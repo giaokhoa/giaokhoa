@@ -1,0 +1,9 @@
+packages:
+  - apps/*
+  - packages/*
+
+allowBuilds:
+  esbuild: false
+  '@parcel/watcher': false
+
+storeDir: node_modules/.pnpm-store

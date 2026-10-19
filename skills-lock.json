@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "skills": {
+    "ponytail": {
+      "source": "DietrichGebert/ponytail",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "skills/ponytail/SKILL.md",
+      "computedHash": "210fa0831f649ce9f8a305f7b7c8cf2a0dd09ac4dd53067109941b96e7811d4e"
+    },
+    "react-router": {
+      "source": "remix-run/react-router",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/react-router/SKILL.md",
+      "computedHash": "ff4d9bc724f0e56a51c453eef5b93caef1c16d3623ac49345d74fc1a5efbc05a"
+    },
+    "shadcn": {
+      "source": "shadcn-ui/ui",
+      "sourceType": "github",
+      "skillPath": "skills/shadcn/SKILL.md",
+      "computedHash": "f615de216e085a84e31593ad0fa9062232adc40cd87b7c7ab2b8e49abf6500be"
+    },
+    "turborepo": {
+      "source": "vercel/turborepo",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "skills/turborepo/SKILL.md",
+      "computedHash": "c83a6ff75c62092f71da91408164ed3426f11749b032fd23ecc855e27c2fb538"
+    }
+  }
+}

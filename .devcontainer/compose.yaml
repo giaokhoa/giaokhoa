@@ -1,0 +1,59 @@
+services:
+  giaokhoa:
+    image: mcr.microsoft.com/devcontainers/base:noble
+    working_dir: /giaokhoa
+    command: sleep infinity
+    environment:
+      S3_ENDPOINT: http://s3mock:9090
+      S3_REGION: us-east-1
+      S3_BUCKET: giaokhoa-assets
+      S3_ACCESS_KEY_ID: local
+      S3_SECRET_ACCESS_KEY: local
+    volumes:
+      - ../:/giaokhoa:cached
+      - tunnel-client-config:/home/vscode/.config/tunnel-client
+    depends_on:
+      db:
+        condition: service_healthy
+      s3mock:
+        condition: service_healthy
+
+  db:
+    image: postgres:18.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DB: giaokhoa
+    ports:
+      - '5432:5432'
+    volumes:
+      - 'pg-data:/var/lib/postgresql'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  s3mock:
+    image: adobe/s3mock:5.1.0
+    restart: unless-stopped
+    environment:
+      COM_ADOBE_TESTING_S3MOCK_STORE_ROOT: /s3mockroot
+      COM_ADOBE_TESTING_S3MOCK_STORE_RETAIN_FILES_ON_EXIT: 'true'
+      COM_ADOBE_TESTING_S3MOCK_STORE_REGION: us-east-1
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: giaokhoa-assets
+    volumes:
+      - 's3mock-data:/s3mockroot'
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:9090/favicon.ico']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  pg-data:
+  s3mock-data:
+  tunnel-client-config:

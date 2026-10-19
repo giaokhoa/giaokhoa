@@ -1,0 +1,43 @@
+{
+  "name": "@giaokhoa/editor",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@giaokhoa/shared": "workspace:*",
+    "@giaokhoa/ui": "workspace:*",
+    "@tiptap/core": "3.31.4",
+    "@tiptap/extension-document": "3.31.4",
+    "@tiptap/extension-image": "3.31.4",
+    "@tiptap/extension-mathematics": "3.31.4",
+    "@tiptap/extension-paragraph": "3.31.4",
+    "@tiptap/extension-table": "3.31.4",
+    "@tiptap/extension-text": "3.31.4",
+    "@tiptap/extension-text-align": "3.31.4",
+    "@tiptap/extension-unique-id": "3.31.4",
+    "@tiptap/extensions": "3.31.4",
+    "@tiptap/pm": "3.31.4",
+    "@tiptap/react": "3.31.4",
+    "@tiptap/static-renderer": "3.31.4",
+    "katex": "0.18.10",
+    "lucide-react": "^1.51.0",
+    "react-image-crop": "11.1.2"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "typescript": "^7.0.2"
+  },
+  "peerDependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  }
+}

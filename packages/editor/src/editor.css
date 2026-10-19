@@ -1,0 +1,115 @@
+.ProseMirror [data-resize-container][data-node='image'] {
+  max-width: 100%;
+  margin-block: 0.75rem;
+}
+
+.ProseMirror [data-resize-container][data-node='image']:has(img[data-align='left']) {
+  justify-content: flex-start;
+}
+
+.ProseMirror [data-resize-container][data-node='image']:has(img[data-align='center']) {
+  justify-content: center;
+}
+
+.ProseMirror [data-resize-container][data-node='image']:has(img[data-align='right']) {
+  justify-content: flex-end;
+}
+
+.ProseMirror [data-resize-container][data-node='image'] [data-resize-handle='bottom-right'] {
+  right: -6px;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  cursor: nwse-resize;
+  border: 2px solid var(--background);
+  border-radius: 9999px;
+  background: var(--primary);
+}
+
+img[data-image-id] {
+  height: auto !important;
+  max-width: 100%;
+  margin-block: 0.75rem;
+}
+
+.ProseMirror [data-resize-container][data-node='image'] img[data-image-id] {
+  margin-block: 0;
+}
+
+img[data-image-id][data-align='left'] {
+  margin-right: auto;
+  margin-left: 0;
+}
+
+img[data-image-id][data-align='center'] {
+  margin-right: auto;
+  margin-left: auto;
+}
+
+img[data-image-id][data-align='right'] {
+  margin-right: 0;
+  margin-left: auto;
+}
+
+.tableWrapper {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin-block: 0.75rem;
+  padding-inline: 2rem;
+  overflow-x: auto;
+}
+
+.tableWrapper table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.tableWrapper th,
+.tableWrapper td {
+  position: relative;
+  min-width: 1em;
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.625rem;
+  vertical-align: top;
+}
+
+.tableWrapper th {
+  background: var(--muted);
+  font-weight: 600;
+}
+
+.tableWrapper th > :first-child,
+.tableWrapper td > :first-child {
+  margin-top: 0;
+}
+
+.tableWrapper th > :last-child,
+.tableWrapper td > :last-child {
+  margin-bottom: 0;
+}
+
+.ProseMirror .selectedCell::after {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  content: '';
+  pointer-events: none;
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
+}
+
+.ProseMirror .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: 0;
+  z-index: 3;
+  width: 4px;
+  pointer-events: none;
+  background: var(--primary);
+}
+
+.ProseMirror.resize-cursor {
+  cursor: col-resize;
+}

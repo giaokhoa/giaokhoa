@@ -1,0 +1,42 @@
+{
+  "name": "@giaokhoa/application",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*/service": {
+      "types": "./src/*/service.ts",
+      "default": "./dist/*/service.js"
+    },
+    "./*/repository": {
+      "types": "./src/*/repository.ts",
+      "default": "./dist/*/repository.js"
+    },
+    "./*/storage": {
+      "types": "./src/*/storage.ts",
+      "default": "./dist/*/storage.js"
+    },
+    "./common/*": {
+      "types": "./src/common/*.ts",
+      "default": "./dist/common/*.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "watch": "tsc --watch --preserveWatchOutput"
+  },
+  "dependencies": {
+    "@giaokhoa/shared": "workspace:*",
+    "dompurify": "^3.4.16",
+    "image-size": "^2.0.4",
+    "jsdom": "^27.4.0"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^27.0.0",
+    "@types/node": "^24.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "4.1.2"
+  }
+}

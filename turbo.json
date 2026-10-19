@@ -1,0 +1,35 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "tasks": {
+    "dev": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true,
+      "env": ["NODE_ENV", "PORT", "VITE_API_URL"]
+    },
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "build/**"],
+      "env": ["VITE_API_URL"]
+    },
+    "start:prod": {
+      "dependsOn": ["build"],
+      "cache": false,
+      "persistent": true,
+      "env": ["NODE_ENV", "PORT"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "dependsOn": ["^build"]
+    },
+    "@giaokhoa/api#test:e2e": {
+      "dependsOn": ["^build"]
+    },
+    "@giaokhoa/api#test:cov": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"]
+    }
+  }
+}

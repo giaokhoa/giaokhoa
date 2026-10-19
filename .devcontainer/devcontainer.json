@@ -1,0 +1,34 @@
+{
+  "name": "Giáo khoa",
+  "dockerComposeFile": "compose.yaml",
+  "service": "giaokhoa",
+  "workspaceFolder": "/giaokhoa",
+  "features": {
+    "ghcr.io/devcontainers/features/node:2": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "mounts": ["source=github-cli-config,target=/home/vscode/.config/gh,type=volume"],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "-dbaeumer.vscode-eslint",
+        "EditorConfig.EditorConfig",
+        "bradlc.vscode-tailwindcss",
+        "oxc.oxc-vscode"
+      ],
+      "settings": {
+        "editor.defaultFormatter": "oxc.oxc-vscode",
+        "editor.formatOnSave": false,
+        "editor.codeActionsOnSave": {
+          "source.format.oxc": "always",
+          "source.fixAll.oxc": "always"
+        }
+      }
+    }
+  },
+  "remoteUser": "vscode",
+  "containerEnv": {
+    "GH_CONFIG_DIR": "/home/vscode/.config/gh"
+  },
+  "postCreateCommand": "bash /giaokhoa/.devcontainer/post-create.sh"
+}

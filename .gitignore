@@ -1,0 +1,12 @@
+.turbo/
+.react-router/
+.worktrees/
+.cache/
+node_modules/
+dist/
+build/
+coverage/
+
+.env*
+!.env.example
+*.tsbuildinfo

@@ -1,0 +1,7 @@
+{
+  "singleQuote": true,
+  "ignorePatterns": [".agents/skills/**", "packages/ui/src/components/**", "**/*.generated.*"],
+  "sortTailwindcss": {
+    "stylesheet": "./packages/ui/src/styles/globals.css"
+  }
+}

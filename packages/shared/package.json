@@ -1,0 +1,38 @@
+{
+  "name": "@giaokhoa/shared",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./curriculum": {
+      "types": "./src/curriculum.ts",
+      "default": "./dist/curriculum.js"
+    },
+    "./images": {
+      "types": "./src/images.ts",
+      "default": "./dist/images.js"
+    },
+    "./questions": {
+      "types": "./src/questions.ts",
+      "default": "./dist/questions.js"
+    },
+    "./http/*": {
+      "types": "./src/http/*.ts",
+      "default": "./dist/http/*.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "katex": "0.18.10",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vitest": "4.1.2"
+  }
+}
