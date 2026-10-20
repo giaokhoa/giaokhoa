@@ -1,18 +1,18 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
-  imageIdSchema,
-  imageRefSchema,
-  MAX_IMAGE_BYTES,
-  tikzImageSourceSchema,
-  type ImageMimeType,
-  type ImageRef,
-  type TikzImageSource,
-} from '@giaokhoa/shared/images';
+  fileIdSchema,
+  fileRefSchema,
+  MAX_FILE_BYTES,
+  tikzFileSourceSchema,
+  type FileMimeType,
+  type FileRef,
+  type TikzFileSource,
+} from '@giaokhoa/shared/files';
 import { imageSize } from 'image-size';
 import type { AuthorizationService } from '../authorization/service.js';
 import { ClientError } from '../common/client-error.js';
-import type { ImagesRepository } from './repository.js';
-import type { ImageStorage } from './storage.js';
+import type { FilesRepository } from './repository.js';
+import type { FileStorage } from './storage.js';
 import { sanitizeAndInspectSvg } from './svg-sanitizer.js';
 
 const MAX_IMAGE_DIMENSION = 12_000;
@@ -26,21 +26,21 @@ const rasterImageTypes = {
 
 const svgImageType = { mimeType: 'image/svg+xml', extension: 'svg' } as const;
 
-export type UploadedImageFile = {
+export type UploadedFile = {
   buffer: Uint8Array;
   originalname: string;
   size: number;
 };
 
-export type CreatedImage = {
-  imageId: string;
-  imageVariantId: string | null;
+export type CreatedFile = {
+  fileId: string;
+  variantFileId: string | null;
   width: number;
   height: number;
-  mimeType: ImageMimeType;
+  mimeType: FileMimeType;
 };
 
-export type StoredImage = {
+export type StoredFile = {
   body: Uint8Array;
   mimeType: string;
   byteSize: number;
@@ -48,7 +48,7 @@ export type StoredImage = {
 };
 
 function invalid(message: string): never {
-  throw new ClientError('invalid', 'image_invalid', message);
+  throw new ClientError('invalid', 'file_invalid', message);
 }
 
 function validateDimensions(width: number | undefined, height: number | undefined) {
@@ -68,7 +68,7 @@ function validateDimensions(width: number | undefined, height: number | undefine
   return { width, height };
 }
 
-function parseTikzSource(input: unknown): TikzImageSource | undefined {
+function parseTikzSource(input: unknown): TikzFileSource | undefined {
   if (
     input === undefined ||
     input === null ||
@@ -77,14 +77,15 @@ function parseTikzSource(input: unknown): TikzImageSource | undefined {
     return undefined;
   }
 
-  const parsed = tikzImageSourceSchema.safeParse(input);
+  const parsed = tikzFileSourceSchema.safeParse(input);
   if (!parsed.success) invalid('Metadata TikZ không hợp lệ');
   return parsed.data;
 }
 
-function inspectOriginalImage(file: UploadedImageFile | undefined, sourceInput: unknown) {
+function inspectOriginalImage(file: UploadedFile | undefined, sourceInput: unknown) {
   if (!file?.buffer?.length) invalid('Chưa chọn ảnh');
-  if (file.size > MAX_IMAGE_BYTES) invalid('Ảnh không được vượt quá 8 MB');
+  if (file.size > MAX_FILE_BYTES || file.buffer.length > MAX_FILE_BYTES)
+    invalid('Ảnh không được vượt quá 8 MB');
 
   let dimensions: ReturnType<typeof imageSize>;
   try {
@@ -112,7 +113,7 @@ function inspectOriginalImage(file: UploadedImageFile | undefined, sourceInput: 
     }
 
     const sanitized = new TextEncoder().encode(inspected.svg);
-    if (sanitized.length > MAX_IMAGE_BYTES) {
+    if (sanitized.length > MAX_FILE_BYTES) {
       invalid('SVG sau khi làm sạch không được vượt quá 8 MB');
     }
 
@@ -134,10 +135,16 @@ function inspectOriginalImage(file: UploadedImageFile | undefined, sourceInput: 
   if (!imageType) invalid('Chỉ hỗ trợ ảnh PNG, JPEG, WebP và SVG được tạo từ TikZ');
 
   const { width, height } = validateDimensions(dimensions.width, dimensions.height);
-  return { file, imageType, width, height, source: undefined };
+  return {
+    file: { ...file, size: file.buffer.length },
+    imageType,
+    width,
+    height,
+    source: undefined,
+  };
 }
 
-function inspectRasterImage(file: UploadedImageFile | undefined) {
+function inspectRasterImage(file: UploadedFile | undefined) {
   const image = inspectOriginalImage(file, undefined);
   if (image.imageType.mimeType === 'image/svg+xml') {
     invalid('Không thể tạo crop variant từ SVG');
@@ -145,113 +152,139 @@ function inspectRasterImage(file: UploadedImageFile | undefined) {
   return image;
 }
 
-export class ImagesService {
+export class FilesService {
   constructor(
-    private readonly repository: ImagesRepository,
-    private readonly storage: ImageStorage,
+    private readonly repository: FilesRepository,
+    private readonly storage: FileStorage,
     private readonly authorization: AuthorizationService,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
-  async createImage(
-    file: UploadedImageFile | undefined,
+  async createFile(
+    file: UploadedFile | undefined,
     userId: string,
     sourceInput?: unknown,
-  ): Promise<CreatedImage> {
+  ): Promise<CreatedFile> {
     const image = inspectOriginalImage(file, sourceInput);
-    const storageKey = `images/originals/${randomUUID()}.${image.imageType.extension}`;
+    const contentHash = createHash('sha256').update(image.file.buffer).digest('hex');
+    // Khóa ngẫu nhiên tránh xóa nhầm blob cùng hash khi GC và upload đồng thời.
+    const storageKey = `files/objects/${randomUUID()}.${image.imageType.extension}`;
     await this.storage.put(storageKey, image.file.buffer, image.imageType.mimeType);
 
+    let stored: Awaited<ReturnType<FilesRepository['create']>>;
     try {
-      const stored = await this.repository.create(
+      stored = await this.repository.create(
         {
           createdByUserId: userId,
+          contentHash,
           storageKey,
           mimeType: image.imageType.mimeType,
           byteSize: image.file.size,
           width: image.width,
           height: image.height,
           originalFilename: image.file.originalname.slice(0, 500),
+          parentFileId: null,
         },
         image.source,
       );
-
-      return {
-        imageId: stored.id,
-        imageVariantId: null,
-        width: stored.width,
-        height: stored.height,
-        mimeType: image.imageType.mimeType,
-      };
     } catch (cause) {
       await this.storage.delete(storageKey).catch(() => undefined);
       throw cause;
     }
+
+    // DB giữ một blob chung theo SHA-256; bản upload trùng chỉ là tạm thời.
+    if (stored.storageKey !== storageKey) {
+      try {
+        await this.storage.delete(storageKey);
+        await this.repository.acknowledgeDeletion(storageKey);
+      } catch {
+        // Outbox sẽ thử lại nếu thao tác dọn bản upload trùng thất bại.
+      }
+    }
+    return {
+      fileId: stored.id,
+      variantFileId: null,
+      width: stored.width,
+      height: stored.height,
+      mimeType: image.imageType.mimeType,
+    };
   }
 
-  async createImageVariant(
-    imageId: string,
-    file: UploadedImageFile | undefined,
+  async createVariant(
+    fileId: string,
+    file: UploadedFile | undefined,
     userId: string,
-  ): Promise<CreatedImage> {
-    const parsedImageId = imageIdSchema.safeParse(imageId);
-    if (!parsedImageId.success)
-      throw new ClientError('not_found', 'image_not_found', 'Ảnh không tồn tại');
+  ): Promise<CreatedFile> {
+    const parsedId = fileIdSchema.safeParse(fileId);
+    if (!parsedId.success)
+      throw new ClientError('not_found', 'file_not_found', 'Ảnh không tồn tại');
 
-    const image = await this.repository.findOwned(parsedImageId.data, userId);
-    if (!image || image.mimeType === 'image/svg+xml')
-      throw new ClientError('not_found', 'image_not_found', 'Ảnh không tồn tại');
+    const original = await this.repository.findOwned(parsedId.data, userId);
+    if (!original || original.parentFileId !== null || original.mimeType === 'image/svg+xml')
+      throw new ClientError('not_found', 'file_not_found', 'Ảnh không tồn tại');
 
-    const variantImage = inspectRasterImage(file);
-    const storageKey = `images/derived/${image.id}/${randomUUID()}.${variantImage.imageType.extension}`;
-    await this.storage.put(storageKey, variantImage.file.buffer, variantImage.imageType.mimeType);
+    const image = inspectRasterImage(file);
+    const contentHash = createHash('sha256').update(image.file.buffer).digest('hex');
+    const storageKey = `files/objects/${randomUUID()}.${image.imageType.extension}`;
+    await this.storage.put(storageKey, image.file.buffer, image.imageType.mimeType);
 
+    let variant: Awaited<ReturnType<FilesRepository['createVariant']>>;
     try {
-      const variant = await this.repository.createVariant({
-        imageId: image.id,
+      variant = await this.repository.createVariant({
+        createdByUserId: userId,
+        contentHash,
         storageKey,
-        mimeType: variantImage.imageType.mimeType,
-        byteSize: variantImage.file.size,
-        width: variantImage.width,
-        height: variantImage.height,
-        filename: variantImage.file.originalname.slice(0, 500),
+        mimeType: image.imageType.mimeType,
+        byteSize: image.file.size,
+        width: image.width,
+        height: image.height,
+        originalFilename: image.file.originalname.slice(0, 500),
+        parentFileId: original.id,
       });
-
-      return {
-        imageId: image.id,
-        imageVariantId: variant.id,
-        width: variant.width,
-        height: variant.height,
-        mimeType: variantImage.imageType.mimeType,
-      };
     } catch (cause) {
       await this.storage.delete(storageKey).catch(() => undefined);
       throw cause;
     }
+
+    if (variant.storageKey !== storageKey) {
+      try {
+        await this.storage.delete(storageKey);
+        await this.repository.acknowledgeDeletion(storageKey);
+      } catch {
+        // Outbox sẽ thử lại nếu thao tác dọn bản upload trùng thất bại.
+      }
+    }
+    return {
+      fileId: original.id,
+      variantFileId: variant.id,
+      width: variant.width,
+      height: variant.height,
+      mimeType: image.imageType.mimeType,
+    };
   }
 
-  async getImageSource(id: string, userId: string): Promise<TikzImageSource> {
-    const parsedId = imageIdSchema.safeParse(id);
+  async getSource(id: string, userId: string): Promise<TikzFileSource> {
+    const parsedId = fileIdSchema.safeParse(id);
     if (!parsedId.success)
-      throw new ClientError('not_found', 'image_source_not_found', 'Nguồn ảnh không tồn tại');
+      throw new ClientError('not_found', 'file_source_not_found', 'Nguồn ảnh không tồn tại');
 
     const source = await this.repository.findSourceOwned(parsedId.data, userId);
     if (!source)
-      throw new ClientError('not_found', 'image_source_not_found', 'Nguồn ảnh không tồn tại');
+      throw new ClientError('not_found', 'file_source_not_found', 'Nguồn ảnh không tồn tại');
 
-    const parsed = tikzImageSourceSchema.safeParse(source);
+    const parsed = tikzFileSourceSchema.safeParse(source);
     if (!parsed.success)
-      throw new ClientError('not_found', 'image_source_not_found', 'Nguồn ảnh không tồn tại');
+      throw new ClientError('not_found', 'file_source_not_found', 'Nguồn ảnh không tồn tại');
     return parsed.data;
   }
 
-  async discardImages(refs: ImageRef[], userId: string): Promise<void> {
-    const parsed = imageRefSchema.array().max(100).safeParse(refs);
+  async discardFiles(refs: FileRef[], userId: string): Promise<void> {
+    const parsed = fileRefSchema.array().max(100).safeParse(refs);
     if (!parsed.success)
-      throw new ClientError('invalid', 'image_refs_invalid', 'Danh sách ảnh cần dọn không hợp lệ');
+      throw new ClientError('invalid', 'file_refs_invalid', 'Danh sách ảnh cần dọn không hợp lệ');
 
     const unique = new Map(
-      parsed.data.map((ref) => [`${ref.imageId}:${ref.imageVariantId ?? ''}`, ref]),
+      parsed.data.map((ref) => [`${ref.fileId}:${ref.variantFileId ?? ''}`, ref]),
     );
     const storageKeys = await this.repository.discardOrphans([...unique.values()], userId);
     const result = await this.deleteQueuedObjects(storageKeys);
@@ -262,9 +295,9 @@ export class ImagesService {
     }
   }
 
-  async collectOrphanImages(cutoff: Date): Promise<number> {
-    while ((await this.repository.queueExpiredOrphans(cutoff)).length) {
-      // Mỗi lô lưu đồng thời việc xóa metadata và các khóa storage cần xóa bền vững.
+  async collectOrphanFiles(cutoff: Date): Promise<number> {
+    while ((await this.repository.queueExpiredOrphans(cutoff)).processed > 0) {
+      // Nhiều file logic có thể cùng một blob nên lô đã xử lý không nhất thiết có storage key.
     }
 
     let deleted = 0;
@@ -316,28 +349,25 @@ export class ImagesService {
    * Chủ ảnh hoặc người nhận bài giao có ảnh trong phần đề được xem binary.
    * Quyền xem ảnh ở đây không bao gồm ảnh chỉ xuất hiện trong guidance/solution.
    */
-  async getImage(id: string, userId: string): Promise<StoredImage> {
-    const parsedId = imageIdSchema.safeParse(id);
+  async getFile(id: string, userId: string): Promise<StoredFile> {
+    const parsedId = fileIdSchema.safeParse(id);
     if (!parsedId.success)
-      throw new ClientError('not_found', 'image_not_found', 'Ảnh không tồn tại');
+      throw new ClientError('not_found', 'file_not_found', 'Ảnh không tồn tại');
 
     const owned = await this.repository.findOwned(parsedId.data, userId);
     const image = owned ?? (await this.repository.find(parsedId.data));
-    if (!image) throw new ClientError('not_found', 'image_not_found', 'Ảnh không tồn tại');
-    if (!owned) await this.assertAssignedImageAccess(parsedId.data, null, userId);
+    if (!image || image.parentFileId !== null)
+      throw new ClientError('not_found', 'file_not_found', 'Ảnh không tồn tại');
+    if (!owned) await this.assertAssignedFileAccess(parsedId.data, null, userId);
 
-    return this.getStoredImage(image.storageKey, image.mimeType, image.byteSize);
+    return this.getStoredFile(image.storageKey, image.mimeType, image.byteSize);
   }
 
-  async getImageVariant(
-    imageId: string,
-    imageVariantId: string,
-    userId: string,
-  ): Promise<StoredImage> {
-    const parsedImageId = imageIdSchema.safeParse(imageId);
-    const parsedImageVariantId = imageIdSchema.safeParse(imageVariantId);
+  async getVariant(fileId: string, variantFileId: string, userId: string): Promise<StoredFile> {
+    const parsedImageId = fileIdSchema.safeParse(fileId);
+    const parsedImageVariantId = fileIdSchema.safeParse(variantFileId);
     if (!parsedImageId.success || !parsedImageVariantId.success) {
-      throw new ClientError('not_found', 'image_not_found', 'Ảnh không tồn tại');
+      throw new ClientError('not_found', 'file_not_found', 'Ảnh không tồn tại');
     }
 
     const owned = await this.repository.findVariantOwned(
@@ -347,23 +377,23 @@ export class ImagesService {
     );
     const variant =
       owned ?? (await this.repository.findVariant(parsedImageId.data, parsedImageVariantId.data));
-    if (!variant) throw new ClientError('not_found', 'image_not_found', 'Ảnh không tồn tại');
+    if (!variant) throw new ClientError('not_found', 'file_not_found', 'Ảnh không tồn tại');
     if (!owned)
-      await this.assertAssignedImageAccess(parsedImageId.data, parsedImageVariantId.data, userId);
+      await this.assertAssignedFileAccess(parsedImageId.data, parsedImageVariantId.data, userId);
 
-    return this.getStoredImage(variant.storageKey, variant.mimeType, variant.byteSize);
+    return this.getStoredFile(variant.storageKey, variant.mimeType, variant.byteSize);
   }
 
-  private async assertAssignedImageAccess(
-    imageId: string,
-    imageVariantId: string | null,
+  private async assertAssignedFileAccess(
+    fileId: string,
+    variantFileId: string | null,
     userId: string,
   ): Promise<void> {
-    const classIds = await this.repository.assignedImageClasses(
-      imageId,
-      imageVariantId,
+    const classIds = await this.repository.assignedFileClasses(
+      fileId,
+      variantFileId,
       userId,
-      new Date(),
+      this.now(),
     );
     for (const classId of classIds) {
       const decision = await this.authorization.authorize({
@@ -373,16 +403,16 @@ export class ImagesService {
       });
       if (decision.allowed) return;
     }
-    throw new ClientError('not_found', 'image_not_found', 'Ảnh không tồn tại');
+    throw new ClientError('not_found', 'file_not_found', 'Ảnh không tồn tại');
   }
 
-  private async getStoredImage(
+  private async getStoredFile(
     storageKey: string,
     mimeType: string,
     byteSize: number,
-  ): Promise<StoredImage> {
+  ): Promise<StoredFile> {
     const object = await this.storage.get(storageKey);
-    if (!object.body) throw new ClientError('not_found', 'image_not_found', 'Ảnh không tồn tại');
+    if (!object.body) throw new ClientError('not_found', 'file_not_found', 'Ảnh không tồn tại');
 
     return { body: object.body, mimeType, byteSize, etag: object.etag };
   }

@@ -1,8 +1,10 @@
 import type { RenderTikz } from '@giaokhoa/editor';
+import { MAX_TIKZ_SOURCE_LENGTH } from '@giaokhoa/shared/files';
 
 const TIKZ_RUNTIME_VERSION = '0.3.1';
 const TIKZ_RUNTIME_DIRECTORY = `vendor/tikz-runtime/v${TIKZ_RUNTIME_VERSION}/`;
 const TIKZ_STALL_TIMEOUT_MS = 20_000;
+const TIKZ_HARD_TIMEOUT_MS = 60_000;
 
 type Diagnostic = {
   severity: 'error' | 'warning';
@@ -40,6 +42,7 @@ type PendingCall = {
   resolve: (value: LatexResult | undefined) => void;
   reject: (reason: Error) => void;
   timer?: ReturnType<typeof setTimeout>;
+  deadlineTimer?: ReturnType<typeof setTimeout>;
 };
 
 let enginePromise: Promise<BrowserTikzEngine> | undefined;
@@ -78,9 +81,11 @@ class BrowserTikzEngine {
 
     try {
       await engine.call('init', {
-        bundleBaseUrl: new URL('bundles/', runtimeBaseUrl()).href,
-        prefetch: ['latex'],
-        logLevel: 'warn',
+        options: {
+          bundleBaseUrl: new URL('bundles/', runtimeBaseUrl()).href,
+          prefetch: ['latex'],
+          logLevel: 'warn',
+        },
       });
       return engine;
     } catch (cause) {
@@ -111,7 +116,15 @@ class BrowserTikzEngine {
 
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      const pending: PendingCall = { resolve, reject };
+      pending.deadlineTimer = setTimeout(() => {
+        if (!this.pending.has(id)) return;
+        this.pending.delete(id);
+        this.clearTimer(pending);
+        reject(new Error(`TikZ vượt quá ${TIKZ_HARD_TIMEOUT_MS} ms; worker đã dừng.`));
+        this.dispose();
+      }, TIKZ_HARD_TIMEOUT_MS);
+      this.pending.set(id, pending);
       this.worker.postMessage({ id, op, ...payload });
     });
   }
@@ -145,12 +158,13 @@ class BrowserTikzEngine {
     const pending = this.pending.get(id);
     if (!pending) return;
 
-    this.clearTimer(pending);
+    this.clearStallTimer(pending);
     pending.timer = setTimeout(() => {
       const stalled = this.pending.get(id);
       if (!stalled) return;
 
       this.pending.delete(id);
+      this.clearTimer(stalled);
       stalled.reject(
         new Error(
           `mp-tikz-wasm: latex made no progress for ${TIKZ_STALL_TIMEOUT_MS} ms; worker terminated`,
@@ -160,10 +174,18 @@ class BrowserTikzEngine {
     }, TIKZ_STALL_TIMEOUT_MS);
   }
 
-  private clearTimer(pending: PendingCall) {
+  private clearStallTimer(pending: PendingCall) {
     if (pending.timer !== undefined) {
       clearTimeout(pending.timer);
       pending.timer = undefined;
+    }
+  }
+
+  private clearTimer(pending: PendingCall) {
+    this.clearStallTimer(pending);
+    if (pending.deadlineTimer !== undefined) {
+      clearTimeout(pending.deadlineTimer);
+      pending.deadlineTimer = undefined;
     }
   }
 
@@ -220,6 +242,9 @@ async function sanitizeSvg(svg: string) {
 }
 
 export const renderTikz: RenderTikz = async (source) => {
+  if (source.length > MAX_TIKZ_SOURCE_LENGTH) {
+    throw new Error(`Mã TikZ không được vượt quá ${MAX_TIKZ_SOURCE_LENGTH} ký tự.`);
+  }
   const currentEnginePromise = getEngine();
   const engine = await currentEnginePromise;
   let result: LatexResult;

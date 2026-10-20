@@ -8,7 +8,7 @@ Các đường dẫn public của domain được chia theo bounded context:
 
 - `@giaokhoa/shared/questions`
 - `@giaokhoa/shared/curriculum`
-- `@giaokhoa/shared/images`
+- `@giaokhoa/shared/files`
 
 Hợp đồng HTTP sử dụng các đường dẫn riêng theo transport:
 
@@ -18,7 +18,7 @@ Hợp đồng HTTP sử dụng các đường dẫn riêng theo transport:
 - `@giaokhoa/shared/http/curricula`
 - `@giaokhoa/shared/http/curriculum-nodes`
 - `@giaokhoa/shared/http/learning-outcomes`
-- `@giaokhoa/shared/http/images`
+- `@giaokhoa/shared/http/files`
 - `@giaokhoa/shared/http/auth`
 
 Schema của domain đặt tên theo ý nghĩa, chẳng hạn `questionCreateSchema`,

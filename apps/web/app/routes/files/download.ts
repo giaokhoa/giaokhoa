@@ -1,4 +1,4 @@
-import { imagesContract } from '@giaokhoa/shared/http/images';
+import { filesContract } from '@giaokhoa/shared/http/files';
 import { createApiClient } from '#lib/http/api.server.js';
 import type { Route } from './+types/download';
 
@@ -12,13 +12,13 @@ const PROXIED_HEADERS = [
 ] as const;
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const parsedParams = imagesContract.get.pathParams.safeParse(params);
+  const parsedParams = filesContract.get.pathParams.safeParse(params);
   if (!parsedParams.success) return new Response(null, { status: 404 });
 
-  const path = imagesContract.get.path.replace(':id', encodeURIComponent(parsedParams.data.id));
+  const path = filesContract.get.path.replace(':id', encodeURIComponent(parsedParams.data.id));
   const response = await createApiClient(request).request<ReadableStream>({
     url: path,
-    method: imagesContract.get.method,
+    method: filesContract.get.method,
     responseType: 'stream',
   });
 

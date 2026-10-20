@@ -21,8 +21,8 @@
     "db:push": "pnpm --filter @giaokhoa/database db:push",
     "db:studio": "pnpm --filter @giaokhoa/database db:studio",
     "reset": "node ./scripts/reset.mjs",
-    "preimages:gc": "pnpm exec turbo run build --filter=@giaokhoa/api",
-    "images:gc": "node ./scripts/images-gc.mjs"
+    "prefiles:gc": "pnpm exec turbo run build --filter=@giaokhoa/api",
+    "files:gc": "node ./scripts/files-gc.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1146.0",

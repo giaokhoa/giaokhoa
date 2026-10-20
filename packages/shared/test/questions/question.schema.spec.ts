@@ -534,8 +534,8 @@ test('table chỉ có các paragraph rỗng không được tính là nội dung
   ).toBe(false);
 });
 
-test('image image hợp lệ được tính là nội dung', () => {
-  const imageId = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d21';
+test('image node có fileId được tính là nội dung', () => {
+  const fileId = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d21';
 
   expect(
     readyQuestionSchema.safeParse({
@@ -546,8 +546,7 @@ test('image image hợp lệ được tính là nội dung', () => {
           {
             type: 'image',
             attrs: {
-              imageId,
-              src: `/images/${imageId}`,
+              fileId,
               alt: 'Hình minh họa',
               title: null,
               width: null,
@@ -560,11 +559,10 @@ test('image image hợp lệ được tính là nội dung', () => {
   ).toBe(true);
 });
 
-test('image alignment nhận trái giữa phải, mặc định giữa và ảnh cũ mặc định original', () => {
-  const imageId = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d21';
+test('image alignment nhận trái giữa phải và mặc định giữa', () => {
+  const fileId = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d21';
   const attrs = {
-    imageId,
-    src: `/images/${imageId}`,
+    fileId,
     alt: null,
     title: null,
     width: 320,
@@ -593,7 +591,7 @@ test('image alignment nhận trái giữa phải, mặc định giữa và ảnh
     expect(image?.type).toBe('image');
     if (image?.type === 'image') {
       expect(image.attrs.align).toBe('center');
-      expect(image.attrs.imageVariantId).toBeNull();
+      expect(image.attrs.variantFileId).toBeNull();
       expect(image.attrs.crop).toBeNull();
     }
   }
@@ -609,13 +607,12 @@ test('image alignment nhận trái giữa phải, mặc định giữa và ảnh
   ).toBe(false);
 });
 
-test('image crop variant phải khớp image, URL và crop metadata', () => {
-  const imageId = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d21';
-  const imageVariantId = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d23';
+test('image crop variant phải khớp file và crop metadata', () => {
+  const fileId = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d21';
+  const variantFileId = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d23';
   const attrs = {
-    imageId,
-    imageVariantId,
-    src: `/images/${imageId}/variants/${imageVariantId}`,
+    fileId,
+    variantFileId,
     alt: 'crop.png',
     title: null,
     width: 320,
@@ -632,9 +629,9 @@ test('image crop variant phải khớp image, URL và crop metadata', () => {
   ).toBe(true);
 
   for (const invalidAttrs of [
-    { ...attrs, imageVariantId: null },
+    { ...attrs, variantFileId: null },
     { ...attrs, crop: null },
-    { ...attrs, src: `/images/${imageId}` },
+    { ...attrs, src: `/files/${fileId}` },
     { ...attrs, crop: { x: 50, y: 15, width: 60, height: 60 } },
   ]) {
     expect(
@@ -646,12 +643,11 @@ test('image crop variant phải khớp image, URL và crop metadata', () => {
   }
 });
 
-test('image TikZ giữ tương thích ảnh cũ và không được dùng crop variant', () => {
-  const imageId = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d21';
-  const imageVariantId = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d23';
+test('image TikZ không được dùng crop variant', () => {
+  const fileId = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d21';
+  const variantFileId = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d23';
   const baseAttrs = {
-    imageId,
-    src: `/images/${imageId}`,
+    fileId,
     alt: 'tikz-diagram.svg',
     title: null,
     width: 320,
@@ -690,8 +686,7 @@ test('image TikZ giữ tương thích ảnh cũ và không được dùng crop v
             attrs: {
               ...baseAttrs,
               generatorKind: 'tikz',
-              imageVariantId,
-              src: `/images/${imageId}/variants/${imageVariantId}`,
+              variantFileId,
               crop: { x: 0, y: 0, width: 100, height: 100 },
             },
           },
@@ -701,11 +696,10 @@ test('image TikZ giữ tương thích ảnh cũ và không được dùng crop v
   ).toBe(false);
 });
 
-test('image node từ chối URL ngoài, image không khớp và kích thước dở dang', () => {
-  const imageId = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d21';
+test('image node từ chối lưu src và kích thước dở dang', () => {
+  const fileId = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d21';
   const attrs = {
-    imageId,
-    src: `/images/${imageId}`,
+    fileId,
     alt: null,
     title: null,
     width: null,
@@ -714,7 +708,7 @@ test('image node từ chối URL ngoài, image không khớp và kích thước 
 
   for (const invalidAttrs of [
     { ...attrs, src: 'https://example.com/image.png' },
-    { ...attrs, src: '/images/018f4c1a-8f27-7b11-8f5e-2bfbf97b6d22' },
+    { ...attrs, src: '/files/018f4c1a-8f27-7b11-8f5e-2bfbf97b6d22' },
     { ...attrs, width: 320 },
   ]) {
     expect(

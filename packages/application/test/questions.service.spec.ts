@@ -4,24 +4,21 @@ import { QuestionsService } from '../src/questions/service.js';
 
 const USER_ID = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d22';
 const QUESTION_ID = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d24';
-const IMAGE_ID = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d21';
-const IMAGE_VARIANT_ID = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d23';
+const FILE_ID = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d21';
+const VARIANT_FILE_ID = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d23';
 
-function image(imageVariantId: string | null = null) {
+function image(variantFileId: string | null = null) {
   return {
     type: 'image' as const,
     attrs: {
-      imageId: IMAGE_ID,
-      imageVariantId,
-      src: imageVariantId
-        ? `/images/${IMAGE_ID}/variants/${imageVariantId}`
-        : `/images/${IMAGE_ID}`,
+      fileId: FILE_ID,
+      variantFileId,
       alt: 'demo.png',
       title: null,
       width: 100,
       height: 80,
       align: 'center' as const,
-      crop: imageVariantId ? { x: 0, y: 0, width: 80, height: 80 } : null,
+      crop: variantFileId ? { x: 0, y: 0, width: 80, height: 80 } : null,
     },
   };
 }
@@ -74,10 +71,10 @@ function createService() {
 }
 
 describe('QuestionsService', () => {
-  it('collects each original and derived image reference once for ownership validation', async () => {
+  it('collects each original and derived file reference once for ownership validation', async () => {
     const { service, repository } = createService();
     const original = image();
-    const variant = image(IMAGE_VARIANT_ID);
+    const variant = image(VARIANT_FILE_ID);
     const question = {
       status: 'ready' as const,
       type: 'short_answer' as const,
@@ -91,8 +88,8 @@ describe('QuestionsService', () => {
     expect(repository.createQuestion).toHaveBeenCalledWith(
       question,
       [
-        { imageId: IMAGE_ID, imageVariantId: null },
-        { imageId: IMAGE_ID, imageVariantId: IMAGE_VARIANT_ID },
+        { fileId: FILE_ID, variantFileId: null },
+        { fileId: FILE_ID, variantFileId: VARIANT_FILE_ID },
       ],
       USER_ID,
     );
@@ -409,7 +406,7 @@ describe('QuestionsService authorization', () => {
     const { service, repository, authorization } = createService();
     repository.createStimulus.mockResolvedValue({ id: QUESTION_ID, ...stimulus });
     await service.createStimulus(stimulus, USER_ID);
-    expect(repository.createStimulus).toHaveBeenCalledWith(stimulus, USER_ID);
+    expect(repository.createStimulus).toHaveBeenCalledWith(stimulus, [], USER_ID);
 
     repository.findStimulusOwned.mockResolvedValue(undefined);
     await expect(service.getStimulus(QUESTION_ID, USER_ID)).rejects.toMatchObject({
@@ -421,7 +418,7 @@ describe('QuestionsService authorization', () => {
     await expect(service.updateStimulus(QUESTION_ID, stimulus, USER_ID)).rejects.toMatchObject({
       kind: 'not_found',
     });
-    expect(repository.updateStimulus).toHaveBeenCalledWith(QUESTION_ID, stimulus, USER_ID);
+    expect(repository.updateStimulus).toHaveBeenCalledWith(QUESTION_ID, stimulus, [], USER_ID);
 
     await expect(service.deleteStimulus(QUESTION_ID, USER_ID)).rejects.toMatchObject({
       kind: 'not_found',

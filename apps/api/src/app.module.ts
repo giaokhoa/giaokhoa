@@ -3,7 +3,7 @@ import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { DrizzleModule } from '@nestjs/drizzle';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { ImagesModule } from './images/images.module.js';
+import { FilesModule } from './files/files.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { envSchema, type Env } from './config/env.js';
 import { CurriculumModule } from './curriculum/curriculum.module.js';
@@ -36,7 +36,7 @@ import { AttemptsModule } from './attempts/attempts.module.js';
     ExamsModule,
     AssignmentsModule,
     AttemptsModule,
-    ImagesModule,
+    FilesModule,
     CurriculumModule,
     QuestionsModule,
   ],

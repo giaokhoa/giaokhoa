@@ -15,7 +15,7 @@ export const envSchema = z
     S3_BUCKET: z.string().min(1),
     S3_ACCESS_KEY_ID: z.string().min(1).optional(),
     S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
-    IMAGE_ORPHAN_TTL_HOURS: z.coerce.number().positive().default(24),
+    FILE_ORPHAN_TTL_HOURS: z.coerce.number().positive().default(24),
     BETTER_AUTH_SECRET: z.string().min(32),
     BETTER_AUTH_URL: z.url(),
     BETTER_AUTH_TRUSTED_ORIGINS: z

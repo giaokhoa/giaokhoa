@@ -1,4 +1,4 @@
-import { imagesContract } from '@giaokhoa/shared/http/images';
+import { filesContract } from '@giaokhoa/shared/http/files';
 import { createApiClient } from '#lib/http/api.server.js';
 import type { Route } from './+types/download-variant';
 
@@ -11,15 +11,15 @@ const PROXIED_HEADERS = [
 ] as const;
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const parsedParams = imagesContract.getVariant.pathParams.safeParse(params);
+  const parsedParams = filesContract.getVariant.pathParams.safeParse(params);
   if (!parsedParams.success) return new Response(null, { status: 404 });
 
-  const path = imagesContract.getVariant.path
+  const path = filesContract.getVariant.path
     .replace(':id', encodeURIComponent(parsedParams.data.id))
-    .replace(':imageVariantId', encodeURIComponent(parsedParams.data.imageVariantId));
+    .replace(':variantId', encodeURIComponent(parsedParams.data.variantId));
   const response = await createApiClient(request).request<ReadableStream>({
     url: path,
-    method: imagesContract.getVariant.method,
+    method: filesContract.getVariant.method,
     responseType: 'stream',
   });
 

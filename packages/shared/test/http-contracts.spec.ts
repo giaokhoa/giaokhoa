@@ -2,7 +2,7 @@ import { assignmentsContract } from '../src/http/assignments.js';
 import { attemptsContract } from '../src/http/attempts.js';
 import { classesContract } from '../src/http/classes.js';
 import { examsContract } from '../src/http/exams.js';
-import { imagesContract, uploadImageBodySchema } from '../src/http/images.js';
+import { filesContract, uploadFileBodySchema } from '../src/http/files.js';
 import { authContract } from '../src/http/auth.js';
 import { curriculaContract } from '../src/http/curricula.js';
 import { curriculumNodesContract } from '../src/http/curriculum-nodes.js';
@@ -28,7 +28,7 @@ const resources = {
   attempts: attemptsContract,
   classes: classesContract,
   exams: examsContract,
-  images: imagesContract,
+  files: filesContract,
   auth: authContract,
   curricula: curriculaContract,
   curriculumNodes: curriculumNodesContract,
@@ -105,12 +105,12 @@ describe('HTTP contract convention', () => {
     }
   });
 
-  it('describes the multipart image file boundary', () => {
-    expect(imagesContract.upload.file).toEqual({
+  it('describes the multipart file boundary', () => {
+    expect(filesContract.upload.file).toEqual({
       field: 'file',
       required: true,
       maxBytes: 8 * 1024 * 1024,
     });
-    expect(uploadImageBodySchema.parse(undefined)).toEqual({});
+    expect(uploadFileBodySchema.parse(undefined)).toEqual({});
   });
 });

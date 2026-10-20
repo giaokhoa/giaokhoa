@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ClientError } from '../src/common/client-error.js';
-import { ImagesService } from '../src/images/service.js';
+import { FilesService } from '../src/files/service.js';
 
 const PNG_1X1 = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -8,33 +8,36 @@ const PNG_1X1 = Buffer.from(
 );
 
 const USER_ID = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d22';
-const IMAGE_ID = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d21';
-const IMAGE_VARIANT_ID = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d23';
+const FILE_ID = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d21';
+const VARIANT_FILE_ID = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d23';
 
 function createService() {
   const repository = {
     create: vi.fn(async (data: Record<string, unknown>) => ({
       ...data,
-      id: IMAGE_ID,
+      id: FILE_ID,
       createdAt: new Date(),
     })),
     createVariant: vi.fn(async (data: Record<string, unknown>) => ({
       ...data,
-      id: IMAGE_VARIANT_ID,
+      id: VARIANT_FILE_ID,
       createdAt: new Date(),
     })),
     find: vi.fn(),
     findOwned: vi.fn(),
     findVariant: vi.fn(),
-    assignedImageClasses: vi.fn(async () => [] as string[]),
+    assignedFileClasses: vi.fn(async () => [] as string[]),
     findSourceOwned: vi.fn(),
     findVariantOwned: vi.fn(),
     discardOrphans: vi.fn(
       async (
-        _refs: Array<{ imageId: string; imageVariantId: string | null }>,
+        _refs: Array<{ fileId: string; variantFileId: string | null }>,
         _userId: string,
       ): Promise<string[]> => [],
     ),
+    queueExpiredOrphans: vi.fn(async () => ({ processed: 0, storageKeys: [] as string[] })),
+    listPendingDeletions: vi.fn(async () => [] as string[]),
+    acknowledgeDeletion: vi.fn(async () => undefined),
   };
   const storage = {
     put: vi.fn(async (_key: string, _body: Buffer, _mimeType: string) => undefined),
@@ -44,24 +47,24 @@ function createService() {
 
   const authorization = { authorize: vi.fn(async () => ({ allowed: false })) };
   return {
-    service: new ImagesService(repository as never, storage as never, authorization as never),
+    service: new FilesService(repository as never, storage as never, authorization as never),
     repository,
     storage,
     authorization,
   };
 }
 
-describe('ImagesService', () => {
+describe('FilesService', () => {
   it('detects image bytes and persists an immutable original image', async () => {
     const { service, repository, storage } = createService();
 
-    const result = await service.createImage(
+    const result = await service.createFile(
       { buffer: PNG_1X1, originalname: 'pixel.fake', size: PNG_1X1.length },
       USER_ID,
     );
 
     expect(storage.put).toHaveBeenCalledWith(
-      expect.stringMatching(/^images\/originals\/[0-9a-f-]+\.png$/),
+      expect.stringMatching(/^files\/objects\/[0-9a-f-]+\.png$/),
       PNG_1X1,
       'image/png',
     );
@@ -75,8 +78,8 @@ describe('ImagesService', () => {
       undefined,
     );
     expect(result).toEqual({
-      imageId: IMAGE_ID,
-      imageVariantId: null,
+      fileId: FILE_ID,
+      variantFileId: null,
       width: 1,
       height: 1,
       mimeType: 'image/png',
@@ -97,7 +100,7 @@ describe('ImagesService', () => {
       source: String.raw`\begin{tikzpicture}\draw (0,0) -- (1,1);\end{tikzpicture}`,
     };
 
-    const result = await service.createImage(
+    const result = await service.createFile(
       { buffer: svg, originalname: 'diagram.svg', size: svg.length },
       USER_ID,
       source,
@@ -117,8 +120,8 @@ describe('ImagesService', () => {
       source,
     );
     expect(result).toEqual({
-      imageId: IMAGE_ID,
-      imageVariantId: null,
+      fileId: FILE_ID,
+      variantFileId: null,
       width: 120,
       height: 80,
       mimeType: 'image/svg+xml',
@@ -132,7 +135,7 @@ describe('ImagesService', () => {
     );
 
     await expect(
-      service.createImage({ buffer: svg, originalname: 'diagram.svg', size: svg.length }, USER_ID),
+      service.createFile({ buffer: svg, originalname: 'diagram.svg', size: svg.length }, USER_ID),
     ).rejects.toBeInstanceOf(ClientError);
 
     expect(storage.put).not.toHaveBeenCalled();
@@ -142,18 +145,19 @@ describe('ImagesService', () => {
   it('uses the assignment capability before reading binary shared with a recipient', async () => {
     const { service, repository, storage, authorization } = createService();
     const record = {
-      id: IMAGE_ID,
-      storageKey: 'images/originals/test.png',
+      id: FILE_ID,
+      parentFileId: null,
+      storageKey: 'files/objects/test.png',
       mimeType: 'image/png',
       byteSize: PNG_1X1.length,
     };
     repository.findOwned.mockResolvedValue(undefined);
     repository.find.mockResolvedValue(record);
-    repository.assignedImageClasses.mockResolvedValue([USER_ID]);
+    repository.assignedFileClasses.mockResolvedValue([USER_ID]);
     storage.get.mockResolvedValue({ body: PNG_1X1 });
     authorization.authorize.mockResolvedValueOnce({ allowed: true });
 
-    await expect(service.getImage(IMAGE_ID, USER_ID)).resolves.toMatchObject({
+    await expect(service.getFile(FILE_ID, USER_ID)).resolves.toMatchObject({
       mimeType: 'image/png',
     });
     expect(authorization.authorize).toHaveBeenCalledWith({
@@ -164,8 +168,8 @@ describe('ImagesService', () => {
     expect(storage.get).toHaveBeenCalledTimes(1);
 
     authorization.authorize.mockResolvedValueOnce({ allowed: false });
-    await expect(service.getImage(IMAGE_ID, USER_ID)).rejects.toMatchObject({
-      code: 'image_not_found',
+    await expect(service.getFile(FILE_ID, USER_ID)).rejects.toMatchObject({
+      code: 'file_not_found',
     });
     expect(storage.get).toHaveBeenCalledTimes(1);
   });
@@ -178,21 +182,22 @@ describe('ImagesService', () => {
     };
     repository.findSourceOwned.mockResolvedValueOnce(source);
 
-    await expect(service.getImageSource(IMAGE_ID, USER_ID)).resolves.toEqual(source);
-    expect(repository.findSourceOwned).toHaveBeenCalledWith(IMAGE_ID, USER_ID);
+    await expect(service.getSource(FILE_ID, USER_ID)).resolves.toEqual(source);
+    expect(repository.findSourceOwned).toHaveBeenCalledWith(FILE_ID, USER_ID);
   });
 
   it('does not create crop variants for SVG images', async () => {
     const { service, repository, storage } = createService();
     repository.findOwned.mockResolvedValueOnce({
-      id: IMAGE_ID,
+      id: FILE_ID,
       createdByUserId: USER_ID,
+      parentFileId: null,
       mimeType: 'image/svg+xml',
     });
 
     await expect(
-      service.createImageVariant(
-        IMAGE_ID,
+      service.createVariant(
+        FILE_ID,
         { buffer: PNG_1X1, originalname: 'crop.png', size: PNG_1X1.length },
         USER_ID,
       ),
@@ -204,32 +209,36 @@ describe('ImagesService', () => {
 
   it('persists a crop variant below an owned original image', async () => {
     const { service, repository, storage } = createService();
-    repository.findOwned.mockResolvedValueOnce({ id: IMAGE_ID, createdByUserId: USER_ID });
+    repository.findOwned.mockResolvedValueOnce({
+      id: FILE_ID,
+      createdByUserId: USER_ID,
+      parentFileId: null,
+    });
 
-    const result = await service.createImageVariant(
-      IMAGE_ID,
+    const result = await service.createVariant(
+      FILE_ID,
       { buffer: PNG_1X1, originalname: 'crop.png', size: PNG_1X1.length },
       USER_ID,
     );
 
-    expect(repository.findOwned).toHaveBeenCalledWith(IMAGE_ID, USER_ID);
+    expect(repository.findOwned).toHaveBeenCalledWith(FILE_ID, USER_ID);
     expect(storage.put).toHaveBeenCalledWith(
-      expect.stringMatching(new RegExp(`^images/derived/${IMAGE_ID}/[0-9a-f-]+\\.png$`)),
+      expect.stringMatching(/^files\/objects\/[0-9a-f-]+\.png$/),
       PNG_1X1,
       'image/png',
     );
     expect(repository.createVariant).toHaveBeenCalledWith(
       expect.objectContaining({
-        imageId: IMAGE_ID,
+        parentFileId: FILE_ID,
         mimeType: 'image/png',
         width: 1,
         height: 1,
-        filename: 'crop.png',
+        originalFilename: 'crop.png',
       }),
     );
     expect(result).toEqual({
-      imageId: IMAGE_ID,
-      imageVariantId: IMAGE_VARIANT_ID,
+      fileId: FILE_ID,
+      variantFileId: VARIANT_FILE_ID,
       width: 1,
       height: 1,
       mimeType: 'image/png',
@@ -241,8 +250,8 @@ describe('ImagesService', () => {
     repository.findOwned.mockResolvedValueOnce(undefined);
 
     await expect(
-      service.createImageVariant(
-        IMAGE_ID,
+      service.createVariant(
+        FILE_ID,
         { buffer: PNG_1X1, originalname: 'crop.png', size: PNG_1X1.length },
         USER_ID,
       ),
@@ -256,7 +265,7 @@ describe('ImagesService', () => {
     const { service, repository, storage } = createService();
 
     await expect(
-      service.createImage(
+      service.createFile(
         { buffer: Buffer.from('not an image'), originalname: 'file.txt', size: 12 },
         USER_ID,
       ),
@@ -271,7 +280,7 @@ describe('ImagesService', () => {
     repository.create.mockRejectedValueOnce(new Error('database failed'));
 
     await expect(
-      service.createImage(
+      service.createFile(
         { buffer: PNG_1X1, originalname: 'pixel.png', size: PNG_1X1.length },
         USER_ID,
       ),
@@ -282,12 +291,16 @@ describe('ImagesService', () => {
 
   it('deletes the uploaded variant if variant metadata persistence fails', async () => {
     const { service, repository, storage } = createService();
-    repository.findOwned.mockResolvedValueOnce({ id: IMAGE_ID, createdByUserId: USER_ID });
+    repository.findOwned.mockResolvedValueOnce({
+      id: FILE_ID,
+      createdByUserId: USER_ID,
+      parentFileId: null,
+    });
     repository.createVariant.mockRejectedValueOnce(new Error('database failed'));
 
     await expect(
-      service.createImageVariant(
-        IMAGE_ID,
+      service.createVariant(
+        FILE_ID,
         { buffer: PNG_1X1, originalname: 'crop.png', size: PNG_1X1.length },
         USER_ID,
       ),
@@ -297,27 +310,27 @@ describe('ImagesService', () => {
   });
 });
 
-describe('ImagesService discard lifecycle', () => {
+describe('FilesService discard lifecycle', () => {
   it('discards each pending image reference at most once', async () => {
     const { service, repository } = createService();
-    const discarded: Array<{ imageId: string; imageVariantId: string | null }> = [];
+    const discarded: Array<{ fileId: string; variantFileId: string | null }> = [];
     repository.discardOrphans.mockImplementationOnce(async (refs) => {
       discarded.push(...refs);
       return [];
     });
 
-    await service.discardImages(
+    await service.discardFiles(
       [
-        { imageId: IMAGE_ID, imageVariantId: null },
-        { imageId: IMAGE_ID, imageVariantId: null },
-        { imageId: IMAGE_ID, imageVariantId: IMAGE_VARIANT_ID },
+        { fileId: FILE_ID, variantFileId: null },
+        { fileId: FILE_ID, variantFileId: null },
+        { fileId: FILE_ID, variantFileId: VARIANT_FILE_ID },
       ],
       USER_ID,
     );
 
     expect(discarded).toEqual([
-      { imageId: IMAGE_ID, imageVariantId: null },
-      { imageId: IMAGE_ID, imageVariantId: IMAGE_VARIANT_ID },
+      { fileId: FILE_ID, variantFileId: null },
+      { fileId: FILE_ID, variantFileId: VARIANT_FILE_ID },
     ]);
   });
 
@@ -325,60 +338,73 @@ describe('ImagesService discard lifecycle', () => {
     const { service, repository } = createService();
 
     await expect(
-      service.discardImages([{ imageId: 'bad', imageVariantId: null }] as never, USER_ID),
+      service.discardFiles([{ fileId: 'bad', variantFileId: null }] as never, USER_ID),
     ).rejects.toBeInstanceOf(ClientError);
 
     expect(repository.discardOrphans).not.toHaveBeenCalled();
   });
 });
 
-describe('ImagesService binary access', () => {
+describe('FilesService garbage collection', () => {
+  it('continues batching when logical files are removed without deleting a shared blob', async () => {
+    const { service, repository, storage } = createService();
+    const cutoff = new Date('2026-01-01T00:00:00Z');
+    repository.queueExpiredOrphans
+      .mockResolvedValueOnce({ processed: 100, storageKeys: [] })
+      .mockResolvedValueOnce({ processed: 1, storageKeys: [] })
+      .mockResolvedValueOnce({ processed: 0, storageKeys: [] });
+
+    await expect(service.collectOrphanFiles(cutoff)).resolves.toBe(0);
+    expect(repository.queueExpiredOrphans).toHaveBeenCalledTimes(3);
+    expect(repository.listPendingDeletions).toHaveBeenCalledTimes(1);
+    expect(storage.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe('FilesService binary access', () => {
   it('returns original bytes only after the repository confirms ownership', async () => {
     const { service, repository, storage } = createService();
     repository.findOwned.mockResolvedValueOnce(undefined);
-    await expect(service.getImage(IMAGE_ID, USER_ID)).rejects.toMatchObject({
+    await expect(service.getFile(FILE_ID, USER_ID)).rejects.toMatchObject({
       kind: 'not_found',
-      code: 'image_not_found',
+      code: 'file_not_found',
     });
     expect(storage.get).not.toHaveBeenCalled();
 
     repository.findOwned.mockResolvedValueOnce({
-      id: IMAGE_ID,
-      storageKey: 'images/originals/private.png',
+      id: FILE_ID,
+      parentFileId: null,
+      storageKey: 'files/objects/private.png',
       mimeType: 'image/png',
       byteSize: PNG_1X1.length,
     });
     storage.get.mockResolvedValueOnce({ body: PNG_1X1, etag: 'etag' });
-    await expect(service.getImage(IMAGE_ID, USER_ID)).resolves.toMatchObject({
+    await expect(service.getFile(FILE_ID, USER_ID)).resolves.toMatchObject({
       body: PNG_1X1,
       mimeType: 'image/png',
     });
-    expect(repository.findOwned).toHaveBeenCalledWith(IMAGE_ID, USER_ID);
+    expect(repository.findOwned).toHaveBeenCalledWith(FILE_ID, USER_ID);
   });
 
   it('requires ownership of the parent image before serving a variant', async () => {
     const { service, repository, storage } = createService();
     repository.findVariantOwned.mockResolvedValueOnce(undefined);
-    await expect(
-      service.getImageVariant(IMAGE_ID, IMAGE_VARIANT_ID, USER_ID),
-    ).rejects.toMatchObject({
+    await expect(service.getVariant(FILE_ID, VARIANT_FILE_ID, USER_ID)).rejects.toMatchObject({
       kind: 'not_found',
     });
     expect(storage.get).not.toHaveBeenCalled();
 
     repository.findVariantOwned.mockResolvedValueOnce({
-      imageId: IMAGE_ID,
-      id: IMAGE_VARIANT_ID,
-      storageKey: 'images/derived/private.png',
+      fileId: FILE_ID,
+      id: VARIANT_FILE_ID,
+      storageKey: 'files/objects/private.png',
       mimeType: 'image/png',
       byteSize: PNG_1X1.length,
     });
     storage.get.mockResolvedValueOnce({ body: PNG_1X1 });
-    await expect(
-      service.getImageVariant(IMAGE_ID, IMAGE_VARIANT_ID, USER_ID),
-    ).resolves.toMatchObject({
+    await expect(service.getVariant(FILE_ID, VARIANT_FILE_ID, USER_ID)).resolves.toMatchObject({
       body: PNG_1X1,
     });
-    expect(repository.findVariantOwned).toHaveBeenCalledWith(IMAGE_ID, IMAGE_VARIANT_ID, USER_ID);
+    expect(repository.findVariantOwned).toHaveBeenCalledWith(FILE_ID, VARIANT_FILE_ID, USER_ID);
   });
 });

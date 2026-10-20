@@ -1,14 +1,14 @@
-import { imagesContract } from '@giaokhoa/shared/http/images';
+import { filesContract } from '@giaokhoa/shared/http/files';
 import type { LoadOriginalImage, LoadTikzSource, UploadImage } from '@giaokhoa/editor';
 import { browserHttp } from '#lib/http/browser.js';
 import { getRequestErrorMessage } from '#lib/http/errors.js';
 
-export const loadOriginalImage: LoadOriginalImage = async (imageId) => {
-  const src = imagesContract.get.path.replace(':id', encodeURIComponent(imageId));
+export const loadOriginalImage: LoadOriginalImage = async (fileId) => {
+  const src = filesContract.get.path.replace(':id', encodeURIComponent(fileId));
   try {
     const response = await browserHttp.request<Blob>({
       url: src,
-      method: imagesContract.get.method,
+      method: filesContract.get.method,
       responseType: 'blob',
     });
     return { blob: response.data, src };
@@ -17,13 +17,13 @@ export const loadOriginalImage: LoadOriginalImage = async (imageId) => {
   }
 };
 
-export const loadTikzSource: LoadTikzSource = async (imageId) => {
+export const loadTikzSource: LoadTikzSource = async (fileId) => {
   try {
     const response = await browserHttp.request<unknown>({
-      url: imagesContract.getSource.path.replace(':id', encodeURIComponent(imageId)),
-      method: imagesContract.getSource.method,
+      url: filesContract.getSource.path.replace(':id', encodeURIComponent(fileId)),
+      method: filesContract.getSource.method,
     });
-    const parsed = imagesContract.getSource.responses[200].safeParse(response.data);
+    const parsed = filesContract.getSource.responses[200].safeParse(response.data);
     if (!parsed.success) throw new Error('Nguồn TikZ không hợp lệ.');
     return parsed.data.source;
   } catch (error) {
@@ -31,10 +31,10 @@ export const loadTikzSource: LoadTikzSource = async (imageId) => {
   }
 };
 
-export const uploadImage: UploadImage = async (file, imageId, source) => {
-  if (imageId && source) throw new Error('TikZ không tạo crop variant.');
+export const uploadImage: UploadImage = async (file, fileId, source) => {
+  if (fileId && source) throw new Error('TikZ không tạo crop variant.');
 
-  const contract = imageId ? imagesContract.uploadVariant : imagesContract.upload;
+  const contract = fileId ? filesContract.uploadVariant : filesContract.upload;
   const formData = new FormData();
   formData.set(contract.file.field, file);
   if (source) {
@@ -42,9 +42,9 @@ export const uploadImage: UploadImage = async (file, imageId, source) => {
     formData.set('source', source.source);
   }
 
-  const endpoint = imageId
-    ? imagesContract.uploadVariant.path.replace(':id', encodeURIComponent(imageId))
-    : imagesContract.upload.path;
+  const endpoint = fileId
+    ? filesContract.uploadVariant.path.replace(':id', encodeURIComponent(fileId))
+    : filesContract.upload.path;
 
   try {
     const response = await browserHttp.request<unknown>({
@@ -60,13 +60,11 @@ export const uploadImage: UploadImage = async (file, imageId, source) => {
   }
 };
 
-export async function discardImages(
-  images: Array<{ imageId: string; imageVariantId: string | null }>,
-) {
-  const body = imagesContract.discard.body.parse({ images });
+export async function discardFiles(files: Array<{ fileId: string; variantFileId: string | null }>) {
+  const body = filesContract.discard.body.parse({ files });
   await browserHttp.request({
-    url: imagesContract.discard.path,
-    method: imagesContract.discard.method,
+    url: filesContract.discard.path,
+    method: filesContract.discard.method,
     data: body,
   });
 }

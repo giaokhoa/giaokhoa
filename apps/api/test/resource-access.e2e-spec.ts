@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { eq, inArray } from 'drizzle-orm';
@@ -8,10 +8,10 @@ import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Client, Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AuthorizationService } from '@giaokhoa/application/authorization/service';
-import { ImagesService } from '@giaokhoa/application/images/service';
+import { FilesService } from '@giaokhoa/application/files/service';
 import { QuestionsService } from '@giaokhoa/application/questions/service';
 import { PostgresAuthorizationRepository } from '@giaokhoa/database/authorization';
-import { PostgresImagesRepository } from '@giaokhoa/database/images';
+import { PostgresFilesRepository } from '@giaokhoa/database/files';
 import { migrationsFolder } from '@giaokhoa/database/migrations';
 import { PostgresQuestionsRepository } from '@giaokhoa/database/questions';
 import { users } from '@giaokhoa/database/schema/auth.generated';
@@ -28,7 +28,7 @@ const richDocument = {
 let pool: Pool;
 let db: Database;
 let questions: QuestionsService;
-let imagesRepository: PostgresImagesRepository;
+let filesRepository: PostgresFilesRepository;
 
 function databaseUrl(name: string) {
   const value = process.env.DATABASE_URL;
@@ -75,7 +75,7 @@ beforeAll(async () => {
   pool = new Pool({ connectionString: databaseUrl(testDatabaseName) });
   db = drizzle(pool, { schema });
   await migrate(db, { migrationsFolder });
-  imagesRepository = new PostgresImagesRepository(db);
+  filesRepository = new PostgresFilesRepository(db);
   const authorization = new AuthorizationService(new PostgresAuthorizationRepository(db));
   questions = new QuestionsService(new PostgresQuestionsRepository(db), authorization);
 }, 30_000);
@@ -147,45 +147,49 @@ describe('Question authoring and asset authorization', () => {
   it('refuses original and variant binary reads by non-owners before storage access', async () => {
     const owner = await createUser('user');
     const stranger = await createUser('user');
-    const original = await imagesRepository.create({
+    const contentHash = createHash('sha256').update('abc').digest('hex');
+    const storageKey = `files/${contentHash.slice(0, 2)}/${contentHash}`;
+    const original = await filesRepository.create({
       createdByUserId: owner.id,
-      storageKey: `images/originals/${randomUUID()}.png`,
+      contentHash,
+      storageKey,
       mimeType: 'image/png',
       byteSize: 3,
       width: 1,
       height: 1,
       originalFilename: 'private.png',
+      parentFileId: null,
     });
-    const variant = await imagesRepository.createVariant({
-      imageId: original.id,
-      storageKey: `images/derived/${randomUUID()}.png`,
+    const variant = await filesRepository.createVariant({
+      createdByUserId: owner.id,
+      contentHash,
+      storageKey,
       mimeType: 'image/png',
       byteSize: 3,
       width: 1,
       height: 1,
-      filename: 'private-crop.png',
+      originalFilename: 'private-crop.png',
+      parentFileId: original.id,
     });
     const storage = { get: vi.fn(async () => ({ body: Buffer.from('abc') })) };
-    const service = new ImagesService(
-      imagesRepository,
+    const service = new FilesService(
+      filesRepository,
       storage as never,
       new AuthorizationService(new PostgresAuthorizationRepository(db)),
     );
-    await expect(service.getImage(original.id, stranger.id)).rejects.toMatchObject({
+    await expect(service.getFile(original.id, stranger.id)).rejects.toMatchObject({
       kind: 'not_found',
     });
-    await expect(
-      service.getImageVariant(original.id, variant.id, stranger.id),
-    ).rejects.toMatchObject({ kind: 'not_found' });
+    await expect(service.getVariant(original.id, variant.id, stranger.id)).rejects.toMatchObject({
+      kind: 'not_found',
+    });
     expect(storage.get).not.toHaveBeenCalled();
-    await expect(service.getImage(original.id, owner.id)).resolves.toMatchObject({
+    await expect(service.getFile(original.id, owner.id)).resolves.toMatchObject({
       mimeType: 'image/png',
     });
-    await expect(service.getImageVariant(original.id, variant.id, owner.id)).resolves.toMatchObject(
-      {
-        mimeType: 'image/png',
-      },
-    );
+    await expect(service.getVariant(original.id, variant.id, owner.id)).resolves.toMatchObject({
+      mimeType: 'image/png',
+    });
     expect(storage.get).toHaveBeenCalledTimes(2);
   });
 });

@@ -1,6 +1,6 @@
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type * as schema from './schema/index.js';
-import type { images, imageSources, imageVariants, questionImageRefs } from './schema/images.js';
+import type { fileBlobs, files, fileSources, fileUses } from './schema/files.js';
 import type {
   curricula,
   curriculumNodes,
@@ -18,11 +18,11 @@ import type {
 
 export type Database = NodePgDatabase<typeof schema>;
 
-export type ImageRow = typeof images.$inferSelect;
-export type ImageInsert = typeof images.$inferInsert;
-export type ImageSourceRow = typeof imageSources.$inferSelect;
-export type ImageVariantRow = typeof imageVariants.$inferSelect;
-export type QuestionImageRefRow = typeof questionImageRefs.$inferSelect;
+export type FileRow = typeof files.$inferSelect;
+export type FileInsert = typeof files.$inferInsert;
+export type FileBlobRow = typeof fileBlobs.$inferSelect;
+export type FileUseRow = typeof fileUses.$inferSelect;
+export type FileSourceRow = typeof fileSources.$inferSelect;
 
 export type SubjectRow = typeof subjects.$inferSelect;
 export type SubjectInsert = typeof subjects.$inferInsert;

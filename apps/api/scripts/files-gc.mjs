@@ -1,17 +1,17 @@
 import 'dotenv/config';
 import { AuthorizationService } from '@giaokhoa/application/authorization/service';
-import { ImagesService } from '@giaokhoa/application/images/service';
+import { FilesService } from '@giaokhoa/application/files/service';
 import { PostgresAuthorizationRepository } from '@giaokhoa/database/authorization';
-import { PostgresImagesRepository } from '@giaokhoa/database/images';
+import { PostgresFilesRepository } from '@giaokhoa/database/files';
 import * as schema from '@giaokhoa/database/schema';
 import { ConfigService } from '@nestjs/config';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
-import { S3ImageStorage } from '../dist/images/s3-image-storage.js';
+import { S3FileStorage } from '../dist/files/s3-file-storage.js';
 
-const ttlHours = Number(process.env.IMAGE_ORPHAN_TTL_HOURS ?? '24');
+const ttlHours = Number(process.env.FILE_ORPHAN_TTL_HOURS ?? '24');
 if (!Number.isFinite(ttlHours) || ttlHours <= 0) {
-  throw new Error('IMAGE_ORPHAN_TTL_HOURS phải là số dương');
+  throw new Error('FILE_ORPHAN_TTL_HOURS phải là số dương');
 }
 
 const connectionString = process.env.DATABASE_URL;
@@ -25,7 +25,7 @@ if (!connectionString) throw new Error('Thiếu DATABASE_URL');
 if (!bucket) throw new Error('Thiếu S3_BUCKET');
 
 const client = new pg.Client({ connectionString });
-const storage = new S3ImageStorage(
+const storage = new S3FileStorage(
   new ConfigService({
     S3_BUCKET: bucket,
     S3_REGION: region,
@@ -39,12 +39,12 @@ const cutoff = new Date(Date.now() - ttlHours * 60 * 60 * 1000);
 await client.connect();
 try {
   const db = drizzle(client, { schema });
-  const repository = new PostgresImagesRepository(db);
+  const repository = new PostgresFilesRepository(db);
   const authorization = new AuthorizationService(new PostgresAuthorizationRepository(db));
-  const service = new ImagesService(repository, storage, authorization);
-  const deletedObjects = await service.collectOrphanImages(cutoff);
+  const service = new FilesService(repository, storage, authorization);
+  const deletedObjects = await service.collectOrphanFiles(cutoff);
   console.log(
-    `Deleted ${deletedObjects} storage object(s), including pending retries and orphan images older than ${ttlHours}h.`,
+    `Deleted ${deletedObjects} storage object(s), including pending retries and orphan files older than ${ttlHours}h.`,
   );
 } finally {
   await client.end();

@@ -3,8 +3,9 @@ import type {
   QuestionsRepository,
   StoredQuestion,
 } from '@giaokhoa/application/questions/repository';
-import type { ImageRef } from '@giaokhoa/shared/images';
+import type { FileRef } from '@giaokhoa/shared/files';
 import {
+  collectFileRefs,
   questionSchema,
   questionStatusSchema,
   stimulusSchema,
@@ -14,9 +15,10 @@ import {
   type StimulusCreate,
   type StimulusPatch,
 } from '@giaokhoa/shared/questions';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { examRevisionQuestions } from '../schema/exams.js';
-import { images, imageVariants, questionImageRefs } from '../schema/images.js';
+import { authzContexts } from '../schema/authorization.js';
+import { files, fileUses } from '../schema/files.js';
 import { question, questionBankEntries, questionVersions, stimuli } from '../schema/questions.js';
 import type { Database } from '../types.js';
 
@@ -53,10 +55,11 @@ function revisionChanged() {
 export class PostgresQuestionsRepository implements QuestionsRepository {
   constructor(private readonly db: Database) {}
 
-  async createQuestion(data: QuestionCreate, refs: ImageRef[], userId: string) {
+  async createQuestion(data: QuestionCreate, refs: FileRef[], userId: string) {
     return this.db.transaction(async (tx) => {
-      await this.validateImageRefs(tx, refs, userId);
+      // Luôn khóa stimulus trước file để không đảo thứ tự với updateStimulus.
       await this.lockOwnedStimulus(tx, data.stimulusId, userId);
+      await this.validateFileRefs(tx, refs, userId);
       const [entry] = await tx
         .insert(questionBankEntries)
         .values({ createdByUserId: userId })
@@ -72,7 +75,7 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
         version: 1,
         status,
       });
-      await this.replaceImageRefs(tx, content.id, [], refs);
+      await this.replaceFileUses(tx, entry.id, content.id, definition);
       return parseStoredQuestion(entry.id, userId, 1, status, content);
     });
   }
@@ -180,7 +183,7 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
     id: string,
     expectedVersion: number,
     data: QuestionCreate,
-    refs: ImageRef[],
+    refs: FileRef[],
     userId: string,
   ) {
     return this.db.transaction(async (tx) => {
@@ -203,8 +206,9 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
         .orderBy(desc(questionVersions.version))
         .limit(1);
       if (!latest || latest.version !== expectedVersion) throw revisionChanged();
-      await this.validateImageRefs(tx, refs, userId);
+      // Luôn khóa stimulus trước file để không đảo thứ tự với updateStimulus.
       await this.lockOwnedStimulus(tx, data.stimulusId, userId);
+      await this.validateFileRefs(tx, refs, userId);
       const { status, ...definition } = data;
 
       const [content] = await tx
@@ -218,8 +222,8 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
         version: nextVersion,
         status,
       });
-      // Mỗi phiên bản nội dung sở hữu tham chiếu ảnh riêng, kể cả bản nháp đã bị thay thế.
-      await this.replaceImageRefs(tx, content.id, [], refs);
+      // Mỗi phiên bản nội dung giữ các tham chiếu file riêng, kể cả bản nháp đã bị thay thế.
+      await this.replaceFileUses(tx, id, content.id, definition);
       return parseStoredQuestion(id, userId, nextVersion, status, content);
     });
   }
@@ -318,31 +322,42 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
         .from(questionVersions)
         .where(eq(questionVersions.questionBankEntryId, id));
       const questionIds = versions.map(({ questionId }) => questionId);
-      const previousRefs = questionIds.length
+      const previousFiles = questionIds.length
         ? await tx
-            .select({
-              imageId: questionImageRefs.imageId,
-              imageVariantId: questionImageRefs.imageVariantId,
-            })
-            .from(questionImageRefs)
-            .where(inArray(questionImageRefs.questionId, questionIds))
+            .select({ fileId: fileUses.fileId })
+            .from(fileUses)
+            .where(and(eq(fileUses.component, 'questions'), inArray(fileUses.itemId, questionIds)))
         : [];
+      await this.lockFileIds(
+        tx,
+        previousFiles.map(({ fileId }) => fileId),
+      );
 
       if (questionIds.length) {
+        await tx
+          .delete(fileUses)
+          .where(and(eq(fileUses.component, 'questions'), inArray(fileUses.itemId, questionIds)));
         await tx.delete(question).where(inArray(question.id, questionIds));
       }
       await tx.delete(questionBankEntries).where(eq(questionBankEntries.id, id));
-      await this.markDetachedRefs(tx, previousRefs);
+      await this.markDetachedFiles(
+        tx,
+        previousFiles.map(({ fileId }) => fileId),
+      );
       return { id };
     });
   }
 
-  async createStimulus(data: StimulusCreate, userId: string): Promise<Stimulus> {
-    const [stimulus] = await this.db
-      .insert(stimuli)
-      .values({ ...data, createdByUserId: userId })
-      .returning();
-    return parseStimulus(stimulus);
+  async createStimulus(data: StimulusCreate, refs: FileRef[], userId: string): Promise<Stimulus> {
+    return this.db.transaction(async (tx) => {
+      await this.validateFileRefs(tx, refs, userId);
+      const [stimulus] = await tx
+        .insert(stimuli)
+        .values({ ...data, createdByUserId: userId })
+        .returning();
+      await this.replaceStimulusFileUses(tx, stimulus.id, refs, userId);
+      return parseStimulus(stimulus);
+    });
   }
 
   async findStimulusOwned(id: string, userId: string): Promise<Stimulus | undefined> {
@@ -357,6 +372,7 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
   async updateStimulus(
     id: string,
     data: StimulusPatch,
+    refs: FileRef[] | null,
     userId: string,
   ): Promise<Stimulus | undefined> {
     return this.db.transaction(async (tx) => {
@@ -369,7 +385,21 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
         .for('update');
       if (!existing) return undefined;
       await this.assertStimulusUnreferenced(tx, id);
+      if (refs !== null) {
+        const prior = await tx
+          .select({ fileId: fileUses.fileId })
+          .from(fileUses)
+          .where(and(eq(fileUses.component, 'stimuli'), eq(fileUses.itemId, id)));
+        // Khóa hợp nhất refs cũ và mới trước khi đổi nội dung để tránh khóa chéo khi sửa đồng thời.
+        await this.validateFileRefs(
+          tx,
+          refs,
+          userId,
+          prior.map(({ fileId }) => fileId),
+        );
+      }
       const [updated] = await tx.update(stimuli).set(data).where(owned).returning();
+      if (updated && refs !== null) await this.replaceStimulusFileUses(tx, id, refs, userId);
       return updated ? parseStimulus(updated) : undefined;
     });
   }
@@ -392,7 +422,22 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
       if (inUse) {
         throw new ClientError('conflict', 'stimulus_in_use', 'Ngữ liệu đang được câu hỏi sử dụng');
       }
+      const previousFiles = await tx
+        .select({ fileId: fileUses.fileId })
+        .from(fileUses)
+        .where(and(eq(fileUses.component, 'stimuli'), eq(fileUses.itemId, id)));
+      await this.lockFileIds(
+        tx,
+        previousFiles.map(({ fileId }) => fileId),
+      );
+      await tx
+        .delete(fileUses)
+        .where(and(eq(fileUses.component, 'stimuli'), eq(fileUses.itemId, id)));
       const [deleted] = await tx.delete(stimuli).where(owned).returning({ id: stimuli.id });
+      await this.markDetachedFiles(
+        tx,
+        previousFiles.map(({ fileId }) => fileId),
+      );
       return deleted;
     });
   }
@@ -433,141 +478,177 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
     }
   }
 
-  private async lockImageRefs(tx: Transaction, refs: ImageRef[]) {
-    const imageIds = [...new Set(refs.map(({ imageId }) => imageId))].sort();
-    if (imageIds.length) {
-      await tx
-        .select({ id: images.id })
-        .from(images)
-        .where(inArray(images.id, imageIds))
-        .orderBy(images.id)
-        .for('update');
-    }
-    const variantIds = [
-      ...new Set(refs.flatMap(({ imageVariantId }) => (imageVariantId ? [imageVariantId] : []))),
-    ].sort();
-    if (variantIds.length) {
-      await tx
-        .select({ id: imageVariants.id })
-        .from(imageVariants)
-        .where(inArray(imageVariants.id, variantIds))
-        .orderBy(imageVariants.id)
-        .for('update');
-    }
+  private async lockFileIds(tx: Transaction, ids: string[]) {
+    const unique = [...new Set(ids)].sort();
+    if (!unique.length) return;
+    await tx
+      .select({ id: files.id })
+      .from(files)
+      .where(inArray(files.id, unique))
+      .orderBy(sql`case when ${files.parentFileId} is null then 0 else 1 end`, files.id)
+      .for('update');
   }
 
-  private async validateImageRefs(tx: Transaction, refs: ImageRef[], userId: string) {
-    const imageIds = [...new Set(refs.map(({ imageId }) => imageId))];
-    if (!imageIds.length) return;
-
-    const ownedAssets = await tx
-      .select({ id: images.id })
-      .from(images)
-      .where(and(inArray(images.id, imageIds), eq(images.createdByUserId, userId)))
-      .orderBy(images.id)
-      .for('update');
-
-    if (ownedAssets.length !== imageIds.length) {
-      throw new ClientError(
-        'invalid',
-        'question_image_reference_invalid',
-        'Question chứa ảnh không tồn tại hoặc không thuộc người dùng',
-      );
-    }
-
-    const variantRefs = refs.filter(
-      (ref): ref is ImageRef & { imageVariantId: string } => ref.imageVariantId !== null,
+  private async validateFileRefs(
+    tx: Transaction,
+    refs: FileRef[],
+    userId: string,
+    extraLockIds: string[] = [],
+  ) {
+    const originalIds = [...new Set(refs.map(({ fileId }) => fileId))].sort();
+    const variants = refs.filter(
+      (ref): ref is FileRef & { variantFileId: string } => ref.variantFileId !== null,
     );
-    const imageVariantIds = [...new Set(variantRefs.map(({ imageVariantId }) => imageVariantId))];
-    if (!imageVariantIds.length) return;
+    const variantIds = [...new Set(variants.map(({ variantFileId }) => variantFileId))].sort();
+    // Khóa theo cây: file gốc trước, crop sau, cùng thứ tự với GC và detach.
+    await this.lockFileIds(tx, [...originalIds, ...variantIds, ...extraLockIds]);
+    if (!originalIds.length) return;
 
-    const variants = await tx
-      .select({ id: imageVariants.id, imageId: imageVariants.imageId })
-      .from(imageVariants)
-      .where(inArray(imageVariants.id, imageVariantIds))
-      .orderBy(imageVariants.id)
-      .for('update');
-
-    const byId = new Map(variants.map((variant) => [variant.id, variant.imageId]));
+    const originals = await tx
+      .select({ id: files.id, parentFileId: files.parentFileId })
+      .from(files)
+      .where(and(inArray(files.id, originalIds), eq(files.createdByUserId, userId)));
     if (
-      variants.length !== imageVariantIds.length ||
-      variantRefs.some(({ imageId, imageVariantId }) => byId.get(imageVariantId) !== imageId)
+      originals.length !== originalIds.length ||
+      originals.some(({ parentFileId }) => parentFileId !== null)
     ) {
       throw new ClientError(
         'invalid',
-        'question_image_reference_invalid',
-        'Question chứa phiên bản ảnh không hợp lệ',
+        'question_file_reference_invalid',
+        'Nội dung chứa file không tồn tại hoặc không thuộc người dùng',
+      );
+    }
+
+    if (!variantIds.length) return;
+    const ownedVariants = await tx
+      .select({ id: files.id, parentFileId: files.parentFileId })
+      .from(files)
+      .where(and(inArray(files.id, variantIds), eq(files.createdByUserId, userId)));
+    const parents = new Map(ownedVariants.map(({ id, parentFileId }) => [id, parentFileId]));
+    if (
+      ownedVariants.length !== variantIds.length ||
+      variants.some(({ fileId, variantFileId }) => parents.get(variantFileId) !== fileId)
+    ) {
+      throw new ClientError(
+        'invalid',
+        'question_file_reference_invalid',
+        'Nội dung chứa biến thể file không hợp lệ',
       );
     }
   }
 
-  private async replaceImageRefs(
+  private async ensureContext(
     tx: Transaction,
-    questionId: string,
-    previousRefs: ImageRef[],
-    nextRefs: ImageRef[],
-  ) {
-    await tx.delete(questionImageRefs).where(eq(questionImageRefs.questionId, questionId));
-
-    if (nextRefs.length) {
-      await tx
-        .insert(questionImageRefs)
-        .values(
-          nextRefs.map(({ imageId, imageVariantId }) => ({ questionId, imageId, imageVariantId })),
-        );
-      const imageIds = [...new Set(nextRefs.map(({ imageId }) => imageId))];
-      await tx.update(images).set({ orphanedAt: null }).where(inArray(images.id, imageIds));
-
-      const imageVariantIds = [
-        ...new Set(
-          nextRefs.flatMap(({ imageVariantId }) => (imageVariantId ? [imageVariantId] : [])),
-        ),
-      ];
-      if (imageVariantIds.length) {
-        await tx
-          .update(imageVariants)
-          .set({ orphanedAt: null })
-          .where(inArray(imageVariants.id, imageVariantIds));
-      }
-    }
-
-    await this.markDetachedRefs(tx, previousRefs);
+    kind: 'bank' | 'user',
+    resourceKey: string,
+  ): Promise<string> {
+    await tx.insert(authzContexts).values({ kind, resourceKey }).onConflictDoNothing();
+    const [context] = await tx
+      .select({ id: authzContexts.id })
+      .from(authzContexts)
+      .where(and(eq(authzContexts.kind, kind), eq(authzContexts.resourceKey, resourceKey)))
+      .limit(1);
+    if (!context) throw new Error('Không tạo được file context');
+    return context.id;
   }
 
-  private async markDetachedRefs(tx: Transaction, refs: ImageRef[]) {
-    await this.lockImageRefs(tx, refs);
-    const now = new Date();
-    const imageIds = [...new Set(refs.map(({ imageId }) => imageId))].sort();
-    if (imageIds.length) {
-      const stillReferenced = await tx
-        .select({ imageId: questionImageRefs.imageId })
-        .from(questionImageRefs)
-        .where(inArray(questionImageRefs.imageId, imageIds));
-      const used = new Set(stillReferenced.map(({ imageId }) => imageId));
-      const orphaned = imageIds.filter((id) => !used.has(id));
-      if (orphaned.length) {
-        await tx.update(images).set({ orphanedAt: now }).where(inArray(images.id, orphaned));
+  private async attachFileUses(
+    tx: Transaction,
+    contextId: string,
+    component: 'questions' | 'stimuli',
+    itemId: string,
+    areas: Array<{ fileArea: 'content' | 'guidance' | 'solution'; refs: FileRef[] }>,
+  ) {
+    const rows: Array<{
+      fileId: string;
+      contextId: string;
+      component: string;
+      fileArea: string;
+      itemId: string;
+    }> = [];
+
+    for (const { fileArea, refs } of areas) {
+      for (const { fileId, variantFileId } of refs) {
+        // Chỉ biến thể đang hiển thị được cấp quyền qua file area nội dung.
+        // Original của ảnh crop vẫn được giữ để chủ sở hữu chỉnh sửa, nhưng không phát cho học sinh.
+        rows.push({
+          fileId: variantFileId ?? fileId,
+          contextId,
+          component,
+          fileArea,
+          itemId,
+        });
+        if (variantFileId) {
+          rows.push({ fileId, contextId, component, fileArea: 'original', itemId });
+        }
       }
     }
+    if (!rows.length) return;
 
-    const imageVariantIds = [
-      ...new Set(refs.flatMap(({ imageVariantId }) => (imageVariantId ? [imageVariantId] : []))),
-    ];
-    if (imageVariantIds.length) {
-      const stillReferenced = await tx
-        .select({ imageVariantId: questionImageRefs.imageVariantId })
-        .from(questionImageRefs)
-        .where(inArray(questionImageRefs.imageVariantId, imageVariantIds));
-      const used = new Set(
-        stillReferenced.flatMap(({ imageVariantId }) => (imageVariantId ? [imageVariantId] : [])),
+    await tx.insert(fileUses).values(rows).onConflictDoNothing();
+    const usedFileIds = [...new Set(rows.map(({ fileId }) => fileId))];
+    await tx.update(files).set({ orphanedAt: null }).where(inArray(files.id, usedFileIds));
+    // File đã được attach không cần giữ thêm draft reference.
+    await tx
+      .delete(fileUses)
+      .where(
+        and(
+          inArray(fileUses.fileId, usedFileIds),
+          eq(fileUses.component, 'user'),
+          eq(fileUses.fileArea, 'draft'),
+        ),
       );
-      const orphaned = imageVariantIds.filter((id) => !used.has(id));
-      if (orphaned.length) {
-        await tx
-          .update(imageVariants)
-          .set({ orphanedAt: now })
-          .where(inArray(imageVariants.id, orphaned));
-      }
+  }
+
+  private async replaceFileUses(
+    tx: Transaction,
+    bankEntryId: string,
+    questionContentId: string,
+    definition: Pick<QuestionCreate, 'content' | 'guidance' | 'solution'>,
+  ) {
+    const contextId = await this.ensureContext(tx, 'bank', bankEntryId);
+    await this.attachFileUses(tx, contextId, 'questions', questionContentId, [
+      { fileArea: 'content', refs: collectFileRefs(definition.content) },
+      { fileArea: 'guidance', refs: collectFileRefs(definition.guidance) },
+      { fileArea: 'solution', refs: collectFileRefs(definition.solution) },
+    ]);
+  }
+
+  private async replaceStimulusFileUses(
+    tx: Transaction,
+    stimulusId: string,
+    refs: FileRef[],
+    userId: string,
+  ) {
+    const previous = await tx
+      .select({ fileId: fileUses.fileId })
+      .from(fileUses)
+      .where(and(eq(fileUses.component, 'stimuli'), eq(fileUses.itemId, stimulusId)));
+    await tx
+      .delete(fileUses)
+      .where(and(eq(fileUses.component, 'stimuli'), eq(fileUses.itemId, stimulusId)));
+    const contextId = await this.ensureContext(tx, 'user', userId);
+    await this.attachFileUses(tx, contextId, 'stimuli', stimulusId, [
+      { fileArea: 'content', refs },
+    ]);
+    await this.markDetachedFiles(
+      tx,
+      previous.map(({ fileId }) => fileId),
+    );
+  }
+
+  private async markDetachedFiles(tx: Transaction, ids: string[]) {
+    const unique = [...new Set(ids)].sort();
+    if (!unique.length) return;
+    await this.lockFileIds(tx, unique);
+    const remaining = await tx
+      .select({ fileId: fileUses.fileId })
+      .from(fileUses)
+      .where(inArray(fileUses.fileId, unique));
+    const attached = new Set(remaining.map(({ fileId }) => fileId));
+    const orphaned = unique.filter((id) => !attached.has(id));
+    if (orphaned.length) {
+      await tx.update(files).set({ orphanedAt: new Date() }).where(inArray(files.id, orphaned));
     }
   }
 }

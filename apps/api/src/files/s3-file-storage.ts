@@ -1,4 +1,4 @@
-import type { ImageStorage } from '@giaokhoa/application/images/storage';
+import type { FileStorage } from '@giaokhoa/application/files/storage';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
 
 @Injectable()
-export class S3ImageStorage implements ImageStorage {
+export class S3FileStorage implements FileStorage {
   private readonly bucket: string;
   private readonly client: S3Client;
 

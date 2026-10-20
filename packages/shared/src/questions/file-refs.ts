@@ -1,7 +1,7 @@
-import type { ImageRef } from '../images.js';
+import type { FileRef } from '../files.js';
 
-export function collectImageRefs(value: unknown): ImageRef[] {
-  const refs = new Map<string, ImageRef>();
+export function collectFileRefs(value: unknown): FileRef[] {
+  const refs = new Map<string, FileRef>();
 
   function visit(value: unknown): void {
     if (Array.isArray(value)) {
@@ -13,12 +13,11 @@ export function collectImageRefs(value: unknown): ImageRef[] {
     const record = value as Record<string, unknown>;
     if (record.type === 'image' && record.attrs && typeof record.attrs === 'object') {
       const attrs = record.attrs as Record<string, unknown>;
-      if (typeof attrs.imageId === 'string') {
-        const imageVariantId =
-          typeof attrs.imageVariantId === 'string' ? attrs.imageVariantId : null;
-        refs.set(`${attrs.imageId}:${imageVariantId ?? ''}`, {
-          imageId: attrs.imageId,
-          imageVariantId,
+      if (typeof attrs.fileId === 'string') {
+        const variantFileId = typeof attrs.variantFileId === 'string' ? attrs.variantFileId : null;
+        refs.set(`${attrs.fileId}:${variantFileId ?? ''}`, {
+          fileId: attrs.fileId,
+          variantFileId,
         });
       }
     }
