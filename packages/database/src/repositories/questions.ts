@@ -15,6 +15,7 @@ import {
   type StimulusPatch,
 } from '@giaokhoa/shared/questions';
 import { and, desc, eq, inArray } from 'drizzle-orm';
+import { examRevisionQuestions } from '../schema/exams.js';
 import { images, imageVariants, questionImageRefs } from '../schema/images.js';
 import { question, questionBankEntries, questionVersions, stimuli } from '../schema/questions.js';
 import type { Database } from '../types.js';
@@ -253,6 +254,27 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
         return parseStoredQuestion(id, userId, latest.version, status, latest.content);
       }
 
+      const [pinned] = await tx
+        .select({ id: examRevisionQuestions.examRevisionId })
+        .from(examRevisionQuestions)
+        .innerJoin(
+          questionVersions,
+          eq(examRevisionQuestions.questionVersionId, questionVersions.id),
+        )
+        .where(
+          and(
+            eq(questionVersions.questionBankEntryId, id),
+            eq(questionVersions.version, latest.version),
+          ),
+        )
+        .limit(1);
+      if (pinned)
+        throw new ClientError(
+          'conflict',
+          'question_in_exam',
+          'Phiên bản câu hỏi đã được chốt vào đề',
+        );
+
       // Chuyển từ nháp sang sẵn sàng dùng chung khóa stimulus với thao tác chỉnh sửa stimulus.
       if (status === 'ready') await this.lockOwnedStimulus(tx, latest.content.stimulusId, userId);
       await tx
@@ -277,6 +299,18 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
         .limit(1)
         .for('update');
       if (!owned) return undefined;
+
+      const [pinned] = await tx
+        .select({ id: examRevisionQuestions.examRevisionId })
+        .from(examRevisionQuestions)
+        .innerJoin(
+          questionVersions,
+          eq(examRevisionQuestions.questionVersionId, questionVersions.id),
+        )
+        .where(eq(questionVersions.questionBankEntryId, id))
+        .limit(1);
+      if (pinned)
+        throw new ClientError('conflict', 'question_in_exam', 'Câu hỏi đã được chốt vào đề');
 
       const versions = await tx
         .select({ questionId: questionVersions.questionId })

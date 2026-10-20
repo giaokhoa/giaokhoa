@@ -20,6 +20,10 @@
       "types": "./src/classes.ts",
       "default": "./dist/classes.js"
     },
+    "./exams": {
+      "types": "./src/exams.ts",
+      "default": "./dist/exams.js"
+    },
     "./http/*": {
       "types": "./src/http/*.ts",
       "default": "./dist/http/*.js"

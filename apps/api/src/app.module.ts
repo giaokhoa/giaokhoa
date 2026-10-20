@@ -12,6 +12,7 @@ import { QuestionsModule } from './questions/questions.module.js';
 import { ClientErrorFilter } from './common/client-error.filter.js';
 import { AuthorizationModule } from './authorization/authorization.module.js';
 import { ClassesModule } from './classes/classes.module.js';
+import { ExamsModule } from './exams/exams.module.js';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { ClassesModule } from './classes/classes.module.js';
     AuthModule,
     AuthorizationModule,
     ClassesModule,
+    ExamsModule,
     ImagesModule,
     CurriculumModule,
     QuestionsModule,
