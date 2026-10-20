@@ -11,7 +11,7 @@ import {
   unique,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { questions } from './questions.js';
+import { questionBankEntries } from './questions.js';
 
 export const subjects = pgTable(
   'subjects',
@@ -93,15 +93,15 @@ export const learningOutcomes = pgTable(
 export const questionSubjects = pgTable(
   'question_subjects',
   {
-    questionId: uuid('question_id')
+    questionBankEntryId: uuid('question_bank_entry_id')
       .notNull()
-      .references(() => questions.id, { onDelete: 'cascade' }),
+      .references(() => questionBankEntries.id, { onDelete: 'cascade' }),
     subjectId: uuid('subject_id')
       .notNull()
       .references(() => subjects.id, { onDelete: 'cascade' }),
   },
   (table) => [
-    primaryKey({ columns: [table.questionId, table.subjectId] }),
+    primaryKey({ columns: [table.questionBankEntryId, table.subjectId] }),
     index('question_subjects_subject_id_idx').on(table.subjectId),
   ],
 );
@@ -109,15 +109,15 @@ export const questionSubjects = pgTable(
 export const questionLearningOutcomes = pgTable(
   'question_learning_outcomes',
   {
-    questionId: uuid('question_id')
+    questionBankEntryId: uuid('question_bank_entry_id')
       .notNull()
-      .references(() => questions.id, { onDelete: 'cascade' }),
+      .references(() => questionBankEntries.id, { onDelete: 'cascade' }),
     learningOutcomeId: uuid('learning_outcome_id')
       .notNull()
       .references(() => learningOutcomes.id, { onDelete: 'cascade' }),
   },
   (table) => [
-    primaryKey({ columns: [table.questionId, table.learningOutcomeId] }),
+    primaryKey({ columns: [table.questionBankEntryId, table.learningOutcomeId] }),
     index('question_learning_outcomes_learning_outcome_id_idx').on(table.learningOutcomeId),
   ],
 );

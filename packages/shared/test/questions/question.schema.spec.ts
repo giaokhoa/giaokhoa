@@ -3,6 +3,7 @@ import {
   questionCreateSchema,
   questionPatchSchema,
   questionSchema,
+  questionVersionSummarySchema,
   readyQuestionSchema,
   stimulusCreateSchema,
 } from '../../src/questions.js';
@@ -104,6 +105,20 @@ test('canonical question từ chối field không khai báo thay vì strip im l�
 test('patch từ chối field không khai báo', () => {
   expect(questionPatchSchema.safeParse({ typo: true }).success).toBe(false);
   expect(questionPatchSchema.safeParse({ type: 'short_answer', typo: true }).success).toBe(false);
+  expect(questionPatchSchema.safeParse({}).success).toBe(false);
+});
+
+test('patch cho phép đổi trạng thái độc lập hoặc chọn trạng thái khi sửa nội dung', () => {
+  expect(questionPatchSchema.safeParse({ status: 'ready' }).success).toBe(true);
+  expect(questionPatchSchema.safeParse({ status: 'draft' }).success).toBe(true);
+  expect(questionPatchSchema.safeParse({ status: 'hidden' }).success).toBe(false);
+  expect(
+    questionPatchSchema.safeParse({
+      status: 'ready',
+      content: shortAnswer.content,
+      solution: shortAnswer.solution,
+    }).success,
+  ).toBe(true);
 });
 
 test('essay solution không được đồng thời có answer và answers', () => {
@@ -125,6 +140,7 @@ test('stimulus và question response dùng object contract strict', () => {
 
   const response = {
     id: '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d20',
+    version: 1,
     status: 'ready' as const,
     ...shortAnswer,
     stimulusId: null,
@@ -132,6 +148,24 @@ test('stimulus và question response dùng object contract strict', () => {
   };
   expect(questionSchema.safeParse(response).success).toBe(true);
   expect(questionSchema.safeParse({ ...response, typo: true }).success).toBe(false);
+  expect(questionSchema.safeParse({ ...response, version: 0 }).success).toBe(false);
+  expect(questionSchema.safeParse({ ...response, version: 1.5 }).success).toBe(false);
+  expect(questionSchema.safeParse({ ...response, version: undefined }).success).toBe(false);
+});
+
+test('version history chỉ chứa version và status hợp lệ', () => {
+  expect(questionVersionSummarySchema.safeParse({ version: 1, status: 'draft' }).success).toBe(
+    true,
+  );
+  expect(questionVersionSummarySchema.safeParse({ version: 2, status: 'ready' }).success).toBe(
+    true,
+  );
+  expect(questionVersionSummarySchema.safeParse({ version: 0, status: 'ready' }).success).toBe(
+    false,
+  );
+  expect(
+    questionVersionSummarySchema.safeParse({ version: 1, status: 'ready', typo: true }).success,
+  ).toBe(false);
 });
 
 test('solution không được reference child ngoài question', () => {

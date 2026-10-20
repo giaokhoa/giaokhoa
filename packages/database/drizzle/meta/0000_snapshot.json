@@ -1,5 +1,5 @@
 {
-  "id": "dd5c76c0-6623-4180-81a8-c21da86cef34",
+  "id": "3663d623-2f47-4d19-a766-01e04aa694e0",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -414,10 +414,10 @@
         }
       },
       "foreignKeys": {
-        "question_image_refs_question_id_questions_id_fk": {
-          "name": "question_image_refs_question_id_questions_id_fk",
+        "question_image_refs_question_id_question_id_fk": {
+          "name": "question_image_refs_question_id_question_id_fk",
           "tableFrom": "question_image_refs",
-          "tableTo": "questions",
+          "tableTo": "question",
           "columnsFrom": ["question_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
@@ -1092,8 +1092,8 @@
       "name": "question_learning_outcomes",
       "schema": "",
       "columns": {
-        "question_id": {
-          "name": "question_id",
+        "question_bank_entry_id": {
+          "name": "question_bank_entry_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -1123,11 +1123,11 @@
         }
       },
       "foreignKeys": {
-        "question_learning_outcomes_question_id_questions_id_fk": {
-          "name": "question_learning_outcomes_question_id_questions_id_fk",
+        "question_learning_outcomes_question_bank_entry_id_question_bank_entries_id_fk": {
+          "name": "question_learning_outcomes_question_bank_entry_id_question_bank_entries_id_fk",
           "tableFrom": "question_learning_outcomes",
-          "tableTo": "questions",
-          "columnsFrom": ["question_id"],
+          "tableTo": "question_bank_entries",
+          "columnsFrom": ["question_bank_entry_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -1143,9 +1143,9 @@
         }
       },
       "compositePrimaryKeys": {
-        "question_learning_outcomes_question_id_learning_outcome_id_pk": {
-          "name": "question_learning_outcomes_question_id_learning_outcome_id_pk",
-          "columns": ["question_id", "learning_outcome_id"]
+        "question_learning_outcomes_question_bank_entry_id_learning_outcome_id_pk": {
+          "name": "question_learning_outcomes_question_bank_entry_id_learning_outcome_id_pk",
+          "columns": ["question_bank_entry_id", "learning_outcome_id"]
         }
       },
       "uniqueConstraints": {},
@@ -1157,8 +1157,8 @@
       "name": "question_subjects",
       "schema": "",
       "columns": {
-        "question_id": {
-          "name": "question_id",
+        "question_bank_entry_id": {
+          "name": "question_bank_entry_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -1188,11 +1188,11 @@
         }
       },
       "foreignKeys": {
-        "question_subjects_question_id_questions_id_fk": {
-          "name": "question_subjects_question_id_questions_id_fk",
+        "question_subjects_question_bank_entry_id_question_bank_entries_id_fk": {
+          "name": "question_subjects_question_bank_entry_id_question_bank_entries_id_fk",
           "tableFrom": "question_subjects",
-          "tableTo": "questions",
-          "columnsFrom": ["question_id"],
+          "tableTo": "question_bank_entries",
+          "columnsFrom": ["question_bank_entry_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -1208,9 +1208,9 @@
         }
       },
       "compositePrimaryKeys": {
-        "question_subjects_question_id_subject_id_pk": {
-          "name": "question_subjects_question_id_subject_id_pk",
-          "columns": ["question_id", "subject_id"]
+        "question_subjects_question_bank_entry_id_subject_id_pk": {
+          "name": "question_subjects_question_bank_entry_id_subject_id_pk",
+          "columns": ["question_bank_entry_id", "subject_id"]
         }
       },
       "uniqueConstraints": {},
@@ -1268,8 +1268,8 @@
       },
       "isRLSEnabled": false
     },
-    "public.questions": {
-      "name": "questions",
+    "public.question": {
+      "name": "question",
       "schema": "",
       "columns": {
         "id": {
@@ -1297,12 +1297,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
         "content": {
           "name": "content",
           "type": "jsonb",
@@ -1323,8 +1317,8 @@
         }
       },
       "indexes": {
-        "questions_created_by_user_id_idx": {
-          "name": "questions_created_by_user_id_idx",
+        "question_created_by_user_id_idx": {
+          "name": "question_created_by_user_id_idx",
           "columns": [
             {
               "expression": "created_by_user_id",
@@ -1338,8 +1332,8 @@
           "method": "btree",
           "with": {}
         },
-        "questions_stimulus_id_idx": {
-          "name": "questions_stimulus_id_idx",
+        "question_stimulus_id_idx": {
+          "name": "question_stimulus_id_idx",
           "columns": [
             {
               "expression": "stimulus_id",
@@ -1355,18 +1349,18 @@
         }
       },
       "foreignKeys": {
-        "questions_created_by_user_id_users_id_fk": {
-          "name": "questions_created_by_user_id_users_id_fk",
-          "tableFrom": "questions",
+        "question_created_by_user_id_users_id_fk": {
+          "name": "question_created_by_user_id_users_id_fk",
+          "tableFrom": "question",
           "tableTo": "users",
           "columnsFrom": ["created_by_user_id"],
           "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "questions_stimulus_id_stimuli_id_fk": {
-          "name": "questions_stimulus_id_stimuli_id_fk",
-          "tableFrom": "questions",
+        "question_stimulus_id_stimuli_id_fk": {
+          "name": "question_stimulus_id_stimuli_id_fk",
+          "tableFrom": "question",
           "tableTo": "stimuli",
           "columnsFrom": ["stimulus_id"],
           "columnsTo": ["id"],
@@ -1378,17 +1372,160 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "questions_status_check": {
-          "name": "questions_status_check",
-          "value": "\"questions\".\"status\" in ('draft', 'ready')"
+        "question_type_check": {
+          "name": "question_type_check",
+          "value": "\"question\".\"type\" in ('multiple_choice', 'true_false', 'short_answer', 'essay')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.question_bank_entries": {
+      "name": "question_bank_entries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "uuidv7()"
         },
-        "questions_ready_solution_check": {
-          "name": "questions_ready_solution_check",
-          "value": "\"questions\".\"status\" = 'draft' or \"questions\".\"solution\" is not null"
+        "created_by_user_id": {
+          "name": "created_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "question_bank_entries_created_by_user_id_idx": {
+          "name": "question_bank_entries_created_by_user_id_idx",
+          "columns": [
+            {
+              "expression": "created_by_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "question_bank_entries_created_by_user_id_users_id_fk": {
+          "name": "question_bank_entries_created_by_user_id_users_id_fk",
+          "tableFrom": "question_bank_entries",
+          "tableTo": "users",
+          "columnsFrom": ["created_by_user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.question_versions": {
+      "name": "question_versions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "uuidv7()"
         },
-        "questions_type_check": {
-          "name": "questions_type_check",
-          "value": "\"questions\".\"type\" in ('multiple_choice', 'true_false', 'short_answer', 'essay')"
+        "question_bank_entry_id": {
+          "name": "question_bank_entry_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "question_id": {
+          "name": "question_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "question_versions_entry_id_idx": {
+          "name": "question_versions_entry_id_idx",
+          "columns": [
+            {
+              "expression": "question_bank_entry_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "question_versions_question_bank_entry_id_question_bank_entries_id_fk": {
+          "name": "question_versions_question_bank_entry_id_question_bank_entries_id_fk",
+          "tableFrom": "question_versions",
+          "tableTo": "question_bank_entries",
+          "columnsFrom": ["question_bank_entry_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "question_versions_question_id_question_id_fk": {
+          "name": "question_versions_question_id_question_id_fk",
+          "tableFrom": "question_versions",
+          "tableTo": "question",
+          "columnsFrom": ["question_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "question_versions_entry_version_unique": {
+          "name": "question_versions_entry_version_unique",
+          "nullsNotDistinct": false,
+          "columns": ["question_bank_entry_id", "version"]
+        },
+        "question_versions_question_unique": {
+          "name": "question_versions_question_unique",
+          "nullsNotDistinct": false,
+          "columns": ["question_id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "question_versions_version_check": {
+          "name": "question_versions_version_check",
+          "value": "\"question_versions\".\"version\" > 0"
+        },
+        "question_versions_status_check": {
+          "name": "question_versions_status_check",
+          "value": "\"question_versions\".\"status\" in ('draft', 'ready')"
         }
       },
       "isRLSEnabled": false

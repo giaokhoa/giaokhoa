@@ -26,15 +26,39 @@ function image(imageVariantId: string | null = null) {
   };
 }
 
+function storedQuestion(status: 'draft' | 'ready' = 'ready', version = 1) {
+  return {
+    id: QUESTION_ID,
+    version,
+    status,
+    type: 'short_answer' as const,
+    stimulusId: null,
+    content: {
+      type: 'doc' as const,
+      content: [
+        { type: 'paragraph' as const, content: [{ type: 'text' as const, text: 'Câu hỏi' }] },
+      ],
+    },
+    guidance: null,
+    solution: { answer: '42' },
+    createdByUserId: USER_ID,
+  };
+}
+
 function createService() {
   const repository = {
     createQuestion: vi.fn(async (question) => ({
       id: QUESTION_ID,
+      version: 1,
       ...question,
     })),
     findQuestion: vi.fn(),
+    findLatestReadyQuestion: vi.fn(),
+    findQuestionVersion: vi.fn(),
+    listQuestionVersions: vi.fn(),
     findQuestionOwned: vi.fn(),
-    updateQuestion: vi.fn(),
+    createQuestionVersion: vi.fn(),
+    changeQuestionStatus: vi.fn(),
     deleteQuestion: vi.fn(),
     createStimulus: vi.fn(),
     findStimulus: vi.fn(),
@@ -69,12 +93,13 @@ describe('QuestionsService', () => {
     );
   });
 
-  it('returns a patched question with unchanged fields preserved', async () => {
+  it('creates a new Draft version for a content patch while preserving omitted fields', async () => {
     const { service, repository } = createService();
     const current = {
       id: QUESTION_ID,
+      version: 1,
       stimulusId: null,
-      status: 'ready' as const,
+      status: 'draft' as const,
       type: 'short_answer' as const,
       content: {
         type: 'doc' as const,
@@ -86,18 +111,51 @@ describe('QuestionsService', () => {
       solution: { answer: '42' },
     };
     repository.findQuestionOwned.mockResolvedValue(current);
-    repository.updateQuestion.mockImplementation(async (id, question) => ({ id, ...question }));
+    repository.createQuestionVersion.mockImplementation(async (id, _expectedVersion, question) => ({
+      id,
+      version: 2,
+      ...question,
+    }));
 
     const updated = await service.updateQuestion(
       QUESTION_ID,
       { solution: { answer: '7' } },
+      1,
       USER_ID,
     );
 
     expect(updated).toEqual({
       ...current,
+      version: 2,
       solution: { answer: '7' },
     });
+    expect(repository.createQuestionVersion).toHaveBeenCalledWith(
+      QUESTION_ID,
+      1,
+      expect.objectContaining({ status: 'draft', solution: { answer: '7' } }),
+      [],
+      USER_ID,
+    );
+  });
+
+  it('does not expose latest draft or its solution to non-owners', async () => {
+    const { service, repository } = createService();
+    repository.findQuestionOwned.mockResolvedValue(undefined);
+
+    await expect(service.getQuestion(QUESTION_ID, USER_ID)).rejects.toMatchObject({
+      kind: 'not_found',
+      code: 'question_not_found',
+    });
+    expect(repository.findQuestion).not.toHaveBeenCalled();
+
+    repository.findQuestionOwned.mockResolvedValue(storedQuestion('draft', 3));
+    await expect(service.getQuestion(QUESTION_ID, USER_ID)).resolves.toMatchObject({
+      id: QUESTION_ID,
+      version: 3,
+      status: 'draft',
+      solution: { answer: '42' },
+    });
+    expect(repository.findQuestionOwned).toHaveBeenCalledWith(QUESTION_ID, USER_ID);
   });
 
   it('does not allow a non-owner to update a question', async () => {
@@ -105,16 +163,18 @@ describe('QuestionsService', () => {
     repository.findQuestionOwned.mockResolvedValue(undefined);
 
     await expect(
-      service.updateQuestion(QUESTION_ID, { solution: { answer: '7' } }, USER_ID),
+      service.updateQuestion(QUESTION_ID, { solution: { answer: '7' } }, 1, USER_ID),
     ).rejects.toMatchObject({ kind: 'not_found', code: 'question_not_found' });
 
-    expect(repository.updateQuestion).not.toHaveBeenCalled();
+    expect(repository.createQuestionVersion).not.toHaveBeenCalled();
+    expect(repository.changeQuestionStatus).not.toHaveBeenCalled();
   });
 
   it('rejects a patch that makes the whole question inconsistent', async () => {
     const { service, repository } = createService();
     repository.findQuestionOwned.mockResolvedValue({
       id: QUESTION_ID,
+      version: 1,
       stimulusId: null,
       status: 'ready',
       type: 'short_answer',
@@ -127,10 +187,11 @@ describe('QuestionsService', () => {
     });
 
     await expect(
-      service.updateQuestion(QUESTION_ID, { type: 'essay' }, USER_ID),
+      service.updateQuestion(QUESTION_ID, { type: 'essay' }, 1, USER_ID),
     ).rejects.toMatchObject({ kind: 'invalid', code: 'question_invalid' });
 
-    expect(repository.updateQuestion).not.toHaveBeenCalled();
+    expect(repository.createQuestionVersion).not.toHaveBeenCalled();
+    expect(repository.changeQuestionStatus).not.toHaveBeenCalled();
   });
 
   it('rejects invalid image references as a bad request', async () => {
@@ -157,5 +218,157 @@ describe('QuestionsService', () => {
         USER_ID,
       ),
     ).rejects.toMatchObject({ kind: 'invalid', code: 'question_image_reference_invalid' });
+  });
+
+  it('creates a new Ready version on explicit content edit without mutating old Ready', async () => {
+    const { service, repository } = createService();
+    const published = storedQuestion('ready', 2);
+    repository.findQuestionOwned.mockResolvedValue(published);
+    repository.createQuestionVersion.mockImplementation(async (id, _expectedVersion, data) => ({
+      id,
+      version: 3,
+      createdByUserId: USER_ID,
+      ...data,
+    }));
+
+    const updated = await service.updateQuestion(
+      QUESTION_ID,
+      { solution: { answer: '7' }, status: 'ready' },
+      2,
+      USER_ID,
+    );
+
+    expect(updated).toMatchObject({ id: QUESTION_ID, version: 3, status: 'ready' });
+    expect(repository.createQuestionVersion).toHaveBeenCalledWith(
+      QUESTION_ID,
+      2,
+      expect.objectContaining({ status: 'ready', solution: { answer: '7' } }),
+      [],
+      USER_ID,
+    );
+    expect(published.version).toBe(2);
+    expect(published.status).toBe('ready');
+    expect(published.solution.answer).toBe('42');
+  });
+
+  it('toggles Draft→Ready and Ready→Draft on the same version', async () => {
+    const { service, repository } = createService();
+    repository.findQuestionOwned.mockResolvedValue(storedQuestion('draft', 2));
+    repository.changeQuestionStatus.mockImplementation(async (id, _expectedVersion, status) => ({
+      ...storedQuestion(status, 2),
+      id,
+    }));
+
+    const ready = await service.updateQuestion(QUESTION_ID, { status: 'ready' }, 2, USER_ID);
+    expect(ready).toMatchObject({ version: 2, status: 'ready' });
+    expect(repository.changeQuestionStatus).toHaveBeenCalledWith(QUESTION_ID, 2, 'ready', USER_ID);
+
+    repository.findQuestionOwned.mockResolvedValue(storedQuestion('ready', 2));
+    const draft = await service.updateQuestion(QUESTION_ID, { status: 'draft' }, 2, USER_ID);
+    expect(draft).toMatchObject({ version: 2, status: 'draft' });
+    expect(repository.changeQuestionStatus).toHaveBeenCalledWith(QUESTION_ID, 2, 'draft', USER_ID);
+    expect(repository.createQuestionVersion).not.toHaveBeenCalled();
+  });
+
+  it('checks expectedVersion under lock even for unchanged status', async () => {
+    const { service, repository } = createService();
+    repository.findQuestionOwned.mockResolvedValue(storedQuestion('ready', 2));
+    repository.changeQuestionStatus.mockRejectedValueOnce(
+      new ClientError('conflict', 'question_version_conflict', 'Phiên bản đã thay đổi'),
+    );
+
+    await expect(
+      service.updateQuestion(QUESTION_ID, { status: 'ready' }, 2, USER_ID),
+    ).rejects.toMatchObject({ kind: 'conflict', code: 'question_version_conflict' });
+    expect(repository.changeQuestionStatus).toHaveBeenCalledWith(QUESTION_ID, 2, 'ready', USER_ID);
+    expect(repository.createQuestionVersion).not.toHaveBeenCalled();
+  });
+
+  it('inherits the current status when creating a content version without status', async () => {
+    const { service, repository } = createService();
+    repository.findQuestionOwned.mockResolvedValue(storedQuestion('ready', 4));
+    repository.createQuestionVersion.mockImplementation(async (id, _expectedVersion, data) => ({
+      id,
+      version: 5,
+      createdByUserId: USER_ID,
+      ...data,
+    }));
+
+    const result = await service.updateQuestion(
+      QUESTION_ID,
+      { guidance: { type: 'doc', content: [] } },
+      4,
+      USER_ID,
+    );
+    expect(result).toMatchObject({ version: 5, status: 'ready' });
+    expect(repository.createQuestionVersion.mock.calls[0]?.[2]).toMatchObject({ status: 'ready' });
+  });
+
+  it('rejects stale version preconditions before any write', async () => {
+    const { service, repository } = createService();
+    repository.findQuestionOwned.mockResolvedValue(storedQuestion('draft', 3));
+
+    await expect(
+      service.updateQuestion(QUESTION_ID, { status: 'ready' }, 2, USER_ID),
+    ).rejects.toMatchObject({ kind: 'conflict', code: 'question_version_conflict' });
+    await expect(
+      service.updateQuestion(QUESTION_ID, { solution: { answer: '7' } }, 2, USER_ID),
+    ).rejects.toMatchObject({ kind: 'conflict', code: 'question_version_conflict' });
+    expect(repository.changeQuestionStatus).not.toHaveBeenCalled();
+    expect(repository.createQuestionVersion).not.toHaveBeenCalled();
+  });
+
+  it('resolves the last Ready version even if the latest authoring version is Draft', async () => {
+    const { service, repository } = createService();
+    repository.findQuestionOwned.mockResolvedValue(storedQuestion('draft', 3));
+    repository.findLatestReadyQuestion.mockResolvedValue(storedQuestion('ready', 2));
+
+    await expect(service.getQuestion(QUESTION_ID, USER_ID)).resolves.toMatchObject({
+      version: 3,
+      status: 'draft',
+    });
+    await expect(service.getLatestReadyQuestion(QUESTION_ID, USER_ID)).resolves.toMatchObject({
+      version: 2,
+      status: 'ready',
+    });
+    expect(repository.findLatestReadyQuestion).toHaveBeenCalledWith(QUESTION_ID);
+
+    repository.findLatestReadyQuestion.mockResolvedValue(undefined);
+    await expect(service.getLatestReadyQuestion(QUESTION_ID, USER_ID)).rejects.toMatchObject({
+      kind: 'not_found',
+      code: 'question_ready_not_found',
+    });
+    repository.findQuestionOwned.mockResolvedValue(undefined);
+    await expect(service.getLatestReadyQuestion(QUESTION_ID, USER_ID)).rejects.toMatchObject({
+      kind: 'not_found',
+      code: 'question_not_found',
+    });
+  });
+
+  it('requires ownership when reading version history and old content', async () => {
+    const { service, repository } = createService();
+    repository.findQuestionOwned.mockResolvedValue(undefined);
+    await expect(service.listQuestionVersions(QUESTION_ID, USER_ID)).rejects.toMatchObject({
+      kind: 'not_found',
+      code: 'question_not_found',
+    });
+    await expect(service.getQuestionVersion(QUESTION_ID, 1, USER_ID)).rejects.toMatchObject({
+      kind: 'not_found',
+      code: 'question_not_found',
+    });
+    expect(repository.listQuestionVersions).not.toHaveBeenCalled();
+    expect(repository.findQuestionVersion).not.toHaveBeenCalled();
+
+    repository.findQuestionOwned.mockResolvedValue(storedQuestion('ready', 2));
+    repository.listQuestionVersions.mockResolvedValue([
+      { version: 1, status: 'ready' },
+      { version: 2, status: 'ready' },
+    ]);
+    repository.findQuestionVersion.mockResolvedValue(storedQuestion('ready', 1));
+    await expect(service.listQuestionVersions(QUESTION_ID, USER_ID)).resolves.toHaveLength(2);
+    await expect(service.getQuestionVersion(QUESTION_ID, 1, USER_ID)).resolves.toMatchObject({
+      id: QUESTION_ID,
+      version: 1,
+    });
   });
 });

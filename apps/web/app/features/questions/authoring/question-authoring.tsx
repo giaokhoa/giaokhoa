@@ -18,7 +18,7 @@ import {
 import { Button } from '@giaokhoa/ui/components/button';
 import { Tabs, TabsList, TabsTrigger } from '@giaokhoa/ui/components/tabs';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useBeforeUnload, useBlocker, useFetcher } from 'react-router';
+import { Link, useBeforeUnload, useBlocker, useFetcher } from 'react-router';
 import { renderTikz } from '#lib/tikz-renderer.js';
 import { AuthoringPane } from './authoring-pane';
 import {
@@ -42,11 +42,11 @@ const QUESTION_TYPES: Array<{ value: QuestionType; label: string }> = [
 
 type PendingUploadEntry = [string, ImageRef];
 
-type SaveQuestionActionData = { question: Question } | { error: string };
+type SaveQuestionActionData = { question: Question } | { error: string; status?: number };
 
 type SaveRequest = {
   requestFingerprint: string;
-  payload: QuestionCreate;
+  payload?: QuestionCreate;
   pendingUploads: PendingUploadEntry[];
   leaveAfterSave: boolean;
 };
@@ -59,13 +59,24 @@ function isImageRefUsed(ref: ImageRef, usedRefs: ImageRef[]): boolean {
   );
 }
 
-export function QuestionAuthoring({ initialDraft }: { initialDraft: QuestionDraft }) {
+export function QuestionAuthoring({
+  initialDraft,
+  initialQuestion,
+}: {
+  initialDraft: QuestionDraft;
+  initialQuestion?: Question;
+}) {
   const [draft, setDraft] = useState<QuestionDraft>(() => initialDraft);
   const [savedDraftFingerprint, setSavedDraftFingerprint] = useState(() =>
     getDraftFingerprint(initialDraft),
   );
-  const [questionId, setQuestionId] = useState<string>();
-  const [persistedStatus, setPersistedStatus] = useState<QuestionStatus>();
+  const [questionId, setQuestionId] = useState<string | undefined>(initialQuestion?.id);
+  const [persistedStatus, setPersistedStatus] = useState<QuestionStatus | undefined>(
+    initialQuestion?.status,
+  );
+  const [persistedVersion, setPersistedVersion] = useState<number | undefined>(
+    initialQuestion?.version,
+  );
   const [savingStatus, setSavingStatus] = useState<QuestionStatus>();
   const [pendingUploadCount, setPendingUploadCount] = useState(0);
   const [pendingTypeChange, setPendingTypeChange] = useState<QuestionType>();
@@ -211,28 +222,40 @@ export function QuestionAuthoring({ initialDraft }: { initialDraft: QuestionDraf
     }
 
     const persistedQuestionId = questionId;
-    const guidancePayload = hasTextContent(requestDraft.guidance)
-      ? requestDraft.guidance
-      : persistedQuestionId
-        ? null
-        : undefined;
-    const payloadResult = questionCreateSchema.safeParse({
-      status: targetStatus,
-      type: requestDraft.type,
-      content: requestDraft.content,
-      ...(guidancePayload !== undefined ? { guidance: guidancePayload } : {}),
-      solution: getDraftSolution(requestDraft),
-    });
-    if (!payloadResult.success) {
-      setError(payloadResult.error.issues.map(({ message }) => message).join('; '));
+    const requestFingerprint = getDraftFingerprint(requestDraft);
+    const shouldSaveContent = !persistedQuestionId || requestFingerprint !== savedDraftFingerprint;
+    if (!shouldSaveContent && persistedStatus === targetStatus) return false;
+    if (persistedQuestionId && !persistedVersion) {
+      setError('Không xác định được phiên bản câu hỏi. Hãy tải lại trang.');
       return false;
+    }
+
+    let payload: QuestionCreate | undefined;
+    if (shouldSaveContent) {
+      const guidancePayload = hasTextContent(requestDraft.guidance)
+        ? requestDraft.guidance
+        : persistedQuestionId
+          ? null
+          : undefined;
+      const payloadResult = questionCreateSchema.safeParse({
+        status: targetStatus,
+        type: requestDraft.type,
+        content: requestDraft.content,
+        ...(guidancePayload !== undefined ? { guidance: guidancePayload } : {}),
+        solution: getDraftSolution(requestDraft),
+      });
+      if (!payloadResult.success) {
+        setError(payloadResult.error.issues.map(({ message }) => message).join('; '));
+        return false;
+      }
+      payload = payloadResult.data;
     }
 
     savingRef.current = true;
     saveRequestRef.current = {
-      requestFingerprint: getDraftFingerprint(requestDraft),
-      payload: payloadResult.data,
-      pendingUploads: [...pendingUploadsRef.current.entries()],
+      requestFingerprint,
+      payload,
+      pendingUploads: payload ? [...pendingUploadsRef.current.entries()] : [],
       leaveAfterSave,
     };
     setSavingStatus(targetStatus);
@@ -241,7 +264,9 @@ export function QuestionAuthoring({ initialDraft }: { initialDraft: QuestionDraf
     void saveFetcher.submit(
       {
         ...(persistedQuestionId ? { questionId: persistedQuestionId } : {}),
-        question: payloadResult.data,
+        question: persistedQuestionId
+          ? { expectedVersion: persistedVersion!, ...(payload ?? { status: targetStatus }) }
+          : payload!,
       },
       { method: 'POST', encType: 'application/json', defaultShouldRevalidate: false },
     );
@@ -259,22 +284,29 @@ export function QuestionAuthoring({ initialDraft }: { initialDraft: QuestionDraf
     const finishSave = async () => {
       try {
         if ('error' in data) {
-          setError(data.error);
+          setError(
+            data.status === 409
+              ? 'Câu hỏi đã có thay đổi từ phiên làm việc khác. Hãy sao lưu nội dung đang soạn rồi tải lại trang để lấy phiên bản mới nhất.'
+              : data.error,
+          );
           return;
         }
 
         setQuestionId(data.question.id);
         setPersistedStatus(data.question.status);
+        setPersistedVersion(data.question.version);
         setSavedDraftFingerprint(request.requestFingerprint);
 
-        const persistedImageRefs = collectImageRefs(request.payload);
-        const currentImageRefs = collectImageRefs(draftRef.current);
-        const cleanupCandidates = request.pendingUploads.filter(
-          ([, ref]) =>
-            isImageRefUsed(ref, persistedImageRefs) || !isImageRefUsed(ref, currentImageRefs),
-        );
-        if (!(await discardPendingUploads(cleanupCandidates))) {
-          setError('Đã lưu câu hỏi nhưng chưa dọn được ảnh không còn sử dụng.');
+        if (request.payload) {
+          const persistedImageRefs = collectImageRefs(request.payload);
+          const currentImageRefs = collectImageRefs(draftRef.current);
+          const cleanupCandidates = request.pendingUploads.filter(
+            ([, ref]) =>
+              isImageRefUsed(ref, persistedImageRefs) || !isImageRefUsed(ref, currentImageRefs),
+          );
+          if (!(await discardPendingUploads(cleanupCandidates))) {
+            setError('Đã lưu câu hỏi nhưng chưa dọn được ảnh không còn sử dụng.');
+          }
         }
       } finally {
         savingRef.current = false;
@@ -315,8 +347,14 @@ export function QuestionAuthoring({ initialDraft }: { initialDraft: QuestionDraf
       ? 'Sẵn sàng'
       : 'Bản nháp'
     : 'Chưa lưu';
-  const canSaveDraft = dirty && (Boolean(questionId) || hasAnyData) && !savingStatus;
-  const canMarkReady = complete && !savingStatus && (dirty || persistedStatus !== 'ready');
+  const canSaveContent = dirty && (Boolean(questionId) || hasAnyData);
+  const canSaveDraft =
+    !savingStatus &&
+    (canSaveContent || (!dirty && persistedStatus === 'ready' && pendingUploadCount === 0));
+  const canSaveReady =
+    complete &&
+    !savingStatus &&
+    (canSaveContent || (!dirty && persistedStatus === 'draft' && pendingUploadCount === 0));
 
   return (
     <div className="flex-1 bg-muted/30 px-4 py-8 md:px-8">
@@ -324,11 +362,29 @@ export function QuestionAuthoring({ initialDraft }: { initialDraft: QuestionDraf
         <div className="mb-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-semibold">Thêm câu hỏi</h1>
+              <h1 className="text-2xl font-semibold">
+                {questionId ? 'Chỉnh sửa câu hỏi' : 'Thêm câu hỏi'}
+              </h1>
               <p className="mt-1 text-sm text-muted-foreground" role="status">
                 Trạng thái: {statusLabel}
+                {persistedVersion ? ` · Phiên bản ${persistedVersion}` : ''}
                 {dirty ? ' · Có thay đổi chưa lưu' : ''}
               </p>
+              {questionId && (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {dirty
+                    ? 'Lưu nội dung sẽ tạo phiên bản mới. Bạn có thể chọn bản nháp hoặc sẵn sàng.'
+                    : 'Đổi trạng thái không tạo phiên bản mới.'}
+                </p>
+              )}
+              {questionId && (
+                <Link
+                  to={`/questions/${questionId}`}
+                  className="mt-1 inline-block text-sm text-primary underline-offset-4 hover:underline"
+                >
+                  Đường dẫn câu hỏi
+                </Link>
+              )}
             </div>
             <div className="flex gap-2">
               <Button
@@ -338,15 +394,23 @@ export function QuestionAuthoring({ initialDraft }: { initialDraft: QuestionDraf
                 disabled={!canSaveDraft}
                 onClick={() => void saveQuestion('draft')}
               >
-                {savingStatus === 'draft' ? 'Đang lưu…' : 'Lưu bản nháp'}
+                {savingStatus === 'draft'
+                  ? 'Đang lưu…'
+                  : !dirty && persistedStatus === 'ready'
+                    ? 'Chuyển về bản nháp'
+                    : 'Lưu bản nháp'}
               </Button>
               <Button
                 type="button"
                 size="sm"
-                disabled={!canMarkReady}
+                disabled={!canSaveReady}
                 onClick={() => void saveQuestion('ready')}
               >
-                {savingStatus === 'ready' ? 'Đang lưu…' : 'Lưu câu hỏi'}
+                {savingStatus === 'ready'
+                  ? 'Đang lưu…'
+                  : !dirty && persistedStatus === 'draft'
+                    ? 'Đánh dấu sẵn sàng'
+                    : 'Lưu & sẵn sàng'}
               </Button>
             </div>
           </div>

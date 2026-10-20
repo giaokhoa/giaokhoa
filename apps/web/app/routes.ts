@@ -6,6 +6,7 @@ export default [
     route('curricula', 'routes/curricula.tsx'),
     route('subjects', 'routes/subjects.tsx'),
     route('questions/new', 'routes/questions/new.tsx'),
+    route('questions/:id', 'routes/questions/edit.tsx'),
   ]),
   layout('routes/auth/layout.tsx', [
     route('login', 'routes/auth/login.tsx'),

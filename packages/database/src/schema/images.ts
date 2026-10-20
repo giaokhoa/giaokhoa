@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { check, index, integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { users } from './auth.generated.js';
-import { questions } from './questions.js';
+import { question } from './questions.js';
 
 export const storageObjectDeletions = pgTable('storage_object_deletions', {
   storageKey: text('storage_key').primaryKey(),
@@ -89,7 +89,7 @@ export const questionImageRefs = pgTable(
       .primaryKey(),
     questionId: uuid('question_id')
       .notNull()
-      .references(() => questions.id, { onDelete: 'cascade' }),
+      .references(() => question.id, { onDelete: 'cascade' }),
     imageId: uuid('image_id')
       .notNull()
       .references(() => images.id, { onDelete: 'cascade' }),

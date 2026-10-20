@@ -134,15 +134,15 @@ CREATE TABLE "learning_outcomes" (
 );
 --> statement-breakpoint
 CREATE TABLE "question_learning_outcomes" (
-	"question_id" uuid NOT NULL,
+	"question_bank_entry_id" uuid NOT NULL,
 	"learning_outcome_id" uuid NOT NULL,
-	CONSTRAINT "question_learning_outcomes_question_id_learning_outcome_id_pk" PRIMARY KEY("question_id","learning_outcome_id")
+	CONSTRAINT "question_learning_outcomes_question_bank_entry_id_learning_outcome_id_pk" PRIMARY KEY("question_bank_entry_id","learning_outcome_id")
 );
 --> statement-breakpoint
 CREATE TABLE "question_subjects" (
-	"question_id" uuid NOT NULL,
+	"question_bank_entry_id" uuid NOT NULL,
 	"subject_id" uuid NOT NULL,
-	CONSTRAINT "question_subjects_question_id_subject_id_pk" PRIMARY KEY("question_id","subject_id")
+	CONSTRAINT "question_subjects_question_bank_entry_id_subject_id_pk" PRIMARY KEY("question_bank_entry_id","subject_id")
 );
 --> statement-breakpoint
 CREATE TABLE "subjects" (
@@ -154,18 +154,32 @@ CREATE TABLE "subjects" (
 	CONSTRAINT "subjects_position_check" CHECK ("subjects"."position" > 0)
 );
 --> statement-breakpoint
-CREATE TABLE "questions" (
+CREATE TABLE "question" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"created_by_user_id" uuid NOT NULL,
 	"stimulus_id" uuid,
 	"type" text NOT NULL,
-	"status" text NOT NULL,
 	"content" jsonb NOT NULL,
 	"guidance" jsonb,
 	"solution" jsonb,
-	CONSTRAINT "questions_status_check" CHECK ("questions"."status" in ('draft', 'ready')),
-	CONSTRAINT "questions_ready_solution_check" CHECK ("questions"."status" = 'draft' or "questions"."solution" is not null),
-	CONSTRAINT "questions_type_check" CHECK ("questions"."type" in ('multiple_choice', 'true_false', 'short_answer', 'essay'))
+	CONSTRAINT "question_type_check" CHECK ("question"."type" in ('multiple_choice', 'true_false', 'short_answer', 'essay'))
+);
+--> statement-breakpoint
+CREATE TABLE "question_bank_entries" (
+	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
+	"created_by_user_id" uuid NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "question_versions" (
+	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
+	"question_bank_entry_id" uuid NOT NULL,
+	"question_id" uuid NOT NULL,
+	"version" integer NOT NULL,
+	"status" text NOT NULL,
+	CONSTRAINT "question_versions_entry_version_unique" UNIQUE("question_bank_entry_id","version"),
+	CONSTRAINT "question_versions_question_unique" UNIQUE("question_id"),
+	CONSTRAINT "question_versions_version_check" CHECK ("question_versions"."version" > 0),
+	CONSTRAINT "question_versions_status_check" CHECK ("question_versions"."status" in ('draft', 'ready'))
 );
 --> statement-breakpoint
 CREATE TABLE "stimuli" (
@@ -176,7 +190,7 @@ CREATE TABLE "stimuli" (
 ALTER TABLE "image_sources" ADD CONSTRAINT "image_sources_image_id_images_id_fk" FOREIGN KEY ("image_id") REFERENCES "public"."images"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "image_variants" ADD CONSTRAINT "image_variants_image_id_images_id_fk" FOREIGN KEY ("image_id") REFERENCES "public"."images"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "images" ADD CONSTRAINT "images_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "question_image_refs" ADD CONSTRAINT "question_image_refs_question_id_questions_id_fk" FOREIGN KEY ("question_id") REFERENCES "public"."questions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "question_image_refs" ADD CONSTRAINT "question_image_refs_question_id_question_id_fk" FOREIGN KEY ("question_id") REFERENCES "public"."question"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "question_image_refs" ADD CONSTRAINT "question_image_refs_image_id_images_id_fk" FOREIGN KEY ("image_id") REFERENCES "public"."images"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "question_image_refs" ADD CONSTRAINT "question_image_refs_image_variant_id_image_variants_id_fk" FOREIGN KEY ("image_variant_id") REFERENCES "public"."image_variants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "accounts" ADD CONSTRAINT "accounts_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -185,12 +199,15 @@ ALTER TABLE "curricula" ADD CONSTRAINT "curricula_subject_id_subjects_id_fk" FOR
 ALTER TABLE "curriculum_nodes" ADD CONSTRAINT "curriculum_nodes_curriculum_id_curricula_id_fk" FOREIGN KEY ("curriculum_id") REFERENCES "public"."curricula"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "curriculum_nodes" ADD CONSTRAINT "curriculum_nodes_parent_fk" FOREIGN KEY ("curriculum_id","parent_id") REFERENCES "public"."curriculum_nodes"("curriculum_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "learning_outcomes" ADD CONSTRAINT "learning_outcomes_node_id_curriculum_nodes_id_fk" FOREIGN KEY ("node_id") REFERENCES "public"."curriculum_nodes"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "question_learning_outcomes" ADD CONSTRAINT "question_learning_outcomes_question_id_questions_id_fk" FOREIGN KEY ("question_id") REFERENCES "public"."questions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "question_learning_outcomes" ADD CONSTRAINT "question_learning_outcomes_question_bank_entry_id_question_bank_entries_id_fk" FOREIGN KEY ("question_bank_entry_id") REFERENCES "public"."question_bank_entries"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "question_learning_outcomes" ADD CONSTRAINT "question_learning_outcomes_learning_outcome_id_learning_outcomes_id_fk" FOREIGN KEY ("learning_outcome_id") REFERENCES "public"."learning_outcomes"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "question_subjects" ADD CONSTRAINT "question_subjects_question_id_questions_id_fk" FOREIGN KEY ("question_id") REFERENCES "public"."questions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "question_subjects" ADD CONSTRAINT "question_subjects_question_bank_entry_id_question_bank_entries_id_fk" FOREIGN KEY ("question_bank_entry_id") REFERENCES "public"."question_bank_entries"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "question_subjects" ADD CONSTRAINT "question_subjects_subject_id_subjects_id_fk" FOREIGN KEY ("subject_id") REFERENCES "public"."subjects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "questions" ADD CONSTRAINT "questions_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "questions" ADD CONSTRAINT "questions_stimulus_id_stimuli_id_fk" FOREIGN KEY ("stimulus_id") REFERENCES "public"."stimuli"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "question" ADD CONSTRAINT "question_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "question" ADD CONSTRAINT "question_stimulus_id_stimuli_id_fk" FOREIGN KEY ("stimulus_id") REFERENCES "public"."stimuli"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "question_bank_entries" ADD CONSTRAINT "question_bank_entries_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "question_versions" ADD CONSTRAINT "question_versions_question_bank_entry_id_question_bank_entries_id_fk" FOREIGN KEY ("question_bank_entry_id") REFERENCES "public"."question_bank_entries"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "question_versions" ADD CONSTRAINT "question_versions_question_id_question_id_fk" FOREIGN KEY ("question_id") REFERENCES "public"."question"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "image_variants_image_id_idx" ON "image_variants" USING btree ("image_id");--> statement-breakpoint
 CREATE INDEX "image_variants_orphaned_at_idx" ON "image_variants" USING btree ("orphaned_at");--> statement-breakpoint
 CREATE INDEX "images_created_by_user_id_idx" ON "images" USING btree ("created_by_user_id");--> statement-breakpoint
@@ -205,5 +222,7 @@ CREATE INDEX "curriculum_nodes_tree_idx" ON "curriculum_nodes" USING btree ("cur
 CREATE INDEX "learning_outcomes_node_id_idx" ON "learning_outcomes" USING btree ("node_id","position");--> statement-breakpoint
 CREATE INDEX "question_learning_outcomes_learning_outcome_id_idx" ON "question_learning_outcomes" USING btree ("learning_outcome_id");--> statement-breakpoint
 CREATE INDEX "question_subjects_subject_id_idx" ON "question_subjects" USING btree ("subject_id");--> statement-breakpoint
-CREATE INDEX "questions_created_by_user_id_idx" ON "questions" USING btree ("created_by_user_id");--> statement-breakpoint
-CREATE INDEX "questions_stimulus_id_idx" ON "questions" USING btree ("stimulus_id");
+CREATE INDEX "question_created_by_user_id_idx" ON "question" USING btree ("created_by_user_id");--> statement-breakpoint
+CREATE INDEX "question_stimulus_id_idx" ON "question" USING btree ("stimulus_id");--> statement-breakpoint
+CREATE INDEX "question_bank_entries_created_by_user_id_idx" ON "question_bank_entries" USING btree ("created_by_user_id");--> statement-breakpoint
+CREATE INDEX "question_versions_entry_id_idx" ON "question_versions" USING btree ("question_bank_entry_id");
