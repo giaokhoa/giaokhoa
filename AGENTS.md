@@ -1,141 +1,28 @@
-# Repository conventions for coding agents
+# Quy tắc chung cho mọi agent
 
-These rules are architectural constraints, not suggestions.
+Các quy tắc này là bắt buộc đối với mọi agent và subagent làm việc trong repository.
 
-## Package responsibilities
+## Phạm vi hướng dẫn
 
-- `@giaokhoa/shared` is the framework- and infrastructure-free shared vocabulary.
-  It owns canonical Zod schemas, inferred types, constants, and HTTP protocol descriptors.
-- `@giaokhoa/application` owns business use cases, domain/application errors, and repository ports.
-  It depends on `@giaokhoa/shared` and must not depend on NestJS, Drizzle, or PostgreSQL.
-- `@giaokhoa/database` owns Drizzle schema, migrations, persistence types, and PostgreSQL repository
-  adapters. It implements repository ports from `@giaokhoa/application`.
-- `apps/api` is an HTTP/Nest adapter. Controllers use `@giaokhoa/shared/http/*` for route contracts,
-  inject application services, and do not query Drizzle tables directly.
-- `apps/mcp` may be added as a separate runtime. It must compose the same application services and
-  database adapters rather than implementing its own persistence logic.
-- Web and editor packages may depend on `@giaokhoa/shared`, but never on application or database packages.
+- Trước khi làm việc, đọc `AGENTS.md` ở root và mọi `AGENTS.md` trên đường dẫn đến thư mục chứa file cần sửa, theo thứ tự từ ngoài vào trong.
+- Nếu một yêu cầu đụng đến nhiều package hoặc app, đọc `AGENTS.md` của từng khu vực liên quan. Hướng dẫn theo thư mục chỉ áp dụng trong phạm vi đó và bổ sung cho quy tắc chung.
+- Chỉ để quy tắc áp dụng toàn repository trong file này. Quy ước riêng của package hoặc app phải đặt trong `AGENTS.md` tại thư mục tương ứng.
 
-Dependency direction:
+## Quy tắc bắt buộc
 
-```text
-@giaokhoa/shared
-       ↑
-@giaokhoa/application
-       ↑
-@giaokhoa/database
+- **Ponytail full:** Mỗi phiên phải đọc `.agents/skills/ponytail/SKILL.md` và áp dụng mức `full`. Chọn giải pháp đơn giản nhất đáp ứng yêu cầu, ưu tiên code sẵn có, thư viện chuẩn và tính năng nền tảng. Không tự chuyển sang `lite` hoặc `ultra`.
+- **Đúng phiên bản:** Trước khi thay đổi phần liên quan đến framework hoặc package bên ngoài, xác định phiên bản đang cài qua manifest/lockfile rồi đọc lại tài liệu phù hợp chính phiên bản đó.
+- **Tối thiểu:** Chỉ dùng phần cần thiết của pattern trong tài liệu để hoàn thành yêu cầu. Không thêm config, abstraction, dependency hay boilerplate thừa.
+- **Tiếng Việt:** Mọi file Markdown, comment trong code, nội dung issue và PR phải viết bằng tiếng Việt; giữ nguyên thuật ngữ kỹ thuật, đường dẫn, lệnh và đoạn code khi cần.
+- **Tiếng Anh:** Code, định danh, tên hàm/class/type, API, key cấu hình, script, test, tên branch và commit message phải viết bằng tiếng Anh. Comment vẫn bằng tiếng Việt.
+- Agent giao việc cho agent khác phải bảo đảm các quy tắc trên cũng được áp dụng.
 
-apps compose application + database at their runtime boundary
-```
+## Quy trình GitHub Flow
 
-`@giaokhoa/database` also depends directly on `@giaokhoa/shared` when it validates persistence rows
-against canonical schemas.
-
-## Shared package
-
-Public domain subpaths are bounded-context oriented:
-
-```text
-@giaokhoa/shared/questions
-@giaokhoa/shared/curriculum
-@giaokhoa/shared/images
-```
-
-HTTP descriptors are transport-specific:
-
-```text
-@giaokhoa/shared/http/questions
-@giaokhoa/shared/http/stimuli
-@giaokhoa/shared/http/subjects
-@giaokhoa/shared/http/curricula
-@giaokhoa/shared/http/curriculum-nodes
-@giaokhoa/shared/http/learning-outcomes
-@giaokhoa/shared/http/images
-@giaokhoa/shared/http/auth
-```
-
-Do not create a root `@giaokhoa/shared` export. Public entries are explicit package exports.
-
-Canonical schemas use semantic names:
-
-```text
-questionSchema
-questionCreateSchema
-questionPatchSchema
-subjectSchema
-subjectCreateSchema
-subjectPatchSchema
-```
-
-When an HTTP body/response has the same shape as a canonical schema, the HTTP descriptor uses the
-canonical schema directly. Do not create aliases such as `CreateQuestionBody` or
-`questionResponseSchema` only to rename an identical shape.
-
-Use `schema.ts` (singular) for a schema module. Avoid parallel `schema.ts` / `schemas.ts` conventions.
-Use singular responsibility filenames such as `service.ts`, `repository.ts`, or direct public entry files
-such as `questions.ts`. Do not add resource-level `index.ts` barrels merely to re-export neighboring files.
-
-## Application package
-
-Application services contain behavior shared by every transport:
-
-- ownership checks
-- merge-and-revalidate behavior
-- question lifecycle rules
-- curriculum tree validation
-- domain/application errors
-
-Repository interfaces live with the application behavior that consumes them.
-Persistence-specific errors such as PostgreSQL error codes must be translated by database adapters into
-application errors.
-
-## Application client errors
-
-Client-caused application failures use the single `ClientError` type from
-`@giaokhoa/application/client-error`.
-
-- `kind` is one of `invalid`, `not_found`, or `conflict`.
-- `code` is a stable domain-specific machine-readable code.
-- `message` is the human-readable explanation.
-- `details` is optional structured context such as validation issues.
-- Do not create per-resource error subclasses or `errors.ts` files just to map one case to HTTP.
-- Transport adapters map `ClientError.kind` to their own protocol semantics.
-
-## Database package
-
-`@giaokhoa/database` is the persistence source of truth.
-
-- Runtime Drizzle tables live in `src/schema/*.ts`.
-- Migrations and Drizzle tooling are owned by `packages/database`.
-- PostgreSQL adapters are named `Postgres{Context}Repository`.
-- Runtime application code outside `@giaokhoa/database` must not issue Drizzle queries directly.
-- The API composition root may import the database schema to initialize Drizzle, but controllers and
-  application services must not import runtime tables.
-- Adding an internal database column must never automatically expose it through a shared canonical schema.
-
-## HTTP descriptors
-
-HTTP resource registries remain named `<resource>Contract`, for example `questionsContract`.
-Allowed operation vocabulary is `method`, `path`, `pathParams`, `query`, `headers`, `body`,
-`file`, and `responses`.
-
-- Use `responses` keyed by HTTP status.
-- Use `204: null` for no-body success.
-- Use `'binary'` for binary responses.
-- Paths are full public API paths.
-
-## Required verification
-
-After changing package boundaries, persistence, shared schemas, or HTTP descriptors, run:
-
-```sh
-pnpm format:check
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm --filter @giaokhoa/api test:e2e
-git diff --check
-```
-
-`packages/shared/test/http-contracts.spec.ts` enforces the HTTP descriptor convention.
+- **Một công việc, một worktree:** Mỗi issue hoặc yêu cầu, cùng PR giải quyết nó, chỉ được dùng **một branch và một Git worktree** trong `.worktrees/<slug>`. Tạo worktree một lần trước khi sửa; không làm việc trực tiếp trên nhánh mặc định hoặc dùng chung worktree cho công việc độc lập.
+- **Tiếp tục đúng worktree:** Mọi yêu cầu bổ sung, audit, sửa lỗi, kiểm thử, review và chỉnh sửa theo PR/CI thuộc cùng công việc phải tiếp tục tại worktree ban đầu. Không tạo worktree hoặc PR mới chỉ vì có tin nhắn tiếp theo hay chuyển giai đoạn. Chỉ tạo worktree mới cho công việc thực sự độc lập; nếu chưa rõ, hỏi người dùng trước.
+- Kiểm tra Git status, xác định nhánh mặc định và cập nhật remote khi có thể. Tạo branch tên ngắn bằng tiếng Anh từ nhánh mặc định mới nhất bằng `git worktree add -b <branch> .worktrees/<slug> <base>`.
+- Đọc code, chỉnh sửa, kiểm thử và commit tại worktree của công việc. Giữ nguyên mọi thay đổi chưa commit của người khác.
+- **Bắt buộc dùng `gh` khi làm việc với GitHub:** Dùng GitHub CLI `gh` để đọc/tạo/cập nhật issue, PR, review, CI/check và gọi GitHub API (qua `gh api` khi cần). Dùng `git` cho thao tác Git như worktree, branch, commit, fetch và push. Nếu `gh` không khả dụng hoặc bị từ chối quyền, báo chặn và hỏi hướng xử lý; không tự chuyển sang cách khác để lách giới hạn.
+- Thực hiện GitHub Flow: thay đổi và kiểm thử → commit → push branch → mở PR vào nhánh mặc định → xử lý review/CI → merge khi được phê duyệt → dọn branch/worktree sau merge. Không push trực tiếp lên nhánh mặc định.
+- Tiêu đề và nội dung PR bằng tiếng Việt, mô tả thay đổi, cách kiểm tra và liên kết issue nếu có. Không tự merge khi thiếu phê duyệt hoặc kiểm tra chưa đạt; không xóa worktree còn dữ liệu chưa lưu.
