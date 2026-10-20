@@ -26,7 +26,7 @@ function createService() {
     find: vi.fn(),
     findOwned: vi.fn(),
     findSourceOwned: vi.fn(),
-    findVariant: vi.fn(),
+    findVariantOwned: vi.fn(),
     discardOrphans: vi.fn(
       async (
         _refs: Array<{ imageId: string; imageVariantId: string | null }>,
@@ -294,5 +294,56 @@ describe('ImagesService discard lifecycle', () => {
     ).rejects.toBeInstanceOf(ClientError);
 
     expect(repository.discardOrphans).not.toHaveBeenCalled();
+  });
+});
+
+describe('ImagesService binary access', () => {
+  it('returns original bytes only after the repository confirms ownership', async () => {
+    const { service, repository, storage } = createService();
+    repository.findOwned.mockResolvedValueOnce(undefined);
+    await expect(service.getImage(IMAGE_ID, USER_ID)).rejects.toMatchObject({
+      kind: 'not_found',
+      code: 'image_not_found',
+    });
+    expect(storage.get).not.toHaveBeenCalled();
+
+    repository.findOwned.mockResolvedValueOnce({
+      id: IMAGE_ID,
+      storageKey: 'images/originals/private.png',
+      mimeType: 'image/png',
+      byteSize: PNG_1X1.length,
+    });
+    storage.get.mockResolvedValueOnce({ body: PNG_1X1, etag: 'etag' });
+    await expect(service.getImage(IMAGE_ID, USER_ID)).resolves.toMatchObject({
+      body: PNG_1X1,
+      mimeType: 'image/png',
+    });
+    expect(repository.findOwned).toHaveBeenCalledWith(IMAGE_ID, USER_ID);
+  });
+
+  it('requires ownership of the parent image before serving a variant', async () => {
+    const { service, repository, storage } = createService();
+    repository.findVariantOwned.mockResolvedValueOnce(undefined);
+    await expect(
+      service.getImageVariant(IMAGE_ID, IMAGE_VARIANT_ID, USER_ID),
+    ).rejects.toMatchObject({
+      kind: 'not_found',
+    });
+    expect(storage.get).not.toHaveBeenCalled();
+
+    repository.findVariantOwned.mockResolvedValueOnce({
+      imageId: IMAGE_ID,
+      id: IMAGE_VARIANT_ID,
+      storageKey: 'images/derived/private.png',
+      mimeType: 'image/png',
+      byteSize: PNG_1X1.length,
+    });
+    storage.get.mockResolvedValueOnce({ body: PNG_1X1 });
+    await expect(
+      service.getImageVariant(IMAGE_ID, IMAGE_VARIANT_ID, USER_ID),
+    ).resolves.toMatchObject({
+      body: PNG_1X1,
+    });
+    expect(repository.findVariantOwned).toHaveBeenCalledWith(IMAGE_ID, IMAGE_VARIANT_ID, USER_ID);
   });
 });

@@ -35,7 +35,11 @@ export interface ImagesRepository {
   find(id: string): Promise<ImageRecord | undefined>;
   findOwned(id: string, userId: string): Promise<ImageRecord | undefined>;
   findSourceOwned(id: string, userId: string): Promise<TikzImageSource | undefined>;
-  findVariant(imageId: string, imageVariantId: string): Promise<ImageVariantRecord | undefined>;
+  findVariantOwned(
+    imageId: string,
+    imageVariantId: string,
+    userId: string,
+  ): Promise<ImageVariantRecord | undefined>;
   discardOrphans(refs: ImageRef[], userId: string): Promise<string[]>;
   queueExpiredOrphans(cutoff: Date): Promise<string[]>;
   listPendingDeletions(afterStorageKey?: string): Promise<string[]>;

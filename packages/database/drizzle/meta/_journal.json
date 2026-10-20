@@ -15,6 +15,13 @@
       "when": 1792490487162,
       "tag": "0001_windy_madame_masque",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792492201809,
+      "tag": "0002_abnormal_iron_monger",
+      "breakpoints": true
     }
   ]
 }

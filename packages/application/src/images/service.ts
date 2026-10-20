@@ -309,27 +309,32 @@ export class ImagesService {
     return { deleted, failed, error: firstError };
   }
 
-  async getImage(id: string): Promise<StoredImage> {
+  async getImage(id: string, userId: string): Promise<StoredImage> {
     const parsedId = imageIdSchema.safeParse(id);
     if (!parsedId.success)
       throw new ClientError('not_found', 'image_not_found', 'Ảnh không tồn tại');
 
-    const image = await this.repository.find(parsedId.data);
+    const image = await this.repository.findOwned(parsedId.data, userId);
     if (!image) throw new ClientError('not_found', 'image_not_found', 'Ảnh không tồn tại');
 
     return this.getStoredImage(image.storageKey, image.mimeType, image.byteSize);
   }
 
-  async getImageVariant(imageId: string, imageVariantId: string): Promise<StoredImage> {
+  async getImageVariant(
+    imageId: string,
+    imageVariantId: string,
+    userId: string,
+  ): Promise<StoredImage> {
     const parsedImageId = imageIdSchema.safeParse(imageId);
     const parsedImageVariantId = imageIdSchema.safeParse(imageVariantId);
     if (!parsedImageId.success || !parsedImageVariantId.success) {
       throw new ClientError('not_found', 'image_not_found', 'Ảnh không tồn tại');
     }
 
-    const variant = await this.repository.findVariant(
+    const variant = await this.repository.findVariantOwned(
       parsedImageId.data,
       parsedImageVariantId.data,
+      userId,
     );
     if (!variant) throw new ClientError('not_found', 'image_not_found', 'Ảnh không tồn tại');
 

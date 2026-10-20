@@ -5,6 +5,8 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Client, Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { AuthorizationService } from '@giaokhoa/application/authorization/service';
+import { PostgresAuthorizationRepository } from '@giaokhoa/database/authorization';
 import { PostgresImagesRepository } from '@giaokhoa/database/images';
 import { migrationsFolder } from '@giaokhoa/database/migrations';
 import type { Database } from '@giaokhoa/database/types';
@@ -27,6 +29,7 @@ let pool: Pool;
 let db: Database;
 let questionsRepository: PostgresQuestionsRepository;
 let imagesRepository: PostgresImagesRepository;
+let authorization: AuthorizationService;
 
 function databaseUrl(databaseName: string) {
   const value = process.env.DATABASE_URL;
@@ -47,12 +50,13 @@ async function withAdminConnection<T>(run: (client: Client) => Promise<T>) {
   }
 }
 
-async function createUser(label: string) {
+async function createUser(label: string, role: 'user' | 'teacher' | 'admin' = 'user') {
   const [user] = await db
     .insert(users)
     .values({
       name: label,
       email: `${label}-${randomUUID()}@example.com`,
+      role,
     })
     .returning();
   return user;
@@ -110,6 +114,7 @@ beforeAll(async () => {
   await migrate(db, { migrationsFolder });
   questionsRepository = new PostgresQuestionsRepository(db);
   imagesRepository = new PostgresImagesRepository(db);
+  authorization = new AuthorizationService(new PostgresAuthorizationRepository(db));
 }, 20_000);
 
 beforeEach(async () => {
@@ -289,8 +294,8 @@ describe('PostgresQuestionsRepository', () => {
 
 describe('QuestionsService version lifecycle', () => {
   it('creates a new draft version for content changes, then publishes it in place', async () => {
-    const user = await createUser('author');
-    const service = new QuestionsService(questionsRepository);
+    const user = await createUser('author', 'teacher');
+    const service = new QuestionsService(questionsRepository, authorization);
     const created = await service.createQuestion(questionData('42', 'draft'), user.id);
 
     const edited = await service.updateQuestion(
@@ -330,8 +335,8 @@ describe('QuestionsService version lifecycle', () => {
   });
 
   it('preserves a ready version when content changes and inherits its status', async () => {
-    const user = await createUser('author');
-    const service = new QuestionsService(questionsRepository);
+    const user = await createUser('author', 'teacher');
+    const service = new QuestionsService(questionsRepository, authorization);
     const created = await service.createQuestion(questionData('42', 'ready'), user.id);
 
     const edited = await service.updateQuestion(
@@ -374,14 +379,17 @@ describe('QuestionsService version lifecycle', () => {
   });
 
   it('does not let a stimulus change after its question switches from ready to draft', async () => {
-    const user = await createUser('author');
-    const service = new QuestionsService(questionsRepository);
-    const stimulus = await service.createStimulus({
-      content: {
-        type: 'doc',
-        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Ngữ liệu ban đầu' }] }],
+    const user = await createUser('author', 'teacher');
+    const service = new QuestionsService(questionsRepository, authorization);
+    const stimulus = await service.createStimulus(
+      {
+        content: {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Ngữ liệu ban đầu' }] }],
+        },
       },
-    });
+      user.id,
+    );
 
     const created = await service.createQuestion(
       { ...questionData('42', 'ready'), stimulusId: stimulus.id },
@@ -396,12 +404,16 @@ describe('QuestionsService version lifecycle', () => {
     expect(changed).toMatchObject({ id: created.id, version: 1, status: 'draft' });
 
     await expect(
-      service.updateStimulus(stimulus.id, {
-        content: {
-          type: 'doc',
-          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Ngữ liệu đã sửa' }] }],
+      service.updateStimulus(
+        stimulus.id,
+        {
+          content: {
+            type: 'doc',
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Ngữ liệu đã sửa' }] }],
+          },
         },
-      }),
+        user.id,
+      ),
     ).rejects.toMatchObject({ kind: 'conflict', code: 'stimulus_in_use' });
   });
 });

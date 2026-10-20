@@ -61,11 +61,16 @@ function createService() {
     changeQuestionStatus: vi.fn(),
     deleteQuestion: vi.fn(),
     createStimulus: vi.fn(),
-    findStimulus: vi.fn(),
+    findStimulusOwned: vi.fn(),
     updateStimulus: vi.fn(),
     deleteStimulus: vi.fn(),
   };
-  return { service: new QuestionsService(repository as never), repository };
+  const authorization = { assertAuthorized: vi.fn(async () => undefined) };
+  return {
+    service: new QuestionsService(repository as never, authorization as never),
+    repository,
+    authorization,
+  };
 }
 
 describe('QuestionsService', () => {
@@ -369,6 +374,63 @@ describe('QuestionsService', () => {
     await expect(service.getQuestionVersion(QUESTION_ID, 1, USER_ID)).resolves.toMatchObject({
       id: QUESTION_ID,
       version: 1,
+    });
+  });
+});
+
+describe('QuestionsService authorization', () => {
+  const stimulus = {
+    content: {
+      type: 'doc' as const,
+      content: [
+        { type: 'paragraph' as const, content: [{ type: 'text' as const, text: 'Ngữ liệu' }] },
+      ],
+    },
+  };
+
+  it('denies authoring without the System capability before writing', async () => {
+    const { service, repository, authorization } = createService();
+    authorization.assertAuthorized.mockRejectedValueOnce(
+      new ClientError('forbidden', 'authorization_denied', 'Không đủ quyền'),
+    );
+
+    await expect(service.createStimulus(stimulus, USER_ID)).rejects.toMatchObject({
+      kind: 'forbidden',
+    });
+    expect(repository.createStimulus).not.toHaveBeenCalled();
+    expect(authorization.assertAuthorized).toHaveBeenCalledWith({
+      actorId: USER_ID,
+      capability: 'question:create_own',
+      context: { kind: 'system', resourceKey: 'giaokhoa' },
+    });
+  });
+
+  it('passes the server actor through every Stimulus operation and hides foreign IDs', async () => {
+    const { service, repository, authorization } = createService();
+    repository.createStimulus.mockResolvedValue({ id: QUESTION_ID, ...stimulus });
+    await service.createStimulus(stimulus, USER_ID);
+    expect(repository.createStimulus).toHaveBeenCalledWith(stimulus, USER_ID);
+
+    repository.findStimulusOwned.mockResolvedValue(undefined);
+    await expect(service.getStimulus(QUESTION_ID, USER_ID)).rejects.toMatchObject({
+      kind: 'not_found',
+      code: 'stimulus_not_found',
+    });
+    expect(repository.findStimulusOwned).toHaveBeenCalledWith(QUESTION_ID, USER_ID);
+
+    await expect(service.updateStimulus(QUESTION_ID, stimulus, USER_ID)).rejects.toMatchObject({
+      kind: 'not_found',
+    });
+    expect(repository.updateStimulus).toHaveBeenCalledWith(QUESTION_ID, stimulus, USER_ID);
+
+    await expect(service.deleteStimulus(QUESTION_ID, USER_ID)).rejects.toMatchObject({
+      kind: 'not_found',
+    });
+    expect(repository.deleteStimulus).toHaveBeenCalledWith(QUESTION_ID, USER_ID);
+    expect(authorization.assertAuthorized).toHaveBeenCalledWith({
+      actorId: USER_ID,
+      capability: 'question:manage_own',
+      context: { kind: 'system', resourceKey: 'giaokhoa' },
     });
   });
 });

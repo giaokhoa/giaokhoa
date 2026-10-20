@@ -70,13 +70,20 @@ export class PostgresImagesRepository implements ImagesRepository {
     return source as TikzImageSource | undefined;
   }
 
-  async findVariant(imageId: string, imageVariantId: string) {
+  async findVariantOwned(imageId: string, imageVariantId: string, userId: string) {
     const [variant] = await this.db
-      .select()
+      .select({ variant: imageVariants })
       .from(imageVariants)
-      .where(and(eq(imageVariants.id, imageVariantId), eq(imageVariants.imageId, imageId)))
+      .innerJoin(images, eq(images.id, imageVariants.imageId))
+      .where(
+        and(
+          eq(imageVariants.id, imageVariantId),
+          eq(imageVariants.imageId, imageId),
+          eq(images.createdByUserId, userId),
+        ),
+      )
       .limit(1);
-    return variant;
+    return variant?.variant;
   }
 
   async discardOrphans(refs: ImageRef[], userId: string) {

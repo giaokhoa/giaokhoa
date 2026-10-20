@@ -65,7 +65,7 @@ export class ImagesController {
   }
 
   @Get(':id/variants/:imageVariantId')
-  @Header('Cache-Control', 'private, max-age=31536000, immutable')
+  @Header('Cache-Control', 'private, no-store')
   @Header('X-Content-Type-Options', 'nosniff')
   async getVariant(
     @Param('id', { schema: imagesContract.getVariant.pathParams.shape.id }) id: string,
@@ -73,9 +73,13 @@ export class ImagesController {
       schema: imagesContract.getVariant.pathParams.shape.imageVariantId,
     })
     imageVariantId: string,
+    @Session() session: UserSession,
     @Res() response: Response,
   ) {
-    this.sendImage(response, await this.images.getImageVariant(id, imageVariantId));
+    this.sendImage(
+      response,
+      await this.images.getImageVariant(id, imageVariantId, session.user.id),
+    );
   }
 
   @Get(':id/source')
@@ -90,13 +94,14 @@ export class ImagesController {
   }
 
   @Get(':id')
-  @Header('Cache-Control', 'private, max-age=31536000, immutable')
+  @Header('Cache-Control', 'private, no-store')
   @Header('X-Content-Type-Options', 'nosniff')
   async get(
     @Param('id', { schema: imagesContract.get.pathParams.shape.id }) id: string,
+    @Session() session: UserSession,
     @Res() response: Response,
   ) {
-    this.sendImage(response, await this.images.getImage(id));
+    this.sendImage(response, await this.images.getImage(id, session.user.id));
   }
 
   private toResponse(image: {

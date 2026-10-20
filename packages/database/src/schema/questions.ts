@@ -7,6 +7,7 @@ export const stimuli = pgTable('stimuli', {
   id: uuid('id')
     .default(sql`uuidv7()`)
     .primaryKey(),
+  createdByUserId: uuid('created_by_user_id').references(() => users.id),
   content: jsonb('content').notNull(),
 });
 

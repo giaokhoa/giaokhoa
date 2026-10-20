@@ -44,7 +44,17 @@ const createOnly = {
   openWorldHint: false,
 } as const;
 
-export function registerCurriculumTools(server: McpServer, curriculum: CurriculumService) {
+export function registerCurriculumTools(
+  server: McpServer,
+  curriculum: CurriculumService,
+  authorizeWrite: () => Promise<void>,
+) {
+  const runWrite = (action: () => Promise<unknown>) =>
+    run(async () => {
+      await authorizeWrite();
+      return action();
+    });
+
   server.registerTool(
     'list_subjects',
     {
@@ -92,7 +102,7 @@ export function registerCurriculumTools(server: McpServer, curriculum: Curriculu
       inputSchema: curriculumCreateSchema,
       annotations: createOnly,
     },
-    (input) => run(() => curriculum.createCurriculum(input)),
+    (input) => runWrite(() => curriculum.createCurriculum(input)),
   );
 
   server.registerTool(
@@ -122,7 +132,7 @@ export function registerCurriculumTools(server: McpServer, curriculum: Curriculu
       inputSchema: curriculumNodeCreateSchema,
       annotations: createOnly,
     },
-    (input) => run(() => curriculum.createNode(input)),
+    (input) => runWrite(() => curriculum.createNode(input)),
   );
 
   server.registerTool(
@@ -152,6 +162,6 @@ export function registerCurriculumTools(server: McpServer, curriculum: Curriculu
       inputSchema: learningOutcomeCreateSchema,
       annotations: createOnly,
     },
-    (input) => run(() => curriculum.createOutcome(input)),
+    (input) => runWrite(() => curriculum.createOutcome(input)),
   );
 }
