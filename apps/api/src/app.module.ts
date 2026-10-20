@@ -10,6 +10,7 @@ import { CurriculumModule } from './curriculum/curriculum.module.js';
 import * as schema from '@giaokhoa/database/schema';
 import { QuestionsModule } from './questions/questions.module.js';
 import { ClientErrorFilter } from './common/client-error.filter.js';
+import { AuthorizationModule } from './authorization/authorization.module.js';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { ClientErrorFilter } from './common/client-error.filter.js';
       }),
     }),
     AuthModule,
+    AuthorizationModule,
     ImagesModule,
     CurriculumModule,
     QuestionsModule,

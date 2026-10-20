@@ -1,4 +1,4 @@
-export type ClientErrorKind = 'invalid' | 'not_found' | 'conflict';
+export type ClientErrorKind = 'invalid' | 'not_found' | 'conflict' | 'forbidden';
 
 export class ClientError extends Error {
   constructor(

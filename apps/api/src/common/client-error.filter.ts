@@ -5,6 +5,7 @@ import {
   Catch,
   ConflictException,
   ExceptionFilter,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 
@@ -24,6 +25,8 @@ export class ClientErrorFilter implements ExceptionFilter {
         return new NotFoundException(error.message);
       case 'conflict':
         return new ConflictException(error.message);
+      case 'forbidden':
+        return new ForbiddenException(error.message);
     }
   }
 }
