@@ -16,6 +16,22 @@
       "types": "./src/questions.ts",
       "default": "./dist/questions.js"
     },
+    "./classes": {
+      "types": "./src/classes.ts",
+      "default": "./dist/classes.js"
+    },
+    "./exams": {
+      "types": "./src/exams.ts",
+      "default": "./dist/exams.js"
+    },
+    "./assignments": {
+      "types": "./src/assignments.ts",
+      "default": "./dist/assignments.js"
+    },
+    "./attempts": {
+      "types": "./src/attempts.ts",
+      "default": "./dist/attempts.js"
+    },
     "./http/*": {
       "types": "./src/http/*.ts",
       "default": "./dist/http/*.js"

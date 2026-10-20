@@ -10,6 +10,7 @@ import {
   type StimulusPatch,
 } from '@giaokhoa/shared/questions';
 import { ClientError } from '../common/client-error.js';
+import type { AuthorizationService } from '../authorization/service.js';
 import type { QuestionsRepository, StoredQuestion } from './repository.js';
 
 function validateMergedQuestion(value: unknown): QuestionCreate {
@@ -31,14 +32,31 @@ function withoutOwner(question: StoredQuestion): Question {
 }
 
 export class QuestionsService {
-  constructor(private readonly repository: QuestionsRepository) {}
+  constructor(
+    private readonly repository: QuestionsRepository,
+    private readonly authorization: AuthorizationService,
+  ) {}
+
+  private assertCapability(
+    userId: string,
+    capability: 'question:create_own' | 'question:manage_own',
+  ) {
+    return this.authorization.assertAuthorized({
+      actorId: userId,
+      capability,
+      context: { kind: 'system', resourceKey: 'giaokhoa' },
+    });
+  }
 
   async createQuestion(question: QuestionCreate, userId: string): Promise<Question> {
+    await this.assertCapability(userId, 'question:create_own');
     const refs = collectImageRefs(question);
     return withoutOwner(await this.repository.createQuestion(question, refs, userId));
   }
 
+  /** Response soạn thảo có lời giải, vì vậy phải thỏa capability và truy vấn theo owner. */
   async getQuestion(id: string, userId: string): Promise<Question> {
+    await this.assertCapability(userId, 'question:manage_own');
     const question = await this.repository.findQuestionOwned(id, userId);
     if (!question)
       throw new ClientError('not_found', 'question_not_found', 'Question không tồn tại');
@@ -46,6 +64,7 @@ export class QuestionsService {
   }
 
   async getLatestReadyQuestion(id: string, userId: string): Promise<Question> {
+    await this.assertCapability(userId, 'question:manage_own');
     const owned = await this.repository.findQuestionOwned(id, userId);
     if (!owned) throw new ClientError('not_found', 'question_not_found', 'Question không tồn tại');
     const question = await this.repository.findLatestReadyQuestion(id);
@@ -55,6 +74,7 @@ export class QuestionsService {
   }
 
   async getQuestionVersion(id: string, version: number, userId: string): Promise<Question> {
+    await this.assertCapability(userId, 'question:manage_own');
     const owned = await this.repository.findQuestionOwned(id, userId);
     if (!owned) throw new ClientError('not_found', 'question_not_found', 'Question không tồn tại');
     const question = await this.repository.findQuestionVersion(id, version);
@@ -68,6 +88,7 @@ export class QuestionsService {
   }
 
   async listQuestionVersions(id: string, userId: string): Promise<QuestionVersionSummary[]> {
+    await this.assertCapability(userId, 'question:manage_own');
     const owned = await this.repository.findQuestionOwned(id, userId);
     if (!owned) throw new ClientError('not_found', 'question_not_found', 'Question không tồn tại');
     return this.repository.listQuestionVersions(id);
@@ -79,6 +100,7 @@ export class QuestionsService {
     expectedVersion: number,
     userId: string,
   ): Promise<Question> {
+    await this.assertCapability(userId, 'question:manage_own');
     const current = await this.repository.findQuestionOwned(id, userId);
     if (!current)
       throw new ClientError('not_found', 'question_not_found', 'Question không tồn tại');
@@ -127,31 +149,35 @@ export class QuestionsService {
   }
 
   async deleteQuestion(id: string, userId: string): Promise<void> {
+    await this.assertCapability(userId, 'question:manage_own');
     if (!(await this.repository.deleteQuestion(id, userId)))
       throw new ClientError('not_found', 'question_not_found', 'Question không tồn tại');
   }
 
-  createStimulus(input: StimulusCreate): Promise<Stimulus> {
-    return this.repository.createStimulus(input);
+  async createStimulus(input: StimulusCreate, userId: string): Promise<Stimulus> {
+    await this.assertCapability(userId, 'question:create_own');
+    return this.repository.createStimulus(input, userId);
   }
 
-  async getStimulus(id: string): Promise<Stimulus> {
-    const stimulus = await this.repository.findStimulus(id);
+  async getStimulus(id: string, userId: string): Promise<Stimulus> {
+    await this.assertCapability(userId, 'question:manage_own');
+    const stimulus = await this.repository.findStimulusOwned(id, userId);
     if (!stimulus)
       throw new ClientError('not_found', 'stimulus_not_found', 'Stimulus không tồn tại');
     return stimulus;
   }
 
-  async updateStimulus(id: string, patch: StimulusPatch): Promise<Stimulus> {
-    await this.getStimulus(id);
-    const updated = await this.repository.updateStimulus(id, patch);
+  async updateStimulus(id: string, patch: StimulusPatch, userId: string): Promise<Stimulus> {
+    await this.assertCapability(userId, 'question:manage_own');
+    const updated = await this.repository.updateStimulus(id, patch, userId);
     if (!updated)
       throw new ClientError('not_found', 'stimulus_not_found', 'Stimulus không tồn tại');
     return updated;
   }
 
-  async deleteStimulus(id: string): Promise<void> {
-    if (!(await this.repository.deleteStimulus(id)))
+  async deleteStimulus(id: string, userId: string): Promise<void> {
+    await this.assertCapability(userId, 'question:manage_own');
+    if (!(await this.repository.deleteStimulus(id, userId)))
       throw new ClientError('not_found', 'stimulus_not_found', 'Stimulus không tồn tại');
   }
 }

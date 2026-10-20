@@ -5,7 +5,12 @@ import type {
   ImagesRepository,
 } from '@giaokhoa/application/images/repository';
 import type { ImageRef, TikzImageSource } from '@giaokhoa/shared/images';
-import { and, asc, DrizzleQueryError, eq, gt, lte, sql } from 'drizzle-orm';
+import { collectImageRefs, questionSchema } from '@giaokhoa/shared/questions';
+import { and, asc, DrizzleQueryError, eq, gt, isNull, lte, sql } from 'drizzle-orm';
+import { assignments, assignmentRecipients } from '../schema/assignments.js';
+import { classes, classEnrolments } from '../schema/classes.js';
+import { examRevisionQuestions } from '../schema/exams.js';
+import { questionVersions } from '../schema/questions.js';
 import {
   images,
   imageSources,
@@ -51,6 +56,7 @@ export class PostgresImagesRepository implements ImagesRepository {
     return image;
   }
 
+  /** Giới hạn theo owner ngay ở SQL, trước khi application đọc bytes từ storage. */
   async findOwned(id: string, userId: string) {
     const [image] = await this.db
       .select()
@@ -58,6 +64,75 @@ export class PostgresImagesRepository implements ImagesRepository {
       .where(and(eq(images.id, id), eq(images.createdByUserId, userId)))
       .limit(1);
     return image;
+  }
+
+  async findVariant(imageId: string, imageVariantId: string) {
+    const [variant] = await this.db
+      .select()
+      .from(imageVariants)
+      .where(and(eq(imageVariants.id, imageVariantId), eq(imageVariants.imageId, imageId)))
+      .limit(1);
+    return variant;
+  }
+
+  /**
+   * Chỉ xét ảnh thực sự nằm trong content của câu hỏi đã giao; bảng refs còn lưu ảnh
+   * trong guidance/solution nên không đủ điều kiện để cho học sinh đọc binary.
+   */
+  async assignedImageClasses(
+    imageId: string,
+    imageVariantId: string | null,
+    userId: string,
+    now: Date,
+  ) {
+    const rows = await this.db
+      .select({ classId: assignments.classId, snapshot: examRevisionQuestions.questionSnapshot })
+      .from(questionImageRefs)
+      .innerJoin(questionVersions, eq(questionVersions.questionId, questionImageRefs.questionId))
+      .innerJoin(
+        examRevisionQuestions,
+        eq(examRevisionQuestions.questionVersionId, questionVersions.id),
+      )
+      .innerJoin(assignments, eq(assignments.examRevisionId, examRevisionQuestions.examRevisionId))
+      .innerJoin(
+        assignmentRecipients,
+        and(
+          eq(assignmentRecipients.assignmentId, assignments.id),
+          eq(assignmentRecipients.userId, userId),
+          eq(assignmentRecipients.status, 'active'),
+        ),
+      )
+      .innerJoin(
+        classEnrolments,
+        and(
+          eq(classEnrolments.classId, assignments.classId),
+          eq(classEnrolments.userId, userId),
+          eq(classEnrolments.status, 'active'),
+        ),
+      )
+      .innerJoin(classes, eq(classes.id, assignments.classId))
+      .where(
+        and(
+          eq(questionImageRefs.imageId, imageId),
+          imageVariantId
+            ? eq(questionImageRefs.imageVariantId, imageVariantId)
+            : isNull(questionImageRefs.imageVariantId),
+          eq(assignments.status, 'published'),
+          lte(assignments.openAt, now),
+          eq(classes.status, 'active'),
+        ),
+      );
+    return [
+      ...new Set(
+        rows
+          .filter(({ snapshot }) =>
+            collectImageRefs(questionSchema.parse(snapshot).content).some(
+              (ref) => ref.imageId === imageId && ref.imageVariantId === imageVariantId,
+            ),
+          )
+          .map(({ classId }) => classId),
+      ),
+    ];
   }
 
   async findSourceOwned(id: string, userId: string) {
@@ -70,13 +145,20 @@ export class PostgresImagesRepository implements ImagesRepository {
     return source as TikzImageSource | undefined;
   }
 
-  async findVariant(imageId: string, imageVariantId: string) {
+  async findVariantOwned(imageId: string, imageVariantId: string, userId: string) {
     const [variant] = await this.db
-      .select()
+      .select({ variant: imageVariants })
       .from(imageVariants)
-      .where(and(eq(imageVariants.id, imageVariantId), eq(imageVariants.imageId, imageId)))
+      .innerJoin(images, eq(images.id, imageVariants.imageId))
+      .where(
+        and(
+          eq(imageVariants.id, imageVariantId),
+          eq(imageVariants.imageId, imageId),
+          eq(images.createdByUserId, userId),
+        ),
+      )
       .limit(1);
-    return variant;
+    return variant?.variant;
   }
 
   async discardOrphans(refs: ImageRef[], userId: string) {

@@ -27,6 +27,7 @@ import type { Response } from 'express';
 export class ImagesController {
   constructor(private readonly images: ImagesService) {}
 
+  /** Tải ảnh mới lên kho riêng của tài khoản, trả ID và URL dùng trong nội dung soạn đề. */
   @Post()
   @UseInterceptors(
     FileInterceptor(imagesContract.upload.file.field, {
@@ -41,6 +42,7 @@ export class ImagesController {
     return this.toResponse(await this.images.createImage(file, session.user.id, body));
   }
 
+  /** Dọn ảnh mồ côi của chủ sở hữu, không xóa ảnh đang được câu hỏi tham chiếu. */
   @Post('discard')
   @HttpCode(HttpStatus.NO_CONTENT)
   discard(
@@ -50,6 +52,7 @@ export class ImagesController {
     return this.images.discardImages(body.images, session.user.id);
   }
 
+  /** Chủ ảnh tải lên phiên bản crop của ảnh raster để dùng trong câu hỏi. */
   @Post(':id/variants')
   @UseInterceptors(
     FileInterceptor(imagesContract.uploadVariant.file.field, {
@@ -64,8 +67,9 @@ export class ImagesController {
     return this.toResponse(await this.images.createImageVariant(id, file, session.user.id));
   }
 
+  /** Trả ảnh crop cho chủ ảnh hoặc học sinh được giao câu hỏi dùng đúng crop này. */
   @Get(':id/variants/:imageVariantId')
-  @Header('Cache-Control', 'private, max-age=31536000, immutable')
+  @Header('Cache-Control', 'private, no-store')
   @Header('X-Content-Type-Options', 'nosniff')
   async getVariant(
     @Param('id', { schema: imagesContract.getVariant.pathParams.shape.id }) id: string,
@@ -73,11 +77,16 @@ export class ImagesController {
       schema: imagesContract.getVariant.pathParams.shape.imageVariantId,
     })
     imageVariantId: string,
+    @Session() session: UserSession,
     @Res() response: Response,
   ) {
-    this.sendImage(response, await this.images.getImageVariant(id, imageVariantId));
+    this.sendImage(
+      response,
+      await this.images.getImageVariant(id, imageVariantId, session.user.id),
+    );
   }
 
+  /** Chỉ chủ ảnh đọc mã nguồn TikZ; người nhận đề chỉ được tải ảnh đã render. */
   @Get(':id/source')
   @Header('Cache-Control', 'private, no-store')
   async getSource(
@@ -89,14 +98,16 @@ export class ImagesController {
     );
   }
 
+  /** Tải bytes ảnh cho chủ sở hữu hoặc học sinh có bài giao đang mở chứa ảnh đó. */
   @Get(':id')
-  @Header('Cache-Control', 'private, max-age=31536000, immutable')
+  @Header('Cache-Control', 'private, no-store')
   @Header('X-Content-Type-Options', 'nosniff')
   async get(
     @Param('id', { schema: imagesContract.get.pathParams.shape.id }) id: string,
+    @Session() session: UserSession,
     @Res() response: Response,
   ) {
-    this.sendImage(response, await this.images.getImage(id));
+    this.sendImage(response, await this.images.getImage(id, session.user.id));
   }
 
   private toResponse(image: {
@@ -112,6 +123,10 @@ export class ImagesController {
     return imagesContract.upload.responses[201].parse({ ...image, src });
   }
 
+  /**
+   * Gửi binary trực tiếp để giữ MIME type, kích thước và ETag; SVG còn cần CSP sandbox.
+   * Quyền tải ảnh phải được kiểm trước khi gọi hàm này.
+   */
   private sendImage(
     response: Response,
     image: { body: Uint8Array; mimeType: string; byteSize: number; etag?: string },

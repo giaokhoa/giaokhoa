@@ -33,8 +33,8 @@ export interface QuestionsRepository {
   ): Promise<StoredQuestion | undefined>;
   deleteQuestion(id: string, userId: string): Promise<{ id: string } | undefined>;
 
-  createStimulus(data: StimulusCreate): Promise<Stimulus>;
-  findStimulus(id: string): Promise<Stimulus | undefined>;
-  updateStimulus(id: string, data: StimulusPatch): Promise<Stimulus | undefined>;
-  deleteStimulus(id: string): Promise<{ id: string } | undefined>;
+  createStimulus(data: StimulusCreate, userId: string): Promise<Stimulus>;
+  findStimulusOwned(id: string, userId: string): Promise<Stimulus | undefined>;
+  updateStimulus(id: string, data: StimulusPatch, userId: string): Promise<Stimulus | undefined>;
+  deleteStimulus(id: string, userId: string): Promise<{ id: string } | undefined>;
 }

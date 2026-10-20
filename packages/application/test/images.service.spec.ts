@@ -25,8 +25,10 @@ function createService() {
     })),
     find: vi.fn(),
     findOwned: vi.fn(),
-    findSourceOwned: vi.fn(),
     findVariant: vi.fn(),
+    assignedImageClasses: vi.fn(async () => [] as string[]),
+    findSourceOwned: vi.fn(),
+    findVariantOwned: vi.fn(),
     discardOrphans: vi.fn(
       async (
         _refs: Array<{ imageId: string; imageVariantId: string | null }>,
@@ -40,10 +42,12 @@ function createService() {
     delete: vi.fn(async (_key: string) => undefined),
   };
 
+  const authorization = { authorize: vi.fn(async () => ({ allowed: false })) };
   return {
-    service: new ImagesService(repository as never, storage as never),
+    service: new ImagesService(repository as never, storage as never, authorization as never),
     repository,
     storage,
+    authorization,
   };
 }
 
@@ -133,6 +137,37 @@ describe('ImagesService', () => {
 
     expect(storage.put).not.toHaveBeenCalled();
     expect(repository.create).not.toHaveBeenCalled();
+  });
+
+  it('uses the assignment capability before reading binary shared with a recipient', async () => {
+    const { service, repository, storage, authorization } = createService();
+    const record = {
+      id: IMAGE_ID,
+      storageKey: 'images/originals/test.png',
+      mimeType: 'image/png',
+      byteSize: PNG_1X1.length,
+    };
+    repository.findOwned.mockResolvedValue(undefined);
+    repository.find.mockResolvedValue(record);
+    repository.assignedImageClasses.mockResolvedValue([USER_ID]);
+    storage.get.mockResolvedValue({ body: PNG_1X1 });
+    authorization.authorize.mockResolvedValueOnce({ allowed: true });
+
+    await expect(service.getImage(IMAGE_ID, USER_ID)).resolves.toMatchObject({
+      mimeType: 'image/png',
+    });
+    expect(authorization.authorize).toHaveBeenCalledWith({
+      actorId: USER_ID,
+      capability: 'assignment:view_assigned',
+      context: { kind: 'class', resourceKey: USER_ID },
+    });
+    expect(storage.get).toHaveBeenCalledTimes(1);
+
+    authorization.authorize.mockResolvedValueOnce({ allowed: false });
+    await expect(service.getImage(IMAGE_ID, USER_ID)).rejects.toMatchObject({
+      code: 'image_not_found',
+    });
+    expect(storage.get).toHaveBeenCalledTimes(1);
   });
 
   it('returns TikZ source only through the owner lookup', async () => {
@@ -294,5 +329,56 @@ describe('ImagesService discard lifecycle', () => {
     ).rejects.toBeInstanceOf(ClientError);
 
     expect(repository.discardOrphans).not.toHaveBeenCalled();
+  });
+});
+
+describe('ImagesService binary access', () => {
+  it('returns original bytes only after the repository confirms ownership', async () => {
+    const { service, repository, storage } = createService();
+    repository.findOwned.mockResolvedValueOnce(undefined);
+    await expect(service.getImage(IMAGE_ID, USER_ID)).rejects.toMatchObject({
+      kind: 'not_found',
+      code: 'image_not_found',
+    });
+    expect(storage.get).not.toHaveBeenCalled();
+
+    repository.findOwned.mockResolvedValueOnce({
+      id: IMAGE_ID,
+      storageKey: 'images/originals/private.png',
+      mimeType: 'image/png',
+      byteSize: PNG_1X1.length,
+    });
+    storage.get.mockResolvedValueOnce({ body: PNG_1X1, etag: 'etag' });
+    await expect(service.getImage(IMAGE_ID, USER_ID)).resolves.toMatchObject({
+      body: PNG_1X1,
+      mimeType: 'image/png',
+    });
+    expect(repository.findOwned).toHaveBeenCalledWith(IMAGE_ID, USER_ID);
+  });
+
+  it('requires ownership of the parent image before serving a variant', async () => {
+    const { service, repository, storage } = createService();
+    repository.findVariantOwned.mockResolvedValueOnce(undefined);
+    await expect(
+      service.getImageVariant(IMAGE_ID, IMAGE_VARIANT_ID, USER_ID),
+    ).rejects.toMatchObject({
+      kind: 'not_found',
+    });
+    expect(storage.get).not.toHaveBeenCalled();
+
+    repository.findVariantOwned.mockResolvedValueOnce({
+      imageId: IMAGE_ID,
+      id: IMAGE_VARIANT_ID,
+      storageKey: 'images/derived/private.png',
+      mimeType: 'image/png',
+      byteSize: PNG_1X1.length,
+    });
+    storage.get.mockResolvedValueOnce({ body: PNG_1X1 });
+    await expect(
+      service.getImageVariant(IMAGE_ID, IMAGE_VARIANT_ID, USER_ID),
+    ).resolves.toMatchObject({
+      body: PNG_1X1,
+    });
+    expect(repository.findVariantOwned).toHaveBeenCalledWith(IMAGE_ID, IMAGE_VARIANT_ID, USER_ID);
   });
 });

@@ -15,6 +15,7 @@ import {
   type StimulusPatch,
 } from '@giaokhoa/shared/questions';
 import { and, desc, eq, inArray } from 'drizzle-orm';
+import { examRevisionQuestions } from '../schema/exams.js';
 import { images, imageVariants, questionImageRefs } from '../schema/images.js';
 import { question, questionBankEntries, questionVersions, stimuli } from '../schema/questions.js';
 import type { Database } from '../types.js';
@@ -37,7 +38,8 @@ function parseStoredQuestion(
 }
 
 function parseStimulus(row: typeof stimuli.$inferSelect) {
-  return stimulusSchema.parse(row);
+  const { createdByUserId: _owner, ...publicStimulus } = row;
+  return stimulusSchema.parse(publicStimulus);
 }
 
 function revisionChanged() {
@@ -54,7 +56,7 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
   async createQuestion(data: QuestionCreate, refs: ImageRef[], userId: string) {
     return this.db.transaction(async (tx) => {
       await this.validateImageRefs(tx, refs, userId);
-      if (data.status === 'ready') await this.lockReadyStimulus(tx, data.stimulusId);
+      await this.lockOwnedStimulus(tx, data.stimulusId, userId);
       const [entry] = await tx
         .insert(questionBankEntries)
         .values({ createdByUserId: userId })
@@ -115,6 +117,7 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
       : undefined;
   }
 
+  /** Lọc owner tại bank entry rồi lấy phiên bản mới nhất; không tiết lộ tồn tại bằng ID. */
   async findQuestionOwned(id: string, userId: string) {
     const [row] = await this.db
       .select({
@@ -201,7 +204,7 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
         .limit(1);
       if (!latest || latest.version !== expectedVersion) throw revisionChanged();
       await this.validateImageRefs(tx, refs, userId);
-      if (data.status === 'ready') await this.lockReadyStimulus(tx, data.stimulusId);
+      await this.lockOwnedStimulus(tx, data.stimulusId, userId);
       const { status, ...definition } = data;
 
       const [content] = await tx
@@ -252,8 +255,29 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
         return parseStoredQuestion(id, userId, latest.version, status, latest.content);
       }
 
+      const [pinned] = await tx
+        .select({ id: examRevisionQuestions.examRevisionId })
+        .from(examRevisionQuestions)
+        .innerJoin(
+          questionVersions,
+          eq(examRevisionQuestions.questionVersionId, questionVersions.id),
+        )
+        .where(
+          and(
+            eq(questionVersions.questionBankEntryId, id),
+            eq(questionVersions.version, latest.version),
+          ),
+        )
+        .limit(1);
+      if (pinned)
+        throw new ClientError(
+          'conflict',
+          'question_in_exam',
+          'Phiên bản câu hỏi đã được chốt vào đề',
+        );
+
       // Chuyển từ nháp sang sẵn sàng dùng chung khóa stimulus với thao tác chỉnh sửa stimulus.
-      if (status === 'ready') await this.lockReadyStimulus(tx, latest.content.stimulusId);
+      if (status === 'ready') await this.lockOwnedStimulus(tx, latest.content.stimulusId, userId);
       await tx
         .update(questionVersions)
         .set({ status })
@@ -276,6 +300,18 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
         .limit(1)
         .for('update');
       if (!owned) return undefined;
+
+      const [pinned] = await tx
+        .select({ id: examRevisionQuestions.examRevisionId })
+        .from(examRevisionQuestions)
+        .innerJoin(
+          questionVersions,
+          eq(examRevisionQuestions.questionVersionId, questionVersions.id),
+        )
+        .where(eq(questionVersions.questionBankEntryId, id))
+        .limit(1);
+      if (pinned)
+        throw new ClientError('conflict', 'question_in_exam', 'Câu hỏi đã được chốt vào đề');
 
       const versions = await tx
         .select({ questionId: questionVersions.questionId })
@@ -301,37 +337,50 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
     });
   }
 
-  async createStimulus(data: StimulusCreate): Promise<Stimulus> {
-    const [stimulus] = await this.db.insert(stimuli).values(data).returning();
+  async createStimulus(data: StimulusCreate, userId: string): Promise<Stimulus> {
+    const [stimulus] = await this.db
+      .insert(stimuli)
+      .values({ ...data, createdByUserId: userId })
+      .returning();
     return parseStimulus(stimulus);
   }
 
-  async findStimulus(id: string): Promise<Stimulus | undefined> {
-    const [stimulus] = await this.db.select().from(stimuli).where(eq(stimuli.id, id)).limit(1);
+  async findStimulusOwned(id: string, userId: string): Promise<Stimulus | undefined> {
+    const [stimulus] = await this.db
+      .select()
+      .from(stimuli)
+      .where(and(eq(stimuli.id, id), eq(stimuli.createdByUserId, userId)))
+      .limit(1);
     return stimulus ? parseStimulus(stimulus) : undefined;
   }
 
-  async updateStimulus(id: string, data: StimulusPatch): Promise<Stimulus | undefined> {
+  async updateStimulus(
+    id: string,
+    data: StimulusPatch,
+    userId: string,
+  ): Promise<Stimulus | undefined> {
     return this.db.transaction(async (tx) => {
+      const owned = and(eq(stimuli.id, id), eq(stimuli.createdByUserId, userId));
       const [existing] = await tx
         .select({ id: stimuli.id })
         .from(stimuli)
-        .where(eq(stimuli.id, id))
+        .where(owned)
         .limit(1)
         .for('update');
       if (!existing) return undefined;
       await this.assertStimulusUnreferenced(tx, id);
-      const [updated] = await tx.update(stimuli).set(data).where(eq(stimuli.id, id)).returning();
+      const [updated] = await tx.update(stimuli).set(data).where(owned).returning();
       return updated ? parseStimulus(updated) : undefined;
     });
   }
 
-  async deleteStimulus(id: string) {
+  async deleteStimulus(id: string, userId: string) {
     return this.db.transaction(async (tx) => {
+      const owned = and(eq(stimuli.id, id), eq(stimuli.createdByUserId, userId));
       const [existing] = await tx
         .select({ id: stimuli.id })
         .from(stimuli)
-        .where(eq(stimuli.id, id))
+        .where(owned)
         .limit(1)
         .for('update');
       if (!existing) return undefined;
@@ -343,24 +392,29 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
       if (inUse) {
         throw new ClientError('conflict', 'stimulus_in_use', 'Ngữ liệu đang được câu hỏi sử dụng');
       }
-      const [deleted] = await tx
-        .delete(stimuli)
-        .where(eq(stimuli.id, id))
-        .returning({ id: stimuli.id });
+      const [deleted] = await tx.delete(stimuli).where(owned).returning({ id: stimuli.id });
       return deleted;
     });
   }
 
-  private async lockReadyStimulus(tx: Transaction, stimulusId: string | null | undefined) {
+  private async lockOwnedStimulus(
+    tx: Transaction,
+    stimulusId: string | null | undefined,
+    userId: string,
+  ) {
     if (!stimulusId) return;
     const [existing] = await tx
       .select({ id: stimuli.id })
       .from(stimuli)
-      .where(eq(stimuli.id, stimulusId))
+      .where(and(eq(stimuli.id, stimulusId), eq(stimuli.createdByUserId, userId)))
       .limit(1)
       .for('update');
     if (!existing) {
-      throw new ClientError('invalid', 'stimulus_invalid', 'Ngữ liệu không tồn tại');
+      throw new ClientError(
+        'invalid',
+        'stimulus_invalid',
+        'Ngữ liệu không tồn tại hoặc không thuộc người dùng',
+      );
     }
   }
 
