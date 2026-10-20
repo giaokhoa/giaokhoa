@@ -283,7 +283,9 @@ describe('Assignment publication and recipients', () => {
     await expect(assignments.publish(teacher.id, draft.id)).rejects.toMatchObject({
       kind: 'forbidden',
     });
-    expect((await assignments.get(teacher.id, draft.id)).status).toBe('draft');
+    await expect(assignments.get(teacher.id, draft.id)).rejects.toMatchObject({
+      kind: 'forbidden',
+    });
   });
 
   it('serializes simultaneous publish and suspension against the same class', async () => {
