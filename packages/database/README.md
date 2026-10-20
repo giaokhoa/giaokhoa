@@ -45,28 +45,28 @@ pnpm --filter @giaokhoa/api auth:generate
 Trong giai đoạn phát triển initial schema, mọi thay đổi schema được phản ánh bằng cách tạo lại migration
 `0000` từ đầu. Migration history bắt đầu ổn định khi database/version mục tiêu được chốt để triển khai.
 
-## Package boundary
+## Ranh giới package
 
-`@giaokhoa/database` là persistence source of truth của workspace:
+`@giaokhoa/database` là nguồn chuẩn của tầng lưu trữ trong workspace:
 
-- `src/schema/*` chứa Drizzle tables, relations, constraints và indexes.
-- `src/types.ts` expose `$inferSelect` / `$inferInsert` dưới dạng type-only public surface.
-- `drizzle/` và `drizzle.config.ts` sở hữu migration tooling.
+- `src/schema/*` chứa bảng, quan hệ, ràng buộc và chỉ mục Drizzle.
+- `src/types.ts` xuất `$inferSelect` / `$inferInsert` dưới dạng type-only.
+- `drizzle/` và `drizzle.config.ts` quản lý migration.
 
-API repositories import runtime table objects từ `@giaokhoa/database/schema/*`. Contracts chỉ được import
-`@giaokhoa/database/types` bằng `import type` để compile-check projection; web/editor không phụ thuộc DB.
+Repository của API import bảng runtime từ `@giaokhoa/database/schema/*`. Các package chỉ cần
+kiểu dữ liệu sử dụng `import type` từ `@giaokhoa/database/types` để kiểm tra projection;
+web/editor không phụ thuộc vào database.
 
-## Naming convention
+## Quy ước đặt tên
 
-The package name is deliberately `@giaokhoa/database`, not an abbreviated `@giaokhoa/db`.
+Tên package thống nhất là `@giaokhoa/database`, không viết tắt thành `@giaokhoa/db`.
 
-- Runtime table variables are plural lower-camel nouns: `subjects`, `questions`, `imageVariants`.
-- Public inferred persistence types use `{Entity}Row` for `$inferSelect` and `{Entity}Insert` for
-  `$inferInsert`.
-- Runtime schema imports use `@giaokhoa/database/schema` or
-  `@giaokhoa/database/schema/<group>`.
-- Type-only consumers use `@giaokhoa/database/types`.
-- Migration path consumers use `@giaokhoa/database/migrations`.
+- Biến bảng runtime dùng danh từ số nhiều dạng lower-camel: `subjects`, `questions`, `imageVariants`.
+- Kiểu persistence suy ra công khai dùng `{Entity}Row` cho `$inferSelect` và `{Entity}Insert`
+  cho `$inferInsert`.
+- Import schema runtime từ `@giaokhoa/database/schema` hoặc `@giaokhoa/database/schema/<group>`.
+- Package chỉ dùng kiểu dữ liệu import từ `@giaokhoa/database/types`.
+- Thành phần cần đường dẫn migration dùng `@giaokhoa/database/migrations`.
 
-Do not add compatibility aliases for `@giaokhoa/db`; keeping one canonical name makes dependency graphs
-and agent-generated changes predictable.
+Không tạo alias tương thích `@giaokhoa/db`; một tên chuẩn giúp đồ thị phụ thuộc và thay đổi
+do agent thực hiện nhất quán.

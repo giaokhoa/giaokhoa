@@ -97,7 +97,7 @@ export function questionToDraft(question: Question): QuestionDraft {
       };
     case 'essay':
       if (question.solution && 'answers' in question.solution) {
-        // The current essay editor only supports a single answer document.
+        // Trình soạn bài luận hiện chỉ hỗ trợ một tài liệu trả lời.
         throw new Error('Multipart essay editing is not supported by this editor.');
       }
       return {

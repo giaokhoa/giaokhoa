@@ -17,16 +17,13 @@ import {
 import { Input } from '@giaokhoa/ui/components/input';
 import { useCallback, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
+import { safeRedirectPath } from '#lib/http/redirect.js';
 import { authClient } from '../api/auth-client';
 import { AuthOtpInput } from './otp-input';
 
 type AuthMode = 'login' | 'register';
 type LoginMethod = 'otp' | 'password';
 type AuthAction = 'google' | 'email';
-
-function safeRedirectPath(value: string | null) {
-  return value?.startsWith('/') && !value.startsWith('//') ? value : '/';
-}
 
 function onboardingPath(redirectTo: string) {
   return `/onboarding?redirect=${encodeURIComponent(redirectTo)}`;

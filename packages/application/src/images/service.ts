@@ -261,7 +261,7 @@ export class ImagesService {
 
   async collectOrphanImages(cutoff: Date): Promise<number> {
     while ((await this.repository.queueExpiredOrphans(cutoff)).length) {
-      // Each batch commits its metadata removal and durable storage deletion keys.
+      // Mỗi lô lưu đồng thời việc xóa metadata và các khóa storage cần xóa bền vững.
     }
 
     let deleted = 0;

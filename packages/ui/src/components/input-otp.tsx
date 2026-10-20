@@ -26,7 +26,7 @@ function InputOTP({
       )}
       spellCheck={false}
       className={cn("disabled:cursor-not-allowed", className)}
-      // input-otp accepts RegExp at runtime, but its public type only exposes the HTML string type.
+      // input-otp nhận RegExp ở runtime, nhưng kiểu public chỉ khai báo chuỗi HTML.
       {...otpProps}
     />
   )

@@ -31,9 +31,9 @@ type MarkRenderer = (
 ) => ReactNode;
 
 /**
- * Tiptap's high-level React static renderer is ideal for one-shot rendering, but this
- * component updates on every keystroke. Precompute the public pm/react mappings once
- * so their React identities stay stable, then render schema-validated ProseMirror nodes.
+ * Renderer tĩnh React của Tiptap phù hợp khi chỉ render một lần, nhưng component này
+ * cập nhật sau mỗi phím gõ. Tính trước mapping pm/react công khai để giữ ổn định
+ * danh tính component React, sau đó render node ProseMirror đã được schema xác thực.
  */
 function createLiveContentRenderer() {
   const extensions = resolveExtensions(plainQuestionExtensions);
@@ -74,7 +74,7 @@ function createLiveContentRenderer() {
 
   const paragraphRenderer = nodes[Paragraph.name];
   if (paragraphRenderer) {
-    // ProseMirror's trailing <br> is EditorView-only; static output stays an empty <p>.
+    // Thẻ <br> cuối của ProseMirror chỉ thuộc EditorView; bản render tĩnh giữ <p> rỗng.
 
     nodes[Paragraph.name] = (props) => {
       const rendered = paragraphRenderer(props);

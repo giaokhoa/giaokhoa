@@ -4,14 +4,11 @@ import {
   curriculumCreateSchema,
   curriculumNodeCreateSchema,
   learningOutcomeCreateSchema,
-  // subjectCreateSchema,
-  // subjectPatchSchema,
 } from '@giaokhoa/shared/curriculum';
 import type { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 
 const idSchema = z.uuidv7();
-// const updateSubjectSchema = z.object({ id: idSchema }).and(subjectPatchSchema);
 
 function success(value: unknown) {
   return {
@@ -47,15 +44,6 @@ const createOnly = {
   openWorldHint: false,
 } as const;
 
-/* Reserved for update_subject when Subject writes are restored.
-const updateOnly = {
-  readOnlyHint: false,
-  destructiveHint: false,
-  idempotentHint: true,
-  openWorldHint: false,
-} as const;
-*/
-
 export function registerCurriculumTools(server: McpServer, curriculum: CurriculumService) {
   server.registerTool(
     'list_subjects',
@@ -76,28 +64,6 @@ export function registerCurriculumTools(server: McpServer, curriculum: Curriculu
     },
     ({ id }) => run(() => curriculum.getSubject(id)),
   );
-
-  /* Subject mutations are intentionally disabled in MCP.
-  server.registerTool(
-    'create_subject',
-    {
-      description: 'Tạo một môn học mới.',
-      inputSchema: subjectCreateSchema,
-      annotations: createOnly,
-    },
-    (input) => run(() => curriculum.createSubject(input)),
-  );
-
-  server.registerTool(
-    'update_subject',
-    {
-      description: 'Cập nhật tên, slug hoặc vị trí sắp xếp của một môn học.',
-      inputSchema: updateSubjectSchema,
-      annotations: updateOnly,
-    },
-    ({ id, ...patch }) => run(() => curriculum.updateSubject(id, patch)),
-  );
-  */
 
   server.registerTool(
     'list_curricula',

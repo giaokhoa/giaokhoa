@@ -690,7 +690,7 @@ export function SimpleEditor({
   const editor = useEditor({
     extensions,
     content: initialContentRef.current,
-    // React Router renders this route on the server; the fallback covers the deferred client mount.
+    // React Router render route này trên server; fallback xử lý lúc client mount trễ.
     immediatelyRender: false,
     shouldRerenderOnTransaction: false,
     editorProps,

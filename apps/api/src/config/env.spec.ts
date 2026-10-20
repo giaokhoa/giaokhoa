@@ -35,6 +35,18 @@ test('validates and transforms environment variables', () => {
   ).toThrow();
 });
 
+test('requires S3 credentials in pairs', () => {
+  expect(() => envSchema.parse({ ...baseEnv, S3_ACCESS_KEY_ID: 'access-key' })).toThrow();
+  expect(() => envSchema.parse({ ...baseEnv, S3_SECRET_ACCESS_KEY: 'secret-key' })).toThrow();
+  expect(
+    envSchema.safeParse({
+      ...baseEnv,
+      S3_ACCESS_KEY_ID: 'access-key',
+      S3_SECRET_ACCESS_KEY: 'secret-key',
+    }).success,
+  ).toBe(true);
+});
+
 test('requires auth provider secrets in pairs', () => {
   expect(() =>
     envSchema.parse({
