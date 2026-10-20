@@ -19,8 +19,10 @@ Các quy tắc này là bắt buộc đối với mọi agent và subagent làm 
 
 ## Quy trình GitHub Flow
 
-- Mỗi issue hoặc yêu cầu liên quan đến repository phải có branch riêng và Git worktree riêng trong `.worktrees/<slug>`. Tạo worktree trước khi sửa; không làm việc trực tiếp trên nhánh mặc định hoặc dùng chung worktree cho yêu cầu độc lập.
+- **Một công việc, một worktree:** Mỗi issue hoặc yêu cầu, cùng PR giải quyết nó, chỉ được dùng **một branch và một Git worktree** trong `.worktrees/<slug>`. Tạo worktree một lần trước khi sửa; không làm việc trực tiếp trên nhánh mặc định hoặc dùng chung worktree cho công việc độc lập.
+- **Tiếp tục đúng worktree:** Mọi yêu cầu bổ sung, audit, sửa lỗi, kiểm thử, review và chỉnh sửa theo PR/CI thuộc cùng công việc phải tiếp tục tại worktree ban đầu. Không tạo worktree hoặc PR mới chỉ vì có tin nhắn tiếp theo hay chuyển giai đoạn. Chỉ tạo worktree mới cho công việc thực sự độc lập; nếu chưa rõ, hỏi người dùng trước.
 - Kiểm tra Git status, xác định nhánh mặc định và cập nhật remote khi có thể. Tạo branch tên ngắn bằng tiếng Anh từ nhánh mặc định mới nhất bằng `git worktree add -b <branch> .worktrees/<slug> <base>`.
-- Đọc code, chỉnh sửa, kiểm thử và commit tại worktree của yêu cầu. Giữ nguyên mọi thay đổi chưa commit của người khác. Với cùng yêu cầu, tiếp tục tại worktree đã tạo.
+- Đọc code, chỉnh sửa, kiểm thử và commit tại worktree của công việc. Giữ nguyên mọi thay đổi chưa commit của người khác.
+- **Bắt buộc dùng `gh` khi làm việc với GitHub:** Dùng GitHub CLI `gh` để đọc/tạo/cập nhật issue, PR, review, CI/check và gọi GitHub API (qua `gh api` khi cần). Dùng `git` cho thao tác Git như worktree, branch, commit, fetch và push. Nếu `gh` không khả dụng hoặc bị từ chối quyền, báo chặn và hỏi hướng xử lý; không tự chuyển sang cách khác để lách giới hạn.
 - Thực hiện GitHub Flow: thay đổi và kiểm thử → commit → push branch → mở PR vào nhánh mặc định → xử lý review/CI → merge khi được phê duyệt → dọn branch/worktree sau merge. Không push trực tiếp lên nhánh mặc định.
 - Tiêu đề và nội dung PR bằng tiếng Việt, mô tả thay đổi, cách kiểm tra và liên kết issue nếu có. Không tự merge khi thiếu phê duyệt hoặc kiểm tra chưa đạt; không xóa worktree còn dữ liệu chưa lưu.
