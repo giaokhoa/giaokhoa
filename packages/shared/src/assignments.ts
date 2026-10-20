@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { questionTypeSchema } from './questions.js';
+import { questionTypeSchema, stimulusSchema } from './questions.js';
 
 const audienceModeSchema = z.enum(['ALL_CLASS', 'SELECTED_USERS']);
 const instantSchema = z.iso.datetime();
@@ -87,6 +87,7 @@ export const studentAssignmentSchema = z.strictObject({
         type: questionTypeSchema,
         content: z.unknown(),
         stimulusId: z.uuidv7().nullable().optional(),
+        stimulus: stimulusSchema.nullable(),
       }),
     }),
   ),

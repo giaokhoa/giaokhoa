@@ -16,6 +16,7 @@ import { Session, type UserSession } from '@thallesp/nestjs-better-auth';
 export class AssignmentAttemptsController {
   constructor(private readonly attempts: AttemptsService) {}
 
+  /** Học sinh được giao bài bắt đầu một lượt làm mới, trong giới hạn thời gian và số lượt. */
   @Post(':assignmentId/attempts')
   async start(
     @Param('assignmentId', { schema: attemptsContract.start.pathParams.shape.assignmentId })
@@ -27,8 +28,12 @@ export class AssignmentAttemptsController {
     );
   }
 
+  /**
+   * Giáo viên có quyền chấm của lớp xem danh sách lượt làm theo bài giao:
+   * người làm, trạng thái, thời điểm và điểm/nhận xét; không trả các câu trả lời.
+   */
   @Get(':assignmentId/attempts')
-  async list(
+  async listForTeacher(
     @Param('assignmentId', {
       schema: attemptsContract.listForTeacher.pathParams.shape.assignmentId,
     })
@@ -45,8 +50,9 @@ export class AssignmentAttemptsController {
 export class AttemptsController {
   constructor(private readonly attempts: AttemptsService) {}
 
+  /** Học sinh xem lượt làm của chính mình cùng các câu đã lưu; không trả đáp án chuẩn. */
   @Get(':id')
-  async get(
+  async getOwn(
     @Param('id', { schema: attemptsContract.get.pathParams.shape.id }) id: string,
     @Session() session: UserSession,
   ): Promise<Attempt> {
@@ -55,6 +61,7 @@ export class AttemptsController {
     );
   }
 
+  /** Lưu hoặc thay câu trả lời ở vị trí đề thi khi lượt làm vẫn cho phép chỉnh sửa. */
   @Put(':id/responses/:position')
   async save(
     @Param('id', { schema: attemptsContract.save.pathParams.shape.id }) id: string,
@@ -68,6 +75,7 @@ export class AttemptsController {
     );
   }
 
+  /** Học sinh nộp bài, chốt các câu trả lời và chuyển lượt làm khỏi trạng thái đang làm. */
   @Post(':id/submit')
   @HttpCode(200)
   async submit(
@@ -79,6 +87,7 @@ export class AttemptsController {
     );
   }
 
+  /** Giáo viên xem toàn bộ câu trả lời của một lượt làm để chấm và phản hồi. */
   @Get(':id/review')
   async review(
     @Param('id', { schema: attemptsContract.review.pathParams.shape.id }) id: string,
@@ -89,6 +98,7 @@ export class AttemptsController {
     );
   }
 
+  /** Giáo viên ghi điểm và nhận xét cho lượt làm đã nộp; không phải API tự chấm. */
   @Patch(':id/grade')
   async grade(
     @Param('id', { schema: attemptsContract.grade.pathParams.shape.id }) id: string,
@@ -100,6 +110,7 @@ export class AttemptsController {
     );
   }
 
+  /** Học sinh xem điểm/nhận xét khi bài đã chấm và đến mốc công bố kết quả. */
   @Get(':id/result')
   async result(
     @Param('id', { schema: attemptsContract.result.pathParams.shape.id }) id: string,
@@ -110,7 +121,7 @@ export class AttemptsController {
     );
   }
 
-  /** Lời giải được trả riêng theo policy công bố, không nằm trong response bài làm. */
+  /** Trả đáp án từng câu cho chủ lượt làm sau mốc releaseSolutionsAt của bài giao. */
   @Get(':id/solutions')
   async solutions(
     @Param('id', { schema: attemptsContract.solutions.pathParams.shape.id }) id: string,

@@ -200,6 +200,13 @@ describe('Class lifecycle and enrolment authorization', () => {
     await expect(service.joinClass(student.id, code)).rejects.toMatchObject({
       code: 'class_membership_suspended',
     });
+    await expect(service.leaveClass(student.id, classroom.id)).rejects.toMatchObject({
+      code: 'class_membership_suspended',
+    });
+    await expect(service.joinClass(student.id, code)).rejects.toMatchObject({
+      code: 'class_membership_suspended',
+    });
+    expect(await allowed(student.id, 'class:view', classroom.id)).toBe(false);
   });
 
   it('denies stale student role, allows leave and rejoin without duplicate active assignment', async () => {

@@ -9,6 +9,7 @@ import {
   type TikzImageSource,
 } from '@giaokhoa/shared/images';
 import { imageSize } from 'image-size';
+import type { AuthorizationService } from '../authorization/service.js';
 import { ClientError } from '../common/client-error.js';
 import type { ImagesRepository } from './repository.js';
 import type { ImageStorage } from './storage.js';
@@ -148,6 +149,8 @@ export class ImagesService {
   constructor(
     private readonly repository: ImagesRepository,
     private readonly storage: ImageStorage,
+    private readonly authorization: AuthorizationService,
+    private readonly now: () => Date = () => new Date(),
   ) {}
 
   async createImage(
@@ -309,14 +312,19 @@ export class ImagesService {
     return { deleted, failed, error: firstError };
   }
 
-  /** Đường đọc binary này chỉ dành cho chủ ảnh; không suy quyền từ việc biết imageId. */
+  /**
+   * Chủ ảnh hoặc người nhận bài giao có ảnh trong phần đề được xem binary.
+   * Quyền xem ảnh ở đây không bao gồm ảnh chỉ xuất hiện trong guidance/solution.
+   */
   async getImage(id: string, userId: string): Promise<StoredImage> {
     const parsedId = imageIdSchema.safeParse(id);
     if (!parsedId.success)
       throw new ClientError('not_found', 'image_not_found', 'Ảnh không tồn tại');
 
-    const image = await this.repository.findOwned(parsedId.data, userId);
+    const owned = await this.repository.findOwned(parsedId.data, userId);
+    const image = owned ?? (await this.repository.find(parsedId.data));
     if (!image) throw new ClientError('not_found', 'image_not_found', 'Ảnh không tồn tại');
+    if (!owned) await this.assertAssignedImageAccess(parsedId.data, null, userId);
 
     return this.getStoredImage(image.storageKey, image.mimeType, image.byteSize);
   }
@@ -332,14 +340,40 @@ export class ImagesService {
       throw new ClientError('not_found', 'image_not_found', 'Ảnh không tồn tại');
     }
 
-    const variant = await this.repository.findVariantOwned(
+    const owned = await this.repository.findVariantOwned(
       parsedImageId.data,
       parsedImageVariantId.data,
       userId,
     );
+    const variant =
+      owned ?? (await this.repository.findVariant(parsedImageId.data, parsedImageVariantId.data));
     if (!variant) throw new ClientError('not_found', 'image_not_found', 'Ảnh không tồn tại');
+    if (!owned)
+      await this.assertAssignedImageAccess(parsedImageId.data, parsedImageVariantId.data, userId);
 
     return this.getStoredImage(variant.storageKey, variant.mimeType, variant.byteSize);
+  }
+
+  private async assertAssignedImageAccess(
+    imageId: string,
+    imageVariantId: string | null,
+    userId: string,
+  ): Promise<void> {
+    const classIds = await this.repository.assignedImageClasses(
+      imageId,
+      imageVariantId,
+      userId,
+      new Date(),
+    );
+    for (const classId of classIds) {
+      const decision = await this.authorization.authorize({
+        actorId: userId,
+        capability: 'assignment:view_assigned',
+        context: { kind: 'class', resourceKey: classId },
+      });
+      if (decision.allowed) return;
+    }
+    throw new ClientError('not_found', 'image_not_found', 'Ảnh không tồn tại');
   }
 
   private async getStoredImage(

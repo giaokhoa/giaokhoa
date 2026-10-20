@@ -166,7 +166,11 @@ describe('Question authoring and asset authorization', () => {
       filename: 'private-crop.png',
     });
     const storage = { get: vi.fn(async () => ({ body: Buffer.from('abc') })) };
-    const service = new ImagesService(imagesRepository, storage as never);
+    const service = new ImagesService(
+      imagesRepository,
+      storage as never,
+      new AuthorizationService(new PostgresAuthorizationRepository(db)),
+    );
     await expect(service.getImage(original.id, stranger.id)).rejects.toMatchObject({
       kind: 'not_found',
     });

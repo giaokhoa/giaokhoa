@@ -6,14 +6,16 @@ import {
   assignmentSchema,
   studentAssignmentSchema,
   type AssignmentPatch,
+  type StudentAssignment,
 } from '@giaokhoa/shared/assignments';
-import { questionSchema } from '@giaokhoa/shared/questions';
+import { questionSchema, stimulusSchema } from '@giaokhoa/shared/questions';
 import { and, asc, eq, inArray, isNull, lte } from 'drizzle-orm';
 import { users } from '../schema/auth.generated.js';
 import { assignments, assignmentRecipients } from '../schema/assignments.js';
 import { authzRoleAssignments, authzRoles } from '../schema/authorization.js';
 import { classes, classEnrolments } from '../schema/classes.js';
 import { exams, examRevisions, examRevisionQuestions } from '../schema/exams.js';
+import { stimuli } from '../schema/questions.js';
 import type { Database } from '../types.js';
 
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -303,7 +305,11 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
     });
   }
 
-  async getDelivery(id: string, actorId: string, now: Date) {
+  async getDelivery(
+    id: string,
+    actorId: string,
+    now: Date,
+  ): Promise<StudentAssignment | undefined> {
     const [match] = await this.db
       .select({ assignment: assignments, title: examRevisions.title })
       .from(assignments)
@@ -342,6 +348,22 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
       .from(examRevisionQuestions)
       .where(eq(examRevisionQuestions.examRevisionId, match.assignment.examRevisionId))
       .orderBy(asc(examRevisionQuestions.position));
+    const entries = snapshots.map(({ position, questionSnapshot }) => {
+      const { id, version, type, content, stimulusId } = questionSchema.parse(questionSnapshot);
+      return { position, question: { id, version, type, content, stimulusId } };
+    });
+    const stimulusIds = [
+      ...new Set(
+        entries.flatMap(({ question }) => (question.stimulusId ? [question.stimulusId] : [])),
+      ),
+    ];
+    const stimulusRows = stimulusIds.length
+      ? await this.db
+          .select({ id: stimuli.id, content: stimuli.content })
+          .from(stimuli)
+          .where(inArray(stimuli.id, stimulusIds))
+      : [];
+    const stimuliById = new Map(stimulusRows.map((row) => [row.id, stimulusSchema.parse(row)]));
     return studentAssignmentSchema.parse({
       assignmentId: match.assignment.id,
       examRevisionId: match.assignment.examRevisionId,
@@ -349,10 +371,14 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
       openAt: match.assignment.openAt,
       closeAt: match.assignment.closeAt,
       maxAttempts: match.assignment.maxAttempts,
-      questions: snapshots.map(({ position, questionSnapshot }) => {
-        const { id, version, type, content, stimulusId } = questionSchema.parse(questionSnapshot);
-        return { position, question: { id, version, type, content, stimulusId } };
-      }),
+      // Chỉ ghép ngữ liệu vào projection học sinh đã được kiểm quyền, không mở GET stimuli theo ID.
+      questions: entries.map(({ position, question }) => ({
+        position,
+        question: {
+          ...question,
+          stimulus: question.stimulusId ? (stimuliById.get(question.stimulusId) ?? null) : null,
+        },
+      })),
     });
   }
 }

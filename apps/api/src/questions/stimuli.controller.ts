@@ -18,6 +18,7 @@ import { Session, type UserSession } from '@thallesp/nestjs-better-auth';
 export class StimuliController {
   constructor(private readonly questions: QuestionsService) {}
 
+  /** Giáo viên tạo ngữ liệu dùng chung để nhiều câu hỏi của mình tham chiếu. */
   @Post()
   async create(
     @Body({ schema: stimuliContract.create.body }) body: StimulusCreate,
@@ -28,6 +29,7 @@ export class StimuliController {
     );
   }
 
+  /** Chủ ngữ liệu đọc toàn bộ văn bản/hình ảnh để soạn đề; không dành cho học sinh. */
   @Get(':id')
   async get(
     @Param('id', { schema: stimuliContract.get.pathParams.shape.id }) id: string,
@@ -38,6 +40,7 @@ export class StimuliController {
     );
   }
 
+  /** Chỉ cho chủ ngữ liệu chỉnh sửa khi chưa có câu hỏi nào tham chiếu. */
   @Patch(':id')
   async update(
     @Param('id', { schema: stimuliContract.update.pathParams.shape.id }) id: string,
@@ -49,6 +52,7 @@ export class StimuliController {
     );
   }
 
+  /** Chỉ xóa ngữ liệu riêng chưa được bất kỳ câu hỏi nào sử dụng. */
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   delete(

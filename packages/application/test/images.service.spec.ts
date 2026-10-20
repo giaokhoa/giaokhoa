@@ -25,6 +25,8 @@ function createService() {
     })),
     find: vi.fn(),
     findOwned: vi.fn(),
+    findVariant: vi.fn(),
+    assignedImageClasses: vi.fn(async () => [] as string[]),
     findSourceOwned: vi.fn(),
     findVariantOwned: vi.fn(),
     discardOrphans: vi.fn(
@@ -40,10 +42,12 @@ function createService() {
     delete: vi.fn(async (_key: string) => undefined),
   };
 
+  const authorization = { authorize: vi.fn(async () => ({ allowed: false })) };
   return {
-    service: new ImagesService(repository as never, storage as never),
+    service: new ImagesService(repository as never, storage as never, authorization as never),
     repository,
     storage,
+    authorization,
   };
 }
 
@@ -133,6 +137,37 @@ describe('ImagesService', () => {
 
     expect(storage.put).not.toHaveBeenCalled();
     expect(repository.create).not.toHaveBeenCalled();
+  });
+
+  it('uses the assignment capability before reading binary shared with a recipient', async () => {
+    const { service, repository, storage, authorization } = createService();
+    const record = {
+      id: IMAGE_ID,
+      storageKey: 'images/originals/test.png',
+      mimeType: 'image/png',
+      byteSize: PNG_1X1.length,
+    };
+    repository.findOwned.mockResolvedValue(undefined);
+    repository.find.mockResolvedValue(record);
+    repository.assignedImageClasses.mockResolvedValue([USER_ID]);
+    storage.get.mockResolvedValue({ body: PNG_1X1 });
+    authorization.authorize.mockResolvedValueOnce({ allowed: true });
+
+    await expect(service.getImage(IMAGE_ID, USER_ID)).resolves.toMatchObject({
+      mimeType: 'image/png',
+    });
+    expect(authorization.authorize).toHaveBeenCalledWith({
+      actorId: USER_ID,
+      capability: 'assignment:view_assigned',
+      context: { kind: 'class', resourceKey: USER_ID },
+    });
+    expect(storage.get).toHaveBeenCalledTimes(1);
+
+    authorization.authorize.mockResolvedValueOnce({ allowed: false });
+    await expect(service.getImage(IMAGE_ID, USER_ID)).rejects.toMatchObject({
+      code: 'image_not_found',
+    });
+    expect(storage.get).toHaveBeenCalledTimes(1);
   });
 
   it('returns TikZ source only through the owner lookup', async () => {

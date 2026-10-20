@@ -372,6 +372,12 @@ export class PostgresClassesRepository implements ClassesRepository {
         return undefined;
       if (action === 'suspend' && row.status !== 'active' && row.status !== 'pending')
         return undefined;
+      if (action === 'leave' && row.status === 'suspended')
+        throw new ClientError(
+          'forbidden',
+          'class_membership_suspended',
+          'Bạn đã bị tạm dừng trong lớp',
+        );
       if (action === 'leave' && row.status === 'left') return undefined;
       const status = action === 'approve' ? 'active' : action === 'suspend' ? 'suspended' : 'left';
       const [updated] = await tx

@@ -34,6 +34,13 @@ export interface ImagesRepository {
   createVariant(data: CreateImageVariantData): Promise<ImageVariantRecord>;
   find(id: string): Promise<ImageRecord | undefined>;
   findOwned(id: string, userId: string): Promise<ImageRecord | undefined>;
+  findVariant(imageId: string, imageVariantId: string): Promise<ImageVariantRecord | undefined>;
+  assignedImageClasses(
+    imageId: string,
+    imageVariantId: string | null,
+    userId: string,
+    now: Date,
+  ): Promise<string[]>;
   findSourceOwned(id: string, userId: string): Promise<TikzImageSource | undefined>;
   findVariantOwned(
     imageId: string,

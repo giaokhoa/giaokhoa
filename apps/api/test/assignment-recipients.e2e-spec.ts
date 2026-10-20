@@ -4,20 +4,23 @@ import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Client, Pool } from 'pg';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AssignmentsService } from '@giaokhoa/application/assignments/service';
 import { AuthorizationService } from '@giaokhoa/application/authorization/service';
 import { ClassesService } from '@giaokhoa/application/classes/service';
 import { ExamsService } from '@giaokhoa/application/exams/service';
+import { ImagesService } from '@giaokhoa/application/images/service';
 import { QuestionsService } from '@giaokhoa/application/questions/service';
 import { PostgresAssignmentsRepository } from '@giaokhoa/database/assignments';
 import { PostgresAuthorizationRepository } from '@giaokhoa/database/authorization';
 import { PostgresClassesRepository } from '@giaokhoa/database/classes';
 import { PostgresExamsRepository } from '@giaokhoa/database/exams';
+import { PostgresImagesRepository } from '@giaokhoa/database/images';
 import { migrationsFolder } from '@giaokhoa/database/migrations';
 import { PostgresQuestionsRepository } from '@giaokhoa/database/questions';
 import * as schema from '@giaokhoa/database/schema';
 import { users } from '@giaokhoa/database/schema/auth.generated';
+import { images, imageVariants } from '@giaokhoa/database/schema/images';
 import {
   assignments as assignmentRows,
   assignmentRecipients,
@@ -38,6 +41,7 @@ let assignments: AssignmentsService;
 let classes: ClassesService;
 let exams: ExamsService;
 let questions: QuestionsService;
+let authorization: AuthorizationService;
 
 function databaseUrl(database: string) {
   if (!process.env.DATABASE_URL)
@@ -72,8 +76,18 @@ async function createUser(role: 'teacher' | 'user' | 'admin' = 'user') {
 async function fixture() {
   const teacher = await createUser('teacher');
   const classroom = await classes.createClass(teacher.id, { name: 'Lớp toán', joinMode: 'AUTO' });
+  const stimulus = await questions.createStimulus(
+    {
+      content: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Đọc đoạn văn này' }] }],
+      },
+    },
+    teacher.id,
+  );
   const question = await questions.createQuestion(
     {
+      stimulusId: stimulus.id,
       status: 'ready',
       type: 'short_answer',
       content: document,
@@ -97,7 +111,7 @@ async function fixture() {
       closeAt,
       maxAttempts: 2,
     });
-  return { teacher, classroom, exam, revision, join, create };
+  return { teacher, classroom, exam, revision, stimulus, join, create };
 }
 
 beforeAll(async () => {
@@ -105,7 +119,7 @@ beforeAll(async () => {
   pool = new Pool({ connectionString: databaseUrl(name) });
   db = drizzle(pool, { schema });
   await migrate(db, { migrationsFolder });
-  const authorization = new AuthorizationService(new PostgresAuthorizationRepository(db));
+  authorization = new AuthorizationService(new PostgresAuthorizationRepository(db));
   assignments = new AssignmentsService(
     new PostgresAssignmentsRepository(db),
     authorization,
@@ -161,7 +175,7 @@ describe('Assignment publication and recipients', () => {
   });
 
   it('rejects outsiders and suspended members atomically, then publishes one selected student', async () => {
-    const { teacher, classroom, join, create } = await fixture();
+    const { teacher, classroom, stimulus, join, create } = await fixture();
     const selected = await createUser();
     const otherMember = await createUser();
     const suspended = await createUser();
@@ -201,7 +215,14 @@ describe('Assignment publication and recipients', () => {
       kind: 'not_found',
     });
     const delivery = await assignments.getDelivery(selected.id, draft.id);
-    expect(delivery.questions[0].question).toMatchObject({ type: 'short_answer' });
+    expect(delivery.questions[0].question).toMatchObject({
+      type: 'short_answer',
+      stimulusId: stimulus.id,
+      stimulus: {
+        id: stimulus.id,
+        content: { content: [{ content: [{ text: 'Đọc đoạn văn này' }] }] },
+      },
+    });
     expect(JSON.stringify(delivery)).not.toContain('"solution"');
     expect(JSON.stringify(delivery)).not.toContain('"answer":"42"');
     expect(JSON.stringify(delivery)).not.toContain('"guidance"');
@@ -287,6 +308,124 @@ describe('Assignment publication and recipients', () => {
     await expect(assignments.getDelivery(student.id, draft.id)).rejects.toMatchObject({
       kind: 'forbidden',
     });
+  });
+
+  it('serves only assigned question images, never hidden guidance or revoked images', async () => {
+    const { teacher, classroom, join } = await fixture();
+    const student = await createUser();
+    const suspended = await createUser();
+    const unselected = await createUser();
+    await join(student.id);
+    await join(suspended.id);
+    await join(unselected.id);
+
+    const [visible, hidden] = await db
+      .insert(images)
+      .values(
+        [teacher.id, teacher.id].map((createdByUserId) => ({
+          createdByUserId,
+          storageKey: 'images/originals/' + randomUUID() + '.png',
+          mimeType: 'image/png',
+          byteSize: 3,
+          width: 1,
+          height: 1,
+          originalFilename: 'test.png',
+        })),
+      )
+      .returning();
+    const [variant] = await db
+      .insert(imageVariants)
+      .values({
+        imageId: visible.id,
+        storageKey: 'images/derived/' + randomUUID() + '.png',
+        mimeType: 'image/png',
+        byteSize: 3,
+        width: 1,
+        height: 1,
+        filename: 'crop.png',
+      })
+      .returning();
+
+    const imageNode = (imageId: string, imageVariantId: string | null) => ({
+      type: 'image' as const,
+      attrs: {
+        imageId,
+        imageVariantId,
+        src: imageVariantId
+          ? '/images/' + imageId + '/variants/' + imageVariantId
+          : '/images/' + imageId,
+        alt: null,
+        title: null,
+        width: null,
+        height: null,
+        align: 'center' as const,
+        crop: imageVariantId ? { x: 0, y: 0, width: 100, height: 100 } : null,
+      },
+    });
+    const question = await questions.createQuestion(
+      {
+        status: 'ready',
+        type: 'short_answer',
+        content: {
+          type: 'doc',
+          content: [
+            { type: 'paragraph', content: [{ type: 'text', text: 'Quan sát hình' }] },
+            imageNode(visible.id, null),
+            imageNode(visible.id, variant.id),
+          ],
+        },
+        guidance: { type: 'doc', content: [imageNode(hidden.id, null)] },
+        solution: { answer: '42' },
+      },
+      teacher.id,
+    );
+    const exam = await exams.createExam(teacher.id, { title: 'Đề có ảnh' });
+    const revision = await exams.createRevision(teacher.id, exam.id, {
+      questions: [{ questionId: question.id, version: question.version }],
+    });
+    const draft = await assignments.create(teacher.id, {
+      classId: classroom.id,
+      examRevisionId: revision.id,
+      audienceMode: 'SELECTED_USERS',
+      selectedUserIds: [student.id, suspended.id],
+      openAt,
+      closeAt,
+    });
+    await assignments.publish(teacher.id, draft.id);
+
+    const storage = { get: vi.fn(async () => ({ body: Buffer.from('abc') })) };
+    const assets = new ImagesService(
+      new PostgresImagesRepository(db),
+      storage as never,
+      authorization,
+      () => now,
+    );
+    expect(
+      (await assignments.getDelivery(student.id, draft.id)).questions[0].question.content,
+    ).toEqual(expect.objectContaining({ type: 'doc' }));
+    await expect(assets.getImage(visible.id, student.id)).resolves.toMatchObject({
+      mimeType: 'image/png',
+    });
+    await expect(assets.getImageVariant(visible.id, variant.id, student.id)).resolves.toMatchObject(
+      {
+        mimeType: 'image/png',
+      },
+    );
+    await expect(assets.getImage(hidden.id, student.id)).rejects.toMatchObject({
+      code: 'image_not_found',
+    });
+    await expect(assets.getImage(visible.id, unselected.id)).rejects.toMatchObject({
+      code: 'image_not_found',
+    });
+    await classes.suspendMember(teacher.id, classroom.id, suspended.id);
+    await expect(assets.getImage(visible.id, suspended.id)).rejects.toMatchObject({
+      code: 'image_not_found',
+    });
+    await assignments.revokeRecipient(teacher.id, draft.id, student.id);
+    await expect(assets.getImage(visible.id, student.id)).rejects.toMatchObject({
+      code: 'image_not_found',
+    });
+    expect(storage.get).toHaveBeenCalledTimes(2);
   });
 
   it('validates windows, selection uniqueness and does not expose draft or early delivery', async () => {

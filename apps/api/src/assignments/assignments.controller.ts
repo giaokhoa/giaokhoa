@@ -14,6 +14,7 @@ import { Session, type UserSession } from '@thallesp/nestjs-better-auth';
 export class AssignmentsController {
   constructor(private readonly assignments: AssignmentsService) {}
 
+  /** Chủ lớp tạo bản nháp bài giao từ một phiên bản đề của chính mình. */
   @Post()
   async create(
     @Body({ schema: assignmentsContract.create.body }) body: AssignmentCreate,
@@ -24,6 +25,7 @@ export class AssignmentsController {
     );
   }
 
+  /** Người tạo bài giao xem cấu hình và lịch công bố; đây không phải bản đề dành cho học sinh. */
   @Get(':id')
   async get(
     @Param('id', { schema: assignmentsContract.get.pathParams.shape.id }) id: string,
@@ -34,6 +36,7 @@ export class AssignmentsController {
     );
   }
 
+  /** Người tạo chỉnh cấu hình bài giao khi vẫn ở trạng thái draft. */
   @Patch(':id')
   async update(
     @Param('id', { schema: assignmentsContract.update.pathParams.shape.id }) id: string,
@@ -45,6 +48,7 @@ export class AssignmentsController {
     );
   }
 
+  /** Chủ lớp công bố bài giao và chốt danh sách học sinh active ở thời điểm công bố. */
   @Post(':id/publish')
   @HttpCode(200)
   async publish(
@@ -56,6 +60,7 @@ export class AssignmentsController {
     );
   }
 
+  /** Chủ bài giao xem danh sách người nhận, nguồn giao và trạng thái thu hồi. */
   @Get(':id/recipients')
   async recipients(
     @Param('id', { schema: assignmentsContract.recipients.pathParams.shape.id }) id: string,
@@ -66,6 +71,7 @@ export class AssignmentsController {
     );
   }
 
+  /** Chủ bài giao thu hồi quyền truy cập của một học sinh, giữ lịch sử đã giao. */
   @Post(':id/recipients/:userId/revoke')
   @HttpCode(204)
   async revoke(
@@ -76,7 +82,7 @@ export class AssignmentsController {
     await this.assignments.revokeRecipient(session.user.id, id, userId);
   }
 
-  /** Response dành cho học sinh, không trả DTO soạn đề chứa đáp án. */
+  /** Học sinh có quyền nhận bài xem câu hỏi và ngữ liệu sau giờ mở; không lộ lời giải/gợi ý. */
   @Get(':id/delivery')
   async delivery(
     @Param('id', { schema: assignmentsContract.delivery.pathParams.shape.id }) id: string,

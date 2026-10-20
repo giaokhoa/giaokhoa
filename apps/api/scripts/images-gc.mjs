@@ -1,5 +1,7 @@
 import 'dotenv/config';
+import { AuthorizationService } from '@giaokhoa/application/authorization/service';
 import { ImagesService } from '@giaokhoa/application/images/service';
+import { PostgresAuthorizationRepository } from '@giaokhoa/database/authorization';
 import { PostgresImagesRepository } from '@giaokhoa/database/images';
 import * as schema from '@giaokhoa/database/schema';
 import { ConfigService } from '@nestjs/config';
@@ -36,8 +38,10 @@ const cutoff = new Date(Date.now() - ttlHours * 60 * 60 * 1000);
 
 await client.connect();
 try {
-  const repository = new PostgresImagesRepository(drizzle(client, { schema }));
-  const service = new ImagesService(repository, storage);
+  const db = drizzle(client, { schema });
+  const repository = new PostgresImagesRepository(db);
+  const authorization = new AuthorizationService(new PostgresAuthorizationRepository(db));
+  const service = new ImagesService(repository, storage, authorization);
   const deletedObjects = await service.collectOrphanImages(cutoff);
   console.log(
     `Deleted ${deletedObjects} storage object(s), including pending retries and orphan images older than ${ttlHours}h.`,
