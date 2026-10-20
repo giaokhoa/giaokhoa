@@ -3,3 +3,4 @@ export * from './auth.generated.js';
 export * from './curriculum.js';
 export * from './questions.js';
 export * from './authorization.js';
+export * from './classes.js';

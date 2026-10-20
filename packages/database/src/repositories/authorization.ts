@@ -8,7 +8,7 @@ import type {
   PermissionEffect,
   RoleAssignmentInput,
 } from '@giaokhoa/application/authorization/repository';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, or } from 'drizzle-orm';
 import { users } from '../schema/auth.generated.js';
 import {
   authzCapabilities,
@@ -17,6 +17,7 @@ import {
   authzRolePermissions,
   authzRoles,
 } from '../schema/authorization.js';
+import { classes, classEnrolments } from '../schema/classes.js';
 import type { Database } from '../types.js';
 
 function contextRecord(row: typeof authzContexts.$inferSelect): AuthorizationContext {
@@ -71,6 +72,11 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
       .select({ contextId: authzRoleAssignments.contextId, effect: authzRolePermissions.effect })
       .from(authzRoleAssignments)
       .innerJoin(authzRoles, eq(authzRoleAssignments.roleId, authzRoles.id))
+      .leftJoin(classes, eq(classes.authzContextId, authzRoleAssignments.contextId))
+      .leftJoin(
+        classEnrolments,
+        and(eq(classEnrolments.classId, classes.id), eq(classEnrolments.userId, actorId)),
+      )
       .innerJoin(authzRolePermissions, eq(authzRolePermissions.roleId, authzRoles.id))
       .innerJoin(authzCapabilities, eq(authzRolePermissions.capabilityId, authzCapabilities.id))
       .where(
@@ -79,6 +85,10 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
           inArray(authzRoleAssignments.contextId, contextIds),
           isNull(authzRoleAssignments.revokedAt),
           eq(authzCapabilities.key, capability),
+          or(
+            ne(authzRoles.key, 'class:student'),
+            and(eq(classEnrolments.status, 'active'), eq(classes.status, 'active')),
+          ),
         ),
       );
 

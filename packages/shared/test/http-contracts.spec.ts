@@ -1,3 +1,4 @@
+import { classesContract } from '../src/http/classes.js';
 import { imagesContract, uploadImageBodySchema } from '../src/http/images.js';
 import { authContract } from '../src/http/auth.js';
 import { curriculaContract } from '../src/http/curricula.js';
@@ -20,6 +21,7 @@ type Operation = {
 };
 
 const resources = {
+  classes: classesContract,
   images: imagesContract,
   auth: authContract,
   curricula: curriculaContract,
@@ -37,7 +39,7 @@ const operations = Object.values(resources).flatMap(
 describe('HTTP contract convention', () => {
   it('has one unique method + path per custom API operation', () => {
     const operationKeys = operations.map(({ method, path }) => `${method} ${path}`);
-    expect(operations).toHaveLength(40);
+    expect(operations).toHaveLength(50);
     expect(new Set(operationKeys).size).toBe(operationKeys.length);
   });
 

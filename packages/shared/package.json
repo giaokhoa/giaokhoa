@@ -16,6 +16,10 @@
       "types": "./src/questions.ts",
       "default": "./dist/questions.js"
     },
+    "./classes": {
+      "types": "./src/classes.ts",
+      "default": "./dist/classes.js"
+    },
     "./http/*": {
       "types": "./src/http/*.ts",
       "default": "./dist/http/*.js"

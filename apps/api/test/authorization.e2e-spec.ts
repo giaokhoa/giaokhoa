@@ -7,6 +7,7 @@ import { Client, Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AuthorizationService } from '@giaokhoa/application/authorization/service';
 import { PostgresAuthorizationRepository } from '@giaokhoa/database/authorization';
+import { PostgresClassesRepository } from '@giaokhoa/database/classes';
 import { migrationsFolder } from '@giaokhoa/database/migrations';
 import {
   authzCapabilities,
@@ -15,6 +16,7 @@ import {
   authzRoles,
 } from '@giaokhoa/database/schema/authorization';
 import { users } from '@giaokhoa/database/schema/auth.generated';
+import { classEnrolments } from '@giaokhoa/database/schema/classes';
 import * as schema from '@giaokhoa/database/schema';
 import type { Database } from '@giaokhoa/database/types';
 
@@ -58,13 +60,13 @@ async function createUser(label: string, role: 'user' | 'teacher' | 'admin' = 'u
 }
 
 async function createClass(ownerId: string, key: string) {
-  return repository.createContextWithRole({
-    context: { kind: 'class', resourceKey: key, parentId: systemId },
-    userId: ownerId,
-    roleKey: 'class:owner',
-    source: 'class_create',
-    grantedByUserId: ownerId,
-  });
+  const classroom = await new PostgresClassesRepository(db).create(
+    { name: key, joinMode: 'AUTO' },
+    ownerId,
+  );
+  const context = await repository.findContext({ kind: 'class', resourceKey: classroom.id });
+  if (!context) throw new Error('Class context missing after creation');
+  return context;
 }
 
 function can(actorId: string, capability: string, kind: 'system' | 'class', resourceKey: string) {
@@ -140,6 +142,9 @@ describe('authorization migration, seed and repository', () => {
       source: 'enrolment',
       grantedByUserId: owner.id,
     };
+    await db
+      .insert(classEnrolments)
+      .values({ classId: classOne.resourceKey, userId: student.id, status: 'active' });
     expect(await repository.assignRole(assignment)).toBe(true);
     expect(await repository.assignRole(assignment)).toBe(false);
     expect(
@@ -209,6 +214,9 @@ describe('authorization migration, seed and repository', () => {
   it('enforces PREVENT and PROHIBIT over owner ALLOW in the same class', async () => {
     const owner = await createUser('multi-role', 'teacher');
     const aClass = await createClass(owner.id, `effects-${randomUUID()}`);
+    await db
+      .insert(classEnrolments)
+      .values({ classId: aClass.resourceKey, userId: owner.id, status: 'active' });
     await repository.assignRole({
       contextId: aClass.id,
       userId: owner.id,
