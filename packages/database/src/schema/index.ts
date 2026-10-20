@@ -5,3 +5,4 @@ export * from './questions.js';
 export * from './authorization.js';
 export * from './classes.js';
 export * from './exams.js';
+export * from './assignments.js';

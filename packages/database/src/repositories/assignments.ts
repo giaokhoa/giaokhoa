@@ -1,0 +1,354 @@
+import { ClientError } from '@giaokhoa/application/common/client-error';
+import type { AssignmentsRepository } from '@giaokhoa/application/assignments/repository';
+import {
+  assignmentCreateSchema,
+  assignmentRecipientSchema,
+  assignmentSchema,
+  studentAssignmentSchema,
+  type AssignmentPatch,
+} from '@giaokhoa/shared/assignments';
+import { questionSchema } from '@giaokhoa/shared/questions';
+import { and, asc, eq, inArray, isNull, lte } from 'drizzle-orm';
+import { users } from '../schema/auth.generated.js';
+import { assignments, assignmentRecipients } from '../schema/assignments.js';
+import { authzRoleAssignments, authzRoles } from '../schema/authorization.js';
+import { classes, classEnrolments } from '../schema/classes.js';
+import { exams, examRevisions, examRevisionQuestions } from '../schema/exams.js';
+import type { Database } from '../types.js';
+
+type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
+
+function forbidden() {
+  return new ClientError(
+    'forbidden',
+    'authorization_denied',
+    'Bạn không có quyền quản lý bài giao',
+  );
+}
+
+function invalidRecipients() {
+  return new ClientError(
+    'invalid',
+    'assignment_recipients_invalid',
+    'Danh sách học sinh phải thuộc lớp và đang active',
+  );
+}
+
+async function assertOwner(
+  tx: Transaction,
+  classroom: typeof classes.$inferSelect | undefined,
+  actorId: string,
+) {
+  if (
+    !classroom ||
+    classroom.status !== 'active' ||
+    classroom.createdByUserId !== actorId ||
+    !classroom.authzContextId
+  )
+    throw forbidden();
+  const [account] = await tx
+    .select({ role: users.role, banned: users.banned })
+    .from(users)
+    .where(eq(users.id, actorId))
+    .for('share')
+    .limit(1);
+  if (!account || account.banned || (account.role !== 'teacher' && account.role !== 'admin'))
+    throw forbidden();
+  const [owner] = await tx
+    .select({ id: authzRoleAssignments.id })
+    .from(authzRoleAssignments)
+    .innerJoin(authzRoles, eq(authzRoleAssignments.roleId, authzRoles.id))
+    .where(
+      and(
+        eq(authzRoleAssignments.contextId, classroom.authzContextId),
+        eq(authzRoleAssignments.userId, actorId),
+        eq(authzRoles.key, 'class:owner'),
+        isNull(authzRoleAssignments.revokedAt),
+      ),
+    )
+    .for('share')
+    .limit(1);
+  if (!owner) throw forbidden();
+}
+
+function config(input: ReturnType<typeof assignmentCreateSchema.parse>) {
+  return {
+    audienceMode: input.audienceMode,
+    selectedUserIds: input.selectedUserIds,
+    openAt: new Date(input.openAt),
+    closeAt: new Date(input.closeAt),
+    maxAttempts: input.maxAttempts,
+    releaseScoreAt: input.releaseScoreAt ? new Date(input.releaseScoreAt) : null,
+    releaseFeedbackAt: input.releaseFeedbackAt ? new Date(input.releaseFeedbackAt) : null,
+    releaseSolutionsAt: input.releaseSolutionsAt ? new Date(input.releaseSolutionsAt) : null,
+  };
+}
+
+export class PostgresAssignmentsRepository implements AssignmentsRepository {
+  constructor(private readonly db: Database) {}
+
+  async create(actorId: string, input: Parameters<AssignmentsRepository['create']>[1]) {
+    const parsed = assignmentCreateSchema.parse(input);
+    return this.db.transaction(async (tx) => {
+      const [classroom] = await tx
+        .select()
+        .from(classes)
+        .where(eq(classes.id, parsed.classId))
+        .for('update')
+        .limit(1);
+      await assertOwner(tx, classroom, actorId);
+      const [revision] = await tx
+        .select({ id: examRevisions.id })
+        .from(examRevisions)
+        .innerJoin(exams, eq(examRevisions.examId, exams.id))
+        .where(and(eq(examRevisions.id, parsed.examRevisionId), eq(exams.createdByUserId, actorId)))
+        .limit(1);
+      if (!revision) return undefined;
+      const [created] = await tx
+        .insert(assignments)
+        .values({
+          classId: parsed.classId,
+          examRevisionId: revision.id,
+          createdByUserId: actorId,
+          ...config(parsed),
+        })
+        .returning();
+      return assignmentSchema.parse(created);
+    });
+  }
+
+  async findById(id: string) {
+    const [row] = await this.db.select().from(assignments).where(eq(assignments.id, id)).limit(1);
+    return row ? assignmentSchema.parse(row) : undefined;
+  }
+
+  async updateDraft(id: string, actorId: string, patch: AssignmentPatch) {
+    const [existing] = await this.db
+      .select({ classId: assignments.classId })
+      .from(assignments)
+      .where(eq(assignments.id, id))
+      .limit(1);
+    if (!existing) return undefined;
+    return this.db.transaction(async (tx) => {
+      const [classroom] = await tx
+        .select()
+        .from(classes)
+        .where(eq(classes.id, existing.classId))
+        .for('update')
+        .limit(1);
+      await assertOwner(tx, classroom, actorId);
+      const [row] = await tx
+        .select()
+        .from(assignments)
+        .where(eq(assignments.id, id))
+        .for('update')
+        .limit(1);
+      if (!row || row.status !== 'draft' || row.createdByUserId !== actorId) return undefined;
+      const updatedInput = assignmentCreateSchema.safeParse({
+        classId: row.classId,
+        examRevisionId: row.examRevisionId,
+        audienceMode: row.audienceMode,
+        selectedUserIds: row.selectedUserIds,
+        openAt: row.openAt.toISOString(),
+        closeAt: row.closeAt.toISOString(),
+        maxAttempts: row.maxAttempts,
+        releaseScoreAt: row.releaseScoreAt?.toISOString() ?? null,
+        releaseFeedbackAt: row.releaseFeedbackAt?.toISOString() ?? null,
+        releaseSolutionsAt: row.releaseSolutionsAt?.toISOString() ?? null,
+        ...patch,
+      });
+      if (!updatedInput.success)
+        throw new ClientError(
+          'invalid',
+          'assignment_invalid',
+          'Cấu hình bài giao không hợp lệ',
+          updatedInput.error.issues,
+        );
+      const [updated] = await tx
+        .update(assignments)
+        .set(config(updatedInput.data))
+        .where(eq(assignments.id, id))
+        .returning();
+      return assignmentSchema.parse(updated);
+    });
+  }
+
+  async publish(id: string, actorId: string) {
+    const [existing] = await this.db
+      .select({ classId: assignments.classId })
+      .from(assignments)
+      .where(eq(assignments.id, id))
+      .limit(1);
+    if (!existing) return undefined;
+    return this.db.transaction(async (tx) => {
+      // Khóa lớp trước assignment: join/suspend cũng khóa lớp đầu tiên.
+      const [classroom] = await tx
+        .select()
+        .from(classes)
+        .where(eq(classes.id, existing.classId))
+        .for('update')
+        .limit(1);
+      await assertOwner(tx, classroom, actorId);
+      const [row] = await tx
+        .select()
+        .from(assignments)
+        .where(eq(assignments.id, id))
+        .for('update')
+        .limit(1);
+      if (!row || row.createdByUserId !== actorId || row.classId !== existing.classId)
+        throw forbidden();
+      if (row.status === 'published') return assignmentSchema.parse(row);
+
+      const active = await tx
+        .select({ userId: classEnrolments.userId })
+        .from(classEnrolments)
+        .where(
+          and(
+            eq(classEnrolments.classId, row.classId),
+            eq(classEnrolments.status, 'active'),
+            ...(row.audienceMode === 'SELECTED_USERS'
+              ? [inArray(classEnrolments.userId, row.selectedUserIds)]
+              : []),
+          ),
+        )
+        .orderBy(asc(classEnrolments.userId));
+
+      if (row.audienceMode === 'SELECTED_USERS' && active.length !== row.selectedUserIds.length)
+        throw invalidRecipients();
+      if (active.length)
+        await tx
+          .insert(assignmentRecipients)
+          .values(
+            active.map(({ userId }) => ({
+              assignmentId: id,
+              userId,
+              source: row.audienceMode === 'ALL_CLASS' ? 'all_class' : 'selected_users',
+            })),
+          )
+          .onConflictDoNothing();
+
+      const [published] = await tx
+        .update(assignments)
+        .set({ status: 'published', publishedAt: new Date() })
+        .where(eq(assignments.id, id))
+        .returning();
+      return assignmentSchema.parse(published);
+    });
+  }
+
+  async listRecipients(id: string, actorId: string) {
+    const [row] = await this.db
+      .select({ createdByUserId: assignments.createdByUserId })
+      .from(assignments)
+      .where(eq(assignments.id, id))
+      .limit(1);
+    if (!row || row.createdByUserId !== actorId) return undefined;
+    const recipients = await this.db
+      .select({
+        userId: assignmentRecipients.userId,
+        status: assignmentRecipients.status,
+        source: assignmentRecipients.source,
+        assignedAt: assignmentRecipients.assignedAt,
+        revokedAt: assignmentRecipients.revokedAt,
+      })
+      .from(assignmentRecipients)
+      .where(eq(assignmentRecipients.assignmentId, id))
+      .orderBy(asc(assignmentRecipients.userId));
+    return recipients.map((value) => assignmentRecipientSchema.parse(value));
+  }
+
+  async revokeRecipient(id: string, userId: string, actorId: string) {
+    const [existing] = await this.db
+      .select({ classId: assignments.classId })
+      .from(assignments)
+      .where(eq(assignments.id, id))
+      .limit(1);
+    if (!existing) return false;
+    return this.db.transaction(async (tx) => {
+      const [classroom] = await tx
+        .select()
+        .from(classes)
+        .where(eq(classes.id, existing.classId))
+        .for('update')
+        .limit(1);
+      await assertOwner(tx, classroom, actorId);
+      const [row] = await tx
+        .select()
+        .from(assignments)
+        .where(eq(assignments.id, id))
+        .for('update')
+        .limit(1);
+      if (!row || row.status !== 'published' || row.createdByUserId !== actorId) return false;
+      const [recipient] = await tx
+        .select()
+        .from(assignmentRecipients)
+        .where(
+          and(eq(assignmentRecipients.assignmentId, id), eq(assignmentRecipients.userId, userId)),
+        )
+        .for('update')
+        .limit(1);
+      if (!recipient) return false;
+      if (recipient.status === 'active')
+        await tx
+          .update(assignmentRecipients)
+          .set({ status: 'revoked', revokedAt: new Date() })
+          .where(
+            and(eq(assignmentRecipients.assignmentId, id), eq(assignmentRecipients.userId, userId)),
+          );
+      return true;
+    });
+  }
+
+  async getDelivery(id: string, actorId: string, now: Date) {
+    const [match] = await this.db
+      .select({ assignment: assignments, title: examRevisions.title })
+      .from(assignments)
+      .innerJoin(
+        assignmentRecipients,
+        and(
+          eq(assignmentRecipients.assignmentId, assignments.id),
+          eq(assignmentRecipients.userId, actorId),
+          eq(assignmentRecipients.status, 'active'),
+        ),
+      )
+      .innerJoin(
+        classEnrolments,
+        and(
+          eq(classEnrolments.classId, assignments.classId),
+          eq(classEnrolments.userId, actorId),
+          eq(classEnrolments.status, 'active'),
+        ),
+      )
+      .innerJoin(classes, and(eq(classes.id, assignments.classId), eq(classes.status, 'active')))
+      .innerJoin(examRevisions, eq(examRevisions.id, assignments.examRevisionId))
+      .where(
+        and(
+          eq(assignments.id, id),
+          eq(assignments.status, 'published'),
+          lte(assignments.openAt, now),
+        ),
+      )
+      .limit(1);
+    if (!match) return undefined;
+    const snapshots = await this.db
+      .select({
+        position: examRevisionQuestions.position,
+        questionSnapshot: examRevisionQuestions.questionSnapshot,
+      })
+      .from(examRevisionQuestions)
+      .where(eq(examRevisionQuestions.examRevisionId, match.assignment.examRevisionId))
+      .orderBy(asc(examRevisionQuestions.position));
+    return studentAssignmentSchema.parse({
+      assignmentId: match.assignment.id,
+      examRevisionId: match.assignment.examRevisionId,
+      title: match.title,
+      openAt: match.assignment.openAt,
+      closeAt: match.assignment.closeAt,
+      maxAttempts: match.assignment.maxAttempts,
+      questions: snapshots.map(({ position, questionSnapshot }) => {
+        const { id, version, type, content, stimulusId } = questionSchema.parse(questionSnapshot);
+        return { position, question: { id, version, type, content, stimulusId } };
+      }),
+    });
+  }
+}

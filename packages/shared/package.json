@@ -24,6 +24,10 @@
       "types": "./src/exams.ts",
       "default": "./dist/exams.js"
     },
+    "./assignments": {
+      "types": "./src/assignments.ts",
+      "default": "./dist/assignments.js"
+    },
     "./http/*": {
       "types": "./src/http/*.ts",
       "default": "./dist/http/*.js"

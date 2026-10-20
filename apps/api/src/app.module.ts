@@ -13,6 +13,7 @@ import { ClientErrorFilter } from './common/client-error.filter.js';
 import { AuthorizationModule } from './authorization/authorization.module.js';
 import { ClassesModule } from './classes/classes.module.js';
 import { ExamsModule } from './exams/exams.module.js';
+import { AssignmentsModule } from './assignments/assignments.module.js';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { ExamsModule } from './exams/exams.module.js';
     AuthorizationModule,
     ClassesModule,
     ExamsModule,
+    AssignmentsModule,
     ImagesModule,
     CurriculumModule,
     QuestionsModule,
