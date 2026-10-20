@@ -57,12 +57,9 @@ async function activeAccountRole(tx: Transaction, actorId: string) {
 }
 
 async function classOwner(tx: Transaction, row: typeof classes.$inferSelect, actorId: string) {
-  if (
-    row.createdByUserId !== actorId ||
-    !row.authzContextId ||
-    !(await activeAccountRole(tx, actorId))
-  )
-    return false;
+  if (row.createdByUserId !== actorId || !row.authzContextId) return false;
+  const role = await activeAccountRole(tx, actorId);
+  if (role !== 'teacher' && role !== 'admin') return false;
   const [owner] = await tx
     .select({ id: authzRoleAssignments.id })
     .from(authzRoleAssignments)

@@ -116,6 +116,51 @@ describe('authorization migration, seed and repository', () => {
     expect(await db.select().from(authzRoles)).toHaveLength(6);
   });
 
+  it('suspends class management after downgrade and restores it on renewal', async () => {
+    const teacher = await createUser('renewable-teacher', 'teacher');
+    const classroom = await createClass(teacher.id, `renewable-${randomUUID()}`);
+    const classesRepository = new PostgresClassesRepository(db);
+
+    expect(await can(teacher.id, 'class:update', 'class', classroom.resourceKey)).toMatchObject({
+      allowed: true,
+    });
+    await db.update(users).set({ role: 'user' }).where(eq(users.id, teacher.id));
+
+    for (const capability of [
+      'class:view',
+      'class:update',
+      'class:enrolment_manage',
+      'assignment:publish',
+      'result:view_class',
+    ]) {
+      expect(await can(teacher.id, capability, 'class', classroom.resourceKey)).toMatchObject({
+        allowed: false,
+      });
+    }
+    expect(
+      await classesRepository.update(classroom.resourceKey, teacher.id, { name: 'Not allowed' }),
+    ).toBeUndefined();
+    expect(await classesRepository.findById(classroom.resourceKey)).toBeDefined();
+    const assignmentRows = await db
+      .select({ id: authzRoleAssignments.id })
+      .from(authzRoleAssignments)
+      .where(
+        and(
+          eq(authzRoleAssignments.contextId, classroom.id),
+          isNull(authzRoleAssignments.revokedAt),
+        ),
+      );
+    expect(assignmentRows).toHaveLength(1);
+
+    await db.update(users).set({ role: 'teacher' }).where(eq(users.id, teacher.id));
+    expect(await can(teacher.id, 'class:update', 'class', classroom.resourceKey)).toMatchObject({
+      allowed: true,
+    });
+    expect(
+      await classesRepository.update(classroom.resourceKey, teacher.id, { name: 'Renewed class' }),
+    ).toMatchObject({ name: 'Renewed class' });
+  });
+
   it('creates class context and owner atomically; isolates sibling contexts and revokes instantly', async () => {
     const owner = await createUser('owner', 'teacher');
     const otherTeacher = await createUser('other-owner', 'teacher');

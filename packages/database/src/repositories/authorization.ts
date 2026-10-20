@@ -89,6 +89,9 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
           inArray(authzRoleAssignments.contextId, contextIds),
           isNull(authzRoleAssignments.revokedAt),
           eq(authzCapabilities.key, capability),
+          // Khi tài khoản không còn là giáo viên, chỉ giữ grant học sinh;
+          // assignment quản lý lớp vẫn lưu để tự có hiệu lực khi nâng vai trò lại.
+          actor.role === 'user' ? eq(authzRoles.key, 'class:student') : undefined,
           or(
             ne(authzRoles.key, 'class:student'),
             and(eq(classEnrolments.status, 'active'), eq(classes.status, 'active')),
