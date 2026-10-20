@@ -1,0 +1,436 @@
+import 'dotenv/config';
+import { randomUUID } from 'node:crypto';
+import { eq, inArray } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import { Client, Pool } from 'pg';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { AssignmentsService } from '@giaokhoa/application/assignments/service';
+import { AttemptsService } from '@giaokhoa/application/attempts/service';
+import { AuthorizationService } from '@giaokhoa/application/authorization/service';
+import { ClassesService } from '@giaokhoa/application/classes/service';
+import { ExamsService } from '@giaokhoa/application/exams/service';
+import { QuestionsService } from '@giaokhoa/application/questions/service';
+import { PostgresAssignmentsRepository } from '@giaokhoa/database/assignments';
+import { PostgresAttemptsRepository } from '@giaokhoa/database/attempts';
+import { PostgresAuthorizationRepository } from '@giaokhoa/database/authorization';
+import { PostgresClassesRepository } from '@giaokhoa/database/classes';
+import { PostgresExamsRepository } from '@giaokhoa/database/exams';
+import { migrationsFolder } from '@giaokhoa/database/migrations';
+import { PostgresQuestionsRepository } from '@giaokhoa/database/questions';
+import * as schema from '@giaokhoa/database/schema';
+import { users } from '@giaokhoa/database/schema/auth.generated';
+import { attempts as attemptRows, attemptResponses } from '@giaokhoa/database/schema/attempts';
+import type { Database } from '@giaokhoa/database/types';
+
+const databaseName = `giaokhoa_phase6_test_${process.pid}_${randomUUID().replaceAll('-', '')}`;
+const NOW = new Date('2026-10-20T12:00:00.000Z');
+const openAt = new Date(NOW.getTime() - 60_000).toISOString();
+const closeAt = new Date(NOW.getTime() + 3_600_000).toISOString();
+const doc = {
+  type: 'doc' as const,
+  content: [{ type: 'paragraph' as const, content: [{ type: 'text' as const, text: 'Câu hỏi?' }] }],
+};
+let clock = NOW;
+let pool: Pool;
+let db: Database;
+let assignments: AssignmentsService;
+let attempts: AttemptsService;
+let classes: ClassesService;
+let exams: ExamsService;
+let questions: QuestionsService;
+
+function databaseUrl(name: string) {
+  if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL required for Phase 6 isolated E2E');
+  const url = new URL(process.env.DATABASE_URL);
+  url.pathname = `/${name}`;
+  return url.toString();
+}
+
+async function adminConnection<T>(run: (client: Client) => Promise<T>) {
+  const client = new Client({ connectionString: databaseUrl('postgres') });
+  await client.connect();
+  try {
+    return await run(client);
+  } finally {
+    await client.end();
+  }
+}
+
+async function createUser(role: 'teacher' | 'admin' | 'user' = 'user') {
+  const [user] = await db
+    .insert(users)
+    .values({
+      name: role,
+      role,
+      email: `${randomUUID()}@example.com`,
+    })
+    .returning();
+  return user;
+}
+
+async function fixture() {
+  const teacher = await createUser('teacher');
+  const classroom = await classes.createClass(teacher.id, { name: 'Lớp toán', joinMode: 'AUTO' });
+  const question = await questions.createQuestion(
+    {
+      status: 'ready',
+      type: 'short_answer',
+      content: doc,
+      solution: { answer: '42' },
+    },
+    teacher.id,
+  );
+  const exam = await exams.createExam(teacher.id, { title: 'Đề thi gốc' });
+  const revision = await exams.createRevision(teacher.id, exam.id, {
+    questions: [{ questionId: question.id, version: question.version }],
+  });
+  const joinCode = await classes.createJoinCode(teacher.id, classroom.id, { expiresInHours: 24 });
+  const enrol = async (userId: string) => classes.joinClass(userId, joinCode.code);
+  const create = (values: Record<string, unknown> = {}) =>
+    assignments.create(teacher.id, {
+      classId: classroom.id,
+      examRevisionId: revision.id,
+      audienceMode: 'ALL_CLASS',
+      selectedUserIds: [],
+      openAt,
+      closeAt,
+      maxAttempts: 2,
+      ...values,
+    } as Parameters<AssignmentsService['create']>[1]);
+  const publish = async (values: Record<string, unknown> = {}) => {
+    const draft = await create(values);
+    return assignments.publish(teacher.id, draft.id);
+  };
+  return { teacher, classroom, revision, enrol, create, publish };
+}
+
+beforeAll(async () => {
+  await adminConnection((client) => client.query(`CREATE DATABASE "${databaseName}"`));
+  pool = new Pool({ connectionString: databaseUrl(databaseName) });
+  db = drizzle(pool, { schema });
+  await migrate(db, { migrationsFolder });
+  const authorization = new AuthorizationService(new PostgresAuthorizationRepository(db));
+  assignments = new AssignmentsService(
+    new PostgresAssignmentsRepository(db),
+    authorization,
+    () => clock,
+  );
+  attempts = new AttemptsService(new PostgresAttemptsRepository(db), authorization, () => clock);
+  classes = new ClassesService(new PostgresClassesRepository(db), authorization);
+  exams = new ExamsService(new PostgresExamsRepository(db), authorization);
+  questions = new QuestionsService(new PostgresQuestionsRepository(db), authorization);
+}, 30_000);
+
+beforeEach(() => {
+  clock = NOW;
+});
+
+afterAll(async () => {
+  await pool?.end();
+  await adminConnection((client) =>
+    client.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`),
+  );
+}, 30_000);
+
+describe('Phase 6 attempt ownership, lifecycle and release', () => {
+  it('starts idempotently under concurrency and enforces max attempts without duplicate numbers', async () => {
+    const { enrol, publish } = await fixture();
+    const student = await createUser();
+    await enrol(student.id);
+    const assignment = await publish();
+    const started = await Promise.all(
+      Array.from({ length: 6 }, () => attempts.start(student.id, assignment.id)),
+    );
+    expect(new Set(started.map((a) => a.id)).size).toBe(1);
+    expect(started[0].attemptNumber).toBe(1);
+    expect(
+      await db.select().from(attemptRows).where(eq(attemptRows.assignmentId, assignment.id)),
+    ).toHaveLength(1);
+
+    await attempts.submit(student.id, started[0].id);
+    const second = await Promise.all([
+      attempts.start(student.id, assignment.id),
+      attempts.start(student.id, assignment.id),
+    ]);
+    expect(second[0].id).toBe(second[1].id);
+    expect(second[0].attemptNumber).toBe(2);
+    await attempts.submit(student.id, second[0].id);
+    await expect(attempts.start(student.id, assignment.id)).rejects.toMatchObject({
+      kind: 'conflict',
+      code: 'attempts_exhausted',
+    });
+    const numbers = await db
+      .select({ number: attemptRows.attemptNumber })
+      .from(attemptRows)
+      .where(eq(attemptRows.assignmentId, assignment.id));
+    expect(numbers.map(({ number }) => number).sort((a, b) => a - b)).toEqual([1, 2]);
+  });
+
+  it('denies draft, early and expired starts without inserting attempts', async () => {
+    const { enrol, create, publish } = await fixture();
+    const student = await createUser();
+    await enrol(student.id);
+    const draft = await create();
+    await expect(attempts.start(student.id, draft.id)).rejects.toMatchObject({ kind: 'not_found' });
+
+    const early = await publish({ openAt: new Date(NOW.getTime() + 20_000).toISOString() });
+    await expect(attempts.start(student.id, early.id)).rejects.toMatchObject({
+      code: 'attempt_window_closed',
+    });
+    const expired = await publish({ closeAt: new Date(NOW.getTime() - 10_000).toISOString() });
+    await expect(attempts.start(student.id, expired.id)).rejects.toMatchObject({
+      code: 'attempt_window_closed',
+    });
+    expect(
+      await db
+        .select()
+        .from(attemptRows)
+        .where(inArray(attemptRows.assignmentId, [draft.id, early.id, expired.id])),
+    ).toHaveLength(0);
+  });
+
+  it('saves valid typed answers, blocks mismatched questions and freezes submissions', async () => {
+    const { enrol, publish } = await fixture();
+    const student = await createUser();
+    await enrol(student.id);
+    const assignment = await publish();
+    const started = await attempts.start(student.id, assignment.id);
+    const id = started.id;
+    await expect(
+      attempts.save(student.id, id, 2, { type: 'short_answer', answer: '12' }),
+    ).rejects.toMatchObject({ code: 'attempt_answer_invalid' });
+    await expect(
+      attempts.save(student.id, id, 1, {
+        type: 'multiple_choice',
+        choiceId: '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d20',
+      }),
+    ).rejects.toMatchObject({ code: 'attempt_answer_invalid' });
+    await attempts.save(student.id, id, 1, { type: 'short_answer', answer: '12' });
+    const saved = await attempts.save(student.id, id, 1, { type: 'short_answer', answer: '23' });
+    expect(saved.responses).toHaveLength(1);
+    expect(saved.responses[0].answer).toEqual({ type: 'short_answer', answer: '23' });
+    expect(JSON.stringify(saved)).not.toContain('"solution"');
+    expect(
+      await db.select().from(attemptResponses).where(eq(attemptResponses.attemptId, id)),
+    ).toHaveLength(1);
+
+    const submitted = await attempts.submit(student.id, id);
+    expect(submitted.status).toBe('submitted');
+    expect(submitted.submittedAt).toBeInstanceOf(Date);
+    await expect(
+      attempts.save(student.id, id, 1, { type: 'short_answer', answer: '42' }),
+    ).rejects.toMatchObject({ code: 'attempt_not_in_progress' });
+    await expect(attempts.submit(student.id, id)).rejects.toMatchObject({
+      code: 'attempt_not_in_progress',
+    });
+    expect((await attempts.getOwn(student.id, id)).responses[0].answer).toEqual({
+      type: 'short_answer',
+      answer: '23',
+    });
+
+    const second = await attempts.start(student.id, assignment.id);
+    clock = new Date(NOW.getTime() + 3_600_001);
+    await expect(
+      attempts.save(student.id, second.id, 1, { type: 'short_answer', answer: '12' }),
+    ).rejects.toMatchObject({ code: 'attempt_window_closed' });
+    await expect(attempts.submit(student.id, second.id)).rejects.toMatchObject({
+      code: 'attempt_window_closed',
+    });
+  });
+
+  it('blocks saves and submits after suspension or recipient revoke, retaining attempts', async () => {
+    const { teacher, classroom, enrol, publish } = await fixture();
+    const suspended = await createUser();
+    const revoked = await createUser();
+    await enrol(suspended.id);
+    await enrol(revoked.id);
+    const assignment = await publish();
+    const first = await attempts.start(suspended.id, assignment.id);
+    const second = await attempts.start(revoked.id, assignment.id);
+    await classes.suspendMember(teacher.id, classroom.id, suspended.id);
+    await assignments.revokeRecipient(teacher.id, assignment.id, revoked.id);
+    await expect(
+      attempts.save(suspended.id, first.id, 1, { type: 'short_answer', answer: '1' }),
+    ).rejects.toMatchObject({ kind: 'forbidden' });
+    await expect(attempts.submit(suspended.id, first.id)).rejects.toMatchObject({
+      kind: 'forbidden',
+    });
+    await expect(
+      attempts.save(revoked.id, second.id, 1, { type: 'short_answer', answer: '1' }),
+    ).rejects.toMatchObject({ kind: 'forbidden' });
+    await expect(attempts.submit(revoked.id, second.id)).rejects.toMatchObject({
+      kind: 'forbidden',
+    });
+    await expect(attempts.start(revoked.id, assignment.id)).rejects.toMatchObject({
+      kind: 'forbidden',
+    });
+    expect(
+      await db.select().from(attemptRows).where(eq(attemptRows.assignmentId, assignment.id)),
+    ).toHaveLength(2);
+  });
+
+  it('isolates another student, teacher and admin from private attempts and grades', async () => {
+    const { teacher, enrol, publish } = await fixture();
+    const first = await createUser();
+    const second = await createUser();
+    const otherTeacher = await createUser('teacher');
+    const admin = await createUser('admin');
+    await enrol(first.id);
+    await enrol(second.id);
+    const assignment = await publish();
+    const started = await attempts.start(first.id, assignment.id);
+    await expect(attempts.getOwn(second.id, started.id)).rejects.toMatchObject({
+      kind: 'not_found',
+    });
+    await expect(
+      attempts.save(second.id, started.id, 1, { type: 'short_answer', answer: '1' }),
+    ).rejects.toMatchObject({ kind: 'not_found' });
+    await expect(attempts.submit(second.id, started.id)).rejects.toMatchObject({
+      kind: 'not_found',
+    });
+    await expect(attempts.review(otherTeacher.id, started.id)).rejects.toMatchObject({
+      kind: 'forbidden',
+    });
+    await expect(attempts.grade(admin.id, started.id, { score: 100 })).rejects.toMatchObject({
+      kind: 'forbidden',
+    });
+    await expect(attempts.listForTeacher(otherTeacher.id, assignment.id)).rejects.toMatchObject({
+      kind: 'forbidden',
+    });
+    await expect(attempts.grade(teacher.id, started.id, { score: 100 })).rejects.toMatchObject({
+      code: 'attempt_not_submitted',
+    });
+    await attempts.submit(first.id, started.id);
+    await expect(attempts.result(second.id, started.id)).rejects.toMatchObject({
+      kind: 'not_found',
+    });
+    await expect(attempts.solutions(second.id, started.id)).rejects.toMatchObject({
+      kind: 'not_found',
+    });
+  });
+
+  it('grades only own class and independently releases score, feedback and solutions', async () => {
+    const { teacher, classroom, enrol, publish } = await fixture();
+    const student = await createUser();
+    await enrol(student.id);
+    const scoreAt = new Date(NOW.getTime() + 10_000).toISOString();
+    const feedbackAt = new Date(NOW.getTime() + 20_000).toISOString();
+    const solutionsAt = new Date(NOW.getTime() + 30_000).toISOString();
+    const assignment = await publish({
+      releaseScoreAt: scoreAt,
+      releaseFeedbackAt: feedbackAt,
+      releaseSolutionsAt: solutionsAt,
+    });
+    const started = await attempts.start(student.id, assignment.id);
+    await attempts.save(student.id, started.id, 1, { type: 'short_answer', answer: '31' });
+    await attempts.submit(student.id, started.id);
+    await expect(attempts.result(student.id, started.id)).rejects.toMatchObject({
+      code: 'result_not_released',
+    });
+    await expect(attempts.solutions(student.id, started.id)).rejects.toMatchObject({
+      code: 'solutions_not_released',
+    });
+
+    const graded = await attempts.grade(teacher.id, started.id, { score: 91.5, feedback: 'Tốt' });
+    expect(graded.score).toBe(91.5);
+    expect(graded.feedback).toBe('Tốt');
+    expect(graded.responses).toHaveLength(1);
+    expect((await attempts.listForTeacher(teacher.id, assignment.id))[0].userId).toBe(student.id);
+    expect((await attempts.review(teacher.id, started.id)).score).toBe(91.5);
+    await expect(attempts.result(student.id, started.id)).rejects.toMatchObject({
+      code: 'result_not_released',
+    });
+
+    clock = new Date(NOW.getTime() + 15_000);
+    expect(await attempts.result(student.id, started.id)).toMatchObject({
+      score: 91.5,
+      feedback: null,
+    });
+    await expect(attempts.solutions(student.id, started.id)).rejects.toMatchObject({
+      code: 'solutions_not_released',
+    });
+    clock = new Date(NOW.getTime() + 35_000);
+    expect(await attempts.result(student.id, started.id)).toMatchObject({
+      score: 91.5,
+      feedback: 'Tốt',
+    });
+    expect((await attempts.solutions(student.id, started.id)).questions).toEqual([
+      { position: 1, solution: { answer: '42' } },
+    ]);
+
+    await classes.leaveClass(student.id, classroom.id);
+    expect((await attempts.result(student.id, started.id)).score).toBe(91.5);
+    expect((await attempts.getOwn(student.id, started.id)).status).toBe('graded');
+    await expect(attempts.start(student.id, assignment.id)).rejects.toMatchObject({
+      kind: 'forbidden',
+    });
+  });
+
+  it('releases feedback without score; blocks historical results for suspended accounts', async () => {
+    const { teacher, classroom, enrol, publish } = await fixture();
+    const student = await createUser();
+    await enrol(student.id);
+    const assignment = await publish({
+      releaseScoreAt: new Date(NOW.getTime() + 30_000).toISOString(),
+      releaseFeedbackAt: openAt,
+    });
+    const started = await attempts.start(student.id, assignment.id);
+    await attempts.submit(student.id, started.id);
+    await attempts.grade(teacher.id, started.id, { score: 80, feedback: 'Cần ôn thêm' });
+    expect(await attempts.result(student.id, started.id)).toMatchObject({
+      score: null,
+      feedback: 'Cần ôn thêm',
+    });
+    await assignments.revokeRecipient(teacher.id, assignment.id, student.id);
+    expect((await attempts.result(student.id, started.id)).feedback).toBe('Cần ôn thêm');
+    await classes.suspendMember(teacher.id, classroom.id, student.id);
+    await expect(attempts.result(student.id, started.id)).rejects.toMatchObject({
+      kind: 'forbidden',
+    });
+  });
+
+  it('denies historical access to banned or invalid-role accounts', async () => {
+    const { teacher, classroom, enrol, publish } = await fixture();
+    const student = await createUser();
+    await enrol(student.id);
+    const assignment = await publish({ releaseScoreAt: openAt });
+    const attempt = await attempts.start(student.id, assignment.id);
+    await attempts.submit(student.id, attempt.id);
+    await attempts.grade(teacher.id, attempt.id, { score: 75 });
+    await classes.leaveClass(student.id, classroom.id);
+    expect((await attempts.result(student.id, attempt.id)).score).toBe(75);
+
+    await db.update(users).set({ banned: true }).where(eq(users.id, student.id));
+    await expect(attempts.result(student.id, attempt.id)).rejects.toMatchObject({
+      kind: 'not_found',
+    });
+    await db.update(users).set({ banned: false, role: null }).where(eq(users.id, student.id));
+    await expect(attempts.result(student.id, attempt.id)).rejects.toMatchObject({
+      kind: 'not_found',
+    });
+  });
+
+  it('separates submit/save racing writes and rejects teacher downgrade on grading', async () => {
+    const { teacher, enrol, publish } = await fixture();
+    const student = await createUser();
+    await enrol(student.id);
+    const assignment = await publish();
+    const started = await attempts.start(student.id, assignment.id);
+    const writes = await Promise.allSettled([
+      attempts.save(student.id, started.id, 1, { type: 'short_answer', answer: '5' }),
+      attempts.submit(student.id, started.id),
+    ]);
+    expect(writes[1].status).toBe('fulfilled');
+    expect(
+      writes[0].status === 'fulfilled' ||
+        (writes[0].status === 'rejected' &&
+          (writes[0].reason as { code?: string }).code === 'attempt_not_in_progress'),
+    ).toBe(true);
+    expect((await attempts.getOwn(student.id, started.id)).status).toBe('submitted');
+    await db.update(users).set({ role: 'user' }).where(eq(users.id, teacher.id));
+    await expect(attempts.grade(teacher.id, started.id, { score: 90 })).rejects.toMatchObject({
+      kind: 'forbidden',
+    });
+  });
+});

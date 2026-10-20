@@ -14,6 +14,7 @@ import { AuthorizationModule } from './authorization/authorization.module.js';
 import { ClassesModule } from './classes/classes.module.js';
 import { ExamsModule } from './exams/exams.module.js';
 import { AssignmentsModule } from './assignments/assignments.module.js';
+import { AttemptsModule } from './attempts/attempts.module.js';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { AssignmentsModule } from './assignments/assignments.module.js';
     ClassesModule,
     ExamsModule,
     AssignmentsModule,
+    AttemptsModule,
     ImagesModule,
     CurriculumModule,
     QuestionsModule,

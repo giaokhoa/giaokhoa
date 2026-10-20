@@ -34,7 +34,7 @@ function invalidRecipients() {
   );
 }
 
-async function assertOwner(
+export async function assertOwner(
   tx: Transaction,
   classroom: typeof classes.$inferSelect | undefined,
   actorId: string,

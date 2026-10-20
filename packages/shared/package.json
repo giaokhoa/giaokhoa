@@ -28,6 +28,10 @@
       "types": "./src/assignments.ts",
       "default": "./dist/assignments.js"
     },
+    "./attempts": {
+      "types": "./src/attempts.ts",
+      "default": "./dist/attempts.js"
+    },
     "./http/*": {
       "types": "./src/http/*.ts",
       "default": "./dist/http/*.js"
