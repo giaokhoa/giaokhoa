@@ -3,7 +3,11 @@ import { authContract } from '../src/http/auth.js';
 import { curriculaContract } from '../src/http/curricula.js';
 import { curriculumNodesContract } from '../src/http/curriculum-nodes.js';
 import { learningOutcomesContract } from '../src/http/learning-outcomes.js';
-import { questionsContract } from '../src/http/questions.js';
+import {
+  questionUpdateBodySchema,
+  questionsContract,
+  questionVersionPathParamsSchema,
+} from '../src/http/questions.js';
 import { stimuliContract } from '../src/http/stimuli.js';
 import { subjectsContract } from '../src/http/subjects.js';
 import { describe, expect, it } from 'vitest';
@@ -33,8 +37,43 @@ const operations = Object.values(resources).flatMap(
 describe('HTTP contract convention', () => {
   it('has one unique method + path per custom API operation', () => {
     const operationKeys = operations.map(({ method, path }) => `${method} ${path}`);
-    expect(operations).toHaveLength(37);
+    expect(operations).toHaveLength(40);
     expect(new Set(operationKeys).size).toBe(operationKeys.length);
+  });
+
+  it('resolves a usable ready revision through the question resource', () => {
+    const id = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d20';
+    expect(questionsContract.getReady.method).toBe('GET');
+    expect(questionsContract.getReady.path).toBe('/questions/:id/ready');
+    expect(questionsContract.getReady.pathParams.parse({ id })).toEqual({ id });
+    expect(questionsContract.getReady.responses[200]).toBe(questionsContract.get.responses[200]);
+  });
+
+  it('validates numeric version URL parameters', () => {
+    const id = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d20';
+    expect(questionVersionPathParamsSchema.parse({ id, version: '2' })).toEqual({ id, version: 2 });
+    for (const version of ['0', '-1', '1.5', 'latest']) {
+      expect(questionVersionPathParamsSchema.safeParse({ id, version }).success).toBe(false);
+    }
+  });
+
+  it('requires an expectedVersion precondition on PATCH without accepting a no-op', () => {
+    expect(
+      questionUpdateBodySchema.safeParse({ expectedVersion: 1, status: 'ready' }).success,
+    ).toBe(true);
+    expect(
+      questionUpdateBodySchema.safeParse({ expectedVersion: 2, status: 'draft', guidance: null })
+        .success,
+    ).toBe(true);
+    for (const invalid of [
+      { expectedVersion: 1 },
+      { status: 'ready' },
+      { expectedVersion: 0, status: 'ready' },
+      { expectedVersion: 1.5, status: 'ready' },
+      { expectedVersion: '1', status: 'ready' },
+    ]) {
+      expect(questionUpdateBodySchema.safeParse(invalid).success).toBe(false);
+    }
   });
 
   it('uses responses keyed by status code instead of a singular response field', () => {

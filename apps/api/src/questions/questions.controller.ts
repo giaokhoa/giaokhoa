@@ -1,5 +1,10 @@
 import { QuestionsService } from '@giaokhoa/application/questions/service';
-import type { Question, QuestionCreate, QuestionPatch } from '@giaokhoa/shared/questions';
+import type {
+  Question,
+  QuestionCreate,
+  QuestionPatch,
+  QuestionVersionSummary,
+} from '@giaokhoa/shared/questions';
 import { questionsContract } from '@giaokhoa/shared/http/questions';
 import {
   Body,
@@ -31,18 +36,55 @@ export class QuestionsController {
   @Get(':id')
   async get(
     @Param('id', { schema: questionsContract.get.pathParams.shape.id }) id: string,
+    @Session() session: UserSession,
   ): Promise<Question> {
-    return questionsContract.get.responses[200].parse(await this.questions.getQuestion(id));
+    return questionsContract.get.responses[200].parse(
+      await this.questions.getQuestion(id, session.user.id),
+    );
+  }
+
+  @Get(':id/ready')
+  async getReady(
+    @Param('id', { schema: questionsContract.getReady.pathParams.shape.id }) id: string,
+    @Session() session: UserSession,
+  ): Promise<Question> {
+    return questionsContract.getReady.responses[200].parse(
+      await this.questions.getLatestReadyQuestion(id, session.user.id),
+    );
+  }
+
+  @Get(':id/versions')
+  async listVersions(
+    @Param('id', { schema: questionsContract.listVersions.pathParams.shape.id }) id: string,
+    @Session() session: UserSession,
+  ): Promise<QuestionVersionSummary[]> {
+    return questionsContract.listVersions.responses[200].parse(
+      await this.questions.listQuestionVersions(id, session.user.id),
+    );
+  }
+
+  @Get(':id/versions/:version')
+  async getVersion(
+    @Param('id', { schema: questionsContract.getVersion.pathParams.shape.id }) id: string,
+    @Param('version', { schema: questionsContract.getVersion.pathParams.shape.version })
+    version: number,
+    @Session() session: UserSession,
+  ): Promise<Question> {
+    return questionsContract.getVersion.responses[200].parse(
+      await this.questions.getQuestionVersion(id, version, session.user.id),
+    );
   }
 
   @Patch(':id')
   async update(
     @Param('id', { schema: questionsContract.update.pathParams.shape.id }) id: string,
-    @Body({ schema: questionsContract.update.body }) body: QuestionPatch,
+    @Body({ schema: questionsContract.update.body })
+    body: QuestionPatch & { expectedVersion: number },
     @Session() session: UserSession,
   ): Promise<Question> {
+    const { expectedVersion, ...patch } = body;
     return questionsContract.update.responses[200].parse(
-      await this.questions.updateQuestion(id, body, session.user.id),
+      await this.questions.updateQuestion(id, patch, expectedVersion, session.user.id),
     );
   }
 

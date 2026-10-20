@@ -311,10 +311,26 @@ export const questionPatchSchema = z
   })
   .refine((value) => Object.keys(value).length > 0, 'Không có dữ liệu để cập nhật');
 
+const questionIdentitySchema = {
+  id: z.uuidv7(),
+  version: z.number().int().positive(),
+};
+
 export const questionSchema = z.union([
-  ...draftQuestionWriteSchemas.map((schema) => schema.safeExtend({ id: z.uuidv7() }).required()),
-  ...readyQuestionWriteSchemas.map((schema) => schema.safeExtend({ id: z.uuidv7() }).required()),
+  ...draftQuestionWriteSchemas.map((schema) =>
+    schema.safeExtend(questionIdentitySchema).required(),
+  ),
+  ...readyQuestionWriteSchemas.map((schema) =>
+    schema.safeExtend(questionIdentitySchema).required(),
+  ),
 ]);
+
+export const questionVersionSummarySchema = z.strictObject({
+  version: z.number().int().positive(),
+  status: questionStatusSchema,
+});
+
+export type QuestionVersionSummary = z.infer<typeof questionVersionSummarySchema>;
 
 export type QuestionType = z.infer<typeof questionTypeSchema>;
 export type QuestionStatus = z.infer<typeof questionStatusSchema>;

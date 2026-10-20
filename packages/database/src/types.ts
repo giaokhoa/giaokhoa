@@ -9,7 +9,12 @@ import type {
   questionSubjects,
   subjects,
 } from './schema/curriculum.js';
-import type { questions, stimuli } from './schema/questions.js';
+import type {
+  question,
+  questionBankEntries,
+  questionVersions,
+  stimuli,
+} from './schema/questions.js';
 
 export type Database = NodePgDatabase<typeof schema>;
 
@@ -30,7 +35,9 @@ export type LearningOutcomeInsert = typeof learningOutcomes.$inferInsert;
 export type QuestionSubjectRow = typeof questionSubjects.$inferSelect;
 export type QuestionLearningOutcomeRow = typeof questionLearningOutcomes.$inferSelect;
 
-export type QuestionRow = typeof questions.$inferSelect;
-export type QuestionInsert = typeof questions.$inferInsert;
+export type QuestionRow = typeof question.$inferSelect;
+export type QuestionInsert = typeof question.$inferInsert;
+export type QuestionBankEntryRow = typeof questionBankEntries.$inferSelect;
+export type QuestionVersionRow = typeof questionVersions.$inferSelect;
 export type StimulusRow = typeof stimuli.$inferSelect;
 export type StimulusInsert = typeof stimuli.$inferInsert;

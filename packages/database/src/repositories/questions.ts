@@ -6,26 +6,46 @@ import type {
 import type { ImageRef } from '@giaokhoa/shared/images';
 import {
   questionSchema,
+  questionStatusSchema,
   stimulusSchema,
   type QuestionCreate,
+  type QuestionStatus,
   type Stimulus,
   type StimulusCreate,
   type StimulusPatch,
 } from '@giaokhoa/shared/questions';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { images, imageVariants, questionImageRefs } from '../schema/images.js';
-import { questions, stimuli } from '../schema/questions.js';
+import { question, questionBankEntries, questionVersions, stimuli } from '../schema/questions.js';
 import type { Database } from '../types.js';
 
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
+type QuestionRow = typeof question.$inferSelect;
 
-function parseStoredQuestion(row: typeof questions.$inferSelect): StoredQuestion {
-  const { createdByUserId, ...question } = row;
-  return { ...questionSchema.parse(question), createdByUserId };
+function parseStoredQuestion(
+  entryId: string,
+  ownerId: string,
+  version: number,
+  status: string,
+  row: QuestionRow,
+): StoredQuestion {
+  const { id: _contentId, createdByUserId: _authorId, ...definition } = row;
+  return {
+    ...questionSchema.parse({ ...definition, id: entryId, version, status }),
+    createdByUserId: ownerId,
+  };
 }
 
 function parseStimulus(row: typeof stimuli.$inferSelect) {
   return stimulusSchema.parse(row);
+}
+
+function revisionChanged() {
+  return new ClientError(
+    'conflict',
+    'question_version_conflict',
+    'Phiên bản câu hỏi đã thay đổi, hãy tải lại trước khi chỉnh sửa',
+  );
 }
 
 export class PostgresQuestionsRepository implements QuestionsRepository {
@@ -34,80 +54,250 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
   async createQuestion(data: QuestionCreate, refs: ImageRef[], userId: string) {
     return this.db.transaction(async (tx) => {
       await this.validateImageRefs(tx, refs, userId);
-      const [question] = await tx
-        .insert(questions)
-        .values({ ...data, createdByUserId: userId })
+      if (data.status === 'ready') await this.lockReadyStimulus(tx, data.stimulusId);
+      const [entry] = await tx
+        .insert(questionBankEntries)
+        .values({ createdByUserId: userId })
         .returning();
-      await this.replaceImageRefs(tx, question.id, [], refs);
-      return parseStoredQuestion(question);
+      const { status, ...definition } = data;
+      const [content] = await tx
+        .insert(question)
+        .values({ ...definition, createdByUserId: userId })
+        .returning();
+      await tx.insert(questionVersions).values({
+        questionBankEntryId: entry.id,
+        questionId: content.id,
+        version: 1,
+        status,
+      });
+      await this.replaceImageRefs(tx, content.id, [], refs);
+      return parseStoredQuestion(entry.id, userId, 1, status, content);
     });
   }
 
   async findQuestion(id: string) {
-    const [question] = await this.db.select().from(questions).where(eq(questions.id, id)).limit(1);
-    return question ? parseStoredQuestion(question) : undefined;
+    const [row] = await this.db
+      .select({
+        entryId: questionBankEntries.id,
+        ownerId: questionBankEntries.createdByUserId,
+        version: questionVersions.version,
+        status: questionVersions.status,
+        content: question,
+      })
+      .from(questionBankEntries)
+      .innerJoin(questionVersions, eq(questionVersions.questionBankEntryId, questionBankEntries.id))
+      .innerJoin(question, eq(question.id, questionVersions.questionId))
+      .where(eq(questionBankEntries.id, id))
+      .orderBy(desc(questionVersions.version))
+      .limit(1);
+    return row
+      ? parseStoredQuestion(row.entryId, row.ownerId, row.version, row.status, row.content)
+      : undefined;
+  }
+
+  async findLatestReadyQuestion(id: string) {
+    const [row] = await this.db
+      .select({
+        entryId: questionBankEntries.id,
+        ownerId: questionBankEntries.createdByUserId,
+        version: questionVersions.version,
+        status: questionVersions.status,
+        content: question,
+      })
+      .from(questionBankEntries)
+      .innerJoin(questionVersions, eq(questionVersions.questionBankEntryId, questionBankEntries.id))
+      .innerJoin(question, eq(question.id, questionVersions.questionId))
+      .where(and(eq(questionBankEntries.id, id), eq(questionVersions.status, 'ready')))
+      .orderBy(desc(questionVersions.version))
+      .limit(1);
+    return row
+      ? parseStoredQuestion(row.entryId, row.ownerId, row.version, row.status, row.content)
+      : undefined;
   }
 
   async findQuestionOwned(id: string, userId: string) {
-    const [question] = await this.db
-      .select()
-      .from(questions)
-      .where(and(eq(questions.id, id), eq(questions.createdByUserId, userId)))
+    const [row] = await this.db
+      .select({
+        entryId: questionBankEntries.id,
+        ownerId: questionBankEntries.createdByUserId,
+        version: questionVersions.version,
+        status: questionVersions.status,
+        content: question,
+      })
+      .from(questionBankEntries)
+      .innerJoin(questionVersions, eq(questionVersions.questionBankEntryId, questionBankEntries.id))
+      .innerJoin(question, eq(question.id, questionVersions.questionId))
+      .where(and(eq(questionBankEntries.id, id), eq(questionBankEntries.createdByUserId, userId)))
+      .orderBy(desc(questionVersions.version))
       .limit(1);
-    return question ? parseStoredQuestion(question) : undefined;
+    return row
+      ? parseStoredQuestion(row.entryId, row.ownerId, row.version, row.status, row.content)
+      : undefined;
   }
 
-  async updateQuestion(id: string, data: QuestionCreate, refs: ImageRef[], userId: string) {
+  async findQuestionVersion(id: string, version: number) {
+    const [row] = await this.db
+      .select({
+        entryId: questionBankEntries.id,
+        ownerId: questionBankEntries.createdByUserId,
+        version: questionVersions.version,
+        status: questionVersions.status,
+        content: question,
+      })
+      .from(questionBankEntries)
+      .innerJoin(questionVersions, eq(questionVersions.questionBankEntryId, questionBankEntries.id))
+      .innerJoin(question, eq(question.id, questionVersions.questionId))
+      .where(and(eq(questionBankEntries.id, id), eq(questionVersions.version, version)))
+      .limit(1);
+    return row
+      ? parseStoredQuestion(row.entryId, row.ownerId, row.version, row.status, row.content)
+      : undefined;
+  }
+
+  async listQuestionVersions(id: string) {
+    const [entry] = await this.db
+      .select({ id: questionBankEntries.id })
+      .from(questionBankEntries)
+      .where(eq(questionBankEntries.id, id))
+      .limit(1);
+    if (!entry) return [];
+
+    const rows = await this.db
+      .select({ version: questionVersions.version, status: questionVersions.status })
+      .from(questionVersions)
+      .where(eq(questionVersions.questionBankEntryId, id))
+      .orderBy(desc(questionVersions.version));
+    return rows.map((row) => ({
+      version: row.version,
+      status: questionStatusSchema.parse(row.status),
+    }));
+  }
+
+  async createQuestionVersion(
+    id: string,
+    expectedVersion: number,
+    data: QuestionCreate,
+    refs: ImageRef[],
+    userId: string,
+  ) {
     return this.db.transaction(async (tx) => {
       const [owned] = await tx
-        .select({ id: questions.id })
-        .from(questions)
-        .where(and(eq(questions.id, id), eq(questions.createdByUserId, userId)))
+        .select({ id: questionBankEntries.id })
+        .from(questionBankEntries)
+        .where(and(eq(questionBankEntries.id, id), eq(questionBankEntries.createdByUserId, userId)))
         .limit(1)
         .for('update');
       if (!owned) return undefined;
 
-      await this.validateImageRefs(tx, refs, userId);
-      const previousRefs = await tx
+      const [latest] = await tx
         .select({
-          imageId: questionImageRefs.imageId,
-          imageVariantId: questionImageRefs.imageVariantId,
+          questionId: questionVersions.questionId,
+          version: questionVersions.version,
+          status: questionVersions.status,
         })
-        .from(questionImageRefs)
-        .where(eq(questionImageRefs.questionId, id));
-      const [question] = await tx
-        .update(questions)
-        .set(data)
-        .where(eq(questions.id, id))
+        .from(questionVersions)
+        .where(eq(questionVersions.questionBankEntryId, id))
+        .orderBy(desc(questionVersions.version))
+        .limit(1);
+      if (!latest || latest.version !== expectedVersion) throw revisionChanged();
+      await this.validateImageRefs(tx, refs, userId);
+      if (data.status === 'ready') await this.lockReadyStimulus(tx, data.stimulusId);
+      const { status, ...definition } = data;
+
+      const [content] = await tx
+        .insert(question)
+        .values({ ...definition, createdByUserId: userId })
         .returning();
-      await this.replaceImageRefs(tx, id, previousRefs, refs);
-      return question ? parseStoredQuestion(question) : undefined;
+      const nextVersion = latest.version + 1;
+      await tx.insert(questionVersions).values({
+        questionBankEntryId: id,
+        questionId: content.id,
+        version: nextVersion,
+        status,
+      });
+      // Every content revision owns its image refs, including revisions superseded while Draft.
+      await this.replaceImageRefs(tx, content.id, [], refs);
+      return parseStoredQuestion(id, userId, nextVersion, status, content);
+    });
+  }
+
+  async changeQuestionStatus(
+    id: string,
+    expectedVersion: number,
+    status: QuestionStatus,
+    userId: string,
+  ) {
+    return this.db.transaction(async (tx) => {
+      const [owned] = await tx
+        .select({ id: questionBankEntries.id })
+        .from(questionBankEntries)
+        .where(and(eq(questionBankEntries.id, id), eq(questionBankEntries.createdByUserId, userId)))
+        .limit(1)
+        .for('update');
+      if (!owned) return undefined;
+
+      const [latest] = await tx
+        .select({
+          version: questionVersions.version,
+          status: questionVersions.status,
+          content: question,
+        })
+        .from(questionVersions)
+        .innerJoin(question, eq(question.id, questionVersions.questionId))
+        .where(eq(questionVersions.questionBankEntryId, id))
+        .orderBy(desc(questionVersions.version))
+        .limit(1);
+      if (!latest || latest.version !== expectedVersion) throw revisionChanged();
+      if (latest.status === status) {
+        return parseStoredQuestion(id, userId, latest.version, status, latest.content);
+      }
+
+      // Draft -> Ready publication shares the stimulus lock with stimulus edits.
+      if (status === 'ready') await this.lockReadyStimulus(tx, latest.content.stimulusId);
+      await tx
+        .update(questionVersions)
+        .set({ status })
+        .where(
+          and(
+            eq(questionVersions.questionBankEntryId, id),
+            eq(questionVersions.version, latest.version),
+          ),
+        );
+      return parseStoredQuestion(id, userId, latest.version, status, latest.content);
     });
   }
 
   async deleteQuestion(id: string, userId: string) {
     return this.db.transaction(async (tx) => {
       const [owned] = await tx
-        .select({ id: questions.id })
-        .from(questions)
-        .where(and(eq(questions.id, id), eq(questions.createdByUserId, userId)))
+        .select({ id: questionBankEntries.id })
+        .from(questionBankEntries)
+        .where(and(eq(questionBankEntries.id, id), eq(questionBankEntries.createdByUserId, userId)))
         .limit(1)
         .for('update');
       if (!owned) return undefined;
 
-      const previousRefs = await tx
-        .select({
-          imageId: questionImageRefs.imageId,
-          imageVariantId: questionImageRefs.imageVariantId,
-        })
-        .from(questionImageRefs)
-        .where(eq(questionImageRefs.questionId, id));
-      const [question] = await tx
-        .delete(questions)
-        .where(eq(questions.id, id))
-        .returning({ id: questions.id });
-      if (question) await this.markDetachedRefs(tx, previousRefs);
-      return question;
+      const versions = await tx
+        .select({ questionId: questionVersions.questionId })
+        .from(questionVersions)
+        .where(eq(questionVersions.questionBankEntryId, id));
+      const questionIds = versions.map(({ questionId }) => questionId);
+      const previousRefs = questionIds.length
+        ? await tx
+            .select({
+              imageId: questionImageRefs.imageId,
+              imageVariantId: questionImageRefs.imageVariantId,
+            })
+            .from(questionImageRefs)
+            .where(inArray(questionImageRefs.questionId, questionIds))
+        : [];
+
+      if (questionIds.length) {
+        await tx.delete(question).where(inArray(question.id, questionIds));
+      }
+      await tx.delete(questionBankEntries).where(eq(questionBankEntries.id, id));
+      await this.markDetachedRefs(tx, previousRefs);
+      return { id };
     });
   }
 
@@ -122,20 +312,94 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
   }
 
   async updateStimulus(id: string, data: StimulusPatch): Promise<Stimulus | undefined> {
-    const [stimulus] = await this.db
-      .update(stimuli)
-      .set(data)
-      .where(eq(stimuli.id, id))
-      .returning();
-    return stimulus ? parseStimulus(stimulus) : undefined;
+    return this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ id: stimuli.id })
+        .from(stimuli)
+        .where(eq(stimuli.id, id))
+        .limit(1)
+        .for('update');
+      if (!existing) return undefined;
+      await this.assertStimulusUnreferenced(tx, id);
+      const [updated] = await tx.update(stimuli).set(data).where(eq(stimuli.id, id)).returning();
+      return updated ? parseStimulus(updated) : undefined;
+    });
   }
 
   async deleteStimulus(id: string) {
-    const [stimulus] = await this.db
-      .delete(stimuli)
-      .where(eq(stimuli.id, id))
-      .returning({ id: stimuli.id });
-    return stimulus;
+    return this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ id: stimuli.id })
+        .from(stimuli)
+        .where(eq(stimuli.id, id))
+        .limit(1)
+        .for('update');
+      if (!existing) return undefined;
+      const [inUse] = await tx
+        .select({ id: question.id })
+        .from(question)
+        .where(eq(question.stimulusId, id))
+        .limit(1);
+      if (inUse) {
+        throw new ClientError('conflict', 'stimulus_in_use', 'Ngữ liệu đang được câu hỏi sử dụng');
+      }
+      const [deleted] = await tx
+        .delete(stimuli)
+        .where(eq(stimuli.id, id))
+        .returning({ id: stimuli.id });
+      return deleted;
+    });
+  }
+
+  private async lockReadyStimulus(tx: Transaction, stimulusId: string | null | undefined) {
+    if (!stimulusId) return;
+    const [existing] = await tx
+      .select({ id: stimuli.id })
+      .from(stimuli)
+      .where(eq(stimuli.id, stimulusId))
+      .limit(1)
+      .for('update');
+    if (!existing) {
+      throw new ClientError('invalid', 'stimulus_invalid', 'Ngữ liệu không tồn tại');
+    }
+  }
+
+  private async assertStimulusUnreferenced(tx: Transaction, id: string) {
+    const [inUse] = await tx
+      .select({ id: question.id })
+      .from(question)
+      .where(eq(question.stimulusId, id))
+      .limit(1);
+    if (inUse) {
+      throw new ClientError(
+        'conflict',
+        'stimulus_in_use',
+        'Ngữ liệu thuộc phiên bản câu hỏi đã lưu, hãy tạo ngữ liệu mới để chỉnh sửa',
+      );
+    }
+  }
+
+  private async lockImageRefs(tx: Transaction, refs: ImageRef[]) {
+    const imageIds = [...new Set(refs.map(({ imageId }) => imageId))].sort();
+    if (imageIds.length) {
+      await tx
+        .select({ id: images.id })
+        .from(images)
+        .where(inArray(images.id, imageIds))
+        .orderBy(images.id)
+        .for('update');
+    }
+    const variantIds = [
+      ...new Set(refs.flatMap(({ imageVariantId }) => (imageVariantId ? [imageVariantId] : []))),
+    ].sort();
+    if (variantIds.length) {
+      await tx
+        .select({ id: imageVariants.id })
+        .from(imageVariants)
+        .where(inArray(imageVariants.id, variantIds))
+        .orderBy(imageVariants.id)
+        .for('update');
+    }
   }
 
   private async validateImageRefs(tx: Transaction, refs: ImageRef[], userId: string) {
@@ -146,6 +410,7 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
       .select({ id: images.id })
       .from(images)
       .where(and(inArray(images.id, imageIds), eq(images.createdByUserId, userId)))
+      .orderBy(images.id)
       .for('update');
 
     if (ownedAssets.length !== imageIds.length) {
@@ -166,6 +431,7 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
       .select({ id: imageVariants.id, imageId: imageVariants.imageId })
       .from(imageVariants)
       .where(inArray(imageVariants.id, imageVariantIds))
+      .orderBy(imageVariants.id)
       .for('update');
 
     const byId = new Map(variants.map((variant) => [variant.id, variant.imageId]));
@@ -215,8 +481,9 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
   }
 
   private async markDetachedRefs(tx: Transaction, refs: ImageRef[]) {
+    await this.lockImageRefs(tx, refs);
     const now = new Date();
-    const imageIds = [...new Set(refs.map(({ imageId }) => imageId))];
+    const imageIds = [...new Set(refs.map(({ imageId }) => imageId))].sort();
     if (imageIds.length) {
       const stillReferenced = await tx
         .select({ imageId: questionImageRefs.imageId })

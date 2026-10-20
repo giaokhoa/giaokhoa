@@ -1,4 +1,4 @@
-import type { QuestionType, TrueFalseAnswers } from '@giaokhoa/shared/questions';
+import type { Question, QuestionType, TrueFalseAnswers } from '@giaokhoa/shared/questions';
 import {
   createEmptyMultipleChoiceDocument,
   createEmptyPlainQuestionDocument,
@@ -64,6 +64,47 @@ export function createQuestionDraft(type: QuestionType): QuestionDraft {
         content: createEmptyPlainQuestionDocument(),
         guidance,
         answer: createEmptyPlainQuestionDocument(),
+      };
+  }
+}
+
+export function questionToDraft(question: Question): QuestionDraft {
+  const guidance = question.guidance ?? createEmptyPlainQuestionDocument();
+
+  switch (question.type) {
+    case 'multiple_choice':
+      return {
+        type: question.type,
+        content: question.content,
+        guidance,
+        correctChoiceId: question.solution?.choiceId,
+      };
+    case 'true_false':
+      return {
+        type: question.type,
+        content: question.content,
+        guidance,
+        answers: Object.fromEntries(
+          (question.solution?.answers ?? []).map(({ statementId, value }) => [statementId, value]),
+        ),
+      };
+    case 'short_answer':
+      return {
+        type: question.type,
+        content: question.content,
+        guidance,
+        answer: question.solution?.answer ?? '',
+      };
+    case 'essay':
+      if (question.solution && 'answers' in question.solution) {
+        // The current essay editor only supports a single answer document.
+        throw new Error('Multipart essay editing is not supported by this editor.');
+      }
+      return {
+        type: question.type,
+        content: question.content,
+        guidance,
+        answer: question.solution?.answer ?? createEmptyPlainQuestionDocument(),
       };
   }
 }
