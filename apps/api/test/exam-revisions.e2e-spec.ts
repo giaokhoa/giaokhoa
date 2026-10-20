@@ -20,7 +20,7 @@ import type { Database } from '@giaokhoa/database/types';
 import { examRevisionCreateSchema } from '@giaokhoa/shared/exams';
 import type { QuestionCreate } from '@giaokhoa/shared/questions';
 
-const databaseName = `giaokhoa_phase4_test_${process.pid}_${randomUUID().replaceAll('-', '')}`;
+const databaseName = `gk_revision_test_${process.pid}_${randomUUID().replaceAll('-', '')}`;
 const unknownQuestionId = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d20';
 const document = {
   type: 'doc' as const,
@@ -32,7 +32,7 @@ let exams: ExamsService;
 let questions: QuestionsService;
 
 function databaseUrl(name: string) {
-  if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL required for Phase 4 E2E');
+  if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL required for exam revision E2E');
   const url = new URL(process.env.DATABASE_URL);
   url.pathname = `/${name}`;
   return url.toString();
@@ -81,7 +81,7 @@ afterAll(async () => {
   );
 }, 30_000);
 
-describe('Phase 4 exam revision ownership and immutability', () => {
+describe('Exam revision ownership and immutability', () => {
   it('isolates private exams and rejects student authoring', async () => {
     const owner = await createUser();
     const stranger = await createUser();
@@ -245,10 +245,10 @@ describe('Phase 4 exam revision ownership and immutability', () => {
     const owner = await createUser();
     const q = await questions.createQuestion(questionData(), owner.id);
     const exam = await exams.createExam(owner.id, { title: 'Rollback' });
-    await db.execute(sql`CREATE FUNCTION phase4_reject_pin() RETURNS trigger LANGUAGE plpgsql AS $$
+    await db.execute(sql`CREATE FUNCTION revision_reject_pin() RETURNS trigger LANGUAGE plpgsql AS $$
       BEGIN RAISE EXCEPTION 'forced pin failure'; END $$`);
-    await db.execute(sql`CREATE TRIGGER phase4_reject_pin_trigger
-      BEFORE INSERT ON exam_revision_questions FOR EACH ROW EXECUTE FUNCTION phase4_reject_pin()`);
+    await db.execute(sql`CREATE TRIGGER revision_reject_pin_trigger
+      BEFORE INSERT ON exam_revision_questions FOR EACH ROW EXECUTE FUNCTION revision_reject_pin()`);
     try {
       await expect(
         exams.createRevision(owner.id, exam.id, {
@@ -256,8 +256,8 @@ describe('Phase 4 exam revision ownership and immutability', () => {
         }),
       ).rejects.toThrow();
     } finally {
-      await db.execute(sql`DROP TRIGGER phase4_reject_pin_trigger ON exam_revision_questions`);
-      await db.execute(sql`DROP FUNCTION phase4_reject_pin()`);
+      await db.execute(sql`DROP TRIGGER revision_reject_pin_trigger ON exam_revision_questions`);
+      await db.execute(sql`DROP FUNCTION revision_reject_pin()`);
     }
     expect(
       await db.select().from(examRevisions).where(eq(examRevisions.examId, exam.id)),

@@ -49,6 +49,10 @@ export class ExamsService {
     return exam;
   }
 
+  /**
+   * Chỉ tạo revision từ câu hỏi hợp lệ; repository xác minh ownership và lưu snapshot.
+   * Đề đã giao tiếp tục dùng snapshot ngay cả khi câu hỏi gốc thay đổi.
+   */
   async createRevision(
     actorId: string,
     id: string,

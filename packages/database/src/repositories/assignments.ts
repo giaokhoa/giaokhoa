@@ -173,6 +173,10 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
     });
   }
 
+  /**
+   * Khóa lớp trước assignment để serialize với join/suspend.
+   * Snapshot recipient chỉ lấy active enrolments và publish lặp không giao thêm lần nữa.
+   */
   async publish(id: string, actorId: string) {
     const [existing] = await this.db
       .select({ classId: assignments.classId })

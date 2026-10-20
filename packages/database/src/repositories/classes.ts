@@ -252,6 +252,10 @@ export class PostgresClassesRepository implements ClassesRepository {
     });
   }
 
+  /**
+   * Khóa lớp rồi mã và enrolment để kiểm hạn/số lượt dùng, cập nhật thành viên
+   * và cấp class:student trong một transaction; pending chưa được cấp role.
+   */
   async join(codeHash: string, actorId: string, now: Date) {
     return this.db.transaction(async (tx) => {
       if (!(await activeAccountRole(tx, actorId)))

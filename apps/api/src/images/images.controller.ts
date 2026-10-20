@@ -117,6 +117,10 @@ export class ImagesController {
     return imagesContract.upload.responses[201].parse({ ...image, src });
   }
 
+  /**
+   * Gửi binary trực tiếp để giữ MIME type, kích thước và ETag; SVG còn cần CSP sandbox.
+   * Quyền tải ảnh phải được kiểm trước khi gọi hàm này.
+   */
   private sendImage(
     response: Response,
     image: { body: Uint8Array; mimeType: string; byteSize: number; etag?: string },

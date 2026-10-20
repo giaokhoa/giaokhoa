@@ -76,6 +76,7 @@ export class AssignmentsController {
     await this.assignments.revokeRecipient(session.user.id, id, userId);
   }
 
+  /** Response dành cho học sinh, không trả DTO soạn đề chứa đáp án. */
   @Get(':id/delivery')
   async delivery(
     @Param('id', { schema: assignmentsContract.delivery.pathParams.shape.id }) id: string,

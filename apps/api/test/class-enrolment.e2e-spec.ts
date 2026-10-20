@@ -20,7 +20,7 @@ import {
 import { classes, classEnrolments, classJoinCodes } from '@giaokhoa/database/schema/classes';
 import type { Database } from '@giaokhoa/database/types';
 
-const name = `giaokhoa_phase3_test_${process.pid}_${randomUUID().replaceAll('-', '')}`;
+const name = `gk_enrolment_test_${process.pid}_${randomUUID().replaceAll('-', '')}`;
 let pool: Pool;
 let db: Database;
 let service: ClassesService;
@@ -29,7 +29,7 @@ let authorization: AuthorizationService;
 
 function url(database: string) {
   if (!process.env.DATABASE_URL)
-    throw new Error('DATABASE_URL is required for isolated Phase 3 tests');
+    throw new Error('DATABASE_URL is required for class enrolment E2E');
   const parsed = new URL(process.env.DATABASE_URL);
   parsed.pathname = `/${database}`;
   return parsed.toString();
@@ -82,7 +82,7 @@ afterAll(async () => {
   await adminConnection((client) => client.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`));
 }, 30_000);
 
-describe('Phase 3 class lifecycle and enrolment authorization', () => {
+describe('Class lifecycle and enrolment authorization', () => {
   it('creates class, context and owner atomically; restricts other teachers and students', async () => {
     const owner = await actor('teacher');
     const other = await actor('teacher');
@@ -119,18 +119,18 @@ describe('Phase 3 class lifecycle and enrolment authorization', () => {
     const updated = await service.updateClass(owner.id, classroom.id, { name: 'Math 2' });
     expect(updated.name).toBe('Math 2');
 
-    await db.execute(sql`CREATE FUNCTION phase3_reject_owner() RETURNS trigger LANGUAGE plpgsql AS $$
+    await db.execute(sql`CREATE FUNCTION class_role_reject_owner() RETURNS trigger LANGUAGE plpgsql AS $$
       BEGIN IF NEW.source = 'class_creation' THEN RAISE EXCEPTION 'forced assignment failure'; END IF;
       RETURN NEW; END $$`);
-    await db.execute(sql`CREATE TRIGGER phase3_reject_owner_trigger
-      BEFORE INSERT ON authz_role_assignments FOR EACH ROW EXECUTE FUNCTION phase3_reject_owner()`);
+    await db.execute(sql`CREATE TRIGGER class_role_reject_owner_trigger
+      BEFORE INSERT ON authz_role_assignments FOR EACH ROW EXECUTE FUNCTION class_role_reject_owner()`);
     try {
       await expect(
         repository.create({ name: 'Orphan', joinMode: 'AUTO' }, owner.id),
       ).rejects.toThrow();
     } finally {
-      await db.execute(sql`DROP TRIGGER phase3_reject_owner_trigger ON authz_role_assignments`);
-      await db.execute(sql`DROP FUNCTION phase3_reject_owner()`);
+      await db.execute(sql`DROP TRIGGER class_role_reject_owner_trigger ON authz_role_assignments`);
+      await db.execute(sql`DROP FUNCTION class_role_reject_owner()`);
     }
     expect(await db.select().from(classes).where(eq(classes.name, 'Orphan'))).toHaveLength(0);
     expect(

@@ -27,6 +27,11 @@ export class AttemptsService {
     });
   }
 
+  /**
+   * Giáo viên phải có capability của lớp; học sinh phải là chủ attempt.
+   * Với bài đã kết thúc của người rời lớp, chỉ bỏ qua role lớp; repository vẫn kiểm
+   * account hợp lệ và policy công bố khi đọc kết quả.
+   */
   private async assertAttempt(actorId: string, id: string, capability: string, teacher = false) {
     const context = await this.repository.findContext(id);
     if (!context)

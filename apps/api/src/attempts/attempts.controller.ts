@@ -110,6 +110,7 @@ export class AttemptsController {
     );
   }
 
+  /** Lời giải được trả riêng theo policy công bố, không nằm trong response bài làm. */
   @Get(':id/solutions')
   async solutions(
     @Param('id', { schema: attemptsContract.solutions.pathParams.shape.id }) id: string,

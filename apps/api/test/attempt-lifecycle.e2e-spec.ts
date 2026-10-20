@@ -23,7 +23,7 @@ import { users } from '@giaokhoa/database/schema/auth.generated';
 import { attempts as attemptRows, attemptResponses } from '@giaokhoa/database/schema/attempts';
 import type { Database } from '@giaokhoa/database/types';
 
-const databaseName = `giaokhoa_phase6_test_${process.pid}_${randomUUID().replaceAll('-', '')}`;
+const databaseName = `gk_attempt_test_${process.pid}_${randomUUID().replaceAll('-', '')}`;
 const NOW = new Date('2026-10-20T12:00:00.000Z');
 const openAt = new Date(NOW.getTime() - 60_000).toISOString();
 const closeAt = new Date(NOW.getTime() + 3_600_000).toISOString();
@@ -41,7 +41,7 @@ let exams: ExamsService;
 let questions: QuestionsService;
 
 function databaseUrl(name: string) {
-  if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL required for Phase 6 isolated E2E');
+  if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL required for attempt lifecycle E2E');
   const url = new URL(process.env.DATABASE_URL);
   url.pathname = `/${name}`;
   return url.toString();
@@ -133,7 +133,7 @@ afterAll(async () => {
   );
 }, 30_000);
 
-describe('Phase 6 attempt ownership, lifecycle and release', () => {
+describe('Attempt ownership, lifecycle and result release', () => {
   it('starts idempotently under concurrency and enforces max attempts without duplicate numbers', async () => {
     const { enrol, publish } = await fixture();
     const student = await createUser();

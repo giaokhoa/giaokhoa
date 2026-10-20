@@ -20,7 +20,7 @@ import * as schema from '@giaokhoa/database/schema';
 import type { Database } from '@giaokhoa/database/types';
 import type { QuestionCreate } from '@giaokhoa/shared/questions';
 
-const testDatabaseName = `giaokhoa_phase2_test_${process.pid}_${randomUUID().replaceAll('-', '')}`;
+const testDatabaseName = `gk_resource_test_${process.pid}_${randomUUID().replaceAll('-', '')}`;
 const richDocument = {
   type: 'doc' as const,
   content: [{ type: 'paragraph' as const, content: [{ type: 'text' as const, text: 'Nội dung' }] }],
@@ -32,7 +32,7 @@ let imagesRepository: PostgresImagesRepository;
 
 function databaseUrl(name: string) {
   const value = process.env.DATABASE_URL;
-  if (!value) throw new Error('DATABASE_URL required for Phase 2 e2e');
+  if (!value) throw new Error('DATABASE_URL required for resource access E2E');
   const url = new URL(value);
   url.pathname = `/${name}`;
   return url.toString();
@@ -87,7 +87,7 @@ afterAll(async () => {
   );
 }, 30_000);
 
-describe('Phase 2 authoring and asset authorization', () => {
+describe('Question authoring and asset authorization', () => {
   it('denies user authoring and applies role downgrade on the next request', async () => {
     const student = await createUser('user');
     await expect(questions.createQuestion(questionData(), student.id)).rejects.toMatchObject({
@@ -186,7 +186,7 @@ describe('Phase 2 authoring and asset authorization', () => {
   });
 });
 
-describe('Phase 2 migration for historical Stimuli', () => {
+describe('Historical Stimuli ownership migration', () => {
   it('backfills only Stimuli whose referencing questions have one owner', async () => {
     const owner = await createUser();
     const other = await createUser();

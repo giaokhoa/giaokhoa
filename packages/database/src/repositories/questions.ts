@@ -117,6 +117,7 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
       : undefined;
   }
 
+  /** Lọc owner tại bank entry rồi lấy phiên bản mới nhất; không tiết lộ tồn tại bằng ID. */
   async findQuestionOwned(id: string, userId: string) {
     const [row] = await this.db
       .select({

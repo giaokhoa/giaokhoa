@@ -80,6 +80,10 @@ export class PostgresExamsRepository implements ExamsRepository {
     });
   }
 
+  /**
+   * Chốt revision bằng snapshot từ question version thuộc tác giả và đang ready.
+   * Khóa bank entry theo thứ tự ID để tránh sửa/xóa cạnh tranh khi chụp đề.
+   */
   async createRevision(
     id: string,
     actorId: string,

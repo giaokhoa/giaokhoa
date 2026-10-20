@@ -54,6 +54,7 @@ export class QuestionsService {
     return withoutOwner(await this.repository.createQuestion(question, refs, userId));
   }
 
+  /** Response soạn thảo có lời giải, vì vậy phải thỏa capability và truy vấn theo owner. */
   async getQuestion(id: string, userId: string): Promise<Question> {
     await this.assertCapability(userId, 'question:manage_own');
     const question = await this.repository.findQuestionOwned(id, userId);

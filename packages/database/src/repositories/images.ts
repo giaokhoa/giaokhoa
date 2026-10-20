@@ -51,6 +51,7 @@ export class PostgresImagesRepository implements ImagesRepository {
     return image;
   }
 
+  /** Giới hạn theo owner ngay ở SQL, trước khi application đọc bytes từ storage. */
   async findOwned(id: string, userId: string) {
     const [image] = await this.db
       .select()

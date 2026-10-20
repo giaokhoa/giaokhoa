@@ -309,6 +309,7 @@ export class ImagesService {
     return { deleted, failed, error: firstError };
   }
 
+  /** Đường đọc binary này chỉ dành cho chủ ảnh; không suy quyền từ việc biết imageId. */
   async getImage(id: string, userId: string): Promise<StoredImage> {
     const parsedId = imageIdSchema.safeParse(id);
     if (!parsedId.success)

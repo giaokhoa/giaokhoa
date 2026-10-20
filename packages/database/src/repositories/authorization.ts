@@ -58,6 +58,10 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
     return row ? contextRecord(row) : undefined;
   }
 
+  /**
+   * Better Auth users.role là nguồn System grant; không tạo bản sao assignment ở System.
+   * Role học sinh chỉ có hiệu lực khi enrolment và lớp đều active; banned/role lạ không có grant.
+   */
   async findPermissions(actorId: string, capability: string, contextIds: string[]) {
     if (contextIds.length === 0) return [];
     const [actor] = await this.db
@@ -131,7 +135,7 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
       throw new ClientError(
         'invalid',
         'authorization_context_invalid',
-        'Phase 1 chỉ materialize Class context',
+        'Chỉ hỗ trợ khởi tạo Class context',
       );
 
     return this.db.transaction(async (tx) => {

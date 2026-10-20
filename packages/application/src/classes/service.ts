@@ -38,6 +38,10 @@ export class ClassesService {
     });
   }
 
+  /**
+   * Kiểm quyền tạo lớp trước khi ghi; repository kiểm lại account role trong transaction
+   * để tạo lớp, Class context và class owner cùng thành công hoặc cùng rollback.
+   */
   async createClass(actorId: string, input: ClassCreate): Promise<Class> {
     await this.assertSystem(actorId, 'class:create');
     return this.repository.create(input, actorId);

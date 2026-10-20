@@ -72,6 +72,10 @@ export class AssignmentsService {
     return updated;
   }
 
+  /**
+   * Quyền publish thuộc đúng Class context. Repository khóa lớp khi chụp active recipients
+   * để kết quả không phụ thuộc vào membership ở những request sau.
+   */
   async publish(actorId: string, id: string): Promise<Assignment> {
     await this.authorized(actorId, id, 'assignment:publish');
     const updated = await this.repository.publish(id, actorId);

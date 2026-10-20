@@ -42,6 +42,11 @@ export class AuthorizationService {
     private readonly audit?: (event: AuthorizationAuditEvent) => void,
   ) {}
 
+  /**
+   * Xét grant từ context cụ thể lên System: PROHIBIT phủ quyết toàn cây,
+   * PREVENT thắng ALLOW cùng cấp, thiếu ALLOW thì từ chối.
+   * Kết quả capability chưa thay thế kiểm tra owner, enrolment và lifecycle của use case.
+   */
   async authorize(request: AuthorizationRequest): Promise<AuthorizationDecision> {
     const context = await this.repository.findContext(request.context);
     if (!context) return this.finish(request, { allowed: false, reason: 'invalid_context' });

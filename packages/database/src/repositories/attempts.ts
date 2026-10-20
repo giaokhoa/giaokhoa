@@ -232,6 +232,10 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
     });
   }
 
+  /**
+   * Dùng chung cho save/submit để khóa lớp và attempt trong cùng transaction.
+   * Chặn sửa khi hết giờ, đã nộp, enrolment bị ngừng hoặc recipient bị thu hồi.
+   */
   private async writable(tx: Transaction, id: string, actorId: string, now: Date) {
     const [ref] = await tx
       .select({ classId: assignments.classId })

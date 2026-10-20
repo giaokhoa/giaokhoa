@@ -24,7 +24,7 @@ import {
 } from '@giaokhoa/database/schema/assignments';
 import type { Database } from '@giaokhoa/database/types';
 
-const name = `giaokhoa_phase5_test_${process.pid}_${randomUUID().replaceAll('-', '')}`;
+const name = `gk_recipient_test_${process.pid}_${randomUUID().replaceAll('-', '')}`;
 const now = new Date('2026-10-20T12:00:00.000Z');
 const openAt = new Date(now.getTime() - 60_000).toISOString();
 const closeAt = new Date(now.getTime() + 3_600_000).toISOString();
@@ -40,7 +40,8 @@ let exams: ExamsService;
 let questions: QuestionsService;
 
 function databaseUrl(database: string) {
-  if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL required for isolated Phase 5 E2E');
+  if (!process.env.DATABASE_URL)
+    throw new Error('DATABASE_URL required for assignment recipient E2E');
   const url = new URL(process.env.DATABASE_URL);
   url.pathname = `/${database}`;
   return url.toString();
@@ -120,7 +121,7 @@ afterAll(async () => {
   await adminConnection((client) => client.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`));
 }, 30_000);
 
-describe('Phase 5 assignment publish and recipients', () => {
+describe('Assignment publication and recipients', () => {
   it('snapshots only active class members and never auto-assigns late joiners', async () => {
     const { teacher, classroom, join, create } = await fixture();
     const first = await createUser();
