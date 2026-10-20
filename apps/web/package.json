@@ -16,6 +16,7 @@
     "build": "react-router build",
     "start": "pnpm start:prod",
     "typecheck": "react-router typegen && tsc",
+    "test": "node --test test/*.test.mjs",
     "start:prod": "PORT=${PORT:-3001} react-router-serve ./build/server/index.js"
   },
   "dependencies": {

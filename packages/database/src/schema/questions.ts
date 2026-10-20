@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { check, index, integer, jsonb, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
 import { users } from './auth.generated.js';
 
-/** Shared source material that one or more independent questions may reference. */
+/** Ngữ liệu dùng chung mà một hoặc nhiều câu hỏi độc lập có thể tham chiếu. */
 export const stimuli = pgTable('stimuli', {
   id: uuid('id')
     .default(sql`uuidv7()`)
@@ -10,7 +10,7 @@ export const stimuli = pgTable('stimuli', {
   content: jsonb('content').notNull(),
 });
 
-/** Stable identity of a question across all of its revisions. */
+/** Danh tính ổn định của một câu hỏi qua mọi phiên bản. */
 export const questionBankEntries = pgTable(
   'question_bank_entries',
   {
@@ -24,7 +24,7 @@ export const questionBankEntries = pgTable(
   (table) => [index('question_bank_entries_created_by_user_id_idx').on(table.createdByUserId)],
 );
 
-/** A complete, version-specific question definition. */
+/** Định nghĩa đầy đủ của câu hỏi tại một phiên bản cụ thể. */
 export const question = pgTable(
   'question',
   {
@@ -50,7 +50,7 @@ export const question = pgTable(
   ],
 );
 
-/** Moodle-style association between a stable bank entry and each question revision. */
+/** Liên kết kiểu Moodle giữa mục ngân hàng ổn định và từng phiên bản câu hỏi. */
 export const questionVersions = pgTable(
   'question_versions',
   {

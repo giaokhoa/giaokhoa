@@ -4,11 +4,8 @@ import { requireSession } from '#features/auth/api/session.server.js';
 import { OnboardingForm } from '#features/auth/components/onboarding-form.js';
 import { createApiClient, isSuccessStatus } from '#lib/http/api.server.js';
 import { getApiErrorMessage } from '#lib/http/errors.js';
+import { safeRedirectPath } from '#lib/http/redirect.js';
 import type { Route } from './+types/onboarding';
-
-function safeRedirectPath(value: string | null) {
-  return value?.startsWith('/') && !value.startsWith('//') ? value : '/questions/new';
-}
 
 function readField(data: FormData, key: string) {
   const value = data.get(key);
@@ -17,7 +14,10 @@ function readField(data: FormData, key: string) {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await requireSession(request);
-  const redirectTo = safeRedirectPath(new URL(request.url).searchParams.get('redirect'));
+  const redirectTo = safeRedirectPath(
+    new URL(request.url).searchParams.get('redirect'),
+    '/questions/new',
+  );
 
   if (session.user.name.trim()) throw redirect(redirectTo);
 
@@ -26,7 +26,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export async function action({ request }: Route.ActionArgs) {
   const session = await requireSession(request);
-  const redirectTo = safeRedirectPath(new URL(request.url).searchParams.get('redirect'));
+  const redirectTo = safeRedirectPath(
+    new URL(request.url).searchParams.get('redirect'),
+    '/questions/new',
+  );
 
   if (session.user.name.trim()) throw redirect(redirectTo);
 

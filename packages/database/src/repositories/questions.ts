@@ -215,7 +215,7 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
         version: nextVersion,
         status,
       });
-      // Every content revision owns its image refs, including revisions superseded while Draft.
+      // Mỗi phiên bản nội dung sở hữu tham chiếu ảnh riêng, kể cả bản nháp đã bị thay thế.
       await this.replaceImageRefs(tx, content.id, [], refs);
       return parseStoredQuestion(id, userId, nextVersion, status, content);
     });
@@ -252,7 +252,7 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
         return parseStoredQuestion(id, userId, latest.version, status, latest.content);
       }
 
-      // Draft -> Ready publication shares the stimulus lock with stimulus edits.
+      // Chuyển từ nháp sang sẵn sàng dùng chung khóa stimulus với thao tác chỉnh sửa stimulus.
       if (status === 'ready') await this.lockReadyStimulus(tx, latest.content.stimulusId);
       await tx
         .update(questionVersions)

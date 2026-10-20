@@ -1,12 +1,8 @@
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
-import {
-  BadRequestException,
-  INestApplication,
-  StandardSchemaValidationPipe,
-} from '@nestjs/common';
+import { INestApplication, StandardSchemaValidationPipe } from '@nestjs/common';
 import { DrizzleModule } from '@nestjs/drizzle';
-import { APP_FILTER } from '@nestjs/core';
+import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
@@ -59,16 +55,13 @@ describe('Curriculum API (e2e)', () => {
         }),
         CurriculumModule,
       ],
-      providers: [{ provide: APP_FILTER, useClass: ClientErrorFilter }],
+      providers: [
+        { provide: APP_FILTER, useClass: ClientErrorFilter },
+        { provide: APP_PIPE, useValue: new StandardSchemaValidationPipe() },
+      ],
     }).compile();
 
     app = module.createNestApplication();
-    app.useGlobalPipes(
-      new StandardSchemaValidationPipe({
-        exceptionFactory: (issues) =>
-          new BadRequestException(issues.map(({ path, message }) => ({ path, message }))),
-      }),
-    );
     await app.init();
   }, 20_000);
 

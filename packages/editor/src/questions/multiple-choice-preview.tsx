@@ -87,7 +87,7 @@ function OptionLayout({
 
   return (
     <div className="@container">
-      {/* Match the empty answer widths before hydration: badge, gap, padding and borders. */}
+      {/* Khớp chiều rộng đáp án rỗng trước hydration, gồm badge, khoảng cách, padding và viền. */}
       <div
         ref={ref}
         data-compact={compact}

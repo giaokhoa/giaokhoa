@@ -15,12 +15,9 @@ import {
 } from '@giaokhoa/ui/components/field';
 import { useCallback, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
+import { safeRedirectPath } from '#lib/http/redirect.js';
 import { authClient } from '../api/auth-client';
 import { AuthOtpInput } from './otp-input';
-
-function safeRedirectPath(value: string | null) {
-  return value?.startsWith('/') && !value.startsWith('//') ? value : '/';
-}
 
 export function VerifyEmailForm() {
   const navigate = useNavigate();

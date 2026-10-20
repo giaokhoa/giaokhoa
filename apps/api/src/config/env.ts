@@ -34,6 +34,7 @@ export const envSchema = z
   })
   .superRefine((env, ctx) => {
     for (const [left, right] of [
+      ['S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'],
       ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
       ['RESEND_API_KEY', 'RESEND_FROM_EMAIL'],
     ] as const) {

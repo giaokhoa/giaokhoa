@@ -1,5 +1,5 @@
-import { Module } from '@nestjs/common';
-import { APP_FILTER } from '@nestjs/core';
+import { Module, StandardSchemaValidationPipe } from '@nestjs/common';
+import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { DrizzleModule } from '@nestjs/drizzle';
 import { drizzle } from 'drizzle-orm/node-postgres';
@@ -30,6 +30,9 @@ import { ClientErrorFilter } from './common/client-error.filter.js';
     CurriculumModule,
     QuestionsModule,
   ],
-  providers: [{ provide: APP_FILTER, useClass: ClientErrorFilter }],
+  providers: [
+    { provide: APP_PIPE, useValue: new StandardSchemaValidationPipe() },
+    { provide: APP_FILTER, useClass: ClientErrorFilter },
+  ],
 })
 export class AppModule {}

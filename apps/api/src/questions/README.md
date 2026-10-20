@@ -47,8 +47,9 @@ Solution được lưu riêng khỏi student-visible content và là bắt buộ
 
 ## Persistence
 
-`questions` và `stimuli` dùng UUIDv7 do PostgreSQL sinh. Trong giai đoạn authoring, record hiện tại được
-cập nhật trực tiếp; versioning chỉ thêm khi có lifecycle publish/attempt cần snapshot bất biến.
+`questions` và `stimuli` dùng UUIDv7 do PostgreSQL sinh. Mỗi lần thay đổi nội dung question đều tạo một phiên bản nội dung bất biến, kể cả khi câu hỏi
+đang ở trạng thái nháp. Chỉ thay đổi trạng thái được cập nhật trực tiếp trên phiên bản hiện tại;
+mọi cập nhật đều kiểm tra `expectedVersion`. Stimulus được quản lý riêng.
 
 ## API
 

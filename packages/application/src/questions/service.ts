@@ -97,9 +97,9 @@ export class QuestionsService {
     } = current;
     const question = validateMergedQuestion({ ...currentQuestion, ...patch });
 
-    // Only a status change is mutable in-place on the current version.
+    // Chỉ thay đổi trạng thái mới được cập nhật trực tiếp trên phiên bản hiện tại.
     if (Object.keys(patch).length === 1 && patch.status !== undefined) {
-      // Even an unchanged status must reach the repository's locked version check.
+      // Kể cả trạng thái không đổi vẫn phải qua kiểm tra phiên bản có khóa trong repository.
       const updated = await this.repository.changeQuestionStatus(
         questionId,
         expectedVersion,
@@ -111,8 +111,8 @@ export class QuestionsService {
       return withoutOwner(updated);
     }
 
-    // Any content edit creates a new immutable content version, including edits to a draft.
-    // An explicit status applies to the new version; otherwise the previous status is inherited.
+    // Mọi chỉnh sửa nội dung đều tạo phiên bản bất biến, kể cả với bản nháp.
+    // Nếu không chỉ định trạng thái mới, phiên bản mới kế thừa trạng thái trước đó.
     const refs = collectImageRefs(question);
     const updated = await this.repository.createQuestionVersion(
       questionId,

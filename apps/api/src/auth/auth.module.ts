@@ -6,6 +6,7 @@ import type { Env } from '../config/env.js';
 import type { Database } from '@giaokhoa/database/types';
 import { AuthController } from './auth.controller.js';
 import { createAuth } from './auth.js';
+import { OnboardingService } from './onboarding.service.js';
 
 @Module({
   imports: [
@@ -27,5 +28,6 @@ import { createAuth } from './auth.js';
     }),
   ],
   controllers: [AuthController],
+  providers: [OnboardingService],
 })
 export class AuthModule {}

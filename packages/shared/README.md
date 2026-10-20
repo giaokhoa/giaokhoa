@@ -1,15 +1,16 @@
-# Shared contracts and schemas
+# Hợp đồng và schema dùng chung
 
-`@giaokhoa/shared` contains framework- and infrastructure-free code that is reused across
-the web, editor, API, application services, database adapters, and future MCP runtime.
+`@giaokhoa/shared` chứa schema, kiểu dữ liệu, hằng số và mô tả HTTP được dùng chung giữa web,
+editor, API, application service, database adapter và MCP. Package này không phụ thuộc framework
+hoặc hạ tầng.
 
-Public domain subpaths are bounded-context oriented:
+Các đường dẫn public của domain được chia theo bounded context:
 
 - `@giaokhoa/shared/questions`
 - `@giaokhoa/shared/curriculum`
 - `@giaokhoa/shared/images`
 
-HTTP descriptors are transport-specific subpaths:
+Hợp đồng HTTP sử dụng các đường dẫn riêng theo transport:
 
 - `@giaokhoa/shared/http/questions`
 - `@giaokhoa/shared/http/stimuli`
@@ -20,9 +21,9 @@ HTTP descriptors are transport-specific subpaths:
 - `@giaokhoa/shared/http/images`
 - `@giaokhoa/shared/http/auth`
 
-Domain schemas use semantic names such as `questionCreateSchema`, `questionPatchSchema`,
-and `questionSchema`. HTTP descriptors reuse those schemas directly when the wire shape is the
-same instead of creating transport aliases.
+Schema của domain đặt tên theo ý nghĩa, chẳng hạn `questionCreateSchema`,
+`questionPatchSchema` và `questionSchema`. Khi dữ liệu HTTP có cùng cấu trúc,
+descriptor dùng lại schema gốc, không tạo alias chỉ để đổi tên.
 
-This package must not import NestJS, React, Drizzle, PostgreSQL code, `@giaokhoa/application`,
-or `@giaokhoa/database`.
+Không import NestJS, React, Drizzle, PostgreSQL, `@giaokhoa/application` hoặc
+`@giaokhoa/database` vào package này.
