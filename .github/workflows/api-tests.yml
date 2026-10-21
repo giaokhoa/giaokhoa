@@ -2,7 +2,7 @@ name: Kiểm thử tầng ứng dụng, cơ sở dữ liệu và giao diện l�
 
 on:
   push:
-    branches: [feat/files-subsystem]
+    branches: [main]
   pull_request:
 
 permissions:
