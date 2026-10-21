@@ -143,7 +143,7 @@ export const authzRolePermissions = pgTable(
       .references(() => authzCapabilities.id),
     /**
      * Cách xử lý quyền: kế thừa (INHERIT), cho phép (ALLOW), ngăn (PREVENT) hoặc cấm tuyệt đối (PROHIBIT).
-     * Tầng nghiệp vụ ưu tiên lệnh cấm tuyệt đối trên toàn cây; ở cùng cấp, ngăn có ưu tiên hơn cho phép.
+     * Tầng nghiệp vụ ưu tiên lệnh cấm tuyệt đối trên toàn cây; ở cùng cấp, cho phép từ vai trò khác thắng ngăn.
      */
     effect: text('effect').notNull(),
   },

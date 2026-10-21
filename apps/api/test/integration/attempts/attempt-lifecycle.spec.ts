@@ -1,3 +1,4 @@
+import { grantSystemRole, revokeRole } from '../../helpers/roles.js';
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { eq, inArray } from 'drizzle-orm';
@@ -62,10 +63,10 @@ async function createUser(role: 'teacher' | 'admin' | 'user' = 'user') {
     .insert(users)
     .values({
       name: role,
-      role,
       email: `${randomUUID()}@example.com`,
     })
     .returning();
+  if (role !== 'user') await grantSystemRole(db, user.id, role);
   return user;
 }
 
@@ -390,7 +391,7 @@ describe('Quyền sở hữu, vòng đời bài làm và công bố kết quả'
     });
   });
 
-  it('chặn truy cập lịch sử của tài khoản bị cấm hoặc sai vai trò', async () => {
+  it('từ chối lịch sử khi tài khoản bị cấm và phục hồi khi mở khóa', async () => {
     const { teacher, classroom, enrol, publish } = await fixture();
     const student = await createUser();
     await enrol(student.id);
@@ -405,14 +406,12 @@ describe('Quyền sở hữu, vòng đời bài làm và công bố kết quả'
     await expect(attempts.result(student.id, attempt.id)).rejects.toMatchObject({
       kind: 'not_found',
     });
-    await db.update(users).set({ banned: false, role: null }).where(eq(users.id, student.id));
-    await expect(attempts.result(student.id, attempt.id)).rejects.toMatchObject({
-      kind: 'not_found',
-    });
+    await db.update(users).set({ banned: false }).where(eq(users.id, student.id));
+    expect((await attempts.result(student.id, attempt.id)).score).toBe(75);
   });
 
-  it('xử lý xung đột giữa lưu và nộp, từ chối chấm khi giáo viên bị hạ vai trò', async () => {
-    const { teacher, enrol, publish } = await fixture();
+  it('xử lý xung đột giữa lưu và nộp, từ chối chấm khi thu hồi vai trò chủ lớp', async () => {
+    const { teacher, classroom, enrol, publish } = await fixture();
     const student = await createUser();
     await enrol(student.id);
     const assignment = await publish();
@@ -428,7 +427,7 @@ describe('Quyền sở hữu, vòng đời bài làm và công bố kết quả'
           (writes[0].reason as { code?: string }).code === 'attempt_not_in_progress'),
     ).toBe(true);
     expect((await attempts.getOwn(student.id, started.id)).status).toBe('submitted');
-    await db.update(users).set({ role: 'user' }).where(eq(users.id, teacher.id));
+    await revokeRole(db, teacher.id, 'class:owner', 'class', classroom.id);
     await expect(attempts.grade(teacher.id, started.id, { score: 90 })).rejects.toMatchObject({
       kind: 'forbidden',
     });

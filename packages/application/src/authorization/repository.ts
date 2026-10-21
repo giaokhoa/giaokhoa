@@ -56,5 +56,10 @@ export interface AuthorizationRepository {
   createContextWithRole(input: ContextWithRoleInput): Promise<AuthorizationContext>;
   /** Không tạo hai lần cấp vai trò còn hiệu lực cho cùng người dùng, vai trò và phạm vi. */
   assignRole(input: RoleAssignmentInput): Promise<boolean>;
-  revokeRole(contextId: string, userId: string, roleKey: string): Promise<boolean>;
+  revokeRole(
+    contextId: string,
+    userId: string,
+    roleKey: string,
+    authorizedBy?: string,
+  ): Promise<boolean>;
 }

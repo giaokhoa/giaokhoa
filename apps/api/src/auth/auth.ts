@@ -1,6 +1,6 @@
 import { drizzleAdapter } from '@better-auth/drizzle-adapter';
 import { betterAuth } from 'better-auth';
-import { admin } from 'better-auth/plugins';
+import { APIError } from 'better-auth/api';
 import { emailOTP } from 'better-auth/plugins/email-otp';
 import { Resend } from 'resend';
 import type { Env } from '../config/env.js';
@@ -50,7 +50,6 @@ export function createAuth(db: Database, env: AuthEnv, generateId: false | 'uuid
       requireEmailVerification: Boolean(resend),
       customSyntheticUser: ({ coreFields, additionalFields, id }) => ({
         ...coreFields,
-        role: 'user',
         banned: false,
         banReason: null,
         banExpires: null,
@@ -58,8 +57,41 @@ export function createAuth(db: Database, env: AuthEnv, generateId: false | 'uuid
         id,
       }),
     },
+    // Better Auth sở hữu xác thực và trạng thái khóa đăng nhập, không sở hữu vai trò hay quyền.
+    user: {
+      additionalFields: {
+        banned: { type: 'boolean', defaultValue: false, input: false },
+        banReason: { type: 'string', required: false, input: false },
+        banExpires: { type: 'date', required: false, input: false },
+      },
+    },
+    databaseHooks: {
+      session: {
+        create: {
+          async before(session, ctx) {
+            if (!ctx) return;
+            const found = await ctx.context.internalAdapter.findUserById(session.userId);
+            const user = found as
+              | (typeof found & { banned?: boolean; banExpires?: Date | null })
+              | null;
+            if (!user?.banned) return;
+            if (user.banExpires && new Date(user.banExpires).getTime() < Date.now()) {
+              await ctx.context.internalAdapter.updateUser(session.userId, {
+                banned: false,
+                banReason: null,
+                banExpires: null,
+              });
+              return;
+            }
+            throw new APIError('FORBIDDEN', {
+              code: 'ACCOUNT_SUSPENDED',
+              message: 'Tài khoản đã bị khóa',
+            });
+          },
+        },
+      },
+    },
     plugins: [
-      admin(),
       emailOTP({
         overrideDefaultEmailVerification: true,
         storeOTP: 'hashed',

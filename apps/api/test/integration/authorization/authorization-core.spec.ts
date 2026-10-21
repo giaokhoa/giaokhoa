@@ -1,3 +1,4 @@
+import { grantSystemRole, revokeSystemRole, revokeRole, grantRole } from '../../helpers/roles.js';
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { and, eq, isNull } from 'drizzle-orm';
@@ -53,9 +54,9 @@ async function createUser(label: string, role: 'user' | 'teacher' | 'admin' = 'u
     .values({
       name: label,
       email: `${label}-${randomUUID()}@example.com`,
-      role,
     })
     .returning();
+  if (role !== 'user') await grantSystemRole(db, created.id, role);
   return created;
 }
 
@@ -93,7 +94,7 @@ afterAll(async () => {
 }, 30_000);
 
 describe('Migration, dữ liệu khởi tạo và kho phân quyền', () => {
-  it('khởi tạo mẫu quyền và đọc vai trò chuẩn của người dùng, không tạo sai lệch phân quyền hệ thống', async () => {
+  it('khởi tạo quyền mặc định của tài khoản và cấp vai trò hệ thống qua context', async () => {
     const user = await createUser('site-user');
     const teacher = await createUser('site-teacher', 'teacher');
     const admin = await createUser('site-admin', 'admin');
@@ -111,12 +112,12 @@ describe('Migration, dữ liệu khởi tạo và kho phân quyền', () => {
     expect(await can(admin.id, 'class:manage_any', 'system', 'giaokhoa')).toMatchObject({
       allowed: false,
     });
-    expect(await db.select().from(authzRoleAssignments)).toHaveLength(0);
-    expect(await db.select().from(authzCapabilities)).toHaveLength(21);
+    expect(await db.select().from(authzRoleAssignments)).toHaveLength(2);
+    expect(await db.select().from(authzCapabilities)).toHaveLength(22);
     expect(await db.select().from(authzRoles)).toHaveLength(6);
   });
 
-  it('thu hồi quyền quản lý lớp sau khi hạ vai trò và khôi phục khi gia hạn', async () => {
+  it('vai trò hệ thống và lớp độc lập, thu hồi vai trò chủ lớp có hiệu lực ngay', async () => {
     const teacher = await createUser('renewable-teacher', 'teacher');
     const classroom = await createClass(teacher.id, `renewable-${randomUUID()}`);
     const classesRepository = new PostgresClassesRepository(db);
@@ -124,8 +125,15 @@ describe('Migration, dữ liệu khởi tạo và kho phân quyền', () => {
     expect(await can(teacher.id, 'class:update', 'class', classroom.resourceKey)).toMatchObject({
       allowed: true,
     });
-    await db.update(users).set({ role: 'user' }).where(eq(users.id, teacher.id));
-
+    await revokeSystemRole(db, teacher.id, 'teacher');
+    expect(await can(teacher.id, 'class:create', 'system', 'giaokhoa')).toMatchObject({
+      allowed: false,
+    });
+    // Gỡ vai trò hệ thống không được âm thầm thu hồi quyền tại context lớp.
+    expect(await can(teacher.id, 'class:update', 'class', classroom.resourceKey)).toMatchObject({
+      allowed: true,
+    });
+    await revokeRole(db, teacher.id, 'class:owner', 'class', classroom.resourceKey);
     for (const capability of [
       'class:view',
       'class:update',
@@ -141,18 +149,7 @@ describe('Migration, dữ liệu khởi tạo và kho phân quyền', () => {
       await classesRepository.update(classroom.resourceKey, teacher.id, { name: 'Not allowed' }),
     ).toBeUndefined();
     expect(await classesRepository.findById(classroom.resourceKey)).toBeDefined();
-    const assignmentRows = await db
-      .select({ id: authzRoleAssignments.id })
-      .from(authzRoleAssignments)
-      .where(
-        and(
-          eq(authzRoleAssignments.contextId, classroom.id),
-          isNull(authzRoleAssignments.revokedAt),
-        ),
-      );
-    expect(assignmentRows).toHaveLength(1);
-
-    await db.update(users).set({ role: 'teacher' }).where(eq(users.id, teacher.id));
+    await grantRole(db, teacher.id, 'class:owner', 'class', classroom.resourceKey);
     expect(await can(teacher.id, 'class:update', 'class', classroom.resourceKey)).toMatchObject({
       allowed: true,
     });
@@ -234,7 +231,7 @@ describe('Migration, dữ liệu khởi tạo và kho phân quyền', () => {
     expect(await repository.findContext({ kind: 'class', resourceKey: key })).toBeUndefined();
   });
 
-  it('từ chối vai trò ở sai phạm vi và mặc định cấm khi vai trò tài khoản thiếu hoặc không rõ', async () => {
+  it('không cấp vai trò sai phạm vi, thu hồi quyền hệ thống ngay sau thao tác', async () => {
     const teacher = await createUser('nullable', 'teacher');
     const aClass = await createClass(teacher.id, `role-${randomUUID()}`);
     await expect(
@@ -245,18 +242,24 @@ describe('Migration, dữ liệu khởi tạo và kho phân quyền', () => {
         source: 'invalid',
       }),
     ).rejects.toMatchObject({ kind: 'invalid', code: 'authorization_role_invalid' });
-
-    await db.update(users).set({ role: null }).where(eq(users.id, teacher.id));
+    await revokeSystemRole(db, teacher.id, 'teacher');
     expect(await can(teacher.id, 'class:create', 'system', 'giaokhoa')).toMatchObject({
       allowed: false,
     });
-    await db.update(users).set({ role: 'unsupported_role' }).where(eq(users.id, teacher.id));
+    await expect(
+      repository.assignRole({
+        contextId: systemId,
+        userId: teacher.id,
+        roleKey: 'system:missing',
+        source: 'invalid',
+      }),
+    ).rejects.toMatchObject({ kind: 'invalid', code: 'authorization_role_invalid' });
     expect(await can(teacher.id, 'class:create', 'system', 'giaokhoa')).toMatchObject({
       allowed: false,
     });
   });
 
-  it('ưu tiên quyền cấm PREVENT và PROHIBIT hơn ALLOW của chủ lớp', async () => {
+  it('ALLOW của vai trò chủ lớp thắng PREVENT khác vai trò, PROHIBIT vẫn tuyệt đối', async () => {
     const owner = await createUser('multi-role', 'teacher');
     const aClass = await createClass(owner.id, `effects-${randomUUID()}`);
     await db
@@ -282,8 +285,8 @@ describe('Migration, dữ liệu khởi tạo và kho phân quyền', () => {
       effect: 'PREVENT',
     });
     expect(await can(owner.id, 'class:update', 'class', aClass.resourceKey)).toMatchObject({
-      allowed: false,
-      reason: 'prevented',
+      allowed: true,
+      reason: 'granted',
     });
     await db
       .update(authzRolePermissions)

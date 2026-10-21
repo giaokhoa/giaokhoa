@@ -1,3 +1,4 @@
+import { grantSystemRole, revokeRole } from '../../helpers/roles.js';
 import 'dotenv/config';
 import { createHash, randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
@@ -63,9 +64,9 @@ async function createUser(role: 'teacher' | 'user' | 'admin' = 'user') {
     .values({
       name: role,
       email: `${randomUUID()}@example.com`,
-      role,
     })
     .returning();
+  if (role !== 'user') await grantSystemRole(db, row.id, role);
   return row;
 }
 
@@ -275,7 +276,7 @@ describe('Công bố bài giao và quản lý người nhận', () => {
     await expect(
       assignments.update(anotherTeacher.id, draft.id, { maxAttempts: 4 }),
     ).rejects.toMatchObject({ kind: 'forbidden' });
-    await db.update(users).set({ role: 'user' }).where(eq(users.id, teacher.id));
+    await revokeRole(db, teacher.id, 'class:owner', 'class', classroom.id);
     await expect(assignments.publish(teacher.id, draft.id)).rejects.toMatchObject({
       kind: 'forbidden',
     });

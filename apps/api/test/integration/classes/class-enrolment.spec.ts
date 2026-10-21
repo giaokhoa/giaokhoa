@@ -1,3 +1,4 @@
+import { grantSystemRole, revokeSystemRole } from '../../helpers/roles.js';
 import 'dotenv/config';
 import { createHash, randomUUID } from 'node:crypto';
 import { and, eq, isNull, sql } from 'drizzle-orm';
@@ -47,9 +48,9 @@ async function actor(role: 'teacher' | 'user' | 'admin' = 'user') {
     .values({
       name: role,
       email: `${randomUUID()}@example.com`,
-      role,
     })
     .returning();
+  if (role !== 'user') await grantSystemRole(db, row.id, role);
   return row;
 }
 
@@ -270,7 +271,7 @@ describe('Vòng đời lớp học và phân quyền ghi danh', () => {
     await expect(
       service.createJoinCode(owner.id, classroom.id, { expiresInHours: 24 }),
     ).rejects.toMatchObject({ code: 'class_not_joinable' });
-    await db.update(users).set({ role: 'user' }).where(eq(users.id, owner.id));
+    await revokeSystemRole(db, owner.id, 'teacher');
     await expect(
       service.createClass(owner.id, { name: 'Second', joinMode: 'AUTO' }),
     ).rejects.toMatchObject({ kind: 'forbidden' });

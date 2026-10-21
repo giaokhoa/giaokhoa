@@ -112,7 +112,7 @@ describe('Dịch vụ phân quyền (AuthorizationService)', () => {
     });
   });
 
-  it('ưu tiên PREVENT hơn ALLOW trong cùng phạm vi và bỏ qua INHERIT', async () => {
+  it('ALLOW ở vai trò khác thắng PREVENT cùng phạm vi và bỏ qua INHERIT', async () => {
     const repository = new FakeAuthorizationRepository();
     repository.set('actor', 'class:update', [
       { contextId: classOne.id, effect: 'ALLOW' },
@@ -120,8 +120,8 @@ describe('Dịch vụ phân quyền (AuthorizationService)', () => {
       { contextId: classOne.id, effect: 'PREVENT' },
     ]);
     expect(await new AuthorizationService(repository).authorize(request)).toEqual({
-      allowed: false,
-      reason: 'prevented',
+      allowed: true,
+      reason: 'granted',
       matchedContextId: classOne.id,
     });
   });

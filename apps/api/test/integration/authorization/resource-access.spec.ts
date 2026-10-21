@@ -1,3 +1,4 @@
+import { grantSystemRole, revokeSystemRole } from '../../helpers/roles.js';
 import 'dotenv/config';
 import { createHash, randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
@@ -52,9 +53,9 @@ async function createUser(role: 'user' | 'teacher' = 'teacher') {
     .values({
       name: 'actor',
       email: `actor-${randomUUID()}@example.com`,
-      role,
     })
     .returning();
+  if (role !== 'user') await grantSystemRole(db, created.id, role);
   return created;
 }
 
@@ -99,7 +100,7 @@ describe('Quyền biên soạn câu hỏi và truy cập tài nguyên', () => {
     const teacher = await createUser();
     const created = await questions.createQuestion(questionData(), teacher.id);
     expect(created.solution).toEqual({ answer: '42' });
-    await db.update(users).set({ role: 'user' }).where(eq(users.id, teacher.id));
+    await revokeSystemRole(db, teacher.id, 'teacher');
     await expect(questions.getQuestion(created.id, teacher.id)).rejects.toMatchObject({
       kind: 'forbidden',
     });

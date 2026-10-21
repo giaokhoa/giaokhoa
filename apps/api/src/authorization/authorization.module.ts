@@ -3,10 +3,12 @@ import { PostgresAuthorizationRepository } from '@giaokhoa/database/authorizatio
 import type { Database } from '@giaokhoa/database/types';
 import { Logger, Module } from '@nestjs/common';
 import { getDrizzleToken } from '@nestjs/drizzle';
+import { AuthorizationController } from './authorization.controller.js';
 
 const logger = new Logger('Authorization');
 
 @Module({
+  controllers: [AuthorizationController],
   providers: [
     {
       provide: PostgresAuthorizationRepository,

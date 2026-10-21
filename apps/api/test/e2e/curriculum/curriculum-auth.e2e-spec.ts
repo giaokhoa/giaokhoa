@@ -1,11 +1,12 @@
+import { grantSystemRole, revokeSystemRole } from '../../helpers/roles.js';
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { INestApplication } from '@nestjs/common';
 import { getDrizzleToken } from '@nestjs/drizzle';
 import { Test } from '@nestjs/testing';
 import { AuthService } from '@thallesp/nestjs-better-auth';
-import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
+import { eq } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Client, Pool } from 'pg';
 import request from 'supertest';
@@ -111,19 +112,12 @@ describe('Phân quyền truy cập chương trình học qua HTTP', () => {
     };
   }
 
-  it('yêu cầu vai trò quản trị hệ thống đối với mọi bộ điều khiển chương trình học', async () => {
+  it('kiểm tra quyền hệ thống theo context và thu hồi ngay mà không dùng admin plugin', async () => {
     await request(app.getHttpServer()).get('/subjects').expect(401);
 
     const regular = await createSession(`user-${randomUUID()}@example.com`);
-    const [regularUser] = await db
-      .select({ role: users.role })
-      .from(users)
-      .where(eq(users.id, regular.userId))
-      .limit(1);
-    expect(regularUser?.role).toBe('user');
-
     const admin = await createSession(`admin-${randomUUID()}@example.com`);
-    await db.update(users).set({ role: 'admin' }).where(eq(users.id, admin.userId));
+    await grantSystemRole(db, admin.userId, 'admin');
 
     const protectedPaths = [
       '/subjects',
@@ -137,8 +131,49 @@ describe('Phân quyền truy cập chương trình học qua HTTP', () => {
     }
 
     await request(app.getHttpServer()).get('/subjects').set('cookie', admin.cookie).expect(200);
+    await request(app.getHttpServer())
+      .post(`/authorization/system-roles/${regular.userId}`)
+      .set('cookie', regular.cookie)
+      .send({ role: 'teacher' })
+      .expect(403);
+    await request(app.getHttpServer())
+      .post(`/authorization/system-roles/${regular.userId}`)
+      .set('cookie', admin.cookie)
+      .send({ role: 'teacher' })
+      .expect(201, { changed: true });
+    await request(app.getHttpServer())
+      .post(`/authorization/system-roles/${regular.userId}`)
+      .set('cookie', admin.cookie)
+      .send({ role: 'teacher' })
+      .expect(201, { changed: false });
+    await request(app.getHttpServer())
+      .delete(`/authorization/system-roles/${regular.userId}`)
+      .set('cookie', admin.cookie)
+      .send({ role: 'teacher' })
+      .expect(200, { changed: true });
+    await request(app.getHttpServer())
+      .get('/api/auth/admin/list-users')
+      .set('cookie', admin.cookie)
+      .expect(404);
     for (const path of protectedPaths.slice(1)) {
       await request(app.getHttpServer()).get(path).set('cookie', admin.cookie).expect(404);
     }
+    await revokeSystemRole(db, admin.userId, 'admin');
+    await request(app.getHttpServer()).get('/subjects').set('cookie', admin.cookie).expect(403);
+  });
+
+  it('chặn tạo phiên khi tài khoản bị khóa, không phụ thuộc vào plugin quản trị', async () => {
+    const email = `suspended-${randomUUID()}@example.com`;
+    const created = await createSession(email);
+    await db.update(users).set({ banned: true }).where(eq(users.id, created.userId));
+    await request(app.getHttpServer())
+      .post('/api/auth/sign-in/email')
+      .send({ email, password: 'password1234' })
+      .expect(403);
+    await db.update(users).set({ banned: false }).where(eq(users.id, created.userId));
+    await request(app.getHttpServer())
+      .post('/api/auth/sign-in/email')
+      .send({ email, password: 'password1234' })
+      .expect(200);
   });
 });

@@ -27,10 +27,11 @@ import {
   Param,
   Patch,
   Post,
+  UseGuards,
 } from '@nestjs/common';
-import { Roles } from '@thallesp/nestjs-better-auth';
+import { CurriculumAuthorizationGuard } from './curriculum.authorization.guard.js';
 
-@Roles(['admin'])
+@UseGuards(CurriculumAuthorizationGuard)
 @Controller('subjects')
 export class SubjectsController {
   constructor(private readonly curriculum: CurriculumService) {}
@@ -94,7 +95,7 @@ export class SubjectsController {
   }
 }
 
-@Roles(['admin'])
+@UseGuards(CurriculumAuthorizationGuard)
 @Controller('curricula')
 export class CurriculaController {
   constructor(private readonly curriculum: CurriculumService) {}
@@ -144,7 +145,7 @@ export class CurriculaController {
   }
 }
 
-@Roles(['admin'])
+@UseGuards(CurriculumAuthorizationGuard)
 @Controller('curriculum-nodes')
 export class CurriculumNodesController {
   constructor(private readonly curriculum: CurriculumService) {}
@@ -192,7 +193,7 @@ export class CurriculumNodesController {
   }
 }
 
-@Roles(['admin'])
+@UseGuards(CurriculumAuthorizationGuard)
 @Controller('learning-outcomes')
 export class LearningOutcomesController {
   constructor(private readonly curriculum: CurriculumService) {}

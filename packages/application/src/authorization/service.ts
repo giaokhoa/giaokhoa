@@ -46,7 +46,7 @@ export class AuthorizationService {
 
   /**
    * Xét quyền từ phạm vi cụ thể lên phạm vi hệ thống: `PROHIBIT` luôn phủ quyết,
-   * `PREVENT` ưu tiên hơn `ALLOW` cùng cấp; không có `ALLOW` thì từ chối.
+   * `ALLOW` từ vai trò khác thắng `PREVENT` cùng cấp; không có `ALLOW` thì từ chối.
    * Quyền được cấp không thay thế kiểm tra chủ sở hữu, tình trạng tham gia lớp
    * và các điều kiện thuộc vòng đời nghiệp vụ.
    */
@@ -86,16 +86,16 @@ export class AuthorizationService {
       const local = applicable.filter(
         (grant: PermissionGrant) => grant.contextId === contextId && grant.effect !== 'INHERIT',
       );
-      if (local.some((grant) => grant.effect === 'PREVENT'))
-        return this.finish(request, {
-          allowed: false,
-          reason: 'prevented',
-          matchedContextId: contextId,
-        });
       if (local.some((grant) => grant.effect === 'ALLOW'))
         return this.finish(request, {
           allowed: true,
           reason: 'granted',
+          matchedContextId: contextId,
+        });
+      if (local.some((grant) => grant.effect === 'PREVENT'))
+        return this.finish(request, {
+          allowed: false,
+          reason: 'prevented',
           matchedContextId: contextId,
         });
     }
@@ -118,6 +118,33 @@ export class AuthorizationService {
       'authorization_denied',
       'Bạn không có quyền thực hiện thao tác này',
     );
+  }
+
+  /** Chỉ chủ thể có quyền quản lý vai trò hệ thống mới được cấp hoặc thu hồi vai trò này. */
+  async changeSystemRole(
+    actorId: string,
+    targetUserId: string,
+    role: 'teacher' | 'admin',
+    grant: boolean,
+  ) {
+    const context = { kind: 'system' as const, resourceKey: 'giaokhoa' };
+    await this.assertAuthorized({ actorId, capability: 'role:assign_system', context });
+    const system = await this.repository.findContext(context);
+    if (!system)
+      throw new ClientError(
+        'not_found',
+        'authorization_context_not_found',
+        'Phạm vi hệ thống không tồn tại',
+      );
+    return grant
+      ? this.repository.assignRole({
+          contextId: system.id,
+          userId: targetUserId,
+          roleKey: `system:${role}`,
+          source: 'system_administrator',
+          grantedByUserId: actorId,
+        })
+      : this.repository.revokeRole(system.id, targetUserId, `system:${role}`, actorId);
   }
 
   private finish(

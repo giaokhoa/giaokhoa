@@ -2,6 +2,8 @@ import { CurriculumService } from '@giaokhoa/application/curriculum/service';
 import { PostgresCurriculumRepository } from '@giaokhoa/database/curriculum';
 import type { Database } from '@giaokhoa/database/types';
 import { Module } from '@nestjs/common';
+import { AuthorizationModule } from '../authorization/authorization.module.js';
+import { CurriculumAuthorizationGuard } from './curriculum.authorization.guard.js';
 import { getDrizzleToken } from '@nestjs/drizzle';
 import {
   CurriculaController,
@@ -11,6 +13,7 @@ import {
 } from './curriculum.controller.js';
 
 @Module({
+  imports: [AuthorizationModule],
   controllers: [
     SubjectsController,
     CurriculaController,
@@ -18,6 +21,7 @@ import {
     LearningOutcomesController,
   ],
   providers: [
+    CurriculumAuthorizationGuard,
     {
       provide: PostgresCurriculumRepository,
       inject: [getDrizzleToken()],

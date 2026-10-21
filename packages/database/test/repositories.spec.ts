@@ -1,3 +1,4 @@
+import { grantSystemRole } from './roles.js';
 import 'dotenv/config';
 import { createHash, randomUUID } from 'node:crypto';
 import { eq, isNotNull } from 'drizzle-orm';
@@ -53,9 +54,9 @@ async function createUser(label: string, role: 'user' | 'teacher' | 'admin' = 'u
     .values({
       name: label,
       email: `${label}-${randomUUID()}@example.com`,
-      role,
     })
     .returning();
+  if (role !== 'user') await grantSystemRole(db, user.id, role);
   return user;
 }
 

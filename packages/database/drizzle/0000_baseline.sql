@@ -75,7 +75,6 @@ CREATE TABLE "sessions" (
 	"ip_address" text,
 	"user_agent" text,
 	"user_id" uuid NOT NULL,
-	"impersonated_by" text,
 	CONSTRAINT "sessions_token_unique" UNIQUE("token")
 );
 --> statement-breakpoint
@@ -87,8 +86,7 @@ CREATE TABLE "users" (
 	"image" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	"role" text,
-	"banned" boolean DEFAULT false,
+	"banned" boolean DEFAULT false NOT NULL,
 	"ban_reason" text,
 	"ban_expires" timestamp,
 	CONSTRAINT "users_email_unique" UNIQUE("email")
@@ -451,7 +449,7 @@ CREATE INDEX "assignments_exam_revision_idx" ON "assignments" USING btree ("exam
 CREATE INDEX "attempts_assignment_idx" ON "attempts" USING btree ("assignment_id");--> statement-breakpoint
 CREATE INDEX "attempts_user_idx" ON "attempts" USING btree ("user_id");
 --> statement-breakpoint
--- Seed RBAC Phase 1. Không cấp mặc định class:manage_any hoặc class:grant_teacher.
+-- Vai trò người dùng đăng nhập áp dụng ngầm tại system context; vai trò giáo viên/quản trị viên phải được cấp riêng trong authz_role_assignments. Không cấp mặc định class:manage_any hoặc class:grant_teacher.
 INSERT INTO "authz_contexts" ("kind", "resource_key", "parent_id") VALUES ('system', 'giaokhoa', NULL) ON CONFLICT ("kind", "resource_key") DO NOTHING;
 --> statement-breakpoint
 INSERT INTO "authz_roles" ("key", "context_kind") VALUES
@@ -473,6 +471,7 @@ INSERT INTO "authz_capabilities" ("key", "context_kind", "description") VALUES
   ('exam:manage_own', 'system', 'exam:manage_own'),
   ('class:create', 'system', 'class:create'),
   ('platform:moderate', 'system', 'platform:moderate'),
+  ('role:assign_system', 'system', 'role:assign_system'),
   ('class:manage_any', 'system', 'class:manage_any'),
   ('class:view', 'class', 'class:view'),
   ('class:update', 'class', 'class:update'),
@@ -510,6 +509,7 @@ FROM (VALUES
   ('system:admin', 'exam:manage_own'),
   ('system:admin', 'class:create'),
   ('system:admin', 'platform:moderate'),
+  ('system:admin', 'role:assign_system'),
   ('class:owner', 'class:view'),
   ('class:owner', 'class:update'),
   ('class:owner', 'class:enrolment_manage'),

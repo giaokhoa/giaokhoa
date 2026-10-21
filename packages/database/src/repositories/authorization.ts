@@ -1,3 +1,4 @@
+import { AuthorizationService } from '@giaokhoa/application/authorization/service';
 import { ClientError } from '@giaokhoa/application/common/client-error';
 import type {
   AuthorizationContext,
@@ -47,7 +48,7 @@ function invalidRole() {
 
 /**
  * Lớp truy cập PostgreSQL phục vụ kiểm tra quyền theo vai trò và phạm vi tài nguyên.
- * Kết hợp vai trò hệ thống của Better Auth với quan hệ thành viên lớp để không cấp quyền từ bản ghi đã hết hiệu lực.
+ * Dùng một nguồn gán vai trò cho cả hệ thống và lớp, chỉ xét tài khoản và quyền còn hiệu lực.
  */
 export class PostgresAuthorizationRepository implements AuthorizationRepository {
   constructor(private readonly db: Database) {}
@@ -79,20 +80,18 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
   }
 
   /**
-   * Trường users.role của Better Auth là nguồn cấp vai trò ở phạm vi hệ thống (system);
-   * không tạo thêm bản ghi gán vai trò trùng lặp tại phạm vi này.
-   * Vai trò học sinh chỉ có hiệu lực khi quan hệ tham gia (enrolment) và lớp đều hoạt động;
-   * tài khoản bị cấm hoặc có vai trò không được nhận diện sẽ không được cấp quyền.
+   * Mọi vai trò hệ thống được cấp hoặc thu hồi qua authz_role_assignments, không đọc vai trò từ phiên đăng nhập.
+   * Vai trò người dùng đã xác thực mặc định áp dụng ở system context; vai trò học sinh chỉ có
+   * hiệu lực khi lớp và quan hệ tham gia hoạt động. Tài khoản bị khóa không được cấp quyền.
    */
   async findPermissions(actorId: string, capability: string, contextIds: string[]) {
     if (contextIds.length === 0) return [];
     const [actor] = await this.db
-      .select({ role: users.role, banned: users.banned })
+      .select({ banned: users.banned })
       .from(users)
       .where(eq(users.id, actorId))
       .limit(1);
     if (!actor || actor.banned) return [];
-    if (actor.role !== 'user' && actor.role !== 'teacher' && actor.role !== 'admin') return [];
 
     const scoped = await this.db
       .select({ contextId: authzRoleAssignments.contextId, effect: authzRolePermissions.effect })
@@ -111,9 +110,6 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
           inArray(authzRoleAssignments.contextId, contextIds),
           isNull(authzRoleAssignments.revokedAt),
           eq(authzCapabilities.key, capability),
-          // Khi tài khoản không còn là giáo viên, chỉ cấp quyền học sinh;
-          // vẫn giữ bản ghi gán vai trò quản lý lớp để khôi phục hiệu lực khi trở lại vai trò giáo viên.
-          actor.role === 'user' ? eq(authzRoles.key, 'class:student') : undefined,
           or(
             ne(authzRoles.key, 'class:student'),
             and(eq(classEnrolments.status, 'active'), eq(classes.status, 'active')),
@@ -138,14 +134,13 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
       .limit(1);
     if (!systemContext) return grants;
 
+    // Giống vai trò mặc định 'authenticated user' của Moodle: áp dụng cho mọi tài khoản hoạt động.
     const system = await this.db
       .select({ effect: authzRolePermissions.effect })
       .from(authzRoles)
       .innerJoin(authzRolePermissions, eq(authzRolePermissions.roleId, authzRoles.id))
       .innerJoin(authzCapabilities, eq(authzRolePermissions.capabilityId, authzCapabilities.id))
-      .where(
-        and(eq(authzRoles.key, `system:${actor.role}`), eq(authzCapabilities.key, capability)),
-      );
+      .where(and(eq(authzRoles.key, 'system:user'), eq(authzCapabilities.key, capability)));
     return [
       ...grants,
       ...system.map((row) => ({
@@ -208,7 +203,7 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
 
   /**
    * Cấp vai trò trong phạm vi tài nguyên sau khi kiểm tra loại vai trò tương thích.
-   * Không cấp vai trò hệ thống qua bảng gán này vì quyền hệ thống do Better Auth quản lý; ràng buộc duy nhất giúp việc cấp trùng không tạo bản ghi mới.
+   * Vai trò hệ thống và lớp đều dùng một nguồn gán vai trò; ràng buộc duy nhất ngăn cấp trùng.
    * Trả về true khi tạo được lần gán đang có hiệu lực, false khi đã tồn tại.
    */
   async assignRole(input: RoleAssignmentInput) {
@@ -223,8 +218,29 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
         .from(authzRoles)
         .where(eq(authzRoles.key, input.roleKey))
         .limit(1);
-      if (!context || !role || context.kind !== role.contextKind || context.kind === 'system')
-        throw invalidRole();
+      if (!context || !role || context.kind !== role.contextKind) throw invalidRole();
+      if (input.source === 'system_administrator') {
+        if (
+          !input.grantedByUserId ||
+          !(await hasSystemCapability(tx, input.grantedByUserId, 'role:assign_system'))
+        )
+          throw new ClientError(
+            'forbidden',
+            'authorization_denied',
+            'Không được cấp vai trò hệ thống',
+          );
+      }
+      const [target] = await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
+      if (!target)
+        throw new ClientError(
+          'not_found',
+          'authorization_user_not_found',
+          'Tài khoản không tồn tại',
+        );
 
       const inserted = await tx
         .insert(authzRoleAssignments)
@@ -245,8 +261,14 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
    * Thu hồi vai trò bằng cách ghi thời điểm thu hồi thay vì xóa bản ghi.
    * Chỉ tác động đến lần gán chưa thu hồi trong đúng phạm vi, đúng người dùng và đúng vai trò; giữ lịch sử cho việc kiểm tra quyền về sau.
    */
-  async revokeRole(contextId: string, userId: string, roleKey: string) {
+  async revokeRole(contextId: string, userId: string, roleKey: string, authorizedBy?: string) {
     return this.db.transaction(async (tx) => {
+      if (authorizedBy && !(await hasSystemCapability(tx, authorizedBy, 'role:assign_system')))
+        throw new ClientError(
+          'forbidden',
+          'authorization_denied',
+          'Không được thu hồi vai trò hệ thống',
+        );
       const [role] = await tx
         .select({ id: authzRoles.id })
         .from(authzRoles)
@@ -268,4 +290,22 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
       return revoked.length > 0;
     });
   }
+}
+
+/** Dùng cùng bộ xét quyền của tầng ứng dụng ngay trong giao dịch đang ghi dữ liệu. */
+export async function hasSystemCapability(
+  tx: Parameters<Parameters<Database['transaction']>[0]>[0],
+  actorId: string,
+  capability: string,
+): Promise<boolean> {
+  const authorization = new AuthorizationService(
+    new PostgresAuthorizationRepository(tx as unknown as Database),
+  );
+  return (
+    await authorization.authorize({
+      actorId,
+      capability,
+      context: { kind: 'system', resourceKey: 'giaokhoa' },
+    })
+  ).allowed;
 }

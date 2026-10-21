@@ -401,7 +401,6 @@ export class PostgresFilesRepository implements FilesRepository {
           eq(fileUses.component, 'questions'),
           eq(fileUses.fileArea, 'solution'),
           lte(assignments.releaseSolutionsAt, now),
-          inArray(users.role, ['user', 'teacher', 'admin']),
           sql`${users.banned} is not true`,
         ),
       );

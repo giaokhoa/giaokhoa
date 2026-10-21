@@ -46,7 +46,7 @@ function invalidRecipients() {
 
 /**
  * Kiểm tra quyền quản lý lớp bên trong một giao dịch (transaction).
- * Yêu cầu lớp đang hoạt động, đúng người tạo, tài khoản giáo viên hoặc quản trị viên chưa bị cấm, và vai trò chủ lớp chưa bị thu hồi.
+ * Yêu cầu lớp đang hoạt động, đúng người tạo, tài khoản chưa bị khóa và vai trò chủ lớp chưa bị thu hồi.
  * @param tx Giao dịch đang dùng để đọc quyền nhất quán với thao tác ghi.
  * @param classroom Bản ghi lớp đã được bên gọi tra cứu và khóa trước khi kiểm tra.
  * @param actorId Mã tài khoản đang thực hiện thao tác.
@@ -65,13 +65,12 @@ export async function assertOwner(
   )
     throw forbidden();
   const [account] = await tx
-    .select({ role: users.role, banned: users.banned })
+    .select({ banned: users.banned })
     .from(users)
     .where(eq(users.id, actorId))
     .for('share')
     .limit(1);
-  if (!account || account.banned || (account.role !== 'teacher' && account.role !== 'admin'))
-    throw forbidden();
+  if (!account || account.banned) throw forbidden();
   const [owner] = await tx
     .select({ id: authzRoleAssignments.id })
     .from(authzRoleAssignments)

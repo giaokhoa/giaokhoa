@@ -9,7 +9,7 @@
 
 ## Các luồng nghiệp vụ phải bảo vệ
 
-- **Phân quyền:** `AuthorizationService` kiểm tra vai trò tài khoản, phạm vi hệ thống hoặc lớp học và quyền trên tài nguyên. Quyền được xét theo trạng thái hiện tại; không chỉ kiểm tra một lần lúc tạo tài nguyên. Quyết định từ chối phải ngăn thao tác ghi hoặc lộ dữ liệu.
+- **Phân quyền:** `AuthorizationService` kiểm tra vai trò được gán theo phạm vi hệ thống hoặc lớp học và quyền trên tài nguyên; không lấy `users.role` của Better Auth làm nguồn cấp quyền. Quyền được xét theo trạng thái hiện tại; không chỉ kiểm tra một lần lúc tạo tài nguyên. Quyết định từ chối phải ngăn thao tác ghi hoặc lộ dữ liệu.
 - **Lớp học:** Tạo lớp gắn với việc tạo phạm vi phân quyền và quyền chủ lớp. Mã tham gia phải được kiểm tra trạng thái, thời hạn và chế độ ghi danh. Chế độ tự động cho phép vào lớp ngay; chế độ chờ duyệt chỉ cấp quyền sau khi được phê duyệt. Đình chỉ, rời lớp hoặc thu hồi quyền phải có hiệu lực với các thao tác tiếp theo.
 - **Câu hỏi và ngữ liệu:** Kiểm tra quyền biên soạn và chủ sở hữu khi tạo, đọc, sửa, xóa. Sửa nội dung câu hỏi tạo phiên bản nội dung mới, giữ phiên bản trước; chỉ thay đổi trạng thái không tự tạo phiên bản mới. Không được sửa ngữ liệu đang bị câu hỏi sử dụng trái quy tắc.
 - **Đề thi:** Người tạo quản lý đề riêng của mình. Mỗi phiên bản đề chốt danh sách, thứ tự và nội dung câu hỏi tại thời điểm tạo; chỉnh sửa câu hỏi sau đó không được âm thầm thay đổi phiên bản đã chốt.

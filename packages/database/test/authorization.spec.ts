@@ -1,3 +1,4 @@
+import { grantSystemRole, revokeSystemRole } from './roles.js';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
@@ -43,9 +44,9 @@ async function actor(role: 'user' | 'teacher' = 'user') {
     .values({
       name: role,
       email: `${randomUUID()}@example.com`,
-      role,
     })
     .returning();
+  if (role !== 'user') await grantSystemRole(db, row.id, role);
   return row;
 }
 
@@ -134,21 +135,24 @@ describe('Kho phân quyền PostgreSQL (PostgresAuthorizationRepository)', () =>
     ).toEqual([]);
   });
 
-  it('không cấp vai trò hệ thống qua bảng lớp và không trả quyền cho tài khoản bị cấm', async () => {
+  it('vai trò hệ thống được gán và thu hồi trong context hệ thống, tài khoản khóa mất quyền', async () => {
     const teacher = await actor('teacher');
     const system = await repository.findContextById(systemId);
     expect(system?.kind).toBe('system');
-    await expect(
-      repository.assignRole({
+    expect(
+      await repository.assignRole({
         contextId: systemId,
         userId: teacher.id,
         roleKey: 'system:teacher',
         source: 'test',
       }),
-    ).rejects.toMatchObject({ kind: 'invalid', code: 'authorization_role_invalid' });
+    ).toBe(false);
     expect(await repository.findPermissions(teacher.id, 'class:create', [systemId])).toContainEqual(
       { contextId: systemId, effect: 'ALLOW' },
     );
+    expect(await revokeSystemRole(db, teacher.id, 'teacher')).toBe(true);
+    expect(await repository.findPermissions(teacher.id, 'class:create', [systemId])).toEqual([]);
+    expect(await grantSystemRole(db, teacher.id, 'teacher')).toBe(true);
     await db.update(users).set({ banned: true }).where(eq(users.id, teacher.id));
     expect(await repository.findPermissions(teacher.id, 'class:create', [systemId])).toEqual([]);
     expect(await repository.findPermissions(teacher.id, 'class:create', [])).toEqual([]);

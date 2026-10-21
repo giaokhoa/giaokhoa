@@ -1,3 +1,4 @@
+import { grantSystemRole } from './roles.js';
 import 'dotenv/config';
 import { createHash, randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
@@ -53,9 +54,9 @@ async function createUser(role: 'teacher' | 'user' = 'teacher') {
     .values({
       name: 'file security test',
       email: 'files-' + randomUUID() + '@example.com',
-      role,
     })
     .returning();
+  if (role !== 'user') await grantSystemRole(db, user.id, role);
   return user;
 }
 
@@ -459,7 +460,9 @@ describe('Quyền truy cập tệp của người nhận', () => {
     expect(
       await repository.releasedSolutionFileClasses(answerFile.id, null, student.id, now),
     ).toEqual([{ classId: classroom.id, enrolmentStatus: 'left' }]);
-    await db.update(users).set({ banned: null }).where(eq(users.id, student.id));
+    await expect(
+      db.update(users).set({ banned: null }).where(eq(users.id, student.id)),
+    ).rejects.toThrow();
     expect(
       await repository.releasedSolutionFileClasses(answerFile.id, null, student.id, now),
     ).toEqual([{ classId: classroom.id, enrolmentStatus: 'left' }]);

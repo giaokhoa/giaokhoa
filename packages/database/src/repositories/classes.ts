@@ -8,6 +8,7 @@ import {
 } from '@giaokhoa/shared/classes';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { users } from '../schema/auth.generated.js';
+import { hasSystemCapability } from './authorization.js';
 import { authzContexts, authzRoleAssignments, authzRoles } from '../schema/authorization.js';
 import { classes, classEnrolments, classJoinCodes } from '../schema/classes.js';
 import type { Database } from '../types.js';
@@ -56,30 +57,25 @@ function publicClass(row: typeof classes.$inferSelect) {
 }
 
 /**
- * Đọc vai trò tài khoản còn hoạt động trong giao dịch và khóa đọc người dùng.
- * Chỉ chấp nhận người dùng, giáo viên hoặc quản trị viên không bị cấm; các trạng thái khác không được tự động cấp quyền.
+ * Xác nhận tài khoản đăng nhập còn hoạt động trong giao dịch, không suy quyền từ hồ sơ đăng nhập.
  */
-async function activeAccountRole(tx: Transaction, actorId: string) {
+async function activeAccount(tx: Transaction, actorId: string) {
   const [actor] = await tx
-    .select({ role: users.role, banned: users.banned })
+    .select({ banned: users.banned })
     .from(users)
     .where(eq(users.id, actorId))
     .for('share')
     .limit(1);
-  if (!actor || actor.banned) return undefined;
-  if (actor.role === 'user' || actor.role === 'teacher' || actor.role === 'admin')
-    return actor.role;
-  return undefined;
+  return !!actor && !actor.banned;
 }
 
 /**
- * Xác nhận chủ lớp dựa đồng thời trên tác giả lớp, vai trò tài khoản và lần gán vai trò chủ lớp đang có hiệu lực.
- * Không dựa riêng vào trường người tạo để tránh giáo viên đã bị hạ vai trò hoặc bị thu hồi quyền vẫn thao tác quản lý.
+ * Xác nhận chủ lớp bằng danh tính và vai trò còn hiệu lực trong context lớp.
+ * Quyền cuối cùng do AuthorizationService xét theo capability, không suy từ vai trò hệ thống.
  */
 async function classOwner(tx: Transaction, row: typeof classes.$inferSelect, actorId: string) {
   if (row.createdByUserId !== actorId || !row.authzContextId) return false;
-  const role = await activeAccountRole(tx, actorId);
-  if (role !== 'teacher' && role !== 'admin') return false;
+  if (!(await activeAccount(tx, actorId))) return false;
   const [owner] = await tx
     .select({ id: authzRoleAssignments.id })
     .from(authzRoleAssignments)
@@ -158,12 +154,11 @@ export class PostgresClassesRepository implements ClassesRepository {
 
   /**
    * Tạo lớp, phạm vi phân quyền và quyền chủ lớp trong cùng một giao dịch.
-   * Yêu cầu người tạo có vai trò giáo viên hoặc quản trị viên; nếu thiếu cấu hình phân quyền gốc thì không tạo lớp dở dang.
+   * Yêu cầu capability tạo lớp trong phạm vi hệ thống; nếu thiếu cấu hình phân quyền gốc thì không tạo lớp dở dang.
    */
   async create(input: ClassCreate, actorId: string) {
     return this.db.transaction(async (tx) => {
-      const role = await activeAccountRole(tx, actorId);
-      if (role !== 'teacher' && role !== 'admin')
+      if (!(await hasSystemCapability(tx, actorId, 'class:create')))
         throw new ClientError('forbidden', 'authorization_denied', 'Bạn không có quyền tạo lớp');
       const [parent] = await tx
         .select({ id: authzContexts.id })
@@ -312,7 +307,7 @@ export class PostgresClassesRepository implements ClassesRepository {
    */
   async join(codeHash: string, actorId: string, now: Date) {
     return this.db.transaction(async (tx) => {
-      if (!(await activeAccountRole(tx, actorId)))
+      if (!(await activeAccount(tx, actorId)))
         throw new ClientError(
           'forbidden',
           'authorization_denied',

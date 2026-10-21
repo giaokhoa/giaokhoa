@@ -40,7 +40,7 @@ export class ClassesService {
   }
 
   /**
-   * Kiểm tra quyền tạo lớp trước khi ghi. Kho dữ liệu kiểm lại vai trò tài khoản
+   * Kiểm tra quyền tạo lớp trước khi ghi. Kho dữ liệu kiểm lại capability hệ thống
    * trong cùng giao dịch tạo lớp, phạm vi phân quyền và vai trò chủ lớp;
    * tất cả phải thành công hoặc cùng được hoàn tác.
    */

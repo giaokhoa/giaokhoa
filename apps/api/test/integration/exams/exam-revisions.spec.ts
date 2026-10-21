@@ -1,3 +1,4 @@
+import { grantSystemRole, revokeSystemRole } from '../../helpers/roles.js';
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
@@ -54,9 +55,9 @@ async function createUser(role: 'teacher' | 'admin' | 'user' = 'teacher') {
     .values({
       name: role,
       email: `${randomUUID()}@example.com`,
-      role,
     })
     .returning();
+  if (role !== 'user') await grantSystemRole(db, row.id, role);
   return row;
 }
 
@@ -271,7 +272,7 @@ describe('Quyền sở hữu và tính bất biến của phiên bản đề thi
     await exams.createRevision(owner.id, exam.id, {
       questions: [{ questionId: q.id, version: 1 }],
     });
-    await db.update(users).set({ role: 'user' }).where(eq(users.id, owner.id));
+    await revokeSystemRole(db, owner.id, 'teacher');
     await expect(
       exams.createRevision(owner.id, exam.id, {
         questions: [{ questionId: q.id, version: 1 }],

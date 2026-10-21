@@ -64,10 +64,10 @@ function closed() {
 
 /**
  * Kiểm tra người dùng còn được phép hoạt động trước khi cho thao tác với lượt làm.
- * Chỉ chấp nhận ba loại tài khoản hợp lệ và từ chối tài khoản bị cấm hoặc không tồn tại.
+ * Từ chối tài khoản bị khóa hoặc không tồn tại; quyền thực hiện do AuthorizationService xét.
  */
-function validAccount(account: { role: string | null; banned: boolean | null } | undefined) {
-  return !!account && !account.banned && ['user', 'teacher', 'admin'].includes(account.role ?? '');
+function validAccount(account: { banned: boolean | null } | undefined) {
+  return !!account && !account.banned;
 }
 
 /**
@@ -253,7 +253,7 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
         .limit(1);
       if (!member) throw denied();
       const [account] = await tx
-        .select({ role: users.role, banned: users.banned })
+        .select({ banned: users.banned })
         .from(users)
         .where(eq(users.id, actorId))
         .for('share')
@@ -335,7 +335,7 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
       .limit(1);
     if (!active) throw denied();
     const [account] = await tx
-      .select({ role: users.role, banned: users.banned })
+      .select({ banned: users.banned })
       .from(users)
       .where(eq(users.id, actorId))
       .for('share')
@@ -434,7 +434,6 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
         enrolmentStatus: classEnrolments.status,
         recipientStatus: assignmentRecipients.status,
         banned: users.banned,
-        role: users.role,
       })
       .from(attempts)
       .innerJoin(assignments, eq(assignments.id, attempts.assignmentId))

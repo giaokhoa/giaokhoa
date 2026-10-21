@@ -25,3 +25,16 @@ Trong giai đoạn phát triển **chưa giữ dữ liệu**, `drizzle/0000_base
 **Không áp dụng bản di trú gốc này lên cơ sở dữ liệu đã chạy các bản di trú cũ.** Môi trường thử nghiệm hoặc phát triển cũ cần được chuẩn bị lại trước khi dùng bản gốc mới; nếu phải giữ dữ liệu, cần có phương án chuyển đổi được phê duyệt riêng.
 
 Các câu lệnh sinh và thực thi bản di trú được khai báo trong `packages/database/package.json`. Không đưa truy vấn bảng Drizzle vào gói nghiệp vụ hoặc bộ điều khiển HTTP.
+
+## Phân quyền tách khỏi Better Auth
+
+Better Auth chỉ sinh các bảng xác thực và những trường khóa tài khoản (`banned`, `banReason`, `banExpires`).
+Trường `users.role` và `sessions.impersonatedBy` của plugin admin không còn trong lược đồ được sinh.
+Các vai trò theo ngữ cảnh, cả `system` và `class`, được ghi trong `authz_role_assignments`;
+`system:user` là quyền mặc định cho tài khoản đang hoạt động và không lưu thành lần cấp vai trò riêng.
+Không tự thêm lại các trường quản trị cũ vào `auth.generated.ts`.
+
+Người vận hành tạo quản trị viên ban đầu theo lệnh `authz:bootstrap` trong README gốc;
+không đặt tài khoản quản trị mặc định trong dữ liệu khởi tạo. Chỉ khởi tạo trên cơ sở dữ liệu
+đã có người dùng được xác minh và chưa có quản trị viên nào. Vai trò sau đó được cấp hoặc
+thu hồi qua API có kiểm tra capability `role:assign_system`.
