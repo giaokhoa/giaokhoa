@@ -70,8 +70,8 @@ function createService() {
   };
 }
 
-describe('QuestionsService', () => {
-  it('collects each original and derived file reference once for ownership validation', async () => {
+describe('Dịch vụ câu hỏi (QuestionsService)', () => {
+  it('chỉ thu thập mỗi tham chiếu tệp gốc và biến thể một lần để kiểm tra chủ sở hữu', async () => {
     const { service, repository } = createService();
     const original = image();
     const variant = image(VARIANT_FILE_ID);
@@ -95,7 +95,7 @@ describe('QuestionsService', () => {
     );
   });
 
-  it('creates a new Draft version for a content patch while preserving omitted fields', async () => {
+  it('tạo phiên bản nháp mới khi sửa nội dung và giữ nguyên các trường không được gửi', async () => {
     const { service, repository } = createService();
     const current = {
       id: QUESTION_ID,
@@ -140,7 +140,7 @@ describe('QuestionsService', () => {
     );
   });
 
-  it('does not expose latest draft or its solution to non-owners', async () => {
+  it('không lộ bản nháp mới nhất hoặc lời giải cho người không sở hữu', async () => {
     const { service, repository } = createService();
     repository.findQuestionOwned.mockResolvedValue(undefined);
 
@@ -160,7 +160,7 @@ describe('QuestionsService', () => {
     expect(repository.findQuestionOwned).toHaveBeenCalledWith(QUESTION_ID, USER_ID);
   });
 
-  it('does not allow a non-owner to update a question', async () => {
+  it('không cho người không sở hữu sửa câu hỏi', async () => {
     const { service, repository } = createService();
     repository.findQuestionOwned.mockResolvedValue(undefined);
 
@@ -172,7 +172,7 @@ describe('QuestionsService', () => {
     expect(repository.changeQuestionStatus).not.toHaveBeenCalled();
   });
 
-  it('rejects a patch that makes the whole question inconsistent', async () => {
+  it('từ chối thay đổi khiến dữ liệu câu hỏi không nhất quán', async () => {
     const { service, repository } = createService();
     repository.findQuestionOwned.mockResolvedValue({
       id: QUESTION_ID,
@@ -196,7 +196,7 @@ describe('QuestionsService', () => {
     expect(repository.changeQuestionStatus).not.toHaveBeenCalled();
   });
 
-  it('rejects invalid image references as a bad request', async () => {
+  it('từ chối tham chiếu ảnh không hợp lệ như một yêu cầu sai', async () => {
     const { service, repository } = createService();
     repository.createQuestion.mockRejectedValueOnce(
       new ClientError(
@@ -222,7 +222,7 @@ describe('QuestionsService', () => {
     ).rejects.toMatchObject({ kind: 'invalid', code: 'question_image_reference_invalid' });
   });
 
-  it('creates a new Ready version on explicit content edit without mutating old Ready', async () => {
+  it('tạo phiên bản sẵn sàng mới khi chủ động sửa nội dung mà không thay đổi phiên bản sẵn sàng cũ', async () => {
     const { service, repository } = createService();
     const published = storedQuestion('ready', 2);
     repository.findQuestionOwned.mockResolvedValue(published);
@@ -253,7 +253,7 @@ describe('QuestionsService', () => {
     expect(published.solution.answer).toBe('42');
   });
 
-  it('toggles Draft→Ready and Ready→Draft on the same version', async () => {
+  it('chuyển qua lại trạng thái nháp và sẵn sàng trên cùng phiên bản', async () => {
     const { service, repository } = createService();
     repository.findQuestionOwned.mockResolvedValue(storedQuestion('draft', 2));
     repository.changeQuestionStatus.mockImplementation(async (id, _expectedVersion, status) => ({
@@ -272,7 +272,7 @@ describe('QuestionsService', () => {
     expect(repository.createQuestionVersion).not.toHaveBeenCalled();
   });
 
-  it('checks expectedVersion under lock even for unchanged status', async () => {
+  it('kiểm tra phiên bản dự kiến trong lúc khóa kể cả khi không đổi trạng thái', async () => {
     const { service, repository } = createService();
     repository.findQuestionOwned.mockResolvedValue(storedQuestion('ready', 2));
     repository.changeQuestionStatus.mockRejectedValueOnce(
@@ -286,7 +286,7 @@ describe('QuestionsService', () => {
     expect(repository.createQuestionVersion).not.toHaveBeenCalled();
   });
 
-  it('inherits the current status when creating a content version without status', async () => {
+  it('kế thừa trạng thái hiện tại khi tạo phiên bản nội dung không chỉ rõ trạng thái', async () => {
     const { service, repository } = createService();
     repository.findQuestionOwned.mockResolvedValue(storedQuestion('ready', 4));
     repository.createQuestionVersion.mockImplementation(async (id, _expectedVersion, data) => ({
@@ -306,7 +306,7 @@ describe('QuestionsService', () => {
     expect(repository.createQuestionVersion.mock.calls[0]?.[2]).toMatchObject({ status: 'ready' });
   });
 
-  it('rejects stale version preconditions before any write', async () => {
+  it('từ chối phiên bản dự kiến đã cũ trước khi ghi dữ liệu', async () => {
     const { service, repository } = createService();
     repository.findQuestionOwned.mockResolvedValue(storedQuestion('draft', 3));
 
@@ -320,7 +320,7 @@ describe('QuestionsService', () => {
     expect(repository.createQuestionVersion).not.toHaveBeenCalled();
   });
 
-  it('resolves the last Ready version even if the latest authoring version is Draft', async () => {
+  it('trả phiên bản sẵn sàng gần nhất dù phiên bản biên soạn mới nhất là bản nháp', async () => {
     const { service, repository } = createService();
     repository.findQuestionOwned.mockResolvedValue(storedQuestion('draft', 3));
     repository.findLatestReadyQuestion.mockResolvedValue(storedQuestion('ready', 2));
@@ -347,7 +347,7 @@ describe('QuestionsService', () => {
     });
   });
 
-  it('requires ownership when reading version history and old content', async () => {
+  it('yêu cầu quyền sở hữu khi đọc lịch sử phiên bản và nội dung cũ', async () => {
     const { service, repository } = createService();
     repository.findQuestionOwned.mockResolvedValue(undefined);
     await expect(service.listQuestionVersions(QUESTION_ID, USER_ID)).rejects.toMatchObject({
@@ -375,7 +375,7 @@ describe('QuestionsService', () => {
   });
 });
 
-describe('QuestionsService authorization', () => {
+describe('Phân quyền của dịch vụ câu hỏi (QuestionsService)', () => {
   const stimulus = {
     content: {
       type: 'doc' as const,
@@ -385,7 +385,7 @@ describe('QuestionsService authorization', () => {
     },
   };
 
-  it('denies authoring without the System capability before writing', async () => {
+  it('từ chối biên soạn khi thiếu quyền hệ thống trước khi ghi dữ liệu', async () => {
     const { service, repository, authorization } = createService();
     authorization.assertAuthorized.mockRejectedValueOnce(
       new ClientError('forbidden', 'authorization_denied', 'Không đủ quyền'),
@@ -402,7 +402,7 @@ describe('QuestionsService authorization', () => {
     });
   });
 
-  it('passes the server actor through every Stimulus operation and hides foreign IDs', async () => {
+  it('truyền người thực hiện vào mọi thao tác ngữ liệu và che giấu định danh của người khác', async () => {
     const { service, repository, authorization } = createService();
     repository.createStimulus.mockResolvedValue({ id: QUESTION_ID, ...stimulus });
     await service.createStimulus(stimulus, USER_ID);

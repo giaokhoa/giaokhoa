@@ -46,7 +46,7 @@ afterAll(async () => {
   await adminQuery(`DROP DATABASE IF EXISTS "${databaseName}"`);
 }, 30_000);
 
-describe('PostgresCurriculumRepository', () => {
+describe('Kho chương trình học PostgreSQL (PostgresCurriculumRepository)', () => {
   it('tạo, liệt kê, đọc, sửa, xóa môn và báo lỗi trùng mã đường dẫn', async () => {
     const math = await repository.createSubject({ name: 'Toán', slug: slug('toan'), position: 3 });
     const literature = await repository.createSubject({
@@ -148,7 +148,7 @@ describe('PostgresCurriculumRepository', () => {
         parentId: root.id,
         title: 'Sai',
       }),
-    ).rejects.toMatchObject({ cause: { code: '23503' } });
+    ).rejects.toMatchObject({ kind: 'invalid', code: 'curriculum_parent_invalid' });
     expect(await repository.deleteNode(sibling.id)).toEqual({ id: sibling.id });
     expect(await repository.findNode(child.id)).toBeUndefined();
   });
@@ -176,6 +176,29 @@ describe('PostgresCurriculumRepository', () => {
     expect(await repository.findOutcome(b.id)).toBeUndefined();
     await repository.deleteNode(node.id);
     expect(await repository.findOutcome(a.id)).toBeUndefined();
+  });
+
+  it('chuyển lỗi khóa ngoại đối với dữ liệu tham chiếu không còn tồn tại thành lỗi nghiệp vụ', async () => {
+    await expect(
+      repository.createCurriculum({ subjectId: randomUUID(), grade: 6 }),
+    ).rejects.toMatchObject({
+      kind: 'not_found',
+      code: 'subject_not_found',
+    });
+    const subject = await repository.createSubject({ name: 'Sinh', slug: slug('sinh-hoc') });
+    const curriculum = await repository.createCurriculum({ subjectId: subject.id, grade: 6 });
+    await expect(
+      repository.createNode({ curriculumId: curriculum.id, parentId: randomUUID(), title: 'Sai' }),
+    ).rejects.toMatchObject({
+      kind: 'invalid',
+      code: 'curriculum_parent_invalid',
+    });
+    await expect(
+      repository.createOutcome({ nodeId: randomUUID(), content: 'Yêu cầu sai' }),
+    ).rejects.toMatchObject({
+      kind: 'not_found',
+      code: 'curriculum_node_not_found',
+    });
   });
 
   it('hai thao tác đổi cha đồng thời không thể tạo chu trình', async () => {

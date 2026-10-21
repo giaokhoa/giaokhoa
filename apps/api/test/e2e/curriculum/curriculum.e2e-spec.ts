@@ -34,7 +34,7 @@ async function withAdminConnection<T>(run: (client: Client) => Promise<T>) {
   }
 }
 
-describe('Curriculum API (e2e)', () => {
+describe('Giao diện HTTP quản lý chương trình học', () => {
   let app: INestApplication<App>;
   let pool: Pool;
 
@@ -74,7 +74,7 @@ describe('Curriculum API (e2e)', () => {
     );
   }, 20_000);
 
-  it('supports subject -> curriculum -> nodes -> outcomes CRUD', async () => {
+  it('cho phép tạo, đọc, sửa, xóa môn học, chương trình, nút nội dung và yêu cầu cần đạt', async () => {
     const subject = await request(app.getHttpServer())
       .post('/subjects')
       .send({ name: 'Toán', slug: 'toan' })
@@ -209,7 +209,7 @@ describe('Curriculum API (e2e)', () => {
     await request(app.getHttpServer()).get(`/subjects/${subject.id}`).expect(404);
   });
 
-  it('rejects a parent from another curriculum', async () => {
+  it('từ chối nút cha thuộc chương trình khác', async () => {
     const subject = await request(app.getHttpServer())
       .post('/subjects')
       .send({ name: 'Ngữ văn', slug: 'ngu-van' })
@@ -247,7 +247,7 @@ describe('Curriculum API (e2e)', () => {
     ).rejects.toMatchObject({ code: '23503' });
   });
 
-  it('rejects duplicate subject and grade curricula', async () => {
+  it('từ chối chương trình trùng môn học và khối lớp', async () => {
     const subject = await request(app.getHttpServer())
       .post('/subjects')
       .send({ name: 'Khoa học tự nhiên', slug: 'khoa-hoc-tu-nhien' })
@@ -287,7 +287,7 @@ describe('Curriculum API (e2e)', () => {
       .expect(409);
   });
 
-  it('maps concurrent unique violations to 409', async () => {
+  it('chuyển lỗi trùng dữ liệu khi có thao tác đồng thời thành mã 409', async () => {
     const subjectResponses = await Promise.all([
       request(app.getHttpServer()).post('/subjects').send({ name: 'Tin học A', slug: 'tin-hoc' }),
       request(app.getHttpServer()).post('/subjects').send({ name: 'Tin học B', slug: 'tin-hoc' }),
@@ -306,7 +306,7 @@ describe('Curriculum API (e2e)', () => {
     ]);
   });
 
-  it('serializes concurrent reparenting so a cycle cannot persist', async () => {
+  it('tuần tự hóa thao tác đổi cha đồng thời để không tạo chu trình', async () => {
     const subject = await request(app.getHttpServer())
       .post('/subjects')
       .send({ name: 'Sinh học', slug: 'sinh-hoc' })
@@ -350,7 +350,7 @@ describe('Curriculum API (e2e)', () => {
     expect(storedA.parentId === b.id && storedB.parentId === a.id).toBe(false);
   });
 
-  it('rejects positions outside PostgreSQL integer storage', async () => {
+  it('từ chối vị trí vượt phạm vi số nguyên của PostgreSQL', async () => {
     const subject = await request(app.getHttpServer())
       .post('/subjects')
       .send({ name: 'Địa lí', slug: 'dia-li' })

@@ -83,6 +83,7 @@ export class PostgresFilesRepository implements FilesRepository {
   /**
    * Thêm bản ghi tệp và xử lý dùng chung đối tượng nhị phân trong cùng giao dịch.
    * Nếu mã băm đã tồn tại, giữ đối tượng cũ và đưa đối tượng tải lên thừa vào hàng đợi xóa; nếu chưa có thì hủy lệnh xóa dự phòng của đối tượng mới.
+   * Khóa chia sẻ bản ghi dữ liệu nhị phân tới khi gắn tệp mới, tránh tranh chấp với giao dịch thu gom.
    * Khởi tạo vị trí tệp nháp thuộc người tải để có thể gắn vào nội dung hoặc thu gom khi quá hạn.
    */
   private async insertFile(
@@ -103,7 +104,8 @@ export class PostgresFilesRepository implements FilesRepository {
       .select()
       .from(fileBlobs)
       .where(eq(fileBlobs.contentHash, data.contentHash))
-      .limit(1);
+      .limit(1)
+      .for('share');
     if (!blob) throw new Error('Không thể xác định object của file');
     if (blob.storageKey === data.storageKey) {
       // Khi khóa đối tượng vừa tải lên trở thành đối tượng dữ liệu dùng chung,
@@ -345,23 +347,29 @@ export class PostgresFilesRepository implements FilesRepository {
   }
 
   /**
-   * Quyền xem lời giải độc lập với quyền xem đề hiện tại: học sinh có lượt làm
-   * đã nộp hoặc đã chấm vẫn xem được lời giải khi đến thời điểm công bố,
+   * Tìm lớp có lời giải đã công bố thực sự tham chiếu tệp để tầng ứng dụng xét quyền.
+   * Với lượt làm đã nộp hoặc đã chấm, tiếp tục cho đọc lịch sử sau khi rời lớp;
    * kể cả sau khi rời lớp. Tệp phải thực sự có trong lời giải của bản chụp đề đã giao;
    * chỉ trùng mã câu hỏi hoặc vị trí lưu tệp không đủ để được cấp quyền.
    * Không cấp quyền xem ảnh hướng dẫn hoặc ảnh gốc của bản cắt.
    */
-  async hasReleasedSolutionFileAccess(
+  async releasedSolutionFileClasses(
     fileId: string,
     variantFileId: string | null,
     userId: string,
     now: Date,
-  ): Promise<boolean> {
+  ): Promise<Array<{ classId: string; enrolmentStatus: 'active' | 'left' }>> {
+    // Trả về lớp và trạng thái tham gia để tầng nghiệp vụ xét quyền theo vai trò
+    // hiện hành; riêng thành viên đã rời lớp có thể tiếp tục xem lịch sử đã nộp.
     // Tra bảng vị trí tệp trước để giảm số bản chụp cần kiểm tra;
     // sau đó đối chiếu tham chiếu tệp thực tế vì nối theo mã câu hỏi
     // có thể khớp nhiều phiên bản khác nhau.
     const rows = await this.db
-      .select({ snapshot: examRevisionQuestions.questionSnapshot })
+      .select({
+        snapshot: examRevisionQuestions.questionSnapshot,
+        classId: assignments.classId,
+        enrolmentStatus: classEnrolments.status,
+      })
       .from(fileUses)
       .innerJoin(questionVersions, sql`${fileUses.itemId} = ${questionVersions.questionId}::text`)
       .innerJoin(
@@ -377,7 +385,7 @@ export class PostgresFilesRepository implements FilesRepository {
           inArray(attempts.status, ['submitted', 'graded']),
         ),
       )
-      .innerJoin(users, and(eq(users.id, userId), eq(users.banned, false)))
+      .innerJoin(users, eq(users.id, userId))
       .innerJoin(
         classEnrolments,
         and(
@@ -394,13 +402,19 @@ export class PostgresFilesRepository implements FilesRepository {
           eq(fileUses.fileArea, 'solution'),
           lte(assignments.releaseSolutionsAt, now),
           inArray(users.role, ['user', 'teacher', 'admin']),
+          sql`${users.banned} is not true`,
         ),
       );
-    return rows.some(({ snapshot }) =>
-      collectFileRefs(questionSchema.parse(snapshot).solution).some(
-        (ref) => ref.fileId === fileId && ref.variantFileId === variantFileId,
-      ),
-    );
+    return rows
+      .filter(({ snapshot }) =>
+        collectFileRefs(questionSchema.parse(snapshot).solution).some(
+          (ref) => ref.fileId === fileId && ref.variantFileId === variantFileId,
+        ),
+      )
+      .map(({ classId, enrolmentStatus }) => ({
+        classId,
+        enrolmentStatus: enrolmentStatus === 'left' ? ('left' as const) : ('active' as const),
+      }));
   }
 
   /**

@@ -5,24 +5,21 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Client, Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { AuthorizationService } from '@giaokhoa/application/authorization/service';
-import { PostgresAuthorizationRepository } from '@giaokhoa/database/authorization';
-import { PostgresFilesRepository } from '@giaokhoa/database/files';
-import { migrationsFolder } from '@giaokhoa/database/migrations';
-import type { Database } from '@giaokhoa/database/types';
-import { fileBlobs, fileObjectDeletions, files, fileUses } from '@giaokhoa/database/schema/files';
-import { users } from '@giaokhoa/database/schema/auth.generated';
-import * as schema from '@giaokhoa/database/schema';
+import { PostgresFilesRepository } from '../src/repositories/files.js';
+import { migrationsFolder } from '../src/migrations.js';
+import type { Database } from '../src/types.js';
+import { fileBlobs, fileObjectDeletions, files, fileUses } from '../src/schema/files.js';
+import { users } from '../src/schema/auth.generated.js';
+import * as schema from '../src/schema/index.js';
 import {
   question,
   questionBankEntries,
   questionVersions,
   stimuli,
-} from '@giaokhoa/database/schema/questions';
-import { PostgresQuestionsRepository } from '@giaokhoa/database/questions';
+} from '../src/schema/questions.js';
+import { PostgresQuestionsRepository } from '../src/repositories/questions.js';
 import type { QuestionCreate } from '@giaokhoa/shared/questions';
 import type { FileRef } from '@giaokhoa/shared/files';
-import { QuestionsService } from '@giaokhoa/application/questions/service';
 
 const testDatabaseName = `giaokhoa_test_${process.pid}_${randomUUID().replaceAll('-', '')}`;
 
@@ -30,7 +27,6 @@ let pool: Pool;
 let db: Database;
 let questionsRepository: PostgresQuestionsRepository;
 let filesRepository: PostgresFilesRepository;
-let authorization: AuthorizationService;
 
 function databaseUrl(databaseName: string) {
   const value = process.env.DATABASE_URL;
@@ -133,7 +129,6 @@ beforeAll(async () => {
   await migrate(db, { migrationsFolder });
   questionsRepository = new PostgresQuestionsRepository(db);
   filesRepository = new PostgresFilesRepository(db);
-  authorization = new AuthorizationService(new PostgresAuthorizationRepository(db));
 }, 20_000);
 
 beforeEach(async () => {
@@ -156,8 +151,8 @@ afterAll(async () => {
   );
 }, 20_000);
 
-describe('PostgresQuestionsRepository', () => {
-  it('rejects file references owned by another user without persisting the question', async () => {
+describe('Kho câu hỏi PostgreSQL (PostgresQuestionsRepository)', () => {
+  it('từ chối tham chiếu tệp của người khác và không lưu câu hỏi', async () => {
     const owner = await createUser('owner');
     const otherUser = await createUser('other');
     const file = await createFile(owner.id, 'private');
@@ -170,7 +165,7 @@ describe('PostgresQuestionsRepository', () => {
     expect(await db.select().from(questionBankEntries)).toHaveLength(0);
   });
 
-  it('preserves file areas for each immutable content version', async () => {
+  it('giữ đúng vùng sử dụng tệp theo từng phiên bản nội dung bất biến', async () => {
     const user = await createUser('author');
     const first = await createFile(user.id, 'first');
     const second = await createFile(user.id, 'second');
@@ -215,7 +210,7 @@ describe('PostgresQuestionsRepository', () => {
     expect(secondUses).toEqual([{ fileId: second.id, area: 'content' }]);
   });
 
-  it('changes status without allocating a new version', async () => {
+  it('đổi trạng thái mà không tạo phiên bản mới', async () => {
     const user = await createUser('author');
     const created = await questionsRepository.createQuestion(
       questionData('42', 'draft'),
@@ -244,7 +239,7 @@ describe('PostgresQuestionsRepository', () => {
     expect(await questionsRepository.listQuestionVersions(created.id)).toHaveLength(1);
   });
 
-  it('keeps a file attached while another question version still references it', async () => {
+  it('giữ liên kết tệp khi phiên bản câu hỏi khác vẫn còn tham chiếu', async () => {
     const user = await createUser('author');
     const file = await createFile(user.id, 'shared');
     const refs = [{ fileId: file.id, variantFileId: null }];
@@ -267,7 +262,7 @@ describe('PostgresQuestionsRepository', () => {
     expect(storedFile.orphanedAt).toBeNull();
   });
 
-  it('enforces question ownership for update and delete', async () => {
+  it('kiểm tra quyền sở hữu khi sửa và xóa câu hỏi', async () => {
     const owner = await createUser('owner');
     const otherUser = await createUser('other');
     const question = await questionsRepository.createQuestion(questionData(), [], owner.id);
@@ -287,7 +282,7 @@ describe('PostgresQuestionsRepository', () => {
     expect(await questionsRepository.findQuestionOwned(question.id, owner.id)).toBeDefined();
   });
 
-  it('rejects a crop variant that belongs to a different file', async () => {
+  it('từ chối biến thể cắt ảnh thuộc tệp khác', async () => {
     const user = await createUser('author');
     const first = await createFile(user.id, 'first');
     const second = await createFile(user.id, 'second');
@@ -306,134 +301,8 @@ describe('PostgresQuestionsRepository', () => {
   });
 });
 
-describe('QuestionsService version lifecycle', () => {
-  it('creates a new draft version for content changes, then publishes it in place', async () => {
-    const user = await createUser('author', 'teacher');
-    const service = new QuestionsService(questionsRepository, authorization);
-    const created = await service.createQuestion(questionData('42', 'draft'), user.id);
-
-    const edited = await service.updateQuestion(
-      created.id,
-      { solution: { answer: '7' } },
-      created.version,
-      user.id,
-    );
-    expect(edited).toMatchObject({ id: created.id, version: 2, status: 'draft' });
-
-    await expect(
-      service.updateQuestion(created.id, { status: 'ready' }, created.version, user.id),
-    ).rejects.toMatchObject({ kind: 'conflict', code: 'question_version_conflict' });
-
-    const original = await service.getQuestionVersion(created.id, 1, user.id);
-    expect(original).toMatchObject({
-      id: created.id,
-      version: 1,
-      status: 'draft',
-      solution: { answer: '42' },
-    });
-
-    const published = await service.updateQuestion(created.id, { status: 'ready' }, 2, user.id);
-    expect(published).toMatchObject({ id: created.id, version: 2, status: 'ready' });
-    const history = await service.listQuestionVersions(created.id, user.id);
-    expect(history).toHaveLength(2);
-    expect(history).toEqual(
-      expect.arrayContaining([
-        { version: 1, status: 'draft' },
-        { version: 2, status: 'ready' },
-      ]),
-    );
-
-    const repeated = await service.updateQuestion(created.id, { status: 'ready' }, 2, user.id);
-    expect(repeated).toMatchObject({ version: 2, status: 'ready' });
-    expect(await service.listQuestionVersions(created.id, user.id)).toHaveLength(2);
-  });
-
-  it('preserves a ready version when content changes and inherits its status', async () => {
-    const user = await createUser('author', 'teacher');
-    const service = new QuestionsService(questionsRepository, authorization);
-    const created = await service.createQuestion(questionData('42', 'ready'), user.id);
-
-    const edited = await service.updateQuestion(
-      created.id,
-      { solution: { answer: '7' } },
-      created.version,
-      user.id,
-    );
-    expect(edited).toMatchObject({
-      id: created.id,
-      version: 2,
-      status: 'ready',
-      solution: { answer: '7' },
-    });
-
-    const original = await service.getQuestionVersion(created.id, 1, user.id);
-    expect(original).toMatchObject({
-      id: created.id,
-      version: 1,
-      status: 'ready',
-      solution: { answer: '42' },
-    });
-
-    const draft = await service.updateQuestion(
-      created.id,
-      { status: 'draft', solution: { answer: '9' } },
-      edited.version,
-      user.id,
-    );
-    expect(draft).toMatchObject({ id: created.id, version: 3, status: 'draft' });
-    expect(await service.listQuestionVersions(created.id, user.id)).toHaveLength(3);
-
-    const latestReady = await service.getLatestReadyQuestion(created.id, user.id);
-    expect(latestReady).toMatchObject({
-      id: created.id,
-      version: 2,
-      status: 'ready',
-      solution: { answer: '7' },
-    });
-  });
-
-  it('does not let a stimulus change after its question switches from ready to draft', async () => {
-    const user = await createUser('author', 'teacher');
-    const service = new QuestionsService(questionsRepository, authorization);
-    const stimulus = await service.createStimulus(
-      {
-        content: {
-          type: 'doc',
-          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Ngữ liệu ban đầu' }] }],
-        },
-      },
-      user.id,
-    );
-
-    const created = await service.createQuestion(
-      { ...questionData('42', 'ready'), stimulusId: stimulus.id },
-      user.id,
-    );
-    const changed = await service.updateQuestion(
-      created.id,
-      { status: 'draft' },
-      created.version,
-      user.id,
-    );
-    expect(changed).toMatchObject({ id: created.id, version: 1, status: 'draft' });
-
-    await expect(
-      service.updateStimulus(
-        stimulus.id,
-        {
-          content: {
-            type: 'doc',
-            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Ngữ liệu đã sửa' }] }],
-          },
-        },
-        user.id,
-      ),
-    ).rejects.toMatchObject({ kind: 'conflict', code: 'stimulus_in_use' });
-  });
-});
-
-describe('PostgresFilesRepository', () => {
-  it('returns generated TikZ source only to its owner', async () => {
+describe('Kho tệp PostgreSQL (PostgresFilesRepository)', () => {
+  it('chỉ trả mã nguồn TikZ đã sinh cho chủ sở hữu', async () => {
     const owner = await createUser('owner');
     const otherUser = await createUser('other');
     const metadata = fileMetadata(owner.id, 'diagram');
@@ -459,7 +328,7 @@ describe('PostgresFilesRepository', () => {
     expect(await filesRepository.findSourceOwned(file.id, otherUser.id)).toBeUndefined();
   });
 
-  it('queues unreferenced file and derived variants in the object deletion outbox', async () => {
+  it('đưa tệp không còn được tham chiếu và các biến thể vào hàng đợi xóa', async () => {
     const user = await createUser('owner');
     const file = await createFile(user.id, 'orphan');
     const variant = await createVariant(file.id, 'orphan-crop');
@@ -474,7 +343,7 @@ describe('PostgresFilesRepository', () => {
     expect(await filesRepository.find(file.id)).toBeUndefined();
   });
 
-  it('preserves a file referenced by a question', async () => {
+  it('giữ tệp còn được câu hỏi tham chiếu', async () => {
     const user = await createUser('owner');
     const file = await createFile(user.id, 'referenced');
     const refs = [{ fileId: file.id, variantFileId: null }];
@@ -485,7 +354,7 @@ describe('PostgresFilesRepository', () => {
     expect(await filesRepository.find(file.id)).toBeDefined();
   });
 
-  it('never discards an orphan belonging to another user', async () => {
+  it('không xóa tệp mồ côi thuộc người dùng khác', async () => {
     const owner = await createUser('owner');
     const otherUser = await createUser('other');
     const file = await createFile(owner.id, 'private');

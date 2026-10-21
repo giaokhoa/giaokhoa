@@ -803,7 +803,7 @@ test('rich content khóa đúng vị trí inline và block math', () => {
   ).toBe(false);
 });
 
-test('draft question accepts structurally valid incomplete content', () => {
+test('câu hỏi nháp chấp nhận nội dung chưa hoàn chỉnh nhưng đúng cấu trúc', () => {
   expect(
     draftQuestionSchema.safeParse({
       type: 'short_answer',
@@ -813,7 +813,7 @@ test('draft question accepts structurally valid incomplete content', () => {
   ).toBe(true);
 });
 
-test('question write status controls draft versus ready validation', () => {
+test('trạng thái ghi câu hỏi quyết định cách xác thực bản nháp và bản sẵn sàng', () => {
   const incomplete = {
     type: 'short_answer' as const,
     content: { type: 'doc' as const, content: [{ type: 'paragraph' as const }] },

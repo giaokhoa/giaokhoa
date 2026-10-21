@@ -11,13 +11,9 @@ import { PostgresAuthorizationRepository } from '@giaokhoa/database/authorizatio
 import { PostgresClassesRepository } from '@giaokhoa/database/classes';
 import { migrationsFolder } from '@giaokhoa/database/migrations';
 import * as schema from '@giaokhoa/database/schema';
-import { users } from '@giaokhoa/database/schema/auth.generated';
-import {
-  authzContexts,
-  authzRoleAssignments,
-  authzRoles,
-} from '@giaokhoa/database/schema/authorization';
-import { classes, classEnrolments, classJoinCodes } from '@giaokhoa/database/schema/classes';
+import { users } from '@giaokhoa/database/schema';
+import { authzContexts, authzRoleAssignments, authzRoles } from '@giaokhoa/database/schema';
+import { classes, classEnrolments, classJoinCodes } from '@giaokhoa/database/schema';
 import type { Database } from '@giaokhoa/database/types';
 
 const name = `gk_enrolment_test_${process.pid}_${randomUUID().replaceAll('-', '')}`;
@@ -82,8 +78,8 @@ afterAll(async () => {
   await adminConnection((client) => client.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`));
 }, 30_000);
 
-describe('Class lifecycle and enrolment authorization', () => {
-  it('creates class, context and owner atomically; restricts other teachers and students', async () => {
+describe('Vòng đời lớp học và phân quyền ghi danh', () => {
+  it('tạo lớp, phạm vi và chủ sở hữu nguyên tử; giới hạn giáo viên khác và học sinh', async () => {
     const owner = await actor('teacher');
     const other = await actor('teacher');
     const student = await actor();
@@ -141,7 +137,7 @@ describe('Class lifecycle and enrolment authorization', () => {
     ).toHaveLength(1);
   });
 
-  it('AUTO join creates one active enrolment and role, including teacher-as-student', async () => {
+  it('ghi danh tự động chỉ tạo một tư cách và vai trò hoạt động, kể cả giáo viên tham gia như học sinh', async () => {
     const owner = await actor('teacher');
     const student = await actor('teacher');
     const classroom = await service.createClass(owner.id, { name: 'Physics', joinMode: 'AUTO' });
@@ -177,7 +173,7 @@ describe('Class lifecycle and enrolment authorization', () => {
     });
   });
 
-  it('APPROVAL holds access pending, approval grants it, suspension revokes it', async () => {
+  it('chế độ duyệt giữ quyền chờ, phê duyệt cấp quyền và đình chỉ thu hồi quyền', async () => {
     const owner = await actor('teacher');
     const other = await actor('teacher');
     const student = await actor();
@@ -209,7 +205,7 @@ describe('Class lifecycle and enrolment authorization', () => {
     expect(await allowed(student.id, 'class:view', classroom.id)).toBe(false);
   });
 
-  it('denies stale student role, allows leave and rejoin without duplicate active assignment', async () => {
+  it('từ chối vai trò học sinh hết hiệu lực, cho rời và vào lại không trùng quyền hoạt động', async () => {
     const owner = await actor('teacher');
     const student = await actor();
     const classroom = await service.createClass(owner.id, { name: 'Biology', joinMode: 'AUTO' });
@@ -246,7 +242,7 @@ describe('Class lifecycle and enrolment authorization', () => {
     expect(role).toHaveLength(1);
   });
 
-  it('rejects invalid/expired/revoked codes, archived class, and downgraded class creation', async () => {
+  it('từ chối mã sai, hết hạn hoặc bị thu hồi; lớp lưu trữ và tài khoản bị hạ vai trò', async () => {
     const owner = await actor('teacher');
     const student = await actor();
     const classroom = await service.createClass(owner.id, { name: 'History', joinMode: 'AUTO' });
@@ -280,7 +276,7 @@ describe('Class lifecycle and enrolment authorization', () => {
     ).rejects.toMatchObject({ kind: 'forbidden' });
   });
 
-  it('honors immediate owner revocation and banned account', async () => {
+  it('áp dụng ngay việc thu hồi quyền chủ lớp và cấm tài khoản', async () => {
     const owner = await actor('teacher');
     const student = await actor();
     const classroom = await service.createClass(owner.id, { name: 'Art', joinMode: 'AUTO' });

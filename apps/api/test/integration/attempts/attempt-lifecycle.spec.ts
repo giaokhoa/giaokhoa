@@ -19,8 +19,8 @@ import { PostgresExamsRepository } from '@giaokhoa/database/exams';
 import { migrationsFolder } from '@giaokhoa/database/migrations';
 import { PostgresQuestionsRepository } from '@giaokhoa/database/questions';
 import * as schema from '@giaokhoa/database/schema';
-import { users } from '@giaokhoa/database/schema/auth.generated';
-import { attempts as attemptRows, attemptResponses } from '@giaokhoa/database/schema/attempts';
+import { users } from '@giaokhoa/database/schema';
+import { attempts as attemptRows, attemptResponses } from '@giaokhoa/database/schema';
 import type { Database } from '@giaokhoa/database/types';
 
 const databaseName = `gk_attempt_test_${process.pid}_${randomUUID().replaceAll('-', '')}`;
@@ -133,8 +133,8 @@ afterAll(async () => {
   );
 }, 30_000);
 
-describe('Attempt ownership, lifecycle and result release', () => {
-  it('starts idempotently under concurrency and enforces max attempts without duplicate numbers', async () => {
+describe('Quyền sở hữu, vòng đời bài làm và công bố kết quả', () => {
+  it('bắt đầu bài làm lặp lại an toàn khi đồng thời, giới hạn số lần làm và không trùng số thứ tự', async () => {
     const { enrol, publish } = await fixture();
     const student = await createUser();
     await enrol(student.id);
@@ -167,7 +167,7 @@ describe('Attempt ownership, lifecycle and result release', () => {
     expect(numbers.map(({ number }) => number).sort((a, b) => a - b)).toEqual([1, 2]);
   });
 
-  it('denies draft, early and expired starts without inserting attempts', async () => {
+  it('từ chối bắt đầu bài nháp, trước giờ hoặc quá hạn mà không tạo bài làm', async () => {
     const { enrol, create, publish } = await fixture();
     const student = await createUser();
     await enrol(student.id);
@@ -190,7 +190,7 @@ describe('Attempt ownership, lifecycle and result release', () => {
     ).toHaveLength(0);
   });
 
-  it('saves valid typed answers, blocks mismatched questions and freezes submissions', async () => {
+  it('lưu câu trả lời đúng kiểu, chặn câu hỏi không thuộc bài và khóa bài đã nộp', async () => {
     const { enrol, publish } = await fixture();
     const student = await createUser();
     await enrol(student.id);
@@ -239,7 +239,7 @@ describe('Attempt ownership, lifecycle and result release', () => {
     });
   });
 
-  it('blocks saves and submits after suspension or recipient revoke, retaining attempts', async () => {
+  it('chặn lưu và nộp sau khi đình chỉ hoặc thu hồi người nhận, vẫn giữ bài làm', async () => {
     const { teacher, classroom, enrol, publish } = await fixture();
     const suspended = await createUser();
     const revoked = await createUser();
@@ -270,7 +270,7 @@ describe('Attempt ownership, lifecycle and result release', () => {
     ).toHaveLength(2);
   });
 
-  it('isolates another student, teacher and admin from private attempts and grades', async () => {
+  it('ngăn học sinh khác, giáo viên và quản trị viên xem bài làm và điểm riêng tư', async () => {
     const { teacher, enrol, publish } = await fixture();
     const first = await createUser();
     const second = await createUser();
@@ -310,7 +310,7 @@ describe('Attempt ownership, lifecycle and result release', () => {
     });
   });
 
-  it('grades only own class and independently releases score, feedback and solutions', async () => {
+  it('chỉ chấm bài thuộc lớp của mình, công bố điểm, nhận xét và lời giải độc lập', async () => {
     const { teacher, classroom, enrol, publish } = await fixture();
     const student = await createUser();
     await enrol(student.id);
@@ -367,7 +367,7 @@ describe('Attempt ownership, lifecycle and result release', () => {
     });
   });
 
-  it('releases feedback without score; blocks historical results for suspended accounts', async () => {
+  it('cho xem nhận xét mà không lộ điểm, chặn kết quả cũ với tài khoản bị đình chỉ', async () => {
     const { teacher, classroom, enrol, publish } = await fixture();
     const student = await createUser();
     await enrol(student.id);
@@ -390,7 +390,7 @@ describe('Attempt ownership, lifecycle and result release', () => {
     });
   });
 
-  it('denies historical access to banned or invalid-role accounts', async () => {
+  it('chặn truy cập lịch sử của tài khoản bị cấm hoặc sai vai trò', async () => {
     const { teacher, classroom, enrol, publish } = await fixture();
     const student = await createUser();
     await enrol(student.id);
@@ -411,7 +411,7 @@ describe('Attempt ownership, lifecycle and result release', () => {
     });
   });
 
-  it('separates submit/save racing writes and rejects teacher downgrade on grading', async () => {
+  it('xử lý xung đột giữa lưu và nộp, từ chối chấm khi giáo viên bị hạ vai trò', async () => {
     const { teacher, enrol, publish } = await fixture();
     const student = await createUser();
     await enrol(student.id);

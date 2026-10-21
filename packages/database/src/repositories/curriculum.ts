@@ -23,7 +23,7 @@ import type { Database } from '../types.js';
 
 /**
  * Dò mã lỗi PostgreSQL qua chuỗi nguyên nhân lỗi được thư viện truy vấn bọc lại.
- * Giới hạn số tầng duyệt để tránh lặp vô hạn; dùng để chuyển lỗi trùng khóa duy nhất sang lỗi nghiệp vụ dễ hiểu.
+ * Giới hạn số tầng duyệt để tránh lặp vô hạn; dùng để chuyển lỗi ràng buộc cơ sở dữ liệu sang lỗi nghiệp vụ.
  */
 function hasPostgresCode(error: unknown, code: string) {
   let current = error;
@@ -136,7 +136,7 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
 
   /**
    * Thêm chương trình cho một môn và một khối lớp.
-   * Ràng buộc duy nhất theo cặp môn/khối bảo vệ dữ liệu khi có hai thao tác tạo đồng thời; lỗi trùng được đổi sang lỗi nghiệp vụ.
+   * Ràng buộc duy nhất bảo vệ dữ liệu khi có hai thao tác tạo đồng thời; lỗi trùng và khóa ngoại được đổi sang lỗi nghiệp vụ.
    */
   async createCurriculum(data: CurriculumCreate) {
     try {
@@ -149,6 +149,8 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
           'curriculum_conflict',
           'Chương trình của môn và lớp này đã tồn tại',
         );
+      if (hasPostgresCode(error, '23503'))
+        throw new ClientError('not_found', 'subject_not_found', 'Môn học không còn tồn tại');
       throw error;
     }
   }
@@ -181,7 +183,7 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
 
   /**
    * Cập nhật các trường được phép sửa của chương trình.
-   * Nếu thay đổi làm trùng cặp môn và khối lớp thì trả lỗi xung đột tương ứng.
+   * Nếu thay đổi làm trùng cặp môn và khối lớp hoặc sai khóa ngoại thì trả lỗi nghiệp vụ tương ứng.
    */
   async updateCurriculum(id: string, data: CurriculumPatch) {
     try {
@@ -198,6 +200,8 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
           'curriculum_conflict',
           'Chương trình của môn và lớp này đã tồn tại',
         );
+      if (hasPostgresCode(error, '23503'))
+        throw new ClientError('not_found', 'subject_not_found', 'Môn học không còn tồn tại');
       throw error;
     }
   }
@@ -229,11 +233,21 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
 
   /**
    * Tạo một nút nội dung trong chương trình học.
-   * Quan hệ cha và chương trình được ràng buộc ở cơ sở dữ liệu để không có nút con trỏ sang chương trình khác.
+   * Quan hệ cha và chương trình được ràng buộc ở cơ sở dữ liệu; chuyển lỗi khóa ngoại thành lỗi yêu cầu không hợp lệ.
    */
   async createNode(data: CurriculumNodeCreate) {
-    const [node] = await this.db.insert(curriculumNodes).values(data).returning();
-    return curriculumNodeSchema.parse(node);
+    try {
+      const [node] = await this.db.insert(curriculumNodes).values(data).returning();
+      return curriculumNodeSchema.parse(node);
+    } catch (error) {
+      if (hasPostgresCode(error, '23503'))
+        throw new ClientError(
+          'invalid',
+          'curriculum_parent_invalid',
+          'Chương trình hoặc nút cha không hợp lệ',
+        );
+      throw error;
+    }
   }
 
   /**
@@ -360,11 +374,21 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
 
   /**
    * Thêm yêu cầu cần đạt vào một nút nội dung cụ thể.
-   * Trả về dữ liệu đã qua kiểm tra hợp đồng yêu cầu cần đạt.
+   * Trả về dữ liệu đã xác thực; chuyển lỗi khóa ngoại nếu nút bị xóa trước khi ghi.
    */
   async createOutcome(data: LearningOutcomeCreate) {
-    const [outcome] = await this.db.insert(learningOutcomes).values(data).returning();
-    return learningOutcomeSchema.parse(outcome);
+    try {
+      const [outcome] = await this.db.insert(learningOutcomes).values(data).returning();
+      return learningOutcomeSchema.parse(outcome);
+    } catch (error) {
+      if (hasPostgresCode(error, '23503'))
+        throw new ClientError(
+          'not_found',
+          'curriculum_node_not_found',
+          'Nút chương trình không còn tồn tại',
+        );
+      throw error;
+    }
   }
 
   /**

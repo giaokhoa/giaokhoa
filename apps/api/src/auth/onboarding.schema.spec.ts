@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { completeOnboardingBodySchema } from '@giaokhoa/shared/http/auth';
 
-describe('completeOnboardingBodySchema', () => {
-  it('requires a name and a valid password', () => {
+describe('Lược đồ hoàn tất tạo hồ sơ (completeOnboardingBodySchema)', () => {
+  it('yêu cầu tên và mật khẩu hợp lệ', () => {
     expect(
       completeOnboardingBodySchema.safeParse({
         lastName: 'Nguyễn',

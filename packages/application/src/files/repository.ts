@@ -37,12 +37,12 @@ export interface FilesRepository {
     userId: string,
     now: Date,
   ): Promise<string[]>;
-  hasReleasedSolutionFileAccess(
+  releasedSolutionFileClasses(
     fileId: string,
     variantFileId: string | null,
     userId: string,
     now: Date,
-  ): Promise<boolean>;
+  ): Promise<Array<{ classId: string; enrolmentStatus: 'active' | 'left' }>>;
   discardOrphans(refs: FileRef[], userId: string): Promise<string[]>;
   queueExpiredOrphans(cutoff: Date): Promise<{ processed: number; storageKeys: string[] }>;
   listPendingDeletions(afterStorageKey?: string): Promise<string[]>;

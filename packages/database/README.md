@@ -1,9 +1,27 @@
-# Database
+# Tầng cơ sở dữ liệu
 
-`@giaokhoa/database` sở hữu Drizzle schema (`src/schema/`), PostgreSQL repository adapter và migration (`drizzle/`). Schema runtime được export từ `src/schema/index.ts`.
+`@giaokhoa/database` sở hữu bảng Drizzle tại `src/schema/`, bộ chuyển đổi kho dữ liệu PostgreSQL và các bản di trú tại `drizzle/`. Các bảng dùng khi chạy được công khai qua `@giaokhoa/database/schema`; các kiểu dữ liệu lưu trữ qua `@giaokhoa/database/types`. Quy định chi tiết về ranh giới nghiệp vụ và kiểm thử nằm trong `AGENTS.md`.
 
-`auth.generated.ts` được Better Auth CLI sinh; khi cần tạo lại, dùng `pnpm --filter @giaokhoa/api auth:generate`. PostgreSQL 18 sinh UUIDv7 cho ID.
+## Quy trình tạo lược đồ xác thực
 
-Trong giai đoạn dev chưa giữ dữ liệu, `drizzle/0000_baseline.sql` là migration duy nhất cho database trống, gồm cả seed quyền RBAC. Database đã chạy lịch sử migration cũ phải được reset trước khi áp dụng baseline mới.
+`src/schema/auth.generated.ts` do công cụ dòng lệnh Better Auth sinh ra; không sửa trực tiếp tệp được tạo. Lệnh chuẩn:
 
-Package exports và lệnh Drizzle xem `package.json`.
+```sh
+pnpm --filter @giaokhoa/api auth:generate
+```
+
+Lệnh thực hiện lần lượt các bước:
+
+1. Better Auth đọc `apps/api/src/auth/auth.config.ts` và tạo `auth.generated.ts` theo các bảng dạng số nhiều `users`, `sessions`, `accounts`, `verifications` vì cấu hình `usePlural: true`.
+2. `apps/api/scripts/patch-auth-schema.mjs` đổi giá trị sinh UUID mặc định `pg_catalog.gen_random_uuid()` thành `uuidv7()`, do PostgreSQL 18 chịu trách nhiệm cấp định danh.
+3. Mã chạy của Better Auth dùng `generateId: false`; cấu hình phục vụ công cụ tạo lược đồ dùng kiểu `uuid` để khóa chính và khóa ngoại có kiểu PostgreSQL thống nhất.
+
+Sau khi tái tạo lược đồ, đối chiếu bảng, ràng buộc và bản di trú trước khi áp dụng. Không tự ý sửa tệp sinh để che giấu sai lệch cấu hình.
+
+## Bản di trú gốc
+
+Trong giai đoạn phát triển **chưa giữ dữ liệu**, `drizzle/0000_baseline.sql` là bản di trú duy nhất cho cơ sở dữ liệu trống, bao gồm dữ liệu khởi tạo phân quyền theo vai trò (RBAC). Nhật ký `drizzle/meta/_journal.json` và ảnh chụp `drizzle/meta/0000_snapshot.json` phải khớp bản di trú cùng lược đồ hiện tại.
+
+**Không áp dụng bản di trú gốc này lên cơ sở dữ liệu đã chạy các bản di trú cũ.** Môi trường thử nghiệm hoặc phát triển cũ cần được chuẩn bị lại trước khi dùng bản gốc mới; nếu phải giữ dữ liệu, cần có phương án chuyển đổi được phê duyệt riêng.
+
+Các câu lệnh sinh và thực thi bản di trú được khai báo trong `packages/database/package.json`. Không đưa truy vấn bảng Drizzle vào gói nghiệp vụ hoặc bộ điều khiển HTTP.

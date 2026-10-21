@@ -5,23 +5,23 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Client, Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PostgresFilesRepository } from '@giaokhoa/database/files';
-import { migrationsFolder } from '@giaokhoa/database/migrations';
-import { users } from '@giaokhoa/database/schema/auth.generated';
-import { authzContexts } from '@giaokhoa/database/schema/authorization';
-import { assignmentRecipients, assignments } from '@giaokhoa/database/schema/assignments';
-import { attempts } from '@giaokhoa/database/schema/attempts';
-import { classEnrolments, classes } from '@giaokhoa/database/schema/classes';
-import { examRevisionQuestions, examRevisions, exams } from '@giaokhoa/database/schema/exams';
-import { fileBlobs, fileObjectDeletions, fileUses, files } from '@giaokhoa/database/schema/files';
+import { PostgresFilesRepository } from '../src/repositories/files.js';
+import { migrationsFolder } from '../src/migrations.js';
+import { users } from '../src/schema/auth.generated.js';
+import { authzContexts } from '../src/schema/authorization.js';
+import { assignmentRecipients, assignments } from '../src/schema/assignments.js';
+import { attempts } from '../src/schema/attempts.js';
+import { classEnrolments, classes } from '../src/schema/classes.js';
+import { examRevisionQuestions, examRevisions, exams } from '../src/schema/exams.js';
+import { fileBlobs, fileObjectDeletions, fileUses, files } from '../src/schema/files.js';
 import {
   question,
   questionBankEntries,
   questionVersions,
   stimuli,
-} from '@giaokhoa/database/schema/questions';
-import * as schema from '@giaokhoa/database/schema';
-import type { Database } from '@giaokhoa/database/types';
+} from '../src/schema/questions.js';
+import * as schema from '../src/schema/index.js';
+import type { Database } from '../src/types.js';
 
 const testDatabaseName =
   'gk_files_security_test_' + process.pid + '_' + randomUUID().replaceAll('-', '');
@@ -47,13 +47,13 @@ async function withAdminConnection<T>(run: (client: Client) => Promise<T>) {
   }
 }
 
-async function createUser() {
+async function createUser(role: 'teacher' | 'user' = 'teacher') {
   const [user] = await db
     .insert(users)
     .values({
       name: 'file security test',
       email: 'files-' + randomUUID() + '@example.com',
-      role: 'teacher',
+      role,
     })
     .returning();
   return user;
@@ -88,8 +88,8 @@ afterAll(async () => {
   );
 }, 30_000);
 
-describe('Files storage and authorization invariants', () => {
-  it('tracks every uploaded object before metadata and clears only committed intents', async () => {
+describe('Ràng buộc lưu trữ và phân quyền tệp', () => {
+  it('ghi nhận đối tượng đã tải lên trước metadata và chỉ xóa yêu cầu đã xác nhận', async () => {
     const owner = await createUser();
     const key = 'files/objects/' + randomUUID() + '.png';
     await repository.reserveUpload(key);
@@ -108,7 +108,7 @@ describe('Files storage and authorization invariants', () => {
     expect(
       await db.select().from(fileObjectDeletions).where(eq(fileObjectDeletions.storageKey, key)),
     ).toHaveLength(0);
-    // Test dùng metadata giả, không để file nháp ảnh hưởng phép đo GC của test sau.
+    // Dùng thông tin tệp giả để bản nháp không ảnh hưởng phép kiểm tra thu gom ở lượt sau.
     await repository.discardOrphans([{ fileId: committed.id, variantFileId: null }], owner.id);
     await repository.acknowledgeDeletion(key);
 
@@ -122,7 +122,7 @@ describe('Files storage and authorization invariants', () => {
     await repository.acknowledgeDeletion(lostKey);
   });
 
-  it('deduplicates bytes without merging ownership, sources or file placements', async () => {
+  it('khử trùng dữ liệu tệp nhưng vẫn tách biệt chủ sở hữu, nguồn và vị trí sử dụng', async () => {
     const owner = await createUser();
     const stranger = await createUser();
     const hash = createHash('sha256').update(randomUUID()).digest('hex');
@@ -144,7 +144,7 @@ describe('Files storage and authorization invariants', () => {
     expect(await repository.findSourceOwned(first.id, owner.id)).toBeUndefined();
     expect(await repository.findSourceOwned(second.id, owner.id)).toBeUndefined();
 
-    // Xóa asset đầu tiên không được xóa bytes khi asset thứ hai còn tham chiếu.
+    // Xóa tài nguyên thứ nhất không được xóa dữ liệu nhị phân khi tài nguyên thứ hai còn tham chiếu.
     expect(
       await repository.discardOrphans([{ fileId: first.id, variantFileId: null }], owner.id),
     ).toEqual([]);
@@ -163,13 +163,13 @@ describe('Files storage and authorization invariants', () => {
     expect(await db.select().from(fileObjectDeletions)).toMatchObject([
       { storageKey: first.storageKey },
     ]);
-    // Dọn fixture TikZ để không làm bẩn lượt GC toàn database ở test kế tiếp.
+    // Dọn dữ liệu TikZ dùng để kiểm thử, tránh ảnh hưởng lượt thu gom tiếp theo.
     expect(
       await repository.discardOrphans([{ fileId: svg.id, variantFileId: null }], owner.id),
     ).toEqual([svg.storageKey]);
   });
 
-  it('never collects a draft that has gained a persistent content placement', async () => {
+  it('không thu gom bản nháp khi đã được tham chiếu bởi nội dung lâu dài', async () => {
     const owner = await createUser();
     const hash = createHash('sha256').update(randomUUID()).digest('hex');
     const file = await repository.create(fileData(owner.id, hash, 'in-use.png'));
@@ -189,7 +189,7 @@ describe('Files storage and authorization invariants', () => {
       itemId,
     });
 
-    // discard dọn draft placement, nhưng content placement ngăn xóa asset.
+    // Loại bỏ bản nháp chỉ gỡ vị trí tạm; vị trí trong nội dung vẫn ngăn xóa tài nguyên.
     expect(
       await repository.discardOrphans([{ fileId: file.id, variantFileId: null }], owner.id),
     ).toEqual([]);
@@ -215,10 +215,10 @@ describe('Files storage and authorization invariants', () => {
   });
 });
 
-describe('Files recipient visibility', () => {
-  it('serves an assigned Stimulus content file, not unrelated or guidance-only files', async () => {
+describe('Quyền truy cập tệp của người nhận', () => {
+  it('chỉ cho người nhận truy cập tệp ngữ liệu được giao, không lộ tệp khác hoặc tệp hướng dẫn', async () => {
     const teacher = await createUser();
-    const student = await createUser();
+    const student = await createUser('user');
     const now = new Date();
     const primaryHash = createHash('sha256').update(randomUUID()).digest('hex');
     const primary = await repository.create(fileData(teacher.id, primaryHash, 'stimulus.png'));
@@ -379,7 +379,7 @@ describe('Files recipient visibility', () => {
     expect(await repository.assignedFileClasses(primary.id, variant.id, student.id, now)).toEqual([
       classroom.id,
     ]);
-    // Nội dung chỉ gắn crop: student không được tải ảnh gốc có thể chứa thông tin đã che.
+    // Nội dung chỉ dùng ảnh đã cắt: học sinh không được tải ảnh gốc có thể chứa thông tin đã che.
     expect(await repository.assignedFileClasses(primary.id, null, student.id, now)).toEqual([]);
 
     const unrelatedHash = createHash('sha256').update(randomUUID()).digest('hex');
@@ -426,8 +426,8 @@ describe('Files recipient visibility', () => {
       itemId: questionRow.id,
     });
     expect(
-      await repository.hasReleasedSolutionFileAccess(answerFile.id, null, student.id, now),
-    ).toBe(false);
+      await repository.releasedSolutionFileClasses(answerFile.id, null, student.id, now),
+    ).toEqual([]);
     await db.insert(attempts).values({
       assignmentId: assignment.id,
       userId: student.id,
@@ -436,20 +436,20 @@ describe('Files recipient visibility', () => {
       submittedAt: now,
     });
     expect(
-      await repository.hasReleasedSolutionFileAccess(answerFile.id, null, student.id, now),
-    ).toBe(false);
+      await repository.releasedSolutionFileClasses(answerFile.id, null, student.id, now),
+    ).toEqual([]);
     await db
       .update(assignments)
       .set({ releaseSolutionsAt: now })
       .where(eq(assignments.id, assignment.id));
     expect(
-      await repository.hasReleasedSolutionFileAccess(answerFile.id, null, student.id, now),
-    ).toBe(true);
-    expect(await repository.hasReleasedSolutionFileAccess(primary.id, null, student.id, now)).toBe(
-      false,
+      await repository.releasedSolutionFileClasses(answerFile.id, null, student.id, now),
+    ).toEqual([{ classId: classroom.id, enrolmentStatus: 'active' }]);
+    expect(await repository.releasedSolutionFileClasses(primary.id, null, student.id, now)).toEqual(
+      [],
     );
 
-    // Người đã làm xong vẫn xem lời giải khi rời lớp hoặc recipient bị thu hồi.
+    // Người đã nộp bài vẫn được xem lời giải khi rời lớp hoặc bị thu hồi quyền nhận bài.
     await db
       .update(classEnrolments)
       .set({ status: 'left' })
@@ -457,11 +457,15 @@ describe('Files recipient visibility', () => {
         and(eq(classEnrolments.classId, classroom.id), eq(classEnrolments.userId, student.id)),
       );
     expect(
-      await repository.hasReleasedSolutionFileAccess(answerFile.id, null, student.id, now),
-    ).toBe(true);
+      await repository.releasedSolutionFileClasses(answerFile.id, null, student.id, now),
+    ).toEqual([{ classId: classroom.id, enrolmentStatus: 'left' }]);
+    await db.update(users).set({ banned: null }).where(eq(users.id, student.id));
+    expect(
+      await repository.releasedSolutionFileClasses(answerFile.id, null, student.id, now),
+    ).toEqual([{ classId: classroom.id, enrolmentStatus: 'left' }]);
     await db.update(users).set({ banned: true }).where(eq(users.id, student.id));
     expect(
-      await repository.hasReleasedSolutionFileAccess(answerFile.id, null, student.id, now),
-    ).toBe(false);
+      await repository.releasedSolutionFileClasses(answerFile.id, null, student.id, now),
+    ).toEqual([]);
   });
 });

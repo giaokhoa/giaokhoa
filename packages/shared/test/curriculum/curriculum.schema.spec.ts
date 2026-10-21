@@ -11,19 +11,19 @@ import {
 
 const uuid = '0199f6e8-865f-7a63-b4ad-a6d488412248';
 
-describe('curriculum schemas', () => {
-  it('accepts the minimal subject payload and normalizes text', () => {
+describe('Các lược đồ chương trình học', () => {
+  it('chấp nhận dữ liệu môn học tối thiểu và chuẩn hóa văn bản', () => {
     expect(subjectCreateSchema.parse({ name: '  Toán  ', slug: 'toan' })).toEqual({
       name: 'Toán',
       slug: 'toan',
     });
   });
 
-  it('rejects unstable subject slugs', () => {
+  it('từ chối mã đường dẫn môn học không ổn định', () => {
     expect(subjectCreateSchema.safeParse({ name: 'Toán', slug: 'Toán 6' }).success).toBe(false);
   });
 
-  it('keeps grade on curriculum, not curriculum nodes', () => {
+  it('lưu khối lớp ở chương trình thay vì tại từng nút nội dung', () => {
     expect(curriculumCreateSchema.safeParse({ subjectId: uuid, grade: 0 }).success).toBe(false);
     expect(curriculumCreateSchema.safeParse({ subjectId: uuid, grade: 12 }).success).toBe(true);
     expect(
@@ -35,13 +35,13 @@ describe('curriculum schemas', () => {
     ).toBe(false);
   });
 
-  it('requires non-empty patches', () => {
+  it('yêu cầu nội dung cập nhật không được rỗng', () => {
     expect(subjectPatchSchema.safeParse({}).success).toBe(false);
     expect(curriculumPatchSchema.safeParse({}).success).toBe(false);
     expect(curriculumNodePatchSchema.safeParse({}).success).toBe(false);
   });
 
-  it('accepts a minimal curriculum node', () => {
+  it('chấp nhận một nút chương trình học tối thiểu', () => {
     expect(
       curriculumNodeCreateSchema.parse({
         curriculumId: uuid,
@@ -50,7 +50,7 @@ describe('curriculum schemas', () => {
     ).toEqual({ curriculumId: uuid, title: 'Số và Đại số' });
   });
 
-  it('requires positions to fit a positive PostgreSQL integer', () => {
+  it('yêu cầu vị trí nằm trong giới hạn số nguyên dương PostgreSQL', () => {
     const maxPosition = 2_147_483_647;
     expect(
       subjectCreateSchema.safeParse({ name: 'Toán', slug: 'toan', position: maxPosition }).success,
@@ -84,7 +84,7 @@ describe('curriculum schemas', () => {
     }
   });
 
-  it('accepts a minimal learning outcome', () => {
+  it('chấp nhận một yêu cầu cần đạt tối thiểu', () => {
     expect(
       learningOutcomeCreateSchema.parse({
         nodeId: uuid,

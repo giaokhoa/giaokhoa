@@ -10,7 +10,7 @@ const baseEnv = {
   BETTER_AUTH_TRUSTED_ORIGINS: 'http://localhost:5173, http://localhost:3001',
 };
 
-test('validates and transforms environment variables', () => {
+test('xác thực và chuyển đổi các biến môi trường', () => {
   const env = envSchema.parse({
     ...baseEnv,
     GOOGLE_CLIENT_ID: '',
@@ -35,7 +35,7 @@ test('validates and transforms environment variables', () => {
   ).toThrow();
 });
 
-test('requires S3 credentials in pairs', () => {
+test('yêu cầu thông tin xác thực S3 theo từng cặp', () => {
   expect(() => envSchema.parse({ ...baseEnv, S3_ACCESS_KEY_ID: 'access-key' })).toThrow();
   expect(() => envSchema.parse({ ...baseEnv, S3_SECRET_ACCESS_KEY: 'secret-key' })).toThrow();
   expect(
@@ -47,7 +47,7 @@ test('requires S3 credentials in pairs', () => {
   ).toBe(true);
 });
 
-test('requires auth provider secrets in pairs', () => {
+test('yêu cầu các khóa bí mật của nhà cung cấp xác thực theo từng cặp', () => {
   expect(() =>
     envSchema.parse({
       ...baseEnv,

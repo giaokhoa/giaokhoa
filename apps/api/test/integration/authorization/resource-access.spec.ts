@@ -12,8 +12,8 @@ import { PostgresAuthorizationRepository } from '@giaokhoa/database/authorizatio
 import { PostgresFilesRepository } from '@giaokhoa/database/files';
 import { migrationsFolder } from '@giaokhoa/database/migrations';
 import { PostgresQuestionsRepository } from '@giaokhoa/database/questions';
-import { users } from '@giaokhoa/database/schema/auth.generated';
-import { stimuli } from '@giaokhoa/database/schema/questions';
+import { users } from '@giaokhoa/database/schema';
+import { stimuli } from '@giaokhoa/database/schema';
 import * as schema from '@giaokhoa/database/schema';
 import type { Database } from '@giaokhoa/database/types';
 import type { QuestionCreate } from '@giaokhoa/shared/questions';
@@ -85,8 +85,8 @@ afterAll(async () => {
   );
 }, 30_000);
 
-describe('Question authoring and asset authorization', () => {
-  it('denies user authoring and applies role downgrade on the next request', async () => {
+describe('Quyền biên soạn câu hỏi và truy cập tài nguyên', () => {
+  it('không cho người dùng thường biên soạn và áp dụng hạ vai trò ngay ở yêu cầu tiếp theo', async () => {
     const student = await createUser('user');
     await expect(questions.createQuestion(questionData(), student.id)).rejects.toMatchObject({
       kind: 'forbidden',
@@ -105,7 +105,7 @@ describe('Question authoring and asset authorization', () => {
     });
   });
 
-  it('isolates Stimulus reads, writes and question references by owner', async () => {
+  it('giới hạn đọc, sửa và tham chiếu ngữ liệu theo chủ sở hữu', async () => {
     const owner = await createUser();
     const stranger = await createUser();
     const created = await questions.createStimulus({ content: richDocument }, owner.id);
@@ -130,7 +130,7 @@ describe('Question authoring and asset authorization', () => {
     ).rejects.toMatchObject({ kind: 'conflict', code: 'stimulus_in_use' });
   });
 
-  it('denies legacy Stimuli whose ownership cannot be proven', async () => {
+  it('từ chối ngữ liệu cũ không xác minh được chủ sở hữu', async () => {
     const owner = await createUser();
     const [legacy] = await db.insert(stimuli).values({ content: richDocument }).returning();
     expect(legacy.createdByUserId).toBeNull();
@@ -142,7 +142,7 @@ describe('Question authoring and asset authorization', () => {
     ).rejects.toMatchObject({ kind: 'invalid', code: 'stimulus_invalid' });
   });
 
-  it('refuses original and variant binary reads by non-owners before storage access', async () => {
+  it('chặn đọc tệp gốc và biến thể của người khác trước khi truy cập kho lưu trữ', async () => {
     const owner = await createUser('user');
     const stranger = await createUser('user');
     const contentHash = createHash('sha256').update('abc').digest('hex');
@@ -189,5 +189,131 @@ describe('Question authoring and asset authorization', () => {
       mimeType: 'image/png',
     });
     expect(storage.get).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('Vòng đời phiên bản câu hỏi qua QuestionsService', () => {
+  it('tạo phiên bản nháp mới khi đổi nội dung rồi công bố ngay trên phiên bản đó', async () => {
+    const user = await createUser('teacher');
+    const service = questions;
+    const created = await service.createQuestion(questionData('draft'), user.id);
+
+    const edited = await service.updateQuestion(
+      created.id,
+      { solution: { answer: '7' } },
+      created.version,
+      user.id,
+    );
+    expect(edited).toMatchObject({ id: created.id, version: 2, status: 'draft' });
+
+    await expect(
+      service.updateQuestion(created.id, { status: 'ready' }, created.version, user.id),
+    ).rejects.toMatchObject({ kind: 'conflict', code: 'question_version_conflict' });
+
+    const original = await service.getQuestionVersion(created.id, 1, user.id);
+    expect(original).toMatchObject({
+      id: created.id,
+      version: 1,
+      status: 'draft',
+      solution: { answer: '42' },
+    });
+
+    const published = await service.updateQuestion(created.id, { status: 'ready' }, 2, user.id);
+    expect(published).toMatchObject({ id: created.id, version: 2, status: 'ready' });
+    const history = await service.listQuestionVersions(created.id, user.id);
+    expect(history).toHaveLength(2);
+    expect(history).toEqual(
+      expect.arrayContaining([
+        { version: 1, status: 'draft' },
+        { version: 2, status: 'ready' },
+      ]),
+    );
+
+    const repeated = await service.updateQuestion(created.id, { status: 'ready' }, 2, user.id);
+    expect(repeated).toMatchObject({ version: 2, status: 'ready' });
+    expect(await service.listQuestionVersions(created.id, user.id)).toHaveLength(2);
+  });
+
+  it('giữ phiên bản sẵn sàng cũ khi đổi nội dung và kế thừa trạng thái', async () => {
+    const user = await createUser('teacher');
+    const service = questions;
+    const created = await service.createQuestion(questionData('ready'), user.id);
+
+    const edited = await service.updateQuestion(
+      created.id,
+      { solution: { answer: '7' } },
+      created.version,
+      user.id,
+    );
+    expect(edited).toMatchObject({
+      id: created.id,
+      version: 2,
+      status: 'ready',
+      solution: { answer: '7' },
+    });
+
+    const original = await service.getQuestionVersion(created.id, 1, user.id);
+    expect(original).toMatchObject({
+      id: created.id,
+      version: 1,
+      status: 'ready',
+      solution: { answer: '42' },
+    });
+
+    const draft = await service.updateQuestion(
+      created.id,
+      { status: 'draft', solution: { answer: '9' } },
+      edited.version,
+      user.id,
+    );
+    expect(draft).toMatchObject({ id: created.id, version: 3, status: 'draft' });
+    expect(await service.listQuestionVersions(created.id, user.id)).toHaveLength(3);
+
+    const latestReady = await service.getLatestReadyQuestion(created.id, user.id);
+    expect(latestReady).toMatchObject({
+      id: created.id,
+      version: 2,
+      status: 'ready',
+      solution: { answer: '7' },
+    });
+  });
+
+  it('không cho sửa ngữ liệu khi câu hỏi liên quan chuyển từ sẵn sàng sang nháp', async () => {
+    const user = await createUser('teacher');
+    const service = questions;
+    const stimulus = await service.createStimulus(
+      {
+        content: {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Ngữ liệu ban đầu' }] }],
+        },
+      },
+      user.id,
+    );
+
+    const created = await service.createQuestion(
+      { ...questionData('ready'), stimulusId: stimulus.id },
+      user.id,
+    );
+    const changed = await service.updateQuestion(
+      created.id,
+      { status: 'draft' },
+      created.version,
+      user.id,
+    );
+    expect(changed).toMatchObject({ id: created.id, version: 1, status: 'draft' });
+
+    await expect(
+      service.updateStimulus(
+        stimulus.id,
+        {
+          content: {
+            type: 'doc',
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Ngữ liệu đã sửa' }] }],
+          },
+        },
+        user.id,
+      ),
+    ).rejects.toMatchObject({ kind: 'conflict', code: 'stimulus_in_use' });
   });
 });

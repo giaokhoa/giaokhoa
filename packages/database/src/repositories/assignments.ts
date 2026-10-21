@@ -309,7 +309,7 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
   /**
    * Thu hồi quyền nhận một bài giao đã công bố mà không xóa lịch sử người nhận.
    * Khóa lớp, bài giao và bản ghi người nhận trong cùng giao dịch để tránh tranh chấp với thao tác tham gia hoặc bắt đầu làm bài.
-   * Trả về false khi không còn bản ghi hợp lệ cần thu hồi; lặp lại trên người đã thu hồi không làm thay đổi thời điểm thu hồi cũ.
+   * Trả về false khi không tìm được người nhận hợp lệ; trả về true với bản ghi đã thu hồi mà không đổi thời điểm thu hồi cũ.
    */
   async revokeRecipient(id: string, userId: string, actorId: string) {
     const [existing] = await this.db

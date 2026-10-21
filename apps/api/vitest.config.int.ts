@@ -1,7 +1,7 @@
 import { config } from 'dotenv';
 import { defineConfig } from 'vitest/config';
 
-// Integration chỉ dùng môi trường test; không được rơi về .env của ứng dụng.
+// Kiểm thử tích hợp chỉ dùng môi trường kiểm thử, không được lấy cấu hình của ứng dụng.
 const testEnvFile = '.env.test';
 const { parsed, error } = config({ path: testEnvFile, override: true });
 if (error || !parsed?.DATABASE_URL) {

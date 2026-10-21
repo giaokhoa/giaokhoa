@@ -65,7 +65,7 @@ afterAll(async () => {
   await adminQuery(`DROP DATABASE IF EXISTS "${databaseName}"`);
 }, 30_000);
 
-describe('PostgresAuthorizationRepository', () => {
+describe('Kho phân quyền PostgreSQL (PostgresAuthorizationRepository)', () => {
   it('tạo phạm vi lớp và vai trò chủ trong cùng giao dịch, rồi truy vấn bằng cả hai loại khóa', async () => {
     const teacher = await actor('teacher');
     const key = `class-${randomUUID()}`;

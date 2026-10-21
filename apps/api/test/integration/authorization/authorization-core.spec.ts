@@ -14,9 +14,9 @@ import {
   authzRoleAssignments,
   authzRolePermissions,
   authzRoles,
-} from '@giaokhoa/database/schema/authorization';
-import { users } from '@giaokhoa/database/schema/auth.generated';
-import { classEnrolments } from '@giaokhoa/database/schema/classes';
+} from '@giaokhoa/database/schema';
+import { users } from '@giaokhoa/database/schema';
+import { classEnrolments } from '@giaokhoa/database/schema';
 import * as schema from '@giaokhoa/database/schema';
 import type { Database } from '@giaokhoa/database/types';
 
@@ -92,8 +92,8 @@ afterAll(async () => {
   );
 }, 30_000);
 
-describe('authorization migration, seed and repository', () => {
-  it('seeds templates and resolves canonical users.role without system assignment drift', async () => {
+describe('Migration, dữ liệu khởi tạo và kho phân quyền', () => {
+  it('khởi tạo mẫu quyền và đọc vai trò chuẩn của người dùng, không tạo sai lệch phân quyền hệ thống', async () => {
     const user = await createUser('site-user');
     const teacher = await createUser('site-teacher', 'teacher');
     const admin = await createUser('site-admin', 'admin');
@@ -116,7 +116,7 @@ describe('authorization migration, seed and repository', () => {
     expect(await db.select().from(authzRoles)).toHaveLength(6);
   });
 
-  it('suspends class management after downgrade and restores it on renewal', async () => {
+  it('thu hồi quyền quản lý lớp sau khi hạ vai trò và khôi phục khi gia hạn', async () => {
     const teacher = await createUser('renewable-teacher', 'teacher');
     const classroom = await createClass(teacher.id, `renewable-${randomUUID()}`);
     const classesRepository = new PostgresClassesRepository(db);
@@ -161,7 +161,7 @@ describe('authorization migration, seed and repository', () => {
     ).toMatchObject({ name: 'Renewed class' });
   });
 
-  it('creates class context and owner atomically; isolates sibling contexts and revokes instantly', async () => {
+  it('tạo phạm vi lớp và chủ sở hữu nguyên tử, tách các phạm vi cùng cấp và thu hồi ngay', async () => {
     const owner = await createUser('owner', 'teacher');
     const otherTeacher = await createUser('other-owner', 'teacher');
     const student = await createUser('student');
@@ -221,7 +221,7 @@ describe('authorization migration, seed and repository', () => {
     expect(activeCount).toBeDefined();
   });
 
-  it('rolls back context creation if assignment FK fails', async () => {
+  it('hoàn tác tạo phạm vi khi khóa ngoại gán vai trò thất bại', async () => {
     const key = `rollback-${randomUUID()}`;
     await expect(
       repository.createContextWithRole({
@@ -234,7 +234,7 @@ describe('authorization migration, seed and repository', () => {
     expect(await repository.findContext({ kind: 'class', resourceKey: key })).toBeUndefined();
   });
 
-  it('rejects role at the wrong context and fails closed for null/unknown account roles', async () => {
+  it('từ chối vai trò ở sai phạm vi và mặc định cấm khi vai trò tài khoản thiếu hoặc không rõ', async () => {
     const teacher = await createUser('nullable', 'teacher');
     const aClass = await createClass(teacher.id, `role-${randomUUID()}`);
     await expect(
@@ -256,7 +256,7 @@ describe('authorization migration, seed and repository', () => {
     });
   });
 
-  it('enforces PREVENT and PROHIBIT over owner ALLOW in the same class', async () => {
+  it('ưu tiên quyền cấm PREVENT và PROHIBIT hơn ALLOW của chủ lớp', async () => {
     const owner = await createUser('multi-role', 'teacher');
     const aClass = await createClass(owner.id, `effects-${randomUUID()}`);
     await db

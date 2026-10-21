@@ -56,7 +56,7 @@ function restoreEnv(name: string, value: string | undefined) {
   process.env[name] = value;
 }
 
-describe('Curriculum authorization (e2e)', () => {
+describe('Phân quyền truy cập chương trình học qua HTTP', () => {
   let app: INestApplication<App>;
   let pool: Pool;
   let db: Database;
@@ -111,7 +111,7 @@ describe('Curriculum authorization (e2e)', () => {
     };
   }
 
-  it('requires the system admin role for all curriculum resource controllers', async () => {
+  it('yêu cầu vai trò quản trị hệ thống đối với mọi bộ điều khiển chương trình học', async () => {
     await request(app.getHttpServer()).get('/subjects').expect(401);
 
     const regular = await createSession(`user-${randomUUID()}@example.com`);

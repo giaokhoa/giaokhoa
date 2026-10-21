@@ -13,9 +13,9 @@ import { PostgresExamsRepository } from '@giaokhoa/database/exams';
 import { migrationsFolder } from '@giaokhoa/database/migrations';
 import { PostgresQuestionsRepository } from '@giaokhoa/database/questions';
 import * as schema from '@giaokhoa/database/schema';
-import { users } from '@giaokhoa/database/schema/auth.generated';
-import { examRevisions, examRevisionQuestions } from '@giaokhoa/database/schema/exams';
-import { questionVersions } from '@giaokhoa/database/schema/questions';
+import { users } from '@giaokhoa/database/schema';
+import { examRevisions, examRevisionQuestions } from '@giaokhoa/database/schema';
+import { questionVersions } from '@giaokhoa/database/schema';
 import type { Database } from '@giaokhoa/database/types';
 import { examRevisionCreateSchema } from '@giaokhoa/shared/exams';
 import type { QuestionCreate } from '@giaokhoa/shared/questions';
@@ -81,8 +81,8 @@ afterAll(async () => {
   );
 }, 30_000);
 
-describe('Exam revision ownership and immutability', () => {
-  it('isolates private exams and rejects student authoring', async () => {
+describe('Quyền sở hữu và tính bất biến của phiên bản đề thi', () => {
+  it('bảo vệ đề thi riêng tư và từ chối học sinh biên soạn', async () => {
     const owner = await createUser();
     const stranger = await createUser();
     const admin = await createUser('admin');
@@ -111,7 +111,7 @@ describe('Exam revision ownership and immutability', () => {
     ).rejects.toMatchObject({ kind: 'not_found' });
   });
 
-  it('preserves pinned question content and exam title across later changes', async () => {
+  it('giữ nguyên nội dung câu hỏi đã chốt và tên đề thi sau các thay đổi', async () => {
     const owner = await createUser();
     const q = await questions.createQuestion(questionData(), owner.id);
     const exam = await exams.createExam(owner.id, { title: 'Original' });
@@ -153,7 +153,7 @@ describe('Exam revision ownership and immutability', () => {
     });
   });
 
-  it('fails closed for draft, missing, and other-teacher questions, leaving no revision rows', async () => {
+  it('từ chối câu hỏi nháp, không tồn tại hoặc thuộc giáo viên khác, không để lại bản ghi phiên bản', async () => {
     const owner = await createUser();
     const stranger = await createUser();
     const owned = await questions.createQuestion(questionData(), owner.id);
@@ -200,7 +200,7 @@ describe('Exam revision ownership and immutability', () => {
     ).toHaveLength(0);
   });
 
-  it('serializes concurrent revisions and retains ordered questions', async () => {
+  it('tuần tự hóa việc sửa đề đồng thời và giữ thứ tự câu hỏi', async () => {
     const owner = await createUser();
     const first = await questions.createQuestion(questionData('11'), owner.id);
     const second = await questions.createQuestion(questionData('22'), owner.id);
@@ -224,7 +224,7 @@ describe('Exam revision ownership and immutability', () => {
     expect(b.questions.map((item) => item.question.id)).toEqual([second.id, first.id]);
   });
 
-  it('enforces FK RESTRICT even for direct database deletion', async () => {
+  it('thực thi ràng buộc khóa ngoại RESTRICT ngay cả khi xóa trực tiếp trong database', async () => {
     const owner = await createUser();
     const q = await questions.createQuestion(questionData(), owner.id);
     const exam = await exams.createExam(owner.id, { title: 'FK' });
@@ -241,7 +241,7 @@ describe('Exam revision ownership and immutability', () => {
     expect((await exams.getRevision(owner.id, exam.id, 1)).questions).toHaveLength(1);
   });
 
-  it('rolls back a revision if inserting a pinned question fails', async () => {
+  it('hoàn tác phiên bản đề khi thêm câu hỏi đã chốt thất bại', async () => {
     const owner = await createUser();
     const q = await questions.createQuestion(questionData(), owner.id);
     const exam = await exams.createExam(owner.id, { title: 'Rollback' });
@@ -264,7 +264,7 @@ describe('Exam revision ownership and immutability', () => {
     ).toHaveLength(0);
   });
 
-  it('blocks new revision after teacher downgrade without deleting history', async () => {
+  it('chặn tạo phiên bản mới khi giáo viên bị hạ vai trò nhưng vẫn giữ lịch sử', async () => {
     const owner = await createUser();
     const q = await questions.createQuestion(questionData(), owner.id);
     const exam = await exams.createExam(owner.id, { title: 'Historical' });

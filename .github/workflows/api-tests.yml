@@ -1,4 +1,4 @@
-name: Kiểm thử Database và API
+name: Kiểm thử cơ sở dữ liệu và giao diện lập trình
 
 on:
   push:
@@ -42,9 +42,9 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - name: Cài dependencies
+      - name: Cài các thư viện phụ thuộc
         run: pnpm install --frozen-lockfile
-      - name: Tạo cấu hình E2E cô lập
+      - name: Tạo cấu hình kiểm thử đầu cuối cô lập
         run: |
           cat > apps/api/.env.test <<'EOF'
           NODE_ENV=test
@@ -58,11 +58,11 @@ jobs:
           BETTER_AUTH_URL=http://localhost:3000
           BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:5173,http://localhost:3001
           EOF
-      - name: Build API và packages
+      - name: Biên dịch giao diện lập trình và các gói
         run: pnpm exec turbo run build --filter=@giaokhoa/api
-      - name: Kiểm thử tích hợp PostgreSQL của database
+      - name: Kiểm thử tích hợp kho dữ liệu PostgreSQL
         run: DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/giaokhoa_test pnpm --filter @giaokhoa/database test:int
-      - name: Kiểm thử tích hợp kho S3 của API
+      - name: Kiểm thử tích hợp dịch vụ nghiệp vụ và S3
         run: pnpm --filter @giaokhoa/api test:int
-      - name: Chạy HTTP E2E
+      - name: Chạy kiểm thử đầu cuối HTTP
         run: pnpm --filter @giaokhoa/api test:e2e

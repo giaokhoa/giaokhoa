@@ -69,8 +69,8 @@ const request = {
   context: { kind: 'class' as const, resourceKey: 'C1' },
 };
 
-describe('AuthorizationService', () => {
-  it('denies missing permissions by default, with a stable audit event', async () => {
+describe('Dịch vụ phân quyền (AuthorizationService)', () => {
+  it('mặc định từ chối khi thiếu quyền và ghi nhận sự kiện kiểm tra ổn định', async () => {
     const repository = new FakeAuthorizationRepository();
     const events: unknown[] = [];
     const service = new AuthorizationService(repository, (event) => events.push(event));
@@ -83,7 +83,7 @@ describe('AuthorizationService', () => {
     });
   });
 
-  it('uses the most specific ALLOW and does not inherit rights across sibling classes', async () => {
+  it('ưu tiên quyền ALLOW ở phạm vi cụ thể nhất và không kế thừa quyền giữa các lớp cùng cấp', async () => {
     const repository = new FakeAuthorizationRepository();
     repository.set('actor', 'class:update', [{ contextId: classOne.id, effect: 'ALLOW' }]);
     const service = new AuthorizationService(repository);
@@ -98,7 +98,7 @@ describe('AuthorizationService', () => {
     ).toEqual({ allowed: false, reason: 'no_grant' });
   });
 
-  it('lets a child ALLOW override an ancestor PREVENT', async () => {
+  it('cho phép ALLOW ở phạm vi con ghi đè PREVENT ở phạm vi cha', async () => {
     const repository = new FakeAuthorizationRepository();
     repository.set('actor', 'class:update', [
       { contextId: system.id, effect: 'PREVENT' },
@@ -112,7 +112,7 @@ describe('AuthorizationService', () => {
     });
   });
 
-  it('makes PREVENT win over ALLOW in the same context, ignoring INHERIT', async () => {
+  it('ưu tiên PREVENT hơn ALLOW trong cùng phạm vi và bỏ qua INHERIT', async () => {
     const repository = new FakeAuthorizationRepository();
     repository.set('actor', 'class:update', [
       { contextId: classOne.id, effect: 'ALLOW' },
@@ -126,7 +126,7 @@ describe('AuthorizationService', () => {
     });
   });
 
-  it('makes PROHIBIT absolute even against a more specific ALLOW', async () => {
+  it('áp dụng PROHIBIT tuyệt đối kể cả khi có ALLOW ở phạm vi cụ thể hơn', async () => {
     const repository = new FakeAuthorizationRepository();
     repository.set('actor', 'class:update', [
       { contextId: system.id, effect: 'PROHIBIT' },
@@ -138,7 +138,7 @@ describe('AuthorizationService', () => {
     });
   });
 
-  it('rejects unrecognized context, malformed ancestry and a cycle', async () => {
+  it('từ chối phạm vi không xác định, cây cha sai cấu trúc hoặc có chu trình', async () => {
     const repository = new FakeAuthorizationRepository();
     const service = new AuthorizationService(repository);
     expect(
