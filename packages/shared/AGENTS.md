@@ -1,36 +1,7 @@
 # Quy ước cho `@giaokhoa/shared`
 
-- Đây là nguồn schema, type, constant và HTTP protocol descriptor chuẩn, không phụ thuộc vào framework hoặc hạ tầng.
-- Public domain subpath phải theo bounded context:
-
-```text
-@giaokhoa/shared/questions
-@giaokhoa/shared/curriculum
-@giaokhoa/shared/files
-```
-
-- HTTP descriptor là phần riêng của transport, xuất qua:
-
-```text
-@giaokhoa/shared/http/questions
-@giaokhoa/shared/http/stimuli
-@giaokhoa/shared/http/subjects
-@giaokhoa/shared/http/curricula
-@giaokhoa/shared/http/curriculum-nodes
-@giaokhoa/shared/http/learning-outcomes
-@giaokhoa/shared/http/files
-@giaokhoa/shared/http/auth
-```
-
-- Không tạo export gốc cho `@giaokhoa/shared`; khai báo public entry tường minh trong package exports.
-- Schema chuẩn dùng tên có ý nghĩa như `questionSchema`, `questionCreateSchema`, `questionPatchSchema`, `subjectSchema`, `subjectCreateSchema`, `subjectPatchSchema`.
-- Khi HTTP body/response trùng cấu trúc schema chuẩn, dùng schema đó trực tiếp; không tạo alias `CreateQuestionBody` hoặc `questionResponseSchema` chỉ để đổi tên.
-- Dùng `schema.ts` (số ít), không dùng song song `schemas.ts`. Đặt tên file theo trách nhiệm như `service.ts`, `repository.ts`, hoặc public entry `questions.ts`; không tạo barrel `index.ts` chỉ để tái export file cùng cấp.
-
-## HTTP descriptor
-
-- Registry của resource có dạng `<resource>Contract`, ví dụ `questionsContract`.
-- Chỉ dùng các trường `method`, `path`, `pathParams`, `query`, `headers`, `body`, `file` và `responses`.
-- `responses` được key bằng HTTP status; dùng `204: null` khi thành công không có body và `'binary'` cho phản hồi nhị phân.
-- Path phải là đường dẫn public API đầy đủ.
-- `test/http-contracts.spec.ts` kiểm tra quy ước HTTP descriptor.
+- Chứa canonical schema, type và HTTP descriptor; không import NestJS, React, Drizzle hoặc các package `application`/`database`.
+- Khai báo public entry tường minh trong `package.json`, không tạo export gốc. Domain và transport HTTP là hai nhóm subpath riêng.
+- Dùng `schema.ts` (không song song `schemas.ts`); tránh barrel và alias chỉ để tái xuất hoặc đổi tên schema.
+- HTTP descriptor dạng `<resource>Contract` chỉ dùng `method`, `path`, `pathParams`, `query`, `headers`, `body`, `file`, `responses`. `responses` key theo HTTP status, với `204: null` và `'binary'` khi phù hợp. Path là public API đầy đủ.
+- Kiểm tra các quy ước HTTP qua `test/http-contracts.spec.ts`.

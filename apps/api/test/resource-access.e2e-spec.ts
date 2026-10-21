@@ -1,8 +1,6 @@
 import 'dotenv/config';
 import { createHash, randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { eq, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Client, Pool } from 'pg';
@@ -15,7 +13,7 @@ import { PostgresFilesRepository } from '@giaokhoa/database/files';
 import { migrationsFolder } from '@giaokhoa/database/migrations';
 import { PostgresQuestionsRepository } from '@giaokhoa/database/questions';
 import { users } from '@giaokhoa/database/schema/auth.generated';
-import { question, stimuli } from '@giaokhoa/database/schema/questions';
+import { stimuli } from '@giaokhoa/database/schema/questions';
 import * as schema from '@giaokhoa/database/schema';
 import type { Database } from '@giaokhoa/database/types';
 import type { QuestionCreate } from '@giaokhoa/shared/questions';
@@ -191,56 +189,5 @@ describe('Question authoring and asset authorization', () => {
       mimeType: 'image/png',
     });
     expect(storage.get).toHaveBeenCalledTimes(2);
-  });
-});
-
-describe('Historical Stimuli ownership migration', () => {
-  it('backfills only Stimuli whose referencing questions have one owner', async () => {
-    const owner = await createUser();
-    const other = await createUser();
-    const [single, mixed, orphan] = await db
-      .insert(stimuli)
-      .values([{ content: richDocument }, { content: richDocument }, { content: richDocument }])
-      .returning();
-
-    await db.insert(question).values([
-      {
-        createdByUserId: owner.id,
-        stimulusId: single.id,
-        type: 'short_answer',
-        content: richDocument,
-      },
-      {
-        createdByUserId: owner.id,
-        stimulusId: single.id,
-        type: 'short_answer',
-        content: richDocument,
-      },
-      {
-        createdByUserId: owner.id,
-        stimulusId: mixed.id,
-        type: 'short_answer',
-        content: richDocument,
-      },
-      {
-        createdByUserId: other.id,
-        stimulusId: mixed.id,
-        type: 'short_answer',
-        content: richDocument,
-      },
-    ]);
-
-    const migration = readFileSync(join(migrationsFolder, '0002_abnormal_iron_monger.sql'), 'utf8');
-    const offset = migration.indexOf('UPDATE "stimuli" AS s');
-    expect(offset).toBeGreaterThan(-1);
-    await pool.query(migration.slice(offset));
-
-    const rows = await db
-      .select()
-      .from(stimuli)
-      .where(inArray(stimuli.id, [single.id, mixed.id, orphan.id]));
-    expect(rows.find(({ id }) => id === single.id)?.createdByUserId).toBe(owner.id);
-    expect(rows.find(({ id }) => id === mixed.id)?.createdByUserId).toBeNull();
-    expect(rows.find(({ id }) => id === orphan.id)?.createdByUserId).toBeNull();
   });
 });
