@@ -11,6 +11,7 @@ import type { AuthorizationService } from '../authorization/service.js';
 import { ClientError } from '../common/client-error.js';
 import type { ExamsRepository } from './repository.js';
 
+/** Quản lý đề riêng của tác giả và các bản chụp phiên bản đề không phụ thuộc chỉnh sửa về sau. */
 export class ExamsService {
   constructor(
     private readonly repository: ExamsRepository,

@@ -10,6 +10,7 @@ import type { AuthorizationService } from '../authorization/service.js';
 import { ClientError } from '../common/client-error.js';
 import type { AssignmentsRepository } from './repository.js';
 
+/** Quản lý bản nháp, công bố và phân phối bài giao theo quyền lớp và danh sách người nhận đã chốt. */
 export class AssignmentsService {
   constructor(
     private readonly repository: AssignmentsRepository,
@@ -60,6 +61,7 @@ export class AssignmentsService {
     return found;
   }
 
+  /** Chỉ chỉnh sửa bản nháp; kho dữ liệu từ chối thay đổi khi bài đã công bố hoặc quyền sở hữu không phù hợp. */
   async update(actorId: string, id: string, patch: AssignmentPatch): Promise<Assignment> {
     await this.authorized(actorId, id, 'assignment:create');
     const updated = await this.repository.updateDraft(id, actorId, patch);
@@ -92,6 +94,7 @@ export class AssignmentsService {
     return recipients;
   }
 
+  /** Thu hồi người nhận đã chốt mà không thay đổi danh sách người nhận của các bài giao khác. */
   async revokeRecipient(actorId: string, id: string, userId: string): Promise<void> {
     await this.authorized(actorId, id, 'assignment:publish');
     if (!(await this.repository.revokeRecipient(id, userId, actorId)))
@@ -102,6 +105,7 @@ export class AssignmentsService {
       );
   }
 
+  /** Chỉ trả nội dung đề đã chốt cho người nhận đủ quyền và trong thời điểm bài giao khả dụng. */
   async getDelivery(actorId: string, id: string): Promise<StudentAssignment> {
     const assignment = await this.authorized(actorId, id, 'assignment:view_assigned');
     const delivery = await this.repository.getDelivery(assignment.id, actorId, this.now());

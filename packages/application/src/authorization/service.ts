@@ -6,6 +6,7 @@ import type {
   PermissionGrant,
 } from './repository.js';
 
+/** Giới hạn các quan hệ cha-con hợp lệ để không suy quyền qua cây phạm vi sai cấu trúc. */
 function validParent(child: AuthorizationContextKind, parent: AuthorizationContextKind) {
   switch (child) {
     case 'system':
@@ -36,6 +37,7 @@ export type AuthorizationDecision = {
 
 export type AuthorizationAuditEvent = AuthorizationRequest & AuthorizationDecision;
 
+/** Xét quyền trên chuỗi phạm vi hiện tại; mọi nhánh quyết định đều có thể ghi nhận qua hàm kiểm toán. */
 export class AuthorizationService {
   constructor(
     private readonly repository: AuthorizationRepository,
@@ -100,6 +102,7 @@ export class AuthorizationService {
     return this.finish(request, { allowed: false, reason: 'no_grant' });
   }
 
+  /** Phân biệt phạm vi không tồn tại với tài khoản không đủ quyền khi chuyển quyết định thành lỗi nghiệp vụ. */
   async assertAuthorized(request: AuthorizationRequest): Promise<void> {
     const decision = await this.authorize(request);
     if (decision.allowed) return;

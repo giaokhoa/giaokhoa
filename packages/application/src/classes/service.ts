@@ -11,6 +11,7 @@ import type { AuthorizationService } from '../authorization/service.js';
 import { ClientError } from '../common/client-error.js';
 import type { ClassesRepository } from './repository.js';
 
+/** Điều phối quyền lớp, mã tham gia và trạng thái ghi danh; thao tác ghi được kiểm tra lại trong kho dữ liệu. */
 export class ClassesService {
   constructor(
     private readonly repository: ClassesRepository,
@@ -61,6 +62,7 @@ export class ClassesService {
     return updated;
   }
 
+  /** Chỉ trả mã tham gia dạng rõ một lần; kho dữ liệu lưu mã băm và thời điểm hết hạn. */
   async createJoinCode(actorId: string, id: string, input: ClassJoinCodeCreate) {
     await this.assertClass(actorId, id, 'class:update');
     const code = randomBytes(32).toString('base64url');
@@ -83,6 +85,7 @@ export class ClassesService {
       throw new ClientError('not_found', 'class_join_code_not_found', 'Mã tham gia không tồn tại');
   }
 
+  /** Kiểm quyền hệ thống trước; kho dữ liệu quyết định ghi danh hay chờ duyệt theo trạng thái lớp và mã. */
   async joinClass(actorId: string, code: string): Promise<ClassJoinResult> {
     await this.assertSystem(actorId, 'class:join');
     return this.repository.join(
@@ -117,6 +120,7 @@ export class ClassesService {
     return updated;
   }
 
+  /** Người học tự rời lớp không cần quyền quản lý thành viên; kho dữ liệu cập nhật trạng thái và thu hồi vai trò. */
   async leaveClass(actorId: string, id: string): Promise<void> {
     const updated = await this.repository.changeEnrolment(id, actorId, actorId, 'leave');
     if (!updated)

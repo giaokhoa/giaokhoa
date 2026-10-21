@@ -40,6 +40,7 @@ function parseViewBox(value: string | null) {
   return width > 0 && height > 0 ? { width, height } : undefined;
 }
 
+/** Làm sạch SVG từ đầu vào không tin cậy, kiểm tham chiếu ngoài và chuẩn hóa kích thước theo pixel. */
 export function sanitizeAndInspectSvg(input: string) {
   const clean = purifier.sanitize(input, {
     USE_PROFILES: { svg: true, svgFilters: true },

@@ -7,6 +7,7 @@ export type AuthorizationContextKind =
   | 'class'
   | 'assignment';
 
+/** Quyền cấm tuyệt đối phủ quyết toàn cây; quyền ngăn và quyền cho phép được xét theo phạm vi gần nhất. */
 export type PermissionEffect = 'INHERIT' | 'ALLOW' | 'PREVENT' | 'PROHIBIT';
 
 export type AuthorizationContext = {
@@ -42,6 +43,7 @@ export type RoleAssignmentInput = {
   grantedByUserId?: string;
 };
 
+/** Hợp đồng đọc quyền hiệu lực và thay đổi vai trò; bộ chuyển đổi phải chỉ trả quyền chưa bị thu hồi. */
 export interface AuthorizationRepository {
   findContext(ref: ContextRef): Promise<AuthorizationContext | undefined>;
   findContextById(id: string): Promise<AuthorizationContext | undefined>;
@@ -50,7 +52,9 @@ export interface AuthorizationRepository {
     capability: string,
     contextIds: string[],
   ): Promise<PermissionGrant[]>;
+  /** Tạo phạm vi và vai trò ban đầu trong cùng giao dịch để tránh tài nguyên thiếu chủ sở hữu. */
   createContextWithRole(input: ContextWithRoleInput): Promise<AuthorizationContext>;
+  /** Không tạo hai lần cấp vai trò còn hiệu lực cho cùng người dùng, vai trò và phạm vi. */
   assignRole(input: RoleAssignmentInput): Promise<boolean>;
   revokeRole(contextId: string, userId: string, roleKey: string): Promise<boolean>;
 }

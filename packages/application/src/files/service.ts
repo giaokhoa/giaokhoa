@@ -154,6 +154,7 @@ function inspectRasterImage(file: UploadedFile | undefined) {
   return image;
 }
 
+/** Điều phối lưu trữ nhị phân, khử trùng nội dung, quyền truy cập và thu gom tệp qua hàng đợi bền vững. */
 export class FilesService {
   constructor(
     private readonly repository: FilesRepository,
@@ -162,6 +163,7 @@ export class FilesService {
     private readonly now: () => Date = () => new Date(),
   ) {}
 
+  /** Xác thực ảnh trước khi ghi, dự phòng lệnh xóa trước khi tải lên và chỉ tin nội dung SVG đã làm sạch. */
   async createFile(
     file: UploadedFile | undefined,
     userId: string,
@@ -219,6 +221,7 @@ export class FilesService {
     };
   }
 
+  /** Chỉ chủ ảnh gốc được tạo ảnh cắt; biến thể không được là SVG hoặc dùng ảnh biến thể làm cha. */
   async createVariant(
     fileId: string,
     file: UploadedFile | undefined,
@@ -278,6 +281,7 @@ export class FilesService {
     };
   }
 
+  /** Nguồn TikZ riêng tư hơn ảnh đã dựng: không cấp cho người chỉ có quyền xem ảnh trong đề. */
   async getSource(id: string, userId: string): Promise<TikzFileSource> {
     const parsedId = fileIdSchema.safeParse(id);
     if (!parsedId.success)
@@ -293,6 +297,7 @@ export class FilesService {
     return parsed.data;
   }
 
+  /** Chỉ gỡ tệp nháp do người dùng sở hữu; tác vụ lưu trữ thất bại vẫn còn bản ghi để thu gom lại. */
   async discardFiles(refs: FileRef[], userId: string): Promise<void> {
     const parsed = fileRefSchema.array().max(100).safeParse(refs);
     if (!parsed.success)
@@ -310,6 +315,7 @@ export class FilesService {
     }
   }
 
+  /** Thu gom hai giai đoạn: xóa tệp logic hết hạn rồi xử lý các khóa lưu trữ đang chờ xóa. */
   async collectOrphanFiles(cutoff: Date): Promise<number> {
     while ((await this.repository.queueExpiredOrphans(cutoff)).processed > 0) {
       // Nhiều file logic có thể cùng một blob nên lô đã xử lý không nhất thiết có storage key.
@@ -381,6 +387,7 @@ export class FilesService {
     return this.getStoredFile(image.storageKey, image.mimeType, image.byteSize);
   }
 
+  /** Đọc ảnh biến thể phải chứng minh cả quan hệ với ảnh gốc lẫn quyền đối với nội dung được giao. */
   async getVariant(fileId: string, variantFileId: string, userId: string): Promise<StoredFile> {
     const parsedImageId = fileIdSchema.safeParse(fileId);
     const parsedImageVariantId = fileIdSchema.safeParse(variantFileId);
@@ -402,6 +409,7 @@ export class FilesService {
     return this.getStoredFile(variant.storageKey, variant.mimeType, variant.byteSize);
   }
 
+  /** Chỉ xét nội dung đề được giao hoặc lời giải đã công bố, không suy quyền từ vị trí tệp đơn thuần. */
   private async assertAssignedFileAccess(
     fileId: string,
     variantFileId: string | null,
