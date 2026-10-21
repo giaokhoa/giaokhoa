@@ -9,7 +9,12 @@ import {
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { users } from '../schema/auth.generated.js';
 import { hasSystemCapability, hasContextCapability } from './authorization.js';
-import { authzContexts, authzRoleAssignments, authzRoles } from '../schema/authorization.js';
+import {
+  authzContexts,
+  authzRoleAssignments,
+  authzRoleContextLevels,
+  authzRoles,
+} from '../schema/authorization.js';
 import { classes, classEnrolments, classJoinCodes } from '../schema/classes.js';
 import type { Database } from '../types.js';
 
@@ -101,11 +106,28 @@ async function studentRole(tx: Transaction, row: typeof classes.$inferSelect) {
 }
 
 /**
- * Cấp vai trò học sinh trong phạm vi lớp cho thành viên đã được chấp nhận.
- * Bỏ qua lần cấp trùng để việc đồng bộ quan hệ thành viên và phân quyền có thể chạy lặp lại an toàn.
+ * Cấp vai trò học sinh tại lớp khi cấu hình cho phép, kể cả qua ghi danh tự động.
+ * Khi cấu hình không hợp lệ, từ chối cả giao dịch ghi danh thay vì âm thầm cấp quyền;
+ * thu hồi vai trò không phụ thuộc cấu hình cấp mới.
  */
 async function grantStudent(tx: Transaction, row: typeof classes.$inferSelect, userId: string) {
   const role = await studentRole(tx, row);
+  const [allowed] = await tx
+    .select({ roleId: authzRoleContextLevels.roleId })
+    .from(authzRoleContextLevels)
+    .where(
+      and(
+        eq(authzRoleContextLevels.roleId, role.roleId),
+        eq(authzRoleContextLevels.contextKind, 'class'),
+      ),
+    )
+    .limit(1);
+  if (!allowed)
+    throw new ClientError(
+      'conflict',
+      'class_student_role_context_disabled',
+      'Vai trò học sinh không được phép cấp tại lớp',
+    );
   await tx
     .insert(authzRoleAssignments)
     .values({
@@ -144,7 +166,8 @@ export class PostgresClassesRepository implements ClassesRepository {
 
   /**
    * Tạo lớp, phạm vi phân quyền và quyền chủ lớp trong cùng một giao dịch.
-   * Yêu cầu capability tạo lớp trong phạm vi hệ thống; nếu thiếu cấu hình phân quyền gốc thì không tạo lớp dở dang.
+   * Chỉ gán vai trò chủ lớp khi loại ngữ cảnh này còn được phép theo cấu hình vai trò;
+   * nếu thiếu quyền hoặc cấu hình, không để lại lớp thiếu vai trò.
    */
   async create(input: ClassCreate, actorId: string) {
     return this.db.transaction(async (tx) => {
@@ -158,7 +181,10 @@ export class PostgresClassesRepository implements ClassesRepository {
       const [ownerRole] = await tx
         .select({ id: authzRoles.id })
         .from(authzRoles)
-        .where(eq(authzRoles.key, 'class:owner'))
+        .innerJoin(authzRoleContextLevels, eq(authzRoleContextLevels.roleId, authzRoles.id))
+        .where(
+          and(eq(authzRoles.key, 'class:owner'), eq(authzRoleContextLevels.contextKind, 'class')),
+        )
         .limit(1);
       if (!parent || !ownerRole)
         throw new ClientError(

@@ -85,8 +85,9 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
 
   /**
    * Mọi vai trò hệ thống được cấp hoặc thu hồi qua authz_role_assignments, không đọc vai trò từ phiên đăng nhập.
-   * Vai trò người dùng đã xác thực mặc định áp dụng ở system context; vai trò học sinh chỉ có
-   * hiệu lực khi lớp và quan hệ tham gia hoạt động. Tài khoản bị khóa không được cấp quyền.
+   * Vai trò người dùng đã xác thực mặc định áp dụng ở system context. Vai trò học sinh tại lớp
+   * hoặc hoạt động con chỉ có hiệu lực khi lớp cha và quan hệ ghi danh còn hoạt động.
+   * Tài khoản bị khóa không được cấp quyền.
    */
   async findPermissions(actorId: string, capability: string, contextIds: string[]) {
     if (!contextIds.length) return [];
@@ -101,7 +102,17 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
       .select({ roleId: authzRoles.id, contextId: authzRoleAssignments.contextId })
       .from(authzRoleAssignments)
       .innerJoin(authzRoles, eq(authzRoleAssignments.roleId, authzRoles.id))
-      .leftJoin(classes, eq(classes.authzContextId, authzRoleAssignments.contextId))
+      .leftJoin(authzContexts, eq(authzContexts.id, authzRoleAssignments.contextId))
+      .leftJoin(
+        classes,
+        or(
+          eq(classes.authzContextId, authzRoleAssignments.contextId),
+          and(
+            eq(authzContexts.kind, 'assignment'),
+            eq(classes.authzContextId, authzContexts.parentId),
+          ),
+        ),
+      )
       .leftJoin(
         classEnrolments,
         and(eq(classEnrolments.classId, classes.id), eq(classEnrolments.userId, actorId)),

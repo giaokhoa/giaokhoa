@@ -53,3 +53,14 @@ Lúc tạo bài giao phải tạo đồng thời ngữ cảnh `assignment` dư�
 làm bài/chấm bài/công bố đọc quyền tại hoạt động đó, vẫn áp dụng điều kiện người nhận,
 trạng thái ghi danh, thời hạn và lịch công bố. Các lệnh quản trị vai trò được kiểm capability
 lần nữa ngay trong giao dịch PostgreSQL để tránh dùng quyền vừa bị thu hồi.
+
+### Tính quyền học sinh theo ngữ cảnh và đồng bộ ghi danh
+
+Vai trò `class:student` được gán ở `class` hoặc `assignment` đều phải đối chiếu trạng thái
+lớp cha và bản ghi tham gia lớp của chính người dùng; đình chỉ hoặc rời lớp khiến vai trò
+ở cả hai cấp không còn quyền, nhưng không cấp quyền ngược từ hoạt động lên lớp hay hoạt
+động khác. Khi tự cấp vai trò cho chủ lớp hoặc cho học sinh sau khi ghi danh, kho dữ liệu
+phải kiểm `authz_role_context_levels` tại ngữ cảnh `class`. Nếu cấu hình không cho phép,
+giao dịch trả lỗi xung đột và không ghi danh/cấp vai trò trái cấu hình; việc thu hồi vai trò
+không bị cản bởi thay đổi cấu hình cấp mới. Đây là ràng buộc nhất quán của Giáo khoa
+cho các luồng cấp quyền tự động, không phải tuyên bố Moodle cấm mọi cách tự cấp vai trò.

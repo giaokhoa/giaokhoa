@@ -123,6 +123,78 @@ describe('Migration, dữ liệu khởi tạo và kho phân quyền', () => {
     expect(await db.select().from(authzRoles)).toHaveLength(6);
   });
 
+  it('xét vai trò học sinh được gán trực tiếp tại hoạt động theo tư cách ghi danh ở lớp cha', async () => {
+    const owner = await createUser('activity-owner', 'teacher');
+    const student = await createUser('activity-student');
+    const classroom = await createClass(owner.id, `activity-${randomUUID()}`);
+    const [first] = await db
+      .insert(authzContexts)
+      .values({
+        kind: 'assignment',
+        resourceKey: randomUUID(),
+        parentId: classroom.id,
+      })
+      .returning();
+    const [sibling] = await db
+      .insert(authzContexts)
+      .values({
+        kind: 'assignment',
+        resourceKey: randomUUID(),
+        parentId: classroom.id,
+      })
+      .returning();
+    await db.insert(classEnrolments).values({
+      classId: classroom.resourceKey,
+      userId: student.id,
+      status: 'active',
+    });
+    expect(
+      await repository.assignRole({
+        contextId: first.id,
+        userId: student.id,
+        roleKey: 'class:student',
+        source: 'test',
+      }),
+    ).toBe(true);
+    expect(
+      await can(student.id, 'assignment:attempt', 'assignment', first.resourceKey),
+    ).toMatchObject({ allowed: true });
+    expect(
+      await can(student.id, 'assignment:attempt', 'assignment', sibling.resourceKey),
+    ).toMatchObject({ allowed: false });
+    expect(await can(student.id, 'class:view', 'class', classroom.resourceKey)).toMatchObject({
+      allowed: false,
+    });
+    await db
+      .update(classEnrolments)
+      .set({ status: 'suspended' })
+      .where(
+        and(
+          eq(classEnrolments.classId, classroom.resourceKey),
+          eq(classEnrolments.userId, student.id),
+        ),
+      );
+    expect(
+      await can(student.id, 'assignment:attempt', 'assignment', first.resourceKey),
+    ).toMatchObject({ allowed: false });
+    await db
+      .update(classEnrolments)
+      .set({ status: 'active' })
+      .where(
+        and(
+          eq(classEnrolments.classId, classroom.resourceKey),
+          eq(classEnrolments.userId, student.id),
+        ),
+      );
+    expect(
+      await can(student.id, 'assignment:attempt', 'assignment', first.resourceKey),
+    ).toMatchObject({ allowed: true });
+    await repository.revokeRole(first.id, student.id, 'class:student');
+    expect(
+      await can(student.id, 'assignment:attempt', 'assignment', first.resourceKey),
+    ).toMatchObject({ allowed: false });
+  });
+
   it('vai trò hệ thống và lớp độc lập, thu hồi vai trò chủ lớp có hiệu lực ngay', async () => {
     const teacher = await createUser('renewable-teacher', 'teacher');
     const classroom = await createClass(teacher.id, `renewable-${randomUUID()}`);
