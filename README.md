@@ -21,71 +21,12 @@ API mặc định ở cổng `3000`, web dev ở `5173`. Web gọi API qua `VITE
 
 UI dùng các component trong `packages/ui`.
 
-## Xác thực và phân quyền theo ngữ cảnh
+## Xác thực và phân quyền
 
-Better Auth quản lý đăng ký, đăng nhập, xác minh email, phiên và trạng thái khóa tài khoản.
-**Không đăng ký `better-auth/plugins/admin`**, không sử dụng `users.role` hay API `/api/auth/admin/*` để quyết định quyền.
+Better Auth phụ trách tài khoản và phiên đăng nhập. Hệ thống phân quyền riêng trong
+`packages/application/src/authorization` quản lý vai trò, capability và ngữ cảnh
+theo định hướng Moodle. `apps/api` cung cấp các giao diện HTTP tương ứng; lược đồ
+lưu trữ ở `packages/database/src/schema/authorization.ts`.
 
-`AuthorizationService` của ứng dụng xét quyền theo mô hình giống Moodle: người dùng nhận vai trò
-trong `system` hoặc `class` (qua `authz_role_assignments`); quyền nằm ở `authz_role_permissions`
-và được xét từ ngữ cảnh cụ thể lên ngữ cảnh cha. Vai trò mặc định `system:user` áp dụng cho tài khoản
-đã đăng nhập còn hoạt động, không cần ghi một bản gán riêng. Một tài khoản có thể giữ đồng thời
-nhiều vai trò ở nhiều ngữ cảnh. `PROHIBIT` cấm tuyệt đối; `ALLOW` thắng `PREVENT` của vai trò khác
-cùng ngữ cảnh; ngữ cảnh con ưu tiên ngữ cảnh cha. Thu hồi vai trò có hiệu lực cho lần kiểm tra kế tiếp.
-
-Sau khi tạo tài khoản đầu tiên đã xác minh email, người vận hành có quyền kết nối PostgreSQL có thể
-khởi tạo **duy nhất** quản trị viên đầu tiên:
-
-```sh
-pnpm --filter @giaokhoa/database build
-pnpm --filter @giaokhoa/database authz:bootstrap admin@example.com
-```
-
-Lệnh từ chối nếu đã có quản trị viên; không nhận email chưa xác minh, không đăng ký tài khoản mới.
-Quản trị viên dùng `POST` hoặc `DELETE /authorization/system-roles/:userId`, với thân yêu cầu
-`{"role":"teacher"}` hoặc `{"role":"admin"}` để cấp hoặc thu hồi vai trò.
-API đòi capability `role:assign_system` tại ngữ cảnh `system`, không phụ thuộc vai trò Better Auth.
-Các quyền theo lớp vẫn do luồng ghi danh và cấp vai trò trong ngữ cảnh lớp quản lý.
-
-Bản di trú `0000_baseline.sql` là bản dành cho **cơ sở dữ liệu trống**, không được chạy trực tiếp
-trên cơ sở dữ liệu đang giữ dữ liệu: việc chuyển các vai trò cũ sang bảng gán theo ngữ cảnh
-phải có bản di trú bảo toàn dữ liệu riêng được rà soát trước khi áp dụng.
-
-### Cấu hình vai trò và ghi đè theo ngữ cảnh
-
-Hệ phân quyền ứng dụng lưu **định nghĩa vai trò** độc lập với **lần gán vai trò**.
-Bảng `authz_role_context_levels` quản lý những loại ngữ cảnh được gán; hai ma trận
-`authz_role_allow_assignments` và `authz_role_allow_overrides` xác định vai trò nào
-được phép gán hoặc ghi đè vai trò khác. Có capability quản trị mà không được ma trận
-cho phép vẫn không đủ quyền.
-
-- Quản trị định nghĩa role: `POST /authorization/roles`, `PUT /authorization/roles/:roleKey/permissions`,
-  `PUT /authorization/roles/:roleKey/contexts` và `PUT /authorization/roles/:roleKey/matrix`;
-  chỉ tài khoản có capability `role:manage` tại `system` được phép.
-- Gán/thu hồi vai trò theo ngữ cảnh: `POST` hoặc `DELETE /authorization/contexts/:contextId/roles/:userId`,
-  body `{"roleKey":"class:teacher"}`. Cần capability `role:assign` và ma trận gán role cho phép.
-- Ghi đè role tại một ngữ cảnh: `PUT /authorization/contexts/:contextId/overrides`, body
-  `{"roleKey":"class:student","capability":"assignment:attempt","effect":"PREVENT"}`.
-  `INHERIT` xóa override, quay về quyền đã định nghĩa hoặc override tại cha.
-
-Áp dụng ngữ nghĩa cốt lõi của Moodle về role, capability và context nhưng **không khẳng định
-đã sao chép mọi loại context và API của Moodle LMS**. Giáo khoa ánh xạ khóa học thành lớp
-(`class`) và hoạt động thành bài giao (`assignment`); quyền truy cập câu hỏi, đề, tệp vẫn
-chịu các quy tắc nghiệp vụ riêng và bảo vệ dữ liệu người dùng.
-Tài liệu tham chiếu: https://moodledev.io/docs/5.0/apis/subsystems/roles
-
-### Rà soát an toàn quyền theo ngữ cảnh (PR #9)
-
-Tệp người nhận xem được chỉ khi có quyền ở **bài giao** chứa tệp, không suy từ
-quyền lớp; ảnh gốc, biến thể và ảnh lời giải giữ các điều kiện phân biệt về vùng
-nội dung, người nhận và thời điểm công bố. Thành viên rời lớp chỉ được đọc lịch
-sử đã hoàn tất khi không có `PROHIBIT` đang có hiệu lực. Ghi lượt làm phải tái
-kiểm tra quyền trong giao dịch, đồng bộ với lúc cấp hoặc thu hồi vai trò; tài khoản
-bị khóa mất quyền qua các phiên hiện có.
-
-Dữ liệu `authz_contexts` cũ thiếu cha cần sửa bằng công cụ có kiểm soát
-`packages/database/scripts/repair-context-parents.sql` sau khi sao lưu, không
-áp dụng tự động trong PR. Tài liệu chuẩn đã đối chiếu: Moodle 5.3
-([Roles API](https://moodledev.io/docs/5.3/apis/subsystems/roles),
-[Access API](https://moodledev.io/docs/5.3/apis/subsystems/access),
-[File API](https://moodledev.io/docs/5.3/apis/subsystems/files)).
+Các lệnh quản trị dữ liệu, công cụ khởi tạo và hướng dẫn sử dụng cụ thể nằm cùng
+thành phần thực hiện chúng; không mô tả luồng nghiệp vụ trong README dự án.

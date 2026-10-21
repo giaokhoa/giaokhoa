@@ -4,7 +4,13 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import { authzContexts, authzRoleAssignments, authzRoles, users } from '../dist/schema/index.js';
 
-// Chỉ dùng khi chưa có quản trị viên. Người vận hành phải có quyền kết nối PostgreSQL.
+// Cách dùng (trong thư mục gốc):
+//   pnpm --filter @giaokhoa/database build
+//   pnpm --filter @giaokhoa/database authz:bootstrap <email-da-xac-minh>
+// Chỉ chạy lần đầu bằng kết nối PostgreSQL có quyền ghi sau khi đã tạo người dùng.
+// Không đăng ký tài khoản mới, không cấp quyền cho tài khoản chưa xác minh/đã khóa;
+// từ chối nếu đã tồn tại một quản trị viên còn hiệu lực. Vai trò sau đó được quản lý qua API.
+
 config({ path: new URL('../../../apps/api/.env', import.meta.url).pathname });
 const email = process.argv[2];
 if (!email || !email.includes('@') || !process.env.DATABASE_URL) {

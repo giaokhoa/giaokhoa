@@ -1,5 +1,9 @@
--- Dành cho quản trị viên sau khi sao lưu dữ liệu. Không chạy tự động lên cơ sở dữ liệu thật.
--- Bù quan hệ cha đã thiếu ở ngữ cảnh người dùng và ngân hàng câu hỏi của phiên bản cũ.
+-- Sửa dữ liệu ngữ cảnh `user`/`bank` cũ có `parent_id = NULL`.
+-- Chỉ chạy bằng kết nối quản trị sau khi sao lưu và thử trên bản sao cơ sở dữ liệu.
+-- Không tự động chạy khi migrate; `0000_baseline.sql` KHÔNG dành cho DB đã có dữ liệu.
+-- Bản ghi tạo mới hoặc được sử dụng lại cũng được sửa ở repositories/files.ts
+-- và repositories/questions.ts; công cụ này sửa nốt những bản ghi chưa được truy cập.
+-- Chỉ điền cha nếu đang NULL, có thể chạy lặp lại. Nếu thiếu gốc hệ thống thì hủy.
 BEGIN;
 DO $$
 DECLARE root_id uuid;

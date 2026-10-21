@@ -10,6 +10,8 @@ const db = drizzle({
   schema,
 });
 
+// Chỉ phục vụ công cụ sinh schema: khóa chính/ngoại dùng kiểu UUID PostgreSQL.
+// Cấu hình khi chạy trong auth.module.ts không chỉ định giá trị này (generateId: false).
 export const auth = createAuth(
   db,
   {
