@@ -9,6 +9,7 @@
     "start": "nest start",
     "typecheck": "tsc --noEmit --incremental false",
     "test": "vitest run",
+    "test:int": "vitest run --config ./vitest.config.int.ts",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "test:cov": "vitest run --coverage",
     "start:debug": "nest start --debug --watch",

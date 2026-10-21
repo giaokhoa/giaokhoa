@@ -27,6 +27,9 @@
     "@giaokhoa/api#test:e2e": {
       "dependsOn": ["^build"]
     },
+    "@giaokhoa/api#test:int": {
+      "dependsOn": ["^build"]
+    },
     "@giaokhoa/api#test:cov": {
       "dependsOn": ["^build"],
       "outputs": ["coverage/**"]

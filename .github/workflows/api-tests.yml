@@ -1,4 +1,4 @@
-name: PostgreSQL E2E
+name: API Integration & E2E
 
 on:
   push:
@@ -60,5 +60,7 @@ jobs:
           EOF
       - name: Build API và packages
         run: pnpm exec turbo run build --filter=@giaokhoa/api
-      - name: Chạy PostgreSQL E2E
+      - name: Chạy PostgreSQL integration
+        run: pnpm --filter @giaokhoa/api test:int
+      - name: Chạy HTTP E2E
         run: pnpm --filter @giaokhoa/api test:e2e

@@ -9,6 +9,7 @@
     "lint": "oxlint .",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "test:int": "turbo run test:int",
     "test:e2e": "turbo run test:e2e",
     "test:cov": "turbo run test:cov",
     "format": "oxfmt .",

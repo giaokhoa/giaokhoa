@@ -9,8 +9,8 @@ import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Client, Pool } from 'pg';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
-import { ClientErrorFilter } from '../src/common/client-error.filter.js';
-import { CurriculumModule } from '../src/curriculum/curriculum.module.js';
+import { ClientErrorFilter } from '../../../src/common/client-error.filter.js';
+import { CurriculumModule } from '../../../src/curriculum/curriculum.module.js';
 import { migrationsFolder } from '@giaokhoa/database/migrations';
 import * as schema from '@giaokhoa/database/schema';
 

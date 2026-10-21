@@ -2,8 +2,8 @@ import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import { describe, expect, it } from 'vitest';
-import { envSchema, type Env } from '../src/config/env.js';
-import { S3FileStorage } from '../src/files/s3-file-storage.js';
+import { envSchema, type Env } from '../../../src/config/env.js';
+import { S3FileStorage } from '../../../src/files/s3-file-storage.js';
 
 describe('S3 FileStorage integration', () => {
   it('writes, reads and deletes an isolated object', async () => {

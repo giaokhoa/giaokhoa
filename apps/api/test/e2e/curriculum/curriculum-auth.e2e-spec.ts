@@ -13,7 +13,7 @@ import type { App } from 'supertest/types.js';
 import { migrationsFolder } from '@giaokhoa/database/migrations';
 import { users } from '@giaokhoa/database/schema';
 import type { Database } from '@giaokhoa/database/types';
-import { createAuth } from '../src/auth/auth.js';
+import { createAuth } from '../../../src/auth/auth.js';
 
 type AppAuth = ReturnType<typeof createAuth>;
 
@@ -72,7 +72,7 @@ describe('Curriculum authorization (e2e)', () => {
     const migrationDb = drizzle(pool);
     await migrate(migrationDb, { migrationsFolder });
 
-    const { AppModule } = await import('../src/app.module.js');
+    const { AppModule } = await import('../../../src/app.module.js');
     const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
 
     app = module.createNestApplication();
