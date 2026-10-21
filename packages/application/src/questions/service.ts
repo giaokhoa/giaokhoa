@@ -13,6 +13,7 @@ import { ClientError } from '../common/client-error.js';
 import type { AuthorizationService } from '../authorization/service.js';
 import type { QuestionsRepository, StoredQuestion } from './repository.js';
 
+/** Kiểm tra lại toàn bộ câu hỏi sau khi gộp bản vá, không chỉ những trường được gửi lên. */
 function validateMergedQuestion(value: unknown): QuestionCreate {
   const result = questionCreateSchema.safeParse(value);
   if (!result.success) {
@@ -31,6 +32,7 @@ function withoutOwner(question: StoredQuestion): Question {
   return publicQuestion;
 }
 
+/** Bảo vệ quyền tác giả, phiên bản câu hỏi bất biến và tham chiếu tệp trong nội dung soạn thảo. */
 export class QuestionsService {
   constructor(
     private readonly repository: QuestionsRepository,
@@ -54,7 +56,7 @@ export class QuestionsService {
     return withoutOwner(await this.repository.createQuestion(question, refs, userId));
   }
 
-  /** Response soạn thảo có lời giải, vì vậy phải thỏa capability và truy vấn theo owner. */
+  /** Dữ liệu soạn thảo chứa cả lời giải, nên phải kiểm tra quyền quản lý và lọc theo chủ sở hữu. */
   async getQuestion(id: string, userId: string): Promise<Question> {
     await this.assertCapability(userId, 'question:manage_own');
     const question = await this.repository.findQuestionOwned(id, userId);
@@ -63,6 +65,7 @@ export class QuestionsService {
     return withoutOwner(question);
   }
 
+  /** Chứng minh quyền sở hữu trước khi đọc phiên bản sẵn sàng để không lộ câu hỏi của tác giả khác. */
   async getLatestReadyQuestion(id: string, userId: string): Promise<Question> {
     await this.assertCapability(userId, 'question:manage_own');
     const owned = await this.repository.findQuestionOwned(id, userId);
@@ -94,6 +97,7 @@ export class QuestionsService {
     return this.repository.listQuestionVersions(id);
   }
 
+  /** Kiểm tra phiên bản kỳ vọng, phân biệt đổi trạng thái với sửa nội dung và xác thực toàn bộ bản sau khi gộp. */
   async updateQuestion(
     id: string,
     patch: QuestionPatch,
@@ -121,7 +125,7 @@ export class QuestionsService {
 
     // Chỉ thay đổi trạng thái mới được cập nhật trực tiếp trên phiên bản hiện tại.
     if (Object.keys(patch).length === 1 && patch.status !== undefined) {
-      // Kể cả trạng thái không đổi vẫn phải qua kiểm tra phiên bản có khóa trong repository.
+      // Ngay cả khi trạng thái không đổi, kho dữ liệu vẫn phải khóa và kiểm tra phiên bản.
       const updated = await this.repository.changeQuestionStatus(
         questionId,
         expectedVersion,
@@ -167,6 +171,7 @@ export class QuestionsService {
     return stimulus;
   }
 
+  /** Chỉ thu thập lại tham chiếu ảnh khi nội dung ngữ liệu thay đổi; quyền và ràng buộc sử dụng do kho dữ liệu bảo vệ. */
   async updateStimulus(id: string, patch: StimulusPatch, userId: string): Promise<Stimulus> {
     await this.assertCapability(userId, 'question:manage_own');
     const refs = patch.content === undefined ? null : collectFileRefs(patch.content);

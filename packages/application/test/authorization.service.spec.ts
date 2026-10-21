@@ -47,15 +47,15 @@ class FakeAuthorizationRepository implements AuthorizationRepository {
   }
 
   async createContextWithRole(_input: ContextWithRoleInput): Promise<AuthorizationContext> {
-    throw new Error('Not used in evaluator tests');
+    throw new Error('Không dùng trong các trường hợp kiểm thử xét quyền');
   }
 
   async assignRole(_input: RoleAssignmentInput): Promise<boolean> {
-    throw new Error('Not used in evaluator tests');
+    throw new Error('Không dùng trong các trường hợp kiểm thử xét quyền');
   }
 
   async revokeRole(_contextId: string, _userId: string, _roleKey: string): Promise<boolean> {
-    throw new Error('Not used in evaluator tests');
+    throw new Error('Không dùng trong các trường hợp kiểm thử xét quyền');
   }
 
   set(actorId: string, capability: string, grants: PermissionGrant[]) {
@@ -160,5 +160,85 @@ describe('Dịch vụ phân quyền (AuthorizationService)', () => {
       kind: 'not_found',
       code: 'authorization_context_not_found',
     });
+  });
+
+  it('từ chối phạm vi giả mạo gốc hệ thống dù được cấp quyền trực tiếp', async () => {
+    const repository = new FakeAuthorizationRepository();
+    const fakeRoot = {
+      id: 'fake-root',
+      kind: 'system' as const,
+      resourceKey: 'another-system',
+      parentId: null,
+    };
+    repository.contexts = [fakeRoot];
+    repository.set('actor', 'class:update', [{ contextId: fakeRoot.id, effect: 'ALLOW' }]);
+    const service = new AuthorizationService(repository);
+    await expect(
+      service.authorize({
+        ...request,
+        context: { kind: 'system', resourceKey: 'another-system' },
+      }),
+    ).resolves.toMatchObject({ allowed: false, reason: 'invalid_context' });
+    repository.contexts = [{ ...classOne, parentId: null }];
+    repository.set('actor', 'class:update', [{ contextId: classOne.id, effect: 'ALLOW' }]);
+    await expect(service.authorize(request)).resolves.toMatchObject({
+      allowed: false,
+      reason: 'invalid_context',
+    });
+  });
+
+  it('chỉ kế thừa quyền qua các loại phạm vi cha hợp lệ', async () => {
+    const repository = new FakeAuthorizationRepository();
+    const bank = { id: 'bank-one', kind: 'bank' as const, resourceKey: 'B1', parentId: system.id };
+    const question = {
+      id: 'question-one',
+      kind: 'question' as const,
+      resourceKey: 'Q1',
+      parentId: bank.id,
+    };
+    const assignment = {
+      id: 'assignment-one',
+      kind: 'assignment' as const,
+      resourceKey: 'A1',
+      parentId: classOne.id,
+    };
+    repository.contexts = [system, classOne, bank, question, assignment];
+    repository.set('actor', 'class:update', [
+      { contextId: bank.id, effect: 'ALLOW' },
+      { contextId: classOne.id, effect: 'ALLOW' },
+    ]);
+    const service = new AuthorizationService(repository);
+    await expect(
+      service.authorize({
+        ...request,
+        context: { kind: 'question', resourceKey: 'Q1' },
+      }),
+    ).resolves.toMatchObject({ allowed: true, matchedContextId: bank.id });
+    await expect(
+      service.authorize({
+        ...request,
+        context: { kind: 'assignment', resourceKey: 'A1' },
+      }),
+    ).resolves.toMatchObject({ allowed: true, matchedContextId: classOne.id });
+
+    repository.contexts = [
+      system,
+      classOne,
+      bank,
+      { ...question, parentId: classOne.id },
+      { ...assignment, parentId: system.id },
+    ];
+    await expect(
+      service.authorize({
+        ...request,
+        context: { kind: 'question', resourceKey: 'Q1' },
+      }),
+    ).resolves.toMatchObject({ allowed: false, reason: 'invalid_context' });
+    await expect(
+      service.authorize({
+        ...request,
+        context: { kind: 'assignment', resourceKey: 'A1' },
+      }),
+    ).resolves.toMatchObject({ allowed: false, reason: 'invalid_context' });
   });
 });

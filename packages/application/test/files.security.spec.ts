@@ -88,18 +88,18 @@ describe('Kiểm thử ngăn tái xuất hiện lỗi bảo mật của dịch v
 
   it.each([
     [
-      'inline URL',
+      'địa chỉ viết trực tiếp',
       '<rect width="10" height="10" style="fill:url(https://attacker.example/a.svg#x)"/>',
     ],
     [
-      'CSS import',
+      'lệnh nhập bảng kiểu CSS',
       '<style>@import url(https://attacker.example/a.css);</style><rect width="10" height="10"/>',
     ],
     [
-      'CSS escape',
+      'ký tự thoát CSS',
       '<rect width="10" height="10" style="fill:u\\\\72l(https://attacker.example/a.svg)"/>',
     ],
-  ])('rejects remote CSS in TikZ SVG (%s)', async (_label, content) => {
+  ])('từ chối tham chiếu CSS bên ngoài trong SVG tạo từ TikZ (%s)', async (_label, content) => {
     const { service, storage } = createService();
     const svg = Buffer.from(
       `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">${content}</svg>`,
@@ -315,9 +315,12 @@ describe('Kiểm thử ngăn tái xuất hiện lỗi bảo mật của dịch v
     expect(storage.get).toHaveBeenCalledOnce();
   });
 
-  it.each(['original', 'variant'])(
-    'keeps an upload intent when metadata and S3 cleanup fail (%s)',
-    async (kind) => {
+  it.each([
+    ['ảnh gốc', 'original'],
+    ['ảnh biến thể', 'variant'],
+  ])(
+    'giữ yêu cầu tải lên khi lưu thông tin tệp và dọn kho S3 đều thất bại (%s)',
+    async (_label, kind) => {
       const { service, repository, storage } = createService();
       repository.findOwned.mockResolvedValue({
         id: FILE_ID,

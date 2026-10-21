@@ -1,8 +1,8 @@
-name: Kiểm thử cơ sở dữ liệu và giao diện lập trình
+name: Kiểm thử tầng ứng dụng, cơ sở dữ liệu và giao diện lập trình
 
 on:
   push:
-    branches: [feat/files-subsystem]
+    branches: [main]
   pull_request:
 
 permissions:
@@ -60,6 +60,8 @@ jobs:
           EOF
       - name: Biên dịch giao diện lập trình và các gói
         run: pnpm exec turbo run build --filter=@giaokhoa/api
+      - name: Kiểm thử đơn vị tầng ứng dụng
+        run: pnpm --filter @giaokhoa/application test
       - name: Kiểm thử tích hợp kho dữ liệu PostgreSQL
         run: DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/giaokhoa_test pnpm --filter @giaokhoa/database test:int
       - name: Kiểm thử tích hợp dịch vụ nghiệp vụ và S3

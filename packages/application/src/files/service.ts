@@ -96,8 +96,8 @@ function inspectOriginalImage(file: UploadedFile | undefined, sourceInput: unkno
 
   const source = parseTikzSource(sourceInput);
   if (dimensions.type === 'svg') {
-    // Kết quả render từ browser vẫn là đầu vào không tin cậy: API bắt buộc
-    // có nguồn TikZ riêng và tự sanitize lại bytes SVG trước khi lưu.
+    // SVG dựng ở trình duyệt vẫn là đầu vào không tin cậy: máy chủ yêu cầu
+    // nguồn TikZ riêng và tự làm sạch dữ liệu SVG trước khi lưu.
     if (!source) invalid('SVG chỉ được tạo từ TikZ');
 
     let text: string;
@@ -154,6 +154,7 @@ function inspectRasterImage(file: UploadedFile | undefined) {
   return image;
 }
 
+/** Điều phối lưu trữ nhị phân, làm sạch nội dung, kiểm tra quyền và thu gom tệp qua hàng đợi bền vững. */
 export class FilesService {
   constructor(
     private readonly repository: FilesRepository,
@@ -162,6 +163,7 @@ export class FilesService {
     private readonly now: () => Date = () => new Date(),
   ) {}
 
+  /** Xác thực ảnh trước khi ghi, dự phòng lệnh xóa trước khi tải lên và chỉ tin nội dung SVG đã làm sạch. */
   async createFile(
     file: UploadedFile | undefined,
     userId: string,
@@ -169,8 +171,9 @@ export class FilesService {
   ): Promise<CreatedFile> {
     const image = inspectOriginalImage(file, sourceInput);
     const contentHash = createHash('sha256').update(image.file.buffer).digest('hex');
-    // Hai request cùng SHA vẫn upload bằng key riêng; chỉ DB chọn blob dùng chung.
-    // Ghi intent trước PUT để GC tìm được object nếu API chết giữa PUT và commit.
+    // Các lượt tải lên cùng mã băm SHA-256 vẫn dùng khóa lưu trữ riêng;
+    // chỉ cơ sở dữ liệu quyết định đối tượng nhị phân nào được dùng chung.
+    // Ghi nhận ý định tải lên trước khi lưu tệp để có thể thu gom nếu tiến trình dừng đột ngột.
     const storageKey = `files/objects/${randomUUID()}.${image.imageType.extension}`;
     await this.repository.reserveUpload(storageKey);
     await this.storage.put(storageKey, image.file.buffer, image.imageType.mimeType);
@@ -196,18 +199,19 @@ export class FilesService {
         await this.storage.delete(storageKey);
         await this.repository.acknowledgeDeletion(storageKey);
       } catch {
-        // Intent bền vững đã ghi trước PUT; GC sẽ dọn nếu cleanup tức thời thất bại.
+        // Ý định tải lên đã được lưu; tác vụ thu gom sẽ xử lý nếu việc xóa tức thời thất bại.
       }
       throw cause;
     }
 
-    // DB giữ một blob chung theo SHA-256; bản upload trùng chỉ là tạm thời.
+    // Cơ sở dữ liệu giữ một đối tượng nhị phân cho cùng mã băm SHA-256;
+    // đối tượng vừa tải lên trùng lặp chỉ là tạm thời.
     if (stored.storageKey !== storageKey) {
       try {
         await this.storage.delete(storageKey);
         await this.repository.acknowledgeDeletion(storageKey);
       } catch {
-        // Outbox sẽ thử lại nếu thao tác dọn bản upload trùng thất bại.
+        // Hàng đợi xóa sẽ thử lại nếu xóa đối tượng trùng lặp thất bại.
       }
     }
     return {
@@ -219,6 +223,7 @@ export class FilesService {
     };
   }
 
+  /** Chỉ chủ ảnh gốc được tạo ảnh cắt; biến thể không được là SVG hoặc dùng ảnh biến thể làm cha. */
   async createVariant(
     fileId: string,
     file: UploadedFile | undefined,
@@ -256,7 +261,7 @@ export class FilesService {
         await this.storage.delete(storageKey);
         await this.repository.acknowledgeDeletion(storageKey);
       } catch {
-        // Intent bền vững đã ghi trước PUT; GC sẽ dọn nếu cleanup tức thời thất bại.
+        // Ý định tải lên đã được lưu; tác vụ thu gom sẽ xử lý nếu việc xóa tức thời thất bại.
       }
       throw cause;
     }
@@ -266,7 +271,7 @@ export class FilesService {
         await this.storage.delete(storageKey);
         await this.repository.acknowledgeDeletion(storageKey);
       } catch {
-        // Outbox sẽ thử lại nếu thao tác dọn bản upload trùng thất bại.
+        // Hàng đợi xóa sẽ thử lại nếu xóa đối tượng trùng lặp thất bại.
       }
     }
     return {
@@ -278,6 +283,7 @@ export class FilesService {
     };
   }
 
+  /** Nguồn TikZ riêng tư hơn ảnh đã dựng: không cấp cho người chỉ có quyền xem ảnh trong đề. */
   async getSource(id: string, userId: string): Promise<TikzFileSource> {
     const parsedId = fileIdSchema.safeParse(id);
     if (!parsedId.success)
@@ -293,6 +299,7 @@ export class FilesService {
     return parsed.data;
   }
 
+  /** Chỉ gỡ tệp nháp do người dùng sở hữu; tác vụ lưu trữ thất bại vẫn còn bản ghi để thu gom lại. */
   async discardFiles(refs: FileRef[], userId: string): Promise<void> {
     const parsed = fileRefSchema.array().max(100).safeParse(refs);
     if (!parsed.success)
@@ -310,9 +317,11 @@ export class FilesService {
     }
   }
 
+  /** Thu gom hai giai đoạn: xóa bản ghi tệp hết hạn rồi xử lý các khóa lưu trữ đang chờ xóa. */
   async collectOrphanFiles(cutoff: Date): Promise<number> {
     while ((await this.repository.queueExpiredOrphans(cutoff)).processed > 0) {
-      // Nhiều file logic có thể cùng một blob nên lô đã xử lý không nhất thiết có storage key.
+      // Nhiều bản ghi tệp có thể cùng dùng một đối tượng nhị phân,
+      // nên lô đã xử lý không nhất thiết phát sinh khóa lưu trữ cần xóa.
     }
 
     let deleted = 0;
@@ -328,8 +337,8 @@ export class FilesService {
       deleted += result.deleted;
       failed += result.failed;
       firstError ??= result.error;
-      // Vẫn bỏ qua key lỗi trong lượt này để không lặp vô hạn; outbox giữ
-      // các key chưa acknowledge cho lần GC kế tiếp.
+      // Bỏ qua khóa xóa thất bại trong lượt này để tránh lặp vô hạn;
+      // hàng đợi vẫn giữ các khóa chưa được xác nhận để thu gom lần sau.
       afterStorageKey = storageKeys[storageKeys.length - 1];
     }
 
@@ -363,9 +372,9 @@ export class FilesService {
   }
 
   /**
-   * Chủ ảnh được xem file của mình; học sinh chỉ được xem file có quyền theo
-   * nội dung đề hoặc solution đã công bố. Guidance, source TikZ và ảnh gốc
-   * của crop không được suy quyền từ khả năng xem biến thể.
+   * Chủ sở hữu được xem ảnh của mình; người nhận bài chỉ được xem ảnh thuộc
+   * nội dung đề hoặc lời giải đã công bố. Quyền xem ảnh cắt không đồng nghĩa
+   * với quyền đọc ảnh gốc, nội dung hướng dẫn hay nguồn TikZ.
    */
   async getFile(id: string, userId: string): Promise<StoredFile> {
     const parsedId = fileIdSchema.safeParse(id);
@@ -381,6 +390,7 @@ export class FilesService {
     return this.getStoredFile(image.storageKey, image.mimeType, image.byteSize);
   }
 
+  /** Đọc ảnh biến thể phải chứng minh cả quan hệ với ảnh gốc lẫn quyền đối với nội dung được giao. */
   async getVariant(fileId: string, variantFileId: string, userId: string): Promise<StoredFile> {
     const parsedImageId = fileIdSchema.safeParse(fileId);
     const parsedImageVariantId = fileIdSchema.safeParse(variantFileId);
@@ -402,6 +412,7 @@ export class FilesService {
     return this.getStoredFile(variant.storageKey, variant.mimeType, variant.byteSize);
   }
 
+  /** Chỉ xét nội dung đề được giao hoặc lời giải đã công bố, không suy quyền từ vị trí tệp đơn thuần. */
   private async assertAssignedFileAccess(
     fileId: string,
     variantFileId: string | null,

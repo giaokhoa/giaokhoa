@@ -11,6 +11,7 @@ import type {
 import { ClientError } from '../common/client-error.js';
 import type { CurriculumRepository } from './repository.js';
 
+/** Điều phối cây chương trình học; các quy tắc toàn vẹn cây được thực thi tại kho dữ liệu khi ghi. */
 export class CurriculumService {
   constructor(private readonly repository: CurriculumRepository) {}
 
@@ -88,6 +89,7 @@ export class CurriculumService {
     return this.repository.listNodes(curriculumId);
   }
 
+  /** Xác minh nút cha cùng chương trình trước khi ghi; ràng buộc khóa ngoại vẫn được kiểm tại kho dữ liệu. */
   async createNode(input: CurriculumNodeCreate) {
     await this.getCurriculum(input.curriculumId);
     if (input.parentId) await this.assertValidParent(input.parentId, input.curriculumId);
@@ -105,6 +107,7 @@ export class CurriculumService {
     return node;
   }
 
+  /** Tách sửa thông tin thường khỏi đổi nút cha: đổi cấu trúc cây phải kiểm chu trình trong giao dịch. */
   async updateNode(id: string, patch: CurriculumNodePatch) {
     if (patch.parentId === undefined) {
       await this.getNode(id);

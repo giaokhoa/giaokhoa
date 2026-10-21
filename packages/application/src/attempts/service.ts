@@ -12,6 +12,7 @@ import type { AuthorizationService } from '../authorization/service.js';
 import { ClientError } from '../common/client-error.js';
 import type { AttemptsRepository } from './repository.js';
 
+/** Áp dụng quyền của người làm và người chấm, vòng đời nộp bài và các mốc công bố độc lập. */
 export class AttemptsService {
   constructor(
     private readonly repository: AttemptsRepository,
@@ -28,9 +29,9 @@ export class AttemptsService {
   }
 
   /**
-   * Giáo viên phải có capability của lớp; học sinh phải là chủ attempt.
-   * Với bài đã kết thúc của người rời lớp, chỉ bỏ qua role lớp; repository vẫn kiểm
-   * account hợp lệ và policy công bố khi đọc kết quả.
+   * Giáo viên phải có quyền của lớp; học sinh phải sở hữu lượt làm bài.
+   * Người đã rời lớp được đọc lượt làm đã kết thúc mà không cần vai trò lớp hiện tại;
+   * kho dữ liệu vẫn kiểm tra tài khoản và điều kiện công bố kết quả.
    */
   private async assertAttempt(actorId: string, id: string, capability: string, teacher = false) {
     const context = await this.repository.findContext(id);
@@ -48,6 +49,7 @@ export class AttemptsService {
     return context;
   }
 
+  /** Quyền làm bài chỉ là điều kiện đầu; kho dữ liệu còn kiểm thời gian, số lượt và người nhận hợp lệ. */
   async start(actorId: string, assignmentId: string): Promise<Attempt> {
     const classId = await this.repository.findAssignmentClass(assignmentId);
     if (!classId)
@@ -64,6 +66,7 @@ export class AttemptsService {
     return attempt;
   }
 
+  /** Kiểm tra cấu trúc câu trả lời trước khi lưu; kho dữ liệu ngăn sửa lượt đã nộp hoặc quá hạn. */
   async save(
     actorId: string,
     id: string,
@@ -105,6 +108,7 @@ export class AttemptsService {
     return attempt;
   }
 
+  /** Chỉ chấm lượt đã nộp bằng quyền lớp hiện tại; trả lỗi xung đột khi trạng thái không cho phép chấm. */
   async grade(actorId: string, id: string, input: AttemptGrade): Promise<AttemptReview> {
     const parsed = attemptGradeSchema.safeParse(input);
     if (!parsed.success)
@@ -121,6 +125,7 @@ export class AttemptsService {
     return graded;
   }
 
+  /** Điểm và nhận xét được công bố theo mốc riêng; đã rời lớp vẫn phải là chủ lượt làm đã hoàn tất. */
   async result(actorId: string, id: string): Promise<AttemptResult> {
     await this.assertAttempt(actorId, id, 'result:view_own');
     const result = await this.repository.result(id, actorId, this.now());
@@ -129,6 +134,7 @@ export class AttemptsService {
     return result;
   }
 
+  /** Mốc công bố lời giải độc lập với mốc xem điểm, không suy quyền từ khả năng đọc đề. */
   async solutions(actorId: string, id: string): Promise<AttemptSolutions> {
     await this.assertAttempt(actorId, id, 'result:view_own');
     const solutions = await this.repository.solutions(id, actorId, this.now());

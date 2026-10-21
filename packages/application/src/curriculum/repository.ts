@@ -13,10 +13,12 @@ import type {
   SubjectPatch,
 } from '@giaokhoa/shared/curriculum';
 
+/** Trả trạng thái tường minh cho thao tác đổi cây để dịch vụ ánh xạ đúng lỗi nghiệp vụ. */
 export type UpdateNodeTreeResult =
   | { status: 'updated'; node: CurriculumNode }
   | { status: 'not_found' | 'invalid_parent' | 'cycle' };
 
+/** Duy trì quan hệ môn, chương trình, nút và yêu cầu cần đạt; chuyển lỗi dữ liệu thành lỗi nghiệp vụ. */
 export interface CurriculumRepository {
   listSubjects(): Promise<Subject[]>;
   createSubject(data: SubjectCreate): Promise<Subject>;
@@ -39,6 +41,7 @@ export interface CurriculumRepository {
   createNode(data: CurriculumNodeCreate): Promise<CurriculumNode>;
   findNode(id: string): Promise<CurriculumNode | undefined>;
   updateNode(id: string, data: CurriculumNodePatch): Promise<CurriculumNode | undefined>;
+  /** Khóa và kiểm tra cấu trúc cây cùng giao dịch, từ chối cha khác chương trình hoặc tạo chu trình. */
   updateNodeTree(
     id: string,
     data: CurriculumNodePatch & { parentId: string | null },
