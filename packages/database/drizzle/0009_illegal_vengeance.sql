@@ -1,1 +1,0 @@
-ALTER TABLE "file_object_deletions" ADD COLUMN "available_at" timestamp DEFAULT now() NOT NULL;
