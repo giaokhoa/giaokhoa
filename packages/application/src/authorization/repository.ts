@@ -43,7 +43,7 @@ export type RoleAssignmentInput = {
   grantedByUserId?: string;
 };
 
-/** Hợp đồng đọc quyền hiệu lực và thay đổi vai trò; bộ chuyển đổi phải chỉ trả quyền chưa bị thu hồi. */
+/** Hợp đồng tra cứu quyền hiện hành và thay đổi vai trò; chỉ xét các lần cấp vai trò chưa bị thu hồi. */
 export interface AuthorizationRepository {
   findContext(ref: ContextRef): Promise<AuthorizationContext | undefined>;
   findContextById(id: string): Promise<AuthorizationContext | undefined>;

@@ -40,7 +40,7 @@ function parseViewBox(value: string | null) {
   return width > 0 && height > 0 ? { width, height } : undefined;
 }
 
-/** Làm sạch SVG từ đầu vào không tin cậy, kiểm tham chiếu ngoài và chuẩn hóa kích thước theo pixel. */
+/** Làm sạch SVG không tin cậy, loại bỏ tham chiếu ngoài và chuẩn hóa kích thước theo điểm ảnh. */
 export function sanitizeAndInspectSvg(input: string) {
   const clean = purifier.sanitize(input, {
     USE_PROFILES: { svg: true, svgFilters: true },
@@ -59,8 +59,8 @@ export function sanitizeAndInspectSvg(input: string) {
     throw new Error('File không phải SVG hợp lệ');
   }
 
-  // DOMPurify chặn nội dung thực thi nhưng không bảo đảm xóa remote URL trong CSS.
-  // Từ chối cả SVG nếu CSS còn reference nguy hiểm; không chỉ lọc href/xlink:href.
+  // DOMPurify chặn nội dung thực thi nhưng không bảo đảm loại bỏ địa chỉ từ xa trong CSS.
+  // Từ chối SVG nếu CSS còn tham chiếu không an toàn; kiểm tra cả ngoài thuộc tính href và xlink:href.
   for (const element of [root, ...root.querySelectorAll('style, [style]')]) {
     const css =
       element.localName === 'style'

@@ -1,6 +1,6 @@
 import type { FileRef, TikzFileSource } from '@giaokhoa/shared/files';
 
-/** Tệp logic riêng theo chủ sở hữu; nhiều tệp có thể tham chiếu cùng đối tượng nhị phân theo mã băm. */
+/** Mỗi bản ghi tệp có chủ sở hữu riêng; nhiều bản ghi có thể cùng dùng một đối tượng nhị phân theo mã băm. */
 export type FileRecord = {
   id: string;
   createdByUserId: string;
@@ -19,7 +19,7 @@ export type FileRecord = {
 export type CreateFileData = Omit<FileRecord, 'id' | 'orphanedAt' | 'createdAt'>;
 export type CreateFileVariantData = CreateFileData & { parentFileId: string };
 
-/** Hợp đồng tệp logic và hàng đợi xóa; giao dịch dữ liệu bảo vệ tham chiếu, còn xóa đối tượng lưu trữ xử lý riêng. */
+/** Hợp đồng quản lý bản ghi tệp và hàng đợi xóa; giao dịch bảo vệ tham chiếu, còn đối tượng lưu trữ được xóa riêng. */
 export interface FilesRepository {
   /** Lưu ý định tải lên trước khi ghi đối tượng để thu gom được tệp thất bại giữa chừng. */
   reserveUpload(storageKey: string): Promise<void>;
@@ -49,9 +49,9 @@ export interface FilesRepository {
     now: Date,
   ): Promise<Array<{ classId: string; enrolmentStatus: 'active' | 'left' }>>;
   discardOrphans(refs: FileRef[], userId: string): Promise<string[]>;
-  /** Chỉ xóa tệp nháp hết hạn khi không còn tham chiếu; xếp khóa đối tượng khi không còn tệp nào dùng chung. */
+  /** Chỉ xóa tệp nháp hết hạn nếu không còn tham chiếu; chỉ xếp khóa để xóa khi không có tệp nào dùng chung. */
   queueExpiredOrphans(cutoff: Date): Promise<{ processed: number; storageKeys: string[] }>;
-  /** Chỉ liệt kê khóa đã hết thời gian chờ xóa, hỗ trợ phân trang qua khóa đã duyệt. */
+  /** Chỉ liệt kê khóa đã đến thời điểm được xóa; hỗ trợ phân trang theo khóa đã duyệt. */
   listPendingDeletions(afterStorageKey?: string): Promise<string[]>;
   acknowledgeDeletion(storageKey: string): Promise<void>;
 }

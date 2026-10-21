@@ -75,8 +75,8 @@ export class AssignmentsService {
   }
 
   /**
-   * Quyền publish thuộc đúng Class context. Repository khóa lớp khi chụp active recipients
-   * để kết quả không phụ thuộc vào membership ở những request sau.
+   * Quyền công bố được xét trong phạm vi lớp tương ứng. Kho dữ liệu khóa lớp
+   * khi chốt danh sách người nhận đang tham gia, không tự thêm người ghi danh về sau.
    */
   async publish(actorId: string, id: string): Promise<Assignment> {
     await this.authorized(actorId, id, 'assignment:publish');

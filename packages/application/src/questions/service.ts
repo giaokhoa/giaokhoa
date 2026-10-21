@@ -56,7 +56,7 @@ export class QuestionsService {
     return withoutOwner(await this.repository.createQuestion(question, refs, userId));
   }
 
-  /** Response soạn thảo có lời giải, vì vậy phải thỏa capability và truy vấn theo owner. */
+  /** Dữ liệu soạn thảo chứa cả lời giải, nên phải kiểm tra quyền quản lý và lọc theo chủ sở hữu. */
   async getQuestion(id: string, userId: string): Promise<Question> {
     await this.assertCapability(userId, 'question:manage_own');
     const question = await this.repository.findQuestionOwned(id, userId);
@@ -125,7 +125,7 @@ export class QuestionsService {
 
     // Chỉ thay đổi trạng thái mới được cập nhật trực tiếp trên phiên bản hiện tại.
     if (Object.keys(patch).length === 1 && patch.status !== undefined) {
-      // Kể cả trạng thái không đổi vẫn phải qua kiểm tra phiên bản có khóa trong repository.
+      // Ngay cả khi trạng thái không đổi, kho dữ liệu vẫn phải khóa và kiểm tra phiên bản.
       const updated = await this.repository.changeQuestionStatus(
         questionId,
         expectedVersion,

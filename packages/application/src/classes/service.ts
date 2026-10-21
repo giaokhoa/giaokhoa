@@ -40,8 +40,9 @@ export class ClassesService {
   }
 
   /**
-   * Kiểm quyền tạo lớp trước khi ghi; repository kiểm lại account role trong transaction
-   * để tạo lớp, Class context và class owner cùng thành công hoặc cùng rollback.
+   * Kiểm tra quyền tạo lớp trước khi ghi. Kho dữ liệu kiểm lại vai trò tài khoản
+   * trong cùng giao dịch tạo lớp, phạm vi phân quyền và vai trò chủ lớp;
+   * tất cả phải thành công hoặc cùng được hoàn tác.
    */
   async createClass(actorId: string, input: ClassCreate): Promise<Class> {
     await this.assertSystem(actorId, 'class:create');

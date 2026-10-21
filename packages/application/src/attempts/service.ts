@@ -29,9 +29,9 @@ export class AttemptsService {
   }
 
   /**
-   * Giáo viên phải có capability của lớp; học sinh phải là chủ attempt.
-   * Với bài đã kết thúc của người rời lớp, chỉ bỏ qua role lớp; repository vẫn kiểm
-   * account hợp lệ và policy công bố khi đọc kết quả.
+   * Giáo viên phải có quyền của lớp; học sinh phải sở hữu lượt làm bài.
+   * Người đã rời lớp được đọc lượt làm đã kết thúc mà không cần vai trò lớp hiện tại;
+   * kho dữ liệu vẫn kiểm tra tài khoản và điều kiện công bố kết quả.
    */
   private async assertAttempt(actorId: string, id: string, capability: string, teacher = false) {
     const context = await this.repository.findContext(id);

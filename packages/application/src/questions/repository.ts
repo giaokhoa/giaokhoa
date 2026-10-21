@@ -39,7 +39,7 @@ export interface QuestionsRepository {
 
   createStimulus(data: StimulusCreate, refs: FileRef[], userId: string): Promise<Stimulus>;
   findStimulusOwned(id: string, userId: string): Promise<Stimulus | undefined>;
-  /** Giá trị rỗng của refs nghĩa là không thay thế tham chiếu tệp; mảng rỗng nghĩa là nội dung không còn ảnh. */
+  /** `refs` bằng `null` nghĩa là giữ nguyên tham chiếu tệp; mảng rỗng nghĩa là xóa hết tham chiếu. */
   updateStimulus(
     id: string,
     data: StimulusPatch,

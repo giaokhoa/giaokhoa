@@ -51,8 +51,8 @@ export class ExamsService {
   }
 
   /**
-   * Chỉ tạo revision từ câu hỏi hợp lệ; repository xác minh ownership và lưu snapshot.
-   * Đề đã giao tiếp tục dùng snapshot ngay cả khi câu hỏi gốc thay đổi.
+   * Chỉ tạo phiên bản đề từ câu hỏi hợp lệ; kho dữ liệu kiểm tra quyền sở hữu
+   * và lưu bản chụp nội dung. Bài đã giao dùng bản chụp cũ dù câu hỏi gốc thay đổi.
    */
   async createRevision(
     actorId: string,

@@ -45,9 +45,10 @@ export class AuthorizationService {
   ) {}
 
   /**
-   * Xét grant từ context cụ thể lên System: PROHIBIT phủ quyết toàn cây,
-   * PREVENT thắng ALLOW cùng cấp, thiếu ALLOW thì từ chối.
-   * Kết quả capability chưa thay thế kiểm tra owner, enrolment và lifecycle của use case.
+   * Xét quyền từ phạm vi cụ thể lên phạm vi hệ thống: `PROHIBIT` luôn phủ quyết,
+   * `PREVENT` ưu tiên hơn `ALLOW` cùng cấp; không có `ALLOW` thì từ chối.
+   * Quyền được cấp không thay thế kiểm tra chủ sở hữu, tình trạng tham gia lớp
+   * và các điều kiện thuộc vòng đời nghiệp vụ.
    */
   async authorize(request: AuthorizationRequest): Promise<AuthorizationDecision> {
     const context = await this.repository.findContext(request.context);
