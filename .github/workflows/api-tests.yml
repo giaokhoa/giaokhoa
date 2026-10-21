@@ -1,4 +1,4 @@
-name: API Integration & E2E
+name: Kiểm thử Database và API
 
 on:
   push:
@@ -60,9 +60,9 @@ jobs:
           EOF
       - name: Build API và packages
         run: pnpm exec turbo run build --filter=@giaokhoa/api
-      - name: Kiểm thử trực tiếp repository PostgreSQL
+      - name: Kiểm thử tích hợp PostgreSQL của database
         run: DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/giaokhoa_test pnpm --filter @giaokhoa/database test:int
-      - name: Chạy PostgreSQL integration
+      - name: Kiểm thử tích hợp kho S3 của API
         run: pnpm --filter @giaokhoa/api test:int
       - name: Chạy HTTP E2E
         run: pnpm --filter @giaokhoa/api test:e2e
