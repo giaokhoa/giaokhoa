@@ -13,6 +13,7 @@ const VARIANT_FILE_ID = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d23';
 
 function createService() {
   const repository = {
+    reserveUpload: vi.fn(async () => undefined),
     create: vi.fn(async (data: Record<string, unknown>) => ({
       ...data,
       id: FILE_ID,
@@ -27,6 +28,7 @@ function createService() {
     findOwned: vi.fn(),
     findVariant: vi.fn(),
     assignedFileClasses: vi.fn(async () => [] as string[]),
+    hasReleasedSolutionFileAccess: vi.fn(async () => false),
     findSourceOwned: vi.fn(),
     findVariantOwned: vi.fn(),
     discardOrphans: vi.fn(

@@ -19,6 +19,7 @@ export type CreateFileData = Omit<FileRecord, 'id' | 'orphanedAt' | 'createdAt'>
 export type CreateFileVariantData = CreateFileData & { parentFileId: string };
 
 export interface FilesRepository {
+  reserveUpload(storageKey: string): Promise<void>;
   create(data: CreateFileData, source?: TikzFileSource): Promise<FileRecord>;
   createVariant(data: CreateFileVariantData): Promise<FileRecord>;
   find(id: string): Promise<FileRecord | undefined>;
@@ -36,6 +37,12 @@ export interface FilesRepository {
     userId: string,
     now: Date,
   ): Promise<string[]>;
+  hasReleasedSolutionFileAccess(
+    fileId: string,
+    variantFileId: string | null,
+    userId: string,
+    now: Date,
+  ): Promise<boolean>;
   discardOrphans(refs: FileRef[], userId: string): Promise<string[]>;
   queueExpiredOrphans(cutoff: Date): Promise<{ processed: number; storageKeys: string[] }>;
   listPendingDeletions(afterStorageKey?: string): Promise<string[]>;

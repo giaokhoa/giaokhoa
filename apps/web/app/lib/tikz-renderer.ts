@@ -1,5 +1,5 @@
 import type { RenderTikz } from '@giaokhoa/editor';
-import { MAX_TIKZ_SOURCE_LENGTH } from '@giaokhoa/shared/files';
+import { hasUnsafeSvgCss, MAX_TIKZ_SOURCE_LENGTH } from '@giaokhoa/shared/files';
 
 const TIKZ_RUNTIME_VERSION = '0.3.1';
 const TIKZ_RUNTIME_DIRECTORY = `vendor/tikz-runtime/v${TIKZ_RUNTIME_VERSION}/`;
@@ -231,6 +231,14 @@ async function sanitizeSvg(svg: string) {
   const root = document.documentElement;
   if (root.localName !== 'svg' || root.namespaceURI !== 'http://www.w3.org/2000/svg') {
     throw new Error('TikZ không tạo được SVG hợp lệ.');
+  }
+
+  for (const element of [root, ...root.querySelectorAll('style, [style]')]) {
+    const css =
+      element.localName === 'style'
+        ? (element.textContent ?? '')
+        : (element.getAttribute('style') ?? '');
+    if (hasUnsafeSvgCss(css)) throw new Error('SVG TikZ chứa tham chiếu CSS không an toàn.');
   }
 
   for (const element of root.querySelectorAll('[href], [xlink\\:href]')) {

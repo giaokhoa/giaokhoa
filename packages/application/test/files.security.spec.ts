@@ -12,6 +12,7 @@ const PNG_1X1 = Buffer.from(
 
 function createService() {
   const repository = {
+    reserveUpload: vi.fn(async () => undefined),
     create: vi.fn(async (data: Record<string, unknown>, source?: unknown) => ({
       ...data,
       source,
@@ -28,6 +29,7 @@ function createService() {
       async (_fileId: string, _variantFileId: string | null, _userId: string, _now: Date) =>
         [] as string[],
     ),
+    hasReleasedSolutionFileAccess: vi.fn(async () => false),
     discardOrphans: vi.fn(async () => [] as string[]),
     queueExpiredOrphans: vi.fn(async () => ({ processed: 0, storageKeys: [] as string[] })),
     listPendingDeletions: vi.fn(async () => [] as string[]),
@@ -79,6 +81,50 @@ describe('FilesService security regressions', () => {
     expect(repository.create).toHaveBeenCalledWith(
       expect.objectContaining({ mimeType: 'image/svg+xml' }),
       source,
+    );
+  });
+
+  it.each([
+    [
+      'inline URL',
+      '<rect width="10" height="10" style="fill:url(https://attacker.example/a.svg#x)"/>',
+    ],
+    [
+      'CSS import',
+      '<style>@import url(https://attacker.example/a.css);</style><rect width="10" height="10"/>',
+    ],
+    [
+      'CSS escape',
+      '<rect width="10" height="10" style="fill:u\\\\72l(https://attacker.example/a.svg)"/>',
+    ],
+  ])('rejects remote CSS in TikZ SVG (%s)', async (_label, content) => {
+    const { service, storage } = createService();
+    const svg = Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">${content}</svg>`,
+    );
+    await expect(
+      service.createFile({ buffer: svg, size: svg.length, originalname: 'tikz.svg' }, OWNER_ID, {
+        kind: 'tikz',
+        source: 'diagram',
+      }),
+    ).rejects.toMatchObject({ kind: 'invalid' });
+    expect(storage.put).not.toHaveBeenCalled();
+  });
+
+  it('preserves local CSS fragment references in TikZ SVG', async () => {
+    const { service, storage } = createService();
+    const svg = Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">' +
+        '<defs><linearGradient id="g"><stop offset="0" stop-color="red"/></linearGradient></defs>' +
+        '<rect width="10" height="10" style="fill:url(#g)"/></svg>',
+    );
+    await service.createFile(
+      { buffer: svg, size: svg.length, originalname: 'tikz.svg' },
+      OWNER_ID,
+      { kind: 'tikz', source: 'diagram' },
+    );
+    expect(Buffer.from(storage.put.mock.calls[0]![1] as Uint8Array).toString()).toContain(
+      'url(#g)',
     );
   });
 
@@ -210,6 +256,58 @@ describe('FilesService security regressions', () => {
     expect(storage.get).toHaveBeenCalledTimes(1);
     expect(storage.get).toHaveBeenCalledWith('files/cropped-variant.png');
   });
+
+  it('allows a released solution image without granting class access to other files', async () => {
+    const { service, repository, storage } = createService();
+    repository.find.mockResolvedValue({
+      id: FILE_ID,
+      parentFileId: null,
+      storageKey: 'files/answer.png',
+      mimeType: 'image/png',
+      byteSize: PNG_1X1.length,
+    });
+    repository.hasReleasedSolutionFileAccess.mockResolvedValueOnce(true);
+    await expect(service.getFile(FILE_ID, STUDENT_ID)).resolves.toMatchObject({
+      mimeType: 'image/png',
+    });
+    expect(repository.hasReleasedSolutionFileAccess).toHaveBeenCalledWith(
+      FILE_ID,
+      null,
+      STUDENT_ID,
+      expect.any(Date),
+    );
+    expect(storage.get).toHaveBeenCalledOnce();
+    await expect(service.getFile(FILE_ID, STUDENT_ID)).rejects.toMatchObject({
+      code: 'file_not_found',
+    });
+    expect(storage.get).toHaveBeenCalledOnce();
+  });
+
+  it.each(['original', 'variant'])(
+    'keeps an upload intent when metadata and S3 cleanup fail (%s)',
+    async (kind) => {
+      const { service, repository, storage } = createService();
+      repository.findOwned.mockResolvedValue({
+        id: FILE_ID,
+        parentFileId: null,
+        mimeType: 'image/png',
+      });
+      repository.create.mockRejectedValueOnce(new Error('DB failed'));
+      repository.createVariant.mockRejectedValueOnce(new Error('DB failed'));
+      storage.delete.mockRejectedValueOnce(new Error('S3 unavailable'));
+      const upload = { buffer: PNG_1X1, size: PNG_1X1.length, originalname: 'photo.png' };
+      await expect(
+        kind === 'original'
+          ? service.createFile(upload, OWNER_ID)
+          : service.createVariant(FILE_ID, upload, OWNER_ID),
+      ).rejects.toThrow('DB failed');
+      expect(repository.reserveUpload).toHaveBeenCalledOnce();
+      expect(repository.reserveUpload.mock.invocationCallOrder[0]).toBeLessThan(
+        storage.put.mock.invocationCallOrder[0]!,
+      );
+      expect(repository.acknowledgeDeletion).not.toHaveBeenCalled();
+    },
+  );
 
   it('does not delete a file when the repository finds it attached concurrently', async () => {
     const { service, repository, storage } = createService();

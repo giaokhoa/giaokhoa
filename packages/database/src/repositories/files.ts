@@ -8,6 +8,8 @@ import type {
 import type { FileRef, TikzFileSource } from '@giaokhoa/shared/files';
 import { collectFileRefs, questionSchema, stimulusSchema } from '@giaokhoa/shared/questions';
 import { and, asc, eq, gt, inArray, lte, sql } from 'drizzle-orm';
+import { users } from '../schema/auth.generated.js';
+import { attempts } from '../schema/attempts.js';
 import { assignmentRecipients, assignments } from '../schema/assignments.js';
 import { authzContexts } from '../schema/authorization.js';
 import { classEnrolments, classes } from '../schema/classes.js';
@@ -25,6 +27,14 @@ function toFileRecord(file: FileRow, blob: typeof fileBlobs.$inferSelect): FileR
 
 export class PostgresFilesRepository implements FilesRepository {
   constructor(private readonly db: Database) {}
+
+  async reserveUpload(storageKey: string): Promise<void> {
+    // Object chưa gắn vào DB: giữ tombstone để GC thử lại nếu tiến trình chết sau PUT.
+    await this.db.insert(fileObjectDeletions).values({
+      storageKey,
+      availableAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+    });
+  }
 
   async create(data: CreateFileData, source?: TikzFileSource): Promise<FileRecord> {
     return this.db.transaction(async (tx) =>
@@ -68,11 +78,20 @@ export class PostgresFilesRepository implements FilesRepository {
       .where(eq(fileBlobs.contentHash, data.contentHash))
       .limit(1);
     if (!blob) throw new Error('Không thể xác định object của file');
-    if (blob.storageKey !== data.storageKey) {
+    if (blob.storageKey === data.storageKey) {
+      // Chỉ xóa upload intent khi blob đã có trong transaction cùng file logic.
+      await tx
+        .delete(fileObjectDeletions)
+        .where(eq(fileObjectDeletions.storageKey, data.storageKey));
+    } else {
+      // Upload trùng SHA có thể được dọn ngay; bytes chuẩn vẫn được giữ.
       await tx
         .insert(fileObjectDeletions)
         .values({ storageKey: data.storageKey })
-        .onConflictDoNothing();
+        .onConflictDoUpdate({
+          target: fileObjectDeletions.storageKey,
+          set: { availableAt: new Date() },
+        });
     }
 
     const [file] = await tx
@@ -264,6 +283,56 @@ export class PostgresFilesRepository implements FilesRepository {
     ];
   }
 
+  /** Lời giải chỉ đọc được bằng lượt làm đã kết thúc và đã qua ngày công bố. */
+  async hasReleasedSolutionFileAccess(
+    fileId: string,
+    variantFileId: string | null,
+    userId: string,
+    now: Date,
+  ): Promise<boolean> {
+    const rows = await this.db
+      .select({ snapshot: examRevisionQuestions.questionSnapshot })
+      .from(fileUses)
+      .innerJoin(questionVersions, sql`${fileUses.itemId} = ${questionVersions.questionId}::text`)
+      .innerJoin(
+        examRevisionQuestions,
+        eq(examRevisionQuestions.questionVersionId, questionVersions.id),
+      )
+      .innerJoin(assignments, eq(assignments.examRevisionId, examRevisionQuestions.examRevisionId))
+      .innerJoin(
+        attempts,
+        and(
+          eq(attempts.assignmentId, assignments.id),
+          eq(attempts.userId, userId),
+          inArray(attempts.status, ['submitted', 'graded']),
+        ),
+      )
+      .innerJoin(users, and(eq(users.id, userId), eq(users.banned, false)))
+      .innerJoin(
+        classEnrolments,
+        and(
+          eq(classEnrolments.classId, assignments.classId),
+          eq(classEnrolments.userId, userId),
+          inArray(classEnrolments.status, ['active', 'left']),
+        ),
+      )
+      .innerJoin(classes, eq(classes.id, assignments.classId))
+      .where(
+        and(
+          eq(fileUses.fileId, variantFileId ?? fileId),
+          eq(fileUses.component, 'questions'),
+          eq(fileUses.fileArea, 'solution'),
+          lte(assignments.releaseSolutionsAt, now),
+          inArray(users.role, ['user', 'teacher', 'admin']),
+        ),
+      );
+    return rows.some(({ snapshot }) =>
+      collectFileRefs(questionSchema.parse(snapshot).solution).some(
+        (ref) => ref.fileId === fileId && ref.variantFileId === variantFileId,
+      ),
+    );
+  }
+
   async discardOrphans(refs: FileRef[], userId: string): Promise<string[]> {
     return this.db.transaction(async (tx) => {
       const keys: string[] = [];
@@ -393,7 +462,12 @@ export class PostgresFilesRepository implements FilesRepository {
     const pending = await this.db
       .select({ storageKey: fileObjectDeletions.storageKey })
       .from(fileObjectDeletions)
-      .where(afterStorageKey ? gt(fileObjectDeletions.storageKey, afterStorageKey) : undefined)
+      .where(
+        and(
+          lte(fileObjectDeletions.availableAt, new Date()),
+          afterStorageKey ? gt(fileObjectDeletions.storageKey, afterStorageKey) : undefined,
+        ),
+      )
       .orderBy(asc(fileObjectDeletions.storageKey))
       .limit(100);
     return pending.map(({ storageKey }) => storageKey);

@@ -169,6 +169,7 @@ export class FilesService {
     const contentHash = createHash('sha256').update(image.file.buffer).digest('hex');
     // Khóa ngẫu nhiên tránh xóa nhầm blob cùng hash khi GC và upload đồng thời.
     const storageKey = `files/objects/${randomUUID()}.${image.imageType.extension}`;
+    await this.repository.reserveUpload(storageKey);
     await this.storage.put(storageKey, image.file.buffer, image.imageType.mimeType);
 
     let stored: Awaited<ReturnType<FilesRepository['create']>>;
@@ -188,7 +189,12 @@ export class FilesService {
         image.source,
       );
     } catch (cause) {
-      await this.storage.delete(storageKey).catch(() => undefined);
+      try {
+        await this.storage.delete(storageKey);
+        await this.repository.acknowledgeDeletion(storageKey);
+      } catch {
+        // Intent bền vững đã ghi trước PUT; GC sẽ dọn nếu cleanup tức thời thất bại.
+      }
       throw cause;
     }
 
@@ -226,6 +232,7 @@ export class FilesService {
     const image = inspectRasterImage(file);
     const contentHash = createHash('sha256').update(image.file.buffer).digest('hex');
     const storageKey = `files/objects/${randomUUID()}.${image.imageType.extension}`;
+    await this.repository.reserveUpload(storageKey);
     await this.storage.put(storageKey, image.file.buffer, image.imageType.mimeType);
 
     let variant: Awaited<ReturnType<FilesRepository['createVariant']>>;
@@ -242,7 +249,12 @@ export class FilesService {
         parentFileId: original.id,
       });
     } catch (cause) {
-      await this.storage.delete(storageKey).catch(() => undefined);
+      try {
+        await this.storage.delete(storageKey);
+        await this.repository.acknowledgeDeletion(storageKey);
+      } catch {
+        // Intent bền vững đã ghi trước PUT; GC sẽ dọn nếu cleanup tức thời thất bại.
+      }
       throw cause;
     }
 
@@ -403,6 +415,10 @@ export class FilesService {
       });
       if (decision.allowed) return;
     }
+    if (
+      await this.repository.hasReleasedSolutionFileAccess(fileId, variantFileId, userId, this.now())
+    )
+      return;
     throw new ClientError('not_found', 'file_not_found', 'Ảnh không tồn tại');
   }
 

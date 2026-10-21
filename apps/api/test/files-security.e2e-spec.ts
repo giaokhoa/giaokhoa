@@ -10,6 +10,7 @@ import { migrationsFolder } from '@giaokhoa/database/migrations';
 import { users } from '@giaokhoa/database/schema/auth.generated';
 import { authzContexts } from '@giaokhoa/database/schema/authorization';
 import { assignmentRecipients, assignments } from '@giaokhoa/database/schema/assignments';
+import { attempts } from '@giaokhoa/database/schema/attempts';
 import { classEnrolments, classes } from '@giaokhoa/database/schema/classes';
 import { examRevisionQuestions, examRevisions, exams } from '@giaokhoa/database/schema/exams';
 import { fileBlobs, fileObjectDeletions, fileUses, files } from '@giaokhoa/database/schema/files';
@@ -88,6 +89,33 @@ afterAll(async () => {
 }, 30_000);
 
 describe('Files storage and authorization invariants', () => {
+  it('tracks every uploaded object before metadata and clears only committed intents', async () => {
+    const owner = await createUser();
+    const key = 'files/objects/' + randomUUID() + '.png';
+    await repository.reserveUpload(key);
+    const [intent] = await db
+      .select()
+      .from(fileObjectDeletions)
+      .where(eq(fileObjectDeletions.storageKey, key));
+    expect(intent.availableAt.getTime()).toBeGreaterThan(Date.now());
+    expect(await repository.listPendingDeletions()).not.toContain(key);
+
+    const hash = createHash('sha256').update(randomUUID()).digest('hex');
+    await repository.create({ ...fileData(owner.id, hash, 'reserved.png'), storageKey: key });
+    expect(
+      await db.select().from(fileObjectDeletions).where(eq(fileObjectDeletions.storageKey, key)),
+    ).toHaveLength(0);
+
+    const lostKey = 'files/objects/' + randomUUID() + '.png';
+    await repository.reserveUpload(lostKey);
+    await db
+      .update(fileObjectDeletions)
+      .set({ availableAt: new Date(0) })
+      .where(eq(fileObjectDeletions.storageKey, lostKey));
+    expect(await repository.listPendingDeletions()).toContain(lostKey);
+    await repository.acknowledgeDeletion(lostKey);
+  });
+
   it('deduplicates bytes without merging ownership, sources or file placements', async () => {
     const owner = await createUser();
     const stranger = await createUser();
@@ -188,6 +216,8 @@ describe('Files recipient visibility', () => {
     const now = new Date();
     const primaryHash = createHash('sha256').update(randomUUID()).digest('hex');
     const primary = await repository.create(fileData(teacher.id, primaryHash, 'stimulus.png'));
+    const answerHash = createHash('sha256').update(randomUUID()).digest('hex');
+    const answerFile = await repository.create(fileData(teacher.id, answerHash, 'answer.png'));
     const variantHash = createHash('sha256').update(randomUUID()).digest('hex');
     const variant = await repository.createVariant({
       ...fileData(teacher.id, variantHash, 'stimulus-crop.png'),
@@ -215,6 +245,24 @@ describe('Files recipient visibility', () => {
       type: 'doc',
       content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Câu hỏi' }] }],
     };
+    const answer = {
+      type: 'doc',
+      content: [
+        {
+          type: 'image',
+          attrs: {
+            fileId: answerFile.id,
+            variantFileId: null,
+            alt: null,
+            title: null,
+            width: null,
+            height: null,
+            align: 'center',
+            crop: null,
+          },
+        },
+      ],
+    };
 
     const [stimulus] = await db
       .insert(stimuli)
@@ -234,9 +282,9 @@ describe('Files recipient visibility', () => {
       .values({
         createdByUserId: teacher.id,
         stimulusId: stimulus.id,
-        type: 'short_answer',
+        type: 'essay',
         content: questionContent,
-        solution: { answer: '42' },
+        solution: { answer },
       })
       .returning();
     const [version] = await db
@@ -271,11 +319,11 @@ describe('Files recipient visibility', () => {
         id: questionRow.id,
         version: 1,
         status: 'ready',
-        type: 'short_answer',
+        type: 'essay',
         stimulusId: stimulus.id,
         content: questionContent,
         guidance: null,
-        solution: { answer: '42' },
+        solution: { answer },
       },
     });
     const [classroom] = await db
@@ -363,5 +411,51 @@ describe('Files recipient visibility', () => {
     expect(await repository.assignedFileClasses(primary.id, variant.id, student.id, now)).toEqual(
       [],
     );
+
+    await db.insert(fileUses).values({
+      fileId: answerFile.id,
+      contextId: context!.id,
+      component: 'questions',
+      fileArea: 'solution',
+      itemId: questionRow.id,
+    });
+    expect(
+      await repository.hasReleasedSolutionFileAccess(answerFile.id, null, student.id, now),
+    ).toBe(false);
+    await db.insert(attempts).values({
+      assignmentId: assignment.id,
+      userId: student.id,
+      attemptNumber: 1,
+      status: 'submitted',
+      submittedAt: now,
+    });
+    expect(
+      await repository.hasReleasedSolutionFileAccess(answerFile.id, null, student.id, now),
+    ).toBe(false);
+    await db
+      .update(assignments)
+      .set({ releaseSolutionsAt: now })
+      .where(eq(assignments.id, assignment.id));
+    expect(
+      await repository.hasReleasedSolutionFileAccess(answerFile.id, null, student.id, now),
+    ).toBe(true);
+    expect(await repository.hasReleasedSolutionFileAccess(primary.id, null, student.id, now)).toBe(
+      false,
+    );
+
+    // Người đã làm xong vẫn xem lời giải khi rời lớp hoặc recipient bị thu hồi.
+    await db
+      .update(classEnrolments)
+      .set({ status: 'left' })
+      .where(
+        and(eq(classEnrolments.classId, classroom.id), eq(classEnrolments.userId, student.id)),
+      );
+    expect(
+      await repository.hasReleasedSolutionFileAccess(answerFile.id, null, student.id, now),
+    ).toBe(true);
+    await db.update(users).set({ banned: true }).where(eq(users.id, student.id));
+    expect(
+      await repository.hasReleasedSolutionFileAccess(answerFile.id, null, student.id, now),
+    ).toBe(false);
   });
 });

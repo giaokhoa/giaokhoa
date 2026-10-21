@@ -111,4 +111,5 @@ export const fileSources = pgTable(
 export const fileObjectDeletions = pgTable('file_object_deletions', {
   storageKey: text('storage_key').primaryKey(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
+  availableAt: timestamp('available_at').defaultNow().notNull(),
 });
