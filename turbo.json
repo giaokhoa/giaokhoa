@@ -35,7 +35,9 @@
       "outputs": ["coverage/**"]
     },
     "@giaokhoa/database#test:int": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "passThroughEnv": ["DATABASE_URL"],
+      "cache": false
     }
   }
 }
