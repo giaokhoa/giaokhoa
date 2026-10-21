@@ -20,11 +20,11 @@ export class AttemptsService {
     private readonly now: () => Date = () => new Date(),
   ) {}
 
-  private assertClass(actorId: string, classId: string, capability: string) {
+  private assertAssignment(actorId: string, assignmentId: string, capability: string) {
     return this.authorization.assertAuthorized({
       actorId,
       capability,
-      context: { kind: 'class', resourceKey: classId },
+      context: { kind: 'assignment', resourceKey: assignmentId },
     });
   }
 
@@ -38,13 +38,13 @@ export class AttemptsService {
     if (!context)
       throw new ClientError('not_found', 'attempt_not_found', 'Lượt làm bài không tồn tại');
     if (teacher) {
-      await this.assertClass(actorId, context.classId, capability);
+      await this.assertAssignment(actorId, context.assignmentId, capability);
     } else {
       if (context.userId !== actorId)
         throw new ClientError('not_found', 'attempt_not_found', 'Lượt làm bài không tồn tại');
       // D06: sau khi rời lớp, chỉ mở lịch sử bài đã nộp của chính mình.
       if (!(context.enrolmentStatus === 'left' && context.status !== 'in_progress'))
-        await this.assertClass(actorId, context.classId, capability);
+        await this.assertAssignment(actorId, context.assignmentId, capability);
     }
     return context;
   }
@@ -54,7 +54,7 @@ export class AttemptsService {
     const classId = await this.repository.findAssignmentClass(assignmentId);
     if (!classId)
       throw new ClientError('not_found', 'assignment_not_found', 'Bài giao không tồn tại');
-    await this.assertClass(actorId, classId, 'assignment:attempt');
+    await this.assertAssignment(actorId, assignmentId, 'assignment:attempt');
     return this.repository.start(assignmentId, actorId, this.now());
   }
 
@@ -94,7 +94,7 @@ export class AttemptsService {
     const classId = await this.repository.findAssignmentClass(assignmentId);
     if (!classId)
       throw new ClientError('not_found', 'assignment_not_found', 'Bài giao không tồn tại');
-    await this.assertClass(actorId, classId, 'assignment:grade');
+    await this.assertAssignment(actorId, assignmentId, 'assignment:grade');
     const list = await this.repository.listForTeacher(assignmentId, actorId);
     if (!list) throw new ClientError('not_found', 'assignment_not_found', 'Bài giao không tồn tại');
     return list;

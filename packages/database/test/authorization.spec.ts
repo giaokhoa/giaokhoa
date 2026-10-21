@@ -82,8 +82,8 @@ describe('Kho phân quyền PostgreSQL (PostgresAuthorizationRepository)', () =>
     expect(await repository.findContextById(context.id)).toEqual(context);
     expect(await repository.findContextById(randomUUID())).toBeUndefined();
     expect(
-      await repository.findPermissions(teacher.id, 'class:update', [context.id]),
-    ).toContainEqual({ contextId: context.id, effect: 'ALLOW' });
+      await repository.findPermissions(teacher.id, 'class:update', [context.id, systemId]),
+    ).toContainEqual(expect.objectContaining({ assignmentContextId: context.id, effect: 'ALLOW' }));
   });
 
   it('cấp vai trò học sinh không trùng, thu hồi rồi cấp lại trong lớp đang hoạt động', async () => {
@@ -118,12 +118,12 @@ describe('Kho phân quyền PostgreSQL (PostgresAuthorizationRepository)', () =>
     expect(await repository.assignRole(input)).toBe(true);
     expect(await repository.assignRole(input)).toBe(false);
     expect(
-      await repository.findPermissions(student.id, 'assignment:attempt', [context.id]),
-    ).toContainEqual({ contextId: context.id, effect: 'ALLOW' });
+      await repository.findPermissions(student.id, 'assignment:attempt', [context.id, systemId]),
+    ).toContainEqual(expect.objectContaining({ assignmentContextId: context.id, effect: 'ALLOW' }));
     expect(await repository.revokeRole(context.id, student.id, 'class:student')).toBe(true);
     expect(await repository.revokeRole(context.id, student.id, 'class:student')).toBe(false);
     expect(
-      await repository.findPermissions(student.id, 'assignment:attempt', [context.id]),
+      await repository.findPermissions(student.id, 'assignment:attempt', [context.id, systemId]),
     ).toEqual([]);
     expect(await repository.assignRole(input)).toBe(true);
     await db
@@ -131,7 +131,7 @@ describe('Kho phân quyền PostgreSQL (PostgresAuthorizationRepository)', () =>
       .set({ status: 'suspended' })
       .where(eq(classEnrolments.userId, student.id));
     expect(
-      await repository.findPermissions(student.id, 'assignment:attempt', [context.id]),
+      await repository.findPermissions(student.id, 'assignment:attempt', [context.id, systemId]),
     ).toEqual([]);
   });
 
@@ -148,7 +148,7 @@ describe('Kho phân quyền PostgreSQL (PostgresAuthorizationRepository)', () =>
       }),
     ).toBe(false);
     expect(await repository.findPermissions(teacher.id, 'class:create', [systemId])).toContainEqual(
-      { contextId: systemId, effect: 'ALLOW' },
+      expect.objectContaining({ contextId: systemId, effect: 'ALLOW' }),
     );
     expect(await revokeSystemRole(db, teacher.id, 'teacher')).toBe(true);
     expect(await repository.findPermissions(teacher.id, 'class:create', [systemId])).toEqual([]);

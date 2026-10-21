@@ -38,3 +38,18 @@ Người vận hành tạo quản trị viên ban đầu theo lệnh `authz:boot
 không đặt tài khoản quản trị mặc định trong dữ liệu khởi tạo. Chỉ khởi tạo trên cơ sở dữ liệu
 đã có người dùng được xác minh và chưa có quản trị viên nào. Vai trò sau đó được cấp hoặc
 thu hồi qua API có kiểm tra capability `role:assign_system`.
+
+### Vai trò và quyền ghi đè theo Moodle
+
+Lược đồ độc lập với Better Auth gồm `authz_roles` (định nghĩa), `authz_role_context_levels`
+(các ngữ cảnh được phép gán), `authz_role_assignments` (gán theo người dùng/ngữ cảnh),
+`authz_role_permissions` (capability mặc định) và `authz_role_overrides` (ghi đè role tại ngữ cảnh).
+`authz_role_allow_assignments` và `authz_role_allow_overrides` là các ma trận quyền uỷ nhiệm.
+Mỗi role được tính quyền riêng với ghi đè gần nhất trong cây hợp lệ; `PROHIBIT` không thể
+bị cho phép ghi đè. Sau khi tính từng role, chỉ cần một `ALLOW` và không có `PROHIBIT`
+để cho phép, còn `PREVENT` không tự phủ quyết `ALLOW` của role khác.
+
+Lúc tạo bài giao phải tạo đồng thời ngữ cảnh `assignment` dưới ngữ cảnh `class`; thao tác
+làm bài/chấm bài/công bố đọc quyền tại hoạt động đó, vẫn áp dụng điều kiện người nhận,
+trạng thái ghi danh, thời hạn và lịch công bố. Các lệnh quản trị vai trò được kiểm capability
+lần nữa ngay trong giao dịch PostgreSQL để tránh dùng quyền vừa bị thu hồi.

@@ -50,3 +50,26 @@ Các quyền theo lớp vẫn do luồng ghi danh và cấp vai trò trong ngữ
 Bản di trú `0000_baseline.sql` là bản dành cho **cơ sở dữ liệu trống**, không được chạy trực tiếp
 trên cơ sở dữ liệu đang giữ dữ liệu: việc chuyển các vai trò cũ sang bảng gán theo ngữ cảnh
 phải có bản di trú bảo toàn dữ liệu riêng được rà soát trước khi áp dụng.
+
+### Cấu hình vai trò và ghi đè theo ngữ cảnh
+
+Hệ phân quyền ứng dụng lưu **định nghĩa vai trò** độc lập với **lần gán vai trò**.
+Bảng `authz_role_context_levels` quản lý những loại ngữ cảnh được gán; hai ma trận
+`authz_role_allow_assignments` và `authz_role_allow_overrides` xác định vai trò nào
+được phép gán hoặc ghi đè vai trò khác. Có capability quản trị mà không được ma trận
+cho phép vẫn không đủ quyền.
+
+- Quản trị định nghĩa role: `POST /authorization/roles`, `PUT /authorization/roles/:roleKey/permissions`,
+  `PUT /authorization/roles/:roleKey/contexts` và `PUT /authorization/roles/:roleKey/matrix`;
+  chỉ tài khoản có capability `role:manage` tại `system` được phép.
+- Gán/thu hồi vai trò theo ngữ cảnh: `POST` hoặc `DELETE /authorization/contexts/:contextId/roles/:userId`,
+  body `{"roleKey":"class:teacher"}`. Cần capability `role:assign` và ma trận gán role cho phép.
+- Ghi đè role tại một ngữ cảnh: `PUT /authorization/contexts/:contextId/overrides`, body
+  `{"roleKey":"class:student","capability":"assignment:attempt","effect":"PREVENT"}`.
+  `INHERIT` xóa override, quay về quyền đã định nghĩa hoặc override tại cha.
+
+Áp dụng ngữ nghĩa cốt lõi của Moodle về role, capability và context nhưng **không khẳng định
+đã sao chép mọi loại context và API của Moodle LMS**. Giáo khoa ánh xạ khóa học thành lớp
+(`class`) và hoạt động thành bài giao (`assignment`); quyền truy cập câu hỏi, đề, tệp vẫn
+chịu các quy tắc nghiệp vụ riêng và bảo vệ dữ liệu người dùng.
+Tài liệu tham chiếu: https://moodledev.io/docs/5.0/apis/subsystems/roles

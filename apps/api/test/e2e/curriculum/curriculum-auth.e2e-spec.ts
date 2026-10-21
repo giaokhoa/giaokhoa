@@ -12,7 +12,7 @@ import { Client, Pool } from 'pg';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { migrationsFolder } from '@giaokhoa/database/migrations';
-import { users } from '@giaokhoa/database/schema';
+import { authzContexts, users } from '@giaokhoa/database/schema';
 import type { Database } from '@giaokhoa/database/types';
 import { createAuth } from '../../../src/auth/auth.js';
 
@@ -160,6 +160,64 @@ describe('Phân quyền truy cập chương trình học qua HTTP', () => {
     }
     await revokeSystemRole(db, admin.userId, 'admin');
     await request(app.getHttpServer()).get('/subjects').set('cookie', admin.cookie).expect(403);
+  });
+
+  it('quản trị định nghĩa role và ma trận qua HTTP, từ chối tài khoản không đủ quyền', async () => {
+    const regular = await createSession(`role-user-${randomUUID()}@example.com`);
+    const admin = await createSession(`role-admin-${randomUUID()}@example.com`);
+    await grantSystemRole(db, admin.userId, 'admin');
+    const roleKey = `custom_${randomUUID()}`;
+    const create = { key: roleKey, contextKind: 'class', contexts: ['class'] };
+    await request(app.getHttpServer())
+      .post('/authorization/roles')
+      .set('cookie', regular.cookie)
+      .send(create)
+      .expect(403);
+    await request(app.getHttpServer())
+      .post('/authorization/roles')
+      .set('cookie', admin.cookie)
+      .send(create)
+      .expect(201, { changed: true });
+    await request(app.getHttpServer())
+      .put(`/authorization/roles/${roleKey}/permissions`)
+      .set('cookie', admin.cookie)
+      .send({ capability: 'class:update', effect: 'ALLOW' })
+      .expect(200, { changed: true });
+    await request(app.getHttpServer())
+      .put(`/authorization/roles/${roleKey}/contexts`)
+      .set('cookie', admin.cookie)
+      .send({ contexts: ['class', 'assignment'] })
+      .expect(200, { changed: true });
+    await request(app.getHttpServer())
+      .put('/authorization/roles/system:admin/matrix')
+      .set('cookie', regular.cookie)
+      .send({ targetRoleKey: roleKey, action: 'assign', allowed: true })
+      .expect(403);
+    await request(app.getHttpServer())
+      .put('/authorization/roles/system:admin/matrix')
+      .set('cookie', admin.cookie)
+      .send({ targetRoleKey: roleKey, action: 'assign', allowed: true })
+      .expect(200, { changed: true });
+    const [system] = await db
+      .select({ id: authzContexts.id })
+      .from(authzContexts)
+      .where(eq(authzContexts.kind, 'system'))
+      .limit(1);
+    await request(app.getHttpServer())
+      .post(`/authorization/contexts/${system.id}/roles/${regular.userId}`)
+      .set('cookie', admin.cookie)
+      .send({ roleKey: 'system:teacher' })
+      .expect(201, { changed: true });
+    await request(app.getHttpServer())
+      .delete(`/authorization/contexts/${system.id}/roles/${regular.userId}`)
+      .set('cookie', regular.cookie)
+      .send({ roleKey: 'system:teacher' })
+      .expect(403);
+    await request(app.getHttpServer())
+      .delete(`/authorization/contexts/${system.id}/roles/${regular.userId}`)
+      .set('cookie', admin.cookie)
+      .send({ roleKey: 'system:teacher' })
+      .expect(200, { changed: true });
   });
 
   it('chặn tạo phiên khi tài khoản bị khóa, không phụ thuộc vào plugin quản trị', async () => {

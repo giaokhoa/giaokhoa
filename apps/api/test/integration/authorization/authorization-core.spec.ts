@@ -12,6 +12,7 @@ import { PostgresClassesRepository } from '@giaokhoa/database/classes';
 import { migrationsFolder } from '@giaokhoa/database/migrations';
 import {
   authzCapabilities,
+  authzContexts,
   authzRoleAssignments,
   authzRolePermissions,
   authzRoles,
@@ -70,7 +71,12 @@ async function createClass(ownerId: string, key: string) {
   return context;
 }
 
-function can(actorId: string, capability: string, kind: 'system' | 'class', resourceKey: string) {
+function can(
+  actorId: string,
+  capability: string,
+  kind: 'system' | 'class' | 'assignment',
+  resourceKey: string,
+) {
   return service.authorize({ actorId, capability, context: { kind, resourceKey } });
 }
 
@@ -113,7 +119,7 @@ describe('Migration, dữ liệu khởi tạo và kho phân quyền', () => {
       allowed: false,
     });
     expect(await db.select().from(authzRoleAssignments)).toHaveLength(2);
-    expect(await db.select().from(authzCapabilities)).toHaveLength(22);
+    expect(await db.select().from(authzCapabilities)).toHaveLength(25);
     expect(await db.select().from(authzRoles)).toHaveLength(6);
   });
 
@@ -301,5 +307,142 @@ describe('Migration, dữ liệu khởi tạo và kho phân quyền', () => {
       allowed: false,
       reason: 'prohibited',
     });
+  });
+
+  it('ma trận Moodle cho phép phân quyền giáo viên trong lớp mà không ràng buộc người tạo', async () => {
+    const owner = await createUser('grant-owner', 'teacher');
+    const colleague = await createUser('grant-colleague');
+    const classroom = await createClass(owner.id, `grant-${randomUUID()}`);
+    const classesRepository = new PostgresClassesRepository(db);
+    await expect(
+      service.changeRole(colleague.id, classroom.id, colleague.id, 'class:student', true),
+    ).rejects.toMatchObject({ kind: 'forbidden' });
+    expect(
+      await service.changeRole(owner.id, classroom.id, colleague.id, 'class:teacher', true),
+    ).toBe(true);
+    expect(await can(colleague.id, 'class:update', 'class', classroom.resourceKey)).toMatchObject({
+      allowed: true,
+    });
+    await expect(
+      classesRepository.update(classroom.resourceKey, colleague.id, { name: 'Đồng giáo viên' }),
+    ).resolves.toMatchObject({ name: 'Đồng giáo viên' });
+    await expect(
+      service.changeRole(owner.id, classroom.id, colleague.id, 'system:admin', true),
+    ).rejects.toMatchObject({ kind: 'invalid' });
+    await expect(
+      service.changeRole(owner.id, classroom.id, colleague.id, 'class:owner', true),
+    ).rejects.toMatchObject({ kind: 'forbidden' });
+    expect(
+      await service.changeRole(owner.id, classroom.id, colleague.id, 'class:teacher', false),
+    ).toBe(true);
+    expect(await can(colleague.id, 'class:update', 'class', classroom.resourceKey)).toMatchObject({
+      allowed: false,
+    });
+  });
+
+  it('quản trị viên định nghĩa vai trò, quyền, loại ngữ cảnh và ma trận gán/ghi đè bằng API nghiệp vụ', async () => {
+    const admin = await createUser('definition-admin', 'admin');
+    const regular = await createUser('definition-user');
+    const classroomOwner = await createUser('definition-owner', 'teacher');
+    const classroom = await createClass(classroomOwner.id, `definition-${randomUUID()}`);
+    const roleKey = `custom:mentor-${randomUUID()}`;
+    await expect(service.createRole(regular.id, roleKey, 'class', ['class'])).rejects.toMatchObject(
+      { kind: 'forbidden' },
+    );
+    expect(await service.createRole(admin.id, roleKey, 'class', ['class'])).toBe(true);
+    expect(await service.createRole(admin.id, roleKey, 'class', ['class'])).toBe(false);
+    expect(await service.setRolePermission(admin.id, roleKey, 'class:update', 'ALLOW')).toBe(true);
+    await expect(
+      service.setRoleMatrix(regular.id, 'system:admin', roleKey, 'assign', true),
+    ).rejects.toMatchObject({ kind: 'forbidden' });
+    expect(await service.setRoleMatrix(admin.id, 'system:admin', roleKey, 'assign', true)).toBe(
+      true,
+    );
+    expect(await service.setRoleMatrix(admin.id, 'system:admin', roleKey, 'override', true)).toBe(
+      true,
+    );
+    await expect(
+      service.changeRole(classroomOwner.id, classroom.id, regular.id, roleKey, true),
+    ).rejects.toMatchObject({ kind: 'forbidden' });
+    expect(await service.changeRole(admin.id, classroom.id, regular.id, roleKey, true)).toBe(true);
+    expect(await can(regular.id, 'class:update', 'class', classroom.resourceKey)).toMatchObject({
+      allowed: true,
+    });
+    expect(await service.setRolePermission(admin.id, roleKey, 'class:update', 'INHERIT')).toBe(
+      true,
+    );
+    expect(await can(regular.id, 'class:update', 'class', classroom.resourceKey)).toMatchObject({
+      allowed: false,
+    });
+    expect(await service.setRoleContexts(admin.id, roleKey, ['assignment'])).toBe(true);
+    await expect(
+      service.changeRole(admin.id, classroom.id, classroomOwner.id, roleKey, true),
+    ).rejects.toMatchObject({ kind: 'invalid' });
+    expect(await service.setRoleContexts(admin.id, roleKey, ['class', 'assignment'])).toBe(true);
+    expect(await service.setRoleMatrix(admin.id, 'system:admin', roleKey, 'assign', false)).toBe(
+      true,
+    );
+    await expect(
+      service.changeRole(admin.id, classroom.id, classroomOwner.id, roleKey, true),
+    ).rejects.toMatchObject({ kind: 'forbidden' });
+  });
+
+  it('ghi đè vai trò cho riêng một hoạt động và INHERIT khôi phục quyền gốc', async () => {
+    const owner = await createUser('override-owner', 'teacher');
+    const student = await createUser('override-student');
+    const classroom = await createClass(owner.id, `override-${randomUUID()}`);
+    await db
+      .insert(classEnrolments)
+      .values({ classId: classroom.resourceKey, userId: student.id, status: 'active' });
+    await repository.assignRole({
+      contextId: classroom.id,
+      userId: student.id,
+      roleKey: 'class:student',
+      source: 'enrolment',
+    });
+    const [first] = await db
+      .insert(authzContexts)
+      .values({ kind: 'assignment', resourceKey: randomUUID(), parentId: classroom.id })
+      .returning();
+    const [second] = await db
+      .insert(authzContexts)
+      .values({ kind: 'assignment', resourceKey: randomUUID(), parentId: classroom.id })
+      .returning();
+    expect(
+      await can(student.id, 'assignment:attempt', 'assignment', first.resourceKey),
+    ).toMatchObject({ allowed: true });
+    await expect(
+      service.overrideRole(student.id, first.id, 'class:student', 'assignment:attempt', 'PREVENT'),
+    ).rejects.toMatchObject({ kind: 'forbidden' });
+    expect(
+      await service.overrideRole(
+        owner.id,
+        first.id,
+        'class:student',
+        'assignment:attempt',
+        'PREVENT',
+      ),
+    ).toBe(true);
+    expect(
+      await can(student.id, 'assignment:attempt', 'assignment', first.resourceKey),
+    ).toMatchObject({ allowed: false, reason: 'prevented' });
+    expect(
+      await can(student.id, 'assignment:attempt', 'assignment', second.resourceKey),
+    ).toMatchObject({ allowed: true });
+    expect(
+      await service.overrideRole(
+        owner.id,
+        first.id,
+        'class:student',
+        'assignment:attempt',
+        'INHERIT',
+      ),
+    ).toBe(true);
+    expect(
+      await can(student.id, 'assignment:attempt', 'assignment', first.resourceKey),
+    ).toMatchObject({ allowed: true });
+    await expect(
+      service.overrideRole(owner.id, first.id, 'system:admin', 'assignment:attempt', 'ALLOW'),
+    ).rejects.toMatchObject({ kind: 'forbidden' });
   });
 });

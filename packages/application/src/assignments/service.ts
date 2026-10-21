@@ -30,7 +30,11 @@ export class AssignmentsService {
     const assignment = await this.repository.findById(id);
     if (!assignment)
       throw new ClientError('not_found', 'assignment_not_found', 'Bài giao không tồn tại');
-    await this.assertClass(actorId, assignment.classId, capability);
+    await this.authorization.assertAuthorized({
+      actorId,
+      capability,
+      context: { kind: 'assignment', resourceKey: assignment.id },
+    });
     return assignment;
   }
 
@@ -56,12 +60,10 @@ export class AssignmentsService {
 
   async get(actorId: string, id: string): Promise<Assignment> {
     const found = await this.authorized(actorId, id, 'assignment:create');
-    if (found.createdByUserId !== actorId)
-      throw new ClientError('not_found', 'assignment_not_found', 'Bài giao không tồn tại');
     return found;
   }
 
-  /** Chỉ chỉnh sửa bản nháp; kho dữ liệu từ chối thay đổi khi bài đã công bố hoặc quyền sở hữu không phù hợp. */
+  /** Chỉ chỉnh sửa bản nháp; quyền được xét tại ngữ cảnh bài giao trước khi ghi. */
   async update(actorId: string, id: string, patch: AssignmentPatch): Promise<Assignment> {
     await this.authorized(actorId, id, 'assignment:create');
     const updated = await this.repository.updateDraft(id, actorId, patch);
@@ -75,7 +77,7 @@ export class AssignmentsService {
   }
 
   /**
-   * Quyền công bố được xét trong phạm vi lớp tương ứng. Kho dữ liệu khóa lớp
+   * Quyền công bố được xét trong ngữ cảnh bài giao cụ thể. Kho dữ liệu khóa lớp
    * khi chốt danh sách người nhận đang tham gia, không tự thêm người ghi danh về sau.
    */
   async publish(actorId: string, id: string): Promise<Assignment> {

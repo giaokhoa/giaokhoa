@@ -8,7 +8,7 @@ import {
 } from '@giaokhoa/shared/classes';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { users } from '../schema/auth.generated.js';
-import { hasSystemCapability } from './authorization.js';
+import { hasSystemCapability, hasContextCapability } from './authorization.js';
 import { authzContexts, authzRoleAssignments, authzRoles } from '../schema/authorization.js';
 import { classes, classEnrolments, classJoinCodes } from '../schema/classes.js';
 import type { Database } from '../types.js';
@@ -69,28 +69,18 @@ async function activeAccount(tx: Transaction, actorId: string) {
   return !!actor && !actor.banned;
 }
 
-/**
- * Xác nhận chủ lớp bằng danh tính và vai trò còn hiệu lực trong context lớp.
- * Quyền cuối cùng do AuthorizationService xét theo capability, không suy từ vai trò hệ thống.
- */
-async function classOwner(tx: Transaction, row: typeof classes.$inferSelect, actorId: string) {
-  if (row.createdByUserId !== actorId || !row.authzContextId) return false;
-  if (!(await activeAccount(tx, actorId))) return false;
-  const [owner] = await tx
-    .select({ id: authzRoleAssignments.id })
-    .from(authzRoleAssignments)
-    .innerJoin(authzRoles, eq(authzRoleAssignments.roleId, authzRoles.id))
-    .where(
-      and(
-        eq(authzRoleAssignments.contextId, row.authzContextId),
-        eq(authzRoleAssignments.userId, actorId),
-        isNull(authzRoleAssignments.revokedAt),
-        eq(authzRoles.key, 'class:owner'),
-      ),
-    )
-    .for('share')
-    .limit(1);
-  return !!owner;
+/** Người có capability hiệu lực tại lớp có thể quản lý; không bắt buộc là người tạo lớp. */
+async function canManageClass(
+  tx: Transaction,
+  row: typeof classes.$inferSelect,
+  actorId: string,
+  capability: 'class:update' | 'class:enrolment_manage',
+) {
+  return (
+    !!row.authzContextId &&
+    (await activeAccount(tx, actorId)) &&
+    (await hasContextCapability(tx, actorId, capability, { kind: 'class', resourceKey: row.id }))
+  );
 }
 
 /**
@@ -217,7 +207,7 @@ export class PostgresClassesRepository implements ClassesRepository {
   }
 
   /**
-   * Sửa thông tin lớp chỉ khi người thực hiện thực sự còn quyền chủ lớp.
+   * Sửa lớp khi người thực hiện có capability class:update tại ngữ cảnh lớp.
    * Khóa lớp trước khi kiểm tra và cập nhật để tránh tranh chấp với thay đổi trạng thái hoặc quyền tham gia.
    */
   async update(id: string, actorId: string, patch: ClassPatch) {
@@ -228,7 +218,7 @@ export class PostgresClassesRepository implements ClassesRepository {
         .where(eq(classes.id, id))
         .for('update')
         .limit(1);
-      if (!row || !(await classOwner(tx, row, actorId))) return undefined;
+      if (!row || !(await canManageClass(tx, row, actorId, 'class:update'))) return undefined;
       const [updated] = await tx
         .update(classes)
         .set({ ...patch, updatedAt: new Date() })
@@ -239,7 +229,7 @@ export class PostgresClassesRepository implements ClassesRepository {
   }
 
   /**
-   * Tạo mã mời đã băm cho lớp đang hoạt động và do người yêu cầu quản lý.
+   * Tạo mã mời đã băm cho lớp đang hoạt động và người có quyền cập nhật lớp.
    * Lưu thời hạn, giới hạn sử dụng và danh tính người cấp; không lưu mã mời nguyên bản trong cơ sở dữ liệu.
    */
   async createJoinCode(
@@ -256,7 +246,11 @@ export class PostgresClassesRepository implements ClassesRepository {
         .where(eq(classes.id, classId))
         .for('update')
         .limit(1);
-      if (!row || row.status !== 'active' || !(await classOwner(tx, row, actorId)))
+      if (
+        !row ||
+        row.status !== 'active' ||
+        !(await canManageClass(tx, row, actorId, 'class:update'))
+      )
         return undefined;
       const [created] = await tx
         .insert(classJoinCodes)
@@ -284,7 +278,8 @@ export class PostgresClassesRepository implements ClassesRepository {
         .where(eq(classes.id, classId))
         .for('update')
         .limit(1);
-      if (!classroom || !(await classOwner(tx, classroom, actorId))) return false;
+      if (!classroom || !(await canManageClass(tx, classroom, actorId, 'class:update')))
+        return false;
       const revoked = await tx
         .update(classJoinCodes)
         .set({ revokedAt: new Date() })
@@ -400,7 +395,7 @@ export class PostgresClassesRepository implements ClassesRepository {
 
   /**
    * Duyệt, đình chỉ hoặc cho thành viên rời lớp bằng một thay đổi trạng thái nhất quán.
-   * Duyệt và đình chỉ đòi quyền chủ lớp; rời lớp chỉ do chính thành viên thực hiện. Việc cấp hoặc thu hồi vai trò học sinh nằm cùng giao dịch với cập nhật thành viên.
+   * Duyệt và đình chỉ đòi quyền quản lý thành viên; rời lớp chỉ do chính thành viên thực hiện. Việc cấp hoặc thu hồi vai trò học sinh nằm cùng giao dịch với cập nhật thành viên.
    */
   async changeEnrolment(
     classId: string,
@@ -416,7 +411,11 @@ export class PostgresClassesRepository implements ClassesRepository {
         .for('update')
         .limit(1);
       if (!classroom) return undefined;
-      if (action !== 'leave' && !(await classOwner(tx, classroom, actorId))) return undefined;
+      if (
+        action !== 'leave' &&
+        !(await canManageClass(tx, classroom, actorId, 'class:enrolment_manage'))
+      )
+        return undefined;
       if (action === 'leave' && actorId !== userId) return undefined;
       const [row] = await tx
         .select()

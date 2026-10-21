@@ -10,6 +10,7 @@ import type {
 
 /** Dữ liệu tối thiểu để xét chủ lượt làm và ngoại lệ đọc lịch sử sau khi rời lớp. */
 export type AttemptContext = {
+  assignmentId: string;
   classId: string;
   userId: string;
   status: Attempt['status'];

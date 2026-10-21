@@ -126,6 +126,44 @@ describe('Dịch vụ phân quyền (AuthorizationService)', () => {
     });
   });
 
+  it('ALLOW của một vai trò thắng PREVENT của vai trò khác dù cấp ở ngữ cảnh khác', async () => {
+    const repository = new FakeAuthorizationRepository();
+    repository.set('actor', 'class:update', [
+      { assignmentContextId: system.id, contextId: classOne.id, effect: 'ALLOW' },
+      { assignmentContextId: classOne.id, contextId: system.id, effect: 'PREVENT' },
+    ]);
+    await expect(new AuthorizationService(repository).authorize(request)).resolves.toMatchObject({
+      allowed: true,
+      reason: 'granted',
+    });
+  });
+
+  it('ghi đè tại ngữ cảnh hoạt động chỉ áp dụng trên đúng nhánh lớp cha', async () => {
+    const repository = new FakeAuthorizationRepository();
+    const assignment = {
+      id: 'activity',
+      kind: 'assignment' as const,
+      resourceKey: 'A1',
+      parentId: classOne.id,
+    };
+    repository.contexts.push(assignment);
+    repository.set('actor', 'class:update', [
+      { assignmentContextId: classOne.id, contextId: assignment.id, effect: 'PREVENT' },
+    ]);
+    await expect(
+      new AuthorizationService(repository).authorize({
+        ...request,
+        context: { kind: 'assignment', resourceKey: 'A1' },
+      }),
+    ).resolves.toMatchObject({ allowed: false, reason: 'prevented' });
+    repository.set('actor', 'class:update', [
+      { assignmentContextId: classOne.id, contextId: system.id, effect: 'ALLOW' },
+    ]);
+    await expect(new AuthorizationService(repository).authorize(request)).resolves.toMatchObject({
+      allowed: true,
+    });
+  });
+
   it('áp dụng PROHIBIT tuyệt đối kể cả khi có ALLOW ở phạm vi cụ thể hơn', async () => {
     const repository = new FakeAuthorizationRepository();
     repository.set('actor', 'class:update', [

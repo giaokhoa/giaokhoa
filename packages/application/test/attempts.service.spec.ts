@@ -27,6 +27,7 @@ function setup() {
   const authorization = { assertAuthorized: vi.fn(async () => undefined) };
   const service = new AttemptsService(repository as never, authorization as never, () => NOW);
   const context = {
+    assignmentId: ASSIGNMENT,
     classId: CLASS,
     userId: ACTOR,
     status: 'in_progress',
@@ -56,7 +57,7 @@ describe('Dịch vụ bài làm (AttemptsService)', () => {
     expect(authorization.assertAuthorized).toHaveBeenLastCalledWith({
       actorId: ACTOR,
       capability: 'assignment:attempt',
-      context: { kind: 'class', resourceKey: CLASS },
+      context: { kind: 'assignment', resourceKey: ASSIGNMENT },
     });
   });
 
@@ -129,7 +130,7 @@ describe('Dịch vụ bài làm (AttemptsService)', () => {
     expect(authorization.assertAuthorized).toHaveBeenCalledWith({
       actorId: ACTOR,
       capability: 'assignment:attempt',
-      context: { kind: 'class', resourceKey: CLASS },
+      context: { kind: 'assignment', resourceKey: ASSIGNMENT },
     });
   });
 
@@ -145,7 +146,7 @@ describe('Dịch vụ bài làm (AttemptsService)', () => {
     expect(authorization.assertAuthorized).toHaveBeenLastCalledWith({
       actorId: OTHER,
       capability: 'assignment:grade',
-      context: { kind: 'class', resourceKey: CLASS },
+      context: { kind: 'assignment', resourceKey: ASSIGNMENT },
     });
     expect(repository.review).toHaveBeenCalledWith(ATTEMPT, OTHER);
   });
@@ -168,7 +169,7 @@ describe('Dịch vụ bài làm (AttemptsService)', () => {
     expect(authorization.assertAuthorized).toHaveBeenCalledWith({
       actorId: OTHER,
       capability: 'assignment:grade',
-      context: { kind: 'class', resourceKey: CLASS },
+      context: { kind: 'assignment', resourceKey: ASSIGNMENT },
     });
   });
 
@@ -190,7 +191,7 @@ describe('Dịch vụ bài làm (AttemptsService)', () => {
     expect(authorization.assertAuthorized).toHaveBeenCalledWith({
       actorId: ACTOR,
       capability: 'result:view_own',
-      context: { kind: 'class', resourceKey: CLASS },
+      context: { kind: 'assignment', resourceKey: ASSIGNMENT },
     });
     repository.result.mockResolvedValue({ attemptId: ATTEMPT, score: 8 });
     repository.solutions.mockResolvedValue(undefined);

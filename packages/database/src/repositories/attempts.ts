@@ -190,6 +190,7 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
     const [row] = await this.db
       .select({
         classId: assignments.classId,
+        assignmentId: attempts.assignmentId,
         userId: attempts.userId,
         status: attempts.status,
         enrolmentStatus: classEnrolments.status,
@@ -290,7 +291,7 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
    */
   private async writable(tx: Transaction, id: string, actorId: string, now: Date) {
     const [ref] = await tx
-      .select({ classId: assignments.classId })
+      .select({ classId: assignments.classId, assignmentId: assignments.id })
       .from(attempts)
       .innerJoin(assignments, eq(attempts.assignmentId, assignments.id))
       .where(and(eq(attempts.id, id), eq(attempts.userId, actorId)))
@@ -478,8 +479,8 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
   }
 
   /**
-   * Liệt kê lịch sử lượt làm của học sinh trong một bài giao mà giáo viên sở hữu.
-   * Kiểm tra đồng thời quyền chủ lớp và tác giả bài giao; sắp theo học sinh và số lần làm để phục vụ chấm bài.
+   * Liệt kê lượt làm cho người có quyền chấm trong ngữ cảnh bài giao.
+   * Kiểm tra capability chấm bài và trạng thái lớp; sắp theo học sinh và số lần làm để phục vụ chấm bài.
    */
   async listForTeacher(assignmentId: string, actorId: string) {
     const classId = await this.findAssignmentClass(assignmentId);
@@ -491,13 +492,13 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
         .where(eq(classes.id, classId))
         .for('share')
         .limit(1);
-      await assertOwner(tx, classroom, actorId);
+      await assertOwner(tx, classroom, actorId, 'assignment:grade', assignmentId);
       const [assignment] = await tx
-        .select({ ownerId: assignments.createdByUserId })
+        .select({ id: assignments.id })
         .from(assignments)
         .where(eq(assignments.id, assignmentId))
         .limit(1);
-      if (!assignment || assignment.ownerId !== actorId) return undefined;
+      if (!assignment) return undefined;
       const rows = await tx
         .select()
         .from(attempts)
@@ -508,13 +509,13 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
   }
 
   /**
-   * Nạp lượt làm cho người quản lý bài giao sau khi xác minh quyền chủ lớp và tác giả bài.
+   * Nạp lượt làm cho người có capability chấm tại ngữ cảnh bài giao, không phụ thuộc người tạo.
    * @param lock Khi chuẩn bị chấm thì khóa ghi lớp và lượt làm; khi chỉ xem thì khóa đọc để giảm tranh chấp.
    * Trả về undefined nếu không tìm thấy lượt làm hoặc bài giao không thuộc người yêu cầu.
    */
   private async teacherAttempt(tx: Transaction, id: string, actorId: string, lock = false) {
     const [ref] = await tx
-      .select({ classId: assignments.classId })
+      .select({ classId: assignments.classId, assignmentId: assignments.id })
       .from(attempts)
       .innerJoin(assignments, eq(attempts.assignmentId, assignments.id))
       .where(eq(attempts.id, id))
@@ -526,15 +527,15 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
       .where(eq(classes.id, ref.classId))
       .for(lock ? 'update' : 'share')
       .limit(1);
-    await assertOwner(tx, classroom, actorId);
+    await assertOwner(tx, classroom, actorId, 'assignment:grade', ref.assignmentId);
     const [row] = await tx
-      .select({ attempt: attempts, createdByUserId: assignments.createdByUserId })
+      .select({ attempt: attempts })
       .from(attempts)
       .innerJoin(assignments, eq(attempts.assignmentId, assignments.id))
       .where(eq(attempts.id, id))
       .for(lock ? 'update' : 'share')
       .limit(1);
-    if (!row || row.createdByUserId !== actorId) return undefined;
+    if (!row) return undefined;
     return row.attempt;
   }
 
@@ -551,7 +552,7 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
 
   /**
    * Ghi điểm và nhận xét cho lượt đã nộp bằng một giao dịch có khóa.
-   * Chỉ tác giả bài giao có quyền chủ lớp được chấm; quy đổi điểm từ thang 100 sang số nguyên phần vạn để tránh sai số số thực.
+   * Chỉ người có capability chấm tại ngữ cảnh bài giao được chấm; quy đổi điểm từ thang 100 sang số nguyên phần vạn để tránh sai số số thực.
    * Không chấm lượt đang làm; ghi trạng thái, điểm và thời điểm chấm cùng lúc.
    */
   async grade(
