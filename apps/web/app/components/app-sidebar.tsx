@@ -9,16 +9,37 @@ import {
   SidebarRail,
   useSidebar,
 } from '@giaokhoa/ui/components/sidebar';
-import { BookOpenTextIcon, LayoutDashboardIcon } from 'lucide-react';
+import {
+  BookOpenTextIcon,
+  ClipboardListIcon,
+  FileTextIcon,
+  GraduationCapIcon,
+  LayoutDashboardIcon,
+} from 'lucide-react';
 import { Link } from 'react-router';
 import { NavMain } from '#components/nav-main.js';
 import { NavUser } from '#components/nav-user.js';
 
 const navItems = [
   {
-    title: 'Dashboard',
+    title: 'Tổng quan',
     url: '/',
     icon: <LayoutDashboardIcon />,
+  },
+  {
+    title: 'Lớp học',
+    url: '/classes',
+    icon: <GraduationCapIcon />,
+  },
+  {
+    title: 'Đề thi',
+    url: '/exams',
+    icon: <FileTextIcon />,
+  },
+  {
+    title: 'Giao bài',
+    url: '/assignments/new',
+    icon: <ClipboardListIcon />,
   },
   {
     title: 'Chương trình học',

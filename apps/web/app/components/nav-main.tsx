@@ -28,7 +28,11 @@ type NavItem = {
 
 function MainNavItem({ item, onNavigate }: { item: NavItem; onNavigate: () => void }) {
   const { pathname } = useLocation();
-  const itemActive = pathname === item.url;
+  const itemActive =
+    pathname === item.url ||
+    pathname.startsWith(`${item.url}/`) ||
+    (item.url === '/assignments/new' &&
+      (pathname.startsWith('/assignments/') || pathname.startsWith('/attempts/')));
   const sectionActive =
     itemActive || item.items?.some((subItem) => pathname === subItem.url) === true;
   const [open, setOpen] = useState(sectionActive);

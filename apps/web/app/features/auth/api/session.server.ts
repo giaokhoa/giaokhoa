@@ -6,6 +6,8 @@ export type SessionPayload = {
     id: string;
     name: string;
     email: string;
+    role?: 'user' | 'teacher' | 'admin';
+    banned?: boolean;
   };
   session: {
     id: string;
