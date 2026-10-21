@@ -233,6 +233,8 @@ async function sanitizeSvg(svg: string) {
     throw new Error('TikZ không tạo được SVG hợp lệ.');
   }
 
+  // Kiểm tra ngay lúc preview để không tải tài nguyên ngoài; API cũng phải
+  // sanitize độc lập vì dữ liệu từ browser không đáng tin cậy.
   for (const element of [root, ...root.querySelectorAll('style, [style]')]) {
     const css =
       element.localName === 'style'

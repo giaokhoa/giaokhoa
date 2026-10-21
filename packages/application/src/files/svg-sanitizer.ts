@@ -58,6 +58,8 @@ export function sanitizeAndInspectSvg(input: string) {
     throw new Error('File không phải SVG hợp lệ');
   }
 
+  // DOMPurify chặn nội dung thực thi nhưng không bảo đảm xóa remote URL trong CSS.
+  // Từ chối cả SVG nếu CSS còn reference nguy hiểm; không chỉ lọc href/xlink:href.
   for (const element of [root, ...root.querySelectorAll('style, [style]')]) {
     const css =
       element.localName === 'style'

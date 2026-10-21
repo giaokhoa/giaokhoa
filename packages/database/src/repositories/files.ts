@@ -29,7 +29,8 @@ export class PostgresFilesRepository implements FilesRepository {
   constructor(private readonly db: Database) {}
 
   async reserveUpload(storageKey: string): Promise<void> {
-    // Object chưa gắn vào DB: giữ tombstone để GC thử lại nếu tiến trình chết sau PUT.
+    // Đây là upload intent, chưa phải lệnh xóa ngay: trì hoãn 48 giờ để GC
+    // không đua với request còn đang PUT/ghi metadata. Commit thành công gỡ intent.
     await this.db.insert(fileObjectDeletions).values({
       storageKey,
       availableAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
@@ -79,12 +80,14 @@ export class PostgresFilesRepository implements FilesRepository {
       .limit(1);
     if (!blob) throw new Error('Không thể xác định object của file');
     if (blob.storageKey === data.storageKey) {
-      // Chỉ xóa upload intent khi blob đã có trong transaction cùng file logic.
+      // Key vừa upload trở thành blob chuẩn: gỡ intent cùng transaction tạo file,
+      // để GC không thể xóa một object đã được tham chiếu hợp lệ.
       await tx
         .delete(fileObjectDeletions)
         .where(eq(fileObjectDeletions.storageKey, data.storageKey));
     } else {
-      // Upload trùng SHA có thể được dọn ngay; bytes chuẩn vẫn được giữ.
+      // Hash đã có blob vật lý khác: giữ key chuẩn của blob cũ, còn key mới
+      // chỉ là bản upload thừa. Cho phép outbox dọn bản thừa mà không đụng blob cũ.
       await tx
         .insert(fileObjectDeletions)
         .values({ storageKey: data.storageKey })
@@ -260,6 +263,9 @@ export class PostgresFilesRepository implements FilesRepository {
           eq(classes.status, 'active'),
         ),
       );
+    // file_uses chỉ là chỉ mục ứng viên: phải đối chiếu đúng FileRef trong
+    // snapshot đã chốt; nếu chỉ join itemId sẽ lộ cả ảnh guidance/original
+    // hoặc ảnh thuộc phiên bản khác của cùng câu hỏi.
     return [
       ...new Set([
         ...rows
@@ -283,13 +289,20 @@ export class PostgresFilesRepository implements FilesRepository {
     ];
   }
 
-  /** Lời giải chỉ đọc được bằng lượt làm đã kết thúc và đã qua ngày công bố. */
+  /**
+   * Đường cấp quyền độc lập với quyền xem đề hiện tại: học sinh có attempt
+   * đã nộp/chấm và đã đến hạn release vẫn đọc được solution khi rời lớp.
+   * File phải thực sự nằm trong solution của snapshot đã giao, không chỉ có
+   * placement cùng questionId; không cấp quyền cho guidance hoặc original crop.
+   */
   async hasReleasedSolutionFileAccess(
     fileId: string,
     variantFileId: string | null,
     userId: string,
     now: Date,
   ): Promise<boolean> {
+    // Truy vấn từ file_uses để giảm số snapshot phải parse; lọc FileRef thật
+    // ở cuối vì join theo questionId có thể khớp nhiều phiên bản câu hỏi.
     const rows = await this.db
       .select({ snapshot: examRevisionQuestions.questionSnapshot })
       .from(fileUses)
@@ -404,6 +417,8 @@ export class PostgresFilesRepository implements FilesRepository {
     return this.db.transaction(async (tx) => {
       // Khóa file trước khi xóa draft: attach cũng khóa file rồi xóa draft.
       // Nếu làm ngược, GC và attach đồng thời có thể deadlock trên file_uses.
+      // skipLocked cho phép nhiều worker GC chạy cùng lúc mà không cùng chọn
+      // một file; attach dùng FOR UPDATE để đồng bộ trước khi đổi file_uses.
       const expired = await tx
         .select()
         .from(files)
@@ -459,6 +474,8 @@ export class PostgresFilesRepository implements FilesRepository {
   }
 
   async listPendingDeletions(afterStorageKey?: string): Promise<string[]> {
+    // available_at phân biệt object đã có thể xóa với upload intent còn hạn:
+    // GC tuyệt đối không xử lý intent khi request upload có thể đang chạy.
     const pending = await this.db
       .select({ storageKey: fileObjectDeletions.storageKey })
       .from(fileObjectDeletions)
@@ -494,6 +511,8 @@ export class PostgresFilesRepository implements FilesRepository {
       .where(eq(files.parentFileId, id))
       .orderBy(asc(files.id))
       .for('update');
+    // Một crop còn được dùng phải giữ cả parent; không xóa parent rồi để
+    // FileRef có variant trỏ vào một ảnh gốc đã biến mất.
     for (const child of children) {
       const [childUse] = await tx
         .select({ fileId: fileUses.fileId })

@@ -96,6 +96,8 @@ function inspectOriginalImage(file: UploadedFile | undefined, sourceInput: unkno
 
   const source = parseTikzSource(sourceInput);
   if (dimensions.type === 'svg') {
+    // Kết quả render từ browser vẫn là đầu vào không tin cậy: API bắt buộc
+    // có nguồn TikZ riêng và tự sanitize lại bytes SVG trước khi lưu.
     if (!source) invalid('SVG chỉ được tạo từ TikZ');
 
     let text: string;
@@ -167,7 +169,8 @@ export class FilesService {
   ): Promise<CreatedFile> {
     const image = inspectOriginalImage(file, sourceInput);
     const contentHash = createHash('sha256').update(image.file.buffer).digest('hex');
-    // Khóa ngẫu nhiên tránh xóa nhầm blob cùng hash khi GC và upload đồng thời.
+    // Hai request cùng SHA vẫn upload bằng key riêng; chỉ DB chọn blob dùng chung.
+    // Ghi intent trước PUT để GC tìm được object nếu API chết giữa PUT và commit.
     const storageKey = `files/objects/${randomUUID()}.${image.imageType.extension}`;
     await this.repository.reserveUpload(storageKey);
     await this.storage.put(storageKey, image.file.buffer, image.imageType.mimeType);
@@ -325,6 +328,8 @@ export class FilesService {
       deleted += result.deleted;
       failed += result.failed;
       firstError ??= result.error;
+      // Vẫn bỏ qua key lỗi trong lượt này để không lặp vô hạn; outbox giữ
+      // các key chưa acknowledge cho lần GC kế tiếp.
       afterStorageKey = storageKeys[storageKeys.length - 1];
     }
 
@@ -358,8 +363,9 @@ export class FilesService {
   }
 
   /**
-   * Chủ ảnh hoặc người nhận bài giao có ảnh trong phần đề được xem binary.
-   * Quyền xem ảnh ở đây không bao gồm ảnh chỉ xuất hiện trong guidance/solution.
+   * Chủ ảnh được xem file của mình; học sinh chỉ được xem file có quyền theo
+   * nội dung đề hoặc solution đã công bố. Guidance, source TikZ và ảnh gốc
+   * của crop không được suy quyền từ khả năng xem biến thể.
    */
   async getFile(id: string, userId: string): Promise<StoredFile> {
     const parsedId = fileIdSchema.safeParse(id);
@@ -415,6 +421,8 @@ export class FilesService {
       });
       if (decision.allowed) return;
     }
+    // Quyền xem lời giải đi theo attempt đã hoàn tất và mốc release, không
+    // đi theo quyền xem đề hiện tại (học sinh có thể đã rời lớp).
     if (
       await this.repository.hasReleasedSolutionFileAccess(fileId, variantFileId, userId, this.now())
     )
