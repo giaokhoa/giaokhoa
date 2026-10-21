@@ -129,6 +129,10 @@ describe('Files storage and authorization invariants', () => {
     expect(await db.select().from(fileObjectDeletions)).toMatchObject([
       { storageKey: first.storageKey },
     ]);
+    // Dọn fixture TikZ để không làm bẩn lượt GC toàn database ở test kế tiếp.
+    expect(
+      await repository.discardOrphans([{ fileId: svg.id, variantFileId: null }], owner.id),
+    ).toEqual([svg.storageKey]);
   });
 
   it('never collects a draft that has gained a persistent content placement', async () => {
