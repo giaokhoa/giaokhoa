@@ -20,6 +20,10 @@ import {
 import { classes, classEnrolments } from '../schema/classes.js';
 import type { Database } from '../types.js';
 
+/**
+ * Chuyển bản ghi phạm vi phân quyền (authorization context) thành kiểu dữ liệu của tầng nghiệp vụ.
+ * Chỉ xuất các trường xác định tài nguyên và quan hệ cha; không để cấu trúc bảng rò sang giao diện nghiệp vụ.
+ */
 function contextRecord(row: typeof authzContexts.$inferSelect): AuthorizationContext {
   return {
     id: row.id,
@@ -29,6 +33,10 @@ function contextRecord(row: typeof authzContexts.$inferSelect): AuthorizationCon
   };
 }
 
+/**
+ * Tạo lỗi dữ liệu vai trò không hợp lệ tại phạm vi phân quyền đang xét.
+ * Dùng chung khi vai trò không tồn tại, không phù hợp loại phạm vi hoặc không được phép cấp trực tiếp.
+ */
 function invalidRole() {
   return new ClientError(
     'invalid',
@@ -44,6 +52,10 @@ function invalidRole() {
 export class PostgresAuthorizationRepository implements AuthorizationRepository {
   constructor(private readonly db: Database) {}
 
+  /**
+   * Tìm phạm vi phân quyền theo loại tài nguyên và mã tài nguyên thay vì theo mã nội bộ.
+   * Cặp thông tin này duy nhất trong cơ sở dữ liệu; trả về undefined khi chưa có phạm vi tương ứng.
+   */
   async findContext(ref: ContextRef) {
     const [row] = await this.db
       .select()
@@ -53,6 +65,10 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
     return row ? contextRecord(row) : undefined;
   }
 
+  /**
+   * Tìm phạm vi phân quyền bằng mã UUID đã lưu.
+   * Trả về cấu trúc cha-con cần cho việc đi ngược cây phạm vi khi xét quyền; không tự suy đoán quyền từ bản ghi.
+   */
   async findContextById(id: string) {
     const [row] = await this.db
       .select()
@@ -139,6 +155,10 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
     ];
   }
 
+  /**
+   * Tạo phạm vi lớp học và cấp vai trò ban đầu cho người dùng trong một giao dịch.
+   * Bắt buộc phạm vi cha là hệ thống chính và vai trò phù hợp loại lớp; hai bước thêm phạm vi và gán vai trò phải cùng thành công để tránh phạm vi thiếu chủ.
+   */
   async createContextWithRole(input: ContextWithRoleInput) {
     if (input.context.kind !== 'class')
       throw new ClientError(
@@ -186,6 +206,11 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
     });
   }
 
+  /**
+   * Cấp vai trò trong phạm vi tài nguyên sau khi kiểm tra loại vai trò tương thích.
+   * Không cấp vai trò hệ thống qua bảng gán này vì quyền hệ thống do Better Auth quản lý; ràng buộc duy nhất giúp việc cấp trùng không tạo bản ghi mới.
+   * Trả về true khi tạo được lần gán đang có hiệu lực, false khi đã tồn tại.
+   */
   async assignRole(input: RoleAssignmentInput) {
     return this.db.transaction(async (tx) => {
       const [context] = await tx
@@ -216,6 +241,10 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
     });
   }
 
+  /**
+   * Thu hồi vai trò bằng cách ghi thời điểm thu hồi thay vì xóa bản ghi.
+   * Chỉ tác động đến lần gán chưa thu hồi trong đúng phạm vi, đúng người dùng và đúng vai trò; giữ lịch sử cho việc kiểm tra quyền về sau.
+   */
   async revokeRole(contextId: string, userId: string, roleKey: string) {
     return this.db.transaction(async (tx) => {
       const [role] = await tx

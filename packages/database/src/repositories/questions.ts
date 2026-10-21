@@ -25,6 +25,11 @@ import type { Database } from '../types.js';
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 type QuestionRow = typeof question.$inferSelect;
 
+/**
+ * Ghép định danh câu hỏi trong ngân hàng, số phiên bản và trạng thái với bản ghi nội dung riêng.
+ * Không đưa mã bản ghi nội dung nội bộ ra ngoài; câu hỏi hiển thị luôn mang danh tính ổn định từ mục ngân hàng.
+ * Xác thực dữ liệu theo hợp đồng câu hỏi trước khi trả về tầng nghiệp vụ.
+ */
 function parseStoredQuestion(
   entryId: string,
   ownerId: string,
@@ -39,11 +44,19 @@ function parseStoredQuestion(
   };
 }
 
+/**
+ * Chuyển ngữ liệu (stimulus) thành dữ liệu trả về đã được xác thực.
+ * Loại mã người tạo nội bộ khỏi nội dung ngữ liệu, vì quyền sở hữu được kiểm tra ở phương thức truy xuất.
+ */
 function parseStimulus(row: typeof stimuli.$inferSelect) {
   const { createdByUserId: _owner, ...publicStimulus } = row;
   return stimulusSchema.parse(publicStimulus);
 }
 
+/**
+ * Tạo lỗi khi phiên bản câu hỏi đã thay đổi so với phiên bản người dùng đang sửa.
+ * Buộc tải lại để tránh hai thao tác đồng thời ghi đè nội dung của nhau.
+ */
 function revisionChanged() {
   return new ClientError(
     'conflict',
@@ -59,6 +72,11 @@ function revisionChanged() {
 export class PostgresQuestionsRepository implements QuestionsRepository {
   constructor(private readonly db: Database) {}
 
+  /**
+   * Tạo mục ngân hàng, bản nội dung đầu tiên và liên kết phiên bản số 1 trong cùng giao dịch.
+   * Kiểm tra quyền sở hữu ngữ liệu và các tệp được tham chiếu trước khi ghi; gắn tệp vào đúng bản nội dung ngay khi tạo.
+   * @param refs Những tham chiếu tệp được trích từ nội dung để đối chiếu quyền sử dụng.
+   */
   async createQuestion(data: QuestionCreate, refs: FileRef[], userId: string) {
     return this.db.transaction(async (tx) => {
       // Luôn khóa ngữ liệu (stimulus) trước tệp, cùng thứ tự với thao tác cập nhật ngữ liệu.
@@ -84,6 +102,10 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
     });
   }
 
+  /**
+   * Đọc phiên bản mới nhất của một câu hỏi theo mã mục ngân hàng.
+   * Không kiểm tra chủ sở hữu ở phương thức này; tầng gọi phải kiểm soát quyền trước khi cho phép xem nội dung.
+   */
   async findQuestion(id: string) {
     const [row] = await this.db
       .select({
@@ -104,6 +126,10 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
       : undefined;
   }
 
+  /**
+   * Chỉ lấy phiên bản mới nhất đã ở trạng thái sẵn sàng (ready).
+   * Dùng cho đường chọn câu hỏi có thể sử dụng, không mặc định bản nháp mới nhất là nội dung đã được công bố.
+   */
   async findLatestReadyQuestion(id: string) {
     const [row] = await this.db
       .select({
@@ -124,8 +150,11 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
       : undefined;
   }
 
-  /** Kiểm tra chủ sở hữu tại mục ngân hàng câu hỏi trước khi lấy phiên bản mới nhất;
-   * không tiết lộ sự tồn tại của câu hỏi cho người không có quyền. */
+  /**
+   * Lấy phiên bản mới nhất của câu hỏi khi người yêu cầu sở hữu mục ngân hàng.
+   * Kiểm tra chủ sở hữu ngay trong truy vấn để không tiết lộ sự tồn tại
+   * hay nội dung câu hỏi của người khác.
+   */
   async findQuestionOwned(id: string, userId: string) {
     const [row] = await this.db
       .select({
@@ -146,6 +175,10 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
       : undefined;
   }
 
+  /**
+   * Tìm đúng số phiên bản thuộc một mục ngân hàng câu hỏi.
+   * Giữ nội dung đã lưu của phiên bản đó, không tự chọn phiên bản mới hơn.
+   */
   async findQuestionVersion(id: string, version: number) {
     const [row] = await this.db
       .select({
@@ -165,6 +198,10 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
       : undefined;
   }
 
+  /**
+   * Liệt kê số phiên bản và trạng thái từ mới đến cũ của một câu hỏi.
+   * Không tải toàn bộ nội dung từng phiên bản khi chỉ cần lịch sử số phiên bản và trạng thái.
+   */
   async listQuestionVersions(id: string) {
     const [entry] = await this.db
       .select({ id: questionBankEntries.id })
@@ -184,6 +221,11 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
     }));
   }
 
+  /**
+   * Tạo bản nội dung mới mà không ghi đè các phiên bản câu hỏi trước đó.
+   * Khóa mục ngân hàng câu hỏi để ngăn thao tác song song; yêu cầu expectedVersion khớp phiên bản mới nhất trước khi tăng số phiên bản.
+   * Kiểm tra lại quyền với ngữ liệu và tệp; mỗi bản nội dung giữ tham chiếu tệp riêng.
+   */
   async createQuestionVersion(
     id: string,
     expectedVersion: number,
@@ -233,6 +275,11 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
     });
   }
 
+  /**
+   * Đổi trạng thái phiên bản mới nhất khi chủ sở hữu cung cấp đúng số phiên bản dự kiến.
+   * Không cho đổi trạng thái của bản câu hỏi đã chốt vào đề thi; khi chuyển sang sẵn sàng, khóa và kiểm tra ngữ liệu thuộc chủ sở hữu.
+   * Thao tác chỉ đổi trạng thái, không tạo bản nội dung mới.
+   */
   async changeQuestionStatus(
     id: string,
     expectedVersion: number,
@@ -300,6 +347,11 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
     });
   }
 
+  /**
+   * Xóa câu hỏi cùng toàn bộ phiên bản nội dung khi không phiên bản nào đã được chốt vào đề.
+   * Khóa mục ngân hàng và các tệp liên quan, gỡ vị trí sử dụng tệp rồi đánh dấu tệp không còn tham chiếu để thu gom an toàn.
+   * Không xóa dữ liệu đề đã phát hành chỉ để đáp ứng yêu cầu xóa câu hỏi nguồn.
+   */
   async deleteQuestion(id: string, userId: string) {
     return this.db.transaction(async (tx) => {
       const [owned] = await tx
@@ -353,6 +405,10 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
     });
   }
 
+  /**
+   * Tạo ngữ liệu dùng chung và gắn tệp thuộc quyền người tạo vào nội dung ngữ liệu.
+   * Đồng bộ tạo bản ghi và vị trí sử dụng tệp trong cùng giao dịch để không có ngữ liệu chứa ảnh chưa được liên kết.
+   */
   async createStimulus(data: StimulusCreate, refs: FileRef[], userId: string): Promise<Stimulus> {
     return this.db.transaction(async (tx) => {
       await this.validateFileRefs(tx, refs, userId);
@@ -365,6 +421,10 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
     });
   }
 
+  /**
+   * Tra ngữ liệu theo cả mã và chủ sở hữu.
+   * Không trả dữ liệu khi ngữ liệu không thuộc người gọi; tránh để lộ nội dung dùng chung của tác giả khác.
+   */
   async findStimulusOwned(id: string, userId: string): Promise<Stimulus | undefined> {
     const [stimulus] = await this.db
       .select()
@@ -374,6 +434,11 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
     return stimulus ? parseStimulus(stimulus) : undefined;
   }
 
+  /**
+   * Chỉ sửa ngữ liệu khi chưa có phiên bản câu hỏi nào đang tham chiếu đến nó.
+   * Khóa ngữ liệu và các tệp cũ/mới trước khi sửa để bảo toàn nội dung phiên bản đã lưu và tránh tranh chấp với thu gom tệp.
+   * @param refs Danh sách tham chiếu mới, hoặc null nếu không thay đổi phần tham chiếu tệp.
+   */
   async updateStimulus(
     id: string,
     data: StimulusPatch,
@@ -409,6 +474,10 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
     });
   }
 
+  /**
+   * Xóa ngữ liệu thuộc chủ sở hữu nếu không câu hỏi nào còn tham chiếu.
+   * Gỡ vị trí sử dụng tệp, khóa các tệp liên quan và đánh dấu tệp trở thành không được sử dụng; không xóa tệp trực tiếp trong giao dịch này.
+   */
   async deleteStimulus(id: string, userId: string) {
     return this.db.transaction(async (tx) => {
       const owned = and(eq(stimuli.id, id), eq(stimuli.createdByUserId, userId));
@@ -447,6 +516,10 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
     });
   }
 
+  /**
+   * Khóa ngữ liệu người dùng sở hữu trước khi gắn vào câu hỏi hoặc đổi trạng thái câu hỏi.
+   * Nếu mã ngữ liệu trống thì bỏ qua; ngược lại yêu cầu tồn tại và đúng chủ để không gắn nội dung của người khác.
+   */
   private async lockOwnedStimulus(
     tx: Transaction,
     stimulusId: string | null | undefined,
@@ -468,6 +541,10 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
     }
   }
 
+  /**
+   * Từ chối sửa ngữ liệu khi đã có bản nội dung câu hỏi sử dụng.
+   * Giữ nguyên ý nghĩa của các phiên bản câu hỏi đã lưu; nếu cần nội dung khác thì phải tạo ngữ liệu mới.
+   */
   private async assertStimulusUnreferenced(tx: Transaction, id: string) {
     const [inUse] = await tx
       .select({ id: question.id })
@@ -483,6 +560,10 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
     }
   }
 
+  /**
+   * Khóa tập hợp bản ghi tệp theo thứ tự cố định để các giao dịch gắn, gỡ và thu gom không kẹt khóa.
+   * Loại mã trùng, khóa ảnh gốc trước ảnh biến thể rồi theo mã UUID; không làm gì khi tập hợp rỗng.
+   */
   private async lockFileIds(tx: Transaction, ids: string[]) {
     const unique = [...new Set(ids)].sort();
     if (!unique.length) return;
@@ -494,6 +575,11 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
       .for('update');
   }
 
+  /**
+   * Xác minh mọi tệp trong nội dung đều thuộc người tạo và các biến thể thực sự là con của ảnh gốc đã chỉ định.
+   * Khóa cả tệp hiện tại và tệp sắp thay đổi theo cùng thứ tự để tránh việc tệp bị xóa hoặc đổi tham chiếu giữa lúc xác minh.
+   * @param extraLockIds Những tệp cũ cần khóa cùng tham chiếu mới khi thay thế nội dung.
+   */
   private async validateFileRefs(
     tx: Transaction,
     refs: FileRef[],
@@ -542,6 +628,10 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
     }
   }
 
+  /**
+   * Tạo nếu chưa có và trả mã phạm vi phân quyền (authorization context) cho người dùng hoặc ngân hàng câu hỏi.
+   * Dùng thao tác chèn bỏ qua xung đột để hai giao dịch cùng tạo một phạm vi không sinh bản ghi trùng.
+   */
   private async ensureContext(
     tx: Transaction,
     kind: 'bank' | 'user',
@@ -557,6 +647,11 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
     return context.id;
   }
 
+  /**
+   * Ghi vị trí sử dụng của tệp theo phân hệ, đối tượng và vùng nội dung cụ thể.
+   * Ảnh biến thể đang hiển thị được gắn tại vùng nội dung; ảnh gốc chỉ giữ trong vùng chỉnh sửa để không lộ cho học sinh.
+   * Xóa vị trí nháp và bỏ dấu tệp không còn sử dụng khi đã được gắn hợp lệ.
+   */
   private async attachFileUses(
     tx: Transaction,
     contextId: string,
@@ -605,6 +700,10 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
       );
   }
 
+  /**
+   * Ghi tham chiếu tệp cho đúng bản nội dung câu hỏi vừa tạo và phạm vi ngân hàng tương ứng.
+   * Tách các vùng nội dung chính, hướng dẫn và lời giải để cấp quyền đọc khác nhau; không xóa tham chiếu của các phiên bản cũ.
+   */
   private async replaceFileUses(
     tx: Transaction,
     bankEntryId: string,
@@ -619,6 +718,11 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
     ]);
   }
 
+  /**
+   * Thay thế các vị trí sử dụng tệp của một ngữ liệu sau khi sửa nội dung.
+   * Gỡ liên kết cũ, gắn liên kết mới trong phạm vi người sở hữu rồi đánh dấu tệp cũ không còn được dùng.
+   * Phải thực hiện trong cùng giao dịch với việc cập nhật ngữ liệu.
+   */
   private async replaceStimulusFileUses(
     tx: Transaction,
     stimulusId: string,
@@ -642,6 +746,10 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
     );
   }
 
+  /**
+   * Đánh dấu thời điểm tệp không còn bất kỳ vị trí sử dụng nào sau khi gỡ liên kết.
+   * Khóa tệp, kiểm tra lại mọi vị trí còn tồn tại; không xóa ngay vì thu gom tệp được thực hiện theo một quy trình an toàn riêng.
+   */
   private async markDetachedFiles(tx: Transaction, ids: string[]) {
     const unique = [...new Set(ids)].sort();
     if (!unique.length) return;

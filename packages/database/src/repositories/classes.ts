@@ -14,6 +14,10 @@ import type { Database } from '../types.js';
 
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
+/**
+ * Tạo lỗi mã tham gia lớp không dùng được.
+ * Không phân biệt mã không tồn tại, đã hết hạn hoặc bị thu hồi trong phản hồi trả về cho người tham gia.
+ */
 function codeInvalid(): ClientError {
   return new ClientError(
     'not_found',
@@ -22,6 +26,10 @@ function codeInvalid(): ClientError {
   );
 }
 
+/**
+ * Chuyển bản ghi thành viên lớp sang dữ liệu trả về hợp đồng nghiệp vụ.
+ * Chỉ giữ trạng thái và các mốc thời gian cần thiết, không đưa mã người cập nhật ra ngoài.
+ */
 function membership(row: typeof classEnrolments.$inferSelect) {
   return classEnrolmentSchema.parse({
     userId: row.userId,
@@ -31,6 +39,10 @@ function membership(row: typeof classEnrolments.$inferSelect) {
   });
 }
 
+/**
+ * Chuyển bản ghi lớp thành cấu trúc công khai đã được xác thực.
+ * Cố ý bỏ mã phạm vi phân quyền nội bộ vì đây không phải dữ liệu hồ sơ lớp dành cho người dùng.
+ */
 function publicClass(row: typeof classes.$inferSelect) {
   return classSchema.parse({
     id: row.id,
@@ -43,6 +55,10 @@ function publicClass(row: typeof classes.$inferSelect) {
   });
 }
 
+/**
+ * Đọc vai trò tài khoản còn hoạt động trong giao dịch và khóa đọc người dùng.
+ * Chỉ chấp nhận người dùng, giáo viên hoặc quản trị viên không bị cấm; các trạng thái khác không được tự động cấp quyền.
+ */
 async function activeAccountRole(tx: Transaction, actorId: string) {
   const [actor] = await tx
     .select({ role: users.role, banned: users.banned })
@@ -56,6 +72,10 @@ async function activeAccountRole(tx: Transaction, actorId: string) {
   return undefined;
 }
 
+/**
+ * Xác nhận chủ lớp dựa đồng thời trên tác giả lớp, vai trò tài khoản và lần gán vai trò chủ lớp đang có hiệu lực.
+ * Không dựa riêng vào trường người tạo để tránh giáo viên đã bị hạ vai trò hoặc bị thu hồi quyền vẫn thao tác quản lý.
+ */
 async function classOwner(tx: Transaction, row: typeof classes.$inferSelect, actorId: string) {
   if (row.createdByUserId !== actorId || !row.authzContextId) return false;
   const role = await activeAccountRole(tx, actorId);
@@ -77,6 +97,10 @@ async function classOwner(tx: Transaction, row: typeof classes.$inferSelect, act
   return !!owner;
 }
 
+/**
+ * Tìm vai trò học sinh trong phạm vi phân quyền của lớp.
+ * Báo xung đột nếu chưa tạo phạm vi hoặc chưa khởi tạo vai trò cần thiết; không tự chèn vai trò thiếu trong lúc tham gia.
+ */
 async function studentRole(tx: Transaction, row: typeof classes.$inferSelect) {
   if (!row.authzContextId)
     throw new ClientError('conflict', 'class_context_missing', 'Context lớp chưa sẵn sàng');
@@ -90,6 +114,10 @@ async function studentRole(tx: Transaction, row: typeof classes.$inferSelect) {
   return { contextId: row.authzContextId, roleId: role.id };
 }
 
+/**
+ * Cấp vai trò học sinh trong phạm vi lớp cho thành viên đã được chấp nhận.
+ * Bỏ qua lần cấp trùng để việc đồng bộ quan hệ thành viên và phân quyền có thể chạy lặp lại an toàn.
+ */
 async function grantStudent(tx: Transaction, row: typeof classes.$inferSelect, userId: string) {
   const role = await studentRole(tx, row);
   await tx
@@ -102,6 +130,10 @@ async function grantStudent(tx: Transaction, row: typeof classes.$inferSelect, u
     .onConflictDoNothing();
 }
 
+/**
+ * Đánh dấu thu hồi vai trò học sinh khi thành viên rời lớp hoặc bị đình chỉ.
+ * Chỉ thu hồi lần gán còn hiệu lực; giữ bản ghi cũ để truy vết các lần tham gia.
+ */
 async function revokeStudent(tx: Transaction, row: typeof classes.$inferSelect, userId: string) {
   const role = await studentRole(tx, row);
   await tx
@@ -124,6 +156,10 @@ async function revokeStudent(tx: Transaction, row: typeof classes.$inferSelect, 
 export class PostgresClassesRepository implements ClassesRepository {
   constructor(private readonly db: Database) {}
 
+  /**
+   * Tạo lớp, phạm vi phân quyền và quyền chủ lớp trong cùng một giao dịch.
+   * Yêu cầu người tạo có vai trò giáo viên hoặc quản trị viên; nếu thiếu cấu hình phân quyền gốc thì không tạo lớp dở dang.
+   */
   async create(input: ClassCreate, actorId: string) {
     return this.db.transaction(async (tx) => {
       const role = await activeAccountRole(tx, actorId);
@@ -176,11 +212,19 @@ export class PostgresClassesRepository implements ClassesRepository {
     });
   }
 
+  /**
+   * Đọc thông tin hiển thị của lớp theo mã định danh.
+   * Không đưa mã phạm vi phân quyền nội bộ vào dữ liệu trả về.
+   */
   async findById(id: string) {
     const [row] = await this.db.select().from(classes).where(eq(classes.id, id)).limit(1);
     return row ? publicClass(row) : undefined;
   }
 
+  /**
+   * Sửa thông tin lớp chỉ khi người thực hiện thực sự còn quyền chủ lớp.
+   * Khóa lớp trước khi kiểm tra và cập nhật để tránh tranh chấp với thay đổi trạng thái hoặc quyền tham gia.
+   */
   async update(id: string, actorId: string, patch: ClassPatch) {
     return this.db.transaction(async (tx) => {
       const [row] = await tx
@@ -199,6 +243,10 @@ export class PostgresClassesRepository implements ClassesRepository {
     });
   }
 
+  /**
+   * Tạo mã mời đã băm cho lớp đang hoạt động và do người yêu cầu quản lý.
+   * Lưu thời hạn, giới hạn sử dụng và danh tính người cấp; không lưu mã mời nguyên bản trong cơ sở dữ liệu.
+   */
   async createJoinCode(
     classId: string,
     actorId: string,
@@ -229,6 +277,10 @@ export class PostgresClassesRepository implements ClassesRepository {
     });
   }
 
+  /**
+   * Thu hồi mã mời của đúng lớp khi người thực hiện có quyền quản lý.
+   * Chỉ đánh dấu thời điểm thu hồi nếu mã chưa bị thu hồi; kết quả boolean cho biết có bản ghi được thay đổi.
+   */
   async revokeJoinCode(classId: string, codeId: string, actorId: string) {
     return this.db.transaction(async (tx) => {
       const [classroom] = await tx
@@ -339,6 +391,10 @@ export class PostgresClassesRepository implements ClassesRepository {
     });
   }
 
+  /**
+   * Liệt kê tất cả quan hệ tham gia một lớp, gồm cả người chờ duyệt hoặc đã rời lớp.
+   * Không tự lọc quyền xem ở đây; tầng nghiệp vụ phải xác minh người gọi có quyền quản lý danh sách.
+   */
   async listEnrolments(classId: string) {
     const rows = await this.db
       .select()
@@ -347,6 +403,10 @@ export class PostgresClassesRepository implements ClassesRepository {
     return rows.map(membership);
   }
 
+  /**
+   * Duyệt, đình chỉ hoặc cho thành viên rời lớp bằng một thay đổi trạng thái nhất quán.
+   * Duyệt và đình chỉ đòi quyền chủ lớp; rời lớp chỉ do chính thành viên thực hiện. Việc cấp hoặc thu hồi vai trò học sinh nằm cùng giao dịch với cập nhật thành viên.
+   */
   async changeEnrolment(
     classId: string,
     userId: string,

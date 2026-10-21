@@ -21,6 +21,10 @@ import { and, asc, eq } from 'drizzle-orm';
 import { curricula, curriculumNodes, learningOutcomes, subjects } from '../schema/curriculum.js';
 import type { Database } from '../types.js';
 
+/**
+ * Dò mã lỗi PostgreSQL qua chuỗi nguyên nhân lỗi được thư viện truy vấn bọc lại.
+ * Giới hạn số tầng duyệt để tránh lặp vô hạn; dùng để chuyển lỗi trùng khóa duy nhất sang lỗi nghiệp vụ dễ hiểu.
+ */
 function hasPostgresCode(error: unknown, code: string) {
   let current = error;
   for (let depth = 0; depth < 5; depth += 1) {
@@ -38,6 +42,10 @@ function hasPostgresCode(error: unknown, code: string) {
 export class PostgresCurriculumRepository implements CurriculumRepository {
   constructor(private readonly db: Database) {}
 
+  /**
+   * Lấy toàn bộ môn học theo thứ tự hiển thị rồi đến tên để ổn định kết quả.
+   * Kiểm tra định dạng từng bản ghi qua sơ đồ dữ liệu dùng chung trước khi trả về.
+   */
   async listSubjects() {
     const rows = await this.db
       .select()
@@ -46,6 +54,10 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
     return rows.map((row) => subjectSchema.parse(row));
   }
 
+  /**
+   * Thêm môn học mới; trả về bản ghi vừa tạo đã được xác thực.
+   * Chuyển lỗi PostgreSQL 23505 do trùng mã đường dẫn (slug) thành lỗi xung đột môn học.
+   */
   async createSubject(data: SubjectCreate) {
     try {
       const [subject] = await this.db.insert(subjects).values(data).returning();
@@ -57,11 +69,19 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
     }
   }
 
+  /**
+   * Tìm môn học theo mã; trả về undefined nếu không tồn tại.
+   * Giữ kiểu dữ liệu đầu ra theo hợp đồng môn học dùng chung.
+   */
   async findSubject(id: string) {
     const [subject] = await this.db.select().from(subjects).where(eq(subjects.id, id)).limit(1);
     return subject ? subjectSchema.parse(subject) : undefined;
   }
 
+  /**
+   * Cập nhật tên, mã đường dẫn hoặc thứ tự môn học theo phần thay đổi được cung cấp.
+   * Chuyển lỗi trùng mã đường dẫn sang lỗi nghiệp vụ thay vì để lộ thông báo cơ sở dữ liệu.
+   */
   async updateSubject(id: string, data: SubjectPatch) {
     try {
       const [subject] = await this.db
@@ -77,6 +97,10 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
     }
   }
 
+  /**
+   * Xóa môn học theo mã và chỉ trả thông tin định danh bản ghi đã xóa.
+   * Các bản ghi phụ thuộc được xử lý theo quan hệ khóa ngoại đã khai báo, không xóa thủ công từng bảng ở đây.
+   */
   async deleteSubject(id: string) {
     const [subject] = await this.db
       .delete(subjects)
@@ -85,6 +109,10 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
     return subject;
   }
 
+  /**
+   * Liệt kê mọi chương trình học, sắp xếp theo môn rồi theo khối lớp.
+   * Dùng khi cần xem danh mục chung thay vì giới hạn theo một môn.
+   */
   async listAllCurricula() {
     const rows = await this.db
       .select()
@@ -93,6 +121,10 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
     return rows.map((row) => curriculumSchema.parse(row));
   }
 
+  /**
+   * Liệt kê chương trình của một môn theo khối lớp tăng dần.
+   * Điều kiện theo mã môn ngăn lẫn chương trình của môn khác.
+   */
   async listCurricula(subjectId: string) {
     const rows = await this.db
       .select()
@@ -102,6 +134,10 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
     return rows.map((row) => curriculumSchema.parse(row));
   }
 
+  /**
+   * Thêm chương trình cho một môn và một khối lớp.
+   * Ràng buộc duy nhất theo cặp môn/khối bảo vệ dữ liệu khi có hai thao tác tạo đồng thời; lỗi trùng được đổi sang lỗi nghiệp vụ.
+   */
   async createCurriculum(data: CurriculumCreate) {
     try {
       const [curriculum] = await this.db.insert(curricula).values(data).returning();
@@ -117,6 +153,10 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
     }
   }
 
+  /**
+   * Đọc một chương trình theo mã, trả về undefined nếu không có.
+   * Kiểm tra cấu trúc bản ghi trước khi chuyển sang tầng nghiệp vụ.
+   */
   async findCurriculum(id: string) {
     const [curriculum] = await this.db
       .select()
@@ -126,6 +166,10 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
     return curriculum ? curriculumSchema.parse(curriculum) : undefined;
   }
 
+  /**
+   * Tra chương trình bằng cặp môn học và khối lớp vốn được cơ sở dữ liệu bảo đảm duy nhất.
+   * Tránh phải lấy toàn bộ chương trình rồi lọc trong bộ nhớ.
+   */
   async findCurriculumBySubjectAndGrade(subjectId: string, grade: number) {
     const [curriculum] = await this.db
       .select()
@@ -135,6 +179,10 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
     return curriculum ? curriculumSchema.parse(curriculum) : undefined;
   }
 
+  /**
+   * Cập nhật các trường được phép sửa của chương trình.
+   * Nếu thay đổi làm trùng cặp môn và khối lớp thì trả lỗi xung đột tương ứng.
+   */
   async updateCurriculum(id: string, data: CurriculumPatch) {
     try {
       const [curriculum] = await this.db
@@ -154,6 +202,10 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
     }
   }
 
+  /**
+   * Xóa chương trình theo mã, trả về định danh nếu đã xóa.
+   * Để cơ sở dữ liệu áp dụng các quy tắc xóa dây chuyền (cascade) đã khai báo cho cây nội dung.
+   */
   async deleteCurriculum(id: string) {
     const [curriculum] = await this.db
       .delete(curricula)
@@ -162,6 +214,10 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
     return curriculum;
   }
 
+  /**
+   * Liệt kê các nút nội dung của một chương trình, sắp xếp theo vị trí và mã nút.
+   * Kết quả gồm cả nút gốc và nút con; trường cha quyết định cấu trúc cây.
+   */
   async listNodes(curriculumId: string) {
     const rows = await this.db
       .select()
@@ -171,11 +227,19 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
     return rows.map((row) => curriculumNodeSchema.parse(row));
   }
 
+  /**
+   * Tạo một nút nội dung trong chương trình học.
+   * Quan hệ cha và chương trình được ràng buộc ở cơ sở dữ liệu để không có nút con trỏ sang chương trình khác.
+   */
   async createNode(data: CurriculumNodeCreate) {
     const [node] = await this.db.insert(curriculumNodes).values(data).returning();
     return curriculumNodeSchema.parse(node);
   }
 
+  /**
+   * Tìm nút nội dung theo mã; không có thì trả về undefined.
+   * Trả về cấu trúc dữ liệu đã xác thực để tầng sử dụng không phụ thuộc kiểu bản ghi Drizzle.
+   */
   async findNode(id: string) {
     const [node] = await this.db
       .select()
@@ -185,6 +249,10 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
     return node ? curriculumNodeSchema.parse(node) : undefined;
   }
 
+  /**
+   * Cập nhật các trường cơ bản của nút nội dung theo mã.
+   * Thay đổi cấu trúc cha-con cần đi qua phương thức updateNodeTree để kiểm tra vòng lặp trong cây.
+   */
   async updateNode(id: string, data: CurriculumNodePatch) {
     const [node] = await this.db
       .update(curriculumNodes)
@@ -194,6 +262,11 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
     return node ? curriculumNodeSchema.parse(node) : undefined;
   }
 
+  /**
+   * Di chuyển nút sang vị trí mới trong cây mà không tạo chu trình (cycle).
+   * Khóa chương trình trước khi đọc chuỗi tổ tiên để đồng bộ các lần di chuyển song song; từ chối nút cha khác chương trình, nút tự làm cha và nhánh gây vòng lặp.
+   * Trả trạng thái chi tiết: đã cập nhật, không tồn tại, cha không hợp lệ hoặc tạo chu trình.
+   */
   async updateNodeTree(
     id: string,
     data: CurriculumNodePatch & { parentId: string | null },
@@ -260,6 +333,10 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
     });
   }
 
+  /**
+   * Xóa nút nội dung theo mã; quan hệ phụ thuộc được xử lý bằng ràng buộc khóa ngoại.
+   * Trả về định danh khi xóa thành công, undefined khi không có nút.
+   */
   async deleteNode(id: string) {
     const [node] = await this.db
       .delete(curriculumNodes)
@@ -268,6 +345,10 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
     return node;
   }
 
+  /**
+   * Lấy các yêu cầu cần đạt (learning outcome) của một nút nội dung theo thứ tự hiển thị.
+   * Nếu nhiều mục có cùng vị trí thì sắp theo mã để kết quả luôn ổn định.
+   */
   async listOutcomes(nodeId: string) {
     const rows = await this.db
       .select()
@@ -277,11 +358,19 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
     return rows.map((row) => learningOutcomeSchema.parse(row));
   }
 
+  /**
+   * Thêm yêu cầu cần đạt vào một nút nội dung cụ thể.
+   * Trả về dữ liệu đã qua kiểm tra hợp đồng yêu cầu cần đạt.
+   */
   async createOutcome(data: LearningOutcomeCreate) {
     const [outcome] = await this.db.insert(learningOutcomes).values(data).returning();
     return learningOutcomeSchema.parse(outcome);
   }
 
+  /**
+   * Đọc yêu cầu cần đạt theo mã; không tồn tại thì trả về undefined.
+   * Không ghép thêm thông tin nút cha vì phương thức chỉ trả một yêu cầu.
+   */
   async findOutcome(id: string) {
     const [outcome] = await this.db
       .select()
@@ -291,6 +380,10 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
     return outcome ? learningOutcomeSchema.parse(outcome) : undefined;
   }
 
+  /**
+   * Cập nhật nội dung hoặc thứ tự một yêu cầu cần đạt.
+   * Dùng thao tác cập nhật và trả bản ghi mới trong một câu lệnh để tránh tra lại.
+   */
   async updateOutcome(id: string, data: LearningOutcomePatch) {
     const [outcome] = await this.db
       .update(learningOutcomes)
@@ -300,6 +393,10 @@ export class PostgresCurriculumRepository implements CurriculumRepository {
     return outcome ? learningOutcomeSchema.parse(outcome) : undefined;
   }
 
+  /**
+   * Xóa yêu cầu cần đạt theo mã; trả về định danh nếu có bản ghi bị xóa.
+   * Các liên kết phân loại câu hỏi chịu quy tắc khóa ngoại của bảng quan hệ.
+   */
   async deleteOutcome(id: string) {
     const [outcome] = await this.db
       .delete(learningOutcomes)

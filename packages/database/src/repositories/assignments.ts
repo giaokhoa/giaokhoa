@@ -20,6 +20,10 @@ import type { Database } from '../types.js';
 
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
+/**
+ * Tạo lỗi từ chối quyền quản lý bài giao (assignment).
+ * Dùng thống nhất cho các thao tác yêu cầu chủ lớp có vai trò quản lý hợp lệ.
+ */
 function forbidden() {
   return new ClientError(
     'forbidden',
@@ -28,6 +32,10 @@ function forbidden() {
   );
 }
 
+/**
+ * Tạo lỗi khi danh sách học sinh được chọn không khớp với các thành viên đang hoạt động.
+ * Không công bố bài giao thiếu người hoặc chứa người ngoài lớp mà người tạo không nhận ra.
+ */
 function invalidRecipients() {
   return new ClientError(
     'invalid',
@@ -36,6 +44,14 @@ function invalidRecipients() {
   );
 }
 
+/**
+ * Kiểm tra quyền quản lý lớp bên trong một giao dịch (transaction).
+ * Yêu cầu lớp đang hoạt động, đúng người tạo, tài khoản giáo viên hoặc quản trị viên chưa bị cấm, và vai trò chủ lớp chưa bị thu hồi.
+ * @param tx Giao dịch đang dùng để đọc quyền nhất quán với thao tác ghi.
+ * @param classroom Bản ghi lớp đã được bên gọi tra cứu và khóa trước khi kiểm tra.
+ * @param actorId Mã tài khoản đang thực hiện thao tác.
+ * @throws Lỗi từ chối quyền khi thiếu bất kỳ điều kiện sở hữu nào.
+ */
 export async function assertOwner(
   tx: Transaction,
   classroom: typeof classes.$inferSelect | undefined,
@@ -73,6 +89,10 @@ export async function assertOwner(
   if (!owner) throw forbidden();
 }
 
+/**
+ * Chuyển cấu hình bài giao đã được xác thực thành dữ liệu phù hợp để ghi PostgreSQL.
+ * Đổi chuỗi thời gian thành Date và dùng null cho lịch công bố chưa được cấu hình, tránh lưu trạng thái thiếu nhất quán.
+ */
 function config(input: ReturnType<typeof assignmentCreateSchema.parse>) {
   return {
     audienceMode: input.audienceMode,
@@ -93,6 +113,11 @@ function config(input: ReturnType<typeof assignmentCreateSchema.parse>) {
 export class PostgresAssignmentsRepository implements AssignmentsRepository {
   constructor(private readonly db: Database) {}
 
+  /**
+   * Tạo bản nháp bài giao cho một lớp và một bản sửa đổi đề thi thuộc người tạo.
+   * Khóa lớp, xác minh quyền sở hữu lớp rồi xác minh tác giả đề trong cùng giao dịch để không tạo bài giao trái quyền.
+   * Trả về undefined khi không tìm thấy bản sửa đổi đề của tác giả; lỗi phân quyền được phát sinh riêng.
+   */
   async create(actorId: string, input: Parameters<AssignmentsRepository['create']>[1]) {
     const parsed = assignmentCreateSchema.parse(input);
     return this.db.transaction(async (tx) => {
@@ -123,11 +148,20 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
     });
   }
 
+  /**
+   * Đọc cấu hình bài giao theo mã và kiểm tra cấu trúc dữ liệu đầu ra.
+   * Phương thức chỉ truy xuất dữ liệu, không tự kiểm tra quyền người xem; tầng gọi phải đặt hàng rào phân quyền.
+   */
   async findById(id: string) {
     const [row] = await this.db.select().from(assignments).where(eq(assignments.id, id)).limit(1);
     return row ? assignmentSchema.parse(row) : undefined;
   }
 
+  /**
+   * Chỉ cập nhật cấu hình bài giao khi còn ở trạng thái bản nháp (draft) và người sửa là tác giả.
+   * Khóa lớp trước bài giao, ghép dữ liệu hiện có với phần thay đổi rồi xác thực toàn bộ cấu hình để tránh phá vỡ tính hợp lệ khi cập nhật từng phần.
+   * Trả về undefined khi bài giao không tồn tại, đã công bố hoặc không thuộc người yêu cầu.
+   */
   async updateDraft(id: string, actorId: string, patch: AssignmentPatch) {
     const [existing] = await this.db
       .select({ classId: assignments.classId })
@@ -247,6 +281,10 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
     });
   }
 
+  /**
+   * Liệt kê người nhận đã được chốt của một bài giao theo thứ tự mã người dùng.
+   * Chỉ trả danh sách khi người yêu cầu chính là tác giả bài giao; kết quả giữ trạng thái đã thu hồi để phục vụ đối soát.
+   */
   async listRecipients(id: string, actorId: string) {
     const [row] = await this.db
       .select({ createdByUserId: assignments.createdByUserId })
@@ -268,6 +306,11 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
     return recipients.map((value) => assignmentRecipientSchema.parse(value));
   }
 
+  /**
+   * Thu hồi quyền nhận một bài giao đã công bố mà không xóa lịch sử người nhận.
+   * Khóa lớp, bài giao và bản ghi người nhận trong cùng giao dịch để tránh tranh chấp với thao tác tham gia hoặc bắt đầu làm bài.
+   * Trả về false khi không còn bản ghi hợp lệ cần thu hồi; lặp lại trên người đã thu hồi không làm thay đổi thời điểm thu hồi cũ.
+   */
   async revokeRecipient(id: string, userId: string, actorId: string) {
     const [existing] = await this.db
       .select({ classId: assignments.classId })
@@ -310,6 +353,11 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
     });
   }
 
+  /**
+   * Tạo nội dung bài giao hiển thị cho học sinh từ bản chụp đề thi đã chốt.
+   * Chỉ chọn người nhận còn hiệu lực, đang tham gia lớp hoạt động và bài đã công bố, đã đến giờ mở; không truy vấn đề đang chỉnh sửa.
+   * Dữ liệu trả về chỉ có nội dung cần làm, không kèm hướng dẫn hoặc lời giải; ngữ liệu chỉ được gắn theo các câu hỏi đã qua kiểm tra quyền.
+   */
   async getDelivery(
     id: string,
     actorId: string,

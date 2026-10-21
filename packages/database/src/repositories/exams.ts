@@ -14,6 +14,10 @@ import { exams, examRevisions, examRevisionQuestions } from '../schema/exams.js'
 import { question, questionBankEntries, questionVersions } from '../schema/questions.js';
 import type { Database } from '../types.js';
 
+/**
+ * Tạo lỗi khi câu hỏi được chọn cho đề không tồn tại hoặc không thuộc tác giả.
+ * Dùng cùng một phản hồi để không tiết lộ danh tính câu hỏi của người khác.
+ */
 function invalidQuestion() {
   return new ClientError(
     'not_found',
@@ -29,6 +33,10 @@ function invalidQuestion() {
 export class PostgresExamsRepository implements ExamsRepository {
   constructor(private readonly db: Database) {}
 
+  /**
+   * Tạo danh tính đề thi thuộc tài khoản giáo viên hoặc quản trị viên chưa bị cấm.
+   * Kiểm tra vai trò trong giao dịch và khóa đọc tài khoản để hạn chế việc đổi vai trò đồng thời với tạo đề.
+   */
   async create(actorId: string, input: { title: string }) {
     return this.db.transaction(async (tx) => {
       const [actor] = await tx
@@ -47,6 +55,10 @@ export class PostgresExamsRepository implements ExamsRepository {
     });
   }
 
+  /**
+   * Liệt kê đề thi theo người tạo, sắp xếp đề mới trước.
+   * Giới hạn ngay tại điều kiện truy vấn để không xuất dữ liệu đề thuộc tài khoản khác.
+   */
   async listOwned(actorId: string) {
     const rows = await this.db
       .select()
@@ -56,6 +68,10 @@ export class PostgresExamsRepository implements ExamsRepository {
     return rows.map((row) => examSchema.parse(row));
   }
 
+  /**
+   * Đọc đề thi khi mã đề và mã chủ sở hữu đều khớp.
+   * Không trả kết quả khi đề không tồn tại hoặc thuộc người khác, tránh tiết lộ tài nguyên.
+   */
   async findOwned(id: string, actorId: string) {
     const [row] = await this.db
       .select()
@@ -65,6 +81,10 @@ export class PostgresExamsRepository implements ExamsRepository {
     return row ? examSchema.parse(row) : undefined;
   }
 
+  /**
+   * Đổi tiêu đề đề thi gốc khi người sửa còn vai trò giáo viên hoặc quản trị viên và sở hữu đề.
+   * Giữ các bản sửa đổi đề thi (revision) đã chốt tách biệt; không sửa nội dung hoặc tiêu đề trong lịch sử.
+   */
   async updateOwned(id: string, actorId: string, input: { title: string }) {
     return this.db.transaction(async (tx) => {
       const [actor] = await tx
@@ -200,6 +220,10 @@ export class PostgresExamsRepository implements ExamsRepository {
     });
   }
 
+  /**
+   * Liệt kê các lần sửa đổi của một đề thi, bản mới nhất trước.
+   * Kiểm tra quyền sở hữu đề gốc trước khi lấy lịch sử; trả về undefined nếu người yêu cầu không sở hữu đề.
+   */
   async listRevisions(id: string, actorId: string) {
     const exam = await this.findOwned(id, actorId);
     if (!exam) return undefined;
@@ -216,6 +240,10 @@ export class PostgresExamsRepository implements ExamsRepository {
     return rows.map((row) => examRevisionSummarySchema.parse(row));
   }
 
+  /**
+   * Đọc bản sửa đổi cụ thể cùng danh sách câu hỏi theo thứ tự trong đề.
+   * Giới hạn theo người sở hữu đề gốc và lấy bản chụp câu hỏi cố định, không ghép lại từ phiên bản câu hỏi hiện tại.
+   */
   async findRevision(
     id: string,
     revision: number,
