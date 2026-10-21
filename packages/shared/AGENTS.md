@@ -6,7 +6,7 @@
 ```text
 @giaokhoa/shared/questions
 @giaokhoa/shared/curriculum
-@giaokhoa/shared/images
+@giaokhoa/shared/files
 ```
 
 - HTTP descriptor là phần riêng của transport, xuất qua:
@@ -18,7 +18,7 @@
 @giaokhoa/shared/http/curricula
 @giaokhoa/shared/http/curriculum-nodes
 @giaokhoa/shared/http/learning-outcomes
-@giaokhoa/shared/http/images
+@giaokhoa/shared/http/files
 @giaokhoa/shared/http/auth
 ```
 

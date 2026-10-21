@@ -8,9 +8,9 @@
       "types": "./src/curriculum.ts",
       "default": "./dist/curriculum.js"
     },
-    "./images": {
-      "types": "./src/images.ts",
-      "default": "./dist/images.js"
+    "./files": {
+      "types": "./src/files.ts",
+      "default": "./dist/files.js"
     },
     "./questions": {
       "types": "./src/questions.ts",

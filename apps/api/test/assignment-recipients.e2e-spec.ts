@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
@@ -9,18 +9,17 @@ import { AssignmentsService } from '@giaokhoa/application/assignments/service';
 import { AuthorizationService } from '@giaokhoa/application/authorization/service';
 import { ClassesService } from '@giaokhoa/application/classes/service';
 import { ExamsService } from '@giaokhoa/application/exams/service';
-import { ImagesService } from '@giaokhoa/application/images/service';
+import { FilesService } from '@giaokhoa/application/files/service';
 import { QuestionsService } from '@giaokhoa/application/questions/service';
 import { PostgresAssignmentsRepository } from '@giaokhoa/database/assignments';
 import { PostgresAuthorizationRepository } from '@giaokhoa/database/authorization';
 import { PostgresClassesRepository } from '@giaokhoa/database/classes';
 import { PostgresExamsRepository } from '@giaokhoa/database/exams';
-import { PostgresImagesRepository } from '@giaokhoa/database/images';
+import { PostgresFilesRepository } from '@giaokhoa/database/files';
 import { migrationsFolder } from '@giaokhoa/database/migrations';
 import { PostgresQuestionsRepository } from '@giaokhoa/database/questions';
 import * as schema from '@giaokhoa/database/schema';
 import { users } from '@giaokhoa/database/schema/auth.generated';
-import { images, imageVariants } from '@giaokhoa/database/schema/images';
 import {
   assignments as assignmentRows,
   assignmentRecipients,
@@ -321,47 +320,48 @@ describe('Assignment publication and recipients', () => {
     await join(suspended.id);
     await join(unselected.id);
 
-    const [visible, hidden] = await db
-      .insert(images)
-      .values(
-        [teacher.id, teacher.id].map((createdByUserId) => ({
-          createdByUserId,
-          storageKey: 'images/originals/' + randomUUID() + '.png',
-          mimeType: 'image/png',
-          byteSize: 3,
-          width: 1,
-          height: 1,
-          originalFilename: 'test.png',
-        })),
-      )
-      .returning();
-    const [variant] = await db
-      .insert(imageVariants)
-      .values({
-        imageId: visible.id,
-        storageKey: 'images/derived/' + randomUUID() + '.png',
+    const repository = new PostgresFilesRepository(db);
+    const metadata = (label: string) => {
+      const contentHash = createHash('sha256').update(label).digest('hex');
+      return {
+        contentHash,
+        storageKey: `files/${contentHash.slice(0, 2)}/${contentHash}`,
         mimeType: 'image/png',
         byteSize: 3,
         width: 1,
         height: 1,
-        filename: 'crop.png',
-      })
-      .returning();
+      };
+    };
+    const visible = await repository.create({
+      ...metadata('abc'),
+      createdByUserId: teacher.id,
+      parentFileId: null,
+      originalFilename: 'visible.png',
+    });
+    const hidden = await repository.create({
+      ...metadata('def'),
+      createdByUserId: teacher.id,
+      parentFileId: null,
+      originalFilename: 'hidden.png',
+    });
+    const variant = await repository.createVariant({
+      ...metadata('ghi'),
+      createdByUserId: teacher.id,
+      parentFileId: visible.id,
+      originalFilename: 'crop.png',
+    });
 
-    const imageNode = (imageId: string, imageVariantId: string | null) => ({
+    const fileNode = (fileId: string, variantFileId: string | null) => ({
       type: 'image' as const,
       attrs: {
-        imageId,
-        imageVariantId,
-        src: imageVariantId
-          ? '/images/' + imageId + '/variants/' + imageVariantId
-          : '/images/' + imageId,
+        fileId,
+        variantFileId,
         alt: null,
         title: null,
         width: null,
         height: null,
         align: 'center' as const,
-        crop: imageVariantId ? { x: 0, y: 0, width: 100, height: 100 } : null,
+        crop: variantFileId ? { x: 0, y: 0, width: 100, height: 100 } : null,
       },
     });
     const question = await questions.createQuestion(
@@ -372,11 +372,11 @@ describe('Assignment publication and recipients', () => {
           type: 'doc',
           content: [
             { type: 'paragraph', content: [{ type: 'text', text: 'Quan sát hình' }] },
-            imageNode(visible.id, null),
-            imageNode(visible.id, variant.id),
+            fileNode(visible.id, null),
+            fileNode(visible.id, variant.id),
           ],
         },
-        guidance: { type: 'doc', content: [imageNode(hidden.id, null)] },
+        guidance: { type: 'doc', content: [fileNode(hidden.id, null)] },
         solution: { answer: '42' },
       },
       teacher.id,
@@ -396,36 +396,29 @@ describe('Assignment publication and recipients', () => {
     await assignments.publish(teacher.id, draft.id);
 
     const storage = { get: vi.fn(async () => ({ body: Buffer.from('abc') })) };
-    const assets = new ImagesService(
-      new PostgresImagesRepository(db),
-      storage as never,
-      authorization,
-      () => now,
-    );
+    const assets = new FilesService(repository, storage as never, authorization, () => now);
     expect(
       (await assignments.getDelivery(student.id, draft.id)).questions[0].question.content,
     ).toEqual(expect.objectContaining({ type: 'doc' }));
-    await expect(assets.getImage(visible.id, student.id)).resolves.toMatchObject({
+    await expect(assets.getFile(visible.id, student.id)).resolves.toMatchObject({
       mimeType: 'image/png',
     });
-    await expect(assets.getImageVariant(visible.id, variant.id, student.id)).resolves.toMatchObject(
-      {
-        mimeType: 'image/png',
-      },
-    );
-    await expect(assets.getImage(hidden.id, student.id)).rejects.toMatchObject({
-      code: 'image_not_found',
+    await expect(assets.getVariant(visible.id, variant.id, student.id)).resolves.toMatchObject({
+      mimeType: 'image/png',
     });
-    await expect(assets.getImage(visible.id, unselected.id)).rejects.toMatchObject({
-      code: 'image_not_found',
+    await expect(assets.getFile(hidden.id, student.id)).rejects.toMatchObject({
+      code: 'file_not_found',
+    });
+    await expect(assets.getFile(visible.id, unselected.id)).rejects.toMatchObject({
+      code: 'file_not_found',
     });
     await classes.suspendMember(teacher.id, classroom.id, suspended.id);
-    await expect(assets.getImage(visible.id, suspended.id)).rejects.toMatchObject({
-      code: 'image_not_found',
+    await expect(assets.getFile(visible.id, suspended.id)).rejects.toMatchObject({
+      code: 'file_not_found',
     });
     await assignments.revokeRecipient(teacher.id, draft.id, student.id);
-    await expect(assets.getImage(visible.id, student.id)).rejects.toMatchObject({
-      code: 'image_not_found',
+    await expect(assets.getFile(visible.id, student.id)).rejects.toMatchObject({
+      code: 'file_not_found',
     });
     expect(storage.get).toHaveBeenCalledTimes(2);
   });

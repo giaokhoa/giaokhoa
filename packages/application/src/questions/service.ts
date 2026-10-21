@@ -1,5 +1,5 @@
 import {
-  collectImageRefs,
+  collectFileRefs,
   questionCreateSchema,
   type Question,
   type QuestionCreate,
@@ -50,7 +50,7 @@ export class QuestionsService {
 
   async createQuestion(question: QuestionCreate, userId: string): Promise<Question> {
     await this.assertCapability(userId, 'question:create_own');
-    const refs = collectImageRefs(question);
+    const refs = collectFileRefs(question);
     return withoutOwner(await this.repository.createQuestion(question, refs, userId));
   }
 
@@ -135,7 +135,7 @@ export class QuestionsService {
 
     // Mọi chỉnh sửa nội dung đều tạo phiên bản bất biến, kể cả với bản nháp.
     // Nếu không chỉ định trạng thái mới, phiên bản mới kế thừa trạng thái trước đó.
-    const refs = collectImageRefs(question);
+    const refs = collectFileRefs(question);
     const updated = await this.repository.createQuestionVersion(
       questionId,
       expectedVersion,
@@ -156,7 +156,7 @@ export class QuestionsService {
 
   async createStimulus(input: StimulusCreate, userId: string): Promise<Stimulus> {
     await this.assertCapability(userId, 'question:create_own');
-    return this.repository.createStimulus(input, userId);
+    return this.repository.createStimulus(input, collectFileRefs(input.content), userId);
   }
 
   async getStimulus(id: string, userId: string): Promise<Stimulus> {
@@ -169,7 +169,8 @@ export class QuestionsService {
 
   async updateStimulus(id: string, patch: StimulusPatch, userId: string): Promise<Stimulus> {
     await this.assertCapability(userId, 'question:manage_own');
-    const updated = await this.repository.updateStimulus(id, patch, userId);
+    const refs = patch.content === undefined ? null : collectFileRefs(patch.content);
+    const updated = await this.repository.updateStimulus(id, patch, refs, userId);
     if (!updated)
       throw new ClientError('not_found', 'stimulus_not_found', 'Stimulus không tồn tại');
     return updated;

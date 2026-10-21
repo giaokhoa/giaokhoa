@@ -1,4 +1,4 @@
-import type { ImageRef } from '@giaokhoa/shared/images';
+import type { FileRef } from '@giaokhoa/shared/files';
 import type {
   Question,
   QuestionCreate,
@@ -12,7 +12,7 @@ import type {
 export type StoredQuestion = Question & { createdByUserId: string };
 
 export interface QuestionsRepository {
-  createQuestion(data: QuestionCreate, refs: ImageRef[], userId: string): Promise<StoredQuestion>;
+  createQuestion(data: QuestionCreate, refs: FileRef[], userId: string): Promise<StoredQuestion>;
   findQuestion(id: string): Promise<StoredQuestion | undefined>;
   findLatestReadyQuestion(id: string): Promise<StoredQuestion | undefined>;
   findQuestionVersion(id: string, version: number): Promise<StoredQuestion | undefined>;
@@ -22,7 +22,7 @@ export interface QuestionsRepository {
     id: string,
     expectedVersion: number,
     data: QuestionCreate,
-    refs: ImageRef[],
+    refs: FileRef[],
     userId: string,
   ): Promise<StoredQuestion | undefined>;
   changeQuestionStatus(
@@ -33,8 +33,13 @@ export interface QuestionsRepository {
   ): Promise<StoredQuestion | undefined>;
   deleteQuestion(id: string, userId: string): Promise<{ id: string } | undefined>;
 
-  createStimulus(data: StimulusCreate, userId: string): Promise<Stimulus>;
+  createStimulus(data: StimulusCreate, refs: FileRef[], userId: string): Promise<Stimulus>;
   findStimulusOwned(id: string, userId: string): Promise<Stimulus | undefined>;
-  updateStimulus(id: string, data: StimulusPatch, userId: string): Promise<Stimulus | undefined>;
+  updateStimulus(
+    id: string,
+    data: StimulusPatch,
+    refs: FileRef[] | null,
+    userId: string,
+  ): Promise<Stimulus | undefined>;
   deleteStimulus(id: string, userId: string): Promise<{ id: string } | undefined>;
 }

@@ -20,7 +20,7 @@ test('validates and transforms environment variables', () => {
   });
 
   expect(env.PORT).toBe(4000);
-  expect(env.IMAGE_ORPHAN_TTL_HOURS).toBe(24);
+  expect(env.FILE_ORPHAN_TTL_HOURS).toBe(24);
   expect(env.BETTER_AUTH_TRUSTED_ORIGINS).toEqual([
     'http://localhost:5173',
     'http://localhost:3001',

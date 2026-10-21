@@ -1,4 +1,4 @@
-import type { TikzImageSource } from '@giaokhoa/shared/images';
+import type { TikzFileSource } from '@giaokhoa/shared/files';
 import { IMAGE_NODE_MAX_DIMENSION } from '@giaokhoa/shared/questions';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Field, FieldTitle } from '@giaokhoa/ui/components/field';
@@ -38,8 +38,8 @@ import { TableContextMenu, TableToolbar } from './table-toolbar.js';
 import { TikzEditorOverlay } from './tikz-editor.js';
 
 export type UploadedImage = {
-  imageId: string;
-  imageVariantId: string | null;
+  fileId: string;
+  variantFileId: string | null;
   src: string;
   width: number;
   height: number;
@@ -47,12 +47,12 @@ export type UploadedImage = {
 
 export type UploadImage = (
   file: File,
-  imageId?: string,
-  source?: TikzImageSource,
+  fileId?: string,
+  source?: TikzFileSource,
 ) => Promise<UploadedImage>;
 
-export type LoadOriginalImage = (imageId: string) => Promise<{ blob: Blob; src: string }>;
-export type LoadTikzSource = (imageId: string) => Promise<string>;
+export type LoadOriginalImage = (fileId: string) => Promise<{ blob: Blob; src: string }>;
+export type LoadTikzSource = (fileId: string) => Promise<string>;
 
 export type TikzDiagnostic = {
   severity: 'error' | 'warning';
@@ -141,8 +141,8 @@ type MathEditorState = {
 };
 
 type ExistingImageState = {
-  imageId: string;
-  imageVariantId: string | null;
+  fileId: string;
+  variantFileId: string | null;
   fileNameStem: string;
   crop: StoredImageCrop | null;
 };
@@ -151,7 +151,7 @@ type ImageEditorState = {
   pos: number;
   maxWidth: number;
   existing?: ExistingImageState;
-  sourceAsset?: { imageId: string; src: string };
+  sourceAsset?: { fileId: string; src: string };
   loading?: boolean;
   file?: File;
   fileNameStem?: string;
@@ -513,20 +513,20 @@ export function SimpleEditor({
   const openExistingImageEditorRef = useRef<
     (
       pos: number,
-      imageId: string,
-      imageVariantId: string | null,
+      fileId: string,
+      variantFileId: string | null,
       fileName: string,
       crop: StoredImageCrop | null,
     ) => void
   >(() => {});
-  const openExistingTikzEditorRef = useRef<(pos: number, imageId: string) => void>(() => {});
+  const openExistingTikzEditorRef = useRef<(pos: number, fileId: string) => void>(() => {});
   openMathEditorRef.current = (pos, type, latex, originalType) => {
     setActive(true);
     setImageEditor(undefined);
     setTikzEditor(undefined);
     setMathEditor({ pos, type, originalType, latex });
   };
-  openExistingImageEditorRef.current = (pos, imageId, imageVariantId, fileName, crop) => {
+  openExistingImageEditorRef.current = (pos, fileId, variantFileId, fileName, crop) => {
     if (!loadOriginalImage) return;
 
     const fileNameStem = imageNameStem(new File([], fileName || 'image.png'));
@@ -538,12 +538,12 @@ export function SimpleEditor({
     setImageEditor({
       pos,
       maxWidth: Math.max(1, maxWidth),
-      existing: { imageId, imageVariantId, fileNameStem, crop },
+      existing: { fileId, variantFileId, fileNameStem, crop },
       loading: true,
       uploading: false,
     });
 
-    void loadOriginalImage(imageId)
+    void loadOriginalImage(fileId)
       .then(({ blob, src }) => {
         if (!['image/png', 'image/jpeg', 'image/webp'].includes(blob.type)) {
           throw new Error('Ảnh gốc không còn đúng định dạng hỗ trợ.');
@@ -556,7 +556,7 @@ export function SimpleEditor({
         const previewUrl = URL.createObjectURL(file);
 
         setImageEditor((current) => {
-          if (current?.existing?.imageId !== imageId || current.pos !== pos) {
+          if (current?.existing?.fileId !== fileId || current.pos !== pos) {
             URL.revokeObjectURL(previewUrl);
             return current;
           }
@@ -566,7 +566,7 @@ export function SimpleEditor({
             loading: false,
             file,
             fileNameStem: imageNameStem(file),
-            sourceAsset: { imageId, src },
+            sourceAsset: { fileId, src },
             previewUrl,
             crop: editorImageCrop(crop),
             error: undefined,
@@ -575,7 +575,7 @@ export function SimpleEditor({
       })
       .catch((cause) => {
         setImageEditor((current) =>
-          current?.existing?.imageId === imageId && current.pos === pos
+          current?.existing?.fileId === fileId && current.pos === pos
             ? {
                 ...current,
                 loading: false,
@@ -586,7 +586,7 @@ export function SimpleEditor({
       });
   };
 
-  openExistingTikzEditorRef.current = (pos, imageId) => {
+  openExistingTikzEditorRef.current = (pos, fileId) => {
     if (!renderTikz || !uploadImage || !loadTikzSource) return;
 
     const maxWidth = editor?.view.dom.clientWidth ?? 1;
@@ -597,14 +597,14 @@ export function SimpleEditor({
       pos,
       maxWidth: Math.max(1, maxWidth),
       source: '',
-      existingAssetId: imageId,
+      existingAssetId: fileId,
       loadingSource: true,
     });
 
-    void loadTikzSource(imageId)
+    void loadTikzSource(fileId)
       .then((source) => {
         setTikzEditor((current) =>
-          current?.existingAssetId === imageId && current.pos === pos
+          current?.existingAssetId === fileId && current.pos === pos
             ? {
                 ...current,
                 source,
@@ -617,7 +617,7 @@ export function SimpleEditor({
       })
       .catch((cause) => {
         setTikzEditor((current) =>
-          current?.existingAssetId === imageId && current.pos === pos
+          current?.existingAssetId === fileId && current.pos === pos
             ? {
                 ...current,
                 loadingSource: false,
@@ -657,11 +657,11 @@ export function SimpleEditor({
             return true;
           }
 
-          const imageElement = event.target.closest<HTMLImageElement>('img[data-image-id][src]');
+          const imageElement = event.target.closest<HTMLImageElement>('img[data-file-id][src]');
           if (!imageElement || !view.dom.contains(imageElement)) return false;
 
-          const imageId = imageElement.dataset.imageId;
-          if (!imageId) return false;
+          const fileId = imageElement.dataset.fileId;
+          if (!fileId) return false;
 
           const pos = view.posAtDOM(imageElement, 0);
           const node = view.state.doc.nodeAt(pos);
@@ -669,14 +669,14 @@ export function SimpleEditor({
 
           view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, pos)));
           if (node.attrs.generatorKind === 'tikz') {
-            openExistingTikzEditorRef.current(pos, imageId);
+            openExistingTikzEditorRef.current(pos, fileId);
             return true;
           }
 
           openExistingImageEditorRef.current(
             pos,
-            imageId,
-            typeof node.attrs.imageVariantId === 'string' ? node.attrs.imageVariantId : null,
+            fileId,
+            typeof node.attrs.variantFileId === 'string' ? node.attrs.variantFileId : null,
             typeof node.attrs.alt === 'string' ? node.attrs.alt : '',
             storedImageCropFrom(node.attrs.crop),
           );
@@ -908,7 +908,7 @@ export function SimpleEditor({
 
     const existing = imageEditor.existing;
     const desiredCrop = storedImageCrop(imageEditor.crop);
-    const sameSource = Boolean(existing && imageEditor.sourceAsset?.imageId === existing.imageId);
+    const sameSource = Boolean(existing && imageEditor.sourceAsset?.fileId === existing.fileId);
     const sameCrop = Boolean(existing && sameStoredImageCrop(desiredCrop, existing.crop));
     const imageType = editor.schema.nodes.image;
     const wasEditable = editor.isEditable;
@@ -918,15 +918,15 @@ export function SimpleEditor({
       if (!existing) return undefined;
 
       const node = editor.state.doc.nodeAt(imageEditor.pos);
-      const imageVariantId =
-        node?.type.name === 'image' && typeof node.attrs.imageVariantId === 'string'
-          ? node.attrs.imageVariantId
+      const variantFileId =
+        node?.type.name === 'image' && typeof node.attrs.variantFileId === 'string'
+          ? node.attrs.variantFileId
           : null;
 
       if (
         node?.type.name !== 'image' ||
-        node.attrs.imageId !== existing.imageId ||
-        imageVariantId !== existing.imageVariantId ||
+        node.attrs.fileId !== existing.fileId ||
+        variantFileId !== existing.variantFileId ||
         !imageType
       ) {
         throw new Error('Ảnh đã thay đổi, không thể cập nhật tại vị trí cũ.');
@@ -965,15 +965,15 @@ export function SimpleEditor({
       let original: UploadedImage;
       if (sameSource && existing && imageEditor.sourceAsset) {
         original = {
-          imageId: existing.imageId,
-          imageVariantId: null,
+          fileId: existing.fileId,
+          variantFileId: null,
           src: imageEditor.sourceAsset.src,
           width: imageEditor.naturalWidth,
           height: imageEditor.naturalHeight,
         };
       } else {
         original = await uploadImage(originalPrepared.file);
-        if (original.imageVariantId !== null) {
+        if (original.variantFileId !== null) {
           throw new Error('Upload ảnh gốc trả về variant không hợp lệ.');
         }
       }
@@ -987,8 +987,8 @@ export function SimpleEditor({
           imageEditor.naturalHeight,
           imageEditor.crop,
         );
-        rendered = await uploadImage(cropped.file, original.imageId);
-        if (rendered.imageId !== original.imageId || !rendered.imageVariantId) {
+        rendered = await uploadImage(cropped.file, original.fileId);
+        if (rendered.fileId !== original.fileId || !rendered.variantFileId) {
           throw new Error('Upload ảnh crop trả về image không hợp lệ.');
         }
       }
@@ -1005,9 +1005,8 @@ export function SimpleEditor({
         imageEditor.maxWidth,
       );
       const attrs = {
-        imageId: rendered.imageId,
-        imageVariantId: rendered.imageVariantId,
-        src: rendered.src,
+        fileId: rendered.fileId,
+        variantFileId: rendered.variantFileId,
         alt: originalPrepared.file.name,
         title: currentNode ? currentNode.attrs.title : null,
         width: display.width,
@@ -1078,7 +1077,7 @@ export function SimpleEditor({
     if (
       tikzEditor.existingAssetId &&
       (currentNode?.type.name !== 'image' ||
-        currentNode.attrs.imageId !== tikzEditor.existingAssetId ||
+        currentNode.attrs.fileId !== tikzEditor.existingAssetId ||
         currentNode.attrs.generatorKind !== 'tikz')
     ) {
       setTikzEditor({ ...tikzEditor, error: 'Hình TikZ đã thay đổi tại vị trí này.' });
@@ -1099,7 +1098,7 @@ export function SimpleEditor({
         kind: 'tikz',
         source,
       });
-      if (uploaded.imageVariantId !== null) {
+      if (uploaded.variantFileId !== null) {
         throw new Error('Upload TikZ trả về variant không hợp lệ.');
       }
 
@@ -1114,9 +1113,8 @@ export function SimpleEditor({
         tikzEditor.maxWidth,
       );
       const attrs = {
-        imageId: uploaded.imageId,
-        imageVariantId: null,
-        src: uploaded.src,
+        fileId: uploaded.fileId,
+        variantFileId: null,
         alt: 'tikz-diagram.svg',
         title: currentNode?.attrs.title ?? null,
         width: display.width,

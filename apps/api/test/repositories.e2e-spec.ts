@@ -1,16 +1,16 @@
 import 'dotenv/config';
-import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { createHash, randomUUID } from 'node:crypto';
+import { eq, isNotNull } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Client, Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { AuthorizationService } from '@giaokhoa/application/authorization/service';
 import { PostgresAuthorizationRepository } from '@giaokhoa/database/authorization';
-import { PostgresImagesRepository } from '@giaokhoa/database/images';
+import { PostgresFilesRepository } from '@giaokhoa/database/files';
 import { migrationsFolder } from '@giaokhoa/database/migrations';
 import type { Database } from '@giaokhoa/database/types';
-import { imageVariants, images, questionImageRefs } from '@giaokhoa/database/schema/images';
+import { fileBlobs, fileObjectDeletions, files, fileUses } from '@giaokhoa/database/schema/files';
 import { users } from '@giaokhoa/database/schema/auth.generated';
 import * as schema from '@giaokhoa/database/schema';
 import {
@@ -21,6 +21,7 @@ import {
 } from '@giaokhoa/database/schema/questions';
 import { PostgresQuestionsRepository } from '@giaokhoa/database/questions';
 import type { QuestionCreate } from '@giaokhoa/shared/questions';
+import type { FileRef } from '@giaokhoa/shared/files';
 import { QuestionsService } from '@giaokhoa/application/questions/service';
 
 const testDatabaseName = `giaokhoa_test_${process.pid}_${randomUUID().replaceAll('-', '')}`;
@@ -28,7 +29,7 @@ const testDatabaseName = `giaokhoa_test_${process.pid}_${randomUUID().replaceAll
 let pool: Pool;
 let db: Database;
 let questionsRepository: PostgresQuestionsRepository;
-let imagesRepository: PostgresImagesRepository;
+let filesRepository: PostgresFilesRepository;
 let authorization: AuthorizationService;
 
 function databaseUrl(databaseName: string) {
@@ -62,45 +63,63 @@ async function createUser(label: string, role: 'user' | 'teacher' | 'admin' = 'u
   return user;
 }
 
-async function createImage(userId: string, label: string) {
-  const [image] = await db
-    .insert(images)
-    .values({
-      createdByUserId: userId,
-      storageKey: `images/${label}-${randomUUID()}.png`,
-      mimeType: 'image/png',
-      byteSize: 1,
-      width: 1,
-      height: 1,
-      originalFilename: `${label}.png`,
-    })
-    .returning();
-  return image;
+function fileMetadata(userId: string, label: string) {
+  const contentHash = createHash('sha256').update(`${label}-${randomUUID()}`).digest('hex');
+  return {
+    createdByUserId: userId,
+    contentHash,
+    storageKey: `files/${contentHash.slice(0, 2)}/${contentHash}`,
+    mimeType: 'image/png',
+    byteSize: 1,
+    width: 1,
+    height: 1,
+    originalFilename: `${label}.png`,
+  };
 }
 
-async function createVariant(imageId: string, label: string) {
-  const [variant] = await db
-    .insert(imageVariants)
-    .values({
-      imageId,
-      storageKey: `images/derived/${label}-${randomUUID()}.png`,
-      mimeType: 'image/png',
-      byteSize: 1,
-      width: 1,
-      height: 1,
-      filename: `${label}.png`,
-    })
-    .returning();
-  return variant;
+function fileNode(fileId: string, variantFileId: string | null = null) {
+  return {
+    type: 'image' as const,
+    attrs: {
+      fileId,
+      variantFileId,
+      alt: null,
+      title: null,
+      width: null,
+      height: null,
+      align: 'center' as const,
+      crop: variantFileId ? { x: 0, y: 0, width: 50, height: 50 } : null,
+    },
+  };
 }
 
-function questionData(answer = '42', status: QuestionCreate['status'] = 'ready'): QuestionCreate {
+async function createFile(userId: string, label: string) {
+  return filesRepository.create({ ...fileMetadata(userId, label), parentFileId: null });
+}
+
+async function createVariant(fileId: string, label: string) {
+  const parent = await filesRepository.find(fileId);
+  if (!parent) throw new Error('File gốc không tồn tại');
+  return filesRepository.createVariant({
+    ...fileMetadata(parent.createdByUserId, label),
+    parentFileId: fileId,
+  });
+}
+
+function questionData(
+  answer = '42',
+  status: QuestionCreate['status'] = 'ready',
+  refs: FileRef[] = [],
+): QuestionCreate {
   return {
     status,
     type: 'short_answer',
     content: {
       type: 'doc',
-      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Câu hỏi' }] }],
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'Câu hỏi' }] },
+        ...refs.map(({ fileId, variantFileId }) => fileNode(fileId, variantFileId)),
+      ],
     },
     solution: { answer },
   };
@@ -113,18 +132,20 @@ beforeAll(async () => {
   db = drizzle(pool, { schema });
   await migrate(db, { migrationsFolder });
   questionsRepository = new PostgresQuestionsRepository(db);
-  imagesRepository = new PostgresImagesRepository(db);
+  filesRepository = new PostgresFilesRepository(db);
   authorization = new AuthorizationService(new PostgresAuthorizationRepository(db));
 }, 20_000);
 
 beforeEach(async () => {
-  await db.delete(questionImageRefs);
+  await db.delete(fileUses);
   await db.delete(questionVersions);
   await db.delete(question);
   await db.delete(questionBankEntries);
   await db.delete(stimuli);
-  await db.delete(imageVariants);
-  await db.delete(images);
+  await db.delete(files).where(isNotNull(files.parentFileId));
+  await db.delete(files);
+  await db.delete(fileBlobs);
+  await db.delete(fileObjectDeletions);
   await db.delete(users);
 });
 
@@ -136,38 +157,37 @@ afterAll(async () => {
 }, 20_000);
 
 describe('PostgresQuestionsRepository', () => {
-  it('rejects image references owned by another user without persisting the question', async () => {
+  it('rejects file references owned by another user without persisting the question', async () => {
     const owner = await createUser('owner');
     const otherUser = await createUser('other');
-    const image = await createImage(owner.id, 'private');
+    const file = await createFile(owner.id, 'private');
+    const refs = [{ fileId: file.id, variantFileId: null }];
 
     await expect(
-      questionsRepository.createQuestion(
-        questionData(),
-        [{ imageId: image.id, imageVariantId: null }],
-        otherUser.id,
-      ),
-    ).rejects.toMatchObject({ kind: 'invalid', code: 'question_image_reference_invalid' });
+      questionsRepository.createQuestion(questionData('42', 'ready', refs), refs, otherUser.id),
+    ).rejects.toMatchObject({ kind: 'invalid', code: 'question_file_reference_invalid' });
 
     expect(await db.select().from(questionBankEntries)).toHaveLength(0);
   });
 
-  it('preserves each version’s images when a draft gets a new content version', async () => {
+  it('preserves file areas for each immutable content version', async () => {
     const user = await createUser('author');
-    const first = await createImage(user.id, 'first');
-    const second = await createImage(user.id, 'second');
+    const first = await createFile(user.id, 'first');
+    const second = await createFile(user.id, 'second');
+    const firstRefs = [{ fileId: first.id, variantFileId: null }];
+    const secondRefs = [{ fileId: second.id, variantFileId: null }];
 
     const created = await questionsRepository.createQuestion(
-      questionData('42', 'draft'),
-      [{ imageId: first.id, imageVariantId: null }],
+      questionData('42', 'draft', firstRefs),
+      firstRefs,
       user.id,
     );
 
     const updated = await questionsRepository.createQuestionVersion(
       created.id,
       created.version,
-      questionData('7', 'draft'),
-      [{ imageId: second.id, imageVariantId: null }],
+      questionData('7', 'draft', secondRefs),
+      secondRefs,
       user.id,
     );
     expect(updated).toMatchObject({ id: created.id, version: 2, status: 'draft' });
@@ -178,25 +198,21 @@ describe('PostgresQuestionsRepository', () => {
       .where(eq(questionVersions.questionBankEntryId, created.id));
     expect(revisions).toHaveLength(2);
 
-    const [attachedFirst] = await db.select().from(images).where(eq(images.id, first.id));
-    const [attachedSecond] = await db.select().from(images).where(eq(images.id, second.id));
-    const firstRefs = await db
-      .select({ imageId: questionImageRefs.imageId })
-      .from(questionImageRefs)
-      .where(
-        eq(questionImageRefs.questionId, revisions.find((row) => row.version === 1)!.questionId),
-      );
-    const secondRefs = await db
-      .select({ imageId: questionImageRefs.imageId })
-      .from(questionImageRefs)
-      .where(
-        eq(questionImageRefs.questionId, revisions.find((row) => row.version === 2)!.questionId),
-      );
+    const [attachedFirst] = await db.select().from(files).where(eq(files.id, first.id));
+    const [attachedSecond] = await db.select().from(files).where(eq(files.id, second.id));
+    const firstUses = await db
+      .select({ fileId: fileUses.fileId, area: fileUses.fileArea })
+      .from(fileUses)
+      .where(eq(fileUses.itemId, revisions.find((row) => row.version === 1)!.questionId));
+    const secondUses = await db
+      .select({ fileId: fileUses.fileId, area: fileUses.fileArea })
+      .from(fileUses)
+      .where(eq(fileUses.itemId, revisions.find((row) => row.version === 2)!.questionId));
 
     expect(attachedFirst.orphanedAt).toBeNull();
     expect(attachedSecond.orphanedAt).toBeNull();
-    expect(firstRefs).toEqual([{ imageId: first.id }]);
-    expect(secondRefs).toEqual([{ imageId: second.id }]);
+    expect(firstUses).toEqual([{ fileId: first.id, area: 'content' }]);
+    expect(secondUses).toEqual([{ fileId: second.id, area: 'content' }]);
   });
 
   it('changes status without allocating a new version', async () => {
@@ -228,19 +244,16 @@ describe('PostgresQuestionsRepository', () => {
     expect(await questionsRepository.listQuestionVersions(created.id)).toHaveLength(1);
   });
 
-  it('keeps an image attached while another question still references it', async () => {
+  it('keeps a file attached while another question version still references it', async () => {
     const user = await createUser('author');
-    const image = await createImage(user.id, 'shared');
+    const file = await createFile(user.id, 'shared');
+    const refs = [{ fileId: file.id, variantFileId: null }];
     const first = await questionsRepository.createQuestion(
-      questionData('1', 'draft'),
-      [{ imageId: image.id, imageVariantId: null }],
+      questionData('1', 'draft', refs),
+      refs,
       user.id,
     );
-    await questionsRepository.createQuestion(
-      questionData('2'),
-      [{ imageId: image.id, imageVariantId: null }],
-      user.id,
-    );
+    await questionsRepository.createQuestion(questionData('2', 'ready', refs), refs, user.id);
 
     await questionsRepository.createQuestionVersion(
       first.id,
@@ -250,8 +263,8 @@ describe('PostgresQuestionsRepository', () => {
       user.id,
     );
 
-    const [storedImage] = await db.select().from(images).where(eq(images.id, image.id));
-    expect(storedImage.orphanedAt).toBeNull();
+    const [storedFile] = await db.select().from(files).where(eq(files.id, file.id));
+    expect(storedFile.orphanedAt).toBeNull();
   });
 
   it('enforces question ownership for update and delete', async () => {
@@ -274,19 +287,20 @@ describe('PostgresQuestionsRepository', () => {
     expect(await questionsRepository.findQuestionOwned(question.id, owner.id)).toBeDefined();
   });
 
-  it('rejects a crop variant that belongs to a different image', async () => {
+  it('rejects a crop variant that belongs to a different file', async () => {
     const user = await createUser('author');
-    const first = await createImage(user.id, 'first');
-    const second = await createImage(user.id, 'second');
+    const first = await createFile(user.id, 'first');
+    const second = await createFile(user.id, 'second');
     const secondVariant = await createVariant(second.id, 'second-crop');
+    const invalidRefs = [{ fileId: first.id, variantFileId: secondVariant.id }];
 
     await expect(
       questionsRepository.createQuestion(
-        questionData(),
-        [{ imageId: first.id, imageVariantId: secondVariant.id }],
+        questionData('42', 'ready', invalidRefs),
+        invalidRefs,
         user.id,
       ),
-    ).rejects.toMatchObject({ kind: 'invalid', code: 'question_image_reference_invalid' });
+    ).rejects.toMatchObject({ kind: 'invalid', code: 'question_file_reference_invalid' });
 
     expect(await db.select().from(questionBankEntries)).toHaveLength(0);
   });
@@ -418,19 +432,19 @@ describe('QuestionsService version lifecycle', () => {
   });
 });
 
-describe('PostgresImagesRepository', () => {
-  it('returns generated source only to the image owner', async () => {
+describe('PostgresFilesRepository', () => {
+  it('returns generated TikZ source only to its owner', async () => {
     const owner = await createUser('owner');
     const otherUser = await createUser('other');
-    const image = await imagesRepository.create(
+    const metadata = fileMetadata(owner.id, 'diagram');
+    const file = await filesRepository.create(
       {
-        createdByUserId: owner.id,
-        storageKey: `images/source-${randomUUID()}.svg`,
+        ...metadata,
         mimeType: 'image/svg+xml',
-        byteSize: 10,
         width: 100,
         height: 80,
         originalFilename: 'diagram.svg',
+        parentFileId: null,
       },
       {
         kind: 'tikz',
@@ -438,55 +452,49 @@ describe('PostgresImagesRepository', () => {
       },
     );
 
-    expect(await imagesRepository.findSourceOwned(image.id, owner.id)).toEqual({
+    expect(await filesRepository.findSourceOwned(file.id, owner.id)).toEqual({
       kind: 'tikz',
       source: String.raw`\\begin{tikzpicture}\\end{tikzpicture}`,
     });
-    expect(await imagesRepository.findSourceOwned(image.id, otherUser.id)).toBeUndefined();
+    expect(await filesRepository.findSourceOwned(file.id, otherUser.id)).toBeUndefined();
   });
 
-  it('queues an unreferenced orphan and its derived images for deletion', async () => {
+  it('queues unreferenced file and derived variants in the object deletion outbox', async () => {
     const user = await createUser('owner');
-    const image = await createImage(user.id, 'orphan');
-    const variant = await createVariant(image.id, 'orphan-crop');
+    const file = await createFile(user.id, 'orphan');
+    const variant = await createVariant(file.id, 'orphan-crop');
 
-    const storageKeys = await imagesRepository.discardOrphans(
-      [{ imageId: image.id, imageVariantId: null }],
+    const storageKeys = await filesRepository.discardOrphans(
+      [{ fileId: file.id, variantFileId: null }],
       user.id,
     );
 
-    expect(storageKeys).toEqual([variant.storageKey, image.storageKey]);
-    expect(await imagesRepository.listPendingDeletions()).toEqual([...storageKeys].sort());
-    expect(await imagesRepository.find(image.id)).toBeUndefined();
+    expect(storageKeys).toEqual([variant.storageKey, file.storageKey]);
+    expect(await filesRepository.listPendingDeletions()).toEqual([...storageKeys].sort());
+    expect(await filesRepository.find(file.id)).toBeUndefined();
   });
 
-  it('keeps an orphan candidate while a question still references it', async () => {
+  it('preserves a file referenced by a question', async () => {
     const user = await createUser('owner');
-    const image = await createImage(user.id, 'referenced');
-    await questionsRepository.createQuestion(
-      questionData(),
-      [{ imageId: image.id, imageVariantId: null }],
-      user.id,
-    );
-    const storageKeys = await imagesRepository.discardOrphans(
-      [{ imageId: image.id, imageVariantId: null }],
-      user.id,
-    );
+    const file = await createFile(user.id, 'referenced');
+    const refs = [{ fileId: file.id, variantFileId: null }];
+    await questionsRepository.createQuestion(questionData('42', 'ready', refs), refs, user.id);
+    const storageKeys = await filesRepository.discardOrphans(refs, user.id);
 
     expect(storageKeys).toEqual([]);
-    expect(await imagesRepository.find(image.id)).toBeDefined();
+    expect(await filesRepository.find(file.id)).toBeDefined();
   });
 
-  it("does not discard another user's orphan", async () => {
+  it('never discards an orphan belonging to another user', async () => {
     const owner = await createUser('owner');
     const otherUser = await createUser('other');
-    const image = await createImage(owner.id, 'private');
-    const storageKeys = await imagesRepository.discardOrphans(
-      [{ imageId: image.id, imageVariantId: null }],
+    const file = await createFile(owner.id, 'private');
+    const storageKeys = await filesRepository.discardOrphans(
+      [{ fileId: file.id, variantFileId: null }],
       otherUser.id,
     );
 
     expect(storageKeys).toEqual([]);
-    expect(await imagesRepository.find(image.id)).toBeDefined();
+    expect(await filesRepository.find(file.id)).toBeDefined();
   });
 });

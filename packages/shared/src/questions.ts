@@ -1,5 +1,5 @@
 export { choiceIdSchema, partIdSchema, statementIdSchema } from './questions/child-id.js';
-export { collectImageRefs } from './questions/image-refs.js';
+export { collectFileRefs } from './questions/file-refs.js';
 export {
   CHOICE_LIST_NODE_TYPE,
   CHOICE_NODE_TYPE,

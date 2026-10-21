@@ -1,7 +1,7 @@
-import { imagesContract } from '@giaokhoa/shared/http/images';
-import type { ImageRef } from '@giaokhoa/shared/images';
+import { filesContract } from '@giaokhoa/shared/http/files';
+import type { FileRef } from '@giaokhoa/shared/files';
 import {
-  collectImageRefs,
+  collectFileRefs,
   questionCreateSchema,
   type Question,
   type QuestionCreate,
@@ -10,11 +10,11 @@ import {
 } from '@giaokhoa/shared/questions';
 import { hasTextContent, type UploadImage } from '@giaokhoa/editor';
 import {
-  discardImages,
+  discardFiles,
   loadOriginalImage,
   loadTikzSource,
   uploadImage,
-} from '#features/images/api/images.client.js';
+} from '#features/files/api/files.client.js';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Tabs, TabsList, TabsTrigger } from '@giaokhoa/ui/components/tabs';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -40,7 +40,7 @@ const QUESTION_TYPES: Array<{ value: QuestionType; label: string }> = [
   { value: 'essay', label: 'Tự luận' },
 ];
 
-type PendingUploadEntry = [string, ImageRef];
+type PendingUploadEntry = [string, FileRef];
 
 type SaveQuestionActionData = { question: Question } | { error: string; status?: number };
 
@@ -51,11 +51,11 @@ type SaveRequest = {
   leaveAfterSave: boolean;
 };
 
-function isImageRefUsed(ref: ImageRef, usedRefs: ImageRef[]): boolean {
+function isFileRefUsed(ref: FileRef, usedRefs: FileRef[]): boolean {
   return usedRefs.some(
     (used) =>
-      used.imageId === ref.imageId &&
-      (ref.imageVariantId === null || used.imageVariantId === ref.imageVariantId),
+      used.fileId === ref.fileId &&
+      (ref.variantFileId === null || used.variantFileId === ref.variantFileId),
   );
 }
 
@@ -88,7 +88,7 @@ export function QuestionAuthoring({
   const draftRef = useRef(draft);
   const savingRef = useRef(false);
   const saveRequestRef = useRef<SaveRequest | undefined>(undefined);
-  const pendingUploadsRef = useRef(new Map<string, ImageRef>());
+  const pendingUploadsRef = useRef(new Map<string, FileRef>());
 
   const draftFingerprint = getDraftFingerprint(draft);
   const hasDraftContent = hasDraftData(draft);
@@ -116,10 +116,10 @@ export function QuestionAuthoring({
 
   const uploadQuestionImage = useCallback<UploadImage>(async (...args) => {
     const uploaded = await uploadImage(...args);
-    const key = `${uploaded.imageId}:${uploaded.imageVariantId ?? ''}`;
+    const key = `${uploaded.fileId}:${uploaded.variantFileId ?? ''}`;
     pendingUploadsRef.current.set(key, {
-      imageId: uploaded.imageId,
-      imageVariantId: uploaded.imageVariantId,
+      fileId: uploaded.fileId,
+      variantFileId: uploaded.variantFileId,
     });
     setPendingUploadCount(pendingUploadsRef.current.size);
     return uploaded;
@@ -132,7 +132,7 @@ export function QuestionAuthoring({
       try {
         for (let offset = 0; offset < pending.length; offset += DISCARD_BATCH_SIZE) {
           const batch = pending.slice(offset, offset + DISCARD_BATCH_SIZE);
-          await discardImages(batch.map(([, ref]) => ref));
+          await discardFiles(batch.map(([, ref]) => ref));
 
           for (const [key] of batch) pendingUploadsRef.current.delete(key);
           setPendingUploadCount(pendingUploadsRef.current.size);
@@ -159,15 +159,15 @@ export function QuestionAuthoring({
   useEffect(() => {
     const handlePageHide = (event: PageTransitionEvent) => {
       if (event.persisted || !shouldWarnOnExit || savingRef.current) return;
-      const images = [...pendingUploadsRef.current.values()];
-      if (!images.length) return;
+      const files = [...pendingUploadsRef.current.values()];
+      if (!files.length) return;
 
-      for (let offset = 0; offset < images.length; offset += DISCARD_BATCH_SIZE) {
-        const body = imagesContract.discard.body.parse({
-          images: images.slice(offset, offset + DISCARD_BATCH_SIZE),
+      for (let offset = 0; offset < files.length; offset += DISCARD_BATCH_SIZE) {
+        const body = filesContract.discard.body.parse({
+          files: files.slice(offset, offset + DISCARD_BATCH_SIZE),
         });
-        void fetch(imagesContract.discard.path, {
-          method: imagesContract.discard.method,
+        void fetch(filesContract.discard.path, {
+          method: filesContract.discard.method,
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(body),
           keepalive: true,
@@ -298,11 +298,11 @@ export function QuestionAuthoring({
         setSavedDraftFingerprint(request.requestFingerprint);
 
         if (request.payload) {
-          const persistedImageRefs = collectImageRefs(request.payload);
-          const currentImageRefs = collectImageRefs(draftRef.current);
+          const persistedFileRefs = collectFileRefs(request.payload);
+          const currentFileRefs = collectFileRefs(draftRef.current);
           const cleanupCandidates = request.pendingUploads.filter(
             ([, ref]) =>
-              isImageRefUsed(ref, persistedImageRefs) || !isImageRefUsed(ref, currentImageRefs),
+              isFileRefUsed(ref, persistedFileRefs) || !isFileRefUsed(ref, currentFileRefs),
           );
           if (!(await discardPendingUploads(cleanupCandidates))) {
             setError('Đã lưu câu hỏi nhưng chưa dọn được ảnh không còn sử dụng.');

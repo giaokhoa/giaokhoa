@@ -73,9 +73,8 @@ const imageNodeSchema = z
   .strictObject({
     type: z.literal('image'),
     attrs: z.strictObject({
-      imageId: z.uuidv7(),
-      imageVariantId: z.uuidv7().nullable().default(null),
-      src: z.string(),
+      fileId: z.uuidv7(),
+      variantFileId: z.uuidv7().nullable().default(null),
       alt: z.string().max(500).nullable(),
       title: z.string().max(500).nullable(),
       width: z.number().positive().max(IMAGE_NODE_MAX_DIMENSION).nullable(),
@@ -86,12 +85,6 @@ const imageNodeSchema = z
     }),
   })
   .superRefine(({ attrs }, ctx) => {
-    const expectedSrc = attrs.imageVariantId
-      ? `/images/${attrs.imageId}/variants/${attrs.imageVariantId}`
-      : `/images/${attrs.imageId}`;
-    if (attrs.src !== expectedSrc) {
-      ctx.addIssue({ code: 'custom', path: ['attrs', 'src'], message: 'URL ảnh không hợp lệ' });
-    }
     if ((attrs.width === null) !== (attrs.height === null)) {
       ctx.addIssue({
         code: 'custom',
@@ -99,14 +92,14 @@ const imageNodeSchema = z
         message: 'Kích thước ảnh phải có đủ width và height',
       });
     }
-    if ((attrs.imageVariantId === null) !== (attrs.crop === null)) {
+    if ((attrs.variantFileId === null) !== (attrs.crop === null)) {
       ctx.addIssue({
         code: 'custom',
         path: ['attrs'],
-        message: 'Ảnh crop phải có đủ imageVariantId và crop',
+        message: 'Ảnh crop phải có đủ variantFileId và crop',
       });
     }
-    if (attrs.generatorKind === 'tikz' && (attrs.imageVariantId !== null || attrs.crop !== null)) {
+    if (attrs.generatorKind === 'tikz' && (attrs.variantFileId !== null || attrs.crop !== null)) {
       ctx.addIssue({
         code: 'custom',
         path: ['attrs'],

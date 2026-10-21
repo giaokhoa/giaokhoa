@@ -1,3 +1,4 @@
+import { fileUrl } from '@giaokhoa/shared/files';
 import { Extension, type Extensions } from '@tiptap/core';
 import Document from '@tiptap/extension-document';
 import Image from '@tiptap/extension-image';
@@ -48,20 +49,27 @@ const EditableBlockMath = BlockMath.extend({
 
 const AssetImage = Image.extend({
   addAttributes() {
+    const parentAttributes = { ...this.parent?.() };
+    delete parentAttributes.src;
     return {
-      ...this.parent?.(),
-      imageId: {
+      ...parentAttributes,
+      fileId: {
         default: null,
-        parseHTML: (element) => element.getAttribute('data-image-id'),
-        renderHTML: ({ imageId }) =>
-          typeof imageId === 'string' && imageId ? { 'data-image-id': imageId } : {},
+        parseHTML: (element) => element.getAttribute('data-file-id'),
+        renderHTML: ({ fileId, variantFileId }) =>
+          typeof fileId === 'string' && fileId
+            ? {
+                'data-file-id': fileId,
+                src: fileUrl({ fileId, variantFileId: variantFileId ?? null }),
+              }
+            : {},
       },
-      imageVariantId: {
+      variantFileId: {
         default: null,
         parseHTML: (element) => element.getAttribute('data-variant-id'),
-        renderHTML: ({ imageVariantId }) =>
-          typeof imageVariantId === 'string' && imageVariantId
-            ? { 'data-variant-id': imageVariantId }
+        renderHTML: ({ variantFileId }) =>
+          typeof variantFileId === 'string' && variantFileId
+            ? { 'data-variant-id': variantFileId }
             : {},
       },
       crop: {
@@ -104,7 +112,7 @@ const AssetImage = Image.extend({
   },
 
   parseHTML() {
-    return [{ tag: 'img[data-image-id][src]' }];
+    return [{ tag: 'img[data-file-id][src]' }];
   },
 
   addInputRules() {

@@ -1,6 +1,11 @@
 {
   "singleQuote": true,
-  "ignorePatterns": [".agents/skills/**", "packages/ui/src/components/**", "**/*.generated.*"],
+  "ignorePatterns": [
+    ".agents/skills/**",
+    "packages/ui/src/components/**",
+    "packages/database/drizzle/meta/*_snapshot.json",
+    "**/*.generated.*"
+  ],
   "sortTailwindcss": {
     "stylesheet": "./packages/ui/src/styles/globals.css"
   }
