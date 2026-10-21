@@ -101,10 +101,16 @@ describe('Files storage and authorization invariants', () => {
     expect(await repository.listPendingDeletions()).not.toContain(key);
 
     const hash = createHash('sha256').update(randomUUID()).digest('hex');
-    await repository.create({ ...fileData(owner.id, hash, 'reserved.png'), storageKey: key });
+    const committed = await repository.create({
+      ...fileData(owner.id, hash, 'reserved.png'),
+      storageKey: key,
+    });
     expect(
       await db.select().from(fileObjectDeletions).where(eq(fileObjectDeletions.storageKey, key)),
     ).toHaveLength(0);
+    // Test dùng metadata giả, không để file nháp ảnh hưởng phép đo GC của test sau.
+    await repository.discardOrphans([{ fileId: committed.id, variantFileId: null }], owner.id);
+    await repository.acknowledgeDeletion(key);
 
     const lostKey = 'files/objects/' + randomUUID() + '.png';
     await repository.reserveUpload(lostKey);
