@@ -33,6 +33,9 @@
     "@giaokhoa/api#test:cov": {
       "dependsOn": ["^build"],
       "outputs": ["coverage/**"]
+    },
+    "@giaokhoa/database#test:int": {
+      "dependsOn": ["^build"]
     }
   }
 }
