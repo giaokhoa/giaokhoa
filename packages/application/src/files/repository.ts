@@ -34,20 +34,20 @@ export interface FilesRepository {
     userId: string,
   ): Promise<FileRecord | undefined>;
   findSourceOwned(id: string, userId: string): Promise<TikzFileSource | undefined>;
-  /** Chỉ trả lớp có bản chụp câu hỏi thực sự chứa ảnh trong phần được giao cho người nhận. */
-  assignedFileClasses(
+  /** Chỉ trả bài giao có bản chụp câu hỏi thực sự chứa ảnh trong phần được giao cho người nhận. */
+  assignedFileAssignments(
     fileId: string,
     variantFileId: string | null,
     userId: string,
     now: Date,
   ): Promise<string[]>;
   /** Đối chiếu ảnh lời giải với lượt đã nộp và mốc công bố; trả trạng thái tham gia để xét quyền hiện tại. */
-  releasedSolutionFileClasses(
+  releasedSolutionFileAssignments(
     fileId: string,
     variantFileId: string | null,
     userId: string,
     now: Date,
-  ): Promise<Array<{ classId: string; enrolmentStatus: 'active' | 'left' }>>;
+  ): Promise<Array<{ assignmentId: string; enrolmentStatus: 'active' | 'left' }>>;
   discardOrphans(refs: FileRef[], userId: string): Promise<string[]>;
   /** Chỉ xóa tệp nháp hết hạn nếu không còn tham chiếu; chỉ xếp khóa để xóa khi không có tệp nào dùng chung. */
   queueExpiredOrphans(cutoff: Date): Promise<{ processed: number; storageKeys: string[] }>;

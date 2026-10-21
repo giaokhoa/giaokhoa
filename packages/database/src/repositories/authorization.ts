@@ -9,7 +9,7 @@ import type {
   PermissionEffect,
   RoleAssignmentInput,
 } from '@giaokhoa/application/authorization/repository';
-import { and, eq, inArray, isNull, ne, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { users } from '../schema/auth.generated.js';
 import {
   authzCapabilities,
@@ -215,6 +215,7 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
     levels: AuthorizationContextKind[],
   ) {
     return this.db.transaction(async (tx) => {
+      await lockAuthorizationMutation(tx);
       await assertRoleManager(tx, actorId);
       if (!levels.length) throw invalidRole();
       const inserted = await tx
@@ -239,6 +240,7 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
     effect: PermissionEffect,
   ) {
     return this.db.transaction(async (tx) => {
+      await lockAuthorizationMutation(tx);
       await assertRoleManager(tx, actorId);
       const [role] = await tx
         .select({ id: authzRoles.id })
@@ -279,6 +281,7 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
 
   async setRoleContexts(actorId: string, roleKey: string, levels: AuthorizationContextKind[]) {
     return this.db.transaction(async (tx) => {
+      await lockAuthorizationMutation(tx);
       await assertRoleManager(tx, actorId);
       if (!levels.length) throw invalidRole();
       const [role] = await tx
@@ -310,6 +313,7 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
     allowed: boolean,
   ) {
     return this.db.transaction(async (tx) => {
+      await lockAuthorizationMutation(tx);
       await assertRoleManager(tx, actorId);
       const found = await tx
         .select({ id: authzRoles.id, key: authzRoles.key })
@@ -372,7 +376,28 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
         ),
       )
       .limit(1);
-    return !!allowed;
+    if (allowed) return true;
+    // system:user là vai trò ngầm định của mọi tài khoản còn hoạt động;
+    // ma trận cũng phải nhận diện vai trò này, không chỉ lần gán được lưu.
+    const [system] = await this.db
+      .select({ id: authzContexts.id })
+      .from(authzContexts)
+      .where(
+        and(
+          eq(authzContexts.kind, 'system'),
+          eq(authzContexts.resourceKey, 'giaokhoa'),
+          inArray(authzContexts.id, contextIds),
+        ),
+      )
+      .limit(1);
+    if (!system) return false;
+    const [implicit] = await this.db
+      .select({ id: matrix.actorRoleId })
+      .from(matrix)
+      .innerJoin(authzRoles, eq(matrix.actorRoleId, authzRoles.id))
+      .where(and(eq(authzRoles.key, 'system:user'), eq(matrix.targetRoleId, role.id)))
+      .limit(1);
+    return !!implicit;
   }
 
   /** Kiểm tra capability và ma trận lần nữa ngay trong giao dịch thay đổi quyền. */
@@ -384,6 +409,7 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
     actorId: string,
   ): Promise<boolean> {
     return this.db.transaction(async (tx) => {
+      await lockAuthorizationMutation(tx);
       const [context] = await tx
         .select()
         .from(authzContexts)
@@ -469,6 +495,7 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
       );
 
     return this.db.transaction(async (tx) => {
+      await lockAuthorizationMutation(tx);
       const [parent] = await tx
         .select()
         .from(authzContexts)
@@ -529,6 +556,7 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
    */
   async assignRole(input: RoleAssignmentInput) {
     return this.db.transaction(async (tx) => {
+      await lockAuthorizationMutation(tx);
       const [context] = await tx
         .select()
         .from(authzContexts)
@@ -609,6 +637,7 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
    */
   async revokeRole(contextId: string, userId: string, roleKey: string, authorizedBy?: string) {
     return this.db.transaction(async (tx) => {
+      await lockAuthorizationMutation(tx);
       if (authorizedBy) {
         const [context] = await tx
           .select()
@@ -658,6 +687,16 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
       return revoked.length > 0;
     });
   }
+}
+
+/**
+ * Đồng bộ thao tác ghi bài với thay đổi vai trò/quyền cho tới khi commit.
+ * ponytail: Khóa advisory toàn cục là giới hạn thông lượng; khi có tải lớn chuyển sang khóa theo cây context.
+ */
+export async function lockAuthorizationMutation(
+  tx: Parameters<Parameters<Database['transaction']>[0]>[0],
+) {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(50421, 9)`);
 }
 
 /** Dùng cùng bộ xét quyền của tầng ứng dụng ngay trong giao dịch đang ghi dữ liệu. */

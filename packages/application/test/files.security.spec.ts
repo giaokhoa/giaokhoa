@@ -25,12 +25,12 @@ function createService() {
     findVariant: vi.fn(),
     findVariantOwned: vi.fn(),
     findSourceOwned: vi.fn(),
-    assignedFileClasses: vi.fn(
+    assignedFileAssignments: vi.fn(
       async (_fileId: string, _variantFileId: string | null, _userId: string, _now: Date) =>
         [] as string[],
     ),
-    releasedSolutionFileClasses: vi.fn(
-      async () => [] as Array<{ classId: string; enrolmentStatus: 'active' | 'left' }>,
+    releasedSolutionFileAssignments: vi.fn(
+      async () => [] as Array<{ assignmentId: string; enrolmentStatus: 'active' | 'left' }>,
     ),
     discardOrphans: vi.fn(async () => [] as string[]),
     queueExpiredOrphans: vi.fn(async () => ({ processed: 0, storageKeys: [] as string[] })),
@@ -43,7 +43,7 @@ function createService() {
     delete: vi.fn(async (_key: string) => undefined),
   };
   const authorization = {
-    authorize: vi.fn(async () => ({ allowed: false })),
+    authorize: vi.fn(async () => ({ allowed: false, reason: 'no_grant' })),
   };
   return {
     service: new FilesService(repository as never, storage as never, authorization as never),
@@ -171,7 +171,7 @@ describe('Kiểm thử ngăn tái xuất hiện lỗi bảo mật của dịch v
       mimeType: 'image/svg+xml',
       byteSize: 20,
     });
-    repository.assignedFileClasses.mockResolvedValue(['class-a']);
+    repository.assignedFileAssignments.mockResolvedValue(['class-a']);
     authorization.authorize.mockResolvedValue({ allowed: true });
 
     await expect(service.getFile(FILE_ID, STUDENT_ID)).resolves.toMatchObject({
@@ -203,16 +203,53 @@ describe('Kiểm thử ngăn tái xuất hiện lỗi bảo mật của dịch v
     expect(authorization.authorize).not.toHaveBeenCalled();
     expect(storage.get).not.toHaveBeenCalled();
 
-    repository.assignedFileClasses.mockResolvedValue(['class-a']);
+    repository.assignedFileAssignments.mockResolvedValue(['class-a']);
     await expect(service.getFile(FILE_ID, STUDENT_ID)).rejects.toMatchObject({
       kind: 'not_found',
     });
     expect(authorization.authorize).toHaveBeenCalledWith({
       actorId: STUDENT_ID,
       capability: 'assignment:view_assigned',
-      context: { kind: 'class', resourceKey: 'class-a' },
+      context: { kind: 'assignment', resourceKey: 'class-a' },
     });
     expect(storage.get).not.toHaveBeenCalled();
+  });
+
+  it('không lấy quyền ở lớp thay cho hai hoạt động cùng lớp có lệnh cấm khác nhau', async () => {
+    const { service, repository, authorization, storage } = createService();
+    repository.find.mockResolvedValue({
+      id: FILE_ID,
+      parentFileId: null,
+      storageKey: 'files/shared.png',
+      mimeType: 'image/png',
+      byteSize: PNG_1X1.length,
+    });
+    repository.assignedFileAssignments.mockResolvedValue(['activity-prohibited']);
+    authorization.authorize.mockImplementation(async ({ context }) => ({
+      allowed: context.resourceKey !== 'activity-prohibited',
+      reason: context.resourceKey === 'activity-prohibited' ? 'prohibited' : 'granted',
+    }));
+    await expect(service.getFile(FILE_ID, STUDENT_ID)).rejects.toMatchObject({
+      code: 'file_not_found',
+    });
+    expect(storage.get).not.toHaveBeenCalled();
+    repository.assignedFileAssignments.mockResolvedValue([
+      'activity-prohibited',
+      'activity-allowed',
+    ]);
+    await expect(service.getFile(FILE_ID, STUDENT_ID)).resolves.toMatchObject({
+      mimeType: 'image/png',
+    });
+    expect(authorization.authorize).toHaveBeenCalledWith({
+      actorId: STUDENT_ID,
+      capability: 'assignment:view_assigned',
+      context: { kind: 'assignment', resourceKey: 'activity-prohibited' },
+    });
+    expect(authorization.authorize).toHaveBeenCalledWith({
+      actorId: STUDENT_ID,
+      capability: 'assignment:view_assigned',
+      context: { kind: 'assignment', resourceKey: 'activity-allowed' },
+    });
   });
 
   it('không lộ ảnh gốc khi học sinh chỉ được giao biến thể ảnh đã cắt', async () => {
@@ -231,7 +268,7 @@ describe('Kiểm thử ngăn tái xuất hiện lỗi bảo mật của dịch v
       mimeType: 'image/png',
       byteSize: PNG_1X1.length,
     });
-    repository.assignedFileClasses.mockImplementation(async (_id, variantId) =>
+    repository.assignedFileAssignments.mockImplementation(async (_id, variantId) =>
       variantId === VARIANT_ID ? ['class-a'] : [],
     );
     authorization.authorize.mockResolvedValue({ allowed: true });
@@ -243,13 +280,13 @@ describe('Kiểm thử ngăn tái xuất hiện lỗi bảo mật của dịch v
       kind: 'not_found',
       code: 'file_not_found',
     });
-    expect(repository.assignedFileClasses).toHaveBeenCalledWith(
+    expect(repository.assignedFileAssignments).toHaveBeenCalledWith(
       FILE_ID,
       VARIANT_ID,
       STUDENT_ID,
       expect.any(Date),
     );
-    expect(repository.assignedFileClasses).toHaveBeenCalledWith(
+    expect(repository.assignedFileAssignments).toHaveBeenCalledWith(
       FILE_ID,
       null,
       STUDENT_ID,
@@ -268,8 +305,8 @@ describe('Kiểm thử ngăn tái xuất hiện lỗi bảo mật của dịch v
       mimeType: 'image/png',
       byteSize: PNG_1X1.length,
     });
-    repository.releasedSolutionFileClasses.mockResolvedValue([
-      { classId: 'class-revoked', enrolmentStatus: 'active' },
+    repository.releasedSolutionFileAssignments.mockResolvedValue([
+      { assignmentId: 'class-revoked', enrolmentStatus: 'active' },
     ]);
     await expect(service.getFile(FILE_ID, STUDENT_ID)).rejects.toMatchObject({
       code: 'file_not_found',
@@ -277,11 +314,34 @@ describe('Kiểm thử ngăn tái xuất hiện lỗi bảo mật của dịch v
     expect(authorization.authorize).toHaveBeenCalledWith({
       actorId: STUDENT_ID,
       capability: 'result:view_own',
-      context: { kind: 'class', resourceKey: 'class-revoked' },
+      context: { kind: 'assignment', resourceKey: 'class-revoked' },
     });
     expect(storage.get).not.toHaveBeenCalled();
 
     authorization.authorize.mockResolvedValueOnce({ allowed: true });
+    await expect(service.getFile(FILE_ID, STUDENT_ID)).resolves.toMatchObject({
+      mimeType: 'image/png',
+    });
+  });
+
+  it('không bỏ qua PROHIBIT khi người đã rời lớp xem tệp lời giải', async () => {
+    const { service, repository, authorization, storage } = createService();
+    repository.find.mockResolvedValue({
+      id: FILE_ID,
+      parentFileId: null,
+      storageKey: 'files/solution.png',
+      mimeType: 'image/png',
+      byteSize: PNG_1X1.length,
+    });
+    repository.releasedSolutionFileAssignments.mockResolvedValue([
+      { assignmentId: 'activity-result', enrolmentStatus: 'left' },
+    ]);
+    authorization.authorize.mockResolvedValueOnce({ allowed: false, reason: 'prohibited' });
+    await expect(service.getFile(FILE_ID, STUDENT_ID)).rejects.toMatchObject({
+      code: 'file_not_found',
+    });
+    expect(storage.get).not.toHaveBeenCalled();
+    authorization.authorize.mockResolvedValueOnce({ allowed: false, reason: 'no_grant' });
     await expect(service.getFile(FILE_ID, STUDENT_ID)).resolves.toMatchObject({
       mimeType: 'image/png',
     });
@@ -296,13 +356,13 @@ describe('Kiểm thử ngăn tái xuất hiện lỗi bảo mật của dịch v
       mimeType: 'image/png',
       byteSize: PNG_1X1.length,
     });
-    repository.releasedSolutionFileClasses.mockResolvedValueOnce([
-      { classId: 'lop-lich-su', enrolmentStatus: 'left' },
+    repository.releasedSolutionFileAssignments.mockResolvedValueOnce([
+      { assignmentId: 'lop-lich-su', enrolmentStatus: 'left' },
     ]);
     await expect(service.getFile(FILE_ID, STUDENT_ID)).resolves.toMatchObject({
       mimeType: 'image/png',
     });
-    expect(repository.releasedSolutionFileClasses).toHaveBeenCalledWith(
+    expect(repository.releasedSolutionFileAssignments).toHaveBeenCalledWith(
       FILE_ID,
       null,
       STUDENT_ID,

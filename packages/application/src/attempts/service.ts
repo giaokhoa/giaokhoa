@@ -30,8 +30,8 @@ export class AttemptsService {
 
   /**
    * Giáo viên phải có quyền của lớp; học sinh phải sở hữu lượt làm bài.
-   * Người đã rời lớp được đọc lượt làm đã kết thúc mà không cần vai trò lớp hiện tại;
-   * kho dữ liệu vẫn kiểm tra tài khoản và điều kiện công bố kết quả.
+   * Người đã rời lớp được đọc lịch sử đã hoàn tất khi không có lệnh cấm tuyệt đối
+   * ở ngữ cảnh bài giao; kho dữ liệu vẫn xét tài khoản và điều kiện công bố.
    */
   private async assertAttempt(actorId: string, id: string, capability: string, teacher = false) {
     const context = await this.repository.findContext(id);
@@ -42,9 +42,18 @@ export class AttemptsService {
     } else {
       if (context.userId !== actorId)
         throw new ClientError('not_found', 'attempt_not_found', 'Lượt làm bài không tồn tại');
-      // D06: sau khi rời lớp, chỉ mở lịch sử bài đã nộp của chính mình.
-      if (!(context.enrolmentStatus === 'left' && context.status !== 'in_progress'))
+      if (context.enrolmentStatus === 'left' && context.status !== 'in_progress') {
+        // Giữ quyền đọc lịch sử cho người đã rời lớp, nhưng PROHIBIT không được vượt qua.
+        const decision = await this.authorization.authorize({
+          actorId,
+          capability,
+          context: { kind: 'assignment', resourceKey: context.assignmentId },
+        });
+        if (decision.reason === 'prohibited')
+          throw new ClientError('forbidden', 'authorization_denied', 'Không được xem lịch sử');
+      } else {
         await this.assertAssignment(actorId, context.assignmentId, capability);
+      }
     }
     return context;
   }

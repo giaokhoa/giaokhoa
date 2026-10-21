@@ -1,6 +1,6 @@
 import { grantSystemRole, revokeSystemRole } from '../../helpers/roles.js';
 import 'dotenv/config';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { INestApplication } from '@nestjs/common';
 import { getDrizzleToken } from '@nestjs/drizzle';
 import { Test } from '@nestjs/testing';
@@ -12,7 +12,7 @@ import { Client, Pool } from 'pg';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { migrationsFolder } from '@giaokhoa/database/migrations';
-import { authzContexts, users } from '@giaokhoa/database/schema';
+import { authzContexts, fileBlobs, files, fileSources, users } from '@giaokhoa/database/schema';
 import type { Database } from '@giaokhoa/database/types';
 import { createAuth } from '../../../src/auth/auth.js';
 
@@ -218,6 +218,48 @@ describe('Phân quyền truy cập chương trình học qua HTTP', () => {
       .set('cookie', admin.cookie)
       .send({ roleKey: 'system:teacher' })
       .expect(200, { changed: true });
+  });
+
+  it('khóa tài khoản thu hồi quyền truy cập nguồn TikZ đang tồn tại qua phiên cũ', async () => {
+    const user = await createSession(`ban-existing-${randomUUID()}@example.com`);
+    const hash = createHash('sha256').update(randomUUID()).digest('hex');
+    await db
+      .insert(fileBlobs)
+      .values({ contentHash: hash, storageKey: `files/${hash}`, byteSize: 10 });
+    const [image] = await db
+      .insert(files)
+      .values({
+        createdByUserId: user.userId,
+        contentHash: hash,
+        mimeType: 'image/svg+xml',
+        width: 16,
+        height: 16,
+        originalFilename: 'tikz.svg',
+      })
+      .returning();
+    await db
+      .insert(fileSources)
+      .values({ fileId: image.id, kind: 'tikz', source: 'du lieu rieng' });
+
+    await request(app.getHttpServer())
+      .get(`/files/${image.id}/source`)
+      .set('cookie', user.cookie)
+      .expect(200, { kind: 'tikz', source: 'du lieu rieng' });
+    await db.update(users).set({ banned: true }).where(eq(users.id, user.userId));
+    await request(app.getHttpServer())
+      .get(`/files/${image.id}/source`)
+      .set('cookie', user.cookie)
+      .expect(403);
+    await request(app.getHttpServer())
+      .get(`/files/${image.id}`)
+      .set('cookie', user.cookie)
+      .expect(403);
+    await request(app.getHttpServer())
+      .post('/files/discard')
+      .set('cookie', user.cookie)
+      .send({ files: [] })
+      .expect(403);
+    await request(app.getHttpServer()).get('/subjects').set('cookie', user.cookie).expect(403);
   });
 
   it('chặn tạo phiên khi tài khoản bị khóa, không phụ thuộc vào plugin quản trị', async () => {

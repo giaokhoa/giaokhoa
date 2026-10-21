@@ -377,11 +377,43 @@ describe('Quyền truy cập tệp của người nhận', () => {
       fileArea: 'content',
       itemId: stimulus.id,
     });
-    expect(await repository.assignedFileClasses(primary.id, variant.id, student.id, now)).toEqual([
-      classroom.id,
-    ]);
+    expect(
+      await repository.assignedFileAssignments(primary.id, variant.id, student.id, now),
+    ).toEqual([assignment.id]);
+    // Hai hoạt động cùng lớp tham chiếu một tệp phải trả hai mã bài giao riêng.
+    const [secondAssignment] = await db
+      .insert(assignments)
+      .values({
+        classId: classroom.id,
+        examRevisionId: revision.id,
+        createdByUserId: teacher.id,
+        audienceMode: 'ALL_CLASS',
+        status: 'published',
+        openAt: new Date(now.getTime() - 60_000),
+        closeAt: new Date(now.getTime() + 86_400_000),
+      })
+      .returning();
+    await db.insert(assignmentRecipients).values({
+      assignmentId: secondAssignment.id,
+      userId: student.id,
+      status: 'active',
+      source: 'all_class',
+    });
+    expect(
+      (await repository.assignedFileAssignments(primary.id, variant.id, student.id, now)).sort(),
+    ).toEqual([assignment.id, secondAssignment.id].sort());
+    await db
+      .update(assignmentRecipients)
+      .set({ status: 'revoked', revokedAt: now })
+      .where(
+        and(
+          eq(assignmentRecipients.assignmentId, secondAssignment.id),
+          eq(assignmentRecipients.userId, student.id),
+        ),
+      );
+
     // Nội dung chỉ dùng ảnh đã cắt: học sinh không được tải ảnh gốc có thể chứa thông tin đã che.
-    expect(await repository.assignedFileClasses(primary.id, null, student.id, now)).toEqual([]);
+    expect(await repository.assignedFileAssignments(primary.id, null, student.id, now)).toEqual([]);
 
     const unrelatedHash = createHash('sha256').update(randomUUID()).digest('hex');
     const unrelated = await repository.create(fileData(teacher.id, unrelatedHash, 'unrelated.png'));
@@ -401,7 +433,9 @@ describe('Quyền truy cập tệp của người nhận', () => {
         itemId: questionRow.id,
       },
     ]);
-    expect(await repository.assignedFileClasses(unrelated.id, null, student.id, now)).toEqual([]);
+    expect(await repository.assignedFileAssignments(unrelated.id, null, student.id, now)).toEqual(
+      [],
+    );
 
     await db
       .update(assignmentRecipients)
@@ -415,9 +449,9 @@ describe('Quyền truy cập tệp của người nhận', () => {
           eq(assignmentRecipients.userId, student.id),
         ),
       );
-    expect(await repository.assignedFileClasses(primary.id, variant.id, student.id, now)).toEqual(
-      [],
-    );
+    expect(
+      await repository.assignedFileAssignments(primary.id, variant.id, student.id, now),
+    ).toEqual([]);
 
     await db.insert(fileUses).values({
       fileId: answerFile.id,
@@ -427,7 +461,7 @@ describe('Quyền truy cập tệp của người nhận', () => {
       itemId: questionRow.id,
     });
     expect(
-      await repository.releasedSolutionFileClasses(answerFile.id, null, student.id, now),
+      await repository.releasedSolutionFileAssignments(answerFile.id, null, student.id, now),
     ).toEqual([]);
     await db.insert(attempts).values({
       assignmentId: assignment.id,
@@ -437,18 +471,18 @@ describe('Quyền truy cập tệp của người nhận', () => {
       submittedAt: now,
     });
     expect(
-      await repository.releasedSolutionFileClasses(answerFile.id, null, student.id, now),
+      await repository.releasedSolutionFileAssignments(answerFile.id, null, student.id, now),
     ).toEqual([]);
     await db
       .update(assignments)
       .set({ releaseSolutionsAt: now })
       .where(eq(assignments.id, assignment.id));
     expect(
-      await repository.releasedSolutionFileClasses(answerFile.id, null, student.id, now),
-    ).toEqual([{ classId: classroom.id, enrolmentStatus: 'active' }]);
-    expect(await repository.releasedSolutionFileClasses(primary.id, null, student.id, now)).toEqual(
-      [],
-    );
+      await repository.releasedSolutionFileAssignments(answerFile.id, null, student.id, now),
+    ).toEqual([{ assignmentId: assignment.id, enrolmentStatus: 'active' }]);
+    expect(
+      await repository.releasedSolutionFileAssignments(primary.id, null, student.id, now),
+    ).toEqual([]);
 
     // Người đã nộp bài vẫn được xem lời giải khi rời lớp hoặc bị thu hồi quyền nhận bài.
     await db
@@ -458,17 +492,17 @@ describe('Quyền truy cập tệp của người nhận', () => {
         and(eq(classEnrolments.classId, classroom.id), eq(classEnrolments.userId, student.id)),
       );
     expect(
-      await repository.releasedSolutionFileClasses(answerFile.id, null, student.id, now),
-    ).toEqual([{ classId: classroom.id, enrolmentStatus: 'left' }]);
+      await repository.releasedSolutionFileAssignments(answerFile.id, null, student.id, now),
+    ).toEqual([{ assignmentId: assignment.id, enrolmentStatus: 'left' }]);
     await expect(
       db.update(users).set({ banned: null }).where(eq(users.id, student.id)),
     ).rejects.toThrow();
     expect(
-      await repository.releasedSolutionFileClasses(answerFile.id, null, student.id, now),
-    ).toEqual([{ classId: classroom.id, enrolmentStatus: 'left' }]);
+      await repository.releasedSolutionFileAssignments(answerFile.id, null, student.id, now),
+    ).toEqual([{ assignmentId: assignment.id, enrolmentStatus: 'left' }]);
     await db.update(users).set({ banned: true }).where(eq(users.id, student.id));
     expect(
-      await repository.releasedSolutionFileClasses(answerFile.id, null, student.id, now),
+      await repository.releasedSolutionFileAssignments(answerFile.id, null, student.id, now),
     ).toEqual([]);
   });
 });

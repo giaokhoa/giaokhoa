@@ -143,10 +143,19 @@ export class PostgresFilesRepository implements FilesRepository {
 
     // Vùng nháp là vị trí sử dụng tệp có thời hạn; sau khi lưu nội dung,
     // tham chiếu từ đối tượng nội dung cụ thể sẽ thay thế vị trí nháp.
+    const [root] = await tx
+      .select({ id: authzContexts.id })
+      .from(authzContexts)
+      .where(and(eq(authzContexts.kind, 'system'), eq(authzContexts.resourceKey, 'giaokhoa')))
+      .limit(1);
+    if (!root) throw new Error('Thiếu ngữ cảnh hệ thống');
     await tx
       .insert(authzContexts)
-      .values({ kind: 'user', resourceKey: data.createdByUserId })
-      .onConflictDoNothing();
+      .values({ kind: 'user', resourceKey: data.createdByUserId, parentId: root.id })
+      .onConflictDoUpdate({
+        target: [authzContexts.kind, authzContexts.resourceKey],
+        set: { parentId: root.id },
+      });
     const [context] = await tx
       .select({ id: authzContexts.id })
       .from(authzContexts)
@@ -234,7 +243,7 @@ export class PostgresFilesRepository implements FilesRepository {
   /** Chỉ xét quyền đọc tệp khi học sinh đang là người nhận bài và thành viên lớp còn hoạt động.
    * Đối chiếu ảnh gốc và ảnh biến thể với bản chụp câu hỏi hoặc ngữ liệu đã giao;
    * vị trí tệp trong cơ sở dữ liệu không đủ để chứng minh quyền xem. */
-  async assignedFileClasses(
+  async assignedFileAssignments(
     fileId: string,
     variantFileId: string | null,
     userId: string,
@@ -242,7 +251,7 @@ export class PostgresFilesRepository implements FilesRepository {
   ): Promise<string[]> {
     const targetId = variantFileId ?? fileId;
     const rows = await this.db
-      .select({ classId: assignments.classId, snapshot: examRevisionQuestions.questionSnapshot })
+      .select({ assignmentId: assignments.id, snapshot: examRevisionQuestions.questionSnapshot })
       .from(fileUses)
       .innerJoin(questionVersions, sql`${fileUses.itemId} = ${questionVersions.questionId}::text`)
       .innerJoin(
@@ -279,7 +288,7 @@ export class PostgresFilesRepository implements FilesRepository {
       );
     const stimulusRows = await this.db
       .select({
-        classId: assignments.classId,
+        assignmentId: assignments.id,
         snapshot: examRevisionQuestions.questionSnapshot,
         stimulusId: stimuli.id,
         stimulusContent: stimuli.content,
@@ -331,7 +340,7 @@ export class PostgresFilesRepository implements FilesRepository {
               (ref) => ref.fileId === fileId && ref.variantFileId === variantFileId,
             ),
           )
-          .map(({ classId }) => classId),
+          .map(({ assignmentId }) => assignmentId),
         ...stimulusRows
           .filter(({ snapshot, stimulusId, stimulusContent }) => {
             const assignedQuestion = questionSchema.parse(snapshot);
@@ -341,7 +350,7 @@ export class PostgresFilesRepository implements FilesRepository {
               (ref) => ref.fileId === fileId && ref.variantFileId === variantFileId,
             );
           })
-          .map(({ classId }) => classId),
+          .map(({ assignmentId }) => assignmentId),
       ]),
     ];
   }
@@ -353,12 +362,12 @@ export class PostgresFilesRepository implements FilesRepository {
    * chỉ trùng mã câu hỏi hoặc vị trí lưu tệp không đủ để được cấp quyền.
    * Không cấp quyền xem ảnh hướng dẫn hoặc ảnh gốc của bản cắt.
    */
-  async releasedSolutionFileClasses(
+  async releasedSolutionFileAssignments(
     fileId: string,
     variantFileId: string | null,
     userId: string,
     now: Date,
-  ): Promise<Array<{ classId: string; enrolmentStatus: 'active' | 'left' }>> {
+  ): Promise<Array<{ assignmentId: string; enrolmentStatus: 'active' | 'left' }>> {
     // Trả về lớp và trạng thái tham gia để tầng nghiệp vụ xét quyền theo vai trò
     // hiện hành; riêng thành viên đã rời lớp có thể tiếp tục xem lịch sử đã nộp.
     // Tra bảng vị trí tệp trước để giảm số bản chụp cần kiểm tra;
@@ -367,7 +376,7 @@ export class PostgresFilesRepository implements FilesRepository {
     const rows = await this.db
       .select({
         snapshot: examRevisionQuestions.questionSnapshot,
-        classId: assignments.classId,
+        assignmentId: assignments.id,
         enrolmentStatus: classEnrolments.status,
       })
       .from(fileUses)
@@ -410,8 +419,8 @@ export class PostgresFilesRepository implements FilesRepository {
           (ref) => ref.fileId === fileId && ref.variantFileId === variantFileId,
         ),
       )
-      .map(({ classId, enrolmentStatus }) => ({
-        classId,
+      .map(({ assignmentId, enrolmentStatus }) => ({
+        assignmentId,
         enrolmentStatus: enrolmentStatus === 'left' ? ('left' as const) : ('active' as const),
       }));
   }

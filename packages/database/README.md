@@ -64,3 +64,23 @@ phải kiểm `authz_role_context_levels` tại ngữ cảnh `class`. Nếu cấ
 giao dịch trả lỗi xung đột và không ghi danh/cấp vai trò trái cấu hình; việc thu hồi vai trò
 không bị cản bởi thay đổi cấu hình cấp mới. Đây là ràng buộc nhất quán của Giáo khoa
 cho các luồng cấp quyền tự động, không phải tuyên bố Moodle cấm mọi cách tự cấp vai trò.
+
+### Đối chiếu truy cập và dữ liệu ngữ cảnh đã tồn tại
+
+Khi học sinh xem tệp trong bài giao, kho dữ liệu trả **mã bài giao chứa tệp**, không trả
+mã lớp; tầng nghiệp vụ đối chiếu capability tại đúng ngữ cảnh `assignment` và đúng
+vùng nội dung `content` hoặc `solution`. Quy tắc xem lịch sử sau khi rời lớp không
+được vượt qua một `PROHIBIT` hiện có hiệu lực ở ngữ cảnh bài giao.
+
+Các ngữ cảnh `user` và `bank` mới được nối đến gốc `system:giaokhoa` ngay khi tạo.
+Các thao tác tạo tệp và gắn tệp vào câu hỏi/ngữ liệu cũng sửa ngữ cảnh cũ thiếu cha
+nếu đi qua bản ghi đó. Với các ngữ cảnh cũ **không được truy cập lại**, cần chạy
+riêng `scripts/repair-context-parents.sql` sau khi sao lưu và rà soát trên bản sao
+cơ sở dữ liệu, bằng quyền quản trị PostgreSQL. Tệp này là lệnh cập nhật dữ liệu
+có thể chạy lặp lại; **không** phải bản di trú tự động, không áp dụng vào dữ liệu thật
+trong PR này. Không được chạy lại `0000_baseline.sql` trên cơ sở dữ liệu hiện hữu.
+
+Các thao tác thay đổi quyền và lưu/nộp/bắt đầu bài dùng khóa giao dịch advisory chung
+để loại bỏ khoảng thời gian giữa việc kiểm tra quyền và ghi dữ liệu. Đây là giới hạn
+thông lượng có chủ đích trong giai đoạn hiện tại; nếu cần tải lớn, thay bằng khóa
+theo ngữ cảnh nhưng vẫn phải chứng minh thứ tự giao dịch không gây leo thang quyền.

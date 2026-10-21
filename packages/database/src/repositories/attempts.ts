@@ -21,6 +21,7 @@ import { classes, classEnrolments } from '../schema/classes.js';
 import { examRevisionQuestions } from '../schema/exams.js';
 import type { Database } from '../types.js';
 import { assertOwner } from './assignments.js';
+import { hasContextCapability, lockAuthorizationMutation } from './authorization.js';
 
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 type AttemptRow = typeof attempts.$inferSelect;
@@ -218,6 +219,7 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
     const classId = await this.findAssignmentClass(assignmentId);
     if (!classId) throw unavailable();
     return this.db.transaction(async (tx) => {
+      await lockAuthorizationMutation(tx);
       // ponytail: Khóa theo lớp để đồng bộ khi tham gia hoặc đình chỉ thành viên; nếu tải cao, chuyển sang khóa từng bản ghi người nhận (recipient).
       const [classroom] = await tx
         .select()
@@ -260,6 +262,13 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
         .for('share')
         .limit(1);
       if (!validAccount(account)) throw denied();
+      if (
+        !(await hasContextCapability(tx, actorId, 'assignment:attempt', {
+          kind: 'assignment',
+          resourceKey: assignmentId,
+        }))
+      )
+        throw denied();
       if (now < assignment.openAt || now >= assignment.closeAt) throw closed();
 
       const history = await tx
@@ -287,9 +296,11 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
   /**
    * Dùng chung cho lưu đáp án và nộp bài để khóa lớp và lượt làm (attempt)
    * trong cùng một giao dịch (transaction). Không cho sửa khi hết giờ, đã nộp,
-   * quan hệ tham gia lớp (enrolment) bị ngừng hoặc quyền nhận bài đã bị thu hồi.
+   * quan hệ tham gia lớp (enrolment) bị ngừng, quyền nhận bài hoặc vai trò bị thu hồi.
+   * Capability được xét lại trong giao dịch, không tin kết quả kiểm tra trước khi gọi.
    */
   private async writable(tx: Transaction, id: string, actorId: string, now: Date) {
+    await lockAuthorizationMutation(tx);
     const [ref] = await tx
       .select({ classId: assignments.classId, assignmentId: assignments.id })
       .from(attempts)
@@ -342,6 +353,13 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
       .for('share')
       .limit(1);
     if (!validAccount(account)) throw denied();
+    if (
+      !(await hasContextCapability(tx, actorId, 'assignment:attempt', {
+        kind: 'assignment',
+        resourceKey: row.assignment.id,
+      }))
+    )
+      throw denied();
     if (now < row.assignment.openAt || now >= row.assignment.closeAt) throw closed();
     return row;
   }

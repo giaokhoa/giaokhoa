@@ -73,3 +73,19 @@ cho phép vẫn không đủ quyền.
 (`class`) và hoạt động thành bài giao (`assignment`); quyền truy cập câu hỏi, đề, tệp vẫn
 chịu các quy tắc nghiệp vụ riêng và bảo vệ dữ liệu người dùng.
 Tài liệu tham chiếu: https://moodledev.io/docs/5.0/apis/subsystems/roles
+
+### Rà soát an toàn quyền theo ngữ cảnh (PR #9)
+
+Tệp người nhận xem được chỉ khi có quyền ở **bài giao** chứa tệp, không suy từ
+quyền lớp; ảnh gốc, biến thể và ảnh lời giải giữ các điều kiện phân biệt về vùng
+nội dung, người nhận và thời điểm công bố. Thành viên rời lớp chỉ được đọc lịch
+sử đã hoàn tất khi không có `PROHIBIT` đang có hiệu lực. Ghi lượt làm phải tái
+kiểm tra quyền trong giao dịch, đồng bộ với lúc cấp hoặc thu hồi vai trò; tài khoản
+bị khóa mất quyền qua các phiên hiện có.
+
+Dữ liệu `authz_contexts` cũ thiếu cha cần sửa bằng công cụ có kiểm soát
+`packages/database/scripts/repair-context-parents.sql` sau khi sao lưu, không
+áp dụng tự động trong PR. Tài liệu chuẩn đã đối chiếu: Moodle 5.3
+([Roles API](https://moodledev.io/docs/5.3/apis/subsystems/roles),
+[Access API](https://moodledev.io/docs/5.3/apis/subsystems/access),
+[File API](https://moodledev.io/docs/5.3/apis/subsystems/files)).

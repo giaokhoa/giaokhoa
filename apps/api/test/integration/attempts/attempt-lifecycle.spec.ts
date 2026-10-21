@@ -1,7 +1,7 @@
 import { grantSystemRole, revokeRole } from '../../helpers/roles.js';
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Client, Pool } from 'pg';
@@ -269,6 +269,90 @@ describe('Quyền sở hữu, vòng đời bài làm và công bố kết quả'
     expect(
       await db.select().from(attemptRows).where(eq(attemptRows.assignmentId, assignment.id)),
     ).toHaveLength(2);
+  });
+
+  it('từ chối lưu, nộp và bắt đầu lượt mới sau khi thu hồi vai trò dù kiểm tra trước đó đã thành công', async () => {
+    const { classroom, enrol, publish } = await fixture();
+    const student = await createUser();
+    await enrol(student.id);
+    const assignment = await publish();
+    const started = await attempts.start(student.id, assignment.id);
+    const authz = new AuthorizationService(new PostgresAuthorizationRepository(db));
+    expect(
+      await authz.authorize({
+        actorId: student.id,
+        capability: 'assignment:attempt',
+        context: { kind: 'assignment', resourceKey: assignment.id },
+      }),
+    ).toMatchObject({ allowed: true });
+    await revokeRole(db, student.id, 'class:student', 'class', classroom.id);
+    const repository = new PostgresAttemptsRepository(db);
+    await expect(
+      repository.save(started.id, student.id, 1, { type: 'short_answer', answer: '99' }, NOW),
+    ).rejects.toMatchObject({ kind: 'forbidden' });
+    await expect(repository.submit(started.id, student.id, NOW)).rejects.toMatchObject({
+      kind: 'forbidden',
+    });
+    await expect(repository.start(assignment.id, student.id, NOW)).rejects.toMatchObject({
+      kind: 'forbidden',
+    });
+    expect(
+      await db.select().from(attemptResponses).where(eq(attemptResponses.attemptId, started.id)),
+    ).toHaveLength(0);
+    expect(
+      (
+        await db
+          .select({ status: attemptRows.status })
+          .from(attemptRows)
+          .where(eq(attemptRows.id, started.id))
+      )[0].status,
+    ).toBe('in_progress');
+  });
+
+  it('không vượt qua PROHIBIT tại bài giao dù là chủ lượt làm đã rời lớp', async () => {
+    const { teacher, classroom, enrol, publish } = await fixture();
+    const student = await createUser();
+    const admin = await createUser('admin');
+    await enrol(student.id);
+    const assignment = await publish({
+      releaseScoreAt: new Date(NOW.getTime() - 10_000).toISOString(),
+      releaseFeedbackAt: new Date(NOW.getTime() - 10_000).toISOString(),
+    });
+    const started = await attempts.start(student.id, assignment.id);
+    await attempts.submit(student.id, started.id);
+    await attempts.grade(teacher.id, started.id, { score: 87 });
+    await classes.leaveClass(student.id, classroom.id);
+    expect((await attempts.result(student.id, started.id)).score).toBe(87);
+    const authz = new AuthorizationService(new PostgresAuthorizationRepository(db));
+    const [context] = await db
+      .select({ id: schema.authzContexts.id })
+      .from(schema.authzContexts)
+      .where(
+        and(
+          eq(schema.authzContexts.kind, 'assignment'),
+          eq(schema.authzContexts.resourceKey, assignment.id),
+        ),
+      )
+      .limit(1);
+    await authz.overrideRole(admin.id, context.id, 'system:user', 'result:view_own', 'PROHIBIT');
+    try {
+      expect(
+        await authz.authorize({
+          actorId: student.id,
+          capability: 'result:view_own',
+          context: { kind: 'assignment', resourceKey: assignment.id },
+        }),
+      ).toMatchObject({ allowed: false, reason: 'prohibited' });
+      await expect(attempts.result(student.id, started.id)).rejects.toMatchObject({
+        kind: 'forbidden',
+      });
+      await expect(attempts.solutions(student.id, started.id)).rejects.toMatchObject({
+        kind: 'forbidden',
+      });
+    } finally {
+      await authz.overrideRole(admin.id, context.id, 'system:user', 'result:view_own', 'INHERIT');
+    }
+    expect((await attempts.result(student.id, started.id)).score).toBe(87);
   });
 
   it('ngăn học sinh khác, giáo viên và quản trị viên xem bài làm và điểm riêng tư', async () => {

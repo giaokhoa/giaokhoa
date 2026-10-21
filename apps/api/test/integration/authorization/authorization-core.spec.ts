@@ -459,6 +459,31 @@ describe('Migration, dữ liệu khởi tạo và kho phân quyền', () => {
     ).rejects.toMatchObject({ kind: 'forbidden' });
   });
 
+  it('vai trò system:user mặc định có thể dùng ma trận ủy quyền đã cấu hình', async () => {
+    const admin = await createUser('matrix-admin', 'admin');
+    const owner = await createUser('matrix-owner', 'teacher');
+    const member = await createUser('matrix-member');
+    const target = await createUser('matrix-target');
+    const classroom = await createClass(owner.id, `matrix-${randomUUID()}`);
+    try {
+      await service.setRolePermission(admin.id, 'system:user', 'role:assign', 'ALLOW');
+      await service.setRoleMatrix(admin.id, 'system:user', 'class:teacher', 'assign', true);
+      expect(
+        await service.changeRole(member.id, classroom.id, target.id, 'class:teacher', true),
+      ).toBe(true);
+      expect(await can(target.id, 'class:update', 'class', classroom.resourceKey)).toMatchObject({
+        allowed: true,
+      });
+      await service.setRoleMatrix(admin.id, 'system:user', 'class:teacher', 'assign', false);
+      await expect(
+        service.changeRole(member.id, classroom.id, target.id, 'class:teacher', false),
+      ).rejects.toMatchObject({ kind: 'forbidden' });
+    } finally {
+      await service.setRoleMatrix(admin.id, 'system:user', 'class:teacher', 'assign', false);
+      await service.setRolePermission(admin.id, 'system:user', 'role:assign', 'INHERIT');
+    }
+  });
+
   it('ghi đè vai trò cho riêng một hoạt động và INHERIT khôi phục quyền gốc', async () => {
     const owner = await createUser('override-owner', 'teacher');
     const student = await createUser('override-student');

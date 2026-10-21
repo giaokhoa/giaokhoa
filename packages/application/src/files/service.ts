@@ -412,42 +412,46 @@ export class FilesService {
     return this.getStoredFile(variant.storageKey, variant.mimeType, variant.byteSize);
   }
 
-  /** Chỉ xét nội dung đề được giao hoặc lời giải đã công bố, không suy quyền từ vị trí tệp đơn thuần. */
+  /** Chỉ xét đúng ngữ cảnh bài giao chứa tệp trong vùng nội dung đề hoặc lời giải đã công bố. */
   private async assertAssignedFileAccess(
     fileId: string,
     variantFileId: string | null,
     userId: string,
   ): Promise<void> {
-    const classIds = await this.repository.assignedFileClasses(
+    const assignmentIds = await this.repository.assignedFileAssignments(
       fileId,
       variantFileId,
       userId,
       this.now(),
     );
-    for (const classId of classIds) {
+    for (const assignmentId of assignmentIds) {
       const decision = await this.authorization.authorize({
         actorId: userId,
         capability: 'assignment:view_assigned',
-        context: { kind: 'class', resourceKey: classId },
+        context: { kind: 'assignment', resourceKey: assignmentId },
       });
       if (decision.allowed) return;
     }
     // Người đã rời lớp chỉ đọc lời giải của lượt đã nộp; thành viên đang
     // hoạt động vẫn phải có quyền xem kết quả tại thời điểm yêu cầu.
-    const released = await this.repository.releasedSolutionFileClasses(
+    const released = await this.repository.releasedSolutionFileAssignments(
       fileId,
       variantFileId,
       userId,
       this.now(),
     );
-    for (const { classId, enrolmentStatus } of released) {
-      if (enrolmentStatus === 'left') return;
+    for (const { assignmentId, enrolmentStatus } of released) {
       const decision = await this.authorization.authorize({
         actorId: userId,
         capability: 'result:view_own',
-        context: { kind: 'class', resourceKey: classId },
+        context: { kind: 'assignment', resourceKey: assignmentId },
       });
-      if (decision.allowed) return;
+      if (
+        decision.allowed ||
+        (enrolmentStatus === 'left' &&
+          (decision.reason === 'no_grant' || decision.reason === 'prevented'))
+      )
+        return;
     }
     throw new ClientError('not_found', 'file_not_found', 'Ảnh không tồn tại');
   }

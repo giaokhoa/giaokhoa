@@ -27,9 +27,9 @@ function createService() {
     find: vi.fn(),
     findOwned: vi.fn(),
     findVariant: vi.fn(),
-    assignedFileClasses: vi.fn(async () => [] as string[]),
-    releasedSolutionFileClasses: vi.fn(
-      async () => [] as Array<{ classId: string; enrolmentStatus: 'active' | 'left' }>,
+    assignedFileAssignments: vi.fn(async () => [] as string[]),
+    releasedSolutionFileAssignments: vi.fn(
+      async () => [] as Array<{ assignmentId: string; enrolmentStatus: 'active' | 'left' }>,
     ),
     findSourceOwned: vi.fn(),
     findVariantOwned: vi.fn(),
@@ -157,7 +157,7 @@ describe('Dịch vụ tệp (FilesService)', () => {
     };
     repository.findOwned.mockResolvedValue(undefined);
     repository.find.mockResolvedValue(record);
-    repository.assignedFileClasses.mockResolvedValue([USER_ID]);
+    repository.assignedFileAssignments.mockResolvedValue([USER_ID]);
     storage.get.mockResolvedValue({ body: PNG_1X1 });
     authorization.authorize.mockResolvedValueOnce({ allowed: true });
 
@@ -167,7 +167,7 @@ describe('Dịch vụ tệp (FilesService)', () => {
     expect(authorization.authorize).toHaveBeenCalledWith({
       actorId: USER_ID,
       capability: 'assignment:view_assigned',
-      context: { kind: 'class', resourceKey: USER_ID },
+      context: { kind: 'assignment', resourceKey: USER_ID },
     });
     expect(storage.get).toHaveBeenCalledTimes(1);
 

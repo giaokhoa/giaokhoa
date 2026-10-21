@@ -24,7 +24,10 @@ function setup() {
     result: vi.fn(),
     solutions: vi.fn(),
   };
-  const authorization = { assertAuthorized: vi.fn(async () => undefined) };
+  const authorization = {
+    assertAuthorized: vi.fn(async () => undefined),
+    authorize: vi.fn(async () => ({ allowed: false, reason: 'no_grant' })),
+  };
   const service = new AttemptsService(repository as never, authorization as never, () => NOW);
   const context = {
     assignmentId: ASSIGNMENT,
@@ -82,7 +85,7 @@ describe('Dịch vụ bài làm (AttemptsService)', () => {
     expect(repository.solutions).not.toHaveBeenCalled();
   });
 
-  it('chỉ bỏ qua quyền lớp cho lịch sử đã nộp của chính người đã rời lớp', async () => {
+  it('giữ lịch sử đã nộp cho người đã rời lớp nhưng không bỏ qua PROHIBIT', async () => {
     const { service, repository, authorization, context } = setup();
     repository.findContext.mockResolvedValue({
       ...context,
@@ -96,7 +99,14 @@ describe('Dịch vụ bài làm (AttemptsService)', () => {
     await expect(service.result(ACTOR, ATTEMPT)).resolves.toMatchObject({ attemptId: ATTEMPT });
     await expect(service.solutions(ACTOR, ATTEMPT)).resolves.toMatchObject({ attemptId: ATTEMPT });
     expect(authorization.assertAuthorized).not.toHaveBeenCalled();
+    expect(authorization.authorize).toHaveBeenCalledWith({
+      actorId: ACTOR,
+      capability: 'result:view_own',
+      context: { kind: 'assignment', resourceKey: ASSIGNMENT },
+    });
     expect(repository.result).toHaveBeenCalledWith(ATTEMPT, ACTOR, NOW);
+    authorization.authorize.mockResolvedValueOnce({ allowed: false, reason: 'prohibited' });
+    await expect(service.result(ACTOR, ATTEMPT)).rejects.toMatchObject({ kind: 'forbidden' });
     expect(repository.solutions).toHaveBeenCalledWith(ATTEMPT, ACTOR, NOW);
 
     repository.findContext.mockResolvedValue({ ...context, enrolmentStatus: 'left' });
