@@ -41,13 +41,13 @@ export interface FilesRepository {
     userId: string,
     now: Date,
   ): Promise<string[]>;
-  /** Đối chiếu ảnh lời giải với lượt đã nộp và mốc công bố; trả trạng thái tham gia để xét quyền hiện tại. */
+  /** Đối chiếu ảnh lời giải với lượt đã nộp và mốc công bố, không cấp quyền theo trạng thái ghi danh. */
   releasedSolutionFileAssignments(
     fileId: string,
     variantFileId: string | null,
     userId: string,
     now: Date,
-  ): Promise<Array<{ assignmentId: string; enrolmentStatus: 'active' | 'left' }>>;
+  ): Promise<string[]>;
   discardOrphans(refs: FileRef[], userId: string): Promise<string[]>;
   /** Chỉ xóa tệp nháp hết hạn nếu không còn tham chiếu; chỉ xếp khóa để xóa khi không có tệp nào dùng chung. */
   queueExpiredOrphans(cutoff: Date): Promise<{ processed: number; storageKeys: string[] }>;

@@ -119,7 +119,7 @@ describe('Migration, dữ liệu khởi tạo và kho phân quyền', () => {
       allowed: false,
     });
     expect(await db.select().from(authzRoleAssignments)).toHaveLength(2);
-    expect(await db.select().from(authzCapabilities)).toHaveLength(25);
+    expect(await db.select().from(authzCapabilities)).toHaveLength(26);
     expect(await db.select().from(authzRoles)).toHaveLength(6);
   });
 

@@ -6,7 +6,7 @@ import type {
   FilesRepository,
 } from '@giaokhoa/application/files/repository';
 import type { FileRef, TikzFileSource } from '@giaokhoa/shared/files';
-import { collectFileRefs, questionSchema, stimulusSchema } from '@giaokhoa/shared/questions';
+import { collectFileRefs, questionSchema } from '@giaokhoa/shared/questions';
 import { and, asc, eq, gt, inArray, lte, sql } from 'drizzle-orm';
 import { users } from '../schema/auth.generated.js';
 import { attempts } from '../schema/attempts.js';
@@ -16,6 +16,7 @@ import { classEnrolments, classes } from '../schema/classes.js';
 import { examRevisionQuestions } from '../schema/exams.js';
 import { fileBlobs, fileObjectDeletions, files, fileSources, fileUses } from '../schema/files.js';
 import { question, questionVersions, stimuli } from '../schema/questions.js';
+import { readPinnedStimulus } from './pinned-stimulus.js';
 import type { Database } from '../types.js';
 
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -291,7 +292,7 @@ export class PostgresFilesRepository implements FilesRepository {
         assignmentId: assignments.id,
         snapshot: examRevisionQuestions.questionSnapshot,
         stimulusId: stimuli.id,
-        stimulusContent: stimuli.content,
+        stimulusSnapshot: examRevisionQuestions.stimulusSnapshot,
       })
       .from(fileUses)
       .innerJoin(stimuli, sql`${fileUses.itemId} = ${stimuli.id}::text`)
@@ -342,10 +343,9 @@ export class PostgresFilesRepository implements FilesRepository {
           )
           .map(({ assignmentId }) => assignmentId),
         ...stimulusRows
-          .filter(({ snapshot, stimulusId, stimulusContent }) => {
-            const assignedQuestion = questionSchema.parse(snapshot);
-            if (assignedQuestion.stimulusId !== stimulusId) return false;
-            const stimulus = stimulusSchema.parse({ id: stimulusId, content: stimulusContent });
+          .filter(({ stimulusSnapshot, stimulusId }) => {
+            const stimulus = readPinnedStimulus(stimulusSnapshot, stimulusId);
+            if (!stimulus) return false;
             return collectFileRefs(stimulus.content).some(
               (ref) => ref.fileId === fileId && ref.variantFileId === variantFileId,
             );
@@ -367,9 +367,8 @@ export class PostgresFilesRepository implements FilesRepository {
     variantFileId: string | null,
     userId: string,
     now: Date,
-  ): Promise<Array<{ assignmentId: string; enrolmentStatus: 'active' | 'left' }>> {
-    // Trả về lớp và trạng thái tham gia để tầng nghiệp vụ xét quyền theo vai trò
-    // hiện hành; riêng thành viên đã rời lớp có thể tiếp tục xem lịch sử đã nộp.
+  ): Promise<string[]> {
+    // Trả đúng hoạt động sở hữu lời giải, không suy ra quyền từ ghi danh.
     // Tra bảng vị trí tệp trước để giảm số bản chụp cần kiểm tra;
     // sau đó đối chiếu tham chiếu tệp thực tế vì nối theo mã câu hỏi
     // có thể khớp nhiều phiên bản khác nhau.
@@ -377,7 +376,6 @@ export class PostgresFilesRepository implements FilesRepository {
       .select({
         snapshot: examRevisionQuestions.questionSnapshot,
         assignmentId: assignments.id,
-        enrolmentStatus: classEnrolments.status,
       })
       .from(fileUses)
       .innerJoin(questionVersions, sql`${fileUses.itemId} = ${questionVersions.questionId}::text`)
@@ -410,7 +408,7 @@ export class PostgresFilesRepository implements FilesRepository {
           eq(fileUses.component, 'questions'),
           eq(fileUses.fileArea, 'solution'),
           lte(assignments.releaseSolutionsAt, now),
-          sql`${users.banned} is not true`,
+          sql`(${users.banned} is not true or ${users.banExpires} <= ${now})`,
         ),
       );
     return rows
@@ -419,10 +417,7 @@ export class PostgresFilesRepository implements FilesRepository {
           (ref) => ref.fileId === fileId && ref.variantFileId === variantFileId,
         ),
       )
-      .map(({ assignmentId, enrolmentStatus }) => ({
-        assignmentId,
-        enrolmentStatus: enrolmentStatus === 'left' ? ('left' as const) : ('active' as const),
-      }));
+      .map(({ assignmentId }) => assignmentId);
   }
 
   /**

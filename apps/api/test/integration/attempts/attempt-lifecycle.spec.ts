@@ -14,7 +14,10 @@ import { ExamsService } from '@giaokhoa/application/exams/service';
 import { QuestionsService } from '@giaokhoa/application/questions/service';
 import { PostgresAssignmentsRepository } from '@giaokhoa/database/assignments';
 import { PostgresAttemptsRepository } from '@giaokhoa/database/attempts';
-import { PostgresAuthorizationRepository } from '@giaokhoa/database/authorization';
+import {
+  PostgresAuthorizationRepository,
+  lockAuthorizationMutation,
+} from '@giaokhoa/database/authorization';
 import { PostgresClassesRepository } from '@giaokhoa/database/classes';
 import { PostgresExamsRepository } from '@giaokhoa/database/exams';
 import { migrationsFolder } from '@giaokhoa/database/migrations';
@@ -309,7 +312,65 @@ describe('Quyền sở hữu, vòng đời bài làm và công bố kết quả'
     ).toBe('in_progress');
   });
 
-  it('không vượt qua PROHIBIT tại bài giao dù là chủ lượt làm đã rời lớp', async () => {
+  it('giao dịch thu hồi quyền chạy xen kẽ không thể cho lưu đáp án sau thời điểm thu hồi', async () => {
+    const { classroom, enrol, publish } = await fixture();
+    const student = await createUser();
+    await enrol(student.id);
+    const assignment = await publish();
+    const started = await attempts.start(student.id, assignment.id);
+    const [context] = await db
+      .select({ id: schema.authzContexts.id })
+      .from(schema.authzContexts)
+      .where(
+        and(
+          eq(schema.authzContexts.kind, 'class'),
+          eq(schema.authzContexts.resourceKey, classroom.id),
+        ),
+      )
+      .limit(1);
+    let release!: () => void;
+    let entered!: () => void;
+    const enteredLock = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const allowCommit = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const revocation = db.transaction(async (tx) => {
+      await lockAuthorizationMutation(tx);
+      await tx
+        .update(schema.authzRoleAssignments)
+        .set({ revokedAt: new Date() })
+        .where(
+          and(
+            eq(schema.authzRoleAssignments.contextId, context.id),
+            eq(schema.authzRoleAssignments.userId, student.id),
+          ),
+        );
+      entered();
+      await allowCommit;
+    });
+    await enteredLock;
+    const repository = new PostgresAttemptsRepository(db);
+    const pendingWrite = repository
+      .save(started.id, student.id, 1, { type: 'short_answer', answer: '99' }, NOW)
+      .then(
+        () => 'allowed',
+        () => 'denied',
+      );
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    } finally {
+      release();
+    }
+    await revocation;
+    expect(await pendingWrite).toBe('denied');
+    expect(
+      await db.select().from(attemptResponses).where(eq(attemptResponses.attemptId, started.id)),
+    ).toHaveLength(0);
+  });
+
+  it('không trả 87 điểm khi quyền PREVENT hoặc PROHIBIT sau khi học sinh rời lớp', async () => {
     const { teacher, classroom, enrol, publish } = await fixture();
     const student = await createUser();
     const admin = await createUser('admin');
@@ -317,12 +378,13 @@ describe('Quyền sở hữu, vòng đời bài làm và công bố kết quả'
     const assignment = await publish({
       releaseScoreAt: new Date(NOW.getTime() - 10_000).toISOString(),
       releaseFeedbackAt: new Date(NOW.getTime() - 10_000).toISOString(),
+      releaseSolutionsAt: new Date(NOW.getTime() - 10_000).toISOString(),
     });
-    const started = await attempts.start(student.id, assignment.id);
-    await attempts.submit(student.id, started.id);
-    await attempts.grade(teacher.id, started.id, { score: 87 });
+    const attempt = await attempts.start(student.id, assignment.id);
+    await attempts.submit(student.id, attempt.id);
+    await attempts.grade(teacher.id, attempt.id, { score: 87 });
+    expect((await attempts.result(student.id, attempt.id)).score).toBe(87);
     await classes.leaveClass(student.id, classroom.id);
-    expect((await attempts.result(student.id, started.id)).score).toBe(87);
     const authz = new AuthorizationService(new PostgresAuthorizationRepository(db));
     const [context] = await db
       .select({ id: schema.authzContexts.id })
@@ -334,25 +396,39 @@ describe('Quyền sở hữu, vòng đời bài làm và công bố kết quả'
         ),
       )
       .limit(1);
-    await authz.overrideRole(admin.id, context.id, 'system:user', 'result:view_own', 'PROHIBIT');
-    try {
-      expect(
-        await authz.authorize({
-          actorId: student.id,
-          capability: 'result:view_own',
-          context: { kind: 'assignment', resourceKey: assignment.id },
-        }),
-      ).toMatchObject({ allowed: false, reason: 'prohibited' });
-      await expect(attempts.result(student.id, started.id)).rejects.toMatchObject({
-        kind: 'forbidden',
-      });
-      await expect(attempts.solutions(student.id, started.id)).rejects.toMatchObject({
-        kind: 'forbidden',
-      });
-    } finally {
-      await authz.overrideRole(admin.id, context.id, 'system:user', 'result:view_own', 'INHERIT');
+    for (const effect of ['PREVENT', 'PROHIBIT'] as const) {
+      await authz.overrideRole(admin.id, context.id, 'system:user', 'result:view_own', effect);
+      try {
+        expect(
+          await authz.authorize({
+            actorId: student.id,
+            capability: 'result:view_own',
+            context: { kind: 'assignment', resourceKey: assignment.id },
+          }),
+        ).toMatchObject({
+          allowed: false,
+          reason: effect === 'PREVENT' ? 'prevented' : 'prohibited',
+        });
+        await expect(attempts.result(student.id, attempt.id)).rejects.toMatchObject({
+          kind: 'forbidden',
+        });
+        await expect(attempts.solutions(student.id, attempt.id)).rejects.toMatchObject({
+          kind: 'forbidden',
+        });
+      } finally {
+        await authz.overrideRole(admin.id, context.id, 'system:user', 'result:view_own', 'INHERIT');
+      }
     }
-    expect((await attempts.result(student.id, started.id)).score).toBe(87);
+    expect(
+      await authz.authorize({
+        actorId: student.id,
+        capability: 'result:view_own',
+        context: { kind: 'assignment', resourceKey: assignment.id },
+      }),
+    ).toMatchObject({ allowed: false });
+    await expect(attempts.result(student.id, attempt.id)).rejects.toMatchObject({
+      kind: 'forbidden',
+    });
   });
 
   it('ngăn học sinh khác, giáo viên và quản trị viên xem bài làm và điểm riêng tư', async () => {
@@ -445,8 +521,12 @@ describe('Quyền sở hữu, vòng đời bài làm và công bố kết quả'
     ]);
 
     await classes.leaveClass(student.id, classroom.id);
-    expect((await attempts.result(student.id, started.id)).score).toBe(91.5);
-    expect((await attempts.getOwn(student.id, started.id)).status).toBe('graded');
+    await expect(attempts.result(student.id, started.id)).rejects.toMatchObject({
+      kind: 'forbidden',
+    });
+    await expect(attempts.getOwn(student.id, started.id)).rejects.toMatchObject({
+      kind: 'forbidden',
+    });
     await expect(attempts.start(student.id, assignment.id)).rejects.toMatchObject({
       kind: 'forbidden',
     });
@@ -484,14 +564,18 @@ describe('Quyền sở hữu, vòng đời bài làm và công bố kết quả'
     await attempts.submit(student.id, attempt.id);
     await attempts.grade(teacher.id, attempt.id, { score: 75 });
     await classes.leaveClass(student.id, classroom.id);
-    expect((await attempts.result(student.id, attempt.id)).score).toBe(75);
+    await expect(attempts.result(student.id, attempt.id)).rejects.toMatchObject({
+      kind: 'forbidden',
+    });
 
     await db.update(users).set({ banned: true }).where(eq(users.id, student.id));
     await expect(attempts.result(student.id, attempt.id)).rejects.toMatchObject({
-      kind: 'not_found',
+      kind: 'forbidden',
     });
     await db.update(users).set({ banned: false }).where(eq(users.id, student.id));
-    expect((await attempts.result(student.id, attempt.id)).score).toBe(75);
+    await expect(attempts.result(student.id, attempt.id)).rejects.toMatchObject({
+      kind: 'forbidden',
+    });
   });
 
   it('xử lý xung đột giữa lưu và nộp, từ chối chấm khi thu hồi vai trò chủ lớp', async () => {

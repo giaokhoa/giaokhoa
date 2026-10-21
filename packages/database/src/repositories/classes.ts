@@ -8,7 +8,7 @@ import {
 } from '@giaokhoa/shared/classes';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { users } from '../schema/auth.generated.js';
-import { hasSystemCapability, hasContextCapability } from './authorization.js';
+import { hasSystemCapability, hasContextCapability, isAccountSuspended } from './authorization.js';
 import {
   authzContexts,
   authzRoleAssignments,
@@ -66,12 +66,12 @@ function publicClass(row: typeof classes.$inferSelect) {
  */
 async function activeAccount(tx: Transaction, actorId: string) {
   const [actor] = await tx
-    .select({ banned: users.banned })
+    .select({ banned: users.banned, banExpires: users.banExpires })
     .from(users)
     .where(eq(users.id, actorId))
     .for('share')
     .limit(1);
-  return !!actor && !actor.banned;
+  return !!actor && !isAccountSuspended(actor);
 }
 
 /** Người có capability hiệu lực tại lớp có thể quản lý; không bắt buộc là người tạo lớp. */

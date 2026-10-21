@@ -117,6 +117,8 @@ export const examRevisionQuestions = pgTable(
      * Bản chụp JSON đầy đủ của câu hỏi tại lúc chốt đề; nguồn cố định cho các lần hiển thị và làm bài về sau.
      */
     questionSnapshot: jsonb('question_snapshot').notNull(),
+    /** Ngữ liệu cố định đi kèm câu hỏi, không đọc lại nội dung đang được soạn thảo. */
+    stimulusSnapshot: jsonb('stimulus_snapshot'),
   },
   (table) => [
     unique('exam_revision_questions_position_unique').on(table.examRevisionId, table.position),

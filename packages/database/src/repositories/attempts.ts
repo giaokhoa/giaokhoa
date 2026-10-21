@@ -21,7 +21,11 @@ import { classes, classEnrolments } from '../schema/classes.js';
 import { examRevisionQuestions } from '../schema/exams.js';
 import type { Database } from '../types.js';
 import { assertOwner } from './assignments.js';
-import { hasContextCapability, lockAuthorizationMutation } from './authorization.js';
+import {
+  hasContextCapability,
+  lockAuthorizationMutation,
+  isAccountSuspended,
+} from './authorization.js';
 
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 type AttemptRow = typeof attempts.$inferSelect;
@@ -67,8 +71,8 @@ function closed() {
  * Kiểm tra người dùng còn được phép hoạt động trước khi cho thao tác với lượt làm.
  * Từ chối tài khoản bị khóa hoặc không tồn tại; quyền thực hiện do AuthorizationService xét.
  */
-function validAccount(account: { banned: boolean | null } | undefined) {
-  return !!account && !account.banned;
+function validAccount(account: { banned: boolean; banExpires: Date | null } | undefined) {
+  return !!account && !isAccountSuspended(account);
 }
 
 /**
@@ -256,7 +260,7 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
         .limit(1);
       if (!member) throw denied();
       const [account] = await tx
-        .select({ banned: users.banned })
+        .select({ banned: users.banned, banExpires: users.banExpires })
         .from(users)
         .where(eq(users.id, actorId))
         .for('share')
@@ -347,7 +351,7 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
       .limit(1);
     if (!active) throw denied();
     const [account] = await tx
-      .select({ banned: users.banned })
+      .select({ banned: users.banned, banExpires: users.banExpires })
       .from(users)
       .where(eq(users.id, actorId))
       .for('share')
@@ -453,6 +457,7 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
         enrolmentStatus: classEnrolments.status,
         recipientStatus: assignmentRecipients.status,
         banned: users.banned,
+        banExpires: users.banExpires,
       })
       .from(attempts)
       .innerJoin(assignments, eq(assignments.id, attempts.assignmentId))

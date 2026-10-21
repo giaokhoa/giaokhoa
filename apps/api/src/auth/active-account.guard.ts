@@ -1,5 +1,6 @@
 import { users } from '@giaokhoa/database/schema';
 import type { Database } from '@giaokhoa/database/types';
+import { isAccountSuspended } from '@giaokhoa/database/authorization';
 import {
   CanActivate,
   ExecutionContext,
@@ -38,7 +39,7 @@ export class ActiveAccountGuard implements CanActivate {
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
-    if (!account || (account.banned && (!account.banExpires || account.banExpires > new Date())))
+    if (!account || isAccountSuspended(account))
       throw new ForbiddenException('Tài khoản đã bị khóa');
     return true;
   }

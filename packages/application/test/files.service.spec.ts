@@ -28,9 +28,7 @@ function createService() {
     findOwned: vi.fn(),
     findVariant: vi.fn(),
     assignedFileAssignments: vi.fn(async () => [] as string[]),
-    releasedSolutionFileAssignments: vi.fn(
-      async () => [] as Array<{ assignmentId: string; enrolmentStatus: 'active' | 'left' }>,
-    ),
+    releasedSolutionFileAssignments: vi.fn(async () => [] as string[]),
     findSourceOwned: vi.fn(),
     findVariantOwned: vi.fn(),
     discardOrphans: vi.fn(
@@ -49,7 +47,10 @@ function createService() {
     delete: vi.fn(async (_key: string) => undefined),
   };
 
-  const authorization = { authorize: vi.fn(async () => ({ allowed: false })) };
+  const authorization = {
+    assertAuthorized: vi.fn(async () => undefined),
+    authorize: vi.fn(async () => ({ allowed: false })),
+  };
   return {
     service: new FilesService(repository as never, storage as never, authorization as never),
     repository,

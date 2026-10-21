@@ -292,6 +292,7 @@ export class FilesService {
     const source = await this.repository.findSourceOwned(parsedId.data, userId);
     if (!source)
       throw new ClientError('not_found', 'file_source_not_found', 'Nguồn ảnh không tồn tại');
+    await this.assertOwnFileAccess(userId);
 
     const parsed = tikzFileSourceSchema.safeParse(source);
     if (!parsed.success)
@@ -385,7 +386,8 @@ export class FilesService {
     const image = owned ?? (await this.repository.find(parsedId.data));
     if (!image || image.parentFileId !== null)
       throw new ClientError('not_found', 'file_not_found', 'Ảnh không tồn tại');
-    if (!owned) await this.assertAssignedFileAccess(parsedId.data, null, userId);
+    if (owned) await this.assertOwnFileAccess(userId);
+    else await this.assertAssignedFileAccess(parsedId.data, null, userId);
 
     return this.getStoredFile(image.storageKey, image.mimeType, image.byteSize);
   }
@@ -406,10 +408,19 @@ export class FilesService {
     const variant =
       owned ?? (await this.repository.findVariant(parsedImageId.data, parsedImageVariantId.data));
     if (!variant) throw new ClientError('not_found', 'file_not_found', 'Ảnh không tồn tại');
-    if (!owned)
-      await this.assertAssignedFileAccess(parsedImageId.data, parsedImageVariantId.data, userId);
+    if (owned) await this.assertOwnFileAccess(userId);
+    else await this.assertAssignedFileAccess(parsedImageId.data, parsedImageVariantId.data, userId);
 
     return this.getStoredFile(variant.storageKey, variant.mimeType, variant.byteSize);
+  }
+
+  /** Quyền đọc nội dung riêng phải được phép tại ngữ cảnh người tạo, không chỉ biết mã chủ sở hữu. */
+  private assertOwnFileAccess(userId: string) {
+    return this.authorization.assertAuthorized({
+      actorId: userId,
+      capability: 'file:read_own',
+      context: { kind: 'user', resourceKey: userId },
+    });
   }
 
   /** Chỉ xét đúng ngữ cảnh bài giao chứa tệp trong vùng nội dung đề hoặc lời giải đã công bố. */
@@ -432,26 +443,21 @@ export class FilesService {
       });
       if (decision.allowed) return;
     }
-    // Người đã rời lớp chỉ đọc lời giải của lượt đã nộp; thành viên đang
-    // hoạt động vẫn phải có quyền xem kết quả tại thời điểm yêu cầu.
+    // Điều kiện về lần nộp và mốc công bố chỉ xác định vị trí sử dụng hợp lệ.
+    // Không được nâng `no_grant` hay `PREVENT` thành `ALLOW` vì đã rời lớp.
     const released = await this.repository.releasedSolutionFileAssignments(
       fileId,
       variantFileId,
       userId,
       this.now(),
     );
-    for (const { assignmentId, enrolmentStatus } of released) {
+    for (const assignmentId of released) {
       const decision = await this.authorization.authorize({
         actorId: userId,
         capability: 'result:view_own',
         context: { kind: 'assignment', resourceKey: assignmentId },
       });
-      if (
-        decision.allowed ||
-        (enrolmentStatus === 'left' &&
-          (decision.reason === 'no_grant' || decision.reason === 'prevented'))
-      )
-        return;
+      if (decision.allowed) return;
     }
     throw new ClientError('not_found', 'file_not_found', 'Ảnh không tồn tại');
   }

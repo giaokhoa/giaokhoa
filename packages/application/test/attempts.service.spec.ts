@@ -85,42 +85,27 @@ describe('Dịch vụ bài làm (AttemptsService)', () => {
     expect(repository.solutions).not.toHaveBeenCalled();
   });
 
-  it('giữ lịch sử đã nộp cho người đã rời lớp nhưng không bỏ qua PROHIBIT', async () => {
+  it('rời lớp và nộp bài không thể bỏ qua quyết định capability khi đọc lịch sử', async () => {
     const { service, repository, authorization, context } = setup();
     repository.findContext.mockResolvedValue({
       ...context,
       enrolmentStatus: 'left',
       status: 'submitted',
     });
-    repository.getOwn.mockResolvedValue({ id: ATTEMPT });
     repository.result.mockResolvedValue({ attemptId: ATTEMPT });
     repository.solutions.mockResolvedValue({ attemptId: ATTEMPT });
-    await expect(service.getOwn(ACTOR, ATTEMPT)).resolves.toMatchObject({ id: ATTEMPT });
-    await expect(service.result(ACTOR, ATTEMPT)).resolves.toMatchObject({ attemptId: ATTEMPT });
-    await expect(service.solutions(ACTOR, ATTEMPT)).resolves.toMatchObject({ attemptId: ATTEMPT });
-    expect(authorization.assertAuthorized).not.toHaveBeenCalled();
-    expect(authorization.authorize).toHaveBeenCalledWith({
+    authorization.assertAuthorized.mockRejectedValue(forbidden);
+    await expect(service.getOwn(ACTOR, ATTEMPT)).rejects.toMatchObject({ kind: 'forbidden' });
+    await expect(service.result(ACTOR, ATTEMPT)).rejects.toMatchObject({ kind: 'forbidden' });
+    await expect(service.solutions(ACTOR, ATTEMPT)).rejects.toMatchObject({ kind: 'forbidden' });
+    expect(repository.getOwn).not.toHaveBeenCalled();
+    expect(repository.result).not.toHaveBeenCalled();
+    expect(repository.solutions).not.toHaveBeenCalled();
+    expect(authorization.assertAuthorized).toHaveBeenCalledWith({
       actorId: ACTOR,
       capability: 'result:view_own',
       context: { kind: 'assignment', resourceKey: ASSIGNMENT },
     });
-    expect(repository.result).toHaveBeenCalledWith(ATTEMPT, ACTOR, NOW);
-    authorization.authorize.mockResolvedValueOnce({ allowed: false, reason: 'prohibited' });
-    await expect(service.result(ACTOR, ATTEMPT)).rejects.toMatchObject({ kind: 'forbidden' });
-    expect(repository.solutions).toHaveBeenCalledWith(ATTEMPT, ACTOR, NOW);
-
-    repository.findContext.mockResolvedValue({ ...context, enrolmentStatus: 'left' });
-    authorization.assertAuthorized.mockRejectedValue(forbidden);
-    await expect(service.getOwn(ACTOR, ATTEMPT)).rejects.toMatchObject({ kind: 'forbidden' });
-    expect(repository.getOwn).toHaveBeenCalledTimes(1);
-
-    repository.findContext.mockResolvedValue({
-      ...context,
-      enrolmentStatus: 'suspended',
-      status: 'graded',
-    });
-    await expect(service.result(ACTOR, ATTEMPT)).rejects.toMatchObject({ kind: 'forbidden' });
-    expect(repository.result).toHaveBeenCalledTimes(1);
   });
 
   it('từ chối câu trả lời sai trước khi đọc lượt làm và chỉ lưu câu trả lời đúng kiểu', async () => {

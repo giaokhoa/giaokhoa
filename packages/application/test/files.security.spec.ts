@@ -29,9 +29,7 @@ function createService() {
       async (_fileId: string, _variantFileId: string | null, _userId: string, _now: Date) =>
         [] as string[],
     ),
-    releasedSolutionFileAssignments: vi.fn(
-      async () => [] as Array<{ assignmentId: string; enrolmentStatus: 'active' | 'left' }>,
-    ),
+    releasedSolutionFileAssignments: vi.fn(async () => [] as string[]),
     discardOrphans: vi.fn(async () => [] as string[]),
     queueExpiredOrphans: vi.fn(async () => ({ processed: 0, storageKeys: [] as string[] })),
     listPendingDeletions: vi.fn(async () => [] as string[]),
@@ -43,6 +41,7 @@ function createService() {
     delete: vi.fn(async (_key: string) => undefined),
   };
   const authorization = {
+    assertAuthorized: vi.fn(async () => undefined),
     authorize: vi.fn(async () => ({ allowed: false, reason: 'no_grant' })),
   };
   return {
@@ -160,6 +159,28 @@ describe('Kiểm thử ngăn tái xuất hiện lỗi bảo mật của dịch v
     ).rejects.toMatchObject({ kind: 'invalid' });
     expect(storage.put).not.toHaveBeenCalled();
     expect(repository.create).not.toHaveBeenCalled();
+  });
+
+  it('người tạo tệp cũng không được đọc khi capability tại ngữ cảnh người dùng từ chối', async () => {
+    const { service, repository, authorization, storage } = createService();
+    repository.findOwned.mockResolvedValue({
+      id: FILE_ID,
+      parentFileId: null,
+      storageKey: 'files/owner.png',
+      mimeType: 'image/png',
+      byteSize: PNG_1X1.length,
+    });
+    const refused = { kind: 'forbidden', code: 'authorization_denied' };
+    authorization.assertAuthorized.mockRejectedValue(refused);
+    await expect(service.getFile(FILE_ID, OWNER_ID)).rejects.toMatchObject(refused);
+    expect(authorization.assertAuthorized).toHaveBeenCalledWith({
+      actorId: OWNER_ID,
+      capability: 'file:read_own',
+      context: { kind: 'user', resourceKey: OWNER_ID },
+    });
+    expect(storage.get).not.toHaveBeenCalled();
+    repository.findSourceOwned.mockResolvedValue({ kind: 'tikz', source: 'private' });
+    await expect(service.getSource(FILE_ID, OWNER_ID)).rejects.toMatchObject(refused);
   });
 
   it('không tiết lộ mã nguồn TikZ cho học sinh chỉ được xem tệp đã kết xuất', async () => {
@@ -305,9 +326,7 @@ describe('Kiểm thử ngăn tái xuất hiện lỗi bảo mật của dịch v
       mimeType: 'image/png',
       byteSize: PNG_1X1.length,
     });
-    repository.releasedSolutionFileAssignments.mockResolvedValue([
-      { assignmentId: 'class-revoked', enrolmentStatus: 'active' },
-    ]);
+    repository.releasedSolutionFileAssignments.mockResolvedValue(['class-revoked']);
     await expect(service.getFile(FILE_ID, STUDENT_ID)).rejects.toMatchObject({
       code: 'file_not_found',
     });
@@ -333,22 +352,25 @@ describe('Kiểm thử ngăn tái xuất hiện lỗi bảo mật của dịch v
       mimeType: 'image/png',
       byteSize: PNG_1X1.length,
     });
-    repository.releasedSolutionFileAssignments.mockResolvedValue([
-      { assignmentId: 'activity-result', enrolmentStatus: 'left' },
-    ]);
+    repository.releasedSolutionFileAssignments.mockResolvedValue(['activity-result']);
     authorization.authorize.mockResolvedValueOnce({ allowed: false, reason: 'prohibited' });
     await expect(service.getFile(FILE_ID, STUDENT_ID)).rejects.toMatchObject({
       code: 'file_not_found',
     });
     expect(storage.get).not.toHaveBeenCalled();
     authorization.authorize.mockResolvedValueOnce({ allowed: false, reason: 'no_grant' });
-    await expect(service.getFile(FILE_ID, STUDENT_ID)).resolves.toMatchObject({
-      mimeType: 'image/png',
+    await expect(service.getFile(FILE_ID, STUDENT_ID)).rejects.toMatchObject({
+      code: 'file_not_found',
     });
+    authorization.authorize.mockResolvedValueOnce({ allowed: false, reason: 'prevented' });
+    await expect(service.getFile(FILE_ID, STUDENT_ID)).rejects.toMatchObject({
+      code: 'file_not_found',
+    });
+    expect(storage.get).not.toHaveBeenCalled();
   });
 
   it('cho xem ảnh lời giải đã công bố mà không cho xem tệp khác trong lớp', async () => {
-    const { service, repository, storage } = createService();
+    const { service, repository, storage, authorization } = createService();
     repository.find.mockResolvedValue({
       id: FILE_ID,
       parentFileId: null,
@@ -356,9 +378,8 @@ describe('Kiểm thử ngăn tái xuất hiện lỗi bảo mật của dịch v
       mimeType: 'image/png',
       byteSize: PNG_1X1.length,
     });
-    repository.releasedSolutionFileAssignments.mockResolvedValueOnce([
-      { assignmentId: 'lop-lich-su', enrolmentStatus: 'left' },
-    ]);
+    repository.releasedSolutionFileAssignments.mockResolvedValueOnce(['lop-lich-su']);
+    authorization.authorize.mockResolvedValueOnce({ allowed: true, reason: 'granted' });
     await expect(service.getFile(FILE_ID, STUDENT_ID)).resolves.toMatchObject({
       mimeType: 'image/png',
     });

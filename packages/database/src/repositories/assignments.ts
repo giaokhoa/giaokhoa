@@ -8,15 +8,15 @@ import {
   type AssignmentPatch,
   type StudentAssignment,
 } from '@giaokhoa/shared/assignments';
-import { questionSchema, stimulusSchema } from '@giaokhoa/shared/questions';
+import { questionSchema } from '@giaokhoa/shared/questions';
 import { and, asc, eq, inArray, lte } from 'drizzle-orm';
 import { users } from '../schema/auth.generated.js';
 import { assignments, assignmentRecipients } from '../schema/assignments.js';
 import { authzContexts } from '../schema/authorization.js';
-import { hasContextCapability } from './authorization.js';
+import { hasContextCapability, isAccountSuspended } from './authorization.js';
 import { classes, classEnrolments } from '../schema/classes.js';
 import { exams, examRevisions, examRevisionQuestions } from '../schema/exams.js';
-import { stimuli } from '../schema/questions.js';
+import { readPinnedStimulus } from './pinned-stimulus.js';
 import type { Database } from '../types.js';
 
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -65,14 +65,14 @@ export async function assertOwner(
 ) {
   if (!classroom || classroom.status !== 'active' || !classroom.authzContextId) throw forbidden();
   const [account] = await tx
-    .select({ banned: users.banned })
+    .select({ banned: users.banned, banExpires: users.banExpires })
     .from(users)
     .where(eq(users.id, actorId))
     .for('share')
     .limit(1);
   if (
     !account ||
-    account.banned ||
+    isAccountSuspended(account) ||
     !(await hasContextCapability(tx, actorId, capability, {
       kind: assignmentId ? 'assignment' : 'class',
       resourceKey: assignmentId ?? classroom.id,
@@ -394,26 +394,19 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
       .select({
         position: examRevisionQuestions.position,
         questionSnapshot: examRevisionQuestions.questionSnapshot,
+        stimulusSnapshot: examRevisionQuestions.stimulusSnapshot,
       })
       .from(examRevisionQuestions)
       .where(eq(examRevisionQuestions.examRevisionId, match.assignment.examRevisionId))
       .orderBy(asc(examRevisionQuestions.position));
-    const entries = snapshots.map(({ position, questionSnapshot }) => {
+    const entries = snapshots.map(({ position, questionSnapshot, stimulusSnapshot }) => {
       const { id, version, type, content, stimulusId } = questionSchema.parse(questionSnapshot);
-      return { position, question: { id, version, type, content, stimulusId } };
+      return {
+        position,
+        question: { id, version, type, content, stimulusId },
+        stimulus: stimulusId ? readPinnedStimulus(stimulusSnapshot, stimulusId) : null,
+      };
     });
-    const stimulusIds = [
-      ...new Set(
-        entries.flatMap(({ question }) => (question.stimulusId ? [question.stimulusId] : [])),
-      ),
-    ];
-    const stimulusRows = stimulusIds.length
-      ? await this.db
-          .select({ id: stimuli.id, content: stimuli.content })
-          .from(stimuli)
-          .where(inArray(stimuli.id, stimulusIds))
-      : [];
-    const stimuliById = new Map(stimulusRows.map((row) => [row.id, stimulusSchema.parse(row)]));
     return studentAssignmentSchema.parse({
       assignmentId: match.assignment.id,
       examRevisionId: match.assignment.examRevisionId,
@@ -423,11 +416,11 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
       maxAttempts: match.assignment.maxAttempts,
       // Chỉ thêm ngữ liệu vào dữ liệu trả cho học sinh sau khi đã kiểm tra quyền;
       // không cho phép đọc ngữ liệu tùy ý chỉ bằng mã định danh.
-      questions: entries.map(({ position, question }) => ({
+      questions: entries.map(({ position, question, stimulus }) => ({
         position,
         question: {
           ...question,
-          stimulus: question.stimulusId ? (stimuliById.get(question.stimulusId) ?? null) : null,
+          stimulus,
         },
       })),
     });

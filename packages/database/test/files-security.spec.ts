@@ -322,6 +322,7 @@ describe('Quyền truy cập tệp của người nhận', () => {
       examRevisionId: revision.id,
       questionVersionId: version.id,
       position: 1,
+      stimulusSnapshot: { id: stimulus.id, content: richImage },
       questionSnapshot: {
         id: questionRow.id,
         version: 1,
@@ -377,6 +378,19 @@ describe('Quyền truy cập tệp của người nhận', () => {
       fileArea: 'content',
       itemId: stimulus.id,
     });
+    // Bản ngữ liệu đang soạn thảo bị thay đổi trực tiếp, nhưng bản đề đã chốt
+    // vẫn cho phép đúng ảnh cắt ban đầu chứ không lấy file từ nội dung mới nhất.
+    await db
+      .update(stimuli)
+      .set({
+        content: {
+          type: 'doc',
+          content: [
+            { type: 'paragraph', content: [{ type: 'text', text: 'Đoạn mới không có ảnh' }] },
+          ],
+        },
+      })
+      .where(eq(stimuli.id, stimulus.id));
     expect(
       await repository.assignedFileAssignments(primary.id, variant.id, student.id, now),
     ).toEqual([assignment.id]);
@@ -479,12 +493,12 @@ describe('Quyền truy cập tệp của người nhận', () => {
       .where(eq(assignments.id, assignment.id));
     expect(
       await repository.releasedSolutionFileAssignments(answerFile.id, null, student.id, now),
-    ).toEqual([{ assignmentId: assignment.id, enrolmentStatus: 'active' }]);
+    ).toEqual([assignment.id]);
     expect(
       await repository.releasedSolutionFileAssignments(primary.id, null, student.id, now),
     ).toEqual([]);
 
-    // Người đã nộp bài vẫn được xem lời giải khi rời lớp hoặc bị thu hồi quyền nhận bài.
+    // Kho dữ liệu chỉ trả hoạt động có lời giải và bài đã nộp; dịch vụ phải từ chối nếu quyền không còn hiệu lực.
     await db
       .update(classEnrolments)
       .set({ status: 'left' })
@@ -493,13 +507,13 @@ describe('Quyền truy cập tệp của người nhận', () => {
       );
     expect(
       await repository.releasedSolutionFileAssignments(answerFile.id, null, student.id, now),
-    ).toEqual([{ assignmentId: assignment.id, enrolmentStatus: 'left' }]);
+    ).toEqual([assignment.id]);
     await expect(
       db.update(users).set({ banned: null }).where(eq(users.id, student.id)),
     ).rejects.toThrow();
     expect(
       await repository.releasedSolutionFileAssignments(answerFile.id, null, student.id, now),
-    ).toEqual([{ assignmentId: assignment.id, enrolmentStatus: 'left' }]);
+    ).toEqual([assignment.id]);
     await db.update(users).set({ banned: true }).where(eq(users.id, student.id));
     expect(
       await repository.releasedSolutionFileAssignments(answerFile.id, null, student.id, now),

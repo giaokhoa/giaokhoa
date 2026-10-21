@@ -75,7 +75,7 @@ export function createAuth(db: Database, env: AuthEnv, generateId: false | 'uuid
               | (typeof found & { banned?: boolean; banExpires?: Date | null })
               | null;
             if (!user?.banned) return;
-            if (user.banExpires && new Date(user.banExpires).getTime() < Date.now()) {
+            if (user.banExpires && new Date(user.banExpires).getTime() <= Date.now()) {
               await ctx.context.internalAdapter.updateUser(session.userId, {
                 banned: false,
                 banReason: null,

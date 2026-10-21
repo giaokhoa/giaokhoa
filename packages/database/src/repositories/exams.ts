@@ -7,11 +7,11 @@ import {
   type ExamRevisionCreate,
   type ExamRevision,
 } from '@giaokhoa/shared/exams';
-import { questionSchema } from '@giaokhoa/shared/questions';
+import { questionSchema, stimulusSchema } from '@giaokhoa/shared/questions';
 import { and, desc, eq } from 'drizzle-orm';
 import { hasSystemCapability } from './authorization.js';
 import { exams, examRevisions, examRevisionQuestions } from '../schema/exams.js';
-import { question, questionBankEntries, questionVersions } from '../schema/questions.js';
+import { question, questionBankEntries, questionVersions, stimuli } from '../schema/questions.js';
 import type { Database } from '../types.js';
 
 /**
@@ -122,7 +122,11 @@ export class PostgresExamsRepository implements ExamsRepository {
       const byId = [...input.questions].sort((a, b) => a.questionId.localeCompare(b.questionId));
       const snapshots = new Map<
         string,
-        { versionId: string; question: ReturnType<typeof questionSchema.parse> }
+        {
+          versionId: string;
+          question: ReturnType<typeof questionSchema.parse>;
+          stimulusSnapshot: unknown;
+        }
       >();
       for (const ref of byId) {
         const [owned] = await tx
@@ -164,7 +168,22 @@ export class PostgresExamsRepository implements ExamsRepository {
           version: ref.version,
           status: 'ready',
         });
-        snapshots.set(ref.questionId, { versionId: selected.versionRow.id, question: snapshot });
+        // Cố định ngữ liệu ngay khi chốt bản đề, khóa bản ghi để không bị sửa xen kẽ.
+        const [stimulus] = selected.content.stimulusId
+          ? await tx
+              .select({ id: stimuli.id, content: stimuli.content })
+              .from(stimuli)
+              .where(eq(stimuli.id, selected.content.stimulusId))
+              .for('share')
+              .limit(1)
+          : [undefined];
+        if (selected.content.stimulusId && !stimulus) throw invalidQuestion();
+        const stimulusSnapshot = stimulus ? stimulusSchema.parse(stimulus) : null;
+        snapshots.set(ref.questionId, {
+          versionId: selected.versionRow.id,
+          question: snapshot,
+          stimulusSnapshot,
+        });
       }
 
       const [latest] = await tx
@@ -185,6 +204,7 @@ export class PostgresExamsRepository implements ExamsRepository {
           questionVersionId: pinned.versionId,
           position: index + 1,
           questionSnapshot: pinned.question,
+          stimulusSnapshot: pinned.stimulusSnapshot,
         };
       });
       await tx.insert(examRevisionQuestions).values(questions);
@@ -196,7 +216,7 @@ export class PostgresExamsRepository implements ExamsRepository {
         createdAt: created.createdAt,
         questions: questions.map(({ position, questionSnapshot }) => ({
           position,
-          question: questionSnapshot,
+          question: questionSchema.parse(questionSnapshot),
         })),
       });
     });

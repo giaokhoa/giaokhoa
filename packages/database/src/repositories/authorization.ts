@@ -38,10 +38,15 @@ function contextRecord(row: typeof authzContexts.$inferSelect): AuthorizationCon
   };
 }
 
-/**
- * Tạo lỗi dữ liệu vai trò không hợp lệ tại phạm vi phân quyền đang xét.
- * Dùng chung khi vai trò không tồn tại, không phù hợp loại phạm vi hoặc không được phép cấp trực tiếp.
- */
+/** Khóa hết hạn không còn hiệu lực ngay cả với phiên đã tạo trước đó. */
+export function isAccountSuspended(
+  account: { banned: boolean; banExpires: Date | null },
+  now = new Date(),
+) {
+  return account.banned && (!account.banExpires || account.banExpires > now);
+}
+
+/** Vai trò không tồn tại, không phù hợp ngữ cảnh hoặc không được phép cấp trực tiếp. */
 function invalidRole() {
   return new ClientError(
     'invalid',
@@ -92,11 +97,11 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
   async findPermissions(actorId: string, capability: string, contextIds: string[]) {
     if (!contextIds.length) return [];
     const [actor] = await this.db
-      .select({ banned: users.banned })
+      .select({ banned: users.banned, banExpires: users.banExpires })
       .from(users)
       .where(eq(users.id, actorId))
       .limit(1);
-    if (!actor || actor.banned) return [];
+    if (!actor || isAccountSuspended(actor)) return [];
 
     const active = await this.db
       .select({ roleId: authzRoles.id, contextId: authzRoleAssignments.contextId })
@@ -349,11 +354,11 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
   ): Promise<boolean> {
     if (!contextIds.length) return false;
     const [actor] = await this.db
-      .select({ banned: users.banned })
+      .select({ banned: users.banned, banExpires: users.banExpires })
       .from(users)
       .where(eq(users.id, actorId))
       .limit(1);
-    if (!actor || actor.banned) return false;
+    if (!actor || isAccountSuspended(actor)) return false;
     const [role] = await this.db
       .select({ id: authzRoles.id })
       .from(authzRoles)

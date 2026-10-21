@@ -240,6 +240,20 @@ describe('Phân quyền truy cập chương trình học qua HTTP', () => {
     await db
       .insert(fileSources)
       .values({ fileId: image.id, kind: 'tikz', source: 'du lieu rieng' });
+    // Trường hợp thực tạo tệp luôn có context người dùng; fixture SQL phải làm tương tự.
+    const [root] = await db
+      .select({ id: authzContexts.id })
+      .from(authzContexts)
+      .where(eq(authzContexts.kind, 'system'))
+      .limit(1);
+    await db
+      .insert(authzContexts)
+      .values({
+        kind: 'user',
+        resourceKey: user.userId,
+        parentId: root.id,
+      })
+      .onConflictDoNothing();
 
     await request(app.getHttpServer())
       .get(`/files/${image.id}/source`)
@@ -260,6 +274,30 @@ describe('Phân quyền truy cập chương trình học qua HTTP', () => {
       .send({ files: [] })
       .expect(403);
     await request(app.getHttpServer()).get('/subjects').set('cookie', user.cookie).expect(403);
+  });
+
+  it('hết hạn khóa có hiệu lực nhất quán ở mọi API với phiên cũ', async () => {
+    const account = await createSession(`ban-expired-${randomUUID()}@example.com`);
+    await grantSystemRole(db, account.userId, 'admin');
+    await request(app.getHttpServer()).get('/subjects').set('cookie', account.cookie).expect(200);
+
+    await db
+      .update(users)
+      .set({ banned: true, banExpires: new Date(Date.now() + 60_000) })
+      .where(eq(users.id, account.userId));
+    await request(app.getHttpServer()).get('/subjects').set('cookie', account.cookie).expect(403);
+
+    await db
+      .update(users)
+      .set({ banned: true, banExpires: new Date(Date.now() - 60_000) })
+      .where(eq(users.id, account.userId));
+    await request(app.getHttpServer()).get('/subjects').set('cookie', account.cookie).expect(200);
+
+    await db
+      .update(users)
+      .set({ banned: true, banExpires: null })
+      .where(eq(users.id, account.userId));
+    await request(app.getHttpServer()).get('/subjects').set('cookie', account.cookie).expect(403);
   });
 
   it('chặn tạo phiên khi tài khoản bị khóa, không phụ thuộc vào plugin quản trị', async () => {
