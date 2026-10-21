@@ -29,7 +29,9 @@ function createService() {
       async (_fileId: string, _variantFileId: string | null, _userId: string, _now: Date) =>
         [] as string[],
     ),
-    hasReleasedSolutionFileAccess: vi.fn(async () => false),
+    releasedSolutionFileClasses: vi.fn(
+      async () => [] as Array<{ classId: string; enrolmentStatus: 'active' | 'left' }>,
+    ),
     discardOrphans: vi.fn(async () => [] as string[]),
     queueExpiredOrphans: vi.fn(async () => ({ processed: 0, storageKeys: [] as string[] })),
     listPendingDeletions: vi.fn(async () => [] as string[]),
@@ -51,8 +53,8 @@ function createService() {
   };
 }
 
-describe('FilesService security regressions', () => {
-  it('strips active content and remote references before storing a TikZ SVG', async () => {
+describe('Kiểm thử ngăn tái xuất hiện lỗi bảo mật của dịch vụ tệp (FilesService)', () => {
+  it('loại bỏ nội dung thực thi và tham chiếu từ xa trước khi lưu SVG của TikZ', async () => {
     const { service, repository, storage } = createService();
     const svg = Buffer.from(
       [
@@ -111,7 +113,7 @@ describe('FilesService security regressions', () => {
     expect(storage.put).not.toHaveBeenCalled();
   });
 
-  it('preserves local CSS fragment references in TikZ SVG', async () => {
+  it('giữ các tham chiếu CSS nội bộ trong SVG của TikZ', async () => {
     const { service, storage } = createService();
     const svg = Buffer.from(
       '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">' +
@@ -128,7 +130,7 @@ describe('FilesService security regressions', () => {
     );
   });
 
-  it('rejects a disguised SVG without TikZ source before writing any object', async () => {
+  it('từ chối SVG giả dạng thiếu nguồn TikZ trước khi ghi dữ liệu', async () => {
     const { service, repository, storage } = createService();
     const svg = Buffer.from(
       '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16"/></svg>',
@@ -144,7 +146,7 @@ describe('FilesService security regressions', () => {
     expect(repository.create).not.toHaveBeenCalled();
   });
 
-  it('rejects an oversized SVG canvas before storing any bytes', async () => {
+  it('từ chối vùng vẽ SVG quá lớn trước khi lưu dữ liệu', async () => {
     const { service, repository, storage } = createService();
     const svg = Buffer.from(
       '<svg xmlns="http://www.w3.org/2000/svg" width="12000" height="12000"><rect width="12000" height="12000"/></svg>',
@@ -160,7 +162,7 @@ describe('FilesService security regressions', () => {
     expect(repository.create).not.toHaveBeenCalled();
   });
 
-  it('does not expose TikZ source to a student allowed to view the rendered file', async () => {
+  it('không tiết lộ mã nguồn TikZ cho học sinh chỉ được xem tệp đã kết xuất', async () => {
     const { service, repository, storage, authorization } = createService();
     repository.find.mockResolvedValue({
       id: FILE_ID,
@@ -185,7 +187,7 @@ describe('FilesService security regressions', () => {
     expect(storage.get).toHaveBeenCalledTimes(1);
   });
 
-  it('checks assignment capability before reading a non-owner blob', async () => {
+  it('kiểm tra quyền đối với bài giao trước khi đọc dữ liệu tệp của người khác', async () => {
     const { service, repository, storage, authorization } = createService();
     repository.find.mockResolvedValue({
       id: FILE_ID,
@@ -213,7 +215,7 @@ describe('FilesService security regressions', () => {
     expect(storage.get).not.toHaveBeenCalled();
   });
 
-  it('never reveals the original when a student is assigned only its cropped variant', async () => {
+  it('không lộ ảnh gốc khi học sinh chỉ được giao biến thể ảnh đã cắt', async () => {
     const { service, repository, storage, authorization } = createService();
     repository.find.mockResolvedValue({
       id: FILE_ID,
@@ -257,7 +259,35 @@ describe('FilesService security regressions', () => {
     expect(storage.get).toHaveBeenCalledWith('files/cropped-variant.png');
   });
 
-  it('allows a released solution image without granting class access to other files', async () => {
+  it('không cho tải ảnh lời giải khi vai trò xem kết quả trong lớp đã bị thu hồi', async () => {
+    const { service, repository, authorization, storage } = createService();
+    repository.find.mockResolvedValue({
+      id: FILE_ID,
+      parentFileId: null,
+      storageKey: 'files/solution.png',
+      mimeType: 'image/png',
+      byteSize: PNG_1X1.length,
+    });
+    repository.releasedSolutionFileClasses.mockResolvedValue([
+      { classId: 'class-revoked', enrolmentStatus: 'active' },
+    ]);
+    await expect(service.getFile(FILE_ID, STUDENT_ID)).rejects.toMatchObject({
+      code: 'file_not_found',
+    });
+    expect(authorization.authorize).toHaveBeenCalledWith({
+      actorId: STUDENT_ID,
+      capability: 'result:view_own',
+      context: { kind: 'class', resourceKey: 'class-revoked' },
+    });
+    expect(storage.get).not.toHaveBeenCalled();
+
+    authorization.authorize.mockResolvedValueOnce({ allowed: true });
+    await expect(service.getFile(FILE_ID, STUDENT_ID)).resolves.toMatchObject({
+      mimeType: 'image/png',
+    });
+  });
+
+  it('cho xem ảnh lời giải đã công bố mà không cho xem tệp khác trong lớp', async () => {
     const { service, repository, storage } = createService();
     repository.find.mockResolvedValue({
       id: FILE_ID,
@@ -266,11 +296,13 @@ describe('FilesService security regressions', () => {
       mimeType: 'image/png',
       byteSize: PNG_1X1.length,
     });
-    repository.hasReleasedSolutionFileAccess.mockResolvedValueOnce(true);
+    repository.releasedSolutionFileClasses.mockResolvedValueOnce([
+      { classId: 'lop-lich-su', enrolmentStatus: 'left' },
+    ]);
     await expect(service.getFile(FILE_ID, STUDENT_ID)).resolves.toMatchObject({
       mimeType: 'image/png',
     });
-    expect(repository.hasReleasedSolutionFileAccess).toHaveBeenCalledWith(
+    expect(repository.releasedSolutionFileClasses).toHaveBeenCalledWith(
       FILE_ID,
       null,
       STUDENT_ID,
@@ -309,7 +341,7 @@ describe('FilesService security regressions', () => {
     },
   );
 
-  it('does not delete a file when the repository finds it attached concurrently', async () => {
+  it('không xóa tệp khi kho dữ liệu phát hiện tham chiếu được thêm đồng thời', async () => {
     const { service, repository, storage } = createService();
     repository.discardOrphans.mockResolvedValue([]);
 
@@ -322,7 +354,7 @@ describe('FilesService security regressions', () => {
     expect(storage.delete).not.toHaveBeenCalled();
   });
 
-  it('keeps failed object deletions queued for the next GC run', async () => {
+  it('giữ đối tượng xóa thất bại trong hàng đợi cho lượt thu gom tiếp theo', async () => {
     const { service, repository, storage } = createService();
     const storageKey = 'files/sha256/blob';
     const cutoff = new Date('2026-01-01T00:00:00Z');

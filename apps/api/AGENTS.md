@@ -1,17 +1,24 @@
 # Quy ước bắt buộc cho `apps/api`
 
-Mọi thay đổi tại đây phải theo kiến trúc và API chính thức của NestJS đúng phiên bản đang cài. Trước khi đổi cách dùng framework, đọc lại tài liệu NestJS tương ứng; không tự tạo tầng hoặc cơ chế thay thế khi Nest đã có sẵn.
+Mọi thay đổi tại đây phải tuân theo cách tổ chức và giao diện lập trình chính thức của NestJS đúng phiên bản đang cài. Không tự tạo cơ chế thay thế khi NestJS đã hỗ trợ.
 
-## Các tầng NestJS
+## Các tầng xử lý
 
-- **Module:** Mỗi tính năng được tổ chức bằng `@Module()`, khai báo đúng `imports`, `controllers`, `providers` và `exports` khi cần. `AppModule` chỉ kết hợp các module và provider toàn ứng dụng.
-- **Controller:** Dùng `@Controller()` và decorator HTTP của Nest để tiếp nhận request, khai báo status/headers, nhận tham số và ủy quyền nghiệp vụ cho provider. Không đặt use case nhiều bước, truy vấn database hoặc logic persistence trong controller.
-- **Provider và DI:** Đăng ký dependency trong module và inject qua Nest container. Provider phụ thuộc Nest dùng `@Injectable()` khi phù hợp; application service độc lập Nest được tạo bằng `useFactory` chính thức. Không tự `new` service/repository trong controller.
-- **Persistence:** Dùng `@nestjs/drizzle` tại composition root; repository adapter trong `@giaokhoa/database` thực hiện truy vấn. Controller và application service không import bảng Drizzle.
-- **Pipe và Zod:** Giữ Zod schema chuẩn từ `@giaokhoa/shared/http/*`. Dùng `StandardSchemaValidationPipe` của NestJS 12 và gắn schema vào `@Body({ schema })`, `@Param(..., { schema })` hoặc `@Query({ schema })`. Không tự `parse`/`safeParse` request trong controller khi pipe xử lý được. Validation nghiệp vụ bên trong application service vẫn được phép.
-- **Configuration:** Dùng `ConfigModule`/`ConfigService` và `validationSchema` với Zod theo Standard Schema như tài liệu NestJS 12; không thêm Joi, `class-validator` hoặc custom validation pipe khi không cần.
-- **Guard và quyền truy cập:** Dùng guard/decorator của Nest hoặc adapter Better Auth tương thích để xác thực và phân quyền. Kiểm tra sở hữu và quy tắc domain thuộc application service.
-- **Exception filter:** Ánh xạ `ClientError` thành lỗi HTTP bằng `ClientErrorFilter`. Không lặp lại phần xử lý lỗi chung tại từng controller.
-- **Interceptor và response:** Dùng interceptor của Nest cho file upload hoặc xử lý chéo khi cần; chỉ dùng `@Res()` trực tiếp cho binary/streaming hoặc khi cần kiểm soát response gốc. Giữ HTTP descriptor và response schema chung làm hợp đồng transport.
+- **Mô-đun (module):** Mỗi tính năng tổ chức bằng `@Module()`, khai báo đúng `imports`, `controllers`, `providers`, `exports` khi cần. `AppModule` chỉ kết hợp các mô-đun và thành phần dùng chung.
+- **Bộ điều khiển (controller):** Dùng `@Controller()` và các bộ chú giải HTTP của NestJS để nhận yêu cầu, tham số, trạng thái và phần đầu phản hồi, sau đó chuyển cho dịch vụ nghiệp vụ. Không đặt quy trình nghiệp vụ nhiều bước hoặc truy vấn cơ sở dữ liệu trong bộ điều khiển.
+- **Thành phần được cung cấp (provider) và tiêm phụ thuộc (dependency injection):** Khai báo trong mô-đun, nhận phụ thuộc từ vùng chứa của NestJS. Dùng `@Injectable()` khi phù hợp; khởi tạo dịch vụ không phụ thuộc NestJS qua `useFactory`. Không tự tạo dịch vụ hoặc kho dữ liệu trong bộ điều khiển.
+- **Tầng lưu trữ:** Kết nối các thành phần ở nơi khởi tạo ứng dụng (composition root) qua `@nestjs/drizzle`. Các bộ chuyển đổi kho dữ liệu thuộc `@giaokhoa/database`; bộ điều khiển và dịch vụ nghiệp vụ không truy vấn trực tiếp bảng Drizzle.
+- **Xác thực yêu cầu:** Lấy lược đồ Zod chuẩn từ `@giaokhoa/shared/http/*`. Dùng `StandardSchemaValidationPipe` của NestJS 12 với `@Body({ schema })`, `@Param(..., { schema })` hoặc `@Query({ schema })`; không gọi `parse` hoặc `safeParse` lặp lại trong bộ điều khiển. Dịch vụ nghiệp vụ vẫn phải kiểm tra các điều kiện nghiệp vụ.
+- **Cấu hình:** Dùng `ConfigModule`, `ConfigService` và xác thực cấu hình bằng lược đồ Zod theo cơ chế chuẩn. Không thêm thư viện xác thực hoặc đường ống tự viết chỉ để thay tính năng đã có.
+- **Xác thực người dùng và phân quyền:** Dùng cơ chế bảo vệ (guard), bộ chú giải của NestJS hoặc bộ chuyển đổi Better Auth tương thích. Kiểm tra quyền sở hữu và quyết định nghiệp vụ nằm ở `@giaokhoa/application`.
+- **Xử lý lỗi:** `ClientErrorFilter` chuyển `ClientError` sang lỗi HTTP. Không viết lại cách xử lý lỗi chung ở từng bộ điều khiển.
+- **Can thiệp phản hồi (interceptor):** Sử dụng cơ chế NestJS cho việc tải tệp hoặc xử lý chung khi cần. Chỉ dùng `@Res()` trực tiếp cho dữ liệu nhị phân, luồng dữ liệu hoặc trường hợp cần kiểm soát phản hồi gốc. Giữ hợp đồng HTTP và lược đồ phản hồi thống nhất với `@giaokhoa/shared`.
 
-Tài liệu tham chiếu chính thức: [Modules](https://docs.nestjs.com/modules), [Controllers](https://docs.nestjs.com/controllers), [Providers](https://docs.nestjs.com/providers), [Pipes](https://docs.nestjs.com/pipes), [Guards](https://docs.nestjs.com/guards), [Exception filters](https://docs.nestjs.com/exception-filters), [Interceptors](https://docs.nestjs.com/interceptors), [Configuration](https://docs.nestjs.com/techniques/configuration), [Drizzle](https://docs.nestjs.com/data/drizzle).
+## Phân tầng kiểm thử
+
+- Kiểm thử kho dữ liệu thuần, ràng buộc PostgreSQL và bản di trú (migration) đặt tại `packages/database/test` và chỉ dùng bộ chuyển đổi, lược đồ cùng dữ liệu lưu trữ cần thiết.
+- Kiểm thử luồng đi qua dịch vụ nghiệp vụ và kho dữ liệu thật đặt tại `apps/api/test/integration`, không chuyển ngược vào gói cơ sở dữ liệu.
+- Kiểm thử đầu cuối qua HTTP đặt tại `apps/api/test/e2e`; kiểm thử dịch vụ độc lập với cơ sở dữ liệu đặt tại `packages/application/test`.
+- Mô tả nhóm và ca kiểm thử phải viết bằng tiếng Việt theo quy tắc tại `AGENTS.md` gốc. Sửa hành vi nào phải sửa chú thích và mô tả kiểm thử liên quan ngay trong cùng thay đổi.
+
+Tài liệu chính thức: [Mô-đun](https://docs.nestjs.com/modules), [Bộ điều khiển](https://docs.nestjs.com/controllers), [Thành phần được cung cấp](https://docs.nestjs.com/providers), [Đường ống](https://docs.nestjs.com/pipes), [Bảo vệ](https://docs.nestjs.com/guards), [Bộ lọc lỗi](https://docs.nestjs.com/exception-filters), [Can thiệp phản hồi](https://docs.nestjs.com/interceptors), [Cấu hình](https://docs.nestjs.com/techniques/configuration), [Drizzle](https://docs.nestjs.com/data/drizzle).

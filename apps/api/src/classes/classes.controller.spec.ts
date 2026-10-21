@@ -9,7 +9,7 @@ import { ClassesController } from './classes.controller.js';
 const classId = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d22';
 const studentId = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d23';
 
-describe('ClassesController HTTP contract', () => {
+describe('Hợp đồng HTTP của bộ điều khiển lớp học (ClassesController)', () => {
   let app: INestApplication;
   const service = {
     approveMember: vi.fn(async () => ({
@@ -43,7 +43,7 @@ describe('ClassesController HTTP contract', () => {
     await app?.close();
   });
 
-  it('returns HTTP 200 after approving or suspending a member', async () => {
+  it('trả mã HTTP 200 sau khi duyệt hoặc đình chỉ thành viên', async () => {
     const http = app.getHttpServer() as App;
     const approved = await request(http)
       .post(`/classes/${classId}/members/${studentId}/approve`)

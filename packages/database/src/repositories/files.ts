@@ -21,28 +21,49 @@ import type { Database } from '../types.js';
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 type FileRow = typeof files.$inferSelect;
 
+/**
+ * Ghép thông tin tệp và đối tượng dữ liệu nhị phân dùng chung thành bản ghi mà tầng nghiệp vụ sử dụng.
+ * Khóa lưu trữ và dung lượng lấy từ bảng dữ liệu nhị phân, không nhân bản các giá trị đó trên từng bản ghi tệp.
+ */
 function toFileRecord(file: FileRow, blob: typeof fileBlobs.$inferSelect): FileRecord {
   return { ...file, storageKey: blob.storageKey, byteSize: blob.byteSize };
 }
 
+/**
+ * Lớp truy cập PostgreSQL cho tệp, đối tượng dữ liệu dùng chung và các vị trí sử dụng.
+ * Kiểm tra quyền đọc theo nội dung thực tế và phối hợp hàng đợi xóa để không xóa nhầm đối tượng đang được tham chiếu.
+ */
 export class PostgresFilesRepository implements FilesRepository {
   constructor(private readonly db: Database) {}
 
+  /**
+   * Đăng ký một khóa đối tượng vừa bắt đầu tải lên để có thể dọn nếu việc ghi thông tin tệp thất bại.
+   * Đặt thời điểm được phép thu gom sau 48 giờ để không xóa đối tượng khi yêu cầu tải lên và giao dịch lưu vẫn đang xử lý.
+   */
   async reserveUpload(storageKey: string): Promise<void> {
-    // Đây là upload intent, chưa phải lệnh xóa ngay: trì hoãn 48 giờ để GC
-    // không đua với request còn đang PUT/ghi metadata. Commit thành công gỡ intent.
+    // Đây là ý định tải lên (upload intent), chưa phải lệnh xóa ngay: trì hoãn 48 giờ
+    // để tác vụ thu gom không tranh chấp với yêu cầu đang tải tệp hoặc ghi thông tin tệp.
+    // Giao dịch lưu thành công sẽ gỡ bản ghi dự phòng này.
     await this.db.insert(fileObjectDeletions).values({
       storageKey,
       availableAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
     });
   }
 
+  /**
+   * Tạo bản ghi tệp gốc, bảo đảm không có tệp cha, trong một giao dịch.
+   * Có thể ghi mã nguồn TikZ nếu tệp được tạo từ hình vẽ; dùng chung nội dung nhị phân theo mã băm SHA-256.
+   */
   async create(data: CreateFileData, source?: TikzFileSource): Promise<FileRecord> {
     return this.db.transaction(async (tx) =>
       this.insertFile(tx, { ...data, parentFileId: null }, source),
     );
   }
 
+  /**
+   * Tạo ảnh biến thể có quan hệ cha-con với đúng tệp gốc của người dùng.
+   * Khóa ảnh gốc, xác minh quyền sở hữu và từ chối lấy một ảnh biến thể làm cha để tránh cấu trúc lồng nhau không được hỗ trợ.
+   */
   async createVariant(data: CreateFileVariantData): Promise<FileRecord> {
     return this.db.transaction(async (tx) => {
       const [parent] = await tx
@@ -59,6 +80,12 @@ export class PostgresFilesRepository implements FilesRepository {
     });
   }
 
+  /**
+   * Thêm bản ghi tệp và xử lý dùng chung đối tượng nhị phân trong cùng giao dịch.
+   * Nếu mã băm đã tồn tại, giữ đối tượng cũ và đưa đối tượng tải lên thừa vào hàng đợi xóa; nếu chưa có thì hủy lệnh xóa dự phòng của đối tượng mới.
+   * Khóa chia sẻ bản ghi dữ liệu nhị phân tới khi gắn tệp mới, tránh tranh chấp với giao dịch thu gom.
+   * Khởi tạo vị trí tệp nháp thuộc người tải để có thể gắn vào nội dung hoặc thu gom khi quá hạn.
+   */
   private async insertFile(
     tx: Transaction,
     data: CreateFileData,
@@ -77,17 +104,20 @@ export class PostgresFilesRepository implements FilesRepository {
       .select()
       .from(fileBlobs)
       .where(eq(fileBlobs.contentHash, data.contentHash))
-      .limit(1);
+      .limit(1)
+      .for('share');
     if (!blob) throw new Error('Không thể xác định object của file');
     if (blob.storageKey === data.storageKey) {
-      // Key vừa upload trở thành blob chuẩn: gỡ intent cùng transaction tạo file,
-      // để GC không thể xóa một object đã được tham chiếu hợp lệ.
+      // Khi khóa đối tượng vừa tải lên trở thành đối tượng dữ liệu dùng chung,
+      // gỡ bản ghi xóa dự phòng trong cùng giao dịch tạo tệp để tác vụ thu gom
+      // không xóa đối tượng đã được tham chiếu hợp lệ.
       await tx
         .delete(fileObjectDeletions)
         .where(eq(fileObjectDeletions.storageKey, data.storageKey));
     } else {
-      // Hash đã có blob vật lý khác: giữ key chuẩn của blob cũ, còn key mới
-      // chỉ là bản upload thừa. Cho phép outbox dọn bản thừa mà không đụng blob cũ.
+      // Nếu mã băm đã có đối tượng dữ liệu, giữ khóa lưu trữ hiện tại;
+      // khóa mới là bản tải lên thừa, được đưa vào hàng đợi xóa (outbox)
+      // mà không tác động đến đối tượng đang được nhiều tệp sử dụng.
       await tx
         .insert(fileObjectDeletions)
         .values({ storageKey: data.storageKey })
@@ -111,7 +141,8 @@ export class PostgresFilesRepository implements FilesRepository {
       .returning();
     if (source) await tx.insert(fileSources).values({ ...source, fileId: file.id });
 
-    // Draft là placement có thời hạn; sau khi lưu nội dung, refs theo item bất biến sẽ thay thế.
+    // Vùng nháp là vị trí sử dụng tệp có thời hạn; sau khi lưu nội dung,
+    // tham chiếu từ đối tượng nội dung cụ thể sẽ thay thế vị trí nháp.
     await tx
       .insert(authzContexts)
       .values({ kind: 'user', resourceKey: data.createdByUserId })
@@ -134,6 +165,10 @@ export class PostgresFilesRepository implements FilesRepository {
     return toFileRecord(file, blob);
   }
 
+  /**
+   * Tra tệp và đối tượng nhị phân theo điều kiện truy vấn đã được bên gọi thiết lập.
+   * Ghép khóa lưu trữ và dung lượng từ bảng dùng chung; không áp đặt quyền sở hữu vì các phương thức bên ngoài chọn điều kiện thích hợp.
+   */
   private async findFile(where: ReturnType<typeof eq>): Promise<FileRecord | undefined> {
     const [row] = await this.db
       .select({ file: files, blob: fileBlobs })
@@ -144,18 +179,34 @@ export class PostgresFilesRepository implements FilesRepository {
     return row ? toFileRecord(row.file, row.blob) : undefined;
   }
 
+  /**
+   * Đọc thông tin tệp bằng mã định danh, không tự xác minh chủ sở hữu.
+   * Chỉ sử dụng ở đường gọi đã có kiểm tra quyền phù hợp, tránh công khai khóa lưu trữ cho người không được phép.
+   */
   find(id: string) {
     return this.findFile(eq(files.id, id));
   }
 
+  /**
+   * Chỉ đọc tệp khi vừa khớp mã tệp vừa khớp người tạo.
+   * Giữ điều kiện quyền sở hữu trong truy vấn để không trả dữ liệu của người dùng khác.
+   */
   findOwned(id: string, userId: string) {
     return this.findFile(and(eq(files.id, id), eq(files.createdByUserId, userId))!);
   }
 
+  /**
+   * Tìm ảnh biến thể khi biết cả mã ảnh gốc và mã ảnh con.
+   * Xác minh quan hệ cha-con ở cơ sở dữ liệu, không chấp nhận một ảnh con không thuộc ảnh gốc đã chỉ định.
+   */
   findVariant(fileId: string, variantFileId: string) {
     return this.findFile(and(eq(files.id, variantFileId), eq(files.parentFileId, fileId))!);
   }
 
+  /**
+   * Tìm ảnh biến thể thuộc một ảnh gốc và đúng người tạo.
+   * Kết hợp mã ảnh con, mã ảnh cha và chủ sở hữu trong một truy vấn để hạn chế đọc nhầm ảnh của người khác.
+   */
   findVariantOwned(fileId: string, variantFileId: string, userId: string) {
     return this.findFile(
       and(
@@ -166,6 +217,10 @@ export class PostgresFilesRepository implements FilesRepository {
     );
   }
 
+  /**
+   * Đọc mã nguồn TikZ của tệp khi người yêu cầu chính là người tạo.
+   * Mã nguồn được tách riêng khỏi ảnh đã dựng và không trả cho người chỉ có quyền xem ảnh.
+   */
   async findSourceOwned(id: string, userId: string): Promise<TikzFileSource | undefined> {
     const [source] = await this.db
       .select({ kind: fileSources.kind, source: fileSources.source })
@@ -176,7 +231,9 @@ export class PostgresFilesRepository implements FilesRepository {
     return source as TikzFileSource | undefined;
   }
 
-  /** Truy cập học sinh chỉ khi file xuất hiện trong phần content của đề đã giao. */
+  /** Chỉ xét quyền đọc tệp khi học sinh đang là người nhận bài và thành viên lớp còn hoạt động.
+   * Đối chiếu ảnh gốc và ảnh biến thể với bản chụp câu hỏi hoặc ngữ liệu đã giao;
+   * vị trí tệp trong cơ sở dữ liệu không đủ để chứng minh quyền xem. */
   async assignedFileClasses(
     fileId: string,
     variantFileId: string | null,
@@ -263,9 +320,9 @@ export class PostgresFilesRepository implements FilesRepository {
           eq(classes.status, 'active'),
         ),
       );
-    // file_uses chỉ là chỉ mục ứng viên: phải đối chiếu đúng FileRef trong
-    // snapshot đã chốt; nếu chỉ join itemId sẽ lộ cả ảnh guidance/original
-    // hoặc ảnh thuộc phiên bản khác của cùng câu hỏi.
+    // Bảng file_uses chỉ giúp tìm ứng viên: phải so khớp tham chiếu tệp (FileRef)
+    // với bản chụp (snapshot) đã chốt. Nếu chỉ nối theo mã đối tượng,
+    // có thể lộ ảnh trong hướng dẫn, ảnh gốc hoặc ảnh của phiên bản câu hỏi khác.
     return [
       ...new Set([
         ...rows
@@ -290,21 +347,29 @@ export class PostgresFilesRepository implements FilesRepository {
   }
 
   /**
-   * Đường cấp quyền độc lập với quyền xem đề hiện tại: học sinh có attempt
-   * đã nộp/chấm và đã đến hạn release vẫn đọc được solution khi rời lớp.
-   * File phải thực sự nằm trong solution của snapshot đã giao, không chỉ có
-   * placement cùng questionId; không cấp quyền cho guidance hoặc original crop.
+   * Tìm lớp có lời giải đã công bố thực sự tham chiếu tệp để tầng ứng dụng xét quyền.
+   * Với lượt làm đã nộp hoặc đã chấm, tiếp tục cho đọc lịch sử sau khi rời lớp;
+   * kể cả sau khi rời lớp. Tệp phải thực sự có trong lời giải của bản chụp đề đã giao;
+   * chỉ trùng mã câu hỏi hoặc vị trí lưu tệp không đủ để được cấp quyền.
+   * Không cấp quyền xem ảnh hướng dẫn hoặc ảnh gốc của bản cắt.
    */
-  async hasReleasedSolutionFileAccess(
+  async releasedSolutionFileClasses(
     fileId: string,
     variantFileId: string | null,
     userId: string,
     now: Date,
-  ): Promise<boolean> {
-    // Truy vấn từ file_uses để giảm số snapshot phải parse; lọc FileRef thật
-    // ở cuối vì join theo questionId có thể khớp nhiều phiên bản câu hỏi.
+  ): Promise<Array<{ classId: string; enrolmentStatus: 'active' | 'left' }>> {
+    // Trả về lớp và trạng thái tham gia để tầng nghiệp vụ xét quyền theo vai trò
+    // hiện hành; riêng thành viên đã rời lớp có thể tiếp tục xem lịch sử đã nộp.
+    // Tra bảng vị trí tệp trước để giảm số bản chụp cần kiểm tra;
+    // sau đó đối chiếu tham chiếu tệp thực tế vì nối theo mã câu hỏi
+    // có thể khớp nhiều phiên bản khác nhau.
     const rows = await this.db
-      .select({ snapshot: examRevisionQuestions.questionSnapshot })
+      .select({
+        snapshot: examRevisionQuestions.questionSnapshot,
+        classId: assignments.classId,
+        enrolmentStatus: classEnrolments.status,
+      })
       .from(fileUses)
       .innerJoin(questionVersions, sql`${fileUses.itemId} = ${questionVersions.questionId}::text`)
       .innerJoin(
@@ -320,7 +385,7 @@ export class PostgresFilesRepository implements FilesRepository {
           inArray(attempts.status, ['submitted', 'graded']),
         ),
       )
-      .innerJoin(users, and(eq(users.id, userId), eq(users.banned, false)))
+      .innerJoin(users, eq(users.id, userId))
       .innerJoin(
         classEnrolments,
         and(
@@ -337,20 +402,31 @@ export class PostgresFilesRepository implements FilesRepository {
           eq(fileUses.fileArea, 'solution'),
           lte(assignments.releaseSolutionsAt, now),
           inArray(users.role, ['user', 'teacher', 'admin']),
+          sql`${users.banned} is not true`,
         ),
       );
-    return rows.some(({ snapshot }) =>
-      collectFileRefs(questionSchema.parse(snapshot).solution).some(
-        (ref) => ref.fileId === fileId && ref.variantFileId === variantFileId,
-      ),
-    );
+    return rows
+      .filter(({ snapshot }) =>
+        collectFileRefs(questionSchema.parse(snapshot).solution).some(
+          (ref) => ref.fileId === fileId && ref.variantFileId === variantFileId,
+        ),
+      )
+      .map(({ classId, enrolmentStatus }) => ({
+        classId,
+        enrolmentStatus: enrolmentStatus === 'left' ? ('left' as const) : ('active' as const),
+      }));
   }
 
+  /**
+   * Gỡ vị trí nháp và thu gom có kiểm tra đối với các tệp người dùng muốn loại bỏ.
+   * Chỉ xử lý tệp của đúng người tạo chưa được gắn vào nội dung; khóa ảnh gốc và ảnh biến thể theo thứ tự cố định để tránh xung đột.
+   * Trả danh sách khóa đối tượng cần xóa khỏi kho S3 sau khi giao dịch hoàn tất.
+   */
   async discardOrphans(refs: FileRef[], userId: string): Promise<string[]> {
     return this.db.transaction(async (tx) => {
       const keys: string[] = [];
-      // Tất cả giao dịch attach/detach/GC khóa asset theo cùng thứ tự:
-      // toàn bộ original trước, sau đó variant, trong mỗi nhóm theo UUID.
+      // Mọi giao dịch gắn tệp, gỡ tệp hoặc thu gom đều khóa theo cùng thứ tự:
+      // toàn bộ ảnh gốc trước, sau đó đến ảnh biến thể, mỗi nhóm theo thứ tự UUID.
       const fileIds = [
         ...new Set(
           refs.flatMap(({ fileId, variantFileId }) =>
@@ -388,7 +464,7 @@ export class PostgresFilesRepository implements FilesRepository {
               .for('update')
           : [file];
         if (!target || !target.orphanedAt) continue;
-        // Bỏ draft của asset lẫn các crop con khi người dùng loại ảnh gốc.
+        // Gỡ vị trí nháp của ảnh gốc và các ảnh cắt liên quan khi người dùng loại ảnh gốc.
         const childIds = ref.variantFileId
           ? []
           : (
@@ -413,21 +489,27 @@ export class PostgresFilesRepository implements FilesRepository {
     });
   }
 
+  /**
+   * Thu gom các tệp chưa được sử dụng đã quá thời điểm giới hạn.
+   * Mỗi lượt xử lý tối đa 100 bản ghi, bỏ qua tệp đang bị giao dịch khác khóa; chỉ xóa khi không còn tham chiếu đang sử dụng và không còn ảnh con.
+   * Trả số bản ghi tệp đã xử lý và danh sách khóa đối tượng có thể xóa ở kho lưu trữ.
+   */
   async queueExpiredOrphans(cutoff: Date): Promise<{ processed: number; storageKeys: string[] }> {
     return this.db.transaction(async (tx) => {
-      // Khóa file trước khi xóa draft: attach cũng khóa file rồi xóa draft.
-      // Nếu làm ngược, GC và attach đồng thời có thể deadlock trên file_uses.
-      // skipLocked cho phép nhiều worker GC chạy cùng lúc mà không cùng chọn
-      // một file; attach dùng FOR UPDATE để đồng bộ trước khi đổi file_uses.
+      // Khóa bản ghi tệp trước khi xóa vị trí nháp, giống thứ tự khi gắn tệp.
+      // Làm ngược thứ tự có thể gây kẹt khóa (deadlock) giữa thu gom và gắn tệp.
+      // Cơ chế bỏ qua bản ghi đang bị khóa (skipLocked) giúp nhiều tác vụ thu gom
+      // chạy song song; thao tác gắn tệp dùng FOR UPDATE để đồng bộ.
       const expired = await tx
         .select()
         .from(files)
         .where(
           and(
             lte(files.orphanedAt, cutoff),
-            // Xóa leaf trước: parent có crop còn dùng không bao giờ chặn 100 slots của GC.
+            // Xử lý ảnh con trước để ảnh gốc có bản cắt còn dùng không chiếm hết hạn mức
+            // 100 bản ghi mỗi lượt thu gom.
             sql`not exists (select 1 from ${files} as child where child.parent_file_id = ${files.id})`,
-            // Chỉ draft đã hết hạn được xóa; placement khác luôn giữ file.
+            // Chỉ xóa tệp có vị trí nháp đã hết hạn; vị trí sử dụng khác luôn giữ tệp.
             sql`not exists (
               select 1 from ${fileUses} as active_use
               where active_use.file_id = ${files.id}
@@ -445,7 +527,7 @@ export class PostgresFilesRepository implements FilesRepository {
       if (expired.length === 0) return { processed: 0, storageKeys: [] };
       const storageKeys: string[] = [];
       for (const file of expired) {
-        // Draft tồn đọng chỉ hết hạn khi asset vẫn còn ở trạng thái orphan.
+        // Chỉ thu gom vị trí nháp đã quá hạn nếu tệp vẫn chưa được nội dung nào tham chiếu.
         await tx
           .delete(fileUses)
           .where(
@@ -458,8 +540,9 @@ export class PostgresFilesRepository implements FilesRepository {
           );
         storageKeys.push(...(await this.queueFileDeletion(tx, file.id)));
       }
-      // SHA dedup có thể xóa 100 bản ghi logical nhưng chưa có key vật lý nào
-      // cần dọn. Đếm file thực sự bị xóa để worker không dừng giữa chừng.
+      // Do dùng chung đối tượng theo mã băm SHA-256, có thể xóa nhiều bản ghi tệp
+      // mà chưa cần xóa đối tượng vật lý nào; đếm số bản ghi thực sự bị xóa
+      // để tác vụ thu gom không kết thúc sớm.
       const remaining = await tx
         .select({ id: files.id })
         .from(files)
@@ -473,9 +556,13 @@ export class PostgresFilesRepository implements FilesRepository {
     });
   }
 
+  /**
+   * Liệt kê tối đa 100 khóa đối tượng đã đến thời điểm cho phép xóa.
+   * Sắp theo khóa lưu trữ và hỗ trợ lấy trang sau để tác vụ thu gom tiếp tục từ khóa trước mà không lặp lại.
+   */
   async listPendingDeletions(afterStorageKey?: string): Promise<string[]> {
-    // available_at phân biệt object đã có thể xóa với upload intent còn hạn:
-    // GC tuyệt đối không xử lý intent khi request upload có thể đang chạy.
+    // Thời điểm available_at phân biệt đối tượng đã đủ điều kiện xóa với ý định tải lên
+    // còn hạn bảo vệ; không thu gom đối tượng khi yêu cầu tải lên có thể vẫn đang xử lý.
     const pending = await this.db
       .select({ storageKey: fileObjectDeletions.storageKey })
       .from(fileObjectDeletions)
@@ -490,10 +577,19 @@ export class PostgresFilesRepository implements FilesRepository {
     return pending.map(({ storageKey }) => storageKey);
   }
 
+  /**
+   * Xác nhận một đối tượng đã được xử lý xóa bằng cách gỡ yêu cầu trong hàng đợi.
+   * Chỉ xóa bản ghi chờ xử lý, không trực tiếp thao tác với kho S3 ở tầng cơ sở dữ liệu.
+   */
   async acknowledgeDeletion(storageKey: string): Promise<void> {
     await this.db.delete(fileObjectDeletions).where(eq(fileObjectDeletions.storageKey, storageKey));
   }
 
+  /**
+   * Kiểm tra khả năng xóa bản ghi tệp và các ảnh con trong một giao dịch.
+   * Không xóa nếu tệp hoặc ảnh con còn vị trí sử dụng; chỉ xóa đối tượng nhị phân khi không còn bản ghi tệp nào trỏ đến cùng mã băm.
+   * Đưa khóa đối tượng vào hàng đợi xóa để tác vụ riêng xóa khỏi kho lưu trữ sau khi dữ liệu đã được ghi nhận.
+   */
   private async queueFileDeletion(tx: Transaction, id: string): Promise<string[]> {
     const [file] = await tx.select().from(files).where(eq(files.id, id)).limit(1).for('update');
     if (!file) return [];
@@ -511,8 +607,8 @@ export class PostgresFilesRepository implements FilesRepository {
       .where(eq(files.parentFileId, id))
       .orderBy(asc(files.id))
       .for('update');
-    // Một crop còn được dùng phải giữ cả parent; không xóa parent rồi để
-    // FileRef có variant trỏ vào một ảnh gốc đã biến mất.
+    // Ảnh cắt còn được sử dụng phải giữ cả ảnh gốc; không xóa ảnh gốc khi
+    // tham chiếu tệp (FileRef) của biến thể vẫn cần ảnh đó.
     for (const child of children) {
       const [childUse] = await tx
         .select({ fileId: fileUses.fileId })
@@ -526,7 +622,7 @@ export class PostgresFilesRepository implements FilesRepository {
     }
 
     await tx.delete(files).where(eq(files.id, id));
-    // Xóa blob chỉ sau khi không còn asset khác trỏ đến cùng content hash.
+    // Chỉ xóa đối tượng nhị phân sau khi không còn bản ghi tệp nào khác dùng chung mã băm.
     const [blob] = await tx
       .select()
       .from(fileBlobs)

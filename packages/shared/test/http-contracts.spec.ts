@@ -42,14 +42,14 @@ const operations = Object.values(resources).flatMap(
   (resource) => Object.values(resource) as Operation[],
 );
 
-describe('HTTP contract convention', () => {
-  it('has one unique method + path per custom API operation', () => {
+describe('Quy ước hợp đồng HTTP', () => {
+  it('mỗi thao tác API chỉ có một cặp phương thức và đường dẫn duy nhất', () => {
     const operationKeys = operations.map(({ method, path }) => `${method} ${path}`);
     expect(operations).toHaveLength(73);
     expect(new Set(operationKeys).size).toBe(operationKeys.length);
   });
 
-  it('resolves a usable ready revision through the question resource', () => {
+  it('truy xuất phiên bản sẵn sàng có thể sử dụng thông qua tài nguyên câu hỏi', () => {
     const id = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d20';
     expect(questionsContract.getReady.method).toBe('GET');
     expect(questionsContract.getReady.path).toBe('/questions/:id/ready');
@@ -57,7 +57,7 @@ describe('HTTP contract convention', () => {
     expect(questionsContract.getReady.responses[200]).toBe(questionsContract.get.responses[200]);
   });
 
-  it('validates numeric version URL parameters', () => {
+  it('xác thực tham số phiên bản dạng số trên đường dẫn', () => {
     const id = '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d20';
     expect(questionVersionPathParamsSchema.parse({ id, version: '2' })).toEqual({ id, version: 2 });
     for (const version of ['0', '-1', '1.5', 'latest']) {
@@ -65,7 +65,7 @@ describe('HTTP contract convention', () => {
     }
   });
 
-  it('requires an expectedVersion precondition on PATCH without accepting a no-op', () => {
+  it('yêu cầu điều kiện phiên bản dự kiến khi cập nhật PATCH và từ chối cập nhật không tạo thay đổi', () => {
     expect(
       questionUpdateBodySchema.safeParse({ expectedVersion: 1, status: 'ready' }).success,
     ).toBe(true);
@@ -84,14 +84,14 @@ describe('HTTP contract convention', () => {
     }
   });
 
-  it('uses responses keyed by status code instead of a singular response field', () => {
+  it('khai báo phản hồi theo mã trạng thái thay vì một trường phản hồi duy nhất', () => {
     for (const operation of operations) {
       expect(Object.keys(operation.responses).length).toBeGreaterThan(0);
       expect('response' in operation).toBe(false);
     }
   });
 
-  it('uses pathParams names that match path placeholders', () => {
+  it('đặt tên tham số đường dẫn khớp với vị trí giữ chỗ', () => {
     for (const operation of operations) {
       const pathNames = [...operation.path.matchAll(/:([A-Za-z0-9_]+)/g)].map((match) => match[1]);
       const schemaNames = operation.pathParams ? Object.keys(operation.pathParams.shape) : [];
@@ -99,13 +99,13 @@ describe('HTTP contract convention', () => {
     }
   });
 
-  it('represents 204 as an explicit no-body response', () => {
+  it('biểu diễn mã 204 thành phản hồi không có nội dung', () => {
     for (const operation of operations) {
       if (204 in operation.responses) expect(operation.responses[204]).toBeNull();
     }
   });
 
-  it('describes the multipart file boundary', () => {
+  it('mô tả ranh giới tải tệp nhiều phần', () => {
     expect(filesContract.upload.file).toEqual({
       field: 'file',
       required: true,

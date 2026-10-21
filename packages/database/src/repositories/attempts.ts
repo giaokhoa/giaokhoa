@@ -25,6 +25,10 @@ import { assertOwner } from './assignments.js';
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 type AttemptRow = typeof attempts.$inferSelect;
 
+/**
+ * Tạo lỗi từ chối truy cập lượt làm bài.
+ * Dùng khi lớp, tài khoản, quyền nhận bài hoặc tư cách thành viên không đáp ứng điều kiện.
+ */
 function denied() {
   return new ClientError(
     'forbidden',
@@ -32,9 +36,17 @@ function denied() {
     'Bạn không có quyền với lượt làm bài',
   );
 }
+/**
+ * Tạo lỗi không tìm thấy hoặc không thể truy cập lượt làm bài.
+ * Không phân biệt rõ bản ghi không tồn tại và bản ghi nằm ngoài phạm vi truy cập của người yêu cầu.
+ */
 function unavailable() {
   return new ClientError('not_found', 'attempt_not_found', 'Lượt làm bài không khả dụng');
 }
+/**
+ * Tạo lỗi khi đáp án không phù hợp với câu hỏi của đề đã giao.
+ * Không chỉ kiểm tra kiểu dữ liệu mà còn kiểm tra mã lựa chọn hoặc mã phần câu hỏi thực sự có trong bản chụp đề.
+ */
 function invalidAnswer() {
   return new ClientError(
     'invalid',
@@ -42,14 +54,27 @@ function invalidAnswer() {
     'Câu trả lời không thuộc câu hỏi của đề',
   );
 }
+/**
+ * Tạo lỗi khi thời điểm yêu cầu nằm ngoài khoảng cho phép làm bài.
+ * Được dùng cho cả bắt đầu lượt mới, lưu câu trả lời và nộp bài.
+ */
 function closed() {
   return new ClientError('conflict', 'attempt_window_closed', 'Đã ngoài thời gian làm bài');
 }
 
+/**
+ * Kiểm tra người dùng còn được phép hoạt động trước khi cho thao tác với lượt làm.
+ * Chỉ chấp nhận ba loại tài khoản hợp lệ và từ chối tài khoản bị cấm hoặc không tồn tại.
+ */
 function validAccount(account: { role: string | null; banned: boolean | null } | undefined) {
   return !!account && !account.banned && ['user', 'teacher', 'admin'].includes(account.role ?? '');
 }
 
+/**
+ * Đối chiếu câu trả lời với cấu trúc câu hỏi trong bản chụp đề thi.
+ * Trắc nghiệm cần mã lựa chọn tồn tại; đúng/sai cần đủ mã mệnh đề; tự luận nhiều phần cần khớp toàn bộ mã phần.
+ * Cách đối chiếu này ngăn gửi câu trả lời cho một vị trí khác hoặc lợi dụng mã không có trong đề.
+ */
 function matches(question: Question, answer: AttemptAnswer): boolean {
   if (question.type !== answer.type) return false;
   if (question.type === 'multiple_choice' && answer.type === 'multiple_choice') {
@@ -83,6 +108,10 @@ function matches(question: Question, answer: AttemptAnswer): boolean {
   return false;
 }
 
+/**
+ * Biến bản ghi lượt làm thành thông tin tóm tắt phục vụ giáo viên.
+ * Chuyển điểm nguyên lưu tại cơ sở dữ liệu về thang điểm 100 và xác thực cấu trúc đầu ra.
+ */
 function summary(row: AttemptRow) {
   return attemptSummarySchema.parse({
     id: row.id,
@@ -98,6 +127,11 @@ function summary(row: AttemptRow) {
   });
 }
 
+/**
+ * Ghép một lượt làm với các câu trả lời theo thứ tự vị trí trong đề.
+ * Chỉ bổ sung điểm và nhận xét khi yêu cầu xem dưới góc độ người chấm; dữ liệu của học sinh không tự kèm các thông tin này.
+ * @param teacher Chọn cấu trúc dành cho giáo viên khi cần hiển thị kết quả chấm.
+ */
 async function detail(tx: Transaction, row: AttemptRow, teacher = false) {
   const responses = await tx
     .select()
@@ -128,9 +162,17 @@ async function detail(tx: Transaction, row: AttemptRow, teacher = false) {
     : attemptSchema.parse(dto);
 }
 
+/**
+ * Lớp truy cập PostgreSQL cho lượt làm và câu trả lời của học sinh.
+ * Phối hợp khóa bản ghi với ràng buộc cơ sở dữ liệu để bảo vệ giới hạn số lượt làm, thời hạn và vòng đời nộp/chấm.
+ */
 export class PostgresAttemptsRepository implements AttemptsRepository {
   constructor(private readonly db: Database) {}
 
+  /**
+   * Tra lớp chứa bài giao từ mã bài giao.
+   * Phục vụ xác định bản ghi lớp cần khóa trước khi xử lý lượt làm; không tự suy đoán lớp từ mã người dùng.
+   */
   async findAssignmentClass(assignmentId: string) {
     const [row] = await this.db
       .select({ classId: assignments.classId })
@@ -140,6 +182,10 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
     return row?.classId;
   }
 
+  /**
+   * Đọc lớp, chủ sở hữu, trạng thái lượt làm và trạng thái tham gia lớp.
+   * Thông tin này được dùng để xác định phạm vi phân quyền và điều kiện truy cập, không thay cho toàn bộ kiểm tra khi ghi dữ liệu.
+   */
   async findContext(attemptId: string) {
     const [row] = await this.db
       .select({
@@ -162,11 +208,16 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
     return row ? { ...row, status: attemptSchema.shape.status.parse(row.status) } : undefined;
   }
 
+  /**
+   * Bắt đầu lượt làm mới hoặc trả lại lượt đang làm dở của cùng học sinh.
+   * Khóa lớp rồi bài giao để không vượt giới hạn số lượt khi hai yêu cầu chạy đồng thời; chỉ cho học sinh còn quyền nhận bài, thành viên hoạt động và trong thời gian mở.
+   * Số lượt được tính từ lịch sử cùng bài giao; nếu đã đạt giới hạn thì từ chối thay vì tạo thêm.
+   */
   async start(assignmentId: string, actorId: string, now: Date): Promise<Attempt> {
     const classId = await this.findAssignmentClass(assignmentId);
     if (!classId) throw unavailable();
     return this.db.transaction(async (tx) => {
-      // ponytail: Khóa theo lớp để đồng bộ với join/suspend; cân nhắc khóa từng recipient nếu tải cao.
+      // ponytail: Khóa theo lớp để đồng bộ khi tham gia hoặc đình chỉ thành viên; nếu tải cao, chuyển sang khóa từng bản ghi người nhận (recipient).
       const [classroom] = await tx
         .select()
         .from(classes)
@@ -233,8 +284,9 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
   }
 
   /**
-   * Dùng chung cho save/submit để khóa lớp và attempt trong cùng transaction.
-   * Chặn sửa khi hết giờ, đã nộp, enrolment bị ngừng hoặc recipient bị thu hồi.
+   * Dùng chung cho lưu đáp án và nộp bài để khóa lớp và lượt làm (attempt)
+   * trong cùng một giao dịch (transaction). Không cho sửa khi hết giờ, đã nộp,
+   * quan hệ tham gia lớp (enrolment) bị ngừng hoặc quyền nhận bài đã bị thu hồi.
    */
   private async writable(tx: Transaction, id: string, actorId: string, now: Date) {
     const [ref] = await tx
@@ -293,6 +345,12 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
     return row;
   }
 
+  /**
+   * Lưu hoặc thay thế câu trả lời tại một vị trí câu hỏi của lượt đang làm.
+   * Đối chiếu đáp án với bản chụp câu hỏi tại chính vị trí đó; cập nhật trùng khóa ghép thay vì tạo hai câu trả lời ở cùng vị trí.
+   * @param position Vị trí câu hỏi trong bản sửa đổi đề thi đã giao, bắt đầu từ 1.
+   * @param now Thời điểm dùng để kiểm tra hạn làm bài và ghi lần cập nhật.
+   */
   async save(
     id: string,
     actorId: string,
@@ -330,6 +388,10 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
     });
   }
 
+  /**
+   * Chốt lượt làm đang còn quyền ghi và chuyển sang trạng thái đã nộp (submitted).
+   * Đặt mốc nộp trong cùng giao dịch với kiểm tra hạn; từ đó các lần lưu đáp án tiếp theo bị từ chối.
+   */
   async submit(id: string, actorId: string, now: Date): Promise<Attempt> {
     return this.db.transaction(async (tx) => {
       await this.writable(tx, id, actorId, now);
@@ -345,6 +407,11 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
     });
   }
 
+  /**
+   * Kiểm tra quyền đọc lượt làm của chính học sinh, kể cả lịch sử đã nộp.
+   * Lượt đang làm chỉ xem được khi lớp, tư cách thành viên và quyền nhận bài còn hoạt động; lượt đã nộp hoặc chấm vẫn xem được nếu thành viên đã rời lớp hợp lệ.
+   * Dùng chung cho chi tiết lượt làm, kết quả và lời giải để tránh các đường đọc có chính sách khác nhau.
+   */
   private async readOwn(tx: Transaction, id: string, actorId: string) {
     const [ref] = await tx
       .select({ classId: assignments.classId })
@@ -400,6 +467,10 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
     return row;
   }
 
+  /**
+   * Lấy chi tiết lượt làm của chính người yêu cầu sau khi kiểm tra quyền đọc.
+   * Không xuất điểm và nhận xét của giáo viên qua cấu trúc lượt làm thông thường.
+   */
   async getOwn(id: string, actorId: string): Promise<Attempt | undefined> {
     return this.db.transaction(async (tx) => {
       const row = await this.readOwn(tx, id, actorId);
@@ -407,6 +478,10 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
     });
   }
 
+  /**
+   * Liệt kê lịch sử lượt làm của học sinh trong một bài giao mà giáo viên sở hữu.
+   * Kiểm tra đồng thời quyền chủ lớp và tác giả bài giao; sắp theo học sinh và số lần làm để phục vụ chấm bài.
+   */
   async listForTeacher(assignmentId: string, actorId: string) {
     const classId = await this.findAssignmentClass(assignmentId);
     if (!classId) return undefined;
@@ -433,6 +508,11 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
     });
   }
 
+  /**
+   * Nạp lượt làm cho người quản lý bài giao sau khi xác minh quyền chủ lớp và tác giả bài.
+   * @param lock Khi chuẩn bị chấm thì khóa ghi lớp và lượt làm; khi chỉ xem thì khóa đọc để giảm tranh chấp.
+   * Trả về undefined nếu không tìm thấy lượt làm hoặc bài giao không thuộc người yêu cầu.
+   */
   private async teacherAttempt(tx: Transaction, id: string, actorId: string, lock = false) {
     const [ref] = await tx
       .select({ classId: assignments.classId })
@@ -459,6 +539,10 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
     return row.attempt;
   }
 
+  /**
+   * Trả chi tiết câu trả lời và thông tin chấm của một lượt làm cho giáo viên sở hữu bài giao.
+   * Dùng đường kiểm tra quyền riêng của người chấm; không dùng điều kiện quyền xem bài của học sinh.
+   */
   async review(id: string, actorId: string): Promise<AttemptReview | undefined> {
     return this.db.transaction(async (tx) => {
       const row = await this.teacherAttempt(tx, id, actorId);
@@ -466,6 +550,11 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
     });
   }
 
+  /**
+   * Ghi điểm và nhận xét cho lượt đã nộp bằng một giao dịch có khóa.
+   * Chỉ tác giả bài giao có quyền chủ lớp được chấm; quy đổi điểm từ thang 100 sang số nguyên phần vạn để tránh sai số số thực.
+   * Không chấm lượt đang làm; ghi trạng thái, điểm và thời điểm chấm cùng lúc.
+   */
   async grade(
     id: string,
     actorId: string,
@@ -490,6 +579,11 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
     });
   }
 
+  /**
+   * Công bố điểm và nhận xét cho chủ lượt làm theo từng mốc thời gian độc lập.
+   * Chỉ đọc lượt đã chấm; điểm chỉ xuất hiện khi đến hạn công bố điểm, nhận xét chỉ xuất hiện khi đến hạn riêng của nhận xét.
+   * Trả về undefined nếu cả hai phần đều chưa được phép công bố.
+   */
   async result(id: string, actorId: string, now: Date) {
     return this.db.transaction(async (tx) => {
       const row = await this.readOwn(tx, id, actorId);
@@ -508,6 +602,10 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
     });
   }
 
+  /**
+   * Trả lời giải của đề đã giao sau khi học sinh nộp bài và đến hạn công bố.
+   * Đọc lời giải từ bản chụp câu hỏi của bản sửa đổi đề, không từ phiên bản câu hỏi đang chỉnh sửa; cho phép học sinh đã rời lớp hợp lệ xem lại theo quyền đọc lịch sử.
+   */
   async solutions(id: string, actorId: string, now: Date) {
     return this.db.transaction(async (tx) => {
       const row = await this.readOwn(tx, id, actorId);

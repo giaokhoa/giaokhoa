@@ -19,11 +19,8 @@ import { PostgresFilesRepository } from '@giaokhoa/database/files';
 import { migrationsFolder } from '@giaokhoa/database/migrations';
 import { PostgresQuestionsRepository } from '@giaokhoa/database/questions';
 import * as schema from '@giaokhoa/database/schema';
-import { users } from '@giaokhoa/database/schema/auth.generated';
-import {
-  assignments as assignmentRows,
-  assignmentRecipients,
-} from '@giaokhoa/database/schema/assignments';
+import { users } from '@giaokhoa/database/schema';
+import { assignments as assignmentRows, assignmentRecipients } from '@giaokhoa/database/schema';
 import type { Database } from '@giaokhoa/database/types';
 
 const name = `gk_recipient_test_${process.pid}_${randomUUID().replaceAll('-', '')}`;
@@ -134,8 +131,8 @@ afterAll(async () => {
   await adminConnection((client) => client.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`));
 }, 30_000);
 
-describe('Assignment publication and recipients', () => {
-  it('snapshots only active class members and never auto-assigns late joiners', async () => {
+describe('Công bố bài giao và quản lý người nhận', () => {
+  it('chỉ chốt danh sách thành viên đang hoạt động, không tự giao cho người tham gia muộn', async () => {
     const { teacher, classroom, join, create } = await fixture();
     const first = await createUser();
     const second = await createUser();
@@ -173,7 +170,7 @@ describe('Assignment publication and recipients', () => {
     expect(await assignments.listRecipients(teacher.id, draft.id)).toHaveLength(2);
   });
 
-  it('rejects outsiders and suspended members atomically, then publishes one selected student', async () => {
+  it('từ chối người ngoài và thành viên bị đình chỉ một cách nguyên tử, chỉ công bố cho học sinh được chọn', async () => {
     const { teacher, classroom, stimulus, join, create } = await fixture();
     const selected = await createUser();
     const otherMember = await createUser();
@@ -243,7 +240,7 @@ describe('Assignment publication and recipients', () => {
     expect(await assignments.listRecipients(teacher.id, draft.id)).toHaveLength(1);
   });
 
-  it('enforces class owner, private exam revision and account downgrade at mutation time', async () => {
+  it('kiểm tra chủ lớp, đề riêng tư và thay đổi vai trò ngay khi ghi dữ liệu', async () => {
     const { teacher, classroom, revision, create } = await fixture();
     const anotherTeacher = await createUser('teacher');
     const anotherClass = await classes.createClass(anotherTeacher.id, {
@@ -287,7 +284,7 @@ describe('Assignment publication and recipients', () => {
     });
   });
 
-  it('serializes simultaneous publish and suspension against the same class', async () => {
+  it('tuần tự hóa thao tác công bố và đình chỉ đồng thời trong cùng lớp', async () => {
     const { teacher, classroom, join, create } = await fixture();
     const student = await createUser();
     await join(student.id);
@@ -311,7 +308,7 @@ describe('Assignment publication and recipients', () => {
     });
   });
 
-  it('serves only assigned question images, never hidden guidance or revoked images', async () => {
+  it('chỉ cung cấp ảnh câu hỏi được giao, không lộ hướng dẫn ẩn hoặc ảnh đã thu hồi', async () => {
     const { teacher, classroom, join } = await fixture();
     const student = await createUser();
     const suspended = await createUser();
@@ -423,7 +420,7 @@ describe('Assignment publication and recipients', () => {
     expect(storage.get).toHaveBeenCalledTimes(2);
   });
 
-  it('validates windows, selection uniqueness and does not expose draft or early delivery', async () => {
+  it('kiểm tra thời gian, danh sách không trùng và không lộ bản nháp hoặc bài giao trước hạn', async () => {
     const { teacher, create, join } = await fixture();
     const student = await createUser();
     await join(student.id);

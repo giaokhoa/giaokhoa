@@ -2,9 +2,9 @@ import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
-import { AppModule } from './../src/app.module.js';
+import { AppModule } from './../../../src/app.module.js';
 
-describe('QuestionsController (e2e)', () => {
+describe('Bộ điều khiển câu hỏi (QuestionsController) qua HTTP', () => {
   let app: INestApplication<App>;
 
   beforeEach(async () => {
@@ -16,11 +16,11 @@ describe('QuestionsController (e2e)', () => {
     await app.init();
   });
 
-  it('rejects unauthenticated question creation', () => {
+  it('từ chối tạo câu hỏi khi chưa xác thực', () => {
     return request(app.getHttpServer()).post('/questions').send({}).expect(401);
   });
 
-  it('rejects unauthenticated question reads', () => {
+  it('từ chối đọc câu hỏi khi chưa xác thực', () => {
     return request(app.getHttpServer())
       .get('/questions/0196c6c5-7d76-7b23-8f22-530ff8ecf6a1')
       .expect(401);

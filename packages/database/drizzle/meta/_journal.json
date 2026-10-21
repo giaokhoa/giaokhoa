@@ -5,71 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1792476438790,
+      "when": 1792562301487,
       "tag": "0000_baseline",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1792490487162,
-      "tag": "0001_windy_madame_masque",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1792492201809,
-      "tag": "0002_abnormal_iron_monger",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1792494375826,
-      "tag": "0003_damp_black_panther",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1792496058531,
-      "tag": "0004_steep_jasper_sitwell",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1792497793337,
-      "tag": "0005_icy_lily_hollister",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1792499329405,
-      "tag": "0006_sturdy_nicolaos",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1792514371271,
-      "tag": "0007_files_subsystem",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1792549664172,
-      "tag": "0008_married_mephistopheles",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1792560352433,
-      "tag": "0009_illegal_vengeance",
       "breakpoints": true
     }
   ]

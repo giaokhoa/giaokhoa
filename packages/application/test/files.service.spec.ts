@@ -28,7 +28,9 @@ function createService() {
     findOwned: vi.fn(),
     findVariant: vi.fn(),
     assignedFileClasses: vi.fn(async () => [] as string[]),
-    hasReleasedSolutionFileAccess: vi.fn(async () => false),
+    releasedSolutionFileClasses: vi.fn(
+      async () => [] as Array<{ classId: string; enrolmentStatus: 'active' | 'left' }>,
+    ),
     findSourceOwned: vi.fn(),
     findVariantOwned: vi.fn(),
     discardOrphans: vi.fn(
@@ -56,8 +58,8 @@ function createService() {
   };
 }
 
-describe('FilesService', () => {
-  it('detects image bytes and persists an immutable original image', async () => {
+describe('Dịch vụ tệp (FilesService)', () => {
+  it('nhận diện dữ liệu ảnh và lưu ảnh gốc không thể thay đổi', async () => {
     const { service, repository, storage } = createService();
 
     const result = await service.createFile(
@@ -88,7 +90,7 @@ describe('FilesService', () => {
     });
   });
 
-  it('sanitizes a TikZ SVG and stores its source separately from the image bytes', async () => {
+  it('làm sạch SVG của TikZ và lưu mã nguồn riêng với dữ liệu ảnh', async () => {
     const { service, repository, storage } = createService();
     const svg = Buffer.from(
       '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80">' +
@@ -130,7 +132,7 @@ describe('FilesService', () => {
     });
   });
 
-  it('requires private TikZ source metadata for SVG uploads', async () => {
+  it('yêu cầu thông tin nguồn TikZ riêng tư khi tải SVG lên', async () => {
     const { service, repository, storage } = createService();
     const svg = Buffer.from(
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10"/></svg>',
@@ -144,7 +146,7 @@ describe('FilesService', () => {
     expect(repository.create).not.toHaveBeenCalled();
   });
 
-  it('uses the assignment capability before reading binary shared with a recipient', async () => {
+  it('kiểm tra quyền đối với bài giao trước khi đọc dữ liệu nhị phân được chia sẻ', async () => {
     const { service, repository, storage, authorization } = createService();
     const record = {
       id: FILE_ID,
@@ -176,7 +178,7 @@ describe('FilesService', () => {
     expect(storage.get).toHaveBeenCalledTimes(1);
   });
 
-  it('returns TikZ source only through the owner lookup', async () => {
+  it('chỉ trả mã nguồn TikZ khi tra cứu theo chủ sở hữu', async () => {
     const { service, repository } = createService();
     const source = {
       kind: 'tikz' as const,
@@ -188,7 +190,7 @@ describe('FilesService', () => {
     expect(repository.findSourceOwned).toHaveBeenCalledWith(FILE_ID, USER_ID);
   });
 
-  it('does not create crop variants for SVG images', async () => {
+  it('không tạo biến thể cắt ảnh đối với SVG', async () => {
     const { service, repository, storage } = createService();
     repository.findOwned.mockResolvedValueOnce({
       id: FILE_ID,
@@ -209,7 +211,7 @@ describe('FilesService', () => {
     expect(repository.createVariant).not.toHaveBeenCalled();
   });
 
-  it('persists a crop variant below an owned original image', async () => {
+  it('lưu biến thể cắt ảnh dưới ảnh gốc thuộc chủ sở hữu', async () => {
     const { service, repository, storage } = createService();
     repository.findOwned.mockResolvedValueOnce({
       id: FILE_ID,
@@ -247,7 +249,7 @@ describe('FilesService', () => {
     });
   });
 
-  it('does not allow creating a variant below an image the user does not own', async () => {
+  it('không cho tạo biến thể dưới ảnh không thuộc người dùng', async () => {
     const { service, repository, storage } = createService();
     repository.findOwned.mockResolvedValueOnce(undefined);
 
@@ -263,7 +265,7 @@ describe('FilesService', () => {
     expect(repository.createVariant).not.toHaveBeenCalled();
   });
 
-  it('rejects unsupported bytes before touching object storage', async () => {
+  it('từ chối dữ liệu không được hỗ trợ trước khi truy cập kho đối tượng', async () => {
     const { service, repository, storage } = createService();
 
     await expect(
@@ -277,7 +279,7 @@ describe('FilesService', () => {
     expect(repository.create).not.toHaveBeenCalled();
   });
 
-  it('deletes the uploaded object if original metadata persistence fails', async () => {
+  it('xóa đối tượng đã tải lên nếu lưu thông tin ảnh gốc thất bại', async () => {
     const { service, repository, storage } = createService();
     repository.create.mockRejectedValueOnce(new Error('database failed'));
 
@@ -291,7 +293,7 @@ describe('FilesService', () => {
     expect(storage.delete).toHaveBeenCalledOnce();
   });
 
-  it('deletes the uploaded variant if variant metadata persistence fails', async () => {
+  it('xóa biến thể đã tải lên nếu lưu thông tin biến thể thất bại', async () => {
     const { service, repository, storage } = createService();
     repository.findOwned.mockResolvedValueOnce({
       id: FILE_ID,
@@ -312,8 +314,8 @@ describe('FilesService', () => {
   });
 });
 
-describe('FilesService discard lifecycle', () => {
-  it('discards each pending image reference at most once', async () => {
+describe('Vòng đời loại bỏ tệp của dịch vụ tệp (FilesService)', () => {
+  it('mỗi tham chiếu ảnh đang chờ chỉ được loại bỏ tối đa một lần', async () => {
     const { service, repository } = createService();
     const discarded: Array<{ fileId: string; variantFileId: string | null }> = [];
     repository.discardOrphans.mockImplementationOnce(async (refs) => {
@@ -336,7 +338,7 @@ describe('FilesService discard lifecycle', () => {
     ]);
   });
 
-  it('rejects malformed discard payloads', async () => {
+  it('từ chối dữ liệu yêu cầu loại bỏ tệp sai cấu trúc', async () => {
     const { service, repository } = createService();
 
     await expect(
@@ -347,8 +349,8 @@ describe('FilesService discard lifecycle', () => {
   });
 });
 
-describe('FilesService garbage collection', () => {
-  it('continues batching when logical files are removed without deleting a shared blob', async () => {
+describe('Thu gom tệp không còn sử dụng của dịch vụ tệp (FilesService)', () => {
+  it('tiếp tục xử lý theo đợt khi xóa tệp logic nhưng vẫn giữ dữ liệu dùng chung', async () => {
     const { service, repository, storage } = createService();
     const cutoff = new Date('2026-01-01T00:00:00Z');
     repository.queueExpiredOrphans
@@ -363,8 +365,8 @@ describe('FilesService garbage collection', () => {
   });
 });
 
-describe('FilesService binary access', () => {
-  it('returns original bytes only after the repository confirms ownership', async () => {
+describe('Quyền truy cập dữ liệu nhị phân qua dịch vụ tệp (FilesService)', () => {
+  it('chỉ trả dữ liệu ảnh gốc sau khi kho dữ liệu xác nhận quyền sở hữu', async () => {
     const { service, repository, storage } = createService();
     repository.findOwned.mockResolvedValueOnce(undefined);
     await expect(service.getFile(FILE_ID, USER_ID)).rejects.toMatchObject({
@@ -388,7 +390,7 @@ describe('FilesService binary access', () => {
     expect(repository.findOwned).toHaveBeenCalledWith(FILE_ID, USER_ID);
   });
 
-  it('requires ownership of the parent image before serving a variant', async () => {
+  it('yêu cầu quyền sở hữu ảnh gốc trước khi cung cấp biến thể', async () => {
     const { service, repository, storage } = createService();
     repository.findVariantOwned.mockResolvedValueOnce(undefined);
     await expect(service.getVariant(FILE_ID, VARIANT_FILE_ID, USER_ID)).rejects.toMatchObject({

@@ -1,72 +1,27 @@
-# Quyết định tổ chức database schema
+# Tầng cơ sở dữ liệu
 
-Schema được tách theo quyền sở hữu:
+`@giaokhoa/database` sở hữu bảng Drizzle tại `src/schema/`, bộ chuyển đổi kho dữ liệu PostgreSQL và các bản di trú tại `drizzle/`. Các bảng dùng khi chạy được công khai qua `@giaokhoa/database/schema`; các kiểu dữ liệu lưu trữ qua `@giaokhoa/database/types`. Quy định chi tiết về ranh giới nghiệp vụ và kiểm thử nằm trong `AGENTS.md`.
 
-- `auth.generated.ts` — schema do Better Auth CLI sinh.
-- `images.ts` — metadata media image; bytes nằm trong S3-compatible object storage.
-- `curriculum.ts` — môn học, chương trình theo môn/lớp, cây nội dung, yêu cầu cần đạt và liên kết câu hỏi.
-- `questions.ts` — schema domain Questions và Stimuli.
-- `index.ts` — entry point chung cho Drizzle và Nest.
+## Quy trình tạo lược đồ xác thực
 
-Cấu trúc này giữ generated auth schema và handwritten domain schema độc lập với nhau.
-
-## Better Auth và UUIDv7
-
-Drizzle adapter của Better Auth dùng `usePlural: true`, nên các bảng auth có tên:
-
-- `users`
-- `sessions`
-- `accounts`
-- `verifications`
-
-Runtime Better Auth dùng `advanced.database.generateId: false`, nên PostgreSQL chịu trách nhiệm sinh
-ID. Riêng `auth.config.ts` dùng `"uuid"` khi chạy CLI để generated schema có sẵn PostgreSQL `uuid` cho
-primary key và foreign key.
-
-Lệnh `auth:generate` chạy theo pipeline:
-
-```text
-auth generate
--> auth.generated.ts
--> patch-auth-schema.mjs
-```
-
-Better Auth CLI sinh UUID với default `pg_catalog.gen_random_uuid()`. `patch-auth-schema.mjs` chỉ đổi
-default đó sang PostgreSQL 18 `uuidv7()`.
-
-Lệnh chuẩn để regenerate auth schema:
+`src/schema/auth.generated.ts` do công cụ dòng lệnh Better Auth sinh ra; không sửa trực tiếp tệp được tạo. Lệnh chuẩn:
 
 ```sh
 pnpm --filter @giaokhoa/api auth:generate
 ```
 
-## Migration trong giai đoạn init
+Lệnh thực hiện lần lượt các bước:
 
-Trong giai đoạn phát triển initial schema, mọi thay đổi schema được phản ánh bằng cách tạo lại migration
-`0000` từ đầu. Migration history bắt đầu ổn định khi database/version mục tiêu được chốt để triển khai.
+1. Better Auth đọc `apps/api/src/auth/auth.config.ts` và tạo `auth.generated.ts` theo các bảng dạng số nhiều `users`, `sessions`, `accounts`, `verifications` vì cấu hình `usePlural: true`.
+2. `apps/api/scripts/patch-auth-schema.mjs` đổi giá trị sinh UUID mặc định `pg_catalog.gen_random_uuid()` thành `uuidv7()`, do PostgreSQL 18 chịu trách nhiệm cấp định danh.
+3. Mã chạy của Better Auth dùng `generateId: false`; cấu hình phục vụ công cụ tạo lược đồ dùng kiểu `uuid` để khóa chính và khóa ngoại có kiểu PostgreSQL thống nhất.
 
-## Ranh giới package
+Sau khi tái tạo lược đồ, đối chiếu bảng, ràng buộc và bản di trú trước khi áp dụng. Không tự ý sửa tệp sinh để che giấu sai lệch cấu hình.
 
-`@giaokhoa/database` là nguồn chuẩn của tầng lưu trữ trong workspace:
+## Bản di trú gốc
 
-- `src/schema/*` chứa bảng, quan hệ, ràng buộc và chỉ mục Drizzle.
-- `src/types.ts` xuất `$inferSelect` / `$inferInsert` dưới dạng type-only.
-- `drizzle/` và `drizzle.config.ts` quản lý migration.
+Trong giai đoạn phát triển **chưa giữ dữ liệu**, `drizzle/0000_baseline.sql` là bản di trú duy nhất cho cơ sở dữ liệu trống, bao gồm dữ liệu khởi tạo phân quyền theo vai trò (RBAC). Nhật ký `drizzle/meta/_journal.json` và ảnh chụp `drizzle/meta/0000_snapshot.json` phải khớp bản di trú cùng lược đồ hiện tại.
 
-Repository của API import bảng runtime từ `@giaokhoa/database/schema/*`. Các package chỉ cần
-kiểu dữ liệu sử dụng `import type` từ `@giaokhoa/database/types` để kiểm tra projection;
-web/editor không phụ thuộc vào database.
+**Không áp dụng bản di trú gốc này lên cơ sở dữ liệu đã chạy các bản di trú cũ.** Môi trường thử nghiệm hoặc phát triển cũ cần được chuẩn bị lại trước khi dùng bản gốc mới; nếu phải giữ dữ liệu, cần có phương án chuyển đổi được phê duyệt riêng.
 
-## Quy ước đặt tên
-
-Tên package thống nhất là `@giaokhoa/database`, không viết tắt thành `@giaokhoa/db`.
-
-- Biến bảng runtime dùng danh từ số nhiều dạng lower-camel: `subjects`, `questions`, `imageVariants`.
-- Kiểu persistence suy ra công khai dùng `{Entity}Row` cho `$inferSelect` và `{Entity}Insert`
-  cho `$inferInsert`.
-- Import schema runtime từ `@giaokhoa/database/schema` hoặc `@giaokhoa/database/schema/<group>`.
-- Package chỉ dùng kiểu dữ liệu import từ `@giaokhoa/database/types`.
-- Thành phần cần đường dẫn migration dùng `@giaokhoa/database/migrations`.
-
-Không tạo alias tương thích `@giaokhoa/db`; một tên chuẩn giúp đồ thị phụ thuộc và thay đổi
-do agent thực hiện nhất quán.
+Các câu lệnh sinh và thực thi bản di trú được khai báo trong `packages/database/package.json`. Không đưa truy vấn bảng Drizzle vào gói nghiệp vụ hoặc bộ điều khiển HTTP.

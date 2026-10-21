@@ -3,7 +3,7 @@ import { ClientError } from '@giaokhoa/application/common/client-error';
 import { describe, expect, it, vi } from 'vitest';
 import { ClientErrorFilter } from './client-error.filter.js';
 
-describe('ClientErrorFilter authorization responses', () => {
+describe('Phản hồi phân quyền của bộ lọc lỗi (ClientErrorFilter)', () => {
   it.each([
     ['forbidden', 403],
     ['not_found', 404],

@@ -421,12 +421,23 @@ export class FilesService {
       });
       if (decision.allowed) return;
     }
-    // Quyền xem lời giải đi theo attempt đã hoàn tất và mốc release, không
-    // đi theo quyền xem đề hiện tại (học sinh có thể đã rời lớp).
-    if (
-      await this.repository.hasReleasedSolutionFileAccess(fileId, variantFileId, userId, this.now())
-    )
-      return;
+    // Người đã rời lớp chỉ đọc lời giải của lượt đã nộp; thành viên đang
+    // hoạt động vẫn phải có quyền xem kết quả tại thời điểm yêu cầu.
+    const released = await this.repository.releasedSolutionFileClasses(
+      fileId,
+      variantFileId,
+      userId,
+      this.now(),
+    );
+    for (const { classId, enrolmentStatus } of released) {
+      if (enrolmentStatus === 'left') return;
+      const decision = await this.authorization.authorize({
+        actorId: userId,
+        capability: 'result:view_own',
+        context: { kind: 'class', resourceKey: classId },
+      });
+      if (decision.allowed) return;
+    }
     throw new ClientError('not_found', 'file_not_found', 'Ảnh không tồn tại');
   }
 
