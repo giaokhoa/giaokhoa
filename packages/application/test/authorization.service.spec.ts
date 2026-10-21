@@ -47,15 +47,15 @@ class FakeAuthorizationRepository implements AuthorizationRepository {
   }
 
   async createContextWithRole(_input: ContextWithRoleInput): Promise<AuthorizationContext> {
-    throw new Error('Not used in evaluator tests');
+    throw new Error('Không dùng trong các trường hợp kiểm thử xét quyền');
   }
 
   async assignRole(_input: RoleAssignmentInput): Promise<boolean> {
-    throw new Error('Not used in evaluator tests');
+    throw new Error('Không dùng trong các trường hợp kiểm thử xét quyền');
   }
 
   async revokeRole(_contextId: string, _userId: string, _roleKey: string): Promise<boolean> {
-    throw new Error('Not used in evaluator tests');
+    throw new Error('Không dùng trong các trường hợp kiểm thử xét quyền');
   }
 
   set(actorId: string, capability: string, grants: PermissionGrant[]) {
