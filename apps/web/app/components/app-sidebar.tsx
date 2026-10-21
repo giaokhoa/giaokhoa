@@ -18,9 +18,18 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router';
 import { NavMain } from '#components/nav-main.js';
+import { authClient } from '#features/auth/api/auth-client.js';
 import { NavUser } from '#components/nav-user.js';
 
-const navItems = [
+type NavEntry = {
+  title: string;
+  url: string;
+  icon: React.ReactNode;
+  teacherOnly?: boolean;
+  items?: { title: string; url: string }[];
+};
+
+const navItems: NavEntry[] = [
   {
     title: 'Tổng quan',
     url: '/',
@@ -34,11 +43,13 @@ const navItems = [
   {
     title: 'Đề thi',
     url: '/exams',
+    teacherOnly: true,
     icon: <FileTextIcon />,
   },
   {
     title: 'Giao bài',
     url: '/assignments/new',
+    teacherOnly: true,
     icon: <ClipboardListIcon />,
   },
   {
@@ -56,6 +67,10 @@ const navItems = [
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { isMobile, setOpenMobile } = useSidebar();
+  const { data: session } = authClient.useSession();
+  const role = (session?.user as { role?: string } | undefined)?.role;
+  const canTeach = role === 'teacher' || role === 'admin';
+  const items = navItems.filter((item) => !item.teacherOnly || canTeach);
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -73,7 +88,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={navItems} />
+        <NavMain items={items} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser />
