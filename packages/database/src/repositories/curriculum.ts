@@ -31,6 +31,10 @@ function hasPostgresCode(error: unknown, code: string) {
   return false;
 }
 
+/**
+ * Lớp truy cập PostgreSQL cho môn học, chương trình, cây nội dung và yêu cầu cần đạt.
+ * Giữ quan hệ cha-con trong cùng chương trình, đồng thời liên kết câu hỏi với môn và yêu cầu cần đạt.
+ */
 export class PostgresCurriculumRepository implements CurriculumRepository {
   constructor(private readonly db: Database) {}
 

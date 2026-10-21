@@ -117,6 +117,10 @@ async function revokeStudent(tx: Transaction, row: typeof classes.$inferSelect, 
     );
 }
 
+/**
+ * Lớp truy cập PostgreSQL để quản lý lớp học, thành viên và mã mời.
+ * Các thao tác tham gia, phê duyệt hoặc đình chỉ dùng giao dịch và thứ tự khóa ổn định để giữ nhất quán quyền trong lớp.
+ */
 export class PostgresClassesRepository implements ClassesRepository {
   constructor(private readonly db: Database) {}
 
@@ -250,8 +254,9 @@ export class PostgresClassesRepository implements ClassesRepository {
   }
 
   /**
-   * Khóa lớp rồi mã và enrolment để kiểm hạn/số lượt dùng, cập nhật thành viên
-   * và cấp class:student trong một transaction; pending chưa được cấp role.
+   * Khóa lần lượt lớp, mã mời và bản ghi tham gia lớp (enrolment) để kiểm tra hạn sử dụng,
+   * cập nhật thành viên và cấp vai trò class:student trong cùng một giao dịch (transaction).
+   * Thành viên đang chờ duyệt (pending) chưa được cấp vai trò này.
    */
   async join(codeHash: string, actorId: string, now: Date) {
     return this.db.transaction(async (tx) => {
@@ -267,7 +272,7 @@ export class PostgresClassesRepository implements ClassesRepository {
         .where(eq(classJoinCodes.codeHash, codeHash))
         .limit(1);
       if (!codeRef) throw codeInvalid();
-      // Khóa lớp trước mã để cùng thứ tự với thao tác thu hồi, tránh deadlock.
+      // Khóa lớp trước mã mời, cùng thứ tự với thao tác thu hồi để tránh kẹt khóa (deadlock).
       const [classroom] = await tx
         .select()
         .from(classes)

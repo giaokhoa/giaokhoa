@@ -22,6 +22,10 @@ function invalidQuestion() {
   );
 }
 
+/**
+ * Lớp truy cập PostgreSQL cho đề thi và các bản sửa đổi có nội dung cố định.
+ * Chốt bản chụp câu hỏi thuộc tác giả tại thời điểm tạo bản sửa đổi để những chỉnh sửa sau không đổi đề đã giao.
+ */
 export class PostgresExamsRepository implements ExamsRepository {
   constructor(private readonly db: Database) {}
 
@@ -81,8 +85,9 @@ export class PostgresExamsRepository implements ExamsRepository {
   }
 
   /**
-   * Chốt revision bằng snapshot từ question version thuộc tác giả và đang ready.
-   * Khóa bank entry theo thứ tự ID để tránh sửa/xóa cạnh tranh khi chụp đề.
+   * Chốt bản sửa đổi đề thi (revision) bằng bản chụp (snapshot) từ phiên bản câu hỏi
+   * do tác giả sở hữu và đang sẵn sàng sử dụng (ready). Khóa các mục ngân hàng câu hỏi
+   * theo thứ tự mã định danh để tránh sửa hoặc xóa đồng thời lúc tạo bản chụp.
    */
   async createRevision(
     id: string,
@@ -111,7 +116,7 @@ export class PostgresExamsRepository implements ExamsRepository {
         .limit(1);
       if (!exam) return undefined;
 
-      // Khóa Question bank entry theo thứ tự cố định để serialize với delete/status update.
+      // Khóa mục ngân hàng câu hỏi theo thứ tự cố định để đồng bộ với thao tác xóa và đổi trạng thái.
       const byId = [...input.questions].sort((a, b) => a.questionId.localeCompare(b.questionId));
       const snapshots = new Map<
         string,

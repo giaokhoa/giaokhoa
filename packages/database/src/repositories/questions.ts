@@ -52,12 +52,16 @@ function revisionChanged() {
   );
 }
 
+/**
+ * Lớp truy cập PostgreSQL cho ngân hàng câu hỏi, các phiên bản nội dung và ngữ liệu.
+ * Giữ quyền sở hữu, phiên bản bất biến và tham chiếu tệp nhất quán khi tạo, sửa, công bố hoặc xóa câu hỏi.
+ */
 export class PostgresQuestionsRepository implements QuestionsRepository {
   constructor(private readonly db: Database) {}
 
   async createQuestion(data: QuestionCreate, refs: FileRef[], userId: string) {
     return this.db.transaction(async (tx) => {
-      // Luôn khóa stimulus trước file để không đảo thứ tự với updateStimulus.
+      // Luôn khóa ngữ liệu (stimulus) trước tệp, cùng thứ tự với thao tác cập nhật ngữ liệu.
       await this.lockOwnedStimulus(tx, data.stimulusId, userId);
       await this.validateFileRefs(tx, refs, userId);
       const [entry] = await tx
@@ -120,7 +124,8 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
       : undefined;
   }
 
-  /** Lọc owner tại bank entry rồi lấy phiên bản mới nhất; không tiết lộ tồn tại bằng ID. */
+  /** Kiểm tra chủ sở hữu tại mục ngân hàng câu hỏi trước khi lấy phiên bản mới nhất;
+   * không tiết lộ sự tồn tại của câu hỏi cho người không có quyền. */
   async findQuestionOwned(id: string, userId: string) {
     const [row] = await this.db
       .select({
@@ -206,7 +211,7 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
         .orderBy(desc(questionVersions.version))
         .limit(1);
       if (!latest || latest.version !== expectedVersion) throw revisionChanged();
-      // Luôn khóa stimulus trước file để không đảo thứ tự với updateStimulus.
+      // Luôn khóa ngữ liệu (stimulus) trước tệp, cùng thứ tự với thao tác cập nhật ngữ liệu.
       await this.lockOwnedStimulus(tx, data.stimulusId, userId);
       await this.validateFileRefs(tx, refs, userId);
       const { status, ...definition } = data;
@@ -222,7 +227,7 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
         version: nextVersion,
         status,
       });
-      // Mỗi phiên bản nội dung giữ các tham chiếu file riêng, kể cả bản nháp đã bị thay thế.
+      // Mỗi phiên bản nội dung giữ tham chiếu tệp riêng, kể cả bản nháp đã bị thay thế.
       await this.replaceFileUses(tx, id, content.id, definition);
       return parseStoredQuestion(id, userId, nextVersion, status, content);
     });
@@ -280,7 +285,7 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
           'Phiên bản câu hỏi đã được chốt vào đề',
         );
 
-      // Chuyển từ nháp sang sẵn sàng dùng chung khóa stimulus với thao tác chỉnh sửa stimulus.
+      // Khi chuyển câu hỏi từ nháp sang sẵn sàng, khóa ngữ liệu cùng cách với thao tác chỉnh sửa ngữ liệu.
       if (status === 'ready') await this.lockOwnedStimulus(tx, latest.content.stimulusId, userId);
       await tx
         .update(questionVersions)
@@ -390,7 +395,7 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
           .select({ fileId: fileUses.fileId })
           .from(fileUses)
           .where(and(eq(fileUses.component, 'stimuli'), eq(fileUses.itemId, id)));
-        // Khóa hợp nhất refs cũ và mới trước khi đổi nội dung để tránh khóa chéo khi sửa đồng thời.
+        // Khóa tập hợp tham chiếu tệp cũ và mới trước khi đổi nội dung để tránh kẹt khóa khi sửa đồng thời.
         await this.validateFileRefs(
           tx,
           refs,
@@ -500,7 +505,7 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
       (ref): ref is FileRef & { variantFileId: string } => ref.variantFileId !== null,
     );
     const variantIds = [...new Set(variants.map(({ variantFileId }) => variantFileId))].sort();
-    // Khóa theo cây: file gốc trước, crop sau, cùng thứ tự với GC và detach.
+    // Khóa theo cây: tệp gốc trước, ảnh cắt (crop) sau, cùng thứ tự với thu gom và gỡ liên kết.
     await this.lockFileIds(tx, [...originalIds, ...variantIds, ...extraLockIds]);
     if (!originalIds.length) return;
 
@@ -569,8 +574,8 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
 
     for (const { fileArea, refs } of areas) {
       for (const { fileId, variantFileId } of refs) {
-        // Chỉ biến thể đang hiển thị được cấp quyền qua file area nội dung.
-        // Original của ảnh crop vẫn được giữ để chủ sở hữu chỉnh sửa, nhưng không phát cho học sinh.
+        // Chỉ biến thể đang hiển thị được cấp quyền thông qua vùng nội dung của tệp.
+        // Ảnh gốc của bản cắt vẫn được giữ cho chủ sở hữu chỉnh sửa, nhưng không cấp cho học sinh.
         rows.push({
           fileId: variantFileId ?? fileId,
           contextId,
@@ -588,7 +593,7 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
     await tx.insert(fileUses).values(rows).onConflictDoNothing();
     const usedFileIds = [...new Set(rows.map(({ fileId }) => fileId))];
     await tx.update(files).set({ orphanedAt: null }).where(inArray(files.id, usedFileIds));
-    // File đã được attach không cần giữ thêm draft reference.
+    // Tệp đã gắn vào nội dung không cần tiếp tục giữ tham chiếu ở vùng nháp.
     await tx
       .delete(fileUses)
       .where(

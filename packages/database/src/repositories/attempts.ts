@@ -128,6 +128,10 @@ async function detail(tx: Transaction, row: AttemptRow, teacher = false) {
     : attemptSchema.parse(dto);
 }
 
+/**
+ * Lớp truy cập PostgreSQL cho lượt làm và câu trả lời của học sinh.
+ * Phối hợp khóa bản ghi với ràng buộc cơ sở dữ liệu để bảo vệ giới hạn số lượt làm, thời hạn và vòng đời nộp/chấm.
+ */
 export class PostgresAttemptsRepository implements AttemptsRepository {
   constructor(private readonly db: Database) {}
 
@@ -166,7 +170,7 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
     const classId = await this.findAssignmentClass(assignmentId);
     if (!classId) throw unavailable();
     return this.db.transaction(async (tx) => {
-      // ponytail: Khóa theo lớp để đồng bộ với join/suspend; cân nhắc khóa từng recipient nếu tải cao.
+      // ponytail: Khóa theo lớp để đồng bộ khi tham gia hoặc đình chỉ thành viên; nếu tải cao, chuyển sang khóa từng bản ghi người nhận (recipient).
       const [classroom] = await tx
         .select()
         .from(classes)
@@ -233,8 +237,9 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
   }
 
   /**
-   * Dùng chung cho save/submit để khóa lớp và attempt trong cùng transaction.
-   * Chặn sửa khi hết giờ, đã nộp, enrolment bị ngừng hoặc recipient bị thu hồi.
+   * Dùng chung cho lưu đáp án và nộp bài để khóa lớp và lượt làm (attempt)
+   * trong cùng một giao dịch (transaction). Không cho sửa khi hết giờ, đã nộp,
+   * quan hệ tham gia lớp (enrolment) bị ngừng hoặc quyền nhận bài đã bị thu hồi.
    */
   private async writable(tx: Transaction, id: string, actorId: string, now: Date) {
     const [ref] = await tx

@@ -13,15 +13,34 @@ import {
 } from 'drizzle-orm/pg-core';
 import { users } from './auth.generated.js';
 
+/**
+ * Biểu diễn phạm vi phân quyền (authorization context) cho hệ thống, người dùng, ngân hàng câu hỏi và từng tài nguyên.
+ * Quan hệ cha-con cho phép tra quyền từ tài nguyên cụ thể lên phạm vi cao hơn; bộ đôi loại và khóa tài nguyên phải duy nhất.
+ */
 export const authzContexts = pgTable(
   'authz_contexts',
   {
+    /**
+     * Mã phạm vi phân quyền duy nhất, được PostgreSQL cấp UUIDv7.
+     */
     id: uuid('id')
       .default(sql`uuidv7()`)
       .primaryKey(),
+    /**
+     * Loại phạm vi: hệ thống, người dùng, ngân hàng câu hỏi, câu hỏi, đề thi, lớp học hoặc bài giao; SQL giới hạn các giá trị được phép.
+     */
     kind: text('kind').notNull(),
+    /**
+     * Mã tài nguyên trong loại phạm vi tương ứng; kết hợp với loại phạm vi để không tạo hai phạm vi cho cùng tài nguyên.
+     */
     resourceKey: text('resource_key').notNull(),
+    /**
+     * Phạm vi cha để kế thừa và xét quyền theo cây; để trống đối với phạm vi gốc và không được trỏ đến chính mình.
+     */
     parentId: uuid('parent_id').references((): AnyPgColumn => authzContexts.id),
+    /**
+     * Thời điểm phạm vi được tạo, phục vụ truy vết vòng đời phân quyền.
+     */
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => [
@@ -38,14 +57,30 @@ export const authzContexts = pgTable(
   ],
 );
 
+/**
+ * Danh mục vai trò (role) dùng để gom các quyền mà người dùng có thể được cấp trong một phạm vi.
+ * Tách vai trò khỏi người dùng để nhiều người dùng cùng sử dụng một định nghĩa quyền nhất quán.
+ */
 export const authzRoles = pgTable(
   'authz_roles',
   {
+    /**
+     * Mã vai trò duy nhất, do PostgreSQL cấp UUIDv7.
+     */
     id: uuid('id')
       .default(sql`uuidv7()`)
       .primaryKey(),
+    /**
+     * Mã vai trò ổn định và không trùng, được code nghiệp vụ dùng để tra cứu.
+     */
     key: text('key').notNull().unique(),
+    /**
+     * Loại phạm vi mà vai trò có hiệu lực: toàn hệ thống (system) hoặc trong lớp học (class).
+     */
     contextKind: text('context_kind').notNull(),
+    /**
+     * Đánh dấu vai trò dựng sẵn của hệ thống; mặc định là có để phân biệt với vai trò có thể được bổ sung sau này.
+     */
     isBuiltin: boolean('is_builtin').default(true).notNull(),
   },
   (table) => [
@@ -53,14 +88,30 @@ export const authzRoles = pgTable(
   ],
 );
 
+/**
+ * Danh mục khả năng thực hiện thao tác (capability) mà hệ thống kiểm soát qua phân quyền.
+ * Định nghĩa khả năng một lần rồi liên kết với nhiều vai trò để tránh nhân bản tên quyền và ý nghĩa của chúng.
+ */
 export const authzCapabilities = pgTable(
   'authz_capabilities',
   {
+    /**
+     * Mã khả năng duy nhất, do PostgreSQL tự cấp UUIDv7.
+     */
     id: uuid('id')
       .default(sql`uuidv7()`)
       .primaryKey(),
+    /**
+     * Mã khả năng ổn định, chẳng hạn quyền quản trị nền tảng; phải duy nhất để các thao tác kiểm tra quyền dùng cùng một tên.
+     */
     key: text('key').notNull().unique(),
+    /**
+     * Loại phạm vi áp dụng khả năng: hệ thống (system) hoặc lớp học (class).
+     */
     contextKind: text('context_kind').notNull(),
+    /**
+     * Mô tả ý nghĩa khả năng cho việc quản trị và rà soát quyền; không dùng làm khóa nhận dạng.
+     */
     description: text('description').notNull(),
   },
   (table) => [
@@ -71,15 +122,29 @@ export const authzCapabilities = pgTable(
   ],
 );
 
+/**
+ * Xác định tác động của một vai trò lên một khả năng tại phạm vi thích hợp.
+ * Cặp vai trò và khả năng chỉ được định nghĩa một lần; kết quả cho phép hay từ chối còn phụ thuộc cây phạm vi và các vai trò đang được cấp.
+ */
 export const authzRolePermissions = pgTable(
   'authz_role_permissions',
   {
+    /**
+     * Vai trò nhận quy tắc quyền này; tham chiếu đến danh mục vai trò.
+     */
     roleId: uuid('role_id')
       .notNull()
       .references(() => authzRoles.id),
+    /**
+     * Khả năng được điều khiển bởi quy tắc này; tham chiếu đến danh mục khả năng.
+     */
     capabilityId: uuid('capability_id')
       .notNull()
       .references(() => authzCapabilities.id),
+    /**
+     * Cách xử lý quyền: kế thừa (INHERIT), cho phép (ALLOW), ngăn (PREVENT) hoặc cấm tuyệt đối (PROHIBIT).
+     * Tầng nghiệp vụ ưu tiên lệnh cấm tuyệt đối trên toàn cây; ở cùng cấp, ngăn có ưu tiên hơn cho phép.
+     */
     effect: text('effect').notNull(),
   },
   (table) => [
@@ -91,24 +156,52 @@ export const authzRolePermissions = pgTable(
   ],
 );
 
+/**
+ * Ghi nhận việc gán vai trò cho một người dùng tại một phạm vi cụ thể và lưu lịch sử thu hồi.
+ * Chỉ cho phép một lần gán đang có hiệu lực cho cùng bộ người dùng, vai trò và phạm vi; bản đã thu hồi được giữ để truy vết.
+ */
 export const authzRoleAssignments = pgTable(
   'authz_role_assignments',
   {
+    /**
+     * Mã sự kiện gán vai trò duy nhất, được PostgreSQL cấp UUIDv7.
+     */
     id: uuid('id')
       .default(sql`uuidv7()`)
       .primaryKey(),
+    /**
+     * Người dùng được gán vai trò và hưởng các quyền tương ứng.
+     */
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id),
+    /**
+     * Vai trò được cấp cho người dùng tại phạm vi đã chọn.
+     */
     roleId: uuid('role_id')
       .notNull()
       .references(() => authzRoles.id),
+    /**
+     * Phạm vi tài nguyên mà lần gán vai trò có hiệu lực; dùng khi xét quyền theo cây phạm vi.
+     */
     contextId: uuid('context_id')
       .notNull()
       .references(() => authzContexts.id),
+    /**
+     * Nguồn hoặc lý do phát sinh lần gán, để phân biệt việc cấp quyền theo cơ chế nào.
+     */
     source: text('source').notNull(),
+    /**
+     * Tài khoản thực hiện cấp vai trò; có thể trống đối với lần cấp tự động của hệ thống.
+     */
     grantedByUserId: uuid('granted_by_user_id').references(() => users.id),
+    /**
+     * Thời điểm cấp vai trò, dùng trong lịch sử phân quyền.
+     */
     grantedAt: timestamp('granted_at').defaultNow().notNull(),
+    /**
+     * Thời điểm thu hồi; để trống nghĩa là lần gán còn hiệu lực và thuộc ràng buộc duy nhất của các lần gán đang hoạt động.
+     */
     revokedAt: timestamp('revoked_at'),
   },
   (table) => [

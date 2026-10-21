@@ -37,6 +37,10 @@ function invalidRole() {
   );
 }
 
+/**
+ * Lớp truy cập PostgreSQL phục vụ kiểm tra quyền theo vai trò và phạm vi tài nguyên.
+ * Kết hợp vai trò hệ thống của Better Auth với quan hệ thành viên lớp để không cấp quyền từ bản ghi đã hết hiệu lực.
+ */
 export class PostgresAuthorizationRepository implements AuthorizationRepository {
   constructor(private readonly db: Database) {}
 
@@ -59,8 +63,10 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
   }
 
   /**
-   * Better Auth users.role là nguồn System grant; không tạo bản sao assignment ở System.
-   * Role học sinh chỉ có hiệu lực khi enrolment và lớp đều active; banned/role lạ không có grant.
+   * Trường users.role của Better Auth là nguồn cấp vai trò ở phạm vi hệ thống (system);
+   * không tạo thêm bản ghi gán vai trò trùng lặp tại phạm vi này.
+   * Vai trò học sinh chỉ có hiệu lực khi quan hệ tham gia (enrolment) và lớp đều hoạt động;
+   * tài khoản bị cấm hoặc có vai trò không được nhận diện sẽ không được cấp quyền.
    */
   async findPermissions(actorId: string, capability: string, contextIds: string[]) {
     if (contextIds.length === 0) return [];
@@ -89,8 +95,8 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
           inArray(authzRoleAssignments.contextId, contextIds),
           isNull(authzRoleAssignments.revokedAt),
           eq(authzCapabilities.key, capability),
-          // Khi tài khoản không còn là giáo viên, chỉ giữ grant học sinh;
-          // assignment quản lý lớp vẫn lưu để tự có hiệu lực khi nâng vai trò lại.
+          // Khi tài khoản không còn là giáo viên, chỉ cấp quyền học sinh;
+          // vẫn giữ bản ghi gán vai trò quản lý lớp để khôi phục hiệu lực khi trở lại vai trò giáo viên.
           actor.role === 'user' ? eq(authzRoles.key, 'class:student') : undefined,
           or(
             ne(authzRoles.key, 'class:student'),

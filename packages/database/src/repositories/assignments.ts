@@ -86,6 +86,10 @@ function config(input: ReturnType<typeof assignmentCreateSchema.parse>) {
   };
 }
 
+/**
+ * Lớp truy cập PostgreSQL cho bài giao và danh sách người nhận.
+ * Đảm bảo công bố bài giao dựa trên thành viên lớp tại thời điểm chốt, tránh phát sinh người nhận ngoài ý muốn khi lớp thay đổi.
+ */
 export class PostgresAssignmentsRepository implements AssignmentsRepository {
   constructor(private readonly db: Database) {}
 
@@ -176,8 +180,9 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
   }
 
   /**
-   * Khóa lớp trước assignment để serialize với join/suspend.
-   * Snapshot recipient chỉ lấy active enrolments và publish lặp không giao thêm lần nữa.
+   * Khóa lớp trước bài giao (assignment) để đồng bộ với thao tác tham gia hoặc đình chỉ lớp.
+   * Danh sách người nhận tại lúc công bố chỉ gồm thành viên đang hoạt động;
+   * công bố lặp lại không được bổ sung người nhận lần nữa.
    */
   async publish(id: string, actorId: string) {
     const [existing] = await this.db
@@ -187,7 +192,7 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
       .limit(1);
     if (!existing) return undefined;
     return this.db.transaction(async (tx) => {
-      // Khóa lớp trước assignment: join/suspend cũng khóa lớp đầu tiên.
+      // Khóa lớp trước bài giao; thao tác tham gia hoặc đình chỉ thành viên cũng khóa lớp trước.
       const [classroom] = await tx
         .select()
         .from(classes)
@@ -371,7 +376,8 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
       openAt: match.assignment.openAt,
       closeAt: match.assignment.closeAt,
       maxAttempts: match.assignment.maxAttempts,
-      // Chỉ ghép ngữ liệu vào projection học sinh đã được kiểm quyền, không mở GET stimuli theo ID.
+      // Chỉ thêm ngữ liệu vào dữ liệu trả cho học sinh sau khi đã kiểm tra quyền;
+      // không cho phép đọc ngữ liệu tùy ý chỉ bằng mã định danh.
       questions: entries.map(({ position, question }) => ({
         position,
         question: {
