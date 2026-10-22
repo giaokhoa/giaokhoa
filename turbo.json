@@ -18,6 +18,7 @@
       "persistent": true,
       "env": ["NODE_ENV", "PORT"]
     },
+    "reset": { "cache": false },
     "typecheck": {
       "dependsOn": ["^build"]
     },
