@@ -25,7 +25,16 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
 import { parseAnswer, parseQuestionContent, textToDocument } from './attempt-data';
 import { RichDocument } from './attempt-ui';
-import { canAutoSave, clearDraft, readDraft, writeDraft, type AnswerDraft } from './draft-storage';
+import {
+  autosaveDelay,
+  clearDraft,
+  draftConflicts,
+  readDraft,
+  shouldClearDraft,
+  shouldRestoreDraft,
+  writeDraft,
+  type AnswerDraft,
+} from './draft-storage';
 
 function documentText(value: unknown): string | null {
   if (!value || typeof value !== 'object' || !('content' in value) || !Array.isArray(value.content))
@@ -95,12 +104,16 @@ export function AnswerForm({
   attemptId,
   item,
   saved,
+  serverVersion,
+  finished,
   onDirty,
   readOnly = false,
 }: {
   attemptId: string;
   item: StudentAssignment['questions'][number];
   saved?: AttemptAnswer;
+  serverVersion: string | null;
+  finished: boolean;
   onDirty: (position: number, dirty: boolean) => void;
   readOnly?: boolean;
 }) {
@@ -108,8 +121,13 @@ export function AnswerForm({
   const prefix = useId();
   const storageKey = 'giaokhoa:attempt:' + attemptId + ':question:' + item.position;
   const restoredKey = useRef<string | null>(null);
+  const baseVersion = useRef(serverVersion);
+  const observedVersion = useRef(serverVersion);
   const submittedAnswer = useRef<string | null>(null);
+  const handledResponse = useRef(fetcher.data);
+  const [conflict, setConflict] = useState(false);
   const [failedAnswer, setFailedAnswer] = useState<string | null>(null);
+  const [failures, setFailures] = useState(0);
   const [hydrated, setHydrated] = useState(false);
   const [restored, setRestored] = useState(false);
   const [storageError, setStorageError] = useState(false);
@@ -155,7 +173,7 @@ export function AnswerForm({
       !edited ||
       draftVersion === previousSavedVersion ||
       draftVersion === savedVersion ||
-      readOnly
+      finished
     ) {
       setDraft(createAnswerDraft(saved));
       setEdited(false);
@@ -167,48 +185,102 @@ export function AnswerForm({
   useEffect(() => {
     if (restoredKey.current === storageKey) return;
     restoredKey.current = storageKey;
-    if (!readOnly) {
+    if (shouldRestoreDraft(finished)) {
       const local = readDraft(window, storageKey);
-      if (local && JSON.stringify(local) !== JSON.stringify(createAnswerDraft(saved))) {
-        setDraft(local);
+      if (local && JSON.stringify(local.draft) !== JSON.stringify(createAnswerDraft(saved))) {
+        baseVersion.current = local.serverVersion === undefined ? '' : local.serverVersion;
+        setDraft(local.draft);
         setEdited(true);
         setRestored(true);
+        setConflict(draftConflicts(local, serverVersion));
       }
     }
     setHydrated(true);
-  }, [readOnly, saved, storageKey]);
+  }, [finished, saved, serverVersion, storageKey]);
 
   useEffect(() => {
-    if (hydrated && (!dirty || readOnly)) clearDraft(window, storageKey);
-  }, [dirty, hydrated, readOnly, storageKey]);
+    if (hydrated && shouldClearDraft(finished, dirty, conflict)) clearDraft(window, storageKey);
+  }, [dirty, hydrated, conflict, finished, storageKey]);
 
   useEffect(() => {
-    if (fetcher.state !== 'idle' || !submittedAnswer.current) return;
-    if (fetcher.data?.error) setFailedAnswer(submittedAnswer.current);
-    else if (fetcher.data?.success) setFailedAnswer(null);
-  }, [fetcher.state, fetcher.data?.error, fetcher.data?.success]);
+    if (!hydrated || observedVersion.current === serverVersion) return;
+    observedVersion.current = serverVersion;
+    if (dirty && !conflict && JSON.stringify(saved) !== submittedAnswer.current) {
+      setConflict(true);
+    } else if (!conflict) {
+      baseVersion.current = serverVersion;
+      if (dirty) writeDraft(window, storageKey, draft, serverVersion);
+    }
+  }, [hydrated, serverVersion, saved, dirty, conflict, draft, storageKey]);
+
+  useEffect(() => {
+    if (
+      fetcher.state !== 'idle' ||
+      !fetcher.data ||
+      fetcher.data === handledResponse.current ||
+      !submittedAnswer.current
+    )
+      return;
+    handledResponse.current = fetcher.data;
+    if (fetcher.data.error) {
+      const failed = submittedAnswer.current;
+      setFailures((count) => (failedAnswer === failed ? count + 1 : 1));
+      setFailedAnswer(failed);
+    } else if (fetcher.data.success) {
+      setFailedAnswer(null);
+      setFailures(0);
+    }
+  }, [fetcher.state, fetcher.data, failedAnswer]);
 
   function submitAnswer(answer: string) {
     submittedAnswer.current = answer;
-    void fetcher.submit(
-      { intent: 'save', position: String(item.position), answer },
-      { method: 'post' },
-    );
+    void fetcher
+      .submit({ intent: 'save', position: String(item.position), answer }, { method: 'post' })
+      .catch(() => {
+        setFailures((count) => (failedAnswer === answer ? count + 1 : 1));
+        setFailedAnswer(answer);
+      });
   }
 
-  // Bản nháp thiếu dữ liệu vẫn được giữ cục bộ; API chỉ nhận câu trả lời hợp lệ.
+  // Thử lại 3 lần với độ trễ tăng dần; chỉnh sửa mới luôn được phép thử lại.
   useEffect(() => {
-    if (
-      !hydrated ||
-      readOnly ||
-      !dirty ||
-      fetcher.state !== 'idle' ||
-      !canAutoSave(answerToSave, failedAnswer)
-    )
+    const delay = autosaveDelay(answerToSave, failedAnswer, failures);
+    if (!hydrated || readOnly || conflict || !dirty || fetcher.state !== 'idle' || delay === null)
       return;
-    const timer = setTimeout(() => submitAnswer(answerToSave!), 1500);
+    const timer = setTimeout(() => submitAnswer(answerToSave!), delay);
     return () => clearTimeout(timer);
-  }, [hydrated, readOnly, dirty, answerToSave, failedAnswer, fetcher.state]);
+  }, [hydrated, readOnly, conflict, dirty, answerToSave, failedAnswer, failures, fetcher.state]);
+
+  // Khi kết nối trở lại, thử tiếp kể cả sau khi hết số lần thử định kỳ.
+  useEffect(() => {
+    const retry = () => {
+      if (failedAnswer) {
+        setFailedAnswer(null);
+        setFailures(0);
+      }
+    };
+    window.addEventListener('online', retry);
+    return () => window.removeEventListener('online', retry);
+  }, [failedAnswer]);
+
+  function useServerAnswer() {
+    clearDraft(window, storageKey);
+    baseVersion.current = serverVersion;
+    setDraft(createAnswerDraft(saved));
+    setEdited(false);
+    setConflict(false);
+    setRestored(false);
+    setFailedAnswer(null);
+    setFailures(0);
+  }
+
+  function useLocalAnswer() {
+    baseVersion.current = serverVersion;
+    setConflict(false);
+    setFailedAnswer(null);
+    setFailures(0);
+    setStorageError(!writeDraft(window, storageKey, draft, serverVersion));
+  }
 
   useEffect(() => {
     onDirty(item.position, dirty);
@@ -220,7 +292,7 @@ export function AnswerForm({
     setDraft(next);
     setEdited(true);
     setError(null);
-    setStorageError(!writeDraft(window, storageKey, next));
+    setStorageError(!writeDraft(window, storageKey, next, baseVersion.current));
   }
 
   return (
@@ -239,6 +311,10 @@ export function AnswerForm({
             method="post"
             onSubmit={(event) => {
               event.preventDefault();
+              if (conflict) {
+                setError('Hãy giải quyết xung đột giữa hai bản trước khi lưu.');
+                return;
+              }
               if (!parsed) {
                 setError(
                   'Câu trả lời chưa hợp lệ. Hãy điền đủ nội dung; câu đúng/sai cần chọn đủ bốn mệnh đề.',
@@ -352,8 +428,28 @@ export function AnswerForm({
                       onChange={(essay) => updateDraft({ essay })}
                     />
                   ))}
-                {(error || (failedAnswer === answerToSave && fetcher.data?.error)) && (
-                  <FieldError>{error ?? fetcher.data?.error}</FieldError>
+                {conflict && (
+                  <div role="alert" className="flex flex-col gap-2">
+                    <p>
+                      Bản trên máy chủ đã thay đổi kể từ khi tạo nháp này. Để tránh ghi đè bài làm
+                      từ thiết bị khác, hệ thống đã dừng tự lưu.
+                    </p>
+                    {!readOnly && (
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" variant="outline" onClick={useServerAnswer}>
+                          Dùng đáp án trên máy chủ
+                        </Button>
+                        <Button type="button" variant="outline" onClick={useLocalAnswer}>
+                          Giữ nháp này và cho phép ghi đè
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {(error || failedAnswer === answerToSave) && (
+                  <FieldError>
+                    {error ?? fetcher.data?.error ?? 'Không thể đồng bộ. Hệ thống sẽ thử lại.'}
+                  </FieldError>
                 )}
                 {storageError && (
                   <FieldError>
@@ -368,18 +464,22 @@ export function AnswerForm({
                 <p role="status">
                   {fetcher.state !== 'idle'
                     ? 'Đang đồng bộ câu trả lời…'
-                    : failedAnswer === answerToSave && fetcher.data?.error
-                      ? 'Lưu thất bại. Sửa câu để tự lưu lại hoặc bấm thử lưu.'
-                      : dirty
-                        ? answerToSave
-                          ? 'Đã giữ nháp trên thiết bị; chờ tự động lưu lên máy chủ…'
-                          : 'Câu chưa hoàn chỉnh; đã giữ nháp trên thiết bị này.'
-                        : saved
-                          ? 'Đã lưu trên máy chủ.'
-                          : 'Chưa trả lời.'}
+                    : conflict
+                      ? 'Nháp xung đột với bản trên máy chủ; chưa tự đồng bộ.'
+                      : failedAnswer === answerToSave
+                        ? failures >= 4
+                          ? 'Lưu thất bại sau 3 lần thử lại. Bấm Lưu để thử lại.'
+                          : 'Lưu thất bại, đang chờ tự thử lại…'
+                        : dirty
+                          ? answerToSave
+                            ? 'Đã giữ nháp trên thiết bị; chờ tự động lưu lên máy chủ…'
+                            : 'Câu chưa hoàn chỉnh; đã giữ nháp trên thiết bị này.'
+                          : saved
+                            ? 'Đã lưu trên máy chủ.'
+                            : 'Chưa trả lời.'}
                 </p>
                 {!readOnly && (
-                  <Button type="submit" disabled={!dirty || fetcher.state !== 'idle'}>
+                  <Button type="submit" disabled={conflict || !dirty || fetcher.state !== 'idle'}>
                     {fetcher.state !== 'idle' && (
                       <Spinner aria-label="Đang lưu" data-icon="inline-start" />
                     )}

@@ -158,6 +158,12 @@ function AttemptWorkspace({
               saved={
                 attempt.responses.find((response) => response.position === item.position)?.answer
               }
+              serverVersion={
+                attempt.responses
+                  .find((response) => response.position === item.position)
+                  ?.updatedAt.toISOString() ?? null
+              }
+              finished={attempt.status !== 'in_progress'}
               onDirty={onDirty}
               readOnly={!canEdit}
             />
