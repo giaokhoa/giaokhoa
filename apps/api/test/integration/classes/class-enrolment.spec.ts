@@ -188,7 +188,19 @@ describe('Vòng đời lớp học và phân quyền ghi danh', () => {
     await expect(service.approveMember(other.id, classroom.id, student.id)).rejects.toMatchObject({
       kind: 'forbidden',
     });
+    await expect(service.listMembers(student.id, classroom.id)).rejects.toMatchObject({
+      kind: 'forbidden',
+    });
+    expect(await service.listMembers(owner.id, classroom.id)).toContainEqual(
+      expect.objectContaining({ userId: student.id, name: student.name, email: student.email }),
+    );
     expect((await service.approveMember(owner.id, classroom.id, student.id)).status).toBe('active');
+    expect(await service.listMembers(owner.id, classroom.id)).toContainEqual(
+      expect.objectContaining({
+        userId: student.id,
+        roles: expect.arrayContaining(['class:student']),
+      }),
+    );
     expect(await allowed(student.id, 'class:view', classroom.id)).toBe(true);
     expect((await service.suspendMember(owner.id, classroom.id, student.id)).status).toBe(
       'suspended',

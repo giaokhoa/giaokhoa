@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { authorizationContract } from '@giaokhoa/shared/http/authorization';
 import {
   Field,
@@ -18,7 +18,16 @@ export async function loader({ request }: Route.LoaderArgs) {
   const access = await getAccess(request);
   if (!access.capabilities.some((key) => ['role:manage', 'role:assign_system'].includes(key)))
     throw new Response('Bạn không có quyền quản lý vai trò hệ thống.', { status: 403 });
-  return access;
+  return {
+    ...access,
+    roles: access.capabilities.includes('role:manage')
+      ? await apiData(
+          request,
+          '/authorization/roles',
+          authorizationContract.listRoleContexts.responses[200],
+        )
+      : [],
+  };
 }
 export async function action({ request }: Route.ActionArgs) {
   try {
@@ -110,19 +119,94 @@ const contexts = [
   ['exam', 'Đề thi'],
   ['class', 'Lớp học'],
   ['assignment', 'Bài giao'],
-];
-function ContextOptions() {
+] as const;
+type ContextKind = (typeof contexts)[number][0];
+function ContextOptions({
+  selected,
+  onChange,
+}: {
+  selected?: ContextKind[];
+  onChange?: (value: ContextKind, checked: boolean) => void;
+} = {}) {
   const prefix = useId();
   return (
     <FieldSet>
       <FieldLegend>Phạm vi được phép cấp</FieldLegend>
       {contexts.map(([value, label]) => (
         <Field key={value} orientation="horizontal">
-          <input type="checkbox" name="contexts" id={prefix + value} value={value} />
+          <input
+            type="checkbox"
+            name="contexts"
+            id={prefix + value}
+            value={value}
+            checked={selected ? selected.includes(value) : undefined}
+            onChange={onChange ? (event) => onChange(value, event.target.checked) : undefined}
+          />
           <FieldLabel htmlFor={prefix + value}>{label}</FieldLabel>
         </Field>
       ))}
     </FieldSet>
+  );
+}
+function RoleContextsEditor({ roles }: { roles: Array<{ key: string; contexts: ContextKind[] }> }) {
+  const [key, setKey] = useState(roles[0]?.key ?? '');
+  const role = roles.find((item) => item.key === key);
+  const [selected, setSelected] = useState<ContextKind[]>(roles[0]?.contexts ?? []);
+  if (!role) return <p>Chưa có vai trò để chỉnh sửa.</p>;
+  const changed = selected.slice().sort().join() !== role.contexts.slice().sort().join();
+  const labels = (values: ContextKind[]) =>
+    contexts
+      .filter(([value]) => values.includes(value))
+      .map(([, label]) => label)
+      .join(', ');
+  return (
+    <Form
+      method="post"
+      onSubmit={(event) => {
+        if (
+          !changed ||
+          !selected.length ||
+          !window.confirm('Xác nhận thay đổi phạm vi cấp vai trò?')
+        )
+          event.preventDefault();
+      }}
+    >
+      <input type="hidden" name="intent" value="contexts" />
+      <input type="hidden" name="roleKey" value={key} />
+      <FieldGroup>
+        <Field>
+          <FieldLabel htmlFor="context-role">Vai trò</FieldLabel>
+          <NativeSelect
+            id="context-role"
+            value={key}
+            onChange={(event) => {
+              const next = roles.find((item) => item.key === event.target.value);
+              setKey(event.target.value);
+              setSelected(next?.contexts ?? []);
+            }}
+          >
+            {roles.map((item) => (
+              <NativeSelectOption key={item.key} value={item.key}>
+                {item.key}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </Field>
+        <p className="text-sm">Hiện tại: {labels(role.contexts) || 'Chưa cấu hình'}</p>
+        <ContextOptions
+          selected={selected}
+          onChange={(value, checked) =>
+            setSelected((current) =>
+              checked
+                ? [...new Set([...current, value])]
+                : current.filter((item) => item !== value),
+            )
+          }
+        />
+        <p className="text-sm">Sau khi lưu: {labels(selected) || 'Không được bỏ trống'}</p>
+        <SubmitButton disabled={!changed || !selected.length}>Lưu phạm vi</SubmitButton>
+      </FieldGroup>
+    </Form>
   );
 }
 export default function Authorization({ loaderData, actionData }: Route.ComponentProps) {
@@ -204,14 +288,7 @@ export default function Authorization({ loaderData, actionData }: Route.Componen
             </Form>
           </Panel>
           <Panel title="Phạm vi của vai trò">
-            <Form method="post">
-              <input type="hidden" name="intent" value="contexts" />
-              <FieldGroup>
-                <InputField id="context-role" name="roleKey" label="Khóa vai trò" required />
-                <ContextOptions />
-                <SubmitButton>Lưu phạm vi</SubmitButton>
-              </FieldGroup>
-            </Form>
+            <RoleContextsEditor roles={loaderData.roles} />
           </Panel>
           <Panel title="Giới hạn cấp và ghi đè vai trò">
             <Form method="post">

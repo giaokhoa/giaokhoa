@@ -53,7 +53,12 @@ export default function AssignmentAttempts({ loaderData: { attempts } }: Route.C
             <TableBody>
               {attempts.map((item) => (
                 <TableRow key={item.id}>
-                  <TableCell>{item.userId}</TableCell>
+                  <TableCell>
+                    <div>{item.name ?? item.userId}</div>
+                    {item.email && (
+                      <div className="text-sm text-muted-foreground">{item.email}</div>
+                    )}
+                  </TableCell>
                   <TableCell>{item.attemptNumber}</TableCell>
                   <TableCell>
                     <Status value={item.status} />

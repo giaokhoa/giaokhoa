@@ -433,10 +433,24 @@ export class PostgresClassesRepository implements ClassesRepository {
    */
   async listEnrolments(classId: string) {
     const rows = await this.db
-      .select()
+      .select({ enrolment: classEnrolments, name: users.name, email: users.email })
       .from(classEnrolments)
+      .innerJoin(users, eq(users.id, classEnrolments.userId))
       .where(eq(classEnrolments.classId, classId));
-    return rows.map(membership);
+    const roles = await this.db
+      .select({ userId: authzRoleAssignments.userId, key: authzRoles.key })
+      .from(authzRoleAssignments)
+      .innerJoin(authzRoles, eq(authzRoles.id, authzRoleAssignments.roleId))
+      .innerJoin(classes, eq(classes.authzContextId, authzRoleAssignments.contextId))
+      .where(and(eq(classes.id, classId), isNull(authzRoleAssignments.revokedAt)));
+    return rows.map(({ enrolment, name, email }) =>
+      classEnrolmentSchema.parse({
+        ...membership(enrolment),
+        name,
+        email,
+        roles: roles.filter((role) => role.userId === enrolment.userId).map((role) => role.key),
+      }),
+    );
   }
 
   /**

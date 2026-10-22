@@ -58,6 +58,19 @@ export const authorizationContract = {
     body: rolePermissionBody,
     responses: { 200: result },
   },
+  listRoleContexts: {
+    method: 'GET',
+    path: '/authorization/roles',
+    responses: {
+      200: z.array(
+        z.strictObject({
+          key: z.string(),
+          contextKind,
+          contexts: z.array(contextKind),
+        }),
+      ),
+    },
+  },
   setRoleContexts: {
     method: 'PUT',
     path: '/authorization/roles/:roleKey/contexts',

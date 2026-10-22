@@ -284,6 +284,27 @@ export class PostgresAuthorizationRepository implements AuthorizationRepository 
     });
   }
 
+  async listRoleContexts() {
+    const rows = await this.db
+      .select({
+        key: authzRoles.key,
+        contextKind: authzRoles.contextKind,
+        level: authzRoleContextLevels.contextKind,
+      })
+      .from(authzRoles)
+      .leftJoin(authzRoleContextLevels, eq(authzRoles.id, authzRoleContextLevels.roleId));
+    return [...new Set(rows.map((row) => row.key))].map((key) => {
+      const roles = rows.filter((row) => row.key === key);
+      return {
+        key,
+        contextKind: roles[0].contextKind as AuthorizationContextKind,
+        contexts: roles.flatMap((row) =>
+          row.level ? [row.level as AuthorizationContextKind] : [],
+        ),
+      };
+    });
+  }
+
   async setRoleContexts(actorId: string, roleKey: string, levels: AuthorizationContextKind[]) {
     return this.db.transaction(async (tx) => {
       await lockAuthorizationMutation(tx);

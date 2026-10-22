@@ -497,7 +497,11 @@ describe('Quyền sở hữu, vòng đời bài làm và công bố kết quả'
     expect(graded.score).toBe(91.5);
     expect(graded.feedback).toBe('Tốt');
     expect(graded.responses).toHaveLength(1);
-    expect((await attempts.listForTeacher(teacher.id, assignment.id))[0].userId).toBe(student.id);
+    expect((await attempts.listForTeacher(teacher.id, assignment.id))[0]).toMatchObject({
+      userId: student.id,
+      name: student.name,
+      email: student.email,
+    });
     expect((await attempts.review(teacher.id, started.id)).score).toBe(91.5);
     await expect(attempts.result(student.id, started.id)).rejects.toMatchObject({
       code: 'result_not_released',

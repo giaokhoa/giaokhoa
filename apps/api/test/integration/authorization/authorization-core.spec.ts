@@ -446,7 +446,11 @@ describe('Migration, dữ liệu khởi tạo và kho phân quyền', () => {
     expect(await can(regular.id, 'class:update', 'class', classroom.resourceKey)).toMatchObject({
       allowed: false,
     });
+    await expect(service.listRoleContexts(regular.id)).rejects.toMatchObject({ kind: 'forbidden' });
     expect(await service.setRoleContexts(admin.id, roleKey, ['assignment'])).toBe(true);
+    expect(
+      (await service.listRoleContexts(admin.id)).find((item) => item.key === roleKey)?.contexts,
+    ).toEqual(['assignment']);
     await expect(
       service.changeRole(admin.id, classroom.id, classroomOwner.id, roleKey, true),
     ).rejects.toMatchObject({ kind: 'invalid' });

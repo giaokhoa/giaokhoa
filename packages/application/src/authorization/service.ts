@@ -175,6 +175,11 @@ export class AuthorizationService {
     return this.repository.setRolePermission(actorId, roleKey, capability, effect);
   }
 
+  async listRoleContexts(actorId: string) {
+    await this.assertRoleManager(actorId);
+    return this.repository.listRoleContexts();
+  }
+
   async setRoleContexts(actorId: string, roleKey: string, levels: AuthorizationContextKind[]) {
     await this.assertRoleManager(actorId);
     return this.repository.setRoleContexts(actorId, roleKey, levels);

@@ -118,11 +118,12 @@ function matches(question: Question, answer: AttemptAnswer): boolean {
  * Biến bản ghi lượt làm thành thông tin tóm tắt phục vụ giáo viên.
  * Chuyển điểm nguyên lưu tại cơ sở dữ liệu về thang điểm 100 và xác thực cấu trúc đầu ra.
  */
-function summary(row: AttemptRow) {
+function summary(row: AttemptRow, user?: { name: string; email: string }) {
   return attemptSummarySchema.parse({
     id: row.id,
     assignmentId: row.assignmentId,
     userId: row.userId,
+    ...user,
     attemptNumber: row.attemptNumber,
     status: row.status,
     startedAt: row.startedAt,
@@ -565,11 +566,12 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
         .limit(1);
       if (!assignment) return undefined;
       const rows = await tx
-        .select()
+        .select({ attempt: attempts, name: users.name, email: users.email })
         .from(attempts)
+        .innerJoin(users, eq(users.id, attempts.userId))
         .where(eq(attempts.assignmentId, assignmentId))
         .orderBy(asc(attempts.userId), asc(attempts.attemptNumber));
-      return rows.map(summary);
+      return rows.map(({ attempt, name, email }) => summary(attempt, { name, email }));
     });
   }
 

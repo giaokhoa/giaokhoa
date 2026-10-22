@@ -64,7 +64,10 @@ export const attemptReviewSchema = attemptSchema.extend({
   feedback: z.string().nullable(),
 });
 
-export const attemptSummarySchema = attemptReviewSchema.omit({ responses: true });
+export const attemptSummarySchema = attemptReviewSchema.omit({ responses: true }).extend({
+  name: z.string().optional(),
+  email: z.email().optional(),
+});
 export const attemptResultSchema = z.strictObject({
   attemptId: z.uuidv7(),
   gradedAt: z.date(),

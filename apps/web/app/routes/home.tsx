@@ -20,12 +20,23 @@ import {
 } from '@giaokhoa/ui/components/card';
 import { Page } from '#features/workspace/ui.js';
 import { workspacePermissions } from '#features/workspace/access.js';
+import { formatDate } from '#lib/http/dates.js';
 import type { loader } from './dashboard/layout';
 
 export default function Home() {
   const { access, classes, assignments } =
     useRouteLoaderData<typeof loader>('routes/dashboard/layout')!;
   const permissions = workspacePermissions(access.capabilities, classes, assignments);
+  const upcoming = assignments
+    .filter(
+      (item) =>
+        item.status === 'published' &&
+        item.closeAt.getTime() > Date.now() &&
+        item.closeAt.getTime() <= Date.now() + 7 * 24 * 60 * 60 * 1000,
+    )
+    .sort((left, right) => left.closeAt.getTime() - right.closeAt.getTime())
+    .slice(0, 5);
+  const drafts = assignments.filter((item) => item.status === 'draft').slice(0, 3);
   const items = [
     {
       title: 'Ngân hàng câu hỏi',
@@ -82,6 +93,38 @@ export default function Home() {
       title={`Chào ${access.user.name || 'bạn'}`}
       description="Không gian dạy và học của bạn tại Giáo khoa."
     >
+      {(upcoming.length > 0 || drafts.length > 0) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Việc cần theo dõi</CardTitle>
+            <CardDescription>Bài sắp đến hạn và bài giao chưa xuất bản.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-3">
+              {upcoming.map((item) => (
+                <div key={item.id}>
+                  <Link className="underline underline-offset-4" to={'/assignments/' + item.id}>
+                    {item.title}
+                  </Link>
+                  <p className="text-sm text-muted-foreground">
+                    {item.className} · Hạn {formatDate(item.closeAt)}
+                  </p>
+                </div>
+              ))}
+              {drafts.map((item) => (
+                <div key={item.id}>
+                  <Link className="underline underline-offset-4" to={'/assignments/' + item.id}>
+                    {item.title}
+                  </Link>
+                  <p className="text-sm text-muted-foreground">
+                    {item.className} · Bản nháp chưa công bố
+                  </p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
         {items.map((item) => (
           <Card key={item.to}>

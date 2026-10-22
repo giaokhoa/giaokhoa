@@ -13,6 +13,8 @@ import {
   TableRow,
 } from '@giaokhoa/ui/components/table';
 import { Form, Link, redirect } from 'react-router';
+import { useState } from 'react';
+import { Input } from '@giaokhoa/ui/components/input';
 import { getAccess } from '#features/workspace/access.server.js';
 import { classCapabilities } from '#features/workspace/access.js';
 import {
@@ -138,6 +140,12 @@ export default function ClassDetail({
 }: Route.ComponentProps) {
   const can = (key: string) => access.capabilities.includes(key);
   const joinCode = actionData && 'joinCode' in actionData ? actionData.joinCode : undefined;
+  const [memberSearch, setMemberSearch] = useState('');
+  const visibleMembers = members.filter((member) =>
+    [member.name, member.email, member.userId].some((value) =>
+      value?.toLocaleLowerCase('vi-VN').includes(memberSearch.trim().toLocaleLowerCase('vi-VN')),
+    ),
+  );
   return (
     <Page
       title={classroom.name}
@@ -162,8 +170,41 @@ export default function ClassDetail({
           />
         )}
       </div>
+      <nav aria-label="Mục của lớp" className="flex flex-wrap gap-4 text-sm">
+        <a className="underline" href="#class-assignments">
+          Bài giao
+        </a>
+        {can('class:enrolment_manage') && (
+          <a className="underline" href="#class-members">
+            Thành viên
+          </a>
+        )}
+        {can('class:update') && (
+          <a className="underline" href="#class-settings">
+            Thiết lập
+          </a>
+        )}
+      </nav>
+      <section id="class-assignments">
+        <Panel title="Bài giao của lớp">
+          {!assignments.length ? (
+            <EmptyList />
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {assignments.map((item) => (
+                <li key={item.id} className="flex flex-wrap items-center justify-between gap-3">
+                  <Link to={`/assignments/${item.id}`} className="underline underline-offset-4">
+                    {item.title}
+                  </Link>
+                  <Status value={item.status} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      </section>
       {can('class:update') && (
-        <div className="grid items-start gap-6 lg:grid-cols-2">
+        <div id="class-settings" className="grid items-start gap-6 lg:grid-cols-2">
           <Panel title="Thông tin lớp">
             <Form method="post">
               <input type="hidden" name="intent" value="update" />
@@ -240,69 +281,70 @@ export default function ClassDetail({
         </div>
       )}
       {can('class:enrolment_manage') && (
-        <Panel title="Thành viên">
-          {!members.length ? (
-            <EmptyList>Chưa có học sinh tham gia lớp.</EmptyList>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Người học</TableHead>
-                  <TableHead>Trạng thái</TableHead>
-                  <TableHead>Tham gia lúc</TableHead>
-                  <TableHead>Thao tác</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {members.map((member) => (
-                  <TableRow key={member.userId}>
-                    <TableCell className="break-all">{member.userId}</TableCell>
-                    <TableCell>
-                      <Status value={member.status} />
-                    </TableCell>
-                    <TableCell>{formatDate(member.joinedAt)}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        {member.status === 'pending' && (
-                          <InlineAction
-                            intent="approve"
-                            label="Duyệt"
-                            fields={{ userId: member.userId }}
-                          />
-                        )}
-                        {(member.status === 'active' || member.status === 'pending') && (
-                          <InlineAction
-                            intent="suspend"
-                            label="Đình chỉ"
-                            fields={{ userId: member.userId }}
-                            confirm="Đình chỉ sẽ thu hồi quyền học tại lớp. Tiếp tục?"
-                          />
-                        )}
-                      </div>
-                    </TableCell>
+        <div id="class-members">
+          <Panel title="Thành viên">
+            <Input
+              aria-label="Tìm thành viên theo tên hoặc tài khoản"
+              placeholder="Tìm theo tên hoặc email"
+              value={memberSearch}
+              onChange={(event) => setMemberSearch(event.target.value)}
+            />
+            {!visibleMembers.length ? (
+              <EmptyList>
+                {memberSearch ? 'Không tìm thấy thành viên.' : 'Chưa có học sinh tham gia lớp.'}
+              </EmptyList>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Người học</TableHead>
+                    <TableHead>Vai trò</TableHead>
+                    <TableHead>Trạng thái</TableHead>
+                    <TableHead>Tham gia lúc</TableHead>
+                    <TableHead>Thao tác</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </Panel>
+                </TableHeader>
+                <TableBody>
+                  {visibleMembers.map((member) => (
+                    <TableRow key={member.userId}>
+                      <TableCell>
+                        <div>{member.name ?? member.userId}</div>
+                        {member.email && (
+                          <div className="text-sm text-muted-foreground">{member.email}</div>
+                        )}
+                      </TableCell>
+                      <TableCell>{member.roles?.join(', ') || 'Chưa cấp'}</TableCell>
+                      <TableCell>
+                        <Status value={member.status} />
+                      </TableCell>
+                      <TableCell>{formatDate(member.joinedAt)}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          {member.status === 'pending' && (
+                            <InlineAction
+                              intent="approve"
+                              label="Duyệt"
+                              fields={{ userId: member.userId }}
+                            />
+                          )}
+                          {(member.status === 'active' || member.status === 'pending') && (
+                            <InlineAction
+                              intent="suspend"
+                              label="Đình chỉ"
+                              fields={{ userId: member.userId }}
+                              confirm="Đình chỉ sẽ thu hồi quyền học tại lớp. Tiếp tục?"
+                            />
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </Panel>
+        </div>
       )}
-      <Panel title="Bài giao của lớp">
-        {!assignments.length ? (
-          <EmptyList />
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {assignments.map((item) => (
-              <li key={item.id} className="flex flex-wrap items-center justify-between gap-3">
-                <Link to={`/assignments/${item.id}`} className="underline underline-offset-4">
-                  {item.title}
-                </Link>
-                <Status value={item.status} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
       {can('role:assign') && (
         <Panel
           title="Cấp hoặc thu hồi vai trò trong lớp"

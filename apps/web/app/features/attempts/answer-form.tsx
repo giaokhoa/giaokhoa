@@ -160,6 +160,28 @@ export function AnswerForm({
     }
   }
   const dirty = edited && draftVersion !== savedVersion;
+  const answerToSave = parsed ? JSON.stringify(parsed) : null;
+
+  // Tự lưu sau khi người học ngừng nhập; nút lưu bên dưới vẫn dùng khi mạng gặp lỗi.
+  useEffect(() => {
+    if (readOnly || !dirty || !answerToSave || fetcher.state !== 'idle' || fetcher.data?.error)
+      return;
+    const timer = setTimeout(() => {
+      void fetcher.submit(
+        { intent: 'save', position: String(item.position), answer: answerToSave },
+        { method: 'post' },
+      );
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [
+    readOnly,
+    dirty,
+    answerToSave,
+    fetcher.state,
+    fetcher.data?.error,
+    fetcher.submit,
+    item.position,
+  ]);
 
   useEffect(() => {
     onDirty(item.position, dirty);
@@ -200,7 +222,7 @@ export function AnswerForm({
               );
             }}
           >
-            <fieldset disabled={readOnly || fetcher.state !== 'idle'}>
+            <fieldset disabled={readOnly}>
               <FieldGroup>
                 {item.question.stimulus && <RichDocument value={item.question.stimulus.content} />}
                 <RichDocument value={stem} />
@@ -308,7 +330,17 @@ export function AnswerForm({
                   <FieldError>{error ?? fetcher.data?.error}</FieldError>
                 )}
                 <p role="status">
-                  {dirty ? 'Có thay đổi chưa lưu.' : saved ? 'Câu trả lời đã lưu.' : ''}
+                  {fetcher.state !== 'idle'
+                    ? 'Đang đồng bộ câu trả lời…'
+                    : fetcher.data?.error
+                      ? 'Lưu thất bại. Hãy thử nút lưu bên dưới.'
+                      : dirty
+                        ? answerToSave
+                          ? 'Chờ tự động lưu…'
+                          : 'Câu trả lời chưa đầy đủ.'
+                        : saved
+                          ? 'Đã lưu trên máy chủ.'
+                          : 'Chưa trả lời.'}
                 </p>
                 {!readOnly && (
                   <Button type="submit" disabled={!dirty || fetcher.state !== 'idle'}>

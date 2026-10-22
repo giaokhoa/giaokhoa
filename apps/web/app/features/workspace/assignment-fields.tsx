@@ -77,7 +77,9 @@ export function AssignmentFields({
                   id={`student-${userId}`}
                   defaultChecked={assignment?.selectedUserIds.includes(userId)}
                 />
-                <FieldLabel htmlFor={`student-${userId}`}>{userId}</FieldLabel>
+                <FieldLabel htmlFor={`student-${userId}`}>
+                  {members.find((member) => member.userId === userId)?.name ?? userId}
+                </FieldLabel>
               </Field>
             ))
           ) : (

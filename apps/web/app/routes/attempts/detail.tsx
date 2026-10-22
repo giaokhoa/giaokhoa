@@ -95,6 +95,7 @@ function AttemptWorkspace({
   loaderData: { attempt, delivery, result, solutions, now },
 }: Pick<Route.ComponentProps, 'loaderData'>) {
   const [dirty, setDirty] = useState<number[]>([]);
+  const [review, setReview] = useState(false);
   const submitter = useFetcher<typeof action>();
   const fetchers = useFetchers();
   const revalidator = useRevalidator();
@@ -125,6 +126,8 @@ function AttemptWorkspace({
       [hasUnsaved],
     ),
   );
+  const answered = new Set(attempt.responses.map((response) => response.position));
+  const unanswered = delivery.value?.questions.filter((item) => !answered.has(item.position)) ?? [];
   const canEdit =
     attempt.status === 'in_progress' &&
     !!delivery.value &&
@@ -148,15 +151,16 @@ function AttemptWorkspace({
       )}
       {delivery.value ? (
         delivery.value.questions.map((item) => (
-          <AnswerForm
-            key={item.position}
-            item={item}
-            saved={
-              attempt.responses.find((response) => response.position === item.position)?.answer
-            }
-            onDirty={onDirty}
-            readOnly={!canEdit}
-          />
+          <div key={item.position} id={'question-' + item.position}>
+            <AnswerForm
+              item={item}
+              saved={
+                attempt.responses.find((response) => response.position === item.position)?.answer
+              }
+              onDirty={onDirty}
+              readOnly={!canEdit}
+            />
+          </div>
         ))
       ) : (
         <>
@@ -169,26 +173,62 @@ function AttemptWorkspace({
         </>
       )}
       {attempt.status === 'in_progress' && (
-        <Panel title="Nộp bài">
+        <Panel title="Rà soát trước khi nộp bài">
           <div className="flex flex-col gap-4">
-            <p>
-              {dirty.length
-                ? `${dirty.length} câu có thay đổi chưa lưu. Hãy lưu từng câu trước khi nộp.`
-                : 'Các câu đã lưu sẽ được nộp. Bạn không thể sửa câu trả lời sau khi nộp.'}
-            </p>
-            <submitter.Form
-              method="post"
-              onSubmit={(event) => {
-                if (hasUnsaved || !window.confirm('Nộp bài và kết thúc lượt làm này?'))
-                  event.preventDefault();
-              }}
-            >
-              <input type="hidden" name="intent" value="submit" />
-              <input type="hidden" name="confirm" value="yes" />
-              <Button type="submit" disabled={hasUnsaved || !canEdit}>
-                Nộp bài
+            {delivery.value && (
+              <p>
+                Đã lưu {answered.size}/{delivery.value.questions.length} câu.
+                {unanswered.length > 0 && ' Có ' + unanswered.length + ' câu chưa trả lời.'}
+              </p>
+            )}
+            {hasUnsaved && (
+              <p role="alert">Có câu đang sửa hoặc đang lưu. Hãy đợi lưu xong trước khi nộp.</p>
+            )}
+            {!review ? (
+              <Button
+                type="button"
+                disabled={!canEdit || hasUnsaved}
+                onClick={() => setReview(true)}
+              >
+                Xem tổng kết bài làm
               </Button>
-            </submitter.Form>
+            ) : (
+              <>
+                <ol className="grid gap-2 sm:grid-cols-2">
+                  {delivery.value?.questions.map((item) => (
+                    <li key={item.position}>
+                      <a
+                        className="underline underline-offset-4"
+                        href={'#question-' + item.position}
+                      >
+                        Câu {item.position}:{' '}
+                        {answered.has(item.position) ? 'Đã lưu' : 'Chưa trả lời'}
+                      </a>
+                    </li>
+                  ))}
+                </ol>
+                {unanswered.length > 0 && (
+                  <p role="alert">
+                    Các câu chưa trả lời sẽ để trống khi nộp. Bạn có thể quay lại từng câu ở trên.
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-3">
+                  <Button type="button" variant="outline" onClick={() => setReview(false)}>
+                    Quay lại bài làm
+                  </Button>
+                  <submitter.Form method="post">
+                    <input type="hidden" name="intent" value="submit" />
+                    <input type="hidden" name="confirm" value="yes" />
+                    <Button
+                      type="submit"
+                      disabled={hasUnsaved || !canEdit || submitter.state !== 'idle'}
+                    >
+                      Xác nhận nộp bài
+                    </Button>
+                  </submitter.Form>
+                </div>
+              </>
+            )}
           </div>
         </Panel>
       )}

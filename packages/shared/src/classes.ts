@@ -32,6 +32,9 @@ export const classPatchSchema = z
 
 export const classEnrolmentSchema = z.strictObject({
   userId: z.uuidv7(),
+  name: z.string().optional(),
+  email: z.email().optional(),
+  roles: z.array(z.string()).optional(),
   status: classEnrolmentStatusSchema,
   joinedAt: z.date(),
   updatedAt: z.date(),

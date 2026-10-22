@@ -9,6 +9,7 @@ import {
   FieldSet,
 } from '@giaokhoa/ui/components/field';
 import { Form, Link } from 'react-router';
+import { useState } from 'react';
 import { getAccess, requireCapability } from '#features/workspace/access.server.js';
 import {
   QuestionPreview,
@@ -92,6 +93,14 @@ export default function ExamDetail({
   loaderData: { exam, revisions, revision, questions },
   actionData,
 }: Route.ComponentProps) {
+  const [selected, setSelected] = useState<Array<{ questionId: string; version: number }>>([]);
+  function move(index: number, step: number) {
+    setSelected((current) => {
+      const next = [...current];
+      [next[index], next[index + step]] = [next[index + step], next[index]];
+      return next;
+    });
+  }
   return (
     <Page
       title={exam.title}
@@ -115,7 +124,7 @@ export default function ExamDetail({
       </Panel>
       <Panel
         title="Chốt phiên bản mới"
-        description="Chọn từ 1 đến 100 câu hỏi sẵn sàng. Thứ tự bên dưới là thứ tự câu trong đề."
+        description="Chọn từ 1 đến 100 câu hỏi, rồi sắp xếp theo thứ tự trước khi chốt."
       >
         {!questions.length ? (
           <EmptyList>
@@ -133,8 +142,18 @@ export default function ExamDetail({
                       <input
                         id={`q-${item.id}`}
                         type="checkbox"
-                        name="question"
-                        value={JSON.stringify({ questionId: item.id, version: item.version })}
+                        checked={selected.some((choice) => choice.questionId === item.id)}
+                        disabled={
+                          selected.length >= 100 &&
+                          !selected.some((choice) => choice.questionId === item.id)
+                        }
+                        onChange={(event) =>
+                          setSelected((current) =>
+                            event.target.checked
+                              ? [...current, { questionId: item.id, version: item.version }]
+                              : current.filter((choice) => choice.questionId !== item.id),
+                          )
+                        }
                       />
                       <FieldLabel htmlFor={`q-${item.id}`}>
                         {questionTypeLabels[item.type]} · Phiên bản {item.version} ·{' '}
@@ -144,7 +163,43 @@ export default function ExamDetail({
                   ))}
                 </FieldGroup>
               </FieldSet>
-              <SubmitButton>Chốt phiên bản đề</SubmitButton>
+              <FieldSet>
+                <FieldLegend>Thứ tự câu trong đề ({selected.length}/100)</FieldLegend>
+                {!selected.length && <p>Chưa chọn câu hỏi.</p>}
+                <ol className="flex flex-col gap-3">
+                  {selected.map((choice, index) => {
+                    const question = questions.find((item) => item.id === choice.questionId);
+                    return (
+                      <li key={choice.questionId} className="flex items-center gap-2">
+                        <input type="hidden" name="question" value={JSON.stringify(choice)} />
+                        <span className="min-w-14">Câu {index + 1}</span>
+                        <span className="flex-1 truncate">
+                          {question ? questionText(question.content) : choice.questionId}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={index === 0}
+                          onClick={() => move(index, -1)}
+                        >
+                          Lên
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={index === selected.length - 1}
+                          onClick={() => move(index, 1)}
+                        >
+                          Xuống
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </FieldSet>
+              <SubmitButton disabled={!selected.length}>Chốt phiên bản đề</SubmitButton>
             </FieldGroup>
           </Form>
         )}
