@@ -21,10 +21,11 @@ import {
 import { Input } from '@giaokhoa/ui/components/input';
 import { Textarea } from '@giaokhoa/ui/components/textarea';
 import { Spinner } from '@giaokhoa/ui/components/spinner';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
 import { parseAnswer, parseQuestionContent, textToDocument } from './attempt-data';
 import { RichDocument } from './attempt-ui';
+import { canAutoSave, clearDraft, readDraft, writeDraft, type AnswerDraft } from './draft-storage';
 
 function documentText(value: unknown): string | null {
   if (!value || typeof value !== 'object' || !('content' in value) || !Array.isArray(value.content))
@@ -74,14 +75,6 @@ function EssayAnswerInput({
   );
 }
 
-type AnswerDraft = {
-  choiceId: string;
-  statements: Record<string, boolean | undefined>;
-  answer: string;
-  essay: unknown;
-  parts: Record<string, unknown>;
-};
-
 function createAnswerDraft(saved?: AttemptAnswer): AnswerDraft {
   return {
     choiceId: saved?.type === 'multiple_choice' ? saved.choiceId : '',
@@ -99,11 +92,13 @@ function createAnswerDraft(saved?: AttemptAnswer): AnswerDraft {
 }
 
 export function AnswerForm({
+  attemptId,
   item,
   saved,
   onDirty,
   readOnly = false,
 }: {
+  attemptId: string;
   item: StudentAssignment['questions'][number];
   saved?: AttemptAnswer;
   onDirty: (position: number, dirty: boolean) => void;
@@ -111,6 +106,13 @@ export function AnswerForm({
 }) {
   const fetcher = useFetcher<{ error?: string; success?: string }>();
   const prefix = useId();
+  const storageKey = 'giaokhoa:attempt:' + attemptId + ':question:' + item.position;
+  const restoredKey = useRef<string | null>(null);
+  const submittedAnswer = useRef<string | null>(null);
+  const [failedAnswer, setFailedAnswer] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+  const [restored, setRestored] = useState(false);
+  const [storageError, setStorageError] = useState(false);
   const [draft, setDraft] = useState(() => createAnswerDraft(saved));
   const [edited, setEdited] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -162,26 +164,51 @@ export function AnswerForm({
   const dirty = edited && draftVersion !== savedVersion;
   const answerToSave = parsed ? JSON.stringify(parsed) : null;
 
-  // Tự lưu sau khi người học ngừng nhập; nút lưu bên dưới vẫn dùng khi mạng gặp lỗi.
   useEffect(() => {
-    if (readOnly || !dirty || !answerToSave || fetcher.state !== 'idle' || fetcher.data?.error)
+    if (restoredKey.current === storageKey) return;
+    restoredKey.current = storageKey;
+    if (!readOnly) {
+      const local = readDraft(window, storageKey);
+      if (local && JSON.stringify(local) !== JSON.stringify(createAnswerDraft(saved))) {
+        setDraft(local);
+        setEdited(true);
+        setRestored(true);
+      }
+    }
+    setHydrated(true);
+  }, [readOnly, saved, storageKey]);
+
+  useEffect(() => {
+    if (hydrated && (!dirty || readOnly)) clearDraft(window, storageKey);
+  }, [dirty, hydrated, readOnly, storageKey]);
+
+  useEffect(() => {
+    if (fetcher.state !== 'idle' || !submittedAnswer.current) return;
+    if (fetcher.data?.error) setFailedAnswer(submittedAnswer.current);
+    else if (fetcher.data?.success) setFailedAnswer(null);
+  }, [fetcher.state, fetcher.data?.error, fetcher.data?.success]);
+
+  function submitAnswer(answer: string) {
+    submittedAnswer.current = answer;
+    void fetcher.submit(
+      { intent: 'save', position: String(item.position), answer },
+      { method: 'post' },
+    );
+  }
+
+  // Bản nháp thiếu dữ liệu vẫn được giữ cục bộ; API chỉ nhận câu trả lời hợp lệ.
+  useEffect(() => {
+    if (
+      !hydrated ||
+      readOnly ||
+      !dirty ||
+      fetcher.state !== 'idle' ||
+      !canAutoSave(answerToSave, failedAnswer)
+    )
       return;
-    const timer = setTimeout(() => {
-      void fetcher.submit(
-        { intent: 'save', position: String(item.position), answer: answerToSave },
-        { method: 'post' },
-      );
-    }, 1500);
+    const timer = setTimeout(() => submitAnswer(answerToSave!), 1500);
     return () => clearTimeout(timer);
-  }, [
-    readOnly,
-    dirty,
-    answerToSave,
-    fetcher.state,
-    fetcher.data?.error,
-    fetcher.submit,
-    item.position,
-  ]);
+  }, [hydrated, readOnly, dirty, answerToSave, failedAnswer, fetcher.state]);
 
   useEffect(() => {
     onDirty(item.position, dirty);
@@ -189,9 +216,11 @@ export function AnswerForm({
   }, [dirty, item.position, onDirty]);
 
   function updateDraft(patch: Partial<AnswerDraft>) {
-    setDraft((current) => ({ ...current, ...patch }));
+    const next = { ...draft, ...patch };
+    setDraft(next);
     setEdited(true);
     setError(null);
+    setStorageError(!writeDraft(window, storageKey, next));
   }
 
   return (
@@ -216,10 +245,7 @@ export function AnswerForm({
                 );
                 return;
               }
-              void fetcher.submit(
-                { intent: 'save', position: String(item.position), answer: JSON.stringify(parsed) },
-                { method: 'post' },
-              );
+              submitAnswer(JSON.stringify(parsed));
             }}
           >
             <fieldset disabled={readOnly}>
@@ -326,18 +352,28 @@ export function AnswerForm({
                       onChange={(essay) => updateDraft({ essay })}
                     />
                   ))}
-                {(error || fetcher.data?.error) && (
+                {(error || (failedAnswer === answerToSave && fetcher.data?.error)) && (
                   <FieldError>{error ?? fetcher.data?.error}</FieldError>
+                )}
+                {storageError && (
+                  <FieldError>
+                    Không thể lưu nháp trên thiết bị này; hãy lưu câu trả lời lên máy chủ.
+                  </FieldError>
+                )}
+                {restored && dirty && (
+                  <FieldDescription>
+                    Đã khôi phục phần đang nhập từ trình duyệt này.
+                  </FieldDescription>
                 )}
                 <p role="status">
                   {fetcher.state !== 'idle'
                     ? 'Đang đồng bộ câu trả lời…'
-                    : fetcher.data?.error
-                      ? 'Lưu thất bại. Hãy thử nút lưu bên dưới.'
+                    : failedAnswer === answerToSave && fetcher.data?.error
+                      ? 'Lưu thất bại. Sửa câu để tự lưu lại hoặc bấm thử lưu.'
                       : dirty
                         ? answerToSave
-                          ? 'Chờ tự động lưu…'
-                          : 'Câu trả lời chưa đầy đủ.'
+                          ? 'Đã giữ nháp trên thiết bị; chờ tự động lưu lên máy chủ…'
+                          : 'Câu chưa hoàn chỉnh; đã giữ nháp trên thiết bị này.'
                         : saved
                           ? 'Đã lưu trên máy chủ.'
                           : 'Chưa trả lời.'}
