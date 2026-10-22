@@ -70,6 +70,13 @@ export interface AuthorizationRepository {
     capability: string,
     effect: PermissionEffect,
   ): Promise<boolean>;
+  listRoleContexts(): Promise<
+    Array<{
+      key: string;
+      contextKind: AuthorizationContextKind;
+      contexts: AuthorizationContextKind[];
+    }>
+  >;
   setRoleContexts(
     actorId: string,
     roleKey: string,

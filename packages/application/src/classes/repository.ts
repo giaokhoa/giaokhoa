@@ -8,6 +8,7 @@ import type {
 
 /** Các thay đổi lớp và ghi danh phải nguyên tử với việc cấp, thu hồi vai trò trong phạm vi lớp. */
 export interface ClassesRepository {
+  listCandidates(actorId: string): Promise<Class[]>;
   create(input: ClassCreate, actorId: string): Promise<Class>;
   findById(id: string): Promise<Class | undefined>;
   update(id: string, actorId: string, patch: ClassPatch): Promise<Class | undefined>;

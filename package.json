@@ -13,7 +13,8 @@
     "test:e2e": "turbo run test:e2e",
     "test:cov": "turbo run test:cov",
     "format": "oxfmt .",
-    "format:check": "oxfmt --check ."
+    "format:check": "oxfmt --check .",
+    "reset": "turbo run reset"
   },
   "devDependencies": {
     "@shadcn/lint": "^0.2.0",

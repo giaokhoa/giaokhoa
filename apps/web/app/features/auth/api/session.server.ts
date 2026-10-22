@@ -13,7 +13,11 @@ export type SessionPayload = {
 };
 
 export async function requireSession(request: Request): Promise<SessionPayload> {
-  const response = await createApiClient(request).get<unknown>('/api/auth/get-session');
+  const response = await createApiClient(request)
+    .get<unknown>('/api/auth/get-session')
+    .catch(() => {
+      throw new Response('Không thể kiểm tra phiên đăng nhập. Vui lòng thử lại.', { status: 502 });
+    });
 
   if (response.status === 401 || response.status === 403) {
     const url = new URL(request.url);

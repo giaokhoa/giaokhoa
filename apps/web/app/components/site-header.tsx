@@ -12,11 +12,26 @@ import { Link, useLocation } from 'react-router';
 
 export function SiteHeader() {
   const { pathname } = useLocation();
-  const pageTitle = {
-    '/curricula': 'Chương trình học',
-    '/subjects': 'Môn học',
-    '/questions/new': 'Thêm câu hỏi',
-  }[pathname];
+  const pageTitle =
+    {
+      '/curricula': 'Chương trình học',
+      '/subjects': 'Môn học',
+      '/questions/new': 'Thêm câu hỏi',
+      '/questions': 'Ngân hàng câu hỏi',
+      '/classes': 'Lớp học',
+      '/exams': 'Đề thi',
+      '/assignments': 'Bài giao',
+      '/attempts': 'Bài làm của tôi',
+      '/authorization': 'Phân quyền',
+    }[pathname] ??
+    {
+      questions: 'Câu hỏi',
+      classes: 'Lớp học',
+      exams: 'Đề thi',
+      assignments: 'Bài giao',
+      attempts: 'Bài làm',
+      curricula: 'Chương trình học',
+    }[pathname.split('/')[1]];
 
   return (
     <header className="sticky top-0 z-30 flex h-(--header-height) shrink-0 items-center gap-2 border-b bg-background transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height) md:rounded-t-xl">
@@ -28,9 +43,9 @@ export function SiteHeader() {
             <BreadcrumbList>
               <BreadcrumbItem>
                 {pageTitle ? (
-                  <BreadcrumbLink render={<Link to="/" />}>Dashboard</BreadcrumbLink>
+                  <BreadcrumbLink render={<Link to="/" />}>Tổng quan</BreadcrumbLink>
                 ) : (
-                  <BreadcrumbPage>Dashboard</BreadcrumbPage>
+                  <BreadcrumbPage>Tổng quan</BreadcrumbPage>
                 )}
               </BreadcrumbItem>
               {pageTitle && (

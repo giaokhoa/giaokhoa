@@ -15,7 +15,7 @@ API mặc định ở cổng `3000`, web dev ở `5173`. Web gọi API qua `VITE
 
 ## Dữ liệu local
 
-`pnpm --filter @giaokhoa/api reset` **xóa schema `public`/`drizzle`** trong PostgreSQL local và toàn bộ object của bucket S3Mock rồi chạy migration từ đầu. Script từ chối host database/S3 không thuộc danh sách local.
+`pnpm reset` chạy tác vụ `reset` của `@giaokhoa/database` (xóa schema local rồi di trú `0000_baseline.sql`) và `@giaokhoa/api` (xóa object trong S3Mock local). Hai tác vụ được thực hiện riêng, không qua script trung gian.
 
 `pnpm --filter @giaokhoa/api files:gc` dọn file nháp hết hạn và thử lại các lần xóa storage lỗi. Lệnh không tự chạy; cần scheduler nếu muốn thu gom định kỳ. TTL mặc định là 24 giờ (`FILE_ORPHAN_TTL_HOURS`).
 
@@ -30,3 +30,9 @@ lưu trữ ở `packages/database/src/schema/authorization.ts`.
 
 Các lệnh quản trị dữ liệu, công cụ khởi tạo và hướng dẫn sử dụng cụ thể nằm cùng
 thành phần thực hiện chúng; không mô tả luồng nghiệp vụ trong README dự án.
+
+## Giao diện web
+
+Không gian làm việc gồm ngân hàng câu hỏi, đề thi, lớp học, bài giao, bài làm và chấm điểm. Khu vực quản trị cung cấp môn học, chương trình và phân quyền. Thanh điều hướng và các thao tác sử dụng quyền hiệu lực do API trả về; Better Auth chỉ cung cấp danh tính và phiên đăng nhập.
+
+Các trang dùng bộ nạp dữ liệu và hành động của React Router, hợp đồng tại `@giaokhoa/shared/http/*` và thành phần trong `packages/ui`. Kiểm thử giao diện thuần đặt tại `apps/web/test`; kiểm thử dữ liệu và phân quyền của không gian làm việc đặt tại `apps/api/test/integration/workspace`.

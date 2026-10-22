@@ -42,7 +42,30 @@ export class AttemptsService {
     return context;
   }
 
+  async listOwn(actorId: string) {
+    const rows = await this.repository.listOwn(actorId);
+    const decisions = new Map(
+      await Promise.all(
+        [...new Set(rows.map((row) => row.assignmentId))].map(
+          async (assignmentId) =>
+            [
+              assignmentId,
+              (
+                await this.authorization.authorize({
+                  actorId,
+                  capability: 'assignment:attempt',
+                  context: { kind: 'assignment', resourceKey: assignmentId },
+                })
+              ).allowed,
+            ] as const,
+        ),
+      ),
+    );
+    return rows.filter((row) => decisions.get(row.assignmentId));
+  }
+
   /** Quyền làm bài chỉ là điều kiện đầu; kho dữ liệu còn kiểm thời gian, số lượt và người nhận hợp lệ. */
+
   async start(actorId: string, assignmentId: string): Promise<Attempt> {
     const classId = await this.repository.findAssignmentClass(assignmentId);
     if (!classId)
@@ -65,6 +88,7 @@ export class AttemptsService {
     id: string,
     position: number,
     answer: AttemptAnswer,
+    expectedAnswer: AttemptAnswer | null,
   ): Promise<Attempt> {
     const parsed = attemptAnswerSchema.safeParse(answer);
     if (!parsed.success)
@@ -75,7 +99,7 @@ export class AttemptsService {
         parsed.error.issues,
       );
     await this.assertAttempt(actorId, id, 'assignment:attempt');
-    return this.repository.save(id, actorId, position, parsed.data, this.now());
+    return this.repository.save(id, actorId, position, parsed.data, expectedAnswer, this.now());
   }
 
   async submit(actorId: string, id: string): Promise<Attempt> {

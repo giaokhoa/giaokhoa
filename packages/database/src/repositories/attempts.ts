@@ -1,4 +1,5 @@
 import { ClientError } from '@giaokhoa/application/common/client-error';
+import { isDeepStrictEqual } from 'node:util';
 import type { AttemptsRepository } from '@giaokhoa/application/attempts/repository';
 import {
   attemptAnswerSchema,
@@ -6,6 +7,7 @@ import {
   attemptResultSchema,
   attemptReviewSchema,
   attemptSchema,
+  ownAttemptSummarySchema,
   attemptSolutionsSchema,
   attemptSummarySchema,
   type AttemptAnswer,
@@ -13,7 +15,7 @@ import {
   type AttemptReview,
 } from '@giaokhoa/shared/attempts';
 import { questionSchema, type Question } from '@giaokhoa/shared/questions';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne, or } from 'drizzle-orm';
 import { users } from '../schema/auth.generated.js';
 import { assignments, assignmentRecipients } from '../schema/assignments.js';
 import { attempts, attemptResponses } from '../schema/attempts.js';
@@ -117,11 +119,12 @@ function matches(question: Question, answer: AttemptAnswer): boolean {
  * Biến bản ghi lượt làm thành thông tin tóm tắt phục vụ giáo viên.
  * Chuyển điểm nguyên lưu tại cơ sở dữ liệu về thang điểm 100 và xác thực cấu trúc đầu ra.
  */
-function summary(row: AttemptRow) {
+function summary(row: AttemptRow, user?: { name: string; email: string }) {
   return attemptSummarySchema.parse({
     id: row.id,
     assignmentId: row.assignmentId,
     userId: row.userId,
+    ...user,
     attemptNumber: row.attemptNumber,
     status: row.status,
     startedAt: row.startedAt,
@@ -173,6 +176,47 @@ async function detail(tx: Transaction, row: AttemptRow, teacher = false) {
  */
 export class PostgresAttemptsRepository implements AttemptsRepository {
   constructor(private readonly db: Database) {}
+
+  /** Giữ cùng điều kiện đọc với getOwn, đồng thời bỏ điểm, nhận xét và nội dung câu trả lời. */
+  async listOwn(actorId: string) {
+    const rows = await this.db
+      .select({ attempt: attempts })
+      .from(attempts)
+      .innerJoin(assignments, eq(assignments.id, attempts.assignmentId))
+      .innerJoin(classes, eq(classes.id, assignments.classId))
+      .leftJoin(
+        classEnrolments,
+        and(eq(classEnrolments.classId, classes.id), eq(classEnrolments.userId, actorId)),
+      )
+      .leftJoin(
+        assignmentRecipients,
+        and(
+          eq(assignmentRecipients.assignmentId, assignments.id),
+          eq(assignmentRecipients.userId, actorId),
+        ),
+      )
+      .where(
+        and(
+          eq(attempts.userId, actorId),
+          or(
+            and(
+              ne(attempts.status, 'in_progress'),
+              inArray(classEnrolments.status, ['active', 'left']),
+            ),
+            and(
+              eq(attempts.status, 'in_progress'),
+              eq(classes.status, 'active'),
+              eq(classEnrolments.status, 'active'),
+              eq(assignmentRecipients.status, 'active'),
+            ),
+          ),
+        ),
+      )
+      .orderBy(attempts.startedAt, attempts.id);
+    return rows.map(({ attempt: { scoreBasisPoints: _score, feedback: _feedback, ...row } }) =>
+      ownAttemptSummarySchema.parse(row),
+    );
+  }
 
   /**
    * Tra lớp chứa bài giao từ mã bài giao.
@@ -379,6 +423,7 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
     actorId: string,
     position: number,
     answer: AttemptAnswer,
+    expectedAnswer: AttemptAnswer | null,
     now: Date,
   ): Promise<Attempt> {
     return this.db.transaction(async (tx) => {
@@ -395,6 +440,18 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
         .limit(1);
       if (!question || !matches(questionSchema.parse(question.snapshot), answer))
         throw invalidAnswer();
+      // writable() khóa lượt làm: các yêu cầu từ nhiều thiết bị được tuần tự hóa.
+      const [current] = await tx
+        .select({ answer: attemptResponses.answer })
+        .from(attemptResponses)
+        .where(and(eq(attemptResponses.attemptId, id), eq(attemptResponses.position, position)))
+        .limit(1);
+      if (!isDeepStrictEqual(current?.answer ?? null, expectedAnswer))
+        throw new ClientError(
+          'conflict',
+          'attempt_answer_changed',
+          'Câu trả lời đã được sửa trên thiết bị khác. Hãy tải bản mới trước khi lưu.',
+        );
       await tx
         .insert(attemptResponses)
         .values({
@@ -523,11 +580,12 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
         .limit(1);
       if (!assignment) return undefined;
       const rows = await tx
-        .select()
+        .select({ attempt: attempts, name: users.name, email: users.email })
         .from(attempts)
+        .innerJoin(users, eq(users.id, attempts.userId))
         .where(eq(attempts.assignmentId, assignmentId))
         .orderBy(asc(attempts.userId), asc(attempts.attemptNumber));
-      return rows.map(summary);
+      return rows.map(({ attempt, name, email }) => summary(attempt, { name, email }));
     });
   }
 

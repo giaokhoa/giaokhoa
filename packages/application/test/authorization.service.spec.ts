@@ -83,6 +83,23 @@ describe('Dịch vụ phân quyền (AuthorizationService)', () => {
     });
   });
 
+  it('tra quyền hiển thị không tạo cảnh báo cho mục bị ẩn nhưng thao tác thật vẫn được ghi nhận', async () => {
+    const repository = new FakeAuthorizationRepository();
+    repository.set('actor', 'class:view', [{ contextId: classOne.id, effect: 'ALLOW' }]);
+    const events: unknown[] = [];
+    const service = new AuthorizationService(repository, (event) => events.push(event));
+    expect(
+      await service.checkCapabilities('actor', request.context, [
+        'class:view',
+        'class:update',
+        'class:view',
+      ]),
+    ).toEqual({ contextId: classOne.id, capabilities: ['class:view'] });
+    expect(events).toEqual([]);
+    await expect(service.assertAuthorized(request)).rejects.toMatchObject({ kind: 'forbidden' });
+    expect(events).toEqual([{ ...request, allowed: false, reason: 'no_grant' }]);
+  });
+
   it('ưu tiên quyền ALLOW ở phạm vi cụ thể nhất và không kế thừa quyền giữa các lớp cùng cấp', async () => {
     const repository = new FakeAuthorizationRepository();
     repository.set('actor', 'class:update', [{ contextId: classOne.id, effect: 'ALLOW' }]);

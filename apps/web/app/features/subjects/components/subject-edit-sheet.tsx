@@ -1,7 +1,14 @@
 import type { Subject } from '@giaokhoa/shared/curriculum';
+import { Alert, AlertDescription } from '@giaokhoa/ui/components/alert';
 import { Button } from '@giaokhoa/ui/components/button';
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from '@giaokhoa/ui/components/field';
 import { Input } from '@giaokhoa/ui/components/input';
-import { Label } from '@giaokhoa/ui/components/label';
 import {
   Sheet,
   SheetContent,
@@ -13,11 +20,15 @@ import {
 import { useEffect } from 'react';
 import { useFetcher } from 'react-router';
 
-type UpdateSubjectActionData = { subject: Subject } | { error: string };
+type SubjectActionData =
+  | { subject: Subject }
+  | { error: string; fieldErrors?: Record<string, string> };
 
-export function SubjectEditSheet({ subject, onClose }: { subject: Subject; onClose: () => void }) {
-  const fetcher = useFetcher<UpdateSubjectActionData>();
+export function SubjectFormSheet({ subject, onClose }: { subject?: Subject; onClose: () => void }) {
+  const fetcher = useFetcher<SubjectActionData>();
   const saving = fetcher.state !== 'idle';
+  const error = fetcher.data && 'error' in fetcher.data ? fetcher.data : undefined;
+  const fieldErrors = error?.fieldErrors;
 
   useEffect(() => {
     if (fetcher.state === 'idle' && fetcher.data && 'subject' in fetcher.data) onClose();
@@ -32,26 +43,52 @@ export function SubjectEditSheet({ subject, onClose }: { subject: Subject; onClo
     >
       <SheetContent showCloseButton={!saving} className="overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Sửa môn học</SheetTitle>
-          <SheetDescription>Cập nhật tên, slug và số thứ tự hiển thị.</SheetDescription>
+          <SheetTitle>{subject ? 'Sửa môn học' : 'Thêm môn học'}</SheetTitle>
+          <SheetDescription>Nhập tên, mã đường dẫn và thứ tự hiển thị.</SheetDescription>
         </SheetHeader>
 
-        <fetcher.Form method="post" className="grid gap-5">
-          <div className="grid gap-5 px-4">
-            <input type="hidden" name="id" value={subject.id} />
+        <fetcher.Form method="post" className="flex flex-col gap-5" aria-busy={saving}>
+          <FieldGroup className="mx-4">
+            <input type="hidden" name="intent" value={subject ? 'update' : 'create'} />
+            {subject && <input type="hidden" name="id" value={subject.id} />}
 
-            <div className="grid gap-2">
-              <Label htmlFor="subject-name">Tên môn học</Label>
-              <Input id="subject-name" name="name" defaultValue={subject.name} required />
-            </div>
+            <Field data-invalid={!!fieldErrors?.name} data-disabled={saving}>
+              <FieldLabel htmlFor="subject-name">Tên môn học</FieldLabel>
+              <Input
+                id="subject-name"
+                name="name"
+                defaultValue={subject?.name}
+                disabled={saving}
+                aria-invalid={!!fieldErrors?.name}
+                aria-describedby={fieldErrors?.name ? 'subject-name-error' : undefined}
+                required
+              />
+              {fieldErrors?.name && (
+                <FieldError id="subject-name-error">{fieldErrors.name}</FieldError>
+              )}
+            </Field>
 
-            <div className="grid gap-2">
-              <Label htmlFor="subject-slug">Slug</Label>
-              <Input id="subject-slug" name="slug" defaultValue={subject.slug} required />
-            </div>
+            <Field data-invalid={!!fieldErrors?.slug} data-disabled={saving}>
+              <FieldLabel htmlFor="subject-slug">Mã đường dẫn</FieldLabel>
+              <Input
+                id="subject-slug"
+                name="slug"
+                defaultValue={subject?.slug}
+                disabled={saving}
+                aria-invalid={!!fieldErrors?.slug}
+                aria-describedby="subject-slug-description subject-slug-error"
+                required
+              />
+              <FieldDescription id="subject-slug-description">
+                Ví dụ: toan-hoc. Chỉ dùng chữ thường không dấu, chữ số và dấu gạch nối giữa các từ.
+              </FieldDescription>
+              {fieldErrors?.slug && (
+                <FieldError id="subject-slug-error">{fieldErrors.slug}</FieldError>
+              )}
+            </Field>
 
-            <div className="grid gap-2">
-              <Label htmlFor="subject-position">STT</Label>
+            <Field data-invalid={!!fieldErrors?.position} data-disabled={saving}>
+              <FieldLabel htmlFor="subject-position">Thứ tự hiển thị</FieldLabel>
               <Input
                 id="subject-position"
                 name="position"
@@ -59,21 +96,32 @@ export function SubjectEditSheet({ subject, onClose }: { subject: Subject; onClo
                 min={1}
                 max={2_147_483_647}
                 step={1}
-                defaultValue={subject.position}
-                required
+                defaultValue={subject?.position}
+                disabled={saving}
+                aria-invalid={!!fieldErrors?.position}
+                aria-describedby="subject-position-description subject-position-error"
+                required={!!subject}
               />
-            </div>
+              {!subject && (
+                <FieldDescription id="subject-position-description">
+                  Để trống để hệ thống tự sắp xếp.
+                </FieldDescription>
+              )}
+              {fieldErrors?.position && (
+                <FieldError id="subject-position-error">{fieldErrors.position}</FieldError>
+              )}
+            </Field>
 
-            {fetcher.data && 'error' in fetcher.data && (
-              <p className="text-sm text-destructive" role="alert">
-                {fetcher.data.error}
-              </p>
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error.error}</AlertDescription>
+              </Alert>
             )}
-          </div>
+          </FieldGroup>
 
           <SheetFooter>
             <Button type="submit" disabled={saving}>
-              {saving ? 'Đang lưu…' : 'Lưu thay đổi'}
+              {saving ? 'Đang lưu…' : subject ? 'Lưu thay đổi' : 'Tạo môn học'}
             </Button>
             <Button type="button" variant="outline" disabled={saving} onClick={onClose}>
               Huỷ

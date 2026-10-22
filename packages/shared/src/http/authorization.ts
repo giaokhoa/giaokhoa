@@ -32,8 +32,19 @@ const roleMatrixBody = z.strictObject({
   allowed: z.boolean(),
 });
 
-/** Quản lý vai trò theo ngữ cảnh hệ thống; không dùng API quản trị của Better Auth. */
+/** Tra quyền của chính người đăng nhập và quản lý vai trò theo ngữ cảnh; không dùng quyền của Better Auth. */
 export const authorizationContract = {
+  check: {
+    method: 'POST',
+    path: '/authorization/check',
+    body: z.strictObject({
+      context: z.strictObject({ kind: contextKind, resourceKey: z.string().min(1).max(200) }),
+      capabilities: z.array(z.string().min(1).max(120)).max(32),
+    }),
+    responses: {
+      200: z.strictObject({ contextId: z.uuidv7(), capabilities: z.array(z.string()) }),
+    },
+  },
   createRole: {
     method: 'POST',
     path: '/authorization/roles',
@@ -46,6 +57,19 @@ export const authorizationContract = {
     pathParams: roleKeyParams,
     body: rolePermissionBody,
     responses: { 200: result },
+  },
+  listRoleContexts: {
+    method: 'GET',
+    path: '/authorization/roles',
+    responses: {
+      200: z.array(
+        z.strictObject({
+          key: z.string(),
+          contextKind,
+          contexts: z.array(contextKind),
+        }),
+      ),
+    },
   },
   setRoleContexts: {
     method: 'PUT',

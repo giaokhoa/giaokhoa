@@ -51,25 +51,29 @@ export class AuthorizationService {
    * và các điều kiện thuộc vòng đời nghiệp vụ.
    */
   async authorize(request: AuthorizationRequest): Promise<AuthorizationDecision> {
+    return this.finish(request, await this.evaluate(request));
+  }
+
+  private async evaluate(request: AuthorizationRequest): Promise<AuthorizationDecision> {
     const context = await this.repository.findContext(request.context);
-    if (!context) return this.finish(request, { allowed: false, reason: 'invalid_context' });
+    if (!context) return { allowed: false, reason: 'invalid_context' };
 
     const chain: string[] = [];
     const visited = new Set<string>();
     let current: typeof context | undefined = context;
     while (current) {
       if (visited.has(current.id) || chain.length >= 32)
-        return this.finish(request, { allowed: false, reason: 'invalid_context' });
+        return { allowed: false, reason: 'invalid_context' };
       visited.add(current.id);
       chain.push(current.id);
       if (!current.parentId) {
         if (current.kind !== 'system' || current.resourceKey !== 'giaokhoa')
-          return this.finish(request, { allowed: false, reason: 'invalid_context' });
+          return { allowed: false, reason: 'invalid_context' };
         break;
       }
       const parent = await this.repository.findContextById(current.parentId);
       if (!parent || !validParent(current.kind, parent.kind))
-        return this.finish(request, { allowed: false, reason: 'invalid_context' });
+        return { allowed: false, reason: 'invalid_context' };
       current = parent;
     }
 
@@ -80,26 +84,26 @@ export class AuthorizationService {
     );
     const applicable = grants.filter((grant) => chain.includes(grant.contextId));
     if (applicable.some((grant) => grant.effect === 'PROHIBIT'))
-      return this.finish(request, { allowed: false, reason: 'prohibited' });
+      return { allowed: false, reason: 'prohibited' };
 
     // Moodle: tính quyền từng vai trò (gồm định nghĩa và override), sau đó gộp.
     // Vai trò ALLOW được phép nếu không vai trò nào PROHIBIT; PREVENT chỉ ngăn chính vai trò đó.
     const allowed = applicable.find((grant) => grant.effect === 'ALLOW');
     if (allowed)
-      return this.finish(request, {
+      return {
         allowed: true,
         reason: 'granted',
         matchedContextId: allowed.contextId,
-      });
+      };
     const prevented = applicable.find((grant) => grant.effect === 'PREVENT');
     if (prevented)
-      return this.finish(request, {
+      return {
         allowed: false,
         reason: 'prevented',
         matchedContextId: prevented.contextId,
-      });
+      };
 
-    return this.finish(request, { allowed: false, reason: 'no_grant' });
+    return { allowed: false, reason: 'no_grant' };
   }
 
   /** Phân biệt phạm vi không tồn tại với tài khoản không đủ quyền khi chuyển quyết định thành lỗi nghiệp vụ. */
@@ -117,6 +121,30 @@ export class AuthorizationService {
       'authorization_denied',
       'Bạn không có quyền thực hiện thao tác này',
     );
+  }
+
+  /**
+   * Chỉ tra quyền của chính người yêu cầu; không ghi mục bị ẩn thành cảnh báo truy cập trái quyền.
+   * Các thao tác nghiệp vụ vẫn dùng authorize/assertAuthorized để kiểm tra và ghi nhận quyết định.
+   */
+  async checkCapabilities(actorId: string, context: ContextRef, capabilities: string[]) {
+    const found = await this.repository.findContext(context);
+    if (!found)
+      throw new ClientError(
+        'not_found',
+        'authorization_context_not_found',
+        'Phạm vi không tồn tại',
+      );
+    const decisions = await Promise.all(
+      [...new Set(capabilities)].map(async (capability) => ({
+        capability,
+        ...(await this.evaluate({ actorId, context, capability })),
+      })),
+    );
+    return {
+      contextId: found.id,
+      capabilities: decisions.filter((item) => item.allowed).map((item) => item.capability),
+    };
   }
 
   private async assertRoleManager(actorId: string) {
@@ -145,6 +173,11 @@ export class AuthorizationService {
   ) {
     await this.assertRoleManager(actorId);
     return this.repository.setRolePermission(actorId, roleKey, capability, effect);
+  }
+
+  async listRoleContexts(actorId: string) {
+    await this.assertRoleManager(actorId);
+    return this.repository.listRoleContexts();
   }
 
   async setRoleContexts(actorId: string, roleKey: string, levels: AuthorizationContextKind[]) {

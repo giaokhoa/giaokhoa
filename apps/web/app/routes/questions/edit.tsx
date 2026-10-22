@@ -1,5 +1,5 @@
 import { questionsContract } from '@giaokhoa/shared/http/questions';
-import { requireSession } from '#features/auth/api/session.server.js';
+import { requireCapability } from '#features/workspace/access.server.js';
 import { QuestionAuthoring } from '#features/questions/authoring/question-authoring.js';
 import { questionToDraft } from '#features/questions/authoring/draft-state.js';
 import { saveQuestionAction } from '#features/questions/authoring/save-action.server.js';
@@ -8,7 +8,7 @@ import { getApiErrorMessage, getRequestErrorMessage } from '#lib/http/errors.js'
 import type { Route } from './+types/edit';
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requireSession(request);
+  await requireCapability(request, 'question:manage_own');
 
   const parsedId = questionsContract.get.pathParams.safeParse({ id: params.id });
   if (!parsedId.success) throw new Response('Mã câu hỏi không hợp lệ.', { status: 400 });
@@ -61,3 +61,5 @@ export default function EditQuestion({ loaderData }: Route.ComponentProps) {
     />
   );
 }
+
+export { WorkspaceErrorBoundary as ErrorBoundary } from '#features/workspace/ui.js';

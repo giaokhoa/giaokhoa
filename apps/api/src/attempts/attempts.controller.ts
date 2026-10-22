@@ -50,6 +50,13 @@ export class AssignmentAttemptsController {
 export class AttemptsController {
   constructor(private readonly attempts: AttemptsService) {}
 
+  @Get()
+  async listOwn(@Session() session: UserSession) {
+    return attemptsContract.listOwn.responses[200].parse(
+      await this.attempts.listOwn(session.user.id),
+    );
+  }
+
   /** Học sinh xem lượt làm của chính mình cùng các câu đã lưu; không trả đáp án chuẩn. */
   @Get(':id')
   async getOwn(
@@ -67,11 +74,12 @@ export class AttemptsController {
     @Param('id', { schema: attemptsContract.save.pathParams.shape.id }) id: string,
     @Param('position', { schema: attemptsContract.save.pathParams.shape.position })
     position: number,
-    @Body({ schema: attemptsContract.save.body }) body: AttemptAnswer,
+    @Body({ schema: attemptsContract.save.body })
+    body: { answer: AttemptAnswer; expectedAnswer: AttemptAnswer | null },
     @Session() session: UserSession,
   ): Promise<Attempt> {
     return attemptsContract.save.responses[200].parse(
-      await this.attempts.save(session.user.id, id, position, body),
+      await this.attempts.save(session.user.id, id, position, body.answer, body.expectedAnswer),
     );
   }
 

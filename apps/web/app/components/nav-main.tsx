@@ -28,7 +28,8 @@ type NavItem = {
 
 function MainNavItem({ item, onNavigate }: { item: NavItem; onNavigate: () => void }) {
   const { pathname } = useLocation();
-  const itemActive = pathname === item.url;
+  const itemActive =
+    pathname === item.url || (item.url !== '/' && pathname.startsWith(`${item.url}/`));
   const sectionActive =
     itemActive || item.items?.some((subItem) => pathname === subItem.url) === true;
   const [open, setOpen] = useState(sectionActive);
@@ -97,7 +98,13 @@ function MainNavItem({ item, onNavigate }: { item: NavItem; onNavigate: () => vo
   );
 }
 
-export function NavMain({ items }: { items: NavItem[] }) {
+export function NavMain({
+  items,
+  canCreateQuestion,
+}: {
+  items: NavItem[];
+  canCreateQuestion: boolean;
+}) {
   const { isMobile, setOpenMobile } = useSidebar();
   const closeMobileSidebar = () => {
     if (isMobile) setOpenMobile(false);
@@ -107,20 +114,22 @@ export function NavMain({ items }: { items: NavItem[] }) {
     <SidebarGroup>
       <SidebarGroupContent>
         <div className="flex flex-col gap-2">
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                tooltip="Thêm câu hỏi"
-                className="bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
-                render={<Link to="/questions/new" onClick={closeMobileSidebar} />}
-              >
-                <CirclePlusIcon />
-                <span>Thêm câu hỏi</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
+          {canCreateQuestion && (
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Thêm câu hỏi"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
+                  render={<Link to="/questions/new" onClick={closeMobileSidebar} />}
+                >
+                  <CirclePlusIcon />
+                  <span>Thêm câu hỏi</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          )}
 
-          <SidebarGroupLabel>Quản lý</SidebarGroupLabel>
+          <SidebarGroupLabel>Không gian làm việc</SidebarGroupLabel>
           <SidebarMenu>
             {items.map((item) => (
               <MainNavItem key={item.title} item={item} onNavigate={closeMobileSidebar} />

@@ -1,6 +1,16 @@
 import { AuthorizationService } from '@giaokhoa/application/authorization/service';
 import { authorizationContract } from '@giaokhoa/shared/http/authorization';
-import { Body, Controller, Delete, HttpCode, HttpStatus, Param, Post, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Put,
+} from '@nestjs/common';
 import { Session, type UserSession } from '@thallesp/nestjs-better-auth';
 
 type SystemRoleBody = { role: 'teacher' | 'admin' };
@@ -9,6 +19,27 @@ type SystemRoleBody = { role: 'teacher' | 'admin' };
 @Controller('authorization')
 export class AuthorizationController {
   constructor(private readonly authorization: AuthorizationService) {}
+
+  @Post('check')
+  @HttpCode(HttpStatus.OK)
+  check(
+    @Body({ schema: authorizationContract.check.body }) body: {
+      context: {
+        kind: 'system' | 'user' | 'bank' | 'question' | 'exam' | 'class' | 'assignment';
+        resourceKey: string;
+      };
+      capabilities: string[];
+    },
+    @Session() session: UserSession,
+  ) {
+    return this.authorization.checkCapabilities(session.user.id, body.context, body.capabilities);
+  }
+
+  /** Chỉ người quản lý vai trò được xem cấu hình vai trò hiện tại. */
+  @Get('roles')
+  async listRoles(@Session() session: UserSession) {
+    return this.authorization.listRoleContexts(session.user.id);
+  }
 
   /** Định nghĩa vai trò và các loại ngữ cảnh được phép gán qua capability hệ thống. */
   @Post('roles')

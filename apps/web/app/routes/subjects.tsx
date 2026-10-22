@@ -1,12 +1,12 @@
 import { subjectsContract } from '@giaokhoa/shared/http/subjects';
-import { requireSession } from '#features/auth/api/session.server.js';
+import { requireCapability } from '#features/workspace/access.server.js';
 import { SubjectsTable } from '#features/subjects/components/subjects-table.js';
 import { createApiClient } from '#lib/http/api.server.js';
 import { getApiErrorMessage, getRequestErrorMessage } from '#lib/http/errors.js';
 import type { Route } from './+types/subjects';
 
 export async function loader({ request }: Route.LoaderArgs) {
-  await requireSession(request);
+  await requireCapability(request, 'platform:moderate');
 
   try {
     const response = await createApiClient(request).request<unknown>({
@@ -16,13 +16,13 @@ export async function loader({ request }: Route.LoaderArgs) {
 
     if (response.status !== 200) {
       throw new Response(getApiErrorMessage(response.data) ?? 'Không thể tải danh sách môn học.', {
-        status: response.status,
+        status: response.status >= 400 && response.status <= 599 ? response.status : 502,
       });
     }
 
     const result = subjectsContract.list.responses[200].safeParse(response.data);
     if (!result.success) {
-      throw new Response('Phản hồi API không đúng subjects contract.', { status: 502 });
+      throw new Response('Phản hồi API không đúng hợp đồng môn học.', { status: 502 });
     }
 
     return { subjects: result.data };
@@ -35,46 +35,88 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  await requireSession(request);
+  await requireCapability(request, 'platform:moderate');
 
   const data = await request.formData();
-  const idResult = subjectsContract.update.pathParams.safeParse({ id: data.get('id') });
-  const patchResult = subjectsContract.update.body.safeParse({
-    name: data.get('name'),
-    slug: data.get('slug'),
-    position: Number(data.get('position')),
-  });
-  if (!idResult.success || !patchResult.success) {
-    const issues = [
-      ...(idResult.success ? [] : idResult.error.issues),
-      ...(patchResult.success ? [] : patchResult.error.issues),
-    ];
+  const intent = data.get('intent');
+  if (intent !== 'create' && intent !== 'update' && intent !== 'delete') {
+    return Response.json({ error: 'Thao tác môn học không hợp lệ.' }, { status: 400 });
+  }
+
+  const endpoint = subjectsContract[intent];
+  let id: string | undefined;
+  if ('pathParams' in endpoint) {
+    const result = endpoint.pathParams.safeParse({ id: data.get('id') });
+    if (!result.success) {
+      return Response.json({ error: 'Mã môn học không hợp lệ.' }, { status: 400 });
+    }
+    id = result.data.id;
+  }
+
+  const position = data.get('position');
+  const bodyResult =
+    intent === 'delete'
+      ? null
+      : subjectsContract[intent].body.safeParse({
+          name: data.get('name'),
+          slug: data.get('slug'),
+          position:
+            typeof position === 'string' && position.trim() !== ''
+              ? Number(position)
+              : intent === 'create' && (position === null || position === '')
+                ? undefined
+                : NaN,
+        });
+  if (bodyResult && !bodyResult.success) {
+    const messages: Record<string, string> = {
+      name: 'Tên môn học không được để trống.',
+      slug: 'Mã đường dẫn chỉ gồm chữ thường không dấu, chữ số và dấu gạch nối giữa các từ.',
+      position: 'Thứ tự phải là số nguyên từ 1 đến 2147483647.',
+    };
+    const fieldErrors = Object.fromEntries(
+      bodyResult.error.issues.map((issue) => {
+        const field = String(issue.path[0]);
+        return [field, messages[field] ?? 'Dữ liệu môn học không hợp lệ.'];
+      }),
+    );
     return Response.json(
-      { error: issues[0]?.message ?? 'Dữ liệu môn học không hợp lệ.' },
+      { error: Object.values(fieldErrors).join(' '), fieldErrors },
       { status: 400 },
     );
   }
 
   try {
     const response = await createApiClient(request).request<unknown>({
-      url: subjectsContract.update.path.replace(':id', encodeURIComponent(idResult.data.id)),
-      method: subjectsContract.update.method,
-      data: patchResult.data,
+      url: endpoint.path.replace(':id', encodeURIComponent(id ?? '')),
+      method: endpoint.method,
+      data: bodyResult?.data,
     });
 
-    if (response.status !== 200) {
+    const expectedStatus = intent === 'delete' ? 204 : intent === 'create' ? 201 : 200;
+    if (response.status !== expectedStatus) {
       return Response.json(
-        { error: getApiErrorMessage(response.data) ?? 'Không thể cập nhật môn học.' },
-        { status: response.status },
+        {
+          error:
+            getApiErrorMessage(response.data) ??
+            (intent === 'create'
+              ? 'Không thể tạo môn học.'
+              : intent === 'delete'
+                ? 'Không thể xóa môn học.'
+                : 'Không thể cập nhật môn học.'),
+        },
+        { status: response.status >= 400 && response.status <= 599 ? response.status : 502 },
       );
     }
 
-    const result = subjectsContract.update.responses[200].safeParse(response.data);
+    if (intent === 'delete') return Response.json({ deleted: true });
+
+    const schema =
+      intent === 'create'
+        ? subjectsContract.create.responses[201]
+        : subjectsContract.update.responses[200];
+    const result = schema.safeParse(response.data);
     if (!result.success) {
-      return Response.json(
-        { error: 'Phản hồi API không đúng subjects contract.' },
-        { status: 502 },
-      );
+      return Response.json({ error: 'Phản hồi API không đúng hợp đồng môn học.' }, { status: 502 });
     }
 
     return Response.json({ subject: result.data });
@@ -97,3 +139,5 @@ export default function Subjects({ loaderData }: Route.ComponentProps) {
     </main>
   );
 }
+
+export { WorkspaceErrorBoundary as ErrorBoundary } from '#features/workspace/ui.js';

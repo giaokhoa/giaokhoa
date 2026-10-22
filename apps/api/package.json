@@ -21,9 +21,9 @@
     "db:migrate": "pnpm --filter @giaokhoa/database db:migrate",
     "db:push": "pnpm --filter @giaokhoa/database db:push",
     "db:studio": "pnpm --filter @giaokhoa/database db:studio",
-    "reset": "node ./scripts/reset.mjs",
     "prefiles:gc": "pnpm exec turbo run build --filter=@giaokhoa/api",
-    "files:gc": "node ./scripts/files-gc.mjs"
+    "files:gc": "node ./scripts/files-gc.mjs",
+    "reset": "node ./scripts/reset-s3.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1146.0",

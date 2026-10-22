@@ -1,6 +1,7 @@
 import { AssignmentsService } from '@giaokhoa/application/assignments/service';
 import type {
   Assignment,
+  AssignmentPreview,
   AssignmentCreate,
   AssignmentPatch,
   AssignmentRecipient,
@@ -14,6 +15,13 @@ import { Session, type UserSession } from '@thallesp/nestjs-better-auth';
 export class AssignmentsController {
   constructor(private readonly assignments: AssignmentsService) {}
 
+  @Get()
+  async list(@Session() session: UserSession) {
+    return assignmentsContract.list.responses[200].parse(
+      await this.assignments.list(session.user.id),
+    );
+  }
+
   /** Chủ lớp tạo bản nháp bài giao từ một phiên bản đề của chính mình. */
   @Post()
   async create(
@@ -26,6 +34,16 @@ export class AssignmentsController {
   }
 
   /** Người tạo bài giao xem cấu hình và lịch công bố; đây không phải bản đề dành cho học sinh. */
+  @Get(':id/preview')
+  async preview(
+    @Param('id', { schema: assignmentsContract.preview.pathParams.shape.id }) id: string,
+    @Session() session: UserSession,
+  ): Promise<AssignmentPreview> {
+    return assignmentsContract.preview.responses[200].parse(
+      await this.assignments.preview(session.user.id, id),
+    );
+  }
+
   @Get(':id')
   async get(
     @Param('id', { schema: assignmentsContract.get.pathParams.shape.id }) id: string,

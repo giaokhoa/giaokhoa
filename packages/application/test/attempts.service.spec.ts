@@ -111,7 +111,7 @@ describe('Dịch vụ bài làm (AttemptsService)', () => {
   it('từ chối câu trả lời sai trước khi đọc lượt làm và chỉ lưu câu trả lời đúng kiểu', async () => {
     const { service, repository, authorization, context } = setup();
     await expect(
-      service.save(ACTOR, ATTEMPT, 1, { type: 'short_answer', answer: '' }),
+      service.save(ACTOR, ATTEMPT, 1, { type: 'short_answer', answer: '' }, null),
     ).rejects.toMatchObject({ kind: 'invalid', code: 'attempt_answer_invalid' });
     expect(repository.findContext).not.toHaveBeenCalled();
     expect(authorization.assertAuthorized).not.toHaveBeenCalled();
@@ -120,8 +120,10 @@ describe('Dịch vụ bài làm (AttemptsService)', () => {
     repository.findContext.mockResolvedValue(context);
     repository.save.mockResolvedValue({ id: ATTEMPT });
     const answer = { type: 'short_answer' as const, answer: '42' };
-    await expect(service.save(ACTOR, ATTEMPT, 1, answer)).resolves.toEqual({ id: ATTEMPT });
-    expect(repository.save).toHaveBeenCalledWith(ATTEMPT, ACTOR, 1, answer, NOW);
+    await expect(service.save(ACTOR, ATTEMPT, 1, answer, null)).resolves.toEqual({ id: ATTEMPT });
+    expect(repository.save).toHaveBeenCalledWith(ATTEMPT, ACTOR, 1, answer, null, NOW);
+    await service.save(ACTOR, ATTEMPT, 1, answer, answer);
+    expect(repository.save).toHaveBeenLastCalledWith(ATTEMPT, ACTOR, 1, answer, answer, NOW);
     expect(authorization.assertAuthorized).toHaveBeenCalledWith({
       actorId: ACTOR,
       capability: 'assignment:attempt',

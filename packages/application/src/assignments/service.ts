@@ -1,6 +1,7 @@
 import { assignmentCreateSchema } from '@giaokhoa/shared/assignments';
 import type {
   Assignment,
+  AssignmentPreview,
   AssignmentCreate,
   AssignmentPatch,
   AssignmentRecipient,
@@ -38,6 +39,43 @@ export class AssignmentsService {
     return assignment;
   }
 
+  /** Lọc riêng quyền quản lý, chấm và quyền người nhận; không suy quyền từ người tạo lớp. */
+  async list(actorId: string) {
+    const candidates = await this.repository.listCandidates(actorId);
+    const result = await Promise.all(
+      candidates.map(async ({ isRecipient, ...item }) => {
+        const access = await this.authorization.checkCapabilities(
+          actorId,
+          { kind: 'assignment', resourceKey: item.id },
+          [
+            'assignment:create',
+            'assignment:publish',
+            'assignment:grade',
+            'assignment:view_assigned',
+            'assignment:attempt',
+            'result:view_own',
+          ],
+        );
+        const capabilities = access.capabilities.filter(
+          (key) =>
+            !['assignment:view_assigned', 'assignment:attempt', 'result:view_own'].includes(key) ||
+            isRecipient,
+        );
+        return { ...item, capabilities };
+      }),
+    );
+    return result.filter((item) =>
+      item.capabilities.some((key) =>
+        [
+          'assignment:create',
+          'assignment:publish',
+          'assignment:grade',
+          'assignment:view_assigned',
+        ].includes(key),
+      ),
+    );
+  }
+
   async create(actorId: string, input: AssignmentCreate): Promise<Assignment> {
     const parsed = assignmentCreateSchema.safeParse(input);
     if (!parsed.success)
@@ -56,6 +94,14 @@ export class AssignmentsService {
         'Phiên bản đề không tồn tại hoặc không thuộc bạn',
       );
     return created;
+  }
+
+  async preview(actorId: string, id: string): Promise<AssignmentPreview> {
+    await this.authorized(actorId, id, 'assignment:grade');
+    const preview = await this.repository.getPreview(id, actorId);
+    if (!preview)
+      throw new ClientError('not_found', 'assignment_not_found', 'Bài giao không tồn tại');
+    return preview;
   }
 
   async get(actorId: string, id: string): Promise<Assignment> {

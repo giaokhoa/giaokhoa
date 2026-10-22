@@ -5,6 +5,7 @@ import {
   attemptResultSchema,
   attemptReviewSchema,
   attemptSchema,
+  ownAttemptSummarySchema,
   attemptSolutionsSchema,
   attemptSummarySchema,
 } from '../attempts.js';
@@ -17,6 +18,11 @@ const responseParams = z.strictObject({
 });
 
 export const attemptsContract = {
+  listOwn: {
+    method: 'GET',
+    path: '/attempts',
+    responses: { 200: z.array(ownAttemptSummarySchema) },
+  },
   start: {
     method: 'POST',
     path: '/assignments/:assignmentId/attempts',
@@ -33,7 +39,10 @@ export const attemptsContract = {
     method: 'PUT',
     path: '/attempts/:id/responses/:position',
     pathParams: responseParams,
-    body: attemptAnswerSchema,
+    body: z.strictObject({
+      answer: attemptAnswerSchema,
+      expectedAnswer: attemptAnswerSchema.nullable(),
+    }),
     responses: { 200: attemptSchema },
   },
   submit: {
