@@ -276,6 +276,7 @@ CREATE TABLE "exam_revision_questions" (
 	"question_version_id" uuid NOT NULL,
 	"position" integer NOT NULL,
 	"question_snapshot" jsonb NOT NULL,
+	"stimulus_snapshot" jsonb,
 	CONSTRAINT "exam_revision_questions_position_unique" UNIQUE("exam_revision_id","position"),
 	CONSTRAINT "exam_revision_questions_version_unique" UNIQUE("exam_revision_id","question_version_id"),
 	CONSTRAINT "exam_revision_questions_position_check" CHECK ("exam_revision_questions"."position" > 0)

@@ -2782,6 +2782,12 @@
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true
+        },
+        "stimulus_snapshot": {
+          "name": "stimulus_snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
