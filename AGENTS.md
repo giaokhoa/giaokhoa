@@ -6,7 +6,7 @@ Các quy tắc này bắt buộc với trợ lý chính và trợ lý phụ (sub
 
 - Trước khi làm việc, đọc `AGENTS.md` ở thư mục gốc và mọi `AGENTS.md` trên đường dẫn tới thư mục cần sửa, theo thứ tự từ ngoài vào trong.
 - Nếu thay đổi liên quan nhiều gói hoặc ứng dụng, đọc hướng dẫn của từng khu vực. Quy ước riêng chỉ áp dụng trong phạm vi đó và bổ sung cho quy tắc chung.
-- Đặt quy tắc chung ở tệp này; đặt quy tắc chuyên biệt và các luồng nghiệp vụ cần bảo vệ trong `AGENTS.md` của khu vực tương ứng.
+- `AGENTS.md` chỉ quy định vai trò, trách nhiệm, ranh giới phụ thuộc và quy ước chung của vùng mã. Quy tắc riêng cho từng luồng nghiệp vụ phải nằm ngay tại dịch vụ, kho dữ liệu, hợp đồng hoặc kiểm thử sở hữu luồng đó; không đưa trình tự xử lý, điều kiện hay ngoại lệ nghiệp vụ vào `AGENTS.md` hoặc `README.md`.
 
 ## Ngôn ngữ và tính nhất quán
 
@@ -14,8 +14,8 @@ Các quy tắc này bắt buộc với trợ lý chính và trợ lý phụ (sub
 - Khi thật sự cần ghi thuật ngữ chuyên môn tiếng Anh, viết cách diễn đạt tiếng Việt trước và ghi thuật ngữ tiếng Anh trong ngoặc ngay sau đó; ví dụ: bản di trú (migration), kho truy cập dữ liệu (repository). Tên riêng, đường dẫn, định danh, từ khóa của ngôn ngữ lập trình, tên thư viện và câu lệnh phải giữ nguyên chính tả kỹ thuật.
 - Mã nguồn, định danh, tên hàm/lớp/kiểu, khóa cấu hình, câu lệnh, tên nhánh và thông điệp ghi nhận thay đổi (commit) viết bằng tiếng Anh. **Phần mô tả của kiểm thử vẫn viết bằng tiếng Việt**.
 - **Sửa mã có chú thích thì phải sửa ngay chú thích liên quan trong cùng thay đổi**, không được để lời giải thích mô tả hành vi cũ.
-- Khi thay đổi giao diện, quy tắc, hành vi hoặc luồng nghiệp vụ, phải đối chiếu và cập nhật tài liệu liên quan (`README.md`, `AGENTS.md`, ví dụ sử dụng và mô tả kiểm thử). Trước khi kết thúc phải kiểm tra mã, chú thích và tài liệu không mâu thuẫn.
-- **Không được xóa luồng nghiệp vụ hoặc quy tắc quan trọng chỉ để rút ngắn tài liệu.** Phải giữ lại thứ tự xử lý, điều kiện, quyền truy cập, chuyển trạng thái, ràng buộc dữ liệu và cách xử lý lỗi khi chúng là căn cứ để triển khai đúng. Chỉ xóa nội dung đã lỗi thời sau khi đối chiếu với mã và thay bằng mô tả chính xác; chỉ bỏ phần trùng lặp khi nơi lưu giữ thông tin thay thế được chỉ rõ.
+- Khi thay đổi hành vi nghiệp vụ, cập nhật mô tả tại nơi triển khai (chú thích mã, hợp đồng, kiểm thử); chỉ cập nhật `README.md` hoặc `AGENTS.md` nếu trách nhiệm, cấu trúc hay quy ước chung của dự án hoặc gói thực sự thay đổi. Trước khi kết thúc phải đối chiếu để không còn mô tả mâu thuẫn.
+- **Không làm mất quy tắc nghiệp vụ khi dọn tài liệu:** nếu `README.md` hay `AGENTS.md` đang mô tả một luồng cụ thể, đối chiếu và chuyển phần còn cần thiết vào nơi triển khai luồng đó trước khi bỏ khỏi tài liệu tổng quát. Kiểm thử phải tiếp tục bảo vệ điều kiện, quyền truy cập và các chuyển trạng thái quan trọng.
 
 ## Quy tắc kỹ thuật
 

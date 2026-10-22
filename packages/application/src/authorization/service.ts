@@ -45,8 +45,8 @@ export class AuthorizationService {
   ) {}
 
   /**
-   * Xét quyền từ phạm vi cụ thể lên phạm vi hệ thống: `PROHIBIT` luôn phủ quyết,
-   * `PREVENT` ưu tiên hơn `ALLOW` cùng cấp; không có `ALLOW` thì từ chối.
+   * Mỗi vai trò được xét theo định nghĩa và ghi đè ở ngữ cảnh gần nhất.
+   * `PROHIBIT` luôn phủ quyết; chỉ cần một vai trò `ALLOW` để vượt qua `PREVENT` ở vai trò khác.
    * Quyền được cấp không thay thế kiểm tra chủ sở hữu, tình trạng tham gia lớp
    * và các điều kiện thuộc vòng đời nghiệp vụ.
    */
@@ -82,23 +82,22 @@ export class AuthorizationService {
     if (applicable.some((grant) => grant.effect === 'PROHIBIT'))
       return this.finish(request, { allowed: false, reason: 'prohibited' });
 
-    for (const contextId of chain) {
-      const local = applicable.filter(
-        (grant: PermissionGrant) => grant.contextId === contextId && grant.effect !== 'INHERIT',
-      );
-      if (local.some((grant) => grant.effect === 'PREVENT'))
-        return this.finish(request, {
-          allowed: false,
-          reason: 'prevented',
-          matchedContextId: contextId,
-        });
-      if (local.some((grant) => grant.effect === 'ALLOW'))
-        return this.finish(request, {
-          allowed: true,
-          reason: 'granted',
-          matchedContextId: contextId,
-        });
-    }
+    // Moodle: tính quyền từng vai trò (gồm định nghĩa và override), sau đó gộp.
+    // Vai trò ALLOW được phép nếu không vai trò nào PROHIBIT; PREVENT chỉ ngăn chính vai trò đó.
+    const allowed = applicable.find((grant) => grant.effect === 'ALLOW');
+    if (allowed)
+      return this.finish(request, {
+        allowed: true,
+        reason: 'granted',
+        matchedContextId: allowed.contextId,
+      });
+    const prevented = applicable.find((grant) => grant.effect === 'PREVENT');
+    if (prevented)
+      return this.finish(request, {
+        allowed: false,
+        reason: 'prevented',
+        matchedContextId: prevented.contextId,
+      });
 
     return this.finish(request, { allowed: false, reason: 'no_grant' });
   }
@@ -118,6 +117,127 @@ export class AuthorizationService {
       'authorization_denied',
       'Bạn không có quyền thực hiện thao tác này',
     );
+  }
+
+  private async assertRoleManager(actorId: string) {
+    await this.assertAuthorized({
+      actorId,
+      capability: 'role:manage',
+      context: { kind: 'system', resourceKey: 'giaokhoa' },
+    });
+  }
+
+  async createRole(
+    actorId: string,
+    key: string,
+    contextKind: 'system' | 'class',
+    levels: AuthorizationContextKind[],
+  ) {
+    await this.assertRoleManager(actorId);
+    return this.repository.createRole(actorId, key, contextKind, levels);
+  }
+
+  async setRolePermission(
+    actorId: string,
+    roleKey: string,
+    capability: string,
+    effect: PermissionGrant['effect'],
+  ) {
+    await this.assertRoleManager(actorId);
+    return this.repository.setRolePermission(actorId, roleKey, capability, effect);
+  }
+
+  async setRoleContexts(actorId: string, roleKey: string, levels: AuthorizationContextKind[]) {
+    await this.assertRoleManager(actorId);
+    return this.repository.setRoleContexts(actorId, roleKey, levels);
+  }
+
+  async setRoleMatrix(
+    actorId: string,
+    actorRoleKey: string,
+    targetRoleKey: string,
+    action: 'assign' | 'override',
+    allowed: boolean,
+  ) {
+    await this.assertRoleManager(actorId);
+    return this.repository.setRoleMatrix(actorId, actorRoleKey, targetRoleKey, action, allowed);
+  }
+
+  /** Vai trò gán theo phạm vi, được kiểm tra cả capability lẫn ma trận cho phép gán. */
+  async changeRole(
+    actorId: string,
+    contextId: string,
+    targetUserId: string,
+    roleKey: string,
+    grant: boolean,
+  ) {
+    const context = await this.repository.findContextById(contextId);
+    if (!context)
+      throw new ClientError(
+        'not_found',
+        'authorization_context_not_found',
+        'Phạm vi không tồn tại',
+      );
+    await this.assertAuthorized({
+      actorId,
+      capability: context.kind === 'system' ? 'role:assign_system' : 'role:assign',
+      context,
+    });
+    return grant
+      ? this.repository.assignRole({
+          contextId,
+          userId: targetUserId,
+          roleKey,
+          source: 'context_delegation',
+          grantedByUserId: actorId,
+        })
+      : this.repository.revokeRole(contextId, targetUserId, roleKey, actorId);
+  }
+
+  /** Ghi đè định nghĩa của một vai trò trong context; không sửa quyền mặc định toàn cục. */
+  async overrideRole(
+    actorId: string,
+    contextId: string,
+    roleKey: string,
+    capability: string,
+    effect: PermissionGrant['effect'],
+  ) {
+    const context = await this.repository.findContextById(contextId);
+    if (!context || context.kind === 'system')
+      throw new ClientError(
+        'invalid',
+        'authorization_override_context_invalid',
+        'Chỉ ghi đè dưới phạm vi hệ thống',
+      );
+    await this.assertAuthorized({ actorId, capability: 'role:override', context });
+    return this.repository.setRoleOverride(contextId, roleKey, capability, effect, actorId);
+  }
+
+  /** Chỉ chủ thể có quyền quản lý vai trò hệ thống mới được cấp hoặc thu hồi vai trò này. */
+  async changeSystemRole(
+    actorId: string,
+    targetUserId: string,
+    role: 'teacher' | 'admin',
+    grant: boolean,
+  ) {
+    const context = { kind: 'system' as const, resourceKey: 'giaokhoa' };
+    await this.assertAuthorized({ actorId, capability: 'role:assign_system', context });
+    const system = await this.repository.findContext(context);
+    if (!system)
+      throw new ClientError(
+        'not_found',
+        'authorization_context_not_found',
+        'Phạm vi hệ thống không tồn tại',
+      );
+    return grant
+      ? this.repository.assignRole({
+          contextId: system.id,
+          userId: targetUserId,
+          roleKey: `system:${role}`,
+          source: 'system_administrator',
+          grantedByUserId: actorId,
+        })
+      : this.repository.revokeRole(system.id, targetUserId, `system:${role}`, actorId);
   }
 
   private finish(

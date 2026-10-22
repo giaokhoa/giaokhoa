@@ -1,3 +1,4 @@
+import { grantSystemRole, revokeSystemRole } from '../../helpers/roles.js';
 import 'dotenv/config';
 import { createHash, randomUUID } from 'node:crypto';
 import { and, eq, isNull, sql } from 'drizzle-orm';
@@ -47,9 +48,9 @@ async function actor(role: 'teacher' | 'user' | 'admin' = 'user') {
     .values({
       name: role,
       email: `${randomUUID()}@example.com`,
-      role,
     })
     .returning();
+  if (role !== 'user') await grantSystemRole(db, row.id, role);
   return row;
 }
 
@@ -205,6 +206,90 @@ describe('Vòng đời lớp học và phân quyền ghi danh', () => {
     expect(await allowed(student.id, 'class:view', classroom.id)).toBe(false);
   });
 
+  it('không cấp vai trò học sinh tự động tại lớp khi cấu hình chỉ cho phép gán tại hoạt động', async () => {
+    const admin = await actor('admin');
+    const owner = await actor('teacher');
+    const automaticStudent = await actor();
+    const pendingStudent = await actor();
+    const enrolledStudent = await actor();
+    const automatic = await service.createClass(owner.id, {
+      name: 'Quyền lớp tự động',
+      joinMode: 'AUTO',
+    });
+    const approval = await service.createClass(owner.id, {
+      name: 'Quyền lớp chờ duyệt',
+      joinMode: 'APPROVAL',
+    });
+    const automaticCode = await service.createJoinCode(owner.id, automatic.id, {
+      expiresInHours: 24,
+    });
+    const approvalCode = await service.createJoinCode(owner.id, approval.id, {
+      expiresInHours: 24,
+    });
+    await service.joinClass(enrolledStudent.id, automaticCode.code);
+    await service.joinClass(pendingStudent.id, approvalCode.code);
+
+    await authorization.setRoleContexts(admin.id, 'class:student', ['assignment']);
+    try {
+      await expect(
+        service.joinClass(automaticStudent.id, automaticCode.code),
+      ).rejects.toMatchObject({
+        kind: 'conflict',
+        code: 'class_student_role_context_disabled',
+      });
+      expect(
+        await db
+          .select()
+          .from(classEnrolments)
+          .where(
+            and(
+              eq(classEnrolments.classId, automatic.id),
+              eq(classEnrolments.userId, automaticStudent.id),
+            ),
+          ),
+      ).toHaveLength(0);
+      await expect(
+        service.approveMember(owner.id, approval.id, pendingStudent.id),
+      ).rejects.toMatchObject({
+        kind: 'conflict',
+        code: 'class_student_role_context_disabled',
+      });
+      const [pending] = await db
+        .select()
+        .from(classEnrolments)
+        .where(
+          and(
+            eq(classEnrolments.classId, approval.id),
+            eq(classEnrolments.userId, pendingStudent.id),
+          ),
+        );
+      expect(pending.status).toBe('pending');
+      expect(await allowed(pendingStudent.id, 'class:view', approval.id)).toBe(false);
+      // Thu hồi vai trò đã cấp phải hoạt động dù cấp mới tại lớp đã bị khóa.
+      await service.suspendMember(owner.id, automatic.id, enrolledStudent.id);
+      expect(await allowed(enrolledStudent.id, 'class:view', automatic.id)).toBe(false);
+    } finally {
+      await authorization.setRoleContexts(admin.id, 'class:student', ['class', 'assignment']);
+    }
+    await service.joinClass(automaticStudent.id, automaticCode.code);
+    await service.approveMember(owner.id, approval.id, pendingStudent.id);
+    expect(await allowed(automaticStudent.id, 'class:view', automatic.id)).toBe(true);
+    expect(await allowed(pendingStudent.id, 'class:view', approval.id)).toBe(true);
+
+    // Vai trò khởi tạo lớp cũng không được vượt cấu hình loại ngữ cảnh được phép gán.
+    await authorization.setRoleContexts(admin.id, 'class:owner', ['assignment']);
+    try {
+      await expect(
+        service.createClass(owner.id, { name: 'Lớp không hợp lệ', joinMode: 'AUTO' }),
+      ).rejects.toMatchObject({ kind: 'conflict', code: 'authorization_not_initialized' });
+      expect(
+        await db.select().from(classes).where(eq(classes.name, 'Lớp không hợp lệ')),
+      ).toHaveLength(0);
+    } finally {
+      await authorization.setRoleContexts(admin.id, 'class:owner', ['class']);
+    }
+  });
+
   it('từ chối vai trò học sinh hết hiệu lực, cho rời và vào lại không trùng quyền hoạt động', async () => {
     const owner = await actor('teacher');
     const student = await actor();
@@ -270,7 +355,7 @@ describe('Vòng đời lớp học và phân quyền ghi danh', () => {
     await expect(
       service.createJoinCode(owner.id, classroom.id, { expiresInHours: 24 }),
     ).rejects.toMatchObject({ code: 'class_not_joinable' });
-    await db.update(users).set({ role: 'user' }).where(eq(users.id, owner.id));
+    await revokeSystemRole(db, owner.id, 'teacher');
     await expect(
       service.createClass(owner.id, { name: 'Second', joinMode: 'AUTO' }),
     ).rejects.toMatchObject({ kind: 'forbidden' });

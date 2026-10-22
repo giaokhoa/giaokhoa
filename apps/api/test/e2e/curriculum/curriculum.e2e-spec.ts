@@ -11,6 +11,7 @@ import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { ClientErrorFilter } from '../../../src/common/client-error.filter.js';
 import { CurriculumModule } from '../../../src/curriculum/curriculum.module.js';
+import { CurriculumAuthorizationGuard } from '../../../src/curriculum/curriculum.authorization.guard.js';
 import { migrationsFolder } from '@giaokhoa/database/migrations';
 import * as schema from '@giaokhoa/database/schema';
 
@@ -59,7 +60,11 @@ describe('Giao diện HTTP quản lý chương trình học', () => {
         { provide: APP_FILTER, useClass: ClientErrorFilter },
         { provide: APP_PIPE, useValue: new StandardSchemaValidationPipe() },
       ],
-    }).compile();
+    })
+      // Nhóm kiểm thử này chỉ xác nhận nghiệp vụ curriculum; quyền HTTP được kiểm thử riêng.
+      .overrideGuard(CurriculumAuthorizationGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     app = module.createNestApplication();
     await app.init();

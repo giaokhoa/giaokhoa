@@ -75,7 +75,6 @@ CREATE TABLE "sessions" (
 	"ip_address" text,
 	"user_agent" text,
 	"user_id" uuid NOT NULL,
-	"impersonated_by" text,
 	CONSTRAINT "sessions_token_unique" UNIQUE("token")
 );
 --> statement-breakpoint
@@ -87,8 +86,7 @@ CREATE TABLE "users" (
 	"image" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	"role" text,
-	"banned" boolean DEFAULT false,
+	"banned" boolean DEFAULT false NOT NULL,
 	"ban_reason" text,
 	"ban_expires" timestamp,
 	CONSTRAINT "users_email_unique" UNIQUE("email")
@@ -451,7 +449,45 @@ CREATE INDEX "assignments_exam_revision_idx" ON "assignments" USING btree ("exam
 CREATE INDEX "attempts_assignment_idx" ON "attempts" USING btree ("assignment_id");--> statement-breakpoint
 CREATE INDEX "attempts_user_idx" ON "attempts" USING btree ("user_id");
 --> statement-breakpoint
--- Seed RBAC Phase 1. Không cấp mặc định class:manage_any hoặc class:grant_teacher.
+CREATE TABLE "authz_role_context_levels" (
+	"role_id" uuid NOT NULL,
+	"context_kind" text NOT NULL,
+	CONSTRAINT "authz_role_context_levels_unique" UNIQUE("role_id","context_kind"),
+	CONSTRAINT "authz_role_context_levels_kind_check" CHECK ("authz_role_context_levels"."context_kind" in ('system', 'user', 'bank', 'question', 'exam', 'class', 'assignment'))
+);
+--> statement-breakpoint
+CREATE TABLE "authz_role_overrides" (
+	"role_id" uuid NOT NULL,
+	"capability_id" uuid NOT NULL,
+	"context_id" uuid NOT NULL,
+	"effect" text NOT NULL,
+	CONSTRAINT "authz_role_overrides_unique" UNIQUE("role_id","capability_id","context_id"),
+	CONSTRAINT "authz_role_overrides_effect_check" CHECK ("authz_role_overrides"."effect" in ('INHERIT', 'ALLOW', 'PREVENT', 'PROHIBIT'))
+);
+--> statement-breakpoint
+ALTER TABLE "authz_role_context_levels" ADD CONSTRAINT "authz_role_context_levels_role_id_authz_roles_id_fk" FOREIGN KEY ("role_id") REFERENCES "public"."authz_roles"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "authz_role_overrides" ADD CONSTRAINT "authz_role_overrides_role_id_authz_roles_id_fk" FOREIGN KEY ("role_id") REFERENCES "public"."authz_roles"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "authz_role_overrides" ADD CONSTRAINT "authz_role_overrides_capability_id_authz_capabilities_id_fk" FOREIGN KEY ("capability_id") REFERENCES "public"."authz_capabilities"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "authz_role_overrides" ADD CONSTRAINT "authz_role_overrides_context_id_authz_contexts_id_fk" FOREIGN KEY ("context_id") REFERENCES "public"."authz_contexts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "authz_role_overrides_context_idx" ON "authz_role_overrides" USING btree ("context_id");
+CREATE TABLE "authz_role_allow_assignments" (
+	"actor_role_id" uuid NOT NULL,
+	"target_role_id" uuid NOT NULL,
+	CONSTRAINT "authz_role_allow_assignments_unique" UNIQUE("actor_role_id","target_role_id")
+);
+--> statement-breakpoint
+CREATE TABLE "authz_role_allow_overrides" (
+	"actor_role_id" uuid NOT NULL,
+	"target_role_id" uuid NOT NULL,
+	CONSTRAINT "authz_role_allow_overrides_unique" UNIQUE("actor_role_id","target_role_id")
+);
+--> statement-breakpoint
+ALTER TABLE "authz_role_allow_assignments" ADD CONSTRAINT "authz_role_allow_assignments_actor_role_id_authz_roles_id_fk" FOREIGN KEY ("actor_role_id") REFERENCES "public"."authz_roles"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "authz_role_allow_assignments" ADD CONSTRAINT "authz_role_allow_assignments_target_role_id_authz_roles_id_fk" FOREIGN KEY ("target_role_id") REFERENCES "public"."authz_roles"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "authz_role_allow_overrides" ADD CONSTRAINT "authz_role_allow_overrides_actor_role_id_authz_roles_id_fk" FOREIGN KEY ("actor_role_id") REFERENCES "public"."authz_roles"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "authz_role_allow_overrides" ADD CONSTRAINT "authz_role_allow_overrides_target_role_id_authz_roles_id_fk" FOREIGN KEY ("target_role_id") REFERENCES "public"."authz_roles"("id") ON DELETE no action ON UPDATE no action;
+--> statement-breakpoint
+-- Vai trò người dùng đăng nhập áp dụng ngầm tại system context; vai trò giáo viên/quản trị viên phải được cấp riêng trong authz_role_assignments. Không cấp mặc định class:manage_any hoặc class:grant_teacher.
 INSERT INTO "authz_contexts" ("kind", "resource_key", "parent_id") VALUES ('system', 'giaokhoa', NULL) ON CONFLICT ("kind", "resource_key") DO NOTHING;
 --> statement-breakpoint
 INSERT INTO "authz_roles" ("key", "context_kind") VALUES
@@ -463,16 +499,44 @@ INSERT INTO "authz_roles" ("key", "context_kind") VALUES
   ('class:student', 'class')
 ON CONFLICT ("key") DO NOTHING;
 --> statement-breakpoint
+INSERT INTO "authz_role_context_levels" ("role_id", "context_kind")
+SELECT r."id", allowed."context_kind"
+FROM (VALUES
+  ('system:user', 'system'), ('system:teacher', 'system'), ('system:admin', 'system'),
+  ('class:owner', 'class'), ('class:teacher', 'class'), ('class:teacher', 'assignment'),
+  ('class:student', 'class'), ('class:student', 'assignment')
+) AS allowed("role_key", "context_kind") JOIN "authz_roles" r ON r."key" = allowed."role_key"
+ON CONFLICT DO NOTHING;
+--> statement-breakpoint
+INSERT INTO "authz_role_allow_assignments" ("actor_role_id", "target_role_id")
+SELECT actor."id", target."id" FROM "authz_roles" actor JOIN "authz_roles" target ON
+ (actor."key" = 'system:admin') OR
+ (actor."key" = 'class:owner' AND target."key" IN ('class:student','class:teacher')) OR
+ (actor."key" = 'class:teacher' AND target."key" = 'class:student')
+ON CONFLICT DO NOTHING;
+--> statement-breakpoint
+INSERT INTO "authz_role_allow_overrides" ("actor_role_id", "target_role_id")
+SELECT actor."id", target."id" FROM "authz_roles" actor JOIN "authz_roles" target ON
+ (actor."key" = 'system:admin') OR
+ (actor."key" = 'class:owner' AND target."key" IN ('class:student','class:teacher')) OR
+ (actor."key" = 'class:teacher' AND target."key" = 'class:student')
+ON CONFLICT DO NOTHING;
+--> statement-breakpoint
 INSERT INTO "authz_capabilities" ("key", "context_kind", "description") VALUES
   ('resource:view_public', 'system', 'resource:view_public'),
   ('practice:attempt_public', 'system', 'practice:attempt_public'),
   ('class:join', 'system', 'class:join'),
+  ('file:read_own', 'system', 'file:read_own'),
   ('question:create_own', 'system', 'question:create_own'),
   ('question:manage_own', 'system', 'question:manage_own'),
   ('exam:create_own', 'system', 'exam:create_own'),
   ('exam:manage_own', 'system', 'exam:manage_own'),
   ('class:create', 'system', 'class:create'),
   ('platform:moderate', 'system', 'platform:moderate'),
+  ('role:assign_system', 'system', 'role:assign_system'),
+  ('role:manage', 'system', 'role:manage'),
+  ('role:assign', 'class', 'role:assign'),
+  ('role:override', 'class', 'role:override'),
   ('class:manage_any', 'system', 'class:manage_any'),
   ('class:view', 'class', 'class:view'),
   ('class:update', 'class', 'class:update'),
@@ -493,6 +557,7 @@ FROM (VALUES
   ('system:user', 'resource:view_public'),
   ('system:user', 'practice:attempt_public'),
   ('system:user', 'class:join'),
+  ('system:user', 'file:read_own'),
   ('system:teacher', 'resource:view_public'),
   ('system:teacher', 'practice:attempt_public'),
   ('system:teacher', 'class:join'),
@@ -510,6 +575,12 @@ FROM (VALUES
   ('system:admin', 'exam:manage_own'),
   ('system:admin', 'class:create'),
   ('system:admin', 'platform:moderate'),
+  ('system:admin', 'role:assign_system'),
+  ('system:admin', 'role:manage'),
+  ('system:admin', 'role:assign'),
+  ('system:admin', 'role:override'),
+  ('class:owner', 'role:assign'),
+  ('class:owner', 'role:override'),
   ('class:owner', 'class:view'),
   ('class:owner', 'class:update'),
   ('class:owner', 'class:enrolment_manage'),
@@ -517,7 +588,10 @@ FROM (VALUES
   ('class:owner', 'assignment:publish'),
   ('class:owner', 'assignment:grade'),
   ('class:owner', 'result:view_class'),
+  ('class:teacher', 'role:assign'),
   ('class:teacher', 'class:view'),
+  ('class:teacher', 'class:update'),
+  ('class:teacher', 'class:enrolment_manage'),
   ('class:teacher', 'assignment:create'),
   ('class:teacher', 'assignment:publish'),
   ('class:teacher', 'assignment:grade'),

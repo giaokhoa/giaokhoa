@@ -7,11 +7,11 @@ import {
   type ExamRevisionCreate,
   type ExamRevision,
 } from '@giaokhoa/shared/exams';
-import { questionSchema } from '@giaokhoa/shared/questions';
+import { questionSchema, stimulusSchema } from '@giaokhoa/shared/questions';
 import { and, desc, eq } from 'drizzle-orm';
-import { users } from '../schema/auth.generated.js';
+import { hasSystemCapability } from './authorization.js';
 import { exams, examRevisions, examRevisionQuestions } from '../schema/exams.js';
-import { question, questionBankEntries, questionVersions } from '../schema/questions.js';
+import { question, questionBankEntries, questionVersions, stimuli } from '../schema/questions.js';
 import type { Database } from '../types.js';
 
 /**
@@ -34,18 +34,12 @@ export class PostgresExamsRepository implements ExamsRepository {
   constructor(private readonly db: Database) {}
 
   /**
-   * Tạo danh tính đề thi thuộc tài khoản giáo viên hoặc quản trị viên chưa bị cấm.
-   * Kiểm tra vai trò trong giao dịch và khóa đọc tài khoản để hạn chế việc đổi vai trò đồng thời với tạo đề.
+   * Tạo danh tính đề thi cho tài khoản có quyền tạo đề ở phạm vi hệ thống.
+   * Kiểm tra quyền hiện hành ngay trong giao dịch trước khi tạo đề.
    */
   async create(actorId: string, input: { title: string }) {
     return this.db.transaction(async (tx) => {
-      const [actor] = await tx
-        .select({ role: users.role, banned: users.banned })
-        .from(users)
-        .where(eq(users.id, actorId))
-        .for('share')
-        .limit(1);
-      if (!actor || actor.banned || (actor.role !== 'teacher' && actor.role !== 'admin'))
+      if (!(await hasSystemCapability(tx, actorId, 'exam:create_own')))
         throw new ClientError('forbidden', 'authorization_denied', 'Bạn không có quyền tạo đề');
       const [created] = await tx
         .insert(exams)
@@ -82,18 +76,12 @@ export class PostgresExamsRepository implements ExamsRepository {
   }
 
   /**
-   * Đổi tiêu đề đề thi gốc khi người sửa còn vai trò giáo viên hoặc quản trị viên và sở hữu đề.
+   * Đổi tiêu đề đề thi gốc khi người sửa có quyền quản lý đề và sở hữu đề.
    * Giữ các bản sửa đổi đề thi (revision) đã chốt tách biệt; không sửa nội dung hoặc tiêu đề trong lịch sử.
    */
   async updateOwned(id: string, actorId: string, input: { title: string }) {
     return this.db.transaction(async (tx) => {
-      const [actor] = await tx
-        .select({ role: users.role, banned: users.banned })
-        .from(users)
-        .where(eq(users.id, actorId))
-        .for('share')
-        .limit(1);
-      if (!actor || actor.banned || (actor.role !== 'teacher' && actor.role !== 'admin'))
+      if (!(await hasSystemCapability(tx, actorId, 'exam:manage_own')))
         throw new ClientError('forbidden', 'authorization_denied', 'Bạn không có quyền sửa đề');
       const [updated] = await tx
         .update(exams)
@@ -115,13 +103,7 @@ export class PostgresExamsRepository implements ExamsRepository {
     input: ExamRevisionCreate,
   ): Promise<ExamRevision | undefined> {
     return this.db.transaction(async (tx) => {
-      const [actor] = await tx
-        .select({ role: users.role, banned: users.banned })
-        .from(users)
-        .where(eq(users.id, actorId))
-        .for('share')
-        .limit(1);
-      if (!actor || actor.banned || (actor.role !== 'teacher' && actor.role !== 'admin'))
+      if (!(await hasSystemCapability(tx, actorId, 'exam:manage_own')))
         throw new ClientError(
           'forbidden',
           'authorization_denied',
@@ -140,7 +122,11 @@ export class PostgresExamsRepository implements ExamsRepository {
       const byId = [...input.questions].sort((a, b) => a.questionId.localeCompare(b.questionId));
       const snapshots = new Map<
         string,
-        { versionId: string; question: ReturnType<typeof questionSchema.parse> }
+        {
+          versionId: string;
+          question: ReturnType<typeof questionSchema.parse>;
+          stimulusSnapshot: unknown;
+        }
       >();
       for (const ref of byId) {
         const [owned] = await tx
@@ -182,7 +168,22 @@ export class PostgresExamsRepository implements ExamsRepository {
           version: ref.version,
           status: 'ready',
         });
-        snapshots.set(ref.questionId, { versionId: selected.versionRow.id, question: snapshot });
+        // Cố định ngữ liệu ngay khi chốt bản đề, khóa bản ghi để không bị sửa xen kẽ.
+        const [stimulus] = selected.content.stimulusId
+          ? await tx
+              .select({ id: stimuli.id, content: stimuli.content })
+              .from(stimuli)
+              .where(eq(stimuli.id, selected.content.stimulusId))
+              .for('share')
+              .limit(1)
+          : [undefined];
+        if (selected.content.stimulusId && !stimulus) throw invalidQuestion();
+        const stimulusSnapshot = stimulus ? stimulusSchema.parse(stimulus) : null;
+        snapshots.set(ref.questionId, {
+          versionId: selected.versionRow.id,
+          question: snapshot,
+          stimulusSnapshot,
+        });
       }
 
       const [latest] = await tx
@@ -203,6 +204,7 @@ export class PostgresExamsRepository implements ExamsRepository {
           questionVersionId: pinned.versionId,
           position: index + 1,
           questionSnapshot: pinned.question,
+          stimulusSnapshot: pinned.stimulusSnapshot,
         };
       });
       await tx.insert(examRevisionQuestions).values(questions);
@@ -214,7 +216,7 @@ export class PostgresExamsRepository implements ExamsRepository {
         createdAt: created.createdAt,
         questions: questions.map(({ position, questionSnapshot }) => ({
           position,
-          question: questionSnapshot,
+          question: questionSchema.parse(questionSnapshot),
         })),
       });
     });

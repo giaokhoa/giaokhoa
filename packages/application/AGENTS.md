@@ -7,18 +7,18 @@
 - Dịch vụ ứng dụng (application service) chứa hành vi dùng chung cho mọi cách giao tiếp: kiểm tra quyền sở hữu, xác thực lại dữ liệu sau khi kết hợp thay đổi, quản lý vòng đời và áp dụng quy tắc nghiệp vụ. Tầng giao tiếp không được tự triển khai lại các quy tắc này.
 - Các mã lỗi riêng của PostgreSQL hoặc tầng lưu trữ phải được bộ chuyển đổi của `@giaokhoa/database` chuyển thành `ClientError`.
 
-## Các luồng nghiệp vụ phải bảo vệ
+## Trách nhiệm các nhóm nghiệp vụ
 
-- **Phân quyền:** `AuthorizationService` kiểm tra vai trò tài khoản, phạm vi hệ thống hoặc lớp học và quyền trên tài nguyên. Quyền được xét theo trạng thái hiện tại; không chỉ kiểm tra một lần lúc tạo tài nguyên. Quyết định từ chối phải ngăn thao tác ghi hoặc lộ dữ liệu.
-- **Lớp học:** Tạo lớp gắn với việc tạo phạm vi phân quyền và quyền chủ lớp. Mã tham gia phải được kiểm tra trạng thái, thời hạn và chế độ ghi danh. Chế độ tự động cho phép vào lớp ngay; chế độ chờ duyệt chỉ cấp quyền sau khi được phê duyệt. Đình chỉ, rời lớp hoặc thu hồi quyền phải có hiệu lực với các thao tác tiếp theo.
-- **Câu hỏi và ngữ liệu:** Kiểm tra quyền biên soạn và chủ sở hữu khi tạo, đọc, sửa, xóa. Sửa nội dung câu hỏi tạo phiên bản nội dung mới, giữ phiên bản trước; chỉ thay đổi trạng thái không tự tạo phiên bản mới. Không được sửa ngữ liệu đang bị câu hỏi sử dụng trái quy tắc.
-- **Đề thi:** Người tạo quản lý đề riêng của mình. Mỗi phiên bản đề chốt danh sách, thứ tự và nội dung câu hỏi tại thời điểm tạo; chỉnh sửa câu hỏi sau đó không được âm thầm thay đổi phiên bản đã chốt.
-- **Giao bài:** Kiểm tra quyền quản lý lớp và phiên bản đề. Khi công bố, chốt danh sách người nhận đủ điều kiện; người tham gia muộn không tự trở thành người nhận. Tôn trọng khoảng thời gian mở, đóng và thu hồi quyền truy cập.
-- **Bài làm:** Chỉ người nhận đủ điều kiện được bắt đầu và lưu câu trả lời; kiểm soát số lần làm, thời hạn và quyền sở hữu. Bài đã nộp không được tiếp tục sửa. Chấm bài chỉ dành cho người có quyền; điểm, nhận xét và lời giải được công bố theo các quyền độc lập.
-- **Tệp:** Xác thực chủ sở hữu trước khi truy cập tệp gốc, biến thể hoặc nguồn tạo tệp; người nhận bài chỉ được đọc tệp thực sự thuộc nội dung được giao. Không xóa dữ liệu còn được tham chiếu; việc thu gom và xóa đối tượng lưu trữ phải tôn trọng các bản ghi chờ xóa.
-- **Chương trình học:** Cây nội dung phải ở đúng chương trình, không được tạo chu trình khi đổi nút cha. Việc sửa hoặc xóa môn học, chương trình, nút và yêu cầu cần đạt phải tôn trọng các quan hệ dữ liệu.
+- **Phân quyền:** `src/authorization` sở hữu cơ chế xét capability, vai trò và ngữ cảnh; không sử dụng role của Better Auth làm nguồn cấp quyền.
+- **Lớp học:** `src/classes` sở hữu quản lý lớp, thành viên và mã tham gia.
+- **Câu hỏi và ngữ liệu:** `src/questions` sở hữu biên soạn, phiên bản nội dung và liên kết ngữ liệu.
+- **Đề thi:** `src/exams` sở hữu đề thi và các phiên bản đề.
+- **Giao bài:** `src/assignments` sở hữu bài giao, nhóm người nhận và lịch công bố.
+- **Bài làm:** `src/attempts` sở hữu lượt làm, bài nộp, chấm điểm và kết quả.
+- **Tệp:** `src/files` sở hữu việc điều phối sử dụng, phục vụ và thu gom tệp.
+- **Chương trình học:** `src/curriculum` sở hữu cấu trúc chương trình và nội dung học.
 
-Các quy tắc chi tiết phải được đối chiếu với mã trong `src/*/service.ts`, hợp đồng tại `src/*/repository.ts` và kiểm thử. Khi hành vi thay đổi, sửa mục tương ứng tại đây cùng lúc; không xóa phần mô tả luồng chỉ vì đã có mã nguồn.
+Điều kiện, ngoại lệ, thứ tự xử lý và quy tắc truy cập của từng nhóm được mô tả tại `src/<nhóm>/service.ts`, hợp đồng `src/<nhóm>/repository.ts`, bộ chuyển đổi lưu trữ liên quan và kiểm thử của nhóm đó; không sao chép luồng vào tệp này.
 
 ## Lỗi do yêu cầu không hợp lệ
 

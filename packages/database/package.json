@@ -29,6 +29,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
+    "authz:bootstrap": "node ./scripts/bootstrap-admin.mjs",
     "test:int": "vitest run"
   },
   "dependencies": {

@@ -637,7 +637,19 @@ export class PostgresQuestionsRepository implements QuestionsRepository {
     kind: 'bank' | 'user',
     resourceKey: string,
   ): Promise<string> {
-    await tx.insert(authzContexts).values({ kind, resourceKey }).onConflictDoNothing();
+    const [root] = await tx
+      .select({ id: authzContexts.id })
+      .from(authzContexts)
+      .where(and(eq(authzContexts.kind, 'system'), eq(authzContexts.resourceKey, 'giaokhoa')))
+      .limit(1);
+    if (!root) throw new Error('Thiếu ngữ cảnh hệ thống');
+    await tx
+      .insert(authzContexts)
+      .values({ kind, resourceKey, parentId: root.id })
+      .onConflictDoUpdate({
+        target: [authzContexts.kind, authzContexts.resourceKey],
+        set: { parentId: root.id },
+      });
     const [context] = await tx
       .select({ id: authzContexts.id })
       .from(authzContexts)

@@ -73,13 +73,10 @@ describe('Dịch vụ giao bài (AssignmentsService)', () => {
     );
   });
 
-  it('không để người khác đọc bài giao dù đã có quyền tạo bài trong cùng lớp', async () => {
+  it('cho phép giáo viên được cấp capability đọc bài giao dù không phải tác giả', async () => {
     const { service, repository, assignment } = setup();
     repository.findById.mockResolvedValue({ ...assignment, createdByUserId: STUDENT });
-    await expect(service.get(ACTOR, ASSIGNMENT)).rejects.toMatchObject({
-      kind: 'not_found',
-      code: 'assignment_not_found',
-    });
+    await expect(service.get(ACTOR, ASSIGNMENT)).resolves.toMatchObject({ id: ASSIGNMENT });
   });
 
   it('không truy cập kho dữ liệu ghi nếu thiếu quyền công bố', async () => {
@@ -125,7 +122,7 @@ describe('Dịch vụ giao bài (AssignmentsService)', () => {
     expect(authorization.assertAuthorized).toHaveBeenCalledWith({
       actorId: ACTOR,
       capability: 'assignment:publish',
-      context: { kind: 'class', resourceKey: CLASS },
+      context: { kind: 'assignment', resourceKey: ASSIGNMENT },
     });
   });
 
@@ -143,7 +140,7 @@ describe('Dịch vụ giao bài (AssignmentsService)', () => {
     expect(authorization.assertAuthorized).toHaveBeenCalledWith({
       actorId: STUDENT,
       capability: 'assignment:view_assigned',
-      context: { kind: 'class', resourceKey: CLASS },
+      context: { kind: 'assignment', resourceKey: ASSIGNMENT },
     });
   });
 
@@ -172,7 +169,7 @@ describe('Dịch vụ giao bài (AssignmentsService)', () => {
     expect(authorization.assertAuthorized).toHaveBeenCalledWith({
       actorId: ACTOR,
       capability: 'assignment:publish',
-      context: { kind: 'class', resourceKey: CLASS },
+      context: { kind: 'assignment', resourceKey: ASSIGNMENT },
     });
   });
 });

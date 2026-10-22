@@ -75,7 +75,7 @@ export const authzRoles = pgTable(
      */
     key: text('key').notNull().unique(),
     /**
-     * Loại phạm vi mà vai trò có hiệu lực: toàn hệ thống (system) hoặc trong lớp học (class).
+     * Phân loại mặc định cho vai trò dựng sẵn; ngữ cảnh được phép cấp thực tế nằm trong authz_role_context_levels.
      */
     contextKind: text('context_kind').notNull(),
     /**
@@ -85,6 +85,56 @@ export const authzRoles = pgTable(
   },
   (table) => [
     check('authz_roles_context_kind_check', sql`${table.contextKind} in ('system', 'class')`),
+  ],
+);
+
+/** Các loại ngữ cảnh được phép gán từng vai trò, tương đương archetype context levels của Moodle. */
+export const authzRoleContextLevels = pgTable(
+  'authz_role_context_levels',
+  {
+    roleId: uuid('role_id')
+      .notNull()
+      .references(() => authzRoles.id),
+    contextKind: text('context_kind').notNull(),
+  },
+  (table) => [
+    unique('authz_role_context_levels_unique').on(table.roleId, table.contextKind),
+    check(
+      'authz_role_context_levels_kind_check',
+      sql`${table.contextKind} in ('system', 'user', 'bank', 'question', 'exam', 'class', 'assignment')`,
+    ),
+  ],
+);
+
+/** Ma trận Moodle: vai trò nào được cấp vai trò nào; capability cấp quyền chưa đủ để vượt ma trận. */
+export const authzRoleAllowAssignments = pgTable(
+  'authz_role_allow_assignments',
+  {
+    actorRoleId: uuid('actor_role_id')
+      .notNull()
+      .references(() => authzRoles.id),
+    targetRoleId: uuid('target_role_id')
+      .notNull()
+      .references(() => authzRoles.id),
+  },
+  (table) => [
+    unique('authz_role_allow_assignments_unique').on(table.actorRoleId, table.targetRoleId),
+  ],
+);
+
+/** Ma trận Moodle: giới hạn các vai trò mà một vai trò được phép ghi đè quyền. */
+export const authzRoleAllowOverrides = pgTable(
+  'authz_role_allow_overrides',
+  {
+    actorRoleId: uuid('actor_role_id')
+      .notNull()
+      .references(() => authzRoles.id),
+    targetRoleId: uuid('target_role_id')
+      .notNull()
+      .references(() => authzRoles.id),
+  },
+  (table) => [
+    unique('authz_role_allow_overrides_unique').on(table.actorRoleId, table.targetRoleId),
   ],
 );
 
@@ -143,7 +193,7 @@ export const authzRolePermissions = pgTable(
       .references(() => authzCapabilities.id),
     /**
      * Cách xử lý quyền: kế thừa (INHERIT), cho phép (ALLOW), ngăn (PREVENT) hoặc cấm tuyệt đối (PROHIBIT).
-     * Tầng nghiệp vụ ưu tiên lệnh cấm tuyệt đối trên toàn cây; ở cùng cấp, ngăn có ưu tiên hơn cho phép.
+     * Tầng nghiệp vụ ưu tiên lệnh cấm tuyệt đối trên toàn cây; ở cùng cấp, cho phép từ vai trò khác thắng ngăn.
      */
     effect: text('effect').notNull(),
   },
@@ -151,6 +201,31 @@ export const authzRolePermissions = pgTable(
     unique('authz_role_permissions_role_capability_unique').on(table.roleId, table.capabilityId),
     check(
       'authz_role_permissions_effect_check',
+      sql`${table.effect} in ('INHERIT', 'ALLOW', 'PREVENT', 'PROHIBIT')`,
+    ),
+  ],
+);
+
+/** Quyền ghi đè cho một vai trò tại một ngữ cảnh cụ thể; không sửa định nghĩa vai trò toàn cục. */
+export const authzRoleOverrides = pgTable(
+  'authz_role_overrides',
+  {
+    roleId: uuid('role_id')
+      .notNull()
+      .references(() => authzRoles.id),
+    capabilityId: uuid('capability_id')
+      .notNull()
+      .references(() => authzCapabilities.id),
+    contextId: uuid('context_id')
+      .notNull()
+      .references(() => authzContexts.id, { onDelete: 'cascade' }),
+    effect: text('effect').notNull(),
+  },
+  (table) => [
+    unique('authz_role_overrides_unique').on(table.roleId, table.capabilityId, table.contextId),
+    index('authz_role_overrides_context_idx').on(table.contextId),
+    check(
+      'authz_role_overrides_effect_check',
       sql`${table.effect} in ('INHERIT', 'ALLOW', 'PREVENT', 'PROHIBIT')`,
     ),
   ],

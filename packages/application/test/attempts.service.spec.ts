@@ -24,9 +24,13 @@ function setup() {
     result: vi.fn(),
     solutions: vi.fn(),
   };
-  const authorization = { assertAuthorized: vi.fn(async () => undefined) };
+  const authorization = {
+    assertAuthorized: vi.fn(async () => undefined),
+    authorize: vi.fn(async () => ({ allowed: false, reason: 'no_grant' })),
+  };
   const service = new AttemptsService(repository as never, authorization as never, () => NOW);
   const context = {
+    assignmentId: ASSIGNMENT,
     classId: CLASS,
     userId: ACTOR,
     status: 'in_progress',
@@ -56,7 +60,7 @@ describe('Dịch vụ bài làm (AttemptsService)', () => {
     expect(authorization.assertAuthorized).toHaveBeenLastCalledWith({
       actorId: ACTOR,
       capability: 'assignment:attempt',
-      context: { kind: 'class', resourceKey: CLASS },
+      context: { kind: 'assignment', resourceKey: ASSIGNMENT },
     });
   });
 
@@ -81,35 +85,27 @@ describe('Dịch vụ bài làm (AttemptsService)', () => {
     expect(repository.solutions).not.toHaveBeenCalled();
   });
 
-  it('chỉ bỏ qua quyền lớp cho lịch sử đã nộp của chính người đã rời lớp', async () => {
+  it('rời lớp và nộp bài không thể bỏ qua quyết định capability khi đọc lịch sử', async () => {
     const { service, repository, authorization, context } = setup();
     repository.findContext.mockResolvedValue({
       ...context,
       enrolmentStatus: 'left',
       status: 'submitted',
     });
-    repository.getOwn.mockResolvedValue({ id: ATTEMPT });
     repository.result.mockResolvedValue({ attemptId: ATTEMPT });
     repository.solutions.mockResolvedValue({ attemptId: ATTEMPT });
-    await expect(service.getOwn(ACTOR, ATTEMPT)).resolves.toMatchObject({ id: ATTEMPT });
-    await expect(service.result(ACTOR, ATTEMPT)).resolves.toMatchObject({ attemptId: ATTEMPT });
-    await expect(service.solutions(ACTOR, ATTEMPT)).resolves.toMatchObject({ attemptId: ATTEMPT });
-    expect(authorization.assertAuthorized).not.toHaveBeenCalled();
-    expect(repository.result).toHaveBeenCalledWith(ATTEMPT, ACTOR, NOW);
-    expect(repository.solutions).toHaveBeenCalledWith(ATTEMPT, ACTOR, NOW);
-
-    repository.findContext.mockResolvedValue({ ...context, enrolmentStatus: 'left' });
     authorization.assertAuthorized.mockRejectedValue(forbidden);
     await expect(service.getOwn(ACTOR, ATTEMPT)).rejects.toMatchObject({ kind: 'forbidden' });
-    expect(repository.getOwn).toHaveBeenCalledTimes(1);
-
-    repository.findContext.mockResolvedValue({
-      ...context,
-      enrolmentStatus: 'suspended',
-      status: 'graded',
-    });
     await expect(service.result(ACTOR, ATTEMPT)).rejects.toMatchObject({ kind: 'forbidden' });
-    expect(repository.result).toHaveBeenCalledTimes(1);
+    await expect(service.solutions(ACTOR, ATTEMPT)).rejects.toMatchObject({ kind: 'forbidden' });
+    expect(repository.getOwn).not.toHaveBeenCalled();
+    expect(repository.result).not.toHaveBeenCalled();
+    expect(repository.solutions).not.toHaveBeenCalled();
+    expect(authorization.assertAuthorized).toHaveBeenCalledWith({
+      actorId: ACTOR,
+      capability: 'result:view_own',
+      context: { kind: 'assignment', resourceKey: ASSIGNMENT },
+    });
   });
 
   it('từ chối câu trả lời sai trước khi đọc lượt làm và chỉ lưu câu trả lời đúng kiểu', async () => {
@@ -129,7 +125,7 @@ describe('Dịch vụ bài làm (AttemptsService)', () => {
     expect(authorization.assertAuthorized).toHaveBeenCalledWith({
       actorId: ACTOR,
       capability: 'assignment:attempt',
-      context: { kind: 'class', resourceKey: CLASS },
+      context: { kind: 'assignment', resourceKey: ASSIGNMENT },
     });
   });
 
@@ -145,7 +141,7 @@ describe('Dịch vụ bài làm (AttemptsService)', () => {
     expect(authorization.assertAuthorized).toHaveBeenLastCalledWith({
       actorId: OTHER,
       capability: 'assignment:grade',
-      context: { kind: 'class', resourceKey: CLASS },
+      context: { kind: 'assignment', resourceKey: ASSIGNMENT },
     });
     expect(repository.review).toHaveBeenCalledWith(ATTEMPT, OTHER);
   });
@@ -168,7 +164,7 @@ describe('Dịch vụ bài làm (AttemptsService)', () => {
     expect(authorization.assertAuthorized).toHaveBeenCalledWith({
       actorId: OTHER,
       capability: 'assignment:grade',
-      context: { kind: 'class', resourceKey: CLASS },
+      context: { kind: 'assignment', resourceKey: ASSIGNMENT },
     });
   });
 
@@ -190,7 +186,7 @@ describe('Dịch vụ bài làm (AttemptsService)', () => {
     expect(authorization.assertAuthorized).toHaveBeenCalledWith({
       actorId: ACTOR,
       capability: 'result:view_own',
-      context: { kind: 'class', resourceKey: CLASS },
+      context: { kind: 'assignment', resourceKey: ASSIGNMENT },
     });
     repository.result.mockResolvedValue({ attemptId: ATTEMPT, score: 8 });
     repository.solutions.mockResolvedValue(undefined);

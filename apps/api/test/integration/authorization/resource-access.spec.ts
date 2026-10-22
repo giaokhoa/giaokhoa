@@ -1,6 +1,7 @@
+import { grantSystemRole, revokeSystemRole } from '../../helpers/roles.js';
 import 'dotenv/config';
 import { createHash, randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Client, Pool } from 'pg';
@@ -9,10 +10,22 @@ import { AuthorizationService } from '@giaokhoa/application/authorization/servic
 import { FilesService } from '@giaokhoa/application/files/service';
 import { QuestionsService } from '@giaokhoa/application/questions/service';
 import { PostgresAuthorizationRepository } from '@giaokhoa/database/authorization';
+import { PostgresClassesRepository } from '@giaokhoa/database/classes';
 import { PostgresFilesRepository } from '@giaokhoa/database/files';
 import { migrationsFolder } from '@giaokhoa/database/migrations';
 import { PostgresQuestionsRepository } from '@giaokhoa/database/questions';
-import { users } from '@giaokhoa/database/schema';
+import {
+  assignmentRecipients,
+  assignments,
+  authzContexts,
+  classEnrolments,
+  examRevisionQuestions,
+  examRevisions,
+  exams,
+  fileUses,
+  questionVersions,
+  users,
+} from '@giaokhoa/database/schema';
 import { stimuli } from '@giaokhoa/database/schema';
 import * as schema from '@giaokhoa/database/schema';
 import type { Database } from '@giaokhoa/database/types';
@@ -52,9 +65,9 @@ async function createUser(role: 'user' | 'teacher' = 'teacher') {
     .values({
       name: 'actor',
       email: `actor-${randomUUID()}@example.com`,
-      role,
     })
     .returning();
+  if (role !== 'user') await grantSystemRole(db, created.id, role);
   return created;
 }
 
@@ -99,7 +112,7 @@ describe('Quyền biên soạn câu hỏi và truy cập tài nguyên', () => {
     const teacher = await createUser();
     const created = await questions.createQuestion(questionData(), teacher.id);
     expect(created.solution).toEqual({ answer: '42' });
-    await db.update(users).set({ role: 'user' }).where(eq(users.id, teacher.id));
+    await revokeSystemRole(db, teacher.id, 'teacher');
     await expect(questions.getQuestion(created.id, teacher.id)).rejects.toMatchObject({
       kind: 'forbidden',
     });
@@ -140,6 +153,228 @@ describe('Quyền biên soạn câu hỏi và truy cập tài nguyên', () => {
     await expect(
       questions.createQuestion(questionData('draft', legacy.id), owner.id),
     ).rejects.toMatchObject({ kind: 'invalid', code: 'stimulus_invalid' });
+  });
+
+  it('nối các ngữ cảnh tệp nháp, ngân hàng và ngữ liệu vào cây hệ thống, kể cả bản ghi cũ', async () => {
+    const teacher = await createUser();
+    const root = await new PostgresAuthorizationRepository(db).findContext({
+      kind: 'system',
+      resourceKey: 'giaokhoa',
+    });
+    if (!root) throw new Error('Thiếu ngữ cảnh hệ thống');
+    const bank = await questions.createQuestion(questionData(), teacher.id);
+    const [bankRow] = await db
+      .select({ id: authzContexts.id, parentId: authzContexts.parentId })
+      .from(authzContexts)
+      .where(and(eq(authzContexts.kind, 'bank'), eq(authzContexts.resourceKey, bank.id)));
+    expect(bankRow.parentId).toBe(root.id);
+    const imageHash = createHash('sha256').update(randomUUID()).digest('hex');
+    const image = await filesRepository.create({
+      createdByUserId: teacher.id,
+      contentHash: imageHash,
+      storageKey: `files/${imageHash}`,
+      mimeType: 'image/png',
+      byteSize: 3,
+      width: 1,
+      height: 1,
+      originalFilename: 'test.png',
+      parentFileId: null,
+    });
+    const [draftUse] = await db
+      .select({ contextId: fileUses.contextId })
+      .from(fileUses)
+      .where(eq(fileUses.fileId, image.id))
+      .limit(1);
+    const [userContext] = await db
+      .select({ id: authzContexts.id, parentId: authzContexts.parentId })
+      .from(authzContexts)
+      .where(eq(authzContexts.id, draftUse.contextId));
+    expect(userContext.parentId).toBe(root.id);
+    await db
+      .update(authzContexts)
+      .set({ parentId: null })
+      .where(eq(authzContexts.id, userContext.id));
+    const repairHash = createHash('sha256').update(randomUUID()).digest('hex');
+    await filesRepository.create({
+      createdByUserId: teacher.id,
+      contentHash: repairHash,
+      storageKey: `files/${repairHash}`,
+      mimeType: 'image/png',
+      byteSize: 3,
+      width: 1,
+      height: 1,
+      originalFilename: 'repair.png',
+      parentFileId: null,
+    });
+    const repaired = await new PostgresAuthorizationRepository(db).findContext({
+      kind: 'user',
+      resourceKey: teacher.id,
+    });
+    expect(repaired?.parentId).toBe(root.id);
+  });
+
+  it('tệp một câu hỏi ở hai bài giao được kiểm từng hoạt động với PROHIBIT riêng', async () => {
+    const teacher = await createUser();
+    const student = await createUser('user');
+    const classroom = await new PostgresClassesRepository(db).create(
+      { name: `Lớp ảnh-${randomUUID()}`, joinMode: 'AUTO' },
+      teacher.id,
+    );
+    const classContext = await new PostgresAuthorizationRepository(db).findContext({
+      kind: 'class',
+      resourceKey: classroom.id,
+    });
+    if (!classContext) throw new Error('Thiếu ngữ cảnh lớp');
+    await db
+      .insert(classEnrolments)
+      .values({ classId: classroom.id, userId: student.id, status: 'active' });
+    const repository = new PostgresAuthorizationRepository(db);
+    await repository.assignRole({
+      contextId: classContext.id,
+      userId: student.id,
+      roleKey: 'class:student',
+      source: 'class_enrolment',
+    });
+    const hash = createHash('sha256').update(randomUUID()).digest('hex');
+    const image = await filesRepository.create({
+      createdByUserId: teacher.id,
+      contentHash: hash,
+      storageKey: `files/${hash}`,
+      mimeType: 'image/png',
+      byteSize: 3,
+      width: 1,
+      height: 1,
+      originalFilename: 'anh.png',
+      parentFileId: null,
+    });
+    const imageDoc = {
+      type: 'doc' as const,
+      content: [
+        {
+          type: 'image' as const,
+          attrs: {
+            fileId: image.id,
+            variantFileId: null,
+            alt: null,
+            title: null,
+            width: null,
+            height: null,
+            align: 'center' as const,
+            crop: null,
+          },
+        },
+      ],
+    };
+    const createdQuestion = await questions.createQuestion(
+      {
+        status: 'ready',
+        type: 'short_answer',
+        content: imageDoc,
+        solution: { answer: '42' },
+      },
+      teacher.id,
+    );
+    const [version] = await db
+      .select({ id: questionVersions.id })
+      .from(questionVersions)
+      .where(eq(questionVersions.questionBankEntryId, createdQuestion.id))
+      .limit(1);
+    const [exam] = await db
+      .insert(exams)
+      .values({
+        title: 'Đề có ảnh',
+        createdByUserId: teacher.id,
+      })
+      .returning();
+    const [revision] = await db
+      .insert(examRevisions)
+      .values({
+        examId: exam.id,
+        revision: 1,
+        title: exam.title,
+      })
+      .returning();
+    await db.insert(examRevisionQuestions).values({
+      examRevisionId: revision.id,
+      questionVersionId: version.id,
+      position: 1,
+      questionSnapshot: createdQuestion,
+    });
+    const createAssignment = async () => {
+      const [assignment] = await db
+        .insert(assignments)
+        .values({
+          classId: classroom.id,
+          examRevisionId: revision.id,
+          createdByUserId: teacher.id,
+          audienceMode: 'ALL_CLASS',
+          status: 'published',
+          openAt: new Date(Date.now() - 60_000),
+          closeAt: new Date(Date.now() + 86_400_000),
+        })
+        .returning();
+      await db.insert(assignmentRecipients).values({
+        assignmentId: assignment.id,
+        userId: student.id,
+        status: 'active',
+        source: 'all_class',
+      });
+      const [context] = await db
+        .insert(authzContexts)
+        .values({
+          kind: 'assignment',
+          resourceKey: assignment.id,
+          parentId: classContext.id,
+        })
+        .returning();
+      return { assignment, context };
+    };
+    const forbiddenAssignment = await createAssignment();
+    const allowedAssignment = await createAssignment();
+    const authz = new AuthorizationService(repository);
+    const storage = { get: vi.fn(async () => ({ body: Buffer.from('abc') })) };
+    const service = new FilesService(filesRepository, storage as never, authz);
+    await authz.overrideRole(
+      teacher.id,
+      forbiddenAssignment.context.id,
+      'class:student',
+      'assignment:view_assigned',
+      'PROHIBIT',
+    );
+    expect(
+      await authz.authorize({
+        actorId: student.id,
+        capability: 'assignment:view_assigned',
+        context: { kind: 'assignment', resourceKey: forbiddenAssignment.assignment.id },
+      }),
+    ).toMatchObject({ allowed: false, reason: 'prohibited' });
+    expect(
+      await authz.authorize({
+        actorId: student.id,
+        capability: 'assignment:view_assigned',
+        context: { kind: 'assignment', resourceKey: allowedAssignment.assignment.id },
+      }),
+    ).toMatchObject({ allowed: true });
+    expect(
+      (
+        await filesRepository.assignedFileAssignments(image.id, null, student.id, new Date())
+      ).sort(),
+    ).toEqual([forbiddenAssignment.assignment.id, allowedAssignment.assignment.id].sort());
+    await expect(service.getFile(image.id, student.id)).resolves.toMatchObject({
+      mimeType: 'image/png',
+    });
+    await db
+      .update(assignmentRecipients)
+      .set({ status: 'revoked', revokedAt: new Date() })
+      .where(
+        and(
+          eq(assignmentRecipients.assignmentId, allowedAssignment.assignment.id),
+          eq(assignmentRecipients.userId, student.id),
+        ),
+      );
+    await expect(service.getFile(image.id, student.id)).rejects.toMatchObject({
+      code: 'file_not_found',
+    });
   });
 
   it('chặn đọc tệp gốc và biến thể của người khác trước khi truy cập kho lưu trữ', async () => {

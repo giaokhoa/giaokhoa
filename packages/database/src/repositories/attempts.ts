@@ -21,6 +21,11 @@ import { classes, classEnrolments } from '../schema/classes.js';
 import { examRevisionQuestions } from '../schema/exams.js';
 import type { Database } from '../types.js';
 import { assertOwner } from './assignments.js';
+import {
+  hasContextCapability,
+  lockAuthorizationMutation,
+  isAccountSuspended,
+} from './authorization.js';
 
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 type AttemptRow = typeof attempts.$inferSelect;
@@ -64,10 +69,10 @@ function closed() {
 
 /**
  * Kiểm tra người dùng còn được phép hoạt động trước khi cho thao tác với lượt làm.
- * Chỉ chấp nhận ba loại tài khoản hợp lệ và từ chối tài khoản bị cấm hoặc không tồn tại.
+ * Từ chối tài khoản bị khóa hoặc không tồn tại; quyền thực hiện do AuthorizationService xét.
  */
-function validAccount(account: { role: string | null; banned: boolean | null } | undefined) {
-  return !!account && !account.banned && ['user', 'teacher', 'admin'].includes(account.role ?? '');
+function validAccount(account: { banned: boolean; banExpires: Date | null } | undefined) {
+  return !!account && !isAccountSuspended(account);
 }
 
 /**
@@ -190,6 +195,7 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
     const [row] = await this.db
       .select({
         classId: assignments.classId,
+        assignmentId: attempts.assignmentId,
         userId: attempts.userId,
         status: attempts.status,
         enrolmentStatus: classEnrolments.status,
@@ -217,6 +223,7 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
     const classId = await this.findAssignmentClass(assignmentId);
     if (!classId) throw unavailable();
     return this.db.transaction(async (tx) => {
+      await lockAuthorizationMutation(tx);
       // ponytail: Khóa theo lớp để đồng bộ khi tham gia hoặc đình chỉ thành viên; nếu tải cao, chuyển sang khóa từng bản ghi người nhận (recipient).
       const [classroom] = await tx
         .select()
@@ -253,12 +260,19 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
         .limit(1);
       if (!member) throw denied();
       const [account] = await tx
-        .select({ role: users.role, banned: users.banned })
+        .select({ banned: users.banned, banExpires: users.banExpires })
         .from(users)
         .where(eq(users.id, actorId))
         .for('share')
         .limit(1);
       if (!validAccount(account)) throw denied();
+      if (
+        !(await hasContextCapability(tx, actorId, 'assignment:attempt', {
+          kind: 'assignment',
+          resourceKey: assignmentId,
+        }))
+      )
+        throw denied();
       if (now < assignment.openAt || now >= assignment.closeAt) throw closed();
 
       const history = await tx
@@ -286,11 +300,13 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
   /**
    * Dùng chung cho lưu đáp án và nộp bài để khóa lớp và lượt làm (attempt)
    * trong cùng một giao dịch (transaction). Không cho sửa khi hết giờ, đã nộp,
-   * quan hệ tham gia lớp (enrolment) bị ngừng hoặc quyền nhận bài đã bị thu hồi.
+   * quan hệ tham gia lớp (enrolment) bị ngừng, quyền nhận bài hoặc vai trò bị thu hồi.
+   * Capability được xét lại trong giao dịch, không tin kết quả kiểm tra trước khi gọi.
    */
   private async writable(tx: Transaction, id: string, actorId: string, now: Date) {
+    await lockAuthorizationMutation(tx);
     const [ref] = await tx
-      .select({ classId: assignments.classId })
+      .select({ classId: assignments.classId, assignmentId: assignments.id })
       .from(attempts)
       .innerJoin(assignments, eq(attempts.assignmentId, assignments.id))
       .where(and(eq(attempts.id, id), eq(attempts.userId, actorId)))
@@ -335,12 +351,19 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
       .limit(1);
     if (!active) throw denied();
     const [account] = await tx
-      .select({ role: users.role, banned: users.banned })
+      .select({ banned: users.banned, banExpires: users.banExpires })
       .from(users)
       .where(eq(users.id, actorId))
       .for('share')
       .limit(1);
     if (!validAccount(account)) throw denied();
+    if (
+      !(await hasContextCapability(tx, actorId, 'assignment:attempt', {
+        kind: 'assignment',
+        resourceKey: row.assignment.id,
+      }))
+    )
+      throw denied();
     if (now < row.assignment.openAt || now >= row.assignment.closeAt) throw closed();
     return row;
   }
@@ -434,7 +457,7 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
         enrolmentStatus: classEnrolments.status,
         recipientStatus: assignmentRecipients.status,
         banned: users.banned,
-        role: users.role,
+        banExpires: users.banExpires,
       })
       .from(attempts)
       .innerJoin(assignments, eq(assignments.id, attempts.assignmentId))
@@ -479,8 +502,8 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
   }
 
   /**
-   * Liệt kê lịch sử lượt làm của học sinh trong một bài giao mà giáo viên sở hữu.
-   * Kiểm tra đồng thời quyền chủ lớp và tác giả bài giao; sắp theo học sinh và số lần làm để phục vụ chấm bài.
+   * Liệt kê lượt làm cho người có quyền chấm trong ngữ cảnh bài giao.
+   * Kiểm tra capability chấm bài và trạng thái lớp; sắp theo học sinh và số lần làm để phục vụ chấm bài.
    */
   async listForTeacher(assignmentId: string, actorId: string) {
     const classId = await this.findAssignmentClass(assignmentId);
@@ -492,13 +515,13 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
         .where(eq(classes.id, classId))
         .for('share')
         .limit(1);
-      await assertOwner(tx, classroom, actorId);
+      await assertOwner(tx, classroom, actorId, 'assignment:grade', assignmentId);
       const [assignment] = await tx
-        .select({ ownerId: assignments.createdByUserId })
+        .select({ id: assignments.id })
         .from(assignments)
         .where(eq(assignments.id, assignmentId))
         .limit(1);
-      if (!assignment || assignment.ownerId !== actorId) return undefined;
+      if (!assignment) return undefined;
       const rows = await tx
         .select()
         .from(attempts)
@@ -509,13 +532,13 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
   }
 
   /**
-   * Nạp lượt làm cho người quản lý bài giao sau khi xác minh quyền chủ lớp và tác giả bài.
+   * Nạp lượt làm cho người có capability chấm tại ngữ cảnh bài giao, không phụ thuộc người tạo.
    * @param lock Khi chuẩn bị chấm thì khóa ghi lớp và lượt làm; khi chỉ xem thì khóa đọc để giảm tranh chấp.
    * Trả về undefined nếu không tìm thấy lượt làm hoặc bài giao không thuộc người yêu cầu.
    */
   private async teacherAttempt(tx: Transaction, id: string, actorId: string, lock = false) {
     const [ref] = await tx
-      .select({ classId: assignments.classId })
+      .select({ classId: assignments.classId, assignmentId: assignments.id })
       .from(attempts)
       .innerJoin(assignments, eq(attempts.assignmentId, assignments.id))
       .where(eq(attempts.id, id))
@@ -527,15 +550,15 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
       .where(eq(classes.id, ref.classId))
       .for(lock ? 'update' : 'share')
       .limit(1);
-    await assertOwner(tx, classroom, actorId);
+    await assertOwner(tx, classroom, actorId, 'assignment:grade', ref.assignmentId);
     const [row] = await tx
-      .select({ attempt: attempts, createdByUserId: assignments.createdByUserId })
+      .select({ attempt: attempts })
       .from(attempts)
       .innerJoin(assignments, eq(attempts.assignmentId, assignments.id))
       .where(eq(attempts.id, id))
       .for(lock ? 'update' : 'share')
       .limit(1);
-    if (!row || row.createdByUserId !== actorId) return undefined;
+    if (!row) return undefined;
     return row.attempt;
   }
 
@@ -552,7 +575,7 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
 
   /**
    * Ghi điểm và nhận xét cho lượt đã nộp bằng một giao dịch có khóa.
-   * Chỉ tác giả bài giao có quyền chủ lớp được chấm; quy đổi điểm từ thang 100 sang số nguyên phần vạn để tránh sai số số thực.
+   * Chỉ người có capability chấm tại ngữ cảnh bài giao được chấm; quy đổi điểm từ thang 100 sang số nguyên phần vạn để tránh sai số số thực.
    * Không chấm lượt đang làm; ghi trạng thái, điểm và thời điểm chấm cùng lúc.
    */
   async grade(

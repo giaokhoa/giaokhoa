@@ -6,7 +6,7 @@ import type {
   FilesRepository,
 } from '@giaokhoa/application/files/repository';
 import type { FileRef, TikzFileSource } from '@giaokhoa/shared/files';
-import { collectFileRefs, questionSchema, stimulusSchema } from '@giaokhoa/shared/questions';
+import { collectFileRefs, questionSchema } from '@giaokhoa/shared/questions';
 import { and, asc, eq, gt, inArray, lte, sql } from 'drizzle-orm';
 import { users } from '../schema/auth.generated.js';
 import { attempts } from '../schema/attempts.js';
@@ -16,6 +16,7 @@ import { classEnrolments, classes } from '../schema/classes.js';
 import { examRevisionQuestions } from '../schema/exams.js';
 import { fileBlobs, fileObjectDeletions, files, fileSources, fileUses } from '../schema/files.js';
 import { question, questionVersions, stimuli } from '../schema/questions.js';
+import { readPinnedStimulus } from './pinned-stimulus.js';
 import type { Database } from '../types.js';
 
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -143,10 +144,19 @@ export class PostgresFilesRepository implements FilesRepository {
 
     // Vùng nháp là vị trí sử dụng tệp có thời hạn; sau khi lưu nội dung,
     // tham chiếu từ đối tượng nội dung cụ thể sẽ thay thế vị trí nháp.
+    const [root] = await tx
+      .select({ id: authzContexts.id })
+      .from(authzContexts)
+      .where(and(eq(authzContexts.kind, 'system'), eq(authzContexts.resourceKey, 'giaokhoa')))
+      .limit(1);
+    if (!root) throw new Error('Thiếu ngữ cảnh hệ thống');
     await tx
       .insert(authzContexts)
-      .values({ kind: 'user', resourceKey: data.createdByUserId })
-      .onConflictDoNothing();
+      .values({ kind: 'user', resourceKey: data.createdByUserId, parentId: root.id })
+      .onConflictDoUpdate({
+        target: [authzContexts.kind, authzContexts.resourceKey],
+        set: { parentId: root.id },
+      });
     const [context] = await tx
       .select({ id: authzContexts.id })
       .from(authzContexts)
@@ -234,7 +244,7 @@ export class PostgresFilesRepository implements FilesRepository {
   /** Chỉ xét quyền đọc tệp khi học sinh đang là người nhận bài và thành viên lớp còn hoạt động.
    * Đối chiếu ảnh gốc và ảnh biến thể với bản chụp câu hỏi hoặc ngữ liệu đã giao;
    * vị trí tệp trong cơ sở dữ liệu không đủ để chứng minh quyền xem. */
-  async assignedFileClasses(
+  async assignedFileAssignments(
     fileId: string,
     variantFileId: string | null,
     userId: string,
@@ -242,7 +252,7 @@ export class PostgresFilesRepository implements FilesRepository {
   ): Promise<string[]> {
     const targetId = variantFileId ?? fileId;
     const rows = await this.db
-      .select({ classId: assignments.classId, snapshot: examRevisionQuestions.questionSnapshot })
+      .select({ assignmentId: assignments.id, snapshot: examRevisionQuestions.questionSnapshot })
       .from(fileUses)
       .innerJoin(questionVersions, sql`${fileUses.itemId} = ${questionVersions.questionId}::text`)
       .innerJoin(
@@ -279,10 +289,10 @@ export class PostgresFilesRepository implements FilesRepository {
       );
     const stimulusRows = await this.db
       .select({
-        classId: assignments.classId,
+        assignmentId: assignments.id,
         snapshot: examRevisionQuestions.questionSnapshot,
         stimulusId: stimuli.id,
-        stimulusContent: stimuli.content,
+        stimulusSnapshot: examRevisionQuestions.stimulusSnapshot,
       })
       .from(fileUses)
       .innerJoin(stimuli, sql`${fileUses.itemId} = ${stimuli.id}::text`)
@@ -331,17 +341,16 @@ export class PostgresFilesRepository implements FilesRepository {
               (ref) => ref.fileId === fileId && ref.variantFileId === variantFileId,
             ),
           )
-          .map(({ classId }) => classId),
+          .map(({ assignmentId }) => assignmentId),
         ...stimulusRows
-          .filter(({ snapshot, stimulusId, stimulusContent }) => {
-            const assignedQuestion = questionSchema.parse(snapshot);
-            if (assignedQuestion.stimulusId !== stimulusId) return false;
-            const stimulus = stimulusSchema.parse({ id: stimulusId, content: stimulusContent });
+          .filter(({ stimulusSnapshot, stimulusId }) => {
+            const stimulus = readPinnedStimulus(stimulusSnapshot, stimulusId);
+            if (!stimulus) return false;
             return collectFileRefs(stimulus.content).some(
               (ref) => ref.fileId === fileId && ref.variantFileId === variantFileId,
             );
           })
-          .map(({ classId }) => classId),
+          .map(({ assignmentId }) => assignmentId),
       ]),
     ];
   }
@@ -353,22 +362,20 @@ export class PostgresFilesRepository implements FilesRepository {
    * chỉ trùng mã câu hỏi hoặc vị trí lưu tệp không đủ để được cấp quyền.
    * Không cấp quyền xem ảnh hướng dẫn hoặc ảnh gốc của bản cắt.
    */
-  async releasedSolutionFileClasses(
+  async releasedSolutionFileAssignments(
     fileId: string,
     variantFileId: string | null,
     userId: string,
     now: Date,
-  ): Promise<Array<{ classId: string; enrolmentStatus: 'active' | 'left' }>> {
-    // Trả về lớp và trạng thái tham gia để tầng nghiệp vụ xét quyền theo vai trò
-    // hiện hành; riêng thành viên đã rời lớp có thể tiếp tục xem lịch sử đã nộp.
+  ): Promise<string[]> {
+    // Trả đúng hoạt động sở hữu lời giải, không suy ra quyền từ ghi danh.
     // Tra bảng vị trí tệp trước để giảm số bản chụp cần kiểm tra;
     // sau đó đối chiếu tham chiếu tệp thực tế vì nối theo mã câu hỏi
     // có thể khớp nhiều phiên bản khác nhau.
     const rows = await this.db
       .select({
         snapshot: examRevisionQuestions.questionSnapshot,
-        classId: assignments.classId,
-        enrolmentStatus: classEnrolments.status,
+        assignmentId: assignments.id,
       })
       .from(fileUses)
       .innerJoin(questionVersions, sql`${fileUses.itemId} = ${questionVersions.questionId}::text`)
@@ -401,8 +408,7 @@ export class PostgresFilesRepository implements FilesRepository {
           eq(fileUses.component, 'questions'),
           eq(fileUses.fileArea, 'solution'),
           lte(assignments.releaseSolutionsAt, now),
-          inArray(users.role, ['user', 'teacher', 'admin']),
-          sql`${users.banned} is not true`,
+          sql`(${users.banned} is not true or ${users.banExpires} <= ${now})`,
         ),
       );
     return rows
@@ -411,10 +417,7 @@ export class PostgresFilesRepository implements FilesRepository {
           (ref) => ref.fileId === fileId && ref.variantFileId === variantFileId,
         ),
       )
-      .map(({ classId, enrolmentStatus }) => ({
-        classId,
-        enrolmentStatus: enrolmentStatus === 'left' ? ('left' as const) : ('active' as const),
-      }));
+      .map(({ assignmentId }) => assignmentId);
   }
 
   /**

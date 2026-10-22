@@ -8,7 +8,13 @@ import {
 } from '@giaokhoa/shared/classes';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { users } from '../schema/auth.generated.js';
-import { authzContexts, authzRoleAssignments, authzRoles } from '../schema/authorization.js';
+import { hasSystemCapability, hasContextCapability, isAccountSuspended } from './authorization.js';
+import {
+  authzContexts,
+  authzRoleAssignments,
+  authzRoleContextLevels,
+  authzRoles,
+} from '../schema/authorization.js';
 import { classes, classEnrolments, classJoinCodes } from '../schema/classes.js';
 import type { Database } from '../types.js';
 
@@ -56,45 +62,30 @@ function publicClass(row: typeof classes.$inferSelect) {
 }
 
 /**
- * Đọc vai trò tài khoản còn hoạt động trong giao dịch và khóa đọc người dùng.
- * Chỉ chấp nhận người dùng, giáo viên hoặc quản trị viên không bị cấm; các trạng thái khác không được tự động cấp quyền.
+ * Xác nhận tài khoản đăng nhập còn hoạt động trong giao dịch, không suy quyền từ hồ sơ đăng nhập.
  */
-async function activeAccountRole(tx: Transaction, actorId: string) {
+async function activeAccount(tx: Transaction, actorId: string) {
   const [actor] = await tx
-    .select({ role: users.role, banned: users.banned })
+    .select({ banned: users.banned, banExpires: users.banExpires })
     .from(users)
     .where(eq(users.id, actorId))
     .for('share')
     .limit(1);
-  if (!actor || actor.banned) return undefined;
-  if (actor.role === 'user' || actor.role === 'teacher' || actor.role === 'admin')
-    return actor.role;
-  return undefined;
+  return !!actor && !isAccountSuspended(actor);
 }
 
-/**
- * Xác nhận chủ lớp dựa đồng thời trên tác giả lớp, vai trò tài khoản và lần gán vai trò chủ lớp đang có hiệu lực.
- * Không dựa riêng vào trường người tạo để tránh giáo viên đã bị hạ vai trò hoặc bị thu hồi quyền vẫn thao tác quản lý.
- */
-async function classOwner(tx: Transaction, row: typeof classes.$inferSelect, actorId: string) {
-  if (row.createdByUserId !== actorId || !row.authzContextId) return false;
-  const role = await activeAccountRole(tx, actorId);
-  if (role !== 'teacher' && role !== 'admin') return false;
-  const [owner] = await tx
-    .select({ id: authzRoleAssignments.id })
-    .from(authzRoleAssignments)
-    .innerJoin(authzRoles, eq(authzRoleAssignments.roleId, authzRoles.id))
-    .where(
-      and(
-        eq(authzRoleAssignments.contextId, row.authzContextId),
-        eq(authzRoleAssignments.userId, actorId),
-        isNull(authzRoleAssignments.revokedAt),
-        eq(authzRoles.key, 'class:owner'),
-      ),
-    )
-    .for('share')
-    .limit(1);
-  return !!owner;
+/** Người có capability hiệu lực tại lớp có thể quản lý; không bắt buộc là người tạo lớp. */
+async function canManageClass(
+  tx: Transaction,
+  row: typeof classes.$inferSelect,
+  actorId: string,
+  capability: 'class:update' | 'class:enrolment_manage',
+) {
+  return (
+    !!row.authzContextId &&
+    (await activeAccount(tx, actorId)) &&
+    (await hasContextCapability(tx, actorId, capability, { kind: 'class', resourceKey: row.id }))
+  );
 }
 
 /**
@@ -115,11 +106,28 @@ async function studentRole(tx: Transaction, row: typeof classes.$inferSelect) {
 }
 
 /**
- * Cấp vai trò học sinh trong phạm vi lớp cho thành viên đã được chấp nhận.
- * Bỏ qua lần cấp trùng để việc đồng bộ quan hệ thành viên và phân quyền có thể chạy lặp lại an toàn.
+ * Cấp vai trò học sinh tại lớp khi cấu hình cho phép, kể cả qua ghi danh tự động.
+ * Khi cấu hình không hợp lệ, từ chối cả giao dịch ghi danh thay vì âm thầm cấp quyền;
+ * thu hồi vai trò không phụ thuộc cấu hình cấp mới.
  */
 async function grantStudent(tx: Transaction, row: typeof classes.$inferSelect, userId: string) {
   const role = await studentRole(tx, row);
+  const [allowed] = await tx
+    .select({ roleId: authzRoleContextLevels.roleId })
+    .from(authzRoleContextLevels)
+    .where(
+      and(
+        eq(authzRoleContextLevels.roleId, role.roleId),
+        eq(authzRoleContextLevels.contextKind, 'class'),
+      ),
+    )
+    .limit(1);
+  if (!allowed)
+    throw new ClientError(
+      'conflict',
+      'class_student_role_context_disabled',
+      'Vai trò học sinh không được phép cấp tại lớp',
+    );
   await tx
     .insert(authzRoleAssignments)
     .values({
@@ -158,12 +166,12 @@ export class PostgresClassesRepository implements ClassesRepository {
 
   /**
    * Tạo lớp, phạm vi phân quyền và quyền chủ lớp trong cùng một giao dịch.
-   * Yêu cầu người tạo có vai trò giáo viên hoặc quản trị viên; nếu thiếu cấu hình phân quyền gốc thì không tạo lớp dở dang.
+   * Chỉ gán vai trò chủ lớp khi loại ngữ cảnh này còn được phép theo cấu hình vai trò;
+   * nếu thiếu quyền hoặc cấu hình, không để lại lớp thiếu vai trò.
    */
   async create(input: ClassCreate, actorId: string) {
     return this.db.transaction(async (tx) => {
-      const role = await activeAccountRole(tx, actorId);
-      if (role !== 'teacher' && role !== 'admin')
+      if (!(await hasSystemCapability(tx, actorId, 'class:create')))
         throw new ClientError('forbidden', 'authorization_denied', 'Bạn không có quyền tạo lớp');
       const [parent] = await tx
         .select({ id: authzContexts.id })
@@ -173,7 +181,10 @@ export class PostgresClassesRepository implements ClassesRepository {
       const [ownerRole] = await tx
         .select({ id: authzRoles.id })
         .from(authzRoles)
-        .where(eq(authzRoles.key, 'class:owner'))
+        .innerJoin(authzRoleContextLevels, eq(authzRoleContextLevels.roleId, authzRoles.id))
+        .where(
+          and(eq(authzRoles.key, 'class:owner'), eq(authzRoleContextLevels.contextKind, 'class')),
+        )
         .limit(1);
       if (!parent || !ownerRole)
         throw new ClientError(
@@ -222,7 +233,7 @@ export class PostgresClassesRepository implements ClassesRepository {
   }
 
   /**
-   * Sửa thông tin lớp chỉ khi người thực hiện thực sự còn quyền chủ lớp.
+   * Sửa lớp khi người thực hiện có capability class:update tại ngữ cảnh lớp.
    * Khóa lớp trước khi kiểm tra và cập nhật để tránh tranh chấp với thay đổi trạng thái hoặc quyền tham gia.
    */
   async update(id: string, actorId: string, patch: ClassPatch) {
@@ -233,7 +244,7 @@ export class PostgresClassesRepository implements ClassesRepository {
         .where(eq(classes.id, id))
         .for('update')
         .limit(1);
-      if (!row || !(await classOwner(tx, row, actorId))) return undefined;
+      if (!row || !(await canManageClass(tx, row, actorId, 'class:update'))) return undefined;
       const [updated] = await tx
         .update(classes)
         .set({ ...patch, updatedAt: new Date() })
@@ -244,7 +255,7 @@ export class PostgresClassesRepository implements ClassesRepository {
   }
 
   /**
-   * Tạo mã mời đã băm cho lớp đang hoạt động và do người yêu cầu quản lý.
+   * Tạo mã mời đã băm cho lớp đang hoạt động và người có quyền cập nhật lớp.
    * Lưu thời hạn, giới hạn sử dụng và danh tính người cấp; không lưu mã mời nguyên bản trong cơ sở dữ liệu.
    */
   async createJoinCode(
@@ -261,7 +272,11 @@ export class PostgresClassesRepository implements ClassesRepository {
         .where(eq(classes.id, classId))
         .for('update')
         .limit(1);
-      if (!row || row.status !== 'active' || !(await classOwner(tx, row, actorId)))
+      if (
+        !row ||
+        row.status !== 'active' ||
+        !(await canManageClass(tx, row, actorId, 'class:update'))
+      )
         return undefined;
       const [created] = await tx
         .insert(classJoinCodes)
@@ -289,7 +304,8 @@ export class PostgresClassesRepository implements ClassesRepository {
         .where(eq(classes.id, classId))
         .for('update')
         .limit(1);
-      if (!classroom || !(await classOwner(tx, classroom, actorId))) return false;
+      if (!classroom || !(await canManageClass(tx, classroom, actorId, 'class:update')))
+        return false;
       const revoked = await tx
         .update(classJoinCodes)
         .set({ revokedAt: new Date() })
@@ -312,7 +328,7 @@ export class PostgresClassesRepository implements ClassesRepository {
    */
   async join(codeHash: string, actorId: string, now: Date) {
     return this.db.transaction(async (tx) => {
-      if (!(await activeAccountRole(tx, actorId)))
+      if (!(await activeAccount(tx, actorId)))
         throw new ClientError(
           'forbidden',
           'authorization_denied',
@@ -405,7 +421,7 @@ export class PostgresClassesRepository implements ClassesRepository {
 
   /**
    * Duyệt, đình chỉ hoặc cho thành viên rời lớp bằng một thay đổi trạng thái nhất quán.
-   * Duyệt và đình chỉ đòi quyền chủ lớp; rời lớp chỉ do chính thành viên thực hiện. Việc cấp hoặc thu hồi vai trò học sinh nằm cùng giao dịch với cập nhật thành viên.
+   * Duyệt và đình chỉ đòi quyền quản lý thành viên; rời lớp chỉ do chính thành viên thực hiện. Việc cấp hoặc thu hồi vai trò học sinh nằm cùng giao dịch với cập nhật thành viên.
    */
   async changeEnrolment(
     classId: string,
@@ -421,7 +437,11 @@ export class PostgresClassesRepository implements ClassesRepository {
         .for('update')
         .limit(1);
       if (!classroom) return undefined;
-      if (action !== 'leave' && !(await classOwner(tx, classroom, actorId))) return undefined;
+      if (
+        action !== 'leave' &&
+        !(await canManageClass(tx, classroom, actorId, 'class:enrolment_manage'))
+      )
+        return undefined;
       if (action === 'leave' && actorId !== userId) return undefined;
       const [row] = await tx
         .select()

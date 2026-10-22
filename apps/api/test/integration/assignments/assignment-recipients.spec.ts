@@ -1,3 +1,4 @@
+import { grantSystemRole, revokeRole } from '../../helpers/roles.js';
 import 'dotenv/config';
 import { createHash, randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
@@ -63,9 +64,9 @@ async function createUser(role: 'teacher' | 'user' | 'admin' = 'user') {
     .values({
       name: role,
       email: `${randomUUID()}@example.com`,
-      role,
     })
     .returning();
+  if (role !== 'user') await grantSystemRole(db, row.id, role);
   return row;
 }
 
@@ -132,6 +133,46 @@ afterAll(async () => {
 }, 30_000);
 
 describe('Công bố bài giao và quản lý người nhận', () => {
+  it('bài giao và ngữ liệu đã chốt không đổi khi nội dung nguồn bị sửa', async () => {
+    const { join, create, stimulus, revision } = await fixture();
+    const student = await createUser();
+    await join(student.id);
+    const draft = await create('ALL_CLASS');
+    await assignments.publish(
+      (
+        await db
+          .select({ createdByUserId: assignmentRows.createdByUserId })
+          .from(assignmentRows)
+          .where(eq(assignmentRows.id, draft.id))
+      )[0].createdByUserId,
+      draft.id,
+    );
+    const before = await assignments.getDelivery(student.id, draft.id);
+    const original = before.questions[0].question.stimulus;
+    expect(original?.content).toMatchObject({
+      content: [{ type: 'paragraph', content: [{ text: 'Đọc đoạn văn này' }] }],
+    });
+    const [pinned] = await db
+      .select({ stimulusSnapshot: schema.examRevisionQuestions.stimulusSnapshot })
+      .from(schema.examRevisionQuestions)
+      .where(eq(schema.examRevisionQuestions.examRevisionId, revision.id))
+      .limit(1);
+    expect(pinned.stimulusSnapshot).toMatchObject({ id: stimulus.id, content: original?.content });
+    await db
+      .update(schema.stimuli)
+      .set({
+        content: {
+          type: 'doc',
+          content: [
+            { type: 'paragraph', content: [{ type: 'text', text: 'Nội dung soạn thảo thay đổi' }] },
+          ],
+        },
+      })
+      .where(eq(schema.stimuli.id, stimulus.id));
+    const after = await assignments.getDelivery(student.id, draft.id);
+    expect(after.questions[0].question.stimulus).toEqual(original);
+  });
+
   it('chỉ chốt danh sách thành viên đang hoạt động, không tự giao cho người tham gia muộn', async () => {
     const { teacher, classroom, join, create } = await fixture();
     const first = await createUser();
@@ -275,7 +316,7 @@ describe('Công bố bài giao và quản lý người nhận', () => {
     await expect(
       assignments.update(anotherTeacher.id, draft.id, { maxAttempts: 4 }),
     ).rejects.toMatchObject({ kind: 'forbidden' });
-    await db.update(users).set({ role: 'user' }).where(eq(users.id, teacher.id));
+    await revokeRole(db, teacher.id, 'class:owner', 'class', classroom.id);
     await expect(assignments.publish(teacher.id, draft.id)).rejects.toMatchObject({
       kind: 'forbidden',
     });

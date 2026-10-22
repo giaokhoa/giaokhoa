@@ -8,21 +8,22 @@ import {
   type AssignmentPatch,
   type StudentAssignment,
 } from '@giaokhoa/shared/assignments';
-import { questionSchema, stimulusSchema } from '@giaokhoa/shared/questions';
-import { and, asc, eq, inArray, isNull, lte } from 'drizzle-orm';
+import { questionSchema } from '@giaokhoa/shared/questions';
+import { and, asc, eq, inArray, lte } from 'drizzle-orm';
 import { users } from '../schema/auth.generated.js';
 import { assignments, assignmentRecipients } from '../schema/assignments.js';
-import { authzRoleAssignments, authzRoles } from '../schema/authorization.js';
+import { authzContexts } from '../schema/authorization.js';
+import { hasContextCapability, isAccountSuspended } from './authorization.js';
 import { classes, classEnrolments } from '../schema/classes.js';
 import { exams, examRevisions, examRevisionQuestions } from '../schema/exams.js';
-import { stimuli } from '../schema/questions.js';
+import { readPinnedStimulus } from './pinned-stimulus.js';
 import type { Database } from '../types.js';
 
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
 /**
  * Tạo lỗi từ chối quyền quản lý bài giao (assignment).
- * Dùng thống nhất cho các thao tác yêu cầu chủ lớp có vai trò quản lý hợp lệ.
+ * Dùng thống nhất cho các thao tác yêu cầu capability quản lý bài giao còn hiệu lực.
  */
 function forbidden() {
   return new ClientError(
@@ -45,48 +46,39 @@ function invalidRecipients() {
 }
 
 /**
- * Kiểm tra quyền quản lý lớp bên trong một giao dịch (transaction).
- * Yêu cầu lớp đang hoạt động, đúng người tạo, tài khoản giáo viên hoặc quản trị viên chưa bị cấm, và vai trò chủ lớp chưa bị thu hồi.
+ * Kiểm tra capability quản lý bài giao ngay trong giao dịch, không khóa quyền vào người tạo lớp.
+ * Yêu cầu lớp đang hoạt động và tài khoản chưa bị khóa.
  * @param tx Giao dịch đang dùng để đọc quyền nhất quán với thao tác ghi.
  * @param classroom Bản ghi lớp đã được bên gọi tra cứu và khóa trước khi kiểm tra.
  * @param actorId Mã tài khoản đang thực hiện thao tác.
- * @throws Lỗi từ chối quyền khi thiếu bất kỳ điều kiện sở hữu nào.
+ * @throws Lỗi từ chối khi tài khoản không còn capability tại lớp.
  */
 export async function assertOwner(
   tx: Transaction,
   classroom: typeof classes.$inferSelect | undefined,
   actorId: string,
+  capability:
+    | 'assignment:create'
+    | 'assignment:publish'
+    | 'assignment:grade' = 'assignment:publish',
+  assignmentId?: string,
 ) {
-  if (
-    !classroom ||
-    classroom.status !== 'active' ||
-    classroom.createdByUserId !== actorId ||
-    !classroom.authzContextId
-  )
-    throw forbidden();
+  if (!classroom || classroom.status !== 'active' || !classroom.authzContextId) throw forbidden();
   const [account] = await tx
-    .select({ role: users.role, banned: users.banned })
+    .select({ banned: users.banned, banExpires: users.banExpires })
     .from(users)
     .where(eq(users.id, actorId))
     .for('share')
     .limit(1);
-  if (!account || account.banned || (account.role !== 'teacher' && account.role !== 'admin'))
+  if (
+    !account ||
+    isAccountSuspended(account) ||
+    !(await hasContextCapability(tx, actorId, capability, {
+      kind: assignmentId ? 'assignment' : 'class',
+      resourceKey: assignmentId ?? classroom.id,
+    }))
+  )
     throw forbidden();
-  const [owner] = await tx
-    .select({ id: authzRoleAssignments.id })
-    .from(authzRoleAssignments)
-    .innerJoin(authzRoles, eq(authzRoleAssignments.roleId, authzRoles.id))
-    .where(
-      and(
-        eq(authzRoleAssignments.contextId, classroom.authzContextId),
-        eq(authzRoleAssignments.userId, actorId),
-        eq(authzRoles.key, 'class:owner'),
-        isNull(authzRoleAssignments.revokedAt),
-      ),
-    )
-    .for('share')
-    .limit(1);
-  if (!owner) throw forbidden();
 }
 
 /**
@@ -114,8 +106,8 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
   constructor(private readonly db: Database) {}
 
   /**
-   * Tạo bản nháp bài giao cho một lớp và một bản sửa đổi đề thi thuộc người tạo.
-   * Khóa lớp, xác minh quyền sở hữu lớp rồi xác minh tác giả đề trong cùng giao dịch để không tạo bài giao trái quyền.
+   * Tạo bản nháp bài giao cho một lớp bằng bản sửa đổi đề thi mà tác giả sở hữu.
+   * Khóa lớp, xét capability tạo bài rồi xác minh tác giả đề trong cùng giao dịch để không tạo bài giao trái quyền.
    * Trả về undefined khi không tìm thấy bản sửa đổi đề của tác giả; lỗi phân quyền được phát sinh riêng.
    */
   async create(actorId: string, input: Parameters<AssignmentsRepository['create']>[1]) {
@@ -127,7 +119,7 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
         .where(eq(classes.id, parsed.classId))
         .for('update')
         .limit(1);
-      await assertOwner(tx, classroom, actorId);
+      await assertOwner(tx, classroom, actorId, 'assignment:create');
       const [revision] = await tx
         .select({ id: examRevisions.id })
         .from(examRevisions)
@@ -144,6 +136,12 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
           ...config(parsed),
         })
         .returning();
+      // Bài giao là ngữ cảnh hoạt động con của lớp, để ghi đè quyền riêng cho từng bài.
+      await tx.insert(authzContexts).values({
+        kind: 'assignment',
+        resourceKey: created.id,
+        parentId: classroom!.authzContextId!,
+      });
       return assignmentSchema.parse(created);
     });
   }
@@ -158,9 +156,9 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
   }
 
   /**
-   * Chỉ cập nhật cấu hình bài giao khi còn ở trạng thái bản nháp (draft) và người sửa là tác giả.
+   * Chỉ cập nhật cấu hình bài giao khi còn ở trạng thái bản nháp (draft) và người sửa có capability.
    * Khóa lớp trước bài giao, ghép dữ liệu hiện có với phần thay đổi rồi xác thực toàn bộ cấu hình để tránh phá vỡ tính hợp lệ khi cập nhật từng phần.
-   * Trả về undefined khi bài giao không tồn tại, đã công bố hoặc không thuộc người yêu cầu.
+   * Trả về undefined khi bài giao không tồn tại hoặc đã công bố; quyền sửa được kiểm trong giao dịch.
    */
   async updateDraft(id: string, actorId: string, patch: AssignmentPatch) {
     const [existing] = await this.db
@@ -176,14 +174,14 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
         .where(eq(classes.id, existing.classId))
         .for('update')
         .limit(1);
-      await assertOwner(tx, classroom, actorId);
+      await assertOwner(tx, classroom, actorId, 'assignment:create', id);
       const [row] = await tx
         .select()
         .from(assignments)
         .where(eq(assignments.id, id))
         .for('update')
         .limit(1);
-      if (!row || row.status !== 'draft' || row.createdByUserId !== actorId) return undefined;
+      if (!row || row.status !== 'draft') return undefined;
       const updatedInput = assignmentCreateSchema.safeParse({
         classId: row.classId,
         examRevisionId: row.examRevisionId,
@@ -233,15 +231,14 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
         .where(eq(classes.id, existing.classId))
         .for('update')
         .limit(1);
-      await assertOwner(tx, classroom, actorId);
+      await assertOwner(tx, classroom, actorId, 'assignment:publish', id);
       const [row] = await tx
         .select()
         .from(assignments)
         .where(eq(assignments.id, id))
         .for('update')
         .limit(1);
-      if (!row || row.createdByUserId !== actorId || row.classId !== existing.classId)
-        throw forbidden();
+      if (!row || row.classId !== existing.classId) throw forbidden();
       if (row.status === 'published') return assignmentSchema.parse(row);
 
       const active = await tx
@@ -283,15 +280,15 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
 
   /**
    * Liệt kê người nhận đã được chốt của một bài giao theo thứ tự mã người dùng.
-   * Chỉ trả danh sách khi người yêu cầu chính là tác giả bài giao; kết quả giữ trạng thái đã thu hồi để phục vụ đối soát.
+   * Chỉ trả danh sách sau khi tầng nghiệp vụ đã kiểm capability tại ngữ cảnh bài giao; kết quả giữ trạng thái đã thu hồi để phục vụ đối soát.
    */
-  async listRecipients(id: string, actorId: string) {
+  async listRecipients(id: string, _actorId: string) {
     const [row] = await this.db
       .select({ createdByUserId: assignments.createdByUserId })
       .from(assignments)
       .where(eq(assignments.id, id))
       .limit(1);
-    if (!row || row.createdByUserId !== actorId) return undefined;
+    if (!row) return undefined;
     const recipients = await this.db
       .select({
         userId: assignmentRecipients.userId,
@@ -325,14 +322,14 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
         .where(eq(classes.id, existing.classId))
         .for('update')
         .limit(1);
-      await assertOwner(tx, classroom, actorId);
+      await assertOwner(tx, classroom, actorId, 'assignment:publish', id);
       const [row] = await tx
         .select()
         .from(assignments)
         .where(eq(assignments.id, id))
         .for('update')
         .limit(1);
-      if (!row || row.status !== 'published' || row.createdByUserId !== actorId) return false;
+      if (!row || row.status !== 'published') return false;
       const [recipient] = await tx
         .select()
         .from(assignmentRecipients)
@@ -397,26 +394,19 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
       .select({
         position: examRevisionQuestions.position,
         questionSnapshot: examRevisionQuestions.questionSnapshot,
+        stimulusSnapshot: examRevisionQuestions.stimulusSnapshot,
       })
       .from(examRevisionQuestions)
       .where(eq(examRevisionQuestions.examRevisionId, match.assignment.examRevisionId))
       .orderBy(asc(examRevisionQuestions.position));
-    const entries = snapshots.map(({ position, questionSnapshot }) => {
+    const entries = snapshots.map(({ position, questionSnapshot, stimulusSnapshot }) => {
       const { id, version, type, content, stimulusId } = questionSchema.parse(questionSnapshot);
-      return { position, question: { id, version, type, content, stimulusId } };
+      return {
+        position,
+        question: { id, version, type, content, stimulusId },
+        stimulus: stimulusId ? readPinnedStimulus(stimulusSnapshot, stimulusId) : null,
+      };
     });
-    const stimulusIds = [
-      ...new Set(
-        entries.flatMap(({ question }) => (question.stimulusId ? [question.stimulusId] : [])),
-      ),
-    ];
-    const stimulusRows = stimulusIds.length
-      ? await this.db
-          .select({ id: stimuli.id, content: stimuli.content })
-          .from(stimuli)
-          .where(inArray(stimuli.id, stimulusIds))
-      : [];
-    const stimuliById = new Map(stimulusRows.map((row) => [row.id, stimulusSchema.parse(row)]));
     return studentAssignmentSchema.parse({
       assignmentId: match.assignment.id,
       examRevisionId: match.assignment.examRevisionId,
@@ -426,11 +416,11 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
       maxAttempts: match.assignment.maxAttempts,
       // Chỉ thêm ngữ liệu vào dữ liệu trả cho học sinh sau khi đã kiểm tra quyền;
       // không cho phép đọc ngữ liệu tùy ý chỉ bằng mã định danh.
-      questions: entries.map(({ position, question }) => ({
+      questions: entries.map(({ position, question, stimulus }) => ({
         position,
         question: {
           ...question,
-          stimulus: question.stimulusId ? (stimuliById.get(question.stimulusId) ?? null) : null,
+          stimulus,
         },
       })),
     });

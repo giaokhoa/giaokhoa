@@ -20,3 +20,13 @@ API mặc định ở cổng `3000`, web dev ở `5173`. Web gọi API qua `VITE
 `pnpm --filter @giaokhoa/api files:gc` dọn file nháp hết hạn và thử lại các lần xóa storage lỗi. Lệnh không tự chạy; cần scheduler nếu muốn thu gom định kỳ. TTL mặc định là 24 giờ (`FILE_ORPHAN_TTL_HOURS`).
 
 UI dùng các component trong `packages/ui`.
+
+## Xác thực và phân quyền
+
+Better Auth phụ trách tài khoản và phiên đăng nhập. Hệ thống phân quyền riêng trong
+`packages/application/src/authorization` quản lý vai trò, capability và ngữ cảnh
+theo định hướng Moodle. `apps/api` cung cấp các giao diện HTTP tương ứng; lược đồ
+lưu trữ ở `packages/database/src/schema/authorization.ts`.
+
+Các lệnh quản trị dữ liệu, công cụ khởi tạo và hướng dẫn sử dụng cụ thể nằm cùng
+thành phần thực hiện chúng; không mô tả luồng nghiệp vụ trong README dự án.

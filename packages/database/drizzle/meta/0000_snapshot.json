@@ -644,12 +644,6 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
-        },
-        "impersonated_by": {
-          "name": "impersonated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -748,17 +742,11 @@
           "notNull": true,
           "default": "now()"
         },
-        "role": {
-          "name": "role",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "banned": {
           "name": "banned",
           "type": "boolean",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": false
         },
         "ban_reason": {
@@ -1799,6 +1787,128 @@
       },
       "isRLSEnabled": false
     },
+    "public.authz_role_allow_assignments": {
+      "name": "authz_role_allow_assignments",
+      "schema": "",
+      "columns": {
+        "actor_role_id": {
+          "name": "actor_role_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_role_id": {
+          "name": "target_role_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "authz_role_allow_assignments_actor_role_id_authz_roles_id_fk": {
+          "name": "authz_role_allow_assignments_actor_role_id_authz_roles_id_fk",
+          "tableFrom": "authz_role_allow_assignments",
+          "tableTo": "authz_roles",
+          "columnsFrom": [
+            "actor_role_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "authz_role_allow_assignments_target_role_id_authz_roles_id_fk": {
+          "name": "authz_role_allow_assignments_target_role_id_authz_roles_id_fk",
+          "tableFrom": "authz_role_allow_assignments",
+          "tableTo": "authz_roles",
+          "columnsFrom": [
+            "target_role_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "authz_role_allow_assignments_unique": {
+          "name": "authz_role_allow_assignments_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "actor_role_id",
+            "target_role_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.authz_role_allow_overrides": {
+      "name": "authz_role_allow_overrides",
+      "schema": "",
+      "columns": {
+        "actor_role_id": {
+          "name": "actor_role_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_role_id": {
+          "name": "target_role_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "authz_role_allow_overrides_actor_role_id_authz_roles_id_fk": {
+          "name": "authz_role_allow_overrides_actor_role_id_authz_roles_id_fk",
+          "tableFrom": "authz_role_allow_overrides",
+          "tableTo": "authz_roles",
+          "columnsFrom": [
+            "actor_role_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "authz_role_allow_overrides_target_role_id_authz_roles_id_fk": {
+          "name": "authz_role_allow_overrides_target_role_id_authz_roles_id_fk",
+          "tableFrom": "authz_role_allow_overrides",
+          "tableTo": "authz_roles",
+          "columnsFrom": [
+            "target_role_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "authz_role_allow_overrides_unique": {
+          "name": "authz_role_allow_overrides_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "actor_role_id",
+            "target_role_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.authz_role_assignments": {
       "name": "authz_role_assignments",
       "schema": "",
@@ -1972,6 +2082,167 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.authz_role_context_levels": {
+      "name": "authz_role_context_levels",
+      "schema": "",
+      "columns": {
+        "role_id": {
+          "name": "role_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "context_kind": {
+          "name": "context_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "authz_role_context_levels_role_id_authz_roles_id_fk": {
+          "name": "authz_role_context_levels_role_id_authz_roles_id_fk",
+          "tableFrom": "authz_role_context_levels",
+          "tableTo": "authz_roles",
+          "columnsFrom": [
+            "role_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "authz_role_context_levels_unique": {
+          "name": "authz_role_context_levels_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "role_id",
+            "context_kind"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "authz_role_context_levels_kind_check": {
+          "name": "authz_role_context_levels_kind_check",
+          "value": "\"authz_role_context_levels\".\"context_kind\" in ('system', 'user', 'bank', 'question', 'exam', 'class', 'assignment')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.authz_role_overrides": {
+      "name": "authz_role_overrides",
+      "schema": "",
+      "columns": {
+        "role_id": {
+          "name": "role_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "capability_id": {
+          "name": "capability_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "context_id": {
+          "name": "context_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "effect": {
+          "name": "effect",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "authz_role_overrides_context_idx": {
+          "name": "authz_role_overrides_context_idx",
+          "columns": [
+            {
+              "expression": "context_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "authz_role_overrides_role_id_authz_roles_id_fk": {
+          "name": "authz_role_overrides_role_id_authz_roles_id_fk",
+          "tableFrom": "authz_role_overrides",
+          "tableTo": "authz_roles",
+          "columnsFrom": [
+            "role_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "authz_role_overrides_capability_id_authz_capabilities_id_fk": {
+          "name": "authz_role_overrides_capability_id_authz_capabilities_id_fk",
+          "tableFrom": "authz_role_overrides",
+          "tableTo": "authz_capabilities",
+          "columnsFrom": [
+            "capability_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "authz_role_overrides_context_id_authz_contexts_id_fk": {
+          "name": "authz_role_overrides_context_id_authz_contexts_id_fk",
+          "tableFrom": "authz_role_overrides",
+          "tableTo": "authz_contexts",
+          "columnsFrom": [
+            "context_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "authz_role_overrides_unique": {
+          "name": "authz_role_overrides_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "role_id",
+            "capability_id",
+            "context_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "authz_role_overrides_effect_check": {
+          "name": "authz_role_overrides_effect_check",
+          "value": "\"authz_role_overrides\".\"effect\" in ('INHERIT', 'ALLOW', 'PREVENT', 'PROHIBIT')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.authz_role_permissions": {

@@ -1,10 +1,11 @@
 import { Module, StandardSchemaValidationPipe } from '@nestjs/common';
-import { APP_FILTER, APP_PIPE } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { DrizzleModule } from '@nestjs/drizzle';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { FilesModule } from './files/files.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { ActiveAccountGuard } from './auth/active-account.guard.js';
 import { envSchema, type Env } from './config/env.js';
 import { CurriculumModule } from './curriculum/curriculum.module.js';
 import * as schema from '@giaokhoa/database/schema';
@@ -41,6 +42,7 @@ import { AttemptsModule } from './attempts/attempts.module.js';
     QuestionsModule,
   ],
   providers: [
+    { provide: APP_GUARD, useClass: ActiveAccountGuard },
     { provide: APP_PIPE, useValue: new StandardSchemaValidationPipe() },
     { provide: APP_FILTER, useClass: ClientErrorFilter },
   ],
