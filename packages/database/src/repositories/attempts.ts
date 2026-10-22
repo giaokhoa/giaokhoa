@@ -1,4 +1,5 @@
 import { ClientError } from '@giaokhoa/application/common/client-error';
+import { isDeepStrictEqual } from 'node:util';
 import type { AttemptsRepository } from '@giaokhoa/application/attempts/repository';
 import {
   attemptAnswerSchema,
@@ -422,6 +423,7 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
     actorId: string,
     position: number,
     answer: AttemptAnswer,
+    expectedAnswer: AttemptAnswer | null,
     now: Date,
   ): Promise<Attempt> {
     return this.db.transaction(async (tx) => {
@@ -438,6 +440,18 @@ export class PostgresAttemptsRepository implements AttemptsRepository {
         .limit(1);
       if (!question || !matches(questionSchema.parse(question.snapshot), answer))
         throw invalidAnswer();
+      // writable() khóa lượt làm: các yêu cầu từ nhiều thiết bị được tuần tự hóa.
+      const [current] = await tx
+        .select({ answer: attemptResponses.answer })
+        .from(attemptResponses)
+        .where(and(eq(attemptResponses.attemptId, id), eq(attemptResponses.position, position)))
+        .limit(1);
+      if (!isDeepStrictEqual(current?.answer ?? null, expectedAnswer))
+        throw new ClientError(
+          'conflict',
+          'attempt_answer_changed',
+          'Câu trả lời đã được sửa trên thiết bị khác. Hãy tải bản mới trước khi lưu.',
+        );
       await tx
         .insert(attemptResponses)
         .values({

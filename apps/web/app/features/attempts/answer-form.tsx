@@ -22,7 +22,7 @@ import { Input } from '@giaokhoa/ui/components/input';
 import { Textarea } from '@giaokhoa/ui/components/textarea';
 import { Spinner } from '@giaokhoa/ui/components/spinner';
 import { useEffect, useId, useRef, useState } from 'react';
-import { useFetcher } from 'react-router';
+import { useFetcher, useRevalidator } from 'react-router';
 import { parseAnswer, parseQuestionContent, textToDocument } from './attempt-data';
 import { RichDocument } from './attempt-ui';
 import {
@@ -117,7 +117,8 @@ export function AnswerForm({
   onDirty: (position: number, dirty: boolean) => void;
   readOnly?: boolean;
 }) {
-  const fetcher = useFetcher<{ error?: string; success?: string }>();
+  const fetcher = useFetcher<{ error?: string; success?: string; conflict?: boolean }>();
+  const revalidator = useRevalidator();
   const prefix = useId();
   const storageKey = 'giaokhoa:attempt:' + attemptId + ':question:' + item.position;
   const restoredKey = useRef<string | null>(null);
@@ -127,6 +128,7 @@ export function AnswerForm({
   const handledResponse = useRef(fetcher.data);
   const [conflict, setConflict] = useState(false);
   const [failedAnswer, setFailedAnswer] = useState<string | null>(null);
+  const [acknowledgedAnswer, setAcknowledgedAnswer] = useState<string | null>(null);
   const [failures, setFailures] = useState(0);
   const [hydrated, setHydrated] = useState(false);
   const [restored, setRestored] = useState(false);
@@ -179,7 +181,7 @@ export function AnswerForm({
       setEdited(false);
     }
   }
-  const dirty = edited && draftVersion !== savedVersion;
+  const dirty = edited && draftVersion !== savedVersion && draftVersion !== acknowledgedAnswer;
   const answerToSave = parsed ? JSON.stringify(parsed) : null;
 
   useEffect(() => {
@@ -222,20 +224,32 @@ export function AnswerForm({
     )
       return;
     handledResponse.current = fetcher.data;
-    if (fetcher.data.error) {
+    if (fetcher.data.conflict) {
+      setConflict(true);
+      void revalidator.revalidate();
+    } else if (fetcher.data.error) {
       const failed = submittedAnswer.current;
       setFailures((count) => (failedAnswer === failed ? count + 1 : 1));
       setFailedAnswer(failed);
     } else if (fetcher.data.success) {
+      setAcknowledgedAnswer(submittedAnswer.current);
       setFailedAnswer(null);
       setFailures(0);
     }
-  }, [fetcher.state, fetcher.data, failedAnswer]);
+  }, [fetcher.state, fetcher.data, failedAnswer, revalidator]);
 
   function submitAnswer(answer: string) {
     submittedAnswer.current = answer;
     void fetcher
-      .submit({ intent: 'save', position: String(item.position), answer }, { method: 'post' })
+      .submit(
+        {
+          intent: 'save',
+          position: String(item.position),
+          answer,
+          expectedAnswer: JSON.stringify(saved ?? null),
+        },
+        { method: 'post' },
+      )
       .catch(() => {
         setFailures((count) => (failedAnswer === answer ? count + 1 : 1));
         setFailedAnswer(answer);
@@ -268,6 +282,7 @@ export function AnswerForm({
     baseVersion.current = serverVersion;
     setDraft(createAnswerDraft(saved));
     setEdited(false);
+    setAcknowledgedAnswer(null);
     setConflict(false);
     setRestored(false);
     setFailedAnswer(null);
@@ -277,6 +292,7 @@ export function AnswerForm({
   function useLocalAnswer() {
     baseVersion.current = serverVersion;
     setConflict(false);
+    setAcknowledgedAnswer(null);
     setFailedAnswer(null);
     setFailures(0);
     setStorageError(!writeDraft(window, storageKey, draft, serverVersion));
@@ -286,6 +302,21 @@ export function AnswerForm({
     onDirty(item.position, dirty);
     return () => onDirty(item.position, false);
   }, [dirty, item.position, onDirty]);
+
+  function discardDraft() {
+    if (!window.confirm('Bỏ phần đang nhập của câu này? Bản đã lưu trên máy chủ vẫn được giữ.'))
+      return;
+    clearDraft(window, storageKey);
+    setDraft(createAnswerDraft(saved));
+    setEdited(false);
+    setAcknowledgedAnswer(null);
+    setConflict(false);
+    baseVersion.current = serverVersion;
+    setRestored(false);
+    setFailedAnswer(null);
+    setFailures(0);
+    setError(null);
+  }
 
   function updateDraft(patch: Partial<AnswerDraft>) {
     const next = { ...draft, ...patch };
@@ -478,6 +509,11 @@ export function AnswerForm({
                             ? 'Đã lưu trên máy chủ.'
                             : 'Chưa trả lời.'}
                 </p>
+                {!readOnly && dirty && !parsed && (
+                  <Button type="button" variant="outline" onClick={discardDraft}>
+                    Bỏ nháp câu này để tiếp tục nộp bài
+                  </Button>
+                )}
                 {!readOnly && (
                   <Button type="submit" disabled={conflict || !dirty || fetcher.state !== 'idle'}>
                     {fetcher.state !== 'idle' && (

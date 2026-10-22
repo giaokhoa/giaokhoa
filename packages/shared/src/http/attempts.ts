@@ -39,7 +39,10 @@ export const attemptsContract = {
     method: 'PUT',
     path: '/attempts/:id/responses/:position',
     pathParams: responseParams,
-    body: attemptAnswerSchema,
+    body: z.strictObject({
+      answer: attemptAnswerSchema,
+      expectedAnswer: attemptAnswerSchema.nullable(),
+    }),
     responses: { 200: attemptSchema },
   },
   submit: {

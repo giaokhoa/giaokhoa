@@ -74,11 +74,12 @@ export class AttemptsController {
     @Param('id', { schema: attemptsContract.save.pathParams.shape.id }) id: string,
     @Param('position', { schema: attemptsContract.save.pathParams.shape.position })
     position: number,
-    @Body({ schema: attemptsContract.save.body }) body: AttemptAnswer,
+    @Body({ schema: attemptsContract.save.body })
+    body: { answer: AttemptAnswer; expectedAnswer: AttemptAnswer | null },
     @Session() session: UserSession,
   ): Promise<Attempt> {
     return attemptsContract.save.responses[200].parse(
-      await this.attempts.save(session.user.id, id, position, body),
+      await this.attempts.save(session.user.id, id, position, body.answer, body.expectedAnswer),
     );
   }
 

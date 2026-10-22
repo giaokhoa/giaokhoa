@@ -73,7 +73,7 @@ async function createUser(role: 'teacher' | 'admin' | 'user' = 'user') {
   return user;
 }
 
-async function fixture() {
+async function fixture(questionCount = 1) {
   const teacher = await createUser('teacher');
   const classroom = await classes.createClass(teacher.id, { name: 'Lớp toán', joinMode: 'AUTO' });
   const question = await questions.createQuestion(
@@ -86,8 +86,16 @@ async function fixture() {
     teacher.id,
   );
   const exam = await exams.createExam(teacher.id, { title: 'Đề thi gốc' });
+  const examQuestions = [{ questionId: question.id, version: question.version }];
+  for (let index = 1; index < questionCount; index++) {
+    const next = await questions.createQuestion(
+      { status: 'ready', type: 'short_answer', content: doc, solution: { answer: '42' } },
+      teacher.id,
+    );
+    examQuestions.push({ questionId: next.id, version: next.version });
+  }
   const revision = await exams.createRevision(teacher.id, exam.id, {
-    questions: [{ questionId: question.id, version: question.version }],
+    questions: examQuestions,
   });
   const joinCode = await classes.createJoinCode(teacher.id, classroom.id, { expiresInHours: 24 });
   const enrol = async (userId: string) => classes.joinClass(userId, joinCode.code);
@@ -194,6 +202,65 @@ describe('Quyền sở hữu, vòng đời bài làm và công bố kết quả'
     ).toHaveLength(0);
   });
 
+  it('ngăn hai thiết bị ghi đè với cùng dữ liệu đã đọc, kể cả khi ghi đồng thời', async () => {
+    const { enrol, publish } = await fixture();
+    const student = await createUser();
+    await enrol(student.id);
+    const assignment = await publish();
+    const started = await attempts.start(student.id, assignment.id);
+    const id = started.id;
+    const X = { type: 'short_answer', answer: '12' } as const;
+    const Y = { type: 'short_answer', answer: '23' } as const;
+    const Z = { type: 'short_answer', answer: '34' } as const;
+
+    // Hai thiết bị cùng tải câu chưa trả lời: chỉ một lần ghi được chấp nhận.
+    const simultaneous = await Promise.allSettled([
+      attempts.save(student.id, id, 1, X, null),
+      attempts.save(student.id, id, 1, Y, null),
+    ]);
+    expect(simultaneous.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(simultaneous.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    const rejected = simultaneous.find((result) => result.status === 'rejected');
+    expect(rejected).toMatchObject({
+      status: 'rejected',
+      reason: { kind: 'conflict', code: 'attempt_answer_changed' },
+    });
+
+    const previous = (await attempts.getOwn(student.id, id)).responses[0].answer;
+    const newer = previous.type === 'short_answer' && previous.answer === X.answer ? Y : X;
+    const saved = await attempts.save(student.id, id, 1, newer, previous);
+    expect(saved.responses[0].answer).toEqual(newer);
+    await expect(attempts.save(student.id, id, 1, Z, previous)).rejects.toMatchObject({
+      kind: 'conflict',
+      code: 'attempt_answer_changed',
+    });
+    expect((await attempts.getOwn(student.id, id)).responses[0].answer).toEqual(newer);
+    // Người học chủ động giữ nháp sau khi tải phiên bản mới vẫn lưu được.
+    expect((await attempts.save(student.id, id, 1, Z, newer)).responses[0].answer).toEqual(Z);
+  });
+
+  it('nộp được 9/10 câu dù câu thứ 10 có nháp chưa hoàn chỉnh trên thiết bị', async () => {
+    const { enrol, publish } = await fixture(10);
+    const student = await createUser();
+    await enrol(student.id);
+    const assignment = await publish();
+    const started = await attempts.start(student.id, assignment.id);
+    for (let position = 1; position <= 9; position++)
+      await attempts.save(
+        student.id,
+        started.id,
+        position,
+        { type: 'short_answer', answer: '42' },
+        null,
+      );
+    // Nháp chưa hoàn chỉnh ở câu 10 không gửi qua API; học sinh có thể bỏ nháp.
+    const submitted = await attempts.submit(student.id, started.id);
+    expect(submitted.status).toBe('submitted');
+    expect(submitted.responses.map((response) => response.position)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9,
+    ]);
+  });
+
   it('lưu câu trả lời đúng kiểu, chặn câu hỏi không thuộc bài và khóa bài đã nộp', async () => {
     const { enrol, publish } = await fixture();
     const student = await createUser();
@@ -202,16 +269,28 @@ describe('Quyền sở hữu, vòng đời bài làm và công bố kết quả'
     const started = await attempts.start(student.id, assignment.id);
     const id = started.id;
     await expect(
-      attempts.save(student.id, id, 2, { type: 'short_answer', answer: '12' }),
+      attempts.save(student.id, id, 2, { type: 'short_answer', answer: '12' }, null),
     ).rejects.toMatchObject({ code: 'attempt_answer_invalid' });
     await expect(
-      attempts.save(student.id, id, 1, {
-        type: 'multiple_choice',
-        choiceId: '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d20',
-      }),
+      attempts.save(
+        student.id,
+        id,
+        1,
+        {
+          type: 'multiple_choice',
+          choiceId: '018f4c1a-8f27-7b11-8f5e-2bfbf97b6d20',
+        },
+        null,
+      ),
     ).rejects.toMatchObject({ code: 'attempt_answer_invalid' });
-    await attempts.save(student.id, id, 1, { type: 'short_answer', answer: '12' });
-    const saved = await attempts.save(student.id, id, 1, { type: 'short_answer', answer: '23' });
+    await attempts.save(student.id, id, 1, { type: 'short_answer', answer: '12' }, null);
+    const saved = await attempts.save(
+      student.id,
+      id,
+      1,
+      { type: 'short_answer', answer: '23' },
+      { type: 'short_answer', answer: '12' },
+    );
     expect(saved.responses).toHaveLength(1);
     expect(saved.responses[0].answer).toEqual({ type: 'short_answer', answer: '23' });
     expect(JSON.stringify(saved)).not.toContain('"solution"');
@@ -223,7 +302,7 @@ describe('Quyền sở hữu, vòng đời bài làm và công bố kết quả'
     expect(submitted.status).toBe('submitted');
     expect(submitted.submittedAt).toBeInstanceOf(Date);
     await expect(
-      attempts.save(student.id, id, 1, { type: 'short_answer', answer: '42' }),
+      attempts.save(student.id, id, 1, { type: 'short_answer', answer: '42' }, null),
     ).rejects.toMatchObject({ code: 'attempt_not_in_progress' });
     await expect(attempts.submit(student.id, id)).rejects.toMatchObject({
       code: 'attempt_not_in_progress',
@@ -236,7 +315,7 @@ describe('Quyền sở hữu, vòng đời bài làm và công bố kết quả'
     const second = await attempts.start(student.id, assignment.id);
     clock = new Date(NOW.getTime() + 3_600_001);
     await expect(
-      attempts.save(student.id, second.id, 1, { type: 'short_answer', answer: '12' }),
+      attempts.save(student.id, second.id, 1, { type: 'short_answer', answer: '12' }, null),
     ).rejects.toMatchObject({ code: 'attempt_window_closed' });
     await expect(attempts.submit(student.id, second.id)).rejects.toMatchObject({
       code: 'attempt_window_closed',
@@ -255,13 +334,13 @@ describe('Quyền sở hữu, vòng đời bài làm và công bố kết quả'
     await classes.suspendMember(teacher.id, classroom.id, suspended.id);
     await assignments.revokeRecipient(teacher.id, assignment.id, revoked.id);
     await expect(
-      attempts.save(suspended.id, first.id, 1, { type: 'short_answer', answer: '1' }),
+      attempts.save(suspended.id, first.id, 1, { type: 'short_answer', answer: '1' }, null),
     ).rejects.toMatchObject({ kind: 'forbidden' });
     await expect(attempts.submit(suspended.id, first.id)).rejects.toMatchObject({
       kind: 'forbidden',
     });
     await expect(
-      attempts.save(revoked.id, second.id, 1, { type: 'short_answer', answer: '1' }),
+      attempts.save(revoked.id, second.id, 1, { type: 'short_answer', answer: '1' }, null),
     ).rejects.toMatchObject({ kind: 'forbidden' });
     await expect(attempts.submit(revoked.id, second.id)).rejects.toMatchObject({
       kind: 'forbidden',
@@ -291,7 +370,7 @@ describe('Quyền sở hữu, vòng đời bài làm và công bố kết quả'
     await revokeRole(db, student.id, 'class:student', 'class', classroom.id);
     const repository = new PostgresAttemptsRepository(db);
     await expect(
-      repository.save(started.id, student.id, 1, { type: 'short_answer', answer: '99' }, NOW),
+      repository.save(started.id, student.id, 1, { type: 'short_answer', answer: '99' }, null, NOW),
     ).rejects.toMatchObject({ kind: 'forbidden' });
     await expect(repository.submit(started.id, student.id, NOW)).rejects.toMatchObject({
       kind: 'forbidden',
@@ -353,7 +432,7 @@ describe('Quyền sở hữu, vòng đời bài làm và công bố kết quả'
     await enteredLock;
     const repository = new PostgresAttemptsRepository(db);
     const pendingWrite = repository
-      .save(started.id, student.id, 1, { type: 'short_answer', answer: '99' }, NOW)
+      .save(started.id, student.id, 1, { type: 'short_answer', answer: '99' }, null, NOW)
       .then(
         () => 'allowed',
         () => 'denied',
@@ -445,7 +524,7 @@ describe('Quyền sở hữu, vòng đời bài làm và công bố kết quả'
       kind: 'not_found',
     });
     await expect(
-      attempts.save(second.id, started.id, 1, { type: 'short_answer', answer: '1' }),
+      attempts.save(second.id, started.id, 1, { type: 'short_answer', answer: '1' }, null),
     ).rejects.toMatchObject({ kind: 'not_found' });
     await expect(attempts.submit(second.id, started.id)).rejects.toMatchObject({
       kind: 'not_found',
@@ -484,7 +563,7 @@ describe('Quyền sở hữu, vòng đời bài làm và công bố kết quả'
       releaseSolutionsAt: solutionsAt,
     });
     const started = await attempts.start(student.id, assignment.id);
-    await attempts.save(student.id, started.id, 1, { type: 'short_answer', answer: '31' });
+    await attempts.save(student.id, started.id, 1, { type: 'short_answer', answer: '31' }, null);
     await attempts.submit(student.id, started.id);
     await expect(attempts.result(student.id, started.id)).rejects.toMatchObject({
       code: 'result_not_released',
@@ -589,7 +668,7 @@ describe('Quyền sở hữu, vòng đời bài làm và công bố kết quả'
     const assignment = await publish();
     const started = await attempts.start(student.id, assignment.id);
     const writes = await Promise.allSettled([
-      attempts.save(student.id, started.id, 1, { type: 'short_answer', answer: '5' }),
+      attempts.save(student.id, started.id, 1, { type: 'short_answer', answer: '5' }, null),
       attempts.submit(student.id, started.id),
     ]);
     expect(writes[1].status).toBe('fulfilled');

@@ -2,7 +2,14 @@ import { assignmentsContract } from '@giaokhoa/shared/http/assignments';
 import { attemptsContract } from '@giaokhoa/shared/http/attempts';
 import { Button } from '@giaokhoa/ui/components/button';
 import { useCallback, useState } from 'react';
-import { useBeforeUnload, useBlocker, useFetcher, useFetchers, useRevalidator } from 'react-router';
+import {
+  data,
+  useBeforeUnload,
+  useBlocker,
+  useFetcher,
+  useFetchers,
+  useRevalidator,
+} from 'react-router';
 import { requireSession } from '#features/auth/api/session.server.js';
 import { AnswerForm } from '#features/attempts/answer-form.js';
 import { parseAnswer, parsePublishedSolution } from '#features/attempts/attempt-data.js';
@@ -77,14 +84,27 @@ export async function action({ request, params }: Route.ActionArgs) {
       /* Lỗi định dạng được chuyển thành phản hồi xác thực bên dưới. */
     }
     if (!answer) throw new Response('Câu trả lời không hợp lệ.', { status: 400 });
+    let expectedAnswer;
+    try {
+      expectedAnswer = JSON.parse(
+        typeof form.get('expectedAnswer') === 'string'
+          ? (form.get('expectedAnswer') as string)
+          : '',
+      );
+    } catch {
+      throw new Response('Dữ liệu phiên bản không hợp lệ.', { status: 400 });
+    }
+    const body = parseInput(attemptsContract.save.body, { answer, expectedAnswer });
     await apiData(
       request,
       `/attempts/${id}/responses/${responseParams.position}`,
       attemptsContract.save.responses[200],
-      { method: 'PUT', data: answer },
+      { method: 'PUT', data: body },
     );
     return { success: 'Đã lưu câu trả lời.' };
   } catch (error) {
+    if (error instanceof Response && error.status === 409)
+      return data({ error: await error.text(), conflict: true }, { status: 409 });
     return actionError(error);
   }
 }
@@ -189,7 +209,10 @@ function AttemptWorkspace({
               </p>
             )}
             {hasUnsaved && (
-              <p role="alert">Có câu đang sửa hoặc đang lưu. Hãy đợi lưu xong trước khi nộp.</p>
+              <p role="alert">
+                Có câu chưa lưu. Hãy hoàn tất và lưu, hoặc bấm “Bỏ nháp câu này” ở câu đang làm dở
+                trước khi nộp.
+              </p>
             )}
             {!review ? (
               <Button

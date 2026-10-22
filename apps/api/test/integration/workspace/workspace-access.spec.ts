@@ -192,7 +192,7 @@ describe('Dữ liệu giao diện theo quyền hiện hành', () => {
     const f = await fixture();
     await assignments.publish(f.teacher.id, f.assignment.id);
     const attempt = await attempts.start(f.student.id, f.assignment.id);
-    await attempts.save(f.student.id, attempt.id, 1, { type: 'short_answer', answer: '42' });
+    await attempts.save(f.student.id, attempt.id, 1, { type: 'short_answer', answer: '42' }, null);
     await attempts.submit(f.student.id, attempt.id);
     await attempts.grade(f.teacher.id, attempt.id, { score: 95, feedback: 'Nhận xét riêng' });
     const list = await attempts.listOwn(f.student.id);

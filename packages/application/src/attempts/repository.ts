@@ -31,6 +31,7 @@ export interface AttemptsRepository {
     actorId: string,
     position: number,
     answer: AttemptAnswer,
+    expectedAnswer: AttemptAnswer | null,
     now: Date,
   ): Promise<Attempt>;
   submit(id: string, actorId: string, now: Date): Promise<Attempt>;
