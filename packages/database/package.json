@@ -27,11 +27,11 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "reset": "node ./scripts/reset.mjs",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "authz:bootstrap": "node ./scripts/bootstrap-admin.mjs",
-    "test:int": "vitest run"
+    "test:int": "vitest run",
+    "reset": "node ./scripts/reset.mjs"
   },
   "dependencies": {
     "@giaokhoa/application": "workspace:*",
