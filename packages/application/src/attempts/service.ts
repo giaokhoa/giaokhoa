@@ -42,7 +42,30 @@ export class AttemptsService {
     return context;
   }
 
+  async listOwn(actorId: string) {
+    const rows = await this.repository.listOwn(actorId);
+    const decisions = new Map(
+      await Promise.all(
+        [...new Set(rows.map((row) => row.assignmentId))].map(
+          async (assignmentId) =>
+            [
+              assignmentId,
+              (
+                await this.authorization.authorize({
+                  actorId,
+                  capability: 'assignment:attempt',
+                  context: { kind: 'assignment', resourceKey: assignmentId },
+                })
+              ).allowed,
+            ] as const,
+        ),
+      ),
+    );
+    return rows.filter((row) => decisions.get(row.assignmentId));
+  }
+
   /** Quyền làm bài chỉ là điều kiện đầu; kho dữ liệu còn kiểm thời gian, số lượt và người nhận hợp lệ. */
+
   async start(actorId: string, assignmentId: string): Promise<Attempt> {
     const classId = await this.repository.findAssignmentClass(assignmentId);
     if (!classId)

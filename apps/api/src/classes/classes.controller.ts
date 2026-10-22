@@ -25,6 +25,13 @@ import { Session, type UserSession } from '@thallesp/nestjs-better-auth';
 export class ClassesController {
   constructor(private readonly classes: ClassesService) {}
 
+  @Get()
+  async list(@Session() session: UserSession) {
+    return classesContract.list.responses[200].parse(
+      await this.classes.listClasses(session.user.id),
+    );
+  }
+
   /** Giáo viên hoặc quản trị viên tạo lớp và trở thành chủ sở hữu của lớp đó. */
   @Post()
   async create(

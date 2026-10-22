@@ -50,6 +50,13 @@ export class AssignmentAttemptsController {
 export class AttemptsController {
   constructor(private readonly attempts: AttemptsService) {}
 
+  @Get()
+  async listOwn(@Session() session: UserSession) {
+    return attemptsContract.listOwn.responses[200].parse(
+      await this.attempts.listOwn(session.user.id),
+    );
+  }
+
   /** Học sinh xem lượt làm của chính mình cùng các câu đã lưu; không trả đáp án chuẩn. */
   @Get(':id')
   async getOwn(

@@ -1,5 +1,6 @@
 import type {
   Attempt,
+  OwnAttemptSummary,
   AttemptAnswer,
   AttemptGrade,
   AttemptResult,
@@ -19,6 +20,7 @@ export type AttemptContext = {
 
 /** Kho dữ liệu bảo vệ thời gian, giới hạn lượt làm, trạng thái nộp và quyền sở hữu khi đọc/ghi. */
 export interface AttemptsRepository {
+  listOwn(actorId: string): Promise<OwnAttemptSummary[]>;
   findAssignmentClass(assignmentId: string): Promise<string | undefined>;
   findContext(attemptId: string): Promise<AttemptContext | undefined>;
   start(assignmentId: string, actorId: string, now: Date): Promise<Attempt>;

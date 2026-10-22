@@ -30,3 +30,9 @@ lưu trữ ở `packages/database/src/schema/authorization.ts`.
 
 Các lệnh quản trị dữ liệu, công cụ khởi tạo và hướng dẫn sử dụng cụ thể nằm cùng
 thành phần thực hiện chúng; không mô tả luồng nghiệp vụ trong README dự án.
+
+## Giao diện web
+
+Không gian làm việc gồm ngân hàng câu hỏi, đề thi, lớp học, bài giao, bài làm và chấm điểm. Khu vực quản trị cung cấp môn học, chương trình và phân quyền. Thanh điều hướng và các thao tác sử dụng quyền hiệu lực do API trả về; Better Auth chỉ cung cấp danh tính và phiên đăng nhập.
+
+Các trang dùng bộ nạp dữ liệu và hành động của React Router, hợp đồng tại `@giaokhoa/shared/http/*` và thành phần trong `packages/ui`. Kiểm thử giao diện thuần đặt tại `apps/web/test`; kiểm thử dữ liệu và phân quyền của không gian làm việc đặt tại `apps/api/test/integration/workspace`.

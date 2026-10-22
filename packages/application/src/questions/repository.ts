@@ -14,6 +14,7 @@ export type StoredQuestion = Question & { createdByUserId: string };
 
 /** Lưu phiên bản nội dung và vị trí sử dụng tệp nguyên tử, đồng thời kiểm tra quyền sở hữu trong truy vấn ghi. */
 export interface QuestionsRepository {
+  listOwned(userId: string): Promise<Question[]>;
   createQuestion(data: QuestionCreate, refs: FileRef[], userId: string): Promise<StoredQuestion>;
   findQuestion(id: string): Promise<StoredQuestion | undefined>;
   findLatestReadyQuestion(id: string): Promise<StoredQuestion | undefined>;

@@ -50,6 +50,11 @@ export class QuestionsService {
     });
   }
 
+  async listQuestions(userId: string): Promise<Question[]> {
+    await this.assertCapability(userId, 'question:manage_own');
+    return this.repository.listOwned(userId);
+  }
+
   async createQuestion(question: QuestionCreate, userId: string): Promise<Question> {
     await this.assertCapability(userId, 'question:create_own');
     const refs = collectFileRefs(question);

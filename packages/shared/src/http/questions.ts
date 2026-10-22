@@ -20,6 +20,7 @@ export const questionUpdateBodySchema = questionPatchSchema
   );
 
 export const questionsContract = {
+  list: { method: 'GET', path: '/questions', responses: { 200: z.array(questionSchema) } },
   create: {
     method: 'POST',
     path: '/questions',

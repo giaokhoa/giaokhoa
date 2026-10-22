@@ -49,6 +49,37 @@ export class ClassesService {
     return this.repository.create(input, actorId);
   }
 
+  /** Danh sách chỉ chứa lớp có quyền xem; quyền tại lớp này không mở lớp khác. */
+  async listClasses(actorId: string) {
+    const candidates = await this.repository.listCandidates(actorId);
+    const capabilities = [
+      'class:view',
+      'class:update',
+      'class:enrolment_manage',
+      'assignment:create',
+      'assignment:publish',
+      'assignment:grade',
+      'assignment:view_assigned',
+      'assignment:attempt',
+      'result:view_own',
+      'role:assign',
+      'role:override',
+    ];
+    const result = await Promise.all(
+      candidates.map(async (classroom) => ({
+        ...classroom,
+        ...(await this.authorization.checkCapabilities(
+          actorId,
+          { kind: 'class', resourceKey: classroom.id },
+          capabilities,
+        )),
+      })),
+    );
+    return result
+      .filter((item) => item.capabilities.includes('class:view'))
+      .map(({ contextId: _contextId, ...item }) => item);
+  }
+
   async getClass(actorId: string, id: string): Promise<Class> {
     const found = await this.repository.findById(id);
     if (!found) throw new ClientError('not_found', 'class_not_found', 'Lớp không tồn tại');

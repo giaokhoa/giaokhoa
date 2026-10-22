@@ -164,6 +164,26 @@ async function revokeStudent(tx: Transaction, row: typeof classes.$inferSelect, 
 export class PostgresClassesRepository implements ClassesRepository {
   constructor(private readonly db: Database) {}
 
+  async listCandidates(actorId: string) {
+    const rows = await this.db
+      .select()
+      .from(classes)
+      .where(sql`exists (
+      select 1 from authz_role_assignments a join authz_contexts c on c.id = a.context_id
+      where a.user_id = ${actorId} and a.revoked_at is null
+      and (c.kind = 'system' or c.id = ${classes.authzContextId} or c.parent_id = ${classes.authzContextId})
+    ) or exists (
+      select 1 from authz_roles r where r.key = 'system:user' and (
+        exists (select 1 from authz_role_permissions p join authz_capabilities cap on cap.id = p.capability_id
+          where p.role_id = r.id and cap.key = 'class:view' and p.effect = 'ALLOW')
+        or exists (select 1 from authz_role_overrides o
+          where o.role_id = r.id and o.context_id = ${classes.authzContextId} and o.effect = 'ALLOW')
+      )
+    )`)
+      .orderBy(classes.name, classes.id);
+    return rows.map(publicClass);
+  }
+
   /**
    * Tạo lớp, phạm vi phân quyền và quyền chủ lớp trong cùng một giao dịch.
    * Chỉ gán vai trò chủ lớp khi loại ngữ cảnh này còn được phép theo cấu hình vai trò;

@@ -4,6 +4,8 @@ import {
   assignmentPatchSchema,
   assignmentRecipientSchema,
   assignmentSchema,
+  assignmentListItemSchema,
+  assignmentPreviewSchema,
   studentAssignmentSchema,
 } from '../assignments.js';
 
@@ -11,6 +13,17 @@ const idParams = z.strictObject({ id: z.uuidv7() });
 const recipientParams = z.strictObject({ id: z.uuidv7(), userId: z.uuidv7() });
 
 export const assignmentsContract = {
+  list: {
+    method: 'GET',
+    path: '/assignments',
+    responses: { 200: z.array(assignmentListItemSchema) },
+  },
+  preview: {
+    method: 'GET',
+    path: '/assignments/:id/preview',
+    pathParams: idParams,
+    responses: { 200: assignmentPreviewSchema },
+  },
   create: {
     method: 'POST',
     path: '/assignments',

@@ -10,6 +10,21 @@ type SystemRoleBody = { role: 'teacher' | 'admin' };
 export class AuthorizationController {
   constructor(private readonly authorization: AuthorizationService) {}
 
+  @Post('check')
+  @HttpCode(HttpStatus.OK)
+  check(
+    @Body({ schema: authorizationContract.check.body }) body: {
+      context: {
+        kind: 'system' | 'user' | 'bank' | 'question' | 'exam' | 'class' | 'assignment';
+        resourceKey: string;
+      };
+      capabilities: string[];
+    },
+    @Session() session: UserSession,
+  ) {
+    return this.authorization.checkCapabilities(session.user.id, body.context, body.capabilities);
+  }
+
   /** Định nghĩa vai trò và các loại ngữ cảnh được phép gán qua capability hệ thống. */
   @Post('roles')
   async createRole(

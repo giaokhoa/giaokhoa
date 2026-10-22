@@ -23,6 +23,13 @@ import { Session, type UserSession } from '@thallesp/nestjs-better-auth';
 export class QuestionsController {
   constructor(private readonly questions: QuestionsService) {}
 
+  @Get()
+  async list(@Session() session: UserSession): Promise<Question[]> {
+    return questionsContract.list.responses[200].parse(
+      await this.questions.listQuestions(session.user.id),
+    );
+  }
+
   @Post()
   async create(
     @Body({ schema: questionsContract.create.body }) body: QuestionCreate,

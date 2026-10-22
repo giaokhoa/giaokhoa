@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { questionTypeSchema, stimulusSchema } from './questions.js';
+import { questionSchema, questionTypeSchema, stimulusSchema } from './questions.js';
 
 const audienceModeSchema = z.enum(['ALL_CLASS', 'SELECTED_USERS']);
 const instantSchema = z.iso.datetime();
@@ -92,6 +92,31 @@ export const studentAssignmentSchema = z.strictObject({
     }),
   ),
 });
+
+export const assignmentPreviewSchema = z.strictObject({
+  title: z.string(),
+  questions: z.array(
+    z.strictObject({
+      position: z.number().int().positive(),
+      question: questionSchema,
+      stimulus: stimulusSchema.nullable(),
+    }),
+  ),
+});
+export type AssignmentPreview = z.infer<typeof assignmentPreviewSchema>;
+
+export const assignmentListItemSchema = z.strictObject({
+  id: z.uuidv7(),
+  classId: z.uuidv7(),
+  className: z.string(),
+  title: z.string(),
+  status: z.enum(['draft', 'published']),
+  openAt: z.date(),
+  closeAt: z.date(),
+  maxAttempts: z.number().int().positive(),
+  capabilities: z.array(z.string()),
+});
+export type AssignmentListItem = z.infer<typeof assignmentListItemSchema>;
 
 export type Assignment = z.infer<typeof assignmentSchema>;
 export type AssignmentCreate = z.input<typeof assignmentCreateSchema>;

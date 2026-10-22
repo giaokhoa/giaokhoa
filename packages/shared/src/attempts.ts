@@ -56,6 +56,9 @@ export const attemptSchema = z.strictObject({
   responses: z.array(attemptResponseSchema),
 });
 
+export const ownAttemptSummarySchema = attemptSchema.omit({ responses: true });
+export type OwnAttemptSummary = z.infer<typeof ownAttemptSummarySchema>;
+
 export const attemptReviewSchema = attemptSchema.extend({
   score: z.number().nullable(),
   feedback: z.string().nullable(),

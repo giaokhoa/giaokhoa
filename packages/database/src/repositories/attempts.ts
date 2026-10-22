@@ -6,6 +6,7 @@ import {
   attemptResultSchema,
   attemptReviewSchema,
   attemptSchema,
+  ownAttemptSummarySchema,
   attemptSolutionsSchema,
   attemptSummarySchema,
   type AttemptAnswer,
@@ -13,7 +14,7 @@ import {
   type AttemptReview,
 } from '@giaokhoa/shared/attempts';
 import { questionSchema, type Question } from '@giaokhoa/shared/questions';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne, or } from 'drizzle-orm';
 import { users } from '../schema/auth.generated.js';
 import { assignments, assignmentRecipients } from '../schema/assignments.js';
 import { attempts, attemptResponses } from '../schema/attempts.js';
@@ -173,6 +174,47 @@ async function detail(tx: Transaction, row: AttemptRow, teacher = false) {
  */
 export class PostgresAttemptsRepository implements AttemptsRepository {
   constructor(private readonly db: Database) {}
+
+  /** Giữ cùng điều kiện đọc với getOwn, đồng thời bỏ điểm, nhận xét và nội dung câu trả lời. */
+  async listOwn(actorId: string) {
+    const rows = await this.db
+      .select({ attempt: attempts })
+      .from(attempts)
+      .innerJoin(assignments, eq(assignments.id, attempts.assignmentId))
+      .innerJoin(classes, eq(classes.id, assignments.classId))
+      .leftJoin(
+        classEnrolments,
+        and(eq(classEnrolments.classId, classes.id), eq(classEnrolments.userId, actorId)),
+      )
+      .leftJoin(
+        assignmentRecipients,
+        and(
+          eq(assignmentRecipients.assignmentId, assignments.id),
+          eq(assignmentRecipients.userId, actorId),
+        ),
+      )
+      .where(
+        and(
+          eq(attempts.userId, actorId),
+          or(
+            and(
+              ne(attempts.status, 'in_progress'),
+              inArray(classEnrolments.status, ['active', 'left']),
+            ),
+            and(
+              eq(attempts.status, 'in_progress'),
+              eq(classes.status, 'active'),
+              eq(classEnrolments.status, 'active'),
+              eq(assignmentRecipients.status, 'active'),
+            ),
+          ),
+        ),
+      )
+      .orderBy(attempts.startedAt, attempts.id);
+    return rows.map(({ attempt: { scoreBasisPoints: _score, feedback: _feedback, ...row } }) =>
+      ownAttemptSummarySchema.parse(row),
+    );
+  }
 
   /**
    * Tra lớp chứa bài giao từ mã bài giao.

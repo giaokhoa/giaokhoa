@@ -119,6 +119,27 @@ export class AuthorizationService {
     );
   }
 
+  /** Chỉ tra quyền của chính người yêu cầu; kết quả phục vụ giao diện, mọi thao tác vẫn xét quyền lại. */
+  async checkCapabilities(actorId: string, context: ContextRef, capabilities: string[]) {
+    const found = await this.repository.findContext(context);
+    if (!found)
+      throw new ClientError(
+        'not_found',
+        'authorization_context_not_found',
+        'Phạm vi không tồn tại',
+      );
+    const decisions = await Promise.all(
+      [...new Set(capabilities)].map(async (capability) => ({
+        capability,
+        ...(await this.authorize({ actorId, context, capability })),
+      })),
+    );
+    return {
+      contextId: found.id,
+      capabilities: decisions.filter((item) => item.allowed).map((item) => item.capability),
+    };
+  }
+
   private async assertRoleManager(actorId: string) {
     await this.assertAuthorized({
       actorId,

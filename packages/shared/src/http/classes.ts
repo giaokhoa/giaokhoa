@@ -7,12 +7,14 @@ import {
   classJoinResultSchema,
   classPatchSchema,
   classSchema,
+  classListItemSchema,
 } from '../classes.js';
 
 const classIdParams = z.strictObject({ id: z.uuidv7() });
 const classMemberParams = z.strictObject({ id: z.uuidv7(), userId: z.uuidv7() });
 
 export const classesContract = {
+  list: { method: 'GET', path: '/classes', responses: { 200: z.array(classListItemSchema) } },
   create: {
     method: 'POST',
     path: '/classes',

@@ -14,6 +14,9 @@ export const classSchema = z.strictObject({
   updatedAt: z.date(),
 });
 
+export const classListItemSchema = classSchema.extend({ capabilities: z.array(z.string()) });
+export type ClassListItem = z.infer<typeof classListItemSchema>;
+
 export const classCreateSchema = z.strictObject({
   name: z.string().trim().min(1).max(200),
   joinMode: classJoinModeSchema,

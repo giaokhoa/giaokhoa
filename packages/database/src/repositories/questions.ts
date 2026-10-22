@@ -10,6 +10,7 @@ import {
   questionStatusSchema,
   stimulusSchema,
   type QuestionCreate,
+  type Question,
   type QuestionStatus,
   type Stimulus,
   type StimulusCreate,
@@ -71,6 +72,32 @@ function revisionChanged() {
  */
 export class PostgresQuestionsRepository implements QuestionsRepository {
   constructor(private readonly db: Database) {}
+
+  async listOwned(userId: string): Promise<Question[]> {
+    const rows = await this.db
+      .selectDistinctOn([questionBankEntries.id], {
+        entryId: questionBankEntries.id,
+        ownerId: questionBankEntries.createdByUserId,
+        version: questionVersions.version,
+        status: questionVersions.status,
+        content: question,
+      })
+      .from(questionBankEntries)
+      .innerJoin(questionVersions, eq(questionVersions.questionBankEntryId, questionBankEntries.id))
+      .innerJoin(question, eq(question.id, questionVersions.questionId))
+      .where(eq(questionBankEntries.createdByUserId, userId))
+      .orderBy(questionBankEntries.id, desc(questionVersions.version));
+    return rows.map((row) => {
+      const { createdByUserId: _owner, ...item } = parseStoredQuestion(
+        row.entryId,
+        row.ownerId,
+        row.version,
+        row.status,
+        row.content,
+      );
+      return item;
+    });
+  }
 
   /**
    * Tạo mục ngân hàng, bản nội dung đầu tiên và liên kết phiên bản số 1 trong cùng giao dịch.

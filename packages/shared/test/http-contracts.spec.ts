@@ -1,3 +1,4 @@
+import { authorizationContract } from '../src/http/authorization.js';
 import { assignmentsContract } from '../src/http/assignments.js';
 import { attemptsContract } from '../src/http/attempts.js';
 import { classesContract } from '../src/http/classes.js';
@@ -24,6 +25,7 @@ type Operation = {
 };
 
 const resources = {
+  authorization: authorizationContract,
   assignments: assignmentsContract,
   attempts: attemptsContract,
   classes: classesContract,
@@ -43,9 +45,25 @@ const operations = Object.values(resources).flatMap(
 );
 
 describe('Quy ước hợp đồng HTTP', () => {
+  it('kiểm tra quyền chỉ nhận ngữ cảnh và tối đa 32 quyền, không cho chọn người khác', () => {
+    const body = {
+      context: { kind: 'system', resourceKey: 'giaokhoa' },
+      capabilities: ['class:create'],
+    };
+    expect(authorizationContract.check.body.safeParse(body).success).toBe(true);
+    expect(
+      authorizationContract.check.body.safeParse({ ...body, actorId: 'người khác' }).success,
+    ).toBe(false);
+    expect(
+      authorizationContract.check.body.safeParse({
+        ...body,
+        capabilities: Array(33).fill('class:create'),
+      }).success,
+    ).toBe(false);
+  });
   it('mỗi thao tác API chỉ có một cặp phương thức và đường dẫn duy nhất', () => {
     const operationKeys = operations.map(({ method, path }) => `${method} ${path}`);
-    expect(operations).toHaveLength(73);
+    expect(operations).toHaveLength(88);
     expect(new Set(operationKeys).size).toBe(operationKeys.length);
   });
 

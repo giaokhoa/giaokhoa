@@ -2,14 +2,16 @@ import { ClientError } from '@giaokhoa/application/common/client-error';
 import type { AssignmentsRepository } from '@giaokhoa/application/assignments/repository';
 import {
   assignmentCreateSchema,
+  assignmentPreviewSchema,
   assignmentRecipientSchema,
   assignmentSchema,
   studentAssignmentSchema,
   type AssignmentPatch,
+  type AssignmentPreview,
   type StudentAssignment,
 } from '@giaokhoa/shared/assignments';
 import { questionSchema } from '@giaokhoa/shared/questions';
-import { and, asc, eq, inArray, lte } from 'drizzle-orm';
+import { and, asc, eq, inArray, lte, sql } from 'drizzle-orm';
 import { users } from '../schema/auth.generated.js';
 import { assignments, assignmentRecipients } from '../schema/assignments.js';
 import { authzContexts } from '../schema/authorization.js';
@@ -105,6 +107,44 @@ function config(input: ReturnType<typeof assignmentCreateSchema.parse>) {
 export class PostgresAssignmentsRepository implements AssignmentsRepository {
   constructor(private readonly db: Database) {}
 
+  async listCandidates(actorId: string) {
+    const recipient = sql<boolean>`exists (
+      select 1 from assignment_recipients r join class_enrolments e on e.class_id = ${assignments.classId} and e.user_id = r.user_id
+      where r.assignment_id = ${assignments.id} and r.user_id = ${actorId} and r.status = 'active'
+      and e.status = 'active' and ${classes.status} = 'active' and ${assignments.status} = 'published'
+    )`;
+    const rows = await this.db
+      .select({
+        id: assignments.id,
+        classId: assignments.classId,
+        className: classes.name,
+        title: examRevisions.title,
+        status: assignments.status,
+        openAt: assignments.openAt,
+        closeAt: assignments.closeAt,
+        maxAttempts: assignments.maxAttempts,
+        isRecipient: recipient,
+      })
+      .from(assignments)
+      .innerJoin(classes, eq(classes.id, assignments.classId))
+      .innerJoin(examRevisions, eq(examRevisions.id, assignments.examRevisionId))
+      .where(sql`${recipient} or exists (
+        select 1 from authz_role_assignments a join authz_contexts c on c.id = a.context_id
+        where a.user_id = ${actorId} and a.revoked_at is null
+        and (c.kind = 'system' or c.id = ${classes.authzContextId} or (c.kind = 'assignment' and c.resource_key = ${assignments.id}::text))
+      ) or exists (
+        select 1 from authz_roles r where r.key = 'system:user' and (
+          exists (select 1 from authz_role_permissions p join authz_capabilities cap on cap.id = p.capability_id
+            where p.role_id = r.id and cap.key in ('assignment:create', 'assignment:publish', 'assignment:grade') and p.effect = 'ALLOW')
+          or exists (select 1 from authz_role_overrides o join authz_contexts c on c.id = o.context_id
+            where o.role_id = r.id and o.effect = 'ALLOW'
+            and (c.id = ${classes.authzContextId} or (c.kind = 'assignment' and c.resource_key = ${assignments.id}::text)))
+        )
+      )`)
+      .orderBy(assignments.openAt, assignments.id);
+    return rows.map((row) => ({ ...row, status: row.status as 'draft' | 'published' }));
+  }
+
   /**
    * Tạo bản nháp bài giao cho một lớp bằng bản sửa đổi đề thi mà tác giả sở hữu.
    * Khóa lớp, xét capability tạo bài rồi xác minh tác giả đề trong cùng giao dịch để không tạo bài giao trái quyền.
@@ -143,6 +183,43 @@ export class PostgresAssignmentsRepository implements AssignmentsRepository {
         parentId: classroom!.authzContextId!,
       });
       return assignmentSchema.parse(created);
+    });
+  }
+
+  /** Bản chụp phục vụ chấm bài, gồm lời giải và ngữ liệu đã chốt; không dùng đường giao đề của học sinh. */
+  async getPreview(id: string, actorId: string): Promise<AssignmentPreview | undefined> {
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({
+          classroom: classes,
+          revisionId: assignments.examRevisionId,
+          title: examRevisions.title,
+        })
+        .from(assignments)
+        .innerJoin(classes, eq(classes.id, assignments.classId))
+        .innerJoin(examRevisions, eq(examRevisions.id, assignments.examRevisionId))
+        .where(eq(assignments.id, id))
+        .limit(1);
+      if (!row) return undefined;
+      await assertOwner(tx, row.classroom, actorId, 'assignment:grade', id);
+      const snapshots = await tx
+        .select()
+        .from(examRevisionQuestions)
+        .where(eq(examRevisionQuestions.examRevisionId, row.revisionId))
+        .orderBy(asc(examRevisionQuestions.position));
+      return assignmentPreviewSchema.parse({
+        title: row.title,
+        questions: snapshots.map((snapshot) => {
+          const question = questionSchema.parse(snapshot.questionSnapshot);
+          return {
+            position: snapshot.position,
+            question,
+            stimulus: question.stimulusId
+              ? readPinnedStimulus(snapshot.stimulusSnapshot, question.stimulusId)
+              : null,
+          };
+        }),
+      });
     });
   }
 
