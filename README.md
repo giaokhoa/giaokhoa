@@ -15,7 +15,7 @@ API mặc định ở cổng `3000`, web dev ở `5173`. Web gọi API qua `VITE
 
 ## Dữ liệu local
 
-`pnpm reset` **xóa schema `public`/`drizzle`** trong PostgreSQL local và toàn bộ object của bucket S3Mock rồi chạy migration từ đầu. Script từ chối host database/S3 không thuộc danh sách local.
+`pnpm reset` chạy tác vụ `reset` của `@giaokhoa/database` (xóa schema local rồi di trú `0000_baseline.sql`) và `@giaokhoa/api` (xóa object trong S3Mock local). Hai tác vụ được thực hiện riêng, không qua script trung gian.
 
 `pnpm --filter @giaokhoa/api files:gc` dọn file nháp hết hạn và thử lại các lần xóa storage lỗi. Lệnh không tự chạy; cần scheduler nếu muốn thu gom định kỳ. TTL mặc định là 24 giờ (`FILE_ORPHAN_TTL_HOURS`).
 

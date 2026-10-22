@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "turbo run dev",
-    "reset": "turbo run reset --filter=@giaokhoa/api",
+    "reset": "turbo run reset",
     "build": "turbo run build",
     "start": "turbo run start:prod",
     "lint": "oxlint .",

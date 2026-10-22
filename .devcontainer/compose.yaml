@@ -3,12 +3,6 @@ services:
     image: mcr.microsoft.com/devcontainers/base:noble
     working_dir: /giaokhoa
     command: sleep infinity
-    environment:
-      S3_ENDPOINT: http://s3mock:9090
-      S3_REGION: us-east-1
-      S3_BUCKET: giaokhoa-assets
-      S3_ACCESS_KEY_ID: local
-      S3_SECRET_ACCESS_KEY: local
     volumes:
       - ../:/giaokhoa:cached
       - tunnel-client-config:/home/vscode/.config/tunnel-client

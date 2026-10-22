@@ -26,10 +26,12 @@
       "dependsOn": ["^build"]
     },
     "@giaokhoa/api#test:e2e": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "cache": false
     },
     "@giaokhoa/api#test:int": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "cache": false
     },
     "@giaokhoa/api#test:cov": {
       "dependsOn": ["^build"],
