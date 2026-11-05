@@ -21,6 +21,7 @@ services:
       default:
         aliases:
           - auth.giaokhoa.localhost
+          - giaokhoa.localhost
     depends_on:
       - keycloak
 

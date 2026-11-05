@@ -1,5 +1,5 @@
 http://giaokhoa.localhost:3000 {
-	@backend path /api /api/* /oauth2/* /login /login/* /logout /actuator/*
+	@backend path /api /api/* /oauth2/* /login /login/* /logout /logout/* /actuator/*
 	handle @backend {
 		reverse_proxy app:8080 {
 			header_up X-Forwarded-Port 3000
