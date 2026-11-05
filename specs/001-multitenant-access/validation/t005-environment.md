@@ -34,7 +34,7 @@ set -a; . .env.test; set +a
 (cd frontend && npm run test:e2e)
 ```
 
-Không cần script CI riêng; Docker-in-Docker chạy TEST services trực tiếp. `TEST_KEYCLOAK_BASE_URL` và issuer Keycloak đều dùng `http://127.0.0.1:18081` để Node/Java/Chromium trong DevContainer truy cập thống nhất.
+CI chạy chính hai bài integration qua job `integration` của `.github/workflows/ci.yml` trên runner Ubuntu có Docker Compose; không tạo script/workflow infra smoke riêng. Docker-in-Docker chạy cùng TEST services trong DevContainer. `TEST_KEYCLOAK_BASE_URL` và issuer Keycloak đều dùng `http://127.0.0.1:18081` để Node/Java/Chromium truy cập thống nhất.
 
 ## Bằng chứng thực chạy — 05/11/2026
 
