@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- JdbcTemplate là dependency dùng chung do Spring quản lý; không sao chép template/connection pool. -->
+    <Match>
+        <Class name="com.giaokhoa.identity.security.JdbcOidcSessionRegistry"/>
+        <Field name="jdbc"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- JPA cần entity không final; các constructor này chỉ gán field, không giữ tài nguyên hay gọi code ngoài. -->
+    <Match>
+        <Class name="~com\.giaokhoa\.authorization\.model\.Authorization(Operation|Projection)"/>
+        <Method name="&lt;init&gt;"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+    <!-- Test cố ý truyền null trong assertThrows để xác nhận validation của constructor. -->
+    <Match>
+        <Class name="com.giaokhoa.authorization.model.AuthorizationModelTest"/>
+        <Method name="~lambda\$requiredArraysRejectNullBeforePersisting\$[0-9]+"/>
+        <Bug pattern="NP_NULL_PARAM_DEREF_NONVIRTUAL"/>
+    </Match>
+</FindBugsFilter>

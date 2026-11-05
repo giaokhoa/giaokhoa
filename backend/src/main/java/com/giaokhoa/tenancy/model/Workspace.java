@@ -2,6 +2,8 @@ package com.giaokhoa.tenancy.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
@@ -9,13 +11,15 @@ import java.time.Instant;
 import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 
 @Entity
 @Table(name = "workspace")
 public class Workspace {
-    public enum Kind { PERSONAL, CENTER, SYSTEM }
+    public enum Kind {
+        PERSONAL,
+        CENTER,
+        SYSTEM
+    }
 
     @Id
     @Column(name = "id", nullable = false)
@@ -46,8 +50,7 @@ public class Workspace {
     @Column(name = "version", nullable = false)
     private long version;
 
-    protected Workspace() {
-    }
+    protected Workspace() {}
 
     public Workspace(UUID id, Kind kind, UUID ownerUserId, UUID centerId, String state) {
         this.id = id;

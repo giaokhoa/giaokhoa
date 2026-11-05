@@ -2,6 +2,8 @@ package com.giaokhoa.identity.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
@@ -9,13 +11,14 @@ import java.time.Instant;
 import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 
 @Entity
 @Table(name = "user_account")
 public class UserAccount {
-    public enum Origin { SELF_REGISTERED, CENTER_ISSUED }
+    public enum Origin {
+        SELF_REGISTERED,
+        CENTER_ISSUED
+    }
 
     @Id
     @Column(name = "id", nullable = false)
@@ -52,10 +55,16 @@ public class UserAccount {
     @Column(name = "version", nullable = false)
     private long version;
 
-    protected UserAccount() {
-    }
+    protected UserAccount() {}
 
-    public UserAccount(UUID id, String keycloakSub, String username, String email, boolean emailVerified, Origin origin, String identityState) {
+    public UserAccount(
+            UUID id,
+            String keycloakSub,
+            String username,
+            String email,
+            boolean emailVerified,
+            Origin origin,
+            String identityState) {
         this.id = id;
         this.keycloakSub = keycloakSub;
         this.username = username;

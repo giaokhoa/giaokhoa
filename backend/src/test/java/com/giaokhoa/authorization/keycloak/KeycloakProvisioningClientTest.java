@@ -10,7 +10,6 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import java.time.Instant;
 import java.util.UUID;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -27,8 +26,8 @@ class KeycloakProvisioningClientTest {
     private static final String HOST = "http://keycloak.test";
     private static final UUID WORKSPACE = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
     private static final String NAME = "center-" + WORKSPACE;
-    private static final String ORG_QUERY = HOST + "/admin/realms/giaokhoa/organizations?search="
-            + NAME + "&max=100";
+    private static final String ORG_QUERY =
+            HOST + "/admin/realms/giaokhoa/organizations?search=" + NAME + "&max=100";
 
     @Test
     void createsOrganizationOnceAndReturnsStableOpaqueIdOnRetry() {
@@ -36,19 +35,40 @@ class KeycloakProvisioningClientTest {
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         KeycloakProvisioningClient client = client(builder);
 
-        server.expect(requestTo(ORG_QUERY)).andExpect(method(HttpMethod.GET))
+        server.expect(requestTo(ORG_QUERY))
+                .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
         server.expect(requestTo(HOST + "/admin/realms/giaokhoa/organizations"))
                 .andExpect(method(HttpMethod.POST))
-                .andExpect(content().json("{\"name\":\"" + NAME
-                        + "\",\"alias\":\"" + NAME + "\",\"description\":\"Center A\"}"))
+                .andExpect(
+                        content()
+                                .json(
+                                        "{\"name\":\""
+                                                + NAME
+                                                + "\",\"alias\":\""
+                                                + NAME
+                                                + "\",\"description\":\"Center A\"}"))
                 .andRespond(withStatus(HttpStatus.CREATED));
-        server.expect(requestTo(ORG_QUERY)).andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess("[{\"id\":\"opaque-keycloak-id\",\"name\":\""
-                        + NAME + "\",\"alias\":\"" + NAME + "\"}]", MediaType.APPLICATION_JSON));
-        server.expect(requestTo(ORG_QUERY)).andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess("[{\"id\":\"opaque-keycloak-id\",\"name\":\""
-                        + NAME + "\",\"alias\":\"" + NAME + "\"}]", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(ORG_QUERY))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(
+                        withSuccess(
+                                "[{\"id\":\"opaque-keycloak-id\",\"name\":\""
+                                        + NAME
+                                        + "\",\"alias\":\""
+                                        + NAME
+                                        + "\"}]",
+                                MediaType.APPLICATION_JSON));
+        server.expect(requestTo(ORG_QUERY))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(
+                        withSuccess(
+                                "[{\"id\":\"opaque-keycloak-id\",\"name\":\""
+                                        + NAME
+                                        + "\",\"alias\":\""
+                                        + NAME
+                                        + "\"}]",
+                                MediaType.APPLICATION_JSON));
 
         assertEquals("opaque-keycloak-id", client.ensureOrganization(WORKSPACE, "Center A"));
         assertEquals("opaque-keycloak-id", client.ensureOrganization(WORKSPACE, "Center A"));
@@ -63,9 +83,12 @@ class KeycloakProvisioningClientTest {
         String[] paths = {"/gk", "/gk/identity", "/gk/identity/eligible"};
         String[] ids = {"root", "branch", "leaf"};
         for (int i = 0; i < paths.length; i++) {
-                server.expect(requestTo(groupPath(paths[i]))).andExpect(method(HttpMethod.GET))
-                    .andRespond(withSuccess("{\"id\":\"" + ids[i] + "\",\"path\":\"" + paths[i] + "\"}",
-                            MediaType.APPLICATION_JSON));
+            server.expect(requestTo(groupPath(paths[i])))
+                    .andExpect(method(HttpMethod.GET))
+                    .andRespond(
+                            withSuccess(
+                                    "{\"id\":\"" + ids[i] + "\",\"path\":\"" + paths[i] + "\"}",
+                                    MediaType.APPLICATION_JSON));
         }
         assertEquals("leaf", client.ensureRealmGroup("/gk/identity/eligible"));
         server.verify();
@@ -78,8 +101,11 @@ class KeycloakProvisioningClientTest {
         KeycloakProvisioningClient client = client(builder);
         server.expect(requestTo(groupPath("/gk/identity/eligible")))
                 .andRespond(withStatus(HttpStatus.NOT_FOUND));
-        assertThrows(IllegalStateException.class, () -> client.setRealmGroupMembership(
-                "opaque-user", "/gk/identity/eligible", false));
+        assertThrows(
+                IllegalStateException.class,
+                () ->
+                        client.setRealmGroupMembership(
+                                "opaque-user", "/gk/identity/eligible", false));
         server.verify();
     }
 
@@ -89,12 +115,21 @@ class KeycloakProvisioningClientTest {
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         KeycloakProvisioningClient client = client(builder);
         server.expect(requestTo(groupPath("/gk/identity/eligible")))
-                .andRespond(withSuccess("{\"id\":\"opaque-group\",\"path\":\"/gk/identity/eligible\"}",
-                        MediaType.APPLICATION_JSON));
-        server.expect(requestTo(HOST + "/admin/realms/giaokhoa/users/opaque-user/groups/opaque-group"))
-                .andExpect(method(HttpMethod.DELETE)).andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
-        assertThrows(org.springframework.web.client.RestClientResponseException.class,
-                () -> client.setRealmGroupMembership("opaque-user", "/gk/identity/eligible", false));
+                .andRespond(
+                        withSuccess(
+                                "{\"id\":\"opaque-group\",\"path\":\"/gk/identity/eligible\"}",
+                                MediaType.APPLICATION_JSON));
+        server.expect(
+                        requestTo(
+                                HOST
+                                        + "/admin/realms/giaokhoa/users/opaque-user/groups/opaque-group"))
+                .andExpect(method(HttpMethod.DELETE))
+                .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+        assertThrows(
+                org.springframework.web.client.RestClientResponseException.class,
+                () ->
+                        client.setRealmGroupMembership(
+                                "opaque-user", "/gk/identity/eligible", false));
         server.verify();
     }
 
@@ -108,12 +143,20 @@ class KeycloakProvisioningClientTest {
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(content().json("{\"name\":\"gk\"}"))
                 .andRespond(withStatus(HttpStatus.CONFLICT));
-        server.expect(requestTo(groupPath("/gk"))).andRespond(withSuccess(
-                "{\"id\":\"root\",\"path\":\"/gk\"}", MediaType.APPLICATION_JSON));
-        server.expect(requestTo(groupPath("/gk/platform"))).andRespond(withSuccess(
-                "{\"id\":\"platform\",\"path\":\"/gk/platform\"}", MediaType.APPLICATION_JSON));
-        server.expect(requestTo(groupPath("/gk/platform/operators"))).andRespond(withSuccess(
-                "{\"id\":\"operators\",\"path\":\"/gk/platform/operators\"}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(groupPath("/gk")))
+                .andRespond(
+                        withSuccess(
+                                "{\"id\":\"root\",\"path\":\"/gk\"}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(groupPath("/gk/platform")))
+                .andRespond(
+                        withSuccess(
+                                "{\"id\":\"platform\",\"path\":\"/gk/platform\"}",
+                                MediaType.APPLICATION_JSON));
+        server.expect(requestTo(groupPath("/gk/platform/operators")))
+                .andRespond(
+                        withSuccess(
+                                "{\"id\":\"operators\",\"path\":\"/gk/platform/operators\"}",
+                                MediaType.APPLICATION_JSON));
         assertEquals("operators", client.ensureRealmGroup("/gk/platform/operators"));
         server.verify();
     }
@@ -122,11 +165,16 @@ class KeycloakProvisioningClientTest {
     void rejectsArbitraryGroupSourcesBeforeCallingKeycloak() {
         KeycloakProvisioningClient client = client(RestClient.builder());
 
-        assertThrows(IllegalArgumentException.class, () -> client.ensureRealmGroup("/gk/roles/admin"));
-        assertThrows(IllegalArgumentException.class, () -> client.ensureRealmGroup(
-                "/gk/workspaces/not-a-uuid/roles/teachers"));
-        assertThrows(IllegalArgumentException.class, () -> client.setRealmGroupMembership(
-                "opaque-user", "/gk/platform/operators/other", false));
+        assertThrows(
+                IllegalArgumentException.class, () -> client.ensureRealmGroup("/gk/roles/admin"));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> client.ensureRealmGroup("/gk/workspaces/not-a-uuid/roles/teachers"));
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                        client.setRealmGroupMembership(
+                                "opaque-user", "/gk/platform/operators/other", false));
         assertThrows(IllegalArgumentException.class, () -> client.ensureOrganization(null, "A"));
     }
 
@@ -135,14 +183,20 @@ class KeycloakProvisioningClientTest {
     }
 
     private KeycloakProvisioningClient client(RestClient.Builder builder) {
-        ClientRegistration registration = ClientRegistration.withRegistrationId("giaokhoa-provisioner")
-                .clientId("test-provisioner")
-                .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
-                .tokenUri(HOST + "/realms/giaokhoa/protocol/openid-connect/token").build();
-        OAuth2AccessToken token = new OAuth2AccessToken(OAuth2AccessToken.TokenType.BEARER,
-                "server-token", Instant.now(), Instant.now().plusSeconds(300));
-        OAuth2AuthorizedClient authorized = new OAuth2AuthorizedClient(
-                registration, "giaokhoa-provisioner", token);
+        ClientRegistration registration =
+                ClientRegistration.withRegistrationId("giaokhoa-provisioner")
+                        .clientId("test-provisioner")
+                        .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+                        .tokenUri(HOST + "/realms/giaokhoa/protocol/openid-connect/token")
+                        .build();
+        OAuth2AccessToken token =
+                new OAuth2AccessToken(
+                        OAuth2AccessToken.TokenType.BEARER,
+                        "server-token",
+                        Instant.now(),
+                        Instant.now().plusSeconds(300));
+        OAuth2AuthorizedClient authorized =
+                new OAuth2AuthorizedClient(registration, "giaokhoa-provisioner", token);
         OAuth2AuthorizedClientManager manager = request -> authorized;
         return new KeycloakProvisioningClient(builder, HOST, manager);
     }

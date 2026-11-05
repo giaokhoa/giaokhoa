@@ -8,6 +8,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import java.io.Serial;
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.Objects;
@@ -18,10 +19,18 @@ import org.hibernate.annotations.UpdateTimestamp;
 @Entity
 @Table(name = "membership_role")
 public class MembershipRole {
-    public enum Role { OWNER, MANAGER, TEACHER, STUDENT, PARENT }
+    public enum Role {
+        OWNER,
+        MANAGER,
+        TEACHER,
+        STUDENT,
+        PARENT
+    }
 
     @Embeddable
     public static class Key implements Serializable {
+        @Serial private static final long serialVersionUID = 1L;
+
         @Column(name = "membership_id", nullable = false)
         private UUID membershipId;
 
@@ -29,8 +38,7 @@ public class MembershipRole {
         @Column(name = "role", nullable = false, length = 16)
         private Role role;
 
-        protected Key() {
-        }
+        protected Key() {}
 
         public Key(UUID membershipId, Role role) {
             this.membershipId = membershipId;
@@ -58,8 +66,7 @@ public class MembershipRole {
         }
     }
 
-    @EmbeddedId
-    private Key id;
+    @EmbeddedId private Key id;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false)
@@ -73,8 +80,7 @@ public class MembershipRole {
     @Column(name = "version", nullable = false)
     private long version;
 
-    protected MembershipRole() {
-    }
+    protected MembershipRole() {}
 
     public MembershipRole(UUID membershipId, Role role) {
         this.id = new Key(membershipId, role);

@@ -47,10 +47,16 @@ public class SubscriptionPeriod {
     @Column(name = "version", nullable = false)
     private long version;
 
-    protected SubscriptionPeriod() {
-    }
+    protected SubscriptionPeriod() {}
 
-    public SubscriptionPeriod(UUID id, UUID workspaceId, Instant validFrom, Instant expiresAt, String confirmationRef, UUID confirmedBy, Instant confirmedAt) {
+    public SubscriptionPeriod(
+            UUID id,
+            UUID workspaceId,
+            Instant validFrom,
+            Instant expiresAt,
+            String confirmationRef,
+            UUID confirmedBy,
+            Instant confirmedAt) {
         this.id = id;
         this.workspaceId = workspaceId;
         this.validFrom = validFrom;
