@@ -1,0 +1,64 @@
+# Always start with: docker compose -p giaokhoa-test -f infra/compose.test.yaml up -d
+# Separate services, credentials, ports and volumes; NEVER use 'down -v' on DEV.
+name: giaokhoa-test
+
+services:
+  test-app-db:
+    image: postgres:18.6-alpine
+    environment:
+      POSTGRES_DB: giaokhoa_test
+      POSTGRES_USER: giaokhoa_test
+      POSTGRES_PASSWORD: test-only-password
+    volumes:
+      - test_app_data:/var/lib/postgresql
+    ports:
+      - "127.0.0.1:15432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U giaokhoa_test -d giaokhoa_test"]
+      interval: 5s
+      retries: 10
+
+  test-keycloak-db:
+    image: postgres:18.6-alpine
+    environment:
+      POSTGRES_DB: keycloak_test
+      POSTGRES_USER: keycloak_test
+      POSTGRES_PASSWORD: test-only-password
+    volumes:
+      - test_keycloak_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak_test -d keycloak_test"]
+      interval: 5s
+      retries: 10
+
+  test-keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    command: start-dev
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://test-keycloak-db:5432/keycloak_test
+      KC_DB_USERNAME: keycloak_test
+      KC_DB_PASSWORD: test-only-password
+      KC_BOOTSTRAP_ADMIN_USERNAME: test-admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: test-only-password
+      KC_HTTP_PORT: 18081
+      KC_HOSTNAME: http://auth.test.giaokhoa.localhost:18081
+    ports:
+      - "127.0.0.1:18081:18081"
+    networks:
+      default:
+        aliases:
+          - auth.test.giaokhoa.localhost
+    depends_on:
+      test-keycloak-db:
+        condition: service_healthy
+
+  test-mailpit:
+    image: axllent/mailpit:v1.33.0
+    ports:
+      - "127.0.0.1:18025:8025"
+      - "127.0.0.1:11025:1025"
+
+volumes:
+  test_app_data:
+  test_keycloak_data:
