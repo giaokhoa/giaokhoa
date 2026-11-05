@@ -108,6 +108,8 @@ jobs:
           retention-days: 7
       - name: Verify Authorization Code, PKCE and Mailpit
         run: npm --prefix frontend run test:e2e
+      - name: Verify native Keycloak bootstrap and provisioning
+        run: bash infra/keycloak/verify-native.sh
       - name: TEST logs on failure
         if: failure()
         run: docker compose -p giaokhoa-test -f infra/compose.test.yaml logs --tail=100

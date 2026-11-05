@@ -18,5 +18,6 @@
 - Trước khi bàn giao thay đổi backend, chạy `./backend/mvnw -B -ntp -f backend/pom.xml clean verify` bằng JDK 25. Lệnh này kiểm tra compiler, unit test, Spotless, PMD và SpotBugs cho cả code chính và test.
 - Tự format bằng `./backend/mvnw -B -ntp -f backend/pom.xml spotless:apply`. Không format tay theo một convention khác.
 - Sửa nguyên nhân warning và vi phạm. Không giảm rule, bỏ qua source/test, thêm suppression hoặc dùng cờ skip chỉ để làm build xanh. Ngoại lệ đã xác minh do framework hoặc test cố ý kiểm tra đầu vào sai phải hẹp và có giải thích cụ thể.
-- Với thay đổi DB, session, OIDC hoặc security, chạy thêm `./backend/mvnw -B -ntp -f backend/pom.xml -Pintegration verify` trên stack TEST riêng theo `backend/README.md`. Profile này tự tìm toàn bộ `*IT`, không liệt kê cố định tên lớp.
+- Với thay đổi DB, session, OIDC hoặc security, chạy thêm `./backend/mvnw -B -ntp -f backend/pom.xml -Pintegration verify` trên stack TEST riêng theo `backend/README.md`. Profile này tự tìm integration test của stack TEST theo convention `*IT`; native Keycloak chạy qua script riêng bên dưới.
 - Báo cáo rõ lệnh đã chạy và kết quả. Không báo integration test thành công nếu chỉ chạy unit test hoặc compile test.
+- Với thay đổi client Keycloak hoặc bootstrap realm, chạy thêm `bash infra/keycloak/verify-native.sh`; script tạo stack native riêng, chạy acceptance test và tự dọn container.

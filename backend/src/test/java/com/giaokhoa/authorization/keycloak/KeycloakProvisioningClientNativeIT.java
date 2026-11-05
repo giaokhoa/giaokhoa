@@ -5,11 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.junit.jupiter.api.Test;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.RestClient;
@@ -25,12 +25,14 @@ class KeycloakProvisioningClientNativeIT {
         assertNotNull(secret);
         assertNotNull(userId);
 
-        KeycloakProvisioningClient client = new KeycloakProvisioningClient(
-                RestClient.builder(), base, "giaokhoa-provisioner", secret);
+        KeycloakProvisioningClient client =
+                new KeycloakProvisioningClient(
+                        RestClient.builder(), base, "giaokhoa-provisioner", secret);
         UUID workspace = UUID.fromString("aaaabbbb-cccc-dddd-eeee-000000000010");
         String organizationId = client.ensureOrganization(workspace, "Native integration center");
         assertFalse(organizationId.isBlank());
-        assertEquals(organizationId, client.ensureOrganization(workspace, "Native integration center"));
+        assertEquals(
+                organizationId, client.ensureOrganization(workspace, "Native integration center"));
 
         String groupPath = "/gk/workspaces/" + workspace + "/members";
         String groupId = client.ensureRealmGroup(groupPath);
@@ -40,11 +42,13 @@ class KeycloakProvisioningClientNativeIT {
         RestClient verification = RestClient.create();
         String verificationToken = provisionerToken(verification, base, secret);
         client.setRealmGroupMembership(userId, groupPath, true);
-        assertTrue(isMember(verification, base, verificationToken, userId, groupId),
+        assertTrue(
+                isMember(verification, base, verificationToken, userId, groupId),
                 "Real Keycloak must reflect added membership");
 
         client.setRealmGroupMembership(userId, groupPath, false);
-        assertFalse(isMember(verification, base, verificationToken, userId, groupId),
+        assertFalse(
+                isMember(verification, base, verificationToken, userId, groupId),
                 "Real Keycloak must reflect revoked membership");
     }
 
@@ -53,22 +57,26 @@ class KeycloakProvisioningClientNativeIT {
         form.add("grant_type", "client_credentials");
         form.add("client_id", "giaokhoa-provisioner");
         form.add("client_secret", secret);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> response = http.post()
-                .uri(base + "/realms/giaokhoa/protocol/openid-connect/token")
-                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .body(form).retrieve().body(Map.class);
+        Map<String, Object> response =
+                http.post()
+                        .uri(base + "/realms/giaokhoa/protocol/openid-connect/token")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .body(form)
+                        .retrieve()
+                        .body(new ParameterizedTypeReference<Map<String, Object>>() {});
         assertNotNull(response);
         return (String) response.get("access_token");
     }
 
-    private boolean isMember(RestClient http, String base, String token, String userId, String groupId) {
-        @SuppressWarnings("unchecked")
-        Map<String, Object>[] groups = http.get()
-                .uri(base + "/admin/realms/giaokhoa/users/" + userId + "/groups")
-                .headers(headers -> headers.setBearerAuth(token))
-                .retrieve().body(Map[].class);
+    private boolean isMember(
+            RestClient http, String base, String token, String userId, String groupId) {
+        List<Map<String, Object>> groups =
+                http.get()
+                        .uri(base + "/admin/realms/giaokhoa/users/" + userId + "/groups")
+                        .headers(headers -> headers.setBearerAuth(token))
+                        .retrieve()
+                        .body(new ParameterizedTypeReference<List<Map<String, Object>>>() {});
         assertNotNull(groups);
-        return Arrays.stream(groups).anyMatch(group -> groupId.equals(group.get("id")));
+        return groups.stream().anyMatch(group -> groupId.equals(group.get("id")));
     }
 }

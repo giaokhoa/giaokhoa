@@ -16,7 +16,7 @@ Dùng JDK 25 và Maven Wrapper. Chạy các lệnh từ thư mục gốc reposit
 | PMD | Phân tích source main/test: code không dùng, thực hành Java, mẫu lỗi và security. |
 | SpotBugs | Phân tích bytecode main/test, effort Max, ngưỡng Medium trở lên. |
 | Surefire | Chạy unit test trong build thông thường. |
-| Failsafe, profile `integration` | Chạy toàn bộ integration test theo convention Maven, bao gồm `*IT`. |
+| Failsafe, profile `integration` | Chạy integration test cho stack PostgreSQL/OIDC TEST theo convention Maven, bao gồm `*IT`; native Keycloak chạy riêng qua script bên dưới. |
 
 ## Integration test
 
@@ -39,3 +39,7 @@ JDT và javac có bộ kiểm tra khác nhau; formatter hoặc build thành côn
 Các rule PMD về số lượng assertion, message cho mọi assertion và hằng số hóa mọi literal không nằm trong convention này: một test có thể kiểm tra nhiều thuộc tính của cùng hành vi; SQL/fixture được giữ gần nơi dùng. Các rule kiểm tra lỗi vẫn áp dụng cả main/test. Ngoại lệ SpotBugs nằm trong `config/spotbugs-exclude.xml`, giới hạn theo lớp/member và loại lỗi, có lý do ngay tại mỗi mục.
 
 CI chỉ tải báo cáo khi kiểm tra thất bại, lưu tối đa 7 ngày. Bước tải báo cáo phục vụ chẩn đoán và không làm thay đổi kết quả lint/test nếu GitHub hết quota artifact; các bước compiler, lint và test vẫn bắt buộc thành công.
+
+## Native Keycloak
+
+`KeycloakProvisioningClientNativeIT` cần realm `giaokhoa` và thông tin do bootstrap tạo, khác realm `giaokhoa-it` của stack TEST. Chạy `bash infra/keycloak/verify-native.sh`: script tạo Keycloak riêng tại cổng 18091, bootstrap, chạy test Java và tự dọn container. CI chạy script này trong job integration sau các kiểm tra của stack TEST; test này được loại khỏi Failsafe của profile `integration` để chạy đúng môi trường, không bị bỏ qua trong CI.
