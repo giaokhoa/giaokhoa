@@ -110,6 +110,8 @@ jobs:
         run: npm --prefix frontend run test:e2e
       - name: Verify native Keycloak bootstrap and provisioning
         run: bash infra/keycloak/verify-native.sh
+      - name: Verify signed OIDC back-channel logout across restart
+        run: node infra/keycloak/verify-oidc-logout.mjs
       - name: TEST logs on failure
         if: failure()
         run: docker compose -p giaokhoa-test -f infra/compose.test.yaml logs --tail=100

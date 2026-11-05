@@ -1,16 +1,27 @@
 package com.giaokhoa.identity.security;
 
+import jakarta.servlet.Filter;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.net.URI;
+import java.util.Base64;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
 import org.springframework.security.config.annotation.web.configurers.oauth2.client.OidcBackChannelLogoutHandler;
 import org.springframework.security.oauth2.client.oidc.session.OidcSessionRegistry;
 import org.springframework.session.web.http.CookieSerializer;
 import org.springframework.session.web.http.DefaultCookieSerializer;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 @Configuration(proxyBeanMethods = false)
 public class OidcLogoutConfiguration {
+    private static final int SIGNED_JWT_PARTS = 3;
+    private static final JsonMapper LOGOUT_JSON = JsonMapper.builder().build();
 
     @Bean
     CookieSerializer sessionCookieSerializer(@Value("${giaokhoa.app-origin}") String appOrigin) {
@@ -22,6 +33,49 @@ public class OidcLogoutConfiguration {
         // Spring's back-channel handler sends the raw session ID in the SESSION cookie.
         serializer.setUseBase64Encoding(false);
         return serializer;
+    }
+
+    @Bean
+    FilterRegistrationBean<Filter> malformedBackChannelLogoutGuard() {
+        // Spring Security 7.1.2 throws for absent events/issuer instead of returning 400.
+        // Preflight only the untrusted JWT shape; Spring verifies signature and claims.
+        Filter guard =
+                (request, response, chain) -> {
+                    if (!"POST".equals(((HttpServletRequest) request).getMethod())) {
+                        chain.doFilter(request, response);
+                        return;
+                    }
+                    String token = ((HttpServletRequest) request).getParameter("logout_token");
+                    if (!hasLogoutClaimShape(token)) {
+                        ((HttpServletResponse) response)
+                                .setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                        return;
+                    }
+                    chain.doFilter(request, response);
+                };
+        var registration = new FilterRegistrationBean<>(guard);
+        registration.addUrlPatterns("/logout/connect/back-channel/keycloak");
+        registration.setOrder(Ordered.HIGHEST_PRECEDENCE);
+        return registration;
+    }
+
+    private static boolean hasLogoutClaimShape(String token) {
+        if (token == null || token.length() > 32768) {
+            return false;
+        }
+        String[] parts = token.split("\\.", -1);
+        if (parts.length != SIGNED_JWT_PARTS) {
+            return false;
+        }
+        try {
+            JsonNode payload = LOGOUT_JSON.readTree(Base64.getUrlDecoder().decode(parts[1]));
+            return payload != null
+                    && payload.isObject()
+                    && payload.path("iss").isString()
+                    && payload.path("events").isObject();
+        } catch (IllegalArgumentException | JacksonException invalidJwt) {
+            return false;
+        }
     }
 
     @Bean

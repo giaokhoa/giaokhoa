@@ -43,3 +43,5 @@ CI chỉ tải báo cáo khi kiểm tra thất bại, lưu tối đa 7 ngày. B�
 ## Native Keycloak
 
 `KeycloakProvisioningClientNativeIT` cần realm `giaokhoa` và thông tin do bootstrap tạo, khác realm `giaokhoa-it` của stack TEST. Chạy `bash infra/keycloak/verify-native.sh`: script tạo Keycloak riêng tại cổng 18091, bootstrap, chạy test Java và tự dọn container. CI chạy script này trong job integration sau các kiểm tra của stack TEST; test này được loại khỏi Failsafe của profile `integration` để chạy đúng môi trường, không bị bỏ qua trong CI.
+
+Sau `-Pintegration verify`, chạy `node infra/keycloak/verify-oidc-logout.mjs` khi đã nạp `TEST_DATABASE_URL`, `TEST_KEYCLOAK_BASE_URL` và `TEST_KEYCLOAK_REALM` theo TEST Compose. Script dùng JAR đã build, tạo client/user/schema TEST ngẫu nhiên, đăng nhập Code+PKCE, restart backend và nhận `logout_token` thật do Keycloak ký; kiểm tra các token sai và việc xóa session JDBC/correlation. Script tự dọn tài nguyên test, không đụng DEV hoặc chạy Flyway repair. CI chạy test này trong job integration.

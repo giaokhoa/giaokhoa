@@ -94,18 +94,33 @@ public final class JdbcOidcSessionRegistry implements OidcSessionRegistry {
 
         // Spring Session has already flushed by the time a provider logs out a browser.
         // Stale correlation must not select an expired/deleted session after a restart.
-        String predicate = sid != null ? "c.sid = ?" : "c.sub = ?";
-        return jdbc.query(
+        // With both claims present, never trust sid alone: require the same subject too.
+        // A subject-only logout intentionally revokes all sessions of that subject.
+        String predicate =
+                sid == null
+                        ? "c.sub = ?"
+                        : subject == null ? "c.sid = ?" : "c.sid = ? AND c.sub = ?";
+        String sql =
                 "DELETE FROM oidc_session_correlation c"
                         + " WHERE c.issuer = ? AND c.client_id = ? AND "
                         + predicate
                         + " AND EXISTS (SELECT 1 FROM spring_session s WHERE s.session_id = c.session_id"
                         + " AND s.expiry_time > (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT)"
-                        + RETURNING,
-                (rs, row) -> sessionInformation(rs),
-                logoutToken.getIssuer().toString(),
-                clientId,
-                sid != null ? sid : subject);
+                        + RETURNING;
+        return sid != null && subject != null
+                ? jdbc.query(
+                        sql,
+                        (rs, row) -> sessionInformation(rs),
+                        logoutToken.getIssuer().toString(),
+                        clientId,
+                        sid,
+                        subject)
+                : jdbc.query(
+                        sql,
+                        (rs, row) -> sessionInformation(rs),
+                        logoutToken.getIssuer().toString(),
+                        clientId,
+                        sid != null ? sid : subject);
     }
 
     // A login may register correlation before Spring Session writes its row.
