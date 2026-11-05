@@ -32,6 +32,7 @@ CREATE TABLE oidc_session_correlation (
     client_id VARCHAR(255) NOT NULL,
     sub VARCHAR(512) NOT NULL,
     sid VARCHAR(512),
+    recorded_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     csrf_header_name VARCHAR(128),
     csrf_token VARCHAR(1024),
     CONSTRAINT ck_oidc_correlation_csrf CHECK (

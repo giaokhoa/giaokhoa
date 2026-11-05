@@ -12,6 +12,7 @@ import org.springframework.security.oauth2.client.oidc.session.OidcSessionInform
 import org.springframework.security.oauth2.client.oidc.session.OidcSessionRegistry;
 import org.springframework.security.oauth2.core.oidc.OidcIdToken;
 import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.util.Assert;
 
 /** Persistent correlation for Spring Security's native OIDC back-channel logout. */
@@ -48,7 +49,7 @@ public final class JdbcOidcSessionRegistry implements OidcSessionRegistry {
                         + " VALUES (?, ?, ?, ?, ?, ?, ?)"
                         + " ON CONFLICT (session_id) DO UPDATE SET"
                         + " issuer = EXCLUDED.issuer, client_id = EXCLUDED.client_id,"
-                        + " sub = EXCLUDED.sub, sid = EXCLUDED.sid,"
+                        + " sub = EXCLUDED.sub, sid = EXCLUDED.sid, recorded_at = CURRENT_TIMESTAMP,"
                         + " csrf_header_name = EXCLUDED.csrf_header_name, csrf_token = EXCLUDED.csrf_token",
                 information.getSessionId(), principal.getIssuer().toString(), clientId, principal.getSubject(),
                 principal.getClaimAsString("sid"), csrf == null ? null : csrf.getKey(),
@@ -88,6 +89,15 @@ public final class JdbcOidcSessionRegistry implements OidcSessionRegistry {
                         + RETURNING,
                 (rs, row) -> sessionInformation(rs),
                 logoutToken.getIssuer().toString(), clientId, sid != null ? sid : subject);
+    }
+
+    // A login may register correlation before Spring Session writes its row.
+    // Allow an hour for the request to flush; never delete an existing session's mapping.
+    @Scheduled(fixedDelayString = "PT1H")
+    void cleanUpOrphanedCorrelations() {
+        jdbc.update("DELETE FROM oidc_session_correlation c"
+                + " WHERE c.recorded_at < clock_timestamp() - INTERVAL '1 hour'"
+                + " AND NOT EXISTS (SELECT 1 FROM spring_session s WHERE s.session_id = c.session_id)");
     }
 
     private static OidcSessionInformation sessionInformation(ResultSet rs) throws SQLException {

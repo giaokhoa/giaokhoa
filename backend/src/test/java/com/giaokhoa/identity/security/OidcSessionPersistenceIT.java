@@ -10,6 +10,18 @@ import com.giaokhoa.support.IntegrationEnvironment;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.registration.ClientRegistration;
+import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.security.oauth2.core.OAuth2AccessToken;
+import org.springframework.security.oauth2.core.OAuth2RefreshToken;
+import org.springframework.session.web.http.SessionRepositoryFilter;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -141,6 +153,82 @@ class OidcSessionPersistenceIT extends IntegrationEnvironment {
         } finally {
             registry.removeSessionInformation(session.getId());
             sessions.deleteById(session.getId());
+        }
+    }
+
+    @Test
+    void authorizedAccessAndRefreshTokensSurviveJdbcSessionReload() throws Exception {
+        var registration = ClientRegistration.withRegistrationId("keycloak")
+                .clientId(CLIENT).authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .redirectUri("{baseUrl}/login/oauth2/code/{registrationId}")
+                .authorizationUri(ISSUER + "/protocol/openid-connect/auth")
+                .tokenUri(ISSUER + "/protocol/openid-connect/token").build();
+        var accessToken = new OAuth2AccessToken(OAuth2AccessToken.TokenType.BEARER,
+                "test-access-secret", Instant.now(), Instant.now().plusSeconds(600), Set.of("openid"));
+        var refreshToken = new OAuth2RefreshToken("test-refresh-secret", Instant.now());
+        var client = new OAuth2AuthorizedClient(registration, "test-subject", accessToken, refreshToken);
+        var auth = new TestingAuthenticationToken("test-subject", "unused", "ROLE_USER");
+        var first = new MockHttpServletRequest("GET", "/");
+        var response = new MockHttpServletResponse();
+        var firstFilter = new SessionRepositoryFilter<>(sessions);
+        firstFilter.doFilter(first, response, (request, reply) ->
+                authorizedClients.saveAuthorizedClient(client, auth,
+                        (jakarta.servlet.http.HttpServletRequest) request,
+                        (jakarta.servlet.http.HttpServletResponse) reply));
+
+        var cookie = response.getCookie("SESSION");
+        assertNotNull(cookie);
+        try {
+            // Fresh request and filter: the client must be read from a JDBC-backed session.
+            var second = new MockHttpServletRequest("GET", "/");
+            second.setCookies(cookie);
+            var loaded = new AtomicReference<OAuth2AuthorizedClient>();
+            var sessionId = new AtomicReference<String>();
+            var secondFilter = new SessionRepositoryFilter<>(sessions);
+            secondFilter.doFilter(second, new MockHttpServletResponse(), (request, reply) -> {
+                var httpRequest = (jakarta.servlet.http.HttpServletRequest) request;
+                loaded.set(new HttpSessionOAuth2AuthorizedClientRepository().loadAuthorizedClient(
+                        "keycloak", auth, httpRequest));
+                sessionId.set(httpRequest.getSession(false).getId());
+            });
+
+            assertNotNull(loaded.get());
+            assertEquals("test-subject", loaded.get().getPrincipalName());
+            assertEquals(accessToken.getTokenValue(), loaded.get().getAccessToken().getTokenValue());
+            assertEquals(accessToken.getExpiresAt(), loaded.get().getAccessToken().getExpiresAt());
+            assertEquals(refreshToken.getTokenValue(), loaded.get().getRefreshToken().getTokenValue());
+            assertNotNull(sessions.findById(sessionId.get()));
+        } finally {
+            // The SESSION cookie contains an encoded ID, not the database session ID.
+            var raw = new String(java.util.Base64.getDecoder().decode(cookie.getValue()),
+                    java.nio.charset.StandardCharsets.UTF_8);
+            sessions.deleteById(raw);
+        }
+    }
+
+    @Test
+    void cleanupOnlyDeletesOldOrphans() {
+        var active = sessions.createSession();
+        sessions.save(active);
+        String oldOrphan = UUID.randomUUID().toString();
+        String freshOrphan = UUID.randomUUID().toString();
+        try {
+            registry.saveSessionInformation(info(oldOrphan, "stale", "old", null));
+            registry.saveSessionInformation(info(freshOrphan, "recent", "new", null));
+            registry.saveSessionInformation(info(active.getId(), "active", "sid-active", null));
+            jdbc.update("UPDATE oidc_session_correlation"
+                            + " SET recorded_at = clock_timestamp() - interval '2 hours'"
+                            + " WHERE session_id IN (?, ?)", oldOrphan, active.getId());
+
+            ((JdbcOidcSessionRegistry) registry).cleanUpOrphanedCorrelations();
+            assertNull(registry.removeSessionInformation(oldOrphan));
+            assertNotNull(registry.removeSessionInformation(freshOrphan));
+            assertNotNull(registry.removeSessionInformation(active.getId()));
+        } finally {
+            registry.removeSessionInformation(oldOrphan);
+            registry.removeSessionInformation(freshOrphan);
+            registry.removeSessionInformation(active.getId());
+            sessions.deleteById(active.getId());
         }
     }
 
