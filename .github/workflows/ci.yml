@@ -82,7 +82,7 @@ jobs:
           docker compose -p giaokhoa-test -f infra/compose.test.yaml exec -T test-keycloak /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:18081 --realm master --user test-admin --password test-only-password
           docker compose -p giaokhoa-test -f infra/compose.test.yaml exec -T test-keycloak /opt/keycloak/bin/kcadm.sh add-roles -r giaokhoa-it --uusername service-account-giaokhoa-it-fixtures --cclientid realm-management --rolename manage-users
       - name: Verify Spring integration, directory and authorization constraints
-        run: ./backend/mvnw -B -ntp -f backend/pom.xml -Dtest=IntegrationEnvironmentIT,DirectorySchemaIT,AuthorizationControlSchemaIT test
+        run: ./backend/mvnw -B -ntp -f backend/pom.xml -Dtest=IntegrationEnvironmentIT,DirectorySchemaIT,AuthorizationControlSchemaIT,IdempotencyServiceIT,AuditEventSchemaIT test
       - name: Verify Authorization Code, PKCE and Mailpit
         run: npm --prefix frontend run test:e2e
       - name: TEST logs on failure
