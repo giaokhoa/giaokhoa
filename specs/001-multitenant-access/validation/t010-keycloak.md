@@ -16,8 +16,13 @@
 - `git diff --check`: đạt.
 - Không reset hoặc truy cập database/realm DEV.
 
-## Cần kiểm chứng native trước khi đóng issue
+## Native TEST Keycloak 26.8.1 — chạy thật ngày 2026-11-05
 
-- Lần chạy bootstrap TEST sau sửa endpoint đang yêu cầu phê duyệt truy cập admin credentials của TEST trong Desktop Commander. Chưa ghi nhận kết quả kiểm tra đủ hai lần liên tiếp, nên **chưa được tuyên bố native bootstrap đạt**.
-- Sau khi quyền chạy TEST được phê duyệt, xác minh: hai lần bootstrap giữ client/group IDs; không còn default permission/resource wildcard; realm profile email optional, default required actions đúng; clients/secrets/redirect/Authorization Services đúng; provisioner có quyền Organization/group và không có realm-admin; kiểm tra lỗi/khôi phục khi bootstrap bị ngắt.
-- Kiểm tra PDP end-to-end với actor/resources/scopes thật thuộc các task tiếp theo (T013/T016), không được suy ra pass từ unit test hay file cấu hình.
+- Với sự phê duyệt Run qua Desktop Commander, dùng **container Keycloak 26.8.1 tạm riêng** tại `127.0.0.1:18091`, admin/secret chỉ là giá trị thử nghiệm tự tạo. Không truy cập admin credential của realm `giaokhoa-it` hoặc DEV.
+- `BOOTSTRAP_1`: `Keycloak realm 'giaokhoa' baseline reconciled`; exit 0.
+- `BOOTSTRAP_2`: `Keycloak realm 'giaokhoa' baseline reconciled`; exit 0.
+- Ảnh chụp ID native sau mỗi lần chạy so sánh bằng `test "$before" = "$after"`: **đạt**, gồm ba client `giaokhoa-web`, `giaokhoa-api`, `giaokhoa-provisioner` và sáu group cố định `/gk`, `/gk/identity`, `/gk/identity/eligible`, `/gk/platform`, `/gk/platform/operators`, `/gk/workspaces`.
+- Gọi Admin API để xác nhận `enabled=true`, `organizationsEnabled=true`, `verifyEmail=true` và không còn marker `gk.bootstrap.pending`: **đạt**.
+- Log kết thúc `NATIVE_TEST_COMPLETE`, exit code 0 (15.71s); container được tự động dừng/xóa và kiểm tra không còn tồn tại.
+- Script có cơ chế xóa Default Permission/Resource/Policy và chặn URI wildcard `/*`, nhưng **chưa có phép đo độc lập lưu bằng chứng** danh sách policy sau bootstrap. Tương tự, chưa có phép kiểm native độc lập cho email `required`, default required actions, quyền grant provisioner và thử nghiệm phục hồi sau khi cố ý ngắt script. Không coi các mục đó là đã nghiệm thu chỉ vì bootstrap không báo lỗi.
+- PDP end-to-end với actor/resources/scopes thật thuộc các task tiếp theo (T013/T016); không suy ra pass từ unit test hoặc baseline.
