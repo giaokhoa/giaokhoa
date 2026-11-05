@@ -2,6 +2,8 @@ package com.giaokhoa.tenancy.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
@@ -9,13 +11,15 @@ import java.time.Instant;
 import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 
 @Entity
 @Table(name = "center_membership")
 public class CenterMembership {
-    public enum State { PENDING, ACTIVE, REVOKED }
+    public enum State {
+        PENDING,
+        ACTIVE,
+        REVOKED
+    }
 
     @Id
     @Column(name = "id", nullable = false)
@@ -49,10 +53,15 @@ public class CenterMembership {
     @Column(name = "version", nullable = false)
     private long version;
 
-    protected CenterMembership() {
-    }
+    protected CenterMembership() {}
 
-    public CenterMembership(UUID id, UUID workspaceId, UUID userId, State state, Instant joinedAt, Instant revokedAt) {
+    public CenterMembership(
+            UUID id,
+            UUID workspaceId,
+            UUID userId,
+            State state,
+            Instant joinedAt,
+            Instant revokedAt) {
         this.id = id;
         this.workspaceId = workspaceId;
         this.userId = userId;

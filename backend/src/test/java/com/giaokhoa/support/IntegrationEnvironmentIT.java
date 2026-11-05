@@ -17,18 +17,17 @@ import org.springframework.web.client.RestClient;
 /** Checks the actual Spring integration profile and its isolated PostgreSQL/OIDC services. */
 @SpringBootTest
 class IntegrationEnvironmentIT extends IntegrationEnvironment {
-    @Autowired
-    DataSource dataSource;
+    @Autowired DataSource dataSource;
 
-    @Autowired
-    Environment environment;
+    @Autowired Environment environment;
 
     @Test
     void springIntegrationProfileUsesRealIsolatedServices() throws Exception {
         assertTrue(Arrays.asList(environment.getActiveProfiles()).contains("integration"));
         String database = environment.getRequiredProperty("spring.datasource.url");
-        String issuer = environment.getRequiredProperty(
-                "spring.security.oauth2.client.provider.keycloak.issuer-uri");
+        String issuer =
+                environment.getRequiredProperty(
+                        "spring.security.oauth2.client.provider.keycloak.issuer-uri");
         validateTargets(database, issuer);
         assertTrue(environment.getRequiredProperty("spring.flyway.clean-disabled", Boolean.class));
 
@@ -37,14 +36,16 @@ class IntegrationEnvironmentIT extends IntegrationEnvironment {
             assertEquals("giaokhoa_test", connection.getCatalog());
         }
 
-        Map<?, ?> discovery = RestClient.create()
-                .get()
-                .uri(URI.create(issuer + "/.well-known/openid-configuration"))
-                .retrieve()
-                .body(Map.class);
+        Map<?, ?> discovery =
+                RestClient.create()
+                        .get()
+                        .uri(URI.create(issuer + "/.well-known/openid-configuration"))
+                        .retrieve()
+                        .body(Map.class);
         assertNotNull(discovery);
         assertEquals(issuer, discovery.get("issuer"));
-        assertTrue(String.valueOf(discovery.get("authorization_endpoint"))
-                .contains("/protocol/openid-connect/auth"));
+        assertTrue(
+                String.valueOf(discovery.get("authorization_endpoint"))
+                        .contains("/protocol/openid-connect/auth"));
     }
 }

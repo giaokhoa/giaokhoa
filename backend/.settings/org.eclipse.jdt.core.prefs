@@ -1,0 +1,6 @@
+eclipse.preferences.version=1
+org.eclipse.jdt.core.compiler.problem.unusedLocal=error
+org.eclipse.jdt.core.compiler.problem.unusedImport=error
+org.eclipse.jdt.core.compiler.problem.rawTypeReference=error
+org.eclipse.jdt.core.compiler.problem.uncheckedTypeOperation=error
+org.eclipse.jdt.core.compiler.problem.deprecation=error

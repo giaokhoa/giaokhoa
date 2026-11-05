@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="Giao Khoa Java" xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+    <description>Kiểm tra lỗi và thực hành Java cho code ứng dụng và test. Spotless quản lý format.</description>
+    <!-- JUnit 5 đã hiển thị expected/actual; test một hành vi có thể cần nhiều assertion. -->
+    <rule ref="category/java/bestpractices.xml">
+        <exclude name="UnitTestAssertionsShouldIncludeMessage"/>
+        <exclude name="UnitTestContainsTooManyAsserts"/>
+    </rule>
+    <!-- Giữ SQL và giá trị fixture tại nơi dùng để test dễ đọc; không ép tạo hằng số cho mọi literal. -->
+    <rule ref="category/java/errorprone.xml">
+        <exclude name="AvoidDuplicateLiterals"/>
+    </rule>
+    <rule ref="category/java/security.xml"/>
+</ruleset>
