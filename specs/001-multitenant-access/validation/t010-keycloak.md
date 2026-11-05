@@ -1,28 +1,36 @@
-# T010 — Kiểm chứng baseline Keycloak
+# T010 — Keycloak baseline: kết quả nghiệm thu
 
-## Trạng thái và nguồn lỗi
+## Scope và sửa lỗi review
 
 - Branch `feat/issue-12-keycloak-baseline`; blocker #6 và #8 đã CLOSED.
-- Trên Keycloak TEST 26.8.1 (không phải DEV), đã **tái hiện** HTTP 404 ở `PUT /admin/realms/giaokhoa/clients/{client-id}/authz/resource-server/settings`.
-- Keycloak 26.8 dùng `GET .../resource-server/settings` để đọc, nhưng **PUT .../resource-server** để cập nhật cấu hình. Đã sửa script theo endpoint chính thức.
-- Bootstrap cũ tạo realm `enabled=false` rồi lỗi, chạy lại không bật realm vì biến `NEW_REALM=false`. Đã thêm realm attribute `gk.bootstrap.pending=true`; chỉ lần chạy thành công có marker mới bật realm và xóa marker. Realm bị admin tắt mà không có marker vẫn được giữ nguyên.
-- Tìm group theo tên + `max=1000` không chứng minh group vắng mặt và có thể bỏ sót việc thu hồi. Java và bootstrap hiện tra cứu theo `group-by-path`. Java từ chối công nhận revoke thành công nếu group nguồn không tồn tại hoặc API lỗi.
-- Token provisioner được quản lý bởi Spring Security OAuth2 `AuthorizedClientServiceOAuth2AuthorizedClientManager` với `client_credentials`, tự tái sử dụng/đổi token trước khi hết hạn; không dùng user session hoặc token của web client.
+- Sửa HTTP 404 do ghi vào `PUT /authz/resource-server/settings` thay vì `PUT /authz/resource-server` trên Keycloak 26.8.1.
+- Realm mới có marker `gk.bootstrap.pending=true` cho đến khi hoàn tất; lần chạy tiếp theo phục hồi realm bị gián đoạn nhưng không bật realm do admin cố ý tắt.
+- Tra cứu group bằng `group-by-path`, không tìm theo tên với giới hạn 1.000 bản ghi. Revoke không được báo thành công nếu không xác định được group.
+- Provisioner dùng OAuth2 client credentials manager của Spring Security để tái sử dụng và làm mới token hợp lệ.
 
-## Bằng chứng kiểm thử code
+## Unit/build
 
-- `bash -n infra/keycloak/bootstrap.sh`: đạt.
-- `mvn -q -f backend/pom.xml verify`: đạt; 6 test provisioning đạt, gồm Organization idempotent, exact group path, group conflict, revoke không có group, revoke lỗi HTTP, path không hợp lệ.
+- `bash -n infra/keycloak/bootstrap.sh infra/keycloak/verify-native.sh`: đạt.
+- `mvn -q -f backend/pom.xml verify`: đạt; 6 unit test provisioning, 1 integration environment smoke.
 - `git diff --check`: đạt.
-- Không reset hoặc truy cập database/realm DEV.
 
-## Native TEST Keycloak 26.8.1 — chạy thật ngày 2026-11-05
+## Native acceptance Keycloak 26.8.1 — 2026-11-05
 
-- Với sự phê duyệt Run qua Desktop Commander, dùng **container Keycloak 26.8.1 tạm riêng** tại `127.0.0.1:18091`, admin/secret chỉ là giá trị thử nghiệm tự tạo. Không truy cập admin credential của realm `giaokhoa-it` hoặc DEV.
-- `BOOTSTRAP_1`: `Keycloak realm 'giaokhoa' baseline reconciled`; exit 0.
-- `BOOTSTRAP_2`: `Keycloak realm 'giaokhoa' baseline reconciled`; exit 0.
-- Ảnh chụp ID native sau mỗi lần chạy so sánh bằng `test "$before" = "$after"`: **đạt**, gồm ba client `giaokhoa-web`, `giaokhoa-api`, `giaokhoa-provisioner` và sáu group cố định `/gk`, `/gk/identity`, `/gk/identity/eligible`, `/gk/platform`, `/gk/platform/operators`, `/gk/workspaces`.
-- Gọi Admin API để xác nhận `enabled=true`, `organizationsEnabled=true`, `verifyEmail=true` và không còn marker `gk.bootstrap.pending`: **đạt**.
-- Log kết thúc `NATIVE_TEST_COMPLETE`, exit code 0 (15.71s); container được tự động dừng/xóa và kiểm tra không còn tồn tại.
-- Script có cơ chế xóa Default Permission/Resource/Policy và chặn URI wildcard `/*`, nhưng **chưa có phép đo độc lập lưu bằng chứng** danh sách policy sau bootstrap. Tương tự, chưa có phép kiểm native độc lập cho email `required`, default required actions, quyền grant provisioner và thử nghiệm phục hồi sau khi cố ý ngắt script. Không coi các mục đó là đã nghiệm thu chỉ vì bootstrap không báo lỗi.
-- PDP end-to-end với actor/resources/scopes thật thuộc các task tiếp theo (T013/T016); không suy ra pass từ unit test hoặc baseline.
+Script có thể chạy lại: `bash infra/keycloak/verify-native.sh` (yêu cầu Docker, curl, jq; cổng 18091). Dùng container `quay.io/keycloak/keycloak:26.8.1` mới, tài khoản và client secret **chỉ dành cho môi trường thử nghiệm**, rồi tự stop/remove sau khi xong. Không đọc secret hoặc sửa realm `giaokhoa-it` và không đụng DEV.
+
+**Kết quả thực chạy**: `NATIVE_T010_ACCEPTANCE_PASSED`, exit 0 (lần chạy đầy đủ cuối: 17.17 giây).
+
+- Bootstrap lần đầu từ Keycloak sạch: **PASS**.
+- Bootstrap lần hai: **PASS**, giữ nguyên native ID của 3 client và 6 group nền: **PASS**.
+- Realm bật; Organizations và verifyEmail bật; marker pending đã xóa: **PASS**.
+- `giaokhoa-web` là confidential client Code+PKCE S256, exact redirect/logout/back-channel và secret đúng: **PASS**.
+- API bật Authorization Services, ENFORCING + UNANIMOUS; không còn Default Permission/Default Policy/Default Resource hoặc URI `/*`: **PASS**.
+- Cả ba client không có Direct Access Grants; web không có group-claim mapper, audience mapper tới API tồn tại: **PASS**.
+- Keycloak user profile có email không bắt buộc; VERIFY_EMAIL, UPDATE_PROFILE và VERIFY_PROFILE không còn defaultAction: **PASS**.
+- Provisioner là service-account riêng, client secret đúng, có các realm-management/uma_protection roles cần thiết nhưng không có direct realm-admin hoặc manage-clients: **PASS**.
+- Native provisioner token đã tự tạo user **không email**, một Organization và một realm group: **PASS**.
+- Mô phỏng bootstrap bị gián đoạn bằng realm disabled có pending marker, chạy lại tự bật và xóa marker: **PASS**.
+- Mô phỏng admin cố ý disable realm không có marker, chạy bootstrap vẫn giữ `enabled=false`: **PASS**.
+- Container thử nghiệm được dọn sau khi chạy (không lưu database test).
+
+**Ranh giới:** Đây là nghiệm thu baseline **T010**. PDP theo actor, resource, scope cho các nghiệp vụ đầy đủ là phạm vi T013/T016/T022; không coi những luồng chưa triển khai đó là đã pass.
