@@ -33,5 +33,6 @@
   "containerEnv": {
     "GH_CONFIG_DIR": "/home/vscode/.config/gh"
   },
-  "postCreateCommand": "sudo mkdir -p /home/vscode/.config/gh && sudo chown -R vscode:vscode /home/vscode/.config/gh"
+  "waitFor": "postCreateCommand",
+  "postCreateCommand": "sudo mkdir -p /home/vscode/.config/gh && sudo chown -R vscode:vscode /home/vscode/.config/gh && npx -y playwright@1.64.1 install --with-deps chromium"
 }
