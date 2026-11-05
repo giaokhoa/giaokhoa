@@ -1,0 +1,1523 @@
+{
+  "repository": "giaokhoa/giaokhoa",
+  "feature": "001-multitenant-access",
+  "verified_at": "2026-11-05T07:18:50.468190+00:00",
+  "parent": {
+    "number": 2,
+    "url": "https://github.com/giaokhoa/giaokhoa/issues/2",
+    "title": "Bộ khung Authentication & Authorization đa trung tâm — Spring Boot + Next.js + Keycloak"
+  },
+  "child_count": 99,
+  "dependency_edges": 128,
+  "parallel_candidates": 32,
+  "ready_tasks": [
+    "T001",
+    "T002",
+    "T003"
+  ],
+  "source_sha256": "9856c33a84a8c8058643ad4a36d51223458b6f9a3e472b2026929929e42efca6",
+  "tasks": {
+    "T001": {
+      "number": 3,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/3",
+      "title": "[T001][Setup] Khởi tạo Spring Boot 4.1.2/Java 25 với Maven Wrapper",
+      "story": null,
+      "phase": "Phase 1: Setup — khởi tạo hai ứng dụng",
+      "parallel_candidate": true,
+      "blocked_by": []
+    },
+    "T002": {
+      "number": 4,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/4",
+      "title": "[T002][Setup] Khởi tạo Next.js 16.4.5 App Router/TypeScript với npm lockfile",
+      "story": null,
+      "phase": "Phase 1: Setup — khởi tạo hai ứng dụng",
+      "parallel_candidate": true,
+      "blocked_by": []
+    },
+    "T003": {
+      "number": 5,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/5",
+      "title": "[T003][Setup] Tạo mẫu biến môi trường shell-compatible cho compose/backend và mẫu Next chỉ BACKEND_INTERNAL_URL",
+      "story": null,
+      "phase": "Phase 1: Setup — khởi tạo hai ứng dụng",
+      "parallel_candidate": true,
+      "blocked_by": []
+    },
+    "T004": {
+      "number": 6,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/6",
+      "title": "[T004][Setup] Thêm compose override gateway/Mailpit và môi trường test PostgreSQL 18.6–Keycloak 26.8.1",
+      "story": null,
+      "phase": "Phase 1: Setup — khởi tạo hai ứng dụng",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T003",
+          "number": 5
+        }
+      ]
+    },
+    "T005": {
+      "number": 7,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/7",
+      "title": "[T005][Setup] Cấu hình JUnit integration và Playwright Authorization Code thật, Testcontainers hoặc test services external",
+      "story": null,
+      "phase": "Phase 1: Setup — khởi tạo hai ứng dụng",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T001",
+          "number": 3
+        },
+        {
+          "task": "T002",
+          "number": 4
+        },
+        {
+          "task": "T004",
+          "number": 6
+        }
+      ]
+    },
+    "T006": {
+      "number": 8,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/8",
+      "title": "[T006][Foundation] Tạo migration và entities directory dùng chung, gồm danh tính, workspace, center, membership/role và gói",
+      "story": null,
+      "phase": "Phase 2: Foundational — cơ chế quyền và gate bắt buộc",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T005",
+          "number": 7
+        }
+      ]
+    },
+    "T007": {
+      "number": 9,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/9",
+      "title": "[T007][Foundation] Tạo migration/entities revision, projection và durable operation",
+      "story": null,
+      "phase": "Phase 2: Foundational — cơ chế quyền và gate bắt buộc",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T006",
+          "number": 8
+        }
+      ]
+    },
+    "T008": {
+      "number": 10,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/10",
+      "title": "[T008][Foundation] Tạo schema Spring Session JDBC và OIDC correlation theo dependency thực",
+      "story": null,
+      "phase": "Phase 2: Foundational — cơ chế quyền và gate bắt buộc",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T006",
+          "number": 8
+        }
+      ]
+    },
+    "T009": {
+      "number": 11,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/11",
+      "title": "[T009][Foundation] Cài Problem Details/error codes, field violations, idempotency payload hash và If-Match/428/409",
+      "story": null,
+      "phase": "Phase 2: Foundational — cơ chế quyền và gate bắt buộc",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T007",
+          "number": 9
+        }
+      ]
+    },
+    "T010": {
+      "number": 12,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/12",
+      "title": "[T010][Foundation] Tạo baseline realm/clients và bootstrap idempotent: web confidential Code+PKCE, api Authorization Services Enforcing, provisioner riêng",
+      "story": null,
+      "phase": "Phase 2: Foundational — cơ chế quyền và gate bắt buộc",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T004",
+          "number": 6
+        },
+        {
+          "task": "T006",
+          "number": 8
+        }
+      ]
+    },
+    "T011": {
+      "number": 13,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/13",
+      "title": "[T011][Foundation] Cài Spring OIDC session và cookie host-only/HttpOnly/Secure theo môi trường",
+      "story": null,
+      "phase": "Phase 2: Foundational — cơ chế quyền và gate bắt buộc",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T008",
+          "number": 10
+        },
+        {
+          "task": "T010",
+          "number": 12
+        },
+        {
+          "task": "T009",
+          "number": 11
+        }
+      ]
+    },
+    "T012": {
+      "number": 14,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/14",
+      "title": "[T012][Foundation] Tạo client Next fetch same-origin với CSRF, no-store và xử lý 202/403/409/428/503",
+      "story": null,
+      "phase": "Phase 2: Foundational — cơ chế quyền và gate bắt buộc",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T002",
+          "number": 4
+        },
+        {
+          "task": "T011",
+          "number": 13
+        }
+      ]
+    },
+    "T013": {
+      "number": 15,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/15",
+      "title": "[T013][Foundation] Viết test native PDP mới mỗi resource/scope, giả role/group/claim không cấp quyền, batch chỉ một permission được cấp không thành ALL và gate thời",
+      "story": null,
+      "phase": "Phase 2: Foundational — cơ chế quyền và gate bắt buộc",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T007",
+          "number": 9
+        },
+        {
+          "task": "T010",
+          "number": 12
+        },
+        {
+          "task": "T011",
+          "number": 13
+        }
+      ]
+    },
+    "T014": {
+      "number": 16,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/16",
+      "title": "[T014][Foundation] Viết test cùng session trước/sau revoke, ACCOUNT/WORKSPACE/GRANT PENDING, lỗi provision/crash/retry và concurrent revoke/write",
+      "story": null,
+      "phase": "Phase 2: Foundational — cơ chế quyền và gate bắt buộc",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T007",
+          "number": 9
+        },
+        {
+          "task": "T010",
+          "number": 12
+        },
+        {
+          "task": "T011",
+          "number": 13
+        }
+      ]
+    },
+    "T015": {
+      "number": 17,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/17",
+      "title": "[T015][Foundation] Cài client UMA với token đúng user trong session",
+      "story": null,
+      "phase": "Phase 2: Foundational — cơ chế quyền và gate bắt buộc",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T013",
+          "number": 15
+        },
+        {
+          "task": "T014",
+          "number": 16
+        }
+      ]
+    },
+    "T016": {
+      "number": 18,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/18",
+      "title": "[T016][Foundation] Cài nguồn graph cố định: actor/current realm group/user, AND mandatory gates, OR nguồn độc lập và một root permission mỗi target/scope",
+      "story": null,
+      "phase": "Phase 2: Foundational — cơ chế quyền và gate bắt buộc",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T015",
+          "number": 17
+        }
+      ]
+    },
+    "T017": {
+      "number": 19,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/19",
+      "title": "[T017][Foundation] Cài durable worker trong Spring: cập nhật desired state/PENDING, provision idempotent, xác minh graph/revision rồi READY/SUCCEEDED",
+      "story": null,
+      "phase": "Phase 2: Foundational — cơ chế quyền và gate bắt buộc",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T016",
+          "number": 18
+        },
+        {
+          "task": "T009",
+          "number": 11
+        }
+      ]
+    },
+    "T018": {
+      "number": 20,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/20",
+      "title": "[T018][Foundation] Cài resolver manifest và transaction fence: luôn ACCOUNT actor + WORKSPACE đích + closure source GRANT/WORKSPACE",
+      "story": null,
+      "phase": "Phase 2: Foundational — cơ chế quyền và gate bắt buộc",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T017",
+          "number": 19
+        }
+      ]
+    },
+    "T019": {
+      "number": 21,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/21",
+      "title": "[T019][Foundation] Cài identity eligibility gate: unknown là SELF_REGISTERED, CENTER_ISSUED chỉ record backend tạo",
+      "story": null,
+      "phase": "Phase 2: Foundational — cơ chế quyền và gate bắt buộc",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T018",
+          "number": 20
+        }
+      ]
+    },
+    "T020": {
+      "number": 22,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/22",
+      "title": "[T020][Foundation] Cài transaction workspace context/RLS helpers và metadata locators: thiếu workspace không thấy tenant rows, không trả content từ lookup trước PDP",
+      "story": null,
+      "phase": "Phase 2: Foundational — cơ chế quyền và gate bắt buộc",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T019",
+          "number": 21
+        }
+      ]
+    },
+    "T021": {
+      "number": 23,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/23",
+      "title": "[T021][Foundation] Cài GET operation status cho initiator, review fixtures chỉ test/review và gate diagnostics không secret",
+      "story": null,
+      "phase": "Phase 2: Foundational — cơ chế quyền và gate bắt buộc",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T020",
+          "number": 22
+        },
+        {
+          "task": "T012",
+          "number": 14
+        }
+      ]
+    },
+    "T022": {
+      "number": 24,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/24",
+      "title": "[T022][Foundation] Chạy/ghi bằng chứng gate native trước mở rộng: Code login qua UI thật, same-session revoke A/B, đúng con/published, partial permissions, UTC befo",
+      "story": null,
+      "phase": "Phase 2: Foundational — cơ chế quyền và gate bắt buộc",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T021",
+          "number": 23
+        }
+      ]
+    },
+    "T023": {
+      "number": 25,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/25",
+      "title": "[T023][US1] Viết integration/contract tests đủ US1.1–US1.9: xác minh, neutral baseline, opposite roles, issued không email, invite existing không đổi origin",
+      "story": "US1",
+      "phase": "Phase 3: US1 — Một tài khoản dùng ở nhiều không gian (P1, MVP)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T022",
+          "number": 24
+        }
+      ]
+    },
+    "T024": {
+      "number": 26,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/26",
+      "title": "[T024][US1] Viết E2E Code login/verify mail/đổi temporary password/workspace switch/logout/back-channel/restart",
+      "story": "US1",
+      "phase": "Phase 3: US1 — Một tài khoản dùng ở nhiều không gian (P1, MVP)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T022",
+          "number": 24
+        }
+      ]
+    },
+    "T025": {
+      "number": 27,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/27",
+      "title": "[T025][US1] Tạo migration/entity recovery_request và source origin khi cấp account, record phục vụ verification tối thiểu",
+      "story": "US1",
+      "phase": "Phase 3: US1 — Một tài khoản dùng ở nhiều không gian (P1, MVP)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T023",
+          "number": 25
+        },
+        {
+          "task": "T024",
+          "number": 26
+        }
+      ]
+    },
+    "T026": {
+      "number": 28,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/28",
+      "title": "[T026][US1] Tạo primitives canonical resource/version cho quyền nền và dùng lại ở US7",
+      "story": "US1",
+      "phase": "Phase 3: US1 — Một tài khoản dùng ở nhiều không gian (P1, MVP)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T023",
+          "number": 25
+        },
+        {
+          "task": "T024",
+          "number": 26
+        }
+      ]
+    },
+    "T027": {
+      "number": 29,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/29",
+      "title": "[T027][US1] Tạo lịch sử practice mẫu riêng personal workspace với RLS",
+      "story": "US1",
+      "phase": "Phase 3: US1 — Một tài khoản dùng ở nhiều không gian (P1, MVP)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T026",
+          "number": 28
+        }
+      ]
+    },
+    "T028": {
+      "number": 30,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/30",
+      "title": "[T028][US1] Cài bootstrap profile/user/personal workspace, nguồn eligible theo identity hiện hành",
+      "story": "US1",
+      "phase": "Phase 3: US1 — Một tài khoản dùng ở nhiều không gian (P1, MVP)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T025",
+          "number": 27
+        }
+      ]
+    },
+    "T029": {
+      "number": 31,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/31",
+      "title": "[T029][US1] Cài workflow gửi yêu cầu hỗ trợ đúng phạm vi và operator xác minh/resolve",
+      "story": "US1",
+      "phase": "Phase 3: US1 — Một tài khoản dùng ở nhiều không gian (P1, MVP)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T028",
+          "number": 30
+        }
+      ]
+    },
+    "T030": {
+      "number": 32,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/32",
+      "title": "[T030][US1] Expose session/CSRF, me workspaces/history/operations, identity verification, recovery request và platform recovery list/resolve theo HTTP contra",
+      "story": "US1",
+      "phase": "Phase 3: US1 — Một tài khoản dùng ở nhiều không gian (P1, MVP)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T029",
+          "number": 31
+        },
+        {
+          "task": "T027",
+          "number": 29
+        }
+      ]
+    },
+    "T031": {
+      "number": 33,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/33",
+      "title": "[T031][US1] Xây onboarding xác minh/khôi phục, workspace switcher và session state đúng request",
+      "story": "US1",
+      "phase": "Phase 3: US1 — Một tài khoản dùng ở nhiều không gian (P1, MVP)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T024",
+          "number": 26
+        }
+      ]
+    },
+    "T032": {
+      "number": 34,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/34",
+      "title": "[T032][US1] Xây trang platform recovery và lịch sử practice mẫu/neutral personal landing",
+      "story": "US1",
+      "phase": "Phase 3: US1 — Một tài khoản dùng ở nhiều không gian (P1, MVP)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T031",
+          "number": 33
+        }
+      ]
+    },
+    "T033": {
+      "number": 35,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/35",
+      "title": "[T033][US1] Chạy các test US1 đã viết và ghi minh chứng 9 scenarios, restart giữ session+authorized client+OIDC correlation",
+      "story": "US1",
+      "phase": "Phase 3: US1 — Một tài khoản dùng ở nhiều không gian (P1, MVP)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T030",
+          "number": 32
+        },
+        {
+          "task": "T032",
+          "number": 34
+        }
+      ]
+    },
+    "T034": {
+      "number": 36,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/36",
+      "title": "[T034][US2] Viết contract/integration tests tenant/owner/manager/member/invite/student-issue/subscription manual, role additions/removals scope riêng, no-ema",
+      "story": "US2",
+      "phase": "Phase 4: US2 — Khởi tạo và quản trị trung tâm (P1)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T033",
+          "number": 35
+        }
+      ]
+    },
+    "T035": {
+      "number": 37,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/37",
+      "title": "[T035][US2] Viết E2E operator tạo center/confirm period, owner bổ nhiệm manager, manager mời/cấp student và trạng thái 202",
+      "story": "US2",
+      "phase": "Phase 4: US2 — Khởi tạo và quản trị trung tâm (P1)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T033",
+          "number": 35
+        }
+      ]
+    },
+    "T036": {
+      "number": 38,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/38",
+      "title": "[T036][US2] Tạo migration/entity invitation",
+      "story": "US2",
+      "phase": "Phase 4: US2 — Khởi tạo và quản trị trung tâm (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T034",
+          "number": 36
+        },
+        {
+          "task": "T035",
+          "number": 37
+        }
+      ]
+    },
+    "T037": {
+      "number": 39,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/39",
+      "title": "[T037][US2] Cài tạo center/Organization, owner membership và native source projection qua operation/revision",
+      "story": "US2",
+      "phase": "Phase 4: US2 — Khởi tạo và quản trị trung tâm (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T036",
+          "number": 38
+        }
+      ]
+    },
+    "T038": {
+      "number": 40,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/40",
+      "title": "[T038][US2] Cài invite/accept/roles/revoke/student issue qua IssuedStudentRegistrar",
+      "story": "US2",
+      "phase": "Phase 4: US2 — Khởi tạo và quản trị trung tâm (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T037",
+          "number": 39
+        }
+      ]
+    },
+    "T039": {
+      "number": 41,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/41",
+      "title": "[T039][US2] Cài xác nhận kỳ/gia hạn thủ công bởi operator, kiểm tra end > start và native time policy",
+      "story": "US2",
+      "phase": "Phase 4: US2 — Khởi tạo và quản trị trung tâm (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T038",
+          "number": 40
+        }
+      ]
+    },
+    "T040": {
+      "number": 42,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/42",
+      "title": "[T040][US2] Expose platform centers/subscriptions và center membership/invitations/roles/student APIs theo hợp đồng",
+      "story": "US2",
+      "phase": "Phase 4: US2 — Khởi tạo và quản trị trung tâm (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T039",
+          "number": 41
+        }
+      ]
+    },
+    "T041": {
+      "number": 43,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/43",
+      "title": "[T041][US2] Xây platform centers/confirm package và center members/invites/role editor danh mục cố định",
+      "story": "US2",
+      "phase": "Phase 4: US2 — Khởi tạo và quản trị trung tâm (P1)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T035",
+          "number": 37
+        }
+      ]
+    },
+    "T042": {
+      "number": 44,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/44",
+      "title": "[T042][US2] Nghiệm thu 7 scenarios US2, chéo role A/B, operator không có academic wildcard và teacher không tạo lớp center",
+      "story": "US2",
+      "phase": "Phase 4: US2 — Khởi tạo và quản trị trung tâm (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T040",
+          "number": 42
+        },
+        {
+          "task": "T041",
+          "number": 43
+        }
+      ]
+    },
+    "T043": {
+      "number": 45,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/45",
+      "title": "[T043][US3] Viết tests lớp–khóa–môn/roster/ghi danh/phân công, FK chéo workspace/lớp, 3 môn–2 giáo viên, học sinh chọn môn, all-current không all-future và t",
+      "story": "US3",
+      "phase": "Phase 5: US3 — Khóa đa môn, nhiều giáo viên, ghi danh từng môn (P1)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T042",
+          "number": 44
+        }
+      ]
+    },
+    "T044": {
+      "number": 46,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/46",
+      "title": "[T044][US3] Viết E2E quản lý tạo lớp/khóa nhiều môn, chọn môn ghi danh, nhiều giáo viên, homeroom và actor chuyển lớp/môn không lộ dữ liệu.",
+      "story": "US3",
+      "phase": "Phase 5: US3 — Khóa đa môn, nhiều giáo viên, ghi danh từng môn (P1)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T042",
+          "number": 44
+        }
+      ]
+    },
+    "T045": {
+      "number": 47,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/47",
+      "title": "[T045][US3] Tạo schema/models school_class/class_student có composite workspace FK, active uniqueness và RLS",
+      "story": "US3",
+      "phase": "Phase 5: US3 — Khóa đa môn, nhiều giáo viên, ghi danh từng môn (P1)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T043",
+          "number": 45
+        },
+        {
+          "task": "T044",
+          "number": 46
+        }
+      ]
+    },
+    "T046": {
+      "number": 48,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/48",
+      "title": "[T046][US3] Tạo model/danh mục subject tối thiểu từ seed có kiểm soát, không cây chương trình hoặc taxonomy mới",
+      "story": "US3",
+      "phase": "Phase 5: US3 — Khóa đa môn, nhiều giáo viên, ghi danh từng môn (P1)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T043",
+          "number": 45
+        },
+        {
+          "task": "T044",
+          "number": 46
+        }
+      ]
+    },
+    "T047": {
+      "number": 49,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/49",
+      "title": "[T047][US3] Tạo course/course_subject với lớp/workspace thống nhất, danh sách môn không rỗng và FK tổng hợp",
+      "story": "US3",
+      "phase": "Phase 5: US3 — Khóa đa môn, nhiều giáo viên, ghi danh từng môn (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T045",
+          "number": 47
+        },
+        {
+          "task": "T046",
+          "number": 48
+        }
+      ]
+    },
+    "T048": {
+      "number": 50,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/50",
+      "title": "[T048][US3] Tạo enrollment, teaching/homeroom assignments và RLS/composite constraints",
+      "story": "US3",
+      "phase": "Phase 5: US3 — Khóa đa môn, nhiều giáo viên, ghi danh từng môn (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T047",
+          "number": 49
+        }
+      ]
+    },
+    "T049": {
+      "number": 51,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/51",
+      "title": "[T049][US3] Cài lớp/roster/course/subject services và scoped repositories",
+      "story": "US3",
+      "phase": "Phase 5: US3 — Khóa đa môn, nhiều giáo viên, ghi danh từng môn (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T048",
+          "number": 50
+        }
+      ]
+    },
+    "T050": {
+      "number": 52,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/52",
+      "title": "[T050][US3] Cài batch enrollment và teacher/homeroom sources với prereq role đúng center",
+      "story": "US3",
+      "phase": "Phase 5: US3 — Khóa đa môn, nhiều giáo viên, ghi danh từng môn (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T049",
+          "number": 51
+        }
+      ]
+    },
+    "T051": {
+      "number": 53,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/53",
+      "title": "[T051][US3] Expose đầy đủ class/course/subject/roster/enrollment/teacher/homeroom routes",
+      "story": "US3",
+      "phase": "Phase 5: US3 — Khóa đa môn, nhiều giáo viên, ghi danh từng môn (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T050",
+          "number": 52
+        }
+      ]
+    },
+    "T052": {
+      "number": 54,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/54",
+      "title": "[T052][US3] Xây UI class/course/môn/roster/ghi danh/phân công, checkbox chọn các môn hiện có và nhiều giáo viên",
+      "story": "US3",
+      "phase": "Phase 5: US3 — Khóa đa môn, nhiều giáo viên, ghi danh từng môn (P1)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T044",
+          "number": 46
+        }
+      ]
+    },
+    "T053": {
+      "number": 55,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/55",
+      "title": "[T053][US3] Chạy đầy đủ US3.1–US3.8 và raw-query RLS/FK tests, giáo viên chỉ roster môn phụ trách, current/future subject và class khác",
+      "story": "US3",
+      "phase": "Phase 5: US3 — Khóa đa môn, nhiều giáo viên, ghi danh từng môn (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T051",
+          "number": 53
+        },
+        {
+          "task": "T052",
+          "number": 54
+        }
+      ]
+    },
+    "T054": {
+      "number": 56,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/56",
+      "title": "[T054][US4] Viết contract/integration tests approved/pending/revoked link, wrong child/center, parent role chỉ xem published, homeroom không duyệt, list khôn",
+      "story": "US4",
+      "phase": "Phase 6: US4 — Phụ huynh xem kết quả của đúng con (P1)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T053",
+          "number": 55
+        }
+      ]
+    },
+    "T055": {
+      "number": 57,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/57",
+      "title": "[T055][US4] Viết E2E parent gửi request, manager approve, parent xem đúng con",
+      "story": "US4",
+      "phase": "Phase 6: US4 — Phụ huynh xem kết quả của đúng con (P1)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T053",
+          "number": 55
+        }
+      ]
+    },
+    "T056": {
+      "number": 58,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/58",
+      "title": "[T056][US4] Tạo guardian_link schema/model/RLS, trạng thái REQUESTED/APPROVED/REJECTED/REVOKED và nguồn parent role",
+      "story": "US4",
+      "phase": "Phase 6: US4 — Phụ huynh xem kết quả của đúng con (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T054",
+          "number": 56
+        },
+        {
+          "task": "T055",
+          "number": 57
+        }
+      ]
+    },
+    "T057": {
+      "number": 59,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/59",
+      "title": "[T057][US4] Tạo primitive sample_activity/submission/result đủ FK/UTC/snapshot và RLS phục vụ read side",
+      "story": "US4",
+      "phase": "Phase 6: US4 — Phụ huynh xem kết quả của đúng con (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T056",
+          "number": 58
+        }
+      ]
+    },
+    "T058": {
+      "number": 60,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/60",
+      "title": "[T058][US4] Cài request/approve/reject/revoke và current native guardian group theo student+center, manager/owner gate",
+      "story": "US4",
+      "phase": "Phase 6: US4 — Phụ huynh xem kết quả của đúng con (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T057",
+          "number": 59
+        }
+      ]
+    },
+    "T059": {
+      "number": 61,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/61",
+      "title": "[T059][US4] Cài read side kết quả và ResultPolicyProjector: scope published tách read/grade, source teacher/personal owner/enrolled student/approved guardian",
+      "story": "US4",
+      "phase": "Phase 6: US4 — Phụ huynh xem kết quả của đúng con (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T058",
+          "number": 60
+        }
+      ]
+    },
+    "T060": {
+      "number": 62,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/62",
+      "title": "[T060][US4] Expose guardian request/list/decision/revoke và students/{sid}/results",
+      "story": "US4",
+      "phase": "Phase 6: US4 — Phụ huynh xem kết quả của đúng con (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T059",
+          "number": 61
+        }
+      ]
+    },
+    "T061": {
+      "number": 63,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/63",
+      "title": "[T061][US4] Xây parent request và manager review, trang kết quả con chỉ published",
+      "story": "US4",
+      "phase": "Phase 6: US4 — Phụ huynh xem kết quả của đúng con (P1)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T055",
+          "number": 57
+        }
+      ]
+    },
+    "T062": {
+      "number": 64,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/64",
+      "title": "[T062][US4] Nghiệm thu 5 scenarios US4 và T6 bằng parent thật trong realm test",
+      "story": "US4",
+      "phase": "Phase 6: US4 — Phụ huynh xem kết quả của đúng con (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T060",
+          "number": 62
+        },
+        {
+          "task": "T061",
+          "number": 63
+        }
+      ]
+    },
+    "T063": {
+      "number": 65,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/65",
+      "title": "[T063][US5] Viết ma trận integration 6 scenarios US5 gồm old cookie/token, actor/tenant/owner giả, independent OR sources, account-vs-workspace fence, lỗi di",
+      "story": "US5",
+      "phase": "Phase 7: US5 — Thu hồi quyền và ngăn vượt phạm vi (P1)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T062",
+          "number": 64
+        }
+      ]
+    },
+    "T064": {
+      "number": 66,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/66",
+      "title": "[T064][US5] Viết E2E giữ nguyên browser context, manager khác revoke rồi gọi lại",
+      "story": "US5",
+      "phase": "Phase 7: US5 — Thu hồi quyền và ngăn vượt phạm vi (P1)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T062",
+          "number": 64
+        }
+      ]
+    },
+    "T065": {
+      "number": 67,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/67",
+      "title": "[T065][US5] Hoàn thiện coordinator dependency closure cho role/membership/class/assignment/enrollment/guardian, hooks nguồn đồng bộ trong desired mutation",
+      "story": "US5",
+      "phase": "Phase 7: US5 — Thu hồi quyền và ngăn vượt phạm vi (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T063",
+          "number": 65
+        },
+        {
+          "task": "T064",
+          "number": 66
+        }
+      ]
+    },
+    "T066": {
+      "number": 68,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/68",
+      "title": "[T066][US5] Hoàn thiện crash recovery/reconcile/operation status và retry ordering, fault injection chỉ test",
+      "story": "US5",
+      "phase": "Phase 7: US5 — Thu hồi quyền và ngăn vượt phạm vi (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T065",
+          "number": 67
+        }
+      ]
+    },
+    "T067": {
+      "number": 69,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/69",
+      "title": "[T067][US5] Hoàn thiện xử lý pending/error và refresh capabilities theo request sau mutation",
+      "story": "US5",
+      "phase": "Phase 7: US5 — Thu hồi quyền và ngăn vượt phạm vi (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T066",
+          "number": 68
+        }
+      ]
+    },
+    "T068": {
+      "number": 70,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/70",
+      "title": "[T068][US5] Chạy core gate hồi quy và revoke matrix/E2E, ghi bằng chứng thứ tự quyết định–commit–revoke và không actor override",
+      "story": "US5",
+      "phase": "Phase 7: US5 — Thu hồi quyền và ngăn vượt phạm vi (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T067",
+          "number": 69
+        }
+      ]
+    },
+    "T069": {
+      "number": 71,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/71",
+      "title": "[T069][US6] Viết test 5 scenarios US6 và personal teaching branch: create/new cần gói, submit theo enrollment, owner grade/publish, rời center không mất pers",
+      "story": "US6",
+      "phase": "Phase 8: US6 — Tách quyền cá nhân khỏi quyền trung tâm (P1)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T068",
+          "number": 70
+        }
+      ]
+    },
+    "T070": {
+      "number": 72,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/72",
+      "title": "[T070][US6] Viết E2E personal/center capability matrix, mua gói do operator kích hoạt, teacher không gói, personal owner tổ chức lớp/khóa/roster, không hiện",
+      "story": "US6",
+      "phase": "Phase 8: US6 — Tách quyền cá nhân khỏi quyền trung tâm (P1)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T068",
+          "number": 70
+        }
+      ]
+    },
+    "T071": {
+      "number": 73,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/73",
+      "title": "[T071][US6] Bổ sung personal policy sources theo owner+gói, current enrollment và completion",
+      "story": "US6",
+      "phase": "Phase 8: US6 — Tách quyền cá nhân khỏi quyền trung tâm (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T069",
+          "number": 71
+        },
+        {
+          "task": "T070",
+          "number": 72
+        }
+      ]
+    },
+    "T072": {
+      "number": 74,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/74",
+      "title": "[T072][US6] Tích hợp personal workspace vào lớp/khóa/roster/ghi danh và soạn sample resource",
+      "story": "US6",
+      "phase": "Phase 8: US6 — Tách quyền cá nhân khỏi quyền trung tâm (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T071",
+          "number": 73
+        }
+      ]
+    },
+    "T073": {
+      "number": 75,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/75",
+      "title": "[T073][US6] Xây personal classes UI tái dùng teaching components theo capability, trạng thái gói và kho mẫu",
+      "story": "US6",
+      "phase": "Phase 8: US6 — Tách quyền cá nhân khỏi quyền trung tâm (P1)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T070",
+          "number": 72
+        }
+      ]
+    },
+    "T074": {
+      "number": 76,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/76",
+      "title": "[T074][US6] Nghiệm thu US6.1–US6.5, personal student/organizer hoạt động không center membership và tách owner/creator",
+      "story": "US6",
+      "phase": "Phase 8: US6 — Tách quyền cá nhân khỏi quyền trung tâm (P1)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T072",
+          "number": 74
+        },
+        {
+          "task": "T073",
+          "number": 75
+        }
+      ]
+    },
+    "T075": {
+      "number": 77,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/77",
+      "title": "[T075][US7] Viết integration/contract ma trận 9 scenarios US7: body/answer tách, giữ source ID/version/owner, fork provenance, share gates, many-source ALL",
+      "story": "US7",
+      "phase": "Phase 9: US7 — Kho, phiên bản và chia sẻ tài nguyên (P2)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T074",
+          "number": 76
+        }
+      ]
+    },
+    "T076": {
+      "number": 78,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/78",
+      "title": "[T076][US7] Viết E2E review resource actions với actor thật, account không author không mở kho từ save, wrong workspace/môn/answer và không cache content sau",
+      "story": "US7",
+      "phase": "Phase 9: US7 — Kho, phiên bản và chia sẻ tài nguyên (P2)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T074",
+          "number": 76
+        }
+      ]
+    },
+    "T077": {
+      "number": 79,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/79",
+      "title": "[T077][US7] Tạo library/resource_assignment schema/models với workspace RLS",
+      "story": "US7",
+      "phase": "Phase 9: US7 — Kho, phiên bản và chia sẻ tài nguyên (P2)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T075",
+          "number": 77
+        },
+        {
+          "task": "T076",
+          "number": 78
+        }
+      ]
+    },
+    "T078": {
+      "number": 80,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/80",
+      "title": "[T078][US7] Tạo share_grant/resource_dependency models/FK/provenance, graph không vòng, giới hạn không được nới qua fork",
+      "story": "US7",
+      "phase": "Phase 9: US7 — Kho, phiên bản và chia sẻ tài nguyên (P2)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T077",
+          "number": 79
+        }
+      ]
+    },
+    "T079": {
+      "number": 81,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/81",
+      "title": "[T079][US7] Tạo correction notice/receipt models với unique nơi nhận, replacement đúng nguồn, không thay lịch sử",
+      "story": "US7",
+      "phase": "Phase 9: US7 — Kho, phiên bản và chia sẻ tài nguyên (P2)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T078",
+          "number": 80
+        }
+      ]
+    },
+    "T080": {
+      "number": 82,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/82",
+      "title": "[T080][US7] Cài save/fork/contextual read/answer bằng canonical repository chỉ sau PDP, native owner/resource_assignment/license branches tách scopes",
+      "story": "US7",
+      "phase": "Phase 9: US7 — Kho, phiên bản và chia sẻ tài nguyên (P2)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T079",
+          "number": 81
+        }
+      ]
+    },
+    "T081": {
+      "number": 83,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/83",
+      "title": "[T081][US7] Cài share/accept/revoke, gate recipient/context/version/action/usage constraints và long-term không nối gói/membership grantor",
+      "story": "US7",
+      "phase": "Phase 9: US7 — Kho, phiên bản và chia sẻ tài nguyên (P2)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T080",
+          "number": 82
+        }
+      ]
+    },
+    "T082": {
+      "number": 84,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/84",
+      "title": "[T082][US7] Cài phát hành source correction/new version, notify từng recipient bị ảnh hưởng và explicit receive update cho lần dùng sau",
+      "story": "US7",
+      "phase": "Phase 9: US7 — Kho, phiên bản và chia sẻ tài nguyên (P2)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T081",
+          "number": 83
+        }
+      ]
+    },
+    "T083": {
+      "number": 85,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/85",
+      "title": "[T083][US7] Cài sample action assign/submit/grade/publish với stub có sẵn US4",
+      "story": "US7",
+      "phase": "Phase 9: US7 — Kho, phiên bản và chia sẻ tài nguyên (P2)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T082",
+          "number": 84
+        }
+      ]
+    },
+    "T084": {
+      "number": 86,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/86",
+      "title": "[T084][US7] Expose samples resource body/answer và action discriminator fixed, capabilities targets current actor",
+      "story": "US7",
+      "phase": "Phase 9: US7 — Kho, phiên bản và chia sẻ tài nguyên (P2)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T083",
+          "number": 85
+        }
+      ]
+    },
+    "T085": {
+      "number": 87,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/87",
+      "title": "[T085][US7] Tạo review panel theo resource action contract và notification/update state, gated profile review",
+      "story": "US7",
+      "phase": "Phase 9: US7 — Kho, phiên bản và chia sẻ tài nguyên (P2)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T076",
+          "number": 78
+        }
+      ]
+    },
+    "T086": {
+      "number": 88,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/88",
+      "title": "[T086][US7] Nghiệm thu 9 scenarios US7 và chạy lại US5 với share dependency, fork và nguồn quyền độc lập",
+      "story": "US7",
+      "phase": "Phase 9: US7 — Kho, phiên bản và chia sẻ tài nguyên (P2)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T084",
+          "number": 86
+        },
+        {
+          "task": "T085",
+          "number": 87
+        }
+      ]
+    },
+    "T087": {
+      "number": 89,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/89",
+      "title": "[T087][US8] Viết test native trước/đúng/sau expiry với personal/center, read-only và completion, source revoke, gỡ quan hệ khi expired, renewal không resurre",
+      "story": "US8",
+      "phase": "Phase 10: US8 — Hết hạn gói và bảo lưu dữ liệu (P2)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T086",
+          "number": 88
+        }
+      ]
+    },
+    "T088": {
+      "number": 90,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/90",
+      "title": "[T088][US8] Viết E2E hết hạn gói với cookie cũ: owner/teacher/parent/student, read/submit/grade/publish, pending activation/gia hạn và các nút mở rộng hoạt đ",
+      "story": "US8",
+      "phase": "Phase 10: US8 — Hết hạn gói và bảo lưu dữ liệu (P2)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T086",
+          "number": 88
+        }
+      ]
+    },
+    "T089": {
+      "number": 91,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/91",
+      "title": "[T089][US8] Hoàn thiện completion source cố định snapshot assignedAt/period/dueAt/attempt, không cần active package nhưng giữ role/membership/assignment/enro",
+      "story": "US8",
+      "phase": "Phase 10: US8 — Hết hạn gói và bảo lưu dữ liệu (P2)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T087",
+          "number": 89
+        },
+        {
+          "task": "T088",
+          "number": 90
+        }
+      ]
+    },
+    "T090": {
+      "number": 92,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/92",
+      "title": "[T090][US8] Tích hợp native half-open package gates vào tất cả scope tăng quyền/create/edit/assign/extend/new attempt/reassign",
+      "story": "US8",
+      "phase": "Phase 10: US8 — Hết hạn gói và bảo lưu dữ liệu (P2)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T089",
+          "number": 91
+        }
+      ]
+    },
+    "T091": {
+      "number": 93,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/93",
+      "title": "[T091][US8] Cài guard không hard-delete đối tượng có lịch sử, bảo lưu canonical version/submission/result và giữ quyền xem theo source",
+      "story": "US8",
+      "phase": "Phase 10: US8 — Hết hạn gói và bảo lưu dữ liệu (P2)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T090",
+          "number": 92
+        }
+      ]
+    },
+    "T092": {
+      "number": 94,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/94",
+      "title": "[T092][US8] Hoàn thiện trạng thái read-only/expired trên personal/center/review, lý do quyền bị chặn dễ hiểu, completion actions còn hợp lệ và revoke vẫn dùn",
+      "story": "US8",
+      "phase": "Phase 10: US8 — Hết hạn gói và bảo lưu dữ liệu (P2)",
+      "parallel_candidate": true,
+      "blocked_by": [
+        {
+          "task": "T088",
+          "number": 90
+        }
+      ]
+    },
+    "T093": {
+      "number": 95,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/95",
+      "title": "[T093][US8] Nghiệm thu 7 scenarios US8 với real Keycloak, giữ lịch sử và quyền độc lập",
+      "story": "US8",
+      "phase": "Phase 10: US8 — Hết hạn gói và bảo lưu dữ liệu (P2)",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T091",
+          "number": 93
+        },
+        {
+          "task": "T092",
+          "number": 94
+        }
+      ]
+    },
+    "T094": {
+      "number": 96,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/96",
+      "title": "[T094][Polish] Chạy đủ 56 acceptance scenarios, T1–T16 và FR-001–FR-054",
+      "story": null,
+      "phase": "Phase 11: Polish và nghiệm thu xuyên suốt",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T093",
+          "number": 95
+        }
+      ]
+    },
+    "T095": {
+      "number": 97,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/97",
+      "title": "[T095][Polish] Kiểm tra RLS/runtime role/FK, protected DTO/IDOR, role prerequisites, CSRF ngoại lệ hẹp back-channel, cookie/sid correlation qua restart, no cach",
+      "story": null,
+      "phase": "Phase 11: Polish và nghiệm thu xuyên suốt",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T094",
+          "number": 96
+        }
+      ]
+    },
+    "T096": {
+      "number": 98,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/98",
+      "title": "[T096][Polish] Nghiệm thu SC-001/002/009 với người dùng thật theo vai trò: đo thời gian, ít nhất 4/5 hoàn thành lần đầu sau hướng dẫn ngắn",
+      "story": null,
+      "phase": "Phase 11: Polish và nghiệm thu xuyên suốt",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T095",
+          "number": 97
+        }
+      ]
+    },
+    "T097": {
+      "number": 99,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/99",
+      "title": "[T097][Polish] Cập nhật quickstart theo lệnh/config thực, seed/reconcile/emergency console/recovery/no-email credential/backup riêng DEV-test",
+      "story": null,
+      "phase": "Phase 11: Polish và nghiệm thu xuyên suốt",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T096",
+          "number": 98
+        }
+      ]
+    },
+    "T098": {
+      "number": 100,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/100",
+      "title": "[T098][Polish] Cấu hình CI chạy Maven verify, frontend lint/test/build và Playwright với services/realm test riêng, secrets qua cơ chế CI",
+      "story": null,
+      "phase": "Phase 11: Polish và nghiệm thu xuyên suốt",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T097",
+          "number": 99
+        }
+      ]
+    },
+    "T099": {
+      "number": 101,
+      "url": "https://github.com/giaokhoa/giaokhoa/issues/101",
+      "title": "[T099][Polish] Chạy quickstart thực theo môi trường sạch test, xác nhận các gate và command exit status, cập nhật task checkboxes/chỉ bằng chứng hoàn thành",
+      "story": null,
+      "phase": "Phase 11: Polish và nghiệm thu xuyên suốt",
+      "parallel_candidate": false,
+      "blocked_by": [
+        {
+          "task": "T098",
+          "number": 100
+        }
+      ]
+    }
+  },
+  "ready_filter_url": "https://github.com/giaokhoa/giaokhoa/issues?q=is%3Aissue+is%3Aopen+label%3Atask+label%3A%22feature%3Amultitenant-access%22+-is%3Ablocked",
+  "ready_filter_verified": true,
+  "notes": "Mapping và trạng thái ready là ảnh chụp lúc xác minh; native Blocked by và bộ lọc GitHub phản ánh tiến độ hiện hành. Không phải kết quả triển khai hoặc kiểm thử sản phẩm."
+}
