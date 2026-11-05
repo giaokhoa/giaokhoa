@@ -93,7 +93,8 @@ service_user="$(admin_get "/clients/$PROV_ID/service-account-user" | jq -er '.id
 admin_get "/users/$service_user/role-mappings/clients/$RM_ID" > "$TMP/roles.json"
 jq -e '[.[].name] as $roles | (["manage-users","view-users","query-users","query-groups","view-clients","manage-organizations","view-organizations","query-organizations","manage-authorization","view-authorization"] - $roles | length == 0) and ($roles | index("realm-admin") | not) and ($roles | index("manage-clients") | not)' "$TMP/roles.json" >/dev/null || fail "Provisioner realm-management role mapping differs"
 assert_admin "/users/$service_user/role-mappings/clients/$API_ID" 'any(.[]; .name == "uma_protection")'
-echo "PASS: provisioner direct grants and no realm-admin/manage-clients"
+assert_admin "/users/$service_user/role-mappings/clients/$RM_ID/composite" 'all(.[]; .name != "realm-admin" and .name != "manage-clients" and .name != "manage-realm")'
+echo "PASS: provisioner direct and effective grants exclude elevated roles"
 
 PROV_TOKEN="$(curl -fsS -X POST "$BASE/realms/giaokhoa/protocol/openid-connect/token" \
   --data-urlencode grant_type=client_credentials \
@@ -110,6 +111,29 @@ provisioner_post '/users' '{"username":"student-without-email","enabled":true,"e
 provisioner_post '/organizations' '{"name":"center-scratch","alias":"center-scratch","enabled":true}'
 provisioner_post '/groups' '{"name":"scratch-group"}'
 echo "PASS: provisioner created user without email, organization, and realm group"
+
+# Verify least privilege by attempting a real forbidden client configuration update.
+forbidden_status="$(curl -sS -o "$TMP/forbidden.json" -w '%{http_code}' -X PUT \
+  -H "Authorization: Bearer $PROV_TOKEN" -H 'Content-Type: application/json' \
+  --data-binary '{"description":"unauthorized-change-probe"}' \
+  "$BASE/admin/realms/giaokhoa/clients/$WEB_ID")"
+[[ "$forbidden_status" == 403 ]] || fail "Provisioner client update must be denied (HTTP $forbidden_status)"
+echo "PASS: provisioner cannot modify OIDC web client (HTTP 403)"
+
+# This calls the production Java class with real Spring OAuth2 token handling.
+export T010_KEYCLOAK_BASE_URL="$BASE"
+export T010_KEYCLOAK_PROVISIONER_SECRET="$KEYCLOAK_PROVISIONER_CLIENT_SECRET"
+T010_KEYCLOAK_USER_ID="$(admin_get '/users?username=student-without-email&exact=true' |
+  jq -er '[.[] | select(.username == "student-without-email")] | if length == 1 then .[0].id else error("test user missing") end')"
+export T010_KEYCLOAK_USER_ID
+REPO="$(cd "$ROOT/../.." && pwd)"
+if ! "$REPO/backend/mvnw" -B -ntp -f "$REPO/backend/pom.xml" \
+    -Dtest=KeycloakProvisioningClientNativeIT test > "$TMP/java-native.log" 2>&1; then
+  tail -55 "$TMP/java-native.log" >&2
+  fail "Java native provisioning integration test"
+fi
+grep -E 'Tests run:|BUILD SUCCESS' "$TMP/java-native.log" | tail -4
+echo "PASS: production Java client created Organization/group and added/revoked membership"
 
 admin_get '' | jq '.enabled = false | .attributes["gk.bootstrap.pending"] = "true"' > "$TMP/realm.json"
 admin_put '' "$TMP/realm.json"

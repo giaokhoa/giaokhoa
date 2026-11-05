@@ -33,4 +33,17 @@ Script có thể chạy lại: `bash infra/keycloak/verify-native.sh` (yêu cầ
 - Mô phỏng admin cố ý disable realm không có marker, chạy bootstrap vẫn giữ `enabled=false`: **PASS**.
 - Container thử nghiệm được dọn sau khi chạy (không lưu database test).
 
-**Ranh giới:** Đây là nghiệm thu baseline **T010**. PDP theo actor, resource, scope cho các nghiệp vụ đầy đủ là phạm vi T013/T016/T022; không coi những luồng chưa triển khai đó là đã pass.
+## Review follow-up — Java native và kiểm thử quyền phủ định (2026-11-05)
+
+Hai nhận xét Should fix trên commit `86b4ea4` được xác nhận trong mã nguồn trước khi bổ sung test:
+- Unit test Java trước đó dùng `MockRestServiceServer` và token manager giả, trong khi script native chỉ dùng curl.
+- Kiểm tra role provisioner mới xét direct grant, chưa chứng minh hành vi bị Keycloak từ chối.
+
+Đã bổ sung và **chạy thành công** trong `bash infra/keycloak/verify-native.sh`:
+- Maven chạy riêng `-Dtest=KeycloakProvisioningClientNativeIT`: **1 test, 0 failure/error**. Dùng public constructor thật và Spring OAuth2 client credentials để tạo Organization lặp lại ổn định, tạo realm group lặp lại ổn định, thêm và thu hồi user membership; GET lại Keycloak xác nhận có/không có membership sau mỗi thao tác.
+- Đọc **effective** realm-management composite role mappings và xác nhận không có `realm-admin`, `manage-clients` hoặc `manage-realm`.
+- Dùng service-account token thử `PUT /admin/realms/giaokhoa/clients/{web-client-id}`: **HTTP 403** (kiểm thử phủ định).
+- Log `NATIVE_T010_ACCEPTANCE_PASSED`, exit code 0 sau 28.51 giây; mặc định Maven verify vẫn đạt 7/7 test. Test native chỉ chạy khi gọi script vì phụ thuộc Docker/realm scratch.
+- Container `gk-t010-native-proof` được dọn sau khi chạy. Không ảnh hưởng DEV hoặc `giaokhoa-it`.
+
+**Giới hạn đã nêu:** Integration test xác minh cấp token thật, không chủ động ép access token hết hạn để kiểm tra làm mới. Đây là nghiệm thu baseline **T010**. PDP theo actor, resource, scope cho các nghiệp vụ đầy đủ là phạm vi T013/T016/T022; không coi những luồng chưa triển khai đó là đã pass.
