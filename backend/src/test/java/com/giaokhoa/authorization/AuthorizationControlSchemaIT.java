@@ -8,6 +8,7 @@ import com.giaokhoa.authorization.model.AuthorizationProjection;
 import com.giaokhoa.support.IntegrationEnvironment;
 import jakarta.persistence.EntityManager;
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
@@ -651,6 +652,8 @@ class AuthorizationControlSchemaIT extends IntegrationEnvironment {
     }
 
     private static String uuidArray(UUID... ids) {
-        return Arrays.stream(ids).map(UUID::toString).collect(Collectors.joining(",", "{", "}"));
+        return Arrays.stream(ids)
+                .map(id -> Objects.requireNonNull(id).toString())
+                .collect(Collectors.joining(",", "{", "}"));
     }
 }

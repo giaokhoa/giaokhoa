@@ -6,6 +6,12 @@
         <Field name="jdbc"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+    <!-- Spring quản lý vòng đời JdbcTemplate và thread-bound EntityManager; không sao chép dependency được inject. -->
+    <Match>
+        <Class name="com.giaokhoa.authorization.operation.IdempotencyService"/>
+        <Field name="~(jdbc|entities)"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
     <!-- JPA cần entity không final; các constructor này chỉ gán field, không giữ tài nguyên hay gọi code ngoài. -->
     <Match>
         <Class name="~com\.giaokhoa\.authorization\.model\.Authorization(Operation|Projection)"/>
