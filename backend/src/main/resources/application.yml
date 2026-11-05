@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: giaokhoa
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  flyway:
+    enabled: true
+    user: ${SPRING_FLYWAY_USER}
+    password: ${SPRING_FLYWAY_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  session:
+    jdbc:
+      initialize-schema: never
+  security:
+    oauth2:
+      client:
+        registration:
+          keycloak:
+            provider: keycloak
+            client-id: ${OIDC_CLIENT_ID}
+            client-secret: ${OIDC_CLIENT_SECRET}
+            client-authentication-method: client_secret_basic
+            authorization-grant-type: authorization_code
+            scope: [openid, profile, email]
+        provider:
+          keycloak:
+            issuer-uri: ${OIDC_ISSUER_URI}
+
+server:
+  forward-headers-strategy: framework
+
+giaokhoa:
+  app-origin: ${APP_ORIGIN}
+  keycloak:
+    authorization-audience: ${KEYCLOAK_AUTHZ_AUDIENCE}
+    admin-base-url: ${KEYCLOAK_ADMIN_BASE_URL}
+    provisioner:
+      client-id: ${KEYCLOAK_PROVISIONER_CLIENT_ID}
+      client-secret: ${KEYCLOAK_PROVISIONER_CLIENT_SECRET}

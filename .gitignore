@@ -1,0 +1,14 @@
+# Secrets và cấu hình máy cá nhân; chỉ commit file mẫu.
+.env
+.env.*
+!.env.example
+!.env.*.example
+backend/src/main/resources/application-local.yml
+backend/src/main/resources/application-local.yaml
+
+# Worktrees độc lập, build artifacts.
+.worktrees/
+**/target/
+**/node_modules/
+**/.next/
+**/coverage/
