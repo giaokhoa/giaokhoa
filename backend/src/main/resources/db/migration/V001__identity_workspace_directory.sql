@@ -241,8 +241,8 @@ BEGIN
             RAISE EXCEPTION 'Subscription confirmation history cannot change' USING ERRCODE = '23514';
         END IF;
         IF (OLD.valid_from, OLD.expires_at) IS DISTINCT FROM (NEW.valid_from, NEW.expires_at)
-            AND (OLD.valid_from <= CURRENT_TIMESTAMP
-                OR NEW.valid_from <= CURRENT_TIMESTAMP
+            AND (OLD.valid_from <= clock_timestamp()
+                OR NEW.valid_from <= clock_timestamp()
                 OR NEW.version <= OLD.version) THEN
             RAISE EXCEPTION 'Only future subscription periods may change with a new version'
                 USING ERRCODE = '23514';

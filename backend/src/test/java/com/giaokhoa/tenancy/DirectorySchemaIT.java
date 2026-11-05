@@ -2,9 +2,11 @@ package com.giaokhoa.tenancy;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.giaokhoa.support.IntegrationEnvironment;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -267,6 +269,26 @@ class DirectorySchemaIT extends IntegrationEnvironment {
 
         assertThrows(DataAccessException.class, () -> jdbc.update(
                 "UPDATE subscription_period SET expires_at = expires_at + interval '1 day'"
+                + " WHERE workspace_id = ?", workspace));
+    }
+
+    @Test
+    void subscriptionCannotChangeAfterStartWithinSameTransaction() {
+        UUID owner = user();
+        UUID workspace = personal(owner);
+        Instant start = jdbc.queryForObject("SELECT clock_timestamp() + interval '2 seconds'",
+                OffsetDateTime.class).toInstant();
+        period(workspace, owner, start, start.plusSeconds(86400));
+        assertTrue(jdbc.queryForObject("SELECT current_timestamp < valid_from"
+                + " FROM subscription_period WHERE workspace_id = ?", Boolean.class, workspace));
+
+        jdbc.query("SELECT pg_sleep_until(valid_from + interval '200 milliseconds')"
+                + " FROM subscription_period WHERE workspace_id = ?", rs -> {}, workspace);
+        assertTrue(jdbc.queryForObject("SELECT clock_timestamp() > valid_from"
+                + " AND current_timestamp < valid_from FROM subscription_period WHERE workspace_id = ?",
+                Boolean.class, workspace));
+        assertThrows(DataAccessException.class, () -> jdbc.update("UPDATE subscription_period"
+                + " SET expires_at = expires_at + interval '1 day', version = version + 1"
                 + " WHERE workspace_id = ?", workspace));
     }
 
