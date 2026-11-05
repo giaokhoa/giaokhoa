@@ -37,3 +37,5 @@ Mở thư mục gốc của worktree. `backend/.settings/org.eclipse.jdt.core.pr
 JDT và javac có bộ kiểm tra khác nhau; formatter hoặc build thành công không có nghĩa mọi kiểm tra IDE đều giống nhau. Maven `verify` là lệnh bắt buộc dùng chung cho agent và CI. Sửa nguyên nhân; chỉ dùng suppression hẹp kèm lý do khi xác nhận ngoại lệ của framework hoặc test cố ý truyền đầu vào sai. Không bỏ qua test để lint xanh.
 
 Các rule PMD về số lượng assertion, message cho mọi assertion và hằng số hóa mọi literal không nằm trong convention này: một test có thể kiểm tra nhiều thuộc tính của cùng hành vi; SQL/fixture được giữ gần nơi dùng. Các rule kiểm tra lỗi vẫn áp dụng cả main/test. Ngoại lệ SpotBugs nằm trong `config/spotbugs-exclude.xml`, giới hạn theo lớp/member và loại lỗi, có lý do ngay tại mỗi mục.
+
+CI chỉ tải báo cáo khi kiểm tra thất bại, lưu tối đa 7 ngày. Bước tải báo cáo phục vụ chẩn đoán và không làm thay đổi kết quả lint/test nếu GitHub hết quota artifact; các bước compiler, lint và test vẫn bắt buộc thành công.

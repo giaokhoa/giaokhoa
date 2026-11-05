@@ -23,7 +23,9 @@ jobs:
       - name: Verify Java quality gates and unit tests
         run: ./backend/mvnw -B -ntp -f backend/pom.xml clean verify
       - name: Upload backend quality reports
-        if: always()
+        if: failure()
+        # Báo cáo phục vụ chẩn đoán; lỗi quota không được thay đổi kết quả lint/test.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: backend-quality-reports
@@ -32,6 +34,7 @@ jobs:
             backend/target/spotbugsXml.xml
             backend/target/surefire-reports/
           if-no-files-found: ignore
+          retention-days: 7
 
   frontend:
     runs-on: ubuntu-24.04
@@ -94,12 +97,15 @@ jobs:
       - name: Verify all Spring integration tests
         run: ./backend/mvnw -B -ntp -f backend/pom.xml -Pintegration verify
       - name: Upload backend integration reports
-        if: always()
+        if: failure()
+        # Báo cáo phục vụ chẩn đoán; lỗi quota không được thay đổi kết quả lint/test.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: backend-integration-reports
           path: backend/target/failsafe-reports/
           if-no-files-found: ignore
+          retention-days: 7
       - name: Verify Authorization Code, PKCE and Mailpit
         run: npm --prefix frontend run test:e2e
       - name: TEST logs on failure
