@@ -7,6 +7,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
@@ -43,6 +45,16 @@ class ProblemDetailsAdviceTest {
 
         @PostMapping("/unauthorized")
         void unauthorized() { throw new BadCredentialsException("secret credentials"); }
+
+        @PostMapping("/duplicate")
+        void duplicate() {
+            throw new DataIntegrityViolationException("constraint uq_user_username, username=private");
+        }
+
+        @PostMapping("/stale")
+        void stale() {
+            throw new OptimisticLockingFailureException("row version private info");
+        }
 
         @PostMapping("/internal")
         void unexpected() {
@@ -103,6 +115,22 @@ class ProblemDetailsAdviceTest {
         mvc.perform(post("/unauthorized"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void integrityViolationHasDataConflictCodeWithoutConstraintDetails() throws Exception {
+        mvc.perform(post("/duplicate"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DATA_CONFLICT"))
+                .andExpect(jsonPath("$.detail").value("Dữ liệu xung đột với ràng buộc hiện có."));
+    }
+
+    @Test
+    void optimisticLockHasDistinctVersionCode() throws Exception {
+        mvc.perform(post("/stale"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("VERSION_CONFLICT"))
+                .andExpect(jsonPath("$.detail").value("Phiên bản dữ liệu đã thay đổi."));
     }
 
     @Test

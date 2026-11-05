@@ -3,10 +3,10 @@ package com.giaokhoa.authorization.operation;
 import com.giaokhoa.authorization.model.AuthorizationOperation;
 import com.giaokhoa.shared.http.HttpProblemException;
 import jakarta.persistence.EntityManager;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Optional;
@@ -103,10 +103,19 @@ public class IdempotencyService {
         return existing;
     }
 
-    // Gọi trong transaction mutation với partition đã khóa; duplicate không tạo queue item thứ hai.
+    // Gọi trước mọi desired-state write, trong cùng transaction; mutation chỉ chạy nếu insert mới.
     @Transactional(propagation = Propagation.MANDATORY)
-    public AuthorizationOperation register(AuthorizationOperation operation) {
+    public AuthorizationOperation executeOnce(AuthorizationOperation operation, Runnable mutation) {
         requireKey(operation.getIdempotencyKey());
+        UUID[] partitions = operation.getAffectedPartitions().clone();
+        // UUID.compareTo() dùng signed longs, khác thứ tự uuid của PostgreSQL.
+        Arrays.sort(partitions, Comparator.comparing(UUID::toString));
+        for (UUID partition : partitions) {
+            if (jdbc.queryForList("SELECT id FROM authz_partition WHERE id = ? FOR UPDATE",
+                    UUID.class, partition).isEmpty()) {
+                throw new IllegalArgumentException("Unknown authorization partition");
+            }
+        }
         int created = jdbc.update(connection -> {
             var ps = connection.prepareStatement("""
                     INSERT INTO authorization_operation
@@ -125,9 +134,12 @@ public class IdempotencyService {
             ps.setLong(8, operation.getDesiredRevision());
             return ps;
         });
-        return created == 1 ? operation : findExisting(
-                operation.getInitiatorUserId(), operation.getIdempotencyKey(), operation.getPayloadHash())
-                .orElseThrow();
+        if (created == 1) {
+            mutation.run();
+            return operation;
+        }
+        return findExisting(operation.getInitiatorUserId(),
+                operation.getIdempotencyKey(), operation.getPayloadHash()).orElseThrow();
     }
 
     public ResponseEntity<OperationReceipt> responseFor(AuthorizationOperation operation) {

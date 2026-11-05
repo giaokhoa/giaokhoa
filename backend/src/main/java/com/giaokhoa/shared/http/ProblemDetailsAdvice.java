@@ -34,9 +34,16 @@ public class ProblemDetailsAdvice extends ResponseEntityExceptionHandler {
         return respond(ex.getStatus(), ex.getCode(), ex.getMessage(), request, null);
     }
 
-    @ExceptionHandler({DataIntegrityViolationException.class, OptimisticLockingFailureException.class})
-    ResponseEntity<Object> conflictingWrite(RuntimeException ex, WebRequest request) {
-        return respond(HttpStatus.CONFLICT, "VERSION_CONFLICT", "Dữ liệu đã thay đổi hoặc không hợp lệ.", request, null);
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    ResponseEntity<Object> staleWrite(OptimisticLockingFailureException ex, WebRequest request) {
+        return respond(HttpStatus.CONFLICT, "VERSION_CONFLICT",
+                "Phiên bản dữ liệu đã thay đổi.", request, null);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    ResponseEntity<Object> dataConflict(DataIntegrityViolationException ex, WebRequest request) {
+        return respond(HttpStatus.CONFLICT, "DATA_CONFLICT",
+                "Dữ liệu xung đột với ràng buộc hiện có.", request, null);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
