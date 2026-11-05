@@ -108,8 +108,8 @@ for id in giaokhoa-web giaokhoa-api giaokhoa-provisioner; do
       .baseUrl = $origin |
       .redirectUris = [$origin + "/login/oauth2/code/keycloak"] |
       .attributes += {
-        "post.logout.redirect.uris": $origin + "/",
-        "backchannel.logout.url": $origin + "/logout/connect/back-channel/keycloak"
+        "post.logout.redirect.uris": ($origin + "/"),
+        "backchannel.logout.url": ($origin + "/logout/connect/back-channel/keycloak")
       }
     elif $id == "giaokhoa-provisioner" then .secret = $provisionerSecret
     else . end
