@@ -339,6 +339,46 @@ class AuthorizationControlSchemaIT extends IntegrationEnvironment {
                 operation));
     }
 
+    @Test
+    void operationRejectsZeroBasedRevisionArrayEvenWhenPartitionsAreReady() {
+        UUID initiator = user();
+        UUID workspace = personal(initiator);
+        UUID owner = scope("WORKSPACE", "workspace:" + workspace);
+        jdbc.update("UPDATE authz_partition SET desired_revision = 1, applied_revision = 1,"
+                + " state = 'READY' WHERE id = ?", owner);
+        assertThrows(DataAccessException.class, () -> {
+            insertRawOperation(initiator, workspace, "{" + owner + "}", "[0:0]={1}", 999);
+            jdbc.execute("SET CONSTRAINTS ALL IMMEDIATE");
+        });
+    }
+
+    @Test
+    void operationRejectsZeroBasedPartitionArray() {
+        UUID initiator = user();
+        UUID workspace = personal(initiator);
+        UUID owner = scope("WORKSPACE", "workspace:" + workspace);
+        assertThrows(DataAccessException.class, () -> insertRawOperation(
+                initiator, workspace, "[0:0]={" + owner + "}", "{1}", 1));
+    }
+
+    @Test
+    void operationRejectsMultidimensionalRevisionArray() {
+        UUID initiator = user();
+        UUID workspace = personal(initiator);
+        UUID owner = scope("WORKSPACE", "workspace:" + workspace);
+        assertThrows(DataAccessException.class, () -> insertRawOperation(
+                initiator, workspace, "{" + owner + "}", "{{1}}", 999));
+    }
+
+    private void insertRawOperation(UUID initiator, UUID workspace, String partitions,
+                                    String revisions, long desiredRevision) {
+        jdbc.update("INSERT INTO authorization_operation(id,initiator_user_id,workspace_id,"
+                + "idempotency_key,payload_hash,affected_partitions,affected_revisions,desired_revision)"
+                + " VALUES (?,?,?,?,?,?::uuid[],?::bigint[],?)",
+                UUID.randomUUID(), initiator, workspace, UUID.randomUUID().toString(), HASH_A,
+                partitions, revisions, desiredRevision);
+    }
+
     private UUID user() {
         UUID id = UUID.randomUUID();
         jdbc.update("INSERT INTO user_account(id,keycloak_sub,username,email_verified,origin,identity_state)"

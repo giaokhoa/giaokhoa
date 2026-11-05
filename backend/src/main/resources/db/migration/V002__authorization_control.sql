@@ -52,10 +52,12 @@ CREATE TABLE authorization_operation (
     version BIGINT NOT NULL DEFAULT 0,
     CONSTRAINT uq_authz_operation_idempotency UNIQUE (initiator_user_id, idempotency_key),
     -- The scalar revision belongs to the first affected partition; each partition advances independently.
-    CONSTRAINT ck_authz_operation_revision_vector CHECK (
-        cardinality(affected_revisions) = cardinality(affected_partitions)
+    CONSTRAINT ck_authz_operation_revision_vector CHECK ((
+        array_ndims(affected_partitions) = 1 AND array_lower(affected_partitions, 1) = 1
+        AND array_ndims(affected_revisions) = 1 AND array_lower(affected_revisions, 1) = 1
+        AND cardinality(affected_revisions) = cardinality(affected_partitions)
         AND desired_revision = affected_revisions[1]
-    ),
+    ) IS TRUE),
     CONSTRAINT ck_authz_operation_succeeded CHECK (
         state <> 'SUCCEEDED' OR (next_attempt_at IS NULL AND last_error_code IS NULL)
     )
@@ -77,13 +79,12 @@ BEGIN
     IF TG_TABLE_NAME = 'authorization_operation' THEN
         IF cardinality(ids) = 0
             OR cardinality(NEW.affected_revisions) <> cardinality(ids)
-            OR array_position(NEW.affected_revisions, NULL) IS NOT NULL
             OR EXISTS (SELECT 1 FROM unnest(NEW.affected_revisions) AS rev(value)
-                       WHERE rev.value < 0) THEN
+                       WHERE rev.value IS NULL OR rev.value < 0) THEN
             RAISE EXCEPTION 'Invalid operation revision vector' USING ERRCODE = '23514';
         END IF;
     END IF;
-    IF array_position(ids, NULL) IS NOT NULL
+    IF EXISTS (SELECT 1 FROM unnest(ids) AS ref(id) WHERE ref.id IS NULL)
         OR cardinality(ids) <> (SELECT count(DISTINCT ref.id) FROM unnest(ids) AS ref(id))
         OR EXISTS (
             SELECT 1 FROM unnest(ids) AS referenced(id)
