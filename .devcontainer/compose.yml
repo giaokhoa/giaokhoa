@@ -1,0 +1,54 @@
+
+services:
+  app:
+    image: mcr.microsoft.com/devcontainers/java:25
+    command: sleep infinity
+    working_dir: /giaokhoa
+    volumes:
+      - ..:/giaokhoa:cached
+    depends_on:
+      - app-db
+      - keycloak
+
+  app-db:
+    image: postgres:18.6-alpine
+    environment:
+      POSTGRES_DB: giaokhoa
+      POSTGRES_USER: giaokhoa
+      POSTGRES_PASSWORD: giaokhoa
+    volumes:
+      - app_data:/var/lib/postgresql
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    command: start-dev
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: http://localhost:8081
+    ports:
+      - "8081:8080"
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+
+  keycloak-db:
+    image: postgres:18.6-alpine
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+    volumes:
+      - keycloak_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  app_data:
+  keycloak_data:
