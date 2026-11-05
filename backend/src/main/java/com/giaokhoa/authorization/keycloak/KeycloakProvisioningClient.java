@@ -43,10 +43,14 @@ public class KeycloakProvisioningClient {
 
     @Autowired
     public KeycloakProvisioningClient(
-            RestClient.Builder builder,
             @Value("${giaokhoa.keycloak.admin-base-url}") String baseUrl,
             @Value("${giaokhoa.keycloak.provisioner.client-id}") String clientId,
             @Value("${giaokhoa.keycloak.provisioner.client-secret}") String clientSecret) {
+        this(RestClient.builder(), baseUrl, clientId, clientSecret);
+    }
+
+    public KeycloakProvisioningClient(RestClient.Builder builder, String baseUrl,
+            String clientId, String clientSecret) {
         this(builder, baseUrl, clientManager(baseUrl.replaceAll("/+$", ""), clientId, clientSecret));
     }
 
