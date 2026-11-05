@@ -212,3 +212,46 @@ CREATE CONSTRAINT TRIGGER ck_user_has_personal_workspace AFTER INSERT ON user_ac
     DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION verify_user_personal_workspace();
 CREATE CONSTRAINT TRIGGER ck_personal_workspace_survives AFTER DELETE ON workspace
     DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION verify_user_personal_workspace();
+
+-- Giữ lịch sử membership và xác nhận gói khi thu hồi, cấp lại hoặc gia hạn.
+CREATE FUNCTION guard_directory_history() RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION '% history cannot be hard-deleted', TG_TABLE_NAME USING ERRCODE = '23514';
+    END IF;
+
+    IF TG_TABLE_NAME = 'center_membership' THEN
+        IF OLD.id IS DISTINCT FROM NEW.id
+            OR OLD.joined_at IS DISTINCT FROM NEW.joined_at
+            OR OLD.created_at IS DISTINCT FROM NEW.created_at THEN
+            RAISE EXCEPTION 'Membership identity and join history cannot change' USING ERRCODE = '23514';
+        END IF;
+        IF OLD.state = 'REVOKED' AND NEW IS DISTINCT FROM OLD THEN
+            RAISE EXCEPTION 'Revoked membership cannot be modified' USING ERRCODE = '23514';
+        END IF;
+        IF OLD.state = 'ACTIVE' AND NEW.state = 'PENDING' THEN
+            RAISE EXCEPTION 'Active membership cannot return to PENDING' USING ERRCODE = '23514';
+        END IF;
+    ELSE
+        IF (OLD.id, OLD.workspace_id, OLD.confirmation_ref, OLD.confirmed_by,
+                OLD.confirmed_at, OLD.created_at)
+            IS DISTINCT FROM
+            (NEW.id, NEW.workspace_id, NEW.confirmation_ref, NEW.confirmed_by,
+                NEW.confirmed_at, NEW.created_at) THEN
+            RAISE EXCEPTION 'Subscription confirmation history cannot change' USING ERRCODE = '23514';
+        END IF;
+        IF (OLD.valid_from, OLD.expires_at) IS DISTINCT FROM (NEW.valid_from, NEW.expires_at)
+            AND (OLD.valid_from <= CURRENT_TIMESTAMP
+                OR NEW.valid_from <= CURRENT_TIMESTAMP
+                OR NEW.version <= OLD.version) THEN
+            RAISE EXCEPTION 'Only future subscription periods may change with a new version'
+                USING ERRCODE = '23514';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER ck_membership_preserve_history BEFORE UPDATE OR DELETE ON center_membership
+    FOR EACH ROW EXECUTE FUNCTION guard_directory_history();
+CREATE TRIGGER ck_subscription_preserve_history BEFORE UPDATE OR DELETE ON subscription_period
+    FOR EACH ROW EXECUTE FUNCTION guard_directory_history();

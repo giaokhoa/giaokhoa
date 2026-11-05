@@ -159,6 +159,131 @@ class DirectorySchemaIT extends IntegrationEnvironment {
         assertThrows(DataAccessException.class, () -> jdbc.execute("SET CONSTRAINTS ALL IMMEDIATE"));
     }
 
+    @Test
+    void revokedMembershipCannotBeReactivatedWithOldRoles() {
+        UUID owner = user();
+        UUID member = user();
+        UUID workspace = center(owner, true);
+        UUID membership = member(workspace, member);
+        jdbc.update("INSERT INTO membership_role(membership_id,role) VALUES (?, 'TEACHER')", membership);
+        jdbc.update("UPDATE center_membership SET state = 'ACTIVE' WHERE id = ?", membership);
+        jdbc.update("UPDATE center_membership SET state = 'REVOKED', revoked_at = now() WHERE id = ?", membership);
+
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "UPDATE center_membership SET state = 'ACTIVE', revoked_at = NULL WHERE id = ?", membership));
+    }
+
+    @Test
+    void revokedMembershipCanBeRegrantedOnlyThroughNewMembership() {
+        UUID owner = user();
+        UUID member = user();
+        UUID workspace = center(owner, true);
+        UUID previous = member(workspace, member);
+        jdbc.update("INSERT INTO membership_role(membership_id,role) VALUES (?, 'TEACHER')", previous);
+        jdbc.update("UPDATE center_membership SET state = 'ACTIVE' WHERE id = ?", previous);
+        jdbc.update("UPDATE center_membership SET state = 'REVOKED', revoked_at = now() WHERE id = ?", previous);
+
+        UUID replacement = member(workspace, member);
+        jdbc.update("INSERT INTO membership_role(membership_id,role) VALUES (?, 'STUDENT')", replacement);
+        jdbc.update("UPDATE center_membership SET state = 'ACTIVE' WHERE id = ?", replacement);
+        jdbc.execute("SET CONSTRAINTS ALL IMMEDIATE");
+        assertEquals(2, jdbc.queryForObject(
+                "SELECT count(*) FROM center_membership WHERE workspace_id = ? AND user_id = ?",
+                Integer.class, workspace, member));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT count(*) FROM center_membership WHERE workspace_id = ? AND user_id = ?"
+                + " AND state = 'ACTIVE'", Integer.class, workspace, member));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT count(*) FROM membership_role WHERE membership_id = ? AND role = 'TEACHER'",
+                Integer.class, previous));
+    }
+
+    @Test
+    void revokedMembershipCannotBeRewritten() {
+        UUID owner = user();
+        UUID member = user();
+        UUID workspace = center(owner, true);
+        UUID membership = member(workspace, member);
+        jdbc.update("UPDATE center_membership SET state = 'REVOKED', revoked_at = now() WHERE id = ?", membership);
+
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "UPDATE center_membership SET joined_at = joined_at - interval '1 day' WHERE id = ?",
+                membership));
+    }
+
+    @Test
+    void activeMembershipCannotReturnToPending() {
+        UUID owner = user();
+        UUID member = user();
+        UUID workspace = center(owner, true);
+        UUID membership = member(workspace, member);
+        jdbc.update("UPDATE center_membership SET state = 'ACTIVE' WHERE id = ?", membership);
+
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "UPDATE center_membership SET state = 'PENDING' WHERE id = ?", membership));
+    }
+
+    @Test
+    void nonOwnerMembershipCannotBeHardDeleted() {
+        UUID owner = user();
+        UUID member = user();
+        UUID workspace = center(owner, true);
+        UUID membership = member(workspace, member);
+        jdbc.update("UPDATE center_membership SET state = 'ACTIVE' WHERE id = ?", membership);
+        jdbc.update("UPDATE center_membership SET state = 'REVOKED', revoked_at = now() WHERE id = ?", membership);
+
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "DELETE FROM center_membership WHERE id = ?", membership));
+    }
+
+    @Test
+    void confirmedSubscriptionCannotBeHardDeleted() {
+        UUID owner = user();
+        UUID workspace = personal(owner);
+        period(workspace, owner, Instant.parse("2026-01-01T00:00:00Z"),
+                Instant.parse("2026-02-01T00:00:00Z"));
+
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "DELETE FROM subscription_period WHERE workspace_id = ?", workspace));
+    }
+
+    @Test
+    void confirmedSubscriptionReferenceCannotBeRewritten() {
+        UUID owner = user();
+        UUID workspace = personal(owner);
+        period(workspace, owner, Instant.parse("2026-01-01T00:00:00Z"),
+                Instant.parse("2026-02-01T00:00:00Z"));
+
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "UPDATE subscription_period SET confirmation_ref = 'forged' WHERE workspace_id = ?", workspace));
+    }
+
+    @Test
+    void startedSubscriptionDatesCannotBeRewritten() {
+        UUID owner = user();
+        UUID workspace = personal(owner);
+        period(workspace, owner, Instant.parse("2026-01-01T00:00:00Z"),
+                Instant.parse("2026-02-01T00:00:00Z"));
+
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "UPDATE subscription_period SET expires_at = expires_at + interval '1 day'"
+                + " WHERE workspace_id = ?", workspace));
+    }
+
+    @Test
+    void futureSubscriptionDatesCanBeUpdatedWithVersion() {
+        UUID owner = user();
+        UUID workspace = personal(owner);
+        period(workspace, owner, Instant.parse("2099-01-01T00:00:00Z"),
+                Instant.parse("2099-02-01T00:00:00Z"));
+
+        assertEquals(1, jdbc.update("UPDATE subscription_period"
+                + " SET expires_at = expires_at + interval '1 day', version = version + 1,"
+                + " updated_at = now() WHERE workspace_id = ? AND version = 0", workspace));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT version FROM subscription_period WHERE workspace_id = ?", Integer.class, workspace));
+    }
+
     private UUID user() {
         UUID id = UUID.randomUUID();
         jdbc.update("INSERT INTO user_account(id,keycloak_sub,username,email_verified,origin,identity_state)"
