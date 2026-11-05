@@ -28,8 +28,16 @@ class AuditEventSchemaIT extends IntegrationEnvironment {
     void recordsOnlyMinimalMetadataAndMapsOccurredAt() {
         UUID target = UUID.randomUUID();
         UUID id = UUID.randomUUID();
-        entities.persist(new AuditEvent(id, null, null, Action.AUTHORIZATION_SYNC,
-                TargetType.AUTHORIZATION_OPERATION, target, null, Outcome.FAILED));
+        entities.persist(
+                new AuditEvent(
+                        id,
+                        null,
+                        null,
+                        Action.AUTHORIZATION_SYNC,
+                        TargetType.AUTHORIZATION_OPERATION,
+                        target,
+                        null,
+                        Outcome.FAILED));
         entities.flush();
         entities.clear();
 
@@ -41,34 +49,58 @@ class AuditEventSchemaIT extends IntegrationEnvironment {
         assertNull(loaded.getActorUserId());
         assertNull(loaded.getWorkspaceId());
 
-        Set<String> fields = jdbc.queryForList("""
-                SELECT column_name FROM information_schema.columns
-                WHERE table_schema = current_schema() AND table_name = 'audit_event'
-                """, String.class).stream().collect(Collectors.toSet());
-        assertEquals(Set.of("id", "actor_user_id", "workspace_id", "action",
-                "target_type", "target_id", "operation_id", "outcome", "occurred_at"), fields);
+        Set<String> fields =
+                jdbc
+                        .queryForList(
+                                """
+                                SELECT column_name FROM information_schema.columns
+                                WHERE table_schema = current_schema() AND table_name = 'audit_event'
+                                """,
+                                String.class)
+                        .stream()
+                        .collect(Collectors.toSet());
+        assertEquals(
+                Set.of(
+                        "id",
+                        "actor_user_id",
+                        "workspace_id",
+                        "action",
+                        "target_type",
+                        "target_id",
+                        "operation_id",
+                        "outcome",
+                        "occurred_at"),
+                fields);
     }
 
     @Test
     void auditHistoryCannotBeRewrittenOrHardDeleted() {
         UUID id = UUID.randomUUID();
-        jdbc.update("""
+        jdbc.update(
+                """
                 INSERT INTO audit_event(id,action,target_type,target_id,outcome)
                 VALUES (?,'RELATIONSHIP_CHANGE','RELATIONSHIP',?,'PENDING')
-                """, id, UUID.randomUUID());
-        assertThrows(DataAccessException.class, () ->
-                jdbc.update("UPDATE audit_event SET outcome='SUCCEEDED' WHERE id=?", id));
+                """,
+                id,
+                UUID.randomUUID());
+        assertThrows(
+                DataAccessException.class,
+                () -> jdbc.update("UPDATE audit_event SET outcome='SUCCEEDED' WHERE id=?", id));
     }
 
     @Test
     void auditHistoryCannotBeDeleted() {
         UUID id = UUID.randomUUID();
-        jdbc.update("""
+        jdbc.update(
+                """
                 INSERT INTO audit_event(id,action,target_type,target_id,outcome)
                 VALUES (?,'RECOVERY','ACCOUNT',?,'FAILED')
-                """, id, UUID.randomUUID());
-        assertThrows(DataAccessException.class, () ->
-                jdbc.update("DELETE FROM audit_event WHERE id=?", id));
+                """,
+                id,
+                UUID.randomUUID());
+        assertThrows(
+                DataAccessException.class,
+                () -> jdbc.update("DELETE FROM audit_event WHERE id=?", id));
     }
 
     @Test
@@ -78,9 +110,15 @@ class AuditEventSchemaIT extends IntegrationEnvironment {
 
     @Test
     void arbitraryActionCannotBeUsedToStoreSensitiveContent() {
-        assertThrows(DataAccessException.class, () -> jdbc.update("""
-                INSERT INTO audit_event(id,action,target_type,target_id,outcome)
-                VALUES (?,'password=secret','ACCOUNT',?,'PENDING')
-                """, UUID.randomUUID(), UUID.randomUUID()));
+        assertThrows(
+                DataAccessException.class,
+                () ->
+                        jdbc.update(
+                                """
+                                INSERT INTO audit_event(id,action,target_type,target_id,outcome)
+                                VALUES (?,'password=secret','ACCOUNT',?,'PENDING')
+                                """,
+                                UUID.randomUUID(),
+                                UUID.randomUUID()));
     }
 }

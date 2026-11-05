@@ -24,29 +24,54 @@ class IdempotencyServiceTest {
         String hash = service.payloadHash("PUT", "/api/workspaces/one/memberships/two", first);
 
         assertEquals(64, hash.length());
-        assertEquals(hash, service.payloadHash("put", "/api/workspaces/one/memberships/two", reordered));
-        assertNotEquals(hash, service.payloadHash("POST", "/api/workspaces/one/memberships/two", first));
-        assertNotEquals(hash, service.payloadHash("PUT", "/api/workspaces/two/memberships/two", first));
-        assertNotEquals(hash, service.payloadHash("PUT", "/api/workspaces/one/memberships/two",
-                json.readTree("{\"roles\":[\"STUDENT\"]}")));
+        assertEquals(
+                hash, service.payloadHash("put", "/api/workspaces/one/memberships/two", reordered));
+        assertNotEquals(
+                hash, service.payloadHash("POST", "/api/workspaces/one/memberships/two", first));
+        assertNotEquals(
+                hash, service.payloadHash("PUT", "/api/workspaces/two/memberships/two", first));
+        assertNotEquals(
+                hash,
+                service.payloadHash(
+                        "PUT",
+                        "/api/workspaces/one/memberships/two",
+                        json.readTree("{\"roles\":[\"STUDENT\"]}")));
     }
 
     @Test
     void keyAndStrongEtagAreRequiredAndVersionConflictIsSafe() {
-        assertEquals(HttpStatus.PRECONDITION_REQUIRED, assertThrows(HttpProblemException.class,
-                () -> service.requireKey(null)).getStatus());
-        assertEquals(HttpStatus.BAD_REQUEST, assertThrows(HttpProblemException.class,
-                () -> service.requireKey("unsafe\r\nheader")).getStatus());
-        assertEquals(HttpStatus.PRECONDITION_REQUIRED, assertThrows(HttpProblemException.class,
-                () -> service.requireIfMatch(null, 2)).getStatus());
-        assertEquals("INVALID_IF_MATCH", assertThrows(HttpProblemException.class,
-                () -> service.requireIfMatch("W/\"2\"", 2)).getCode());
-        assertEquals("INVALID_IF_MATCH", assertThrows(HttpProblemException.class,
-                () -> service.requireIfMatch("*", 2)).getCode());
-        assertEquals("INVALID_IF_MATCH", assertThrows(HttpProblemException.class,
-                () -> service.requireIfMatch("\"999999999999999999999\"", 2)).getCode());
-        assertEquals(HttpStatus.CONFLICT, assertThrows(HttpProblemException.class,
-                () -> service.requireIfMatch("\"1\"", 2)).getStatus());
+        assertEquals(
+                HttpStatus.PRECONDITION_REQUIRED,
+                assertThrows(HttpProblemException.class, () -> service.requireKey(null))
+                        .getStatus());
+        assertEquals(
+                HttpStatus.BAD_REQUEST,
+                assertThrows(
+                                HttpProblemException.class,
+                                () -> service.requireKey("unsafe\r\nheader"))
+                        .getStatus());
+        assertEquals(
+                HttpStatus.PRECONDITION_REQUIRED,
+                assertThrows(HttpProblemException.class, () -> service.requireIfMatch(null, 2))
+                        .getStatus());
+        assertEquals(
+                "INVALID_IF_MATCH",
+                assertThrows(HttpProblemException.class, () -> service.requireIfMatch("W/\"2\"", 2))
+                        .getCode());
+        assertEquals(
+                "INVALID_IF_MATCH",
+                assertThrows(HttpProblemException.class, () -> service.requireIfMatch("*", 2))
+                        .getCode());
+        assertEquals(
+                "INVALID_IF_MATCH",
+                assertThrows(
+                                HttpProblemException.class,
+                                () -> service.requireIfMatch("\"999999999999999999999\"", 2))
+                        .getCode());
+        assertEquals(
+                HttpStatus.CONFLICT,
+                assertThrows(HttpProblemException.class, () -> service.requireIfMatch("\"1\"", 2))
+                        .getStatus());
         assertDoesNotThrow(() -> service.requireIfMatch("\"2\"", 2));
     }
 
@@ -54,8 +79,16 @@ class IdempotencyServiceTest {
     void pendingAndRetryableCannotBePresentedAsCompleted() {
         UUID actor = UUID.randomUUID();
         UUID partition = UUID.randomUUID();
-        AuthorizationOperation operation = new AuthorizationOperation(UUID.randomUUID(), actor, null,
-                "key", "f".repeat(64), new UUID[]{partition}, new Long[]{0L}, 0L);
+        AuthorizationOperation operation =
+                new AuthorizationOperation(
+                        UUID.randomUUID(),
+                        actor,
+                        null,
+                        "key",
+                        "f".repeat(64),
+                        new UUID[] {partition},
+                        new Long[] {0L},
+                        0L);
 
         var result = service.responseFor(operation);
         assertEquals(HttpStatus.ACCEPTED, result.getStatusCode());

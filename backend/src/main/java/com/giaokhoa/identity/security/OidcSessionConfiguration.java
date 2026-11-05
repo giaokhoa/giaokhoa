@@ -21,7 +21,9 @@ public class OidcSessionConfiguration {
 
     @Bean
     OidcSessionRegistry oidcSessionRegistry(
-            JdbcTemplate jdbc, @Value("${spring.security.oauth2.client.registration.keycloak.client-id}") String clientId) {
+            JdbcTemplate jdbc,
+            @Value("${spring.security.oauth2.client.registration.keycloak.client-id}")
+                    String clientId) {
         return new JdbcOidcSessionRegistry(jdbc, clientId);
     }
 }

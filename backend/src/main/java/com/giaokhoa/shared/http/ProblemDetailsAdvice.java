@@ -36,19 +36,32 @@ public class ProblemDetailsAdvice extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(OptimisticLockingFailureException.class)
     ResponseEntity<Object> staleWrite(OptimisticLockingFailureException ex, WebRequest request) {
-        return respond(HttpStatus.CONFLICT, "VERSION_CONFLICT",
-                "Phiên bản dữ liệu đã thay đổi.", request, null);
+        return respond(
+                HttpStatus.CONFLICT,
+                "VERSION_CONFLICT",
+                "Phiên bản dữ liệu đã thay đổi.",
+                request,
+                null);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<Object> dataConflict(DataIntegrityViolationException ex, WebRequest request) {
-        return respond(HttpStatus.CONFLICT, "DATA_CONFLICT",
-                "Dữ liệu xung đột với ràng buộc hiện có.", request, null);
+        return respond(
+                HttpStatus.CONFLICT,
+                "DATA_CONFLICT",
+                "Dữ liệu xung đột với ràng buộc hiện có.",
+                request,
+                null);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     ResponseEntity<Object> forbidden(AccessDeniedException ex, WebRequest request) {
-        return respond(HttpStatus.FORBIDDEN, "FORBIDDEN", "Không có quyền thực hiện thao tác.", request, null);
+        return respond(
+                HttpStatus.FORBIDDEN,
+                "FORBIDDEN",
+                "Không có quyền thực hiện thao tác.",
+                request,
+                null);
     }
 
     @ExceptionHandler(AuthenticationException.class)
@@ -58,35 +71,65 @@ public class ProblemDetailsAdvice extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     ResponseEntity<Object> unexpected(Exception ex, WebRequest request) {
-        logger.error("Unexpected request failure (" + ex.getClass().getSimpleName() + ")");
-        return respond(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
-                "Không thể xử lý yêu cầu.", request, null);
+        if (logger.isErrorEnabled()) {
+            logger.error("Unexpected request failure (" + ex.getClass().getSimpleName() + ")");
+        }
+        return respond(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "INTERNAL_ERROR",
+                "Không thể xử lý yêu cầu.",
+                request,
+                null);
     }
 
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
-            MethodArgumentNotValidException ex, HttpHeaders headers,
-            HttpStatusCode status, WebRequest request) {
-        List<Violation> violations = ex.getBindingResult().getFieldErrors().stream()
-                .map(this::violation)
-                .sorted(Comparator.comparing(Violation::field).thenComparing(Violation::code))
-                .toList();
-        return respond(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED",
-                "Dữ liệu không hợp lệ.", request, violations);
+            MethodArgumentNotValidException ex,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest request) {
+        List<Violation> violations =
+                ex.getBindingResult().getFieldErrors().stream()
+                        .map(this::violation)
+                        .sorted(
+                                Comparator.comparing(Violation::field)
+                                        .thenComparing(Violation::code))
+                        .toList();
+        return respond(
+                HttpStatus.BAD_REQUEST,
+                "VALIDATION_FAILED",
+                "Dữ liệu không hợp lệ.",
+                request,
+                violations);
     }
 
     @Override
     protected ResponseEntity<Object> handleHandlerMethodValidationException(
-            HandlerMethodValidationException ex, HttpHeaders headers,
-            HttpStatusCode status, WebRequest request) {
-        List<Violation> violations = ex.getParameterValidationResults().stream()
-                .flatMap(result -> result.getResolvableErrors().stream().map(error ->
-                        new Violation(result.getMethodParameter().getParameterName() == null
-                                ? "request" : result.getMethodParameter().getParameterName(),
-                                "INVALID", "Giá trị không hợp lệ.")))
-                .toList();
-        return respond(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED",
-                "Dữ liệu không hợp lệ.", request, violations);
+            HandlerMethodValidationException ex,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest request) {
+        List<Violation> violations =
+                ex.getParameterValidationResults().stream()
+                        .flatMap(result ->
+                                result.getResolvableErrors().stream()
+                                        .map(error ->
+                                                new Violation(
+                                                        result.getMethodParameter()
+                                                                                .getParameterName()
+                                                                        == null
+                                                                ? "request"
+                                                                : result.getMethodParameter()
+                                                                        .getParameterName(),
+                                                        "INVALID",
+                                                        "Giá trị không hợp lệ.")))
+                        .toList();
+        return respond(
+                HttpStatus.BAD_REQUEST,
+                "VALIDATION_FAILED",
+                "Dữ liệu không hợp lệ.",
+                request,
+                violations);
     }
 
     private Violation violation(FieldError error) {
@@ -97,26 +140,43 @@ public class ProblemDetailsAdvice extends ResponseEntityExceptionHandler {
 
     @Override
     protected ResponseEntity<Object> handleExceptionInternal(
-            Exception ex, Object body, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+            Exception ex,
+            Object body,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest request) {
         if (ex instanceof MissingRequestHeaderException missing
                 && ("If-Match".equalsIgnoreCase(missing.getHeaderName())
-                    || "Idempotency-Key".equalsIgnoreCase(missing.getHeaderName()))) {
-            return respond(HttpStatus.PRECONDITION_REQUIRED, "PRECONDITION_REQUIRED",
-                    "Thiếu header bắt buộc.", request, null);
+                        || "Idempotency-Key".equalsIgnoreCase(missing.getHeaderName()))) {
+            return respond(
+                    HttpStatus.PRECONDITION_REQUIRED,
+                    "PRECONDITION_REQUIRED",
+                    "Thiếu header bắt buộc.",
+                    request,
+                    null);
         }
-        String code = switch (status.value()) {
-            case 401 -> "UNAUTHORIZED";
-            case 403 -> "FORBIDDEN";
-            case 404 -> "NOT_FOUND";
-            case 503 -> "SERVICE_UNAVAILABLE";
-            default -> status.is5xxServerError() ? "INTERNAL_ERROR" : "BAD_REQUEST";
-        };
-        return respond(status, code, status.value() == 404
-                ? "Không tìm thấy tài nguyên." : "Yêu cầu không thể xử lý.", request, null);
+        String code =
+                switch (status.value()) {
+                    case 401 -> "UNAUTHORIZED";
+                    case 403 -> "FORBIDDEN";
+                    case 404 -> "NOT_FOUND";
+                    case 503 -> "SERVICE_UNAVAILABLE";
+                    default -> status.is5xxServerError() ? "INTERNAL_ERROR" : "BAD_REQUEST";
+                };
+        return respond(
+                status,
+                code,
+                status.value() == 404 ? "Không tìm thấy tài nguyên." : "Yêu cầu không thể xử lý.",
+                request,
+                null);
     }
 
-    private ResponseEntity<Object> respond(HttpStatusCode status, String code, String detail,
-                                            WebRequest request, List<Violation> violations) {
+    private ResponseEntity<Object> respond(
+            HttpStatusCode status,
+            String code,
+            String detail,
+            WebRequest request,
+            List<Violation> violations) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);
         problem.setTitle(HttpStatus.valueOf(status.value()).getReasonPhrase());
         problem.setProperty("code", code);
@@ -125,8 +185,13 @@ public class ProblemDetailsAdvice extends ResponseEntityExceptionHandler {
             problem.setInstance(URI.create(http.getRequestURI()));
             String trace = MDC.get("traceId");
             String requestId = http.getRequestId();
-            problem.setProperty("traceId", trace != null && !trace.isBlank() ? trace
-                    : requestId != null && !requestId.isBlank() ? requestId : UUID.randomUUID().toString());
+            problem.setProperty(
+                    "traceId",
+                    trace != null && !trace.isBlank()
+                            ? trace
+                            : requestId != null && !requestId.isBlank()
+                                    ? requestId
+                                    : UUID.randomUUID().toString());
         } else {
             problem.setProperty("traceId", UUID.randomUUID().toString());
         }

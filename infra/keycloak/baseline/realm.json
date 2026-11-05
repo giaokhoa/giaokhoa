@@ -1,0 +1,89 @@
+{
+  "realm": "giaokhoa",
+  "enabled": true,
+  "sslRequired": "none",
+  "organizationsEnabled": true,
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": false,
+  "loginWithEmailAllowed": true,
+  "verifyEmail": true,
+  "duplicateEmailsAllowed": false,
+  "clients": [
+    {
+      "clientId": "giaokhoa-web",
+      "name": "Giao Khoa Spring BFF",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "backchannel.logout.session.required": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "giaokhoa-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "giaokhoa-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "giaokhoa-api",
+      "name": "Giao Khoa protected resources",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": true,
+      "redirectUris": [],
+      "webOrigins": [],
+      "authorizationSettings": {
+        "policyEnforcementMode": "ENFORCING",
+        "allowRemoteResourceManagement": true,
+        "decisionStrategy": "UNANIMOUS"
+      }
+    },
+    {
+      "clientId": "giaokhoa-provisioner",
+      "name": "Giao Khoa server-side directory and PAP",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": false,
+      "redirectUris": [],
+      "webOrigins": []
+    }
+  ],
+  "groups": [
+    {
+      "name": "gk",
+      "subGroups": [
+        { "name": "identity", "subGroups": [{ "name": "eligible" }] },
+        { "name": "platform", "subGroups": [{ "name": "operators" }] },
+        { "name": "workspaces" }
+      ]
+    }
+  ]
+}

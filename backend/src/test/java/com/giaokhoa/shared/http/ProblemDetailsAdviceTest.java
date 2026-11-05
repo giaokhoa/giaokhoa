@@ -1,7 +1,10 @@
 package com.giaokhoa.shared.http;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -21,6 +24,8 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+// MockMvc.andExpect performs real assertions but is not recognized by PMD's JUnit rule.
+@SuppressWarnings("PMD.UnitTestShouldIncludeAssert")
 class ProblemDetailsAdviceTest {
     private MockMvc mvc;
 
@@ -29,26 +34,34 @@ class ProblemDetailsAdviceTest {
         record Payload(@NotBlank String name) {}
 
         @PostMapping("/probe")
-        void validate(@RequestHeader("If-Match") String ifMatch, @Valid @RequestBody Payload payload) {}
+        void validate(
+                @RequestHeader("If-Match") String ifMatch, @Valid @RequestBody Payload payload) {}
 
         @PostMapping("/pending")
         void unavailable() {
-            throw new HttpProblemException(HttpStatus.SERVICE_UNAVAILABLE,
-                    "PROJECTION_PENDING", "Đồng bộ quyền đang xử lý.");
+            throw new HttpProblemException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "PROJECTION_PENDING",
+                    "Đồng bộ quyền đang xử lý.");
         }
 
         @PostMapping("/query")
         void invalidParam(@RequestParam @NotBlank String code) {}
 
         @PostMapping("/forbidden")
-        void forbidden() { throw new AccessDeniedException("internal security details"); }
+        void forbidden() {
+            throw new AccessDeniedException("internal security details");
+        }
 
         @PostMapping("/unauthorized")
-        void unauthorized() { throw new BadCredentialsException("secret credentials"); }
+        void unauthorized() {
+            throw new BadCredentialsException("secret credentials");
+        }
 
         @PostMapping("/duplicate")
         void duplicate() {
-            throw new DataIntegrityViolationException("constraint uq_user_username, username=private");
+            throw new DataIntegrityViolationException(
+                    "constraint uq_user_username, username=private");
         }
 
         @PostMapping("/stale")
@@ -64,13 +77,18 @@ class ProblemDetailsAdviceTest {
 
     @BeforeEach
     void setup() {
-        mvc = MockMvcBuilders.standaloneSetup(new Probe())
-                .setControllerAdvice(new ProblemDetailsAdvice()).build();
+        mvc =
+                MockMvcBuilders.standaloneSetup(new Probe())
+                        .setControllerAdvice(new ProblemDetailsAdvice())
+                        .build();
     }
 
     @Test
     void missingIfMatchReturns428WithNoCacheAndTrace() throws Exception {
-        mvc.perform(post("/probe").contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"ok\"}"))
+        mvc.perform(
+                        post("/probe")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"name\":\"ok\"}"))
                 .andExpect(status().isPreconditionRequired())
                 .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(header().string("Cache-Control", "private, no-store"))
@@ -82,8 +100,11 @@ class ProblemDetailsAdviceTest {
 
     @Test
     void invalidFieldProducesSafeViolationsWithoutRejectedData() throws Exception {
-        mvc.perform(post("/probe").header("If-Match", "\"0\"")
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"\"}"))
+        mvc.perform(
+                        post("/probe")
+                                .header("If-Match", "\"0\"")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"name\":\"\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.violations[0].field").value("name"))

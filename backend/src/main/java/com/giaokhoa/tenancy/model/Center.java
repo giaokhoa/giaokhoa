@@ -44,10 +44,15 @@ public class Center {
     @Column(name = "version", nullable = false)
     private long version;
 
-    protected Center() {
-    }
+    protected Center() {}
 
-    public Center(UUID id, UUID workspaceId, String keycloakOrganizationId, String name, UUID ownerUserId, String state) {
+    public Center(
+            UUID id,
+            UUID workspaceId,
+            String keycloakOrganizationId,
+            String name,
+            UUID ownerUserId,
+            String state) {
         this.id = id;
         this.workspaceId = workspaceId;
         this.keycloakOrganizationId = keycloakOrganizationId;
