@@ -33,6 +33,9 @@ public class AuthorizationOperation {
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(name = "affected_partitions", nullable = false, columnDefinition = "uuid[]")
     private UUID[] affectedPartitions;
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "affected_revisions", nullable = false, columnDefinition = "bigint[]")
+    private Long[] affectedRevisions;
     @Column(name = "desired_revision", nullable = false)
     private long desiredRevision;
     @Enumerated(EnumType.STRING)
@@ -58,13 +61,14 @@ public class AuthorizationOperation {
 
     public AuthorizationOperation(UUID id, UUID initiatorUserId, UUID workspaceId,
                                   String idempotencyKey, String payloadHash,
-                                  UUID[] affectedPartitions, long desiredRevision) {
+                                  UUID[] affectedPartitions, Long[] affectedRevisions, long desiredRevision) {
         this.id = id;
         this.initiatorUserId = initiatorUserId;
         this.workspaceId = workspaceId;
         this.idempotencyKey = idempotencyKey;
         this.payloadHash = payloadHash;
         this.affectedPartitions = affectedPartitions;
+        this.affectedRevisions = affectedRevisions;
         this.desiredRevision = desiredRevision;
         this.state = State.PENDING;
     }
@@ -75,6 +79,7 @@ public class AuthorizationOperation {
     public String getIdempotencyKey() { return idempotencyKey; }
     public String getPayloadHash() { return payloadHash; }
     public UUID[] getAffectedPartitions() { return affectedPartitions; }
+    public Long[] getAffectedRevisions() { return affectedRevisions; }
     public long getDesiredRevision() { return desiredRevision; }
     public State getState() { return state; }
     public int getAttemptCount() { return attemptCount; }

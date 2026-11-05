@@ -40,6 +40,7 @@ CREATE TABLE authorization_operation (
     idempotency_key VARCHAR(255) NOT NULL CHECK (btrim(idempotency_key) <> ''),
     payload_hash VARCHAR(64) NOT NULL CHECK (payload_hash ~ '^[0-9a-f]{64}$'),
     affected_partitions UUID[] NOT NULL,
+    affected_revisions BIGINT[] NOT NULL,
     desired_revision BIGINT NOT NULL CHECK (desired_revision >= 0),
     state VARCHAR(24) NOT NULL DEFAULT 'PENDING'
         CHECK (state IN ('PENDING', 'APPLYING', 'SUCCEEDED', 'RETRYABLE_FAILURE', 'FAILED')),
@@ -50,6 +51,11 @@ CREATE TABLE authorization_operation (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     version BIGINT NOT NULL DEFAULT 0,
     CONSTRAINT uq_authz_operation_idempotency UNIQUE (initiator_user_id, idempotency_key),
+    -- The scalar revision belongs to the first affected partition; each partition advances independently.
+    CONSTRAINT ck_authz_operation_revision_vector CHECK (
+        cardinality(affected_revisions) = cardinality(affected_partitions)
+        AND desired_revision = affected_revisions[1]
+    ),
     CONSTRAINT ck_authz_operation_succeeded CHECK (
         state <> 'SUCCEEDED' OR (next_attempt_at IS NULL AND last_error_code IS NULL)
     )
@@ -68,8 +74,16 @@ BEGIN
     ELSE
         ids := NEW.affected_partitions;
     END IF;
-    IF (TG_TABLE_NAME = 'authorization_operation' AND cardinality(ids) = 0)
-        OR array_position(ids, NULL) IS NOT NULL
+    IF TG_TABLE_NAME = 'authorization_operation' THEN
+        IF cardinality(ids) = 0
+            OR cardinality(NEW.affected_revisions) <> cardinality(ids)
+            OR array_position(NEW.affected_revisions, NULL) IS NOT NULL
+            OR EXISTS (SELECT 1 FROM unnest(NEW.affected_revisions) AS rev(value)
+                       WHERE rev.value < 0) THEN
+            RAISE EXCEPTION 'Invalid operation revision vector' USING ERRCODE = '23514';
+        END IF;
+    END IF;
+    IF array_position(ids, NULL) IS NOT NULL
         OR cardinality(ids) <> (SELECT count(DISTINCT ref.id) FROM unnest(ids) AS ref(id))
         OR EXISTS (
             SELECT 1 FROM unnest(ids) AS referenced(id)
@@ -87,7 +101,7 @@ END;
 $$;
 CREATE TRIGGER ck_authz_projection_refs BEFORE INSERT OR UPDATE OF partition_id, dependency_partition_ids
     ON authz_projection FOR EACH ROW EXECUTE FUNCTION validate_authz_partition_ids();
-CREATE TRIGGER ck_authz_operation_refs BEFORE INSERT OR UPDATE OF affected_partitions
+CREATE TRIGGER ck_authz_operation_refs BEFORE INSERT OR UPDATE OF affected_partitions, affected_revisions
     ON authorization_operation FOR EACH ROW EXECUTE FUNCTION validate_authz_partition_ids();
 
 -- Keep referenced partitions durable; array references cannot use a normal FK.
@@ -152,9 +166,11 @@ BEGIN
             RAISE EXCEPTION 'Projection partition cannot change' USING ERRCODE = '23514';
         END IF;
         owner_id := NEW.partition_id;
-        desired_changed := (OLD.target_key, OLD.policy_names, OLD.dependency_partition_ids, OLD.desired_hash)
+        desired_changed := (OLD.target_key, OLD.keycloak_resource_id, OLD.policy_names,
+                            OLD.dependency_partition_ids, OLD.desired_hash)
             IS DISTINCT FROM
-            (NEW.target_key, NEW.policy_names, NEW.dependency_partition_ids, NEW.desired_hash);
+            (NEW.target_key, NEW.keycloak_resource_id, NEW.policy_names,
+             NEW.dependency_partition_ids, NEW.desired_hash);
     END IF;
     IF desired_changed AND EXISTS (
         SELECT 1 FROM authz_partition p WHERE p.id = owner_id AND p.state = 'READY'
@@ -237,11 +253,14 @@ CREATE TRIGGER ck_authz_partition_monotonic BEFORE UPDATE ON authz_partition
 CREATE FUNCTION guard_authz_operation_payload() RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
     IF (OLD.id, OLD.initiator_user_id, OLD.workspace_id, OLD.idempotency_key,
-        OLD.payload_hash, OLD.affected_partitions, OLD.desired_revision)
+        OLD.payload_hash, OLD.affected_partitions, OLD.affected_revisions, OLD.desired_revision)
         IS DISTINCT FROM
         (NEW.id, NEW.initiator_user_id, NEW.workspace_id, NEW.idempotency_key,
-        NEW.payload_hash, NEW.affected_partitions, NEW.desired_revision) THEN
+        NEW.payload_hash, NEW.affected_partitions, NEW.affected_revisions, NEW.desired_revision) THEN
         RAISE EXCEPTION 'Operation idempotency payload cannot change' USING ERRCODE = '23514';
+    END IF;
+    IF OLD.state IN ('SUCCEEDED', 'FAILED') AND OLD.state <> NEW.state THEN
+        RAISE EXCEPTION 'Terminal authorization operation cannot restart' USING ERRCODE = '23514';
     END IF;
     RETURN NEW;
 END;
@@ -256,11 +275,12 @@ BEGIN
     SELECT * INTO current_row FROM authorization_operation WHERE id = NEW.id;
     IF NOT FOUND THEN RETURN NEW; END IF;
     IF current_row.state = 'SUCCEEDED' AND EXISTS (
-        SELECT 1 FROM unnest(current_row.affected_partitions) AS ref(id)
+        SELECT 1 FROM unnest(current_row.affected_partitions, current_row.affected_revisions)
+            AS ref(id, revision)
         LEFT JOIN authz_partition p ON p.id = ref.id
         WHERE p.id IS NULL OR p.state <> 'READY'
-            OR p.desired_revision <> current_row.desired_revision
-            OR p.applied_revision <> current_row.desired_revision
+            OR p.desired_revision <> ref.revision
+            OR p.applied_revision <> ref.revision
     ) THEN
         RAISE EXCEPTION 'Operation cannot succeed before affected partitions are READY'
             USING ERRCODE = '23514';

@@ -6,14 +6,21 @@
 - Tự tạo `ACCOUNT` và `WORKSPACE` partition ở trạng thái `PENDING` khi insert directory, backfill phạm vi có sẵn; `GRANT` partition sẽ do luồng cấp quyền tương ứng tạo khi bảng grant xuất hiện.
 - UUID nghiệp vụ tách khỏi Keycloak locator opaque. Projection chỉ lưu key/metadata/hash/policies/dependencies, không lưu body, bài làm, token hoặc password.
 - Ràng buộc DB: unique owner/target/idempotency key theo actor; revision không giảm; `READY` đòi revision bằng nhau, hash đã áp dụng, Keycloak locator và các dependency READY; sửa graph hoặc nguồn liên quan phải fence trước. Mảng UUID tham chiếu partition tồn tại, không lặp; partition không hard-delete.
-- Operation giữ bất biến idempotency payload; `SUCCEEDED` chỉ khi toàn bộ partition bị ảnh hưởng đã READY tại revision tương ứng. Tất cả trạng thái PENDING/APPLYING/SUCCEEDED/RETRYABLE_FAILURE/FAILED được lưu và có thể lấy ra qua JPA.
+- Operation giữ bất biến idempotency payload và snapshot `affected_revisions` theo từng partition (sắp theo thứ tự `affected_partitions`); `desired_revision` vẫn là revision của partition đầu tiên. `SUCCEEDED` chỉ khi tất cả partition READY ở revision tương ứng, không yêu cầu các partition có cùng số revision. `SUCCEEDED`/`FAILED` không thể chuyển về trạng thái chờ. Các trạng thái PENDING/APPLYING/SUCCEEDED/RETRYABLE_FAILURE/FAILED được lưu và có thể lấy ra qua JPA.
 
 ## Kết quả xác minh
 
 - Môi trường: Docker Compose `giaokhoa-test`, PostgreSQL 18.6, realm TEST của Keycloak 26.8.1. Chỉ reset schema **TEST** để chạy lại migration từ đầu; không thay đổi DEV.
 - Lệnh: `./backend/mvnw -B -ntp -f backend/pom.xml -Dtest=AuthorizationControlSchemaIT,DirectorySchemaIT,IntegrationEnvironmentIT test` (với biến môi trường TEST từ job integration).
-- Kết quả: **45 passed, 0 failed, 0 errors**; trong đó `AuthorizationControlSchemaIT` 19 ca. Flyway V001/V002 được áp dụng lại thành công và Hibernate xác nhận mapping.
+- Kết quả: **53 passed, 0 failed, 0 errors**; trong đó `AuthorizationControlSchemaIT` 27 ca. Flyway V001/V002 được áp dụng lại thành công và Hibernate xác nhận mapping.
 - CI integration được cập nhật để chạy thêm `AuthorizationControlSchemaIT`.
+
+## Review bổ sung (Issue #9)
+
+- Viết regression tests trước khi sửa: **3 test thất bại** đúng ba lỗi từ review: thay `keycloak_resource_id` khi READY được chấp nhận; multi-partition revisions `1/2` bị từ chối khi SUCCEEDED; `SUCCEEDED → PENDING` được chấp nhận.
+- Đã sửa: fence cả Keycloak locator; bổ sung mảng `affected_revisions` tương ứng một-một với `affected_partitions` và xác minh từng revision; bảo vệ trạng thái kết thúc `SUCCEEDED`/`FAILED`.
+- Regression tests kiểm tra cả đường hợp lệ khi đã fence, operation nhiều partition khác revision, dependency stale bị từ chối, snapshot revision không được ghi đè và lỗi cấu trúc mảng.
+- V002 vẫn chỉ ở nhánh T007, chưa merge/deploy; kiểm tra lại từ schema PostgreSQL TEST sạch để xác nhận migration Flyway và Hibernate.
 
 ## Giới hạn và phần việc tiếp theo
 

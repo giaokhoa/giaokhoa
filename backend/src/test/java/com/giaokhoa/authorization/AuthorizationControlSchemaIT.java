@@ -231,6 +231,114 @@ class AuthorizationControlSchemaIT extends IntegrationEnvironment {
                 "SELECT state FROM authorization_operation WHERE id = ?", String.class, id));
     }
 
+    @Test
+    void readyProjectionCannotChangeKeycloakLocatorWithoutFence() {
+        UUID owner = partition();
+        UUID projection = projection(owner, "grant:" + UUID.randomUUID(), new UUID[0], true);
+        jdbc.update("UPDATE authz_partition SET state = 'READY' WHERE id = ?", owner);
+        jdbc.execute("SET CONSTRAINTS ALL IMMEDIATE");
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "UPDATE authz_projection SET keycloak_resource_id = 'locator-changed' WHERE id = ?",
+                projection));
+    }
+
+    @Test
+    void operationCanSucceedWithIndependentPartitionRevisions() {
+        UUID initiator = user();
+        UUID workspace = personal(initiator);
+        UUID first = partition();
+        UUID second = partition();
+        jdbc.update("UPDATE authz_partition SET desired_revision = 1, applied_revision = 1,"
+                + " state = 'READY' WHERE id = ?", first);
+        jdbc.update("UPDATE authz_partition SET desired_revision = 2, applied_revision = 2,"
+                + " state = 'READY' WHERE id = ?", second);
+        UUID operation = operationWithRevisions(initiator, workspace, "mixed-revisions", HASH_A,
+                new UUID[]{first, second}, new Long[]{1L, 2L});
+        jdbc.update("UPDATE authorization_operation SET state = 'SUCCEEDED' WHERE id = ?", operation);
+        jdbc.execute("SET CONSTRAINTS ALL IMMEDIATE");
+        assertEquals("SUCCEEDED", jdbc.queryForObject(
+                "SELECT state FROM authorization_operation WHERE id = ?", String.class, operation));
+        assertArrayEquals(new Long[]{1L, 2L},
+                entities.find(AuthorizationOperation.class, operation).getAffectedRevisions());
+    }
+
+    @Test
+    void succeededOperationCannotReturnToPending() {
+        UUID initiator = user();
+        UUID workspace = personal(initiator);
+        UUID owner = scope("WORKSPACE", "workspace:" + workspace);
+        UUID operation = operation(initiator, workspace, "final-key", HASH_A, owner);
+        jdbc.update("UPDATE authz_partition SET desired_revision = 1, applied_revision = 1,"
+                + " state = 'READY' WHERE id = ?", owner);
+        jdbc.update("UPDATE authorization_operation SET state = 'SUCCEEDED' WHERE id = ?", operation);
+        jdbc.execute("SET CONSTRAINTS ALL IMMEDIATE");
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "UPDATE authorization_operation SET state = 'PENDING' WHERE id = ?", operation));
+    }
+
+    @Test
+    void keycloakLocatorCanChangeWhilePartitionIsFenced() {
+        UUID owner = partition();
+        UUID projection = projection(owner, "grant:" + UUID.randomUUID(), new UUID[0], true);
+        jdbc.update("UPDATE authz_partition SET state = 'READY' WHERE id = ?", owner);
+        jdbc.execute("SET CONSTRAINTS ALL IMMEDIATE");
+        jdbc.execute("SET CONSTRAINTS ALL DEFERRED");
+        jdbc.update("UPDATE authz_partition SET desired_revision = 1, state = 'PENDING' WHERE id = ?", owner);
+        jdbc.update("UPDATE authz_projection SET state = 'PENDING',"
+                + " keycloak_resource_id = 'reconciled-locator' WHERE id = ?", projection);
+        jdbc.execute("SET CONSTRAINTS ALL IMMEDIATE");
+    }
+
+    @Test
+    void operationCannotSucceedWithOneStaleAffectedPartition() {
+        UUID initiator = user();
+        UUID workspace = personal(initiator);
+        UUID first = partition();
+        UUID second = partition();
+        jdbc.update("UPDATE authz_partition SET desired_revision = 1, applied_revision = 1,"
+                + " state = 'READY' WHERE id = ?", first);
+        jdbc.update("UPDATE authz_partition SET desired_revision = 2, applied_revision = 2,"
+                + " state = 'READY' WHERE id = ?", second);
+        UUID operation = operationWithRevisions(initiator, workspace, "stale-dependency", HASH_A,
+                new UUID[]{first, second}, new Long[]{1L, 3L});
+        jdbc.update("UPDATE authorization_operation SET state = 'SUCCEEDED' WHERE id = ?", operation);
+        assertThrows(DataAccessException.class, () -> jdbc.execute("SET CONSTRAINTS ALL IMMEDIATE"));
+    }
+
+    @Test
+    void failedOperationCannotRestartSilently() {
+        UUID initiator = user();
+        UUID workspace = personal(initiator);
+        UUID owner = scope("WORKSPACE", "workspace:" + workspace);
+        UUID operation = operation(initiator, workspace, "failed-key", HASH_A, owner);
+        jdbc.update("UPDATE authorization_operation SET state = 'FAILED' WHERE id = ?", operation);
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "UPDATE authorization_operation SET state = 'PENDING' WHERE id = ?", operation));
+    }
+
+    @Test
+    void operationRejectsRevisionVectorWithWrongLength() {
+        UUID initiator = user();
+        UUID workspace = personal(initiator);
+        UUID first = partition();
+        UUID second = partition();
+        assertThrows(DataAccessException.class, () -> operationWithRevisions(
+                initiator, workspace, "bad-vector", HASH_A,
+                new UUID[]{first, second}, new Long[]{1L}));
+    }
+
+    @Test
+    void operationRevisionSnapshotCannotBeRewritten() {
+        UUID initiator = user();
+        UUID workspace = personal(initiator);
+        UUID partition = scope("WORKSPACE", "workspace:" + workspace);
+        UUID operation = operation(initiator, workspace, "snapshot-key", HASH_A, partition);
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "UPDATE authorization_operation SET affected_revisions = ARRAY[2]::bigint[],"
+                + " desired_revision = 2 WHERE id = ?",
+                operation));
+    }
+
     private UUID user() {
         UUID id = UUID.randomUUID();
         jdbc.update("INSERT INTO user_account(id,keycloak_sub,username,email_verified,origin,identity_state)"
@@ -277,12 +385,24 @@ class AuthorizationControlSchemaIT extends IntegrationEnvironment {
     }
 
     private UUID operation(UUID initiator, UUID workspace, String key, String hash, UUID... partitions) {
+        Long[] revisions = new Long[partitions.length];
+        Arrays.fill(revisions, 1L);
+        return operationWithRevisions(initiator, workspace, key, hash, partitions, revisions);
+    }
+
+    private UUID operationWithRevisions(UUID initiator, UUID workspace, String key, String hash,
+                                        UUID[] partitions, Long[] revisions) {
         UUID id = UUID.randomUUID();
         jdbc.update("INSERT INTO authorization_operation(id,initiator_user_id,workspace_id,"
-                + "idempotency_key,payload_hash,affected_partitions,desired_revision)"
-                + " VALUES (?,?,?,?,?,?::uuid[],1)",
-                id, initiator, workspace, key, hash, uuidArray(partitions));
+                + "idempotency_key,payload_hash,affected_partitions,affected_revisions,desired_revision)"
+                + " VALUES (?,?,?,?,?,?::uuid[],?::bigint[],?)",
+                id, initiator, workspace, key, hash, uuidArray(partitions),
+                longArray(revisions), revisions.length == 0 ? 0L : revisions[0]);
         return id;
+    }
+
+    private static String longArray(Long[] revisions) {
+        return Arrays.stream(revisions).map(String::valueOf).collect(Collectors.joining(",", "{", "}"));
     }
 
     private static String uuidArray(UUID[] ids) {
