@@ -8,12 +8,18 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager;
+import org.springframework.security.oauth2.client.registration.ClientRegistration;
+import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
@@ -28,23 +34,18 @@ class KeycloakProvisioningClientTest {
     void createsOrganizationOnceAndReturnsStableOpaqueIdOnRetry() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-        KeycloakProvisioningClient client = new KeycloakProvisioningClient(
-                builder, HOST, "giaokhoa-provisioner", "test-secret");
+        KeycloakProvisioningClient client = client(builder);
 
-        expectToken(server);
         server.expect(requestTo(ORG_QUERY)).andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
-        expectToken(server);
         server.expect(requestTo(HOST + "/admin/realms/giaokhoa/organizations"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(content().json("{\"name\":\"" + NAME
                         + "\",\"alias\":\"" + NAME + "\",\"description\":\"Center A\"}"))
                 .andRespond(withStatus(HttpStatus.CREATED));
-        expectToken(server);
         server.expect(requestTo(ORG_QUERY)).andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("[{\"id\":\"opaque-keycloak-id\",\"name\":\""
                         + NAME + "\",\"alias\":\"" + NAME + "\"}]", MediaType.APPLICATION_JSON));
-        expectToken(server);
         server.expect(requestTo(ORG_QUERY)).andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("[{\"id\":\"opaque-keycloak-id\",\"name\":\""
                         + NAME + "\",\"alias\":\"" + NAME + "\"}]", MediaType.APPLICATION_JSON));
@@ -55,34 +56,71 @@ class KeycloakProvisioningClientTest {
     }
 
     @Test
-    void resolvesNestedRealmGroupsWithoutCreatingDuplicates() {
+    void resolvesGroupByExactPathWithoutNameSearch() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-        KeycloakProvisioningClient client = new KeycloakProvisioningClient(
-                builder, HOST, "giaokhoa-provisioner", "test-secret");
-
-        expectToken(server);
-        server.expect(requestTo(groupQuery("gk"))).andRespond(withSuccess(
-                "[{\"id\":\"root\",\"name\":\"gk\",\"path\":\"/gk\"}]",
-                MediaType.APPLICATION_JSON));
-        expectToken(server);
-        server.expect(requestTo(groupQuery("identity"))).andRespond(withSuccess(
-                "[{\"id\":\"root\",\"path\":\"/gk\",\"subGroups\":["
-                + "{\"id\":\"branch\",\"name\":\"identity\",\"path\":\"/gk/identity\"}]}]",
-                MediaType.APPLICATION_JSON));
-        expectToken(server);
-        server.expect(requestTo(groupQuery("eligible"))).andRespond(withSuccess(
-                "[{\"id\":\"leaf\",\"path\":\"/gk/identity/eligible\"}]",
-                MediaType.APPLICATION_JSON));
-
+        KeycloakProvisioningClient client = client(builder);
+        String[] paths = {"/gk", "/gk/identity", "/gk/identity/eligible"};
+        String[] ids = {"root", "branch", "leaf"};
+        for (int i = 0; i < paths.length; i++) {
+                server.expect(requestTo(groupPath(paths[i]))).andExpect(method(HttpMethod.GET))
+                    .andRespond(withSuccess("{\"id\":\"" + ids[i] + "\",\"path\":\"" + paths[i] + "\"}",
+                            MediaType.APPLICATION_JSON));
+        }
         assertEquals("leaf", client.ensureRealmGroup("/gk/identity/eligible"));
         server.verify();
     }
 
     @Test
+    void revokeDoesNotSucceedWhenExactGroupIsMissing() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        KeycloakProvisioningClient client = client(builder);
+        server.expect(requestTo(groupPath("/gk/identity/eligible")))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+        assertThrows(IllegalStateException.class, () -> client.setRealmGroupMembership(
+                "opaque-user", "/gk/identity/eligible", false));
+        server.verify();
+    }
+
+    @Test
+    void revokeUsesExactIdAndFailsOnKeycloakError() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        KeycloakProvisioningClient client = client(builder);
+        server.expect(requestTo(groupPath("/gk/identity/eligible")))
+                .andRespond(withSuccess("{\"id\":\"opaque-group\",\"path\":\"/gk/identity/eligible\"}",
+                        MediaType.APPLICATION_JSON));
+        server.expect(requestTo(HOST + "/admin/realms/giaokhoa/users/opaque-user/groups/opaque-group"))
+                .andExpect(method(HttpMethod.DELETE)).andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+        assertThrows(org.springframework.web.client.RestClientResponseException.class,
+                () -> client.setRealmGroupMembership("opaque-user", "/gk/identity/eligible", false));
+        server.verify();
+    }
+
+    @Test
+    void retriesGroupCreationConflictByReadingActualId() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        KeycloakProvisioningClient client = client(builder);
+        server.expect(requestTo(groupPath("/gk"))).andRespond(withStatus(HttpStatus.NOT_FOUND));
+        server.expect(requestTo(HOST + "/admin/realms/giaokhoa/groups"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("{\"name\":\"gk\"}"))
+                .andRespond(withStatus(HttpStatus.CONFLICT));
+        server.expect(requestTo(groupPath("/gk"))).andRespond(withSuccess(
+                "{\"id\":\"root\",\"path\":\"/gk\"}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(groupPath("/gk/platform"))).andRespond(withSuccess(
+                "{\"id\":\"platform\",\"path\":\"/gk/platform\"}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(groupPath("/gk/platform/operators"))).andRespond(withSuccess(
+                "{\"id\":\"operators\",\"path\":\"/gk/platform/operators\"}", MediaType.APPLICATION_JSON));
+        assertEquals("operators", client.ensureRealmGroup("/gk/platform/operators"));
+        server.verify();
+    }
+
+    @Test
     void rejectsArbitraryGroupSourcesBeforeCallingKeycloak() {
-        KeycloakProvisioningClient client = new KeycloakProvisioningClient(
-                RestClient.builder(), HOST, "giaokhoa-provisioner", "test-secret");
+        KeycloakProvisioningClient client = client(RestClient.builder());
 
         assertThrows(IllegalArgumentException.class, () -> client.ensureRealmGroup("/gk/roles/admin"));
         assertThrows(IllegalArgumentException.class, () -> client.ensureRealmGroup(
@@ -92,14 +130,20 @@ class KeycloakProvisioningClientTest {
         assertThrows(IllegalArgumentException.class, () -> client.ensureOrganization(null, "A"));
     }
 
-    private String groupQuery(String name) {
-        return HOST + "/admin/realms/giaokhoa/groups?search=" + name
-                + "&exact=true&briefRepresentation=false&max=1000";
+    private String groupPath(String path) {
+        return HOST + "/admin/realms/giaokhoa/group-by-path" + path;
     }
 
-    private void expectToken(MockRestServiceServer server) {
-        server.expect(requestTo(HOST + "/realms/giaokhoa/protocol/openid-connect/token"))
-                .andExpect(method(HttpMethod.POST))
-                .andRespond(withSuccess("{\"access_token\":\"server-token\"}", MediaType.APPLICATION_JSON));
+    private KeycloakProvisioningClient client(RestClient.Builder builder) {
+        ClientRegistration registration = ClientRegistration.withRegistrationId("giaokhoa-provisioner")
+                .clientId("test-provisioner")
+                .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+                .tokenUri(HOST + "/realms/giaokhoa/protocol/openid-connect/token").build();
+        OAuth2AccessToken token = new OAuth2AccessToken(OAuth2AccessToken.TokenType.BEARER,
+                "server-token", Instant.now(), Instant.now().plusSeconds(300));
+        OAuth2AuthorizedClient authorized = new OAuth2AuthorizedClient(
+                registration, "giaokhoa-provisioner", token);
+        OAuth2AuthorizedClientManager manager = request -> authorized;
+        return new KeycloakProvisioningClient(builder, HOST, manager);
     }
 }

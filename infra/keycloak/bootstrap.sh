@@ -35,34 +35,44 @@ TOKEN="$(curl -fsS --request POST "$BASE/realms/master/protocol/openid-connect/t
   --data-urlencode "password=$KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD" | jq -er '.access_token')"
 
 admin_get() {
-  curl -fsS -H "Authorization: Bearer $TOKEN" "$BASE/admin/realms/$REALM$1"
+  curl -fsS -H "Authorization: Bearer $TOKEN" "$BASE/admin/realms/$REALM$1" || {
+    echo "Keycloak request failed: GET /admin/realms/$REALM$1" >&2
+    return 1
+  }
 }
 admin_send() {
   curl -fsS -o /dev/null -X "$1" -H "Authorization: Bearer $TOKEN" \
     -H 'Content-Type: application/json' --data-binary "@$3" \
-    "$BASE/admin/realms/$REALM$2"
+    "$BASE/admin/realms/$REALM$2" || {
+      echo "Keycloak request failed: $1 /admin/realms/$REALM$2" >&2
+      return 1
+    }
 }
 admin_delete() {
   curl -fsS -o /dev/null -X DELETE -H "Authorization: Bearer $TOKEN" \
-    "$BASE/admin/realms/$REALM$1"
+    "$BASE/admin/realms/$REALM$1" || {
+      echo "Keycloak request failed: DELETE /admin/realms/$REALM$1" >&2
+      return 1
+    }
 }
 
 code="$(curl -sS -o /dev/null -w '%{http_code}' \
   -H "Authorization: Bearer $TOKEN" "$BASE/admin/realms/$REALM")"
-NEW_REALM=false
 if [[ "$code" == 404 ]]; then
   # Disable a new realm until the default wildcard permission has been removed.
-  jq '.enabled = false' "$BASELINE" > "$TMP/realm-new.json"
+  jq '.enabled = false | .attributes["gk.bootstrap.pending"] = "true"' \
+    "$BASELINE" > "$TMP/realm-new.json"
   curl -fsS -o /dev/null -X POST -H "Authorization: Bearer $TOKEN" \
     -H 'Content-Type: application/json' --data-binary "@$TMP/realm-new.json" "$BASE/admin/realms"
-  NEW_REALM=true
 elif [[ "$code" != 200 ]]; then
   echo "Cannot inspect realm (HTTP $code)" >&2
   exit 1
 fi
 
-# Update baseline flags while preserving the existing realm's enabled state and directory.
+# Only realms marked by our unfinished bootstrap may be enabled on retry.
+# Other disabled realms retain the administrator's intentional state.
 admin_get '' > "$TMP/realm-current.json"
+PENDING_BOOTSTRAP="$(jq -r '.attributes["gk.bootstrap.pending"] // "false"' "$TMP/realm-current.json")"
 jq -s '.[0] * (.[1] | {
   organizationsEnabled, registrationAllowed, registrationEmailAsUsername,
   loginWithEmailAllowed, verifyEmail, duplicateEmailsAllowed
@@ -144,7 +154,7 @@ fi
 admin_get "/clients/$API_ID/authz/resource-server/settings" |
   jq '.policyEnforcementMode = "ENFORCING" | .decisionStrategy = "UNANIMOUS" |
       .allowRemoteResourceManagement = true' > "$TMP/authz.json"
-admin_send PUT "/clients/$API_ID/authz/resource-server/settings" "$TMP/authz.json"
+admin_send PUT "/clients/$API_ID/authz/resource-server" "$TMP/authz.json"
 
 AUTHZ="/clients/$API_ID/authz/resource-server"
 admin_get "$AUTHZ/permission/resource" > "$TMP/permissions.json"
@@ -163,9 +173,16 @@ admin_get "$AUTHZ/resource" | jq -e 'all(.[]; all(.uris // []; . != "/*"))' > /d
 
 # These are fixed realm groups (never Organization groups, never inherited policies).
 group_id() {
-  local path="$1" name="${1##*/}"
-  admin_get "/groups?search=$name&exact=true&briefRepresentation=false&max=1000" |
-    jq -r --arg p "$path" '[.. | objects | select(.path == $p)] | .[0].id // empty'
+  local path="$1" status
+  status="$(curl -sS -o "$TMP/group-lookup.json" -w '%{http_code}' \
+    -H "Authorization: Bearer $TOKEN" \
+    "$BASE/admin/realms/$REALM/group-by-path$path")" || return 1
+  if [[ "$status" == 404 ]]; then return 0; fi
+  if [[ "$status" != 200 ]]; then
+    echo "Keycloak request failed: GET /group-by-path$path (HTTP $status)" >&2
+    return 1
+  fi
+  jq -er '.id' "$TMP/group-lookup.json"
 }
 ensure_group() {
   local path="$1" parent="${1%/*}" name="${1##*/}" target
@@ -199,8 +216,9 @@ done
 admin_get "/clients/$API_ID/roles/uma_protection" | jq -s '.[0:1]' > "$TMP/role.json"
 admin_send POST "/users/$service_user/role-mappings/clients/$API_ID" "$TMP/role.json"
 
-if [[ "$NEW_REALM" == true ]]; then
-  admin_get '' | jq '.enabled = true' > "$TMP/realm-ready.json"
+if [[ "$PENDING_BOOTSTRAP" == true ]]; then
+  admin_get '' | jq '.enabled = true | del(.attributes["gk.bootstrap.pending"])' \
+    > "$TMP/realm-ready.json"
   admin_send PUT '' "$TMP/realm-ready.json"
 fi
 echo "Keycloak realm '$REALM' baseline reconciled; existing directory and policy graph preserved."

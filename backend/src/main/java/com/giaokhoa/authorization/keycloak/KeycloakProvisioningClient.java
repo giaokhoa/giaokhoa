@@ -6,11 +6,19 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
+import org.springframework.security.oauth2.client.AuthorizedClientServiceOAuth2AuthorizedClientManager;
+import org.springframework.security.oauth2.client.InMemoryOAuth2AuthorizedClientService;
+import org.springframework.security.oauth2.client.OAuth2AuthorizeRequest;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientProviderBuilder;
+import org.springframework.security.oauth2.client.registration.ClientRegistration;
+import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
+import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -31,18 +39,37 @@ public class KeycloakProvisioningClient {
 
     private final RestClient http;
     private final String baseUrl;
-    private final String clientId;
-    private final String clientSecret;
+    private final OAuth2AuthorizedClientManager manager;
 
+    @Autowired
     public KeycloakProvisioningClient(
             RestClient.Builder builder,
             @Value("${giaokhoa.keycloak.admin-base-url}") String baseUrl,
             @Value("${giaokhoa.keycloak.provisioner.client-id}") String clientId,
             @Value("${giaokhoa.keycloak.provisioner.client-secret}") String clientSecret) {
+        this(builder, baseUrl, clientManager(baseUrl.replaceAll("/+$", ""), clientId, clientSecret));
+    }
+
+    KeycloakProvisioningClient(RestClient.Builder builder, String baseUrl, OAuth2AuthorizedClientManager manager) {
         this.http = builder.build();
         this.baseUrl = baseUrl.replaceAll("/+$", "");
-        this.clientId = clientId;
-        this.clientSecret = clientSecret;
+        this.manager = manager;
+    }
+
+    private static OAuth2AuthorizedClientManager clientManager(String baseUrl, String clientId, String secret) {
+        ClientRegistration registration = ClientRegistration.withRegistrationId("giaokhoa-provisioner")
+                .clientId(clientId).clientSecret(secret)
+                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)
+                .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+                .tokenUri(baseUrl + "/realms/giaokhoa/protocol/openid-connect/token")
+                .build();
+        InMemoryClientRegistrationRepository repository = new InMemoryClientRegistrationRepository(registration);
+        AuthorizedClientServiceOAuth2AuthorizedClientManager manager =
+                new AuthorizedClientServiceOAuth2AuthorizedClientManager(
+                        repository, new InMemoryOAuth2AuthorizedClientService(repository));
+        manager.setAuthorizedClientProvider(OAuth2AuthorizedClientProviderBuilder.builder()
+                .clientCredentials().build());
+        return manager;
     }
 
     /** One Organization per center; stable name prevents duplicate organizations on retry. */
@@ -108,7 +135,8 @@ public class KeycloakProvisioningClient {
         }
         String groupId = member ? ensureRealmGroup(groupPath) : findExistingSourceGroup(groupPath);
         if (groupId == null) {
-            return;
+            // Never report a revocation as synchronized without identifying its source group.
+            throw new IllegalStateException("Cannot revoke membership: realm group does not exist: " + groupPath);
         }
         URI destination = endpoint("users", keycloakUserId, "groups", groupId);
         if (member) {
@@ -135,34 +163,20 @@ public class KeycloakProvisioningClient {
     }
 
     private Group findGroup(String path) {
-        String name = path.substring(path.lastIndexOf('/') + 1);
-        URI uri = UriComponentsBuilder.fromUri(endpoint("groups"))
-                .queryParam("search", name).queryParam("exact", true)
-                .queryParam("briefRepresentation", false).queryParam("max", 1000)
-                .build().encode().toUri();
-        Group[] groups = get(uri, Group[].class);
-        for (Group group : groups) {
-            Group match = findInHierarchy(group, path);
-            if (match != null) {
-                return match;
+        // Exact path lookup avoids pagination and name collisions across workspaces.
+        URI uri = URI.create(endpoint("group-by-path") + path);
+        try {
+            Group group = get(uri, Group.class);
+            if (!path.equals(group.path()) || group.id() == null || group.id().isBlank()) {
+                throw new IllegalStateException("Keycloak returned a group for an unexpected path");
             }
-        }
-        return null;
-    }
-
-    private Group findInHierarchy(Group group, String path) {
-        if (path.equals(group.path())) {
             return group;
-        }
-        if (group.subGroups() != null) {
-            for (Group child : group.subGroups()) {
-                Group match = findInHierarchy(child, path);
-                if (match != null) {
-                    return match;
-                }
+        } catch (RestClientResponseException ex) {
+            if (ex.getStatusCode().value() == 404) {
+                return null;
             }
+            throw ex;
         }
-        return null;
     }
 
     private URI endpoint(String... segments) {
@@ -175,19 +189,12 @@ public class KeycloakProvisioningClient {
     }
 
     private String accessToken() {
-        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-        form.add("grant_type", "client_credentials");
-        form.add("client_id", clientId);
-        form.add("client_secret", clientSecret);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> token = http.post()
-                .uri(baseUrl + "/realms/giaokhoa/protocol/openid-connect/token")
-                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .body(form).retrieve().body(Map.class);
-        if (token == null || !(token.get("access_token") instanceof String value) || value.isBlank()) {
-            throw new IllegalStateException("Keycloak provisioner did not return an access token");
+        var client = manager.authorize(OAuth2AuthorizeRequest.withClientRegistrationId("giaokhoa-provisioner")
+                .principal("giaokhoa-provisioner").build());
+        if (client == null || client.getAccessToken() == null) {
+            throw new IllegalStateException("Keycloak provisioner cannot obtain an access token");
         }
-        return value;
+        return client.getAccessToken().getTokenValue();
     }
 
     private <T> T get(URI uri, Class<T> type) {
@@ -214,7 +221,7 @@ public class KeycloakProvisioningClient {
                 .retrieve().toBodilessEntity();
     }
 
-    private record Group(String id, String name, String path, Group[] subGroups) { }
+    private record Group(String id, String name, String path) { }
 
     private record Organization(String id, String name, String alias) { }
 }
