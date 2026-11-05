@@ -92,8 +92,8 @@ public class ProblemDetailsAdvice extends ResponseEntityExceptionHandler {
                 ex.getBindingResult().getFieldErrors().stream()
                         .map(this::violation)
                         .sorted(
-                                Comparator.comparing(Violation::field)
-                                        .thenComparing(Violation::code))
+                                Comparator.comparing((Violation violation) -> violation.field())
+                                        .thenComparing(violation -> violation.code()))
                         .toList();
         return respond(
                 HttpStatus.BAD_REQUEST,
