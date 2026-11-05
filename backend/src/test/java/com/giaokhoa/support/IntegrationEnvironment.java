@@ -1,18 +1,18 @@
 package com.giaokhoa.support;
 
-import java.net.URI;
-import java.util.regex.Pattern;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 /**
- * Base for opt-in integration tests against isolated external TEST services.
+ * Base for opt-in integration tests against the isolated local Compose TEST stack.
  * Never run them against DEV databases or realms.
  */
 @ActiveProfiles("integration")
 public abstract class IntegrationEnvironment {
-    private static final Pattern TEST_REALM = Pattern.compile("/realms/giaokhoa-it(?:-[a-z0-9-]+)?");
+    // shortcut: This fixture targets local Compose TEST only; external TEST needs a separately verified allowlist.
+    private static final String TEST_DB = "jdbc:postgresql://127.0.0.1:15432/giaokhoa_test";
+    private static final String TEST_ISSUER = "http://127.0.0.1:18081/realms/giaokhoa-it";
 
     @DynamicPropertySource
     static void testServices(DynamicPropertyRegistry registry) {
@@ -34,19 +34,8 @@ public abstract class IntegrationEnvironment {
     }
 
     static void validateTargets(String database, String issuer) {
-        if (!database.startsWith("jdbc:postgresql://")) {
-            throw new IllegalArgumentException("Integration tests require PostgreSQL");
-        }
-        URI jdbc = URI.create(database.substring("jdbc:".length()));
-        URI provider = URI.create(issuer);
-        if (jdbc.getHost() == null || jdbc.getPath() == null
-                || "app-db".equals(jdbc.getHost())
-                || !jdbc.getPath().matches("/[a-zA-Z0-9_]*_test")
-                || provider.getHost() == null
-                || "auth.giaokhoa.localhost".equals(provider.getHost())
-                || !TEST_REALM.matcher(provider.getPath()).matches()
-                || !("http".equals(provider.getScheme()) || "https".equals(provider.getScheme()))) {
-            throw new IllegalArgumentException("Integration targets must be a *_test database and giaokhoa-it realm");
+        if (!TEST_DB.equals(database) || !TEST_ISSUER.equals(issuer)) {
+            throw new IllegalArgumentException("Integration tests require the dedicated local TEST database and issuer");
         }
     }
 

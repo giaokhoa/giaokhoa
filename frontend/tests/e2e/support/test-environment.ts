@@ -22,16 +22,13 @@ export class TestEnvironment {
   private readonly receivedMail = new Set<string>();
 
   constructor() {
-    if (!/^giaokhoa-it(?:-[a-z0-9-]+)?$/.test(this.realm)) {
-      throw new Error("Chỉ cho phép realm giaokhoa-it* để kiểm thử");
+    if (this.realm !== "giaokhoa-it") {
+      throw new Error("Chỉ cho phép realm giaokhoa-it để kiểm thử");
     }
-    if (!["http:", "https:"].includes(this.keycloak.protocol) ||
-        this.keycloak.hostname === "auth.giaokhoa.localhost" ||
-        this.keycloak.pathname !== "/" ||
-        !["http:", "https:"].includes(this.mailpit.protocol) ||
-        this.mailpit.hostname === "mailpit" ||
-        (["127.0.0.1", "localhost"].includes(this.mailpit.hostname) && this.mailpit.port === "8025")) {
-      throw new Error("Không được dùng DEV Keycloak/Mailpit cho TEST");
+    // shortcut: local Compose TEST only; add external targets only after independent TEST verification.
+    if (this.keycloak.href !== "http://127.0.0.1:18081/" ||
+        this.mailpit.href !== "http://127.0.0.1:18025/") {
+      throw new Error("Chỉ dùng Keycloak/Mailpit TEST; không được kết nối DEV");
     }
   }
 

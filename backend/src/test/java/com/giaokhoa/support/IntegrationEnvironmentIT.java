@@ -5,22 +5,34 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.URI;
-import java.sql.DriverManager;
+import java.util.Arrays;
 import java.util.Map;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.core.env.Environment;
 import org.springframework.web.client.RestClient;
 
-/** Verifies real TEST services without requiring application features from later tasks. */
+/** Checks the actual Spring integration profile and its isolated PostgreSQL/OIDC services. */
+@SpringBootTest
 class IntegrationEnvironmentIT extends IntegrationEnvironment {
-    @Test
-    void isolatedPostgresAndKeycloakIssuerAreAvailable() throws Exception {
-        String database = required("TEST_DATABASE_URL");
-        String issuer = required("TEST_KEYCLOAK_BASE_URL").replaceAll("/+$", "")
-                + "/realms/" + required("TEST_KEYCLOAK_REALM");
-        validateTargets(database, issuer);
+    @Autowired
+    DataSource dataSource;
 
-        try (var connection = DriverManager.getConnection(database,
-                required("TEST_DATABASE_USERNAME"), required("TEST_DATABASE_PASSWORD"))) {
+    @Autowired
+    Environment environment;
+
+    @Test
+    void springIntegrationProfileUsesRealIsolatedServices() throws Exception {
+        assertTrue(Arrays.asList(environment.getActiveProfiles()).contains("integration"));
+        String database = environment.getRequiredProperty("spring.datasource.url");
+        String issuer = environment.getRequiredProperty(
+                "spring.security.oauth2.client.provider.keycloak.issuer-uri");
+        validateTargets(database, issuer);
+        assertTrue(environment.getRequiredProperty("spring.flyway.clean-disabled", Boolean.class));
+
+        try (var connection = dataSource.getConnection()) {
             assertTrue(connection.isValid(5));
             assertEquals("giaokhoa_test", connection.getCatalog());
         }

@@ -7,23 +7,22 @@ import org.junit.jupiter.api.Test;
 
 class IntegrationEnvironmentTest {
     @Test
-    void onlyDedicatedPostgresDatabaseAndRealmAreAllowed() {
-        assertDoesNotThrow(() -> IntegrationEnvironment.validateTargets(
-                "jdbc:postgresql://127.0.0.1:15432/giaokhoa_test",
-                "http://auth.test.giaokhoa.localhost:18081/realms/giaokhoa-it"));
+    void onlyLocalComposeTestDatabaseAndIssuerAreAllowed() {
+        String testDb = "jdbc:postgresql://127.0.0.1:15432/giaokhoa_test";
+        String testIssuer = "http://127.0.0.1:18081/realms/giaokhoa-it";
+
+        assertDoesNotThrow(() -> IntegrationEnvironment.validateTargets(testDb, testIssuer));
         assertThrows(IllegalArgumentException.class, () -> IntegrationEnvironment.validateTargets(
-                "jdbc:postgresql://localhost:5432/giaokhoa",
-                "http://auth.test.giaokhoa.localhost:18081/realms/giaokhoa-it"));
+                testDb, "http://127.0.0.1:8081/realms/giaokhoa-it"));
         assertThrows(IllegalArgumentException.class, () -> IntegrationEnvironment.validateTargets(
-                "jdbc:postgresql://localhost:15432/giaokhoa_test",
-                "http://auth.giaokhoa.localhost:8081/realms/giaokhoa"));
+                "jdbc:postgresql://127.0.0.1:5432/giaokhoa_test", testIssuer));
         assertThrows(IllegalArgumentException.class, () -> IntegrationEnvironment.validateTargets(
-                "jdbc:h2:mem:test", "http://localhost/realms/giaokhoa-it"));
+                "jdbc:postgresql://127.0.0.1:15432/giaokhoa", testIssuer));
         assertThrows(IllegalArgumentException.class, () -> IntegrationEnvironment.validateTargets(
-                "jdbc:postgresql://app-db:5432/giaokhoa_test",
-                "http://auth.test.giaokhoa.localhost:18081/realms/giaokhoa-it"));
+                "jdbc:postgresql://app-db:5432/giaokhoa_test", testIssuer));
         assertThrows(IllegalArgumentException.class, () -> IntegrationEnvironment.validateTargets(
-                "jdbc:postgresql://test-app-db:5432/giaokhoa_test",
-                "http://auth.giaokhoa.localhost:8081/realms/giaokhoa-it"));
+                testDb, "http://auth.giaokhoa.localhost:8081/realms/giaokhoa-it"));
+        assertThrows(IllegalArgumentException.class, () -> IntegrationEnvironment.validateTargets(
+                "jdbc:h2:mem:test", testIssuer));
     }
 }
