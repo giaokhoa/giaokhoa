@@ -1,0 +1,44 @@
+{
+  "realm": "giaokhoa-it",
+  "enabled": true,
+  "sslRequired": "none",
+  "verifyEmail": true,
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": false,
+  "smtpServer": {
+    "host": "test-mailpit",
+    "port": "1025",
+    "from": "no-reply@test.giaokhoa.localhost",
+    "auth": "false",
+    "starttls": "false",
+    "ssl": "false"
+  },
+  "clients": [
+    {
+      "clientId": "giaokhoa-it-web",
+      "name": "Integration TEST login only",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "ci-web-client-only",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "attributes": { "pkce.code.challenge.method": "S256" },
+      "redirectUris": ["http://127.0.0.1:18888/callback", "http://127.0.0.1:8080/login/oauth2/code/keycloak", "http://localhost:8080/login/oauth2/code/keycloak"]
+    },
+    {
+      "clientId": "giaokhoa-it-fixtures",
+      "name": "Integration TEST fixtures only",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "ci-fixtures-only",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true
+    }
+  ]
+}

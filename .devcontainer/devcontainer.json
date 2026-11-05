@@ -5,7 +5,7 @@
   "workspaceFolder": "/giaokhoa",
   "features": {
     "ghcr.io/devcontainers/features/java:1": {
-      "version": "none",
+      "version": "25",
       "installMaven": true,
       "installGradle": false
     },
@@ -15,7 +15,8 @@
     "ghcr.io/devcontainers/features/python:1": {
       "installTools": false
     },
-    "ghcr.io/devcontainers/features/github-cli:1": {}
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/docker-in-docker:4": {}
   },
   "mounts": [
     "source=github-cli-config,target=/home/vscode/.config/gh,type=volume"

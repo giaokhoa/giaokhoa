@@ -1,4 +1,5 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createServer } from "node:http";
 import { expect, type Page } from "@playwright/test";
 
 type TestUser = { id: string; username: string; email: string; password: string };
@@ -15,7 +16,6 @@ function required(name: string): string {
 export class TestEnvironment {
   readonly keycloak = new URL(required("TEST_KEYCLOAK_BASE_URL"));
   readonly realm = required("TEST_KEYCLOAK_REALM");
-  readonly backendOrigin = required("TEST_BACKEND_ORIGIN");
   readonly clientId = required("TEST_OIDC_CLIENT_ID");
   readonly mailpit = new URL(required("TEST_MAILPIT_URL"));
   private readonly createdUsers = new Set<string>();
@@ -72,7 +72,7 @@ export class TestEnvironment {
     const email = `${username}@test.giaokhoa.localhost`;
     const password = randomBytes(24).toString("base64url") + "Aa1!";
     const response = await this.admin("POST", "/users", {
-      username, email, enabled: true, emailVerified,
+      username, email, firstName: "Test", lastName: "Fixture", enabled: true, emailVerified,
       credentials: [{ type: "password", value: password, temporary: false }],
     });
     const location = response.headers.get("location");
@@ -126,26 +126,60 @@ export class TestEnvironment {
     this.receivedMail.delete(message.ID);
   }
 
-  async loginWithCode(page: Page, user: TestUser): Promise<void> {
-    await page.goto(new URL("/oauth2/authorization/keycloak", this.backendOrigin).toString());
-    await expect(page).toHaveURL(new RegExp(`/realms/${this.realm}/protocol/openid-connect/auth`));
-    const authorization = new URL(page.url());
-    expect(authorization.searchParams.get("response_type")).toBe("code");
-    expect(authorization.searchParams.get("client_id")).toBe(this.clientId);
-    expect(authorization.searchParams.get("state")).toBeTruthy();
-    expect(authorization.searchParams.get("nonce")).toBeTruthy();
-    expect(authorization.searchParams.get("code_challenge")).toBeTruthy();
+  async exchangeAuthorizationCode(page: Page, user: TestUser): Promise<void> {
+    // Browser uses real Keycloak login; only the Node runner receives and redeems the code.
+    const redirectUri = "http://127.0.0.1:18888/callback";
+    const state = randomBytes(20).toString("base64url");
+    const nonce = randomBytes(20).toString("base64url");
+    const verifier = randomBytes(32).toString("base64url");
+    const challenge = createHash("sha256").update(verifier).digest("base64url");
+    const authorize = new URL(`/realms/${this.realm}/protocol/openid-connect/auth`, this.keycloak);
+    for (const [key, value] of Object.entries({
+      client_id: this.clientId, redirect_uri: redirectUri, response_type: "code",
+      scope: "openid profile", state, nonce, code_challenge: challenge,
+      code_challenge_method: "S256",
+    })) authorize.searchParams.set(key, value);
 
+    const callbackServer = createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "text/plain" });
+      response.end("Authorization Code callback received");
+    });
+    await new Promise<void>((resolve, reject) => {
+      callbackServer.once("error", reject);
+      callbackServer.listen(18888, "127.0.0.1", resolve);
+    });
+    try {
+      await page.goto(authorize.toString());
     await page.locator("#username").fill(user.username);
     await page.locator("#password").fill(user.password);
     await page.locator("#kc-login").click();
-    await page.waitForURL((url) => url.origin === new URL(this.backendOrigin).origin
-      && !url.pathname.startsWith("/login/oauth2/code/"));
-    const url = new URL(page.url());
-    expect(url.searchParams.has("code")).toBe(false);
-    expect(url.searchParams.has("access_token")).toBe(false);
-    const cookies = await page.context().cookies(this.backendOrigin);
-    expect(cookies.some((cookie) => ["SESSION", "JSESSIONID"].includes(cookie.name)
-      && cookie.httpOnly)).toBe(true);
+    await page.waitForURL((url) => url.origin === "http://127.0.0.1:18888");
+    const callback = new URL(page.url());
+    expect(callback.searchParams.get("state")).toBe(state);
+    const code = callback.searchParams.get("code");
+    expect(code).toBeTruthy();
+    expect(callback.searchParams.has("access_token")).toBe(false);
+
+    const response = await fetch(new URL(`/realms/${this.realm}/protocol/openid-connect/token`, this.keycloak), {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code", code: code!, redirect_uri: redirectUri,
+        client_id: this.clientId, client_secret: required("TEST_OIDC_CLIENT_SECRET"),
+        code_verifier: verifier,
+      }),
+    });
+    expect(response.status).toBe(200);
+    const tokens = await response.json() as { token_type: string; id_token: string };
+    expect(tokens.token_type.toLowerCase()).toBe("bearer");
+    const claims = JSON.parse(Buffer.from(tokens.id_token.split(".")[1], "base64url").toString()) as {
+      iss: string; aud: string; nonce: string;
+    };
+    expect(claims.iss).toBe(`${this.keycloak.origin}/realms/${this.realm}`);
+    expect(claims.aud).toBe(this.clientId);
+    expect(claims.nonce).toBe(nonce);
+    } finally {
+      callbackServer.close();
+    }
   }
 }

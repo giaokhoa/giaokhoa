@@ -50,7 +50,7 @@ public abstract class IntegrationEnvironment {
         }
     }
 
-    private static String required(String key) {
+    static String required(String key) {
         String value = System.getenv(key);
         if (value == null || value.isBlank()) {
             throw new IllegalStateException("Missing integration environment variable: " + key);

@@ -1,7 +1,7 @@
 
 services:
   app:
-    image: mcr.microsoft.com/devcontainers/java:25
+    image: mcr.microsoft.com/devcontainers/base:ubuntu
     command: sleep infinity
     working_dir: /giaokhoa
     volumes:

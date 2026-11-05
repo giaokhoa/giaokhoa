@@ -1,31 +1,45 @@
-# T005 — Môi trường kiểm thử integration và Authorization Code
+# T005 — Kiểm thử integration với TEST services thật
 
 ## Phạm vi
 
-- JUnit `IntegrationEnvironment` nạp profile `integration` và kiểm tra PostgreSQL thật + Keycloak OIDC discovery; mặc định Maven `verify` không chạy `*IT` khi TEST services chưa được cấp.
-- Playwright `auth-code.spec.ts` chạy Keycloak UI qua Authorization Code (state/nonce/PKCE) và kiểm tra cookie HttpOnly do Spring cấp; không dùng mock JWT, password grant hoặc mock PDP.
-- Fixture admin chỉ dùng `client_credentials` của **test-realm service account** có `manage-users` để tạo tài khoản ngẫu nhiên `t005-UUID`. Browser vẫn đăng nhập bằng UI Keycloak thật. Cleanup chỉ user ID vừa tạo.
-- Test mail yêu cầu Keycloak thật gửi `send-verify-email` tới SMTP Mailpit TEST, tìm email theo địa chỉ ngẫu nhiên và thời điểm yêu cầu, chỉ xóa message ID vừa nhận; không xóa toàn mailbox, reset volume, `flyway clean` hay DEV.
+- JUnit `IntegrationEnvironmentIT` kiểm tra JDBC PostgreSQL `giaokhoa_test` và OIDC discovery của Keycloak `giaokhoa-it`; chạy rõ tên test khi TEST stack có sẵn. `mvn verify` chạy các JUnit guard không cần dịch vụ.
+- Playwright đăng nhập bằng **Keycloak UI**, nhận **Authorization Code + PKCE S256**, kiểm tra `state`, `nonce`, đổi code lấy token bằng confidential client. Callback HTTP cục bộ chỉ tồn tại trong lúc test chạy; không dùng password grant hay mock token.
+- Kiểm tra Keycloak gửi email xác minh thật qua SMTP tới Mailpit TEST. Chỉ xóa tài khoản có ID do test tạo và email nhận được trong test; không xóa volume hoặc dữ liệu DEV.
+- Đây là kiểm thử hạ tầng và giao thức OIDC. **Chưa khẳng định Spring session, callback ứng dụng, RLS hay native PDP**; các phần ấy chưa được triển khai trong backend skeleton và được nghiệm thu ở các task liên quan.
 
-## Điều kiện chạy thật
-
-1. Ở **Docker host**, khởi động riêng `docker compose -p giaokhoa-test -f infra/compose.test.yaml up -d`. Nếu runner nằm trong DevContainer, `127.0.0.1` không trỏ vào TEST stack: cần forward port hoặc chạy runner trên TEST network.
-2. Trong Keycloak **TEST**, cấp realm `giaokhoa-it`. Client `giaokhoa-it-web` là confidential, Standard Flow ON, Direct Access Grants/Implicit Flow OFF; redirect URI đúng `http://localhost:8080/login/oauth2/code/keycloak`. Issuer `http://auth.test.giaokhoa.localhost:18081/realms/giaokhoa-it` phải cùng địa chỉ browser và Spring truy cập được. Test realm có SMTP host `test-mailpit`, port `1025`; địa chỉ From thuộc TEST. Tạo service account `giaokhoa-it-fixtures` có `realm-management/manage-users` trong realm TEST, chỉ để quản lý fixture. Không dùng client/admin DEV.
-3. Nạp file riêng tư dựa trên `.env.test.example`: `set -a; . /path/to/local-test-env; set +a`. Các secret `replace-with-...` cần thay bằng secret TEST. DB ở `giaokhoa_test`. T004 hiện có một user `giaokhoa_test`; migration T006 cần cấp runtime/migrator roles tách biệt trước khi chứng minh RLS.
-4. Chạy Spring với profile `integration` và test classpath: `./backend/mvnw -f backend/pom.xml -Dspring-boot.run.profiles=integration -Dspring-boot.run.useTestClasspath=true spring-boot:run`. Backend đang ở giai đoạn skeleton; full login callback/CSRF/session và native PDP được hoàn thiện ở các task sau. Cần Spring callback ở `TEST_BACKEND_ORIGIN` và test DB schema sẵn sàng.
+## Chạy trực tiếp trong DevContainer
 
 ```bash
-./backend/mvnw -f backend/pom.xml -Dtest=IntegrationEnvironmentIT test
-npm --prefix frontend ci
-cd frontend
-TEST_AUTH_CODE=1 npm run test:e2e -- auth-code.spec.ts
+docker compose -p giaokhoa-test -f infra/compose.test.yaml up -d
 ```
 
-Khi chưa có TEST services, E2E UI công khai vẫn chạy; test auth/mail sẽ skip nếu `TEST_AUTH_CODE=0`. Skip **không phải** pass nghiệm thu. Hai test này xác minh hạ tầng, **không thay thế** native PDP gate T022.
+TEST stack dùng các cổng `127.0.0.1:15432` (PostgreSQL), `127.0.0.1:18081` (Keycloak), `127.0.0.1:18025` (Mailpit), `127.0.0.1:11025` (SMTP). Realm `giaokhoa-it` tự import từ `infra/keycloak/test-realm.json` khi database Keycloak TEST mới được khởi tạo; không dùng chung DEV.
 
-## Bằng chứng hiện tại
+Khi realm mới được tạo, cấp **duy nhất** `realm-management/manage-users` cho service account TEST của client `giaokhoa-it-fixtures`:
 
-- Maven `verify`: PASS; JUnit environment guard PASS (1/1).
-- Frontend: TypeScript, ESLint, Next build PASS; Vitest PASS (3/3); Playwright UI public PASS (1/1), auth code/mail SKIP (2/2).
-- Chưa chạy integration thật: không có Docker CLI; Keycloak TEST `18081` và Mailpit TEST `18025` chưa reachable từ máy. Không được ghi login, SMTP, issuer hoặc database thật là PASS.
-- Không đụng DEV stack/volume, không xóa dữ liệu hoặc sửa main.
+```bash
+docker compose -p giaokhoa-test -f infra/compose.test.yaml exec -T test-keycloak /opt/keycloak/bin/kcadm.sh \
+  config credentials --server http://localhost:18081 --realm master --user test-admin --password test-only-password
+docker compose -p giaokhoa-test -f infra/compose.test.yaml exec -T test-keycloak /opt/keycloak/bin/kcadm.sh \
+  add-roles -r giaokhoa-it --uusername service-account-giaokhoa-it-fixtures \
+  --cclientid realm-management --rolename manage-users
+```
+
+Tạo `.env.test` (được Git ignore) dựa trên `.env.test.example`, dùng credentials **chỉ dành cho TEST**. Các placeholder phải được thay đúng client secret của realm TEST. Sau đó:
+
+```bash
+set -a; . .env.test; set +a
+./backend/mvnw -B -ntp -f backend/pom.xml verify
+./backend/mvnw -B -ntp -f backend/pom.xml -Dtest=IntegrationEnvironmentIT test
+(cd frontend && npm run test:e2e)
+```
+
+Không cần script CI riêng; Docker-in-Docker chạy TEST services trực tiếp. `TEST_KEYCLOAK_BASE_URL` và issuer Keycloak đều dùng `http://127.0.0.1:18081` để Node/Java/Chromium trong DevContainer truy cập thống nhất.
+
+## Bằng chứng thực chạy — 05/11/2026
+
+- Java 25.0.5, Maven 3.10.0, Node 24.22.2, Docker 29.9.3, Compose v5.7.0: PASS.
+- Docker TEST: hai PostgreSQL healthy, Keycloak TEST discovery HTTP 200, Mailpit API HTTP 200.
+- Maven `verify` và JUnit `IntegrationEnvironmentIT`: PASS (1/1 ở mỗi lệnh).
+- TypeScript, ESLint, Vitest, Next.js build: PASS; Playwright homepage, Authorization Code/PKCE và Mailpit email: PASS (3/3).
+- DEV stack/volumes, `main`, dữ liệu ngoài TEST không bị xóa hoặc reset.
