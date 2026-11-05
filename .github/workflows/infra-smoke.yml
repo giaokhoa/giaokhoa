@@ -1,0 +1,29 @@
+name: Infrastructure smoke
+
+on:
+  pull_request:
+    paths:
+      - 'infra/**'
+      - '.devcontainer/compose.yml'
+      - '.github/workflows/infra-smoke.yml'
+      - '.github/scripts/infra-smoke.sh'
+  push:
+    branches: [main]
+    paths:
+      - 'infra/**'
+      - '.devcontainer/compose.yml'
+      - '.github/workflows/infra-smoke.yml'
+      - '.github/scripts/infra-smoke.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check isolated Docker infrastructure
+        run: bash .github/scripts/infra-smoke.sh
