@@ -33,7 +33,9 @@ services:
 
   test-keycloak:
     image: quay.io/keycloak/keycloak:26.8.1
-    command: start-dev
+    command: start-dev --import-realm
+    volumes:
+      - ./keycloak/test-realm.json:/opt/keycloak/data/import/giaokhoa-it-realm.json:ro
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://test-keycloak-db:5432/keycloak_test
@@ -42,7 +44,7 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: test-admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: test-only-password
       KC_HTTP_PORT: 18081
-      KC_HOSTNAME: http://auth.test.giaokhoa.localhost:18081
+      KC_HOSTNAME: http://127.0.0.1:18081
     ports:
       - "127.0.0.1:18081:18081"
     networks:

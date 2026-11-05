@@ -1,0 +1,182 @@
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createServer } from "node:http";
+import { expect, type Page } from "@playwright/test";
+
+type TestUser = { id: string; username: string; email: string; password: string };
+type Mail = { ID: string; Subject: string; Created: string; To: { Address: string }[] };
+type MailSearch = { messages: Mail[] };
+
+function required(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`Thiếu cấu hình TEST: ${name}`);
+  return value;
+}
+
+/** Calls from the Node test runner only; no tokens or credentials reach Next/browser. */
+export class TestEnvironment {
+  readonly keycloak = new URL(required("TEST_KEYCLOAK_BASE_URL"));
+  readonly realm = required("TEST_KEYCLOAK_REALM");
+  readonly clientId = required("TEST_OIDC_CLIENT_ID");
+  readonly mailpit = new URL(required("TEST_MAILPIT_URL"));
+  private readonly createdUsers = new Set<string>();
+  private readonly receivedMail = new Set<string>();
+
+  constructor() {
+    if (this.realm !== "giaokhoa-it") {
+      throw new Error("Chỉ cho phép realm giaokhoa-it để kiểm thử");
+    }
+    // shortcut: local Compose TEST only; add external targets only after independent TEST verification.
+    if (this.keycloak.href !== "http://127.0.0.1:18081/" ||
+        this.mailpit.href !== "http://127.0.0.1:18025/") {
+      throw new Error("Chỉ dùng Keycloak/Mailpit TEST; không được kết nối DEV");
+    }
+  }
+
+  private url(path: string): string {
+    return new URL(path, this.keycloak).toString();
+  }
+
+  private async adminToken(): Promise<string> {
+    const response = await fetch(this.url(`/realms/${this.realm}/protocol/openid-connect/token`), {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: required("TEST_KEYCLOAK_ADMIN_CLIENT_ID"),
+        client_secret: required("TEST_KEYCLOAK_ADMIN_CLIENT_SECRET"),
+      }),
+    });
+    if (!response.ok) throw new Error(`Keycloak test admin token: HTTP ${response.status}`);
+    return (await response.json() as { access_token: string }).access_token;
+  }
+
+  private async admin(method: string, path: string, body?: object): Promise<Response> {
+    const response = await fetch(this.url(`/admin/realms/${this.realm}${path}`), {
+      method,
+      headers: {
+        authorization: `Bearer ${await this.adminToken()}`,
+        ...(body ? { "content-type": "application/json" } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!response.ok) throw new Error(`Keycloak test admin ${method}: HTTP ${response.status}`);
+    return response;
+  }
+
+  async createUser(emailVerified = true): Promise<TestUser> {
+    const unique = randomUUID();
+    const username = `t005-${unique}`;
+    const email = `${username}@test.giaokhoa.localhost`;
+    const password = randomBytes(24).toString("base64url") + "Aa1!";
+    const response = await this.admin("POST", "/users", {
+      username, email, firstName: "Test", lastName: "Fixture", enabled: true, emailVerified,
+      credentials: [{ type: "password", value: password, temporary: false }],
+    });
+    const location = response.headers.get("location");
+    const id = location?.split("/").at(-1);
+    if (!id || !/^[a-f0-9-]{36}$/.test(id)) {
+      throw new Error("Keycloak không trả ID của user test; kiểm tra fixture thủ công");
+    }
+    this.createdUsers.add(id);
+    return { id, username, email, password };
+  }
+
+  async deleteUser(user: TestUser): Promise<void> {
+    if (!this.createdUsers.has(user.id)) throw new Error("Không xóa tài khoản không do test tạo");
+    await this.admin("DELETE", `/users/${encodeURIComponent(user.id)}`);
+    this.createdUsers.delete(user.id);
+  }
+
+  async requestVerificationEmail(user: TestUser): Promise<void> {
+    if (!this.createdUsers.has(user.id)) throw new Error("Chỉ gửi mail cho tài khoản test");
+    await this.admin("PUT", `/users/${encodeURIComponent(user.id)}/send-verify-email`);
+  }
+
+  async waitForEmail(email: string, since: number): Promise<Mail> {
+    if (!email.endsWith("@test.giaokhoa.localhost")) throw new Error("Email phải thuộc TEST");
+    const url = new URL("/api/v1/search", this.mailpit);
+    url.searchParams.set("query", `to:${email}`);
+    for (let i = 0; i < 30; i++) {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Mailpit test: HTTP ${response.status}`);
+      const result = await response.json() as MailSearch;
+      const message = result.messages.find((mail) =>
+        Date.parse(mail.Created) >= since - 1_000 &&
+        mail.To.some((recipient) => recipient.Address === email));
+      if (message) {
+        this.receivedMail.add(message.ID);
+        return message;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    throw new Error("Mailpit không nhận được email xác minh của user test");
+  }
+
+  async deleteEmail(message: Mail): Promise<void> {
+    if (!this.receivedMail.has(message.ID)) throw new Error("Không xóa email không do test nhận");
+    const response = await fetch(new URL("/api/v1/messages", this.mailpit), {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ IDs: [message.ID] }),
+    });
+    if (!response.ok) throw new Error(`Xóa mail test: HTTP ${response.status}`);
+    this.receivedMail.delete(message.ID);
+  }
+
+  async exchangeAuthorizationCode(page: Page, user: TestUser): Promise<void> {
+    // Browser uses real Keycloak login; only the Node runner receives and redeems the code.
+    const redirectUri = "http://127.0.0.1:18888/callback";
+    const state = randomBytes(20).toString("base64url");
+    const nonce = randomBytes(20).toString("base64url");
+    const verifier = randomBytes(32).toString("base64url");
+    const challenge = createHash("sha256").update(verifier).digest("base64url");
+    const authorize = new URL(`/realms/${this.realm}/protocol/openid-connect/auth`, this.keycloak);
+    for (const [key, value] of Object.entries({
+      client_id: this.clientId, redirect_uri: redirectUri, response_type: "code",
+      scope: "openid profile", state, nonce, code_challenge: challenge,
+      code_challenge_method: "S256",
+    })) authorize.searchParams.set(key, value);
+
+    const callbackServer = createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "text/plain" });
+      response.end("Authorization Code callback received");
+    });
+    await new Promise<void>((resolve, reject) => {
+      callbackServer.once("error", reject);
+      callbackServer.listen(18888, "127.0.0.1", resolve);
+    });
+    try {
+      await page.goto(authorize.toString());
+    await page.locator("#username").fill(user.username);
+    await page.locator("#password").fill(user.password);
+    await page.locator("#kc-login").click();
+    await page.waitForURL((url) => url.origin === "http://127.0.0.1:18888");
+    const callback = new URL(page.url());
+    expect(callback.searchParams.get("state")).toBe(state);
+    const code = callback.searchParams.get("code");
+    expect(code).toBeTruthy();
+    expect(callback.searchParams.has("access_token")).toBe(false);
+
+    const response = await fetch(new URL(`/realms/${this.realm}/protocol/openid-connect/token`, this.keycloak), {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code", code: code!, redirect_uri: redirectUri,
+        client_id: this.clientId, client_secret: required("TEST_OIDC_CLIENT_SECRET"),
+        code_verifier: verifier,
+      }),
+    });
+    expect(response.status).toBe(200);
+    const tokens = await response.json() as { token_type: string; id_token: string };
+    expect(tokens.token_type.toLowerCase()).toBe("bearer");
+    const claims = JSON.parse(Buffer.from(tokens.id_token.split(".")[1], "base64url").toString()) as {
+      iss: string; aud: string; nonce: string;
+    };
+    expect(claims.iss).toBe(`${this.keycloak.origin}/realms/${this.realm}`);
+    expect(claims.aud).toBe(this.clientId);
+    expect(claims.nonce).toBe(nonce);
+    } finally {
+      callbackServer.close();
+    }
+  }
+}

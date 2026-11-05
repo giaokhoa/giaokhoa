@@ -1,0 +1,36 @@
+# External TEST services only; no H2, mock PDP, schema reset or DEV fallback.
+spring:
+  datasource:
+    url: ${TEST_DATABASE_URL}
+    username: ${TEST_DATABASE_USERNAME}
+    password: ${TEST_DATABASE_PASSWORD}
+  flyway:
+    enabled: true
+    clean-disabled: true
+    user: ${TEST_DATABASE_MIGRATOR_USERNAME}
+    password: ${TEST_DATABASE_MIGRATOR_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  session:
+    jdbc:
+      initialize-schema: never
+  security:
+    oauth2:
+      client:
+        registration:
+          keycloak:
+            client-id: ${TEST_OIDC_CLIENT_ID}
+            client-secret: ${TEST_OIDC_CLIENT_SECRET}
+            authorization-grant-type: authorization_code
+        provider:
+          keycloak:
+            issuer-uri: ${TEST_KEYCLOAK_BASE_URL}/realms/${TEST_KEYCLOAK_REALM}
+giaokhoa:
+  app-origin: ${TEST_APP_ORIGIN}
+  keycloak:
+    authorization-audience: ${TEST_KEYCLOAK_AUTHZ_AUDIENCE}
+    admin-base-url: ${TEST_KEYCLOAK_BASE_URL}
+    provisioner:
+      client-id: ${TEST_KEYCLOAK_PROVISIONER_CLIENT_ID}
+      client-secret: ${TEST_KEYCLOAK_PROVISIONER_CLIENT_SECRET}
