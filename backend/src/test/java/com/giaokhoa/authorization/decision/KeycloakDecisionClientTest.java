@@ -18,6 +18,7 @@ import com.giaokhoa.shared.http.HttpProblemException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.List;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -28,15 +29,24 @@ import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientProviderBuilder;
+import org.springframework.security.oauth2.client.endpoint.RestClientRefreshTokenTokenResponseClient;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
+import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizedClientManager;
 import org.springframework.security.oauth2.client.web.HttpSessionOAuth2AuthorizedClientRepository;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
+import org.springframework.security.oauth2.core.OAuth2RefreshToken;
+import org.springframework.security.oauth2.core.http.converter.OAuth2AccessTokenResponseHttpMessageConverter;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.test.web.client.ResponseActions;
 import org.springframework.test.web.client.ResponseCreator;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 class KeycloakDecisionClientTest {
     private static final String HOST = "http://keycloak.test";
@@ -44,13 +54,20 @@ class KeycloakDecisionClientTest {
     private static final String AUDIENCE = "giaokhoa-api";
     private static final String USER = "session-user";
     private static final String USER_TOKEN = "user-access-token";
+    private static final String REFRESHED_TOKEN = "refreshed-access-token";
+    private static final String REFRESH_TOKEN = "stored-refresh-token";
+
+    @AfterEach
+    void resetRequestContext() {
+        RequestContextHolder.resetRequestAttributes();
+    }
 
     @Test
     void allowsOnlyWhenEveryRequiredPairIsAllowed() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         Session session = sessionWithToken(USER, tokenExpiringIn(300));
-        KeycloakDecisionClient client = client(builder, session.repository());
+        KeycloakDecisionClient client = client(builder, session);
 
         expectDecision(server, "resource-a%23enter", "resource-b").andRespond(allowed());
         expectDecision(server, "resource-b%23read", "resource-a").andRespond(allowed());
@@ -70,7 +87,7 @@ class KeycloakDecisionClientTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         Session session = sessionWithToken(USER, tokenExpiringIn(300));
-        KeycloakDecisionClient client = client(builder, session.repository());
+        KeycloakDecisionClient client = client(builder, session);
 
         expectDecision(server, "resource-a%23enter", "resource-b").andRespond(allowed());
         expectDecision(server, "resource-b%23read", "resource-a")
@@ -91,7 +108,7 @@ class KeycloakDecisionClientTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         Session session = sessionWithToken(USER, tokenExpiringIn(300));
-        KeycloakDecisionClient client = client(builder, session.repository());
+        KeycloakDecisionClient client = client(builder, session);
 
         expectDecision(server, "resource-a%23enter", "resource-b")
                 .andRespond(withSuccess("{\"result\":false}", MediaType.APPLICATION_JSON));
@@ -110,7 +127,7 @@ class KeycloakDecisionClientTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         Session session = sessionWithToken(USER, tokenExpiringIn(300));
-        KeycloakDecisionClient client = client(builder, session.repository());
+        KeycloakDecisionClient client = client(builder, session);
         RequiredPermissions required =
                 RequiredPermissions.of(RequiredPermissions.require("resource-a", "enter"));
         Authentication authentication = authentication(USER);
@@ -128,7 +145,7 @@ class KeycloakDecisionClientTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         Session session = sessionWithToken(USER, tokenExpiringIn(300));
-        KeycloakDecisionClient client = client(builder, session.repository());
+        KeycloakDecisionClient client = client(builder, session);
 
         expectDecision(server, "resource-a%23enter", "resource-b")
                 .andRespond(withSuccess("{\"result\":\"true\"}", MediaType.APPLICATION_JSON));
@@ -153,7 +170,7 @@ class KeycloakDecisionClientTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         Session session = sessionWithToken(USER, tokenExpiringIn(300));
-        KeycloakDecisionClient client = client(builder, session.repository());
+        KeycloakDecisionClient client = client(builder, session);
 
         expectDecision(server, "resource-a%23enter", "resource-b")
                 .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
@@ -177,7 +194,7 @@ class KeycloakDecisionClientTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         Session session = new Session(new HttpSessionOAuth2AuthorizedClientRepository());
-        KeycloakDecisionClient client = client(builder, session.repository());
+        KeycloakDecisionClient client = client(builder, session);
 
         HttpProblemException exception =
                 assertThrows(
@@ -198,7 +215,7 @@ class KeycloakDecisionClientTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         Session session = sessionWithToken("another-user", tokenExpiringIn(300));
-        KeycloakDecisionClient client = client(builder, session.repository());
+        KeycloakDecisionClient client = client(builder, session);
 
         HttpProblemException exception =
                 assertThrows(
@@ -215,11 +232,60 @@ class KeycloakDecisionClientTest {
     }
 
     @Test
-    void failsClosedWhenTheSessionTokenHasExpired() {
+    void refreshesAnExpiredSessionTokenAndDecidesWithTheNewToken() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-        Session session = sessionWithToken(USER, tokenExpiringIn(-60));
-        KeycloakDecisionClient client = client(builder, session.repository());
+        RestClient.Builder tokenBuilder = RestClient.builder();
+        MockRestServiceServer tokenServer = MockRestServiceServer.bindTo(tokenBuilder).build();
+        Session session = sessionWithRefreshToken(USER, tokenExpiringIn(-120));
+        KeycloakDecisionClient client = client(builder, session, tokenBuilder);
+
+        tokenServer
+                .expect(requestTo(TOKEN_URL))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(
+                        content()
+                                .string(
+                                        allOf(
+                                                containsString("grant_type=refresh_token"),
+                                                containsString("refresh_token=" + REFRESH_TOKEN))))
+                .andRespond(
+                        withSuccess(
+                                "{\"access_token\":\""
+                                        + REFRESHED_TOKEN
+                                        + "\",\"token_type\":\"Bearer\",\"expires_in\":300,"
+                                        + "\"refresh_token\":\"rotated-refresh-token\"}",
+                                MediaType.APPLICATION_JSON));
+        expectDecision(server, REFRESHED_TOKEN, "resource-a%23enter", "resource-b")
+                .andRespond(allowed());
+
+        assertTrue(
+                client.isAllowed(
+                        authentication(USER),
+                        session.request(),
+                        RequiredPermissions.of(
+                                RequiredPermissions.require("resource-a", "enter"))));
+        tokenServer.verify();
+        server.verify();
+        OAuth2AuthorizedClient stored =
+                session.repository()
+                        .loadAuthorizedClient("keycloak", authentication(USER), session.request());
+        assertEquals(REFRESHED_TOKEN, stored.getAccessToken().getTokenValue());
+    }
+
+    @Test
+    void failsClosedWhenKeycloakRejectsTheRefreshToken() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        RestClient.Builder tokenBuilder = RestClient.builder();
+        MockRestServiceServer tokenServer = MockRestServiceServer.bindTo(tokenBuilder).build();
+        Session session = sessionWithRefreshToken(USER, tokenExpiringIn(-120));
+        KeycloakDecisionClient client = client(builder, session, tokenBuilder);
+
+        tokenServer
+                .expect(requestTo(TOKEN_URL))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST));
 
         HttpProblemException exception =
                 assertThrows(
@@ -232,14 +298,50 @@ class KeycloakDecisionClientTest {
                                                 RequiredPermissions.require(
                                                         "resource-a", "enter"))));
         assertEquals(HttpStatus.SERVICE_UNAVAILABLE, exception.getStatus());
+        assertEquals("DECISION_UNVERIFIABLE", exception.getCode());
+        tokenServer.verify();
+        server.verify();
+    }
+
+    @Test
+    void failsClosedWhenTheExpiredSessionTokenCannotBeRefreshed() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        Session session = sessionWithToken(USER, tokenExpiringIn(-120));
+        KeycloakDecisionClient client = client(builder, session);
+
+        // No refresh token in the session: Keycloak rejects the expired token itself.
+        expectDecision(server, "resource-a%23enter", "resource-b")
+                .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
+
+        HttpProblemException exception =
+                assertThrows(
+                        HttpProblemException.class,
+                        () ->
+                                client.isAllowed(
+                                        authentication(USER),
+                                        session.request(),
+                                        RequiredPermissions.of(
+                                                RequiredPermissions.require(
+                                                        "resource-a", "enter"))));
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, exception.getStatus());
+        assertEquals("DECISION_UNVERIFIABLE", exception.getCode());
         server.verify();
     }
 
     private ResponseActions expectDecision(
             MockRestServiceServer server, String encodedPair, String otherResource) {
+        return expectDecision(server, USER_TOKEN, encodedPair, otherResource);
+    }
+
+    private ResponseActions expectDecision(
+            MockRestServiceServer server,
+            String bearerToken,
+            String encodedPair,
+            String otherResource) {
         return server.expect(requestTo(TOKEN_URL))
                 .andExpect(method(HttpMethod.POST))
-                .andExpect(header("Authorization", "Bearer " + USER_TOKEN))
+                .andExpect(header("Authorization", "Bearer " + bearerToken))
                 .andExpect(content().contentType(MediaType.APPLICATION_FORM_URLENCODED))
                 .andExpect(
                         content()
@@ -258,9 +360,41 @@ class KeycloakDecisionClientTest {
         return withSuccess("{\"result\":true}", MediaType.APPLICATION_JSON);
     }
 
+    private KeycloakDecisionClient client(RestClient.Builder builder, Session session) {
+        return client(builder, session, null);
+    }
+
     private KeycloakDecisionClient client(
-            RestClient.Builder builder, OAuth2AuthorizedClientRepository repository) {
-        return new KeycloakDecisionClient(builder, repository, TOKEN_URL, AUDIENCE);
+            RestClient.Builder builder, Session session, RestClient.Builder tokenBuilder) {
+        // The manager resolves the servlet response from the request context, as on a servlet
+        // thread; the request itself is passed to authorize() as an attribute.
+        RequestContextHolder.setRequestAttributes(
+                new ServletRequestAttributes(session.request(), new MockHttpServletResponse()));
+        var provider = OAuth2AuthorizedClientProviderBuilder.builder().authorizationCode();
+        if (tokenBuilder == null) {
+            provider.refreshToken();
+        } else {
+            // Mirror the token response client's own default client, which carries the OAuth2
+            // token response converter, on top of the mock-bound builder.
+            RestClient tokenHttp =
+                    tokenBuilder
+                            .configureMessageConverters(converters ->
+                                    converters.addCustomConverter(
+                                            new OAuth2AccessTokenResponseHttpMessageConverter()))
+                            .build();
+            RestClientRefreshTokenTokenResponseClient tokenResponseClient =
+                    new RestClientRefreshTokenTokenResponseClient();
+            tokenResponseClient.setRestClient(tokenHttp);
+            provider.refreshToken(
+                    configurer -> configurer.accessTokenResponseClient(tokenResponseClient));
+        }
+        DefaultOAuth2AuthorizedClientManager manager =
+                new DefaultOAuth2AuthorizedClientManager(
+                        new InMemoryClientRegistrationRepository(registration()),
+                        session.repository());
+        manager.setAuthorizedClientProvider(provider.build());
+        OAuth2AuthorizedClientManager authorizedClientManager = manager;
+        return new KeycloakDecisionClient(builder, authorizedClientManager, TOKEN_URL, AUDIENCE);
     }
 
     private Authentication authentication(String name) {
@@ -276,22 +410,34 @@ class KeycloakDecisionClientTest {
                 now.plusSeconds(seconds));
     }
 
+    private ClientRegistration registration() {
+        return ClientRegistration.withRegistrationId("keycloak")
+                .clientId("giaokhoa-web")
+                .clientSecret("test-secret")
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .authorizationUri(HOST + "/realms/giaokhoa/protocol/openid-connect/auth")
+                .redirectUri("{baseUrl}/login/oauth2/code/keycloak")
+                .tokenUri(TOKEN_URL)
+                .build();
+    }
+
     private Session sessionWithToken(String principalName, OAuth2AccessToken token) {
+        return sessionWithClient(new OAuth2AuthorizedClient(registration(), principalName, token));
+    }
+
+    private Session sessionWithRefreshToken(String principalName, OAuth2AccessToken token) {
+        OAuth2RefreshToken refreshToken =
+                new OAuth2RefreshToken(REFRESH_TOKEN, token.getIssuedAt());
+        return sessionWithClient(
+                new OAuth2AuthorizedClient(registration(), principalName, token, refreshToken));
+    }
+
+    private Session sessionWithClient(OAuth2AuthorizedClient authorized) {
         Session session = new Session(new HttpSessionOAuth2AuthorizedClientRepository());
-        ClientRegistration registration =
-                ClientRegistration.withRegistrationId("keycloak")
-                        .clientId("giaokhoa-web")
-                        .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                        .authorizationUri(HOST + "/realms/giaokhoa/protocol/openid-connect/auth")
-                        .redirectUri("{baseUrl}/login/oauth2/code/keycloak")
-                        .tokenUri(TOKEN_URL)
-                        .build();
-        OAuth2AuthorizedClient authorized =
-                new OAuth2AuthorizedClient(registration, principalName, token);
         session.repository()
                 .saveAuthorizedClient(
                         authorized,
-                        authentication(principalName),
+                        authentication(authorized.getPrincipalName()),
                         session.request(),
                         new MockHttpServletResponse());
         return session;

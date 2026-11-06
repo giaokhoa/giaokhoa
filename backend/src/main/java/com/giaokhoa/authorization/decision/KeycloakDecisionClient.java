@@ -2,7 +2,6 @@ package com.giaokhoa.authorization.decision;
 
 import com.giaokhoa.shared.http.HttpProblemException;
 import jakarta.servlet.http.HttpServletRequest;
-import java.time.Instant;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,11 +9,15 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.client.OAuth2AuthorizeRequest;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientProviderBuilder;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizedClientManager;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
-import org.springframework.security.oauth2.core.OAuth2AccessToken;
+import org.springframework.security.oauth2.core.OAuth2AuthorizationException;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -25,7 +28,8 @@ import org.springframework.web.client.RestClientResponseException;
 /**
  * UMA decision client for the session user. Each call asks Keycloak about exactly one
  * resource/scope pair with the user's own token; a service account never evaluates in place of the
- * user, and an allow is never cached or reused for a later request.
+ * user, and an allow is never cached or reused for a later request. The authorized client manager
+ * refreshes an expired access token from the session's refresh token instead of rejecting it.
  */
 @Component
 public class KeycloakDecisionClient {
@@ -34,7 +38,7 @@ public class KeycloakDecisionClient {
     private static final String FAILURE_DETAIL = "Không xác minh được quyết định quyền.";
 
     private final RestClient http;
-    private final OAuth2AuthorizedClientRepository authorizedClients;
+    private final OAuth2AuthorizedClientManager manager;
     private final String tokenUrl;
     private final String audience;
 
@@ -43,18 +47,35 @@ public class KeycloakDecisionClient {
             OAuth2AuthorizedClientRepository authorizedClients,
             ClientRegistrationRepository registrations,
             @Value("${giaokhoa.keycloak.authorization-audience}") String audience) {
-        this(RestClient.builder(), authorizedClients, tokenEndpoint(registrations), audience);
+        this(
+                RestClient.builder(),
+                sessionClientManager(registrations, authorizedClients),
+                tokenEndpoint(registrations),
+                audience);
     }
 
     KeycloakDecisionClient(
             RestClient.Builder builder,
-            OAuth2AuthorizedClientRepository authorizedClients,
+            OAuth2AuthorizedClientManager manager,
             String tokenUrl,
             String audience) {
         this.http = builder.build();
-        this.authorizedClients = authorizedClients;
+        this.manager = manager;
         this.tokenUrl = tokenUrl;
         this.audience = audience;
+    }
+
+    private static OAuth2AuthorizedClientManager sessionClientManager(
+            ClientRegistrationRepository registrations,
+            OAuth2AuthorizedClientRepository authorizedClients) {
+        DefaultOAuth2AuthorizedClientManager manager =
+                new DefaultOAuth2AuthorizedClientManager(registrations, authorizedClients);
+        manager.setAuthorizedClientProvider(
+                OAuth2AuthorizedClientProviderBuilder.builder()
+                        .authorizationCode()
+                        .refreshToken()
+                        .build());
+        return manager;
     }
 
     private static String tokenEndpoint(ClientRegistrationRepository registrations) {
@@ -84,19 +105,23 @@ public class KeycloakDecisionClient {
         if (authentication == null) {
             throw unverifiable(null);
         }
-        OAuth2AuthorizedClient client =
-                authorizedClients.loadAuthorizedClient(REGISTRATION_ID, authentication, request);
+        OAuth2AuthorizedClient client;
+        try {
+            client =
+                    manager.authorize(
+                            OAuth2AuthorizeRequest.withClientRegistrationId(REGISTRATION_ID)
+                                    .principal(authentication)
+                                    .attribute(HttpServletRequest.class.getName(), request)
+                                    .build());
+        } catch (OAuth2AuthorizationException ex) {
+            throw unverifiable(ex);
+        }
         if (client == null
                 || !client.getPrincipalName().equals(authentication.getName())
                 || client.getAccessToken() == null) {
             throw unverifiable(null);
         }
-        OAuth2AccessToken token = client.getAccessToken();
-        Instant expiresAt = token.getExpiresAt();
-        if (expiresAt != null && !expiresAt.isAfter(Instant.now())) {
-            throw unverifiable(null);
-        }
-        return token.getTokenValue();
+        return client.getAccessToken().getTokenValue();
     }
 
     private boolean decide(String accessToken, RequiredPermissions.Permission permission) {
