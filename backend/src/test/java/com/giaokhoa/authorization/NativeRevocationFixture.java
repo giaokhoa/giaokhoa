@@ -520,9 +520,27 @@ final class NativeRevocationFixture implements AutoCloseable {
         }
 
         long permissionCount() {
-            return getList(root() + "/permission/scope").stream()
-                    .filter(item -> String.valueOf(item.get("resources")).contains(resource))
-                    .count();
+            // Permission representations carry no associations; the permissions of a
+            // resource are read from the resource's own association endpoint.
+            return getList(root() + "/resource/" + resource + "/permissions").size();
+        }
+
+        /**
+         * Policies linked from any permission or other policy; representations alone hide the
+         * links, so they are read from each holder's association endpoint.
+         */
+        private java.util.Set<String> referencedPolicyIds(
+                List<Map<String, Object>> policies, List<Map<String, Object>> permissions) {
+            java.util.Set<String> referenced = new java.util.HashSet<>();
+            List<Map<String, Object>> holders = new java.util.ArrayList<>(permissions);
+            holders.addAll(policies);
+            for (Map<String, Object> holder : holders) {
+                for (Map<String, Object> linked :
+                        getList(root() + "/policy/" + holder.get("id") + "/associatedPolicies")) {
+                    referenced.add(String.valueOf(linked.get("id")));
+                }
+            }
+            return referenced;
         }
 
         private String root() {
@@ -538,10 +556,9 @@ final class NativeRevocationFixture implements AutoCloseable {
             // Remove permissions first, including those provisioned by the real writer on our
             // unique resource. Never delete shared policies/scopes or unrelated API resources.
             for (String id : ownedResources) {
-                for (Map<String, Object> permission : getList(root() + "/permission/scope")) {
-                    if (String.valueOf(permission.get("resources")).contains(id)) {
-                        delete(root() + "/permission/scope/" + permission.get("id"));
-                    }
+                for (Map<String, Object> permission :
+                        getList(root() + "/resource/" + id + "/permissions")) {
+                    delete(root() + "/permission/scope/" + permission.get("id"));
                 }
             }
             for (String id : ownedPolicies) {
@@ -556,21 +573,13 @@ final class NativeRevocationFixture implements AutoCloseable {
                 boolean deleted = false;
                 List<Map<String, Object>> policies = getList(root() + "/policy");
                 List<Map<String, Object>> permissions = getList(root() + "/permission/scope");
+                java.util.Set<String> referenced = referencedPolicyIds(policies, permissions);
                 for (Map<String, Object> policy : policies) {
                     if (!projected.contains(policy.get("name"))) {
                         continue;
                     }
                     String id = String.valueOf(policy.get("id"));
-                    boolean stillInUse =
-                            permissions.stream()
-                                            .anyMatch(permission ->
-                                                    String.valueOf(permission.get("policies"))
-                                                            .contains(id))
-                                    || policies.stream()
-                                            .filter(other -> !id.equals(other.get("id")))
-                                            .anyMatch(other ->
-                                                    String.valueOf(other.get("policies"))
-                                                            .contains(id));
+                    boolean stillInUse = referenced.contains(id);
                     if (!stillInUse) {
                         delete(root() + "/policy/" + id);
                         deleted = true;

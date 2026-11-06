@@ -242,8 +242,10 @@ public class PolicyGraphWriter {
         String permissionName = NativePolicyTemplates.rootPermissionName(targetKey, scope);
         for (Map<String, Object> permission : list(root + "/permission/scope")) {
             if (permissionName.equals(permission.get("name"))) {
-                return ids(permission.get("resources")).contains(resourceId)
-                        && new HashSet<>(ids(permission.get("policies"))).equals(recordedPolicyIds);
+                String permissionId = String.valueOf(permission.get("id"));
+                return associatedIds(root, permissionId, "resources", "_id").contains(resourceId)
+                        && associatedIds(root, permissionId, "associatedPolicies", "id")
+                                .equals(recordedPolicyIds);
             }
         }
         return false;
@@ -426,8 +428,7 @@ public class PolicyGraphWriter {
                     "Native policy name collision with another type: " + name);
         }
         String id = String.valueOf(existing.get("id"));
-        Map<String, Object> current = get(root + "/policy/aggregate/" + id);
-        if (!new HashSet<>(ids(current.get("policies"))).equals(new HashSet<>(policyIds))) {
+        if (!associatedIds(root, id, "associatedPolicies", "id").equals(new HashSet<>(policyIds))) {
             Map<String, Object> update = new LinkedHashMap<>(payload);
             update.put("id", id);
             put(root + "/policy/aggregate/" + id, update);
@@ -555,10 +556,13 @@ public class PolicyGraphWriter {
             String scopeId,
             List<String> policyIds) {
         String id = String.valueOf(existing.get("id"));
+        Set<String> linkedPolicies = associatedIds(root, id, "associatedPolicies", "id");
+        Set<String> linkedResources = associatedIds(root, id, "resources", "_id");
+        Set<String> linkedScopes = associatedIds(root, id, "scopes", "id");
         boolean same =
-                new HashSet<>(ids(existing.get("policies"))).equals(new HashSet<>(policyIds))
-                        && new HashSet<>(ids(existing.get("resources"))).equals(Set.of(resourceId))
-                        && new HashSet<>(ids(existing.get("scopes"))).equals(Set.of(scopeId));
+                linkedPolicies.equals(new HashSet<>(policyIds))
+                        && linkedResources.equals(Set.of(resourceId))
+                        && linkedScopes.equals(Set.of(scopeId));
         if (!same) {
             Map<String, Object> update = new LinkedHashMap<>(desired);
             update.put("id", id);
@@ -574,12 +578,14 @@ public class PolicyGraphWriter {
             String scopeId,
             List<String> policyIds,
             String targetKey) {
-        Map<String, Object> permission = get(root + "/permission/scope/" + permissionId);
+        Set<String> policies = associatedIds(root, permissionId, "associatedPolicies", "id");
+        Set<String> resources = associatedIds(root, permissionId, "resources", "_id");
+        Set<String> scopes = associatedIds(root, permissionId, "scopes", "id");
         Map<String, Object> resource = get(root + "/resource/" + resourceId);
         boolean verified =
-                new HashSet<>(ids(permission.get("policies"))).equals(new HashSet<>(policyIds))
-                        && ids(permission.get("resources")).contains(resourceId)
-                        && ids(permission.get("scopes")).contains(scopeId)
+                policies.equals(new HashSet<>(policyIds))
+                        && resources.contains(resourceId)
+                        && scopes.contains(scopeId)
                         && targetKey.equals(resource.get("name"))
                         && ids(resource.get("scopes"), "id").contains(scopeId);
         if (!verified) {
@@ -587,6 +593,21 @@ public class PolicyGraphWriter {
                     "Native policy graph read-back does not match the desired graph for "
                             + targetKey);
         }
+    }
+
+    /**
+     * IDs of the objects linked to one policy or permission. Keycloak returns permission and
+     * aggregate representations without their associations, so linked resources, scopes and
+     * policies are only readable from the object's association endpoints.
+     */
+    private Set<String> associatedIds(
+            String root, String policyId, String association, String idKey) {
+        Set<String> out = new HashSet<>();
+        for (Map<String, Object> linked :
+                get(root + "/policy/" + policyId + "/" + association, MAP_LIST)) {
+            out.add(String.valueOf(linked.get(idKey)));
+        }
+        return out;
     }
 
     private Map<String, Map<String, Object>> policyIndex(String root) {
@@ -738,10 +759,6 @@ public class PolicyGraphWriter {
     }
 
     /** IDs of a JSON field that is either a list of plain IDs or of objects carrying an ID key. */
-    private static List<String> ids(Object field) {
-        return ids(field, null);
-    }
-
     private static List<String> ids(Object field, String key) {
         List<String> out = new ArrayList<>();
         if (field instanceof List<?> list) {

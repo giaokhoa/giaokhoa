@@ -121,17 +121,7 @@ class PolicyGraphWriterTest {
                         + "\",\"decisionStrategy\":\"UNANIMOUS\","
                         + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"],"
                         + "\"policies\":[\"pol-elig\",\"pol-any\"]}");
-        expectGet(
-                server,
-                ROOT + "/permission/scope/perm-1",
-                "{\"id\":\"perm-1\",\"policies\":[\"pol-elig\",\"pol-any\"],"
-                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}");
-        expectGet(
-                server,
-                ROOT + "/resource/res-1",
-                "{\"_id\":\"res-1\",\"name\":\""
-                        + TARGET
-                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
+        expectReadBack(server, "perm-1", List.of("pol-elig", "pol-any"));
 
         PolicyGraphWriter.AppliedGraph applied = writer.apply(graph());
 
@@ -194,28 +184,14 @@ class PolicyGraphWriterTest {
         expectGroup(server, ELIGIBLE, "g-elig");
         expectGroup(server, MANAGERS, "g-mgr");
         expectGroup(server, OWNERS, "g-own");
-        expectGet(
-                server,
-                ROOT + "/policy/aggregate/pol-any",
-                "{\"id\":\"pol-any\",\"policies\":[\"pol-src\",\"pol-own\"]}");
+        expectAssociated(
+                server, "pol-any", "associatedPolicies", List.of("pol-src", "pol-own"), "id");
         expectGet(
                 server,
                 ROOT + "/permission/scope" + LIST,
-                "[{\"id\":\"perm-1\",\"name\":\""
-                        + ROOT_NAME
-                        + "\",\"policies\":[\"pol-elig\",\"pol-any\"],"
-                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}]");
-        expectGet(
-                server,
-                ROOT + "/permission/scope/perm-1",
-                "{\"id\":\"perm-1\",\"policies\":[\"pol-elig\",\"pol-any\"],"
-                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}");
-        expectGet(
-                server,
-                ROOT + "/resource/res-1",
-                "{\"_id\":\"res-1\",\"name\":\""
-                        + TARGET
-                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
+                "[{\"id\":\"perm-1\",\"name\":\"" + ROOT_NAME + "\"}]");
+        expectLinked(server, "perm-1", List.of("pol-elig", "pol-any"));
+        expectReadBack(server, "perm-1", List.of("pol-elig", "pol-any"));
 
         PolicyGraphWriter.AppliedGraph applied = writer.apply(graph());
         assertEquals("res-1", applied.resourceId());
@@ -259,10 +235,8 @@ class PolicyGraphWriterTest {
         expectGet(
                 server,
                 ROOT + "/permission/scope" + LIST,
-                "[{\"id\":\"perm-1\",\"name\":\""
-                        + ROOT_NAME
-                        + "\",\"policies\":[\"pol-stale\"],"
-                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}]");
+                "[{\"id\":\"perm-1\",\"name\":\"" + ROOT_NAME + "\"}]");
+        expectLinked(server, "perm-1", List.of("pol-stale"));
         server.expect(requestTo(ROOT + "/permission/scope/perm-1"))
                 .andExpect(method(HttpMethod.PUT))
                 .andExpect(
@@ -272,17 +246,7 @@ class PolicyGraphWriterTest {
                                                 + ROOT_NAME
                                                 + "\",\"policies\":[\"pol-own\"]}"))
                 .andRespond(withNoContent());
-        expectGet(
-                server,
-                ROOT + "/permission/scope/perm-1",
-                "{\"id\":\"perm-1\",\"policies\":[\"pol-own\"],"
-                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}");
-        expectGet(
-                server,
-                ROOT + "/resource/res-1",
-                "{\"_id\":\"res-1\",\"name\":\""
-                        + TARGET
-                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
+        expectReadBack(server, "perm-1", List.of("pol-own"));
 
         PolicyGraphWriter.AppliedGraph applied = writer.apply(graph);
         assertEquals(List.of("gk-group:" + OWNERS), applied.policyNames());
@@ -380,17 +344,7 @@ class PolicyGraphWriterTest {
                 ROOT + "/permission/scope",
                 "{\"id\":\"perm-1\"}",
                 "{\"name\":\"" + ROOT_NAME + "\",\"policies\":[\"pol-elig\",\"pol-own\"]}");
-        expectGet(
-                server,
-                ROOT + "/permission/scope/perm-1",
-                "{\"id\":\"perm-1\",\"policies\":[\"pol-elig\",\"pol-own\"],"
-                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}");
-        expectGet(
-                server,
-                ROOT + "/resource/res-1",
-                "{\"_id\":\"res-1\",\"name\":\""
-                        + TARGET
-                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
+        expectReadBack(server, "perm-1", List.of("pol-elig", "pol-own"));
 
         PolicyGraphWriter.AppliedGraph applied = writer.apply(graph);
         assertEquals(List.of("gk-group:" + ELIGIBLE, "gk-group:" + OWNERS), applied.policyNames());
@@ -436,27 +390,15 @@ class PolicyGraphWriterTest {
                         + "{\"id\":\"pol-any\",\"name\":\""
                         + ANY_NAME
                         + "\",\"type\":\"aggregate\"}]");
-        expectGet(
-                server,
-                ROOT + "/policy/aggregate/pol-any",
-                "{\"id\":\"pol-any\",\"policies\":[\"pol-mgr\",\"pol-own\"]}");
+        expectAssociated(
+                server, "pol-any", "associatedPolicies", List.of("pol-mgr", "pol-own"), "id");
         expectGet(server, ROOT + "/permission/scope" + LIST, "[]");
         expectCreate(
                 server,
                 ROOT + "/permission/scope",
                 "{\"id\":\"perm-1\"}",
                 "{\"name\":\"" + ROOT_NAME + "\",\"policies\":[\"pol-any\"]}");
-        expectGet(
-                server,
-                ROOT + "/permission/scope/perm-1",
-                "{\"id\":\"perm-1\",\"policies\":[\"pol-any\"],"
-                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}");
-        expectGet(
-                server,
-                ROOT + "/resource/res-1",
-                "{\"_id\":\"res-1\",\"name\":\""
-                        + TARGET
-                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
+        expectReadBack(server, "perm-1", List.of("pol-any"));
 
         PolicyGraphWriter.AppliedGraph applied = writer.apply(graph);
         assertEquals(
@@ -484,17 +426,7 @@ class PolicyGraphWriterTest {
         expectCreate(server, ROOT + "/policy/group", "{\"id\":\"pol-own\"}");
         expectGet(server, ROOT + "/permission/scope" + LIST, "[]");
         expectCreate(server, ROOT + "/permission/scope", "{\"id\":\"perm-1\"}");
-        expectGet(
-                server,
-                ROOT + "/permission/scope/perm-1",
-                "{\"id\":\"perm-1\",\"policies\":[\"pol-own\"],"
-                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}");
-        expectGet(
-                server,
-                ROOT + "/resource/res-1",
-                "{\"_id\":\"res-1\",\"name\":\""
-                        + TARGET
-                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
+        expectReadBack(server, "perm-1", List.of("pol-own"));
 
         PolicyGraphWriter.AppliedGraph applied = writer.apply(graph);
         assertEquals(List.of("gk-group:" + OWNERS), applied.policyNames());
@@ -554,17 +486,7 @@ class PolicyGraphWriterTest {
                 ROOT + "/permission/scope",
                 "{\"id\":\"perm-1\"}",
                 "{\"name\":\"" + ROOT_NAME + "\",\"policies\":[\"pol-user\"]}");
-        expectGet(
-                server,
-                ROOT + "/permission/scope/perm-1",
-                "{\"id\":\"perm-1\",\"policies\":[\"pol-user\"],"
-                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}");
-        expectGet(
-                server,
-                ROOT + "/resource/res-1",
-                "{\"_id\":\"res-1\",\"name\":\""
-                        + TARGET
-                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
+        expectReadBack(server, "perm-1", List.of("pol-user"));
 
         PolicyGraphWriter.AppliedGraph applied = writer.apply(graph);
         assertEquals(List.of("gk-user:user-123"), applied.policyNames());
@@ -590,17 +512,7 @@ class PolicyGraphWriterTest {
         expectCreate(server, ROOT + "/policy/group", "{\"id\":\"pol-own\"}");
         expectGet(server, ROOT + "/permission/scope" + LIST, "[]");
         expectCreate(server, ROOT + "/permission/scope", "{\"id\":\"perm-1\"}");
-        expectGet(
-                server,
-                ROOT + "/permission/scope/perm-1",
-                "{\"id\":\"perm-1\",\"policies\":[],"
-                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}");
-        expectGet(
-                server,
-                ROOT + "/resource/res-1",
-                "{\"_id\":\"res-1\",\"name\":\""
-                        + TARGET
-                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
+        expectReadBack(server, "perm-1", List.of());
 
         assertThrows(IllegalStateException.class, () -> writer.apply(graph));
         server.verify();
@@ -613,7 +525,7 @@ class PolicyGraphWriterTest {
         PolicyGraphWriter writer = writer(builder);
 
         expectClients(server);
-        expectStoredGraph(server, "[\"pol-own\"]");
+        expectStoredGraph(server, List.of("pol-own"));
 
         assertTrue(writer.isGraphIntact(TARGET, "enter", "res-1", List.of("gk-group:" + OWNERS)));
         server.verify();
@@ -627,7 +539,7 @@ class PolicyGraphWriterTest {
 
         expectClients(server);
         // The policy itself still exists; only the link from the root permission was removed.
-        expectStoredGraph(server, "[]");
+        expectStoredGraph(server, List.of());
 
         assertFalse(writer.isGraphIntact(TARGET, "enter", "res-1", List.of("gk-group:" + OWNERS)));
         server.verify();
@@ -640,18 +552,18 @@ class PolicyGraphWriterTest {
         PolicyGraphWriter writer = writer(builder);
 
         expectClients(server);
-        expectStoredGraph(server, "[\"pol-own\",\"pol-extra\"]", true);
+        expectStoredGraph(server, List.of("pol-own", "pol-extra"), true);
 
         assertFalse(writer.isGraphIntact(TARGET, "enter", "res-1", List.of("gk-group:" + OWNERS)));
         server.verify();
     }
 
-    private void expectStoredGraph(MockRestServiceServer server, String permissionPolicies) {
-        expectStoredGraph(server, permissionPolicies, false);
+    private void expectStoredGraph(MockRestServiceServer server, List<String> permissionPolicyIds) {
+        expectStoredGraph(server, permissionPolicyIds, false);
     }
 
     private void expectStoredGraph(
-            MockRestServiceServer server, String permissionPolicies, boolean extraPolicy) {
+            MockRestServiceServer server, List<String> permissionPolicyIds, boolean extraPolicy) {
         expectGet(
                 server,
                 ROOT + "/resource" + LIST,
@@ -668,11 +580,49 @@ class PolicyGraphWriterTest {
         expectGet(
                 server,
                 ROOT + "/permission/scope" + LIST,
-                "[{\"id\":\"perm-1\",\"name\":\""
-                        + ROOT_NAME
-                        + "\",\"resources\":[\"res-1\"],\"policies\":"
-                        + permissionPolicies
-                        + "}]");
+                "[{\"id\":\"perm-1\",\"name\":\"" + ROOT_NAME + "\"}]");
+        expectAssociated(server, "perm-1", "resources", List.of("res-1"), "_id");
+        expectAssociated(server, "perm-1", "associatedPolicies", permissionPolicyIds, "id");
+    }
+
+    /** One association collection of a policy or permission, as Keycloak serves it. */
+    private void expectAssociated(
+            MockRestServiceServer server,
+            String policyId,
+            String association,
+            List<String> ids,
+            String idKey) {
+        StringBuilder json = new StringBuilder("[");
+        for (int i = 0; i < ids.size(); i++) {
+            if (i > 0) {
+                json.append(',');
+            }
+            json.append("{\"").append(idKey).append("\":\"").append(ids.get(i)).append("\"}");
+        }
+        expectGet(
+                server,
+                ROOT + "/policy/" + policyId + "/" + association,
+                json.append(']').toString());
+    }
+
+    /** The linked resources, scopes and policies read before an existing permission is judged. */
+    private void expectLinked(
+            MockRestServiceServer server, String permissionId, List<String> policyIds) {
+        expectAssociated(server, permissionId, "associatedPolicies", policyIds, "id");
+        expectAssociated(server, permissionId, "resources", List.of("res-1"), "_id");
+        expectAssociated(server, permissionId, "scopes", List.of("scope-enter"), "id");
+    }
+
+    /** A full read-back: the permission's associations plus the resource itself. */
+    private void expectReadBack(
+            MockRestServiceServer server, String permissionId, List<String> policyIds) {
+        expectLinked(server, permissionId, policyIds);
+        expectGet(
+                server,
+                ROOT + "/resource/res-1",
+                "{\"_id\":\"res-1\",\"name\":\""
+                        + TARGET
+                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
     }
 
     /** A full page of unrelated entries, so only a later page can hold the wanted name. */
