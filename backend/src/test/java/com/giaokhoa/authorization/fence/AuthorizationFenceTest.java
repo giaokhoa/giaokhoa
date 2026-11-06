@@ -1,0 +1,151 @@
+package com.giaokhoa.authorization.fence;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import com.giaokhoa.authorization.fence.DependencyManifestResolver.Manifest;
+import com.giaokhoa.shared.http.HttpProblemException;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+
+class AuthorizationFenceTest {
+    private static final UUID ACTOR = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID WORKSPACE = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private static final UUID ACCOUNT = UUID.fromString("33333333-3333-3333-3333-333333333333");
+    private static final UUID WORKSPACE_PARTITION =
+            UUID.fromString("44444444-4444-4444-4444-444444444444");
+    private static final UUID GRANT = UUID.fromString("55555555-5555-5555-5555-555555555555");
+    private static final List<String> KEYS = List.of("workspace:" + WORKSPACE);
+
+    @Test
+    void acquireSnapshotsRevisionsWhenEveryPartitionIsReady() {
+        JdbcTemplate jdbc = stubLocks(mock(JdbcTemplate.class), readyRows());
+        DependencyManifestResolver resolver = mock(DependencyManifestResolver.class);
+        Manifest manifest = manifest(List.of(ACCOUNT, WORKSPACE_PARTITION));
+        when(resolver.resolve(ACTOR, WORKSPACE, KEYS)).thenReturn(manifest);
+
+        var snapshot = new AuthorizationFence(jdbc, resolver, stubTransactions()).acquire(manifest);
+
+        assertEquals(Map.of(ACCOUNT, 2L, WORKSPACE_PARTITION, 2L), snapshot.revisions());
+    }
+
+    @Test
+    void aPendingPartitionFailsClosedWith503() {
+        Map<UUID, Map<String, Object>> rows = readyRows();
+        rows.put(WORKSPACE_PARTITION, row("PENDING", 2, 1));
+        JdbcTemplate jdbc = stubLocks(mock(JdbcTemplate.class), rows);
+        DependencyManifestResolver resolver = mock(DependencyManifestResolver.class);
+
+        HttpProblemException problem =
+                assertThrows(
+                        HttpProblemException.class,
+                        () ->
+                                new AuthorizationFence(jdbc, resolver, stubTransactions())
+                                        .acquire(manifest(List.of(ACCOUNT, WORKSPACE_PARTITION))));
+
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, problem.getStatus());
+    }
+
+    @Test
+    void anUnappliedRevisionFailsClosedWith503() {
+        Map<UUID, Map<String, Object>> rows = readyRows();
+        rows.put(ACCOUNT, row("READY", 3, 2));
+        JdbcTemplate jdbc = stubLocks(mock(JdbcTemplate.class), rows);
+        DependencyManifestResolver resolver = mock(DependencyManifestResolver.class);
+
+        assertThrows(
+                HttpProblemException.class,
+                () ->
+                        new AuthorizationFence(jdbc, resolver, stubTransactions())
+                                .acquire(manifest(List.of(ACCOUNT, WORKSPACE_PARTITION))));
+    }
+
+    @Test
+    void acquireReResolvesWhenTheClosureGrowsUnderTheLocks() {
+        JdbcTemplate jdbc = stubLocks(mock(JdbcTemplate.class), readyRows());
+        DependencyManifestResolver resolver = mock(DependencyManifestResolver.class);
+        Manifest small = manifest(List.of(ACCOUNT, WORKSPACE_PARTITION));
+        Manifest grown = manifest(List.of(ACCOUNT, WORKSPACE_PARTITION, GRANT));
+        when(resolver.resolve(ACTOR, WORKSPACE, KEYS)).thenReturn(grown, grown);
+
+        var snapshot = new AuthorizationFence(jdbc, resolver, stubTransactions()).acquire(small);
+
+        assertEquals(grown.partitionIds(), snapshot.manifest().partitionIds());
+        assertEquals(3, snapshot.revisions().size());
+    }
+
+    @Test
+    void atSnapshotRejectsARevisionBumpedAfterAcquisition() {
+        Map<UUID, Map<String, Object>> rows = readyRows();
+        rows.put(WORKSPACE_PARTITION, row("READY", 3, 3));
+        JdbcTemplate jdbc = stubLocks(mock(JdbcTemplate.class), rows);
+        DependencyManifestResolver resolver = mock(DependencyManifestResolver.class);
+        var snapshot =
+                new AuthorizationFence.Snapshot(
+                        manifest(List.of(ACCOUNT, WORKSPACE_PARTITION)),
+                        Map.of(ACCOUNT, 2L, WORKSPACE_PARTITION, 2L));
+
+        assertThrows(
+                AuthorizationFence.ClosureChangedException.class,
+                () ->
+                        new AuthorizationFence(jdbc, resolver, stubTransactions())
+                                .atSnapshot(snapshot, () -> "must not run"));
+    }
+
+    private static Manifest manifest(List<UUID> partitions) {
+        return new Manifest(ACTOR, WORKSPACE, KEYS, Map.of(), partitions);
+    }
+
+    private static Map<String, Object> row(String state, long desired, long applied) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("state", state);
+        row.put("desired_revision", desired);
+        row.put("applied_revision", applied);
+        return row;
+    }
+
+    private static Map<UUID, Map<String, Object>> readyRows() {
+        Map<UUID, Map<String, Object>> rows = new LinkedHashMap<>();
+        rows.put(ACCOUNT, row("READY", 2, 2));
+        rows.put(WORKSPACE_PARTITION, row("READY", 2, 2));
+        rows.put(GRANT, row("READY", 2, 2));
+        return rows;
+    }
+
+    private static JdbcTemplate stubLocks(JdbcTemplate jdbc, Map<UUID, Map<String, Object>> rows) {
+        when(jdbc.queryForList(contains("FOR SHARE"), any(UUID.class)))
+                .thenAnswer(invocation -> {
+                    Map<String, Object> row = rows.get(invocation.getArgument(1, UUID.class));
+                    return row == null ? List.of() : List.of(row);
+                });
+        return jdbc;
+    }
+
+    private static PlatformTransactionManager stubTransactions() {
+        return new PlatformTransactionManager() {
+            @Override
+            public TransactionStatus getTransaction(TransactionDefinition definition) {
+                return new SimpleTransactionStatus();
+            }
+
+            @Override
+            public void commit(TransactionStatus status) {}
+
+            @Override
+            public void rollback(TransactionStatus status) {}
+        };
+    }
+}
