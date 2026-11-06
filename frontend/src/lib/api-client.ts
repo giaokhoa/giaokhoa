@@ -137,7 +137,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   return readApiResponse<T>(response, method === "HEAD");
 }
 
-// HTML form navigation is required for Spring's RP-Initiated OIDC logout redirect.
+// Điều hướng bằng HTML form là bắt buộc cho RP-Initiated OIDC logout redirect của Spring.
 export async function submitLogout(): Promise<void> {
   const [, token] = await getCsrf();
   const form = document.createElement("form");
