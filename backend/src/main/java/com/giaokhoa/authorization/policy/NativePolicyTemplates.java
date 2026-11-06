@@ -9,10 +9,10 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
- * The fixed native templates of the authorization contract: realm group paths, target keys with
- * their fixed scopes, and the deterministic Keycloak names derived from them. Templates are fixed
- * by the contract, never chosen by a center or a caller; prerequisite roles are realm groups, not
- * global realm roles.
+ * Các template native cố định của hợp đồng authorization: realm group path, target key cùng scope
+ * cố định của chúng, và các tên Keycloak xác định suy ra từ chúng. Template do hợp đồng cố định,
+ * không bao giờ do center hay caller chọn; prerequisite role là realm group, không phải global
+ * realm role.
  */
 public final class NativePolicyTemplates {
     public static final String ELIGIBILITY_GROUP = "/gk/identity/eligible";
@@ -35,13 +35,16 @@ public final class NativePolicyTemplates {
                             + UUID_PATTERN
                             + "/guardians))");
 
-    /** Keycloak renders time-policy boundaries in UTC with this exact pattern. */
+    /** Keycloak hiển thị biên của time policy theo UTC bằng đúng pattern này. */
     public static final DateTimeFormatter KEYCLOAK_UTC =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneOffset.UTC);
 
     private NativePolicyTemplates() {}
 
-    /** Prerequisite operational roles of a workspace; projected as groups, never global roles. */
+    /**
+     * Các prerequisite operational role của một workspace; được chiếu thành group, không bao giờ là
+     * global role.
+     */
     public enum PrerequisiteRole {
         TEACHERS("teachers"),
         STUDENTS("students"),
@@ -92,12 +95,12 @@ public final class NativePolicyTemplates {
         return "/gk/workspaces/" + requireId(workspaceId) + "/" + suffix;
     }
 
-    /** True only for the fixed group sources of the contract. */
+    /** Chỉ true với các group source cố định của hợp đồng. */
     public static boolean isGroupSource(String path) {
         return path != null && GROUP_SOURCE.matcher(path).matches();
     }
 
-    /** Target kinds of the contract, each with its key shape and its fixed scope set. */
+    /** Các loại target của hợp đồng, mỗi loại với dạng key và tập scope cố định của nó. */
     public enum TargetType {
         PLATFORM(
                 "platform",
@@ -200,7 +203,7 @@ public final class NativePolicyTemplates {
         }
     }
 
-    /** The target type a key belongs to; empty when the key matches no fixed template. */
+    /** Loại target mà một key thuộc về; rỗng khi key không khớp template cố định nào. */
     public static Optional<TargetType> targetTypeOf(String targetKey) {
         for (TargetType type : TargetType.values()) {
             if (type.matches(targetKey)) {
@@ -210,7 +213,7 @@ public final class NativePolicyTemplates {
         return Optional.empty();
     }
 
-    /** Only profile/onboarding/recovery endpoints may omit the business eligibility gate. */
+    /** Chỉ các endpoint profile/onboarding/recovery mới được bỏ qua eligibility gate nghiệp vụ. */
     static boolean requiresEligibility(TargetType type, String scope) {
         return switch (type) {
             case PROFILE -> !List.of("profile.read", "recovery.request").contains(scope);
@@ -263,8 +266,8 @@ public final class NativePolicyTemplates {
         return "grant:" + requireId(grantId);
     }
 
-    // Deterministic native names. Leaf policy names are derived from their only content, so an
-    // existing policy with the template name already has the desired configuration.
+    // Tên native xác định. Tên leaf policy suy ra từ nội dung duy nhất của chúng, nên một
+    // policy hiện có với tên template đó đã mang cấu hình mong muốn.
     public static String groupPolicyName(String groupPath) {
         return "gk-group:" + groupPath;
     }

@@ -24,8 +24,8 @@ import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 
 /**
- * Server-only directory and realm-group projection client. Keycloak IDs are opaque; business
- * workspace IDs remain UUIDs.
+ * Client projection directory và realm group chỉ dùng phía server. ID của Keycloak là mờ (opaque);
+ * ID workspace nghiệp vụ vẫn là UUID.
  */
 @Component
 public class KeycloakProvisioningClient {
@@ -93,7 +93,7 @@ public class KeycloakProvisioningClient {
         return manager;
     }
 
-    /** One Organization per center; stable name prevents duplicate organizations on retry. */
+    /** Mỗi center một Organization; tên ổn định ngăn tạo trùng organization khi retry. */
     public String ensureOrganization(UUID workspaceId, String displayName) {
         if (workspaceId == null || displayName == null || displayName.isBlank()) {
             throw new IllegalArgumentException("Workspace ID and organization name are required");
@@ -119,7 +119,7 @@ public class KeycloakProvisioningClient {
             if (!ex.getStatusCode().isSameCodeAs(HttpStatus.CONFLICT)) {
                 throw ex;
             }
-            // A concurrent retry may have created the same stable organization.
+            // Một retry đồng thời có thể đã tạo cùng organization ổn định đó.
         }
         Organization created = findOrganization(name);
         if (created == null) {
@@ -128,7 +128,7 @@ public class KeycloakProvisioningClient {
         return created.id();
     }
 
-    /** Allowed templates are fixed by the authorization contract, not chosen by a center. */
+    /** Template được phép do hợp đồng authorization cố định, không phải do center chọn. */
     public String ensureRealmGroup(String path) {
         if (path == null || !GROUP_SOURCE.matcher(path).matches()) {
             throw new IllegalArgumentException("Unrecognized authorization group source");
@@ -161,14 +161,15 @@ public class KeycloakProvisioningClient {
         return parentId;
     }
 
-    /** Membership is independent of Organization groups; no inherited policy is implied. */
+    /** Membership độc lập với group của Organization; không ngụ ý policy kế thừa nào. */
     public void setRealmGroupMembership(String keycloakUserId, String groupPath, boolean member) {
         if (keycloakUserId == null || keycloakUserId.isBlank()) {
             throw new IllegalArgumentException("Keycloak user ID is required");
         }
         String groupId = member ? ensureRealmGroup(groupPath) : findExistingSourceGroup(groupPath);
         if (groupId == null) {
-            // Never report a revocation as synchronized without identifying its source group.
+            // Không bao giờ báo một lần thu hồi là đã đồng bộ khi chưa xác định được group nguồn
+            // của nó.
             throw new IllegalStateException(
                     "Cannot revoke membership: realm group does not exist: " + groupPath);
         }
@@ -204,7 +205,7 @@ public class KeycloakProvisioningClient {
     }
 
     private Group findGroup(String path) {
-        // Exact path lookup avoids pagination and name collisions across workspaces.
+        // Tra cứu theo path chính xác tránh phân trang và đụng tên giữa các workspace.
         URI uri = URI.create(endpoint("group-by-path") + path);
         try {
             Group group = get(uri, Group.class);

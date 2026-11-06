@@ -310,7 +310,7 @@ class KeycloakDecisionClientTest {
         Session session = sessionWithToken(USER, tokenExpiringIn(-120));
         KeycloakDecisionClient client = client(builder, session);
 
-        // No refresh token in the session: Keycloak rejects the expired token itself.
+        // Không có refresh token trong phiên: Keycloak tự từ chối token đã hết hạn.
         expectDecision(server, "resource-a%23enter", "resource-b")
                 .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
 
@@ -366,16 +366,16 @@ class KeycloakDecisionClientTest {
 
     private KeycloakDecisionClient client(
             RestClient.Builder builder, Session session, RestClient.Builder tokenBuilder) {
-        // The manager resolves the servlet response from the request context, as on a servlet
-        // thread; the request itself is passed to authorize() as an attribute.
+        // Manager resolve servlet response từ request context, như trên một servlet
+        // thread; chính request được truyền vào authorize() dưới dạng attribute.
         RequestContextHolder.setRequestAttributes(
                 new ServletRequestAttributes(session.request(), new MockHttpServletResponse()));
         var provider = OAuth2AuthorizedClientProviderBuilder.builder().authorizationCode();
         if (tokenBuilder == null) {
             provider.refreshToken();
         } else {
-            // Mirror the token response client's own default client, which carries the OAuth2
-            // token response converter, on top of the mock-bound builder.
+            // Phản chiếu default client của chính token response client, vốn mang OAuth2
+            // token response converter, trên builder đã gắn mock.
             RestClient tokenHttp =
                     tokenBuilder
                             .configureMessageConverters(converters ->

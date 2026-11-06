@@ -51,7 +51,7 @@ CREATE TABLE authorization_operation (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     version BIGINT NOT NULL DEFAULT 0,
     CONSTRAINT uq_authz_operation_idempotency UNIQUE (initiator_user_id, idempotency_key),
-    -- The scalar revision belongs to the first affected partition; each partition advances independently.
+    -- Revision scalar thuộc về partition bị ảnh hưởng đầu tiên; mỗi partition tiến độc lập.
     CONSTRAINT ck_authz_operation_revision_vector CHECK ((
         array_ndims(affected_partitions) = 1 AND array_lower(affected_partitions, 1) = 1
         AND array_ndims(affected_revisions) = 1 AND array_lower(affected_revisions, 1) = 1
@@ -66,7 +66,7 @@ CREATE INDEX ix_authz_operation_queue ON authorization_operation(next_attempt_at
     WHERE state IN ('PENDING', 'RETRYABLE_FAILURE');
 CREATE INDEX ix_authz_operation_workspace ON authorization_operation(workspace_id, created_at DESC);
 
--- Arrays are control-plane references, not independent authorization sources.
+-- Các mảng là tham chiếu của control-plane, không phải nguồn authorization độc lập.
 CREATE FUNCTION validate_authz_partition_ids() RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
     ids UUID[];
@@ -105,7 +105,7 @@ CREATE TRIGGER ck_authz_projection_refs BEFORE INSERT OR UPDATE OF partition_id,
 CREATE TRIGGER ck_authz_operation_refs BEFORE INSERT OR UPDATE OF affected_partitions, affected_revisions
     ON authorization_operation FOR EACH ROW EXECUTE FUNCTION validate_authz_partition_ids();
 
--- Keep referenced partitions durable; array references cannot use a normal FK.
+-- Giữ các partition được tham chiếu bền vững; tham chiếu mảng không dùng được FK thông thường.
 CREATE FUNCTION preserve_authz_partition() RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
     RAISE EXCEPTION 'Authorization partitions cannot be deleted' USING ERRCODE = '23514';
@@ -132,8 +132,8 @@ BEGIN
             USING ERRCODE = '23514';
     END IF;
 
-    -- Any source change must fence all dependent projections, even when
-    -- the source reaches a newer READY revision within the same transaction.
+    -- Mọi thay đổi nguồn phải fence mọi projection phụ thuộc, ngay cả khi
+    -- nguồn đạt một READY revision mới hơn trong cùng transaction.
     IF TG_OP = 'UPDATE' AND
         (OLD.desired_revision IS DISTINCT FROM NEW.desired_revision
          OR current_row.state <> 'READY') AND EXISTS (
@@ -150,7 +150,7 @@ CREATE CONSTRAINT TRIGGER ck_authz_partition_ready_deferred
     AFTER INSERT OR UPDATE ON authz_partition DEFERRABLE INITIALLY DEFERRED
     FOR EACH ROW EXECUTE FUNCTION verify_authz_partition_ready();
 
--- Reject desired graph edits unless the owning scope is already fenced.
+-- Từ chối sửa desired graph trừ khi scope sở hữu đã được fence.
 CREATE FUNCTION guard_authz_projection_desired() RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
     owner_id UUID;
@@ -216,7 +216,7 @@ CREATE CONSTRAINT TRIGGER ck_authz_projection_ready_deferred
     AFTER INSERT OR UPDATE ON authz_projection DEFERRABLE INITIALLY DEFERRED
     FOR EACH ROW EXECUTE FUNCTION verify_authz_projection_ready();
 
--- Every existing and newly created identity/workspace starts fenced until Keycloak is reconciled.
+-- Mọi identity/workspace hiện có và mới tạo đều bắt đầu ở trạng thái fenced cho tới khi Keycloak được reconcile.
 INSERT INTO authz_partition(id, kind, owner_key)
     SELECT gen_random_uuid(), 'ACCOUNT', 'account:' || id FROM user_account;
 INSERT INTO authz_partition(id, kind, owner_key)
@@ -236,7 +236,7 @@ CREATE TRIGGER tr_authz_account_scope AFTER INSERT ON user_account
 CREATE TRIGGER tr_authz_workspace_scope AFTER INSERT ON workspace
     FOR EACH ROW EXECUTE FUNCTION create_authz_scope();
 
--- Scope identity and revision counters are monotonic; an old READY fence cannot be restored.
+-- Định danh scope và bộ đếm revision là đơn điệu; một READY fence cũ không thể được khôi phục.
 CREATE FUNCTION guard_authz_partition_identity() RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
     IF (OLD.id, OLD.kind, OLD.owner_key) IS DISTINCT FROM (NEW.id, NEW.kind, NEW.owner_key)
@@ -250,7 +250,7 @@ $$;
 CREATE TRIGGER ck_authz_partition_monotonic BEFORE UPDATE ON authz_partition
     FOR EACH ROW EXECUTE FUNCTION guard_authz_partition_identity();
 
--- The operation row is the durable queue item AND the idempotency record.
+-- Dòng operation vừa là mục hàng đợi bền vững VỪA là bản ghi idempotency.
 CREATE FUNCTION guard_authz_operation_payload() RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
     IF (OLD.id, OLD.initiator_user_id, OLD.workspace_id, OLD.idempotency_key,

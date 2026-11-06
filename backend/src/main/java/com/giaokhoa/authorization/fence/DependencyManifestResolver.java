@@ -22,13 +22,12 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * Resolves the dependency manifest of a protected request: the actor's ACCOUNT partition, the
- * target WORKSPACE partition and the upstream source closure of the requested targets — the
- * partitions owning a target projection plus, transitively, every partition those projections
- * depend on. Partitions that merely depend on the same sources (an independent grant sharing the
- * workspace) are not part of the manifest, so fencing one source never fences the others. A missing
- * partition means the projection was never recorded: fail closed with 503 instead of deciding on an
- * incomplete set.
+ * Resolve dependency manifest của một protected request: ACCOUNT partition của actor, WORKSPACE
+ * partition đích và closure nguồn upstream của các target được yêu cầu — các partition sở hữu một
+ * target projection cộng, theo quan hệ truyền dẫn, mọi partition mà các projection đó phụ thuộc.
+ * Partition chỉ phụ thuộc vào cùng các nguồn (một grant độc lập dùng chung workspace) không thuộc
+ * manifest, nên fence một nguồn không bao giờ fence các nguồn còn lại. Thiếu một partition nghĩa là
+ * projection chưa từng được ghi: fail closed với 503 thay vì quyết định trên một tập thiếu.
  */
 @Component
 public class DependencyManifestResolver {
@@ -41,7 +40,7 @@ public class DependencyManifestResolver {
         this.jdbc = jdbc;
     }
 
-    /** One resolved manifest; partition IDs are in the stable lock order used by the fence. */
+    /** Một manifest đã resolve; ID các partition theo thứ tự khóa ổn định mà fence sử dụng. */
     public record Manifest(
             UUID actorUserId,
             UUID workspaceId,
@@ -90,7 +89,6 @@ public class DependencyManifestResolver {
                 include(partitions, frontier, dependency);
             }
         }
-        // Upstream closure: expand every partition in the set through the projections it owns.
         Set<UUID> expanded = new HashSet<>();
         while (!frontier.isEmpty()) {
             UUID owner = frontier.removeFirst();

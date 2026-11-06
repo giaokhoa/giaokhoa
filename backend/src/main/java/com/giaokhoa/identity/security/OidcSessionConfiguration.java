@@ -15,7 +15,7 @@ public class OidcSessionConfiguration {
 
     @Bean
     OAuth2AuthorizedClientRepository authorizedClientRepository() {
-        // Spring Session JDBC persists the HttpSession, including authorized access/refresh tokens.
+        // Spring Session JDBC lưu bền HttpSession, gồm cả access/refresh token đã được ủy quyền.
         return new HttpSessionOAuth2AuthorizedClientRepository();
     }
 

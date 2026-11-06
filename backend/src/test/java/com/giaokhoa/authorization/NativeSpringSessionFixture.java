@@ -29,8 +29,8 @@ import org.springframework.session.SessionRepository;
 import org.springframework.session.web.http.SessionRepositoryFilter;
 
 /**
- * Stores a real Keycloak Code+PKCE user token in the application's actual JDBC Spring Session and
- * reloads it through the configured OAuth2AuthorizedClientRepository.
+ * Lưu một user token Code+PKCE thật của Keycloak vào JDBC Spring Session thật của ứng dụng và nạp
+ * lại nó qua OAuth2AuthorizedClientRepository đã cấu hình.
  */
 final class NativeSpringSessionFixture implements AutoCloseable {
     private final SessionRepositoryFilter<?> filter;

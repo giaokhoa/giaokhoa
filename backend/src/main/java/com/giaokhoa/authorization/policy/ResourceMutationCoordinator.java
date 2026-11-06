@@ -14,10 +14,10 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Serializes Keycloak resource mutations across application instances using the shared PostgreSQL
- * database. A transaction-scoped advisory lock covers the entire read/modify/write/read-back
- * sequence, including all scopes of one target resource; an in-process synchronized block is not
- * sufficient when multiple workers provision the same Keycloak resource.
+ * Tuần tự hóa các mutation lên resource của Keycloak giữa các instance của ứng dụng bằng cơ sở dữ
+ * liệu PostgreSQL dùng chung. Một advisory lock phạm vi transaction bao trọn toàn bộ chuỗi
+ * đọc/sửa/ghi/đọc lại, gồm mọi scope của một target resource; một khối synchronized trong tiến
+ * trình là không đủ khi nhiều worker cùng provision một resource Keycloak.
  */
 @Component
 public class ResourceMutationCoordinator {
@@ -52,7 +52,8 @@ public class ResourceMutationCoordinator {
 
     private static long lockId(String targetKey) {
         try {
-            // Stable across JVMs, and namespaced to avoid collisions with unrelated advisory locks.
+            // Ổn định giữa các JVM, và có namespace để tránh đụng các advisory lock không liên
+            // quan.
             byte[] digest =
                     MessageDigest.getInstance("SHA-256")
                             .digest(

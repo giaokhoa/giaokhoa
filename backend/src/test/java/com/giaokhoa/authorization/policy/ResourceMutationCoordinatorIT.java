@@ -17,7 +17,10 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 
-/** Proves cross-instance serialization on the dedicated TEST PostgreSQL, not an in-JVM mutex. */
+/**
+ * Chứng minh tuần tự hóa xuyên instance trên TEST PostgreSQL chuyên dụng, không phải mutex trong
+ * JVM.
+ */
 @SpringBootTest
 class ResourceMutationCoordinatorIT extends IntegrationEnvironment {
     private static final String SCHEMA =
@@ -42,7 +45,7 @@ class ResourceMutationCoordinatorIT extends IntegrationEnvironment {
 
     @Test
     void twoWorkerInstancesSerializeMutationsForTheSameResource() throws Exception {
-        // Independent coordinator objects simulate separate application workers.
+        // Các đối tượng coordinator độc lập mô phỏng các application worker riêng biệt.
         ResourceMutationCoordinator firstWorker =
                 new ResourceMutationCoordinator(jdbc, transactions);
         ResourceMutationCoordinator secondWorker =

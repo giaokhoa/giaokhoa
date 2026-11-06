@@ -19,8 +19,8 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.RestClient;
 
 /**
- * Native Keycloak 26.8.1 time-policy gate: exact UTC [start,end) via the real admin policy
- * evaluator, plus real-time UMA decisions with an unchanged user access token.
+ * Cổng time policy Keycloak 26.8.1 native: [start,end) UTC chính xác qua admin policy evaluator
+ * thật, cộng các quyết định UMA thời gian thực với user access token không đổi.
  */
 class NativeTimePolicyIT {
     private static final DateTimeFormatter KEYCLOAK_UTC =
@@ -37,12 +37,12 @@ class NativeTimePolicyIT {
         String endId = gate.required("NATIVE_GATE_END_POLICY_ID");
         String provisioner = provisionerToken();
 
-        // In the default fixture both native boundaries are in the future.
+        // Trong fixture mặc định cả hai biên native đều ở tương lai.
         assertFalse(gate.decide(actor, resource, "attempt.open"));
 
-        // The admin-only Keycloak policy evaluator executes the *real* policy graph with
-        // an exact evaluation context. Never send kc.time.date_time in UMA requests:
-        // production decisions must always use Keycloak's server clock.
+        // Policy evaluator chỉ-dành-cho-admin của Keycloak thực thi policy graph *thật* với
+        // một evaluation context chính xác. Không bao giờ gửi kc.time.date_time trong UMA request:
+        // quyết định production phải luôn dùng đồng hồ server của Keycloak.
         Instant start = Instant.parse("2033-01-15T10:00:00Z");
         Instant end = start.plusSeconds(60);
         updateNotBefore(startId, "POSITIVE", start, provisioner);
@@ -53,9 +53,9 @@ class NativeTimePolicyIT {
         assertEquals("DENY", evaluateAt(end, provisioner));
         assertEquals("DENY", evaluateAt(end.plusSeconds(1), provisioner));
 
-        // Real UMA: confirm the gate flips without logout, refresh or a cron process.
-        // Both comparisons are deliberately far from now; CI latency cannot skip a
-        // narrow live-time window.
+        // UMA thật: xác nhận cổng lật mà không cần logout, refresh hay tiến trình cron.
+        // Cả hai mốc so sánh được cố ý đặt xa hiện tại; độ trễ CI không thể bỏ qua một
+        // cửa sổ thời gian thực hẹp.
         updateNotBefore(startId, "POSITIVE", Instant.now().minusSeconds(180), provisioner);
         updateNotBefore(endId, "NEGATIVE", Instant.now().plusSeconds(180), provisioner);
         assertTrue(gate.decide(actor, resource, "attempt.open"));

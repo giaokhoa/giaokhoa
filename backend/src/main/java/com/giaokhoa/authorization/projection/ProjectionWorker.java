@@ -27,17 +27,17 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestClientException;
 
 /**
- * The durable projection worker: it claims due authorization operations in creation order (an
- * operation never overtakes an older one touching the same partition), reconciles every affected
- * partition at exactly the operation's revision through {@link ProjectionReconciler}, and marks the
- * operation SUCCEEDED only after the database confirms every partition READY at that revision.
- * Claims are atomic (rows locked {@code FOR UPDATE SKIP LOCKED} plus a guarded update), so two
- * application instances can never process the same operation. Failures retry with the same
- * idempotency payload and a bounded backoff; exhausting the attempt budget fails the operation and
- * its partitions without opening the fence. Partitions fenced without a live operation (dependency
- * fences, out-of-band drift repairs) are reconciled on the same loop under the same bounded
- * backoff, and READY partitions are periodically checked for console drift through a rotating scan
- * that reaches every partition.
+ * Projection worker bền vững: nó claim các authorization operation tới hạn theo thứ tự tạo (một
+ * operation không bao giờ vượt operation cũ hơn chạm cùng partition), reconcile mọi partition bị
+ * ảnh hưởng tại đúng revision của operation qua {@link ProjectionReconciler}, và chỉ đánh dấu
+ * operation SUCCEEDED sau khi cơ sở dữ liệu xác nhận mọi partition READY tại revision đó. Claim là
+ * nguyên tử (các dòng khóa {@code FOR UPDATE SKIP LOCKED} cộng một update có điều kiện), nên hai
+ * instance của ứng dụng không bao giờ xử lý cùng một operation. Thất bại retry với cùng idempotency
+ * payload và backoff có giới hạn; cạn ngân sách lần thử sẽ fail operation và các partition của nó
+ * mà không mở fence. Các partition bị fence mà không có operation đang sống (dependency fence, sửa
+ * drift ngoài hệ thống) được reconcile trên cùng vòng lặp dưới cùng backoff có giới hạn, và các
+ * partition READY được kiểm tra định kỳ tìm drift từ console qua một lượt quét xoay vòng chạm tới
+ * mọi partition.
  */
 @Component
 public class ProjectionWorker {
@@ -59,7 +59,7 @@ public class ProjectionWorker {
     private Instant lastDriftScan = Instant.EPOCH;
     private UUID driftScanCursor;
 
-    /** Rate-limit state of one fenced partition without a live operation. */
+    /** Trạng thái giới hạn tốc độ của một partition bị fence mà không có operation đang sống. */
     private record OrphanRetry(int failures, Instant nextAttemptAt) {}
 
     public ProjectionWorker(
@@ -78,7 +78,6 @@ public class ProjectionWorker {
         private static final long serialVersionUID = 1L;
     }
 
-    /** Bounded retry delay: grows with the attempt count and is capped. */
     static Duration backoffFor(int attemptCount) {
         return Duration.ofSeconds(Math.min(60, 5L * Math.max(1, attemptCount)));
     }
@@ -133,9 +132,10 @@ public class ProjectionWorker {
                                         rs.getInt("attempt_count"),
                                         due);
                             });
-            // The PostgreSQL queue pattern: due rows are locked FOR UPDATE SKIP LOCKED, so
-            // a row another instance is claiming never appears here; the guarded update
-            // below, whose row count is the only proof of ownership, is the final check.
+            // Mẫu hàng đợi PostgreSQL: các dòng tới hạn được khóa FOR UPDATE SKIP LOCKED, nên
+            // một dòng instance khác đang claim không bao giờ xuất hiện ở đây; update có điều
+            // kiện bên dưới, với số dòng bị ảnh hưởng là bằng chứng sở hữu duy nhất, là chốt chặn
+            // cuối.
             Set<UUID> claimable =
                     new HashSet<>(
                             jdbc.queryForList(
@@ -199,10 +199,10 @@ public class ProjectionWorker {
                 }
             }
             transactions.executeWithoutResult(status -> {
-                // Re-read the desired revisions in the same transaction that records
-                // success: a mutation that bumped a partition after the checks above makes
-                // this operation superseded, not a reconcile failure, and the partitions it
-                // fenced now belong to the newer operation.
+                // Đọc lại các desired revision trong cùng transaction ghi nhận
+                // thành công: một mutation đã bump một partition sau các kiểm tra ở trên khiến
+                // operation này bị superseded (thay thế), không phải lỗi reconcile, và các
+                // partition nó đã fence nay thuộc về operation mới hơn.
                 for (int i = 0; i < operation.partitions().size(); i++) {
                     List<Long> current =
                             jdbc.queryForList(
@@ -259,8 +259,8 @@ public class ProjectionWorker {
             boolean terminal,
             boolean fencePartitions) {
         transactions.executeWithoutResult(status -> {
-            // Guarded by the claimed state: an instance that lost the operation to another
-            // claim records nothing, so it can never fail an operation that already succeeded.
+            // Được bảo vệ bởi trạng thái đã claim: một instance thua operation vào tay claim
+            // khác sẽ không ghi gì, nên không bao giờ fail được một operation đã thành công.
             jdbc.update(
                     "UPDATE authorization_operation SET state = ?, next_attempt_at = ?,"
                             + " last_error_code = ?, updated_at = now()"
@@ -288,10 +288,10 @@ public class ProjectionWorker {
     }
 
     /**
-     * Partitions fenced without a live operation still converge: verify and reopen, or stay fenced.
-     * Retries are rate-limited with the same bounded backoff as the operation path, so a partition
-     * that cannot converge (for example while Keycloak is down) is not retried on every one-second
-     * poll.
+     * Các partition bị fence mà không có operation đang sống vẫn hội tụ: xác minh và mở lại, hoặc
+     * giữ nguyên fence. Retry bị giới hạn tốc độ bằng cùng backoff có giới hạn như đường operation,
+     * nên một partition không thể hội tụ (ví dụ khi Keycloak đang sập) không bị retry ở mọi poll
+     * một giây.
      */
     void reconcileOrphanedPartitions() {
         List<UUID> orphaned =
@@ -317,8 +317,8 @@ public class ProjectionWorker {
             if (retry != null && now.isBefore(retry.nextAttemptAt())) {
                 continue;
             }
-            // Fail-closed: a partition that cannot converge stays PENDING until its next
-            // scheduled attempt.
+            // Fail-closed: một partition không thể hội tụ giữ nguyên PENDING tới lần thử
+            // đã lên lịch tiếp theo của nó.
             if (reconciler.tryReconcilePartition(partitionId)) {
                 orphanRetries.remove(partitionId);
             } else {
@@ -330,10 +330,10 @@ public class ProjectionWorker {
     }
 
     /**
-     * Out-of-band console edits are not synced instantly: on a slow cadence READY partitions are
-     * checked against Keycloak, and a drifted partition is fenced first, reconciled, verified and
-     * only then reopened by the normal publish path. The scan rotates through the whole READY set
-     * instead of rechecking the same oldest partitions forever.
+     * Các sửa đổi từ console ngoài hệ thống không được đồng bộ tức thì: theo nhịp chậm, các
+     * partition READY được đối chiếu với Keycloak, và một partition bị drift sẽ được fence trước,
+     * reconcile, xác minh rồi chỉ sau đó mới mở lại bằng đường publish bình thường. Lượt quét xoay
+     * vòng qua toàn bộ tập READY thay vì kiểm tra lại mãi cùng các partition cũ nhất.
      */
     private void repairDriftIfDue() {
         Instant now = Instant.now();
@@ -360,16 +360,16 @@ public class ProjectionWorker {
             }
             if (!intact) {
                 reconciler.fencePartition(partitionId);
-                // A failed repair stays fenced; the orphan path keeps retrying it.
+                // Một lần sửa thất bại giữ nguyên fence; đường orphan tiếp tục retry nó.
                 reconciler.tryReconcilePartition(partitionId);
             }
         }
     }
 
     /**
-     * The rotating drift-scan window over the READY set in stable UUID-string order: up to {@code
-     * limit} IDs strictly after {@code after}, wrapping to the head of the list, so every READY
-     * partition is reached within a bounded number of scans.
+     * Cửa sổ quét drift xoay vòng trên tập READY theo thứ tự chuỗi UUID ổn định: tối đa {@code
+     * limit} ID nằm ngay sau {@code after}, vòng về đầu danh sách, nên mọi partition READY đều được
+     * chạm tới trong một số lượt quét có giới hạn.
      */
     static List<UUID> scanWindow(List<UUID> orderedIds, UUID after, int limit) {
         List<UUID> window = new ArrayList<>();

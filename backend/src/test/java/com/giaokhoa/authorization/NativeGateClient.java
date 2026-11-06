@@ -15,7 +15,7 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
-/** Calls Keycloak's token endpoint with the real actor token; no mocked PDP decisions. */
+/** Gọi token endpoint của Keycloak bằng actor token thật; không có quyết định PDP nào bị mock. */
 final class NativeGateClient {
     private static final int EXPECTED_ACTOR_COUNT = 2;
 
@@ -29,7 +29,7 @@ final class NativeGateClient {
 
     String token(String user) {
         try {
-            // Tokens are produced exclusively by native-pkce-login.mjs via real Keycloak Code+PKCE.
+            // Token chỉ được tạo bởi native-pkce-login.mjs qua Code+PKCE thật của Keycloak.
             List<String> tokens =
                     Files.readAllLines(Path.of(required("NATIVE_GATE_NATIVE_TOKENS_FILE")));
             if (tokens.size() != EXPECTED_ACTOR_COUNT) {

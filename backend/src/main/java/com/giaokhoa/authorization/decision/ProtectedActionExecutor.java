@@ -19,13 +19,12 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
 /**
- * The protected-action pipeline of the authorization contract: resolve the actor from the session,
- * resolve the dependency manifest, hold the transaction fence, ask the Keycloak PDP about every
- * required resource/scope pair with the user's own token — outside any database transaction — and
- * only then run the caller's read or mutation inside a second fence transaction that proves the
- * recorded revisions did not move. A closure or revision change restarts the pipeline with a fresh
- * manifest; a fenced partition or an unverifiable decision fails closed with 503, a native deny
- * with 403 for actions.
+ * Pipeline của protected action theo hợp đồng authorization: resolve actor từ phiên, resolve
+ * dependency manifest, giữ transaction fence, hỏi Keycloak PDP về mọi cặp resource/scope bắt buộc
+ * bằng token của chính user — ngoài mọi transaction cơ sở dữ liệu — rồi mới chạy thao tác đọc hoặc
+ * mutation của caller bên trong một fence transaction thứ hai chứng minh các revision đã ghi không
+ * đổi. Closure hoặc revision thay đổi sẽ khởi động lại pipeline với manifest mới; partition đang bị
+ * fence hoặc quyết định không xác minh được sẽ fail closed với 503, native deny với 403 cho action.
  */
 @Component
 public class ProtectedActionExecutor {
@@ -50,7 +49,7 @@ public class ProtectedActionExecutor {
         this.jdbc = jdbc;
     }
 
-    /** One target of a protected request and the fixed-template scopes it needs. */
+    /** Một target của protected request cùng các scope theo template cố định mà nó cần. */
     public record Target(String targetKey, List<String> scopes) {
         public Target {
             NativePolicyTemplates.TargetType type =
@@ -66,7 +65,7 @@ public class ProtectedActionExecutor {
         }
     }
 
-    /** The PDP answer of every requested pair; a pair is allowed only on a native allow. */
+    /** Đáp án PDP của mọi cặp được yêu cầu; một cặp chỉ được phép khi có native allow. */
     public record Decisions(Map<String, Map<String, Boolean>> byTarget) {
         public Decisions {
             byTarget = Map.copyOf(Objects.requireNonNull(byTarget, "byTarget"));
@@ -83,7 +82,7 @@ public class ProtectedActionExecutor {
         }
     }
 
-    /** Evaluates every pair and returns the decisions for display; never runs an action. */
+    /** Đánh giá mọi cặp và trả về các quyết định để hiển thị; không bao giờ chạy action. */
     public Decisions evaluate(
             Authentication authentication,
             HttpServletRequest request,
@@ -93,8 +92,8 @@ public class ProtectedActionExecutor {
     }
 
     /**
-     * Evaluates every pair, then runs {@code action} inside the closing fence transaction. Any
-     * native deny aborts with 403 before the action runs.
+     * Đánh giá mọi cặp, rồi chạy {@code action} bên trong fence transaction chốt. Mọi native deny
+     * đều hủy với 403 trước khi action chạy.
      */
     public <T> T execute(
             Authentication authentication,
@@ -152,8 +151,8 @@ public class ProtectedActionExecutor {
         for (Target target : targets) {
             String resourceId = manifest.recordedResourceIds().get(target.targetKey());
             if (resourceId == null) {
-                // Native resources are named by target key; the recorded projection ID wins
-                // whenever one exists, this lookup only covers targets without a projection.
+                // Resource native được đặt tên theo target key; ID của projection đã ghi thắng
+                // mỗi khi tồn tại, tra cứu này chỉ áp cho target chưa có projection.
                 resourceId = writer.findResourceId(target.targetKey()).orElse(null);
             }
             Map<String, Boolean> perScope = new LinkedHashMap<>();
@@ -173,9 +172,9 @@ public class ProtectedActionExecutor {
     }
 
     /**
-     * The one session-actor resolution: the directory account of the authenticated subject.
-     * Controllers that must bind request data to the actor before running the pipeline use this
-     * instead of resolving the account themselves.
+     * Điểm resolve actor của phiên duy nhất: tài khoản directory của subject đã xác thực.
+     * Controller nào phải gắn dữ liệu request với actor trước khi chạy pipeline thì dùng điểm này
+     * thay vì tự resolve tài khoản.
      */
     public UUID actorUserId(Authentication authentication) {
         if (authentication == null || authentication.getName() == null) {
@@ -188,8 +187,8 @@ public class ProtectedActionExecutor {
                         UUID.class,
                         authentication.getName());
         if (found.isEmpty()) {
-            // An authenticated session without a directory account has no ACCOUNT partition to
-            // fence, so no protected decision may be taken for it.
+            // Phiên đã xác thực nhưng không có tài khoản directory thì không có ACCOUNT partition
+            // để fence, nên không quyết định protected nào được đưa ra cho nó.
             throw AuthorizationFence.notReady();
         }
         return found.getFirst();

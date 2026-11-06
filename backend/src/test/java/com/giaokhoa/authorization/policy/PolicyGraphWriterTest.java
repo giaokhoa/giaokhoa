@@ -49,7 +49,7 @@ class PolicyGraphWriterTest {
     private static final String ANY_NAME = "gk-any:" + TARGET + "#enter";
     private static final String ROOT_NAME = "gk-root:" + TARGET + "#enter";
 
-    /** Eligibility gate outside the OR; owner alone, or manager inside a validity window. */
+    /** Eligibility gate nằm ngoài OR; owner một mình, hoặc manager trong một validity window. */
     private static PolicyGraph graph() {
         return PolicyGraph.forEligibleActor(
                 TARGET,
@@ -513,7 +513,7 @@ class PolicyGraphWriterTest {
         expectCreate(server, ROOT + "/resource", "{\"_id\":\"res-1\"}");
         expectGet(server, ROOT + "/policy" + LIST, "[]");
         expectGroup(server, ELIGIBLE, "g-elig");
-        // A concurrent apply created the shared eligibility policy first.
+        // Một apply đồng thời đã tạo shared eligibility policy trước.
         server.expect(requestTo(ROOT + "/policy/group"))
                 .andExpect(method(HttpMethod.POST))
                 .andRespond(withStatus(HttpStatus.CONFLICT));
@@ -564,7 +564,7 @@ class PolicyGraphWriterTest {
         expectCreate(server, ROOT + "/policy/group", "{\"id\":\"pol-mgr\"}");
         expectGroup(server, OWNERS, "g-own");
         expectCreate(server, ROOT + "/policy/group", "{\"id\":\"pol-own\"}");
-        // A concurrent apply created this pair's OR aggregate first.
+        // Một apply đồng thời đã tạo OR aggregate của cặp này trước.
         server.expect(requestTo(ROOT + "/policy/aggregate"))
                 .andExpect(method(HttpMethod.POST))
                 .andRespond(withStatus(HttpStatus.CONFLICT));
@@ -772,7 +772,7 @@ class PolicyGraphWriterTest {
         PolicyGraphWriter writer = writer(builder);
 
         expectClients(server);
-        // The policy itself still exists; only the link from the root permission was removed.
+        // Bản thân policy vẫn tồn tại; chỉ liên kết từ root permission đã bị gỡ.
         expectStoredGraph(server, List.of());
 
         assertFalse(writer.isGraphIntact(TARGET, "enter", "res-1", List.of("gk-group:" + OWNERS)));
@@ -819,7 +819,7 @@ class PolicyGraphWriterTest {
         expectAssociated(server, "perm-1", "associatedPolicies", permissionPolicyIds, "id");
     }
 
-    /** One association collection of a policy or permission, as Keycloak serves it. */
+    /** Một tập association của một policy hoặc permission, như Keycloak phục vụ nó. */
     private void expectAssociated(
             MockRestServiceServer server,
             String policyId,
@@ -839,7 +839,7 @@ class PolicyGraphWriterTest {
                 json.append(']').toString());
     }
 
-    /** Native detail and association endpoints must be read before reporting a graph as applied. */
+    /** Các endpoint detail và association native phải được đọc trước khi báo một graph là đã áp. */
     private void expectReadBack(
             MockRestServiceServer server, String permissionId, List<String> policyIds) {
         var mapper = new tools.jackson.databind.json.JsonMapper();
@@ -863,7 +863,7 @@ class PolicyGraphWriterTest {
                         + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
     }
 
-    /** A full page of unrelated entries, so only a later page can hold the wanted name. */
+    /** Một trang đầy các mục không liên quan, nên chỉ trang sau mới có thể giữ tên cần tìm. */
     private static String dummyPage(String kind, int count) {
         StringBuilder json = new StringBuilder("[");
         for (int i = 0; i < count; i++) {

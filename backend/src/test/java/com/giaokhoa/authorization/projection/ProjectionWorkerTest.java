@@ -55,7 +55,7 @@ class ProjectionWorkerTest {
                 .thenReturn(
                         new ProjectionReconciler.PartitionRow(
                                 PARTITION, 1L, 0L, AuthorizationPartition.State.PENDING));
-        // Another instance won the claim: the conditional update matched no row.
+        // Một instance khác thắng claim: update có điều kiện không khớp dòng nào.
         when(jdbc.update(contains("SET state = 'APPLYING'"), any(UUID.class))).thenReturn(0);
 
         new ProjectionWorker(jdbc, reconciler, stubTransactions()).poll();
@@ -73,7 +73,7 @@ class ProjectionWorkerTest {
                 .thenReturn(
                         new ProjectionReconciler.PartitionRow(
                                 PARTITION, 1L, 0L, AuthorizationPartition.State.PENDING));
-        // A newer mutation bumped the desired revision after the in-loop check.
+        // Một mutation mới hơn đã bump desired revision sau kiểm tra trong vòng lặp.
         when(jdbc.queryForList(contains("desired_revision"), eq(Long.class), any()))
                 .thenReturn(List.of(2L));
 
@@ -109,8 +109,8 @@ class ProjectionWorkerTest {
     void driftScanWindowRotatesThroughTheWholeReadySet() {
         List<UUID> ready = List.of(uuid(1), uuid(2), uuid(3), uuid(4), uuid(5), uuid(6), uuid(7));
         assertEquals(ready.subList(0, 5), ProjectionWorker.scanWindow(ready, null, 5));
-        // The window continues after the last scanned ID and wraps, so partitions beyond the
-        // first page are reached instead of the same oldest five being rechecked forever.
+        // Cửa sổ tiếp tục sau ID quét cuối cùng và vòng lại, nên các partition ngoài
+        // trang đầu tiên được chạm tới thay vì mãi kiểm tra lại cùng năm partition cũ nhất.
         assertEquals(
                 List.of(uuid(6), uuid(7), uuid(1), uuid(2), uuid(3)),
                 ProjectionWorker.scanWindow(ready, uuid(5), 5));
@@ -131,7 +131,7 @@ class ProjectionWorkerTest {
         worker.reconcileOrphanedPartitions();
         worker.reconcileOrphanedPartitions();
 
-        // The second poll is inside the bounded backoff window: no new network attempt.
+        // Poll thứ hai nằm trong cửa sổ backoff có giới hạn: không có lần thử mạng mới.
         verify(reconciler, times(1)).tryReconcilePartition(PARTITION);
     }
 
@@ -139,7 +139,7 @@ class ProjectionWorkerTest {
         return UUID.fromString(String.format("00000000-0000-0000-0000-%012d", suffix));
     }
 
-    /** One due PENDING operation over {@link #PARTITION} at revision 1, attempt 0. */
+    /** Một operation PENDING tới hạn trên {@link #PARTITION} tại revision 1, attempt 0. */
     private static void stubQueue(JdbcTemplate jdbc) throws Exception {
         when(jdbc.query(anyString(), ArgumentMatchers.<RowMapper<Object>>any()))
                 .thenAnswer(invocation -> {
@@ -158,7 +158,7 @@ class ProjectionWorkerTest {
                     return List.of(mapper.mapRow(rs, 0));
                 });
         when(jdbc.queryForList(anyString(), eq(UUID.class), anyInt())).thenReturn(List.of());
-        // The claimable set locked FOR UPDATE SKIP LOCKED contains the queued operation.
+        // Tập claimable khóa FOR UPDATE SKIP LOCKED chứa operation đang xếp hàng.
         when(jdbc.queryForList(anyString(), eq(UUID.class))).thenReturn(List.of(OPERATION));
     }
 

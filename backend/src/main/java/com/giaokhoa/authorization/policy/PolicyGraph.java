@@ -8,16 +8,15 @@ import java.util.HexFormat;
 import java.util.List;
 
 /**
- * The desired native policy graph for one target/scope pair. The root permission ANDs the common
- * gates (applied outside the OR, identity eligibility first of all) with the OR of the independent
- * sources; each source ANDs all of its mandatory gates. A gate is only ever a current realm group,
- * a concrete actor, or a validity window: prerequisite roles are projected as groups, so no gate
- * can reference a global realm role. A validity window {@code [validFrom, expiresAt)} is written as
- * a POSITIVE not-before at its start and a NEGATIVE not-before at its end.
+ * Desired native policy graph cho một cặp target/scope. Root permission AND các common gate (áp
+ * ngoài OR, identity eligibility trước hết) với OR của các source độc lập; mỗi source AND mọi
+ * mandatory gate của nó. Một gate chỉ có thể là một realm group hiện hành, một actor cụ thể, hoặc
+ * một validity window: prerequisite role được chiếu thành group, nên không gate nào tham chiếu được
+ * global realm role. Một validity window {@code [validFrom, expiresAt)} được viết thành một
+ * not-before POSITIVE tại đầu và một not-before NEGATIVE tại cuối của nó.
  *
- * <p>The canonical descriptor is the deterministic serialization of the graph; its SHA-256 is the
- * desired hash recorded on the projection, so the same domain sources always rebuild the same
- * graph.
+ * <p>Canonical descriptor là dạng serialization xác định của graph; SHA-256 của nó là desired hash
+ * ghi trên projection, nên cùng các domain source luôn dựng lại cùng một graph.
  */
 public record PolicyGraph(
         String targetKey, String scope, List<Gate> commonGates, List<Source> sources) {
@@ -50,7 +49,7 @@ public record PolicyGraph(
                                 .toList());
     }
 
-    /** Business-safe convenience constructor: eligibility is a mandatory common gate. */
+    /** Constructor tiện ích an toàn cho nghiệp vụ: eligibility là common gate bắt buộc. */
     public PolicyGraph(String targetKey, String scope, List<Source> sources) {
         this(
                 targetKey,
@@ -59,7 +58,7 @@ public record PolicyGraph(
                 sources);
     }
 
-    /** The common identity-eligibility gate plus the given independent sources. */
+    /** Identity-eligibility gate chung cộng các source độc lập cho trước. */
     public static PolicyGraph forEligibleActor(
             String targetKey, String scope, List<Source> sources) {
         return new PolicyGraph(
@@ -69,7 +68,7 @@ public record PolicyGraph(
                 sources);
     }
 
-    /** Canonical serialization; gate and source order in the input never changes it. */
+    /** Serialization canonical; thứ tự gate và source trong đầu vào không bao giờ thay đổi nó. */
     public String descriptor() {
         StringBuilder out =
                 new StringBuilder("GRAPH|target=")
@@ -85,16 +84,19 @@ public record PolicyGraph(
         return out.toString();
     }
 
-    /** SHA-256 of the canonical descriptor, as recorded on the authorization projection. */
+    /** SHA-256 của canonical descriptor, như được ghi trên authorization projection. */
     public String desiredHash() {
         return sha256(descriptor());
     }
 
-    /** One mandatory condition of a source or of the graph itself. */
+    /** Một điều kiện bắt buộc của một source hoặc của chính graph. */
     public sealed interface Gate permits Gate.GroupMembership, Gate.Actor, Gate.Validity {
         String descriptor();
 
-        /** Membership of a current realm group, resolved by its fixed template path. */
+        /**
+         * Tư cách thành viên của một realm group hiện hành, resolve theo template path cố định của
+         * nó.
+         */
         record GroupMembership(String groupPath) implements Gate {
             public GroupMembership {
                 if (!NativePolicyTemplates.isGroupSource(groupPath)) {
@@ -109,7 +111,7 @@ public record PolicyGraph(
             }
         }
 
-        /** A concrete Keycloak user: an individual owner or grant recipient. */
+        /** Một user Keycloak cụ thể: một owner cá nhân hoặc người nhận grant. */
         record Actor(String keycloakUserId) implements Gate {
             public Actor {
                 if (keycloakUserId == null || keycloakUserId.isBlank()) {
@@ -123,7 +125,7 @@ public record PolicyGraph(
             }
         }
 
-        /** A {@code [validFrom, expiresAt)} window; either bound may stand alone. */
+        /** Một cửa sổ {@code [validFrom, expiresAt)}; mỗi biên có thể đứng độc lập. */
         record Validity(Instant validFrom, Instant expiresAt) implements Gate {
             public Validity {
                 if (validFrom == null && expiresAt == null) {
@@ -149,7 +151,7 @@ public record PolicyGraph(
         }
     }
 
-    /** One independent way to be granted: every gate of the source must hold together. */
+    /** Một cách độc lập để được cấp: mọi gate của source phải cùng thỏa. */
     public record Source(List<Gate> gates) {
         public Source {
             gates = List.copyOf(canonicalGates(gates));
@@ -166,7 +168,7 @@ public record PolicyGraph(
             return joinGates(gates);
         }
 
-        /** Short stable identifier of this exact gate set, used in the native policy name. */
+        /** Định danh ngắn ổn định của đúng tập gate này, dùng trong native policy name. */
         public String descriptorHash() {
             return sha256(descriptor()).substring(0, 32);
         }

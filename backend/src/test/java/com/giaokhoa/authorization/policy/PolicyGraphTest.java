@@ -132,7 +132,7 @@ class PolicyGraphTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new PolicyGraph(target, "enter", List.of(), List.of(owner)));
-        // Putting eligibility in an OR source is insufficient: it must be common to all sources.
+        // Đặt eligibility vào một OR source là không đủ: nó phải chung cho mọi source.
         assertThrows(
                 IllegalArgumentException.class,
                 () ->
@@ -211,7 +211,7 @@ class PolicyGraphTest {
         for (String path : paths) {
             assertTrue(NativePolicyTemplates.isGroupSource(path), path);
         }
-        // Prerequisite roles are projected groups, never global realm roles.
+        // Prerequisite role là group được chiếu, không bao giờ là global realm role.
         assertEquals(
                 "/gk/workspaces/" + WORKSPACE + "/roles/teachers",
                 NativePolicyTemplates.prerequisiteRoleGroup(WORKSPACE, PrerequisiteRole.TEACHERS));

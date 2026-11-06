@@ -30,10 +30,10 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 /**
- * UMA decision client for the session user. Each call asks Keycloak about exactly one
- * resource/scope pair with the user's own token; a service account never evaluates in place of the
- * user, and an allow is never cached or reused for a later request. The authorized client manager
- * refreshes an expired access token from the session's refresh token instead of rejecting it.
+ * Client quyết định UMA cho user của phiên. Mỗi lần gọi chỉ hỏi Keycloak về đúng một cặp
+ * resource/scope bằng token của chính user; service account không bao giờ đánh giá thay user, và
+ * một allow không bao giờ được cache hay dùng lại cho request sau. Authorized client manager làm
+ * mới access token đã hết hạn từ refresh token của phiên thay vì từ chối nó.
  */
 @Component
 public class KeycloakDecisionClient {
@@ -101,7 +101,7 @@ public class KeycloakDecisionClient {
         return registration.getProviderDetails().getTokenUri();
     }
 
-    /** True only when Keycloak allows every required pair for the session user. */
+    /** Chỉ true khi Keycloak cho phép mọi cặp bắt buộc đối với user của phiên. */
     public boolean isAllowed(
             Authentication authentication,
             HttpServletRequest request,
