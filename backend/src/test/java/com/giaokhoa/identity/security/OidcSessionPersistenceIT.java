@@ -154,7 +154,10 @@ class OidcSessionPersistenceIT extends IntegrationEnvironment {
                             newId,
                             session.getId()));
             assertNull(registry.removeSessionInformation(session.getId()));
-            assertEquals(newId, registry.removeSessionInformation(newId).getSessionId());
+            assertEquals(
+                    newId,
+                    Objects.requireNonNull(registry.removeSessionInformation(newId))
+                            .getSessionId());
 
             registry.saveSessionInformation(info(newId, "user-4", "sid-4", null));
             sessions.deleteById(newId);
@@ -225,7 +228,8 @@ class OidcSessionPersistenceIT extends IntegrationEnvironment {
         assertFalse(cookie.getSecure());
         assertNull(cookie.getDomain());
         assertTrue(cookie.isHttpOnly());
-        assertTrue(response.getHeader("Set-Cookie").contains("SameSite=Lax"));
+        assertTrue(
+                Objects.requireNonNull(response.getHeader("Set-Cookie")).contains("SameSite=Lax"));
         try {
             // Request mới dùng filter Spring Session production và cookie serializer.
             var second = new MockHttpServletRequest("GET", "/");
@@ -244,13 +248,18 @@ class OidcSessionPersistenceIT extends IntegrationEnvironment {
                     });
 
             assertNotNull(loaded.get());
-            assertEquals("test-subject", loaded.get().getPrincipalName());
+            assertEquals("test-subject", Objects.requireNonNull(loaded.get()).getPrincipalName());
             assertEquals(
-                    accessToken.getTokenValue(), loaded.get().getAccessToken().getTokenValue());
-            assertEquals(accessToken.getExpiresAt(), loaded.get().getAccessToken().getExpiresAt());
+                    accessToken.getTokenValue(),
+                    Objects.requireNonNull(loaded.get()).getAccessToken().getTokenValue());
             assertEquals(
-                    refreshToken.getTokenValue(), loaded.get().getRefreshToken().getTokenValue());
-            Objects.requireNonNull(sessions.findById(sessionId.get()));
+                    accessToken.getExpiresAt(),
+                    Objects.requireNonNull(loaded.get()).getAccessToken().getExpiresAt());
+            assertEquals(
+                    refreshToken.getTokenValue(),
+                    Objects.requireNonNull(Objects.requireNonNull(loaded.get()).getRefreshToken())
+                            .getTokenValue());
+            Objects.requireNonNull(sessions.findById(Objects.requireNonNull(sessionId.get())));
         } finally {
             sessions.deleteById(cookie.getValue());
         }

@@ -191,7 +191,7 @@ public class KeycloakProvisioningClient {
         return group == null ? null : group.id();
     }
 
-    private Organization findOrganization(String name) {
+    private @Nullable Organization findOrganization(String name) {
         URI uri =
                 UriComponentsBuilder.fromUri(endpoint("organizations"))
                         .queryParam("search", name)

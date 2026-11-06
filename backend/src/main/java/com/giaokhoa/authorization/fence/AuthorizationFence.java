@@ -97,8 +97,12 @@ public class AuthorizationFence {
                 throw notReady();
             }
             Map<String, Object> row = rows.getFirst();
-            long desired = ((Number) row.get("desired_revision")).longValue();
-            long applied = ((Number) row.get("applied_revision")).longValue();
+            if (!(row.get("desired_revision") instanceof Number desiredRevision)
+                    || !(row.get("applied_revision") instanceof Number appliedRevision)) {
+                throw notReady();
+            }
+            long desired = desiredRevision.longValue();
+            long applied = appliedRevision.longValue();
             if (!"READY".equals(row.get("state")) || desired != applied) {
                 throw notReady();
             }

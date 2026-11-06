@@ -57,7 +57,9 @@ public class DependencyManifestResolver {
     }
 
     private record ProjectionRow(
-            UUID partitionId, String keycloakResourceId, List<UUID> dependencyPartitionIds) {}
+            UUID partitionId,
+            @Nullable String keycloakResourceId,
+            List<UUID> dependencyPartitionIds) {}
 
     public Manifest resolve(UUID actorUserId, UUID workspaceId, Collection<String> targetKeys) {
         Objects.requireNonNull(actorUserId, "actorUserId");
@@ -152,12 +154,12 @@ public class DependencyManifestResolver {
 
     private static ProjectionRow toRow(Map<String, Object> row) {
         return new ProjectionRow(
-                (UUID) row.get("partition_id"),
+                (UUID) Objects.requireNonNull(row.get("partition_id"), "partition_id"),
                 (String) row.get("keycloak_resource_id"),
                 uuids(row.get("dependency_partition_ids")));
     }
 
-    private static List<UUID> uuids(Object value) {
+    private static List<UUID> uuids(@Nullable Object value) {
         if (value == null) {
             return List.of();
         }

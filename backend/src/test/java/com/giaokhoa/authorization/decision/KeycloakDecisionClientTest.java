@@ -272,7 +272,9 @@ class KeycloakDecisionClientTest {
         OAuth2AuthorizedClient stored =
                 session.repository()
                         .loadAuthorizedClient("keycloak", authentication(USER), session.request());
-        assertEquals(REFRESHED_TOKEN, stored.getAccessToken().getTokenValue());
+        assertEquals(
+                REFRESHED_TOKEN,
+                java.util.Objects.requireNonNull(stored).getAccessToken().getTokenValue());
     }
 
     @Test

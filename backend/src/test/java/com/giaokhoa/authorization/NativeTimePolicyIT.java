@@ -108,8 +108,11 @@ class NativeTimePolicyIT {
                         .body(form)
                         .retrieve()
                         .body(new ParameterizedTypeReference<Map<String, Object>>() {});
-        return (String)
-                Objects.requireNonNull(result, "Missing provisioner token").get("access_token");
+        return Objects.requireNonNull(
+                (String)
+                        Objects.requireNonNull(result, "Missing provisioner token")
+                                .get("access_token"),
+                "access_token");
     }
 
     private void updateNotBefore(String id, String logic, Instant boundary, String token) {

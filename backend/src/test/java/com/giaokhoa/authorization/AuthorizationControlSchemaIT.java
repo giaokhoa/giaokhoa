@@ -563,8 +563,9 @@ class AuthorizationControlSchemaIT extends IntegrationEnvironment {
     }
 
     private UUID personal(UUID user) {
-        return jdbc.queryForObject(
-                "SELECT id FROM workspace WHERE owner_user_id = ?", UUID.class, user);
+        return Objects.requireNonNull(
+                jdbc.queryForObject(
+                        "SELECT id FROM workspace WHERE owner_user_id = ?", UUID.class, user));
     }
 
     private UUID partition() {
@@ -577,11 +578,12 @@ class AuthorizationControlSchemaIT extends IntegrationEnvironment {
     }
 
     private UUID scope(String kind, String key) {
-        return jdbc.queryForObject(
-                "SELECT id FROM authz_partition WHERE kind = ? AND owner_key = ?",
-                UUID.class,
-                kind,
-                key);
+        return Objects.requireNonNull(
+                jdbc.queryForObject(
+                        "SELECT id FROM authz_partition WHERE kind = ? AND owner_key = ?",
+                        UUID.class,
+                        kind,
+                        key));
     }
 
     private void assertScope(String kind, String key) {

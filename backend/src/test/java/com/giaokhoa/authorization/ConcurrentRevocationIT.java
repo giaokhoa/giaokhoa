@@ -547,7 +547,11 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                     "UPDATE authz_partition SET state = 'READY' WHERE id IN (?, ?)",
                     account,
                     workspacePartition);
-            return new ActorScope(actor, workspace, account, workspacePartition);
+            return new ActorScope(
+                    actor,
+                    workspace,
+                    java.util.Objects.requireNonNull(account, "account partition"),
+                    java.util.Objects.requireNonNull(workspacePartition, "workspace partition"));
         });
     }
 
@@ -1177,23 +1181,28 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
     }
 
     private String lockedState(UUID partition, String lock) {
-        return jdbc.queryForObject(
-                "SELECT state FROM authz_partition WHERE id = ? FOR " + lock,
-                String.class,
-                partition);
+        return java.util.Objects.requireNonNull(
+                jdbc.queryForObject(
+                        "SELECT state FROM authz_partition WHERE id = ? FOR " + lock,
+                        String.class,
+                        partition));
     }
 
     private String state(UUID partition) {
-        return jdbc.queryForObject(
-                "SELECT state FROM authz_partition WHERE id = ?", String.class, partition);
+        return java.util.Objects.requireNonNull(
+                jdbc.queryForObject(
+                        "SELECT state FROM authz_partition WHERE id = ?", String.class, partition));
     }
 
     private String operationState(UUID operation) {
-        return jdbc.queryForObject(
-                "SELECT state FROM authorization_operation WHERE id = ?", String.class, operation);
+        return java.util.Objects.requireNonNull(
+                jdbc.queryForObject(
+                        "SELECT state FROM authorization_operation WHERE id = ?",
+                        String.class,
+                        operation));
     }
 
-    private String operationErrorCode(UUID operation) {
+    private @org.jspecify.annotations.Nullable String operationErrorCode(UUID operation) {
         return jdbc.queryForObject(
                 "SELECT last_error_code FROM authorization_operation WHERE id = ?",
                 String.class,

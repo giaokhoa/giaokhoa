@@ -3,7 +3,6 @@ package com.giaokhoa.tenancy;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.giaokhoa.support.IntegrationEnvironment;
 import java.time.Instant;
@@ -395,7 +394,8 @@ class DirectorySchemaIT extends IntegrationEnvironment {
         assertNotNull(databaseStart);
         Instant start = databaseStart.toInstant();
         period(workspace, owner, start, start.plusSeconds(86400));
-        assertTrue(
+        assertEquals(
+                Boolean.TRUE,
                 jdbc.queryForObject(
                         "SELECT current_timestamp < valid_from"
                                 + " FROM subscription_period WHERE workspace_id = ?",
@@ -407,7 +407,8 @@ class DirectorySchemaIT extends IntegrationEnvironment {
                         + " FROM subscription_period WHERE workspace_id = ?",
                 rs -> {},
                 workspace);
-        assertTrue(
+        assertEquals(
+                Boolean.TRUE,
                 jdbc.queryForObject(
                         "SELECT clock_timestamp() > valid_from"
                                 + " AND current_timestamp < valid_from FROM subscription_period WHERE workspace_id = ?",
@@ -464,10 +465,11 @@ class DirectorySchemaIT extends IntegrationEnvironment {
     }
 
     private UUID personal(UUID owner) {
-        return jdbc.queryForObject(
-                "SELECT id FROM workspace WHERE kind = 'PERSONAL' AND owner_user_id = ?",
-                UUID.class,
-                owner);
+        return Objects.requireNonNull(
+                jdbc.queryForObject(
+                        "SELECT id FROM workspace WHERE kind = 'PERSONAL' AND owner_user_id = ?",
+                        UUID.class,
+                        owner));
     }
 
     private UUID center(UUID owner, boolean withOwner) {

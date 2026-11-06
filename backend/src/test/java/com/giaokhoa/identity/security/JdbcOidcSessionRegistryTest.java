@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.client.oidc.session.OidcSessionInformation;
@@ -49,7 +50,7 @@ class JdbcOidcSessionRegistryTest {
     private static JdbcTemplate unwritableJdbc() {
         return new JdbcTemplate() {
             @Override
-            public int update(String sql, Object... args) {
+            public int update(String sql, @Nullable Object @Nullable ... args) {
                 throw new AssertionError("Invalid OIDC input must not reach the database");
             }
         };

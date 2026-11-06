@@ -6,9 +6,9 @@
 backend/src/main/resources/application-local.yml
 backend/src/main/resources/application-local.yaml
 
-# File cấu hình do IDE tạo; giữ org.eclipse.jdt.core.prefs trong Git.
-/backend/.settings/org.eclipse.core.resources.prefs
-/backend/.settings/org.eclipse.jdt.apt.core.prefs
+# Ignore IDE-generated settings; keep shared Java compiler settings.
+/backend/.settings/*
+!/backend/.settings/org.eclipse.jdt.core.prefs
 
 # Worktrees độc lập, build artifacts.
 .worktrees/

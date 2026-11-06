@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.mockito.invocation.Invocation;
@@ -177,7 +178,7 @@ class ProjectionWorkerTest {
     private static PlatformTransactionManager stubTransactions() {
         return new PlatformTransactionManager() {
             @Override
-            public TransactionStatus getTransaction(TransactionDefinition definition) {
+            public TransactionStatus getTransaction(@Nullable TransactionDefinition definition) {
                 return new SimpleTransactionStatus();
             }
 

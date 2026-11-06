@@ -65,7 +65,8 @@ class KeycloakProvisioningClientNativeIT {
                         .retrieve()
                         .body(new ParameterizedTypeReference<Map<String, Object>>() {});
         assertNotNull(response);
-        return (String) response.get("access_token");
+        return java.util.Objects.requireNonNull(
+                (String) response.get("access_token"), "access_token");
     }
 
     private boolean isMember(

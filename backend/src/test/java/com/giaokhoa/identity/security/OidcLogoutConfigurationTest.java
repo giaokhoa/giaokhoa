@@ -10,6 +10,7 @@ import jakarta.servlet.http.Cookie;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
+import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -27,7 +28,7 @@ class OidcLogoutConfigurationTest {
         var response = new MockHttpServletResponse();
 
         serializer.writeCookieValue(new CookieSerializer.CookieValue(request, response, "id-123"));
-        String header = response.getHeader("Set-Cookie");
+        String header = Objects.requireNonNull(response.getHeader("Set-Cookie"), "Set-Cookie");
         assertTrue(header.startsWith("SESSION=id-123;"));
         assertTrue(header.contains("HttpOnly"));
         assertTrue(header.contains("Secure"));
@@ -81,7 +82,7 @@ class OidcLogoutConfigurationTest {
         serializer.writeCookieValue(
                 new CookieSerializer.CookieValue(
                         new MockHttpServletRequest(), response, "local-id"));
-        String header = response.getHeader("Set-Cookie");
+        String header = Objects.requireNonNull(response.getHeader("Set-Cookie"), "Set-Cookie");
         assertTrue(header.startsWith("SESSION=local-id;"));
         assertTrue(header.contains("HttpOnly"));
         assertFalse(header.contains("Secure"));

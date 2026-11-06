@@ -141,7 +141,7 @@ final class NativeRevocationFixture implements AutoCloseable {
                         .retrieve()
                         .body(MAP);
         assertNotNull(tokens);
-        return (String) tokens.get("access_token");
+        return Objects.requireNonNull((String) tokens.get("access_token"), "access_token");
     }
 
     record WebTokens(String accessToken, String idToken, String refreshToken) {}
@@ -271,9 +271,9 @@ final class NativeRevocationFixture implements AutoCloseable {
             assertEquals(
                     Objects.requireNonNull(userId), JSON.readTree(claims).get("sub").stringValue());
             return new WebTokens(
-                    (String) tokens.get("access_token"),
+                    Objects.requireNonNull((String) tokens.get("access_token"), "access_token"),
                     idToken,
-                    (String) tokens.get("refresh_token"));
+                    Objects.requireNonNull((String) tokens.get("refresh_token"), "refresh_token"));
         } catch (IOException exception) {
             throw new IllegalStateException("Native TEST Code+PKCE login failed", exception);
         } catch (InterruptedException exception) {
@@ -810,7 +810,7 @@ final class NativeRevocationFixture implements AutoCloseable {
                         .retrieve()
                         .body(MAP);
         assertNotNull(response);
-        return (String) response.get("access_token");
+        return Objects.requireNonNull((String) response.get("access_token"), "access_token");
     }
 
     private String create(String path, Map<String, ?> body) {
