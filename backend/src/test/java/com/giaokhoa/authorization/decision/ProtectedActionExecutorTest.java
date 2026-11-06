@@ -26,6 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.invocation.InvocationOnMock;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -52,6 +53,35 @@ class ProtectedActionExecutorTest {
                         List.of(TARGET));
 
         assertTrue(result.allowed(KEY, "enter"));
+        verify(fixture.writer, never()).findResourceId(any());
+    }
+
+    @Test
+    void evaluateDecidesOnTheSnapshotManifestWhenTheFenceReResolvedTheClosure() {
+        Fixture fixture = new Fixture(Map.of(KEY, "stale-resource"));
+        Manifest snapshotManifest =
+                new Manifest(
+                        ACTOR,
+                        WORKSPACE,
+                        List.of(KEY),
+                        Map.of(KEY, "snapshot-resource"),
+                        List.of());
+        when(fixture.fence.acquire(any()))
+                .thenReturn(new AuthorizationFence.Snapshot(snapshotManifest, Map.of()));
+        when(fixture.decisions.isAllowed(any(), any(), any())).thenReturn(true);
+
+        var result =
+                fixture.executor.evaluate(
+                        fixture.authentication,
+                        new MockHttpServletRequest(),
+                        WORKSPACE,
+                        List.of(TARGET));
+
+        assertTrue(result.allowed(KEY, "enter"));
+        ArgumentCaptor<RequiredPermissions> asked =
+                ArgumentCaptor.forClass(RequiredPermissions.class);
+        verify(fixture.decisions).isAllowed(any(), any(), asked.capture());
+        assertEquals("snapshot-resource", asked.getValue().permissions().getFirst().resourceId());
         verify(fixture.writer, never()).findResourceId(any());
     }
 

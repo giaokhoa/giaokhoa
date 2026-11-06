@@ -132,7 +132,7 @@ public class ProtectedActionExecutor {
         for (int attempt = 1; ; attempt++) {
             Manifest manifest = resolver.resolve(actorUserId, workspaceId, targetKeys);
             AuthorizationFence.Snapshot snapshot = fence.acquire(manifest);
-            Decisions result = decide(authentication, request, manifest, targets);
+            Decisions result = decide(authentication, request, snapshot.manifest(), targets);
             try {
                 return fence.atSnapshot(snapshot, () -> finisher.apply(snapshot, result));
             } catch (AuthorizationFence.ClosureChangedException changed) {
@@ -172,7 +172,12 @@ public class ProtectedActionExecutor {
         return new Decisions(byTarget);
     }
 
-    private UUID actorUserId(Authentication authentication) {
+    /**
+     * The one session-actor resolution: the directory account of the authenticated subject.
+     * Controllers that must bind request data to the actor before running the pipeline use this
+     * instead of resolving the account themselves.
+     */
+    public UUID actorUserId(Authentication authentication) {
         if (authentication == null || authentication.getName() == null) {
             throw new HttpProblemException(
                     HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Cần đăng nhập.");

@@ -1,7 +1,6 @@
 package com.giaokhoa.verification;
 
 import com.giaokhoa.authorization.decision.ProtectedActionExecutor;
-import com.giaokhoa.authorization.fence.AuthorizationFence;
 import com.giaokhoa.authorization.operation.IdempotencyService;
 import com.giaokhoa.authorization.policy.NativePolicyTemplates;
 import com.giaokhoa.shared.http.HttpProblemException;
@@ -23,9 +22,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Sample actions of the verification contract. Every action runs through the same
  * manifest/fence/PDP pipeline as business actions and never accepts a substitute actor. Only the
- * fixed CREATE_RESOURCE discriminator is implemented in the foundation phase; it returns a stub
- * result because no sample-resource table exists yet. Unknown actions are rejected, never silently
- * allowed.
+ * fixed CREATE_RESOURCE discriminator is implemented; it returns a stub result because no
+ * sample-resource table exists yet. Unknown actions are rejected, never silently allowed.
  */
 @RestController
 public class SampleActionController {
@@ -95,7 +93,7 @@ public class SampleActionController {
 
     private SampleActionResult createForPersonalOwner(
             UUID workspaceId, Authentication authentication, HttpServletRequest httpRequest) {
-        UUID actorUserId = actorUserId(authentication);
+        UUID actorUserId = executor.actorUserId(authentication);
         List<Map<String, Object>> rows =
                 jdbc.queryForList(
                         "SELECT kind, owner_user_id FROM workspace WHERE id = ?", workspaceId);
@@ -143,21 +141,5 @@ public class SampleActionController {
     private SampleActionResult stubResult() {
         UUID id = UUID.randomUUID();
         return new SampleActionResult(id, "SUCCEEDED", true, "RESOURCE", id);
-    }
-
-    private UUID actorUserId(Authentication authentication) {
-        if (authentication == null || authentication.getName() == null) {
-            throw new HttpProblemException(
-                    HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Cần đăng nhập.");
-        }
-        List<UUID> found =
-                jdbc.queryForList(
-                        "SELECT id FROM user_account WHERE keycloak_sub = ?",
-                        UUID.class,
-                        authentication.getName());
-        if (found.isEmpty()) {
-            throw AuthorizationFence.notReady();
-        }
-        return found.getFirst();
     }
 }
