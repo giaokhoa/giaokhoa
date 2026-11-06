@@ -126,7 +126,7 @@ public class IdempotencyService {
         requireKey(operation.getIdempotencyKey());
         UUID[] partitions = operation.getAffectedPartitions().clone();
         // UUID.compareTo() dùng signed longs, khác thứ tự uuid của PostgreSQL.
-        Arrays.sort(partitions, Comparator.comparing(UUID::toString));
+        Arrays.sort(partitions, Comparator.comparing((UUID partition) -> partition.toString()));
         for (UUID partition : partitions) {
             if (jdbc.queryForList(
                             "SELECT id FROM authz_partition WHERE id = ? FOR UPDATE",
