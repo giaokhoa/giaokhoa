@@ -18,9 +18,9 @@ import org.springframework.web.client.RestClient;
 class KeycloakProvisioningClientNativeIT {
     @Test
     void provisionsOrganizationGroupAndMembershipUsingRealClientCredentials() {
-        String base = System.getenv("T010_KEYCLOAK_BASE_URL");
-        String secret = System.getenv("T010_KEYCLOAK_PROVISIONER_SECRET");
-        String userId = System.getenv("T010_KEYCLOAK_USER_ID");
+        String base = System.getenv("PROVISIONING_TEST_KEYCLOAK_BASE_URL");
+        String secret = System.getenv("PROVISIONING_TEST_KEYCLOAK_PROVISIONER_SECRET");
+        String userId = System.getenv("PROVISIONING_TEST_KEYCLOAK_USER_ID");
         assertNotNull(base, "Run with infra/keycloak/verify-native.sh");
         assertNotNull(secret);
         assertNotNull(userId);

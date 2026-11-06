@@ -43,13 +43,13 @@ import org.springframework.web.context.WebApplicationContext;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** T014: PostgreSQL commit ordering plus opt-in Foundation HTTP contracts. */
+/** Revocation contract: PostgreSQL commit ordering plus opt-in Foundation HTTP contracts. */
 @SpringBootTest
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class ConcurrentRevocationIT extends IntegrationEnvironment {
     private static final JsonMapper JSON = new JsonMapper();
     private static final String SCHEMA =
-            "t014_concurrent_" + UUID.randomUUID().toString().replace("-", "");
+            "revocation_concurrent_" + UUID.randomUUID().toString().replace("-", "");
 
     @DynamicPropertySource
     static void isolatedCommittedTransactions(DynamicPropertyRegistry registry) {
@@ -222,12 +222,13 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
         GRANT_FAILED
     }
 
-    @Tag("t014-pending")
+    @Tag("pending-contract")
     @ParameterizedTest
     @EnumSource(PendingScope.class)
     void protectedCapabilitiesMustRejectCommittedPendingDependency(PendingScope pending)
             throws Exception {
-        // RED T018/T021: identical authenticated HTTP request before and after committed fence.
+        // RED: request-fence and sample-action contracts require identical authenticated HTTP
+        // request before and after committed fence.
         try (var nativeGate = new NativeRevocationFixture();
                 var session = nativeSession(nativeGate)) {
             ActorScope fixture = actorWithReadyPersonalWorkspace(nativeGate.userSubject());
@@ -311,13 +312,13 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                     assertTrue(apiGraph.allowed(token, keycloakResourceB));
                 }
                 assertAll(
-                        "T014_READY_AND_FENCED_" + pending,
+                        "REVOCATION_CONTRACT_READY_AND_FENCED_" + pending,
                         () -> assertReadyAllowed(readyA, "A_BEFORE_" + pending),
                         () ->
                                 assertEquals(
                                         HttpStatus.SERVICE_UNAVAILABLE.value(),
                                         fencedA.getStatus(),
-                                        "T014_FENCED_EXPECT_503_"
+                                        "REVOCATION_CONTRACT_FENCED_EXPECT_503_"
                                                 + pending
                                                 + " actual HTTP="
                                                 + fencedA.getStatus()),
@@ -356,7 +357,8 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
 
     private void assertReadyAllowed(MockHttpServletResponse response, String scenario)
             throws Exception {
-        assertEquals(200, response.getStatus(), "T014_READY_EXPECT_ALLOW_" + scenario);
+        assertEquals(
+                200, response.getStatus(), "REVOCATION_CONTRACT_READY_EXPECT_ALLOW_" + scenario);
         List<JsonNode> decisions =
                 JSON.readTree(response.getContentAsString()).findValues("allowed");
         assertEquals(1, decisions.size(), "One exact target/scope must be evaluated");
@@ -365,10 +367,10 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                 "READY must produce a native allow, not a constant HTTP 200/deny");
     }
 
-    @Tag("t014-pending")
+    @Tag("pending-contract")
     @Test
     void concurrentFixtureMutationMustWaitForDatabaseRevocationFence() throws Exception {
-        // RED T018/T021: sample actions must use the same production PEP and lock protocol.
+        // RED: sample actions must use the same production PEP and lock protocol.
         try (var nativeGate = new NativeRevocationFixture();
                 var session = nativeSession(nativeGate)) {
             ActorScope fixture = actorWithReadyPersonalWorkspace(nativeGate.userSubject());
@@ -404,13 +406,15 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                                                             fixture.workspace())
                                                     .with(csrf())
                                                     .cookie(session.cookie())
-                                                    .header("Idempotency-Key", "t014-concurrent")
+                                                    .header(
+                                                            "Idempotency-Key",
+                                                            "revocation-concurrent")
                                                     .contentType(MediaType.APPLICATION_JSON)
                                                     .content(
                                                             ("{\"action\":\"CREATE_RESOURCE\","
                                                                             + "\"subjectId\":\"%s\","
                                                                             + "\"kind\":\"QUESTION\","
-                                                                            + "\"label\":\"T014 protected\"}")
+                                                                            + "\"label\":\"Revocation contract protected\"}")
                                                                     .formatted(UUID.randomUUID())))
                                     .andReturn()
                                     .getResponse()
@@ -442,16 +446,16 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                     if (writer.isDone()) {
                         int earlyStatus = writer.get(10, TimeUnit.SECONDS);
                         fail(
-                                "T014_EARLY_HTTP_STATUS="
+                                "REVOCATION_CONTRACT_EARLY_HTTP_STATUS="
                                         + earlyStatus
                                         + " before PostgreSQL fence: "
                                         + (earlyStatus == 404
-                                                ? "T021 sample action route absent"
+                                                ? "sample action route absent"
                                                 : "unexpected security/validation/business response"));
                     }
                     assertTrue(
                             blockedOnRevoke,
-                            "T014_LOCK_NOT_OBSERVED: writer never waited on revoker PID");
+                            "REVOCATION_CONTRACT_LOCK_NOT_OBSERVED: writer never waited on revoker PID");
                     assertFalse(writer.isDone(), "No mutation response before the revoke commits");
                 } finally {
                     finishRevoke.countDown();
@@ -512,8 +516,8 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                             + " VALUES (?,?,?,?,true,'SELF_REGISTERED','ACTIVE')",
                     actor,
                     keycloakSub,
-                    "t014-actor-" + actor,
-                    "t014-" + actor + "@example.invalid");
+                    "revocation-actor-" + actor,
+                    "revocation-" + actor + "@example.invalid");
             jdbc.update(
                     "INSERT INTO workspace(id,kind,owner_user_id,state)"
                             + " VALUES (?,'PERSONAL',?,'ACTIVE')",
@@ -548,10 +552,11 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
         }
     }
 
-    @Tag("t014-pending")
+    @Tag("pending-contract")
     @Test
     void productionWorkerMustReconcilePartiallyProvisionedAppGraphAfterRetry() throws Exception {
-        // RED T016/T017: the source is an actual PERSONAL owner in V001, not a fabricated
+        // RED: graph writer and reconciliation worker are not implemented; the source is an actual
+        // PERSONAL owner in V001, not a fabricated
         // share_grant (which has no production schema before the later user-story tasks).
         try (var nativeGate = new NativeRevocationFixture()) {
             ActorScope actor = actorWithReadyPersonalWorkspace(nativeGate.userSubject());
@@ -579,13 +584,13 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                                 UUID.randomUUID(),
                                 actor.actor(),
                                 actor.workspace(),
-                                "t014-partial-provision-retry",
+                                "revocation-partial-provision-retry",
                                 desiredHash,
                                 new UUID[] {actor.account(), actor.workspacePartition()},
                                 new Long[] {0L, 1L},
                                 0L);
                 tx(() -> {
-                    // This is a real source the T016 graph writer can reconstruct: native user
+                    // This is a real source the graph writer can reconstruct: native user
                     // policy for workspace.owner_user_id, evaluated for targetKey#enter.
                     assertEquals(
                             actor.actor(),
@@ -641,13 +646,13 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                                                 idempotency
                                                         .findExisting(
                                                                 actor.actor(),
-                                                                "t014-partial-provision-retry",
+                                                                "revocation-partial-provision-retry",
                                                                 desiredHash)
                                                         .orElseThrow())
                                         .getStatusCode()));
                 assertTrue(
                         webContext.containsBean("projectionWorker"),
-                        "T014_WORKER_NOT_INSTALLED: T017 must resume owner source through"
+                        "REVOCATION_CONTRACT_WORKER_NOT_INSTALLED: the reconciliation worker must resume owner source through"
                                 + " production PolicyGraphWriter/ProjectionReconciler");
                 long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
                 while (System.nanoTime() < deadline) {
@@ -666,7 +671,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                     Thread.sleep(100);
                 }
                 assertAll(
-                        "T014_REAL_WORKER_PARTIAL_GRAPH_RECOVERY",
+                        "REVOCATION_CONTRACT_REAL_WORKER_PARTIAL_GRAPH_RECOVERY",
                         () ->
                                 assertEquals(
                                         "READY",
@@ -743,7 +748,8 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
     @Test
     void crashAfterNativeRevokeBeforeDatabaseAckCanReplayWithoutDuplicatingGraph()
             throws Exception {
-        // A worker implementation is still T017. This tests its network/commit crash window,
+        // The reconciliation worker is not implemented yet. This tests the network/commit crash
+        // window,
         // with native Keycloak, committed PostgreSQL revisions and a second identical revoke.
         try (var nativeGate = new NativeRevocationFixture();
                 var session = nativeSession(nativeGate)) {
@@ -757,7 +763,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                             UUID.randomUUID(),
                             fixture.actor(),
                             fixture.workspace(),
-                            "t014-native-crash-retry",
+                            "revocation-native-crash-retry",
                             "a".repeat(64),
                             new UUID[] {fixture.account(), fixture.workspacePartition()},
                             new Long[] {0L, 1L},
@@ -784,7 +790,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                                             idempotency
                                                     .findExisting(
                                                             fixture.actor(),
-                                                            "t014-native-crash-retry",
+                                                            "revocation-native-crash-retry",
                                                             "a".repeat(64))
                                                     .orElseThrow())
                                     .getStatusCode()));
@@ -828,7 +834,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                                             idempotency
                                                     .findExisting(
                                                             fixture.actor(),
-                                                            "t014-native-crash-retry",
+                                                            "revocation-native-crash-retry",
                                                             "a".repeat(64))
                                                     .orElseThrow())
                                     .getStatusCode()));
@@ -880,8 +886,8 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                             "INSERT INTO user_account(id,keycloak_sub,username,email_verified,origin,identity_state)"
                                     + " VALUES (?,?,?,false,'SELF_REGISTERED','PENDING')",
                             actor,
-                            "t014-sub-" + actor,
-                            "t014-user-" + actor);
+                            "revocation-sub-" + actor,
+                            "revocation-user-" + actor);
                     jdbc.update(
                             "INSERT INTO workspace(id,kind,owner_user_id,state)"
                                     + " VALUES (?,'PERSONAL',?,'ACTIVE')",

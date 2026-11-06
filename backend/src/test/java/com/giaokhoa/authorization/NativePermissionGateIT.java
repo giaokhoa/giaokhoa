@@ -25,9 +25,9 @@ class NativePermissionGateIT {
         assertFalse(
                 claims.has("groups"), "Native group policy must not rely on access-token groups");
 
-        assertTrue(gate.decide(token, gate.required("T013_RESOURCE_A_ID"), "read"));
-        assertFalse(gate.decide(token, gate.required("T013_RESOURCE_A_ID"), "update"));
-        assertFalse(gate.decide(token, gate.required("T013_RESOURCE_B_ID"), "read"));
+        assertTrue(gate.decide(token, gate.required("NATIVE_GATE_RESOURCE_A_ID"), "read"));
+        assertFalse(gate.decide(token, gate.required("NATIVE_GATE_RESOURCE_A_ID"), "update"));
+        assertFalse(gate.decide(token, gate.required("NATIVE_GATE_RESOURCE_B_ID"), "read"));
     }
 
     @Test
@@ -44,17 +44,17 @@ class NativePermissionGateIT {
         assertTrue(
                 new String(decoded, StandardCharsets.UTF_8).contains("native-gate-teacher-role"),
                 "The denied actor must actually carry the decoy realm role");
-        assertFalse(gate.decide(token, gate.required("T013_RESOURCE_A_ID"), "read"));
+        assertFalse(gate.decide(token, gate.required("NATIVE_GATE_RESOURCE_A_ID"), "read"));
         assertTrue(
-                gate.decide(token, gate.required("T013_RESOURCE_B_ID"), "read"),
+                gate.decide(token, gate.required("NATIVE_GATE_RESOURCE_B_ID"), "read"),
                 "The same actor must retain its independent native B permission");
     }
 
     @Test
     void batchWithOneGrantMustNotBecomeAllRequiredPairs() {
         String actorToken = gate.token("native-gate-assigned");
-        String resourceA = gate.required("T013_RESOURCE_A_ID");
-        String resourceB = gate.required("T013_RESOURCE_B_ID");
+        String resourceA = gate.required("NATIVE_GATE_RESOURCE_A_ID");
+        String resourceB = gate.required("NATIVE_GATE_RESOURCE_B_ID");
 
         List<Map<String, Object>> granted =
                 gate.permissions(actorToken, resourceA + "#read", resourceB + "#read");
@@ -62,7 +62,8 @@ class NativePermissionGateIT {
         assertEquals(resourceA, granted.getFirst().get("rsid"));
         assertEquals(List.of("read"), granted.getFirst().get("scopes"));
 
-        // T015's PEP must evaluate every required pair, not interpret a partial batch as ALL.
+        // the permission enforcement layer's PEP must evaluate every required pair, not interpret a
+        // partial batch as ALL.
         assertFalse(
                 gate.decide(actorToken, resourceA, "read")
                         && gate.decide(actorToken, resourceB, "read"));

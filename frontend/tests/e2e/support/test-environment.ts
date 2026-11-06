@@ -65,7 +65,7 @@ export class TestEnvironment {
 
   async createUser(emailVerified = true): Promise<TestUser> {
     const unique = randomUUID();
-    const username = `t005-${unique}`;
+    const username = `e2e-${unique}`;
     const email = `${username}@test.giaokhoa.localhost`;
     const password = randomBytes(24).toString("base64url") + "Aa1!";
     const response = await this.admin("POST", "/users", {

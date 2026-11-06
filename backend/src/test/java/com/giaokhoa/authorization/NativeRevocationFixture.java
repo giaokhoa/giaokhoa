@@ -63,9 +63,10 @@ final class NativeRevocationFixture implements AutoCloseable {
         base = required("TEST_KEYCLOAK_BASE_URL");
         if (!"http://127.0.0.1:18081".equals(base)
                 || !"giaokhoa-it".equals(required("TEST_KEYCLOAK_REALM"))) {
-            throw new IllegalArgumentException("T014 native fixture is limited to TEST Keycloak");
+            throw new IllegalArgumentException(
+                    "Revocation native fixture is limited to TEST Keycloak");
         }
-        clientName = "t014-" + UUID.randomUUID();
+        clientName = "revocation-" + UUID.randomUUID();
         clientSecret = "test-secret-" + UUID.randomUUID();
         adminToken = masterToken();
         boolean provisioned = false;
@@ -105,7 +106,8 @@ final class NativeRevocationFixture implements AutoCloseable {
 
     WebTokens webTokensViaCodePkce() {
         // Actual Keycloak Authorization Code+PKCE for the application's confidential TEST client.
-        // HTTP form login is sufficient here; T022 additionally covers the browser/BFF callback.
+        // HTTP form login is sufficient here; end-to-end acceptance additionally covers the
+        // browser/BFF callback.
         String client = required("TEST_OIDC_CLIENT_ID");
         if (!"giaokhoa-it-web".equals(client)) {
             throw new IllegalArgumentException("Only TEST BFF client can be used");
@@ -292,13 +294,15 @@ final class NativeRevocationFixture implements AutoCloseable {
     }
 
     /**
-     * Fault fixture for T017: native resource exists in the TEST application's API audience, but
-     * scope permission/policy has not yet been provisioned. Never touch DEV.
+     * Fault fixture for reconciliation-worker recovery: native resource exists in the TEST
+     * application's API audience, but scope permission/policy has not yet been provisioned. Never
+     * touch DEV.
      */
     PartialApplicationGraph partiallyProvisionApplicationResource(String targetKey, String scope) {
         String audience = required("TEST_KEYCLOAK_AUTHZ_AUDIENCE");
         if (!"giaokhoa-it-api".equals(audience)) {
-            throw new IllegalArgumentException("T014 partial graph requires TEST API audience");
+            throw new IllegalArgumentException(
+                    "Revocation partial graph requires TEST API audience");
         }
         var matches =
                 getList("/clients?clientId=" + encode(audience)).stream()
@@ -423,7 +427,8 @@ final class NativeRevocationFixture implements AutoCloseable {
         }
 
         void cleanupProjectedPolicies(java.util.function.Supplier<List<String>> names) {
-            // Production T016 records the exact owned native policy names in authz_projection.
+            // The production graph writer records the exact owned native policy names in
+            // authz_projection.
             // Read them at close, after the worker had a chance to write them.
             projectionPolicyNames = names;
         }
@@ -454,7 +459,7 @@ final class NativeRevocationFixture implements AutoCloseable {
                     create(
                             root() + "/policy/user",
                             Map.of(
-                                    "name", "t014-owner-" + targetKey,
+                                    "name", "revocation-owner-" + targetKey,
                                     "type", "user",
                                     "logic", "POSITIVE",
                                     "decisionStrategy", "UNANIMOUS",
@@ -464,7 +469,7 @@ final class NativeRevocationFixture implements AutoCloseable {
                     root() + "/permission/scope",
                     Map.of(
                             "name",
-                            "t014-scope-" + targetKey,
+                            "revocation-scope-" + targetKey,
                             "type",
                             "scope",
                             "decisionStrategy",

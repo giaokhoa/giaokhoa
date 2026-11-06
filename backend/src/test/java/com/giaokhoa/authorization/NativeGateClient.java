@@ -20,7 +20,7 @@ final class NativeGateClient {
     private static final int EXPECTED_ACTOR_COUNT = 2;
 
     private final RestClient http = RestClient.create();
-    private final String base = required("T013_KEYCLOAK_BASE_URL");
+    private final String base = required("NATIVE_GATE_KEYCLOAK_BASE_URL");
 
     String required(String name) {
         return Objects.requireNonNull(
@@ -30,7 +30,8 @@ final class NativeGateClient {
     String token(String user) {
         try {
             // Tokens are produced exclusively by native-pkce-login.mjs via real Keycloak Code+PKCE.
-            List<String> tokens = Files.readAllLines(Path.of(required("T013_NATIVE_TOKENS_FILE")));
+            List<String> tokens =
+                    Files.readAllLines(Path.of(required("NATIVE_GATE_NATIVE_TOKENS_FILE")));
             if (tokens.size() != EXPECTED_ACTOR_COUNT) {
                 throw new IllegalStateException("Expected exactly two native PKCE actor tokens");
             }
