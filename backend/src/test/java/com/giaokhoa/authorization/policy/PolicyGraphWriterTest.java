@@ -676,6 +676,6 @@ class PolicyGraphWriterTest {
         OAuth2AuthorizedClient authorized =
                 new OAuth2AuthorizedClient(registration, "giaokhoa-provisioner", token);
         OAuth2AuthorizedClientManager manager = request -> authorized;
-        return new PolicyGraphWriter(builder, HOST, manager, "giaokhoa-api");
+        return new PolicyGraphWriter(builder, HOST, "giaokhoa", manager, "giaokhoa-api");
     }
 }
