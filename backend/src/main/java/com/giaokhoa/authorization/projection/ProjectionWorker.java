@@ -120,7 +120,7 @@ public class ProjectionWorker {
                                     + " FROM authorization_operation"
                                     + " WHERE state IN ('PENDING', 'APPLYING',"
                                     + " 'RETRYABLE_FAILURE')"
-                                    + " ORDER BY created_at, id",
+                                    + " ORDER BY recorded_seq",
                             (rs, row) -> {
                                 boolean due =
                                         "APPLYING".equals(rs.getString("state"))
@@ -146,7 +146,7 @@ public class ProjectionWorker {
                                             + " OR (state = 'APPLYING'"
                                             + " AND updated_at <= now()"
                                             + " - INTERVAL '5 minutes')"
-                                            + " ORDER BY created_at, id"
+                                            + " ORDER BY recorded_seq"
                                             + " FOR UPDATE SKIP LOCKED",
                                     UUID.class));
             Set<UUID> blocked = new HashSet<>();
