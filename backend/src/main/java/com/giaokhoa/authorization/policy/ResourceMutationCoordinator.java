@@ -31,8 +31,8 @@ public class ResourceMutationCoordinator {
     public <T> T withResourceLock(String targetKey, Supplier<T> action) {
         TransactionTemplate tx = new TransactionTemplate(transactions);
         tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        return tx.execute(status -> {
-            jdbc.query("SELECT pg_advisory_xact_lock(?)", rs -> {}, lockId(targetKey));
+        return tx.execute(_ -> {
+            jdbc.query("SELECT pg_advisory_xact_lock(?)", _ -> {}, lockId(targetKey));
             return action.get();
         });
     }

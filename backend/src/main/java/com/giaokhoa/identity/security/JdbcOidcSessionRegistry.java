@@ -37,9 +37,7 @@ public final class JdbcOidcSessionRegistry implements OidcSessionRegistry {
         Assert.notNull(information, "information is required");
         var principal = information.getPrincipal();
         var issuer = principal.getIssuer();
-        if (issuer == null) {
-            throw new IllegalArgumentException("OIDC issuer is required");
-        }
+        Assert.notNull(issuer, "OIDC issuer is required");
         Assert.hasText(principal.getSubject(), "OIDC subject is required");
         var audience = principal.getAudience();
         Assert.isTrue(
@@ -67,16 +65,19 @@ public final class JdbcOidcSessionRegistry implements OidcSessionRegistry {
                 csrf == null ? null : csrf.getValue());
     }
 
+    // ECJ đọc sai hợp đồng trả về @Nullable của Spring Security trong bytecode.
+    @SuppressWarnings("null")
     @Override
     public @Nullable OidcSessionInformation removeSessionInformation(String sessionId) {
         var removed =
                 jdbc.query(
                         "DELETE FROM oidc_session_correlation WHERE session_id = ?" + RETURNING,
-                        (rs, row) -> sessionInformation(rs),
+                        (rs, _) -> sessionInformation(rs),
                         sessionId);
         return removed.isEmpty() ? null : removed.getFirst();
     }
 
+    // Claim sid và sub có thể thiếu dù ECJ suy luận chúng luôn non-null.
     @Override
     public Iterable<OidcSessionInformation> removeSessionInformation(OidcLogoutToken logoutToken) {
         Assert.notNull(logoutToken, "logoutToken is required");
@@ -87,8 +88,8 @@ public final class JdbcOidcSessionRegistry implements OidcSessionRegistry {
             return List.of();
         }
 
-        String sid = logoutToken.getSessionId();
-        String subject = logoutToken.getSubject();
+        @Nullable String sid = logoutToken.getSessionId();
+        @Nullable String subject = logoutToken.getSubject();
         if (sid == null && subject == null) {
             return List.of();
         }
@@ -111,14 +112,14 @@ public final class JdbcOidcSessionRegistry implements OidcSessionRegistry {
         return sid != null && subject != null
                 ? jdbc.query(
                         sql,
-                        (rs, row) -> sessionInformation(rs),
+                        (rs, _) -> sessionInformation(rs),
                         logoutToken.getIssuer().toString(),
                         clientId,
                         sid,
                         subject)
                 : jdbc.query(
                         sql,
-                        (rs, row) -> sessionInformation(rs),
+                        (rs, _) -> sessionInformation(rs),
                         logoutToken.getIssuer().toString(),
                         clientId,
                         sid != null ? sid : subject);

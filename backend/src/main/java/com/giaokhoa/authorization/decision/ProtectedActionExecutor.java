@@ -88,7 +88,7 @@ public class ProtectedActionExecutor {
             HttpServletRequest request,
             UUID workspaceId,
             List<Target> targets) {
-        return run(authentication, request, workspaceId, targets, (snapshot, result) -> result);
+        return run(authentication, request, workspaceId, targets, (_, result) -> result);
     }
 
     /**
@@ -106,7 +106,7 @@ public class ProtectedActionExecutor {
                 request,
                 workspaceId,
                 targets,
-                (snapshot, result) -> {
+                (_, result) -> {
                     if (!result.allAllowed()) {
                         throw new HttpProblemException(
                                 HttpStatus.FORBIDDEN,

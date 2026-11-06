@@ -60,7 +60,7 @@ public class AuthorizationFence {
         for (int attempt = 1; ; attempt++) {
             Manifest current = manifest;
             try {
-                return transactions.execute(status -> lockAndVerify(current, null));
+                return transactions.execute(_ -> lockAndVerify(current, null));
             } catch (ClosureChangedException changed) {
                 if (attempt >= MAX_RESOLUTION_ATTEMPTS) {
                     throw notReady(changed);
@@ -79,7 +79,7 @@ public class AuthorizationFence {
      * các revision đã ghi của chúng, để việc giữ revision kéo dài tới khi transaction này commit.
      */
     public <T> T atSnapshot(Snapshot snapshot, Supplier<T> body) {
-        return transactions.execute(status -> {
+        return transactions.execute(_ -> {
             lockAndVerify(snapshot.manifest(), snapshot.revisions());
             return body.get();
         });

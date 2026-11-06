@@ -54,7 +54,15 @@ class OidcLogoutConfigurationTest {
         guard.doFilter(request, response, downstream);
         assertEquals(400, response.getStatus());
         assertNull(downstream.getRequest());
+    }
 
+    @Test
+    void validBackChannelClaimsReachSpringNativeHandler() throws Exception {
+        var guard =
+                java.util.Objects.requireNonNull(
+                        new OidcLogoutConfiguration()
+                                .malformedBackChannelLogoutGuard()
+                                .getFilter());
         var valid = new MockHttpServletRequest("POST", "/logout/connect/back-channel/keycloak");
         valid.addParameter(
                 "logout_token",

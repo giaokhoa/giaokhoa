@@ -749,7 +749,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
         String[] names =
                 jdbc.queryForObject(
                         "SELECT policy_names FROM authz_projection WHERE id=?",
-                        (rs, rowNum) -> (String[]) rs.getArray(1).getArray(),
+                        (rs, _) -> (String[]) rs.getArray(1).getArray(),
                         projection);
         return java.util.Arrays.asList(java.util.Objects.requireNonNull(names));
     }
@@ -1225,7 +1225,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
     }
 
     private <T> T tx(java.util.function.Supplier<T> action) {
-        return new TransactionTemplate(transactionManager).execute(status -> action.get());
+        return new TransactionTemplate(transactionManager).execute(_ -> action.get());
     }
 
     private static void await(CountDownLatch latch) {

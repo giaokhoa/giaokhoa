@@ -35,7 +35,18 @@ Build mặc định không cần PostgreSQL/Keycloak và không chạy integrati
 
 Mở thư mục gốc của worktree. `backend/.settings/org.eclipse.jdt.core.prefs` là cấu hình JDT dùng chung; các file `.settings` còn lại do IDE tự sinh được Git ignore. Giữ một `package-info.java` cho mỗi package trong `src/main/java`; không tạo bản trùng trong `src/test/java`. Package chỉ dành cho test có thể khai báo riêng. Với package JPA `@NullUnmarked`, đặt `@NullMarked` trực tiếp trên class test nếu cần kiểm tra null mà không tạo thêm `package-info.java` trùng. Nếu IDE chưa cập nhật, chạy **Java: Update Project Configuration**.
 
-JDT và javac có bộ kiểm tra khác nhau; formatter hoặc build thành công không có nghĩa mọi kiểm tra IDE đều giống nhau. Cấu hình JDT **chỉ bỏ qua** `nullUncheckedConversion`: API JDK/thư viện không khai báo nullability làm JDT báo hàng loạt chuyển đổi từ trạng thái *chưa xác định* sang `@NonNull`, kể cả khi không có thao tác dereference null. Các cảnh báo `nullReference`, `potentialNullReference`, `nullSpecViolation` vẫn bật; NullAway trong Maven tiếp tục chặn lỗi null ở cả main/test. Không thêm `Objects.requireNonNull` chỉ để xóa cảnh báo về annotation thiếu từ thư viện. Maven `verify` là lệnh bắt buộc dùng chung cho agent và CI. Sửa nguyên nhân; chỉ dùng suppression hẹp kèm lý do khi xác nhận ngoại lệ của framework hoặc test cố ý truyền đầu vào sai. Không bỏ qua test để lint xanh.
+JDT và javac có bộ kiểm tra khác nhau; formatter hoặc build thành công không có nghĩa mọi kiểm tra IDE đều giống nhau. JDT bỏ qua đúng ba loại nhiễu đã kiểm chứng: `nullUncheckedConversion` (JDK/thư viện thiếu annotation), `deadCode` (JDT 3.44 suy luận sai các nhánh kiểm tra null cần thiết khi đọc bytecode Spring; mức mặc định của Eclipse cũng là ignore), và `unhandledWarningToken` (annotation `PMD.*` dùng bởi PMD nhưng JDT không hiểu). Các kiểm tra `nullReference`, `potentialNullReference`, `nullSpecViolation`, `uncheckedTypeOperation` vẫn bật; các ngoại lệ ECJ/Spring Security cụ thể được giới hạn bằng `@SuppressWarnings("null")` ở đúng method. NullAway trong Maven vẫn chặn lỗi null ở cả main/test. Maven `verify` là lệnh bắt buộc dùng chung cho agent và CI. Không thêm `Objects.requireNonNull` chỉ để xóa cảnh báo về annotation thiếu từ thư viện. Sửa nguyên nhân; chỉ dùng suppression hẹp kèm lý do khi xác nhận ngoại lệ của framework hoặc test cố ý truyền đầu vào sai. Không bỏ qua test để lint xanh.
+
+Để đối chiếu trực tiếp diagnostics JDT với VS Code bằng ECJ 3.44.0 CLI (kiểm tra `main` và `test` trong một lượt, không cần sửa IDE):
+
+```sh
+tmp=$(mktemp -d)
+./backend/mvnw -B -ntp -q -f backend/pom.xml org.apache.maven.plugins:maven-dependency-plugin:3.10.0:build-classpath -Dmdep.outputFile="$tmp/cp"
+./backend/mvnw -B -ntp -q -f backend/pom.xml org.apache.maven.plugins:maven-dependency-plugin:3.10.0:copy -Dartifact=org.eclipse.jdt:ecj:3.44.0 -DoutputDirectory="$tmp"
+(cd backend && java -jar "$tmp/ecj-3.44.0.jar" -properties .settings/org.eclipse.jdt.core.prefs -proc:none -maxProblems 10000 -cp "$(cat "$tmp/cp")" -d "$tmp/classes" -log "$tmp/jdt.xml" src/main/java src/test/java)
+python3 -c 'import sys, xml.etree.ElementTree as ET; p=list(ET.parse(sys.argv[1]).getroot().iter("problem")); print(f"JDT diagnostics: {len(p)}"); sys.exit(bool(p))' "$tmp/jdt.xml"
+rm -rf "$tmp"
+```
 
 Các rule PMD về số lượng assertion, message cho mọi assertion và hằng số hóa mọi literal không nằm trong convention này: một test có thể kiểm tra nhiều thuộc tính của cùng hành vi; SQL/fixture được giữ gần nơi dùng. Các rule kiểm tra lỗi vẫn áp dụng cả main/test. Ngoại lệ SpotBugs nằm trong `config/spotbugs-exclude.xml`, giới hạn theo lớp/member và loại lỗi, có lý do ngay tại mỗi mục.
 

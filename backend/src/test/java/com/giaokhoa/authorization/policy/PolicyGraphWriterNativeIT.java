@@ -74,7 +74,7 @@ class PolicyGraphWriterNativeIT {
                         Instant.now().plusSeconds(300));
         OAuth2AuthorizedClient serviceClient =
                 new OAuth2AuthorizedClient(serviceRegistration, CLIENT_ID, serviceAccessToken);
-        OAuth2AuthorizedClientManager serviceManager = request -> serviceClient;
+        OAuth2AuthorizedClientManager serviceManager = _ -> serviceClient;
         PolicyGraphWriter writer =
                 new PolicyGraphWriter(
                         RestClient.builder(), base, "giaokhoa", serviceManager, AUDIENCE, null);
@@ -96,7 +96,7 @@ class PolicyGraphWriterNativeIT {
                                         new Gate.Actor(userId),
                                         new Gate.Validity(from, until))));
         String root = authzRoot(http, base, adminToken);
-        var subject = UsernamePasswordAuthenticationToken.authenticated(USER, null, List.of());
+        var subject = authenticationWithoutCredentials();
         var repository = new HttpSessionOAuth2AuthorizedClientRepository();
         MockHttpServletRequest servletRequest = new MockHttpServletRequest();
         servletRequest.setSession(new MockHttpSession());
@@ -202,6 +202,12 @@ class PolicyGraphWriterNativeIT {
         assertFalse(decision.isAllowed(subject, servletRequest, required));
         writer.retractRoot(graph.targetKey(), graph.scope());
         assertFalse(decision.isAllowed(subject, servletRequest, required));
+    }
+
+    // ECJ đọc sai tham số credentials @Nullable của Spring Security.
+    @SuppressWarnings("null")
+    private static UsernamePasswordAuthenticationToken authenticationWithoutCredentials() {
+        return new UsernamePasswordAuthenticationToken(USER, null, List.of());
     }
 
     private static String serviceToken(RestClient http, String base, String secret) {

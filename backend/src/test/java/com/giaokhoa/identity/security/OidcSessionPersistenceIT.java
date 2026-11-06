@@ -239,7 +239,7 @@ class OidcSessionPersistenceIT extends IntegrationEnvironment {
             sessionFilter.doFilter(
                     second,
                     new MockHttpServletResponse(),
-                    (request, reply) -> {
+                    (request, _) -> {
                         var httpRequest = (jakarta.servlet.http.HttpServletRequest) request;
                         loaded.set(
                                 new HttpSessionOAuth2AuthorizedClientRepository()
@@ -295,7 +295,7 @@ class OidcSessionPersistenceIT extends IntegrationEnvironment {
 
     // Capture generic vì kiểu JdbcSession của Spring không public; không dùng raw type/cast.
     private static <S extends Session> S persistedSession(SessionRepository<S> repository) {
-        return persistedSession(repository, session -> {});
+        return persistedSession(repository, _ -> {});
     }
 
     private static <S extends Session> S persistedSession(

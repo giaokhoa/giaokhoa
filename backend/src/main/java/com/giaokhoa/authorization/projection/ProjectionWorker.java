@@ -108,7 +108,7 @@ public class ProjectionWorker {
     }
 
     private Optional<ClaimedOperation> claimNext() {
-        return transactions.execute(status -> {
+        return transactions.execute(_ -> {
             List<QueueRow> queue =
                     jdbc.query(
                             "SELECT id, affected_partitions, affected_revisions,"
@@ -121,7 +121,7 @@ public class ProjectionWorker {
                                     + " WHERE state IN ('PENDING', 'APPLYING',"
                                     + " 'RETRYABLE_FAILURE')"
                                     + " ORDER BY recorded_seq",
-                            (rs, row) -> {
+                            (rs, _) -> {
                                 boolean due =
                                         "APPLYING".equals(rs.getString("state"))
                                                 ? rs.getBoolean("stale")
@@ -199,7 +199,7 @@ public class ProjectionWorker {
                     reconciler.reconcilePartition(partitionId, revision);
                 }
             }
-            transactions.executeWithoutResult(status -> {
+            transactions.executeWithoutResult(_ -> {
                 // Đọc lại các desired revision trong cùng transaction ghi nhận
                 // thành công: một mutation đã bump một partition sau các kiểm tra ở trên khiến
                 // operation này bị superseded (thay thế), không phải lỗi reconcile, và các
@@ -259,7 +259,7 @@ public class ProjectionWorker {
             String errorCode,
             boolean terminal,
             boolean fencePartitions) {
-        transactions.executeWithoutResult(status -> {
+        transactions.executeWithoutResult(_ -> {
             // Được bảo vệ bởi trạng thái đã claim: một instance thua operation vào tay claim
             // khác sẽ không ghi gì, nên không bao giờ fail được một operation đã thành công.
             jdbc.update(

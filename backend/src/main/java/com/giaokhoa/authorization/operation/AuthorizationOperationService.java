@@ -230,7 +230,7 @@ public class AuthorizationOperationService {
                                             ps.getConnection()
                                                     .createArrayOf(
                                                             "uuid", level.toArray(new UUID[0]))),
-                            (rs, row) ->
+                            (rs, _) ->
                                     new DependentRow(
                                             rs.getObject("id", UUID.class),
                                             rs.getObject("partition_id", UUID.class)));

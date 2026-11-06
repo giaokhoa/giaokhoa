@@ -116,7 +116,8 @@ public class KeycloakDecisionClient {
         return true;
     }
 
-    private String userAccessToken(Authentication authentication, HttpServletRequest request) {
+    private String userAccessToken(
+            @Nullable Authentication authentication, HttpServletRequest request) {
         if (authentication == null) {
             throw unverifiable(null);
         }

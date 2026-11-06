@@ -120,7 +120,7 @@ public class ProblemDetailsAdvice extends ResponseEntityExceptionHandler {
                 ex.getParameterValidationResults().stream()
                         .flatMap(result ->
                                 result.getResolvableErrors().stream()
-                                        .map(error ->
+                                        .map(_ ->
                                                 new Violation(
                                                         result.getMethodParameter()
                                                                                 .getParameterName()

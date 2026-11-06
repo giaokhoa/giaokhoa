@@ -405,7 +405,7 @@ class DirectorySchemaIT extends IntegrationEnvironment {
         jdbc.query(
                 "SELECT pg_sleep_until(valid_from + interval '200 milliseconds')"
                         + " FROM subscription_period WHERE workspace_id = ?",
-                rs -> {},
+                _ -> {},
                 workspace);
         assertEquals(
                 Boolean.TRUE,
