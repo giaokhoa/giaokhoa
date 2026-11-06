@@ -991,6 +991,130 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                         created.actor()));
     }
 
+    @Test
+    void youngerOperationCannotOvertakeAnOlderOperationOnTheSamePartition() throws Exception {
+        UUID partition = partition();
+        UUID[] operations =
+                tx(() -> {
+                    UUID actor = UUID.randomUUID();
+                    jdbc.update(
+                            "INSERT INTO user_account(id,keycloak_sub,username,email_verified,origin,identity_state)"
+                                    + " VALUES (?,?,?,false,'SELF_REGISTERED','PENDING')",
+                            actor,
+                            "revocation-sub-" + actor,
+                            "revocation-user-" + actor);
+                    fence(partition, 1);
+                    var older =
+                            new AuthorizationOperation(
+                                    UUID.randomUUID(),
+                                    actor,
+                                    null,
+                                    "ordering-older",
+                                    "a".repeat(64),
+                                    new UUID[] {partition},
+                                    new Long[] {1L},
+                                    1L);
+                    idempotency.executeOnce(older, () -> {});
+                    jdbc.update(
+                            "UPDATE authorization_operation SET state='RETRYABLE_FAILURE',"
+                                    + " attempt_count=1,"
+                                    + " next_attempt_at=now() + INTERVAL '1 hour'"
+                                    + " WHERE id=?",
+                            older.getId());
+                    var younger =
+                            new AuthorizationOperation(
+                                    UUID.randomUUID(),
+                                    actor,
+                                    null,
+                                    "ordering-younger",
+                                    "b".repeat(64),
+                                    new UUID[] {partition},
+                                    new Long[] {1L},
+                                    1L);
+                    idempotency.executeOnce(younger, () -> {});
+                    return new UUID[] {older.getId(), younger.getId()};
+                });
+        UUID older = operations[0];
+        UUID younger = operations[1];
+
+        // Several worker polls pass: the younger operation is due, but it must stay untouched
+        // while the older operation touching the same partition is still waiting.
+        Thread.sleep(8000);
+        assertEquals("PENDING", operationState(younger));
+        assertEquals(0, operationAttempts(younger));
+
+        // Once the older operation becomes due it is claimed first and fails closed (the
+        // partition records no projection to verify); the younger one still waits behind it.
+        tx(() -> {
+            jdbc.update(
+                    "UPDATE authorization_operation SET next_attempt_at=now() WHERE id=?", older);
+            return null;
+        });
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+        while (operationAttempts(older) < 2 && System.nanoTime() < deadline) {
+            Thread.sleep(100);
+        }
+        assertEquals(2, operationAttempts(older));
+        assertEquals("PENDING", operationState(younger));
+        assertEquals(0, operationAttempts(younger));
+    }
+
+    @Test
+    void operationOvertakenByANewerRevisionEndsSupersededWithoutFencing() throws Exception {
+        UUID partition = partition();
+        UUID operation =
+                tx(() -> {
+                    UUID actor = UUID.randomUUID();
+                    jdbc.update(
+                            "INSERT INTO user_account(id,keycloak_sub,username,email_verified,origin,identity_state)"
+                                    + " VALUES (?,?,?,false,'SELF_REGISTERED','PENDING')",
+                            actor,
+                            "revocation-sub-" + actor,
+                            "revocation-user-" + actor);
+                    fence(partition, 1);
+                    var recorded =
+                            new AuthorizationOperation(
+                                    UUID.randomUUID(),
+                                    actor,
+                                    null,
+                                    "superseded-operation",
+                                    "a".repeat(64),
+                                    new UUID[] {partition},
+                                    new Long[] {1L},
+                                    1L);
+                    idempotency.executeOnce(recorded, () -> {});
+                    jdbc.update(
+                            "UPDATE authorization_operation SET state='RETRYABLE_FAILURE',"
+                                    + " attempt_count=1, next_attempt_at=now() WHERE id=?",
+                            recorded.getId());
+                    // A newer mutation fences the partition at revision 2 before the worker
+                    // resumes the older operation.
+                    fence(partition, 2);
+                    return recorded.getId();
+                });
+
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+        while (!"FAILED".equals(operationState(operation)) && System.nanoTime() < deadline) {
+            Thread.sleep(100);
+        }
+        assertEquals("FAILED", operationState(operation));
+        assertEquals(
+                "SUPERSEDED_BY_NEWER_REVISION",
+                jdbc.queryForObject(
+                        "SELECT last_error_code FROM authorization_operation WHERE id=?",
+                        String.class,
+                        operation));
+        // The newer revision keeps its fence: the superseded operation must neither fail the
+        // partition nor reopen it.
+        assertEquals("PENDING", state(partition));
+        assertEquals(
+                2L,
+                jdbc.queryForObject(
+                        "SELECT desired_revision FROM authz_partition WHERE id=?",
+                        Long.class,
+                        partition));
+    }
+
     private record Recovery(UUID actor, UUID grant, UUID operation) {}
 
     private int backendPid() {
@@ -1038,6 +1162,19 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
     private String state(UUID partition) {
         return jdbc.queryForObject(
                 "SELECT state FROM authz_partition WHERE id = ?", String.class, partition);
+    }
+
+    private String operationState(UUID operation) {
+        return jdbc.queryForObject(
+                "SELECT state FROM authorization_operation WHERE id = ?", String.class, operation);
+    }
+
+    private int operationAttempts(UUID operation) {
+        return java.util.Objects.requireNonNull(
+                jdbc.queryForObject(
+                        "SELECT attempt_count FROM authorization_operation WHERE id = ?",
+                        Integer.class,
+                        operation));
     }
 
     private void fence(UUID partition, long revision) {
