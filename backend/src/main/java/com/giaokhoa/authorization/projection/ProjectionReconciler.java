@@ -1,5 +1,6 @@
 package com.giaokhoa.authorization.projection;
 
+import com.giaokhoa.authorization.keycloak.KeycloakProvisioningClient;
 import com.giaokhoa.authorization.model.AuthorizationPartition;
 import com.giaokhoa.authorization.model.AuthorizationProjection;
 import com.giaokhoa.authorization.policy.NativePolicyTemplates;
@@ -15,6 +16,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -69,14 +71,17 @@ public class ProjectionReconciler {
 
     private final JdbcTemplate jdbc;
     private final PolicyGraphWriter writer;
+    private final KeycloakProvisioningClient directory;
     private final TransactionTemplate transactions;
 
     public ProjectionReconciler(
             JdbcTemplate jdbc,
             PolicyGraphWriter writer,
+            KeycloakProvisioningClient directory,
             PlatformTransactionManager transactionManager) {
         this.jdbc = jdbc;
         this.writer = writer;
+        this.directory = directory;
         this.transactions = new TransactionTemplate(transactionManager);
     }
 
@@ -206,7 +211,39 @@ public class ProjectionReconciler {
                 outcomes.add(new Outcome(projection, step, null));
             }
         }
+        syncEligibilityMembership(partitionId);
         publish(partition, outcomes);
+    }
+
+    /**
+     * ACCOUNT partition còn chiếu một trạng thái directory mà graph không biểu diễn được:
+     * membership của chủ account trong group eligibility của danh tính — thứ mọi business graph đều
+     * gate theo. Membership mong muốn được dựng lại từ chính các row account bền làm nguồn
+     * eligibility (record do backend cấp, hoặc email verified đã ghi) và chỉ ghi khi membership
+     * live đang khác, để reconcile không đổi gì thì vẫn chỉ là kiểm chứng đọc. Ghi lỗi thì
+     * reconciliation lỗi theo: fence giữ đóng thay vì publish READY trên membership cũ.
+     */
+    private void syncEligibilityMembership(UUID partitionId) {
+        List<Map<String, Object>> accounts =
+                jdbc.queryForList(
+                        "SELECT u.keycloak_sub, u.origin, u.email_verified FROM authz_partition p"
+                                + " JOIN user_account u ON 'account:' || u.id = p.owner_key"
+                                + " WHERE p.id = ? AND p.kind = 'ACCOUNT'",
+                        partitionId);
+        if (accounts.isEmpty()) {
+            return;
+        }
+        Map<String, Object> account = accounts.getFirst();
+        String subject =
+                Objects.requireNonNull((String) account.get("keycloak_sub"), "keycloak_sub");
+        boolean eligible =
+                "CENTER_ISSUED".equals(account.get("origin"))
+                        || Boolean.TRUE.equals(account.get("email_verified"));
+        if (directory.isRealmGroupMember(subject, NativePolicyTemplates.ELIGIBILITY_GROUP)
+                != eligible) {
+            directory.setRealmGroupMembership(
+                    subject, NativePolicyTemplates.ELIGIBILITY_GROUP, eligible);
+        }
     }
 
     /** Fence một partition và các projection của nó; dùng trước khi sửa drift ngoài hệ thống. */
@@ -364,6 +401,14 @@ public class ProjectionReconciler {
 
     private List<String> reconstructSources(
             String targetKey, NativePolicyTemplates.TargetType type, String scope) {
+        if (type == NativePolicyTemplates.TargetType.PROFILE) {
+            UUID userId = UUID.fromString(targetKey.substring("account:".length()));
+            return jdbc.query(
+                    "SELECT keycloak_sub FROM user_account WHERE id = ?"
+                            + " AND (origin = 'CENTER_ISSUED' OR email_verified)",
+                    (rs, row) -> eligibilityDescriptor(userId, rs.getString(1), targetKey, scope),
+                    userId);
+        }
         if (type != NativePolicyTemplates.TargetType.WORKSPACE) {
             return List.of();
         }
@@ -403,6 +448,23 @@ public class ProjectionReconciler {
                 + scope;
     }
 
+    /**
+     * Descriptor chuẩn của nguồn eligibility cho account target, dựng lại từ row account bền khi
+     * account đang eligible: record do backend cấp, hoặc email verified đã ghi của account tự đăng
+     * ký.
+     */
+    public static String eligibilityDescriptor(
+            UUID userId, String keycloakSubject, String targetKey, String scope) {
+        return "IDENTITY_ELIGIBILITY|user="
+                + userId
+                + "|subject="
+                + keycloakSubject
+                + "|target="
+                + targetKey
+                + "|scope="
+                + scope;
+    }
+
     /** Canonical descriptor của một graph không còn được tồn tại cho cặp đó nữa. */
     public static String retractDescriptor(String targetKey, String scope) {
         return "RETRACT|target=" + targetKey + "|scope=" + scope;
@@ -432,7 +494,9 @@ public class ProjectionReconciler {
 
     private static PolicyGraph.Gate actorGate(String descriptor) {
         String[] parts = descriptor.split("\\|", -1);
-        if (parts.length < 2 || !"PERSONAL_OWNER".equals(parts[0])) {
+        if (parts.length < 2
+                || !("PERSONAL_OWNER".equals(parts[0])
+                        || "IDENTITY_ELIGIBILITY".equals(parts[0]))) {
             throw new IllegalArgumentException("Unsupported source descriptor: " + descriptor);
         }
         for (String part : parts) {

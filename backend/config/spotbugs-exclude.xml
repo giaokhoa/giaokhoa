@@ -18,10 +18,16 @@
         <Field name="~(jdbc|idempotency)"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
-    <!-- Dependency singleton do Spring quản lý (JdbcTemplate, PolicyGraphWriter); không sao chép khi inject vào reconciler/worker. -->
+    <!-- Dependency singleton do Spring quản lý (JdbcTemplate, PolicyGraphWriter, KeycloakProvisioningClient); không sao chép khi inject vào reconciler/worker. -->
     <Match>
         <Class name="com.giaokhoa.authorization.projection.ProjectionReconciler"/>
-        <Field name="~(jdbc|writer)"/>
+        <Field name="~(jdbc|writer|directory)"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- Dependency singleton do Spring quản lý (JdbcTemplate, CurrentIdentityClient, AuthorizationOperationService); không sao chép khi inject vào synchronizer. -->
+    <Match>
+        <Class name="com.giaokhoa.identity.eligibility.IdentityEligibilitySynchronizer"/>
+        <Field name="~(jdbc|identities|operations)"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
     <Match>
