@@ -45,6 +45,9 @@ class NativePermissionGateIT {
                 new String(decoded, StandardCharsets.UTF_8).contains("native-gate-teacher-role"),
                 "The denied actor must actually carry the decoy realm role");
         assertFalse(gate.decide(token, gate.required("T013_RESOURCE_A_ID"), "read"));
+        assertTrue(
+                gate.decide(token, gate.required("T013_RESOURCE_B_ID"), "read"),
+                "The same actor must retain its independent native B permission");
     }
 
     @Test

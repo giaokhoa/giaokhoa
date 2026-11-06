@@ -4,6 +4,7 @@
   "subjectBId": "71000000-0000-4000-8000-0000000000b2",
   "activityId": "71000000-0000-4000-8000-0000000000c3",
   "teacherGroup": "/gk/workspaces/71000000-0000-4000-8000-000000000015/course-subjects/71000000-0000-4000-8000-0000000000a1/teachers",
+  "teacherGroupB": "/gk/workspaces/71000000-0000-4000-8000-000000000015/course-subjects/71000000-0000-4000-8000-0000000000b2/teachers",
   "eligibleGroup": "/gk/identity/eligible",
   "user": "native-gate-assigned",
   "claimOnlyUser": "native-gate-claim-only",
@@ -14,6 +15,8 @@
   "policy": {
     "eligibility": "native-gate-eligible",
     "teacher": "native-gate-subject-a-teacher",
+    "teacherB": "native-gate-subject-b-teacher",
+    "sourceB": "native-gate-eligible-and-teacher-b",
     "source": "native-gate-eligible-and-teacher",
     "validFrom": "native-gate-valid-from",
     "expiresAt": "native-gate-expires-at",

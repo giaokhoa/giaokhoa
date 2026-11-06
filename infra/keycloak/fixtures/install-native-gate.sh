@@ -42,11 +42,21 @@ T013_ASSIGNED_USER="$(gate_value .user)"
 T013_CLAIM_USER="$(gate_value .claimOnlyUser)"
 T013_TEACHER_GROUP="$(gate_value .teacherGroup)"
 T013_TEACHER_GROUP_ID="$(gate_group "$T013_TEACHER_GROUP")"
+T013_TEACHER_B_GROUP_ID="$(gate_group "$(gate_value .teacherGroupB)")"
 T013_ELIGIBLE_GROUP_ID="$(gate_group "$(gate_value .eligibleGroup)")"
 
-# Native PDP fixture uses a temporary direct-grant client; production web remains Code+PKCE.
-gate_post /clients '{"clientId":"native-gate-test","enabled":true,"publicClient":true,"standardFlowEnabled":false,"directAccessGrantsEnabled":true,"serviceAccountsEnabled":false,"protocol":"openid-connect"}'
-gate_post /clients '{"clientId":"native-gate-forged","enabled":true,"publicClient":true,"standardFlowEnabled":false,"directAccessGrantsEnabled":true,"serviceAccountsEnabled":false,"protocol":"openid-connect"}'
+# Isolated test clients must exercise Authorization Code + PKCE, never password grant.
+for test_client in native-gate-test native-gate-forged; do
+  gate_post /clients "$(jq -n --arg name "$test_client" \
+    '{clientId:$name,enabled:true,publicClient:true,standardFlowEnabled:true,
+      directAccessGrantsEnabled:false,serviceAccountsEnabled:false,protocol:"openid-connect",
+      redirectUris:["http://127.0.0.1:18895/callback"],
+      attributes:{"pkce.code.challenge.method":"S256"}}')"
+  admin_get "/clients/$(client_id "$test_client")" | jq -e \
+    '.standardFlowEnabled == true and .directAccessGrantsEnabled == false and
+      .attributes["pkce.code.challenge.method"] == "S256"' >/dev/null || \
+    fail "Native actor clients must use Code+PKCE, never password grant"
+done
 NATIVE_FORGED_ID="$(client_id native-gate-forged)"
 gate_post "/clients/$NATIVE_FORGED_ID/protocol-mappers/models" "$(jq -n --arg group "$T013_TEACHER_GROUP" \
   '{name:"native-forged-groups",protocol:"openid-connect",protocolMapper:"oidc-hardcoded-claim-mapper",
@@ -70,9 +80,13 @@ for user in "$T013_ASSIGNED_USER" "$T013_CLAIM_USER"; do
   curl -fsS -o /dev/null -X PUT -H "Authorization: Bearer $TOKEN" \
     "$BASE/admin/realms/giaokhoa/users/$uid/groups/$T013_ELIGIBLE_GROUP_ID"
   if [[ "$user" == "$T013_ASSIGNED_USER" ]]; then
+    export T013_ASSIGNED_USER_ID="$uid"
     curl -fsS -o /dev/null -X PUT -H "Authorization: Bearer $TOKEN" \
       "$BASE/admin/realms/giaokhoa/users/$uid/groups/$T013_TEACHER_GROUP_ID"
   else
+    # This actor has a *real* B assignment but only an invented A claim/role.
+    curl -fsS -o /dev/null -X PUT -H "Authorization: Bearer $TOKEN" \
+      "$BASE/admin/realms/giaokhoa/users/$uid/groups/$T013_TEACHER_B_GROUP_ID"
     curl -fsS -o /dev/null -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
       --data-binary "[$ROLE_JSON]" "$BASE/admin/realms/giaokhoa/users/$uid/role-mappings/realm"
   fi
@@ -103,6 +117,7 @@ gate_group_policy() {
 }
 ELIGIBLE_POLICY_ID="$(gate_group_policy "$(gate_value .policy.eligibility)" "$T013_ELIGIBLE_GROUP_ID")"
 TEACHER_POLICY_ID="$(gate_group_policy "$(gate_value .policy.teacher)" "$T013_TEACHER_GROUP_ID")"
+TEACHER_B_POLICY_ID="$(gate_group_policy "$(gate_value .policy.teacherB)" "$T013_TEACHER_B_GROUP_ID")"
 gate_aggregate() {
   local name="$1" ids="$2"
   gate_post "$AUTHZ/policy/aggregate" "$(jq -n --arg name "$name" --argjson ids "$ids" \
@@ -111,6 +126,8 @@ gate_aggregate() {
 }
 SOURCE_POLICY_ID="$(gate_aggregate "$(gate_value .policy.source)" \
   "$(jq -n --arg a "$ELIGIBLE_POLICY_ID" --arg b "$TEACHER_POLICY_ID" '[$a,$b]')")"
+SOURCE_B_POLICY_ID="$(gate_aggregate "$(gate_value .policy.sourceB)" \
+  "$(jq -n --arg a "$ELIGIBLE_POLICY_ID" --arg b "$TEACHER_B_POLICY_ID" '[$a,$b]')")"
 
 gate_time_policy() {
   local name="$1" logic="$2"
@@ -130,5 +147,6 @@ gate_permission() {
       resources:[$resource],scopes:[$scope],policies:[$policy]}')"
 }
 gate_permission native-gate-subject-a-read "$T013_RESOURCE_A_ID" "$READ_ID" "$SOURCE_POLICY_ID"
+gate_permission native-gate-subject-b-read "$T013_RESOURCE_B_ID" "$READ_ID" "$SOURCE_B_POLICY_ID"
 gate_permission native-gate-activity-open "$T013_ACTIVITY_ID" "$OPEN_ID" "$TIME_POLICY_ID"
 echo "PASS: isolated native fixture seeded with two actors and per-resource/scope policies"

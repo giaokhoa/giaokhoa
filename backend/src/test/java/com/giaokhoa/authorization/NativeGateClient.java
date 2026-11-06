@@ -1,5 +1,9 @@
 package com.giaokhoa.authorization;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -13,6 +17,8 @@ import org.springframework.web.client.RestClientResponseException;
 
 /** Calls Keycloak's token endpoint with the real actor token; no mocked PDP decisions. */
 final class NativeGateClient {
+    private static final int EXPECTED_ACTOR_COUNT = 2;
+
     private final RestClient http = RestClient.create();
     private final String base = required("T013_KEYCLOAK_BASE_URL");
 
@@ -22,22 +28,20 @@ final class NativeGateClient {
     }
 
     String token(String user) {
-        var form = new LinkedMultiValueMap<String, String>();
-        form.add("grant_type", "password");
-        form.add(
-                "client_id",
-                "native-gate-claim-only".equals(user) ? "native-gate-forged" : "native-gate-test");
-        form.add("username", user);
-        form.add("password", required("T013_NATIVE_PASSWORD"));
-        Map<String, Object> body =
-                http.post()
-                        .uri(base + "/realms/giaokhoa/protocol/openid-connect/token")
-                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                        .body(form)
-                        .retrieve()
-                        .body(new ParameterizedTypeReference<Map<String, Object>>() {});
-        return (String)
-                Objects.requireNonNull(body, "Missing native actor token").get("access_token");
+        try {
+            // Tokens are produced exclusively by native-pkce-login.mjs via real Keycloak Code+PKCE.
+            List<String> tokens = Files.readAllLines(Path.of(required("T013_NATIVE_TOKENS_FILE")));
+            if (tokens.size() != EXPECTED_ACTOR_COUNT) {
+                throw new IllegalStateException("Expected exactly two native PKCE actor tokens");
+            }
+            return switch (user) {
+                case "native-gate-assigned" -> tokens.get(0);
+                case "native-gate-claim-only" -> tokens.get(1);
+                default -> throw new IllegalArgumentException("Unknown native actor");
+            };
+        } catch (IOException exception) {
+            throw new UncheckedIOException("Unable to read native PKCE actor tokens", exception);
+        }
     }
 
     boolean decide(String actorToken, String resourceId, String scope) {

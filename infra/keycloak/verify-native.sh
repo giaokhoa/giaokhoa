@@ -165,6 +165,11 @@ echo "PASS: production Java client created Organization/group and added/revoked 
 export T013_API_CLIENT_ID="$API_ID"
 # T013 uses real Authorization Services and fixture actors on this disposable realm only.
 source "$ROOT/fixtures/install-native-gate.sh"
+export T013_NATIVE_TOKENS_FILE="$TMP/native-pkce-actor-tokens"
+if ! node "$ROOT/fixtures/native-pkce-login.mjs"; then
+  docker logs "$CONTAINER" 2>&1 | tail -55 >&2 || true
+  fail "Native actor login via real Authorization Code + PKCE"
+fi
 if ! "$REPO/backend/mvnw" -B -ntp -f "$REPO/backend/pom.xml" \
     -Dtest=NativePermissionGateIT,NativeTimePolicyIT test > "$TMP/native-gate-java.log" 2>&1; then
   tail -70 "$TMP/native-gate-java.log" >&2
