@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import com.giaokhoa.authorization.model.AuthorizationOperation;
 import com.giaokhoa.authorization.operation.IdempotencyService;
 import com.giaokhoa.support.IntegrationEnvironment;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -25,6 +26,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
 import org.springframework.session.SessionRepository;
@@ -38,11 +40,14 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.context.WebApplicationContext;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /** T014: PostgreSQL commit ordering plus opt-in Foundation HTTP contracts. */
 @SpringBootTest
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class ConcurrentRevocationIT extends IntegrationEnvironment {
+    private static final JsonMapper JSON = new JsonMapper();
     private static final String SCHEMA =
             "t014_concurrent_" + UUID.randomUUID().toString().replace("-", "");
 
@@ -195,14 +200,37 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
     @EnumSource(PendingScope.class)
     void protectedCapabilitiesMustRejectCommittedPendingDependency(PendingScope pending)
             throws Exception {
-        // RED T018/T021: authenticated real MVC route, no substitute authorization executor.
+        // RED T018/T021: identical HTTP request before and after a committed fence.
+        // A handler that returns 503 to every request must NOT pass this contrast.
         try (var nativeGate = new NativeRevocationFixture();
                 var session = nativeSession(nativeGate)) {
             ActorScope fixture = actorWithReadyPersonalWorkspace(nativeGate.userSubject());
-            GrantScope grant = null;
-            if (pending == PendingScope.GRANT_PENDING || pending == PendingScope.GRANT_FAILED) {
-                grant = grantDependency(fixture, nativeGate.resourceId("a"));
-                UUID grantPartition = grant.partition();
+            boolean requiresGrant =
+                    pending == PendingScope.GRANT_PENDING || pending == PendingScope.GRANT_FAILED;
+            GrantScope affectedGrant =
+                    requiresGrant ? grantDependency(fixture, nativeGate.resourceId("a")) : null;
+            GrantScope independentGrant =
+                    requiresGrant ? grantDependency(fixture, nativeGate.resourceId("b")) : null;
+
+            String targetA =
+                    affectedGrant == null
+                            ? workspaceTarget(fixture.workspace())
+                            : versionTarget(affectedGrant);
+            String targetB = independentGrant == null ? null : versionTarget(independentGrant);
+            String token = session.currentAccessToken();
+            assertTrue(nativeGate.allowed(token, "a", requiresGrant ? "content.read" : "enter"));
+            if (requiresGrant) {
+                assertTrue(nativeGate.allowed(token, "b", "content.read"));
+            }
+
+            MockMvc mvc =
+                    MockMvcBuilders.webAppContextSetup(webContext)
+                            .addFilters(sessionFilter)
+                            .apply(springSecurity())
+                            .build();
+            MockHttpServletResponse readyA = capabilityResponse(mvc, fixture, session, targetA);
+            if (affectedGrant != null) {
+                UUID grantPartition = affectedGrant.partition();
                 tx(() -> {
                     jdbc.update(
                             "UPDATE authz_projection SET state = 'PENDING'"
@@ -217,44 +245,73 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                 });
                 assertEquals("READY", state(fixture.workspacePartition()));
                 assertEquals("READY", state(fixture.account()));
+                assertEquals("READY", state(independentGrant.partition()));
             } else {
                 tx(() -> {
                     fence(fixture.partition(pending), 1);
                     return null;
                 });
             }
-            assertTrue(nativeGate.allowed(session.currentAccessToken(), "a"));
-            if (grant != null) {
-                assertTrue(nativeGate.allowed(session.currentAccessToken(), "a", "content.read"));
+            MockHttpServletResponse fencedA = capabilityResponse(mvc, fixture, session, targetA);
+            MockHttpServletResponse independentB =
+                    targetB == null ? null : capabilityResponse(mvc, fixture, session, targetB);
+            // Native A still has a grant: only the database fence may deny the request.
+            assertTrue(nativeGate.allowed(token, "a", requiresGrant ? "content.read" : "enter"));
+            if (independentB != null) {
+                assertTrue(nativeGate.allowed(token, "b", "content.read"));
             }
-            String capabilityTarget =
-                    grant == null
-                            ? ("{\"type\":\"WORKSPACE\",\"id\":\"%s\"," + "\"scopes\":[\"enter\"]}")
-                                    .formatted(fixture.workspace())
-                            : ("{\"type\":\"RESOURCE_VERSION\",\"id\":\"%s\","
-                                            + "\"versionId\":\"%s\","
-                                            + "\"scopes\":[\"content.read\"]}")
-                                    .formatted(grant.resource(), grant.version());
-            MockMvc mvc =
-                    MockMvcBuilders.webAppContextSetup(webContext)
-                            .addFilters(sessionFilter)
-                            .apply(springSecurity())
-                            .build();
-            int status =
-                    mvc.perform(
-                                    post("/api/workspaces/{wid}/capabilities", fixture.workspace())
-                                            .cookie(session.cookie())
-                                            .with(csrf())
-                                            .contentType(MediaType.APPLICATION_JSON)
-                                            .content("{\"targets\":[" + capabilityTarget + "]}"))
-                            .andReturn()
-                            .getResponse()
-                            .getStatus();
-            assertEquals(
-                    HttpStatus.SERVICE_UNAVAILABLE.value(),
-                    status,
-                    "Committed PENDING " + pending + " must fence the T021 capabilities route");
+            assertAll(
+                    "T014_READY_AND_FENCED_" + pending,
+                    () -> assertReadyAllowed(readyA, "A_BEFORE_" + pending),
+                    () ->
+                            assertEquals(
+                                    HttpStatus.SERVICE_UNAVAILABLE.value(),
+                                    fencedA.getStatus(),
+                                    "T014_FENCED_EXPECT_503_"
+                                            + pending
+                                            + " actual HTTP="
+                                            + fencedA.getStatus()),
+                    () -> {
+                        if (independentB != null) {
+                            assertReadyAllowed(independentB, "INDEPENDENT_B_AFTER_" + pending);
+                        }
+                    });
         }
+    }
+
+    private String workspaceTarget(UUID workspace) {
+        return ("{\"type\":\"WORKSPACE\",\"id\":\"%s\",\"scopes\":[\"enter\"]}")
+                .formatted(workspace);
+    }
+
+    private String versionTarget(GrantScope grant) {
+        return ("{\"type\":\"RESOURCE_VERSION\",\"id\":\"%s\","
+                        + "\"versionId\":\"%s\",\"scopes\":[\"content.read\"]}")
+                .formatted(grant.resource(), grant.version());
+    }
+
+    private MockHttpServletResponse capabilityResponse(
+            MockMvc mvc, ActorScope actor, NativeSpringSessionFixture session, String target)
+            throws Exception {
+        return mvc.perform(
+                        post("/api/workspaces/{wid}/capabilities", actor.workspace())
+                                .cookie(session.cookie())
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"targets\":[" + target + "]}"))
+                .andReturn()
+                .getResponse();
+    }
+
+    private void assertReadyAllowed(MockHttpServletResponse response, String scenario)
+            throws Exception {
+        assertEquals(200, response.getStatus(), "T014_READY_EXPECT_ALLOW_" + scenario);
+        List<JsonNode> decisions =
+                JSON.readTree(response.getContentAsString()).findValues("allowed");
+        assertEquals(1, decisions.size(), "One exact target/scope must be evaluated");
+        assertTrue(
+                decisions.getFirst().isBoolean() && decisions.getFirst().booleanValue(),
+                "READY must produce a native allow, not a constant HTTP 200/deny");
     }
 
     @Tag("t014-pending")
@@ -331,9 +388,19 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                         }
                         Thread.sleep(25);
                     }
+                    if (writer.isDone()) {
+                        int earlyStatus = writer.get(10, TimeUnit.SECONDS);
+                        fail(
+                                "T014_EARLY_HTTP_STATUS="
+                                        + earlyStatus
+                                        + " before PostgreSQL fence: "
+                                        + (earlyStatus == 404
+                                                ? "T021 sample action route absent"
+                                                : "unexpected security/validation/business response"));
+                    }
                     assertTrue(
                             blockedOnRevoke,
-                            "Protected HTTP mutation must block on this revoker's PostgreSQL lock");
+                            "T014_LOCK_NOT_OBSERVED: writer never waited on revoker PID");
                     assertFalse(writer.isDone(), "No mutation response before the revoke commits");
                 } finally {
                     finishRevoke.countDown();
@@ -429,6 +496,140 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                 case GRANT_PENDING, GRANT_FAILED ->
                         throw new IllegalArgumentException("GRANT is resolved from projection");
             };
+        }
+    }
+
+    @Tag("t014-pending")
+    @Test
+    void productionWorkerMustReconcilePartiallyProvisionedAppGraphAfterRetry() throws Exception {
+        // RED T016/T017: real Keycloak resource is already provisioned in the application's
+        // TEST API audience; the policy/permission is missing after a simulated worker crash.
+        // No test-only graph writer, fake PDP, or fake worker is involved.
+        try (var nativeGate = new NativeRevocationFixture();
+                var graph = nativeGate.partiallyProvisionApplicationResource()) {
+            ActorScope actor = actorWithReadyPersonalWorkspace(nativeGate.userSubject());
+            UUID grant = UUID.randomUUID();
+            UUID projection = UUID.randomUUID();
+            UUID version = UUID.randomUUID();
+            var operation =
+                    new AuthorizationOperation(
+                            UUID.randomUUID(),
+                            actor.actor(),
+                            actor.workspace(),
+                            "t014-partial-provision-retry",
+                            "b".repeat(64),
+                            new UUID[] {actor.account(), actor.workspacePartition(), grant},
+                            new Long[] {0L, 0L, 1L},
+                            0L);
+            tx(() -> {
+                jdbc.update(
+                        "INSERT INTO authz_partition"
+                                + "(id,kind,owner_key,desired_revision,state)"
+                                + " VALUES (?,'GRANT',?,1,'PENDING')",
+                        grant,
+                        "grant:" + grant);
+                jdbc.update(
+                        "INSERT INTO authz_projection"
+                                + "(id,partition_id,target_key,keycloak_resource_id,"
+                                + "dependency_partition_ids,desired_hash,state)"
+                                + " VALUES (?,?,?,?,ARRAY[?::uuid,?::uuid],?,'PENDING')",
+                        projection,
+                        grant,
+                        "workspace:"
+                                + actor.workspace()
+                                + ":resource:"
+                                + UUID.randomUUID()
+                                + ":version:"
+                                + version,
+                        graph.resourceId(),
+                        actor.account(),
+                        actor.workspacePartition(),
+                        "b".repeat(64));
+                idempotency.executeOnce(operation, () -> {});
+                jdbc.update(
+                        "UPDATE authorization_operation SET state='RETRYABLE_FAILURE',"
+                                + " attempt_count=1,next_attempt_at=now(),"
+                                + " last_error_code='PARTIAL_KEYCLOAK_PROVISION'"
+                                + " WHERE id=?",
+                        operation.getId());
+                return null;
+            });
+            assertEquals(1, graph.resourceCount(), "Partial native resource must exist already");
+            long policiesBefore = graph.policyCount();
+            assertEquals(0, graph.permissionCount(), "Permission is absent at crash point");
+            assertEquals("PENDING", state(grant), "Grant must stay fenced until recovery");
+            assertEquals(
+                    HttpStatus.ACCEPTED,
+                    tx(() ->
+                            idempotency
+                                    .responseFor(
+                                            idempotency
+                                                    .findExisting(
+                                                            actor.actor(),
+                                                            "t014-partial-provision-retry",
+                                                            "b".repeat(64))
+                                                    .orElseThrow())
+                                    .getStatusCode()));
+            assertTrue(
+                    webContext.containsBean("projectionWorker"),
+                    "T014_WORKER_NOT_INSTALLED: T017 must resume an existing partial "
+                            + "resource via production PolicyGraphWriter/ProjectionReconciler");
+
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+            while (System.nanoTime() < deadline) {
+                boolean done =
+                        "READY".equals(state(grant))
+                                && "SUCCEEDED"
+                                        .equals(
+                                                jdbc.queryForObject(
+                                                        "SELECT state FROM authorization_operation"
+                                                                + " WHERE id=?",
+                                                        String.class,
+                                                        operation.getId()));
+                if (done) {
+                    break;
+                }
+                Thread.sleep(100);
+            }
+            assertAll(
+                    "T014_REAL_WORKER_PARTIAL_GRAPH_RECOVERY",
+                    () -> assertEquals("READY", state(grant), "Grant must be reconciled"),
+                    () ->
+                            assertEquals(
+                                    "SUCCEEDED",
+                                    jdbc.queryForObject(
+                                            "SELECT state FROM authorization_operation WHERE id=?",
+                                            String.class,
+                                            operation.getId())),
+                    () ->
+                            assertEquals(
+                                    "b".repeat(64),
+                                    jdbc.queryForObject(
+                                            "SELECT applied_hash FROM authz_projection WHERE id=?",
+                                            String.class,
+                                            projection)),
+                    () -> assertEquals(1, graph.resourceCount(), "Retry may not clone resource"),
+                    () ->
+                            assertTrue(
+                                    graph.policyCount() > policiesBefore,
+                                    "Retry must finish the missing native policy, not only a resource"),
+                    () ->
+                            assertEquals(
+                                    1,
+                                    graph.permissionCount(),
+                                    "Exactly one scope permission must reference the resource"));
+            tx(() -> {
+                assertEquals(
+                        operation.getId(),
+                        idempotency
+                                .executeOnce(
+                                        operation,
+                                        () -> fail("Replay must not create another operation"))
+                                .getId());
+                return null;
+            });
+            assertEquals(1, graph.resourceCount());
+            assertEquals(1, graph.permissionCount());
         }
     }
 

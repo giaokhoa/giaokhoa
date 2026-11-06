@@ -38,6 +38,7 @@ final class NativeRevocationFixture implements AutoCloseable {
     private static final String REDIRECT_URI = "http://127.0.0.1:18888/callback";
     private static final Pattern LOGIN_FORM =
             Pattern.compile("<form[^>]*id=\"kc-form-login\"[^>]*action=\"([^\"]+)\"");
+    private static final int SINGLE_CLIENT = 1;
     private static final String DEFAULT_PERMISSION = "Default Permission";
     private static final String DEFAULT_RESOURCE = "Default Resource";
     private static final String DEFAULT_POLICY = "Default Policy";
@@ -290,6 +291,166 @@ final class NativeRevocationFixture implements AutoCloseable {
                 .count();
     }
 
+    /**
+     * Fault fixture for T017: native resource exists in the TEST application's API audience, but
+     * scope permission/policy has not yet been provisioned. Never touch DEV.
+     */
+    PartialApplicationGraph partiallyProvisionApplicationResource() {
+        String audience = required("TEST_KEYCLOAK_AUTHZ_AUDIENCE");
+        if (!"giaokhoa-it-api".equals(audience)) {
+            throw new IllegalArgumentException("T014 partial graph requires TEST API audience");
+        }
+        var matches =
+                getList("/clients?clientId=" + encode(audience)).stream()
+                        .filter(item -> audience.equals(item.get("clientId")))
+                        .toList();
+        if (matches.size() > SINGLE_CLIENT) {
+            throw new IllegalStateException("Duplicate TEST API audience clients");
+        }
+        boolean ownedClient = matches.isEmpty();
+        String appClient =
+                ownedClient
+                        ? create(
+                                "/clients",
+                                Map.of(
+                                        "clientId",
+                                        audience,
+                                        "protocol",
+                                        "openid-connect",
+                                        "enabled",
+                                        true,
+                                        "publicClient",
+                                        false,
+                                        "standardFlowEnabled",
+                                        false,
+                                        "directAccessGrantsEnabled",
+                                        false,
+                                        "authorizationServicesEnabled",
+                                        true,
+                                        "serviceAccountsEnabled",
+                                        true,
+                                        "fullScopeAllowed",
+                                        false,
+                                        "authorizationSettings",
+                                        Map.of(
+                                                "policyEnforcementMode", "ENFORCING",
+                                                "allowRemoteResourceManagement", true,
+                                                "decisionStrategy", "UNANIMOUS")))
+                        : String.valueOf(matches.getFirst().get("id"));
+        String root = "/clients/" + appClient + "/authz/resource-server";
+        String scopeId = null;
+        String resourceId = null;
+        boolean ownedScope = false;
+        boolean created = false;
+        try {
+            if (ownedClient) {
+                removeDefaults(root);
+            }
+            var scopes =
+                    getList(root + "/scope").stream()
+                            .filter(item -> "content.read".equals(item.get("name")))
+                            .toList();
+            if (scopes.size() > SINGLE_CLIENT) {
+                throw new IllegalStateException("Duplicate native content.read scope");
+            }
+            ownedScope = scopes.isEmpty();
+            scopeId =
+                    ownedScope
+                            ? create(root + "/scope", Map.of("name", "content.read"))
+                            : String.valueOf(scopes.getFirst().get("id"));
+            String name = "t014-partial-" + UUID.randomUUID();
+            resourceId =
+                    create(
+                            root + "/resource",
+                            Map.of(
+                                    "name",
+                                    name,
+                                    "ownerManagedAccess",
+                                    false,
+                                    "scopes",
+                                    List.of(Map.of("id", scopeId, "name", "content.read"))));
+            created = true;
+            return new PartialApplicationGraph(
+                    appClient, name, resourceId, scopeId, ownedClient, ownedScope);
+        } finally {
+            if (!created) {
+                if (ownedClient) {
+                    delete("/clients/" + appClient);
+                } else {
+                    if (resourceId != null) {
+                        delete(root + "/resource/" + resourceId);
+                    }
+                    if (ownedScope && scopeId != null) {
+                        delete(root + "/scope/" + scopeId);
+                    }
+                }
+            }
+        }
+    }
+
+    final class PartialApplicationGraph implements AutoCloseable {
+        private final String appClient;
+        private final String name;
+        private final String resource;
+        private final String scope;
+        private final boolean ownedClient;
+        private final boolean ownedScope;
+
+        PartialApplicationGraph(
+                String appClient,
+                String name,
+                String resource,
+                String scope,
+                boolean ownedClient,
+                boolean ownedScope) {
+            this.appClient = appClient;
+            this.name = name;
+            this.resource = resource;
+            this.scope = scope;
+            this.ownedClient = ownedClient;
+            this.ownedScope = ownedScope;
+        }
+
+        String resourceId() {
+            return resource;
+        }
+
+        int resourceCount() {
+            return (int)
+                    getList(root() + "/resource").stream()
+                            .filter(item -> name.equals(item.get("name")))
+                            .count();
+        }
+
+        long policyCount() {
+            return getList(root() + "/policy").stream()
+                    .filter(item -> !DEFAULT_POLICY.equals(item.get("name")))
+                    .count();
+        }
+
+        long permissionCount() {
+            return getList(root() + "/permission/scope").stream()
+                    .filter(item -> String.valueOf(item.get("resources")).contains(resource))
+                    .count();
+        }
+
+        private String root() {
+            return "/clients/" + appClient + "/authz/resource-server";
+        }
+
+        @Override
+        public void close() {
+            if (ownedClient) {
+                delete("/clients/" + appClient);
+            } else {
+                delete(root() + "/resource/" + resource);
+                if (ownedScope) {
+                    delete(root() + "/scope/" + scope);
+                }
+            }
+        }
+    }
+
     String resourceId(String target) {
         return "a".equals(target) ? resourceA : resourceB;
     }
@@ -368,7 +529,10 @@ final class NativeRevocationFixture implements AutoCloseable {
     }
 
     private void removeDefaults() {
-        String root = "/clients/" + clientId + "/authz/resource-server";
+        removeDefaults("/clients/" + clientId + "/authz/resource-server");
+    }
+
+    private void removeDefaults(String root) {
         for (Map<String, Object> permission : getList(root + "/permission/resource")) {
             if (DEFAULT_PERMISSION.equals(permission.get("name"))) {
                 delete(root + "/permission/resource/" + permission.get("id"));
