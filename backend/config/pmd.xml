@@ -7,6 +7,13 @@
     <rule ref="category/java/bestpractices.xml">
         <exclude name="UnitTestAssertionsShouldIncludeMessage"/>
         <exclude name="UnitTestContainsTooManyAsserts"/>
+        <exclude name="UnitTestShouldIncludeAssert"/>
+    </rule>
+    <!-- MockMvc .andExpect performs assertions, but PMD's default JUnit rule misses them. -->
+    <rule ref="category/java/bestpractices.xml/UnitTestShouldIncludeAssert">
+        <properties>
+            <property name="extraAssertMethodNames" value="andExpect"/>
+        </properties>
     </rule>
     <!-- Giữ SQL và giá trị fixture tại nơi dùng để test dễ đọc; không ép tạo hằng số cho mọi literal. -->
     <rule ref="category/java/errorprone.xml">

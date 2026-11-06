@@ -311,7 +311,7 @@ final class NativeRevocationFixture implements AutoCloseable {
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                         .body(form)
                         .retrieve()
-                        .onStatus(status -> status == HttpStatus.FORBIDDEN, (request, reply) -> {})
+                        .onStatus(status -> status == HttpStatus.FORBIDDEN, (_, _) -> {})
                         .toEntity(MAP);
         if (response.getStatusCode() == HttpStatus.FORBIDDEN) {
             return false;
@@ -538,9 +538,7 @@ final class NativeRevocationFixture implements AutoCloseable {
                             .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                             .body(form)
                             .retrieve()
-                            .onStatus(
-                                    status -> status == HttpStatus.FORBIDDEN,
-                                    (request, reply) -> {})
+                            .onStatus(status -> status == HttpStatus.FORBIDDEN, (_, _) -> {})
                             .toEntity(MAP);
             if (response.getStatusCode() == HttpStatus.FORBIDDEN) {
                 return false;

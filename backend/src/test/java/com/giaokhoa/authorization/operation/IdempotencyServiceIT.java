@@ -103,7 +103,7 @@ class IdempotencyServiceIT extends IntegrationEnvironment {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void simultaneousRetriesBothSeeMissingKeyButOnlyOneAppliesMutation() throws Exception {
         TransactionTemplate tx = new TransactionTemplate(transactions);
-        UUID actor = tx.execute(status -> user());
+        UUID actor = tx.execute(_ -> user());
         UUID partition = workspacePartition(actor);
         UUID accountPartition =
                 jdbc.queryForObject(
@@ -118,7 +118,7 @@ class IdempotencyServiceIT extends IntegrationEnvironment {
         CountDownLatch start = new CountDownLatch(1);
         Callable<UUID> attempt =
                 () ->
-                        tx.execute(status -> {
+                        tx.execute(_ -> {
                             assertTrue(
                                     idempotency
                                             .findExisting(actor, "concurrent-key", "a".repeat(64))
@@ -177,7 +177,7 @@ class IdempotencyServiceIT extends IntegrationEnvironment {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void failingMutationRollsBackOperationAndDesiredStateTogether() {
         TransactionTemplate tx = new TransactionTemplate(transactions);
-        UUID actor = tx.execute(status -> user());
+        UUID actor = tx.execute(_ -> user());
         UUID partition = workspacePartition(actor);
         UUID workspace =
                 jdbc.queryForObject(
@@ -196,7 +196,7 @@ class IdempotencyServiceIT extends IntegrationEnvironment {
         assertThrows(
                 IllegalStateException.class,
                 () ->
-                        tx.execute(status ->
+                        tx.execute(_ ->
                                 idempotency.executeOnce(
                                         operation,
                                         () -> {

@@ -117,7 +117,7 @@ final class NativeSpringSessionFixture implements AutoCloseable {
         filter.doFilter(
                 request,
                 new MockHttpServletResponse(),
-                (wrapped, reply) -> {
+                (wrapped, _) -> {
                     var httpRequest = (HttpServletRequest) wrapped;
                     var session = Objects.requireNonNull(httpRequest.getSession(false));
                     var context =

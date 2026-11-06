@@ -48,14 +48,14 @@ public class ProjectionReconciler {
     public static final String ERROR_REVISION_SUPERSEDED = "REVISION_SUPERSEDED";
 
     private static final RowMapper<PartitionRow> PARTITION_MAPPER =
-            (rs, row) ->
+            (rs, _) ->
                     new PartitionRow(
                             rs.getObject("id", UUID.class),
                             rs.getLong("desired_revision"),
                             rs.getLong("applied_revision"),
                             AuthorizationPartition.State.valueOf(rs.getString("state")));
     private static final RowMapper<ProjectionRow> PROJECTION_MAPPER =
-            (rs, row) ->
+            (rs, _) ->
                     new ProjectionRow(
                             rs.getObject("id", UUID.class),
                             rs.getObject("partition_id", UUID.class),
@@ -211,7 +211,7 @@ public class ProjectionReconciler {
 
     /** Fence một partition và các projection của nó; dùng trước khi sửa drift ngoài hệ thống. */
     public void fencePartition(UUID partitionId) {
-        transactions.executeWithoutResult(status -> {
+        transactions.executeWithoutResult(_ -> {
             jdbc.update(
                     "UPDATE authz_partition SET state = 'PENDING', updated_at = now()"
                             + " WHERE id = ? AND state = 'READY'",
@@ -288,13 +288,16 @@ public class ProjectionReconciler {
     }
 
     private void publish(PartitionRow snapshot, List<Outcome> outcomes) {
-        transactions.executeWithoutResult(status -> {
+        transactions.executeWithoutResult(_ -> {
             PartitionRow current =
-                    jdbc.queryForObject(
-                            "SELECT id, desired_revision, applied_revision, state"
-                                    + " FROM authz_partition WHERE id = ? FOR UPDATE",
-                            PARTITION_MAPPER,
-                            snapshot.id());
+                    Objects.requireNonNull(
+                            jdbc.queryForObject(
+                                    "SELECT id, desired_revision, applied_revision, state"
+                                            + " FROM authz_partition WHERE id = ? FOR UPDATE",
+                                    PARTITION_MAPPER,
+                                    snapshot.id()),
+                            "Authorization partition missing during reconciliation: "
+                                    + snapshot.id());
             if (current.desiredRevision() != snapshot.desiredRevision()) {
                 throw new ReconciliationException(
                         ERROR_REVISION_SUPERSEDED,
@@ -372,7 +375,7 @@ public class ProjectionReconciler {
                                         + " JOIN user_account u ON u.id = w.owner_user_id"
                                         + " WHERE w.id = ? AND w.kind = 'PERSONAL'"
                                         + " AND u.email_verified AND u.identity_state = 'ACTIVE'",
-                                (rs, row) ->
+                                (rs, _) ->
                                         personalOwnerDescriptor(
                                                 workspaceId,
                                                 rs.getObject(1, UUID.class),

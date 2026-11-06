@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Các template native cố định của hợp đồng authorization: realm group path, target key cùng scope
@@ -296,7 +297,7 @@ public final class NativePolicyTemplates {
         return "gk-root:" + targetKey + "#" + scope;
     }
 
-    private static UUID requireId(UUID id) {
+    private static UUID requireId(@Nullable UUID id) {
         if (id == null) {
             throw new IllegalArgumentException("Identifier is required");
         }

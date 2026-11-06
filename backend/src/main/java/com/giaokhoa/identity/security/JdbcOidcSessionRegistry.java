@@ -72,11 +72,12 @@ public final class JdbcOidcSessionRegistry implements OidcSessionRegistry {
         var removed =
                 jdbc.query(
                         "DELETE FROM oidc_session_correlation WHERE session_id = ?" + RETURNING,
-                        (rs, row) -> sessionInformation(rs),
+                        (rs, _) -> sessionInformation(rs),
                         sessionId);
         return removed.isEmpty() ? null : removed.getFirst();
     }
 
+    // Claim sid và sub có thể thiếu dù ECJ suy luận chúng luôn non-null.
     @Override
     public Iterable<OidcSessionInformation> removeSessionInformation(OidcLogoutToken logoutToken) {
         Assert.notNull(logoutToken, "logoutToken is required");
@@ -87,8 +88,8 @@ public final class JdbcOidcSessionRegistry implements OidcSessionRegistry {
             return List.of();
         }
 
-        String sid = logoutToken.getSessionId();
-        String subject = logoutToken.getSubject();
+        @Nullable String sid = logoutToken.getSessionId();
+        @Nullable String subject = logoutToken.getSubject();
         if (sid == null && subject == null) {
             return List.of();
         }
@@ -111,14 +112,14 @@ public final class JdbcOidcSessionRegistry implements OidcSessionRegistry {
         return sid != null && subject != null
                 ? jdbc.query(
                         sql,
-                        (rs, row) -> sessionInformation(rs),
+                        (rs, _) -> sessionInformation(rs),
                         logoutToken.getIssuer().toString(),
                         clientId,
                         sid,
                         subject)
                 : jdbc.query(
                         sql,
-                        (rs, row) -> sessionInformation(rs),
+                        (rs, _) -> sessionInformation(rs),
                         logoutToken.getIssuer().toString(),
                         clientId,
                         sid != null ? sid : subject);

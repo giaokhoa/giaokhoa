@@ -79,13 +79,13 @@ public class AuthorizationOperationService {
         idempotency.requireKey(idempotencyKey);
         validate(changes);
 
-        List<UUID> primaries = changes.stream().map(PartitionChange::partitionId).toList();
+        List<UUID> primaries = changes.stream().map(change -> change.partitionId()).toList();
         Closure closure = dependentClosure(primaries);
         // Khóa các primary và dependent closure trong MỘT thứ tự toàn cục — cùng thứ tự
         // IdempotencyService khóa — để hai mutation có closure giao nhau không thể
         // deadlock lẫn nhau; dependent chưa fence mà được tạo đồng thời vẫn bị
         // deferred partition trigger bắt tại thời điểm commit.
-        Set<UUID> lockOrder = new TreeSet<>(Comparator.comparing(UUID::toString));
+        Set<UUID> lockOrder = new TreeSet<>(Comparator.comparing(id -> id.toString()));
         lockOrder.addAll(primaries);
         lockOrder.addAll(closure.partitionIds());
         Map<UUID, Long> currentRevisions = new HashMap<>();
@@ -230,7 +230,7 @@ public class AuthorizationOperationService {
                                             ps.getConnection()
                                                     .createArrayOf(
                                                             "uuid", level.toArray(new UUID[0]))),
-                            (rs, row) ->
+                            (rs, _) ->
                                     new DependentRow(
                                             rs.getObject("id", UUID.class),
                                             rs.getObject("partition_id", UUID.class)));
@@ -300,6 +300,6 @@ public class AuthorizationOperationService {
     }
 
     private static List<UUID> sortedByUuidString(Set<UUID> ids) {
-        return ids.stream().sorted(Comparator.comparing(UUID::toString)).toList();
+        return ids.stream().sorted(Comparator.comparing(id -> id.toString())).toList();
     }
 }

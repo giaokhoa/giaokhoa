@@ -175,7 +175,7 @@ public record PolicyGraph(
         }
     }
 
-    private static List<Gate> canonicalGates(List<Gate> gates) {
+    private static List<Gate> canonicalGates(@Nullable List<Gate> gates) {
         if (gates == null) {
             return List.of();
         }

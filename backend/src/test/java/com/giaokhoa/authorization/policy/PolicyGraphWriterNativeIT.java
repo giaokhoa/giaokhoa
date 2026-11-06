@@ -74,7 +74,7 @@ class PolicyGraphWriterNativeIT {
                         Instant.now().plusSeconds(300));
         OAuth2AuthorizedClient serviceClient =
                 new OAuth2AuthorizedClient(serviceRegistration, CLIENT_ID, serviceAccessToken);
-        OAuth2AuthorizedClientManager serviceManager = request -> serviceClient;
+        OAuth2AuthorizedClientManager serviceManager = _ -> serviceClient;
         PolicyGraphWriter writer =
                 new PolicyGraphWriter(
                         RestClient.builder(), base, "giaokhoa", serviceManager, AUDIENCE, null);

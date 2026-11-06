@@ -1,7 +1,6 @@
 package com.giaokhoa.authorization.decision;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -55,9 +54,15 @@ class CapabilitiesControllerTest {
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         var target = Objects.requireNonNull(response.getBody()).targets().getFirst();
-        assertNull(target.id());
-        assertNull(target.versionId());
-        assertTrue(target.scopes().getFirst().allowed());
+        assertEquals(
+                new CapabilitiesController.TargetDecision(
+                        "PLATFORM",
+                        null,
+                        null,
+                        List.of(
+                                new CapabilitiesController.ScopeDecision(
+                                        "center.list", true, "ALLOWED"))),
+                target);
     }
 
     @Test
