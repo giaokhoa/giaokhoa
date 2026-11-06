@@ -182,6 +182,33 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
         }
     }
 
+    @Test
+    void nativeApiFixtureCleanupPreservesIndependentResourceServerGrants() {
+        // First graph owns the isolated TEST API client; second shares only its resource server.
+        try (var nativeGate = new NativeRevocationFixture();
+                var first =
+                        nativeGate.partiallyProvisionApplicationResource(
+                                "workspace:" + UUID.randomUUID(), "enter")) {
+            first.authorizeOwner();
+            String token = nativeGate.userToken();
+            assertTrue(first.allowed(token, first.resourceId()));
+            long originalPolicies = first.policyCount();
+            try (var second =
+                    nativeGate.partiallyProvisionApplicationResource(
+                            "workspace:" + UUID.randomUUID(), "enter")) {
+                second.authorizeOwner();
+                assertTrue(second.allowed(token, second.resourceId()));
+                assertTrue(first.allowed(token, first.resourceId()));
+                assertEquals(1, second.resourceCount());
+            }
+            assertTrue(first.allowed(token, first.resourceId()));
+            assertEquals(
+                    originalPolicies, first.policyCount(), "No extra policy after second cleanup");
+            assertEquals(
+                    1, first.resourceCount(), "The shared client owner still has its resource");
+        }
+    }
+
     private NativeSpringSessionFixture nativeSession(NativeRevocationFixture nativeGate)
             throws Exception {
         return new NativeSpringSessionFixture(
@@ -200,82 +227,106 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
     @EnumSource(PendingScope.class)
     void protectedCapabilitiesMustRejectCommittedPendingDependency(PendingScope pending)
             throws Exception {
-        // RED T018/T021: identical HTTP request before and after a committed fence.
-        // A handler that returns 503 to every request must NOT pass this contrast.
+        // RED T018/T021: identical authenticated HTTP request before and after committed fence.
         try (var nativeGate = new NativeRevocationFixture();
                 var session = nativeSession(nativeGate)) {
             ActorScope fixture = actorWithReadyPersonalWorkspace(nativeGate.userSubject());
             boolean requiresGrant =
                     pending == PendingScope.GRANT_PENDING || pending == PendingScope.GRANT_FAILED;
-            GrantScope affectedGrant =
-                    requiresGrant ? grantDependency(fixture, nativeGate.resourceId("a")) : null;
-            GrantScope independentGrant =
-                    requiresGrant ? grantDependency(fixture, nativeGate.resourceId("b")) : null;
-
-            String targetA =
-                    affectedGrant == null
-                            ? workspaceTarget(fixture.workspace())
-                            : versionTarget(affectedGrant);
-            String targetB = independentGrant == null ? null : versionTarget(independentGrant);
-            String token = session.currentAccessToken();
-            assertTrue(nativeGate.allowed(token, "a", requiresGrant ? "content.read" : "enter"));
-            if (requiresGrant) {
-                assertTrue(nativeGate.allowed(token, "b", "content.read"));
-            }
-
-            MockMvc mvc =
-                    MockMvcBuilders.webAppContextSetup(webContext)
-                            .addFilters(sessionFilter)
-                            .apply(springSecurity())
-                            .build();
-            MockHttpServletResponse readyA = capabilityResponse(mvc, fixture, session, targetA);
-            if (affectedGrant != null) {
-                UUID grantPartition = affectedGrant.partition();
-                tx(() -> {
-                    jdbc.update(
-                            "UPDATE authz_projection SET state = 'PENDING'"
-                                    + " WHERE partition_id = ?",
-                            grantPartition);
-                    jdbc.update(
-                            "UPDATE authz_partition SET desired_revision = 1, state = ?"
-                                    + " WHERE id = ?",
-                            pending == PendingScope.GRANT_FAILED ? "FAILED" : "PENDING",
-                            grantPartition);
-                    return null;
-                });
-                assertEquals("READY", state(fixture.workspacePartition()));
-                assertEquals("READY", state(fixture.account()));
-                assertEquals("READY", state(independentGrant.partition()));
-            } else {
-                tx(() -> {
-                    fence(fixture.partition(pending), 1);
-                    return null;
-                });
-            }
-            MockHttpServletResponse fencedA = capabilityResponse(mvc, fixture, session, targetA);
-            MockHttpServletResponse independentB =
-                    targetB == null ? null : capabilityResponse(mvc, fixture, session, targetB);
-            // Native A still has a grant: only the database fence may deny the request.
-            assertTrue(nativeGate.allowed(token, "a", requiresGrant ? "content.read" : "enter"));
-            if (independentB != null) {
-                assertTrue(nativeGate.allowed(token, "b", "content.read"));
-            }
-            assertAll(
-                    "T014_READY_AND_FENCED_" + pending,
-                    () -> assertReadyAllowed(readyA, "A_BEFORE_" + pending),
-                    () ->
-                            assertEquals(
-                                    HttpStatus.SERVICE_UNAVAILABLE.value(),
-                                    fencedA.getStatus(),
-                                    "T014_FENCED_EXPECT_503_"
-                                            + pending
-                                            + " actual HTTP="
-                                            + fencedA.getStatus()),
-                    () -> {
-                        if (independentB != null) {
-                            assertReadyAllowed(independentB, "INDEPENDENT_B_AFTER_" + pending);
-                        }
+            UUID resourceA = UUID.randomUUID();
+            UUID versionA = UUID.randomUUID();
+            UUID resourceB = UUID.randomUUID();
+            UUID versionB = UUID.randomUUID();
+            String keyA =
+                    requiresGrant
+                            ? versionTargetKey(fixture.workspace(), resourceA, versionA)
+                            : "workspace:" + fixture.workspace();
+            String keyB = versionTargetKey(fixture.workspace(), resourceB, versionB);
+            try (var apiGraph =
+                    nativeGate.partiallyProvisionApplicationResource(
+                            keyA, requiresGrant ? "content.read" : "enter")) {
+                apiGraph.authorizeOwner(); // Native Keycloak user policy on the TEST API audience.
+                String keycloakResourceB =
+                        requiresGrant ? apiGraph.addAuthorizedResource(keyB) : null;
+                GrantScope affectedGrant =
+                        requiresGrant
+                                ? grantDependency(
+                                        fixture, resourceA, versionA, apiGraph.resourceId())
+                                : null;
+                GrantScope independentGrant =
+                        requiresGrant
+                                ? grantDependency(fixture, resourceB, versionB, keycloakResourceB)
+                                : null;
+                String targetA =
+                        affectedGrant == null
+                                ? workspaceTarget(fixture.workspace())
+                                : versionTarget(affectedGrant);
+                String targetB = independentGrant == null ? null : versionTarget(independentGrant);
+                String token = session.currentAccessToken();
+                assertTrue(
+                        apiGraph.allowed(token, apiGraph.resourceId()),
+                        "Native READY A must allow via TEST API audience");
+                if (requiresGrant) {
+                    assertTrue(
+                            apiGraph.allowed(token, keycloakResourceB),
+                            "Native independent READY B must allow via TEST API audience");
+                }
+                MockMvc mvc =
+                        MockMvcBuilders.webAppContextSetup(webContext)
+                                .addFilters(sessionFilter)
+                                .apply(springSecurity())
+                                .build();
+                MockHttpServletResponse readyA = capabilityResponse(mvc, fixture, session, targetA);
+                if (affectedGrant != null) {
+                    UUID grantPartition = affectedGrant.partition();
+                    tx(() -> {
+                        jdbc.update(
+                                "UPDATE authz_projection SET state = 'PENDING'"
+                                        + " WHERE partition_id = ?",
+                                grantPartition);
+                        jdbc.update(
+                                "UPDATE authz_partition SET desired_revision = 1, state = ?"
+                                        + " WHERE id = ?",
+                                pending == PendingScope.GRANT_FAILED ? "FAILED" : "PENDING",
+                                grantPartition);
+                        return null;
                     });
+                    assertEquals("READY", state(fixture.workspacePartition()));
+                    assertEquals("READY", state(fixture.account()));
+                    assertEquals("READY", state(independentGrant.partition()));
+                } else {
+                    tx(() -> {
+                        fence(fixture.partition(pending), 1);
+                        return null;
+                    });
+                }
+                MockHttpServletResponse fencedA =
+                        capabilityResponse(mvc, fixture, session, targetA);
+                MockHttpServletResponse independentB =
+                        targetB == null ? null : capabilityResponse(mvc, fixture, session, targetB);
+                assertTrue(
+                        apiGraph.allowed(token, apiGraph.resourceId()),
+                        "Native A remains allowed; the DB fence must deny.");
+                if (independentB != null) {
+                    assertTrue(apiGraph.allowed(token, keycloakResourceB));
+                }
+                assertAll(
+                        "T014_READY_AND_FENCED_" + pending,
+                        () -> assertReadyAllowed(readyA, "A_BEFORE_" + pending),
+                        () ->
+                                assertEquals(
+                                        HttpStatus.SERVICE_UNAVAILABLE.value(),
+                                        fencedA.getStatus(),
+                                        "T014_FENCED_EXPECT_503_"
+                                                + pending
+                                                + " actual HTTP="
+                                                + fencedA.getStatus()),
+                        () -> {
+                            if (independentB != null) {
+                                assertReadyAllowed(independentB, "INDEPENDENT_B_AFTER_" + pending);
+                            }
+                        });
+            }
         }
     }
 
@@ -423,11 +474,14 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
 
     private record GrantScope(UUID partition, UUID resource, UUID version) {}
 
-    private GrantScope grantDependency(ActorScope fixture, String keycloakResourceId) {
+    private String versionTargetKey(UUID workspace, UUID resource, UUID version) {
+        return "workspace:" + workspace + ":resource:" + resource + ":version:" + version;
+    }
+
+    private GrantScope grantDependency(
+            ActorScope fixture, UUID resource, UUID version, String keycloakResourceId) {
         return tx(() -> {
             UUID grant = UUID.randomUUID();
-            UUID resource = UUID.randomUUID();
-            UUID version = UUID.randomUUID();
             jdbc.update(
                     "INSERT INTO authz_partition(id,kind,owner_key)" + " VALUES (?,'GRANT',?)",
                     grant,
@@ -439,12 +493,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                             + " VALUES (?,?,?,?,ARRAY[?::uuid],?,?,'READY')",
                     UUID.randomUUID(),
                     grant,
-                    "workspace:"
-                            + fixture.workspace()
-                            + ":resource:"
-                            + resource
-                            + ":version:"
-                            + version,
+                    versionTargetKey(fixture.workspace(), resource, version),
                     keycloakResourceId,
                     fixture.workspacePartition(),
                     "a".repeat(64),
@@ -502,135 +551,193 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
     @Tag("t014-pending")
     @Test
     void productionWorkerMustReconcilePartiallyProvisionedAppGraphAfterRetry() throws Exception {
-        // RED T016/T017: real Keycloak resource is already provisioned in the application's
-        // TEST API audience; the policy/permission is missing after a simulated worker crash.
-        // No test-only graph writer, fake PDP, or fake worker is involved.
-        try (var nativeGate = new NativeRevocationFixture();
-                var graph = nativeGate.partiallyProvisionApplicationResource()) {
+        // RED T016/T017: the source is an actual PERSONAL owner in V001, not a fabricated
+        // share_grant (which has no production schema before the later user-story tasks).
+        try (var nativeGate = new NativeRevocationFixture()) {
             ActorScope actor = actorWithReadyPersonalWorkspace(nativeGate.userSubject());
-            UUID grant = UUID.randomUUID();
-            UUID projection = UUID.randomUUID();
-            UUID version = UUID.randomUUID();
-            var operation =
-                    new AuthorizationOperation(
-                            UUID.randomUUID(),
+            String targetKey = "workspace:" + actor.workspace();
+            String scope = "enter";
+            // The writer can reconstruct this owner-source graph intent from durable V001 rows.
+            String canonicalSource =
+                    jdbc.queryForObject(
+                            """
+                            SELECT concat('PERSONAL_OWNER|workspace=',w.id,
+                                '|user=',u.id,'|subject=',u.keycloak_sub,
+                                '|target=workspace:',w.id,'|scope=enter')
+                            FROM workspace w JOIN user_account u ON u.id=w.owner_user_id
+                            WHERE w.id=? AND w.kind='PERSONAL'
+                                AND u.email_verified AND u.identity_state='ACTIVE'
+                            """,
+                            String.class,
+                            actor.workspace());
+            assertNotNull(canonicalSource, "Expected an eligible durable personal owner source");
+            String desiredHash = hashOf(canonicalSource);
+            try (var graph = nativeGate.partiallyProvisionApplicationResource(targetKey, scope)) {
+                UUID projection = UUID.randomUUID();
+                var operation =
+                        new AuthorizationOperation(
+                                UUID.randomUUID(),
+                                actor.actor(),
+                                actor.workspace(),
+                                "t014-partial-provision-retry",
+                                desiredHash,
+                                new UUID[] {actor.account(), actor.workspacePartition()},
+                                new Long[] {0L, 1L},
+                                0L);
+                tx(() -> {
+                    // This is a real source the T016 graph writer can reconstruct: native user
+                    // policy for workspace.owner_user_id, evaluated for targetKey#enter.
+                    assertEquals(
                             actor.actor(),
-                            actor.workspace(),
-                            "t014-partial-provision-retry",
-                            "b".repeat(64),
-                            new UUID[] {actor.account(), actor.workspacePartition(), grant},
-                            new Long[] {0L, 0L, 1L},
-                            0L);
-            tx(() -> {
-                jdbc.update(
-                        "INSERT INTO authz_partition"
-                                + "(id,kind,owner_key,desired_revision,state)"
-                                + " VALUES (?,'GRANT',?,1,'PENDING')",
-                        grant,
-                        "grant:" + grant);
-                jdbc.update(
-                        "INSERT INTO authz_projection"
-                                + "(id,partition_id,target_key,keycloak_resource_id,"
-                                + "dependency_partition_ids,desired_hash,state)"
-                                + " VALUES (?,?,?,?,ARRAY[?::uuid,?::uuid],?,'PENDING')",
-                        projection,
-                        grant,
-                        "workspace:"
-                                + actor.workspace()
-                                + ":resource:"
-                                + UUID.randomUUID()
-                                + ":version:"
-                                + version,
-                        graph.resourceId(),
-                        actor.account(),
-                        actor.workspacePartition(),
-                        "b".repeat(64));
-                idempotency.executeOnce(operation, () -> {});
-                jdbc.update(
-                        "UPDATE authorization_operation SET state='RETRYABLE_FAILURE',"
-                                + " attempt_count=1,next_attempt_at=now(),"
-                                + " last_error_code='PARTIAL_KEYCLOAK_PROVISION'"
-                                + " WHERE id=?",
-                        operation.getId());
-                return null;
-            });
-            assertEquals(1, graph.resourceCount(), "Partial native resource must exist already");
-            long policiesBefore = graph.policyCount();
-            assertEquals(0, graph.permissionCount(), "Permission is absent at crash point");
-            assertEquals("PENDING", state(grant), "Grant must stay fenced until recovery");
-            assertEquals(
-                    HttpStatus.ACCEPTED,
-                    tx(() ->
-                            idempotency
-                                    .responseFor(
-                                            idempotency
-                                                    .findExisting(
-                                                            actor.actor(),
-                                                            "t014-partial-provision-retry",
-                                                            "b".repeat(64))
-                                                    .orElseThrow())
-                                    .getStatusCode()));
-            assertTrue(
-                    webContext.containsBean("projectionWorker"),
-                    "T014_WORKER_NOT_INSTALLED: T017 must resume an existing partial "
-                            + "resource via production PolicyGraphWriter/ProjectionReconciler");
-
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
-            while (System.nanoTime() < deadline) {
-                boolean done =
-                        "READY".equals(state(grant))
-                                && "SUCCEEDED"
-                                        .equals(
-                                                jdbc.queryForObject(
-                                                        "SELECT state FROM authorization_operation"
-                                                                + " WHERE id=?",
-                                                        String.class,
-                                                        operation.getId()));
-                if (done) {
-                    break;
-                }
-                Thread.sleep(100);
-            }
-            assertAll(
-                    "T014_REAL_WORKER_PARTIAL_GRAPH_RECOVERY",
-                    () -> assertEquals("READY", state(grant), "Grant must be reconciled"),
-                    () ->
-                            assertEquals(
-                                    "SUCCEEDED",
-                                    jdbc.queryForObject(
-                                            "SELECT state FROM authorization_operation WHERE id=?",
-                                            String.class,
-                                            operation.getId())),
-                    () ->
-                            assertEquals(
-                                    "b".repeat(64),
-                                    jdbc.queryForObject(
-                                            "SELECT applied_hash FROM authz_projection WHERE id=?",
-                                            String.class,
-                                            projection)),
-                    () -> assertEquals(1, graph.resourceCount(), "Retry may not clone resource"),
-                    () ->
-                            assertTrue(
-                                    graph.policyCount() > policiesBefore,
-                                    "Retry must finish the missing native policy, not only a resource"),
-                    () ->
-                            assertEquals(
-                                    1,
-                                    graph.permissionCount(),
-                                    "Exactly one scope permission must reference the resource"));
-            tx(() -> {
+                            jdbc.queryForObject(
+                                    "SELECT owner_user_id FROM workspace WHERE id=?",
+                                    UUID.class,
+                                    actor.workspace()));
+                    assertEquals(
+                            nativeGate.userSubject(),
+                            jdbc.queryForObject(
+                                    "SELECT keycloak_sub FROM user_account WHERE id=?",
+                                    String.class,
+                                    actor.actor()));
+                    fence(actor.workspacePartition(), 1);
+                    jdbc.update(
+                            "INSERT INTO authz_projection"
+                                    + "(id,partition_id,target_key,keycloak_resource_id,"
+                                    + "dependency_partition_ids,desired_hash,state)"
+                                    + " VALUES (?,?,?,?,ARRAY[?::uuid],?,'PENDING')",
+                            projection,
+                            actor.workspacePartition(),
+                            targetKey,
+                            graph.resourceId(),
+                            actor.account(),
+                            desiredHash);
+                    idempotency.executeOnce(operation, () -> {});
+                    jdbc.update(
+                            "UPDATE authorization_operation SET state='RETRYABLE_FAILURE',"
+                                    + " attempt_count=1,next_attempt_at=now(),"
+                                    + " last_error_code='PARTIAL_KEYCLOAK_PROVISION'"
+                                    + " WHERE id=?",
+                            operation.getId());
+                    return null;
+                });
+                graph.cleanupProjectedPolicies(() -> projectionPolicies(projection));
+                assertEquals(1, graph.resourceCount(), "Native workspace resource exists already");
+                long policiesBefore = graph.policyCount();
+                assertEquals(0, graph.permissionCount(), "Permission absent at crash point");
+                assertFalse(
+                        graph.allowed(
+                                nativeGate.webTokensViaCodePkce().accessToken(),
+                                graph.resourceId()),
+                        "Partial TEST API graph must be native PDP-denied until worker reconciles");
                 assertEquals(
-                        operation.getId(),
-                        idempotency
-                                .executeOnce(
-                                        operation,
-                                        () -> fail("Replay must not create another operation"))
-                                .getId());
-                return null;
-            });
-            assertEquals(1, graph.resourceCount());
-            assertEquals(1, graph.permissionCount());
+                        "PENDING",
+                        state(actor.workspacePartition()),
+                        "Workspace stays fenced until native reconciliation");
+                assertEquals(
+                        HttpStatus.ACCEPTED,
+                        tx(() ->
+                                idempotency
+                                        .responseFor(
+                                                idempotency
+                                                        .findExisting(
+                                                                actor.actor(),
+                                                                "t014-partial-provision-retry",
+                                                                desiredHash)
+                                                        .orElseThrow())
+                                        .getStatusCode()));
+                assertTrue(
+                        webContext.containsBean("projectionWorker"),
+                        "T014_WORKER_NOT_INSTALLED: T017 must resume owner source through"
+                                + " production PolicyGraphWriter/ProjectionReconciler");
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+                while (System.nanoTime() < deadline) {
+                    boolean done =
+                            "READY".equals(state(actor.workspacePartition()))
+                                    && "SUCCEEDED"
+                                            .equals(
+                                                    jdbc.queryForObject(
+                                                            "SELECT state FROM authorization_operation"
+                                                                    + " WHERE id=?",
+                                                            String.class,
+                                                            operation.getId()));
+                    if (done) {
+                        break;
+                    }
+                    Thread.sleep(100);
+                }
+                assertAll(
+                        "T014_REAL_WORKER_PARTIAL_GRAPH_RECOVERY",
+                        () ->
+                                assertEquals(
+                                        "READY",
+                                        state(actor.workspacePartition()),
+                                        "Rebuilt owner workspace must be READY"),
+                        () ->
+                                assertEquals(
+                                        "SUCCEEDED",
+                                        jdbc.queryForObject(
+                                                "SELECT state FROM authorization_operation WHERE id=?",
+                                                String.class,
+                                                operation.getId())),
+                        () ->
+                                assertEquals(
+                                        desiredHash,
+                                        jdbc.queryForObject(
+                                                "SELECT applied_hash FROM authz_projection WHERE id=?",
+                                                String.class,
+                                                projection)),
+                        () ->
+                                assertFalse(
+                                        projectionPolicies(projection).isEmpty(),
+                                        "Writer must record exact native policy names for future cleanup"),
+                        () ->
+                                assertEquals(
+                                        1, graph.resourceCount(), "Retry may not clone resource"),
+                        () ->
+                                assertTrue(
+                                        graph.policyCount() > policiesBefore,
+                                        "Retry must install the missing native owner policy"),
+                        () ->
+                                assertEquals(
+                                        1,
+                                        graph.permissionCount(),
+                                        "Exactly one scope permission must reference this resource"),
+                        () ->
+                                assertTrue(
+                                        graph.allowed(
+                                                nativeGate.webTokensViaCodePkce().accessToken(),
+                                                graph.resourceId()),
+                                        "Owner policy must be granted by TEST API audience PDP"));
+                tx(() -> {
+                    assertEquals(
+                            operation.getId(),
+                            idempotency
+                                    .executeOnce(
+                                            operation,
+                                            () -> fail("Retry must not create another operation"))
+                                    .getId());
+                    return null;
+                });
+                assertEquals(1, graph.resourceCount());
+                assertEquals(1, graph.permissionCount());
+            }
         }
+    }
+
+    private List<String> projectionPolicies(UUID projection) {
+        String[] names =
+                jdbc.queryForObject(
+                        "SELECT policy_names FROM authz_projection WHERE id=?",
+                        (rs, rowNum) -> (String[]) rs.getArray(1).getArray(),
+                        projection);
+        return java.util.Arrays.asList(java.util.Objects.requireNonNull(names));
+    }
+
+    private String hashOf(String source) throws Exception {
+        byte[] digest =
+                java.security.MessageDigest.getInstance("SHA-256")
+                        .digest(source.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return java.util.HexFormat.of().formatHex(digest);
     }
 
     @Test

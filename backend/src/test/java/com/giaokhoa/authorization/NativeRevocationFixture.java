@@ -295,7 +295,7 @@ final class NativeRevocationFixture implements AutoCloseable {
      * Fault fixture for T017: native resource exists in the TEST application's API audience, but
      * scope permission/policy has not yet been provisioned. Never touch DEV.
      */
-    PartialApplicationGraph partiallyProvisionApplicationResource() {
+    PartialApplicationGraph partiallyProvisionApplicationResource(String targetKey, String scope) {
         String audience = required("TEST_KEYCLOAK_AUTHZ_AUDIENCE");
         if (!"giaokhoa-it-api".equals(audience)) {
             throw new IllegalArgumentException("T014 partial graph requires TEST API audience");
@@ -348,7 +348,7 @@ final class NativeRevocationFixture implements AutoCloseable {
             }
             var scopes =
                     getList(root + "/scope").stream()
-                            .filter(item -> "content.read".equals(item.get("name")))
+                            .filter(item -> scope.equals(item.get("name")))
                             .toList();
             if (scopes.size() > SINGLE_CLIENT) {
                 throw new IllegalStateException("Duplicate native content.read scope");
@@ -356,9 +356,9 @@ final class NativeRevocationFixture implements AutoCloseable {
             ownedScope = scopes.isEmpty();
             scopeId =
                     ownedScope
-                            ? create(root + "/scope", Map.of("name", "content.read"))
+                            ? create(root + "/scope", Map.of("name", scope))
                             : String.valueOf(scopes.getFirst().get("id"));
-            String name = "t014-partial-" + UUID.randomUUID();
+            String name = targetKey;
             resourceId =
                     create(
                             root + "/resource",
@@ -368,10 +368,10 @@ final class NativeRevocationFixture implements AutoCloseable {
                                     "ownerManagedAccess",
                                     false,
                                     "scopes",
-                                    List.of(Map.of("id", scopeId, "name", "content.read"))));
+                                    List.of(Map.of("id", scopeId, "name", scope))));
             created = true;
             return new PartialApplicationGraph(
-                    appClient, name, resourceId, scopeId, ownedClient, ownedScope);
+                    appClient, name, resourceId, scopeId, scope, ownedClient, ownedScope);
         } finally {
             if (!created) {
                 if (ownedClient) {
@@ -392,27 +392,113 @@ final class NativeRevocationFixture implements AutoCloseable {
         private final String appClient;
         private final String name;
         private final String resource;
-        private final String scope;
+        private final String scopeId;
+        private final String scopeName;
         private final boolean ownedClient;
         private final boolean ownedScope;
+        private final List<String> ownedResources = new java.util.ArrayList<>();
+        private final List<String> ownedPolicies = new java.util.ArrayList<>();
+        private java.util.function.Supplier<List<String>> projectionPolicyNames = List::of;
 
         PartialApplicationGraph(
                 String appClient,
                 String name,
                 String resource,
-                String scope,
+                String scopeId,
+                String scopeName,
                 boolean ownedClient,
                 boolean ownedScope) {
             this.appClient = appClient;
             this.name = name;
             this.resource = resource;
-            this.scope = scope;
+            this.scopeId = scopeId;
+            this.scopeName = scopeName;
             this.ownedClient = ownedClient;
             this.ownedScope = ownedScope;
+            ownedResources.add(resource);
         }
 
         String resourceId() {
             return resource;
+        }
+
+        void cleanupProjectedPolicies(java.util.function.Supplier<List<String>> names) {
+            // Production T016 records the exact owned native policy names in authz_projection.
+            // Read them at close, after the worker had a chance to write them.
+            projectionPolicyNames = names;
+        }
+
+        String addAuthorizedResource(String targetKey) {
+            String nextResource =
+                    create(
+                            root() + "/resource",
+                            Map.of(
+                                    "name",
+                                    targetKey,
+                                    "ownerManagedAccess",
+                                    false,
+                                    "scopes",
+                                    List.of(Map.of("id", scopeId, "name", scopeName))));
+            ownedResources.add(nextResource);
+            authorizeOwner(nextResource, targetKey);
+            return nextResource;
+        }
+
+        void authorizeOwner() {
+            authorizeOwner(resource, name);
+        }
+
+        private void authorizeOwner(String id, String targetKey) {
+            // User policy is the native projection of the actual logged-in recipient/owner.
+            String sourcePolicy =
+                    create(
+                            root() + "/policy/user",
+                            Map.of(
+                                    "name", "t014-owner-" + targetKey,
+                                    "type", "user",
+                                    "logic", "POSITIVE",
+                                    "decisionStrategy", "UNANIMOUS",
+                                    "users", List.of(userId)));
+            ownedPolicies.add(sourcePolicy);
+            create(
+                    root() + "/permission/scope",
+                    Map.of(
+                            "name",
+                            "t014-scope-" + targetKey,
+                            "type",
+                            "scope",
+                            "decisionStrategy",
+                            "UNANIMOUS",
+                            "resources",
+                            List.of(id),
+                            "scopes",
+                            List.of(scopeId),
+                            "policies",
+                            List.of(sourcePolicy)));
+        }
+
+        boolean allowed(String userToken, String resourceId) {
+            var form = new LinkedMultiValueMap<String, String>();
+            form.add("grant_type", "urn:ietf:params:oauth:grant-type:uma-ticket");
+            form.add("audience", required("TEST_KEYCLOAK_AUTHZ_AUDIENCE"));
+            form.add("permission", resourceId + "#" + scopeName);
+            form.add("response_mode", "decision");
+            var response =
+                    http.post()
+                            .uri(base + "/realms/giaokhoa-it/protocol/openid-connect/token")
+                            .headers(headers -> headers.setBearerAuth(userToken))
+                            .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                            .body(form)
+                            .retrieve()
+                            .onStatus(
+                                    status -> status == HttpStatus.FORBIDDEN,
+                                    (request, reply) -> {})
+                            .toEntity(MAP);
+            if (response.getStatusCode() == HttpStatus.FORBIDDEN) {
+                return false;
+            }
+            assertEquals(200, response.getStatusCode().value());
+            return NativeGateClient.requireDecision(response.getBody());
         }
 
         int resourceCount() {
@@ -442,11 +528,59 @@ final class NativeRevocationFixture implements AutoCloseable {
         public void close() {
             if (ownedClient) {
                 delete("/clients/" + appClient);
-            } else {
-                delete(root() + "/resource/" + resource);
-                if (ownedScope) {
-                    delete(root() + "/scope/" + scope);
+                return;
+            }
+            // Remove permissions first, including those provisioned by the real writer on our
+            // unique resource. Never delete shared policies/scopes or unrelated API resources.
+            for (String id : ownedResources) {
+                for (Map<String, Object> permission : getList(root() + "/permission/scope")) {
+                    if (String.valueOf(permission.get("resources")).contains(id)) {
+                        delete(root() + "/permission/scope/" + permission.get("id"));
+                    }
                 }
+            }
+            for (String id : ownedPolicies) {
+                delete(root() + "/policy/" + id);
+            }
+            // Only policies named by this projection can be garbage-collected.
+            // Shared policies still referenced by unrelated resources are preserved.
+            List<String> projected = projectionPolicyNames.get();
+            int remaining = projected.size();
+            while (remaining > 0) {
+                remaining--;
+                boolean deleted = false;
+                List<Map<String, Object>> policies = getList(root() + "/policy");
+                List<Map<String, Object>> permissions = getList(root() + "/permission/scope");
+                for (Map<String, Object> policy : policies) {
+                    if (!projected.contains(policy.get("name"))) {
+                        continue;
+                    }
+                    String id = String.valueOf(policy.get("id"));
+                    boolean stillInUse =
+                            permissions.stream()
+                                            .anyMatch(permission ->
+                                                    String.valueOf(permission.get("policies"))
+                                                            .contains(id))
+                                    || policies.stream()
+                                            .filter(other -> !id.equals(other.get("id")))
+                                            .anyMatch(other ->
+                                                    String.valueOf(other.get("policies"))
+                                                            .contains(id));
+                    if (!stillInUse) {
+                        delete(root() + "/policy/" + id);
+                        deleted = true;
+                        break;
+                    }
+                }
+                if (!deleted) {
+                    break; // No further test-owned policies can be removed safely.
+                }
+            }
+            for (String id : ownedResources) {
+                delete(root() + "/resource/" + id);
+            }
+            if (ownedScope) {
+                delete(root() + "/scope/" + scopeId);
             }
         }
     }
