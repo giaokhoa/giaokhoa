@@ -33,6 +33,7 @@ class PolicyGraphWriterTest {
     private static final String ROOT =
             HOST + "/admin/realms/giaokhoa/clients/api-uuid/authz/resource-server";
     private static final String LIST = "?first=0&max=1000";
+    private static final String PAGE2 = "?first=1000&max=1000";
     private static final UUID WORKSPACE = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
     private static final String TARGET = "workspace:" + WORKSPACE;
     private static final String ELIGIBLE = "/gk/identity/eligible";
@@ -341,6 +342,209 @@ class PolicyGraphWriterTest {
 
         assertThrows(IllegalStateException.class, () -> writer.apply(graph));
         server.verify();
+    }
+
+    @Test
+    void usesTheExistingPolicyWhenAConcurrentCreateConflicts() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PolicyGraphWriter writer = writer(builder);
+        PolicyGraph graph =
+                PolicyGraph.forEligibleActor(
+                        TARGET, "enter", List.of(Source.of(new Gate.GroupMembership(OWNERS))));
+
+        expectClients(server);
+        expectGet(server, ROOT + "/scope" + LIST, "[]");
+        expectCreate(server, ROOT + "/scope", "{\"id\":\"scope-enter\"}");
+        expectGet(server, ROOT + "/resource" + LIST, "[]");
+        expectCreate(server, ROOT + "/resource", "{\"_id\":\"res-1\"}");
+        expectGet(server, ROOT + "/policy" + LIST, "[]");
+        expectGroup(server, ELIGIBLE, "g-elig");
+        // A concurrent apply created the shared eligibility policy first.
+        server.expect(requestTo(ROOT + "/policy/group"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.CONFLICT));
+        expectGet(
+                server,
+                ROOT + "/policy" + LIST,
+                "[{\"id\":\"pol-elig\",\"name\":\"gk-group:"
+                        + ELIGIBLE
+                        + "\",\"type\":\"group\"}]");
+        expectGroup(server, OWNERS, "g-own");
+        expectCreate(server, ROOT + "/policy/group", "{\"id\":\"pol-own\"}");
+        expectGet(server, ROOT + "/permission/scope" + LIST, "[]");
+        expectCreate(
+                server,
+                ROOT + "/permission/scope",
+                "{\"id\":\"perm-1\"}",
+                "{\"name\":\"" + ROOT_NAME + "\",\"policies\":[\"pol-elig\",\"pol-own\"]}");
+        expectGet(
+                server,
+                ROOT + "/permission/scope/perm-1",
+                "{\"id\":\"perm-1\",\"policies\":[\"pol-elig\",\"pol-own\"],"
+                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}");
+        expectGet(
+                server,
+                ROOT + "/resource/res-1",
+                "{\"_id\":\"res-1\",\"name\":\""
+                        + TARGET
+                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
+
+        PolicyGraphWriter.AppliedGraph applied = writer.apply(graph);
+        assertEquals(List.of("gk-group:" + ELIGIBLE, "gk-group:" + OWNERS), applied.policyNames());
+        server.verify();
+    }
+
+    @Test
+    void usesTheExistingAggregateWhenAConcurrentCreateConflicts() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PolicyGraphWriter writer = writer(builder);
+        PolicyGraph graph =
+                new PolicyGraph(
+                        TARGET,
+                        "enter",
+                        List.of(
+                                Source.of(new Gate.GroupMembership(OWNERS)),
+                                Source.of(new Gate.GroupMembership(MANAGERS))));
+
+        expectClients(server);
+        expectGet(server, ROOT + "/scope" + LIST, "[]");
+        expectCreate(server, ROOT + "/scope", "{\"id\":\"scope-enter\"}");
+        expectGet(server, ROOT + "/resource" + LIST, "[]");
+        expectCreate(server, ROOT + "/resource", "{\"_id\":\"res-1\"}");
+        expectGet(server, ROOT + "/policy" + LIST, "[]");
+        expectGroup(server, MANAGERS, "g-mgr");
+        expectCreate(server, ROOT + "/policy/group", "{\"id\":\"pol-mgr\"}");
+        expectGroup(server, OWNERS, "g-own");
+        expectCreate(server, ROOT + "/policy/group", "{\"id\":\"pol-own\"}");
+        // A concurrent apply created this pair's OR aggregate first.
+        server.expect(requestTo(ROOT + "/policy/aggregate"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.CONFLICT));
+        expectGet(
+                server,
+                ROOT + "/policy" + LIST,
+                "[{\"id\":\"pol-mgr\",\"name\":\"gk-group:"
+                        + MANAGERS
+                        + "\",\"type\":\"group\"},"
+                        + "{\"id\":\"pol-own\",\"name\":\"gk-group:"
+                        + OWNERS
+                        + "\",\"type\":\"group\"},"
+                        + "{\"id\":\"pol-any\",\"name\":\""
+                        + ANY_NAME
+                        + "\",\"type\":\"aggregate\"}]");
+        expectGet(
+                server,
+                ROOT + "/policy/aggregate/pol-any",
+                "{\"id\":\"pol-any\",\"policies\":[\"pol-mgr\",\"pol-own\"]}");
+        expectGet(server, ROOT + "/permission/scope" + LIST, "[]");
+        expectCreate(
+                server,
+                ROOT + "/permission/scope",
+                "{\"id\":\"perm-1\"}",
+                "{\"name\":\"" + ROOT_NAME + "\",\"policies\":[\"pol-any\"]}");
+        expectGet(
+                server,
+                ROOT + "/permission/scope/perm-1",
+                "{\"id\":\"perm-1\",\"policies\":[\"pol-any\"],"
+                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}");
+        expectGet(
+                server,
+                ROOT + "/resource/res-1",
+                "{\"_id\":\"res-1\",\"name\":\""
+                        + TARGET
+                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
+
+        PolicyGraphWriter.AppliedGraph applied = writer.apply(graph);
+        assertEquals(
+                List.of(ANY_NAME, "gk-group:" + MANAGERS, "gk-group:" + OWNERS),
+                applied.policyNames());
+        server.verify();
+    }
+
+    @Test
+    void findsTheScopeOnTheSecondPageWhenApplying() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PolicyGraphWriter writer = writer(builder);
+        PolicyGraph graph =
+                new PolicyGraph(
+                        TARGET, "enter", List.of(Source.of(new Gate.GroupMembership(OWNERS))));
+
+        expectClients(server);
+        expectGet(server, ROOT + "/scope" + LIST, dummyPage("scope", 1000));
+        expectGet(server, ROOT + "/scope" + PAGE2, "[{\"id\":\"scope-enter\",\"name\":\"enter\"}]");
+        expectGet(server, ROOT + "/resource" + LIST, "[]");
+        expectCreate(server, ROOT + "/resource", "{\"_id\":\"res-1\"}");
+        expectGet(server, ROOT + "/policy" + LIST, "[]");
+        expectGroup(server, OWNERS, "g-own");
+        expectCreate(server, ROOT + "/policy/group", "{\"id\":\"pol-own\"}");
+        expectGet(server, ROOT + "/permission/scope" + LIST, "[]");
+        expectCreate(server, ROOT + "/permission/scope", "{\"id\":\"perm-1\"}");
+        expectGet(
+                server,
+                ROOT + "/permission/scope/perm-1",
+                "{\"id\":\"perm-1\",\"policies\":[\"pol-own\"],"
+                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}");
+        expectGet(
+                server,
+                ROOT + "/resource/res-1",
+                "{\"_id\":\"res-1\",\"name\":\""
+                        + TARGET
+                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
+
+        PolicyGraphWriter.AppliedGraph applied = writer.apply(graph);
+        assertEquals(List.of("gk-group:" + OWNERS), applied.policyNames());
+        server.verify();
+    }
+
+    @Test
+    void findsTheRootPermissionAndAggregateOnSecondPagesWhenRetracting() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PolicyGraphWriter writer = writer(builder);
+
+        expectClients(server);
+        expectGet(server, ROOT + "/permission/scope" + LIST, dummyPage("perm", 1000));
+        expectGet(
+                server,
+                ROOT + "/permission/scope" + PAGE2,
+                "[{\"id\":\"perm-1\",\"name\":\"" + ROOT_NAME + "\"}]");
+        server.expect(requestTo(ROOT + "/permission/scope/perm-1"))
+                .andExpect(method(HttpMethod.DELETE))
+                .andRespond(withNoContent());
+        expectGet(server, ROOT + "/policy" + LIST, dummyPage("pol", 1000));
+        expectGet(
+                server,
+                ROOT + "/policy" + PAGE2,
+                "[{\"id\":\"pol-any\",\"name\":\"" + ANY_NAME + "\",\"type\":\"aggregate\"}]");
+        server.expect(requestTo(ROOT + "/policy/pol-any"))
+                .andExpect(method(HttpMethod.DELETE))
+                .andRespond(withNoContent());
+
+        writer.retractRoot(TARGET, "enter");
+        server.verify();
+    }
+
+    /** A full page of unrelated entries, so only a later page can hold the wanted name. */
+    private static String dummyPage(String kind, int count) {
+        StringBuilder json = new StringBuilder("[");
+        for (int i = 0; i < count; i++) {
+            if (i > 0) {
+                json.append(',');
+            }
+            json.append("{\"id\":\"")
+                    .append(kind)
+                    .append('-')
+                    .append(i)
+                    .append("\",\"name\":\"")
+                    .append(kind)
+                    .append('-')
+                    .append(i)
+                    .append("\"}");
+        }
+        return json.append(']').toString();
     }
 
     private void expectClients(MockRestServiceServer server) {

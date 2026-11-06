@@ -44,6 +44,7 @@ public class PolicyGraphWriter {
     private static final String UNANIMOUS = "UNANIMOUS";
     private static final String AFFIRMATIVE = "AFFIRMATIVE";
     private static final int SINGLE = 1;
+    private static final int PAGE_SIZE = 1000;
     private static final ParameterizedTypeReference<List<Map<String, Object>>> MAP_LIST =
             new ParameterizedTypeReference<>() {};
     private static final ParameterizedTypeReference<Map<String, Object>> MAP =
@@ -296,17 +297,36 @@ public class PolicyGraphWriter {
             Map<String, Object> payload) {
         Map<String, Object> existing = policies.get(name);
         if (existing != null) {
-            if (!type.equals(existing.get("type"))) {
-                throw new IllegalStateException(
-                        "Native policy name collision with another type: " + name);
-            }
-            return String.valueOf(existing.get("id"));
+            return existingPolicyId(existing, name, type);
         }
-        String id = create(root + "/policy/" + type, payload);
+        String id;
+        try {
+            id = create(root + "/policy/" + type, payload);
+        } catch (RestClientResponseException ex) {
+            if (!ex.getStatusCode().isSameCodeAs(HttpStatus.CONFLICT)) {
+                throw ex;
+            }
+            // A concurrent apply created the same deterministic policy name first.
+            Map<String, Object> raced = policyIndex(root).get(name);
+            if (raced == null) {
+                throw new IllegalStateException(
+                        "Keycloak policy not visible after creation: " + name, ex);
+            }
+            policies.put(name, raced);
+            return existingPolicyId(raced, name, type);
+        }
         Map<String, Object> created = new LinkedHashMap<>(payload);
         created.put("id", id);
         policies.put(name, created);
         return id;
+    }
+
+    private String existingPolicyId(Map<String, Object> existing, String name, String type) {
+        if (!type.equals(existing.get("type"))) {
+            throw new IllegalStateException(
+                    "Native policy name collision with another type: " + name);
+        }
+        return String.valueOf(existing.get("id"));
     }
 
     /** Aggregates named after their target are compared, because a new revision may rewire them. */
@@ -319,11 +339,25 @@ public class PolicyGraphWriter {
         Map<String, Object> payload = aggregate(name, decisionStrategy, policyIds);
         Map<String, Object> existing = policies.get(name);
         if (existing == null) {
-            String id = create(root + "/policy/aggregate", payload);
-            Map<String, Object> created = new LinkedHashMap<>(payload);
-            created.put("id", id);
-            policies.put(name, created);
-            return id;
+            try {
+                String id = create(root + "/policy/aggregate", payload);
+                Map<String, Object> created = new LinkedHashMap<>(payload);
+                created.put("id", id);
+                policies.put(name, created);
+                return id;
+            } catch (RestClientResponseException ex) {
+                if (!ex.getStatusCode().isSameCodeAs(HttpStatus.CONFLICT)) {
+                    throw ex;
+                }
+                // A concurrent apply created the same deterministic aggregate first; the
+                // comparison below reconciles it like any pre-existing aggregate.
+                existing = policyIndex(root).get(name);
+                if (existing == null) {
+                    throw new IllegalStateException(
+                            "Keycloak policy not visible after creation: " + name, ex);
+                }
+                policies.put(name, existing);
+            }
         }
         if (!"aggregate".equals(existing.get("type"))) {
             throw new IllegalStateException(
@@ -345,40 +379,74 @@ public class PolicyGraphWriter {
                 return String.valueOf(existing.get("id"));
             }
         }
-        return create(root + "/scope", Map.of("name", scope));
+        try {
+            return create(root + "/scope", Map.of("name", scope));
+        } catch (RestClientResponseException ex) {
+            if (!ex.getStatusCode().isSameCodeAs(HttpStatus.CONFLICT)) {
+                throw ex;
+            }
+            // A concurrent apply created the same scope first.
+            for (Map<String, Object> raced : list(root + "/scope")) {
+                if (scope.equals(raced.get("name"))) {
+                    return String.valueOf(raced.get("id"));
+                }
+            }
+            throw new IllegalStateException(
+                    "Keycloak scope not visible after creation: " + scope, ex);
+        }
     }
 
     private String ensureResource(String root, String targetKey, String scopeId) {
         for (Map<String, Object> existing : list(root + "/resource")) {
             if (targetKey.equals(existing.get("name"))) {
-                String id = String.valueOf(existing.get("_id"));
-                Map<String, Object> current = get(root + "/resource/" + id);
-                List<String> scopeIds = ids(current.get("scopes"), "id");
-                if (!scopeIds.contains(scopeId)) {
-                    scopeIds.add(scopeId);
-                    List<Map<String, String>> scopes = new ArrayList<>();
-                    for (String existingScope : scopeIds) {
-                        scopes.add(Map.of("id", existingScope));
-                    }
-                    Map<String, Object> update = new LinkedHashMap<>();
-                    update.put("_id", id);
-                    update.put("name", targetKey);
-                    update.put("ownerManagedAccess", false);
-                    update.put("scopes", scopes);
-                    put(root + "/resource/" + id, update);
-                }
-                return id;
+                return resourceWithScope(root, existing, targetKey, scopeId);
             }
         }
-        return create(
-                root + "/resource",
-                Map.of(
-                        "name",
-                        targetKey,
-                        "ownerManagedAccess",
-                        false,
-                        "scopes",
-                        List.of(Map.of("id", scopeId))));
+        try {
+            return create(
+                    root + "/resource",
+                    Map.of(
+                            "name",
+                            targetKey,
+                            "ownerManagedAccess",
+                            false,
+                            "scopes",
+                            List.of(Map.of("id", scopeId))));
+        } catch (RestClientResponseException ex) {
+            if (!ex.getStatusCode().isSameCodeAs(HttpStatus.CONFLICT)) {
+                throw ex;
+            }
+            // A concurrent apply created the same deterministic resource name first.
+            for (Map<String, Object> raced : list(root + "/resource")) {
+                if (targetKey.equals(raced.get("name"))) {
+                    return resourceWithScope(root, raced, targetKey, scopeId);
+                }
+            }
+            throw new IllegalStateException(
+                    "Keycloak resource not visible after creation: " + targetKey, ex);
+        }
+    }
+
+    /** An existing resource only needs the scope attached when it is not there yet. */
+    private String resourceWithScope(
+            String root, Map<String, Object> existing, String targetKey, String scopeId) {
+        String id = String.valueOf(existing.get("_id"));
+        Map<String, Object> current = get(root + "/resource/" + id);
+        List<String> scopeIds = ids(current.get("scopes"), "id");
+        if (!scopeIds.contains(scopeId)) {
+            scopeIds.add(scopeId);
+            List<Map<String, String>> scopes = new ArrayList<>();
+            for (String existingScope : scopeIds) {
+                scopes.add(Map.of("id", existingScope));
+            }
+            Map<String, Object> update = new LinkedHashMap<>();
+            update.put("_id", id);
+            update.put("name", targetKey);
+            update.put("ownerManagedAccess", false);
+            update.put("scopes", scopes);
+            put(root + "/resource/" + id, update);
+        }
+        return id;
     }
 
     private String ensureRootPermission(
@@ -394,23 +462,47 @@ public class PolicyGraphWriter {
                         "policies", policyIds);
         for (Map<String, Object> existing : list(root + "/permission/scope")) {
             if (name.equals(existing.get("name"))) {
-                String id = String.valueOf(existing.get("id"));
-                boolean same =
-                        new HashSet<>(ids(existing.get("policies")))
-                                        .equals(new HashSet<>(policyIds))
-                                && new HashSet<>(ids(existing.get("resources")))
-                                        .equals(Set.of(resourceId))
-                                && new HashSet<>(ids(existing.get("scopes")))
-                                        .equals(Set.of(scopeId));
-                if (!same) {
-                    Map<String, Object> update = new LinkedHashMap<>(desired);
-                    update.put("id", id);
-                    put(root + "/permission/scope/" + id, update);
-                }
-                return id;
+                return reconcileRootPermission(
+                        root, existing, desired, resourceId, scopeId, policyIds);
             }
         }
-        return create(root + "/permission/scope", desired);
+        try {
+            return create(root + "/permission/scope", desired);
+        } catch (RestClientResponseException ex) {
+            if (!ex.getStatusCode().isSameCodeAs(HttpStatus.CONFLICT)) {
+                throw ex;
+            }
+            // A concurrent apply created the same deterministic root permission first.
+            for (Map<String, Object> raced : list(root + "/permission/scope")) {
+                if (name.equals(raced.get("name"))) {
+                    return reconcileRootPermission(
+                            root, raced, desired, resourceId, scopeId, policyIds);
+                }
+            }
+            throw new IllegalStateException(
+                    "Keycloak permission not visible after creation: " + name, ex);
+        }
+    }
+
+    /** An existing root permission is updated in place when a new revision rewires it. */
+    private String reconcileRootPermission(
+            String root,
+            Map<String, Object> existing,
+            Map<String, Object> desired,
+            String resourceId,
+            String scopeId,
+            List<String> policyIds) {
+        String id = String.valueOf(existing.get("id"));
+        boolean same =
+                new HashSet<>(ids(existing.get("policies"))).equals(new HashSet<>(policyIds))
+                        && new HashSet<>(ids(existing.get("resources"))).equals(Set.of(resourceId))
+                        && new HashSet<>(ids(existing.get("scopes"))).equals(Set.of(scopeId));
+        if (!same) {
+            Map<String, Object> update = new LinkedHashMap<>(desired);
+            update.put("id", id);
+            put(root + "/permission/scope/" + id, update);
+        }
+        return id;
     }
 
     private void verifyReadBack(
@@ -496,8 +588,19 @@ public class PolicyGraphWriter {
         return client.getAccessToken().getTokenValue();
     }
 
+    /** Every page is fetched: a name missing from the result truly does not exist in Keycloak. */
     private List<Map<String, Object>> list(String path) {
-        return get(path + "?first=0&max=1000", MAP_LIST);
+        List<Map<String, Object>> all = new ArrayList<>();
+        int first = 0;
+        while (true) {
+            List<Map<String, Object>> page =
+                    get(path + "?first=" + first + "&max=" + PAGE_SIZE, MAP_LIST);
+            all.addAll(page);
+            if (page.size() < PAGE_SIZE) {
+                return all;
+            }
+            first += page.size();
+        }
     }
 
     private Map<String, Object> get(String path) {
