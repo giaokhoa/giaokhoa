@@ -204,6 +204,106 @@ class PolicyGraphWriterNativeIT {
         assertFalse(decision.isAllowed(subject, servletRequest, required));
     }
 
+    @Test
+    void nativeWriterAttachesASecondScopeToTheSameResource() throws Exception {
+        String base = required("PROVISIONING_TEST_KEYCLOAK_BASE_URL");
+        String secret = required("PROVISIONING_TEST_KEYCLOAK_PROVISIONER_SECRET");
+        String userId = required("NATIVE_GATE_ASSIGNED_USER_ID");
+        String userToken =
+                Files.readAllLines(Path.of(required("NATIVE_GATE_NATIVE_TOKENS_FILE"))).getFirst();
+        RestClient http = RestClient.create();
+        String adminToken = serviceToken(http, base, secret);
+        ClientRegistration serviceRegistration =
+                ClientRegistration.withRegistrationId(CLIENT_ID)
+                        .clientId(CLIENT_ID)
+                        .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+                        .tokenUri(base + "/realms/giaokhoa/protocol/openid-connect/token")
+                        .build();
+        OAuth2AccessToken serviceAccessToken =
+                new OAuth2AccessToken(
+                        OAuth2AccessToken.TokenType.BEARER,
+                        adminToken,
+                        Instant.now(),
+                        Instant.now().plusSeconds(300));
+        OAuth2AuthorizedClient serviceClient =
+                new OAuth2AuthorizedClient(serviceRegistration, CLIENT_ID, serviceAccessToken);
+        OAuth2AuthorizedClientManager serviceManager = _ -> serviceClient;
+        PolicyGraphWriter writer =
+                new PolicyGraphWriter(
+                        RestClient.builder(), base, "giaokhoa", serviceManager, AUDIENCE, null);
+
+        KeycloakProvisioningClient directory =
+                new KeycloakProvisioningClient(RestClient.builder(), base, CLIENT_ID, secret);
+        String owners = NativePolicyTemplates.ownersGroup(WORKSPACE);
+        directory.ensureRealmGroup(owners);
+        directory.setRealmGroupMembership(userId, owners, true);
+
+        String target = NativePolicyTemplates.workspaceKey(WORKSPACE);
+        List<Source> sources = List.of(Source.of(new Gate.GroupMembership(owners)));
+        PolicyGraphWriter.AppliedGraph first =
+                writer.apply(new PolicyGraph(target, "enter", sources));
+        // Trước bản sửa writer, lần apply này gãy ở bước tạo root permission: scope thứ hai
+        // không được Keycloak gắn vào resource dù lời gọi cập nhật trả thành công.
+        PolicyGraphWriter.AppliedGraph second =
+                writer.apply(new PolicyGraph(target, "read", sources));
+        assertEquals(first.resourceId(), second.resourceId());
+
+        String root = authzRoot(http, base, adminToken);
+        Map<String, Object> resource =
+                get(http, root + "/resource/" + first.resourceId(), adminToken);
+        java.util.Set<String> scopeNames = new java.util.TreeSet<>();
+        List<?> resourceScopes = java.util.Objects.requireNonNull((List<?>) resource.get("scopes"));
+        for (Object item : resourceScopes) {
+            scopeNames.add(String.valueOf(((Map<?, ?>) item).get("name")));
+        }
+        assertEquals(java.util.Set.of("enter", "read"), scopeNames);
+        assertTrue(writer.isGraphIntact(target, "enter", first.resourceId(), first.policyNames()));
+        assertTrue(writer.isGraphIntact(target, "read", second.resourceId(), second.policyNames()));
+
+        var subject = UsernamePasswordAuthenticationToken.authenticated(USER, null, List.of());
+        var repository = new HttpSessionOAuth2AuthorizedClientRepository();
+        MockHttpServletRequest servletRequest = new MockHttpServletRequest();
+        servletRequest.setSession(new MockHttpSession());
+        ClientRegistration webRegistration =
+                ClientRegistration.withRegistrationId("keycloak")
+                        .clientId("native-gate-test")
+                        .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                        .authorizationUri(base + "/realms/giaokhoa/protocol/openid-connect/auth")
+                        .tokenUri(base + "/realms/giaokhoa/protocol/openid-connect/token")
+                        .redirectUri("http://127.0.0.1:18895/callback")
+                        .build();
+        OAuth2AccessToken webToken =
+                new OAuth2AccessToken(
+                        OAuth2AccessToken.TokenType.BEARER,
+                        userToken,
+                        Instant.now(),
+                        Instant.now().plusSeconds(300));
+        repository.saveAuthorizedClient(
+                new OAuth2AuthorizedClient(webRegistration, USER, webToken),
+                subject,
+                servletRequest,
+                new MockHttpServletResponse());
+        RequestContextHolder.setRequestAttributes(
+                new ServletRequestAttributes(servletRequest, new MockHttpServletResponse()));
+        KeycloakDecisionClient decision =
+                new KeycloakDecisionClient(
+                        repository,
+                        new InMemoryClientRegistrationRepository(webRegistration),
+                        AUDIENCE);
+        assertTrue(
+                decision.isAllowed(
+                        subject,
+                        servletRequest,
+                        RequiredPermissions.of(
+                                RequiredPermissions.require(first.resourceId(), "enter"))));
+        assertTrue(
+                decision.isAllowed(
+                        subject,
+                        servletRequest,
+                        RequiredPermissions.of(
+                                RequiredPermissions.require(second.resourceId(), "read"))));
+    }
+
     private static String serviceToken(RestClient http, String base, String secret) {
         var form = new LinkedMultiValueMap<String, String>();
         form.add("grant_type", "client_credentials");

@@ -10,6 +10,10 @@ một target không thể nhận scope thứ hai trở đi. Chi tiết finding �
 quy tắc của gate, kết quả âm tính này được ghi nguyên vẹn — không hạ spec, không đổi PDP,
 không sửa writer trong phạm vi việc này.
 
+**Cập nhật:** Finding 1 sau đó đã được sửa trong cùng thay đổi này và gate đã chạy lại đạt
+9/9 nhóm case — xem mục "Chạy lại gate sau khi sửa Finding 1" ở dưới. Toàn bộ ghi chép của
+lượt đầu dưới đây được giữ nguyên làm lịch sử.
+
 ## Finding 1 (chặn gate): PolicyGraphWriter không gắn được scope thứ hai cho một target
 
 - Triệu chứng: `PolicyGraphWriter.apply(...)` cho scope thứ hai của cùng một target (ví dụ
@@ -34,6 +38,57 @@ không sửa writer trong phạm vi việc này.
 - Hệ quả cho gate: các case §9.4, §9.6, §9.7 (đều cần target đa scope) **không đạt** ở bước
   provision, trước khi tới được khẳng định quyết định. Ba case này phải chạy lại sau khi
   writer được sửa (việc sửa nằm ngoài phạm vi gate này).
+
+## Chạy lại gate sau khi sửa Finding 1 — ĐẠT 9/9
+
+Bản sửa (cùng thay đổi này, sau khi kết quả âm tính ở trên đã được hai vòng review xác
+nhận): `PolicyGraphWriter` mang cả `id` và `name` trong mọi entry scope khi tạo resource
+và khi cập nhật resource (`resourceWithScope` giữ lại name của các scope đã gắn đọc từ
+chính representation hiện hành, scope mới dùng đúng tên đang apply). Unit test của writer
+nay khẳng định payload `{id, name}` ở cả hai đường và bao phủ đường cập nhật khi resource
+đã có một scope khác gắn sẵn. `PolicyGraphWriterNativeIT` có thêm case apply hai scope
+(`enter`, `read`) cho cùng một workspace trên Keycloak thật: khẳng định cùng một resource
+giữ đủ hai scope, cả hai graph nguyên vẹn theo `isGraphIntact` và PDP cho phép cả hai cặp
+resource/scope.
+
+Môi trường lượt chạy lại: stack TEST native lại chết trước lượt (máy thay mới, `/var/tmp`
+trống) và được dựng lại theo runbook trước khi chạy cổng — PostgreSQL 15432, Keycloak TEST
+18081 (đủ 5 role của service account fixtures), Keycloak scratch 18091 trên database
+`keycloak_native` mới tinh; token actor được cấp tươi ngay trước lượt native nên không có
+lỗi token hết hạn nào.
+
+Các cổng của lượt chạy lại, theo đúng thứ tự:
+
+```
+./backend/mvnw -B -ntp -f backend/pom.xml clean verify
+→ Tests run: 153, Failures: 0, Errors: 0, Skipped: 0 — BUILD SUCCESS
+./backend/mvnw -B -ntp -f backend/pom.xml -Pintegration verify   (đã nạp env TEST_* của stack TEST native)
+→ unit 153/153; failsafe Tests run: 121, Failures: 0, Errors: 0, Skipped: 8 — BUILD SUCCESS
+  (8 skip là các lớp native-only theo thiết kế của pom, tăng 1 so với lượt đầu vì
+  PolicyGraphWriterNativeIT có thêm case đa scope; chúng được chạy thật ở lượt native riêng)
+Lượt native riêng (driver tương đương verify-native.sh trên Keycloak scratch 18091,
+bootstrap chạy hai lần, fixture native gate, đăng nhập actor bằng PKCE qua Chromium thật):
+→ KeycloakProvisioningClientNativeIT 1/1
+→ NativePermissionGateIT 3/3, NativeTimePolicyIT 1/1, PolicyGraphWriterNativeIT 2/2,
+  NativeGateAcceptanceIT 6/6 — tổng 12, Failures: 0, Errors: 0, Skipped: 0 — BUILD SUCCESS
+```
+
+| Case | Kết quả chạy lại |
+|---|---|
+| §9.1 | ĐẠT (`NativePermissionGateIT` 3/3) |
+| §9.2 | ĐẠT (`NativeGateAcceptanceIT`, cùng lượt native) |
+| §9.3 | ĐẠT (`NativePermissionGateIT`) |
+| §9.4 | **ĐẠT** — apply `activity.assign` (scope thứ hai) thành công; toàn bộ khẳng định quyết định của case được thực thi và pass |
+| §9.5 | ĐẠT (`NativeTimePolicyIT` 1/1) |
+| §9.6 | **ĐẠT** — apply `attempt.open` (scope thứ hai) thành công; toàn bộ khẳng định quyết định được thực thi và pass |
+| §9.7 | **ĐẠT** — apply `use` (scope thứ hai) thành công; toàn bộ khẳng định quyết định được thực thi và pass |
+| §9.8 | ĐẠT (trong 121 IT của cổng integration) |
+| §9.9 | ĐẠT (cả hai test trong `NativeGateAcceptanceIT`) |
+
+Hạn chế của lượt chạy lại: spec e2e UI (§9.1 ở tầng UI) không chạy lại vì thay đổi này chỉ
+đụng writer và test phía backend; kết quả e2e của lượt đầu (2 passed) giữ nguyên giá trị.
+`verify-native.sh` nguyên văn vẫn chỉ chạy được trên CI (máy local không có Docker); lượt
+native local là bản tương đương từng bước chức năng như lượt đầu.
 
 ## Môi trường chạy và sự cố hạ tầng
 
@@ -145,6 +200,8 @@ test skip sạch — cơ chế skip giữ nguyên để CI không đỏ giả.
 - Ba case §9.4/§9.6/§9.7 mới chỉ fail ở bước provision; phần khẳng định quyết định của
   chúng (ma trận allow/deny) chưa được thực thi và phải chạy lại sau khi Finding 1 được
   sửa. Không kết luận gì về semantics quyết định của ba case này từ lượt chạy này.
+  *(Đã hết hiệu lực: cả ba case đã chạy lại trọn vẹn và đạt sau bản sửa — xem mục "Chạy
+  lại gate sau khi sửa Finding 1".)*
 - `verify-native.sh` chưa được chạy nguyên văn ở local vì không có Docker; bản tương
   đương native đã bao phủ mọi bước chức năng của script trừ các assert cấu hình realm
   bằng curl của chính script (các assert đó vẫn chạy ở CI).
