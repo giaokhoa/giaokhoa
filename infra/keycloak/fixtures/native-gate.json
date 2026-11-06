@@ -1,0 +1,22 @@
+{
+  "workspaceId": "71000000-0000-4000-8000-000000000015",
+  "subjectAId": "71000000-0000-4000-8000-0000000000a1",
+  "subjectBId": "71000000-0000-4000-8000-0000000000b2",
+  "activityId": "71000000-0000-4000-8000-0000000000c3",
+  "teacherGroup": "/gk/workspaces/71000000-0000-4000-8000-000000000015/course-subjects/71000000-0000-4000-8000-0000000000a1/teachers",
+  "eligibleGroup": "/gk/identity/eligible",
+  "user": "native-gate-assigned",
+  "claimOnlyUser": "native-gate-claim-only",
+  "resourceA": "workspace:71000000-0000-4000-8000-000000000015:course-subject:71000000-0000-4000-8000-0000000000a1",
+  "resourceB": "workspace:71000000-0000-4000-8000-000000000015:course-subject:71000000-0000-4000-8000-0000000000b2",
+  "activity": "workspace:71000000-0000-4000-8000-000000000015:activity:71000000-0000-4000-8000-0000000000c3",
+  "scopes": ["read", "update", "attempt.open"],
+  "policy": {
+    "eligibility": "native-gate-eligible",
+    "teacher": "native-gate-subject-a-teacher",
+    "source": "native-gate-eligible-and-teacher",
+    "validFrom": "native-gate-valid-from",
+    "expiresAt": "native-gate-expires-at",
+    "timeGate": "native-gate-time-and-source"
+  }
+}

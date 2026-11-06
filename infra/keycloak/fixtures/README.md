@@ -4,6 +4,10 @@ Thư mục này dành cho các fixture Keycloak **test/review**, không chạy t
 và không nhập đè realm hoặc dữ liệu DEV. T006 chỉ chuẩn bị nơi đặt fixture;
 bootstrap Keycloak và API seed được triển khai ở các task sau.
 
+`native-gate.json` là fixture T013 cố định; `install-native-gate.sh` tạo actor, realm group,
+resource/scope và policy thật chỉ trên realm tạm do `verify-native.sh` khởi động.
+Client dùng Direct Access Grants chỉ phục vụ acceptance test này, không đổi `giaokhoa-web`.
+
 Mỗi scenario set phải tạo dữ kiện của mình độc lập (ID/người dùng/workspace mới),
 không dựa vào thứ tự chạy hoặc trạng thái còn lại từ story trước:
 
