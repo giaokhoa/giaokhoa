@@ -1,7 +1,7 @@
 // Native T011 acceptance: actual Keycloak Code+PKCE login, signed back-channel logout,
 // session restart and JDBC invalidation. Run only against the dedicated Compose TEST stack.
 import assert from "node:assert/strict";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, generateKeyPairSync, randomBytes, randomUUID, sign } from "node:crypto";
 import { execFileSync, spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { resolve } from "node:path";
@@ -18,10 +18,12 @@ const password = randomBytes(24).toString("base64url") + "Aa1!";
 const username = "t011-" + randomUUID();
 const appJar = resolve("backend/target/giaokhoa-backend-0.0.1-SNAPSHOT.jar");
 const keycloakBase = "http://127.0.0.1:18081";
+const logoutEvent = "http://schemas.openid.net/event/backchannel-logout";
 let app;
 let clientUuid;
 let userId;
 let proxy;
+let jwksServer;
 let received;
 let backendLogs = "";
 let schemaCreated = false;
@@ -72,7 +74,7 @@ function reservePort() {
     });
 }
 
-async function startBackend(port) {
+async function startBackend(port, testJwksUrl) {
     const appOrigin = "http://127.0.0.1:" + port;
     const environment = {
         ...process.env,
@@ -97,6 +99,7 @@ async function startBackend(port) {
         "--spring.flyway.schemas=" + schema,
         "--spring.flyway.default-schema=" + schema,
         "--spring.datasource.hikari.schema=" + schema,
+        ...(testJwksUrl ? ["--spring.security.oauth2.client.provider.keycloak.jwk-set-uri=" + testJwksUrl] : []),
     ], { env: environment, stdio: ["ignore", "pipe", "pipe"] });
     const collect = (chunk) => { backendLogs = (backendLogs + chunk.toString()).slice(-12000); };
     app.stdout.on("data", collect);
@@ -215,14 +218,101 @@ async function signedIdTokenWithoutLogoutEvent(appOrigin) {
     return (await exchanged.json()).id_token;
 }
 
-async function rejectedWithoutRevocation(appOrigin, signedToken, sessionCount) {
-    const response = await fetch(appOrigin + "/logout/connect/back-channel/keycloak", {
+async function rejectedWithoutRevocation(appOrigin, signedToken, sessionCount, reason = "invalid claims") {
+    const response = await submitLogout(appOrigin, signedToken);
+    assert.equal(response.status, 400, reason + " must be rejected");
+    assert.equal(sessionCount(), "1", reason + " cannot delete a JDBC session");
+}
+
+function signTestLogout(privateKey, claims) {
+    const header = Buffer.from(JSON.stringify({
+        alg: "RS256", typ: "logout+jwt", kid: "t011-ephemeral",
+    })).toString("base64url");
+    const payload = Buffer.from(JSON.stringify(claims)).toString("base64url");
+    const content = header + "." + payload;
+    return content + "." + sign("RSA-SHA256", Buffer.from(content), privateKey).toString("base64url");
+}
+
+function tamperSignature(token) {
+    const parts = token.split(".");
+    const signature = Buffer.from(parts[2], "base64url");
+    signature[0] ^= 1;
+    parts[2] = signature.toString("base64url");
+    return parts.join(".");
+}
+
+async function verifyIsolatedSignatureIssuerAudience(appOrigin, port, sessionCount, correlation, recorded) {
+    // Ephemeral TEST-only trust anchor: reject one claim at a time with otherwise
+    // correctly signed logout tokens. The real Keycloak signature is tested afterward.
+    const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const publicJwk = {
+        ...publicKey.export({ format: "jwk" }),
+        use: "sig", alg: "RS256", kid: "t011-ephemeral",
+    };
+    let jwksRequests = 0;
+    jwksServer = createServer((request, response) => {
+        if (request.url !== "/jwks") {
+            response.writeHead(404);
+            response.end();
+            return;
+        }
+        jwksRequests++;
+        response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+        response.end(JSON.stringify({ keys: [publicJwk] }));
+    });
+    await new Promise((done, reject) => {
+        jwksServer.once("error", reject);
+        jwksServer.listen(0, "127.0.0.1", done);
+    });
+    const jwksUrl = "http://127.0.0.1:" + jwksServer.address().port + "/jwks";
+    await stopBackend();
+    backendLogs = "";
+    await startBackend(port, jwksUrl);
+    assert.equal(sessionCount(), "1", "Existing session survives test-only JWKS restart");
+
+    const claims = {
+        iss: issuer, aud: clientId, sub: userId, sid: recorded[1],
+        iat: Math.floor(Date.now() / 1000), jti: randomUUID(),
+        events: { [logoutEvent]: {} },
+    };
+    // A valid signed control for an absent subject must be accepted without revoking
+    // the live session. This demonstrates that Spring trusts our ephemeral JWKS.
+    const control = signTestLogout(privateKey, {
+        ...claims, sub: "nonexistent-" + randomUUID(), sid: "nonexistent-" + randomUUID(),
+    });
+    const accepted = await submitLogout(appOrigin, control);
+    assert.equal(accepted.status, 200, "Valid test-signed logout token must reach the native handler");
+    assert.ok(jwksRequests > 0, "Spring must obtain the ephemeral public signing key");
+    assert.equal(sessionCount(), "1");
+
+    const negatives = [
+        ["tampered signature", tamperSignature(signTestLogout(privateKey, claims))],
+        ["wrong issuer", signTestLogout(privateKey, { ...claims, iss: "https://wrong-issuer.example.test" })],
+        ["wrong audience", signTestLogout(privateKey, { ...claims, aud: "other-client" })],
+        ["wrong events", signTestLogout(privateKey, { ...claims, events: { "other-event": {} } })],
+    ];
+    for (const [reason, token] of negatives) {
+        await rejectedWithoutRevocation(appOrigin, token, sessionCount, reason);
+        assert.equal(correlation(), recorded.join("|"), reason + " must preserve correlation");
+    }
+    const active = await browserFetch(appOrigin + "/api/me/workspaces");
+    assert.equal(active.status, 404, "Original browser cookie stays authenticated");
+
+    await stopBackend();
+    await new Promise((done) => jwksServer.close(done));
+    jwksServer = undefined;
+    backendLogs = "";
+    await startBackend(port);
+    assert.equal(sessionCount(), "1", "Session persists when restoring genuine Keycloak JWKS");
+    console.log("PASS: isolated signed-token validation for signature, issuer, audience and events");
+}
+
+async function submitLogout(appOrigin, token) {
+    return fetch(appOrigin + "/logout/connect/back-channel/keycloak", {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ logout_token: signedToken }),
+        body: new URLSearchParams({ logout_token: token }),
     });
-    assert.equal(response.status, 400, "Invalid logout claims must be rejected");
-    assert.equal(sessionCount(), "1", "Invalid logout token cannot delete a JDBC session");
 }
 
 async function waitUntil(check, message) {
@@ -330,25 +420,9 @@ async function run() {
     assert.equal(idClaims.events, undefined, "A signed ID token is not a logout event");
     await rejectedWithoutRevocation(appOrigin, validIdToken, sessionCount);
 
-    // These tokens are also Keycloak-signed but have the wrong issuer or audience.
-    const masterToken = await fetchAdminToken();
-    const masterClaims = JSON.parse(Buffer.from(masterToken.split(".")[1], "base64url").toString());
-    assert.notEqual(masterClaims.iss, issuer);
-    await rejectedWithoutRevocation(appOrigin, masterToken, sessionCount);
-    const fixtureTokenResponse = await fetch(issuer + "/protocol/openid-connect/token", {
-        method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-            grant_type: "client_credentials", client_id: "giaokhoa-it-fixtures",
-            client_secret: "ci-fixtures-only",
-        }),
-    });
-    assert.equal(fixtureTokenResponse.status, 200);
-    const fixtureToken = (await fixtureTokenResponse.json()).access_token;
-    const fixtureClaims = JSON.parse(Buffer.from(fixtureToken.split(".")[1], "base64url").toString());
-    assert.equal(fixtureClaims.iss, issuer);
-    assert.ok(![].concat(fixtureClaims.aud ?? []).includes(clientId));
-    await rejectedWithoutRevocation(appOrigin, fixtureToken, sessionCount);
+    // In the next phase a TEST-only RSA/JWKS pair makes each failure isolated:
+    // real signature verification, one invalid claim, and an unchanged JDBC session.
+    await verifyIsolatedSignatureIssuerAudience(appOrigin, port, sessionCount, correlation, recorded);
 
     await admin("POST", "/users/" + userId + "/logout");
     await waitUntil(() => received.length > 0, "Keycloak signed back-channel callback");
@@ -379,6 +453,7 @@ try {
     process.exitCode = 1;
 } finally {
     await stopBackend();
+    if (jwksServer) await new Promise((done) => jwksServer.close(done));
     if (proxy) await new Promise((done) => proxy.close(done));
     if (userId) await admin("DELETE", "/users/" + userId).catch((error) => console.error("TEST user cleanup:", error));
     if (clientUuid) await admin("DELETE", "/clients/" + clientUuid).catch((error) => console.error("TEST client cleanup:", error));
