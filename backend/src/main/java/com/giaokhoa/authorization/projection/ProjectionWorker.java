@@ -6,11 +6,14 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -26,10 +29,13 @@ import org.springframework.web.client.RestClientException;
  * operation never overtakes an older one touching the same partition), reconciles every affected
  * partition at exactly the operation's revision through {@link ProjectionReconciler}, and marks the
  * operation SUCCEEDED only after the database confirms every partition READY at that revision.
- * Failures retry with the same idempotency payload and a bounded backoff; exhausting the attempt
- * budget fails the operation and its partitions without opening the fence. Partitions fenced
- * without a live operation (dependency fences, out-of-band drift repairs) are reconciled on the
- * same loop, and READY partitions are periodically checked for console drift.
+ * Claims are atomic (rows locked {@code FOR UPDATE SKIP LOCKED} plus a guarded update), so two
+ * application instances can never process the same operation. Failures retry with the same
+ * idempotency payload and a bounded backoff; exhausting the attempt budget fails the operation and
+ * its partitions without opening the fence. Partitions fenced without a live operation (dependency
+ * fences, out-of-band drift repairs) are reconciled on the same loop under the same bounded
+ * backoff, and READY partitions are periodically checked for console drift through a rotating scan
+ * that reaches every partition.
  */
 @Component
 public class ProjectionWorker {
@@ -45,7 +51,12 @@ public class ProjectionWorker {
     private final ProjectionReconciler reconciler;
     private final TransactionTemplate transactions;
     private final AtomicBoolean running = new AtomicBoolean();
+    private final Map<UUID, OrphanRetry> orphanRetries = new ConcurrentHashMap<>();
     private Instant lastDriftScan = Instant.EPOCH;
+    private UUID driftScanCursor;
+
+    /** Rate-limit state of one fenced partition without a live operation. */
+    private record OrphanRetry(int failures, Instant nextAttemptAt) {}
 
     public ProjectionWorker(
             JdbcTemplate jdbc,
@@ -118,24 +129,48 @@ public class ProjectionWorker {
                                         rs.getInt("attempt_count"),
                                         due);
                             });
+            // The PostgreSQL queue pattern: due rows are locked FOR UPDATE SKIP LOCKED, so
+            // a row another instance is claiming never appears here; the guarded update
+            // below, whose row count is the only proof of ownership, is the final check.
+            Set<UUID> claimable =
+                    new HashSet<>(
+                            jdbc.queryForList(
+                                    "SELECT id FROM authorization_operation"
+                                            + " WHERE (state IN ('PENDING', 'RETRYABLE_FAILURE')"
+                                            + " AND (next_attempt_at IS NULL"
+                                            + " OR next_attempt_at <= now()))"
+                                            + " OR (state = 'APPLYING'"
+                                            + " AND updated_at <= now()"
+                                            + " - INTERVAL '5 minutes')"
+                                            + " ORDER BY created_at, id"
+                                            + " FOR UPDATE SKIP LOCKED",
+                                    UUID.class));
             Set<UUID> blocked = new HashSet<>();
             ClaimedOperation claimed = null;
             for (QueueRow row : queue) {
                 boolean overlaps = row.partitions().stream().anyMatch(blocked::contains);
                 blocked.addAll(row.partitions());
-                if (claimed == null && row.due() && !overlaps) {
-                    jdbc.update(
-                            "UPDATE authorization_operation SET state = 'APPLYING',"
-                                    + " attempt_count = attempt_count + 1,"
-                                    + " next_attempt_at = NULL, last_error_code = NULL,"
-                                    + " updated_at = now() WHERE id = ?",
-                            row.id());
-                    claimed =
-                            new ClaimedOperation(
-                                    row.id(),
-                                    row.partitions(),
-                                    row.revisions(),
-                                    row.attemptCount() + 1);
+                if (claimed == null && row.due() && !overlaps && claimable.contains(row.id())) {
+                    int updated =
+                            jdbc.update(
+                                    "UPDATE authorization_operation SET state = 'APPLYING',"
+                                            + " attempt_count = attempt_count + 1,"
+                                            + " next_attempt_at = NULL, last_error_code = NULL,"
+                                            + " updated_at = now() WHERE id = ?"
+                                            + " AND (state IN ('PENDING', 'RETRYABLE_FAILURE')"
+                                            + " OR (state = 'APPLYING'"
+                                            + " AND updated_at <= now()"
+                                            + " - INTERVAL '5 minutes'))",
+                                    row.id());
+                    boolean claimedByThisInstance = updated == 1;
+                    if (claimedByThisInstance) {
+                        claimed =
+                                new ClaimedOperation(
+                                        row.id(),
+                                        row.partitions(),
+                                        row.revisions(),
+                                        row.attemptCount() + 1);
+                    }
                 }
             }
             return Optional.ofNullable(claimed);
@@ -159,13 +194,30 @@ public class ProjectionWorker {
                     reconciler.reconcilePartition(partitionId, revision);
                 }
             }
-            transactions.executeWithoutResult(status ->
-                    jdbc.update(
-                            "UPDATE authorization_operation SET state = 'SUCCEEDED',"
-                                    + " next_attempt_at = NULL, last_error_code = NULL,"
-                                    + " updated_at = now()"
-                                    + " WHERE id = ? AND state = 'APPLYING'",
-                            operation.id()));
+            transactions.executeWithoutResult(status -> {
+                // Re-read the desired revisions in the same transaction that records
+                // success: a mutation that bumped a partition after the checks above makes
+                // this operation superseded, not a reconcile failure, and the partitions it
+                // fenced now belong to the newer operation.
+                for (int i = 0; i < operation.partitions().size(); i++) {
+                    List<Long> current =
+                            jdbc.queryForList(
+                                    "SELECT desired_revision FROM authz_partition WHERE id = ?",
+                                    Long.class,
+                                    operation.partitions().get(i));
+                    if (current.isEmpty()
+                            || current.getFirst().longValue()
+                                    != operation.revisions().get(i).longValue()) {
+                        throw new SupersededException();
+                    }
+                }
+                jdbc.update(
+                        "UPDATE authorization_operation SET state = 'SUCCEEDED',"
+                                + " next_attempt_at = NULL, last_error_code = NULL,"
+                                + " updated_at = now()"
+                                + " WHERE id = ? AND state = 'APPLYING'",
+                        operation.id());
+            });
         } catch (SupersededException ex) {
             recordFailure(operation, ERROR_SUPERSEDED, true, false);
         } catch (ProjectionReconciler.ReconciliationException ex) {
@@ -189,9 +241,12 @@ public class ProjectionWorker {
             boolean terminal,
             boolean fencePartitions) {
         transactions.executeWithoutResult(status -> {
+            // Guarded by the claimed state: an instance that lost the operation to another
+            // claim records nothing, so it can never fail an operation that already succeeded.
             jdbc.update(
                     "UPDATE authorization_operation SET state = ?, next_attempt_at = ?,"
-                            + " last_error_code = ?, updated_at = now() WHERE id = ?",
+                            + " last_error_code = ?, updated_at = now()"
+                            + " WHERE id = ? AND state = 'APPLYING'",
                     terminal ? "FAILED" : "RETRYABLE_FAILURE",
                     terminal
                             ? null
@@ -216,8 +271,11 @@ public class ProjectionWorker {
 
     /**
      * Partitions fenced without a live operation still converge: verify and reopen, or stay fenced.
+     * Retries are rate-limited with the same bounded backoff as the operation path, so a partition
+     * that cannot converge (for example while Keycloak is down) is not retried on every one-second
+     * poll.
      */
-    private void reconcileOrphanedPartitions() {
+    void reconcileOrphanedPartitions() {
         List<UUID> orphaned =
                 jdbc.queryForList(
                         "SELECT p.id FROM authz_partition p WHERE p.state = 'PENDING'"
@@ -227,16 +285,37 @@ public class ProjectionWorker {
                                 + " ORDER BY p.created_at LIMIT ?",
                         UUID.class,
                         MAX_PARTITIONS_PER_CYCLE);
+        orphanRetries
+                .keySet()
+                .retainAll(
+                        new HashSet<>(
+                                jdbc.queryForList(
+                                        "SELECT id FROM authz_partition"
+                                                + " WHERE state = 'PENDING'",
+                                        UUID.class)));
+        Instant now = Instant.now();
         for (UUID partitionId : orphaned) {
-            // Fail-closed: a partition that cannot converge stays PENDING for the next cycle.
-            reconciler.tryReconcilePartition(partitionId);
+            OrphanRetry retry = orphanRetries.get(partitionId);
+            if (retry != null && now.isBefore(retry.nextAttemptAt())) {
+                continue;
+            }
+            // Fail-closed: a partition that cannot converge stays PENDING until its next
+            // scheduled attempt.
+            if (reconciler.tryReconcilePartition(partitionId)) {
+                orphanRetries.remove(partitionId);
+            } else {
+                int failures = retry == null ? 1 : retry.failures() + 1;
+                orphanRetries.put(
+                        partitionId, new OrphanRetry(failures, now.plus(backoffFor(failures))));
+            }
         }
     }
 
     /**
      * Out-of-band console edits are not synced instantly: on a slow cadence READY partitions are
      * checked against Keycloak, and a drifted partition is fenced first, reconciled, verified and
-     * only then reopened by the normal publish path.
+     * only then reopened by the normal publish path. The scan rotates through the whole READY set
+     * instead of rechecking the same oldest partitions forever.
      */
     private void repairDriftIfDue() {
         Instant now = Instant.now();
@@ -245,12 +324,16 @@ public class ProjectionWorker {
         }
         lastDriftScan = now;
         List<UUID> ready =
-                jdbc.queryForList(
-                        "SELECT id FROM authz_partition WHERE state = 'READY'"
-                                + " ORDER BY updated_at, id LIMIT ?",
-                        UUID.class,
-                        MAX_PARTITIONS_PER_CYCLE);
-        for (UUID partitionId : ready) {
+                new ArrayList<>(
+                        jdbc.queryForList(
+                                "SELECT id FROM authz_partition WHERE state = 'READY'",
+                                UUID.class));
+        ready.sort(Comparator.comparing(UUID::toString));
+        List<UUID> batch = scanWindow(ready, driftScanCursor, MAX_PARTITIONS_PER_CYCLE);
+        if (!batch.isEmpty()) {
+            driftScanCursor = batch.getLast();
+        }
+        for (UUID partitionId : batch) {
             boolean intact;
             try {
                 intact = reconciler.verifyStoredGraph(partitionId);
@@ -263,6 +346,32 @@ public class ProjectionWorker {
                 reconciler.tryReconcilePartition(partitionId);
             }
         }
+    }
+
+    /**
+     * The rotating drift-scan window over the READY set in stable UUID-string order: up to {@code
+     * limit} IDs strictly after {@code after}, wrapping to the head of the list, so every READY
+     * partition is reached within a bounded number of scans.
+     */
+    static List<UUID> scanWindow(List<UUID> orderedIds, UUID after, int limit) {
+        List<UUID> window = new ArrayList<>();
+        for (UUID id : orderedIds) {
+            if (window.size() >= limit) {
+                break;
+            }
+            if (after == null || id.toString().compareTo(after.toString()) > 0) {
+                window.add(id);
+            }
+        }
+        for (UUID id : orderedIds) {
+            if (window.size() >= limit) {
+                break;
+            }
+            if (after != null && id.toString().compareTo(after.toString()) <= 0) {
+                window.add(id);
+            }
+        }
+        return window;
     }
 
     private static List<UUID> uuidList(java.sql.ResultSet rs, String column)
