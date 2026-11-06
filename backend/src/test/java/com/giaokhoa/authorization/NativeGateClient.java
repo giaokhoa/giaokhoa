@@ -54,14 +54,20 @@ final class NativeGateClient {
                             .body(request("decision", resourceId + "#" + scope))
                             .retrieve()
                             .body(new ParameterizedTypeReference<Map<String, Object>>() {});
-            return Boolean.TRUE.equals(
-                    Objects.requireNonNull(answer, "No native PDP response").get("result"));
+            return requireDecision(answer);
         } catch (RestClientResponseException exception) {
             if (exception.getStatusCode().isSameCodeAs(HttpStatus.FORBIDDEN)) {
                 return false;
             }
             throw exception;
         }
+    }
+
+    static boolean requireDecision(Map<String, Object> answer) {
+        if (answer == null || !(answer.get("result") instanceof Boolean decision)) {
+            throw new IllegalStateException("Native PDP response must contain a boolean result");
+        }
+        return decision;
     }
 
     List<Map<String, Object>> permissions(String actorToken, String... pairs) {
