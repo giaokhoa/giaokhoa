@@ -141,6 +141,66 @@ class PolicyGraphWriterTest {
 
     @Test
     void reapplyingTheSameGraphCreatesAndUpdatesNothing() {
+        assertReapply(false, false, false);
+    }
+
+    @Test
+    void repairsUnsafeRootLogicAndDecisionStrategy() {
+        assertReapply(true, false, false);
+    }
+
+    @Test
+    void repairsUnsafeOrAggregateLogicAndDecisionStrategy() {
+        assertReapply(false, true, false);
+    }
+
+    @Test
+    void repairsUnsafeSourceAggregateLogicAndDecisionStrategy() {
+        assertReapply(false, false, true);
+    }
+
+    @Test
+    void failsClosedWhenLeafStillHasWrongConfigurationAfterUpdate() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PolicyGraphWriter writer = writer(builder);
+        expectClients(server);
+        expectGet(server, ROOT + "/scope" + LIST, "[]");
+        expectCreate(server, ROOT + "/scope", "{\"id\":\"scope-enter\"}");
+        expectGet(server, ROOT + "/resource" + LIST, "[]");
+        expectCreate(server, ROOT + "/resource", "{\"_id\":\"res-1\"}");
+        expectGet(
+                server,
+                ROOT + "/policy" + LIST,
+                "[{\"id\":\"pol-elig\",\"name\":\"gk-group:"
+                        + ELIGIBLE
+                        + "\",\"type\":\"group\"}]");
+        expectGroup(server, ELIGIBLE, "g-elig");
+        String wrong =
+                "{\"id\":\"pol-elig\",\"name\":\"gk-group:"
+                        + ELIGIBLE
+                        + "\",\"type\":\"group\",\"logic\":\"NEGATIVE\","
+                        + "\"groups\":[{\"id\":\"g-elig\",\"extendChildren\":false}]}";
+        expectGet(server, ROOT + "/policy/group/pol-elig", wrong);
+        server.expect(requestTo(ROOT + "/policy/group/pol-elig"))
+                .andExpect(method(HttpMethod.PUT))
+                .andRespond(withNoContent());
+        expectGet(server, ROOT + "/policy/group/pol-elig", wrong);
+        assertThrows(IllegalStateException.class, () -> writer.apply(graph()));
+        server.verify();
+    }
+
+    @Test
+    void repairsCorruptedGroupAndTimeLeafPolicies() {
+        assertReapply(false, false, false, true);
+    }
+
+    private void assertReapply(boolean staleRoot, boolean staleOr, boolean staleSource) {
+        assertReapply(staleRoot, staleOr, staleSource, false);
+    }
+
+    private void assertReapply(
+            boolean staleRoot, boolean staleOr, boolean staleSource, boolean staleLeaves) {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         PolicyGraphWriter writer = writer(builder);
@@ -182,16 +242,120 @@ class PolicyGraphWriterTest {
                         + ANY_NAME
                         + "\",\"type\":\"aggregate\"}]");
         expectGroup(server, ELIGIBLE, "g-elig");
+        if (staleLeaves) {
+            expectGet(
+                    server,
+                    ROOT + "/policy/group/pol-elig",
+                    "{\"id\":\"pol-elig\",\"name\":\"gk-group:"
+                            + ELIGIBLE
+                            + "\",\"type\":\"group\",\"logic\":\"NEGATIVE\","
+                            + "\"groups\":[{\"id\":\"wrong-group\",\"extendChildren\":true}]}");
+            expectLeafRepair(
+                    server,
+                    "group",
+                    "pol-elig",
+                    "\"groups\":[{\"id\":\"g-elig\",\"extendChildren\":false}]");
+        } else {
+            expectLeaf(server, "pol-elig");
+        }
         expectGroup(server, MANAGERS, "g-mgr");
-        expectGroup(server, OWNERS, "g-own");
-        expectAssociated(
-                server, "pol-any", "associatedPolicies", List.of("pol-src", "pol-own"), "id");
+        expectLeaf(server, "pol-mgr");
+        expectLeaf(server, "pol-from");
+        if (staleLeaves) {
+            expectGet(
+                    server,
+                    ROOT + "/policy/time/pol-until",
+                    "{\"id\":\"pol-until\",\"name\":\"gk-valid-until:"
+                            + UNTIL
+                            + "\",\"type\":\"time\",\"logic\":\"POSITIVE\","
+                            + "\"notBefore\":\"2030-03-01 00:00:00\","
+                            + "\"notOnOrAfter\":\"2040-01-01 00:00:00\"}");
+            expectLeafRepair(server, "time", "pol-until", "\"notBefore\":\"2030-02-01 00:00:00\"");
+        } else {
+            expectLeaf(server, "pol-until");
+        }
         expectGet(
                 server,
-                ROOT + "/permission/scope" + LIST,
-                "[{\"id\":\"perm-1\",\"name\":\"" + ROOT_NAME + "\"}]");
-        expectLinked(server, "perm-1", List.of("pol-elig", "pol-any"));
-        expectReadBack(server, "perm-1", List.of("pol-elig", "pol-any"));
+                ROOT + "/policy/aggregate/pol-src",
+                "{\"id\":\"pol-src\",\"logic\":\""
+                        + (staleSource ? "NEGATIVE" : "POSITIVE")
+                        + "\",\"decisionStrategy\":\""
+                        + (staleSource ? "AFFIRMATIVE" : "UNANIMOUS")
+                        + "\",\"policies\":[\"pol-mgr\",\"pol-from\",\"pol-until\"]}");
+        if (staleSource) {
+            server.expect(requestTo(ROOT + "/policy/aggregate/pol-src"))
+                    .andExpect(method(HttpMethod.PUT))
+                    .andExpect(
+                            content()
+                                    .json(
+                                            "{\"logic\":\"POSITIVE\",\"decisionStrategy\":\"UNANIMOUS\"}"))
+                    .andRespond(withNoContent());
+            expectGet(
+                    server,
+                    ROOT + "/policy/aggregate/pol-src",
+                    "{\"id\":\"pol-src\",\"logic\":\"POSITIVE\",\"decisionStrategy\":\"UNANIMOUS\","
+                            + "\"policies\":[\"pol-mgr\",\"pol-from\",\"pol-until\"]}");
+        }
+        expectGroup(server, OWNERS, "g-own");
+        expectLeaf(server, "pol-own");
+        expectGet(
+                server,
+                ROOT + "/policy/aggregate/pol-any",
+                "{\"id\":\"pol-any\",\"logic\":\""
+                        + (staleOr ? "NEGATIVE" : "POSITIVE")
+                        + "\",\"decisionStrategy\":\""
+                        + (staleOr ? "UNANIMOUS" : "AFFIRMATIVE")
+                        + "\",\"policies\":[\"pol-src\",\"pol-own\"]}");
+        if (staleOr) {
+            server.expect(requestTo(ROOT + "/policy/aggregate/pol-any"))
+                    .andExpect(method(HttpMethod.PUT))
+                    .andExpect(
+                            content()
+                                    .json(
+                                            "{\"logic\":\"POSITIVE\",\"decisionStrategy\":\"AFFIRMATIVE\"}"))
+                    .andRespond(withNoContent());
+            expectGet(
+                    server,
+                    ROOT + "/policy/aggregate/pol-any",
+                    "{\"id\":\"pol-any\",\"logic\":\"POSITIVE\",\"decisionStrategy\":\"AFFIRMATIVE\","
+                            + "\"policies\":[\"pol-src\",\"pol-own\"]}");
+        }
+        String rootState =
+                "[{\"id\":\"perm-1\",\"name\":\""
+                        + ROOT_NAME
+                        + "\",\"policies\":[\"pol-elig\",\"pol-any\"],"
+                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}]";
+        if (staleRoot) {
+            rootState =
+                    rootState.replace(
+                            "\"policies\"",
+                            "\"logic\":\"NEGATIVE\",\"decisionStrategy\":\"AFFIRMATIVE\",\"policies\"");
+        }
+        expectGet(server, ROOT + "/permission/scope" + LIST, rootState);
+        expectGet(
+                server,
+                ROOT + "/permission/scope/perm-1",
+                rootState.substring(1, rootState.length() - 1));
+        if (staleRoot) {
+            server.expect(requestTo(ROOT + "/permission/scope/perm-1"))
+                    .andExpect(method(HttpMethod.PUT))
+                    .andExpect(
+                            content()
+                                    .json(
+                                            "{\"logic\":\"POSITIVE\",\"decisionStrategy\":\"UNANIMOUS\"}"))
+                    .andRespond(withNoContent());
+        }
+        expectGet(
+                server,
+                ROOT + "/permission/scope/perm-1",
+                "{\"id\":\"perm-1\",\"policies\":[\"pol-elig\",\"pol-any\"],"
+                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}");
+        expectGet(
+                server,
+                ROOT + "/resource/res-1",
+                "{\"_id\":\"res-1\",\"name\":\""
+                        + TARGET
+                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
 
         PolicyGraphWriter.AppliedGraph applied = writer.apply(graph());
         assertEquals("res-1", applied.resourceId());
@@ -231,12 +395,23 @@ class PolicyGraphWriterTest {
                 server,
                 ROOT + "/policy" + LIST,
                 "[{\"id\":\"pol-own\",\"name\":\"gk-group:" + OWNERS + "\",\"type\":\"group\"}]");
+        expectGroup(server, ELIGIBLE, "g-elig");
+        expectCreate(server, ROOT + "/policy/group", "{\"id\":\"pol-elig\"}");
         expectGroup(server, OWNERS, "g-own");
+        expectLeaf(server, "pol-own");
         expectGet(
                 server,
                 ROOT + "/permission/scope" + LIST,
-                "[{\"id\":\"perm-1\",\"name\":\"" + ROOT_NAME + "\"}]");
-        expectLinked(server, "perm-1", List.of("pol-stale"));
+                "[{\"id\":\"perm-1\",\"name\":\""
+                        + ROOT_NAME
+                        + "\",\"policies\":[\"pol-stale\"],"
+                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}]");
+        expectGet(
+                server,
+                ROOT + "/permission/scope/perm-1",
+                "{\"id\":\"perm-1\",\"name\":\""
+                        + ROOT_NAME
+                        + "\",\"policies\":[\"pol-stale\"],\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}");
         server.expect(requestTo(ROOT + "/permission/scope/perm-1"))
                 .andExpect(method(HttpMethod.PUT))
                 .andExpect(
@@ -244,12 +419,22 @@ class PolicyGraphWriterTest {
                                 .json(
                                         "{\"id\":\"perm-1\",\"name\":\""
                                                 + ROOT_NAME
-                                                + "\",\"policies\":[\"pol-own\"]}"))
+                                                + "\",\"policies\":[\"pol-elig\",\"pol-own\"]}"))
                 .andRespond(withNoContent());
-        expectReadBack(server, "perm-1", List.of("pol-own"));
+        expectGet(
+                server,
+                ROOT + "/permission/scope/perm-1",
+                "{\"id\":\"perm-1\",\"policies\":[\"pol-elig\",\"pol-own\"],"
+                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}");
+        expectGet(
+                server,
+                ROOT + "/resource/res-1",
+                "{\"_id\":\"res-1\",\"name\":\""
+                        + TARGET
+                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
 
         PolicyGraphWriter.AppliedGraph applied = writer.apply(graph);
-        assertEquals(List.of("gk-group:" + OWNERS), applied.policyNames());
+        assertEquals(List.of("gk-group:" + ELIGIBLE, "gk-group:" + OWNERS), applied.policyNames());
         server.verify();
     }
 
@@ -302,6 +487,8 @@ class PolicyGraphWriterTest {
         expectGet(server, ROOT + "/resource" + LIST, "[]");
         expectCreate(server, ROOT + "/resource", "{\"_id\":\"res-1\"}");
         expectGet(server, ROOT + "/policy" + LIST, "[]");
+        expectGroup(server, ELIGIBLE, "g-elig");
+        expectCreate(server, ROOT + "/policy/group", "{\"id\":\"pol-elig\"}");
         server.expect(requestTo(HOST + "/admin/realms/giaokhoa/group-by-path" + OWNERS))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withStatus(HttpStatus.NOT_FOUND));
@@ -336,6 +523,7 @@ class PolicyGraphWriterTest {
                 "[{\"id\":\"pol-elig\",\"name\":\"gk-group:"
                         + ELIGIBLE
                         + "\",\"type\":\"group\"}]");
+        expectLeaf(server, "pol-elig");
         expectGroup(server, OWNERS, "g-own");
         expectCreate(server, ROOT + "/policy/group", "{\"id\":\"pol-own\"}");
         expectGet(server, ROOT + "/permission/scope" + LIST, "[]");
@@ -370,6 +558,8 @@ class PolicyGraphWriterTest {
         expectGet(server, ROOT + "/resource" + LIST, "[]");
         expectCreate(server, ROOT + "/resource", "{\"_id\":\"res-1\"}");
         expectGet(server, ROOT + "/policy" + LIST, "[]");
+        expectGroup(server, ELIGIBLE, "g-elig");
+        expectCreate(server, ROOT + "/policy/group", "{\"id\":\"pol-elig\"}");
         expectGroup(server, MANAGERS, "g-mgr");
         expectCreate(server, ROOT + "/policy/group", "{\"id\":\"pol-mgr\"}");
         expectGroup(server, OWNERS, "g-own");
@@ -390,19 +580,37 @@ class PolicyGraphWriterTest {
                         + "{\"id\":\"pol-any\",\"name\":\""
                         + ANY_NAME
                         + "\",\"type\":\"aggregate\"}]");
-        expectAssociated(
-                server, "pol-any", "associatedPolicies", List.of("pol-mgr", "pol-own"), "id");
+        expectGet(
+                server,
+                ROOT + "/policy/aggregate/pol-any",
+                "{\"id\":\"pol-any\",\"logic\":\"POSITIVE\","
+                        + "\"decisionStrategy\":\"AFFIRMATIVE\","
+                        + "\"policies\":[\"pol-mgr\",\"pol-own\"]}");
         expectGet(server, ROOT + "/permission/scope" + LIST, "[]");
         expectCreate(
                 server,
                 ROOT + "/permission/scope",
                 "{\"id\":\"perm-1\"}",
-                "{\"name\":\"" + ROOT_NAME + "\",\"policies\":[\"pol-any\"]}");
-        expectReadBack(server, "perm-1", List.of("pol-any"));
+                "{\"name\":\"" + ROOT_NAME + "\",\"policies\":[\"pol-elig\",\"pol-any\"]}");
+        expectGet(
+                server,
+                ROOT + "/permission/scope/perm-1",
+                "{\"id\":\"perm-1\",\"policies\":[\"pol-elig\",\"pol-any\"],"
+                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}");
+        expectGet(
+                server,
+                ROOT + "/resource/res-1",
+                "{\"_id\":\"res-1\",\"name\":\""
+                        + TARGET
+                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
 
         PolicyGraphWriter.AppliedGraph applied = writer.apply(graph);
         assertEquals(
-                List.of(ANY_NAME, "gk-group:" + MANAGERS, "gk-group:" + OWNERS),
+                List.of(
+                        ANY_NAME,
+                        "gk-group:" + ELIGIBLE,
+                        "gk-group:" + MANAGERS,
+                        "gk-group:" + OWNERS),
                 applied.policyNames());
         server.verify();
     }
@@ -422,14 +630,26 @@ class PolicyGraphWriterTest {
         expectGet(server, ROOT + "/resource" + LIST, "[]");
         expectCreate(server, ROOT + "/resource", "{\"_id\":\"res-1\"}");
         expectGet(server, ROOT + "/policy" + LIST, "[]");
+        expectGroup(server, ELIGIBLE, "g-elig");
+        expectCreate(server, ROOT + "/policy/group", "{\"id\":\"pol-elig\"}");
         expectGroup(server, OWNERS, "g-own");
         expectCreate(server, ROOT + "/policy/group", "{\"id\":\"pol-own\"}");
         expectGet(server, ROOT + "/permission/scope" + LIST, "[]");
         expectCreate(server, ROOT + "/permission/scope", "{\"id\":\"perm-1\"}");
-        expectReadBack(server, "perm-1", List.of("pol-own"));
+        expectGet(
+                server,
+                ROOT + "/permission/scope/perm-1",
+                "{\"id\":\"perm-1\",\"policies\":[\"pol-elig\",\"pol-own\"],"
+                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}");
+        expectGet(
+                server,
+                ROOT + "/resource/res-1",
+                "{\"_id\":\"res-1\",\"name\":\""
+                        + TARGET
+                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
 
         PolicyGraphWriter.AppliedGraph applied = writer.apply(graph);
-        assertEquals(List.of("gk-group:" + OWNERS), applied.policyNames());
+        assertEquals(List.of("gk-group:" + ELIGIBLE, "gk-group:" + OWNERS), applied.policyNames());
         server.verify();
     }
 
@@ -475,6 +695,8 @@ class PolicyGraphWriterTest {
         expectGet(server, ROOT + "/resource" + LIST, "[]");
         expectCreate(server, ROOT + "/resource", "{\"_id\":\"res-1\"}");
         expectGet(server, ROOT + "/policy" + LIST, "[]");
+        expectGroup(server, ELIGIBLE, "g-elig");
+        expectCreate(server, ROOT + "/policy/group", "{\"id\":\"pol-elig\"}");
         expectCreate(
                 server,
                 ROOT + "/policy/user",
@@ -485,11 +707,21 @@ class PolicyGraphWriterTest {
                 server,
                 ROOT + "/permission/scope",
                 "{\"id\":\"perm-1\"}",
-                "{\"name\":\"" + ROOT_NAME + "\",\"policies\":[\"pol-user\"]}");
-        expectReadBack(server, "perm-1", List.of("pol-user"));
+                "{\"name\":\"" + ROOT_NAME + "\",\"policies\":[\"pol-elig\",\"pol-user\"]}");
+        expectGet(
+                server,
+                ROOT + "/permission/scope/perm-1",
+                "{\"id\":\"perm-1\",\"policies\":[\"pol-elig\",\"pol-user\"],"
+                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}");
+        expectGet(
+                server,
+                ROOT + "/resource/res-1",
+                "{\"_id\":\"res-1\",\"name\":\""
+                        + TARGET
+                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
 
         PolicyGraphWriter.AppliedGraph applied = writer.apply(graph);
-        assertEquals(List.of("gk-user:user-123"), applied.policyNames());
+        assertEquals(List.of("gk-group:" + ELIGIBLE, "gk-user:user-123"), applied.policyNames());
         server.verify();
     }
 
@@ -508,6 +740,8 @@ class PolicyGraphWriterTest {
         expectGet(server, ROOT + "/resource" + LIST, "[]");
         expectCreate(server, ROOT + "/resource", "{\"_id\":\"res-1\"}");
         expectGet(server, ROOT + "/policy" + LIST, "[]");
+        expectGroup(server, ELIGIBLE, "g-elig");
+        expectCreate(server, ROOT + "/policy/group", "{\"id\":\"pol-elig\"}");
         expectGroup(server, OWNERS, "g-own");
         expectCreate(server, ROOT + "/policy/group", "{\"id\":\"pol-own\"}");
         expectGet(server, ROOT + "/permission/scope" + LIST, "[]");
@@ -605,18 +839,22 @@ class PolicyGraphWriterTest {
                 json.append(']').toString());
     }
 
-    /** The linked resources, scopes and policies read before an existing permission is judged. */
-    private void expectLinked(
-            MockRestServiceServer server, String permissionId, List<String> policyIds) {
-        expectAssociated(server, permissionId, "associatedPolicies", policyIds, "id");
-        expectAssociated(server, permissionId, "resources", List.of("res-1"), "_id");
-        expectAssociated(server, permissionId, "scopes", List.of("scope-enter"), "id");
-    }
-
-    /** A full read-back: the permission's associations plus the resource itself. */
+    /** Native detail and association endpoints must be read before reporting a graph as applied. */
     private void expectReadBack(
             MockRestServiceServer server, String permissionId, List<String> policyIds) {
-        expectLinked(server, permissionId, policyIds);
+        var mapper = new tools.jackson.databind.json.JsonMapper();
+        var state = new java.util.LinkedHashMap<String, Object>();
+        state.put("id", permissionId);
+        state.put("name", ROOT_NAME);
+        state.put("logic", "POSITIVE");
+        state.put("decisionStrategy", "UNANIMOUS");
+        state.put("policies", policyIds);
+        state.put("resources", List.of("res-1"));
+        state.put("scopes", List.of("scope-enter"));
+        expectGet(
+                server,
+                ROOT + "/permission/scope/" + permissionId,
+                mapper.writeValueAsString(state));
         expectGet(
                 server,
                 ROOT + "/resource/res-1",
@@ -655,9 +893,58 @@ class PolicyGraphWriterTest {
     }
 
     private void expectGet(MockRestServiceServer server, String url, String body) {
+        String responseBody = body;
+        if (url.startsWith(ROOT + "/permission/scope")
+                && body.contains("\"policies\"")
+                && !body.contains("\"logic\"")) {
+            responseBody =
+                    responseBody.replace(
+                            "\"policies\"",
+                            "\"logic\":\"POSITIVE\",\"decisionStrategy\":\"UNANIMOUS\",\"policies\"");
+        }
+        if (url.startsWith(ROOT + "/policy/aggregate/")
+                && body.contains("\"policies\"")
+                && !body.contains("\"logic\"")) {
+            String strategy = url.endsWith("/pol-any") ? "AFFIRMATIVE" : "UNANIMOUS";
+            responseBody =
+                    responseBody.replace(
+                            "\"policies\"",
+                            "\"logic\":\"POSITIVE\",\"decisionStrategy\":\""
+                                    + strategy
+                                    + "\",\"policies\"");
+        }
         server.expect(requestTo(url))
                 .andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+                .andRespond(withSuccess(responseBody, MediaType.APPLICATION_JSON));
+        if ((url.contains("/policy/aggregate/") || url.contains("/permission/scope/"))
+                && !url.endsWith("/associatedPolicies")) {
+            var mapper = new tools.jackson.databind.json.JsonMapper();
+            var policies = mapper.readTree(responseBody).get("policies");
+            if (policies != null) {
+                List<java.util.Map<String, String>> associated = new java.util.ArrayList<>();
+                for (var policy : policies) {
+                    associated.add(java.util.Map.of("id", policy.stringValue()));
+                }
+                expectGet(
+                        server, url + "/associatedPolicies", mapper.writeValueAsString(associated));
+                if (url.contains("/permission/scope/")) {
+                    for (String relation : List.of("resources", "scopes")) {
+                        var values = mapper.readTree(responseBody).get(relation);
+                        if (values != null) {
+                            List<java.util.Map<String, String>> linked =
+                                    new java.util.ArrayList<>();
+                            for (var value : values) {
+                                linked.add(java.util.Map.of("id", value.stringValue()));
+                            }
+                            expectGet(
+                                    server,
+                                    url + "/" + relation,
+                                    mapper.writeValueAsString(linked));
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private void expectGroup(MockRestServiceServer server, String path, String id) {
@@ -671,6 +958,7 @@ class PolicyGraphWriterTest {
         server.expect(requestTo(url))
                 .andExpect(method(HttpMethod.POST))
                 .andRespond(withStatus(HttpStatus.CREATED).body(response));
+        expectCreatedLeaf(server, url, response);
     }
 
     private void expectCreate(
@@ -679,6 +967,94 @@ class PolicyGraphWriterTest {
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(content().json(expectedJson))
                 .andRespond(withStatus(HttpStatus.CREATED).body(response));
+        expectCreatedLeaf(server, url, response);
+        if ((ROOT + "/policy/aggregate").equals(url)) {
+            var json = new tools.jackson.databind.json.JsonMapper();
+            var desired = json.readTree(expectedJson);
+            var id = json.readTree(response).get("id").stringValue();
+            expectGet(
+                    server,
+                    ROOT + "/policy/aggregate/" + id,
+                    "{\"id\":\""
+                            + id
+                            + "\",\"logic\":\"POSITIVE\",\"decisionStrategy\":\""
+                            + desired.get("decisionStrategy").stringValue()
+                            + "\",\"policies\":"
+                            + desired.get("policies")
+                            + "}");
+        }
+    }
+
+    private void expectLeafRepair(
+            MockRestServiceServer server, String type, String id, String expectedField) {
+        server.expect(requestTo(ROOT + "/policy/" + type + "/" + id))
+                .andExpect(method(HttpMethod.PUT))
+                .andExpect(content().json("{" + expectedField + "}"))
+                .andRespond(withNoContent());
+        expectLeaf(server, id);
+    }
+
+    private void expectCreatedLeaf(MockRestServiceServer server, String url, String response) {
+        if (url.startsWith(ROOT + "/policy/") && !url.endsWith("/aggregate")) {
+            var created = new tools.jackson.databind.json.JsonMapper().readTree(response);
+            expectLeaf(server, created.get("id").stringValue());
+        }
+    }
+
+    private void expectLeaf(MockRestServiceServer server, String id) {
+        String type;
+        String body;
+        switch (id) {
+            case "pol-elig", "pol-mgr", "pol-own" -> {
+                type = "group";
+                String path =
+                        switch (id) {
+                            case "pol-elig" -> ELIGIBLE;
+                            case "pol-mgr" -> MANAGERS;
+                            default -> OWNERS;
+                        };
+                String group =
+                        switch (id) {
+                            case "pol-elig" -> "g-elig";
+                            case "pol-mgr" -> "g-mgr";
+                            default -> "g-own";
+                        };
+                body =
+                        "{\"id\":\""
+                                + id
+                                + "\",\"name\":\"gk-group:"
+                                + path
+                                + "\",\"type\":\"group\",\"logic\":\"POSITIVE\","
+                                + "\"groups\":[{\"id\":\""
+                                + group
+                                + "\",\"extendChildren\":false}]}";
+            }
+            case "pol-from", "pol-until" -> {
+                type = "time";
+                boolean until = "pol-until".equals(id);
+                String boundary = until ? UNTIL.toString() : FROM.toString();
+                String date = until ? "2030-02-01 00:00:00" : "2030-01-01 00:00:00";
+                body =
+                        "{\"id\":\""
+                                + id
+                                + "\",\"name\":\"gk-valid-"
+                                + (until ? "until:" : "from:")
+                                + boundary
+                                + "\",\"type\":\"time\",\"logic\":\""
+                                + (until ? "NEGATIVE" : "POSITIVE")
+                                + "\",\"notBefore\":\""
+                                + date
+                                + "\"}";
+            }
+            case "pol-user" -> {
+                type = "user";
+                body =
+                        "{\"id\":\"pol-user\",\"name\":\"gk-user:user-123\","
+                                + "\"type\":\"user\",\"logic\":\"POSITIVE\",\"users\":[\"user-123\"]}";
+            }
+            default -> throw new IllegalArgumentException("Unexpected leaf policy: " + id);
+        }
+        expectGet(server, ROOT + "/policy/" + type + "/" + id, body);
     }
 
     private PolicyGraphWriter writer(RestClient.Builder builder) {

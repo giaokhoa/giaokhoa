@@ -210,6 +210,15 @@ public final class NativePolicyTemplates {
         return Optional.empty();
     }
 
+    /** Only profile/onboarding/recovery endpoints may omit the business eligibility gate. */
+    static boolean requiresEligibility(TargetType type, String scope) {
+        return switch (type) {
+            case PROFILE -> !List.of("profile.read", "recovery.request").contains(scope);
+            case PLATFORM -> !"account.recover".equals(scope);
+            default -> true;
+        };
+    }
+
     public static String platformKey() {
         return "platform";
     }

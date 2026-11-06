@@ -422,7 +422,7 @@ public class ProjectionReconciler {
         for (String descriptor : sourceDescriptors) {
             sources.add(new PolicyGraph.Source(List.of(actorGate(descriptor))));
         }
-        return new PolicyGraph(targetKey, scope, List.of(), sources);
+        return new PolicyGraph(targetKey, scope, sources);
     }
 
     private static PolicyGraph.Gate actorGate(String descriptor) {

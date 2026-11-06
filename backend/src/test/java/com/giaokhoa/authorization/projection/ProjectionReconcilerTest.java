@@ -2,8 +2,8 @@ package com.giaokhoa.authorization.projection;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.giaokhoa.authorization.policy.NativePolicyTemplates;
 import com.giaokhoa.authorization.policy.PolicyGraph;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -71,7 +71,11 @@ class ProjectionReconcilerTest {
         PolicyGraph graph = ProjectionReconciler.graphFor(TARGET, "enter", List.of(descriptor));
         assertEquals(TARGET, graph.targetKey());
         assertEquals("enter", graph.scope());
-        assertTrue(graph.commonGates().isEmpty());
+        assertEquals(
+                List.of(
+                        new PolicyGraph.Gate.GroupMembership(
+                                NativePolicyTemplates.ELIGIBILITY_GROUP)),
+                graph.commonGates());
         assertEquals(
                 List.of(new PolicyGraph.Gate.Actor("keycloak-subject")),
                 graph.sources().getFirst().gates());

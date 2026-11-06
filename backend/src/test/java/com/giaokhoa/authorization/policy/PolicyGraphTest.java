@@ -125,6 +125,71 @@ class PolicyGraphTest {
     }
 
     @Test
+    void businessGraphRequiresEligibilityOutsideTheSources() {
+        Source owner =
+                Source.of(new Gate.GroupMembership(NativePolicyTemplates.ownersGroup(WORKSPACE)));
+        String target = NativePolicyTemplates.workspaceKey(WORKSPACE);
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new PolicyGraph(target, "enter", List.of(), List.of(owner)));
+        // Putting eligibility in an OR source is insufficient: it must be common to all sources.
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                        new PolicyGraph(
+                                target,
+                                "enter",
+                                List.of(),
+                                List.of(
+                                        Source.of(
+                                                new Gate.GroupMembership(
+                                                        NativePolicyTemplates.ELIGIBILITY_GROUP)),
+                                        owner)));
+        assertEquals(
+                List.of(new Gate.GroupMembership(NativePolicyTemplates.ELIGIBILITY_GROUP)),
+                new PolicyGraph(target, "enter", List.of(owner)).commonGates());
+    }
+
+    @Test
+    void onboardingAndRecoveryAreExplicitEligibilityExceptions() {
+        Source actor = Source.of(new Gate.Actor("identity-actor"));
+        assertTrue(
+                new PolicyGraph(
+                                NativePolicyTemplates.profileKey(OBJECT),
+                                "profile.read",
+                                List.of(),
+                                List.of(actor))
+                        .commonGates()
+                        .isEmpty());
+        assertTrue(
+                new PolicyGraph(
+                                NativePolicyTemplates.profileKey(OBJECT),
+                                "recovery.request",
+                                List.of(),
+                                List.of(actor))
+                        .commonGates()
+                        .isEmpty());
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                        new PolicyGraph(
+                                NativePolicyTemplates.profileKey(OBJECT),
+                                "workspace.list",
+                                List.of(),
+                                List.of(actor)));
+    }
+
+    @Test
+    void rejectsSubsecondTimeBoundariesInsteadOfGrantingEarlyOrExpiringEarly() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new Gate.Validity(FROM.plusMillis(900), UNTIL));
+        assertThrows(
+                IllegalArgumentException.class, () -> new Gate.Validity(FROM, UNTIL.plusNanos(1)));
+        assertEquals(FROM, new Gate.Validity(FROM, UNTIL).validFrom());
+    }
+
+    @Test
     void groupTemplatesMatchTheFixedSources() {
         List<String> paths =
                 List.of(

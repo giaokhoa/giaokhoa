@@ -55,6 +55,7 @@ public class PolicyGraphWriter {
     private final String realm;
     private final OAuth2AuthorizedClientManager manager;
     private final String audienceClientId;
+    private final ResourceMutationCoordinator mutationCoordinator;
     private String cachedRoot;
 
     @Autowired
@@ -64,14 +65,25 @@ public class PolicyGraphWriter {
                     String issuerUri,
             @Value("${giaokhoa.keycloak.provisioner.client-id}") String clientId,
             @Value("${giaokhoa.keycloak.provisioner.client-secret}") String clientSecret,
-            @Value("${giaokhoa.keycloak.authorization-audience}") String audienceClientId) {
+            @Value("${giaokhoa.keycloak.authorization-audience}") String audienceClientId,
+            ResourceMutationCoordinator mutationCoordinator) {
         this(
                 RestClient.builder(),
                 baseUrl,
                 realmOf(issuerUri),
                 provisionerManager(
                         baseUrl.replaceAll("/+$", ""), realmOf(issuerUri), clientId, clientSecret),
-                audienceClientId);
+                audienceClientId,
+                mutationCoordinator);
+    }
+
+    /** Unit-test constructor; production always supplies the distributed coordinator. */
+    PolicyGraphWriter(
+            RestClient.Builder builder,
+            String baseUrl,
+            OAuth2AuthorizedClientManager manager,
+            String audienceClientId) {
+        this(builder, baseUrl, "giaokhoa", manager, audienceClientId, null);
     }
 
     PolicyGraphWriter(
@@ -80,11 +92,22 @@ public class PolicyGraphWriter {
             String realm,
             OAuth2AuthorizedClientManager manager,
             String audienceClientId) {
+        this(builder, baseUrl, realm, manager, audienceClientId, null);
+    }
+
+    PolicyGraphWriter(
+            RestClient.Builder builder,
+            String baseUrl,
+            String realm,
+            OAuth2AuthorizedClientManager manager,
+            String audienceClientId,
+            ResourceMutationCoordinator mutationCoordinator) {
         this.http = builder.build();
         this.baseUrl = baseUrl.replaceAll("/+$", "");
         this.realm = realm;
         this.manager = manager;
         this.audienceClientId = audienceClientId;
+        this.mutationCoordinator = mutationCoordinator;
     }
 
     /**
@@ -131,6 +154,13 @@ public class PolicyGraphWriter {
 
     /** Creates or updates the whole graph of one target/scope pair, then verifies it by reading. */
     public AppliedGraph apply(PolicyGraph graph) {
+        if (mutationCoordinator == null) {
+            return applyLocked(graph); // unit tests use an in-memory mock Keycloak
+        }
+        return mutationCoordinator.withResourceLock(graph.targetKey(), () -> applyLocked(graph));
+    }
+
+    private AppliedGraph applyLocked(PolicyGraph graph) {
         String root = resourceServerRoot();
         String scopeId = ensureScope(root, graph.scope());
         String resourceId = ensureResource(root, graph.targetKey(), scopeId);
@@ -151,13 +181,7 @@ public class PolicyGraphWriter {
                 sourceNodes.add(leaves.getFirst());
             } else {
                 String name = NativePolicyTemplates.sourcePolicyName(source.descriptorHash());
-                sourceNodes.add(
-                        ensurePolicy(
-                                root,
-                                policies,
-                                name,
-                                "aggregate",
-                                aggregate(name, UNANIMOUS, leaves)));
+                sourceNodes.add(ensureAggregate(root, policies, name, UNANIMOUS, leaves));
                 policyNames.add(name);
             }
         }
@@ -184,6 +208,19 @@ public class PolicyGraphWriter {
      * leaf policies stay for the graphs that still use them.
      */
     public void retractRoot(String targetKey, String scope) {
+        if (mutationCoordinator == null) {
+            retractRootLocked(targetKey, scope); // unit tests use an in-memory mock Keycloak
+        } else {
+            mutationCoordinator.withResourceLock(
+                    targetKey,
+                    () -> {
+                        retractRootLocked(targetKey, scope);
+                        return null;
+                    });
+        }
+    }
+
+    private void retractRootLocked(String targetKey, String scope) {
         // The same fixed-template validation as the graph: unknown targets never reach Keycloak.
         NativePolicyTemplates.TargetType type =
                 NativePolicyTemplates.targetTypeOf(targetKey)
@@ -360,37 +397,98 @@ public class PolicyGraphWriter {
             String type,
             Map<String, Object> payload) {
         Map<String, Object> existing = policies.get(name);
-        if (existing != null) {
-            return existingPolicyId(existing, name, type);
-        }
-        String id;
-        try {
-            id = create(root + "/policy/" + type, payload);
-        } catch (RestClientResponseException ex) {
-            if (!ex.getStatusCode().isSameCodeAs(HttpStatus.CONFLICT)) {
-                throw ex;
+        if (existing == null) {
+            try {
+                String id = create(root + "/policy/" + type, payload);
+                existing = Map.of("id", id, "type", type);
+                policies.put(name, existing);
+            } catch (RestClientResponseException ex) {
+                if (!ex.getStatusCode().isSameCodeAs(HttpStatus.CONFLICT)) {
+                    throw ex;
+                }
+                // A concurrent apply created the same deterministic policy name first.
+                existing = policyIndex(root).get(name);
+                if (existing == null) {
+                    throw new IllegalStateException(
+                            "Keycloak policy not visible after creation: " + name, ex);
+                }
+                policies.put(name, existing);
             }
-            // A concurrent apply created the same deterministic policy name first.
-            Map<String, Object> raced = policyIndex(root).get(name);
-            if (raced == null) {
-                throw new IllegalStateException(
-                        "Keycloak policy not visible after creation: " + name, ex);
-            }
-            policies.put(name, raced);
-            return existingPolicyId(raced, name, type);
         }
-        Map<String, Object> created = new LinkedHashMap<>(payload);
-        created.put("id", id);
-        policies.put(name, created);
+        String id = existingPolicyId(existing, name, type);
+        String endpoint = root + "/policy/" + type + "/" + id;
+        Map<String, Object> current = get(endpoint);
+        if (!sameLeafPolicy(current, payload, type)) {
+            Map<String, Object> update = new LinkedHashMap<>(payload);
+            update.put("id", id);
+            put(endpoint, update);
+            current = get(endpoint);
+        }
+        if (!sameLeafPolicy(current, payload, type)) {
+            throw new IllegalStateException("Native leaf policy read-back mismatch: " + name);
+        }
         return id;
     }
 
-    private String existingPolicyId(Map<String, Object> existing, String name, String type) {
+    private static String existingPolicyId(Map<String, Object> existing, String name, String type) {
         if (!type.equals(existing.get("type"))) {
             throw new IllegalStateException(
                     "Native policy name collision with another type: " + name);
         }
         return String.valueOf(existing.get("id"));
+    }
+
+    private static boolean sameLeafPolicy(
+            Map<String, Object> actual, Map<String, Object> desired, String type) {
+        if (!desired.get("name").equals(actual.get("name"))
+                || !type.equals(actual.get("type"))
+                || !desired.get("logic").equals(actual.get("logic"))
+                || (actual.containsKey("decisionStrategy")
+                        && desired.containsKey("decisionStrategy")
+                        && !desired.get("decisionStrategy")
+                                .equals(actual.get("decisionStrategy")))) {
+            return false;
+        }
+        return switch (type) {
+            case "group" -> {
+                if (!(actual.get("groups") instanceof List<?> groups)
+                        || groups.size() != SINGLE
+                        || !(groups.getFirst() instanceof Map<?, ?> group)) {
+                    yield false;
+                }
+                Map<?, ?> expected = (Map<?, ?>) ((List<?>) desired.get("groups")).getFirst();
+                yield expected.get("id").equals(group.get("id"))
+                        && Boolean.FALSE.equals(group.get("extendChildren"));
+            }
+            case "user" ->
+                    new HashSet<>(ids(actual.get("users")))
+                            .equals(new HashSet<>(ids(desired.get("users"))));
+            case "time" -> {
+                if (!desired.get("notBefore").equals(actual.get("notBefore"))) {
+                    yield false;
+                }
+                boolean hasUnexpectedBoundary = false;
+                for (String field :
+                        List.of(
+                                "notOnOrAfter",
+                                "dayMonth",
+                                "dayMonthEnd",
+                                "month",
+                                "monthEnd",
+                                "hour",
+                                "hourEnd",
+                                "minute",
+                                "minuteEnd")) {
+                    Object value = actual.get(field);
+                    if (value != null && !"".equals(value)) {
+                        hasUnexpectedBoundary = true;
+                        break;
+                    }
+                }
+                yield !hasUnexpectedBoundary;
+            }
+            default -> throw new IllegalStateException("Unsupported leaf policy type: " + type);
+        };
     }
 
     /** Aggregates named after their target are compared, because a new revision may rewire them. */
@@ -408,7 +506,7 @@ public class PolicyGraphWriter {
                 Map<String, Object> created = new LinkedHashMap<>(payload);
                 created.put("id", id);
                 policies.put(name, created);
-                return id;
+                existing = created;
             } catch (RestClientResponseException ex) {
                 if (!ex.getStatusCode().isSameCodeAs(HttpStatus.CONFLICT)) {
                     throw ex;
@@ -428,12 +526,41 @@ public class PolicyGraphWriter {
                     "Native policy name collision with another type: " + name);
         }
         String id = String.valueOf(existing.get("id"));
-        if (!associatedIds(root, id, "associatedPolicies", "id").equals(new HashSet<>(policyIds))) {
+        String endpoint = root + "/policy/aggregate/" + id;
+        Map<String, Object> current = get(endpoint);
+        boolean same =
+                sameAggregate(current, decisionStrategy, policyIds, associatedPolicies(endpoint));
+        if (!same) {
             Map<String, Object> update = new LinkedHashMap<>(payload);
             update.put("id", id);
-            put(root + "/policy/aggregate/" + id, update);
+            put(endpoint, update);
+            current = get(endpoint);
+            same =
+                    sameAggregate(
+                            current, decisionStrategy, policyIds, associatedPolicies(endpoint));
+        }
+        if (!same) {
+            throw new IllegalStateException("Native aggregate read-back mismatch: " + name);
         }
         return id;
+    }
+
+    private static boolean sameAggregate(
+            Map<String, Object> actual,
+            String strategy,
+            List<String> policies,
+            Set<String> associatedPolicies) {
+        return POSITIVE.equals(actual.get("logic"))
+                && strategy.equals(actual.get("decisionStrategy"))
+                && associatedPolicies.equals(new HashSet<>(policies));
+    }
+
+    private Set<String> associatedPolicies(String path) {
+        return relatedIds(path, "associatedPolicies");
+    }
+
+    private Set<String> relatedIds(String path, String relation) {
+        return new HashSet<>(ids(get(uri(path + "/" + relation), MAP_LIST)));
     }
 
     private String ensureScope(String root, String scope) {
@@ -556,13 +683,17 @@ public class PolicyGraphWriter {
             String scopeId,
             List<String> policyIds) {
         String id = String.valueOf(existing.get("id"));
-        Set<String> linkedPolicies = associatedIds(root, id, "associatedPolicies", "id");
-        Set<String> linkedResources = associatedIds(root, id, "resources", "_id");
-        Set<String> linkedScopes = associatedIds(root, id, "scopes", "id");
+        String endpoint = root + "/permission/scope/" + id;
+        Map<String, Object> current = get(endpoint);
+        Set<String> policies = associatedPolicies(endpoint);
+        Set<String> resources = relatedIds(endpoint, "resources");
+        Set<String> scopes = relatedIds(endpoint, "scopes");
         boolean same =
-                linkedPolicies.equals(new HashSet<>(policyIds))
-                        && linkedResources.equals(Set.of(resourceId))
-                        && linkedScopes.equals(Set.of(scopeId));
+                POSITIVE.equals(current.get("logic"))
+                        && UNANIMOUS.equals(current.get("decisionStrategy"))
+                        && policies.equals(new HashSet<>(policyIds))
+                        && resources.equals(Set.of(resourceId))
+                        && scopes.equals(Set.of(scopeId));
         if (!same) {
             Map<String, Object> update = new LinkedHashMap<>(desired);
             update.put("id", id);
@@ -578,14 +709,18 @@ public class PolicyGraphWriter {
             String scopeId,
             List<String> policyIds,
             String targetKey) {
-        Set<String> policies = associatedIds(root, permissionId, "associatedPolicies", "id");
-        Set<String> resources = associatedIds(root, permissionId, "resources", "_id");
-        Set<String> scopes = associatedIds(root, permissionId, "scopes", "id");
+        String endpoint = root + "/permission/scope/" + permissionId;
+        Map<String, Object> permission = get(endpoint);
+        Set<String> policies = associatedPolicies(endpoint);
+        Set<String> permissionResources = relatedIds(endpoint, "resources");
+        Set<String> permissionScopes = relatedIds(endpoint, "scopes");
         Map<String, Object> resource = get(root + "/resource/" + resourceId);
         boolean verified =
-                policies.equals(new HashSet<>(policyIds))
-                        && resources.contains(resourceId)
-                        && scopes.contains(scopeId)
+                POSITIVE.equals(permission.get("logic"))
+                        && UNANIMOUS.equals(permission.get("decisionStrategy"))
+                        && policies.equals(new HashSet<>(policyIds))
+                        && permissionResources.equals(Set.of(resourceId))
+                        && permissionScopes.equals(Set.of(scopeId))
                         && targetKey.equals(resource.get("name"))
                         && ids(resource.get("scopes"), "id").contains(scopeId);
         if (!verified) {
@@ -595,11 +730,7 @@ public class PolicyGraphWriter {
         }
     }
 
-    /**
-     * IDs of the objects linked to one policy or permission. Keycloak returns permission and
-     * aggregate representations without their associations, so linked resources, scopes and
-     * policies are only readable from the object's association endpoints.
-     */
+    /** Fetch native links for the projection reconciler's graph integrity check. */
     private Set<String> associatedIds(
             String root, String policyId, String association, String idKey) {
         Set<String> out = new HashSet<>();
@@ -756,6 +887,10 @@ public class PolicyGraphWriter {
                 .headers(headers -> headers.setBearerAuth(accessToken()))
                 .retrieve()
                 .toBodilessEntity();
+    }
+
+    private static List<String> ids(Object field) {
+        return ids(field, null);
     }
 
     /** IDs of a JSON field that is either a list of plain IDs or of objects carrying an ID key. */

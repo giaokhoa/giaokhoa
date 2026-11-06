@@ -294,7 +294,11 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                     });
                     assertEquals("READY", state(fixture.workspacePartition()));
                     assertEquals("READY", state(fixture.account()));
-                    assertEquals("READY", state(independentGrant.partition()));
+                    GrantScope verifiedIndependentGrant =
+                            java.util.Objects.requireNonNull(
+                                    independentGrant,
+                                    "Independent grant is required when revoking a grant");
+                    assertEquals("READY", state(verifiedIndependentGrant.partition()));
                 } else {
                     tx(() -> {
                         fence(fixture.partition(pending), 1);
@@ -558,6 +562,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
         // PERSONAL owner in V001, not a fabricated
         // share_grant (which has no production schema before the later user-story tasks).
         try (var nativeGate = new NativeRevocationFixture()) {
+            nativeGate.provisionEligibilityForWorkerFixture();
             ActorScope actor = actorWithReadyPersonalWorkspace(nativeGate.userSubject());
             String targetKey = "workspace:" + actor.workspace();
             String scope = "enter";
