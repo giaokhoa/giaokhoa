@@ -15,8 +15,10 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -63,7 +65,7 @@ class IdentityEligibilitySynchronizerIT extends IntegrationEnvironment {
     private static final String DEFAULT_RESOURCE = "Default Resource";
     private static final String DEFAULT_POLICY = "Default Policy";
     private static final List<String> OWNED_GROUP_IDS = new ArrayList<>();
-    private static String ownedApiClientId;
+    private static @Nullable String ownedApiClientId;
 
     @DynamicPropertySource
     static void isolatedSchema(DynamicPropertyRegistry registry) {
@@ -176,9 +178,9 @@ class IdentityEligibilitySynchronizerIT extends IntegrationEnvironment {
     private UUID account(
             String keycloakSub,
             String origin,
-            String usernameSeed,
+            @Nullable String usernameSeed,
             boolean verified,
-            String email) {
+            @Nullable String email) {
         UUID actor = UUID.randomUUID();
         UUID workspace = UUID.randomUUID();
         String username = "eligibility-" + (usernameSeed == null ? actor : usernameSeed);
@@ -228,7 +230,7 @@ class IdentityEligibilitySynchronizerIT extends IntegrationEnvironment {
         fail("Operation did not succeed in time: " + operationId);
     }
 
-    private String createUser(String username, String email, boolean emailVerified) {
+    private String createUser(String username, @Nullable String email, boolean emailVerified) {
         var body = new java.util.HashMap<String, Object>();
         body.put("username", username);
         body.put("enabled", true);
@@ -436,7 +438,7 @@ class IdentityEligibilitySynchronizerIT extends IntegrationEnvironment {
         if (response == null) {
             throw new IllegalStateException("Master token not readable");
         }
-        return (String) response.get("access_token");
+        return Objects.requireNonNull((String) response.get("access_token"), "access_token");
     }
 
     private static String required(String key) {
