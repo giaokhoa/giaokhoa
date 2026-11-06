@@ -290,11 +290,14 @@ public class ProjectionReconciler {
     private void publish(PartitionRow snapshot, List<Outcome> outcomes) {
         transactions.executeWithoutResult(_ -> {
             PartitionRow current =
-                    jdbc.queryForObject(
-                            "SELECT id, desired_revision, applied_revision, state"
-                                    + " FROM authz_partition WHERE id = ? FOR UPDATE",
-                            PARTITION_MAPPER,
-                            snapshot.id());
+                    Objects.requireNonNull(
+                            jdbc.queryForObject(
+                                    "SELECT id, desired_revision, applied_revision, state"
+                                            + " FROM authz_partition WHERE id = ? FOR UPDATE",
+                                    PARTITION_MAPPER,
+                                    snapshot.id()),
+                            "Authorization partition missing during reconciliation: "
+                                    + snapshot.id());
             if (current.desiredRevision() != snapshot.desiredRevision()) {
                 throw new ReconciliationException(
                         ERROR_REVISION_SUPERSEDED,

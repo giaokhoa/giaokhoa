@@ -37,7 +37,9 @@ public final class JdbcOidcSessionRegistry implements OidcSessionRegistry {
         Assert.notNull(information, "information is required");
         var principal = information.getPrincipal();
         var issuer = principal.getIssuer();
-        Assert.notNull(issuer, "OIDC issuer is required");
+        if (issuer == null) {
+            throw new IllegalArgumentException("OIDC issuer is required");
+        }
         Assert.hasText(principal.getSubject(), "OIDC subject is required");
         var audience = principal.getAudience();
         Assert.isTrue(
@@ -65,8 +67,6 @@ public final class JdbcOidcSessionRegistry implements OidcSessionRegistry {
                 csrf == null ? null : csrf.getValue());
     }
 
-    // ECJ đọc sai hợp đồng trả về @Nullable của Spring Security trong bytecode.
-    @SuppressWarnings("null")
     @Override
     public @Nullable OidcSessionInformation removeSessionInformation(String sessionId) {
         var removed =

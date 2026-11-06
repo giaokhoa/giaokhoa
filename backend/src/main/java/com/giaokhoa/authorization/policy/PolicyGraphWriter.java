@@ -117,9 +117,12 @@ public class PolicyGraphWriter {
      * Realm là segment path cuối cùng của OIDC issuer đã cấu hình, nguồn duy nhất mà ứng dụng đã
      * tin cậy cho cả tên realm production lẫn TEST.
      */
-    private static String realmOf(String issuerUri) {
+    private static String realmOf(@Nullable String issuerUri) {
+        if (issuerUri == null) {
+            throw new IllegalStateException("Keycloak issuer URI has no realm: null");
+        }
         String marker = "/realms/";
-        int start = issuerUri == null ? -1 : issuerUri.lastIndexOf(marker);
+        int start = issuerUri.lastIndexOf(marker);
         String realm =
                 start < 0 ? "" : issuerUri.substring(start + marker.length()).replaceAll("/+$", "");
         if (realm.isBlank() || realm.contains("/")) {

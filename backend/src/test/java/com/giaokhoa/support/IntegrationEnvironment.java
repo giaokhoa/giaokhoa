@@ -8,10 +8,8 @@ import org.springframework.test.context.DynamicPropertySource;
  * Lớp base cho các integration test opt-in chạy trên Compose TEST stack cục bộ tách biệt. Không bao
  * giờ chạy chúng trên cơ sở dữ liệu hay realm DEV.
  */
-// Spring kế thừa cấu hình TEST qua lớp base; không cho khởi tạo fixture trực tiếp.
-@SuppressWarnings("PMD.AbstractClassWithoutAbstractMethod")
 @ActiveProfiles("integration")
-public abstract class IntegrationEnvironment {
+public abstract class IntegrationEnvironment { // NOPMD - Lớp base TEST để kế thừa.
     // shortcut: Fixture này chỉ nhắm Compose TEST cục bộ; TEST bên ngoài cần một allowlist
     // được kiểm chứng riêng.
     private static final String TEST_DB = "jdbc:postgresql://127.0.0.1:15432/giaokhoa_test";

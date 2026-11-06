@@ -23,8 +23,6 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-// MockMvc.andExpect thực hiện assertion thật nhưng không được rule JUnit của PMD nhận diện.
-@SuppressWarnings("PMD.UnitTestShouldIncludeAssert")
 class ProblemDetailsAdviceTest {
     private final MockMvc mvc =
             MockMvcBuilders.standaloneSetup(new Probe())

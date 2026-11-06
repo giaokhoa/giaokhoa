@@ -401,10 +401,8 @@ class KeycloakDecisionClientTest {
         return new KeycloakDecisionClient(builder, authorizedClientManager, TOKEN_URL, AUDIENCE);
     }
 
-    // ECJ đọc sai tham số credentials @Nullable của Spring Security.
-    @SuppressWarnings("null")
     private Authentication authentication(String name) {
-        return new UsernamePasswordAuthenticationToken(name, null, List.of());
+        return UsernamePasswordAuthenticationToken.authenticated(name, null, List.of());
     }
 
     private OAuth2AccessToken tokenExpiringIn(long seconds) {
