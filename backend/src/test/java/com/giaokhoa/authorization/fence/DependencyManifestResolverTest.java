@@ -95,6 +95,43 @@ class DependencyManifestResolverTest {
     }
 
     @Test
+    void aTargetProjectionWithoutDependencyArrayFailsClosedWith503() {
+        JdbcTemplate jdbc = stubPartitions(mock(JdbcTemplate.class));
+        Map<String, Object> projection =
+                Map.of("partition_id", GRANT, "keycloak_resource_id", "native-resource");
+        when(jdbc.queryForList(contains("WHERE target_key"), anyString()))
+                .thenReturn(List.of(projection));
+
+        HttpProblemException problem =
+                assertThrows(
+                        HttpProblemException.class,
+                        () ->
+                                new DependencyManifestResolver(jdbc)
+                                        .resolve(ACTOR, WORKSPACE, List.of(VERSION_KEY)));
+
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, problem.getStatus());
+        assertEquals("AUTHORIZATION_NOT_READY", problem.getCode());
+    }
+
+    @Test
+    void anOwnedProjectionWithoutDependencyArrayFailsClosedWith503() {
+        JdbcTemplate jdbc = stubPartitions(mock(JdbcTemplate.class));
+        when(jdbc.queryForList(contains("WHERE target_key"), anyString())).thenReturn(List.of());
+        when(jdbc.queryForList(contains("WHERE partition_id"), any(UUID.class)))
+                .thenReturn(List.of(Map.of("partition_id", ACCOUNT)));
+
+        HttpProblemException problem =
+                assertThrows(
+                        HttpProblemException.class,
+                        () ->
+                                new DependencyManifestResolver(jdbc)
+                                        .resolve(ACTOR, WORKSPACE, List.of("platform")));
+
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, problem.getStatus());
+        assertEquals("AUTHORIZATION_NOT_READY", problem.getCode());
+    }
+
+    @Test
     void aMissingPartitionFailsClosedWith503() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForList(

@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.MDC;
@@ -32,7 +33,12 @@ public class ProblemDetailsAdvice extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(HttpProblemException.class)
     ResponseEntity<Object> knownProblem(HttpProblemException ex, WebRequest request) {
-        return respond(ex.getStatus(), ex.getCode(), ex.getMessage(), request, null);
+        return respond(
+                ex.getStatus(),
+                ex.getCode(),
+                Objects.requireNonNull(ex.getMessage(), "HTTP problem detail"),
+                request,
+                null);
     }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)
@@ -142,7 +148,7 @@ public class ProblemDetailsAdvice extends ResponseEntityExceptionHandler {
     @Override
     protected ResponseEntity<Object> handleExceptionInternal(
             Exception ex,
-            Object body,
+            @Nullable Object body,
             HttpHeaders headers,
             HttpStatusCode status,
             WebRequest request) {

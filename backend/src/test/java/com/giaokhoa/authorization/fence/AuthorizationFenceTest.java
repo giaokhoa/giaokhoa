@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -46,6 +47,23 @@ class AuthorizationFenceTest {
     void aPendingPartitionFailsClosedWith503() {
         Map<UUID, Map<String, Object>> rows = readyRows();
         rows.put(WORKSPACE_PARTITION, row("PENDING", 2, 1));
+        JdbcTemplate jdbc = stubLocks(mock(JdbcTemplate.class), rows);
+        DependencyManifestResolver resolver = mock(DependencyManifestResolver.class);
+
+        HttpProblemException problem =
+                assertThrows(
+                        HttpProblemException.class,
+                        () ->
+                                new AuthorizationFence(jdbc, resolver, stubTransactions())
+                                        .acquire(manifest(List.of(ACCOUNT, WORKSPACE_PARTITION))));
+
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, problem.getStatus());
+    }
+
+    @Test
+    void missingRevisionFailsClosedWith503() {
+        Map<UUID, Map<String, Object>> rows = readyRows();
+        rows.put(ACCOUNT, Map.of("state", "READY", "desired_revision", 2L));
         JdbcTemplate jdbc = stubLocks(mock(JdbcTemplate.class), rows);
         DependencyManifestResolver resolver = mock(DependencyManifestResolver.class);
 
@@ -137,7 +155,7 @@ class AuthorizationFenceTest {
     private static PlatformTransactionManager stubTransactions() {
         return new PlatformTransactionManager() {
             @Override
-            public TransactionStatus getTransaction(TransactionDefinition definition) {
+            public TransactionStatus getTransaction(@Nullable TransactionDefinition definition) {
                 return new SimpleTransactionStatus();
             }
 

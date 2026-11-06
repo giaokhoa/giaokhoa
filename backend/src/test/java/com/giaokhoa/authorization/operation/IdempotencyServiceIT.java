@@ -248,10 +248,11 @@ class IdempotencyServiceIT extends IntegrationEnvironment {
         UUID workspace =
                 jdbc.queryForObject(
                         "SELECT id FROM workspace WHERE owner_user_id=?", UUID.class, actor);
-        return jdbc.queryForObject(
-                "SELECT id FROM authz_partition WHERE owner_key=?",
-                UUID.class,
-                "workspace:" + workspace);
+        return Objects.requireNonNull(
+                jdbc.queryForObject(
+                        "SELECT id FROM authz_partition WHERE owner_key=?",
+                        UUID.class,
+                        "workspace:" + workspace));
     }
 
     private UUID user() {

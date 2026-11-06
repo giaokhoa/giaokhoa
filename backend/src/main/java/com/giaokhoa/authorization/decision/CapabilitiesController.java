@@ -28,7 +28,8 @@ public class CapabilitiesController {
         this.executor = executor;
     }
 
-    public record TargetInput(String type, UUID id, UUID versionId, List<String> scopes) {
+    public record TargetInput(
+            String type, @Nullable UUID id, @Nullable UUID versionId, List<String> scopes) {
         public TargetInput {
             scopes = scopes == null ? List.of() : List.copyOf(scopes);
         }
@@ -42,7 +43,8 @@ public class CapabilitiesController {
 
     public record ScopeDecision(String scope, boolean allowed, String reasonCode) {}
 
-    public record TargetDecision(String type, UUID id, UUID versionId, List<ScopeDecision> scopes) {
+    public record TargetDecision(
+            String type, @Nullable UUID id, @Nullable UUID versionId, List<ScopeDecision> scopes) {
         public TargetDecision {
             scopes = List.copyOf(scopes);
         }

@@ -115,7 +115,7 @@ class ProjectionFenceGateIT extends IntegrationEnvironment {
                         "workspace:" + workspaceB);
         ready(a.account());
         ready(a.workspacePartition());
-        ready(partitionB);
+        ready(Objects.requireNonNull(partitionB, "workspace partition"));
 
         jdbc.update(
                 "UPDATE authz_partition SET desired_revision = 1, state = 'PENDING' WHERE id = ?",
@@ -185,7 +185,12 @@ class ProjectionFenceGateIT extends IntegrationEnvironment {
                         "SELECT id FROM authz_partition WHERE owner_key = ?",
                         UUID.class,
                         "workspace:" + workspace);
-        return new Fixture(actor, workspace, account, workspacePartition, grant);
+        return new Fixture(
+                actor,
+                workspace,
+                Objects.requireNonNull(account, "account partition"),
+                Objects.requireNonNull(workspacePartition, "workspace partition"),
+                grant);
     }
 
     private UUID centerWorkspace(UUID owner) {

@@ -7,11 +7,12 @@ Dùng JDK 25 và Maven Wrapper. Chạy các lệnh từ thư mục gốc reposit
 ./backend/mvnw -B -ntp -f backend/pom.xml clean verify
 ```
 
-`verify` thất bại nếu compiler có warning, test thất bại, format sai, PMD hoặc SpotBugs phát hiện vi phạm. Không cần cài thêm binary lint; các phiên bản được cố định trong `pom.xml`.
+`verify` thất bại nếu compiler/NullAway có lỗi, test thất bại, format sai, PMD hoặc SpotBugs phát hiện vi phạm. Không cần chạy script kiểm tra null riêng; các phiên bản được cố định trong `pom.xml`.
 
 | Bước | Phạm vi và mục đích |
 | --- | --- |
 | javac `-Xlint:all` và `failOnWarning` | Compile cả main/test; chặn raw type, unchecked, deprecated API và các warning compiler khác. |
+| Error Prone + NullAway | Kiểm tra hợp đồng JSpecify trong các package `@NullMarked` khi compile cả main/test; lỗi nullability làm build thất bại. Chỉ bật check NullAway trong Error Prone để không thêm rule không liên quan. |
 | Spotless / Google Java Format AOSP | Format 4 spaces, thứ tự import và dọn import thừa cho main/test. |
 | PMD | Phân tích source main/test: code không dùng, thực hành Java, mẫu lỗi và security. |
 | SpotBugs | Phân tích bytecode main/test, effort Max, ngưỡng Medium trở lên. |
@@ -32,7 +33,7 @@ Build mặc định không cần PostgreSQL/Keycloak và không chạy integrati
 
 ## VS Code và agent
 
-Mở thư mục gốc của worktree. `backend/.settings/org.eclipse.jdt.core.prefs` cấu hình JDT để coi unused local/import, raw type, unchecked và deprecated API là lỗi. Nếu IDE chưa cập nhật, chạy **Java: Update Project Configuration**.
+Mở thư mục gốc của worktree. `backend/.settings/org.eclipse.jdt.core.prefs` là cấu hình JDT dùng chung; các file `.settings` còn lại do IDE tự sinh được Git ignore. Giữ một `package-info.java` cho mỗi package trong `src/main/java`; không tạo bản trùng trong `src/test/java`. Package chỉ dành cho test có thể khai báo riêng. Với package JPA `@NullUnmarked`, đặt `@NullMarked` trực tiếp trên class test nếu cần kiểm tra null mà không tạo thêm `package-info.java` trùng. Nếu IDE chưa cập nhật, chạy **Java: Update Project Configuration**.
 
 JDT và javac có bộ kiểm tra khác nhau; formatter hoặc build thành công không có nghĩa mọi kiểm tra IDE đều giống nhau. Maven `verify` là lệnh bắt buộc dùng chung cho agent và CI. Sửa nguyên nhân; chỉ dùng suppression hẹp kèm lý do khi xác nhận ngoại lệ của framework hoặc test cố ý truyền đầu vào sai. Không bỏ qua test để lint xanh.
 

@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
@@ -460,13 +461,15 @@ public class PolicyGraphWriter {
 
     private static boolean sameLeafPolicy(
             Map<String, Object> actual, Map<String, Object> desired, String type) {
-        if (!desired.get("name").equals(actual.get("name"))
+        if (desired.get("name") == null
+                || !Objects.equals(desired.get("name"), actual.get("name"))
                 || !type.equals(actual.get("type"))
-                || !desired.get("logic").equals(actual.get("logic"))
+                || desired.get("logic") == null
+                || !Objects.equals(desired.get("logic"), actual.get("logic"))
                 || (actual.containsKey("decisionStrategy")
                         && desired.containsKey("decisionStrategy")
-                        && !desired.get("decisionStrategy")
-                                .equals(actual.get("decisionStrategy")))) {
+                        && !Objects.equals(
+                                desired.get("decisionStrategy"), actual.get("decisionStrategy")))) {
             return false;
         }
         return switch (type) {
@@ -476,15 +479,21 @@ public class PolicyGraphWriter {
                         || !(groups.getFirst() instanceof Map<?, ?> group)) {
                     yield false;
                 }
-                Map<?, ?> expected = (Map<?, ?>) ((List<?>) desired.get("groups")).getFirst();
-                yield expected.get("id").equals(group.get("id"))
+                if (!(desired.get("groups") instanceof List<?> expectedGroups)
+                        || expectedGroups.size() != SINGLE
+                        || !(expectedGroups.getFirst() instanceof Map<?, ?> expected)) {
+                    yield false;
+                }
+                yield expected.get("id") != null
+                        && Objects.equals(expected.get("id"), group.get("id"))
                         && Boolean.FALSE.equals(group.get("extendChildren"));
             }
             case "user" ->
                     new HashSet<>(ids(actual.get("users")))
                             .equals(new HashSet<>(ids(desired.get("users"))));
             case "time" -> {
-                if (!desired.get("notBefore").equals(actual.get("notBefore"))) {
+                if (desired.get("notBefore") == null
+                        || !Objects.equals(desired.get("notBefore"), actual.get("notBefore"))) {
                     yield false;
                 }
                 boolean hasUnexpectedBoundary = false;
@@ -910,14 +919,14 @@ public class PolicyGraphWriter {
                 .toBodilessEntity();
     }
 
-    private static List<String> ids(Object field) {
+    private static List<String> ids(@Nullable Object field) {
         return ids(field, null);
     }
 
     /**
      * Các ID của một trường JSON hoặc là danh sách ID thuần hoặc danh sách đối tượng mang key ID.
      */
-    private static List<String> ids(Object field, @Nullable String key) {
+    private static List<String> ids(@Nullable Object field, @Nullable String key) {
         List<String> out = new ArrayList<>();
         if (field instanceof List<?> list) {
             for (Object item : list) {
