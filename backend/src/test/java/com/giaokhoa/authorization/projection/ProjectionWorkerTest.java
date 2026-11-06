@@ -74,7 +74,7 @@ class ProjectionWorkerTest {
                         new ProjectionReconciler.PartitionRow(
                                 PARTITION, 1L, 0L, AuthorizationPartition.State.PENDING));
         // Một mutation mới hơn đã bump desired revision sau kiểm tra trong vòng lặp.
-        when(jdbc.queryForList(contains("desired_revision"), eq(Long.class), any()))
+        when(jdbc.queryForList(contains("desired_revision"), eq(Long.class), any(UUID.class)))
                 .thenReturn(List.of(2L));
 
         new ProjectionWorker(jdbc, reconciler, stubTransactions()).poll();

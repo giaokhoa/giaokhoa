@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import com.giaokhoa.authorization.model.AuthorizationOperation;
 import com.giaokhoa.shared.http.HttpProblemException;
 import jakarta.persistence.EntityManager;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -91,10 +92,11 @@ class IdempotencyServiceTest {
                         0L);
 
         var result = service.responseFor(operation);
+        var body = Objects.requireNonNull(result.getBody());
         assertEquals(HttpStatus.ACCEPTED, result.getStatusCode());
-        assertFalse(result.getBody().completed());
-        assertEquals("PENDING", result.getBody().state());
-        assertTrue(result.getBody().statusUrl().contains(operation.getId().toString()));
+        assertFalse(body.completed());
+        assertEquals("PENDING", body.state());
+        assertTrue(body.statusUrl().contains(operation.getId().toString()));
         assertEquals("private, no-store", result.getHeaders().getFirst("Cache-Control"));
     }
 }

@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.oauth2.client.oidc.authentication.logout.OidcLogoutToken;
@@ -67,7 +68,7 @@ public final class JdbcOidcSessionRegistry implements OidcSessionRegistry {
     }
 
     @Override
-    public OidcSessionInformation removeSessionInformation(String sessionId) {
+    public @Nullable OidcSessionInformation removeSessionInformation(String sessionId) {
         var removed =
                 jdbc.query(
                         "DELETE FROM oidc_session_correlation WHERE session_id = ?" + RETURNING,

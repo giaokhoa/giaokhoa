@@ -1,6 +1,7 @@
 package com.giaokhoa.authorization.policy;
 
 import java.net.URI;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -9,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
@@ -56,7 +58,7 @@ public class PolicyGraphWriter {
     private final String realm;
     private final OAuth2AuthorizedClientManager manager;
     private final String audienceClientId;
-    private final ResourceMutationCoordinator mutationCoordinator;
+    private final @Nullable ResourceMutationCoordinator mutationCoordinator;
 
     @Autowired
     public PolicyGraphWriter(
@@ -101,7 +103,7 @@ public class PolicyGraphWriter {
             String realm,
             OAuth2AuthorizedClientManager manager,
             String audienceClientId,
-            ResourceMutationCoordinator mutationCoordinator) {
+            @Nullable ResourceMutationCoordinator mutationCoordinator) {
         this.http = builder.build();
         this.baseUrl = baseUrl.replaceAll("/+$", "");
         this.realm = realm;
@@ -154,10 +156,11 @@ public class PolicyGraphWriter {
 
     /** Tạo hoặc cập nhật toàn bộ graph của một cặp target/scope, rồi xác minh bằng cách đọc lại. */
     public AppliedGraph apply(PolicyGraph graph) {
-        if (mutationCoordinator == null) {
+        ResourceMutationCoordinator coordinator = mutationCoordinator;
+        if (coordinator == null) {
             return applyLocked(graph); // unit test dùng Keycloak mock trong bộ nhớ
         }
-        return mutationCoordinator.withResourceLock(graph.targetKey(), () -> applyLocked(graph));
+        return coordinator.withResourceLock(graph.targetKey(), () -> applyLocked(graph));
     }
 
     private AppliedGraph applyLocked(PolicyGraph graph) {
@@ -208,10 +211,11 @@ public class PolicyGraphWriter {
      * dùng chung ở lại cho các graph vẫn dùng chúng.
      */
     public void retractRoot(String targetKey, String scope) {
-        if (mutationCoordinator == null) {
+        ResourceMutationCoordinator coordinator = mutationCoordinator;
+        if (coordinator == null) {
             retractRootLocked(targetKey, scope); // unit test dùng Keycloak mock trong bộ nhớ
         } else {
-            mutationCoordinator.withResourceLock(
+            coordinator.withResourceLock(
                     targetKey,
                     () -> {
                         retractRootLocked(targetKey, scope);
@@ -351,8 +355,9 @@ public class PolicyGraphWriter {
             // thúc.
             // Một notOnOrAfter đơn thuần vẫn cho phép đúng khoảnh khắc kết thúc.
             List<String> ids = new ArrayList<>();
-            if (validity.validFrom() != null) {
-                String name = NativePolicyTemplates.validFromPolicyName(validity.validFrom());
+            Instant validFrom = validity.validFrom();
+            if (validFrom != null) {
+                String name = NativePolicyTemplates.validFromPolicyName(validFrom);
                 policyNames.add(name);
                 ids.add(
                         ensurePolicy(
@@ -368,11 +373,11 @@ public class PolicyGraphWriter {
                                         "logic",
                                         POSITIVE,
                                         "notBefore",
-                                        NativePolicyTemplates.KEYCLOAK_UTC.format(
-                                                validity.validFrom()))));
+                                        NativePolicyTemplates.KEYCLOAK_UTC.format(validFrom))));
             }
-            if (validity.expiresAt() != null) {
-                String name = NativePolicyTemplates.validUntilPolicyName(validity.expiresAt());
+            Instant expiresAt = validity.expiresAt();
+            if (expiresAt != null) {
+                String name = NativePolicyTemplates.validUntilPolicyName(expiresAt);
                 policyNames.add(name);
                 ids.add(
                         ensurePolicy(
@@ -388,8 +393,7 @@ public class PolicyGraphWriter {
                                         "logic",
                                         NEGATIVE,
                                         "notBefore",
-                                        NativePolicyTemplates.KEYCLOAK_UTC.format(
-                                                validity.expiresAt()))));
+                                        NativePolicyTemplates.KEYCLOAK_UTC.format(expiresAt))));
             }
             return ids;
         }
@@ -913,7 +917,7 @@ public class PolicyGraphWriter {
     /**
      * Các ID của một trường JSON hoặc là danh sách ID thuần hoặc danh sách đối tượng mang key ID.
      */
-    private static List<String> ids(Object field, String key) {
+    private static List<String> ids(Object field, @Nullable String key) {
         List<String> out = new ArrayList<>();
         if (field instanceof List<?> list) {
             for (Object item : list) {

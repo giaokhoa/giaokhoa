@@ -6,6 +6,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Desired native policy graph cho một cặp target/scope. Root permission AND các common gate (áp
@@ -126,7 +127,7 @@ public record PolicyGraph(
         }
 
         /** Một cửa sổ {@code [validFrom, expiresAt)}; mỗi biên có thể đứng độc lập. */
-        record Validity(Instant validFrom, Instant expiresAt) implements Gate {
+        record Validity(@Nullable Instant validFrom, @Nullable Instant expiresAt) implements Gate {
             public Validity {
                 if (validFrom == null && expiresAt == null) {
                     throw new IllegalArgumentException("A validity window needs a bound");

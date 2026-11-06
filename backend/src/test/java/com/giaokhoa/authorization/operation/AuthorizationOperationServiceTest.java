@@ -74,7 +74,7 @@ class AuthorizationOperationServiceTest {
         UUID closurePartition = UUID.fromString("11111111-1111-1111-1111-111111111111");
         UUID primary = UUID.fromString("22222222-2222-2222-2222-222222222222");
         List<UUID> lockOrder = new ArrayList<>();
-        when(jdbc.queryForList(contains("FOR UPDATE"), eq(Long.class), any()))
+        when(jdbc.queryForList(contains("FOR UPDATE"), eq(Long.class), any(UUID.class)))
                 .thenAnswer(invocation -> {
                     lockOrder.add(invocation.getArgument(2, UUID.class));
                     return List.of(0L);
@@ -82,7 +82,7 @@ class AuthorizationOperationServiceTest {
         AtomicInteger closureQueries = new AtomicInteger();
         when(jdbc.query(
                         anyString(),
-                        any(PreparedStatementSetter.class),
+                        ArgumentMatchers.<PreparedStatementSetter>any(),
                         ArgumentMatchers.<RowMapper<Object>>any()))
                 .thenAnswer(invocation -> {
                     if (closureQueries.getAndIncrement() > 0) {

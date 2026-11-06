@@ -18,6 +18,7 @@ import com.giaokhoa.shared.http.HttpProblemException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
@@ -45,6 +46,7 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.test.web.client.ResponseActions;
 import org.springframework.test.web.client.ResponseCreator;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClient.Builder;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
@@ -360,12 +362,12 @@ class KeycloakDecisionClientTest {
         return withSuccess("{\"result\":true}", MediaType.APPLICATION_JSON);
     }
 
-    private KeycloakDecisionClient client(RestClient.Builder builder, Session session) {
+    private KeycloakDecisionClient client(Builder builder, Session session) {
         return client(builder, session, null);
     }
 
     private KeycloakDecisionClient client(
-            RestClient.Builder builder, Session session, RestClient.Builder tokenBuilder) {
+            Builder builder, Session session, @Nullable Builder tokenBuilder) {
         // Manager resolve servlet response từ request context, như trên một servlet
         // thread; chính request được truyền vào authorize() dưới dạng attribute.
         RequestContextHolder.setRequestAttributes(

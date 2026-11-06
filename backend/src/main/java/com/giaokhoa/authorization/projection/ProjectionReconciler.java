@@ -5,6 +5,7 @@ import com.giaokhoa.authorization.model.AuthorizationProjection;
 import com.giaokhoa.authorization.policy.NativePolicyTemplates;
 import com.giaokhoa.authorization.policy.PolicyGraph;
 import com.giaokhoa.authorization.policy.PolicyGraphWriter;
+import com.giaokhoa.authorization.policy.PolicyGraphWriter.AppliedGraph;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -14,8 +15,10 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
@@ -122,7 +125,7 @@ public class ProjectionReconciler {
     }
 
     private record Outcome(
-            ProjectionRow projection, Resolved resolved, PolicyGraphWriter.AppliedGraph applied) {}
+            ProjectionRow projection, Resolved resolved, @Nullable AppliedGraph applied) {}
 
     public PartitionRow partition(UUID partitionId) {
         return jdbc.queryForObject(
@@ -153,7 +156,7 @@ public class ProjectionReconciler {
         reconcile(partitionId, expectedDesiredRevision);
     }
 
-    private void reconcile(UUID partitionId, Long expectedDesiredRevision) {
+    private void reconcile(UUID partitionId, @Nullable Long expectedDesiredRevision) {
         PartitionRow partition = partition(partitionId);
         if (expectedDesiredRevision != null
                 && partition.desiredRevision() != expectedDesiredRevision) {
@@ -302,7 +305,7 @@ public class ProjectionReconciler {
                 if (outcome.resolved() instanceof Resolved.Retract) {
                     jdbc.update("DELETE FROM authz_projection WHERE id = ?", projection.id());
                 } else {
-                    PolicyGraphWriter.AppliedGraph applied = outcome.applied();
+                    AppliedGraph applied = Objects.requireNonNull(outcome.applied());
                     jdbc.update(
                             "UPDATE authz_projection SET applied_hash = desired_hash,"
                                     + " keycloak_resource_id = ?, policy_names = ?,"

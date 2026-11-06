@@ -8,7 +8,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -27,7 +26,10 @@ import org.springframework.web.bind.annotation.RestController;
 // MockMvc.andExpect thực hiện assertion thật nhưng không được rule JUnit của PMD nhận diện.
 @SuppressWarnings("PMD.UnitTestShouldIncludeAssert")
 class ProblemDetailsAdviceTest {
-    private MockMvc mvc;
+    private final MockMvc mvc =
+            MockMvcBuilders.standaloneSetup(new Probe())
+                    .setControllerAdvice(new ProblemDetailsAdvice())
+                    .build();
 
     @RestController
     static class Probe {
@@ -73,14 +75,6 @@ class ProblemDetailsAdviceTest {
         void unexpected() {
             throw new IllegalArgumentException("credential super-secret must not appear");
         }
-    }
-
-    @BeforeEach
-    void setup() {
-        mvc =
-                MockMvcBuilders.standaloneSetup(new Probe())
-                        .setControllerAdvice(new ProblemDetailsAdvice())
-                        .build();
     }
 
     @Test

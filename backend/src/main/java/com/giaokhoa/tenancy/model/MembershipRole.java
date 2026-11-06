@@ -15,6 +15,7 @@ import java.util.Objects;
 import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.jspecify.annotations.Nullable;
 
 @Entity
 @Table(name = "membership_role")
@@ -54,7 +55,7 @@ public class MembershipRole {
         }
 
         @Override
-        public boolean equals(Object other) {
+        public boolean equals(@Nullable Object other) {
             if (this == other) return true;
             if (!(other instanceof Key key)) return false;
             return Objects.equals(membershipId, key.membershipId) && role == key.role;

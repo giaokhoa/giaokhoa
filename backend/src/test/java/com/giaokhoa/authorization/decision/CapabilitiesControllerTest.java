@@ -16,6 +16,7 @@ import com.giaokhoa.authorization.decision.ProtectedActionExecutor.Decisions;
 import com.giaokhoa.shared.http.HttpProblemException;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -70,6 +71,12 @@ class CapabilitiesControllerTest {
                         WORKSPACE, request, authentication, new MockHttpServletRequest());
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertTrue(response.getBody().targets().getFirst().scopes().getFirst().allowed());
+        assertTrue(
+                Objects.requireNonNull(response.getBody())
+                        .targets()
+                        .getFirst()
+                        .scopes()
+                        .getFirst()
+                        .allowed());
     }
 }

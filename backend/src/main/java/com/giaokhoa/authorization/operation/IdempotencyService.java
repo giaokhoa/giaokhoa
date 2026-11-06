@@ -11,6 +11,7 @@ import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -39,7 +40,7 @@ public class IdempotencyService {
         this.entities = entities;
     }
 
-    public String requireKey(String key) {
+    public String requireKey(@Nullable String key) {
         if (key == null || key.isBlank()) {
             throw new HttpProblemException(
                     HttpStatus.PRECONDITION_REQUIRED,
@@ -55,7 +56,7 @@ public class IdempotencyService {
         return key;
     }
 
-    public void requireIfMatch(String ifMatch, long currentVersion) {
+    public void requireIfMatch(@Nullable String ifMatch, long currentVersion) {
         if (ifMatch == null || ifMatch.isBlank()) {
             throw new HttpProblemException(
                     HttpStatus.PRECONDITION_REQUIRED, "PRECONDITION_REQUIRED", "Thiếu If-Match.");

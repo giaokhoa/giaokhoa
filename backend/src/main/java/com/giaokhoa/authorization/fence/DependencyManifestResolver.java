@@ -17,6 +17,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -129,7 +130,7 @@ public class DependencyManifestResolver {
         return found.getFirst();
     }
 
-    private ProjectionRow projectionByTarget(String targetKey) {
+    private @Nullable ProjectionRow projectionByTarget(String targetKey) {
         List<Map<String, Object>> rows =
                 jdbc.queryForList(
                         "SELECT partition_id, keycloak_resource_id, dependency_partition_ids"

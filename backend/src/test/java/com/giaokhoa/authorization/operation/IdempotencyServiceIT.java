@@ -6,6 +6,7 @@ import com.giaokhoa.authorization.model.AuthorizationOperation;
 import com.giaokhoa.shared.http.HttpProblemException;
 import com.giaokhoa.support.IntegrationEnvironment;
 import jakarta.persistence.EntityManager;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -44,7 +45,7 @@ class IdempotencyServiceIT extends IntegrationEnvironment {
         assertEquals(1, mutations.get());
         assertEquals(first.getId(), replay.getId());
         assertEquals(HttpStatus.ACCEPTED, idempotency.responseFor(replay).getStatusCode());
-        assertFalse(idempotency.responseFor(replay).getBody().completed());
+        assertFalse(Objects.requireNonNull(idempotency.responseFor(replay).getBody()).completed());
         assertEquals(
                 1,
                 jdbc.queryForObject(
@@ -79,7 +80,8 @@ class IdempotencyServiceIT extends IntegrationEnvironment {
         var completed =
                 idempotency.findExisting(actor, "key-complete", "a".repeat(64)).orElseThrow();
         assertEquals(HttpStatus.OK, idempotency.responseFor(completed).getStatusCode());
-        assertTrue(idempotency.responseFor(completed).getBody().completed());
+        assertTrue(
+                Objects.requireNonNull(idempotency.responseFor(completed).getBody()).completed());
     }
 
     @Test

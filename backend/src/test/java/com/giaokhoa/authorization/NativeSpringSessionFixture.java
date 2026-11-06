@@ -98,7 +98,8 @@ final class NativeSpringSessionFixture implements AutoCloseable {
                             (HttpServletResponse) reply);
                 });
         sessionCookie = Objects.requireNonNull(response.getCookie("SESSION"));
-        assertNotNull(sessions.findById(sessionCookie.getValue()), "Session must persist in JDBC");
+        Objects.requireNonNull(
+                sessions.findById(sessionCookie.getValue()), "Session must persist in JDBC");
         assertTrue(
                 java.util.Arrays.equals(
                         tokens.accessToken().toCharArray(), currentAccessToken().toCharArray()),

@@ -16,7 +16,6 @@ import com.giaokhoa.support.IntegrationEnvironment;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -31,15 +30,12 @@ import org.springframework.web.context.WebApplicationContext;
 @SpringBootTest
 class SecurityConfigurationIT extends IntegrationEnvironment {
 
-    @Autowired WebApplicationContext context;
-
     @Autowired ClientRegistrationRepository registrations;
 
-    private MockMvc mvc;
+    private final MockMvc mvc;
 
-    @BeforeEach
-    void setUp() {
-        mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
+    SecurityConfigurationIT(WebApplicationContext context) {
+        this.mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
     }
 
     @Test

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.giaokhoa.authorization.operation.IdempotencyService;
 import com.giaokhoa.support.IntegrationEnvironment;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -76,7 +77,7 @@ class ProjectionFenceGateIT extends IntegrationEnvironment {
         var failed =
                 idempotency.findExisting(fixture.actor(), "revocation-revoke", HASH).orElseThrow();
         assertEquals(HttpStatus.ACCEPTED, idempotency.responseFor(failed).getStatusCode());
-        assertFalse(idempotency.responseFor(failed).getBody().completed());
+        assertFalse(Objects.requireNonNull(idempotency.responseFor(failed).getBody()).completed());
         assertEquals(
                 "PENDING",
                 jdbc.queryForObject(
