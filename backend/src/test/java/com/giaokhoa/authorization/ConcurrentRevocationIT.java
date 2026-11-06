@@ -1,33 +1,69 @@
 package com.giaokhoa.authorization;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import com.giaokhoa.authorization.model.AuthorizationOperation;
 import com.giaokhoa.authorization.operation.IdempotencyService;
 import com.giaokhoa.support.IntegrationEnvironment;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
+import org.springframework.security.oauth2.core.oidc.OidcIdToken;
+import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.context.WebApplicationContext;
 
 /** Real PostgreSQL locks: a revoke and a protected write must have one commit order. */
 @SpringBootTest
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class ConcurrentRevocationIT extends IntegrationEnvironment {
+    private static final String SCHEMA =
+            "t014_concurrent_" + UUID.randomUUID().toString().replace("-", "");
+
+    @DynamicPropertySource
+    static void isolatedCommittedTransactions(DynamicPropertyRegistry registry) {
+        registry.add("spring.flyway.schemas", () -> SCHEMA);
+        registry.add("spring.flyway.default-schema", () -> SCHEMA);
+        registry.add(
+                "spring.datasource.hikari.connection-init-sql",
+                () -> "SET search_path TO " + SCHEMA + ",public");
+    }
+
+    @AfterAll
+    static void removeCommittedFixtures(@Autowired JdbcTemplate jdbc) {
+        // The real DB forbids deleting individual partitions; only drop this test-owned schema.
+        jdbc.execute("DROP SCHEMA IF EXISTS " + SCHEMA + " CASCADE");
+    }
+
     @Autowired JdbcTemplate jdbc;
     @Autowired IdempotencyService idempotency;
     @Autowired PlatformTransactionManager transactionManager;
+    @Autowired WebApplicationContext webContext;
 
     @Test
     void inFlightWriteFinishesBeforeRevocationCanAcquireExclusiveFence() throws Exception {
@@ -106,6 +142,114 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
             commitRevoke.countDown();
         }
     }
+
+    @Test
+    void concurrentProtectedHttpMutationMustNotBypassRevocationFence() throws Exception {
+        // RED (T018): real Spring MVC business request must wait for the revoke's DB fence.
+        // No test-only PEP: the declared POST /classes route is currently absent (HTTP 404).
+        try (var nativeGate = new NativeRevocationFixture()) {
+            ActorScope fixture = actorWithReadyPersonalWorkspace(nativeGate.userSubject());
+            MockMvc mvc =
+                    MockMvcBuilders.webAppContextSetup(webContext).apply(springSecurity()).build();
+            var idToken =
+                    new OidcIdToken(
+                            "synthetic-session-id-token",
+                            Instant.now(),
+                            Instant.now().plusSeconds(600),
+                            Map.of(
+                                    "iss",
+                                    "http://127.0.0.1:18081/realms/giaokhoa-it",
+                                    "sub",
+                                    nativeGate.userSubject(),
+                                    "aud",
+                                    List.of("giaokhoa-it-web")));
+            var auth =
+                    new OAuth2AuthenticationToken(
+                            new DefaultOidcUser(List.of(), idToken, "sub"), List.of(), "keycloak");
+            CountDownLatch revokeLocked = new CountDownLatch(1);
+            CountDownLatch finishRevoke = new CountDownLatch(1);
+
+            try (var pool = Executors.newFixedThreadPool(2)) {
+                var revoker =
+                        pool.submit(() ->
+                                tx(() -> {
+                                    lockedState(fixture.partition(), "UPDATE");
+                                    fence(fixture.partition(), 1);
+                                    revokeLocked.countDown();
+                                    await(finishRevoke);
+                                    return 1;
+                                }));
+                assertTrue(revokeLocked.await(10, TimeUnit.SECONDS));
+                var writer =
+                        pool.submit(() ->
+                                mvc.perform(
+                                                post(
+                                                                "/api/workspaces/{wid}/classes",
+                                                                fixture.workspace())
+                                                        .with(csrf())
+                                                        .with(authentication(auth))
+                                                        .header(
+                                                                "Idempotency-Key",
+                                                                "t014-concurrent")
+                                                        .contentType(MediaType.APPLICATION_JSON)
+                                                        .content("{\"name\":\"T014 protected\"}"))
+                                        .andReturn()
+                                        .getResponse()
+                                        .getStatus());
+                try {
+                    assertThrows(
+                            TimeoutException.class,
+                            () -> writer.get(300, TimeUnit.MILLISECONDS),
+                            "The HTTP mutation must hold a shared fence until the revoke commits");
+                } finally {
+                    finishRevoke.countDown();
+                }
+
+                assertEquals(1, revoker.get(10, TimeUnit.SECONDS));
+                assertEquals(
+                        HttpStatus.SERVICE_UNAVAILABLE.value(), writer.get(10, TimeUnit.SECONDS));
+                assertEquals(
+                        0,
+                        jdbc.queryForObject(
+                                "SELECT count(*) FROM authorization_operation WHERE workspace_id = ?",
+                                Integer.class,
+                                fixture.workspace()));
+            } finally {
+                finishRevoke.countDown();
+            }
+        }
+    }
+
+    private ActorScope actorWithReadyPersonalWorkspace(String keycloakSub) {
+        return tx(() -> {
+            UUID actor = UUID.randomUUID();
+            UUID workspace = UUID.randomUUID();
+            jdbc.update(
+                    "INSERT INTO user_account(id,keycloak_sub,username,email,email_verified,origin,identity_state)"
+                            + " VALUES (?,?,?,?,true,'SELF_REGISTERED','ACTIVE')",
+                    actor,
+                    keycloakSub,
+                    "t014-actor-" + actor,
+                    "t014-" + actor + "@example.invalid");
+            jdbc.update(
+                    "INSERT INTO workspace(id,kind,owner_user_id,state)"
+                            + " VALUES (?,'PERSONAL',?,'ACTIVE')",
+                    workspace,
+                    actor);
+            UUID partition =
+                    jdbc.queryForObject(
+                            "SELECT id FROM authz_partition WHERE owner_key = ?",
+                            UUID.class,
+                            "workspace:" + workspace);
+            jdbc.update(
+                    "UPDATE authz_partition SET state = 'READY'" + " WHERE owner_key IN (?, ?)",
+                    "account:" + actor,
+                    "workspace:" + workspace);
+            return new ActorScope(workspace, partition);
+        });
+    }
+
+    private record ActorScope(UUID workspace, UUID partition) {}
 
     @Test
     void staleWorkerCannotPublishOldRevisionAfterNewRevoke() {

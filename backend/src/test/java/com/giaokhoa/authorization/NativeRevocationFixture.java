@@ -62,6 +62,10 @@ final class NativeRevocationFixture implements AutoCloseable {
         }
     }
 
+    String userSubject() {
+        return userId;
+    }
+
     String userToken() {
         var form = new LinkedMultiValueMap<String, String>();
         form.add("grant_type", "password");
