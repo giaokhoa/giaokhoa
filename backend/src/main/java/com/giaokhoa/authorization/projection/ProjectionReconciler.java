@@ -16,6 +16,8 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -35,6 +37,8 @@ import org.springframework.web.client.RestClientException;
  */
 @Component
 public class ProjectionReconciler {
+    private static final Logger LOG = LoggerFactory.getLogger(ProjectionReconciler.class);
+
     public static final String ERROR_NO_RECORDED_PROJECTION = "NO_RECORDED_PROJECTION";
     public static final String ERROR_DESIRED_SOURCE_MISMATCH = "DESIRED_SOURCE_MISMATCH";
     public static final String ERROR_DEPENDENCY_NOT_READY = "DEPENDENCY_NOT_READY";
@@ -273,6 +277,9 @@ public class ProjectionReconciler {
                 | DataAccessException
                 | IllegalStateException
                 | OAuth2AuthorizationException ex) {
+            if (LOG.isWarnEnabled()) {
+                LOG.warn("Partition {} did not reconcile: {}", partitionId, ex.toString());
+            }
             return false;
         }
     }

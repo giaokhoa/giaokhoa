@@ -15,6 +15,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -39,6 +41,8 @@ import org.springframework.web.client.RestClientException;
  */
 @Component
 public class ProjectionWorker {
+    private static final Logger LOG = LoggerFactory.getLogger(ProjectionWorker.class);
+
     static final int MAX_ATTEMPTS = 5;
     static final String ERROR_SUPERSEDED = "SUPERSEDED_BY_NEWER_REVISION";
     static final String ERROR_RECONCILE_FAILED = "PROJECTION_RECONCILE_FAILED";
@@ -221,12 +225,26 @@ public class ProjectionWorker {
         } catch (SupersededException ex) {
             recordFailure(operation, ERROR_SUPERSEDED, true, false);
         } catch (ProjectionReconciler.ReconciliationException ex) {
+            if (LOG.isWarnEnabled()) {
+                LOG.warn(
+                        "Operation {} failed reconciliation with code {}: {}",
+                        operation.id(),
+                        ex.errorCode(),
+                        ex.getMessage());
+            }
             recordFailure(
                     operation, ex.errorCode(), operation.attemptCount() >= MAX_ATTEMPTS, true);
         } catch (RestClientException
                 | DataAccessException
                 | IllegalStateException
                 | OAuth2AuthorizationException ex) {
+            if (LOG.isWarnEnabled()) {
+                LOG.warn(
+                        "Operation {} failed reconciliation with code {}",
+                        operation.id(),
+                        ERROR_RECONCILE_FAILED,
+                        ex);
+            }
             recordFailure(
                     operation,
                     ERROR_RECONCILE_FAILED,
