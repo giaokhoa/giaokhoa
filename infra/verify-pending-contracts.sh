@@ -33,15 +33,14 @@ if not path.is_file():
     raise AssertionError("Pending contract Failsafe report missing: setup/build failure, not contract RED")
 suite = ET.parse(path).getroot()
 if (int(suite.get("tests", 0)), int(suite.get("failures", 0)),
-        int(suite.get("errors", 0)), int(suite.get("skipped", 0))) != (6, 6, 0, 0):
-    raise AssertionError("Pending contract verifier expects exactly 6 assertion REDs, zero errors/skips")
+        int(suite.get("errors", 0)), int(suite.get("skipped", 0))) != (5, 5, 0, 0):
+    raise AssertionError("Pending contract verifier expects exactly 5 assertion REDs, zero errors/skips")
 cases = suite.findall("testcase")
 stem = "protectedCapabilitiesMustRejectCommittedPendingDependency(PendingScope)"
 scopes = ("ACCOUNT", "WORKSPACE", "GRANT_PENDING", "GRANT_FAILED")
 expected = {f"{stem}[{i}]": name for i, name in enumerate(scopes, 1)}
-worker = "productionWorkerMustReconcilePartiallyProvisionedAppGraphAfterRetry"
 concurrent = "concurrentFixtureMutationMustWaitForDatabaseRevocationFence"
-expected.update({worker: None, concurrent: None})
+expected.update({concurrent: None})
 if len(cases) != len(expected) or {c.get("name") for c in cases} != set(expected):
     raise AssertionError("Pending contract test identities changed; review them before updating CI")
 
@@ -51,11 +50,8 @@ for case in cases:
     if failure is None or case.find("error") is not None:
         raise AssertionError(f"{name}: expected assertion RED, not pass/setup error")
     message = failure.get("message", "")
-    if name in (worker, concurrent):
-        if name == worker:
-            if not message.startswith("REVOCATION_CONTRACT_WORKER_NOT_INSTALLED:"):
-                raise AssertionError("Worker contract RED is no longer due to missing reconciliation worker")
-        elif message != (
+    if name == concurrent:
+        if message != (
                 "REVOCATION_CONTRACT_EARLY_HTTP_STATUS=404 before PostgreSQL fence: "
                 "sample action route absent"):
             raise AssertionError(
@@ -74,7 +70,7 @@ for case in cases:
             " ==> expected: <200> but was: <404>")
     if any(check not in message for check in assertions):
         raise AssertionError(f"{scope}: missing READY/503/independent-B contrast or HTTP status changed")
-print("Pending contracts: 6 deliberate REDs verified (READY/503/B, missing reconciliation worker, early HTTP 404)")
+print("Pending contracts: 5 deliberate REDs verified (READY/503/B, early HTTP 404)")
 PY
 then
   tail -70 "$LOG" >&2

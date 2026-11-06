@@ -74,7 +74,8 @@ class PolicyGraphWriterNativeIT {
                 new OAuth2AuthorizedClient(serviceRegistration, CLIENT_ID, serviceAccessToken);
         OAuth2AuthorizedClientManager serviceManager = request -> serviceClient;
         PolicyGraphWriter writer =
-                new PolicyGraphWriter(RestClient.builder(), base, serviceManager, AUDIENCE);
+                new PolicyGraphWriter(
+                        RestClient.builder(), base, "giaokhoa", serviceManager, AUDIENCE, null);
 
         KeycloakProvisioningClient directory =
                 new KeycloakProvisioningClient(RestClient.builder(), base, CLIENT_ID, secret);

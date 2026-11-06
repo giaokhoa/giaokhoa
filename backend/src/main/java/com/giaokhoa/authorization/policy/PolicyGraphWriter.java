@@ -52,6 +52,7 @@ public class PolicyGraphWriter {
 
     private final RestClient http;
     private final String baseUrl;
+    private final String realm;
     private final OAuth2AuthorizedClientManager manager;
     private final String audienceClientId;
     private final ResourceMutationCoordinator mutationCoordinator;
@@ -60,6 +61,8 @@ public class PolicyGraphWriter {
     @Autowired
     public PolicyGraphWriter(
             @Value("${giaokhoa.keycloak.admin-base-url}") String baseUrl,
+            @Value("${spring.security.oauth2.client.provider.keycloak.issuer-uri}")
+                    String issuerUri,
             @Value("${giaokhoa.keycloak.provisioner.client-id}") String clientId,
             @Value("${giaokhoa.keycloak.provisioner.client-secret}") String clientSecret,
             @Value("${giaokhoa.keycloak.authorization-audience}") String audienceClientId,
@@ -67,7 +70,9 @@ public class PolicyGraphWriter {
         this(
                 RestClient.builder(),
                 baseUrl,
-                provisionerManager(baseUrl.replaceAll("/+$", ""), clientId, clientSecret),
+                realmOf(issuerUri),
+                provisionerManager(
+                        baseUrl.replaceAll("/+$", ""), realmOf(issuerUri), clientId, clientSecret),
                 audienceClientId,
                 mutationCoordinator);
     }
@@ -78,31 +83,57 @@ public class PolicyGraphWriter {
             String baseUrl,
             OAuth2AuthorizedClientManager manager,
             String audienceClientId) {
-        this(builder, baseUrl, manager, audienceClientId, null);
+        this(builder, baseUrl, "giaokhoa", manager, audienceClientId, null);
     }
 
     PolicyGraphWriter(
             RestClient.Builder builder,
             String baseUrl,
+            String realm,
+            OAuth2AuthorizedClientManager manager,
+            String audienceClientId) {
+        this(builder, baseUrl, realm, manager, audienceClientId, null);
+    }
+
+    PolicyGraphWriter(
+            RestClient.Builder builder,
+            String baseUrl,
+            String realm,
             OAuth2AuthorizedClientManager manager,
             String audienceClientId,
             ResourceMutationCoordinator mutationCoordinator) {
         this.http = builder.build();
         this.baseUrl = baseUrl.replaceAll("/+$", "");
+        this.realm = realm;
         this.manager = manager;
         this.audienceClientId = audienceClientId;
         this.mutationCoordinator = mutationCoordinator;
     }
 
+    /**
+     * The realm is the last path segment of the configured OIDC issuer, the single source the
+     * application already trusts for both the production and the TEST realm names.
+     */
+    private static String realmOf(String issuerUri) {
+        String marker = "/realms/";
+        int start = issuerUri == null ? -1 : issuerUri.lastIndexOf(marker);
+        String realm =
+                start < 0 ? "" : issuerUri.substring(start + marker.length()).replaceAll("/+$", "");
+        if (realm.isBlank() || realm.contains("/")) {
+            throw new IllegalStateException("Keycloak issuer URI has no realm: " + issuerUri);
+        }
+        return realm;
+    }
+
     private static OAuth2AuthorizedClientManager provisionerManager(
-            String baseUrl, String clientId, String secret) {
+            String baseUrl, String realm, String clientId, String secret) {
         ClientRegistration registration =
                 ClientRegistration.withRegistrationId("giaokhoa-provisioner")
                         .clientId(clientId)
                         .clientSecret(secret)
                         .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)
                         .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
-                        .tokenUri(baseUrl + "/realms/giaokhoa/protocol/openid-connect/token")
+                        .tokenUri(baseUrl + "/realms/" + realm + "/protocol/openid-connect/token")
                         .build();
         InMemoryClientRegistrationRepository repository =
                 new InMemoryClientRegistrationRepository(registration);
@@ -213,6 +244,48 @@ public class PolicyGraphWriter {
                 delete(root + "/policy/" + policy.get("id"));
             }
         }
+    }
+
+    /**
+     * Read-only drift check for reconciliation: true only when the recorded resource still exists
+     * under its recorded ID, every recorded policy is still present, and the root permission of the
+     * pair still references that resource with exactly the recorded policy set linked — the same
+     * policy set the apply path verifies on read-back. Anything else is treated as out-of-band
+     * drift. The content inside a still-linked policy is not compared; that is the recorded graph's
+     * own business, enforced when the graph is (re)applied.
+     */
+    public boolean isGraphIntact(
+            String targetKey, String scope, String resourceId, List<String> policyNames) {
+        String root = resourceServerRoot();
+        boolean resourceFound = false;
+        for (Map<String, Object> resource : list(root + "/resource")) {
+            if (targetKey.equals(resource.get("name"))) {
+                resourceFound = resourceId.equals(String.valueOf(resource.get("_id")));
+                break;
+            }
+        }
+        if (!resourceFound) {
+            return false;
+        }
+        Map<String, Map<String, Object>> policies = policyIndex(root);
+        Set<String> recordedPolicyIds = new HashSet<>();
+        for (String name : policyNames) {
+            Map<String, Object> policy = policies.get(name);
+            if (policy == null) {
+                return false;
+            }
+            recordedPolicyIds.add(String.valueOf(policy.get("id")));
+        }
+        String permissionName = NativePolicyTemplates.rootPermissionName(targetKey, scope);
+        for (Map<String, Object> permission : list(root + "/permission/scope")) {
+            if (permissionName.equals(permission.get("name"))) {
+                String permissionId = String.valueOf(permission.get("id"));
+                return associatedIds(root, permissionId, "resources", "_id").contains(resourceId)
+                        && associatedIds(root, permissionId, "associatedPolicies", "id")
+                                .equals(recordedPolicyIds);
+            }
+        }
+        return false;
     }
 
     private List<String> gatePolicies(
@@ -657,6 +730,17 @@ public class PolicyGraphWriter {
         }
     }
 
+    /** Fetch native links for the projection reconciler's graph integrity check. */
+    private Set<String> associatedIds(
+            String root, String policyId, String association, String idKey) {
+        Set<String> out = new HashSet<>();
+        for (Map<String, Object> linked :
+                get(root + "/policy/" + policyId + "/" + association, MAP_LIST)) {
+            out.add(String.valueOf(linked.get(idKey)));
+        }
+        return out;
+    }
+
     private Map<String, Map<String, Object>> policyIndex(String root) {
         Map<String, Map<String, Object>> index = new LinkedHashMap<>();
         for (Map<String, Object> policy : list(root + "/policy")) {
@@ -666,7 +750,7 @@ public class PolicyGraphWriter {
     }
 
     private String realmGroupId(String path) {
-        URI uri = URI.create(baseUrl + "/admin/realms/giaokhoa/group-by-path" + path);
+        URI uri = URI.create(baseUrl + "/admin/realms/" + realm + "/group-by-path" + path);
         try {
             Map<String, Object> group = get(uri, MAP);
             if (!path.equals(group.get("path")) || group.get("id") == null) {
@@ -688,7 +772,7 @@ public class PolicyGraphWriter {
         }
         URI uri =
                 UriComponentsBuilder.fromUriString(baseUrl)
-                        .pathSegment("admin", "realms", "giaokhoa", "clients")
+                        .pathSegment("admin", "realms", realm, "clients")
                         .queryParam("clientId", audienceClientId)
                         .build()
                         .encode()
@@ -700,7 +784,9 @@ public class PolicyGraphWriter {
         }
         cachedRoot =
                 baseUrl
-                        + "/admin/realms/giaokhoa/clients/"
+                        + "/admin/realms/"
+                        + realm
+                        + "/clients/"
                         + clients.getFirst().get("id")
                         + "/authz/resource-server";
         return cachedRoot;
@@ -803,11 +889,11 @@ public class PolicyGraphWriter {
                 .toBodilessEntity();
     }
 
-    /** IDs of a JSON field that is either a list of plain IDs or of objects carrying an ID key. */
     private static List<String> ids(Object field) {
         return ids(field, null);
     }
 
+    /** IDs of a JSON field that is either a list of plain IDs or of objects carrying an ID key. */
     private static List<String> ids(Object field, String key) {
         List<String> out = new ArrayList<>();
         if (field instanceof List<?> list) {

@@ -1,7 +1,9 @@
 package com.giaokhoa.authorization.policy;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -119,17 +121,7 @@ class PolicyGraphWriterTest {
                         + "\",\"decisionStrategy\":\"UNANIMOUS\","
                         + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"],"
                         + "\"policies\":[\"pol-elig\",\"pol-any\"]}");
-        expectGet(
-                server,
-                ROOT + "/permission/scope/perm-1",
-                "{\"id\":\"perm-1\",\"policies\":[\"pol-elig\",\"pol-any\"],"
-                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}");
-        expectGet(
-                server,
-                ROOT + "/resource/res-1",
-                "{\"_id\":\"res-1\",\"name\":\""
-                        + TARGET
-                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
+        expectReadBack(server, "perm-1", List.of("pol-elig", "pol-any"));
 
         PolicyGraphWriter.AppliedGraph applied = writer.apply(graph());
 
@@ -540,17 +532,7 @@ class PolicyGraphWriterTest {
                 ROOT + "/permission/scope",
                 "{\"id\":\"perm-1\"}",
                 "{\"name\":\"" + ROOT_NAME + "\",\"policies\":[\"pol-elig\",\"pol-own\"]}");
-        expectGet(
-                server,
-                ROOT + "/permission/scope/perm-1",
-                "{\"id\":\"perm-1\",\"policies\":[\"pol-elig\",\"pol-own\"],"
-                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}");
-        expectGet(
-                server,
-                ROOT + "/resource/res-1",
-                "{\"_id\":\"res-1\",\"name\":\""
-                        + TARGET
-                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
+        expectReadBack(server, "perm-1", List.of("pol-elig", "pol-own"));
 
         PolicyGraphWriter.AppliedGraph applied = writer.apply(graph);
         assertEquals(List.of("gk-group:" + ELIGIBLE, "gk-group:" + OWNERS), applied.policyNames());
@@ -601,7 +583,9 @@ class PolicyGraphWriterTest {
         expectGet(
                 server,
                 ROOT + "/policy/aggregate/pol-any",
-                "{\"id\":\"pol-any\",\"policies\":[\"pol-mgr\",\"pol-own\"]}");
+                "{\"id\":\"pol-any\",\"logic\":\"POSITIVE\","
+                        + "\"decisionStrategy\":\"AFFIRMATIVE\","
+                        + "\"policies\":[\"pol-mgr\",\"pol-own\"]}");
         expectGet(server, ROOT + "/permission/scope" + LIST, "[]");
         expectCreate(
                 server,
@@ -762,20 +746,121 @@ class PolicyGraphWriterTest {
         expectCreate(server, ROOT + "/policy/group", "{\"id\":\"pol-own\"}");
         expectGet(server, ROOT + "/permission/scope" + LIST, "[]");
         expectCreate(server, ROOT + "/permission/scope", "{\"id\":\"perm-1\"}");
+        expectReadBack(server, "perm-1", List.of());
+
+        assertThrows(IllegalStateException.class, () -> writer.apply(graph));
+        server.verify();
+    }
+
+    @Test
+    void graphIsIntactWhenTheRootPermissionLinksExactlyTheRecordedPolicies() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PolicyGraphWriter writer = writer(builder);
+
+        expectClients(server);
+        expectStoredGraph(server, List.of("pol-own"));
+
+        assertTrue(writer.isGraphIntact(TARGET, "enter", "res-1", List.of("gk-group:" + OWNERS)));
+        server.verify();
+    }
+
+    @Test
+    void graphIsNotIntactWhenAPolicyWasUnlinkedFromTheRootPermission() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PolicyGraphWriter writer = writer(builder);
+
+        expectClients(server);
+        // The policy itself still exists; only the link from the root permission was removed.
+        expectStoredGraph(server, List.of());
+
+        assertFalse(writer.isGraphIntact(TARGET, "enter", "res-1", List.of("gk-group:" + OWNERS)));
+        server.verify();
+    }
+
+    @Test
+    void graphIsNotIntactWhenTheRootPermissionLinksAnExtraPolicy() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PolicyGraphWriter writer = writer(builder);
+
+        expectClients(server);
+        expectStoredGraph(server, List.of("pol-own", "pol-extra"), true);
+
+        assertFalse(writer.isGraphIntact(TARGET, "enter", "res-1", List.of("gk-group:" + OWNERS)));
+        server.verify();
+    }
+
+    private void expectStoredGraph(MockRestServiceServer server, List<String> permissionPolicyIds) {
+        expectStoredGraph(server, permissionPolicyIds, false);
+    }
+
+    private void expectStoredGraph(
+            MockRestServiceServer server, List<String> permissionPolicyIds, boolean extraPolicy) {
         expectGet(
                 server,
-                ROOT + "/permission/scope/perm-1",
-                "{\"id\":\"perm-1\",\"policies\":[],"
-                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}");
+                ROOT + "/resource" + LIST,
+                "[{\"_id\":\"res-1\",\"name\":\"" + TARGET + "\"}]");
+        String policies =
+                "[{\"id\":\"pol-own\",\"name\":\"gk-group:"
+                        + OWNERS
+                        + "\",\"type\":\"group\"}"
+                        + (extraPolicy
+                                ? ",{\"id\":\"pol-extra\",\"name\":\"gk-extra\",\"type\":\"group\"}"
+                                : "")
+                        + "]";
+        expectGet(server, ROOT + "/policy" + LIST, policies);
+        expectGet(
+                server,
+                ROOT + "/permission/scope" + LIST,
+                "[{\"id\":\"perm-1\",\"name\":\"" + ROOT_NAME + "\"}]");
+        expectAssociated(server, "perm-1", "resources", List.of("res-1"), "_id");
+        expectAssociated(server, "perm-1", "associatedPolicies", permissionPolicyIds, "id");
+    }
+
+    /** One association collection of a policy or permission, as Keycloak serves it. */
+    private void expectAssociated(
+            MockRestServiceServer server,
+            String policyId,
+            String association,
+            List<String> ids,
+            String idKey) {
+        StringBuilder json = new StringBuilder("[");
+        for (int i = 0; i < ids.size(); i++) {
+            if (i > 0) {
+                json.append(',');
+            }
+            json.append("{\"").append(idKey).append("\":\"").append(ids.get(i)).append("\"}");
+        }
+        expectGet(
+                server,
+                ROOT + "/policy/" + policyId + "/" + association,
+                json.append(']').toString());
+    }
+
+    /** Native detail and association endpoints must be read before reporting a graph as applied. */
+    private void expectReadBack(
+            MockRestServiceServer server, String permissionId, List<String> policyIds) {
+        var mapper = new tools.jackson.databind.json.JsonMapper();
+        var state = new java.util.LinkedHashMap<String, Object>();
+        state.put("id", permissionId);
+        state.put("name", ROOT_NAME);
+        state.put("logic", "POSITIVE");
+        state.put("decisionStrategy", "UNANIMOUS");
+        state.put("policies", policyIds);
+        state.put("resources", List.of("res-1"));
+        state.put("scopes", List.of("scope-enter"));
+        expectGet(
+                server,
+                ROOT + "/permission/scope/" + permissionId,
+                mapper.writeValueAsString(state));
         expectGet(
                 server,
                 ROOT + "/resource/res-1",
                 "{\"_id\":\"res-1\",\"name\":\""
                         + TARGET
                         + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
-
-        assertThrows(IllegalStateException.class, () -> writer.apply(graph));
-        server.verify();
     }
 
     /** A full page of unrelated entries, so only a later page can hold the wanted name. */
@@ -988,6 +1073,6 @@ class PolicyGraphWriterTest {
         OAuth2AuthorizedClient authorized =
                 new OAuth2AuthorizedClient(registration, "giaokhoa-provisioner", token);
         OAuth2AuthorizedClientManager manager = request -> authorized;
-        return new PolicyGraphWriter(builder, HOST, manager, "giaokhoa-api");
+        return new PolicyGraphWriter(builder, HOST, "giaokhoa", manager, "giaokhoa-api");
     }
 }
