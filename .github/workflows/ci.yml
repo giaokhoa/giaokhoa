@@ -104,6 +104,12 @@ jobs:
           curl -fsS --retry 40 --retry-delay 2 --retry-all-errors --max-time 5 http://127.0.0.1:18081/realms/giaokhoa-it/.well-known/openid-configuration -o /dev/null
           docker compose -p giaokhoa-test -f infra/compose.test.yaml exec -T test-keycloak /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:18081 --realm master --user test-admin --password test-only-password
           docker compose -p giaokhoa-test -f infra/compose.test.yaml exec -T test-keycloak /opt/keycloak/bin/kcadm.sh add-roles -r giaokhoa-it --uusername service-account-giaokhoa-it-fixtures --cclientid realm-management --rolename manage-users
+          # The production policy graph writer runs in the integration context with the
+          # fixtures credential: mirror the authorization roles bootstrap.sh grants the
+          # production provisioner, or every writer call is rejected with 403.
+          for role in view-clients query-clients view-authorization manage-authorization; do
+            docker compose -p giaokhoa-test -f infra/compose.test.yaml exec -T test-keycloak /opt/keycloak/bin/kcadm.sh add-roles -r giaokhoa-it --uusername service-account-giaokhoa-it-fixtures --cclientid realm-management --rolename "$role"
+          done
       # Unimplemented request-fence/worker contracts remain RED and run as a separate suite.
       - name: Verify implemented Spring integration tests (exclude pending contracts)
         run: ./backend/mvnw -B -ntp -f backend/pom.xml -Pintegration verify
