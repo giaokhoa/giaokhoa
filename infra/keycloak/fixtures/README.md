@@ -1,10 +1,10 @@
 # Bộ dữ kiện nghiệm thu theo story
 
 Thư mục này dành cho các fixture Keycloak **test/review**, không chạy trong production
-và không nhập đè realm hoặc dữ liệu DEV. T006 chỉ chuẩn bị nơi đặt fixture;
-bootstrap Keycloak và API seed được triển khai ở các task sau.
+và không nhập đè realm hoặc dữ liệu DEV. Bootstrap Keycloak và API seed
+được triển khai riêng; thư mục này chỉ chứa fixture nghiệm thu.
 
-`native-gate.json` là fixture T013 cố định; `install-native-gate.sh` tạo actor, realm group,
+`native-gate.json` là fixture native authorization cố định; `install-native-gate.sh` tạo actor, realm group,
 resource/scope và policy thật chỉ trên realm tạm do `verify-native.sh` khởi động.
 Hai test client dùng **Authorization Code + PKCE S256** trong Chromium thật,
 tắt Direct Access Grants và không thay đổi `giaokhoa-web`. Token của actor được

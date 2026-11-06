@@ -36,14 +36,14 @@ gate_group() {
   printf '%s' "$parent"
 }
 
-export T013_KEYCLOAK_BASE_URL="$BASE"
-export T013_NATIVE_PASSWORD="$(openssl rand -hex 18)"
-T013_ASSIGNED_USER="$(gate_value .user)"
-T013_CLAIM_USER="$(gate_value .claimOnlyUser)"
-T013_TEACHER_GROUP="$(gate_value .teacherGroup)"
-T013_TEACHER_GROUP_ID="$(gate_group "$T013_TEACHER_GROUP")"
-T013_TEACHER_B_GROUP_ID="$(gate_group "$(gate_value .teacherGroupB)")"
-T013_ELIGIBLE_GROUP_ID="$(gate_group "$(gate_value .eligibleGroup)")"
+export NATIVE_GATE_KEYCLOAK_BASE_URL="$BASE"
+export NATIVE_GATE_NATIVE_PASSWORD="$(openssl rand -hex 18)"
+NATIVE_GATE_ASSIGNED_USER="$(gate_value .user)"
+NATIVE_GATE_CLAIM_USER="$(gate_value .claimOnlyUser)"
+NATIVE_GATE_TEACHER_GROUP="$(gate_value .teacherGroup)"
+NATIVE_GATE_TEACHER_GROUP_ID="$(gate_group "$NATIVE_GATE_TEACHER_GROUP")"
+NATIVE_GATE_TEACHER_B_GROUP_ID="$(gate_group "$(gate_value .teacherGroupB)")"
+NATIVE_GATE_ELIGIBLE_GROUP_ID="$(gate_group "$(gate_value .eligibleGroup)")"
 
 # Isolated test clients must exercise Authorization Code + PKCE, never password grant.
 for test_client in native-gate-test native-gate-forged; do
@@ -58,19 +58,19 @@ for test_client in native-gate-test native-gate-forged; do
     fail "Native actor clients must use Code+PKCE, never password grant"
 done
 NATIVE_FORGED_ID="$(client_id native-gate-forged)"
-gate_post "/clients/$NATIVE_FORGED_ID/protocol-mappers/models" "$(jq -n --arg group "$T013_TEACHER_GROUP" \
+gate_post "/clients/$NATIVE_FORGED_ID/protocol-mappers/models" "$(jq -n --arg group "$NATIVE_GATE_TEACHER_GROUP" \
   '{name:"native-forged-groups",protocol:"openid-connect",protocolMapper:"oidc-hardcoded-claim-mapper",
     config:{"claim.name":"groups","claim.value":$group,"jsonType.label":"String","access.token.claim":"true"}}')"
 gate_post /roles '{"name":"native-gate-teacher-role"}'
 ROLE_JSON="$(admin_get '/roles/native-gate-teacher-role')"
 
-for user in "$T013_ASSIGNED_USER" "$T013_CLAIM_USER"; do
+for user in "$NATIVE_GATE_ASSIGNED_USER" "$NATIVE_GATE_CLAIM_USER"; do
   attrs='{}'
-  if [[ "$user" == "$T013_CLAIM_USER" ]]; then
-    attrs="$(jq -n --arg group "$T013_TEACHER_GROUP" '{gk_claimed_groups:[$group]}')"
+  if [[ "$user" == "$NATIVE_GATE_CLAIM_USER" ]]; then
+    attrs="$(jq -n --arg group "$NATIVE_GATE_TEACHER_GROUP" '{gk_claimed_groups:[$group]}')"
   fi
   body="$(jq -n --arg user "$user" --arg email "$user@example.test" \
-    --arg password "$T013_NATIVE_PASSWORD" --argjson attrs "$attrs" \
+    --arg password "$NATIVE_GATE_NATIVE_PASSWORD" --argjson attrs "$attrs" \
     '{username:$user, email:$email, emailVerified:true, firstName:"Native", lastName:"Gate",
       enabled:true, requiredActions:[], attributes:$attrs,
       credentials:[{type:"password", value:$password, temporary:false}]}')"
@@ -78,15 +78,15 @@ for user in "$T013_ASSIGNED_USER" "$T013_CLAIM_USER"; do
   uid="$(admin_get "/users?username=$user&exact=true" |
     jq -er --arg user "$user" '[.[] | select(.username == $user)] | if length==1 then .[0].id else error("missing fixture actor") end')"
   curl -fsS -o /dev/null -X PUT -H "Authorization: Bearer $TOKEN" \
-    "$BASE/admin/realms/giaokhoa/users/$uid/groups/$T013_ELIGIBLE_GROUP_ID"
-  if [[ "$user" == "$T013_ASSIGNED_USER" ]]; then
-    export T013_ASSIGNED_USER_ID="$uid"
+    "$BASE/admin/realms/giaokhoa/users/$uid/groups/$NATIVE_GATE_ELIGIBLE_GROUP_ID"
+  if [[ "$user" == "$NATIVE_GATE_ASSIGNED_USER" ]]; then
+    export NATIVE_GATE_ASSIGNED_USER_ID="$uid"
     curl -fsS -o /dev/null -X PUT -H "Authorization: Bearer $TOKEN" \
-      "$BASE/admin/realms/giaokhoa/users/$uid/groups/$T013_TEACHER_GROUP_ID"
+      "$BASE/admin/realms/giaokhoa/users/$uid/groups/$NATIVE_GATE_TEACHER_GROUP_ID"
   else
     # This actor has a *real* B assignment but only an invented A claim/role.
     curl -fsS -o /dev/null -X PUT -H "Authorization: Bearer $TOKEN" \
-      "$BASE/admin/realms/giaokhoa/users/$uid/groups/$T013_TEACHER_B_GROUP_ID"
+      "$BASE/admin/realms/giaokhoa/users/$uid/groups/$NATIVE_GATE_TEACHER_B_GROUP_ID"
     curl -fsS -o /dev/null -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
       --data-binary "[$ROLE_JSON]" "$BASE/admin/realms/giaokhoa/users/$uid/role-mappings/realm"
   fi
@@ -105,9 +105,9 @@ gate_resource() {
     '{name:$name,ownerManagedAccess:false,scopes:[$scopes[]|{id:.}]}')"
   gate_id "$AUTHZ/resource" "$name"
 }
-export T013_RESOURCE_A_ID="$(gate_resource resourceA "$(jq -n --arg a "$READ_ID" --arg b "$UPDATE_ID" '[$a,$b]')")"
-export T013_RESOURCE_B_ID="$(gate_resource resourceB "$(jq -n --arg a "$READ_ID" '[$a]')")"
-export T013_ACTIVITY_ID="$(gate_resource activity "$(jq -n --arg a "$OPEN_ID" '[$a]')")"
+export NATIVE_GATE_RESOURCE_A_ID="$(gate_resource resourceA "$(jq -n --arg a "$READ_ID" --arg b "$UPDATE_ID" '[$a,$b]')")"
+export NATIVE_GATE_RESOURCE_B_ID="$(gate_resource resourceB "$(jq -n --arg a "$READ_ID" '[$a]')")"
+export NATIVE_GATE_ACTIVITY_ID="$(gate_resource activity "$(jq -n --arg a "$OPEN_ID" '[$a]')")"
 
 gate_group_policy() {
   local name="$1" group_id="$2"
@@ -115,9 +115,9 @@ gate_group_policy() {
     '{name:$name,logic:"POSITIVE",groups:[{id:$id,extendChildren:false}]}')"
   gate_id "$AUTHZ/policy" "$name"
 }
-ELIGIBLE_POLICY_ID="$(gate_group_policy "$(gate_value .policy.eligibility)" "$T013_ELIGIBLE_GROUP_ID")"
-TEACHER_POLICY_ID="$(gate_group_policy "$(gate_value .policy.teacher)" "$T013_TEACHER_GROUP_ID")"
-TEACHER_B_POLICY_ID="$(gate_group_policy "$(gate_value .policy.teacherB)" "$T013_TEACHER_B_GROUP_ID")"
+ELIGIBLE_POLICY_ID="$(gate_group_policy "$(gate_value .policy.eligibility)" "$NATIVE_GATE_ELIGIBLE_GROUP_ID")"
+TEACHER_POLICY_ID="$(gate_group_policy "$(gate_value .policy.teacher)" "$NATIVE_GATE_TEACHER_GROUP_ID")"
+TEACHER_B_POLICY_ID="$(gate_group_policy "$(gate_value .policy.teacherB)" "$NATIVE_GATE_TEACHER_B_GROUP_ID")"
 gate_aggregate() {
   local name="$1" ids="$2"
   gate_post "$AUTHZ/policy/aggregate" "$(jq -n --arg name "$name" --argjson ids "$ids" \
@@ -135,18 +135,18 @@ gate_time_policy() {
     '{name:$name,logic:$logic,notBefore:"2099-01-01 00:00:00"}')"
   gate_id "$AUTHZ/policy" "$name"
 }
-export T013_START_POLICY_ID="$(gate_time_policy "$(gate_value .policy.validFrom)" POSITIVE)"
-export T013_END_POLICY_ID="$(gate_time_policy "$(gate_value .policy.expiresAt)" NEGATIVE)"
+export NATIVE_GATE_START_POLICY_ID="$(gate_time_policy "$(gate_value .policy.validFrom)" POSITIVE)"
+export NATIVE_GATE_END_POLICY_ID="$(gate_time_policy "$(gate_value .policy.expiresAt)" NEGATIVE)"
 TIME_POLICY_ID="$(gate_aggregate "$(gate_value .policy.timeGate)" \
-  "$(jq -n --arg a "$SOURCE_POLICY_ID" --arg b "$T013_START_POLICY_ID" \
-    --arg c "$T013_END_POLICY_ID" '[$a,$b,$c]')")"
+  "$(jq -n --arg a "$SOURCE_POLICY_ID" --arg b "$NATIVE_GATE_START_POLICY_ID" \
+    --arg c "$NATIVE_GATE_END_POLICY_ID" '[$a,$b,$c]')")"
 gate_permission() {
   gate_post "$AUTHZ/permission/scope" "$(jq -n --arg name "$1" --arg resource "$2" \
     --arg scope "$3" --arg policy "$4" \
     '{name:$name,logic:"POSITIVE",decisionStrategy:"UNANIMOUS",
       resources:[$resource],scopes:[$scope],policies:[$policy]}')"
 }
-gate_permission native-gate-subject-a-read "$T013_RESOURCE_A_ID" "$READ_ID" "$SOURCE_POLICY_ID"
-gate_permission native-gate-subject-b-read "$T013_RESOURCE_B_ID" "$READ_ID" "$SOURCE_B_POLICY_ID"
-gate_permission native-gate-activity-open "$T013_ACTIVITY_ID" "$OPEN_ID" "$TIME_POLICY_ID"
+gate_permission native-gate-subject-a-read "$NATIVE_GATE_RESOURCE_A_ID" "$READ_ID" "$SOURCE_POLICY_ID"
+gate_permission native-gate-subject-b-read "$NATIVE_GATE_RESOURCE_B_ID" "$READ_ID" "$SOURCE_B_POLICY_ID"
+gate_permission native-gate-activity-open "$NATIVE_GATE_ACTIVITY_ID" "$OPEN_ID" "$TIME_POLICY_ID"
 echo "PASS: isolated native fixture seeded with two actors and per-resource/scope policies"

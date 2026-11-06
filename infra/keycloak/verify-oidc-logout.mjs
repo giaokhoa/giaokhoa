@@ -1,4 +1,4 @@
-// Native T011 acceptance: actual Keycloak Code+PKCE login, signed back-channel logout,
+// Native OIDC logout acceptance: actual Keycloak Code+PKCE login, signed back-channel logout,
 // session restart and JDBC invalidation. Run only against the dedicated Compose TEST stack.
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, randomBytes, randomUUID, sign } from "node:crypto";
@@ -11,11 +11,11 @@ const database = "jdbc:postgresql://127.0.0.1:15432/giaokhoa_test";
 assert.equal(process.env.TEST_KEYCLOAK_BASE_URL, "http://127.0.0.1:18081");
 assert.equal(process.env.TEST_KEYCLOAK_REALM, "giaokhoa-it");
 assert.equal(process.env.TEST_DATABASE_URL, database);
-const schema = "gk_t011_" + randomUUID().replaceAll("-", "").slice(0, 12);
-const clientId = "t011-" + randomUUID();
+const schema = "gk_oidc_logout_" + randomUUID().replaceAll("-", "").slice(0, 12);
+const clientId = "oidc-logout-" + randomUUID();
 const clientSecret = randomBytes(24).toString("base64url");
 const password = randomBytes(24).toString("base64url") + "Aa1!";
-const username = "t011-" + randomUUID();
+const username = "oidc-logout-" + randomUUID();
 const appJar = resolve("backend/target/giaokhoa-backend-0.0.1-SNAPSHOT.jar");
 const keycloakBase = "http://127.0.0.1:18081";
 const logoutEvent = "http://schemas.openid.net/event/backchannel-logout";
@@ -194,7 +194,7 @@ async function signedIdTokenWithoutLogoutEvent(appOrigin) {
     const url = new URL(issuer + "/protocol/openid-connect/auth");
     for (const [key, value] of Object.entries({
         response_type: "code", client_id: clientId, redirect_uri: redirectUri,
-        scope: "openid", nonce, state: "t011-event-validation",
+        scope: "openid", nonce, state: "oidc-logout-event-validation",
         code_challenge: createHash("sha256").update(verifier).digest("base64url"),
         code_challenge_method: "S256",
     })) url.searchParams.set(key, value);
@@ -226,7 +226,7 @@ async function rejectedWithoutRevocation(appOrigin, signedToken, sessionCount, r
 
 function signTestLogout(privateKey, claims) {
     const header = Buffer.from(JSON.stringify({
-        alg: "RS256", typ: "logout+jwt", kid: "t011-ephemeral",
+        alg: "RS256", typ: "logout+jwt", kid: "oidc-logout-ephemeral",
     })).toString("base64url");
     const payload = Buffer.from(JSON.stringify(claims)).toString("base64url");
     const content = header + "." + payload;
@@ -247,7 +247,7 @@ async function verifyIsolatedSignatureIssuerAudience(appOrigin, port, sessionCou
     const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
     const publicJwk = {
         ...publicKey.export({ format: "jwk" }),
-        use: "sig", alg: "RS256", kid: "t011-ephemeral",
+        use: "sig", alg: "RS256", kid: "oidc-logout-ephemeral",
     };
     let jwksRequests = 0;
     jwksServer = createServer((request, response) => {
@@ -360,7 +360,7 @@ async function run() {
     schemaCreated = true;
 
     const createdClient = await admin("POST", "/clients", {
-        clientId, secret: clientSecret, name: "T011 ephemeral signed logout acceptance",
+        clientId, secret: clientSecret, name: "Ephemeral signed OIDC logout acceptance",
         enabled: true, protocol: "openid-connect",
         publicClient: false, standardFlowEnabled: true, directAccessGrantsEnabled: false,
         serviceAccountsEnabled: false,
@@ -377,7 +377,7 @@ async function run() {
 
     const createdUser = await admin("POST", "/users", {
         username, email: username + "@test.giaokhoa.localhost",
-        firstName: "T011", lastName: "Acceptance", enabled: true, emailVerified: true,
+        firstName: "OIDC logout", lastName: "Acceptance", enabled: true, emailVerified: true,
         credentials: [{ type: "password", value: password, temporary: false }],
     });
     userId = createdUser.headers.get("location")?.split("/").at(-1);

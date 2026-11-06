@@ -32,9 +32,9 @@ class NativeTimePolicyIT {
     @Test
     void nativeTimePolicyIsInclusiveAtStartAndExclusiveExactlyAtEnd() {
         String actor = gate.token("native-gate-assigned");
-        String resource = gate.required("T013_ACTIVITY_ID");
-        String startId = gate.required("T013_START_POLICY_ID");
-        String endId = gate.required("T013_END_POLICY_ID");
+        String resource = gate.required("NATIVE_GATE_ACTIVITY_ID");
+        String startId = gate.required("NATIVE_GATE_START_POLICY_ID");
+        String endId = gate.required("NATIVE_GATE_END_POLICY_ID");
         String provisioner = provisionerToken();
 
         // In the default fixture both native boundaries are in the future.
@@ -65,18 +65,18 @@ class NativeTimePolicyIT {
 
     private String evaluateAt(Instant instant, String provisioner) {
         String endpoint =
-                gate.required("T013_KEYCLOAK_BASE_URL")
+                gate.required("NATIVE_GATE_KEYCLOAK_BASE_URL")
                         + "/admin/realms/giaokhoa/clients/"
-                        + gate.required("T013_API_CLIENT_ID")
+                        + gate.required("NATIVE_GATE_API_CLIENT_ID")
                         + "/authz/resource-server/policy/evaluate";
         Map<String, Object> request =
                 Map.of(
-                        "userId", gate.required("T013_ASSIGNED_USER_ID"),
-                        "clientId", gate.required("T013_API_CLIENT_ID"),
+                        "userId", gate.required("NATIVE_GATE_ASSIGNED_USER_ID"),
+                        "clientId", gate.required("NATIVE_GATE_API_CLIENT_ID"),
                         "resources",
                                 List.of(
                                         Map.of(
-                                                "_id", gate.required("T013_ACTIVITY_ID"),
+                                                "_id", gate.required("NATIVE_GATE_ACTIVITY_ID"),
                                                 "scopes", List.of(Map.of("name", "attempt.open")))),
                         "context",
                                 Map.of(
@@ -102,7 +102,7 @@ class NativeTimePolicyIT {
         Map<String, Object> result =
                 http.post()
                         .uri(
-                                gate.required("T013_KEYCLOAK_BASE_URL")
+                                gate.required("NATIVE_GATE_KEYCLOAK_BASE_URL")
                                         + "/realms/giaokhoa/protocol/openid-connect/token")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                         .body(form)
@@ -114,9 +114,9 @@ class NativeTimePolicyIT {
 
     private void updateNotBefore(String id, String logic, Instant boundary, String token) {
         String endpoint =
-                gate.required("T013_KEYCLOAK_BASE_URL")
+                gate.required("NATIVE_GATE_KEYCLOAK_BASE_URL")
                         + "/admin/realms/giaokhoa/clients/"
-                        + gate.required("T013_API_CLIENT_ID")
+                        + gate.required("NATIVE_GATE_API_CLIENT_ID")
                         + "/authz/resource-server/policy/time/"
                         + id;
         Map<String, Object> current =

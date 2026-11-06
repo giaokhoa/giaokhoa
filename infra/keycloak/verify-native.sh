@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Isolated native acceptance for T010/T013: disposable Keycloak 26.8.1 + PostgreSQL.
+# Isolated native acceptance for Keycloak provisioning and authorization: disposable Keycloak 26.8.1 + PostgreSQL.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE=http://127.0.0.1:18091
-CONTAINER=gk-t010-native-proof
-DATABASE=gk-t010-native-postgres
-NETWORK=gk-t010-native-network
+CONTAINER=gk-native-proof
+DATABASE=gk-native-postgres
+NETWORK=gk-native-network
 TMP="$(mktemp -d)"
 started=false
 db_started=false
@@ -59,8 +59,8 @@ docker run --rm -d --name "$CONTAINER" --network "$NETWORK" -p 127.0.0.1:18091:8
   -e KC_DB=postgres -e KC_DB_URL="jdbc:postgresql://$DATABASE:5432/keycloak_native" \
   -e KC_DB_USERNAME=keycloak_native -e KC_DB_PASSWORD=native-disposable-only-password \
   -e TZ=UTC \
-  -e KC_BOOTSTRAP_ADMIN_USERNAME=t010-native-admin \
-  -e KC_BOOTSTRAP_ADMIN_PASSWORD=t010-disposable-only-password \
+  -e KC_BOOTSTRAP_ADMIN_USERNAME=native-test-admin \
+  -e KC_BOOTSTRAP_ADMIN_PASSWORD=native-disposable-only-password \
   quay.io/keycloak/keycloak:26.8.1 start-dev >/dev/null
 started=true
 ready=false
@@ -73,10 +73,10 @@ done
 [[ "$ready" == true ]] || fail "Scratch Keycloak not ready"
 
 export KEYCLOAK_ADMIN_BASE_URL="$BASE"
-export KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME=t010-native-admin
-export KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD=t010-disposable-only-password
-export OIDC_CLIENT_SECRET=t010-web-only-synthetic-secret
-export KEYCLOAK_PROVISIONER_CLIENT_SECRET=t010-provisioner-only-synthetic-secret
+export KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME=native-test-admin
+export KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD=native-disposable-only-password
+export OIDC_CLIENT_SECRET=native-web-only-synthetic-secret
+export KEYCLOAK_PROVISIONER_CLIENT_SECRET=native-provisioner-only-synthetic-secret
 export APP_ORIGIN=http://127.0.0.1:3000
 
 admin_token() {
@@ -148,11 +148,11 @@ forbidden_status="$(curl -sS -o "$TMP/forbidden.json" -w '%{http_code}' -X PUT \
 echo "PASS: provisioner cannot modify OIDC web client (HTTP 403)"
 
 # This calls the production Java class with real Spring OAuth2 token handling.
-export T010_KEYCLOAK_BASE_URL="$BASE"
-export T010_KEYCLOAK_PROVISIONER_SECRET="$KEYCLOAK_PROVISIONER_CLIENT_SECRET"
-T010_KEYCLOAK_USER_ID="$(admin_get '/users?username=student-without-email&exact=true' |
+export PROVISIONING_TEST_KEYCLOAK_BASE_URL="$BASE"
+export PROVISIONING_TEST_KEYCLOAK_PROVISIONER_SECRET="$KEYCLOAK_PROVISIONER_CLIENT_SECRET"
+PROVISIONING_TEST_KEYCLOAK_USER_ID="$(admin_get '/users?username=student-without-email&exact=true' |
   jq -er '[.[] | select(.username == "student-without-email")] | if length == 1 then .[0].id else error("test user missing") end')"
-export T010_KEYCLOAK_USER_ID
+export PROVISIONING_TEST_KEYCLOAK_USER_ID
 REPO="$(cd "$ROOT/../.." && pwd)"
 if ! "$REPO/backend/mvnw" -B -ntp -f "$REPO/backend/pom.xml" \
     -Dtest=KeycloakProvisioningClientNativeIT test > "$TMP/java-native.log" 2>&1; then
@@ -162,10 +162,10 @@ fi
 grep -E 'Tests run:|BUILD SUCCESS' "$TMP/java-native.log" | tail -4
 echo "PASS: production Java client created Organization/group and added/revoked membership"
 
-export T013_API_CLIENT_ID="$API_ID"
-# T013 uses real Authorization Services and fixture actors on this disposable realm only.
+export NATIVE_GATE_API_CLIENT_ID="$API_ID"
+# Use real Authorization Services and fixture actors on this disposable realm only.
 source "$ROOT/fixtures/install-native-gate.sh"
-export T013_NATIVE_TOKENS_FILE="$TMP/native-pkce-actor-tokens"
+export NATIVE_GATE_NATIVE_TOKENS_FILE="$TMP/native-pkce-actor-tokens"
 if ! node "$ROOT/fixtures/native-pkce-login.mjs"; then
   docker logs "$CONTAINER" 2>&1 | tail -55 >&2 || true
   fail "Native actor login via real Authorization Code + PKCE"
@@ -193,4 +193,4 @@ bash "$ROOT/bootstrap.sh"
 assert_admin '' '.enabled == false'
 echo "PASS: intentionally disabled realm stays disabled"
 
-echo "NATIVE_T010_T013_ACCEPTANCE_PASSED"
+echo "NATIVE_AUTHORIZATION_ACCEPTANCE_PASSED"

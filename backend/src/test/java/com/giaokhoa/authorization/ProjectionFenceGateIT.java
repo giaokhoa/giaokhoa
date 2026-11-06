@@ -16,8 +16,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * T014 control-plane gates on real PostgreSQL. The protected-request/PDP integration is added in
- * T015-T018; a READY row alone must never be treated as an authorization decision.
+ * Control-plane revocation gates on real PostgreSQL. Until request-fence and PDP integration is
+ * implemented, a READY row alone must never be treated as an authorization decision.
  */
 @SpringBootTest
 @Transactional
@@ -72,7 +72,8 @@ class ProjectionFenceGateIT extends IntegrationEnvironment {
                         + " last_error_code = 'KEYCLOAK_UNAVAILABLE', next_attempt_at = now()"
                         + " WHERE id = ?",
                 operation);
-        var failed = idempotency.findExisting(fixture.actor(), "t014-revoke", HASH).orElseThrow();
+        var failed =
+                idempotency.findExisting(fixture.actor(), "revocation-revoke", HASH).orElseThrow();
         assertEquals(HttpStatus.ACCEPTED, idempotency.responseFor(failed).getStatusCode());
         assertFalse(idempotency.responseFor(failed).getBody().completed());
         assertEquals(
@@ -161,9 +162,9 @@ class ProjectionFenceGateIT extends IntegrationEnvironment {
                 "INSERT INTO user_account(id,keycloak_sub,username,email,email_verified,origin,identity_state)"
                         + " VALUES (?,?,?,?,true,'SELF_REGISTERED','ACTIVE')",
                 actor,
-                "t014-sub-" + actor,
-                "t014-user-" + actor,
-                "t014-" + actor + "@example.invalid");
+                "revocation-sub-" + actor,
+                "revocation-user-" + actor,
+                "revocation-" + actor + "@example.invalid");
         jdbc.update(
                 "INSERT INTO workspace(id,kind,owner_user_id,state) VALUES (?,'PERSONAL',?,'ACTIVE')",
                 workspace,
@@ -195,10 +196,10 @@ class ProjectionFenceGateIT extends IntegrationEnvironment {
                 center);
         jdbc.update(
                 "INSERT INTO center(id,workspace_id,keycloak_organization_id,name,owner_user_id,state)"
-                        + " VALUES (?,?,?,'T014 Center',?,'ACTIVE')",
+                        + " VALUES (?,?,?,'Revocation test center',?,'ACTIVE')",
                 center,
                 workspace,
-                "t014-org-" + center,
+                "revocation-org-" + center,
                 owner);
         jdbc.update(
                 "INSERT INTO center_membership(id,workspace_id,user_id,state,joined_at)"
@@ -220,7 +221,7 @@ class ProjectionFenceGateIT extends IntegrationEnvironment {
         jdbc.update(
                 "INSERT INTO authorization_operation(id,initiator_user_id,workspace_id,"
                         + "idempotency_key,payload_hash,affected_partitions,affected_revisions,desired_revision)"
-                        + " VALUES (?,?,?,'t014-revoke',?,ARRAY[?::uuid,?::uuid,?::uuid],"
+                        + " VALUES (?,?,?,'revocation-revoke',?,ARRAY[?::uuid,?::uuid,?::uuid],"
                         + " ARRAY[?::bigint,?::bigint,?::bigint],?)",
                 id,
                 fixture.actor(),

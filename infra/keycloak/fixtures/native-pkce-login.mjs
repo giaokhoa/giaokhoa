@@ -1,4 +1,4 @@
-// Disposable T013 acceptance: real Chromium login + Authorization Code/PKCE S256.
+// Disposable native authorization acceptance: real Chromium login + Authorization Code/PKCE S256.
 // Actor tokens remain in a mode-0600 temporary file consumed only by native Java tests.
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
@@ -9,9 +9,9 @@ import { createRequire } from "node:module";
 const require = createRequire(new URL("../../../frontend/package.json", import.meta.url));
 const { chromium } = require("@playwright/test");
 
-const base = process.env.T013_KEYCLOAK_BASE_URL;
-const password = process.env.T013_NATIVE_PASSWORD;
-const output = process.env.T013_NATIVE_TOKENS_FILE;
+const base = process.env.NATIVE_GATE_KEYCLOAK_BASE_URL;
+const password = process.env.NATIVE_GATE_NATIVE_PASSWORD;
+const output = process.env.NATIVE_GATE_NATIVE_TOKENS_FILE;
 assert.equal(base, "http://127.0.0.1:18091", "Native login must target only disposable Keycloak");
 assert.ok(password && output, "Native PKCE fixture parameters are required");
 
