@@ -24,8 +24,6 @@
         <maven-pmd.version>3.28.0</maven-pmd.version>
         <pmd.version>7.29.0</pmd.version>
         <spotbugs-maven.version>4.10.5.0</spotbugs-maven.version>
-        <!-- Pending contract-first tests run separately until the implementation is available. -->
-        <pendingContract.excludedGroups>pending-contract</pendingContract.excludedGroups>
     </properties>
 
     <dependencies>
@@ -200,7 +198,6 @@
                         <artifactId>maven-failsafe-plugin</artifactId>
                         <configuration>
                             <failIfNoTests>true</failIfNoTests>
-                            <excludedGroups>${pendingContract.excludedGroups}</excludedGroups>
                             <!-- Native Keycloak dùng stack riêng và được CI chạy qua verify-native.sh. -->
                             <excludes>
                                 <exclude>**/KeycloakProvisioningClientNativeIT.java</exclude>
