@@ -15,12 +15,12 @@ docker compose -p giaokhoa-test -f infra/compose.test.yaml up -d
 
 Guard integration chỉ cho phép đúng `127.0.0.1:15432/giaokhoa_test` (PostgreSQL), `127.0.0.1:18081/realms/giaokhoa-it` (Keycloak), `127.0.0.1:18025` (Mailpit); SMTP TEST dùng `127.0.0.1:11025`. Bất kỳ cổng DEV như `8081`, `5432`, `8025` đều bị từ chối ngay cả khi đặt tên realm/database giống TEST. Muốn chạy TEST trên host khác phải bổ sung endpoint đã được xác minh riêng, không chỉ đổi biến môi trường. Realm `giaokhoa-it` tự import từ `infra/keycloak/test-realm.json` khi database Keycloak TEST mới được khởi tạo; không dùng chung DEV.
 
-Khi realm mới được tạo, cấp cho service account TEST của client `giaokhoa-it-fixtures` các role `realm-management` sau: `manage-users` (fixture tạo/gỡ user) và `view-clients`, `query-clients`, `view-authorization`, `manage-authorization` — bộ role writer graph production cần, khớp phần tương ứng mà `infra/keycloak/bootstrap.sh` cấp cho provisioner production; thiếu chúng, mọi lời gọi Admin REST authorization của `PolicyGraphWriter` trong context integration bị Keycloak trả 403 và worker chỉ ghi nhận `PROJECTION_RECONCILE_FAILED`:
+Khi realm mới được tạo, cấp cho service account TEST của client `giaokhoa-it-fixtures` các role `realm-management` sau: `manage-users` (fixture tạo/gỡ user) và `view-clients`, `view-authorization`, `manage-authorization`, `query-groups` — bộ role writer graph production cần, khớp phần tương ứng mà `infra/keycloak/bootstrap.sh` cấp cho provisioner production; thiếu chúng, mọi lời gọi Admin REST authorization của `PolicyGraphWriter` trong context integration bị Keycloak trả 403 và worker chỉ ghi nhận `PROJECTION_RECONCILE_FAILED`:
 
 ```bash
 docker compose -p giaokhoa-test -f infra/compose.test.yaml exec -T test-keycloak /opt/keycloak/bin/kcadm.sh \
   config credentials --server http://localhost:18081 --realm master --user test-admin --password test-only-password
-for role in manage-users view-clients query-clients view-authorization manage-authorization; do
+for role in manage-users view-clients view-authorization manage-authorization query-groups; do
   docker compose -p giaokhoa-test -f infra/compose.test.yaml exec -T test-keycloak /opt/keycloak/bin/kcadm.sh \
     add-roles -r giaokhoa-it --uusername service-account-giaokhoa-it-fixtures \
     --cclientid realm-management --rolename "$role"
