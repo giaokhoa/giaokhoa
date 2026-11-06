@@ -1,5 +1,5 @@
-// Native OIDC logout acceptance: actual Keycloak Code+PKCE login, signed back-channel logout,
-// session restart and JDBC invalidation. Run only against the dedicated Compose TEST stack.
+// Acceptance OIDC logout native: đăng nhập Keycloak Code+PKCE thật, back-channel logout có ký,
+// khởi động lại session và vô hiệu hóa JDBC. Chỉ chạy trên Compose TEST stack chuyên dụng.
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, randomBytes, randomUUID, sign } from "node:crypto";
 import { execFileSync, spawn } from "node:child_process";
@@ -114,7 +114,7 @@ async function startBackend(port, testJwksUrl) {
             });
             if (response.status >= 200 && response.status < 500) return appOrigin;
         } catch {
-            // Spring/JDBC/Keycloak discovery still starting.
+            // Discovery của Spring/JDBC/Keycloak vẫn đang khởi động.
         }
         await sleep(250);
     }
@@ -198,7 +198,7 @@ async function signedIdTokenWithoutLogoutEvent(appOrigin) {
         code_challenge: createHash("sha256").update(verifier).digest("base64url"),
         code_challenge_method: "S256",
     })) url.searchParams.set(key, value);
-    // Reuse the real SSO browser session established by the preceding login.
+    // Dùng lại SSO browser session thật do lần đăng nhập trước thiết lập.
     const authorized = await browserFetch(url.href);
     assert.equal(authorized.status, 302, "Keycloak SSO authorization code");
     const callback = new URL(authorized.headers.get("location"), url);
@@ -242,8 +242,8 @@ function tamperSignature(token) {
 }
 
 async function verifyIsolatedSignatureIssuerAudience(appOrigin, port, sessionCount, correlation, recorded) {
-    // Ephemeral TEST-only trust anchor: reject one claim at a time with otherwise
-    // correctly signed logout tokens. The real Keycloak signature is tested afterward.
+    // Trust anchor tạm thời chỉ-cho-TEST: từ chối từng claim một với các logout token
+    // vốn được ký đúng. Chữ ký thật của Keycloak được kiểm tra sau đó.
     const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
     const publicJwk = {
         ...publicKey.export({ format: "jwk" }),
@@ -275,8 +275,8 @@ async function verifyIsolatedSignatureIssuerAudience(appOrigin, port, sessionCou
         iat: Math.floor(Date.now() / 1000), jti: randomUUID(),
         events: { [logoutEvent]: {} },
     };
-    // A valid signed control for an absent subject must be accepted without revoking
-    // the live session. This demonstrates that Spring trusts our ephemeral JWKS.
+    // Một control đã ký hợp lệ cho một subject vắng mặt phải được chấp nhận mà không thu hồi
+    // session đang sống. Điều này chứng minh Spring tin JWKS tạm thời của ta.
     const control = signTestLogout(privateKey, {
         ...claims, sub: "nonexistent-" + randomUUID(), sid: "nonexistent-" + randomUUID(),
     });
@@ -420,8 +420,8 @@ async function run() {
     assert.equal(idClaims.events, undefined, "A signed ID token is not a logout event");
     await rejectedWithoutRevocation(appOrigin, validIdToken, sessionCount);
 
-    // In the next phase a TEST-only RSA/JWKS pair makes each failure isolated:
-    // real signature verification, one invalid claim, and an unchanged JDBC session.
+    // Ở phase tiếp theo một cặp RSA/JWKS chỉ-cho-TEST khiến mỗi thất bại tách biệt:
+    // xác minh chữ ký thật, một claim không hợp lệ, và một JDBC session không đổi.
     await verifyIsolatedSignatureIssuerAudience(appOrigin, port, sessionCount, correlation, recorded);
 
     await admin("POST", "/users/" + userId + "/logout");
@@ -457,7 +457,7 @@ try {
     if (proxy) await new Promise((done) => proxy.close(done));
     if (userId) await admin("DELETE", "/users/" + userId).catch((error) => console.error("TEST user cleanup:", error));
     if (clientUuid) await admin("DELETE", "/clients/" + clientUuid).catch((error) => console.error("TEST client cleanup:", error));
-    // Only the randomly named schema created by this run is removed.
+    // Chỉ schema mang tên ngẫu nhiên do lần chạy này tạo mới bị gỡ.
     if (schemaCreated) {
         try { dockerSql("SET client_min_messages=warning; DROP SCHEMA " + schema + " CASCADE"); }
         catch (error) { console.error("TEST schema cleanup:", error); process.exitCode = 1; }

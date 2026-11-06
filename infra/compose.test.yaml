@@ -1,5 +1,5 @@
-# Always start with: docker compose -p giaokhoa-test -f infra/compose.test.yaml up -d
-# Separate services, credentials, ports and volumes; NEVER use 'down -v' on DEV.
+# Luôn khởi động bằng: docker compose -p giaokhoa-test -f infra/compose.test.yaml up -d
+# Service, credential, cổng và volume riêng; KHÔNG BAO GIỜ dùng 'down -v' trên DEV.
 name: giaokhoa-test
 
 services:

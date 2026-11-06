@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Isolated native acceptance for Keycloak provisioning and authorization: disposable Keycloak 26.8.1 + PostgreSQL.
+# Acceptance native tách biệt cho provisioning và authorization của Keycloak: Keycloak 26.8.1 + PostgreSQL dùng một lần.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE=http://127.0.0.1:18091
@@ -139,7 +139,7 @@ provisioner_post '/organizations' '{"name":"center-scratch","alias":"center-scra
 provisioner_post '/groups' '{"name":"scratch-group"}'
 echo "PASS: provisioner created user without email, organization, and realm group"
 
-# Verify least privilege by attempting a real forbidden client configuration update.
+# Kiểm chứng least privilege bằng cách thử một lần cập nhật cấu hình client bị cấm thật.
 forbidden_status="$(curl -sS -o "$TMP/forbidden.json" -w '%{http_code}' -X PUT \
   -H "Authorization: Bearer $PROV_TOKEN" -H 'Content-Type: application/json' \
   --data-binary '{"description":"unauthorized-change-probe"}' \
@@ -147,7 +147,7 @@ forbidden_status="$(curl -sS -o "$TMP/forbidden.json" -w '%{http_code}' -X PUT \
 [[ "$forbidden_status" == 403 ]] || fail "Provisioner client update must be denied (HTTP $forbidden_status)"
 echo "PASS: provisioner cannot modify OIDC web client (HTTP 403)"
 
-# This calls the production Java class with real Spring OAuth2 token handling.
+# Đoạn này gọi class Java production với xử lý token Spring OAuth2 thật.
 export PROVISIONING_TEST_KEYCLOAK_BASE_URL="$BASE"
 export PROVISIONING_TEST_KEYCLOAK_PROVISIONER_SECRET="$KEYCLOAK_PROVISIONER_CLIENT_SECRET"
 PROVISIONING_TEST_KEYCLOAK_USER_ID="$(admin_get '/users?username=student-without-email&exact=true' |
@@ -163,7 +163,7 @@ grep -E 'Tests run:|BUILD SUCCESS' "$TMP/java-native.log" | tail -4
 echo "PASS: production Java client created Organization/group and added/revoked membership"
 
 export NATIVE_GATE_API_CLIENT_ID="$API_ID"
-# Use real Authorization Services and fixture actors on this disposable realm only.
+# Chỉ dùng Authorization Services thật và fixture actor trên realm dùng một lần này.
 source "$ROOT/fixtures/install-native-gate.sh"
 export NATIVE_GATE_NATIVE_TOKENS_FILE="$TMP/native-pkce-actor-tokens"
 if ! node "$ROOT/fixtures/native-pkce-login.mjs"; then
@@ -179,7 +179,7 @@ fi
 grep -E 'Tests run:|BUILD SUCCESS' "$TMP/native-gate-java.log" | tail -6
 echo "PASS: native resource/scope, claim, batch and UTC time boundaries"
 
-# Native time gate can exceed the short-lived master admin token lifetime.
+# Native time gate có thể vượt quá tuổi thọ ngắn của master admin token.
 TOKEN="$(admin_token)"
 admin_get '' | jq '.enabled = false | .attributes["gk.bootstrap.pending"] = "true"' > "$TMP/realm.json"
 admin_put '' "$TMP/realm.json"

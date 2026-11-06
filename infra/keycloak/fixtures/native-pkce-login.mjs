@@ -1,5 +1,5 @@
-// Disposable native authorization acceptance: real Chromium login + Authorization Code/PKCE S256.
-// Actor tokens remain in a mode-0600 temporary file consumed only by native Java tests.
+// Acceptance authorization native dùng một lần: đăng nhập Chromium thật + Authorization Code/PKCE S256.
+// Actor token nằm trong một file tạm mode-0600 chỉ được các native Java test tiêu thụ.
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
@@ -50,7 +50,7 @@ try {
 
             await page.goto(authorize.href);
             await page.locator("#username").fill(username);
-            // Keycloak 26 may split username and password across two browser forms.
+            // Keycloak 26 có thể tách username và password thành hai form trình duyệt.
             if (await page.locator('input[name="password"]').count() === 0) {
                 await page.locator('#kc-login, button[type="submit"], input[type="submit"]').first().click();
             }
