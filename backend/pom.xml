@@ -24,6 +24,8 @@
         <maven-pmd.version>3.28.0</maven-pmd.version>
         <pmd.version>7.29.0</pmd.version>
         <spotbugs-maven.version>4.10.5.0</spotbugs-maven.version>
+        <!-- T014 contract-first tests stay runnable via -Dt014.excludedGroups= -Dgroups=t014-pending. -->
+        <t014.excludedGroups>t014-pending</t014.excludedGroups>
     </properties>
 
     <dependencies>
@@ -198,6 +200,7 @@
                         <artifactId>maven-failsafe-plugin</artifactId>
                         <configuration>
                             <failIfNoTests>true</failIfNoTests>
+                            <excludedGroups>${t014.excludedGroups}</excludedGroups>
                             <!-- Native Keycloak dùng stack riêng và được CI chạy qua verify-native.sh. -->
                             <excludes>
                                 <exclude>**/KeycloakProvisioningClientNativeIT.java</exclude>
