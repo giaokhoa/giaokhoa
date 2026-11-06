@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.giaokhoa.support.IntegrationEnvironment;
 import java.time.Instant;
@@ -51,6 +52,8 @@ class OidcSessionPersistenceIT extends IntegrationEnvironment {
 
     @Autowired OAuth2AuthorizedClientRepository authorizedClients;
 
+    @Autowired SessionRepositoryFilter<?> sessionFilter;
+
     @Test
     void sessionAndCorrelationSurviveNewRegistryAndMatchOnlyCorrectSid() {
         assertInstanceOf(HttpSessionOAuth2AuthorizedClientRepository.class, authorizedClients);
@@ -84,10 +87,17 @@ class OidcSessionPersistenceIT extends IntegrationEnvironment {
                                     token(ISSUER, CLIENT, "user-1", "sid-elsewhere"))
                             .iterator()
                             .hasNext());
-            var removed =
+            // Both sid and sub in a signed logout token must agree with one correlation row.
+            assertFalse(
                     restarted
                             .removeSessionInformation(
                                     token(ISSUER, CLIENT, "different-user", "sid-1"))
+                            .iterator()
+                            .hasNext());
+            assertNotNull(sessions.findById(session.getId()));
+            var removed =
+                    restarted
+                            .removeSessionInformation(token(ISSUER, CLIENT, "user-1", "sid-1"))
                             .iterator();
             assertNotNull(removed);
             var correlation = removed.next();
@@ -196,8 +206,7 @@ class OidcSessionPersistenceIT extends IntegrationEnvironment {
         var auth = new TestingAuthenticationToken("test-subject", "unused", "ROLE_USER");
         var first = new MockHttpServletRequest("GET", "/");
         var response = new MockHttpServletResponse();
-        var firstFilter = new SessionRepositoryFilter<>(sessions);
-        firstFilter.doFilter(
+        sessionFilter.doFilter(
                 first,
                 response,
                 (request, reply) ->
@@ -209,14 +218,19 @@ class OidcSessionPersistenceIT extends IntegrationEnvironment {
 
         var cookie = response.getCookie("SESSION");
         assertNotNull(cookie);
+        assertEquals(UUID.fromString(cookie.getValue()).toString(), cookie.getValue());
+        assertEquals("SESSION", cookie.getName());
+        assertFalse(cookie.getSecure());
+        assertNull(cookie.getDomain());
+        assertTrue(cookie.isHttpOnly());
+        assertTrue(response.getHeader("Set-Cookie").contains("SameSite=Lax"));
         try {
-            // Fresh request and filter: the client must be read from a JDBC-backed session.
+            // Fresh request using the production Spring Session filter and cookie serializer.
             var second = new MockHttpServletRequest("GET", "/");
             second.setCookies(cookie);
             var loaded = new AtomicReference<OAuth2AuthorizedClient>();
             var sessionId = new AtomicReference<String>();
-            var secondFilter = new SessionRepositoryFilter<>(sessions);
-            secondFilter.doFilter(
+            sessionFilter.doFilter(
                     second,
                     new MockHttpServletResponse(),
                     (request, reply) -> {
@@ -236,12 +250,7 @@ class OidcSessionPersistenceIT extends IntegrationEnvironment {
                     refreshToken.getTokenValue(), loaded.get().getRefreshToken().getTokenValue());
             assertNotNull(sessions.findById(sessionId.get()));
         } finally {
-            // The SESSION cookie contains an encoded ID, not the database session ID.
-            var raw =
-                    new String(
-                            java.util.Base64.getDecoder().decode(cookie.getValue()),
-                            java.nio.charset.StandardCharsets.UTF_8);
-            sessions.deleteById(raw);
+            sessions.deleteById(cookie.getValue());
         }
     }
 
