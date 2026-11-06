@@ -14,6 +14,12 @@ describe("hiển thị trạng thái operation", () => {
     expect(operationStatus({ state: "FAILED", completed: false }).kind).toBe("failed");
   });
 
+  it("không gán mọi lỗi operation cho cập nhật quyền", () => {
+    const result = operationStatus({ state: "FAILED", completed: false });
+    expect(result.message).not.toContain("quyền");
+    expect(result.message).toContain("Thao tác");
+  });
+
   it("không coi trạng thái lạ là hoàn tất", () => {
     expect(operationStatus({ state: "UNKNOWN" as "PENDING", completed: true }).kind).toBe("pending");
   });

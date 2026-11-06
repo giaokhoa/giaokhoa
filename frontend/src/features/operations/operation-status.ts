@@ -23,7 +23,7 @@ export function operationStatus(
   operation: Pick<OperationView, "state" | "completed">,
 ): OperationStatus {
   if (operation.state === "FAILED") {
-    return { kind: "failed", message: "Không thể cập nhật quyền. Vui lòng thử lại hoặc liên hệ hỗ trợ." };
+    return { kind: "failed", message: "Thao tác không hoàn tất. Vui lòng thử lại hoặc liên hệ hỗ trợ." };
   }
   if (operation.state === "SUCCEEDED" && operation.completed === true) {
     return { kind: "succeeded", message: "Thao tác đã hoàn tất." };

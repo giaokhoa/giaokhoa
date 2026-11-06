@@ -50,9 +50,12 @@ export function apiPath(path: string): string {
   return url.pathname + url.search;
 }
 
-export async function readApiResponse<T>(response: Response): Promise<ApiResult<T>> {
+export async function readApiResponse<T>(
+  response: Response,
+  withoutBody = false,
+): Promise<ApiResult<T>> {
   let body: unknown;
-  if (response.status !== 204 && response.status !== 205) {
+  if (!withoutBody && response.status !== 204 && response.status !== 205) {
     try {
       body = await response.json();
     } catch {
@@ -104,11 +107,17 @@ async function getCsrf(): Promise<[string, string]> {
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<ApiResult<T>> {
   const url = apiPath(path);
+  if (url === "/api/logout" || url.startsWith("/api/logout?")) {
+    throw new Error("Dùng submitLogout để điều hướng đăng xuất.");
+  }
   const headers = new Headers(init.headers);
   if (headers.has("Authorization") || headers.has("Cookie") || headers.has("X-Tenant-Id")) {
     throw new Error("Không gửi token, cookie hay tenant override từ API client.");
   }
   if (!headers.has("Accept")) headers.set("Accept", "application/json");
+  if (typeof init.body === "string" && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
 
   const method = (init.method ?? "GET").toUpperCase();
   if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
@@ -125,5 +134,22 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     cache: "no-store",
     redirect: "manual",
   });
-  return readApiResponse<T>(response);
+  return readApiResponse<T>(response, method === "HEAD");
+}
+
+// HTML form navigation is required for Spring's RP-Initiated OIDC logout redirect.
+export async function submitLogout(): Promise<void> {
+  const [, token] = await getCsrf();
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = "/api/logout";
+
+  const csrf = document.createElement("input");
+  csrf.type = "hidden";
+  csrf.name = "_csrf";
+  csrf.value = token;
+
+  form.appendChild(csrf);
+  document.body.appendChild(form);
+  form.submit();
 }

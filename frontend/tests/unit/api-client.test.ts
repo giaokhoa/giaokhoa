@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { apiRequest } from "../../src/lib/api-client";
+import { apiRequest, submitLogout } from "../../src/lib/api-client";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -42,6 +42,29 @@ describe("browser API client", () => {
     expect(options.credentials).toBe("same-origin");
   });
 
+  it("gửi JSON đúng Content-Type và không ghi đè FormData hay form encode", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(session("csrf-json"))
+      .mockResolvedValueOnce(Response.json({ ok: true }))
+      .mockResolvedValueOnce(session("csrf-form"))
+      .mockResolvedValueOnce(Response.json({ ok: true }))
+      .mockResolvedValueOnce(session("csrf-url"))
+      .mockResolvedValueOnce(Response.json({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    await apiRequest("/api/classes", { method: "POST", body: JSON.stringify({ name: "Lớp" }) });
+    const jsonRequest = new Request("https://same-origin.test/api/classes", fetchMock.mock.calls[1][1]);
+    expect(jsonRequest.headers.get("Content-Type")).toBe("application/json");
+
+    const formData = new FormData();
+    formData.set("name", "Lớp");
+    await apiRequest("/api/classes", { method: "POST", body: formData });
+    const formRequest = new Request("https://same-origin.test/api/classes", fetchMock.mock.calls[3][1]);
+    expect(formRequest.headers.get("Content-Type")).toMatch(/^multipart\/form-data; boundary=/);
+
+    await apiRequest("/api/classes", { method: "POST", body: new URLSearchParams({ name: "Lớp" }) });
+    const encoded = new Request("https://same-origin.test/api/classes", fetchMock.mock.calls[5][1]);
+    expect(encoded.headers.get("Content-Type")).toContain("application/x-www-form-urlencoded");
+  });
+
   it("giữ trạng thái 202 khi response chứa operation lồng trong StudentIssueView", async () => {
     const studentIssue = {
       operation: { id: "op-2", state: "APPLYING", completed: false, targetType: "STUDENT" },
@@ -59,11 +82,36 @@ describe("browser API client", () => {
       .mockResolvedValueOnce(session("new"))
       .mockResolvedValueOnce(Response.json({ ok: true }));
     vi.stubGlobal("fetch", fetchMock);
-    await apiRequest("/api/logout", { method: "POST" });
-    await apiRequest("/api/logout", { method: "POST" });
+    await apiRequest("/api/classes", { method: "POST" });
+    await apiRequest("/api/classes", { method: "POST" });
     expect(new Headers(fetchMock.mock.calls[1][1].headers).get("X-CSRF-TOKEN")).toBe("old");
     expect(new Headers(fetchMock.mock.calls[3][1].headers).get("X-CSRF-TOKEN")).toBe("new");
     expect(fetchMock.mock.calls.filter(([path]) => path === "/api/session")).toHaveLength(2);
+  });
+
+  it("logout dùng POST form điều hướng và không bị JSON fetch giữ lại redirect", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(session("logout-token"));
+    vi.stubGlobal("fetch", fetchMock);
+    const submit = vi.fn();
+    const appendInput = vi.fn();
+    const appendForm = vi.fn();
+    const form = { method: "", action: "", appendChild: appendInput, submit };
+    const input = { type: "", name: "", value: "" };
+    vi.stubGlobal("document", {
+      body: { appendChild: appendForm },
+      createElement: vi.fn((tag: string) => tag === "form" ? form : input),
+    });
+    await submitLogout();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/session");
+    expect(form).toMatchObject({ method: "POST", action: "/api/logout" });
+    expect(input).toMatchObject({ type: "hidden", name: "_csrf", value: "logout-token" });
+    expect(appendInput).toHaveBeenCalledWith(input);
+    expect(appendForm).toHaveBeenCalledWith(form);
+    expect(submit).toHaveBeenCalledOnce();
+    await expect(apiRequest("/api/logout", { method: "POST" })).rejects.toThrow(/logout/i);
+    await expect(apiRequest("/api/logout?returnTo=%2F", { method: "POST" })).rejects.toThrow(/logout/i);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it.each([403, 409, 428, 503])("xử lý problem+json %i theo mã lỗi", async (status) => {
@@ -102,6 +150,16 @@ describe("browser API client", () => {
     }
     await expect(apiRequest("/api/me", { headers: { Authorization: "Bearer secret" } })).rejects.toThrow();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("HEAD 200 không đòi JSON body và lỗi HEAD vẫn bị từ chối", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(null, { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 403 }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await apiRequest("/api/health", { method: "HEAD" })).toEqual({
+      kind: "data", status: 200, data: undefined,
+    });
+    await expect(apiRequest("/api/health", { method: "HEAD" })).rejects.toMatchObject({ status: 403 });
   });
 
   it("giữ idempotency do caller cấp và trả dữ liệu rỗng cho 204", async () => {
