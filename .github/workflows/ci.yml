@@ -100,6 +100,8 @@ jobs:
       # with -Dgroups=t014-pending -Dt014.excludedGroups= (expected RED until T018/T021).
       - name: Verify implemented Spring integration tests (exclude documented T014 RED)
         run: ./backend/mvnw -B -ntp -f backend/pom.xml -Pintegration verify
+      - name: Assert T014 contract-first RED remains meaningful
+        run: bash infra/verify-t014-red.sh
       - name: Upload backend integration reports
         if: failure()
         # Báo cáo phục vụ chẩn đoán; lỗi quota không được thay đổi kết quả lint/test.

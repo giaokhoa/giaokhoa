@@ -1,7 +1,6 @@
 package com.giaokhoa.authorization;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -9,14 +8,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import com.giaokhoa.authorization.model.AuthorizationOperation;
 import com.giaokhoa.authorization.operation.IdempotencyService;
 import com.giaokhoa.support.IntegrationEnvironment;
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Tag;
@@ -29,9 +25,10 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
-import org.springframework.security.oauth2.core.oidc.OidcIdToken;
-import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
+import org.springframework.session.SessionRepository;
+import org.springframework.session.web.http.SessionRepositoryFilter;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -68,6 +65,10 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
     @Autowired IdempotencyService idempotency;
     @Autowired PlatformTransactionManager transactionManager;
     @Autowired WebApplicationContext webContext;
+    @Autowired SessionRepositoryFilter<?> sessionFilter;
+    @Autowired OAuth2AuthorizedClientRepository authorizedClients;
+    @Autowired ClientRegistrationRepository clientRegistrations;
+    @Autowired SessionRepository<?> sessions;
 
     @Test
     void inFlightWriteFinishesBeforeRevocationCanAcquireExclusiveFence() throws Exception {
@@ -75,11 +76,14 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
         CountDownLatch protectedLock = new CountDownLatch(1);
         CountDownLatch releaseWrite = new CountDownLatch(1);
         CountDownLatch revokeStarted = new CountDownLatch(1);
+        AtomicInteger writerBackendPid = new AtomicInteger();
+        AtomicInteger revokeBackendPid = new AtomicInteger();
 
         try (var pool = Executors.newFixedThreadPool(2)) {
             var writer =
                     pool.submit(() ->
                             tx(() -> {
+                                writerBackendPid.set(backendPid());
                                 assertEquals("READY", lockedState(partition, "SHARE"));
                                 protectedLock.countDown();
                                 await(releaseWrite);
@@ -90,6 +94,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
             var revoker =
                     pool.submit(() ->
                             tx(() -> {
+                                revokeBackendPid.set(backendPid());
                                 revokeStarted.countDown();
                                 lockedState(partition, "UPDATE");
                                 fence(partition, 1);
@@ -97,10 +102,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                             }));
             assertTrue(revokeStarted.await(10, TimeUnit.SECONDS));
             try {
-                assertThrows(
-                        TimeoutException.class,
-                        () -> revoker.get(300, TimeUnit.MILLISECONDS),
-                        "Revoke must block until the protected transaction commits");
+                assertBlockedBy(revoker, revokeBackendPid.get(), writerBackendPid.get());
             } finally {
                 releaseWrite.countDown();
             }
@@ -118,11 +120,15 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
         UUID partition = partition();
         CountDownLatch revokedButNotCommitted = new CountDownLatch(1);
         CountDownLatch commitRevoke = new CountDownLatch(1);
+        CountDownLatch writerAtDatabase = new CountDownLatch(1);
+        AtomicInteger revokerBackendPid = new AtomicInteger();
+        AtomicInteger writerBackendPid = new AtomicInteger();
 
         try (var pool = Executors.newFixedThreadPool(2)) {
             var revoker =
                     pool.submit(() ->
                             tx(() -> {
+                                revokerBackendPid.set(backendPid());
                                 lockedState(partition, "UPDATE");
                                 fence(partition, 1);
                                 revokedButNotCommitted.countDown();
@@ -130,12 +136,16 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                                 return 1;
                             }));
             assertTrue(revokedButNotCommitted.await(10, TimeUnit.SECONDS));
-            var writer = pool.submit(() -> tx(() -> lockedState(partition, "SHARE")));
+            var writer =
+                    pool.submit(() ->
+                            tx(() -> {
+                                writerBackendPid.set(backendPid());
+                                writerAtDatabase.countDown();
+                                return lockedState(partition, "SHARE");
+                            }));
             try {
-                assertThrows(
-                        TimeoutException.class,
-                        () -> writer.get(300, TimeUnit.MILLISECONDS),
-                        "A write may not read the old READY state while revoke holds the fence");
+                assertTrue(writerAtDatabase.await(10, TimeUnit.SECONDS));
+                assertBlockedBy(writer, writerBackendPid.get(), revokerBackendPid.get());
             } finally {
                 commitRevoke.countDown();
             }
@@ -147,9 +157,37 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
         }
     }
 
+    @Test
+    void realCodePkceActorTokenSurvivesJdbcSessionAcrossNativeRevocation() throws Exception {
+        try (var nativeGate = new NativeRevocationFixture();
+                var session = nativeSession(nativeGate)) {
+            String first = session.currentAccessToken();
+            assertFalse(nativeGate.containsGroupClaim(first));
+            assertTrue(nativeGate.allowed(first, "a"));
+            assertTrue(nativeGate.allowed(first, "b"));
+
+            nativeGate.revoke("a");
+            String after = session.currentAccessToken();
+            assertTrue(
+                    java.util.Arrays.equals(first.toCharArray(), after.toCharArray()),
+                    "Spring JDBC session must retain the same user token");
+            assertFalse(
+                    nativeGate.allowed(after, "a"), "Revoked A must deny without another login");
+            assertTrue(nativeGate.allowed(after, "b"), "Independent B must remain allowed");
+        }
+    }
+
+    private NativeSpringSessionFixture nativeSession(NativeRevocationFixture nativeGate)
+            throws Exception {
+        return new NativeSpringSessionFixture(
+                nativeGate, sessionFilter, authorizedClients, clientRegistrations, sessions);
+    }
+
     private enum PendingScope {
         ACCOUNT,
-        WORKSPACE
+        WORKSPACE,
+        GRANT_PENDING,
+        GRANT_FAILED
     }
 
     @Tag("t014-pending")
@@ -158,28 +196,57 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
     void protectedCapabilitiesMustRejectCommittedPendingDependency(PendingScope pending)
             throws Exception {
         // RED T018/T021: authenticated real MVC route, no substitute authorization executor.
-        try (var nativeGate = new NativeRevocationFixture()) {
+        try (var nativeGate = new NativeRevocationFixture();
+                var session = nativeSession(nativeGate)) {
             ActorScope fixture = actorWithReadyPersonalWorkspace(nativeGate.userSubject());
-            tx(() -> {
-                fence(fixture.partition(pending), 1);
-                return null;
-            });
-
+            GrantScope grant = null;
+            if (pending == PendingScope.GRANT_PENDING || pending == PendingScope.GRANT_FAILED) {
+                grant = grantDependency(fixture, nativeGate.resourceId("a"));
+                UUID grantPartition = grant.partition();
+                tx(() -> {
+                    jdbc.update(
+                            "UPDATE authz_projection SET state = 'PENDING'"
+                                    + " WHERE partition_id = ?",
+                            grantPartition);
+                    jdbc.update(
+                            "UPDATE authz_partition SET desired_revision = 1, state = ?"
+                                    + " WHERE id = ?",
+                            pending == PendingScope.GRANT_FAILED ? "FAILED" : "PENDING",
+                            grantPartition);
+                    return null;
+                });
+                assertEquals("READY", state(fixture.workspacePartition()));
+                assertEquals("READY", state(fixture.account()));
+            } else {
+                tx(() -> {
+                    fence(fixture.partition(pending), 1);
+                    return null;
+                });
+            }
+            assertTrue(nativeGate.allowed(session.currentAccessToken(), "a"));
+            if (grant != null) {
+                assertTrue(nativeGate.allowed(session.currentAccessToken(), "a", "content.read"));
+            }
+            String capabilityTarget =
+                    grant == null
+                            ? ("{\"type\":\"WORKSPACE\",\"id\":\"%s\"," + "\"scopes\":[\"enter\"]}")
+                                    .formatted(fixture.workspace())
+                            : ("{\"type\":\"RESOURCE_VERSION\",\"id\":\"%s\","
+                                            + "\"versionId\":\"%s\","
+                                            + "\"scopes\":[\"content.read\"]}")
+                                    .formatted(grant.resource(), grant.version());
             MockMvc mvc =
-                    MockMvcBuilders.webAppContextSetup(webContext).apply(springSecurity()).build();
+                    MockMvcBuilders.webAppContextSetup(webContext)
+                            .addFilters(sessionFilter)
+                            .apply(springSecurity())
+                            .build();
             int status =
                     mvc.perform(
                                     post("/api/workspaces/{wid}/capabilities", fixture.workspace())
+                                            .cookie(session.cookie())
                                             .with(csrf())
-                                            .with(
-                                                    authentication(
-                                                            oidcAuthentication(
-                                                                    nativeGate.userSubject())))
                                             .contentType(MediaType.APPLICATION_JSON)
-                                            .content(
-                                                    ("{\"targets\":[{\"type\":\"WORKSPACE\",\"id\":\"%s\","
-                                                                    + "\"scopes\":[\"enter\"]}]}")
-                                                            .formatted(fixture.workspace())))
+                                            .content("{\"targets\":[" + capabilityTarget + "]}"))
                             .andReturn()
                             .getResponse()
                             .getStatus();
@@ -194,11 +261,15 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
     @Test
     void concurrentFixtureMutationMustWaitForDatabaseRevocationFence() throws Exception {
         // RED T018/T021: sample actions must use the same production PEP and lock protocol.
-        try (var nativeGate = new NativeRevocationFixture()) {
+        try (var nativeGate = new NativeRevocationFixture();
+                var session = nativeSession(nativeGate)) {
             ActorScope fixture = actorWithReadyPersonalWorkspace(nativeGate.userSubject());
             MockMvc mvc =
-                    MockMvcBuilders.webAppContextSetup(webContext).apply(springSecurity()).build();
-            var auth = oidcAuthentication(nativeGate.userSubject());
+                    MockMvcBuilders.webAppContextSetup(webContext)
+                            .addFilters(sessionFilter)
+                            .apply(springSecurity())
+                            .build();
+            assertTrue(nativeGate.allowed(session.currentAccessToken(), "a"));
             CountDownLatch revokeLocked = new CountDownLatch(1);
             CountDownLatch finishRevoke = new CountDownLatch(1);
             CountDownLatch writerStarted = new CountDownLatch(1);
@@ -208,11 +279,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                 var revoker =
                         pool.submit(() ->
                                 tx(() -> {
-                                    revokerBackendPid.set(
-                                            java.util.Objects.requireNonNull(
-                                                    jdbc.queryForObject(
-                                                            "SELECT pg_backend_pid()",
-                                                            Integer.class)));
+                                    revokerBackendPid.set(backendPid());
                                     lockedState(fixture.workspacePartition(), "UPDATE");
                                     fence(fixture.workspacePartition(), 1);
                                     revokeLocked.countDown();
@@ -228,7 +295,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                                                             "/api/workspaces/{wid}/samples/actions",
                                                             fixture.workspace())
                                                     .with(csrf())
-                                                    .with(authentication(auth))
+                                                    .cookie(session.cookie())
                                                     .header("Idempotency-Key", "t014-concurrent")
                                                     .contentType(MediaType.APPLICATION_JSON)
                                                     .content(
@@ -287,22 +354,37 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
         }
     }
 
-    private OAuth2AuthenticationToken oidcAuthentication(String subject) {
-        // Mock the authenticated transport only; no PDP/fence or real Code-login claim is made.
-        var idToken =
-                new OidcIdToken(
-                        "synthetic-session-id-token",
-                        Instant.now(),
-                        Instant.now().plusSeconds(600),
-                        Map.of(
-                                "iss",
-                                "http://127.0.0.1:18081/realms/giaokhoa-it",
-                                "sub",
-                                subject,
-                                "aud",
-                                List.of("giaokhoa-it-web")));
-        return new OAuth2AuthenticationToken(
-                new DefaultOidcUser(List.of(), idToken, "sub"), List.of(), "keycloak");
+    private record GrantScope(UUID partition, UUID resource, UUID version) {}
+
+    private GrantScope grantDependency(ActorScope fixture, String keycloakResourceId) {
+        return tx(() -> {
+            UUID grant = UUID.randomUUID();
+            UUID resource = UUID.randomUUID();
+            UUID version = UUID.randomUUID();
+            jdbc.update(
+                    "INSERT INTO authz_partition(id,kind,owner_key)" + " VALUES (?,'GRANT',?)",
+                    grant,
+                    "grant:" + grant);
+            jdbc.update(
+                    "INSERT INTO authz_projection(id,partition_id,target_key,"
+                            + "keycloak_resource_id,dependency_partition_ids,desired_hash,"
+                            + "applied_hash,state)"
+                            + " VALUES (?,?,?,?,ARRAY[?::uuid],?,?,'READY')",
+                    UUID.randomUUID(),
+                    grant,
+                    "workspace:"
+                            + fixture.workspace()
+                            + ":resource:"
+                            + resource
+                            + ":version:"
+                            + version,
+                    keycloakResourceId,
+                    fixture.workspacePartition(),
+                    "a".repeat(64),
+                    "a".repeat(64));
+            jdbc.update("UPDATE authz_partition SET state = 'READY' WHERE id = ?", grant);
+            return new GrantScope(grant, resource, version);
+        });
     }
 
     private ActorScope actorWithReadyPersonalWorkspace(String keycloakSub) {
@@ -335,13 +417,119 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                     "UPDATE authz_partition SET state = 'READY' WHERE id IN (?, ?)",
                     account,
                     workspacePartition);
-            return new ActorScope(workspace, account, workspacePartition);
+            return new ActorScope(actor, workspace, account, workspacePartition);
         });
     }
 
-    private record ActorScope(UUID workspace, UUID account, UUID workspacePartition) {
+    private record ActorScope(UUID actor, UUID workspace, UUID account, UUID workspacePartition) {
         UUID partition(PendingScope scope) {
-            return scope == PendingScope.ACCOUNT ? account : workspacePartition;
+            return switch (scope) {
+                case ACCOUNT -> account;
+                case WORKSPACE -> workspacePartition;
+                case GRANT_PENDING, GRANT_FAILED ->
+                        throw new IllegalArgumentException("GRANT is resolved from projection");
+            };
+        }
+    }
+
+    @Test
+    void crashAfterNativeRevokeBeforeDatabaseAckCanReplayWithoutDuplicatingGraph()
+            throws Exception {
+        // A worker implementation is still T017. This tests its network/commit crash window,
+        // with native Keycloak, committed PostgreSQL revisions and a second identical revoke.
+        try (var nativeGate = new NativeRevocationFixture();
+                var session = nativeSession(nativeGate)) {
+            ActorScope fixture = actorWithReadyPersonalWorkspace(nativeGate.userSubject());
+            String token = session.currentAccessToken();
+            assertTrue(nativeGate.allowed(token, "a"));
+            assertTrue(nativeGate.allowed(token, "b"));
+            var graphBefore = nativeGate.graphInventory();
+            var operation =
+                    new AuthorizationOperation(
+                            UUID.randomUUID(),
+                            fixture.actor(),
+                            fixture.workspace(),
+                            "t014-native-crash-retry",
+                            "a".repeat(64),
+                            new UUID[] {fixture.account(), fixture.workspacePartition()},
+                            new Long[] {0L, 1L},
+                            0L);
+            tx(() -> {
+                idempotency.executeOnce(operation, () -> fence(fixture.workspacePartition(), 1));
+                jdbc.update(
+                        "UPDATE authorization_operation SET state='APPLYING', attempt_count=1"
+                                + " WHERE id=?",
+                        operation.getId());
+                return null;
+            });
+
+            // Native operation commits, then the worker disappears before recording READY.
+            nativeGate.revoke("a");
+            assertFalse(nativeGate.allowed(token, "a"));
+            assertTrue(nativeGate.allowed(token, "b"));
+            assertEquals("PENDING", state(fixture.workspacePartition()));
+            assertEquals(
+                    HttpStatus.ACCEPTED,
+                    tx(() ->
+                            idempotency
+                                    .responseFor(
+                                            idempotency
+                                                    .findExisting(
+                                                            fixture.actor(),
+                                                            "t014-native-crash-retry",
+                                                            "a".repeat(64))
+                                                    .orElseThrow())
+                                    .getStatusCode()));
+
+            tx(() -> {
+                jdbc.update(
+                        "UPDATE authorization_operation SET state='RETRYABLE_FAILURE',"
+                                + " last_error_code='KEYCLOAK_ACK_LOST', next_attempt_at=now()"
+                                + " WHERE id=?",
+                        operation.getId());
+                return null;
+            });
+            nativeGate.revoke("a"); // Replay the same native operation, no new graph objects.
+            assertEquals(graphBefore, nativeGate.graphInventory());
+            assertFalse(nativeGate.allowed(token, "a"));
+            assertTrue(nativeGate.allowed(token, "b"));
+
+            tx(() -> {
+                var replay =
+                        idempotency.executeOnce(
+                                operation, () -> fail("Retry must not reapply desired mutation"));
+                assertEquals(operation.getId(), replay.getId());
+                jdbc.update(
+                        "UPDATE authorization_operation SET state='APPLYING',"
+                                + " attempt_count=2, next_attempt_at=NULL, last_error_code=NULL"
+                                + " WHERE id=?",
+                        operation.getId());
+                jdbc.update(
+                        "UPDATE authz_partition SET applied_revision=1, state='READY' WHERE id=?",
+                        fixture.workspacePartition());
+                jdbc.update(
+                        "UPDATE authorization_operation SET state='SUCCEEDED' WHERE id=?",
+                        operation.getId());
+                return null;
+            });
+            assertEquals(
+                    HttpStatus.OK,
+                    tx(() ->
+                            idempotency
+                                    .responseFor(
+                                            idempotency
+                                                    .findExisting(
+                                                            fixture.actor(),
+                                                            "t014-native-crash-retry",
+                                                            "a".repeat(64))
+                                                    .orElseThrow())
+                                    .getStatusCode()));
+            assertEquals(
+                    1,
+                    jdbc.queryForObject(
+                            "SELECT count(*) FROM authorization_operation WHERE id=?",
+                            Integer.class,
+                            operation.getId()));
         }
     }
 
@@ -491,6 +679,29 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
     }
 
     private record Recovery(UUID actor, UUID grant, UUID operation) {}
+
+    private int backendPid() {
+        return java.util.Objects.requireNonNull(
+                jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+    }
+
+    private void assertBlockedBy(Future<?> waiting, int waiterPid, int blockerPid)
+            throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (!waiting.isDone() && System.nanoTime() < deadline) {
+            Boolean blocked =
+                    jdbc.queryForObject(
+                            "SELECT ? = ANY(pg_blocking_pids(?))",
+                            Boolean.class,
+                            blockerPid,
+                            waiterPid);
+            if (Boolean.TRUE.equals(blocked)) {
+                return;
+            }
+            Thread.sleep(25);
+        }
+        fail("PostgreSQL did not report backend " + waiterPid + " blocked by " + blockerPid);
+    }
 
     private UUID partition() {
         return tx(() -> {

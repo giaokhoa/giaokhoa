@@ -1,59 +1,31 @@
-# T014 — Bằng chứng review sau commit b5d542e (test-first)
+# T014 — Review lần 3: test-first contract và giới hạn nghiệm thu
 
-## Phạm vi và phân loại GREEN/RED
+## Kết luận
 
-Mốc Foundation là T022, trước T051 (ClassController của US3). Vì vậy test
-application-boundary tại T014 dùng đúng contract trước T022, **không** gọi
-`/api/workspaces/{wid}/classes`:
+| Review | Cách xử lý |
+| --- | --- |
+| Thiếu OAuth2AuthorizedClient | Test dùng `NativeSpringSessionFixture`: token **Code+PKCE thật** của `giaokhoa-it-web` TEST, gắn vào Spring `OAuth2AuthorizedClientRepository`/SecurityContext của Spring Session JDBC. Request HTTP RED dùng cookie `SESSION`, không dùng `authentication()` giả. |
+| Thiếu same-session | GREEN test load cùng cookie/JDBC token trước/sau native revoke A; A deny, B allow. Đây chưa phải Spring OIDC callback/PEP E2E. |
+| GRANT PENDING/FAILED | Thêm 2 RED riêng: grant-owned projection của resource/version `content.read` với dependency WORKSPACE. ACCOUNT và WORKSPACE vẫn READY, GRANT PENDING hoặc FAILED; protected capabilities cần 503. |
+| Worker crash/retry | GREEN test Keycloak thật: native revoke A sau DB desired commit nhưng trước READY/ack, tiếp tục 202, replay cùng revoke không nhân bản resource/policy/grant, xác nhận graph inventory và idempotency rồi mới READY/200. **Chưa** restart worker T017 thật. |
+| Concurrent DB false-PASS | Cả hai DB test kiểm tra PID connection đang chờ và blocker đúng bằng `pg_blocking_pids(waiterPid)`. Không coi timeout thread là bằng chứng lock. |
+| PDP boolean | Dùng `NativeGateClient.requireDecision()` từ T013 để yêu cầu boolean thật. |
+| Thiếu main | Đã merge `origin/main` chứa T012/T013 vào feature T014, không merge vào `main`. |
 
-- `POST /api/workspaces/{wid}/capabilities`: kiểm tra ACCOUNT/WORKSPACE đã
-  PENDING trong transaction **đã commit** -> yêu cầu HTTP 503.
-- `POST /api/workspaces/{wid}/samples/actions` với `CREATE_RESOURCE`: kiểm tra
-  business mutation không vượt qua lock/revision fence của revoke đang mở.
+## Các lệnh chạy
 
-Hai endpoint ở trên được khai trong `contracts/http-api.md`, thuộc kiểm chứng
-Foundation/T021, không phải ClassController T051. Test này **không dựng**
-test-only PEP, PDP giả hay production route tạm. Principal OIDC được tạo qua
-Spring Security MockMvc để thử HTTP boundary; đó **không phải** phiên login thật
-Authorization Code + PKCE, phần này vẫn thuộc T022.
-
-Các test HTTP nằm trong `ConcurrentRevocationIT` không dùng transaction test bao
-ngoài. Từng actor/workspace/partition được tạo với `TransactionTemplate` rồi
-**commit trước khi** gọi MockMvc. Class này có schema PostgreSQL TEST riêng
-`t014_concurrent_<UUID>`, Flyway migrate từ đầu và `@AfterAll` drop schema.
-Không xóa `authz_partition` bằng DELETE vì migration bảo vệ lịch sử revision.
-
-Trong concurrent HTTP test, revoker giữ khóa `FOR UPDATE` và báo **backend PID**.
-Test chỉ công nhận writer đã chạm khóa nếu `pg_blocking_pids()` báo cụ thể
-writer chờ đúng revoker ở `authz_partition`. Có tín hiệu `writerStarted` trước
-request và kiểm tra response/operation **sau khi** cho revoke commit. Không
-coi `Future.get(300ms)` là bằng chứng lock: request chậm đơn thuần không đạt.
-
-## Chạy test
-
-Cần TEST PostgreSQL/Keycloak và biến `TEST_*` như `backend/README.md`.
-Maven JDK 25, cả hai lệnh bên dưới dùng profile integration:
+Dùng các biến `TEST_*` của `backend/README.md`; không chạy DEV.
 
 ```sh
-# Mặc định / CI: toàn bộ phần đã triển khai (chỉ loại tag t014-pending).
+./backend/mvnw -B -ntp -f backend/pom.xml clean verify
 ./backend/mvnw -B -ntp -f backend/pom.xml -Pintegration verify
-
-# Opt-in RED của T014: chạy CHỈ 3 contract tests, thất bại là kết quả dự kiến
-# cho đến khi T018/T021 và fixture/PAP tương ứng được triển khai.
-./backend/mvnw -B -ntp -f backend/pom.xml -Pintegration \
-  -Dgroups=t014-pending '-Dt014.excludedGroups=' verify
+bash infra/verify-t014-red.sh
+bash infra/keycloak/verify-native.sh
 ```
 
-Maven Failsafe dùng `t014.excludedGroups=t014-pending` trong `backend/pom.xml`.
-CI chỉ loại ba test tagged; không bỏ các integration test đã có. Khi T018/T021
-được triển khai, chạy lại RED command; nếu cả ba GREEN, **bỏ tag và default
-exclusion**, đưa chúng trở về CI bắt buộc. Không được báo integration CI mặc định
-là đã nghiệm thu mọi hành vi được quarantine.
+Failsafe mặc định chỉ loại tag `t014-pending`. GitHub CI vẫn yêu cầu integration GREEN và thêm `infra/verify-t014-red.sh` để kiểm tra đúng **5 assertion RED**, không chấp nhận lỗi môi trường, fixture hỏng hay test bị quên. Khi T018/T021 triển khai, gỡ tag và cập nhật verifier trong cùng thay đổi để chuyển hợp đồng sang CI GREEN.
 
-Trên máy hiện tại, schema TEST công khai có checksum V002 khác `origin/main`.
-Vì vậy cả hai lần chạy dưới đây bổ sung ba tham số để chỉ dùng schema
-`t014_issue16` đã migrate đúng, không repair/drop schema công khai và không
-đụng DEV:
+Trên TEST DB máy local, schema public bị checksum Flyway V002 khác `origin/main`. Khi chạy integration và script RED local, thêm ba tham số Maven (script chuyển tiếp các argument):
 
 ```sh
 '-Dspring.flyway.schemas=t014_issue16'
@@ -61,33 +33,13 @@ Vì vậy cả hai lần chạy dưới đây bổ sung ba tham số để chỉ
 '-Dspring.datasource.hikari.connection-init-sql=SET search_path TO t014_issue16,public'
 ```
 
-## Kết quả đã đo
+`ConcurrentRevocationIT` tạo schema `t014_concurrent_<UUID>` riêng, migrate rồi drop sau test; không repair/clean DB public hay DEV. Session cookie được xóa khi test kết thúc.
 
-| Lần chạy | Kết quả | Log |
-| --- | --- | --- |
-| `clean verify` (JDK 25) | **27/27 unit GREEN**, Spotless/PMD/SpotBugs GREEN | `/tmp/t014-r3-unit-final.log` |
-| `-Pintegration verify` mặc định | **86/86 integration GREEN**, `BUILD SUCCESS` | `/tmp/t014-r3-integration-green.log` |
-| `-Pintegration -Dgroups=t014-pending '-Dt014.excludedGroups=' verify` | **3/3 RED được thực thi**, `BUILD FAILURE` đúng dự kiến | `/tmp/t014-r3-contract-red.log` |
+## Kết quả và giới hạn
 
-Hai RED `protectedCapabilitiesMustRejectCommittedPendingDependency` (ACCOUNT
-và WORKSPACE): mong đợi HTTP 503 nhưng hiện nhận 404 vì route/PEP chưa có.
-RED `concurrentFixtureMutationMustWaitForDatabaseRevocationFence`: không quan
-sát thấy PostgreSQL writer chờ revoker PID vì sample action route chưa có.
-Đây là thiếu implementation, **không** là xác nhận hiện hữu production path
-có lỗi lock hay leak dữ liệu.
+- JDK 25: **28/28 unit GREEN**, Spotless/PMD/SpotBugs GREEN — `/tmp/t014-r4-unit-crash.log`.
+- Integration TEST: **88/88 GREEN**, gồm native Code+PKCE + JDBC session và crash-window replay — `/tmp/t014-r4-default3.log`.
+- Contract RED: **5/5 thất bại do thiếu implementation, không có fixture/setup error** — `/tmp/t014-r4-red-grant2.log` (trước script verifier tự động).
+- T013 native acceptance sau cập nhật main: đối chiếu `/tmp/t014-r4-native-final.log` sau khi chạy.
 
-## Chưa được chứng minh — không khẳng định nghiệm thu E2E
-
-- **GRANT** PENDING/FAILED tại protected request cần manifest closure/source
-  projection thật (T017–T018, T021–T022); DB operation constraint đã GREEN.
-- **Same-session**: Spring Session cookie và Authorization Code + PKCE, dùng user
-  access token qua chính `KeycloakDecisionClient`, trước/sau revoke A/B (T015–T022).
-  Native PDP cùng access token A/B **đã GREEN**, nhưng test dùng TEST direct-grant
-  client synthetic riêng, không phải BFF web client.
-- **Concurrent business write** với production `ProtectedActionExecutor`: pending
-  test đã ràng buộc HTTP route T021 và blocker PID, nhưng chưa thể GREEN trước T018.
-- **Crash/retry** worker thật và Keycloak graph reconciliation/idempotence (T017).
-  Test hiện tại chỉ GREEN cho revision/idempotency ở DB.
-
-Không đóng gate T022 hay suy E2E được bảo vệ từ 86 GREEN. Giữ yêu cầu
-review/test-first riêng khỏi production acceptance.
+**Chưa được chứng minh:** HTTP protected PEP hoàn chỉnh, GRANT closure re-resolve của T018, Spring UI login callback T022, worker thật bị crash/restart và Keycloak reconcile T017. Native PDP + Spring Session test GREEN không đồng nghĩa E2E đã GREEN. T014 được nghiệm thu theo tiêu chí test-first; gate hoàn chỉnh vẫn thuộc T022.
