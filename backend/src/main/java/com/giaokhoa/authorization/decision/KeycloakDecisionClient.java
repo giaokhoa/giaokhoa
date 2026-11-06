@@ -2,12 +2,16 @@ package com.giaokhoa.authorization.decision;
 
 import com.giaokhoa.shared.http.HttpProblemException;
 import jakarta.servlet.http.HttpServletRequest;
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.ClientHttpRequestFactory;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.client.OAuth2AuthorizeRequest;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
@@ -36,6 +40,8 @@ public class KeycloakDecisionClient {
     private static final String REGISTRATION_ID = "keycloak";
     private static final String GRANT_TYPE = "urn:ietf:params:oauth:grant-type:uma-ticket";
     private static final String FAILURE_DETAIL = "Không xác minh được quyết định quyền.";
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(2);
+    private static final Duration READ_TIMEOUT = Duration.ofSeconds(5);
 
     private final RestClient http;
     private final OAuth2AuthorizedClientManager manager;
@@ -48,10 +54,18 @@ public class KeycloakDecisionClient {
             ClientRegistrationRepository registrations,
             @Value("${giaokhoa.keycloak.authorization-audience}") String audience) {
         this(
-                RestClient.builder(),
+                RestClient.builder().requestFactory(requestFactory()),
                 sessionClientManager(registrations, authorizedClients),
                 tokenEndpoint(registrations),
                 audience);
+    }
+
+    private static ClientHttpRequestFactory requestFactory() {
+        JdkClientHttpRequestFactory factory =
+                new JdkClientHttpRequestFactory(
+                        HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build());
+        factory.setReadTimeout(READ_TIMEOUT);
+        return factory;
     }
 
     KeycloakDecisionClient(
