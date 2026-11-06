@@ -33,6 +33,12 @@ public record PolicyGraph(
                     "Scope is not fixed for target " + targetKey + ": " + scope);
         }
         commonGates = List.copyOf(canonicalGates(commonGates));
+        if (NativePolicyTemplates.requiresEligibility(type, scope)
+                && !commonGates.contains(
+                        new Gate.GroupMembership(NativePolicyTemplates.ELIGIBILITY_GROUP))) {
+            throw new IllegalArgumentException(
+                    "Business permissions must require the identity eligibility gate");
+        }
         if (sources == null || sources.isEmpty()) {
             throw new IllegalArgumentException("At least one independent source is required");
         }
@@ -44,9 +50,13 @@ public record PolicyGraph(
                                 .toList());
     }
 
-    /** A graph without common gates. */
+    /** Business-safe convenience constructor: eligibility is a mandatory common gate. */
     public PolicyGraph(String targetKey, String scope, List<Source> sources) {
-        this(targetKey, scope, List.of(), sources);
+        this(
+                targetKey,
+                scope,
+                List.of(new Gate.GroupMembership(NativePolicyTemplates.ELIGIBILITY_GROUP)),
+                sources);
     }
 
     /** The common identity-eligibility gate plus the given independent sources. */
@@ -118,6 +128,11 @@ public record PolicyGraph(
             public Validity {
                 if (validFrom == null && expiresAt == null) {
                     throw new IllegalArgumentException("A validity window needs a bound");
+                }
+                if ((validFrom != null && validFrom.getNano() != 0)
+                        || (expiresAt != null && expiresAt.getNano() != 0)) {
+                    throw new IllegalArgumentException(
+                            "Native Keycloak time policies support whole-second boundaries only");
                 }
                 if (validFrom != null && expiresAt != null && !validFrom.isBefore(expiresAt)) {
                     throw new IllegalArgumentException("Validity start must precede its end");
