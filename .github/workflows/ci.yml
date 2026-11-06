@@ -111,11 +111,8 @@ jobs:
           for role in view-clients view-authorization manage-authorization query-groups; do
             docker compose -p giaokhoa-test -f infra/compose.test.yaml exec -T test-keycloak /opt/keycloak/bin/kcadm.sh add-roles -r giaokhoa-it --uusername service-account-giaokhoa-it-fixtures --cclientid realm-management --rolename "$role"
           done
-      # Unimplemented request-fence/worker contracts remain RED and run as a separate suite.
-      - name: Verify implemented Spring integration tests (exclude pending contracts)
+      - name: Verify implemented Spring integration tests
         run: ./backend/mvnw -B -ntp -f backend/pom.xml -Pintegration verify
-      - name: Assert pending contract-first RED remains meaningful
-        run: bash infra/verify-pending-contracts.sh
       - name: Upload backend integration reports
         if: failure()
         # Báo cáo phục vụ chẩn đoán; lỗi quota không được thay đổi kết quả lint/test.

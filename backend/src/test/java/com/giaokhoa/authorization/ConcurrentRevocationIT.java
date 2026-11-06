@@ -16,7 +16,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -43,7 +42,7 @@ import org.springframework.web.context.WebApplicationContext;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Revocation contract: PostgreSQL commit ordering plus opt-in Foundation HTTP contracts. */
+/** Revocation contract: PostgreSQL commit ordering plus the Foundation HTTP contracts. */
 @SpringBootTest
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class ConcurrentRevocationIT extends IntegrationEnvironment {
@@ -222,13 +221,12 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
         GRANT_FAILED
     }
 
-    @Tag("pending-contract")
     @ParameterizedTest
     @EnumSource(PendingScope.class)
     void protectedCapabilitiesMustRejectCommittedPendingDependency(PendingScope pending)
             throws Exception {
-        // RED: request-fence and sample-action contracts require identical authenticated HTTP
-        // request before and after committed fence.
+        // The request-fence contract requires the identical authenticated HTTP request
+        // before and after a committed fence.
         try (var nativeGate = new NativeRevocationFixture();
                 var session = nativeSession(nativeGate)) {
             ActorScope fixture = actorWithReadyPersonalWorkspace(nativeGate.userSubject());
@@ -371,10 +369,9 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                 "READY must produce a native allow, not a constant HTTP 200/deny");
     }
 
-    @Tag("pending-contract")
     @Test
     void concurrentFixtureMutationMustWaitForDatabaseRevocationFence() throws Exception {
-        // RED: sample actions must use the same production PEP and lock protocol.
+        // Sample actions must use the same production PEP and lock protocol.
         try (var nativeGate = new NativeRevocationFixture();
                 var session = nativeSession(nativeGate)) {
             ActorScope fixture = actorWithReadyPersonalWorkspace(nativeGate.userSubject());

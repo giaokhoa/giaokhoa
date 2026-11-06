@@ -29,6 +29,28 @@
         <Field name="~(jdbc|reconciler)"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+    <!-- Dependency singleton do Spring quản lý (JdbcTemplate); không sao chép khi inject vào resolver/fence/controller mẫu. -->
+    <Match>
+        <Class name="com.giaokhoa.authorization.fence.DependencyManifestResolver"/>
+        <Field name="jdbc"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.giaokhoa.authorization.fence.AuthorizationFence"/>
+        <Field name="jdbc"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Class name="com.giaokhoa.verification.SampleActionController"/>
+        <Field name="jdbc"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- Dependency singleton do Spring quản lý (JdbcTemplate, PolicyGraphWriter); không sao chép khi inject vào executor. -->
+    <Match>
+        <Class name="com.giaokhoa.authorization.decision.ProtectedActionExecutor"/>
+        <Field name="~(jdbc|writer)"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
     <!-- JPA cần entity không final; các constructor này chỉ gán field, không giữ tài nguyên hay gọi code ngoài. -->
     <Match>
         <Class name="~com\.giaokhoa\.authorization\.model\.Authorization(Operation|Projection)"/>
