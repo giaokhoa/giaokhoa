@@ -239,6 +239,6 @@ public final class PermissionCatalog {
     private PermissionCatalog() {}
 
     public static List<String> names(Scope... scopes) {
-        return Arrays.stream(scopes).map(Scope::scopeName).toList();
+        return Arrays.stream(scopes).map(scope -> scope.scopeName()).toList();
     }
 }

@@ -120,12 +120,14 @@ public class IdentityEligibilitySynchronizer {
                 current.emailVerified(),
                 actorUserId);
         UUID accountPartition = accountPartition(actorUserId);
-        long recordedRevision =
-                jdbc.queryForList(
-                                "SELECT desired_revision FROM authz_partition WHERE id = ?",
-                                Long.class,
-                                accountPartition)
-                        .getFirst();
+        Long recordedRevision =
+                jdbc.queryForObject(
+                        "SELECT desired_revision FROM authz_partition WHERE id = ?",
+                        Long.class,
+                        accountPartition);
+        if (recordedRevision == null) {
+            throw AuthorizationFence.notReady();
+        }
         List<AuthorizationOperationService.DesiredProjection> projections =
                 List.of(
                         new AuthorizationOperationService.DesiredProjection(

@@ -185,7 +185,7 @@ class IdentityEligibilitySynchronizerIT extends IntegrationEnvironment {
         UUID workspace = UUID.randomUUID();
         String username = "eligibility-" + (usernameSeed == null ? actor : usernameSeed);
         new TransactionTemplate(transactionManager)
-                .executeWithoutResult(status -> {
+                .executeWithoutResult(_ -> {
                     jdbc.update(
                             "INSERT INTO user_account"
                                     + " (id, keycloak_sub, username, email, email_verified,"

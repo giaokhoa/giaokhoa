@@ -420,7 +420,7 @@ public class ProjectionReconciler {
             return jdbc.query(
                     "SELECT keycloak_sub FROM user_account WHERE id = ?"
                             + " AND (origin = 'CENTER_ISSUED' OR email_verified)",
-                    (rs, row) -> eligibilityDescriptor(userId, rs.getString(1), targetKey, scope),
+                    (rs, _) -> eligibilityDescriptor(userId, rs.getString(1), targetKey, scope),
                     userId);
         }
         if (type != NativePolicyTemplates.TargetType.WORKSPACE) {
