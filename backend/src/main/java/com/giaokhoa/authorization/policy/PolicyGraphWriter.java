@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,7 +57,6 @@ public class PolicyGraphWriter {
     private final OAuth2AuthorizedClientManager manager;
     private final String audienceClientId;
     private final ResourceMutationCoordinator mutationCoordinator;
-    private String cachedRoot;
 
     @Autowired
     public PolicyGraphWriter(
@@ -286,6 +286,20 @@ public class PolicyGraphWriter {
             }
         }
         return false;
+    }
+
+    /**
+     * Read-only lookup for the decision path: native resources are named by their target key, so
+     * the resource a PDP call must name is the one recorded under that name, if it exists.
+     */
+    public Optional<String> findResourceId(String targetKey) {
+        String root = resourceServerRoot();
+        for (Map<String, Object> resource : list(root + "/resource")) {
+            if (targetKey.equals(resource.get("name"))) {
+                return Optional.of(String.valueOf(resource.get("_id")));
+            }
+        }
+        return Optional.empty();
     }
 
     private List<String> gatePolicies(
@@ -767,9 +781,8 @@ public class PolicyGraphWriter {
     }
 
     private String resourceServerRoot() {
-        if (cachedRoot != null) {
-            return cachedRoot;
-        }
+        // Resolved on every call, never cached: the client can be recreated (realm re-import,
+        // fixture lifecycle), and a stale cached ID turns every later call into a 404.
         URI uri =
                 UriComponentsBuilder.fromUriString(baseUrl)
                         .pathSegment("admin", "realms", realm, "clients")
@@ -782,14 +795,12 @@ public class PolicyGraphWriter {
             throw new IllegalStateException(
                     "Expected exactly one resource server client: " + audienceClientId);
         }
-        cachedRoot =
-                baseUrl
-                        + "/admin/realms/"
-                        + realm
-                        + "/clients/"
-                        + clients.getFirst().get("id")
-                        + "/authz/resource-server";
-        return cachedRoot;
+        return baseUrl
+                + "/admin/realms/"
+                + realm
+                + "/clients/"
+                + clients.getFirst().get("id")
+                + "/authz/resource-server";
     }
 
     private String accessToken() {
