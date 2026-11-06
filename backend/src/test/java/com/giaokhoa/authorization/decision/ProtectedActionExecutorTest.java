@@ -188,7 +188,8 @@ class ProtectedActionExecutorTest {
                         }
                         return runSupplier(invocation);
                     });
-            when(jdbc.queryForList(contains("FROM user_account"), eq(UUID.class), any()))
+            when(jdbc.queryForList(
+                            contains("FROM user_account"), eq(UUID.class), any(String.class)))
                     .thenReturn(List.of(ACTOR));
             when(authentication.getName()).thenReturn("keycloak-subject");
             executor = new ProtectedActionExecutor(resolver, fence, decisions, writer, jdbc);

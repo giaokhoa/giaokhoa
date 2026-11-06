@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.Immutable;
+import org.jspecify.annotations.Nullable;
 
 @Entity
 @Immutable
@@ -44,10 +45,10 @@ public class AuditEvent {
     private UUID id;
 
     @Column(name = "actor_user_id")
-    private UUID actorUserId;
+    private @Nullable UUID actorUserId;
 
     @Column(name = "workspace_id")
-    private UUID workspaceId;
+    private @Nullable UUID workspaceId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "action", nullable = false, length = 32)
@@ -61,7 +62,7 @@ public class AuditEvent {
     private UUID targetId;
 
     @Column(name = "operation_id")
-    private UUID operationId;
+    private @Nullable UUID operationId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "outcome", nullable = false, length = 16)
@@ -75,12 +76,12 @@ public class AuditEvent {
 
     public AuditEvent(
             UUID id,
-            UUID actorUserId,
-            UUID workspaceId,
+            @Nullable UUID actorUserId,
+            @Nullable UUID workspaceId,
             Action action,
             TargetType targetType,
             UUID targetId,
-            UUID operationId,
+            @Nullable UUID operationId,
             Outcome outcome) {
         this.id = id;
         this.actorUserId = actorUserId;
@@ -96,11 +97,11 @@ public class AuditEvent {
         return id;
     }
 
-    public UUID getActorUserId() {
+    public @Nullable UUID getActorUserId() {
         return actorUserId;
     }
 
-    public UUID getWorkspaceId() {
+    public @Nullable UUID getWorkspaceId() {
         return workspaceId;
     }
 
@@ -116,7 +117,7 @@ public class AuditEvent {
         return targetId;
     }
 
-    public UUID getOperationId() {
+    public @Nullable UUID getOperationId() {
         return operationId;
     }
 

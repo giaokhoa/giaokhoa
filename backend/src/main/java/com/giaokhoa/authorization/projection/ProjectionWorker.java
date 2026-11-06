@@ -15,6 +15,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
@@ -57,7 +58,7 @@ public class ProjectionWorker {
     private final AtomicBoolean running = new AtomicBoolean();
     private final Map<UUID, OrphanRetry> orphanRetries = new ConcurrentHashMap<>();
     private Instant lastDriftScan = Instant.EPOCH;
-    private UUID driftScanCursor;
+    private @Nullable UUID driftScanCursor;
 
     /** Trạng thái giới hạn tốc độ của một partition bị fence mà không có operation đang sống. */
     private record OrphanRetry(int failures, Instant nextAttemptAt) {}
@@ -371,7 +372,7 @@ public class ProjectionWorker {
      * limit} ID nằm ngay sau {@code after}, vòng về đầu danh sách, nên mọi partition READY đều được
      * chạm tới trong một số lượt quét có giới hạn.
      */
-    static List<UUID> scanWindow(List<UUID> orderedIds, UUID after, int limit) {
+    static List<UUID> scanWindow(List<UUID> orderedIds, @Nullable UUID after, int limit) {
         List<UUID> window = new ArrayList<>();
         for (UUID id : orderedIds) {
             if (window.size() >= limit) {

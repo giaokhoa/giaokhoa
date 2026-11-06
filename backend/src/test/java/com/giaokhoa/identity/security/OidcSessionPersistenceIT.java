@@ -11,10 +11,12 @@ import com.giaokhoa.support.IntegrationEnvironment;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -94,7 +96,7 @@ class OidcSessionPersistenceIT extends IntegrationEnvironment {
                                     token(ISSUER, CLIENT, "different-user", "sid-1"))
                             .iterator()
                             .hasNext());
-            assertNotNull(sessions.findById(session.getId()));
+            Objects.requireNonNull(sessions.findById(session.getId()));
             var removed =
                     restarted
                             .removeSessionInformation(token(ISSUER, CLIENT, "user-1", "sid-1"))
@@ -106,7 +108,7 @@ class OidcSessionPersistenceIT extends IntegrationEnvironment {
             assertEquals("sid-1", correlation.getPrincipal().getClaimAsString("sid"));
             assertEquals(Map.of("X-CSRF-TOKEN", "csrf-1"), correlation.getAuthorities());
             assertFalse(removed.hasNext());
-            assertNull(restarted.removeSessionInformation(session.getId()));
+            assertTrue(Objects.isNull(restarted.removeSessionInformation(session.getId())));
         } finally {
             registry.removeSessionInformation(session.getId());
             sessions.deleteById(session.getId());
@@ -128,7 +130,7 @@ class OidcSessionPersistenceIT extends IntegrationEnvironment {
             var ids = new java.util.HashSet<String>();
             removed.forEach(value -> ids.add(value.getSessionId()));
             assertEquals(java.util.Set.of(a.getId(), b.getId()), ids);
-            assertNotNull(restarted.removeSessionInformation(other.getId()));
+            Objects.requireNonNull(restarted.removeSessionInformation(other.getId()));
         } finally {
             registry.removeSessionInformation(a.getId());
             registry.removeSessionInformation(b.getId());
@@ -248,7 +250,7 @@ class OidcSessionPersistenceIT extends IntegrationEnvironment {
             assertEquals(accessToken.getExpiresAt(), loaded.get().getAccessToken().getExpiresAt());
             assertEquals(
                     refreshToken.getTokenValue(), loaded.get().getRefreshToken().getTokenValue());
-            assertNotNull(sessions.findById(sessionId.get()));
+            Objects.requireNonNull(sessions.findById(sessionId.get()));
         } finally {
             sessions.deleteById(cookie.getValue());
         }
@@ -296,7 +298,7 @@ class OidcSessionPersistenceIT extends IntegrationEnvironment {
     }
 
     private static OidcSessionInformation info(
-            String sessionId, String sub, String sid, String csrf) {
+            String sessionId, String sub, String sid, @Nullable String csrf) {
         var token =
                 new OidcIdToken(
                         "test-id-token",
@@ -310,7 +312,7 @@ class OidcSessionPersistenceIT extends IntegrationEnvironment {
     }
 
     private static OidcLogoutToken token(
-            String issuer, String audience, String subject, String sid) {
+            String issuer, String audience, String subject, @Nullable String sid) {
         var builder =
                 OidcLogoutToken.withTokenValue("validated-by-spring-handler")
                         .issuer(issuer)

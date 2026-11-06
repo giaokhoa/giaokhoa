@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -64,7 +65,7 @@ final class NativeGateClient {
         }
     }
 
-    static boolean requireDecision(Map<String, Object> answer) {
+    static boolean requireDecision(@Nullable Map<String, Object> answer) {
         if (answer == null || !(answer.get("result") instanceof Boolean decision)) {
             throw new IllegalStateException("Native PDP response must contain a boolean result");
         }

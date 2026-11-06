@@ -3,8 +3,10 @@ package com.giaokhoa.authorization.keycloak;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -94,7 +96,7 @@ public class KeycloakProvisioningClient {
     }
 
     /** Mỗi center một Organization; tên ổn định ngăn tạo trùng organization khi retry. */
-    public String ensureOrganization(UUID workspaceId, String displayName) {
+    public String ensureOrganization(@Nullable UUID workspaceId, @Nullable String displayName) {
         if (workspaceId == null || displayName == null || displayName.isBlank()) {
             throw new IllegalArgumentException("Workspace ID and organization name are required");
         }
@@ -158,7 +160,7 @@ public class KeycloakProvisioningClient {
             }
             parentId = group.id();
         }
-        return parentId;
+        return Objects.requireNonNull(parentId);
     }
 
     /** Membership độc lập với group của Organization; không ngụ ý policy kế thừa nào. */
@@ -181,7 +183,7 @@ public class KeycloakProvisioningClient {
         }
     }
 
-    private String findExistingSourceGroup(String path) {
+    private @Nullable String findExistingSourceGroup(String path) {
         if (path == null || !GROUP_SOURCE.matcher(path).matches()) {
             throw new IllegalArgumentException("Unrecognized authorization group source");
         }
@@ -204,7 +206,7 @@ public class KeycloakProvisioningClient {
                 .orElse(null);
     }
 
-    private Group findGroup(String path) {
+    private @Nullable Group findGroup(String path) {
         // Tra cứu theo path chính xác tránh phân trang và đụng tên giữa các workspace.
         URI uri = URI.create(endpoint("group-by-path") + path);
         try {

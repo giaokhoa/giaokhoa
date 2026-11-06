@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -70,7 +71,7 @@ public class AuthorizationOperationService {
     @Transactional
     public AuthorizationOperation applyDesiredState(
             UUID initiatorUserId,
-            UUID workspaceId,
+            @Nullable UUID workspaceId,
             String idempotencyKey,
             String payloadHash,
             List<PartitionChange> changes) {

@@ -14,6 +14,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
+import org.jspecify.annotations.Nullable;
 
 @Entity
 @Table(name = "authz_projection")
@@ -35,7 +36,7 @@ public class AuthorizationProjection {
     private String targetKey;
 
     @Column(name = "keycloak_resource_id", length = 512)
-    private String keycloakResourceId;
+    private @Nullable String keycloakResourceId;
 
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(name = "policy_names", nullable = false, columnDefinition = "text[]")
@@ -49,7 +50,7 @@ public class AuthorizationProjection {
     private String desiredHash;
 
     @Column(name = "applied_hash", length = 64)
-    private String appliedHash;
+    private @Nullable String appliedHash;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "state", nullable = false, length = 16)
@@ -73,11 +74,11 @@ public class AuthorizationProjection {
             UUID id,
             UUID partitionId,
             String targetKey,
-            String keycloakResourceId,
-            String[] policyNames,
-            UUID[] dependencyPartitionIds,
+            @Nullable String keycloakResourceId,
+            @Nullable String[] policyNames,
+            @Nullable UUID[] dependencyPartitionIds,
             String desiredHash,
-            String appliedHash,
+            @Nullable String appliedHash,
             State state) {
         this.id = id;
         this.partitionId = partitionId;
@@ -103,7 +104,7 @@ public class AuthorizationProjection {
         return targetKey;
     }
 
-    public String getKeycloakResourceId() {
+    public @Nullable String getKeycloakResourceId() {
         return keycloakResourceId;
     }
 
@@ -119,7 +120,7 @@ public class AuthorizationProjection {
         return desiredHash;
     }
 
-    public String getAppliedHash() {
+    public @Nullable String getAppliedHash() {
         return appliedHash;
     }
 

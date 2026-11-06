@@ -5,6 +5,7 @@ import java.net.URI;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.MDC;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -176,7 +177,7 @@ public class ProblemDetailsAdvice extends ResponseEntityExceptionHandler {
             String code,
             String detail,
             WebRequest request,
-            List<Violation> violations) {
+            @Nullable List<Violation> violations) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);
         problem.setTitle(HttpStatus.valueOf(status.value()).getReasonPhrase());
         problem.setProperty("code", code);

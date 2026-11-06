@@ -1,5 +1,6 @@
 package com.giaokhoa.shared.http;
 
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 
 public class HttpProblemException extends RuntimeException {
@@ -12,7 +13,7 @@ public class HttpProblemException extends RuntimeException {
     }
 
     public HttpProblemException(
-            HttpStatus status, String code, String safeDetail, Throwable cause) {
+            HttpStatus status, String code, String safeDetail, @Nullable Throwable cause) {
         super(safeDetail, cause);
         this.status = status;
         this.code = code;

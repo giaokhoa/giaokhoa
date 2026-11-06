@@ -256,7 +256,11 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                                 : null;
                 GrantScope independentGrant =
                         requiresGrant
-                                ? grantDependency(fixture, resourceB, versionB, keycloakResourceB)
+                                ? grantDependency(
+                                        fixture,
+                                        resourceB,
+                                        versionB,
+                                        java.util.Objects.requireNonNull(keycloakResourceB))
                                 : null;
                 String targetA =
                         affectedGrant == null
@@ -269,7 +273,8 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                         "Native READY A must allow via TEST API audience");
                 if (requiresGrant) {
                     assertTrue(
-                            apiGraph.allowed(token, keycloakResourceB),
+                            apiGraph.allowed(
+                                    token, java.util.Objects.requireNonNull(keycloakResourceB)),
                             "Native independent READY B must allow via TEST API audience");
                 }
                 MockMvc mvc =
@@ -313,7 +318,9 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                         apiGraph.allowed(token, apiGraph.resourceId()),
                         "Native A remains allowed; the DB fence must deny.");
                 if (independentB != null) {
-                    assertTrue(apiGraph.allowed(token, keycloakResourceB));
+                    assertTrue(
+                            apiGraph.allowed(
+                                    token, java.util.Objects.requireNonNull(keycloakResourceB)));
                 }
                 assertAll(
                         "REVOCATION_CONTRACT_READY_AND_FENCED_" + pending,

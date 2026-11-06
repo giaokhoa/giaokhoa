@@ -19,8 +19,10 @@ import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -54,12 +56,12 @@ final class NativeRevocationFixture implements AutoCloseable {
     private final String adminToken;
     private final String clientName;
     private final String clientSecret;
-    private String clientId;
-    private String userId;
-    private String groupA;
-    private String groupB;
-    private String resourceA;
-    private String resourceB;
+    private @Nullable String clientId;
+    private @Nullable String userId;
+    private @Nullable String groupA;
+    private @Nullable String groupB;
+    private @Nullable String resourceA;
+    private @Nullable String resourceB;
     private final List<String> ownedEligibilityGroupIds = new java.util.ArrayList<>();
 
     NativeRevocationFixture() {
@@ -121,7 +123,7 @@ final class NativeRevocationFixture implements AutoCloseable {
     }
 
     String userSubject() {
-        return userId;
+        return Objects.requireNonNull(userId);
     }
 
     String userToken() {
@@ -266,7 +268,8 @@ final class NativeRevocationFixture implements AutoCloseable {
                     new String(
                             Base64.getUrlDecoder().decode(idToken.split("[.]")[1]),
                             StandardCharsets.UTF_8);
-            assertEquals(userId, JSON.readTree(claims).get("sub").stringValue());
+            assertEquals(
+                    Objects.requireNonNull(userId), JSON.readTree(claims).get("sub").stringValue());
             return new WebTokens(
                     (String) tokens.get("access_token"),
                     idToken,
@@ -641,7 +644,7 @@ final class NativeRevocationFixture implements AutoCloseable {
     }
 
     String resourceId(String target) {
-        return "a".equals(target) ? resourceA : resourceB;
+        return Objects.requireNonNull("a".equals(target) ? resourceA : resourceB);
     }
 
     void revoke(String target) {
@@ -678,8 +681,10 @@ final class NativeRevocationFixture implements AutoCloseable {
                         Map.of("name", "content.read"));
         // Một authorization server mới tạo có thể có các mặc định wildcard: xóa chúng.
         removeDefaults();
-        groupA = create("/groups", Map.of("name", clientName + "-a"));
-        groupB = create("/groups", Map.of("name", clientName + "-b"));
+        String createdGroupA = create("/groups", Map.of("name", clientName + "-a"));
+        groupA = createdGroupA;
+        String createdGroupB = create("/groups", Map.of("name", clientName + "-b"));
+        groupB = createdGroupB;
         userId =
                 create(
                         "/users",
@@ -707,14 +712,16 @@ final class NativeRevocationFixture implements AutoCloseable {
                                                 clientSecret,
                                                 "temporary",
                                                 false))));
-        addToGroup(groupA);
-        addToGroup(groupB);
-        resourceA = resource("a", scope, contentScope);
-        resourceB = resource("b", scope, contentScope);
-        permission("a", resourceA, scope, groupA);
-        permission("b", resourceB, scope, groupB);
-        permission("a-content", resourceA, contentScope, groupA);
-        permission("b-content", resourceB, contentScope, groupB);
+        addToGroup(createdGroupA);
+        addToGroup(createdGroupB);
+        String createdResourceA = resource("a", scope, contentScope);
+        resourceA = createdResourceA;
+        String createdResourceB = resource("b", scope, contentScope);
+        resourceB = createdResourceB;
+        permission("a", createdResourceA, scope, createdGroupA);
+        permission("b", createdResourceB, scope, createdGroupB);
+        permission("a-content", createdResourceA, contentScope, createdGroupA);
+        permission("b-content", createdResourceB, contentScope, createdGroupB);
     }
 
     private void removeDefaults() {
@@ -821,8 +828,10 @@ final class NativeRevocationFixture implements AutoCloseable {
             return value.substring(value.lastIndexOf('/') + 1);
         }
         // POST của Authorization Services trả một ID trong JSON thay vì trong Location header.
-        assertNotNull(response.getBody(), "Keycloak must return a created ID for " + path);
-        var created = JSON.readTree(response.getBody());
+        String createdBody =
+                Objects.requireNonNull(
+                        response.getBody(), "Keycloak must return a created ID for " + path);
+        var created = JSON.readTree(createdBody);
         var id = created.has("id") ? created.get("id") : created.get("_id");
         assertNotNull(id, "Keycloak must return a created ID for " + path);
         return id.stringValue();

@@ -186,7 +186,8 @@ class PolicyGraphTest {
                 () -> new Gate.Validity(FROM.plusMillis(900), UNTIL));
         assertThrows(
                 IllegalArgumentException.class, () -> new Gate.Validity(FROM, UNTIL.plusNanos(1)));
-        assertEquals(FROM, new Gate.Validity(FROM, UNTIL).validFrom());
+        assertEquals(
+                FROM, java.util.Objects.requireNonNull(new Gate.Validity(FROM, UNTIL).validFrom()));
     }
 
     @Test

@@ -8,6 +8,7 @@ import com.giaokhoa.shared.audit.AuditEvent.TargetType;
 import com.giaokhoa.support.IntegrationEnvironment;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -46,8 +47,8 @@ class AuditEventSchemaIT extends IntegrationEnvironment {
         assertEquals(Action.AUTHORIZATION_SYNC, loaded.getAction());
         assertEquals(Outcome.FAILED, loaded.getOutcome());
         assertTrue(loaded.getOccurredAt().isBefore(Instant.now().plusSeconds(2)));
-        assertNull(loaded.getActorUserId());
-        assertNull(loaded.getWorkspaceId());
+        assertTrue(Objects.isNull(loaded.getActorUserId()));
+        assertTrue(Objects.isNull(loaded.getWorkspaceId()));
 
         Set<String> fields =
                 jdbc

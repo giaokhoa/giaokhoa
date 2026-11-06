@@ -5,6 +5,7 @@ import com.giaokhoa.shared.http.HttpProblemException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -157,7 +158,7 @@ public class CapabilitiesController {
         return invalidTarget(null);
     }
 
-    private static HttpProblemException invalidTarget(Throwable cause) {
+    private static HttpProblemException invalidTarget(@Nullable Throwable cause) {
         return new HttpProblemException(
                 HttpStatus.BAD_REQUEST, "INVALID_TARGET", "Đối tượng đích không hợp lệ.", cause);
     }

@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
@@ -172,7 +173,7 @@ public class KeycloakDecisionClient {
         return form;
     }
 
-    private static HttpProblemException unverifiable(Throwable cause) {
+    private static HttpProblemException unverifiable(@Nullable Throwable cause) {
         return new HttpProblemException(
                 HttpStatus.SERVICE_UNAVAILABLE, "DECISION_UNVERIFIABLE", FAILURE_DETAIL, cause);
     }

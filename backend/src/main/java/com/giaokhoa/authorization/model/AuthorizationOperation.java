@@ -14,6 +14,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
+import org.jspecify.annotations.Nullable;
 
 @Entity
 @Table(name = "authorization_operation")
@@ -34,7 +35,7 @@ public class AuthorizationOperation {
     private UUID initiatorUserId;
 
     @Column(name = "workspace_id")
-    private UUID workspaceId;
+    private @Nullable UUID workspaceId;
 
     @Column(name = "idempotency_key", nullable = false, length = 255)
     private String idempotencyKey;
@@ -83,11 +84,11 @@ public class AuthorizationOperation {
     public AuthorizationOperation(
             UUID id,
             UUID initiatorUserId,
-            UUID workspaceId,
+            @Nullable UUID workspaceId,
             String idempotencyKey,
             String payloadHash,
-            UUID[] affectedPartitions,
-            Long[] affectedRevisions,
+            @Nullable UUID[] affectedPartitions,
+            @Nullable Long[] affectedRevisions,
             long desiredRevision) {
         this.id = id;
         this.initiatorUserId = initiatorUserId;
@@ -110,7 +111,7 @@ public class AuthorizationOperation {
         return initiatorUserId;
     }
 
-    public UUID getWorkspaceId() {
+    public @Nullable UUID getWorkspaceId() {
         return workspaceId;
     }
 

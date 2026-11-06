@@ -4,9 +4,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.sql.PreparedStatement;
 import java.util.function.Supplier;
-import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -34,18 +32,7 @@ public class ResourceMutationCoordinator {
         TransactionTemplate tx = new TransactionTemplate(transactions);
         tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         return tx.execute(status -> {
-            long lockId = lockId(targetKey);
-            jdbc.execute(
-                    (ConnectionCallback<Void>)
-                            connection -> {
-                                try (PreparedStatement statement =
-                                        connection.prepareStatement(
-                                                "SELECT pg_advisory_xact_lock(?)")) {
-                                    statement.setLong(1, lockId);
-                                    statement.execute();
-                                }
-                                return null;
-                            });
+            jdbc.query("SELECT pg_advisory_xact_lock(?)", rs -> {}, lockId(targetKey));
             return action.get();
         });
     }

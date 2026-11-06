@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -84,7 +85,7 @@ public class AuthorizationFence {
         });
     }
 
-    private Snapshot lockAndVerify(Manifest manifest, Map<UUID, Long> expected) {
+    private Snapshot lockAndVerify(Manifest manifest, @Nullable Map<UUID, Long> expected) {
         Map<UUID, Long> revisions = new LinkedHashMap<>();
         for (UUID partitionId : manifest.partitionIds()) {
             List<Map<String, Object>> rows =
@@ -124,7 +125,7 @@ public class AuthorizationFence {
         return notReady(null);
     }
 
-    public static HttpProblemException notReady(Throwable cause) {
+    public static HttpProblemException notReady(@Nullable Throwable cause) {
         return new HttpProblemException(
                 HttpStatus.SERVICE_UNAVAILABLE,
                 DependencyManifestResolver.NOT_READY_CODE,

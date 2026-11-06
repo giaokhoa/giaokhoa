@@ -2,6 +2,7 @@ package com.giaokhoa.authorization.decision;
 
 import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /** Các cặp resource/scope mà một protected action yêu cầu; mọi cặp đều phải được cho phép. */
 public record RequiredPermissions(List<Permission> permissions) {
@@ -17,7 +18,10 @@ public record RequiredPermissions(List<Permission> permissions) {
         return new RequiredPermissions(List.of(permissions));
     }
 
-    public static Permission require(String resourceId, String scope) {
+    public static Permission require(@Nullable String resourceId, @Nullable String scope) {
+        if (resourceId == null || scope == null) {
+            throw new IllegalArgumentException("Resource ID and scope are required");
+        }
         return new Permission(resourceId, scope);
     }
 
