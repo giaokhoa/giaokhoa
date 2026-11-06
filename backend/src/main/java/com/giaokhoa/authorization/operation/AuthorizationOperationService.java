@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -73,15 +74,26 @@ public class AuthorizationOperationService {
         idempotency.requireKey(idempotencyKey);
         validate(changes);
 
-        Map<UUID, Long> newRevisions = new LinkedHashMap<>();
         List<UUID> primaries = changes.stream().map(PartitionChange::partitionId).toList();
-        for (UUID partitionId : sortedByUuidString(primaries)) {
-            newRevisions.put(partitionId, lockCurrentRevision(partitionId) + 1);
-        }
         Closure closure = dependentClosure(primaries);
+        // Lock primaries and the dependent closure in ONE global order — the same order
+        // IdempotencyService locks in — so two mutations whose closures cross cannot
+        // deadlock each other; an unfenced dependent created concurrently is still caught
+        // by the deferred partition trigger at commit.
+        Set<UUID> lockOrder = new TreeSet<>(Comparator.comparing(UUID::toString));
+        lockOrder.addAll(primaries);
+        lockOrder.addAll(closure.partitionIds());
+        Map<UUID, Long> currentRevisions = new HashMap<>();
+        for (UUID partitionId : lockOrder) {
+            currentRevisions.put(partitionId, lockCurrentRevision(partitionId));
+        }
+        Map<UUID, Long> newRevisions = new LinkedHashMap<>();
+        for (UUID partitionId : primaries) {
+            newRevisions.put(partitionId, currentRevisions.get(partitionId) + 1);
+        }
         Map<UUID, Long> dependentRevisions = new LinkedHashMap<>();
         for (UUID partitionId : sortedByUuidString(closure.partitionIds())) {
-            dependentRevisions.put(partitionId, lockCurrentRevision(partitionId));
+            dependentRevisions.put(partitionId, currentRevisions.get(partitionId));
         }
 
         List<UUID> affected = new ArrayList<>(primaries);
@@ -275,10 +287,6 @@ public class AuthorizationOperationService {
                 }
             }
         }
-    }
-
-    private static List<UUID> sortedByUuidString(List<UUID> ids) {
-        return ids.stream().sorted(Comparator.comparing(UUID::toString)).toList();
     }
 
     private static List<UUID> sortedByUuidString(Set<UUID> ids) {
