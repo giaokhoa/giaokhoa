@@ -3,6 +3,7 @@ package com.giaokhoa.identity.eligibility;
 import com.giaokhoa.authorization.fence.AuthorizationFence;
 import com.giaokhoa.authorization.model.AuthorizationOperation;
 import com.giaokhoa.authorization.operation.AuthorizationOperationService;
+import com.giaokhoa.authorization.permission.PermissionCatalog;
 import com.giaokhoa.authorization.policy.NativePolicyTemplates;
 import com.giaokhoa.authorization.projection.ProjectionReconciler;
 import com.giaokhoa.identity.keycloak.CurrentIdentityClient;
@@ -42,7 +43,8 @@ public class IdentityEligibilitySynchronizer {
      * thái eligibility được ghi; các scope profile còn lại bị gate bởi eligibility sẽ dùng cùng
      * nguồn này khi endpoint của chúng được cài.
      */
-    private static final String ELIGIBILITY_SCOPE = "workspace.list";
+    private static final String ELIGIBILITY_SCOPE =
+            PermissionCatalog.ProfileScope.WORKSPACE_LIST.scopeName();
 
     private final JdbcTemplate jdbc;
     private final CurrentIdentityClient identities;

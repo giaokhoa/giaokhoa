@@ -16,3 +16,9 @@ backend/src/main/resources/application-local.yaml
 **/node_modules/
 **/.next/
 **/coverage/
+
+# Package authorization.target là source thật, không phải thư mục build target.
+!/backend/src/main/java/com/giaokhoa/authorization/target/
+!/backend/src/main/java/com/giaokhoa/authorization/target/**
+!/backend/src/test/java/com/giaokhoa/authorization/target/
+!/backend/src/test/java/com/giaokhoa/authorization/target/**

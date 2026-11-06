@@ -1,5 +1,6 @@
 package com.giaokhoa.authorization.policy;
 
+import com.giaokhoa.authorization.permission.PermissionCatalog;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -103,63 +104,24 @@ public final class NativePolicyTemplates {
 
     /** Các loại target của hợp đồng, mỗi loại với dạng key và tập scope cố định của nó. */
     public enum TargetType {
-        PLATFORM(
-                "platform",
-                List.of(
-                        "center.create",
-                        "center.list",
-                        "subscription.confirm",
-                        "account.recover",
-                        "fixture.manage")),
+        // Danh sách scope của từng loại target không chép tại đây: chúng suy ra từ
+        // PermissionCatalog, nguồn sự thật duy nhất của hợp đồng scope.
+        PLATFORM("platform", PermissionCatalog.names(PermissionCatalog.PlatformScope.values())),
         PROFILE(
                 "account:" + UUID_PATTERN,
-                List.of("profile.read", "workspace.list", "recovery.request", "history.read")),
+                PermissionCatalog.names(PermissionCatalog.ProfileScope.values())),
         WORKSPACE(
                 "workspace:" + UUID_PATTERN,
-                List.of(
-                        "enter",
-                        "read",
-                        "class.list",
-                        "class.create",
-                        "membership.list",
-                        "membership.invite",
-                        "membership.role.assign",
-                        "membership.role.revoke",
-                        "membership.revoke",
-                        "manager.assign",
-                        "manager.revoke",
-                        "student.issue",
-                        "guardian.request",
-                        "guardian.approve",
-                        "guardian.revoke")),
+                PermissionCatalog.names(PermissionCatalog.WorkspaceScope.values())),
         CLASS(
                 "workspace:" + UUID_PATTERN + ":class:" + UUID_PATTERN,
-                List.of(
-                        "read",
-                        "update",
-                        "course.list",
-                        "course.create",
-                        "roster.read",
-                        "roster.add",
-                        "roster.revoke",
-                        "homeroom.assign",
-                        "homeroom.revoke",
-                        "completion.read")),
+                PermissionCatalog.names(PermissionCatalog.ClassScope.values())),
         COURSE(
                 "workspace:" + UUID_PATTERN + ":course:" + UUID_PATTERN,
-                List.of("read", "update", "subject.add")),
+                PermissionCatalog.names(PermissionCatalog.CourseScope.values())),
         COURSE_SUBJECT(
                 "workspace:" + UUID_PATTERN + ":course-subject:" + UUID_PATTERN,
-                List.of(
-                        "read",
-                        "roster.read",
-                        "enrollment.add",
-                        "enrollment.revoke",
-                        "teacher.assign",
-                        "teacher.revoke",
-                        "resource.create",
-                        "activity.assign",
-                        "completion.read")),
+                PermissionCatalog.names(PermissionCatalog.CourseSubjectScope.values())),
         RESOURCE_VERSION(
                 "workspace:"
                         + UUID_PATTERN
@@ -167,25 +129,19 @@ public final class NativePolicyTemplates {
                         + UUID_PATTERN
                         + ":version:"
                         + UUID_PATTERN,
-                List.of(
-                        "content.read",
-                        "answer.read",
-                        "use",
-                        "fork",
-                        "share",
-                        "library.save",
-                        "review",
-                        "practice")),
+                PermissionCatalog.names(PermissionCatalog.ResourceVersionScope.values())),
         RESOURCE(
                 "workspace:" + UUID_PATTERN + ":resource:" + UUID_PATTERN,
-                List.of("draft.edit", "version.create")),
+                PermissionCatalog.names(PermissionCatalog.ResourceScope.values())),
         ACTIVITY(
                 "workspace:" + UUID_PATTERN + ":activity:" + UUID_PATTERN,
-                List.of("read", "submit", "schedule.extend", "attempt.open", "reassign")),
+                PermissionCatalog.names(PermissionCatalog.ActivityScope.values())),
         RESULT(
                 "workspace:" + UUID_PATTERN + ":result:" + UUID_PATTERN,
-                List.of("read", "read.published", "grade", "publish")),
-        GRANT("grant:" + UUID_PATTERN, List.of("accept", "revoke"));
+                PermissionCatalog.names(PermissionCatalog.ResultScope.values())),
+        GRANT(
+                "grant:" + UUID_PATTERN,
+                PermissionCatalog.names(PermissionCatalog.GrantScope.values()));
 
         private final Pattern keyPattern;
         private final List<String> fixedScopes;
@@ -217,8 +173,13 @@ public final class NativePolicyTemplates {
     /** Chỉ các endpoint profile/onboarding/recovery mới được bỏ qua eligibility gate nghiệp vụ. */
     static boolean requiresEligibility(TargetType type, String scope) {
         return switch (type) {
-            case PROFILE -> !List.of("profile.read", "recovery.request").contains(scope);
-            case PLATFORM -> !"account.recover".equals(scope);
+            case PROFILE ->
+                    !PermissionCatalog.ProfileScope.PROFILE_READ.scopeName().equals(scope)
+                            && !PermissionCatalog.ProfileScope.RECOVERY_REQUEST
+                                    .scopeName()
+                                    .equals(scope);
+            case PLATFORM ->
+                    !PermissionCatalog.PlatformScope.ACCOUNT_RECOVER.scopeName().equals(scope);
             default -> true;
         };
     }
