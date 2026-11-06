@@ -17,8 +17,12 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataAccessException;
@@ -38,7 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.context.WebApplicationContext;
 
-/** Real PostgreSQL locks: a revoke and a protected write must have one commit order. */
+/** T014: PostgreSQL commit ordering plus opt-in Foundation HTTP contracts. */
 @SpringBootTest
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class ConcurrentRevocationIT extends IntegrationEnvironment {
@@ -143,64 +147,127 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
         }
     }
 
+    private enum PendingScope {
+        ACCOUNT,
+        WORKSPACE
+    }
+
+    @Tag("t014-pending")
+    @ParameterizedTest
+    @EnumSource(PendingScope.class)
+    void protectedCapabilitiesMustRejectCommittedPendingDependency(PendingScope pending)
+            throws Exception {
+        // RED T018/T021: authenticated real MVC route, no substitute authorization executor.
+        try (var nativeGate = new NativeRevocationFixture()) {
+            ActorScope fixture = actorWithReadyPersonalWorkspace(nativeGate.userSubject());
+            tx(() -> {
+                fence(fixture.partition(pending), 1);
+                return null;
+            });
+
+            MockMvc mvc =
+                    MockMvcBuilders.webAppContextSetup(webContext).apply(springSecurity()).build();
+            int status =
+                    mvc.perform(
+                                    post("/api/workspaces/{wid}/capabilities", fixture.workspace())
+                                            .with(csrf())
+                                            .with(
+                                                    authentication(
+                                                            oidcAuthentication(
+                                                                    nativeGate.userSubject())))
+                                            .contentType(MediaType.APPLICATION_JSON)
+                                            .content(
+                                                    ("{\"targets\":[{\"type\":\"WORKSPACE\",\"id\":\"%s\","
+                                                                    + "\"scopes\":[\"enter\"]}]}")
+                                                            .formatted(fixture.workspace())))
+                            .andReturn()
+                            .getResponse()
+                            .getStatus();
+            assertEquals(
+                    HttpStatus.SERVICE_UNAVAILABLE.value(),
+                    status,
+                    "Committed PENDING " + pending + " must fence the T021 capabilities route");
+        }
+    }
+
+    @Tag("t014-pending")
     @Test
-    void concurrentProtectedHttpMutationMustNotBypassRevocationFence() throws Exception {
-        // RED (T018): real Spring MVC business request must wait for the revoke's DB fence.
-        // No test-only PEP: the declared POST /classes route is currently absent (HTTP 404).
+    void concurrentFixtureMutationMustWaitForDatabaseRevocationFence() throws Exception {
+        // RED T018/T021: sample actions must use the same production PEP and lock protocol.
         try (var nativeGate = new NativeRevocationFixture()) {
             ActorScope fixture = actorWithReadyPersonalWorkspace(nativeGate.userSubject());
             MockMvc mvc =
                     MockMvcBuilders.webAppContextSetup(webContext).apply(springSecurity()).build();
-            var idToken =
-                    new OidcIdToken(
-                            "synthetic-session-id-token",
-                            Instant.now(),
-                            Instant.now().plusSeconds(600),
-                            Map.of(
-                                    "iss",
-                                    "http://127.0.0.1:18081/realms/giaokhoa-it",
-                                    "sub",
-                                    nativeGate.userSubject(),
-                                    "aud",
-                                    List.of("giaokhoa-it-web")));
-            var auth =
-                    new OAuth2AuthenticationToken(
-                            new DefaultOidcUser(List.of(), idToken, "sub"), List.of(), "keycloak");
+            var auth = oidcAuthentication(nativeGate.userSubject());
             CountDownLatch revokeLocked = new CountDownLatch(1);
             CountDownLatch finishRevoke = new CountDownLatch(1);
+            CountDownLatch writerStarted = new CountDownLatch(1);
+            AtomicInteger revokerBackendPid = new AtomicInteger();
 
             try (var pool = Executors.newFixedThreadPool(2)) {
                 var revoker =
                         pool.submit(() ->
                                 tx(() -> {
-                                    lockedState(fixture.partition(), "UPDATE");
-                                    fence(fixture.partition(), 1);
+                                    revokerBackendPid.set(
+                                            java.util.Objects.requireNonNull(
+                                                    jdbc.queryForObject(
+                                                            "SELECT pg_backend_pid()",
+                                                            Integer.class)));
+                                    lockedState(fixture.workspacePartition(), "UPDATE");
+                                    fence(fixture.workspacePartition(), 1);
                                     revokeLocked.countDown();
                                     await(finishRevoke);
                                     return 1;
                                 }));
                 assertTrue(revokeLocked.await(10, TimeUnit.SECONDS));
                 var writer =
-                        pool.submit(() ->
-                                mvc.perform(
-                                                post(
-                                                                "/api/workspaces/{wid}/classes",
-                                                                fixture.workspace())
-                                                        .with(csrf())
-                                                        .with(authentication(auth))
-                                                        .header(
-                                                                "Idempotency-Key",
-                                                                "t014-concurrent")
-                                                        .contentType(MediaType.APPLICATION_JSON)
-                                                        .content("{\"name\":\"T014 protected\"}"))
-                                        .andReturn()
-                                        .getResponse()
-                                        .getStatus());
+                        pool.submit(() -> {
+                            writerStarted.countDown();
+                            return mvc.perform(
+                                            post(
+                                                            "/api/workspaces/{wid}/samples/actions",
+                                                            fixture.workspace())
+                                                    .with(csrf())
+                                                    .with(authentication(auth))
+                                                    .header("Idempotency-Key", "t014-concurrent")
+                                                    .contentType(MediaType.APPLICATION_JSON)
+                                                    .content(
+                                                            ("{\"action\":\"CREATE_RESOURCE\","
+                                                                            + "\"subjectId\":\"%s\","
+                                                                            + "\"kind\":\"QUESTION\","
+                                                                            + "\"label\":\"T014 protected\"}")
+                                                                    .formatted(UUID.randomUUID())))
+                                    .andReturn()
+                                    .getResponse()
+                                    .getStatus();
+                        });
                 try {
-                    assertThrows(
-                            TimeoutException.class,
-                            () -> writer.get(300, TimeUnit.MILLISECONDS),
-                            "The HTTP mutation must hold a shared fence until the revoke commits");
+                    assertTrue(writerStarted.await(10, TimeUnit.SECONDS));
+                    boolean blockedOnRevoke = false;
+                    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+                    while (System.nanoTime() < deadline && !writer.isDone()) {
+                        // Match the exact revoker PostgreSQL backend, not mere HTTP slowness.
+                        blockedOnRevoke =
+                                Boolean.TRUE.equals(
+                                        jdbc.queryForObject(
+                                                """
+                                                SELECT EXISTS (
+                                                  SELECT 1 FROM pg_stat_activity a
+                                                  WHERE ? = ANY(pg_blocking_pids(a.pid))
+                                                    AND a.wait_event_type = 'Lock'
+                                                    AND a.query ILIKE '%authz_partition%'
+                                                )
+                                                """,
+                                                Boolean.class, revokerBackendPid.get()));
+                        if (blockedOnRevoke) {
+                            break;
+                        }
+                        Thread.sleep(25);
+                    }
+                    assertTrue(
+                            blockedOnRevoke,
+                            "Protected HTTP mutation must block on this revoker's PostgreSQL lock");
+                    assertFalse(writer.isDone(), "No mutation response before the revoke commits");
                 } finally {
                     finishRevoke.countDown();
                 }
@@ -220,6 +287,24 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
         }
     }
 
+    private OAuth2AuthenticationToken oidcAuthentication(String subject) {
+        // Mock the authenticated transport only; no PDP/fence or real Code-login claim is made.
+        var idToken =
+                new OidcIdToken(
+                        "synthetic-session-id-token",
+                        Instant.now(),
+                        Instant.now().plusSeconds(600),
+                        Map.of(
+                                "iss",
+                                "http://127.0.0.1:18081/realms/giaokhoa-it",
+                                "sub",
+                                subject,
+                                "aud",
+                                List.of("giaokhoa-it-web")));
+        return new OAuth2AuthenticationToken(
+                new DefaultOidcUser(List.of(), idToken, "sub"), List.of(), "keycloak");
+    }
+
     private ActorScope actorWithReadyPersonalWorkspace(String keycloakSub) {
         return tx(() -> {
             UUID actor = UUID.randomUUID();
@@ -236,20 +321,29 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                             + " VALUES (?,'PERSONAL',?,'ACTIVE')",
                     workspace,
                     actor);
-            UUID partition =
+            UUID account =
+                    jdbc.queryForObject(
+                            "SELECT id FROM authz_partition WHERE owner_key = ?",
+                            UUID.class,
+                            "account:" + actor);
+            UUID workspacePartition =
                     jdbc.queryForObject(
                             "SELECT id FROM authz_partition WHERE owner_key = ?",
                             UUID.class,
                             "workspace:" + workspace);
             jdbc.update(
-                    "UPDATE authz_partition SET state = 'READY'" + " WHERE owner_key IN (?, ?)",
-                    "account:" + actor,
-                    "workspace:" + workspace);
-            return new ActorScope(workspace, partition);
+                    "UPDATE authz_partition SET state = 'READY' WHERE id IN (?, ?)",
+                    account,
+                    workspacePartition);
+            return new ActorScope(workspace, account, workspacePartition);
         });
     }
 
-    private record ActorScope(UUID workspace, UUID partition) {}
+    private record ActorScope(UUID workspace, UUID account, UUID workspacePartition) {
+        UUID partition(PendingScope scope) {
+            return scope == PendingScope.ACCOUNT ? account : workspacePartition;
+        }
+    }
 
     @Test
     void staleWorkerCannotPublishOldRevisionAfterNewRevoke() {
