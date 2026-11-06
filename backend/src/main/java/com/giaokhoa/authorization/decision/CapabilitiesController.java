@@ -137,11 +137,12 @@ public class CapabilitiesController {
                     NativePolicyTemplates.courseSubjectKey(workspaceId, requireId(input));
             case RESOURCE -> NativePolicyTemplates.resourceKey(workspaceId, requireId(input));
             case RESOURCE_VERSION -> {
-                if (input.versionId() == null) {
+                UUID versionId = input.versionId();
+                if (versionId == null) {
                     throw invalidTarget();
                 }
                 yield NativePolicyTemplates.resourceVersionKey(
-                        workspaceId, requireId(input), input.versionId());
+                        workspaceId, requireId(input), versionId);
             }
             case ACTIVITY -> NativePolicyTemplates.activityKey(workspaceId, requireId(input));
             case RESULT -> NativePolicyTemplates.resultKey(workspaceId, requireId(input));
@@ -150,10 +151,11 @@ public class CapabilitiesController {
     }
 
     private static UUID requireId(TargetInput input) {
-        if (input.id() == null) {
+        UUID id = input.id();
+        if (id == null) {
             throw invalidTarget();
         }
-        return input.id();
+        return id;
     }
 
     private static HttpProblemException invalidTarget() {

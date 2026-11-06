@@ -158,11 +158,8 @@ class ProtectedActionExecutorTest {
         verify(fixture.resolver, times(2)).resolve(ACTOR, WORKSPACE, List.of(KEY));
     }
 
-    // Mockito trả lại chính supplier của executor ở dạng không kiểu; phép cast an toàn theo cách
-    // dựng.
-    @SuppressWarnings("unchecked")
     private static Object runSupplier(InvocationOnMock invocation) {
-        return ((Supplier<Object>) invocation.getArgument(1)).get();
+        return ((Supplier<?>) invocation.getArgument(1)).get();
     }
 
     private static final class Fixture {

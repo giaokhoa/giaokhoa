@@ -20,6 +20,7 @@ org.eclipse.jdt.core.compiler.problem.potentialNullReference=warning
 org.eclipse.jdt.core.compiler.problem.rawTypeReference=error
 org.eclipse.jdt.core.compiler.problem.reportPreviewFeatures=ignore
 org.eclipse.jdt.core.compiler.problem.syntacticNullAnalysisForFields=enabled
+org.eclipse.jdt.core.compiler.problem.nullUncheckedConversion=ignore
 org.eclipse.jdt.core.compiler.problem.uncheckedTypeOperation=error
 org.eclipse.jdt.core.compiler.problem.unusedImport=error
 org.eclipse.jdt.core.compiler.problem.unusedLocal=error
