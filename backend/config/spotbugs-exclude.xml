@@ -51,6 +51,18 @@
         <Field name="jdbc"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+    <!-- Dependency singleton do Spring quản lý (JdbcTemplate); không sao chép khi inject vào controller trạng thái operation. -->
+    <Match>
+        <Class name="com.giaokhoa.authorization.operation.OperationController"/>
+        <Field name="jdbc"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- Fixture test giữ JdbcTemplate của context test để seed dữ kiện; không sao chép template/connection pool. -->
+    <Match>
+        <Class name="com.giaokhoa.support.NativeGateFixture"/>
+        <Field name="jdbc"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
     <!-- Dependency singleton do Spring quản lý (JdbcTemplate); không sao chép khi inject vào helper transaction workspace. -->
     <Match>
         <Class name="com.giaokhoa.tenancy.data.WorkspaceTransaction"/>
