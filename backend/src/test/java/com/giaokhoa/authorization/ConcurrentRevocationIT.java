@@ -552,10 +552,9 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
         }
     }
 
-    @Tag("pending-contract")
     @Test
     void productionWorkerMustReconcilePartiallyProvisionedAppGraphAfterRetry() throws Exception {
-        // RED: graph writer and reconciliation worker are not implemented; the source is an actual
+        // The production reconciliation worker must resume this operation; the source is an actual
         // PERSONAL owner in V001, not a fabricated
         // share_grant (which has no production schema before the later user-story tasks).
         try (var nativeGate = new NativeRevocationFixture()) {
@@ -748,8 +747,8 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
     @Test
     void crashAfterNativeRevokeBeforeDatabaseAckCanReplayWithoutDuplicatingGraph()
             throws Exception {
-        // The reconciliation worker is not implemented yet. This tests the network/commit crash
-        // window,
+        // This partition records no projection, so the worker cannot verify or publish it; the
+        // test drives the network/commit crash window by hand,
         // with native Keycloak, committed PostgreSQL revisions and a second identical revoke.
         try (var nativeGate = new NativeRevocationFixture();
                 var session = nativeSession(nativeGate)) {
