@@ -62,14 +62,17 @@ public class CapabilitiesController {
         if (request == null || request.targets() == null || request.targets().isEmpty()) {
             throw invalidTarget();
         }
+        UUID actorUserId = executor.actorUserId(authentication);
         List<ProtectedActionExecutor.Target> targets =
-                request.targets().stream().map(input -> toTarget(workspaceId, input)).toList();
+                request.targets().stream()
+                        .map(input -> toTarget(workspaceId, actorUserId, input))
+                        .toList();
         ProtectedActionExecutor.Decisions decisions =
                 executor.evaluate(authentication, httpRequest, workspaceId, targets);
         List<TargetDecision> view =
                 request.targets().stream()
                         .map(input -> {
-                            String key = targetKey(workspaceId, input);
+                            String key = targetKey(workspaceId, actorUserId, input);
                             List<ScopeDecision> scopes =
                                     input.scopes().stream()
                                             .map(scope -> {
@@ -89,19 +92,20 @@ public class CapabilitiesController {
                 .body(new CapabilitiesView(view));
     }
 
-    private static ProtectedActionExecutor.Target toTarget(UUID workspaceId, TargetInput input) {
+    private static ProtectedActionExecutor.Target toTarget(
+            UUID workspaceId, UUID actorUserId, TargetInput input) {
         if (input == null || input.scopes() == null || input.scopes().isEmpty()) {
             throw invalidTarget();
         }
         try {
             return new ProtectedActionExecutor.Target(
-                    targetKey(workspaceId, input), input.scopes());
+                    targetKey(workspaceId, actorUserId, input), input.scopes());
         } catch (IllegalArgumentException ex) {
             throw invalidTarget(ex);
         }
     }
 
-    private static String targetKey(UUID workspaceId, TargetInput input) {
+    private static String targetKey(UUID workspaceId, UUID actorUserId, TargetInput input) {
         NativePolicyTemplates.TargetType type;
         try {
             type = NativePolicyTemplates.TargetType.valueOf(String.valueOf(input.type()));
@@ -110,7 +114,14 @@ public class CapabilitiesController {
         }
         return switch (type) {
             case PLATFORM -> NativePolicyTemplates.platformKey();
-            case PROFILE -> NativePolicyTemplates.profileKey(requireId(input));
+            case PROFILE -> {
+                // A profile target is the actor's own account; the contract limits capability
+                // targets to the route workspace and the current actor.
+                if (!actorUserId.equals(requireId(input))) {
+                    throw invalidTarget();
+                }
+                yield NativePolicyTemplates.profileKey(actorUserId);
+            }
             case WORKSPACE -> {
                 if (!workspaceId.equals(input.id())) {
                     throw invalidTarget();
