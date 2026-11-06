@@ -50,40 +50,82 @@ public class KeycloakProvisioningClient {
 
     private final RestClient http;
     private final String baseUrl;
+    private final String realm;
     private final OAuth2AuthorizedClientManager manager;
 
     @Autowired
     public KeycloakProvisioningClient(
             @Value("${giaokhoa.keycloak.admin-base-url}") String baseUrl,
+            @Value("${spring.security.oauth2.client.provider.keycloak.issuer-uri}")
+                    String issuerUri,
             @Value("${giaokhoa.keycloak.provisioner.client-id}") String clientId,
             @Value("${giaokhoa.keycloak.provisioner.client-secret}") String clientSecret) {
-        this(RestClient.builder(), baseUrl, clientId, clientSecret);
+        this(
+                RestClient.builder(),
+                baseUrl,
+                realmOf(issuerUri),
+                clientManager(
+                        baseUrl.replaceAll("/+$", ""), realmOf(issuerUri), clientId, clientSecret));
     }
 
     public KeycloakProvisioningClient(
             RestClient.Builder builder, String baseUrl, String clientId, String clientSecret) {
+        this(builder, baseUrl, "giaokhoa", clientId, clientSecret);
+    }
+
+    public KeycloakProvisioningClient(
+            RestClient.Builder builder,
+            String baseUrl,
+            String realm,
+            String clientId,
+            String clientSecret) {
         this(
                 builder,
                 baseUrl,
-                clientManager(baseUrl.replaceAll("/+$", ""), clientId, clientSecret));
+                realm,
+                clientManager(baseUrl.replaceAll("/+$", ""), realm, clientId, clientSecret));
     }
 
     KeycloakProvisioningClient(
             RestClient.Builder builder, String baseUrl, OAuth2AuthorizedClientManager manager) {
+        this(builder, baseUrl, "giaokhoa", manager);
+    }
+
+    KeycloakProvisioningClient(
+            RestClient.Builder builder,
+            String baseUrl,
+            String realm,
+            OAuth2AuthorizedClientManager manager) {
         this.http = builder.build();
         this.baseUrl = baseUrl.replaceAll("/+$", "");
+        this.realm = realm;
         this.manager = manager;
     }
 
+    /**
+     * Realm là segment cuối của issuer URI OIDC đã cấu hình — nguồn duy nhất app tin cho cả tên
+     * realm production lẫn realm TEST.
+     */
+    private static String realmOf(@Nullable String issuerUri) {
+        String marker = "/realms/";
+        int start = issuerUri == null ? -1 : issuerUri.lastIndexOf(marker);
+        String realm =
+                start < 0 ? "" : issuerUri.substring(start + marker.length()).replaceAll("/+$", "");
+        if (realm.isBlank() || realm.contains("/")) {
+            throw new IllegalStateException("Keycloak issuer URI has no realm: " + issuerUri);
+        }
+        return realm;
+    }
+
     private static OAuth2AuthorizedClientManager clientManager(
-            String baseUrl, String clientId, String secret) {
+            String baseUrl, String realm, String clientId, String secret) {
         ClientRegistration registration =
                 ClientRegistration.withRegistrationId("giaokhoa-provisioner")
                         .clientId(clientId)
                         .clientSecret(secret)
                         .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)
                         .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
-                        .tokenUri(baseUrl + "/realms/giaokhoa/protocol/openid-connect/token")
+                        .tokenUri(baseUrl + "/realms/" + realm + "/protocol/openid-connect/token")
                         .build();
         InMemoryClientRegistrationRepository repository =
                 new InMemoryClientRegistrationRepository(registration);
@@ -163,6 +205,18 @@ public class KeycloakProvisioningClient {
         return Objects.requireNonNull(parentId);
     }
 
+    /** Đọc các realm group mà user là thành viên trực tiếp và đối chiếu path cố định. */
+    public boolean isRealmGroupMember(String keycloakUserId, String groupPath) {
+        if (keycloakUserId == null || keycloakUserId.isBlank()) {
+            throw new IllegalArgumentException("Keycloak user ID is required");
+        }
+        if (groupPath == null || !GROUP_SOURCE.matcher(groupPath).matches()) {
+            throw new IllegalArgumentException("Unrecognized authorization group source");
+        }
+        Group[] groups = get(endpoint("users", keycloakUserId, "groups"), Group[].class);
+        return Arrays.stream(groups).anyMatch(group -> groupPath.equals(group.path()));
+    }
+
     /** Membership độc lập với group của Organization; không ngụ ý policy kế thừa nào. */
     public void setRealmGroupMembership(String keycloakUserId, String groupPath, boolean member) {
         if (keycloakUserId == null || keycloakUserId.isBlank()) {
@@ -225,8 +279,7 @@ public class KeycloakProvisioningClient {
 
     private URI endpoint(String... segments) {
         UriComponentsBuilder uri =
-                UriComponentsBuilder.fromUriString(baseUrl)
-                        .pathSegment("admin", "realms", "giaokhoa");
+                UriComponentsBuilder.fromUriString(baseUrl).pathSegment("admin", "realms", realm);
         for (String segment : segments) {
             uri.pathSegment(segment);
         }
