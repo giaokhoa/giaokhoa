@@ -212,7 +212,10 @@ public class PolicyGraphWriter {
     /**
      * Read-only drift check for reconciliation: true only when the recorded resource still exists
      * under its recorded ID, every recorded policy is still present, and the root permission of the
-     * pair still references that resource. Anything else is treated as out-of-band drift.
+     * pair still references that resource with exactly the recorded policy set linked — the same
+     * policy set the apply path verifies on read-back. Anything else is treated as out-of-band
+     * drift. The content inside a still-linked policy is not compared; that is the recorded graph's
+     * own business, enforced when the graph is (re)applied.
      */
     public boolean isGraphIntact(
             String targetKey, String scope, String resourceId, List<String> policyNames) {
@@ -228,15 +231,19 @@ public class PolicyGraphWriter {
             return false;
         }
         Map<String, Map<String, Object>> policies = policyIndex(root);
+        Set<String> recordedPolicyIds = new HashSet<>();
         for (String name : policyNames) {
-            if (!policies.containsKey(name)) {
+            Map<String, Object> policy = policies.get(name);
+            if (policy == null) {
                 return false;
             }
+            recordedPolicyIds.add(String.valueOf(policy.get("id")));
         }
         String permissionName = NativePolicyTemplates.rootPermissionName(targetKey, scope);
         for (Map<String, Object> permission : list(root + "/permission/scope")) {
             if (permissionName.equals(permission.get("name"))) {
-                return ids(permission.get("resources")).contains(resourceId);
+                return ids(permission.get("resources")).contains(resourceId)
+                        && new HashSet<>(ids(permission.get("policies"))).equals(recordedPolicyIds);
             }
         }
         return false;

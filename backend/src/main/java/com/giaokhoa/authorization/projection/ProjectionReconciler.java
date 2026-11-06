@@ -218,9 +218,11 @@ public class ProjectionReconciler {
 
     /**
      * Drift check for a READY partition: false only when a projection whose desired state still
-     * rebuilds exactly from durable rows is provably missing or altered in Keycloak. Rows whose
-     * source no longer rebuilds, and any Keycloak read failure, are not proof of drift and never
-     * fence the partition on their own.
+     * rebuilds exactly from durable rows is provably altered in Keycloak at the level {@link
+     * PolicyGraphWriter#isGraphIntact} verifies — resource or recorded policy missing, or the root
+     * permission no longer linking exactly the recorded policy set to the recorded resource. Rows
+     * whose source no longer rebuilds, and any Keycloak read failure, are not proof of drift and
+     * never fence the partition on their own.
      */
     public boolean verifyStoredGraph(UUID partitionId) {
         for (ProjectionRow projection : projectionsOf(partitionId)) {

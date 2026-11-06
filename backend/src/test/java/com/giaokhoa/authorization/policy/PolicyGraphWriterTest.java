@@ -1,7 +1,9 @@
 package com.giaokhoa.authorization.policy;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -602,6 +604,75 @@ class PolicyGraphWriterTest {
 
         assertThrows(IllegalStateException.class, () -> writer.apply(graph));
         server.verify();
+    }
+
+    @Test
+    void graphIsIntactWhenTheRootPermissionLinksExactlyTheRecordedPolicies() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PolicyGraphWriter writer = writer(builder);
+
+        expectClients(server);
+        expectStoredGraph(server, "[\"pol-own\"]");
+
+        assertTrue(writer.isGraphIntact(TARGET, "enter", "res-1", List.of("gk-group:" + OWNERS)));
+        server.verify();
+    }
+
+    @Test
+    void graphIsNotIntactWhenAPolicyWasUnlinkedFromTheRootPermission() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PolicyGraphWriter writer = writer(builder);
+
+        expectClients(server);
+        // The policy itself still exists; only the link from the root permission was removed.
+        expectStoredGraph(server, "[]");
+
+        assertFalse(writer.isGraphIntact(TARGET, "enter", "res-1", List.of("gk-group:" + OWNERS)));
+        server.verify();
+    }
+
+    @Test
+    void graphIsNotIntactWhenTheRootPermissionLinksAnExtraPolicy() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PolicyGraphWriter writer = writer(builder);
+
+        expectClients(server);
+        expectStoredGraph(server, "[\"pol-own\",\"pol-extra\"]", true);
+
+        assertFalse(writer.isGraphIntact(TARGET, "enter", "res-1", List.of("gk-group:" + OWNERS)));
+        server.verify();
+    }
+
+    private void expectStoredGraph(MockRestServiceServer server, String permissionPolicies) {
+        expectStoredGraph(server, permissionPolicies, false);
+    }
+
+    private void expectStoredGraph(
+            MockRestServiceServer server, String permissionPolicies, boolean extraPolicy) {
+        expectGet(
+                server,
+                ROOT + "/resource" + LIST,
+                "[{\"_id\":\"res-1\",\"name\":\"" + TARGET + "\"}]");
+        String policies =
+                "[{\"id\":\"pol-own\",\"name\":\"gk-group:"
+                        + OWNERS
+                        + "\",\"type\":\"group\"}"
+                        + (extraPolicy
+                                ? ",{\"id\":\"pol-extra\",\"name\":\"gk-extra\",\"type\":\"group\"}"
+                                : "")
+                        + "]";
+        expectGet(server, ROOT + "/policy" + LIST, policies);
+        expectGet(
+                server,
+                ROOT + "/permission/scope" + LIST,
+                "[{\"id\":\"perm-1\",\"name\":\""
+                        + ROOT_NAME
+                        + "\",\"resources\":[\"res-1\"],\"policies\":"
+                        + permissionPolicies
+                        + "}]");
     }
 
     /** A full page of unrelated entries, so only a later page can hold the wanted name. */
