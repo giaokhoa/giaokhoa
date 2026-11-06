@@ -1,6 +1,7 @@
 package com.giaokhoa.authorization.decision;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -13,6 +14,7 @@ import static org.mockito.Mockito.when;
 import com.giaokhoa.authorization.decision.CapabilitiesController.CapabilitiesRequest;
 import com.giaokhoa.authorization.decision.CapabilitiesController.TargetInput;
 import com.giaokhoa.authorization.decision.ProtectedActionExecutor.Decisions;
+import com.giaokhoa.authorization.policy.NativePolicyTemplates;
 import com.giaokhoa.shared.http.HttpProblemException;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +29,64 @@ class CapabilitiesControllerTest {
     private static final UUID ACTOR = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID OTHER = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final UUID WORKSPACE = UUID.fromString("22222222-2222-2222-2222-222222222222");
+
+    @Test
+    void aPlatformTargetWithoutIdIsEvaluatedAndReturnedWithoutInventingAnId() {
+        ProtectedActionExecutor executor = mock(ProtectedActionExecutor.class);
+        Authentication authentication = mock(Authentication.class);
+        when(executor.actorUserId(authentication)).thenReturn(ACTOR);
+        when(executor.evaluate(any(), any(), eq(WORKSPACE), any()))
+                .thenReturn(
+                        new Decisions(
+                                Map.of(
+                                        NativePolicyTemplates.platformKey(),
+                                        Map.of("center.list", true))));
+        CapabilitiesController controller = new CapabilitiesController(executor);
+
+        var response =
+                controller.capabilities(
+                        WORKSPACE,
+                        new CapabilitiesRequest(
+                                List.of(
+                                        new TargetInput(
+                                                "PLATFORM", null, null, List.of("center.list")))),
+                        authentication,
+                        new MockHttpServletRequest());
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        var target = Objects.requireNonNull(response.getBody()).targets().getFirst();
+        assertNull(target.id());
+        assertNull(target.versionId());
+        assertTrue(target.scopes().getFirst().allowed());
+    }
+
+    @Test
+    void anIdRequiredTargetWithoutIdIsRejectedBeforeEvaluation() {
+        ProtectedActionExecutor executor = mock(ProtectedActionExecutor.class);
+        Authentication authentication = mock(Authentication.class);
+        when(executor.actorUserId(authentication)).thenReturn(ACTOR);
+        CapabilitiesController controller = new CapabilitiesController(executor);
+
+        HttpProblemException problem =
+                assertThrows(
+                        HttpProblemException.class,
+                        () ->
+                                controller.capabilities(
+                                        WORKSPACE,
+                                        new CapabilitiesRequest(
+                                                List.of(
+                                                        new TargetInput(
+                                                                "CLASS",
+                                                                null,
+                                                                null,
+                                                                List.of("class.read")))),
+                                        authentication,
+                                        new MockHttpServletRequest()));
+
+        assertEquals(HttpStatus.BAD_REQUEST, problem.getStatus());
+        assertEquals("INVALID_TARGET", problem.getCode());
+        verify(executor, never()).evaluate(any(), any(), any(), any());
+    }
 
     @Test
     void aProfileTargetOfAnotherUserIsRejectedAsAnInvalidTarget() {

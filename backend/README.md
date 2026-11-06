@@ -33,7 +33,7 @@ Build mặc định không cần PostgreSQL/Keycloak và không chạy integrati
 
 ## VS Code và agent
 
-Mở thư mục gốc của worktree. `backend/.settings/org.eclipse.jdt.core.prefs` là cấu hình JDT dùng chung; các file `.settings` còn lại do IDE tự sinh được Git ignore. Giữ một `package-info.java` cho mỗi package trong `src/main/java`; không tạo bản trùng trong `src/test/java`. Package chỉ dành cho test có thể khai báo riêng. Nếu IDE chưa cập nhật, chạy **Java: Update Project Configuration**.
+Mở thư mục gốc của worktree. `backend/.settings/org.eclipse.jdt.core.prefs` là cấu hình JDT dùng chung; các file `.settings` còn lại do IDE tự sinh được Git ignore. Giữ một `package-info.java` cho mỗi package trong `src/main/java`; không tạo bản trùng trong `src/test/java`. Package chỉ dành cho test có thể khai báo riêng. Với package JPA `@NullUnmarked`, đặt `@NullMarked` trực tiếp trên class test nếu cần kiểm tra null mà không tạo thêm `package-info.java` trùng. Nếu IDE chưa cập nhật, chạy **Java: Update Project Configuration**.
 
 JDT và javac có bộ kiểm tra khác nhau; formatter hoặc build thành công không có nghĩa mọi kiểm tra IDE đều giống nhau. Maven `verify` là lệnh bắt buộc dùng chung cho agent và CI. Sửa nguyên nhân; chỉ dùng suppression hẹp kèm lý do khi xác nhận ngoại lệ của framework hoặc test cố ý truyền đầu vào sai. Không bỏ qua test để lint xanh.
 

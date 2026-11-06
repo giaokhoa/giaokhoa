@@ -4,8 +4,11 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
+// Entity JPA dùng @NullUnmarked; vẫn kiểm tra hợp đồng null của test bằng @NullMarked.
+@NullMarked
 class AuthorizationModelTest {
     @Test
     void operationArraysCannotBeChangedThroughConstructorArgumentsOrGetters() {
