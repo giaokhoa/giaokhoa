@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -59,6 +60,7 @@ public class ProjectionWorker {
     private final Map<UUID, OrphanRetry> orphanRetries = new ConcurrentHashMap<>();
     private Instant lastDriftScan = Instant.EPOCH;
     private @Nullable UUID driftScanCursor;
+    private @Nullable UUID orphanScanCursor;
 
     /** Trạng thái giới hạn tốc độ của một partition bị fence mà không có operation đang sống. */
     private record OrphanRetry(int failures, Instant nextAttemptAt) {}
@@ -187,18 +189,7 @@ public class ProjectionWorker {
 
     private void process(ClaimedOperation operation) {
         try {
-            for (int i = 0; i < operation.partitions().size(); i++) {
-                UUID partitionId = operation.partitions().get(i);
-                long revision = operation.revisions().get(i);
-                ProjectionReconciler.PartitionRow partition = reconciler.partition(partitionId);
-                if (partition.desiredRevision() != revision) {
-                    throw new SupersededException();
-                }
-                if (partition.state() != AuthorizationPartition.State.READY
-                        || partition.appliedRevision() != revision) {
-                    reconciler.reconcilePartition(partitionId, revision);
-                }
-            }
+            reconcileAffected(operation.partitions(), operation.revisions());
             transactions.executeWithoutResult(_ -> {
                 // Đọc lại các desired revision trong cùng transaction ghi nhận
                 // thành công: một mutation đã bump một partition sau các kiểm tra ở trên khiến
@@ -220,8 +211,9 @@ public class ProjectionWorker {
                         "UPDATE authorization_operation SET state = 'SUCCEEDED',"
                                 + " next_attempt_at = NULL, last_error_code = NULL,"
                                 + " updated_at = now()"
-                                + " WHERE id = ? AND state = 'APPLYING'",
-                        operation.id());
+                                + " WHERE id = ? AND state = 'APPLYING' AND attempt_count = ?",
+                        operation.id(),
+                        operation.attemptCount());
             });
         } catch (SupersededException ex) {
             recordFailure(operation, ERROR_SUPERSEDED, true, false);
@@ -233,8 +225,13 @@ public class ProjectionWorker {
                         ex.errorCode(),
                         ex.getMessage());
             }
+            boolean superseded =
+                    ProjectionReconciler.ERROR_REVISION_SUPERSEDED.equals(ex.errorCode());
             recordFailure(
-                    operation, ex.errorCode(), operation.attemptCount() >= MAX_ATTEMPTS, true);
+                    operation,
+                    superseded ? ERROR_SUPERSEDED : ex.errorCode(),
+                    superseded || operation.attemptCount() >= MAX_ATTEMPTS,
+                    !superseded);
         } catch (RestClientException
                 | DataAccessException
                 | IllegalStateException
@@ -254,6 +251,47 @@ public class ProjectionWorker {
         }
     }
 
+    void reconcileAffected(List<UUID> partitionIds, List<Long> revisions) {
+        Map<UUID, Long> remaining = new LinkedHashMap<>();
+        Map<UUID, Set<UUID>> dependencies = new LinkedHashMap<>();
+        for (int i = 0; i < partitionIds.size(); i++) {
+            UUID id = partitionIds.get(i);
+            remaining.put(id, revisions.get(i));
+            Set<UUID> upstream = new HashSet<>();
+            for (var projection : reconciler.projectionsOf(id)) {
+                upstream.addAll(projection.dependencyPartitionIds());
+            }
+            dependencies.put(id, upstream);
+        }
+        while (!remaining.isEmpty()) {
+            boolean progressed = false;
+            var entries = remaining.entrySet().iterator();
+            while (entries.hasNext()) {
+                var entry = entries.next();
+                UUID id = entry.getKey();
+                if (dependencies.getOrDefault(id, Set.of()).stream()
+                        .anyMatch(remaining::containsKey)) {
+                    continue;
+                }
+                var partition = reconciler.partition(id);
+                long revision = entry.getValue();
+                if (partition.desiredRevision() != revision) {
+                    throw new SupersededException();
+                }
+                if (partition.state() != AuthorizationPartition.State.READY
+                        || partition.appliedRevision() != revision) {
+                    reconciler.reconcilePartition(id, revision);
+                }
+                entries.remove();
+                progressed = true;
+            }
+            if (!progressed) {
+                throw new ProjectionReconciler.ReconciliationException(
+                        "DEPENDENCY_CYCLE", "Operation partitions have cyclic dependencies");
+            }
+        }
+    }
+
     private void recordFailure(
             ClaimedOperation operation,
             String errorCode,
@@ -262,18 +300,21 @@ public class ProjectionWorker {
         transactions.executeWithoutResult(_ -> {
             // Được bảo vệ bởi trạng thái đã claim: một instance thua operation vào tay claim
             // khác sẽ không ghi gì, nên không bao giờ fail được một operation đã thành công.
-            jdbc.update(
-                    "UPDATE authorization_operation SET state = ?, next_attempt_at = ?,"
-                            + " last_error_code = ?, updated_at = now()"
-                            + " WHERE id = ? AND state = 'APPLYING'",
-                    terminal ? "FAILED" : "RETRYABLE_FAILURE",
-                    terminal
-                            ? null
-                            : Timestamp.from(
-                                    Instant.now().plus(backoffFor(operation.attemptCount()))),
-                    errorCode,
-                    operation.id());
-            if (fencePartitions && terminal) {
+            int updated =
+                    jdbc.update(
+                            "UPDATE authorization_operation SET state = ?, next_attempt_at = ?,"
+                                    + " last_error_code = ?, updated_at = now()"
+                                    + " WHERE id = ? AND state = 'APPLYING' AND attempt_count = ?",
+                            terminal ? "FAILED" : "RETRYABLE_FAILURE",
+                            terminal
+                                    ? null
+                                    : Timestamp.from(
+                                            Instant.now()
+                                                    .plus(backoffFor(operation.attemptCount()))),
+                            errorCode,
+                            operation.id(),
+                            operation.attemptCount());
+            if (updated == 1 && fencePartitions && terminal) {
                 for (UUID partitionId : operation.partitions()) {
                     jdbc.update(
                             "UPDATE authz_partition SET state = 'FAILED'"
@@ -301,19 +342,15 @@ public class ProjectionWorker {
                                 + " AND NOT EXISTS (SELECT 1 FROM authorization_operation o"
                                 + " WHERE o.state IN ('PENDING', 'APPLYING', 'RETRYABLE_FAILURE')"
                                 + " AND p.id = ANY(o.affected_partitions))"
-                                + " ORDER BY p.created_at LIMIT ?",
-                        UUID.class,
-                        MAX_PARTITIONS_PER_CYCLE);
-        orphanRetries
-                .keySet()
-                .retainAll(
-                        new HashSet<>(
-                                jdbc.queryForList(
-                                        "SELECT id FROM authz_partition"
-                                                + " WHERE state = 'PENDING'",
-                                        UUID.class)));
+                                + " ORDER BY p.id",
+                        UUID.class);
+        orphanRetries.keySet().retainAll(new HashSet<>(orphaned));
+        List<UUID> batch = scanWindow(orphaned, orphanScanCursor, MAX_PARTITIONS_PER_CYCLE);
+        if (!batch.isEmpty()) {
+            orphanScanCursor = batch.getLast();
+        }
         Instant now = Instant.now();
-        for (UUID partitionId : orphaned) {
+        for (UUID partitionId : batch) {
             OrphanRetry retry = orphanRetries.get(partitionId);
             if (retry != null && now.isBefore(retry.nextAttemptAt())) {
                 continue;

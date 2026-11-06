@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -17,6 +18,7 @@ import com.giaokhoa.authorization.fence.AuthorizationFence;
 import com.giaokhoa.authorization.fence.DependencyManifestResolver;
 import com.giaokhoa.authorization.fence.DependencyManifestResolver.Manifest;
 import com.giaokhoa.authorization.policy.PolicyGraphWriter;
+import com.giaokhoa.identity.eligibility.IdentityEligibilitySynchronizer;
 import com.giaokhoa.shared.http.HttpProblemException;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +29,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.invocation.InvocationOnMock;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -158,6 +161,88 @@ class ProtectedActionExecutorTest {
         verify(fixture.resolver, times(2)).resolve(ACTOR, WORKSPACE, List.of(KEY));
     }
 
+    @Test
+    void currentEligibilityIsReadBeforeTheFenceAndPdp() {
+        Fixture fixture = new Fixture(Map.of(KEY, "recorded-resource"));
+        fixture.executor.evaluate(
+                fixture.authentication, new MockHttpServletRequest(), WORKSPACE, List.of(TARGET));
+        InOrder order =
+                inOrder(fixture.eligibility, fixture.resolver, fixture.fence, fixture.decisions);
+        order.verify(fixture.eligibility).synchronizeEligibility(ACTOR);
+        order.verify(fixture.resolver).resolve(ACTOR, WORKSPACE, List.of(KEY));
+        order.verify(fixture.fence).acquire(any());
+        order.verify(fixture.decisions).isAllowed(any(), any(), any());
+    }
+
+    @Test
+    void anUnreadableCurrentIdentityStopsBeforeDecisionsAndAction() {
+        Fixture fixture = new Fixture(Map.of(KEY, "recorded-resource"));
+        when(fixture.eligibility.synchronizeEligibility(ACTOR))
+                .thenThrow(
+                        new HttpProblemException(
+                                HttpStatus.SERVICE_UNAVAILABLE,
+                                "IDENTITY_UNAVAILABLE",
+                                "Không đọc được danh tính."));
+        AtomicBoolean ran = new AtomicBoolean();
+        var failure =
+                assertThrows(
+                        HttpProblemException.class,
+                        () ->
+                                fixture.executor.execute(
+                                        fixture.authentication,
+                                        new MockHttpServletRequest(),
+                                        WORKSPACE,
+                                        List.of(TARGET),
+                                        () -> ran.getAndSet(true)));
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, failure.getStatus());
+        assertFalse(ran.get());
+        verify(fixture.resolver, never()).resolve(any(), any(), any());
+        verify(fixture.decisions, never()).isAllowed(any(), any(), any());
+    }
+
+    @Test
+    void repeatedTargetsPreserveEveryScopeAndDecideEachPairOnce() {
+        for (boolean reverse : List.of(false, true)) {
+            Fixture fixture = new Fixture(Map.of(KEY, "recorded-resource"));
+            when(fixture.decisions.isAllowed(any(), any(), any()))
+                    .thenAnswer(invocation ->
+                            "read"
+                                    .equals(
+                                            invocation
+                                                    .getArgument(2, RequiredPermissions.class)
+                                                    .permissions()
+                                                    .getFirst()
+                                                    .scope()));
+            var denied = new ProtectedActionExecutor.Target(KEY, List.of("membership.revoke"));
+            var allowed = new ProtectedActionExecutor.Target(KEY, List.of("read", "read"));
+            List<ProtectedActionExecutor.Target> targets =
+                    reverse ? List.of(allowed, denied) : List.of(denied, allowed);
+            var result =
+                    fixture.executor.evaluate(
+                            fixture.authentication,
+                            new MockHttpServletRequest(),
+                            WORKSPACE,
+                            targets);
+            assertFalse(result.allowed(KEY, "membership.revoke"));
+            assertTrue(result.allowed(KEY, "read"));
+            assertFalse(result.allAllowed());
+            verify(fixture.decisions, times(2)).isAllowed(any(), any(), any());
+            AtomicBoolean ran = new AtomicBoolean();
+            var failure =
+                    assertThrows(
+                            HttpProblemException.class,
+                            () ->
+                                    fixture.executor.execute(
+                                            fixture.authentication,
+                                            new MockHttpServletRequest(),
+                                            WORKSPACE,
+                                            targets,
+                                            () -> ran.getAndSet(true)));
+            assertEquals(HttpStatus.FORBIDDEN, failure.getStatus());
+            assertFalse(ran.get());
+        }
+    }
+
     private static Object runSupplier(InvocationOnMock invocation) {
         return ((Supplier<?>) invocation.getArgument(1)).get();
     }
@@ -168,6 +253,8 @@ class ProtectedActionExecutorTest {
         final KeycloakDecisionClient decisions = mock(KeycloakDecisionClient.class);
         final PolicyGraphWriter writer = mock(PolicyGraphWriter.class);
         final JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        final IdentityEligibilitySynchronizer eligibility =
+                mock(IdentityEligibilitySynchronizer.class);
         final Authentication authentication = mock(Authentication.class);
         final AtomicInteger confirmationsToSkip = new AtomicInteger();
         final ProtectedActionExecutor executor;
@@ -175,7 +262,7 @@ class ProtectedActionExecutorTest {
         Fixture(Map<String, String> recordedResourceIds) {
             Manifest manifest =
                     new Manifest(ACTOR, WORKSPACE, List.of(KEY), recordedResourceIds, List.of());
-            when(resolver.resolve(ACTOR, WORKSPACE, List.of(KEY))).thenReturn(manifest);
+            when(resolver.resolve(eq(ACTOR), eq(WORKSPACE), any())).thenReturn(manifest);
             when(fence.acquire(manifest))
                     .thenReturn(new AuthorizationFence.Snapshot(manifest, Map.of()));
             when(fence.atSnapshot(any(), any()))
@@ -189,7 +276,9 @@ class ProtectedActionExecutorTest {
                             contains("FROM user_account"), eq(UUID.class), any(String.class)))
                     .thenReturn(List.of(ACTOR));
             when(authentication.getName()).thenReturn("keycloak-subject");
-            executor = new ProtectedActionExecutor(resolver, fence, decisions, writer, jdbc);
+            executor =
+                    new ProtectedActionExecutor(
+                            resolver, fence, decisions, writer, jdbc, eligibility);
         }
     }
 }

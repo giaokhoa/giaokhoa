@@ -7,6 +7,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import com.giaokhoa.authorization.model.AuthorizationOperation;
 import com.giaokhoa.authorization.operation.IdempotencyService;
+import com.giaokhoa.authorization.projection.ProjectionReconciler;
+import com.giaokhoa.identity.eligibility.IdentityEligibilitySynchronizer;
 import com.giaokhoa.support.IntegrationEnvironment;
 import java.util.List;
 import java.util.UUID;
@@ -67,6 +69,8 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
 
     @Autowired JdbcTemplate jdbc;
     @Autowired IdempotencyService idempotency;
+    @Autowired IdentityEligibilitySynchronizer eligibility;
+    @Autowired ProjectionReconciler reconciler;
     @Autowired PlatformTransactionManager transactionManager;
     @Autowired WebApplicationContext webContext;
     @Autowired SessionRepositoryFilter<?> sessionFilter;
@@ -243,8 +247,12 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                             : "workspace:" + fixture.workspace();
             String keyB = versionTargetKey(fixture.workspace(), resourceB, versionB);
             try (var apiGraph =
-                    nativeGate.partiallyProvisionApplicationResource(
-                            keyA, requiresGrant ? "content.read" : "enter")) {
+                            nativeGate.partiallyProvisionApplicationResource(
+                                    keyA, requiresGrant ? "content.read" : "enter");
+                    var identityGraph =
+                            nativeGate.partiallyProvisionApplicationResource(
+                                    "account:" + fixture.actor(), "workspace.list")) {
+                prepareEligibility(fixture, nativeGate, identityGraph);
                 apiGraph.authorizeOwner(); // User policy native của Keycloak trên audience của TEST
                 // API.
                 String keycloakResourceB =
@@ -384,106 +392,207 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
         try (var nativeGate = new NativeRevocationFixture();
                 var session = nativeSession(nativeGate)) {
             ActorScope fixture = actorWithReadyPersonalWorkspace(nativeGate.userSubject());
-            MockMvc mvc =
-                    MockMvcBuilders.webAppContextSetup(webContext)
-                            .addFilters(sessionFilter)
-                            .apply(springSecurity())
-                            .build();
-            assertTrue(nativeGate.allowed(session.currentAccessToken(), "a"));
-            CountDownLatch revokeLocked = new CountDownLatch(1);
-            CountDownLatch finishRevoke = new CountDownLatch(1);
-            CountDownLatch writerStarted = new CountDownLatch(1);
-            AtomicInteger revokerBackendPid = new AtomicInteger();
+            try (var identityGraph =
+                    nativeGate.partiallyProvisionApplicationResource(
+                            "account:" + fixture.actor(), "workspace.list")) {
+                prepareEligibility(fixture, nativeGate, identityGraph);
+                MockMvc mvc =
+                        MockMvcBuilders.webAppContextSetup(webContext)
+                                .addFilters(sessionFilter)
+                                .apply(springSecurity())
+                                .build();
+                assertTrue(nativeGate.allowed(session.currentAccessToken(), "a"));
+                CountDownLatch revokeLocked = new CountDownLatch(1);
+                CountDownLatch finishRevoke = new CountDownLatch(1);
+                CountDownLatch writerStarted = new CountDownLatch(1);
+                AtomicInteger revokerBackendPid = new AtomicInteger();
 
-            try (var pool = Executors.newFixedThreadPool(2)) {
-                var revoker =
-                        pool.submit(() ->
-                                tx(() -> {
-                                    revokerBackendPid.set(backendPid());
-                                    lockedState(fixture.workspacePartition(), "UPDATE");
-                                    fence(fixture.workspacePartition(), 1);
-                                    revokeLocked.countDown();
-                                    await(finishRevoke);
-                                    return 1;
-                                }));
-                assertTrue(revokeLocked.await(10, TimeUnit.SECONDS));
-                var writer =
-                        pool.submit(() -> {
-                            writerStarted.countDown();
-                            return mvc.perform(
-                                            post(
-                                                            "/api/workspaces/{wid}/samples/actions",
-                                                            fixture.workspace())
-                                                    .with(csrf())
-                                                    .cookie(session.cookie())
-                                                    .header(
-                                                            "Idempotency-Key",
-                                                            "revocation-concurrent")
-                                                    .contentType(MediaType.APPLICATION_JSON)
-                                                    .content(
-                                                            ("{\"action\":\"CREATE_RESOURCE\","
-                                                                            + "\"subjectId\":\"%s\","
-                                                                            + "\"kind\":\"QUESTION\","
-                                                                            + "\"label\":\"Revocation contract protected\"}")
-                                                                    .formatted(UUID.randomUUID())))
-                                    .andReturn()
-                                    .getResponse()
-                                    .getStatus();
-                        });
-                try {
-                    assertTrue(writerStarted.await(10, TimeUnit.SECONDS));
-                    boolean blockedOnRevoke = false;
-                    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-                    while (System.nanoTime() < deadline && !writer.isDone()) {
-                        // Khớp đúng backend PostgreSQL của revoker, không phải chỉ độ chậm HTTP.
-                        blockedOnRevoke =
-                                Boolean.TRUE.equals(
-                                        jdbc.queryForObject(
-                                                """
-                                                SELECT EXISTS (
-                                                  SELECT 1 FROM pg_stat_activity a
-                                                  WHERE ? = ANY(pg_blocking_pids(a.pid))
-                                                    AND a.wait_event_type = 'Lock'
-                                                    AND a.query ILIKE '%authz_partition%'
-                                                )
-                                                """,
-                                                Boolean.class, revokerBackendPid.get()));
-                        if (blockedOnRevoke) {
-                            break;
+                try (var pool = Executors.newFixedThreadPool(2)) {
+                    var revoker =
+                            pool.submit(() ->
+                                    tx(() -> {
+                                        revokerBackendPid.set(backendPid());
+                                        lockedState(fixture.workspacePartition(), "UPDATE");
+                                        fence(fixture.workspacePartition(), 1);
+                                        revokeLocked.countDown();
+                                        await(finishRevoke);
+                                        return 1;
+                                    }));
+                    assertTrue(revokeLocked.await(10, TimeUnit.SECONDS));
+                    var writer =
+                            pool.submit(() -> {
+                                writerStarted.countDown();
+                                return mvc.perform(
+                                                post(
+                                                                "/api/workspaces/{wid}/samples/actions",
+                                                                fixture.workspace())
+                                                        .with(csrf())
+                                                        .cookie(session.cookie())
+                                                        .header(
+                                                                "Idempotency-Key",
+                                                                "revocation-concurrent")
+                                                        .contentType(MediaType.APPLICATION_JSON)
+                                                        .content(
+                                                                ("{\"action\":\"CREATE_RESOURCE\","
+                                                                                + "\"subjectId\":\"%s\","
+                                                                                + "\"kind\":\"QUESTION\","
+                                                                                + "\"label\":\"Revocation contract protected\"}")
+                                                                        .formatted(
+                                                                                UUID.randomUUID())))
+                                        .andReturn()
+                                        .getResponse()
+                                        .getStatus();
+                            });
+                    try {
+                        assertTrue(writerStarted.await(10, TimeUnit.SECONDS));
+                        boolean blockedOnRevoke = false;
+                        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+                        while (System.nanoTime() < deadline && !writer.isDone()) {
+                            // Khớp đúng backend PostgreSQL của revoker, không phải chỉ độ chậm
+                            // HTTP.
+                            blockedOnRevoke =
+                                    Boolean.TRUE.equals(
+                                            jdbc.queryForObject(
+                                                    """
+                                                    SELECT EXISTS (
+                                                      SELECT 1 FROM pg_stat_activity a
+                                                      WHERE ? = ANY(pg_blocking_pids(a.pid))
+                                                        AND a.wait_event_type = 'Lock'
+                                                        AND a.query ILIKE '%authz_partition%'
+                                                    )
+                                                    """,
+                                                    Boolean.class, revokerBackendPid.get()));
+                            if (blockedOnRevoke) {
+                                break;
+                            }
+                            Thread.sleep(25);
                         }
-                        Thread.sleep(25);
+                        if (writer.isDone()) {
+                            int earlyStatus = writer.get(10, TimeUnit.SECONDS);
+                            fail(
+                                    "REVOCATION_CONTRACT_EARLY_HTTP_STATUS="
+                                            + earlyStatus
+                                            + " before PostgreSQL fence: "
+                                            + (earlyStatus == 404
+                                                    ? "sample action route absent"
+                                                    : "unexpected security/validation/business response"));
+                        }
+                        assertTrue(
+                                blockedOnRevoke,
+                                "REVOCATION_CONTRACT_LOCK_NOT_OBSERVED: writer never waited on revoker PID");
+                        assertFalse(
+                                writer.isDone(), "No mutation response before the revoke commits");
+                    } finally {
+                        finishRevoke.countDown();
                     }
-                    if (writer.isDone()) {
-                        int earlyStatus = writer.get(10, TimeUnit.SECONDS);
-                        fail(
-                                "REVOCATION_CONTRACT_EARLY_HTTP_STATUS="
-                                        + earlyStatus
-                                        + " before PostgreSQL fence: "
-                                        + (earlyStatus == 404
-                                                ? "sample action route absent"
-                                                : "unexpected security/validation/business response"));
-                    }
-                    assertTrue(
-                            blockedOnRevoke,
-                            "REVOCATION_CONTRACT_LOCK_NOT_OBSERVED: writer never waited on revoker PID");
-                    assertFalse(writer.isDone(), "No mutation response before the revoke commits");
+
+                    assertEquals(1, revoker.get(10, TimeUnit.SECONDS));
+                    assertEquals(
+                            HttpStatus.SERVICE_UNAVAILABLE.value(),
+                            writer.get(10, TimeUnit.SECONDS));
+                    assertEquals(
+                            0,
+                            jdbc.queryForObject(
+                                    "SELECT count(*) FROM authorization_operation WHERE workspace_id = ?",
+                                    Integer.class,
+                                    fixture.workspace()));
                 } finally {
                     finishRevoke.countDown();
                 }
-
-                assertEquals(1, revoker.get(10, TimeUnit.SECONDS));
-                assertEquals(
-                        HttpStatus.SERVICE_UNAVAILABLE.value(), writer.get(10, TimeUnit.SECONDS));
-                assertEquals(
-                        0,
-                        jdbc.queryForObject(
-                                "SELECT count(*) FROM authorization_operation WHERE workspace_id = ?",
-                                Integer.class,
-                                fixture.workspace()));
-            } finally {
-                finishRevoke.countDown();
             }
         }
+    }
+
+    @Test
+    void sameSessionRequestRefreshesEligibilityBeforeUsingTheNativePermission() throws Exception {
+        try (var nativeGate = new NativeRevocationFixture();
+                var session = nativeSession(nativeGate)) {
+            ActorScope actor = actorWithReadyPersonalWorkspace(nativeGate.userSubject());
+            String target = "workspace:" + actor.workspace();
+            try (var graph = nativeGate.partiallyProvisionApplicationResource(target, "enter");
+                    var identityGraph =
+                            nativeGate.partiallyProvisionApplicationResource(
+                                    "account:" + actor.actor(), "workspace.list")) {
+                prepareEligibility(actor, nativeGate, identityGraph);
+                String descriptor =
+                        ProjectionReconciler.personalOwnerDescriptor(
+                                actor.workspace(),
+                                actor.actor(),
+                                nativeGate.userSubject(),
+                                target,
+                                "enter");
+                tx(() -> {
+                    jdbc.update(
+                            "UPDATE authz_partition SET state='PENDING' WHERE id=?",
+                            actor.workspacePartition());
+                    jdbc.update(
+                            "INSERT INTO authz_projection(id,partition_id,target_key,desired_hash,dependency_partition_ids)"
+                                    + " VALUES (?,?,?,?,ARRAY[?]::uuid[])",
+                            UUID.randomUUID(),
+                            actor.workspacePartition(),
+                            target,
+                            ProjectionReconciler.desiredHash(target, "enter", List.of(descriptor)),
+                            actor.account());
+                    return null;
+                });
+                reconciler.reconcilePartition(actor.workspacePartition());
+                UUID projection =
+                        jdbc.queryForList(
+                                        "SELECT id FROM authz_projection WHERE target_key=?",
+                                        UUID.class,
+                                        target)
+                                .getFirst();
+                graph.cleanupProjectedPolicies(() -> projectionPolicies(projection));
+                MockMvc mvc =
+                        MockMvcBuilders.webAppContextSetup(webContext)
+                                .addFilters(sessionFilter)
+                                .apply(springSecurity())
+                                .build();
+                String request = workspaceTarget(actor.workspace());
+                assertReadyAllowed(
+                        capabilityResponse(mvc, actor, session, request), "verified actor");
+                nativeGate.setEmailVerified(false);
+                var response = capabilityResponse(mvc, actor, session, request);
+                assertTrue(
+                        response.getStatus() == 503
+                                || (response.getStatus() == 200
+                                        && !JSON.readTree(response.getContentAsString())
+                                                .at("/targets/0/scopes/0/allowed")
+                                                .booleanValue()),
+                        "Same session must never receive a stale allow after verification is removed");
+                reconciler.reconcilePartition(actor.account());
+                reconciler.reconcilePartition(actor.workspacePartition());
+                response = capabilityResponse(mvc, actor, session, request);
+                assertEquals(200, response.getStatus());
+                assertFalse(
+                        JSON.readTree(response.getContentAsString())
+                                .at("/targets/0/scopes/0/allowed")
+                                .booleanValue());
+                nativeGate.setEmailVerified(true);
+                eligibility.synchronizeEligibility(actor.actor());
+                reconciler.reconcilePartition(actor.account());
+                reconciler.reconcilePartition(actor.workspacePartition());
+                assertReadyAllowed(
+                        capabilityResponse(mvc, actor, session, request), "verified again");
+            }
+        }
+    }
+
+    private void prepareEligibility(
+            ActorScope actor,
+            NativeRevocationFixture nativeGate,
+            NativeRevocationFixture.PartialApplicationGraph identityGraph) {
+        nativeGate.provisionEligibilityForWorkerFixture();
+        eligibility.synchronizeEligibility(actor.actor());
+        reconciler.reconcilePartition(actor.account());
+        UUID projection =
+                jdbc.queryForList(
+                                "SELECT id FROM authz_projection WHERE target_key=?",
+                                UUID.class,
+                                "account:" + actor.actor())
+                        .getFirst();
+        List<String> policyNames = projectionPolicies(projection);
+        identityGraph.cleanupProjectedPolicies(() -> policyNames);
     }
 
     private record GrantScope(UUID partition, UUID resource, UUID version) {}

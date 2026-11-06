@@ -142,6 +142,20 @@ class IdentityEligibilitySynchronizerTest {
     }
 
     @Test
+    void anAppliedRetractionDoesNotCreateANewOperationOnEveryRequest() {
+        account("SELF_REGISTERED", false, EMAIL);
+        noRecordedProjection();
+        current(new CurrentIdentity(SUBJECT, "learner", EMAIL, false, true));
+        when(jdbc.queryForObject(
+                        contains("applied_revision > 0"),
+                        eq(Boolean.class),
+                        eq("account:" + ACTOR)))
+                .thenReturn(true);
+        assertTrue(synchronizer.synchronizeEligibility(ACTOR).isEmpty());
+        verifyNoInteractions(operations);
+    }
+
+    @Test
     void anUnreadableCurrentProfileFailsClosedAndRecordsNothing() {
         account("SELF_REGISTERED", false, EMAIL);
         when(identities.readCurrentIdentity(SUBJECT))

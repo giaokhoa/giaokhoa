@@ -635,7 +635,8 @@ final class NativeRevocationFixture implements AutoCloseable {
             for (String id : ownedResources) {
                 delete(root() + "/resource/" + id);
             }
-            if (ownedScope) {
+            if (ownedScope && getList(root() + "/resource").isEmpty()) {
+                // Scope có thể được worker dùng chung cho account resource khác trong client.
                 delete(root() + "/scope/" + scopeId);
             }
         }
@@ -784,6 +785,16 @@ final class NativeRevocationFixture implements AutoCloseable {
                         List.of(scope),
                         "policies",
                         List.of(groupPolicy)));
+    }
+
+    void setEmailVerified(boolean verified) {
+        http.put()
+                .uri(admin("/users/" + userId))
+                .headers(headers -> headers.setBearerAuth(adminToken))
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("emailVerified", verified))
+                .retrieve()
+                .toBodilessEntity();
     }
 
     private void addToGroup(String group) {

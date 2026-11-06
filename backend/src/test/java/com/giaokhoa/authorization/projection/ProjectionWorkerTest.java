@@ -2,12 +2,14 @@ package com.giaokhoa.authorization.projection;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockingDetails;
 import static org.mockito.Mockito.never;
@@ -16,6 +18,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.giaokhoa.authorization.model.AuthorizationPartition;
+import com.giaokhoa.authorization.model.AuthorizationProjection;
 import java.sql.Array;
 import java.sql.ResultSet;
 import java.time.Duration;
@@ -136,12 +139,103 @@ class ProjectionWorkerTest {
         verify(reconciler, times(1)).tryReconcilePartition(PARTITION);
     }
 
+    @Test
+    void dependentPartitionsReconcileAfterTheirSourcesRegardlessOfUuidOrder() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        ProjectionReconciler reconciler = mock(ProjectionReconciler.class);
+        UUID a = uuid(3);
+        UUID b = uuid(2);
+        UUID c = uuid(1);
+        when(reconciler.projectionsOf(b)).thenReturn(List.of(projection(b, a)));
+        when(reconciler.projectionsOf(c)).thenReturn(List.of(projection(c, b)));
+        for (UUID id : List.of(a, b, c)) {
+            when(reconciler.partition(id))
+                    .thenReturn(
+                            new ProjectionReconciler.PartitionRow(
+                                    id, 1, 0, AuthorizationPartition.State.PENDING));
+        }
+        var worker = new ProjectionWorker(jdbc, reconciler, stubTransactions());
+        worker.reconcileAffected(List.of(a, c, b), List.of(1L, 1L, 1L));
+        var order = inOrder(reconciler);
+        order.verify(reconciler).reconcilePartition(a, 1);
+        order.verify(reconciler).reconcilePartition(b, 1);
+        order.verify(reconciler).reconcilePartition(c, 1);
+    }
+
+    @Test
+    void cyclicDependenciesFailClosedBeforeWritingAnyPartition() {
+        ProjectionReconciler reconciler = mock(ProjectionReconciler.class);
+        UUID a = uuid(1);
+        UUID b = uuid(2);
+        when(reconciler.projectionsOf(a)).thenReturn(List.of(projection(a, b)));
+        when(reconciler.projectionsOf(b)).thenReturn(List.of(projection(b, a)));
+        var worker = new ProjectionWorker(mock(JdbcTemplate.class), reconciler, stubTransactions());
+        var failure =
+                assertThrows(
+                        ProjectionReconciler.ReconciliationException.class,
+                        () -> worker.reconcileAffected(List.of(a, b), List.of(1L, 1L)));
+        assertEquals("DEPENDENCY_CYCLE", failure.errorCode());
+        verify(reconciler, never())
+                .reconcilePartition(any(UUID.class), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void orphanScanReachesRecoverableRowsBehindFiveFailingRowsDuringBackoff() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        ProjectionReconciler reconciler = mock(ProjectionReconciler.class);
+        List<UUID> ids = List.of(uuid(1), uuid(2), uuid(3), uuid(4), uuid(5), uuid(6));
+        when(jdbc.queryForList(anyString(), eq(UUID.class))).thenReturn(ids);
+        when(reconciler.tryReconcilePartition(uuid(6))).thenReturn(true);
+        var worker = new ProjectionWorker(jdbc, reconciler, stubTransactions());
+        worker.reconcileOrphanedPartitions();
+        worker.reconcileOrphanedPartitions();
+        verify(reconciler).tryReconcilePartition(uuid(6));
+        for (UUID id : ids.subList(0, 5)) {
+            verify(reconciler, times(1)).tryReconcilePartition(id);
+        }
+    }
+
+    private static ProjectionReconciler.ProjectionRow projection(UUID owner, UUID dependency) {
+        return new ProjectionReconciler.ProjectionRow(
+                UUID.randomUUID(),
+                owner,
+                "workspace:" + owner,
+                "resource",
+                List.of(),
+                List.of(dependency),
+                "a".repeat(64),
+                "a".repeat(64),
+                AuthorizationProjection.State.READY);
+    }
+
+    @Test
+    void aWorkerThatLostItsAttemptCannotFailPartitionsOwnedByTheNewAttempt() throws Exception {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        ProjectionReconciler reconciler = mock(ProjectionReconciler.class);
+        stubQueue(jdbc, ProjectionWorker.MAX_ATTEMPTS - 1);
+        when(jdbc.update(contains("SET state = 'APPLYING'"), any(UUID.class))).thenReturn(1);
+        when(reconciler.partition(PARTITION))
+                .thenThrow(
+                        new ProjectionReconciler.ReconciliationException(
+                                "KEYCLOAK_FAILURE", "Lỗi sau khi worker khác đã reclaim"));
+        // Update ghi failure trả 0: attempt_count đã đổi trong DB, worker này hết quyền sở hữu.
+        new ProjectionWorker(jdbc, reconciler, stubTransactions()).poll();
+        verify(jdbc, never())
+                .update(contains("authz_partition SET state = 'FAILED'"), any(UUID.class));
+        verify(jdbc, never())
+                .update(contains("authz_projection SET state = 'FAILED'"), any(UUID.class));
+    }
+
     private static UUID uuid(int suffix) {
         return UUID.fromString(String.format("00000000-0000-0000-0000-%012d", suffix));
     }
 
     /** Một operation PENDING tới hạn trên {@link #PARTITION} tại revision 1, attempt 0. */
     private static void stubQueue(JdbcTemplate jdbc) throws Exception {
+        stubQueue(jdbc, 0);
+    }
+
+    private static void stubQueue(JdbcTemplate jdbc, int attemptCount) throws Exception {
         when(jdbc.query(anyString(), ArgumentMatchers.<RowMapper<Object>>any()))
                 .thenAnswer(invocation -> {
                     RowMapper<Object> mapper = invocation.getArgument(1);
@@ -153,7 +247,7 @@ class ProjectionWorkerTest {
                     when(rs.getObject("id", UUID.class)).thenReturn(OPERATION);
                     when(rs.getArray("affected_partitions")).thenReturn(partitions);
                     when(rs.getArray("affected_revisions")).thenReturn(revisions);
-                    when(rs.getInt("attempt_count")).thenReturn(0);
+                    when(rs.getInt("attempt_count")).thenReturn(attemptCount);
                     when(rs.getString("state")).thenReturn("PENDING");
                     when(rs.getBoolean("due")).thenReturn(true);
                     return List.of(mapper.mapRow(rs, 0));
