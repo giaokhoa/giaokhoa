@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
-# Isolated acceptance test for T010. Only synthetic credentials and disposable Keycloak.
+# Isolated native acceptance for T010/T013: disposable Keycloak 26.8.1 + PostgreSQL.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE=http://127.0.0.1:18091
 CONTAINER=gk-t010-native-proof
+DATABASE=gk-t010-native-postgres
+NETWORK=gk-t010-native-network
 TMP="$(mktemp -d)"
 started=false
+db_started=false
+network_started=false
 cleanup() {
   if [[ "$started" == true ]]; then docker stop "$CONTAINER" >/dev/null 2>&1 || true; fi
+  if [[ "$db_started" == true ]]; then docker stop "$DATABASE" >/dev/null 2>&1 || true; fi
+  if [[ "$network_started" == true ]]; then docker network rm "$NETWORK" >/dev/null 2>&1 || true; fi
   rm -rf "$TMP"
 }
 trap cleanup EXIT
@@ -34,7 +40,25 @@ snapshot() {
   done
 }
 
-docker run --rm -d --name "$CONTAINER" -p 127.0.0.1:18091:8080 \
+docker network create "$NETWORK" >/dev/null
+network_started=true
+docker run --rm -d --name "$DATABASE" --network "$NETWORK" \
+  -e POSTGRES_DB=keycloak_native -e POSTGRES_USER=keycloak_native \
+  -e POSTGRES_PASSWORD=native-disposable-only-password \
+  postgres:18.6-alpine >/dev/null
+db_started=true
+db_ready=false
+for i in $(seq 1 45); do
+  if docker exec "$DATABASE" pg_isready -q -U keycloak_native -d keycloak_native; then
+    db_ready=true; break
+  fi
+  sleep 1
+done
+[[ "$db_ready" == true ]] || fail "Scratch PostgreSQL not ready"
+docker run --rm -d --name "$CONTAINER" --network "$NETWORK" -p 127.0.0.1:18091:8080 \
+  -e KC_DB=postgres -e KC_DB_URL="jdbc:postgresql://$DATABASE:5432/keycloak_native" \
+  -e KC_DB_USERNAME=keycloak_native -e KC_DB_PASSWORD=native-disposable-only-password \
+  -e TZ=UTC \
   -e KC_BOOTSTRAP_ADMIN_USERNAME=t010-native-admin \
   -e KC_BOOTSTRAP_ADMIN_PASSWORD=t010-disposable-only-password \
   quay.io/keycloak/keycloak:26.8.1 start-dev >/dev/null
@@ -55,10 +79,13 @@ export OIDC_CLIENT_SECRET=t010-web-only-synthetic-secret
 export KEYCLOAK_PROVISIONER_CLIENT_SECRET=t010-provisioner-only-synthetic-secret
 export APP_ORIGIN=http://127.0.0.1:3000
 
-TOKEN="$(curl -fsS -X POST "$BASE/realms/master/protocol/openid-connect/token" \
-  --data-urlencode grant_type=password --data-urlencode client_id=admin-cli \
-  --data-urlencode "username=$KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME" \
-  --data-urlencode "password=$KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD" | jq -er '.access_token')"
+admin_token() {
+  curl -fsS -X POST "$BASE/realms/master/protocol/openid-connect/token" \
+    --data-urlencode grant_type=password --data-urlencode client_id=admin-cli \
+    --data-urlencode "username=$KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME" \
+    --data-urlencode "password=$KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD" | jq -er '.access_token'
+}
+TOKEN="$(admin_token)"
 echo "CHECK: bootstrap on clean Keycloak"
 bash "$ROOT/bootstrap.sh"
 before="$(snapshot)"
@@ -135,6 +162,25 @@ fi
 grep -E 'Tests run:|BUILD SUCCESS' "$TMP/java-native.log" | tail -4
 echo "PASS: production Java client created Organization/group and added/revoked membership"
 
+export T013_API_CLIENT_ID="$API_ID"
+# T013 uses real Authorization Services and fixture actors on this disposable realm only.
+source "$ROOT/fixtures/install-native-gate.sh"
+export T013_NATIVE_TOKENS_FILE="$TMP/native-pkce-actor-tokens"
+if ! node "$ROOT/fixtures/native-pkce-login.mjs"; then
+  docker logs "$CONTAINER" 2>&1 | tail -55 >&2 || true
+  fail "Native actor login via real Authorization Code + PKCE"
+fi
+if ! "$REPO/backend/mvnw" -B -ntp -f "$REPO/backend/pom.xml" \
+    -Dtest=NativePermissionGateIT,NativeTimePolicyIT test > "$TMP/native-gate-java.log" 2>&1; then
+  tail -70 "$TMP/native-gate-java.log" >&2
+  docker logs "$CONTAINER" 2>&1 | tail -90 >&2 || true
+  fail "Native permission/time PDP integration tests"
+fi
+grep -E 'Tests run:|BUILD SUCCESS' "$TMP/native-gate-java.log" | tail -6
+echo "PASS: native resource/scope, claim, batch and UTC time boundaries"
+
+# Native time gate can exceed the short-lived master admin token lifetime.
+TOKEN="$(admin_token)"
 admin_get '' | jq '.enabled = false | .attributes["gk.bootstrap.pending"] = "true"' > "$TMP/realm.json"
 admin_put '' "$TMP/realm.json"
 bash "$ROOT/bootstrap.sh"
@@ -147,4 +193,4 @@ bash "$ROOT/bootstrap.sh"
 assert_admin '' '.enabled == false'
 echo "PASS: intentionally disabled realm stays disabled"
 
-echo "NATIVE_T010_ACCEPTANCE_PASSED"
+echo "NATIVE_T010_T013_ACCEPTANCE_PASSED"
