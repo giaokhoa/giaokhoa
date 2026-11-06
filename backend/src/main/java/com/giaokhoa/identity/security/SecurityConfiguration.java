@@ -5,7 +5,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.web.configurers.oauth2.client.OidcBackChannelLogoutHandler;
 import org.springframework.security.oauth2.client.oidc.web.logout.OidcClientInitiatedLogoutSuccessHandler;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
@@ -53,8 +52,8 @@ public class SecurityConfiguration {
                         oidc.backChannel(
                                 channel -> channel.logoutHandler(backChannelLogoutHandler)))
                 .logout(logout -> logout.logoutUrl("/api/logout").logoutSuccessHandler(rpLogout))
-                .httpBasic(AbstractHttpConfigurer::disable)
-                .formLogin(AbstractHttpConfigurer::disable);
+                .httpBasic(basic -> basic.disable())
+                .formLogin(form -> form.disable());
         return http.build();
     }
 }

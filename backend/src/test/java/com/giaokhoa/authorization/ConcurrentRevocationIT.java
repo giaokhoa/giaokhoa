@@ -294,7 +294,11 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                     });
                     assertEquals("READY", state(fixture.workspacePartition()));
                     assertEquals("READY", state(fixture.account()));
-                    assertEquals("READY", state(independentGrant.partition()));
+                    GrantScope verifiedIndependentGrant =
+                            java.util.Objects.requireNonNull(
+                                    independentGrant,
+                                    "Independent grant is required when revoking a grant");
+                    assertEquals("READY", state(verifiedIndependentGrant.partition()));
                 } else {
                     tx(() -> {
                         fence(fixture.partition(pending), 1);
