@@ -74,6 +74,10 @@ class WorkspaceTransactionIT extends IntegrationEnvironment {
         String url = jdbc.execute((ConnectionCallback<String>) con -> con.getMetaData().getURL());
         runtimeDataSource = new SingleConnectionDataSource(url, RUNTIME_ROLE, password, true);
         runtimeJdbc = new JdbcTemplate(runtimeDataSource);
+        String schema = jdbc.queryForList("SELECT current_schema()", String.class).getFirst();
+        String quotedSchema = "\"" + schema.replace("\"", "\"\"") + "\"";
+        jdbc.execute("GRANT USAGE ON SCHEMA " + quotedSchema + " TO " + RUNTIME_ROLE);
+        runtimeJdbc.execute("SET search_path TO " + quotedSchema);
         runtimeTransaction =
                 new WorkspaceTransaction(
                         runtimeJdbc, new DataSourceTransactionManager(runtimeDataSource));
@@ -83,6 +87,12 @@ class WorkspaceTransactionIT extends IntegrationEnvironment {
     void dropRuntimeRoleAndProbeTable() {
         runtimeDataSource.destroy();
         jdbc.execute("DROP TABLE IF EXISTS " + PROBE_TABLE);
+        String schema = jdbc.queryForList("SELECT current_schema()", String.class).getFirst();
+        jdbc.execute(
+                "REVOKE USAGE ON SCHEMA \""
+                        + schema.replace("\"", "\"\"")
+                        + "\" FROM "
+                        + RUNTIME_ROLE);
         jdbc.execute("DROP ROLE IF EXISTS " + RUNTIME_ROLE);
     }
 

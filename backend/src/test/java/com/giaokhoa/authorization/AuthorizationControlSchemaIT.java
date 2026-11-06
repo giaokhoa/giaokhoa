@@ -79,6 +79,21 @@ class AuthorizationControlSchemaIT extends IntegrationEnvironment {
     }
 
     @Test
+    void readyProjectionRejectsANullAppliedHash() {
+        UUID partition = partition();
+        assertThrows(
+                DataAccessException.class,
+                () ->
+                        jdbc.update(
+                                "INSERT INTO authz_projection(id,partition_id,target_key,desired_hash,"
+                                        + "keycloak_resource_id,state) VALUES (?,?,?,?,'opaque-keycloak-id','READY')",
+                                UUID.randomUUID(),
+                                partition,
+                                "grant:" + UUID.randomUUID(),
+                                HASH_A));
+    }
+
+    @Test
     void projectionRequiresKeycloakLocatorBeforeReady() {
         UUID partition = partition();
         assertThrows(

@@ -5,6 +5,7 @@ import com.giaokhoa.authorization.fence.DependencyManifestResolver;
 import com.giaokhoa.authorization.fence.DependencyManifestResolver.Manifest;
 import com.giaokhoa.authorization.policy.NativePolicyTemplates;
 import com.giaokhoa.authorization.policy.PolicyGraphWriter;
+import com.giaokhoa.identity.eligibility.IdentityEligibilitySynchronizer;
 import com.giaokhoa.shared.http.HttpProblemException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.LinkedHashMap;
@@ -35,18 +36,21 @@ public class ProtectedActionExecutor {
     private final KeycloakDecisionClient decisions;
     private final PolicyGraphWriter writer;
     private final JdbcTemplate jdbc;
+    private final IdentityEligibilitySynchronizer eligibility;
 
     public ProtectedActionExecutor(
             DependencyManifestResolver resolver,
             AuthorizationFence fence,
             KeycloakDecisionClient decisions,
             PolicyGraphWriter writer,
-            JdbcTemplate jdbc) {
+            JdbcTemplate jdbc,
+            IdentityEligibilitySynchronizer eligibility) {
         this.resolver = resolver;
         this.fence = fence;
         this.decisions = decisions;
         this.writer = writer;
         this.jdbc = jdbc;
+        this.eligibility = eligibility;
     }
 
     /** Một target của protected request cùng các scope theo template cố định mà nó cần. */
@@ -129,6 +133,7 @@ public class ProtectedActionExecutor {
         UUID actorUserId = actorUserId(authentication);
         List<String> targetKeys = targets.stream().map(target -> target.targetKey()).toList();
         for (int attempt = 1; ; attempt++) {
+            eligibility.synchronizeEligibility(actorUserId);
             Manifest manifest = resolver.resolve(actorUserId, workspaceId, targetKeys);
             AuthorizationFence.Snapshot snapshot = fence.acquire(manifest);
             Decisions result = decide(authentication, request, snapshot.manifest(), targets);
@@ -155,8 +160,12 @@ public class ProtectedActionExecutor {
                 // mỗi khi tồn tại, tra cứu này chỉ áp cho target chưa có projection.
                 resourceId = writer.findResourceId(target.targetKey()).orElse(null);
             }
-            Map<String, Boolean> perScope = new LinkedHashMap<>();
+            Map<String, Boolean> perScope =
+                    byTarget.computeIfAbsent(target.targetKey(), _ -> new LinkedHashMap<>());
             for (String scope : target.scopes()) {
+                if (perScope.containsKey(scope)) {
+                    continue;
+                }
                 perScope.put(
                         scope,
                         resourceId != null
@@ -166,7 +175,6 @@ public class ProtectedActionExecutor {
                                         RequiredPermissions.of(
                                                 RequiredPermissions.require(resourceId, scope))));
             }
-            byTarget.put(target.targetKey(), perScope);
         }
         return new Decisions(byTarget);
     }

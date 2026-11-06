@@ -107,8 +107,10 @@ public class IdentityEligibilitySynchronizer {
                         || !Objects.equals(current.email(), recordedEmail)
                         || eligible != recordedEligible;
         if (!profileChanged
-                && !recordedHashes.isEmpty()
-                && desiredHash.equals(recordedHashes.getFirst())) {
+                && ((!recordedHashes.isEmpty() && desiredHash.equals(recordedHashes.getFirst()))
+                        || (!eligible
+                                && recordedHashes.isEmpty()
+                                && retractionWasApplied(actorUserId)))) {
             return Optional.empty();
         }
 
@@ -144,11 +146,22 @@ public class IdentityEligibilitySynchronizer {
         return Optional.of(operation);
     }
 
+    private boolean retractionWasApplied(UUID actorUserId) {
+        // Reconcile xóa projection đã retract; revision đã áp là bằng chứng không tạo lại nó.
+        return Boolean.TRUE.equals(
+                jdbc.queryForObject(
+                        "SELECT state = 'READY' AND applied_revision = desired_revision"
+                                + " AND applied_revision > 0 FROM authz_partition"
+                                + " WHERE kind = 'ACCOUNT' AND owner_key = ?",
+                        Boolean.class,
+                        "account:" + actorUserId));
+    }
+
     private CurrentIdentity readCurrent(String keycloakSub) {
         CurrentIdentity current;
         try {
             current = identities.readCurrentIdentity(keycloakSub);
-        } catch (RestClientException | OAuth2AuthorizationException ex) {
+        } catch (RestClientException | OAuth2AuthorizationException | IllegalStateException ex) {
             throw unavailable(ex);
         }
         if (!keycloakSub.equals(current.id())) {

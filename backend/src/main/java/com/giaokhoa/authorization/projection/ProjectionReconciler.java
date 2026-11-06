@@ -7,6 +7,7 @@ import com.giaokhoa.authorization.policy.NativePolicyTemplates;
 import com.giaokhoa.authorization.policy.PolicyGraph;
 import com.giaokhoa.authorization.policy.PolicyGraphWriter;
 import com.giaokhoa.authorization.policy.PolicyGraphWriter.AppliedGraph;
+import com.giaokhoa.authorization.policy.ResourceMutationCoordinator;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -73,16 +74,19 @@ public class ProjectionReconciler {
     private final PolicyGraphWriter writer;
     private final KeycloakProvisioningClient directory;
     private final TransactionTemplate transactions;
+    private final ResourceMutationCoordinator coordinator;
 
     public ProjectionReconciler(
             JdbcTemplate jdbc,
             PolicyGraphWriter writer,
             KeycloakProvisioningClient directory,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            ResourceMutationCoordinator coordinator) {
         this.jdbc = jdbc;
         this.writer = writer;
         this.directory = directory;
         this.transactions = new TransactionTemplate(transactionManager);
+        this.coordinator = coordinator;
     }
 
     /** Một thất bại reconciliation mang error code bền vững được ghi trên operation. */
@@ -162,6 +166,16 @@ public class ProjectionReconciler {
     }
 
     private void reconcile(UUID partitionId, @Nullable Long expectedDesiredRevision) {
+        // Khóa trước khi đọc revision: worker chờ khóa không được ghi lại snapshot cũ.
+        coordinator.withResourceLock(
+                "partition:" + partitionId,
+                () -> {
+                    reconcileLocked(partitionId, expectedDesiredRevision);
+                    return null;
+                });
+    }
+
+    private void reconcileLocked(UUID partitionId, @Nullable Long expectedDesiredRevision) {
         PartitionRow partition = partition(partitionId);
         if (expectedDesiredRevision != null
                 && partition.desiredRevision() != expectedDesiredRevision) {
@@ -418,8 +432,7 @@ public class ProjectionReconciler {
                         .query(
                                 "SELECT u.id, u.keycloak_sub FROM workspace w"
                                         + " JOIN user_account u ON u.id = w.owner_user_id"
-                                        + " WHERE w.id = ? AND w.kind = 'PERSONAL'"
-                                        + " AND u.email_verified AND u.identity_state = 'ACTIVE'",
+                                        + " WHERE w.id = ? AND w.kind = 'PERSONAL'",
                                 (rs, _) ->
                                         personalOwnerDescriptor(
                                                 workspaceId,
