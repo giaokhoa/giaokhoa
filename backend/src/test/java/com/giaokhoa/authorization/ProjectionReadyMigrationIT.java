@@ -38,7 +38,7 @@ class ProjectionReadyMigrationIT extends IntegrationEnvironment {
                 independent = UUID.randomUUID();
         try {
             new TransactionTemplate(new DataSourceTransactionManager(source))
-                    .executeWithoutResult(status -> {
+                    .executeWithoutResult(_ -> {
                         for (UUID id : new UUID[] {bad, dependent, independent}) {
                             jdbc.update(
                                     "INSERT INTO authz_partition(id,kind,owner_key) VALUES (?,'GRANT',?)",

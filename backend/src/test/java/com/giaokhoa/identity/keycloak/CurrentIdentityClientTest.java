@@ -99,7 +99,7 @@ class CurrentIdentityClientTest {
                         Instant.now().plusSeconds(300));
         OAuth2AuthorizedClient authorized =
                 new OAuth2AuthorizedClient(registration, "giaokhoa-provisioner", token);
-        OAuth2AuthorizedClientManager manager = request -> authorized;
+        OAuth2AuthorizedClientManager manager = _ -> authorized;
         return new CurrentIdentityClient(builder, HOST, REALM, manager);
     }
 }

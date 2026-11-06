@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.giaokhoa.support.IntegrationEnvironment;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
@@ -74,7 +75,10 @@ class WorkspaceTransactionIT extends IntegrationEnvironment {
         String url = jdbc.execute((ConnectionCallback<String>) con -> con.getMetaData().getURL());
         runtimeDataSource = new SingleConnectionDataSource(url, RUNTIME_ROLE, password, true);
         runtimeJdbc = new JdbcTemplate(runtimeDataSource);
-        String schema = jdbc.queryForList("SELECT current_schema()", String.class).getFirst();
+        String schema =
+                Objects.requireNonNull(
+                        jdbc.queryForObject("SELECT current_schema()", String.class),
+                        "TEST schema is required");
         String quotedSchema = "\"" + schema.replace("\"", "\"\"") + "\"";
         jdbc.execute("GRANT USAGE ON SCHEMA " + quotedSchema + " TO " + RUNTIME_ROLE);
         runtimeJdbc.execute("SET search_path TO " + quotedSchema);
@@ -87,7 +91,10 @@ class WorkspaceTransactionIT extends IntegrationEnvironment {
     void dropRuntimeRoleAndProbeTable() {
         runtimeDataSource.destroy();
         jdbc.execute("DROP TABLE IF EXISTS " + PROBE_TABLE);
-        String schema = jdbc.queryForList("SELECT current_schema()", String.class).getFirst();
+        String schema =
+                Objects.requireNonNull(
+                        jdbc.queryForObject("SELECT current_schema()", String.class),
+                        "TEST schema is required");
         jdbc.execute(
                 "REVOKE USAGE ON SCHEMA \""
                         + schema.replace("\"", "\"\"")

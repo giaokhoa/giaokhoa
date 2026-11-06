@@ -156,6 +156,21 @@ class IdentityEligibilitySynchronizerTest {
     }
 
     @Test
+    void aNullAccountRevisionFailsClosedBeforeRecordingAnOperation() {
+        account("SELF_REGISTERED", false, EMAIL);
+        current(new CurrentIdentity(SUBJECT, "learner", EMAIL, true, true));
+        when(jdbc.queryForObject(
+                        contains("desired_revision"), eq(Long.class), eq(ACCOUNT_PARTITION)))
+                .thenReturn(null);
+        var failure =
+                assertThrows(
+                        HttpProblemException.class,
+                        () -> synchronizer.synchronizeEligibility(ACTOR));
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, failure.getStatus());
+        verifyNoInteractions(operations);
+    }
+
+    @Test
     void anUnreadableCurrentProfileFailsClosedAndRecordsNothing() {
         account("SELF_REGISTERED", false, EMAIL);
         when(identities.readCurrentIdentity(SUBJECT))
@@ -224,8 +239,9 @@ class IdentityEligibilitySynchronizerTest {
         when(jdbc.queryForList(
                         contains("FROM authz_partition"), eq(UUID.class), eq("account:" + ACTOR)))
                 .thenReturn(List.of(ACCOUNT_PARTITION));
-        when(jdbc.queryForList(contains("desired_revision"), eq(Long.class), eq(ACCOUNT_PARTITION)))
-                .thenReturn(List.of(0L));
+        when(jdbc.queryForObject(
+                        contains("desired_revision"), eq(Long.class), eq(ACCOUNT_PARTITION)))
+                .thenReturn(0L);
     }
 
     private void noRecordedProjection() {
@@ -242,11 +258,8 @@ class IdentityEligibilitySynchronizerTest {
                 .thenReturn(mock(AuthorizationOperation.class));
     }
 
-    // ArgumentCaptor.forClass(List.class) không mang kiểu PartitionChange; chữ ký
-    // applyDesiredState cố định tham số là List<PartitionChange> nên việc gán captor này an toàn.
-    @SuppressWarnings("unchecked")
     private PartitionChange capturedChange() {
-        ArgumentCaptor<List<PartitionChange>> captor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<PartitionChange>> captor = ArgumentCaptor.captor();
         verify(operations)
                 .applyDesiredState(
                         eq(ACTOR),

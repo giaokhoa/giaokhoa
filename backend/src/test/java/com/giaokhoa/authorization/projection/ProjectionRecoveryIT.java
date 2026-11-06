@@ -155,7 +155,7 @@ class ProjectionRecoveryIT extends IntegrationEnvironment {
         CountDownLatch newAtWriter = new CountDownLatch(1);
         AtomicBoolean nativeAllow = new AtomicBoolean();
         doAnswer(
-                        call -> {
+                        _ -> {
                             oldAtWriter.countDown();
                             await(releaseOld);
                             nativeAllow.set(true);
@@ -164,7 +164,7 @@ class ProjectionRecoveryIT extends IntegrationEnvironment {
                 .when(writer)
                 .apply(any());
         doAnswer(
-                        call -> {
+                        _ -> {
                             nativeAllow.set(false);
                             newAtWriter.countDown();
                             return null;
@@ -176,7 +176,7 @@ class ProjectionRecoveryIT extends IntegrationEnvironment {
             var old =
                     pool.submit(() -> reconciler.reconcilePartition(actor.workspacePartition(), 0));
             assertTrue(oldAtWriter.await(10, TimeUnit.SECONDS));
-            tx().executeWithoutResult(status -> {
+            tx().executeWithoutResult(_ -> {
                 jdbc.update(
                         "UPDATE authz_partition SET desired_revision=1 WHERE id=?",
                         actor.workspacePartition());
@@ -278,7 +278,7 @@ class ProjectionRecoveryIT extends IntegrationEnvironment {
     }
 
     private Actor actor() {
-        return tx().execute(status -> {
+        return tx().execute(_ -> {
             UUID user = UUID.randomUUID();
             UUID workspace = UUID.randomUUID();
             String subject = "subject-" + user;
@@ -317,7 +317,9 @@ class ProjectionRecoveryIT extends IntegrationEnvironment {
                 actor.target(),
                 ProjectionReconciler.desiredHash(
                         actor.target(), "enter", List.of(descriptor(actor))),
-                "{" + String.join(",", dependencies.stream().map(UUID::toString).toList()) + "}");
+                "{"
+                        + String.join(",", dependencies.stream().map(id -> id.toString()).toList())
+                        + "}");
     }
 
     private DesiredProjection desired(Actor actor, List<UUID> dependencies) {
