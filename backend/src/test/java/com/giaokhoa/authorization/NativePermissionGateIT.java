@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Native PDP acceptance test: run only with infra/keycloak/verify-native.sh. */
+/** Acceptance test PDP native: chỉ chạy bằng infra/keycloak/verify-native.sh. */
 class NativePermissionGateIT {
     private final NativeGateClient gate = new NativeGateClient();
 
@@ -62,8 +62,9 @@ class NativePermissionGateIT {
         assertEquals(resourceA, granted.getFirst().get("rsid"));
         assertEquals(List.of("read"), granted.getFirst().get("scopes"));
 
-        // the permission enforcement layer's PEP must evaluate every required pair, not interpret a
-        // partial batch as ALL.
+        // PEP của permission enforcement layer phải đánh giá mọi cặp bắt buộc, không được diễn giải
+        // một
+        // batch dở dang thành ALL.
         assertFalse(
                 gate.decide(actorToken, resourceA, "read")
                         && gate.decide(actorToken, resourceB, "read"));

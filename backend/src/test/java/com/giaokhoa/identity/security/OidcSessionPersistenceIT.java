@@ -67,7 +67,7 @@ class OidcSessionPersistenceIT extends IntegrationEnvironment {
             assertEquals("persisted", reloaded.getAttribute("spring-session-persistence"));
             registry.saveSessionInformation(info(session.getId(), "user-1", "sid-1", "csrf-1"));
 
-            // New object: no in-memory registry shared with the original instance.
+            // Đối tượng mới: không có registry trong bộ nhớ dùng chung với instance gốc.
             var restarted = new JdbcOidcSessionRegistry(jdbc, CLIENT);
             assertFalse(
                     restarted
@@ -87,7 +87,7 @@ class OidcSessionPersistenceIT extends IntegrationEnvironment {
                                     token(ISSUER, CLIENT, "user-1", "sid-elsewhere"))
                             .iterator()
                             .hasNext());
-            // Both sid and sub in a signed logout token must agree with one correlation row.
+            // Cả sid và sub trong logout token đã ký phải khớp với một dòng tương quan.
             assertFalse(
                     restarted
                             .removeSessionInformation(
@@ -225,7 +225,7 @@ class OidcSessionPersistenceIT extends IntegrationEnvironment {
         assertTrue(cookie.isHttpOnly());
         assertTrue(response.getHeader("Set-Cookie").contains("SameSite=Lax"));
         try {
-            // Fresh request using the production Spring Session filter and cookie serializer.
+            // Request mới dùng filter Spring Session production và cookie serializer.
             var second = new MockHttpServletRequest("GET", "/");
             second.setCookies(cookie);
             var loaded = new AtomicReference<OAuth2AuthorizedClient>();

@@ -28,7 +28,7 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 chmod 700 "$TMP"
 
-# admin-cli password grant is ONLY for bootstrap; no user-facing client has password grant.
+# Password grant của admin-cli CHỈ dành cho bootstrap; không client hướng-người-dùng nào có password grant.
 TOKEN="$(curl -fsS --request POST "$BASE/realms/master/protocol/openid-connect/token" \
   --data-urlencode 'grant_type=password' --data-urlencode 'client_id=admin-cli' \
   --data-urlencode "username=$KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME" \
@@ -59,7 +59,7 @@ admin_delete() {
 code="$(curl -sS -o /dev/null -w '%{http_code}' \
   -H "Authorization: Bearer $TOKEN" "$BASE/admin/realms/$REALM")"
 if [[ "$code" == 404 ]]; then
-  # Disable a new realm until the default wildcard permission has been removed.
+  # Vô hiệu hóa realm mới cho tới khi default wildcard permission đã bị gỡ.
   jq '.enabled = false | .attributes["gk.bootstrap.pending"] = "true"' \
     "$BASELINE" > "$TMP/realm-new.json"
   curl -fsS -o /dev/null -X POST -H "Authorization: Bearer $TOKEN" \
@@ -69,8 +69,8 @@ elif [[ "$code" != 200 ]]; then
   exit 1
 fi
 
-# Only realms marked by our unfinished bootstrap may be enabled on retry.
-# Other disabled realms retain the administrator's intentional state.
+# Chỉ các realm được bootstrap dở dang của ta đánh dấu mới được bật khi retry.
+# Các realm bị tắt khác giữ nguyên trạng thái có chủ ý của administrator.
 admin_get '' > "$TMP/realm-current.json"
 PENDING_BOOTSTRAP="$(jq -r '.attributes["gk.bootstrap.pending"] // "false"' "$TMP/realm-current.json")"
 jq -s '.[0] * (.[1] | {
@@ -79,12 +79,12 @@ jq -s '.[0] * (.[1] | {
 })' "$TMP/realm-current.json" "$BASELINE" > "$TMP/realm-update.json"
 admin_send PUT '' "$TMP/realm-update.json"
 
-# Keycloak's default profile may require email. Never enforce it for center-issued students.
+# Profile mặc định của Keycloak có thể đòi email. Không bao giờ ép điều đó với học viên do center cấp.
 admin_get '/users/profile' | jq '(.attributes[] | select(.name == "email")) |= del(.required)' \
   > "$TMP/profile.json"
 admin_send PUT '/users/profile' "$TMP/profile.json"
 
-# Do not auto-attach these actions to all identities (especially no-email students).
+# Không tự động gắn các action này cho mọi identity (đặc biệt là học viên không có email).
 admin_get '/authentication/required-actions' > "$TMP/actions.json"
 for action in VERIFY_EMAIL UPDATE_PROFILE VERIFY_PROFILE; do
   if jq -e --arg a "$action" '.[] | select(.alias == $a)' "$TMP/actions.json" > "$TMP/action.json"; then
@@ -133,7 +133,7 @@ WEB_ID="$(client_id giaokhoa-web)"
 API_ID="$(client_id giaokhoa-api)"
 PROV_ID="$(client_id giaokhoa-provisioner)"
 
-# Ensure the access token has the resource-server audience, without group claims.
+# Đảm bảo access token mang audience của resource-server, không kèm group claim.
 admin_get "/clients/$WEB_ID/protocol-mappers/models" > "$TMP/mappers.json"
 if ! jq -e '[.[] | select(.protocolMapper == "oidc-group-membership-mapper")] | length == 0' \
   "$TMP/mappers.json" > /dev/null; then
@@ -150,7 +150,7 @@ else
   admin_send PUT "/clients/$WEB_ID/protocol-mappers/models/$mapper" "$TMP/audience-update.json"
 fi
 
-# Force native PDP enforcing mode; remove Keycloak's default wildcard allow.
+# Ép chế độ enforcing của PDP native; gỡ wildcard allow mặc định của Keycloak.
 admin_get "/clients/$API_ID/authz/resource-server/settings" |
   jq '.policyEnforcementMode = "ENFORCING" | .decisionStrategy = "UNANIMOUS" |
       .allowRemoteResourceManagement = true' > "$TMP/authz.json"
@@ -167,11 +167,11 @@ admin_get "$AUTHZ/policy" > "$TMP/policies.json"
 jq -r '.[] | select(.name == "Default Policy") | .id' "$TMP/policies.json" |
   while IFS= read -r policy; do admin_delete "$AUTHZ/policy/$policy"; done
 
-# A manually added wildcard is unsafe; refuse to declare a successful bootstrap.
+# Một wildcard thêm thủ công là không an toàn; từ chối tuyên bố bootstrap thành công.
 admin_get "$AUTHZ/resource" | jq -e 'all(.[]; all(.uris // []; . != "/*"))' > /dev/null ||
   { echo "Wildcard resource still present; inspect manually" >&2; exit 1; }
 
-# These are fixed realm groups (never Organization groups, never inherited policies).
+# Đây là các realm group cố định (không bao giờ là Organization group, không bao giờ là policy kế thừa).
 group_id() {
   local path="$1" status
   status="$(curl -sS -o "$TMP/group-lookup.json" -w '%{http_code}' \
@@ -203,8 +203,8 @@ for path in /gk /gk/identity /gk/identity/eligible /gk/platform \
   ensure_group "$path"
 done
 
-# Directory + realm group management only, plus resource-server Protection API.
-# No realm-admin, no generic manage-clients and no service account on the web client.
+# Chỉ quản lý directory + realm group, cộng Protection API của resource-server.
+# Không realm-admin, không manage-clients chung chung và không service account trên web client.
 service_user="$(admin_get "/clients/$PROV_ID/service-account-user" | jq -er '.id')"
 RM_ID="$(client_id realm-management)"
 for role in manage-users view-users query-users query-groups view-clients \

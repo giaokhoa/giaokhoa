@@ -117,8 +117,8 @@ class AuthorizationOperationServiceTest {
                                                 List.of("source"),
                                                 List.of())))));
 
-        // The closure partition sorts before the primary, so it must be locked first: locking
-        // group by group (primaries, then closure) can deadlock two crossing mutations.
+        // Partition của closure sắp xếp trước primary, nên phải khóa nó trước: khóa
+        // theo từng nhóm (các primary, rồi closure) có thể deadlock hai mutation giao nhau.
         assertEquals(List.of(closurePartition, primary), lockOrder);
     }
 

@@ -30,15 +30,15 @@ public class OidcLogoutConfiguration {
         serializer.setUseHttpOnlyCookie(true);
         serializer.setUseSecureCookie("https".equalsIgnoreCase(URI.create(appOrigin).getScheme()));
         serializer.setSameSite("Lax");
-        // Spring's back-channel handler sends the raw session ID in the SESSION cookie.
+        // Back-channel handler của Spring gửi session ID thô trong cookie SESSION.
         serializer.setUseBase64Encoding(false);
         return serializer;
     }
 
     @Bean
     FilterRegistrationBean<Filter> malformedBackChannelLogoutGuard() {
-        // Spring Security 7.1.2 throws for absent events/issuer instead of returning 400.
-        // Preflight only the untrusted JWT shape; Spring verifies signature and claims.
+        // Spring Security 7.1.2 ném lỗi khi thiếu events/issuer thay vì trả 400.
+        // Chỉ preflight hình dạng JWT chưa đáng tin; Spring xác minh chữ ký và claim.
         Filter guard =
                 (request, response, chain) -> {
                     if (!"POST".equals(((HttpServletRequest) request).getMethod())) {
@@ -83,7 +83,7 @@ public class OidcLogoutConfiguration {
             OidcSessionRegistry registry, @Value("${server.port:8080}") int serverPort) {
         var handler = new OidcBackChannelLogoutHandler(registry);
         handler.setSessionCookieName("SESSION");
-        // The incoming gateway port can differ from Spring's local HTTP listener.
+        // Cổng gateway đến có thể khác cổng HTTP listener cục bộ của Spring.
         handler.setLogoutUri(
                 "http://127.0.0.1:" + serverPort + "/logout/connect/back-channel/{registrationId}");
         return handler;

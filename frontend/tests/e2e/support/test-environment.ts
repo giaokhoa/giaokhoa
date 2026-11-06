@@ -12,7 +12,7 @@ function required(name: string): string {
   return value;
 }
 
-/** Calls from the Node test runner only; no tokens or credentials reach Next/browser. */
+/** Chỉ các lời gọi từ Node test runner; không token hay credential nào tới Next/trình duyệt. */
 export class TestEnvironment {
   readonly keycloak = new URL(required("TEST_KEYCLOAK_BASE_URL"));
   readonly realm = required("TEST_KEYCLOAK_REALM");
@@ -25,7 +25,7 @@ export class TestEnvironment {
     if (this.realm !== "giaokhoa-it") {
       throw new Error("Chỉ cho phép realm giaokhoa-it để kiểm thử");
     }
-    // shortcut: local Compose TEST only; add external targets only after independent TEST verification.
+    // shortcut: Chỉ Compose TEST cục bộ; chỉ thêm target bên ngoài sau khi TEST độc lập được kiểm chứng.
     if (this.keycloak.href !== "http://127.0.0.1:18081/" ||
         this.mailpit.href !== "http://127.0.0.1:18025/") {
       throw new Error("Chỉ dùng Keycloak/Mailpit TEST; không được kết nối DEV");
@@ -124,7 +124,7 @@ export class TestEnvironment {
   }
 
   async exchangeAuthorizationCode(page: Page, user: TestUser): Promise<void> {
-    // Browser uses real Keycloak login; only the Node runner receives and redeems the code.
+    // Trình duyệt dùng đăng nhập Keycloak thật; chỉ Node runner nhận và đổi code.
     const redirectUri = "http://127.0.0.1:18888/callback";
     const state = randomBytes(20).toString("base64url");
     const nonce = randomBytes(20).toString("base64url");

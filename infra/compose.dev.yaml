@@ -1,5 +1,5 @@
-# Use together with .devcontainer/compose.yml and the EXISTING COMPOSE_PROJECT_NAME.
-# Do not run this override as an independent stack or remove DEV volumes.
+# Dùng cùng .devcontainer/compose.yml và COMPOSE_PROJECT_NAME HIỆN CÓ.
+# Không chạy override này như một stack độc lập và không xóa volume DEV.
 name: ${COMPOSE_PROJECT_NAME:?Set COMPOSE_PROJECT_NAME to the existing DevContainer project}
 
 services:
@@ -15,7 +15,7 @@ services:
       - "127.0.0.1:3000:3000"
       - "127.0.0.1:8081:8081"
     volumes:
-      # Relative to the first Compose file (.devcontainer/compose.yml).
+      # Tương đối theo Compose file đầu tiên (.devcontainer/compose.yml).
       - ../infra/gateway/Caddyfile:/etc/caddy/Caddyfile:ro
     networks:
       default:

@@ -5,15 +5,15 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 /**
- * Base for opt-in integration tests against the isolated local Compose TEST stack. Never run them
- * against DEV databases or realms.
+ * Lớp base cho các integration test opt-in chạy trên Compose TEST stack cục bộ tách biệt. Không bao
+ * giờ chạy chúng trên cơ sở dữ liệu hay realm DEV.
  */
 // Spring kế thừa cấu hình TEST qua lớp base; không cho khởi tạo fixture trực tiếp.
 @SuppressWarnings("PMD.AbstractClassWithoutAbstractMethod")
 @ActiveProfiles("integration")
 public abstract class IntegrationEnvironment {
-    // shortcut: This fixture targets local Compose TEST only; external TEST needs a separately
-    // verified allowlist.
+    // shortcut: Fixture này chỉ nhắm Compose TEST cục bộ; TEST bên ngoài cần một allowlist
+    // được kiểm chứng riêng.
     private static final String TEST_DB = "jdbc:postgresql://127.0.0.1:15432/giaokhoa_test";
     private static final String TEST_ISSUER = "http://127.0.0.1:18081/realms/giaokhoa-it";
 

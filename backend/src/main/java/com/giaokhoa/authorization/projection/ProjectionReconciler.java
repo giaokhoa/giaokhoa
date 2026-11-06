@@ -28,12 +28,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestClientException;
 
 /**
- * Rebuilds the desired native graph of one fenced partition from durable rows, applies it through
- * the idempotent {@link PolicyGraphWriter} and only then publishes the partition READY at the
- * revision it verified. The desired state of a projection is its recorded {@code desired_hash}: the
- * SHA-256 of the canonical source descriptors rebuilt from the source rows, so a projection whose
- * source disappeared or changed can never be published from a stale graph. Failures leave the
- * partition fenced; nothing here opens a fence on partial evidence.
+ * Dựng lại desired native graph của một partition đang bị fence từ các dòng bền vững, áp nó qua
+ * {@link PolicyGraphWriter} idempotent và chỉ sau đó mới publish partition READY tại revision nó đã
+ * xác minh. Trạng thái mong muốn của một projection là {@code desired_hash} đã ghi của nó: SHA-256
+ * của các canonical source descriptor dựng lại từ các dòng nguồn, nên một projection mà nguồn của
+ * nó đã biến mất hoặc thay đổi không bao giờ được publish từ một graph đã cũ. Thất bại để partition
+ * vẫn bị fence; không gì ở đây mở fence dựa trên bằng chứng dở dang.
  */
 @Component
 public class ProjectionReconciler {
@@ -77,7 +77,7 @@ public class ProjectionReconciler {
         this.transactions = new TransactionTemplate(transactionManager);
     }
 
-    /** A reconciliation failure carrying the durable error code recorded on the operation. */
+    /** Một thất bại reconciliation mang error code bền vững được ghi trên operation. */
     public static final class ReconciliationException extends RuntimeException {
         private static final long serialVersionUID = 1L;
 
@@ -141,13 +141,13 @@ public class ProjectionReconciler {
                 partitionId);
     }
 
-    /** Reconciles the partition at whatever revision is currently desired. */
+    /** Reconcile partition tại bất kỳ revision nào đang được mong muốn hiện tại. */
     public void reconcilePartition(UUID partitionId) {
         reconcile(partitionId, null);
     }
 
     /**
-     * Reconciles the partition only if {@code expectedDesiredRevision} is still the desired one.
+     * Chỉ reconcile partition nếu {@code expectedDesiredRevision} vẫn là revision được mong muốn.
      */
     public void reconcilePartition(UUID partitionId, long expectedDesiredRevision) {
         reconcile(partitionId, expectedDesiredRevision);
@@ -170,8 +170,8 @@ public class ProjectionReconciler {
         }
         List<ProjectionRow> projections = projectionsOf(partitionId);
         if (projections.isEmpty()) {
-            // Nothing recorded to verify against: publishing READY would be a guess, so the
-            // fence stays closed and the operation keeps retrying within its attempt budget.
+            // Không có gì đã ghi để đối chiếu: publish READY sẽ là đoán mò, nên fence
+            // giữ nguyên đóng và operation tiếp tục retry trong ngân sách lần thử của nó.
             throw new ReconciliationException(
                     ERROR_NO_RECORDED_PROJECTION,
                     "Partition has no recorded projection to reconcile: " + partitionId);
@@ -206,7 +206,7 @@ public class ProjectionReconciler {
         publish(partition, outcomes);
     }
 
-    /** Fences a partition and its projections; used before repairing out-of-band drift. */
+    /** Fence một partition và các projection của nó; dùng trước khi sửa drift ngoài hệ thống. */
     public void fencePartition(UUID partitionId) {
         transactions.executeWithoutResult(status -> {
             jdbc.update(
@@ -221,12 +221,12 @@ public class ProjectionReconciler {
     }
 
     /**
-     * Drift check for a READY partition: false only when a projection whose desired state still
-     * rebuilds exactly from durable rows is provably altered in Keycloak at the level {@link
-     * PolicyGraphWriter#isGraphIntact} verifies — resource or recorded policy missing, or the root
-     * permission no longer linking exactly the recorded policy set to the recorded resource. Rows
-     * whose source no longer rebuilds, and any Keycloak read failure, are not proof of drift and
-     * never fence the partition on their own.
+     * Kiểm tra drift cho một partition READY: chỉ false khi một projection mà trạng thái mong muốn
+     * của nó vẫn dựng lại đúng từ các dòng bền vững bị chứng minh là đã thay đổi trong Keycloak ở
+     * mức {@link PolicyGraphWriter#isGraphIntact} xác minh — resource hoặc policy đã ghi bị thiếu,
+     * hoặc root permission không còn liên kết đúng tập policy đã ghi tới resource đã ghi. Các dòng
+     * mà nguồn của chúng không còn dựng lại được, và mọi lỗi đọc Keycloak, không phải bằng chứng
+     * của drift và không bao giờ tự chúng fence partition.
      */
     public boolean verifyStoredGraph(UUID partitionId) {
         for (ProjectionRow projection : projectionsOf(partitionId)) {
@@ -264,9 +264,9 @@ public class ProjectionReconciler {
     }
 
     /**
-     * Best-effort reconciliation for partitions without a live operation: returns false instead of
-     * throwing when the partition cannot converge now, so the caller can move on and the fence
-     * simply stays closed for the next cycle.
+     * Reconciliation best-effort cho các partition không có operation đang sống: trả về false thay
+     * vì ném lỗi khi partition chưa thể hội tụ lúc này, để caller đi tiếp và fence đơn giản giữ
+     * đóng cho chu kỳ sau.
      */
     public boolean tryReconcilePartition(UUID partitionId) {
         try {
@@ -382,7 +382,7 @@ public class ProjectionReconciler {
         return owner.map(List::of).orElse(List.of());
     }
 
-    /** The canonical personal-owner source descriptor, rebuilt from the durable owner rows. */
+    /** Canonical source descriptor của personal owner, dựng lại từ các dòng owner bền vững. */
     public static String personalOwnerDescriptor(
             UUID workspaceId, UUID userId, String keycloakSubject, String targetKey, String scope) {
         return "PERSONAL_OWNER|workspace="
@@ -397,14 +397,14 @@ public class ProjectionReconciler {
                 + scope;
     }
 
-    /** The canonical descriptor of a graph that must no longer exist for the pair. */
+    /** Canonical descriptor của một graph không còn được tồn tại cho cặp đó nữa. */
     public static String retractDescriptor(String targetKey, String scope) {
         return "RETRACT|target=" + targetKey + "|scope=" + scope;
     }
 
     /**
-     * The desired hash recorded on a projection: SHA-256 of the canonical source descriptors,
-     * sorted and joined by newline; an empty source set hashes the retract descriptor instead.
+     * Desired hash ghi trên một projection: SHA-256 của các canonical source descriptor, sắp xếp và
+     * nối bằng newline; một tập nguồn rỗng thay vào đó hash retract descriptor.
      */
     public static String desiredHash(
             String targetKey, String scope, List<String> sourceDescriptors) {
@@ -415,7 +415,6 @@ public class ProjectionReconciler {
         return sha256(String.join("\n", sorted));
     }
 
-    /** Builds the native graph of one target/scope pair from its canonical source descriptors. */
     public static PolicyGraph graphFor(
             String targetKey, String scope, List<String> sourceDescriptors) {
         List<PolicyGraph.Source> sources = new ArrayList<>();

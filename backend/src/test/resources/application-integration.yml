@@ -1,4 +1,4 @@
-# External TEST services only; no H2, mock PDP, schema reset or DEV fallback.
+# Chỉ dùng các service TEST bên ngoài; không H2, không mock PDP, không reset schema, không fallback về DEV.
 spring:
   datasource:
     url: ${TEST_DATABASE_URL}

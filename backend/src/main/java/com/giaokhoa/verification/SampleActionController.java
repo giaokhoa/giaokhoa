@@ -20,10 +20,10 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Sample actions of the verification contract. Every action runs through the same
- * manifest/fence/PDP pipeline as business actions and never accepts a substitute actor. Only the
- * fixed CREATE_RESOURCE discriminator is implemented; it returns a stub result because no
- * sample-resource table exists yet. Unknown actions are rejected, never silently allowed.
+ * Các sample action của hợp đồng verification. Mọi action chạy qua cùng pipeline manifest/fence/PDP
+ * như business action và không bao giờ chấp nhận actor thay thế. Chỉ discriminator cố định
+ * CREATE_RESOURCE được cài đặt; nó trả kết quả stub vì chưa có bảng sample-resource. Action lạ bị
+ * từ chối, không bao giờ được lặng lẽ cho qua.
  */
 @RestController
 public class SampleActionController {
@@ -118,9 +118,9 @@ public class SampleActionController {
                 workspaceId,
                 List.of(target),
                 () -> {
-                    // The personal branch of the contract is owner plus a live subscription
-                    // period, checked inside the fence transaction so a period expiring
-                    // mid-request cannot slip a stale allow through.
+                    // Nhánh personal của hợp đồng là owner cộng một kỳ subscription còn hiệu
+                    // lực, được kiểm tra bên trong fence transaction để một kỳ hết hạn
+                    // giữa request không thể lọt một allow đã cũ qua.
                     Integer active =
                             jdbc.queryForObject(
                                     "SELECT count(*) FROM subscription_period"

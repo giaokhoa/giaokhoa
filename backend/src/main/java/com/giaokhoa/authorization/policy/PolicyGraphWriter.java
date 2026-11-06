@@ -30,12 +30,12 @@ import org.springframework.web.util.UriComponentsBuilder;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Writes a {@link PolicyGraph} into the native Keycloak authorization graph of the resource server,
- * using the provisioner credential. Every object is looked up by its deterministic template name
- * before creation, so applying the same graph twice converges without duplicates; the root
- * permission is compared and updated when a new revision changes its policy set. The graph is read
- * back before the result is returned: a sent request is never treated as proof. Leaf policies are
- * shared between graphs and are never deleted here.
+ * Ghi một {@link PolicyGraph} vào native authorization graph của Keycloak trên resource server,
+ * dùng credential của provisioner. Mọi đối tượng được tra theo template name xác định của chúng
+ * trước khi tạo, nên áp cùng một graph hai lần sẽ hội tụ mà không trùng lặp; root permission được
+ * đối chiếu và cập nhật khi một revision mới thay đổi tập policy của nó. Graph được đọc lại trước
+ * khi kết quả được trả về: một request đã gửi không bao giờ được coi là bằng chứng. Leaf policy
+ * được dùng chung giữa các graph và không bao giờ bị xóa tại đây.
  */
 @Component
 public class PolicyGraphWriter {
@@ -77,7 +77,7 @@ public class PolicyGraphWriter {
                 mutationCoordinator);
     }
 
-    /** Unit-test constructor; production always supplies the distributed coordinator. */
+    /** Constructor cho unit test; production luôn cung cấp distributed coordinator. */
     PolicyGraphWriter(
             RestClient.Builder builder,
             String baseUrl,
@@ -111,8 +111,8 @@ public class PolicyGraphWriter {
     }
 
     /**
-     * The realm is the last path segment of the configured OIDC issuer, the single source the
-     * application already trusts for both the production and the TEST realm names.
+     * Realm là segment path cuối cùng của OIDC issuer đã cấu hình, nguồn duy nhất mà ứng dụng đã
+     * tin cậy cho cả tên realm production lẫn TEST.
      */
     private static String realmOf(String issuerUri) {
         String marker = "/realms/";
@@ -145,17 +145,17 @@ public class PolicyGraphWriter {
         return manager;
     }
 
-    /** What a successful apply leaves behind: the projection resource ID and its policy names. */
+    /** Thứ một lần apply thành công để lại: projection resource ID và các policy name của nó. */
     public record AppliedGraph(String resourceId, List<String> policyNames) {
         public AppliedGraph {
             policyNames = List.copyOf(policyNames);
         }
     }
 
-    /** Creates or updates the whole graph of one target/scope pair, then verifies it by reading. */
+    /** Tạo hoặc cập nhật toàn bộ graph của một cặp target/scope, rồi xác minh bằng cách đọc lại. */
     public AppliedGraph apply(PolicyGraph graph) {
         if (mutationCoordinator == null) {
-            return applyLocked(graph); // unit tests use an in-memory mock Keycloak
+            return applyLocked(graph); // unit test dùng Keycloak mock trong bộ nhớ
         }
         return mutationCoordinator.withResourceLock(graph.targetKey(), () -> applyLocked(graph));
     }
@@ -203,13 +203,13 @@ public class PolicyGraphWriter {
     }
 
     /**
-     * Removes the root permission of one target/scope pair, and with it the pair's own OR
-     * aggregate: by construction that aggregate is referenced only by this root permission. Shared
-     * leaf policies stay for the graphs that still use them.
+     * Xóa root permission của một cặp target/scope, và cùng với nó OR aggregate riêng của cặp: theo
+     * cách dựng, aggregate đó chỉ được tham chiếu bởi chính root permission này. Các leaf policy
+     * dùng chung ở lại cho các graph vẫn dùng chúng.
      */
     public void retractRoot(String targetKey, String scope) {
         if (mutationCoordinator == null) {
-            retractRootLocked(targetKey, scope); // unit tests use an in-memory mock Keycloak
+            retractRootLocked(targetKey, scope); // unit test dùng Keycloak mock trong bộ nhớ
         } else {
             mutationCoordinator.withResourceLock(
                     targetKey,
@@ -221,7 +221,8 @@ public class PolicyGraphWriter {
     }
 
     private void retractRootLocked(String targetKey, String scope) {
-        // The same fixed-template validation as the graph: unknown targets never reach Keycloak.
+        // Cùng phép validation template cố định như graph: target lạ không bao giờ tới được
+        // Keycloak.
         NativePolicyTemplates.TargetType type =
                 NativePolicyTemplates.targetTypeOf(targetKey)
                         .orElseThrow(() ->
@@ -247,12 +248,12 @@ public class PolicyGraphWriter {
     }
 
     /**
-     * Read-only drift check for reconciliation: true only when the recorded resource still exists
-     * under its recorded ID, every recorded policy is still present, and the root permission of the
-     * pair still references that resource with exactly the recorded policy set linked — the same
-     * policy set the apply path verifies on read-back. Anything else is treated as out-of-band
-     * drift. The content inside a still-linked policy is not compared; that is the recorded graph's
-     * own business, enforced when the graph is (re)applied.
+     * Kiểm tra drift chỉ đọc phục vụ reconciliation: chỉ true khi resource đã ghi vẫn tồn tại dưới
+     * ID đã ghi của nó, mọi policy đã ghi vẫn hiện diện, và root permission của cặp vẫn tham chiếu
+     * resource đó với đúng tập policy đã ghi được liên kết — cùng tập policy mà đường apply xác
+     * minh khi đọc lại. Mọi khác biệt đều bị coi là drift ngoài hệ thống (out-of-band). Nội dung
+     * bên trong một policy vẫn còn liên kết không được đối chiếu; đó là việc của chính graph đã
+     * ghi, được thực thi khi graph được áp (lại).
      */
     public boolean isGraphIntact(
             String targetKey, String scope, String resourceId, List<String> policyNames) {
@@ -289,8 +290,8 @@ public class PolicyGraphWriter {
     }
 
     /**
-     * Read-only lookup for the decision path: native resources are named by their target key, so
-     * the resource a PDP call must name is the one recorded under that name, if it exists.
+     * Tra cứu chỉ đọc cho đường decision: resource native được đặt tên theo target key, nên
+     * resource mà một lời gọi PDP phải nêu tên là resource được ghi dưới tên đó, nếu tồn tại.
      */
     public Optional<String> findResourceId(String targetKey) {
         String root = resourceServerRoot();
@@ -346,8 +347,9 @@ public class PolicyGraphWriter {
                                     "users", List.of(actor.keycloakUserId()))));
         }
         if (gate instanceof PolicyGraph.Gate.Validity validity) {
-            // [start, end): POSITIVE not-before at the start, NEGATIVE not-before at the end.
-            // A single notOnOrAfter would still allow the exact end instant.
+            // [start, end): not-before POSITIVE tại điểm bắt đầu, not-before NEGATIVE tại điểm kết
+            // thúc.
+            // Một notOnOrAfter đơn thuần vẫn cho phép đúng khoảnh khắc kết thúc.
             List<String> ids = new ArrayList<>();
             if (validity.validFrom() != null) {
                 String name = NativePolicyTemplates.validFromPolicyName(validity.validFrom());
@@ -420,7 +422,7 @@ public class PolicyGraphWriter {
                 if (!ex.getStatusCode().isSameCodeAs(HttpStatus.CONFLICT)) {
                     throw ex;
                 }
-                // A concurrent apply created the same deterministic policy name first.
+                // Một apply đồng thời đã tạo cùng policy name xác định đó trước.
                 existing = policyIndex(root).get(name);
                 if (existing == null) {
                     throw new IllegalStateException(
@@ -505,7 +507,10 @@ public class PolicyGraphWriter {
         };
     }
 
-    /** Aggregates named after their target are compared, because a new revision may rewire them. */
+    /**
+     * Aggregate đặt tên theo target của chúng được đối chiếu, vì một revision mới có thể nối lại
+     * chúng.
+     */
     private String ensureAggregate(
             String root,
             Map<String, Map<String, Object>> policies,
@@ -525,8 +530,8 @@ public class PolicyGraphWriter {
                 if (!ex.getStatusCode().isSameCodeAs(HttpStatus.CONFLICT)) {
                     throw ex;
                 }
-                // A concurrent apply created the same deterministic aggregate first; the
-                // comparison below reconciles it like any pre-existing aggregate.
+                // Một apply đồng thời đã tạo cùng aggregate xác định đó trước; phép đối chiếu
+                // bên dưới hòa giải nó như mọi aggregate có sẵn.
                 existing = policyIndex(root).get(name);
                 if (existing == null) {
                     throw new IllegalStateException(
@@ -589,7 +594,7 @@ public class PolicyGraphWriter {
             if (!ex.getStatusCode().isSameCodeAs(HttpStatus.CONFLICT)) {
                 throw ex;
             }
-            // A concurrent apply created the same scope first.
+            // Một apply đồng thời đã tạo cùng scope đó trước.
             for (Map<String, Object> raced : list(root + "/scope")) {
                 if (scope.equals(raced.get("name"))) {
                     return String.valueOf(raced.get("id"));
@@ -620,7 +625,7 @@ public class PolicyGraphWriter {
             if (!ex.getStatusCode().isSameCodeAs(HttpStatus.CONFLICT)) {
                 throw ex;
             }
-            // A concurrent apply created the same deterministic resource name first.
+            // Một apply đồng thời đã tạo cùng resource name xác định đó trước.
             for (Map<String, Object> raced : list(root + "/resource")) {
                 if (targetKey.equals(raced.get("name"))) {
                     return resourceWithScope(root, raced, targetKey, scopeId);
@@ -631,7 +636,6 @@ public class PolicyGraphWriter {
         }
     }
 
-    /** An existing resource only needs the scope attached when it is not there yet. */
     private String resourceWithScope(
             String root, Map<String, Object> existing, String targetKey, String scopeId) {
         String id = String.valueOf(existing.get("_id"));
@@ -676,7 +680,7 @@ public class PolicyGraphWriter {
             if (!ex.getStatusCode().isSameCodeAs(HttpStatus.CONFLICT)) {
                 throw ex;
             }
-            // A concurrent apply created the same deterministic root permission first.
+            // Một apply đồng thời đã tạo cùng root permission xác định đó trước.
             for (Map<String, Object> raced : list(root + "/permission/scope")) {
                 if (name.equals(raced.get("name"))) {
                     return reconcileRootPermission(
@@ -688,7 +692,7 @@ public class PolicyGraphWriter {
         }
     }
 
-    /** An existing root permission is updated in place when a new revision rewires it. */
+    /** Một root permission hiện có được cập nhật tại chỗ khi một revision mới nối lại nó. */
     private String reconcileRootPermission(
             String root,
             Map<String, Object> existing,
@@ -744,7 +748,7 @@ public class PolicyGraphWriter {
         }
     }
 
-    /** Fetch native links for the projection reconciler's graph integrity check. */
+    /** Lấy các liên kết native phục vụ kiểm tra tính toàn vẹn graph của projection reconciler. */
     private Set<String> associatedIds(
             String root, String policyId, String association, String idKey) {
         Set<String> out = new HashSet<>();
@@ -773,7 +777,7 @@ public class PolicyGraphWriter {
             return String.valueOf(group.get("id"));
         } catch (RestClientResponseException ex) {
             if (ex.getStatusCode().isSameCodeAs(HttpStatus.NOT_FOUND)) {
-                // Groups are directory projections; the graph writer never invents them.
+                // Group là projection của directory; graph writer không bao giờ tự bịa ra chúng.
                 throw new IllegalStateException("Realm group is not provisioned: " + path, ex);
             }
             throw ex;
@@ -781,8 +785,8 @@ public class PolicyGraphWriter {
     }
 
     private String resourceServerRoot() {
-        // Resolved on every call, never cached: the client can be recreated (realm re-import,
-        // fixture lifecycle), and a stale cached ID turns every later call into a 404.
+        // Resolve ở mọi lần gọi, không bao giờ cache: client có thể bị tạo lại (realm re-import,
+        // vòng đời fixture), và một ID cache đã cũ biến mọi lần gọi sau đó thành 404.
         URI uri =
                 UriComponentsBuilder.fromUriString(baseUrl)
                         .pathSegment("admin", "realms", realm, "clients")
@@ -815,7 +819,9 @@ public class PolicyGraphWriter {
         return client.getAccessToken().getTokenValue();
     }
 
-    /** Every page is fetched: a name missing from the result truly does not exist in Keycloak. */
+    /**
+     * Mọi trang đều được lấy: một tên vắng mặt trong kết quả thực sự không tồn tại trong Keycloak.
+     */
     private List<Map<String, Object>> list(String path) {
         List<Map<String, Object>> all = new ArrayList<>();
         int first = 0;
@@ -851,7 +857,7 @@ public class PolicyGraphWriter {
         return get(uri(path), type);
     }
 
-    /** Paths are either absolute (already containing the base URL) or realm-relative. */
+    /** Path hoặc là tuyệt đối (đã chứa base URL) hoặc tương đối theo realm. */
     private URI uri(String path) {
         return URI.create(path.startsWith("http") ? path : baseUrl + path);
     }
@@ -870,7 +876,7 @@ public class PolicyGraphWriter {
             String value = location.getPath();
             return value.substring(value.lastIndexOf('/') + 1);
         }
-        // Authorization Services POST returns the created ID in the JSON body instead.
+        // POST của Authorization Services trả ID đã tạo trong thân JSON thay vào đó.
         if (response.getBody() == null) {
             throw new IllegalStateException("Keycloak returned no created ID for " + path);
         }
@@ -904,7 +910,9 @@ public class PolicyGraphWriter {
         return ids(field, null);
     }
 
-    /** IDs of a JSON field that is either a list of plain IDs or of objects carrying an ID key. */
+    /**
+     * Các ID của một trường JSON hoặc là danh sách ID thuần hoặc danh sách đối tượng mang key ID.
+     */
     private static List<String> ids(Object field, String key) {
         List<String> out = new ArrayList<>();
         if (field instanceof List<?> list) {

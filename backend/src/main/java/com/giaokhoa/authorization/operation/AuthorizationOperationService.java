@@ -18,12 +18,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Records an authorization mutation the durable way: inside one app-db transaction it bumps the
- * desired revision of every changed partition, fences those partitions and their projections,
- * fences every READY projection that depends on them (the dependency closure), stores the new
- * desired hashes and inserts the idempotent operation. The transaction commits before any network
- * call; {@link com.giaokhoa.authorization.projection.ProjectionWorker} applies the recorded state
- * afterwards. A replay with the same idempotency key returns the existing operation untouched.
+ * Ghi một mutation authorization theo cách bền vững: trong một transaction của app-db, nó bump
+ * desired revision của mọi partition thay đổi, fence các partition đó cùng projection của chúng,
+ * fence mọi READY projection phụ thuộc vào chúng (dependency closure), lưu desired hash mới và chèn
+ * operation idempotent. Transaction commit trước mọi lời gọi mạng; {@link
+ * com.giaokhoa.authorization.projection.ProjectionWorker} áp trạng thái đã ghi sau đó. Một replay
+ * với cùng idempotency key trả về operation hiện có, không đụng vào nó.
  */
 @Service
 public class AuthorizationOperationService {
@@ -35,7 +35,10 @@ public class AuthorizationOperationService {
         this.idempotency = idempotency;
     }
 
-    /** One desired graph of a partition: its canonical source descriptors, or empty to retract. */
+    /**
+     * Một desired graph của một partition: các source descriptor canonical của nó, hoặc rỗng để
+     * retract.
+     */
     public record DesiredProjection(
             String targetKey,
             String scope,
@@ -51,7 +54,7 @@ public class AuthorizationOperationService {
         }
     }
 
-    /** All desired graphs one partition moves to at its next revision. */
+    /** Mọi desired graph mà một partition chuyển tới tại revision tiếp theo của nó. */
     public record PartitionChange(UUID partitionId, List<DesiredProjection> projections) {
         public PartitionChange {
             projections = projections == null ? List.of() : List.copyOf(projections);
@@ -59,10 +62,10 @@ public class AuthorizationOperationService {
     }
 
     /**
-     * Fences the changed partitions plus their dependent closure and records the operation. The
-     * caller lists partitions in dependency order; fenced dependents join the affected set after
-     * them at their current revision, so the operation only completes once the whole closure is
-     * consistent again.
+     * Fence các partition đã thay đổi cùng dependent closure của chúng và ghi operation. Caller
+     * liệt kê partition theo thứ tự phụ thuộc; các dependent bị fence gia nhập tập bị ảnh hưởng
+     * phía sau chúng tại revision hiện tại của chúng, nên operation chỉ hoàn tất khi toàn bộ
+     * closure nhất quán trở lại.
      */
     @Transactional
     public AuthorizationOperation applyDesiredState(
@@ -76,10 +79,10 @@ public class AuthorizationOperationService {
 
         List<UUID> primaries = changes.stream().map(PartitionChange::partitionId).toList();
         Closure closure = dependentClosure(primaries);
-        // Lock primaries and the dependent closure in ONE global order — the same order
-        // IdempotencyService locks in — so two mutations whose closures cross cannot
-        // deadlock each other; an unfenced dependent created concurrently is still caught
-        // by the deferred partition trigger at commit.
+        // Khóa các primary và dependent closure trong MỘT thứ tự toàn cục — cùng thứ tự
+        // IdempotencyService khóa — để hai mutation có closure giao nhau không thể
+        // deadlock lẫn nhau; dependent chưa fence mà được tạo đồng thời vẫn bị
+        // deferred partition trigger bắt tại thời điểm commit.
         Set<UUID> lockOrder = new TreeSet<>(Comparator.comparing(UUID::toString));
         lockOrder.addAll(primaries);
         lockOrder.addAll(closure.partitionIds());
@@ -126,8 +129,8 @@ public class AuthorizationOperationService {
             fenced.add(change.partitionId());
         }
         fenced.addAll(closure.partitionIds());
-        // Fence every involved partition before any desired field changes: the database only
-        // accepts desired edits under a fence.
+        // Fence mọi partition liên quan trước khi bất kỳ trường desired nào thay đổi: cơ sở dữ
+        // liệu chỉ chấp nhận sửa desired dưới một fence.
         for (UUID partitionId : fenced) {
             jdbc.update("UPDATE authz_partition SET state = 'PENDING' WHERE id = ?", partitionId);
         }
@@ -202,7 +205,9 @@ public class AuthorizationOperationService {
 
     private record DependentRow(UUID projectionId, UUID partitionId) {}
 
-    /** READY projections depending on the changed partitions, and recursively on their owners. */
+    /**
+     * Các READY projection phụ thuộc vào các partition đã thay đổi, và đệ quy lên owner của chúng.
+     */
     private Closure dependentClosure(List<UUID> primaries) {
         Set<UUID> owners = new HashSet<>();
         List<UUID> projectionIds = new ArrayList<>();

@@ -42,7 +42,7 @@ import org.springframework.web.context.WebApplicationContext;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Revocation contract: PostgreSQL commit ordering plus the Foundation HTTP contracts. */
+/** Hợp đồng thu hồi: thứ tự commit của PostgreSQL cộng các hợp đồng HTTP Foundation. */
 @SpringBootTest
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class ConcurrentRevocationIT extends IntegrationEnvironment {
@@ -61,7 +61,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
 
     @AfterAll
     static void removeCommittedFixtures(@Autowired JdbcTemplate jdbc) {
-        // The real DB forbids deleting individual partitions; only drop this test-owned schema.
+        // DB thật cấm xóa từng partition riêng lẻ; chỉ drop schema do test này sở hữu.
         jdbc.execute("DROP SCHEMA IF EXISTS " + SCHEMA + " CASCADE");
     }
 
@@ -91,7 +91,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                                 assertEquals("READY", lockedState(partition, "SHARE"));
                                 protectedLock.countDown();
                                 await(releaseWrite);
-                                // Protected mutation holds the read fence until commit.
+                                // Protected mutation giữ read fence tới khi commit.
                                 return 1;
                             }));
             assertTrue(protectedLock.await(10, TimeUnit.SECONDS));
@@ -183,7 +183,8 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
 
     @Test
     void nativeApiFixtureCleanupPreservesIndependentResourceServerGrants() {
-        // First graph owns the isolated TEST API client; second shares only its resource server.
+        // Graph đầu tiên sở hữu TEST API client tách biệt; graph thứ hai chỉ dùng chung resource
+        // server của nó.
         try (var nativeGate = new NativeRevocationFixture();
                 var first =
                         nativeGate.partiallyProvisionApplicationResource(
@@ -225,8 +226,8 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
     @EnumSource(PendingScope.class)
     void protectedCapabilitiesMustRejectCommittedPendingDependency(PendingScope pending)
             throws Exception {
-        // The request-fence contract requires the identical authenticated HTTP request
-        // before and after a committed fence.
+        // Hợp đồng request-fence đòi hỏi cùng một HTTP request đã xác thực
+        // trước và sau một fence đã commit.
         try (var nativeGate = new NativeRevocationFixture();
                 var session = nativeSession(nativeGate)) {
             ActorScope fixture = actorWithReadyPersonalWorkspace(nativeGate.userSubject());
@@ -244,7 +245,8 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
             try (var apiGraph =
                     nativeGate.partiallyProvisionApplicationResource(
                             keyA, requiresGrant ? "content.read" : "enter")) {
-                apiGraph.authorizeOwner(); // Native Keycloak user policy on the TEST API audience.
+                apiGraph.authorizeOwner(); // User policy native của Keycloak trên audience của TEST
+                // API.
                 String keycloakResourceB =
                         requiresGrant ? apiGraph.addAuthorizedResource(keyB) : null;
                 GrantScope affectedGrant =
@@ -371,7 +373,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
 
     @Test
     void concurrentFixtureMutationMustWaitForDatabaseRevocationFence() throws Exception {
-        // Sample actions must use the same production PEP and lock protocol.
+        // Sample action phải dùng cùng PEP production và giao thức khóa.
         try (var nativeGate = new NativeRevocationFixture();
                 var session = nativeSession(nativeGate)) {
             ActorScope fixture = actorWithReadyPersonalWorkspace(nativeGate.userSubject());
@@ -426,7 +428,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                     boolean blockedOnRevoke = false;
                     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
                     while (System.nanoTime() < deadline && !writer.isDone()) {
-                        // Match the exact revoker PostgreSQL backend, not mere HTTP slowness.
+                        // Khớp đúng backend PostgreSQL của revoker, không phải chỉ độ chậm HTTP.
                         blockedOnRevoke =
                                 Boolean.TRUE.equals(
                                         jdbc.queryForObject(
@@ -555,15 +557,15 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
 
     @Test
     void productionWorkerMustReconcilePartiallyProvisionedAppGraphAfterRetry() throws Exception {
-        // The production reconciliation worker must resume this operation; the source is an actual
-        // PERSONAL owner in V001, not a fabricated
-        // share_grant (which has no production schema before the later user-story tasks).
+        // Reconciliation worker production phải tiếp tục operation này; nguồn là một
+        // PERSONAL owner thật trong V001, không phải share_grant bịa ra
+        // (vốn chưa có schema production trước các task user-story sau này).
         try (var nativeGate = new NativeRevocationFixture()) {
             nativeGate.provisionEligibilityForWorkerFixture();
             ActorScope actor = actorWithReadyPersonalWorkspace(nativeGate.userSubject());
             String targetKey = "workspace:" + actor.workspace();
             String scope = "enter";
-            // The writer can reconstruct this owner-source graph intent from durable V001 rows.
+            // Writer có thể dựng lại ý đồ graph của nguồn owner này từ các dòng bền vững của V001.
             String canonicalSource =
                     jdbc.queryForObject(
                             """
@@ -591,8 +593,8 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                                 new Long[] {0L, 1L},
                                 0L);
                 tx(() -> {
-                    // This is a real source the graph writer can reconstruct: native user
-                    // policy for workspace.owner_user_id, evaluated for targetKey#enter.
+                    // Đây là một nguồn thật graph writer dựng lại được: user
+                    // policy native cho workspace.owner_user_id, được đánh giá cho targetKey#enter.
                     assertEquals(
                             actor.actor(),
                             jdbc.queryForObject(
@@ -751,9 +753,10 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
     @Test
     void crashAfterNativeRevokeBeforeDatabaseAckCanReplayWithoutDuplicatingGraph()
             throws Exception {
-        // This partition records no projection, so the worker cannot verify or publish it; the
-        // test drives the network/commit crash window by hand,
-        // with native Keycloak, committed PostgreSQL revisions and a second identical revoke.
+        // Partition này không ghi projection nào, nên worker không thể xác minh hay publish nó;
+        // test điều khiển cửa sổ crash mạng/commit bằng tay,
+        // với Keycloak native, các revision PostgreSQL đã commit và một lần revoke thứ hai giống
+        // hệt.
         try (var nativeGate = new NativeRevocationFixture();
                 var session = nativeSession(nativeGate)) {
             ActorScope fixture = actorWithReadyPersonalWorkspace(nativeGate.userSubject());
@@ -780,7 +783,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                 return null;
             });
 
-            // Native operation commits, then the worker disappears before recording READY.
+            // Native operation commit, rồi worker biến mất trước khi ghi READY.
             nativeGate.revoke("a");
             assertFalse(nativeGate.allowed(token, "a"));
             assertTrue(nativeGate.allowed(token, "b"));
@@ -806,7 +809,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                         operation.getId());
                 return null;
             });
-            nativeGate.revoke("a"); // Replay the same native operation, no new graph objects.
+            nativeGate.revoke("a"); // Replay cùng native operation, không thêm đối tượng graph mới.
             assertEquals(graphBefore, nativeGate.graphInventory());
             assertFalse(nativeGate.allowed(token, "a"));
             assertTrue(nativeGate.allowed(token, "b"));
@@ -858,7 +861,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
             return null;
         });
 
-        // A worker for revision 1 cannot claim READY after revision 2 has become desired.
+        // Một worker cho revision 1 không thể claim READY sau khi revision 2 đã thành desired.
         assertThrows(
                 DataAccessException.class,
                 () ->
@@ -933,7 +936,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                     return new Recovery(actor, grant, operation.getId());
                 });
 
-        // The worker has stopped after commit: a new transaction can only return 202.
+        // Worker đã dừng sau commit: một transaction mới chỉ có thể trả 202.
         assertEquals("PENDING", state(created.grant()));
         assertEquals(
                 HttpStatus.ACCEPTED,
@@ -1046,14 +1049,14 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
         UUID older = operations[0];
         UUID younger = operations[1];
 
-        // Several worker polls pass: the younger operation is due, but it must stay untouched
-        // while the older operation touching the same partition is still waiting.
+        // Vài poll của worker trôi qua: operation trẻ hơn đã tới hạn, nhưng nó phải giữ nguyên
+        // không bị đụng trong khi operation cũ hơn chạm cùng partition vẫn đang chờ.
         Thread.sleep(8000);
         assertEquals("PENDING", operationState(younger));
         assertEquals(0, operationAttempts(younger));
 
-        // Once the older operation becomes due it is claimed first and fails closed (the
-        // partition records no projection to verify); the younger one still waits behind it.
+        // Khi operation cũ hơn tới hạn, nó được claim trước và fail closed (partition
+        // không ghi projection nào để xác minh); operation trẻ hơn vẫn chờ phía sau nó.
         tx(() -> {
             jdbc.update(
                     "UPDATE authorization_operation SET next_attempt_at=now() WHERE id=?", older);
@@ -1101,8 +1104,8 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                             "UPDATE authorization_operation SET state='RETRYABLE_FAILURE',"
                                     + " attempt_count=1, next_attempt_at=now() WHERE id=?",
                             recorded.getId());
-                    // A newer mutation fences the partition at revision 2 before the worker
-                    // resumes the older operation.
+                    // Một mutation mới hơn fence partition tại revision 2 trước khi worker
+                    // tiếp tục operation cũ hơn.
                     fence(partition, 2);
                     return recorded.getId();
                 });
@@ -1118,8 +1121,8 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                         "SELECT last_error_code FROM authorization_operation WHERE id=?",
                         String.class,
                         operation));
-        // The newer revision keeps its fence: the superseded operation must neither fail the
-        // partition nor reopen it.
+        // Revision mới hơn giữ fence của nó: operation bị superseded không được fail
+        // partition cũng không được mở lại nó.
         assertEquals("PENDING", state(partition));
         assertEquals(
                 2L,

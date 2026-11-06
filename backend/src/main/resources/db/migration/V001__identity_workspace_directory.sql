@@ -43,7 +43,7 @@ CREATE TABLE center (
     CONSTRAINT uq_center_id_workspace UNIQUE (id, workspace_id)
 );
 
--- Both references are deferred so a CENTER workspace and its center can be inserted together.
+-- Cả hai tham chiếu đều deferred để một CENTER workspace và center của nó được chèn cùng nhau.
 ALTER TABLE workspace ADD CONSTRAINT fk_workspace_center
     FOREIGN KEY (center_id, id) REFERENCES center(id, workspace_id)
     DEFERRABLE INITIALLY DEFERRED;
@@ -137,7 +137,7 @@ CREATE TRIGGER ck_center_immutable_owner BEFORE UPDATE OF workspace_id, owner_us
 CREATE TRIGGER ck_membership_immutable_identity BEFORE UPDATE OF workspace_id, user_id
     ON center_membership FOR EACH ROW EXECUTE FUNCTION enforce_directory_immutable_links();
 
--- Deferred owner check: initial center, membership and OWNER role can share one transaction.
+-- Kiểm tra owner deferred: center ban đầu, membership và OWNER role có thể dùng chung một transaction.
 CREATE FUNCTION verify_center_owner() RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
     target_workspace UUID;
@@ -187,7 +187,7 @@ CREATE CONSTRAINT TRIGGER ck_role_owner AFTER INSERT OR UPDATE OR DELETE ON memb
 CREATE CONSTRAINT TRIGGER ck_workspace_center_owner AFTER INSERT OR UPDATE ON workspace
     DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION verify_center_owner();
 
--- Every directory account owns exactly one PERSONAL workspace at transaction commit.
+-- Mọi tài khoản directory sở hữu đúng một PERSONAL workspace tại thời điểm transaction commit.
 CREATE FUNCTION verify_user_personal_workspace() RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
     owner_id UUID;

@@ -38,7 +38,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
-/** Run only through verify-native.sh against its disposable Keycloak 26.8.1 realm. */
+/** Chỉ chạy qua verify-native.sh trên realm Keycloak 26.8.1 dùng một lần của nó. */
 @EnabledIfEnvironmentVariable(named = "PROVISIONING_TEST_KEYCLOAK_BASE_URL", matches = ".+")
 class PolicyGraphWriterNativeIT {
     private static final String CLIENT_ID = "giaokhoa-provisioner";

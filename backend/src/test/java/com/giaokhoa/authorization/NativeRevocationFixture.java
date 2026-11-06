@@ -30,8 +30,9 @@ import org.springframework.web.client.RestClientResponseException;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Disposable, native Keycloak 26.8.1 policy graph on the allowlisted integration TEST realm. The
- * Direct Grant client is test-only: never giaokhoa-web, never an application auth path.
+ * Policy graph Keycloak 26.8.1 native dùng một lần trên integration TEST realm thuộc allowlist.
+ * Direct Grant client chỉ dành cho test: không bao giờ là giaokhoa-web, không bao giờ là đường auth
+ * của ứng dụng.
  */
 final class NativeRevocationFixture implements AutoCloseable {
     private static final JsonMapper JSON = new JsonMapper();
@@ -83,8 +84,8 @@ final class NativeRevocationFixture implements AutoCloseable {
     }
 
     /**
-     * The worker cannot invent directory groups. Seed the native identity eligibility projection
-     * for this TEST-only user before asking the real writer to apply a business graph.
+     * Worker không thể bịa ra directory group. Seed native identity eligibility projection cho user
+     * chỉ-dùng-cho-TEST này trước khi yêu cầu writer thật áp một business graph.
      */
     void provisionEligibilityForWorkerFixture() {
         String parentId = null;
@@ -144,9 +145,9 @@ final class NativeRevocationFixture implements AutoCloseable {
     record WebTokens(String accessToken, String idToken, String refreshToken) {}
 
     WebTokens webTokensViaCodePkce() {
-        // Actual Keycloak Authorization Code+PKCE for the application's confidential TEST client.
-        // HTTP form login is sufficient here; end-to-end acceptance additionally covers the
-        // browser/BFF callback.
+        // Authorization Code+PKCE thật của Keycloak cho confidential TEST client của ứng dụng.
+        // HTTP form login là đủ ở đây; acceptance đầu-cuối bao phủ thêm
+        // callback của trình duyệt/BFF.
         String client = required("TEST_OIDC_CLIENT_ID");
         if (!"giaokhoa-it-web".equals(client)) {
             throw new IllegalArgumentException("Only TEST BFF client can be used");
@@ -199,8 +200,8 @@ final class NativeRevocationFixture implements AutoCloseable {
             if (!loginUrl.startsWith(base + "/realms/giaokhoa-it/login-actions/")) {
                 throw new IllegalStateException("Unexpected TEST login form target");
             }
-            // TEST Keycloak issues Secure cookies even on HTTP loopback. Return them only
-            // to the allowlisted 127.0.0.1:18081 login action, not to any other origin.
+            // TEST Keycloak phát hành cookie Secure ngay cả trên HTTP loopback. Chỉ trả chúng
+            // về login action 127.0.0.1:18081 thuộc allowlist, không về origin nào khác.
             String loginCookies =
                     loginPage.headers().allValues("set-cookie").stream()
                             .map(cookie -> cookie.split(";", 2)[0])
@@ -333,9 +334,9 @@ final class NativeRevocationFixture implements AutoCloseable {
     }
 
     /**
-     * Fault fixture for reconciliation-worker recovery: native resource exists in the TEST
-     * application's API audience, but scope permission/policy has not yet been provisioned. Never
-     * touch DEV.
+     * Fixture lỗi phục vụ khôi phục của reconciliation worker: native resource tồn tại trong API
+     * audience của ứng dụng TEST, nhưng scope permission/policy chưa được provision. Không bao giờ
+     * đụng vào DEV.
      */
     PartialApplicationGraph partiallyProvisionApplicationResource(String targetKey, String scope) {
         String audience = required("TEST_KEYCLOAK_AUTHZ_AUDIENCE");
@@ -466,9 +467,9 @@ final class NativeRevocationFixture implements AutoCloseable {
         }
 
         void cleanupProjectedPolicies(java.util.function.Supplier<List<String>> names) {
-            // The production graph writer records the exact owned native policy names in
+            // Graph writer production ghi đúng các native policy name thuộc sở hữu trong
             // authz_projection.
-            // Read them at close, after the worker had a chance to write them.
+            // Đọc chúng lúc đóng, sau khi worker đã có cơ hội ghi chúng.
             projectionPolicyNames = names;
         }
 
@@ -493,7 +494,7 @@ final class NativeRevocationFixture implements AutoCloseable {
         }
 
         private void authorizeOwner(String id, String targetKey) {
-            // User policy is the native projection of the actual logged-in recipient/owner.
+            // User policy là projection native của recipient/owner thật đã đăng nhập.
             String sourcePolicy =
                     create(
                             root() + "/policy/user",
@@ -559,14 +560,14 @@ final class NativeRevocationFixture implements AutoCloseable {
         }
 
         long permissionCount() {
-            // Permission representations carry no associations; the permissions of a
-            // resource are read from the resource's own association endpoint.
+            // Representation của permission không mang association; các permission của một
+            // resource được đọc từ association endpoint của chính resource đó.
             return getList(root() + "/resource/" + resource + "/permissions").size();
         }
 
         /**
-         * Policies linked from any permission or other policy; representations alone hide the
-         * links, so they are read from each holder's association endpoint.
+         * Các policy liên kết từ bất kỳ permission hoặc policy nào khác; representation đơn thuần
+         * che giấu các liên kết, nên chúng được đọc từ association endpoint của từng holder.
          */
         private java.util.Set<String> referencedPolicyIds(
                 List<Map<String, Object>> policies, List<Map<String, Object>> permissions) {
@@ -592,8 +593,9 @@ final class NativeRevocationFixture implements AutoCloseable {
                 delete("/clients/" + appClient);
                 return;
             }
-            // Remove permissions first, including those provisioned by the real writer on our
-            // unique resource. Never delete shared policies/scopes or unrelated API resources.
+            // Xóa permission trước, gồm cả những permission writer thật đã provision trên
+            // resource duy nhất của ta. Không bao giờ xóa shared policy/scope hay API resource
+            // không liên quan.
             for (String id : ownedResources) {
                 for (Map<String, Object> permission :
                         getList(root() + "/resource/" + id + "/permissions")) {
@@ -603,8 +605,8 @@ final class NativeRevocationFixture implements AutoCloseable {
             for (String id : ownedPolicies) {
                 delete(root() + "/policy/" + id);
             }
-            // Only policies named by this projection can be garbage-collected.
-            // Shared policies still referenced by unrelated resources are preserved.
+            // Chỉ các policy được projection này nêu tên mới bị thu gom rác.
+            // Shared policy vẫn còn được resource không liên quan tham chiếu thì được giữ lại.
             List<String> projected = projectionPolicyNames.get();
             int remaining = projected.size();
             while (remaining > 0) {
@@ -626,7 +628,7 @@ final class NativeRevocationFixture implements AutoCloseable {
                     }
                 }
                 if (!deleted) {
-                    break; // No further test-owned policies can be removed safely.
+                    break; // Không còn policy nào do test sở hữu có thể xóa an toàn nữa.
                 }
             }
             for (String id : ownedResources) {
@@ -674,7 +676,7 @@ final class NativeRevocationFixture implements AutoCloseable {
                 create(
                         "/clients/" + clientId + "/authz/resource-server/scope",
                         Map.of("name", "content.read"));
-        // A newly created authorization server can have wildcard defaults: delete them.
+        // Một authorization server mới tạo có thể có các mặc định wildcard: xóa chúng.
         removeDefaults();
         groupA = create("/groups", Map.of("name", clientName + "-a"));
         groupB = create("/groups", Map.of("name", clientName + "-b"));
@@ -818,7 +820,7 @@ final class NativeRevocationFixture implements AutoCloseable {
             String value = location.getPath();
             return value.substring(value.lastIndexOf('/') + 1);
         }
-        // Authorization Services POST returns an ID in JSON rather than a Location header.
+        // POST của Authorization Services trả một ID trong JSON thay vì trong Location header.
         assertNotNull(response.getBody(), "Keycloak must return a created ID for " + path);
         var created = JSON.readTree(response.getBody());
         var id = created.has("id") ? created.get("id") : created.get("_id");
@@ -862,7 +864,7 @@ final class NativeRevocationFixture implements AutoCloseable {
         if (userId != null) {
             delete("/users/" + userId);
         }
-        // Remove only the directory segments created by this fixture, leaf to root.
+        // Chỉ xóa các segment directory do fixture này tạo, từ lá về gốc.
         for (int i = ownedEligibilityGroupIds.size() - 1; i >= 0; i--) {
             delete("/groups/" + ownedEligibilityGroupIds.get(i));
         }

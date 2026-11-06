@@ -14,7 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.RestClient;
 
-/** Run via infra/keycloak/verify-native.sh against its disposable Keycloak 26.8.1. */
+/** Chạy qua infra/keycloak/verify-native.sh trên Keycloak 26.8.1 dùng một lần của nó. */
 class KeycloakProvisioningClientNativeIT {
     @Test
     void provisionsOrganizationGroupAndMembershipUsingRealClientCredentials() {

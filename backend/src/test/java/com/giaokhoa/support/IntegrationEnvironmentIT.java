@@ -14,7 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.env.Environment;
 import org.springframework.web.client.RestClient;
 
-/** Checks the actual Spring integration profile and its isolated PostgreSQL/OIDC services. */
+/** Kiểm tra integration profile thật của Spring và các dịch vụ PostgreSQL/OIDC tách biệt của nó. */
 @SpringBootTest
 class IntegrationEnvironmentIT extends IntegrationEnvironment {
     @Autowired DataSource dataSource;

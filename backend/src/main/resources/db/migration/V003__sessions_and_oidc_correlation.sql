@@ -1,5 +1,5 @@
--- Exact Spring Session JDBC 4.1 PostgreSQL schema (spring-session-jdbc/schema-postgresql.sql).
--- Flyway owns these tables; Spring Session schema auto-initialization stays disabled.
+-- Đúng schema PostgreSQL của Spring Session JDBC 4.1 (spring-session-jdbc/schema-postgresql.sql).
+-- Flyway sở hữu các bảng này; auto-initialization schema của Spring Session luôn bị tắt.
 CREATE TABLE SPRING_SESSION (
     PRIMARY_ID CHAR(36) NOT NULL,
     SESSION_ID CHAR(36) NOT NULL,
@@ -23,9 +23,9 @@ CREATE TABLE SPRING_SESSION_ATTRIBUTES (
         REFERENCES SPRING_SESSION(PRIMARY_ID) ON DELETE CASCADE
 );
 
--- OAuth2 login registers correlation before Spring Session flushes the new session.
--- No FK to SPRING_SESSION: it would reject that legitimate registration sequence.
--- CSRF header/token must survive restart for Spring's internal back-channel POST.
+-- OAuth2 login đăng ký correlation trước khi Spring Session flush session mới.
+-- Không có FK tới SPRING_SESSION: nó sẽ từ chối trình tự đăng ký hợp lệ đó.
+-- CSRF header/token phải sống sót qua khởi động lại cho back-channel POST nội bộ của Spring.
 CREATE TABLE oidc_session_correlation (
     session_id CHAR(36) PRIMARY KEY,
     issuer VARCHAR(2048) NOT NULL,
@@ -44,8 +44,8 @@ CREATE INDEX ix_oidc_correlation_sid
 CREATE INDEX ix_oidc_correlation_sub
     ON oidc_session_correlation (issuer, client_id, sub);
 
--- Spring Session JDBC deletes expired sessions in SQL without publishing a
--- Spring Security SessionDestroyedEvent. Keep correlation lifecycle tied to JDBC.
+-- Spring Session JDBC xóa session hết hạn bằng SQL mà không publish một
+-- SessionDestroyedEvent của Spring Security. Giữ vòng đời correlation gắn với JDBC.
 CREATE FUNCTION sync_oidc_correlation_session() RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
     IF TG_OP = 'DELETE' THEN

@@ -15,7 +15,7 @@ import org.springframework.security.oauth2.core.oidc.OidcIdToken;
 import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
 import org.springframework.util.Assert;
 
-/** Persistent correlation for Spring Security's native OIDC back-channel logout. */
+/** Tương quan bền vững phục vụ OIDC back-channel logout native của Spring Security. */
 public final class JdbcOidcSessionRegistry implements OidcSessionRegistry {
 
     private static final String RETURNING =
@@ -79,7 +79,7 @@ public final class JdbcOidcSessionRegistry implements OidcSessionRegistry {
     @Override
     public Iterable<OidcSessionInformation> removeSessionInformation(OidcLogoutToken logoutToken) {
         Assert.notNull(logoutToken, "logoutToken is required");
-        // Require BOTH issuer and configured audience; never match another OIDC client.
+        // Đòi hỏi CẢ issuer lẫn audience đã cấu hình; không bao giờ khớp một OIDC client khác.
         if (logoutToken.getIssuer() == null
                 || logoutToken.getAudience() == null
                 || !logoutToken.getAudience().contains(clientId)) {
@@ -92,10 +92,10 @@ public final class JdbcOidcSessionRegistry implements OidcSessionRegistry {
             return List.of();
         }
 
-        // Spring Session has already flushed by the time a provider logs out a browser.
-        // Stale correlation must not select an expired/deleted session after a restart.
-        // With both claims present, never trust sid alone: require the same subject too.
-        // A subject-only logout intentionally revokes all sessions of that subject.
+        // Spring Session đã flush xong vào lúc một provider logout một trình duyệt.
+        // Tương quan cũ không được chọn một session đã hết hạn/bị xóa sau khi khởi động lại.
+        // Khi cả hai claim đều có, không bao giờ tin sid một mình: đòi hỏi cùng subject nữa.
+        // Một logout chỉ theo subject cố ý thu hồi mọi session của subject đó.
         String predicate =
                 sid == null
                         ? "c.sub = ?"
@@ -123,8 +123,8 @@ public final class JdbcOidcSessionRegistry implements OidcSessionRegistry {
                         sid != null ? sid : subject);
     }
 
-    // A login may register correlation before Spring Session writes its row.
-    // Allow an hour for the request to flush; never delete an existing session's mapping.
+    // Một lần login có thể đăng ký tương quan trước khi Spring Session ghi dòng của nó.
+    // Cho một giờ để request flush; không bao giờ xóa mapping của một session hiện có.
     @Scheduled(fixedDelayString = "PT1H")
     void cleanUpOrphanedCorrelations() {
         jdbc.update(
@@ -134,8 +134,8 @@ public final class JdbcOidcSessionRegistry implements OidcSessionRegistry {
     }
 
     private static OidcSessionInformation sessionInformation(ResultSet rs) throws SQLException {
-        // Spring's logout handler needs only sessionId and CSRF header, not an actual ID token.
-        // Reconstruct a minimal principal so SessionIdChangedEvent can call withSessionId().
+        // Logout handler của Spring chỉ cần sessionId và CSRF header, không cần ID token thật.
+        // Dựng lại một principal tối thiểu để SessionIdChangedEvent gọi được withSessionId().
         Map<String, Object> claims = new HashMap<>();
         claims.put("iss", rs.getString("issuer"));
         claims.put("aud", List.of(rs.getString("client_id")));

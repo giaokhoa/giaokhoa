@@ -16,8 +16,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Control-plane revocation gates on real PostgreSQL. Until request-fence and PDP integration is
- * implemented, a READY row alone must never be treated as an authorization decision.
+ * Các cổng thu hồi ở control-plane trên PostgreSQL thật. Chừng nào tích hợp request-fence và PDP
+ * chưa được cài đặt, một dòng READY đơn thuần không bao giờ được coi là một quyết định
+ * authorization.
  */
 @SpringBootTest
 @Transactional
@@ -49,7 +50,7 @@ class ProjectionFenceGateIT extends IntegrationEnvironment {
         jdbc.update(
                 "UPDATE authorization_operation SET state = 'SUCCEEDED' WHERE id = ?", operation);
 
-        // The DB rejects any false success, including GRANT and ACCOUNT dependencies.
+        // DB từ chối mọi thành công giả, gồm cả dependency GRANT và ACCOUNT.
         assertThrows(
                 DataAccessException.class, () -> jdbc.execute("SET CONSTRAINTS ALL IMMEDIATE"));
     }
@@ -83,7 +84,7 @@ class ProjectionFenceGateIT extends IntegrationEnvironment {
                         String.class,
                         fixture.workspacePartition()));
 
-        // Retry does not change the idempotency payload or assume Keycloak succeeded.
+        // Retry không thay đổi idempotency payload và không giả định Keycloak đã thành công.
         jdbc.update(
                 "UPDATE authorization_operation SET state = 'APPLYING', attempt_count = 2,"
                         + " next_attempt_at = NULL WHERE id = ?",

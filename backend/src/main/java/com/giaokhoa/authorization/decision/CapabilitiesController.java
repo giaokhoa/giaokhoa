@@ -15,9 +15,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Capabilities of the current actor: for each requested target/scope of the route workspace, the
- * live PDP decision taken through the dependency-manifest fence. The view only feeds the UI; it
- * grants nothing and exposes no native policy or group identifiers.
+ * Khả năng của actor hiện tại: với mỗi target/scope được yêu cầu thuộc workspace của route, đây là
+ * quyết định PDP trực tiếp lấy qua fence của dependency manifest. View này chỉ phục vụ UI; nó không
+ * cấp quyền gì và không lộ định danh policy hay group native.
  */
 @RestController
 public class CapabilitiesController {
@@ -115,8 +115,8 @@ public class CapabilitiesController {
         return switch (type) {
             case PLATFORM -> NativePolicyTemplates.platformKey();
             case PROFILE -> {
-                // A profile target is the actor's own account; the contract limits capability
-                // targets to the route workspace and the current actor.
+                // Target profile là chính tài khoản của actor; hợp đồng giới hạn capability
+                // target trong workspace của route và actor hiện tại.
                 if (!actorUserId.equals(requireId(input))) {
                     throw invalidTarget();
                 }

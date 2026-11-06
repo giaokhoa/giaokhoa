@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sourced by verify-native.sh against its disposable realm, never against DEV.
+# Được verify-native.sh source vào trên realm dùng một lần của nó, không bao giờ trên DEV.
 GATE_FIXTURE="$ROOT/fixtures/native-gate.json"
 AUTHZ="/clients/$API_ID/authz/resource-server"
 gate_value() { jq -er "$1" "$GATE_FIXTURE"; }
@@ -45,7 +45,7 @@ NATIVE_GATE_TEACHER_GROUP_ID="$(gate_group "$NATIVE_GATE_TEACHER_GROUP")"
 NATIVE_GATE_TEACHER_B_GROUP_ID="$(gate_group "$(gate_value .teacherGroupB)")"
 NATIVE_GATE_ELIGIBLE_GROUP_ID="$(gate_group "$(gate_value .eligibleGroup)")"
 
-# Isolated test clients must exercise Authorization Code + PKCE, never password grant.
+# Test client tách biệt phải thực thi Authorization Code + PKCE, không bao giờ password grant.
 for test_client in native-gate-test native-gate-forged; do
   gate_post /clients "$(jq -n --arg name "$test_client" \
     '{clientId:$name,enabled:true,publicClient:true,standardFlowEnabled:true,
@@ -84,7 +84,7 @@ for user in "$NATIVE_GATE_ASSIGNED_USER" "$NATIVE_GATE_CLAIM_USER"; do
     curl -fsS -o /dev/null -X PUT -H "Authorization: Bearer $TOKEN" \
       "$BASE/admin/realms/giaokhoa/users/$uid/groups/$NATIVE_GATE_TEACHER_GROUP_ID"
   else
-    # This actor has a *real* B assignment but only an invented A claim/role.
+    # Actor này có một phân công B *thật* nhưng chỉ có A claim/role bịa ra.
     curl -fsS -o /dev/null -X PUT -H "Authorization: Bearer $TOKEN" \
       "$BASE/admin/realms/giaokhoa/users/$uid/groups/$NATIVE_GATE_TEACHER_B_GROUP_ID"
     curl -fsS -o /dev/null -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
