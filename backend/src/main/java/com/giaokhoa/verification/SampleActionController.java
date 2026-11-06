@@ -2,6 +2,7 @@ package com.giaokhoa.verification;
 
 import com.giaokhoa.authorization.decision.ProtectedActionExecutor;
 import com.giaokhoa.authorization.operation.IdempotencyService;
+import com.giaokhoa.authorization.permission.PermissionCatalog;
 import com.giaokhoa.authorization.policy.NativePolicyTemplates;
 import com.giaokhoa.shared.http.HttpProblemException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -86,7 +87,7 @@ public class SampleActionController {
                 new ProtectedActionExecutor.Target(
                         NativePolicyTemplates.courseSubjectKey(
                                 workspaceId, request.courseSubjectId()),
-                        List.of("resource.create"));
+                        List.of(PermissionCatalog.CourseSubjectScope.RESOURCE_CREATE.scopeName()));
         return executor.execute(
                 authentication, httpRequest, workspaceId, List.of(target), this::stubResult);
     }
@@ -111,7 +112,8 @@ public class SampleActionController {
         }
         var target =
                 new ProtectedActionExecutor.Target(
-                        NativePolicyTemplates.workspaceKey(workspaceId), List.of("enter"));
+                        NativePolicyTemplates.workspaceKey(workspaceId),
+                        List.of(PermissionCatalog.WorkspaceScope.ENTER.scopeName()));
         return executor.execute(
                 authentication,
                 httpRequest,
