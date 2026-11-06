@@ -527,6 +527,83 @@ class PolicyGraphWriterTest {
         server.verify();
     }
 
+    @Test
+    void writesAnActorSourceAsAUserPolicy() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PolicyGraphWriter writer = writer(builder);
+        PolicyGraph graph =
+                new PolicyGraph(TARGET, "enter", List.of(Source.of(new Gate.Actor("user-123"))));
+
+        expectClients(server);
+        expectGet(server, ROOT + "/scope" + LIST, "[]");
+        expectCreate(server, ROOT + "/scope", "{\"id\":\"scope-enter\"}");
+        expectGet(server, ROOT + "/resource" + LIST, "[]");
+        expectCreate(server, ROOT + "/resource", "{\"_id\":\"res-1\"}");
+        expectGet(server, ROOT + "/policy" + LIST, "[]");
+        expectCreate(
+                server,
+                ROOT + "/policy/user",
+                "{\"id\":\"pol-user\"}",
+                "{\"name\":\"gk-user:user-123\",\"type\":\"user\"," + "\"users\":[\"user-123\"]}");
+        expectGet(server, ROOT + "/permission/scope" + LIST, "[]");
+        expectCreate(
+                server,
+                ROOT + "/permission/scope",
+                "{\"id\":\"perm-1\"}",
+                "{\"name\":\"" + ROOT_NAME + "\",\"policies\":[\"pol-user\"]}");
+        expectGet(
+                server,
+                ROOT + "/permission/scope/perm-1",
+                "{\"id\":\"perm-1\",\"policies\":[\"pol-user\"],"
+                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}");
+        expectGet(
+                server,
+                ROOT + "/resource/res-1",
+                "{\"_id\":\"res-1\",\"name\":\""
+                        + TARGET
+                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
+
+        PolicyGraphWriter.AppliedGraph applied = writer.apply(graph);
+        assertEquals(List.of("gk-user:user-123"), applied.policyNames());
+        server.verify();
+    }
+
+    @Test
+    void failsWhenTheReadBackPermissionMissesAPolicy() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PolicyGraphWriter writer = writer(builder);
+        PolicyGraph graph =
+                new PolicyGraph(
+                        TARGET, "enter", List.of(Source.of(new Gate.GroupMembership(OWNERS))));
+
+        expectClients(server);
+        expectGet(server, ROOT + "/scope" + LIST, "[]");
+        expectCreate(server, ROOT + "/scope", "{\"id\":\"scope-enter\"}");
+        expectGet(server, ROOT + "/resource" + LIST, "[]");
+        expectCreate(server, ROOT + "/resource", "{\"_id\":\"res-1\"}");
+        expectGet(server, ROOT + "/policy" + LIST, "[]");
+        expectGroup(server, OWNERS, "g-own");
+        expectCreate(server, ROOT + "/policy/group", "{\"id\":\"pol-own\"}");
+        expectGet(server, ROOT + "/permission/scope" + LIST, "[]");
+        expectCreate(server, ROOT + "/permission/scope", "{\"id\":\"perm-1\"}");
+        expectGet(
+                server,
+                ROOT + "/permission/scope/perm-1",
+                "{\"id\":\"perm-1\",\"policies\":[],"
+                        + "\"resources\":[\"res-1\"],\"scopes\":[\"scope-enter\"]}");
+        expectGet(
+                server,
+                ROOT + "/resource/res-1",
+                "{\"_id\":\"res-1\",\"name\":\""
+                        + TARGET
+                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
+
+        assertThrows(IllegalStateException.class, () -> writer.apply(graph));
+        server.verify();
+    }
+
     /** A full page of unrelated entries, so only a later page can hold the wanted name. */
     private static String dummyPage(String kind, int count) {
         StringBuilder json = new StringBuilder("[");
