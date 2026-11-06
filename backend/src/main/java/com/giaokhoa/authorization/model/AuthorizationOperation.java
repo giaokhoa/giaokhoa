@@ -87,8 +87,8 @@ public class AuthorizationOperation {
             @Nullable UUID workspaceId,
             String idempotencyKey,
             String payloadHash,
-            @Nullable UUID[] affectedPartitions,
-            @Nullable Long[] affectedRevisions,
+            UUID[] affectedPartitions,
+            Long[] affectedRevisions,
             long desiredRevision) {
         this.id = id;
         this.initiatorUserId = initiatorUserId;

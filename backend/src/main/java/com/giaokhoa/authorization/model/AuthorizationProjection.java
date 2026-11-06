@@ -75,8 +75,8 @@ public class AuthorizationProjection {
             UUID partitionId,
             String targetKey,
             @Nullable String keycloakResourceId,
-            @Nullable String[] policyNames,
-            @Nullable UUID[] dependencyPartitionIds,
+            String[] policyNames,
+            UUID[] dependencyPartitionIds,
             String desiredHash,
             @Nullable String appliedHash,
             State state) {
