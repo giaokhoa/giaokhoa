@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -38,6 +39,7 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 /** Run only through verify-native.sh against its disposable Keycloak 26.8.1 realm. */
+@EnabledIfEnvironmentVariable(named = "PROVISIONING_TEST_KEYCLOAK_BASE_URL", matches = ".+")
 class PolicyGraphWriterNativeIT {
     private static final String CLIENT_ID = "giaokhoa-provisioner";
     private static final String AUDIENCE = "giaokhoa-api";

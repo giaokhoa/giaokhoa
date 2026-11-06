@@ -26,6 +26,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -58,6 +59,7 @@ final class NativeRevocationFixture implements AutoCloseable {
     private String groupB;
     private String resourceA;
     private String resourceB;
+    private final List<String> ownedEligibilityGroupIds = new java.util.ArrayList<>();
 
     NativeRevocationFixture() {
         base = required("TEST_KEYCLOAK_BASE_URL");
@@ -78,6 +80,43 @@ final class NativeRevocationFixture implements AutoCloseable {
                 close();
             }
         }
+    }
+
+    /**
+     * The worker cannot invent directory groups. Seed the native identity eligibility projection
+     * for this TEST-only user before asking the real writer to apply a business graph.
+     */
+    void provisionEligibilityForWorkerFixture() {
+        String parentId = null;
+        StringBuilder path = new StringBuilder();
+        for (String segment : List.of("gk", "identity", "eligible")) {
+            path.append('/').append(segment);
+            String currentPath = path.toString();
+            String found = null;
+            try {
+                Map<String, Object> group =
+                        http.get()
+                                .uri(admin("/group-by-path" + currentPath))
+                                .headers(headers -> headers.setBearerAuth(adminToken))
+                                .retrieve()
+                                .body(MAP);
+                if (group != null && currentPath.equals(group.get("path"))) {
+                    found = String.valueOf(group.get("id"));
+                }
+            } catch (RestClientResponseException exception) {
+                if (!exception.getStatusCode().isSameCodeAs(HttpStatus.NOT_FOUND)) {
+                    throw exception;
+                }
+            }
+            if (found == null) {
+                String endpoint =
+                        parentId == null ? "/groups" : "/groups/" + parentId + "/children";
+                found = create(endpoint, Map.of("name", segment));
+                ownedEligibilityGroupIds.add(found);
+            }
+            parentId = found;
+        }
+        addToGroup(java.util.Objects.requireNonNull(parentId));
     }
 
     String userSubject() {
@@ -822,6 +861,10 @@ final class NativeRevocationFixture implements AutoCloseable {
     public void close() {
         if (userId != null) {
             delete("/users/" + userId);
+        }
+        // Remove only the directory segments created by this fixture, leaf to root.
+        for (int i = ownedEligibilityGroupIds.size() - 1; i >= 0; i--) {
+            delete("/groups/" + ownedEligibilityGroupIds.get(i));
         }
         if (groupA != null) {
             delete("/groups/" + groupA);
