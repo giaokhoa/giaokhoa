@@ -227,6 +227,8 @@ class IdentityEligibilitySynchronizerTest {
                 .thenReturn(mock(AuthorizationOperation.class));
     }
 
+    // ArgumentCaptor.forClass(List.class) không mang kiểu PartitionChange; chữ ký
+    // applyDesiredState cố định tham số là List<PartitionChange> nên việc gán captor này an toàn.
     @SuppressWarnings("unchecked")
     private PartitionChange capturedChange() {
         ArgumentCaptor<List<PartitionChange>> captor = ArgumentCaptor.forClass(List.class);

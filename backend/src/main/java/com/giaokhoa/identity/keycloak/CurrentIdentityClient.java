@@ -1,18 +1,12 @@
 package com.giaokhoa.identity.keycloak;
 
+import com.giaokhoa.authorization.keycloak.KeycloakProvisionerFactory;
 import java.net.URI;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.oauth2.client.AuthorizedClientServiceOAuth2AuthorizedClientManager;
-import org.springframework.security.oauth2.client.InMemoryOAuth2AuthorizedClientService;
 import org.springframework.security.oauth2.client.OAuth2AuthorizeRequest;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager;
-import org.springframework.security.oauth2.client.OAuth2AuthorizedClientProviderBuilder;
-import org.springframework.security.oauth2.client.registration.ClientRegistration;
-import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
-import org.springframework.security.oauth2.core.AuthorizationGrantType;
-import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -41,9 +35,12 @@ public class CurrentIdentityClient {
         this(
                 RestClient.builder(),
                 baseUrl,
-                realmOf(issuerUri),
-                clientManager(
-                        baseUrl.replaceAll("/+$", ""), realmOf(issuerUri), clientId, clientSecret));
+                KeycloakProvisionerFactory.realmOf(issuerUri),
+                KeycloakProvisionerFactory.clientManager(
+                        baseUrl.replaceAll("/+$", ""),
+                        KeycloakProvisionerFactory.realmOf(issuerUri),
+                        clientId,
+                        clientSecret));
     }
 
     CurrentIdentityClient(
@@ -86,41 +83,6 @@ public class CurrentIdentityClient {
             throw new IllegalStateException("Empty Keycloak identity response");
         }
         return identity;
-    }
-
-    /**
-     * Realm là segment cuối của issuer URI OIDC đã cấu hình — nguồn duy nhất app tin cho cả tên
-     * realm production lẫn realm TEST.
-     */
-    private static String realmOf(@Nullable String issuerUri) {
-        String marker = "/realms/";
-        int start = issuerUri == null ? -1 : issuerUri.lastIndexOf(marker);
-        String realm =
-                start < 0 ? "" : issuerUri.substring(start + marker.length()).replaceAll("/+$", "");
-        if (realm.isBlank() || realm.contains("/")) {
-            throw new IllegalStateException("Keycloak issuer URI has no realm: " + issuerUri);
-        }
-        return realm;
-    }
-
-    private static OAuth2AuthorizedClientManager clientManager(
-            String baseUrl, String realm, String clientId, String secret) {
-        ClientRegistration registration =
-                ClientRegistration.withRegistrationId("giaokhoa-provisioner")
-                        .clientId(clientId)
-                        .clientSecret(secret)
-                        .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)
-                        .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
-                        .tokenUri(baseUrl + "/realms/" + realm + "/protocol/openid-connect/token")
-                        .build();
-        InMemoryClientRegistrationRepository repository =
-                new InMemoryClientRegistrationRepository(registration);
-        AuthorizedClientServiceOAuth2AuthorizedClientManager manager =
-                new AuthorizedClientServiceOAuth2AuthorizedClientManager(
-                        repository, new InMemoryOAuth2AuthorizedClientService(repository));
-        manager.setAuthorizedClientProvider(
-                OAuth2AuthorizedClientProviderBuilder.builder().clientCredentials().build());
-        return manager;
     }
 
     private String accessToken() {
