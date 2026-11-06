@@ -682,7 +682,9 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                                         jdbc.queryForObject(
                                                 "SELECT state FROM authorization_operation WHERE id=?",
                                                 String.class,
-                                                operation.getId())),
+                                                operation.getId()),
+                                        "Worker last_error_code="
+                                                + operationErrorCode(operation.getId())),
                         () ->
                                 assertEquals(
                                         desiredHash,
@@ -1003,6 +1005,11 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                             actor,
                             "revocation-sub-" + actor,
                             "revocation-user-" + actor);
+                    jdbc.update(
+                            "INSERT INTO workspace(id,kind,owner_user_id,state)"
+                                    + " VALUES (?,'PERSONAL',?,'ACTIVE')",
+                            UUID.randomUUID(),
+                            actor);
                     fence(partition, 1);
                     var older =
                             new AuthorizationOperation(
@@ -1071,6 +1078,11 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                             actor,
                             "revocation-sub-" + actor,
                             "revocation-user-" + actor);
+                    jdbc.update(
+                            "INSERT INTO workspace(id,kind,owner_user_id,state)"
+                                    + " VALUES (?,'PERSONAL',?,'ACTIVE')",
+                            UUID.randomUUID(),
+                            actor);
                     fence(partition, 1);
                     var recorded =
                             new AuthorizationOperation(
@@ -1167,6 +1179,13 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
     private String operationState(UUID operation) {
         return jdbc.queryForObject(
                 "SELECT state FROM authorization_operation WHERE id = ?", String.class, operation);
+    }
+
+    private String operationErrorCode(UUID operation) {
+        return jdbc.queryForObject(
+                "SELECT last_error_code FROM authorization_operation WHERE id = ?",
+                String.class,
+                operation);
     }
 
     private int operationAttempts(UUID operation) {
