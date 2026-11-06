@@ -347,7 +347,7 @@ public class ProjectionWorker {
                         jdbc.queryForList(
                                 "SELECT id FROM authz_partition WHERE state = 'READY'",
                                 UUID.class));
-        ready.sort(Comparator.comparing(UUID::toString));
+        ready.sort(Comparator.comparing(id -> id.toString()));
         List<UUID> batch = scanWindow(ready, driftScanCursor, MAX_PARTITIONS_PER_CYCLE);
         if (!batch.isEmpty()) {
             driftScanCursor = batch.getLast();

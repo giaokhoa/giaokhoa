@@ -37,16 +37,19 @@ Mở thư mục gốc của worktree. `backend/.settings/org.eclipse.jdt.core.pr
 
 JDT và javac/NullAway kiểm tra hai phần khác nhau. JDT **không** ánh xạ JSpecify `@NullMarked` sang Eclipse `@NonNullByDefault`: hai annotation có ngữ nghĩa khác nhau cho generic, wildcard và type variable, và phép ánh xạ cũ gây hàng trăm cảnh báo `nullUncheckedConversion` giả từ JDK/Mockito. Thay vào đó, JDT kiểm tra các annotation `@Nullable`/`@NonNull` tường minh và dereference; NullAway trong Maven là bộ kiểm tra chính thức cho các package JSpecify `@NullMarked`, gồm cả main/test. Các tùy chọn `nullReference`, `potentialNullReference`, `nullSpecViolation`, `nullUncheckedConversion`, `deadCode` không bị hạ mức để làm bảng Problems xanh. Nếu một API thư viện thực sự chưa khai báo nullability, ưu tiên Eclipse External Null Annotations (`.eea`) với contract đã kiểm chứng, thay vì gắn `requireNonNull` hoặc suppress ở hàng loạt caller. Maven `verify` là quality gate bắt buộc; PMD có `extraAssertMethodNames=andExpect` vì `MockMvc.andExpect` là assertion, và một ngoại lệ `NOPMD` theo dòng cho lớp base integration cố ý `abstract`.
 
-Để đối chiếu trực tiếp diagnostics JDT với VS Code bằng ECJ 3.44.0 CLI (kiểm tra `main` và `test` trong một lượt, không cần sửa IDE):
+Để bắt **cùng phiên bản compiler với Java Language Server** (kể cả lỗi method reference `ReferenceExpressionParameterNullityUnchecked` mà ECJ 3.44.0 bỏ sót), dùng batch compiler nằm trong extension Red Hat Java của VS Code Server. Chạy từ gốc worktree trên dev container đã cài extension:
 
 ```sh
 tmp=$(mktemp -d)
+batch=$(find "$HOME/.vscode-server/extensions" -name 'org.eclipse.jdt.core.compiler.batch_*.jar' | sort -V | tail -n 1)
+test -n "$batch" || { echo 'Missing Red Hat Java JDT batch compiler'; exit 1; }
 ./backend/mvnw -B -ntp -q -f backend/pom.xml org.apache.maven.plugins:maven-dependency-plugin:3.10.0:build-classpath -Dmdep.outputFile="$tmp/cp"
-./backend/mvnw -B -ntp -q -f backend/pom.xml org.apache.maven.plugins:maven-dependency-plugin:3.10.0:copy -Dartifact=org.eclipse.jdt:ecj:3.44.0 -DoutputDirectory="$tmp"
-(cd backend && java -jar "$tmp/ecj-3.44.0.jar" -properties .settings/org.eclipse.jdt.core.prefs -proc:none -maxProblems 10000 -cp "$(cat "$tmp/cp")" -d "$tmp/classes" -log "$tmp/jdt.xml" src/main/java src/test/java)
+(cd backend && java -cp "$batch" org.eclipse.jdt.internal.compiler.batch.Main -properties .settings/org.eclipse.jdt.core.prefs -proc:none -maxProblems 10000 -cp "$(cat "$tmp/cp")" -d "$tmp/classes" -log "$tmp/jdt.xml" src/main/java src/test/java)
 python3 -c 'import sys, xml.etree.ElementTree as ET; p=list(ET.parse(sys.argv[1]).getroot().iter("problem")); print(f"JDT diagnostics: {len(p)}"); sys.exit(bool(p))' "$tmp/jdt.xml"
 rm -rf "$tmp"
 ```
+
+Lệnh này chạy cả `main` lẫn `test`, không thay thế `mvn clean verify` và không thay thế diagnostics của Java Language Server khi IDE giữ cache cũ.
 
 Các rule PMD về số lượng assertion, message cho mọi assertion và hằng số hóa mọi literal không nằm trong convention này: một test có thể kiểm tra nhiều thuộc tính của cùng hành vi; SQL/fixture được giữ gần nơi dùng. Các rule kiểm tra lỗi vẫn áp dụng cả main/test. Ngoại lệ SpotBugs nằm trong `config/spotbugs-exclude.xml`, giới hạn theo lớp/member và loại lỗi, có lý do ngay tại mỗi mục.
 

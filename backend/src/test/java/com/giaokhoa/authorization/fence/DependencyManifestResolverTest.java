@@ -166,6 +166,6 @@ class DependencyManifestResolverTest {
     }
 
     private static List<UUID> sorted(List<UUID> ids) {
-        return ids.stream().sorted(java.util.Comparator.comparing(UUID::toString)).toList();
+        return ids.stream().sorted(java.util.Comparator.comparing(id -> id.toString())).toList();
     }
 }

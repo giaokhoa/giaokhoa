@@ -78,7 +78,7 @@ public class ProtectedActionExecutor {
         public boolean allAllowed() {
             return byTarget.values().stream()
                     .flatMap(perScope -> perScope.values().stream())
-                    .allMatch(Boolean::booleanValue);
+                    .allMatch(allowed -> allowed.booleanValue());
         }
     }
 
@@ -127,7 +127,7 @@ public class ProtectedActionExecutor {
             throw new IllegalArgumentException("At least one target is required");
         }
         UUID actorUserId = actorUserId(authentication);
-        List<String> targetKeys = targets.stream().map(Target::targetKey).toList();
+        List<String> targetKeys = targets.stream().map(target -> target.targetKey()).toList();
         for (int attempt = 1; ; attempt++) {
             Manifest manifest = resolver.resolve(actorUserId, workspaceId, targetKeys);
             AuthorizationFence.Snapshot snapshot = fence.acquire(manifest);

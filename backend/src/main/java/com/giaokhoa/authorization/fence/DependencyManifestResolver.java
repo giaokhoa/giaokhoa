@@ -67,7 +67,7 @@ public class DependencyManifestResolver {
         if (targetKeys == null || targetKeys.isEmpty()) {
             throw new IllegalArgumentException("At least one target key is required");
         }
-        Set<UUID> partitions = new TreeSet<>(Comparator.comparing(UUID::toString));
+        Set<UUID> partitions = new TreeSet<>(Comparator.comparing(id -> id.toString()));
         Deque<UUID> frontier = new ArrayDeque<>();
         include(
                 partitions,
