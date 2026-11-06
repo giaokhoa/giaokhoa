@@ -64,6 +64,8 @@ jobs:
       TEST_DATABASE_MIGRATOR_PASSWORD: test-only-password
       TEST_KEYCLOAK_BASE_URL: http://127.0.0.1:18081
       TEST_KEYCLOAK_REALM: giaokhoa-it
+      TEST_KEYCLOAK_MASTER_USERNAME: test-admin
+      TEST_KEYCLOAK_MASTER_PASSWORD: test-only-password
       TEST_OIDC_CLIENT_ID: giaokhoa-it-web
       TEST_OIDC_CLIENT_SECRET: ci-web-client-only
       TEST_KEYCLOAK_ADMIN_CLIENT_ID: giaokhoa-it-fixtures
