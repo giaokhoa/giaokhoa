@@ -1,0 +1,159 @@
+"use client";
+
+import { useState, type FormEvent } from "react";
+import {
+  operationStatus,
+  type OperationState,
+  type OperationView,
+} from "../operations/operation-status";
+import { apiRequest } from "../../lib/api-client";
+
+export type TrackedOperation = Pick<OperationView, "id" | "state" | "completed" | "errorCode">;
+
+type PendingAction = "recovery" | "operation" | null;
+
+const operationStates: OperationState[] = [
+  "PENDING",
+  "APPLYING",
+  "SUCCEEDED",
+  "RETRYABLE_FAILURE",
+  "FAILED",
+];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function parseTrackedOperation(data: unknown): TrackedOperation | null {
+  if (!isRecord(data)) return null;
+  const source = isRecord(data.operation) ? data.operation : data;
+  const id = typeof source.id === "string" && source.id
+    ? source.id
+    : typeof data.operationId === "string" && data.operationId
+      ? data.operationId
+      : null;
+  if (!id
+      || typeof source.state !== "string"
+      || !operationStates.includes(source.state as OperationState)
+      || typeof source.completed !== "boolean") {
+    return null;
+  }
+  return {
+    id,
+    state: source.state as OperationState,
+    completed: source.completed,
+    errorCode: typeof source.errorCode === "string" && source.errorCode ? source.errorCode : undefined,
+  };
+}
+
+// Form chỉ gửi target của chính actor; lý do trống hoặc thiếu userId thì không gửi.
+export function recoveryRequestBody(
+  userId: string,
+  reason: string,
+): { targetUserId: string; reason: string } | null {
+  const trimmedReason = reason.trim();
+  if (!userId || !trimmedReason) return null;
+  return { targetUserId: userId, reason: trimmedReason };
+}
+
+export function RecoveryRequestForm({ userId }: { userId: string }) {
+  const [operation, setOperation] = useState<TrackedOperation | null>(null);
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+
+  async function checkOperation() {
+    if (!operation) return;
+    setPendingAction("operation");
+    setError(null);
+    try {
+      const result = await apiRequest<unknown>(`/api/me/operations/${encodeURIComponent(operation.id)}`);
+      const nextOperation = result.kind === "data" ? parseTrackedOperation(result.data) : null;
+      if (!nextOperation) {
+        throw new Error("Phản hồi trạng thái thao tác không hợp lệ.");
+      }
+      setOperation(nextOperation);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Không kiểm tra được trạng thái thao tác.");
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
+  async function submitRecovery(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const body = recoveryRequestBody(userId, reason);
+    if (!body) {
+      setError("Hãy nhập lý do cần hỗ trợ khôi phục.");
+      return;
+    }
+    setPendingAction("recovery");
+    setError(null);
+    try {
+      const result = await apiRequest<unknown>("/api/me/recovery-requests", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      const nextOperation = parseTrackedOperation(result.data);
+      if (!nextOperation) {
+        throw new Error("Phản hồi thao tác không hợp lệ.");
+      }
+      setOperation(nextOperation);
+      setReason("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Thao tác không thành công.");
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
+  return (
+    <section aria-labelledby="recovery-title">
+      <h2 id="recovery-title">Khôi phục tài khoản</h2>
+      <p>
+        Yêu cầu này chỉ tạo đề nghị hỗ trợ cho chính tài khoản của bạn; mật khẩu không
+        được thay đổi tại trang này.
+      </p>
+      <form onSubmit={submitRecovery}>
+        <div className="field">
+          <label htmlFor="recovery-reason">Lý do cần hỗ trợ</label>
+          <textarea
+            id="recovery-reason"
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            rows={4}
+            required
+          />
+        </div>
+        <button
+          className="action-button"
+          type="submit"
+          disabled={pendingAction !== null || !reason.trim()}
+        >
+          Gửi yêu cầu khôi phục
+        </button>
+      </form>
+
+      {operation ? (
+        <div className="section">
+          <h3>Trạng thái thao tác</h3>
+          <p>{operationStatus(operation).message}</p>
+          <p>
+            Mã thao tác: <code>{operation.id}</code>
+          </p>
+          {operation.errorCode ? <p>Mã lỗi: {operation.errorCode}</p> : null}
+          <button
+            className="secondary-button"
+            type="button"
+            disabled={pendingAction !== null}
+            onClick={() => void checkOperation()}
+          >
+            Kiểm tra trạng thái
+          </button>
+        </div>
+      ) : null}
+
+      {error ? <p role="alert">{error}</p> : null}
+    </section>
+  );
+}
