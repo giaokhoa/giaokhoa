@@ -11,6 +11,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -126,14 +127,11 @@ public class RecoveryService {
     /** Hàng đợi yêu cầu hỗ trợ cho platform operator, cũ nhất trước. */
     @Transactional(readOnly = true)
     public List<RequestView> listRequests() {
-        return jdbc
-                .queryForList(
-                        "SELECT id, requester_user_id, workspace_id, target_user_id, state,"
-                                + " verified_by, resolved_at, verification_note, created_at"
-                                + " FROM recovery_request ORDER BY created_at ASC, id ASC")
-                .stream()
-                .map(RecoveryService::toView)
-                .toList();
+        return jdbc.query(
+                "SELECT id, requester_user_id, workspace_id, target_user_id, state,"
+                        + " verified_by, resolved_at, verification_note, created_at"
+                        + " FROM recovery_request ORDER BY created_at ASC, id ASC",
+                REQUEST_MAPPER);
     }
 
     /**
@@ -237,16 +235,17 @@ public class RecoveryService {
     }
 
     private RequestView loadView(UUID requestId) {
-        List<Map<String, Object>> rows =
-                jdbc.queryForList(
+        List<RequestView> rows =
+                jdbc.query(
                         "SELECT id, requester_user_id, workspace_id, target_user_id, state,"
                                 + " verified_by, resolved_at, verification_note, created_at"
                                 + " FROM recovery_request WHERE id = ?",
+                        REQUEST_MAPPER,
                         requestId);
         if (rows.isEmpty()) {
             throw requestNotFound();
         }
-        return toView(rows.getFirst());
+        return rows.getFirst();
     }
 
     private HttpProblemException stateConflict(UUID requestId) {
@@ -295,29 +294,21 @@ public class RecoveryService {
         return trimmed;
     }
 
-    private static RequestView toView(Map<String, Object> row) {
-        return new RequestView(
-                (UUID) Objects.requireNonNull(row.get("id"), "id"),
-                (UUID) Objects.requireNonNull(row.get("requester_user_id"), "requester_user_id"),
-                (UUID) row.get("workspace_id"),
-                (UUID) Objects.requireNonNull(row.get("target_user_id"), "target_user_id"),
-                RecoveryRequest.State.valueOf(
-                        (String) Objects.requireNonNull(row.get("state"), "state")),
-                (UUID) row.get("verified_by"),
-                toInstant(row.get("resolved_at")),
-                (String) row.get("verification_note"),
-                Objects.requireNonNull(toInstant(row.get("created_at")), "created_at"));
-    }
-
-    private static @Nullable Instant toInstant(@Nullable Object value) {
-        // pgjdbc trả OffsetDateTime cho cột TIMESTAMPTZ khi đọc qua JdbcTemplate.
-        return switch (value) {
-            case null -> null;
-            case Instant instant -> instant;
-            case OffsetDateTime offset -> offset.toInstant();
-            default ->
-                    throw new IllegalStateException(
-                            "Unsupported timestamp type: " + value.getClass().getName());
-        };
-    }
+    // Đọc thẳng OffsetDateTime theo kiểu đích: để pgjdbc tự chuyển cột TIMESTAMPTZ thay vì
+    // nhận java.sql.Timestamp qua Map rồi quy đổi thủ công.
+    private static final RowMapper<RequestView> REQUEST_MAPPER =
+            (rs, _) -> {
+                OffsetDateTime resolvedAt = rs.getObject("resolved_at", OffsetDateTime.class);
+                return new RequestView(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("requester_user_id", UUID.class),
+                        rs.getObject("workspace_id", UUID.class),
+                        rs.getObject("target_user_id", UUID.class),
+                        RecoveryRequest.State.valueOf(rs.getString("state")),
+                        rs.getObject("verified_by", UUID.class),
+                        resolvedAt == null ? null : resolvedAt.toInstant(),
+                        rs.getString("verification_note"),
+                        Objects.requireNonNull(rs.getObject("created_at", OffsetDateTime.class))
+                                .toInstant());
+            };
 }

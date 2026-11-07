@@ -412,7 +412,12 @@ class RecoveryWorkflowIT extends IntegrationEnvironment {
         UUID center = seedCenter(owner);
         String username = "existing-" + UUID.randomUUID();
         String password = "existing-password-" + UUID.randomUUID();
-        String existingSub = createUser(keycloakUser(username, null, false, password, false));
+        // Realm TEST bắt buộc email trong hồ sơ người dùng: danh tính có sẵn không email sẽ bị
+        // Keycloak từ chối cấp token ("Account is not fully set up") nên probe mật khẩu không
+        // chạy được; fixture dùng email đã xác minh để probe đúng hành vi cần khóa.
+        String existingSub =
+                createUser(
+                        keycloakUser(username, username + "@example.com", true, password, false));
         createdKeycloakUsers.add(existingSub);
         assertEquals(200, grantStatus(username, password));
 
