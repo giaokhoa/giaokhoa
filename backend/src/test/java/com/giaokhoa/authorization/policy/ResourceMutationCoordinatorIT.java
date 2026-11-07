@@ -3,6 +3,7 @@ package com.giaokhoa.authorization.policy;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.giaokhoa.authorization.projection.ProjectionWorker;
 import com.giaokhoa.support.IntegrationEnvironment;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -15,6 +16,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /**
@@ -39,6 +41,12 @@ class ResourceMutationCoordinatorIT extends IntegrationEnvironment {
     static void removeIsolatedSchema(@Autowired JdbcTemplate jdbc) {
         jdbc.execute("DROP SCHEMA IF EXISTS " + SCHEMA + " CASCADE");
     }
+
+    // Worker không thuộc phạm vi kiểm thử của class này (coordinator được gọi trực tiếp và
+    // đồng bộ), nhưng worker thật chạy theo lịch sẽ mở giao dịch trên chính schema này trong
+    // khi @AfterAll DROP SCHEMA cần khóa độc quyền mọi bảng — hai bên khóa chéo nhau và
+    // PostgreSQL hủy DROP bằng deadlock. Mock nó để không còn actor đồng thời nào chạm schema.
+    @MockitoBean ProjectionWorker scheduledWorker;
 
     @Autowired JdbcTemplate jdbc;
     @Autowired PlatformTransactionManager transactions;

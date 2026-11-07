@@ -5,6 +5,7 @@ import static org.springframework.security.test.web.servlet.setup.SecurityMockMv
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 import com.giaokhoa.authorization.model.AuthorizationOperation;
+import com.giaokhoa.authorization.projection.ProjectionWorker;
 import com.giaokhoa.support.IntegrationEnvironment;
 import com.giaokhoa.support.NativeGateFixture;
 import java.util.Objects;
@@ -24,6 +25,7 @@ import org.springframework.session.SessionRepository;
 import org.springframework.session.web.http.SessionRepositoryFilter;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -60,6 +62,13 @@ class OperationStatusIT extends IntegrationEnvironment {
         // DB thật cấm xóa từng partition riêng lẻ; chỉ drop schema do test này sở hữu.
         jdbc.execute("DROP SCHEMA IF EXISTS " + SCHEMA + " CASCADE");
     }
+
+    // Worker không thuộc phạm vi kiểm thử của class này (mọi khẳng định đều qua dữ kiện seed
+    // trực tiếp và đường đọc đồng bộ), nhưng worker thật chạy theo lịch sẽ mở giao dịch trên
+    // chính schema này trong khi @AfterAll DROP SCHEMA cần khóa độc quyền mọi bảng — hai bên
+    // khóa chéo nhau và PostgreSQL hủy DROP bằng deadlock. Mock nó để không còn actor đồng
+    // thời nào chạm schema.
+    @MockitoBean ProjectionWorker scheduledWorker;
 
     @Autowired JdbcTemplate jdbc;
     @Autowired PlatformTransactionManager transactionManager;

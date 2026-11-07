@@ -4,22 +4,52 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.giaokhoa.authorization.projection.ProjectionWorker;
 import com.giaokhoa.support.IntegrationEnvironment;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Objects;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
 @Transactional
 class DirectorySchemaIT extends IntegrationEnvironment {
+    private static final String SCHEMA =
+            "directory_schema_" + UUID.randomUUID().toString().replace("-", "");
+
+    // Schema cô lập riêng thay vì public dùng chung: dữ kiện của class này không còn lẫn với
+    // class khác và không cần ai RESET public sau lượt chạy.
+    @DynamicPropertySource
+    static void isolatedSchema(DynamicPropertyRegistry registry) {
+        registry.add("spring.flyway.schemas", () -> SCHEMA);
+        registry.add("spring.flyway.default-schema", () -> SCHEMA);
+        registry.add(
+                "spring.datasource.hikari.connection-init-sql",
+                () -> "SET search_path TO " + SCHEMA + ",public");
+    }
+
+    @AfterAll
+    static void removeSchema(@Autowired JdbcTemplate jdbc) {
+        jdbc.execute("DROP SCHEMA IF EXISTS " + SCHEMA + " CASCADE");
+    }
+
+    // Worker thật chạy theo lịch sẽ mở giao dịch trên chính schema cô lập này trong khi
+    // @AfterAll DROP SCHEMA cần khóa độc quyền mọi bảng — hai bên khóa chéo nhau và PostgreSQL
+    // hủy DROP bằng deadlock (cùng cơ chế BootstrapProfileIT). Mọi khẳng định của class này
+    // đều đồng bộ nên mock worker không đổi ý nghĩa kiểm thử.
+    @MockitoBean ProjectionWorker scheduledWorker;
+
     @Autowired JdbcTemplate jdbc;
 
     @Test

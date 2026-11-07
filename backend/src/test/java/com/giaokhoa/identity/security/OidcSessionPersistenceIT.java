@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.giaokhoa.authorization.projection.ProjectionWorker;
 import com.giaokhoa.support.IntegrationEnvironment;
 import java.time.Instant;
 import java.util.List;
@@ -17,6 +18,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -39,9 +41,36 @@ import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
 import org.springframework.session.Session;
 import org.springframework.session.SessionRepository;
 import org.springframework.session.web.http.SessionRepositoryFilter;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @SpringBootTest
 class OidcSessionPersistenceIT extends IntegrationEnvironment {
+    private static final String SCHEMA =
+            "oidc_session_" + UUID.randomUUID().toString().replace("-", "");
+
+    // Schema cô lập riêng thay vì public dùng chung: các bảng session của class này không
+    // còn lẫn với class khác và không cần ai RESET public sau lượt chạy.
+    @DynamicPropertySource
+    static void isolatedSchema(DynamicPropertyRegistry registry) {
+        registry.add("spring.flyway.schemas", () -> SCHEMA);
+        registry.add("spring.flyway.default-schema", () -> SCHEMA);
+        registry.add(
+                "spring.datasource.hikari.connection-init-sql",
+                () -> "SET search_path TO " + SCHEMA + ",public");
+    }
+
+    @AfterAll
+    static void removeSchema(@Autowired JdbcTemplate jdbc) {
+        jdbc.execute("DROP SCHEMA IF EXISTS " + SCHEMA + " CASCADE");
+    }
+
+    // Worker thật chạy theo lịch sẽ mở giao dịch trên chính schema cô lập này trong khi
+    // @AfterAll DROP SCHEMA cần khóa độc quyền mọi bảng — hai bên khóa chéo nhau và PostgreSQL
+    // hủy DROP bằng deadlock (cùng cơ chế BootstrapProfileIT). Mọi khẳng định của class này
+    // đều đồng bộ nên mock worker không đổi ý nghĩa kiểm thử.
+    @MockitoBean ProjectionWorker scheduledWorker;
 
     private static final String ISSUER = "http://127.0.0.1:18081/realms/giaokhoa-it";
     private static final String CLIENT = "giaokhoa-it-web";

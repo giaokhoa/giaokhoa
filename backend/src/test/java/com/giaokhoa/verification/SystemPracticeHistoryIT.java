@@ -3,6 +3,7 @@ package com.giaokhoa.verification;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.giaokhoa.authorization.projection.ProjectionWorker;
 import com.giaokhoa.support.IntegrationEnvironment;
 import com.giaokhoa.tenancy.data.WorkspaceTransaction;
 import com.giaokhoa.verification.model.SystemPracticeAttemptSample;
@@ -27,6 +28,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,6 +57,12 @@ class SystemPracticeHistoryIT extends IntegrationEnvironment {
                 "spring.datasource.hikari.connection-init-sql",
                 () -> "SET search_path TO " + SCHEMA + ",public");
     }
+
+    // Worker không thuộc phạm vi kiểm thử của class này (mọi khẳng định đều qua transaction
+    // đồng bộ), nhưng worker thật chạy theo lịch sẽ mở giao dịch trên chính schema này trong
+    // khi @AfterAll DROP SCHEMA cần khóa độc quyền mọi bảng — hai bên khóa chéo nhau và
+    // PostgreSQL hủy DROP bằng deadlock. Mock nó để không còn actor đồng thời nào chạm schema.
+    @MockitoBean ProjectionWorker scheduledWorker;
 
     @Autowired private JdbcTemplate jdbc;
     @Autowired private PlatformTransactionManager transactionManager;

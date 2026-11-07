@@ -3,6 +3,7 @@ package com.giaokhoa.resources;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.giaokhoa.authorization.projection.ProjectionWorker;
 import com.giaokhoa.resources.model.Resource;
 import com.giaokhoa.resources.model.ResourceVersion;
 import com.giaokhoa.support.IntegrationEnvironment;
@@ -20,6 +21,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
 // Schema riêng cho lớp test vì code của branch chưa biết migration V006 đang nằm ở schema mặc
@@ -43,6 +45,12 @@ class ResourcePrimitivesSchemaIT extends IntegrationEnvironment {
     static void removeSchema(@Autowired JdbcTemplate jdbc) {
         jdbc.execute("DROP SCHEMA IF EXISTS " + SCHEMA + " CASCADE");
     }
+
+    // Worker không thuộc phạm vi kiểm thử của class này (mọi khẳng định đều qua JDBC/entity
+    // đồng bộ), nhưng worker thật chạy theo lịch sẽ mở giao dịch trên chính schema này trong
+    // khi @AfterAll DROP SCHEMA cần khóa độc quyền mọi bảng — hai bên khóa chéo nhau và
+    // PostgreSQL hủy DROP bằng deadlock. Mock nó để không còn actor đồng thời nào chạm schema.
+    @MockitoBean ProjectionWorker scheduledWorker;
 
     @Autowired private JdbcTemplate jdbc;
     @Autowired private EntityManager entityManager;

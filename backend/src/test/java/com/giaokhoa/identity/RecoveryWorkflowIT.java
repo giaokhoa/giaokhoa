@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.giaokhoa.authorization.projection.ProjectionWorker;
 import com.giaokhoa.identity.InitialCredentialHandoff.Handoff;
 import com.giaokhoa.identity.RecoveryService.Decision;
 import com.giaokhoa.identity.RecoveryService.RequestView;
@@ -32,6 +33,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -91,6 +93,12 @@ class RecoveryWorkflowIT extends IntegrationEnvironment {
     static void removeSchema(@Autowired JdbcTemplate jdbc) {
         jdbc.execute("DROP SCHEMA IF EXISTS " + SCHEMA + " CASCADE");
     }
+
+    // Worker không thuộc phạm vi kiểm thử của class này (mọi khẳng định đều qua service đồng
+    // bộ), nhưng worker thật chạy theo lịch sẽ mở giao dịch trên chính schema này trong khi
+    // @AfterAll DROP SCHEMA cần khóa độc quyền mọi bảng — hai bên khóa chéo nhau và PostgreSQL
+    // hủy DROP bằng deadlock. Mock nó để không còn actor đồng thời nào chạm schema.
+    @MockitoBean ProjectionWorker scheduledWorker;
 
     @Autowired JdbcTemplate jdbc;
     @Autowired PlatformTransactionManager transactionManager;

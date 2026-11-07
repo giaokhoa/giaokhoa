@@ -12,23 +12,54 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.giaokhoa.authorization.projection.ProjectionWorker;
 import com.giaokhoa.support.IntegrationEnvironment;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.core.oidc.OidcIdToken;
 import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
 @SpringBootTest
 class SecurityConfigurationIT extends IntegrationEnvironment {
+    private static final String SCHEMA =
+            "security_configuration_" + UUID.randomUUID().toString().replace("-", "");
+
+    // Schema cô lập riêng thay vì public dùng chung: context của class này không còn dùng
+    // chung trạng thái DB với class khác và không cần ai RESET public sau lượt chạy.
+    @DynamicPropertySource
+    static void isolatedSchema(DynamicPropertyRegistry registry) {
+        registry.add("spring.flyway.schemas", () -> SCHEMA);
+        registry.add("spring.flyway.default-schema", () -> SCHEMA);
+        registry.add(
+                "spring.datasource.hikari.connection-init-sql",
+                () -> "SET search_path TO " + SCHEMA + ",public");
+    }
+
+    @AfterAll
+    static void removeSchema(@Autowired JdbcTemplate jdbc) {
+        jdbc.execute("DROP SCHEMA IF EXISTS " + SCHEMA + " CASCADE");
+    }
+
+    // Worker thật chạy theo lịch sẽ mở giao dịch trên chính schema cô lập này trong khi
+    // @AfterAll DROP SCHEMA cần khóa độc quyền mọi bảng — hai bên khóa chéo nhau và PostgreSQL
+    // hủy DROP bằng deadlock (cùng cơ chế BootstrapProfileIT). Mọi khẳng định của class này
+    // đều qua MockMvc đồng bộ nên mock worker không đổi ý nghĩa kiểm thử.
+    @MockitoBean ProjectionWorker scheduledWorker;
 
     @Autowired ClientRegistrationRepository registrations;
 
@@ -40,6 +71,8 @@ class SecurityConfigurationIT extends IntegrationEnvironment {
 
     @Test
     void authorizationCodeRequestRequiresPkce() throws Exception {
+        var client =
+                java.util.Objects.requireNonNull(registrations.findByRegistrationId("keycloak"));
         var response =
                 mvc.perform(get("/oauth2/authorization/keycloak"))
                         .andExpect(status().is3xxRedirection())
@@ -48,7 +81,7 @@ class SecurityConfigurationIT extends IntegrationEnvironment {
         String location = response.getRedirectedUrl();
         assertTrue(location != null && location.contains("code_challenge="));
         assertTrue(location.contains("code_challenge_method=S256"));
-        assertTrue(location.startsWith("http://127.0.0.1:18081/realms/giaokhoa-it/"));
+        assertTrue(location.startsWith(client.getProviderDetails().getIssuerUri() + "/"));
     }
 
     @Test
@@ -105,7 +138,8 @@ class SecurityConfigurationIT extends IntegrationEnvironment {
         assertNotNull(redirect);
         assertTrue(
                 redirect.startsWith(
-                        "http://127.0.0.1:18081/realms/giaokhoa-it/protocol/openid-connect/logout?"));
+                        client.getProviderDetails().getIssuerUri()
+                                + "/protocol/openid-connect/logout?"));
         assertTrue(redirect.contains("id_token_hint="));
         assertTrue(redirect.contains("post_logout_redirect_uri="));
     }

@@ -23,6 +23,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -62,9 +63,11 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
     }
 
     @AfterAll
-    static void removeCommittedFixtures(@Autowired JdbcTemplate jdbc) {
+    static void removeCommittedFixtures(@Autowired ApplicationContext context) {
+        // Class này cần worker thật nên không mock được như BootstrapProfileIT; teardown dừng
+        // scheduler trước để không còn actor đồng thời nào chạm schema khi DROP.
         // DB thật cấm xóa từng partition riêng lẻ; chỉ drop schema do test này sở hữu.
-        jdbc.execute("DROP SCHEMA IF EXISTS " + SCHEMA + " CASCADE");
+        stopSchedulerAndDropSchema(context, SCHEMA);
     }
 
     @Autowired JdbcTemplate jdbc;

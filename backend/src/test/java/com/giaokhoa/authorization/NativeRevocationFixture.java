@@ -62,11 +62,12 @@ final class NativeRevocationFixture implements AutoCloseable {
     private @Nullable String groupB;
     private @Nullable String resourceA;
     private @Nullable String resourceB;
-    private final List<String> ownedEligibilityGroupIds = new java.util.ArrayList<>();
 
     NativeRevocationFixture() {
         base = required("TEST_KEYCLOAK_BASE_URL");
-        if (!"http://127.0.0.1:18081".equals(base)
+        // Hai làn stack TEST chuyên dụng đã kiểm chứng (cùng realm, chỉ khác cổng): làn 1
+        // dùng 18081, làn 2 dùng 18082.
+        if (!("http://127.0.0.1:18081".equals(base) || "http://127.0.0.1:18082".equals(base))
                 || !"giaokhoa-it".equals(required("TEST_KEYCLOAK_REALM"))) {
             throw new IllegalArgumentException(
                     "Revocation native fixture is limited to TEST Keycloak");
@@ -114,8 +115,9 @@ final class NativeRevocationFixture implements AutoCloseable {
             if (found == null) {
                 String endpoint =
                         parentId == null ? "/groups" : "/groups/" + parentId + "/children";
+                // Cây /gk/identity/eligible là object nền của realm: chỉ tạo khi thiếu, không
+                // bao giờ xóa ở teardown — nhiều class dùng chung đường dẫn cố định này.
                 found = create(endpoint, Map.of("name", segment));
-                ownedEligibilityGroupIds.add(found);
             }
             parentId = found;
         }
@@ -881,10 +883,6 @@ final class NativeRevocationFixture implements AutoCloseable {
     public void close() {
         if (userId != null) {
             delete("/users/" + userId);
-        }
-        // Chỉ xóa các segment directory do fixture này tạo, từ lá về gốc.
-        for (int i = ownedEligibilityGroupIds.size() - 1; i >= 0; i--) {
-            delete("/groups/" + ownedEligibilityGroupIds.get(i));
         }
         if (groupA != null) {
             delete("/groups/" + groupA);
