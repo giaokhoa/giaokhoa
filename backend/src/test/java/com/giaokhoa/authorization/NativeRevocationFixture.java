@@ -65,7 +65,9 @@ final class NativeRevocationFixture implements AutoCloseable {
 
     NativeRevocationFixture() {
         base = required("TEST_KEYCLOAK_BASE_URL");
-        if (!"http://127.0.0.1:18081".equals(base)
+        // Hai làn stack TEST chuyên dụng đã kiểm chứng (cùng realm, chỉ khác cổng): làn 1
+        // dùng 18081, làn 2 dùng 18082.
+        if (!("http://127.0.0.1:18081".equals(base) || "http://127.0.0.1:18082".equals(base))
                 || !"giaokhoa-it".equals(required("TEST_KEYCLOAK_REALM"))) {
             throw new IllegalArgumentException(
                     "Revocation native fixture is limited to TEST Keycloak");

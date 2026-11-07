@@ -71,6 +71,8 @@ class SecurityConfigurationIT extends IntegrationEnvironment {
 
     @Test
     void authorizationCodeRequestRequiresPkce() throws Exception {
+        var client =
+                java.util.Objects.requireNonNull(registrations.findByRegistrationId("keycloak"));
         var response =
                 mvc.perform(get("/oauth2/authorization/keycloak"))
                         .andExpect(status().is3xxRedirection())
@@ -79,7 +81,7 @@ class SecurityConfigurationIT extends IntegrationEnvironment {
         String location = response.getRedirectedUrl();
         assertTrue(location != null && location.contains("code_challenge="));
         assertTrue(location.contains("code_challenge_method=S256"));
-        assertTrue(location.startsWith("http://127.0.0.1:18081/realms/giaokhoa-it/"));
+        assertTrue(location.startsWith(client.getProviderDetails().getIssuerUri() + "/"));
     }
 
     @Test
@@ -136,7 +138,8 @@ class SecurityConfigurationIT extends IntegrationEnvironment {
         assertNotNull(redirect);
         assertTrue(
                 redirect.startsWith(
-                        "http://127.0.0.1:18081/realms/giaokhoa-it/protocol/openid-connect/logout?"));
+                        client.getProviderDetails().getIssuerUri()
+                                + "/protocol/openid-connect/logout?"));
         assertTrue(redirect.contains("id_token_hint="));
         assertTrue(redirect.contains("post_logout_redirect_uri="));
     }
