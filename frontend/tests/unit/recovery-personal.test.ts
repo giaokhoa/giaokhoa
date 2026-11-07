@@ -61,6 +61,40 @@ describe("lịch sử luyện tập mẫu của chính user", () => {
     ]);
   });
 
+  it("chấp nhận cả outcomeStub (hợp đồng camelCase) lẫn outcome", () => {
+    expect(parsePracticeHistory([
+      {
+        id: "attempt-1",
+        attemptedAt: "2026-11-07T00:00:00Z",
+        systemResourceId: "resource-1",
+        versionId: "version-1",
+        outcomeStub: "DONE",
+      },
+      {
+        id: "attempt-2",
+        attemptedAt: "2026-11-07T00:00:00Z",
+        systemResourceId: "resource-1",
+        versionId: "version-1",
+        outcome: "DONE",
+      },
+    ])).toEqual([
+      {
+        id: "attempt-1",
+        attemptedAt: "2026-11-07T00:00:00Z",
+        systemResourceId: "resource-1",
+        versionId: "version-1",
+        outcome: "DONE",
+      },
+      {
+        id: "attempt-2",
+        attemptedAt: "2026-11-07T00:00:00Z",
+        systemResourceId: "resource-1",
+        versionId: "version-1",
+        outcome: "DONE",
+      },
+    ]);
+  });
+
   it("chấp nhận dạng {items} và trả rỗng khi phản hồi không phải danh sách", () => {
     expect(parsePracticeHistory({
       items: [{

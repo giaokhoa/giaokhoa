@@ -31,7 +31,9 @@ function parseAttempt(item: unknown): PracticeAttempt | null {
     attemptedAt: item.attemptedAt,
     systemResourceId: item.systemResourceId,
     versionId: item.versionId,
-    outcome: typeof item.outcome === "string" && item.outcome ? item.outcome : undefined,
+    // outcome_stub trong model serialize thành outcomeStub theo quy tắc camelCase của hợp đồng; giữ outcome cho tương thích.
+    outcome: typeof item.outcomeStub === "string" && item.outcomeStub ? item.outcomeStub
+      : typeof item.outcome === "string" && item.outcome ? item.outcome : undefined,
   };
 }
 
