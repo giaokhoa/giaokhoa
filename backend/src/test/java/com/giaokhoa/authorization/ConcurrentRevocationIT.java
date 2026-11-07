@@ -33,7 +33,6 @@ import org.springframework.security.oauth2.client.registration.ClientRegistratio
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
 import org.springframework.session.SessionRepository;
 import org.springframework.session.web.http.SessionRepositoryFilter;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -49,7 +48,6 @@ import tools.jackson.databind.json.JsonMapper;
 /** Hợp đồng thu hồi: thứ tự commit của PostgreSQL cộng các hợp đồng HTTP Foundation. */
 @SpringBootTest
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-@DirtiesContext
 class ConcurrentRevocationIT extends IntegrationEnvironment {
     private static final JsonMapper JSON = new JsonMapper();
     private static final String SCHEMA =
@@ -66,10 +64,10 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
 
     @AfterAll
     static void removeCommittedFixtures(@Autowired ApplicationContext context) {
-        // Class này cần worker thật nên không mock được như BootstrapProfileIT; teardown đóng
-        // context trước để không còn actor đồng thời nào chạm schema khi DROP.
+        // Class này cần worker thật nên không mock được như BootstrapProfileIT; teardown dừng
+        // scheduler trước để không còn actor đồng thời nào chạm schema khi DROP.
         // DB thật cấm xóa từng partition riêng lẻ; chỉ drop schema do test này sở hữu.
-        closeContextAndDropSchema(context, SCHEMA);
+        stopSchedulerAndDropSchema(context, SCHEMA);
     }
 
     @Autowired JdbcTemplate jdbc;

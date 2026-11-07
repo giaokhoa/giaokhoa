@@ -70,7 +70,6 @@ import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.session.SessionRepository;
 import org.springframework.session.web.http.SessionRepositoryFilter;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -95,7 +94,6 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @SpringBootTest
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-@DirtiesContext
 class IdentityFlowIT extends IntegrationEnvironment {
     private static final JsonMapper JSON = new JsonMapper();
     private static final String SCHEMA =
@@ -131,9 +129,9 @@ class IdentityFlowIT extends IntegrationEnvironment {
     @AfterAll
     static void removeSchema(@Autowired ApplicationContext context) {
         // Class này chờ operation do worker thật xử lý (awaitSucceeded) nên không mock được như
-        // BootstrapProfileIT; teardown đóng context trước để không còn actor đồng thời nào chạm
+        // BootstrapProfileIT; teardown dừng scheduler trước để không còn actor đồng thời nào chạm
         // schema khi DROP.
-        closeContextAndDropSchema(context, SCHEMA);
+        stopSchedulerAndDropSchema(context, SCHEMA);
     }
 
     @Autowired JdbcTemplate jdbc;

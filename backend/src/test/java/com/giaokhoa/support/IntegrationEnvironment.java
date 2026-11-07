@@ -8,7 +8,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Duration;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -52,13 +52,18 @@ public abstract class IntegrationEnvironment { // NOPMD - Lớp base TEST để 
     }
 
     /**
-     * Teardown cho class cần worker thật (không mock được): đóng context để scheduler dừng hẳn, chờ
-     * khóa của lượt poll đang chạy dở trên schema tan hết, rồi DROP bằng connection độc lập vì pool
-     * đã đóng theo context. Class dùng cách này phải kèm {@code @DirtiesContext} để context đã đóng
-     * bị loại khỏi cache của Spring Test thay vì được trao lại cho class sau.
+     * Teardown cho class cần worker thật (không mock được): dừng scheduler để không còn lượt poll
+     * nào mở giao dịch trên schema, chờ khóa của lượt đang chạy dở tan hết, rồi DROP bằng
+     * connection độc lập vì pool vẫn mở theo context. KHÔNG đóng context ở đây: các listener
+     * afterTestClass của Spring Test vẫn chạm vào context sau @AfterAll, và context đã đóng làm
+     * chúng thử restart rồi lỗi "LifecycleProcessor not initialized" (Spring Test 7.0). Class dùng
+     * cách này cũng KHÔNG kèm @DirtiesContext — context của mỗi class là riêng (schema theo UUID
+     * trong DynamicPropertySource) nên không có class sau nào nhận lại nó.
      */
-    protected static void closeContextAndDropSchema(ApplicationContext context, String schema) {
-        ((ConfigurableApplicationContext) context).close();
+    protected static void stopSchedulerAndDropSchema(ApplicationContext context, String schema) {
+        context.getBeansOfType(ThreadPoolTaskScheduler.class)
+                .values()
+                .forEach(ThreadPoolTaskScheduler::shutdown);
         try (Connection connection =
                         DriverManager.getConnection(
                                 required("TEST_DATABASE_URL"),

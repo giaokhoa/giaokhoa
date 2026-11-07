@@ -28,7 +28,6 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -48,7 +47,6 @@ import org.springframework.web.client.RestClientResponseException;
  */
 @SpringBootTest
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-@DirtiesContext
 class IdentityEligibilitySynchronizerIT extends IntegrationEnvironment {
     private static final String SCHEMA =
             "eligibility_sync_" + UUID.randomUUID().toString().replace("-", "");
@@ -85,9 +83,9 @@ class IdentityEligibilitySynchronizerIT extends IntegrationEnvironment {
     @AfterAll
     static void removeSchema(@Autowired ApplicationContext context) {
         // Class này chờ operation do worker thật xử lý (awaitSucceeded) nên không mock được như
-        // BootstrapProfileIT; teardown đóng context trước để không còn actor đồng thời nào chạm
+        // BootstrapProfileIT; teardown dừng scheduler trước để không còn actor đồng thời nào chạm
         // schema khi DROP.
-        closeContextAndDropSchema(context, SCHEMA);
+        stopSchedulerAndDropSchema(context, SCHEMA);
     }
 
     @Autowired JdbcTemplate jdbc;
