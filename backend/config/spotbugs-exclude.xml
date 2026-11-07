@@ -42,6 +42,18 @@
         <Field name="jdbc"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+    <!-- Dependency singleton do Spring quản lý (JdbcTemplate); không sao chép khi inject vào service khôi phục. -->
+    <Match>
+        <Class name="com.giaokhoa.identity.RecoveryService"/>
+        <Field name="jdbc"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- Dependency singleton do Spring quản lý (IdentityProvisioningClient, IssuedStudentRegistrar); không sao chép khi inject vào workflow bàn giao credential. -->
+    <Match>
+        <Class name="com.giaokhoa.identity.InitialCredentialHandoff"/>
+        <Field name="~(provisioning|registrar)"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
     <Match>
         <Class name="com.giaokhoa.authorization.projection.ProjectionWorker"/>
         <Field name="~(jdbc|reconciler)"/>
