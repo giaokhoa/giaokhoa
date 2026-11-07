@@ -23,6 +23,10 @@ public abstract class IntegrationEnvironment { // NOPMD - Lớp base TEST để 
     // được kiểm chứng riêng.
     private static final String TEST_DB = "jdbc:postgresql://127.0.0.1:15432/giaokhoa_test";
     private static final String TEST_ISSUER = "http://127.0.0.1:18081/realms/giaokhoa-it";
+    // Làn 2: stack TEST chuyên dụng thứ hai đã kiểm chứng (cùng realm/credential như làn 1,
+    // chỉ khác cổng). DB và issuer phải đi cùng làn — cặp chéo vẫn bị từ chối.
+    private static final String TEST_DB_LANE_2 = "jdbc:postgresql://127.0.0.1:15433/giaokhoa_test";
+    private static final String TEST_ISSUER_LANE_2 = "http://127.0.0.1:18082/realms/giaokhoa-it";
 
     @DynamicPropertySource
     static void testServices(DynamicPropertyRegistry registry) {
@@ -95,7 +99,9 @@ public abstract class IntegrationEnvironment { // NOPMD - Lớp base TEST để 
     }
 
     static void validateTargets(String database, String issuer) {
-        if (!TEST_DB.equals(database) || !TEST_ISSUER.equals(issuer)) {
+        boolean lane1 = TEST_DB.equals(database) && TEST_ISSUER.equals(issuer);
+        boolean lane2 = TEST_DB_LANE_2.equals(database) && TEST_ISSUER_LANE_2.equals(issuer);
+        if (!lane1 && !lane2) {
             throw new IllegalArgumentException(
                     "Integration tests require the dedicated local TEST database and issuer");
         }
