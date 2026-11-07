@@ -129,6 +129,23 @@ class RecoveryWorkflowIT extends IntegrationEnvironment {
     }
 
     @Test
+    void submitWithReasonKeepsReasonForOperatorQueue() {
+        UUID actor = seedAccount("SELF_REGISTERED");
+
+        RequestView created = recoveryService.submit(actor, actor, null, "  Quên mật khẩu  ");
+
+        assertEquals("Quên mật khẩu", created.reason());
+        // Hàng đợi chứa yêu cầu của cả class nên chỉ tìm đúng yêu cầu vừa gửi.
+        List<RequestView> listed = recoveryService.listRequests();
+        RequestView found =
+                listed.stream()
+                        .filter(view -> view.id().equals(created.id()))
+                        .findFirst()
+                        .orElseThrow();
+        assertEquals("Quên mật khẩu", found.reason());
+    }
+
+    @Test
     void submitForMissingTargetReturnsNotFound() {
         UUID actor = seedAccount("SELF_REGISTERED");
 

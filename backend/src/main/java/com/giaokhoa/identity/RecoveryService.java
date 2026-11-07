@@ -29,6 +29,12 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class RecoveryService {
+    /**
+     * Độ dài tối đa của ghi chú xác minh và lý do cần hỗ trợ (khớp VARCHAR(1000) ở migration; CHECK
+     * chỉ chặn chuỗi toàn khoảng trắng).
+     */
+    private static final int MAX_NOTE_LENGTH = 1000;
+
     private final JdbcTemplate jdbc;
 
     public RecoveryService(JdbcTemplate jdbc) {
@@ -47,6 +53,7 @@ public class RecoveryService {
             UUID requesterUserId,
             @Nullable UUID workspaceId,
             UUID targetUserId,
+            @Nullable String reason,
             RecoveryRequest.State state,
             @Nullable UUID verifiedBy,
             @Nullable Instant resolvedAt,
@@ -60,6 +67,19 @@ public class RecoveryService {
      */
     @Transactional
     public RequestView submit(UUID requesterUserId, UUID targetUserId, @Nullable UUID workspaceId) {
+        return submit(requesterUserId, targetUserId, workspaceId, null);
+    }
+
+    /**
+     * Như {@link #submit(UUID, UUID, UUID)} nhưng giữ lại lý do người gửi cần hỗ trợ để operator
+     * thấy được khi xử lý. Lý do trống được coi như không có; dài quá 1000 ký tự thì từ chối.
+     */
+    @Transactional
+    public RequestView submit(
+            UUID requesterUserId,
+            UUID targetUserId,
+            @Nullable UUID workspaceId,
+            @Nullable String reason) {
         Objects.requireNonNull(requesterUserId, "requesterUserId");
         Objects.requireNonNull(targetUserId, "targetUserId");
         requireAccount(requesterUserId);
@@ -115,12 +135,13 @@ public class RecoveryService {
         UUID id = UUID.randomUUID();
         jdbc.update(
                 "INSERT INTO recovery_request"
-                        + " (id, requester_user_id, workspace_id, target_user_id, state)"
-                        + " VALUES (?, ?, ?, ?, 'REQUESTED')",
+                        + " (id, requester_user_id, workspace_id, target_user_id, state, reason)"
+                        + " VALUES (?, ?, ?, ?, 'REQUESTED', ?)",
                 id,
                 requesterUserId,
                 workspaceId,
-                targetUserId);
+                targetUserId,
+                normalizeReason(reason));
         return loadView(id);
     }
 
@@ -128,7 +149,7 @@ public class RecoveryService {
     @Transactional(readOnly = true)
     public List<RequestView> listRequests() {
         return jdbc.query(
-                "SELECT id, requester_user_id, workspace_id, target_user_id, state,"
+                "SELECT id, requester_user_id, workspace_id, target_user_id, reason, state,"
                         + " verified_by, resolved_at, verification_note, created_at"
                         + " FROM recovery_request ORDER BY created_at ASC, id ASC",
                 REQUEST_MAPPER);
@@ -237,7 +258,7 @@ public class RecoveryService {
     private RequestView loadView(UUID requestId) {
         List<RequestView> rows =
                 jdbc.query(
-                        "SELECT id, requester_user_id, workspace_id, target_user_id, state,"
+                        "SELECT id, requester_user_id, workspace_id, target_user_id, reason, state,"
                                 + " verified_by, resolved_at, verification_note, created_at"
                                 + " FROM recovery_request WHERE id = ?",
                         REQUEST_MAPPER,
@@ -285,11 +306,28 @@ public class RecoveryService {
             return null;
         }
         String trimmed = verificationNote.trim();
-        if (trimmed.isEmpty() || trimmed.length() > 1000) {
+        if (trimmed.isEmpty() || trimmed.length() > MAX_NOTE_LENGTH) {
             throw new HttpProblemException(
                     HttpStatus.BAD_REQUEST,
                     "INVALID_VERIFICATION_NOTE",
                     "Ghi chú xác minh phải có từ 1 đến 1000 ký tự.");
+        }
+        return trimmed;
+    }
+
+    private static @Nullable String normalizeReason(@Nullable String reason) {
+        if (reason == null) {
+            return null;
+        }
+        String trimmed = reason.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if (trimmed.length() > MAX_NOTE_LENGTH) {
+            throw new HttpProblemException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_REASON",
+                    "Lý do cần hỗ trợ phải có từ 1 đến 1000 ký tự.");
         }
         return trimmed;
     }
@@ -304,6 +342,7 @@ public class RecoveryService {
                         rs.getObject("requester_user_id", UUID.class),
                         rs.getObject("workspace_id", UUID.class),
                         rs.getObject("target_user_id", UUID.class),
+                        rs.getString("reason"),
                         RecoveryRequest.State.valueOf(rs.getString("state")),
                         rs.getObject("verified_by", UUID.class),
                         resolvedAt == null ? null : resolvedAt.toInstant(),

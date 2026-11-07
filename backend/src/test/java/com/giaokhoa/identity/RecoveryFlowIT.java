@@ -101,6 +101,7 @@ class RecoveryFlowIT extends IntegrationEnvironment {
 
     @Autowired JdbcTemplate jdbc;
     @Autowired PlatformTransactionManager transactionManager;
+    @Autowired RecoveryService recoveryService;
     @Autowired WebApplicationContext webContext;
     @Autowired SessionRepositoryFilter<?> sessionFilter;
     @Autowired OAuth2AuthorizedClientRepository authorizedClients;
@@ -260,7 +261,10 @@ class RecoveryFlowIT extends IntegrationEnvironment {
                                                         "Idempotency-Key",
                                                         "recovery-flow-" + UUID.randomUUID())
                                                 .contentType(MediaType.APPLICATION_JSON)
-                                                .content("{\"targetUserId\":\"" + actor + "\"}"))
+                                                .content(
+                                                        "{\"targetUserId\":\""
+                                                                + actor
+                                                                + "\",\"reason\":\"Quên mật khẩu\"}"))
                                 .andReturn()
                                 .getResponse();
 
@@ -271,6 +275,78 @@ class RecoveryFlowIT extends IntegrationEnvironment {
             }
         } finally {
             deleteUser(subject);
+        }
+    }
+
+    @Test
+    void submitWithoutReasonIsRejected() throws Exception {
+        String username = "recovery-no-reason-" + UUID.randomUUID();
+        String password = "recovery-password-" + UUID.randomUUID();
+        String subject =
+                createUser(keycloakUser(username, username + "@example.test", true, password));
+        try {
+            UUID actor = seedActor(subject);
+
+            try (var session = openSession(username, password, subject)) {
+                MockHttpServletResponse response =
+                        mockMvc()
+                                .perform(
+                                        post("/api/me/recovery-requests")
+                                                .cookie(session.cookie())
+                                                .with(csrf())
+                                                .header(
+                                                        "Idempotency-Key",
+                                                        "recovery-no-reason-" + UUID.randomUUID())
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content("{\"targetUserId\":\"" + actor + "\"}"))
+                                .andReturn()
+                                .getResponse();
+
+                assertEquals(400, response.getStatus());
+            }
+        } finally {
+            deleteUser(subject);
+        }
+    }
+
+    @Test
+    void rejectedRequestPollShowsRejectionCode() throws Exception {
+        String requesterName = "recovery-reject-" + UUID.randomUUID();
+        String operatorName = "recovery-operator-" + UUID.randomUUID();
+        String password = "recovery-password-" + UUID.randomUUID();
+        String requesterSubject =
+                createUser(
+                        keycloakUser(
+                                requesterName, requesterName + "@example.test", true, password));
+        String operatorSubject =
+                createUser(
+                        keycloakUser(operatorName, operatorName + "@example.test", true, password));
+        try {
+            UUID requester = seedActor(requesterSubject);
+            UUID operator = seedActor(operatorSubject);
+            RecoveryService.RequestView created =
+                    recoveryService.submit(requester, requester, null, "Quên mật khẩu");
+            recoveryService.resolve(
+                    operator, created.id(), RecoveryService.Decision.REJECT, "Không xác minh được");
+
+            try (var session = openSession(requesterName, password, requesterSubject)) {
+                MockHttpServletResponse response =
+                        mockMvc()
+                                .perform(
+                                        get("/api/me/operations/" + created.id())
+                                                .cookie(session.cookie()))
+                                .andReturn()
+                                .getResponse();
+
+                assertEquals(200, response.getStatus());
+                JsonNode body = JSON.readTree(response.getContentAsString());
+                assertEquals("FAILED", body.get("state").stringValue());
+                assertTrue(body.get("completed").booleanValue());
+                assertEquals("RECOVERY_REJECTED", body.get("errorCode").stringValue());
+            }
+        } finally {
+            deleteUser(requesterSubject);
+            deleteUser(operatorSubject);
         }
     }
 

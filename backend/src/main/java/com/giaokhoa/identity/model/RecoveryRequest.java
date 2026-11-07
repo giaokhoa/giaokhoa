@@ -36,6 +36,9 @@ public class RecoveryRequest {
     @Column(name = "target_user_id", nullable = false)
     private UUID targetUserId;
 
+    @Column(name = "reason", length = 1000)
+    private @Nullable String reason;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "state", nullable = false, length = 16)
     private State state;
@@ -64,11 +67,16 @@ public class RecoveryRequest {
     protected RecoveryRequest() {}
 
     public RecoveryRequest(
-            UUID id, UUID requesterUserId, @Nullable UUID workspaceId, UUID targetUserId) {
+            UUID id,
+            UUID requesterUserId,
+            @Nullable UUID workspaceId,
+            UUID targetUserId,
+            @Nullable String reason) {
         this.id = id;
         this.requesterUserId = requesterUserId;
         this.workspaceId = workspaceId;
         this.targetUserId = targetUserId;
+        this.reason = reason;
         this.state = State.REQUESTED;
     }
 
@@ -86,6 +94,10 @@ public class RecoveryRequest {
 
     public UUID getTargetUserId() {
         return targetUserId;
+    }
+
+    public @Nullable String getReason() {
+        return reason;
     }
 
     public State getState() {

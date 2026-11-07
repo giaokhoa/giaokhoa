@@ -63,7 +63,8 @@ class RecoveryRequestIT extends IntegrationEnvironment {
 
         new TransactionTemplate(transactionManager)
                 .executeWithoutResult(status -> {
-                    entityManager.persist(new RecoveryRequest(id, requester, null, target));
+                    entityManager.persist(
+                            new RecoveryRequest(id, requester, null, target, "Quên mật khẩu"));
                     entityManager.flush();
                 });
 
@@ -77,6 +78,7 @@ class RecoveryRequestIT extends IntegrationEnvironment {
         assertEquals(requester, reloaded.getRequesterUserId());
         assertNull(reloaded.getWorkspaceId());
         assertEquals(target, reloaded.getTargetUserId());
+        assertEquals("Quên mật khẩu", reloaded.getReason());
         assertEquals(RecoveryRequest.State.REQUESTED, reloaded.getState());
         assertNull(reloaded.getVerifiedBy());
         assertNull(reloaded.getResolvedAt());

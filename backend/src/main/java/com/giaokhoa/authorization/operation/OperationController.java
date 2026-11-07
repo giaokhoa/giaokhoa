@@ -112,7 +112,10 @@ public class OperationController {
                 "SUCCEEDED".equals(state) || "FAILED".equals(state),
                 TargetType.PROFILE.name(),
                 targetId,
-                null);
+                // Yêu cầu bị từ chối phải mang mã lỗi ổn định để client phân biệt được với lỗi
+                // hệ thống khi poll: ghi chú từ chối của operator chỉ operator thấy ở danh sách
+                // platform, không trả qua poll của người gửi.
+                "REJECTED".equals(requestState) ? "RECOVERY_REJECTED" : null);
     }
 
     private record TargetRef(TargetType type, @Nullable UUID id) {}
