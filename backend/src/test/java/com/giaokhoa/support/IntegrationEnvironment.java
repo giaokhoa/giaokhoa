@@ -15,6 +15,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.awaitility.core.ConditionTimeoutException;
 import org.springframework.context.ApplicationContext;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.test.context.ActiveProfiles;
@@ -34,6 +35,7 @@ public abstract class IntegrationEnvironment { // NOPMD - Lớp base TEST để 
     // Làn 2: stack TEST chuyên dụng thứ hai đã kiểm chứng (cùng realm/credential như làn 1,
     // chỉ khác cổng). DB và issuer phải đi cùng làn — cặp chéo vẫn bị từ chối.
     private static final String TEST_DB_LANE_2 = "jdbc:postgresql://127.0.0.1:15433/giaokhoa_test";
+    private static final String OPERATION_FAILED = "FAILED";
     private static final String TEST_ISSUER_LANE_2 = "http://127.0.0.1:18082/realms/giaokhoa-it";
 
     @DynamicPropertySource
@@ -138,7 +140,7 @@ public abstract class IntegrationEnvironment { // NOPMD - Lớp base TEST để 
      */
     protected static void awaitOperationSucceeded(JdbcTemplate jdbc, UUID operationId) {
         AtomicReference<Object> failureCode = new AtomicReference<>();
-        AtomicReference<RuntimeException> queryFailure = new AtomicReference<>();
+        AtomicReference<DataAccessException> queryFailure = new AtomicReference<>();
         try {
             await().atMost(Duration.ofSeconds(90))
                     .pollInterval(Duration.ofMillis(500))
@@ -148,12 +150,12 @@ public abstract class IntegrationEnvironment { // NOPMD - Lớp base TEST để 
                                     jdbc.queryForMap(
                                             "SELECT state, last_error_code FROM authorization_operation WHERE id = ?",
                                             operationId);
-                            if ("FAILED".equals(String.valueOf(row.get("state")))) {
+                            if (OPERATION_FAILED.equals(String.valueOf(row.get("state")))) {
                                 failureCode.set(row.get("last_error_code"));
                                 return true;
                             }
                             return "SUCCEEDED".equals(String.valueOf(row.get("state")));
-                        } catch (RuntimeException ex) {
+                        } catch (DataAccessException ex) {
                             queryFailure.set(ex);
                             return true;
                         }
