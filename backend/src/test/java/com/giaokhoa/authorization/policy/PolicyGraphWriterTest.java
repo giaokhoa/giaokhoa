@@ -67,7 +67,13 @@ class PolicyGraphWriterTest {
         expectGet(server, ROOT + "/scope" + LIST, "[]");
         expectCreate(server, ROOT + "/scope", "{\"id\":\"scope-enter\"}");
         expectGet(server, ROOT + "/resource" + LIST, "[]");
-        expectCreate(server, ROOT + "/resource", "{\"_id\":\"res-1\"}");
+        expectCreate(
+                server,
+                ROOT + "/resource",
+                "{\"_id\":\"res-1\"}",
+                "{\"name\":\""
+                        + TARGET
+                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
         expectGet(server, ROOT + "/policy" + LIST, "[]");
         expectGroup(server, ELIGIBLE, "g-elig");
         expectCreate(
@@ -381,7 +387,9 @@ class PolicyGraphWriterTest {
         expectGet(
                 server,
                 ROOT + "/resource/res-1",
-                "{\"_id\":\"res-1\",\"name\":\"" + TARGET + "\",\"scopes\":[]}");
+                "{\"_id\":\"res-1\",\"name\":\""
+                        + TARGET
+                        + "\",\"scopes\":[{\"id\":\"scope-read\",\"name\":\"read\"}]}");
         server.expect(requestTo(ROOT + "/resource/res-1"))
                 .andExpect(method(HttpMethod.PUT))
                 .andExpect(
@@ -389,7 +397,8 @@ class PolicyGraphWriterTest {
                                 .json(
                                         "{\"_id\":\"res-1\",\"name\":\""
                                                 + TARGET
-                                                + "\",\"scopes\":[{\"id\":\"scope-enter\"}]}"))
+                                                + "\",\"scopes\":[{\"id\":\"scope-read\",\"name\":\"read\"},"
+                                                + "{\"id\":\"scope-enter\",\"name\":\"enter\"}]}"))
                 .andRespond(withNoContent());
         expectGet(
                 server,
@@ -431,7 +440,8 @@ class PolicyGraphWriterTest {
                 ROOT + "/resource/res-1",
                 "{\"_id\":\"res-1\",\"name\":\""
                         + TARGET
-                        + "\",\"scopes\":[{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
+                        + "\",\"scopes\":[{\"id\":\"scope-read\",\"name\":\"read\"},"
+                        + "{\"id\":\"scope-enter\",\"name\":\"enter\"}]}");
 
         PolicyGraphWriter.AppliedGraph applied = writer.apply(graph);
         assertEquals(List.of("gk-group:" + ELIGIBLE, "gk-group:" + OWNERS), applied.policyNames());

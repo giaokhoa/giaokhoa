@@ -171,7 +171,7 @@ if ! node "$ROOT/fixtures/native-pkce-login.mjs"; then
   fail "Native actor login via real Authorization Code + PKCE"
 fi
 if ! "$REPO/backend/mvnw" -B -ntp -f "$REPO/backend/pom.xml" \
-    -Dtest=NativePermissionGateIT,NativeTimePolicyIT,PolicyGraphWriterNativeIT test > "$TMP/native-gate-java.log" 2>&1; then
+    -Dtest=NativePermissionGateIT,NativeTimePolicyIT,PolicyGraphWriterNativeIT,NativeGateAcceptanceIT test > "$TMP/native-gate-java.log" 2>&1; then
   tail -70 "$TMP/native-gate-java.log" >&2
   docker logs "$CONTAINER" 2>&1 | tail -90 >&2 || true
   fail "Native permission/time PDP integration tests"

@@ -170,7 +170,7 @@ public class PolicyGraphWriter {
     private AppliedGraph applyLocked(PolicyGraph graph) {
         String root = resourceServerRoot();
         String scopeId = ensureScope(root, graph.scope());
-        String resourceId = ensureResource(root, graph.targetKey(), scopeId);
+        String resourceId = ensureResource(root, graph.targetKey(), scopeId, graph.scope());
         Map<String, Map<String, Object>> policies = policyIndex(root);
 
         Set<String> policyNames = new TreeSet<>();
@@ -621,10 +621,10 @@ public class PolicyGraphWriter {
         }
     }
 
-    private String ensureResource(String root, String targetKey, String scopeId) {
+    private String ensureResource(String root, String targetKey, String scopeId, String scopeName) {
         for (Map<String, Object> existing : list(root + "/resource")) {
             if (targetKey.equals(existing.get("name"))) {
-                return resourceWithScope(root, existing, targetKey, scopeId);
+                return resourceWithScope(root, existing, targetKey, scopeId, scopeName);
             }
         }
         try {
@@ -636,7 +636,7 @@ public class PolicyGraphWriter {
                             "ownerManagedAccess",
                             false,
                             "scopes",
-                            List.of(Map.of("id", scopeId))));
+                            List.of(Map.of("id", scopeId, "name", scopeName))));
         } catch (RestClientResponseException ex) {
             if (!ex.getStatusCode().isSameCodeAs(HttpStatus.CONFLICT)) {
                 throw ex;
@@ -644,7 +644,7 @@ public class PolicyGraphWriter {
             // Một apply đồng thời đã tạo cùng resource name xác định đó trước.
             for (Map<String, Object> raced : list(root + "/resource")) {
                 if (targetKey.equals(raced.get("name"))) {
-                    return resourceWithScope(root, raced, targetKey, scopeId);
+                    return resourceWithScope(root, raced, targetKey, scopeId, scopeName);
                 }
             }
             throw new IllegalStateException(
@@ -653,15 +653,37 @@ public class PolicyGraphWriter {
     }
 
     private String resourceWithScope(
-            String root, Map<String, Object> existing, String targetKey, String scopeId) {
+            String root,
+            Map<String, Object> existing,
+            String targetKey,
+            String scopeId,
+            String scopeName) {
         String id = String.valueOf(existing.get("_id"));
         Map<String, Object> current = get(root + "/resource/" + id);
         List<String> scopeIds = ids(current.get("scopes"), "id");
         if (!scopeIds.contains(scopeId)) {
             scopeIds.add(scopeId);
+            Map<String, String> scopeNames = new LinkedHashMap<>();
+            if (current.get("scopes") instanceof List<?> currentScopes) {
+                for (Object item : currentScopes) {
+                    if (item instanceof Map<?, ?> scope && scope.get("name") != null) {
+                        scopeNames.put(
+                                String.valueOf(scope.get("id")), String.valueOf(scope.get("name")));
+                    }
+                }
+            }
+            scopeNames.put(scopeId, scopeName);
+            // Bất biến của Keycloak: entry scope chỉ có id vẫn được chấp nhận (204) nhưng scope
+            // mới không được gắn; mọi entry phải mang cả id và name mới được giữ.
             List<Map<String, String>> scopes = new ArrayList<>();
             for (String existingScope : scopeIds) {
-                scopes.add(Map.of("id", existingScope));
+                Map<String, String> entry = new LinkedHashMap<>();
+                entry.put("id", existingScope);
+                String name = scopeNames.get(existingScope);
+                if (name != null) {
+                    entry.put("name", name);
+                }
+                scopes.add(entry);
             }
             Map<String, Object> update = new LinkedHashMap<>();
             update.put("_id", id);
