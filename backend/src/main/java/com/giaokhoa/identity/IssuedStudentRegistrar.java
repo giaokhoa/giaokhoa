@@ -142,6 +142,13 @@ public class IssuedStudentRegistrar {
         if (!memberships.isEmpty()) {
             membershipId = memberships.getFirst();
             membershipCreated = false;
+            // Cấp trực tiếp kích hoạt luôn membership đã mời: chỉ đổi state, giữ nguyên
+            // joined_at vì trigger guard_directory_history cấm sửa lịch sử tham gia.
+            // Điều kiện state trong câu lệnh khiến lượt cập nhật vô hại với membership ACTIVE.
+            jdbc.update(
+                    "UPDATE center_membership SET state = 'ACTIVE' WHERE id = ?"
+                            + " AND state = 'PENDING'",
+                    membershipId);
         } else {
             membershipId = UUID.randomUUID();
             jdbc.update(

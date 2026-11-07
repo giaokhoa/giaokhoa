@@ -15,6 +15,7 @@ import com.giaokhoa.tenancy.WorkspaceDirectory;
 import com.giaokhoa.tenancy.WorkspaceDirectory.ListedWorkspace;
 import com.giaokhoa.tenancy.model.MembershipRole;
 import java.net.URI;
+import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -297,6 +298,58 @@ class BootstrapProfileIT extends IntegrationEnvironment {
                         Integer.class,
                         center,
                         first.userId()));
+    }
+
+    @Test
+    void registrarActivatesPendingMembershipOnReissue() {
+        UUID owner = seedAccount("registrar-owner4-" + UUID.randomUUID(), "SELF_REGISTERED", null);
+        UUID center = seedCenter(owner);
+        String studentSub = "pending-sub-" + UUID.randomUUID();
+        String studentUsername = "pending-student-" + UUID.randomUUID();
+        UUID student = seedAccount(studentSub, studentUsername, "SELF_REGISTERED", null);
+        UUID pending = UUID.randomUUID();
+        tx(() -> {
+            jdbc.update(
+                    "INSERT INTO center_membership(id,workspace_id,user_id,state,joined_at)"
+                            + " VALUES (?,?,?,'PENDING',now())",
+                    pending,
+                    center,
+                    student);
+            return null;
+        });
+        OffsetDateTime joinedBefore =
+                jdbc.queryForObject(
+                        "SELECT joined_at FROM center_membership WHERE id = ?",
+                        OffsetDateTime.class,
+                        pending);
+
+        IssuedStudent issued = registrar.issueStudent(owner, center, studentSub, studentUsername);
+
+        assertFalse(issued.membershipCreated(), "Membership đã có từ lúc mời nên không tạo mới");
+        assertEquals(pending, issued.membershipId());
+        assertEquals(
+                "ACTIVE",
+                jdbc.queryForObject(
+                        "SELECT state FROM center_membership WHERE id = ?", String.class, pending));
+        assertEquals(
+                joinedBefore,
+                jdbc.queryForObject(
+                        "SELECT joined_at FROM center_membership WHERE id = ?",
+                        OffsetDateTime.class,
+                        pending),
+                "Kích hoạt không được sửa lịch sử tham gia");
+        assertEquals(Set.of(MembershipRole.Role.STUDENT), directory.rolesIn(student, center));
+        assertEquals(
+                1,
+                jdbc.queryForObject(
+                        "SELECT count(*) FROM center_membership WHERE workspace_id = ? AND"
+                                + " user_id = ?",
+                        Integer.class,
+                        center,
+                        student));
+        assertTrue(
+                directory.listWorkspaces(student).stream().anyMatch(w -> w.id().equals(center)),
+                "Học sinh vừa được cấp phải thấy center trong thư mục");
     }
 
     @Test
