@@ -105,6 +105,24 @@
         <Field name="~(jdbc|writer)"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+    <!-- Dependency singleton do Spring quản lý (JdbcTemplate, IdentityProvisioningClient); không sao chép khi inject vào controller phiên. -->
+    <Match>
+        <Class name="com.giaokhoa.identity.SessionController"/>
+        <Field name="~(jdbc|provisioning)"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- Dependency singleton do Spring quản lý (PolicyGraphWriter); không sao chép khi inject vào controller khôi phục. -->
+    <Match>
+        <Class name="com.giaokhoa.identity.RecoveryController"/>
+        <Field name="policyWriter"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- Dependency singleton do Spring quản lý (JdbcTemplate); không sao chép khi inject vào service lịch sử practice. -->
+    <Match>
+        <Class name="com.giaokhoa.verification.SystemPracticeService"/>
+        <Field name="jdbc"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
     <!-- JPA cần entity không final; các constructor này chỉ gán field, không giữ tài nguyên hay gọi code ngoài. -->
     <Match>
         <Class name="~com\.giaokhoa\.authorization\.model\.Authorization(Operation|Projection)"/>

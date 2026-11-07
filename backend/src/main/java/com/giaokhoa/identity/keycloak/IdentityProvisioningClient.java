@@ -27,6 +27,7 @@ public class IdentityProvisioningClient {
     private final RestClient http;
     private final String baseUrl;
     private final String realm;
+    private final String webClientId;
     private final OAuth2AuthorizedClientManager manager;
 
     @Autowired
@@ -34,12 +35,15 @@ public class IdentityProvisioningClient {
             @Value("${giaokhoa.keycloak.admin-base-url}") String baseUrl,
             @Value("${spring.security.oauth2.client.provider.keycloak.issuer-uri}")
                     String issuerUri,
+            @Value("${spring.security.oauth2.client.registration.keycloak.client-id}")
+                    String webClientId,
             @Value("${giaokhoa.keycloak.provisioner.client-id}") String clientId,
             @Value("${giaokhoa.keycloak.provisioner.client-secret}") String clientSecret) {
         this(
                 RestClient.builder(),
                 baseUrl,
                 KeycloakProvisionerFactory.realmOf(issuerUri),
+                webClientId,
                 KeycloakProvisionerFactory.clientManager(
                         baseUrl.replaceAll("/+$", ""),
                         KeycloakProvisionerFactory.realmOf(issuerUri),
@@ -51,10 +55,12 @@ public class IdentityProvisioningClient {
             RestClient.Builder builder,
             String baseUrl,
             String realm,
+            String webClientId,
             OAuth2AuthorizedClientManager manager) {
         this.http = builder.build();
         this.baseUrl = baseUrl.replaceAll("/+$", "");
         this.realm = realm;
+        this.webClientId = webClientId;
         this.manager = manager;
     }
 
@@ -104,6 +110,34 @@ public class IdentityProvisioningClient {
         }
         http.delete()
                 .uri(endpoint("users", keycloakUserId))
+                .headers(headers -> headers.setBearerAuth(accessToken()))
+                .retrieve()
+                .toBodilessEntity();
+    }
+
+    /**
+     * Gửi email xác minh địa chỉ email cho user hiện hữu. Keycloak tự sinh liên kết hành động và
+     * thời hạn của nó; backend không giữ, không lộ bất kỳ token nào của luồng xác minh.
+     */
+    public void sendVerifyEmail(String keycloakUserId) {
+        if (keycloakUserId == null || keycloakUserId.isBlank()) {
+            throw new IllegalArgumentException("Keycloak user ID is required");
+        }
+        URI uri =
+                UriComponentsBuilder.fromUriString(baseUrl)
+                        .pathSegment(
+                                "admin",
+                                "realms",
+                                realm,
+                                "users",
+                                keycloakUserId,
+                                "send-verify-email")
+                        .queryParam("client_id", webClientId)
+                        .build()
+                        .encode()
+                        .toUri();
+        http.put()
+                .uri(uri)
                 .headers(headers -> headers.setBearerAuth(accessToken()))
                 .retrieve()
                 .toBodilessEntity();

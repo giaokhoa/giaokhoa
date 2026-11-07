@@ -60,8 +60,9 @@ public class OperationController {
                         operationId,
                         actorUserId);
         if (rows.isEmpty()) {
-            throw new HttpProblemException(
-                    HttpStatus.NOT_FOUND, "NOT_FOUND", "Không tìm thấy tài nguyên.");
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
+                    .body(recoveryStatus(operationId, actorUserId));
         }
         Map<String, Object> row = rows.getFirst();
         String state = String.valueOf(row.get("state"));
@@ -77,6 +78,41 @@ public class OperationController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
                 .body(view);
+    }
+
+    /**
+     * Yêu cầu khôi phục danh tính không phải authorization operation nhưng biên nhận gửi yêu cầu
+     * mang chính ID của nó làm operationId, nên đường poll này tra tiếp bảng yêu cầu khi không thấy
+     * operation: chỉ yêu cầu do chính actor gửi mới hiện, trạng thái yêu cầu được ánh xạ sang vòng
+     * đời operation và đích là profile của tài khoản được hỗ trợ.
+     */
+    private OperationView recoveryStatus(UUID operationId, UUID actorUserId) {
+        List<Map<String, Object>> rows =
+                jdbc.queryForList(
+                        "SELECT state, target_user_id FROM recovery_request"
+                                + " WHERE id = ? AND requester_user_id = ?",
+                        operationId,
+                        actorUserId);
+        if (rows.isEmpty()) {
+            throw new HttpProblemException(
+                    HttpStatus.NOT_FOUND, "NOT_FOUND", "Không tìm thấy tài nguyên.");
+        }
+        Map<String, Object> row = rows.getFirst();
+        String requestState = String.valueOf(row.get("state"));
+        String state =
+                switch (requestState) {
+                    case "RESOLVED" -> "SUCCEEDED";
+                    case "REJECTED" -> "FAILED";
+                    default -> "PENDING";
+                };
+        UUID targetId = row.get("target_user_id") instanceof UUID id ? id : actorUserId;
+        return new OperationView(
+                operationId,
+                state,
+                "SUCCEEDED".equals(state) || "FAILED".equals(state),
+                TargetType.PROFILE.name(),
+                targetId,
+                null);
     }
 
     private record TargetRef(TargetType type, @Nullable UUID id) {}
