@@ -30,6 +30,18 @@
         <Field name="~(jdbc|identities|operations)"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+    <!-- Dependency singleton do Spring quản lý (JdbcTemplate, CurrentIdentityClient); không sao chép khi inject vào service bootstrap. -->
+    <Match>
+        <Class name="com.giaokhoa.identity.IdentityService"/>
+        <Field name="~(jdbc|identities)"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- Dependency singleton do Spring quản lý (JdbcTemplate); không sao chép khi inject vào registrar. -->
+    <Match>
+        <Class name="com.giaokhoa.identity.IssuedStudentRegistrar"/>
+        <Field name="jdbc"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
     <Match>
         <Class name="com.giaokhoa.authorization.projection.ProjectionWorker"/>
         <Field name="~(jdbc|reconciler)"/>
@@ -66,6 +78,12 @@
     <!-- Dependency singleton do Spring quản lý (JdbcTemplate); không sao chép khi inject vào helper transaction workspace. -->
     <Match>
         <Class name="com.giaokhoa.tenancy.data.WorkspaceTransaction"/>
+        <Field name="jdbc"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- Dependency singleton do Spring quản lý (JdbcTemplate); không sao chép khi inject vào thư mục workspace. -->
+    <Match>
+        <Class name="com.giaokhoa.tenancy.WorkspaceDirectory"/>
         <Field name="jdbc"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
