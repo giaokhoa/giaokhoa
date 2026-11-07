@@ -51,6 +51,7 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -70,6 +71,7 @@ import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.session.SessionRepository;
 import org.springframework.session.web.http.SessionRepositoryFilter;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -94,6 +96,7 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @SpringBootTest
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
+@DirtiesContext
 class IdentityFlowIT extends IntegrationEnvironment {
     private static final JsonMapper JSON = new JsonMapper();
     private static final String SCHEMA =
@@ -140,8 +143,11 @@ class IdentityFlowIT extends IntegrationEnvironment {
     }
 
     @AfterAll
-    static void removeSchema(@Autowired JdbcTemplate jdbc) {
-        jdbc.execute("DROP SCHEMA IF EXISTS " + SCHEMA + " CASCADE");
+    static void removeSchema(@Autowired ApplicationContext context) {
+        // Class này chờ operation do worker thật xử lý (awaitSucceeded) nên không mock được như
+        // BootstrapProfileIT; teardown đóng context trước để không còn actor đồng thời nào chạm
+        // schema khi DROP.
+        closeContextAndDropSchema(context, SCHEMA);
     }
 
     @Autowired JdbcTemplate jdbc;

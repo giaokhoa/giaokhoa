@@ -24,10 +24,12 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -47,6 +49,7 @@ import org.springframework.web.client.RestClientResponseException;
  */
 @SpringBootTest
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
+@DirtiesContext
 class IdentityEligibilitySynchronizerIT extends IntegrationEnvironment {
     private static final String SCHEMA =
             "eligibility_sync_" + UUID.randomUUID().toString().replace("-", "");
@@ -94,8 +97,11 @@ class IdentityEligibilitySynchronizerIT extends IntegrationEnvironment {
     }
 
     @AfterAll
-    static void removeSchema(@Autowired JdbcTemplate jdbc) {
-        jdbc.execute("DROP SCHEMA IF EXISTS " + SCHEMA + " CASCADE");
+    static void removeSchema(@Autowired ApplicationContext context) {
+        // Class này chờ operation do worker thật xử lý (awaitSucceeded) nên không mock được như
+        // BootstrapProfileIT; teardown đóng context trước để không còn actor đồng thời nào chạm
+        // schema khi DROP.
+        closeContextAndDropSchema(context, SCHEMA);
     }
 
     @Autowired JdbcTemplate jdbc;

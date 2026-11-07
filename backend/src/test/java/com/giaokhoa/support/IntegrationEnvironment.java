@@ -1,5 +1,14 @@
 package com.giaokhoa.support;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.time.Duration;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -36,6 +45,53 @@ public abstract class IntegrationEnvironment { // NOPMD - Lớp base TEST để 
         registry.add(
                 "spring.security.oauth2.client.registration.keycloak.client-secret",
                 () -> required("TEST_OIDC_CLIENT_SECRET"));
+    }
+
+    /**
+     * Teardown cho class cần worker thật (không mock được): đóng context để scheduler dừng hẳn, chờ
+     * khóa của lượt poll đang chạy dở trên schema tan hết, rồi DROP bằng connection độc lập vì pool
+     * đã đóng theo context. Class dùng cách này phải kèm {@code @DirtiesContext} để context đã đóng
+     * bị loại khỏi cache của Spring Test thay vì được trao lại cho class sau.
+     */
+    protected static void closeContextAndDropSchema(ApplicationContext context, String schema) {
+        ((ConfigurableApplicationContext) context).close();
+        try (Connection connection =
+                        DriverManager.getConnection(
+                                required("TEST_DATABASE_URL"),
+                                required("TEST_DATABASE_USERNAME"),
+                                required("TEST_DATABASE_PASSWORD"));
+                Statement statement = connection.createStatement()) {
+            awaitSchemaLocksReleased(connection, schema);
+            statement.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Không DROP được schema " + schema, ex);
+        }
+    }
+
+    private static void awaitSchemaLocksReleased(Connection connection, String schema)
+            throws SQLException {
+        long deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos();
+        while (System.nanoTime() < deadline) {
+            try (PreparedStatement locks =
+                    connection.prepareStatement(
+                            "SELECT count(*) FROM pg_locks l"
+                                    + " JOIN pg_class c ON c.oid = l.relation"
+                                    + " JOIN pg_namespace n ON n.oid = c.relnamespace"
+                                    + " WHERE n.nspname = ? AND l.pid <> pg_backend_pid()")) {
+                locks.setString(1, schema);
+                try (ResultSet result = locks.executeQuery()) {
+                    if (result.next() && result.getLong(1) == 0) {
+                        return;
+                    }
+                }
+            }
+            try {
+                Thread.sleep(250);
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
     }
 
     static void validateTargets(String database, String issuer) {
