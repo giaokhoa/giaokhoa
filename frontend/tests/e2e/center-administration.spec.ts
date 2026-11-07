@@ -107,6 +107,14 @@ async function dangNhapLai(
   return session.csrf!;
 }
 
+// Lần mutation được bảo vệ đầu tiên của actor mới trả 503 AUTHORIZATION_NOT_READY:
+// partition ACCOUNT mới bootstrap ở PENDING, ProtectedActionExecutor đồng bộ eligibility
+// rồi fence chặn cho tới khi worker chiếu xong. Chỉ thử lại đúng mã này, tối đa 60 giây;
+// 503 xảy ra trước khi endpoint ghi operation của nó nên mỗi lần thử dùng Idempotency-Key
+// mới là an toàn; tuyệt đối không thử lại 400/403/409 hay 503 với mã khác (vd: PDP lỗi).
+const THOI_GIAN_CHO_FENCE_MS = 60_000;
+const KHOANG_CHO_FENCE_MS = 1_000;
+
 async function guiMutation(
   page: Page,
   origin: string,
@@ -116,15 +124,33 @@ async function guiMutation(
   body?: Record<string, unknown>,
   tuyChon?: { idempotencyKey?: string; headers?: Record<string, string> },
 ): Promise<APIResponse> {
-  return page.request.fetch(`${origin}${path}`, {
-    method,
-    headers: {
-      [csrf.headerName]: csrf.token,
-      "Idempotency-Key": tuyChon?.idempotencyKey ?? randomUUID(),
-      ...(tuyChon?.headers ?? {}),
-    },
-    data: body,
-  });
+  const batDau = Date.now();
+  // Lần thử đầu giữ nguyên key do caller truyền (test retry cùng key dựa vào đó);
+  // các lần thử lại sau 503 dùng key mới.
+  let khoaIdempotency = tuyChon?.idempotencyKey ?? randomUUID();
+  for (;;) {
+    const traLoi = await page.request.fetch(`${origin}${path}`, {
+      method,
+      headers: {
+        [csrf.headerName]: csrf.token,
+        "Idempotency-Key": khoaIdempotency,
+        ...(tuyChon?.headers ?? {}),
+      },
+      data: body,
+    });
+    if (traLoi.status() !== 503) return traLoi;
+    let ma: unknown;
+    try {
+      ma = ((await traLoi.json()) as { code?: unknown }).code;
+    } catch {
+      return traLoi;
+    }
+    if (ma !== "AUTHORIZATION_NOT_READY" || Date.now() - batDau >= THOI_GIAN_CHO_FENCE_MS) {
+      return traLoi;
+    }
+    khoaIdempotency = randomUUID();
+    await page.waitForTimeout(KHOANG_CHO_FENCE_MS);
+  }
 }
 
 function layOperationId(traLoi: MutationTraLoi): string {
@@ -163,7 +189,7 @@ async function taoNguoiDung(
 ): Promise<NguoiDungTest> {
   const user = await env.createUser();
   daTao.push(user);
-  if (nhom) await env.choVaoNhomRealm(user, nhom);
+  if (nhom) await env.addToRealmGroup(user, nhom);
   return user;
 }
 
@@ -280,7 +306,7 @@ async function moiVaChapNhan(
   const mail = await env.waitForEmail(nguoiDuocMoi.email, batDauChoMail);
   let token = "";
   try {
-    token = trichTokenChapNhanMoi(await env.docNoiDungEmail(mail));
+    token = trichTokenChapNhanMoi(await env.readEmailContent(mail));
   } finally {
     await env.deleteEmail(mail);
   }

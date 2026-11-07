@@ -118,14 +118,14 @@ export class TestEnvironment {
   }
 
   async readVerificationLink(message: Mail): Promise<string> {
-    const link = (await this.docNoiDungEmail(message))
+    const link = (await this.readEmailContent(message))
       .match(/https?:\/\/[^\s"'<>]*action-token[^\s"'<>]*/)?.[0];
     if (!link) throw new Error("Email xác minh không chứa link action-token của Keycloak");
     return link.replace(/&amp;/g, "&");
   }
 
   /** Đọc toàn bộ nội dung text/HTML của một email test đã nhận. */
-  async docNoiDungEmail(message: Mail): Promise<string> {
+  async readEmailContent(message: Mail): Promise<string> {
     if (!this.receivedMail.has(message.ID)) throw new Error("Không đọc email không do test nhận");
     const response = await fetch(new URL(`/api/v1/message/${encodeURIComponent(message.ID)}`, this.mailpit));
     if (!response.ok) throw new Error(`Mailpit message: HTTP ${response.status}`);
@@ -137,7 +137,7 @@ export class TestEnvironment {
    * Đưa user test vào một realm group nguồn (/gk/...): tạo từng đoạn group nếu chưa có rồi
    * gắn user vào group cuối. Dùng để dựng operator nền tảng và eligible cho actor E2E.
    */
-  async choVaoNhomRealm(user: TestUser, groupPath: string): Promise<void> {
+  async addToRealmGroup(user: TestUser, groupPath: string): Promise<void> {
     if (!this.createdUsers.has(user.id)) throw new Error("Chỉ thêm user do test tạo vào realm group");
     if (!/^\/gk(\/[A-Za-z0-9_-]+)+$/.test(groupPath)) {
       throw new Error("Chỉ thêm vào group nguồn /gk/*");
