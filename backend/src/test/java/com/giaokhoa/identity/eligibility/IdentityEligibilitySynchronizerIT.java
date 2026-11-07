@@ -12,7 +12,6 @@ import com.giaokhoa.support.IntegrationEnvironment;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -67,8 +66,6 @@ class IdentityEligibilitySynchronizerIT extends IntegrationEnvironment {
     private static final String DEFAULT_PERMISSION = "Default Permission";
     private static final String DEFAULT_RESOURCE = "Default Resource";
     private static final String DEFAULT_POLICY = "Default Policy";
-    private static final List<String> OWNED_GROUP_IDS = new ArrayList<>();
-    private static @Nullable String ownedApiClientId;
 
     @DynamicPropertySource
     static void isolatedSchema(DynamicPropertyRegistry registry) {
@@ -83,17 +80,6 @@ class IdentityEligibilitySynchronizerIT extends IntegrationEnvironment {
     static void seedRealmPrerequisites() {
         seedEligibilityGroup();
         ensureApiClient();
-    }
-
-    @AfterAll
-    static void removeRealmPrerequisites() {
-        if (ownedApiClientId != null) {
-            delete(adminStatic("/clients/" + ownedApiClientId));
-        }
-        for (int i = OWNED_GROUP_IDS.size() - 1; i >= 0; i--) {
-            delete(adminStatic("/groups/" + OWNED_GROUP_IDS.get(i)));
-        }
-        OWNED_GROUP_IDS.clear();
     }
 
     @AfterAll
@@ -331,8 +317,9 @@ class IdentityEligibilitySynchronizerIT extends IntegrationEnvironment {
             if (found == null) {
                 String endpoint =
                         parentId == null ? "/groups" : "/groups/" + parentId + "/children";
+                // Cây /gk/identity/eligible là object nền của realm: chỉ tạo khi thiếu,
+                // không bao giờ xóa ở teardown — nhiều class dùng chung đường dẫn cố định này.
                 found = createResource(adminStatic(endpoint), Map.of("name", segment));
-                OWNED_GROUP_IDS.add(found);
             }
             parentId = found;
         }
@@ -367,7 +354,9 @@ class IdentityEligibilitySynchronizerIT extends IntegrationEnvironment {
                                                 "policyEnforcementMode", "ENFORCING",
                                                 "allowRemoteResourceManagement", true,
                                                 "decisionStrategy", "UNANIMOUS")));
-        ownedApiClientId = clientId;
+        // Client này là object nền của realm (cùng vai trò bootstrap.sh ở production): chỉ
+        // tạo khi thiếu và gỡ default do Keycloak tự sinh đúng như bootstrap, không bao giờ
+        // xóa ở teardown — nhiều class dùng chung client theo clientId cố định này.
         removeClientDefaults(clientId);
     }
 
