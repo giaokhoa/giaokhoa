@@ -118,14 +118,61 @@ export class TestEnvironment {
   }
 
   async readVerificationLink(message: Mail): Promise<string> {
+    const link = (await this.docNoiDungEmail(message))
+      .match(/https?:\/\/[^\s"'<>]*action-token[^\s"'<>]*/)?.[0];
+    if (!link) throw new Error("Email xác minh không chứa link action-token của Keycloak");
+    return link.replace(/&amp;/g, "&");
+  }
+
+  /** Đọc toàn bộ nội dung text/HTML của một email test đã nhận. */
+  async docNoiDungEmail(message: Mail): Promise<string> {
     if (!this.receivedMail.has(message.ID)) throw new Error("Không đọc email không do test nhận");
     const response = await fetch(new URL(`/api/v1/message/${encodeURIComponent(message.ID)}`, this.mailpit));
     if (!response.ok) throw new Error(`Mailpit message: HTTP ${response.status}`);
     const detail = await response.json() as { Text?: string; HTML?: string };
-    const link = `${detail.Text ?? ""}\n${detail.HTML ?? ""}`
-      .match(/https?:\/\/[^\s"'<>]*action-token[^\s"'<>]*/)?.[0];
-    if (!link) throw new Error("Email xác minh không chứa link action-token của Keycloak");
-    return link.replace(/&amp;/g, "&");
+    return `${detail.Text ?? ""}\n${detail.HTML ?? ""}`;
+  }
+
+  /**
+   * Đưa user test vào một realm group nguồn (/gk/...): tạo từng đoạn group nếu chưa có rồi
+   * gắn user vào group cuối. Dùng để dựng operator nền tảng và eligible cho actor E2E.
+   */
+  async choVaoNhomRealm(user: TestUser, groupPath: string): Promise<void> {
+    if (!this.createdUsers.has(user.id)) throw new Error("Chỉ thêm user do test tạo vào realm group");
+    if (!/^\/gk(\/[A-Za-z0-9_-]+)+$/.test(groupPath)) {
+      throw new Error("Chỉ thêm vào group nguồn /gk/*");
+    }
+    let parentId: string | undefined;
+    let groupId = "";
+    for (const segment of groupPath.split("/").filter(Boolean)) {
+      const siblings = parentId
+        ? await this.adminJson<{ id: string; name: string }[]>(
+          "GET", `/groups/${encodeURIComponent(parentId)}/children`)
+        : await this.adminJson<{ id: string; name: string }[]>("GET", "/groups");
+      const found = siblings.find((group) => group.name === segment);
+      if (found) {
+        groupId = found.id;
+      } else {
+        const response = await this.admin(
+          "POST",
+          parentId ? `/groups/${encodeURIComponent(parentId)}/children` : "/groups",
+          { name: segment },
+        );
+        const location = response.headers.get("location");
+        const id = location?.split("/").at(-1);
+        if (!id || !/^[a-f0-9-]{36}$/.test(id)) {
+          throw new Error("Keycloak không trả ID của group test; kiểm tra fixture thủ công");
+        }
+        groupId = id;
+      }
+      parentId = groupId;
+    }
+    await this.admin("PUT", `/users/${encodeURIComponent(user.id)}/groups/${encodeURIComponent(groupId)}`);
+  }
+
+  private async adminJson<T>(method: string, path: string): Promise<T> {
+    const response = await this.admin(method, path);
+    return (await response.json()) as T;
   }
 
   // Admin kết thúc mọi phiên SSO của user; Keycloak gửi back-channel logout tới các client đã đăng ký.
