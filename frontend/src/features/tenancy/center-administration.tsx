@@ -823,9 +823,9 @@ export function CenterMembersContent({ workspaceId }: { workspaceId: string }) {
   async function revokeMember(member: Membership) {
     await runMutation(
       `revoke:${member.id}`,
-      JSON.stringify([userId, workspaceId, "revoke", member.id]),
+      JSON.stringify([userId, workspaceId, "revoke", member.id, member.version]),
       `${membersPath}/${encodeURIComponent(member.id)}`,
-      { method: "DELETE" },
+      { method: "DELETE", headers: { "If-Match": `"${member.version}"` } },
     );
   }
 
@@ -900,6 +900,9 @@ export function CenterMembersContent({ workspaceId }: { workspaceId: string }) {
                                       pendingAction !== null
                                       || role === "OWNER"
                                       || (role === "MANAGER" && !canAssignManager)
+                                      // Gói hết hạn chặn thêm vai trò: role chưa có bị khóa,
+                                      // role đang có vẫn bỏ chọn được qua cùng nút Lưu.
+                                      || (subscriptionExpired && !member.roles.includes(role))
                                     }
                                     onChange={(event) => setRoleDrafts((current) => ({
                                       ...current,
