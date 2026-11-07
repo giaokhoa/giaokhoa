@@ -62,7 +62,7 @@ class RecoveryRequestIT extends IntegrationEnvironment {
         UUID id = UUID.randomUUID();
 
         new TransactionTemplate(transactionManager)
-                .executeWithoutResult(status -> {
+                .executeWithoutResult(_ -> {
                     entityManager.persist(
                             new RecoveryRequest(id, requester, null, target, "Quên mật khẩu"));
                     entityManager.flush();
@@ -70,7 +70,7 @@ class RecoveryRequestIT extends IntegrationEnvironment {
 
         RecoveryRequest reloaded =
                 new TransactionTemplate(transactionManager)
-                        .execute(status -> {
+                        .execute(_ -> {
                             entityManager.clear();
                             return entityManager.find(RecoveryRequest.class, id);
                         });
@@ -240,7 +240,7 @@ class RecoveryRequestIT extends IntegrationEnvironment {
         UUID user = UUID.randomUUID();
         UUID workspace = UUID.randomUUID();
         new TransactionTemplate(transactionManager)
-                .executeWithoutResult(status -> {
+                .executeWithoutResult(_ -> {
                     jdbc.update(
                             "INSERT INTO user_account(id,keycloak_sub,username,email,"
                                     + "email_verified,origin,identity_state)"

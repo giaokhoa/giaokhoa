@@ -315,6 +315,12 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                 } else {
                     tx(() -> {
                         fence(fixture.partition(pending), 1);
+                        if (pending == PendingScope.ACCOUNT) {
+                            fence(fixture.workspacePartition(), 1);
+                            jdbc.update(
+                                    "UPDATE authz_projection SET state = 'PENDING' WHERE partition_id = ?",
+                                    fixture.workspacePartition());
+                        }
                         return null;
                     });
                 }
@@ -526,13 +532,13 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                             "UPDATE authz_partition SET state='PENDING' WHERE id=?",
                             actor.workspacePartition());
                     jdbc.update(
-                            "INSERT INTO authz_projection(id,partition_id,target_key,desired_hash,dependency_partition_ids)"
-                                    + " VALUES (?,?,?,?,ARRAY[?]::uuid[])",
-                            UUID.randomUUID(),
-                            actor.workspacePartition(),
-                            target,
+                            "UPDATE authz_projection SET desired_hash = ?,"
+                                    + " dependency_partition_ids = ARRAY[?]::uuid[], state = 'PENDING'"
+                                    + " WHERE partition_id = ? AND target_key = ?",
                             ProjectionReconciler.desiredHash(target, "enter", List.of(descriptor)),
-                            actor.account());
+                            actor.account(),
+                            actor.workspacePartition(),
+                            target);
                     return null;
                 });
                 reconciler.reconcilePartition(actor.workspacePartition());
@@ -585,6 +591,15 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
         nativeGate.provisionEligibilityForWorkerFixture();
         eligibility.synchronizeEligibility(actor.actor());
         reconciler.reconcilePartition(actor.account());
+        reconciler.reconcilePartition(actor.workspacePartition());
+        org.awaitility.Awaitility.await()
+                .atMost(java.time.Duration.ofSeconds(15))
+                .until(() ->
+                        jdbc.queryForList(
+                                        "SELECT id FROM authorization_operation WHERE initiator_user_id = ? AND state <> 'SUCCEEDED'",
+                                        UUID.class,
+                                        actor.actor())
+                                .isEmpty());
         UUID projection =
                 jdbc.queryForList(
                                 "SELECT id FROM authz_projection WHERE target_key=?",

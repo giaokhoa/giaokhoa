@@ -1,5 +1,6 @@
 package com.giaokhoa.identity;
 
+import com.giaokhoa.authorization.operation.IdempotencyService;
 import com.giaokhoa.identity.model.RecoveryRequest;
 import com.giaokhoa.shared.http.HttpProblemException;
 import java.time.Instant;
@@ -7,6 +8,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
@@ -16,16 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Workflow yêu cầu hỗ trợ khôi phục danh tính cho tài khoản không tự khôi phục được qua email.
- * Người dùng chỉ gửi yêu cầu cho chính mình; quản lý center chỉ gửi được cho thành viên của center
- * mình quản lý — đích ngoài phạm vi và đích không tồn tại đều trả cùng một 404 để không lộ sự tồn
- * tại của tài khoản. Chỉ platform operator mới xác minh/resolve (quyết định PDP ở endpoint);
- * service này ép thứ tự vòng đời REQUESTED → VERIFIED → RESOLVED/REJECTED bằng UPDATE có điều kiện
- * trạng thái, vì tầng DB chỉ khóa tính nhất quán của verified_by/resolved_at chứ không khóa thứ tự
- * chuyển. Service không bao giờ chạm vào credential hay origin của tài khoản đích: resolve không
- * cấp lại mật khẩu cho danh tính đã có và không đổi origin; credential của tài khoản không email do
- * operator đặt trực tiếp trên Keycloak sau khi yêu cầu đã RESOLVED, không đi qua response của
- * workflow này và không bao giờ trả cho center đã gửi yêu cầu.
+ * Workflow hỗ trợ: xác minh trước, xác nhận khôi phục và bàn giao qua kênh riêng rồi mới hoàn tất.
  */
 @Service
 public class RecoveryService {
@@ -37,13 +30,17 @@ public class RecoveryService {
 
     private final JdbcTemplate jdbc;
 
-    public RecoveryService(JdbcTemplate jdbc) {
+    private final IdempotencyService idempotency;
+
+    public RecoveryService(JdbcTemplate jdbc, IdempotencyService idempotency) {
         this.jdbc = jdbc;
+        this.idempotency = idempotency;
     }
 
     /** Quyết định của operator khi resolve, khớp hợp đồng resolve của platform recovery. */
     public enum Decision {
         APPROVE,
+        COMPLETE,
         REJECT
     }
 
@@ -58,7 +55,8 @@ public class RecoveryService {
             @Nullable UUID verifiedBy,
             @Nullable Instant resolvedAt,
             @Nullable String verificationNote,
-            Instant createdAt) {}
+            Instant createdAt,
+            long version) {}
 
     /**
      * Gửi yêu cầu hỗ trợ cho tài khoản đích. Không có workspace thì chỉ được gửi cho chính mình; có
@@ -70,12 +68,32 @@ public class RecoveryService {
         return submit(requesterUserId, targetUserId, workspaceId, null);
     }
 
-    /**
-     * Như {@link #submit(UUID, UUID, UUID)} nhưng giữ lại lý do người gửi cần hỗ trợ để operator
-     * thấy được khi xử lý. Lý do trống được coi như không có; dài quá 1000 ký tự thì từ chối.
-     */
     @Transactional
     public RequestView submit(
+            UUID requesterUserId,
+            UUID targetUserId,
+            @Nullable UUID workspaceId,
+            @Nullable String reason) {
+        return submitRequest(UUID.randomUUID(), requesterUserId, targetUserId, workspaceId, reason);
+    }
+
+    @Transactional
+    public RequestView submitOnce(
+            UUID requesterUserId,
+            UUID targetUserId,
+            @Nullable UUID workspaceId,
+            @Nullable String reason,
+            String key,
+            String hash) {
+        UUID id = UUID.randomUUID();
+        Optional<UUID> replay = replay(requesterUserId, key, hash, id, "SUBMIT");
+        return replay.isPresent()
+                ? loadView(replay.get())
+                : submitRequest(id, requesterUserId, targetUserId, workspaceId, reason);
+    }
+
+    private RequestView submitRequest(
+            UUID id,
             UUID requesterUserId,
             UUID targetUserId,
             @Nullable UUID workspaceId,
@@ -132,7 +150,6 @@ public class RecoveryService {
             }
         }
 
-        UUID id = UUID.randomUUID();
         jdbc.update(
                 "INSERT INTO recovery_request"
                         + " (id, requester_user_id, workspace_id, target_user_id, state, reason)"
@@ -150,7 +167,7 @@ public class RecoveryService {
     public List<RequestView> listRequests() {
         return jdbc.query(
                 "SELECT id, requester_user_id, workspace_id, target_user_id, reason, state,"
-                        + " verified_by, resolved_at, verification_note, created_at"
+                        + " verified_by, resolved_at, verification_note, created_at, version"
                         + " FROM recovery_request ORDER BY created_at ASC, id ASC",
                 REQUEST_MAPPER);
     }
@@ -180,12 +197,33 @@ public class RecoveryService {
         return loadView(requestId);
     }
 
-    /**
-     * Operator quyết định yêu cầu: APPROVE → RESOLVED, REJECT → REJECTED. Yêu cầu đang REQUESTED
-     * được ghi bước xác minh (verified_by và ghi chú của chính lần gọi này) ngay trước bước quyết
-     * định trong cùng transaction, nên resolved_at không bao giờ được ghi khi chưa có xác minh; yêu
-     * cầu đã ở trạng thái cuối trả 409.
-     */
+    /** Replay được kiểm tra trước version: retry của mutation đã commit phải trả lại biên nhận. */
+    @Transactional
+    public RequestView resolveOnce(
+            UUID operatorUserId,
+            UUID requestId,
+            Decision decision,
+            @Nullable String verificationNote,
+            String key,
+            String hash,
+            @Nullable String ifMatch) {
+        Optional<UUID> existing = replay(operatorUserId, key, hash, requestId, "RESOLVE");
+        if (existing.isPresent()) {
+            return loadView(existing.get());
+        }
+        List<Long> versions =
+                jdbc.queryForList(
+                        "SELECT version FROM recovery_request WHERE id = ? FOR UPDATE",
+                        Long.class,
+                        requestId);
+        if (versions.isEmpty()) {
+            throw requestNotFound();
+        }
+        idempotency.requireIfMatch(ifMatch, versions.getFirst());
+        return resolve(operatorUserId, requestId, decision, verificationNote);
+    }
+
+    /** APPROVE chỉ xác minh; COMPLETE là xác nhận của operator sau khi đã khôi phục và bàn giao. */
     @Transactional
     public RequestView resolve(
             UUID operatorUserId,
@@ -197,41 +235,68 @@ public class RecoveryService {
         Objects.requireNonNull(decision, "decision");
         requireAccount(operatorUserId);
         String note = normalizeNote(verificationNote);
-
+        if (decision != Decision.REJECT && note == null) {
+            throw new HttpProblemException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_VERIFICATION_NOTE",
+                    "Cần ghi nhận việc xác minh hoặc việc khôi phục và bàn giao đã hoàn tất.");
+        }
         RecoveryRequest.State current = currentState(requestId);
         if (current == RecoveryRequest.State.RESOLVED
                 || current == RecoveryRequest.State.REJECTED) {
             throw invalidState(requestId);
         }
-        if (current == RecoveryRequest.State.REQUESTED) {
-            int verified =
-                    jdbc.update(
-                            "UPDATE recovery_request SET state = 'VERIFIED', verified_by = ?,"
-                                    + " verification_note = ?, version = version + 1"
-                                    + " WHERE id = ? AND state = 'REQUESTED'",
-                            operatorUserId,
-                            note,
-                            requestId);
-            if (verified == 0) {
-                throw stateConflict(requestId);
-            }
+        if (decision == Decision.APPROVE) {
+            return verify(operatorUserId, requestId, note);
         }
-        String resolvedState =
-                decision == Decision.APPROVE
-                        ? RecoveryRequest.State.RESOLVED.name()
-                        : RecoveryRequest.State.REJECTED.name();
+        if (decision == Decision.COMPLETE && current != RecoveryRequest.State.VERIFIED) {
+            throw invalidState(requestId);
+        }
+        if (current == RecoveryRequest.State.REQUESTED) {
+            verify(operatorUserId, requestId, note);
+        }
+        String state = decision == Decision.COMPLETE ? "RESOLVED" : "REJECTED";
         int updated =
                 jdbc.update(
                         "UPDATE recovery_request SET state = ?, resolved_at = now(),"
-                                + " verification_note = COALESCE(?, verification_note),"
-                                + " version = version + 1 WHERE id = ? AND state = 'VERIFIED'",
-                        resolvedState,
+                                + " verification_note = COALESCE(?, verification_note), version = version + 1"
+                                + " WHERE id = ? AND state = 'VERIFIED'",
+                        state,
                         note,
                         requestId);
         if (updated == 0) {
             throw stateConflict(requestId);
         }
         return loadView(requestId);
+    }
+
+    private Optional<UUID> replay(
+            UUID actor, String key, String hash, UUID requestId, String kind) {
+        idempotency.requireKey(key);
+        int inserted =
+                jdbc.update(
+                        "INSERT INTO recovery_mutation(actor_user_id,idempotency_key,payload_hash,request_id,kind)"
+                                + " VALUES (?,?,?,?,?) ON CONFLICT (actor_user_id,idempotency_key) DO NOTHING",
+                        actor,
+                        key,
+                        hash,
+                        requestId,
+                        kind);
+        if (inserted != 0) {
+            return Optional.empty();
+        }
+        Map<String, Object> previous =
+                jdbc.queryForMap(
+                        "SELECT payload_hash, request_id FROM recovery_mutation WHERE actor_user_id = ? AND idempotency_key = ?",
+                        actor,
+                        key);
+        if (!hash.equals(previous.get("payload_hash"))) {
+            throw new HttpProblemException(
+                    HttpStatus.CONFLICT,
+                    "IDEMPOTENCY_CONFLICT",
+                    "Idempotency-Key đã dùng với yêu cầu khác.");
+        }
+        return Optional.of((UUID) Objects.requireNonNull(previous.get("request_id")));
     }
 
     private void requireAccount(UUID userId) {
@@ -259,7 +324,7 @@ public class RecoveryService {
         List<RequestView> rows =
                 jdbc.query(
                         "SELECT id, requester_user_id, workspace_id, target_user_id, reason, state,"
-                                + " verified_by, resolved_at, verification_note, created_at"
+                                + " verified_by, resolved_at, verification_note, created_at, version"
                                 + " FROM recovery_request WHERE id = ?",
                         REQUEST_MAPPER,
                         requestId);
@@ -348,6 +413,7 @@ public class RecoveryService {
                         resolvedAt == null ? null : resolvedAt.toInstant(),
                         rs.getString("verification_note"),
                         Objects.requireNonNull(rs.getObject("created_at", OffsetDateTime.class))
-                                .toInstant());
+                                .toInstant(),
+                        rs.getLong("version"));
             };
 }

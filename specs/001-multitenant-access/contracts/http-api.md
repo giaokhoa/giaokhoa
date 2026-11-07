@@ -70,7 +70,9 @@ Cấp học sinh mới tạo identity/temporary credential đồng bộ trước
 | `POST /api/platform/centers` | CenterCreate → OperationView | platform `center.create`; tạo Organization, workspace, owner membership và projection |
 | `POST /api/platform/subscriptions` | SubscriptionConfirm → OperationView | platform `subscription.confirm`; không gọi payment gateway |
 | `GET /api/platform/recovery-requests` | Danh sách yêu cầu hỗ trợ tối thiểu | platform `account.recover` |
-| `POST /api/platform/recovery-requests/{id}/resolve` | `{decision,verificationNote?}` → OperationView | platform `account.recover`; xác minh, đặt temporary credential an toàn hoặc từ chối; không gửi password cho center |
+| `POST /api/platform/recovery-requests/{id}/resolve` | `{decision:APPROVE/COMPLETE/REJECT,verificationNote?}` → OperationView | platform `account.recover`; APPROVE chỉ xác minh, COMPLETE xác nhận đã khôi phục/bàn giao, REJECT từ chối; không gửi password cho center |
+
+Recovery list trả thêm `version` cho từng yêu cầu. Resolve bắt buộc `Idempotency-Key` và `If-Match: "<version>"`; cùng key/body/version replay biên nhận, payload khác trả 409. APPROVE cần ghi chú xác minh và trả 202/PENDING, yêu cầu giữ VERIFIED. Operator khôi phục bằng Keycloak và bàn giao qua kênh riêng cho đúng người dùng; sau đó COMPLETE kèm ghi chú xác nhận mới ghi RESOLVED và trả completed=true. Chưa thực hiện xong thì giữ VERIFIED. Operator đã gửi mutation có thể poll biên nhận của mình qua operations; không trả credential trong list/poll/SSR.
 
 ## Thành viên trung tâm
 

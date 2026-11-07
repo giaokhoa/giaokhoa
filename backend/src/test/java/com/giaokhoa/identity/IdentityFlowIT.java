@@ -2,6 +2,7 @@ package com.giaokhoa.identity;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -262,6 +263,8 @@ class IdentityFlowIT extends IntegrationEnvironment {
                                     actor),
                             "personal workspace");
 
+            webContext.getBean(IdentityService.class).bootstrap(subject);
+            awaitIdentity(actor);
             try (var session = openSession(username, password, subject)) {
                 MockHttpServletResponse response =
                         mockMvc()
@@ -512,6 +515,494 @@ class IdentityFlowIT extends IntegrationEnvironment {
                 body.get("csrf").get("token").stringValue().isBlank(),
                 "Phiên ẩn danh vẫn nhận CSRF token để bắt đầu đăng nhập");
         assertFalse(body.has("user"), "Chưa đăng nhập thì không có thông tin người dùng");
+    }
+
+    @Test
+    void lostVerificationBlocksWorkspaceMetadataAndHistoryOnTheSameSession() throws Exception {
+        String username = "regression-eligibility-" + UUID.randomUUID();
+        String password = "Password1-" + UUID.randomUUID();
+        String subject =
+                createUser(keycloakUser(username, username + "@example.test", true, password));
+        try {
+            UUID actor = webContext.getBean(IdentityService.class).bootstrap(subject).userId();
+            awaitIdentity(actor);
+            UUID center = seedCenter(actor);
+            try (var session = openSession(username, password, subject)) {
+                assertEquals(
+                        200,
+                        mockMvc()
+                                .perform(get("/api/me/workspaces").cookie(session.cookie()))
+                                .andReturn()
+                                .getResponse()
+                                .getStatus());
+                assertEquals(
+                        200,
+                        mockMvc()
+                                .perform(get("/api/me/practice-history").cookie(session.cookie()))
+                                .andReturn()
+                                .getResponse()
+                                .getStatus());
+                updateProfile(subject, "changed-" + UUID.randomUUID() + "@example.test", false);
+                for (String path : List.of("/api/me/workspaces", "/api/me/practice-history")) {
+                    MockHttpServletResponse denied =
+                            mockMvc()
+                                    .perform(get(path).cookie(session.cookie()))
+                                    .andReturn()
+                                    .getResponse();
+                    assertTrue(
+                            denied.getStatus() == 403 || denied.getStatus() == 503,
+                            denied.getContentAsString());
+                    assertFalse(denied.getContentAsString().contains(center.toString()));
+                    assertFalse(denied.getContentAsString().contains("Flow test center"));
+                }
+                awaitIdentity(actor);
+                assertFalse(groupPathsOf(subject).contains(ELIGIBLE_GROUP));
+                setEmailVerified(subject, true);
+                webContext.getBean(IdentityService.class).bootstrap(subject);
+                awaitIdentity(actor);
+                assertEquals(
+                        200,
+                        mockMvc()
+                                .perform(get("/api/me/practice-history").cookie(session.cookie()))
+                                .andReturn()
+                                .getResponse()
+                                .getStatus());
+                webContext
+                        .getBean(
+                                com.giaokhoa.authorization.keycloak.KeycloakProvisioningClient
+                                        .class)
+                        .setRealmGroupMembership(subject, ELIGIBLE_GROUP, false);
+                for (String path : List.of("/api/me/workspaces", "/api/me/practice-history")) {
+                    assertEquals(
+                            403,
+                            mockMvc()
+                                    .perform(get(path).cookie(session.cookie()))
+                                    .andReturn()
+                                    .getResponse()
+                                    .getStatus());
+                }
+            }
+        } finally {
+            deleteUser(subject);
+        }
+    }
+
+    @Test
+    void pendingOrFailedPersonalPartitionBlocksBothProfileReadEndpoints() throws Exception {
+        String username = "regression-fence-" + UUID.randomUUID();
+        String password = "Password1-" + UUID.randomUUID();
+        String subject =
+                createUser(keycloakUser(username, username + "@example.test", true, password));
+        try {
+            var actor = webContext.getBean(IdentityService.class).bootstrap(subject);
+            awaitIdentity(actor.userId());
+            try (var session = openSession(username, password, subject)) {
+                for (String state : List.of("PENDING", "FAILED")) {
+                    jdbc.update(
+                            "UPDATE authz_partition SET state = ? WHERE owner_key = ?",
+                            state,
+                            "workspace:" + actor.personalWorkspaceId());
+                    for (String path : List.of("/api/me/workspaces", "/api/me/practice-history")) {
+                        assertEquals(
+                                503,
+                                mockMvc()
+                                        .perform(get(path).cookie(session.cookie()))
+                                        .andReturn()
+                                        .getResponse()
+                                        .getStatus());
+                    }
+                }
+            }
+        } finally {
+            deleteUser(subject);
+        }
+    }
+
+    @Test
+    void bootstrapConvergesAndConcurrentFirstRequestsShareOneIdentity() throws Exception {
+        String username = "regression-bootstrap-" + UUID.randomUUID();
+        String subject = createUser(keycloakUser(username, username + "@example.test", true));
+        try {
+            var start = new java.util.concurrent.CountDownLatch(1);
+            var identities = webContext.getBean(IdentityService.class);
+            try (var threads = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+                var first =
+                        threads.submit(() -> {
+                            start.await();
+                            return identities.bootstrap(subject);
+                        });
+                var second =
+                        threads.submit(() -> {
+                            start.await();
+                            return identities.bootstrap(subject);
+                        });
+                start.countDown();
+                var a = first.get(30, java.util.concurrent.TimeUnit.SECONDS);
+                var b = second.get(30, java.util.concurrent.TimeUnit.SECONDS);
+                assertEquals(a.userId(), b.userId());
+                assertEquals(a.personalWorkspaceId(), b.personalWorkspaceId());
+                assertNotEquals(a.created(), b.created());
+                awaitIdentity(a.userId());
+                assertTrue(groupPathsOf(subject).contains(ELIGIBLE_GROUP));
+                assertEquals(
+                        2,
+                        jdbc.queryForObject(
+                                "SELECT count(*) FROM authz_partition WHERE owner_key IN (?,?) AND state = 'READY'",
+                                Integer.class,
+                                "account:" + a.userId(),
+                                "workspace:" + a.personalWorkspaceId()));
+                assertEquals(
+                        1,
+                        jdbc.queryForObject(
+                                "SELECT count(*) FROM authorization_operation WHERE initiator_user_id = ?",
+                                Integer.class,
+                                a.userId()));
+                assertFalse(identities.bootstrap(subject).created());
+                assertEquals(
+                        1,
+                        jdbc.queryForObject(
+                                "SELECT count(*) FROM authorization_operation WHERE initiator_user_id = ?",
+                                Integer.class,
+                                a.userId()));
+                var resource =
+                        webContext
+                                .getBean(com.giaokhoa.authorization.policy.PolicyGraphWriter.class)
+                                .findResourceId("account:" + a.userId())
+                                .orElseThrow();
+                assertNotNull(resource);
+                assertTrue(
+                        webContext
+                                .getBean(
+                                        com.giaokhoa.authorization.projection.ProjectionReconciler
+                                                .class)
+                                .verifyStoredGraph(
+                                        Objects.requireNonNull(
+                                                jdbc.queryForObject(
+                                                        "SELECT id FROM authz_partition WHERE owner_key = ?",
+                                                        UUID.class,
+                                                        "account:" + a.userId()))));
+            }
+        } finally {
+            deleteUser(subject);
+        }
+    }
+
+    @Test
+    void recoveryHttpRetriesReplayAndPreconditionsAreRequired() throws Exception {
+        String username = "regression-replay-" + UUID.randomUUID();
+        String password = "Password1-" + UUID.randomUUID();
+        String subject =
+                createUser(keycloakUser(username, username + "@example.test", true, password));
+        try {
+            UUID actor = seedAccount(subject, "SELF_REGISTERED", username + "@example.test", true);
+            try (var session = openSession(username, password, subject)) {
+                String body =
+                        JSON.writeValueAsString(
+                                Map.of("targetUserId", actor, "reason", "Quên mật khẩu"));
+                String key = "retry-" + UUID.randomUUID();
+                MockHttpServletResponse missing =
+                        mockMvc()
+                                .perform(
+                                        post("/api/me/recovery-requests")
+                                                .cookie(session.cookie())
+                                                .with(csrf())
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(body))
+                                .andReturn()
+                                .getResponse();
+                assertEquals(428, missing.getStatus());
+                MockHttpServletResponse first =
+                        mockMvc()
+                                .perform(
+                                        post("/api/me/recovery-requests")
+                                                .cookie(session.cookie())
+                                                .with(csrf())
+                                                .header("Idempotency-Key", key)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(body))
+                                .andReturn()
+                                .getResponse();
+                MockHttpServletResponse second =
+                        mockMvc()
+                                .perform(
+                                        post("/api/me/recovery-requests")
+                                                .cookie(session.cookie())
+                                                .with(csrf())
+                                                .header("Idempotency-Key", key)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(body))
+                                .andReturn()
+                                .getResponse();
+                assertEquals(202, first.getStatus(), first.getContentAsString());
+                assertEquals(first.getContentAsString(), second.getContentAsString());
+                assertEquals(
+                        1,
+                        jdbc.queryForObject(
+                                "SELECT count(*) FROM recovery_request WHERE requester_user_id = ?",
+                                Integer.class,
+                                actor));
+                MockHttpServletResponse conflict =
+                        mockMvc()
+                                .perform(
+                                        post("/api/me/recovery-requests")
+                                                .cookie(session.cookie())
+                                                .with(csrf())
+                                                .header("Idempotency-Key", key)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(
+                                                        JSON.writeValueAsString(
+                                                                Map.of(
+                                                                        "targetUserId",
+                                                                        UUID.randomUUID(),
+                                                                        "reason",
+                                                                        "Quên mật khẩu"))))
+                                .andReturn()
+                                .getResponse();
+                assertEquals(409, conflict.getStatus());
+                var changedReason =
+                        mockMvc()
+                                .perform(
+                                        post("/api/me/recovery-requests")
+                                                .cookie(session.cookie())
+                                                .with(csrf())
+                                                .header("Idempotency-Key", key)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(
+                                                        JSON.writeValueAsString(
+                                                                Map.of(
+                                                                        "targetUserId",
+                                                                        actor,
+                                                                        "reason",
+                                                                        "Lý do khác"))))
+                                .andReturn()
+                                .getResponse();
+                assertEquals(409, changedReason.getStatus());
+
+                var service = webContext.getBean(RecoveryService.class);
+                var start = new java.util.concurrent.CountDownLatch(1);
+                String concurrentKey = "concurrent-" + UUID.randomUUID();
+                try (var threads =
+                        java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+                    var one =
+                            threads.submit(() -> {
+                                start.await();
+                                return service.submitOnce(
+                                        actor,
+                                        actor,
+                                        null,
+                                        "Khôi phục đăng nhập",
+                                        concurrentKey,
+                                        "a".repeat(64));
+                            });
+                    var two =
+                            threads.submit(() -> {
+                                start.await();
+                                return service.submitOnce(
+                                        actor,
+                                        actor,
+                                        null,
+                                        "Khôi phục đăng nhập",
+                                        concurrentKey,
+                                        "a".repeat(64));
+                            });
+                    start.countDown();
+                    assertEquals(
+                            one.get(20, java.util.concurrent.TimeUnit.SECONDS).id(),
+                            two.get(20, java.util.concurrent.TimeUnit.SECONDS).id());
+                }
+                assertEquals(
+                        2,
+                        jdbc.queryForObject(
+                                "SELECT count(*) FROM recovery_request WHERE requester_user_id = ?",
+                                Integer.class,
+                                actor));
+            }
+        } finally {
+            deleteUser(subject);
+        }
+    }
+
+    @Test
+    void operatorApprovalKeepsRecoveryPendingUntilConfirmedDelivery() throws Exception {
+        String username = "regression-operator-" + UUID.randomUUID();
+        String password = "Password1-" + UUID.randomUUID();
+        String subject =
+                createUser(keycloakUser(username, username + "@example.test", true, password));
+        String targetSubject =
+                createUser(
+                        keycloakUser(
+                                "regression-target-" + UUID.randomUUID(),
+                                null,
+                                false,
+                                "Password1-" + UUID.randomUUID()));
+        var writer = webContext.getBean(com.giaokhoa.authorization.policy.PolicyGraphWriter.class);
+        try {
+            seedAccount(subject, "SELF_REGISTERED", username + "@example.test", true);
+            UUID target = seedAccount(targetSubject, "CENTER_ISSUED", null, false);
+            var submitted = webContext.getBean(RecoveryService.class).submit(target, target, null);
+            writer.apply(
+                    new com.giaokhoa.authorization.policy.PolicyGraph(
+                            "platform",
+                            "account.recover",
+                            List.of(),
+                            List.of(
+                                    com.giaokhoa.authorization.policy.PolicyGraph.Source.of(
+                                            new com.giaokhoa.authorization.policy.PolicyGraph.Gate
+                                                    .Actor(subject)))));
+            try (var session = openSession(username, password, subject)) {
+                String path = "/api/platform/recovery-requests/" + submitted.id() + "/resolve";
+                String key = "approve-" + UUID.randomUUID();
+                var early =
+                        mockMvc()
+                                .perform(
+                                        post(path)
+                                                .cookie(session.cookie())
+                                                .with(csrf())
+                                                .header(
+                                                        "Idempotency-Key",
+                                                        "early-" + UUID.randomUUID())
+                                                .header("If-Match", "\"0\"")
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(
+                                                        "{\"decision\":\"COMPLETE\",\"verificationNote\":\"Đã bàn giao\"}"))
+                                .andReturn()
+                                .getResponse();
+                assertEquals(409, early.getStatus());
+
+                String approval =
+                        "{\"decision\":\"APPROVE\",\"verificationNote\":\"Đã xác minh đúng chủ tài khoản\"}";
+                var missing =
+                        mockMvc()
+                                .perform(
+                                        post(path)
+                                                .cookie(session.cookie())
+                                                .with(csrf())
+                                                .header("Idempotency-Key", key)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(approval))
+                                .andReturn()
+                                .getResponse();
+                assertEquals(428, missing.getStatus());
+                var approved =
+                        mockMvc()
+                                .perform(
+                                        post(path)
+                                                .cookie(session.cookie())
+                                                .with(csrf())
+                                                .header("Idempotency-Key", key)
+                                                .header("If-Match", "\"0\"")
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(approval))
+                                .andReturn()
+                                .getResponse();
+                assertEquals(202, approved.getStatus(), approved.getContentAsString());
+                assertFalse(
+                        JSON.readTree(approved.getContentAsString())
+                                .get("completed")
+                                .booleanValue());
+                assertEquals(
+                        "VERIFIED",
+                        jdbc.queryForObject(
+                                "SELECT state FROM recovery_request WHERE id = ?",
+                                String.class,
+                                submitted.id()));
+                var replay =
+                        mockMvc()
+                                .perform(
+                                        post(path)
+                                                .cookie(session.cookie())
+                                                .with(csrf())
+                                                .header("Idempotency-Key", key)
+                                                .header("If-Match", "\"0\"")
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(approval))
+                                .andReturn()
+                                .getResponse();
+                assertEquals(approved.getContentAsString(), replay.getContentAsString());
+                var poll =
+                        mockMvc()
+                                .perform(
+                                        get("/api/me/operations/" + submitted.id())
+                                                .cookie(session.cookie()))
+                                .andReturn()
+                                .getResponse();
+                assertEquals(200, poll.getStatus());
+                assertEquals(
+                        "PENDING",
+                        JSON.readTree(poll.getContentAsString()).get("state").stringValue());
+                String completion =
+                        "{\"decision\":\"COMPLETE\",\"verificationNote\":\"Đã khôi phục và bàn giao qua kênh riêng\"}";
+                var stale =
+                        mockMvc()
+                                .perform(
+                                        post(path)
+                                                .cookie(session.cookie())
+                                                .with(csrf())
+                                                .header(
+                                                        "Idempotency-Key",
+                                                        "stale-" + UUID.randomUUID())
+                                                .header("If-Match", "\"0\"")
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(completion))
+                                .andReturn()
+                                .getResponse();
+                assertEquals(409, stale.getStatus());
+                // Mô phỏng công việc operator thực hiện ở console, không gửi credential qua app.
+                HTTP.put()
+                        .uri(admin("/users/" + targetSubject + "/reset-password"))
+                        .headers(h -> h.setBearerAuth(masterToken()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(
+                                Map.of(
+                                        "type",
+                                        "password",
+                                        "value",
+                                        "Recovered1-" + UUID.randomUUID(),
+                                        "temporary",
+                                        true))
+                        .retrieve()
+                        .toBodilessEntity();
+                var completed =
+                        mockMvc()
+                                .perform(
+                                        post(path)
+                                                .cookie(session.cookie())
+                                                .with(csrf())
+                                                .header(
+                                                        "Idempotency-Key",
+                                                        "complete-" + UUID.randomUUID())
+                                                .header("If-Match", "\"1\"")
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(completion))
+                                .andReturn()
+                                .getResponse();
+                assertEquals(200, completed.getStatus(), completed.getContentAsString());
+                assertTrue(
+                        JSON.readTree(completed.getContentAsString())
+                                .get("completed")
+                                .booleanValue());
+                assertEquals(
+                        "RESOLVED",
+                        jdbc.queryForObject(
+                                "SELECT state FROM recovery_request WHERE id = ?",
+                                String.class,
+                                submitted.id()));
+            }
+        } finally {
+            writer.retractRoot("platform", "account.recover");
+            deleteUser(subject);
+            deleteUser(targetSubject);
+        }
+    }
+
+    private void awaitIdentity(UUID actor) {
+        for (UUID operation :
+                jdbc.queryForList(
+                        "SELECT id FROM authorization_operation WHERE initiator_user_id = ?",
+                        UUID.class,
+                        actor)) {
+            awaitSucceeded(operation);
+        }
     }
 
     // ---------- Dữ kiện thư mục ----------

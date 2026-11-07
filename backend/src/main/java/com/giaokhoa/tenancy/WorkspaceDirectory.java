@@ -45,7 +45,7 @@ public class WorkspaceDirectory {
                         + " OR (w.kind = 'CENTER' AND EXISTS (SELECT 1 FROM center_membership m"
                         + " WHERE m.workspace_id = w.id AND m.user_id = ? AND m.state = 'ACTIVE')))"
                         + " ORDER BY CASE w.kind WHEN 'PERSONAL' THEN 0 ELSE 1 END, w.id",
-                (rows, _rowNum) ->
+                (rows, _) ->
                         new ListedWorkspace(
                                 (UUID) Objects.requireNonNull(rows.getObject("id"), "id"),
                                 Workspace.Kind.valueOf(

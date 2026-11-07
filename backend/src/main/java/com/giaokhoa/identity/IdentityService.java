@@ -1,5 +1,7 @@
 package com.giaokhoa.identity;
 
+import com.giaokhoa.authorization.policy.ResourceMutationCoordinator;
+import com.giaokhoa.identity.eligibility.IdentityEligibilitySynchronizer;
 import com.giaokhoa.identity.keycloak.CurrentIdentityClient;
 import com.giaokhoa.identity.keycloak.CurrentIdentityClient.CurrentIdentity;
 import com.giaokhoa.identity.model.UserAccount;
@@ -30,9 +32,18 @@ public class IdentityService {
     private final JdbcTemplate jdbc;
     private final CurrentIdentityClient identities;
 
-    public IdentityService(JdbcTemplate jdbc, CurrentIdentityClient identities) {
+    private final ResourceMutationCoordinator coordinator;
+    private final IdentityEligibilitySynchronizer eligibility;
+
+    public IdentityService(
+            JdbcTemplate jdbc,
+            CurrentIdentityClient identities,
+            ResourceMutationCoordinator coordinator,
+            IdentityEligibilitySynchronizer eligibility) {
         this.jdbc = jdbc;
         this.identities = identities;
+        this.coordinator = coordinator;
+        this.eligibility = eligibility;
     }
 
     /** Kết quả bootstrap: user và personal workspace của actor, kèm cờ account mới tạo. */
@@ -59,7 +70,6 @@ public class IdentityService {
      * username và identity_state. Profile không đọc được, subject không khớp, account bị vô hiệu
      * hay verified mà không có email đều fail-closed 503 và không ghi gì.
      */
-    @Transactional
     public BootstrapResult bootstrap(String keycloakSub) {
         Objects.requireNonNull(keycloakSub, "keycloakSub");
         if (keycloakSub.isBlank()) {
@@ -74,6 +84,16 @@ public class IdentityService {
             throw unavailable(null);
         }
 
+        return coordinator.withResourceLock(
+                "identity-bootstrap:" + keycloakSub,
+                () -> {
+                    BootstrapResult result = bootstrapCurrent(keycloakSub, current);
+                    eligibility.synchronizeEligibility(result.userId());
+                    return result;
+                });
+    }
+
+    private BootstrapResult bootstrapCurrent(String keycloakSub, CurrentIdentity current) {
         List<Map<String, Object>> accounts =
                 jdbc.queryForList(
                         "SELECT id, username, origin FROM user_account WHERE keycloak_sub = ?",
@@ -166,7 +186,7 @@ public class IdentityService {
         CurrentIdentity current;
         try {
             current = identities.readCurrentIdentity(keycloakSub);
-        } catch (RestClientException | OAuth2AuthorizationException ex) {
+        } catch (RestClientException | OAuth2AuthorizationException | IllegalStateException ex) {
             throw unavailable(ex);
         }
         if (!keycloakSub.equals(current.id())) {

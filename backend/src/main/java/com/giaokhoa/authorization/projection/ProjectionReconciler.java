@@ -3,6 +3,7 @@ package com.giaokhoa.authorization.projection;
 import com.giaokhoa.authorization.keycloak.KeycloakProvisioningClient;
 import com.giaokhoa.authorization.model.AuthorizationPartition;
 import com.giaokhoa.authorization.model.AuthorizationProjection;
+import com.giaokhoa.authorization.permission.PermissionCatalog;
 import com.giaokhoa.authorization.policy.NativePolicyTemplates;
 import com.giaokhoa.authorization.policy.PolicyGraph;
 import com.giaokhoa.authorization.policy.PolicyGraphWriter;
@@ -219,9 +220,29 @@ public class ProjectionReconciler {
             ProjectionRow projection = projections.get(i);
             Resolved step = resolved.get(i);
             if (step instanceof Resolved.Apply apply) {
-                outcomes.add(new Outcome(projection, step, writer.apply(apply.graph())));
+                AppliedGraph applied = null;
+                for (String scope : projectedScopes(projection.targetKey(), apply.scope())) {
+                    PolicyGraph graph =
+                            new PolicyGraph(
+                                    projection.targetKey(),
+                                    scope,
+                                    apply.graph().commonGates(),
+                                    apply.graph().sources());
+                    AppliedGraph next = writer.apply(graph);
+                    if (applied != null
+                            && (!applied.resourceId().equals(next.resourceId())
+                                    || !applied.policyNames().equals(next.policyNames()))) {
+                        throw new ReconciliationException(
+                                ERROR_DESIRED_SOURCE_MISMATCH,
+                                "Profile permissions must share the same identity source");
+                    }
+                    applied = next;
+                }
+                outcomes.add(new Outcome(projection, step, Objects.requireNonNull(applied)));
             } else if (step instanceof Resolved.Retract retract) {
-                writer.retractRoot(projection.targetKey(), retract.scope());
+                for (String scope : projectedScopes(projection.targetKey(), retract.scope())) {
+                    writer.retractRoot(projection.targetKey(), scope);
+                }
                 outcomes.add(new Outcome(projection, step, null));
             }
         }
@@ -299,12 +320,17 @@ public class ProjectionReconciler {
             Resolved.Apply apply = (Resolved.Apply) resolved;
             boolean intact;
             try {
-                intact =
-                        writer.isGraphIntact(
-                                projection.targetKey(),
-                                apply.scope(),
-                                projection.keycloakResourceId(),
-                                projection.policyNames());
+                intact = true;
+                for (String scope : projectedScopes(projection.targetKey(), apply.scope())) {
+                    if (!writer.isGraphIntact(
+                            projection.targetKey(),
+                            scope,
+                            projection.keycloakResourceId(),
+                            projection.policyNames())) {
+                        intact = false;
+                        break;
+                    }
+                }
             } catch (RestClientException
                     | IllegalStateException
                     | OAuth2AuthorizationException ex) {
@@ -475,12 +501,30 @@ public class ProjectionReconciler {
                 + "|target="
                 + targetKey
                 + "|scope="
-                + scope;
+                + scope
+                + profileBundleDescriptor(targetKey, scope);
+    }
+
+    // Hai scope đọc của US1 dùng cùng actor và eligibility; một checkpoint ghi theo target.
+    private static List<String> projectedScopes(String targetKey, String scope) {
+        return targetKey.startsWith("account:")
+                        && PermissionCatalog.ProfileScope.WORKSPACE_LIST.scopeName().equals(scope)
+                ? List.of(scope, PermissionCatalog.ProfileScope.HISTORY_READ.scopeName())
+                : List.of(scope);
+    }
+
+    private static String profileBundleDescriptor(String targetKey, String scope) {
+        List<String> scopes = projectedScopes(targetKey, scope);
+        return scopes.size() > 1 ? "|scopes=" + String.join(",", scopes) : "";
     }
 
     /** Canonical descriptor của một graph không còn được tồn tại cho cặp đó nữa. */
     public static String retractDescriptor(String targetKey, String scope) {
-        return "RETRACT|target=" + targetKey + "|scope=" + scope;
+        return "RETRACT|target="
+                + targetKey
+                + "|scope="
+                + scope
+                + profileBundleDescriptor(targetKey, scope);
     }
 
     /**
