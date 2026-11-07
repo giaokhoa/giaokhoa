@@ -4,6 +4,11 @@ spring:
     url: ${TEST_DATABASE_URL}
     username: ${TEST_DATABASE_USERNAME}
     password: ${TEST_DATABASE_PASSWORD}
+    # Mỗi class IT giữ một ApplicationContext riêng trong cache của Spring tới hết suite;
+    # pool mặc định 10 connection cho mỗi context sẽ vượt trần 100 connection của PostgreSQL TEST.
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
   flyway:
     enabled: true
     clean-disabled: true
