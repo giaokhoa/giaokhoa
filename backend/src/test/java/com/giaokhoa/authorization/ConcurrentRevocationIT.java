@@ -794,16 +794,15 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                         webContext.containsBean("projectionWorker"),
                         "REVOCATION_CONTRACT_WORKER_NOT_INSTALLED: the reconciliation worker must resume owner source through"
                                 + " production PolicyGraphWriter/ProjectionReconciler");
-                awaitCondition(
-                        () ->
-                                "READY".equals(state(actor.workspacePartition()))
-                                        && "SUCCEEDED"
-                                                .equals(
-                                                        jdbc.queryForObject(
-                                                                "SELECT state FROM authorization_operation"
-                                                                        + " WHERE id=?",
-                                                                String.class,
-                                                                operation.getId())));
+                awaitCondition(() ->
+                        "READY".equals(state(actor.workspacePartition()))
+                                && "SUCCEEDED"
+                                        .equals(
+                                                jdbc.queryForObject(
+                                                        "SELECT state FROM authorization_operation"
+                                                                + " WHERE id=?",
+                                                        String.class,
+                                                        operation.getId())));
                 assertAll(
                         "REVOCATION_CONTRACT_REAL_WORKER_PARTIAL_GRAPH_RECOVERY",
                         () ->
@@ -1185,10 +1184,9 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
         // Awaitility during() giữ điều kiện liên tục suốt khoảng chờ thay cho ngủ cố định.
         await().during(Duration.ofSeconds(8))
                 .atMost(Duration.ofSeconds(10))
-                .until(
-                        () ->
-                                "PENDING".equals(operationState(younger))
-                                        && operationAttempts(younger) == 0);
+                .until(() ->
+                        "PENDING".equals(operationState(younger))
+                                && operationAttempts(younger) == 0);
         assertEquals("PENDING", operationState(younger));
         assertEquals(0, operationAttempts(younger));
 

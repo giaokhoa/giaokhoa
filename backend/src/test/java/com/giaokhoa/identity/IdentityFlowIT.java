@@ -21,7 +21,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HashMap;
@@ -93,6 +92,7 @@ class IdentityFlowIT extends IntegrationEnvironment {
     private static final RestClient HTTP = RestClient.create();
     private static final String BASE = fixture("TEST_KEYCLOAK_BASE_URL").replaceAll("/+$", "");
     private static final String REALM = fixture("TEST_KEYCLOAK_REALM");
+
     @DynamicPropertySource
     static void isolatedSchema(DynamicPropertyRegistry registry) {
         isolatedSchema(registry, SCHEMA);

@@ -14,9 +14,9 @@ import org.springframework.web.client.RestClientResponseException;
 /**
  * Nền realm dùng chung của các integration test: cây group eligibility và client resource-server
  * của realm TEST. Đây là object nền cấp realm (cùng vai trò bootstrap.sh ở production) — test chỉ
- * tạo khi thiếu, không bao giờ xóa ở teardown, vì không class nào sở hữu vòng đời của chúng.
- * Token admin được cấp qua {@link Supplier} để từng nơi gọi giữ nguyên nhịp lấy token của mình
- * (lấy mới mỗi request hoặc dùng bản đã cấp một lần).
+ * tạo khi thiếu, không bao giờ xóa ở teardown, vì không class nào sở hữu vòng đời của chúng. Token
+ * admin được cấp qua {@link Supplier} để từng nơi gọi giữ nguyên nhịp lấy token của mình (lấy mới
+ * mỗi request hoặc dùng bản đã cấp một lần).
  */
 public final class RealmFoundation {
     private static final ParameterizedTypeReference<Map<String, Object>> MAP =
@@ -61,9 +61,7 @@ public final class RealmFoundation {
                         parentId == null ? "/groups" : "/groups/" + parentId + "/children";
                 // Cây /gk/identity/eligible là object nền của realm: chỉ tạo khi thiếu, không
                 // bao giờ xóa ở teardown — nhiều class dùng chung đường dẫn cố định này.
-                found =
-                        createResource(
-                                http, adminBase + endpoint, token, Map.of("name", segment));
+                found = createResource(http, adminBase + endpoint, token, Map.of("name", segment));
             }
             parentId = found;
         }

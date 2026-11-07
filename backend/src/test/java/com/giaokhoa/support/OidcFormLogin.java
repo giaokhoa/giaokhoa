@@ -29,9 +29,9 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.RestClient;
 
 /**
- * Đăng nhập form OIDC Authorization Code + PKCE qua Keycloak TEST cho client web của ứng dụng —
- * bản dùng chung thay các bản sao trước đây ở IdentityFlowIT và NativeRevocationFixture. Chỉ chấp
- * nhận đúng client BFF của stack TEST; không dùng Direct Access Grants cho phiên web.
+ * Đăng nhập form OIDC Authorization Code + PKCE qua Keycloak TEST cho client web của ứng dụng — bản
+ * dùng chung thay các bản sao trước đây ở IdentityFlowIT và NativeRevocationFixture. Chỉ chấp nhận
+ * đúng client BFF của stack TEST; không dùng Direct Access Grants cho phiên web.
  */
 public final class OidcFormLogin {
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -115,8 +115,7 @@ public final class OidcFormLogin {
                     browser.send(
                             HttpRequest.newBuilder(URI.create(loginUrl))
                                     .header("Cookie", loginCookies)
-                                    .header(
-                                            "Content-Type", "application/x-www-form-urlencoded")
+                                    .header("Content-Type", "application/x-www-form-urlencoded")
                                     .POST(
                                             HttpRequest.BodyPublishers.ofString(
                                                     "username="
@@ -154,7 +153,8 @@ public final class OidcFormLogin {
             var exchange = new LinkedMultiValueMap<String, String>();
             exchange.add("grant_type", "authorization_code");
             exchange.add("client_id", client);
-            exchange.add("client_secret", IntegrationEnvironment.required("TEST_OIDC_CLIENT_SECRET"));
+            exchange.add(
+                    "client_secret", IntegrationEnvironment.required("TEST_OIDC_CLIENT_SECRET"));
             exchange.add("redirect_uri", redirectUri);
             exchange.add("code", code);
             exchange.add("code_verifier", verifier);
@@ -169,8 +169,7 @@ public final class OidcFormLogin {
             return new WebTokens(
                     Objects.requireNonNull((String) tokens.get("access_token"), "access_token"),
                     Objects.requireNonNull((String) tokens.get("id_token"), "id_token"),
-                    Objects.requireNonNull(
-                            (String) tokens.get("refresh_token"), "refresh_token"));
+                    Objects.requireNonNull((String) tokens.get("refresh_token"), "refresh_token"));
         } catch (IOException exception) {
             throw new IllegalStateException("Native TEST Code+PKCE login failed", exception);
         } catch (InterruptedException exception) {

@@ -105,23 +105,22 @@ public abstract class IntegrationEnvironment { // NOPMD - Lớp base TEST để 
         try {
             await().atMost(Duration.ofSeconds(60))
                     .pollInterval(Duration.ofMillis(250))
-                    .until(
-                            () -> {
-                                try (PreparedStatement locks =
-                                        connection.prepareStatement(
-                                                "SELECT count(*) FROM pg_locks l"
-                                                        + " JOIN pg_class c ON c.oid = l.relation"
-                                                        + " JOIN pg_namespace n ON n.oid = c.relnamespace"
-                                                        + " WHERE n.nspname = ? AND l.pid <> pg_backend_pid()")) {
-                                    locks.setString(1, schema);
-                                    try (ResultSet result = locks.executeQuery()) {
-                                        return result.next() && result.getLong(1) == 0;
-                                    }
-                                } catch (SQLException ex) {
-                                    queryFailure.set(ex);
-                                    return true;
-                                }
-                            });
+                    .until(() -> {
+                        try (PreparedStatement locks =
+                                connection.prepareStatement(
+                                        "SELECT count(*) FROM pg_locks l"
+                                                + " JOIN pg_class c ON c.oid = l.relation"
+                                                + " JOIN pg_namespace n ON n.oid = c.relnamespace"
+                                                + " WHERE n.nspname = ? AND l.pid <> pg_backend_pid()")) {
+                            locks.setString(1, schema);
+                            try (ResultSet result = locks.executeQuery()) {
+                                return result.next() && result.getLong(1) == 0;
+                            }
+                        } catch (SQLException ex) {
+                            queryFailure.set(ex);
+                            return true;
+                        }
+                    });
         } catch (ConditionTimeoutException ex) {
             // Hết 60 giây mà khóa chưa tan: giữ hành vi cũ — trả về để lệnh DROP tự xử lý.
             return;
@@ -134,8 +133,8 @@ public abstract class IntegrationEnvironment { // NOPMD - Lớp base TEST để 
     /**
      * Chờ operation do worker thật xử lý tới SUCCEEDED bằng Awaitility (poll 500 ms, tối đa 90
      * giây) — bản dùng chung thay hai bản sao viết tay trước đây ở IdentityFlowIT và
-     * IdentityEligibilitySynchronizerIT. FAILED dừng chờ ngay và báo kèm mã lỗi; lỗi truy vấn
-     * trạng thái được ném lại nguyên vẹn, đúng hành vi vòng poll cũ.
+     * IdentityEligibilitySynchronizerIT. FAILED dừng chờ ngay và báo kèm mã lỗi; lỗi truy vấn trạng
+     * thái được ném lại nguyên vẹn, đúng hành vi vòng poll cũ.
      */
     protected static void awaitOperationSucceeded(JdbcTemplate jdbc, UUID operationId) {
         AtomicReference<Object> failureCode = new AtomicReference<>();
@@ -143,23 +142,22 @@ public abstract class IntegrationEnvironment { // NOPMD - Lớp base TEST để 
         try {
             await().atMost(Duration.ofSeconds(90))
                     .pollInterval(Duration.ofMillis(500))
-                    .until(
-                            () -> {
-                                try {
-                                    Map<String, Object> row =
-                                            jdbc.queryForMap(
-                                                    "SELECT state, last_error_code FROM authorization_operation WHERE id = ?",
-                                                    operationId);
-                                    if ("FAILED".equals(String.valueOf(row.get("state")))) {
-                                        failureCode.set(row.get("last_error_code"));
-                                        return true;
-                                    }
-                                    return "SUCCEEDED".equals(String.valueOf(row.get("state")));
-                                } catch (RuntimeException ex) {
-                                    queryFailure.set(ex);
-                                    return true;
-                                }
-                            });
+                    .until(() -> {
+                        try {
+                            Map<String, Object> row =
+                                    jdbc.queryForMap(
+                                            "SELECT state, last_error_code FROM authorization_operation WHERE id = ?",
+                                            operationId);
+                            if ("FAILED".equals(String.valueOf(row.get("state")))) {
+                                failureCode.set(row.get("last_error_code"));
+                                return true;
+                            }
+                            return "SUCCEEDED".equals(String.valueOf(row.get("state")));
+                        } catch (RuntimeException ex) {
+                            queryFailure.set(ex);
+                            return true;
+                        }
+                    });
         } catch (ConditionTimeoutException ex) {
             fail("Operation did not succeed in time: " + operationId);
         }
