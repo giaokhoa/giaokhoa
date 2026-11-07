@@ -110,8 +110,9 @@ async function dangNhapLai(
 // Lần mutation được bảo vệ đầu tiên của actor mới trả 503 AUTHORIZATION_NOT_READY:
 // partition ACCOUNT mới bootstrap ở PENDING, ProtectedActionExecutor đồng bộ eligibility
 // rồi fence chặn cho tới khi worker chiếu xong. Chỉ thử lại đúng mã này, tối đa 60 giây;
-// 503 xảy ra trước khi endpoint ghi operation của nó nên mỗi lần thử dùng Idempotency-Key
-// mới là an toàn; tuyệt đối không thử lại 400/403/409 hay 503 với mã khác (vd: PDP lỗi).
+// 503 xảy ra trước khi endpoint ghi operation của nó nên key chưa từng được ghi — giữ
+// nguyên key qua mọi lần thử để lần retry tường minh sau đó vẫn tra đúng operation;
+// tuyệt đối không thử lại 400/403/409 hay 503 với mã khác (vd: PDP lỗi).
 const THOI_GIAN_CHO_FENCE_MS = 60_000;
 const KHOANG_CHO_FENCE_MS = 1_000;
 
@@ -125,9 +126,10 @@ async function guiMutation(
   tuyChon?: { idempotencyKey?: string; headers?: Record<string, string> },
 ): Promise<APIResponse> {
   const batDau = Date.now();
-  // Lần thử đầu giữ nguyên key do caller truyền (test retry cùng key dựa vào đó);
-  // các lần thử lại sau 503 dùng key mới.
-  let khoaIdempotency = tuyChon?.idempotencyKey ?? randomUUID();
+  // Giữ nguyên key do caller truyền qua mọi lần thử: lần thử 503 chưa ghi operation nào
+  // nên key chưa từng được dùng; đổi key mới sẽ làm lần retry tường minh sau đó tra
+  // không thấy operation và bị coi là mutation mới (vd: 409 USERNAME_TAKEN ở test 5).
+  const khoaIdempotency = tuyChon?.idempotencyKey ?? randomUUID();
   for (;;) {
     const traLoi = await page.request.fetch(`${origin}${path}`, {
       method,
@@ -148,7 +150,6 @@ async function guiMutation(
     if (ma !== "AUTHORIZATION_NOT_READY" || Date.now() - batDau >= THOI_GIAN_CHO_FENCE_MS) {
       return traLoi;
     }
-    khoaIdempotency = randomUUID();
     await page.waitForTimeout(KHOANG_CHO_FENCE_MS);
   }
 }
