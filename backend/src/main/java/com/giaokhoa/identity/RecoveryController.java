@@ -17,6 +17,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -35,6 +37,8 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 public class RecoveryController {
+    private static final Logger LOG = LoggerFactory.getLogger(RecoveryController.class);
+
     private final RecoveryService recovery;
     private final ProtectedActionExecutor executor;
     private final KeycloakDecisionClient decisions;
@@ -51,7 +55,8 @@ public class RecoveryController {
         this.policyWriter = policyWriter;
     }
 
-    public record SubmitRequest(@Nullable UUID targetUserId, @Nullable UUID workspaceId) {}
+    public record SubmitRequest(
+            @Nullable UUID targetUserId, @Nullable UUID workspaceId, @Nullable String reason) {}
 
     public record SubmitReceipt(
             UUID operationId, String state, boolean completed, String statusUrl) {}
@@ -66,6 +71,7 @@ public class RecoveryController {
             UUID requesterUserId,
             @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable UUID workspaceId,
             UUID targetUserId,
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable String reason,
             String state,
             @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable UUID verifiedBy,
             @JsonInclude(JsonInclude.Include.NON_NULL) @Nullable Instant resolvedAt,
@@ -81,10 +87,17 @@ public class RecoveryController {
                     "VALIDATION_FAILED",
                     "Thiếu tài khoản đích của yêu cầu.");
         }
+        // Giữ lý do trong biến cục bộ: gọi body.reason() hai lần khiến phân tích null
+        // không nối được lần kiểm tra với lần dùng.
+        String reason = body.reason();
+        if (reason == null || reason.isBlank()) {
+            throw new HttpProblemException(
+                    HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Thiếu lý do cần hỗ trợ.");
+        }
         UUID actor = executor.actorUserId(authentication);
         RequestView created =
                 Objects.requireNonNull(
-                        recovery.submit(actor, body.targetUserId(), body.workspaceId()));
+                        recovery.submit(actor, body.targetUserId(), body.workspaceId(), reason));
         // Yêu cầu được ghi đồng bộ ngay trong lời gọi này nhưng vòng đời của nó chưa kết thúc:
         // biên nhận 202 mang chính ID của yêu cầu làm operationId để client poll qua endpoint
         // operations chung, nơi trạng thái yêu cầu được ánh xạ sang vòng đời operation.
@@ -144,6 +157,8 @@ public class RecoveryController {
         } catch (IllegalStateException ex) {
             // Resource server chưa được bootstrap trong realm này thì chưa thể tồn tại grant
             // operator nào: từ chối như trường hợp không có resource, không coi là lỗi hệ thống.
+            // Ghi WARN để vận hành phân biệt được realm chưa bootstrap với lời gọi trái phép.
+            LOG.warn("Không tra được resource platform khi kiểm tra quyền operator", ex);
             resourceId = Optional.empty();
         }
         boolean allowed =
@@ -170,6 +185,7 @@ public class RecoveryController {
                 view.requesterUserId(),
                 view.workspaceId(),
                 view.targetUserId(),
+                view.reason(),
                 view.state().name(),
                 view.verifiedBy(),
                 view.resolvedAt(),

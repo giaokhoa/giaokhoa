@@ -17,6 +17,7 @@ export type PlatformRecoveryRequest = {
   id: string;
   targetUserId: string;
   requesterUserId?: string;
+  reason?: string;
   state: RecoveryRequestState;
   createdAt?: string;
 };
@@ -50,6 +51,7 @@ function parseRequest(item: unknown): PlatformRecoveryRequest | null {
     requesterUserId: typeof item.requesterUserId === "string" && item.requesterUserId
       ? item.requesterUserId
       : undefined,
+    reason: typeof item.reason === "string" && item.reason ? item.reason : undefined,
     state: item.state as RecoveryRequestState,
     createdAt: typeof item.createdAt === "string" && item.createdAt ? item.createdAt : undefined,
   };
@@ -220,6 +222,12 @@ export function PlatformRecoveryContent() {
                         <dt>Tài khoản đích</dt>
                         <dd><code>{request.targetUserId}</code></dd>
                       </div>
+                      {request.reason ? (
+                        <div>
+                          <dt>Lý do cần hỗ trợ</dt>
+                          <dd>{request.reason}</dd>
+                        </div>
+                      ) : null}
                       <div>
                         <dt>Trạng thái</dt>
                         <dd>{stateLabels[request.state]}</dd>
