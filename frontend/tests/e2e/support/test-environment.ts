@@ -63,14 +63,14 @@ export class TestEnvironment {
     return response;
   }
 
-  async createUser(emailVerified = true): Promise<TestUser> {
+  async createUser(emailVerified = true, temporaryPassword = false): Promise<TestUser> {
     const unique = randomUUID();
     const username = `e2e-${unique}`;
     const email = `${username}@test.giaokhoa.localhost`;
     const password = randomBytes(24).toString("base64url") + "Aa1!";
     const response = await this.admin("POST", "/users", {
       username, email, firstName: "Test", lastName: "Fixture", enabled: true, emailVerified,
-      credentials: [{ type: "password", value: password, temporary: false }],
+      credentials: [{ type: "password", value: password, temporary: temporaryPassword }],
     });
     const location = response.headers.get("location");
     const id = location?.split("/").at(-1);
@@ -110,6 +110,28 @@ export class TestEnvironment {
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
     throw new Error("Mailpit không nhận được email xác minh của user test");
+  }
+
+  // Credential tạm của Keycloak tự kéo theo required action UPDATE_PASSWORD ở lần đăng nhập đầu.
+  async createUserWithTemporaryPassword(): Promise<TestUser> {
+    return this.createUser(true, true);
+  }
+
+  async readVerificationLink(message: Mail): Promise<string> {
+    if (!this.receivedMail.has(message.ID)) throw new Error("Không đọc email không do test nhận");
+    const response = await fetch(new URL(`/api/v1/message/${encodeURIComponent(message.ID)}`, this.mailpit));
+    if (!response.ok) throw new Error(`Mailpit message: HTTP ${response.status}`);
+    const detail = await response.json() as { Text?: string; HTML?: string };
+    const link = `${detail.Text ?? ""}\n${detail.HTML ?? ""}`
+      .match(/https?:\/\/[^\s"'<>]*action-token[^\s"'<>]*/)?.[0];
+    if (!link) throw new Error("Email xác minh không chứa link action-token của Keycloak");
+    return link.replace(/&amp;/g, "&");
+  }
+
+  // Admin kết thúc mọi phiên SSO của user; Keycloak gửi back-channel logout tới các client đã đăng ký.
+  async terminateUserSessions(user: TestUser): Promise<void> {
+    if (!this.createdUsers.has(user.id)) throw new Error("Chỉ kết thúc phiên của tài khoản test");
+    await this.admin("POST", `/users/${encodeURIComponent(user.id)}/logout`);
   }
 
   async deleteEmail(message: Mail): Promise<void> {
