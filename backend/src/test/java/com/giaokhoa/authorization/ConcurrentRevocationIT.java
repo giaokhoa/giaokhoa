@@ -97,7 +97,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                                 writerBackendPid.set(backendPid());
                                 assertEquals("READY", lockedState(partition, "SHARE"));
                                 protectedLock.countDown();
-                                await(releaseWrite);
+                                awaitLatch(releaseWrite);
                                 // Protected mutation giữ read fence tới khi commit.
                                 return 1;
                             }));
@@ -143,7 +143,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                                 lockedState(partition, "UPDATE");
                                 fence(partition, 1);
                                 revokedButNotCommitted.countDown();
-                                await(commitRevoke);
+                                awaitLatch(commitRevoke);
                                 return 1;
                             }));
             assertTrue(revokedButNotCommitted.await(10, TimeUnit.SECONDS));
@@ -424,7 +424,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                                         lockedState(fixture.workspacePartition(), "UPDATE");
                                         fence(fixture.workspacePartition(), 1);
                                         revokeLocked.countDown();
-                                        await(finishRevoke);
+                                        awaitLatch(finishRevoke);
                                         return 1;
                                     }));
                     assertTrue(revokeLocked.await(10, TimeUnit.SECONDS));
@@ -1361,7 +1361,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
         return new TransactionTemplate(transactionManager).execute(_ -> action.get());
     }
 
-    private static void await(CountDownLatch latch) {
+    private static void awaitLatch(CountDownLatch latch) {
         try {
             assertTrue(latch.await(10, TimeUnit.SECONDS), "Concurrent test timed out");
         } catch (InterruptedException exception) {
