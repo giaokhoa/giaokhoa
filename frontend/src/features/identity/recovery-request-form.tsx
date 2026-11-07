@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import {
   operationStatus,
   type OperationState,
@@ -58,6 +58,7 @@ export function recoveryRequestBody(
 
 export function RecoveryRequestForm({ userId }: { userId: string }) {
   const [operation, setOperation] = useState<TrackedOperation | null>(null);
+  const recoveryAttempt = useRef<{ payload: string; key: string } | null>(null);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
@@ -87,12 +88,17 @@ export function RecoveryRequestForm({ userId }: { userId: string }) {
       setError("Hãy nhập lý do cần hỗ trợ khôi phục.");
       return;
     }
+    const payload = JSON.stringify(body);
+    if (recoveryAttempt.current?.payload !== payload) {
+      recoveryAttempt.current = { payload, key: crypto.randomUUID() };
+    }
     setPendingAction("recovery");
     setError(null);
     try {
       const result = await apiRequest<unknown>("/api/me/recovery-requests", {
         method: "POST",
-        body: JSON.stringify(body),
+        body: payload,
+        headers: { "Idempotency-Key": recoveryAttempt.current.key },
       });
       const nextOperation = parseTrackedOperation(result.data);
       if (!nextOperation) {
@@ -100,6 +106,7 @@ export function RecoveryRequestForm({ userId }: { userId: string }) {
       }
       setOperation(nextOperation);
       setReason("");
+      recoveryAttempt.current = null;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Thao tác không thành công.");
     } finally {

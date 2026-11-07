@@ -74,6 +74,7 @@ export function parseWorkspaces(data: unknown): WorkspaceView[] {
 
 export function WorkspaceSwitcher() {
   const { session, activeWorkspaceId, selectWorkspace } = useSession();
+  const [reload, setReload] = useState(0);
   const [result, setResult] = useState<WorkspaceResult | null>(null);
   const activeWorkspaceIdRef = useRef(activeWorkspaceId);
   const userId = session.status === "authenticated" ? session.user.id : null;
@@ -112,7 +113,7 @@ export function WorkspaceSwitcher() {
     return () => {
       ignore = true;
     };
-  }, [selectWorkspace, userId]);
+  }, [selectWorkspace, userId, reload]);
 
   if (session.status !== "authenticated") return null;
 
@@ -131,7 +132,10 @@ export function WorkspaceSwitcher() {
       <h2 id="workspace-switcher-title">Không gian làm việc</h2>
 
       {loadState === "loading" ? <p>Đang tải danh sách không gian…</p> : null}
-      {loadState === "error" ? <p role="alert">{message}</p> : null}
+      {loadState === "error" ? <>
+        <p role="alert">{message}</p>
+        <button type="button" className="secondary-button" onClick={() => { setResult(null); setReload((value) => value + 1); }}>Tải lại danh sách không gian</button>
+      </> : null}
       {loadState === "ready" && workspaces.length === 0 ? (
         <p>Chưa có không gian khả dụng. Hoàn tất xác minh danh tính để tiếp tục.</p>
       ) : null}

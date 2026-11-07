@@ -9,6 +9,7 @@ import com.giaokhoa.authorization.projection.ProjectionReconciler;
 import com.giaokhoa.identity.keycloak.CurrentIdentityClient;
 import com.giaokhoa.identity.keycloak.CurrentIdentityClient.CurrentIdentity;
 import com.giaokhoa.shared.http.HttpProblemException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -38,10 +39,8 @@ public class IdentityEligibilitySynchronizer {
     static final String IDENTITY_UNAVAILABLE_CODE = "IDENTITY_UNAVAILABLE";
 
     /**
-     * Projection của account mang nguồn eligibility qua fence: workspace list là capability nghiệp
-     * vụ ở cấp account của actor eligible. Row projection khóa theo target nên cặp này là trạng
-     * thái eligibility được ghi; các scope profile còn lại bị gate bởi eligibility sẽ dùng cùng
-     * nguồn này khi endpoint của chúng được cài.
+     * Checkpoint account ghi cùng nguồn actor/eligibility cho hai scope đọc US1, mỗi scope có root
+     * native riêng.
      */
     private static final String ELIGIBILITY_SCOPE =
             PermissionCatalog.ProfileScope.WORKSPACE_LIST.scopeName();
@@ -106,20 +105,60 @@ public class IdentityEligibilitySynchronizer {
                 current.emailVerified() != recordedVerified
                         || !Objects.equals(current.email(), recordedEmail)
                         || eligible != recordedEligible;
-        if (!profileChanged
-                && ((!recordedHashes.isEmpty() && desiredHash.equals(recordedHashes.getFirst()))
-                        || (!eligible
-                                && recordedHashes.isEmpty()
-                                && retractionWasApplied(actorUserId)))) {
+        boolean accountChanged =
+                profileChanged
+                        || !((!recordedHashes.isEmpty()
+                                        && desiredHash.equals(recordedHashes.getFirst()))
+                                || (!eligible
+                                        && recordedHashes.isEmpty()
+                                        && retractionWasApplied(actorUserId)));
+        List<AuthorizationOperationService.PartitionChange> changes = new ArrayList<>();
+        UUID accountPartition = accountPartition(actorUserId);
+        List<Map<String, Object>> personal =
+                jdbc.queryForList(
+                        "SELECT w.id, p.id AS partition_id, p.desired_revision FROM workspace w"
+                                + " JOIN authz_partition p ON p.owner_key = 'workspace:' || w.id"
+                                + " AND p.kind = 'WORKSPACE' WHERE w.kind = 'PERSONAL' AND w.owner_user_id = ?",
+                        actorUserId);
+        if (!personal.isEmpty()) {
+            Map<String, Object> workspace = personal.getFirst();
+            UUID workspaceId = (UUID) Objects.requireNonNull(workspace.get("id"));
+            String workspaceTarget = NativePolicyTemplates.workspaceKey(workspaceId);
+            if (jdbc.queryForList(
+                            "SELECT id FROM authz_projection WHERE target_key = ?",
+                            UUID.class,
+                            workspaceTarget)
+                    .isEmpty()) {
+                String scope = PermissionCatalog.WorkspaceScope.ENTER.scopeName();
+                changes.add(
+                        new AuthorizationOperationService.PartitionChange(
+                                (UUID) Objects.requireNonNull(workspace.get("partition_id")),
+                                List.of(
+                                        new AuthorizationOperationService.DesiredProjection(
+                                                workspaceTarget,
+                                                scope,
+                                                List.of(
+                                                        ProjectionReconciler
+                                                                .personalOwnerDescriptor(
+                                                                        workspaceId,
+                                                                        actorUserId,
+                                                                        keycloakSub,
+                                                                        workspaceTarget,
+                                                                        scope)),
+                                                List.of(accountPartition)))));
+            }
+        }
+        if (!accountChanged && changes.isEmpty()) {
             return Optional.empty();
         }
 
-        jdbc.update(
-                "UPDATE user_account SET email = ?, email_verified = ? WHERE id = ?",
-                current.email(),
-                current.emailVerified(),
-                actorUserId);
-        UUID accountPartition = accountPartition(actorUserId);
+        if (profileChanged) {
+            jdbc.update(
+                    "UPDATE user_account SET email = ?, email_verified = ? WHERE id = ?",
+                    current.email(),
+                    current.emailVerified(),
+                    actorUserId);
+        }
         Long recordedRevision =
                 jdbc.queryForObject(
                         "SELECT desired_revision FROM authz_partition WHERE id = ?",
@@ -136,15 +175,19 @@ public class IdentityEligibilitySynchronizer {
         // đã quan sát sẽ replay đúng operation đó, còn lần lật trạng thái sau ghi operation mới.
         String idempotencyKey =
                 "identity-eligibility:" + actorUserId + ":" + (recordedRevision + 1);
+        if (accountChanged) {
+            changes.addFirst(
+                    new AuthorizationOperationService.PartitionChange(
+                            accountPartition, projections));
+        } else {
+            long workspaceRevision =
+                    ((Number) Objects.requireNonNull(personal.getFirst().get("desired_revision")))
+                            .longValue();
+            idempotencyKey = "identity-personal:" + actorUserId + ":" + (workspaceRevision + 1);
+        }
         AuthorizationOperation operation =
                 operations.applyDesiredState(
-                        actorUserId,
-                        null,
-                        idempotencyKey,
-                        desiredHash,
-                        List.of(
-                                new AuthorizationOperationService.PartitionChange(
-                                        accountPartition, projections)));
+                        actorUserId, null, idempotencyKey, desiredHash, changes);
         return Optional.of(operation);
     }
 
@@ -166,7 +209,9 @@ public class IdentityEligibilitySynchronizer {
         } catch (RestClientException | OAuth2AuthorizationException | IllegalStateException ex) {
             throw unavailable(ex);
         }
-        if (!keycloakSub.equals(current.id())) {
+        if (!keycloakSub.equals(current.id())
+                || !current.enabled()
+                || (current.emailVerified() && current.email() == null)) {
             // Profile đọc được là của subject khác: không phải input của account này.
             throw unavailable(null);
         }

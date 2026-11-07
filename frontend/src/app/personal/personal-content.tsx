@@ -50,6 +50,7 @@ export function parsePracticeHistory(data: unknown): PracticeAttempt[] {
 
 export function PersonalContent() {
   const { session, refreshSession } = useSession();
+  const [reload, setReload] = useState(0);
   const [attempts, setAttempts] = useState<PracticeAttempt[] | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const userId = session.status === "authenticated" ? session.user.id : null;
@@ -71,7 +72,7 @@ export function PersonalContent() {
     return () => {
       ignore = true;
     };
-  }, [userId]);
+  }, [userId, reload]);
 
   return (
     <main className="site-main">
@@ -143,7 +144,10 @@ export function PersonalContent() {
                 hiển thị nội dung bài làm và không tạo gói hoặc lớp học.
               </p>
               {attempts === null ? <p role="status">Đang tải lịch sử luyện tập…</p> : null}
-              {historyError ? <p role="alert">{historyError}</p> : null}
+              {historyError ? <>
+                <p role="alert">{historyError}</p>
+                <button type="button" className="secondary-button" onClick={() => { setAttempts(null); setHistoryError(null); setReload((value) => value + 1); }}>Tải lại lịch sử</button>
+              </> : null}
               {attempts !== null && attempts.length === 0 && !historyError ? (
                 <p>Chưa có lần luyện tập mẫu nào.</p>
               ) : null}

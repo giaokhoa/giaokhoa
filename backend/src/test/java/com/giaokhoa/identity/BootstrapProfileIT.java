@@ -447,7 +447,7 @@ class BootstrapProfileIT extends IntegrationEnvironment {
                 Set.of(inA.personalWorkspaceId(), centerB),
                 Set.copyOf(
                         directory.listWorkspaces(inA.userId()).stream()
-                                .map(ListedWorkspace::id)
+                                .map(view -> view.id())
                                 .toList()));
         assertEquals(Set.of(), directory.rolesIn(inA.userId(), centerA));
         assertEquals(Set.of(MembershipRole.Role.STUDENT), directory.rolesIn(inA.userId(), centerB));
@@ -574,7 +574,7 @@ class BootstrapProfileIT extends IntegrationEnvironment {
     }
 
     private <T> @Nullable T tx(java.util.function.Supplier<@Nullable T> work) {
-        return new TransactionTemplate(transactionManager).execute(_status -> work.get());
+        return new TransactionTemplate(transactionManager).execute(_ -> work.get());
     }
 
     // ---------- Keycloak TEST realm qua Admin API ----------

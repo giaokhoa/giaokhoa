@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { WorkspaceSwitcher } from "../../features/identity/workspace-switcher";
 import { useSession } from "../../features/identity/session-provider";
 import {
@@ -51,6 +51,7 @@ function parseTrackedOperation(data: unknown): TrackedOperation | null {
 export function OnboardingContent() {
   const { session, refreshSession } = useSession();
   const [operation, setOperation] = useState<TrackedOperation | null>(null);
+  const recoveryAttempt = useRef<{ payload: string; key: string } | null>(null);
   const [reason, setReason] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
@@ -66,19 +67,28 @@ export function OnboardingContent() {
   }
 
   async function runMutation(action: Exclude<PendingAction, null>, path: string, body?: unknown) {
+    const payload = body === undefined ? undefined : JSON.stringify(body);
+    if (action === "recovery" && payload && recoveryAttempt.current?.payload !== payload) {
+      recoveryAttempt.current = { payload, key: crypto.randomUUID() };
+    }
     setPendingAction(action);
     setActionError(null);
     try {
       const result = await apiRequest<unknown>(path, {
         method: "POST",
-        body: body === undefined ? undefined : JSON.stringify(body),
+        body: payload,
+        headers: action === "recovery" && recoveryAttempt.current
+          ? { "Idempotency-Key": recoveryAttempt.current.key } : undefined,
       });
       const nextOperation = parseTrackedOperation(result.data);
       if (!nextOperation) {
         throw new Error("Phản hồi thao tác không hợp lệ.");
       }
       setOperation(nextOperation);
-      if (action === "recovery") setReason("");
+      if (action === "recovery") {
+        setReason("");
+        recoveryAttempt.current = null;
+      }
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Thao tác không thành công.");
     } finally {

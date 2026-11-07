@@ -377,6 +377,7 @@ class RecoveryFlowIT extends IntegrationEnvironment {
                                                         "Idempotency-Key",
                                                         "recovery-resolve-" + UUID.randomUUID())
                                                 .contentType(MediaType.APPLICATION_JSON)
+                                                .header("If-Match", "\"0\"")
                                                 .content("{\"decision\":\"RESET_PASSWORD\"}"))
                                 .andReturn()
                                 .getResponse();

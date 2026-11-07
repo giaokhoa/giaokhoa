@@ -83,15 +83,19 @@ public class OperationController {
     /**
      * Yêu cầu khôi phục danh tính không phải authorization operation nhưng biên nhận gửi yêu cầu
      * mang chính ID của nó làm operationId, nên đường poll này tra tiếp bảng yêu cầu khi không thấy
-     * operation: chỉ yêu cầu do chính actor gửi mới hiện, trạng thái yêu cầu được ánh xạ sang vòng
-     * đời operation và đích là profile của tài khoản được hỗ trợ.
+     * operation: người gửi hoặc operator đã gửi mutation xử lý được theo dõi biên nhận của mình.
+     * Trạng thái yêu cầu được ánh xạ sang vòng đời operation và đích là profile của tài khoản được
+     * hỗ trợ.
      */
     private OperationView recoveryStatus(UUID operationId, UUID actorUserId) {
         List<Map<String, Object>> rows =
                 jdbc.queryForList(
                         "SELECT state, target_user_id FROM recovery_request"
-                                + " WHERE id = ? AND requester_user_id = ?",
+                                + " WHERE id = ? AND (requester_user_id = ? OR EXISTS"
+                                + " (SELECT 1 FROM recovery_mutation m WHERE m.request_id = recovery_request.id"
+                                + " AND m.actor_user_id = ? AND m.kind = 'RESOLVE'))",
                         operationId,
+                        actorUserId,
                         actorUserId);
         if (rows.isEmpty()) {
             throw new HttpProblemException(

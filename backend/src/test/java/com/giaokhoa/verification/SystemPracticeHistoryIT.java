@@ -126,7 +126,9 @@ class SystemPracticeHistoryIT extends IntegrationEnvironment {
                             entityManager.clear();
                             return entityManager.find(SystemPracticeAttemptSample.class, id);
                         });
-        assertThat(reloaded).isNotNull();
+        if (reloaded == null) {
+            throw new AssertionError("Không tìm thấy practice attempt vừa lưu");
+        }
         assertThat(reloaded.getPersonalWorkspaceId()).isEqualTo(workspaceId);
         assertThat(reloaded.getUserId()).isEqualTo(userId);
         assertThat(reloaded.getSystemResourceId()).isEqualTo(published.resourceId());

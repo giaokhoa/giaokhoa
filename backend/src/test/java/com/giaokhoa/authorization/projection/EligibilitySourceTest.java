@@ -24,7 +24,7 @@ class EligibilitySourceTest {
                         + USER
                         + "|subject=subject-1|target="
                         + TARGET
-                        + "|scope=workspace.list",
+                        + "|scope=workspace.list|scopes=workspace.list,history.read",
                 descriptor);
         assertNotEquals(
                 ProjectionReconciler.desiredHash(TARGET, "workspace.list", List.of(descriptor)),

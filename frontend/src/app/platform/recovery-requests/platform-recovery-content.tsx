@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "../../../lib/api-client";
 import {
   operationStatus,
@@ -20,9 +20,10 @@ export type PlatformRecoveryRequest = {
   reason?: string;
   state: RecoveryRequestState;
   createdAt?: string;
+  version: number;
 };
 
-export type ResolveDecision = "APPROVE" | "REJECT";
+export type ResolveDecision = "APPROVE" | "COMPLETE" | "REJECT";
 
 const requestStates: RecoveryRequestState[] = ["REQUESTED", "VERIFIED", "RESOLVED", "REJECTED"];
 
@@ -42,6 +43,7 @@ function parseRequest(item: unknown): PlatformRecoveryRequest | null {
       || typeof item.id !== "string" || !item.id
       || typeof item.targetUserId !== "string" || !item.targetUserId
       || typeof item.state !== "string"
+      || typeof item.version !== "number" || !Number.isSafeInteger(item.version) || item.version < 0
       || !requestStates.includes(item.state as RecoveryRequestState)) {
     return null;
   }
@@ -54,6 +56,7 @@ function parseRequest(item: unknown): PlatformRecoveryRequest | null {
     reason: typeof item.reason === "string" && item.reason ? item.reason : undefined,
     state: item.state as RecoveryRequestState,
     createdAt: typeof item.createdAt === "string" && item.createdAt ? item.createdAt : undefined,
+    version: item.version,
   };
 }
 
@@ -74,8 +77,9 @@ export function resolveRequestBody(
   decision: string,
   verificationNote: string,
 ): { decision: ResolveDecision; verificationNote?: string } | null {
-  if (decision !== "APPROVE" && decision !== "REJECT") return null;
+  if (decision !== "APPROVE" && decision !== "COMPLETE" && decision !== "REJECT") return null;
   const note = verificationNote.trim();
+  if ((decision !== "REJECT" && !note) || note.length > 1000) return null;
   return note ? { decision, verificationNote: note } : { decision };
 }
 
@@ -87,6 +91,7 @@ export function PlatformRecoveryContent() {
   const [operation, setOperation] = useState<TrackedOperation | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const lastAttempt = useRef<{ signature: string; key: string } | null>(null);
   const userId = session.status === "authenticated" ? session.user.id : null;
 
   async function loadRequests() {
@@ -122,22 +127,32 @@ export function PlatformRecoveryContent() {
 
   async function resolveRequest(requestId: string, decision: ResolveDecision) {
     const body = resolveRequestBody(decision, notes[requestId] ?? "");
-    if (!body) return;
+    if (!body) {
+      setActionError("Cần ghi chú việc xác minh hoặc việc khôi phục và bàn giao đã hoàn tất (tối đa 1000 ký tự).");
+      return;
+    }
+    const request = requests?.find((item) => item.id === requestId);
+    if (!request) return;
+    const signature = JSON.stringify([userId, requestId, body, request.version]);
+    if (lastAttempt.current?.signature !== signature) {
+      lastAttempt.current = { signature, key: crypto.randomUUID() };
+    }
     setPendingAction(requestId);
     setActionError(null);
     try {
       const result = await apiRequest<unknown>(
         `/api/platform/recovery-requests/${encodeURIComponent(requestId)}/resolve`,
-        { method: "POST", body: JSON.stringify(body) },
+        { method: "POST", body: JSON.stringify(body), headers: {
+          "Idempotency-Key": lastAttempt.current.key,
+          "If-Match": `"${request.version}"`,
+        } },
       );
       const nextOperation = parseTrackedOperation(result.data);
       if (!nextOperation) {
         throw new Error("Phản hồi thao tác không hợp lệ.");
       }
       setOperation(nextOperation);
-      if (nextOperation.completed && nextOperation.state === "SUCCEEDED") {
-        await loadRequests();
-      }
+      await loadRequests();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Thao tác không thành công.");
     } finally {
@@ -203,6 +218,7 @@ export function PlatformRecoveryContent() {
               nội dung học tập từ chức vụ và không tạo gói hoặc lớp khi chỉ có quyền nền.
             </p>
 
+            <p>Xác minh danh tính trước. Sau đó khôi phục tài khoản và bàn giao credential qua kênh riêng cho đúng người dùng; chỉ xác nhận hoàn tất khi đã thực hiện xong.</p>
             {requests === null ? <p role="status">Đang tải danh sách yêu cầu…</p> : null}
             {listError ? <p role="alert">{listError}</p> : null}
             {requests !== null && requests.length === 0 && !listError ? (
@@ -259,9 +275,9 @@ export function PlatformRecoveryContent() {
                           className="action-button"
                           type="button"
                           disabled={pendingAction !== null}
-                          onClick={() => void resolveRequest(request.id, "APPROVE")}
+                          onClick={() => void resolveRequest(request.id, request.state === "REQUESTED" ? "APPROVE" : "COMPLETE")}
                         >
-                          Xác minh
+                          {request.state === "REQUESTED" ? "Đã xác minh danh tính" : "Xác nhận đã khôi phục và bàn giao"}
                         </button>
                         {" "}
                         <button

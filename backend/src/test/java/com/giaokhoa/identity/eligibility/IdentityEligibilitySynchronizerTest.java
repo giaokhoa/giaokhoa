@@ -70,7 +70,7 @@ class IdentityEligibilitySynchronizerTest {
                                 + SUBJECT
                                 + "|target="
                                 + TARGET
-                                + "|scope=workspace.list"),
+                                + "|scope=workspace.list|scopes=workspace.list,history.read"),
                 projection.sourceDescriptors());
         verify(jdbc).update(contains("UPDATE user_account"), eq(EMAIL), eq(true), eq(ACTOR));
     }

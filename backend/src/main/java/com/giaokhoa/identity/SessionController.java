@@ -2,6 +2,8 @@ package com.giaokhoa.identity;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.giaokhoa.authorization.decision.ProtectedActionExecutor;
+import com.giaokhoa.authorization.permission.PermissionCatalog;
+import com.giaokhoa.authorization.policy.NativePolicyTemplates;
 import com.giaokhoa.identity.IdentityService.BootstrapResult;
 import com.giaokhoa.identity.IdentityService.CurrentUser;
 import com.giaokhoa.identity.keycloak.IdentityProvisioningClient;
@@ -13,7 +15,6 @@ import com.giaokhoa.verification.SystemPracticeService.PracticeEntry;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
@@ -112,31 +113,57 @@ public class SessionController {
     }
 
     @GetMapping("/api/me/workspaces")
-    public ResponseEntity<List<WorkspaceView>> workspaces(Authentication authentication) {
+    public ResponseEntity<List<WorkspaceView>> workspaces(
+            Authentication authentication, HttpServletRequest request) {
         UUID actor = executor.actorUserId(authentication);
-        List<WorkspaceView> views =
-                directory.listWorkspaces(actor).stream().map(w -> workspaceView(actor, w)).toList();
-        return protectedOk(views);
+        UUID personal = identities.currentUser(actor).personalWorkspaceId();
+        return protectedOk(
+                executor.execute(
+                        authentication,
+                        request,
+                        personal,
+                        List.of(
+                                new ProtectedActionExecutor.Target(
+                                        NativePolicyTemplates.profileKey(actor),
+                                        List.of(
+                                                PermissionCatalog.ProfileScope.WORKSPACE_LIST
+                                                        .scopeName()))),
+                        () ->
+                                directory.listWorkspaces(actor).stream()
+                                        .map(w -> workspaceView(actor, w))
+                                        .toList()));
     }
 
     @GetMapping("/api/me/practice-history")
-    public ResponseEntity<List<PracticeEntry>> practiceHistory(Authentication authentication) {
+    public ResponseEntity<List<PracticeEntry>> practiceHistory(
+            Authentication authentication, HttpServletRequest request) {
         UUID actor = executor.actorUserId(authentication);
-        return protectedOk(practice.historyFor(actor));
+        UUID personal = identities.currentUser(actor).personalWorkspaceId();
+        return protectedOk(
+                executor.execute(
+                        authentication,
+                        request,
+                        personal,
+                        List.of(
+                                new ProtectedActionExecutor.Target(
+                                        NativePolicyTemplates.profileKey(actor),
+                                        List.of(
+                                                PermissionCatalog.ProfileScope.HISTORY_READ
+                                                        .scopeName()))),
+                        () -> practice.historyFor(actor)));
     }
 
     @PostMapping("/api/identity/verification")
     public ResponseEntity<OperationReceipt> requestVerification(Authentication authentication) {
         UUID actor = executor.actorUserId(authentication);
-        Optional<String> keycloakUserId =
-                jdbc.query(
-                        "SELECT keycloak_sub FROM user_account WHERE id = ?",
-                        rs -> rs.next() ? Optional.of(rs.getString(1)) : Optional.empty(),
-                        actor);
-        provisioning.sendVerifyEmail(
-                keycloakUserId.orElseThrow(() ->
-                        new IllegalStateException(
-                                "Account row without Keycloak subject for actor " + actor)));
+        List<String> subjects =
+                jdbc.queryForList(
+                        "SELECT keycloak_sub FROM user_account WHERE id = ?", String.class, actor);
+        if (subjects.isEmpty()) {
+            throw new IllegalStateException(
+                    "Account row without Keycloak subject for actor " + actor);
+        }
+        provisioning.sendVerifyEmail(subjects.getFirst());
         // Gửi email là tác vụ phụ trợ đồng bộ, không có thực thể operation để poll: biên nhận hoàn
         // tất ngay mang chính định danh của actor theo hình dạng tracked operation của hợp đồng.
         return ResponseEntity.ok()
@@ -150,7 +177,10 @@ public class SessionController {
                         ? centerName(workspace.centerId())
                         : identities.currentUser(actor).username();
         List<String> roles =
-                directory.rolesIn(actor, workspace.id()).stream().map(Enum::name).sorted().toList();
+                directory.rolesIn(actor, workspace.id()).stream()
+                        .map(role -> role.name())
+                        .sorted()
+                        .toList();
         return new WorkspaceView(
                 workspace.id(),
                 name,
@@ -172,17 +202,15 @@ public class SessionController {
     }
 
     private SubscriptionView subscriptionOf(UUID workspaceId) {
-        Optional<Instant> expiresAt =
+        List<Instant> periods =
                 jdbc.query(
                         "SELECT expires_at FROM subscription_period WHERE workspace_id = ?"
                                 + " AND valid_from <= now() AND expires_at > now()"
                                 + " ORDER BY expires_at DESC LIMIT 1",
-                        rs ->
-                                rs.next()
-                                        ? Optional.of(rs.getTimestamp(1).toInstant())
-                                        : Optional.empty(),
+                        (rs, _) -> rs.getTimestamp(1).toInstant(),
                         workspaceId);
-        return new SubscriptionView(expiresAt.isPresent(), expiresAt.orElse(null));
+        return new SubscriptionView(
+                !periods.isEmpty(), periods.isEmpty() ? null : periods.getFirst());
     }
 
     private String syncStateOf(UUID workspaceId) {

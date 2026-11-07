@@ -247,7 +247,7 @@ class RecoveryWorkflowIT extends IntegrationEnvironment {
     }
 
     @Test
-    void resolveVerifiedApproveResolvesAndLeavesIdentityUntouched() {
+    void completeVerifiedRequestAfterOperatorConfirmsRecoveryAndDelivery() {
         UUID owner = seedAccount("SELF_REGISTERED");
         UUID center = seedCenter(owner);
         UUID manager = seedAccount("CENTER_ISSUED");
@@ -257,11 +257,15 @@ class RecoveryWorkflowIT extends IntegrationEnvironment {
         recoveryService.verify(operator, submitted.id(), "Đã xác minh qua điện thoại");
 
         RequestView resolved =
-                recoveryService.resolve(operator, submitted.id(), Decision.APPROVE, null);
+                recoveryService.resolve(
+                        operator,
+                        submitted.id(),
+                        Decision.COMPLETE,
+                        "Đã khôi phục và bàn giao qua kênh riêng");
 
         assertEquals(RecoveryRequest.State.RESOLVED, resolved.state());
         assertEquals(operator, resolved.verifiedBy());
-        assertEquals("Đã xác minh qua điện thoại", resolved.verificationNote());
+        assertEquals("Đã khôi phục và bàn giao qua kênh riêng", resolved.verificationNote());
         assertNotNull(resolved.resolvedAt());
         // Resolve không bao giờ chạm vào danh tính của tài khoản đích: origin và trạng thái
         // danh tính của quản lý giữ nguyên, không có mật khẩu nào được cấp lại qua workflow.
@@ -287,7 +291,7 @@ class RecoveryWorkflowIT extends IntegrationEnvironment {
     }
 
     @Test
-    void resolveRequestedVerifiesInlineBeforeResolving() {
+    void approveOnlyVerifiesAndKeepsRecoveryPending() {
         UUID actor = seedAccount("CENTER_ISSUED");
         UUID operator = seedAccount("SELF_REGISTERED");
         RequestView submitted = recoveryService.submit(actor, actor, null);
@@ -296,10 +300,10 @@ class RecoveryWorkflowIT extends IntegrationEnvironment {
                 recoveryService.resolve(
                         operator, submitted.id(), Decision.APPROVE, "Xác minh tại quầy hỗ trợ");
 
-        assertEquals(RecoveryRequest.State.RESOLVED, resolved.state());
+        assertEquals(RecoveryRequest.State.VERIFIED, resolved.state());
         assertEquals(operator, resolved.verifiedBy());
         assertEquals("Xác minh tại quầy hỗ trợ", resolved.verificationNote());
-        assertNotNull(resolved.resolvedAt());
+        assertNull(resolved.resolvedAt());
     }
 
     @Test
@@ -314,7 +318,10 @@ class RecoveryWorkflowIT extends IntegrationEnvironment {
                         HttpProblemException.class,
                         () ->
                                 recoveryService.resolve(
-                                        operator, submitted.id(), Decision.APPROVE, null));
+                                        operator,
+                                        submitted.id(),
+                                        Decision.APPROVE,
+                                        "Xác minh lại"));
         assertEquals(HttpStatus.CONFLICT, ex.getStatus());
         assertEquals("RECOVERY_INVALID_STATE", ex.getCode());
     }
@@ -328,7 +335,7 @@ class RecoveryWorkflowIT extends IntegrationEnvironment {
 
         List<RequestView> listed = recoveryService.listRequests();
 
-        List<UUID> ids = listed.stream().map(RequestView::id).toList();
+        List<UUID> ids = listed.stream().map(view -> view.id()).toList();
         assertTrue(ids.contains(first.id()));
         assertTrue(ids.contains(second.id()));
         assertTrue(ids.indexOf(first.id()) < ids.indexOf(second.id()));
@@ -548,7 +555,7 @@ class RecoveryWorkflowIT extends IntegrationEnvironment {
     }
 
     private <T> @Nullable T tx(java.util.function.Supplier<@Nullable T> work) {
-        return new TransactionTemplate(transactionManager).execute(_status -> work.get());
+        return new TransactionTemplate(transactionManager).execute(_ -> work.get());
     }
 
     // ---------- Keycloak TEST realm qua Admin API ----------

@@ -118,6 +118,7 @@ describe("danh sách khôi phục của platform", () => {
           targetUserId: "user-9",
           state: "REQUESTED",
           reason: "Quên mật khẩu",
+          version: 0,
           createdAt: "2026-11-07T00:00:00Z",
         },
         { id: "req-2", targetUserId: "user-8", state: "CHO_XU_LY" },
@@ -129,6 +130,7 @@ describe("danh sách khôi phục của platform", () => {
         targetUserId: "user-9",
         requesterUserId: undefined,
         reason: "Quên mật khẩu",
+        version: 0,
         state: "REQUESTED",
         createdAt: "2026-11-07T00:00:00Z",
       },
@@ -141,6 +143,11 @@ describe("danh sách khôi phục của platform", () => {
       verificationNote: "Đã xác minh email",
     });
     expect(resolveRequestBody("REJECT", "   ")).toEqual({ decision: "REJECT" });
+    expect(resolveRequestBody("COMPLETE", "Đã khôi phục và bàn giao")).toEqual({
+      decision: "COMPLETE", verificationNote: "Đã khôi phục và bàn giao",
+    });
+    expect(resolveRequestBody("APPROVE", "")).toBeNull();
+    expect(resolveRequestBody("COMPLETE", "")).toBeNull();
     expect(resolveRequestBody("VERIFIED", "ghi chú")).toBeNull();
     expect(resolveRequestBody("", "")).toBeNull();
   });
