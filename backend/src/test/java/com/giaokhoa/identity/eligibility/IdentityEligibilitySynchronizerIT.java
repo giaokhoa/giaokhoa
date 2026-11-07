@@ -4,14 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import com.giaokhoa.authorization.model.AuthorizationOperation;
 import com.giaokhoa.shared.http.HttpProblemException;
 import com.giaokhoa.support.IntegrationEnvironment;
+import com.giaokhoa.support.RealmFoundation;
 import java.net.URI;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -25,7 +23,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -36,7 +33,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientResponseException;
 
 /**
  * Gate eligibility trên stack TEST thật: synchronizer đọc profile hiện hành từ Keycloak 26.8.1, ghi
@@ -59,19 +55,10 @@ class IdentityEligibilitySynchronizerIT extends IntegrationEnvironment {
     private static final RestClient HTTP = RestClient.create();
     private static final String BASE = required("TEST_KEYCLOAK_BASE_URL").replaceAll("/+$", "");
     private static final String REALM = required("TEST_KEYCLOAK_REALM");
-    private static final String STATE_SUCCEEDED = "SUCCEEDED";
-    private static final String STATE_FAILED = "FAILED";
-    private static final String DEFAULT_PERMISSION = "Default Permission";
-    private static final String DEFAULT_RESOURCE = "Default Resource";
-    private static final String DEFAULT_POLICY = "Default Policy";
 
     @DynamicPropertySource
     static void isolatedSchema(DynamicPropertyRegistry registry) {
-        registry.add("spring.flyway.schemas", () -> SCHEMA);
-        registry.add("spring.flyway.default-schema", () -> SCHEMA);
-        registry.add(
-                "spring.datasource.hikari.connection-init-sql",
-                () -> "SET search_path TO " + SCHEMA + ",public");
+        isolatedSchema(registry, SCHEMA);
     }
 
     @BeforeAll
@@ -197,27 +184,7 @@ class IdentityEligibilitySynchronizerIT extends IntegrationEnvironment {
     }
 
     private void awaitSucceeded(UUID operationId) {
-        Instant deadline = Instant.now().plus(Duration.ofSeconds(90));
-        while (Instant.now().isBefore(deadline)) {
-            Map<String, Object> row =
-                    jdbc.queryForMap(
-                            "SELECT state, last_error_code FROM authorization_operation"
-                                    + " WHERE id = ?",
-                            operationId);
-            if (STATE_SUCCEEDED.equals(row.get("state"))) {
-                return;
-            }
-            if (STATE_FAILED.equals(row.get("state"))) {
-                fail("Operation failed with " + row.get("last_error_code"));
-            }
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-                fail("Interrupted while waiting for the operation");
-            }
-        }
-        fail("Operation did not succeed in time: " + operationId);
+        awaitOperationSucceeded(jdbc, operationId);
     }
 
     private String createUser(String username, @Nullable String email, boolean emailVerified) {
@@ -291,120 +258,16 @@ class IdentityEligibilitySynchronizerIT extends IntegrationEnvironment {
     }
 
     private static void seedEligibilityGroup() {
-        String parentId = null;
-        StringBuilder path = new StringBuilder();
-        for (String segment : List.of("gk", "identity", "eligible")) {
-            path.append('/').append(segment);
-            String currentPath = path.toString();
-            String found = null;
-            try {
-                Map<String, Object> group =
-                        HTTP.get()
-                                .uri(adminStatic("/group-by-path" + currentPath))
-                                .headers(headers -> headers.setBearerAuth(masterToken()))
-                                .retrieve()
-                                .body(MAP);
-                if (group != null && currentPath.equals(group.get("path"))) {
-                    found = String.valueOf(group.get("id"));
-                }
-            } catch (RestClientResponseException ex) {
-                if (!ex.getStatusCode().isSameCodeAs(HttpStatus.NOT_FOUND)) {
-                    throw ex;
-                }
-            }
-            if (found == null) {
-                String endpoint =
-                        parentId == null ? "/groups" : "/groups/" + parentId + "/children";
-                // Cây /gk/identity/eligible là object nền của realm: chỉ tạo khi thiếu,
-                // không bao giờ xóa ở teardown — nhiều class dùng chung đường dẫn cố định này.
-                found = createResource(adminStatic(endpoint), Map.of("name", segment));
-            }
-            parentId = found;
-        }
+        RealmFoundation.ensureEligibilityTree(
+                HTTP, adminStatic(""), IdentityEligibilitySynchronizerIT::masterToken);
     }
 
     private static void ensureApiClient() {
-        String audience = required("TEST_KEYCLOAK_AUTHZ_AUDIENCE");
-        List<Map<String, Object>> matches =
-                HTTP.get()
-                        .uri(adminStatic("/clients?clientId=" + audience))
-                        .headers(headers -> headers.setBearerAuth(masterToken()))
-                        .retrieve()
-                        .body(LIST);
-        if (matches != null && !matches.isEmpty()) {
-            return;
-        }
-        String clientId =
-                createResource(
-                        adminStatic("/clients"),
-                        Map.of(
-                                "clientId", audience,
-                                "protocol", "openid-connect",
-                                "enabled", true,
-                                "publicClient", false,
-                                "standardFlowEnabled", false,
-                                "directAccessGrantsEnabled", false,
-                                "authorizationServicesEnabled", true,
-                                "serviceAccountsEnabled", true,
-                                "fullScopeAllowed", false,
-                                "authorizationSettings",
-                                        Map.of(
-                                                "policyEnforcementMode", "ENFORCING",
-                                                "allowRemoteResourceManagement", true,
-                                                "decisionStrategy", "UNANIMOUS")));
-        // Client này là object nền của realm (cùng vai trò bootstrap.sh ở production): chỉ
-        // tạo khi thiếu và gỡ default do Keycloak tự sinh đúng như bootstrap, không bao giờ
-        // xóa ở teardown — nhiều class dùng chung client theo clientId cố định này.
-        removeClientDefaults(clientId);
-    }
-
-    private static void removeClientDefaults(String clientId) {
-        String root = "/clients/" + clientId + "/authz/resource-server";
-        for (Map<String, Object> permission : getList(adminStatic(root + "/permission/resource"))) {
-            if (DEFAULT_PERMISSION.equals(permission.get("name"))) {
-                delete(adminStatic(root + "/permission/resource/" + permission.get("id")));
-            }
-        }
-        for (Map<String, Object> resource : getList(adminStatic(root + "/resource"))) {
-            if (DEFAULT_RESOURCE.equals(resource.get("name"))) {
-                delete(adminStatic(root + "/resource/" + resource.get("_id")));
-            }
-        }
-        for (Map<String, Object> policy : getList(adminStatic(root + "/policy"))) {
-            if (DEFAULT_POLICY.equals(policy.get("name"))) {
-                delete(adminStatic(root + "/policy/" + policy.get("id")));
-            }
-        }
-    }
-
-    private static List<Map<String, Object>> getList(String uri) {
-        List<Map<String, Object>> result =
-                HTTP.get()
-                        .uri(uri)
-                        .headers(headers -> headers.setBearerAuth(masterToken()))
-                        .retrieve()
-                        .body(LIST);
-        if (result == null) {
-            throw new IllegalStateException("Keycloak list not readable: " + uri);
-        }
-        return result;
-    }
-
-    private static String createResource(String uri, Map<String, ?> body) {
-        var response =
-                HTTP.post()
-                        .uri(uri)
-                        .headers(headers -> headers.setBearerAuth(masterToken()))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(body)
-                        .retrieve()
-                        .toEntity(String.class);
-        URI location = response.getHeaders().getLocation();
-        if (location == null) {
-            throw new IllegalStateException("Keycloak did not return a location for " + uri);
-        }
-        String path = location.getPath();
-        return path.substring(path.lastIndexOf('/') + 1);
+        RealmFoundation.ensureApiClient(
+                HTTP,
+                adminStatic(""),
+                IdentityEligibilitySynchronizerIT::masterToken,
+                required("TEST_KEYCLOAK_AUTHZ_AUDIENCE"));
     }
 
     private static void delete(String uri) {

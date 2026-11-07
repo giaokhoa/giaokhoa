@@ -66,11 +66,7 @@ class ProjectionRecoveryIT extends IntegrationEnvironment {
 
     @DynamicPropertySource
     static void isolatedSchema(DynamicPropertyRegistry registry) {
-        registry.add("spring.flyway.schemas", () -> SCHEMA);
-        registry.add("spring.flyway.default-schema", () -> SCHEMA);
-        registry.add(
-                "spring.datasource.hikari.connection-init-sql",
-                () -> "SET search_path TO " + SCHEMA + ",public");
+        isolatedSchema(registry, SCHEMA);
     }
 
     @AfterAll

@@ -69,11 +69,7 @@ class RecoveryWorkflowIT extends IntegrationEnvironment {
 
     @DynamicPropertySource
     static void isolatedSchema(DynamicPropertyRegistry registry) {
-        registry.add("spring.flyway.schemas", () -> SCHEMA);
-        registry.add("spring.flyway.default-schema", () -> SCHEMA);
-        registry.add(
-                "spring.datasource.hikari.connection-init-sql",
-                () -> "SET search_path TO " + SCHEMA + ",public");
+        isolatedSchema(registry, SCHEMA);
     }
 
     @AfterAll
@@ -338,6 +334,8 @@ class RecoveryWorkflowIT extends IntegrationEnvironment {
     void listRequestsReturnsSubmittedRequestsOldestFirst() throws Exception {
         UUID actor = seedAccount("SELF_REGISTERED");
         RequestView first = recoveryService.submit(actor, actor, null);
+        // Sleep ngắn có chủ đích để hai request có mốc thời gian tạo khác nhau cho khẳng định
+        // thứ tự ở dưới — không phải chờ một điều kiện nên không dùng Awaitility.
         Thread.sleep(100);
         RequestView second = recoveryService.submit(actor, actor, null);
 
