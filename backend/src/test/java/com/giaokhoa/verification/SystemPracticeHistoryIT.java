@@ -1,0 +1,414 @@
+package com.giaokhoa.verification;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.giaokhoa.support.IntegrationEnvironment;
+import com.giaokhoa.tenancy.data.WorkspaceTransaction;
+import com.giaokhoa.verification.model.SystemPracticeAttemptSample;
+import jakarta.persistence.EntityManager;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Objects;
+import java.util.UUID;
+import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.ConnectionCallback;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+
+/**
+ * Lịch sử practice trên schema cô lập riêng: migration phải áp sạch từ đầu, trigger chỉ cho
+ * practice version đã khoá của resource hệ thống vào đúng personal workspace của người làm, và lịch
+ * sử không bị hard-delete hay đổi định danh. Phần RLS chạy qua một role runtime không superuser,
+ * không BYPASSRLS — đúng bất biến của data-model — vì user của stack TEST là owner nên tự nó không
+ * chịu RLS.
+ */
+@SpringBootTest
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
+class SystemPracticeHistoryIT extends IntegrationEnvironment {
+    private static final String SCHEMA =
+            "system_practice_" + UUID.randomUUID().toString().replace("-", "");
+    private static final String RUNTIME_ROLE = "practice_history_runtime";
+
+    @DynamicPropertySource
+    static void isolatedSchema(DynamicPropertyRegistry registry) {
+        registry.add("spring.flyway.schemas", () -> SCHEMA);
+        registry.add("spring.flyway.default-schema", () -> SCHEMA);
+        registry.add(
+                "spring.datasource.hikari.connection-init-sql",
+                () -> "SET search_path TO " + SCHEMA + ",public");
+    }
+
+    @Autowired private JdbcTemplate jdbc;
+    @Autowired private PlatformTransactionManager transactionManager;
+    @Autowired private EntityManager entityManager;
+
+    private SingleConnectionDataSource runtimeDataSource;
+    private JdbcTemplate runtimeJdbc;
+    private WorkspaceTransaction runtimeTransaction;
+
+    @BeforeAll
+    void createRuntimeRole() {
+        String password = UUID.randomUUID().toString();
+        jdbc.execute("DROP ROLE IF EXISTS " + RUNTIME_ROLE);
+        jdbc.execute(
+                "CREATE ROLE "
+                        + RUNTIME_ROLE
+                        + " LOGIN PASSWORD '"
+                        + password
+                        + "' NOSUPERUSER NOBYPASSRLS");
+        jdbc.execute("GRANT USAGE ON SCHEMA " + SCHEMA + " TO " + RUNTIME_ROLE);
+        jdbc.execute(
+                "GRANT SELECT, INSERT, UPDATE ON system_practice_attempt_sample TO "
+                        + RUNTIME_ROLE);
+        jdbc.execute(
+                "GRANT SELECT ON workspace, user_account, resource, resource_version TO "
+                        + RUNTIME_ROLE);
+
+        String url = jdbc.execute((ConnectionCallback<String>) con -> con.getMetaData().getURL());
+        runtimeDataSource = new SingleConnectionDataSource(url, RUNTIME_ROLE, password, true);
+        runtimeJdbc = new JdbcTemplate(runtimeDataSource);
+        runtimeJdbc.execute("SET search_path TO " + SCHEMA + ",public");
+        runtimeTransaction =
+                new WorkspaceTransaction(
+                        runtimeJdbc, new DataSourceTransactionManager(runtimeDataSource));
+    }
+
+    @AfterAll
+    void removeSchemaAndRuntimeRole() {
+        runtimeDataSource.destroy();
+        jdbc.execute("DROP SCHEMA IF EXISTS " + SCHEMA + " CASCADE");
+        jdbc.execute("DROP ROLE IF EXISTS " + RUNTIME_ROLE);
+    }
+
+    @Test
+    void entityRoundTripPersistsAttempt() {
+        UUID userId = userWithPersonalWorkspace();
+        UUID workspaceId = personalWorkspaceOf(userId);
+        PublishedVersion published = publishedVersion();
+        UUID id = UUID.randomUUID();
+        // TIMESTAMPTZ chỉ giữ tới micro giây nên chuẩn hoá ngay từ đầu để so sánh chính xác.
+        Instant attemptedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+
+        new TransactionTemplate(transactionManager)
+                .executeWithoutResult(_ ->
+                        entityManager.persist(
+                                new SystemPracticeAttemptSample(
+                                        id,
+                                        workspaceId,
+                                        userId,
+                                        published.resourceId(),
+                                        published.versionId(),
+                                        attemptedAt,
+                                        "Bài làm mẫu",
+                                        null)));
+
+        SystemPracticeAttemptSample reloaded =
+                new TransactionTemplate(transactionManager)
+                        .execute(_ -> {
+                            entityManager.clear();
+                            return entityManager.find(SystemPracticeAttemptSample.class, id);
+                        });
+        assertThat(reloaded).isNotNull();
+        assertThat(reloaded.getPersonalWorkspaceId()).isEqualTo(workspaceId);
+        assertThat(reloaded.getUserId()).isEqualTo(userId);
+        assertThat(reloaded.getSystemResourceId()).isEqualTo(published.resourceId());
+        assertThat(reloaded.getVersionId()).isEqualTo(published.versionId());
+        assertThat(reloaded.getAttemptedAt()).isEqualTo(attemptedAt);
+        assertThat(reloaded.getContentStub()).isEqualTo("Bài làm mẫu");
+        assertThat(reloaded.getOutcomeStub()).isNull();
+        assertThat(reloaded.getCreatedAt()).isNotNull();
+    }
+
+    @Test
+    void rlsIsolatesPersonalWorkspaces() {
+        UUID userA = userWithPersonalWorkspace();
+        UUID workspaceA = personalWorkspaceOf(userA);
+        UUID userB = userWithPersonalWorkspace();
+        UUID workspaceB = personalWorkspaceOf(userB);
+        PublishedVersion published = publishedVersion();
+        insertAttempt(workspaceA, userA, published);
+        insertAttempt(workspaceB, userB, published);
+
+        assertThat(countVisible(runtimeJdbc, workspaceA)).isZero();
+        assertThat(
+                        runtimeTransaction.inWorkspace(
+                                workspaceA, () -> countVisible(runtimeJdbc, workspaceA)))
+                .isEqualTo(1);
+        assertThat(
+                        runtimeTransaction.inWorkspace(
+                                workspaceA, () -> countVisible(runtimeJdbc, workspaceB)))
+                .isZero();
+        assertThat(
+                        runtimeTransaction.inWorkspace(
+                                workspaceB, () -> countVisible(runtimeJdbc, workspaceB)))
+                .isEqualTo(1);
+        assertThatThrownBy(() ->
+                        runtimeTransaction.inWorkspace(
+                                workspaceA,
+                                () -> {
+                                    insertAttempt(runtimeJdbc, workspaceB, userB, published);
+                                    return null;
+                                }))
+                .isInstanceOf(DataAccessException.class);
+        runtimeTransaction.inWorkspace(
+                workspaceA,
+                () -> {
+                    insertAttempt(runtimeJdbc, workspaceA, userA, published);
+                    return null;
+                });
+        assertThat(
+                        runtimeTransaction.inWorkspace(
+                                workspaceA, () -> countVisible(runtimeJdbc, workspaceA)))
+                .isEqualTo(2);
+    }
+
+    @Test
+    void onlyLockedVersionCanBePracticed() {
+        UUID userId = userWithPersonalWorkspace();
+        UUID workspaceId = personalWorkspaceOf(userId);
+        UUID resourceId = systemResource();
+        UUID draft = version(resourceId, "DRAFT", null);
+        UUID approved = version(resourceId, "APPROVED", null);
+
+        assertThatThrownBy(() -> insertAttempt(workspaceId, userId, resourceId, draft))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("published version");
+        assertThatThrownBy(() -> insertAttempt(workspaceId, userId, resourceId, approved))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("published version");
+        insertAttempt(
+                workspaceId, userId, resourceId, version(resourceId, "LOCKED", Instant.now()));
+        assertThat(countAsOwner(workspaceId)).isEqualTo(1);
+    }
+
+    @Test
+    void rejectsResourceOutsideSystemWorkspace() {
+        UUID userId = userWithPersonalWorkspace();
+        UUID workspaceId = personalWorkspaceOf(userId);
+        UUID ownResourceId = UUID.randomUUID();
+        jdbc.update(
+                "INSERT INTO resource"
+                        + " (id, owner_workspace_id, created_by_user_id, kind, subject_id, state)"
+                        + " VALUES (?, ?, ?, 'EXAM', ?, 'ACTIVE')",
+                ownResourceId,
+                workspaceId,
+                userId,
+                UUID.randomUUID());
+        UUID locked = version(ownResourceId, "LOCKED", Instant.now());
+
+        assertThatThrownBy(() -> insertAttempt(workspaceId, userId, ownResourceId, locked))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("system resource");
+    }
+
+    @Test
+    void rejectsVersionOfAnotherResource() {
+        UUID userId = userWithPersonalWorkspace();
+        UUID workspaceId = personalWorkspaceOf(userId);
+        PublishedVersion published = publishedVersion();
+        PublishedVersion other = publishedVersion();
+
+        assertThatThrownBy(() ->
+                        insertAttempt(
+                                workspaceId, userId, published.resourceId(), other.versionId()))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("published version");
+    }
+
+    @Test
+    void rejectsAttemptIntoAnotherUsersPersonalWorkspace() {
+        UUID userId = userWithPersonalWorkspace();
+        UUID otherUser = userWithPersonalWorkspace();
+        UUID otherWorkspace = personalWorkspaceOf(otherUser);
+        PublishedVersion published = publishedVersion();
+
+        assertThatThrownBy(() -> insertAttempt(otherWorkspace, userId, published))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("own personal workspace");
+        assertThatThrownBy(() -> insertAttempt(published.systemWorkspaceId(), userId, published))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("own personal workspace");
+    }
+
+    @Test
+    void historyIsImmutableExceptOutcome() {
+        UUID userId = userWithPersonalWorkspace();
+        UUID workspaceId = personalWorkspaceOf(userId);
+        PublishedVersion published = publishedVersion();
+        UUID id = insertAttempt(workspaceId, userId, published);
+
+        jdbc.update(
+                "UPDATE system_practice_attempt_sample SET outcome_stub = 'Đạt' WHERE id = ?", id);
+        assertThatThrownBy(() ->
+                        jdbc.update(
+                                "UPDATE system_practice_attempt_sample SET user_id = ?"
+                                        + " WHERE id = ?",
+                                userWithPersonalWorkspace(),
+                                id))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("identity cannot change");
+        assertThatThrownBy(() ->
+                        jdbc.update("DELETE FROM system_practice_attempt_sample WHERE id = ?", id))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("cannot be hard-deleted");
+        assertThat(countAsOwner(workspaceId)).isEqualTo(1);
+    }
+
+    private record PublishedVersion(UUID systemWorkspaceId, UUID resourceId, UUID versionId) {}
+
+    private PublishedVersion publishedVersion() {
+        UUID systemWorkspaceId = UUID.randomUUID();
+        jdbc.update(
+                "INSERT INTO workspace (id, kind, state) VALUES (?, 'SYSTEM', 'ACTIVE')",
+                systemWorkspaceId);
+        UUID resourceId = UUID.randomUUID();
+        jdbc.update(
+                "INSERT INTO resource"
+                        + " (id, owner_workspace_id, created_by_user_id, kind, subject_id, state)"
+                        + " VALUES (?, ?, ?, 'EXAM', ?, 'ACTIVE')",
+                resourceId,
+                systemWorkspaceId,
+                userWithPersonalWorkspace(),
+                UUID.randomUUID());
+        return new PublishedVersion(
+                systemWorkspaceId, resourceId, version(resourceId, "LOCKED", Instant.now()));
+    }
+
+    private UUID systemResource() {
+        UUID systemWorkspaceId = UUID.randomUUID();
+        jdbc.update(
+                "INSERT INTO workspace (id, kind, state) VALUES (?, 'SYSTEM', 'ACTIVE')",
+                systemWorkspaceId);
+        UUID resourceId = UUID.randomUUID();
+        jdbc.update(
+                "INSERT INTO resource"
+                        + " (id, owner_workspace_id, created_by_user_id, kind, subject_id, state)"
+                        + " VALUES (?, ?, ?, 'EXAM', ?, 'ACTIVE')",
+                resourceId,
+                systemWorkspaceId,
+                userWithPersonalWorkspace(),
+                UUID.randomUUID());
+        return resourceId;
+    }
+
+    private UUID version(UUID resourceId, String reviewState, @Nullable Instant lockedAt) {
+        UUID id = UUID.randomUUID();
+        Integer existing =
+                jdbc.queryForObject(
+                        "SELECT count(*) FROM resource_version WHERE resource_id = ?",
+                        Integer.class,
+                        resourceId);
+        int versionNo = (existing == null ? 0 : existing) + 1;
+        jdbc.update(
+                "INSERT INTO resource_version"
+                        + " (id, resource_id, version_no, label, body_stub, answer_stub,"
+                        + " review_state, locked_at)"
+                        + " VALUES (?, ?, ?, ?, 'Nội dung', 'Đáp án', ?, ?)",
+                id,
+                resourceId,
+                versionNo,
+                "Bản " + versionNo,
+                reviewState,
+                lockedAt == null ? null : Timestamp.from(lockedAt));
+        return id;
+    }
+
+    private UUID userWithPersonalWorkspace() {
+        UUID userId = UUID.randomUUID();
+        UUID workspaceId = UUID.randomUUID();
+        new TransactionTemplate(transactionManager)
+                .executeWithoutResult(_ -> {
+                    jdbc.update(
+                            "INSERT INTO user_account"
+                                    + " (id, keycloak_sub, username, email_verified,"
+                                    + " origin, identity_state)"
+                                    + " VALUES (?, ?, ?, false,"
+                                    + " 'SELF_REGISTERED', 'ACTIVE')",
+                            userId,
+                            "sub-" + userId,
+                            "user-" + userId);
+                    jdbc.update(
+                            "INSERT INTO workspace (id, kind, owner_user_id, state)"
+                                    + " VALUES (?, 'PERSONAL', ?, 'ACTIVE')",
+                            workspaceId,
+                            userId);
+                });
+        return userId;
+    }
+
+    private UUID personalWorkspaceOf(UUID userId) {
+        return Objects.requireNonNull(
+                jdbc.queryForObject(
+                        "SELECT id FROM workspace WHERE owner_user_id = ? AND kind = 'PERSONAL'",
+                        UUID.class,
+                        userId));
+    }
+
+    private UUID insertAttempt(UUID workspaceId, UUID userId, PublishedVersion published) {
+        return insertAttempt(
+                jdbc, workspaceId, userId, published.resourceId(), published.versionId());
+    }
+
+    private UUID insertAttempt(
+            JdbcTemplate template, UUID workspaceId, UUID userId, PublishedVersion published) {
+        return insertAttempt(
+                template, workspaceId, userId, published.resourceId(), published.versionId());
+    }
+
+    private UUID insertAttempt(UUID workspaceId, UUID userId, UUID resourceId, UUID versionId) {
+        return insertAttempt(jdbc, workspaceId, userId, resourceId, versionId);
+    }
+
+    private UUID insertAttempt(
+            JdbcTemplate template, UUID workspaceId, UUID userId, UUID resourceId, UUID versionId) {
+        UUID id = UUID.randomUUID();
+        template.update(
+                "INSERT INTO system_practice_attempt_sample"
+                        + " (id, personal_workspace_id, user_id, system_resource_id, version_id,"
+                        + " attempted_at, content_stub)"
+                        + " VALUES (?, ?, ?, ?, ?, ?, 'Bài làm mẫu')",
+                id,
+                workspaceId,
+                userId,
+                resourceId,
+                versionId,
+                Timestamp.from(Instant.now()));
+        return id;
+    }
+
+    private int countAsOwner(UUID workspaceId) {
+        return Objects.requireNonNull(
+                jdbc.queryForObject(
+                        "SELECT count(*) FROM system_practice_attempt_sample"
+                                + " WHERE personal_workspace_id = ?",
+                        Integer.class,
+                        workspaceId));
+    }
+
+    private int countVisible(JdbcTemplate template, UUID workspaceId) {
+        return Objects.requireNonNull(
+                template.queryForObject(
+                        "SELECT count(*) FROM system_practice_attempt_sample"
+                                + " WHERE personal_workspace_id = ?",
+                        Integer.class,
+                        workspaceId));
+    }
+}

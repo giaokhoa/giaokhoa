@@ -295,8 +295,11 @@ async function verifyIsolatedSignatureIssuerAudience(appOrigin, port, sessionCou
         await rejectedWithoutRevocation(appOrigin, token, sessionCount, reason);
         assert.equal(correlation(), recorded.join("|"), reason + " must preserve correlation");
     }
+    // Endpoint đã tồn tại từ US1 nên không còn 404: user chưa bootstrap (chưa gọi
+    // /api/session) nên actor fail-closed 503 theo thiết kế; 503 chứ không phải 302
+    // vẫn chứng minh cookie còn xác thực.
     const active = await browserFetch(appOrigin + "/api/me/workspaces");
-    assert.equal(active.status, 404, "Original browser cookie stays authenticated");
+    assert.equal(active.status, 503, "Original browser cookie stays authenticated");
 
     await stopBackend();
     await new Promise((done) => jwksServer.close(done));
@@ -402,8 +405,10 @@ async function run() {
     await startBackend(port);
     assert.equal(sessionCount(), "1", "JDBC session survives backend restart");
     assert.equal(correlation(), recorded.join("|"), "OIDC correlation survives restart");
+    // Như trên: endpoint đã tồn tại từ US1, user chưa bootstrap nên fail-closed 503;
+    // 503 chứ không phải 302 chứng minh SESSION cũ còn xác thực sau restart.
     const active = await browserFetch(appOrigin + "/api/me/workspaces");
-    assert.equal(active.status, 404, "Old SESSION cookie authenticates after restart");
+    assert.equal(active.status, 503, "Old SESSION cookie authenticates after restart");
 
     const badToken = await fetch(appOrigin + "/logout/connect/back-channel/keycloak", {
         method: "POST",
