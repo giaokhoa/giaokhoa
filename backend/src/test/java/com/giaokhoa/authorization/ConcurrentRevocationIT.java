@@ -1,5 +1,6 @@
 package com.giaokhoa.authorization;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
@@ -10,6 +11,7 @@ import com.giaokhoa.authorization.operation.IdempotencyService;
 import com.giaokhoa.authorization.projection.ProjectionReconciler;
 import com.giaokhoa.identity.eligibility.IdentityEligibilitySynchronizer;
 import com.giaokhoa.support.IntegrationEnvironment;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -17,6 +19,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
+import org.awaitility.core.ConditionTimeoutException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -595,8 +599,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
         eligibility.synchronizeEligibility(actor.actor());
         reconciler.reconcilePartition(actor.account());
         reconciler.reconcilePartition(actor.workspacePartition());
-        org.awaitility.Awaitility.await()
-                .atMost(java.time.Duration.ofSeconds(15))
+        await().atMost(Duration.ofSeconds(15))
                 .until(() ->
                         jdbc.queryForList(
                                         "SELECT id FROM authorization_operation WHERE initiator_user_id = ? AND state <> 'SUCCEEDED'",
@@ -795,22 +798,16 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                         webContext.containsBean("projectionWorker"),
                         "REVOCATION_CONTRACT_WORKER_NOT_INSTALLED: the reconciliation worker must resume owner source through"
                                 + " production PolicyGraphWriter/ProjectionReconciler");
-                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
-                while (System.nanoTime() < deadline) {
-                    boolean done =
-                            "READY".equals(state(actor.workspacePartition()))
-                                    && "SUCCEEDED"
-                                            .equals(
-                                                    jdbc.queryForObject(
-                                                            "SELECT state FROM authorization_operation"
-                                                                    + " WHERE id=?",
-                                                            String.class,
-                                                            operation.getId()));
-                    if (done) {
-                        break;
-                    }
-                    Thread.sleep(100);
-                }
+                awaitCondition(
+                        () ->
+                                "READY".equals(state(actor.workspacePartition()))
+                                        && "SUCCEEDED"
+                                                .equals(
+                                                        jdbc.queryForObject(
+                                                                "SELECT state FROM authorization_operation"
+                                                                        + " WHERE id=?",
+                                                                String.class,
+                                                                operation.getId())));
                 assertAll(
                         "REVOCATION_CONTRACT_REAL_WORKER_PARTIAL_GRAPH_RECOVERY",
                         () ->
@@ -1189,7 +1186,13 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
 
         // Vài poll của worker trôi qua: operation trẻ hơn đã tới hạn, nhưng nó phải giữ nguyên
         // không bị đụng trong khi operation cũ hơn chạm cùng partition vẫn đang chờ.
-        Thread.sleep(8000);
+        // Awaitility during() giữ điều kiện liên tục suốt khoảng chờ thay cho ngủ cố định.
+        await().during(Duration.ofSeconds(8))
+                .atMost(Duration.ofSeconds(10))
+                .until(
+                        () ->
+                                "PENDING".equals(operationState(younger))
+                                        && operationAttempts(younger) == 0);
         assertEquals("PENDING", operationState(younger));
         assertEquals(0, operationAttempts(younger));
 
@@ -1200,10 +1203,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                     "UPDATE authorization_operation SET next_attempt_at=now() WHERE id=?", older);
             return null;
         });
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
-        while (operationAttempts(older) < 2 && System.nanoTime() < deadline) {
-            Thread.sleep(100);
-        }
+        awaitCondition(() -> operationAttempts(older) >= 2);
         assertEquals(2, operationAttempts(older));
         assertEquals("PENDING", operationState(younger));
         assertEquals(0, operationAttempts(younger));
@@ -1248,10 +1248,7 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
                     return recorded.getId();
                 });
 
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
-        while (!"FAILED".equals(operationState(operation)) && System.nanoTime() < deadline) {
-            Thread.sleep(100);
-        }
+        awaitCondition(() -> "FAILED".equals(operationState(operation)));
         assertEquals("FAILED", operationState(operation));
         assertEquals(
                 "SUPERSEDED_BY_NEWER_REVISION",
@@ -1275,6 +1272,21 @@ class ConcurrentRevocationIT extends IntegrationEnvironment {
     private int backendPid() {
         return java.util.Objects.requireNonNull(
                 jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+    }
+
+    /**
+     * Chờ một điều kiện tối đa 15 giây bằng Awaitility (poll 100 ms) thay vòng poll viết tay.
+     * Timeout bị nuốt có chủ đích: các assert ngay sau vòng chờ tự báo đúng trạng thái lệch kèm
+     * thông điệp của chúng, như hành vi vòng poll cũ.
+     */
+    private static void awaitCondition(BooleanSupplier condition) {
+        try {
+            await().atMost(Duration.ofSeconds(15))
+                    .pollInterval(Duration.ofMillis(100))
+                    .until(condition::getAsBoolean);
+        } catch (ConditionTimeoutException ignored) {
+            // assert phía sau sẽ báo trạng thái thật
+        }
     }
 
     private void assertBlockedBy(Future<?> waiting, int waiterPid, int blockerPid)

@@ -4,14 +4,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import com.giaokhoa.authorization.model.AuthorizationOperation;
 import com.giaokhoa.shared.http.HttpProblemException;
 import com.giaokhoa.support.IntegrationEnvironment;
 import java.net.URI;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -59,8 +56,6 @@ class IdentityEligibilitySynchronizerIT extends IntegrationEnvironment {
     private static final RestClient HTTP = RestClient.create();
     private static final String BASE = required("TEST_KEYCLOAK_BASE_URL").replaceAll("/+$", "");
     private static final String REALM = required("TEST_KEYCLOAK_REALM");
-    private static final String STATE_SUCCEEDED = "SUCCEEDED";
-    private static final String STATE_FAILED = "FAILED";
     private static final String DEFAULT_PERMISSION = "Default Permission";
     private static final String DEFAULT_RESOURCE = "Default Resource";
     private static final String DEFAULT_POLICY = "Default Policy";
@@ -197,27 +192,7 @@ class IdentityEligibilitySynchronizerIT extends IntegrationEnvironment {
     }
 
     private void awaitSucceeded(UUID operationId) {
-        Instant deadline = Instant.now().plus(Duration.ofSeconds(90));
-        while (Instant.now().isBefore(deadline)) {
-            Map<String, Object> row =
-                    jdbc.queryForMap(
-                            "SELECT state, last_error_code FROM authorization_operation"
-                                    + " WHERE id = ?",
-                            operationId);
-            if (STATE_SUCCEEDED.equals(row.get("state"))) {
-                return;
-            }
-            if (STATE_FAILED.equals(row.get("state"))) {
-                fail("Operation failed with " + row.get("last_error_code"));
-            }
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-                fail("Interrupted while waiting for the operation");
-            }
-        }
-        fail("Operation did not succeed in time: " + operationId);
+        awaitOperationSucceeded(jdbc, operationId);
     }
 
     private String createUser(String username, @Nullable String email, boolean emailVerified) {

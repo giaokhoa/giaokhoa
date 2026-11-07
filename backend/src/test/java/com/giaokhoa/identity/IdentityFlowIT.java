@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -1096,30 +1095,7 @@ class IdentityFlowIT extends IntegrationEnvironment {
     }
 
     private void awaitSucceeded(UUID operationId) {
-        Instant deadline = Instant.now().plus(Duration.ofSeconds(90));
-        while (Instant.now().isBefore(deadline)) {
-            Map<String, Object> row =
-                    jdbc.queryForMap(
-                            "SELECT state, last_error_code FROM authorization_operation WHERE id = ?",
-                            operationId);
-            switch (String.valueOf(row.get("state"))) {
-                case "SUCCEEDED" -> {
-                    return;
-                }
-                case "FAILED" -> fail("Operation failed with " + row.get("last_error_code"));
-                default -> sleep();
-            }
-        }
-        fail("Operation did not succeed in time: " + operationId);
-    }
-
-    private static void sleep() {
-        try {
-            Thread.sleep(500);
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-            fail("Interrupted while waiting for the operation");
-        }
+        awaitOperationSucceeded(jdbc, operationId);
     }
 
     private <T> T tx(java.util.function.Supplier<T> action) {
