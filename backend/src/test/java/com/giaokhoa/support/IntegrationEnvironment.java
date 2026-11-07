@@ -60,6 +60,20 @@ public abstract class IntegrationEnvironment { // NOPMD - Lớp base TEST để 
     }
 
     /**
+     * Khai báo schema cô lập cho một class test: Flyway migrate vào đúng schema đó và mọi kết nối
+     * của pool mang search_path trỏ vào nó. Từng class vẫn tự khai {@code @DynamicPropertySource}
+     * của mình (annotation phải nằm trên chính class) và chỉ truyền hằng SCHEMA vào đây, thay cho
+     * bản sao cùng 3 dòng khai báo ở mọi class trước đây.
+     */
+    protected static void isolatedSchema(DynamicPropertyRegistry registry, String schema) {
+        registry.add("spring.flyway.schemas", () -> schema);
+        registry.add("spring.flyway.default-schema", () -> schema);
+        registry.add(
+                "spring.datasource.hikari.connection-init-sql",
+                () -> "SET search_path TO " + schema + ",public");
+    }
+
+    /**
      * Teardown cho class cần worker thật (không mock được): dừng scheduler để không còn lượt poll
      * nào mở giao dịch trên schema, chờ khóa của lượt đang chạy dở tan hết, rồi DROP bằng
      * connection độc lập vì pool vẫn mở theo context. KHÔNG đóng context ở đây: các listener

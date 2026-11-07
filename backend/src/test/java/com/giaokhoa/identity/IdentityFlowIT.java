@@ -14,24 +14,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import com.giaokhoa.authorization.model.AuthorizationOperation;
 import com.giaokhoa.identity.eligibility.IdentityEligibilitySynchronizer;
 import com.giaokhoa.support.IntegrationEnvironment;
+import com.giaokhoa.support.OidcFormLogin;
+import com.giaokhoa.support.RealmFoundation;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import java.net.CookieManager;
 import java.net.URI;
-import java.net.URLDecoder;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -40,8 +31,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -52,7 +41,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -79,7 +67,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.context.WebApplicationContext;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -106,17 +93,9 @@ class IdentityFlowIT extends IntegrationEnvironment {
     private static final RestClient HTTP = RestClient.create();
     private static final String BASE = fixture("TEST_KEYCLOAK_BASE_URL").replaceAll("/+$", "");
     private static final String REALM = fixture("TEST_KEYCLOAK_REALM");
-    private static final String DEFAULT_PERMISSION = "Default Permission";
-    private static final String DEFAULT_RESOURCE = "Default Resource";
-    private static final String DEFAULT_POLICY = "Default Policy";
-
     @DynamicPropertySource
     static void isolatedSchema(DynamicPropertyRegistry registry) {
-        registry.add("spring.flyway.schemas", () -> SCHEMA);
-        registry.add("spring.flyway.default-schema", () -> SCHEMA);
-        registry.add(
-                "spring.datasource.hikari.connection-init-sql",
-                () -> "SET search_path TO " + SCHEMA + ",public");
+        isolatedSchema(registry, SCHEMA);
     }
 
     @BeforeAll
@@ -1225,120 +1204,16 @@ class IdentityFlowIT extends IntegrationEnvironment {
     }
 
     private static void seedEligibilityGroup() {
-        String parentId = null;
-        StringBuilder path = new StringBuilder();
-        for (String segment : List.of("gk", "identity", "eligible")) {
-            path.append('/').append(segment);
-            String currentPath = path.toString();
-            String found = null;
-            try {
-                Map<String, Object> group =
-                        HTTP.get()
-                                .uri(adminStatic("/group-by-path" + currentPath))
-                                .headers(headers -> headers.setBearerAuth(masterTokenStatic()))
-                                .retrieve()
-                                .body(MAP);
-                if (group != null && currentPath.equals(group.get("path"))) {
-                    found = String.valueOf(group.get("id"));
-                }
-            } catch (RestClientResponseException ex) {
-                if (!ex.getStatusCode().isSameCodeAs(HttpStatus.NOT_FOUND)) {
-                    throw ex;
-                }
-            }
-            if (found == null) {
-                String endpoint =
-                        parentId == null ? "/groups" : "/groups/" + parentId + "/children";
-                // Cây /gk/identity/eligible là object nền của realm: chỉ tạo khi thiếu, không
-                // bao giờ xóa ở teardown — nhiều class dùng chung đường dẫn cố định này.
-                found = createResource(adminStatic(endpoint), Map.of("name", segment));
-            }
-            parentId = found;
-        }
+        RealmFoundation.ensureEligibilityTree(
+                HTTP, adminStatic(""), IdentityFlowIT::masterTokenStatic);
     }
 
     private static void ensureApiClient() {
-        String audience = fixture("TEST_KEYCLOAK_AUTHZ_AUDIENCE");
-        List<Map<String, Object>> matches =
-                HTTP.get()
-                        .uri(adminStatic("/clients?clientId=" + audience))
-                        .headers(headers -> headers.setBearerAuth(masterTokenStatic()))
-                        .retrieve()
-                        .body(LIST);
-        if (matches != null && !matches.isEmpty()) {
-            return;
-        }
-        String clientId =
-                createResource(
-                        adminStatic("/clients"),
-                        Map.of(
-                                "clientId", audience,
-                                "protocol", "openid-connect",
-                                "enabled", true,
-                                "publicClient", false,
-                                "standardFlowEnabled", false,
-                                "directAccessGrantsEnabled", false,
-                                "authorizationServicesEnabled", true,
-                                "serviceAccountsEnabled", true,
-                                "fullScopeAllowed", false,
-                                "authorizationSettings",
-                                        Map.of(
-                                                "policyEnforcementMode", "ENFORCING",
-                                                "allowRemoteResourceManagement", true,
-                                                "decisionStrategy", "UNANIMOUS")));
-        // Client này là object nền của realm (cùng vai trò bootstrap.sh ở production): chỉ
-        // tạo khi thiếu và gỡ default do Keycloak tự sinh đúng như bootstrap, không bao giờ
-        // xóa ở teardown — nhiều class dùng chung client theo clientId cố định này.
-        removeClientDefaults(clientId);
-    }
-
-    private static void removeClientDefaults(String clientId) {
-        String root = "/clients/" + clientId + "/authz/resource-server";
-        for (Map<String, Object> permission : getList(adminStatic(root + "/permission/resource"))) {
-            if (DEFAULT_PERMISSION.equals(permission.get("name"))) {
-                delete(adminStatic(root + "/permission/resource/" + permission.get("id")));
-            }
-        }
-        for (Map<String, Object> resource : getList(adminStatic(root + "/resource"))) {
-            if (DEFAULT_RESOURCE.equals(resource.get("name"))) {
-                delete(adminStatic(root + "/resource/" + resource.get("_id")));
-            }
-        }
-        for (Map<String, Object> policy : getList(adminStatic(root + "/policy"))) {
-            if (DEFAULT_POLICY.equals(policy.get("name"))) {
-                delete(adminStatic(root + "/policy/" + policy.get("id")));
-            }
-        }
-    }
-
-    private static List<Map<String, Object>> getList(String uri) {
-        List<Map<String, Object>> result =
-                HTTP.get()
-                        .uri(uri)
-                        .headers(headers -> headers.setBearerAuth(masterTokenStatic()))
-                        .retrieve()
-                        .body(LIST);
-        if (result == null) {
-            throw new IllegalStateException("Keycloak list not readable: " + uri);
-        }
-        return result;
-    }
-
-    private static String createResource(String uri, Map<String, ?> body) {
-        var response =
-                HTTP.post()
-                        .uri(uri)
-                        .headers(headers -> headers.setBearerAuth(masterTokenStatic()))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(body)
-                        .retrieve()
-                        .toEntity(String.class);
-        URI location = response.getHeaders().getLocation();
-        if (location == null) {
-            throw new IllegalStateException("Keycloak did not return a location for " + uri);
-        }
-        String path = location.getPath();
-        return path.substring(path.lastIndexOf('/') + 1);
+        RealmFoundation.ensureApiClient(
+                HTTP,
+                adminStatic(""),
+                IdentityFlowIT::masterTokenStatic,
+                fixture("TEST_KEYCLOAK_AUTHZ_AUDIENCE"));
     }
 
     private static void delete(String uri) {
@@ -1387,9 +1262,6 @@ class IdentityFlowIT extends IntegrationEnvironment {
      */
     static final class RealSession implements AutoCloseable {
         private static final String REDIRECT_URI = "http://127.0.0.1:18888/callback";
-        private static final Pattern LOGIN_FORM =
-                Pattern.compile("<form[^>]*id=\"kc-form-login\"[^>]*action=\"([^\"]+)\"");
-        private static final SecureRandom RANDOM = new SecureRandom();
 
         private final SessionRepository<?> sessions;
         private final Cookie sessionCookie;
@@ -1419,7 +1291,9 @@ class IdentityFlowIT extends IntegrationEnvironment {
                 throws Exception {
             var registration =
                     Objects.requireNonNull(registrations.findByRegistrationId("keycloak"));
-            Tokens tokens = webTokensViaCodePkce(username, password);
+            OidcFormLogin.WebTokens tokens =
+                    OidcFormLogin.webTokensViaCodePkce(
+                            HTTP, BASE, REALM, REDIRECT_URI, username, password);
             String claims =
                     new String(
                             Base64.getUrlDecoder().decode(tokens.idToken().split("[.]")[1]),
@@ -1474,141 +1348,6 @@ class IdentityFlowIT extends IntegrationEnvironment {
             assertNotNull(
                     sessions.findById(sessionCookie.getValue()), "Session must persist in JDBC");
             return new RealSession(sessions, sessionCookie);
-        }
-
-        private record Tokens(String accessToken, String idToken, String refreshToken) {}
-
-        private static Tokens webTokensViaCodePkce(String username, String password) {
-            String client = fixture("TEST_OIDC_CLIENT_ID");
-            if (!"giaokhoa-it-web".equals(client)) {
-                throw new IllegalArgumentException("Only TEST BFF client can be used");
-            }
-            byte[] nonce = new byte[32];
-            RANDOM.nextBytes(nonce);
-            String verifier = Base64.getUrlEncoder().withoutPadding().encodeToString(nonce);
-            String challenge;
-            try {
-                challenge =
-                        Base64.getUrlEncoder()
-                                .withoutPadding()
-                                .encodeToString(
-                                        MessageDigest.getInstance("SHA-256")
-                                                .digest(
-                                                        verifier.getBytes(
-                                                                StandardCharsets.US_ASCII)));
-            } catch (NoSuchAlgorithmException ex) {
-                throw new IllegalStateException("PKCE requires SHA-256", ex);
-            }
-            String state = UUID.randomUUID().toString();
-            String url =
-                    BASE
-                            + "/realms/"
-                            + REALM
-                            + "/protocol/openid-connect/auth?client_id="
-                            + encode(client)
-                            + "&redirect_uri="
-                            + encode(REDIRECT_URI)
-                            + "&response_type=code&scope=openid&state="
-                            + encode(state)
-                            + "&nonce="
-                            + UUID.randomUUID()
-                            + "&code_challenge="
-                            + encode(challenge)
-                            + "&code_challenge_method=S256";
-            try (HttpClient browser =
-                    HttpClient.newBuilder()
-                            .cookieHandler(new CookieManager())
-                            .connectTimeout(Duration.ofSeconds(10))
-                            .followRedirects(HttpClient.Redirect.NEVER)
-                            .build()) {
-                var loginPage =
-                        browser.send(
-                                HttpRequest.newBuilder(URI.create(url)).GET().build(),
-                                HttpResponse.BodyHandlers.ofString());
-                assertEquals(200, loginPage.statusCode(), "Expected native Keycloak login form");
-                var form = LOGIN_FORM.matcher(loginPage.body());
-                if (!form.find()) {
-                    throw new IllegalStateException("Native TEST Code login form not found");
-                }
-                String loginUrl = form.group(1).replace("&amp;", "&");
-                if (!loginUrl.startsWith(BASE + "/realms/" + REALM + "/login-actions/")) {
-                    throw new IllegalStateException("Unexpected TEST login form target");
-                }
-                // Cookie Secure của TEST Keycloak chỉ được trả về đúng login action loopback này.
-                String loginCookies =
-                        loginPage.headers().allValues("set-cookie").stream()
-                                .map(cookie -> cookie.split(";", 2)[0])
-                                .collect(Collectors.joining("; "));
-                var loginResponse =
-                        browser.send(
-                                HttpRequest.newBuilder(URI.create(loginUrl))
-                                        .header("Cookie", loginCookies)
-                                        .header("Content-Type", "application/x-www-form-urlencoded")
-                                        .POST(
-                                                HttpRequest.BodyPublishers.ofString(
-                                                        "username="
-                                                                + encode(username)
-                                                                + "&password="
-                                                                + encode(password)
-                                                                + "&credentialId="))
-                                        .build(),
-                                HttpResponse.BodyHandlers.ofString());
-                assertEquals(302, loginResponse.statusCode(), "Native Code login must redirect");
-                URI redirected =
-                        URI.create(loginResponse.headers().firstValue("location").orElseThrow());
-                if (!REDIRECT_URI.equals(
-                        redirected.getScheme()
-                                + "://"
-                                + redirected.getHost()
-                                + ":"
-                                + redirected.getPort()
-                                + redirected.getPath())) {
-                    throw new IllegalStateException("Unexpected TEST OIDC redirect target");
-                }
-                Map<String, String> params =
-                        Arrays.stream(redirected.getRawQuery().split("&"))
-                                .map(value -> value.split("=", 2))
-                                .collect(
-                                        Collectors.toMap(
-                                                pair ->
-                                                        URLDecoder.decode(
-                                                                pair[0], StandardCharsets.UTF_8),
-                                                pair ->
-                                                        URLDecoder.decode(
-                                                                pair[1], StandardCharsets.UTF_8)));
-                assertEquals(state, params.get("state"));
-                String code = Objects.requireNonNull(params.get("code"));
-                var exchange = new LinkedMultiValueMap<String, String>();
-                exchange.add("grant_type", "authorization_code");
-                exchange.add("client_id", client);
-                exchange.add("client_secret", fixture("TEST_OIDC_CLIENT_SECRET"));
-                exchange.add("redirect_uri", REDIRECT_URI);
-                exchange.add("code", code);
-                exchange.add("code_verifier", verifier);
-                Map<String, Object> tokens =
-                        HTTP.post()
-                                .uri(BASE + "/realms/" + REALM + "/protocol/openid-connect/token")
-                                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                                .body(exchange)
-                                .retrieve()
-                                .body(MAP);
-                assertNotNull(tokens);
-                return new Tokens(
-                        Objects.requireNonNull((String) tokens.get("access_token"), "access_token"),
-                        Objects.requireNonNull((String) tokens.get("id_token"), "id_token"),
-                        Objects.requireNonNull(
-                                (String) tokens.get("refresh_token"), "refresh_token"));
-            } catch (IOException exception) {
-                throw new IllegalStateException("Native TEST Code+PKCE login failed", exception);
-            } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException(
-                        "Native TEST Code+PKCE login interrupted", exception);
-            }
-        }
-
-        private static String encode(String value) {
-            return URLEncoder.encode(value, StandardCharsets.UTF_8);
         }
     }
 }
