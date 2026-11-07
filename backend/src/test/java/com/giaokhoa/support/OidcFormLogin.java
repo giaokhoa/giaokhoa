@@ -18,6 +18,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -97,24 +98,35 @@ public final class OidcFormLogin {
                             HttpRequest.newBuilder(URI.create(url)).GET().build(),
                             HttpResponse.BodyHandlers.ofString());
             assertEquals(200, loginPage.statusCode(), "Expected native Keycloak login form");
-            var form = LOGIN_FORM.matcher(loginPage.body());
-            if (!form.find()) {
-                throw new IllegalStateException("Native TEST Code login form not found");
+            String pageBody = loginPage.body();
+            // Cookie Secure của TEST Keycloak chỉ được trả về đúng login action loopback này
+            // nên gom cookie thủ công theo tên như cookie jar của trình duyệt.
+            Map<String, String> cookieJar = new LinkedHashMap<>();
+            collectCookies(cookieJar, loginPage);
+            if (!pageBody.contains("name=\"password\"")) {
+                // Realm đã có organization thì Keycloak 26 chuyển sang đăng nhập
+                // identity-first: gửi username trước, password ở bước sau.
+                var usernameStep =
+                        browser.send(
+                                HttpRequest.newBuilder(
+                                                URI.create(loginFormAction(base, realm, pageBody)))
+                                        .header("Cookie", cookieHeader(cookieJar))
+                                        .header("Content-Type", "application/x-www-form-urlencoded")
+                                        .POST(
+                                                HttpRequest.BodyPublishers.ofString(
+                                                        "username=" + encode(username)))
+                                        .build(),
+                                HttpResponse.BodyHandlers.ofString());
+                assertEquals(
+                        200, usernameStep.statusCode(), "Username step must render password form");
+                pageBody = usernameStep.body();
+                collectCookies(cookieJar, usernameStep);
             }
-            String loginUrl = form.group(1).replace("&amp;", "&");
-            if (!loginUrl.startsWith(base + "/realms/" + realm + "/login-actions/")) {
-                throw new IllegalStateException("Unexpected TEST login form target");
-            }
-            // TEST Keycloak phát hành cookie Secure ngay cả trên HTTP loopback. Chỉ trả chúng
-            // về đúng login action loopback của realm TEST này, không về origin nào khác.
-            String loginCookies =
-                    loginPage.headers().allValues("set-cookie").stream()
-                            .map(cookie -> cookie.split(";", 2)[0])
-                            .collect(Collectors.joining("; "));
             var loginResponse =
                     browser.send(
-                            HttpRequest.newBuilder(URI.create(loginUrl))
-                                    .header("Cookie", loginCookies)
+                            HttpRequest.newBuilder(
+                                            URI.create(loginFormAction(base, realm, pageBody)))
+                                    .header("Cookie", cookieHeader(cookieJar))
                                     .header("Content-Type", "application/x-www-form-urlencoded")
                                     .POST(
                                             HttpRequest.BodyPublishers.ofString(
@@ -176,6 +188,34 @@ public final class OidcFormLogin {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Native TEST Code+PKCE login interrupted", exception);
         }
+    }
+
+    private static String loginFormAction(String base, String realm, String pageBody) {
+        var form = LOGIN_FORM.matcher(pageBody);
+        if (!form.find()) {
+            throw new IllegalStateException("Native TEST Code login form not found");
+        }
+        String loginUrl = form.group(1).replace("&amp;", "&");
+        if (!loginUrl.startsWith(base + "/realms/" + realm + "/login-actions/")) {
+            throw new IllegalStateException("Unexpected TEST login form target");
+        }
+        return loginUrl;
+    }
+
+    private static void collectCookies(Map<String, String> jar, HttpResponse<?> response) {
+        for (String header : response.headers().allValues("set-cookie")) {
+            String pair = header.split(";", 2)[0];
+            int equals = pair.indexOf('=');
+            if (equals > 0) {
+                jar.put(pair.substring(0, equals), pair.substring(equals + 1));
+            }
+        }
+    }
+
+    private static String cookieHeader(Map<String, String> jar) {
+        return jar.entrySet().stream()
+                .map(entry -> entry.getKey() + "=" + entry.getValue())
+                .collect(Collectors.joining("; "));
     }
 
     private static String encode(String value) {
