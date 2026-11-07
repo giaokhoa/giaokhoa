@@ -15,8 +15,13 @@
 - Thứ tự cổng: `clean verify` trước, reset schema public về trống, rồi `-Pintegration verify`
   sau (nạp biến `TEST_*` từ phần export của `/var/tmp/test-stack/run-it.sh` trước khi chạy).
   Không chạy `clean verify` sau lượt integration để không ghi đè `failsafe-reports`.
-- T1–T2 (tasks.md:276) là T001/T002 — khởi tạo backend Spring Boot và frontend Next.js.
-  Bằng chứng: `clean verify` và `npm run lint/test/build` của frontend xanh trong gate này.
+- T1–T2 là hai kịch bản quickstart của US1 (tasks.md:276 xếp vào cột "Kịch bản
+  quickstart"; quickstart.md mục 6): T1 = tự đăng ký chưa xác minh email, thử vào nghiệp
+  vụ, xác minh email rồi thử lại; T2 = cấp username student không email, đăng nhập/đổi
+  mật khẩu tạm, thêm cùng danh tính vào trung tâm B. Bằng chứng là các test đã trích
+  dưới US1.1/US1.4/US1.5 (`IdentityFlowIT`, `BootstrapProfileIT`, `RecoveryWorkflowIT`),
+  không phải "build xanh". (T001/T002 là task khởi tạo Spring Boot/Next.js ở
+  tasks.md:25-26, không phải kịch bản nghiệm thu.)
 - Ràng buộc của issue: không đánh dấu story hoàn tất nếu issued student phải email hoặc
   baseline mở author/student role. Cả hai điều kiện này đều KHÔNG xảy ra — xem US1.2 và
   US1.4. Việc đóng story vẫn do bước review/merge quyết; tài liệu này chỉ ghi bằng chứng.
@@ -28,12 +33,15 @@
 | Unit + kiểm tra tĩnh backend | `./backend/mvnw -B -ntp -s /var/tmp/test-stack/maven-settings.xml -f backend/pom.xml clean verify` | **BUILD SUCCESS** — unit 162 test, 0 failures, 0 errors, 0 skipped (Spotless, PMD, SpotBugs đều xanh; xem ghi chú về 2 lần sửa PMD/SpotBugs ở Phụ lục) |
 | Integration toàn suite | `./backend/mvnw -B -ntp -s /var/tmp/test-stack/maven-settings.xml -f backend/pom.xml -Pintegration verify` | **197 test, 0 failures, 1 error, 9 skipped** — error duy nhất là test SMTP (không có Mailpit ở local, xanh ở CI); `too many clients already` = 0 lần; `ConcurrentRevocationIT` 16/16 |
 | Frontend lint/test/build | `npm run lint`, `npm test`, `npm run build` | **Lint xanh, unit 36 test / 7 file đều pass, build xanh** (routes: `/`, `/onboarding`, `/personal`, `/platform/recovery-requests`) |
-| E2E Playwright | `npm run test:e2e` | Không chạy ở local (cần backend 8080 + Mailpit); bằng chứng từ CI, xem dưới |
+| E2E Playwright | `npm run test:e2e` | Không chạy ở local (cần backend 8080 + Mailpit); ở CI 3 passed / 15 skipped — 3 passed là `auth-code`/`home`, còn toàn bộ spec scenario US1 (`identity`, `session-security`, `native-gate`) đều bị skip vì thiếu `NATIVE_GATE_APP_ORIGIN`, nên e2e không cho bằng chứng scenario US1 nào (xem dưới) |
 
 Bằng chứng CI trên chính head đã merge (`51b31f24`, PR #149, job integration
 `128315371509`, log `hidden_files/ci-us1d-integration.log`): backend ✓, frontend ✓,
 integration ✓. Maven integration 194 test, 0 failures, 0 errors, 9 skipped;
-`too many clients already` = 0 lần; e2e 3 passed / 15 skipped; `verify-native.sh` pass;
+`too many clients already` = 0 lần; e2e 3 passed / 15 skipped — 3 passed là 2 test
+`auth-code.spec.ts` + 1 test `home.spec.ts`, còn 15 skipped là toàn bộ 7 test
+`identity.spec.ts` + 6 test `session-security.spec.ts` + 2 test `native-gate.spec.ts`
+(vì CI không đặt `NATIVE_GATE_APP_ORIGIN` nên cả ba spec tự skip); `verify-native.sh` pass;
 `verify-oidc-logout.mjs` in dòng `PASS: Keycloak-signed logout, issuer/aud/events/sid/sub,
 DB deletion, restart and old cookie rejection`.
 
@@ -47,7 +55,10 @@ DB deletion, restart and old cookie rejection`.
 - `RecoveryFlowIT.verifiedEmailUserCanBeSentPasswordActionEmail` (khôi phục qua email)
 - E2E `identity.spec.ts`: “email chưa xác minh: đăng nhập bị chặn ở bước verify email của
   Keycloak và không lập phiên ứng dụng”; “bấm link xác minh trong email (Mailpit) thì đăng
-  nhập được và session báo email đã xác minh” — bằng chứng từ CI (3 passed / 15 skipped).
+  nhập được và session báo email đã xác minh” — **chưa có bằng chứng e2e**: cả 7 test của
+  spec này đều bị skip ở CI vì thiếu `NATIVE_GATE_APP_ORIGIN` (3 passed e2e ở CI là
+  `auth-code`/`home`, không phải scenario US1). Hành vi đã khóa ở tầng integration bằng 3
+  test trên.
 
 Kết quả local: `IdentityFlowIT` 12 run / 1 skipped (test invitations đã disable), 0 đỏ; `RecoveryFlowIT` 10 run, đỏ duy nhất test SMTP (xem US1.7).
 
@@ -67,7 +78,9 @@ Kết quả local: `IdentityFlowIT` 12 run / 1 skipped, 0 đỏ; `BootstrapProfi
 - `IdentityFlowIT.oppositeRolesInTwoCentersStaySeparated`
 - `BootstrapProfileIT.directoryListsOnlyValidWorkspacesAndRolesStayPerWorkspace`
 - E2E `identity.spec.ts`: “workspace switch: danh sách theo hợp đồng, workspace lạ là 404
-  và cookie active-workspace giả không đổi được danh sách” — bằng chứng từ CI.
+  và cookie active-workspace giả không đổi được danh sách” — **chưa có bằng chứng e2e**:
+  test này nằm trong 7 test của `identity.spec.ts` đều bị skip ở CI vì thiếu
+  `NATIVE_GATE_APP_ORIGIN`. Hành vi đã khóa ở tầng integration bằng 2 test trên.
 
 Kết quả local: `IdentityFlowIT` 12 run / 1 skipped, 0 đỏ (gồm `oppositeRolesInTwoCentersStaySeparated`); `BootstrapProfileIT` 12/12.
 
@@ -128,7 +141,8 @@ Kết quả local: `RecoveryFlowIT` 10 run, 0 failure, 1 error duy nhất là te
   to send execute actions email”). Đây là giới hạn môi trường local đã biết, không phải lỗi
   code; bằng chứng xanh lấy từ CI head `51b31f24` (suite 194 test 0 error).
 - E2E `identity.spec.ts`: “mật khẩu tạm: lần đăng nhập đầu bị ép đổi mật khẩu, mật khẩu cũ
-  không dùng lại được” — bằng chứng từ CI.
+  không dùng lại được” — **chưa có bằng chứng e2e**: test này nằm trong 7 test của
+  `identity.spec.ts` đều bị skip ở CI vì thiếu `NATIVE_GATE_APP_ORIGIN`.
 
 Kết quả local: `RecoveryFlowIT.verifiedEmailUserCanBeSentPasswordActionEmail` đỏ đúng như dự kiến — 500 `Failed to send execute actions email` vì local không có Mailpit (xem chi tiết ở mục “Hạn chế”). Toàn suite còn lại 0 failure.
 
@@ -149,7 +163,10 @@ Kết quả local: `IdentityFlowIT` 12 run / 1 skipped, 0 đỏ; `BootstrapProfi
 - E2E `session-security.spec.ts`: không token trong DOM/network/SSR; no-store; CSRF (mutation
   thiếu token bị 403; token sai hình dạng vẫn bị 400); chưa eligible thì không tạo được action
   mới (503 fail-closed); khởi động lại trình duyệt giữ phiên từ storage state; storage state
-  cũ sau logout không hồi sinh được phiên — bằng chứng từ CI.
+  cũ sau logout không hồi sinh được phiên — **chưa có bằng chứng e2e**: cả 6 test của spec
+  này đều bị skip ở CI vì thiếu `NATIVE_GATE_APP_ORIGIN`. Hành vi từ chối ẩn danh/phiên
+  giả đã khóa ở tầng integration bằng 5 test trên; các khẳng định CSRF/no-store/token ở
+  biên trình duyệt chưa có bằng chứng chạy thật.
 
 Kết quả local: `IdentityFlowIT` 12 run / 1 skipped, 0 đỏ (gồm 3 test ẩn danh/phiên giả); `RecoveryFlowIT` 10 run, 0 failure (gồm 2 test ẩn danh); `SecurityConfigurationIT` 4/4.
 
@@ -250,7 +267,10 @@ Kết quả local: `IdentityFlowIT` 12 run / 1 skipped, 0 đỏ (gồm 3 test �
 - Test invitations `IdentityFlowIT.invitationEndpointRegistersExistingIdentityWithoutOriginChange`
   đang `@Disabled` — endpoint invitations thuộc US2, chờ T034/T036/T038/T040.
 - E2E Playwright không chạy ở local trong gate này (cần backend ở cổng 8080 + Mailpit);
-  bằng chứng e2e lấy từ CI head `51b31f24` (3 passed / 15 skipped).
+  ở CI head `51b31f24` e2e cũng không cho bằng chứng scenario US1 nào: 3 passed là
+  `auth-code`/`home`, còn 15 skipped là toàn bộ spec `identity`/`session-security`/
+  `native-gate` vì thiếu `NATIVE_GATE_APP_ORIGIN`. Muốn có bằng chứng e2e thật phải chạy
+  gate có đặt biến này (xem kết luận, mục 2).
 - Happy-path HTTP của platform operator (list/resolve 200) chưa có test — xem Note mở (a).
 - `ConcurrentRevocationIT` là test nhạy với thời gian lan truyền policy trên Keycloak: nếu
   là test fail duy nhất thì chạy lại đúng một lần theo tiền lệ PR #148; hai lần liên tiếp
@@ -259,8 +279,9 @@ Kết quả local: `IdentityFlowIT` 12 run / 1 skipped, 0 đỏ (gồm 3 test �
 ## Kết luận
 
 **Gate đạt cho 9/9 scenarios với bằng chứng thực tế** (số liệu lượt chạy local + CI ở
-trên): mỗi scenario đều có ít nhất một test integration/e2e chạy thật khẳng định hành vi,
-không test nào được tick pass từ tài liệu. Hai điều kiện cấm đánh dấu story hoàn tất đều
+trên): mỗi scenario đều có ít nhất một test **integration** chạy thật khẳng định hành vi,
+không test nào được tick pass từ tài liệu. Bằng chứng e2e cho các scenario US1 chưa có
+(toàn bộ spec scenario bị skip ở CI) — xem mục Hạn chế. Hai điều kiện cấm đánh dấu story hoàn tất đều
 KHÔNG xảy ra: issued student không cần email (US1.4) và baseline không mở author/student
 role (US1.2).
 
@@ -268,9 +289,11 @@ Còn mở, đã ghi rõ và không giấu trong kết luận:
 
 1. Happy-path HTTP của platform operator (list/resolve 200) chưa có test — Note (a). Mức đã
    chứng minh: resolve/list ở tầng service + chặn 403 ở tầng HTTP.
-2. E2E Playwright, `verify-oidc-logout.mjs` và `verify-native.sh` chỉ có bằng chứng CI
-   (head `51b31f24`, job integration `128315371509` success); local không chạy được vì cần
-   Docker/Mailpit/backend 8080.
+2. E2E Playwright chưa có bằng chứng chạy thật cho scenario US1 nào (ở CI toàn bộ spec
+   scenario bị skip vì thiếu `NATIVE_GATE_APP_ORIGIN`; local không chạy được vì cần
+   backend 8080/Mailpit). `verify-oidc-logout.mjs` và `verify-native.sh` chỉ có bằng
+   chứng CI (head `51b31f24`, job integration `128315371509` success); local không chạy
+   được vì cần Docker/Mailpit/backend 8080.
 3. `RecoveryFlowIT.verifiedEmailUserCanBeSentPasswordActionEmail` đỏ ở local vì thiếu
    Mailpit; xanh ở CI.
 

@@ -29,7 +29,10 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class RecoveryService {
-    /** Độ dài tối đa của ghi chú xác minh và lý do cần hỗ trợ (khớp CHECK ở migration). */
+    /**
+     * Độ dài tối đa của ghi chú xác minh và lý do cần hỗ trợ (khớp VARCHAR(1000) ở migration; CHECK
+     * chỉ chặn chuỗi toàn khoảng trắng).
+     */
     private static final int MAX_NOTE_LENGTH = 1000;
 
     private final JdbcTemplate jdbc;
