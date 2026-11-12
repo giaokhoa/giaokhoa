@@ -112,6 +112,23 @@ chương này.
    Tạo bằng lệnh `git worktree add -b <type>/<số-issue>-<slug> .worktrees/<type>-<số-issue>-<slug> dev`. Chỉ dùng `main`
    làm nhánh gốc nếu `dev` chưa được thiết lập. Quy tắc tên nhánh
    vẫn theo mục "Đặt tên branch" ở dưới.
+   **Ngay sau mỗi lần tạo worktree, bắt buộc sao chép cả hai file
+   `.env` local từ worktree gốc sang worktree mới** trước khi chạy
+   install, build, migrate, test hoặc dev. Chạy từ thư mục gốc repo
+   (thay `<worktree>` bằng tên thư mục vừa tạo):
+
+   ```bash
+   cp -n apps/api/.env .worktrees/<worktree>/apps/api/.env
+   cp -n apps/worker/.env .worktrees/<worktree>/apps/worker/.env
+   ```
+
+   Không ghi đè `.env` đã có ở worktree đích, không in giá trị bí
+   mật ra log và không commit các file này. Nếu worktree gốc chưa có
+   một file `.env` cần sao chép, tạo file đó từ `.env.example`
+   tương ứng và cấu hình các giá trị local trước khi tiếp tục. Kiểm
+   tra `DATABASE_URL` trong cả hai file đích trỏ đúng database của
+   môi trường hiện tại.
+
 3. **Chưa có số Issue.** Khi cần chuẩn bị trước khi có Issue, dùng
    worktree trong `.worktrees/` và nhánh tạm riêng, không tự đặt
    số Issue giả. Đổi về nhánh đúng quy ước khi có Issue và trước PR.

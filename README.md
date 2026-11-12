@@ -64,14 +64,46 @@ triển local, compose ở gốc cho production tự host.
 
 ## Chạy ứng dụng
 
+Từ gốc monorepo, chạy `pnpm dev` để Turbo biên dịch các workspace
+package phụ thuộc trước khi mở API, worker và web ở chế độ watch.
+Các bản build của package trong `dist/` có thể tồn tại từ lần checkout
+trước, nên không khởi động trực tiếp các app trước khi Turbo hoàn tất
+bước `^build`.
+
 ```bash
 pnpm install
-cp apps/api/.env.example apps/api/.env       # các giá trị mặc định đã khớp hạ tầng local
-pnpm --filter @giaokhoa/api db:migrate            # tạo các bảng hạ tầng
-pnpm --filter @giaokhoa/api build && pnpm --filter @giaokhoa/api start   # API ở cổng :3000
-pnpm --filter @giaokhoa/worker build && pnpm --filter @giaokhoa/worker start
-pnpm --filter @giaokhoa/web dev                   # web ở cổng :5173 (proxy /api → :3000)
+cp -n apps/api/.env.example apps/api/.env
+cp -n apps/worker/.env.example apps/worker/.env
+pnpm exec turbo run build --filter=@giaokhoa/db
+pnpm --filter @giaokhoa/api db:migrate
+pnpm dev
 ```
+
+Lệnh migrate tự đọc `apps/api/.env` bằng cơ chế `--env-file-if-exists`
+của Node 24, nhưng vẫn ưu tiên biến môi trường đã được export. API chạy
+ở cổng 3000, web ở cổng 5173; worker xử lý tác vụ nền.
+
+Mỗi Git worktree có thư mục `apps/api` và `apps/worker` riêng:
+file `.env` không được Git đưa sang worktree mới. **Ngay sau khi tạo
+worktree**, sao chép cả hai file `.env` từ worktree gốc sang worktree
+đích (không ghi đè file đã có), theo lệnh và yêu cầu bảo vệ bí mật trong
+`AGENTS.md`. Nếu file nguồn chưa tồn tại, tạo từ `.env.example` và
+cấu hình trước khi chạy migrate hoặc `pnpm dev` trong worktree mới.
+
+Nếu Dev Container sử dụng volume PostgreSQL **cũ** từ trước khi đổi tên
+database `lms` thành `giaokhoa`, biến `POSTGRES_DB` và
+`init-db.sql` không tạo lại database trong volume đã có dữ liệu.
+Không xóa volume để sửa lỗi này. Trên **máy host** đang chạy Docker,
+tạo thêm database mới một lần nếu chưa có:
+
+```bash
+docker compose -f .devcontainer/compose.yaml exec db createdb -U postgres giaokhoa
+```
+
+Sau đó kiểm tra `DATABASE_URL` trong hai file `.env` local đều
+trỏ vào database `giaokhoa` (không ghi đè những giá trị bí mật khác),
+rồi chạy lại lệnh migrate ở trên. Nếu database đã tồn tại, bỏ qua lệnh
+`createdb`.
 
 - Health: `GET http://localhost:3000/api/v1/health`
 - OpenAPI: `http://localhost:3000/api/docs`

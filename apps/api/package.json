@@ -16,7 +16,7 @@
     "test:bench": "vitest run --project bench",
     "dev": "nest start --watch",
     "start": "node dist/main.js",
-    "db:migrate": "node node_modules/@giaokhoa/db/dist/migrate/run.js centre",
+    "db:migrate": "node --env-file-if-exists=.env node_modules/@giaokhoa/db/dist/migrate/run.js centre",
     "db:migrate:control-plane": "node node_modules/@giaokhoa/db/dist/migrate/run.js control-plane",
     "db:setup:control-plane": "node dist/modules/control-plane/control-plane-setup.js",
     "db:migrate:system-bank": "node node_modules/@giaokhoa/db/dist/migrate/run.js system-bank",
