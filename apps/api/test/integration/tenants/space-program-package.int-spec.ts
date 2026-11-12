@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { INestApplication } from '@nestjs/common';
 import { Client, Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createControlPlaneKysely } from '@lms/db/control-plane';
+import { createControlPlaneKysely } from '@giaokhoa/db/control-plane';
 import { createTestApp } from '../../support/identity-access-helpers';
 import { SpaceProgramPackageService } from '../../../src/modules/tenants/space-program-package.service';
 import { CENTRE_PROGRAM_PACKAGE_KEY } from '../../../src/modules/tenants/centre-provision';
@@ -34,11 +34,11 @@ import { PROGRAM_DUMP_VERSION } from '../../../src/modules/curriculum/program-du
  *     artifact hiện hành thì bước này từ chối thay vì ghi đè lặng
  *     lẽ, và dòng bản cài lệch được giữ nguyên.
  */
-const CP_DATABASE = 'lms_test_cp_587b';
-const CP_ROLE = 'lms_cp_test_587b';
+const CP_DATABASE = 'giaokhoa_test_cp_587b';
+const CP_ROLE = 'giaokhoa_cp_test_587b';
 const CP_PASSWORD = 'cp-test-587b';
-const CENTRE_A_DATABASE = 'lms_test_centre_a_587b';
-const CENTRE_A_ROLE = 'lms_centre_a_587b_app';
+const CENTRE_A_DATABASE = 'giaokhoa_test_centre_a_587b';
+const CENTRE_A_ROLE = 'giaokhoa_centre_a_587b_app';
 const CENTRE_A_PASSWORD = 'centre-a-test-587b';
 const RUN_SUFFIX = Math.random().toString(36).slice(2, 8);
 const CENTRE_A_SLUG = `trung-tam-a-587b-${RUN_SUFFIX}`;
@@ -170,7 +170,7 @@ describe('Bước cài gói YCCĐ vào kho đích (tích hợp)', () => {
           name: 'Trung tâm chung 587b',
           kind: 'center',
           status: 'active',
-          database_name: 'lms_test_api',
+          database_name: 'giaokhoa_test_api',
           storage_mode: 'shared',
           connection_role_ref: 'postgres',
           secret_ref: 'env:SPACE_TEST_A_587B_URL',

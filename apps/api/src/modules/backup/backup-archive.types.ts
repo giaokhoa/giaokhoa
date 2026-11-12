@@ -1,5 +1,5 @@
 /**
- * Hình dạng dòng trong ARCHIVE sao lưu (định dạng `lms-backup` v1) —
+ * Hình dạng dòng trong ARCHIVE sao lưu (định dạng `giaokhoa-backup` v1) —
  * chuyển Kysely, issue #648.
  *
  * Các interface này là hình dạng camelCase của một dòng dữ kiện khi

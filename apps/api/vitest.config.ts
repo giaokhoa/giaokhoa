@@ -8,12 +8,12 @@ export default defineConfig({
     hookTimeout: 30000,
     fileParallelism: false,
     env: {
-      // Cách ly suite: API dùng DB riêng lms_test_api, worker dùng
-      // lms_test_worker (xem apps/worker/vitest.config.ts) — hai suite
+      // Cách ly suite: API dùng DB riêng giaokhoa_test_api, worker dùng
+      // giaokhoa_test_worker (xem apps/worker/vitest.config.ts) — hai suite
       // chạy song song trong CI không còn giẫm lên dữ liệu toàn cục của
-      // nhau (outbox backlog, event_log...). LMS_TEST_DATABASE_URL vẫn
+      // nhau (outbox backlog, event_log...). GIAOKHOA_TEST_DATABASE_URL vẫn
       // ghi đè được khi cần trỏ cả hai vào một DB riêng theo worktree.
-      DATABASE_URL: process.env.LMS_TEST_DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5432/lms_test_api',
+      DATABASE_URL: process.env.GIAOKHOA_TEST_DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5432/giaokhoa_test_api',
       REDIS_URL: 'redis://localhost:6379',
       JWT_SECRET: 'test-secret-at-least-16-chars',
       NODE_ENV: 'test',

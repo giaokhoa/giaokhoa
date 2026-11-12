@@ -4,11 +4,11 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@lms/ui/components/select';
+} from '@giaokhoa/ui/components/select';
 
 /**
  * Ô chọn dùng chung của các bề mặt vai trò & quyền trong feature
- * admin, dựng trên component Select thật của `@lms/ui` (Base UI) —
+ * admin, dựng trên component Select thật của `@giaokhoa/ui` (Base UI) —
  * thay toàn bộ `<select>` native trước đây: nút mở mang viền,
  * `shadow-xs`, chevron và danh sách xổ dạng popover có style đúng
  * khuôn Select của bản demo mẫu, thay vì mũi tên và danh sách xổ

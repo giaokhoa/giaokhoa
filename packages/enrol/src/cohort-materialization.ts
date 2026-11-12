@@ -111,6 +111,8 @@ export class CohortMaterializationSurface {
   private readonly roleAssignment: RoleAssignmentCore;
 
   /**
+   * Dựng các lõi kiểm tra slot, tách vai và gán vai từ cùng một bộ phụ thuộc do ứng dụng cấp.
+   *
    * @param deps - bộ phụ thuộc host cấp: tay cầm Kysely, cổng outbox, cổng ngữ cảnh platform.
    */
   constructor(deps: SharedSurfaceDeps) {

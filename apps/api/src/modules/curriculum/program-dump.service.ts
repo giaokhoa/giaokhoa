@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { writeFileSync } from 'node:fs';
-import { CurriculumRepository } from '@lms/db/repositories/curriculum';
+import { CurriculumRepository } from '@giaokhoa/db/repositories/curriculum';
 import { ContextsService } from '../access/contexts.service';
 import {
   buildProgramDumpSql, loadProgramDumpSql, restoreProgramDumpSql, PROGRAM_DUMP_VERSION,

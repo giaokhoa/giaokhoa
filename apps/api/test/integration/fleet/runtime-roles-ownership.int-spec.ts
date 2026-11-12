@@ -26,8 +26,8 @@ import { buildOwnershipTransferQuery } from '../../../src/modules/fleet/runtime-
  * `postgres`: ở CI đó là user `postgres`, ở cụm local có thể là
  * superuser khác.
  */
-const SCRATCH_DATABASE = 'lms_test_ownership_603';
-const MIGRATOR_ROLE = 'lms_migrator_test_603';
+const SCRATCH_DATABASE = 'giaokhoa_test_ownership_603';
+const MIGRATOR_ROLE = 'giaokhoa_migrator_test_603';
 
 const ADMIN_ROLE = decodeURIComponent(new URL(process.env.DATABASE_URL!).username || 'postgres');
 

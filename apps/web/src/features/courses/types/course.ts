@@ -1,4 +1,4 @@
-import type { Course, CourseContent, EnrolInstance } from '@lms/contracts';
+import type { Course, CourseContent, EnrolInstance } from '@giaokhoa/contracts';
 
 /**
  * Kiểu dữ liệu của trang khoá học thuộc feature courses. Tách từ

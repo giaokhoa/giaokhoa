@@ -4,7 +4,7 @@
  * từ tài liệu rich text và chuyển mốc thời gian ISO sang giá trị
  * cho input `datetime-local`. Không phụ thuộc React hay API.
  */
-import { extractRichTextPlainText, type RichTextDocument } from '@lms/contracts';
+import { extractRichTextPlainText, type RichTextDocument } from '@giaokhoa/contracts';
 
 /** Trích text thuần từ tài liệu rich text; tài liệu trống/thiếu thì trả chuỗi rỗng. */
 export function plainText(doc: RichTextDocument | null | undefined): string {

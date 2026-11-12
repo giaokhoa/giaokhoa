@@ -136,7 +136,7 @@ describe('Mua gói: tenant_plan + teacher_plan qua pipeline VietQR (issue #189, 
     expect(payment.amount).toBe(TENANT_PLAN_DEFAULT_PRICE);
     expect(payment.component).toBe('tenant_plan');
     expect(payment.accountId).toBe(sepayAccountId);
-    expect(payment.paymentCode).toMatch(/^LMS[0-9A-HJKMNP-TV-Z]{9}$/);
+    expect(payment.paymentCode).toMatch(/^GKH[0-9A-HJKMNP-TV-Z]{9}$/);
     // Ghi vết giá đã áp vào chính bản ghi payment.
     expect(payment.data?.plan?.configuredPrice).toBe(TENANT_PLAN_DEFAULT_PRICE);
     expect(payment.data?.plan?.periodDays).toBe(365);

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { cn } from '@lms/ui/lib/utils';
+import { cn } from '@giaokhoa/ui/lib/utils';
 
 /**
  * Bậc bề rộng nội dung chuẩn của khung trang (hồ sơ UI/UX §3.1): màn ít

@@ -15,8 +15,8 @@ const APP_CACHE_DEFAULT_TTL_MS = 300_000;
 
 /**
  * CacheInfraModule — ánh xạ hai chế độ của MUC trong Moodle:
- *  - application: kho Redis dùng chung qua @nestjs/cache-manager + Keyv (namespace `lms:app`)
- *  - session:     kho Redis với namespace riêng (`lms:session`), SessionCacheService
+ *  - application: kho Redis dùng chung qua @nestjs/cache-manager + Keyv (namespace `giaokhoa:app`)
+ *  - session:     kho Redis với namespace riêng (`giaokhoa:session`), SessionCacheService
  *
  * Chế độ "request" của MUC không còn provider riêng: nhu cầu ghi nhớ
  * trong phạm vi một request do AsyncLocalStorage của ngữ cảnh tenant
@@ -35,7 +35,7 @@ const APP_CACHE_DEFAULT_TTL_MS = 300_000;
         stores: [
           new Keyv({
             store: new KeyvRedis(cacheRedisConfigFromUrl(config.getOrThrow<string>('REDIS_URL'))),
-            namespace: 'lms:app',
+            namespace: 'giaokhoa:app',
             ttl: APP_CACHE_DEFAULT_TTL_MS,
           }),
         ],

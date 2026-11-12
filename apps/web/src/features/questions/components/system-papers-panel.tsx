@@ -12,8 +12,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
-import { Button } from '@lms/ui/components/button';
-import { Label } from '@lms/ui/components/label';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Label } from '@giaokhoa/ui/components/label';
 
 import { useBankExams, useCopyExamPaper, useReviewExamPaperContribution } from '../queries/questions';
 import type { BankLite, DossierSpecLite, ExamContributionLite } from '../types/questions';

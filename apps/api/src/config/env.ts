@@ -257,13 +257,9 @@ export function validateEnv(config: Record<string, unknown>): Env {
 }
 
 /**
- * Dựng tham số `connection` cho bộ máy cũ từ URL và cờ TLS.
+ * Chuyển URL PostgreSQL thành cấu hình kết nối mà driver `pg` chấp nhận.
  *
- * Không bật TLS thì trả nguyên chuỗi (hành vi cũ). Bật thì trả PoolConfig
- * có `ssl.rejectUnauthorized = false` — chứng chỉ của nhà cung cấp
- * PostgreSQL do CA riêng của nhà cung cấp ký nên không kiểm chứng theo
- * CA hệ thống được; đây là cấu hình driver `pg` cần khi gặp CA riêng
- * như vậy.
+ * Khi `ssl` bật, trả `PoolConfig` với TLS nhưng `rejectUnauthorized: false`: chứng chỉ máy chủ KHÔNG được xác thực, nên đường kết nối có nguy cơ bị giả mạo nếu mạng không đáng tin. Khi tắt TLS, giữ nguyên URL; không tự biến đổi thông tin truy cập.
  */
 export function databaseConnectionFromEnv(url: string, ssl: boolean): string | PoolConfig {
   if (!ssl) return url;
@@ -271,20 +267,18 @@ export function databaseConnectionFromEnv(url: string, ssl: boolean): string | P
 }
 
 /**
- * Tuỳ chọn TLS cho ioredis khi URL là rediss:// (dịch vụ Redis bắt
- * buộc TLS): chứng chỉ phía dịch vụ là tự ký hoặc do CA riêng ký nên
- * phải tắt kiểm chứng, nếu không bắt tay TLS bị ngắt giữa chừng. URL
- * redis:// thường trả rỗng.
+ * Bật TLS cho URL `rediss://`; URL `redis://` không cần tuỳ chọn thêm.
+ *
+ * `rejectUnauthorized: false` bỏ xác thực chứng chỉ máy chủ Redis. Đây là đánh đổi về an toàn kết nối, không phải cách xác thực CA riêng; chỉ chấp nhận với môi trường kiểm soát được mạng và chứng chỉ.
  */
 export function redisTlsFromUrl(url: string): { tls?: { rejectUnauthorized: boolean } } {
   return new URL(url).protocol === 'rediss:' ? { tls: { rejectUnauthorized: false } } : {};
 }
 
 /**
- * Cấu hình client cho @keyv/redis (dựng trên @redis/client) từ
- * REDIS_URL: với rediss:// phải khai socket TLS tắt kiểm chứng chứng
- * chỉ như redisTlsFromUrl, nếu không kết nối tới dịch vụ Redis bắt
- * buộc TLS gãy ngay ở bước bắt tay.
+ * Dựng cấu hình `@keyv/redis` từ `REDIS_URL`; với `rediss://` bật TLS tương ứng.
+ *
+ * Cấu hình hiện tại tắt xác thực chứng chỉ máy chủ (`rejectUnauthorized: false`) và không bảo vệ trước giả mạo endpoint trong mạng không tin cậy.
  */
 export function cacheRedisConfigFromUrl(url: string): {
   url: string;

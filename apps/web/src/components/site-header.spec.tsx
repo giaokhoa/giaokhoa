@@ -2,7 +2,7 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, Outlet, RouterProvider, useLocation } from 'react-router';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { SidebarProvider } from '@lms/ui/components/sidebar';
+import { SidebarProvider } from '@giaokhoa/ui/components/sidebar';
 import { TestProviders } from '#test/providers';
 import { SiteHeader } from '#components/site-header';
 

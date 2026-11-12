@@ -4,7 +4,7 @@
  * lập: ghi dấu đã-phân-phối trước khi publish được xác nhận).
  *
  * Dựng đường THẬT của worker: processor thật + tầng phân phối dùng
- * chung `@lms/messaging` + cổng phát thật
+ * chung `@giaokhoa/messaging` + cổng phát thật
  * `createMessagingRealtimeEmitter`, và một Socket.IO server độc lập
  * đóng vai phía API (cùng Redis adapter, client socket.io thật đã
  * vào room theo đúng luật gateway). Bề mặt đọc dữ kiện được giả lập
@@ -41,7 +41,7 @@ import {
   createMessagingDistributionService,
   userRoom,
   type MessagingDistributionStore,
-} from '@lms/messaging';
+} from '@giaokhoa/messaging';
 import {
   createMessagingRealtimeEmitter,
   type MessagingRealtimeEmitterHandle,
@@ -54,8 +54,8 @@ import {
 } from './processors/messaging-realtime.processor';
 
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
-const ACL_USER = 'lms-test-nopublish';
-const ACL_PASS = 'lms-test-nopublish-pass';
+const ACL_USER = 'giaokhoa-test-nopublish';
+const ACL_PASS = 'giaokhoa-test-nopublish-pass';
 
 const tenantId = 'emitter-spec-tenant';
 const convId = randomUUID();

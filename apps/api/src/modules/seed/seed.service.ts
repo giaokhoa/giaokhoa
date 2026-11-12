@@ -7,9 +7,9 @@ import { ControlPlaneRegistryService } from '../control-plane/control-plane.serv
 import { SiteConfigService } from '../site-config/site-config.service';
 import { tenantAls } from '../tenants/tenant-als';
 import { TenantsService } from '../tenants/tenants.service';
-import type { TenantRow } from '@lms/db/repositories/tenants';
+import type { TenantRow } from '@giaokhoa/db/repositories/tenants';
 import { UsersService } from '../users/users.service';
-import type { UserRow } from '@lms/db/repositories/users';
+import type { UserRow } from '@giaokhoa/db/repositories/users';
 
 /**
  * Seed khởi tạo có tính idempotent: context hệ thống, registry capability, các role
@@ -58,7 +58,7 @@ export class SeedService implements OnApplicationBootstrap {
     await this.roles.seedDefaults();
     await this.users.ensureGuestUser();
     const zero = await this.tenants.ensurePlatformTenant();
-    const fullname = (await this.siteConfig.getValue<string>('core', 'fullname')) ?? 'LMS';
+    const fullname = (await this.siteConfig.getValue<string>('core', 'fullname')) ?? 'Giáo khoa';
     const school = await this.tenants.ensureDefaultSchoolTenant(fullname);
     const admins = (await this.currentSiteAdmins());
     let admin: UserRow | undefined;

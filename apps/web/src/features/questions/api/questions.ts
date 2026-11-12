@@ -1,6 +1,6 @@
 import type {
   QuestionCategory, QuestionUsage, QuestionView, RichTextDocument, StimulusView,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 import type {
   AttributionLite,

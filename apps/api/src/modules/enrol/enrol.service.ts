@@ -1,9 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { I18nService } from '@nestjs/i18n';
-import { CohortMaterializationSurface } from '@lms/enrol';
-import { type CentreTx } from '@lms/db';
-import { EnrolRepository, type EnrolRow, type UserEnrolmentRow } from '@lms/db/repositories/enrol';
+import { CohortMaterializationSurface } from '@giaokhoa/enrol';
+import { type CentreTx } from '@giaokhoa/db';
+import { EnrolRepository, type EnrolRow, type UserEnrolmentRow } from '@giaokhoa/db/repositories/enrol';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
@@ -63,7 +63,7 @@ export type EnrolMethod = (typeof ENROL_METHODS)[number];
  */
 export class EnrolService implements OnModuleInit {
   /**
-   * Bề mặt vật chất hoá cohort dùng chung (`@lms/enrol`): funnel ghi
+   * Bề mặt vật chất hoá cohort dùng chung (`@giaokhoa/enrol`): funnel ghi
    * danh lõi, đường gỡ ghi danh lõi và hai điểm vào vật chất hoá
    * theo sự kiện thành viên cohort sống ở tầng dữ liệu dùng chung
    * để tiến trình khác (worker) gọi được cùng một định nghĩa.
@@ -333,7 +333,7 @@ export class EnrolService implements OnModuleInit {
    *
    * Toàn bộ funnel sống ở bề mặt vật chất hoá dùng chung
    * (`CohortMaterializationSurface.enrolUserInternal` của
-   * `@lms/enrol`): chốt tách vai, transaction chèn ghi danh +
+   * `@giaokhoa/enrol`): chốt tách vai, transaction chèn ghi danh +
    * `user_enrolled`, membership tenant, cấp vai của instance và xếp
    * nhóm đích — xem lời dẫn của bề mặt đó để biết flow đầy đủ.
    * Service này chỉ giữ phần thuộc về tiến trình API: dịch lỗi của
@@ -567,7 +567,7 @@ export class EnrolService implements OnModuleInit {
    *
    * Toàn bộ đường rút sống ở bề mặt vật chất hoá dùng chung
    * (`CohortMaterializationSurface.unenrolInternal` của
-   * `@lms/enrol`) — gồm quyết định giữ/xoá theo dữ liệu liên quan,
+   * `@giaokhoa/enrol`) — gồm quyết định giữ/xoá theo dữ liệu liên quan,
    * transaction phát `user_unenrolled` cùng sự kiện tái tổng hợp
    * hoàn thành `course_completion_reaggregation_requested`, và việc
    * gỡ đúng dòng gán do chính instance này cấp. Service này chỉ

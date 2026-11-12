@@ -4,7 +4,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
-import { createCentreKysely } from '@lms/db';
+import { createCentreKysely } from '@giaokhoa/db';
 import { I18nWorkerModule } from './i18n/i18n.config';
 import { databaseConnectionFromEnv, redisConnectionFromUrl, validateEnv } from './config/env';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
@@ -62,7 +62,7 @@ import {
   PaymentsRepository,
   PlanEntitlementsService,
   SepayMatchingService,
-} from '@lms/payments';
+} from '@giaokhoa/payments';
 import { SepayMatchingScheduler } from './sepay-matching.scheduler';
 import { WorkerEnrolOutboxService } from './worker-enrol-outbox.service';
 import { WorkerPaidClassEnrolActivationService } from './worker-paid-class-enrol-activation.service';
@@ -239,10 +239,10 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
     CohortSyncService, CohortSyncEventsProcessor, CohortSyncCatchupService,
     // Điểm quét matching IPN SePay ở worker (issue con #539 của
     // #522): scheduler quét bảng `payment_provider_events` theo
-    // nhịp 1 giây + bề mặt matching dùng chung của `@lms/payments`
+    // nhịp 1 giây + bề mặt matching dùng chung của `@giaokhoa/payments`
     // + cài đặt phía worker cho ba cổng xuyên module (kích hoạt ghi
     // danh / ghi danh cấp lớp / đối chiếu đích + settle) trên bề mặt
-    // vật chất hoá cohort dùng chung của `@lms/enrol`. Không đăng ký
+    // vật chất hoá cohort dùng chung của `@giaokhoa/enrol`. Không đăng ký
     // hàng đợi BullMQ nào cho nhịp quét: đây là quét bảng, không
     // phải đường relay outbox.
     {

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { sql, type CentreDB, type CentreDb, type CentreTx } from '@lms/db';
+import { sql, type CentreDB, type CentreDb, type CentreTx } from '@giaokhoa/db';
 
 /**
  * Kiểu JSON của cột jsonb theo codegen (xem chú thích tương ứng
@@ -23,7 +23,7 @@ export interface OutboxEventInput {
 }
 
 /**
- * Bề mặt phát outbox dùng chung của package `@lms/payments` (issue
+ * Bề mặt phát outbox dùng chung của package `@giaokhoa/payments` (issue
  * #538): ghi dòng sự kiện vào bảng `outbox_events` dùng chung với
  * ĐÚNG khuôn dòng của `OutboxService` phía apps/api (aggregate, type,
  * payload, tenant_id; tenant được gương vào payload khi payload chưa

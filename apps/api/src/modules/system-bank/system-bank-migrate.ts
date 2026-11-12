@@ -36,15 +36,15 @@
  * phần chụp cây viết trực tiếp trong script (service là đường chạy
  * thường xuyên, không phải đường di trú).
  *
- * Mọi truy cập dữ kiện qua handle Kysely của `@lms/db` (kho nghiệp
- * vụ) và `@lms/db/system-bank` (kho ngân hàng); các câu đọc đặt bí
+ * Mọi truy cập dữ kiện qua handle Kysely của `@giaokhoa/db` (kho nghiệp
+ * vụ) và `@giaokhoa/db/system-bank` (kho ngân hàng); các câu đọc đặt bí
  * danh camelCase cho cột để phần thân dưới giữ nguyên hình dạng dữ
  * kiện như trước (đặc biệt là các mảng trung gian đưa vào checksum
  * của gói YCCĐ — đổi hình dạng là đổi checksum).
  */
 import { Pool } from 'pg';
-import { createCentreKysely, sql, type JsonValue } from '@lms/db';
-import { createSystemBankKysely } from '@lms/db/system-bank';
+import { createCentreKysely, sql, type JsonValue } from '@giaokhoa/db';
+import { createSystemBankKysely } from '@giaokhoa/db/system-bank';
 import { canonicalizeJson, checksumPackage, packageValidationError, type SystemQuestionPackage } from './system-bank-package';
 
 async function main(): Promise<void> {

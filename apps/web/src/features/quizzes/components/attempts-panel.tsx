@@ -13,11 +13,11 @@
  * @param props.actionError - Lỗi thao tác hiện tại (trang giữ).
  * @param props.startAttempt - Handler bắt đầu lượt làm (preview = xem trước).
  */
-import type { PinRegradeLogEntry } from '@lms/contracts';
+import type { PinRegradeLogEntry } from '@giaokhoa/contracts';
 import { formatDateTime } from '#utils/date-format';
 import { QuizForUser } from '../types/quiz';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent } from '@lms/ui/components/card';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent } from '@giaokhoa/ui/components/card';
 import { ErrorAlert } from '#components/error-alert';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router';

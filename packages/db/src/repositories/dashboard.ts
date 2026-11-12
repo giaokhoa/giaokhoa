@@ -1,8 +1,5 @@
 /**
- * Repository của module DASHBOARD trên Kysely — hạng mục nhóm C của
- * chiến dịch chuyển tầng dữ liệu sang `packages/db` + Kysely (issue
- * #652), chuyển từ repository cũ trước chuyển đổi ở
- * `apps/api/src/modules/dashboard/dashboard.repository.ts`.
+ * Repository của module DASHBOARD trên Kysely.
  *
  * Vai trò: mọi truy cập dữ liệu của dashboard việc cần làm (DASH1,
  * issue #121) — tập khoá người dùng thuộc về (ghi danh hiệu lực, gán
@@ -264,6 +261,8 @@ function prefInsertValues(userId: string, courseId: string, color: string | null
  */
 export class DashboardRepository {
   /**
+   * Nhận handle đã định tuyến và registry mức ngữ cảnh để các truy vấn dashboard dùng cùng phạm vi dữ liệu.
+   *
    * @param handle - Handle Kysely kho trung tâm (facade định tuyến theo không gian do phía ứng dụng cấp).
    * @param contextLevels - Implementation của cổng registry mức ngữ cảnh do phía ứng dụng cấp từ registry hiện hành; repository chỉ đọc khoá `COURSE` qua cổng này.
    */

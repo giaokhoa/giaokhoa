@@ -1,15 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { uuidIdSchema } from '@lms/contracts';
-import { sql, type CentreDB } from '@lms/db';
+import { uuidIdSchema } from '@giaokhoa/contracts';
+import { sql, type CentreDB } from '@giaokhoa/db';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
 
 /**
- * Hình dáng row outbox mà writer phản chiếu — khai tay đúng các cột
- * writer đọc (trước đây suy từ định nghĩa bảng bộ máy cũ dùng chung
- * `@lms/db`; bảng bộ máy cũ bị xoá ở hạng mục gỡ bộ máy cũ nên kiểu phải
- * sống độc lập với nó). `payload` thu hẹp về record vì writer chỉ đọc
- * payload dạng object; `seq` là số thứ tự đã được phía gọi (relay)
- * chuyển về số từ giá trị int8 thô của kho.
+ * Các trường outbox cần để phản chiếu sự kiện vào `event_log`; không phụ thuộc kiểu dữ liệu của tầng ORM.
+ *
+ * `payload` chỉ nhận object hoặc null vì writer đọc các khoá có tên; `seq` đã được relay chuyển từ int8 PostgreSQL về `number`.
  */
 export interface OutboxRowLike {
   id: string;
@@ -54,22 +51,12 @@ function str(value: unknown): string | null {
 }
 
 /**
- * Bản sao phía worker của EventLogWriter phía API (worker giữ góc nhìn riêng
- * của mình về hạ tầng dùng chung, giống như chính outbox relay): observer logstore duy nhất.
- * Mọi dòng outbox mà relay của worker phát hành đều được phản chiếu
- * vào `event_log` với payload đã chuẩn hoá (component / action / actor /
- * related user / course / object / IP). Việc phản chiếu KHÔNG BAO GIỜ làm gãy relay:
- * lỗi được ghi log và nuốt, ngữ nghĩa phát hành giữ nguyên không đổi.
+ * Phản chiếu sự kiện đã phát từ outbox của worker sang `event_log`, chuẩn hoá actor, người liên quan, khoá học, đối tượng và địa chỉ IP.
+ *
+ * Lỗi ghi log được ghi nhận nhưng không làm thất bại relay, vì phát sự kiện và ghi log là hai trách nhiệm độc lập.
  *
  * @remarks
- * Mọi truy vấn đi qua handle Kysely định tuyến
- * (`SpaceDatabaseService.routedKysely`): relay gọi writer ngay trong
- * phiên của kho chứa dòng outbox (kho chung ở ngữ cảnh platform, kho
- * riêng trong phiên theo trung tâm đã chuẩn bị phía Kysely), nên dòng
- * `event_log` và tra cứu context đều vào đúng kho đó — cùng đích kho
- * với handle bộ máy cũ định tuyến trước đây. Cột jsonb `payload` khi ghi
- * đi qua serialize tường minh + `::jsonb` (khuôn pilot: driver `pg`
- * hiểu mảng cấp cao nhất là mảng PostgreSQL nếu không serialize).
+ * Writer dùng `SpaceDatabaseService.routedKysely` trong phiên kho đang xử lý, bảo đảm tra cứu context và ghi `event_log` cùng database với outbox gốc. Giá trị JSONB được serialize và ép `::jsonb` để mảng không bị driver `pg` diễn giải thành mảng PostgreSQL.
  */
 @Injectable()
 export class EventLogWriter {

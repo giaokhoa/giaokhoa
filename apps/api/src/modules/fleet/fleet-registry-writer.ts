@@ -22,10 +22,10 @@
  * trường của chúng là ranh giới tin cậy của tầng vận hành.
  */
 import type { ConfigService } from '@nestjs/config';
-import type { SchemaMigrationStep } from '@lms/db/control-plane';
-import type { SpaceRegistryRow } from '@lms/db/repositories/control-plane';
+import type { SchemaMigrationStep } from '@giaokhoa/db/control-plane';
+import type { SpaceRegistryRow } from '@giaokhoa/db/repositories/control-plane';
 import type { FleetSpace } from './fleet-common';
-import { ControlPlaneRepository } from '@lms/db/repositories/control-plane';
+import { ControlPlaneRepository } from '@giaokhoa/db/repositories/control-plane';
 import { ControlPlaneConnection } from '../control-plane/control-plane.connection';
 
 /** Kết quả một lượt chạy migration mà runner báo về registry. */

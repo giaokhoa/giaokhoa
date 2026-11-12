@@ -2,21 +2,21 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Inject, Logger } from '@nestjs/common';
 import { DelayedError, type Job } from 'bullmq';
 import type Redis from 'ioredis';
-import type { MessagingDistributionService } from '@lms/messaging';
+import type { MessagingDistributionService } from '@giaokhoa/messaging';
 import { SpaceJobRunner } from '../db/routing/space-job-runner';
 import type { OutboxEventJobData } from '../outbox-event-routes';
 
 /** Tên hàng đợi BullMQ của consumer phân phối realtime messaging. */
 export const MESSAGING_REALTIME_QUEUE = 'messaging-realtime';
 
-/** Khoá tiêm của tầng phân phối (`@lms/messaging`) cấp cho processor này. */
+/** Khoá tiêm của tầng phân phối (`@giaokhoa/messaging`) cấp cho processor này. */
 export const MESSAGING_DISTRIBUTION_SERVICE = 'MESSAGING_DISTRIBUTION_SERVICE';
 
 /** Khoá tiêm của connection Redis giữ dấu đã-phân-phối. */
 export const MESSAGING_DISTRIBUTED_REDIS = 'MESSAGING_DISTRIBUTED_REDIS';
 
 /** Tiền tố khoá Redis của dấu đã-phân-phối, khoá theo `outboxId` của sự kiện. */
-export const MESSAGING_DISTRIBUTED_KEY_PREFIX = 'lms:messaging:distributed:';
+export const MESSAGING_DISTRIBUTED_KEY_PREFIX = 'giaokhoa:messaging:distributed:';
 
 /**
  * TTL của dấu đã-phân-phối: 7 ngày — cùng khuôn với dấu đã-gửi của
@@ -51,7 +51,7 @@ const DISTRIBUTION_RETRY_DELAY_MS = 5_000;
  * 2. Kiểm dấu đã-phân-phối theo `outboxId` trong Redis: đã có dấu
  *    thì job là lượt phát lại của một sự kiện đã phân phối xong —
  *    kết thúc ngay, không phân phối lần hai.
- * 3. Gọi luật phân phối dùng chung ở `@lms/messaging`
+ * 3. Gọi luật phân phối dùng chung ở `@giaokhoa/messaging`
  *    (`distributeEvent`): đọc dữ kiện tại thời điểm phân phối, qua
  *    cổng chặn 1–1 fail-closed và rà soát membership, rồi phát qua
  *    Redis emitter về phía API.

@@ -29,6 +29,14 @@ hoặc trong issue đặc tả của chính việc đó trên GitHub:
   chính thư viện đó trước — tài liệu, cách dùng khuyến nghị, bộ
   rule và quy ước của nhà phát hành — và dùng đúng như vậy. Cấm
   đoán hành vi của thư viện hay uốn nó theo thói quen từ nơi khác.
+- **Không sinh script hạ tầng nếu framework đã hỗ trợ:** trước khi tạo
+  file `.js`/`.mjs`/`.sh`/`.sql` phục vụ bootstrap, build, proxy, CI hoặc
+  devcontainer, phải đối chiếu tài liệu chính thức của công cụ hiện tại
+  (pnpm, Docker Compose/PostgreSQL, Dev Containers, Nest CLI, React Router,
+  Kysely, Vitest). Ưu tiên cấu hình khai báo và CLI có sẵn. Chỉ viết code
+  điều phối riêng khi có hành vi thật sự chưa được hỗ trợ và có kiểm chứng
+  tương đương; ghi rõ trách nhiệm và thời điểm chạy của nó. Không coi việc
+  chuyển đoạn shell sang script mới là dọn sạch code.
 - **Thay đổi tối thiểu theo đúng task:** mọi thay đổi phải là tối
   thiểu cần thiết cho task: không mở rộng phạm vi, không refactor
   tiện tay, không đụng code không liên quan. Phát hiện ngoài phạm
@@ -88,6 +96,33 @@ nhánh, đặt tên branch, tạo issue, tạo PR, chuẩn tiêu đề và
 commit, đóng issue, review và merge, vòng đời label. Khi repo
 được tạo lại từ đầu, toàn bộ quy trình được dựng lại theo đúng
 chương này.
+
+### Worktree bắt buộc khi xử lý Issue
+
+1. **Mỗi Issue một worktree riêng dưới `.worktrees/`.** Tất cả
+   worktree phục vụ Issue phải đặt trong `<repo-root>/.worktrees/`
+   (ví dụ `.worktrees/fix-442-tenant-api-prefix`), và đường dẫn
+   `/.worktrees/` phải được khai trong `.gitignore`. Mỗi Issue có
+   worktree và nhánh riêng; không tái sử dụng worktree cho Issue khác.
+   Cấm sửa file nguồn, tạo commit hoặc chạy lệnh làm thay đổi code
+   trong worktree gốc đang checkout `main` hoặc `dev`; chỉ được
+   dùng worktree gốc để quản lý Git worktree.
+2. **Kiểm tra trước khi thi công.** Tại worktree gốc, chạy
+   `git status --short` và `git worktree list` trước khi tạo worktree.
+   Tạo bằng lệnh `git worktree add -b <type>/<số-issue>-<slug> .worktrees/<type>-<số-issue>-<slug> dev`. Chỉ dùng `main`
+   làm nhánh gốc nếu `dev` chưa được thiết lập. Quy tắc tên nhánh
+   vẫn theo mục "Đặt tên branch" ở dưới.
+3. **Chưa có số Issue.** Khi cần chuẩn bị trước khi có Issue, dùng
+   worktree trong `.worktrees/` và nhánh tạm riêng, không tự đặt
+   số Issue giả. Đổi về nhánh đúng quy ước khi có Issue và trước PR.
+4. **Bảo toàn thay đổi.** Khi phát hiện sửa nhầm trong worktree gốc,
+   phải sao lưu, chuyển và đối chiếu đầy đủ thay đổi trước khi dọn
+   bản sai chỗ. Cấm dùng `git reset --hard` hoặc `git clean -fd`
+   để xoá dữ liệu chưa được xác minh đã chuyển an toàn.
+5. **Kiểm chứng và bàn giao.** Chạy lint, typecheck, test trong worktree
+   của Issue. Báo rõ đường dẫn worktree, nhánh, trạng thái Git và
+   giữ worktree gốc sạch (ngoại trừ thay đổi do người dùng chủ động
+   giữ lại).
 
 ### Flow nhánh dev và main
 
@@ -224,8 +259,7 @@ trình hiện tại trong tài liệu này.
    mỗi issue (theo mục "Flow nhánh dev và main" ở trên; trong giai
    đoạn chuyển tiếp chưa có nhánh `dev` thì nhánh từ `main`, PR vào
    `main`).
-2. Thân PR theo `.github/pull_request_template.md`, gồm: `Closes
-   #<số issue>`; tóm tắt thay đổi; bản đồ thay đổi theo phạm vi; task
+2. Thân PR theo `.github/pull_request_template.md`, gồm: `Closes #<số issue>`; tóm tắt thay đổi; bản đồ thay đổi theo phạm vi; task
    list toàn bộ việc con của issue (mang từ issue sang) và tích khi
    xong từng mục; đối chiếu nghiệm thu từng tiêu chí kèm bằng chứng;
    kết quả kiểm chứng và CI.
@@ -316,8 +350,7 @@ trình hiện tại trong tài liệu này.
 
 ### Đóng issue
 
-1. Issue chỉ đóng bằng cơ chế tự đóng qua dòng `Closes #<số
-   issue>` trong thân PR khi PR merge. Cấm đóng tay issue trước
+1. Issue chỉ đóng bằng cơ chế tự đóng qua dòng `Closes #<số issue>` trong thân PR khi PR merge. Cấm đóng tay issue trước
    khi PR của nó merge.
 2. Sau khi merge, phải kiểm chứng issue đã thật sự đóng. Nếu PR
    đã merge mà issue chưa đóng (sai từ khoá đóng hoặc sai nhánh
@@ -349,11 +382,11 @@ hoặc qua API) TRƯỚC khi mở issue đầu tiên; xoá các label mặc
 định tiếng Anh của GitHub không thuộc bộ này, không dùng bộ
 label mặc định đó.
 
-| Tên label | Mã màu | Mô tả | Khi nào gắn | Ai gắn |
-| --- | --- | --- | --- | --- |
-| `đang thi công` | `1d76db` | Đội thi công đang làm | Khi bắt đầu làm issue | Đội thi công |
-| `đang review` | `5319e7` | Đội review độc lập đang chấm | Khi bắt đầu chấm | Đội review |
-| `chờ sửa` | `d93f0b` | Review chưa đạt, chờ đội thi công sửa | Khi phán quyết chưa đạt | Đội review |
-| `chờ merge` | `0e8a16` | Review đã đạt, chờ merge | Khi phán quyết đạt | Đội review |
-| `lỗi` | `d73a4a` | Có gì đó không hoạt động | Label loại cho issue lỗi | Đội mở issue |
-| `tính năng` | `a2eeef` | Tính năng mới hoặc yêu cầu | Label loại cho issue tính năng | Đội mở issue |
+| Tên label       | Mã màu   | Mô tả                                 | Khi nào gắn                    | Ai gắn       |
+| --------------- | -------- | ------------------------------------- | ------------------------------ | ------------ |
+| `đang thi công` | `1d76db` | Đội thi công đang làm                 | Khi bắt đầu làm issue          | Đội thi công |
+| `đang review`   | `5319e7` | Đội review độc lập đang chấm          | Khi bắt đầu chấm               | Đội review   |
+| `chờ sửa`       | `d93f0b` | Review chưa đạt, chờ đội thi công sửa | Khi phán quyết chưa đạt        | Đội review   |
+| `chờ merge`     | `0e8a16` | Review đã đạt, chờ merge              | Khi phán quyết đạt             | Đội review   |
+| `lỗi`           | `d73a4a` | Có gì đó không hoạt động              | Label loại cho issue lỗi       | Đội mở issue |
+| `tính năng`     | `a2eeef` | Tính năng mới hoặc yêu cầu            | Label loại cho issue tính năng | Đội mở issue |

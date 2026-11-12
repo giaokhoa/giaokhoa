@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { INestApplicationContext } from '@nestjs/common';
-import { sql, type CentreDb } from '@lms/db';
+import { sql, type CentreDb } from '@giaokhoa/db';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {

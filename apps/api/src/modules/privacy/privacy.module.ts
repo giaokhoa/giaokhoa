@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrivacyRepository } from '@lms/db/repositories/privacy';
+import { PrivacyRepository } from '@giaokhoa/db/repositories/privacy';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { AccessModule } from '../access/access.module';
@@ -13,7 +13,7 @@ import { PrivacyService } from './privacy.service';
   imports: [AccessModule, FilesModule, UsersModule, SpaceRoutingModule],
   controllers: [PrivacyController],
   providers: [
-    // Repository của package @lms/db chạy trên handle Kysely đã định
+    // Repository của package @giaokhoa/db chạy trên handle Kysely đã định
     // tuyến theo không gian (issue #648).
     {
       provide: PrivacyRepository,

@@ -1,5 +1,5 @@
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { TeacherCommentBankEntryView } from '@lms/contracts';
+import type { TeacherCommentBankEntryView } from '@giaokhoa/contracts';
 import {
   addSubmissionAnnotation,
   createCommentBankEntry,

@@ -36,7 +36,7 @@ describe('Tập nghiệm thu mô phỏng CAM-0', () => {
         fills.set(row.slot, { choice, style: 'full' });
         truth.set(row.slot, choice);
       });
-      const qrText = `LMSQ1|quiz-${s}|A|user-${s}|chk${s}`;
+      const qrText = `GKHQ1|quiz-${s}|A|user-${s}|chk${s}`;
       const sheet = renderSheetRgba({ geometry, qrText, bubbleCode: null, fills });
       const photo = simulatePhoto(sheet, { seed: 5000 + s, blurPasses: s % 3 === 0 ? 1 : 0 });
       const result = processSheetImage(photo, geometry);
@@ -153,12 +153,12 @@ describe('Tập nghiệm thu mô phỏng CAM-0', () => {
     const geometry = computeSheetGeometry(OPTION_COUNTS_40);
     const fills = new Map<number, SlotFill>();
     for (let slot = 1; slot <= 40; slot++) fills.set(slot, { choice: 1, style: 'full' });
-    const sheet = renderSheetRgba({ geometry, qrText: 'LMSQ1|q|A|u|c', bubbleCode: null, fills });
+    const sheet = renderSheetRgba({ geometry, qrText: 'GKHQ1|q|A|u|c', bubbleCode: null, fills });
     const blurred = processSheetImage(simulatePhoto(sheet, { seed: 31337, blurPasses: 8 }), geometry);
     expect(blurred.qualityOk).toBe(false);
     expect(blurred.qualityReasons).toContain('blurry');
     // Che mất một fiducial bằng mảng trắng lớn ở góc.
-    const broken = renderSheetRgba({ geometry, qrText: 'LMSQ1|q|A|u|c', bubbleCode: null, fills });
+    const broken = renderSheetRgba({ geometry, qrText: 'GKHQ1|q|A|u|c', bubbleCode: null, fills });
     for (let y = 0; y < 260; y++) {
       for (let x = 0; x < 260; x++) {
         const i = (y * broken.width + x) * 4;

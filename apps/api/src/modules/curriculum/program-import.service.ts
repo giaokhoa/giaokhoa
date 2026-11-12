@@ -1,9 +1,9 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import type { ProgramDatasetStatus, ProgramImportChange, ProgramImportResult } from '@lms/contracts';
-import type { CentreTx } from '@lms/db';
+import type { ProgramDatasetStatus, ProgramImportChange, ProgramImportResult } from '@giaokhoa/contracts';
+import type { CentreTx } from '@giaokhoa/db';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { ContextsService } from '../access/contexts.service';
-import { CurriculumRepository, type CurriculumNodeRow } from '@lms/db/repositories/curriculum';
+import { CurriculumRepository, type CurriculumNodeRow } from '@giaokhoa/db/repositories/curriculum';
 import { CURRICULUM_MANAGE, CURRICULUM_VIEW } from './curriculum.service';
 import {
   loadProgramDataset, programAncestorNodeId, programCurriculumId, programDatasetByKey, programLessonNodeId,

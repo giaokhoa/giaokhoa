@@ -45,7 +45,7 @@ import { createExamDraft } from '../../support/exam-pin-helpers';
  *    cả hai kỷ nguyên; approve qua REST → deep copy vào bank trường
  *    (derived_from trỏ câu gốc); chặn câu chưa ready / câu của người
  *    khác / đích bank personal / câu không tồn tại; idempotency replay
- *    + conflict; trần thiếu scope lms.banks.contribute → HTTP 403
+ *    + conflict; trần thiếu scope giaokhoa.banks.contribute → HTTP 403
  *    insufficient_scope (app riêng).
  */
 
@@ -189,8 +189,8 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
     const prm = await http(app).get('/.well-known/oauth-protected-resource');
     expect(prm.status).toBe(200);
     expect(String(prm.body.resource)).toMatch(/\/mcp$/);
-    expect(prm.body.scopes_supported).toContain('lms.questions.draft');
-    expect(prm.body.scopes_supported).toContain('lms.banks.contribute');
+    expect(prm.body.scopes_supported).toContain('giaokhoa.questions.draft');
+    expect(prm.body.scopes_supported).toContain('giaokhoa.banks.contribute');
     expect(prm.body.authorization_servers?.length).toBeGreaterThan(0);
 
     const noToken = await mcpCall(app, null, 'tools/call', { name: 'list_my_banks', arguments: {} });
@@ -977,7 +977,7 @@ describe('MCP rate limit (app riêng, hạn tạo = 2/giờ)', () => {
   });
 });
 
-describe('MCP submit_contribution thiếu scope (app riêng, trần không có lms.banks.contribute)', () => {
+describe('MCP submit_contribution thiếu scope (app riêng, trần không có giaokhoa.banks.contribute)', () => {
   let app3: INestApplication;
 
   beforeAll(async () => {
@@ -985,7 +985,7 @@ describe('MCP submit_contribution thiếu scope (app riêng, trần không có l
       // Deps chuẩn từ facade của McpModule (issue #138), chỉ thu hẹp
       // trần scope để kiểm cổng insufficient_scope của submit_contribution.
       const deps = a.get(McpDepsService).createMountDeps();
-      return { ...deps, grantedScopes: ['lms.questions.read', 'lms.questions.draft'] };
+      return { ...deps, grantedScopes: ['giaokhoa.questions.read', 'giaokhoa.questions.draft'] };
     });
   });
   afterAll(async () => { await app3.close(); });
@@ -1011,7 +1011,7 @@ describe('MCP submit_contribution thiếu scope (app riêng, trần không có l
       });
     expect(res.status).toBe(403);
     expect(String(res.headers['www-authenticate'])).toContain('insufficient_scope');
-    expect(String(res.headers['www-authenticate'])).toContain('lms.banks.contribute');
+    expect(String(res.headers['www-authenticate'])).toContain('giaokhoa.banks.contribute');
     expect(parseMcpBody(res.text).error?.code).toBe(-32003);
   });
 });

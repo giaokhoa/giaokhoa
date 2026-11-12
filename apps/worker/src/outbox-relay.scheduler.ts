@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Interval } from '@nestjs/schedule';
-import type { CentreDb } from '@lms/db';
+import type { CentreDb } from '@giaokhoa/db';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
 import { mapWithConcurrencyLimit } from './db/routing/space-sweep';
 import { EventLogWriter } from './event-log-writer.service';

@@ -19,7 +19,7 @@ import { baSessionResponse, isGetSessionUrl } from '#test/ba-session';
  *
  * - Admin thấy đủ cây (3 mục cha); nhóm cha đóng mặc định, bấm mới mở
  *   mục con; các nhóm mở độc lập (không accordion).
- * - Trạng thái mở của nhóm lưu ở localStorage `lms:sidebar:open-groups`
+ * - Trạng thái mở của nhóm lưu ở localStorage `giaokhoa:sidebar:open-groups`
  *   — "F5" (gỡ cây, dựng lại) vẫn giữ; nhóm chứa route đang xem thì
  *   luôn tự mở và mục con + nút cha cùng mang trạng thái active.
  * - Ba mục ngân hàng CẤP CAO NHẤT ngay sau Học tập (chốt lại của Lão
@@ -354,7 +354,7 @@ describe('cây điều hướng sidebar — trạng thái nhóm', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: 'Học tập' }));
     expect(await screen.findByRole('link', { name: 'Huy hiệu' })).toBeInTheDocument();
-    expect(JSON.parse(localStorage.getItem('lms:sidebar:open-groups') ?? '[]')).toEqual(['learning']);
+    expect(JSON.parse(localStorage.getItem('giaokhoa:sidebar:open-groups') ?? '[]')).toEqual(['learning']);
 
     // F5: gỡ toàn bộ cây, dựng lại từ đầu — localStorage còn nguyên.
     first.unmount();

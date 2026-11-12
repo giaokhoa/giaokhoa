@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ControlPlaneRepository } from '@lms/db/repositories/control-plane';
+import { ControlPlaneRepository } from '@giaokhoa/db/repositories/control-plane';
 import {
   ControlPlaneRegistryService,
   SHARED_DATABASE_SCHEMA_VERSION,
@@ -18,7 +18,7 @@ import { createTestApp } from '../../support/identity-access-helpers';
  * registry phiên bản schema và tách quyền kết nối giữa hai database.
  *
  * Môi trường của ca tự cấp phát như đường triển khai thật: một
- * database control plane MỚI (`lms_test_cp_580`) trên cùng cụm với
+ * database control plane MỚI (`giaokhoa_test_cp_580`) trên cùng cụm với
  * database nghiệp vụ test, một role kết nối riêng chỉ có quyền trên
  * database đó, bộ migration riêng của control plane áp từ rỗng bằng
  * chính file SQL đã sinh, rồi mới khởi động ứng dụng với
@@ -28,7 +28,7 @@ import { createTestApp } from '../../support/identity-access-helpers';
  * Cô lập kết nối được kiểm ở ĐÚNG bước mở kết nối, hai chiều: ca
  * cũng khoá CONNECT trên chính database nghiệp vụ test (thu hồi
  * PUBLIC, cấp lại cho role của đường dữ kiện và một role nghiệp vụ
- * thường `lms_biz_test_580`) như script cấp phát làm ở môi trường
+ * thường `giaokhoa_biz_test_580`) như script cấp phát làm ở môi trường
  * triển khai, rồi khẳng định role control plane chết ngay tại
  * `connect()`. ACL của database nghiệp vụ được trả về mặc định ở
  * afterAll để không ảnh hưởng các ca khác dùng chung cụm test.
@@ -45,10 +45,10 @@ import { createTestApp } from '../../support/identity-access-helpers';
  * chạy local bằng PG16): PG18 — bản ở CI và production — có sẵn hàm
  * này, shim sẽ che mất hàm gốc nên tuyệt đối không áp ở đó.
  */
-const CP_DATABASE = 'lms_test_cp_580';
-const CP_ROLE = 'lms_cp_test_580';
+const CP_DATABASE = 'giaokhoa_test_cp_580';
+const CP_ROLE = 'giaokhoa_cp_test_580';
 const CP_PASSWORD = 'cp-test-580';
-const BIZ_ROLE = 'lms_biz_test_580';
+const BIZ_ROLE = 'giaokhoa_biz_test_580';
 
 const UUIDV7_SHIM = `CREATE OR REPLACE FUNCTION uuidv7() RETURNS uuid AS $$ DECLARE ts_ms bigint := (extract(epoch from clock_timestamp()) * 1000)::bigint; b bytea; BEGIN b := decode(lpad(to_hex(ts_ms), 12, '0'), 'hex') || gen_random_bytes(10); b := set_byte(b, 6, (get_byte(b, 6) & 15) | 112); b := set_byte(b, 8, (get_byte(b, 8) & 63) | 128); RETURN encode(b, 'hex')::uuid; END; $$ LANGUAGE plpgsql VOLATILE`;
 
@@ -219,9 +219,9 @@ describe('Control plane: sổ đăng ký không gian và registry phiên bản s
       slug: 'trung-tam-test-580',
       name: 'Trung tâm test 580',
       kind: 'center',
-      databaseName: 'lms_centre_test_580',
+      databaseName: 'giaokhoa_centre_test_580',
       storageMode: 'dedicated',
-      connectionRoleRef: 'lms_centre_test_580_app',
+      connectionRoleRef: 'giaokhoa_centre_test_580_app',
       secretRef: 'env:TEST_580_DATABASE_URL',
       plan: 'standard',
     });
@@ -244,9 +244,9 @@ describe('Control plane: sổ đăng ký không gian và registry phiên bản s
         slug: 'trung-tam-test-580',
         name: 'Trung tâm trùng slug',
         kind: 'center',
-        databaseName: 'lms_centre_dup',
+        databaseName: 'giaokhoa_centre_dup',
         storageMode: 'dedicated',
-        connectionRoleRef: 'lms_centre_dup_app',
+        connectionRoleRef: 'giaokhoa_centre_dup_app',
       }),
     ).rejects.toBeInstanceOf(ConflictException);
   });
@@ -281,16 +281,16 @@ describe('Control plane: sổ đăng ký không gian và registry phiên bản s
       slug: 'trung-tam-test-611-khac',
       name: 'Trung tâm test 611 khác',
       kind: 'center',
-      databaseName: 'lms_centre_test_611_other',
+      databaseName: 'giaokhoa_centre_test_611_other',
       storageMode: 'dedicated',
-      connectionRoleRef: 'lms_centre_test_611_other_app',
+      connectionRoleRef: 'giaokhoa_centre_test_611_other_app',
     });
     await expect(
-      registry.updateRegistration(adminId, createdSpaceId, { databaseName: 'lms_centre_test_611_other' }),
+      registry.updateRegistration(adminId, createdSpaceId, { databaseName: 'giaokhoa_centre_test_611_other' }),
     ).rejects.toBeInstanceOf(ConflictException);
-    const unchanged = await registry.updateRegistration(adminId, createdSpaceId, { databaseName: 'lms_centre_test_580' });
-    expect(unchanged.databaseName).toBe('lms_centre_test_580');
-    expect(other.databaseName).toBe('lms_centre_test_611_other');
+    const unchanged = await registry.updateRegistration(adminId, createdSpaceId, { databaseName: 'giaokhoa_centre_test_580' });
+    expect(unchanged.databaseName).toBe('giaokhoa_centre_test_580');
+    expect(other.databaseName).toBe('giaokhoa_centre_test_611_other');
   });
 
   it('chỉ đổi storageMode sang dedicated mà giữ nguyên tên database đã có ở dòng kho chung khác cũng bị từ chối 409', async () => {
@@ -345,7 +345,7 @@ describe('Control plane: sổ đăng ký không gian và registry phiên bản s
     expect(otherFromPlatform?.id).toBe(school.id);
     const otherFromSchool = await repository.findOtherSpaceByDatabaseName(school.databaseName, school.id);
     expect(otherFromSchool?.id).toBe(platform.id);
-    const onlyRow = await repository.findOtherSpaceByDatabaseName('lms_centre_test_580', createdSpaceId);
+    const onlyRow = await repository.findOtherSpaceByDatabaseName('giaokhoa_centre_test_580', createdSpaceId);
     expect(onlyRow).toBeUndefined();
   });
 
@@ -367,7 +367,7 @@ describe('Control plane: sổ đăng ký không gian và registry phiên bản s
   it('tra cứu định tuyến theo slug trả đúng dòng đăng ký; slug lạ nhận lỗi không tìm thấy', async () => {
     const found = await registry.getBySlug(adminId, 'trung-tam-test-580');
     expect(found.id).toBe(createdSpaceId);
-    expect(found.databaseName).toBe('lms_centre_test_580');
+    expect(found.databaseName).toBe('giaokhoa_centre_test_580');
     await expect(registry.getBySlug(adminId, 'slug-khong-ton-tai')).rejects.toBeInstanceOf(NotFoundException);
   });
 
@@ -377,7 +377,7 @@ describe('Control plane: sổ đăng ký không gian và registry phiên bản s
         slug: 'trung-tam-cua-khach',
         name: 'Trung tâm của khách',
         kind: 'center',
-        databaseName: 'lms_centre_guest',
+        databaseName: 'giaokhoa_centre_guest',
         storageMode: 'dedicated',
         connectionRoleRef: 'guest_app',
       }),
@@ -641,9 +641,9 @@ describe('Control plane: sổ đăng ký không gian và registry phiên bản s
       slug: 'trung-tam-song-song-589',
       name: 'Trung tâm kiểm đồng thời',
       kind: 'center',
-      databaseName: 'lms_centre_parallel_589',
+      databaseName: 'giaokhoa_centre_parallel_589',
       storageMode: 'dedicated',
-      connectionRoleRef: 'lms_centre_parallel_589_app',
+      connectionRoleRef: 'giaokhoa_centre_parallel_589_app',
     });
     // Bốn thao tác ghi chạy cùng lúc trên cùng một dòng (hai đổi
     // trạng thái qua lại, hai cập nhật tên): ảnh before của mỗi
@@ -676,9 +676,9 @@ describe('Control plane: sổ đăng ký không gian và registry phiên bản s
       slug: 'trung-tam-trung-dong-thoi-589',
       name: 'Trung tâm trùng đồng thời',
       kind: 'center' as const,
-      databaseName: 'lms_centre_race_589',
+      databaseName: 'giaokhoa_centre_race_589',
       storageMode: 'dedicated' as const,
-      connectionRoleRef: 'lms_centre_race_589_app',
+      connectionRoleRef: 'giaokhoa_centre_race_589_app',
     };
     const results = await Promise.allSettled([
       registry.createRegistration(adminId, dto),

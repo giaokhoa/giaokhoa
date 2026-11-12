@@ -30,8 +30,8 @@ import { ensureCentreSchemaDelta } from '../../../src/modules/tenants/centre-sch
  * tên database).
  */
 const RUN_SUFFIX = Math.random().toString(36).slice(2, 8);
-const BIZ_DATABASE = `lms_test_bizdelta_611_${RUN_SUFFIX}`;
-const CP_DATABASE = `lms_test_cpdelta_611_${RUN_SUFFIX}`;
+const BIZ_DATABASE = `giaokhoa_test_bizdelta_611_${RUN_SUFFIX}`;
+const CP_DATABASE = `giaokhoa_test_cpdelta_611_${RUN_SUFFIX}`;
 
 const UUIDV7_SHIM = `CREATE OR REPLACE FUNCTION uuidv7() RETURNS uuid AS $$ DECLARE ts_ms bigint := (extract(epoch from clock_timestamp()) * 1000)::bigint; b bytea; BEGIN b := decode(lpad(to_hex(ts_ms), 12, '0'), 'hex') || gen_random_bytes(10); b := set_byte(b, 6, (get_byte(b, 6) & 15) | 112); b := set_byte(b, 8, (get_byte(b, 8) & 63) | 128); RETURN encode(b, 'hex')::uuid; END; $$ LANGUAGE plpgsql VOLATILE`;
 

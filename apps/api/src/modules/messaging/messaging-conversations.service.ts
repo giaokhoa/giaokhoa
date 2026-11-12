@@ -2,8 +2,8 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { UsersService } from '../users/users.service';
-import { MessagingRepository, type ConversationRow, type MessageRow, type MessageWithQuoteRow } from '@lms/db/repositories/messaging';
-import { blankRecalledContent } from '@lms/messaging';
+import { MessagingRepository, type ConversationRow, type MessageRow, type MessageWithQuoteRow } from '@giaokhoa/db/repositories/messaging';
+import { blankRecalledContent } from '@giaokhoa/messaging';
 import { tenantAls } from '../tenants/tenant-als';
 import { MessagingContactsService, type PersonSummaryView } from './messaging-contacts.service';
 import { MessagingMembershipSyncService } from './messaging-membership-sync.service';

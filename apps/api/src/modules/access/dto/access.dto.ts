@@ -20,11 +20,11 @@ import {
   type ReplaceRoleCapabilities,
   type UpdateRole,
   uuidIdSchema,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 
 /**
  * Validation của Access (contexts/roles/assignments) dùng Zod qua Standard
- * Schema — schema nền ở `@lms/contracts` là nguồn sự thật duy nhất.
+ * Schema — schema nền ở `@giaokhoa/contracts` là nguồn sự thật duy nhất.
  */
 export { assignRoleSchema, capabilityMatrixQuerySchema, createContextSchema, createRoleSchema, overrideCapabilitySchema, replaceRoleCapabilitiesSchema, updateRoleSchema };
 export type CreateContextDto = CreateContext;

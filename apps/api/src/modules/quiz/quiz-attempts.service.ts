@@ -9,8 +9,8 @@ import type {
   QuizAttemptSummary,
   QuizView,
   RichTextDocument,
-} from '@lms/contracts';
-import { extractRichTextPlainText } from '@lms/contracts';
+} from '@giaokhoa/contracts';
+import { extractRichTextPlainText } from '@giaokhoa/contracts';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { CoursesService } from '../courses/courses.service';
 import { EnrolService } from '../enrol/enrol.service';
@@ -27,7 +27,7 @@ import {
   type ExamAttemptEventRow,
   type ExamAttemptRow,
   type ExamPinOverrideRow,
-} from '@lms/db/repositories/quiz';
+} from '@giaokhoa/db/repositories/quiz';
 import { QuizSharedService } from './quiz-shared.service';
 import { QUIZ_COMPONENT } from './quiz-shared.service';
 import { QUIZ_CAPABILITIES } from './quiz-shared.service';

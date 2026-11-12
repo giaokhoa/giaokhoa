@@ -1,13 +1,9 @@
 import type { CentreDb, CentreTx } from '../client';
 
 /**
- * Kho dữ liệu nhóm trên Kysely (issue #645, nhóm G5 của chiến
- * dịch chuyển tầng dữ liệu sang Kysely): TOÀN BỘ bề mặt của
- * `GroupsRepository` cũ ở `apps/api`  được chuyển nguyên
- * vẹn sang đây — group, grouping, thành viên nhóm và cohort (nhóm
- * hệ thống/danh mục).
+ * Kho dữ liệu nhóm trên Kysely: quản lý group, grouping, thành viên nhóm và cohort dùng cho phân nhóm theo ngữ cảnh.
  *
- * Khuôn truy vấn theo đúng pilot kho control plane (issue #640):
+ * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Cột đọc khai tường minh kèm bí danh camelCase dùng chung cho
  *   select và returning — KHÔNG bật CamelCasePlugin.
  * - Ghi qua hàm ánh xạ Insert/Update loại `undefined` tường minh
@@ -26,9 +22,7 @@ import type { CentreDb, CentreTx } from '../client';
  * transaction của bên gọi vào để việc gỡ và ghi sổ hoàn commit
  * cùng nhau.
  *
- * Bề mặt kiểu dòng giữ đúng hình dạng `$inferSelect` của
- * repository cũ để phía tiêu thụ trong module groups không đổi
- * hợp đồng.
+ * Kiểu dòng công khai dùng camelCase, được ánh xạ tường minh từ các cột snake_case.
  */
 
 /** Handle kho trung tâm mà repository chấp nhận: thường hoặc trong giao dịch. */
@@ -36,9 +30,7 @@ export type GroupsDb = CentreDb | CentreTx;
 /** Handle giao dịch kho trung tâm. */
 export type GroupsTx = CentreTx;
 
-// ---------------------------------------------------------------------------
-// Kiểu dòng đọc (hợp đồng công khai — khớp `$inferSelect` của repository cũ)
-// ---------------------------------------------------------------------------
+// Kiểu dòng công khai: tên thuộc tính camelCase ánh xạ từ cột PostgreSQL.
 
 /** Dòng `course_groups`. */
 export interface GroupRow {

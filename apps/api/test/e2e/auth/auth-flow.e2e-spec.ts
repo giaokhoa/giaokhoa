@@ -130,7 +130,7 @@ describe('Xác thực: đăng nhập, khoá tài khoản, xoay refresh, phiên, 
     expect(me1.status).toBe(200);
     // Lần đăng nhập thứ hai mang id cũ phải xoay nó (bảo vệ chống fixation).
     const second = await http(app).post('/api/v1/auth/session/login')
-      .set('Cookie', `lms_session=${sid1}`).send({ username: user.username, password: STRONG_PASSWORD });
+      .set('Cookie', `giaokhoa_session=${sid1}`).send({ username: user.username, password: STRONG_PASSWORD });
     const sid2 = second.body.sessionId as string;
     expect(sid2).not.toBe(sid1);
     const oldMe = await http(app).get('/api/v1/auth/session/me').set('x-session-id', sid1);

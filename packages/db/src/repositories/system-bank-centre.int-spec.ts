@@ -11,7 +11,7 @@ import { SystemBankCentreRepository } from './system-bank-centre';
  * Database trung tâm được dựng từ rỗng bằng chính cầu nối
  * migration của package (carrier đóng băng của kho centre) trên
  * cụm PostgreSQL thật của môi trường test (biến
- * `LMS_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ
+ * `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ
  * `DATABASE_URL` của package). Kết nối chạy bằng quyền quản trị
  * của cụm test như spec pilot — RLS theo tenant không thuộc phạm
  * vi của spec này (hành vi GUC/RLS của handle đã khoá ở spec khói
@@ -31,10 +31,10 @@ import { SystemBankCentreRepository } from './system-bank-centre';
  * - Tra slug trung tâm theo tenant id của kho chung.
  */
 const adminUrl =
-  process.env.LMS_DB_TEST_ADMIN_URL ??
+  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
 
-const CENTRE_DB = 'lms_db_g650_centre';
+const CENTRE_DB = 'giaokhoa_db_g650_centre';
 const TENANT_ID = '01965000-0000-7000-8000-000000000201';
 const CONTEXT_ID = '01965000-0000-7000-8000-000000000202';
 const SUBJECT_ID = '01965000-0000-7000-8000-000000000203';
@@ -58,7 +58,7 @@ function doc(text: string): { type: string; content: Array<{ type: string; conte
 
 beforeAll(async () => {
   if (!adminUrl) {
-    throw new Error('Thiếu kết nối quản trị cho spec phía trung tâm: đặt LMS_DB_TEST_ADMIN_URL hoặc DATABASE_URL.');
+    throw new Error('Thiếu kết nối quản trị cho spec phía trung tâm: đặt GIAOKHOA_DB_TEST_ADMIN_URL hoặc DATABASE_URL.');
   }
   const centreUrl = await buildTestDatabase({ adminUrl, database: CENTRE_DB, store: 'centre' });
   pool = new Pool({ connectionString: centreUrl });

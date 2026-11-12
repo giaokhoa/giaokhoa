@@ -23,7 +23,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  * và không có vòng gia hạn nào) thì khoá biến mất dù socket vẫn nối.
  */
 
-const PRESENCE_KEY_PREFIX = 'lms:messaging:presence:';
+const PRESENCE_KEY_PREFIX = 'giaokhoa:messaging:presence:';
 
 async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
@@ -69,7 +69,7 @@ describe('Làm mới TTL presence nhắn tin (issue #33, F2)', () => {
     });
 
     // TENANT-1 (#196): khoá presence mang đoạn tenant —
-    // `lms:messaging:presence:{tenantId}:{userId}` — nên test tìm
+    // `giaokhoa:messaging:presence:{tenantId}:{userId}` — nên test tìm
     // khoá của đúng user theo mẫu thay vì dựng khoá cứng như trước.
     const keyPattern = `${PRESENCE_KEY_PREFIX}*:${user.id}`;
     const findKey = async (): Promise<string | null> => (await redis.keys(keyPattern))[0] ?? null;

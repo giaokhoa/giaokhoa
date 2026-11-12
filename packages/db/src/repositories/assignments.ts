@@ -1,7 +1,5 @@
 /**
- * Repository của cụm BÀI TẬP (assignments) trên Kysely — một phần
- * của nhóm G9 trong chiến dịch chuyển tầng dữ liệu sang Kysely
- * (issue #649).
+ * Repository của cụm BÀI TẬP (assignments) trên Kysely.
  *
  * Vai trò: mọi truy cập tới mười hai bảng của hoạt động Bài tập nộp
  * tệp/ảnh (mod_assign) tập trung ở đây:

@@ -3,10 +3,10 @@ import type { ConfigService } from '@nestjs/config';
 import type { Queue } from 'bullmq';
 import type { Cache } from 'cache-manager';
 import { describe, expect, it, vi } from 'vitest';
-import type { CentreDb } from '@lms/db';
-import { AccessRepository, type ContextRow } from '@lms/db/repositories/access';
+import type { CentreDb } from '@giaokhoa/db';
+import { AccessRepository, type ContextRow } from '@giaokhoa/db/repositories/access';
 import type { FileSigningService } from '../files/file-signing.service';
-import type { FileRow, FilesRepository } from '@lms/db/repositories/files';
+import type { FileRow, FilesRepository } from '@giaokhoa/db/repositories/files';
 import { FilesService } from '../files/files.service';
 import type { ObjectStorage } from '../files/storage';
 import { tenantAls } from '../tenants/tenant-als';
@@ -227,7 +227,7 @@ function makeEvaluator(gate: GateReads): PermissionEvaluator {
     repo as unknown as AccessRepository,
     contexts as unknown as ContextsService,
     cache as unknown as Cache,
-    { getOrThrow: () => 'postgres://user:pass@localhost:5432/lms_test_api' } as unknown as ConfigService,
+    { getOrThrow: () => 'postgres://user:pass@localhost:5432/giaokhoa_test_api' } as unknown as ConfigService,
   );
 }
 

@@ -2,7 +2,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module, type ExecutionContext, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { createCentreKysely } from '@lms/db';
+import { createCentreKysely } from '@giaokhoa/db';
 import { databaseConnectionFromEnv, redisConnectionFromUrl, validateEnv } from './config/env';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
 import { SpaceRoutingModule } from './db/routing/space-routing.module';

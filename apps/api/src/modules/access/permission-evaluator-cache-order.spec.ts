@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Cache } from 'cache-manager';
 import type { ConfigService } from '@nestjs/config';
 import type { SpaceDatabaseService } from '../../db/routing/space-database.service';
-import { AccessRepository, type ContextRow } from '@lms/db/repositories/access';
+import { AccessRepository, type ContextRow } from '@giaokhoa/db/repositories/access';
 import { ContextsService } from './contexts.service';
 import { CAP_ALLOW } from './domain/permission';
 import { PermissionEvaluator } from './permission-evaluator.service';
@@ -159,7 +159,7 @@ function makeWorld(opts?: { databaseUrl?: string; cacheStore?: Map<string, unkno
   // Kho cache và URL cơ sở dữ liệu được truyền vào khi spec cần dựng
   // nhiều "tiến trình" dùng chung một Redis (cùng `cacheStore`) nhưng
   // trỏ vào các DB khác nhau (khác `databaseUrl`); mặc định mỗi thế
-  // giới có kho riêng và DB tên `lms_test_api`.
+  // giới có kho riêng và DB tên `giaokhoa_test_api`.
   const cacheStore = opts?.cacheStore ?? new Map<string, unknown>();
   const cache = {
     async get(key: string) { return cacheStore.get(key); },
@@ -170,7 +170,7 @@ function makeWorld(opts?: { databaseUrl?: string; cacheStore?: Map<string, unkno
   const repoCast = repo as unknown as AccessRepository;
   const contextsService = new ContextsService(repoCast);
   const config = {
-    getOrThrow: () => opts?.databaseUrl ?? 'postgres://user:pass@localhost:5432/lms_test_api',
+    getOrThrow: () => opts?.databaseUrl ?? 'postgres://user:pass@localhost:5432/giaokhoa_test_api',
   } as unknown as ConfigService;
   // Khung định tuyến kho giả lập cho các ca cần ngữ cảnh kho riêng:
   // chỉ phơi đúng phép tra danh tính kho của ngữ cảnh mà evaluator
@@ -325,8 +325,8 @@ describe('PermissionEvaluator — cô lập cache site admin theo cơ sở dữ 
     // chung; app con trên DB trống khác sau đó quyết định việc tạo
     // admin đầu tiên dựa trên danh sách site admin nó đọc được.
     const sharedStore = new Map<string, unknown>();
-    const processA = makeWorld({ databaseUrl: 'postgres://localhost:5432/lms_db_a', cacheStore: sharedStore });
-    const processB = makeWorld({ databaseUrl: 'postgres://localhost:5432/lms_db_b', cacheStore: sharedStore });
+    const processA = makeWorld({ databaseUrl: 'postgres://localhost:5432/giaokhoa_db_a', cacheStore: sharedStore });
+    const processB = makeWorld({ databaseUrl: 'postgres://localhost:5432/giaokhoa_db_b', cacheStore: sharedStore });
     processB.state.siteAdmins = [];
 
     await processA.evaluator.setSiteAdmins(['admin-cua-db-a']);
@@ -340,8 +340,8 @@ describe('PermissionEvaluator — cô lập cache site admin theo cơ sở dữ 
 
   it('lượt đọc tự nạp cache của một DB không làm DB khác đọc trúng danh sách của DB đó', async () => {
     const sharedStore = new Map<string, unknown>();
-    const processA = makeWorld({ databaseUrl: 'postgres://localhost:5432/lms_db_a', cacheStore: sharedStore });
-    const processB = makeWorld({ databaseUrl: 'postgres://localhost:5432/lms_db_b', cacheStore: sharedStore });
+    const processA = makeWorld({ databaseUrl: 'postgres://localhost:5432/giaokhoa_db_a', cacheStore: sharedStore });
+    const processB = makeWorld({ databaseUrl: 'postgres://localhost:5432/giaokhoa_db_b', cacheStore: sharedStore });
     processB.state.siteAdmins = ['admin-cua-db-b'];
 
     await expect(processA.evaluator.listSiteAdmins()).resolves.toEqual(['user-admin']);
@@ -350,8 +350,8 @@ describe('PermissionEvaluator — cô lập cache site admin theo cơ sở dữ 
 
   it('hai tiến trình cùng một cơ sở dữ liệu vẫn dùng chung mục cache: lượt đọc của tiến trình sau trúng cache, không hỏi lại DB', async () => {
     const sharedStore = new Map<string, unknown>();
-    const processA = makeWorld({ databaseUrl: 'postgres://localhost:5432/lms_db_chung', cacheStore: sharedStore });
-    const processB = makeWorld({ databaseUrl: 'postgres://localhost:5432/lms_db_chung', cacheStore: sharedStore });
+    const processA = makeWorld({ databaseUrl: 'postgres://localhost:5432/giaokhoa_db_chung', cacheStore: sharedStore });
+    const processB = makeWorld({ databaseUrl: 'postgres://localhost:5432/giaokhoa_db_chung', cacheStore: sharedStore });
 
     await expect(processA.evaluator.listSiteAdmins()).resolves.toEqual(['user-admin']);
     await expect(processB.evaluator.listSiteAdmins()).resolves.toEqual(['user-admin']);
@@ -388,7 +388,7 @@ describe('PermissionEvaluator — cô lập cache site admin theo cơ sở dữ 
     // của kho riêng — không dùng mục kho chung vừa nạp — và nhận
     // diện admin của kho riêng; đồng thời lớp phủ platform khiến
     // admin kho chung cũng được nhận diện trong ngữ cảnh này.
-    contextDatabaseName = 'lms_space_rieng';
+    contextDatabaseName = 'giaokhoa_space_rieng';
     state.siteAdmins = ['admin-kho-rieng'];
     await expect(evaluator.isSiteAdmin('admin-kho-rieng')).resolves.toBe(true);
     expect(counters.configReads).toBeGreaterThan(readsAfterSharedPrime);

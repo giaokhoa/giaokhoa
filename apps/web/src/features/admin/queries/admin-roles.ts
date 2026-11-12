@@ -5,7 +5,7 @@ import type {
   OverrideCapability,
   ReplaceRoleCapabilities,
   UpdateRole,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { queryKeys as sharedQueryKeys } from '#lib/query-keys';
 import {
   createAssignment,

@@ -238,7 +238,7 @@ describe('AuthMailProcessor (consumer mail auth trên hàng đợi ở worker)',
     expect(result.status).toBe('sent');
     expect(mailer.sent).toHaveLength(1);
     expect(mailer.sent[0]?.to).toBe('user@example.com');
-    expect(mailer.sent[0]?.subject).toBe('Đặt lại mật khẩu tài khoản LMS');
+    expect(mailer.sent[0]?.subject).toBe('Đặt lại mật khẩu tài khoản Giáo khoa');
     expect(mailer.sent[0]?.text).toContain(RESET_URL);
   });
 
@@ -252,7 +252,7 @@ describe('AuthMailProcessor (consumer mail auth trên hàng đợi ở worker)',
 
     expect(result.status).toBe('sent');
     expect(mailer.sent).toHaveLength(1);
-    expect(mailer.sent[0]?.subject).toBe('Mã đăng nhập LMS của bạn');
+    expect(mailer.sent[0]?.subject).toBe('Mã đăng nhập Giáo khoa của bạn');
     expect(mailer.sent[0]?.text).toContain('482916');
   });
 

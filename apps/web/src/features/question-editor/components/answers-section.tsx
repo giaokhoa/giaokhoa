@@ -13,13 +13,13 @@
  * @param props.itemId - Id câu hỏi đang sửa (định danh mục của file ảnh).
  * @param props.moveItem - Hàm đổi vị trí một phần tử trong mảng (trang giữ).
  */
-import { splitMultipleChoiceDocument } from '@lms/editor';
-import { Button } from '@lms/ui/components/button';
-import { Checkbox } from '@lms/ui/components/checkbox';
-import { Field, FieldLabel } from '@lms/ui/components/field';
-import { Input } from '@lms/ui/components/input';
-import { Label } from '@lms/ui/components/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@lms/ui/components/select';
+import { splitMultipleChoiceDocument } from '@giaokhoa/editor';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Checkbox } from '@giaokhoa/ui/components/checkbox';
+import { Field, FieldLabel } from '@giaokhoa/ui/components/field';
+import { Input } from '@giaokhoa/ui/components/input';
+import { Label } from '@giaokhoa/ui/components/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@giaokhoa/ui/components/select';
 import { useTranslation } from 'react-i18next';
 import type { QuestionEditorFormState } from '../types/form-model';
 import { McDocumentField, RichField, TfDocumentField } from './rich-fields';

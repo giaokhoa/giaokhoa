@@ -10,7 +10,7 @@ import { createMcpProtectedRequestHandler } from '@better-auth/mcp';
  * (mcp-bridge-auth.ts) chỉ còn là đường lùi khi AS chưa bật.
  *
  * Plugin trả Response thành phẩm (401/403 kèm challenge
- * WWW-Authenticate) khi token không đạt; tầng mount của LMS lại cần
+ * WWW-Authenticate) khi token không đạt; tầng mount của Giáo khoa lại cần
  * lỗi JSON-RPC đồng dạng lớp 0 của MCP-0 (-32001/-32003) — nên
  * verifier chạy handler của plugin với một callback chỉ GHI LẠI
  * claims (qua AsyncLocalStorage để các request đồng thời không lẫn
@@ -19,7 +19,7 @@ import { createMcpProtectedRequestHandler } from '@better-auth/mcp';
  * hình lỗi + các cổng tiếp theo (scope theo tool, rate limit) như cũ.
  */
 export interface McpOAuthIdentity {
-  /** `sub` của access token = id người dùng LMS (AS phát cho chính giáo viên). */
+  /** `sub` của access token = id người dùng Giáo khoa (AS phát cho chính giáo viên). */
   userId: string;
   /** `client_id` trên token — định danh client THẬT do AS cấp (khác clientInfo tự giới thiệu ở kỷ nguyên cầu auth). */
   clientId: string;

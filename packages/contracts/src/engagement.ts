@@ -63,7 +63,7 @@ export const messageSchema = z.object({
   /** Tóm tắt trích dẫn dựng ở server theo quyền của người nhận; null khi tin không trích dẫn tin nào. */
   replyTo: messageQuoteSchema.nullable(),
 });
-export type LmsMessage = z.infer<typeof messageSchema>;
+export type GiaoKhoaMessage = z.infer<typeof messageSchema>;
 
 export const conversationSchema = z.object({
   id: uuidIdSchema,
@@ -198,7 +198,7 @@ export const notificationSchema = z.object({
   timeRead: z.string().nullable(),
   createdAt: z.string(),
 });
-export type LmsNotification = z.infer<typeof notificationSchema>;
+export type GiaoKhoaNotification = z.infer<typeof notificationSchema>;
 
 /** Tần suất gửi email của một loại thông báo (mô hình tuỳ chọn v2, NB-2 issue #174). */
 export const emailFrequencySchema = z.enum(['immediate', 'daily', 'off']);
@@ -419,7 +419,7 @@ export const commentSchema = z.object({
   content: z.string(),
   contextId: uuidIdSchema,
 });
-export type LmsComment = z.infer<typeof commentSchema>;
+export type GiaoKhoaComment = z.infer<typeof commentSchema>;
 
 export const ratingAggregateSchema = z.object({
   count: z.number().int(),
@@ -741,13 +741,13 @@ export const MESSAGING_SOCKET_EVENTS = {
 /** Tin mới được phân phối qua consumer của outbox `message_sent`. */
 export interface RealtimeNewMessagePayload {
   conversationId: string;
-  message: LmsMessage;
+  message: GiaoKhoaMessage;
 }
 
 /** Cập nhật cho danh sách conversation của TỪNG user (số chưa đọc là của user nhận sự kiện). */
 export interface RealtimeConversationUpdatedPayload {
   conversationId: string;
-  message: LmsMessage;
+  message: GiaoKhoaMessage;
   unreadCount: number;
 }
 
@@ -810,7 +810,7 @@ export interface RealtimePresenceSnapshotPayload {
 export type MessagingSyncRequest = Record<string, number>;
 
 /** Kết quả đồng bộ: conversationId → các tin còn thiếu, tăng dần theo seq. */
-export type MessagingSyncResult = Record<string, LmsMessage[]>;
+export type MessagingSyncResult = Record<string, GiaoKhoaMessage[]>;
 
 /** Payload đặt tuỳ chọn kênh nhận cho một message provider. */
 /**
@@ -1167,7 +1167,7 @@ export type FrameworkExportCompetency = z.infer<typeof frameworkExportCompetency
  * `key`/`parentKey`/`competencyKey` chỉ để nối cấu trúc bên trong file.
  */
 export const frameworkExportSchema = z.strictObject({
-  format: z.literal('lms-competency-framework'),
+  format: z.literal('giaokhoa-competency-framework'),
   version: z.literal(1),
   framework: z.strictObject({
     shortName: z.string().min(1),

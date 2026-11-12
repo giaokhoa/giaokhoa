@@ -33,12 +33,12 @@ import { ExamsRepository, type ExamRow } from './exams';
  *   (T-13: điều kiện vắng mặt không thành `where(undefined)`).
  */
 const adminUrl =
-  process.env.LMS_DB_TEST_ADMIN_URL ??
+  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : 'postgres://postgres:postgres@localhost:5432/postgres');
 
-const TEST_DATABASE = 'lms_db_g3_exams';
-const TEST_ROLE = 'lms_db_g3_exams';
-const TEST_ROLE_PASSWORD = 'lms_db_g3_exams_pw';
+const TEST_DATABASE = 'giaokhoa_db_g3_exams';
+const TEST_ROLE = 'giaokhoa_db_g3_exams';
+const TEST_ROLE_PASSWORD = 'giaokhoa_db_g3_exams_pw';
 
 const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const ACTOR_ID = '01a19887-6b35-7760-8e64-a5960bfd0875';

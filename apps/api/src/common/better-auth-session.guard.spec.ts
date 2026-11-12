@@ -45,7 +45,7 @@ function buildGuard(input: {
   const spaceDb = {
     resolveTarget: vi.fn(async (slug: string) => {
       if (input.dedicatedSlug && slug === input.dedicatedSlug) {
-        return { slug, spaceId: 'id-dang-ky-a', status: 'active', mode: 'dedicated', databaseName: 'lms_centre_a' };
+        return { slug, spaceId: 'id-dang-ky-a', status: 'active', mode: 'dedicated', databaseName: 'giaokhoa_centre_a' };
       }
       throw new SpaceRoutingError('space_routing.space_not_found', 'not registered');
     }),

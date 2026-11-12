@@ -44,7 +44,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync,
 import { createRequire } from 'node:module';
 import { basename, dirname, join } from 'node:path';
 import type { Client } from 'pg';
-import { getAppliedMigrations, getLatestAppliedMigration } from '@lms/db';
+import { getAppliedMigrations, getLatestAppliedMigration } from '@giaokhoa/db';
 
 /** Một kho trong mắt công cụ vận hành: dòng đăng ký + ảnh registry phiên bản của nó. */
 export type FleetSpace = {
@@ -152,12 +152,12 @@ export function sha256Hex(data: Buffer): string {
   return createHash('sha256').update(data).digest('hex');
 }
 
-const ENCRYPTION_MAGIC = Buffer.from('LMSBK1', 'ascii');
+const ENCRYPTION_MAGIC = Buffer.from('GKHBK1', 'ascii');
 const SCRYPT_OPTIONS = { N: 16_384, r: 8, p: 1 } as const;
 
 /**
  * Mã hoá nội dung sao lưu bằng AES-256-GCM với khoá suy ra từ cụm
- * mật khẩu qua scrypt. Khuôn gói: magic `LMSBK1` + salt 16 byte +
+ * mật khẩu qua scrypt. Khuôn gói: magic `GKHBK1` + salt 16 byte +
  * IV 12 byte + thẻ xác thực 16 byte + bản mã — gói tự chứa mọi thứ
  * cần để giải mã trừ cụm mật khẩu, và thẻ GCM khiến mọi sửa đổi
  * trên bản mã đều làm giải mã thất bại (phát hiện được ở bước kiểm
@@ -303,9 +303,9 @@ export function runPgTool(
 /**
  * Thư mục carrier của kho trung tâm tại vị trí mới
  * (`packages/db/migrations/centre`): phân giải qua điểm vào chính
- * của package `@lms/db` để đường dẫn là TUYỆT ĐỐI và đúng ở mọi bố
+ * của package `@giaokhoa/db` để đường dẫn là TUYỆT ĐỐI và đúng ở mọi bố
  * cục chạy (repo phát triển, image production đóng gói bằng
- * `pnpm deploy` — carrier nằm trong `node_modules/@lms/db`), không
+ * `pnpm deploy` — carrier nằm trong `node_modules/@giaokhoa/db`), không
  * suy từ thư mục làm việc như mặc định cũ theo thư mục làm việc (thư mục
  * đó không còn tồn tại sau khi carrier dời vào package). Phân giải
  * lỗi (bố cục lạ chưa build package) thì dự phòng theo vị trí
@@ -314,9 +314,9 @@ export function runPgTool(
 export function resolveCentreMigrationsDir(): string {
   try {
     const require = createRequire(__filename);
-    return join(dirname(require.resolve('@lms/db')), '..', 'migrations', 'centre');
+    return join(dirname(require.resolve('@giaokhoa/db')), '..', 'migrations', 'centre');
   } catch {
-    return join(process.cwd(), 'node_modules', '@lms', 'db', 'migrations', 'centre');
+    return join(process.cwd(), 'node_modules', '@giaokhoa', 'db', 'migrations', 'centre');
   }
 }
 
@@ -342,7 +342,7 @@ export function listMigrationFolders(migrationsDir: string): string[] {
 
 /**
  * Đọc phiên bản schema THẬT của một database từ nhật ký migration
- * của chính nó — uỷ thác cho hàm đọc của `@lms/db` (issue #639):
+ * của chính nó — uỷ thác cho hàm đọc của `@giaokhoa/db` (issue #639):
  * đọc `kysely_migration` (phiên bản mới nhất là tên lớn nhất — tên
  * migration mở đầu bằng dấu thời gian nên thứ tự tên là thứ tự
  * áp). Database chưa từng được áp migration bằng bộ máy của
@@ -357,7 +357,7 @@ export async function readDatabaseSchemaVersion(client: Client): Promise<string 
 /**
  * Đọc TOÀN TẬP tên migration đã áp trong một database từ nhật ký
  * `kysely_migration` của chính nó — uỷ thác cho hàm đọc của
- * `@lms/db` (cùng nguồn như `readDatabaseSchemaVersion`). Đây là
+ * `@giaokhoa/db` (cùng nguồn như `readDatabaseSchemaVersion`). Đây là
  * căn cứ để runner quyết định một kho còn thiếu migration nào:
  * chỉ nhìn migration MỚI NHẤT (như `readDatabaseSchemaVersion`)
  * sẽ bỏ sót kho đã có migration mới nhất nhưng THIẾU một

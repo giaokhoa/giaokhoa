@@ -16,10 +16,10 @@
  * @param props.applyUpdate - Handler áp cập nhật lên version đã xem trước.
  * @param props.setUpdatePreview - Setter của bản xem trước (nút huỷ đặt null).
  */
-import type { PinVersionUpdatePreview, QuizView } from '@lms/contracts';
+import type { PinVersionUpdatePreview, QuizView } from '@giaokhoa/contracts';
 import { CourseGroup } from '#features/progress-report/types/progress-report';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lms/ui/components/card';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { ErrorAlert } from '#components/error-alert';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';

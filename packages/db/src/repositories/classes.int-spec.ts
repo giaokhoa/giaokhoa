@@ -29,10 +29,10 @@ import { ClassesRepository } from './classes';
  */
 
 const adminUrl =
-  process.env.LMS_DB_TEST_ADMIN_URL ??
+  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
 
-const TEST_DB = 'lms_db_g645_classes';
+const TEST_DB = 'giaokhoa_db_g645_classes';
 
 let pool: Pool;
 let db: CentreDb;
@@ -45,7 +45,7 @@ let classId: string;
 
 beforeAll(async () => {
   if (!adminUrl) {
-    throw new Error('Thiếu kết nối quản trị cho spec Kysely #645: đặt LMS_DB_TEST_ADMIN_URL hoặc DATABASE_URL.');
+    throw new Error('Thiếu kết nối quản trị cho spec Kysely #645: đặt GIAOKHOA_DB_TEST_ADMIN_URL hoặc DATABASE_URL.');
   }
   const storeUrl = await buildTestDatabase({ adminUrl, database: TEST_DB, store: 'centre' });
   pool = new Pool({ connectionString: storeUrl });

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { UserProfile } from '@lms/contracts';
-import { Button } from '@lms/ui/components/button';
+import type { UserProfile } from '@giaokhoa/contracts';
+import { Button } from '@giaokhoa/ui/components/button';
 import {
   Dialog,
   DialogContent,
@@ -8,7 +8,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@lms/ui/components/dialog';
+} from '@giaokhoa/ui/components/dialog';
 import { ErrorAlert } from '#components/error-alert';
 import { useTranslation } from 'react-i18next';
 import '#config/i18n';
@@ -16,7 +16,7 @@ import { useDeleteAdminUser } from '../queries/admin-users';
 
 /**
  * Hộp thoại xác nhận xoá người dùng của feature admin, dựng trên
- * component Dialog chuẩn của `@lms/ui` (thay cho `window.confirm` của
+ * component Dialog chuẩn của `@giaokhoa/ui` (thay cho `window.confirm` của
  * trình duyệt mà trang danh sách dùng trước đây).
  *
  * Luồng nghiệp vụ: hộp thoại nêu rõ tên người dùng sắp xoá và yêu cầu

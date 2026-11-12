@@ -1,7 +1,7 @@
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { Badge } from '@lms/ui/components/badge';
-import { Button } from '@lms/ui/components/button';
+import { Badge } from '@giaokhoa/ui/components/badge';
+import { Button } from '@giaokhoa/ui/components/button';
 import type { CurriculumTreeNode } from '#lib/curriculum';
 
 /**

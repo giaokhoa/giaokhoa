@@ -1,7 +1,5 @@
 /**
- * Repository của cụm REPORT BUILDER trên Kysely — chuyển đổi
- * bộ máy cũ → Kysely thuộc nhóm G8 của chiến dịch chuyển tầng dữ
- * liệu (issue #648).
+ * Repository của cụm REPORT BUILDER trên Kysely.
  *
  * Vai trò: mọi truy cập tới ba bảng report_builder_report,
  * report_builder_audience và report_builder_schedule của kho

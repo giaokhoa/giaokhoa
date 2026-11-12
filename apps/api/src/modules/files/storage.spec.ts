@@ -122,7 +122,7 @@ function storageContract(name: string, make: () => Promise<{ storage: ObjectStor
 }
 
 storageContract('LocalObjectStorage', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'lms-files-contract-'));
+  const dir = await mkdtemp(join(tmpdir(), 'giaokhoa-files-contract-'));
   const storage = new LocalObjectStorage(fakeConfig({ FILE_STORAGE_DIR: dir }));
   return { storage, cleanup: () => rm(dir, { recursive: true, force: true }) };
 });

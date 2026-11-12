@@ -1734,7 +1734,7 @@ describe('Messages page — M5: ghim / lưu trữ / tắt tiếng và tab Lưu t
   });
 
   it('hàng không có nút phụ; ghim và tắt tiếng qua menu đầu khung đưa hội thoại lên đầu kèm icon ghim và hiện icon tắt tiếng', async () => {
-    localStorage.setItem('lms.accessToken', 'test-token');
+    localStorage.setItem('giaokhoa.accessToken', 'test-token');
     const calls: RecordedCall[] = [];
     stubFetchM5(calls);
     renderMessages();
@@ -1777,7 +1777,7 @@ describe('Messages page — M5: ghim / lưu trữ / tắt tiếng và tab Lưu t
   });
 
   it('hội thoại đã lưu trữ chỉ hiện ở tab Lưu trữ với số đếm đúng; không hiện ở Tất cả / Chưa đọc và không tính vào số đếm của hai tab đó', async () => {
-    localStorage.setItem('lms.accessToken', 'test-token');
+    localStorage.setItem('giaokhoa.accessToken', 'test-token');
     const calls: RecordedCall[] = [];
     // B bắt đầu ở trạng thái đã lưu trữ và có 3 tin chưa đọc:
     // server chỉ trả B ở đường ?archived=true, danh sách chính
@@ -1818,7 +1818,7 @@ describe('Messages page — M5: ghim / lưu trữ / tắt tiếng và tab Lưu t
   });
 
   it('lưu trữ qua menu đầu khung dời hội thoại khỏi danh sách chính sang tab Lưu trữ; bỏ lưu trữ ở đó đưa hội thoại về danh sách chính', async () => {
-    localStorage.setItem('lms.accessToken', 'test-token');
+    localStorage.setItem('giaokhoa.accessToken', 'test-token');
     const calls: RecordedCall[] = [];
     stubFetchM5(calls);
     renderMessages();
@@ -1860,7 +1860,7 @@ describe('Messages page — M5: ghim / lưu trữ / tắt tiếng và tab Lưu t
   });
 
   it('tin mới từ người khác vào hội thoại đã lưu trữ: hội thoại rời tab Lưu trữ và hiện ở danh sách chính với trích đoạn và số chưa đọc mới', async () => {
-    localStorage.setItem('lms.accessToken', 'test-token');
+    localStorage.setItem('giaokhoa.accessToken', 'test-token');
     const calls: RecordedCall[] = [];
     stubFetchM5(calls, { bArchived: true });
     renderMessages();
@@ -1899,7 +1899,7 @@ describe('Messages page — M5: ghim / lưu trữ / tắt tiếng và tab Lưu t
   });
 
   it('tin mới của chính mình vào hội thoại đã lưu trữ: hội thoại ở nguyên tab Lưu trữ và hàng cập nhật trích đoạn mới', async () => {
-    localStorage.setItem('lms.accessToken', 'test-token');
+    localStorage.setItem('giaokhoa.accessToken', 'test-token');
     const calls: RecordedCall[] = [];
     stubFetchM5(calls, { bArchived: true });
     renderMessages();
@@ -2041,7 +2041,7 @@ describe('Messages page — vòng sửa issue #623: tập đã lưu và cụm so
   });
 
   it('tập đã lưu về chậm hơn danh sách chính: tab Lưu trữ hiện khung đang tải của chính nó, không khẳng định rỗng giả', async () => {
-    localStorage.setItem('lms.accessToken', 'test-token');
+    localStorage.setItem('giaokhoa.accessToken', 'test-token');
     const calls: RecordedCall[] = [];
     let releaseArchived!: () => void;
     const gate = new Promise<void>((resolve) => { releaseArchived = resolve; });
@@ -2064,7 +2064,7 @@ describe('Messages page — vòng sửa issue #623: tập đã lưu và cụm so
   });
 
   it('tập đã lưu lỗi: tab Lưu trữ hiện báo lỗi kèm nút thử lại thay cho câu rỗng, và thử lại nạp được tập', async () => {
-    localStorage.setItem('lms.accessToken', 'test-token');
+    localStorage.setItem('giaokhoa.accessToken', 'test-token');
     const calls: RecordedCall[] = [];
     const archivedState = { fails: true };
     stubFetch625Round2(calls, { archivedFails: () => archivedState.fails });
@@ -2084,7 +2084,7 @@ describe('Messages page — vòng sửa issue #623: tập đã lưu và cụm so
   });
 
   it('sự kiện cũ đến muộn cho hội thoại chỉ sống ở tập đã lưu bị chốt seq bỏ qua: hội thoại không nhảy sang danh sách chính và tin cuối không lùi', async () => {
-    localStorage.setItem('lms.accessToken', 'test-token');
+    localStorage.setItem('giaokhoa.accessToken', 'test-token');
     const calls: RecordedCall[] = [];
     stubFetch625Round2(calls);
     renderMessages();
@@ -2128,7 +2128,7 @@ describe('Messages page — vòng sửa issue #623: tập đã lưu và cụm so
   });
 
   it('gửi tin của chính mình trong hội thoại đã lưu: hội thoại dời lên đầu mục Gần đây của tab Lưu trữ', async () => {
-    localStorage.setItem('lms.accessToken', 'test-token');
+    localStorage.setItem('giaokhoa.accessToken', 'test-token');
     const calls: RecordedCall[] = [];
     stubFetch625Round2(calls);
     renderMessages();
@@ -2157,7 +2157,7 @@ describe('Messages page — vòng sửa issue #623: tập đã lưu và cụm so
   });
 
   it('sự kiện realtime của chính mình vào hội thoại đã lưu: hội thoại dời lên đầu phân mục của nó và cập nhật trích đoạn', async () => {
-    localStorage.setItem('lms.accessToken', 'test-token');
+    localStorage.setItem('giaokhoa.accessToken', 'test-token');
     const calls: RecordedCall[] = [];
     stubFetch625Round2(calls);
     renderMessages();
@@ -2194,7 +2194,7 @@ describe('Messages page — vòng sửa issue #623: tập đã lưu và cụm so
   });
 
   it('form Ghi chú nội bộ mang cùng hàng công cụ như form Trả lời và các nút định dạng tác động lên nháp ghi chú', async () => {
-    localStorage.setItem('lms.accessToken', 'test-token');
+    localStorage.setItem('giaokhoa.accessToken', 'test-token');
     const calls: RecordedCall[] = [];
     stubFetch625Round2(calls);
     renderMessages();
@@ -2220,7 +2220,7 @@ describe('Messages page — vòng sửa issue #623: tập đã lưu và cụm so
   });
 
   it('bộ chọn emoji của form Ghi chú nội bộ chèn biểu tượng vào nháp ghi chú tại con trỏ', async () => {
-    localStorage.setItem('lms.accessToken', 'test-token');
+    localStorage.setItem('giaokhoa.accessToken', 'test-token');
     const calls: RecordedCall[] = [];
     stubFetch625Round2(calls);
     renderMessages();
@@ -2237,7 +2237,7 @@ describe('Messages page — vòng sửa issue #623: tập đã lưu và cụm so
   });
 
   it('thông báo sau khi gửi ghi chú không bám lại dưới hộp: chuyển về tab Trả lời là thông báo biến mất', async () => {
-    localStorage.setItem('lms.accessToken', 'test-token');
+    localStorage.setItem('giaokhoa.accessToken', 'test-token');
     const calls: RecordedCall[] = [];
     stubFetch625Round2(calls);
     renderMessages();
@@ -3348,7 +3348,7 @@ describe('Messages page — dọn gọn trình bày (avatar neo đáy dòng + me
   });
 
   it('hàng hội thoại ở danh sách không còn menu ⋯ (điểm C3): hàng là một nút nguyên khối và bấm hàng mở hội thoại', async () => {
-    localStorage.setItem('lms.accessToken', 'test-token');
+    localStorage.setItem('giaokhoa.accessToken', 'test-token');
     const calls: RecordedCall[] = [];
     stubFetchM5(calls);
     renderMessages();
@@ -3868,7 +3868,7 @@ describe('Trang tin nhắn — dựng lại theo mẫu demo (issue #564)', () =>
   });
 
   it('ghim qua menu đầu khung đưa hội thoại vào mục Ghim, còn lại ở mục Gần đây', async () => {
-    localStorage.setItem('lms.accessToken', 'test-token');
+    localStorage.setItem('giaokhoa.accessToken', 'test-token');
     const calls: RecordedCall[] = [];
     stubFetchM5(calls);
     renderMessages();
@@ -4521,8 +4521,8 @@ describe('Trang tin nhắn — đợt dựng UI giống demo (issue #591)', () =
     // Gieo đúng trạng thái đã lưu của lần dùng trước:
     // tab Nhóm + một hội thoại 1–1 đang mở dở (issue
     // #608, điểm A-BS5 — mệnh đề khôi phục khi tải trang).
-    localStorage.setItem('lms.messages.tab', 'groups');
-    localStorage.setItem('lms.messages.conversationId', CONV_ID);
+    localStorage.setItem('giaokhoa.messages.tab', 'groups');
+    localStorage.setItem('giaokhoa.messages.conversationId', CONV_ID);
     stub591Fetch(calls);
     renderMessages();
 
@@ -4548,8 +4548,8 @@ describe('Trang tin nhắn — đợt dựng UI giống demo (issue #591)', () =
 
   it('deep-link trỏ tới hội thoại khác với hội thoại đã lưu (tab Nhóm và hội thoại 1–1 đã lưu) thì deep-link vẫn được ưu tiên và mở đúng hội thoại của nó', async () => {
     const calls: RecordedCall[] = [];
-    localStorage.setItem('lms.messages.tab', 'groups');
-    localStorage.setItem('lms.messages.conversationId', CONV_ID);
+    localStorage.setItem('giaokhoa.messages.tab', 'groups');
+    localStorage.setItem('giaokhoa.messages.conversationId', CONV_ID);
     stub591Fetch(calls);
     renderMessages(`/messages?conversation=${KT_GROUP_ID}`);
 

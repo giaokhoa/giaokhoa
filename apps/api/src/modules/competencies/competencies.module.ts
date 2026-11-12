@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { CompetenciesRepository } from '@lms/db/repositories/competencies';
+import { CompetenciesRepository } from '@giaokhoa/db/repositories/competencies';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { EventsModule } from '../../infra/events/events.module';
@@ -17,7 +17,7 @@ import { CompetenciesService } from './competencies.service';
  * tiêu thụ qua các hook đã đăng ký vào CompletionService; các yêu cầu review đi
  * ra ngoài thông qua facade của MessagingService (không dùng repository xuyên module).
  *
- * Từ issue #646, CompetenciesRepository sống ở `@lms/db` (lớp
+ * Từ issue #646, CompetenciesRepository sống ở `@giaokhoa/db` (lớp
  * thuần, không phụ thuộc Nest) nên module lắp nó bằng factory
  * provider với handle Kysely định tuyến của kho trung tâm
  * (`SpaceDatabaseService.routedKysely`).

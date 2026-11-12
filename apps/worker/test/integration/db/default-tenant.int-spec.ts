@@ -2,7 +2,7 @@
  * Spec tích hợp của helper tenant mặc định phía worker
  * (`resolveDefaultTenantId`, issue #659) sau khi chuyển sang
  * Kysely: khoá luật TENANT-1 trên database trung tâm thật dựng từ
- * rỗng bằng cầu nối migration của `@lms/db`.
+ * rỗng bằng cầu nối migration của `@giaokhoa/db`.
  *
  * Bối cảnh gọi thật: các processor nền (cấp huy hiệu, nhắc lịch,
  * báo cáo theo lịch) chạy helper này trong ngữ cảnh platform tường
@@ -23,7 +23,7 @@
 import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { CentreDb } from '@lms/db';
+import type { CentreDb } from '@giaokhoa/db';
 import {
   buildTestDatabase,
   createTestKysely,
@@ -31,14 +31,14 @@ import {
   runInTestPlatformContext,
   TestTenantPool,
   withDatabase,
-} from '@lms/db/test-support';
+} from '@giaokhoa/db/test-support';
 import { resolveDefaultTenantId } from '../../../src/db/default-tenant';
 
-const TEST_DATABASE = 'lms_test_w659_default_tenant';
-const TEST_ROLE = 'lms_test_w659_role';
-const TEST_ROLE_PASSWORD = 'lms_test_w659_password';
+const TEST_DATABASE = 'giaokhoa_test_w659_default_tenant';
+const TEST_ROLE = 'giaokhoa_test_w659_role';
+const TEST_ROLE_PASSWORD = 'giaokhoa_test_w659_password';
 
-const baseUrl = process.env.LMS_TEST_DATABASE_URL ?? process.env.DATABASE_URL!;
+const baseUrl = process.env.GIAOKHOA_TEST_DATABASE_URL ?? process.env.DATABASE_URL!;
 const adminUrl = withDatabase(baseUrl, 'postgres');
 
 const PLATFORM_TENANT_ID = randomUUID();

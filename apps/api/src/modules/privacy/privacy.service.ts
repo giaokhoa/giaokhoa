@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { PrivacyRepository, type PrivacyRequestRow } from '@lms/db/repositories/privacy';
+import { PrivacyRepository, type PrivacyRequestRow } from '@giaokhoa/db/repositories/privacy';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { ContextsService } from '../access/contexts.service';
 import { FilesService } from '../files/files.service';
@@ -247,7 +247,7 @@ export class PrivacyService {
       async (userId) => (await db.deleteFrom('search_documents').where('owner_id', '=', userId).returning('id').execute()).length);
     simple('contentbank', ['content_bank_content.creator_id'],
       // sizeBytes là cột int8: qua Kysely nó đọc về là chuỗi (luật
-      // int8 của package @lms/db) — chuyển lại thành số tại biên này
+      // int8 của package @giaokhoa/db) — chuyển lại thành số tại biên này
       // để bản xuất giữ nguyên hình dạng dữ kiện như trước.
       async (userId) => (await db.selectFrom('content_bank_content').select(CONTENT_BANK_CONTENT_COLUMNS).where('creator_id', '=', userId).execute())
         .map((row) => ({ ...row, sizeBytes: row.sizeBytes === null ? null : Number(row.sizeBytes) })),
@@ -328,7 +328,7 @@ export class PrivacyService {
       if (req.type === 'export') {
         const bundle: Record<string, unknown> = {};
         for (const p of this.providers.values()) bundle[p.subsystem] = await p.export(req.userId);
-        const manifest = { requestId: id, userId: req.userId, subsystems: Object.keys(bundle), format: 'lms-privacy-export', version: 1 };
+        const manifest = { requestId: id, userId: req.userId, subsystems: Object.keys(bundle), format: 'giaokhoa-privacy-export', version: 1 };
         const sys = await this.contexts.ensureSystemContext();
         const file = await this.files.upload({
           contextId: sys.id, component: 'core_privacy', fileArea: 'export', itemId: id,

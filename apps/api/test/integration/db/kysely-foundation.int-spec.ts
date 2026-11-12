@@ -1,6 +1,6 @@
 /**
  * Spec tích hợp của khung Kysely phía `apps/api`: chứng minh trên
- * database trung tâm dựng từ rỗng bằng harness của `@lms/db` rằng
+ * database trung tâm dựng từ rỗng bằng harness của `@giaokhoa/db` rằng
  * handle Kysely đi qua `TenantAwarePool` THẬT của hệ (không phải
  * bản phục vụ test trong package) vẫn giữ đúng hợp đồng GUC/RLS,
  * và wiring NestJS tự dựng (`KyselyModule` + `@InjectKysely`) cấp
@@ -17,7 +17,7 @@
  *         handle kho trung tâm chạy được trên `TenantAwarePool`
  *         thật, và đóng module thì instance bị huỷ (pool đóng theo).
  *
- * Môi trường: kết nối quản trị lấy từ `LMS_TEST_DATABASE_URL` (ghi
+ * Môi trường: kết nối quản trị lấy từ `GIAOKHOA_TEST_DATABASE_URL` (ghi
  * đè chuẩn của suite api) hoặc `DATABASE_URL` do cấu hình Vitest
  * của api đặt, thay tên database thành `postgres`. Database và
  * role test dùng tên cố định dưới đây, được xoá/dựng lại mỗi lượt
@@ -27,23 +27,23 @@ import { Injectable } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createCentreKysely, type CentreDb, type CentreTx } from '@lms/db';
-import type { ControlPlaneDb } from '@lms/db/control-plane';
+import { createCentreKysely, type CentreDb, type CentreTx } from '@giaokhoa/db';
+import type { ControlPlaneDb } from '@giaokhoa/db/control-plane';
 import {
   buildTestDatabase,
   dropTestDatabase,
   withDatabase,
-} from '@lms/db/test-support';
+} from '@giaokhoa/db/test-support';
 import { InjectKysely } from '../../../src/db/inject-kysely';
 import { KyselyModule } from '../../../src/db/kysely.module';
 import { TenantAwarePool } from '../../../src/db/tenant-pool';
 import { tenantAls } from '../../../src/modules/tenants/tenant-als';
 
-const TEST_DATABASE = 'lms_api_kysely_foundation';
-const TEST_ROLE = 'lms_api_kysely_foundation';
-const TEST_ROLE_PASSWORD = 'lms_api_kysely_foundation_pw';
+const TEST_DATABASE = 'giaokhoa_api_kysely_foundation';
+const TEST_ROLE = 'giaokhoa_api_kysely_foundation';
+const TEST_ROLE_PASSWORD = 'giaokhoa_api_kysely_foundation_pw';
 
-const baseUrl = process.env.LMS_TEST_DATABASE_URL ?? process.env.DATABASE_URL;
+const baseUrl = process.env.GIAOKHOA_TEST_DATABASE_URL ?? process.env.DATABASE_URL;
 const adminUrl = baseUrl ? withDatabase(baseUrl, 'postgres') : undefined;
 
 let pool: TenantAwarePool;
@@ -79,7 +79,7 @@ class KyselyHandleConsumer {
 beforeAll(async () => {
   if (!adminUrl) {
     throw new Error(
-      'Thiếu kết nối quản trị cho spec khung Kysely: LMS_TEST_DATABASE_URL/DATABASE_URL chưa được đặt.',
+      'Thiếu kết nối quản trị cho spec khung Kysely: GIAOKHOA_TEST_DATABASE_URL/DATABASE_URL chưa được đặt.',
     );
   }
   const adminStoreUrl = await buildTestDatabase({

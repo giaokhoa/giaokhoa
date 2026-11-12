@@ -21,7 +21,7 @@ import { addExamSlot, createExamDraft } from '../../support/exam-pin-helpers';
 /**
  * Ca đầu-cuối của KHO NGÂN HÀNG HỆ THỐNG (issue #585): ứng dụng thật
  * chạy với một database kho ngân hàng riêng dựng riêng cho đợt này
- * (`lms_test_bank_585`, role riêng, CONNECT của PUBLIC bị thu hồi,
+ * (`giaokhoa_test_bank_585`, role riêng, CONNECT của PUBLIC bị thu hồi,
  * migration kho ngân hàng áp bằng chính role chủ kho như đường triển
  * khai thật), đọc qua biến `SYSTEM_BANK_DATABASE_URL` đặt trước khi
  * ứng dụng khởi động. Shim `uuidv7()` chỉ áp khi server dưới PG18.
@@ -54,8 +54,8 @@ import { addExamSlot, createExamDraft } from '../../support/exam-pin-helpers';
  * nào và sự kiện vẫn còn nguyên trong danh sách chờ của giáo viên,
  * giáo viên ghi nhận xong thì sự kiện hết như hành vi hiện hành.
  */
-const BANK_DATABASE = 'lms_test_bank_585';
-const BANK_ROLE = 'lms_bank_test_585';
+const BANK_DATABASE = 'giaokhoa_test_bank_585';
+const BANK_ROLE = 'giaokhoa_bank_test_585';
 const BANK_PASSWORD = 'bank585test';
 
 const UUIDV7_SHIM = `CREATE OR REPLACE FUNCTION uuidv7() RETURNS uuid AS $$ DECLARE ts_ms bigint := (extract(epoch from clock_timestamp()) * 1000)::bigint; b bytea; BEGIN b := decode(lpad(to_hex(ts_ms), 12, '0'), 'hex') || gen_random_bytes(10); b := set_byte(b, 6, (get_byte(b, 6) & 15) | 112); b := set_byte(b, 8, (get_byte(b, 8) & 63) | 128); RETURN encode(b, 'hex')::uuid; END; $$ LANGUAGE plpgsql VOLATILE`;

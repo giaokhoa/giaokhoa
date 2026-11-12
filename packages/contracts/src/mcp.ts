@@ -4,7 +4,7 @@ import { questionViewSchema } from './assessment.js';
 
 /**
  * Hợp đồng bề mặt MCP (issue #110, lát MCP-0): input/output của các tool
- * mà client AI (Claude.ai/ChatGPT/MCP Inspector…) gọi vào LMS.
+ * mà client AI (Claude.ai/ChatGPT/MCP Inspector…) gọi vào Giáo khoa.
  *
  * Nguyên tắc (hồ sơ research MCP Phần 2.3/3.1): input tạo câu hỏi là
  * DẠNG THU HẸP có chủ đích của `createQuestionSchema` — cùng một hợp
@@ -144,7 +144,7 @@ export const mcpGetQuestionOutputSchema = questionViewSchema;
 
 /**
  * Tool `submit_contribution` (lát MCP-2 của issue #110, scope OAuth
- * `lms.banks.contribute`): đề xuất đưa các câu CỦA CHÍNH chủ token (đã
+ * `giaokhoa.banks.contribute`): đề xuất đưa các câu CỦA CHÍNH chủ token (đã
  * `ready`) vào một bank chung (tổ/trường/khoá) qua cơ chế đóng góp QB-4
  * hiện hữu — server tạo `question_bank_contributions` ở trạng thái
  * `pending`, người có `question:moderate` tại bank đích duyệt thì câu
@@ -154,7 +154,7 @@ export const mcpGetQuestionOutputSchema = questionViewSchema;
  * phát lại cùng key + cùng payload trả kết quả cũ, không tạo đề xuất
  * trùng; cùng key khác payload là lỗi `question.idempotency_conflict`.
  * Từ issue #228 tool mở đối xứng cho đề và ma trận (cùng scope
- * `lms.banks.contribute`, không thêm scope mới): đề đi vào đường
+ * `giaokhoa.banks.contribute`, không thêm scope mới): đề đi vào đường
  * đóng góp duy nhất của đề (`exam_contributions`, mode 'new'), ma
  * trận vào hàng chờ đóng góp ma trận — cả hai đều qua đúng cổng chủ
  * sở hữu + trạng thái + đích chung của từng đường như phía câu hỏi.
@@ -363,7 +363,7 @@ export const mcpCreateStimulusWithQuestionsOutputSchema = z.object({
 export type McpCreateStimulusWithQuestionsOutput = z.infer<typeof mcpCreateStimulusWithQuestionsOutputSchema>;
 
 /**
- * Tool `publish_questions` (scope `lms.questions.write`): duyệt phát
+ * Tool `publish_questions` (scope `giaokhoa.questions.write`): duyệt phát
  * hành các câu DRAFT của CHÍNH chủ token trong bank cá nhân của họ lên
  * `ready` — đúng đường nghiệp vụ `setQuestionStatus` mà giao diện web
  * dùng. Từng-item: câu không phải của chủ token coi như không tồn

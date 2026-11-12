@@ -1,11 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@lms/ui/components/card';
-import { Checkbox } from '@lms/ui/components/checkbox';
-import { Field, FieldGroup, FieldLabel } from '@lms/ui/components/field';
-import { Input } from '@lms/ui/components/input';
-import { Skeleton } from '@lms/ui/components/skeleton';
-import { Textarea } from '@lms/ui/components/textarea';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
+import { Checkbox } from '@giaokhoa/ui/components/checkbox';
+import { Field, FieldGroup, FieldLabel } from '@giaokhoa/ui/components/field';
+import { Input } from '@giaokhoa/ui/components/input';
+import { Skeleton } from '@giaokhoa/ui/components/skeleton';
+import { Textarea } from '@giaokhoa/ui/components/textarea';
 import { ErrorAlert } from '#components/error-alert';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';

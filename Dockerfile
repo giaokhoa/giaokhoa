@@ -10,7 +10,7 @@
 # mã nguồn monorepo và devDependency.
 #
 # Các image runtime dùng node:24-bookworm-slim cùng họ glibc với image
-# build (bookworm đầy đủ) vì @lms/api có dependency native argon2 — bản
+# build (bookworm đầy đủ) vì @giaokhoa/api có dependency native argon2 — bản
 # binary biên dịch ở giai đoạn build phải nạp được ở giai đoạn runtime.
 
 # syntax=docker/dockerfile:1
@@ -23,10 +23,10 @@ RUN corepack enable
 WORKDIR /repo
 COPY . .
 RUN pnpm install --frozen-lockfile
-RUN pnpm exec turbo run build --filter=@lms/api --filter=@lms/worker --filter=@lms/web
-RUN pnpm --filter @lms/api deploy --prod /out/api \
-  && pnpm --filter @lms/worker deploy --prod /out/worker \
-  && pnpm --filter @lms/web deploy --prod /out/web
+RUN pnpm exec turbo run build --filter=@giaokhoa/api --filter=@giaokhoa/worker --filter=@giaokhoa/web
+RUN pnpm --filter @giaokhoa/api deploy --prod /out/api \
+  && pnpm --filter @giaokhoa/worker deploy --prod /out/worker \
+  && pnpm --filter @giaokhoa/web deploy --prod /out/web
 
 # ----- Runtime API -----
 # Tiến trình API NestJS đã biên dịch (dist/main.js). Dữ liệu tệp tải lên
@@ -64,14 +64,13 @@ USER node
 CMD ["node", "dist/main.js"]
 
 # ----- Runtime web -----
-# Chạy thẳng server production của web (server/prod-server.mjs): phục vụ
-# bản build SSR + tệp tĩnh và proxy /api/*, /socket.io/*, /mcp,
-# /.well-known/* về API nội bộ qua biến LMS_API_INTERNAL_URL — giữ
-# nguyên topology một-origin như đường chạy production hiện hành.
+# Server SSR chính thức của React Router chỉ phục vụ trang và asset.
+# Caddy (service gateway) chịu trách nhiệm proxy API/Socket.IO/MCP,
+# CSP và cổng HTTP công khai; tiến trình web không tự proxy nữa.
 FROM node:24-bookworm-slim AS web
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build --chown=node:node /out/web ./
 USER node
-EXPOSE 8080
-CMD ["node", "server/prod-server.mjs"]
+EXPOSE 3000
+CMD ["./node_modules/.bin/react-router-serve", "build/server/index.js"]

@@ -1,4 +1,4 @@
-import type { DashboardOverviewView } from '@lms/contracts';
+import type { DashboardOverviewView } from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 
 /**

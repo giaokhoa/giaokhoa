@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { AssignmentListItem } from '@lms/contracts';
-import { Button } from '@lms/ui/components/button';
+import type { AssignmentListItem } from '@giaokhoa/contracts';
+import { Button } from '@giaokhoa/ui/components/button';
 import {
   Dialog,
   DialogContent,
@@ -8,7 +8,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@lms/ui/components/dialog';
+} from '@giaokhoa/ui/components/dialog';
 import { ErrorAlert } from '#components/error-alert';
 import { useTranslation } from 'react-i18next';
 import '#config/i18n';
@@ -33,7 +33,7 @@ export interface UnassignTarget {
 
 /**
  * Hộp thoại xác nhận gỡ dòng gán vai, dựng trên component Dialog
- * thật của `@lms/ui`.
+ * thật của `@giaokhoa/ui`.
  *
  * Luồng nghiệp vụ: hộp thoại nêu rõ bộ ba sắp gỡ (người dùng × vai trò
  * × ngữ cảnh) và yêu cầu xác nhận. Khi backend từ chối, hộp thoại GIỮ

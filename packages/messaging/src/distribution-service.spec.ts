@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { MESSAGING_SOCKET_EVENTS } from '@lms/contracts';
+import { MESSAGING_SOCKET_EVENTS } from '@giaokhoa/contracts';
 import { createMessagingDistributionService } from './distribution-service.js';
 import type { MessagingDistributionStore } from './distribution-store.js';
 import type { RealtimeEmitter } from './distribution-service.js';

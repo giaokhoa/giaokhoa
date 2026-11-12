@@ -1,4 +1,4 @@
-import { Skeleton } from '@lms/ui/components/skeleton';
+import { Skeleton } from '@giaokhoa/ui/components/skeleton';
 
 /**
  * Vỏ giữ chỗ của khung đã đăng nhập, dùng ở hai thời điểm: HydrateFallback

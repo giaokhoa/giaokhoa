@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { CohortMaterializationSurface, type SharedOutboxPort } from '@lms/enrol';
+import { CohortMaterializationSurface, type SharedOutboxPort } from '@giaokhoa/enrol';
 import Redis from 'ioredis';
 import { createTestApp } from '../../support/identity-access-helpers';
 import { CompletionReaggregationOutboxConsumer } from '../../../src/modules/completion/completion-reaggregation-outbox.consumer';
@@ -15,7 +15,7 @@ import { tenantAls } from '../../../src/modules/tenants/tenant-als';
 
 /**
  * Spec đặc tả hoá (characterization) cho bề mặt vật chất hoá cohort
- * dùng chung `@lms/enrol` ở phía API (issue #527).
+ * dùng chung `@giaokhoa/enrol` ở phía API (issue #527).
  *
  * Bối cảnh: đường đồng bộ cohort — thành viên cohort được vật chất
  * hoá thành ghi danh cấp khoá, rời cohort thì ghi danh bị rút hoặc
@@ -478,7 +478,7 @@ describe('Vật chất hoá cohort dùng chung — đặc tả hoá hành vi ở
     // của chính nó, không được neo qua yêu cầu đã ghi ở trên.
     const databaseName = new URL(process.env.DATABASE_URL!).pathname.replace(/^\//, '');
     const redis = new Redis(process.env.REDIS_URL!);
-    await redis.del(`lms:completion-reaggregation:${databaseName}:seq`);
+    await redis.del(`giaokhoa:completion-reaggregation:${databaseName}:seq`);
     const fresh = new CompletionReaggregationOutboxConsumer(
       app.get(ConfigService),
       app.get(SpaceDatabaseService),

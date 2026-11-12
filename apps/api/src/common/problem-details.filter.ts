@@ -6,7 +6,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import type { ProblemDetails } from '@lms/contracts';
+import type { ProblemDetails } from '@giaokhoa/contracts';
 import { t } from '@nestjs/i18n';
 import type { Response } from 'express';
 

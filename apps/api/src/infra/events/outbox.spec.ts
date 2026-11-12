@@ -1,10 +1,10 @@
 import { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { createCentreKysely, type CentreDb } from '@lms/db';
+import { createCentreKysely, type CentreDb } from '@giaokhoa/db';
 import { OutboxService } from './outbox.service';
 
 /**
- * Hợp đồng giao dịch của writer outbox (real DB, lms_test_api).
+ * Hợp đồng giao dịch của writer outbox (real DB, giaokhoa_test_api).
  *
  * Spec này chỉ khẳng định phía ghi: sự kiện được đưa vào outbox
  * trong cùng transaction với nghiệp vụ thì chỉ tồn tại sau khi
@@ -22,7 +22,7 @@ import { OutboxService } from './outbox.service';
  * `enqueueStandalone` tự mở transaction riêng (đường ghi bộ máy cũ
  * chuyển tiếp đã xoá ở issue #663).
  */
-describe('Outbox giao dịch (DB thật, lms_test_api)', () => {
+describe('Outbox giao dịch (DB thật, giaokhoa_test_api)', () => {
   let pool: Pool;
   let kysely: CentreDb;
   let outbox: OutboxService;

@@ -20,26 +20,26 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: lms_test_api
-        ports: ['5432:5432']
+          POSTGRES_DB: giaokhoa_test_api
+        ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U postgres"
           --health-interval 5s --health-timeout 5s --health-retries 10
       redis:
         image: redis:7
-        ports: ['6379:6379']
+        ports: ["6379:6379"]
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      # Each test suite owns its database — api: lms_test_api (created by
-      # the postgres service via POSTGRES_DB), worker: lms_test_worker
+      # Each test suite owns its database — api: giaokhoa_test_api (created by
+      # the postgres service via POSTGRES_DB), worker: giaokhoa_test_worker
       # (created by a step below) — because turbo runs the suites in
       # parallel and they must not share mutable global tables (the
       # outbox backlog race is the failure this isolation prevents).
       # The vitest configs pin those names; this job-level DATABASE_URL
       # only serves steps outside the suites (kept on the api database).
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/lms_test_api
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/giaokhoa_test_api
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: ci-secret-at-least-16-chars
     steps:
@@ -51,6 +51,8 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
       # Công cụ PostgreSQL 18 cho test của đội kho (issue #586):
       # pg_dump của runner từ chối dump khi bản của nó cũ hơn bản
       # của server (service postgres 18.6) nên bản client 16 mặc
@@ -65,17 +67,17 @@ jobs:
           sudo apt-get install -y -qq postgresql-client-18
           echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
       - name: Create the worker test database
-        run: PGPASSWORD=postgres psql -h localhost -U postgres -c 'CREATE DATABASE lms_test_worker'
+        run: PGPASSWORD=postgres psql -h localhost -U postgres -c 'CREATE DATABASE giaokhoa_test_worker'
       # Runner migration Kysely (issue #639) chạy từ dist đã build
-      # của @lms/db, nên phải build package này TRƯỚC bước migrate
+      # của @giaokhoa/db, nên phải build package này TRƯỚC bước migrate
       # (bước Build toàn bộ chạy sau migrate).
-      - name: Build @lms/db for the migration runner
-        run: pnpm exec turbo run build --filter=@lms/db
+      - name: Build @giaokhoa/db for the migration runner
+        run: pnpm exec turbo run build --filter=@giaokhoa/db
       - name: Migrate the test databases from empty
         run: |
-          DATABASE_URL=postgres://postgres:postgres@localhost:5432/lms_test_api pnpm --filter @lms/api db:migrate
-          DATABASE_URL=postgres://postgres:postgres@localhost:5432/lms_test_worker pnpm --filter @lms/api db:migrate
-      # Cổng chống lệch kiểu Kysely của @lms/db: sinh lại cả ba file
+          DATABASE_URL=postgres://postgres:postgres@localhost:5432/giaokhoa_test_api pnpm --filter @giaokhoa/api db:migrate
+          DATABASE_URL=postgres://postgres:postgres@localhost:5432/giaokhoa_test_worker pnpm --filter @giaokhoa/api db:migrate
+      # Cổng chống lệch kiểu Kysely của @giaokhoa/db: sinh lại cả ba file
       # kiểu trong packages/db/src/types từ database dựng từ rỗng
       # trên chính service PostgreSQL 18.6 của job (lệnh db:types
       # tự suy kết nối quản trị từ DATABASE_URL cấp job) rồi yêu cầu
@@ -83,7 +85,7 @@ jobs:
       # sinh từ bộ SQL mang dữ liệu hiện hành là job đỏ tại chỗ.
       - name: Check generated Kysely types are up to date
         run: |
-          pnpm --filter @lms/db run db:types
+          pnpm --filter @giaokhoa/db run db:types
           git diff --exit-code -- packages/db/src/types
       - name: Build
         run: pnpm exec turbo run build
@@ -96,101 +98,12 @@ jobs:
       # của API qua script riêng đã khai trong package.json của API.
       - name: Test
         run: |
-          pnpm exec turbo run test --filter='!@lms/api'
-          pnpm --filter @lms/api run test:unit
-          pnpm --filter @lms/api run test:int
-      # Smoke test topology production (lát 3 của issue #294): boot cả
-      # cặp hai tiến trình của topology C (API ở cổng nội bộ; SSR bind
-      # cổng công khai, proxy /api/* về API) — khởi động tách rời đúng
-      # như Dockerfile/compose chạy production — trên chính DB test
-      # của job này — DB
-      # lms_test_api đã migrate từ trống ở bước trên qua biến môi
-      # trường DATABASE_URL cấp job. Probe /health chỉ chạy SELECT 1
-      # tới DB và PING Redis nên không cần seed nghiệp vụ nào thêm;
-      # đây là mức seed tối thiểu của lát. Ngân sách cộng thêm của
-      # bước giữ ở mức tối thiểu: trần chờ boot 120 giây, hai probe
-      # gọn, tiến trình được dọn ngay trong bước.
-      - name: Smoke test the production topology (SSR to API)
-        run: |
-          set -euo pipefail
-          smoke_started=$(date +%s)
-          public_base="http://127.0.0.1:8080"
-
-          # Khởi động hai tiến trình TÁCH RỜI trong một phiên (session)
-          # riêng để khi dọn dẹp giết được cả nhóm tiến trình: API
-          # (dist/main.js, cổng nội bộ 3100) và SSR (prod-server qua
-          # script start của @lms/web, cổng công khai 8080) là hai
-          # tiến trình con của cùng một shell — đúng cách production
-          # chạy bằng Docker Compose (api và web là hai service
-          # riêng). `wait -n` làm shell thoát ngay khi một tiến trình
-          # con chết để trap dọn dẹp giết nốt tiến trình còn lại, giữ
-          # tính chất "một con chết là cả cặp tắt" của bước chạy thử.
-          # Biến môi trường cấp job (DATABASE_URL, REDIS_URL,
-          # JWT_SECRET) được cả hai tiến trình thừa hưởng.
-          setsid bash -c '
-            PORT=3100 NODE_ENV=production node apps/api/dist/main.js &
-            PORT=8080 LMS_API_INTERNAL_URL=http://127.0.0.1:3100 NODE_ENV=production pnpm --filter @lms/web start &
-            wait -n
-          ' > smoke-topology.log 2>&1 &
-          topology_pid=$!
-          cleanup() {
-            kill -TERM -"$topology_pid" 2>/dev/null || true
-            # Chờ nhóm tiến trình tắt hẳn (trần 10 giây) để không để
-            # lại tiến trình mồ côi giữ cổng sau bước.
-            for i in $(seq 1 10); do
-              kill -0 -"$topology_pid" 2>/dev/null || break
-              sleep 1
-            done
-            kill -KILL -"$topology_pid" 2>/dev/null || true
-          }
-          trap cleanup EXIT
-
-          # Chờ API sống qua mặt tiền công khai: request đi qua proxy
-          # /api/* của tiến trình SSR về API nội bộ — đạt probe 1
-          # đồng thời chứng minh cả hai tiến trình đã lên. Cặp tiến
-          # trình chết giữa chừng thì dừng ngay kèm log, không chờ
-          # hết trần.
-          api_ready=0
-          for attempt in $(seq 1 60); do
-            if ! kill -0 "$topology_pid" 2>/dev/null; then
-              echo "::error::Topology processes exited before the topology became ready"
-              cat smoke-topology.log
-              exit 1
-            fi
-            if curl -fsS --max-time 5 "$public_base/api/v1/health" -o smoke-health.json 2>/dev/null; then
-              api_ready=1
-              break
-            fi
-            sleep 2
-          done
-          if [ "$api_ready" != "1" ]; then
-            echo "::error::API health probe through the public port did not succeed within 120s"
-            cat smoke-topology.log
-            exit 1
-          fi
-
-          # Probe 1 — /api/v1/health QUA cổng công khai của prod-server:
-          # HTTP 200 (curl -f đã gác) và payload báo trạng thái ok,
-          # database up, redis up.
-          echo "Probe 1 payload: $(cat smoke-health.json)"
-          grep -q '"status":"ok"' smoke-health.json || { echo "::error::Health payload status is not ok"; exit 1; }
-          grep -q '"database":"up"' smoke-health.json || { echo "::error::Health payload database is not up"; exit 1; }
-          grep -q '"redis":"up"' smoke-health.json || { echo "::error::Health payload redis is not up"; exit 1; }
-
-          # Probe 2 — route SSR động /health QUA cổng công khai: HTML
-          # trả về phải chứa sẵn trạng thái do loader phía server lấy
-          # từ API nội bộ lúc nhận request (cặp thẻ <dd> chứa giá trị
-          # trạng thái + mốc thời gian ISO sống). Nếu loader không lấy
-          # được dữ liệu, trang chỉ render khung đang tải phía client
-          # (không có các thẻ này) và probe đỏ. Route này không nằm
-          # trong danh sách prerender tĩnh (chỉ / và /login) nên nội
-          # dung có dữ liệu tại thời điểm request chứng minh SSR động.
-          curl -fsS --max-time 15 "$public_base/health" -o smoke-ssr.html || { echo "::error::SSR /health did not return HTTP 200"; exit 1; }
-          grep -q 'ok</dd>' smoke-ssr.html || { echo "::error::SSR /health HTML lacks the loader-rendered status value"; exit 1; }
-          grep -q 'up</dd>' smoke-ssr.html || { echo "::error::SSR /health HTML lacks the loader-rendered check values"; exit 1; }
-          grep -Eq '<dd>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:' smoke-ssr.html || { echo "::error::SSR /health HTML lacks a live ISO timestamp from the loader"; exit 1; }
-
-          echo "Smoke topology passed in $(( $(date +%s) - smoke_started ))s"
+          pnpm exec turbo run test --filter='!@giaokhoa/api'
+          pnpm --filter @giaokhoa/api run test:unit
+          pnpm --filter @giaokhoa/api run test:int
+      # Smoke production chạy trên toàn bộ topology Compose (Caddy +
+      # React Router SSR + NestJS) ở job deploy-check/verify-stack,
+      # thay cho tự quản lý hai tiến trình bằng setsid/kill/trap ở đây.
 
   # E2e của API chia thành 4 shard chạy song song bằng matrix, theo
   # khuôn chính thức của Vitest (mục Sharding trong tài liệu
@@ -199,7 +112,7 @@ jobs:
   # blob report xuống và chạy --merge-reports để tổng hợp kết quả.
   # Mỗi shard có service PostgreSQL/Redis riêng của job (mỗi job
   # chạy trên một runner riêng) và dùng DB riêng
-  # lms_test_api_<số shard>: các file e2e dùng chung dữ liệu toàn
+  # giaokhoa_test_api_<số shard>: các file e2e dùng chung dữ liệu toàn
   # cục (outbox, event_log) nên shard dùng chung tài nguyên sẽ giẫm
   # dữ liệu của nhau. Redis tách bằng service riêng cho từng shard,
   # không tách bằng DB logic trong URL: kết nối hàng đợi BullMQ của
@@ -225,13 +138,13 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: postgres
-        ports: ['5432:5432']
+        ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U postgres"
           --health-interval 5s --health-timeout 5s --health-retries 10
       redis:
         image: redis:7
-        ports: ['6379:6379']
+        ports: ["6379:6379"]
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s --health-timeout 5s --health-retries 10
@@ -245,20 +158,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Create the test database of this shard
-        run: PGPASSWORD=postgres psql -h localhost -U postgres -c 'CREATE DATABASE lms_test_api_${{ matrix.shardIndex }}'
+        run: PGPASSWORD=postgres psql -h localhost -U postgres -c 'CREATE DATABASE giaokhoa_test_api_${{ matrix.shardIndex }}'
       # Runner migration Kysely (issue #639) chạy từ dist đã build
-      # của @lms/db, nên phải build package này TRƯỚC bước migrate
+      # của @giaokhoa/db, nên phải build package này TRƯỚC bước migrate
       # (bước Build API chạy sau migrate).
-      - name: Build @lms/db for the migration runner
-        run: pnpm exec turbo run build --filter=@lms/db
+      - name: Build @giaokhoa/db for the migration runner
+        run: pnpm exec turbo run build --filter=@giaokhoa/db
       - name: Migrate the test database of this shard from empty
-        run: DATABASE_URL=postgres://postgres:postgres@localhost:5432/lms_test_api_${{ matrix.shardIndex }} pnpm --filter @lms/api db:migrate
+        run: DATABASE_URL=postgres://postgres:postgres@localhost:5432/giaokhoa_test_api_${{ matrix.shardIndex }} pnpm --filter @giaokhoa/api db:migrate
       - name: Build the API and its dependencies
-        run: pnpm exec turbo run build --filter=@lms/api...
+        run: pnpm exec turbo run build --filter=@giaokhoa/api...
       - name: Run this e2e shard
         working-directory: apps/api
         env:
-          LMS_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/lms_test_api_${{ matrix.shardIndex }}
+          GIAOKHOA_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/giaokhoa_test_api_${{ matrix.shardIndex }}
         run: pnpm exec vitest run --project e2e --reporter=blob --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
       # Blob report tải lên kể cả khi shard đỏ (chỉ trừ lúc lượt bị
       # huỷ) để job gộp luôn có đủ kết quả của cả 4 shard.

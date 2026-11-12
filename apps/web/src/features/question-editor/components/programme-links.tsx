@@ -22,11 +22,11 @@
  * @param props.setLinkOutcomePick - Setter cho ô chọn YCCĐ.
  * @param props.setLinkLevelPick - Setter cho ô chọn mức độ.
  */
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lms/ui/components/card';
-import { Field, FieldLabel } from '@lms/ui/components/field';
-import { Label } from '@lms/ui/components/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@lms/ui/components/select';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
+import { Field, FieldLabel } from '@giaokhoa/ui/components/field';
+import { Label } from '@giaokhoa/ui/components/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@giaokhoa/ui/components/select';
 import { useTranslation } from 'react-i18next';
 import { COGNITIVE_LEVELS, LEVEL_LABEL_KEYS } from '#features/questions/utils/shared';
 import type { CurriculumLinksView } from '#features/questions/utils/shared';

@@ -1,8 +1,5 @@
 /**
- * Repository của cụm TỆP trên Kysely — hạng mục nhân rộng G7 của
- * chiến dịch chuyển tầng dữ liệu (issue #647), chuyển từ
- * repository cũ trước chuyển đổi ở
- * `apps/api/src/modules/files/files.repository.ts`.
+ * Repository của cụm TỆP trên Kysely.
  *
  * Vai trò: mọi truy cập tới bảng `files` của kho trung tâm (bản
  * ghi logic của tệp theo khuôn Moodle: mỗi bản ghi là một file tại

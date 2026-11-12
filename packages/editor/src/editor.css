@@ -1,5 +1,5 @@
 /*
- * Vỏ trình bày của @lms/editor (lát E1, issue #248).
+ * Vỏ trình bày của @giaokhoa/editor (lát E1, issue #248).
  *
  * Trước lát này package editor không có một rule CSS nào: nút toolbar là
  * <button> trần không class, vùng soạn không khung/không chiều cao tối
@@ -11,21 +11,21 @@
  * panel công thức dạng overlay nổi).
  *
  * Bề mặt chứa phải nạp file này một lần (apps/web nạp ở root:
- * `@lms/editor/editor.css`). Các biến màu (--background, --border,
- * --muted, --primary, --destructive...) lấy từ bộ token của @lms/ui.
+ * `@giaokhoa/editor/editor.css`). Các biến màu (--background, --border,
+ * --muted, --primary, --destructive...) lấy từ bộ token của @giaokhoa/ui.
  */
 
 /* --- Khung vùng soạn: vùng soạn như một trang giấy (giaokhoa:
        rounded-xl border bg-background, min-h-80 cho trường chính) --- */
 
-.lms-rich-text-editor__frame {
+.giaokhoa-rich-text-editor__frame {
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 0.75rem;
   background: var(--background);
 }
 
-.lms-rich-text-editor .ProseMirror {
+.giaokhoa-rich-text-editor .ProseMirror {
   min-height: 20rem;
   padding: 0.75rem 1rem;
   outline: none;
@@ -33,28 +33,28 @@
 
 /* Trường phụ (phương án, feedback, grader info...): bản nhỏ như
    GuidanceEditor của giaokhoa (min-h-24). */
-.lms-rich-text-editor--compact .ProseMirror {
+.giaokhoa-rich-text-editor--compact .ProseMirror {
   min-height: 6rem;
 }
 
-.lms-rich-text-editor .ProseMirror p {
+.giaokhoa-rich-text-editor .ProseMirror p {
   margin: 0.25rem 0;
 }
 
-.lms-rich-text-editor .ProseMirror ul {
+.giaokhoa-rich-text-editor .ProseMirror ul {
   margin: 0.25rem 0;
   padding-left: 1.5rem;
   list-style: disc;
 }
 
-.lms-rich-text-editor .ProseMirror img {
+.giaokhoa-rich-text-editor .ProseMirror img {
   max-width: 100%;
   height: auto;
 }
 
 /* Node nguyên tử đang được chọn (ảnh/công thức tách dòng) phải nhìn
    thấy được là đang chọn. */
-.lms-rich-text-editor .ProseMirror .ProseMirror-selectednode {
+.giaokhoa-rich-text-editor .ProseMirror .ProseMirror-selectednode {
   outline: 2px solid var(--ring);
   outline-offset: 1px;
   border-radius: 0.25rem;
@@ -66,13 +66,13 @@
        decoration chèn vào đầu choice). Kéo-thả đổi thứ tự dùng cơ chế
        kéo node của ProseMirror trên chính thẻ lựa chọn này. --- */
 
-.lms-rich-text-editor .ProseMirror .lms-choice-list {
+.giaokhoa-rich-text-editor .ProseMirror .giaokhoa-choice-list {
   margin: 0.75rem 0 0.25rem;
   padding: 0;
   list-style: none;
 }
 
-.lms-rich-text-editor .ProseMirror .lms-choice {
+.giaokhoa-rich-text-editor .ProseMirror .giaokhoa-choice {
   position: relative;
   min-height: 2.5rem;
   margin: 0.5rem 0;
@@ -83,7 +83,7 @@
 
 /* Radio đáp án đúng: widget decoration nằm tuyệt đối ở cột trái của
    thẻ lựa chọn, canh giữa theo chiều dọc như bản giaokhoa. */
-.lms-rich-text-editor .ProseMirror .lms-choice__correct {
+.giaokhoa-rich-text-editor .ProseMirror .giaokhoa-choice__correct {
   position: absolute;
   top: 50%;
   left: 0.75rem;
@@ -96,7 +96,7 @@
   transform: translateY(-50%);
 }
 
-.lms-rich-text-editor .ProseMirror .lms-choice__correct-input {
+.giaokhoa-rich-text-editor .ProseMirror .giaokhoa-choice__correct-input {
   width: 1rem;
   height: 1rem;
   margin: 0;
@@ -108,13 +108,13 @@
        danh sách mệnh đề là một <ol>; mỗi mệnh đề là một thẻ có viền,
        cặp radio Đúng/Sai là widget decoration nằm ở dải đầu thẻ. --- */
 
-.lms-rich-text-editor .ProseMirror .lms-statement-list {
+.giaokhoa-rich-text-editor .ProseMirror .giaokhoa-statement-list {
   margin: 0.75rem 0 0.25rem;
   padding: 0;
   list-style: none;
 }
 
-.lms-rich-text-editor .ProseMirror .lms-statement {
+.giaokhoa-rich-text-editor .ProseMirror .giaokhoa-statement {
   position: relative;
   min-height: 2.5rem;
   margin: 0.5rem 0;
@@ -123,7 +123,7 @@
   border-radius: 0.5rem;
 }
 
-.lms-rich-text-editor .ProseMirror .lms-statement__answer {
+.giaokhoa-rich-text-editor .ProseMirror .giaokhoa-statement__answer {
   position: absolute;
   top: 0.45rem;
   left: 0.75rem;
@@ -133,7 +133,7 @@
   gap: 0.9rem;
 }
 
-.lms-rich-text-editor .ProseMirror .lms-statement__answer-option {
+.giaokhoa-rich-text-editor .ProseMirror .giaokhoa-statement__answer-option {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
@@ -141,7 +141,7 @@
   cursor: pointer;
 }
 
-.lms-rich-text-editor .ProseMirror .lms-statement__answer-input {
+.giaokhoa-rich-text-editor .ProseMirror .giaokhoa-statement__answer-input {
   width: 1rem;
   height: 1rem;
   margin: 0;
@@ -150,9 +150,9 @@
 }
 
 /* --- Thanh công cụ: nút icon cỡ size-8 kiểu Button/Toggle ghost của
-       @lms/ui (giaokhoa: size="icon-sm", h-11, gap-1, px-2) --- */
+       @giaokhoa/ui (giaokhoa: size="icon-sm", h-11, gap-1, px-2) --- */
 
-.lms-editor-toolbar {
+.giaokhoa-editor-toolbar {
   display: flex;
   height: 2.75rem;
   min-width: 0;
@@ -164,7 +164,7 @@
 
 /* Khi không có slot ở header trang, toolbar neo sticky ngay trên
    editor đang active. */
-.lms-editor-toolbar--sticky {
+.giaokhoa-editor-toolbar--sticky {
   position: sticky;
   top: 0;
   z-index: 20;
@@ -175,7 +175,7 @@
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
 }
 
-.lms-editor-toolbar__button {
+.giaokhoa-editor-toolbar__button {
   display: inline-flex;
   flex-shrink: 0;
   width: 2rem;
@@ -192,11 +192,11 @@
     color 0.15s ease;
 }
 
-.lms-editor-toolbar__button:hover {
+.giaokhoa-editor-toolbar__button:hover {
   background: var(--muted);
 }
 
-.lms-editor-toolbar__button:focus-visible {
+.giaokhoa-editor-toolbar__button:focus-visible {
   border-color: var(--ring);
   outline: none;
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
@@ -204,24 +204,24 @@
 
 /* Trạng thái mark đang bật phải NHÌN THẤY được — trước lát này
    aria-pressed đã khai nhưng không CSS nào hiển thị. */
-.lms-editor-toolbar__button[aria-pressed='true'] {
+.giaokhoa-editor-toolbar__button[aria-pressed='true'] {
   background: var(--muted);
   color: var(--foreground);
   box-shadow: inset 0 0 0 1px var(--border);
 }
 
-.lms-editor-toolbar__button:disabled {
+.giaokhoa-editor-toolbar__button:disabled {
   pointer-events: none;
   opacity: 0.5;
 }
 
-.lms-editor-toolbar__button svg {
+.giaokhoa-editor-toolbar__button svg {
   width: 1rem;
   height: 1rem;
   pointer-events: none;
 }
 
-.lms-editor-toolbar__separator {
+.giaokhoa-editor-toolbar__separator {
   flex-shrink: 0;
   width: 1px;
   height: 1.25rem;
@@ -233,7 +233,7 @@
        (fixed top-16, max-w-xl, shadow-2xl) thay cho khối inline đẩy
        nội dung form xuống --- */
 
-.lms-math-panel {
+.giaokhoa-math-panel {
   position: fixed;
   top: 4rem;
   left: 50%;

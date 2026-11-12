@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import type { RoleListItem, UserListStatus, UserWithAssignmentsListItem } from '@lms/contracts';
-import { Avatar, AvatarFallback } from '@lms/ui/components/avatar';
-import { Badge } from '@lms/ui/components/badge';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardDescription, CardHeader, CardTitle } from '@lms/ui/components/card';
-import { Field, FieldLabel } from '@lms/ui/components/field';
-import { InputGroup, InputGroupAddon, InputGroupInput } from '@lms/ui/components/input-group';
+import type { RoleListItem, UserListStatus, UserWithAssignmentsListItem } from '@giaokhoa/contracts';
+import { Avatar, AvatarFallback } from '@giaokhoa/ui/components/avatar';
+import { Badge } from '@giaokhoa/ui/components/badge';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
+import { Field, FieldLabel } from '@giaokhoa/ui/components/field';
+import { InputGroup, InputGroupAddon, InputGroupInput } from '@giaokhoa/ui/components/input-group';
 import {
   Table,
   TableBody,
@@ -14,7 +14,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@lms/ui/components/table';
+} from '@giaokhoa/ui/components/table';
 import { EllipsisVertical, Plus, Search } from 'lucide-react';
 import { PageSkeleton } from '#components/page-skeleton';
 import { ErrorAlert } from '#components/error-alert';
@@ -42,7 +42,7 @@ import { TablePagination } from './table-pagination';
  * trạng thái; KHÔNG có ô chọn gói dịch vụ vì gói thuộc về trung tâm,
  * không thuộc về người dùng), khối công cụ là ô tìm kiếm bên trái và
  * cụm cỡ trang + nút Gán vai trò bên phải (KHÔNG có Export/Import vì
- * hệ không có endpoint đó). Mọi ô chọn là Select của `@lms/ui` qua
+ * hệ không có endpoint đó). Mọi ô chọn là Select của `@giaokhoa/ui` qua
  * component dùng chung của feature. Hàng bảng cao 56px:
  * người dùng là avatar 36px kèm tên đậm và email xám dưới tên; cột
  * vai trò bày MỌI gán của người đó kèm nhãn cấp ngữ cảnh dạng chữ

@@ -1,14 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lms/ui/components/card';
-import { Input } from '@lms/ui/components/input';
-import { Label } from '@lms/ui/components/label';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
+import { Input } from '@giaokhoa/ui/components/input';
+import { Label } from '@giaokhoa/ui/components/label';
 import { ErrorAlert } from '#components/error-alert';
 
 /**
  * Trang đăng nhập cho luồng uỷ quyền MCP (lát MCP-1, issue #163).
  *
- * Đây KHÔNG phải trang đăng nhập chính của LMS: nó là `loginPage` mà
+ * Đây KHÔNG phải trang đăng nhập chính của Giáo khoa: nó là `loginPage` mà
  * máy chủ OAuth (plugin mcp() của Better Auth) chuyển tới khi client
  * AI mở luồng authorize mà trình duyệt chưa có phiên Better Auth.
  * Trang chỉ làm hai việc: đăng nhập bằng username/mật khẩu qua
@@ -115,7 +115,7 @@ export default function McpLoginPage() {
         <CardHeader>
           <CardTitle>Đăng nhập để uỷ quyền ứng dụng AI</CardTitle>
           <CardDescription>
-            Một ứng dụng AI đang xin quyền truy cập ngân hàng câu hỏi thay bạn. Đăng nhập bằng tài khoản LMS
+            Một ứng dụng AI đang xin quyền truy cập ngân hàng câu hỏi thay bạn. Đăng nhập bằng tài khoản Giáo khoa
             của bạn để tiếp tục tới bước xác nhận quyền.
           </CardDescription>
         </CardHeader>

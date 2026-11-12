@@ -30,13 +30,13 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
-import { Badge } from '@lms/ui/components/badge';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lms/ui/components/card';
-import { Checkbox } from '@lms/ui/components/checkbox';
-import { Field, FieldGroup, FieldLabel } from '@lms/ui/components/field';
-import { Input } from '@lms/ui/components/input';
-import { Label } from '@lms/ui/components/label';
+import { Badge } from '@giaokhoa/ui/components/badge';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
+import { Checkbox } from '@giaokhoa/ui/components/checkbox';
+import { Field, FieldGroup, FieldLabel } from '@giaokhoa/ui/components/field';
+import { Input } from '@giaokhoa/ui/components/input';
+import { Label } from '@giaokhoa/ui/components/label';
 import { ErrorAlert } from '#components/error-alert';
 import {
   Select,
@@ -44,7 +44,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@lms/ui/components/select';
+} from '@giaokhoa/ui/components/select';
 import { ApiError } from '#lib/api';
 import { frameworkExportQueryOptions, useAddTemplateCohort, useAddTemplateCompetency, useCompetencyFrameworks, useCompetencyTemplates, useCreateCompetency, useCreateCompetencyFramework, useCreateLearningPlanTemplate, useCreatePlansFromTemplate, useFrameworkCompetencies, useImportCompetencyFramework, usePlanReviewAction, useReviewQueuePlans, useReviewQueueUsercomps, useUsercompReviewAction, useUserOptions, userCompetenciesQueryOptions, userLearningPlansQueryOptions } from '../queries/learning-plan';
 import type { PlanReviewActionName, UsercompReviewActionName } from '../types/learning-plan';
@@ -98,6 +98,7 @@ export function CompetencyAdmin() {
   const templatesQuery = useCompetencyTemplates();
   const frameworks = frameworksQuery.data ?? [];
   const templates = templatesQuery.data ?? [];
+  const firstTemplateId = templatesQuery.data?.[0]?.id;
   const [selectedFrameworkId, setSelectedFrameworkId] = useState('');
   const competenciesQuery = useFrameworkCompetencies(selectedFrameworkId);
   const competencies = competenciesQuery.data ?? [];
@@ -152,10 +153,10 @@ export function CompetencyAdmin() {
    * mỗi lần nạp lại hai danh sách khung quản trị.
    */
   useEffect(() => {
-    if (selectedTemplateId === '' && templates.length > 0) {
-      setSelectedTemplateId(templates[0]!.id);
+    if (selectedTemplateId === '' && firstTemplateId) {
+      setSelectedTemplateId(firstTemplateId);
     }
-  }, [templates, selectedTemplateId]);
+  }, [firstTemplateId, selectedTemplateId]);
 
   /** Tạo framework qua POST /frameworks với đúng body của `createCompetencyFrameworkSchema`. */
   async function createFramework(event: FormEvent) {

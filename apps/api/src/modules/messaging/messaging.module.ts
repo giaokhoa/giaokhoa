@@ -11,8 +11,8 @@ import { MessagingController, NotificationsController } from './messaging.contro
 import { MessagingGateway } from './messaging.gateway';
 
 import { MessagingRealtimeService } from './messaging-realtime.service';
-import { MessagingRepository } from '@lms/db/repositories/messaging';
-import { createMessagingStore } from '@lms/messaging';
+import { MessagingRepository } from '@giaokhoa/db/repositories/messaging';
+import { createMessagingStore } from '@giaokhoa/messaging';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { MessagingSendThrottleService } from './messaging-send-throttle.service';
 import { MessagingService, NOTIFICATION_DISPATCH_QUEUE } from './messaging.service';
@@ -44,13 +44,7 @@ import { NotificationUnreadStreamService } from './notification-unread-stream.se
   controllers: [MessagingController, NotificationsController],
   providers: [
     {
-      // MessagingRepository nay là repository Kysely của `@lms/db`
-      // (issue #658): provider dựng bằng factory với handle kho
-      // trung tâm ĐÃ ĐỊNH TUYẾN THEO KHÔNG GIAN (`routedKysely`
-      // của SpaceDatabaseService) và cài đặt của cổng store dùng
-      // chung do `@lms/messaging` cấp trên cùng handle đó —
-      // repository uỷ quyền các phép đọc dùng chung qua cổng, nên
-      // `@lms/db` không phụ thuộc ngược vào `@lms/messaging`.
+      // Dùng cùng handle Kysely cho repository và `createMessagingStore`; repository uỷ quyền truy vấn đọc dùng chung qua cổng store để `@giaokhoa/db` không phụ thuộc ngược `@giaokhoa/messaging`.
       provide: MessagingRepository,
       useFactory: (spaceDb: SpaceDatabaseService) => new MessagingRepository(
         spaceDb.routedKysely,
@@ -67,7 +61,7 @@ import { NotificationUnreadStreamService } from './notification-unread-stream.se
     // Cả hai consumer quét outbox đều đã chuyển sang worker: phân
     // phối sự kiện messaging qua hàng đợi `messaging-realtime`
     // (issue con #521 của #491; consumer hàng đợi ở worker, luật
-    // phân phối ở `@lms/messaging`) và thông báo sự kiện nghiệp vụ
+    // phân phối ở `@giaokhoa/messaging`) và thông báo sự kiện nghiệp vụ
     // qua hàng đợi `notification-events` (issue con #520 của
     // #491). Phía API không còn consumer polling nào đọc trực
     // tiếp bảng outbox.

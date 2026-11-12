@@ -54,37 +54,17 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      # Sinh file .env cho môi trường CI từ file mẫu: tám bí mật
-      # được sinh ngẫu nhiên ngay trong job và không rời khỏi
-      # runner — bảy bí mật bắt buộc (khai ${...:?} trong
-      # compose.yaml) cộng mật khẩu tài khoản quản trị bootstrap
-      # của Keycloak (compose nội suy biến này theo dạng có mặc
-      # định rỗng, nhưng bootstrap cần giá trị thật ở lần khởi
-      # động đầu tiên để Keycloak tạo được tài khoản quản trị
-      # bootstrap); các biến còn lại
-      # giữ nguyên mặc định của file mẫu, trong đó BETTER_AUTH_URL
-      # và CORS_ORIGINS là http://localhost:8080 cho môi trường CI. Các
-      # biến tuỳ chọn (MFA, Resend) giữ ở dạng comment trong file mẫu
-      # nên vắng mặt hẳn — đúng trạng thái ứng dụng hỗ trợ.
-      - name: Generate CI environment file
+      # Dùng workflow command chính thức GITHUB_ENV thay cho tạo
+      # .env.example rồi sed/grep từng bí mật. Compose đọc trực tiếp
+      # biến môi trường của runner, các giá trị tùy chọn lấy mặc định
+      # từ compose.yaml. Mỗi bí mật sinh riêng và được mask trong log.
+      - name: Generate CI environment variables
         run: |
-          cp .env.example .env
-          sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 32)|" .env
-          sed -i "s|^CONTROL_PLANE_POSTGRES_PASSWORD=.*|CONTROL_PLANE_POSTGRES_PASSWORD=$(openssl rand -hex 32)|" .env
-          sed -i "s|^RUNTIME_POSTGRES_PASSWORD=.*|RUNTIME_POSTGRES_PASSWORD=$(openssl rand -hex 32)|" .env
-          sed -i "s|^MIGRATOR_POSTGRES_PASSWORD=.*|MIGRATOR_POSTGRES_PASSWORD=$(openssl rand -hex 32)|" .env
-          sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -hex 32)|" .env
-          sed -i "s|^BETTER_AUTH_SECRET=.*|BETTER_AUTH_SECRET=$(openssl rand -hex 32)|" .env
-          sed -i "s|^KEYCLOAK_DB_PASSWORD=.*|KEYCLOAK_DB_PASSWORD=$(openssl rand -hex 32)|" .env
-          sed -i "s|^KEYCLOAK_ADMIN_PASSWORD=.*|KEYCLOAK_ADMIN_PASSWORD=$(openssl rand -hex 32)|" .env
-          grep -q '^POSTGRES_PASSWORD=.\+' .env
-          grep -q '^CONTROL_PLANE_POSTGRES_PASSWORD=.\+' .env
-          grep -q '^RUNTIME_POSTGRES_PASSWORD=.\+' .env
-          grep -q '^MIGRATOR_POSTGRES_PASSWORD=.\+' .env
-          grep -q '^JWT_SECRET=.\+' .env
-          grep -q '^BETTER_AUTH_SECRET=.\+' .env
-          grep -q '^KEYCLOAK_DB_PASSWORD=.\+' .env
-          grep -q '^KEYCLOAK_ADMIN_PASSWORD=.\+' .env
+          for name in POSTGRES_PASSWORD CONTROL_PLANE_POSTGRES_PASSWORD RUNTIME_POSTGRES_PASSWORD MIGRATOR_POSTGRES_PASSWORD JWT_SECRET BETTER_AUTH_SECRET KEYCLOAK_DB_PASSWORD KEYCLOAK_ADMIN_PASSWORD; do
+            secret=$(openssl rand -hex 32)
+            echo "::add-mask::$secret"
+            printf '%s=%s\n' "$name" "$secret" >> "$GITHUB_ENV"
+          done
 
       - name: Validate compose configuration
         run: docker compose -f compose.yaml -f compose.ci.yaml config > /dev/null
@@ -96,66 +76,37 @@ jobs:
       - name: Build and start the stack
         run: docker compose -f compose.yaml -f compose.ci.yaml up -d --build
 
-      # Chờ tối đa khoảng 5 phút cho API khỏe qua cửa web (cổng 8080
-      # là cổng của ứng dụng mà stack publish ra host; cổng 8085 của
-      # Keycloak chỉ bind loopback cho tunnel). Quá hạn thì in trạng
-      # thái stack và log của api + migrate để chẩn đoán rồi fail.
-      - name: Wait for API health
+      # HTTP probe qua cổng công khai Caddy. Docker Compose đã chờ
+      # healthcheck của API/web qua depends_on; curl có retry chính thức
+      # thay cho vòng lặp shell chờ từng dịch vụ.
+      - name: Verify API through the public gateway
         run: |
-          for attempt in $(seq 1 60); do
-            if curl -sf http://localhost:8080/api/v1/health > /dev/null; then
-              echo "API health OK after ${attempt} attempt(s)."
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "API health check timed out."
-          docker compose -f compose.yaml -f compose.ci.yaml ps
-          docker compose -f compose.yaml -f compose.ci.yaml logs api migrate
-          exit 1
+          curl --fail --silent --show-error --retry 60 --retry-delay 5 --retry-all-errors --max-time 5 \
+            http://127.0.0.1:8080/api/v1/health -o smoke-health.json
+          jq -e '.status == "ok" and .checks.database == "up" and .checks.redis == "up"' smoke-health.json
 
-      - name: Check root page responds
-        run: curl -sf http://localhost:8080/ -o /dev/null
+      # Cổng nghiệm thu SSR động: loader nhận JSON thực từ API nội
+      # bộ, và HTML chứa dữ liệu đã render trước khi hydrate.
+      - name: Verify SSR, CSP and cache isolation
+        run: |
+          curl -fsS --max-time 15 http://127.0.0.1:8080/health -o smoke-ssr.html
+          grep -q 'ok</dd>' smoke-ssr.html
+          grep -q 'up</dd>' smoke-ssr.html
+          grep -Eq '<dd>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:' smoke-ssr.html
+          curl -fsS -D smoke-login.headers -o smoke-login.html http://127.0.0.1:8080/login
+          grep -qi '^content-security-policy: .*frame-ancestors .none.' smoke-login.headers
+          grep -qi '^x-content-type-options: nosniff' smoke-login.headers
+          grep -qi '^cache-control: private, no-cache' smoke-login.headers
+          curl -fsS -o /dev/null http://127.0.0.1:8080/
 
-      # Chờ Keycloak sẵn sàng rồi kiểm chứng nó boot khỏe,
-      # theo hai khẳng định — khẳng định nào trượt cũng làm
-      # job fail ngay tại bước này:
-      # (1) healthcheck của chính service keycloak báo healthy:
-      # healthcheck thăm /health/ready trên cổng quản trị 9000
-      # bên trong container (cổng 9000 không publish ra host nên
-      # runner không thăm trực tiếp được; trạng thái health đọc
-      # qua docker inspect của container service).
-      # (2) Tài liệu discovery của realm `master` qua cổng
-      # loopback 8085 khẳng định issuer đúng tên miền công khai:
-      # KC_HOSTNAME ghim issuer theo https://auth.fuckr.net nên
-      # discovery trả issuer này dù request đi qua địa chỉ
-      # loopback của runner. Realm `master` có sẵn trong mọi
-      # bản cài Keycloak nên luôn khẳng định được; các realm
-      # nghiệp vụ là dữ kiện vận hành do admin tạo trong trang
-      # quản trị, không nằm trong stack CI này.
+      # Compose chờ healthcheck native của Keycloak (chỉ chọn
+      # keycloak/kc-db, không chờ container migration one-shot).
+      # Sau đó kiểm tra issuer từ discovery qua cổng loopback.
       - name: Verify Keycloak readiness
         run: |
-          for attempt in $(seq 1 60); do
-            container_id=$(docker compose -f compose.yaml -f compose.ci.yaml ps -q keycloak)
-            health=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$container_id" 2>/dev/null || true)
-            if [ "$health" = "healthy" ]; then
-              echo "Keycloak healthy after ${attempt} attempt(s)."
-              break
-            fi
-            if [ "$attempt" = "60" ]; then
-              echo "Keycloak did not become healthy in time (last health status: ${health:-unknown})."
-              docker compose -f compose.yaml -f compose.ci.yaml ps
-              docker compose -f compose.yaml -f compose.ci.yaml logs keycloak kc-db
-              exit 1
-            fi
-            sleep 5
-          done
+          docker compose -f compose.yaml -f compose.ci.yaml up --wait --wait-timeout 300 keycloak
           issuer=$(curl -sf http://127.0.0.1:8085/realms/master/.well-known/openid-configuration | jq -er '.issuer')
-          echo "Realm master discovery issuer: ${issuer}"
-          if [ "$issuer" != "https://auth.fuckr.net/realms/master" ]; then
-            echo "Unexpected issuer for realm master."
-            exit 1
-          fi
+          test "$issuer" = "https://auth.fuckr.net/realms/master"
 
       # Kịch bản thứ hai: chạy lại stack với KEYCLOAK_ADMIN_PASSWORD
       # KHÔNG được đặt — đúng trạng thái của môi trường triển khai
@@ -172,49 +123,17 @@ jobs:
       # kịch bản không dọn volume: cơ sở dữ liệu của Keycloak đã
       # có realm master từ kịch bản trên — khớp trạng thái
       # production khi deploy lại sau khi kết thúc bootstrap.
-      - name: Remove bootstrap admin password from CI environment
-        run: |
-          sed -i '/^KEYCLOAK_ADMIN_PASSWORD=/d' .env
-          if grep -q '^KEYCLOAK_ADMIN_PASSWORD=.\+' .env; then
-            echo "KEYCLOAK_ADMIN_PASSWORD is still set in .env."
-            exit 1
-          fi
-          echo "KEYCLOAK_ADMIN_PASSWORD removed from .env."
+      # Chỉ bỏ biến bootstrap khi khởi động và kiểm tra Keycloak:
+      # env -u cho cùng ngữ nghĩa biến hoàn toàn vắng mặt như production
+      # sau bootstrap, không sửa tệp .env hay tác động service khác.
+      - name: Restart Keycloak without bootstrap admin password
+        run: env -u KEYCLOAK_ADMIN_PASSWORD docker compose -f compose.yaml -f compose.ci.yaml up -d keycloak
 
-      # Chỉ service keycloak nội suy biến vừa gỡ, nên lệnh up này
-      # tạo lại đúng container keycloak với môi trường mới; các
-      # service còn lại giữ nguyên.
-      - name: Restart the stack without bootstrap admin password
-        run: docker compose -f compose.yaml -f compose.ci.yaml up -d
-
-      # Chờ Keycloak đạt healthy trở lại trong trạng thái không
-      # có mật khẩu bootstrap, rồi khẳng định lại issuer trong
-      # tài liệu discovery của realm `master` như kịch bản trên.
-      # Quá hạn thì in trạng thái stack và log của keycloak +
-      # kc-db để chẩn đoán rồi fail.
-      - name: Verify Keycloak readiness without bootstrap admin password
+      - name: Verify Keycloak after removing bootstrap password
         run: |
-          for attempt in $(seq 1 60); do
-            container_id=$(docker compose -f compose.yaml -f compose.ci.yaml ps -q keycloak)
-            health=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$container_id" 2>/dev/null || true)
-            if [ "$health" = "healthy" ]; then
-              echo "Keycloak healthy without bootstrap admin password after ${attempt} attempt(s)."
-              break
-            fi
-            if [ "$attempt" = "60" ]; then
-              echo "Keycloak did not become healthy without bootstrap admin password in time (last health status: ${health:-unknown})."
-              docker compose -f compose.yaml -f compose.ci.yaml ps
-              docker compose -f compose.yaml -f compose.ci.yaml logs keycloak kc-db
-              exit 1
-            fi
-            sleep 5
-          done
+          env -u KEYCLOAK_ADMIN_PASSWORD docker compose -f compose.yaml -f compose.ci.yaml up --wait --wait-timeout 300 keycloak
           issuer=$(curl -sf http://127.0.0.1:8085/realms/master/.well-known/openid-configuration | jq -er '.issuer')
-          echo "Realm master discovery issuer: ${issuer}"
-          if [ "$issuer" != "https://auth.fuckr.net/realms/master" ]; then
-            echo "Unexpected issuer for realm master."
-            exit 1
-          fi
+          test "$issuer" = "https://auth.fuckr.net/realms/master"
 
       - name: Tear down the stack
         if: always()

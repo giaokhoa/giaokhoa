@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react';
-import { Button } from '@lms/ui/components/button';
+import { Button } from '@giaokhoa/ui/components/button';
 
 /**
  * Chân phân trang của các bảng thuộc feature admin, dựng đúng số đo

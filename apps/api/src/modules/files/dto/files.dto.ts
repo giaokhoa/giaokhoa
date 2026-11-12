@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { uploadFileMetaSchema, type UploadFileMeta, uuidIdSchema } from '@lms/contracts';
+import { uploadFileMetaSchema, type UploadFileMeta, uuidIdSchema } from '@giaokhoa/contracts';
 
 /**
  * Validation của Files dùng Zod qua Standard Schema — schema nền ở
- * `@lms/contracts`.
+ * `@giaokhoa/contracts`.
  */
 export { uploadFileMetaSchema };
 export type UploadMetaBaseDto = UploadFileMeta;

@@ -39,7 +39,7 @@ import { BadRequestException, Injectable, NotFoundException, UnprocessableEntity
 import ExcelJS from 'exceljs';
 import type {
   ExamMatrixView, MatrixImportIssue, MatrixImportPreview, MatrixImportPreviewCell,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { CurriculumService, type CurriculumTreeView } from '../curriculum/curriculum.service';
 import { MATRIX_PRESETS, matrixWarnings } from './domain/matrix';
 import { QuizService } from './quiz.service';

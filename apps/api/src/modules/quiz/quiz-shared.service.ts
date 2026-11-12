@@ -1,5 +1,5 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
-import type { QuizAttemptSummary, QuizView } from '@lms/contracts';
+import type { QuizAttemptSummary, QuizView } from '@giaokhoa/contracts';
 import { TenantContextService } from '../tenants/tenant-context.service';
 import { TenantsService } from '../tenants/tenants.service';
 import { ContextsService } from '../access/contexts.service';
@@ -17,7 +17,7 @@ import {
   type ExamMatrixRow,
   type ExamAttemptRow,
   type ExamPinRow,
-} from '@lms/db/repositories/quiz';
+} from '@giaokhoa/db/repositories/quiz';
 import type { PinRow, EffectiveSlotRow } from './quiz.service';
 
 export const QUIZ_COMPONENT = 'mod_quiz';

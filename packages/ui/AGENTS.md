@@ -36,19 +36,19 @@ của repo.
   README kèm lý do, trong cùng commit**.
 - Cấm đặt component nghiệp vụ/mã tự viết của dự án vào package này.
 - Cấm đổi preset/nền (Radix ↔ Base UI…) tự phát — chuyển nền là quy trình riêng
-  có ghi chép, kèm kiểm chứng build + test của `@lms/web`.
+  có ghi chép, kèm kiểm chứng build + test của `@giaokhoa/web`.
 - Cấm phá tính nhất quán vỏ dùng chung: thêm biến thể hình thức cho một trang
   riêng ở tầng package này.
 
 ## Kiểm chứng bắt buộc
 
-- Sau mọi thay đổi/đồng bộ: `turbo run typecheck --filter=@lms/ui` + build và
-  test targeted của `@lms/web`; đối chiếu diff `components.json` và
+- Sau mọi thay đổi/đồng bộ: `turbo run typecheck --filter=@giaokhoa/ui` + build và
+  test targeted của `@giaokhoa/web`; đối chiếu diff `components.json` và
   `src/styles/globals.css` trước khi commit.
 - **Typecheck trước khi push** là bắt buộc; build lại `dist` của package trước
   khi kết luận lỗi ở apps/web.
 - CI là cổng chính; kết luận CI chỉ từ LOG THẬT. Suite nặng local giữ khoá
-  `flock /tmp/lms-heavy-suite.lock`.
+  `flock /tmp/giaokhoa-heavy-suite.lock`.
 
 ## Kỷ luật test theo nghiệp vụ
 

@@ -1,19 +1,19 @@
 import { Injectable } from '@nestjs/common';
-import { type CentreTx } from '@lms/db';
-import { PlanLimitsCore, type EffectivePlanLimit, type TenantSlotFacts } from '@lms/enrol';
+import { type CentreTx } from '@giaokhoa/db';
+import { PlanLimitsCore, type EffectivePlanLimit, type TenantSlotFacts } from '@giaokhoa/enrol';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { tenantAls } from '../tenants/tenant-als';
 import { delegateToSharedCore } from './translate-shared-error';
 
-export { TEACHING_ROLE_ARCHETYPES } from '@lms/enrol';
-export type { EffectivePlanLimit, TenantSlotFacts } from '@lms/enrol';
+export { TEACHING_ROLE_ARCHETYPES } from '@giaokhoa/enrol';
+export type { EffectivePlanLimit, TenantSlotFacts } from '@giaokhoa/enrol';
 
 /**
  * Facade Nest của định nghĩa thực thi GIỚI HẠN SLOT của hai gói.
  *
  * Định nghĩa đếm slot, phân giải hạn mức hiệu lực và các điểm chặn
- * sống ở lõi dùng chung `PlanLimitsCore` của package `@lms/enrol`
- * (tầng dữ liệu, trên schema dùng chung `@lms/db`) để mọi bề mặt
+ * sống ở lõi dùng chung `PlanLimitsCore` của package `@giaokhoa/enrol`
+ * (tầng dữ liệu, trên schema dùng chung `@giaokhoa/db`) để mọi bề mặt
  * vật chất hoá ghi danh — API tại đây, worker khi nó dựng consumer
  * đồng bộ cohort — áp đúng MỘT định nghĩa duy nhất. Service này chỉ
  * còn là lớp bọc của API: dựng lõi bằng tay cầm Kysely đã định tuyến của API

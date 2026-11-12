@@ -37,7 +37,7 @@ import { AdminRolesPage } from './admin-roles';
  * dòng kèm cụm nút luôn bày.
  *
  * Lượt dựng lại theo demo (issue #597) ghim trạng thái mới: hộp thoại
- * vai/gán/gỡ/xoá dựng trên component Dialog thật của `@lms/ui` (nút ×
+ * vai/gán/gỡ/xoá dựng trên component Dialog thật của `@giaokhoa/ui` (nút ×
  * của component mang nhãn truy cập "Close"); nhãn ngữ cảnh ở mọi bề
  * mặt là tên cấp dạng chữ qua adapter (Hệ thống / Trung tâm) — chuỗi
  * kỹ thuật "cấp · thực thể · đường dẫn" không còn xuất hiện; lưới thẻ
@@ -82,7 +82,7 @@ import { AdminRolesPage } from './admin-roles';
  *
  * Vòng căn chỉnh khớp demo (issue #624): mọi ô chọn của hai bề
  * mặt (lọc, cỡ trang, ngữ cảnh, hộp thoại gán) chuyển từ
- * `<select>` native sang Select của `@lms/ui` — các ca tương
+ * `<select>` native sang Select của `@giaokhoa/ui` — các ca tương
  * tác chọn theo nhãn nhìn thấy của lựa chọn qua helper
  * `chooseOption`; form vai báo lỗi tên tại trường (tối thiểu 2
  * ký tự, có placeholder); báo lỗi tải của trang đi theo độ hạt
@@ -462,7 +462,7 @@ async function openEditDialog() {
 }
 
 /**
- * Chọn một lựa chọn trong ô Select của `@lms/ui` theo nhãn nhìn
+ * Chọn một lựa chọn trong ô Select của `@giaokhoa/ui` theo nhãn nhìn
  * thấy: bấm nút mở rồi bấm lựa chọn trong danh sách xổ — danh sách
  * xổ render qua portal ở tầng document nên truy vấn bằng `screen`,
  * không giới hạn trong hộp thoại hay thẻ chứa nút mở.

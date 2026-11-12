@@ -6,7 +6,7 @@ import type {
   CourseGrouping,
   EnrolInstance,
   UserEnrolment,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 import type { CourseConversationView, MemberRow } from '../types/course-admin';
 

@@ -1,16 +1,16 @@
 import { useState, type ReactNode } from 'react';
 import { BellOff, ChevronDown, MessageSquare, Pin, Search, UserPlus } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@lms/ui/components/avatar';
-import { Badge } from '@lms/ui/components/badge';
-import { Button } from '@lms/ui/components/button';
+import { Avatar, AvatarFallback } from '@giaokhoa/ui/components/avatar';
+import { Badge } from '@giaokhoa/ui/components/badge';
+import { Button } from '@giaokhoa/ui/components/button';
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
-} from '@lms/ui/components/collapsible';
-import { InputGroup, InputGroupAddon, InputGroupInput } from '@lms/ui/components/input-group';
-import { Separator } from '@lms/ui/components/separator';
-import { Skeleton } from '@lms/ui/components/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@lms/ui/components/tabs';
-import { cn } from '@lms/ui/lib/utils';
+} from '@giaokhoa/ui/components/collapsible';
+import { InputGroup, InputGroupAddon, InputGroupInput } from '@giaokhoa/ui/components/input-group';
+import { Separator } from '@giaokhoa/ui/components/separator';
+import { Skeleton } from '@giaokhoa/ui/components/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@giaokhoa/ui/components/tabs';
+import { cn } from '@giaokhoa/ui/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { CreateGroupSheet } from './create-group-sheet';
 import { GroupListNav, countGroupListEntries } from './group-list-nav';
@@ -470,7 +470,7 @@ export function ConversationSidebar({
    * căn lại theo bản demo ở issue #608): tiêu đề phẳng kiểu
    * demo — nhãn 12px vừa màu muted, đệm ngang 12px, đệm dưới
    * 8px, chevron 12px, KHÔNG số đếm, hover chỉ đổi màu chữ —
-   * dựng trên primitive Collapsible của @lms/ui, không dùng vỏ
+   * dựng trên primitive Collapsible của @giaokhoa/ui, không dùng vỏ
    * Card của CollapsibleSection dùng chung và không tự chế
    * kiểu collapse riêng.
    *
@@ -713,7 +713,7 @@ export function ConversationSidebar({
         */}
         {/*
           Cấu trúc ô tìm theo bản demo (issue #608): InputGroup
-          của @lms/ui — hộp 36px bo 8px, addon kính lúp 16px
+          của @giaokhoa/ui — hộp 36px bo 8px, addon kính lúp 16px
           màu muted ở đầu, ô nhập trong suốt không viền bên
           trong.
         */}
@@ -731,7 +731,7 @@ export function ConversationSidebar({
         </InputGroup>
         {/*
           Thanh tab bốn tab lọc ngang hàng như bản demo (issue
-          #606): TabsList variant `line` của @lms/ui, mỗi trigger
+          #606): TabsList variant `line` của @giaokhoa/ui, mỗi trigger
           là nhãn chữ nhỏ độ đậm thường kèm số đếm của tab trong
           ngoặc đơn dạng chữ màu phụ — đúng dạng "Tất cả (3)"
           của demo. Số đếm nằm trong span `aria-hidden` và

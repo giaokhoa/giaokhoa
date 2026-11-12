@@ -401,7 +401,7 @@ export function coursePreferenceName(courseId: string): string {
 /** Chế độ ghi đè theo khoá: 'all' = nhận như mặc định toàn cục, 'mute' = tắt tiếng khoá đó. */
 export type NotificationCourseOverrideMode = 'all' | 'mute';
 
-/** Một dòng ghi đè theo khoá của một user (hình dạng hợp đồng ở @lms/contracts). */
+/** Một dòng ghi đè theo khoá của một user (hình dạng hợp đồng ở @giaokhoa/contracts). */
 export interface NotificationCourseOverrideView {
   courseId: string;
   courseName: string;
@@ -443,7 +443,7 @@ export function defaultEmailFrequency(group: MessageProviderGroup): EmailFrequen
   return group === 'learning' ? 'daily' : 'immediate';
 }
 
-/** Một dòng tuỳ chọn v2 của một provider cho một user (hình dạng hợp đồng ở @lms/contracts). */
+/** Một dòng tuỳ chọn v2 của một provider cho một user (hình dạng hợp đồng ở @giaokhoa/contracts). */
 export interface NotificationPreferenceView {
   provider: string;
   component: string;

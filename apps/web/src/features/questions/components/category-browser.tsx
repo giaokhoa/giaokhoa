@@ -13,11 +13,11 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router';
 
-import type { QuestionCategory, QuestionView, RichTextDocument, StimulusView } from '@lms/contracts';
-import { Button } from '@lms/ui/components/button';
-import { CardContent } from '@lms/ui/components/card';
-import { Checkbox } from '@lms/ui/components/checkbox';
-import { Skeleton } from '@lms/ui/components/skeleton';
+import type { QuestionCategory, QuestionView, RichTextDocument, StimulusView } from '@giaokhoa/contracts';
+import { Button } from '@giaokhoa/ui/components/button';
+import { CardContent } from '@giaokhoa/ui/components/card';
+import { Checkbox } from '@giaokhoa/ui/components/checkbox';
+import { Skeleton } from '@giaokhoa/ui/components/skeleton';
 
 import { useQueryClient } from '@tanstack/react-query';
 

@@ -1,6 +1,6 @@
 /**
  * Khuôn trạng thái tải dùng chung ở tầng ứng dụng, dựng trên nguyên tử
- * `Skeleton` của `@lms/ui`.
+ * `Skeleton` của `@giaokhoa/ui`.
  *
  * Trước đây mỗi trang tự lắp trạng thái tải theo cùng một khuôn: một
  * khung chứa mang nhãn aria và một danh sách các khối Skeleton con xếp
@@ -12,9 +12,9 @@
  * Ranh giới: các vị trí chỉ gồm MỘT khối Skeleton đơn lẻ tại chỗ trong
  * một khối con (không có khung và danh sách đi kèm) không thuộc khuôn
  * này — chúng dùng thẳng nguyên tử `Skeleton` vốn đã là thành phần dùng
- * chung của `@lms/ui`.
+ * chung của `@giaokhoa/ui`.
  */
-import { Skeleton } from '@lms/ui/components/skeleton';
+import { Skeleton } from '@giaokhoa/ui/components/skeleton';
 
 /** Props của khuôn trạng thái tải dùng chung. */
 export interface PageSkeletonProps {

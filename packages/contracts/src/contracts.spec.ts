@@ -1299,9 +1299,9 @@ describe('Hợp đồng control plane (sổ đăng ký không gian, #580)', () =
     slug: 'trung-tam-abc',
     name: 'Trung tâm ABC',
     kind: 'center',
-    databaseName: 'lms_centre_abc',
+    databaseName: 'giaokhoa_centre_abc',
     storageMode: 'dedicated',
-    connectionRoleRef: 'lms_centre_abc_app',
+    connectionRoleRef: 'giaokhoa_centre_abc_app',
     secretRef: 'env:CENTRE_ABC_DATABASE_URL',
     plan: 'standard',
   };

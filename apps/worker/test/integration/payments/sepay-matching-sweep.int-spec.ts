@@ -183,7 +183,7 @@ describe('Điểm quét matching IPN SePay ở worker — nhịp thật của mo
   it('IPN khớp đủ 3 điều kiện → succeeded + ghi danh ACTIVE đúng một lần; nhịp sau không nhân đôi', async () => {
     const buyer = await insertUser();
     const { instanceId } = await makeFeeCourse();
-    const code = `LMS539${randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase()}`;
+    const code = `GKH539${randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase()}`;
     const paymentId = await makePayment(buyer, instanceId, code);
     const txId = `sepay-tx-${randomUUID()}`;
     const eventId = await makeEvent({
@@ -211,7 +211,7 @@ describe('Điểm quét matching IPN SePay ở worker — nhịp thật của mo
   it('sai số tiền → payment và sự kiện vào needs_review, không kích hoạt, không ghi danh', async () => {
     const buyer = await insertUser();
     const { instanceId } = await makeFeeCourse();
-    const code = `LMS539${randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase()}`;
+    const code = `GKH539${randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase()}`;
     const paymentId = await makePayment(buyer, instanceId, code);
     const eventId = await makeEvent({
       direction: 'credit', amount: 99999, code, txId: `sepay-tx-${randomUUID()}`,
@@ -228,7 +228,7 @@ describe('Điểm quét matching IPN SePay ở worker — nhịp thật của mo
   it('sự kiện processing treo quá 60 giây được nhịp sau nhận lại và khớp', async () => {
     const buyer = await insertUser();
     const { instanceId } = await makeFeeCourse();
-    const code = `LMS539${randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase()}`;
+    const code = `GKH539${randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase()}`;
     const paymentId = await makePayment(buyer, instanceId, code);
     const eventId = await makeEvent({
       direction: 'credit', amount: 100000, code, txId: `sepay-tx-${randomUUID()}`,
@@ -245,7 +245,7 @@ describe('Điểm quét matching IPN SePay ở worker — nhịp thật của mo
   it('debit khớp dòng hoàn approved đủ 100% → settled + refunded + ghi danh SUSPENDED; phát lại debit không settle hai lần', async () => {
     const buyer = await insertUser();
     const { instanceId } = await makeFeeCourse();
-    const code = `LMS539${randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase()}`;
+    const code = `GKH539${randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase()}`;
     const paymentId = await makePayment(buyer, instanceId, code);
     // Payment đã succeeded và ghi danh đang ACTIVE — trạng thái trước khi hoàn tiền.
     await pg.query("UPDATE payments SET status = 'succeeded' WHERE id = $1", [paymentId]);

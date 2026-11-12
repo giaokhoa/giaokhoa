@@ -14,7 +14,7 @@ import type {
  *
  * Các ca này ghim HÀNH VI HIỆN TẠI của `SepayMatchingService` tại
  * thời điểm trích xuất service từ apps/api sang package dùng chung
- * `@lms/payments` — chúng là mốc đối chiếu để việc trích xuất chứng
+ * `@giaokhoa/payments` — chúng là mốc đối chiếu để việc trích xuất chứng
  * minh bảo toàn hành vi, và là đặc tả thực thi của các luật đã ghi
  * trong docblock của service:
  *
@@ -61,7 +61,7 @@ function makePayment(overrides: Partial<PaymentRow> = {}): PaymentRow {
     externalTransactionId: null,
     component: 'enrol_fee',
     itemId: ITEM_ID,
-    paymentCode: 'LMSABC123',
+    paymentCode: 'GKHABC123',
     expiresAt: null,
     reviewDecision: null,
     reviewReason: null,
@@ -84,8 +84,8 @@ function makeEvent(overrides: Partial<ProviderEventRow> = {}): ProviderEventRow 
     externalTransactionId: 'TXN-EXT-1',
     direction: 'credit',
     amount: 500_000,
-    content: 'CK LMSABC123',
-    extractedCode: 'LMSABC123',
+    content: 'CK GKHABC123',
+    extractedCode: 'GKHABC123',
     matchedPaymentId: null,
     matchStatus: 'received',
     raw: { reference_code: 'TXN-EXT-1' },

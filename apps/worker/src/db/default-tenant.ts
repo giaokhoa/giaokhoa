@@ -1,4 +1,4 @@
-import type { CentreDb } from '@lms/db';
+import type { CentreDb } from '@giaokhoa/db';
 
 /**
  * Tenant mặc định của một user phía worker (TENANT-1, #196) — cùng
@@ -19,7 +19,7 @@ import type { CentreDb } from '@lms/db';
  * trước đây (ngữ cảnh platform thì về kho chung; phiên theo trung
  * tâm đã chuẩn bị phía Kysely thì vào kho của trung tâm đó; xem
  * `db/routing/space-database.service.ts`). Kiểu handle lấy từ
- * `@lms/db` để các cụm worker sau không định nghĩa lại kiểu cục bộ.
+ * `@giaokhoa/db` để các cụm worker sau không định nghĩa lại kiểu cục bộ.
  */
 export async function resolveDefaultTenantId(db: CentreDb, userId: string): Promise<string | null> {
   const rows = await db

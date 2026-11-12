@@ -26,7 +26,7 @@
  * án provider `current()` thay vì tự tuyên bố ngoại lệ).
  *
  * Môi trường: tự cấp phát control plane + hai kho riêng + một kho
- * đóng vai kho chung bằng harness của `@lms/db` (database dựng từ
+ * đóng vai kho chung bằng harness của `@giaokhoa/db` (database dựng từ
  * rỗng bằng Migrator của package, không phụ thuộc database test
  * của CI). Chuỗi bí mật cố ý trỏ về database `postgres` để bộ
  * phân giải phải chốt đích theo `databaseName` trong sổ.
@@ -34,18 +34,18 @@
 import type { ConfigService } from '@nestjs/config';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createCentreKysely, type CentreDb } from '@lms/db';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '@lms/db/test-support';
+import { createCentreKysely, type CentreDb } from '@giaokhoa/db';
+import { buildTestDatabase, dropTestDatabase, withDatabase } from '@giaokhoa/db/test-support';
 import { SpaceRoutingError } from '../../../src/db/routing/space-connection-resolver';
 import { SpaceDatabaseService } from '../../../src/db/routing/space-database.service';
 import { TenantAwarePool } from '../../../src/db/tenant-pool';
 import { ControlPlaneConnection } from '../../../src/modules/control-plane/control-plane.connection';
 import { tenantAls } from '../../../src/modules/tenants/tenant-als';
 
-const CP_DATABASE = 'lms_test_cp_639';
-const SHARED_DATABASE = 'lms_test_shared_639';
-const CENTRE_A_DATABASE = 'lms_test_centre_a_639';
-const CENTRE_B_DATABASE = 'lms_test_centre_b_639';
+const CP_DATABASE = 'giaokhoa_test_cp_639';
+const SHARED_DATABASE = 'giaokhoa_test_shared_639';
+const CENTRE_A_DATABASE = 'giaokhoa_test_centre_a_639';
+const CENTRE_B_DATABASE = 'giaokhoa_test_centre_b_639';
 const CENTRE_A_SLUG = 'trung-tam-a-639';
 const CENTRE_B_SLUG = 'trung-tam-b-639';
 const SHARED_SLUG = 'trang-chinh-639';
@@ -64,7 +64,7 @@ const POOL_IDLE_TIMEOUT_MS = 300_000;
 /** Timeout nhàn rỗi của service riêng cho ca fail-closed (mẫu của ca #581). */
 const SHORT_IDLE_TIMEOUT_MS = 600;
 
-const baseUrl = process.env.LMS_TEST_DATABASE_URL ?? process.env.DATABASE_URL!;
+const baseUrl = process.env.GIAOKHOA_TEST_DATABASE_URL ?? process.env.DATABASE_URL!;
 const adminUrl = withDatabase(baseUrl, 'postgres');
 const adminUser = decodeURIComponent(new URL(baseUrl).username);
 

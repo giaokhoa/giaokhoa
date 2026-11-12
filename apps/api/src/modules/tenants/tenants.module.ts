@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
-import { CentreIdentityRepository } from '@lms/db/repositories/centre-identity';
-import { SiteConfigRepository } from '@lms/db/repositories/site-config';
-import { TenantsRepository } from '@lms/db/repositories/tenants';
+import { CentreIdentityRepository } from '@giaokhoa/db/repositories/centre-identity';
+import { SiteConfigRepository } from '@giaokhoa/db/repositories/site-config';
+import { TenantsRepository } from '@giaokhoa/db/repositories/tenants';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { EventsModule } from '../../infra/events/events.module';
@@ -31,7 +31,7 @@ import { TenantsService } from './tenants.service';
   imports: [AccessModule, UsersModule, EventsModule, SpaceRoutingModule, ControlPlaneModule],
   controllers: [TenantsController, CentreIdentityController],
   providers: [
-    // Hai repository của module đã chuyển sang `@lms/db` trên
+    // Hai repository của module đã chuyển sang `@giaokhoa/db` trên
     // Kysely (issue #641) nên được lắp bằng factory provider trên
     // facade định tuyến `routedKysely` — cùng khuôn lắp ráp với
     // ControlPlaneRepository ở ControlPlaneModule.

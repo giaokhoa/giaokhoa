@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { sql as kyselySql, type CentreTx } from '@lms/db';
+import { sql as kyselySql, type CentreTx } from '@giaokhoa/db';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { tenantAls, type TenantAlsStore } from './tenant-als';
 import { TenantContextService } from './tenant-context.service';

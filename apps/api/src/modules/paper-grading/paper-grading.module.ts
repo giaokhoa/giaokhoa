@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PaperGradingRepository } from '@lms/db/repositories/paper-grading';
+import { PaperGradingRepository } from '@giaokhoa/db/repositories/paper-grading';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { EventsModule } from '../../infra/events/events.module';
@@ -21,10 +21,7 @@ import { PaperGradingService } from './paper-grading.service';
  * (outbox → event log cho các thao tác gán/sửa ở hàng chờ, như biên
  * bản sửa lỗi).
  *
- * PaperGradingRepository nay là repository Kysely của `@lms/db`
- * (issue #644): provider dựng bằng factory với handle kho trung
- * tâm đã định tuyến theo không gian (`routedKysely` của
- * SpaceDatabaseService).
+ * PaperGradingRepository dùng `routedKysely` từ SpaceDatabaseService để các phiếu và kết quả quét được ghi đúng kho của trung tâm.
  */
 @Module({
   imports: [AccessModule, QuizModule, EnrolModule, UsersModule, FilesModule, SiteConfigModule, EventsModule, SpaceRoutingModule],

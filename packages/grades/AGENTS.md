@@ -43,8 +43,7 @@ của repo.
 
 ## Kiểm chứng bắt buộc
 
-- **Typecheck + test của package trước khi push**: `pnpm --filter @lms/grades
-  typecheck` và `pnpm --filter @lms/grades test` (suite của package này nhẹ,
+- **Typecheck + test của package trước khi push**: `pnpm --filter @giaokhoa/grades typecheck` và `pnpm --filter @giaokhoa/grades test` (suite của package này nhẹ,
   chạy targeted là đủ; không cần khoá flock trừ khi chạy kèm suite nặng khác).
 - Build lại `dist` trước khi typecheck apps/api trong cùng feat.
 - CI là cổng chính; kết luận CI chỉ từ LOG THẬT.

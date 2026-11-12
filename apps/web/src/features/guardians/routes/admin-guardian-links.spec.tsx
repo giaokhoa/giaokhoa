@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { UserProfile } from '@lms/contracts';
+import type { UserProfile } from '@giaokhoa/contracts';
 import { TestProviders } from '#test/providers';
 import { baSessionResponse, isGetSessionUrl } from '#test/ba-session';
 import { AdminGuardianLinksPage } from './admin-guardian-links';

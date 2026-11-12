@@ -1,13 +1,13 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import type { UserListStatus, UserWithAssignmentsListResponse } from '@lms/contracts';
+import type { UserListStatus, UserWithAssignmentsListResponse } from '@giaokhoa/contracts';
 import { OutboxService } from '../../infra/events/outbox.service';
-import { AccessRepository, type AssignmentListRow, type RoleRow } from '@lms/db/repositories/access';
+import { AccessRepository, type AssignmentListRow, type RoleRow } from '@giaokhoa/db/repositories/access';
 import { ContextsService } from './contexts.service';
 import { CAPABILITY_DEFINITIONS, DEFAULT_ROLES } from './domain/capabilities';
 import { CAP_ALLOW, CAP_INHERIT, CAP_PREVENT, CAP_PROHIBIT } from './domain/permission';
 import { PlanLimitsService, TEACHING_ROLE_ARCHETYPES } from './plan-limits.service';
 import { RoleSeparationService } from './role-separation.service';
-import type { CentreTx } from '@lms/db';
+import type { CentreTx } from '@giaokhoa/db';
 
 const VALID_PERMISSIONS = [CAP_PROHIBIT, CAP_PREVENT, CAP_INHERIT, CAP_ALLOW];
 

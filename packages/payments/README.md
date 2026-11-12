@@ -1,4 +1,4 @@
-# @lms/payments — Bề mặt thanh toán dùng chung
+# @giaokhoa/payments — Bề mặt thanh toán dùng chung
 
 Package dùng chung cho các luồng thanh toán phải chạy được ở nhiều
 tiến trình (apps/api và apps/worker), theo cùng khuôn package dùng
@@ -18,7 +18,7 @@ trích xuất bảo toàn hành vi từ module payments của apps/api.
   hoá `src/sepay-matching.service.spec.ts`.
 - `PaymentsRepository` — tầng truy cập dữ liệu thanh toán (tài
   khoản, payment, dòng hoàn, sự kiện provider, quyền lợi gói,
-  coupon) trên schema dùng chung `@lms/db`. Chỉ thao tác dữ liệu,
+  coupon) trên schema dùng chung `@giaokhoa/db`. Chỉ thao tác dữ liệu,
   không chứa luật nghiệp vụ.
 - `PlanEntitlementsService` — kích hoạt và đình chỉ quyền lợi gói
   (`tenant_plan`/`teacher_plan`) từ ảnh chụp gói trong
@@ -40,15 +40,15 @@ qua cổng; cài đặt cổng thuộc về tiến trình chủ:
 
 - `PaidEnrolActivationPort` — kích hoạt ghi danh có phí. Cài đặt
   phía apps/worker (từ issue #539): `WorkerPaidEnrolActivationService`
-  trên phễu ghi danh dùng chung của `@lms/enrol`.
+  trên phễu ghi danh dùng chung của `@giaokhoa/enrol`.
 - `PaidClassEnrolActivationPort` — kích hoạt ghi danh cấp lớp. Cài
   đặt phía apps/worker (từ issue #539):
   `WorkerPaidClassEnrolActivationService` trên phễu cohort dùng chung
-  của `@lms/enrol`.
+  của `@giaokhoa/enrol`.
 - `PaymentSettlementPort` — đối chiếu đích phía server và xác nhận
   chi hoàn cho sự kiện `debit`. Cài đặt phía apps/worker (từ issue
   #539): `WorkerPaymentSettlementService` trên dữ liệu dùng chung
-  `@lms/db` và repository/service của chính package này.
+  `@giaokhoa/db` và repository/service của chính package này.
 
 Việc nối cài đặt phía worker nằm trong `WorkerModule`
 (`useExisting` trỏ vào các adapter của worker). Luật nghiệp vụ

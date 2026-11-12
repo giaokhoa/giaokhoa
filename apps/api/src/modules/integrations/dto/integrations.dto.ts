@@ -7,11 +7,11 @@ import {
   type CreateExternalService,
   type CreateExternalToken,
   type SetExternalServiceEnabled,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 
 /**
  * Validation của Web Services dùng Zod qua Standard Schema:
- * schema nền ở `@lms/contracts` là nguồn sự thật duy nhất, dùng chung với form
+ * schema nền ở `@giaokhoa/contracts` là nguồn sự thật duy nhất, dùng chung với form
  * phía React; server không định nghĩa hệ validation thứ hai.
  */
 export { callExternalFunctionSchema, createExternalServiceSchema, createExternalTokenSchema, setExternalServiceEnabledSchema };

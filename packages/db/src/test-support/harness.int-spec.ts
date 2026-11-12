@@ -1,5 +1,5 @@
 /**
- * Spec khói của khung Kysely trong `@lms/db`: chứng minh ba tính
+ * Spec khói của khung Kysely trong `@giaokhoa/db`: chứng minh ba tính
  * chất nền mà mọi repository Kysely về sau sẽ dựa vào, trên database
  * trung tâm dựng từ rỗng bằng đúng SQL mang dữ liệu hiện hành:
  *
@@ -16,7 +16,7 @@
  *         riêng cho mỗi trung tâm.
  *
  * Môi trường: cần một cụm PostgreSQL truy cập được bằng quyền quản
- * trị — lấy từ `LMS_DB_TEST_ADMIN_URL`, hoặc suy từ `DATABASE_URL`
+ * trị — lấy từ `GIAOKHOA_DB_TEST_ADMIN_URL`, hoặc suy từ `DATABASE_URL`
  * (thay tên database thành `postgres`) như môi trường CI. Database
  * test (tên cố định dưới đây) bị xoá và dựng lại từ rỗng ở đầu
  * suite, xoá hẳn khi suite xong. Vì superuser bỏ qua RLS, suite tạo
@@ -38,12 +38,12 @@ import {
   TestTenantPool,
 } from './tenant-context';
 
-const TEST_DATABASE = 'lms_db_kysely_smoke';
-const TEST_ROLE = 'lms_db_kysely_smoke';
-const TEST_ROLE_PASSWORD = 'lms_db_kysely_smoke_pw';
+const TEST_DATABASE = 'giaokhoa_db_kysely_smoke';
+const TEST_ROLE = 'giaokhoa_db_kysely_smoke';
+const TEST_ROLE_PASSWORD = 'giaokhoa_db_kysely_smoke_pw';
 
 const adminUrl =
-  process.env.LMS_DB_TEST_ADMIN_URL ??
+  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
 
 let tenantPool: TestTenantPool;
@@ -70,7 +70,7 @@ async function listVisibleTenantSlugs(handle: CentreDb | CentreTx): Promise<stri
 beforeAll(async () => {
   if (!adminUrl) {
     throw new Error(
-      'Thiếu kết nối quản trị cho spec khói Kysely: đặt LMS_DB_TEST_ADMIN_URL hoặc DATABASE_URL.',
+      'Thiếu kết nối quản trị cho spec khói Kysely: đặt GIAOKHOA_DB_TEST_ADMIN_URL hoặc DATABASE_URL.',
     );
   }
   const adminStoreUrl = await buildTestDatabase({
@@ -128,7 +128,7 @@ afterAll(async () => {
   }
 }, 60_000);
 
-describe('khung Kysely của @lms/db', () => {
+describe('khung Kysely của @giaokhoa/db', () => {
   it('chỉ cho thấy dòng của đúng tenant trong ngữ cảnh tenant, qua Kysely trên pool gắn GUC', async () => {
     await expect(runInTestTenantContext(tenantAId, () => listVisibleTenantSlugs(db))).resolves.toEqual([
       'smoke-alpha',

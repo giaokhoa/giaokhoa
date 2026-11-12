@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
-import { adjustedGrade } from '@lms/grades';
+import { adjustedGrade } from '@giaokhoa/grades';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { CompletionService } from '../completion/completion.service';
@@ -8,7 +8,7 @@ import { EnrolService } from '../enrol/enrol.service';
 import { UsersService } from '../users/users.service';
 import { renderVneduWorkbook, type VneduExportItem, type VneduExportModel } from './domain/vnedu-export';
 import type { ExportGradesVneduDto } from './dto/grades.dto';
-import { GradesRepository, type GradeRow, type ItemRow } from '@lms/db/repositories/grades';
+import { GradesRepository, type GradeRow, type ItemRow } from '@giaokhoa/db/repositories/grades';
 
 export const COMPLETION_PASS = 2;
 export const COMPLETION_FAIL = 3;
@@ -32,7 +32,7 @@ export interface ActivityGradeView {
  * ngày 25/10/2026, issue #224). Nguồn sự thật duy nhất của điểm là điểm
  * của từng hoạt động: quiz attempt ghi qua recordActivityGrade, bài tập
  * chấm theo bài, GV nhập/sửa điểm của một bài qua setGrade/updateGrade.
- * Mọi phép tính số học nằm ở engine thuần @lms/grades (adjustedGrade).
+ * Mọi phép tính số học nằm ở engine thuần @giaokhoa/grades (adjustedGrade).
  *
  * ĐÃ GỠ HẲN ở #224: gradebook tổng hợp theo khoá (categories/letters/
  * scales/outcomes, điểm tổng khoá, regrade, export/import CSV) và Sổ
@@ -66,7 +66,7 @@ export class GradesService implements OnModuleInit {
     this.completion.registerCourseGradeChecker(async (courseId, userId) => this.courseGradePassed(courseId, userId));
     // Dữ liệu điểm là một họ "dữ liệu liên quan" quyết định giữ/xoá
     // dòng ghi danh khi gỡ ghi danh: họ đó nay được truy vấn trực
-    // tiếp ở tầng dữ liệu dùng chung (@lms/enrol) thay cho probe
+    // tiếp ở tầng dữ liệu dùng chung (@giaokhoa/enrol) thay cho probe
     // đăng ký lúc khởi tạo tiến trình như trước đây.
   }
 

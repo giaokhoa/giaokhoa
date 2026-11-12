@@ -37,7 +37,7 @@ describe('Access: seed cắt bỏ các định nghĩa năng lực đã cũ (issu
     // mang một trong các tiền tố đã loại bỏ (ba sơ đồ cũ).
     const staleCourse = 'moodle/' + 'course:update';
     const staleQuiz = 'mod/' + 'quiz:attempt';
-    const staleCompletion = 'lms/' + 'completion:manage';
+    const staleCompletion = 'giaokhoa/' + 'completion:manage';
     await pg.query(
       `insert into capabilities (name, cap_type, context_level, component) values
          ($1, 'write', 50, 'core_course'),

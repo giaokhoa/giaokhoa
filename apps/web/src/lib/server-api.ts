@@ -3,7 +3,7 @@
  *
  * Loader chạy trong tiến trình SSR và gọi API qua địa chỉ nội bộ
  * (topology C: API ở cùng một máy, địa chỉ mặc định 127.0.0.1:3000,
- * ghi đè bằng biến môi trường `LMS_API_INTERNAL_URL`) — KHÔNG vòng qua
+ * ghi đè bằng biến môi trường `GIAOKHOA_API_INTERNAL_URL`) — KHÔNG vòng qua
  * URL công khai của chính app. Module này chỉ được loader import;
  * React Router tự loại loader khỏi bản build phía client nên mã này
  * không chạy trên trình duyệt.
@@ -31,14 +31,14 @@
  * có signal riêng (signal hủy của TanStack Query) thì hai signal được
  * gộp bằng `AbortSignal.any` — hủy bên nào cũng dừng lượt gọi.
  */
-import { problemDetailsSchema } from '@lms/contracts';
+import { problemDetailsSchema } from '@giaokhoa/contracts';
 import { ApiError } from '#lib/api';
 
 /** Trần thời gian cho MỘT lượt gọi API nội bộ phía server (mili giây). */
 export const SSR_FETCH_TIMEOUT_MS = 10_000;
 
 export function apiInternalBase(): string {
-  return process.env.LMS_API_INTERNAL_URL ?? 'http://127.0.0.1:3000';
+  return process.env.GIAOKHOA_API_INTERNAL_URL ?? 'http://127.0.0.1:3000';
 }
 
 /**

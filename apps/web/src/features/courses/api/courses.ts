@@ -1,4 +1,4 @@
-import type { Course, CourseCategoryTreeNode } from '@lms/contracts';
+import type { Course, CourseCategoryTreeNode } from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 
 /**

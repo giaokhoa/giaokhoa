@@ -4,7 +4,7 @@ import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import Redis from 'ioredis';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { sql, type JsonValue } from '@lms/db';
+import { sql, type JsonValue } from '@giaokhoa/db';
 import { CohortSyncCatchupService } from '../../../src/cohort-sync-catchup.service';
 import { redisConnectionFromUrl } from '../../../src/config/env';
 import {
@@ -140,7 +140,7 @@ describe('Worker cohort sync catchup (phát bù tồn đọng khi chuyển đổ
     // Khoá watermark cũ dựng đúng cách consumer polling cũ
     // dựng: tiền tố + tên database trong DATABASE_URL của suite.
     const databaseName = new URL(process.env.DATABASE_URL!).pathname.replace(/^\//, '') || 'default';
-    legacyWatermarkKey = `lms:cohort-sync:${databaseName}:seq`;
+    legacyWatermarkKey = `giaokhoa:cohort-sync:${databaseName}:seq`;
     redis = new Redis({ ...redisConnectionFromUrl(process.env.REDIS_URL ?? 'redis://localhost:6379') });
     await redis.del(legacyWatermarkKey);
 

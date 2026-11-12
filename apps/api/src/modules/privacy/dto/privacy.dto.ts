@@ -4,9 +4,9 @@ import {
   decidePrivacyRequestSchema,
   type DecidePrivacyRequest,
   uuidIdSchema,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 
-/** Validation Privacy dùng Zod qua Standard Schema — schema nền ở `@lms/contracts`. */
+/** Validation Privacy dùng Zod qua Standard Schema — schema nền ở `@giaokhoa/contracts`. */
 export { decidePrivacyRequestSchema };
 export type DecidePrivacyRequestDto = DecidePrivacyRequest;
 

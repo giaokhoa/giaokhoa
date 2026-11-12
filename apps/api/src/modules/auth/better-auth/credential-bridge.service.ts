@@ -2,7 +2,7 @@ import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import type { BetterAuthOptions } from 'better-auth';
 import { makeSignature } from 'better-auth/crypto';
 import { createInternalAdapter } from 'better-auth/db';
-import type { CentreDb } from '@lms/db';
+import type { CentreDb } from '@giaokhoa/db';
 import { SpaceDatabaseService } from '../../../db/routing/space-database.service';
 import { BetterAuthService } from './better-auth.service';
 

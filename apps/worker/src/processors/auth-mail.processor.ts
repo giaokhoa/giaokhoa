@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { DelayedError, type Job } from 'bullmq';
 import Redis from 'ioredis';
-import { renderAuthMail, type AuthMailPayload } from '@lms/contracts';
+import { renderAuthMail, type AuthMailPayload } from '@giaokhoa/contracts';
 import { redisConnectionFromUrl } from '../config/env';
 import { SpaceJobRunner } from '../db/routing/space-job-runner';
 import type { OutboxEventJobData } from '../outbox-event-routes';
@@ -18,7 +18,7 @@ import { ResendMailService } from '../resend-mail.service';
  * @remarks
  * Flow tổng thể của mail auth sau đợt chuyển đổi:
  * 1. Các callback của Better Auth phía API chỉ GHI dòng outbox
- *    `auth_mail_requested` (payload theo hợp đồng ở `@lms/contracts`)
+ *    `auth_mail_requested` (payload theo hợp đồng ở `@giaokhoa/contracts`)
  *    rồi trả về ngay — không gửi mail trong request.
  * 2. Relay outbox duy nhất ở worker phát dòng đó thành MỘT job trên
  *    hàng đợi `auth-mail` (bảng định tuyến ở `outbox-event-routes.ts`:
@@ -27,7 +27,7 @@ import { ResendMailService } from '../resend-mail.service';
  *    `publishedAt` và phản chiếu `event_log`. Dấu `publishedAt` là
  *    dấu ĐÃ PHÁT, không phải dấu hoàn thành xử lý.
  * 3. Processor này nhận job, dựng nội dung mail bằng template dùng
- *    chung {@link renderAuthMail} của `@lms/contracts` và gửi qua
+ *    chung {@link renderAuthMail} của `@giaokhoa/contracts` và gửi qua
  *    transport Resend phía worker ({@link ResendMailService}) — nội
  *    dung mail và hành vi gửi giữ nguyên như đường consumer polling
  *    phía API trước đây (consumer đó đã gỡ ở cùng issue này).
@@ -157,11 +157,11 @@ export interface AuthMailSentMarker {
 /** Khoá tiêm của {@link AuthMailSentMarker} trong `worker.module.ts`. */
 export const AUTH_MAIL_SENT_MARKER = 'AUTH_MAIL_SENT_MARKER';
 
-/** Tiền tố khoá Redis của dấu ĐÃ GỬI: `lms:auth-mail:sent:<outboxId>`. */
-const SENT_MARKER_KEY_PREFIX = 'lms:auth-mail:sent:';
+/** Tiền tố khoá Redis của dấu ĐÃ GỬI: `giaokhoa:auth-mail:sent:<outboxId>`. */
+const SENT_MARKER_KEY_PREFIX = 'giaokhoa:auth-mail:sent:';
 
-/** Tiền tố khoá Redis của lease ĐANG XỬ LÝ: `lms:auth-mail:processing:<outboxId>`. */
-const PROCESSING_LEASE_KEY_PREFIX = 'lms:auth-mail:processing:';
+/** Tiền tố khoá Redis của lease ĐANG XỬ LÝ: `giaokhoa:auth-mail:processing:<outboxId>`. */
+const PROCESSING_LEASE_KEY_PREFIX = 'giaokhoa:auth-mail:processing:';
 
 /**
  * Thời gian sống của dấu ĐÃ GỬI: 7 ngày. Mọi cửa sổ phát lại thực
@@ -205,9 +205,9 @@ const RELEASE_PROCESSING_IF_OWNER_SCRIPT =
 
 /**
  * Bản cài đặt Redis của {@link AuthMailSentMarker}: mỗi sự kiện có
- * hai khoá độc lập — `lms:auth-mail:sent:<outboxId>` (dấu ĐÃ GỬI,
+ * hai khoá độc lập — `giaokhoa:auth-mail:sent:<outboxId>` (dấu ĐÃ GỬI,
  * hạn {@link SENT_MARKER_TTL_SECONDS}) và
- * `lms:auth-mail:processing:<outboxId>` (lease ĐANG XỬ LÝ mang
+ * `giaokhoa:auth-mail:processing:<outboxId>` (lease ĐANG XỬ LÝ mang
  * token chủ sở hữu, hạn {@link PROCESSING_LEASE_TTL_SECONDS}).
  * Chiếm lease bằng `SET ... NX` (lệnh nguyên tử phía Redis — đúng
  * một lượt trong mọi lượt đồng thời nhận được khoá); nhả lease

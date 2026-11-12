@@ -7,10 +7,10 @@ import {
 import { createCategory, createCourse, createEnrolInstance } from '../../support/course-enrolment-helpers';
 import { ClassesService } from '../../../src/modules/classes/classes.service';
 import { ENROL_ACTIVE, ENROL_SUSPENDED, EnrolService } from '../../../src/modules/enrol/enrol.service';
-import { PaymentsRepository } from '@lms/payments';
+import { PaymentsRepository } from '@giaokhoa/payments';
 import { PaymentsService } from '../../../src/modules/payments/payments.service';
 
-const TEST_DB_URL = process.env.LMS_TEST_DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5432/lms_test_api';
+const TEST_DB_URL = process.env.GIAOKHOA_TEST_DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5432/giaokhoa_test_api';
 
 /**
  * Hồi quy kết quả đáp ứng của khâu SETTLE HOÀN TIỀN khi bước phát

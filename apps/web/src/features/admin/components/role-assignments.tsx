@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import type { AssignmentListItem, RoleListItem } from '@lms/contracts';
-import { Avatar, AvatarFallback } from '@lms/ui/components/avatar';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardDescription, CardHeader, CardTitle } from '@lms/ui/components/card';
-import { Field, FieldLabel } from '@lms/ui/components/field';
-import { InputGroup, InputGroupAddon, InputGroupInput } from '@lms/ui/components/input-group';
+import type { AssignmentListItem, RoleListItem } from '@giaokhoa/contracts';
+import { Avatar, AvatarFallback } from '@giaokhoa/ui/components/avatar';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
+import { Field, FieldLabel } from '@giaokhoa/ui/components/field';
+import { InputGroup, InputGroupAddon, InputGroupInput } from '@giaokhoa/ui/components/input-group';
 import {
   Table,
   TableBody,
@@ -13,7 +13,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@lms/ui/components/table';
+} from '@giaokhoa/ui/components/table';
 import { Plus, Search, UserMinus } from 'lucide-react';
 import { PageSkeleton } from '#components/page-skeleton';
 import { ErrorAlert } from '#components/error-alert';
@@ -39,7 +39,7 @@ import { TablePagination } from './table-pagination';
  * lọc là các ô chọn có nhãn đặt phía trên (vai trò, ngữ cảnh), khối
  * công cụ là ô tìm kiếm bên trái và cụm cỡ trang + nút Gán vai trò
  * bên phải; ở bề rộng hẹp các khối gói dòng nhưng không tràn ngang.
- * Mọi ô chọn là Select của `@lms/ui` qua component dùng chung của
+ * Mọi ô chọn là Select của `@giaokhoa/ui` qua component dùng chung của
  * feature. Hàng bảng cao 56px, cột thời gian bày dạng ngày chữ như
  * bảng người dùng cùng trang, thao tác gỡ là nút ghost biểu tượng
  * như ngôn ngữ thao tác của khuôn bảng mẫu. Chân bảng là dòng tóm

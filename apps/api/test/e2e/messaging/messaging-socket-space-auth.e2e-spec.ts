@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { Client, Pool } from 'pg';
 import { io, type Socket } from 'socket.io-client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createControlPlaneKysely } from '@lms/db/control-plane';
+import { createControlPlaneKysely } from '@giaokhoa/db/control-plane';
 
 /**
  * Better Auth phải bật ngay từ lúc AppModule được import (khuôn của
@@ -64,8 +64,8 @@ function signedBetterAuthCookie(token: string): string {
  * socket realtime của messaging tại địa chỉ của một trung tâm ở
  * kho riêng. Hạ tầng dựng đúng khuôn spec các cổng Phần A: trung
  * tâm kiểm chứng có database riêng trên cùng cụm test
- * (`lms_test_centre_sock587`), sổ đăng ký ở database control plane
- * riêng (`lms_test_cp_sock587`) mà ứng dụng đọc qua
+ * (`giaokhoa_test_centre_sock587`), sổ đăng ký ở database control plane
+ * riêng (`giaokhoa_test_cp_sock587`) mà ứng dụng đọc qua
  * `CONTROL_PLANE_DATABASE_URL`. Hai thành viên A/B, hội thoại nhóm
  * của họ và một tin nhắn được tạo bằng API công khai ở kho chung
  * rồi sao sang kho riêng và XOÁ khỏi kho chung — đúng trạng thái
@@ -89,11 +89,11 @@ function signedBetterAuthCookie(token: string): string {
  * Khẳng định về PHÂN PHỐI sự kiện qua hàng đợi phía worker nằm
  * ngoài spec này, cùng ranh giới với spec realtime-flow hiện hữu.
  */
-const CP_DATABASE = 'lms_test_cp_sock587';
-const CP_ROLE = 'lms_cp_sock587';
+const CP_DATABASE = 'giaokhoa_test_cp_sock587';
+const CP_ROLE = 'giaokhoa_cp_sock587';
 const CP_PASSWORD = 'cp-test-sock587';
-const CENTRE_DATABASE = 'lms_test_centre_sock587';
-const CENTRE_ROLE = 'lms_centre_sock587_app';
+const CENTRE_DATABASE = 'giaokhoa_test_centre_sock587';
+const CENTRE_ROLE = 'giaokhoa_centre_sock587_app';
 const CENTRE_PASSWORD = 'centre-sock-test-587';
 const RUN_SUFFIX = Math.random().toString(36).slice(2, 8);
 const CENTRE_SLUG = `trung-tam-sock-587-${RUN_SUFFIX}`;

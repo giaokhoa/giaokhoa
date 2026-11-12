@@ -1,4 +1,4 @@
-# @lms/web — README nghiệp vụ
+# @giaokhoa/web — README nghiệp vụ
 
 > File này ghi các **quyết định nghiệp vụ quan trọng và còn đang hiệu lực** của package.
 > Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub.
@@ -14,23 +14,23 @@ biến nằm ở `apps/api`; web không tự "gác" nghiệp vụ bằng cách g
 
 ## Quyết định nghiệp vụ còn hiệu lực
 
-| Quyết định | Nguồn |
-|---|---|
-| Kiến trúc hiển thị hybrid: **app/dashboard chạy SPA; CHỈ bề mặt public mới SSR**. (Nền React Router framework `ssr: true` từ GĐ4 giữ nguyên để phục vụ lớp public — README cũ ghi "SPA, ssr: false" là SAI, đã sửa ở bản này.) | Sổ mục F, chốt 25/10/2026 14:41; issue #7 |
-| Cấu trúc sidebar ngân hàng: 3 mục top-level — "Ngân hàng câu hỏi" (nút thu/mở riêng, một con "Ngữ liệu"), "Ngân hàng đề" (lá), "Ngân hàng ma trận" (lá). **BỎ hẳn mục "Ngân hàng hệ thống" ở sidebar** — khu hệ thống là tab "Hệ thống" trong từng màn danh sách ngân hàng (tab "Cá nhân" mặc định), hai tab chung khung danh sách, chỉ khác nguồn dữ liệu. | Sổ mục B, chốt lại 26/10/2026 11:40; issue #228 |
-| Dữ liệu ngân hàng có hai khu vực: "Ngân hàng hệ thống" (chung, tầng platform) và khu "của tôi" của từng giáo viên — trình bày bằng hai tab Cá nhân / Hệ thống trong cùng màn danh sách (xem dòng trên). Admin có khu riêng đúng như giáo viên. | Sổ mục B, chốt 24–25/10/2026; trình bày chốt lại 26/10/2026 11:40 |
-| Nhóm "Học tập" ở sidebar + command palette **chỉ hiện khi có dấu chân học tập**: (M) đang là học viên ≥1 khoá (đình chỉ vẫn tính) hoặc (A) ≥1 huy hiệu chưa bị thu hồi hoặc ≥1 kế hoạch học tập của chính mình. Ẩn điều hướng ≠ khoá trang. | Sổ mục B, chốt 25/10/2026; PR #190 |
-| Chuông thông báo ở header **ĐƯỢC GIỮ** như hiện tại. (Quyết định cũ "bỏ hẳn chuông, thông báo ở sidebar" ngày 23/10/2026 đã bị THAY THẾ — không làm theo nữa.) | Sổ mục C, chốt 25/10/2026 23:09; issue #174 |
-| Phân tầng tuỳ chọn thông báo trên UI: học sinh chỉ thấy tuỳ chọn TỐI THIỂU (tắt tiếng theo khoá); trang admin cấp site có mục cài đặt loại sự kiện được gửi. Ẩn ở UI không thay thế chặn ở API — API là nơi chặn thật. | Sổ mục C, chốt 25/10/2026 23:09; issue #174 (lát NB-7) |
-| Luồng tạo khoá: lớp học tạo TRƯỚC, khoá nằm trong lớp. GV chưa có lớp mà tạo khoá thì wizard chèn bước tạo lớp nội tuyến (một trường tên) — KHÔNG sinh lớp mặc định ẩn. | Sổ mục A, chốt 25/10/2026 15:51; issue #184 |
-| Bề mặt học sinh làm bài **không hiển thị nguồn sách** của câu hỏi; phụ huynh/học sinh chỉ thấy điểm ĐÃ CÔNG BỐ (digest PH không mang điểm qua kênh ngoài — luật tối thiểu hoá kênh ngoài là luật cứng). | Sổ mục B + C (P4); issue #130/#133 |
-| Blog và hỏi-đáp: **ĐÃ GỠ** khỏi sản phẩm (không còn mục Blog trong điều hướng, không còn bề mặt hỏi-đáp). Không dựng lại hai bề mặt này khi chưa có lệnh mới. | Chốt 25/10/2026 21:55; issue #173 |
-| Đóng băng mở rộng: chỉ hoàn thiện chức năng đang có; không tự thêm bề mặt/hướng mới (nội dung hệ thống công khai, TENANT-2/3/4…) khi chưa có lệnh. | Sổ mục A, chốt 25/10/2026 15:07 |
+| Quyết định                                                                                                                                                                                                                                                                                                                                                  | Nguồn                                                             |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Kiến trúc hiển thị hybrid: **app/dashboard chạy SPA; CHỈ bề mặt public mới SSR**. (Nền React Router framework `ssr: true` từ GĐ4 giữ nguyên để phục vụ lớp public — README cũ ghi "SPA, ssr: false" là SAI, đã sửa ở bản này.)                                                                                                                              | Sổ mục F, chốt 25/10/2026 14:41; issue #7                         |
+| Cấu trúc sidebar ngân hàng: 3 mục top-level — "Ngân hàng câu hỏi" (nút thu/mở riêng, một con "Ngữ liệu"), "Ngân hàng đề" (lá), "Ngân hàng ma trận" (lá). **BỎ hẳn mục "Ngân hàng hệ thống" ở sidebar** — khu hệ thống là tab "Hệ thống" trong từng màn danh sách ngân hàng (tab "Cá nhân" mặc định), hai tab chung khung danh sách, chỉ khác nguồn dữ liệu. | Sổ mục B, chốt lại 26/10/2026 11:40; issue #228                   |
+| Dữ liệu ngân hàng có hai khu vực: "Ngân hàng hệ thống" (chung, tầng platform) và khu "của tôi" của từng giáo viên — trình bày bằng hai tab Cá nhân / Hệ thống trong cùng màn danh sách (xem dòng trên). Admin có khu riêng đúng như giáo viên.                                                                                                              | Sổ mục B, chốt 24–25/10/2026; trình bày chốt lại 26/10/2026 11:40 |
+| Nhóm "Học tập" ở sidebar + command palette **chỉ hiện khi có dấu chân học tập**: (M) đang là học viên ≥1 khoá (đình chỉ vẫn tính) hoặc (A) ≥1 huy hiệu chưa bị thu hồi hoặc ≥1 kế hoạch học tập của chính mình. Ẩn điều hướng ≠ khoá trang.                                                                                                                 | Sổ mục B, chốt 25/10/2026; PR #190                                |
+| Chuông thông báo ở header **ĐƯỢC GIỮ** như hiện tại. (Quyết định cũ "bỏ hẳn chuông, thông báo ở sidebar" ngày 23/10/2026 đã bị THAY THẾ — không làm theo nữa.)                                                                                                                                                                                              | Sổ mục C, chốt 25/10/2026 23:09; issue #174                       |
+| Phân tầng tuỳ chọn thông báo trên UI: học sinh chỉ thấy tuỳ chọn TỐI THIỂU (tắt tiếng theo khoá); trang admin cấp site có mục cài đặt loại sự kiện được gửi. Ẩn ở UI không thay thế chặn ở API — API là nơi chặn thật.                                                                                                                                      | Sổ mục C, chốt 25/10/2026 23:09; issue #174 (lát NB-7)            |
+| Luồng tạo khoá: lớp học tạo TRƯỚC, khoá nằm trong lớp. GV chưa có lớp mà tạo khoá thì wizard chèn bước tạo lớp nội tuyến (một trường tên) — KHÔNG sinh lớp mặc định ẩn.                                                                                                                                                                                     | Sổ mục A, chốt 25/10/2026 15:51; issue #184                       |
+| Bề mặt học sinh làm bài **không hiển thị nguồn sách** của câu hỏi; phụ huynh/học sinh chỉ thấy điểm ĐÃ CÔNG BỐ (digest PH không mang điểm qua kênh ngoài — luật tối thiểu hoá kênh ngoài là luật cứng).                                                                                                                                                     | Sổ mục B + C (P4); issue #130/#133                                |
+| Blog và hỏi-đáp: **ĐÃ GỠ** khỏi sản phẩm (không còn mục Blog trong điều hướng, không còn bề mặt hỏi-đáp). Không dựng lại hai bề mặt này khi chưa có lệnh mới.                                                                                                                                                                                               | Chốt 25/10/2026 21:55; issue #173                                 |
+| Đóng băng mở rộng: chỉ hoàn thiện chức năng đang có; không tự thêm bề mặt/hướng mới (nội dung hệ thống công khai, TENANT-2/3/4…) khi chưa có lệnh.                                                                                                                                                                                                          | Sổ mục A, chốt 25/10/2026 15:07                                   |
 
 ## Ranh giới — package này KHÔNG làm gì
 
 - Không chứa component shadcn/ui: toàn bộ lớp shadcn sống ở `packages/ui`; web chỉ dùng
-  qua `@lms/ui/...`. Cấm sao chép component của package vào `src/components/` để sửa
+  qua `@giaokhoa/ui/...`. Cấm sao chép component của package vào `src/components/` để sửa
   riêng (sẽ bị ghi đè mất ở lần đồng bộ shadcn kế tiếp). Component tự viết theo nghiệp
   vụ nằm ở `apps/web/src/components/`.
 - Không chứa trình soạn thảo rich-text: dùng `packages/editor`.
@@ -49,4 +49,9 @@ biến nằm ở `apps/api`; web không tự "gác" nghiệp vụ bằng cách g
   `lib/auth-client.ts`); phía server, `lib/server-api.ts` đọc cùng cookie
   đó cho loader/SSR. Không còn token Bearer ở localStorage (đã chuyển sang
   cookie từ PR #257).
-- Dev: `pnpm dev` (proxy `/api` sang backend cổng 3000).
+- Dev: `pnpm dev` (Vite proxy `/api`, `/socket.io`, `/mcp` và
+  OAuth metadata về backend cổng 3000).
+- Production: `@react-router/serve` chỉ phục vụ SSR + asset trên
+  cổng nội bộ 3000; service Caddy ở `compose.yaml` làm reverse proxy
+  và gắn CSP cho HTML theo `Caddyfile`. Không prerender trang dựa
+  cookie; `/` và `/login` đều SSR theo request.

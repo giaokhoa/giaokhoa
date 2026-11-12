@@ -1,14 +1,14 @@
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router';
-import type { GuardianDigestFrequency } from '@lms/contracts';
+import type { GuardianDigestFrequency } from '@giaokhoa/contracts';
 import '#config/i18n';
 import { guardianDigestPreferenceQueryOptions, guardianMyStudentsQueryOptions, guardianOverviewQueryOptions, guardianResultsQueryOptions, useUpdateGuardianDigestPreference } from '../queries/guardians';
 import { formatWithOptions } from '#utils/date-format';
 import { SectionCards, type StatCard } from '#components/section-cards';
-import { Badge } from '@lms/ui/components/badge';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@lms/ui/components/card';
+import { Badge } from '@giaokhoa/ui/components/badge';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { PageSkeleton } from '#components/page-skeleton';
 import { PageShell } from '#components/page-shell';
 

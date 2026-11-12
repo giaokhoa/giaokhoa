@@ -9,9 +9,9 @@ import {
   PaymentsRepository,
   PlanEntitlementsService,
   SepayMatchingService,
-} from '@lms/payments';
-import { createCentreKysely } from '@lms/db';
-import { createControlPlaneKysely } from '@lms/db/control-plane';
+} from '@giaokhoa/payments';
+import { createCentreKysely } from '@giaokhoa/db';
+import { createControlPlaneKysely } from '@giaokhoa/db/control-plane';
 import { SpaceDatabaseService } from '../../../src/db/routing/space-database.service';
 import { tenantAls } from '../../../src/db/tenant-als';
 import { TenantAwarePool } from '../../../src/db/tenant-pool';
@@ -27,7 +27,7 @@ import { WorkerPaymentSpaceScope } from '../../../src/worker-payment-space-scope
  * tại ĐÚNG KHO của trung tâm sở hữu payment.
  *
  * Cách dựng: đồ thị service dựng tay đúng ngăn xếp production của
- * nhịp quét (repository + writer + service của `@lms/payments`, ba
+ * nhịp quét (repository + writer + service của `@giaokhoa/payments`, ba
  * cổng hiệu ứng của worker; scheduler không tham gia — spec gọi
  * thẳng `SepayMatchingService.sweep` trong bọc platform của nhịp
  * như `SepayMatchingScheduler.sweepTick` làm), khung định tuyến là
@@ -72,8 +72,8 @@ import { WorkerPaymentSpaceScope } from '../../../src/worker-payment-space-scope
  * ở đó. Khuôn cấp phát + áp migration chép theo spec khung định
  * tuyến (`test/integration/db/space-routing.int-spec.ts`).
  */
-const CP_DATABASE = 'lms_test_cp_td1';
-const CENTRE_DATABASE = 'lms_test_centre_td1';
+const CP_DATABASE = 'giaokhoa_test_cp_td1';
+const CENTRE_DATABASE = 'giaokhoa_test_centre_td1';
 const tag = randomUUID().slice(0, 8);
 const CENTRE_SLUG = `trung-tam-rieng-td1-${tag}`;
 const SHARED_SLUG = `trung-tam-chung-td1-${tag}`;
@@ -247,7 +247,7 @@ describe('Kích hoạt ghi danh trả phí theo không gian của payment (integ
     itemId: string;
   }): Promise<{ paymentId: string; code: string }> {
     const paymentId = uid();
-    const code = `LMSTD1${randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase()}`;
+    const code = `GKHTD1${randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase()}`;
     await sharedPg.query(
       `INSERT INTO payments (id, account_id, tenant_id, user_id, amount, currency, status, gateway, component, item_id, payment_code)
        VALUES ($1, $2, $3, $4, ${FEE_AMOUNT}, 'VND', 'pending', 'sepay', $5, $6, $7)`,
@@ -367,7 +367,7 @@ describe('Kích hoạt ghi danh trả phí theo không gian của payment (integ
         },
         {
           slug: BROKEN_SLUG, name: 'Trung tâm lỗi td1', kind: 'center', status: 'active',
-          database_name: 'lms_test_centre_td1_broken', storage_mode: 'dedicated', connection_role_ref: businessRole,
+          database_name: 'giaokhoa_test_centre_td1_broken', storage_mode: 'dedicated', connection_role_ref: businessRole,
           secret_ref: 'env:SPACE_TEST_TD1_MISSING_URL', schema_version: 'v1',
         },
       ]).execute();
@@ -391,7 +391,7 @@ describe('Kích hoạt ghi danh trả phí theo không gian của payment (integ
     } as unknown as ConfigService);
     sharedPool = new TenantAwarePool({ connectionString: process.env.DATABASE_URL! });
     // Handle Kysely trên pool dùng chung (đúng như factory của
-    // module worker) cho repository + writer của `@lms/payments` và
+    // module worker) cho repository + writer của `@giaokhoa/payments` và
     // cho toàn bộ adapter của worker qua khung định tuyến này: điểm
     // phân giải không gian chỉ cần khung, hai adapter kích hoạt
     // và settlement chạy trên handle Kysely định tuyến của khung.

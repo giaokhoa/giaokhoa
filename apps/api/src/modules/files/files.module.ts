@@ -1,7 +1,7 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { FilesRepository } from '@lms/db/repositories/files';
+import { FilesRepository } from '@giaokhoa/db/repositories/files';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { AccessModule } from '../access/access.module';
@@ -14,7 +14,7 @@ import { createObjectStorage } from './storage-factory';
 
 /**
  * Module quản lý file. Từ issue #647, repository của module sống
- * ở `@lms/db` trên Kysely (lớp thuần, không phụ thuộc Nest) nên
+ * ở `@giaokhoa/db` trên Kysely (lớp thuần, không phụ thuộc Nest) nên
  * module lắp nó bằng factory provider trên handle định tuyến theo
  * không gian (`SpaceDatabaseService.routedKysely`) — cùng khuôn
  * lắp repository của pilot control plane.

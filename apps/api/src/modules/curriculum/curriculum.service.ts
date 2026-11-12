@@ -4,7 +4,7 @@ import { ContextsService } from '../access/contexts.service';
 import { CoursesService } from '../courses/courses.service';
 import {
   CurriculumRepository, type CurriculumNodeRow, type CurriculumRow, type LearningOutcomeRow, type SubjectRow,
-} from '@lms/db/repositories/curriculum';
+} from '@giaokhoa/db/repositories/curriculum';
 import { programOutcomeDocText, programOutcomeTextToDoc, type ProgramOutcomeDoc } from './program-datasets';
 
 /**
@@ -57,7 +57,7 @@ export interface CurriculumTreeView {
   nodes: CurriculumNodeView[];
 }
 
-/** Bóc lỗi vi phạm unique của PostgreSQL (23505) dù bộ máy cũ có bọc qua cause hay không. */
+/** Kiểm tra mã unique violation 23505 trên lỗi gốc hoặc trên các lớp `cause` mà adapter có thể bao lại. */
 function isUniqueViolation(err: unknown): boolean {
   let e: unknown = err;
   while (e !== null && typeof e === 'object') {

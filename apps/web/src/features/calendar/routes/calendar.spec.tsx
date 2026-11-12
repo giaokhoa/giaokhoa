@@ -67,7 +67,7 @@ function stubFetch(calls: RecordedCall[]) {
       if (url === '/api/v1/calendar/export-token' && method === 'POST') {
         state.exportToken = {
           token: 'tok123',
-          url: 'https://lms.example/api/v1/calendar/export/01900000-0000-7000-8000-000000000033-tok123.ics',
+          url: 'https://giaokhoa.example/api/v1/calendar/export/01900000-0000-7000-8000-000000000033-tok123.ics',
         };
         return respond(state.exportToken);
       }

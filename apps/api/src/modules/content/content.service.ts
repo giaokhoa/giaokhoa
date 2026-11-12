@@ -1,10 +1,10 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { ContentRepository, type PageRow, type ResourceRow } from '@lms/db/repositories/content';
+import { ContentRepository, type PageRow, type ResourceRow } from '@giaokhoa/db/repositories/content';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { CompletionService } from '../completion/completion.service';
 import { CoursesService } from '../courses/courses.service';
-import type { CmRow } from '@lms/db/repositories/courses';
+import type { CmRow } from '@giaokhoa/db/repositories/courses';
 import { FilesService } from '../files/files.service';
 import { isSafeExternalResourceUrl, sanitizePageContent } from './page-content-sanitizer';
 

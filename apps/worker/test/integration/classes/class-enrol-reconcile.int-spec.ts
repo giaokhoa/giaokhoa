@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { INestApplicationContext } from '@nestjs/common';
-import { sql } from '@lms/db';
+import { sql } from '@giaokhoa/db';
 import { ClassEnrolReconcileProcessor } from '../../../src/processors/class-enrol-reconcile.processor';
 import {
   bootWorkerModuleAsOrdinaryRole,

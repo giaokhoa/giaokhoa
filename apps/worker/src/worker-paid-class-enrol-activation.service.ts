@@ -3,8 +3,8 @@ import {
   CohortMaterializationSurface,
   ensureActiveTenantMembership,
   SharedDomainError,
-} from '@lms/enrol';
-import type { PaidClassEnrolActivationPort } from '@lms/payments';
+} from '@giaokhoa/enrol';
+import type { PaidClassEnrolActivationPort } from '@giaokhoa/payments';
 import { tenantAls } from './db/tenant-als';
 import { WorkerEnrolOutboxService } from './worker-enrol-outbox.service';
 import { WorkerPaymentSpaceScope } from './worker-payment-space-scope.service';

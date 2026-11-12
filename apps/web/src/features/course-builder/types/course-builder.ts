@@ -1,4 +1,4 @@
-import type { Course, CourseContent, CourseGroup, CourseGrouping, GradeItem } from '@lms/contracts';
+import type { Course, CourseContent, CourseGroup, CourseGrouping, GradeItem } from '@giaokhoa/contracts';
 
 /**
  * Kiểu dữ liệu của trang xây dựng khoá học thuộc feature

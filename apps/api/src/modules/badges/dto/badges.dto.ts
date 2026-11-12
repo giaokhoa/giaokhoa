@@ -9,11 +9,11 @@ import {
   type SetBadgeCriteria,
   type SetBadgeStatus,
   type UpdateBadge,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 
 /**
  * Validation của Badges dùng Zod qua Standard Schema — schema nền ở
- * `@lms/contracts` là nguồn sự thật duy nhất.
+ * `@giaokhoa/contracts` là nguồn sự thật duy nhất.
  */
 export { badgeUserSchema, createBadgeSchema, setBadgeCriteriaSchema, setBadgeStatusSchema, updateBadgeSchema };
 export type CreateBadgeDto = CreateBadge;

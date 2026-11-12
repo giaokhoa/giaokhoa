@@ -1,4 +1,4 @@
-import type { ContentBankContent } from '@lms/contracts';
+import type { ContentBankContent } from '@giaokhoa/contracts';
 
 /**
  * Kiểu và hằng của Kho học liệu thuộc feature content-bank

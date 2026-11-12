@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
-import type { QuestionCategory, QuestionView, StimulusView } from '@lms/contracts';
-import { composeMultipleChoiceDocument, splitMultipleChoiceDocument } from '@lms/editor';
+import type { QuestionCategory, QuestionView, StimulusView } from '@giaokhoa/contracts';
+import { composeMultipleChoiceDocument, splitMultipleChoiceDocument } from '@giaokhoa/editor';
 // CSS của editor và KaTeX nạp tại route module này (issue #503): trang
-// soạn câu hỏi là bề mặt duy nhất dựng các editor của @lms/editor (kèm
+// soạn câu hỏi là bề mặt duy nhất dựng các editor của @giaokhoa/editor (kèm
 // panel công thức) và xem trước bằng RichTextView có công thức KaTeX —
 // nạp tại đây để CSS chỉ đi theo hai route tạo/sửa câu hỏi thay vì mọi
-// route như khi nạp ở root. Vỏ trình bày của @lms/editor (lát E1 #248):
+// route như khi nạp ở root. Vỏ trình bày của @giaokhoa/editor (lát E1 #248):
 // khung vùng soạn, trạng thái pressed của toolbar icon, panel công thức
 // dạng overlay; editor không tự nạp CSS nên app nạp tại bề mặt dùng nó.
-import '@lms/editor/editor.css';
+import '@giaokhoa/editor/editor.css';
 import 'katex/dist/katex.min.css';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent } from '@lms/ui/components/card';
-import { FieldGroup } from '@lms/ui/components/field';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent } from '@giaokhoa/ui/components/card';
+import { FieldGroup } from '@giaokhoa/ui/components/field';
 import { PageSkeleton } from '#components/page-skeleton';
 import { ErrorAlert } from '#components/error-alert';
 import { useTranslation } from 'react-i18next';
@@ -66,7 +66,7 @@ export { editorFormContent, editorFormFromView, emptyEditorForm, type QuestionEd
  *    mới tạo qua API mặc định ở `ready`).
  *
  * Mô hình soạn theo loại (chi tiết ở các hàm compose/split của
- * `@lms/editor` và ở `editorFormContent`):
+ * `@giaokhoa/editor` và ở `editorFormContent`):
  * - Multichoice soạn trên MỘT tài liệu thống nhất (thân câu + 4 lựa
  *   chọn trong cùng tài liệu, radio đáp án đúng là metadata ngoài tài
  *   liệu); khi lưu tài liệu được TÁCH thành thân câu / các dòng
@@ -80,7 +80,7 @@ export { editorFormContent, editorFormFromView, emptyEditorForm, type QuestionEd
  *   nhập thuần; mọi mẫu liệt kê đều được chấp nhận (không tỉ trọng).
  *
  * Mọi trường nội dung trình bày đều là tài liệu rich text qua trình
- * soạn của @lms/editor — công thức toán và danh sách đến từ chính
+ * soạn của @giaokhoa/editor — công thức toán và danh sách đến từ chính
  * editor đó; ảnh chèn qua bộ chọn ảnh của lát files (định danh bền
  * `/api/v1/files/<id>/content` nằm trong `attrs.src` của node image).
  * Mô hình form GIỮ NGUYÊN tài liệu Tiptap khi mở câu có sẵn nên câu
@@ -219,7 +219,7 @@ export function QuestionEditorPage({ mode }: { mode: 'new' | 'edit' }) {
         // Không tải được options bổ sung thì giữ nguyên phần đã nạp từ view.
       }
     },
-    [loadCurriculumLinks, loadLinkSubjects],
+    [loadCurriculumLinks, loadLinkSubjects, queryClient],
   );
 
   // Gác khởi tạo một lần của màn soạn: mảng phụ thuộc của hiệu

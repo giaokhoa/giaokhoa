@@ -1,6 +1,6 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
-import { CalendarRepository } from '@lms/db/repositories/calendar';
+import { CalendarRepository } from '@giaokhoa/db/repositories/calendar';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { EventsModule } from '../../infra/events/events.module';
@@ -14,7 +14,7 @@ import { CALENDAR_IMPORT_QUEUE, CALENDAR_REMINDER_QUEUE, CalendarService } from 
 /**
  * Facade của CalendarModule: CalendarService. Khả năng hiển thị chỉ được tính từ các facade Courses/Enrol/Groups.
  *
- * Từ issue #647, repository của module sống ở `@lms/db` trên
+ * Từ issue #647, repository của module sống ở `@giaokhoa/db` trên
  * Kysely (lớp thuần, không phụ thuộc Nest) nên module lắp nó bằng
  * factory provider trên handle định tuyến theo không gian
  * (`SpaceDatabaseService.routedKysely`) — cùng khuôn lắp repository

@@ -1,7 +1,5 @@
 /**
- * Repository của bảng MCP IDEMPOTENCY trên Kysely — chuyển đổi
- * bộ máy cũ → Kysely thuộc nhóm G8 của chiến dịch chuyển tầng dữ
- * liệu (issue #648).
+ * Repository của bảng MCP IDEMPOTENCY trên Kysely.
  *
  * Vai trò: truy cập bảng `mcp_idempotency_keys` của kho trung tâm
  * — tra cứu có xét hạn: dòng hết hạn bị xoá ngay khi chạm tới và

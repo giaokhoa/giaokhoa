@@ -1,9 +1,9 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { uuidIdSchema } from '@lms/contracts';
+import { uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiTags } from '@nestjs/swagger';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { QuestionBanksService } from './question-banks.service';
-import { BANK_KINDS, type BankKind } from '@lms/db/repositories/question-banks';
+import { BANK_KINDS, type BankKind } from '@giaokhoa/db/repositories/question-banks';
 import { MatrixBanksService } from '../quiz/matrix-banks.service';
 import {
   approveMatrixContributionSchema, rejectMatrixContributionSchema,

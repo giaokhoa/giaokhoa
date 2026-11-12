@@ -10,7 +10,7 @@ import {
 describe('Hàm validateEnv (fail-fast)', () => {
   it('chấp nhận env hợp lệ', () => {
     const env = validateEnv({
-      DATABASE_URL: 'postgres://postgres:postgres@localhost:5432/lms',
+      DATABASE_URL: 'postgres://postgres:postgres@localhost:5432/giaokhoa',
       REDIS_URL: 'redis://localhost:6379',
       JWT_SECRET: 'a-secret-with-16+chars',
     });
@@ -25,7 +25,7 @@ describe('Hàm validateEnv (fail-fast)', () => {
 
   it('mặc định DATABASE_SSL là false và phân tích cờ true', () => {
     const base = {
-      DATABASE_URL: 'postgres://postgres:postgres@localhost:5432/lms',
+      DATABASE_URL: 'postgres://postgres:postgres@localhost:5432/giaokhoa',
       REDIS_URL: 'redis://localhost:6379',
       JWT_SECRET: 'a-secret-with-16+chars',
     };
@@ -36,7 +36,7 @@ describe('Hàm validateEnv (fail-fast)', () => {
   it('từ chối giá trị DATABASE_SSL không hợp lệ', () => {
     expect(() =>
       validateEnv({
-        DATABASE_URL: 'postgres://postgres:postgres@localhost:5432/lms',
+        DATABASE_URL: 'postgres://postgres:postgres@localhost:5432/giaokhoa',
         REDIS_URL: 'redis://localhost:6379',
         JWT_SECRET: 'a-secret-with-16+chars',
         DATABASE_SSL: 'yes',
@@ -55,14 +55,14 @@ describe('Hàm validateEnv (fail-fast)', () => {
 
 describe('Hàm databaseConnectionFromEnv', () => {
   it('trả URL thuần khi SSL tắt', () => {
-    expect(databaseConnectionFromEnv('postgres://localhost/lms', false)).toBe(
-      'postgres://localhost/lms',
+    expect(databaseConnectionFromEnv('postgres://localhost/giaokhoa', false)).toBe(
+      'postgres://localhost/giaokhoa',
     );
   });
 
   it('trả PoolConfig có SSL khi cờ đang bật', () => {
-    expect(databaseConnectionFromEnv('postgres://db.example.com/lms', true)).toEqual({
-      connectionString: 'postgres://db.example.com/lms',
+    expect(databaseConnectionFromEnv('postgres://db.example.com/giaokhoa', true)).toEqual({
+      connectionString: 'postgres://db.example.com/giaokhoa',
       ssl: { rejectUnauthorized: false },
     });
   });

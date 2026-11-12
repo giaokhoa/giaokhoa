@@ -1,4 +1,4 @@
-# @lms/db — README nghiệp vụ
+# @giaokhoa/db — README nghiệp vụ
 
 > File này ghi các **quyết định nghiệp vụ quan trọng và còn đang hiệu lực** của package.
 > Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub.
@@ -22,14 +22,14 @@ dưới đây là trạng thái thường trực.
 
 ## Quyết định nghiệp vụ còn hiệu lực
 
-| Quyết định | Nguồn |
-|---|---|
-| Multi-tenant bằng shared DB: mọi bảng nghiệp vụ mang `tenant_id` và được PostgreSQL **RLS ép fail-closed** (policy theo GUC `app.tenant_id`; thiếu ngữ cảnh tenant = không thấy dữ liệu). Tenant = TRUNG TÂM; trang chính là tenant nền tảng. | Sổ mục A; issue #166, TENANT-0 |
+| Quyết định                                                                                                                                                                                                                                                                                 | Nguồn                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| Multi-tenant bằng shared DB: mọi bảng nghiệp vụ mang `tenant_id` và được PostgreSQL **RLS ép fail-closed** (policy theo GUC `app.tenant_id`; thiếu ngữ cảnh tenant = không thấy dữ liệu). Tenant = TRUNG TÂM; trang chính là tenant nền tảng.                                              | Sổ mục A; issue #166, TENANT-0                      |
 | Khoá chính mặc định **UUIDv7** cho các bảng nghiệp vụ (trừ ngoại lệ đã chốt, vd bảng OAuth của Better Auth). Số lượng bảng/số mặc định uuidv7/số policy RLS là bất biến được spec ở apps/api khoá cứng — thay đổi schema phải cập nhật các đếm đó bằng con số đếm thật trên baseline cuối. | Nền uuidv7 toàn hệ; spec `uuidv7-primary-keys-flow` |
-| Lớp–khoá: một khoá thuộc đúng một lớp (`course.class_id`); roster lớp nằm ở cohort đi kèm lớp (không bảng roster riêng) — schema phải giữ quan hệ này, không tạo đường ghi danh song song thứ hai. | Sổ mục A; issue #184 |
-| Dữ liệu chuẩn GDPT neo bằng UUIDv5 theo khoá tự nhiên; 4 FK từ dữ liệu chuẩn dùng `restrict` (không cascade) để import diff không xoá được dữ liệu đã neo. | Phương án D, chốt 25/10/2026; issue #161 |
-| Dự án xây từ đầu: **reset dữ liệu thoải mái tới khi chốt version** — schema tiến hoá bằng baseline mới, không thiết kế migration giữ dữ liệu live. | Sổ mục F, chốt 23/10/2026 |
-| Hai dòng tiền tách bạch trong schema thanh toán: bản ghi thanh toán gắn tenant sở hữu và tài khoản nhận của chính chủ sở hữu; platform không thu hộ học phí trung tâm. | Sổ mục E; issue #189 |
+| Lớp–khoá: một khoá thuộc đúng một lớp (`course.class_id`); roster lớp nằm ở cohort đi kèm lớp (không bảng roster riêng) — schema phải giữ quan hệ này, không tạo đường ghi danh song song thứ hai.                                                                                         | Sổ mục A; issue #184                                |
+| Dữ liệu chuẩn GDPT neo bằng UUIDv5 theo khoá tự nhiên; 4 FK từ dữ liệu chuẩn dùng `restrict` (không cascade) để import diff không xoá được dữ liệu đã neo.                                                                                                                                 | Phương án D, chốt 25/10/2026; issue #161            |
+| Dự án xây từ đầu: **reset dữ liệu thoải mái tới khi chốt version** — schema tiến hoá bằng baseline mới, không thiết kế migration giữ dữ liệu live.                                                                                                                                         | Sổ mục F, chốt 23/10/2026                           |
+| Hai dòng tiền tách bạch trong schema thanh toán: bản ghi thanh toán gắn tenant sở hữu và tài khoản nhận của chính chủ sở hữu; platform không thu hộ học phí trung tâm.                                                                                                                     | Sổ mục E; issue #189                                |
 
 ## Khung Kysely
 
@@ -38,7 +38,7 @@ dưới đây là trạng thái thường trực.
 - Ba file kiểu của ba kho — `src/types/centre-db.d.ts`,
   `src/types/control-plane-db.d.ts`, `src/types/system-bank-db.d.ts` — được
   **kysely-codegen sinh từ cơ sở dữ liệu thật**, không viết tay và không sửa
-  tay. Lệnh `pnpm --filter @lms/db db:types` dựng ba database từ rỗng bằng
+  tay. Lệnh `pnpm --filter @giaokhoa/db db:types` dựng ba database từ rỗng bằng
   đúng bộ SQL đang mang dữ liệu hiện hành (script `scripts/generate-types.mjs`),
   rồi chạy codegen cho từng kho. CI (job `verify`) chạy lại lệnh này và yêu
   cầu `git diff` trên `src/types/` rỗng — file kiểu lệch khỏi DB thật là CI đỏ.
@@ -91,7 +91,7 @@ dưới đây là trạng thái thường trực.
   hay ngữ cảnh của app**, **không giữ kết nối riêng ngoài factory**: mọi
   truy vấn đi qua handle được truyền vào. Ngữ cảnh tenant đến từ pool
   (GUC ở tầng kết nối), không đến từ tham số của repository.
-- Điểm vào test-support (`@lms/db/test-support`, thư mục
+- Điểm vào test-support (`@giaokhoa/db/test-support`, thư mục
   `src/test-support/`) chỉ dùng trong test: dựng DB test từ rỗng bằng SQL
   mang dữ liệu (`buildTestDatabase`), pool test gắn ngữ cảnh tenant theo
   đúng hợp đồng GUC của hệ (`TestTenantPool`), và `createTestKysely(...)`
@@ -130,10 +130,10 @@ dưới đây là trạng thái thường trực.
 - Ngoại lệ có chủ đích: schema control plane (`src/control-plane.schema.ts`,
   issue #580) thuộc **database riêng** trên cùng cụm Postgres với bộ migration
   riêng ở `packages/db/migrations/control-plane/`, nên xuất qua subpath
-  `@lms/db/control-plane` (`src/control-plane.ts`) và KHÔNG qua `src/index.ts` —
+  `@giaokhoa/db/control-plane` (`src/control-plane.ts`) và KHÔNG qua `src/index.ts` —
   đưa vào barrel chung sẽ làm bộ migration của kho nghiệp vụ sinh lệnh cho các
   bảng control plane và ngược lại. Kho ngân hàng hệ thống theo cùng khuôn qua
-  `@lms/db/system-bank`. Factory và kiểu handle của từng kho đi theo đúng các
+  `@giaokhoa/db/system-bank`. Factory và kiểu handle của từng kho đi theo đúng các
   điểm vào này.
 - Subpath repository khai bằng **một** wildcard duy nhất
   (`"./repositories/*"` trong `package.json`, một dòng `paths` wildcard

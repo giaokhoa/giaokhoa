@@ -2,7 +2,7 @@ import { forwardRef, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { AuthRepository } from '@lms/db/repositories/auth';
+import { AuthRepository } from '@giaokhoa/db/repositories/auth';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { CacheInfraModule } from '../../infra/cache/cache-infra.module';
@@ -43,7 +43,7 @@ import { JwtAuthStrategy, LocalAuthStrategy } from './strategies';
   ],
   controllers: [AuthController, OAuthController],
   providers: [
-    // AuthRepository sống ở `@lms/db` (lớp thuần trên Kysely, issue
+    // AuthRepository sống ở `@giaokhoa/db` (lớp thuần trên Kysely, issue
     // #641) nên module lắp nó bằng factory provider: handle là
     // facade định tuyến theo không gian `routedKysely` — cùng khuôn
     // lắp ráp với ControlPlaneRepository ở ControlPlaneModule.

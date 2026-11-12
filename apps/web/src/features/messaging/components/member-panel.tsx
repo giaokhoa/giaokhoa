@@ -1,12 +1,12 @@
 import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { Ban, Check, Info, MessageCircle, Trash, UserPlus, X } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@lms/ui/components/avatar';
-import { Badge } from '@lms/ui/components/badge';
+import { Avatar, AvatarFallback } from '@giaokhoa/ui/components/avatar';
+import { Badge } from '@giaokhoa/ui/components/badge';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from '@lms/ui/components/dropdown-menu';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@lms/ui/components/sheet';
+} from '@giaokhoa/ui/components/dropdown-menu';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@giaokhoa/ui/components/sheet';
 import { useTranslation } from 'react-i18next';
 import type { ConversationView, MemberPanelContext, MemberPanelEntry } from '../types/types';
 import { CHAT_MENU_CONTENT_CLASS, CHAT_MENU_ITEM_CLASS, initialsOf } from '../utils/utils';
@@ -212,7 +212,7 @@ export function MemberActionMenu({
       >
         {children}
       </DropdownMenuTrigger>
-      {/* Bề rộng + không xuống dòng theo hằng ở utils: mặc định của @lms/ui ghim bề rộng theo avatar hẹp làm nhãn bẻ nhiều dòng. */}
+      {/* Bề rộng + không xuống dòng theo hằng ở utils: mặc định của @giaokhoa/ui ghim bề rộng theo avatar hẹp làm nhãn bẻ nhiều dòng. */}
       <DropdownMenuContent align="start" sideOffset={4} className={CHAT_MENU_CONTENT_CLASS}>
         {canMessageNow ? (
           <DropdownMenuItem className={CHAT_MENU_ITEM_CLASS} onClick={() => onMessageMember(entry.userId)}>

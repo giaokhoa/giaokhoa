@@ -3,8 +3,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client, Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createCentreKysely, sql, type CentreDb } from '@lms/db';
-import { createControlPlaneKysely } from '@lms/db/control-plane';
+import { createCentreKysely, sql, type CentreDb } from '@giaokhoa/db';
+import { createControlPlaneKysely } from '@giaokhoa/db/control-plane';
 import { SpaceRoutingError } from '../../../src/db/routing/space-connection-resolver';
 import { SpaceDatabaseService } from '../../../src/db/routing/space-database.service';
 import { emitSpaceRegistryChanged } from '../../../src/db/routing/space-routing-events';
@@ -19,8 +19,8 @@ import { TenantAwarePool } from '../../../src/db/tenant-pool';
  *
  * Môi trường của ca tự cấp phát trên cùng cụm với database test
  * của worker, toàn bộ bằng TÊN MỚI của riêng đợt này: một database
- * control plane (`lms_test_cp_581w`) với role riêng và một kho
- * riêng (`lms_test_centre_w_581`) có đúng một role ứng dụng riêng
+ * control plane (`giaokhoa_test_cp_581w`) với role riêng và một kho
+ * riêng (`giaokhoa_test_centre_w_581`) có đúng một role ứng dụng riêng
  * (CONNECT của PUBLIC bị thu hồi, baseline nghiệp vụ áp bằng
  * chính role chủ kho). Worker chưa có kết nối control plane dùng
  * chung nên service của worker tự giữ pool đọc sổ từ biến
@@ -31,7 +31,7 @@ import { TenantAwarePool } from '../../../src/db/tenant-pool';
  * hồi quy cho bản sao phía worker, dựng đúng hình hai ca phía
  * API: (1) sổ đổi role/bí mật của kho sau khi pool đã tạo thì lần
  * lấy handle kế tiếp kết nối bằng role mới — cần một role thứ hai
- * của kho (`lms_centre_w2_581_app`, có CONNECT vào kho) làm đích
+ * của kho (`giaokhoa_centre_w2_581_app`, có CONNECT vào kho) làm đích
  * đổi sổ; (2) trung tâm kho riêng đã chuẩn bị mà pool bị đóng vì
  * nhàn rỗi thì truy vấn qua handle định tuyến trong ngữ cảnh còn
  * mang slug bị từ chối (fail-closed) — ca này dựng một service
@@ -42,17 +42,17 @@ import { TenantAwarePool } from '../../../src/db/tenant-pool';
  * chạy local bằng PG16): PG18 — bản ở CI và production — có sẵn
  * hàm này, shim sẽ che mất hàm gốc nên tuyệt đối không áp ở đó.
  */
-const CP_DATABASE = 'lms_test_cp_581w';
-const CP_ROLE = 'lms_cp_test_581w';
+const CP_DATABASE = 'giaokhoa_test_cp_581w';
+const CP_ROLE = 'giaokhoa_cp_test_581w';
 const CP_PASSWORD = 'cp-test-581w';
-const CENTRE_DATABASE = 'lms_test_centre_w_581';
-const CENTRE_ROLE = 'lms_centre_w_581_app';
+const CENTRE_DATABASE = 'giaokhoa_test_centre_w_581';
+const CENTRE_ROLE = 'giaokhoa_centre_w_581_app';
 const CENTRE_PASSWORD = 'centre-w-581';
 const CENTRE_SLUG = 'trung-tam-w-581';
 const SHARED_SLUG = 'trang-chinh';
 const CENTRE_TENANT_ID = '01958100-0000-7000-8000-0000000000d4';
 /** Role thứ hai của kho riêng phía worker — đích đổi sổ của ca hồi quy xoay role/bí mật sau khi pool đã tạo. */
-const CENTRE2_ROLE = 'lms_centre_w2_581_app';
+const CENTRE2_ROLE = 'giaokhoa_centre_w2_581_app';
 const CENTRE2_PASSWORD = 'centre-w2-581';
 /** Id dòng ghi hợp lệ qua phiên của ca bị-thu-hồi (ghi vào kho riêng), phân biệt với dòng ghi qua handle định tuyến phải bị từ chối. */
 const SESSION_ROW_ID = '01958100-0000-7000-8000-0000000000e6';

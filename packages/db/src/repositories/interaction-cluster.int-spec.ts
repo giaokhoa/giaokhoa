@@ -14,7 +14,7 @@ import { SocialRepository } from './social';
  *
  * Database kho trung tâm được dựng từ rỗng bằng chính cầu nối
  * migration của package (carrier đóng băng) trên cụm PostgreSQL
- * thật của môi trường test (biến `LMS_DB_TEST_ADMIN_URL` ghi đè
+ * thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè
  * cụm khi cần, mặc định suy từ `DATABASE_URL` của package). Mọi ca
  * chạy qua các repository production trong `repositories/` —
  * không mô phỏng handle.
@@ -31,10 +31,10 @@ import { SocialRepository } from './social';
  * (commit đủ / rollback sạch).
  */
 const adminUrl =
-  process.env.LMS_DB_TEST_ADMIN_URL ??
+  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : '');
 
-const TEST_DB = 'lms_db_g7_647';
+const TEST_DB = 'giaokhoa_db_g7_647';
 
 const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 /** Các định danh cố định cho dữ kiện mẫu; mỗi describe dùng dải riêng để các ca không giẫm nhau. */
@@ -52,7 +52,7 @@ let files: FilesRepository;
 
 beforeAll(async () => {
   if (!adminUrl) {
-    throw new Error('Thiếu kết nối quản trị cho spec tích hợp G7: đặt LMS_DB_TEST_ADMIN_URL hoặc DATABASE_URL.');
+    throw new Error('Thiếu kết nối quản trị cho spec tích hợp G7: đặt GIAOKHOA_DB_TEST_ADMIN_URL hoặc DATABASE_URL.');
   }
   const url = await buildTestDatabase({ adminUrl, database: TEST_DB, store: 'centre' });
   pool = new Pool({ connectionString: url });

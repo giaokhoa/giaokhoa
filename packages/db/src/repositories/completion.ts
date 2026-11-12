@@ -1,7 +1,5 @@
 /**
- * Repository của cụm HOÀN THÀNH (completion) trên Kysely — một phần
- * của nhóm G9 trong chiến dịch chuyển tầng dữ liệu sang Kysely
- * (issue #649).
+ * Repository của cụm HOÀN THÀNH (completion) trên Kysely.
  *
  * Vai trò: mọi truy cập tới bốn bảng của miền hoàn thành tập trung
  * ở đây:

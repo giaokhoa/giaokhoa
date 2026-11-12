@@ -3,7 +3,7 @@ import {
   COURSE_CARD_COLORS,
   type CourseCardColor,
   type CourseCardPrefView,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 import { queryKeys } from '#lib/query-keys';
 

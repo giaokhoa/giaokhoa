@@ -5,8 +5,8 @@ import type {
   PinVersionUpdatePreview,
   QuestionView,
   ExamPinOverrideView as QuizOverrideView,
-} from '@lms/contracts';
-import { extractRichTextPlainText } from '@lms/contracts';
+} from '@giaokhoa/contracts';
+import { extractRichTextPlainText } from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 import type {
   AttemptView,

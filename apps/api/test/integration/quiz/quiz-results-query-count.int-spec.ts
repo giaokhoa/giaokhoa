@@ -3,9 +3,9 @@ import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { v7 as uuidv7 } from 'uuid';
 import { QuestionBanksService } from '../../../src/modules/questions/question-banks.service';
-import { QuestionsRepository } from '@lms/db/repositories/questions';
+import { QuestionsRepository } from '@giaokhoa/db/repositories/questions';
 import { QuestionsService } from '../../../src/modules/questions/questions.service';
-import { QuizRepository } from '@lms/db/repositories/quiz';
+import { QuizRepository } from '@giaokhoa/db/repositories/quiz';
 import { QuizService } from '../../../src/modules/quiz/quiz.service';
 import {
   STRONG_PASSWORD, adminToken, assignRole, createTestApp, createUserViaApi, http, login, roleIdByShortname,

@@ -47,12 +47,12 @@
  *     context trước rồi mới đóng hai pool (context đóng sau cùng ở
  *     các lượt trước không còn giữ tham chiếu tới pool đã đóng).
  *   - Harness không đụng `worker.smoke.spec.ts` và không đổi cách ly
- *     DB của suite (`lms_test_worker` riêng, tách khỏi `lms_test_api`).
+ *     DB của suite (`giaokhoa_test_worker` riêng, tách khỏi `giaokhoa_test_api`).
  */
 import type { INestApplicationContext } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Pool } from 'pg';
-import { createCentreKysely, type CentreDb } from '@lms/db';
+import { createCentreKysely, type CentreDb } from '@giaokhoa/db';
 import { TenantAwarePool } from '../../src/db/tenant-pool';
 import { SpaceDatabaseService } from '../../src/db/routing/space-database.service';
 import { WorkerModule } from '../../src/worker.module';

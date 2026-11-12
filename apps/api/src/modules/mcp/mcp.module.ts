@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { McpIdempotencyRepository } from '@lms/db/repositories/mcp-idempotency';
+import { McpIdempotencyRepository } from '@giaokhoa/db/repositories/mcp-idempotency';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { EventsModule } from '../../infra/events/events.module';
@@ -35,7 +35,7 @@ import { McpDepsService } from './mcp-deps.service';
   // vòng phụ thuộc.
   imports: [QuestionsModule, UsersModule, EventsModule, BetterAuthModule, CurriculumModule, TenantsModule, ExamsModule, QuizModule, SpaceRoutingModule],
   providers: [
-    // Repository của package @lms/db chạy trên handle Kysely đã định
+    // Repository của package @giaokhoa/db chạy trên handle Kysely đã định
     // tuyến theo không gian (issue #648).
     {
       provide: McpIdempotencyRepository,

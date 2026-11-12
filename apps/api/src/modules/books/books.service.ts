@@ -1,12 +1,12 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, type OnModuleInit } from '@nestjs/common';
-import type { BookDatasetStatus, BookImportResult } from '@lms/contracts';
+import type { BookDatasetStatus, BookImportResult } from '@giaokhoa/contracts';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { ContextsService } from '../access/contexts.service';
 import { CoursesService } from '../courses/courses.service';
-import { CurriculumRepository, type SubjectRow } from '@lms/db/repositories/curriculum';
+import { CurriculumRepository, type SubjectRow } from '@giaokhoa/db/repositories/curriculum';
 import { programOutcomeDocText } from '../curriculum/program-datasets';
 import { CURRICULUM_MANAGE, CURRICULUM_VIEW } from '../curriculum/curriculum.service';
-import { BookRepository, type BookNodeRow, type BookRow } from '@lms/db/repositories/books';
+import { BookRepository, type BookNodeRow, type BookRow } from '@giaokhoa/db/repositories/books';
 import {
   loadBookDataset, bookDatasetByKey, bookRecordHash, BOOK_DATASETS, type BookDatasetDef, type BookRecord,
 } from './book-datasets';

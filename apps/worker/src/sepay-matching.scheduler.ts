@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
-import { SepayMatchingService } from '@lms/payments';
+import { SepayMatchingService } from '@giaokhoa/payments';
 import { tenantAls } from './db/tenant-als';
 
 /** Nhịp quét sự kiện IPN chờ matching — giữ đúng nhịp của consumer phía API trước đây. */
@@ -11,7 +11,7 @@ const BATCH_SIZE = 20;
 /**
  * Điểm quét matching IPN SePay ở worker (issue con #539 của #522):
  * quét bảng `payment_provider_events` theo nhịp và giao cho
- * `SepayMatchingService` của package dùng chung `@lms/payments`.
+ * `SepayMatchingService` của package dùng chung `@giaokhoa/payments`.
  *
  * Flow: mỗi nhịp 1.000 ms → gọi `SepayMatchingService.sweep(20)` —
  * quét tối đa 20 sự kiện đang chờ (trạng thái `received`, hoặc

@@ -14,7 +14,7 @@ import { ResendMailService } from './resend-mail.service';
  * Khâu gửi mail auth thật nằm ở phía worker (issue #517): relay
  * outbox duy nhất phát dòng `auth_mail_requested` thành job trên
  * hàng đợi, processor ở worker dựng nội dung bằng template dùng
- * chung ở `@lms/contracts` và gửi qua transport Resend phía worker.
+ * chung ở `@giaokhoa/contracts` và gửi qua transport Resend phía worker.
  * Tiến trình API không còn consumer polling cho mail auth.
  *
  * Module không phụ thuộc module auth (đường phụ thuộc chạy ngược lại:

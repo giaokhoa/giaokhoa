@@ -1,6 +1,6 @@
 /**
  * Kiểm thử khôi phục định kỳ của đội kho (issue #586) — script CLI
- * chạy bằng `pnpm --filter @lms/api fleet:restore-test [--space <slug>]`:
+ * chạy bằng `pnpm --filter @giaokhoa/api fleet:restore-test [--space <slug>]`:
  *
  * 1. Chọn kho: theo slug được chỉ định, hoặc theo vòng xoay công
  *    bằng (kho đang hoạt động có lượt kiểm thử cũ nhất — xem
@@ -147,7 +147,7 @@ export async function runFleetRestoreTest(options: FleetRestoreTestOptions = {})
     }
 
     const plainPath = join(backupDir, `.restore-${runId}.dump`);
-    const tempDatabase = `lms_restore_test_${space.slug.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}_${runId.replace(/\D/g, '').slice(0, 14)}`;
+    const tempDatabase = `giaokhoa_restore_test_${space.slug.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}_${runId.replace(/\D/g, '').slice(0, 14)}`;
     writeFileSync(plainPath, plain);
     const admin = new Client({ connectionString: retargetUrl(adminUrl, 'postgres') });
     // Cờ mở kết nối thật: các thao tác dọn trên client quản trị ở

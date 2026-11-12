@@ -21,9 +21,9 @@ const DEDICATED_TARGET: ResolvedSpaceConnection = {
   spaceId: 'id-dang-ky-a',
   status: 'active',
   mode: 'dedicated',
-  databaseName: 'lms_centre_a',
+  databaseName: 'giaokhoa_centre_a',
   connectionRole: 'centre_a_app',
-  connectionString: 'postgres://centre_a_app:pw@db.internal:5432/lms_centre_a',
+  connectionString: 'postgres://centre_a_app:pw@db.internal:5432/giaokhoa_centre_a',
   schemaVersion: 'v3',
 };
 
@@ -32,8 +32,8 @@ const SHARED_TARGET: ResolvedSpaceConnection = {
   slug: 'truong-mac-dinh',
   spaceId: 'id-dang-ky-truong',
   mode: 'shared',
-  databaseName: 'lms_shared',
-  connectionRole: 'lms_app',
+  databaseName: 'giaokhoa_shared',
+  connectionRole: 'giaokhoa_app',
   connectionString: undefined,
 };
 

@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
-import { uuidIdSchema } from '@lms/contracts';
+import { uuidIdSchema } from '@giaokhoa/contracts';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
@@ -13,7 +13,7 @@ import { AuthService, type PasswordLoginOutcome } from './auth.service';
 import { BetterAuthService } from './better-auth/better-auth.service';
 
 
-export const SESSION_COOKIE = 'lms_session';
+export const SESSION_COOKIE = 'giaokhoa_session';
 
 function sessionCookieOf(req: Request): string | undefined {
   const header = req.headers.cookie;

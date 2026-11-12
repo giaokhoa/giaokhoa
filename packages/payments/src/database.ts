@@ -1,15 +1,15 @@
-import type { CentreDb, CentreTx } from '@lms/db';
+import type { CentreDb, CentreTx } from '@giaokhoa/db';
 
 /**
- * Kiểu handle cơ sở dữ liệu của package `@lms/payments`.
+ * Kiểu handle cơ sở dữ liệu của package `@giaokhoa/payments`.
  *
  * Package dùng chung không sở hữu kết nối: handle thật do tiến trình
  * chủ (apps/api hôm nay; apps/worker) khởi tạo qua factory của
- * `@lms/db` trên chính schema dùng chung và tiêm vào các service của
+ * `@giaokhoa/db` trên chính schema dùng chung và tiêm vào các service của
  * package qua provider `useFactory` của module chủ (handle định tuyến
  * `routedKysely` của khung định tuyến theo không gian).
  *
- * Kiểu này neo vào handle kho trung tâm của `@lms/db` thay vì một
+ * Kiểu này neo vào handle kho trung tâm của `@giaokhoa/db` thay vì một
  * khai báo quan hệ riêng của từng tiến trình chủ như trước, vì hai
  * lý do: (1) mọi bảng của package đều nằm trong kho trung tâm và
  * kiểu sinh codegen của kho đó là nguồn sự thật duy nhất cho hình

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { uuidIdSchema } from './ids.js';
 
 /**
- * Hợp đồng API Curriculum (port từ giaokhoa, chương trình GDPT 2018):
+ * Hợp đồng API chương trình GDPT 2018 giữa frontend và backend:
  * subjects → curricula (duy nhất theo cặp môn + khối 1–12) →
  * curriculum_nodes (cây) → learning_outcomes (yêu cầu cần đạt).
  * Môn học neo vào một context (như question category của ngân hàng câu hỏi):

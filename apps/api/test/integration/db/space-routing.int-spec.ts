@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createCentreKysely, sql, type CentreDb } from '@lms/db';
+import { createCentreKysely, sql, type CentreDb } from '@giaokhoa/db';
 import { SpaceRoutingError } from '../../../src/db/routing/space-connection-resolver';
 import { emitSpaceRegistryChanged } from '../../../src/db/routing/space-routing-events';
 import { SpaceDatabaseService } from '../../../src/db/routing/space-database.service';
@@ -19,8 +19,8 @@ import { tenantAls } from '../../../src/modules/tenants/tenant-als';
  *
  * Môi trường của ca tự cấp phát trên cùng cụm với database nghiệp
  * vụ test, toàn bộ bằng TÊN MỚI của riêng đợt này: một database
- * control plane (`lms_test_cp_581`) với role riêng, HAI database
- * kho riêng (`lms_test_centre_a_581`, `lms_test_centre_b_581`) —
+ * control plane (`giaokhoa_test_cp_581`) với role riêng, HAI database
+ * kho riêng (`giaokhoa_test_centre_a_581`, `giaokhoa_test_centre_b_581`) —
  * mỗi kho có ĐÚNG MỘT role ứng dụng riêng, CONNECT của PUBLIC bị
  * thu hồi và chỉ cấp lại cho role của kho đó, baseline nghiệp vụ
  * được áp vào từng kho bằng chính role chủ kho như đường triển
@@ -48,21 +48,21 @@ import { tenantAls } from '../../../src/modules/tenants/tenant-als';
  * ngữ cảnh cũ mà truy vấn/ghi; (2) sổ đổi role/bí mật của một kho
  * SAU khi pool đã tạo thì lần lấy handle kế tiếp phải kết nối
  * bằng role mới — ca cần thêm một role thứ hai của kho A
- * (`lms_centre_a2_581_app`, có CONNECT vào kho A như một role của
+ * (`giaokhoa_centre_a2_581_app`, có CONNECT vào kho A như một role của
  * kho thật được cấp phát) để làm đích đổi sổ.
  *
  * Shim `uuidv7()` chỉ áp khi server PostgreSQL dưới 18 (môi trường
  * chạy local bằng PG16): PG18 — bản ở CI và production — có sẵn
  * hàm này, shim sẽ che mất hàm gốc nên tuyệt đối không áp ở đó.
  */
-const CP_DATABASE = 'lms_test_cp_581';
-const CP_ROLE = 'lms_cp_test_581';
+const CP_DATABASE = 'giaokhoa_test_cp_581';
+const CP_ROLE = 'giaokhoa_cp_test_581';
 const CP_PASSWORD = 'cp-test-581';
-const CENTRE_A_DATABASE = 'lms_test_centre_a_581';
-const CENTRE_A_ROLE = 'lms_centre_a_581_app';
+const CENTRE_A_DATABASE = 'giaokhoa_test_centre_a_581';
+const CENTRE_A_ROLE = 'giaokhoa_centre_a_581_app';
 const CENTRE_A_PASSWORD = 'centre-a-581';
-const CENTRE_B_DATABASE = 'lms_test_centre_b_581';
-const CENTRE_B_ROLE = 'lms_centre_b_581_app';
+const CENTRE_B_DATABASE = 'giaokhoa_test_centre_b_581';
+const CENTRE_B_ROLE = 'giaokhoa_centre_b_581_app';
 const CENTRE_B_PASSWORD = 'centre-b-581';
 const CENTRE_A_SLUG = 'trung-tam-a-581';
 const CENTRE_B_SLUG = 'trung-tam-b-581';
@@ -71,7 +71,7 @@ const TENANT_A_ID = '01958100-0000-7000-8000-0000000000a1';
 const TENANT_B_ID = '01958100-0000-7000-8000-0000000000b2';
 const SHARED_TENANT_ID = '01958100-0000-7000-8000-0000000000c3';
 /** Role thứ hai của kho A — đích đổi sổ của ca hồi quy xoay role/bí mật sau khi pool đã tạo. */
-const CENTRE_A2_ROLE = 'lms_centre_a2_581_app';
+const CENTRE_A2_ROLE = 'giaokhoa_centre_a2_581_app';
 const CENTRE_A2_PASSWORD = 'centre-a2-581';
 /** Id của dòng ghi mà ca hồi quy bị-thu-hồi cố ý ghi qua handle định tuyến: dòng này không được phép xuất hiện ở bất kỳ kho nào. */
 const REVOKED_MARKER_ID = '01958100-0000-7000-8000-0000000000f6';

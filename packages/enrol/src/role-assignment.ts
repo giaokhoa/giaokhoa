@@ -50,6 +50,8 @@ export function isEnrolManagedAssignment(assignment: { component?: string | null
  */
 export class RoleAssignmentCore {
   /**
+   * Dùng chung handle, outbox và các lõi kiểm tra để gán/gỡ vai tuân thủ cùng luật slot và tách vai.
+   *
    * @param db - tay cầm Kysely của host.
    * @param outbox - cổng ghi outbox của host.
    * @param planLimits - lõi giới hạn slot dùng chung.

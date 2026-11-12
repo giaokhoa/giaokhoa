@@ -10,12 +10,13 @@
  * - Code React (`apps/web`, `packages/ui`, `packages/editor`): preset
  *   `flat.recommended` của eslint-plugin-react-hooks.
  * - File test: preset `recommended` của `@vitest/eslint-plugin`, áp
- *   riêng theo glob của dự án (`*.spec.*`, `*.int-spec.*`,
- *   `*.e2e-spec.*`) — file test không lint chung bộ rule của code
- *   nguồn.
+ *   bổ sung lên rule JS/TS và React nếu khớp glob. Vitest cho phép
+ *   thông báo ở đối số thứ hai của expect; e2e/integration dùng
+ *   helper chứa assertion ngoài callback test.
  *
- * Lint chạy qua script `lint` ở gốc (hoặc `turbo run lint`) và chưa
- * phải cổng chặn trong CI.
+ * Root chỉ điều phối bằng `turbo run lint`; từng workspace chạy `eslint .`.
+ * Cấu hình chung được ESLint tự tìm từ root; mỗi workspace tự quản
+ * baseline `eslint-suppressions.json` cho các lỗi cũ chưa xử lý.
  */
 import js from "@eslint/js";
 import vitest from "@vitest/eslint-plugin";
@@ -59,5 +60,19 @@ export default defineConfig([
       "**/*.e2e-spec.{js,mjs,cjs,ts,tsx}",
     ],
     ...vitest.configs.recommended,
+    rules: {
+      ...vitest.configs.recommended.rules,
+      // Vitest hỗ trợ expect(actual, message), khác giới hạn mặc định của plugin.
+      "vitest/valid-expect": ["error", { maxArgs: 2 }],
+    },
+  },
+  {
+    files: [
+      "**/*.int-spec.{js,mjs,cjs,ts,tsx}",
+      "**/*.e2e-spec.{js,mjs,cjs,ts,tsx}",
+    ],
+    // Test HTTP/integration dùng helper assert chung ngoài callback it/test.
+    // Giữ no-standalone-expect cho unit test để chặn assertion tại top-level.
+    rules: { "vitest/no-standalone-expect": "off" },
   },
 ]);

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { type PinRegradeLogEntry, type PinRegradeResult, type PinVersionUpdatePreview } from '@lms/contracts';
-import { Button } from '@lms/ui/components/button';
+import { type PinRegradeLogEntry, type PinRegradeResult, type PinVersionUpdatePreview } from '@giaokhoa/contracts';
+import { Button } from '@giaokhoa/ui/components/button';
 import { PageSkeleton } from '#components/page-skeleton';
 import { ErrorAlert } from '#components/error-alert';
 import { useTranslation } from 'react-i18next';

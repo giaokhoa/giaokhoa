@@ -32,15 +32,15 @@ import {
   type SortingState,
 } from '@tanstack/react-table';
 
-import { Button } from '@lms/ui/components/button';
+import { Button } from '@giaokhoa/ui/components/button';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuTrigger,
-} from '@lms/ui/components/dropdown-menu';
-import { Input } from '@lms/ui/components/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@lms/ui/components/table';
+} from '@giaokhoa/ui/components/dropdown-menu';
+import { Input } from '@giaokhoa/ui/components/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@giaokhoa/ui/components/table';
 
 // Bộ tính năng của bảng (TanStack Table v9 khai báo tường minh để
 // tree-shake), giữ đúng bộ khung của block dashboard-01 và hướng dẫn
@@ -218,19 +218,24 @@ export function DataTable<T extends Record<string, any>>({
    * hỏi, nút thao tác) bị thay node giữa chừng — sự kiện click/change
    * rơi vào node đã rời cây khiến handler của trang không bao giờ chạy
    * (đã gặp thật ở ngân hàng câu hỏi). Vì vậy bảng chỉ dựng lại cột khi
-   * tập (id + tiêu đề) thay đổi, còn nội dung ô và hàm tính giá trị
-   * luôn đọc bản cột mới nhất qua ref.
+   * tập (id, tiêu đề, khả năng sắp xếp) thay đổi; nội dung ô và hàm tính
+   * giá trị luôn đọc bản cột mới nhất qua ref. Chữ ký JSON chứa đủ
+   * cấu hình cần dựng cột để useMemo không phụ thuộc mảng columns
+   * mới được tạo sau mỗi lần render.
    */
   const columnsRef = React.useRef(columns);
   columnsRef.current = columns;
-  const columnSignature = columns.map((col) => `${col.id}:${col.header}`).join('|');
+  const columnSignature = JSON.stringify(
+    columns.map((col) => [col.id, col.header, Boolean(col.sortValue)]),
+  );
   const tableColumns = React.useMemo(() => {
     const helper = createColumnHelper<typeof features, AnyRow>();
+    const shapes = JSON.parse(columnSignature) as [id: string, header: string, sortable: boolean][];
     return helper.columns(
-      columns.map((col) =>
+      shapes.map(([id, header, sortable]) =>
         helper.accessor(
           (row: AnyRow): string | number => {
-            const latest = columnsRef.current.find((c) => c.id === col.id);
+            const latest = columnsRef.current.find((c) => c.id === id);
             return latest?.filterValue
               ? latest.filterValue(row as T)
               : latest?.sortValue
@@ -238,18 +243,17 @@ export function DataTable<T extends Record<string, any>>({
                 : '';
           },
           {
-            id: col.id,
-            header: col.header,
-            enableSorting: Boolean(col.sortValue),
+            id,
+            header,
+            enableSorting: sortable,
             cell: (info) => {
-              const latest = columnsRef.current.find((c) => c.id === col.id);
+              const latest = columnsRef.current.find((c) => c.id === id);
               return latest ? latest.cell(info.row.original as T) : null;
             },
           },
         ),
       ),
     );
-    // Phụ thuộc có chủ đích vào chữ ký cột — xem ghi chú phía trên.
   }, [columnSignature]);
 
   const table = useTable({

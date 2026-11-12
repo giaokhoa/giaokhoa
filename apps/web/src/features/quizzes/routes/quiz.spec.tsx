@@ -8,12 +8,12 @@ import { QuizAttemptPage } from './quiz-attempt';
 import { QuizResultsPage } from './quiz-results';
 
 /**
- * Giả lập @lms/editor cho spec trang attempt: chỉ cần RichTextView
+ * Giả lập @giaokhoa/editor cho spec trang attempt: chỉ cần RichTextView
  * dựng nội dung rich text thành chữ đọc được — spec trang kiểm LUỒNG
  * NGHIỆP VỤ phía học sinh (hướng dẫn/lời giải hiện theo cổng), cơ chế
  * render Tiptap thật thuộc spec của chính package editor (mẫu P4).
  */
-vi.mock('@lms/editor', async () => {
+vi.mock('@giaokhoa/editor', async () => {
   const React = await import('react');
   interface NodeLike {
     type: string;

@@ -26,7 +26,7 @@ export interface AuthMailPort {
  *
  * Các ghim theo chính sách đã chốt của hệ:
  * - `otpLength: 6` + `expiresIn: 300` (5 phút — khớp câu chữ trong
- *   mẫu mail dùng chung ở `@lms/contracts`, module `auth-mail`) +
+ *   mẫu mail dùng chung ở `@giaokhoa/contracts`, module `auth-mail`) +
  *   `allowedAttempts: 5`.
  * - `disableSignUp: true` — BẮT BUỘC: mặc định của plugin là cho
  *   email lạ nhận OTP rồi TỰ TẠO tài khoản khi đăng nhập bằng mã, tức

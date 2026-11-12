@@ -1,6 +1,6 @@
 /**
  * Định nghĩa ba kho và bước tiền-migration dùng chung cho bộ máy
- * migration của `@lms/db` (runner `run.ts`, hậu kiểm `verify.ts`,
+ * migration của `@giaokhoa/db` (runner `run.ts`, hậu kiểm `verify.ts`,
  * harness test dựng database từ rỗng).
  *
  * Ba kho có bộ carrier riêng (danh sách đóng băng khai tại đây;

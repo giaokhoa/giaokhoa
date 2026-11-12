@@ -19,11 +19,11 @@ import {
   type ResolvePaymentReview,
   type SettleRefund,
   type UpdateCoupon,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 
 /**
  * Validation Payments dùng Zod qua Standard Schema — schema nền ở
- * `@lms/contracts`; số tiền là số nguyên đơn vị nhỏ nhất được ép ngay ở schema
+ * `@giaokhoa/contracts`; số tiền là số nguyên đơn vị nhỏ nhất được ép ngay ở schema
  * (`z.number().int()`), không chờ xuống service.
  * Lát 3 (issue #189): hoàn tiền đi qua vòng đời duyệt nên có thêm
  * schema cho từng bước — tạo yêu cầu (`createRefundSchema`, lý do bắt

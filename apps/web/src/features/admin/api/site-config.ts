@@ -1,4 +1,4 @@
-import type { SiteSetting, SiteSettingAuditEntry } from '@lms/contracts';
+import type { SiteSetting, SiteSettingAuditEntry } from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 
 /**

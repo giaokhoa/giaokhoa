@@ -68,7 +68,7 @@ describe('Huy hiệu và năng lực', () => {
 
   it('cây tiêu chí huy hiệu: ALL cần mọi lá, ANY cần một lá; kích hoạt cần tiêu chí và khoá chúng (badgeslib + §2#14)', async () => {
     const badgeRes = await http(app).post('/api/v1/badges').set('Authorization', `Bearer ${admin}`)
-      .send({ name: 'Finisher', type: 1, issuerName: 'LMS HQ' });
+      .send({ name: 'Finisher', type: 1, issuerName: 'Giáo khoa HQ' });
     const badgeId = badgeRes.body.id as string;
     // Không thể kích hoạt khi không có tiêu chí.
     const early = await http(app).post(`/api/v1/badges/${badgeId}/status`).set('Authorization', `Bearer ${admin}`).send({ status: 1 });
@@ -479,7 +479,7 @@ describe('Huy hiệu và năng lực', () => {
 
     const exported = await http(app).get(`/api/v1/competencies/frameworks/${framework.id}/export`).set('Authorization', `Bearer ${admin}`);
     expect(exported.status).toBe(200);
-    expect(exported.body.format).toBe('lms-competency-framework');
+    expect(exported.body.format).toBe('giaokhoa-competency-framework');
     expect(exported.body.version).toBe(1);
     expect(exported.body.competencies).toHaveLength(3);
 
@@ -523,12 +523,12 @@ describe('Huy hiệu và năng lực', () => {
     const scale = { values: ['Not competent', 'Competent'], proficient: [1] };
     // Sai version → Zod từ chối.
     const wrongVersion = await http(app).post('/api/v1/competencies/frameworks/import').set('Authorization', `Bearer ${admin}`)
-      .send({ format: 'lms-competency-framework', version: 2, framework: { shortName: 'Bad', idNumber: '', description: '', visible: true, taxonomies: 'competency', scale }, competencies: [] });
+      .send({ format: 'giaokhoa-competency-framework', version: 2, framework: { shortName: 'Bad', idNumber: '', description: '', visible: true, taxonomies: 'competency', scale }, competencies: [] });
     expect(wrongVersion.status).toBe(400);
     // Đúng hình dạng nhưng rule tham chiếu competency không phải con trực tiếp → import_invalid, rollback toàn bộ.
     const badRef = await http(app).post('/api/v1/competencies/frameworks/import').set('Authorization', `Bearer ${admin}`)
       .send({
-        format: 'lms-competency-framework', version: 1,
+        format: 'giaokhoa-competency-framework', version: 1,
         framework: { shortName: `Bad import ${Date.now()}`, idNumber: '', description: '', visible: true, taxonomies: 'competency', scale },
         competencies: [
           { key: 'p', shortName: 'P', idNumber: '', description: '', parentKey: null, sortOrder: 0, rule: { outcome: 'complete', pointsRequired: 1, entries: [{ competencyKey: 'x', points: 1, required: true }] } },
@@ -539,7 +539,7 @@ describe('Huy hiệu và năng lực', () => {
     expect(badRef.status).toBe(400);
     expect(badRef.body.code).toBe('competency.import_invalid');
     // Thiếu hẳn trường bắt buộc → 400.
-    const missing = await http(app).post('/api/v1/competencies/frameworks/import').set('Authorization', `Bearer ${admin}`).send({ format: 'lms-competency-framework' });
+    const missing = await http(app).post('/api/v1/competencies/frameworks/import').set('Authorization', `Bearer ${admin}`).send({ format: 'giaokhoa-competency-framework' });
     expect(missing.status).toBe(400);
     // Không framework rác nào được tạo.
     const after = await http(app).get('/api/v1/competencies/frameworks').set('Authorization', `Bearer ${admin}`);

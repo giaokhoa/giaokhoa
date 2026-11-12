@@ -1,6 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
-import type { HealthStatus } from '@lms/contracts';
+import type { HealthStatus } from '@giaokhoa/contracts';
 import { HealthService } from './health.service';
 import { Public } from '../../common/public.decorator';
 

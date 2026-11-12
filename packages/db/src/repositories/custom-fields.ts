@@ -1,7 +1,5 @@
 /**
- * Repository của cụm CUSTOM FIELDS trên Kysely — chuyển đổi
- * bộ máy cũ → Kysely thuộc nhóm G8 của chiến dịch chuyển tầng dữ
- * liệu (issue #648).
+ * Repository của cụm CUSTOM FIELDS trên Kysely.
  *
  * Vai trò: mọi truy cập tới ba bảng custom_field_category,
  * custom_field_field và custom_field_data của kho trung tâm tập

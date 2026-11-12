@@ -93,6 +93,8 @@ export interface RoleConflictAuditReport {
  */
 export class RoleSeparationCore {
   /**
+   * Nhận cổng platform để phép kiểm tra tách vai không bị kết quả RLS thiếu dữ liệu làm lọt vi phạm.
+   *
    * @param db - tay cầm Kysely của host.
    * @param runInPlatformScope - cổng chạy trong ngữ cảnh platform của host.
    */

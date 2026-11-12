@@ -8,7 +8,7 @@ import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { CoursesService } from '../courses/courses.service';
 import { EnrolService } from '../enrol/enrol.service';
 import { GroupsService } from '../groups/groups.service';
-import { CalendarRepository, type CalendarEventRow, type CalendarExportTokenRow, type CalendarSubscriptionRow } from '@lms/db/repositories/calendar';
+import { CalendarRepository, type CalendarEventRow, type CalendarExportTokenRow, type CalendarSubscriptionRow } from '@giaokhoa/db/repositories/calendar';
 import { serializeCalendar } from './domain/ics';
 import { formatRrule, occurrenceStarts, parseRrule } from './domain/rrule';
 

@@ -4,15 +4,9 @@ import type { LearningOutcomeDoc } from '../jsonb-types';
 import type { Json } from '../types/centre-db';
 
 /**
- * Kho dữ liệu câu hỏi trên Kysely (issue #642, nhóm G2 của chiến
- * dịch chuyển tầng dữ liệu sang Kysely): TOÀN BỘ bề mặt của
- * `QuestionsRepository` cũ ở `apps/api`  được chuyển
- * nguyên vẹn sang đây — category, câu hỏi, entry/version, stimulus,
- * đáp án + options theo dạng câu, usage/attempt/step của engine, và
- * các gắn kết chương trình (môn/YCCĐ) kèm bộ lọc khám phá theo
- * chương trình.
+ * Kho dữ liệu câu hỏi trên Kysely: quản lý danh mục, phiên bản câu hỏi, ngữ liệu, đáp án, lượt làm và các gắn kết chương trình dùng cho tìm kiếm và đánh giá.
  *
- * Khuôn truy vấn theo đúng pilot kho control plane (issue #640):
+ * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Cột đọc khai tường minh kèm bí danh camelCase
  *   (`'bank_id as bankId'`) dùng chung cho select và returning —
  *   KHÔNG bật CamelCasePlugin (một nguồn sự thật là database thật).
@@ -30,16 +24,9 @@ import type { Json } from '../types/centre-db';
  *   thường hoặc handle giao dịch) để phía gọi lồng thao tác vào
  *   giao dịch của mình.
  *
- * Bề mặt kiểu dòng (hàng `*Row` xuất khẩu dưới đây) giữ đúng hình
- * dạng `$inferSelect` của repository cũ để phía tiêu thụ trong
- * module questions không đổi hợp đồng: các cột jsonb nội dung
- * không có `$type<>` ở schema bộ máy cũ được giữ là `unknown` như
- * hợp đồng cũ; `content` của YCCĐ giữ kiểu `LearningOutcomeDoc`
- * theo `$type<>` đã khai.
+ * Các kiểu dòng `*Row` là hợp đồng camelCase ở biên API. Các cột jsonb nội dung không có lược đồ chặt giữ kiểu `unknown`; riêng `content` của YCCĐ giữ kiểu `LearningOutcomeDoc`.
  *
- * Điểm chuyển tiếp C-7 đã được hấp thụ ở đợt access (#651):
- * giao dịch `buildBank` nay mở phía Kysely và ghi category mặc
- * định thẳng qua `insertCategory` tại đây.
+ * Luồng `buildBank` mở transaction Kysely và tạo danh mục mặc định bằng `insertCategory` trong cùng giao dịch.
  */
 
 /** Handle kho trung tâm mà repository chấp nhận: thường hoặc trong giao dịch. */
@@ -47,9 +34,7 @@ export type QuestionsDb = CentreDb | CentreTx;
 /** Handle giao dịch kho trung tâm (tham số bắt buộc của các thao tác đa bước). */
 export type QuestionsTx = CentreTx;
 
-// ---------------------------------------------------------------------------
-// Kiểu dòng đọc (hợp đồng công khai — khớp `$inferSelect` của repository cũ)
-// ---------------------------------------------------------------------------
+// Kiểu dòng công khai: tên thuộc tính camelCase ánh xạ từ cột PostgreSQL.
 
 /** Dòng `question_categories`. */
 export interface QCategoryRow {

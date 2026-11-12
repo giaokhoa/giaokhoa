@@ -1,5 +1,5 @@
 import { createAdapter } from '@socket.io/redis-adapter';
-import type { RealtimeEmitter, RealtimeRemoteSocket } from '@lms/messaging';
+import type { RealtimeEmitter, RealtimeRemoteSocket } from '@giaokhoa/messaging';
 import Redis from 'ioredis';
 import { Server } from 'socket.io';
 

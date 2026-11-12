@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import type { Course } from '@lms/contracts';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lms/ui/components/card';
-import { Label } from '@lms/ui/components/label';
+import type { Course } from '@giaokhoa/contracts';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
+import { Label } from '@giaokhoa/ui/components/label';
 import { useTranslation } from 'react-i18next';
 import '#config/i18n';
 import { useApplyBookFrame, useApplyCurriculumFrame, useUpdateCourseFrameInfo } from '../queries/course-builder';

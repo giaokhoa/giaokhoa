@@ -1,6 +1,6 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import type { Job } from 'bullmq';
-import { sql, type CentreDB } from '@lms/db';
+import { sql, type CentreDB } from '@giaokhoa/db';
 import { SpaceDatabaseService } from '../db/routing/space-database.service';
 import { TaskLogService } from '../task-log.service';
 import { tenantAls } from '../db/tenant-als';
@@ -11,7 +11,7 @@ export interface EnrolExpiryResult { checkedAt: string; suspendedIds: string[]; 
  * Danh sách cột đọc của một dòng `user_enrolments` mà processor
  * này nạp — dùng chung cho lượt quét quá hạn và lượt quét cảnh
  * báo: bí danh camelCase tường minh theo khuôn danh sách cột của
- * `@lms/db`.
+ * `@giaokhoa/db`.
  */
 const USER_ENROLMENT_COLUMNS = [
   'id',
@@ -111,7 +111,7 @@ export class EnrolExpiryProcessor extends WorkerHost {
           .values({
             aggregate: 'enrol', type: 'user_enrolment_suspended', tenant_id: tenantId,
             // Cột `payload` jsonb đi qua serialize tường minh kèm
-            // `::jsonb` theo khuôn ghi jsonb của `@lms/db`.
+            // `::jsonb` theo khuôn ghi jsonb của `@giaokhoa/db`.
             payload: sql<CentreDB['outbox_events']['payload']>`${JSON.stringify({
               userId: ue.userId, enrolmentId: ue.id, enrolId: ue.enrolId, reason: 'expired', tenantId,
             })}::jsonb`,
@@ -165,7 +165,7 @@ export class EnrolExpiryProcessor extends WorkerHost {
         .values({
           aggregate: 'enrol', type: 'enrol_expiry_warning', tenant_id: tenantId,
           // Cột `payload` jsonb đi qua serialize tường minh kèm
-          // `::jsonb` theo khuôn ghi jsonb của `@lms/db`.
+          // `::jsonb` theo khuôn ghi jsonb của `@giaokhoa/db`.
           payload: sql<CentreDB['outbox_events']['payload']>`${JSON.stringify({
             userId: ue.userId, enrolmentId: ue.id, enrolId: ue.enrolId, tenantId,
             courseId: instance.courseId, timeEnd: ue.timeEnd.toISOString(),

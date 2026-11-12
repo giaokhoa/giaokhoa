@@ -1,5 +1,5 @@
 import { forwardRef, Module } from '@nestjs/common';
-import { UsersRepository } from '@lms/db/repositories/users';
+import { UsersRepository } from '@giaokhoa/db/repositories/users';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { EventsModule } from '../../infra/events/events.module';
@@ -26,11 +26,7 @@ import { UsersService } from './users.service';
  * thuộc tầng dữ liệu).
  */
 @Module({
-  // SpaceRoutingModule (thêm ở issue #641): UsersRepository đã
-  // chuyển sang `@lms/db` trên Kysely nên module lắp nó bằng
-  // factory provider trên facade định tuyến `routedKysely`; trước
-  // đây repository tự inject handle qua nhà cung cấp kết nối
-  // bộ máy cũ nên module chưa cần cạnh import này.
+  // SpaceRoutingModule cấp `routedKysely` cho UsersRepository; handle phải phân giải kho theo ngữ cảnh của từng request.
   imports: [AccessModule, CustomFieldsModule, EventsModule, SpaceRoutingModule, forwardRef(() => BetterAuthModule), forwardRef(() => AuthModule)],
   controllers: [UsersController],
   providers: [

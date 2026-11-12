@@ -17,7 +17,7 @@ import {
   Undo2,
   type LucideIcon,
 } from 'lucide-react';
-import type { RichTextDocument } from '@lms/contracts';
+import type { RichTextDocument } from '@giaokhoa/contracts';
 import { plainTextExtensions } from './extensions.js';
 import {
   contentForSave,
@@ -28,7 +28,7 @@ import { validateMathLatex } from './math.js';
 
 /**
  * Tài liệu rỗng dùng khi chưa có nội dung: một `doc` chứa đúng một
- * paragraph rỗng — khớp `emptyRichTextDocument` của `@lms/contracts`.
+ * paragraph rỗng — khớp `emptyRichTextDocument` của `@giaokhoa/contracts`.
  */
 const EMPTY_DOCUMENT: RichTextDocument = {
   type: 'doc',
@@ -147,7 +147,7 @@ export interface RichTextEditorProps {
 
 /**
  * Trình soạn thảo rich text dùng chung cho mọi nơi cần nhập nội dung giàu
- * trong LMS, dựng trên Tiptap với bộ extension của hợp đồng
+ * trong Giáo khoa, dựng trên Tiptap với bộ extension của hợp đồng
  * ({@link plainTextExtensions}). Editor chuyên biệt có thể thay bộ
  * extension qua prop `extensions` (xem TSDoc của prop đó) — vỏ này vẫn lo
  * toolbar/panel công thức/đường ảnh cho chúng.
@@ -506,8 +506,8 @@ export function RichTextEditor({
       <div
         className={
           headerTarget
-            ? 'lms-editor-toolbar'
-            : 'lms-editor-toolbar lms-editor-toolbar--sticky'
+            ? 'giaokhoa-editor-toolbar'
+            : 'giaokhoa-editor-toolbar giaokhoa-editor-toolbar--sticky'
         }
         role="toolbar"
         aria-label="Công cụ chỉnh sửa"
@@ -515,7 +515,7 @@ export function RichTextEditor({
       >
         <button
           type="button"
-          className="lms-editor-toolbar__button"
+          className="giaokhoa-editor-toolbar__button"
           title="Hoàn tác"
           aria-label="Hoàn tác"
           disabled={!toolbarState.canUndo}
@@ -526,7 +526,7 @@ export function RichTextEditor({
         </button>
         <button
           type="button"
-          className="lms-editor-toolbar__button"
+          className="giaokhoa-editor-toolbar__button"
           title="Làm lại"
           aria-label="Làm lại"
           disabled={!toolbarState.canRedo}
@@ -535,12 +535,12 @@ export function RichTextEditor({
         >
           <Redo2 />
         </button>
-        <span className="lms-editor-toolbar__separator" aria-hidden="true" />
+        <span className="giaokhoa-editor-toolbar__separator" aria-hidden="true" />
         {TOOLBAR_MARKS.map(({ mark, title, Icon }) => (
           <button
             key={mark}
             type="button"
-            className="lms-editor-toolbar__button"
+            className="giaokhoa-editor-toolbar__button"
             title={title}
             aria-label={title}
             aria-pressed={toolbarState[mark]}
@@ -552,7 +552,7 @@ export function RichTextEditor({
         ))}
         <button
           type="button"
-          className="lms-editor-toolbar__button"
+          className="giaokhoa-editor-toolbar__button"
           title="Danh sách không thứ tự"
           aria-label="Danh sách không thứ tự"
           aria-pressed={toolbarState.bulletList}
@@ -561,10 +561,10 @@ export function RichTextEditor({
         >
           <List />
         </button>
-        <span className="lms-editor-toolbar__separator" aria-hidden="true" />
+        <span className="giaokhoa-editor-toolbar__separator" aria-hidden="true" />
         <button
           type="button"
-          className="lms-editor-toolbar__button"
+          className="giaokhoa-editor-toolbar__button"
           title="Chèn công thức"
           aria-label="Chèn công thức"
           onMouseDown={(event) => event.preventDefault()}
@@ -575,7 +575,7 @@ export function RichTextEditor({
         {onRequestImage ? (
           <button
             type="button"
-            className="lms-editor-toolbar__button"
+            className="giaokhoa-editor-toolbar__button"
             title="Chèn ảnh"
             aria-label="Chèn ảnh"
             onMouseDown={(event) => event.preventDefault()}
@@ -591,8 +591,8 @@ export function RichTextEditor({
     <div
       className={
         size === 'compact'
-          ? 'lms-rich-text-editor lms-rich-text-editor--compact'
-          : 'lms-rich-text-editor'
+          ? 'giaokhoa-rich-text-editor giaokhoa-rich-text-editor--compact'
+          : 'giaokhoa-rich-text-editor'
       }
       data-editor-owner={ownerId}
     >
@@ -616,7 +616,7 @@ export function RichTextEditor({
           onDelete={mathPanel.targetPos !== null ? deleteMathTarget : undefined}
         />
       ) : null}
-      <div className="lms-rich-text-editor__frame">
+      <div className="giaokhoa-rich-text-editor__frame">
         <EditorContent editor={editor} />
       </div>
     </div>

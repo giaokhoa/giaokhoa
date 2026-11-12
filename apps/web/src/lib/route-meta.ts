@@ -2,14 +2,14 @@ import i18n from '#config/i18n';
 
 /**
  * Helper meta() theo route (F-08 của rà soát #133, việc #146): trước
- * đây không route nào xuất meta() và Layout gắn cứng một title LMS
+ * đây không route nào xuất meta() và Layout gắn cứng một title Giáo khoa
  * cho mọi trang. Nay mỗi route module xuất meta() qua các helper này:
- * tiêu đề dạng "<Tên trang> · LMS", lấy từ ĐÚNG resources i18n hiện
+ * tiêu đề dạng "<Tên trang> · Giáo khoa", lấy từ ĐÚNG resources i18n hiện
  * hữu (locale cố định vi như toàn app — xem i18n.ts) để không có thêm
- * một nguồn chuỗi thứ hai. Trang chủ dùng meta riêng ở root ('LMS').
+ * một nguồn chuỗi thứ hai. Trang chủ dùng meta riêng ở root ('Giáo khoa').
  */
 export function titleMeta(title: string): { title: string }[] {
-  return [{ title: `${title} · LMS` }];
+  return [{ title: `${title} · Giáo khoa` }];
 }
 
 /** Tiêu đề từ một khoá của namespace `app` (nav*, signIn…). */

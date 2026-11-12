@@ -1,7 +1,7 @@
 import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { healthStatusSchema, type HealthStatus } from '@lms/contracts';
-import { sql } from '@lms/db';
+import { healthStatusSchema, type HealthStatus } from '@giaokhoa/contracts';
+import { sql } from '@giaokhoa/db';
 import Redis from 'ioredis';
 import { redisTlsFromUrl } from '../../config/env';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';

@@ -3,14 +3,14 @@ import {
   CohortMaterializationSurface,
   type SharedOutboxEventInput,
   type SharedOutboxPort,
-} from '@lms/enrol';
-import { sql, type CentreDB, type CentreTx } from '@lms/db';
+} from '@giaokhoa/enrol';
+import { sql, type CentreDB, type CentreTx } from '@giaokhoa/db';
 import { tenantAls } from './db/tenant-als';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
 
 /**
  * Cổng ghi outbox của tiến trình worker cho bề mặt vật chất hoá
- * cohort dùng chung (`@lms/enrol`) — bản sao đúng hợp đồng cổng mà
+ * cohort dùng chung (`@giaokhoa/enrol`) — bản sao đúng hợp đồng cổng mà
  * dịch vụ outbox của API vẫn giữ, viết lại cho hạ tầng của worker:
  *
  * - `enqueue` ghi dòng sự kiện trong transaction Kysely được truyền
@@ -42,7 +42,7 @@ class WorkerOutboxPort implements SharedOutboxPort {
         aggregate: input.aggregate,
         type: input.type,
         // Cột `payload` jsonb đi qua serialize tường minh kèm
-        // `::jsonb` theo khuôn ghi jsonb của `@lms/db`: driver `pg`
+        // `::jsonb` theo khuôn ghi jsonb của `@giaokhoa/db`: driver `pg`
         // tự stringify object thường nhưng hiểu MẢNG cấp cao nhất
         // là mảng PostgreSQL.
         payload: sql<CentreDB['outbox_events']['payload']>`${JSON.stringify(payload)}::jsonb`,
@@ -58,7 +58,7 @@ class WorkerOutboxPort implements SharedOutboxPort {
 
 /**
  * Host phía worker của bề mặt vật chất hoá cohort dùng chung
- * (`@lms/enrol`) — tầng nối duy nhất giữa consumer hàng đợi đồng bộ
+ * (`@giaokhoa/enrol`) — tầng nối duy nhất giữa consumer hàng đợi đồng bộ
  * cohort ở worker và bề mặt đó (issue con #528 của #519, đợt tách
  * #491).
  *

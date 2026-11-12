@@ -1,4 +1,4 @@
-import type { Capability } from '@lms/contracts';
+import type { Capability } from '@giaokhoa/contracts';
 
 /**
  * Kiểu dữ liệu của hộp thoại ma trận vai trò thuộc feature admin.

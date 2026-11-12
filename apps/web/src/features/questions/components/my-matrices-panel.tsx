@@ -13,8 +13,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
-import { Button } from '@lms/ui/components/button';
-import { Label } from '@lms/ui/components/label';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Label } from '@giaokhoa/ui/components/label';
 
 import { SubjectLite } from '#features/matrices/types/matrix';
 import { useBankMatrices, useBankMatrixContributions, useCopyMatrixToMyBank, useDeleteMatrix, useProposeMatrixContribution, useReviewMatrixContribution } from '../queries/questions';

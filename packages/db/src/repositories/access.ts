@@ -8,18 +8,12 @@ import {
 } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
-import type { UserListStatus } from '@lms/contracts';
+import type { UserListStatus } from '@giaokhoa/contracts';
 
 /**
- * Kho dữ liệu phân quyền trên Kysely (issue #651, nhóm C của chiến
- * dịch chuyển tầng dữ liệu sang Kysely): chuyển nguyên vẹn bề mặt
- * của `AccessRepository` cũ ở `apps/api`  sang đây — bảng
- * `context`, `capabilities`, `role`, `role_assignments`,
- * `role_capabilities` và `config` (khoá `siteadmins`), cùng bốn
- * phép đọc cổng tenant (`tenants`, `tenant_memberships`).
+ * Kho dữ liệu phân quyền trên Kysely: quản lý cây context, capability, vai trò và gán vai; đọc cấu hình quản trị hệ thống cùng thông tin tenant/membership cho các cổng kiểm tra quyền.
  *
- * Khuôn truy vấn theo đúng pilot kho control plane (issue #640) và
- * các repository đã chuyển trước đó:
+ * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Cột đọc khai tường minh kèm bí danh camelCase dùng chung cho
  *   select và returning — KHÔNG bật CamelCasePlugin.
  * - Kiểu dòng công khai khai tay trong file này, khớp hình dạng
@@ -59,9 +53,7 @@ export type AccessDb = CentreDb | CentreTx;
 /** Handle giao dịch kho trung tâm. */
 export type AccessTx = CentreTx;
 
-// ---------------------------------------------------------------------------
-// Kiểu dòng đọc (hợp đồng công khai — khớp `$inferSelect` của repository cũ)
-// ---------------------------------------------------------------------------
+// Kiểu dòng công khai: tên thuộc tính camelCase ánh xạ từ cột PostgreSQL.
 
 /** Dòng `context`. */
 export interface ContextRow {

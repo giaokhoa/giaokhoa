@@ -9,11 +9,11 @@ import {
   type CreateNote,
   type RateItem,
   type SetItemTags,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 
 /**
  * Validation của Social (tags/comments/ratings/notes) dùng Zod qua
- * Standard Schema — schema nền ở `@lms/contracts` là nguồn sự thật duy nhất.
+ * Standard Schema — schema nền ở `@giaokhoa/contracts` là nguồn sự thật duy nhất.
  */
 export {
   addCommentSchema,

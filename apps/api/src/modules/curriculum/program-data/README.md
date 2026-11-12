@@ -118,10 +118,10 @@ Tài liệu này là log đính chính của các dataset trong thư mục này
   cải cách" (nội dung: "Khái lược về cải cách – Khái niệm cải cách
   – Một số biểu hiện của các cuộc cải cách"):
 
-  | Ý theo văn bản nguồn (trang 41) | Ý trong dataset | Kết quả |
-  | --- | --- | --- |
-  | Khái niệm cải cách | "Giải thích được khái niệm cải cách." | Khớp |
-  | Một số biểu hiện của các cuộc cải cách | "Phân tích được những biểu hiện của các cuộc cải cách." | Khớp |
+  | Ý theo văn bản nguồn (trang 41)        | Ý trong dataset                                         | Kết quả |
+  | -------------------------------------- | ------------------------------------------------------- | ------- |
+  | Khái niệm cải cách                     | "Giải thích được khái niệm cải cách."                   | Khớp    |
+  | Một số biểu hiện của các cuộc cải cách | "Phân tích được những biểu hiện của các cuộc cải cách." | Khớp    |
 
 - Kết luận: trong phạm vi bản ghi LS-0047, thiếu 0 ý, thừa 0 ý;
   bản ghi giữ nguyên.
@@ -360,8 +360,7 @@ Tài liệu này là log đính chính của các dataset trong thư mục này
 
 - Văn bản: `ct-diali-official.pdf`, trang 9–29.
 - DL-0001 (không có YCCĐ; tiêu đề mở đầu) và DL-0002 (YCCĐ về vai trò
-  của môn Địa lí và các ngành nghề liên quan; đầu đề `Sử dụng bản
-  đồ` ở cuối nội dung không có YCCĐ) → Môn Địa Lí Với Định Hướng
+  của môn Địa lí và các ngành nghề liên quan; đầu đề `Sử dụng bản đồ` ở cuối nội dung không có YCCĐ) → Môn Địa Lí Với Định Hướng
   Nghề Nghiệp.
 - DL-0003 (YCCĐ về các phương pháp biểu hiện trên bản đồ, sử dụng
   bản đồ, GPS và bản đồ số; đầu đề `Trái Đất` ở cuối nội dung không
@@ -641,10 +640,10 @@ của node chứa bản ghi) — không dòng nào khác thay đổi.
 
 ## Số liệu sau đợt đính chính ngày 28/10/2026 (issue #391)
 
-| Dataset | File | Bản ghi | Dòng YCCĐ hiện hành trong DB |
-|---|---|---:|---:|
-| Lịch sử | program-lichsu.json | 98 | 347 |
-| **Tổng** | — | **2.115** | **7.395** |
+| Dataset  | File                |   Bản ghi | Dòng YCCĐ hiện hành trong DB |
+| -------- | ------------------- | --------: | ---------------------------: |
+| Lịch sử  | program-lichsu.json |        98 |                          347 |
+| **Tổng** | —                   | **2.115** |                    **7.395** |
 
 Phiên bản dump đông cứng sau đợt: `2026-10-28.3` (header dump ghi
 subjects=19, curricula=146, curriculum_nodes=3637,
@@ -933,20 +932,20 @@ các mục dưới đây; tổng sau đợt ở bảng cuối mục.
 
 ### Số liệu sau đợt khôi phục ngày 29/10/2026 (issue #480)
 
-| Dataset | Bản ghi trước → sau | Dòng YCCĐ hiện hành trước → sau |
-|---|---|---|
-| Lịch sử | 98 → 110 | 347 → 403 |
-| Lịch sử và Địa lí THCS | 63 → 64 | 328 → 398 |
-| Công nghệ | 103 → 121 | 456 → 530 |
-| Địa lí | 62 → 63 | 266 → 308 |
-| Sinh học | 133 → 133 | 407 → 433 |
-| Toán | 300 → 314 | 852 → 900 |
-| Khoa học tự nhiên | 130 → 131 | 589 → 596 |
-| Lịch sử và Địa lí tiểu học | 47 → 49 | 162 → 171 |
-| Khoa học | 32 → 32 | 107 → 115 |
-| Tin học | 115 → 115 | 395 → 396 |
-| 11 dataset còn lại | không đổi | không đổi |
-| **Tổng** | **2.115 → 2.164** | **7.395 → 7.736** |
+| Dataset                    | Bản ghi trước → sau | Dòng YCCĐ hiện hành trước → sau |
+| -------------------------- | ------------------- | ------------------------------- |
+| Lịch sử                    | 98 → 110            | 347 → 403                       |
+| Lịch sử và Địa lí THCS     | 63 → 64             | 328 → 398                       |
+| Công nghệ                  | 103 → 121           | 456 → 530                       |
+| Địa lí                     | 62 → 63             | 266 → 308                       |
+| Sinh học                   | 133 → 133           | 407 → 433                       |
+| Toán                       | 300 → 314           | 852 → 900                       |
+| Khoa học tự nhiên          | 130 → 131           | 589 → 596                       |
+| Lịch sử và Địa lí tiểu học | 47 → 49             | 162 → 171                       |
+| Khoa học                   | 32 → 32             | 107 → 115                       |
+| Tin học                    | 115 → 115           | 395 → 396                       |
+| 11 dataset còn lại         | không đổi           | không đổi                       |
+| **Tổng**                   | **2.115 → 2.164**   | **7.395 → 7.736**               |
 
 Phiên bản dump đông cứng sau đợt: `2026-10-29.1` (header dump ghi
 subjects=19, curricula=146, curriculum_nodes=3708,
@@ -1156,16 +1155,16 @@ U+0394 viết liền với chỉ số dưới và mũ độ viết bằng chữ 
 
 ### Số liệu sau đợt khôi phục ngày 29/10/2026 — đợt 2 (issue #501)
 
-| Dataset | Bản ghi trước → sau | Dòng YCCĐ hiện hành trước → sau |
-|---|---|---|
-| Hoá học | 94 → 94 | 359 → 359 |
-| Khoa học tự nhiên | 131 → 131 | 596 → 596 |
-| Sinh học | 133 → 133 | 433 → 433 |
-| Vật lí | 82 → 82 | 245 → 245 |
-| Lịch sử | 110 → 110 | 403 → 403 |
-| Toán | 314 → 314 | 900 → 900 |
-| 15 dataset còn lại | không đổi | không đổi |
-| **Tổng** | **2.164 → 2.164** | **7.736 → 7.736** |
+| Dataset            | Bản ghi trước → sau | Dòng YCCĐ hiện hành trước → sau |
+| ------------------ | ------------------- | ------------------------------- |
+| Hoá học            | 94 → 94             | 359 → 359                       |
+| Khoa học tự nhiên  | 131 → 131           | 596 → 596                       |
+| Sinh học           | 133 → 133           | 433 → 433                       |
+| Vật lí             | 82 → 82             | 245 → 245                       |
+| Lịch sử            | 110 → 110           | 403 → 403                       |
+| Toán               | 314 → 314           | 900 → 900                       |
+| 15 dataset còn lại | không đổi           | không đổi                       |
+| **Tổng**           | **2.164 → 2.164**   | **7.736 → 7.736**               |
 
 Phiên bản dump đông cứng sau đợt: `2026-10-29.2` (header dump ghi
 subjects=19, curricula=146, curriculum_nodes=3696,
@@ -1462,24 +1461,23 @@ tổng số node 3.696 → 3.718 (tăng ròng 22).
   "– Nhịp 4." ở trường nội dung). Khác biệt này nằm ở trường
   `content`, không thuộc tầng YCCĐ và không thuộc phạm vi sửa
   nhãn của đợt này; giữ nguyên hiện trạng.
-- Các ghi nhận ngoài phạm vi của đợt 2 (HH-0024 ý 7, HH-0073 ý
-  5) không thuộc phạm vi đợt 3 và không bị đụng tới trong đợt
+- Các ghi nhận ngoài phạm vi của đợt 2 (HH-0024 ý 7, HH-0073 ý 5) không thuộc phạm vi đợt 3 và không bị đụng tới trong đợt
   này.
 
 ### Số liệu sau đợt khôi phục ngày 29/10/2026 — đợt 3 (issue #502)
 
-| Dataset | Bản ghi trước → sau | Dòng YCCĐ hiện hành trước → sau |
-|---|---|---|
-| Giáo dục công dân | 116 → 116 | 464 → 477 |
-| Tiếng Anh 3–12 | 95 → 102 | 296 → 334 |
-| Tự nhiên và Xã hội | 48 → 48 | 150 → 152 |
-| Ngữ văn | 238 → 238 | 537 → 527 |
-| Âm nhạc | 116 → 116 | 454 → 454 |
-| Mĩ thuật | 100 → 100 | 485 → 485 |
-| Giáo dục thể chất | 22 → 22 | 115 → 115 |
-| Hoạt động trải nghiệm | 105 → 105 | 341 → 341 |
-| 13 dataset còn lại | không đổi | không đổi |
-| **Tổng** | **2.164 → 2.171** | **7.736 → 7.779** |
+| Dataset               | Bản ghi trước → sau | Dòng YCCĐ hiện hành trước → sau |
+| --------------------- | ------------------- | ------------------------------- |
+| Giáo dục công dân     | 116 → 116           | 464 → 477                       |
+| Tiếng Anh 3–12        | 95 → 102            | 296 → 334                       |
+| Tự nhiên và Xã hội    | 48 → 48             | 150 → 152                       |
+| Ngữ văn               | 238 → 238           | 537 → 527                       |
+| Âm nhạc               | 116 → 116           | 454 → 454                       |
+| Mĩ thuật              | 100 → 100           | 485 → 485                       |
+| Giáo dục thể chất     | 22 → 22             | 115 → 115                       |
+| Hoạt động trải nghiệm | 105 → 105           | 341 → 341                       |
+| 13 dataset còn lại    | không đổi           | không đổi                       |
+| **Tổng**              | **2.164 → 2.171**   | **7.736 → 7.779**               |
 
 Phiên bản dump đông cứng sau đợt: `2026-10-29.3` (header dump
 ghi subjects=19, curricula=146, curriculum_nodes=3718,

@@ -1,17 +1,17 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
-import { MessagingRepository } from '@lms/db/repositories/messaging';
+import { MessagingRepository } from '@giaokhoa/db/repositories/messaging';
 import { MessagingRealtimeService } from './messaging-realtime.service';
 import { MessagingNotificationsService } from './messaging-notifications.service';
 
-/** Tóm tắt hiển thị của một user trong các response của messaging (hợp đồng ở @lms/contracts). */
+/** Tóm tắt hiển thị của một user trong các response của messaging (hợp đồng ở @giaokhoa/contracts). */
 export interface PersonSummaryView {
   userId: string;
   displayName: string;
   username: string;
 }
 
-/** Trạng thái quan hệ của một người so với người đang tìm (hợp đồng ở @lms/contracts). */
+/** Trạng thái quan hệ của một người so với người đang tìm (hợp đồng ở @giaokhoa/contracts). */
 export type ContactRelationship = 'contact' | 'pending_incoming' | 'pending_outgoing' | 'blocked' | 'none';
 
 /** Tên hiển thị của một user: "firstName lastName" đã cắt khoảng trắng; cả hai trống thì lùi về username. */

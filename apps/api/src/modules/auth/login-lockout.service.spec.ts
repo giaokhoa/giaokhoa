@@ -1,7 +1,7 @@
 import type { ConfigService } from '@nestjs/config';
 import { describe, expect, it } from 'vitest';
 import type { UsersService } from '../users/users.service';
-import type { AuthRepository } from '@lms/db/repositories/auth';
+import type { AuthRepository } from '@giaokhoa/db/repositories/auth';
 import { LoginLockoutService } from './login-lockout.service';
 
 /**

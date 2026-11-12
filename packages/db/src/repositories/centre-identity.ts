@@ -1,6 +1,5 @@
 /**
- * Repository NHẬN DIỆN TRUNG TÂM trên Kysely — chuyển đổi bộ máy cũ →
- * Kysely của chiến dịch chuyển tầng dữ liệu (issue #641, nhóm G1).
+ * Repository NHẬN DIỆN TRUNG TÂM trên Kysely.
  *
  * Vai trò: mọi truy cập tới ba bảng `centre_identity`,
  * `centre_invites` và `config` (đường đọc danh sách quản trị của

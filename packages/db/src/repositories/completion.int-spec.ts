@@ -15,7 +15,7 @@ import { CompletionRepository } from './completion';
  *
  * Database trung tâm được dựng từ rỗng bằng chính cầu nối migration
  * của package trên cụm PostgreSQL thật của môi trường test (biến
- * `LMS_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ
+ * `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ
  * `DATABASE_URL` của package). Mọi ca chạy qua repository production
  * trong ngữ cảnh tenant qua pool gắn GUC như đường production.
  *
@@ -28,12 +28,12 @@ import { CompletionRepository } from './completion';
  * - Đọc cấu hình của khoá chưa cấu hình trả mặc định `{ method: 1 }`.
  * - Các danh sách theo tập rỗng trả mảng rỗng mà không lỗi.
  */
-const TEST_DATABASE = 'lms_db_g649_completion';
-const TEST_ROLE = 'lms_db_g649_completion';
-const TEST_ROLE_PASSWORD = 'lms_db_g649_completion_pw';
+const TEST_DATABASE = 'giaokhoa_db_g649_completion';
+const TEST_ROLE = 'giaokhoa_db_g649_completion';
+const TEST_ROLE_PASSWORD = 'giaokhoa_db_g649_completion_pw';
 
 const adminUrl =
-  process.env.LMS_DB_TEST_ADMIN_URL ??
+  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
 
 const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -53,7 +53,7 @@ let cm2Id = '';
 beforeAll(async () => {
   if (!adminUrl) {
     throw new Error(
-      'Thiếu kết nối quản trị cho spec tích hợp G9: đặt LMS_DB_TEST_ADMIN_URL hoặc DATABASE_URL.',
+      'Thiếu kết nối quản trị cho spec tích hợp G9: đặt GIAOKHOA_DB_TEST_ADMIN_URL hoặc DATABASE_URL.',
     );
   }
   const adminStoreUrl = await buildTestDatabase({

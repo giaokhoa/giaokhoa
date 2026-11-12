@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { AssignmentsRepository } from '@lms/db/repositories/assignments';
+import { AssignmentsRepository } from '@giaokhoa/db/repositories/assignments';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { EventsModule } from '../../infra/events/events.module';
@@ -19,7 +19,7 @@ import { AssignmentsService } from './assignments.service';
  * dedup + signed URL), Grades (grade item + ghi điểm của hoạt động) và
  * Access (PermissionEvaluator/Contexts) — không vòng phụ thuộc vì không
  * module nào trong số đó phụ thuộc Assignments. Repository của module
- * nằm ở `@lms/db/repositories/assignments` trên Kysely và được dựng
+ * nằm ở `@giaokhoa/db/repositories/assignments` trên Kysely và được dựng
  * bằng factory trên facade định tuyến kho trung tâm
  * (`SpaceDatabaseService.routedKysely`).
  */

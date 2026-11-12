@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { classPublicViewSchema, type ClassPublicView } from '@lms/contracts';
-import { Button, buttonVariants } from '@lms/ui/components/button';
-import { Card, CardContent } from '@lms/ui/components/card';
-import { Skeleton } from '@lms/ui/components/skeleton';
+import { classPublicViewSchema, type ClassPublicView } from '@giaokhoa/contracts';
+import { Button, buttonVariants } from '@giaokhoa/ui/components/button';
+import { Card, CardContent } from '@giaokhoa/ui/components/card';
+import { Skeleton } from '@giaokhoa/ui/components/skeleton';
 import { ErrorAlert } from '#components/error-alert';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { QRCodeSVG } from 'qrcode.react';

@@ -21,7 +21,7 @@
  * Mọi bước đều idempotent: chạy lại ở mỗi lần stack khởi động là an
  * toàn và không đổi dữ kiện. Script KHÔNG tạo bảng — bảng do bộ
  * migration riêng của control plane tạo (chạy qua runner của
- * `@lms/db`).
+ * `@giaokhoa/db`).
  * Chưa cấu hình `CONTROL_PLANE_DATABASE_URL` thì bỏ qua lặng lẽ
  * (thoát 0) để các môi trường chưa dùng control plane không gãy.
  *

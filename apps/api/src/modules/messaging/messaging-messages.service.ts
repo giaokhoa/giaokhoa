@@ -4,8 +4,8 @@ import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { SiteConfigService } from '../site-config/site-config.service';
 import { UsersService } from '../users/users.service';
-import { MessagingRepository, type ConversationRow, type MessageRow, type MessageWithQuoteRow, type ReportRow } from '@lms/db/repositories/messaging';
-import { blankRecalledContent, searchExcerptOf } from '@lms/messaging';
+import { MessagingRepository, type ConversationRow, type MessageRow, type MessageWithQuoteRow, type ReportRow } from '@giaokhoa/db/repositories/messaging';
+import { blankRecalledContent, searchExcerptOf } from '@giaokhoa/messaging';
 import { tenantAls } from '../tenants/tenant-als';
 import { MessagingSendThrottleService } from './messaging-send-throttle.service';
 import { MessagingContactsService } from './messaging-contacts.service';
@@ -760,7 +760,7 @@ export class MessagingMessagesService {
     return {
       conversations: await this.repo.countUnreadConversations(userId),
       // Phạm vi tenant của ngữ cảnh hiện hành truyền tường minh
-      // xuống repository (repository tại `@lms/db` không đọc ALS).
+      // xuống repository (repository tại `@giaokhoa/db` không đọc ALS).
       notifications: await this.repo.countUnreadNotifications(userId, tenantAls.getStore()?.tenantId),
     };
   }

@@ -6,14 +6,14 @@ import {
 import {
   MESSAGING_SOCKET_EVENTS,
   type MessagingSyncRequest, type MessagingSyncResult,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import type { Server, Socket } from 'socket.io';
 import { Public } from '../../common/public.decorator';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
-import { MessagingRepository } from '@lms/db/repositories/messaging';
-import { blankRecalledContent } from '@lms/messaging';
+import { MessagingRepository } from '@giaokhoa/db/repositories/messaging';
+import { blankRecalledContent } from '@giaokhoa/messaging';
 import { MessagingSocketAuth } from './messaging-socket-auth';
-import { conversationRoom, toWireMessage, userRoom } from '@lms/messaging';
+import { conversationRoom, toWireMessage, userRoom } from '@giaokhoa/messaging';
 import { MessagingRealtimeService } from './messaging-realtime.service';
 
 /** Số tin tối đa trả cho mỗi conversation trong một lần đồng bộ (client xin tiếp nếu còn thiếu). */
@@ -36,7 +36,7 @@ const SYNC_MAX_CONVERSATIONS = 50;
  * conversation mình là thành viên. Sự kiện tin mới/đã đọc KHÔNG phát
  * từ đây cũng không phát từ service ghi DB — chúng đi đường outbox →
  * relay duy nhất → hàng đợi ở worker → consumer phân phối theo luật
- * ở `@lms/messaging`, phát qua Redis emitter về adapter của gateway
+ * ở `@giaokhoa/messaging`, phát qua Redis emitter về adapter của gateway
  * này (issue #521). Gateway chỉ xử lý các tương tác theo kết nối:
  * join/leave room, `sync` (xin tin còn thiếu theo seq khi nối lại),
  * `typing`, và ảnh chụp hiện diện ban đầu gửi cho chính socket vừa
@@ -175,6 +175,8 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
    * `typing` không chuyển tiếp. Hội thoại nhóm không bị chạm.
    */
   /**
+   * Kiểm tra quan hệ chặn hai phía cho hội thoại trực tiếp; bỏ qua các hội thoại không phải loại một-một.
+   *
    * @param blockedIdsSource - Nguồn danh sách chặn dùng thay cho tra
    *   trực tiếp: `handleConnection` truyền vào một hàm tải-lười-một-
    *   lần để cả vòng lặp vào room dùng chung đúng một lượt tra; các

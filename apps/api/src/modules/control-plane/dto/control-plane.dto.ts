@@ -9,11 +9,11 @@ import {
   type RecordSpaceSchemaMigrationRun,
   type UpdateSpaceRegistration,
   type UpdateSpaceSchemaRegistry,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 
 /**
  * Validation của module Control Plane dùng Zod qua Standard Schema —
- * schema nền ở `@lms/contracts` là nguồn sự thật duy nhất.
+ * schema nền ở `@giaokhoa/contracts` là nguồn sự thật duy nhất.
  */
 export {
   changeSpaceStatusSchema,

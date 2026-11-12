@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Job } from 'bullmq';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { sql } from '@lms/db';
+import { sql } from '@giaokhoa/db';
 import { tenantAls } from '../db/tenant-als';
 import { SpaceDatabaseService } from '../db/routing/space-database.service';
 

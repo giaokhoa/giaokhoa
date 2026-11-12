@@ -1,5 +1,5 @@
 import { forwardRef, Module, ServiceUnavailableException } from '@nestjs/common';
-import { ControlPlaneRepository } from '@lms/db/repositories/control-plane';
+import { ControlPlaneRepository } from '@giaokhoa/db/repositories/control-plane';
 import { AccessModule } from '../access/access.module';
 import { ControlPlaneConnection } from './control-plane.connection';
 import { ControlPlaneController } from './control-plane.controller';
@@ -20,7 +20,7 @@ import { ControlPlaneRegistryService } from './control-plane.service';
  * (tenants, classes) đọc/ghi thư mục qua đúng một điểm truy cập
  * của database này.
  *
- * Từ pilot Kysely (issue #640), repository sống ở `@lms/db` (lớp
+ * Từ pilot Kysely (issue #640), repository sống ở `@giaokhoa/db` (lớp
  * thuần, không phụ thuộc Nest) nên module lắp nó bằng factory
  * provider: handle lấy từ adapter `ControlPlaneConnection`, và hàm
  * dựng lỗi chưa-cấu-hình là `ServiceUnavailableException` mang mã

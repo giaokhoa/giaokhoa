@@ -6,7 +6,7 @@ import type { AuthMailPort } from './email-otp.plugin';
  * Type của dòng outbox mang yêu cầu gửi mail auth. Consumer là
  * processor trên hàng đợi ở phía worker (relay outbox duy nhất phát
  * dòng thành job theo bảng định tuyến của nó); hợp đồng payload của
- * type này nằm ở `@lms/contracts` (module `auth-mail`).
+ * type này nằm ở `@giaokhoa/contracts` (module `auth-mail`).
  */
 export const AUTH_MAIL_OUTBOX_TYPE = 'auth_mail_requested';
 /** Aggregate của các dòng outbox mail auth. */

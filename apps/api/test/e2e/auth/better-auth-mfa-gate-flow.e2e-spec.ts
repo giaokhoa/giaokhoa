@@ -6,7 +6,7 @@ import { generate } from 'otplib';
 import { Client } from 'pg';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { renderAuthMail, type AuthMailPayload } from '@lms/contracts';
+import { renderAuthMail, type AuthMailPayload } from '@giaokhoa/contracts';
 import type { BetterAuthService } from '../../../src/modules/auth/better-auth/better-auth.service';
 import type { CredentialBridgeService } from '../../../src/modules/auth/better-auth/credential-bridge.service';
 import type { TotpService } from '../../../src/modules/auth/totp.service';
@@ -179,7 +179,7 @@ describe('Cổng MFA thống nhất của Better Auth (user_totp là nguồn duy
   /**
    * Chờ tới khi có mail gửi cho địa chỉ này: nội dung mail được dựng
    * từ dòng outbox `auth_mail_requested` của chính địa chỉ đó bằng
-   * `renderAuthMail` dùng chung ở `@lms/contracts` — hàm mà
+   * `renderAuthMail` dùng chung ở `@giaokhoa/contracts` — hàm mà
    * processor ở phía worker gọi khi gửi thật (khâu gửi đã chuyển
    * sang hàng đợi ở worker, issue #517; dòng outbox được ghi đồng bộ
    * trong request nên thường có ngay).

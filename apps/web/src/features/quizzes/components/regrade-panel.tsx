@@ -20,10 +20,10 @@
  * @param props.setRegradeVersionId - Setter của version đích.
  * @param props.runRegrade - Handler chạy chấm lại (dryRun = chỉ xem trước).
  */
-import type { CourseRosterMember, PinRegradeLogEntry, PinRegradeResult, QuizView } from '@lms/contracts';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lms/ui/components/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@lms/ui/components/select';
+import type { CourseRosterMember, PinRegradeLogEntry, PinRegradeResult, QuizView } from '@giaokhoa/contracts';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@giaokhoa/ui/components/select';
 import { ErrorAlert } from '#components/error-alert';
 import { useTranslation } from 'react-i18next';
 

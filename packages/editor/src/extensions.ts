@@ -101,7 +101,7 @@ const ContinuableImage = Image.extend({
  * Bộ này là nguồn sự thật duy nhất về hình dạng tài liệu mà trình soạn
  * thảo ({@link RichTextEditor}) và trình hiển thị chỉ-đọc
  * ({@link RichTextView}) cùng chấp nhận — khớp với
- * `richTextDocumentSchema` của `@lms/contracts`. Thêm node/mark mới là
+ * `richTextDocumentSchema` của `@giaokhoa/contracts`. Thêm node/mark mới là
  * thay đổi hợp đồng nội dung: phải nới schema ở contracts trong cùng feat
  * và có đường render tương ứng ở phía xem.
  */

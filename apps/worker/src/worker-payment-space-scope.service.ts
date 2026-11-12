@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { type CentreDb } from '@lms/db';
-import { SharedDomainError } from '@lms/enrol';
+import { type CentreDb } from '@giaokhoa/db';
+import { SharedDomainError } from '@giaokhoa/enrol';
 import { tenantAls } from './db/tenant-als';
 import {
   SpaceRoutingError,

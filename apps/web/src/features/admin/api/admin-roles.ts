@@ -9,7 +9,7 @@ import type {
   UpdateRole,
   UserListStatus,
   UserWithAssignmentsListResponse,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 
 /**

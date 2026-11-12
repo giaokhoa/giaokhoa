@@ -79,7 +79,7 @@ function stubFetch(calls: RecordedCall[], pub: unknown, paymentStatus = 'pending
         return respond(
           {
             id: PAYMENT_ID, amount: 1500000, currency: 'VND', status: 'pending', component: 'class_fee',
-            itemId: CLASS_ID, paymentCode: 'LMS7K3QX9P2M', vietqrPayload: '0002010102123856PAYLOAD6304XXXX',
+            itemId: CLASS_ID, paymentCode: 'GKH7K3QX9P2M', vietqrPayload: '0002010102123856PAYLOAD6304XXXX',
           },
           201,
         );
@@ -88,7 +88,7 @@ function stubFetch(calls: RecordedCall[], pub: unknown, paymentStatus = 'pending
         const polls = calls.filter((c) => c.url === url).length;
         return respond({
           id: PAYMENT_ID, amount: 1500000, currency: 'VND', status: polls > 1 ? paymentStatus : 'pending',
-          component: 'class_fee', itemId: CLASS_ID, paymentCode: 'LMS7K3QX9P2M', vietqrPayload: null,
+          component: 'class_fee', itemId: CLASS_ID, paymentCode: 'GKH7K3QX9P2M', vietqrPayload: null,
         });
       }
       if (url === `/api/v1/classes/${CLASS_ID}` && method === 'GET') return respond(CLASS_VIEW_NO_FEE);
@@ -100,7 +100,7 @@ function stubFetch(calls: RecordedCall[], pub: unknown, paymentStatus = 'pending
 }
 
 function renderPublic() {
-  localStorage.setItem('lms.accessToken', 'test-token');
+  localStorage.setItem('giaokhoa.accessToken', 'test-token');
   const router = createMemoryRouter([{ path: '/classes/:id/public', element: <ClassPublicPage /> }], {
     initialEntries: [`/classes/${CLASS_ID}/public`],
   });
@@ -129,7 +129,7 @@ describe('Trang công khai mua gói lớp (CLASS-3)', () => {
     await waitFor(() => {
       expect(calls.some((c) => c.url === `/api/v1/payments/class-fee/${CLASS_ID}` && c.method === 'POST')).toBe(true);
     });
-    expect(await screen.findByText('LMS7K3QX9P2M')).toBeTruthy();
+    expect(await screen.findByText('GKH7K3QX9P2M')).toBeTruthy();
     expect(screen.getByText(/Đang chờ đối soát thanh toán/)).toBeTruthy();
   });
 
@@ -229,7 +229,7 @@ describe('Loader phía server của trang lớp public (HTML đầu mang dữ ki
 
   it('meta dùng tên lớp thật + mô tả công khai khi có dữ kiện loader; không có thì rơi về tiêu đề tĩnh', () => {
     expect(classPublicMeta({ data: { classPublic: PUBLIC_SUMMARY } })).toEqual([
-      { title: 'Lớp 10A1 · LMS' },
+      { title: 'Lớp 10A1 · Giáo khoa' },
       { name: 'description', content: 'Lớp toán nâng cao' },
     ]);
     const fallback = classPublicMeta({ data: { classPublic: null } });
@@ -246,7 +246,7 @@ describe('Loader phía server của trang lớp public (HTML đầu mang dữ ki
           : Promise.resolve(new Response('{}', { status: 404 })),
       ),
     );
-    localStorage.setItem('lms.accessToken', 'test-token');
+    localStorage.setItem('giaokhoa.accessToken', 'test-token');
     const router = createMemoryRouter(
       [{ path: '/classes/:id/public', element: <ClassPublicPage initialPublic={PUBLIC_SUMMARY} /> }],
       { initialEntries: [`/classes/${CLASS_ID}/public`] },
@@ -269,7 +269,7 @@ describe('Màn sửa lớp — đặt học phí (CLASS-3)', () => {
   it('GV nhập học phí và lưu → PATCH mang feeCost là số nguyên đã nhập', async () => {
     const calls: RecordedCall[] = [];
     stubFetch(calls, PUBLIC_PACKAGE);
-    localStorage.setItem('lms.accessToken', 'test-token');
+    localStorage.setItem('giaokhoa.accessToken', 'test-token');
     const router = createMemoryRouter([{ path: '/classes/:id/edit', element: <ClassEditPage /> }], {
       initialEntries: [`/classes/${CLASS_ID}/edit`],
     });

@@ -365,7 +365,7 @@ describe('Trình dựng khoá học (giáo viên)', () => {
     renderCourseBuilder();
 
     const availabilityBox = await screen.findByTestId(`module-availability-${MODULE_ID}`);
-    // Trình sửa điều kiện truy cập nay dùng Select của @lms/ui (không còn
+    // Trình sửa điều kiện truy cập nay dùng Select của @giaokhoa/ui (không còn
     // select native): bấm trigger rồi chọn option theo nhãn hiển thị.
     await userEvent.click(within(availabilityBox).getByLabelText('Loại điều kiện mới'));
     await userEvent.click(await screen.findByRole('option', { name: 'Ngày' }));

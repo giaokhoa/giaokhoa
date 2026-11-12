@@ -1,6 +1,5 @@
 /**
- * Repository của cụm TENANT trên Kysely — chuyển đổi bộ máy cũ →
- * Kysely của chiến dịch chuyển tầng dữ liệu (issue #641, nhóm G1).
+ * Repository của cụm TENANT trên Kysely.
  *
  * Vai trò: mọi truy cập tới ba bảng `tenants`, `tenant_memberships`
  * và `tenant_config` của kho trung tâm tập trung ở đây. Thuần dữ
@@ -8,9 +7,7 @@
  * PermissionEvaluator phía ứng dụng; repository chỉ nhận handle
  * Kysely do tầng ứng dụng truyền vào.
  *
- * Khuôn hình dạng dữ liệu ở biên repository — cùng khuôn pilot kho
- * control plane (xem `control-plane.ts` và playbook trong
- * `AGENTS.md` của package):
+ * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong, truy vấn viết trên interface schema sinh bằng
  *   codegen: tên bảng/cột giữ nguyên snake_case của database.
  * - Bên ngoài, repository trả/nhận hình dạng dòng camelCase như
@@ -213,17 +210,7 @@ function membershipUpdateSet(patch: Partial<TenantMembershipRow>): Updateable<Ce
 export class TenantsRepository {
   constructor(private readonly handle: CentreDb) {}
 
-  /**
-   * Handle gốc của repository (handle Kysely được định tuyến theo
-   * không gian). Tầng service còn đúng một điểm ghép cần handle
-   * thô — uỷ thác bảo đảm membership cho tầng dùng chung
-   * `@lms/enrol` — và điểm đó KHÔNG lấy handle từ đây nữa: tầng
-   * dùng chung đó vẫn chạy trên bộ máy cũ cho tới hạng mục chuyển
-   * đổi của chính nó, nên service tự inject handle bộ máy cũ cho
-   * riêng điểm uỷ thác đó (xem kiểm kê giao dịch trong thân PR
-   * của issue #641). Getter này giữ cho các đường đọc/ghi Kysely
-   * cần handle gốc trong tương lai của chính cụm tenant.
-   */
+  /** Handle Kysely định tuyến theo không gian của repository, dùng khi caller cần ghép truy vấn vào cùng kho. */
   get dbHandle(): CentreDb { return this.handle; }
 
   async insertTenant(v: NewTenant): Promise<TenantRow> {

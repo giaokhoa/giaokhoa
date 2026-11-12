@@ -6,7 +6,7 @@ import type {
   PinVersionUpdateSlotDiff,
   ExamPinOverrideView,
   QuizView,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { CoursesService } from '../courses/courses.service';
@@ -25,7 +25,7 @@ import {
   type ExamPinFeedbackRow,
   type ExamPinOverrideRow,
   type ExamPinRow,
-} from '@lms/db/repositories/quiz';
+} from '@giaokhoa/db/repositories/quiz';
 import { QuizSharedService } from './quiz-shared.service';
 import { QuizAttemptsService } from './quiz-attempts.service';
 import { QUIZ_COMPONENT } from './quiz-shared.service';

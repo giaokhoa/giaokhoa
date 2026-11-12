@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { ContextsService } from '../access/contexts.service';
 import { CONTEXT_LEVELS } from '../access/domain/capabilities';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
-import { EventLogRepository, type EventLogRow } from '@lms/db/repositories/event-log';
+import { EventLogRepository, type EventLogRow } from '@giaokhoa/db/repositories/event-log';
 import type { ListEventLogsQueryDto } from './dto/event-log.dto';
 
 /** Capability đọc nhật ký sự kiện (Moodle `log:view`). */
@@ -73,7 +73,7 @@ export class EventLogService {
     return {
       id: row.id,
       // seq là cột int8: qua Kysely nó đọc về là chuỗi (luật int8 của
-      // package @lms/db) — chuyển lại thành số tại biên này để giữ
+      // package @giaokhoa/db) — chuyển lại thành số tại biên này để giữ
       // nguyên hợp đồng `seq: number` của view/API.
       seq: Number(row.seq),
       eventType: row.eventType,

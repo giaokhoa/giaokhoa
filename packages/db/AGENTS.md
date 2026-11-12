@@ -46,12 +46,12 @@ của repo.
 
 ## Kiểm chứng bắt buộc
 
-- **Typecheck + build trước khi push**: `pnpm --filter @lms/db typecheck`
+- **Typecheck + build trước khi push**: `pnpm --filter @giaokhoa/db typecheck`
   và build lại `dist`, rồi mới typecheck apps/api + apps/worker.
 - Kiểm chứng migrate phải làm trên **cây merge** (hoặc chờ CI trên PR): kiểm trên
   cây branch riêng không đủ — bẫy hai baseline chỉ lộ ở cây merge.
 - CI là cổng chính; kết luận CI chỉ từ LOG THẬT. Suite nặng local giữ khoá
-  `flock /tmp/lms-heavy-suite.lock`, tối đa một vòng nặng một lúc.
+  `flock /tmp/giaokhoa-heavy-suite.lock`, tối đa một vòng nặng một lúc.
 
 ## Kỷ luật khung Kysely (chiến dịch chuyển ORM)
 
@@ -143,11 +143,10 @@ luồng nghiệp vụ — bằng tiếng Việt**; mọi tài liệu bằng ti�
   là tham số bắt buộc, cấm truyền `undefined`.
 - **jsonb.** Mọi giá trị ghi vào cột jsonb đi qua một helper
   serialize tường minh duy nhất
-  (`sql<T>\`${JSON.stringify(value)}::jsonb\``): driver `pg` tự
-  stringify object thường nhưng hiểu MẢNG cấp cao nhất là mảng
-  PostgreSQL, khiến cột jsonb lỗi `invalid input syntax for type
-  json`. Biến tích luỹ cho `.values()` có trường biểu thức phải
-  khai kiểu `InsertObject<DB, '<bảng>'>`.
+  (`sql<T>\`${JSON.stringify(value)}::jsonb\``): driver `pg`tự
+stringify object thường nhưng hiểu MẢNG cấp cao nhất là mảng
+PostgreSQL, khiến cột jsonb lỗi`invalid input syntax for type json`. Biến tích luỹ cho `.values()`có trường biểu thức phải
+khai kiểu`InsertObject<DB, '<bảng>'>`.
 - **onConflict.** `doNothing()` khi trùng không ném lỗi và
   `returning` trả mảng rỗng — repository ánh xạ thành `undefined`
   cho hợp đồng insert-if-absent; bên trong transaction, doNothing

@@ -1,7 +1,5 @@
 /**
- * Repository của cụm HỌC LIỆU trên Kysely — chuyển đổi từ
- * repository bộ máy cũ của module content phía `apps/api` (issue
- * #646, nhóm G6 của chiến dịch chuyển tầng dữ liệu sang Kysely).
+ * Repository của cụm HỌC LIỆU trên Kysely.
  *
  * Vai trò: mọi truy cập tới các bảng học liệu của kho trung tâm
  * (pages — trang đọc mod_page, resources — tài nguyên mod_resource,
@@ -13,8 +11,7 @@
  * mở transaction nào (mọi phương thức chạy trên handle gốc), đúng
  * bề mặt của repository cũ.
  *
- * Khuôn hình dạng dữ liệu ở biên repository (theo playbook chuyển
- * đổi của package, đúc từ pilot kho control plane):
+ * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong repository, truy vấn viết trên interface schema sinh
  *   bằng codegen: tên bảng/cột giữ nguyên snake_case của database
  *   (riêng bảng pages/resources, cột khoá ngoại tên là `course`

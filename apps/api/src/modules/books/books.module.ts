@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { BookRepository } from '@lms/db/repositories/books';
+import { BookRepository } from '@giaokhoa/db/repositories/books';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { AccessModule } from '../access/access.module';
@@ -11,7 +11,7 @@ import { BookService } from './books.service';
 /**
  * BooksModule: tầng sách độc lập (K0b tái cấu trúc) — sách + cây mục lục + ánh xạ sang chương trình + sổ nạp dataset. Phụ thuộc Access (PermissionEvaluator + ContextsService), Curriculum (sổ chương trình để phân giải ánh xạ), Courses (đăng ký book frame provider).
  *
- * Từ issue #647, repository của module sống ở `@lms/db` trên
+ * Từ issue #647, repository của module sống ở `@giaokhoa/db` trên
  * Kysely (lớp thuần, không phụ thuộc Nest) nên module lắp nó bằng
  * factory provider trên handle định tuyến theo không gian
  * (`SpaceDatabaseService.routedKysely`) — cùng khuôn lắp repository

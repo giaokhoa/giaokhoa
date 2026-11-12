@@ -1,4 +1,4 @@
-import type { CreateTenant, CreateUser, Tenant, TenantMembership } from '@lms/contracts';
+import type { CreateTenant, CreateUser, Tenant, TenantMembership } from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 import type { TenantMemberStatus, TenantUserSummary } from '../types/tenant-admin';
 

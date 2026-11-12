@@ -2,7 +2,7 @@ import { encodeVietQr } from 'vn-qr-pay';
 
 /**
  * Lõi VietQR Lát 1 (issue #189; hồ sơ payment-vietqr §2/§6):
- * - Mã thanh toán: `LMS` + 9 ký tự base32 Crockford mã hoá từ số thứ tự của
+ * - Mã thanh toán: `GKH` + 9 ký tự base32 Crockford mã hoá từ số thứ tự của
  *   sequence `payment_code_seq` — sinh một lần, duy nhất (unique ở DB),
  *   không tái sử dụng; đặt ở trường 62/08 (purpose) của QR.
  * - QR ĐỘNG theo chuẩn EMVCo/NAPAS qua `vn-qr-pay`: trường 54 khoá số tiền,
@@ -16,13 +16,13 @@ import { encodeVietQr } from 'vn-qr-pay';
  *   CRC hợp lệ) trong vietqr.spec.ts cạnh mã nguồn, không giả mạo khớp mẫu.
  */
 
-export const PAYMENT_CODE_PREFIX = 'LMS';
+export const PAYMENT_CODE_PREFIX = 'GKH';
 /** Hạn hiệu lực mặc định của mã thanh toán/QR: 24 giờ (hồ sơ §2.3). */
 export const PAYMENT_CODE_TTL_MS = 24 * 60 * 60 * 1000;
 
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
-/** Mã hoá một số thứ tự thành mã thanh toán 12 ký tự (`LMS` + 9). */
+/** Mã hoá một số thứ tự thành mã thanh toán 12 ký tự (`GKH` + 9). */
 export function paymentCodeFromSequence(seq: number): string {
   let n = Math.floor(Math.abs(seq));
   let encoded = '';
@@ -33,12 +33,12 @@ export function paymentCodeFromSequence(seq: number): string {
   return PAYMENT_CODE_PREFIX + encoded.padStart(9, '0');
 }
 
-const PAYMENT_CODE_RE = /LMS[0-9A-HJKMNP-TV-Z]{9}/;
+const PAYMENT_CODE_RE = /GKH[0-9A-HJKMNP-TV-Z]{9}/;
 
 /**
  * Trích mã thanh toán từ nội dung chuyển khoản: chuẩn hoá viết hoa và bỏ
  * mọi ký tự ngoài [A-Z0-9] (ngân hàng thường chèn dấu cách/gạch), rồi tìm
- * mẫu `LMS` + 9 ký tự Crockford (không chứa I, L, O, U).
+ * mẫu `GKH` + 9 ký tự Crockford (không chứa I, L, O, U).
  */
 export function extractPaymentCode(content: string): string | null {
   const normalized = content.toUpperCase().replace(/[^A-Z0-9]/g, '');

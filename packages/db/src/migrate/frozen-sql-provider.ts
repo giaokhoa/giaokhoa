@@ -1,5 +1,5 @@
 /**
- * `MigrationProvider` tự viết cho bộ máy migration của `@lms/db`:
+ * `MigrationProvider` tự viết cho bộ máy migration của `@giaokhoa/db`:
  * đọc các file SQL trong `packages/db/migrations/<kho>/` và biến
  * mỗi thư mục migration thành một migration Kysely. Thư mục của
  * một kho chứa hai loại migration cùng khuôn file `migration.sql`:
@@ -38,7 +38,7 @@ import { join } from 'node:path';
 import { sql } from 'kysely';
 import type { Migration, MigrationProvider } from 'kysely/migration';
 
-/** Dấu phân tách câu lệnh trong file migration — cùng dấu bộ máy bộ máy cũ dùng. */
+/** Dấu phân tách câu lệnh trong `migration.sql`; giữ nguyên để thực thi các carrier SQL đã đóng băng. */
 const STATEMENT_BREAKPOINT = '--> statement-breakpoint';
 
 /**

@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { Course, MyAccessView } from '@lms/contracts';
+import type { Course, MyAccessView } from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 import { useAuth } from '#lib/auth';
 import { queryKeys } from '#lib/query-keys';

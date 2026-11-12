@@ -31,7 +31,7 @@
  * ranh giới; không gác capability ở tầng này.
  */
 import { Pool } from 'pg';
-import { createCentreKysely, sql as kyselySql } from '@lms/db';
+import { createCentreKysely, sql as kyselySql } from '@giaokhoa/db';
 import { normalizeSpaceSlug } from './centre-provision';
 import { FleetRegistryWriter } from '../fleet/fleet-registry-writer';
 

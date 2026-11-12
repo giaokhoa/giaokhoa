@@ -14,9 +14,9 @@ import { registerMcpTools, type McpToolDeps } from './mcp.tools';
  * thật, soi trùng trước khi tạo, câu mới luôn vào draft chờ giáo viên
  * duyệt) thay vì bịa quy trình riêng.
  */
-export function createLmsMcpServer(actor: McpActor, deps: McpToolDeps): McpServer {
+export function createGiaoKhoaMcpServer(actor: McpActor, deps: McpToolDeps): McpServer {
   const server = new McpServer(
-    { name: 'lms-mcp', version: '0.2.0' },
+    { name: 'giaokhoa-mcp', version: '0.2.0' },
     { capabilities: { tools: {}, resources: {}, prompts: {} } },
   );
   registerMcpTools(server, actor, deps);
@@ -25,7 +25,7 @@ export function createLmsMcpServer(actor: McpActor, deps: McpToolDeps): McpServe
   return server;
 }
 
-const QUESTION_AUTHORING_GUIDE = `# Soạn câu hỏi cho LMS — quy trình bắt buộc
+const QUESTION_AUTHORING_GUIDE = `# Soạn câu hỏi cho Giáo khoa — quy trình bắt buộc
 
 Bạn đang soạn câu hỏi cho ngân hàng câu hỏi của giáo viên đang đăng nhập. Mọi câu bạn tạo đều vào trạng thái DRAFT (bản nháp) và chỉ dùng được sau khi giáo viên duyệt phát hành. Tuân thủ đúng thứ tự:
 
@@ -34,23 +34,23 @@ Bạn đang soạn câu hỏi cho ngân hàng câu hỏi của giáo viên đang
 3. **Soi trùng trước.** Gọi \`search_questions\` để xem câu tương tự đã có chưa, và \`check_duplicates\` cho các câu sắp tạo. Câu trùng hoàn toàn (exact) sẽ bị hệ thống bỏ qua khi tạo — hãy sửa nội dung hoặc bỏ câu đó.
 4. **Tạo câu.** Một câu: \`create_question\`. Nhiều câu: \`create_questions_batch\` (kết quả từng câu; mỗi câu phải có \`clientItemId\` riêng). Nhóm câu cùng một ngữ liệu (đoạn văn/bài đọc): \`create_stimulus_with_questions\` (nguyên tử — một câu lỗi là cả nhóm không được tạo), hoặc khai \`stimuli\` + \`stimulusRef\` trong batch. Luôn đặt \`idempotencyKey\` mới cho mỗi lượt tạo khác nhau; phát lại cùng key + cùng payload là an toàn.
 5. **Định dạng đáp án.** multichoice: đúng 4 lựa chọn, đúng một đáp án đúng (cờ correct). truefalse: thân câu + đúng 4 mệnh đề, mỗi mệnh đề kèm giá trị Đúng/Sai (câu đúng/sai chùm 4 ý). shortanswer: mọi đáp án liệt kê đều được chấp nhận. essay: không có đáp án. Câu hỏi không có trường tên. Nội dung là văn bản thuần — không HTML, không ký tự điều khiển.
-6. **Phát hành.** Chỉ khi giáo viên yêu cầu rõ, gọi \`publish_questions\` để chuyển draft → ready (cần scope \`lms.questions.write\`). Mặc định KHÔNG tự phát hành.
+6. **Phát hành.** Chỉ khi giáo viên yêu cầu rõ, gọi \`publish_questions\` để chuyển draft → ready (cần scope \`giaokhoa.questions.write\`). Mặc định KHÔNG tự phát hành.
 7. **Đóng góp lên bank chung.** Giáo viên muốn đưa câu đã ready lên bank tổ/trường thì dùng \`submit_contribution\` — đề xuất ở trạng thái chờ duyệt, người điều hành bank chung quyết định, bạn không ghi thẳng được vào bank chung.
 `;
 
 function registerMcpResources(server: McpServer): void {
   server.registerResource(
     'question-authoring-guide',
-    'lms://guide/question-authoring',
+    'giaokhoa://guide/question-authoring',
     {
       title: 'Hướng dẫn soạn câu hỏi bám YCCĐ',
       description:
-        'Quy trình soạn câu hỏi chuẩn của LMS: bám YCCĐ thật qua search_curriculum_outcomes, soi trùng trước khi tạo, câu mới vào draft, phát hành chỉ khi giáo viên yêu cầu.',
+        'Quy trình soạn câu hỏi chuẩn của Giáo khoa: bám YCCĐ thật qua search_curriculum_outcomes, soi trùng trước khi tạo, câu mới vào draft, phát hành chỉ khi giáo viên yêu cầu.',
       mimeType: 'text/markdown',
     },
     async () => ({
       contents: [
-        { uri: 'lms://guide/question-authoring', mimeType: 'text/markdown', text: QUESTION_AUTHORING_GUIDE },
+        { uri: 'giaokhoa://guide/question-authoring', mimeType: 'text/markdown', text: QUESTION_AUTHORING_GUIDE },
       ],
     }),
   );
@@ -62,7 +62,7 @@ function registerMcpPrompts(server: McpServer): void {
     {
       title: 'Tạo câu hỏi theo yêu cầu cần đạt',
       description:
-        'Soạn một bộ câu hỏi draft bám đúng một yêu cầu cần đạt (YCCĐ) lấy từ search_curriculum_outcomes, qua đúng quy trình của resource lms://guide/question-authoring.',
+        'Soạn một bộ câu hỏi draft bám đúng một yêu cầu cần đạt (YCCĐ) lấy từ search_curriculum_outcomes, qua đúng quy trình của resource giaokhoa://guide/question-authoring.',
       argsSchema: {
         outcomeContent: z.string().describe('Nguyên văn nội dung YCCĐ (lấy từ kết quả search_curriculum_outcomes)'),
         outcomeId: z.string().optional().describe('Id của YCCĐ trong hệ thống (truy vết)'),
@@ -94,7 +94,7 @@ function registerMcpPrompts(server: McpServer): void {
               text:
                 `Hãy soạn ${count} câu hỏi dạng ${qtype} bám đúng yêu cầu cần đạt sau đây${contextLine ? ` (${contextLine})` : ''}:\n\n` +
                 `"${args.outcomeContent}"\n\n` +
-                'Thực hiện đúng quy trình trong resource lms://guide/question-authoring: ' +
+                'Thực hiện đúng quy trình trong resource giaokhoa://guide/question-authoring: ' +
                 'xác nhận lại YCCĐ bằng search_curriculum_outcomes nếu cần, lấy bankId/categoryId từ list_my_banks + list_categories, ' +
                 'soi trùng bằng check_duplicates, rồi tạo câu ở trạng thái draft bằng create_questions_batch (mỗi câu một clientItemId). ' +
                 'Mọi câu phải kiểm tra được đúng nội dung của YCCĐ trên, đáp án đúng phải chắc chắn, các đáp án nhiễu phải hợp lý. ' +

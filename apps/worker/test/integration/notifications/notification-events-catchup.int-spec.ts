@@ -3,7 +3,7 @@ import type { INestApplicationContext } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import Redis from 'ioredis';
-import { sql, type RawBuilder } from '@lms/db';
+import { sql, type RawBuilder } from '@giaokhoa/db';
 import { redisConnectionFromUrl } from '../../../src/config/env';
 import { NotificationEventsCatchupService } from '../../../src/notification-events-catchup.service';
 import { NotificationEventsMarker } from '../../../src/notification-events-marker.service';
@@ -141,7 +141,7 @@ describe('Worker notification events catch-up (phát bù tồn đọng theo wate
     // Khoá watermark của consumer polling cũ, dựng đúng cách consumer
     // cũ dựng: tên database lấy từ path của DATABASE_URL.
     const databaseName = new URL(process.env.DATABASE_URL!).pathname.replace(/^\//, '') || 'default';
-    legacyWatermarkKey = `lms:messaging:notifications:${databaseName}:seq`;
+    legacyWatermarkKey = `giaokhoa:messaging:notifications:${databaseName}:seq`;
     await redis.del(legacyWatermarkKey);
   });
   afterAll(async () => {

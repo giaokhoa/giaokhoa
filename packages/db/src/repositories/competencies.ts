@@ -1,8 +1,5 @@
 /**
- * Repository của cụm NĂNG LỰC trên Kysely — chuyển đổi từ
- * repository bộ máy cũ của module competencies phía `apps/api`
- * (issue #646, nhóm G6 của chiến dịch chuyển tầng dữ liệu sang
- * Kysely).
+ * Repository của cụm NĂNG LỰC trên Kysely.
  *
  * Vai trò: mọi truy cập tới các bảng năng lực của kho trung tâm
  * (competency_framework, competency dạng cây, các bảng liên kết
@@ -14,8 +11,7 @@
  * nhận handle (instance gốc hoặc transaction đang mở) để phía gọi
  * ghép nhiều thao tác vào một transaction khi cần.
  *
- * Khuôn hình dạng dữ liệu ở biên repository (theo playbook chuyển
- * đổi của package, đúc từ pilot kho control plane):
+ * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong repository, truy vấn viết trên interface schema sinh
  *   bằng codegen: tên bảng/cột giữ nguyên snake_case của database.
  * - Bên ngoài, repository trả/nhận các hình dạng dòng camelCase như

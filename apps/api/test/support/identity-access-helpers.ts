@@ -6,7 +6,7 @@ import { AppModule } from '../../src/app.module';
 import { enableTrustedProxy } from '../../src/common/client-ip';
 import { ProblemDetailsFilter } from '../../src/common/problem-details.filter';
 
-process.env.FILE_STORAGE_DIR = process.env.FILE_STORAGE_DIR ?? '/tmp/lms-test-files';
+process.env.FILE_STORAGE_DIR = process.env.FILE_STORAGE_DIR ?? '/tmp/giaokhoa-test-files';
 
 export const ADMIN = { username: 'admin', password: 'Admin123!' };
 export const STRONG_PASSWORD = 'Passw0rd!';

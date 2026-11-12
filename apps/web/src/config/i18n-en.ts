@@ -388,7 +388,7 @@ export const enResources = {
     signIn: 'Sign in',
 
     homeDescription:
-      'TypeScript LMS — Moodle core business equivalent. Frontend consumes the REST/OpenAPI backend via the shared @lms/contracts package.',
+      'GiaoKhoa (TypeScript) — Moodle core business equivalent. Frontend consumes the REST/OpenAPI backend via the shared @giaokhoa/contracts package.',
     checkApiHealth: 'Check API health',
     healthTitle: 'API health',
     healthDescription: 'Live status from GET /api/v1/health',
@@ -401,7 +401,7 @@ export const enResources = {
     redis: 'Redis',
     timestamp: 'Timestamp',
     loginTitle: 'Sign in',
-    loginDescription: 'Log in with your LMS account. Your session is kept in a secure cookie.',
+    loginDescription: 'Log in with your GiaoKhoa account. Your session is kept in a secure cookie.',
     username: 'Username',
     password: 'Password',
     loginFailed: 'Login failed',
@@ -465,7 +465,7 @@ export const enResources = {
       'Could not finish signing in with the external account. The session may have expired — please try again.',
     backToLogin: 'Back to the sign-in page',
     linkedAccountsTitle: 'Linked logins',
-    linkedAccountsDescription: 'External accounts you can use to sign in to the LMS.',
+    linkedAccountsDescription: 'External accounts you can use to sign in to GiaoKhoa.',
     linkedAccountsLoadFailed: 'Could not load the linked logins.',
     noLinkedAccounts: 'No external account is linked yet.',
     linkedOn: 'Linked on {{date}}',

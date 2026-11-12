@@ -391,7 +391,7 @@ export const appResources = {
       signIn: 'Đăng nhập',
 
       homeDescription:
-        'LMS viết bằng TypeScript — tương đương nghiệp vụ lõi của Moodle. Frontend dùng backend REST/OpenAPI qua gói dùng chung @lms/contracts.',
+        'Giáo khoa viết bằng TypeScript — tương đương nghiệp vụ lõi của Moodle. Frontend dùng backend REST/OpenAPI qua gói dùng chung @giaokhoa/contracts.',
       checkApiHealth: 'Kiểm tra trạng thái API',
       healthTitle: 'Trạng thái API',
       healthDescription: 'Trạng thái trực tiếp từ GET /api/v1/health',
@@ -404,7 +404,7 @@ export const appResources = {
       redis: 'Redis',
       timestamp: 'Mốc thời gian',
       loginTitle: 'Đăng nhập',
-      loginDescription: 'Đăng nhập bằng tài khoản LMS của bạn. Phiên đăng nhập được giữ bằng cookie an toàn.',
+      loginDescription: 'Đăng nhập bằng tài khoản Giáo khoa của bạn. Phiên đăng nhập được giữ bằng cookie an toàn.',
       username: 'Tên đăng nhập',
       password: 'Mật khẩu',
       loginFailed: 'Đăng nhập thất bại',
@@ -465,7 +465,7 @@ export const appResources = {
       oauthCallbackFailed: 'Không thể hoàn tất đăng nhập bằng tài khoản ngoài. Phiên có thể đã hết hạn — vui lòng thử lại.',
       backToLogin: 'Về trang đăng nhập',
       linkedAccountsTitle: 'Tài khoản liên kết',
-      linkedAccountsDescription: 'Các tài khoản ngoài bạn có thể dùng để đăng nhập vào LMS.',
+      linkedAccountsDescription: 'Các tài khoản ngoài bạn có thể dùng để đăng nhập vào Giáo khoa.',
       linkedAccountsLoadFailed: 'Không tải được danh sách tài khoản liên kết.',
       noLinkedAccounts: 'Chưa có tài khoản ngoài nào được liên kết.',
       linkedOn: 'Liên kết ngày {{date}}',

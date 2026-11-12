@@ -5,7 +5,7 @@
  *
  * Một lượt migrate làm đúng 3 việc, theo thứ tự:
  * 1. Phân giải thư mục migration qua điểm vào chính của package
- *    (`require.resolve('@lms/db')` — đường dẫn TUYỆT ĐỐI, diệt lớp
+ *    (`require.resolve('@giaokhoa/db')` — đường dẫn TUYỆT ĐỐI, diệt lớp
  *    lỗi "sai thư mục làm việc báo thành công giả": runner không
  *    bao giờ suy thư mục từ cwd).
  * 2. Áp migration qua trình tự dùng chung `applyStoreMigrations`
@@ -45,17 +45,17 @@ import { applyStoreMigrations } from './apply';
 import { isMigrationStoreKey, MIGRATION_STORES, type MigrationStoreKey } from './stores';
 import { verifyStore } from './verify';
 
-/** Gốc package `@lms/db`: phân giải qua chính package (không qua cwd). */
+/** Gốc package `@giaokhoa/db`: phân giải qua chính package (không qua cwd). */
 function packageRoot(): string {
   try {
     const require = createRequire(__filename);
     // Phân giải qua điểm vào chính của package (`exports["."]` →
     // `dist/index.js`) rồi đi lên một cấp: `exports` map của package
     // không khai `./package.json` nên phân giải thẳng
-    // `@lms/db/package.json` bị Node từ chối
+    // `@giaokhoa/db/package.json` bị Node từ chối
     // (ERR_PACKAGE_PATH_NOT_EXPORTED — đã kiểm chứng tại thời điểm
     // thi công); điểm vào chính cho cùng kết quả tuyệt đối.
-    return join(dirname(require.resolve('@lms/db')), '..');
+    return join(dirname(require.resolve('@giaokhoa/db')), '..');
   } catch {
     // Dự phòng khi chạy từ source chưa qua workspace link: vị trí
     // file này sâu đúng hai cấp dưới gốc package ở cả `src/` và

@@ -1,8 +1,5 @@
 /**
- * Repository của cụm SÁCH GIÁO KHOA trên Kysely — hạng mục nhân
- * rộng G7 của chiến dịch chuyển tầng dữ liệu (issue #647), chuyển
- * từ repository cũ trước chuyển đổi ở
- * `apps/api/src/modules/books/books.repository.ts`.
+ * Repository của cụm SÁCH GIÁO KHOA trên Kysely.
  *
  * Vai trò: mọi truy cập tới bốn bảng của kho trung tâm thuộc tầng
  * SGK — `books` (cuốn sách), `book_nodes` (cây chủ đề → bài),

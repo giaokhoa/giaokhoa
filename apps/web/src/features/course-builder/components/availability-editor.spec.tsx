@@ -61,7 +61,7 @@ describe('Khối AvailabilityEditor', () => {
     );
 
     const root = screen.getByTestId('availability-node-root');
-    // Select của @lms/ui: trigger hiện chữ của tuỳ chọn đang chọn thay cho value của <select> native.
+    // Select của @giaokhoa/ui: trigger hiện chữ của tuỳ chọn đang chọn thay cho value của <select> native.
     expect(screen.getByTestId('avail-op-root')).toHaveTextContent('Tất cả điều kiện (AND)');
     expect(within(root).getByLabelText('Mốc thời gian')).not.toHaveValue('');
     const nested = screen.getByTestId('availability-node-1');

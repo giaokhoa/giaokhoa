@@ -2,11 +2,11 @@ import { BadRequestException, Injectable, NotFoundException, UnauthorizedExcepti
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'node:crypto';
-import type { OAuthIssuer } from '@lms/contracts';
+import type { OAuthIssuer } from '@giaokhoa/contracts';
 import { SessionCacheService } from '../../infra/cache/session-cache.service';
 import { UsersService } from '../users/users.service';
-import type { UserRow } from '@lms/db/repositories/users';
-import { AuthRepository, type UserOauthLinkRow } from '@lms/db/repositories/auth';
+import type { UserRow } from '@giaokhoa/db/repositories/users';
+import { AuthRepository, type UserOauthLinkRow } from '@giaokhoa/db/repositories/auth';
 import { AuthService, type SessionClientInfo } from './auth.service';
 import { SessionService } from './session.service';
 

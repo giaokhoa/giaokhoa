@@ -17,23 +17,23 @@
  * cần dựng cả khung định tuyến.
  *
  * Môi trường: một database trung tâm dựng từ rỗng bằng harness của
- * `@lms/db`.
+ * `@giaokhoa/db`.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createCentreKysely, sql as kyselySql, type CentreDb } from '@lms/db';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '@lms/db/test-support';
+import { createCentreKysely, sql as kyselySql, type CentreDb } from '@giaokhoa/db';
+import { buildTestDatabase, dropTestDatabase, withDatabase } from '@giaokhoa/db/test-support';
 import { TenantAwarePool } from '../../../src/db/tenant-pool';
 import type { SpaceDatabaseService } from '../../../src/db/routing/space-database.service';
 import { tenantAls } from '../../../src/modules/tenants/tenant-als';
 import { TenantContextService } from '../../../src/modules/tenants/tenant-context.service';
 import { TenantDbService } from '../../../src/modules/tenants/tenant-db.service';
 
-const TEST_DATABASE = 'lms_test_tenant_db_kysely_639';
+const TEST_DATABASE = 'giaokhoa_test_tenant_db_kysely_639';
 const TENANT_ID = '01963900-0000-7000-8000-0000000000a1';
 const ROW_COMMIT_ID = '01963900-0000-7000-8000-0000000000d4';
 const ROW_ROLLBACK_ID = '01963900-0000-7000-8000-0000000000e5';
 
-const baseUrl = process.env.LMS_TEST_DATABASE_URL ?? process.env.DATABASE_URL!;
+const baseUrl = process.env.GIAOKHOA_TEST_DATABASE_URL ?? process.env.DATABASE_URL!;
 const adminUrl = withDatabase(baseUrl, 'postgres');
 
 async function currentSetting(db: CentreDb, key: string): Promise<string> {

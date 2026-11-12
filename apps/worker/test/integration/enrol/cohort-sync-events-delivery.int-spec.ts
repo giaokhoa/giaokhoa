@@ -3,7 +3,7 @@ import type { INestApplicationContext } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { sql, type JsonValue } from '@lms/db';
+import { sql, type JsonValue } from '@giaokhoa/db';
 import { OUTBOX_EVENT_QUEUE_ROUTES } from '../../../src/outbox-event-routes';
 import {
   bootWorkerModuleAsOrdinaryRole,

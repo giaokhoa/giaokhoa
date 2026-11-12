@@ -1,7 +1,7 @@
-import { CAP } from '@lms/contracts';
-import { Badge } from '@lms/ui/components/badge';
-import { Checkbox } from '@lms/ui/components/checkbox';
-import { Toggle } from '@lms/ui/components/toggle';
+import { CAP } from '@giaokhoa/contracts';
+import { Badge } from '@giaokhoa/ui/components/badge';
+import { Checkbox } from '@giaokhoa/ui/components/checkbox';
+import { Toggle } from '@giaokhoa/ui/components/toggle';
 import { Eye, Lock, PencilLine } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import '#config/i18n';
@@ -12,8 +12,8 @@ import '#config/i18n';
  * ("hình dạng demo, dữ kiện thật", comment phán quyết 6539398880):
  *
  * - Hình dạng theo ngôn ngữ demo nhưng mỗi ô là MỘT năng lực thật:
- *   hộp thoại dùng Checkbox của `@lms/ui`, trang Quyền dùng Toggle
- *   của `@lms/ui` dạng nút icon size-8 variant outline (bật =
+ *   hộp thoại dùng Checkbox của `@giaokhoa/ui`, trang Quyền dùng Toggle
+ *   của `@giaokhoa/ui` dạng nút icon size-8 variant outline (bật =
  *   `bg-primary/10 text-primary`, tắt = outline viền/nền/bóng như
  *   nút chưa cấp của demo; icon cỡ 12px theo loại năng lực — read
  *   là Eye, write là PencilLine, đúng cặp icon demo dùng cho

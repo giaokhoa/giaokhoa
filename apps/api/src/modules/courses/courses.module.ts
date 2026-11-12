@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { CoursesRepository } from '@lms/db/repositories/courses';
+import { CoursesRepository } from '@giaokhoa/db/repositories/courses';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { EventsModule } from '../../infra/events/events.module';
@@ -16,12 +16,7 @@ import { CoursesService } from './courses.service';
   controllers: [CoursesController],
   providers: [
     {
-      // CoursesRepository nay là repository Kysely của `@lms/db`
-      // (issue #645): provider dựng bằng factory với handle kho
-      // trung tâm ĐÃ ĐỊNH TUYẾN THEO KHÔNG GIAN (`routedKysely`
-      // của SpaceDatabaseService — cùng pool dùng chung có gắn
-      // ngữ cảnh tenant mà tầng bộ máy cũ đang chạy trên đó), không
-      // phải handle tĩnh theo một database cố định.
+      // Dùng handle Kysely định tuyến theo không gian để toàn bộ truy vấn khoá học giữ đúng ngữ cảnh tenant/GUC/RLS.
       provide: CoursesRepository,
       useFactory: (spaceDb: SpaceDatabaseService) => new CoursesRepository(spaceDb.routedKysely),
       inject: [SpaceDatabaseService],

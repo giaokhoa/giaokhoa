@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blankRecalledContent, type MessageRow } from '@lms/messaging';
+import { blankRecalledContent, type MessageRow } from '@giaokhoa/messaging';
 import { isWithinRecallWindow } from './messaging.service';
 
 /**

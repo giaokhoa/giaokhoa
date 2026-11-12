@@ -1,10 +1,10 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
-import type { UserProfile } from '@lms/contracts';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@lms/ui/components/card';
-import { Field, FieldGroup, FieldLabel } from '@lms/ui/components/field';
-import { Input } from '@lms/ui/components/input';
+import type { UserProfile } from '@giaokhoa/contracts';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
+import { Field, FieldGroup, FieldLabel } from '@giaokhoa/ui/components/field';
+import { Input } from '@giaokhoa/ui/components/input';
 import { useTranslation } from 'react-i18next';
 import { ErrorAlert } from '#components/error-alert';
 import { PageSkeleton } from '#components/page-skeleton';

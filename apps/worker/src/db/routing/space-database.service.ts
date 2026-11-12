@@ -1,8 +1,8 @@
 import { Injectable, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
-import { createCentreKysely, type CentreDb } from '@lms/db';
-import { createControlPlaneKysely, type ControlPlaneDb } from '@lms/db/control-plane';
+import { createCentreKysely, type CentreDb } from '@giaokhoa/db';
+import { createControlPlaneKysely, type ControlPlaneDb } from '@giaokhoa/db/control-plane';
 import { databaseConnectionFromEnv } from '../../config/env';
 import { tenantAls, type TenantAlsStore } from '../tenant-als';
 import { TenantAwarePool } from '../tenant-pool';
@@ -49,9 +49,7 @@ import { SpacePoolManager } from './space-pool-manager';
  * lười, có trần, đóng khi nhàn rỗi; pool kho riêng cũng là
  * `TenantAwarePool` để chính sách RLS tiếp tục fail-closed theo
  * tenant của ngữ cảnh; không kết nối "siêu quyền" cho đường nền.
- *
- * (Facade song song phía bộ máy cũ đã xoá ở issue #663 cùng đợt gỡ
- * bộ máy cũ khỏi cây: khung nay chỉ còn một facade Kysely.)
+
  */
 @Injectable()
 export class SpaceDatabaseService implements OnModuleDestroy {

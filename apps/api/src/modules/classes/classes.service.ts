@@ -24,28 +24,28 @@ import type {
   JoinClassResult,
   RosterStudentIdentity,
   UpdateClass,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { OutboxService } from '../../infra/events/outbox.service';
-import type { CentreTx } from '@lms/db';
+import type { CentreTx } from '@giaokhoa/db';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
-import { ControlPlaneRepository } from '@lms/db/repositories/control-plane';
+import { ControlPlaneRepository } from '@giaokhoa/db/repositories/control-plane';
 import { tenantAls } from '../tenants/tenant-als';
-import type { ContextRow } from '@lms/db/repositories/access';
-import { GroupsRepository } from '@lms/db/repositories/groups';
+import type { ContextRow } from '@giaokhoa/db/repositories/access';
+import { GroupsRepository } from '@giaokhoa/db/repositories/groups';
 import { ContextsService } from '../access/contexts.service';
 import { CONTEXT_LEVELS } from '../access/domain/capabilities';
 import { CAP_ALLOW } from '../access/domain/permission';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { RolesService } from '../access/roles.service';
-import type { CourseRow } from '@lms/db/repositories/courses';
+import type { CourseRow } from '@giaokhoa/db/repositories/courses';
 import { CoursesService } from '../courses/courses.service';
 import { EnrolService } from '../enrol/enrol.service';
 import { GroupsService } from '../groups/groups.service';
 import { TenantContextService } from '../tenants/tenant-context.service';
 import { TenantsService } from '../tenants/tenants.service';
 import { UsersService } from '../users/users.service';
-import type { UserRow } from '@lms/db/repositories/users';
-import { CLASS_WHOLE_GROUP_NAME, ClassesRepository, type ClassJoinRequestRow, type ClassRow } from '@lms/db/repositories/classes';
+import type { UserRow } from '@giaokhoa/db/repositories/users';
+import { CLASS_WHOLE_GROUP_NAME, ClassesRepository, type ClassJoinRequestRow, type ClassRow } from '@giaokhoa/db/repositories/classes';
 
 export type { ClassRow };
 
@@ -703,7 +703,7 @@ export class ClassesService implements OnModuleInit {
     const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
     const bytes = randomBytes(12);
     const core = Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
-    return `Lms@9${core}`;
+    return `GiaoKhoa@9${core}`;
   }
 
   /** Username chưa bị chiếm, bắt đầu từ `base`; trùng thì thêm hậu tố số tăng dần. */

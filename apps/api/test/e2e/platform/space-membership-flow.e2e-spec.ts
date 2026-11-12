@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { generate } from 'otplib';
 import { Client, Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createControlPlaneKysely } from '@lms/db/control-plane';
+import { createControlPlaneKysely } from '@giaokhoa/db/control-plane';
 import { emitSpaceRegistryChanged } from '../../../src/db/routing/space-routing-events';
 import { SpaceDatabaseService } from '../../../src/db/routing/space-database.service';
 import { CAP_ALLOW } from '../../../src/modules/access/domain/permission';
@@ -67,17 +67,17 @@ import {
  * (7) đăng nhập ở kho riêng chỉ tạo family refresh trong kho đó;
  * (8) đường kho chung giữ nguyên hành vi (hồi quy gọn).
  */
-const CP_DATABASE = 'lms_test_cp_584';
-const CP_ROLE = 'lms_cp_test_584';
+const CP_DATABASE = 'giaokhoa_test_cp_584';
+const CP_ROLE = 'giaokhoa_cp_test_584';
 const CP_PASSWORD = 'cp-test-584';
-const CENTRE_A_DATABASE = 'lms_test_centre_a_584';
-const CENTRE_A_ROLE = 'lms_centre_a_584_app';
+const CENTRE_A_DATABASE = 'giaokhoa_test_centre_a_584';
+const CENTRE_A_ROLE = 'giaokhoa_centre_a_584_app';
 const CENTRE_A_PASSWORD = 'centre-a-584';
-const CENTRE_B_DATABASE = 'lms_test_centre_b_584';
-const CENTRE_B_ROLE = 'lms_centre_b_584_app';
+const CENTRE_B_DATABASE = 'giaokhoa_test_centre_b_584';
+const CENTRE_B_ROLE = 'giaokhoa_centre_b_584_app';
 const CENTRE_B_PASSWORD = 'centre-b-584';
-const MAIN_DATABASE = 'lms_test_main_584';
-const MAIN_ROLE = 'lms_main_584_app';
+const MAIN_DATABASE = 'giaokhoa_test_main_584';
+const MAIN_ROLE = 'giaokhoa_main_584_app';
 const MAIN_PASSWORD = 'main-584';
 // Slug của hai trung tâm mang hậu tố ngẫu nhiên theo lượt chạy:
 // tenant tương ứng được tạo thật trong database nghiệp vụ test
@@ -672,7 +672,7 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
     await withClient(clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD), async (client) => {
       await client.query(
         `INSERT INTO space_registry (slug, name, kind, status, database_name, storage_mode, connection_role_ref, secret_ref, schema_version)
-         VALUES ($1, 'Trung tâm lệch cấu hình (spec 584)', 'center', 'active', 'lms_test_bad_584', 'dedicated', 'lms_bad_584_app', 'env:SPACE_TEST_MISSING_584_URL', 'v1')
+         VALUES ($1, 'Trung tâm lệch cấu hình (spec 584)', 'center', 'active', 'giaokhoa_test_bad_584', 'dedicated', 'giaokhoa_bad_584_app', 'env:SPACE_TEST_MISSING_584_URL', 'v1')
          ON CONFLICT (slug) DO UPDATE SET status = 'active', database_name = EXCLUDED.database_name,
            storage_mode = 'dedicated', connection_role_ref = EXCLUDED.connection_role_ref, secret_ref = EXCLUDED.secret_ref`,
         [badSlug],
@@ -761,8 +761,8 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
     // tenant KHÔNG được sao vào kho C — trạng thái "đã đăng ký
     // kho riêng, chưa cấp phát xong phần dữ kiện" mà chốt
     // fail-closed phải bắt như khi cấp phiên mới.
-    const centreCDatabase = 'lms_test_centre_c_584';
-    const centreCRole = 'lms_centre_c_584_app';
+    const centreCDatabase = 'giaokhoa_test_centre_c_584';
+    const centreCRole = 'giaokhoa_centre_c_584_app';
     const centreCPassword = 'centre-c-584';
     const centreCSlug = `trung-tam-c-${RUN_SUFFIX}`;
     const hostC = `${centreCSlug}.test.local`;

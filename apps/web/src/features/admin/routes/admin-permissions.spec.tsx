@@ -38,7 +38,7 @@ import { AdminPermissionsPage } from './admin-permissions';
  * lỗi và khoá ô chặn đã ghim ở các vòng trước giữ nguyên.
  *
  * Vòng căn chỉnh khớp demo (issue #624): ô chọn ngữ cảnh chuyển
- * từ `<select>` native sang Select của `@lms/ui` — các ca đổi
+ * từ `<select>` native sang Select của `@giaokhoa/ui` — các ca đổi
  * ngữ cảnh chọn theo nhãn nhìn thấy của lựa chọn qua helper
  * `chooseOption`; toggle chưa cấp dùng variant outline, huy
  * hiệu khoá đặt cạnh nút toggle như hộp thoại ma trận.
@@ -164,7 +164,7 @@ function renderPage() {
 }
 
 /**
- * Chọn một lựa chọn trong ô Select của `@lms/ui` theo nhãn nhìn
+ * Chọn một lựa chọn trong ô Select của `@giaokhoa/ui` theo nhãn nhìn
  * thấy: bấm nút mở rồi bấm lựa chọn trong danh sách xổ — danh sách
  * xổ render qua portal ở tầng document nên truy vấn bằng `screen`.
  */

@@ -11,7 +11,7 @@ import type { SpaceDatabaseService } from '../../db/routing/space-database.servi
 import type { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { SkipSpaceContext } from './skip-space-context.decorator';
 import { SpaceContextGuard } from './space-context.guard';
-import type { TenantsRepository } from '@lms/db/repositories/tenants';
+import type { TenantsRepository } from '@giaokhoa/db/repositories/tenants';
 
 @SkipSpaceContext()
 class SkipSpaceContextHandler {}
@@ -32,9 +32,9 @@ const DEDICATED_TARGET: ResolvedSpaceConnection = {
   spaceId: 'id-dang-ky-a',
   status: 'active',
   mode: 'dedicated',
-  databaseName: 'lms_centre_a',
+  databaseName: 'giaokhoa_centre_a',
   connectionRole: 'centre_a_app',
-  connectionString: 'postgres://centre_a_app:pw@db.internal:5432/lms_centre_a',
+  connectionString: 'postgres://centre_a_app:pw@db.internal:5432/giaokhoa_centre_a',
   schemaVersion: 'v3',
 };
 
@@ -43,8 +43,8 @@ const SHARED_TARGET: ResolvedSpaceConnection = {
   spaceId: 'id-dang-ky-truong',
   status: 'active',
   mode: 'shared',
-  databaseName: 'lms_shared',
-  connectionRole: 'lms_app',
+  databaseName: 'giaokhoa_shared',
+  connectionRole: 'giaokhoa_app',
   schemaVersion: 'v1',
 };
 

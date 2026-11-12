@@ -1,5 +1,5 @@
 {
-  "name": "@lms/config",
+  "name": "@giaokhoa/config",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,8 +7,5 @@
     "./tsconfig/base.json": "./tsconfig/base.json",
     "./tsconfig/nest.json": "./tsconfig/nest.json",
     "./tsconfig/react.json": "./tsconfig/react.json"
-  },
-  "scripts": {
-    "lint": "eslint ."
   }
 }

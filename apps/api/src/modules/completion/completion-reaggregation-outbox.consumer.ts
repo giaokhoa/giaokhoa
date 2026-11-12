@@ -1,8 +1,8 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { CentreDb } from '@lms/db';
+import type { CentreDb } from '@giaokhoa/db';
 import Redis from 'ioredis';
-import { COURSE_COMPLETION_REAGGREGATION_REQUESTED } from '@lms/enrol';
+import { COURSE_COMPLETION_REAGGREGATION_REQUESTED } from '@giaokhoa/enrol';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { redisTlsFromUrl } from '../../config/env';
 import { CompletionService } from './completion.service';
@@ -27,7 +27,7 @@ const REAGGREGATION_TYPES = [COURSE_COMPLETION_REAGGREGATION_REQUESTED] as const
  * sau khi unenrol đã xong và lỗi của nó bị nuốt, nên tiến trình
  * chết giữa hai bước là mất tái tổng hợp vĩnh viễn, và cơ chế đăng
  * ký lúc chạy đó chỉ tồn tại trong tiến trình API — bề mặt vật chất
- * hoá dùng chung (`@lms/enrol`) không mang theo được. Nay bề mặt đó
+ * hoá dùng chung (`@giaokhoa/enrol`) không mang theo được. Nay bề mặt đó
  * phát sự kiện `course_completion_reaggregation_requested` trong
  * CÙNG transaction với thao tác gỡ ghi danh (rollback thì không có
  * yêu cầu nào tồn tại; commit thì yêu cầu chắc chắn tồn tại), và
@@ -79,7 +79,7 @@ export class CompletionReaggregationOutboxConsumer implements OnModuleInit, OnMo
     } catch {
       // DATABASE_URL không parse được: giữ tên mặc định cho khoá watermark.
     }
-    this.watermarkKey = `lms:completion-reaggregation:${databaseName}:seq`;
+    this.watermarkKey = `giaokhoa:completion-reaggregation:${databaseName}:seq`;
   }
 
   onModuleInit(): void {

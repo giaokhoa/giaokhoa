@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import type { Job, Queue } from 'bullmq';
 import { Client, Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createCentreKysely, sql } from '@lms/db';
-import { createControlPlaneKysely } from '@lms/db/control-plane';
+import { createCentreKysely, sql } from '@giaokhoa/db';
+import { createControlPlaneKysely } from '@giaokhoa/db/control-plane';
 import { tenantAls } from '../../../src/db/tenant-als';
 import { SpaceDatabaseService } from '../../../src/db/routing/space-database.service';
 import { SpaceJobRunner } from '../../../src/db/routing/space-job-runner';
@@ -23,9 +23,9 @@ import { NotificationEventsProcessor } from '../../../src/processors/notificatio
  * (issue #582): relay outbox thật và consumer thông báo thật chạy
  * trên hai kho kiểm chứng dựng riêng cho đợt này — kho chung là
  * chính database test của worker, kho riêng là một database mới
- * (`lms_test_centre_a_582w`) có role ứng dụng riêng, CONNECT của
+ * (`giaokhoa_test_centre_a_582w`) có role ứng dụng riêng, CONNECT của
  * PUBLIC bị thu hồi, baseline nghiệp vụ áp bằng role chủ kho, và
- * một database control plane riêng (`lms_test_cp_582w`) giữ dòng
+ * một database control plane riêng (`giaokhoa_test_cp_582w`) giữ dòng
  * đăng ký của trung tâm. Chuỗi bí mật của kho riêng cố ý trỏ về
  * database mặc định `postgres` — đích cuối do sổ chốt như ca của
  * khung ở issue #581.
@@ -45,11 +45,11 @@ import { NotificationEventsProcessor } from '../../../src/processors/notificatio
  * Shim `uuidv7()` chỉ áp khi server PostgreSQL dưới 18 như ca
  * tích hợp của khung (PG18 có sẵn hàm này).
  */
-const CP_DATABASE = 'lms_test_cp_582w';
-const CP_ROLE = 'lms_cp_test_582w';
+const CP_DATABASE = 'giaokhoa_test_cp_582w';
+const CP_ROLE = 'giaokhoa_cp_test_582w';
 const CP_PASSWORD = 'cp-test-582w';
-const CENTRE_DATABASE = 'lms_test_centre_a_582w';
-const CENTRE_ROLE = 'lms_centre_a_582w_app';
+const CENTRE_DATABASE = 'giaokhoa_test_centre_a_582w';
+const CENTRE_ROLE = 'giaokhoa_centre_a_582w_app';
 const CENTRE_PASSWORD = 'centre-a-582w';
 const CENTRE_SLUG = 'trung-tam-a-582w';
 const CENTRE_TENANT_ID = '01958200-0000-7000-8000-0000000000a1';

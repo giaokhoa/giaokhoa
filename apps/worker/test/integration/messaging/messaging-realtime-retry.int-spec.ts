@@ -29,7 +29,7 @@ import type { OutboxEventJobData } from '../../../src/outbox-event-routes';
  * Khuôn test: hàng đợi BullMQ THẬT trên Redis thật và processor
  * THẬT, chỉ stub đúng biên `distributeEvent` của tầng phân phối
  * (biên đã được các spec khác chứng minh: luật phân phối ở
- * `@lms/messaging` và cổng phát có xác nhận publish ở emitter).
+ * `@giaokhoa/messaging` và cổng phát có xác nhận publish ở emitter).
  * Hàng đợi dùng tên riêng của spec này để cách ly với hàng đợi
  * production `messaging-realtime` mà spec int của hàng đợi
  * messaging dùng song song; chính sách job mặc định được sao đúng

@@ -1,5 +1,5 @@
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { GuardianDigestFrequency } from '@lms/contracts';
+import type { GuardianDigestFrequency } from '@giaokhoa/contracts';
 import { queryClient } from '#lib/query-client';
 import { queryKeys as sharedQueryKeys } from '#lib/query-keys';
 import {

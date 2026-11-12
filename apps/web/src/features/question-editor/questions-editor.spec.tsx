@@ -21,14 +21,14 @@ import { QuestionEditPage, QuestionNewPage } from './routes/question-editor';
  * bằng `stimulusId`. Trạng thái draft/ready chốt bằng
  * POST /questions/:id/status sau khi lưu.
  *
- * `@lms/editor` được thay bằng bản giả lập textarea (tài liệu ↔ văn bản
+ * `@giaokhoa/editor` được thay bằng bản giả lập textarea (tài liệu ↔ văn bản
  * thuần theo paragraph; editor trắc nghiệm thống nhất giả lập bằng
  * textarea thân câu + textarea từng lựa chọn + radio đáp án đúng, vận
  * hành trên đúng hình dạng JSON tài liệu thống nhất) để spec trang
  * kiểm LUỒNG NGƯỜI DÙNG và payload — cơ chế soạn Tiptap thật thuộc
  * spec của chính package editor.
  */
-vi.mock('@lms/editor', async () => {
+vi.mock('@giaokhoa/editor', async () => {
   const React = await import('react');
   interface DocLike {
     type: 'doc';
@@ -125,7 +125,7 @@ vi.mock('@lms/editor', async () => {
     RichTextView: ({ value }: { value: DocLike | null }) =>
       value ? React.createElement('div', null, docToText(value)) : null,
     // --- Tài liệu thống nhất trắc nghiệm (giả lập trung thực theo
-    // hình dạng JSON của module multiple-choice ở @lms/editor) ---
+    // hình dạng JSON của module multiple-choice ở @giaokhoa/editor) ---
     splitMultipleChoiceDocument: (content: McDocLike) => {
       const nodes = content.content ?? [];
       const listIndex = nodes.findIndex((node) => node.type === 'choiceList');
@@ -265,7 +265,7 @@ vi.mock('@lms/editor', async () => {
       );
     },
     // --- Tài liệu thống nhất Đúng/Sai TF-A (giả lập theo hình dạng
-    // JSON của module true-false ở @lms/editor): doc gồm các block
+    // JSON của module true-false ở @giaokhoa/editor): doc gồm các block
     // thân chung + một node statementList chốt đuôi chứa đúng 4
     // statement (mỗi statement có attrs.id và content là các block).
     splitTrueFalseDocument: (content: McDocLike) => {
@@ -596,7 +596,7 @@ async function openNewQuestionForm() {
   await screen.findByLabelText('Nội dung câu hỏi');
 }
 
-/** Chọn một tuỳ chọn trong Select của @lms/ui: bấm trigger theo nhãn rồi bấm option theo chữ hiển thị. */
+/** Chọn một tuỳ chọn trong Select của @giaokhoa/ui: bấm trigger theo nhãn rồi bấm option theo chữ hiển thị. */
 async function pickSelectOption(scope: ReturnType<typeof within>, label: string, optionText: string) {
   await userEvent.click(scope.getByLabelText(label));
   await userEvent.click(await screen.findByRole('option', { name: optionText }));

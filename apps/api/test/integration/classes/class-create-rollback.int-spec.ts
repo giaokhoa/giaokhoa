@@ -6,7 +6,7 @@ import { RolesService } from '../../../src/modules/access/roles.service';
 import { CONTEXT_LEVELS } from '../../../src/modules/access/domain/capabilities';
 import { ClassesService } from '../../../src/modules/classes/classes.service';
 
-const TEST_DB_URL = process.env.LMS_TEST_DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5432/lms_test_api';
+const TEST_DB_URL = process.env.GIAOKHOA_TEST_DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5432/giaokhoa_test_api';
 
 /**
  * Hồi quy nguyên tử cho luồng TẠO LỚP (issue #490, DL-09).

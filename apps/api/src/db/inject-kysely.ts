@@ -1,18 +1,11 @@
 /**
- * Decorator `@InjectKysely(...)` — cơ chế inject handle Kysely tự
- * dựng của repo, thay vai trò mà decorator inject theo token của
- * NestJS từng giữ cho phía bộ máy cũ.
+ * Tạo token inject riêng cho ba kho Kysely tại tầng NestJS: kho trung tâm, kho control plane và kho ngân hàng hệ thống.
  *
- * Vì sao tự dựng: Kysely không có module NestJS chính thức và dự án
- * không lấy thêm package cộng đồng cho việc này (xem `KyselyModule`
- * trong `kysely.module.ts` cùng thư mục). Mỗi kho dữ liệu có một
- * token riêng; `InjectKysely()` không tham số trỏ về kho trung tâm —
- * kho mặc định, tương đương cách decorator của bộ máy cũ trỏ về kết
- * nối mặc định trước đây.
+ * Kysely không cung cấp module NestJS mặc định; `@InjectKysely()` chọn kho trung tâm khi không truyền tên, giúp các consumer chỉ phụ thuộc vào token đã đăng ký bởi `KyselyModule`.
  */
 import { Inject } from '@nestjs/common';
 
-/** Ba kho dữ liệu có handle Kysely — khớp ba factory trong `@lms/db` (`client.ts`). */
+/** Ba kho dữ liệu có handle Kysely — khớp ba factory trong `@giaokhoa/db` (`client.ts`). */
 export type KyselyStoreName = 'centre' | 'control-plane' | 'system-bank';
 
 /** Token provider của handle Kysely kho trung tâm (`CentreDb`). */

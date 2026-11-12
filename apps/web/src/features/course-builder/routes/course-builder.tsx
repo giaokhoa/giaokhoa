@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import type {
   Course, CourseContent, CourseGroup, CourseGrouping, GradeItem,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { CurriculumFramePanel, BookFramePanel } from '../components/curriculum-frame-panel';
-import { Card, CardContent, CardHeader, CardTitle } from '@lms/ui/components/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { useTranslation } from 'react-i18next';
 import '#config/i18n';
 import { fetchItems, insertItem } from '#features/content-bank/api/content-bank';

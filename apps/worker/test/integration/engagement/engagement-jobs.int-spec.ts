@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { INestApplicationContext } from '@nestjs/common';
-import { sql } from '@lms/db';
+import { sql } from '@giaokhoa/db';
 import { BadgeAwardProcessor } from '../../../src/processors/badge-award.processor';
 import { CalendarImportProcessor } from '../../../src/processors/calendar-import.processor';
 import { CalendarReminderProcessor } from '../../../src/processors/calendar-reminder.processor';
@@ -19,7 +19,7 @@ import {
  * award_badge.feature), calendar/tests/lib_test
  * test_add_subscription (hình dạng counts của kết quả nhập ICS).
  * User được chèn thô (raw-insert) với id cao duy nhất để giữ độc lập với
- * dữ liệu còn sót lại từ các lần chạy trước của suite này trong lms_test_worker.
+ * dữ liệu còn sót lại từ các lần chạy trước của suite này trong giaokhoa_test_worker.
  *
  * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness
  * role thường (`test/ordinary-worker-module.ts`): module chạy bằng
@@ -116,8 +116,8 @@ describe('Engagement của worker: gửi thông báo, nhắc/lấy lịch, tự 
   it('nhập lịch phân tích ICS thành sự kiện đăng ký; chạy lại không nhập trùng gì (số đếm nhập lib_test)', async () => {
     const ics = [
       'BEGIN:VCALENDAR', 'VERSION:2.0',
-      'BEGIN:VEVENT', 'UID:import-1@lms', 'SUMMARY:Keynote', 'DTSTART:20270105T090000Z', 'DTEND:20270105T100000Z', 'END:VEVENT',
-      'BEGIN:VEVENT', 'UID:import-2@lms', 'SUMMARY:Workshop', 'DTSTART:20270106T090000Z', 'DTEND:20270106T110000Z', 'END:VEVENT',
+      'BEGIN:VEVENT', 'UID:import-1@giaokhoa', 'SUMMARY:Keynote', 'DTSTART:20270105T090000Z', 'DTEND:20270105T100000Z', 'END:VEVENT',
+      'BEGIN:VEVENT', 'UID:import-2@giaokhoa', 'SUMMARY:Workshop', 'DTSTART:20270106T090000Z', 'DTEND:20270106T110000Z', 'END:VEVENT',
       'END:VCALENDAR',
     ].join('\r\n');
     const sub = await db.insertInto('calendar_subscriptions').values({
@@ -141,10 +141,10 @@ describe('Engagement của worker: gửi thông báo, nhắc/lấy lịch, tự 
     const courseId = (courseRows.rows[0] as { id: string }).id;
     await db.insertInto('course_completions').values({ user_id: userA, course: courseId, status: 'complete', time_started: new Date(), time_completed: new Date() }).execute();
 
-    const badgeRow = await db.insertInto('badge').values({ name: `Worker badge ${suffix}`, type: 1, status: 1, issuer_name: 'LMS' }).returningAll().executeTakeFirstOrThrow();
+    const badgeRow = await db.insertInto('badge').values({ name: `Worker badge ${suffix}`, type: 1, status: 1, issuer_name: 'Giáo khoa' }).returningAll().executeTakeFirstOrThrow();
     await db.insertInto('badge_criteria').values({ badge_id: badgeRow.id, criteria_type: 'overall', method: 1, params: {} }).execute();
     await db.insertInto('badge_criteria').values({ badge_id: badgeRow.id, criteria_type: 'coursecompletion', method: 1, params: { courseId } }).execute();
-    const hardBadge = await db.insertInto('badge').values({ name: `Hard badge ${suffix}`, type: 1, status: 1, issuer_name: 'LMS' }).returningAll().executeTakeFirstOrThrow();
+    const hardBadge = await db.insertInto('badge').values({ name: `Hard badge ${suffix}`, type: 1, status: 1, issuer_name: 'Giáo khoa' }).returningAll().executeTakeFirstOrThrow();
     await db.insertInto('badge_criteria').values({ badge_id: hardBadge.id, criteria_type: 'overall', method: 1, params: {} }).execute();
     await db.insertInto('badge_criteria').values({ badge_id: hardBadge.id, criteria_type: 'coursecompletion', method: 1, params: { courseId } }).execute();
     await db.insertInto('badge_criteria').values({ badge_id: hardBadge.id, criteria_type: 'competency', method: 1, params: { competencyId: 999999 } }).execute();
@@ -188,7 +188,7 @@ describe('Engagement của worker: gửi thông báo, nhắc/lấy lịch, tự 
     await db.insertInto('course_completions').values({ user_id: userA, course: courseId, status: 'complete', time_started: new Date(), time_completed: new Date() }).execute();
 
     const mkBadge = async (name: string, leaves: { criteriaType: string; params: Record<string, unknown> }[]) => {
-      const row = await db.insertInto('badge').values({ name, type: 1, status: 1, issuer_name: 'LMS' }).returningAll().executeTakeFirstOrThrow();
+      const row = await db.insertInto('badge').values({ name, type: 1, status: 1, issuer_name: 'Giáo khoa' }).returningAll().executeTakeFirstOrThrow();
       await db.insertInto('badge_criteria').values({ badge_id: row.id, criteria_type: 'overall', method: 1, params: {} }).execute();
       for (const leaf of leaves) await db.insertInto('badge_criteria').values({ badge_id: row.id, criteria_type: leaf.criteriaType, method: 1, params: leaf.params }).execute();
       return row.id as string;

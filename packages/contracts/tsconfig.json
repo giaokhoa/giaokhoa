@@ -1,5 +1,5 @@
 {
-  "extends": "@lms/config/tsconfig/base.json",
+  "extends": "@giaokhoa/config/tsconfig/base.json",
   "compilerOptions": {
     "module": "NodeNext",
     "moduleResolution": "NodeNext",

@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { richTextDocumentSchema, type RichTextDocument } from '@lms/contracts';
+import { richTextDocumentSchema, type RichTextDocument } from '@giaokhoa/contracts';
 import { contentForSave, ensureTerminalContinuation } from './document-continuation.js';
 import { RichTextEditor } from './rich-text-editor.js';
 import { RichTextView } from './rich-text-view.js';
@@ -655,7 +655,7 @@ describe('Tài liệu soạn thảo TrueFalse (TF-A)', () => {
     expect(container.textContent).toContain('Thân câu hiển thị');
     expect(container.textContent).toContain('Nội dung mệnh đề 1');
     expect(container.textContent).toContain('Nội dung mệnh đề 2');
-    expect(container.querySelectorAll('ol.lms-statement-list li')).toHaveLength(2);
+    expect(container.querySelectorAll('ol.giaokhoa-statement-list li')).toHaveLength(2);
   });
 
   it('renders one Đúng/Sai radio pair per statement and reports the picked value by statement id', async () => {

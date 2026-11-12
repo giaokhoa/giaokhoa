@@ -29,7 +29,7 @@ describe('Cấu hình site (cài đặt admin)', () => {
     const list = await http(app).get('/api/v1/site-config').set('Authorization', `Bearer ${admin}`);
     expect(list.status).toBe(200);
     const byKey = new Map((list.body as { component: string; name: string }[]).map((s) => [`${s.component}/${s.name}`, s]));
-    expect(byKey.get('core/fullname')).toMatchObject({ value: 'LMS', defaultValue: 'LMS', source: 'default' });
+    expect(byKey.get('core/fullname')).toMatchObject({ value: 'Giáo khoa', defaultValue: 'Giáo khoa', source: 'default' });
     expect(byKey.get('core/lang')).toMatchObject({ value: 'vi', source: 'default' });
     expect(byKey.get('core/messagingallusers')).toMatchObject({ value: false, source: 'default' });
     expect(byKey.get('badges/enabled')).toMatchObject({ value: true, source: 'default' });
@@ -50,12 +50,12 @@ describe('Cấu hình site (cài đặt admin)', () => {
     const entry = (audit.body as { oldValue: unknown; newValue: unknown; changedBy: string }[])
       .find((a) => a.newValue === 'Trường Học Số');
     expect(entry).toBeDefined();
-    expect(entry!.oldValue).toBe('LMS');
+    expect(entry!.oldValue).toBe('Giáo khoa');
     expect(entry!.changedBy).toBe(adminId);
 
     const cleared = await http(app).delete('/api/v1/site-config/core/fullname').set('Authorization', `Bearer ${admin}`);
     expect(cleared.status).toBe(200);
-    expect(cleared.body).toMatchObject({ value: 'LMS', source: 'default' });
+    expect(cleared.body).toMatchObject({ value: 'Giáo khoa', source: 'default' });
 
     const clearAgain = await http(app).delete('/api/v1/site-config/core/fullname').set('Authorization', `Bearer ${admin}`);
     expect(clearAgain.status).toBe(404);
@@ -68,7 +68,7 @@ describe('Cấu hình site (cài đặt admin)', () => {
     expect(put.status).toBe(200);
     expect(put.body).toMatchObject({ component: 'badges', value: false, source: 'database' });
     const core = await http(app).get('/api/v1/site-config/core/fullname').set('Authorization', `Bearer ${admin}`);
-    expect(core.body.value).toBe('LMS');
+    expect(core.body.value).toBe('Giáo khoa');
     await http(app).delete('/api/v1/site-config/badges/enabled').set('Authorization', `Bearer ${admin}`);
   });
 
@@ -98,6 +98,6 @@ describe('Cấu hình site (cài đặt admin)', () => {
       .set('Authorization', `Bearer ${plainLogin.accessToken}`).send({ value: 'Hacked' });
     expect(write.status).toBe(403);
     const unchanged = await http(app).get('/api/v1/site-config/core/fullname').set('Authorization', `Bearer ${admin}`);
-    expect(unchanged.body.value).toBe('LMS');
+    expect(unchanged.body.value).toBe('Giáo khoa');
   });
 });

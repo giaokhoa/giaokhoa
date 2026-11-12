@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MESSAGING_DISTRIBUTED_EVENT_TYPES } from '@lms/messaging';
+import { MESSAGING_DISTRIBUTED_EVENT_TYPES } from '@giaokhoa/messaging';
 import type { SpaceRegistryEntry } from './db/routing/space-connection-resolver';
 import { OutboxRelayScheduler } from './outbox-relay.scheduler';
 import {
@@ -484,7 +484,7 @@ describe('Relay outbox — định tuyến theo trung tâm (issue #582)', () => 
     id: 'id-dang-ky-a',
     slug: 'trung-tam-a',
     status: 'active',
-    databaseName: 'lms_centre_a',
+    databaseName: 'giaokhoa_centre_a',
     storageMode: 'dedicated',
     connectionRoleRef: 'centre_a_app',
     secretRef: 'env:CENTRE_A_URL',

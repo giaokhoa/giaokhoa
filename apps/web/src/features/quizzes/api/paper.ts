@@ -1,4 +1,4 @@
-import type { PaperBatch, PaperScan } from '@lms/contracts';
+import type { PaperBatch, PaperScan } from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 
 /**

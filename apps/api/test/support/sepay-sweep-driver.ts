@@ -1,11 +1,11 @@
 import 'reflect-metadata';
-import { createCentreKysely, type CentreDb } from '@lms/db';
+import { createCentreKysely, type CentreDb } from '@giaokhoa/db';
 import {
   OutboxWriterService,
   PaymentsRepository,
   PlanEntitlementsService,
   SepayMatchingService,
-} from '@lms/payments';
+} from '@giaokhoa/payments';
 import type { ConfigService } from '@nestjs/config';
 import { CohortSyncService } from '../../../worker/src/cohort-sync.service';
 import { SepayMatchingScheduler } from '../../../worker/src/sepay-matching.scheduler';
@@ -30,9 +30,9 @@ import { WorkerPaymentSpaceScope } from '../../../worker/src/worker-payment-spac
  *
  * Cách dẫn: dựng ĐÚNG ngăn xếp production của worker bằng `new`
  * (không qua Nest, không boot WorkerModule — e2e shard chỉ build
- * `@lms/api`, không có tiến trình worker chạy kèm): handle Kysely
+ * `@giaokhoa/api`, không có tiến trình worker chạy kèm): handle Kysely
  * trên `TenantAwarePool` của worker (gắn GUC theo ALS như module
- * thật) cho repository + writer của `@lms/payments`, cho lượt đọc
+ * thật) cho repository + writer của `@giaokhoa/payments`, cho lượt đọc
  * polling đồng bộ cohort của chính cầu dẫn này, và cho toàn
  * bộ adapter của worker qua khung định tuyến theo không gian
  * (handle Kysely được gắn vào khung
@@ -80,7 +80,7 @@ let cohortWatermark = '0';
 /**
  * Handle Kysely kho trung tâm trên pool của cầu dẫn (vòng đời của
  * nó đi theo pool chung, không `destroy()` riêng): repository và
- * writer của `@lms/payments` cùng toàn bộ adapter của worker đều
+ * writer của `@giaokhoa/payments` cùng toàn bộ adapter của worker đều
  * chạy trên handle Kysely (qua khung định tuyến gắn handle này làm
  * đích kho chung), nên mọi điểm dựng đều lấy handle từ đây.
  */

@@ -18,17 +18,17 @@
  */
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import type { Job } from 'bullmq';
-import { sql, type CentreDB } from '@lms/db';
-import { type EnrolInstanceRow } from '@lms/enrol';
+import { sql, type CentreDB } from '@giaokhoa/db';
+import { type EnrolInstanceRow } from '@giaokhoa/enrol';
 import { SpaceDatabaseService } from '../db/routing/space-database.service';
 import { TaskLogService } from '../task-log.service';
 import { tenantAls } from '../db/tenant-als';
 
 /**
  * Danh sách cột đọc của một dòng `enrol` mà processor này nạp —
- * đúng hình dạng `EnrolRow` của `@lms/db`, dùng chung cho lượt đọc
+ * đúng hình dạng `EnrolRow` của `@giaokhoa/db`, dùng chung cho lượt đọc
  * các instance cohort của lớp: bí danh camelCase tường minh theo
- * khuôn danh sách cột của `@lms/db`.
+ * khuôn danh sách cột của `@giaokhoa/db`.
  */
 const ENROL_COLUMNS = [
   'id',
@@ -333,7 +333,7 @@ export class ClassEnrolReconcileProcessor extends WorkerHost {
         await tx.insertInto('outbox_events').values({
           aggregate: 'enrol', type: 'user_enrolled',
           // Cột `payload` jsonb đi qua serialize tường minh kèm
-          // `::jsonb` theo khuôn ghi jsonb của `@lms/db`.
+          // `::jsonb` theo khuôn ghi jsonb của `@giaokhoa/db`.
           payload: sql<CentreDB['outbox_events']['payload']>`${JSON.stringify({
             courseId: instance.courseId, userId, instanceId: instance.id, method: 'cohort', actorId: null, reconciled: true,
           })}::jsonb`,

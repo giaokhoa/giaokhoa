@@ -1,4 +1,4 @@
-# @lms/grades — README nghiệp vụ
+# @giaokhoa/grades — README nghiệp vụ
 
 > File này ghi các **quyết định nghiệp vụ quan trọng và còn đang hiệu lực** của package.
 > Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub.
@@ -17,13 +17,13 @@ Ngữ nghĩa tính toán ở đây bám Moodle (sàn tối thiểu của sản p
 
 ## Quyết định nghiệp vụ còn hiệu lực
 
-| Quyết định | Nguồn |
-|---|---|
-| Công thức điểm viết theo cú pháp Moodle: bắt đầu bằng `=`, tham chiếu grade item bằng `[[idNumber]]`, hàm lõi `sum/average/min/max`… Đánh giá bằng **parser an toàn, KHÔNG dùng `eval`** — công thức do GV nhập là dữ liệu, không phải code. | `grade-formula.ts` (oracle: MoodleDocs "Grade calculations", tra 23/10/2026) |
-| Ngữ nghĩa điểm trống đã chốt: chia cho 0 → **null** (không có điểm), không lỗi/Infinity. Điểm trống truyền qua phép toán hai ngôi thành null; riêng `sum/average/min/max` BỎ QUA đối số trống, chỉ null khi mọi đối số đều trống. | `grade-formula.ts` |
-| `round` theo ngữ nghĩa PHP của Moodle: làm tròn nửa **ra xa số 0** (round(2.5)=3, round(-2.5)=-3). `mod` giữ dấu của số bị chia (fmod); `if` đánh giá lười; toán tử so sánh cho 1/0 và không chuỗi được. Hàm ngoài tập lõi bị **từ chối lúc phân tích cú pháp bằng lỗi rõ ràng** — không âm thầm tính sai. | `grade-formula.ts` |
-| Tính đúng của bộ máy được khoá bằng **parity corpus** (`parity-corpus.ts` + `grade-parity.spec.ts`): tập ca đối chiếu kết quả với Moodle. Đổi ngữ nghĩa tính toán mà corpus không đổi theo quyết định mới = chưa xong. | Issue #137 |
-| Mô hình điểm của hệ thống là điểm **theo từng hoạt động** (từng bài kiểm tra/bài tập): KHÔNG còn Sổ điểm Việt Nam (TT 22/27) và KHÔNG còn tổng hợp điểm theo khoá. Engine này chỉ phục vụ tính điểm trong phạm vi một hoạt động và các công thức GV cấu hình cho hoạt động đó — **không hard-code công thức của bất kỳ chế độ điểm cụ thể nào vào engine dùng chung**. | Sổ mục B, chốt 25/10/2026 23:49; issue #224 |
+| Quyết định                                                                                                                                                                                                                                                                                                                                                             | Nguồn                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Công thức điểm viết theo cú pháp Moodle: bắt đầu bằng `=`, tham chiếu grade item bằng `[[idNumber]]`, hàm lõi `sum/average/min/max`… Đánh giá bằng **parser an toàn, KHÔNG dùng `eval`** — công thức do GV nhập là dữ liệu, không phải code.                                                                                                                           | `grade-formula.ts` (oracle: MoodleDocs "Grade calculations", tra 23/10/2026) |
+| Ngữ nghĩa điểm trống đã chốt: chia cho 0 → **null** (không có điểm), không lỗi/Infinity. Điểm trống truyền qua phép toán hai ngôi thành null; riêng `sum/average/min/max` BỎ QUA đối số trống, chỉ null khi mọi đối số đều trống.                                                                                                                                      | `grade-formula.ts`                                                           |
+| `round` theo ngữ nghĩa PHP của Moodle: làm tròn nửa **ra xa số 0** (round(2.5)=3, round(-2.5)=-3). `mod` giữ dấu của số bị chia (fmod); `if` đánh giá lười; toán tử so sánh cho 1/0 và không chuỗi được. Hàm ngoài tập lõi bị **từ chối lúc phân tích cú pháp bằng lỗi rõ ràng** — không âm thầm tính sai.                                                             | `grade-formula.ts`                                                           |
+| Tính đúng của bộ máy được khoá bằng **parity corpus** (`parity-corpus.ts` + `grade-parity.spec.ts`): tập ca đối chiếu kết quả với Moodle. Đổi ngữ nghĩa tính toán mà corpus không đổi theo quyết định mới = chưa xong.                                                                                                                                                 | Issue #137                                                                   |
+| Mô hình điểm của hệ thống là điểm **theo từng hoạt động** (từng bài kiểm tra/bài tập): KHÔNG còn Sổ điểm Việt Nam (TT 22/27) và KHÔNG còn tổng hợp điểm theo khoá. Engine này chỉ phục vụ tính điểm trong phạm vi một hoạt động và các công thức GV cấu hình cho hoạt động đó — **không hard-code công thức của bất kỳ chế độ điểm cụ thể nào vào engine dùng chung**. | Sổ mục B, chốt 25/10/2026 23:49; issue #224                                  |
 
 ## Ranh giới — package này KHÔNG làm gì
 

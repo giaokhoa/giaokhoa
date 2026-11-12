@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { Observable, Subject } from 'rxjs';
 import { redisTlsFromUrl } from '../../config/env';
-import { MessagingRepository } from '@lms/db/repositories/messaging';
+import { MessagingRepository } from '@giaokhoa/db/repositories/messaging';
 import { tenantAls } from '../tenants/tenant-als';
 
 /**
@@ -11,7 +11,7 @@ import { tenantAls } from '../tenants/tenant-als';
  * vừa thay đổi". Payload chỉ là userId — số đếm thật luôn được đọc lại
  * từ database ở phía nhận, không tin số mang theo tín hiệu.
  */
-export const NOTIFICATION_UNREAD_CHANGED_CHANNEL = 'lms:notifications:unread-changed';
+export const NOTIFICATION_UNREAD_CHANGED_CHANNEL = 'giaokhoa:notifications:unread-changed';
 
 /** Nhịp heartbeat của stream: đủ dày để giữ kết nối SSE sống qua giới hạn idle của các chặng proxy ở biên. */
 const HEARTBEAT_INTERVAL_MS = 25_000;
@@ -128,7 +128,7 @@ export class NotificationUnreadStreamService implements OnModuleInit, OnModuleDe
         tenantId ? { tenantId } : { platform: true },
         // Vòng ALS vẫn giữ (nó lập cả ngữ cảnh pool/RLS); tenantId
         // đồng thời truyền tường minh xuống repository vì
-        // repository tại `@lms/db` không đọc ALS (issue #658).
+        // repository tại `@giaokhoa/db` không đọc ALS (issue #658).
         () => this.repo.countUnreadNotifications(userId, tenantId ?? undefined),
       );
       for (const subject of subjects) {

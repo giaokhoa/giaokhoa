@@ -4,7 +4,7 @@
  * thái React, không gọi API — các card trong thư mục này và file trang
  * dùng chung khi dựng bề mặt điểm và bề mặt xuất vnEdu.
  */
-import type { GradeItem } from '@lms/contracts';
+import type { GradeItem } from '@giaokhoa/contracts';
 
 /** Loại cột vnEdu (TT 22/2021) mà giáo viên gán cho một mục điểm khi xuất Excel — issue #53. */
 export type VneduColumnKind = 'none' | 'regular' | 'midterm' | 'final';

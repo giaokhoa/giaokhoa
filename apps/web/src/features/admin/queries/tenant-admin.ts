@@ -1,5 +1,5 @@
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { CreateTenant, CreateUser } from '@lms/contracts';
+import type { CreateTenant, CreateUser } from '@giaokhoa/contracts';
 import { queryKeys as sharedQueryKeys } from '#lib/query-keys';
 import {
   addTenantMember,

@@ -35,7 +35,7 @@ import {
 
 interface Person { id: string; username: string; token: string }
 
-const PRESENCE_KEY_PREFIX = 'lms:messaging:presence:';
+const PRESENCE_KEY_PREFIX = 'giaokhoa:messaging:presence:';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

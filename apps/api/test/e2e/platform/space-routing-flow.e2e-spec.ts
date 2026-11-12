@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client, Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createControlPlaneKysely } from '@lms/db/control-plane';
+import { createControlPlaneKysely } from '@giaokhoa/db/control-plane';
 import { emitSpaceRegistryChanged } from '../../../src/db/routing/space-routing-events';
 import {
   STRONG_PASSWORD,
@@ -17,11 +17,11 @@ import {
  * Ca đầu-cuối của ĐỊNH TUYẾN THEO TRUNG TÂM Ở TẦNG API (issue
  * #582): ứng dụng thật (toàn bộ chuỗi guard) chạy với hai trung
  * tâm kiểm chứng ở kho riêng dựng riêng cho đợt này — hai
- * database mới trên cùng cụm test (`lms_test_centre_a_582`,
- * `lms_test_centre_b_582`), mỗi kho có role ứng dụng riêng,
+ * database mới trên cùng cụm test (`giaokhoa_test_centre_a_582`,
+ * `giaokhoa_test_centre_b_582`), mỗi kho có role ứng dụng riêng,
  * CONNECT của PUBLIC bị thu hồi, baseline nghiệp vụ áp bằng role
  * chủ kho; sổ đăng ký nằm ở database control plane riêng
- * (`lms_test_cp_582`) mà ứng dụng đọc qua biến
+ * (`giaokhoa_test_cp_582`) mà ứng dụng đọc qua biến
  * `CONTROL_PLANE_DATABASE_URL` đặt trước khi ứng dụng khởi động.
  * Hai tenant tương ứng được tạo bằng chính API công khai ở kho
  * chung, rồi dòng tenant (và với trung tâm A: dòng user + dòng
@@ -52,14 +52,14 @@ import {
  * (5) trung tâm ở kho chung giữ nguyên hành vi hiện tại ở cả địa
  *     chỉ gốc lẫn tên miền con của nó.
  */
-const CP_DATABASE = 'lms_test_cp_582';
-const CP_ROLE = 'lms_cp_test_582';
+const CP_DATABASE = 'giaokhoa_test_cp_582';
+const CP_ROLE = 'giaokhoa_cp_test_582';
 const CP_PASSWORD = 'cp-test-582';
-const CENTRE_A_DATABASE = 'lms_test_centre_a_582';
-const CENTRE_A_ROLE = 'lms_centre_a_582_app';
+const CENTRE_A_DATABASE = 'giaokhoa_test_centre_a_582';
+const CENTRE_A_ROLE = 'giaokhoa_centre_a_582_app';
 const CENTRE_A_PASSWORD = 'centre-a-582';
-const CENTRE_B_DATABASE = 'lms_test_centre_b_582';
-const CENTRE_B_ROLE = 'lms_centre_b_582_app';
+const CENTRE_B_DATABASE = 'giaokhoa_test_centre_b_582';
+const CENTRE_B_ROLE = 'giaokhoa_centre_b_582_app';
 const CENTRE_B_PASSWORD = 'centre-b-582';
 // Slug của hai trung tâm mang hậu tố ngẫu nhiên theo lượt chạy:
 // tenant tương ứng được tạo thật trong database nghiệp vụ test

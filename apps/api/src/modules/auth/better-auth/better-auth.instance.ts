@@ -27,7 +27,7 @@ import { mcp } from '@better-auth/mcp';
 import { APIError, betterAuth } from 'better-auth';
 import { createAuthMiddleware, type AuthMiddleware } from 'better-auth/api';
 import { jwt, username } from 'better-auth/plugins';
-import type { CentreDb } from '@lms/db';
+import type { CentreDb } from '@giaokhoa/db';
 import { PasswordService } from '../../users/password.service';
 import { createEmailOtpPlugin, type AuthMailPort } from '../../mail/email-otp.plugin';
 import { createMfaGateHook, type MfaGateDeps } from './mfa-gate';
@@ -109,10 +109,10 @@ function withPostgresArrays<T extends {
  * này (MCP_SCOPES) — hai nơi phải khớp nhau.
  */
 export const MCP_OAUTH_SCOPES = [
-  'lms.questions.read',
-  'lms.questions.draft',
-  'lms.questions.write',
-  'lms.banks.contribute',
+  'giaokhoa.questions.read',
+  'giaokhoa.questions.draft',
+  'giaokhoa.questions.write',
+  'giaokhoa.banks.contribute',
 ] as const;
 
 /** TTL (giây) của access token cho resource `/mcp` — JWT đã phát không thu hồi server-side được (RFC 7009) nên TTL ngắn là đường bù đã chốt ở addendum. */

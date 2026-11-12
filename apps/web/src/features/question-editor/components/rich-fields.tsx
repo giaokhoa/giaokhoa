@@ -16,8 +16,8 @@ import {
   type MultipleChoiceDocumentJson,
   type RichTextImagePick,
   type TrueFalseDocumentJson,
-} from '@lms/editor';
-import { Field, FieldLabel } from '@lms/ui/components/field';
+} from '@giaokhoa/editor';
+import { Field, FieldLabel } from '@giaokhoa/ui/components/field';
 import { useTranslation } from 'react-i18next';
 import { QUESTION_IMAGE_ACCEPT, QuestionImageError } from '../types/question-files';
 import type { QuestionFileArea } from '../types/question-files';
@@ -148,7 +148,7 @@ export function RichField({
 
 /**
  * Trường soạn trắc nghiệm trên tài liệu thống nhất: thân câu + bốn
- * lựa chọn trong MỘT editor (`MultipleChoiceEditor` của @lms/editor),
+ * lựa chọn trong MỘT editor (`MultipleChoiceEditor` của @giaokhoa/editor),
  * radio đáp án đúng gắn tại từng lựa chọn. Đường chèn ảnh dùng chung
  * một handler cho cả tài liệu — khu vực file ghi là `questiontext`
  * vì vị trí con trỏ (thân câu hay trong lựa chọn) không lộ ra qua
@@ -193,7 +193,7 @@ export function McDocumentField({
 
 /**
  * Trường soạn Đúng/Sai trên tài liệu thống nhất TF-A: thân chung +
- * đúng 4 mệnh đề trong MỘT editor (`TrueFalseEditor` của @lms/editor),
+ * đúng 4 mệnh đề trong MỘT editor (`TrueFalseEditor` của @giaokhoa/editor),
  * cặp radio Đ/S gắn tại từng mệnh đề để chọn đáp án của mệnh đề đó
  * (đáp án sống ngoài tài liệu qua `answers`/`onAnswerChange`). Đường
  * chèn ảnh dùng chung một handler cho cả tài liệu như trường MC.

@@ -2,15 +2,15 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client, Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createCentreKysely, sql as kyselySql } from '@lms/db';
-import { applyStoreMigrations } from '@lms/db/migrate';
+import { createCentreKysely, sql as kyselySql } from '@giaokhoa/db';
+import { applyStoreMigrations } from '@giaokhoa/db/migrate';
 import {
   installSpaceRoleBaseline,
   runSpaceProvision,
 } from '../../../src/modules/tenants/space-provision-runner';
 import { deriveCentreSecretEnvVar } from '../../../src/modules/tenants/centre-provision';
 import { FleetRegistryWriter } from '../../../src/modules/fleet/fleet-registry-writer';
-import { AccessRepository } from '@lms/db/repositories/access';
+import { AccessRepository } from '@giaokhoa/db/repositories/access';
 import { ContextsService } from '../../../src/modules/access/contexts.service';
 import { RolesService } from '../../../src/modules/access/roles.service';
 import { PlanLimitsService } from '../../../src/modules/access/plan-limits.service';
@@ -40,11 +40,11 @@ import { DEFAULT_ROLES } from '../../../src/modules/access/domain/capabilities';
  * trên cùng cụm không va chạm, và không tái dùng tên database cũ
  * (tránh khoá cache siteadmins cũ trong Redis theo tên database).
  * Cụm test lấy từ `DATABASE_URL` đã được Vitest phân giải (biến
- * `LMS_TEST_DATABASE_URL` ghi đè khi chạy ngoài CI).
+ * `GIAOKHOA_TEST_DATABASE_URL` ghi đè khi chạy ngoài CI).
  */
 const RUN_SUFFIX = Math.random().toString(36).slice(2, 8);
-const CP_DATABASE = `lms_test_cp_td7_${RUN_SUFFIX}`;
-const SHARED_DATABASE = `lms_test_shared_td7_${RUN_SUFFIX}`;
+const CP_DATABASE = `giaokhoa_test_cp_td7_${RUN_SUFFIX}`;
+const SHARED_DATABASE = `giaokhoa_test_shared_td7_${RUN_SUFFIX}`;
 const SLUG_A = `trung-tam-td7-a-${RUN_SUFFIX}`;
 const SLUG_B = `trung-tam-td7-b-${RUN_SUFFIX}`;
 const ADMIN_EMAIL_A = `admin-td7-a-${RUN_SUFFIX}@example.com`;
@@ -206,7 +206,7 @@ async function buildReferenceStore(): Promise<void> {
   });
   const pool = new Pool({ connectionString: clusterUrl(SHARED_DATABASE) });
   try {
-    // Bộ máy migration của `@lms/db` tự cài shim `uuidv7()` khi
+    // Bộ máy migration của `@giaokhoa/db` tự cài shim `uuidv7()` khi
     // server dưới PG18 (xem `installUuidv7Shim` trong package).
     const db = createCentreKysely(pool);
     await applyStoreMigrations(db, 'centre', MIGRATIONS_DIR);

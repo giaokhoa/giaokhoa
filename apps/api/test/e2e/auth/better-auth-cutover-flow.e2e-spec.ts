@@ -4,7 +4,7 @@ import { Test } from '@nestjs/testing';
 import { Client } from 'pg';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { renderAuthMail, type AuthMailPayload } from '@lms/contracts';
+import { renderAuthMail, type AuthMailPayload } from '@giaokhoa/contracts';
 import type { CredentialBridgeService } from '../../../src/modules/auth/better-auth/credential-bridge.service';
 import type { MailMessage } from '../../../src/modules/mail/mail.types';
 
@@ -116,7 +116,7 @@ describe('Chuẩn bị cutover Better Auth — cửa sổ bake (issue #7 giai đ
   /**
    * Chờ tới khi có mail gửi cho địa chỉ này: nội dung mail được dựng
    * từ dòng outbox `auth_mail_requested` của chính địa chỉ đó bằng
-   * `renderAuthMail` dùng chung ở `@lms/contracts` — hàm mà
+   * `renderAuthMail` dùng chung ở `@giaokhoa/contracts` — hàm mà
    * processor ở phía worker gọi khi gửi thật (khâu gửi đã chuyển
    * sang hàng đợi ở worker, issue #517; dòng outbox được ghi đồng bộ
    * trong request nên thường có ngay).

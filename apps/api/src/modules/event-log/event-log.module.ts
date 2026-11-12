@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { EventLogRepository } from '@lms/db/repositories/event-log';
+import { EventLogRepository } from '@giaokhoa/db/repositories/event-log';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { AccessModule } from '../access/access.module';
@@ -11,7 +11,7 @@ import { EventLogService } from './event-log.service';
   imports: [AccessModule, SpaceRoutingModule],
   controllers: [EventLogController],
   providers: [
-    // Repository của package @lms/db chạy trên handle Kysely đã định
+    // Repository của package @giaokhoa/db chạy trên handle Kysely đã định
     // tuyến theo không gian (issue #648).
     {
       provide: EventLogRepository,

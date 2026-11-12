@@ -1,6 +1,6 @@
 /**
  * Runner migration của ĐỘI KHO (issue #586) — script CLI chạy bằng
- * `pnpm --filter @lms/api fleet:migrate` trên máy triển khai (hoặc
+ * `pnpm --filter @giaokhoa/api fleet:migrate` trên máy triển khai (hoặc
  * được lịch vận hành gọi), áp bộ migration hiện hành của repo lên
  * MỌI kho trong sổ đăng ký của control plane theo đợt an toàn:
  *
@@ -24,7 +24,7 @@
  *    tên). Còn thiếu thì: chụp BẢN SAO LƯU CHỐT gắn mã lượt chạy
  *    (điểm khôi phục của riêng kho đó — chụp hỏng thì kho bị đánh
  *    dấu hỏng và KHÔNG áp migration), áp migration bằng bộ máy
- *    migration của `@lms/db` (`applyStoreMigrations`), đọc lại
+ *    migration của `@giaokhoa/db` (`applyStoreMigrations`), đọc lại
  *    toàn tập đã áp để đối chiếu, rồi ghi kết
  *    quả (phiên bản đầu/đích, từng bước, lỗi) vào registry.
  *    Migration hỏng KHÔNG tự khôi phục từ bản chốt: khôi phục là
@@ -51,9 +51,9 @@
  */
 import { basename, join } from 'node:path';
 import { Client, Pool } from 'pg';
-import { createCentreKysely } from '@lms/db';
-import { applyStoreMigrations } from '@lms/db/migrate';
-import type { SchemaMigrationStep } from '@lms/db/control-plane';
+import { createCentreKysely } from '@giaokhoa/db';
+import { applyStoreMigrations } from '@giaokhoa/db/migrate';
+import type { SchemaMigrationStep } from '@giaokhoa/db/control-plane';
 import {
   dumpDatabaseToFile,
   listMigrationFolders,
@@ -72,7 +72,7 @@ import { FleetRegistryWriter } from './fleet-registry-writer';
 /** Tuỳ chọn của một lượt chạy runner; mặc định đọc từ biến môi trường của tiến trình. */
 export type FleetMigrationOptions = {
   env?: NodeJS.ProcessEnv;
-  /** Thư mục chứa các thư mục migration nghiệp vụ; mặc định `FLEET_MIGRATIONS_DIR` hoặc thư mục carrier trong package `@lms/db`. */
+  /** Thư mục chứa các thư mục migration nghiệp vụ; mặc định `FLEET_MIGRATIONS_DIR` hoặc thư mục carrier trong package `@giaokhoa/db`. */
   migrationsDir?: string;
   /** Thư mục gốc chứa các bản sao lưu theo kho; mặc định `FLEET_BACKUP_DIR` (bắt buộc có). */
   backupDir?: string;
@@ -191,7 +191,7 @@ async function migrateSpace(
 
     const pool = new Pool({ connectionString: url });
     try {
-      // Áp bằng trình tự dùng chung của bộ máy migration `@lms/db`
+      // Áp bằng trình tự dùng chung của bộ máy migration `@giaokhoa/db`
       // (shim tiền-migration + `migrateToLatest()` + tự kiểm lỗi —
       // xem `apply.ts` của package): cùng một trình tự với CLI
       // migrate của compose và runner cấp phát. Riêng runner đội
@@ -258,7 +258,7 @@ export async function runFleetMigration(options: FleetMigrationOptions = {}): Pr
   const backupDir = options.backupDir ?? env.FLEET_BACKUP_DIR;
   if (!backupDir) throw new Error('FLEET_BACKUP_DIR is required (pre-migration backups need a destination)');
   // Carrier đã dời về `packages/db/migrations/centre` (issue #639):
-  // mặc định mới phân giải qua vị trí package `@lms/db` (đúng cả
+  // mặc định mới phân giải qua vị trí package `@giaokhoa/db` (đúng cả
   // khi chạy từ repo lẫn từ image production đóng gói); biến môi
   // trường và option tường minh vẫn thắng mặc định như trước.
   const migrationsDir =

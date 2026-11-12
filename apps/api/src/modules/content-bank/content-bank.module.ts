@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ContentBankRepository } from '@lms/db/repositories/content-bank';
+import { ContentBankRepository } from '@giaokhoa/db/repositories/content-bank';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { AccessModule } from '../access/access.module';
@@ -14,7 +14,7 @@ import { ContentBankService } from './content-bank.service';
  * điểm cắm "Thêm từ kho" (tạo course module + sao file vào context của
  * module).
  *
- * Từ issue #646, ContentBankRepository sống ở `@lms/db` (lớp
+ * Từ issue #646, ContentBankRepository sống ở `@giaokhoa/db` (lớp
  * thuần, không phụ thuộc Nest) nên module lắp nó bằng factory
  * provider với handle Kysely định tuyến của kho trung tâm
  * (`SpaceDatabaseService.routedKysely`).

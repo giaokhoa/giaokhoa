@@ -24,7 +24,7 @@ export interface McpActor {
    * Trần quyền OAuth của phiên gọi (authInfo.scopes): kỷ nguyên cầu
    * auth = tập scope mount cấp cho token hệ thống; MCP-1 AS sẽ là scope
    * trên access token thật. Tool ghi có scope riêng (vd
-   * `lms.banks.contribute`) phải tự đối chiếu trần này — quyền nghiệp
+   * `giaokhoa.banks.contribute`) phải tự đối chiếu trần này — quyền nghiệp
    * vụ thật vẫn là capability tại context như REST.
    */
   scopes: string[];

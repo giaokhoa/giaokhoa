@@ -1,0 +1,7 @@
+{
+  "src/hooks/use-mobile.ts": {
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  }
+}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lms/ui/components/card';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { ErrorAlert } from '#components/error-alert';
 
 /**
@@ -10,7 +10,7 @@ import { ErrorAlert } from '#components/error-alert';
  * AS chuyển trình duyệt tới đây kèm chuỗi query authorize ĐÃ KÝ.
  * Trang hiển thị tên client (lấy từ `/oauth2/public-client` bằng
  * chính phiên BA) + danh sách scope xin cấp dạng tích chọn. Scope
- * `lms.questions.write` (phát hành câu hỏi) KHÔNG tích sẵn — giáo
+ * `giaokhoa.questions.write` (phát hành câu hỏi) KHÔNG tích sẵn — giáo
  * viên phải chủ động bật. Khi bấm đồng ý/từ chối, trang POST về
  * `/oauth2/consent` kèm `oauth_query` nguyên văn và đi tiếp theo
  * đúng `url` máy chủ trả về (không tự ghép redirect_uri — bài học
@@ -19,13 +19,13 @@ import { ErrorAlert } from '#components/error-alert';
 
 /** Nhãn tiếng Việt + mức cảnh báo cho từng scope MCP. */
 const SCOPE_LABELS: Record<string, { label: string; sensitive?: boolean }> = {
-  'lms.questions.read': { label: 'Xem ngân hàng câu hỏi: danh sách bank, thư mục, tìm và đọc câu hỏi' },
-  'lms.questions.draft': { label: 'Tạo câu hỏi BẢN NHÁP trong ngân hàng cá nhân của bạn (chưa dùng được cho tới khi bạn duyệt)' },
-  'lms.questions.write': {
+  'giaokhoa.questions.read': { label: 'Xem ngân hàng câu hỏi: danh sách bank, thư mục, tìm và đọc câu hỏi' },
+  'giaokhoa.questions.draft': { label: 'Tạo câu hỏi BẢN NHÁP trong ngân hàng cá nhân của bạn (chưa dùng được cho tới khi bạn duyệt)' },
+  'giaokhoa.questions.write': {
     label: 'PHÁT HÀNH câu hỏi: chuyển bản nháp của bạn thành câu hỏi chính thức dùng được trong đề thi',
     sensitive: true,
   },
-  'lms.banks.contribute': { label: 'Đề xuất đóng góp câu hỏi đã phát hành của bạn lên ngân hàng chung (vẫn cần người duyệt phía bank chung)' },
+  'giaokhoa.banks.contribute': { label: 'Đề xuất đóng góp câu hỏi đã phát hành của bạn lên ngân hàng chung (vẫn cần người duyệt phía bank chung)' },
 };
 
 interface ConsentContext {
@@ -69,7 +69,7 @@ export default function McpConsentPage() {
     }
     setContext(parsed);
     // Mọi scope NGOẠI TRỪ write được tích sẵn; write phải chủ động bật.
-    setSelected(new Set(parsed.scopes.filter((scope) => scope !== 'lms.questions.write')));
+    setSelected(new Set(parsed.scopes.filter((scope) => scope !== 'giaokhoa.questions.write')));
     void (async () => {
       try {
         const res = await fetch(
@@ -127,7 +127,7 @@ export default function McpConsentPage() {
           <CardTitle>Uỷ quyền cho ứng dụng AI</CardTitle>
           <CardDescription>
             {context
-              ? `Ứng dụng "${context.clientName}" xin được thay bạn thực hiện các việc sau trong LMS. Chỉ cấp những quyền bạn thật sự cần — bạn thu hồi được bằng cách ngừng kết nối trong ứng dụng.`
+              ? `Ứng dụng "${context.clientName}" xin được thay bạn thực hiện các việc sau trong Giáo khoa. Chỉ cấp những quyền bạn thật sự cần — bạn thu hồi được bằng cách ngừng kết nối trong ứng dụng.`
               : 'Đang tải thông tin uỷ quyền…'}
           </CardDescription>
         </CardHeader>

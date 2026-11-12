@@ -24,7 +24,7 @@
  * route này — đề/bài chỉ đọc bản chụp trong kho trung tâm.
  */
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { uuidIdSchema } from '@lms/contracts';
+import { uuidIdSchema } from '@giaokhoa/contracts';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { SystemBankService } from './system-bank.service';
 import {

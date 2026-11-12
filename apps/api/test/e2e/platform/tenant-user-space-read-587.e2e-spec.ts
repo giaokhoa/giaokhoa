@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client, Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createControlPlaneKysely } from '@lms/db/control-plane';
+import { createControlPlaneKysely } from '@giaokhoa/db/control-plane';
 import { SpaceDatabaseService } from '../../../src/db/routing/space-database.service';
 import { PermissionEvaluator } from '../../../src/modules/access/permission-evaluator.service';
 import { tenantAls } from '../../../src/modules/tenants/tenant-als';
@@ -106,11 +106,11 @@ import {
 // trước còn sót trên cụm được dọn ở beforeAll — chỉ database,
 // không đụng tới Redis.)
 const RUN_SUFFIX = Math.random().toString(36).slice(2, 8);
-const CP_DATABASE = `lms_test_cp_td6_${RUN_SUFFIX}`;
-const CP_ROLE = 'lms_cp_test_td6';
+const CP_DATABASE = `giaokhoa_test_cp_td6_${RUN_SUFFIX}`;
+const CP_ROLE = 'giaokhoa_cp_test_td6';
 const CP_PASSWORD = 'cp-test-td6';
-const CENTRE_DATABASE = `lms_test_centre_td6_${RUN_SUFFIX}`;
-const CENTRE_ROLE = 'lms_centre_td6_app';
+const CENTRE_DATABASE = `giaokhoa_test_centre_td6_${RUN_SUFFIX}`;
+const CENTRE_ROLE = 'giaokhoa_centre_td6_app';
 const CENTRE_PASSWORD = 'centre-test-td6';
 const CENTRE_SLUG = `trung-tam-td6-${RUN_SUFFIX}`;
 const HOST = `${CENTRE_SLUG}.test.local`;
@@ -221,7 +221,7 @@ describe('Tạo người dùng cho trung tâm cấp phát mới chỉ có ở kh
       // nên điều kiện "chạy lại trên cùng một Redis giữ nguyên"
       // vẫn nguyên vẹn.
       const leftovers = await admin.query<{ datname: string }>(
-        "SELECT datname FROM pg_database WHERE datname ~ '^lms_test_(cp|centre)_td6_'",
+        "SELECT datname FROM pg_database WHERE datname ~ '^giaokhoa_test_(cp|centre)_td6_'",
       );
       for (const row of leftovers.rows) {
         await admin.query(`DROP DATABASE IF EXISTS ${quoted(row.datname)} WITH (FORCE)`);

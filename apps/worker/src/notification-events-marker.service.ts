@@ -5,9 +5,9 @@ import { randomUUID } from 'node:crypto';
 import { redisConnectionFromUrl } from './config/env';
 
 /** Tiền tố khoá Redis của dấu "đang xử lý" (lease) theo outboxId. */
-const PROCESSING_KEY_PREFIX = 'lms:notification-events:processing:';
+const PROCESSING_KEY_PREFIX = 'giaokhoa:notification-events:processing:';
 /** Tiền tố khoá Redis của dấu "đã xử lý" theo outboxId. */
-const PROCESSED_KEY_PREFIX = 'lms:notification-events:processed:';
+const PROCESSED_KEY_PREFIX = 'giaokhoa:notification-events:processed:';
 /**
  * Thời hạn của lease "đang xử lý": 10 phút. Lease chỉ là chốt chống
  * hai lượt chạy xử lý CÙNG một sự kiện song song, không phải giới

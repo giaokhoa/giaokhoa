@@ -1,8 +1,8 @@
-import type { ClassStaffRole } from '@lms/contracts';
+import type { ClassStaffRole } from '@giaokhoa/contracts';
 
 /**
  * Kiểu dữ liệu của feature classes: tái xuất các kiểu hợp đồng lớp
- * học từ `@lms/contracts` (nơi dùng của feature nhập kiểu từ đây
+ * học từ `@giaokhoa/contracts` (nơi dùng của feature nhập kiểu từ đây
  * thay vì thẳng từ contracts để giữ một điểm neo kiểu cho miền
  * lớp), hằng thứ tự vai lớp và hình dạng payment gói lớp ở bề mặt
  * web. Tách từ module phẳng `src/lib/classes.ts` khi tổ chức lại
@@ -25,7 +25,7 @@ export type {
   ClassView,
   JoinClassResult,
   RosterStudentIdentity,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 
 /** Ba vai lớp theo thứ tự hiển thị ở bề mặt phân quyền (giao bài / chấm bài / quản roster). */
 export const CLASS_STAFF_ROLE_ORDER: ClassStaffRole[] = ['classassigner', 'classgrader', 'classrostermanager'];

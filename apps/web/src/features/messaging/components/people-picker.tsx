@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
 import { Check } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@lms/ui/components/avatar';
-import { Badge } from '@lms/ui/components/badge';
-import { Button } from '@lms/ui/components/button';
-import { cn } from '@lms/ui/lib/utils';
+import { Avatar, AvatarFallback } from '@giaokhoa/ui/components/avatar';
+import { Badge } from '@giaokhoa/ui/components/badge';
+import { Button } from '@giaokhoa/ui/components/button';
+import { cn } from '@giaokhoa/ui/lib/utils';
 import { useTranslation } from 'react-i18next';
 import type { MessagingCourse, PeoplePickerContext, RosterMember } from '../types/types';
 import { initialsOf } from '../utils/utils';

@@ -1,6 +1,5 @@
 /**
- * Repository của cụm NGƯỜI DÙNG trên Kysely — chuyển đổi bộ máy cũ →
- * Kysely của chiến dịch chuyển tầng dữ liệu (issue #641, nhóm G1).
+ * Repository của cụm NGƯỜI DÙNG trên Kysely.
  *
  * Vai trò: mọi truy cập tới hai bảng `users` và `user_preferences`
  * của kho trung tâm tập trung ở đây. Repository không chứa luật
@@ -12,9 +11,7 @@
  * handle gốc, và tham số `tx` tuỳ chọn ở các thao tác ghi để chạy
  * trong transaction do nơi gọi mở.
  *
- * Khuôn hình dạng dữ liệu ở biên repository — cùng khuôn pilot kho
- * control plane (xem `control-plane.ts` và playbook trong
- * `AGENTS.md` của package):
+ * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong, truy vấn viết trên interface schema sinh bằng
  *   codegen: tên bảng/cột giữ nguyên snake_case của database.
  * - Bên ngoài, repository trả/nhận hình dạng dòng camelCase như
@@ -37,7 +34,7 @@
  *   handle đó.
  */
 import { sql, type ExpressionBuilder, type Insertable, type Updateable } from 'kysely';
-import type { UserListSortBy, UserListStatus } from '@lms/contracts';
+import type { UserListSortBy, UserListStatus } from '@giaokhoa/contracts';
 import type { CentreDb, CentreDB, CentreTx } from '../client';
 
 /** Một dòng người dùng (hình dạng camelCase phía tiêu thụ dùng). */
@@ -83,7 +80,7 @@ export type UserPatch = Partial<NewUser>;
 
 /**
  * Bộ lọc danh sách người dùng cho `search()` — nhóm trạng thái và hợp đồng
- * sắp xếp, nhận giá trị theo hợp đồng truy vấn ở `@lms/contracts`. Mọi
+ * sắp xếp, nhận giá trị theo hợp đồng truy vấn ở `@giaokhoa/contracts`. Mọi
  * trường đều tuỳ chọn; bỏ trống trường nào thì `search()` áp dụng hành vi
  * mặc định của trường đó như mô tả từng trường dưới đây.
  *
@@ -183,14 +180,7 @@ function userUpdateSet(patch: UserPatch): Updateable<CentreDB['users']> {
 export class UsersRepository {
   constructor(private readonly handle: CentreDb) {}
 
-  /**
-   * Handle gốc của repository — điểm ghép mà tầng service dùng để
-   * mở transaction (`transaction(fn)` bên dưới) và cho các đường
-   * đọc phụ trợ thuộc chính module người dùng. Handle này là
-   * handle Kysely được định tuyến theo không gian, KHÔNG còn là
-   * handle bộ máy cũ: mọi thao tác ghép vào transaction mở từ đây
-   * đều là thao tác Kysely trên cùng một transaction.
-   */
+  /** Cấp handle Kysely định tuyến của repository cho các truy vấn phụ trợ cần dùng cùng database. */
   get dbHandle(): CentreDb { return this.handle; }
 
   /** Mở một transaction trên kho trung tâm và chạy `fn` trong đó (thành/bại cùng nhau). */

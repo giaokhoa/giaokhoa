@@ -3,17 +3,9 @@ import type { CentreDb, CentreTx } from '../client';
 import type { EntryRow, QCategoryRow, QuestionBankRow, QuestionRow } from './questions';
 
 /**
- * Kho dữ liệu lớp BANK của feat Ngân hàng câu hỏi chung trên Kysely
- * (issue #644, nhóm G4 của chiến dịch chuyển tầng dữ liệu sang
- * Kysely): TOÀN BỘ bề mặt của `QuestionBanksRepository` cũ ở
- * `apps/api`  được chuyển nguyên vẹn sang đây — bank,
- * category thuộc bank, đề xuất đóng góp, và các tra cứu tín hiệu
- * (số slot đề tham chiếu câu, đề/pin đang chứa câu, đội ngũ giáo
- * viên cho bank trường, tên hiển thị người dùng, YCCĐ theo node
- * chương trình bằng CTE đệ quy).
+ * Kho dữ liệu ngân hàng câu hỏi trên Kysely: quản lý bank, danh mục, đề xuất đóng góp và tra cứu ảnh hưởng tới đề/pin, giáo viên quản lý bank và YCCĐ của chương trình.
  *
- * Khuôn truy vấn theo đúng pilot kho control plane (issue #640) và
- * repository câu hỏi (issue #642):
+ * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Cột đọc khai tường minh kèm bí danh camelCase
  *   (`'bank_id as bankId'`) dùng chung cho select và returning —
  *   KHÔNG bật CamelCasePlugin (một nguồn sự thật là database thật).

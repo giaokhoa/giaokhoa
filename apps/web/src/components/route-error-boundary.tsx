@@ -1,5 +1,5 @@
 import { isRouteErrorResponse, useRevalidator } from 'react-router';
-import { Button } from '@lms/ui/components/button';
+import { Button } from '@giaokhoa/ui/components/button';
 
 /**
  * Biên lỗi DÙNG CHUNG cho mọi route lá (F-07 của rà soát #133, việc

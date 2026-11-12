@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import type { RoleListItem, UserProfile } from '@lms/contracts';
-import { Button } from '@lms/ui/components/button';
+import type { RoleListItem, UserProfile } from '@giaokhoa/contracts';
+import { Button } from '@giaokhoa/ui/components/button';
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@lms/ui/components/dialog';
-import { Field, FieldGroup, FieldLabel } from '@lms/ui/components/field';
-import { InputGroup, InputGroupAddon, InputGroupInput } from '@lms/ui/components/input-group';
+} from '@giaokhoa/ui/components/dialog';
+import { Field, FieldGroup, FieldLabel } from '@giaokhoa/ui/components/field';
+import { InputGroup, InputGroupAddon, InputGroupInput } from '@giaokhoa/ui/components/input-group';
 import { Search } from 'lucide-react';
 import { PageSkeleton } from '#components/page-skeleton';
 import { ErrorAlert } from '#components/error-alert';
@@ -25,7 +25,7 @@ import { AdminSelect } from './admin-select';
 
 /**
  * Hộp thoại gán vai trò của feature admin, dựng trên component
- * Dialog thật của `@lms/ui`.
+ * Dialog thật của `@giaokhoa/ui`.
  *
  * Luồng nghiệp vụ: người quản trị chọn người dùng (tìm theo tên hoặc
  * email qua danh sách người dùng phân trang phía server), chọn vai trò

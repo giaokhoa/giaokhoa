@@ -10,7 +10,7 @@ import { DashboardRepository, type ContextLevels } from './dashboard';
  *
  * Database kho trung tâm được dựng từ rỗng bằng chính cầu nối
  * migration của package (carrier đóng băng) trên cụm PostgreSQL
- * thật của môi trường test (biến `LMS_DB_TEST_ADMIN_URL` ghi đè cụm
+ * thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm
  * khi cần, mặc định suy từ `DATABASE_URL` của package). Mọi ca chạy
  * qua repository production ở `dashboard.ts` — không mô phỏng
  * handle.
@@ -33,10 +33,10 @@ import { DashboardRepository, type ContextLevels } from './dashboard';
  * được repository tiêu thụ nên spec cấp 0.
  */
 const adminUrl =
-  process.env.LMS_DB_TEST_ADMIN_URL ??
+  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
 
-const TEST_DB = 'lms_db_dash_652';
+const TEST_DB = 'giaokhoa_db_dash_652';
 
 /** Số mức của context khoá trong dữ kiện mẫu — giá trị riêng của spec, chỉ chảy qua cổng. */
 const COURSE_LEVEL = 777;
@@ -351,7 +351,7 @@ let itemOldId = '';
 
 beforeAll(async () => {
   if (!adminUrl) {
-    throw new Error('Thiếu kết nối quản trị cho spec tích hợp dashboard: đặt LMS_DB_TEST_ADMIN_URL hoặc DATABASE_URL.');
+    throw new Error('Thiếu kết nối quản trị cho spec tích hợp dashboard: đặt GIAOKHOA_DB_TEST_ADMIN_URL hoặc DATABASE_URL.');
   }
   const url = await buildTestDatabase({ adminUrl, database: TEST_DB, store: 'centre' });
   pool = new Pool({ connectionString: url });

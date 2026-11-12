@@ -1,19 +1,9 @@
-import type { CentreDb, CentreTx } from '@lms/db';
+import type { CentreDb, CentreTx } from '@giaokhoa/db';
 
 /**
- * Các kiểu nền của package `@lms/enrol`: tay cầm cơ sở dữ liệu, các
- * cổng (port) mà host phải cấp, và các kiểu dòng dữ liệu dùng chung.
+ * Hợp đồng nền của `@giaokhoa/enrol`: handle Kysely, các cổng do ứng dụng cấp và kiểu dòng ở biên nghiệp vụ.
  *
- * Package không phụ thuộc framework: nó chỉ nói chuyện với tầng dữ
- * liệu qua Kysely trên kho trung tâm của `@lms/db` (không bật
- * CamelCasePlugin — tên cột trong truy vấn giữ snake_case như DB,
- * tên trường trong kiểu dòng giữ camelCase như hợp đồng cũ của
- * repository bộ máy cũ để phía tiêu thụ không đổi). Hai thứ thuộc về
- * hạ tầng của từng app nên được host cấp vào qua cổng thay vì package
- * tự giữ: (1) ghi outbox — mỗi app có dịch vụ outbox riêng với ngữ
- * cảnh tenant của app đó; (2) chạy một lượt đọc trong ngữ cảnh
- * platform — mỗi app giữ bản sao `tenantAls` của riêng nó theo tiền
- * lệ hạ tầng của repo, package không được giữ bản sao thứ ba.
+ * Package không phụ thuộc NestJS và không giữ ALS riêng. Host cấp cổng outbox để ghi cùng transaction, cùng cổng chạy trong ngữ cảnh platform để các phép đếm/kiểm tra xuyên tenant không bị RLS che dữ liệu. Truy vấn giữ tên cột snake_case của PostgreSQL; các kiểu dòng trả ra dùng camelCase theo hợp đồng của caller.
  */
 
 /**
@@ -82,9 +72,7 @@ export interface SharedSurfaceDeps {
 }
 
 // ---------------------------------------------------------------------------
-// Kiểu dòng đọc (hợp đồng công khai — khớp `$inferSelect` của schema
-// bộ máy cũ để phía tiêu thụ không đổi; khai tường minh tại đây để
-// package sống sót qua hạng mục gỡ bộ máy cũ #663 khi file schema bị xoá)
+// Các kiểu dòng camelCase ở biên package; các truy vấn Kysely ánh xạ từ cột snake_case của database.
 // ---------------------------------------------------------------------------
 
 /** Dòng của bảng `context` (cây context phân quyền). */
@@ -134,9 +122,9 @@ export interface TenantMembershipRow {
  * Dòng của bảng `enrol` (một phương thức ghi danh của khoá học) và
  * dòng của bảng `user_enrolments` (ghi danh của một người dùng):
  * dùng chung một định nghĩa với repository Kysely của G5 ở
- * `@lms/db` — hai bảng này là cùng một dữ kiện ở cả hai phía.
+ * `@giaokhoa/db` — hai bảng này là cùng một dữ kiện ở cả hai phía.
  */
-export type { EnrolRow as EnrolInstanceRow, UserEnrolmentRow } from '@lms/db/repositories/enrol';
+export type { EnrolRow as EnrolInstanceRow, UserEnrolmentRow } from '@giaokhoa/db/repositories/enrol';
 
 // ---------------------------------------------------------------------------
 // Danh sách cột đọc (dùng chung cho select và returning — khuôn G5:

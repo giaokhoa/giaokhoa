@@ -3,8 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
-import { Badge } from '@lms/ui/components/badge';
-import { Button } from '@lms/ui/components/button';
+import { Badge } from '@giaokhoa/ui/components/badge';
+import { Button } from '@giaokhoa/ui/components/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,7 +13,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@lms/ui/components/dropdown-menu';
+} from '@giaokhoa/ui/components/dropdown-menu';
 import { apiJson } from '#lib/api';
 import { formatDateTime } from '#utils/date-format';
 import { flattenNotificationGroups, updateNotificationGroupsCache, useMarkNotificationRead, useNotificationGroups, useNotificationUnreadCount, useReadNotificationGroup } from '../queries/notifications';

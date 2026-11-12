@@ -1,6 +1,6 @@
 import { Extension, mergeAttributes, Node, type JSONContent } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
-import type { RichTextDocument } from '@lms/contracts';
+import type { RichTextDocument } from '@giaokhoa/contracts';
 import { plainTextExtensions } from './extensions.js';
 
 /**
@@ -114,7 +114,7 @@ export const ChoiceList = Node.create({
   content: `${CHOICE_NODE_TYPE}{${MULTIPLE_CHOICE_COUNT}}`,
   isolating: true,
   parseHTML: () => [{ tag: 'ol[data-choice-list]' }],
-  renderHTML: () => ['ol', { 'data-choice-list': '', class: 'lms-choice-list' }, 0],
+  renderHTML: () => ['ol', { 'data-choice-list': '', class: 'giaokhoa-choice-list' }, 0],
 });
 
 /**
@@ -139,7 +139,7 @@ export const Choice = Node.create({
   parseHTML: () => [{ tag: 'li[data-choice]' }],
   renderHTML: ({ HTMLAttributes }) => [
     'li',
-    mergeAttributes(HTMLAttributes, { 'data-choice': '', class: 'lms-choice' }),
+    mergeAttributes(HTMLAttributes, { 'data-choice': '', class: 'giaokhoa-choice' }),
     0,
   ],
 });

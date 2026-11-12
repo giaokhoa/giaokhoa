@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { UserProfile } from '@lms/contracts';
-import { userProfileSchema } from '@lms/contracts';
+import type { UserProfile } from '@giaokhoa/contracts';
+import { userProfileSchema } from '@giaokhoa/contracts';
 import { apiErrorFromAuthClient, apiFetch, TwoFactorRedirectError } from '#lib/api';
 import { authClient, useSession } from '#lib/auth-client';
 import { queryClient } from '#lib/query-client';

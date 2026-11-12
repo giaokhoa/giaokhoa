@@ -1,4 +1,4 @@
-import { uuidIdSchema } from '@lms/contracts';
+import { uuidIdSchema } from '@giaokhoa/contracts';
 import { SharedDomainError } from './errors';
 import { CONTEXT_COLUMNS, type ContextRow, type EnrolDatabase } from './types';
 

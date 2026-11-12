@@ -1,5 +1,5 @@
 import { useQueries } from '@tanstack/react-query';
-import type { CourseActivityGrid, MyActivityGrades } from '@lms/contracts';
+import type { CourseActivityGrid, MyActivityGrades } from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 import { queryKeys } from '#lib/query-keys';
 

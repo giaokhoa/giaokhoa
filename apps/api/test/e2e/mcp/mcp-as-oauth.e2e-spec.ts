@@ -20,7 +20,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  *    draft→ready + publish_not_draft, search_questions,
  *    check_duplicates, search_curriculum_outcomes, submit_contribution
  *    hồi quy trên đường AS.
- *  - ca scope hẹp dựng được: token chỉ lms.questions.read → tạo câu
+ *  - ca scope hẹp dựng được: token chỉ giaokhoa.questions.read → tạo câu
  *    và publish đều 403 insufficient_scope (-32003) ở tầng mount.
  *  - token cầu auth cũ (JWT hệ thống HS256) bị RS từ chối 401; token
  *    bị sửa chữ ký → 401; không token → 401.
@@ -44,7 +44,7 @@ const ISSUER = `${ORIGIN}/api/v1/auth`;
 const RESOURCE = `${ORIGIN}/mcp`;
 const REDIRECT_URI = 'http://127.0.0.1:8765/callback';
 const BA_PASSWORD = ['McpAs', '!234567'].join('');
-const ALL_SCOPES = 'lms.questions.read lms.questions.draft lms.questions.write lms.banks.contribute';
+const ALL_SCOPES = 'giaokhoa.questions.read giaokhoa.questions.draft giaokhoa.questions.write giaokhoa.banks.contribute';
 
 type Helpers = typeof import('../../support/identity-access-helpers');
 let helpers: Helpers;
@@ -161,7 +161,7 @@ async function runAuthorizeFlow(
   options?: { offlineAccess?: boolean },
 ): Promise<TokenSet> {
   // `offline_access` là scope GIAO THỨC phía AS (không phải scope
-  // quyền LMS): plugin oauth-provider CHỈ cấp refresh token khi
+  // quyền Giáo khoa): plugin oauth-provider CHỈ cấp refresh token khi
   // authorize xin scope này (kiểm chứng trong dist 1.7.12) — luồng
   // chính xin kèm để có refresh token mà xoay vòng. Access token
   // mang offline_access trong claim scope (resource không ghim
@@ -470,7 +470,7 @@ describe('MCP-1: máy chủ OAuth (AS) + RS + bộ tool mới (issue #163)', () 
       .set('Mcp-Method', 'resources/list')
       .send({ jsonrpc: '2.0', id: 1, method: 'resources/list', params: { _meta: MODERN_META } });
     const resourceUris = (JSON.parse(resources.text).result.resources as { uri: string }[]).map((r) => r.uri);
-    expect(resourceUris).toContain('lms://guide/question-authoring');
+    expect(resourceUris).toContain('giaokhoa://guide/question-authoring');
     const prompts = await helpers
       .http(app)
       .post('/mcp')
@@ -770,9 +770,9 @@ describe('MCP-1: máy chủ OAuth (AS) + RS + bộ tool mới (issue #163)', () 
     expect(found.grade).toBe(5);
   });
 
-  it('ca scope hẹp: token chỉ lms.questions.read → đọc được, tạo/publish bị 403 insufficient_scope ở mount', async () => {
-    const narrow = await runAuthorizeFlow(app, cookie, clientId, 'lms.questions.read');
-    expect(decodeJwtPayload(narrow.accessToken).scope).toBe('lms.questions.read');
+  it('ca scope hẹp: token chỉ giaokhoa.questions.read → đọc được, tạo/publish bị 403 insufficient_scope ở mount', async () => {
+    const narrow = await runAuthorizeFlow(app, cookie, clientId, 'giaokhoa.questions.read');
+    expect(decodeJwtPayload(narrow.accessToken).scope).toBe('giaokhoa.questions.read');
 
     const read = await callTool(app, narrow.accessToken, 'list_my_banks', {});
     expect(read.isError).toBe(false);

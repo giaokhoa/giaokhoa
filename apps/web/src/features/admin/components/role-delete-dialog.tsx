@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { RoleListItem } from '@lms/contracts';
-import { Button } from '@lms/ui/components/button';
+import type { RoleListItem } from '@giaokhoa/contracts';
+import { Button } from '@giaokhoa/ui/components/button';
 import {
   Dialog,
   DialogContent,
@@ -8,7 +8,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@lms/ui/components/dialog';
+} from '@giaokhoa/ui/components/dialog';
 import { ErrorAlert } from '#components/error-alert';
 import { ApiError } from '#lib/api';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +17,7 @@ import { useDeleteRole } from '../queries/admin-roles';
 
 /**
  * Hộp thoại xác nhận xoá vai trò của feature admin, dựng trên
- * component Dialog thật của `@lms/ui` theo hình hộp thoại xác nhận
+ * component Dialog thật của `@giaokhoa/ui` theo hình hộp thoại xác nhận
  * xoá của mẫu (tiêu đề "Delete Role", câu xác nhận nêu tên vai trò,
  * nút huỷ phụ và nút xoá destructive).
  *

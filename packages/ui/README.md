@@ -1,4 +1,4 @@
-# @lms/ui — README
+# @giaokhoa/ui — README
 
 > File này ghi các **quyết định quan trọng và còn đang hiệu lực** của package.
 > Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub.
@@ -13,11 +13,11 @@ phẩm, qua cùng một bộ component nền.
 
 ## Quyết định còn hiệu lực
 
-| Quyết định | Nguồn |
-|---|---|
-| Toàn bộ component shadcn/ui của dự án sống DUY NHẤT ở package này. `apps/web` chỉ dùng qua `@lms/ui/...`, cấm sao chép component vào app để sửa riêng. Component nghiệp vụ tự viết nằm ở `apps/web/src/components/`. | README gốc của package; README của apps/web |
-| Nhất quán hình thức là yêu cầu bắt buộc, không phải trang trí: các vỏ tương tác dùng chung (collapse/section, dialog, bảng…) dùng MỘT component/khuôn chung cho mọi trang — mỗi trang tự chế một kiểu vỏ là lỗi (đã ghi nhận 3 kiểu collapse khác nhau trên trang /questions, 25/10/2026 — lát UI-1 thống nhất vỏ). | Yêu cầu nghiệp vụ ngày 25/10/2026 23:04; issue #133 (UI-1) |
-| Font chữ của sản phẩm là Geist — Geist Sans cho font sans, Geist Mono cho font mono (bản Variable tự host qua `@fontsource-variable/geist` và `@fontsource-variable/geist-mono`), áp qua preset hiện hành — không nạp font ngoài theo trang. Tên font chỉ nằm ở chỗ nạp + hai token `--font-sans`/`--font-mono` trong `globals.css`; đổi họ font lần sau chỉ sửa đúng chỗ đó. | `globals.css` + ngoại lệ ghi ở cuối file |
+| Quyết định                                                                                                                                                                                                                                                                                                                                                                    | Nguồn                                                      |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Toàn bộ component shadcn/ui của dự án sống DUY NHẤT ở package này. `apps/web` chỉ dùng qua `@giaokhoa/ui/...`, cấm sao chép component vào app để sửa riêng. Component nghiệp vụ tự viết nằm ở `apps/web/src/components/`.                                                                                                                                                     | README gốc của package; README của apps/web                |
+| Nhất quán hình thức là yêu cầu bắt buộc, không phải trang trí: các vỏ tương tác dùng chung (collapse/section, dialog, bảng…) dùng MỘT component/khuôn chung cho mọi trang — mỗi trang tự chế một kiểu vỏ là lỗi (đã ghi nhận 3 kiểu collapse khác nhau trên trang /questions, 25/10/2026 — lát UI-1 thống nhất vỏ).                                                           | Yêu cầu nghiệp vụ ngày 25/10/2026 23:04; issue #133 (UI-1) |
+| Font chữ của sản phẩm là Geist — Geist Sans cho font sans, Geist Mono cho font mono (bản Variable tự host qua `@fontsource-variable/geist` và `@fontsource-variable/geist-mono`), áp qua preset hiện hành — không nạp font ngoài theo trang. Tên font chỉ nằm ở chỗ nạp + hai token `--font-sans`/`--font-mono` trong `globals.css`; đổi họ font lần sau chỉ sửa đúng chỗ đó. | `globals.css` + ngoại lệ ghi ở cuối file                   |
 
 ## Bất biến
 
@@ -33,9 +33,9 @@ phẩm, qua cùng một bộ component nền.
 ## Cách các ứng dụng dùng
 
 ```tsx
-import { Button } from '@lms/ui/components/button';
-import { useIsMobile } from '@lms/ui/hooks/use-mobile';
-import '@lms/ui/globals.css'; // chỉ import một lần ở root của app
+import { Button } from "@giaokhoa/ui/components/button";
+import { useIsMobile } from "@giaokhoa/ui/hooks/use-mobile";
+import "@giaokhoa/ui/globals.css"; // chỉ import một lần ở root của app
 ```
 
 Cấu trúc bao gói theo đúng mô hình monorepo chính thức của shadcn
@@ -57,8 +57,8 @@ tsconfig ở cả package lẫn app:
 Chạy CLI ngay trong thư mục này (`components.json` đã trỏ alias và
 file CSS theo package; `shadcn info` tại thư mục này nhận diện được
 cấu hình và resolve đủ alias mà không cần dấu hiệu framework nào).
-Sau khi đồng bộ: chạy `turbo run typecheck --filter=@lms/ui` và
-build + test của `@lms/web`, đối chiếu diff của `components.json` và
+Sau khi đồng bộ: chạy `turbo run typecheck --filter=@giaokhoa/ui` và
+build + test của `@giaokhoa/web`, đối chiếu diff của `components.json` và
 `src/styles/globals.css` trước khi commit.
 
 ## Ngoại lệ so với bản shadcn sinh ra (kèm lý do)
@@ -74,8 +74,7 @@ build + test của `@lms/web`, đối chiếu diff của `components.json` và
   editor dùng class Tailwind trong component của chính nó (panel công
   thức dạng overlay, toolbar), không khai báo thì các class đó không
   sinh CSS ở bản dựng của `apps/web`.
-- `src/styles/globals.css`: khối `body { font-family: ui-sans-system
-  ... }` của CSS thời tiền-package (không phải hàng shadcn) đã bị xoá
+- `src/styles/globals.css`: khối `body { font-family: ui-sans-system ... }` của CSS thời tiền-package (không phải hàng shadcn) đã bị xoá
   khi áp preset Base Vega — khối đó không nằm trong layer nên thắng
   cả `@apply font-sans` của preset và chặn font Inter.
 - `src/components/message.tsx` (lát dọn gọn UI nhắn tin, nối tiếp
@@ -132,7 +131,7 @@ build + test của `@lms/web`, đối chiếu diff của `components.json` và
   đối chiếu dòng cỡ chữ này (bản sinh ra sẽ mang lại `text-sm`).
 - `src/components/breadcrumb.tsx` và `src/components/marker.tsx`
   (issue #394): đã XOÁ khỏi package. Lý do: tại thời điểm xoá, quét
-  toàn repo theo tên file, tên export và đường import `@lms/ui/...`
+  toàn repo theo tên file, tên export và đường import `@giaokhoa/ui/...`
   cho 0 điểm dùng ngoài chính hai file — hai component do CLI sinh ra
   nhưng không bề mặt nào của sản phẩm sử dụng, giữ lại chỉ tạo ấn
   tượng sai rằng chúng là một phần của bộ component đang dùng. Nếu

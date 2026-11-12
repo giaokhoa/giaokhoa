@@ -105,8 +105,8 @@ describe('Luồng đăng nhập (hợp đồng cookie Better Auth, fetch mock t�
     await userEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }));
     await waitFor(() => expect(screen.getByText(/Hồ sơ — learner/)).toBeInTheDocument());
     expect(signInBodies).toEqual([{ username: 'learner', password: 'Passw0rd!' }]);
-    expect(localStorage.getItem('lms.accessToken')).toBeNull();
-    expect(localStorage.getItem('lms.refreshToken')).toBeNull();
+    expect(localStorage.getItem('giaokhoa.accessToken')).toBeNull();
+    expect(localStorage.getItem('giaokhoa.refreshToken')).toBeNull();
     expect(screen.getByLabelText(/Department/)).toHaveValue('Sales');
   });
 
@@ -128,7 +128,7 @@ describe('Luồng đăng nhập (hợp đồng cookie Better Auth, fetch mock t�
     await userEvent.type(screen.getByLabelText('Mật khẩu'), 'wrong');
     await userEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }));
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Invalid username or password'));
-    expect(localStorage.getItem('lms.accessToken')).toBeNull();
+    expect(localStorage.getItem('giaokhoa.accessToken')).toBeNull();
   });
 
   it('phân giải phiên cookie sẵn có thẳng vào hồ sơ mà không cần vòng đăng nhập', async () => {
@@ -181,7 +181,7 @@ describe('Luồng đăng nhập (hợp đồng cookie Better Auth, fetch mock t�
     await userEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }));
     // Bước hai: form nhập mã hiện ra và vẫn chưa có phiên/token nào.
     await waitFor(() => expect(screen.getByLabelText('Mã xác thực')).toBeInTheDocument());
-    expect(localStorage.getItem('lms.accessToken')).toBeNull();
+    expect(localStorage.getItem('giaokhoa.accessToken')).toBeNull();
     await userEvent.type(screen.getByLabelText('Mã xác thực'), '123456');
     await userEvent.click(screen.getByRole('button', { name: 'Xác thực' }));
     await waitFor(() => expect(screen.getByText(/Hồ sơ — learner/)).toBeInTheDocument());

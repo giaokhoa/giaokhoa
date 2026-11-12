@@ -1,12 +1,12 @@
 {
   "dependencies": {
-    "@lms/contracts": "workspace:*",
+    "@giaokhoa/contracts": "workspace:*",
     "uuid": "^14.0.3",
     "kysely": "0.29.7",
     "pg": "^8.23.1"
   },
   "devDependencies": {
-    "@lms/config": "workspace:*",
+    "@giaokhoa/config": "workspace:*",
     "@types/node": "^26.6.5",
     "typescript": "catalog:nest",
     "@types/pg": "^8.23.1",
@@ -40,7 +40,7 @@
     }
   },
   "main": "./dist/index.js",
-  "name": "@lms/db",
+  "name": "@giaokhoa/db",
   "private": true,
   "scripts": {
     "build": "tsc -p tsconfig.build.json && mkdir -p dist/types && cp src/types/*.d.ts dist/types/",

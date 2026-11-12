@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { Queue } from 'bullmq';
-import { createCentreKysely, type CentreDb } from '@lms/db';
+import { createCentreKysely, type CentreDb } from '@giaokhoa/db';
 import { redisConnectionFromUrl } from '../../../worker/src/config/env';
 import { tenantAls } from '../../../worker/src/db/tenant-als';
 import { TenantAwarePool } from '../../../worker/src/db/tenant-pool';
@@ -28,7 +28,7 @@ import {
  *
  * Cách dẫn: dựng ĐÚNG ngăn xếp production của worker bằng `new`
  * (không qua Nest, không boot WorkerModule — e2e shard chỉ build
- * `@lms/api`, không có tiến trình worker chạy kèm): tay cầm Kysely
+ * `@giaokhoa/api`, không có tiến trình worker chạy kèm): tay cầm Kysely
  * trên `TenantAwarePool` của worker (gắn GUC theo ALS như module
  * thật — relay, `EventLogWriter` và `TaskLogService` của worker
  * đều chạy trên handle Kysely định tuyến), bảng định

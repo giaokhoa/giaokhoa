@@ -1,7 +1,5 @@
 /**
- * Repository của cụm NGÂN HÀNG ĐỀ trên Kysely — nhóm G3 của chiến
- * dịch chuyển tầng dữ liệu sang Kysely (issue #643), chuyển từ
- * `apps/api/src/modules/exams/exams.repository.ts`.
+ * Repository của cụm NGÂN HÀNG ĐỀ trên Kysely.
  *
  * Vai trò: mọi truy cập tới danh tính đề (exams), version nội dung
  * bất biến (exam_versions), slots ghim version câu (exam_slots),
@@ -18,8 +16,7 @@
  * chỉ nhận handle (instance gốc hoặc transaction đang mở) để phía
  * gọi ghép nhiều thao tác vào một transaction khi cần.
  *
- * Khuôn hình dạng dữ liệu ở biên repository (khuôn pilot #640 — xem
- * mục playbook trong `AGENTS.md` của package):
+ * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong repository, truy vấn viết trên interface schema sinh
  *   bằng codegen: tên bảng/cột giữ nguyên snake_case của database,
  *   kiểu dòng nội bộ qua `Selectable`/`Insertable`/`Updateable`.
@@ -43,7 +40,7 @@
  *   do tầng ứng dụng dựng bằng factory của package rồi truyền vào.
  */
 import { sql, type Insertable, type InsertObject, type RawBuilder, type Updateable, type UpdateObject } from 'kysely';
-import { extractRichTextPlainText, type RichTextDocument } from '@lms/contracts';
+import { extractRichTextPlainText, type RichTextDocument } from '@giaokhoa/contracts';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 
 /** Handle giao dịch của kho trung tâm — kiểu `Transaction<CentreDB>` của package. */

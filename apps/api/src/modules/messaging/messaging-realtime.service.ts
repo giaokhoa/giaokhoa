@@ -1,15 +1,15 @@
 import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { MESSAGING_SOCKET_EVENTS } from '@lms/contracts';
-import { conversationRoom, tenantRealtimeSegment, userRoom } from '@lms/messaging';
+import { MESSAGING_SOCKET_EVENTS } from '@giaokhoa/contracts';
+import { conversationRoom, tenantRealtimeSegment, userRoom } from '@giaokhoa/messaging';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import type { Server } from 'socket.io';
 import { redisTlsFromUrl } from '../../config/env';
-import { MessagingRepository } from '@lms/db/repositories/messaging';
+import { MessagingRepository } from '@giaokhoa/db/repositories/messaging';
 
-const PRESENCE_KEY_PREFIX = 'lms:messaging:presence:';
-const TYPING_KEY_PREFIX = 'lms:messaging:typing:';
+const PRESENCE_KEY_PREFIX = 'giaokhoa:messaging:presence:';
+const TYPING_KEY_PREFIX = 'giaokhoa:messaging:typing:';
 /** Mặc định của hai knob presence trong env (xem config/env.ts): TTL 600s, gia hạn mỗi 120s. */
 const PRESENCE_TTL_SECONDS_DEFAULT = 600;
 const PRESENCE_REFRESH_MS_DEFAULT = 120_000;
@@ -30,7 +30,7 @@ const TYPING_TTL_SECONDS = 4;
  * message.read, message.deleted, conversation.invalidate) KHÔNG
  * còn ở đây: từ issue #521, consumer phía worker tiêu thụ sự kiện
  * outbox qua hàng đợi và phân phối qua Redis emitter theo luật ở
- * package dùng chung `@lms/messaging` (nhà duy nhất của luật phân
+ * package dùng chung `@giaokhoa/messaging` (nhà duy nhất của luật phân
  * phối — cổng chặn 1–1 fail-closed và rà soát membership tại thời
  * điểm phân phối nằm ở đó). Tên room cũng lấy từ package đó để nơi
  * nối (gateway) và nơi phát (worker) không bao giờ lệch nhau.

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { INestApplicationContext } from '@nestjs/common';
-import { sql, type JsonValue } from '@lms/db';
+import { sql, type JsonValue } from '@giaokhoa/db';
 import {
   AnalyticsRunProcessor, BackupProcessor, PaymentReconciliationProcessor, PrivacyProcessor,
   ReportScheduleProcessor, RestoreProcessor, SearchReindexProcessor,
@@ -86,13 +86,13 @@ describe('Dịch vụ platform của worker: backup, reindex tìm kiếm, analyt
     expect(first.status).toBe('completed');
     expect(first.sections).toBe(2);
     const [row] = await db.selectFrom('backup_jobs').selectAll().where('id', '=', job.id).execute();
-    expect(row.archive.format).toBe('lms-backup');
+    expect(row.archive.format).toBe('giaokhoa-backup');
     expect(row.archive.version).toBe(1);
     const second = await processor.process({ data: { jobId: job.id } } as never);
     expect(second.status).toBe('duplicate');
   });
 
-  it('kho lưu trữ của bộ xử lý backup chứa các mục questions/badges/calendar mới (cùng định dạng lms-backup v1 như API)', async () => {
+  it('kho lưu trữ của bộ xử lý backup chứa các mục questions/badges/calendar mới (cùng định dạng giaokhoa-backup v1 như API)', async () => {
     // Ngân hàng câu hỏi ở context của khoá + badge của khoá + sự kiện/subscription của khoá.
     const qCatRows = await sql`insert into question_categories (name, context_id) values (${`wk5-bank-${suffix}`}, ${courseCtxId}) returning id`.execute(db);
     const qCatId = (qCatRows.rows[0] as { id: string }).id;
@@ -117,7 +117,7 @@ describe('Dịch vụ platform của worker: backup, reindex tìm kiếm, analyt
     const result = await processor.process({ data: { jobId: job.id } } as never);
     expect(result.status).toBe('completed');
     const [row] = await db.selectFrom('backup_jobs').selectAll().where('id', '=', job.id).execute();
-    expect(row.archive.format).toBe('lms-backup');
+    expect(row.archive.format).toBe('giaokhoa-backup');
     expect(row.archive.version).toBe(1);
     expect(row.archive.contributors.questions).toEqual({ categories: 1, questions: 1, entries: 1, versions: 2 });
     expect(row.archive.contributors.badges).toEqual({ badges: 1, criteria: 2 });

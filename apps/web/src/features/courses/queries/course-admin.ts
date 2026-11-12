@@ -6,7 +6,7 @@ import type {
   CourseGrouping,
   EnrolInstance,
   UserEnrolment,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { queryClient } from '#lib/query-client';
 import { queryKeys as sharedQueryKeys } from '#lib/query-keys';
 import {

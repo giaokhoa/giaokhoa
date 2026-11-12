@@ -1,6 +1,6 @@
 import { Injectable, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createCentreKysely, type CentreDb } from '@lms/db';
+import { createCentreKysely, type CentreDb } from '@giaokhoa/db';
 import { databaseConnectionFromEnv } from '../../config/env';
 import { ControlPlaneConnection } from '../../modules/control-plane/control-plane.connection';
 import { tenantAls, type TenantAlsStore } from '../../modules/tenants/tenant-als';
@@ -59,11 +59,7 @@ import { SpacePoolManager } from './space-pool-manager';
  * chính sách RLS trong kho của trung tâm tiếp tục fail-closed theo
  * tenant của ngữ cảnh, không có kết nối "siêu quyền" nào được tạo
  * cho đường nghiệp vụ.
- *
- * (Facade song song phía bộ máy cũ và cơ chế chuẩn bị đối xứng hai
- * facade của issue #641 đã xoá ở issue #663 cùng đợt gỡ bộ máy cũ
- * khỏi cây: khung nay chỉ còn một facade Kysely, bước chuẩn bị là
- * hành vi của chính facade này.)
+
  */
 @Injectable()
 export class SpaceDatabaseService implements OnModuleDestroy {

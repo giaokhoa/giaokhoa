@@ -1,14 +1,14 @@
 import type { CSSProperties } from 'react';
 import { Link, Outlet } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@lms/ui/components/button';
+import { Button } from '@giaokhoa/ui/components/button';
 import { useAuth } from '#lib/auth';
 import { useSidebarDefaultOpen } from '#lib/sidebar-default-open';
 import { AppSidebar } from '#components/app-sidebar';
 import { AppShellSkeleton } from '#components/app-shell-skeleton';
 import { NavigationProgressBar, useNavigationPending } from '#components/navigation-progress';
 import { SiteHeader } from '#components/site-header';
-import { SidebarInset, SidebarProvider } from '@lms/ui/components/sidebar';
+import { SidebarInset, SidebarProvider } from '@giaokhoa/ui/components/sidebar';
 
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 
@@ -68,7 +68,7 @@ function PublicShell() {
     <div>
       <header className="flex items-center gap-4 border-b px-8 py-3">
         <Link to="/" className="font-semibold">
-          LMS
+          Giáo khoa
         </Link>
         {/* Không có bộ chọn ngôn ngữ: site chỉ dành cho người Việt,
             i18n chỉ quản lý chuỗi tập trung với locale cố định vi. */}

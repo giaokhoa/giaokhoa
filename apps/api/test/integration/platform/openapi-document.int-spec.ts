@@ -22,7 +22,7 @@ describe('Sinh tài liệu OpenAPI (ngang bằng với bootstrap production)', (
     app = await createTestApp();
     document = SwaggerModule.createDocument(
       app,
-      new DocumentBuilder().setTitle('LMS API').setDescription('bootstrap parity probe').setVersion('1.0').build(),
+      new DocumentBuilder().setTitle('Giáo khoa API').setDescription('bootstrap parity probe').setVersion('1.0').build(),
     );
   });
 

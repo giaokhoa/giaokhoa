@@ -1,39 +1,39 @@
 {
-  "extends": "@lms/config/tsconfig/nest.json",
+  "extends": "@giaokhoa/config/tsconfig/nest.json",
   "compilerOptions": {
     "outDir": "./dist",
     "paths": {
       "@/*": [
         "./src/*"
       ],
-      // Subpath control plane của @lms/db (issue #580): package giữ
+      // Subpath control plane của @giaokhoa/db (issue #580): package giữ
       // moduleResolution Node10 nên TS không đọc được `exports` của
       // package — ánh xạ thẳng tới bản dist đã build (đúng kỷ luật
-      // "app tiêu thụ dùng bản dist" của @lms/db). Runtime Node đọc
-      // `exports` trong package.json của @lms/db như thường.
-      "@lms/db/control-plane": [
+      // "app tiêu thụ dùng bản dist" của @giaokhoa/db). Runtime Node đọc
+      // `exports` trong package.json của @giaokhoa/db như thường.
+      "@giaokhoa/db/control-plane": [
         "../../packages/db/dist/control-plane.d.ts"
       ],
-      // Subpath kho ngân hàng của @lms/db (issue #585) — cùng lý do như
+      // Subpath kho ngân hàng của @giaokhoa/db (issue #585) — cùng lý do như
       // subpath control plane ở trên.
-      "@lms/db/system-bank": [
+      "@giaokhoa/db/system-bank": [
         "../../packages/db/dist/system-bank.d.ts"
       ],
-      // Wildcard repository Kysely của @lms/db (chiến dịch chuyển
+      // Wildcard repository Kysely của @giaokhoa/db (chiến dịch chuyển
       // ORM sang Kysely): khai MỘT dòng duy nhất cho mọi module
       // repository về sau — cùng lý do Node10 như các subpath trên.
-      "@lms/db/repositories/*": [
+      "@giaokhoa/db/repositories/*": [
         "../../packages/db/dist/repositories/*.d.ts"
       ],
-      // Điểm vào test-support của @lms/db (harness dựng DB test):
+      // Điểm vào test-support của @giaokhoa/db (harness dựng DB test):
       // chỉ test mới import, cùng cơ chế ánh xạ dist như trên.
-      "@lms/db/test-support": [
+      "@giaokhoa/db/test-support": [
         "../../packages/db/dist/test-support/index.d.ts"
       ],
-      // Điểm vào bộ máy migration của @lms/db (issue #663): các
+      // Điểm vào bộ máy migration của @giaokhoa/db (issue #663): các
       // runner phía API áp migration qua `applyStoreMigrations`
       // của package — cùng cơ chế ánh xạ dist như trên.
-      "@lms/db/migrate": [
+      "@giaokhoa/db/migrate": [
         "../../packages/db/dist/migrate/apply.d.ts"
       ]
     },

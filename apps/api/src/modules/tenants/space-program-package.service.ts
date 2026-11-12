@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import { sql as kyselySql } from '@lms/db';
+import { sql as kyselySql } from '@giaokhoa/db';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { ContextsService } from '../access/contexts.service';
 import { CENTRE_PROGRAM_PACKAGE_KEY } from './centre-provision';

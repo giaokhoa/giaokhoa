@@ -1,6 +1,6 @@
 /**
  * DTO của lớp Ngân hàng đề (EB-1): hợp đồng dùng chung một nguồn sự
- * thật ở `@lms/contracts` (schema Zod) — file này chỉ đặt tên kiểu cho
+ * thật ở `@giaokhoa/contracts` (schema Zod) — file này chỉ đặt tên kiểu cho
  * controller/service dùng thống nhất với các module khác.
  */
 export {
@@ -23,4 +23,4 @@ export {
   type CreateExamDossier as CreateExamDossierDto,
   type ApproveExamDossier as ApproveExamDossierDto,
   type RejectExamDossier as RejectExamDossierDto,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';

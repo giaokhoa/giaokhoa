@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import type { CourseCategoryTreeNode, UserListResponse } from '@lms/contracts';
+import type { CourseCategoryTreeNode, UserListResponse } from '@giaokhoa/contracts';
 import '#config/i18n';
 import { ApiError } from '#lib/api';
 import { useAuth } from '#lib/auth';
@@ -19,12 +19,12 @@ import { dashboardUnreadCountQueryOptions, useDashboardOverview } from '../queri
 import { displayCourseName, useCourseCardPrefs } from '#lib/course-cards';
 import { DashboardSkeleton } from './dashboard-skeleton';
 import { SectionCards, type StatCard } from '#components/section-cards';
-import { Skeleton } from '@lms/ui/components/skeleton';
+import { Skeleton } from '@giaokhoa/ui/components/skeleton';
 import { ChartAreaInteractive, type ChartPoint } from './chart-area-interactive';
 import { DataTable, type DataColumn } from '#components/data-table';
-import { Badge } from '@lms/ui/components/badge';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@lms/ui/components/card';
+import { Badge } from '@giaokhoa/ui/components/badge';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { PageShell } from '#components/page-shell';
 
 /** Hình dạng sự kiện lịch mà trang này cần (khớp EventView của trang lịch). */
@@ -531,8 +531,6 @@ function StudentSection() {
 
   const badgeCount = badgesQuery.data ? badgesQuery.data.length : null;
   const unread = notificationsQuery.data ? notificationsQuery.data.unread : null;
-  const events = eventsQuery.data ?? [];
-
   const activityPcts: number[] = [];
   for (const access of learning) {
     for (const activity of gradebookOf(access)?.activities ?? []) {
@@ -579,6 +577,7 @@ function StudentSection() {
   ];
 
   const chartData: ChartPoint[] = useMemo(() => {
+    const events = eventsQuery.data ?? [];
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     return Array.from({ length: 30 }, (_, i) => {
@@ -590,7 +589,7 @@ function StudentSection() {
       }).length;
       return { label: formatWithOptions(day, i18n.language, { day: '2-digit', month: '2-digit' }), value };
     });
-  }, [events, i18n.language]);
+  }, [eventsQuery.data, i18n.language]);
 
   const columns: DataColumn<CourseAccess>[] = [
     {

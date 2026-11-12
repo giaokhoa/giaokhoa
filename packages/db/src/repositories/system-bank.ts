@@ -1,8 +1,5 @@
 /**
- * Repository của kho NGÂN HÀNG HỆ THỐNG trên Kysely — hạng mục
- * nhân rộng G10 của chiến dịch chuyển tầng dữ liệu (issue #650),
- * chuyển từ repository bộ máy cũ phía `apps/api` theo khuôn pilot kho
- * control plane (issue #640).
+ * Repository của kho NGÂN HÀNG HỆ THỐNG trên Kysely.
  *
  * Vai trò: mọi truy cập tới mười bảng của database kho ngân hàng
  * (câu hỏi hệ thống + phiên bản bất biến + liên kết YCCĐ của phiên
@@ -18,7 +15,7 @@
  * vụ dùng cả hai kho (nhập bản chụp, cài gói) bảo đảm thứ tự ghi
  * lành tính ở tầng service, không gộp hai handle thành một.
  *
- * Khuôn hình dạng dữ liệu ở biên repository (như pilot):
+ * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong, truy vấn viết trên interface schema sinh bằng
  *   codegen: tên bảng/cột giữ nguyên snake_case của database.
  * - Bên ngoài, repository trả/nhận hình dạng dòng camelCase như
@@ -43,7 +40,7 @@
  *   do tầng ứng dụng cấp qua hàm dựng lỗi lúc lắp ráp repository.
  */
 import { sql, type InsertObject, type RawBuilder } from 'kysely';
-import type { SystemBankPackage } from '@lms/contracts';
+import type { SystemBankPackage } from '@giaokhoa/contracts';
 import type { SystemBankDb, SystemBankTx, SystemBankDB } from '../client';
 import type { Json } from '../types/system-bank-db';
 

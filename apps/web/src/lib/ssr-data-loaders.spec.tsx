@@ -14,7 +14,7 @@
  *       trùng cho cùng query (đây là giá trị nghiệp vụ của lát —
  *       trang hết vòng chờ + tải hai lần).
  *   (c) CHƯA đăng nhập: loader không gọi bất kỳ API dữ liệu nghiệp
- *       vụ nào và trả state rỗng — mặt công khai (bản prerender)
+ *       vụ nào và trả state rỗng — mặt công khai (SSR không cookie)
  *       không dính dữ liệu cá nhân.
  *   (d) HTTP status sống sót qua đường prefetch: đáp ứng 403 thì
  *       `serverQueryFn` ném `ApiError` đúng status và QueryClient
@@ -137,7 +137,7 @@ function stubCalendarApi() {
     '/api/v1/calendar/events': { body: CALENDAR_EVENTS },
     '/api/v1/calendar/subscriptions': { body: [] },
     '/api/v1/calendar/export-token': {
-      body: { token: 'token-xuat-lich', url: 'https://lms.example/calendar.ics' },
+      body: { token: 'token-xuat-lich', url: 'https://giaokhoa.example/calendar.ics' },
     },
   });
 }
@@ -154,7 +154,7 @@ describe('SL-1 — bộ nạp /calendar', () => {
     expect(findQuery(dehydratedState, calendarQueryKeys.calendarSubscriptions)?.state.status).toBe('success');
     expect(findQuery(dehydratedState, calendarQueryKeys.calendarExportToken)?.state.data).toEqual({
       token: 'token-xuat-lich',
-      url: 'https://lms.example/calendar.ics',
+      url: 'https://giaokhoa.example/calendar.ics',
     });
   });
 
@@ -222,14 +222,14 @@ describe('SL-1 — bộ nạp /badges', () => {
 describe('SL-1 — bộ nạp /admin/site-config', () => {
   it('có phiên + quyền: dehydrate cấu hình + nhật ký kiểm toán', async () => {
     stubApi({
-      '/api/v1/site-config': { body: [{ key: 'site_name', value: 'LMS Thử nghiệm' }] },
+      '/api/v1/site-config': { body: [{ key: 'site_name', value: 'Giáo khoa Thử nghiệm' }] },
       '/api/v1/site-config/audit': { body: [{ id: 'audit-1', key: 'site_name' }] },
     });
     const { dehydratedState } = await siteConfigLoader({
       request: sessionRequest('/admin/site-config'),
     });
     expect(findQuery(dehydratedState, adminQueryKeys.siteConfig)?.state.data).toEqual([
-      { key: 'site_name', value: 'LMS Thử nghiệm' },
+      { key: 'site_name', value: 'Giáo khoa Thử nghiệm' },
     ]);
     expect(findQuery(dehydratedState, adminQueryKeys.siteConfigAudit)?.state.data).toEqual([
       { id: 'audit-1', key: 'site_name' },
@@ -426,7 +426,7 @@ describe('SL-1 — bộ nạp / (dashboard)', () => {
     expect(findQuery(dehydratedState, queryKeys.courseAccess('course-1'))).toBeUndefined();
   });
 
-  it('chưa đăng nhập: không gọi API nào, state rỗng — bản prerender mặt công khai không dính dữ liệu cá nhân', async () => {
+  it('chưa đăng nhập: không gọi API nào, state rỗng — HTML SSR công khai không dính dữ liệu cá nhân', async () => {
     const spy = stubHomeApi(STUDENT_ACCESS);
     const { dehydratedState } = await homeLoader({ request: anonymousRequest('/') });
     expect(spy).not.toHaveBeenCalled();

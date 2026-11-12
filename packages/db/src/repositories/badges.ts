@@ -1,8 +1,5 @@
 /**
- * Repository của cụm HUY HIỆU trên Kysely — hạng mục nhân rộng G7
- * của chiến dịch chuyển tầng dữ liệu (issue #647), chuyển từ
- * repository cũ trước chuyển đổi ở
- * `apps/api/src/modules/badges/badges.repository.ts`.
+ * Repository của cụm HUY HIỆU trên Kysely.
  *
  * Vai trò: mọi truy cập tới bốn bảng của kho trung tâm thuộc
  * module huy hiệu — `badge` (định nghĩa huy hiệu), `badge_criteria`
