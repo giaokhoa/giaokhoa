@@ -64,6 +64,12 @@ triển local, compose ở gốc cho production tự host.
 
 ## Chạy ứng dụng
 
+Từ gốc monorepo, chạy `pnpm dev` để Turbo biên dịch các workspace
+package phụ thuộc trước khi mở API, worker và web ở chế độ watch.
+Các bản build của package trong `dist/` có thể tồn tại từ lần checkout
+trước, nên không khởi động trực tiếp các app trước khi Turbo hoàn tất
+bước `^build`.
+
 ```bash
 pnpm install
 cp apps/api/.env.example apps/api/.env       # các giá trị mặc định đã khớp hạ tầng local
