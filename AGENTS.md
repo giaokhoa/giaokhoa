@@ -81,6 +81,13 @@ hoặc trong issue đặc tả của chính việc đó trên GitHub:
   lượt thay đổi; comment lệch code thật là lỗi phải sửa trong cùng
   lượt, không để tồn đọng.
 
+## Quy tắc xuống dòng cho tài liệu và comment
+
+- **Không tự hard-wrap văn xuôi theo độ rộng cột.** Trong `README.md`, `AGENTS.md`, `docs/**/*.md`, tài liệu của package, mô tả Issue/PR và comment hướng dẫn, mỗi đoạn văn xuôi phải nằm trên **một dòng vật lý trong tệp nguồn**; để trình xem Markdown hoặc editor tự soft-wrap khi hiển thị. Cấm xuống dòng chỉ vì đạt 70, 72, 80, 100 hay 120 ký tự; không dùng độ rộng của cửa sổ terminal làm giới hạn cho văn xuôi.
+- **Chỉ xuống dòng khi có ý nghĩa cấu trúc.** Tách dòng cho tiêu đề, đoạn văn mới (có dòng trống), từng mục danh sách/checklist, từng dòng bảng, blockquote, code fence hoặc ngắt dòng có chủ đích của Markdown. Không gộp những cấu trúc này thành một dòng. Với một mục danh sách chứa một đoạn văn dài, giữ toàn bộ đoạn đó trên cùng dòng với dấu đầu mục thay vì xuống dòng thụt lề theo độ rộng.
+- **Comment trong code cũng không hard-wrap.** Comment `//` ghi mỗi ý hoàn chỉnh trên một dòng. Trong TSDoc `/** ... */`, mỗi đoạn văn xuôi đặt trên một dòng ` * ...`; các tag `@param`, `@returns`, `@throws`, `@example` đặt trên những dòng riêng theo đúng cú pháp và mỗi đoạn có chủ đích. Không tách giữa câu chỉ để giữ giới hạn ký tự. Vẫn phải tuân thủ mức độ mô tả TSDoc của `AGENTS.md` từng package; lời khuyên comment ngắn trong skill bên ngoài không được dùng để lược bỏ thông tin bắt buộc.
+- **Giữ nguyên định dạng code.** Quy tắc này chỉ áp dụng cho văn xuôi, không thay thế formatter hay cách chia dòng TypeScript, JSON, YAML, SQL, bảng, đoạn code và chuỗi có ngắt dòng mang ngữ nghĩa. Khi sửa nội dung cũ, chỉ chỉnh các đoạn tài liệu/comment thuộc phạm vi thay đổi; không reflow hàng loạt các tệp không liên quan.
+
 ## Quy trình tạo Issue và PR
 
 Chương này là chuẩn GitHub đầy đủ và duy nhất của repo: flow
