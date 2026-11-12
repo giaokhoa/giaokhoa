@@ -4,7 +4,7 @@ import { ContextsService } from '../access/contexts.service';
 import { CoursesService } from '../courses/courses.service';
 import {
   CurriculumRepository, type CurriculumNodeRow, type CurriculumRow, type LearningOutcomeRow, type SubjectRow,
-} from '@lms/db/repositories/curriculum';
+} from '@giaokhoa/db/repositories/curriculum';
 import { programOutcomeDocText, programOutcomeTextToDoc, type ProgramOutcomeDoc } from './program-datasets';
 
 /**

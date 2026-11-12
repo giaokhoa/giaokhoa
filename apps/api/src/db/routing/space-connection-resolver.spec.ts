@@ -18,7 +18,7 @@ const DEDICATED_ENTRY: SpaceRegistryEntry = {
   id: 'id-dang-ky-a',
   slug: 'trung-tam-a',
   status: 'active',
-  databaseName: 'lms_centre_a',
+  databaseName: 'giaokhoa_centre_a',
   storageMode: 'dedicated',
   connectionRoleRef: 'centre_a_app',
   secretRef: 'env:CENTRE_A_URL',
@@ -29,9 +29,9 @@ const SHARED_ENTRY: SpaceRegistryEntry = {
   id: 'id-dang-ky-trang-chinh',
   slug: 'trang-chinh',
   status: 'active',
-  databaseName: 'lms_shared',
+  databaseName: 'giaokhoa_shared',
   storageMode: 'shared',
-  connectionRoleRef: 'lms_app',
+  connectionRoleRef: 'giaokhoa_app',
   secretRef: 'env:DATABASE_URL',
   schemaVersion: 'v1',
 };
@@ -78,8 +78,8 @@ describe('Bộ phân giải đích kết nối theo trung tâm', () => {
     const target = await resolver.resolve('trang-chinh');
     expect(target.mode).toBe('shared');
     expect(target.spaceId).toBe('id-dang-ky-trang-chinh');
-    expect(target.databaseName).toBe('lms_shared');
-    expect(target.connectionRole).toBe('lms_app');
+    expect(target.databaseName).toBe('giaokhoa_shared');
+    expect(target.connectionRole).toBe('giaokhoa_app');
     expect(target.connectionString).toBeUndefined();
     resolver.dispose();
   });
@@ -90,7 +90,7 @@ describe('Bộ phân giải đích kết nối theo trung tâm', () => {
     expect(target.mode).toBe('dedicated');
     // Chuỗi bí mật gốc trỏ /postgres (database mặc định của role) —
     // đích cuối phải là databaseName của sổ.
-    expect(target.connectionString).toBe('postgres://centre_a_app:pw@db.internal:5432/lms_centre_a');
+    expect(target.connectionString).toBe('postgres://centre_a_app:pw@db.internal:5432/giaokhoa_centre_a');
     expect(target.connectionRole).toBe('centre_a_app');
     expect(target.schemaVersion).toBe('v3');
     resolver.dispose();

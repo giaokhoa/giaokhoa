@@ -9,11 +9,11 @@ import {
   type CreateUser,
   type UpdateTenant,
   type UpdateTenantMember,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 
 /**
  * Validation của module Tenants dùng Zod qua Standard Schema — schema nền
- * ở `@lms/contracts` là nguồn sự thật duy nhất. Tạo người dùng trong tenant
+ * ở `@giaokhoa/contracts` là nguồn sự thật duy nhất. Tạo người dùng trong tenant
  * dùng lại đúng `createUserSchema` của bề mặt users (user là thực thể
  * TOÀN CỤC; tenant chỉ thêm membership).
  */

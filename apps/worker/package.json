@@ -1,5 +1,5 @@
 {
-  "name": "@lms/worker",
+  "name": "@giaokhoa/worker",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -13,12 +13,12 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@lms/contracts": "workspace:*",
-    "@lms/db": "workspace:*",
-    "@lms/enrol": "workspace:*",
-    "@lms/grades": "workspace:*",
-    "@lms/messaging": "workspace:*",
-    "@lms/payments": "workspace:*",
+    "@giaokhoa/contracts": "workspace:*",
+    "@giaokhoa/db": "workspace:*",
+    "@giaokhoa/enrol": "workspace:*",
+    "@giaokhoa/grades": "workspace:*",
+    "@giaokhoa/messaging": "workspace:*",
+    "@giaokhoa/payments": "workspace:*",
     "@nestjs/bullmq": "^12.0.0",
     "@nestjs/common": "^12.2.0",
     "@nestjs/config": "^12.0.1",
@@ -37,7 +37,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@lms/config": "workspace:*",
+    "@giaokhoa/config": "workspace:*",
     "@nestjs/testing": "^12.2.0",
     "@swc/core": "^1.16.18",
     "@types/node": "^26.6.5",

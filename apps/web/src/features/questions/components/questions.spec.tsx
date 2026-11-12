@@ -252,7 +252,7 @@ describe('Luồng sử dụng câu hỏi — endpoint thật', () => {
     expect(screen.queryByRole('button', { name: 'Tạo danh mục' })).toBeNull();
     await userEvent.click(screen.getByRole('link', { name: 'Danh mục mới' }));
 
-    // Ngữ cảnh là một Select tử tế của @lms/ui (không còn ô gõ ID thô
+    // Ngữ cảnh là một Select tử tế của @giaokhoa/ui (không còn ô gõ ID thô
     // điền sẵn "1"), mặc định ngữ cảnh hệ thống: trigger hiện nhãn "Hệ
     // thống" và danh sách mở ra có tuỳ chọn đó.
     const contextTrigger = await screen.findByLabelText('Ngữ cảnh');

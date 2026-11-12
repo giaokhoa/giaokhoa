@@ -1,6 +1,6 @@
 import { Injectable, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createControlPlaneKysely, type ControlPlaneDb } from '@lms/db/control-plane';
+import { createControlPlaneKysely, type ControlPlaneDb } from '@giaokhoa/db/control-plane';
 import { Pool } from 'pg';
 import { databaseConnectionFromEnv } from '../../config/env';
 
@@ -12,7 +12,7 @@ import { databaseConnectionFromEnv } from '../../config/env';
  * Từ pilot chuyển đổi Kysely (issue #640), lớp này là ADAPTER mỏng:
  * nó chỉ còn làm hai việc của tầng ứng dụng — đọc cấu hình môi
  * trường và sở hữu vòng đời của `pg.Pool` — rồi cấp pool cho factory
- * `createControlPlaneKysely` của `@lms/db`; mọi truy cập dữ liệu đi
+ * `createControlPlaneKysely` của `@giaokhoa/db`; mọi truy cập dữ liệu đi
  * qua handle Kysely (`kysely`) và repository của package. Pool
  * KHÔNG bị đóng qua `destroy()` của instance Kysely (hàm đó cũng
  * đóng pool): điểm đóng duy nhất là `onModuleDestroy` của adapter

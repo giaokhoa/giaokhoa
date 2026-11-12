@@ -1,5 +1,5 @@
-import { createCentreKysely, sql, type CentreDb } from '@lms/db';
-import { buildTestDatabase, dropTestDatabase, withDatabase } from '@lms/db/test-support';
+import { createCentreKysely, sql, type CentreDb } from '@giaokhoa/db';
+import { buildTestDatabase, dropTestDatabase, withDatabase } from '@giaokhoa/db/test-support';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -21,7 +21,7 @@ import {
  * chạy trong transaction bao ngoài; một câu lỗi giữa script làm
  * transaction abort và rollback TOÀN BỘ, kể cả các câu INSERT đã
  * chạy trước nó. Hai ca dưới đây khoá cả hai phía trên database
- * thật dựng từ rỗng bằng cầu nối migration của `@lms/db`:
+ * thật dựng từ rỗng bằng cầu nối migration của `@giaokhoa/db`:
  * - Ca đầy đủ: restore trọn artifact thật, đếm dòng từng bảng
  *   khớp số đếm của artifact và mọi môn học được neo về context
  *   đích (bước update bằng builder chạy SAU sql.raw trong cùng
@@ -31,16 +31,16 @@ import {
  *   — restore phải ném lỗi và cả năm bảng đích vẫn 0 dòng.
  */
 const adminUrl =
-  process.env.LMS_DB_TEST_ADMIN_URL ??
+  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   withDatabase(
     process.env.DATABASE_URL ??
-      process.env.LMS_TEST_DATABASE_URL ??
-      'postgres://postgres:postgres@localhost:5432/lms_test_api',
+      process.env.GIAOKHOA_TEST_DATABASE_URL ??
+      'postgres://postgres:postgres@localhost:5432/giaokhoa_test_api',
     'postgres',
   );
 
-const FULL_DB = 'lms_db_g646_t12_full';
-const ROLLBACK_DB = 'lms_db_g646_t12_rollback';
+const FULL_DB = 'giaokhoa_db_g646_t12_full';
+const ROLLBACK_DB = 'giaokhoa_db_g646_t12_rollback';
 const ANCHOR_CONTEXT_ID = '01934f2a-7b6d-7c1e-9c4a-2f5d8e6a5001';
 
 /** Số dòng kỳ vọng của artifact chương trình (đếm tại artifact `program-dump.sql` đi kèm module). */

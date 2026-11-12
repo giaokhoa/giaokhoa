@@ -40,12 +40,12 @@ describe('Hành trình kiểm toán ngược Behat', () => {
     const student = await createUserViaApi(app, admin);
     const studentToken = (await login(app, student.username, STRONG_PASSWORD)).accessToken;
     // Badge A: tiêu chí manual, cấp thủ công.
-    const aRes = await http(app).post('/api/v1/badges').set('Authorization', `Bearer ${admin}`).send({ name: 'Step one', type: 1, issuerName: 'LMS HQ' });
+    const aRes = await http(app).post('/api/v1/badges').set('Authorization', `Bearer ${admin}`).send({ name: 'Step one', type: 1, issuerName: 'Giáo khoa HQ' });
     const aId = aRes.body.id as string;
     await http(app).put(`/api/v1/badges/${aId}/criteria`).set('Authorization', `Bearer ${admin}`).send({ method: 1, criteria: [{ criteriaType: 'manual', params: {} }] });
     await http(app).post(`/api/v1/badges/${aId}/status`).set('Authorization', `Bearer ${admin}`).send({ status: 1 });
     // Badge B: yêu cầu đã có badge A.
-    const bRes = await http(app).post('/api/v1/badges').set('Authorization', `Bearer ${admin}`).send({ name: 'Step two', type: 1, issuerName: 'LMS HQ' });
+    const bRes = await http(app).post('/api/v1/badges').set('Authorization', `Bearer ${admin}`).send({ name: 'Step two', type: 1, issuerName: 'Giáo khoa HQ' });
     const bId = bRes.body.id as string;
     await http(app).put(`/api/v1/badges/${bId}/criteria`).set('Authorization', `Bearer ${admin}`).send({ method: 1, criteria: [{ criteriaType: 'badge', params: { badgeId: aId } }] });
     await http(app).post(`/api/v1/badges/${bId}/status`).set('Authorization', `Bearer ${admin}`).send({ status: 1 });

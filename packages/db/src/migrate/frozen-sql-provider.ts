@@ -1,5 +1,5 @@
 /**
- * `MigrationProvider` tự viết cho bộ máy migration của `@lms/db`:
+ * `MigrationProvider` tự viết cho bộ máy migration của `@giaokhoa/db`:
  * đọc các file SQL trong `packages/db/migrations/<kho>/` và biến
  * mỗi thư mục migration thành một migration Kysely. Thư mục của
  * một kho chứa hai loại migration cùng khuôn file `migration.sql`:

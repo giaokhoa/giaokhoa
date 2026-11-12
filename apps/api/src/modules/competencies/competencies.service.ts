@@ -12,7 +12,7 @@ import { UsersService } from '../users/users.service';
 import {
   CompetenciesRepository, type CompetencyRow, type EvidenceRow, type FrameworkRow,
   type PlanRow, type TemplateRow, type UsercompRow,
-} from '@lms/db/repositories/competencies';
+} from '@giaokhoa/db/repositories/competencies';
 
 export const PLAN_STATUS = { DRAFT: 0, ACTIVE: 1, WAITING_FOR_REVIEW: 2, IN_REVIEW: 3, COMPLETE: 4 } as const;
 export const USERCOMP_REVIEW = { NONE: 0, WAITING: 1, IN_REVIEW: 2 } as const;
@@ -52,9 +52,9 @@ export function parseRuleConfig(raw: unknown): CompetencyRulePointsConfig | null
   return { pointsRequired: cfg.pointsRequired as number, entries };
 }
 
-/** Hình dạng tài liệu export framework (khớp `frameworkExportSchema` ở @lms/contracts). */
+/** Hình dạng tài liệu export framework (khớp `frameworkExportSchema` ở @giaokhoa/contracts). */
 export interface FrameworkExportDoc {
-  format: 'lms-competency-framework';
+  format: 'giaokhoa-competency-framework';
   version: 1;
   framework: { shortName: string; idNumber: string; description: string; visible: boolean; taxonomies: string; scale: ScaleConfiguration };
   competencies: {
@@ -324,7 +324,7 @@ export class CompetenciesService implements OnModuleInit {
     const framework = await this.getFramework(frameworkId);
     const competencies = await this.repo.listCompetencies(frameworkId);
     return {
-      format: 'lms-competency-framework',
+      format: 'giaokhoa-competency-framework',
       version: 1,
       framework: {
         shortName: framework.shortName, idNumber: framework.idNumber, description: framework.description,

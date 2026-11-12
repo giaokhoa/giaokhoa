@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { INestApplicationContext } from '@nestjs/common';
-import { sql, type CentreDb, type JsonValue } from '@lms/db';
+import { sql, type CentreDb, type JsonValue } from '@giaokhoa/db';
 import Redis from 'ioredis';
 import {
   NOTIFICATION_UNREAD_CHANGED_CHANNEL,

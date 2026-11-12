@@ -29,7 +29,7 @@ export interface SiteSettingDefinition {
 
 /** Danh sách setting đã đăng ký — thêm setting mới là thêm một dòng ở đây kèm giá trị mặc định. */
 export const SITE_SETTINGS: readonly SiteSettingDefinition[] = [
-  { component: 'core', name: 'fullname', type: 'string', defaultValue: 'LMS', scope: 'both' },
+  { component: 'core', name: 'fullname', type: 'string', defaultValue: 'Giáo khoa', scope: 'both' },
   { component: 'core', name: 'lang', type: 'enum', options: ['vi', 'en'], defaultValue: 'vi', scope: 'both' },
   { component: 'core', name: 'timezone', type: 'string', defaultValue: 'Asia/Saigon', scope: 'both' },
   { component: 'core', name: 'sitepolicy', type: 'string', defaultValue: '', scope: 'platform' },
@@ -46,7 +46,7 @@ export const SITE_SETTINGS: readonly SiteSettingDefinition[] = [
   // chốt ở issue #33): trần độ dài một tin tính theo KÝ TỰ NGƯỜI DÙNG
   // THẤY (grapheme, không đếm byte) — vượt trần bị từ chối 400
   // `messaging.message_too_long`; 0 = tắt trần. Giá trị mặc định phải
-  // khớp MESSAGING_MAX_MESSAGE_LENGTH_DEFAULT ở @lms/contracts.
+  // khớp MESSAGING_MAX_MESSAGE_LENGTH_DEFAULT ở @giaokhoa/contracts.
   { component: 'core', name: 'messagingmaxmessagelength', type: 'number', defaultValue: 10000, scope: 'both' },
   // Throttle gửi tin theo từng người dùng bằng Redis (cùng lát M2):
   // cửa sổ bùng phát (burst) mặc định 20 tin / 10 giây + trần duy trì

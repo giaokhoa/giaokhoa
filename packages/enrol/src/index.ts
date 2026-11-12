@@ -1,8 +1,8 @@
 /**
- * Barrel của package `@lms/enrol` — bề mặt vật chất hoá cohort và
+ * Barrel của package `@giaokhoa/enrol` — bề mặt vật chất hoá cohort và
  * các lõi tầng dữ liệu mà nó đi qua (gán vai, tách vai, giới hạn
  * slot, membership tenant, dữ liệu liên quan), dùng chung cho
- * `apps/api` và `apps/worker` trên cùng schema `@lms/db`.
+ * `apps/api` và `apps/worker` trên cùng schema `@giaokhoa/db`.
  */
 export * from './errors';
 export * from './types';

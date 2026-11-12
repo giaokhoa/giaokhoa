@@ -18,9 +18,9 @@
  * @param props.onCategoryChange - Handler đổi danh mục đích của trang.
  * @param props.onQtypeChange - Handler đổi loại câu hỏi của trang.
  */
-import type { QuestionCategory, StimulusView } from '@lms/contracts';
-import { Field, FieldLabel } from '@lms/ui/components/field';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@lms/ui/components/select';
+import type { QuestionCategory, StimulusView } from '@giaokhoa/contracts';
+import { Field, FieldLabel } from '@giaokhoa/ui/components/field';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@giaokhoa/ui/components/select';
 import { useTranslation } from 'react-i18next';
 import { QTYPES, QTYPE_LABEL_KEYS, plainText } from '#features/questions/utils/shared';
 import type { QuestionEditorFormState } from '../types/form-model';

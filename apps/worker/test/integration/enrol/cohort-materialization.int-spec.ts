@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { Client, Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { CohortMaterializationSurface, type EnrolInstanceRow, type SharedOutboxPort } from '@lms/enrol';
-import { createCentreKysely, sql, type CentreDB, type CentreDb } from '@lms/db';
+import { CohortMaterializationSurface, type EnrolInstanceRow, type SharedOutboxPort } from '@giaokhoa/enrol';
+import { createCentreKysely, sql, type CentreDB, type CentreDb } from '@giaokhoa/db';
 import { tenantAls } from '../../../src/db/tenant-als';
 
 /**
  * Spec đặc tả hoá cho bề mặt vật chất hoá cohort dùng chung
- * `@lms/enrol` ở phía WORKER (issue #527, tiêu chí nghiệm thu về
+ * `@giaokhoa/enrol` ở phía WORKER (issue #527, tiêu chí nghiệm thu về
  * tính gọi được từ worker).
  *
  * Bối cảnh: đường đồng bộ cohort trước đây chỉ chạy được trong
@@ -17,7 +17,7 @@ import { tenantAls } from '../../../src/db/tenant-als';
  * đã trích xuất dựng và chạy trọn vẹn trong NGỮ CẢNH CỦA WORKER:
  * chính tiến trình test của worker import package, dựng bề mặt
  * bằng tay cầm Kysely trên cơ sở dữ liệu test của worker
- * (`lms_test_worker`), cổng outbox do phía gọi tự cấp (chèn thẳng
+ * (`giaokhoa_test_worker`), cổng outbox do phía gọi tự cấp (chèn thẳng
  * vào `outbox_events` trên schema dùng chung, gương `tenantId` vào
  * payload như dịch vụ outbox của API vẫn làm) và cổng ngữ cảnh
  * platform là `tenantAls` của worker — không qua bất kỳ service
@@ -144,7 +144,7 @@ describe('Vật chất hoá cohort dùng chung — gọi được và đúng hà
     // transaction được truyền vào, enqueueStandalone ghi độc lập —
     // đúng hợp đồng cổng mà package khai báo. Cột `payload` jsonb
     // đi qua serialize tường minh kèm `::jsonb` theo khuôn ghi
-    // jsonb của `@lms/db`.
+    // jsonb của `@giaokhoa/db`.
     const outbox: SharedOutboxPort = {
       async enqueue(tx, input) {
         const tenantIdValue = input.tenantId ?? null;

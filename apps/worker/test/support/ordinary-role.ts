@@ -30,15 +30,15 @@
  *     trong CI, bước migrate DB test từ trống chạy trước suite nên mọi
  *     bảng đã tồn tại khi harness chạy.
  *   - Harness không đổi URL quản trị và không đụng cách ly DB của
- *     suite (`lms_test_worker` riêng, tách khỏi `lms_test_api`).
+ *     suite (`giaokhoa_test_worker` riêng, tách khỏi `giaokhoa_test_api`).
  */
 import { Client } from 'pg';
 
 /** Tên role ứng dụng dùng chung cho mọi spec worker chạy dưới RLS. */
-export const ORDINARY_ROLE = 'lms_worker_ordinary';
+export const ORDINARY_ROLE = 'giaokhoa_worker_ordinary';
 
 /** Mật khẩu của role thường — chỉ dùng trong môi trường test local/CI. */
-export const ORDINARY_ROLE_PASSWORD = 'lms-worker-ordinary-test-password';
+export const ORDINARY_ROLE_PASSWORD = 'giaokhoa-worker-ordinary-test-password';
 
 /**
  * Khoá advisory cấp phiên để tuần tự hoá việc dựng role giữa các
@@ -54,7 +54,7 @@ const ORDINARY_ROLE_SETUP_LOCK = 294001;
  * Lấy URL kết nối quản trị của suite worker từ env.
  *
  * @returns URL trong `DATABASE_URL` (vitest config gán, mặc định trỏ
- *   `lms_test_worker` bằng superuser — chỉ dùng để nạp fixture và dựng
+ *   `giaokhoa_test_worker` bằng superuser — chỉ dùng để nạp fixture và dựng
  *   role, không dùng để chạy phần xử lý cần kiểm chứng RLS).
  * @throws Error khi env chưa được đặt (suite chạy ngoài vitest config).
  */

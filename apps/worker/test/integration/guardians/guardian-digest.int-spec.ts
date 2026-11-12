@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { INestApplicationContext } from '@nestjs/common';
 import { GuardianDigestProcessor } from '../../../src/processors/guardian-digest.processor';
-import { sql } from '@lms/db';
+import { sql } from '@giaokhoa/db';
 import {
   bootWorkerModuleAsOrdinaryRole,
   type OrdinaryWorkerModuleHarness,

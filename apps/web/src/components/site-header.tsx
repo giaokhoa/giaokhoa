@@ -3,9 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router';
 import { IconSearch } from '@tabler/icons-react';
 
-import { Input } from '@lms/ui/components/input';
-import { Separator } from '@lms/ui/components/separator';
-import { SidebarTrigger } from '@lms/ui/components/sidebar';
+import { Input } from '@giaokhoa/ui/components/input';
+import { Separator } from '@giaokhoa/ui/components/separator';
+import { SidebarTrigger } from '@giaokhoa/ui/components/sidebar';
 import { CommandPalette } from '#components/command-palette';
 import { NotificationBell } from '#features/notifications/components/notification-bell';
 import '#config/i18n';
@@ -142,7 +142,7 @@ export function SiteHeader() {
         <div className="flex min-w-0 items-center gap-1 lg:gap-2">
           <SidebarTrigger />
           <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-4" />
-          <h1 className="truncate text-base font-medium">{match ? t(`${match.ns}:${match.key}`) : 'LMS'}</h1>
+          <h1 className="truncate text-base font-medium">{match ? t(`${match.ns}:${match.key}`) : 'Giáo khoa'}</h1>
         </div>
         {/* Vùng giữa: ô tìm kiếm chiếm phần linh hoạt còn lại và căn
             giữa trong phần đó; max-w-xl giữ ô không bè ra quá rộng

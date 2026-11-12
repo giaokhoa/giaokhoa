@@ -1,4 +1,4 @@
-import type { RichTextDocument } from '@lms/contracts';
+import type { RichTextDocument } from '@giaokhoa/contracts';
 
 /**
  * Kiểu dữ liệu của shell ngân hàng câu hỏi/đề/ma trận thuộc

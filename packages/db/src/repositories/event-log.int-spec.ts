@@ -23,10 +23,10 @@ import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-suppo
 import { EventLogRepository, type EventLogFilters } from './event-log';
 
 const adminUrl =
-  process.env.LMS_DB_TEST_ADMIN_URL ??
+  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
 
-const TEST_DB = 'lms_db_g648_eventlog';
+const TEST_DB = 'giaokhoa_db_g648_eventlog';
 
 const USER_1 = '00000000-0000-4000-8000-0000000000d1';
 const USER_2 = '00000000-0000-4000-8000-0000000000d2';
@@ -49,7 +49,7 @@ async function collectAll(filters: EventLogFilters): Promise<{ ids: string[]; to
 }
 
 beforeAll(async () => {
-  if (!adminUrl) throw new Error('Thiếu kết nối quản trị: đặt LMS_DB_TEST_ADMIN_URL hoặc DATABASE_URL.');
+  if (!adminUrl) throw new Error('Thiếu kết nối quản trị: đặt GIAOKHOA_DB_TEST_ADMIN_URL hoặc DATABASE_URL.');
   const url = await buildTestDatabase({ adminUrl, database: TEST_DB, store: 'centre' });
   pool = new Pool({ connectionString: url });
   db = createCentreKysely(pool);

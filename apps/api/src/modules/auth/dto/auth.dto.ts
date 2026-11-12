@@ -17,11 +17,11 @@ import {
   type OAuthHandoff,
   type OAuthIssuer,
   type RefreshToken,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 
 /**
  * Validation của Auth dùng Zod qua Standard Schema — schema nền ở
- * `@lms/contracts` là nguồn sự thật duy nhất.
+ * `@giaokhoa/contracts` là nguồn sự thật duy nhất.
  */
 export { changePasswordSchema, loginAsSchema, loginSchema, mfaTotpCodeSchema, mfaTotpSetupSchema, mfaVerifySchema, oauthHandoffSchema, oauthIssuerSchema, refreshTokenSchema };
 export type LoginDto = Login;

@@ -1,8 +1,9 @@
-# GiaoKhoa — TypeScript (NestJS + React)
+# Giáo khoa — TypeScript (NestJS + React)
 
-Một LMS TypeScript viết từ đầu, có phạm vi nghiệp vụ tương đương các phân
-hệ lõi của Moodle (chỉ backend; không tương thích ngược với cơ sở dữ
-liệu, định dạng file hay giao thức của Moodle — xem báo cáo nghiên cứu).
+Giáo khoa là nền tảng quản lý học tập viết bằng TypeScript (NestJS + React),
+có phạm vi nghiệp vụ tương đương các phân hệ lõi của Moodle ở backend.
+Hệ thống không tương thích ngược với cơ sở dữ liệu, định dạng file hay
+giao thức của Moodle (xem báo cáo nghiên cứu).
 
 ## Cấu trúc thư mục
 
@@ -23,7 +24,7 @@ không bao giờ import code backend hay schema cơ sở dữ liệu.
 ## Điều kiện tiên quyết
 
 - Node 24 (trường `engines` của `package.json` gốc), pnpm theo trường `packageManager` của `package.json` gốc
-- PostgreSQL 18.6 tại `localhost:5432` (người dùng `postgres`/`postgres`, các DB `lms` và `lms_test`) — bắt buộc bản 18.x: khoá chính mặc định dùng hàm `uuidv7()` native
+- PostgreSQL 18.6 tại `localhost:5432` (người dùng `postgres`/`postgres`, các DB `giaokhoa` và `giaokhoa_test`) — bắt buộc bản 18.x: khoá chính mặc định dùng hàm `uuidv7()` native
 - Redis tại `localhost:6379`
 
 ## Phát triển trong Dev Container
@@ -35,8 +36,8 @@ Features để cài Node 24, pnpm 12.14.0 (theo `packageManager` trong
 namespace với PostgreSQL 18.6 và Redis 7, vì vậy API, worker và test
 tiếp tục kết nối qua `localhost:5432` và `localhost:6379`.
 
-PostgreSQL tạo các database `lms`, `lms_test`, `lms_test_api` và
-`lms_test_worker` khi khởi tạo volume mới (tài khoản/mật khẩu:
+PostgreSQL tạo các database `giaokhoa`, `giaokhoa_test`, `giaokhoa_test_api` và
+`giaokhoa_test_worker` khi khởi tạo volume mới (tài khoản/mật khẩu:
 `postgres`/`postgres`). Đây là tên database kỹ thuật còn được sử dụng
 trong cấu hình API, worker, test và CI; tên workspace và tên hiển thị
 Dev Container đã dùng `GiaoKhoa`. Với volume PostgreSQL đã tồn tại,
@@ -65,10 +66,10 @@ triển local, compose ở gốc cho production tự host.
 ```bash
 pnpm install
 cp apps/api/.env.example apps/api/.env       # các giá trị mặc định đã khớp hạ tầng local
-pnpm --filter @lms/api db:migrate            # tạo các bảng hạ tầng
-pnpm --filter @lms/api build && pnpm --filter @lms/api start   # API ở cổng :3000
-pnpm --filter @lms/worker build && pnpm --filter @lms/worker start
-pnpm --filter @lms/web dev                   # web ở cổng :5173 (proxy /api → :3000)
+pnpm --filter @giaokhoa/api db:migrate            # tạo các bảng hạ tầng
+pnpm --filter @giaokhoa/api build && pnpm --filter @giaokhoa/api start   # API ở cổng :3000
+pnpm --filter @giaokhoa/worker build && pnpm --filter @giaokhoa/worker start
+pnpm --filter @giaokhoa/web dev                   # web ở cổng :5173 (proxy /api → :3000)
 ```
 
 - Health: `GET http://localhost:3000/api/v1/health`
@@ -139,7 +140,7 @@ redis-server --daemonize yes              # Redis tại localhost:6379 (hoặc: 
 # 2) Cài đặt + schema + dữ liệu mẫu (chỉ lần chạy đầu; seed có tính idempotent)
 pnpm install
 cp apps/api/.env.example apps/api/.env    # các mặc định khớp hạ tầng local (bỏ qua nếu .env đã có)
-pnpm --filter @lms/api db:migrate
+pnpm --filter @giaokhoa/api db:migrate
 pnpm seed                                 # build API, rồi seed dữ liệu mẫu dưới đây
 
 # 3) Chạy mọi thứ (API :3000, worker, web :5173) bằng một lệnh
@@ -164,7 +165,7 @@ Tài khoản admin do chính bootstrap của API tạo từ
 `apps/api/.env`). Seed bổ sung: tài khoản phụ huynh **parent1** liên kết
 giám hộ sẵn với student1 (quan hệ Cha) để đăng nhập xem bề mặt phụ
 huynh, và khoá học **DEMO101 — "Khoá học mẫu: Làm
-quen với LMS"** với 3 section và 3 module, cả hai học viên đều đã ghi
+quen với Giáo khoa"** với 3 section và 3 module, cả hai học viên đều đã ghi
 danh, điểm mẫu (student1 = 8.5, student2 = 6.5 ở "Bài kiểm tra 1"), huy
 hiệu "Huy hiệu khởi đầu" đã trao cho student1, và một sự kiện lịch của
 khoá học vào 09:00 ngày mai.
@@ -209,11 +210,11 @@ khai `lint: eslint .` trong `package.json`. Turbo chạy song song và cache
 theo từng workspace; thay đổi ở `eslint.config.mjs` tại root sẽ làm mới
 cache của các task lint. Cấu hình ESLint duy nhất ở root tự phân rule
 JavaScript/Node, TypeScript, React Hooks và Vitest bằng glob. Package
-`@lms/config` chỉ có JSON nên không khai lint.
+`@giaokhoa/config` chỉ có JSON nên không khai lint.
 
-Chạy riêng bằng `pnpm --filter @lms/web lint`. Những package còn lỗi cũ
+Chạy riêng bằng `pnpm --filter @giaokhoa/web lint`. Những package còn lỗi cũ
 có `eslint-suppressions.json` của chính package, không tắt rule chung.
-Khi sửa hết một nhóm lỗi, chạy `pnpm --filter @lms/web exec eslint . --prune-suppressions`
+Khi sửa hết một nhóm lỗi, chạy `pnpm --filter @giaokhoa/web exec eslint . --prune-suppressions`
 (ví dụ với web) để cập nhật baseline, rồi chạy lại `pnpm lint`.
 
 ## Kiểm chứng (định nghĩa "xanh")
@@ -241,7 +242,7 @@ ghim/trở ngại hiện tại:
 
 - Các app NestJS (`api`, `worker`): TypeScript **6.0.3** — `nest build`/toolchain của Nest
   chưa hỗ trợ TypeScript 7. Mọi thứ còn lại: 7.0.2.
-- Tầng dữ liệu: Kysely qua package `@lms/db` — kiểu của ba kho sinh
+- Tầng dữ liệu: Kysely qua package `@giaokhoa/db` — kiểu của ba kho sinh
   bằng `kysely-codegen` từ database thật, migration viết tay và áp
   bằng runner của chính package (các carrier đóng băng giữ nguyên
   từng byte).

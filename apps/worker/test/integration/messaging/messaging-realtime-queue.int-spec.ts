@@ -10,8 +10,8 @@ import Redis from 'ioredis';
 import { Server } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { io as clientIo, type Socket as ClientSocket } from 'socket.io-client';
-import { sql, type JsonValue } from '@lms/db';
-import { conversationRoom, userRoom } from '@lms/messaging';
+import { sql, type JsonValue } from '@giaokhoa/db';
+import { conversationRoom, userRoom } from '@giaokhoa/messaging';
 import { OutboxRelayScheduler } from '../../../src/outbox-relay.scheduler';
 import {
   MESSAGING_DISTRIBUTED_KEY_PREFIX,
@@ -29,7 +29,7 @@ import {
  * dòng outbox (ghi như đường nghiệp vụ phía API vẫn ghi) → relay
  * outbox duy nhất đóng dấu `publishedAt` và phát job vào hàng đợi
  * `messaging-realtime` → `MessagingRealtimeProcessor` → luật phân
- * phối dùng chung ở `@lms/messaging` → phát qua Redis adapter tới
+ * phối dùng chung ở `@giaokhoa/messaging` → phát qua Redis adapter tới
  * một Socket.IO server độc lập đóng vai phía API (gắn socket vào
  * room đúng luật gateway: room riêng của user + room của các
  * conversation, `data.userId` gắn lúc bắt tay).

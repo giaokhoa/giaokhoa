@@ -1,6 +1,6 @@
 import { Module, ServiceUnavailableException } from '@nestjs/common';
-import { SystemBankCentreRepository } from '@lms/db/repositories/system-bank-centre';
-import { SystemBankRepository } from '@lms/db/repositories/system-bank';
+import { SystemBankCentreRepository } from '@giaokhoa/db/repositories/system-bank-centre';
+import { SystemBankRepository } from '@giaokhoa/db/repositories/system-bank';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { AccessModule } from '../access/access.module';
@@ -23,7 +23,7 @@ import { SystemBankService } from './system-bank.service';
  * dùng đúng một kết nối kho ngân hàng của tiến trình.
  *
  * Từ hạng mục nhân rộng G10 (issue #650), cả hai repository sống ở
- * `@lms/db` (lớp thuần, không phụ thuộc Nest) nên module lắp chúng
+ * `@giaokhoa/db` (lớp thuần, không phụ thuộc Nest) nên module lắp chúng
  * bằng factory provider theo khuôn pilot kho control plane:
  * - Repository kho ngân hàng nhận handle Kysely từ adapter
  *   `SystemBankConnection` (kết nối riêng chuyên dụng), kèm hàm dựng

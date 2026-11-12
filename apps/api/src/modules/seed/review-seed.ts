@@ -155,7 +155,7 @@ async function main(): Promise<void> {
     let course = courseItems.find((c) => c.shortName === COURSE_SHORTNAME);
     if (!course) {
       course = must(await call('POST', '/courses', admin, {
-        fullName: 'Khoá học mẫu: Làm quen với LMS', shortName: COURSE_SHORTNAME, category: category.id, classId,
+        fullName: 'Khoá học mẫu: Làm quen với Giáo khoa', shortName: COURSE_SHORTNAME, category: category.id, classId,
         summary: 'Khoá học mẫu phục vụ buổi review: có section, module, điểm, huy hiệu và sự kiện lịch.',
       }), 'create course') as { id: string; shortName: string; classId?: string | null };
       console.log(`[seed] course created (#${course.id}) inside demo class`);
@@ -373,7 +373,7 @@ async function main(): Promise<void> {
     const badges = must(await call('GET', '/badges', admin), 'list badges') as { id: string; name: string; status: number }[];
     let badge = badges.find((b) => b.name === 'Huy hiệu khởi đầu');
     if (!badge) {
-      badge = must(await call('POST', '/badges', admin, { name: 'Huy hiệu khởi đầu', type: 1, issuerName: 'LMS Review', description: 'Cấp thủ công cho student1 để xem ngay trong buổi review.' }), 'create badge') as { id: string; name: string; status: number };
+      badge = must(await call('POST', '/badges', admin, { name: 'Huy hiệu khởi đầu', type: 1, issuerName: 'Giáo khoa Review', description: 'Cấp thủ công cho student1 để xem ngay trong buổi review.' }), 'create badge') as { id: string; name: string; status: number };
       must(await call('PUT', `/badges/${badge.id}/criteria`, admin, { method: 1, criteria: [{ criteriaType: 'manual', params: {} }] }), 'set badge criteria');
       must(await call('POST', `/badges/${badge.id}/status`, admin, { status: 1 }), 'activate badge');
       console.log(`[seed] badge created + activated (#${badge.id})`);

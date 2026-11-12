@@ -1,8 +1,8 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { SharedDomainError } from '@lms/enrol';
+import { SharedDomainError } from '@giaokhoa/enrol';
 
 /**
- * Cầu dịch lỗi giữa lõi dùng chung `@lms/enrol` và bề mặt HTTP của
+ * Cầu dịch lỗi giữa lõi dùng chung `@giaokhoa/enrol` và bề mặt HTTP của
  * API.
  *
  * Các lõi ở tầng dữ liệu dùng chung ném `SharedDomainError` mang mã

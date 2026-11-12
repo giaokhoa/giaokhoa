@@ -5,7 +5,7 @@ import {
   type RealtimeMessageDeletedPayload,
   type RealtimeMessageReadPayload,
   type RealtimeNewMessagePayload,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { blankRecalledContent, toWireMessage, type MessageRow } from './message-wire.js';
 import { conversationRoom, userRoom } from './realtime-rooms.js';
 import type { MessagingDistributionStore } from './distribution-store.js';

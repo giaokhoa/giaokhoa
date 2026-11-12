@@ -1,8 +1,8 @@
 import { useCallback } from 'react';
 import { Link, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
-import type { AssignmentForUserView } from '@lms/contracts';
-import { Card, CardContent, CardHeader, CardTitle } from '@lms/ui/components/card';
+import type { AssignmentForUserView } from '@giaokhoa/contracts';
+import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { PageSkeleton } from '#components/page-skeleton';
 import { ErrorAlert } from '#components/error-alert';
 import { useTranslation } from 'react-i18next';

@@ -3,7 +3,7 @@ import type {
   QuizAttemptSummary,
   QuizView,
   RichTextDocument,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 
 /**
  * Kiểu dữ liệu của trang lần ghim đề và trang làm bài thuộc

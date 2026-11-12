@@ -21,10 +21,10 @@ import { FleetRegistryWriter } from '../../../src/modules/fleet/fleet-registry-w
  * trên cùng cụm không va chạm, và không tái dùng tên database cũ
  * (tránh khoá cache siteadmins cũ trong Redis theo tên database).
  * Cụm test lấy từ `DATABASE_URL` đã được Vitest phân giải (biến
- * `LMS_TEST_DATABASE_URL` ghi đè khi chạy ngoài CI).
+ * `GIAOKHOA_TEST_DATABASE_URL` ghi đè khi chạy ngoài CI).
  */
 const RUN_SUFFIX = Math.random().toString(36).slice(2, 8);
-const CP_DATABASE = `lms_test_cp_583_${RUN_SUFFIX}`;
+const CP_DATABASE = `giaokhoa_test_cp_583_${RUN_SUFFIX}`;
 const SLUG = `trung-tam-583-${RUN_SUFFIX}`;
 const ADMIN_EMAIL = `admin-583-${RUN_SUFFIX}@example.com`;
 const ADMIN_USERNAME = `admin583${RUN_SUFFIX}`;
@@ -298,7 +298,7 @@ describe('Cấp phát trung tâm mới (tích hợp)', () => {
     // Dòng kho chung trỏ về database dùng chung — ghi trực tiếp vào
     // sổ (đường seedExistingSpaces tạo ra các dòng này trong thực
     // tế, không qua cấp phát).
-    const sharedDb = `lms_shared_583_${RUN_SUFFIX}`;
+    const sharedDb = `giaokhoa_shared_583_${RUN_SUFFIX}`;
     await withClient(clusterUrl(CP_DATABASE), async (client) => {
       await client.query(
         `INSERT INTO space_registry (slug, name, kind, status, database_name, storage_mode, connection_role_ref, secret_ref, schema_version, plan)
@@ -324,7 +324,7 @@ describe('Cấp phát trung tâm mới (tích hợp)', () => {
   });
 
   it('chỉ mục unique từng phần ở tầng database: hai dòng dedicated trùng tên bị chặn, hai dòng shared trùng tên vẫn được', async () => {
-    const dbName = `lms_dup_583_${RUN_SUFFIX}`;
+    const dbName = `giaokhoa_dup_583_${RUN_SUFFIX}`;
     await withClient(clusterUrl(CP_DATABASE), async (client) => {
       await client.query(
         `INSERT INTO space_registry (slug, name, kind, status, database_name, storage_mode, connection_role_ref, secret_ref, schema_version, plan)
@@ -411,7 +411,7 @@ describe('Cấp phát trung tâm mới (tích hợp)', () => {
     // viên của một role đặc quyền thì vẫn bị từ chối.
     const memberSlug = `trung-tam-thanh-vien-${RUN_SUFFIX}`;
     const memberRole = deriveCentreRoleName(memberSlug);
-    const privilegedRole = `lms_quyen_611_${RUN_SUFFIX}`;
+    const privilegedRole = `giaokhoa_quyen_611_${RUN_SUFFIX}`;
     await withClient(adminConn, async (admin) => {
       await admin.query(`CREATE ROLE ${quoted(privilegedRole)} LOGIN SUPERUSER PASSWORD 'tam-611-quyen'`);
       await admin.query(`CREATE ROLE ${quoted(memberRole)} LOGIN PASSWORD 'tam-611-thanh-vien'`);

@@ -1,5 +1,5 @@
 /**
- * Harness dựng database test từ rỗng cho `@lms/db` (điểm vào
+ * Harness dựng database test từ rỗng cho `@giaokhoa/db` (điểm vào
  * test-support, chỉ dùng trong test — không phải mã chạy production).
  *
  * Từ hạng mục nền thứ hai (issue #639), harness dựng database bằng

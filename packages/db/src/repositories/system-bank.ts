@@ -43,7 +43,7 @@
  *   do tầng ứng dụng cấp qua hàm dựng lỗi lúc lắp ráp repository.
  */
 import { sql, type InsertObject, type RawBuilder } from 'kysely';
-import type { SystemBankPackage } from '@lms/contracts';
+import type { SystemBankPackage } from '@giaokhoa/contracts';
 import type { SystemBankDb, SystemBankTx, SystemBankDB } from '../client';
 import type { Json } from '../types/system-bank-db';
 

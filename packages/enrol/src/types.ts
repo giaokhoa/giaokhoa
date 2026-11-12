@@ -1,11 +1,11 @@
-import type { CentreDb, CentreTx } from '@lms/db';
+import type { CentreDb, CentreTx } from '@giaokhoa/db';
 
 /**
- * Các kiểu nền của package `@lms/enrol`: tay cầm cơ sở dữ liệu, các
+ * Các kiểu nền của package `@giaokhoa/enrol`: tay cầm cơ sở dữ liệu, các
  * cổng (port) mà host phải cấp, và các kiểu dòng dữ liệu dùng chung.
  *
  * Package không phụ thuộc framework: nó chỉ nói chuyện với tầng dữ
- * liệu qua Kysely trên kho trung tâm của `@lms/db` (không bật
+ * liệu qua Kysely trên kho trung tâm của `@giaokhoa/db` (không bật
  * CamelCasePlugin — tên cột trong truy vấn giữ snake_case như DB,
  * tên trường trong kiểu dòng giữ camelCase như hợp đồng cũ của
  * repository bộ máy cũ để phía tiêu thụ không đổi). Hai thứ thuộc về
@@ -134,9 +134,9 @@ export interface TenantMembershipRow {
  * Dòng của bảng `enrol` (một phương thức ghi danh của khoá học) và
  * dòng của bảng `user_enrolments` (ghi danh của một người dùng):
  * dùng chung một định nghĩa với repository Kysely của G5 ở
- * `@lms/db` — hai bảng này là cùng một dữ kiện ở cả hai phía.
+ * `@giaokhoa/db` — hai bảng này là cùng một dữ kiện ở cả hai phía.
  */
-export type { EnrolRow as EnrolInstanceRow, UserEnrolmentRow } from '@lms/db/repositories/enrol';
+export type { EnrolRow as EnrolInstanceRow, UserEnrolmentRow } from '@giaokhoa/db/repositories/enrol';
 
 // ---------------------------------------------------------------------------
 // Danh sách cột đọc (dùng chung cho select và returning — khuôn G5:

@@ -40,11 +40,11 @@ của repo.
 
 ## Kiểm chứng bắt buộc
 
-- **Typecheck + test của package trước khi push**: `pnpm --filter @lms/editor
-  typecheck` và `pnpm --filter @lms/editor test`; build lại `dist` trước khi
+- **Typecheck + test của package trước khi push**: `pnpm --filter @giaokhoa/editor
+  typecheck` và `pnpm --filter @giaokhoa/editor test`; build lại `dist` trước khi
   typecheck apps/web trong cùng feat.
 - CI là cổng chính; kết luận CI chỉ từ LOG THẬT. Suite nặng local giữ khoá
-  `flock /tmp/lms-heavy-suite.lock`.
+  `flock /tmp/giaokhoa-heavy-suite.lock`.
 
 ## Kỷ luật test theo nghiệp vụ
 
@@ -89,7 +89,7 @@ không dựa vào trí nhớ của trợ lý:
   phát); `src/editor.css` — vỏ vùng soạn + toolbar; xuất qua `src/index.ts`;
   test ở `src/editor.spec.tsx`.
 - **Luồng dữ liệu:** `apps/web` gắn editor với tài liệu đầu vào đúng hợp đồng
-  rich-text của `@lms/contracts` → tài liệu được bảo đảm đoạn viết tiếp ở
+  rich-text của `@giaokhoa/contracts` → tài liệu được bảo đảm đoạn viết tiếp ở
   cuối → người dùng soạn qua **một toolbar duy nhất cho editor đang active**
   (portal vào `#editor-toolbar-slot` ở header trang khi trang có slot, không
   có thì neo trên editor; mất focus thì ẩn) → mỗi thay đổi phát qua `onChange`

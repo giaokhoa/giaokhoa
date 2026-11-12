@@ -4,7 +4,7 @@
  */
 
 import type { ExamVariant, LearningOutcomeDoc } from "../jsonb-types";
-import type { PaperQuality, PaperReading, PaperRosterEntry, PaperSlotLayout } from "@lms/contracts";
+import type { PaperQuality, PaperReading, PaperRosterEntry, PaperSlotLayout } from "@giaokhoa/contracts";
 import type { ColumnType } from "kysely";
 
 export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>

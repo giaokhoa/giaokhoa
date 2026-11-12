@@ -2,20 +2,20 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { keepPreviousData, useQueries, useQuery } from '@tanstack/react-query';
 import type { PaginationState, SortingState } from '@tanstack/react-table';
-import type { UserListSortBy, UserListStatus, UserProfile } from '@lms/contracts';
-import { Avatar, AvatarFallback } from '@lms/ui/components/avatar';
-import { Badge } from '@lms/ui/components/badge';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent } from '@lms/ui/components/card';
+import type { UserListSortBy, UserListStatus, UserProfile } from '@giaokhoa/contracts';
+import { Avatar, AvatarFallback } from '@giaokhoa/ui/components/avatar';
+import { Badge } from '@giaokhoa/ui/components/badge';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent } from '@giaokhoa/ui/components/card';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@lms/ui/components/dropdown-menu';
-import { Field, FieldGroup, FieldLabel } from '@lms/ui/components/field';
-import { Input } from '@lms/ui/components/input';
-import { NativeSelect, NativeSelectOption } from '@lms/ui/components/native-select';
+} from '@giaokhoa/ui/components/dropdown-menu';
+import { Field, FieldGroup, FieldLabel } from '@giaokhoa/ui/components/field';
+import { Input } from '@giaokhoa/ui/components/input';
+import { NativeSelect, NativeSelectOption } from '@giaokhoa/ui/components/native-select';
 import { Ellipsis, Plus } from 'lucide-react';
 import { PageSkeleton } from '#components/page-skeleton';
 import { ErrorAlert } from '#components/error-alert';
@@ -446,7 +446,7 @@ export function AdminUsersPage() {
               một là tìm kiếm + hai bộ lọc, hàng hai là cỡ trang và
               nút thêm người dùng; mỗi điều khiển co theo nội dung
               như thanh lọc của bảng gán vai. Ba ô chọn dùng component
-              NativeSelect của `@lms/ui` (bọc đúng thẻ select gốc nên
+              NativeSelect của `@giaokhoa/ui` (bọc đúng thẻ select gốc nên
               test component vẫn điều khiển bằng selectOptions, khác
               với Select của Base UI). */}
           <div className="flex flex-wrap items-end gap-2">

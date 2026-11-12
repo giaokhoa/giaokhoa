@@ -18,7 +18,7 @@ import type { SessionCacheService } from '../../../src/infra/cache/session-cache
  *   (`/login?mfaChallenge=`). Mã sai bị từ chối
  *   (`auth.mfa_invalid_code`); mã đúng qua
  *   `POST /auth/oauth/mfa/verify` mới sinh phiên (cookie
- *   `lms_session`) và mã bàn giao; mã bàn giao đổi được cặp token
+ *   `giaokhoa_session`) và mã bàn giao; mã bàn giao đổi được cặp token
  *   dùng thật và chỉ dùng được một lần.
  * - (d2) Lớp gác thứ hai tại điểm đổi bàn giao: một mã bàn giao ở
  *   định dạng cũ (giá trị là userId thuần, không có dấu đã-qua-MFA)
@@ -162,7 +162,7 @@ describe('OAuth hệ cũ: cổng MFA tại callback và điểm đổi bàn giao
     expect(location).not.toContain('handoff=');
     // Không cookie phiên nào được đặt ở callback bị gác.
     const cookies = ((callback.headers['set-cookie'] as unknown as string[] | undefined) ?? []).join(';');
-    expect(cookies).not.toContain('lms_session=');
+    expect(cookies).not.toContain('giaokhoa_session=');
     const challengeToken = new URL(location, 'http://localhost').searchParams.get('mfaChallenge');
     expect(challengeToken).toBeTruthy();
 
@@ -179,7 +179,7 @@ describe('OAuth hệ cũ: cổng MFA tại callback và điểm đổi bàn giao
     expect(ok.body.user.id).toBe(user.id);
     expect(ok.body.handoffCode).toBeTruthy();
     const okCookies = ((ok.headers['set-cookie'] as unknown as string[] | undefined) ?? []).join(';');
-    expect(okCookies).toContain('lms_session=');
+    expect(okCookies).toContain('giaokhoa_session=');
 
     // Bàn giao đổi được cặp token dùng thật, và chỉ một lần.
     const exchanged = await http(app).post('/api/v1/auth/oauth/handoff').send({ code: ok.body.handoffCode });

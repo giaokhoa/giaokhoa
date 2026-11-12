@@ -217,7 +217,7 @@ export class TenantsRepository {
    * Handle gốc của repository (handle Kysely được định tuyến theo
    * không gian). Tầng service còn đúng một điểm ghép cần handle
    * thô — uỷ thác bảo đảm membership cho tầng dùng chung
-   * `@lms/enrol` — và điểm đó KHÔNG lấy handle từ đây nữa: tầng
+   * `@giaokhoa/enrol` — và điểm đó KHÔNG lấy handle từ đây nữa: tầng
    * dùng chung đó vẫn chạy trên bộ máy cũ cho tới hạng mục chuyển
    * đổi của chính nó, nên service tự inject handle bộ máy cũ cho
    * riêng điểm uỷ thác đó (xem kiểm kê giao dịch trong thân PR

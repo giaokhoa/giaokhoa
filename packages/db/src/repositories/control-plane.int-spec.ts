@@ -21,7 +21,7 @@ import {
  *
  * Database control plane được dựng từ rỗng bằng chính cầu nối
  * migration của package (carrier đóng băng) trên cụm PostgreSQL
- * thật của môi trường test (biến `LMS_DB_TEST_ADMIN_URL` ghi đè
+ * thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè
  * cụm khi cần, mặc định suy từ `DATABASE_URL` của package). Mọi ca
  * chạy qua repository production ở `control-plane.ts` — không mô
  * phỏng handle.
@@ -43,11 +43,11 @@ import {
  * trên kho control plane ở cả hai đường (từ rỗng / đã áp đủ no-op).
  */
 const adminUrl =
-  process.env.LMS_DB_TEST_ADMIN_URL ??
+  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : 'postgres://postgres:postgres@localhost:5432/postgres');
 
-const CP_DB = 'lms_db_pilot640_cp';
-const T1_DB = 'lms_db_pilot640_t1';
+const CP_DB = 'giaokhoa_db_pilot640_cp';
+const T1_DB = 'giaokhoa_db_pilot640_t1';
 
 const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const ACTOR_ID = '01a19887-6b35-7760-8e64-a5960bfd0875';

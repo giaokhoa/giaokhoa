@@ -5,19 +5,19 @@ import type {
   CourseGroup,
   CourseGrouping,
   UserEnrolment,
-} from '@lms/contracts';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lms/ui/components/card';
-import { Checkbox } from '@lms/ui/components/checkbox';
-import { Input } from '@lms/ui/components/input';
-import { Label } from '@lms/ui/components/label';
+} from '@giaokhoa/contracts';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
+import { Checkbox } from '@giaokhoa/ui/components/checkbox';
+import { Input } from '@giaokhoa/ui/components/input';
+import { Label } from '@giaokhoa/ui/components/label';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@lms/ui/components/select';
+} from '@giaokhoa/ui/components/select';
 import { PageSkeleton } from '#components/page-skeleton';
 import { useTranslation } from 'react-i18next';
 import { PageHeader, PageShell } from '#components/page-shell';

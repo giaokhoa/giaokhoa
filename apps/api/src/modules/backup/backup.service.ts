@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { BackupRepository, type JobRow } from '@lms/db/repositories/backup';
-import { sql, type CentreDB, type RawBuilder, type Selectable } from '@lms/db';
+import { BackupRepository, type JobRow } from '@giaokhoa/db/repositories/backup';
+import { sql, type CentreDB, type RawBuilder, type Selectable } from '@giaokhoa/db';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { ContextsService } from '../access/contexts.service';
 import { RoleSeparationService } from '../access/role-separation.service';
@@ -159,7 +159,7 @@ const CALENDAR_SUBSCRIPTIONS_COLUMNS = [
   'user_id as userId', 'poll_interval as pollInterval', 'last_updated as lastUpdated', 'created_at as createdAt',
 ] as const;
 
-/** Kiểu jsonb của cột `badge_criteria.params` theo schema codegen của package @lms/db. */
+/** Kiểu jsonb của cột `badge_criteria.params` theo schema codegen của package @giaokhoa/db. */
 type BadgeCriteriaParams = Selectable<CentreDB['badge_criteria']>['params'];
 
 /**
@@ -173,7 +173,7 @@ function badgeCriteriaParamsJsonb(value: Record<string, unknown>): RawBuilder<Ba
 }
 
 /** Định dạng archive riêng có version — không phải .mbz. */
-export const BACKUP_FORMAT = 'lms-backup';
+export const BACKUP_FORMAT = 'giaokhoa-backup';
 export const BACKUP_FORMAT_VERSION = 1;
 
 /** Ngữ cảnh import dùng chung cho các contributor: tra cứu và ghi id mapping của job restore. */

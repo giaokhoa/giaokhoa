@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { uuidIdSchema } from '@lms/contracts';
-import { AccessRepository, type ContextRow } from '@lms/db/repositories/access';
-import type { CentreTx } from '@lms/db';
+import { uuidIdSchema } from '@giaokhoa/contracts';
+import { AccessRepository, type ContextRow } from '@giaokhoa/db/repositories/access';
+import type { CentreTx } from '@giaokhoa/db';
 import { CONTEXT_LEVELS } from './domain/capabilities';
 
 @Injectable()

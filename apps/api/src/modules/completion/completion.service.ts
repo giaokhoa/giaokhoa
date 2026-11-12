@@ -3,8 +3,8 @@ import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundEx
 import { I18nService } from '@nestjs/i18n';
 import { OnEvent } from '@nestjs/event-emitter';
 import type { Queue } from 'bullmq';
-import { sql, type CentreTx } from '@lms/db';
-import { CompletionRepository, type CourseCompletionRow } from '@lms/db/repositories/completion';
+import { sql, type CentreTx } from '@giaokhoa/db';
+import { CompletionRepository, type CourseCompletionRow } from '@giaokhoa/db/repositories/completion';
 import { OutboxService, type OutboxEventInput } from '../../infra/events/outbox.service';
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';

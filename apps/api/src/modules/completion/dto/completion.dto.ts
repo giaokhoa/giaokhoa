@@ -7,11 +7,11 @@ import {
   type MarkCourseSelfCompletion,
   type MarkManualCompletion,
   type SetCompletionCriteria,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 
 /**
  * Validation của Completion dùng Zod qua Standard Schema — schema nền ở
- * `@lms/contracts` là nguồn sự thật duy nhất.
+ * `@giaokhoa/contracts` là nguồn sự thật duy nhất.
  */
 export { markCourseCriteriaCompletionSchema, markCourseSelfCompletionSchema, markManualCompletionSchema, setCompletionCriteriaSchema };
 export type SetCriteriaDto = SetCompletionCriteria;

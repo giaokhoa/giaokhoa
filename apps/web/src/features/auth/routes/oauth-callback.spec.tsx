@@ -89,7 +89,7 @@ describe('Trang callback OAuth (phân giải phiên cookie, fetch mock tại bi�
     renderApp('/oauth/callback');
     await waitFor(() => expect(screen.getByText(/Hồ sơ — learner/)).toBeInTheDocument());
     expect(requestedUrls.some((u) => u.includes('oauth/handoff'))).toBe(false);
-    expect(localStorage.getItem('lms.accessToken')).toBeNull();
+    expect(localStorage.getItem('giaokhoa.accessToken')).toBeNull();
   });
 
   it('hiện lỗi và đường về trang đăng nhập khi không có cookie phiên', async () => {
@@ -104,7 +104,7 @@ describe('Trang callback OAuth (phân giải phiên cookie, fetch mock tại bi�
     renderApp('/oauth/callback');
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Không thể hoàn tất đăng nhập'));
     expect(screen.getByRole('button', { name: 'Về trang đăng nhập' })).toBeInTheDocument();
-    expect(localStorage.getItem('lms.accessToken')).toBeNull();
+    expect(localStorage.getItem('giaokhoa.accessToken')).toBeNull();
   });
 
   it('hiện lỗi khi phiên tồn tại nhưng không tải được hồ sơ', async () => {

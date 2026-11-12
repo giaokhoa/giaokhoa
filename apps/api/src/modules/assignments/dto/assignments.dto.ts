@@ -17,11 +17,11 @@ import {
   type UpdateAssignAnnotation,
   type UpdateAssignment,
   type UpsertAssignRubric,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 
 /**
  * Validation của Bài tập nộp tệp/ảnh dùng Zod qua Standard Schema —
- * schema nền ở `@lms/contracts` là nguồn sự thật duy nhất (giống các
+ * schema nền ở `@giaokhoa/contracts` là nguồn sự thật duy nhất (giống các
  * module khác).
  */
 export {

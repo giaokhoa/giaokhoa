@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { MfaTotpSetupResponse, OAuthIssuer } from '@lms/contracts';
+import type { MfaTotpSetupResponse, OAuthIssuer } from '@giaokhoa/contracts';
 import {
   mfaStatusResponseSchema,
   mfaTotpSetupResponseSchema,
@@ -8,14 +8,14 @@ import {
   oauthAuthorizeResponseSchema,
   oauthLinksResponseSchema,
   oauthProvidersResponseSchema,
-} from '@lms/contracts';
-import { Badge } from '@lms/ui/components/badge';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardDescription, CardHeader } from '@lms/ui/components/card';
-import { Empty, EmptyHeader, EmptyTitle } from '@lms/ui/components/empty';
-import { Input } from '@lms/ui/components/input';
-import { Label } from '@lms/ui/components/label';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@lms/ui/components/table';
+} from '@giaokhoa/contracts';
+import { Badge } from '@giaokhoa/ui/components/badge';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardDescription, CardHeader } from '@giaokhoa/ui/components/card';
+import { Empty, EmptyHeader, EmptyTitle } from '@giaokhoa/ui/components/empty';
+import { Input } from '@giaokhoa/ui/components/input';
+import { Label } from '@giaokhoa/ui/components/label';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@giaokhoa/ui/components/table';
 import { ErrorAlert } from '#components/error-alert';
 import { QRCodeSVG } from 'qrcode.react';
 import { useTranslation } from 'react-i18next';

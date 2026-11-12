@@ -92,7 +92,7 @@ describe('Route guards đợt 4 (H7–H15, #134)', () => {
     cohortId = cohort.body.id as string;
 
     const badge = await http(app).post('/api/v1/badges')
-      .set('Authorization', `Bearer ${admin}`).send({ name: `Guard badge ${Date.now()}`, type: 1, issuerName: 'LMS HQ' });
+      .set('Authorization', `Bearer ${admin}`).send({ name: `Guard badge ${Date.now()}`, type: 1, issuerName: 'Giáo khoa HQ' });
     expect(badge.status).toBeLessThan(300);
     badgeId = badge.body.id as string;
 
@@ -197,7 +197,7 @@ describe('Route guards đợt 4 (H7–H15, #134)', () => {
 
   it('H11: calendar subscriptions chỉ trả của chính chủ', async () => {
     const ics = [
-      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//LMS//Guard//EN',
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Giáo khoa//Guard//EN',
       'BEGIN:VEVENT', 'UID:guard-sub-1', 'DTSTAMP:20260101T000000Z',
       'DTSTART:20260102T000000Z', 'DTEND:20260102T010000Z', 'SUMMARY:Guard event',
       'END:VEVENT', 'END:VCALENDAR',

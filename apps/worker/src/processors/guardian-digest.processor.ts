@@ -1,6 +1,6 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import type { Job } from 'bullmq';
-import { sql, type CentreDB } from '@lms/db';
+import { sql, type CentreDB } from '@giaokhoa/db';
 import { TaskLogService } from '../task-log.service';
 import { tenantAls } from '../db/tenant-als';
 import { SpaceDatabaseService } from '../db/routing/space-database.service';
@@ -165,7 +165,7 @@ export class GuardianDigestProcessor extends WorkerHost {
           await this.spaceDb.routedKysely.insertInto('outbox_events').values({
             aggregate: 'guardian', type: 'guardian_digest_due', tenant_id: link.tenantId,
             // jsonb: serialize tường minh kèm `::jsonb` theo khuôn
-            // ghi jsonb của `@lms/db`; khoá payload giữ nguyên
+            // ghi jsonb của `@giaokhoa/db`; khoá payload giữ nguyên
             // camelCase như sự kiện cũ vì nửa tiêu thụ đọc đúng khoá đó.
             payload: sql<CentreDB['outbox_events']['payload']>`${JSON.stringify({
               guardianUserId: link.guardianUserId, studentUserId: link.studentUserId, digestId, tenantId: link.tenantId,

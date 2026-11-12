@@ -9,11 +9,11 @@
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { StimulusView } from '@lms/contracts';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lms/ui/components/card';
-import { Field, FieldGroup, FieldLabel } from '@lms/ui/components/field';
-import { Textarea } from '@lms/ui/components/textarea';
+import type { StimulusView } from '@giaokhoa/contracts';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
+import { Field, FieldGroup, FieldLabel } from '@giaokhoa/ui/components/field';
+import { Textarea } from '@giaokhoa/ui/components/textarea';
 
 import { useQueryClient } from '@tanstack/react-query';
 

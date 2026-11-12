@@ -1,5 +1,5 @@
 /**
- * Lệnh `db:types` của `@lms/db`: sinh lại cả ba file kiểu Kysely
+ * Lệnh `db:types` của `@giaokhoa/db`: sinh lại cả ba file kiểu Kysely
  * (`src/types/centre-db.d.ts`, `src/types/control-plane-db.d.ts`,
  * `src/types/system-bank-db.d.ts`) từ cơ sở dữ liệu THẬT dựng từ rỗng
  * bằng đúng bộ SQL đang mang dữ liệu hiện hành (carrier), rồi chạy
@@ -7,7 +7,7 @@
  *
  * Luồng cho mỗi kho:
  *   1. Xoá và tạo mới một database tạm riêng trên cụm đích (tên cố
- *      định `lms_types_<kho>`) qua kết nối quản trị.
+ *      định `giaokhoa_types_<kho>`) qua kết nối quản trị.
  *   2. Nếu cụm chạy PostgreSQL dưới 18: cài shim `uuidv7()` viết tay
  *      TRƯỚC khi áp SQL — bản PG18 có hàm tích hợp nên bỏ qua. Shim
  *      nằm NGOÀI nội dung carrier (carrier giữ nguyên từng byte).
@@ -49,21 +49,21 @@ const UUIDV7_SHIM = `CREATE OR REPLACE FUNCTION uuidv7() RETURNS uuid AS $$ DECL
 const STORES = [
   {
     key: 'centre',
-    database: 'lms_types_centre',
+    database: 'giaokhoa_types_centre',
     migrationsDir: join(packageDir, 'migrations', 'centre'),
     configFile: join(packageDir, 'scripts', 'codegen', 'centre.json'),
     outFile: join(packageDir, 'src', 'types', 'centre-db.d.ts'),
   },
   {
     key: 'control-plane',
-    database: 'lms_types_control_plane',
+    database: 'giaokhoa_types_control_plane',
     migrationsDir: join(packageDir, 'migrations', 'control-plane'),
     configFile: join(packageDir, 'scripts', 'codegen', 'control-plane.json'),
     outFile: join(packageDir, 'src', 'types', 'control-plane-db.d.ts'),
   },
   {
     key: 'system-bank',
-    database: 'lms_types_system_bank',
+    database: 'giaokhoa_types_system_bank',
     migrationsDir: join(packageDir, 'migrations', 'system-bank'),
     configFile: join(packageDir, 'scripts', 'codegen', 'system-bank.json'),
     outFile: join(packageDir, 'src', 'types', 'system-bank-db.d.ts'),

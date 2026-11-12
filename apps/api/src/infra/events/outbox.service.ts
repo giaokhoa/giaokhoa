@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { sql, type CentreDb, type CentreDB, type CentreTx } from '@lms/db';
+import { sql, type CentreDb, type CentreDB, type CentreTx } from '@giaokhoa/db';
 import { tenantAls } from '../../modules/tenants/tenant-als';
 
 export interface OutboxEventInput {
@@ -70,7 +70,7 @@ export class OutboxService {
    * service; chữ ký `enqueueKysely(tx: CentreTx, input)` giữ
    * nguyên để mọi phía gọi không đổi hợp đồng. Cột `payload` jsonb
    * đi qua serialize tường minh kèm `::jsonb` theo khuôn ghi jsonb
-   * của `@lms/db`: driver `pg` tự stringify object thường nhưng
+   * của `@giaokhoa/db`: driver `pg` tự stringify object thường nhưng
    * hiểu MẢNG cấp cao nhất là mảng PostgreSQL.
    */
   async enqueueKysely(tx: CentreTx, input: OutboxEventInput): Promise<void> {

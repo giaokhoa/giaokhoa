@@ -143,7 +143,7 @@ function stubFetch(calls: RecordedCall[], overview: unknown = OWNER_OVERVIEW, cl
       if (url === `/api/v1/classes/${CLASS_ID}/roster` && method === 'POST') return respond({ added: true }, 201);
       if (url === `/api/v1/classes/${CLASS_ID}/roster/identity` && method === 'POST')
         return respond(
-          { userId: '01900000-0000-7000-8000-0000000000e9', username: '0901234567', email: 'moi@example.com', fullName: 'Học Sinh Mới', outcome: 'created', temporaryPassword: 'Lms@9AbCdEfGh' },
+          { userId: '01900000-0000-7000-8000-0000000000e9', username: '0901234567', email: 'moi@example.com', fullName: 'Học Sinh Mới', outcome: 'created', temporaryPassword: 'GiaoKhoa@9AbCdEfGh' },
           201,
         );
       if (url === `/api/v1/classes/${CLASS_ID}/roster/import-file` && method === 'POST')
@@ -154,7 +154,7 @@ function stubFetch(calls: RecordedCall[], overview: unknown = OWNER_OVERVIEW, cl
           alreadyMembers: 0,
           failed: 1,
           results: [
-            { row: 1, fullName: 'Học Sinh Mới', status: 'added_created', userId: '01900000-0000-7000-8000-0000000000e9', username: '0901234567', temporaryPassword: 'Lms@9AbCdEfGh', error: null },
+            { row: 1, fullName: 'Học Sinh Mới', status: 'added_created', userId: '01900000-0000-7000-8000-0000000000e9', username: '0901234567', temporaryPassword: 'GiaoKhoa@9AbCdEfGh', error: null },
             { row: 2, fullName: 'Dòng Hỏng', status: 'error', userId: null, username: null, temporaryPassword: null, error: 'class.roster_identity_missing' },
           ],
         });
@@ -174,7 +174,7 @@ function stubFetch(calls: RecordedCall[], overview: unknown = OWNER_OVERVIEW, cl
 }
 
 function renderDetail() {
-  localStorage.setItem('lms.accessToken', 'test-token');
+  localStorage.setItem('giaokhoa.accessToken', 'test-token');
   const router = createMemoryRouter([{ path: '/classes/:id', element: <ClassDetailPage /> }], { initialEntries: [`/classes/${CLASS_ID}`] });
   render(
     <TestProviders>
@@ -200,7 +200,7 @@ describe('Chi tiết lớp — roster và các luồng quản trị (CLASS-1)', 
     await userEvent.type(screen.getByLabelText(/Số điện thoại/), '0901234567');
     await userEvent.click(screen.getByRole('button', { name: 'Thêm vào lớp' }));
 
-    expect(await screen.findByText(/mật khẩu tạm: Lms@9AbCdEfGh/)).toBeTruthy();
+    expect(await screen.findByText(/mật khẩu tạm: GiaoKhoa@9AbCdEfGh/)).toBeTruthy();
     const call = calls.find((c) => c.url.endsWith('/roster/identity'));
     expect(call?.body).toEqual({ fullName: 'Học Sinh Mới', phone: '0901234567' });
   });
@@ -277,7 +277,7 @@ describe('Chi tiết lớp — nút Chat lớp (MSG-T2)', () => {
   it('nút "Chat lớp" gọi ensure chat cấp lớp phía messages rồi điều hướng sang Tin nhắn mở đúng conversation', async () => {
     const calls: RecordedCall[] = [];
     stubFetch(calls);
-    localStorage.setItem('lms.accessToken', 'test-token');
+    localStorage.setItem('giaokhoa.accessToken', 'test-token');
     const router = createMemoryRouter(
       [
         { path: '/classes/:id', element: <ClassDetailPage /> },
@@ -376,7 +376,7 @@ describe('Danh sách lớp — hành động theo cờ quyền của server (iss
   });
 
   function renderList() {
-    localStorage.setItem('lms.accessToken', 'test-token');
+    localStorage.setItem('giaokhoa.accessToken', 'test-token');
     const router = createMemoryRouter([{ path: '/classes', element: <ClassesPage /> }], { initialEntries: ['/classes'] });
     render(
       <TestProviders>
@@ -443,7 +443,7 @@ describe('Tự báo danh bằng mã tham gia (CLASS-1)', () => {
   it('mở link có mã: xem trước thấy tên lớp + chủ lớp, xin vào lớp đã có HS thì nhận trạng thái chờ duyệt', async () => {
     const calls: RecordedCall[] = [];
     stubFetch(calls);
-    localStorage.setItem('lms.accessToken', 'test-token');
+    localStorage.setItem('giaokhoa.accessToken', 'test-token');
     const router = createMemoryRouter([{ path: '/classes/join', element: <ClassJoinPage /> }], { initialEntries: ['/classes/join?code=LOP10A1XYZ'] });
     render(
       <TestProviders>

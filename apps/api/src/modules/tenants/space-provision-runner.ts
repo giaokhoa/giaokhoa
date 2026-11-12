@@ -28,7 +28,7 @@
  *    không cấp mật khẩu thì GIỮ NGUYÊN mật khẩu cũ (không xoay lén
  *    dưới chân môi trường triển khai đã lưu mật khẩu trước đó).
  * 3. Migration: toàn bộ migration nghiệp vụ hiện hành vào database
- *    mới bằng đúng bộ máy migration của `@lms/db`
+ *    mới bằng đúng bộ máy migration của `@giaokhoa/db`
  *    (`applyStoreMigrations`, như fleet runner), rồi ghi phiên bản
  *    schema vào registry của trung tâm.
  *    Database mới nên không cần sao lưu trước như fleet runner.
@@ -70,8 +70,8 @@
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { Client, Pool } from 'pg';
-import type { SpaceRegistryRow } from '@lms/db/repositories/control-plane';
-import { applyStoreMigrations } from '@lms/db/migrate';
+import type { SpaceRegistryRow } from '@giaokhoa/db/repositories/control-plane';
+import { applyStoreMigrations } from '@giaokhoa/db/migrate';
 import {
   buildCentreDatabaseUrl,
   CENTRE_INVITE_TTL_MS,
@@ -97,7 +97,7 @@ import {
   retargetUrl,
 } from '../fleet/fleet-common';
 import { FleetRegistryWriter } from '../fleet/fleet-registry-writer';
-import { AccessRepository } from '@lms/db/repositories/access';
+import { AccessRepository } from '@giaokhoa/db/repositories/access';
 import { ContextsService } from '../access/contexts.service';
 import { RolesService } from '../access/roles.service';
 import { PlanLimitsService } from '../access/plan-limits.service';
@@ -105,8 +105,8 @@ import { RoleSeparationService } from '../access/role-separation.service';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { CONTEXT_LEVELS, DEFAULT_ROLES } from '../access/domain/capabilities';
-import { createCentreKysely, sql as kyselySql, type CentreDb, type JsonValue } from '@lms/db';
-import { isDedicatedDatabaseNameConflict } from '@lms/db/repositories/control-plane';
+import { createCentreKysely, sql as kyselySql, type CentreDb, type JsonValue } from '@giaokhoa/db';
+import { isDedicatedDatabaseNameConflict } from '@giaokhoa/db/repositories/control-plane';
 import {
   loadProgramDumpSql,
   PROGRAM_DUMP_VERSION,
@@ -135,7 +135,7 @@ export type SpaceProvisionOptions = {
   databasePassword?: string;
   /** UUID của người vận hành — bắt buộc, ghi vào lịch sử sổ đăng ký (fail-closed khi thiếu). */
   actorId: string;
-  /** Thư mục migration nghiệp vụ (mặc định: thư mục carrier trong package `@lms/db`). */
+  /** Thư mục migration nghiệp vụ (mặc định: thư mục carrier trong package `@giaokhoa/db`). */
   migrationsDir?: string;
   /** Biến môi trường (mặc định `process.env`) — test chèn env riêng qua đây. */
   env?: NodeJS.ProcessEnv;
@@ -344,7 +344,7 @@ export async function runSpaceProvision(options: SpaceProvisionOptions): Promise
   const connectionRole = deriveCentreRoleName(slug);
   const secretEnvVar = deriveCentreSecretEnvVar(slug);
   // Carrier đã dời về `packages/db/migrations/centre` (issue #639):
-  // mặc định mới phân giải qua vị trí package `@lms/db` (đúng cả
+  // mặc định mới phân giải qua vị trí package `@giaokhoa/db` (đúng cả
   // khi chạy từ repo lẫn từ image production đóng gói); option
   // tường minh vẫn thắng mặc định như trước.
   const migrationsDir = options.migrationsDir ?? resolveCentreMigrationsDir();
@@ -489,7 +489,7 @@ export async function runSpaceProvision(options: SpaceProvisionOptions): Promise
     const centreUrl = buildCentreDatabaseUrl({ host: clusterHost, port: clusterPort, role: connectionRole, password: centrePassword, databaseName });
 
     // ---- Bước 3: migration nghiệp vụ vào kho mới ----
-    // Bộ máy migration của `@lms/db` (`applyStoreMigrations`) tự
+    // Bộ máy migration của `@giaokhoa/db` (`applyStoreMigrations`) tự
     // lo bước tiền-migration shim `uuidv7()` cho cụm dưới PG18
     // trước khi áp — cùng trình tự với CLI migrate và fleet
     // runner, không bản sao tại đây.
@@ -704,7 +704,7 @@ export async function runSpaceProvision(options: SpaceProvisionOptions): Promise
         const next = [...currentAdmins, adminUserId];
         // Cột `value` là jsonb và giá trị là MẢNG cấp cao nhất:
         // phải serialize tường minh kèm `::jsonb` như khuôn ghi
-        // jsonb của `@lms/db` (driver `pg` hiểu mảng cấp cao nhất
+        // jsonb của `@giaokhoa/db` (driver `pg` hiểu mảng cấp cao nhất
         // là mảng PostgreSQL, không phải JSON).
         const nextValue = kyselySql<JsonValue>`${JSON.stringify(next)}::jsonb`;
         if (siteAdminsRow) {

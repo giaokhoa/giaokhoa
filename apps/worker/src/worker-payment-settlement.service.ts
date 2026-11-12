@@ -1,25 +1,25 @@
 import { Injectable } from '@nestjs/common';
-import { sql, type CentreTx } from '@lms/db';
+import { sql, type CentreTx } from '@giaokhoa/db';
 import {
   ENROL_SUSPENDED,
   ENROL_WITHDRAWN,
   SharedDomainError,
-} from '@lms/enrol';
+} from '@giaokhoa/enrol';
 import {
   PaymentsRepository,
   planChargedAmountOf,
   type PaymentRow,
   type ProviderEventRow,
   type RefundRow,
-} from '@lms/payments';
-import type { PaymentSettlementPort } from '@lms/payments';
+} from '@giaokhoa/payments';
+import type { PaymentSettlementPort } from '@giaokhoa/payments';
 import { tenantAls } from './db/tenant-als';
 import { WorkerEnrolOutboxService } from './worker-enrol-outbox.service';
 import { WorkerPaymentSpaceScope } from './worker-payment-space-scope.service';
 
 /**
  * Slug của tenant platform (tenant-zero) — định danh dữ liệu đã gieo,
- * ghi trong tài liệu schema dùng chung `@lms/db` (`tenants.schema.ts`):
+ * ghi trong tài liệu schema dùng chung `@giaokhoa/db` (`tenants.schema.ts`):
  * tenant-zero là không gian của Trang chính, chủ của dòng tiền gói và
  * của hàng đợi platform. Đọc trực tiếp từ bảng `tenants` để không
  * phụ thuộc service tenant phía API.
@@ -31,7 +31,7 @@ const PLATFORM_TENANT_SLUG = 'trang-chinh';
  * chi hoàn (`PAYMENT_SETTLEMENT_PORT` — issue con #539 của #522).
  *
  * Gồm hai hiệu ứng của facade thanh toán phía API, dựng lại trên dữ
- * liệu dùng chung `@lms/db` + repository/service của `@lms/payments`
+ * liệu dùng chung `@giaokhoa/db` + repository/service của `@giaokhoa/payments`
  * (không import gì từ `apps/api`):
  *
  * 1. `verifyPaymentAgainstServerTarget` — phép đối chiếu phòng thủ
@@ -285,7 +285,7 @@ export class WorkerPaymentSettlementService implements PaymentSettlementPort {
       return;
     }
     // Hoàn đủ gói → đình chỉ quyền lợi gói của chính payment đó
-    // (qua `PaymentsRepository` của `@lms/payments` trên chính
+    // (qua `PaymentsRepository` của `@giaokhoa/payments` trên chính
     // transaction của khâu settle; đường worker đã gác component
     // gói trước nên nối trực tiếp giữ nguyên ngữ nghĩa của
     // `plans.suspendForPayment`).

@@ -1,4 +1,4 @@
-# @lms/worker — README nghiệp vụ
+# @giaokhoa/worker — README nghiệp vụ
 
 > File này ghi các **quyết định nghiệp vụ quan trọng và còn đang hiệu lực** của package.
 > Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub.
@@ -20,7 +20,7 @@ hàm luật dùng chung khi luật đó áp cho cả hai phía.
 | Luật thông báo áp giống hệt ở phía worker như phía API: loại bắt buộc P2 không tắt được; tắt tiếng theo khoá chừa điểm mới + hết hạn ghi danh (P3); chính sách admin cấp site tôn trọng trước tuỳ chọn cá nhân. Đường phát nền phải đi qua **hàm luật phân phối chung** — cấm có đường phát riêng vòng qua cổng chặn (bài học PR #94: đường read-receipt vòng qua cổng làm rò trạng thái). | Sổ mục C; issue #174 (NB-4/NB-6) |
 | Retention thông báo: giữ 90/180 ngày theo loại (NB-6). Dọn dẹp file/ảnh phiếu theo mốc hết hạn giữ ảnh `paperscanretentionmonths` (mặc định 18 tháng) qua port ObjectStorage. | Issue #174; issue #112, chỉ đạo 25/10/2026 16:51 |
 | Sau mỗi lần reset DB, consumer giữ watermark trong bộ nhớ phải **tự neo lại** khi seq DB thấp hơn watermark (không được im lặng no-op). Mọi consumer outbox mới phải theo nguyên lý tự neo này. (Consumer phân phối realtime messaging không còn thuộc nhóm này từ issue #521: đã chuyển sang hàng đợi ở worker, không giữ watermark.) | Issue #125; áp cho consumer thông báo + cohort |
-| Phân phối realtime messaging chạy ở worker qua hàng đợi: relay outbox duy nhất phát job vào hàng đợi `messaging-realtime`, consumer phân phối theo luật dùng chung ở `@lms/messaging` (cổng chặn 1–1 fail-closed, membership chốt tại thời điểm phân phối) và chống trùng theo `outboxId`. `publishedAt` chỉ là dấu relay đã phát, không phải dấu đã phân phối. | Issue #521 |
+| Phân phối realtime messaging chạy ở worker qua hàng đợi: relay outbox duy nhất phát job vào hàng đợi `messaging-realtime`, consumer phân phối theo luật dùng chung ở `@giaokhoa/messaging` (cổng chặn 1–1 fail-closed, membership chốt tại thời điểm phân phối) và chống trùng theo `outboxId`. `publishedAt` chỉ là dấu relay đã phát, không phải dấu đã phân phối. | Issue #521 |
 | Đối soát ghi danh lớp (`class-enrol-reconcile`): roster lớp là nguồn sự thật, vật chất hoá xuống khoá có trần lệch 1 chu kỳ (15 phút); đối soát phải **tôn trọng đình chỉ thủ công theo khoá** — không tự ghi danh lại người đã bị đình chỉ tay. | Issue #184, research chốt 25/10/2026 15:59 |
 | Nhắc hết hạn ghi danh và nhắc hạn hoạt động là việc của worker theo lịch; cửa sổ nhắc là cấu hình nghiệp vụ (site-config), không hard-code rải rác. | Issue #174; module enrol/assignments |
 | Custom jobId BullMQ **không chứa dấu `:`** (dedupe key nối bằng `-`) — vi phạm làm job bị dedupe sai/im lặng mất. | Phát hiện ở TENANT-1, 25/10/2026 |

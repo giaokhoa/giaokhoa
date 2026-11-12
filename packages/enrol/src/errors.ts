@@ -1,5 +1,5 @@
 /**
- * Lỗi miền dùng chung của package `@lms/enrol`.
+ * Lỗi miền dùng chung của package `@giaokhoa/enrol`.
  *
  * Package này là code thuần tầng dữ liệu (không phụ thuộc Nest hay
  * HTTP), nên mọi lỗi nghiệp vụ nó ném ra đều mang một `code` kỹ thuật

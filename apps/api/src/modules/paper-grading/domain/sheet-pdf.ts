@@ -13,7 +13,7 @@ import path from 'node:path';
 import fontkit from '@pdf-lib/fontkit';
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import QRCode from 'qrcode';
-import type { PaperSlotLayout } from '@lms/contracts';
+import type { PaperSlotLayout } from '@giaokhoa/contracts';
 import {
   ANSWER_TOP, CODE_BUBBLE_R, CODE_ORIGIN, FIDUCIAL_CENTERS, FIDUCIAL_SIZE, OPTION_LETTERS,
   PX_PER_PT, QR_RECT, TEMPLATE_HEIGHT, TEMPLATE_WIDTH, VARIANT_ORIGIN, VARIANT_WRITE_BOX,
@@ -21,14 +21,14 @@ import {
 } from './sheet-layout';
 
 /**
- * Tiền tố payload QR trên phiếu: `LMSQ1|<batchId>|<lotCode>|<userId|''>`.
+ * Tiền tố payload QR trên phiếu: `GKHQ1|<batchId>|<lotCode>|<userId|''>`.
  * lotCode là mã định danh của lô in: mã đề 4 số (examCode) với lô có
  * mã đề số, ngược lại là variantCode. Phiếu DÙNG CHUNG không bao giờ
  * mang userId — QR của phiếu chung chỉ định danh buổi/variant (lớp dự
  * phòng định tuyến khi lưới tô mã đề không đọc được), định danh học
  * sinh luôn đi qua lưới ô tô mã + roster.
  */
-export const SHEET_QR_PREFIX = 'LMSQ1';
+export const SHEET_QR_PREFIX = 'GKHQ1';
 
 export function sheetQrPayload(batchId: string, variantCode: string, userId: string | null): string {
   return `${SHEET_QR_PREFIX}|${batchId}|${variantCode}|${userId ?? ''}`;
@@ -204,7 +204,7 @@ export async function generateSheetsPdf(input: SheetsPdfInput): Promise<Buffer> 
     }
 
     // Chân phiếu.
-    const footer = `Lô phiếu ${input.batchId.slice(0, 8)} · Mã đề ${input.variantCode} · Phiếu trả lời của hệ thống LMS — chỉ dùng cho bài kiểm tra tương ứng.`;
+    const footer = `Lô phiếu ${input.batchId.slice(0, 8)} · Mã đề ${input.variantCode} · Phiếu trả lời của hệ thống Giáo khoa — chỉ dùng cho bài kiểm tra tương ứng.`;
     const w = regular.widthOfTextAtSize(footer, 8);
     page.drawText(footer, { x: (PAGE_W_PT - w) / 2, y: px(28), size: 8, font: regular, color: GRAY });
   }

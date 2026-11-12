@@ -12,7 +12,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button } from '@lms/ui/components/button';
+import { Button } from '@giaokhoa/ui/components/button';
 
 import { useQueryClient } from '@tanstack/react-query';
 

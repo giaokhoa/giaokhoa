@@ -39,12 +39,12 @@ import { UsersRepository } from './users';
  *   bề mặt trong cụm này.
  */
 const adminUrl =
-  process.env.LMS_DB_TEST_ADMIN_URL ??
+  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL
     ? withDatabase(process.env.DATABASE_URL, 'postgres')
     : 'postgres://postgres:postgres@localhost:5432/postgres');
 
-const CENTRE_DB = 'lms_db_g641_centre';
+const CENTRE_DB = 'giaokhoa_db_g641_centre';
 
 const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 

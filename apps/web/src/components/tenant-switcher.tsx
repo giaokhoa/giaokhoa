@@ -1,13 +1,13 @@
 import { IconBuildingCommunity, IconCheck } from '@tabler/icons-react';
 import { useTranslation } from 'react-i18next';
-import type { MyTenant } from '@lms/contracts';
+import type { MyTenant } from '@giaokhoa/contracts';
 
 import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-} from '@lms/ui/components/dropdown-menu';
+} from '@giaokhoa/ui/components/dropdown-menu';
 import { switchTenant, useMyTenants } from '#lib/tenants';
 import '#config/i18n';
 

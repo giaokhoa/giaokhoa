@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { sql, type CentreDb } from '@lms/db';
+import { sql, type CentreDb } from '@giaokhoa/db';
 import type {
   CurriculumNodeRow, CurriculumRow, LearningOutcomeRow, ProgramRecordRow, SubjectRow,
-} from '@lms/db/repositories/curriculum';
+} from '@giaokhoa/db/repositories/curriculum';
 
 /**
  * DUMP ĐÔNG CỨNG dữ liệu chương trình GDPT 2018 — mô hình phân phối

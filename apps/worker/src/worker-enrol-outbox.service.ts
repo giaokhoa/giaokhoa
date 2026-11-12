@@ -2,13 +2,13 @@ import { Injectable } from '@nestjs/common';
 import {
   type SharedOutboxEventInput,
   type SharedOutboxPort,
-} from '@lms/enrol';
-import { sql, type CentreDB, type CentreTx } from '@lms/db';
+} from '@giaokhoa/enrol';
+import { sql, type CentreDB, type CentreTx } from '@giaokhoa/db';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
 
 /**
  * Cổng ghi outbox phía worker cho bề mặt vật chất hoá cohort dùng
- * chung (`@lms/enrol`).
+ * chung (`@giaokhoa/enrol`).
  *
  * Cổng này ghi trực tiếp bằng Kysely với ĐÚNG ngữ nghĩa của
  * `OutboxWriterService` — tenant CHỈ lấy từ tham số tường minh của
@@ -46,7 +46,7 @@ export class WorkerEnrolOutboxService implements SharedOutboxPort {
         aggregate: input.aggregate,
         type: input.type,
         // Cột `payload` jsonb đi qua serialize tường minh kèm
-        // `::jsonb` theo khuôn ghi jsonb của `@lms/db` (xem cổng
+        // `::jsonb` theo khuôn ghi jsonb của `@giaokhoa/db` (xem cổng
         // outbox của worker trong `cohort-sync.service.ts`).
         payload: sql<CentreDB['outbox_events']['payload']>`${JSON.stringify(payload)}::jsonb`,
         tenant_id: tenantId,

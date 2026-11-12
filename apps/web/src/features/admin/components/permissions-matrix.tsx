@@ -1,4 +1,4 @@
-import { CAP, type CapabilityMatrixResponse } from '@lms/contracts';
+import { CAP, type CapabilityMatrixResponse } from '@giaokhoa/contracts';
 import {
   Table,
   TableBody,
@@ -6,7 +6,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@lms/ui/components/table';
+} from '@giaokhoa/ui/components/table';
 import { useTranslation } from 'react-i18next';
 import '#config/i18n';
 import { type CapabilityGroup } from '../types/admin-roles';

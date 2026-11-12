@@ -1,11 +1,11 @@
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import { Link } from 'react-router';
-import type { Course } from '@lms/contracts';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@lms/ui/components/card';
-import { CardDescription } from '@lms/ui/components/card';
-import { Input } from '@lms/ui/components/input';
-import { Label } from '@lms/ui/components/label';
+import type { Course } from '@giaokhoa/contracts';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
+import { CardDescription } from '@giaokhoa/ui/components/card';
+import { Input } from '@giaokhoa/ui/components/input';
+import { Label } from '@giaokhoa/ui/components/label';
 import { useTranslation } from 'react-i18next';
 
 interface CourseInfoCardProps {

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@lms/ui/components/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@lms/ui/components/select';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@giaokhoa/ui/components/select';
 import { ErrorAlert } from '#components/error-alert';
 import {
   useCreateCurriculumRow, useCurriculumRow, useUpdateCurriculumRow,

@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react';
 import { IconChevronDown } from '@tabler/icons-react';
-import { Card, CardDescription, CardHeader, CardTitle, CardContent } from '@lms/ui/components/card';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@lms/ui/components/collapsible';
-import { cn } from '@lms/ui/lib/utils';
+import { Card, CardDescription, CardHeader, CardTitle, CardContent } from '@giaokhoa/ui/components/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@giaokhoa/ui/components/collapsible';
+import { cn } from '@giaokhoa/ui/lib/utils';
 
 /**
  * UI-1: MỘT khuôn collapse/section dùng chung cho toàn web — Card +
- * Collapsible của @lms/ui, trigger full-width có chevron xoay theo
+ * Collapsible của @giaokhoa/ui, trigger full-width có chevron xoay theo
  * trạng thái mở, hover/focus rõ, tiêu đề CardTitle + mô tả
  * CardDescription nhất quán, nội dung trong CollapsibleContent.
  *

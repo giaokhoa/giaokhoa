@@ -1,4 +1,4 @@
-import type { UserListResponse, UserListSortBy, UserListStatus, UserProfile } from '@lms/contracts';
+import type { UserListResponse, UserListSortBy, UserListStatus, UserProfile } from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 import type { NewUserDraft, UpdateUserDraft } from '../types/admin-users';
 

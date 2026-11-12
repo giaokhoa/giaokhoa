@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { SiteConfigRepository } from '@lms/db/repositories/site-config';
+import { SiteConfigRepository } from '@giaokhoa/db/repositories/site-config';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { AccessModule } from '../access/access.module';
@@ -9,7 +9,7 @@ import { SiteConfigService } from './site-config.service';
 
 @Module({
   // SpaceRoutingModule (thêm ở issue #641): SiteConfigRepository
-  // đã chuyển sang `@lms/db` trên Kysely nên module lắp nó bằng
+  // đã chuyển sang `@giaokhoa/db` trên Kysely nên module lắp nó bằng
   // factory provider trên facade định tuyến `routedKysely`; trước
   // đây repository tự inject handle qua nhà cung cấp kết nối
   // bộ máy cũ nên module chưa cần cạnh import này.

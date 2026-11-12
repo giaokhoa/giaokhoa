@@ -1,4 +1,4 @@
-# @lms/api — README nghiệp vụ
+# @giaokhoa/api — README nghiệp vụ
 
 > File này ghi các **quyết định nghiệp vụ quan trọng và còn đang hiệu lực** của package.
 > Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub.
@@ -6,7 +6,7 @@
 
 ## Package phụ trách nghiệp vụ gì
 
-`apps/api` là backend duy nhất của sản phẩm: toàn bộ nghiệp vụ của một LMS cho **lớp học
+`apps/api` là backend duy nhất của sản phẩm: toàn bộ nghiệp vụ của một Giáo khoa cho **lớp học
 online** tương thích nghiệp vụ sư phạm Việt Nam (Moodle là sàn tối thiểu) chạy qua API này —
 khoá học, lớp học, ghi danh, ngân hàng câu hỏi/đề/ma trận, quiz, bài tập, điểm theo bài, nhắn tin,
 thông báo, thanh toán học phí, chấm bài giấy bằng camera, MCP cho AI nhập câu hỏi, quản trị
@@ -20,7 +20,7 @@ phía server** — client không bao giờ là nơi gác nghiệp vụ duy nhấ
 | Ngoài phạm vi: nghiệp vụ hành chính trường học (điểm danh hành chính, sổ đầu bài, thời khoá biểu trường, đơn xin nghỉ) — đất của vnEdu/SMAS. Cầu nối duy nhất là XUẤT dữ liệu đúng mẫu. | Sổ quyết định mục A, chốt 24/10/2026 |
 | Multi-tenant: tenant = **TRUNG TÂM** (không phải trường học). Trang chính là tenant nền tảng: quản ngân hàng CHUNG + phục vụ GV/HS tự do. Tenant tách biệt nhau; lấy nội dung từ kho chung bằng **copy + ghim phiên bản**, không đồng bộ sống. Nền kỹ thuật: shared DB + `tenant_id` + PostgreSQL RLS fail-closed; platform không có quyền ngầm trong tenant — hỗ trợ chỉ qua `loginas` có lý do + audit. | Sổ mục A, chốt 25/10/2026 (12:23, đính chính 15:29); issue #166, TENANT-0 đã merge |
 | Lớp học là thực thể cha hạng nhất: tạo lớp TRƯỚC, khoá học nằm trong lớp; GV tự do cũng bắt buộc có lớp trước. Ghi danh chủ yếu là ghi danh VÀO LỚP (roster của lớp vật chất hoá xuống từng khoá). | Sổ mục A, chốt 25/10/2026 15:51; issue #184 |
-| Định danh capability: dạng duy nhất `<area>:<name>`, **bỏ hẳn mọi tiền tố** (`moodle/`, `mod/`, `lms/`, `report/`). | Sổ mục B, chốt 24/10/2026; issue #35 |
+| Định danh capability: dạng duy nhất `<area>:<name>`, **bỏ hẳn mọi tiền tố** (`moodle/`, `mod/`, `giaokhoa/`, `report/`). | Sổ mục B, chốt 24/10/2026; issue #35 |
 | Phân quyền/đọc ngân hàng câu hỏi theo **cây CONTEXT + capability tại context** (kiểu Moodle), KHÔNG theo nhãn scope. Admin có khu ngân hàng riêng đúng như giáo viên. | Sổ mục B, chốt 25/10/2026 08:08 + 08:45 |
 | Đề thi: đúng MỘT thực thể `exam_papers` (hai dạng snapshot/recipe). Ma trận theo CV 7991 (hàng = chủ đề × đơn vị kiến thức; cột = dạng câu × 3 mức Biết/Hiểu/Vận dụng); cấu trúc đề tốt nghiệp theo QĐ 764. | Sổ mục B, chốt 24/10/2026 |
 | `books` là thực thể độc lập (`book_nodes`, `book_mappings`). **Không hiển thị nguồn sách trên câu hỏi ở bề mặt học sinh làm bài**; cờ ghi công khai trên sách mặc định TẮT; API phía học viên không trả trường nguồn sách. | Sổ mục B, chốt 24–25/10/2026 |

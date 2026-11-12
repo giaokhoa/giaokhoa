@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { SearchRepository } from '@lms/db/repositories/search';
+import { SearchRepository } from '@giaokhoa/db/repositories/search';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { AccessModule } from '../access/access.module';
@@ -14,7 +14,7 @@ import { PostgresSearchEngine, SEARCH_ENGINE, SearchService } from './search.ser
   imports: [AccessModule, SpaceRoutingModule],
   controllers: [SearchController],
   providers: [
-    // Repository của package @lms/db chạy trên handle Kysely đã định
+    // Repository của package @giaokhoa/db chạy trên handle Kysely đã định
     // tuyến theo không gian (issue #648).
     {
       provide: SearchRepository,

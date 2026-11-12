@@ -5,19 +5,19 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { MyTenant, Tenant as TenantDto, TenantMembership as TenantMembershipDto } from '@lms/contracts';
-import { ensureActiveTenantMembership } from '@lms/enrol';
+import type { MyTenant, Tenant as TenantDto, TenantMembership as TenantMembershipDto } from '@giaokhoa/contracts';
+import { ensureActiveTenantMembership } from '@giaokhoa/enrol';
 import {
   DEFAULT_SCHOOL_TENANT_SLUG,
   PLATFORM_TENANT_SLUG,
   TenantsRepository,
   type TenantMembershipRow,
   type TenantRow,
-} from '@lms/db/repositories/tenants';
-import type { UserRow } from '@lms/db/repositories/users';
+} from '@giaokhoa/db/repositories/tenants';
+import type { UserRow } from '@giaokhoa/db/repositories/users';
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
-import { ControlPlaneRepository } from '@lms/db/repositories/control-plane';
+import { ControlPlaneRepository } from '@giaokhoa/db/repositories/control-plane';
 import { PlanLimitsService } from '../access/plan-limits.service';
 import { UsersService } from '../users/users.service';
 import { OutboxService } from '../../infra/events/outbox.service';
@@ -559,12 +559,12 @@ export class TenantsService {
    * tenant để cổng membership có hiệu lực ngay.
    *
    * Thao tác dữ liệu sống ở tầng dùng chung
-   * (`ensureActiveTenantMembership` của `@lms/enrol`) vì funnel ghi
+   * (`ensureActiveTenantMembership` của `@giaokhoa/enrol`) vì funnel ghi
    * danh dùng chung phải đảm bảo membership ngay trong đường vật
    * chất hoá của nó mà không phụ thuộc service của API; method này
    * chỉ uỷ thác, giữ nguyên hành vi và kiểu trả về.
    *
-   * Handle uỷ thác (D5 #657): tầng dùng chung `@lms/enrol` đã
+   * Handle uỷ thác (D5 #657): tầng dùng chung `@giaokhoa/enrol` đã
    * chuyển sang Kysely nên điểm này uỷ thác bằng tay cầm Kysely
    * đã định tuyến của API (`spaceDb.routedKysely`); handle bộ máy cũ
    * thô inject riêng cho điểm này đã gỡ. Điểm uỷ thác là một

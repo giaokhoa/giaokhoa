@@ -8,7 +8,7 @@ function configStub(values: Record<string, unknown>): ConfigService {
 
 const MESSAGE = {
   to: 'student@example.com',
-  subject: 'Mã đăng nhập LMS của bạn',
+  subject: 'Mã đăng nhập Giáo khoa của bạn',
   text: 'Mã của bạn là 123456',
   html: '<p>Mã của bạn là <b>123456</b></p>',
 };
@@ -33,7 +33,7 @@ describe('Khối ResendMailService', () => {
     }));
     vi.stubGlobal('fetch', fetchMock);
     const service = new ResendMailService(
-      configStub({ RESEND_API_KEY: 'rk_test_key', MAIL_FROM: 'LMS <no-reply@example.com>' }),
+      configStub({ RESEND_API_KEY: 'rk_test_key', MAIL_FROM: 'Giáo khoa <no-reply@example.com>' }),
     );
     expect(service.configured).toBe(true);
 
@@ -46,7 +46,7 @@ describe('Khối ResendMailService', () => {
     expect(init.method).toBe('POST');
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer rk_test_key');
     expect(JSON.parse(init.body as string)).toEqual({
-      from: 'LMS <no-reply@example.com>',
+      from: 'Giáo khoa <no-reply@example.com>',
       to: ['student@example.com'],
       subject: MESSAGE.subject,
       text: MESSAGE.text,

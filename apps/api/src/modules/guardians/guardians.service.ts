@@ -3,10 +3,10 @@ import { OutboxService } from '../../infra/events/outbox.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { GradesService } from '../grades/grades.service';
 import { TenantContextService } from '../tenants/tenant-context.service';
-import { TenantsRepository } from '@lms/db/repositories/tenants';
+import { TenantsRepository } from '@giaokhoa/db/repositories/tenants';
 import { TenantsService } from '../tenants/tenants.service';
 import { UsersService } from '../users/users.service';
-import { GuardiansRepository, type GuardianLinkRow } from '@lms/db/repositories/guardians';
+import { GuardiansRepository, type GuardianLinkRow } from '@giaokhoa/db/repositories/guardians';
 
 /** Capability quản lý liên kết giám hộ (PH-0, issue #116). */
 export const GUARDIAN_MANAGE_CAPABILITY = 'guardian:manage';

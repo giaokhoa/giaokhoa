@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { I18nService } from '@nestjs/i18n';
-import { sql } from '@lms/db';
+import { sql } from '@giaokhoa/db';
 import { NotificationDeliveryService } from './notification-delivery.service';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
 

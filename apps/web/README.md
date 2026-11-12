@@ -1,4 +1,4 @@
-# @lms/web — README nghiệp vụ
+# @giaokhoa/web — README nghiệp vụ
 
 > File này ghi các **quyết định nghiệp vụ quan trọng và còn đang hiệu lực** của package.
 > Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub.
@@ -30,7 +30,7 @@ biến nằm ở `apps/api`; web không tự "gác" nghiệp vụ bằng cách g
 ## Ranh giới — package này KHÔNG làm gì
 
 - Không chứa component shadcn/ui: toàn bộ lớp shadcn sống ở `packages/ui`; web chỉ dùng
-  qua `@lms/ui/...`. Cấm sao chép component của package vào `src/components/` để sửa
+  qua `@giaokhoa/ui/...`. Cấm sao chép component của package vào `src/components/` để sửa
   riêng (sẽ bị ghi đè mất ở lần đồng bộ shadcn kế tiếp). Component tự viết theo nghiệp
   vụ nằm ở `apps/web/src/components/`.
 - Không chứa trình soạn thảo rich-text: dùng `packages/editor`.

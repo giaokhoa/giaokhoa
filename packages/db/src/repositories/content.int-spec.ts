@@ -19,10 +19,10 @@ import { ContentRepository } from './content';
  * chiếu user trong mã), và doNothing của learning record.
  */
 const adminUrl =
-  process.env.LMS_DB_TEST_ADMIN_URL ??
+  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
 
-const TEST_DB = 'lms_db_g646_content';
+const TEST_DB = 'giaokhoa_db_g646_content';
 const USER_ID = '01934f2a-7b6d-7c1e-9c4a-2f5d8e6a3001';
 const OTHER_USER_ID = '01934f2a-7b6d-7c1e-9c4a-2f5d8e6a3002';
 const OTHER_COURSE_ID = '01934f2a-7b6d-7c1e-9c4a-2f5d8e6a3004';
@@ -34,7 +34,7 @@ let courseId = '';
 let cmIds: string[] = [];
 
 beforeAll(async () => {
-  if (!adminUrl) throw new Error('Thiếu LMS_DB_TEST_ADMIN_URL/DATABASE_URL cho spec tích hợp');
+  if (!adminUrl) throw new Error('Thiếu GIAOKHOA_DB_TEST_ADMIN_URL/DATABASE_URL cho spec tích hợp');
   const url = await buildTestDatabase({ adminUrl, database: TEST_DB, store: 'centre' });
   pool = new Pool({ connectionString: url });
   db = createCentreKysely(pool);

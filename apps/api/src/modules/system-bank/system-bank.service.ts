@@ -37,13 +37,13 @@
  */
 import { createHash } from 'node:crypto';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { SystemBankCentreRepository } from '@lms/db/repositories/system-bank-centre';
-import { SystemBankRepository } from '@lms/db/repositories/system-bank';
+import { SystemBankCentreRepository } from '@giaokhoa/db/repositories/system-bank-centre';
+import { SystemBankRepository } from '@giaokhoa/db/repositories/system-bank';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { ContextsService } from '../access/contexts.service';
 import { tenantAls } from '../tenants/tenant-als';
 import { TenantDbService } from '../tenants/tenant-db.service';
-import type { RichTextInput, SystemBankPackage } from '@lms/contracts';
+import type { RichTextInput, SystemBankPackage } from '@giaokhoa/contracts';
 import { QuestionsService, type QuestionContentInput } from '../questions/questions.service';
 import { QuestionBanksService } from '../questions/question-banks.service';
 import { canonicalizeJson, checksumPackage, packageValidationError, verifyPackageChecksum } from './system-bank-package';

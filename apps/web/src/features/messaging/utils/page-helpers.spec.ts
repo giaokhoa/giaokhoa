@@ -3,7 +3,7 @@ import { readStoredMessagesTab, storeMessagesTab, withConversationMovedToSection
 import type { ConversationView } from '../types/types';
 
 /** Khoá localStorage của tab khung trái Tin nhắn — đúng khoá page-helpers đang dùng. */
-const TAB_KEY = 'lms.messages.tab';
+const TAB_KEY = 'giaokhoa.messages.tab';
 
 /**
  * Lưu bền tab khung trái của trang Tin nhắn (issue #606): thanh

@@ -4,8 +4,8 @@ import {
   ENROL_ACTIVE,
   SharedDomainError,
   type EnrolInstanceRow,
-} from '@lms/enrol';
-import type { PaidEnrolActivationPort } from '@lms/payments';
+} from '@giaokhoa/enrol';
+import type { PaidEnrolActivationPort } from '@giaokhoa/payments';
 import { tenantAls } from './db/tenant-als';
 import { WorkerEnrolOutboxService } from './worker-enrol-outbox.service';
 import { WorkerPaymentSpaceScope } from './worker-payment-space-scope.service';
@@ -15,7 +15,7 @@ import { WorkerPaymentSpaceScope } from './worker-payment-space-scope.service';
  * đúng hình dạng `EnrolRow` mà phễu ghi danh dùng chung
  * (`CohortMaterializationSurface.enrolUserInternal`) nhận, dùng
  * chung cho lượt đọc instance đích: bí danh camelCase tường minh
- * theo khuôn danh sách cột của `@lms/db`.
+ * theo khuôn danh sách cột của `@giaokhoa/db`.
  */
 const ENROL_COLUMNS = [
   'id',
@@ -73,7 +73,7 @@ const ENROL_COLUMNS = [
  *    cấp vai của instance, xếp nhóm đích). Adapter này KHÔNG giữ
  *    thêm luật nào: hai chốt ở bước 2–3 là đúng hai chốt của
  *    `EnrolService.activatePaidEnrol` phía API, chỉ đọc dữ liệu
- *    qua `@lms/db` để tới được phễu chung.
+ *    qua `@giaokhoa/db` để tới được phễu chung.
  *
  * Không gửi tin nhắn chào mừng: chào mừng là hiệu ứng phụ của tiến
  * trình API (xem `EnrolService.enrolUserInternal`) — bề mặt chung

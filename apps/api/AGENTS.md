@@ -32,20 +32,20 @@ của repo.
 ## Quy ước tầng dữ liệu (Kysely)
 
 - Tầng dữ liệu của hệ dùng **Kysely** duy nhất, qua package
-  `@lms/db`. **Một module thuộc hẳn về Kysely**: toàn bộ đường dữ
+  `@giaokhoa/db`. **Một module thuộc hẳn về Kysely**: toàn bộ đường dữ
   liệu đi qua handle Kysely (khung định tuyến `SpaceDatabaseService`
   cho kho trung tâm, `@InjectKysely(...)` từ
   `src/db/kysely.module.ts` khi cần inject theo kho, repository nằm
-  ở `@lms/db/repositories/*`).
+  ở `@giaokhoa/db/repositories/*`).
 - **Một giao dịch một handle**: một thao tác nghiệp vụ chỉ mở giao
   dịch trên đúng một handle Kysely.
 - Handle Kysely của kho trung tâm phải dựng trên `TenantAwarePool` để
   GUC/RLS theo ngữ cảnh tenant hoạt động đúng; hai kho còn
-  lại dùng pool thường qua các điểm vào riêng của `@lms/db`.
+  lại dùng pool thường qua các điểm vào riêng của `@giaokhoa/db`.
 
 ## Điều cấm package-specific
 
-- Cấm capability có tiền tố (`moodle/`, `mod/`, `lms/`, `report/`) — dạng duy nhất
+- Cấm capability có tiền tố (`moodle/`, `mod/`, `giaokhoa/`, `report/`) — dạng duy nhất
   `<area>:<name>`. Thêm capability phải đăng ký vào registry và cập nhật mọi spec đếm.
 - Cấm schema route dùng `z.date()`/`z.coerce.date()` — chỉ `z.iso.datetime(...)`
   (Swagger `createDocument` lúc boot production sẽ crash; e2e không bắt được lớp này,
@@ -65,17 +65,17 @@ của repo.
 ## Kiểm chứng bắt buộc
 
 - **Typecheck package trước khi push**: sửa file nào thì typecheck tối thiểu trọn
-  package (`pnpm --filter @lms/api typecheck`) — tuyệt đối không đẩy code chưa qua
+  package (`pnpm --filter @giaokhoa/api typecheck`) — tuyệt đối không đẩy code chưa qua
   typecheck để CI đổ ở bước rẻ nhất. Đụng package dùng chung thì build lại dist của
   package đó trước khi kết luận lỗi type (dist cũ = lỗi type giả kinh điển).
 - CI trên PR là cổng kiểm chứng chính; kết luận về CI chỉ từ **LOG THẬT**
   (log của job `verify` trên GitHub Actions của chính PR), không suy từ thời
   lượng bước hay thông báo của helper.
 - Local chỉ chạy test targeted của đúng phần mình đụng. Chạy suite e2e/vitest nặng ở
-  local phải giữ khoá `flock /tmp/lms-heavy-suite.lock` suốt lượt
+  local phải giữ khoá `flock /tmp/giaokhoa-heavy-suite.lock` suốt lượt
   chạy; tối đa một vòng nặng tại một thời điểm trên máy này.
 - Suite api và worker không chạy đồng thời trên cùng một DB; giữ cách ly DB như CI
-  (`lms_test_api` / `lms_test_worker`).
+  (`giaokhoa_test_api` / `giaokhoa_test_worker`).
 
 ## Kỷ luật test theo nghiệp vụ
 
@@ -97,7 +97,7 @@ theo chuẩn TSDoc**, chi tiết nhất có thể — flow kỹ thuật phải n
   (dữ liệu vào → các bước xử lý → dữ liệu ra / side-effect).
 - Mỗi hàm/class/giao diện trọng yếu: TSDoc `/** ... */` tiếng Việt gồm mục đích,
   `@param`/`@returns`, các bước flow, bất biến/ràng buộc, mã lỗi ném ra
-  (mã ProblemDetails của `@lms/contracts`), side-effect (ghi DB, ghi outbox/phát
+  (mã ProblemDetails của `@giaokhoa/contracts`), side-effect (ghi DB, ghi outbox/phát
   sự kiện cho worker và realtime, gọi hệ ngoài).
 - Logic phức tạp/nhánh rẽ quan trọng (gác capability theo context, cổng công bố
   điểm, khớp 3 điều kiện thanh toán, RLS/tenant): comment nội tuyến tiếng Việt
@@ -124,7 +124,7 @@ theo chuẩn TSDoc**, chi tiết nhất có thể — flow kỹ thuật phải n
   tenant/RLS theo request). Thêm `src/config/`, `src/infra/`, `src/i18n/`.
 - **Luồng một request:** HTTP vào → guard xác thực (JWT/Better Auth) → thiết
   lập ngữ cảnh tenant → guard capability theo cây context → controller kiểm
-  chứng body bằng schema route của `@lms/contracts` → service thực thi luật
+  chứng body bằng schema route của `@giaokhoa/contracts` → service thực thi luật
   nghiệp vụ (giao dịch khi cần) → ghi/đọc DB qua Kysely với `tenant_id` + RLS
   fail-closed → trả response đúng contract. Side-effect nền đi qua **outbox/sự
   kiện** cho `apps/worker` và realtime, không chạy việc nền dài trong request;

@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client, Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createControlPlaneKysely, type ControlPlaneDb } from '@lms/db/control-plane';
+import { createControlPlaneKysely, type ControlPlaneDb } from '@giaokhoa/db/control-plane';
 import { emitSpaceRegistryChanged } from '../../../src/db/routing/space-routing-events';
 import { SpaceDatabaseService } from '../../../src/db/routing/space-database.service';
 import { CAP_ALLOW } from '../../../src/modules/access/domain/permission';
@@ -58,11 +58,11 @@ import {
  * mục trỏ tới kho đích không chuẩn bị được thì lỗi tường minh
  * chứ không trả rỗng giả.
  */
-const CP_DATABASE = 'lms_test_cp_td3';
-const CP_ROLE = 'lms_cp_test_td3';
+const CP_DATABASE = 'giaokhoa_test_cp_td3';
+const CP_ROLE = 'giaokhoa_cp_test_td3';
 const CP_PASSWORD = 'cp-test-td3';
-const CENTRE_DATABASE = 'lms_test_centre_td3';
-const CENTRE_ROLE = 'lms_centre_td3_app';
+const CENTRE_DATABASE = 'giaokhoa_test_centre_td3';
+const CENTRE_ROLE = 'giaokhoa_centre_td3_app';
 const CENTRE_PASSWORD = 'centre-test-td3';
 const RUN_SUFFIX = Math.random().toString(36).slice(2, 8);
 const CENTRE_SLUG = `trung-tam-td3-${RUN_SUFFIX}`;
@@ -597,7 +597,7 @@ describe('Đọc quản trị ở kho đích + thư mục định tuyến (đầ
   it('thư mục trỏ tới kho đích không chuẩn bị được thì lỗi tường minh, không trả rỗng giả hay từ chối oan', async () => {
     // Không gian "hỏng": đăng ký kho riêng trỏ tới một database
     // không tồn tại trên cụm; thư mục có mục trỏ về nó.
-    process.env.SPACE_TEST_BROKEN_TD3_URL = clusterUrl('lms_test_khong_ton_tai_td3', CENTRE_ROLE, CENTRE_PASSWORD);
+    process.env.SPACE_TEST_BROKEN_TD3_URL = clusterUrl('giaokhoa_test_khong_ton_tai_td3', CENTRE_ROLE, CENTRE_PASSWORD);
     await withCpDb(async (cpDb) => {
       await cpDb.insertInto('space_registry').values([
         {
@@ -605,7 +605,7 @@ describe('Đọc quản trị ở kho đích + thư mục định tuyến (đầ
           name: 'Trung tâm hỏng TĐ3',
           kind: 'center',
           status: 'active',
-          database_name: 'lms_test_khong_ton_tai_td3',
+          database_name: 'giaokhoa_test_khong_ton_tai_td3',
           storage_mode: 'dedicated',
           connection_role_ref: CENTRE_ROLE,
           secret_ref: 'env:SPACE_TEST_BROKEN_TD3_URL',

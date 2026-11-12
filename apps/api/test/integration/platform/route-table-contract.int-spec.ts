@@ -216,7 +216,7 @@ describe('Hợp đồng bảng route tĩnh (issue #345, #342, #343)', () => {
     app = await createTestApp();
     document = SwaggerModule.createDocument(
       app,
-      new DocumentBuilder().setTitle('LMS API').setDescription('route table contract probe').setVersion('1.0').build(),
+      new DocumentBuilder().setTitle('Giáo khoa API').setDescription('route table contract probe').setVersion('1.0').build(),
     );
   });
 

@@ -57,7 +57,7 @@ describe('MessagingService.notify — tối thiểu hoá kênh ngoài (C-5)', ()
     const i18n = {
       t: vi.fn((key: string, opts?: { args?: Record<string, unknown> }) => {
         if (key === 'platform.externalGenericSubject') return 'Bạn có thông báo mới';
-        if (key === 'platform.externalGenericBody') return `Có thông báo mới thuộc loại "${String(opts?.args?.event ?? '')}" dành cho bạn. Đăng nhập LMS để xem chi tiết.`;
+        if (key === 'platform.externalGenericBody') return `Có thông báo mới thuộc loại "${String(opts?.args?.event ?? '')}" dành cho bạn. Đăng nhập Giáo khoa để xem chi tiết.`;
         return key;
       }),
     };
@@ -114,7 +114,7 @@ describe('MessagingService.notify — tối thiểu hoá kênh ngoài (C-5)', ()
     expect(inserted[0]!.subject).toBe('Full in-app subject');
     expect(jobs).toHaveLength(1);
     expect(jobs[0]!.subject).toBe('Bạn có thông báo mới');
-    expect(jobs[0]!.body).toBe('Có thông báo mới thuộc loại "Tổng hợp cho phụ huynh" dành cho bạn. Đăng nhập LMS để xem chi tiết.');
+    expect(jobs[0]!.body).toBe('Có thông báo mới thuộc loại "Tổng hợp cho phụ huynh" dành cho bạn. Đăng nhập Giáo khoa để xem chi tiết.');
     expect(jobs[0]!.subject).not.toBe('Full in-app subject');
     expect(jobs[0]!.body).not.toContain('child data');
   });
@@ -148,7 +148,7 @@ describe('MessagingService.notify — tối thiểu hoá kênh ngoài (C-5)', ()
     expect(inserted[0]!.subject).toBe('Free admin subject');
     expect(jobs).toHaveLength(1);
     expect(jobs[0]!.subject).toBe('Bạn có thông báo mới');
-    expect(jobs[0]!.body).toBe('Có thông báo mới thuộc loại "Điểm số thay đổi" dành cho bạn. Đăng nhập LMS để xem chi tiết.');
+    expect(jobs[0]!.body).toBe('Có thông báo mới thuộc loại "Điểm số thay đổi" dành cho bạn. Đăng nhập Giáo khoa để xem chi tiết.');
     expect(jobs[0]!.body).not.toContain('Free admin body');
   });
 

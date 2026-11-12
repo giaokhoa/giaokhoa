@@ -208,7 +208,7 @@ describe('Trang kế hoạch học tập — quản trị năng lực', () => {
     );
     expect(createObjectURL).toHaveBeenCalled();
     expect(clickSpy).toHaveBeenCalled();
-    // Thông báo thao tác nay là Alert của @lms/ui (role="alert").
+    // Thông báo thao tác nay là Alert của @giaokhoa/ui (role="alert").
     expect(await screen.findByRole('alert')).toHaveTextContent('Đã xuất framework "FW1"');
   });
 

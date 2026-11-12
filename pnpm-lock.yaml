@@ -230,25 +230,25 @@ importers:
       '@keyv/redis':
         specifier: ^6.1.0
         version: 6.1.0(keyv@6.1.0)
-      '@lms/config':
+      '@giaokhoa/config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@lms/contracts':
+      '@giaokhoa/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@lms/db':
+      '@giaokhoa/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@lms/enrol':
+      '@giaokhoa/enrol':
         specifier: workspace:*
         version: link:../../packages/enrol
-      '@lms/grades':
+      '@giaokhoa/grades':
         specifier: workspace:*
         version: link:../../packages/grades
-      '@lms/messaging':
+      '@giaokhoa/messaging':
         specifier: workspace:*
         version: link:../../packages/messaging
-      '@lms/payments':
+      '@giaokhoa/payments':
         specifier: workspace:*
         version: link:../../packages/payments
       '@modelcontextprotocol/server':
@@ -438,13 +438,13 @@ importers:
 
   apps/web:
     dependencies:
-      '@lms/contracts':
+      '@giaokhoa/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@lms/editor':
+      '@giaokhoa/editor':
         specifier: workspace:*
         version: link:../../packages/editor
-      '@lms/ui':
+      '@giaokhoa/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@react-router/node':
@@ -502,7 +502,7 @@ importers:
         specifier: 'catalog:'
         version: 4.6.7
     devDependencies:
-      '@lms/config':
+      '@giaokhoa/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@react-router/dev':
@@ -559,22 +559,22 @@ importers:
 
   apps/worker:
     dependencies:
-      '@lms/contracts':
+      '@giaokhoa/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@lms/db':
+      '@giaokhoa/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@lms/enrol':
+      '@giaokhoa/enrol':
         specifier: workspace:*
         version: link:../../packages/enrol
-      '@lms/grades':
+      '@giaokhoa/grades':
         specifier: workspace:*
         version: link:../../packages/grades
-      '@lms/messaging':
+      '@giaokhoa/messaging':
         specifier: workspace:*
         version: link:../../packages/messaging
-      '@lms/payments':
+      '@giaokhoa/payments':
         specifier: workspace:*
         version: link:../../packages/payments
       '@nestjs/bullmq':
@@ -626,7 +626,7 @@ importers:
         specifier: 'catalog:'
         version: 4.6.7
     devDependencies:
-      '@lms/config':
+      '@giaokhoa/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@nestjs/testing':
@@ -662,7 +662,7 @@ importers:
         specifier: 'catalog:'
         version: 4.6.7
     devDependencies:
-      '@lms/config':
+      '@giaokhoa/config':
         specifier: workspace:*
         version: link:../config
       typescript:
@@ -674,7 +674,7 @@ importers:
 
   packages/db:
     dependencies:
-      '@lms/contracts':
+      '@giaokhoa/contracts':
         specifier: workspace:*
         version: link:../contracts
       kysely:
@@ -687,7 +687,7 @@ importers:
         specifier: ^14.0.3
         version: 14.0.3
     devDependencies:
-      '@lms/config':
+      '@giaokhoa/config':
         specifier: workspace:*
         version: link:../config
       '@types/node':
@@ -708,7 +708,7 @@ importers:
 
   packages/editor:
     dependencies:
-      '@lms/contracts':
+      '@giaokhoa/contracts':
         specifier: workspace:*
         version: link:../contracts
       '@tiptap/core':
@@ -772,7 +772,7 @@ importers:
         specifier: ^19.3.1
         version: 19.3.1(react@19.3.1)
     devDependencies:
-      '@lms/config':
+      '@giaokhoa/config':
         specifier: workspace:*
         version: link:../config
       '@testing-library/dom':
@@ -808,14 +808,14 @@ importers:
 
   packages/enrol:
     dependencies:
-      '@lms/contracts':
+      '@giaokhoa/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@lms/db':
+      '@giaokhoa/db':
         specifier: workspace:*
         version: link:../db
     devDependencies:
-      '@lms/config':
+      '@giaokhoa/config':
         specifier: workspace:*
         version: link:../config
       '@types/node':
@@ -827,7 +827,7 @@ importers:
 
   packages/grades:
     devDependencies:
-      '@lms/config':
+      '@giaokhoa/config':
         specifier: workspace:*
         version: link:../config
       typescript:
@@ -839,14 +839,14 @@ importers:
 
   packages/messaging:
     dependencies:
-      '@lms/contracts':
+      '@giaokhoa/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@lms/db':
+      '@giaokhoa/db':
         specifier: workspace:*
         version: link:../db
     devDependencies:
-      '@lms/config':
+      '@giaokhoa/config':
         specifier: workspace:*
         version: link:../config
       typescript:
@@ -858,14 +858,14 @@ importers:
 
   packages/payments:
     dependencies:
-      '@lms/db':
+      '@giaokhoa/db':
         specifier: workspace:*
         version: link:../db
       '@nestjs/common':
         specifier: ^12.2.0
         version: 12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0)
     devDependencies:
-      '@lms/config':
+      '@giaokhoa/config':
         specifier: workspace:*
         version: link:../config
       '@types/node':
@@ -923,7 +923,7 @@ importers:
         specifier: ^1.4.0
         version: 1.4.0
     devDependencies:
-      '@lms/config':
+      '@giaokhoa/config':
         specifier: workspace:*
         version: link:../config
       '@types/react':

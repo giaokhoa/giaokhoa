@@ -1,23 +1,23 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@lms/ui/components/card';
-import { Empty, EmptyHeader, EmptyTitle } from '@lms/ui/components/empty';
-import { Field, FieldGroup, FieldLabel } from '@lms/ui/components/field';
-import { Input } from '@lms/ui/components/input';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
+import { Empty, EmptyHeader, EmptyTitle } from '@giaokhoa/ui/components/empty';
+import { Field, FieldGroup, FieldLabel } from '@giaokhoa/ui/components/field';
+import { Input } from '@giaokhoa/ui/components/input';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@lms/ui/components/select';
+} from '@giaokhoa/ui/components/select';
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from '@lms/ui/components/sheet';
+} from '@giaokhoa/ui/components/sheet';
 import { PageSkeleton } from '#components/page-skeleton';
 import { ErrorAlert } from '#components/error-alert';
 import { useTranslation } from 'react-i18next';

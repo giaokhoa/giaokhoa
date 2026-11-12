@@ -17,7 +17,7 @@ import { STRONG_PASSWORD, createTestApp, http } from '../../support/identity-acc
  * ký riêng, database + role riêng, baseline hiện hành, gói chương
  * trình, quản trị đầu tiên + lời mời), rồi ứng dụng thật chạy trên
  * chính hai kho đó qua tên miền con mang slug. Database test dùng
- * chung (`lms_test_api`) phải đã migrate từ trống trước khi chạy
+ * chung (`giaokhoa_test_api`) phải đã migrate từ trống trước khi chạy
  * spec này — đúng tiền điều kiện của mọi spec e2e khác (bước
  * Migrate trong CI).
  *
@@ -56,7 +56,7 @@ import { STRONG_PASSWORD, createTestApp, http } from '../../support/identity-acc
  * trực tiếp trong kho trung tâm thay vì qua endpoint đó.
  */
 const RUN_SUFFIX = Math.random().toString(36).slice(2, 8);
-const CP_DATABASE = `lms_test_cp_583e_${RUN_SUFFIX}`;
+const CP_DATABASE = `giaokhoa_test_cp_583e_${RUN_SUFFIX}`;
 const SLUG_A = `trung-tam-e2e-a-${RUN_SUFFIX}`;
 const SLUG_B = `trung-tam-e2e-b-${RUN_SUFFIX}`;
 const HOST_A = `${SLUG_A}.test.local`;

@@ -4,12 +4,12 @@ import type {
   DashboardGradingQueueView,
   DashboardNewResultView,
   DashboardOverviewView,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { ContextsService } from '../access/contexts.service';
 import { CONTEXT_LEVELS } from '../access/domain/capabilities';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { GradesService } from '../grades/grades.service';
-import { DashboardRepository } from '@lms/db/repositories/dashboard';
+import { DashboardRepository } from '@giaokhoa/db/repositories/dashboard';
 
 /** Giới hạn tổng số việc đến hạn trả về trong khối tổng hợp (chống phình ở khoá cũ nhiều hoạt động quá hạn). */
 const DUE_ITEMS_LIMIT = 100;

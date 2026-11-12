@@ -90,11 +90,11 @@ import type { Queue } from 'bullmq';
  *   `NotificationEventsProcessor`, handler
  *   `NotificationEventsHandlerService`).
  * - Sáu loại sự kiện messaging (xem
- *   `MESSAGING_DISTRIBUTED_EVENT_TYPES` của `@lms/messaging`) trỏ
+ *   `MESSAGING_DISTRIBUTED_EVENT_TYPES` của `@giaokhoa/messaging`) trỏ
  *   về hàng đợi `messaging-realtime` — consumer phân phối
  *   realtime đã chuyển sang worker ở issue con #521 của #491
  *   (processor `MessagingRealtimeProcessor`, luật phân phối ở
- *   package `@lms/messaging`). Riêng `message_sent` có HAI
+ *   package `@giaokhoa/messaging`). Riêng `message_sent` có HAI
  *   consumer ở worker — phân phối realtime và thông báo sự
  *   kiện — nên dòng của nó là danh sách hai đích
  *   `['messaging-realtime', 'notification-events']` theo đúng cơ
@@ -116,7 +116,7 @@ import type { Queue } from 'bullmq';
 export const OUTBOX_EVENT_QUEUE_ROUTES: OutboxEventQueueRoutes = {
   // Mail auth (issue #517): processor `AuthMailProcessor` trên hàng
   // đợi `auth-mail` dựng nội dung bằng template dùng chung ở
-  // `@lms/contracts` và gửi qua transport Resend phía worker.
+  // `@giaokhoa/contracts` và gửi qua transport Resend phía worker.
   auth_mail_requested: 'auth-mail',
   // Digest phụ huynh (issue #518): processor
   // `GuardianDigestEventsProcessor` trên hàng đợi
@@ -142,7 +142,7 @@ export const OUTBOX_EVENT_QUEUE_ROUTES: OutboxEventQueueRoutes = {
   cohort_member_removed: 'cohort-sync-events',
   // Phân phối realtime messaging (issue con #521 của #491):
   // processor `MessagingRealtimeProcessor` trên hàng đợi
-  // `messaging-realtime`, luật phân phối ở `@lms/messaging`.
+  // `messaging-realtime`, luật phân phối ở `@giaokhoa/messaging`.
   // `message_sent` còn consumer thông báo ở khối trên nên là
   // danh sách hai đích (fan-out) — không dựng dòng riêng cạnh
   // tranh cho cùng một loại sự kiện.

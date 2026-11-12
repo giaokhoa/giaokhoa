@@ -7,18 +7,18 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router';
 
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lms/ui/components/card';
-import { Field, FieldGroup, FieldLabel } from '@lms/ui/components/field';
-import { Input } from '@lms/ui/components/input';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
+import { Field, FieldGroup, FieldLabel } from '@giaokhoa/ui/components/field';
+import { Input } from '@giaokhoa/ui/components/input';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@lms/ui/components/select';
-import { Skeleton } from '@lms/ui/components/skeleton';
+} from '@giaokhoa/ui/components/select';
+import { Skeleton } from '@giaokhoa/ui/components/skeleton';
 import { ErrorAlert } from '#components/error-alert';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -33,7 +33,7 @@ import { withApiReason, type ContextOption } from '../utils/shared';
  * Màn tạo danh mục câu hỏi RIÊNG theo chuẩn §9 (route
  * /questions/categories/new): trước đây form này nhồi ngay dưới danh
  * sách ngân hàng trong cùng một trang (§9: tạo mới là màn riêng, không
- * nhồi form vào danh sách). Ngữ cảnh vẫn là control Select của @lms/ui
+ * nhồi form vào danh sách). Ngữ cảnh vẫn là control Select của @giaokhoa/ui
  * chỉ liệt kê ngữ cảnh người dùng thật sự có question:managecategory
  * (issue #55 mục 2), mặc định ngữ cảnh hệ thống. Tạo xong quay về danh
  * sách ngân hàng (trang danh sách tự nạp lại khi mở).

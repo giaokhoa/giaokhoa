@@ -1,5 +1,5 @@
 import { sql, type RawBuilder } from 'kysely';
-import type { PaperQuality, PaperReading, PaperRosterEntry, PaperSlotLayout } from '@lms/contracts';
+import type { PaperQuality, PaperReading, PaperRosterEntry, PaperSlotLayout } from '@giaokhoa/contracts';
 import type { CentreDb } from '../client';
 
 /**

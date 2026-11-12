@@ -360,7 +360,7 @@ function renderTree(curriculumId = 'curr-5') {
 }
 
 /**
- * Chọn một lựa chọn trong ô Select của `@lms/ui` theo nhãn nhìn
+ * Chọn một lựa chọn trong ô Select của `@giaokhoa/ui` theo nhãn nhìn
  * thấy: bấm nút mở (định danh bằng id của SelectTrigger) rồi bấm lựa
  * chọn trong danh sách xổ — danh sách xổ render qua portal ở tầng
  * document nên truy vấn bằng `screen`.

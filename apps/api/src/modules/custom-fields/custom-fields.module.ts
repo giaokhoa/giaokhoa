@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { CustomFieldsRepository } from '@lms/db/repositories/custom-fields';
+import { CustomFieldsRepository } from '@giaokhoa/db/repositories/custom-fields';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { CustomFieldsController } from './custom-fields.controller';
@@ -9,7 +9,7 @@ import { CustomFieldsService } from './custom-fields.service';
   imports: [SpaceRoutingModule],
   controllers: [CustomFieldsController],
   providers: [
-    // Repository của package @lms/db chạy trên handle Kysely đã định
+    // Repository của package @giaokhoa/db chạy trên handle Kysely đã định
     // tuyến theo không gian (issue #648).
     {
       provide: CustomFieldsRepository,

@@ -1,7 +1,7 @@
 import { sql } from 'kysely';
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { PaperQuality, PaperReading, PaperRosterEntry, PaperSlotLayout } from '@lms/contracts';
+import type { PaperQuality, PaperReading, PaperRosterEntry, PaperSlotLayout } from '@giaokhoa/contracts';
 import { createCentreKysely, type CentreDb } from '../client';
 import type { ExamVariant } from '../jsonb-types';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
@@ -13,7 +13,7 @@ import { PaperGradingRepository } from './paper-grading';
  *
  * Database trung tâm dựng từ rỗng bằng chính cầu nối migration
  * của package trên cụm PostgreSQL thật của môi trường test (biến
- * `LMS_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ
+ * `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ
  * `DATABASE_URL`). Mọi ca chạy qua repository production ở
  * `paper-grading.ts` — không mô phỏng handle.
  *
@@ -36,10 +36,10 @@ import { PaperGradingRepository } from './paper-grading';
  */
 
 const adminUrl =
-  process.env.LMS_DB_TEST_ADMIN_URL ??
+  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
 
-const TEST_DB = 'lms_db_g644_paper_grading';
+const TEST_DB = 'giaokhoa_db_g644_paper_grading';
 const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 /** Định danh cố định cho các cột tham chiếu mềm (file/user) — không có khoá ngoại. */
@@ -107,7 +107,7 @@ async function seedData(): Promise<Seed> {
 
 beforeAll(async () => {
   if (!adminUrl) {
-    throw new Error('Thiếu kết nối quản trị cho spec Kysely #644: đặt LMS_DB_TEST_ADMIN_URL hoặc DATABASE_URL.');
+    throw new Error('Thiếu kết nối quản trị cho spec Kysely #644: đặt GIAOKHOA_DB_TEST_ADMIN_URL hoặc DATABASE_URL.');
   }
   const storeUrl = await buildTestDatabase({ adminUrl, database: TEST_DB, store: 'centre' });
   pool = new Pool({ connectionString: storeUrl });

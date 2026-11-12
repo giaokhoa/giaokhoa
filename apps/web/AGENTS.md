@@ -44,8 +44,8 @@ của repo.
 
 ## Kiểm chứng bắt buộc
 
-- **Typecheck trước khi push**: `pnpm --filter @lms/web typecheck` (build của web có
-  kèm typecheck). Dist cũ của `@lms/ui`/`@lms/editor`/`@lms/contracts` là nguồn lỗi
+- **Typecheck trước khi push**: `pnpm --filter @giaokhoa/web typecheck` (build của web có
+  kèm typecheck). Dist cũ của `@giaokhoa/ui`/`@giaokhoa/editor`/`@giaokhoa/contracts` là nguồn lỗi
   type giả — build lại package phụ thuộc trước khi kết luận.
 - Feat lớn xong phải có lượt nghiệm thu trên **trình duyệt thật** bằng tài khoản seed
   đổi đủ vai liên quan (tài khoản demo ghi công khai trong README gốc của repo — tự
@@ -54,8 +54,8 @@ của repo.
 - Kiểm chứng gồm cả **tính nhất quán hình thức** (vỏ component, trạng thái hover,
   chevron, khoảng cách) — không chỉ kiểm cấu trúc/chức năng.
 - CI là cổng chính; kết luận CI chỉ từ LOG THẬT. Local chỉ test targeted
-  (`pnpm --filter @lms/web test -- <spec liên quan>`); suite nặng phải giữ khoá
-  `flock /tmp/lms-heavy-suite.lock`.
+  (`pnpm --filter @giaokhoa/web test -- <spec liên quan>`); suite nặng phải giữ khoá
+  `flock /tmp/giaokhoa-heavy-suite.lock`.
 
 ## Kỷ luật test theo nghiệp vụ
 
@@ -140,8 +140,8 @@ miền nằm trong feature của nó, tách rõ tầng `api/` khỏi tầng
 ### Ngoại lệ của kỷ luật import ngang — tập cạnh đóng băng
 
 Kỷ luật ở trên có đúng một ngoại lệ: tập cạnh import ngang giữa các
-feature đã đóng băng trong [comment phán quyết của điều phối trên
-issue #500](https://github.com/kvu90/lms/issues/500#issuecomment-6504346634)
+feature đã đóng băng trong [comment của issue #500 thuộc repo lịch sử
+trước khi đổi tên](https://github.com/kvu90/lms/issues/500#issuecomment-6504346634)
 (27 cặp ở code chạy thật và các cặp chỉ có ở file spec, đúng danh sách
 trong comment đó — các cạnh này là hệ quả của bảng ánh xạ đã duyệt khi
 tổ chức lại `features/`). Mọi cạnh import ngang phát sinh **ngoài** tập
@@ -157,12 +157,12 @@ ngoại lệ — muốn mở rộng phải có phán quyết ghi lại trong iss
   từng feature khai trong `src/features/<feature>/routes.ts` theo
   chuẩn đường dẫn của sổ mục F; `src/config/i18n.ts` nạp bản dịch.
 - **Luồng hiển thị:** điều hướng vào route → root/vỏ đọc phiên (cookie
-  `lms_session`) và capabilities từ API → route module trong
+  `giaokhoa_session`) và capabilities từ API → route module trong
   `src/features/<feature>/routes/` nạp dữ liệu qua tầng `queries/` của
   chính feature đó (hook React Query, prefetch/clientLoader) trên nền
   các hàm gọi API thuần ở tầng `api/` và client dùng chung
-  `src/lib/api.ts` → render bằng component nền của `@lms/ui` và editor
-  của `@lms/editor` (không tự chế editor/component nền riêng) → hành
+  `src/lib/api.ts` → render bằng component nền của `@giaokhoa/ui` và editor
+  của `@giaokhoa/editor` (không tự chế editor/component nền riêng) → hành
   động của người dùng gọi API `/api/v1` hoặc kênh realtime
   (`src/features/messaging/api/messaging-socket.ts`,
   `src/features/notifications/hooks/notification-unread-stream.ts`)
@@ -172,7 +172,7 @@ ngoại lệ — muốn mở rộng phải có phán quyết ghi lại trong iss
   trị…), mỗi feature tự chứa route module, component và tầng dữ liệu
   của nó; `src/app/` — khung framework (điểm vào, root, shell, file
   gộp route); `src/components/` — vỏ dùng chung của app (bọc component
-  `@lms/ui` theo luồng GV/HS); `src/lib/` — client API, auth, phân
+  `@giaokhoa/ui` theo luồng GV/HS); `src/lib/` — client API, auth, phân
   quyền hiển thị và helper thật sự đa-feature; `src/config/`,
   `src/hooks/`, `src/utils/` — cấu hình, hook và hàm thuần dùng
   chung; `src/test/` — hạ tầng test của app.

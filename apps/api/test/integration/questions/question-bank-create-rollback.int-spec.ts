@@ -7,7 +7,7 @@ import {
 import { RolesService } from '../../../src/modules/access/roles.service';
 import { QuestionBanksService } from '../../../src/modules/questions/question-banks.service';
 
-const TEST_DB_URL = process.env.LMS_TEST_DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5432/lms_test_api';
+const TEST_DB_URL = process.env.GIAOKHOA_TEST_DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5432/giaokhoa_test_api';
 
 /**
  * Hồi quy nguyên tử cho luồng TẠO BANK câu hỏi (issue #490, DL-09).

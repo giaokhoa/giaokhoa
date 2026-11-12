@@ -43,14 +43,14 @@ export function escapeIcsText(value: string): string {
 /**
  * Serialize danh sách sự kiện thành nội dung file .ics hoàn chỉnh
  * (VCALENDAR bọc các VEVENT, ngắt dòng CRLF). UID ổn định theo id của
- * sự kiện (`<id>@lms`) nên xuất lại nhiều lần không đổi danh tính sự kiện;
+ * sự kiện (`<id>@giaokhoa`) nên xuất lại nhiều lần không đổi danh tính sự kiện;
  * DTEND luôn có mặt: bằng DTSTART cộng timeDuration (giây).
  */
 export function serializeCalendar(events: IcsExportEvent[], options: { calName?: string } = {}): string {
   const lines: string[] = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//LMS//Calendar Export//EN',
+    'PRODID:-//Giáo khoa//Calendar Export//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
   ];
@@ -58,7 +58,7 @@ export function serializeCalendar(events: IcsExportEvent[], options: { calName?:
   for (const event of events) {
     const end = new Date(event.timeStart.getTime() + Math.max(0, event.timeDuration) * 1000);
     lines.push('BEGIN:VEVENT');
-    lines.push(`UID:${event.id}@lms`);
+    lines.push(`UID:${event.id}@giaokhoa`);
     lines.push(`DTSTAMP:${formatIcsDate(event.updatedAt)}`);
     lines.push(`DTSTART:${formatIcsDate(event.timeStart)}`);
     lines.push(`DTEND:${formatIcsDate(end)}`);

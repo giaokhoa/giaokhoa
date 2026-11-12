@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { sql, type CentreDB, type CentreDb, type CentreTx } from '@lms/db';
+import { sql, type CentreDB, type CentreDb, type CentreTx } from '@giaokhoa/db';
 import type { DbTx } from './database';
 
 /**
  * Kiểu JSON của cột jsonb theo codegen của kho trung tâm — đồng cấu
  * trúc với `JsonValue` của Kysely nên biểu thức SQL mang kiểu này
  * gán được cho mọi cột jsonb. Lấy qua chỉ mục bảng thay vì import
- * trực tiếp từ `kysely` (barrel `@lms/db` không re-export kiểu đó).
+ * trực tiếp từ `kysely` (barrel `@giaokhoa/db` không re-export kiểu đó).
  * Helper này cố tình KHÔNG export khỏi package: kiểu trả về của
  * `sql` tham chiếu tới kiểu của `kysely` mà `package.json` của
  * package không khai phụ thuộc, nên đưa nó vào `.d.ts` công khai
@@ -17,7 +17,7 @@ type CentreJson = NonNullable<CentreDB['payments']['data']>;
 
 /**
  * Xâu hoá một giá trị jsonb để ghi qua Kysely, đúng khuôn sổ tay
- * chuyển đổi của `@lms/db`.
+ * chuyển đổi của `@giaokhoa/db`.
  *
  * Driver `pg` tự stringify object thường nhưng hiểu MẢNG cấp cao
  * nhất là mảng PostgreSQL, nên mọi lần ghi jsonb đều xâu hoá trước
@@ -77,7 +77,7 @@ export interface PaymentRow {
  * Nullability theo đúng kiểu sinh codegen của kho trung tâm (nguồn
  * thật là DB): `created_by`, `approval_level`,
  * `approval_threshold` đều nullable trong DB — khác với khai báo
- * `.notNull()` cũ của schema bộ máy cũ; contract `@lms/contracts`
+ * `.notNull()` cũ của schema bộ máy cũ; contract `@giaokhoa/contracts`
  * cũng đã khai nullable cho đúng ba trường này nên phía gọi không
  * đổi gì.
  */
@@ -507,8 +507,8 @@ function mapProviderEventInsert(input: ProviderEventInsert) {
  * Kho dữ liệu payment_accounts / payments / payment_refunds.
  *
  * Repository này là tầng truy cập dữ liệu thanh toán của package
- * dùng chung `@lms/payments` (issue #538): nó chỉ thao tác dữ liệu
- * qua Kysely trên kho trung tâm của `@lms/db`, không chứa luật
+ * dùng chung `@giaokhoa/payments` (issue #538): nó chỉ thao tác dữ liệu
+ * qua Kysely trên kho trung tâm của `@giaokhoa/db`, không chứa luật
  * nghiệp vụ và không phụ thuộc module nào của tiến trình chủ — mọi
  * phía (facade thanh toán phía apps/api, luồng matching dùng chung)
  * dùng đúng repository này, không có bản sao thứ hai.

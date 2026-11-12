@@ -57,7 +57,7 @@ import {
  * lợi, như các component khác.
  *
  * Issue #538 (issue con của #522): service này thuộc bề mặt matching
- * dùng chung của package `@lms/payments` — cùng package với
+ * dùng chung của package `@giaokhoa/payments` — cùng package với
  * `PaymentsRepository`, `PlanEntitlementsService` và bề mặt phát
  * outbox `OutboxWriterService`. Ba hiệu ứng xuyên module (kích hoạt
  * ghi danh, kích hoạt ghi danh cấp lớp, đối chiếu đích và xác nhận

@@ -1,4 +1,4 @@
-import type { TenantMembership } from '@lms/contracts';
+import type { TenantMembership } from '@giaokhoa/contracts';
 
 /**
  * Kiểu dữ liệu của bề mặt quản trị tenant thuộc feature admin.

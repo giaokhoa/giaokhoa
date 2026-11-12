@@ -31,7 +31,7 @@ function isCohortMemberPayload(payload: unknown): payload is { cohortId: string;
  * này vào hàng đợi `cohort-sync-events` với `jobId` bằng id dòng
  * outbox, processor này chỉ kiểm tra hình dạng payload rồi uỷ cho
  * {@link CohortSyncService} — host phía worker của bề mặt vật chất
- * hoá cohort dùng chung (`@lms/enrol`, issue con #527).
+ * hoá cohort dùng chung (`@giaokhoa/enrol`, issue con #527).
  *
  * @remarks
  * Flow: relay phát job → processor chạy toàn bộ job trong ngữ cảnh

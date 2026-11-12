@@ -18,13 +18,13 @@
  * @param props.setBusy - Setter của cờ bận dùng chung.
  */
 import { useState, type Dispatch, type FormEvent, type SetStateAction } from 'react';
-import type { CourseRosterMember, ExamPinOverrideView as QuizOverrideView } from '@lms/contracts';
+import type { CourseRosterMember, ExamPinOverrideView as QuizOverrideView } from '@giaokhoa/contracts';
 import { CourseGroup } from '#features/progress-report/types/progress-report';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lms/ui/components/card';
-import { Field, FieldLabel } from '@lms/ui/components/field';
-import { Input } from '@lms/ui/components/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@lms/ui/components/select';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
+import { Field, FieldLabel } from '@giaokhoa/ui/components/field';
+import { Input } from '@giaokhoa/ui/components/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@giaokhoa/ui/components/select';
 import { ErrorAlert } from '#components/error-alert';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '#lib/api';

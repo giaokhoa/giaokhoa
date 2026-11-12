@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent } from '@lms/ui/components/card';
-import { Empty, EmptyHeader, EmptyTitle } from '@lms/ui/components/empty';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent } from '@giaokhoa/ui/components/card';
+import { Empty, EmptyHeader, EmptyTitle } from '@giaokhoa/ui/components/empty';
 import { ErrorAlert } from '#components/error-alert';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';

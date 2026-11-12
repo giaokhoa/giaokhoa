@@ -1,13 +1,13 @@
 import { useState, type ReactNode } from 'react';
 import { BellOff, ChevronDown, Plus } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@lms/ui/components/avatar';
-import { Badge } from '@lms/ui/components/badge';
-import { Button } from '@lms/ui/components/button';
+import { Avatar, AvatarFallback } from '@giaokhoa/ui/components/avatar';
+import { Badge } from '@giaokhoa/ui/components/badge';
+import { Button } from '@giaokhoa/ui/components/button';
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
-} from '@lms/ui/components/collapsible';
-import { Skeleton } from '@lms/ui/components/skeleton';
-import { cn } from '@lms/ui/lib/utils';
+} from '@giaokhoa/ui/components/collapsible';
+import { Skeleton } from '@giaokhoa/ui/components/skeleton';
+import { cn } from '@giaokhoa/ui/lib/utils';
 import { useTranslation } from 'react-i18next';
 import type {
   ConversationGroupTreeView,
@@ -443,7 +443,7 @@ export function GroupListNav({
    * Một mục thu gọn của danh sách nhóm (mục Ghim / mục Nhóm
    * khi tách mục): tiêu đề phẳng + chevron 12px, không số
    * đếm, đúng khuôn nhãn mục của bản demo (điểm B16), dựng
-   * trên primitive Collapsible của @lms/ui với đúng kiểu
+   * trên primitive Collapsible của @giaokhoa/ui với đúng kiểu
    * trình bày của các mục trong tab Tất cả ở khung trái —
    * không tự chế kiểu thu/mở riêng. Nội dung chỉ render khi
    * mục mở, như các mục của tab Tất cả.

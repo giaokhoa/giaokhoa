@@ -44,7 +44,7 @@ const OTHER_SESSION = {
   createdAt: '2026-10-22T01:00:00.000Z',
   lastActivityAt: '2026-10-22T02:00:00.000Z',
   ip: '198.51.100.7',
-  userAgent: 'LMS mobile app',
+  userAgent: 'Giáo khoa mobile app',
   current: false,
 };
 const THIRD_SESSION = {
@@ -122,7 +122,7 @@ describe('Cài đặt — trang bảo mật, thẻ phiên (chuyển từ Hồ s�
     // Chrome/Linux đọc thành "Chrome trên Linux"; user-agent lạ không
     // phân tích được thì hiện nguyên chuỗi gốc.
     expect(within(sessionsTable).getByText('Chrome trên Linux')).toBeInTheDocument();
-    expect(within(sessionsTable).getByText('LMS mobile app')).toBeInTheDocument();
+    expect(within(sessionsTable).getByText('Giáo khoa mobile app')).toBeInTheDocument();
     // Chỉ phiên khác mới có nút huỷ (phiên hiện tại dùng huy hiệu thay thế).
     const revokeButtons = screen.getAllByRole('button', { name: 'Huỷ phiên' });
     expect(revokeButtons).toHaveLength(1);
@@ -166,7 +166,7 @@ describe('Cài đặt — trang bảo mật, thẻ phiên (chuyển từ Hồ s�
     expect(within(thirdRow).queryByText('Chrome trên Linux')).not.toBeInTheDocument();
     // Phiên hiện tại vẫn hiện mô tả thiết bị đã phân tích và IP của nó.
     expect(within(table).getByText('Chrome trên Linux')).toBeInTheDocument();
-    expect(within(table).getByText('LMS mobile app')).toBeInTheDocument();
+    expect(within(table).getByText('Giáo khoa mobile app')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Huỷ mọi phiên khác' }));
     await waitFor(() => expect(within(table).getAllByRole('row')).toHaveLength(2));
     expect(screen.getByText('203.0.113.10')).toBeInTheDocument();
@@ -177,7 +177,7 @@ describe('Cài đặt — trang bảo mật, thẻ phiên (chuyển từ Hồ s�
 const TOTP_SECRET = 'JBSWY3DPEHPK3PXP';
 // URL otpauth của fixture được nối từ từng đoạn nhỏ (tham số khoá bí
 // mật tách rời) để nguyên liệu test không bị nhầm với credential thật.
-const TOTP_OTPAUTH_URL = 'otpauth://totp/LMS:learner?' + 'sec' + 'ret=' + TOTP_SECRET + '&issuer=LMS';
+const TOTP_OTPAUTH_URL = 'otpauth://totp/Giáo khoa:learner?' + 'sec' + 'ret=' + TOTP_SECRET + '&issuer=Giáo khoa';
 const TOTP_SETUP_RESPONSE: Record<string, string> = { otpauthUrl: TOTP_OTPAUTH_URL };
 TOTP_SETUP_RESPONSE['sec' + 'ret'] = TOTP_SECRET;
 

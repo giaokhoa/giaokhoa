@@ -347,7 +347,7 @@ describe('Messaging — ẩn hội thoại/liên hệ khi có quan hệ chặn (
       while (Date.now() < presenceDeadline) {
         if (presenceEvents.some((e) => e.userId === a.id)) break;
         if (!presenceKeySeen) {
-          presenceKeySeen = (await redis.keys(`lms:messaging:presence:*:${a.id}`)).length > 0;
+          presenceKeySeen = (await redis.keys(`giaokhoa:messaging:presence:*:${a.id}`)).length > 0;
         }
         await sleep(50);
       }

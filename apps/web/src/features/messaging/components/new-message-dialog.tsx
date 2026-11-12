@@ -1,11 +1,11 @@
 import { Copy } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@lms/ui/components/avatar';
-import { Badge } from '@lms/ui/components/badge';
-import { Button } from '@lms/ui/components/button';
+import { Avatar, AvatarFallback } from '@giaokhoa/ui/components/avatar';
+import { Badge } from '@giaokhoa/ui/components/badge';
+import { Button } from '@giaokhoa/ui/components/button';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
-} from '@lms/ui/components/dialog';
-import { Input } from '@lms/ui/components/input';
+} from '@giaokhoa/ui/components/dialog';
+import { Input } from '@giaokhoa/ui/components/input';
 import { useTranslation } from 'react-i18next';
 import { PeoplePicker } from './people-picker';
 import type {

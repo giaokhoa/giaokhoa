@@ -45,12 +45,12 @@ của repo.
 
 ## Kiểm chứng bắt buộc
 
-- **Typecheck trước khi push**: `pnpm --filter @lms/worker typecheck`; build lại
+- **Typecheck trước khi push**: `pnpm --filter @giaokhoa/worker typecheck`; build lại
   dist của `packages/db`/`packages/contracts` trước khi kết luận lỗi type.
-- CI là cổng chính (suite worker có DB riêng `lms_test_worker` — không chạy đồng
+- CI là cổng chính (suite worker có DB riêng `giaokhoa_test_worker` — không chạy đồng
   thời với suite api trên cùng DB); kết luận CI chỉ từ LOG THẬT.
 - Local chỉ test targeted; suite nặng giữ khoá
-  `flock /tmp/lms-heavy-suite.lock` suốt lượt chạy.
+  `flock /tmp/giaokhoa-heavy-suite.lock` suốt lượt chạy.
 
 ## Kỷ luật test theo nghiệp vụ
 

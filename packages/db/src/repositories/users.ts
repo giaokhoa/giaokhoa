@@ -37,7 +37,7 @@
  *   handle đó.
  */
 import { sql, type ExpressionBuilder, type Insertable, type Updateable } from 'kysely';
-import type { UserListSortBy, UserListStatus } from '@lms/contracts';
+import type { UserListSortBy, UserListStatus } from '@giaokhoa/contracts';
 import type { CentreDb, CentreDB, CentreTx } from '../client';
 
 /** Một dòng người dùng (hình dạng camelCase phía tiêu thụ dùng). */
@@ -83,7 +83,7 @@ export type UserPatch = Partial<NewUser>;
 
 /**
  * Bộ lọc danh sách người dùng cho `search()` — nhóm trạng thái và hợp đồng
- * sắp xếp, nhận giá trị theo hợp đồng truy vấn ở `@lms/contracts`. Mọi
+ * sắp xếp, nhận giá trị theo hợp đồng truy vấn ở `@giaokhoa/contracts`. Mọi
  * trường đều tuỳ chọn; bỏ trống trường nào thì `search()` áp dụng hành vi
  * mặc định của trường đó như mô tả từng trường dưới đây.
  *

@@ -1,6 +1,6 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
-import { CompletionRepository } from '@lms/db/repositories/completion';
+import { CompletionRepository } from '@giaokhoa/db/repositories/completion';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { EventsModule } from '../../infra/events/events.module';
@@ -15,7 +15,7 @@ import { COMPLETION_QUEUE, CompletionService } from './completion.service';
 /** Facade của CompletionModule: CompletionService. Phụ thuộc Courses, Enrol, registry Availability, Access (report §3.12).
  * Consumer tái tổng hợp sau gỡ ghi danh sống trong module này vì nó là phía
  * tiêu thụ sự kiện `course_completion_reaggregation_requested` qua mốc seq riêng.
- * Repository của module nằm ở `@lms/db/repositories/completion` trên Kysely và
+ * Repository của module nằm ở `@giaokhoa/db/repositories/completion` trên Kysely và
  * được dựng bằng factory trên facade định tuyến kho trung tâm
  * (`SpaceDatabaseService.routedKysely`). */
 @Module({

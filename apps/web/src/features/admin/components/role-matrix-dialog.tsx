@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { CAP, type Capability, type RoleListItem } from '@lms/contracts';
-import { Button } from '@lms/ui/components/button';
-import { Checkbox } from '@lms/ui/components/checkbox';
+import { CAP, type Capability, type RoleListItem } from '@giaokhoa/contracts';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Checkbox } from '@giaokhoa/ui/components/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -9,9 +9,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@lms/ui/components/dialog';
-import { Field, FieldError, FieldGroup, FieldLabel } from '@lms/ui/components/field';
-import { Input } from '@lms/ui/components/input';
+} from '@giaokhoa/ui/components/dialog';
+import { Field, FieldError, FieldGroup, FieldLabel } from '@giaokhoa/ui/components/field';
+import { Input } from '@giaokhoa/ui/components/input';
 import {
   Table,
   TableBody,
@@ -19,7 +19,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@lms/ui/components/table';
+} from '@giaokhoa/ui/components/table';
 import { ErrorAlert } from '#components/error-alert';
 import type { ContextRow, RoleCapabilityRow } from '#lib/access';
 import { useTranslation } from 'react-i18next';
@@ -32,7 +32,7 @@ import { isLockedPermission, PermissionCheckboxCell } from './permission-cells';
 
 /**
  * Hộp thoại thêm/sửa vai trò kèm ma trận quyền của feature admin,
- * dựng trên component Dialog thật của `@lms/ui` theo số đo của hộp
+ * dựng trên component Dialog thật của `@giaokhoa/ui` theo số đo của hộp
  * thoại vai trò mẫu: khung rộng tối đa 768px (sm:max-w-3xl), cao tối
  * đa 90vh cuộn dọc, tiêu đề 16px semibold, form xếp dọc cách nhau
  * gap-6, ma trận nằm trong khung viền bo rounded-lg.

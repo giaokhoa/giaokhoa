@@ -11,7 +11,7 @@ import {
  * (packages/database/src/schema/curriculum.ts): subjects (slug duy nhất) →
  * curricula (duy nhất theo môn + khối 1–12) → curriculum_nodes (cây, khoá
  * ngoại ghép giữ node con trong cùng chương trình) → learning_outcomes.
- * Phần LMS bổ sung: môn neo context + capability curriculum:view|manage
+ * Phần Giáo khoa bổ sung: môn neo context + capability curriculum:view|manage
  * qua PermissionEvaluator (mẫu ngân hàng câu hỏi/stimulus), node có kind
  * (strand = mạch nội dung) và thời lượng/% thời lượng cho số hoá GDPT 2018.
  */

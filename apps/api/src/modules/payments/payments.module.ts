@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import {
   PaymentsRepository,
   PlanEntitlementsService,
-} from '@lms/payments';
+} from '@giaokhoa/payments';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { EventsModule } from '../../infra/events/events.module';
@@ -31,7 +31,7 @@ import { ManualPaymentGateway, PAYMENT_GATEWAY, PaymentsService } from './paymen
  * hạn theo tenant dùng TenantConfigService của TenantsModule.
  * Issue #538 (con của #522): SepayMatchingService, PaymentsRepository,
  * PlanEntitlementsService và bề mặt phát outbox của matching
- * (OutboxWriterService) thuộc package dùng chung `@lms/payments`;
+ * (OutboxWriterService) thuộc package dùng chung `@giaokhoa/payments`;
  * từ issue #539, toàn bộ ngăn xếp matching (service, writer và cài
  * đặt cho ba cổng xuyên module của nó) chỉ đăng ký phía worker —
  * module này giữ lại đúng hai class mà facade thanh toán dùng trực

@@ -7,11 +7,11 @@ import {
   type CreateCalendarEvent,
   type CreateCalendarException,
   type CreateCalendarSubscription,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 
 /**
  * Validation của Calendar dùng Zod qua Standard Schema — schema nền ở
- * `@lms/contracts` là nguồn sự thật duy nhất.
+ * `@giaokhoa/contracts` là nguồn sự thật duy nhất.
  */
 export {
   calendarRemindSchema,

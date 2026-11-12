@@ -6,12 +6,12 @@ import { McpBridgeAuth } from './mcp-bridge-auth';
 import type { McpActor } from './mcp.context';
 import type { McpOAuthVerifier } from './mcp-oauth-verifier';
 import { McpRateLimiter } from './mcp-rate-limit';
-import { createLmsMcpServer } from './mcp.server';
+import { createGiaoKhoaMcpServer } from './mcp.server';
 import type { McpToolDeps } from './mcp.tools';
 import { tenantAls } from '../tenants/tenant-als';
 
 /**
- * Mount MCP server của LMS (MCP-0, issue #110) lên express instance của
+ * Mount MCP server của Giáo khoa (MCP-0, issue #110) lên express instance của
  * Nest — cùng tiền lệ Better Auth (better-auth.mount.ts): đăng ký TRƯỚC
  * route + body parser của Nest để request tới /mcp đến tay handler ở
  * dạng thô. MCP có không gian URL riêng, KHÔNG nằm dưới /api/v1:
@@ -42,19 +42,19 @@ import { tenantAls } from '../tenants/tenant-als';
 const logger = new Logger('McpMount');
 
 const MAX_BODY_BYTES = 256 * 1024;
-const MCP_SCOPES = ['lms.questions.read', 'lms.questions.draft', 'lms.questions.write', 'lms.banks.contribute'] as const;
+const MCP_SCOPES = ['giaokhoa.questions.read', 'giaokhoa.questions.draft', 'giaokhoa.questions.write', 'giaokhoa.banks.contribute'] as const;
 
 /**
  * Tập scope kỷ nguyên CẦU AUTH cấp cho token hệ thống (authInfo.scopes):
  * chỉ các scope đã có tool thật sau lưng — read + draft của MCP-0 và
- * contribute của lát MCP-2 (issue #110 mở lại). `lms.questions.write`
+ * contribute của lát MCP-2 (issue #110 mở lại). `giaokhoa.questions.write`
  * KHÔNG nằm ở đây: publish là tool của MCP-1 và chỉ gọi được bằng
  * access token OAuth thật (cầu auth cấp trần đồng nhất không dựng
  * được ca thiếu scope — chính là động cơ của lát này). Khi AS bật,
  * scope lấy từ access token qua McpOAuthVerifier; `deps.grantedScopes`
  * vẫn là đường ghi đè cho test ở cả hai kỷ nguyên.
  */
-const BRIDGE_SCOPES: readonly string[] = ['lms.questions.read', 'lms.questions.draft', 'lms.banks.contribute'];
+const BRIDGE_SCOPES: readonly string[] = ['giaokhoa.questions.read', 'giaokhoa.questions.draft', 'giaokhoa.banks.contribute'];
 
 /**
  * Scope riêng của TỪNG tool (lát MCP-1 hoàn thiện bản đồ của MCP-0):
@@ -63,17 +63,17 @@ const BRIDGE_SCOPES: readonly string[] = ['lms.questions.read', 'lms.questions.d
  * capability tại context của bank quyết ở tầng tool như REST.
  */
 const TOOL_REQUIRED_SCOPES: Record<string, string> = {
-  list_my_banks: 'lms.questions.read',
-  list_categories: 'lms.questions.read',
-  get_question: 'lms.questions.read',
-  search_questions: 'lms.questions.read',
-  check_duplicates: 'lms.questions.read',
-  search_curriculum_outcomes: 'lms.questions.read',
-  create_question: 'lms.questions.draft',
-  create_questions_batch: 'lms.questions.draft',
-  create_stimulus_with_questions: 'lms.questions.draft',
-  publish_questions: 'lms.questions.write',
-  submit_contribution: 'lms.banks.contribute',
+  list_my_banks: 'giaokhoa.questions.read',
+  list_categories: 'giaokhoa.questions.read',
+  get_question: 'giaokhoa.questions.read',
+  search_questions: 'giaokhoa.questions.read',
+  check_duplicates: 'giaokhoa.questions.read',
+  search_curriculum_outcomes: 'giaokhoa.questions.read',
+  create_question: 'giaokhoa.questions.draft',
+  create_questions_batch: 'giaokhoa.questions.draft',
+  create_stimulus_with_questions: 'giaokhoa.questions.draft',
+  publish_questions: 'giaokhoa.questions.write',
+  submit_contribution: 'giaokhoa.banks.contribute',
 };
 
 interface JsonRpcEnvelope {
@@ -169,7 +169,7 @@ export function mountMcp(app: NestExpressApplication, deps: McpMountDeps): void 
         era: ctx.era,
         scopes: ctx.authInfo?.scopes ?? [],
       };
-      return createLmsMcpServer(actor, deps.toolDeps);
+      return createGiaoKhoaMcpServer(actor, deps.toolDeps);
     },
     {
       legacy: 'stateless',
@@ -262,7 +262,7 @@ export function mountMcp(app: NestExpressApplication, deps: McpMountDeps): void 
             forbidden ? -32003 : -32001,
             forbidden
               ? 'Insufficient scope: the access token does not carry the required scope'
-              : 'Unauthorized: a valid LMS access token is required',
+              : 'Unauthorized: a valid GiaoKhoa access token is required',
           );
         }
         const actor = deps.resolveActor ? await deps.resolveActor(verdict.identity.userId) : null;
@@ -271,7 +271,7 @@ export function mountMcp(app: NestExpressApplication, deps: McpMountDeps): void 
             'WWW-Authenticate',
             `Bearer resource_metadata="${baseOf(req)}/.well-known/oauth-protected-resource", error="invalid_token"`,
           );
-          return jsonRpcError(res, 401, body.id, -32001, 'Unauthorized: the token subject is not an active LMS user');
+          return jsonRpcError(res, 401, body.id, -32001, 'Unauthorized: the token subject is not an active GiaoKhoa user');
         }
         identity = {
           userId: verdict.identity.userId,
@@ -290,7 +290,7 @@ export function mountMcp(app: NestExpressApplication, deps: McpMountDeps): void 
             'WWW-Authenticate',
             `Bearer resource_metadata="${baseOf(req)}/.well-known/oauth-protected-resource", error="invalid_token"`,
           );
-          return jsonRpcError(res, 401, body.id, -32001, 'Unauthorized: a valid LMS access token is required');
+          return jsonRpcError(res, 401, body.id, -32001, 'Unauthorized: a valid GiaoKhoa access token is required');
         }
         identity = bridgeIdentity;
         tokenScopes = BRIDGE_SCOPES;

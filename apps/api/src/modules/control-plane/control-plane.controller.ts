@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, Put } from '@nestjs/common';
-import { uuidIdSchema } from '@lms/contracts';
+import { uuidIdSchema } from '@giaokhoa/contracts';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { PlatformRoute } from '../../common/platform-route.decorator';
 import { ControlPlaneRegistryService } from './control-plane.service';

@@ -1,13 +1,13 @@
-# @lms/enrol — README nghiệp vụ
+# @giaokhoa/enrol — README nghiệp vụ
 
 > File này ghi các **quyết định nghiệp vụ quan trọng và còn đang hiệu lực** của package.
 > Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub.
 
 ## Package phụ trách nghiệp vụ gì
 
-`@lms/enrol` là **bề mặt vật chất hoá cohort dùng chung** của hệ thống: nó biến quan hệ thành viên cohort thành ghi danh cấp khoá (thêm thành viên → ghi danh vào mọi khoá có instance cohort tương ứng; rời cohort → rút hoặc đình chỉ ghi danh theo chế độ rời của instance), cùng các lõi tầng dữ liệu mà đường vật chất hoá đó đi qua — gán/gỡ vai tại context, kiểm tra tách vai giáo viên/học viên, giới hạn slot của gói, đảm bảo membership tenant, và truy vấn dữ liệu liên quan quyết định giữ/xoá dòng ghi danh khi gỡ.
+`@giaokhoa/enrol` là **bề mặt vật chất hoá cohort dùng chung** của hệ thống: nó biến quan hệ thành viên cohort thành ghi danh cấp khoá (thêm thành viên → ghi danh vào mọi khoá có instance cohort tương ứng; rời cohort → rút hoặc đình chỉ ghi danh theo chế độ rời của instance), cùng các lõi tầng dữ liệu mà đường vật chất hoá đó đi qua — gán/gỡ vai tại context, kiểm tra tách vai giáo viên/học viên, giới hạn slot của gói, đảm bảo membership tenant, và truy vấn dữ liệu liên quan quyết định giữ/xoá dòng ghi danh khi gỡ.
 
-Trước đây toàn bộ logic này sống trong `apps/api`, và đường đồng bộ cohort phụ thuộc hai cơ chế chỉ tồn tại trong tiến trình API: các probe dữ liệu liên quan và hook sau-gỡ-ghi-danh mà module nghiệp vụ đăng ký vào lúc khởi tạo tiến trình. Hệ quả là không tiến trình nào khác vật chất hoá cohort được. Package này trích đúng các định nghĩa đó xuống tầng dữ liệu (trên schema dùng chung `@lms/db`) để API và worker cùng áp một định nghĩa duy nhất; phần thuộc về tiến trình (HTTP, capability của người thao tác, tin nhắn chào mừng, consumer quét outbox) ở lại phía app.
+Trước đây toàn bộ logic này sống trong `apps/api`, và đường đồng bộ cohort phụ thuộc hai cơ chế chỉ tồn tại trong tiến trình API: các probe dữ liệu liên quan và hook sau-gỡ-ghi-danh mà module nghiệp vụ đăng ký vào lúc khởi tạo tiến trình. Hệ quả là không tiến trình nào khác vật chất hoá cohort được. Package này trích đúng các định nghĩa đó xuống tầng dữ liệu (trên schema dùng chung `@giaokhoa/db`) để API và worker cùng áp một định nghĩa duy nhất; phần thuộc về tiến trình (HTTP, capability của người thao tác, tin nhắn chào mừng, consumer quét outbox) ở lại phía app.
 
 ## Quyết định nghiệp vụ còn hiệu lực
 

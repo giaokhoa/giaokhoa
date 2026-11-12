@@ -1,5 +1,5 @@
 import { queryOptions, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import type { QuestionView, RichTextDocument } from '@lms/contracts';
+import type { QuestionView, RichTextDocument } from '@giaokhoa/contracts';
 import { queryClient } from '#lib/query-client';
 import { queryKeys as sharedQueryKeys } from '#lib/query-keys';
 import {

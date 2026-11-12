@@ -1,5 +1,5 @@
 /**
- * Điểm vào gốc của `@lms/db` cho kho TRUNG TÂM: factory handle
+ * Điểm vào gốc của `@giaokhoa/db` cho kho TRUNG TÂM: factory handle
  * Kysely + hàm đọc nhật ký migration + các kiểu jsonb nghiệp vụ.
  *
  * Từ issue #663 (gỡ bộ máy cũ khỏi cây mã), package không còn lớp
@@ -9,7 +9,7 @@
  * qua handle Kysely (`client.ts`) cùng các repository trong
  * `src/repositories/`. Phần GHI của bộ máy migration (trình tự áp
  * dùng chung, runner CLI) được tiêu thụ qua điểm vào
- * `@lms/db/migrate` và file `dist/migrate/run.js`, không qua
+ * `@giaokhoa/db/migrate` và file `dist/migrate/run.js`, không qua
  * barrel này.
  */
 export { createCentreKysely, type CentreDB, type CentreDb, type CentreTx } from './client';
@@ -29,7 +29,7 @@ export {
 } from './migrate/journal';
 /**
  * Re-export `sql` của Kysely qua barrel của package: các app tiêu
- * thụ (api, worker) phụ thuộc `@lms/db`, không phụ thuộc trực tiếp
+ * thụ (api, worker) phụ thuộc `@giaokhoa/db`, không phụ thuộc trực tiếp
  * package `kysely` — mọi bề mặt Kysely mà app cần (kể cả mẫu SQL
  * thô để gắn GUC trong transaction) đều đi qua điểm vào này, giữ
  * nguyên kỷ luật phụ thuộc đã chốt ở PR-N1. Từ issue #648, barrel

@@ -206,7 +206,7 @@ function renderBank() {
   );
 }
 
-/** Chọn một tuỳ chọn trong Select của @lms/ui: bấm trigger theo nhãn rồi bấm option theo chữ hiển thị. */
+/** Chọn một tuỳ chọn trong Select của @giaokhoa/ui: bấm trigger theo nhãn rồi bấm option theo chữ hiển thị. */
 async function pickSelectOption(scope: ReturnType<typeof within>, label: string, optionName: string) {
   await userEvent.click(scope.getByLabelText(label));
   await userEvent.click(await screen.findByRole('option', { name: optionName }, { timeout: 10000 }));

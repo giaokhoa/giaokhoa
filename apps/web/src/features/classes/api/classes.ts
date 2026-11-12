@@ -14,14 +14,14 @@ import type {
   Course,
   JoinClassResult,
   RosterStudentIdentity,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { apiFetch, apiJson } from '#lib/api';
 import type { ClassFeePaymentView } from '../types/classes';
 
 /**
  * Đường gọi API lớp học (CLASS-1, issue #184) — web chỉ trình bày +
  * dẫn luồng; mọi gác quyền và luật vòng đời nằm ở API module classes.
- * Kiểu dữ liệu lấy thẳng từ @lms/contracts để không lệch hợp đồng.
+ * Kiểu dữ liệu lấy thẳng từ @giaokhoa/contracts để không lệch hợp đồng.
  * Đây là tầng api/ của feature classes sau khi tổ chức lại apps/web
  * theo mô hình features/ (issue #500): file này giữ toàn bộ hàm gọi
  * API; phần tái xuất kiểu và hằng đã tách sang `../types/classes`.

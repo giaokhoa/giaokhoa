@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { CentreIdentityService } from './centre-identity.service';
-import type { CentreIdentityRepository } from '@lms/db/repositories/centre-identity';
-import type { TenantsRepository } from '@lms/db/repositories/tenants';
+import type { CentreIdentityRepository } from '@giaokhoa/db/repositories/centre-identity';
+import type { TenantsRepository } from '@giaokhoa/db/repositories/tenants';
 import type { UsersService } from '../users/users.service';
 
 /**

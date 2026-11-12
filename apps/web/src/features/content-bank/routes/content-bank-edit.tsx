@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@lms/ui/components/card';
-import { Input } from '@lms/ui/components/input';
-import { Label } from '@lms/ui/components/label';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
+import { Input } from '@giaokhoa/ui/components/input';
+import { Label } from '@giaokhoa/ui/components/label';
 import { useTranslation } from 'react-i18next';
 import '#config/i18n';
 import { ApiError } from '#lib/api';

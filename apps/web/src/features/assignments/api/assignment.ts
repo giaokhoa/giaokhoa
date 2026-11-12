@@ -3,7 +3,7 @@ import type {
   AssignSubmissionSummary,
   AssignmentForUserView,
   TeacherCommentBankEntryView,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 import type { AssignmentWriteBody } from '../types/assignment';
 

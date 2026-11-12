@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ContentRepository } from '@lms/db/repositories/content';
+import { ContentRepository } from '@giaokhoa/db/repositories/content';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { EventsModule } from '../../infra/events/events.module';
@@ -19,7 +19,7 @@ import { ContentService } from './content.service';
  * (tệp + URL đã ký) và Access (PermissionEvaluator) — không vòng phụ
  * thuộc vì không module nào trong số đó phụ thuộc Content.
  *
- * Từ issue #646, ContentRepository sống ở `@lms/db` (lớp thuần,
+ * Từ issue #646, ContentRepository sống ở `@giaokhoa/db` (lớp thuần,
  * không phụ thuộc Nest) nên module lắp nó bằng factory provider
  * với handle Kysely định tuyến của kho trung tâm
  * (`SpaceDatabaseService.routedKysely`).

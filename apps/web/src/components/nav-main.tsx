@@ -2,8 +2,8 @@ import type { Icon } from '@tabler/icons-react';
 import { ChevronRightIcon } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router';
 
-import { Badge } from '@lms/ui/components/badge';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@lms/ui/components/collapsible';
+import { Badge } from '@giaokhoa/ui/components/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@giaokhoa/ui/components/collapsible';
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -14,7 +14,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
   useSidebar,
-} from '@lms/ui/components/sidebar';
+} from '@giaokhoa/ui/components/sidebar';
 
 /** Một mục điều hướng lá trong sidebar: nhãn đã dịch sẵn, đường dẫn route thật của app. */
 export interface NavItem {

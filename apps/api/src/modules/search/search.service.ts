@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { sql, type SqlBool } from '@lms/db';
-import { SearchRepository, type SearchDocRow } from '@lms/db/repositories/search';
+import { sql, type SqlBool } from '@giaokhoa/db';
+import { SearchRepository, type SearchDocRow } from '@giaokhoa/db/repositories/search';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { ContextsService } from '../access/contexts.service';
 

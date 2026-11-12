@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@lms/ui/components/card';
-import { Field, FieldGroup, FieldLabel } from '@lms/ui/components/field';
-import { Input } from '@lms/ui/components/input';
-import { Textarea } from '@lms/ui/components/textarea';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
+import { Field, FieldGroup, FieldLabel } from '@giaokhoa/ui/components/field';
+import { Input } from '@giaokhoa/ui/components/input';
+import { Textarea } from '@giaokhoa/ui/components/textarea';
 import { ErrorAlert } from '#components/error-alert';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';

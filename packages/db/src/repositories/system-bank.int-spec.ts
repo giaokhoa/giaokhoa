@@ -1,6 +1,6 @@
 import { Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { SystemBankPackage } from '@lms/contracts';
+import type { SystemBankPackage } from '@giaokhoa/contracts';
 import { createSystemBankKysely, type SystemBankDb } from '../client';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
 import { SystemBankRepository } from './system-bank';
@@ -12,7 +12,7 @@ import { SystemBankRepository } from './system-bank';
  * Database kho ngân hàng được dựng từ rỗng bằng chính cầu nối
  * migration của package (carrier đóng băng của kho system-bank)
  * trên cụm PostgreSQL thật của môi trường test (biến
- * `LMS_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ
+ * `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ
  * `DATABASE_URL` của package). Mọi ca chạy qua repository
  * production ở `system-bank.ts` — không mô phỏng handle.
  *
@@ -30,10 +30,10 @@ import { SystemBankRepository } from './system-bank';
  *   hiểu mảng trần là mảng PostgreSQL).
  */
 const adminUrl =
-  process.env.LMS_DB_TEST_ADMIN_URL ??
+  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
 
-const BANK_DB = 'lms_db_g650_bank';
+const BANK_DB = 'giaokhoa_db_g650_bank';
 const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const ADMIN_ID = '01965000-0000-7000-8000-000000000001';
 const EXPLICIT_QUESTION_ID = '01965000-0000-7000-8000-0000000000aa';
@@ -60,7 +60,7 @@ function samplePackage(text: string, outcomeId?: string): SystemBankPackage {
 
 beforeAll(async () => {
   if (!adminUrl) {
-    throw new Error('Thiếu kết nối quản trị cho spec kho ngân hàng: đặt LMS_DB_TEST_ADMIN_URL hoặc DATABASE_URL.');
+    throw new Error('Thiếu kết nối quản trị cho spec kho ngân hàng: đặt GIAOKHOA_DB_TEST_ADMIN_URL hoặc DATABASE_URL.');
   }
   const bankUrl = await buildTestDatabase({ adminUrl, database: BANK_DB, store: 'system-bank' });
   pool = new Pool({ connectionString: bankUrl });

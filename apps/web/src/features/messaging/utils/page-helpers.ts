@@ -17,9 +17,9 @@ import type {
 } from '../types/types';
 
 /** Khoá localStorage của tab khung trái Tin nhắn gần nhất (lát MSG-T3). */
-const MESSAGES_TAB_STORAGE_KEY = 'lms.messages.tab';
+const MESSAGES_TAB_STORAGE_KEY = 'giaokhoa.messages.tab';
 /** Khoá localStorage của hội thoại Tin nhắn đang mở gần nhất (lát MSG-T3). */
-const MESSAGES_CONVERSATION_STORAGE_KEY = 'lms.messages.conversationId';
+const MESSAGES_CONVERSATION_STORAGE_KEY = 'giaokhoa.messages.conversationId';
 /**
  * Các tab khung trái hợp lệ — giá trị lưu hỏng thì lùi về tab
  * Tất cả. Từ issue #606, thanh tab là bốn tab lọc ngang hàng

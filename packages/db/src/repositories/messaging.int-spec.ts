@@ -47,10 +47,10 @@ import { MessagingRepository, type MessagingStorePort } from './messaging';
  */
 
 const adminUrl =
-  process.env.LMS_DB_TEST_ADMIN_URL ??
+  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
 
-const TEST_DB = 'lms_db_g658_messaging';
+const TEST_DB = 'giaokhoa_db_g658_messaging';
 
 const UUIDV7_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -110,7 +110,7 @@ async function seedNotification(v: {
 
 beforeAll(async () => {
   if (!adminUrl) {
-    throw new Error('Thiếu kết nối quản trị cho spec Kysely #658: đặt LMS_DB_TEST_ADMIN_URL hoặc DATABASE_URL.');
+    throw new Error('Thiếu kết nối quản trị cho spec Kysely #658: đặt GIAOKHOA_DB_TEST_ADMIN_URL hoặc DATABASE_URL.');
   }
   const storeUrl = await buildTestDatabase({ adminUrl, database: TEST_DB, store: 'centre' });
   pool = new Pool({ connectionString: storeUrl });

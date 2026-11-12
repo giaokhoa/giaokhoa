@@ -171,7 +171,7 @@ describe('Đợt xác thực: đăng nhập social OAuth2, luồng phiên MFA, p
     expect(callback.headers.location).toContain('/oauth/callback?handoff=');
     // Cookie phiên được đặt như đăng nhập thường (cùng cơ chế phiên).
     const cookies = (callback.headers['set-cookie'] as unknown as string[]).join(';');
-    expect(cookies).toContain('lms_session=');
+    expect(cookies).toContain('giaokhoa_session=');
 
     const body = await exchangeHandoff(callback.headers.location as string);
     expect(body.user.username).toBe(email.split('@')[0]);
@@ -296,7 +296,7 @@ describe('Đợt xác thực: đăng nhập social OAuth2, luồng phiên MFA, p
       .send({ challengeToken: challenge, code: await currentTotpCode(secret) });
     expect(verified.status).toBe(201);
     expect(verified.body.sessionId).toBeTruthy();
-    expect((verified.headers['set-cookie'] as unknown as string[]).join(';')).toContain('lms_session=');
+    expect((verified.headers['set-cookie'] as unknown as string[]).join(';')).toContain('giaokhoa_session=');
     const me = await http(app).get('/api/v1/auth/session/me').set('x-session-id', verified.body.sessionId as string);
     expect(me.status).toBe(200);
     expect(me.body.id).toBe(user.id);
@@ -351,7 +351,7 @@ describe('Đợt xác thực: đăng nhập social OAuth2, luồng phiên MFA, p
     expect(webSessions[0]!.ip).toBeTruthy();
     // Mang cookie theo thì phiên web đó trở thành phiên hiện tại.
     const listWithCookie = await http(app).get('/api/v1/auth/sessions')
-      .set('Authorization', `Bearer ${first.accessToken}`).set('Cookie', `lms_session=${webSessionId}`);
+      .set('Authorization', `Bearer ${first.accessToken}`).set('Cookie', `giaokhoa_session=${webSessionId}`);
     const webNow = (listWithCookie.body.sessions as { id: string; current: boolean }[]).find((s) => s.id === webSessionId);
     expect(webNow!.current).toBe(true);
 

@@ -25,7 +25,7 @@ import * as tokensRoute from './platform-tokens';
  *     `RouteErrorBoundary` (so sánh đồng nhất tham chiếu, không
  *     phải một component trông giống) — lỗi của trang được chứa
  *     trong vùng nội dung theo cơ chế đã gác ở `ssr-frame.spec.tsx`.
- *  2. `meta()` trả tiêu đề "<Tên trang> · LMS" dựng từ ĐÚNG khoá
+ *  2. `meta()` trả tiêu đề "<Tên trang> · Giáo khoa" dựng từ ĐÚNG khoá
  *     tiêu đề mà chính trang dùng cho heading của nó trong
  *     namespace `platform` (searchTitle / tokensTitle / backupTitle
  *     / insightsTitle / reportsTitle / privacyTitle). Khoá phải tồn
@@ -51,7 +51,7 @@ describe('F-07/F-08 (#133): 6 route module platform thật — ErrorBoundary dù
     it(`route ${name} meta() trả tiêu đề dựng từ khoá platform riêng ${key}`, () => {
       const expectedTitle = i18n.t(key, { ns: 'platform' });
       expect(expectedTitle).not.toBe(key);
-      expect(route.meta()).toEqual([{ title: `${expectedTitle} · LMS` }]);
+      expect(route.meta()).toEqual([{ title: `${expectedTitle} · Giáo khoa` }]);
     });
   }
 });

@@ -8,8 +8,8 @@
  * gọi API; trang soạn và các khối giao diện của nó dùng chung mô
  * hình này.
  */
-import type { QuestionView, RichTextDocument } from '@lms/contracts';
-import { extractRichTextPlainText } from '@lms/contracts';
+import type { QuestionView, RichTextDocument } from '@giaokhoa/contracts';
+import { extractRichTextPlainText } from '@giaokhoa/contracts';
 import {
   composeMultipleChoiceDocument,
   composeTrueFalseDocument,
@@ -19,7 +19,7 @@ import {
   splitTrueFalseDocument,
   type MultipleChoiceDocumentJson,
   type TrueFalseDocumentJson,
-} from '@lms/editor';
+} from '@giaokhoa/editor';
 import { QTYPES, plainText } from '#features/questions/utils/shared';
 import type { OptionsRecord, Qtype } from '#features/questions/utils/shared';
 

@@ -7,9 +7,9 @@
  */
 import { useTranslation } from 'react-i18next';
 
-import type { ActivityGradeView } from '@lms/contracts';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lms/ui/components/card';
-import { Empty, EmptyHeader, EmptyTitle } from '@lms/ui/components/empty';
+import type { ActivityGradeView } from '@giaokhoa/contracts';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
+import { Empty, EmptyHeader, EmptyTitle } from '@giaokhoa/ui/components/empty';
 
 import { DataTable, type DataColumn } from '#components/data-table';
 

@@ -6,7 +6,7 @@
  * như adapter của pilot kho control plane: nó chỉ còn làm hai việc
  * của tầng ứng dụng — đọc cấu hình môi trường và sở hữu vòng đời
  * của `pg.Pool` — rồi cấp pool cho factory
- * `createSystemBankKysely` của `@lms/db`; mọi truy cập dữ liệu đi
+ * `createSystemBankKysely` của `@giaokhoa/db`; mọi truy cập dữ liệu đi
  * qua handle Kysely (`kysely`) và repository của package. Pool
  * KHÔNG bị đóng qua `destroy()` của instance Kysely (hàm đó cũng
  * đóng pool): điểm đóng duy nhất là `onModuleDestroy` của adapter
@@ -26,7 +26,7 @@
  */
 import { Injectable, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createSystemBankKysely, type SystemBankDb } from '@lms/db/system-bank';
+import { createSystemBankKysely, type SystemBankDb } from '@giaokhoa/db/system-bank';
 import { Pool } from 'pg';
 import { databaseConnectionFromEnv } from '../../config/env';
 

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
-import type { QuestionView } from '@lms/contracts';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardDescription, CardHeader, CardTitle } from '@lms/ui/components/card';
+import type { QuestionView } from '@giaokhoa/contracts';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { ErrorAlert } from '#components/error-alert';
 import { useTranslation } from 'react-i18next';
 import { BankAreaTabs } from './bank-area-tabs';

@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { AnalyticsRepository } from '@lms/db/repositories/analytics';
+import { AnalyticsRepository } from '@giaokhoa/db/repositories/analytics';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { AccessModule } from '../access/access.module';
@@ -13,7 +13,7 @@ import { AnalyticsService } from './analytics.service';
   imports: [AccessModule, CoursesModule, EnrolModule, SpaceRoutingModule],
   controllers: [AnalyticsController],
   providers: [
-    // Repository của package @lms/db chạy trên handle Kysely đã định
+    // Repository của package @giaokhoa/db chạy trên handle Kysely đã định
     // tuyến theo không gian (issue #648) — cùng khuôn lắp ráp với
     // repository control plane của pilot.
     {

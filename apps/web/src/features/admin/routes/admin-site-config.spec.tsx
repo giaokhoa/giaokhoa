@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { SiteSetting } from '@lms/contracts';
+import type { SiteSetting } from '@giaokhoa/contracts';
 import { TestProviders } from '#test/providers';
 import { AdminSiteConfigPage } from './admin-site-config';
 
@@ -27,8 +27,8 @@ const SETTINGS: SiteSetting[] = [
     component: 'core',
     name: 'fullname',
     type: 'string',
-    defaultValue: 'LMS',
-    value: 'LMS Trường tôi',
+    defaultValue: 'Giáo khoa',
+    value: 'Giáo khoa Trường tôi',
     source: 'database',
     scope: 'both',
   },
@@ -84,7 +84,7 @@ describe('Trang cấu hình site của admin', () => {
 
     expect(await screen.findByText('messagingallusers')).toBeInTheDocument();
     expect(screen.getByText('fullname')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('LMS Trường tôi')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Giáo khoa Trường tôi')).toBeInTheDocument();
     expect(screen.getAllByText('mặc định').length).toBeGreaterThan(0);
     expect(screen.getByText('đã ghi đè')).toBeInTheDocument();
     expect(calls.some((c) => c.url === '/api/v1/site-config' && c.method === 'GET')).toBe(true);

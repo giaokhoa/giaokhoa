@@ -1,10 +1,10 @@
 import { BadRequestException, UnprocessableEntityException } from '@nestjs/common';
-import type { PaperSlotLayout, RichTextDocument } from '@lms/contracts';
-import { getTrueFalseStatements, TRUE_FALSE_STATEMENT_COUNT } from '@lms/contracts';
+import type { PaperSlotLayout, RichTextDocument } from '@giaokhoa/contracts';
+import { getTrueFalseStatements, TRUE_FALSE_STATEMENT_COUNT } from '@giaokhoa/contracts';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { CurriculumService } from '../curriculum/curriculum.service';
 import { QuestionsService, type QuestionView } from '../questions/questions.service';
-import { QUIZ_PIN_ATTEMPTS_LIMIT, QuizRepository, type ExamMatrixCellRow, type ExamMatrixRow } from '@lms/db/repositories/quiz';
+import { QUIZ_PIN_ATTEMPTS_LIMIT, QuizRepository, type ExamMatrixCellRow, type ExamMatrixRow } from '@giaokhoa/db/repositories/quiz';
 import { QuizSharedService } from './quiz-shared.service';
 import { QuizAttemptsService } from './quiz-attempts.service';
 import { QUIZ_COMPONENT } from './quiz-shared.service';

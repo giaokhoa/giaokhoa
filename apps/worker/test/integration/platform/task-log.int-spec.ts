@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { INestApplicationContext } from '@nestjs/common';
-import type { CentreDb } from '@lms/db';
+import type { CentreDb } from '@giaokhoa/db';
 import { EnrolExpiryProcessor } from '../../../src/processors/enrol-expiry.processor';
 import { OutboxRelayScheduler } from '../../../src/outbox-relay.scheduler';
 import { TaskLogService } from '../../../src/task-log.service';

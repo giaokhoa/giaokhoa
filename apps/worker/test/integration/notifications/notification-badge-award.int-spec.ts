@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { INestApplicationContext } from '@nestjs/common';
-import { sql } from '@lms/db';
+import { sql } from '@giaokhoa/db';
 import { BadgeAwardProcessor } from '../../../src/processors/badge-award.processor';
 import {
   bootWorkerModuleAsOrdinaryRole,
@@ -67,7 +67,7 @@ describe('Worker #174-A: tự trao huy hiệu gửi qua luật gửi chung (tắ
   }
 
   async function mkBadge(name: string, type: number, badgeCourseId: string | null, leafCourseId: string): Promise<string> {
-    const row = await db.insertInto('badge').values({ name, type, status: 1, issuer_name: 'LMS', course_id: badgeCourseId }).returningAll().executeTakeFirstOrThrow();
+    const row = await db.insertInto('badge').values({ name, type, status: 1, issuer_name: 'Giáo khoa', course_id: badgeCourseId }).returningAll().executeTakeFirstOrThrow();
     await db.insertInto('badge_criteria').values({ badge_id: row.id, criteria_type: 'overall', method: 1, params: {} }).execute();
     await db.insertInto('badge_criteria').values({ badge_id: row.id, criteria_type: 'coursecompletion', method: 1, params: { courseId: leafCourseId } }).execute();
     return row.id as string;

@@ -6,7 +6,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client, Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createControlPlaneKysely } from '@lms/db/control-plane';
+import { createControlPlaneKysely } from '@giaokhoa/db/control-plane';
 
 /**
  * Better Auth phải bật ngay từ lúc AppModule được import (ConfigModule
@@ -80,10 +80,10 @@ function signedBetterAuthCookie(token: string): string {
  * Ca đầu-cuối của CÁC CỔNG TIỀN DI TRÚ (Phần A, issue #587):
  * ứng dụng thật (toàn bộ chuỗi guard) chạy với một trung tâm kiểm
  * chứng ở kho riêng dựng riêng cho đợt này — database mới trên
- * cùng cụm test (`lms_test_centre_a_587`), role ứng dụng riêng,
+ * cùng cụm test (`giaokhoa_test_centre_a_587`), role ứng dụng riêng,
  * CONNECT của PUBLIC bị thu hồi, baseline nghiệp vụ áp bằng role
  * chủ kho; sổ đăng ký nằm ở database control plane riêng
- * (`lms_test_cp_587`) mà ứng dụng đọc qua biến
+ * (`giaokhoa_test_cp_587`) mà ứng dụng đọc qua biến
  * `CONTROL_PLANE_DATABASE_URL` đặt trước khi ứng dụng khởi động.
  * Tenant tương ứng được tạo bằng chính API công khai ở kho chung,
  * rồi dòng tenant (và dòng user + dòng membership của từng tài
@@ -128,11 +128,11 @@ function signedBetterAuthCookie(token: string): string {
  *     nhập được tại địa chỉ platform và phiên ghi ở kho chung;
  *     tài khoản chỉ ở kho riêng bị từ chối tại địa chỉ platform.
  */
-const CP_DATABASE = 'lms_test_cp_587';
-const CP_ROLE = 'lms_cp_test_587';
+const CP_DATABASE = 'giaokhoa_test_cp_587';
+const CP_ROLE = 'giaokhoa_cp_test_587';
 const CP_PASSWORD = 'cp-test-587';
-const CENTRE_A_DATABASE = 'lms_test_centre_a_587';
-const CENTRE_A_ROLE = 'lms_centre_a_587_app';
+const CENTRE_A_DATABASE = 'giaokhoa_test_centre_a_587';
+const CENTRE_A_ROLE = 'giaokhoa_centre_a_587_app';
 const CENTRE_A_PASSWORD = 'centre-a-test-587';
 // Slug của trung tâm mang hậu tố ngẫu nhiên theo lượt chạy:
 // tenant tương ứng được tạo thật trong database nghiệp vụ test

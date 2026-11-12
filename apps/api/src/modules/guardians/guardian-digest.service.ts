@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { GuardianDigestFrequency, GuardianDigestPreferenceView } from '@lms/contracts';
+import type { GuardianDigestFrequency, GuardianDigestPreferenceView } from '@giaokhoa/contracts';
 import { UsersService } from '../users/users.service';
 import { GuardiansService } from './guardians.service';
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PlanLimitsCore, type EnrolDatabase } from '@lms/enrol';
+import { PlanLimitsCore, type EnrolDatabase } from '@giaokhoa/enrol';
 import { tenantAls, type TenantAlsStore } from '../tenants/tenant-als';
 import { PlanLimitsService } from './plan-limits.service';
 import { RoleSeparationService } from './role-separation.service';

@@ -1,6 +1,6 @@
 /**
  * Trình tự áp migration của một kho — ĐIỂM VÀO DÙNG CHUNG duy nhất
- * của bộ máy migration `@lms/db` cho mọi đường ghi (issue #663):
+ * của bộ máy migration `@giaokhoa/db` cho mọi đường ghi (issue #663):
  * CLI `run.ts` (chuỗi migrate của compose), runner đội kho
  * (`fleet-migration-runner`) và runner cấp phát trung tâm
  * (`space-provision-runner`) đều áp migration qua hàm này, không

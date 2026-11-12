@@ -3,7 +3,7 @@ import {
 } from '@nestjs/common';
 import type {
   CreateExamDossier, ExamDossierView, RejectExamDossier,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { QuestionBanksService } from '../questions/question-banks.service';
@@ -11,7 +11,7 @@ import { QuizService, type MatrixSpecification } from '../quiz/quiz.service';
 import {
   ExamsRepository,
   type ExamDossierRow,
-} from '@lms/db/repositories/exams';
+} from '@giaokhoa/db/repositories/exams';
 import { ExamsService, EXAM_CAPABILITIES, examPaperContentHash } from './exams.service';
 
 /**

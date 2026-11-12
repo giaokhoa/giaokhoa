@@ -20,7 +20,7 @@
  */
 import { useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MESSAGING_MAX_MESSAGE_LENGTH_DEFAULT } from '@lms/contracts';
+import { MESSAGING_MAX_MESSAGE_LENGTH_DEFAULT } from '@giaokhoa/contracts';
 import { ApiError } from '#lib/api';
 import { useSendMessage } from '../queries/messaging';
 import type { MessagingRealtimeHandle } from '../api/messaging-socket';

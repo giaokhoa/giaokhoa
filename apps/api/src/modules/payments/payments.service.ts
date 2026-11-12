@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { timingSafeEqual } from 'node:crypto';
-import { sql, type CentreTx } from '@lms/db';
+import { sql, type CentreTx } from '@giaokhoa/db';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { ContextsService } from '../access/contexts.service';
@@ -11,9 +11,9 @@ import { SiteConfigService } from '../site-config/site-config.service';
 import { TenantContextService } from '../tenants/tenant-context.service';
 import { TenantConfigService } from '../tenants/tenant-config.service';
 import { TenantsService } from '../tenants/tenants.service';
-import { PaymentsRepository, PlanEntitlementsService, planChargedAmountOf, type AccountRow, type CouponRow, type EntitlementRow, type PaymentRow, type PlanSnapshot, type ProviderEventRow, type RefundRow } from '@lms/payments';
+import { PaymentsRepository, PlanEntitlementsService, planChargedAmountOf, type AccountRow, type CouponRow, type EntitlementRow, type PaymentRow, type PlanSnapshot, type ProviderEventRow, type RefundRow } from '@giaokhoa/payments';
 import { buildVietQrPayload, extractPaymentCode, maskAccountConfig, paymentCodeFromSequence, readAccountConfig, PAYMENT_CODE_TTL_MS } from './vietqr';
-import type { Coupon, CreateCoupon, CreateRefund, PaymentRefund, PaymentReviewQueueItem, PlanEntitlement, RejectRefund, ResolvePaymentReview, SettleRefund, UpdateCoupon } from '@lms/contracts';
+import type { Coupon, CreateCoupon, CreateRefund, PaymentRefund, PaymentReviewQueueItem, PlanEntitlement, RejectRefund, ResolvePaymentReview, SettleRefund, UpdateCoupon } from '@giaokhoa/contracts';
 
 /** Tên header mang shared secret xác thực webhook của gateway 'manual'. */
 export const PAYMENT_WEBHOOK_SECRET_HEADER = 'x-payment-webhook-secret';
@@ -146,7 +146,7 @@ export class PaymentsService {
     // Các transaction của facade (tạo yêu cầu hoàn, xác nhận chi) mở
     // từ `repo.transaction` — handle Kysely định tuyến mà module tiêm
     // cho repository — để `tx` truyền đồng thời cho repository của
-    // package dùng chung `@lms/payments` và cho các service của API
+    // package dùng chung `@giaokhoa/payments` và cho các service của API
     // (enrol, classes) trong CÙNG một transaction mà vẫn khớp kiểu ở
     // cả hai phía (issue #538, điểm nối C-8/C đã đóng ở #656).
     private readonly repo: PaymentsRepository,

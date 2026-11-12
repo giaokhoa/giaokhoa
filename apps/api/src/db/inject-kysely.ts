@@ -12,7 +12,7 @@
  */
 import { Inject } from '@nestjs/common';
 
-/** Ba kho dữ liệu có handle Kysely — khớp ba factory trong `@lms/db` (`client.ts`). */
+/** Ba kho dữ liệu có handle Kysely — khớp ba factory trong `@giaokhoa/db` (`client.ts`). */
 export type KyselyStoreName = 'centre' | 'control-plane' | 'system-bank';
 
 /** Token provider của handle Kysely kho trung tâm (`CentreDb`). */

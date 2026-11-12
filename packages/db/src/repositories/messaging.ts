@@ -38,17 +38,17 @@ import type { CentreDb, CentreTx, CentreDB } from '../client';
  *   `messaging.spec.ts` (tầng biên dịch) và
  *   `messaging.int-spec.ts` (kết quả thật).
  *
- * GỠ VÒNG PHỤ THUỘC `@lms/db` ↔ `@lms/messaging`: bề mặt đọc dùng
+ * GỠ VÒNG PHỤ THUỘC `@giaokhoa/db` ↔ `@giaokhoa/messaging`: bề mặt đọc dùng
  * chung của messaging (luật đọc tin/hội thoại cho cả đường REST
  * phía API và consumer phân phối phía worker) vẫn cài đặt tại
- * `@lms/messaging` dưới dạng hàm thuần nhận handle Kysely. File
+ * `@giaokhoa/messaging` dưới dạng hàm thuần nhận handle Kysely. File
  * này KHAI cổng {@link MessagingStorePort} cho đúng bề mặt đó;
  * repository nhận cài đặt của cổng qua constructor và uỷ quyền
- * mọi phép đọc dùng chung qua cổng — `@lms/db` không import
- * `@lms/messaging` ở bất kỳ dạng nào, còn `@lms/messaging` chỉ
+ * mọi phép đọc dùng chung qua cổng — `@giaokhoa/db` không import
+ * `@giaokhoa/messaging` ở bất kỳ dạng nào, còn `@giaokhoa/messaging` chỉ
  * import type-only từ file này (kiểu dòng + cổng), nên đồ thị
  * phụ thuộc là DAG. Các helper thuần chuỗi của họ excerpt
- * (`quoteExcerptOf`, `searchExcerptOf`) ở lại `@lms/messaging`
+ * (`quoteExcerptOf`, `searchExcerptOf`) ở lại `@giaokhoa/messaging`
  * vì chúng là logic hình dạng wire, không phải truy cập dữ liệu.
  *
  * RANH GIỚI NGỮ CẢNH: repository này KHÔNG đọc ALS hay bất kỳ
@@ -267,7 +267,7 @@ export interface NotificationItemsOptions {
   limit: number;
 }
 
-/** Tuỳ chọn cửa sổ tin theo cursor seq (bề mặt đọc dùng chung của `@lms/messaging`). */
+/** Tuỳ chọn cửa sổ tin theo cursor seq (bề mặt đọc dùng chung của `@giaokhoa/messaging`). */
 export interface MessageWindowOptions {
   /** Chỉ lấy tin có seq nhỏ hơn mốc này (tải lịch sử cũ hơn). */
   beforeSeq?: number;
@@ -293,9 +293,9 @@ export interface MessageWindowOptions {
 
 /**
  * Khối tóm tắt TRÍCH DẪN của một tin gốc (lát M3, issue #229) — hình
- * dạng khớp `messageQuoteSchema` của @lms/contracts (khai báo ở đây
+ * dạng khớp `messageQuoteSchema` của @giaokhoa/contracts (khai báo ở đây
  * để tầng dữ liệu là nguồn định nghĩa duy nhất của hình dạng dòng;
- * `@lms/messaging` re-export cho các phía tiêu thụ hiện hữu).
+ * `@giaokhoa/messaging` re-export cho các phía tiêu thụ hiện hữu).
  */
 export interface MessageQuoteView {
   id: string;
@@ -317,17 +317,17 @@ export type MessageWithQuoteRow = MessageRow & { replyTo: MessageQuoteView | nul
 export const STAFF_ARCHETYPES = ['manager', 'coursecreator', 'editingteacher', 'teacher'] as const;
 
 // ---------------------------------------------------------------------------
-// Cổng bề mặt đọc dùng chung (gỡ vòng @lms/db ↔ @lms/messaging)
+// Cổng bề mặt đọc dùng chung (gỡ vòng @giaokhoa/db ↔ @giaokhoa/messaging)
 // ---------------------------------------------------------------------------
 
 /**
  * Cổng của tầng store đọc dùng chung: đúng 13 phép đọc mà repository
- * uỷ quyền sang cài đặt tại `@lms/messaging` (hàm thuần nhận handle
+ * uỷ quyền sang cài đặt tại `@giaokhoa/messaging` (hàm thuần nhận handle
  * Kysely, xem `distribution-store.ts` của package đó). Phía app gắn
  * cài đặt qua `createMessagingStore(handle)` khi dựng repository;
  * phía worker tiêu thụ cùng các hàm thuần qua bề mặt phân phối hẹp
  * hơn của nó. Repository KHÔNG tự import cài đặt — chiều phụ thuộc
- * duy nhất là `@lms/messaging` → (type-only) file này.
+ * duy nhất là `@giaokhoa/messaging` → (type-only) file này.
  */
 export interface MessagingStorePort {
   /** Lấy conversation theo id. */
@@ -694,7 +694,7 @@ export class MessagingRepository {
   }
   /**
    * Lấy conversation theo id. Cài đặt truy vấn ở bề mặt đọc dùng
-   * chung `@lms/messaging` — repository chỉ uỷ quyền qua cổng
+   * chung `@giaokhoa/messaging` — repository chỉ uỷ quyền qua cổng
    * {@link MessagingStorePort} (issue #521).
    */
   async getConversation(id: string): Promise<ConversationRow | undefined> {
@@ -724,7 +724,7 @@ export class MessagingRepository {
   }
   /**
    * Thành viên của conversation. Cài đặt truy vấn ở bề mặt đọc dùng
-   * chung `@lms/messaging` — repository chỉ uỷ quyền (issue #521).
+   * chung `@giaokhoa/messaging` — repository chỉ uỷ quyền (issue #521).
    */
   async listMembers(conversationId: string): Promise<string[]> {
     return this.store.listConversationMemberIds(conversationId);
@@ -925,7 +925,7 @@ export class MessagingRepository {
   }
   /**
    * Lấy tin nhắn theo id. Cài đặt truy vấn ở bề mặt đọc dùng
-   * chung `@lms/messaging` — repository chỉ uỷ quyền (issue #521).
+   * chung `@giaokhoa/messaging` — repository chỉ uỷ quyền (issue #521).
    */
   async getMessage(id: string): Promise<MessageRow | undefined> {
     return this.store.getMessageById(id);
@@ -947,7 +947,7 @@ export class MessagingRepository {
    * Một cửa sổ tin của conversation theo cursor seq, luôn trả tăng dần
    * theo seq. Không cursor: cửa sổ MỚI NHẤT (limit tin cuối). beforeSeq:
    * cửa sổ ngay trước mốc. afterSeq: các tin sau mốc (đồng bộ thiếu
-   * hụt). Cài đặt truy vấn ở bề mặt đọc dùng chung `@lms/messaging` —
+   * hụt). Cài đặt truy vấn ở bề mặt đọc dùng chung `@giaokhoa/messaging` —
    * repository chỉ uỷ quyền (issue #521).
    */
   async listMessages(conversationId: string, opts: MessageWindowOptions = {}): Promise<MessageRow[]> {
@@ -1078,14 +1078,14 @@ export class MessagingRepository {
   }
   /**
    * Lấy nhiều dòng tin theo id (kiểm tra thẩm quyền hàng loạt trước
-   * khi gỡ). Cài đặt truy vấn ở bề mặt đọc dùng chung `@lms/messaging`.
+   * khi gỡ). Cài đặt truy vấn ở bề mặt đọc dùng chung `@giaokhoa/messaging`.
    */
   async getMessagesByIds(ids: string[]): Promise<MessageRow[]> {
     return this.store.getMessagesByIds(ids);
   }
   /**
    * Trong tập id này, các tin user đã đặt cờ xoá-phía-mình. Cài đặt
-   * truy vấn ở bề mặt đọc dùng chung `@lms/messaging`.
+   * truy vấn ở bề mặt đọc dùng chung `@giaokhoa/messaging`.
    */
   async listDeletedForUserIds(messageIds: string[], userId: string): Promise<Set<string>> {
     return this.store.listDeletedForUserIds(messageIds, userId);
@@ -1093,7 +1093,7 @@ export class MessagingRepository {
   /**
    * Gắn khối trích dẫn (lát M3, issue #229) cho một lô tin: tra lô
    * các tin gốc một lần (không N+1), dựng quote theo quyền của người
-   * nhận bằng `messageQuoteOf` của `@lms/messaging`. Tin gốc tra
+   * nhận bằng `messageQuoteOf` của `@giaokhoa/messaging`. Tin gốc tra
    * không thấy (chỉ còn xảy ra khi khoá ngoại chưa kịp set null
    * sau xoá cứng) hoặc thuộc conversation khác (dữ liệu không thể
    * sinh qua đường gửi — gác ở service) thì `replyTo = null`: hiển
@@ -1149,7 +1149,7 @@ export class MessagingRepository {
   }
   /**
    * Mốc đã đọc của một thành viên (undefined nếu không phải thành
-   * viên). Cài đặt truy vấn ở bề mặt đọc dùng chung `@lms/messaging`.
+   * viên). Cài đặt truy vấn ở bề mặt đọc dùng chung `@giaokhoa/messaging`.
    */
   async getMemberLastReadSeq(conversationId: string, userId: string): Promise<number | undefined> {
     return this.store.getMemberLastReadSeq(conversationId, userId);
@@ -1281,7 +1281,7 @@ export class MessagingRepository {
    * Số tin chưa đọc của MỘT user trong MỘT conversation (đếm bằng
    * count(*) theo mốc đã đọc của chính user — consumer realtime dùng
    * để gửi kèm sự kiện cập nhật cho từng người nhận). Cài đặt truy
-   * vấn ở bề mặt đọc dùng chung `@lms/messaging` — repository chỉ
+   * vấn ở bề mặt đọc dùng chung `@giaokhoa/messaging` — repository chỉ
    * uỷ quyền (issue #521).
    */
   async countUnreadForConversation(conversationId: string, userId: string): Promise<number> {
@@ -1366,7 +1366,7 @@ export class MessagingRepository {
   }
   /**
    * Danh sách user bị chặn. Cài đặt truy vấn ở bề mặt đọc dùng chung
-   * `@lms/messaging` — repository chỉ uỷ quyền (issue #521).
+   * `@giaokhoa/messaging` — repository chỉ uỷ quyền (issue #521).
    */
   async listBlocked(userId: string): Promise<string[]> {
     return this.store.listBlockedUserIds(userId);
@@ -1375,7 +1375,7 @@ export class MessagingRepository {
    * Danh sách user ĐÃ CHẶN user này (chiều ngược của listBlocked) —
    * danh sách thành viên khoá dùng để giấu phía chặn khỏi roster của
    * phía bị chặn, khớp ngữ nghĩa chặn hiện có. Cài đặt truy vấn ở
-   * bề mặt đọc dùng chung `@lms/messaging` (issue #521).
+   * bề mặt đọc dùng chung `@giaokhoa/messaging` (issue #521).
    */
   async listBlockerIds(userId: string): Promise<string[]> {
     return this.store.listBlockerUserIds(userId);
@@ -1384,7 +1384,7 @@ export class MessagingRepository {
    * Mọi user đang có quan hệ chặn với user này ở BẤT KỲ chiều nào
    * (người mình chặn ∪ người chặn mình) — tập "đối tác bị chặn" dùng
    * cho các luật ẩn bề mặt 1–1 (presence, mốc đã đọc). Cài đặt truy
-   * vấn ở bề mặt đọc dùng chung `@lms/messaging` (issue #521).
+   * vấn ở bề mặt đọc dùng chung `@giaokhoa/messaging` (issue #521).
    */
   async listBlockedCounterpartIds(userId: string): Promise<string[]> {
     return this.store.listBlockedCounterpartIds(userId);
@@ -3054,7 +3054,7 @@ export class MessagingRepository {
   /**
    * Tenant của một conversation (TENANT-1, #196) — nguồn tenant cho
    * notification tin nhắn mới. Cài đặt truy vấn ở bề mặt đọc dùng
-   * chung `@lms/messaging` — repository chỉ uỷ quyền (issue #521).
+   * chung `@giaokhoa/messaging` — repository chỉ uỷ quyền (issue #521).
    */
   async getConversationTenantId(conversationId: string): Promise<string | null> {
     return this.store.getConversationTenantId(conversationId);

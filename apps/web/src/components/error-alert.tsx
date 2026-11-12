@@ -1,6 +1,6 @@
 /**
  * Khối báo lỗi/thông báo dùng chung ở tầng ứng dụng, dựng trên nguyên tử
- * `Alert` của `@lms/ui`.
+ * `Alert` của `@giaokhoa/ui`.
  *
  * Trước đây mọi trang tự lắp lại cùng một khuôn khối: một `Alert` (variant
  * `destructive` hoặc mặc định), tuỳ chọn một `AlertTitle`, và đúng một
@@ -11,7 +11,7 @@
  */
 import type { ReactNode } from 'react';
 
-import { Alert, AlertDescription, AlertTitle } from '@lms/ui/components/alert';
+import { Alert, AlertDescription, AlertTitle } from '@giaokhoa/ui/components/alert';
 
 /** Props của khối báo lỗi dùng chung. */
 export interface ErrorAlertProps {

@@ -21,7 +21,7 @@ import {
 
 /**
  * Đường mail auth qua hàng đợi ở worker (issue #517) trên hạ tầng
- * thật của suite worker (DB `lms_test_worker`, Redis thật):
+ * thật của suite worker (DB `giaokhoa_test_worker`, Redis thật):
  *
  * - Một dòng outbox `auth_mail_requested` được relay duy nhất phát
  *   thành job trên hàng đợi `auth-mail` theo bảng định tuyến: job
@@ -278,7 +278,7 @@ describe('Worker: mail auth qua hàng đợi (issue #517)', () => {
       expect(replay.status).toBe('duplicate');
       expect(mailer.sent).toHaveLength(1);
       expect(mailer.sent[0]?.to).toBe(recipient);
-      expect(mailer.sent[0]?.subject).toBe('Mã đăng nhập LMS của bạn');
+      expect(mailer.sent[0]?.subject).toBe('Mã đăng nhập Giáo khoa của bạn');
       expect(mailer.sent[0]?.text).toContain('482916');
     } finally {
       await marker.onModuleDestroy();
@@ -382,7 +382,7 @@ describe('Worker: mail auth qua hàng đợi (issue #517)', () => {
       // trôi qua — đúng trạng thái Redis tự tới khi tiến trình giữ
       // lease đã chết và hạn lease đáo hạn, mà test không phải chờ
       // thật 60 giây.
-      await raw.pexpire(`lms:auth-mail:processing:${outboxId}`, 1);
+      await raw.pexpire(`giaokhoa:auth-mail:processing:${outboxId}`, 1);
       await new Promise((resolve) => setTimeout(resolve, 60));
 
       // Hàng đợi phát lại job sau khi worker cũ chết: mail phải

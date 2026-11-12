@@ -50,7 +50,7 @@ describe('Hàm describeUserAgent', () => {
   });
 
   it('trả nguyên chuỗi gốc khi không phân tích được gì', () => {
-    expect(describeUserAgent('LMS mobile app', UNKNOWN_LABEL, formatDescription)).toBe('LMS mobile app');
+    expect(describeUserAgent('Giáo khoa mobile app', UNKNOWN_LABEL, formatDescription)).toBe('Giáo khoa mobile app');
   });
 
   it('rút gọn chuỗi gốc dài không phân tích được ở 48 ký tự kèm dấu ba chấm', () => {

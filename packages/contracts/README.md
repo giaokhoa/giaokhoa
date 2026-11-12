@@ -1,4 +1,4 @@
-# @lms/contracts — README nghiệp vụ
+# @giaokhoa/contracts — README nghiệp vụ
 
 > File này ghi các **quyết định nghiệp vụ quan trọng và còn đang hiệu lực** của package.
 > Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub.
@@ -19,7 +19,7 @@ vụ" dù không chứa logic chạy.
 |---|---|
 | Lỗi API theo khuôn **ProblemDetails** dùng chung (một định dạng lỗi duy nhất cho mọi miền, gồm mã lỗi ổn định để client ánh xạ thông điệp). Mã lỗi là một phần của hợp đồng nghiệp vụ: đổi mã = đổi hành vi phía người dùng. Ví dụ đã chốt: vượt trần độ dài tin nhắn trả **400** (không phải 422). | `problem-details.ts`; sổ mục D, issue #212 |
 | Khoá site-config là hợp đồng nghiệp vụ cấp site: các ngưỡng/chính sách do ADMIN cài (trần tin nhắn 10.000 ký tự, chính sách loại thông báo được gửi…) khai ở `site-config.ts` — thêm khoá mới phải kèm quyết định nghiệp vụ trong sổ, không tự chế khoá. | `site-config.ts`; sổ mục C/D, chốt 25/10/2026 |
-| MCP: tập scope là hợp đồng quyền của AI client — chỉ các scope đã chốt (`lms.questions.read/draft/write`, `lms.banks.contribute`); **không tồn tại scope ghi thẳng vào ngân hàng chung** trong hợp đồng này, vì đường vào bank chung duy nhất là duyệt contribution bởi con người. | `mcp.ts`; sổ mục E; issue #163 |
+| MCP: tập scope là hợp đồng quyền của AI client — chỉ các scope đã chốt (`giaokhoa.questions.read/draft/write`, `giaokhoa.banks.contribute`); **không tồn tại scope ghi thẳng vào ngân hàng chung** trong hợp đồng này, vì đường vào bank chung duy nhất là duyệt contribution bởi con người. | `mcp.ts`; sổ mục E; issue #163 |
 | Định dạng rich-text dùng chung (`rich-text.ts`) là hợp đồng nội dung soạn thảo giữa `packages/editor`, API và web: nội dung lưu dạng cấu trúc theo schema này, không phải HTML tự do. | `rich-text.ts` |
 | Id dùng UUIDv7 (`ids.ts`) thống nhất toàn hệ — id không mang ngữ nghĩa nghiệp vụ (không mã hoá SBD/mã lớp vào id). | `ids.ts`; nền TENANT-0, issue #166 |
 | Payload của sự kiện outbox `auth_mail_requested` và hàm dựng nội dung mail auth (`renderAuthMail`) chỉ có MỘT bản dùng chung ở `auth-mail.ts`: phía API ghi payload vào outbox, phía worker dựng nội dung và gửi. Nội dung mail (tiêu đề, câu chữ, hạn hiệu lực công bố) là hợp đồng nghiệp vụ của luồng auth — đổi nội dung là đổi hành vi với người dùng, không phải việc của các issue chuyển consumer. | `auth-mail.ts`; issue #517 |

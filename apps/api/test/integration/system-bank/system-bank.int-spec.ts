@@ -3,10 +3,10 @@ import { join } from 'node:path';
 import { Client, Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ServiceUnavailableException } from '@nestjs/common';
-import { createCentreKysely, type CentreDb } from '@lms/db';
-import { createSystemBankKysely, type SystemBankDb } from '@lms/db/system-bank';
-import { SystemBankCentreRepository } from '@lms/db/repositories/system-bank-centre';
-import { SystemBankRepository } from '@lms/db/repositories/system-bank';
+import { createCentreKysely, type CentreDb } from '@giaokhoa/db';
+import { createSystemBankKysely, type SystemBankDb } from '@giaokhoa/db/system-bank';
+import { SystemBankCentreRepository } from '@giaokhoa/db/repositories/system-bank-centre';
+import { SystemBankRepository } from '@giaokhoa/db/repositories/system-bank';
 import { tenantAls } from '../../../src/modules/tenants/tenant-als';
 import { SystemBankConnection } from '../../../src/modules/system-bank/system-bank.connection';
 import { checksumPackage } from '../../../src/modules/system-bank/system-bank-package';
@@ -17,8 +17,8 @@ import { SystemBankService } from '../../../src/modules/system-bank/system-bank.
  * ngân hàng + repository phía trung tâm chạy trên database thật, tự
  * cấp phát trên cùng cụm với database nghiệp vụ test, toàn bộ bằng
  * TÊN MỚI của riêng đợt này: một database kho ngân hàng
- * (`lms_test_bank_585`) với role riêng và một database trung tâm
- * (`lms_test_centre_585`) với role riêng, CONNECT của PUBLIC bị thu
+ * (`giaokhoa_test_bank_585`) với role riêng và một database trung tâm
+ * (`giaokhoa_test_centre_585`) với role riêng, CONNECT của PUBLIC bị thu
  * hồi và chỉ cấp lại cho role của kho đó, migration kho ngân hàng áp
  * vào kho ngân hàng và baseline nghiệp vụ (đã gồm 3 bảng vệ tinh
  * trung tâm) áp vào kho trung tâm, đều bằng chính role chủ kho như
@@ -39,11 +39,11 @@ import { SystemBankService } from '../../../src/modules/system-bank/system-bank.
  * trung tâm khác. Đường nhập bản chụp (cần QuestionsService thật)
  * và đường bank-off thuộc tầng e2e.
  */
-const BANK_DATABASE = 'lms_test_bank_585';
-const BANK_ROLE = 'lms_bank_test_585';
+const BANK_DATABASE = 'giaokhoa_test_bank_585';
+const BANK_ROLE = 'giaokhoa_bank_test_585';
 const BANK_PASSWORD = 'bank585test';
-const CENTRE_DATABASE = 'lms_test_centre_585';
-const CENTRE_ROLE = 'lms_centre_test_585';
+const CENTRE_DATABASE = 'giaokhoa_test_centre_585';
+const CENTRE_ROLE = 'giaokhoa_centre_test_585';
 const CENTRE_PASSWORD = 'centre585test';
 const ADMIN_ID = '01958500-0000-7000-8000-000000000001';
 const SYSTEM_ID = '01958500-0000-7000-8000-000000000002';
@@ -146,7 +146,7 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
           : undefined,
     } as never);
     const connection = bankConnection;
-    // Repository chuyển sang package `@lms/db` (hạng mục G10, issue
+    // Repository chuyển sang package `@giaokhoa/db` (hạng mục G10, issue
     // #650): kho ngân hàng nhận handle Kysely của adapter kết nối
     // kèm hàm dựng lỗi 503 chưa-cấu-hình đúng hình dạng module dùng;
     // repository phía trung tâm nhận MỘT handle Kysely trên pool

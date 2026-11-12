@@ -7,7 +7,7 @@ export default defineConfig({
     // để dựng database riêng của nó, và DATABASE_URL cấp job không
     // tới được tiến trình test qua turbo nên phải ghim tại đây —
     // cùng cách vitest.config của apps/api ghim DATABASE_URL của
-    // nó. Biến LMS_DB_TEST_ADMIN_URL (đọc trong spec) ghi đè khi
+    // nó. Biến GIAOKHOA_DB_TEST_ADMIN_URL (đọc trong spec) ghi đè khi
     // cần trỏ tới cụm khác, ví dụ cụm local ở cổng riêng.
     env: {
       DATABASE_URL: 'postgres://postgres:postgres@localhost:5432/postgres',

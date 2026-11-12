@@ -7,7 +7,7 @@
  * nhập từ đây để giữ đúng một hành vi; bề mặt xuất khẩu của trang cũ được
  * giữ nguyên bằng cách trang questions.tsx xuất khẩu lại từ module này.
  */
-import { extractRichTextPlainText, type QuestionView, type RichTextDocument } from '@lms/contracts';
+import { extractRichTextPlainText, type QuestionView, type RichTextDocument } from '@giaokhoa/contracts';
 
 import { ApiError } from '#lib/api';
 

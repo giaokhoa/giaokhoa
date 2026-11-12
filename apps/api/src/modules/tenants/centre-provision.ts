@@ -22,9 +22,9 @@ import { createHash, randomBytes } from 'node:crypto';
 import { SPACE_LABEL_PATTERN } from './space-resolution';
 
 /** Tiền tố tên database riêng của một trung tâm trên cụm chung. */
-export const CENTRE_DATABASE_PREFIX = 'lms_space_';
+export const CENTRE_DATABASE_PREFIX = 'giaokhoa_space_';
 /** Tiền tố tên role kết nối của một trung tâm (khác tiền tố database để không lẫn). */
-export const CENTRE_ROLE_PREFIX = 'lms_role_';
+export const CENTRE_ROLE_PREFIX = 'giaokhoa_role_';
 /** Giới hạn độ dài định danh của PostgreSQL (byte; slug ASCII nên bằng số ký tự). */
 export const POSTGRES_IDENTIFIER_LIMIT = 63;
 /** Hạn dùng của lời mời kích hoạt: 7 ngày kể từ lúc cấp. */

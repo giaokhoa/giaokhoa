@@ -2,10 +2,10 @@ import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/
 import { ConfigService } from '@nestjs/config';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { generateSecret, generateURI, verify } from 'otplib';
-import { AuthRepository } from '@lms/db/repositories/auth';
+import { AuthRepository } from '@giaokhoa/db/repositories/auth';
 
 /** Nhãn issuer trong otpauth URL — tên hệ thống hiển thị trong ứng dụng authenticator. */
-const TOTP_ISSUER = 'LMS';
+const TOTP_ISSUER = 'Giáo khoa';
 /** Cửa sổ kiểm chứng TOTP: ±30 giây = ±1 bước 30s quanh thời điểm hiện tại (lệch đồng hồ authenticator). */
 const TOTP_EPOCH_TOLERANCE_SECONDS = 30;
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@lms/ui/components/card';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { useTranslation } from 'react-i18next';
 import '#config/i18n';
 import { apiFetch, apiJson } from '#lib/api';
@@ -22,7 +22,7 @@ function isHls(fileName: string, mime: string | null): boolean {
  * gửi lại khi có mạng hoặc lần mở player sau, học sinh mạng yếu
  * không bị mất tiến độ đã học thật.
  */
-const QUEUE_KEY = 'lms-learn-event-queue';
+const QUEUE_KEY = 'giaokhoa-learn-event-queue';
 interface QueuedEvent { path: string; body: string }
 
 function enqueueEvent(event: QueuedEvent): void {

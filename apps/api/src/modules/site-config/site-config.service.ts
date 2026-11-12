@@ -1,11 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import type { SiteSetting, SiteSettingAuditEntry } from '@lms/contracts';
+import type { SiteSetting, SiteSettingAuditEntry } from '@giaokhoa/contracts';
 import {
   MESSAGE_PROVIDERS,
   NOTIFICATION_POLICY_COMPONENT,
   notificationPolicySettingName,
 } from '../messaging/notification-providers';
-import { SiteConfigRepository } from '@lms/db/repositories/site-config';
+import { SiteConfigRepository } from '@giaokhoa/db/repositories/site-config';
 import {
   SITE_SETTINGS,
   findSiteSetting,

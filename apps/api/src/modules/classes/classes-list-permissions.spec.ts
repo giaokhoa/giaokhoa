@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Cache } from 'cache-manager';
 import type { ConfigService } from '@nestjs/config';
 import type { OutboxService } from '../../infra/events/outbox.service';
-import type { AccessRepository, ContextRow } from '@lms/db/repositories/access';
+import type { AccessRepository, ContextRow } from '@giaokhoa/db/repositories/access';
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import type { CoursesService } from '../courses/courses.service';
@@ -14,10 +14,10 @@ import { TenantContextService } from '../tenants/tenant-context.service';
 import type { TenantsService } from '../tenants/tenants.service';
 import type { UsersService } from '../users/users.service';
 import type { SpaceDatabaseService } from '../../db/routing/space-database.service';
-import type { ControlPlaneRepository } from '@lms/db/repositories/control-plane';
-import type { ClassesRepository, ClassRow } from '@lms/db/repositories/classes';
+import type { ControlPlaneRepository } from '@giaokhoa/db/repositories/control-plane';
+import type { ClassesRepository, ClassRow } from '@giaokhoa/db/repositories/classes';
 import { ClassesService } from './classes.service';
-import type { GroupsRepository } from '@lms/db/repositories/groups';
+import type { GroupsRepository } from '@giaokhoa/db/repositories/groups';
 
 /**
  * Bộ spec phân quyền cho danh sách lớp (DL-06): khi `listClasses`
@@ -184,7 +184,7 @@ function makeWorld(opts: WorldOptions = {}) {
 
   const accessRepoCast = accessRepo as unknown as AccessRepository;
   const contextsService = new ContextsService(accessRepoCast);
-  const evaluator = new PermissionEvaluator(accessRepoCast, contextsService, cache as unknown as Cache, { getOrThrow: () => 'postgres://user:pass@localhost:5432/lms_test_api' } as unknown as ConfigService);
+  const evaluator = new PermissionEvaluator(accessRepoCast, contextsService, cache as unknown as Cache, { getOrThrow: () => 'postgres://user:pass@localhost:5432/giaokhoa_test_api' } as unknown as ConfigService);
 
   const classesRepo = {
     async listClassesByTenant(tenantId: string) {

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { sql, type CentreDB, type CentreDb } from '@lms/db';
+import { sql, type CentreDB, type CentreDb } from '@giaokhoa/db';
 
 /** Hình dạng dòng outbox mà writer phản chiếu (tập con cấu trúc của dòng outbox đã commit). */
 export interface OutboxRowLike {
@@ -112,7 +112,7 @@ export class EventLogWriter {
         outboxSeq: row.seq,
       };
       // Cột `payload` jsonb đi qua serialize tường minh kèm
-      // `::jsonb` theo khuôn ghi jsonb của `@lms/db` (driver `pg`
+      // `::jsonb` theo khuôn ghi jsonb của `@giaokhoa/db` (driver `pg`
       // hiểu MẢNG cấp cao nhất là mảng PostgreSQL nếu ghi thẳng).
       await (await this.handle())
         .insertInto('event_log')

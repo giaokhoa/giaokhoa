@@ -1,4 +1,4 @@
-import type { ExamMatrixView, MatrixImportPreview } from '@lms/contracts';
+import type { ExamMatrixView, MatrixImportPreview } from '@giaokhoa/contracts';
 import { apiFetch, apiJson } from '#lib/api';
 import type {
   AvailabilityLite,

@@ -1,12 +1,12 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
-import type { ExamMatrixContributionView, ExamMatrixView } from '@lms/contracts';
+import type { ExamMatrixContributionView, ExamMatrixView } from '@giaokhoa/contracts';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { QuestionBanksService } from '../questions/question-banks.service';
-import type { QuestionBankRow } from '@lms/db/repositories/question-banks';
+import type { QuestionBankRow } from '@giaokhoa/db/repositories/question-banks';
 import type { CopyExamMatrixDto, CreateMatrixContributionDto, RejectMatrixContributionDto } from './dto/quiz.dto';
-import { QuizRepository, type ExamMatrixCellRow, type ExamMatrixContributionRow, type ExamMatrixRow } from '@lms/db/repositories/quiz';
+import { QuizRepository, type ExamMatrixCellRow, type ExamMatrixContributionRow, type ExamMatrixRow } from '@giaokhoa/db/repositories/quiz';
 import { QuizService } from './quiz.service';
 import { isMatrixContentSignatureConflict, matrixContentSignature } from './matrix-content-signature';
 

@@ -18,7 +18,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       # Tên DB phải khớp cấu hình API, worker, test và CI hiện tại.
-      POSTGRES_DB: lms
+      POSTGRES_DB: giaokhoa
     volumes:
       - pgdata:/var/lib/postgresql
       - ./init-db.sql:/docker-entrypoint-initdb.d/10-init-db.sql:ro

@@ -1,18 +1,18 @@
 import { Injectable } from '@nestjs/common';
-import { RoleSeparationCore, type RoleConflictAuditReport } from '@lms/enrol';
+import { RoleSeparationCore, type RoleConflictAuditReport } from '@giaokhoa/enrol';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { tenantAls } from '../tenants/tenant-als';
 import { delegateToSharedCore } from './translate-shared-error';
 
-export { isRoleContextConflictError, ROLE_CONTEXT_CONFLICT_CODE } from '@lms/enrol';
-export type { RoleConflictAuditEntry, RoleConflictAuditReport } from '@lms/enrol';
+export { isRoleContextConflictError, ROLE_CONTEXT_CONFLICT_CODE } from '@giaokhoa/enrol';
+export type { RoleConflictAuditEntry, RoleConflictAuditReport } from '@giaokhoa/enrol';
 
 /**
  * Facade Nest của định nghĩa kiểm tra TÁCH VAI GIÁO VIÊN/HỌC VIÊN.
  *
  * Định nghĩa và toàn bộ truy vấn của kiểm tách vai sống ở lõi dùng
- * chung `RoleSeparationCore` của package `@lms/enrol` (tầng dữ liệu,
- * trên schema dùng chung `@lms/db`) để mọi bề mặt vật chất hoá ghi
+ * chung `RoleSeparationCore` của package `@giaokhoa/enrol` (tầng dữ liệu,
+ * trên schema dùng chung `@giaokhoa/db`) để mọi bề mặt vật chất hoá ghi
  * danh — API tại đây, worker khi nó dựng consumer đồng bộ cohort —
  * gọi về đúng MỘT định nghĩa duy nhất. Service này chỉ còn là lớp
  * bọc của API: dựng lõi bằng tay cầm Kysely đã định tuyến của API

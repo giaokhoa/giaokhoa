@@ -1,5 +1,5 @@
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Capability, RoleListItem } from '@lms/contracts';
+import type { Capability, RoleListItem } from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 import { queryKeys } from '#lib/query-keys';
 

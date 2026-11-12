@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { AnalyticsRepository, type InsightRow, type ModelRow } from '@lms/db/repositories/analytics';
+import { AnalyticsRepository, type InsightRow, type ModelRow } from '@giaokhoa/db/repositories/analytics';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { CoursesService } from '../courses/courses.service';
 import { EnrolService } from '../enrol/enrol.service';

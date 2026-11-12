@@ -96,8 +96,8 @@ async function bootstrap(): Promise<void> {
   const document = SwaggerModule.createDocument(
     app,
     new DocumentBuilder()
-      .setTitle('LMS API')
-      .setDescription('TypeScript LMS — Moodle core business equivalent (backend)')
+      .setTitle('Giáo khoa API')
+      .setDescription('TypeScript Giáo khoa — Moodle core business equivalent (backend)')
       .setVersion('1.0')
       .build(),
   );

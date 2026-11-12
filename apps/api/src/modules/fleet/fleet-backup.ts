@@ -1,6 +1,6 @@
 /**
  * Sao lưu logic định kỳ của đội kho (issue #586) — script CLI chạy
- * bằng `pnpm --filter @lms/api fleet:backup`, hai chế độ:
+ * bằng `pnpm --filter @giaokhoa/api fleet:backup`, hai chế độ:
  *
  * CHẾ ĐỘ CHẠY (mặc định): chụp một bản sao lưu logic cho từng kho
  * còn mang dữ kiện (trạng thái đang hoạt động hoặc tạm ngưng — kho

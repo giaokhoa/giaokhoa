@@ -2,11 +2,11 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router';
 import '#config/i18n';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent } from '@lms/ui/components/card';
-import { Empty, EmptyHeader, EmptyTitle } from '@lms/ui/components/empty';
-import { Input } from '@lms/ui/components/input';
-import { Label } from '@lms/ui/components/label';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent } from '@giaokhoa/ui/components/card';
+import { Empty, EmptyHeader, EmptyTitle } from '@giaokhoa/ui/components/empty';
+import { Input } from '@giaokhoa/ui/components/input';
+import { Label } from '@giaokhoa/ui/components/label';
 import { PageHeader, PageShell } from '#components/page-shell';
 import { useQueryClient } from '@tanstack/react-query';
 import { systemCapabilities, usePermissions } from '#lib/permissions';

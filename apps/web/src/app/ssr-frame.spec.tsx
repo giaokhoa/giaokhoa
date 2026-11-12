@@ -52,7 +52,7 @@ function requestWithCookie(cookie: string): Request {
 }
 
 beforeAll(() => {
-  // jsdom không có matchMedia; hook useIsMobile của @lms/ui cần nó khi
+  // jsdom không có matchMedia; hook useIsMobile của @giaokhoa/ui cần nó khi
   // sidebar mount — stub tối thiểu trả "không phải mobile" (như
   // shell.spec.tsx).
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({

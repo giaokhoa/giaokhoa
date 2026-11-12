@@ -15,7 +15,7 @@ import { CustomFieldsService } from '../custom-fields/custom-fields.service';
 import { GroupsService } from '../groups/groups.service';
 import { MessagingService } from '../messaging/messaging.service';
 import { USER_AREA, USER_COMPONENT, UsersService } from '../users/users.service';
-import { BadgesRepository, type BadgeRow, type CriteriaRow, type IssuedRow } from '@lms/db/repositories/badges';
+import { BadgesRepository, type BadgeRow, type CriteriaRow, type IssuedRow } from '@giaokhoa/db/repositories/badges';
 
 export const BADGE_AWARD_QUEUE = 'badge-award';
 export const BADGE_STATUS = { INACTIVE: 0, ACTIVE: 1, RETIRED: 2, ARCHIVED: 3, DISABLED: 4 } as const;
@@ -136,7 +136,7 @@ export class BadgesService implements OnModuleInit {
     return this.repo.insertBadge({
       name: input.name, description: input.description ?? '', type,
       courseId: type === 2 ? input.courseId! : null,
-      issuerName: input.issuerName ?? 'LMS', issuerUrl: input.issuerUrl ?? '', issuerContact: input.issuerContact ?? '',
+      issuerName: input.issuerName ?? 'Giáo khoa', issuerUrl: input.issuerUrl ?? '', issuerContact: input.issuerContact ?? '',
       expireDate: input.expireDate ? new Date(input.expireDate) : null,
       expirePeriod: input.expirePeriod ?? null, status: BADGE_STATUS.INACTIVE,
       version: input.version ?? '', userCreated: actorId, userModified: actorId,

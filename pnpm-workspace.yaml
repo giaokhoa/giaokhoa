@@ -1,3 +1,5 @@
+storeDir: node_modules/.pnpm-store
+
 packages:
   - apps/*
   - packages/*

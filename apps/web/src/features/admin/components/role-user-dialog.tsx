@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { UserWithAssignmentsListItem } from '@lms/contracts';
-import { Button } from '@lms/ui/components/button';
+import type { UserWithAssignmentsListItem } from '@giaokhoa/contracts';
+import { Button } from '@giaokhoa/ui/components/button';
 import {
   Dialog,
   DialogContent,
@@ -8,7 +8,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@lms/ui/components/dialog';
+} from '@giaokhoa/ui/components/dialog';
 import { useTranslation } from 'react-i18next';
 import '#config/i18n';
 import type { ContextRow } from '#lib/access';
@@ -18,7 +18,7 @@ import { RoleUnassignDialog, type UnassignTarget } from './role-unassign-dialog'
 /**
  * Hộp thoại quản lý vai trò của đúng một người dùng trên trang vai
  * trò, mở từ nút thao tác của dòng người đó trong bảng người dùng
- * kèm vai trò, dựng trên component Dialog thật của `@lms/ui`.
+ * kèm vai trò, dựng trên component Dialog thật của `@giaokhoa/ui`.
  *
  * Luồng nghiệp vụ: hộp thoại liệt kê mọi gán vai của người dùng — mỗi
  * gán bày tên vai kèm nhãn ngữ cảnh qua adapter nhãn ngữ cảnh (cấp

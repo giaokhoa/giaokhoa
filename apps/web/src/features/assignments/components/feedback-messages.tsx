@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { Button } from '@lms/ui/components/button';
-import { Input } from '@lms/ui/components/input';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Input } from '@giaokhoa/ui/components/input';
 import { ErrorAlert } from '#components/error-alert';
 import { useTranslation } from 'react-i18next';
 import { usePostFeedbackMessage } from '../queries/assignment';

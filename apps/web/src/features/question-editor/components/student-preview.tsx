@@ -6,10 +6,10 @@
  * nhãn hiển thị của câu hỏi. Chỉ trình bày từ dữ liệu được truyền
  * qua props, không gọi API.
  */
-import type { StimulusView } from '@lms/contracts';
-import { RichTextView, splitMultipleChoiceDocument, splitTrueFalseDocument } from '@lms/editor';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lms/ui/components/card';
-import { Input } from '@lms/ui/components/input';
+import type { StimulusView } from '@giaokhoa/contracts';
+import { RichTextView, splitMultipleChoiceDocument, splitTrueFalseDocument } from '@giaokhoa/editor';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
+import { Input } from '@giaokhoa/ui/components/input';
 import { useTranslation } from 'react-i18next';
 import { plainText } from '#features/questions/utils/shared';
 import { docHasContent, type Doc, type QuestionEditorFormState } from '../types/form-model';

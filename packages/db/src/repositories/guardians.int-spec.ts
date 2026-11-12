@@ -18,7 +18,7 @@ import { GuardiansRepository } from './guardians';
  *
  * Database trung tâm được dựng từ rỗng bằng chính cầu nối migration
  * của package trên cụm PostgreSQL thật của môi trường test (biến
- * `LMS_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ
+ * `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ
  * `DATABASE_URL` của package). Mọi ca chạy qua repository production
  * — không mô phỏng handle — trong ngữ cảnh tenant qua pool gắn GUC
  * như đường production.
@@ -41,12 +41,12 @@ import { GuardiansRepository } from './guardians';
  *   tính vào tổng số, chỉ không tính vào số đã hoàn thành; dòng hoàn
  *   thành của HỌC SINH KHÁC trên cùng module không được rò vào đếm.
  */
-const TEST_DATABASE = 'lms_db_g649_guardians';
-const TEST_ROLE = 'lms_db_g649_guardians';
-const TEST_ROLE_PASSWORD = 'lms_db_g649_guardians_pw';
+const TEST_DATABASE = 'giaokhoa_db_g649_guardians';
+const TEST_ROLE = 'giaokhoa_db_g649_guardians';
+const TEST_ROLE_PASSWORD = 'giaokhoa_db_g649_guardians_pw';
 
 const adminUrl =
-  process.env.LMS_DB_TEST_ADMIN_URL ??
+  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
 
 const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -169,7 +169,7 @@ async function insertCm(values: {
 beforeAll(async () => {
   if (!adminUrl) {
     throw new Error(
-      'Thiếu kết nối quản trị cho spec tích hợp G9: đặt LMS_DB_TEST_ADMIN_URL hoặc DATABASE_URL.',
+      'Thiếu kết nối quản trị cho spec tích hợp G9: đặt GIAOKHOA_DB_TEST_ADMIN_URL hoặc DATABASE_URL.',
     );
   }
   const adminStoreUrl = await buildTestDatabase({

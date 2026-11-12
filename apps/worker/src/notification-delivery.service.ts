@@ -6,7 +6,7 @@ import type { Queue } from 'bullmq';
 import Redis from 'ioredis';
 import { randomUUID } from 'node:crypto';
 import { redisConnectionFromUrl } from './config/env';
-import { sql, type CentreDB } from '@lms/db';
+import { sql, type CentreDB } from '@giaokhoa/db';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
 
 /**
@@ -15,7 +15,7 @@ import { SpaceDatabaseService } from './db/routing/space-database.service';
  * (`notification-unread-stream.service.ts`): payload chỉ là userId, số
  * đếm thật luôn được phía API đọc lại từ database.
  */
-export const NOTIFICATION_UNREAD_CHANGED_CHANNEL = 'lms:notifications:unread-changed';
+export const NOTIFICATION_UNREAD_CHANGED_CHANNEL = 'giaokhoa:notifications:unread-changed';
 
 /** Định nghĩa provider tối thiểu mà phía worker cần để áp luật phân phối. */
 export interface WorkerProviderLaw {
@@ -570,7 +570,7 @@ export class NotificationDeliveryService implements OnModuleDestroy {
     await this.spaceDb.routedKysely.insertInto('outbox_events').values({
       aggregate: 'messaging', type: 'notification_created', tenant_id: tenantId,
       // jsonb: serialize tường minh kèm `::jsonb` theo khuôn ghi
-      // jsonb của `@lms/db` (driver `pg` hiểu mảng cấp cao nhất là
+      // jsonb của `@giaokhoa/db` (driver `pg` hiểu mảng cấp cao nhất là
       // mảng PostgreSQL nên không gắn object thô); khoá payload giữ
       // nguyên camelCase như sự kiện cũ vì consumer đọc đúng khoá đó.
       payload: sql<CentreDB['outbox_events']['payload']>`${JSON.stringify({ userId, provider: providerName, notificationId, ...(tenantId ? { tenantId } : {}) })}::jsonb`,

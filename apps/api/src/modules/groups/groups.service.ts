@@ -10,8 +10,8 @@ import { AvailabilityService } from '../availability/availability.service';
 import { CoursesService, GROUPMODE_SEPARATEGROUPS } from '../courses/courses.service';
 import { TenantContextService } from '../tenants/tenant-context.service';
 import { TenantsService } from '../tenants/tenants.service';
-import { type CentreTx } from '@lms/db';
-import { GroupsRepository, type CohortRow, type GroupRow, type GroupingRow } from '@lms/db/repositories/groups';
+import { type CentreTx } from '@giaokhoa/db';
+import { GroupsRepository, type CohortRow, type GroupRow, type GroupingRow } from '@giaokhoa/db/repositories/groups';
 
 /**
  * Facade của GroupsModule (core_group + cohort của Moodle).

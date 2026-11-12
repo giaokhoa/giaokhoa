@@ -58,4 +58,4 @@ export type {
   RichTextMark,
   RichTextParagraphNode,
   RichTextTextNode,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';

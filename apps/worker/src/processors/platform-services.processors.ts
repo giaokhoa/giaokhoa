@@ -1,7 +1,7 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import type { Job } from 'bullmq';
 import { I18nService } from '@nestjs/i18n';
-import { sql, type CentreDB } from '@lms/db';
+import { sql, type CentreDB } from '@giaokhoa/db';
 import { NotificationDeliveryService } from '../notification-delivery.service';
 import { tenantAls } from '../db/tenant-als';
 import { resolveDefaultTenantId } from '../db/default-tenant';
@@ -89,7 +89,7 @@ export class BackupProcessor extends WorkerHost {
         })
         .execute();
     }
-    // Archive dùng CHUNG định dạng lms-backup v1 với API: bản tóm
+    // Archive dùng CHUNG định dạng giaokhoa-backup v1 với API: bản tóm
     // tắt của worker mang đủ các section contributor mới (questions/badges/
     // calendar) bên cạnh các section cũ; attempts/usages của question bank
     // và assertions của badge KHÔNG bao giờ vào archive (dữ liệu vận hành /
@@ -100,7 +100,7 @@ export class BackupProcessor extends WorkerHost {
       calendar: { events: calEvents.length, subscriptions: calSubs.length },
     };
     if (scope === 'site') {
-      const archive = { format: 'lms-backup', version: 1, scope, courseId: null, anonymize: row.anonymize, contributors: extended };
+      const archive = { format: 'giaokhoa-backup', version: 1, scope, courseId: null, anonymize: row.anonymize, contributors: extended };
       await db
         .updateTable('backup_jobs')
         .set({
@@ -116,7 +116,7 @@ export class BackupProcessor extends WorkerHost {
     const cms = await db.selectFrom('course_modules').select('id').where('course', '=', row.courseId!).execute();
     const instances = await db.selectFrom('enrol').select('id').where('course_id', '=', row.courseId!).execute();
     const archive = {
-      format: 'lms-backup', version: 1, scope, courseId: row.courseId, anonymize: row.anonymize,
+      format: 'giaokhoa-backup', version: 1, scope, courseId: row.courseId, anonymize: row.anonymize,
       contributors: { courses: { sections: sections.length, cms: cms.length }, enrol: { instances: instances.length }, ...extended },
     };
     await db
@@ -474,7 +474,7 @@ export class PrivacyProcessor extends WorkerHost {
     const userId = req.userId;
     const subsystems = ['users', 'enrol', 'grades', 'completion', 'files', 'messaging', 'calendar', 'badges', 'competencies', 'social', 'search', 'contentbank', 'payments'];
     if (req.type === 'export') {
-      const manifest = { requestId: req.id, userId: userId, subsystems, format: 'lms-privacy-export', version: 1, worker: true };
+      const manifest = { requestId: req.id, userId: userId, subsystems, format: 'giaokhoa-privacy-export', version: 1, worker: true };
       await db
         .insertInto('privacy_export_files')
         .values({

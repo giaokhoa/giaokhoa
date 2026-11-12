@@ -5,33 +5,33 @@ import {
   Eraser, FileText, Flag, Globe, Link2, Mail, MapPin, MessageSquare, MessagesSquare, Paperclip,
   Phone, Pin, PinOff, Reply, Send, Smile, SmilePlus, Sparkles, Trash, Undo2, Video, X,
 } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@lms/ui/components/avatar';
-import { Badge } from '@lms/ui/components/badge';
-import { Bubble, BubbleContent } from '@lms/ui/components/bubble';
-import { Button } from '@lms/ui/components/button';
-import { cn } from '@lms/ui/lib/utils';
+import { Avatar, AvatarFallback } from '@giaokhoa/ui/components/avatar';
+import { Badge } from '@giaokhoa/ui/components/badge';
+import { Bubble, BubbleContent } from '@giaokhoa/ui/components/bubble';
+import { Button } from '@giaokhoa/ui/components/button';
+import { cn } from '@giaokhoa/ui/lib/utils';
 import {
   DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
-} from '@lms/ui/components/dropdown-menu';
+} from '@giaokhoa/ui/components/dropdown-menu';
 import {
   Popover, PopoverContent, PopoverTrigger,
-} from '@lms/ui/components/popover';
-import { Input } from '@lms/ui/components/input';
-import { Separator } from '@lms/ui/components/separator';
-import { Skeleton } from '@lms/ui/components/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@lms/ui/components/tabs';
-import { Textarea } from '@lms/ui/components/textarea';
+} from '@giaokhoa/ui/components/popover';
+import { Input } from '@giaokhoa/ui/components/input';
+import { Separator } from '@giaokhoa/ui/components/separator';
+import { Skeleton } from '@giaokhoa/ui/components/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@giaokhoa/ui/components/tabs';
+import { Textarea } from '@giaokhoa/ui/components/textarea';
 import {
   Tooltip, TooltipContent, TooltipTrigger,
-} from '@lms/ui/components/tooltip';
+} from '@giaokhoa/ui/components/tooltip';
 import {
   Message, MessageAvatar, MessageContent, MessageFooter, MessageHeader,
-} from '@lms/ui/components/message';
+} from '@giaokhoa/ui/components/message';
 import {
   MessageScroller, MessageScrollerButton, MessageScrollerContent, MessageScrollerItem,
   MessageScrollerProvider, MessageScrollerViewport, useMessageScroller,
-} from '@lms/ui/components/message-scroller';
+} from '@giaokhoa/ui/components/message-scroller';
 import { useTranslation } from 'react-i18next';
 
 import { formatWithOptions } from '#utils/date-format';
@@ -93,7 +93,7 @@ function RichMessageText({ text }: { text: string }) {
  * Lưới emoji của bộ chọn ở ô soạn (issue #591; tập và thứ tự
  * căn đúng theo bản demo ở issue #608 — trích nguyên mảng
  * emoji từ chunk JS của demo): dựng trên component Popover
- * của `@lms/ui` (vòng sửa PR #593 — bản trước dùng
+ * của `@giaokhoa/ui` (vòng sửa PR #593 — bản trước dùng
  * DropdownMenu đã bị cả hai lớp review bác vì khác component
  * và khác ngữ nghĩa), dạng lưới 5 cột × 4 hàng. Chọn emoji
  * chèn ký tự TẠI VỊ TRÍ CON TRỎ trong ô soạn (đúng hành vi bản
@@ -969,7 +969,7 @@ export function ChatPanel({
                     >
                       <Ellipsis aria-hidden />
                     </DropdownMenuTrigger>
-                    {/* Bề rộng + không xuống dòng theo hằng ở utils: mặc định của @lms/ui ghim bề rộng theo nút ⋯ hẹp làm nhãn bẻ nhiều dòng. */}
+                    {/* Bề rộng + không xuống dòng theo hằng ở utils: mặc định của @giaokhoa/ui ghim bề rộng theo nút ⋯ hẹp làm nhãn bẻ nhiều dòng. */}
                     <DropdownMenuContent align={mine ? 'end' : 'start'} sideOffset={4} className={CHAT_MENU_CONTENT_CLASS}>
                       {/*
                         Mục Thảo luận (thread) — CHỈ HÌNH DẠNG
@@ -1201,7 +1201,7 @@ export function ChatPanel({
           HÌNH DẠNG THUẦN ở trạng thái vô hiệu: chức năng
           gọi chưa có quyết định, không nối đường gọi nào.
           Đúng như demo, Call và Video call mang Tooltip
-          thật (component `tooltip` của `@lms/ui`) hiện
+          thật (component `tooltip` của `@giaokhoa/ui`) hiện
           đúng nhãn của nút khi di chuột; riêng More
           actions KHÔNG có tooltip — ở demo nút này là
           trigger trần của menu thả xuống, thêm tooltip
@@ -1499,7 +1499,7 @@ export function ChatPanel({
                 bong bóng xem RichMessageText), nút đính kèm
                 vẫn là hình dạng vô hiệu (điểm chưa có phán
                 quyết chức năng); nút emoji mở POPOVER lưới
-                (component Popover của `@lms/ui`) và chèn TẠI
+                (component Popover của `@giaokhoa/ui`) và chèn TẠI
                 con trỏ; nút Gửi là nút BIỂU TƯỢNG, vẫn vô hiệu
                 khi nháp trống; KHÔNG còn bộ đếm ký tự và khung
                 nhập phình to như trước (trần ký tự vẫn được

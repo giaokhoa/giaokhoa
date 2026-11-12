@@ -6,7 +6,7 @@
 # trình duyệt chỉ nói chuyện với service web (cổng web là cổng duy nhất
 # của ứng dụng được publish ra host); web proxy /api/*, /socket.io/*,
 # /mcp và /.well-known/* về service api qua mạng nội bộ của compose
-# (LMS_API_INTERNAL_URL), nên cookie đăng nhập và realtime hoạt động
+# (GIAOKHOA_API_INTERNAL_URL), nên cookie đăng nhập và realtime hoạt động
 # đúng như trước. Ngoài cổng web, stack chỉ còn publish cổng 8085 của
 # Keycloak — và cổng đó bị bind vào loopback của host, chỉ Cloudflare
 # Tunnel chạy ngay trên host mới tới được (xem khối Keycloak ở dưới).
@@ -35,22 +35,22 @@
 x-api-env: &api-env
   NODE_ENV: production
   # Mô hình role của kho nghiệp vụ (issue #586): tầng ứng dụng chạy
-  # bằng role RUNTIME `lms_runtime` — không phải superuser, không sở
+  # bằng role RUNTIME `giaokhoa_runtime` — không phải superuser, không sở
   # hữu đối tượng nào, chỉ có quyền dữ liệu tối thiểu do bước
   # migrate cấp (script runtime-roles-setup). Role và quyền được cấp
   # phát ở bước migrate trước khi api khởi động; mật khẩu của role
   # chỉ sống trong file .env của môi trường triển khai.
-  DATABASE_URL: postgres://lms_runtime:${RUNTIME_POSTGRES_PASSWORD:?Can dat RUNTIME_POSTGRES_PASSWORD trong file .env}@postgres:5432/${POSTGRES_DB:-lms}
+  DATABASE_URL: postgres://giaokhoa_runtime:${RUNTIME_POSTGRES_PASSWORD:?Can dat RUNTIME_POSTGRES_PASSWORD trong file .env}@postgres:5432/${POSTGRES_DB:-giaokhoa}
   # Trần kết nối của pool nghiệp vụ phía api trong ngân sách kết nối
   # của cụm (issue #586) — xem ghi chú RUNTIME_POSTGRES_PASSWORD
   # trong .env.example để biết cách cộng ngân sách.
   DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
   CONTROL_PLANE_POOL_MAX: ${CONTROL_PLANE_POOL_MAX:-4}
-  # Database control plane (issue #580): database riêng `lms_control_plane`
-  # trên cùng cụm Postgres, role kết nối riêng `lms_control_plane` — role
+  # Database control plane (issue #580): database riêng `giaokhoa_control_plane`
+  # trên cùng cụm Postgres, role kết nối riêng `giaokhoa_control_plane` — role
   # và database được cấp phát idempotent bởi bước migrate (script
   # control-plane-setup), không khai ở service postgres.
-  CONTROL_PLANE_DATABASE_URL: postgres://lms_control_plane:${CONTROL_PLANE_POSTGRES_PASSWORD:?Can dat CONTROL_PLANE_POSTGRES_PASSWORD trong file .env}@postgres:5432/lms_control_plane
+  CONTROL_PLANE_DATABASE_URL: postgres://giaokhoa_control_plane:${CONTROL_PLANE_POSTGRES_PASSWORD:?Can dat CONTROL_PLANE_POSTGRES_PASSWORD trong file .env}@postgres:5432/giaokhoa_control_plane
   # Database kho ngân hàng hệ thống (issue #585): database riêng trên
   # cùng cụm, role kết nối riêng — database và role được cấp phát
   # idempotent bởi bước migrate (script system-bank-setup). Khai báo
@@ -100,7 +100,7 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Can dat POSTGRES_PASSWORD trong file .env}
-      POSTGRES_DB: ${POSTGRES_DB:-lms}
+      POSTGRES_DB: ${POSTGRES_DB:-giaokhoa}
     volumes:
       # PostgreSQL 18 đổi bố cục: mount phải đặt tại /var/lib/postgresql
       # (image tự quản thư mục con theo major version). Mount vào
@@ -108,7 +108,7 @@ services:
       # container lỗi khởi động.
       - pgdata:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-lms}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-giaokhoa}"]
       interval: 5s
       timeout: 5s
       retries: 12
@@ -163,12 +163,12 @@ services:
       NODE_ENV: production
       # Worker dùng cùng role RUNTIME như api (issue #586 — xem
       # x-api-env): không superuser, không sở hữu đối tượng.
-      DATABASE_URL: postgres://lms_runtime:${RUNTIME_POSTGRES_PASSWORD:?Can dat RUNTIME_POSTGRES_PASSWORD trong file .env}@postgres:5432/${POSTGRES_DB:-lms}
+      DATABASE_URL: postgres://giaokhoa_runtime:${RUNTIME_POSTGRES_PASSWORD:?Can dat RUNTIME_POSTGRES_PASSWORD trong file .env}@postgres:5432/${POSTGRES_DB:-giaokhoa}
       # Khung định tuyến theo trung tâm phía worker (issue #581) đọc
       # sổ đăng ký ở control plane qua đúng biến này như api — thiếu
       # nó thì mọi đường mở phiên theo trung tâm của worker ném lỗi
       # chưa cấu hình trong triển khai mặc định.
-      CONTROL_PLANE_DATABASE_URL: postgres://lms_control_plane:${CONTROL_PLANE_POSTGRES_PASSWORD:?Can dat CONTROL_PLANE_POSTGRES_PASSWORD trong file .env}@postgres:5432/lms_control_plane
+      CONTROL_PLANE_DATABASE_URL: postgres://giaokhoa_control_plane:${CONTROL_PLANE_POSTGRES_PASSWORD:?Can dat CONTROL_PLANE_POSTGRES_PASSWORD trong file .env}@postgres:5432/giaokhoa_control_plane
       SYSTEM_BANK_DATABASE_URL:
       SPACE_NHANTIN_DATABASE_URL:
       DATABASE_POOL_MAX: ${WORKER_DATABASE_POOL_MAX:-10}
@@ -199,7 +199,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 8080
-      LMS_API_INTERNAL_URL: http://api:3100
+      GIAOKHOA_API_INTERNAL_URL: http://api:3100
     ports:
       # Cổng của ứng dụng được publish ra host. Khi gắn Cloudflare
       # Tunnel, tunnel trỏ vào đúng cổng này của máy host. (Keycloak
@@ -215,7 +215,7 @@ services:
       retries: 12
       start_period: 20s
 
-  # Áp migration (thư mục migration trong package @lms/db đi kèm image api) rồi kết thúc.
+  # Áp migration (thư mục migration trong package @giaokhoa/db đi kèm image api) rồi kết thúc.
   # Service này luôn thuộc stack, không nằm trong profile: api và
   # worker khai depends_on điều kiện service_completed_successfully
   # vào nó nên mỗi lần `docker compose up`, migration được áp xong
@@ -234,7 +234,7 @@ services:
       # #586): script cấp phát control plane suy ra đích nghiệp vụ
       # (database + role được cấp CONNECT) từ biến này, và nó là dự
       # phòng khi DATABASE_ADMIN_URL vắng mặt.
-      DATABASE_URL: postgres://lms_migrator:${MIGRATOR_POSTGRES_PASSWORD:?Can dat MIGRATOR_POSTGRES_PASSWORD trong file .env}@postgres:5432/${POSTGRES_DB:-lms}
+      DATABASE_URL: postgres://giaokhoa_migrator:${MIGRATOR_POSTGRES_PASSWORD:?Can dat MIGRATOR_POSTGRES_PASSWORD trong file .env}@postgres:5432/${POSTGRES_DB:-giaokhoa}
       # Kết nối quản trị của cụm — CHỈ dùng ở bước cấp phát role và
       # database (hai script setup), không còn đường dữ kiện nào của
       # ứng dụng chạy bằng kết nối này.
@@ -244,9 +244,9 @@ services:
       # migration và role runtime chỉ giữ quyền dữ liệu; cấu hình
       # runner migration của kho nghiệp vụ ưu tiên MIGRATION_DATABASE_URL nên
       # migration được áp bằng đúng role chủ sở hữu.
-      MIGRATION_DATABASE_URL: postgres://lms_migrator:${MIGRATOR_POSTGRES_PASSWORD:?Can dat MIGRATOR_POSTGRES_PASSWORD trong file .env}@postgres:5432/${POSTGRES_DB:-lms}
-      RUNTIME_DATABASE_URL: postgres://lms_runtime:${RUNTIME_POSTGRES_PASSWORD:?Can dat RUNTIME_POSTGRES_PASSWORD trong file .env}@postgres:5432/${POSTGRES_DB:-lms}
-      CONTROL_PLANE_DATABASE_URL: postgres://lms_control_plane:${CONTROL_PLANE_POSTGRES_PASSWORD:?Can dat CONTROL_PLANE_POSTGRES_PASSWORD trong file .env}@postgres:5432/lms_control_plane
+      MIGRATION_DATABASE_URL: postgres://giaokhoa_migrator:${MIGRATOR_POSTGRES_PASSWORD:?Can dat MIGRATOR_POSTGRES_PASSWORD trong file .env}@postgres:5432/${POSTGRES_DB:-giaokhoa}
+      RUNTIME_DATABASE_URL: postgres://giaokhoa_runtime:${RUNTIME_POSTGRES_PASSWORD:?Can dat RUNTIME_POSTGRES_PASSWORD trong file .env}@postgres:5432/${POSTGRES_DB:-giaokhoa}
+      CONTROL_PLANE_DATABASE_URL: postgres://giaokhoa_control_plane:${CONTROL_PLANE_POSTGRES_PASSWORD:?Can dat CONTROL_PLANE_POSTGRES_PASSWORD trong file .env}@postgres:5432/giaokhoa_control_plane
       # URL kho ngân hàng hệ thống (issue #585) — TUỲ CHỌN, truyền xuyên
       # từ file .env; chưa đặt thì chuỗi migrate bỏ qua bước (4) cấp phát +
       # migration kho ngân hàng (xem command ở cuối service này). Khi kích
@@ -304,7 +304,7 @@ services:
     command:
       - sh
       - -c
-      - "node dist/modules/fleet/runtime-roles-setup.js && node dist/modules/control-plane/control-plane-setup.js && node node_modules/@lms/db/dist/migrate/run.js centre && node dist/modules/system-bank/system-bank-centre-tables-setup.js && node node_modules/@lms/db/dist/migrate/run.js control-plane && node dist/modules/tenants/centre-schema-delta-ensure.js && if [ -n \"$SYSTEM_BANK_DATABASE_URL\" ]; then node dist/modules/system-bank/system-bank-setup.js && node node_modules/@lms/db/dist/migrate/run.js system-bank; fi"
+      - "node dist/modules/fleet/runtime-roles-setup.js && node dist/modules/control-plane/control-plane-setup.js && node node_modules/@giaokhoa/db/dist/migrate/run.js centre && node dist/modules/system-bank/system-bank-centre-tables-setup.js && node node_modules/@giaokhoa/db/dist/migrate/run.js control-plane && node dist/modules/tenants/centre-schema-delta-ensure.js && if [ -n \"$SYSTEM_BANK_DATABASE_URL\" ]; then node dist/modules/system-bank/system-bank-setup.js && node node_modules/@giaokhoa/db/dist/migrate/run.js system-bank; fi"
 
   # Chạy một lần để seed dữ liệu mẫu (tài khoản demo + khoá học mẫu).
   # CHỈ dùng cho môi trường thử nghiệm tự host lần đầu; TUYỆT ĐỐI không

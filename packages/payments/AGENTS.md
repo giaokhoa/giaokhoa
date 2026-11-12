@@ -29,9 +29,9 @@ ngữ" trong `AGENTS.md` ở thư mục gốc của repo.
 - 1 issue = 1 feat = 1 PR.
 - Package này là bề mặt DÙNG CHUNG cho nhiều tiến trình: cấm import
   bất cứ thứ gì từ `apps/*`. Phụ thuộc cho phép: kho trung tâm và
-  handle Kysely qua `@lms/db`, khung NestJS (`@nestjs/common`). Cấm
+  handle Kysely qua `@giaokhoa/db`, khung NestJS (`@nestjs/common`). Cấm
   import trực tiếp `kysely` — mọi kiểu handle và `sql` đều lấy qua
-  `@lms/db`.
+  `@giaokhoa/db`.
 - Ba hiệu ứng xuyên module của luồng matching (kích hoạt ghi danh,
   kích hoạt ghi danh cấp lớp, đối chiếu đích và xác nhận chi) chỉ
   được gọi qua các cổng ở `src/sepay-matching-ports.ts` — cấm import
@@ -55,8 +55,8 @@ ngữ" trong `AGENTS.md` ở thư mục gốc của repo.
 ## Kiểm chứng bắt buộc
 
 - **Typecheck + test của package trước khi push**:
-  `pnpm --filter @lms/payments typecheck` và
-  `pnpm --filter @lms/payments test`.
+  `pnpm --filter @giaokhoa/payments typecheck` và
+  `pnpm --filter @giaokhoa/payments test`.
 - Build lại `dist` của package trước khi typecheck apps/api trong
   cùng feat (dist cũ = lỗi type giả kinh điển).
 - CI là cổng chính; kết luận CI chỉ từ LOG THẬT.

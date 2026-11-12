@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Cache } from 'cache-manager';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { tenantAls } from '../tenants/tenant-als';
-import { AccessRepository, type ContextRow } from '@lms/db/repositories/access';
+import { AccessRepository, type ContextRow } from '@giaokhoa/db/repositories/access';
 import { ContextsService } from './contexts.service';
 import { CAPABILITY_DEFINITIONS, CONTEXT_LEVELS } from './domain/capabilities';
 import { aggregateRoleResults, evaluateSingleRole, type RoleOverridePoint } from './domain/permission';

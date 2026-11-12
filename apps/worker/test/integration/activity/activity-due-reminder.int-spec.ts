@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { INestApplicationContext } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
-import { sql } from '@lms/db';
+import { sql } from '@giaokhoa/db';
 import { ActivityDueReminderProcessor } from '../../../src/processors/activity-due-reminder.processor';
 import {
   bootWorkerModuleAsOrdinaryRole,

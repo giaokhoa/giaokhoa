@@ -3,7 +3,7 @@ import { GradeFormulaError, calculateFromFormula } from './grade-formula.js';
 
 /**
  * Corpus parity của bộ máy công thức điểm — MỘT danh sách ca dùng chung, chạy y hệt ở
- * package @lms/grades, apps/api và apps/worker (spec parity ở cả ba nơi). Mục đích:
+ * package @giaokhoa/grades, apps/api và apps/worker (spec parity ở cả ba nơi). Mục đích:
  * khoá hành vi "cùng công thức → cùng kết quả ở mọi phía chạy" sau vụ phân kỳ 11.1
  * của #134 (worker từng chạy bản rút gọn 4 hàm trong lúc api chạy bản 9 hàm).
  *

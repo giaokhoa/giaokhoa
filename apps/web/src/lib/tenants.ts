@@ -1,4 +1,4 @@
-import type { MyTenant } from '@lms/contracts';
+import type { MyTenant } from '@giaokhoa/contracts';
 import { queryOptions, useQuery } from '@tanstack/react-query';
 import { apiJson } from '#lib/api';
 import { queryKeys } from '#lib/query-keys';

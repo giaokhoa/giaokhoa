@@ -371,7 +371,7 @@ describe('Nhắn tin và lịch', () => {
 
   it('đăng ký lịch: tạo một đăng ký xếp hàng nhập ICS; nhắc nhở có thể lên lịch cho sự kiện nhìn thấy được', async () => {
     const ics = [
-      'BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT', 'UID:sub-test-1@lms',
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT', 'UID:sub-test-1@giaokhoa',
       'SUMMARY:Imported keynote', 'DTSTART:20270105T090000Z', 'DTEND:20270105T100000Z',
       'END:VEVENT', 'END:VCALENDAR',
     ].join('\r\n');
@@ -457,7 +457,7 @@ describe('Nhắn tin và lịch', () => {
     expect(summaries.filter((n) => n === 'Export weekly series')).toHaveLength(2);
     // UID ổn định theo từng id sự kiện; DTEND = DTSTART + timeDuration.
     const dentistParsed = parsed.find((e) => e.summary === 'Export my dentist')!;
-    expect(dentistParsed.uid).toBe(`${dentistId}@lms`);
+    expect(dentistParsed.uid).toBe(`${dentistId}@giaokhoa`);
     expect(dentistParsed.start.getTime()).toBe(Math.floor(soon.getTime() / 1000) * 1000);
     expect(dentistParsed.end!.getTime() - dentistParsed.start.getTime()).toBe(3600_000);
     expect(dentistParsed.description).toBe('Checkup, cleaning');

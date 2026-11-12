@@ -50,7 +50,7 @@
 import { forwardRef, Inject, Injectable, Optional } from '@nestjs/common';
 import { constantTimeEqual, makeSignature } from 'better-auth/crypto';
 import type { Request } from 'express';
-import type { CentreDb } from '@lms/db';
+import type { CentreDb } from '@giaokhoa/db';
 import { SpaceDatabaseService } from '../../../db/routing/space-database.service';
 import { TotpService } from '../totp.service';
 import { BetterAuthService } from './better-auth.service';

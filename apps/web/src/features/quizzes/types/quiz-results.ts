@@ -1,4 +1,4 @@
-import type { QuizAttemptSummary, QuizView } from '@lms/contracts';
+import type { QuizAttemptSummary, QuizView } from '@giaokhoa/contracts';
 
 /**
  * Kiểu dữ liệu của trang kết quả quiz thuộc feature quizzes. Tách

@@ -14,12 +14,12 @@ import type {
   SpaceSchemaRegistry,
   UpdateSpaceRegistration,
   UpdateSpaceSchemaRegistry,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import {
   ControlPlaneRepository,
   isDedicatedDatabaseNameConflict,
   type SpaceRegistryRow,
-} from '@lms/db/repositories/control-plane';
+} from '@giaokhoa/db/repositories/control-plane';
 import { emitSpaceRegistryChanged } from '../../db/routing/space-routing-events';
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';

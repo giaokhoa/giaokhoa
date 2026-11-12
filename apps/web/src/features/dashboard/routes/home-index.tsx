@@ -8,7 +8,7 @@ import type {
   MyActivityGrades,
   Role,
   UserListResponse,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { useAuth } from '#lib/auth';
 import { HomePage } from '../components/home';
 import { DashboardSkeleton } from '../components/dashboard-skeleton';
@@ -163,5 +163,5 @@ export default function HomeIndexRoute() {
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 export function meta() {
-  return [{ title: 'LMS' }];
+  return [{ title: 'Giáo khoa' }];
 }

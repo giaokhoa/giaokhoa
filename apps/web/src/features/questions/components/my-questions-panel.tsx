@@ -14,9 +14,9 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
-import type { QuestionView } from '@lms/contracts';
-import { Button } from '@lms/ui/components/button';
-import { Label } from '@lms/ui/components/label';
+import type { QuestionView } from '@giaokhoa/contracts';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Label } from '@giaokhoa/ui/components/label';
 
 import { useDeleteBankQuestion, useProposeQuestionContribution, useRestoreQuestion, useWithdrawQuestion } from '../queries/questions';
 import type { AttributionLite, BankLite } from '../types/questions';

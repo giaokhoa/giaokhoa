@@ -4,7 +4,7 @@ import {
   createMessagingDistributionService,
   createMessagingDistributionStore,
   type MessagingDistributionService,
-} from '@lms/messaging';
+} from '@giaokhoa/messaging';
 import Redis from 'ioredis';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
 import { createMessagingRealtimeEmitter, type MessagingRealtimeEmitterHandle } from './messaging-realtime-emitter';
@@ -12,7 +12,7 @@ import { createMessagingRealtimeEmitter, type MessagingRealtimeEmitterHandle } f
 /**
  * Runtime của consumer phân phối realtime messaging ở worker
  * (issue #521): sở hữu các tài nguyên sống theo tiến trình mà
- * processor cần — tầng phân phối dùng chung của `@lms/messaging`
+ * processor cần — tầng phân phối dùng chung của `@giaokhoa/messaging`
  * (dựng trên kết nối DB của worker), connection Redis giữ dấu
  * đã-phân-phối theo `outboxId`, và cổng phát realtime qua Redis
  * adapter — rồi đóng tất cả khi module tắt, để không rò connection
@@ -20,7 +20,7 @@ import { createMessagingRealtimeEmitter, type MessagingRealtimeEmitterHandle } f
  */
 @Injectable()
 export class MessagingRealtimeRuntime implements OnModuleDestroy {
-  /** Tầng phân phối dùng chung (luật ở `@lms/messaging`). */
+  /** Tầng phân phối dùng chung (luật ở `@giaokhoa/messaging`). */
   readonly distribution: MessagingDistributionService;
   /** Connection Redis giữ dấu đã-phân-phối của consumer. */
   readonly redis: Redis;

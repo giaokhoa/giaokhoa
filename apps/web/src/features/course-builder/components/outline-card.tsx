@@ -2,15 +2,15 @@ import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import {
   COURSE_CONTENT_TYPES,
   type CourseContent, type CourseGroup, type CourseGrouping, type GradeItem,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { AvailabilityEditor } from './availability-editor';
 import { LibraryItem } from '#features/content-bank/types/content-bank';
-import { Badge } from '@lms/ui/components/badge';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@lms/ui/components/card';
-import { CardDescription } from '@lms/ui/components/card';
-import { Input } from '@lms/ui/components/input';
-import { Label } from '@lms/ui/components/label';
+import { Badge } from '@giaokhoa/ui/components/badge';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
+import { CardDescription } from '@giaokhoa/ui/components/card';
+import { Input } from '@giaokhoa/ui/components/input';
+import { Label } from '@giaokhoa/ui/components/label';
 import { useTranslation } from 'react-i18next';
 import {
   bankItemInsertable, bankScopeKey, bankTypeKey, moveItem, statusChoiceOf, type ItemStatusChoice,

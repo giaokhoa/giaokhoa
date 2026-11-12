@@ -1,6 +1,6 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import type { CentreDb } from '@lms/db';
+import type { CentreDb } from '@giaokhoa/db';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { tenantAls } from '../../modules/tenants/tenant-als';

@@ -7,7 +7,7 @@ import type { CentreDb, CentreTx } from '../client';
  * vẹn sang đây — enrol instance (phương thức ghi danh của khoá
  * học) và user enrolment (ghi danh của từng user).
  *
- * Hai bảng này DÙNG CHUNG với package `@lms/enrol` (bề mặt vật
+ * Hai bảng này DÙNG CHUNG với package `@giaokhoa/enrol` (bề mặt vật
  * chất hoá cohort) — thứ tự chuyển đổi G5 trước, D5 (#657) sau
  * giữ nguyên như kế hoạch; repository này không đổi hình dạng
  * bảng hay ngữ nghĩa ghi nào của bề mặt đó.

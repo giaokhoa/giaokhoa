@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { GradesRepository } from '@lms/db/repositories/grades';
+import { GradesRepository } from '@giaokhoa/db/repositories/grades';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { EventsModule } from '../../infra/events/events.module';
@@ -19,7 +19,7 @@ import { GradesService } from './grades.service';
  * Courses, Enrol, Access, Completion (chỉ qua facade). Đăng ký các
  * evaluator của nó vào Completion/Courses lúc khởi động.
  *
- * GradesRepository là repository Kysely của `@lms/db` (issue
+ * GradesRepository là repository Kysely của `@giaokhoa/db` (issue
  * #644): provider dựng bằng factory với handle kho trung tâm đã
  * định tuyến theo không gian (`routedKysely` của
  * SpaceDatabaseService). Ba luồng ghi điểm (`setGrade`,

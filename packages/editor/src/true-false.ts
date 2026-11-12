@@ -5,7 +5,7 @@ import {
   getTrueFalseStatements,
   richTextBlocksHaveContent,
   type RichTextDocument,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { plainTextExtensions } from './extensions.js';
 
 /**
@@ -114,7 +114,7 @@ export const StatementList = Node.create({
   content: `${STATEMENT_NODE_TYPE}{${TRUE_FALSE_STATEMENT_COUNT}}`,
   isolating: true,
   parseHTML: () => [{ tag: 'ol[data-statement-list]' }],
-  renderHTML: () => ['ol', { 'data-statement-list': '', class: 'lms-statement-list' }, 0],
+  renderHTML: () => ['ol', { 'data-statement-list': '', class: 'giaokhoa-statement-list' }, 0],
 });
 
 /**
@@ -135,7 +135,7 @@ export const Statement = Node.create({
   parseHTML: () => [{ tag: 'li[data-statement]' }],
   renderHTML: ({ HTMLAttributes }) => [
     'li',
-    mergeAttributes(HTMLAttributes, { 'data-statement': '', class: 'lms-statement' }),
+    mergeAttributes(HTMLAttributes, { 'data-statement': '', class: 'giaokhoa-statement' }),
     0,
   ],
 });

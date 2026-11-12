@@ -43,7 +43,7 @@
  *   do tầng ứng dụng dựng bằng factory của package rồi truyền vào.
  */
 import { sql, type Insertable, type InsertObject, type RawBuilder, type Updateable, type UpdateObject } from 'kysely';
-import { extractRichTextPlainText, type RichTextDocument } from '@lms/contracts';
+import { extractRichTextPlainText, type RichTextDocument } from '@giaokhoa/contracts';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 
 /** Handle giao dịch của kho trung tâm — kiểu `Transaction<CentreDB>` của package. */

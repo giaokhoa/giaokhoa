@@ -12,11 +12,11 @@ import {
   type ImportSystemBankQuestion,
   type SystemBankPackage,
   type WithdrawSystemBankQuestion,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 
 /**
  * Validation của module System Bank dùng Zod qua Standard Schema —
- * schema nền ở `@lms/contracts` là nguồn sự thật duy nhất.
+ * schema nền ở `@giaokhoa/contracts` là nguồn sự thật duy nhất.
  */
 export {
   createSystemBankQuestionSchema,

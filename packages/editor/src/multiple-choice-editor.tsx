@@ -1,7 +1,7 @@
 import { useId, useMemo, useRef } from 'react';
 import { Decoration, Extension, type WidgetDecoration } from '@tiptap/core';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
-import type { RichTextDocument } from '@lms/contracts';
+import type { RichTextDocument } from '@giaokhoa/contracts';
 import { RichTextEditor } from './rich-text-editor.js';
 import type { RichTextImagePick } from './rich-text-editor.js';
 import {
@@ -107,12 +107,12 @@ function createCorrectChoiceDecoration(controlRef: { current: CorrectChoiceContr
                 pos + 1,
                 () => {
                   const wrapper = document.createElement('span');
-                  wrapper.className = 'lms-choice__correct';
+                  wrapper.className = 'giaokhoa-choice__correct';
 
                   const input = document.createElement('input');
                   input.type = 'radio';
                   input.name = controlRef.current.groupName;
-                  input.className = 'lms-choice__correct-input';
+                  input.className = 'giaokhoa-choice__correct-input';
                   input.setAttribute('aria-label', 'Đặt làm đáp án đúng');
                   input.checked = controlRef.current.correctChoiceId === choiceId;
                   input.addEventListener('change', () => {

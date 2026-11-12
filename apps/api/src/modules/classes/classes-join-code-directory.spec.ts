@@ -4,7 +4,7 @@ import type { CoursesService } from '../courses/courses.service';
 import type { EnrolService } from '../enrol/enrol.service';
 import type { GroupsService } from '../groups/groups.service';
 import type { RolesService } from '../access/roles.service';
-import type { ControlPlaneRepository, SpaceJoinCodeDirectoryRow } from '@lms/db/repositories/control-plane';
+import type { ControlPlaneRepository, SpaceJoinCodeDirectoryRow } from '@giaokhoa/db/repositories/control-plane';
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import type { TenantContextService } from '../tenants/tenant-context.service';
@@ -12,9 +12,9 @@ import type { TenantsService } from '../tenants/tenants.service';
 import type { UsersService } from '../users/users.service';
 import type { OutboxService } from '../../infra/events/outbox.service';
 import type { SpaceDatabaseService } from '../../db/routing/space-database.service';
-import type { ClassesRepository, ClassRow } from '@lms/db/repositories/classes';
+import type { ClassesRepository, ClassRow } from '@giaokhoa/db/repositories/classes';
 import { ClassesService } from './classes.service';
-import type { GroupsRepository } from '@lms/db/repositories/groups';
+import type { GroupsRepository } from '@giaokhoa/db/repositories/groups';
 
 /**
  * Bộ spec cho điểm chặn 4 của hạng mục 3 (issue #587): ràng buộc

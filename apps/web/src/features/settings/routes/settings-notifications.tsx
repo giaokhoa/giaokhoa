@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@lms/ui/components/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { ErrorAlert } from '#components/error-alert';
 import { useTranslation } from 'react-i18next';
 import { CollapsibleSection } from '#components/collapsible-section';

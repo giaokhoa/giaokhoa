@@ -8,7 +8,7 @@ import {
 } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
-import type { UserListStatus } from '@lms/contracts';
+import type { UserListStatus } from '@giaokhoa/contracts';
 
 /**
  * Kho dữ liệu phân quyền trên Kysely (issue #651, nhóm C của chiến

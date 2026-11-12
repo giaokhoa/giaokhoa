@@ -10,8 +10,8 @@ import {
   useMatches,
   useRouteError,
 } from 'react-router';
-import type { UserProfile } from '@lms/contracts';
-import { userProfileSchema } from '@lms/contracts';
+import type { UserProfile } from '@giaokhoa/contracts';
+import { userProfileSchema } from '@giaokhoa/contracts';
 import { HydrationBoundary, QueryClientProvider, type DehydratedState } from '@tanstack/react-query';
 import { AuthProvider } from '#lib/auth';
 import { PermissionsProvider } from '#lib/permissions';
@@ -20,8 +20,8 @@ import { SidebarDefaultOpenContext } from '#lib/sidebar-default-open';
 import { fetchApiJson } from '#lib/server-api';
 import { AppShellSkeleton } from '#components/app-shell-skeleton';
 import '#config/i18n';
-import '@lms/ui/globals.css';
-// CSS của KaTeX và vỏ trình bày của @lms/editor KHÔNG còn nạp ở root
+import '@giaokhoa/ui/globals.css';
+// CSS của KaTeX và vỏ trình bày của @giaokhoa/editor KHÔNG còn nạp ở root
 // (issue #503, bước gọn CSS ở root theo số đo: một file CSS ~162,5 kB
 // giải nén từng đi theo mọi route): hai gói CSS đó nay nạp ngay tại các
 // route module thật sự dựng editor/công thức — trang soạn câu hỏi
@@ -81,7 +81,7 @@ export async function loader({
  * gắn cứng <title> nữa.
  */
 export function meta(): { title: string }[] {
-  return [{ title: 'LMS' }];
+  return [{ title: 'Giáo khoa' }];
 }
 
 /**
@@ -220,7 +220,7 @@ export function ErrorBoundary() {
     : 'Đã xảy ra lỗi không mong muốn.';
   return (
     <main className="flex min-h-svh flex-col items-center justify-center gap-3 p-6 text-center">
-      <h1 className="text-2xl font-semibold">LMS</h1>
+      <h1 className="text-2xl font-semibold">Giáo khoa</h1>
       <p className="text-sm text-muted-foreground">{message}</p>
       <a href="/" className="text-sm underline underline-offset-4">
         Về trang chủ

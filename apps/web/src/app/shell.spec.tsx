@@ -168,7 +168,7 @@ function renderAt(url: string) {
 }
 
 beforeAll(() => {
-  // jsdom không có matchMedia; hook useIsMobile của @lms/ui cần nó khi
+  // jsdom không có matchMedia; hook useIsMobile của @giaokhoa/ui cần nó khi
   // sidebar mount — stub tối thiểu trả "không phải mobile".
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
     matches: false,
@@ -245,8 +245,8 @@ describe('dọn dẹp khi đăng xuất', () => {
     await waitFor(() => expect(probe.dataset.ready).toBe('true'));
     expect(queryClient.getQueryCache().findAll().length).toBeGreaterThan(0);
     // Hợp đồng sau cutover: web không giữ token nào ở localStorage.
-    expect(localStorage.getItem('lms.accessToken')).toBeNull();
-    expect(localStorage.getItem('lms.refreshToken')).toBeNull();
+    expect(localStorage.getItem('giaokhoa.accessToken')).toBeNull();
+    expect(localStorage.getItem('giaokhoa.refreshToken')).toBeNull();
 
     await userEvent.click(screen.getByTestId('probe-logout'));
 

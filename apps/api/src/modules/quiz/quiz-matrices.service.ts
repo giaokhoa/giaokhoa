@@ -9,14 +9,14 @@ import type {
   ExamMatrixView,
   MatrixCellAvailability,
   MatrixImportCellAvailability,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { TenantContextService } from '../tenants/tenant-context.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { CoursesService } from '../courses/courses.service';
 import { CurriculumService } from '../curriculum/curriculum.service';
 import { QuestionBanksService } from '../questions/question-banks.service';
-import type { QuestionBankRow } from '@lms/db/repositories/question-banks';
+import type { QuestionBankRow } from '@giaokhoa/db/repositories/question-banks';
 import type {
   CreateExamMatrixCellDto,
   CreateExamMatrixDto,
@@ -31,7 +31,7 @@ import {
   type ExamMatrixRow,
   type ExamMatrixVersionRow,
   type QuizTx,
-} from '@lms/db/repositories/quiz';
+} from '@giaokhoa/db/repositories/quiz';
 import {
   isMatrixContentSignatureConflict,
   matrixContentSignature,

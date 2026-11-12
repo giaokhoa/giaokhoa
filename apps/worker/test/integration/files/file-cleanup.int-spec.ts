@@ -10,7 +10,7 @@ import {
   type OrdinaryWorkerModuleHarness,
 } from '../../support/ordinary-worker-module';
 
-const STORAGE = '/tmp/lms-worker-test-files';
+const STORAGE = '/tmp/giaokhoa-worker-test-files';
 
 /**
  * Luồng dọn file mồ côi (report §3.11 golden file case, nửa phía worker).

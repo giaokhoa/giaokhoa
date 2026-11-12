@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { SepayMatchingService } from '@lms/payments';
+import type { SepayMatchingService } from '@giaokhoa/payments';
 import { SepayMatchingScheduler } from './sepay-matching.scheduler';
 
 /**

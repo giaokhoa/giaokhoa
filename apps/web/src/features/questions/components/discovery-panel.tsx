@@ -12,10 +12,10 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { QuestionView } from '@lms/contracts';
-import { Button } from '@lms/ui/components/button';
-import { Input } from '@lms/ui/components/input';
-import { Label } from '@lms/ui/components/label';
+import type { QuestionView } from '@giaokhoa/contracts';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Input } from '@giaokhoa/ui/components/input';
+import { Label } from '@giaokhoa/ui/components/label';
 
 import { useQueryClient } from '@tanstack/react-query';
 

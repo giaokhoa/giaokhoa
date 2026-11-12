@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { INestApplicationContext } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
-import { sql, type RawBuilder } from '@lms/db';
+import { sql, type RawBuilder } from '@giaokhoa/db';
 import { NotificationEventsMarker } from '../../../src/notification-events-marker.service';
 import { NotificationEventsProcessor } from '../../../src/processors/notification-events.processor';
 import type { OutboxEventJobData } from '../../../src/outbox-event-routes';

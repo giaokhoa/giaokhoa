@@ -46,12 +46,12 @@ của repo.
 
 ## Kiểm chứng bắt buộc
 
-- **Typecheck + build trước khi push**: `pnpm --filter @lms/db typecheck`
+- **Typecheck + build trước khi push**: `pnpm --filter @giaokhoa/db typecheck`
   và build lại `dist`, rồi mới typecheck apps/api + apps/worker.
 - Kiểm chứng migrate phải làm trên **cây merge** (hoặc chờ CI trên PR): kiểm trên
   cây branch riêng không đủ — bẫy hai baseline chỉ lộ ở cây merge.
 - CI là cổng chính; kết luận CI chỉ từ LOG THẬT. Suite nặng local giữ khoá
-  `flock /tmp/lms-heavy-suite.lock`, tối đa một vòng nặng một lúc.
+  `flock /tmp/giaokhoa-heavy-suite.lock`, tối đa một vòng nặng một lúc.
 
 ## Kỷ luật khung Kysely (chiến dịch chuyển ORM)
 

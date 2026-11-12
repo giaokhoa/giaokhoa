@@ -4,8 +4,8 @@ import Redis from 'ioredis';
 import { redisTlsFromUrl } from '../../config/env';
 import { SiteConfigService } from '../site-config/site-config.service';
 
-const BURST_KEY_PREFIX = 'lms:messaging:send-burst:';
-const MINUTE_KEY_PREFIX = 'lms:messaging:send-minute:';
+const BURST_KEY_PREFIX = 'giaokhoa:messaging:send-burst:';
+const MINUTE_KEY_PREFIX = 'giaokhoa:messaging:send-minute:';
 /** Cửa sổ duy trì luôn là 60 giây (trần đọc từ site-config là số tin/phút). */
 const MINUTE_WINDOW_SECONDS = 60;
 

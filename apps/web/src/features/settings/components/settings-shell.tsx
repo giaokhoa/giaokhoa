@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { IconBell, IconLink, IconShieldLock } from '@tabler/icons-react';
 import { NavLink } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { cn } from '@lms/ui/lib/utils';
+import { cn } from '@giaokhoa/ui/lib/utils';
 import { PageHeader, PageShell } from '#components/page-shell';
 import '#config/i18n';
 

@@ -1,5 +1,5 @@
 /**
- * Khung Kysely của `@lms/db`: ba hàm dựng instance và các kiểu handle
+ * Khung Kysely của `@giaokhoa/db`: ba hàm dựng instance và các kiểu handle
  * cho ba kho dữ liệu của hệ (kho trung tâm, kho control plane, kho
  * ngân hàng hệ thống).
  *

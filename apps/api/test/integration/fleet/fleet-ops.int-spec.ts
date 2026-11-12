@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { join } from 'node:path';
 import { Client, Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createCentreKysely } from '@lms/db';
-import { applyStoreMigrations } from '@lms/db/migrate';
+import { createCentreKysely } from '@giaokhoa/db';
+import { applyStoreMigrations } from '@giaokhoa/db/migrate';
 import { checkFleetBackups, runFleetBackup } from '../../../src/modules/fleet/fleet-backup';
 import { backupFileName, dumpDatabaseToFile, readDatabaseSchemaVersion } from '../../../src/modules/fleet/fleet-common';
 import { runFleetMigration } from '../../../src/modules/fleet/fleet-migration-runner';
@@ -17,9 +17,9 @@ import { runRuntimeRolesSetup } from '../../../src/modules/fleet/runtime-roles-s
  * trên một cụm test thật với các database và role TÊN MỚI của
  * riêng ca này.
  *
- * Bố cục: một database control plane riêng (`lms_test_cp_586`, áp
+ * Bố cục: một database control plane riêng (`giaokhoa_test_cp_586`, áp
  * bộ migration của control plane từ rỗng như ca của issue #580),
- * một kho nghiệp vụ trầy (`lms_test_biz_586`) cho phần tách role,
+ * một kho nghiệp vụ trầy (`giaokhoa_test_biz_586`) cho phần tách role,
  * và BỐN kho đã đăng ký trong sổ — kho nền tảng `trang-chinh-586`,
  * trung tâm canary `tt-a-canary-586`, trung tâm `tt-b-loi-586` bị
  * phá hoại có chủ đích ở lượt migration đầu (một bảng trùng tên với
@@ -43,22 +43,22 @@ import { runRuntimeRolesSetup } from '../../../src/modules/fleet/runtime-roles-s
  * Tệp sao lưu của ca ghi vào thư mục riêng trong cây làm việc và
  * được dọn ở afterAll, cùng toàn bộ database/role trầy của ca.
  */
-const CP_DATABASE = 'lms_test_cp_586';
-const CP_ROLE = 'lms_cp_test_586';
+const CP_DATABASE = 'giaokhoa_test_cp_586';
+const CP_ROLE = 'giaokhoa_cp_test_586';
 const CP_PASSWORD = 'cp-test-586';
-const BIZ_DATABASE = 'lms_test_biz_586';
-const RUNTIME_ROLE = 'lms_runtime_test_586';
+const BIZ_DATABASE = 'giaokhoa_test_biz_586';
+const RUNTIME_ROLE = 'giaokhoa_runtime_test_586';
 const RUNTIME_PASSWORD = 'runtime-test-586';
-const MIGRATOR_ROLE = 'lms_migrator_test_586';
+const MIGRATOR_ROLE = 'giaokhoa_migrator_test_586';
 const MIGRATOR_PASSWORD = 'migrator-test-586';
 const BASELINE_VERSION = '20261025163710_baseline';
 const BACKUP_DIR = join(__dirname, 'fleet-586-artifacts');
 
 const SPACES = [
-  { slug: 'trang-chinh-586', kind: 'platform', database: 'lms_test_space_platform_586' },
-  { slug: 'tt-a-canary-586', kind: 'center', database: 'lms_test_space_canary_586' },
-  { slug: 'tt-b-loi-586', kind: 'center', database: 'lms_test_space_loi_586' },
-  { slug: 'tt-c-586', kind: 'center', database: 'lms_test_space_c_586' },
+  { slug: 'trang-chinh-586', kind: 'platform', database: 'giaokhoa_test_space_platform_586' },
+  { slug: 'tt-a-canary-586', kind: 'center', database: 'giaokhoa_test_space_canary_586' },
+  { slug: 'tt-b-loi-586', kind: 'center', database: 'giaokhoa_test_space_loi_586' },
+  { slug: 'tt-c-586', kind: 'center', database: 'giaokhoa_test_space_c_586' },
 ] as const;
 
 const UUIDV7_SHIM = `CREATE OR REPLACE FUNCTION uuidv7() RETURNS uuid AS $$ DECLARE ts_ms bigint := (extract(epoch from clock_timestamp()) * 1000)::bigint; b bytea; BEGIN b := decode(lpad(to_hex(ts_ms), 12, '0'), 'hex') || gen_random_bytes(10); b := set_byte(b, 6, (get_byte(b, 6) & 15) | 112); b := set_byte(b, 8, (get_byte(b, 8) & 63) | 128); RETURN encode(b, 'hex')::uuid; END; $$ LANGUAGE plpgsql VOLATILE`;
@@ -379,7 +379,7 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       // users của baseline trong kho tt-b — bước áp migration của
       // riêng kho đó phải hỏng và cuốn toàn bộ giao dịch của nó về
       // trạng thái chưa có phiên bản.
-      await withClient(clusterUrl('lms_test_space_loi_586', MIGRATOR_ROLE, MIGRATOR_PASSWORD), async (client) => {
+      await withClient(clusterUrl('giaokhoa_test_space_loi_586', MIGRATOR_ROLE, MIGRATOR_PASSWORD), async (client) => {
         await client.query('CREATE TABLE users (id integer)');
       });
 
@@ -398,12 +398,12 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       }
       expect((await registryState('tt-b-loi-586')).currentVersion).toBeNull();
       const brokenDbVersion = await withClient(
-        clusterUrl('lms_test_space_loi_586', MIGRATOR_ROLE, MIGRATOR_PASSWORD),
+        clusterUrl('giaokhoa_test_space_loi_586', MIGRATOR_ROLE, MIGRATOR_PASSWORD),
         (client) => readDatabaseSchemaVersion(client),
       );
       expect(brokenDbVersion).toBeNull();
       const platformDbVersion = await withClient(
-        clusterUrl('lms_test_space_platform_586', MIGRATOR_ROLE, MIGRATOR_PASSWORD),
+        clusterUrl('giaokhoa_test_space_platform_586', MIGRATOR_ROLE, MIGRATOR_PASSWORD),
         (client) => readDatabaseSchemaVersion(client),
       );
       expect(platformDbVersion).toBe(BASELINE_VERSION);
@@ -426,7 +426,7 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
     }, 300_000);
 
     it('chạy lại sau khi gỡ phá hoại chỉ xử lý kho chưa đạt đích, và sổ lệch sự thật được đồng bộ lại không bịa lượt chạy', async () => {
-      await withClient(clusterUrl('lms_test_space_loi_586', MIGRATOR_ROLE, MIGRATOR_PASSWORD), async (client) => {
+      await withClient(clusterUrl('giaokhoa_test_space_loi_586', MIGRATOR_ROLE, MIGRATOR_PASSWORD), async (client) => {
         await client.query('DROP TABLE users');
       });
       // Gây lệch sổ có chủ đích cho canary: registry ghi một phiên
@@ -562,12 +562,12 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
     it('tổng kết nối mở dưới tải đồng thời không vượt tổng trần của các pool, và kho nhàn rỗi không giữ kết nối nào', async () => {
       const idleTimeoutMillis = 150;
       const canaryPool = new Pool({
-        connectionString: clusterUrl('lms_test_space_canary_586', MIGRATOR_ROLE, MIGRATOR_PASSWORD),
+        connectionString: clusterUrl('giaokhoa_test_space_canary_586', MIGRATOR_ROLE, MIGRATOR_PASSWORD),
         max: 3,
         idleTimeoutMillis,
       });
       const cPool = new Pool({
-        connectionString: clusterUrl('lms_test_space_c_586', MIGRATOR_ROLE, MIGRATOR_PASSWORD),
+        connectionString: clusterUrl('giaokhoa_test_space_c_586', MIGRATOR_ROLE, MIGRATOR_PASSWORD),
         max: 3,
         idleTimeoutMillis,
       });
@@ -600,8 +600,8 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
           ...Array.from({ length: 5 }, () => cpPool.query('SELECT pg_sleep(0.6)')),
         ];
         await new Promise((resolve) => setTimeout(resolve, 250));
-        const canaryCount = await countConnections('lms_test_space_canary_586');
-        const cCount = await countConnections('lms_test_space_c_586');
+        const canaryCount = await countConnections('giaokhoa_test_space_canary_586');
+        const cCount = await countConnections('giaokhoa_test_space_c_586');
         const cpCount = await countConnections(CP_DATABASE);
         expect(canaryCount).toBeGreaterThan(0);
         expect(canaryCount).toBeLessThanOrEqual(3);
@@ -613,8 +613,8 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
         // Sau khi hết việc và qua thời gian thu hồi kết nối nhàn,
         // các kho không còn giữ kết nối nào.
         await new Promise((resolve) => setTimeout(resolve, 600));
-        expect(await countConnections('lms_test_space_canary_586')).toBe(0);
-        expect(await countConnections('lms_test_space_c_586')).toBe(0);
+        expect(await countConnections('giaokhoa_test_space_canary_586')).toBe(0);
+        expect(await countConnections('giaokhoa_test_space_c_586')).toBe(0);
         expect(await countConnections(CP_DATABASE)).toBe(0);
       } finally {
         await canaryPool.end();
@@ -625,7 +625,7 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
   });
 
   describe('hồi quy vòng sửa: cô lập lỗi theo kho, tập migration còn thiếu, sao lưu fail-closed và kiểm tra khói', () => {
-    // Bộ ca này dùng sổ control plane RIÊNG (`lms_test_cp_fx595`)
+    // Bộ ca này dùng sổ control plane RIÊNG (`giaokhoa_test_cp_fx595`)
     // và các kho riêng để không chạm vào trạng thái registry của
     // các bộ ca trên; role dùng lại bộ role của ca chính (được tạo
     // ở beforeAll ngoài cùng và dọn ở afterAll ngoài cùng). Bộ
@@ -633,7 +633,7 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
     // migration "đích" — kho fx595-d được áp trước RIÊNG thư mục
     // đích để dựng đúng hình kho có migration mới nhất mà thiếu
     // migration cũ.
-    const FX_CP_DATABASE = 'lms_test_cp_fx595';
+    const FX_CP_DATABASE = 'giaokhoa_test_cp_fx595';
     const FX_BACKUP_DIR = join(__dirname, 'fleet-fx595-artifacts');
     const FX_MIGRATIONS_FULL = join(__dirname, 'fleet-fx595-migrations-full');
     const FX_MIGRATIONS_TARGET_ONLY = join(__dirname, 'fleet-fx595-migrations-target-only');
@@ -641,14 +641,14 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
     const FX_TARGET_VERSION = '20260202000000_fx_target';
     const FX_ENCRYPTION_KEY = 'fleet-test-fx595-passphrase';
     const FX_SPACES = [
-      { slug: 'fx595-nen-tang', kind: 'platform', database: 'lms_test_fx595_platform' },
-      { slug: 'fx595-a-canary', kind: 'center', database: 'lms_test_fx595_canary' },
-      { slug: 'fx595-b-chet', kind: 'center', database: 'lms_test_fx595_dead' },
-      { slug: 'fx595-c-tot', kind: 'center', database: 'lms_test_fx595_good' },
-      { slug: 'fx595-d-thieu-cu', kind: 'center', database: 'lms_test_fx595_stale' },
+      { slug: 'fx595-nen-tang', kind: 'platform', database: 'giaokhoa_test_fx595_platform' },
+      { slug: 'fx595-a-canary', kind: 'center', database: 'giaokhoa_test_fx595_canary' },
+      { slug: 'fx595-b-chet', kind: 'center', database: 'giaokhoa_test_fx595_dead' },
+      { slug: 'fx595-c-tot', kind: 'center', database: 'giaokhoa_test_fx595_good' },
+      { slug: 'fx595-d-thieu-cu', kind: 'center', database: 'giaokhoa_test_fx595_stale' },
     ] as const;
-    const FX_NOUSERS_SPACE = { slug: 'fx595-e-khong-users', kind: 'center', database: 'lms_test_fx595_nousers' } as const;
-    const FX_DEADCONNECT_SPACE = { slug: 'fx595-f-loi-ket-noi', kind: 'center', database: 'lms_test_fx595_deadconnect' } as const;
+    const FX_NOUSERS_SPACE = { slug: 'fx595-e-khong-users', kind: 'center', database: 'giaokhoa_test_fx595_nousers' } as const;
+    const FX_DEADCONNECT_SPACE = { slug: 'fx595-f-loi-ket-noi', kind: 'center', database: 'giaokhoa_test_fx595_deadconnect' } as const;
 
     const fxEnv = (): NodeJS.ProcessEnv => ({
       ...process.env,
@@ -759,7 +759,7 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       // kho fx595-d — nhật ký của nó có migration mới nhất nhưng
       // không có migration cũ.
       const stalePool = new Pool({
-        connectionString: clusterUrl('lms_test_fx595_stale', MIGRATOR_ROLE, MIGRATOR_PASSWORD),
+        connectionString: clusterUrl('giaokhoa_test_fx595_stale', MIGRATOR_ROLE, MIGRATOR_PASSWORD),
       });
       try {
         await applyStoreMigrations(createCentreKysely(stalePool), 'centre', FX_MIGRATIONS_TARGET_ONLY);
@@ -821,7 +821,7 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       expect(staleRuns).toHaveLength(1);
       expect(staleRuns[0]!.status).toBe('success');
       expect((await fxRegistryState('fx595-d-thieu-cu')).currentVersion).toBe(FX_TARGET_VERSION);
-      await withClient(clusterUrl('lms_test_fx595_stale', MIGRATOR_ROLE, MIGRATOR_PASSWORD), async (client) => {
+      await withClient(clusterUrl('giaokhoa_test_fx595_stale', MIGRATOR_ROLE, MIGRATOR_PASSWORD), async (client) => {
         const tables = await client.query<{ tablename: string }>(
           `SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('fx_older_probe', 'fx_target_probe') ORDER BY tablename`,
         );
@@ -866,7 +866,7 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       const dir = join(FX_BACKUP_DIR, 'direct-nokey');
       await expect(
         dumpDatabaseToFile({
-          url: clusterUrl('lms_test_fx595_good', MIGRATOR_ROLE, MIGRATOR_PASSWORD),
+          url: clusterUrl('giaokhoa_test_fx595_good', MIGRATOR_ROLE, MIGRATOR_PASSWORD),
           dir,
           kind: 'scheduled',
           runId: 'fx595-nokey',
@@ -887,7 +887,7 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       mkdirSync(join(dir, encName), { recursive: true });
       await expect(
         dumpDatabaseToFile({
-          url: clusterUrl('lms_test_fx595_good', MIGRATOR_ROLE, MIGRATOR_PASSWORD),
+          url: clusterUrl('giaokhoa_test_fx595_good', MIGRATOR_ROLE, MIGRATOR_PASSWORD),
           dir,
           kind: 'scheduled',
           runId,

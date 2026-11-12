@@ -14,7 +14,7 @@ Toàn bộ comment trong code — gồm comment mô tả luồng nghiệp vụ �
 ## Ranh giới phạm vi
 
 - 1 issue = 1 feat = 1 PR. Package thuần TypeScript: không thêm phụ thuộc Nest, Socket.IO hay client Redis vào package này — việc phát đi qua cổng `RealtimeEmitter`, việc đọc đi qua handle Kysely do app gọi truyền vào.
-- Schema bảng lấy từ `@lms/db`, hợp đồng sự kiện lấy từ `@lms/contracts` — cấm sao chép định nghĩa bảng hay tên sự kiện vào package.
+- Schema bảng lấy từ `@giaokhoa/db`, hợp đồng sự kiện lấy từ `@giaokhoa/contracts` — cấm sao chép định nghĩa bảng hay tên sự kiện vào package.
 
 ## Điều cấm package-specific
 

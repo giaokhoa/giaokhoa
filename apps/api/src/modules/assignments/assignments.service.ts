@@ -3,7 +3,7 @@ import type {
   AssignAnnotationView, AssignFeedbackMessageView, AssignGradeView, AssignRubricEvaluationInput,
   AssignRubricView, AssignSubmissionDetail, AssignSubmissionFileView, AssignSubmissionSummary,
   AssignmentForUserView, AssignmentView, TeacherCommentBankEntryView,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { ContextsService } from '../access/contexts.service';
 import { CONTEXT_LEVELS } from '../access/domain/capabilities';
@@ -15,7 +15,7 @@ import { GradesService } from '../grades/grades.service';
 import { UsersService } from '../users/users.service';
 import {
   AssignmentsRepository, type AssignAnnotationRow, type AssignGradeRow, type AssignSubmissionRow, type AssignmentRow,
-} from '@lms/db/repositories/assignments';
+} from '@giaokhoa/db/repositories/assignments';
 
 export const ASSIGN_COMPONENT = 'mod_assign';
 export const ASSIGN_CAPABILITIES = {

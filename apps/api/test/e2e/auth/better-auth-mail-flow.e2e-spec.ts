@@ -4,7 +4,7 @@ import { Test } from '@nestjs/testing';
 import { Client } from 'pg';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { renderAuthMail, type AuthMailPayload } from '@lms/contracts';
+import { renderAuthMail, type AuthMailPayload } from '@giaokhoa/contracts';
 import type { BetterAuthService } from '../../../src/modules/auth/better-auth/better-auth.service';
 import type { CredentialBridgeService } from '../../../src/modules/auth/better-auth/credential-bridge.service';
 import type { MailMessage } from '../../../src/modules/mail/mail.types';
@@ -17,7 +17,7 @@ import type { MailMessage } from '../../../src/modules/mail/mail.types';
  * endpoint Better Auth → callback → AuthMailService ghi dòng outbox
  * `auth_mail_requested` (đồng bộ trong request). Mail "người dùng
  * nhận" được dựng từ chính dòng outbox đó bằng `renderAuthMail` của
- * `@lms/contracts` — hàm dùng chung duy nhất mà processor ở phía
+ * `@giaokhoa/contracts` — hàm dùng chung duy nhất mà processor ở phía
  * worker gọi khi gửi thật (issue #517: khâu gửi đã chuyển sang hàng
  * đợi ở worker; relay phát job, processor dựng nội dung và gọi
  * transport Resend phía worker — khâu đó được kiểm chứng ở suite
@@ -197,7 +197,7 @@ describe('Mail Better Auth: đặt lại + OTP email (issue #7 giai đoạn 2.5)
     expect(outbox.rows[0].n).toBeGreaterThanOrEqual(1);
 
     const mail = await waitForMailTo(user.email);
-    expect(mail.subject).toBe('Đặt lại mật khẩu tài khoản LMS');
+    expect(mail.subject).toBe('Đặt lại mật khẩu tài khoản Giáo khoa');
     const token = /\/reset-password\/([A-Za-z0-9_-]+)\?/.exec(mail.text)?.[1];
     expect(token).toBeTruthy();
 
@@ -295,7 +295,7 @@ describe('Mail Better Auth: đặt lại + OTP email (issue #7 giai đoạn 2.5)
     expect(sent.body.success).toBe(true);
 
     const mail = await waitForMailTo(user.email);
-    expect(mail.subject).toBe('Mã đăng nhập LMS của bạn');
+    expect(mail.subject).toBe('Mã đăng nhập Giáo khoa của bạn');
     const otp = /\b(\d{6})\b/.exec(mail.text)?.[1];
     expect(otp).toBeTruthy();
 
@@ -402,7 +402,7 @@ describe('Mail Better Auth: đặt lại + OTP email (issue #7 giai đoạn 2.5)
     expect(sent.status).toBe(200);
 
     const mail = await waitForMailTo(user.email);
-    expect(mail.subject).toBe('Mã đặt lại mật khẩu LMS');
+    expect(mail.subject).toBe('Mã đặt lại mật khẩu Giáo khoa');
     const otp = /\b(\d{6})\b/.exec(mail.text)?.[1];
     expect(otp).toBeTruthy();
 

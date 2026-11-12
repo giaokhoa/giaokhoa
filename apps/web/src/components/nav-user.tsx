@@ -2,7 +2,7 @@ import { IconDotsVertical, IconLogout, IconSettings, IconUserCircle } from '@tab
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
-import { Avatar, AvatarFallback } from '@lms/ui/components/avatar';
+import { Avatar, AvatarFallback } from '@giaokhoa/ui/components/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,8 +11,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@lms/ui/components/dropdown-menu';
-import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@lms/ui/components/sidebar';
+} from '@giaokhoa/ui/components/dropdown-menu';
+import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@giaokhoa/ui/components/sidebar';
 import { useAuth } from '#lib/auth';
 import { TenantSwitcherMenu } from '#components/tenant-switcher';
 import '#config/i18n';

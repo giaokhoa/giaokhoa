@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { sql } from '@lms/db';
+import { sql } from '@giaokhoa/db';
 import { SpaceDatabaseService } from '../../../src/db/routing/space-database.service';
 import { ORDINARY_ROLE } from '../../support/ordinary-role';
 import {

@@ -74,7 +74,7 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
     const backup = await http(app).post('/api/v1/backup/jobs').set('Authorization', `Bearer ${admin}`).send({ courseId: course.id });
     expect(backup.status).toBeLessThan(300);
     expect(backup.body.status).toBe('completed');
-    expect(backup.body.archive.format).toBe('lms-backup');
+    expect(backup.body.archive.format).toBe('giaokhoa-backup');
     expect(backup.body.archive.version).toBe(1);
     const steps = await http(app).get(`/api/v1/backup/jobs/${backup.body.id}/steps`).set('Authorization', `Bearer ${admin}`);
     expect((steps.body as { name: string }[]).map((s) => s.name)).toEqual(
@@ -278,12 +278,12 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
     expect(comp.status).toBe(201);
     // --- Hai badge của khoá: B tham chiếu A (badge), khoá (course), cm (activity) và competency.
     const badgeA = await http(app).post('/api/v1/badges').set('Authorization', `Bearer ${admin}`)
-      .send({ name: `BK Badge A ${suffix}`, type: 2, courseId: course.id, issuerName: 'LMS' });
+      .send({ name: `BK Badge A ${suffix}`, type: 2, courseId: course.id, issuerName: 'Giáo khoa' });
     expect(badgeA.status).toBeLessThan(300);
     await http(app).put(`/api/v1/badges/${badgeA.body.id}/criteria`).set('Authorization', `Bearer ${admin}`)
       .send({ method: 1, criteria: [{ criteriaType: 'manual', params: {} }] });
     const badgeB = await http(app).post('/api/v1/badges').set('Authorization', `Bearer ${admin}`)
-      .send({ name: `BK Badge B ${suffix}`, type: 2, courseId: course.id, issuerName: 'LMS' });
+      .send({ name: `BK Badge B ${suffix}`, type: 2, courseId: course.id, issuerName: 'Giáo khoa' });
     expect(badgeB.status).toBeLessThan(300);
     await http(app).put(`/api/v1/badges/${badgeB.body.id}/criteria`).set('Authorization', `Bearer ${admin}`)
       .send({
@@ -307,7 +307,7 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
       .send({ name: `BK weekly ${suffix}`, eventType: 'course', courseId: course.id, timeStart: soon, repeat: { freq: 'WEEKLY', count: 2 } });
     expect(series.status).toBe(201);
     const seriesRootId = series.body.event.id as string;
-    const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT', 'UID:bk-feed@lms', 'SUMMARY:BK feed event', 'DTSTART:20270105T090000Z', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+    const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT', 'UID:bk-feed@giaokhoa', 'SUMMARY:BK feed event', 'DTSTART:20270105T090000Z', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
     const sub = await http(app).post('/api/v1/calendar/subscriptions').set('Authorization', `Bearer ${admin}`)
       .send({ name: `BK course feed ${suffix}`, eventType: 'course', courseId: course.id, icsData: ics });
     expect(sub.status).toBe(201);
@@ -432,7 +432,7 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
       .send({ categoryId: siteCat.body.id, qtype: 'shortanswer', questionText: 'Capital of France?', answers: [{ text: 'Paris', correct: true }] });
     expect(siteQ.status).toBeLessThan(300);
     const siteBadge = await http(app).post('/api/v1/badges').set('Authorization', `Bearer ${admin}`)
-      .send({ name: `Site Badge ${suffix}`, type: 1, issuerName: 'LMS HQ' });
+      .send({ name: `Site Badge ${suffix}`, type: 1, issuerName: 'Giáo khoa HQ' });
     expect(siteBadge.status).toBeLessThan(300);
     await http(app).put(`/api/v1/badges/${siteBadge.body.id}/criteria`).set('Authorization', `Bearer ${admin}`)
       .send({ method: 1, criteria: [{ criteriaType: 'manual', params: {} }] });

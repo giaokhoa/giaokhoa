@@ -1,11 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import type { UserProfile } from '@lms/contracts';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardDescription, CardHeader } from '@lms/ui/components/card';
-import { Input } from '@lms/ui/components/input';
-import { Label } from '@lms/ui/components/label';
-import { Spinner } from '@lms/ui/components/spinner';
+import type { UserProfile } from '@giaokhoa/contracts';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardDescription, CardHeader } from '@giaokhoa/ui/components/card';
+import { Input } from '@giaokhoa/ui/components/input';
+import { Label } from '@giaokhoa/ui/components/label';
+import { Spinner } from '@giaokhoa/ui/components/spinner';
 import { ErrorAlert } from '#components/error-alert';
 import { PageHeader, PageShell } from '#components/page-shell';
 import { useTranslation } from 'react-i18next';

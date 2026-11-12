@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { CurriculumRepository } from '@lms/db/repositories/curriculum';
+import { CurriculumRepository } from '@giaokhoa/db/repositories/curriculum';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { AccessModule } from '../access/access.module';
@@ -15,7 +15,7 @@ import { ProgramImportService } from './program-import.service';
  * đăng ký frame provider (K0a). Tầng sách đã tách hẳn sang
  * BooksModule (K0b tái cấu trúc).
  *
- * Từ issue #646, CurriculumRepository sống ở `@lms/db` (lớp thuần,
+ * Từ issue #646, CurriculumRepository sống ở `@giaokhoa/db` (lớp thuần,
  * không phụ thuộc Nest) nên module lắp nó bằng factory provider:
  * handle là handle Kysely định tuyến của kho trung tâm
  * (`SpaceDatabaseService.routedKysely`, dựng trên cùng

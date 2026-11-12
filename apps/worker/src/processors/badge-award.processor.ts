@@ -2,7 +2,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { I18nService } from '@nestjs/i18n';
 import type { Job } from 'bullmq';
 import { createHash, randomUUID } from 'node:crypto';
-import { sql, type CentreDB } from '@lms/db';
+import { sql, type CentreDB } from '@giaokhoa/db';
 import { tenantAls } from '../db/tenant-als';
 import { resolveDefaultTenantId } from '../db/default-tenant';
 import { SpaceDatabaseService } from '../db/routing/space-database.service';

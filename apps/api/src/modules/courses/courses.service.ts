@@ -1,9 +1,9 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { sql, type CentreTx, type ExamVariant } from '@lms/db';
+import { sql, type CentreTx, type ExamVariant } from '@giaokhoa/db';
 import {
   CoursesRepository, type CategoryRow, type CmRow, type CourseFormatOptionRow, type CourseRow, type SectionRow,
-} from '@lms/db/repositories/courses';
+} from '@giaokhoa/db/repositories/courses';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { ContextsService } from '../access/contexts.service';
 import { CONTEXT_LEVELS } from '../access/domain/capabilities';

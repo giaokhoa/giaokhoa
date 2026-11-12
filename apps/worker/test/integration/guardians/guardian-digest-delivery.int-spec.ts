@@ -4,7 +4,7 @@ import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { GuardianDigestEventsProcessor } from '../../../src/processors/guardian-digest-events.processor';
 import type { OutboxEventJobData } from '../../../src/outbox-event-routes';
-import { sql, type RawBuilder } from '@lms/db';
+import { sql, type RawBuilder } from '@giaokhoa/db';
 import {
   bootWorkerModuleAsOrdinaryRole,
   type OrdinaryWorkerModuleHarness,

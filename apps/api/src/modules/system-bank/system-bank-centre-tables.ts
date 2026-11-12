@@ -11,7 +11,7 @@
  *   truy vết nguồn), `system_bank_event_receipts` (vết trung tâm đã
  *   nhận sự kiện) và `outcome_package_installs` (vết bản cài gói
  *   YCCĐ) — sống trong kho nghiệp vụ của trung tâm, được khai trong
- *   schema `@lms/db` và được tạo bởi file baseline
+ *   schema `@giaokhoa/db` và được tạo bởi file baseline
  *   `packages/db/migrations/centre/20261025163710_baseline/migration.sql`.
  * - Ba bảng được NỐI VÀO CUỐI file baseline sau khi baseline đã phát
  *   hành. bộ máy cũ bỏ qua cả thư mục baseline trên các database đã áp

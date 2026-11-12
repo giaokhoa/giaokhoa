@@ -79,8 +79,8 @@ describe('mật khẩu database và token lời mời', () => {
   });
 
   it('URL kết nối mã hoá phần trăm mật khẩu chứa ký tự đặc biệt', () => {
-    const url = buildCentreDatabaseUrl({ host: 'db.internal', port: 5432, role: 'lms_role_x', password: 'p@ss/w?rd#', databaseName: 'lms_space_x' });
-    expect(url).toBe('postgres://lms_role_x:p%40ss%2Fw%3Frd%23@db.internal:5432/lms_space_x');
+    const url = buildCentreDatabaseUrl({ host: 'db.internal', port: 5432, role: 'giaokhoa_role_x', password: 'p@ss/w?rd#', databaseName: 'giaokhoa_space_x' });
+    expect(url).toBe('postgres://giaokhoa_role_x:p%40ss%2Fw%3Frd%23@db.internal:5432/giaokhoa_space_x');
     expect(() => new URL(url)).not.toThrow();
   });
 

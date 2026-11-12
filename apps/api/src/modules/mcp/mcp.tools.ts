@@ -36,7 +36,7 @@ import {
   type McpSubmitContributionInput,
   type McpSubmitContributionOutput,
   type RichTextDocument,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import type { OutboxService } from '../../infra/events/outbox.service';
 import type { CurriculumService } from '../curriculum/curriculum.service';
 import type { ExamsService } from '../exams/exams.service';
@@ -45,7 +45,7 @@ import type { QuestionsService } from '../questions/questions.service';
 import type { MatrixBanksService } from '../quiz/matrix-banks.service';
 import { truefalseHashAnswers } from '../questions/domain/question-engine';
 import { mcpRequestHash, normalizeContentStrings, scanContent, type ContentViolation } from './mcp-content';
-import type { McpIdempotencyRepository } from '@lms/db/repositories/mcp-idempotency';
+import type { McpIdempotencyRepository } from '@giaokhoa/db/repositories/mcp-idempotency';
 import type { McpActor } from './mcp.context';
 
 export interface McpToolDeps {
@@ -665,9 +665,9 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       // 403 insufficient_scope — research Phần 2.2/3.2): scope OAuth
       // chỉ là TRẦN, quyền nghiệp vụ thật do proposeContribution kiểm
       // bằng capability tại context như đường REST. ─────────────────
-      if (!actor.scopes.includes('lms.banks.contribute')) {
+      if (!actor.scopes.includes('giaokhoa.banks.contribute')) {
         await auditCall(deps, actor, 'submit_contribution', { result: 'insufficient_scope', bankId: targetBankId });
-        return errResult('insufficient_scope', 'This tool requires the OAuth scope "lms.banks.contribute"');
+        return errResult('insufficient_scope', 'This tool requires the OAuth scope "giaokhoa.banks.contribute"');
       }
 
       // ── Bank đích phải tồn tại (mọi cổng đích còn lại — personal,
@@ -1162,9 +1162,9 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
       const args = rawArgs as { questionIds: string[]; idempotencyKey: string };
 
       // ── Trần scope (phòng thủ tầng tool; cổng chính ở mount). ────
-      if (!actor.scopes.includes('lms.questions.write')) {
+      if (!actor.scopes.includes('giaokhoa.questions.write')) {
         await auditCall(deps, actor, 'publish_questions', { result: 'insufficient_scope' });
-        return errResult('insufficient_scope', 'This tool requires the OAuth scope "lms.questions.write"');
+        return errResult('insufficient_scope', 'This tool requires the OAuth scope "giaokhoa.questions.write"');
       }
       const { questionIds, idempotencyKey } = args;
 

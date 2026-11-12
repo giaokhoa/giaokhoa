@@ -1,4 +1,4 @@
-import type { Course, CourseContent, EnrolInstance } from '@lms/contracts';
+import type { Course, CourseContent, EnrolInstance } from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 import type {
   ClassMarkersView,

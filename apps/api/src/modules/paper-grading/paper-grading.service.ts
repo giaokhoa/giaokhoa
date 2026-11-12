@@ -27,7 +27,7 @@ import {
 import {
   PAPER_SCAN_STATUSES, type CreatePaperBatch, type PaperBatch, type PaperReading,
   type PaperRosterEntry, type PaperScan, type PaperScanStatus, type ResolvePaperReadings,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { ContextsService } from '../access/contexts.service';
 import { CONTEXT_LEVELS } from '../access/domain/capabilities';
@@ -45,7 +45,7 @@ import {
   type SheetGeometry,
 } from './domain/sheet-layout';
 import { generateSheetsPdf, parseSheetQr, type SheetPageStudent } from './domain/sheet-pdf';
-import { PaperGradingRepository, type PaperBatchRow, type PaperScanRow } from '@lms/db/repositories/paper-grading';
+import { PaperGradingRepository, type PaperBatchRow, type PaperScanRow } from '@giaokhoa/db/repositories/paper-grading';
 
 export const PAPER_COMPONENT = 'mod_quiz';
 const GRADE_PAPER_CAP = 'quiz:gradepaper';

@@ -13,7 +13,7 @@
  *     cảnh kết nối: `TenantAwarePool` cho kho trung tâm để RLS/GUC
  *     hoạt động, pool thường cho hai kho còn lại) và đăng ký một
  *     provider cho mỗi kho được truyền, dùng đúng factory của
- *     `@lms/db` (`createCentreKysely`, `createControlPlaneKysely`,
+ *     `@giaokhoa/db` (`createCentreKysely`, `createControlPlaneKysely`,
  *     `createSystemBankKysely`).
  *   - Các service lấy handle bằng `@InjectKysely(...)` (xem
  *     `inject-kysely.ts` cùng thư mục).
@@ -36,12 +36,12 @@ import {
   type OnApplicationShutdown,
   type Provider,
 } from '@nestjs/common';
-import { createCentreKysely, type CentreDb } from '@lms/db';
+import { createCentreKysely, type CentreDb } from '@giaokhoa/db';
 import {
   createControlPlaneKysely,
   type ControlPlaneDb,
-} from '@lms/db/control-plane';
-import { createSystemBankKysely, type SystemBankDb } from '@lms/db/system-bank';
+} from '@giaokhoa/db/control-plane';
+import { createSystemBankKysely, type SystemBankDb } from '@giaokhoa/db/system-bank';
 import type { Pool } from 'pg';
 import { KYSELY_CENTRE, KYSELY_CONTROL_PLANE, KYSELY_SYSTEM_BANK } from './inject-kysely';
 
@@ -51,9 +51,9 @@ const KYSELY_INSTANCES = 'KYSELY_INSTANCES';
 /**
  * Hình tối thiểu của một instance Kysely mà provider dọn dẹp cần:
  * chỉ thao tác `destroy()`. Khai theo cấu trúc thay vì import kiểu
- * `Kysely` vì package `kysely` là phụ thuộc của `@lms/db`, không
+ * `Kysely` vì package `kysely` là phụ thuộc của `@giaokhoa/db`, không
  * phải của `apps/api` — các handle đi vào module đều qua factory
- * của `@lms/db` nên kiểu đầy đủ vẫn được giữ ở nơi khai báo chúng.
+ * của `@giaokhoa/db` nên kiểu đầy đủ vẫn được giữ ở nơi khai báo chúng.
  */
 type DestroyableKysely = { destroy(): Promise<void> };
 

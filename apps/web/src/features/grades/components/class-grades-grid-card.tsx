@@ -8,8 +8,8 @@
  */
 import { useTranslation } from 'react-i18next';
 
-import type { CourseActivityGrid } from '@lms/contracts';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lms/ui/components/card';
+import type { CourseActivityGrid } from '@giaokhoa/contracts';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 
 import { scoreLabel } from '../utils/gradebook-helpers';
 

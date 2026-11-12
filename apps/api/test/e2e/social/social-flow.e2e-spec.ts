@@ -129,7 +129,7 @@ describe('Xã hội: thẻ, bình luận, đánh giá, ghi chú', () => {
       raters.push((await login(app, u.username, STRONG_PASSWORD)).accessToken);
     }
     const systemCtx = await contextIdByLevelInstance(app, admin, 10, null);
-    // Id item duy nhất theo lượt chạy: lms_test tồn tại qua các lượt chạy, và bản tổng hợp
+    // Id item duy nhất theo lượt chạy: giaokhoa_test tồn tại qua các lượt chạy, và bản tổng hợp
     // tính theo từng item — id cố định sẽ tích lũy rating từ các lượt chạy trước.
     const [itemA, itemB, itemC, itemBad] = [uuidv7(), uuidv7(), uuidv7(), uuidv7()];
     const rate = async (token: string, itemId: string, rating: number) => {

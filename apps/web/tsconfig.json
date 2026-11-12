@@ -1,8 +1,8 @@
 {
-  "extends": "@lms/config/tsconfig/react.json",
+  "extends": "@giaokhoa/config/tsconfig/react.json",
   "compilerOptions": {
     "paths": {
-      "@lms/contracts": [
+      "@giaokhoa/contracts": [
         "../../packages/contracts/src/index.ts"
       ],
       "#features/*": [

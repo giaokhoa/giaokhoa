@@ -45,7 +45,7 @@ describe('McpOAuthVerifier (lát MCP-1, issue #163)', () => {
       aud: AUDIENCE,
       sub: '11111111-2222-4333-8444-555555555555',
       client_id: 'client-abc',
-      scope: 'lms.questions.read lms.questions.draft',
+      scope: 'giaokhoa.questions.read giaokhoa.questions.draft',
       iat: now,
       exp: now + 3600,
       jti: 'token-1',
@@ -94,7 +94,7 @@ describe('McpOAuthVerifier (lát MCP-1, issue #163)', () => {
     if (result.ok) {
       expect(result.identity.userId).toBe('11111111-2222-4333-8444-555555555555');
       expect(result.identity.clientId).toBe('client-abc');
-      expect(result.identity.scopes).toEqual(['lms.questions.read', 'lms.questions.draft']);
+      expect(result.identity.scopes).toEqual(['giaokhoa.questions.read', 'giaokhoa.questions.draft']);
     }
   });
 

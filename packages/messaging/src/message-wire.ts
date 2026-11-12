@@ -1,17 +1,17 @@
-import type { LmsMessage } from '@lms/contracts';
+import type { GiaoKhoaMessage } from '@giaokhoa/contracts';
 import type {
   ConversationRow,
   MessageQuoteView,
   MessageRow,
   MessageWithQuoteRow,
-} from '@lms/db/repositories/messaging';
+} from '@giaokhoa/db/repositories/messaging';
 
 /**
  * Hình dạng dòng của tầng dữ liệu messaging được khai một nguồn duy
- * nhất tại `@lms/db/repositories/messaging` (nơi repository Kysely
+ * nhất tại `@giaokhoa/db/repositories/messaging` (nơi repository Kysely
  * sống) và re-export tại đây cho mọi phía tiêu thụ hiện hữu của
  * package — chỉ là import type-only, không tạo phụ thuộc runtime
- * ngược về `@lms/db` (issue #658: gỡ vòng phụ thuộc hai package).
+ * ngược về `@giaokhoa/db` (issue #658: gỡ vòng phụ thuộc hai package).
  */
 export type { ConversationRow, MessageQuoteView, MessageRow, MessageWithQuoteRow };
 
@@ -70,7 +70,7 @@ export function messageQuoteOf(original: MessageRow, opts: { privileged: boolean
  * Khối trích dẫn (lát M3) do tầng gọi dựng sẵn qua `attachQuotes` của
  * bề mặt đọc rồi truyền vào — hàm này thuần ánh xạ, không tự tra DB.
  */
-export function toWireMessage(row: MessageRow, quote: MessageQuoteView | null = null): LmsMessage {
+export function toWireMessage(row: MessageRow, quote: MessageQuoteView | null = null): GiaoKhoaMessage {
   return {
     id: row.id,
     conversationId: row.conversationId,
@@ -103,7 +103,7 @@ export const SEARCH_EXCERPT_MAX_CHARS = QUOTE_EXCERPT_MAX_CHARS;
  *
  * Hàm này trước đây sống trong file repository phía API; nó là
  * logic hình dạng wire thuần chuỗi (cùng họ với {@link quoteExcerptOf})
- * nên chuyển về đây khi repository dời sang `@lms/db` — `@lms/db`
+ * nên chuyển về đây khi repository dời sang `@giaokhoa/db` — `@giaokhoa/db`
  * giữ thuần truy cập dữ liệu (issue #658).
  */
 export function searchExcerptOf(text: string, query: string): string {

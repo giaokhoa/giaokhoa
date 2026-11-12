@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import type { AssignSubmissionSummary, AssignmentForUserView } from '@lms/contracts';
-import { Badge } from '@lms/ui/components/badge';
-import { Button } from '@lms/ui/components/button';
-import { Input } from '@lms/ui/components/input';
-import { Label } from '@lms/ui/components/label';
-import { Skeleton } from '@lms/ui/components/skeleton';
-import { Textarea } from '@lms/ui/components/textarea';
+import type { AssignSubmissionSummary, AssignmentForUserView } from '@giaokhoa/contracts';
+import { Badge } from '@giaokhoa/ui/components/badge';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Input } from '@giaokhoa/ui/components/input';
+import { Label } from '@giaokhoa/ui/components/label';
+import { Skeleton } from '@giaokhoa/ui/components/skeleton';
+import { Textarea } from '@giaokhoa/ui/components/textarea';
 import { ErrorAlert } from '#components/error-alert';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';

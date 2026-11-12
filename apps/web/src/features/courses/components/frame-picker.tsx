@@ -1,5 +1,5 @@
-import { Badge } from '@lms/ui/components/badge';
-import { Checkbox } from '@lms/ui/components/checkbox';
+import { Badge } from '@giaokhoa/ui/components/badge';
+import { Checkbox } from '@giaokhoa/ui/components/checkbox';
 import { useTranslation } from 'react-i18next';
 import type { FrameUnit } from '#lib/curriculum';
 import '#config/i18n';

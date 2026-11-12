@@ -11,7 +11,7 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   plugins: [reactRouter(), tailwindcss()],
   // Package contracts xuất CommonJS: để Node nạp ngoài Vite SSR module runner.
-  ssr: { external: ['@lms/contracts'] },
+  ssr: { external: ['@giaokhoa/contracts'] },
   server: {
     host: '0.0.0.0',
     port: 5173,

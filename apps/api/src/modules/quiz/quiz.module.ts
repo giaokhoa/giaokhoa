@@ -1,5 +1,5 @@
 import { forwardRef, Module } from '@nestjs/common';
-import { QuizRepository } from '@lms/db/repositories/quiz';
+import { QuizRepository } from '@giaokhoa/db/repositories/quiz';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { EventsModule } from '../../infra/events/events.module';
@@ -46,7 +46,7 @@ import { QuizService } from './quiz.service';
   imports: [AccessModule, CoursesModule, forwardRef(() => QuestionsModule), GradesModule, UsersModule, GroupsModule, CurriculumModule, EventsModule, TenantsModule, EnrolModule, FilesModule, forwardRef(() => ExamsModule), SpaceRoutingModule],
   controllers: [QuizAttemptsController, ExamMatricesController],
   providers: [
-    // Repository nay thuộc package @lms/db (issue #643): dựng trên
+    // Repository nay thuộc package @giaokhoa/db (issue #643): dựng trên
     // handle Kysely định tuyến theo trung tâm — cùng pool
     // TenantAwarePool với đường cũ trước đây nên ngữ cảnh
     // GUC/RLS giữ nguyên. Token lớp giữ nguyên để các điểm tiêm và

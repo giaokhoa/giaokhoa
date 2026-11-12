@@ -77,7 +77,7 @@ describe('BadgesService.issueBadge — thông báo badge_awarded tôn trọng t�
   function badgeOf(courseId: string | null) {
     return {
       id: 'badge-1', name: 'Huy hiệu kiểm chứng', description: null,
-      type: courseId ? 2 : 1, courseId, issuerName: 'LMS', issuerUrl: null,
+      type: courseId ? 2 : 1, courseId, issuerName: 'Giáo khoa', issuerUrl: null,
       version: null, expireDate: null, expirePeriod: null, status: 1,
     };
   }

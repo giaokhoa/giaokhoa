@@ -3,13 +3,13 @@ import { I18nService } from '@nestjs/i18n';
 import type { Queue } from 'bullmq';
 import { randomUUID } from 'node:crypto';
 import type { Observable } from 'rxjs';
-import type { NotificationGroup, NotificationGroupPage, NotificationItem, NotificationItemPage } from '@lms/contracts';
+import type { NotificationGroup, NotificationGroupPage, NotificationItem, NotificationItemPage } from '@giaokhoa/contracts';
 import type { ListNotificationGroupsQueryDto, ListNotificationItemsQueryDto, ReadNotificationGroupDto } from './dto/messaging.dto';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { SiteConfigService } from '../site-config/site-config.service';
 import { UsersService } from '../users/users.service';
-import { MessagingRepository, type NotificationRow } from '@lms/db/repositories/messaging';
+import { MessagingRepository, type NotificationRow } from '@giaokhoa/db/repositories/messaging';
 import { NotificationUnreadStreamService } from './notification-unread-stream.service';
 import { tenantAls } from '../tenants/tenant-als';
 import { MessagingGroupTreeService } from './messaging-group-tree.service';
@@ -132,7 +132,7 @@ export class MessagingNotificationsService {
   /**
    * Phạm vi tenant hiệu lực cho các đường notification phía user:
    * đọc từ ngữ cảnh tenant của request hiện hành và truyền TƯỜNG
-   * MINH xuống repository (repository tại `@lms/db` không đọc
+   * MINH xuống repository (repository tại `@giaokhoa/db` không đọc
    * ALS — issue #658). Ngữ cảnh platform hoặc đường nền (không
    * có store ALS) cho `undefined` = không lọc thêm ở tầng ứng
    * dụng, đúng ngữ nghĩa của bản cũ khi repository tự đọc ALS.

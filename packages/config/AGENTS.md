@@ -38,8 +38,8 @@ của repo.
 ## Kiểm chứng bắt buộc
 
 - Đổi tsconfig ở đây = đổi điều kiện biên dịch của MỌI package: trước khi push
-  phải chạy typecheck của ít nhất một app mỗi dòng (`@lms/api` cho dòng Nest,
-  `@lms/web` cho dòng React) và ghi kết quả vào bàn giao.
+  phải chạy typecheck của ít nhất một app mỗi dòng (`@giaokhoa/api` cho dòng Nest,
+  `@giaokhoa/web` cho dòng React) và ghi kết quả vào bàn giao.
 - CI là cổng chính; kết luận CI chỉ từ LOG THẬT.
 
 ## Kỷ luật test theo nghiệp vụ
@@ -68,10 +68,10 @@ logic phức tạp; đội đánh giá độc lập soi như tiêu chí đạt.
   `strict: true` và các kỷ luật kiểu nền).
 - `tsconfig/nest.json` — kế thừa `base.json`, dòng backend (module CommonJS,
   moduleResolution Node10): `apps/api`, `apps/worker`, `packages/db`
-  dùng qua `extends: "@lms/config/tsconfig/nest.json"`.
+  dùng qua `extends: "@giaokhoa/config/tsconfig/nest.json"`.
 - `tsconfig/react.json` — kế thừa `base.json`, dòng frontend (module ESNext,
   moduleResolution bundler): `apps/web`, `packages/editor`, `packages/ui`
-  dùng qua `extends: "@lms/config/tsconfig/react.json"`.
+  dùng qua `extends: "@giaokhoa/config/tsconfig/react.json"`.
 - `packages/contracts` dùng thẳng `base.json`. Hai dòng Nest/React tách nhau
   theo quyết định tách hai dòng (xem điều cấm ở trên: không gộp hai dòng
   khi chưa có quyết định thay thế).

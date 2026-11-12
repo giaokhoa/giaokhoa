@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Cache } from 'cache-manager';
 import type { ConfigService } from '@nestjs/config';
-import type { AccessRepository, ContextRow } from '@lms/db/repositories/access';
+import type { AccessRepository, ContextRow } from '@giaokhoa/db/repositories/access';
 import type { ContextsService } from './contexts.service';
 import { CAPABILITY_DEFINITIONS } from './domain/capabilities';
 import { PermissionEvaluator } from './permission-evaluator.service';
@@ -148,7 +148,7 @@ function makeWorld() {
     repo as unknown as AccessRepository,
     contexts as unknown as ContextsService,
     cache as unknown as Cache,
-    { getOrThrow: () => 'postgres://user:pass@localhost:5432/lms_test_api' } as unknown as ConfigService,
+    { getOrThrow: () => 'postgres://user:pass@localhost:5432/giaokhoa_test_api' } as unknown as ConfigService,
   );
   return { evaluator, counter, byId };
 }

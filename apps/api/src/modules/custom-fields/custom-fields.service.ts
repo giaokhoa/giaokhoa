@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { CustomFieldsRepository, type FieldRow } from '@lms/db/repositories/custom-fields';
+import { CustomFieldsRepository, type FieldRow } from '@giaokhoa/db/repositories/custom-fields';
 
 export type CustomFieldType = 'text' | 'textarea' | 'select' | 'checkbox' | 'date';
 export interface FieldConfig { required?: boolean; options?: string[]; defaultvalue?: string; maxlength?: number }

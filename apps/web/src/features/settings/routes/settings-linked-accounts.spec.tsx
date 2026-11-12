@@ -44,7 +44,7 @@ const OTHER_SESSION = {
   createdAt: '2026-10-22T01:00:00.000Z',
   lastActivityAt: '2026-10-22T02:00:00.000Z',
   ip: '198.51.100.7',
-  userAgent: 'LMS mobile app',
+  userAgent: 'Giáo khoa mobile app',
   current: false,
 };
 const THIRD_SESSION = {

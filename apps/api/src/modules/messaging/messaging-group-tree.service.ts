@@ -1,5 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { MessagingRepository } from '@lms/db/repositories/messaging';
+import { MessagingRepository } from '@giaokhoa/db/repositories/messaging';
 import type { ContactRelationship, PersonSummaryView } from './messaging-contacts.service';
 import { MessagingMembershipSyncService } from './messaging-membership-sync.service';
 
@@ -33,7 +33,7 @@ export interface MessagingCourseView {
   shortName: string;
 }
 
-/** Vai của người gọi tại một nút cây nhóm (hợp đồng ở @lms/contracts, lát MSG-T1). */
+/** Vai của người gọi tại một nút cây nhóm (hợp đồng ở @giaokhoa/contracts, lát MSG-T1). */
 export type ConversationTreeRole = 'teaching' | 'learning' | 'staff';
 
 /**

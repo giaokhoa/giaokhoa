@@ -17,13 +17,13 @@ import {
  */
 describe('Cấp phát database control plane (helper thuần)', () => {
   it('đọc tên database từ path và role từ username của URL', () => {
-    const target = parseControlPlaneTarget('postgres://lms_control_plane:pw@db.internal:5432/lms_control_plane');
-    expect(target).toEqual({ database: 'lms_control_plane', role: 'lms_control_plane', rolePassword: 'pw' });
+    const target = parseControlPlaneTarget('postgres://giaokhoa_control_plane:pw@db.internal:5432/giaokhoa_control_plane');
+    expect(target).toEqual({ database: 'giaokhoa_control_plane', role: 'giaokhoa_control_plane', rolePassword: 'pw' });
   });
 
   it('URL thiếu tên database hoặc thiếu username bị từ chối ngay', () => {
     expect(() => parseControlPlaneTarget('postgres://role:pw@db.internal:5432/')).toThrow(/database/);
-    expect(() => parseControlPlaneTarget('postgres://db.internal:5432/lms_control_plane')).toThrow(/role/);
+    expect(() => parseControlPlaneTarget('postgres://db.internal:5432/giaokhoa_control_plane')).toThrow(/role/);
   });
 
   it('định danh và literal được thoát đúng cú pháp SQL', () => {
@@ -52,23 +52,23 @@ describe('Cấp phát database control plane (helper thuần)', () => {
   });
 
   it('đích khoá kho nghiệp vụ đọc từ URL: tên database ở path, role nghiệp vụ ở username', () => {
-    expect(parseBusinessTarget('postgres://app_role:pw@db.internal:5432/lms')).toEqual({
-      database: 'lms',
+    expect(parseBusinessTarget('postgres://app_role:pw@db.internal:5432/giaokhoa')).toEqual({
+      database: 'giaokhoa',
       roles: ['app_role'],
     });
     expect(() => parseBusinessTarget('postgres://app_role:pw@db.internal:5432/')).toThrow(/database/);
-    expect(() => parseBusinessTarget('postgres://db.internal:5432/lms')).toThrow(/role/);
+    expect(() => parseBusinessTarget('postgres://db.internal:5432/giaokhoa')).toThrow(/role/);
   });
 
   it('khoá kho nghiệp vụ thu hồi CONNECT của PUBLIC và chỉ cấp lại cho các role nghiệp vụ hợp lệ', () => {
-    expect(buildRestrictBusinessConnectStatements({ database: 'lms', roles: ['app_role'] })).toEqual([
-      'REVOKE CONNECT ON DATABASE "lms" FROM PUBLIC',
-      'GRANT CONNECT ON DATABASE "lms" TO "app_role"',
+    expect(buildRestrictBusinessConnectStatements({ database: 'giaokhoa', roles: ['app_role'] })).toEqual([
+      'REVOKE CONNECT ON DATABASE "giaokhoa" FROM PUBLIC',
+      'GRANT CONNECT ON DATABASE "giaokhoa" TO "app_role"',
     ]);
-    expect(buildRestrictBusinessConnectStatements({ database: 'lms', roles: ['app_role', 'report_role'] })).toEqual([
-      'REVOKE CONNECT ON DATABASE "lms" FROM PUBLIC',
-      'GRANT CONNECT ON DATABASE "lms" TO "app_role"',
-      'GRANT CONNECT ON DATABASE "lms" TO "report_role"',
+    expect(buildRestrictBusinessConnectStatements({ database: 'giaokhoa', roles: ['app_role', 'report_role'] })).toEqual([
+      'REVOKE CONNECT ON DATABASE "giaokhoa" FROM PUBLIC',
+      'GRANT CONNECT ON DATABASE "giaokhoa" TO "app_role"',
+      'GRANT CONNECT ON DATABASE "giaokhoa" TO "report_role"',
     ]);
   });
 });

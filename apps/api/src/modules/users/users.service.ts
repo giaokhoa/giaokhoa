@@ -1,9 +1,9 @@
 import { BadRequestException, ConflictException, ForbiddenException, forwardRef, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import type { MyAccessView } from '@lms/contracts';
-import { AuthRepository } from '@lms/db/repositories/auth';
-import { UsersRepository, type UserListFilter, type UserPatch, type UserRow } from '@lms/db/repositories/users';
+import type { MyAccessView } from '@giaokhoa/contracts';
+import { AuthRepository } from '@giaokhoa/db/repositories/auth';
+import { UsersRepository, type UserListFilter, type UserPatch, type UserRow } from '@giaokhoa/db/repositories/users';
 import { OutboxService } from '../../infra/events/outbox.service';
-import type { ContextRow } from '@lms/db/repositories/access';
+import type { ContextRow } from '@giaokhoa/db/repositories/access';
 import { ContextsService } from '../access/contexts.service';
 import { CredentialBridgeService } from '../auth/better-auth/credential-bridge.service';
 import { CONTEXT_LEVELS } from '../access/domain/capabilities';

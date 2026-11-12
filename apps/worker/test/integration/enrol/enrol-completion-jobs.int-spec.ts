@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { INestApplicationContext } from '@nestjs/common';
-import { sql } from '@lms/db';
+import { sql } from '@giaokhoa/db';
 import { CompletionRecalculateProcessor } from '../../../src/processors/completion-recalculate.processor';
 import { EnrolExpiryProcessor } from '../../../src/processors/enrol-expiry.processor';
 import {

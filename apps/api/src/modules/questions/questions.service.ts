@@ -3,7 +3,7 @@ import {
   cognitiveLevelSchema, extractRichTextPlainText, getTrueFalseStatements, richTextBlocksContainStatementList,
   richTextBlocksHaveContent, toRichTextDocument, TRUE_FALSE_STATEMENT_COUNT, uuidIdSchema,
   type RichTextDocument, type RichTextInput,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { ContextsService } from '../access/contexts.service';
@@ -13,7 +13,7 @@ import {
   QuestionsRepository, type AnswerKeyRow, type AnswerRow, type AttemptRow, type EntryRow, type EssayOptionsRow,
   type MultichoiceOptionsRow, type QCategoryRow, type QuestionRow, type QuestionsTx,
   type ShortanswerOptionsRow, type StepRow, type StimulusRow, type UsageRow, type VersionRow,
-} from '@lms/db/repositories/questions';
+} from '@giaokhoa/db/repositories/questions';
 
 /** Một đáp án trong payload cấu trúc theo qtype (đầu vào của API): cờ `correct` đúng/sai NHỊ PHÂN — tỉ trọng fraction đã bỏ hẳn (quyết 12:04 ngày 26/10/2026). */
 export interface QuestionAnswerInput {

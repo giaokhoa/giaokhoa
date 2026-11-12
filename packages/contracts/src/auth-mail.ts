@@ -83,9 +83,9 @@ function escapeHtml(value: string): string {
 /** Dựng nội dung mail (tiêu đề + text + html tối thiểu) từ payload outbox. */
 export function renderAuthMail(payload: AuthMailPayload): RenderedAuthMail {
   if (payload.kind === 'password_reset') {
-    const subject = 'Đặt lại mật khẩu tài khoản LMS';
+    const subject = 'Đặt lại mật khẩu tài khoản Giáo khoa';
     const text = [
-      'Bạn (hoặc ai đó) vừa yêu cầu đặt lại mật khẩu cho tài khoản LMS gắn với email này.',
+      'Bạn (hoặc ai đó) vừa yêu cầu đặt lại mật khẩu cho tài khoản Giáo khoa gắn với email này.',
       '',
       `Mở liên kết sau để đặt mật khẩu mới (có hiệu lực trong ${RESET_LINK_VALIDITY_TEXT}, chỉ dùng được một lần):`,
       payload.url,
@@ -93,7 +93,7 @@ export function renderAuthMail(payload: AuthMailPayload): RenderedAuthMail {
       'Nếu bạn không yêu cầu, hãy bỏ qua email này — mật khẩu hiện tại vẫn giữ nguyên.',
     ].join('\n');
     const html = [
-      '<p>Bạn (hoặc ai đó) vừa yêu cầu đặt lại mật khẩu cho tài khoản LMS gắn với email này.</p>',
+      '<p>Bạn (hoặc ai đó) vừa yêu cầu đặt lại mật khẩu cho tài khoản Giáo khoa gắn với email này.</p>',
       `<p><a href="${escapeHtml(payload.url)}">Đặt mật khẩu mới</a> (liên kết có hiệu lực trong ${RESET_LINK_VALIDITY_TEXT}, chỉ dùng được một lần).</p>`,
       '<p>Nếu bạn không yêu cầu, hãy bỏ qua email này — mật khẩu hiện tại vẫn giữ nguyên.</p>',
     ].join('\n');
@@ -103,21 +103,21 @@ export function renderAuthMail(payload: AuthMailPayload): RenderedAuthMail {
   // Luồng OTP đặt lại mật khẩu và luồng OTP đăng nhập dùng hai tiêu đề
   // khác nhau để người nhận nhìn tiêu đề là biết mã này cho việc gì.
   const forPasswordReset = payload.otpType === 'forget-password';
-  const subject = forPasswordReset ? 'Mã đặt lại mật khẩu LMS' : 'Mã đăng nhập LMS của bạn';
+  const subject = forPasswordReset ? 'Mã đặt lại mật khẩu Giáo khoa' : 'Mã đăng nhập Giáo khoa của bạn';
   const purpose = forPasswordReset
-    ? 'Mã để đặt lại mật khẩu tài khoản LMS của bạn là:'
-    : 'Mã đăng nhập tài khoản LMS của bạn là:';
+    ? 'Mã để đặt lại mật khẩu tài khoản Giáo khoa của bạn là:'
+    : 'Mã đăng nhập tài khoản Giáo khoa của bạn là:';
   const text = [
     purpose,
     '',
     payload.otp,
     '',
-    `Mã có hiệu lực trong ${OTP_VALIDITY_TEXT}. Không chia sẻ mã này cho bất kỳ ai — đội ngũ LMS không bao giờ hỏi mã của bạn.`,
+    `Mã có hiệu lực trong ${OTP_VALIDITY_TEXT}. Không chia sẻ mã này cho bất kỳ ai — đội ngũ Giáo khoa không bao giờ hỏi mã của bạn.`,
   ].join('\n');
   const html = [
     `<p>${purpose}</p>`,
     `<p style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">${escapeHtml(payload.otp)}</p>`,
-    `<p>Mã có hiệu lực trong ${OTP_VALIDITY_TEXT}. Không chia sẻ mã này cho bất kỳ ai — đội ngũ LMS không bao giờ hỏi mã của bạn.</p>`,
+    `<p>Mã có hiệu lực trong ${OTP_VALIDITY_TEXT}. Không chia sẻ mã này cho bất kỳ ai — đội ngũ Giáo khoa không bao giờ hỏi mã của bạn.</p>`,
   ].join('\n');
   return { to: payload.to, subject, text, html };
 }

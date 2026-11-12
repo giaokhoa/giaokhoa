@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { I18nService } from '@nestjs/i18n';
-import { sql, type CentreDB } from '@lms/db';
+import { sql, type CentreDB } from '@giaokhoa/db';
 import { NotificationDeliveryService } from './notification-delivery.service';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
 
@@ -547,7 +547,7 @@ export class GuardianDigestHandlerService {
     await this.spaceDb.routedKysely.insertInto('outbox_events').values({
       aggregate: 'guardian', type, tenant_id: tenantId,
       // jsonb: serialize tường minh kèm `::jsonb` theo khuôn ghi
-      // jsonb của `@lms/db`; khoá payload giữ nguyên như sự kiện cũ.
+      // jsonb của `@giaokhoa/db`; khoá payload giữ nguyên như sự kiện cũ.
       payload: sql<CentreDB['outbox_events']['payload']>`${JSON.stringify({ ...payload, tenantId })}::jsonb`,
     }).execute();
   }

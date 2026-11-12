@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { GroupsRepository } from '@lms/db/repositories/groups';
+import { GroupsRepository } from '@giaokhoa/db/repositories/groups';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { EventsModule } from '../../infra/events/events.module';
@@ -16,7 +16,7 @@ import { GroupsService } from './groups.service';
   controllers: [CourseGroupsController, CourseGroupingsController, CohortsController],
   providers: [
     {
-      // GroupsRepository nay là repository Kysely của `@lms/db`
+      // GroupsRepository nay là repository Kysely của `@giaokhoa/db`
       // (issue #645): provider dựng bằng factory với handle kho
       // trung tâm ĐÃ ĐỊNH TUYẾN THEO KHÔNG GIAN (`routedKysely`
       // của SpaceDatabaseService), cùng khuôn với các repository

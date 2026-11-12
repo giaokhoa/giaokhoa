@@ -4,7 +4,7 @@ import { ClassEnrolReconcileProcessor } from '../../../src/processors/class-enro
 import { TaskLogService } from '../../../src/task-log.service';
 import { TenantAwarePool } from '../../../src/db/tenant-pool';
 import { adminDatabaseUrl, ensureOrdinaryRole, ordinaryRoleUrl } from '../../support/ordinary-role';
-import { createCentreKysely, sql, type CentreDb } from '@lms/db';
+import { createCentreKysely, sql, type CentreDb } from '@giaokhoa/db';
 
 /**
  * Hồi quy issue #292 — job đối soát ghi danh lớp chạy bằng role DB

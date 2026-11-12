@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import type { SiteSetting } from '@lms/contracts';
+import type { SiteSetting } from '@giaokhoa/contracts';
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import {
@@ -8,8 +8,8 @@ import {
   validateSiteSettingValue,
   type SiteSettingDefinition,
 } from '../site-config/settings-registry';
-import { SiteConfigRepository } from '@lms/db/repositories/site-config';
-import { TenantsRepository } from '@lms/db/repositories/tenants';
+import { SiteConfigRepository } from '@giaokhoa/db/repositories/site-config';
+import { TenantsRepository } from '@giaokhoa/db/repositories/tenants';
 import { TenantContextService } from './tenant-context.service';
 
 /**
@@ -41,7 +41,7 @@ export class TenantConfigService {
    * Giá trị đã lưu ở tầng platform; undefined khi chưa có ghi đè.
    * Quy tắc lưu trữ (bảng `config` cho core, `plugin_config` cho
    * component kèm nhánh đọc JSON) do `SiteConfigRepository` của
-   * `@lms/db` giữ — service này uỷ quyền thẳng, không giữ bản sao
+   * `@giaokhoa/db` giữ — service này uỷ quyền thẳng, không giữ bản sao
    * đường truy vấn riêng.
    */
   private async platformStoredValue(component: string, name: string): Promise<unknown> {

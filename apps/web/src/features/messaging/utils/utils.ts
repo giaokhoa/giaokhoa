@@ -116,11 +116,11 @@ export function presenceLabelKey(status: PresenceStatus): string {
  * gọn UI nhắn tin, nối tiếp issue #33).
  *
  * @remarks
- * `DropdownMenuContent` mặc định của \@lms/ui ghim bề rộng theo bề
+ * `DropdownMenuContent` mặc định của \@giaokhoa/ui ghim bề rộng theo bề
  * rộng của phần tử gọt (`w-(--anchor-width)`) — nút ⋯ và avatar đều
  * rất hẹp nên các nhãn dài bị bẻ xuống nhiều dòng, menu trông nát.
  * Hằng này sửa TẠI ĐIỂM DÙNG (cố ý không đổi class mặc định toàn cục
- * của \@lms/ui để không đổi hành vi mọi menu khác trong hệ): menu
+ * của \@giaokhoa/ui để không đổi hành vi mọi menu khác trong hệ): menu
  * lấy bề rộng theo mục dài nhất (`w-max`), không hẹp hơn `min-w-52`,
  * và bị chặn ở `max-w-[calc(100vw-2rem)]` để positioner của Base UI
  * vẫn giữ trọn menu trong viewport (cùng khuôn chặn của menu chuông

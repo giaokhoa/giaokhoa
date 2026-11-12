@@ -1,6 +1,6 @@
 import { forwardRef, Module } from '@nestjs/common';
-import { QuestionBanksRepository } from '@lms/db/repositories/question-banks';
-import { QuestionsRepository } from '@lms/db/repositories/questions';
+import { QuestionBanksRepository } from '@giaokhoa/db/repositories/question-banks';
+import { QuestionsRepository } from '@giaokhoa/db/repositories/questions';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { EventsModule } from '../../infra/events/events.module';
@@ -28,14 +28,14 @@ import { QuestionsService } from './questions.service';
  * `forwardRef` theo khuôn vòng module đã có của repo (Users ↔ Auth ↔
  * BetterAuth).
  *
- * QuestionsRepository nay là repository Kysely của `@lms/db` (issue
+ * QuestionsRepository nay là repository Kysely của `@giaokhoa/db` (issue
  * #642): provider dựng bằng factory với handle kho trung tâm ĐÃ
  * ĐỊNH TUYẾN THEO KHÔNG GIAN (`routedKysely` của
  * SpaceDatabaseService — cùng pool dùng chung có gắn ngữ cảnh
  * tenant mà tầng bộ máy cũ đang chạy trên đó), không phải handle
  * tĩnh theo một database cố định.
  *
- * QuestionBanksRepository cũng là repository Kysely của `@lms/db`
+ * QuestionBanksRepository cũng là repository Kysely của `@giaokhoa/db`
  * (issue #644), dựng bằng cùng khuôn factory. Giao dịch
  * `buildBank` đã lật sang Kysely cùng đợt access (#651) khi điểm
  * chuyển tiếp C-7 được hấp thụ — không còn repository chuyển

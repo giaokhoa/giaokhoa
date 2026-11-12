@@ -1,5 +1,5 @@
 import { forwardRef, Module } from '@nestjs/common';
-import { AccessRepository } from '@lms/db/repositories/access';
+import { AccessRepository } from '@giaokhoa/db/repositories/access';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { CacheInfraModule } from '../../infra/cache/cache-infra.module';
@@ -39,7 +39,7 @@ import { RolesService } from './roles.service';
   controllers: [AccessController],
   providers: [
     {
-      // AccessRepository nay là repository Kysely của `@lms/db`
+      // AccessRepository nay là repository Kysely của `@giaokhoa/db`
       // (issue #651): provider dựng bằng factory với handle kho
       // trung tâm ĐÃ ĐỊNH TUYẾN THEO KHÔNG GIAN (`routedKysely`
       // của SpaceDatabaseService), cùng khuôn với các repository

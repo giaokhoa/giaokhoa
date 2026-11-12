@@ -13,11 +13,11 @@ import {
   type GroupMember,
   type UpdateCohort,
   type UpdateGroup,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 
 /**
  * Validation của Groups & Cohorts dùng Zod qua Standard Schema — schema nền ở
- * `@lms/contracts` là nguồn sự thật duy nhất.
+ * `@giaokhoa/contracts` là nguồn sự thật duy nhất.
  */
 export {
   createCohortSchema,

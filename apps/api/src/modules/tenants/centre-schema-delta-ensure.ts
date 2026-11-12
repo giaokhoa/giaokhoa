@@ -26,7 +26,7 @@
  * Tiền điều kiện: kho nghiệp vụ và kho control plane đều đã áp
  * baseline/migration của chúng (cũ hoặc mới). Bước này KHÔNG thay
  * bộ migration: database trống vẫn phải chạy runner migration của
- * package (`@lms/db/dist/migrate/run.js`) trước (nó tạo mọi bảng
+ * package (`@giaokhoa/db/dist/migrate/run.js`) trước (nó tạo mọi bảng
  * kể cả delta).
  *
  * Nối dây: chuỗi migrate của stack (`compose.yaml`, service

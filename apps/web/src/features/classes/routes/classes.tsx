@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Badge } from '@lms/ui/components/badge';
-import { Button, buttonVariants } from '@lms/ui/components/button';
-import { Empty, EmptyHeader, EmptyTitle } from '@lms/ui/components/empty';
-import { Skeleton } from '@lms/ui/components/skeleton';
+import { Badge } from '@giaokhoa/ui/components/badge';
+import { Button, buttonVariants } from '@giaokhoa/ui/components/button';
+import { Empty, EmptyHeader, EmptyTitle } from '@giaokhoa/ui/components/empty';
+import { Skeleton } from '@giaokhoa/ui/components/skeleton';
 import { ErrorAlert } from '#components/error-alert';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';

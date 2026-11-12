@@ -1,6 +1,6 @@
 import { Injectable, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createCentreKysely, type CentreDb } from '@lms/db';
+import { createCentreKysely, type CentreDb } from '@giaokhoa/db';
 import { databaseConnectionFromEnv } from '../../config/env';
 import { ControlPlaneConnection } from '../../modules/control-plane/control-plane.connection';
 import { tenantAls, type TenantAlsStore } from '../../modules/tenants/tenant-als';

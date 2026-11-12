@@ -1,4 +1,4 @@
-import type { RichTextBlockNode, RichTextDocument } from '@lms/contracts';
+import type { RichTextBlockNode, RichTextDocument } from '@giaokhoa/contracts';
 
 /**
  * Các node block nguyên tử mà sau chúng người soạn không gõ tiếp được

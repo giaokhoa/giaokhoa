@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { GuardianViewRepository } from '@lms/db/repositories/guardian-view';
-import { GuardiansRepository } from '@lms/db/repositories/guardians';
+import { GuardianViewRepository } from '@giaokhoa/db/repositories/guardian-view';
+import { GuardiansRepository } from '@giaokhoa/db/repositories/guardians';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { EventsModule } from '../../infra/events/events.module';
@@ -32,7 +32,7 @@ import { GuardiansService } from './guardians.service';
  * chung hàng đợi phát kênh ngoài với phía API.
  *
  * Hai repository của module (liên kết giám hộ và bề mặt chỉ-xem) nằm
- * ở `@lms/db/repositories/*` trên Kysely và được dựng ở đây bằng
+ * ở `@giaokhoa/db/repositories/*` trên Kysely và được dựng ở đây bằng
  * factory trên facade định tuyến kho trung tâm
  * (`SpaceDatabaseService.routedKysely`) — cùng khuôn lắp ráp của các
  * module đã chuyển đổi.

@@ -1,6 +1,6 @@
 import type {
   GuardianDigestFrequency, GuardianDigestPreferenceView, GuardianStudentOverviewView, GuardianStudentResultsView,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 import type { CreateGuardianLinkDraft, GuardianLinkView, GuardianMyStudentEntry } from '../types/guardians';
 

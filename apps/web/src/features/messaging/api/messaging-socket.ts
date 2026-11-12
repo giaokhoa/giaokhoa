@@ -11,7 +11,7 @@ import {
   type RealtimePresencePayload,
   type RealtimePresenceSnapshotPayload,
   type RealtimeTypingPayload,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 
 /**
  * Kênh realtime của tin nhắn (issue #33, chặng A1): Socket.IO namespace

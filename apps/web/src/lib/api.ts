@@ -1,5 +1,5 @@
-import type { ProblemDetails } from '@lms/contracts';
-import { problemDetailsSchema } from '@lms/contracts';
+import type { ProblemDetails } from '@giaokhoa/contracts';
+import { problemDetailsSchema } from '@giaokhoa/contracts';
 
 /**
  * Tầng gọi API nghiệp vụ của web (issue #7, Giai đoạn 2 — cutover

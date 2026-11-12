@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
-import { cn } from '@lms/ui/lib/utils';
+import { cn } from '@giaokhoa/ui/lib/utils';
 import { BankArea } from '../utils/shared';
 import '#config/i18n';
 
@@ -13,7 +13,7 @@ import '#config/i18n';
  * khác nguồn dữ liệu của trang đích. Tab là ĐIỀU HƯỚNG theo route —
  * mỗi khu vực giữ path riêng theo chuẩn đường dẫn (issue #221), KHÔNG
  * dùng query định danh khu vực; tab đang đứng mang `aria-current`.
- * Vỏ tab bám đúng component Tabs dùng chung của @lms/ui (nền muted,
+ * Vỏ tab bám đúng component Tabs dùng chung của @giaokhoa/ui (nền muted,
  * tab active nền background + shadow) nhưng render bằng Link vì đây
  * là điều hướng giữa hai trang, không phải chuyển panel tại chỗ.
  */

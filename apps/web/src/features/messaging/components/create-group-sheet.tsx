@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Button } from '@lms/ui/components/button';
-import { Input } from '@lms/ui/components/input';
-import { Label } from '@lms/ui/components/label';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@lms/ui/components/sheet';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Input } from '@giaokhoa/ui/components/input';
+import { Label } from '@giaokhoa/ui/components/label';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@giaokhoa/ui/components/sheet';
 import { useTranslation } from 'react-i18next';
 import { PeoplePicker } from './people-picker';
 import type {

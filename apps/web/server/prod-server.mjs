@@ -7,7 +7,7 @@
  *   2. Proxy các đường của API (xem `proxy-paths.mjs`: `/api/*`,
  *      `/socket.io/*`, `/mcp`, `/.well-known/oauth-protected-resource`)
  *      về API ở địa chỉ nội bộ
- *      (LMS_API_INTERNAL_URL, mặc định http://127.0.0.1:3000): chuyển
+ *      (GIAOKHOA_API_INTERNAL_URL, mặc định http://127.0.0.1:3000): chuyển
  *      nguyên header (Cookie đi lên, Set-Cookie — kể cả nhiều header —
  *      đi xuống; Host GIỮ NGUYÊN của request gốc vì tầng ứng dụng
  *      phân giải trung tâm theo Host, xem proxy-headers.mjs), nối
@@ -29,7 +29,7 @@
  * build` trước) — đây cũng là cách target `web` của Dockerfile ở gốc
  * repo chạy tiến trình này trong stack Docker Compose. Chạy cả
  * topology ở local thì khởi động thêm tiến trình API riêng
- * (`apps/api/dist/main.js`) và trỏ `LMS_API_INTERNAL_URL` về API đó.
+ * (`apps/api/dist/main.js`) và trỏ `GIAOKHOA_API_INTERNAL_URL` về API đó.
  */
 import { createServer, request as httpRequest } from 'node:http';
 import { connect as netConnect } from 'node:net';
@@ -43,7 +43,7 @@ import { buildProxyHeaders, buildUpgradeRequestLines } from './proxy-headers.mjs
 import { compressBuffer, isCompressibleType, MIN_COMPRESS_BYTES, pickEncoding } from './compression.mjs';
 import { applyDocumentSecurityHeaders } from './security-headers.mjs';
 
-const apiOrigin = new URL(process.env.LMS_API_INTERNAL_URL ?? 'http://127.0.0.1:3000');
+const apiOrigin = new URL(process.env.GIAOKHOA_API_INTERNAL_URL ?? 'http://127.0.0.1:3000');
 const publicPort = Number(process.env.PORT ?? process.env.PUBLIC_PORT ?? 8080);
 const clientDir = fileURLToPath(new URL('../build/client/', import.meta.url));
 

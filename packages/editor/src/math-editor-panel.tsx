@@ -39,7 +39,7 @@ export interface MathEditorPanelProps {
  * nhập là xác nhận, Escape là huỷ. Việc kiểm tra cú pháp và áp vào tài
  * liệu nằm ở phía chứa ({@link RichTextEditor}) — panel chỉ trình bày.
  *
- * Trình bày: overlay nổi ở đầu trang (class `lms-math-panel` trong
+ * Trình bày: overlay nổi ở đầu trang (class `giaokhoa-math-panel` trong
  * `editor.css`: fixed, shadow lớn) theo đúng mẫu overlay công thức của
  * editor giaokhoa — trước lát E1 panel là một khối inline không style
  * đẩy toàn bộ nội dung form xuống mỗi lần mở.
@@ -65,7 +65,7 @@ export function MathEditorPanel({
 
   return (
     <section
-      className="lms-math-panel"
+      className="giaokhoa-math-panel"
       aria-label="Soạn công thức LaTeX"
       data-testid="math-panel"
       data-editor-owner={ownerId}

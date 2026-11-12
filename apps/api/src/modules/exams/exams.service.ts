@@ -7,14 +7,14 @@ import type {
   CreateExamPin, ExamSlotInput, GenerateFromMatrix, QuizView,
   RejectExamContribution, SetExamSlots, SetExamStatus, SwapExamSlot, UpdateExam,
   WithdrawExam,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { RolesService } from '../access/roles.service';
 import { CAP_ALLOW } from '../access/domain/permission';
 import { QuestionBanksService, QBANK_LEAD_ROLE, QBANK_MEMBER_ROLE } from '../questions/question-banks.service';
-import type { QuestionBankRow } from '@lms/db/repositories/question-banks';
+import type { QuestionBankRow } from '@giaokhoa/db/repositories/question-banks';
 import { QuizService, type MatrixSpecification } from '../quiz/quiz.service';
 import { SiteConfigService } from '../site-config/site-config.service';
 import { TenantConfigService } from '../tenants/tenant-config.service';
@@ -22,8 +22,8 @@ import { TenantContextService } from '../tenants/tenant-context.service';
 import {
   ExamsRepository,
   type ExamContributionRow, type ExamRow, type ExamSlotRow, type ExamVersionRow,
-} from '@lms/db/repositories/exams';
-import type { ExamMatrixCellRow } from '@lms/db/repositories/quiz';
+} from '@giaokhoa/db/repositories/exams';
+import type { ExamMatrixCellRow } from '@giaokhoa/db/repositories/quiz';
 
 /**
  * Bộ capability của lớp ngân hàng đề — mọi cổng đều đánh giá TẠI

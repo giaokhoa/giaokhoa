@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { SocialRepository } from '@lms/db/repositories/social';
+import { SocialRepository } from '@giaokhoa/db/repositories/social';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { AccessModule } from '../access/access.module';
@@ -18,7 +18,7 @@ import { TagsService } from './tags.service';
  * các bảng (component, itemType/area, itemId, contextId) không có FK cứng.
  * Mỗi service con được export dưới dạng facade riêng của nó.
  *
- * Từ issue #647, repository dùng chung sống ở `@lms/db` trên
+ * Từ issue #647, repository dùng chung sống ở `@giaokhoa/db` trên
  * Kysely (lớp thuần, không phụ thuộc Nest) nên module lắp nó bằng
  * factory provider trên handle định tuyến theo không gian
  * (`SpaceDatabaseService.routedKysely`) — cùng khuôn lắp repository

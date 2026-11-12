@@ -1,6 +1,6 @@
 import { FileText } from 'lucide-react';
-import { Card } from '@lms/ui/components/card';
-import { cn } from '@lms/ui/lib/utils';
+import { Card } from '@giaokhoa/ui/components/card';
+import { cn } from '@giaokhoa/ui/lib/utils';
 
 /**
  * Thẻ tệp đính kèm theo đúng khuôn của bản demo (issue #608,
@@ -15,7 +15,7 @@ import { cn } from '@lms/ui/lib/utils';
  *
  * Cách dựng (issue #623 — thuần hoá component theo chuẩn
  * dựng trên component shadcn trước, tuỳ biến trên chính
- * component): thẻ dựng trên component `Card` của `@lms/ui`,
+ * component): thẻ dựng trên component `Card` của `@giaokhoa/ui`,
  * KHÔNG còn là thẻ div/a viết tay. Khuôn demo đạt bằng cách
  * ghi đè class ngay trên Card: hướng hàng ngang + khoảng
  * cách 2 thay cho hướng cột và `--card-spacing` mặc định,

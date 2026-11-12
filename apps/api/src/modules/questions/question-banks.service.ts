@@ -1,26 +1,26 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { v7 as uuidv7 } from 'uuid';
-import { extractRichTextPlainText, getTrueFalseStatements, TRUE_FALSE_STATEMENT_COUNT, type RichTextDocument } from '@lms/contracts';
-import type { CentreTx } from '@lms/db';
+import { extractRichTextPlainText, getTrueFalseStatements, TRUE_FALSE_STATEMENT_COUNT, type RichTextDocument } from '@giaokhoa/contracts';
+import type { CentreTx } from '@giaokhoa/db';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { CONTEXT_LEVELS } from '../access/domain/capabilities';
 import { CAP_ALLOW } from '../access/domain/permission';
-import { type ContextRow } from '@lms/db/repositories/access';
+import { type ContextRow } from '@giaokhoa/db/repositories/access';
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { RolesService } from '../access/roles.service';
 import { GroupsService } from '../groups/groups.service';
 import { TenantContextService } from '../tenants/tenant-context.service';
-import { TenantsRepository } from '@lms/db/repositories/tenants';
+import { TenantsRepository } from '@giaokhoa/db/repositories/tenants';
 import { TenantsService } from '../tenants/tenants.service';
 import { truefalseHashAnswers } from './domain/question-engine';
 import {
   QuestionsRepository, type EntryRow, type QCategoryRow, type QuestionOutcomeLinkRow, type QuestionRow,
   type QuestionSubjectLinkRow, type QuestionsTx, type VersionRow,
-} from '@lms/db/repositories/questions';
+} from '@giaokhoa/db/repositories/questions';
 import { QuestionsService, type QuestionView, type SupportedQtype } from './questions.service';
-import { QuestionBanksRepository, BANK_KINDS, type BankKind, type ContributionRow, type QuestionBankRow } from '@lms/db/repositories/question-banks';
+import { QuestionBanksRepository, BANK_KINDS, type BankKind, type ContributionRow, type QuestionBankRow } from '@giaokhoa/db/repositories/question-banks';
 
 /** Vai chuyên dụng của lớp bank, gán TẠI context của từng bank (không phải archetype toàn cục). */
 export const QBANK_MEMBER_ROLE = 'qbankmember';

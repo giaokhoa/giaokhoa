@@ -1,12 +1,12 @@
-import { sql, type SqlBool } from '@lms/db';
-import type { CentreDb, CentreTx } from '@lms/db';
+import { sql, type SqlBool } from '@giaokhoa/db';
+import type { CentreDb, CentreTx } from '@giaokhoa/db';
 import type {
   ConversationRow,
   MessageRow,
   MessageWindowOptions,
   MessageWithQuoteRow,
   MessagingStorePort,
-} from '@lms/db/repositories/messaging';
+} from '@giaokhoa/db/repositories/messaging';
 import { messageQuoteOf } from './message-wire.js';
 
 /**
@@ -21,22 +21,22 @@ import { messageQuoteOf } from './message-wire.js';
  * Các hàm thuần nhận `db` làm tham số đầu: mỗi app truyền handle
  * Kysely của chính nó (kèm ngữ cảnh tenant/RLS của app đó); package
  * không giữ kết nối và không phụ thuộc framework nào. Handle là
- * handle kho trung tâm của `@lms/db` (`CentreDb` hoặc handle giao
+ * handle kho trung tâm của `@giaokhoa/db` (`CentreDb` hoặc handle giao
  * dịch `CentreTx`). Package không khai phụ thuộc trực tiếp vào
  * `kysely` (đóng băng ở nền của chiến dịch): hàm `sql` của Kysely
- * được lấy qua kênh re-export chính thức ở barrel của `@lms/db`
+ * được lấy qua kênh re-export chính thức ở barrel của `@giaokhoa/db`
  * dành cho phía tiêu thụ, còn kiểu dòng và cổng store lấy type-only
- * từ `@lms/db/repositories/messaging` — chiều phụ thuộc giữ là DAG
- * vì `@lms/db` không import package này ở bất kỳ dạng nào
- * (issue #658: gỡ vòng phụ thuộc `@lms/db` ↔ `@lms/messaging`).
+ * từ `@giaokhoa/db/repositories/messaging` — chiều phụ thuộc giữ là DAG
+ * vì `@giaokhoa/db` không import package này ở bất kỳ dạng nào
+ * (issue #658: gỡ vòng phụ thuộc `@giaokhoa/db` ↔ `@giaokhoa/messaging`).
  */
 export type MessagingDatabase = CentreDb | CentreTx;
 
-/** Hình dạng cửa sổ tin được khai tại `@lms/db/repositories/messaging` — re-export để bề mặt package giữ nguyên. */
-export type { MessageWindowOptions } from '@lms/db/repositories/messaging';
+/** Hình dạng cửa sổ tin được khai tại `@giaokhoa/db/repositories/messaging` — re-export để bề mặt package giữ nguyên. */
+export type { MessageWindowOptions } from '@giaokhoa/db/repositories/messaging';
 
 // Danh sách cột đọc tường minh kèm bí danh camelCase — cùng hình
-// dạng với danh sách cột của repository tại `@lms/db` (khai cục bộ
+// dạng với danh sách cột của repository tại `@giaokhoa/db` (khai cục bộ
 // ở đây để tầng store không phải import module repository).
 
 const CONVERSATION_COLUMNS = [
@@ -292,7 +292,7 @@ export async function listBlockedCounterpartIds(db: MessagingDatabase, userId: s
 
 /**
  * Dựng cài đặt của cổng store dùng chung {@link MessagingStorePort}
- * (khai tại `@lms/db/repositories/messaging`) trên một handle
+ * (khai tại `@giaokhoa/db/repositories/messaging`) trên một handle
  * Kysely của app gọi: phía API gắn cài đặt này vào
  * `MessagingRepository` — repository uỷ quyền mọi phép đọc dùng
  * chung qua cổng này thay vì import trực tiếp các hàm ở đây.

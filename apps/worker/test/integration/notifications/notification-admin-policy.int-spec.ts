@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { INestApplicationContext } from '@nestjs/common';
-import { sql } from '@lms/db';
+import { sql } from '@giaokhoa/db';
 import { CalendarReminderProcessor } from '../../../src/processors/calendar-reminder.processor';
 import {
   bootWorkerModuleAsOrdinaryRole,

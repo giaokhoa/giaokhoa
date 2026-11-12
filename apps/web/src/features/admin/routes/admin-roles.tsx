@@ -1,14 +1,14 @@
 import { useState } from 'react';
-import type { RoleListItem } from '@lms/contracts';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent } from '@lms/ui/components/card';
+import type { RoleListItem } from '@giaokhoa/contracts';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent } from '@giaokhoa/ui/components/card';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@lms/ui/components/dropdown-menu';
-import { Empty, EmptyHeader, EmptyTitle } from '@lms/ui/components/empty';
+} from '@giaokhoa/ui/components/dropdown-menu';
+import { Empty, EmptyHeader, EmptyTitle } from '@giaokhoa/ui/components/empty';
 import { EllipsisVertical, Pencil, Plus, Trash2 } from 'lucide-react';
 import { PageSkeleton } from '#components/page-skeleton';
 import { ErrorAlert } from '#components/error-alert';

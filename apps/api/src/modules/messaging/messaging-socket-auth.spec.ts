@@ -83,13 +83,13 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
         if (opts.spaceMode === 'dedicated') {
           return {
             mode: 'dedicated', spaceId: opts.spaceId ?? 'space-1', slug, status: 'active',
-            databaseName: 'lms_centre_test', schemaVersion: 'v1',
+            databaseName: 'giaokhoa_centre_test', schemaVersion: 'v1',
           };
         }
         if (opts.spaceMode === 'shared') {
           return {
             mode: 'shared', spaceId: 'space-shared', slug, status: 'active',
-            databaseName: 'lms_shared_test', schemaVersion: 'v1',
+            databaseName: 'giaokhoa_shared_test', schemaVersion: 'v1',
           };
         }
         throw new SpaceRoutingError('space_routing.space_not_found', `Space slug ${slug} is not registered`);

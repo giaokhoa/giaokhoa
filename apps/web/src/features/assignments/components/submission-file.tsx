@@ -1,5 +1,5 @@
 import { useRef, useState, type MouseEvent, type PointerEvent } from 'react';
-import type { AssignAnnotationView, AssignSubmissionFileView } from '@lms/contracts';
+import type { AssignAnnotationView, AssignSubmissionFileView } from '@giaokhoa/contracts';
 import { useTranslation } from 'react-i18next';
 
 export const ANNOTATION_KINDS = ['correct', 'incorrect', 'note', 'highlight', 'frame', 'draw'] as const;

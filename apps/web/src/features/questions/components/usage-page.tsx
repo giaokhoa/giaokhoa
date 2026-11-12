@@ -7,12 +7,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router';
 
-import type { QuestionUsage, RichTextDocument } from '@lms/contracts';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lms/ui/components/card';
-import { Field, FieldLabel } from '@lms/ui/components/field';
-import { Input } from '@lms/ui/components/input';
-import { Skeleton } from '@lms/ui/components/skeleton';
+import type { QuestionUsage, RichTextDocument } from '@giaokhoa/contracts';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
+import { Field, FieldLabel } from '@giaokhoa/ui/components/field';
+import { Input } from '@giaokhoa/ui/components/input';
+import { Skeleton } from '@giaokhoa/ui/components/skeleton';
 import { ErrorAlert } from '#components/error-alert';
 
 import { useQueryClient } from '@tanstack/react-query';

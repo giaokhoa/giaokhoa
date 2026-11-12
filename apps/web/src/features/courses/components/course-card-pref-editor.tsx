@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@lms/ui/components/button';
-import { Input } from '@lms/ui/components/input';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Input } from '@giaokhoa/ui/components/input';
 import {
   COURSE_CARD_COLOR_HEX,
   COURSE_CARD_COLORS,

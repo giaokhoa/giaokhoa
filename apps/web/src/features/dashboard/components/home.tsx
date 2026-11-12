@@ -1,8 +1,8 @@
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import '#config/i18n';
-import { Button } from '@lms/ui/components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lms/ui/components/card';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { PageShell } from '#components/page-shell';
 
 export function HomePage() {
@@ -11,7 +11,7 @@ export function HomePage() {
     <PageShell width="wide">
       <Card>
         <CardHeader>
-          <CardTitle>LMS</CardTitle>
+          <CardTitle>Giáo khoa</CardTitle>
           <CardDescription>{t('homeDescription')}</CardDescription>
         </CardHeader>
         <CardContent>

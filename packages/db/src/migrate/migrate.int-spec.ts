@@ -1,5 +1,5 @@
 /**
- * Spec tích hợp của bộ máy migration của `@lms/db` (issue #639,
+ * Spec tích hợp của bộ máy migration của `@giaokhoa/db` (issue #639,
  * hoàn thiện ở #663): chứng minh trên database thật rằng bộ máy áp
  * đủ carrier với đúng số đếm kỳ vọng, hàm đọc nhật ký chỉ đọc
  * `kysely_migration`, runner CLI dừng to tiếng trước database lạ,
@@ -16,7 +16,7 @@
  * chép tên từ nhật ký cũ sang; cửa sổ chuyển đổi đã đóng nên bước
  * cấy và các ca kiểm của nó đã gỡ cùng PR này.)
  *
- * Môi trường: cụm PostgreSQL quản trị từ `LMS_DB_TEST_ADMIN_URL`
+ * Môi trường: cụm PostgreSQL quản trị từ `GIAOKHOA_DB_TEST_ADMIN_URL`
  * (hoặc suy từ `DATABASE_URL` như spec khói của harness). Các
  * database test bị xoá và dựng lại ở đầu suite, xoá hẳn khi xong.
  * Thử nghiệm T-3 chạy tiến trình con `node -e` dùng `kysely` từ
@@ -36,14 +36,14 @@ import { installUuidv7Shim, MIGRATION_STORES, UUIDV7_SHIM } from './stores';
 import { verifyStore } from './verify';
 
 const adminUrl =
-  process.env.LMS_DB_TEST_ADMIN_URL ??
+  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : 'postgres://postgres:postgres@localhost:5432/postgres');
 
-const CENTRE_DB = 'lms_db_migrate_n2_centre';
-const STRANGE_DB = 'lms_db_migrate_n2_strange';
-const PROD_DB = 'lms_db_migrate_n2_prod';
-const T2_DB = 'lms_db_migrate_n2_t2';
-const T3_DB = 'lms_db_migrate_n2_t3';
+const CENTRE_DB = 'giaokhoa_db_migrate_n2_centre';
+const STRANGE_DB = 'giaokhoa_db_migrate_n2_strange';
+const PROD_DB = 'giaokhoa_db_migrate_n2_prod';
+const T2_DB = 'giaokhoa_db_migrate_n2_t2';
+const T3_DB = 'giaokhoa_db_migrate_n2_t3';
 
 /**
  * Diện carrier đóng băng của kho control plane (định nghĩa tại
@@ -232,7 +232,7 @@ describe('bộ máy migration của package cho ba kho', () => {
 
   it('hàm đọc nhật ký chỉ đọc kysely_migration: database trống trả tập rỗng, nhật ký cũ bị bỏ qua, nhật ký Kysely trả đúng tập tên', async () => {
     const carrierNames = [...CP_CARRIERS];
-    const fresh = await freshDatabase('lms_db_migrate_n2_dual');
+    const fresh = await freshDatabase('giaokhoa_db_migrate_n2_dual');
     try {
       const empty = new Client({ connectionString: fresh });
       await empty.connect();
@@ -260,7 +260,7 @@ describe('bộ máy migration của package cho ba kho', () => {
         await migrated.end();
       }
     } finally {
-      await dropTestDatabase(adminUrl, 'lms_db_migrate_n2_dual').catch(() => undefined);
+      await dropTestDatabase(adminUrl, 'giaokhoa_db_migrate_n2_dual').catch(() => undefined);
     }
   });
 
@@ -340,7 +340,7 @@ describe('bộ máy migration của package cho ba kho', () => {
   });
 
   it('shim được cài ngoài carrier: hàm uuidv7() gọi được mà không ghi vào nhật ký', async () => {
-    const shimUrl = await freshDatabase('lms_db_migrate_n2_shim');
+    const shimUrl = await freshDatabase('giaokhoa_db_migrate_n2_shim');
     const pool = new Pool({ connectionString: shimUrl });
     const db = new Kysely({ dialect: new PostgresDialect({ pool }) });
     try {
@@ -359,7 +359,7 @@ describe('bộ máy migration của package cho ba kho', () => {
       }
     } finally {
       await db.destroy().catch(() => undefined);
-      await dropTestDatabase(adminUrl, 'lms_db_migrate_n2_shim').catch(() => undefined);
+      await dropTestDatabase(adminUrl, 'giaokhoa_db_migrate_n2_shim').catch(() => undefined);
     }
   });
 

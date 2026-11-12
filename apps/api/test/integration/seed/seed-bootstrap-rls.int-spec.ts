@@ -22,7 +22,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  * định + membership của admin.
  *
  * Yêu cầu: dist của apps/api phải được build trước (CI luôn build trước
- * bước test; chạy local: `pnpm --filter @lms/api build`).
+ * bước test; chạy local: `pnpm --filter @giaokhoa/api build`).
  *
  * Tự vệ chống test rỗng: spec cũng khẳng định role thường NGOÀI ngữ
  * cảnh thấy 0 tenant và INSERT bị 42501 — tức RLS thật sự cắn role này,
@@ -45,10 +45,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const ADMIN_URL =
   process.env.DATABASE_URL ??
-  process.env.LMS_TEST_DATABASE_URL ??
-  'postgres://postgres:postgres@localhost:5432/lms_test_api';
-const SCRATCH_DB = 'lms_test_seed_rls';
-const APP_ROLE = 'lms_seed_rls_app';
+  process.env.GIAOKHOA_TEST_DATABASE_URL ??
+  'postgres://postgres:postgres@localhost:5432/giaokhoa_test_api';
+const SCRATCH_DB = 'giaokhoa_test_seed_rls';
+const APP_ROLE = 'giaokhoa_seed_rls_app';
 const APP_ROLE_PASSWORD = 'seed-rls-test-only';
 const APP_PORT = 3199;
 const APP_BASE = `http://127.0.0.1:${APP_PORT}`;
@@ -143,7 +143,7 @@ describe('Seed bootstrap trên DB trống bằng role thường dưới RLS fail
     const mainJs = join(process.cwd(), 'dist', 'main.js');
     if (!existsSync(mainJs)) {
       throw new Error(
-        'Thiếu apps/api/dist/main.js — build trước khi chạy spec này: pnpm --filter @lms/api build',
+        'Thiếu apps/api/dist/main.js — build trước khi chạy spec này: pnpm --filter @giaokhoa/api build',
       );
     }
     const env: NodeJS.ProcessEnv = {

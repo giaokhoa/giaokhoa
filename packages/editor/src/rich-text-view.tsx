@@ -1,6 +1,6 @@
 import { renderToReactElement } from '@tiptap/static-renderer/pm/react';
 import { Fragment, type ReactNode } from 'react';
-import type { RichTextBlockNode, RichTextDocument } from '@lms/contracts';
+import type { RichTextBlockNode, RichTextDocument } from '@giaokhoa/contracts';
 import { plainTextExtensions } from './extensions.js';
 import { renderMathHtml } from './math.js';
 
@@ -132,7 +132,7 @@ export function RichTextView({ value }: RichTextViewProps): ReactNode {
     }
     flush(`stem-${index}`);
     segments.push(
-      <ol key={`statements-${index}`} className="lms-statement-list">
+      <ol key={`statements-${index}`} className="giaokhoa-statement-list">
         {block.content.map((statement) => (
           <li key={statement.attrs.id} data-statement={statement.attrs.id}>
             <RichTextView value={{ type: 'doc', content: statement.content }} />

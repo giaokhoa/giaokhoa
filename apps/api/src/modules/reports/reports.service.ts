@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { I18nService } from '@nestjs/i18n';
-import { ReportsRepository, type ReportRow, type ScheduleRow } from '@lms/db/repositories/reports';
+import { ReportsRepository, type ReportRow, type ScheduleRow } from '@giaokhoa/db/repositories/reports';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { ContextsService } from '../access/contexts.service';
 import { CoursesService } from '../courses/courses.service';

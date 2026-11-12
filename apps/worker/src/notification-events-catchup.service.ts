@@ -17,7 +17,7 @@ import { SpaceDatabaseService } from './db/routing/space-database.service';
  * đúng từ consumer cũ — cơ chế phát bù đọc lại chính khoá đó,
  * không dựng khoá song song.
  */
-const LEGACY_WATERMARK_KEY_PREFIX = 'lms:messaging:notifications:';
+const LEGACY_WATERMARK_KEY_PREFIX = 'giaokhoa:messaging:notifications:';
 /** Số dòng tồn đọng tối đa đọc trong một lô phát bù — cùng cỡ lô quét của consumer cũ. */
 const DRAIN_BATCH_SIZE = 100;
 /**

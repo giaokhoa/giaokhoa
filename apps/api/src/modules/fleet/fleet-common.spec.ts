@@ -117,6 +117,7 @@ describe('Công cụ vận hành đội kho (helper thuần)', () => {
   it('gói sao lưu mã hoá giải mã trở lại đúng nguyên bản, và mọi sửa đổi trên gói đều làm giải mã thất bại', () => {
     const plain = Buffer.from('noi dung sao luu gia lap '.repeat(64));
     const packed = encryptBackup(plain, 'cum-mat-khau');
+    expect(packed.subarray(0, 6).toString('ascii')).toBe('GKHBK1');
     expect(isEncryptedBackup(packed)).toBe(true);
     expect(isEncryptedBackup(plain)).toBe(false);
     expect(decryptBackup(packed, 'cum-mat-khau').equals(plain)).toBe(true);
@@ -128,19 +129,19 @@ describe('Công cụ vận hành đội kho (helper thuần)', () => {
   });
 
   it('tham số công cụ pg không bao giờ chứa mật khẩu — mật khẩu chỉ đi riêng để caller đưa vào PGPASSWORD', () => {
-    const { args, password } = buildPgToolArgs('postgres://lms_migrator:s3cret@db.internal:5433/lms');
-    expect(args).toEqual(['-h', 'db.internal', '-p', '5433', '-U', 'lms_migrator', '-d', 'lms']);
+    const { args, password } = buildPgToolArgs('postgres://giaokhoa_migrator:s3cret@db.internal:5433/giaokhoa');
+    expect(args).toEqual(['-h', 'db.internal', '-p', '5433', '-U', 'giaokhoa_migrator', '-d', 'giaokhoa']);
     expect(password).toBe('s3cret');
     expect(args.join(' ')).not.toContain('s3cret');
   });
 
   it('URL vận hành của một kho: lấy nền từ biến mà sổ trỏ tới, thay thông tin đăng nhập bằng của role migration và đích bằng database của kho', () => {
     const env = {
-      SPACE_URL: 'postgres://lms_runtime:runtimepw@db.internal:5432/lms',
-      MIGRATION_DATABASE_URL: 'postgres://lms_migrator:migratorpw@db.internal:5432/lms',
+      SPACE_URL: 'postgres://giaokhoa_runtime:runtimepw@db.internal:5432/giaokhoa',
+      MIGRATION_DATABASE_URL: 'postgres://giaokhoa_migrator:migratorpw@db.internal:5432/giaokhoa',
     } as NodeJS.ProcessEnv;
     const url = new URL(resolveSpaceConnectionUrl(space({ databaseName: 'tenant_a_db' }), env));
-    expect(url.username).toBe('lms_migrator');
+    expect(url.username).toBe('giaokhoa_migrator');
     expect(url.password).toBe('migratorpw');
     expect(url.pathname).toBe('/tenant_a_db');
     expect(url.hostname).toBe('db.internal');
@@ -158,8 +159,8 @@ describe('Công cụ vận hành đội kho (helper thuần)', () => {
 
   it('URL chụp sao lưu ưu tiên kết nối quản trị của cụm đổi đích sang database của kho; vắng kết nối quản trị thì rơi về URL vận hành', () => {
     const withAdmin = {
-      SPACE_URL: 'postgres://lms_runtime:runtimepw@db.internal:5432/lms',
-      MIGRATION_DATABASE_URL: 'postgres://lms_migrator:migratorpw@db.internal:5432/lms',
+      SPACE_URL: 'postgres://giaokhoa_runtime:runtimepw@db.internal:5432/giaokhoa',
+      MIGRATION_DATABASE_URL: 'postgres://giaokhoa_migrator:migratorpw@db.internal:5432/giaokhoa',
       DATABASE_ADMIN_URL: 'postgres://postgres:adminpw@db.internal:5432/postgres',
     } as NodeJS.ProcessEnv;
     const admin = new URL(resolveDumpConnectionUrl(space({ databaseName: 'tenant_a_db' }), withAdmin));
@@ -169,15 +170,15 @@ describe('Công cụ vận hành đội kho (helper thuần)', () => {
     const withoutAdmin = { ...withAdmin } as NodeJS.ProcessEnv;
     delete withoutAdmin.DATABASE_ADMIN_URL;
     const fallback = new URL(resolveDumpConnectionUrl(space({ databaseName: 'tenant_a_db' }), withoutAdmin));
-    expect(fallback.username).toBe('lms_migrator');
+    expect(fallback.username).toBe('giaokhoa_migrator');
     expect(fallback.pathname).toBe('/tenant_a_db');
   });
 
   it('đổi đích URL giữ nguyên cổng và thông tin đăng nhập, chỉ thay tên database', () => {
-    const url = new URL(retargetUrl('postgres://u:p@db.internal:5433/lms', 'lms_backup'));
+    const url = new URL(retargetUrl('postgres://u:p@db.internal:5433/giaokhoa', 'giaokhoa_backup'));
     expect(url.port).toBe('5433');
     expect(url.username).toBe('u');
-    expect(url.pathname).toBe('/lms_backup');
+    expect(url.pathname).toBe('/giaokhoa_backup');
   });
 
   it('số nguyên cấu hình: giá trị hợp lệ được dùng, rỗng hoặc không hợp lệ rơi về giá trị dự phòng', () => {

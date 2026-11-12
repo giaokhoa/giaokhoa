@@ -32,10 +32,10 @@ import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-suppo
 import { ReportsRepository } from './reports';
 
 const adminUrl =
-  process.env.LMS_DB_TEST_ADMIN_URL ??
+  process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
 
-const TEST_DB = 'lms_db_g648_reports';
+const TEST_DB = 'giaokhoa_db_g648_reports';
 
 const ROLE_TEACHER = '00000000-0000-4000-8000-0000000000a1';
 const ROLE_MANAGER = '00000000-0000-4000-8000-0000000000a2';
@@ -68,7 +68,7 @@ async function oracleUserHasAnyRole(userId: string, roleNames: string[]): Promis
 }
 
 beforeAll(async () => {
-  if (!adminUrl) throw new Error('Thiếu kết nối quản trị: đặt LMS_DB_TEST_ADMIN_URL hoặc DATABASE_URL.');
+  if (!adminUrl) throw new Error('Thiếu kết nối quản trị: đặt GIAOKHOA_DB_TEST_ADMIN_URL hoặc DATABASE_URL.');
   const url = await buildTestDatabase({ adminUrl, database: TEST_DB, store: 'centre' });
   pool = new Pool({ connectionString: url });
   db = createCentreKysely(pool);

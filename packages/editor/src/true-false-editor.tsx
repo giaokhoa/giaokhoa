@@ -1,7 +1,7 @@
 import { useId, useMemo, useRef } from 'react';
 import { Decoration, Extension, type WidgetDecoration } from '@tiptap/core';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
-import type { RichTextDocument } from '@lms/contracts';
+import type { RichTextDocument } from '@giaokhoa/contracts';
 import { RichTextEditor } from './rich-text-editor.js';
 import type { RichTextImagePick } from './rich-text-editor.js';
 import {
@@ -106,16 +106,16 @@ function createStatementAnswerDecoration(controlRef: { current: StatementAnswerC
                 pos + 1,
                 () => {
                   const wrapper = document.createElement('span');
-                  wrapper.className = 'lms-statement__answer';
+                  wrapper.className = 'giaokhoa-statement__answer';
 
                   const buildOption = (value: boolean, label: string, ariaLabel: string) => {
                     const option = document.createElement('label');
-                    option.className = 'lms-statement__answer-option';
+                    option.className = 'giaokhoa-statement__answer-option';
 
                     const input = document.createElement('input');
                     input.type = 'radio';
                     input.name = `${controlRef.current.groupPrefix}:${statementId}`;
-                    input.className = 'lms-statement__answer-input';
+                    input.className = 'giaokhoa-statement__answer-input';
                     input.setAttribute('aria-label', ariaLabel);
                     input.checked = controlRef.current.answers[statementId] === value;
                     input.addEventListener('change', () => {

@@ -6,11 +6,11 @@ import type {
   GuardianStudentOverviewView,
   GuardianStudentResultsView,
   GuardianWeeklyItemView,
-} from '@lms/contracts';
+} from '@giaokhoa/contracts';
 import { DashboardService } from '../dashboard/dashboard.service';
 import { GradesService } from '../grades/grades.service';
 import { UsersService } from '../users/users.service';
-import { GuardianViewRepository } from '@lms/db/repositories/guardian-view';
+import { GuardianViewRepository } from '@giaokhoa/db/repositories/guardian-view';
 import { GuardiansService } from './guardians.service';
 
 /** Trần số việc trong tóm tắt tuần trả về (việc tuần này + quá hạn). */

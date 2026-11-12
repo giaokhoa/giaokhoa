@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Cache } from 'cache-manager';
 import type { ConfigService } from '@nestjs/config';
 import type { OutboxService } from '../../infra/events/outbox.service';
-import type { AccessRepository, ContextRow } from '@lms/db/repositories/access';
+import type { AccessRepository, ContextRow } from '@giaokhoa/db/repositories/access';
 import { ContextsService } from './contexts.service';
 import { CAP_ALLOW } from './domain/permission';
 import { PermissionEvaluator } from './permission-evaluator.service';
@@ -143,7 +143,7 @@ function makeWorld() {
   const repoCast = repo as unknown as AccessRepository;
   const contextsService = new ContextsService(repoCast);
   const rolesService = new RolesService(repoCast, contextsService, outbox as unknown as OutboxService, planLimits as PlanLimitsService, roleSeparation as RoleSeparationService);
-  const evaluator = new PermissionEvaluator(repoCast, contextsService, cache as unknown as Cache, { getOrThrow: () => 'postgres://user:pass@localhost:5432/lms_test_api' } as unknown as ConfigService);
+  const evaluator = new PermissionEvaluator(repoCast, contextsService, cache as unknown as Cache, { getOrThrow: () => 'postgres://user:pass@localhost:5432/giaokhoa_test_api' } as unknown as ConfigService);
   return { state, rolesService, evaluator, contexts };
 }
 

@@ -36,12 +36,12 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-} from '@lms/ui/components/sidebar';
+} from '@giaokhoa/ui/components/sidebar';
 import { usePermissions } from '#lib/permissions';
 import '#config/i18n';
 
 /** Khoá localStorage lưu các nhóm điều hướng đang mở (hồ sơ UI/UX §4.3). */
-const OPEN_GROUPS_STORAGE_KEY = 'lms:sidebar:open-groups';
+const OPEN_GROUPS_STORAGE_KEY = 'giaokhoa:sidebar:open-groups';
 
 /**
  * Đọc lười danh sách nhóm đang mở đã lưu ở lần render đầu tiên, theo
@@ -300,7 +300,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem>
             <SidebarMenuButton render={<Link to="/" />} className="data-[slot=sidebar-menu-button]:p-1.5!">
               <IconInnerShadowTop className="size-5!" />
-              <span className="text-base font-semibold">LMS</span>
+              <span className="text-base font-semibold">Giáo khoa</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

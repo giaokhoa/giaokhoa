@@ -1,4 +1,4 @@
-import type { Course, CourseContent, CourseGroup, CourseGrouping, GradeItem } from '@lms/contracts';
+import type { Course, CourseContent, CourseGroup, CourseGrouping, GradeItem } from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 import type { BuilderBody, BuilderCriteriaView, CourseBuilderData } from '../types/course-builder';
 
