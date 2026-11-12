@@ -96,16 +96,20 @@ describe('resolveDedicatedSpace phân giải địa chỉ thành không gian kho
     expect(await resolveDedicatedSpace(db, undefined)).toBeNull();
   });
 
-  it('slug chưa đăng ký trong sổ thì trả null chứ không ném lỗi', async () => {
+  it('hostname có slug chưa đăng ký bị từ chối thay vì đọc kho chung', async () => {
     const db = fakeSpaceDb({});
-    expect(await resolveDedicatedSpace(db, 'trung-tam-la.test.local')).toBeNull();
+    await expect(resolveDedicatedSpace(db, 'trung-tam-la.test.local')).rejects.toMatchObject({
+      code: 'space_routing.space_not_found',
+    });
   });
 
-  it('tầng định tuyến chưa cấu hình thì trả null để giữ hành vi kho chung cũ', async () => {
+  it('hostname của trung tâm bị từ chối khi chưa cấu hình control plane', async () => {
     const db = fakeSpaceDb({
       'trung-tam-x': new SpaceRoutingError('space_routing.not_configured', 'Control plane is not configured'),
     });
-    expect(await resolveDedicatedSpace(db, 'trung-tam-x.test.local')).toBeNull();
+    await expect(resolveDedicatedSpace(db, 'trung-tam-x.test.local')).rejects.toMatchObject({
+      code: 'space_routing.not_configured',
+    });
   });
 
   it('trung tâm ở chế độ kho chung thì trả null để đi đường kho chung', async () => {

@@ -385,13 +385,21 @@ export class TenantsService {
    *   tenant không tồn tại ở kho nào.
    */
   async spaceTargetForTenant(tenantId: string): Promise<{ slug: string; dedicated: boolean } | null> {
+    const contextSlug = tenantAls.getStore()?.spaceSlug;
     const row = await this.tenantRowForTargetResolution(tenantId);
+    // Request đã ghim hostname của trung tâm không được đổi kho
+    // bằng tenantId trên URL/body: id thiếu hoặc thuộc trung tâm
+    // khác phải dừng tại đây, trước mọi truy vấn sang kho chung.
+    if (contextSlug && (!row || row.slug !== contextSlug)) {
+      throw new NotFoundException({ message: 'Tenant does not belong to the addressed centre', code: 'tenant.not_found' });
+    }
     if (!row) return null;
     try {
       const target = await this.spaceDb.resolveTarget(row.slug);
       return { slug: row.slug, dedicated: target.mode === 'dedicated' };
     } catch (err) {
       if (
+        !contextSlug &&
         err instanceof SpaceRoutingError &&
         (err.code === 'space_routing.space_not_found' || err.code === 'space_routing.not_configured')
       ) {
@@ -447,6 +455,9 @@ export class TenantsService {
           throw err;
         }
       }
+      // Nếu host đã chọn trung tâm, một id không có trong kho
+      // của nó tuyệt đối không được đem đi tìm ở kho chung.
+      return undefined;
     }
     return tenantAls.run({ platform: true }, () => this.repo.getTenant(tenantId));
   }
@@ -494,6 +505,17 @@ export class TenantsService {
 
   private async createTenantInContext(actorId: string, dto: CreateTenantDto): Promise<TenantDto> {
     await this.assertPlatformManager(actorId);
+    // Trung tâm mới bắt buộc có database và role riêng. API tạo
+    // tenant cũ chỉ còn dành cho trường học dùng chung trong giai
+    // đoạn tương thích; nó không thể tạo một trung tâm nửa vời
+    // trong kho chung. Trung tâm mới được cấp qua CLI 7 bước
+    // `space-provision` của người vận hành, kèm lời mời quản trị.
+    if (dto.kind === 'center') {
+      throw new BadRequestException({
+        message: 'New centres require dedicated provisioning; use the space-provision operator command',
+        code: 'centre.provision_required',
+      });
+    }
     const slug = dto.slug.trim().toLowerCase();
     if (!SLUG_RE.test(slug)) {
       throw new BadRequestException({ message: `Invalid tenant slug: ${dto.slug}`, code: 'tenant.invalid_slug' });

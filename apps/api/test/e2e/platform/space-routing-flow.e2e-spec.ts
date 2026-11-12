@@ -352,14 +352,15 @@ describe('Định tuyến theo trung tâm ở tầng API (đầu-cuối)', () =>
       await client.query('UPDATE users SET first_name = $1 WHERE id = $2', [CENTRE_A_FIRST_NAME, teacherId]);
     });
 
-    // Token của giáo viên cho tenant A qua đường chuyển tenant
-    // như người dùng thật.
-    const teacherApex = await login(app, teacherUsername, STRONG_PASSWORD);
-    const switched = (await must(
-      await http(app).post(`/api/v1/auth/switch-tenant/${tenantAId}`).set(auth(teacherApex.accessToken)),
-      'switch teacher to tenant A',
+    // Khi trung tâm A đã có kho riêng, giáo viên phải đăng nhập
+    // trực tiếp tại địa chỉ A để token được phát từ kho A. Không
+    // dùng đường switch từ site chính để tạo token cho kho khác.
+    const teacherAtA = (await must(
+      await http(app).post('/api/v1/auth/token').set('Host', HOST_A)
+        .send({ username: teacherUsername, password: STRONG_PASSWORD }),
+      'login teacher at A',
     )) as { accessToken: string };
-    teacherTokenA = switched.accessToken;
+    teacherTokenA = teacherAtA.accessToken;
 
     // Một tài khoản chỉ tồn tại ở kho chung (không sao vào kho
     // riêng nào) cho ca đăng nhập lệch kho.
@@ -431,7 +432,9 @@ describe('Định tuyến theo trung tâm ở tầng API (đầu-cuối)', () =>
 
   it('đăng nhập tại địa chỉ của trung tâm A tạo family refresh trong kho A chứ không ở kho chung, và hồ sơ đọc tại địa chỉ A mang dữ kiện của kho A', async () => {
     const familiesInSharedBefore = await countFamilies(process.env.DATABASE_URL!, teacherId);
-    expect(await countFamilies(clusterUrl(CENTRE_A_DATABASE, CENTRE_A_ROLE, CENTRE_A_PASSWORD), teacherId)).toBe(0);
+    // Trước ca này giáo viên đã đăng nhập A trong setup để có
+    // phiên kiểm tra hostname; phiên mới phải bổ sung family ở A.
+    const familiesInABefore = await countFamilies(clusterUrl(CENTRE_A_DATABASE, CENTRE_A_ROLE, CENTRE_A_PASSWORD), teacherId);
 
     const res = await http(app)
       .post('/api/v1/auth/token')
@@ -443,17 +446,18 @@ describe('Định tuyến theo trung tâm ở tầng API (đầu-cuối)', () =>
 
     expect(
       await countFamilies(clusterUrl(CENTRE_A_DATABASE, CENTRE_A_ROLE, CENTRE_A_PASSWORD), teacherId),
-    ).toBeGreaterThanOrEqual(1);
+    ).toBeGreaterThan(familiesInABefore);
     expect(await countFamilies(process.env.DATABASE_URL!, teacherId)).toBe(familiesInSharedBefore);
 
-    // Cùng một token, hồ sơ đọc tại địa chỉ A mang dấu của kho A;
-    // đọc ở địa chỉ gốc (kho chung) mang dữ kiện gốc ở kho chung.
+    // Token đã được phát cho kho A chỉ đọc được tại hostname A.
+    // Dù kho chung có bản sao cùng userId, địa chỉ gốc phải chặn
+    // ngay từ chiến lược JWT, không trả hồ sơ kho chung.
     const meAtA = await http(app).get('/api/v1/users/me').set('Host', HOST_A).set(auth(teacherTokenA));
     expect(meAtA.status).toBe(200);
     expect((meAtA.body as { firstName?: string }).firstName).toBe(CENTRE_A_FIRST_NAME);
     const meAtApex = await http(app).get('/api/v1/users/me').set(auth(teacherTokenA));
-    expect(meAtApex.status).toBe(200);
-    expect((meAtApex.body as { firstName?: string }).firstName).not.toBe(CENTRE_A_FIRST_NAME);
+    expect(meAtApex.status).toBe(401);
+    expect((meAtApex.body as { code?: string }).code).toBe('auth.centre_mismatch');
   });
 
   it('tài khoản chỉ tồn tại ở kho chung đăng nhập tại địa chỉ của trung tâm A thì thất bại vì kho A không có tài khoản đó', async () => {

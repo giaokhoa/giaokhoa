@@ -124,7 +124,7 @@ describe('Người dùng: tương đương phân giải batch my-access', () => 
     // --- Dữ kiện cây tenant (cổng membership) dùng vai tuỳ chỉnh chung ---
     const slug = uniqueName('tenant').toLowerCase();
     const tenantRes = await http(app).post('/api/v1/tenants').set('Authorization', `Bearer ${admin}`)
-      .send({ slug, name: `Trung tâm ${slug}`, kind: 'center' });
+      .send({ slug, name: `Trường ${slug}`, kind: 'school' });
     expect([200, 201]).toContain(tenantRes.status);
     const tenantId = (tenantRes.body as { id: string }).id;
     const contextsRes = await http(app).get('/api/v1/access/contexts').set('Authorization', `Bearer ${admin}`);

@@ -1,8 +1,5 @@
 import type { SpaceDatabaseService } from '../../db/routing/space-database.service';
-import {
-  SpaceRoutingError,
-  type ResolvedSpaceConnection,
-} from '../../db/routing/space-connection-resolver';
+import type { ResolvedSpaceConnection } from '../../db/routing/space-connection-resolver';
 
 /**
  * Phân giải địa chỉ request thành slug của trung tâm (issue #582).
@@ -69,12 +66,10 @@ export interface DedicatedSpace {
  * Phân giải địa chỉ request thành không gian ở KHO RIÊNG, hoặc
  * `null` khi request không thuộc trung tâm kho riêng nào.
  *
- * Các trường hợp trả `null` (đường kho chung giữ nguyên hành vi):
- * địa chỉ không mang trung tâm, slug chưa đăng ký trong sổ, tầng
- * định tuyến chưa cấu hình, hoặc trung tâm ở chế độ kho chung.
- * Mọi lỗi phân giải còn lại (bí mật/role của kho riêng lệch sổ)
- * là lỗi cấu hình vận hành nên ném ra nguyên trạng, fail-closed,
- * thay vì im lặng coi request là đường kho chung.
+ * Chỉ trả `null` khi địa chỉ không mang slug hoặc sổ đã xác nhận
+ * slug thuộc kho chung. Một hostname có slug nhưng không được
+ * đăng ký, hoặc không thể đọc sổ, là lỗi định tuyến và phải
+ * fail-closed trước khi đọc/ghi dữ liệu; không đoán kho chung.
  *
  * @param spaceDb - Khung định tuyến (chỉ cần `resolveTarget`; hàm
  *   này không mở pool, chỉ đọc sổ đăng ký qua đệm của khung).
@@ -87,18 +82,9 @@ export async function resolveDedicatedSpace(
   const header = Array.isArray(host) ? host[0] : host;
   const slug = extractSpaceSlugFromHost(header);
   if (!slug) return null;
-  let target: ResolvedSpaceConnection;
-  try {
-    target = await spaceDb.resolveTarget(slug);
-  } catch (err) {
-    if (
-      err instanceof SpaceRoutingError &&
-      (err.code === 'space_routing.space_not_found' || err.code === 'space_routing.not_configured')
-    ) {
-      return null;
-    }
-    throw err;
-  }
+  // Slug đã có trong Host buộc phải phân giải qua sổ; mất sổ
+  // hoặc slug giả không được phép chuyển request sang kho chung.
+  const target: ResolvedSpaceConnection = await spaceDb.resolveTarget(slug);
   if (target.mode !== 'dedicated') return null;
   return { slug, spaceId: target.spaceId };
 }

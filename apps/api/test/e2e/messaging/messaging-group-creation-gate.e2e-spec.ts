@@ -109,7 +109,7 @@ describe('Messaging — cổng tạo nhóm tự do chỉ dành cho quản trị 
     // vai manager tại context của chính tenant đó.
     const slug = `gate-${uniqueName('t').toLowerCase()}`;
     const tenantRes = await http(app).post('/api/v1/tenants')
-      .set('Authorization', `Bearer ${admin}`).send({ name: 'Trung tâm kiểm cổng tạo nhóm', slug, kind: 'center' });
+      .set('Authorization', `Bearer ${admin}`).send({ name: 'Trường kiểm cổng tạo nhóm', slug, kind: 'school' });
     if (tenantRes.status !== 201) throw new Error(`create tenant failed: ${tenantRes.status} ${JSON.stringify(tenantRes.body)}`);
     const centreTenantId = (tenantRes.body as { id: string }).id;
     owner = await person();

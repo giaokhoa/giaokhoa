@@ -111,8 +111,28 @@ export class JwtAuthStrategy extends PassportStrategy(JwtStrategy, 'jwt') {
       throw new UnauthorizedException({ message: 'Token is not an access token', code: 'auth.unauthenticated' });
     }
     const space = await resolveDedicatedSpace(this.spaceDb, req.headers?.host);
-    if (space && payload.centre_id !== undefined && payload.centre_id !== space.spaceId) {
-      throw new UnauthorizedException({ message: 'Token belongs to another centre', code: 'auth.centre_mismatch' });
+    // Token của trung tâm A/B không dùng được ở địa chỉ khác hay
+    // hostname gốc. Ngoại lệ có kiểm chứng: Trang chính còn dùng
+    // địa chỉ gốc và kho chung cho phiên của tenant platform trong
+    // giai đoạn này (việc tách Trang chính thuộc issue sau).
+    // Chỉ chấp nhận nếu id kho được nêu trong token khớp chính xác
+    // dòng đăng ký Trang chính, không nhận mọi token mang tid platform.
+    if (payload.centre_id !== undefined && (!space || payload.centre_id !== space.spaceId)) {
+      let rootIsPlatform = false;
+      if (!space && payload.tid !== undefined) {
+        const platform = await this.tenants.platformTenant();
+        if (payload.tid === platform.id) {
+          try {
+            const registered = await this.spaceDb.resolveTarget(platform.slug);
+            rootIsPlatform = registered.spaceId === payload.centre_id;
+          } catch {
+            // Mất sổ hoặc cấu hình lỗi thì từ chối, không suy luận kho.
+          }
+        }
+      }
+      if (!rootIsPlatform) {
+        throw new UnauthorizedException({ message: 'Token belongs to another centre or address', code: 'auth.centre_mismatch' });
+      }
     }
     // Đường vận hành platform (issue #582): phiên KHÔNG mang claim
     // `centre_id` và mang `tid` của tenant platform tra ở kho chung —
