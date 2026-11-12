@@ -136,7 +136,7 @@ describe('VietQR lát 1: pipeline IPN SePay cho enrol_fee (issue #189, §6.4)', 
   it('6.4.4 + 6.4.5: payment trên account SePay có mã + QR + hạn 24h; config bị che ở list và get', async () => {
     const { instance, buyerToken } = await createFeeCourse(sepayAccountId);
     const payment = await createFeePayment(buyerToken, instance.id);
-    expect(payment.paymentCode).toMatch(/^Giáo khoa[0-9A-HJKMNP-TV-Z]{9}$/);
+    expect(payment.paymentCode).toMatch(/^GKH[0-9A-HJKMNP-TV-Z]{9}$/);
     expect(payment.tenantId).toBeTruthy();
     const expires = new Date(payment.expiresAt as string).getTime();
     expect(expires - Date.now()).toBeGreaterThan(23 * 3600 * 1000);
@@ -162,8 +162,8 @@ describe('VietQR lát 1: pipeline IPN SePay cho enrol_fee (issue #189, §6.4)', 
     const { instance, buyerToken } = await createFeeCourse(sepayAccountId);
     const first = await createFeePayment(buyerToken, instance.id);
     const second = await createFeePayment(buyerToken, instance.id);
-    expect(first.paymentCode).toMatch(/^Giáo khoa[0-9A-HJKMNP-TV-Z]{9}$/);
-    expect(second.paymentCode).toMatch(/^Giáo khoa[0-9A-HJKMNP-TV-Z]{9}$/);
+    expect(first.paymentCode).toMatch(/^GKH[0-9A-HJKMNP-TV-Z]{9}$/);
+    expect(second.paymentCode).toMatch(/^GKH[0-9A-HJKMNP-TV-Z]{9}$/);
     expect(second.paymentCode).not.toBe(first.paymentCode);
     expect(second.id).not.toBe(first.id);
     // Mã đã sinh là bất biến: đọc lại payment không sinh mã mới.

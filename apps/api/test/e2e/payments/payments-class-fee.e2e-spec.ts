@@ -274,7 +274,7 @@ describe('CLASS-3: học phí theo lớp qua pipeline class_fee (issue #184)', (
     expect(payment.component).toBe('class_fee');
     expect(payment.itemId).toBe(classA);
     expect(payment.amount).toBe(FEE);
-    expect(payment.paymentCode).toMatch(/^Giáo khoa[0-9A-HJKMNP-TV-Z]{9}$/);
+    expect(payment.paymentCode).toMatch(/^GKH[0-9A-HJKMNP-TV-Z]{9}$/);
     expect(typeof payment.vietqrPayload).toBe('string');
     expect(await enrolmentActive(courseA1, buyer.token)).toBe(false);
 
