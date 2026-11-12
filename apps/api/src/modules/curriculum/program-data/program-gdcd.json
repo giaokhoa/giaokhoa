@@ -1,0 +1,3301 @@
+{
+ "subject": "Giáo dục công dân",
+ "issued_with": "Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+ "records": [
+  {
+   "id": "GDCD-0041",
+   "subject": "Giáo dục công dân",
+   "grade": 6,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Tự hào về truyền thống gia đình, dòng họ",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được một số truyền thống của gia đình, dòng họ."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Giải thích được một cách đơn giản ý nghĩa của truyền thống gia đình, dòng họ."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Biết giữ gìn, phát huy truyền thống gia đình, dòng họ bằng những việc làm cụ thể phù hợp."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được một số truyền thống của gia đình, dòng họ. – Giải thích được một cách đơn giản ý nghĩa của truyền thống gia đình, dòng họ. – Biết giữ gìn, phát huy truyền thống gia đình, dòng họ bằng những việc làm cụ thể phù hợp.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     28
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0042",
+   "subject": "Giáo dục công dân",
+   "grade": 6,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Yêu thương con người",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được khái niệm và biểu hiện của tình yêu thương con người."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Trình bày được giá trị của tình yêu thương con người."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Thực hiện được những việc làm thể hiện tình yêu thương con người."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Đánh giá được thái độ, hành vi thể hiện tình yêu thương của người khác."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Phê phán những biểu hiện trái với tình yêu thương con người."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được khái niệm và biểu hiện của tình yêu thương con người. – Trình bày được giá trị của tình yêu thương con người. – Thực hiện được những việc làm thể hiện tình yêu thương con người. – Đánh giá được thái độ, hành vi thể hiện tình yêu thương của người khác. – Phê phán những biểu hiện trái với tình yêu thương con người.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     28
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0043",
+   "subject": "Giáo dục công dân",
+   "grade": 6,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Siêng năng, kiên trì",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được khái niệm, biểu hiện của siêng năng, kiên trì."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận biết được ý nghĩa của siêng năng, kiên trì."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Siêng năng, kiên trì trong lao động, học tập và cuộc sống hằng ngày."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Đánh giá được sự siêng năng, kiên trì của bản thân và người khác trong học tập, lao động."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Quý trọng những người siêng năng, kiên trì; góp ý cho những bạn có biểu hiện lười biếng, hay nản lòng để khắc phục hạn chế này."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được khái niệm, biểu hiện của siêng năng, kiên trì. – Nhận biết được ý nghĩa của siêng năng, kiên trì. – Siêng năng, kiên trì trong lao động, học tập và cuộc sống hằng ngày. – Đánh giá được sự siêng năng, kiên trì của bản thân và người khác trong học tập, lao động. – Quý trọng những người siêng năng, kiên trì; góp ý cho những bạn có biểu hiện lười biếng, hay nản lòng để khắc phục hạn chế này.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     28,
+     29
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0044",
+   "subject": "Giáo dục công dân",
+   "grade": 6,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Tôn trọng sự thật",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận biết được một số biểu hiện của tôn trọng sự thật."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Hiểu vì sao phải tôn trọng sự thật."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Luôn nói thật với người thân, thầy cô, bạn bè và người có trách nhiệm."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Không đồng tình với việc nói dối hoặc che giấu sự thật."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nhận biết được một số biểu hiện của tôn trọng sự thật. – Hiểu vì sao phải tôn trọng sự thật. – Luôn nói thật với người thân, thầy cô, bạn bè và người có trách nhiệm. – Không đồng tình với việc nói dối hoặc che giấu sự thật.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     29
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0045",
+   "subject": "Giáo dục công dân",
+   "grade": 6,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Tự lập",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được khái niệm tự lập."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Liệt kê được các biểu hiện của người có tính tự lập."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Hiểu vì sao phải tự lập."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Đánh giá được khả năng tự lập của bản thân và người khác."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Tự thực hiện được nhiệm vụ của bản thân trong học tập, sinh hoạt hằng ngày, hoạt động tập thể ở trường và trong cuộc sống cộng đồng; không dựa dẫm, ỷ lại và phụ thuộc vào người khác."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được khái niệm tự lập. – Liệt kê được các biểu hiện của người có tính tự lập. – Hiểu vì sao phải tự lập. – Đánh giá được khả năng tự lập của bản thân và người khác. – Tự thực hiện được nhiệm vụ của bản thân trong học tập, sinh hoạt hằng ngày, hoạt động tập thể ở trường và trong cuộc sống cộng đồng; không dựa dẫm, ỷ lại và phụ thuộc vào người khác.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     29
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0046",
+   "subject": "Giáo dục công dân",
+   "grade": 6,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Tự nhận thức bản thân",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được thế nào là tự nhận thức bản thân."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận biết được ý nghĩa của tự nhận thức bản thân."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Tự nhận thức được điểm mạnh, điểm yếu, giá trị, vị trí, tình cảm, các mối quan hệ của bản thân."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Biết tôn trọng bản thân."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Xây dựng được kế hoạch phát huy điểm mạnh và hạn chế điểm yếu của bản thân."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được thế nào là tự nhận thức bản thân. – Nhận biết được ý nghĩa của tự nhận thức bản thân. – Tự nhận thức được điểm mạnh, điểm yếu, giá trị, vị trí, tình cảm, các mối quan hệ của bản thân. – Biết tôn trọng bản thân. – Xây dựng được kế hoạch phát huy điểm mạnh và hạn chế điểm yếu của bản thân.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     29
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0047",
+   "subject": "Giáo dục công dân",
+   "grade": 6,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Ứng phó với tình huống nguy hiểm",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận biết được các tình huống nguy hiểm và hậu quả của những tình huống nguy hiểm đối với trẻ em."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được cách ứng phó với một số tình huống nguy hiểm."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Thực hành được cách ứng phó trước một số tình huống nguy hiểm để đảm bảo an toàn."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nhận biết được các tình huống nguy hiểm và hậu quả của những tình huống nguy hiểm đối với trẻ em. – Nêu được cách ứng phó với một số tình huống nguy hiểm. – Thực hành được cách ứng phó trước một số tình huống nguy hiểm để đảm bảo an toàn.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     29,
+     30
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0048",
+   "subject": "Giáo dục công dân",
+   "grade": 6,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Tiết kiệm",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được khái niệm tiết kiệm và biểu hiện của tiết kiệm (tiền bạc, đồ dùng, thời gian, điện, nước,...)."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Hiểu vì sao phải tiết kiệm."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Thực hành tiết kiệm trong cuộc sống, học tập."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận xét, đánh giá được việc thực hành tiết kiệm của bản thân và những người xung quanh."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Phê phán những biểu hiện lãng phí."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được khái niệm tiết kiệm và biểu hiện của tiết kiệm (tiền bạc, đồ dùng, thời gian, điện, nước,...). – Hiểu vì sao phải tiết kiệm. – Thực hành tiết kiệm trong cuộc sống, học tập. – Nhận xét, đánh giá được việc thực hành tiết kiệm của bản thân và những người xung quanh. – Phê phán những biểu hiện lãng phí.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     30
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0049",
+   "subject": "Giáo dục công dân",
+   "grade": 6,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Công dân nước Cộng hoà xã hội chủ nghĩa Việt Nam",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được khái niệm công dân; căn cứ xác định công dân nước Cộng hoà xã hội chủ nghĩa Việt Nam."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được quy định của Hiến pháp nước Cộng hoà xã hội chủ nghĩa Việt Nam về quyền và nghĩa vụ cơ bản của công dân."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Bước đầu thực hiện được một số quyền và nghĩa vụ cơ bản của công dân."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được khái niệm công dân; căn cứ xác định công dân nước Cộng hoà xã hội chủ nghĩa Việt Nam. – Nêu được quy định của Hiến pháp nước Cộng hoà xã hội chủ nghĩa Việt Nam về quyền và nghĩa vụ cơ bản của công dân. – Bước đầu thực hiện được một số quyền và nghĩa vụ cơ bản của công dân.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     30
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0050",
+   "subject": "Giáo dục công dân",
+   "grade": 6,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Quyền trẻ em",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được các quyền cơ bản của trẻ em; ý nghĩa của quyền trẻ em và việc thực hiện quyền trẻ em; trách nhiệm của gia đình, nhà trường, xã hội trong việc thực hiện quyền trẻ em."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Phân biệt được hành vi thực hiện quyền trẻ em và hành vi vi phạm quyền trẻ em."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Thực hiện tốt quyền và bổn phận của trẻ em."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận xét, đánh giá được việc thực hiện quyền trẻ em của bản thân, gia đình, nhà trường, cộng đồng; bày tỏ được nhu cầu để thực hiện tốt hơn quyền trẻ em."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được các quyền cơ bản của trẻ em; ý nghĩa của quyền trẻ em và việc thực hiện quyền trẻ em; trách nhiệm của gia đình, nhà trường, xã hội trong việc thực hiện quyền trẻ em. – Phân biệt được hành vi thực hiện quyền trẻ em và hành vi vi phạm quyền trẻ em. – Thực hiện tốt quyền và bổn phận của trẻ em. – Nhận xét, đánh giá được việc thực hiện quyền trẻ em của bản thân, gia đình, nhà trường, cộng đồng; bày tỏ được nhu cầu để thực hiện tốt hơn quyền trẻ em.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     30
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0051",
+   "subject": "Giáo dục công dân",
+   "grade": 7,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Tự hào về truyền thống quê hương",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được một số truyền thống văn hoá, truyền thống yêu nước, chống giặc ngoại xâm của quê hương."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Thực hiện được những việc làm phù hợp để giữ gìn, phát huy truyền thống của quê hương."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Phê phán những việc làm trái ngược với truyền thống tốt đẹp của quê hương."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được một số truyền thống văn hoá, truyền thống yêu nước, chống giặc ngoại xâm của quê hương. – Thực hiện được những việc làm phù hợp để giữ gìn, phát huy truyền thống của quê hương. – Phê phán những việc làm trái ngược với truyền thống tốt đẹp của quê hương.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     31
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0052",
+   "subject": "Giáo dục công dân",
+   "grade": 7,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Quan tâm, cảm thông và chia sẻ",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được những biểu hiện của sự quan tâm, cảm thôngvà chia sẻ với người khác."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Hiểu vì sao mọi người phải quan tâm, cảm thôngvà chia sẻ với nhau."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Thường xuyên có những lời nói, việc làm thể hiện sự quan tâm, cảm thôngvà chia sẻ với mọi người."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Khích lệ, động viên bạn bè quan tâm, cảm thông và chia sẻ với người khác; phê phán thói ích kỉ, thờ ơ trước khó khăn, mất mát của người khác."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được những biểu hiện của sự quan tâm, cảm thôngvà chia sẻ với người khác. – Hiểu vì sao mọi người phải quan tâm, cảm thôngvà chia sẻ với nhau. – Thường xuyên có những lời nói, việc làm thể hiện sự quan tâm, cảm thôngvà chia sẻ với mọi người. – Khích lệ, động viên bạn bè quan tâm, cảm thông và chia sẻ với người khác; phê phán thói ích kỉ, thờ ơ trước khó khăn, mất mát của người khác.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     31
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0053",
+   "subject": "Giáo dục công dân",
+   "grade": 7,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Học tập tự giác, tích cực",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được các biểu hiện của học tập tự giác, tích cực."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Hiểu vì sao phải học tập tự giác, tích cực."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Thực hiện được việc học tập tự giác, tích cực."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Biết góp ý, nhắc nhở những bạn chưa tự giác, tích cực học tập để khắc phục hạn chế này."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được các biểu hiện của học tập tự giác, tích cực. – Hiểu vì sao phải học tập tự giác, tích cực. – Thực hiện được việc học tập tự giác, tích cực. – Biết góp ý, nhắc nhở những bạn chưa tự giác, tích cực học tập để khắc phục hạn chế này.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     31
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0054",
+   "subject": "Giáo dục công dân",
+   "grade": 7,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Giữ chữ tín",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Hiểu được chữ tín là gì, biểu hiện của giữ chữ tín và vì sao phải giữ chữ tín."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Phân biệt được hành vi giữ chữ tín và không giữ chữ tín."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Luôn giữ lời hứa với người thân, thầy cô, bạn bè và người có trách nhiệm."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Phê phán những người không biết giữ chữ tín."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Hiểu được chữ tín là gì, biểu hiện của giữ chữ tín và vì sao phải giữ chữ tín. – Phân biệt được hành vi giữ chữ tín và không giữ chữ tín. – Luôn giữ lời hứa với người thân, thầy cô, bạn bè và người có trách nhiệm. – Phê phán những người không biết giữ chữ tín.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     31,
+     32
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0055",
+   "subject": "Giáo dục công dân",
+   "grade": 7,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Bảo tồn di sản văn hoá",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được khái niệm di sản văn hoá và một số loại di sản văn hoá của Việt Nam."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Giải thích được ý nghĩa của di sản văn hoáđối với con người và xã hội."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được quy định cơ bản của pháp luật về quyền và nghĩa vụ của tổ chức, cá nhân đối với việc bảo vệ di sản văn hoá."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận biết được trách nhiệm của học sinh trong việc bảo tồn di sản văn hoá."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Liệt kê được các hành vi vi phạm pháp luật về bảo tồn di sản văn hoá và cách đấu tranh, ngăn chặn các hành vi đó."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Thực hiện được một số việc cần làm phù hợp với lứa tuổi để góp phần bảo vệ di sản văn hoá."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được khái niệm di sản văn hoá và một số loại di sản văn hoá của Việt Nam. – Giải thích được ý nghĩa của di sản văn hoáđối với con người và xã hội. – Nêu được quy định cơ bản của pháp luật về quyền và nghĩa vụ của tổ chức, cá nhân đối với việc bảo vệ di sản văn hoá. – Nhận biết được trách nhiệm của học sinh trong việc bảo tồn di sản văn hoá. – Liệt kê được các hành vi vi phạm pháp luật về bảo tồn di sản văn hoá và cách đấu tranh, ngăn chặn các hành vi đó. – Thực hiện được một số việc cần làm phù hợp với lứa tuổi để góp phần bảo vệ di sản văn hoá.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     32
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0056",
+   "subject": "Giáo dục công dân",
+   "grade": 7,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Ứng phó với tâm lí căng thẳng",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được các tình huống thường gây căng thẳng."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận biết được biểu hiện của cơ thể khi bị căng thẳng."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được nguyên nhân và ảnh hưởng của căng thẳng"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được cách ứng phó tích cực khi căng thẳng."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Thực hành được một số cách ứng phó tích cực khi căng thẳng."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được các tình huống thường gây căng thẳng. – Nhận biết được biểu hiện của cơ thể khi bị căng thẳng. – Nêu được nguyên nhân và ảnh hưởng của căng thẳng – Nêu được cách ứng phó tích cực khi căng thẳng. – Thực hành được một số cách ứng phó tích cực khi căng thẳng.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     32
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0057",
+   "subject": "Giáo dục công dân",
+   "grade": 7,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Phòng, chống bạo lực học đường",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được các biểu hiện của bạo lực học đường; nguyên nhân và tác hại của bạo lực học đường."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được một số quy định cơ bản của pháp luật liên quan đến phòng, chống bạo lực học đường."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Biết cách ứng phó trước, trong và sau khi bị bạo lực học đường."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Tham gia các hoạt động tuyên truyền phòng, chống bạo lực học đường do nhà trường, địa phương tổ chức."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Phê phán, đấu tranh với những hành vi bạo lực học đường; sống tự chủ, không để bị lôi kéo tham gia bạo lực học đường."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được các biểu hiện của bạo lực học đường; nguyên nhân và tác hại của bạo lực học đường. – Nêu được một số quy định cơ bản của pháp luật liên quan đến phòng, chống bạo lực học đường. – Biết cách ứng phó trước, trong và sau khi bị bạo lực học đường. – Tham gia các hoạt động tuyên truyền phòng, chống bạo lực học đường do nhà trường, địa phương tổ chức. – Phê phán, đấu tranh với những hành vi bạo lực học đường; sống tự chủ, không để bị lôi kéo tham gia bạo lực học đường.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     32,
+     33
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0058",
+   "subject": "Giáo dục công dân",
+   "grade": 7,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Quản lí tiền",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được ý nghĩa của việc quản lí tiền hiệu quả."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận biết được một số nguyên tắc quản lí tiền có hiệu quả."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Bước đầu biết quản lí tiền và tạo nguồn thu nhập của cá nhân."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được ý nghĩa của việc quản lí tiền hiệu quả. – Nhận biết được một số nguyên tắc quản lí tiền có hiệu quả. – Bước đầu biết quản lí tiền và tạo nguồn thu nhập của cá nhân.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     33
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0059",
+   "subject": "Giáo dục công dân",
+   "grade": 7,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Phòng, chống tệ nạn xã hội",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được khái niệm tệ nạn xã hội và các loại tệ nạn xã hội phổ biến."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Giải thích đượcnguyên nhân, hậu quả của tệ nạn xã hội đối với bản thân, gia đình và xã hội."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được một số quy định của pháp luật về phòng, chống tệ nạn xã hội."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Thực hiện tốt các quy định của pháp luật về phòng, chống tệ nạn xã hội."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Tham gia các hoạt động phòng, chống tệ nạn xã hội do nhà trường, địa phương tổ chức."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Phê phán, đấu tranh với các tệ nạn xã hội và tuyên truyền, vận động mọi người tham gia các hoạt động phòng, chống tệ nạn xã hội."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được khái niệm tệ nạn xã hội và các loại tệ nạn xã hội phổ biến. – Giải thích đượcnguyên nhân, hậu quả của tệ nạn xã hội đối với bản thân, gia đình và xã hội. – Nêu được một số quy định của pháp luật về phòng, chống tệ nạn xã hội. – Thực hiện tốt các quy định của pháp luật về phòng, chống tệ nạn xã hội. – Tham gia các hoạt động phòng, chống tệ nạn xã hội do nhà trường, địa phương tổ chức. – Phê phán, đấu tranh với các tệ nạn xã hội và tuyên truyền, vận động mọi người tham gia các hoạt động phòng, chống tệ nạn xã hội.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     33
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0060",
+   "subject": "Giáo dục công dân",
+   "grade": 7,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Quyền và nghĩa vụ của công dân trong gia đình",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được khái niệm và vai trò của gia đình; quy định cơ bản của pháp luật về quyền và nghĩa vụ của các thành viên trong gia đình."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận xét được việc thực hiện quyền và nghĩa vụ trong gia đình của bản thân và của người khác."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Thực hiện được nghĩa vụ của bản thân đối với ông bà, cha mẹ và anh chị em trong gia đình bằng những việc làm cụ thể."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được khái niệm và vai trò của gia đình; quy định cơ bản của pháp luật về quyền và nghĩa vụ của các thành viên trong gia đình. – Nhận xét được việc thực hiện quyền và nghĩa vụ trong gia đình của bản thân và của người khác. – Thực hiện được nghĩa vụ của bản thân đối với ông bà, cha mẹ và anh chị em trong gia đình bằng những việc làm cụ thể.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     33
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0061",
+   "subject": "Giáo dục công dân",
+   "grade": 8,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Tự hào về truyền thống dân tộc Việt Nam",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được một số truyền thống của dân tộc Việt Nam."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận biết được giá trị của các truyền thống của dân tộc Việt Nam."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Kể được một số biểu hiện của lòng tự hào về truyền thống của dân tộc Việt Nam."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Đánh giá được hành vi, việc làm của bản thân và những người xung quanh trong việc thể hiện lòng tự hào về truyền thống của dân tộc Việt Nam."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Thực hiện được những việc làm cụ thể để giữ gìn, phát huy truyền thống của dân tộc."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được một số truyền thống của dân tộc Việt Nam. – Nhận biết được giá trị của các truyền thống của dân tộc Việt Nam. – Kể được một số biểu hiện của lòng tự hào về truyền thống của dân tộc Việt Nam. – Đánh giá được hành vi, việc làm của bản thân và những người xung quanh trong việc thể hiện lòng tự hào về truyền thống của dân tộc Việt Nam. – Thực hiện được những việc làm cụ thể để giữ gìn, phát huy truyền thống của dân tộc.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     34
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0062",
+   "subject": "Giáo dục công dân",
+   "grade": 8,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Tôn trọng sự đa dạng của các dân tộc",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "–Nêu được một số biểu hiện của sự đa dạng của các dân tộc và các nền văn hoá trên thế giới."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Hiểu được ý nghĩa của việc tôn trọng sự đa dạng của các dân tộc và các nền văn hoá trên thế giới."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Thể hiện được bằng lời nói và việc làm thái độ tôn trọng sự đa dạng của các dân tộc và các nền văn hoá trên thế giới."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Phê phán những hành vi kì thị, phân biệt chủng tộc và văn hoá."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "–Nêu được một số biểu hiện của sự đa dạng của các dân tộc và các nền văn hoá trên thế giới. – Hiểu được ý nghĩa của việc tôn trọng sự đa dạng của các dân tộc và các nền văn hoá trên thế giới. – Thể hiện được bằng lời nói và việc làm thái độ tôn trọng sự đa dạng của các dân tộc và các nền văn hoá trên thế giới. – Phê phán những hành vi kì thị, phân biệt chủng tộc và văn hoá.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     34
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0063",
+   "subject": "Giáo dục công dân",
+   "grade": 8,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Lao động cần cù, sáng tạo",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được khái niệm cần cù, sáng tạo trong lao động và một số biểu hiện của cần cù, sáng tạo trong lao động."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Giải thích được ý nghĩa của cần cù, sáng tạo trong lao động."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Thể hiện được sự cần cù, sáng tạo trong lao động của bản thân."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Trân trọng những thành quả lao động; quý trọng và học hỏi những tấm gương cần cù, sáng tạo trong lao động; phê phán những biểu hiện chây lười, thụ động trong lao động."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được khái niệm cần cù, sáng tạo trong lao động và một số biểu hiện của cần cù, sáng tạo trong lao động. – Giải thích được ý nghĩa của cần cù, sáng tạo trong lao động. – Thể hiện được sự cần cù, sáng tạo trong lao động của bản thân. – Trân trọng những thành quả lao động; quý trọng và học hỏi những tấm gương cần cù, sáng tạo trong lao động; phê phán những biểu hiện chây lười, thụ động trong lao động.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     34
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0064",
+   "subject": "Giáo dục công dân",
+   "grade": 8,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Bảo vệ lẽ phải",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Giải thích được một cách đơn giản về sự cần thiết phải bảo vệ lẽ phải."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Thực hiện được việc bảo vệ lẽ phải bằng lời nói và hành động cụ thể, phù hợp với lứa tuổi."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Khích lệ, động viên bạn bè có thái độ, hành vi bảo vệ lẽ phải; phê phán những thái độ, hành vi không bảo vệ lẽ phải."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Giải thích được một cách đơn giản về sự cần thiết phải bảo vệ lẽ phải. – Thực hiện được việc bảo vệ lẽ phải bằng lời nói và hành động cụ thể, phù hợp với lứa tuổi. – Khích lệ, động viên bạn bè có thái độ, hành vi bảo vệ lẽ phải; phê phán những thái độ, hành vi không bảo vệ lẽ phải.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     35
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0065",
+   "subject": "Giáo dục công dân",
+   "grade": 8,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Bảo vệ môi trường và tài nguyên thiên nhiên",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Giải thích được sự cần thiết phải bảo vệ môi trường và tài nguyên thiên nhiên."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được một số quy định cơ bản của pháp luật về bảo vệ môi trường, tài nguyên thiên nhiên; một số biện pháp cần thiết để bảo vệ môi trường và tài nguyên thiên nhiên."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được trách nhiệm của học sinh trong việc bảo vệ môi trường và tài nguyên thiên nhiên."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Thực hiện được việc bảo vệ môi trường và tài nguyên thiên nhiên bằng những việc làm phù hợp với lứa tuổi."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Phê phán, đấu tranh với những hành vi gây ô nhiễm môi trường và phá hoại tài nguyên thiên nhiên."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Giải thích được sự cần thiết phải bảo vệ môi trường và tài nguyên thiên nhiên. – Nêu được một số quy định cơ bản của pháp luật về bảo vệ môi trường, tài nguyên thiên nhiên; một số biện pháp cần thiết để bảo vệ môi trường và tài nguyên thiên nhiên. – Nêu được trách nhiệm của học sinh trong việc bảo vệ môi trường và tài nguyên thiên nhiên. – Thực hiện được việc bảo vệ môi trường và tài nguyên thiên nhiên bằng những việc làm phù hợp với lứa tuổi. – Phê phán, đấu tranh với những hành vi gây ô nhiễm môi trường và phá hoại tài nguyên thiên nhiên.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     35
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0066",
+   "subject": "Giáo dục công dân",
+   "grade": 8,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Xác định mục tiêu cá nhân",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận biết được thế nào là mục tiêu cá nhân; các loại mục tiêu cá nhân."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Hiểu vì sao phải xác định mục tiêu cá nhân."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được cách xác định mục tiêu và lập kế hoạch thực hiện mục tiêu cá nhân."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Xây dựng được mục tiêu cá nhân của bản thân và kế hoạch hành động nhằm đạt mục tiêu đó."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nhận biết được thế nào là mục tiêu cá nhân; các loại mục tiêu cá nhân. – Hiểu vì sao phải xác định mục tiêu cá nhân. – Nêu được cách xác định mục tiêu và lập kế hoạch thực hiện mục tiêu cá nhân. – Xây dựng được mục tiêu cá nhân của bản thân và kế hoạch hành động nhằm đạt mục tiêu đó.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     35
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0067",
+   "subject": "Giáo dục công dân",
+   "grade": 8,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Phòng, chống bạo lực gia đình",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Kể được các hình thức bạo lực gia đình phổ biến."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Phân tích được tác hại của hành vi bạo lực gia đình đối với cá nhân, gia đình và xã hội."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được một số quy định của pháp luật về phòng, chống bạo lực gia đình."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Biết cách phòng, chống bạo lực gia đình."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Phê phán các hành vi bạo lực gia đình trong gia đình và cộng đồng."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Kể được các hình thức bạo lực gia đình phổ biến. – Phân tích được tác hại của hành vi bạo lực gia đình đối với cá nhân, gia đình và xã hội. – Nêu được một số quy định của pháp luật về phòng, chống bạo lực gia đình. – Biết cách phòng, chống bạo lực gia đình. – Phê phán các hành vi bạo lực gia đình trong gia đình và cộng đồng.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     35,
+     36
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0068",
+   "subject": "Giáo dục công dân",
+   "grade": 8,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Lập kế hoạch chi tiêu",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận biết được sự cần thiết phải lập kế hoạch chi tiêu."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được cách lập kế hoạch chi tiêu."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Lập được kế hoạch chi tiêu và tạo thói quen chi tiêu hợp lí."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Giúp đỡ bạn bè, người thân lập kế hoạch chi tiêu hợp lí."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nhận biết được sự cần thiết phải lập kế hoạch chi tiêu. – Nêu được cách lập kế hoạch chi tiêu. – Lập được kế hoạch chi tiêu và tạo thói quen chi tiêu hợp lí. – Giúp đỡ bạn bè, người thân lập kế hoạch chi tiêu hợp lí.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     36
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0069",
+   "subject": "Giáo dục công dân",
+   "grade": 8,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Phòng ngừa tai nạn vũ khí, cháy, nổ và các chất độc hại",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Kể được tên một số tai nạn vũ khí, cháy, nổ và chất độc hại; nhận diện được một số nguy cơ dẫn đến tai nạn vũ khí, cháy, nổ và chất độc hại."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Trình bày được hậu quả của tai nạn vũ khí, cháy, nổ và chất độc hại."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được quy định cơ bản của pháp luật về phòng ngừa tai nạn vũ khí, cháy, nổ và các chất độc hại."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận biết được trách nhiệm của công dân trong việc phòng ngừa tai nạn vũ khí, cháy, nổ và các chất độc hại."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Thực hiện được việc phòng ngừa tai nạn vũ khí, cháy, nổ và các chất độc hại."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhắc nhở, tuyên truyền người thân, bạn bè chủ động phòng ngừa tai nạn vũ khí, cháy, nổ và các chất độc hại."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Kể được tên một số tai nạn vũ khí, cháy, nổ và chất độc hại; nhận diện được một số nguy cơ dẫn đến tai nạn vũ khí, cháy, nổ và chất độc hại. – Trình bày được hậu quả của tai nạn vũ khí, cháy, nổ và chất độc hại. – Nêu được quy định cơ bản của pháp luật về phòng ngừa tai nạn vũ khí, cháy, nổ và các chất độc hại. – Nhận biết được trách nhiệm của công dân trong việc phòng ngừa tai nạn vũ khí, cháy, nổ và các chất độc hại. – Thực hiện được việc phòng ngừa tai nạn vũ khí, cháy, nổ và các chất độc hại. – Nhắc nhở, tuyên truyền người thân, bạn bè chủ động phòng ngừa tai nạn vũ khí, cháy, nổ và các chất độc hại.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     36
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0070",
+   "subject": "Giáo dục công dân",
+   "grade": 8,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Quyền và nghĩa vụ lao động của công dân",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Phân tích được tầm quan trọng của lao động đối với đời sống con người."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được một số quy định của pháp luật về quyền, nghĩa vụ lao động của công dân và lao động chưa thành niên."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được một số quyền và nghĩa vụ cơ bản của các bên tham gia hợp đồng lao động; lập được hợp đồng lao động có nội dung đơn giản giữa người sử dụng lao động và người lao động."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Tích cực, chủ động tham gia lao động ở gia đình, trường, lớp và cộng đồng phù hợp lứa tuổi."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Phân tích được tầm quan trọng của lao động đối với đời sống con người. – Nêu được một số quy định của pháp luật về quyền, nghĩa vụ lao động của công dân và lao động chưa thành niên. – Nêu được một số quyền và nghĩa vụ cơ bản của các bên tham gia hợp đồng lao động; lập được hợp đồng lao động có nội dung đơn giản giữa người sử dụng lao động và người lao động. – Tích cực, chủ động tham gia lao động ở gia đình, trường, lớp và cộng đồng phù hợp lứa tuổi.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     36,
+     37
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0071",
+   "subject": "Giáo dục công dân",
+   "grade": 9,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Sống có lí tưởng",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được khái niệm sống có lí tưởng."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Giải thích được ý nghĩa của việc sống có lí tưởng."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận biết được lí tưởng sống của thanh niên Việt Nam."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Xác định được lí tưởng sống của bản thân và nỗ lực học tập, rèn luyện theo lí tưởng."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được khái niệm sống có lí tưởng. – Giải thích được ý nghĩa của việc sống có lí tưởng. – Nhận biết được lí tưởng sống của thanh niên Việt Nam. – Xác định được lí tưởng sống của bản thân và nỗ lực học tập, rèn luyện theo lí tưởng.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     37
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0072",
+   "subject": "Giáo dục công dân",
+   "grade": 9,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Khoan dung",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được khái niệm khoan dung và biểu hiện của khoan dung."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận biết được giá trị của khoan dung."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Thực hiện được những việc làm thể hiện sự khoan dung trong những tình huống cụ thể, phù hợp với lứa tuổi."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Phê phán các biểu hiện thiếu khoan dung."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được khái niệm khoan dung và biểu hiện của khoan dung. – Nhận biết được giá trị của khoan dung. – Thực hiện được những việc làm thể hiện sự khoan dung trong những tình huống cụ thể, phù hợp với lứa tuổi. – Phê phán các biểu hiện thiếu khoan dung.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     37
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0073",
+   "subject": "Giáo dục công dân",
+   "grade": 9,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Tích cực tham gia các hoạt động cộng đồng",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Hiểu được thế nào là hoạt động cộng đồng; nêu được một số hoạt động cộng đồng."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Giải thích được sự cần thiết phải tham gia các hoạt động cộng đồng."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận biết được trách nhiệm của học sinh trong việc tham gia vào các hoạt động cộng đồng."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Tham gia tích cực, tự giác các hoạt động chung của cộng đồng phù hợp với lứa tuổi do lớp, trường, địa phương tổ chức."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Phê phán biểu hiện thờ ơ, thiếu trách nhiệm với các hoạt động cộng đồng."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Hiểu được thế nào là hoạt động cộng đồng; nêu được một số hoạt động cộng đồng. – Giải thích được sự cần thiết phải tham gia các hoạt động cộng đồng. – Nhận biết được trách nhiệm của học sinh trong việc tham gia vào các hoạt động cộng đồng. – Tham gia tích cực, tự giác các hoạt động chung của cộng đồng phù hợp với lứa tuổi do lớp, trường, địa phương tổ chức. – Phê phán biểu hiện thờ ơ, thiếu trách nhiệm với các hoạt động cộng đồng.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     37
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0074",
+   "subject": "Giáo dục công dân",
+   "grade": 9,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Khách quan và công bằng",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận biết được những biểu hiện khách quan, công bằng."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Hiểu được ý nghĩa của khách quan, công bằng; tác hại của sự thiếu khách quan, công bằng."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Thể hiện được thái độ khách quan, công bằng trong cuộc sống hằng ngày."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Phê phán những biểu hiện không khách quan, công bằng."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nhận biết được những biểu hiện khách quan, công bằng. – Hiểu được ý nghĩa của khách quan, công bằng; tác hại của sự thiếu khách quan, công bằng. – Thể hiện được thái độ khách quan, công bằng trong cuộc sống hằng ngày. – Phê phán những biểu hiện không khách quan, công bằng.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     38
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0075",
+   "subject": "Giáo dục công dân",
+   "grade": 9,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Bảo vệ hoà bình",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được thế nào là hoà bình và bảo vệ hoà bình; các biểu hiện của hoà bình."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Giải thích được vì sao cần phải bảo vệ hoà bình."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận ra được những biện pháp để thúc đẩy và bảo vệ hoà bình."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Biết lựa chọn và tham gia những hoạt động phù hợp để bảo vệ hoà bình."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Phê phán xung đột sắc tộc và chiến tranh phi nghĩa."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được thế nào là hoà bình và bảo vệ hoà bình; các biểu hiện của hoà bình. – Giải thích được vì sao cần phải bảo vệ hoà bình. – Nhận ra được những biện pháp để thúc đẩy và bảo vệ hoà bình. – Biết lựa chọn và tham gia những hoạt động phù hợp để bảo vệ hoà bình. – Phê phán xung đột sắc tộc và chiến tranh phi nghĩa.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     38
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0076",
+   "subject": "Giáo dục công dân",
+   "grade": 9,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Quản lí thời gian hiệu quả",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "–Hiểu được thế nào là quản lí thời gian hiệu quả."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận biết được sự cần thiết phải quản lí thời gian hiệu quả."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được cách quản lí thời gian hiệu quả."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Thực hiện được kĩ năng quản lí thời gian hiệu quả."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "–Hiểu được thế nào là quản lí thời gian hiệu quả. – Nhận biết được sự cần thiết phải quản lí thời gian hiệu quả. – Nêu được cách quản lí thời gian hiệu quả. – Thực hiện được kĩ năng quản lí thời gian hiệu quả.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     38
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0077",
+   "subject": "Giáo dục công dân",
+   "grade": 9,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Thích ứng với thay đổi",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được một số thay đổi có khả năng xảy ra trong cuộc sống của bản thân và gia đình."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận biết được ý nghĩa của việc thích ứng trước những thay đổi trong cuộc sống."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được các biện pháp để thích ứng với thay đổi trong cuộc sống."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Thích ứng được với một số thay đổi (nếu có) trong cuộc sống của bản thân."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được một số thay đổi có khả năng xảy ra trong cuộc sống của bản thân và gia đình. – Nhận biết được ý nghĩa của việc thích ứng trước những thay đổi trong cuộc sống. – Nêu được các biện pháp để thích ứng với thay đổi trong cuộc sống. – Thích ứng được với một số thay đổi (nếu có) trong cuộc sống của bản thân.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     38
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0078",
+   "subject": "Giáo dục công dân",
+   "grade": 9,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Tiêu dùng thông minh",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận biết được thế nào là tiêu dùng thông minh;lợi ích của tiêu dùng thông minh."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Đánh giá được các hành vi tiêu dùng thông minh và kém thông minh."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được các cách tiêu dùng thông minh (nắm bắt thông tin về sản phẩm, sử dụng sản phẩm an toàn, nhận biết những hình thức quảng cáo khác nhau, xác định phương thức thanh toán,...)."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Thực hiện được hành vi tiêu dùng thông minh trong một số tình huống cụ thể."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Khích lệ, giúp đỡ người thân, bạn bè trở thành người tiêu dùngthông minh."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nhận biết được thế nào là tiêu dùng thông minh;lợi ích của tiêu dùng thông minh. – Đánh giá được các hành vi tiêu dùng thông minh và kém thông minh. – Nêu được các cách tiêu dùng thông minh (nắm bắt thông tin về sản phẩm, sử dụng sản phẩm an toàn, nhận biết những hình thức quảng cáo khác nhau, xác định phương thức thanh toán,...). – Thực hiện được hành vi tiêu dùng thông minh trong một số tình huống cụ thể. – Khích lệ, giúp đỡ người thân, bạn bè trở thành người tiêu dùngthông minh.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     38,
+     39
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0079",
+   "subject": "Giáo dục công dân",
+   "grade": 9,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Vi phạm pháp luật và trách nhiệm pháp lí",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được khái niệm vi phạm pháp luật và trách nhiệm pháp lí; các loại vi phạm pháp luật và trách nhiệm pháp lí."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được ý nghĩa của trách nhiệm pháp lí."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Phân tích, đánh giá được các hành vi vi phạm pháp luật và trách nhiệm pháp lí trong một số tình huống cụ thể."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nghiêm chỉnh chấp hành pháp luật; tích cực ngăn ngừa và đấu tranh với các hành vi vi phạm pháp luật."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được khái niệm vi phạm pháp luật và trách nhiệm pháp lí; các loại vi phạm pháp luật và trách nhiệm pháp lí. – Nêu được ý nghĩa của trách nhiệm pháp lí. – Phân tích, đánh giá được các hành vi vi phạm pháp luật và trách nhiệm pháp lí trong một số tình huống cụ thể. – Nghiêm chỉnh chấp hành pháp luật; tích cực ngăn ngừa và đấu tranh với các hành vi vi phạm pháp luật.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     39
+    ]
+   }
+  },
+  {
+   "id": "GDCD-0080",
+   "subject": "Giáo dục công dân",
+   "grade": 9,
+   "level": "THCS",
+   "stream": null,
+   "section": "Nội dung cụ thể",
+   "topic": "Quyền tự do kinh doanh và nghĩa vụđóng thuế",
+   "content": "",
+   "kind": "requirement",
+   "outcomes": [
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nêu được quy định cơ bản của pháp luật về quyền tự do kinh doanh và nghĩa vụ đóng thuế."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Phân tích, đánh giá được hậu quả của hành vi vi phạm pháp luật về quyền tự do kinh doanh và nghĩa vụ đóng thuế."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Nhận biết được trách nhiệm công dân trong việc thực hiện quyền tự do kinh doanh và nghĩa vụ đóng thuế."
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "type": "doc",
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "Vận động gia đình, người thân thực hiện tốt quyền tự do kinh doanh và nghĩa vụ đóng thuế."
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "outcome_text": "– Nêu được quy định cơ bản của pháp luật về quyền tự do kinh doanh và nghĩa vụ đóng thuế. – Phân tích, đánh giá được hậu quả của hành vi vi phạm pháp luật về quyền tự do kinh doanh và nghĩa vụ đóng thuế. – Nhận biết được trách nhiệm công dân trong việc thực hiện quyền tự do kinh doanh và nghĩa vụ đóng thuế. – Vận động gia đình, người thân thực hiện tốt quyền tự do kinh doanh và nghĩa vụ đóng thuế.",
+   "source": {
+    "document": "Chương trình môn Giáo dục công dân (Đạo đức / Giáo dục công dân / Giáo dục kinh tế và pháp luật), ban hành kèm theo Thông tư số 32/2018/TT-BGDĐT ngày 26/12/2018",
+    "file": "ct-gdcd-official.pdf",
+    "portal": "data.moet.gov.vn (share Jf6LwbnDihZna46)",
+    "pdf_pages": [
+     39
+    ]
+   }
+  }
+ ]
+}

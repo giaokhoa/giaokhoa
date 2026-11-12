@@ -1,0 +1,201 @@
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { createMemoryRouter, RouterProvider } from 'react-router';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { TestProviders } from '#test/providers';
+import { baSessionBody, isGetSessionUrl } from '#test/ba-session';
+import { PermissionsProvider } from '#lib/permissions';
+import { BadgesPage } from './badges';
+
+/**
+ * Spec huy hiệu theo endpoint thật: "của tôi" qua GET /badges/mine (không
+ * còn đường ghép theo userId), kích hoạt qua POST /badges/:id/status với
+ * { status: 1 } (không còn /activate), và danh sách đã cấp của một badge
+ * qua GET /badges/:id/issued trong panel quản trị (canAdminister).
+ */
+const ADMIN_ID = '01900000-0000-7000-8000-0000000000a1';
+const BADGE_ID = '01900000-0000-7000-8000-000000000002';
+const ISSUED_USER_ID = '01900000-0000-7000-8000-000000000099';
+
+const PROFILE = {
+  id: ADMIN_ID,
+  username: 'admin',
+  firstName: 'Quản',
+  lastName: 'Trị',
+  email: 'admin@example.com',
+  suspended: false,
+  deleted: false,
+  isGuest: false,
+  forcePasswordChange: false,
+  lastLogin: null,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  customFields: [],
+};
+
+interface RecordedCall {
+  url: string;
+  method: string;
+  body: unknown;
+}
+
+/** Stub fetch ghi lại mọi lời gọi; badge lật trạng thái sau khi POST /status thành công. */
+function stubFetch(calls: RecordedCall[], state: { badgeStatus: number }) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      const respond = (body: unknown) =>
+        new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (isGetSessionUrl(url)) return respond(baSessionBody({ id: PROFILE.id, username: PROFILE.username, email: PROFILE.email }));
+      if (url === '/api/v1/users/me') return respond(PROFILE);
+      if (url === '/api/v1/users/me/capabilities')
+        return respond({ userId: PROFILE.id, isSiteAdmin: true, assignments: [], contexts: [] });
+      if (url === '/api/v1/users?pageSize=1') return respond({ users: [PROFILE], total: 1, page: 1, pageSize: 1 });
+      if (url === '/api/v1/access/roles') return respond([]);
+      if (url === '/api/v1/questions/categories') return respond([]);
+      if (url === '/api/v1/courses') return respond([]);
+      if (url === '/api/v1/badges') {
+        return respond([
+          { id: BADGE_ID, name: 'Finisher', description: '', type: 1, courseId: null, status: state.badgeStatus },
+        ]);
+      }
+      if (url === '/api/v1/badges/mine') {
+        return respond([
+          {
+            id: '01900000-0000-7000-8000-000000000011',
+            badgeId: BADGE_ID,
+            userId: ADMIN_ID,
+            uniqueHash: 'abcdef0123456789',
+            dateIssued: '2026-10-20T00:00:00.000Z',
+            dateExpire: null,
+            revoked: false,
+            badge: { id: BADGE_ID, name: 'Finisher', description: '', type: 1, courseId: null, status: 1 },
+          },
+        ]);
+      }
+      if (url === `/api/v1/badges/${BADGE_ID}/status` && method === 'POST') {
+        state.badgeStatus = 1;
+        return respond({ id: BADGE_ID, name: 'Finisher', description: '', type: 1, courseId: null, status: 1 });
+      }
+      if (url === `/api/v1/badges/${BADGE_ID}/criteria` && method === 'PUT') {
+        return respond({ method: 1, criteria: [] });
+      }
+      if (url === `/api/v1/badges/${BADGE_ID}/issued`) {
+        return respond([
+          {
+            id: '01900000-0000-7000-8000-000000000021',
+            badgeId: BADGE_ID,
+            userId: ISSUED_USER_ID,
+            uniqueHash: 'feedface99887766',
+            dateIssued: '2026-10-21T00:00:00.000Z',
+            dateExpire: null,
+            revoked: false,
+          },
+        ]);
+      }
+      return new Response('{}', { status: 404, headers: { 'Content-Type': 'application/json' } });
+    }),
+  );
+}
+
+/** Render trang huy hiệu trong đúng khung provider của ứng dụng thật. */
+function renderBadges() {
+  const router = createMemoryRouter([{ path: '/badges', element: <BadgesPage /> }], { initialEntries: ['/badges'] });
+  render(
+    <TestProviders>
+      <PermissionsProvider>
+        <RouterProvider router={router} />
+      </PermissionsProvider>
+    </TestProviders>,
+  );
+}
+
+describe('Trang huy hiệu — endpoint thật', () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  it('tải huy hiệu của tôi từ /badges/mine và không bao giờ gọi URL cũ theo người dùng hay activate', async () => {
+    const calls: RecordedCall[] = [];
+    stubFetch(calls, { badgeStatus: 0 });
+    renderBadges();
+
+    expect((await screen.findAllByText('Finisher')).length).toBeGreaterThan(0);
+    expect(calls.some((c) => c.url === '/api/v1/badges/mine' && c.method === 'GET')).toBe(true);
+    expect(calls.some((c) => String(c.url).includes('/badges/users/'))).toBe(false);
+    expect(calls.some((c) => String(c.url).includes('/activate'))).toBe(false);
+  });
+
+  it('kích hoạt huy hiệu qua POST /badges/:id/status với { status: 1 }', async () => {
+    const calls: RecordedCall[] = [];
+    const state = { badgeStatus: 0 };
+    stubFetch(calls, state);
+    renderBadges();
+
+    const activateButton = await screen.findByRole('button', { name: 'Kích hoạt' });
+    await userEvent.click(activateButton);
+
+    await waitFor(() => expect(calls.some((c) => c.url === `/api/v1/badges/${BADGE_ID}/status`)).toBe(true));
+    const statusCall = calls.find((c) => c.url === `/api/v1/badges/${BADGE_ID}/status`);
+    expect(statusCall?.method).toBe('POST');
+    expect(statusCall?.body).toEqual({ status: 1 });
+    expect(calls.some((c) => String(c.url).includes('/activate'))).toBe(false);
+  });
+
+  it('vô hiệu query huy hiệu sau khi kích hoạt để danh sách fetch lại với trạng thái mới (F-01)', async () => {
+    const calls: RecordedCall[] = [];
+    const state = { badgeStatus: 0 };
+    stubFetch(calls, state);
+    renderBadges();
+
+    const activateButton = await screen.findByRole('button', { name: 'Kích hoạt' });
+    const listCallsBefore = calls.filter((c) => c.url === '/api/v1/badges' && c.method === 'GET').length;
+    await userEvent.click(activateButton);
+
+    // Đột biến làm mới truy vấn qua tiền tố khoá factory: danh sách được tải
+    // lại và nút Kích hoạt biến mất vì badge đã sang trạng thái hoạt động.
+    await waitFor(() =>
+      expect(calls.filter((c) => c.url === '/api/v1/badges' && c.method === 'GET').length).toBeGreaterThan(
+        listCallsBefore,
+      ),
+    );
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Kích hoạt' })).not.toBeInTheDocument());
+  });
+
+  it('hiện danh sách đã cấp của một huy hiệu từ GET /badges/:id/issued trong panel admin', async () => {
+    const calls: RecordedCall[] = [];
+    stubFetch(calls, { badgeStatus: 1 });
+    renderBadges();
+
+    const viewButton = await screen.findByRole('button', { name: 'Xem đã cấp' });
+    await userEvent.click(viewButton);
+
+    await waitFor(() =>
+      expect(calls.some((c) => c.url === `/api/v1/badges/${BADGE_ID}/issued` && c.method === 'GET')).toBe(true),
+    );
+    expect(await screen.findByText(new RegExp(ISSUED_USER_ID))).toBeInTheDocument();
+  });
+
+  it('lưu tiêu chí qua PUT với hình dạng payload contracts (mảng criteria, không phải leaves)', async () => {
+    const calls: RecordedCall[] = [];
+    stubFetch(calls, { badgeStatus: 1 });
+    renderBadges();
+
+    const courseId = '01900000-0000-7000-8000-0000000000c1';
+    await userEvent.type(await screen.findByLabelText('ID huy hiệu'), BADGE_ID);
+    await userEvent.type(screen.getByLabelText('ID khoá học cho tiêu chí hoàn thành khoá học'), courseId);
+    await userEvent.click(screen.getByRole('button', { name: 'Đặt tiêu chí (TẤT CẢ)' }));
+
+    await waitFor(() =>
+      expect(calls.some((c) => c.url === `/api/v1/badges/${BADGE_ID}/criteria` && c.method === 'PUT')).toBe(true),
+    );
+    const putCall = calls.find((c) => c.url === `/api/v1/badges/${BADGE_ID}/criteria`);
+    expect(putCall?.body).toEqual({
+      method: 1,
+      criteria: [{ criteriaType: 'coursecompletion', params: { courseId } }],
+    });
+  });
+});

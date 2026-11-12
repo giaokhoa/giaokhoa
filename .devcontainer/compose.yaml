@@ -1,0 +1,32 @@
+services:
+  app:
+    image: mcr.microsoft.com/devcontainers/base:ubuntu
+    working_dir: /giaokhoa
+    volumes:
+      - ..:/giaokhoa:cached
+    command: sleep infinity
+    # Dùng chung localhost với PostgreSQL và Redis theo cấu hình ứng dụng.
+    network_mode: service:db
+    depends_on:
+      - db
+      - redis
+
+  db:
+    image: postgres:18.6
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      # Tên DB phải khớp cấu hình API, worker, test và CI hiện tại.
+      POSTGRES_DB: lms
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./init-db.sql:/docker-entrypoint-initdb.d/10-init-db.sql:ro
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    network_mode: service:db
+
+volumes:
+  pgdata:

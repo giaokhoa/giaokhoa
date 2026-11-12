@@ -1,0 +1,190 @@
+import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { uuidIdSchema } from '@lms/contracts';
+import { ApiTags } from '@nestjs/swagger';
+import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
+import { createCohortSchema, createGroupSchema, createGroupingSchema, groupMemberSchema, groupingGroupSchema, updateCohortSchema, updateGroupSchema, type CreateCohortDto, type CreateGroupDto, type CreateGroupingDto, type GroupingGroupDto, type MemberDto, type UpdateCohortDto, type UpdateGroupDto } from './dto/groups.dto';
+import { GroupsService } from './groups.service';
+
+@ApiTags('groups')
+@Controller({ path: 'courses/:courseId/groups', version: '1' })
+/**
+ * API nhóm trong khoá học: group và thành viên.
+ *
+ * Lớp này khai tiền tố con đầy đủ của chính nó thay vì tiền tố trơ
+ * `courses`: tiền tố trơ `courses` chỉ còn module courses sở hữu, mỗi
+ * tiền tố đầy đủ khác chỉ có đúng một lớp khai báo. Bảng route giữ
+ * nguyên từng ký tự so với trước khi đổi hình thức khai báo. Các route
+ * grouping tách sang `CourseGroupingsController` vì không chung tiền tố
+ * con với họ route groups.
+ */
+export class CourseGroupsController {
+  constructor(private readonly groups: GroupsService) {}
+
+  @Post()
+  /**
+   * POST /courses/:id/groups — tạo nhóm.
+   */
+  async createGroup(@Param('courseId', { schema: uuidIdSchema }) courseId: string, @Body({ schema: createGroupSchema }) dto: CreateGroupDto, @CurrentUser() actor: AuthenticatedUser) {
+    return this.groups.createGroup(actor.id, courseId, dto);
+  }
+  @Get()
+  /**
+   * GET /courses/:id/groups — nhóm của khoá học (đã lọc theo quyền nhìn thấy của người xem).
+   */
+  async listGroups(@Param('courseId', { schema: uuidIdSchema }) courseId: string, @CurrentUser() actor: AuthenticatedUser) {
+    return this.groups.listGroups(actor.id, courseId);
+  }
+  @Get('visible-members')
+  /**
+   * GET /groups/:id/visible-members — thành viên được phép thấy.
+   */
+  async visibleMembers(@Param('courseId', { schema: uuidIdSchema }) courseId: string, @CurrentUser() actor: AuthenticatedUser) {
+    return this.groups.listVisibleMembers(actor.id, courseId);
+  }
+  @Patch(':groupId')
+  /**
+   * PATCH /groups/:id — cập nhật nhóm.
+   */
+  async updateGroup(@Param('groupId', { schema: uuidIdSchema }) groupId: string, @Body({ schema: updateGroupSchema }) dto: UpdateGroupDto, @CurrentUser() actor: AuthenticatedUser) {
+    return this.groups.updateGroup(actor.id, groupId, dto);
+  }
+  @Delete(':groupId')
+  /**
+   * DELETE /groups/:id — xoá nhóm.
+   */
+  async deleteGroup(@Param('groupId', { schema: uuidIdSchema }) groupId: string, @CurrentUser() actor: AuthenticatedUser) {
+    await this.groups.deleteGroup(actor.id, groupId);
+    return { deleted: true };
+  }
+  @Post(':groupId/members')
+  /**
+   * POST /groups/:id/members — thêm thành viên.
+   */
+  async addMember(@Param('groupId', { schema: uuidIdSchema }) groupId: string, @Body({ schema: groupMemberSchema }) dto: MemberDto, @CurrentUser() actor: AuthenticatedUser) {
+    await this.groups.addMember(actor.id, groupId, dto.userId);
+    return { added: true };
+  }
+  @Delete(':groupId/members/:userId')
+  /**
+   * DELETE /groups/:id/members/:userId — gỡ thành viên.
+   */
+  async removeMember(@Param('groupId', { schema: uuidIdSchema }) groupId: string, @Param('userId', { schema: uuidIdSchema }) userId: string, @CurrentUser() actor: AuthenticatedUser) {
+    await this.groups.removeMember(actor.id, groupId, userId);
+    return { removed: true };
+  }
+  @Get(':groupId/members')
+  /**
+   * GET /groups/:id/members hoặc /cohorts/:id/members — liệt kê thành viên.
+   */
+  async members(@Param('groupId', { schema: uuidIdSchema }) groupId: string, @CurrentUser() actor: AuthenticatedUser) {
+    return this.groups.listMembers(actor.id, groupId);
+  }
+}
+
+@ApiTags('groups')
+@Controller({ path: 'courses/:courseId/groupings', version: '1' })
+/**
+ * API grouping trong khoá học: tạo/liệt kê grouping và đưa nhóm vào grouping.
+ *
+ * Lớp này tách khỏi `CourseGroupsController` vì các route của nó không
+ * chung tiền tố con với họ route `courses/:courseId/groups`. Bảng route
+ * giữ nguyên từng ký tự so với trước khi đổi hình thức khai báo.
+ */
+export class CourseGroupingsController {
+  constructor(private readonly groups: GroupsService) {}
+
+  @Post()
+  /**
+   * POST /courses/:id/groupings — tạo grouping.
+   */
+  async createGrouping(@Param('courseId', { schema: uuidIdSchema }) courseId: string, @Body({ schema: createGroupingSchema }) dto: CreateGroupingDto, @CurrentUser() actor: AuthenticatedUser) {
+    return this.groups.createGrouping(actor.id, courseId, dto);
+  }
+  @Get()
+  /**
+   * GET /courses/:id/groupings — liệt kê grouping (đã lọc theo quyền nhìn thấy nhóm của người xem ở chế độ separate groups).
+   */
+  async listGroupings(@Param('courseId', { schema: uuidIdSchema }) courseId: string, @CurrentUser() actor: AuthenticatedUser) {
+    return this.groups.listGroupings(courseId, actor.id);
+  }
+  @Post(':groupingId/groups')
+  /**
+   * POST /groupings/:id/groups — đưa nhóm vào grouping.
+   */
+  async addToGrouping(@Param('groupingId', { schema: uuidIdSchema }) groupingId: string, @Body({ schema: groupingGroupSchema }) dto: GroupingGroupDto, @CurrentUser() actor: AuthenticatedUser) {
+    await this.groups.addGroupToGrouping(actor.id, groupingId, dto.groupId);
+    return { added: true };
+  }
+  @Get(':groupingId/groups')
+  /**
+   * GET /groupings/:id/groups — nhóm thuộc grouping.
+   */
+  async groupingGroups(@Param('groupingId', { schema: uuidIdSchema }) groupingId: string, @CurrentUser() actor: AuthenticatedUser) {
+    return this.groups.groupsInGrouping(groupingId, actor.id);
+  }
+  @Delete(':groupingId')
+  /**
+   * DELETE /groupings/:id — xoá grouping.
+   */
+  async deleteGrouping(@Param('groupingId', { schema: uuidIdSchema }) groupingId: string, @CurrentUser() actor: AuthenticatedUser) {
+    await this.groups.deleteGrouping(actor.id, groupingId);
+    return { deleted: true };
+  }
+}
+
+@ApiTags('cohorts')
+@Controller({ path: 'cohorts', version: '1' })
+/**
+ * API cohort: cohort hệ thống/danh mục và thành viên của chúng.
+ */
+export class CohortsController {
+  constructor(private readonly groups: GroupsService) {}
+
+  @Post()
+  /**
+   * POST /cohorts — tạo cohort.
+   */
+  async create(@Body({ schema: createCohortSchema }) dto: CreateCohortDto, @CurrentUser() actor: AuthenticatedUser) {
+    return this.groups.createCohort(actor.id, dto);
+  }
+  @Get()
+  /**
+   * GET /cohorts — liệt kê cohort (chỉ các cohort người gọi có cohort:view/cohort:manage).
+   */
+  async list(@CurrentUser() actor: AuthenticatedUser) { return this.groups.listCohorts(actor.id); }
+  @Get(':id')
+  /**
+   * GET /cohorts/:id — chi tiết cohort (người ngoài nhận 404 như cohort không tồn tại).
+   */
+  async get(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) { return this.groups.getCohort(id, actor.id); }
+  @Patch(':id')
+  /**
+   * PATCH /cohorts/:id — cập nhật cohort.
+   */
+  async update(@Param('id', { schema: uuidIdSchema }) id: string, @Body({ schema: updateCohortSchema }) dto: UpdateCohortDto, @CurrentUser() actor: AuthenticatedUser) {
+    return this.groups.updateCohort(actor.id, id, dto);
+  }
+  @Delete(':id')
+  /**
+   * DELETE /cohorts/:id — xoá cohort.
+   */
+  async remove(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
+    await this.groups.deleteCohort(actor.id, id);
+    return { deleted: true };
+  }
+  @Get(':id/members')
+  /** GET /cohorts/:id/members — thành viên của cohort (chỉ người có quyền xem/quản lý cohort; người ngoài nhận 404 như cohort không tồn tại). */
+  async members(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) { return this.groups.listCohortMembers(id, actor.id); }
+  @Post(':id/members')
+  /** POST /cohorts/:id/members — thêm thành viên cohort (kích hoạt cohort sync). */
+  async addMember(@Param('id', { schema: uuidIdSchema }) id: string, @Body({ schema: groupMemberSchema }) dto: MemberDto, @CurrentUser() actor: AuthenticatedUser) {
+    await this.groups.addCohortMember(actor.id, id, dto.userId);
+    return { added: true };
+  }
+  @Delete(':id/members/:userId')
+  /** DELETE /cohorts/:id/members/:userId — gỡ thành viên cohort. */
+  async removeMember(@Param('id', { schema: uuidIdSchema }) id: string, @Param('userId', { schema: uuidIdSchema }) userId: string, @CurrentUser() actor: AuthenticatedUser) {
+    await this.groups.removeCohortMember(actor.id, id, userId);
+    return { removed: true };
+  }
+}

@@ -1,0 +1,307 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { INestApplicationContext } from '@nestjs/common';
+import { sql, type CentreDb, type JsonValue } from '@lms/db';
+import Redis from 'ioredis';
+import {
+  NOTIFICATION_UNREAD_CHANGED_CHANNEL,
+  NotificationDeliveryService,
+} from '../../../src/notification-delivery.service';
+import { CalendarReminderProcessor } from '../../../src/processors/calendar-reminder.processor';
+import { ReportScheduleProcessor } from '../../../src/processors/platform-services.processors';
+import {
+  NotificationRetentionProcessor,
+} from '../../../src/processors/notification-retention.processor';
+import { redisConnectionFromUrl } from '../../../src/config/env';
+import { tenantAls } from '../../../src/db/tenant-als';
+import {
+  bootWorkerModuleAsOrdinaryRole,
+  type OrdinaryWorkerModuleHarness,
+} from '../../support/ordinary-worker-module';
+
+const DAY_MS = 24 * 3600_000;
+
+/**
+ * NB-6 (issue #174, G9 + G10): vòng đời dữ liệu thông báo + hai đường
+ * phát nền (calendar reminder, report schedule) quy về hàm luật phân
+ * phối dùng chung của worker. Oracle: mô hình đích D.6 (đã đọc 90 ngày /
+ * chưa đọc 180 ngày / dispatch log 90 ngày) + luật `notify()` phía API
+ * sau NB-2 (v2 → suy dữ liệu cũ loggedin → loggedoff → mặc định bật;
+ * loại bắt buộc P2 ép bật; người bị đình chỉ không nhận gì).
+ *
+ * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness
+ * role thường (`test/ordinary-worker-module.ts`): module chạy bằng
+ * role NOSUPERUSER/NOBYPASSRLS như production, fixture và đọc kiểm
+ * chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ
+ * của spec không đổi. Hệ quả của việc chạy bằng role thường: ca nào
+ * gọi trực tiếp service phân phối (không qua processor) phải tự đặt
+ * ngữ cảnh platform bằng `tenantAls.run({ platform: true }, ...)`
+ * như mọi processor vẫn làm trước khi gọi service trong production —
+ * ngoài ngữ cảnh, RLS fail-closed chặn cả dòng thông báo không gắn
+ * tenant, vốn chỉ được phép ở ngữ cảnh platform.
+ */
+describe('Worker NB-6: lưu giữ thông báo + luật gửi chung', () => {
+  let context: INestApplicationContext;
+  let harness: OrdinaryWorkerModuleHarness;
+  let db: CentreDb;
+  let delivery: NotificationDeliveryService;
+  const suffix = Date.now() % 100000;
+  const uid = (slot: number) => `01970000-0000-7000-8000-${String(970000 + suffix * 10 + slot).padStart(12, '0')}`;
+  const plainUser = uid(1);
+  const v2OffUser = uid(2);
+  const legacyInOffUser = uid(3);
+  const legacyOutOffUser = uid(4);
+  const suspendedUser = uid(5);
+  const retentionUser = uid(6);
+  const startedAt = new Date(Date.now() - 1000);
+
+  async function mkUser(id: string, username: string, suspended = false) {
+    await sql`insert into users (id, username, email, first_name, last_name, suspended, deleted)
+      values (${id}, ${username}, ${`${username}@x.io`}, 'Nb6', 'User', ${suspended}, false)
+      on conflict (id) do nothing`.execute(db);
+  }
+
+  async function setPref(userId: string, name: string, value: string) {
+    await db.insertInto('user_preferences').values({ user_id: userId, name, value }).onConflict((oc) => oc.doNothing()).execute();
+  }
+
+  async function mkEvent(userId: string, name: string) {
+    const event = await db.insertInto('calendar_events').values({
+      name, event_type: 'user', user_id: userId, time_start: new Date(Date.now() + 3600_000),
+    }).returningAll().executeTakeFirstOrThrow();
+    return event.id as string;
+  }
+
+  async function notesOf(userId: string, eventType: string) {
+    return db.selectFrom('notifications').selectAll()
+      .where('user_id_to', '=', userId).where('event_type', '=', eventType)
+      .execute();
+  }
+
+  async function dispatchOf(userId: string, provider: string, status: string) {
+    return db.selectFrom('notification_dispatch_log').selectAll()
+      .where('user_id', '=', userId)
+      .where('provider', '=', provider)
+      .where('status', '=', status)
+      .execute();
+  }
+
+  beforeAll(async () => {
+    harness = await bootWorkerModuleAsOrdinaryRole();
+    context = harness.context;
+    db = harness.adminDb;
+    delivery = context.get(NotificationDeliveryService);
+    await mkUser(plainUser, `nb6-plain-${suffix}`);
+    await mkUser(v2OffUser, `nb6-v2off-${suffix}`);
+    await mkUser(legacyInOffUser, `nb6-login-off-${suffix}`);
+    await mkUser(legacyOutOffUser, `nb6-logout-off-${suffix}`);
+    await mkUser(suspendedUser, `nb6-susp-${suffix}`, true);
+    await mkUser(retentionUser, `nb6-ret-${suffix}`);
+    // v2OffUser tắt popup theo mô hình v2 cho cả hai provider của lát.
+    await setPref(v2OffUser, 'message_provider_calendar_reminder_popup_v2', '0');
+    await setPref(v2OffUser, 'message_provider_report_scheduled_popup_v2', '0');
+    // legacyInOffUser chỉ tắt theo khoá cũ ở trạng thái loggedin.
+    await setPref(legacyInOffUser, 'message_provider_calendar_reminder_popup_loggedin', '0');
+    // legacyOutOffUser chỉ có khoá cũ ở trạng thái loggedoff: luật chung
+    // (như API sau NB-2) suy loggedin → loggedoff nên vẫn tính là tắt.
+    await setPref(legacyOutOffUser, 'message_provider_calendar_reminder_popup_loggedoff', '0');
+  });
+  afterAll(async () => { await harness.close(); });
+
+  it('nhắc lịch gửi qua luật chung: thông báo + log gửi đã giao, phát lại là trùng lặp', async () => {
+    const processor = context.get(CalendarReminderProcessor);
+    const eventId = await mkEvent(plainUser, `NB6 exam ${suffix}`);
+    const first = await processor.process({ data: { eventId, userId: plainUser, minutesBefore: 30 } } as never);
+    expect(first.status).toBe('notified');
+    const notes = await notesOf(plainUser, 'calendar_reminder');
+    expect(notes).toHaveLength(1);
+    expect(notes[0].context_url).toBe(`/calendar/events/${eventId}`);
+    // Giữ nguyên bề mặt hiển thị cũ: smallMessage là subject.
+    expect(notes[0].small_message).toBe(notes[0].subject);
+    const logs = await dispatchOf(plainUser, 'calendar_reminder', 'delivered');
+    expect(logs).toHaveLength(1);
+    expect(logs[0].dedupe_key).toBe(`popup-${notes[0].id}`);
+    expect(logs[0].notification_id).toBe(notes[0].id);
+    const replay = await processor.process({ data: { eventId, userId: plainUser, minutesBefore: 30 } } as never);
+    expect(replay.status).toBe('duplicate');
+    expect(await notesOf(plainUser, 'calendar_reminder')).toHaveLength(1);
+  });
+
+  it('nhắc lịch tôn trọng tuỳ chọn v2: tắt ⇒ không lưu gì, ghi log skipped-preference', async () => {
+    const processor = context.get(CalendarReminderProcessor);
+    const eventId = await mkEvent(v2OffUser, `NB6 exam off ${suffix}`);
+    const result = await processor.process({ data: { eventId, userId: v2OffUser, minutesBefore: 30 } } as never);
+    expect(result.status).toBe('skipped-preference');
+    expect(await notesOf(v2OffUser, 'calendar_reminder')).toHaveLength(0);
+    expect(await dispatchOf(v2OffUser, 'calendar_reminder', 'skipped-preference')).toHaveLength(1);
+  });
+
+  it('nhắc lịch tôn trọng tuỳ chọn cũ theo cách suy ra chung (loggedin, rồi loggedoff)', async () => {
+    const processor = context.get(CalendarReminderProcessor);
+    const inEvent = await mkEvent(legacyInOffUser, `NB6 legacy in ${suffix}`);
+    const inResult = await processor.process({ data: { eventId: inEvent, userId: legacyInOffUser, minutesBefore: 30 } } as never);
+    expect(inResult.status).toBe('skipped-preference');
+    expect(await notesOf(legacyInOffUser, 'calendar_reminder')).toHaveLength(0);
+    const outEvent = await mkEvent(legacyOutOffUser, `NB6 legacy out ${suffix}`);
+    const outResult = await processor.process({ data: { eventId: outEvent, userId: legacyOutOffUser, minutesBefore: 30 } } as never);
+    expect(outResult.status).toBe('skipped-preference');
+    expect(await notesOf(legacyOutOffUser, 'calendar_reminder')).toHaveLength(0);
+  });
+
+  it('nhắc lịch không gửi gì cho người dùng bị đình chỉ và ghi log skipped-suspended', async () => {
+    const processor = context.get(CalendarReminderProcessor);
+    const eventId = await mkEvent(suspendedUser, `NB6 exam susp ${suffix}`);
+    const result = await processor.process({ data: { eventId, userId: suspendedUser, minutesBefore: 30 } } as never);
+    expect(result.status).toBe('skipped-suspended');
+    expect(await notesOf(suspendedUser, 'calendar_reminder')).toHaveLength(0);
+    expect(await dispatchOf(suspendedUser, 'calendar_reminder', 'skipped-suspended')).toHaveLength(1);
+  });
+
+  it('provider bắt buộc (P2) không thể tắt: bước phân giải ép bật kênh in-app', async () => {
+    // v2OffUser không có khoá nào cho provider bắt buộc này — gieo thêm
+    // khoá v2 tắt tường minh rồi vẫn phải bị ép bật khi mandatory.
+    await setPref(v2OffUser, 'message_provider_enrol_expiry_warning_popup_v2', '0');
+    const law = { name: 'enrol_expiry_warning', component: 'core_enrol', mandatoryInApp: true };
+    expect(await delivery.resolvePopupEnabled(v2OffUser, law)).toBe(true);
+    expect(await delivery.resolvePopupEnabled(v2OffUser, { ...law, mandatoryInApp: false })).toBe(false);
+  });
+
+  it('luật chung từ chối provider chưa đăng ký mà không ghi gì', async () => {
+    const result = await delivery.deliverInApp(plainUser, 'not_a_provider', {
+      subject: 'x', body: 'y', smallMessage: 'x',
+    });
+    expect(result.status).toBe('unknown-provider');
+    expect(await notesOf(plainUser, 'not_a_provider')).toHaveLength(0);
+  });
+
+  it('lượt gửi phát tín hiệu badge unread-changed trên kênh Redis chung', async () => {
+    const subscriber = new Redis(redisConnectionFromUrl(process.env.REDIS_URL ?? 'redis://localhost:6379'));
+    try {
+      await subscriber.subscribe(NOTIFICATION_UNREAD_CHANGED_CHANNEL);
+      const messagePromise = new Promise<string>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('badge signal not received in 5s')), 5000);
+        subscriber.on('message', (_channel: string, message: string) => {
+          if (message === plainUser) { clearTimeout(timer); resolve(message); }
+        });
+      });
+      // Gọi service trực tiếp nên spec tự đặt ngữ cảnh platform —
+      // trong production service luôn được processor gọi từ bên
+      // trong ngữ cảnh platform/tenant mà processor đã bọc.
+      const result = await tenantAls.run({ platform: true }, () => delivery.deliverInApp(plainUser, 'report_scheduled', {
+        subject: `NB6 signal ${suffix}`, body: 'body', smallMessage: `NB6 signal ${suffix}`,
+        contextUrl: '/reports/signal',
+      }));
+      expect(result.status).toBe('delivered');
+      await expect(messagePromise).resolves.toBe(plainUser);
+    } finally {
+      await subscriber.quit();
+    }
+  });
+
+  it('lịch báo cáo thông báo qua luật chung và nay để lại log gửi đã giao', async () => {
+    const report = await db.insertInto('report_builder_report').values({
+      name: `NB6 report ${suffix}`, data_source: 'enrolments', created_by: plainUser,
+      columns: sql<JsonValue>`${JSON.stringify(['userId'])}::jsonb`,
+    }).returningAll().executeTakeFirstOrThrow();
+    const schedule = await db.insertInto('report_builder_schedule').values({
+      report_id: report.id, created_by: plainUser, cron: 'daily', enabled: true,
+    }).returningAll().executeTakeFirstOrThrow();
+    const processor = context.get(ReportScheduleProcessor);
+    const result = await processor.process({ data: { scheduleId: schedule.id } } as never);
+    expect(result.status).toBe('completed');
+    const notes = await notesOf(plainUser, 'report_scheduled');
+    expect(notes.length).toBeGreaterThanOrEqual(1);
+    const mine = notes.find((n) => n.context_url === `/reports/${report.id}`);
+    expect(mine).toBeDefined();
+    const logs = await dispatchOf(plainUser, 'report_scheduled', 'delivered');
+    expect(logs.some((l) => l.notification_id === mine!.id)).toBe(true);
+  });
+
+  it('lịch báo cáo tôn trọng luật: tuỳ chọn tắt và người tạo bị đình chỉ thì không nhận thông báo', async () => {
+    const processor = context.get(ReportScheduleProcessor);
+    async function runFor(creator: string, tag: string) {
+      const report = await db.insertInto('report_builder_report').values({
+        name: `NB6 report ${tag} ${suffix}`, data_source: 'enrolments', created_by: creator,
+        columns: sql<JsonValue>`${JSON.stringify(['userId'])}::jsonb`,
+      }).returningAll().executeTakeFirstOrThrow();
+      const schedule = await db.insertInto('report_builder_schedule').values({
+        report_id: report.id, created_by: creator, cron: 'daily', enabled: true,
+      }).returningAll().executeTakeFirstOrThrow();
+      const result = await processor.process({ data: { scheduleId: schedule.id } } as never);
+      expect(result.status).toBe('completed');
+      return report.id as string;
+    }
+    const offReportId = await runFor(v2OffUser, 'off');
+    expect((await notesOf(v2OffUser, 'report_scheduled'))
+      .some((n) => n.context_url === `/reports/${offReportId}`)).toBe(false);
+    expect(await dispatchOf(v2OffUser, 'report_scheduled', 'skipped-preference')).toHaveLength(1);
+    const suspReportId = await runFor(suspendedUser, 'susp');
+    expect((await notesOf(suspendedUser, 'report_scheduled'))
+      .some((n) => n.context_url === `/reports/${suspReportId}`)).toBe(false);
+    expect((await dispatchOf(suspendedUser, 'report_scheduled', 'skipped-suspended')).length)
+      .toBeGreaterThanOrEqual(1);
+  });
+
+  it('lượt quét lưu giữ xoá đúng quá ngưỡng 90/180/90 ngày và giữ lại ngày ngưỡng', async () => {
+    const processor = context.get(NotificationRetentionProcessor);
+    const now = new Date();
+    const at = (days: number) => new Date(now.getTime() - days * DAY_MS);
+    async function mkNote(days: number, read: boolean) {
+      const row = await db.insertInto('notifications').values({
+        user_id_to: retentionUser, subject: `nb6-ret-${days}-${read ? 'r' : 'u'}-${suffix}`,
+        full_message: 'x', small_message: 'x', component: 'core_test', event_type: 'retention_probe',
+        created_at: at(days), time_read: read ? at(days) : null,
+      }).returningAll().executeTakeFirstOrThrow();
+      return row.id as string;
+    }
+    async function mkDispatch(days: number) {
+      const row = await db.insertInto('notification_dispatch_log').values({
+        user_id: retentionUser, provider: 'retention_probe', channel: 'popup',
+        status: 'delivered', subject: 'x', dedupe_key: `nb6-ret-${days}-${suffix}`,
+        created_at: at(days),
+      }).returningAll().executeTakeFirstOrThrow();
+      return row.id as string;
+    }
+    const readKept89 = await mkNote(89, true);
+    const readKept90 = await mkNote(90, true);
+    const readGone91 = await mkNote(91, true);
+    const unreadKept179 = await mkNote(179, false);
+    const unreadKept180 = await mkNote(180, false);
+    const unreadGone181 = await mkNote(181, false);
+    const dispatchKept89 = await mkDispatch(89);
+    const dispatchKept90 = await mkDispatch(90);
+    const dispatchGone91 = await mkDispatch(91);
+
+    const result = await processor.sweep(now);
+    expect(result.readDeleted).toBeGreaterThanOrEqual(1);
+    expect(result.unreadDeleted).toBeGreaterThanOrEqual(1);
+    expect(result.dispatchLogDeleted).toBeGreaterThanOrEqual(1);
+
+    const remainingNotes = await db.selectFrom('notifications').select('id')
+      .where('user_id_to', '=', retentionUser).execute();
+    const noteIds = new Set(remainingNotes.map((r: { id: string }) => r.id));
+    expect(noteIds.has(readKept89)).toBe(true);
+    expect(noteIds.has(readKept90)).toBe(true);
+    expect(noteIds.has(readGone91)).toBe(false);
+    expect(noteIds.has(unreadKept179)).toBe(true);
+    expect(noteIds.has(unreadKept180)).toBe(true);
+    expect(noteIds.has(unreadGone181)).toBe(false);
+
+    const remainingDispatch = await db.selectFrom('notification_dispatch_log').select('id')
+      .where('user_id', '=', retentionUser).execute();
+    const dispatchIds = new Set(remainingDispatch.map((r: { id: string }) => r.id));
+    expect(dispatchIds.has(dispatchKept89)).toBe(true);
+    expect(dispatchIds.has(dispatchKept90)).toBe(true);
+    expect(dispatchIds.has(dispatchGone91)).toBe(false);
+  });
+
+  it('lượt chạy tiến trình lưu giữ để lại một dòng task_log thành công', async () => {
+    const processor = context.get(NotificationRetentionProcessor);
+    await processor.process({ data: {} } as never);
+    const rows = await db.selectFrom('task_log').selectAll()
+      .where('task_name', '=', 'notification-retention').where('started_at', '>=', startedAt)
+      .orderBy('started_at', 'desc').execute();
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    expect(rows[0].status).toBe('success');
+    expect(rows[0].message).toContain('dispatch log');
+  });
+});

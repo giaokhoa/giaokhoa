@@ -1,0 +1,19 @@
+{
+  "name": "GiaoKhoa — Dev Container",
+  "dockerComposeFile": "compose.yaml",
+  "service": "app",
+  "workspaceFolder": "/giaokhoa",
+  "remoteUser": "vscode",
+  "features": {
+    "ghcr.io/devcontainers/features/node:2": {
+      "version": "24",
+      "pnpmVersion": "12.14.0"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "mounts": [
+    "source=github-cli-config,target=/home/vscode/.config/gh,type=volume"
+  ],
+  "forwardPorts": [3000, 5173],
+  "postCreateCommand": "sudo install -d -o vscode -g vscode /home/vscode/.config/gh && sudo chown -R vscode:vscode /home/vscode/.config/gh && pnpm install --frozen-lockfile && cp -n apps/api/.env.example apps/api/.env && cp -n apps/worker/.env.example apps/worker/.env"
+}

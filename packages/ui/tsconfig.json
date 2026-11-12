@@ -1,0 +1,1 @@
+{"compilerOptions":{"types":[]},"extends":"@lms/config/tsconfig/react.json","include":["src"]}

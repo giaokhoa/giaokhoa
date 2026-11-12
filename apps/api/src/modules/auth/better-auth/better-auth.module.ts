@@ -1,0 +1,43 @@
+import { forwardRef, Module } from '@nestjs/common';
+import { SpaceRoutingModule } from '../../../db/routing/space-routing.module';
+import { MailModule } from '../../mail/mail.module';
+import { UsersModule } from '../../users/users.module';
+import { AuthModule } from '../auth.module';
+import { BetterAuthService } from './better-auth.service';
+import { CredentialBridgeService } from './credential-bridge.service';
+import { TwoFactorCompletionController } from './two-factor-completion.controller';
+import { TwoFactorCompletionService } from './two-factor-completion.service';
+
+/**
+ * Nền Better Auth (issue #7, Giai đoạn 1): instance (sau cờ
+ * BETTER_AUTH_ENABLED, mặc định tắt) + cầu nối credential. Handler HTTP
+ * được mount ở bootstrap (main.ts) qua `mountBetterAuth`, guard nhận
+ * diện cookie nằm ở `common/better-auth-session.guard.ts` và được
+ * AppModule đăng ký toàn cục trước JwtAuthGuard.
+ *
+ * Controller hoàn tất bước hai MFA (`/auth/two-factor/*`) là route
+ * Nest duy nhất của module này: mount chừa segment `two-factor` cho
+ * Nest vì bước hoàn tất kiểm mã thẳng vào `user_totp` — xem
+ * `two-factor-completion.service.ts`.
+ */
+@Module({
+  // Hai vòng module tường minh, forwardRef ở cả hai phía như khuôn
+  // UsersModule ↔ BetterAuthModule đã có:
+  // - UsersModule: module này cần PasswordService của UsersModule,
+  //   UsersService cần CredentialBridgeService của module này để đồng
+  //   bộ credential (chặng 2.6).
+  // - AuthModule: module này cần LoginLockoutService của AuthModule
+  //   (điểm 2.4: hooks của instance dùng chung chính sách khoá với hệ
+  //   legacy), AuthModule cần BetterAuthService + CredentialBridgeService
+  //   của module này cho login-as ở chặng bake (chặng 2.6).
+  // - SpaceRoutingModule (issue #654, D2): ba service của module này
+  //   inject SpaceDatabaseService và chạy trên facade `routedKysely`.
+  //   Không tạo chu trình mới: chuỗi SpaceRouting → ControlPlane →
+  //   Access không có đường về BetterAuthModule, nên import trực tiếp
+  //   (không forwardRef) như AuthModule đã làm.
+  imports: [forwardRef(() => UsersModule), MailModule, forwardRef(() => AuthModule), SpaceRoutingModule],
+  controllers: [TwoFactorCompletionController],
+  providers: [BetterAuthService, CredentialBridgeService, TwoFactorCompletionService],
+  exports: [BetterAuthService, CredentialBridgeService],
+})
+export class BetterAuthModule {}

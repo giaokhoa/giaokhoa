@@ -1,0 +1,305 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { INestApplicationContext } from '@nestjs/common';
+import { getQueueToken } from '@nestjs/bullmq';
+import type { Queue } from 'bullmq';
+import { sql } from '@lms/db';
+import { ActivityDueReminderProcessor } from '../../../src/processors/activity-due-reminder.processor';
+import {
+  bootWorkerModuleAsOrdinaryRole,
+  type OrdinaryWorkerModuleHarness,
+} from '../../support/ordinary-worker-module';
+
+/**
+ * Lát N5 (issue #50): nhắc hạn nộp tự động trước 24 giờ.
+ *
+ * Phía phát (worker): lượt quét activity-due-reminders tìm pin có
+ * time_close thuộc (hiện tại, hiện tại + 24h] và phát ĐÚNG MỘT sự
+ * kiện outbox `activity_due_reminder` cho từng (học sinh, pin) chưa
+ * nộp — học sinh đã có attempt hoàn tất (needsgrading/finished) thì
+ * không nhắc, attempt inprogress (chưa nộp) vẫn nhắc; chạy lại không
+ * phát trùng (dedupe theo (userId, pinId, timeClose) trên outbox);
+ * giáo viên dời hạn thì mốc hạn mới được nhắc lại.
+ *
+ * NB-1 (issue #174): cùng lượt quét phủ thêm BÀI TẬP theo
+ * assignments.due_date — sự kiện mang activityType 'assign' +
+ * assignmentId; "chưa nộp" = chưa có bản nộp ở trạng thái submitted
+ * (bản nháp vẫn nhắc); dedupe theo (userId, assignmentId, dueDate).
+ *
+ * Nửa API (sự kiện → thông báo activity_due_soon) được kiểm chứng ở
+ * apps/api/test/notifications-providers-flow.e2e-spec.ts bằng đúng
+ * hình dạng sự kiện phát ở đây.
+ *
+ * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness
+ * role thường (`test/ordinary-worker-module.ts`): module chạy bằng
+ * role NOSUPERUSER/NOBYPASSRLS như production, fixture và đọc kiểm
+ * chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ
+ * của spec không đổi.
+ */
+describe('Nhắc sắp đến hạn hoạt động của worker (N5, issue #50)', () => {
+  let context: INestApplicationContext;
+  let harness: OrdinaryWorkerModuleHarness;
+  let db: any;
+  const suffix = Date.now();
+
+  const uid = (n: number) => `01900000-0000-7000-8000-${String(910000 + n * 37 + (suffix % 1000)).padStart(12, '0')}`;
+  const HOUR = 3600_000;
+
+  async function makeQuiz(opts: { closeInHours: number | null; courseVisible?: boolean; cmVisible?: boolean; name?: string }) {
+    const catRows = await sql`insert into course_categories (name, path, tenant_id) values (${`n5-cat-${suffix}-${Math.random()}`}, '', (select id from tenants where slug = 'worker-fixture')) returning id`.execute(db);
+    const catId = (catRows.rows[0] as { id: string }).id;
+    const short = `n5${suffix}${Math.floor(Math.random() * 1e9)}`;
+    const courseRows = await sql`insert into course (category, tenant_id, full_name, short_name, visible, class_id) values (${catId}, (select tenant_id from course_categories where id = ${catId}), 'N5 course', ${short}, ${opts.courseVisible ?? true}, ${await fixtureClassId()}) returning id`.execute(db);
+    const cid = (courseRows.rows[0] as { id: string }).id;
+    const secRows = await sql`insert into course_sections (course, section) values (${cid}, 0) returning id`.execute(db);
+    const secId = (secRows.rows[0] as { id: string }).id;
+    const cmRows = await sql`insert into course_modules (course, section, component, visible) values (${cid}, ${secId}, 'mod_quiz', ${opts.cmVisible ?? true}) returning id`.execute(db);
+    const cmId = (cmRows.rows[0] as { id: string }).id;
+    const timeClose = opts.closeInHours === null ? null : new Date(Date.now() + opts.closeInHours * HOUR);
+    // Sau gộp Đề (#226): hoạt động được nhắc là LẦN GHIM (exam_pins)
+    // — dựng tối thiểu bank → đề → version → pin bằng SQL như các
+    // fixture khác của suite worker.
+    const tenantRows = await sql`insert into tenants (slug, name, kind, status) values ('worker-fixture', 'Worker fixture tenant', 'school', 'active') on conflict (slug) do update set slug = excluded.slug returning id`.execute(db);
+    const tenantId = (tenantRows.rows[0] as { id: string }).id;
+    const bankRows = await sql`insert into question_banks (name, bank_kind, scope, context_id, created_by, tenant_id) values ('N5 bank', 'exam', 'personal', ${uid(900)}, ${uid(900)}, ${tenantId}) returning id`.execute(db);
+    const bankId = (bankRows.rows[0] as { id: string }).id;
+    const examRows = await sql`insert into exams (bank_id, created_by, status) values (${bankId}, ${uid(900)}, 'ready') returning id`.execute(db);
+    const examId = (examRows.rows[0] as { id: string }).id;
+    const verRows = await sql`insert into exam_versions (exam_id, version, name, created_by) values (${examId}, 1, ${opts.name ?? 'Quiz N5'}, ${uid(900)}) returning id`.execute(db);
+    const versionId = (verRows.rows[0] as { id: string }).id;
+    const pinRows = await sql`insert into exam_pins (exam_id, exam_version_id, course_id, cm_id, time_close, variants, created_by) values (${examId}, ${versionId}, ${cid}, ${cmId}, ${timeClose}, '[]'::jsonb, ${uid(900)}) returning id`.execute(db);
+    const pinId = (pinRows.rows[0] as { id: string }).id;
+    const inst = await db.insertInto('enrol').values({ course_id: cid, enrol: 'manual', status: 0 }).returningAll().executeTakeFirstOrThrow();
+    return { courseId: cid, quizId: pinId, instanceId: inst.id as string, timeClose };
+  }
+
+  async function enrolStudent(instance: string, userId: string, overrides: Record<string, unknown> = {}) {
+    const row = await db.insertInto('user_enrolments').values({
+      enrol_id: instance, user_id: userId, status: 0, time_start: new Date(Date.now() - 24 * HOUR), ...overrides,
+    }).returningAll().executeTakeFirstOrThrow();
+    return row.id as string;
+  }
+
+  async function addAttempt(quizId: string, userId: string, state: string) {
+    const usageRows = await sql`insert into question_usages (component, user_id) values ('mod_quiz', ${userId}) returning id`.execute(db);
+    const usageId = (usageRows.rows[0] as { id: string }).id;
+    await sql`insert into exam_attempts (pin_id, user_id, attempt_number, usage_id, state, preview) values (${quizId}, ${userId}, 1, ${usageId}, ${state}, false)`.execute(db);
+  }
+
+  async function eventsFor(quizId: string, userId?: string) {
+    const rows = await db.selectFrom('outbox_events').selectAll().where('type', '=', 'activity_due_reminder').execute();
+    return (rows as { payload: { pinId?: string; userId?: string; timeClose?: string } }[])
+      .filter((e) => e.payload.pinId === quizId && (userId === undefined || e.payload.userId === userId));
+  }
+
+  async function makeAssignment(opts: { dueInHours: number | null; courseVisible?: boolean; cmVisible?: boolean; name?: string }) {
+    const catRows = await sql`insert into course_categories (name, path, tenant_id) values (${`nb1-cat-${suffix}-${Math.random()}`}, '', (select id from tenants where slug = 'worker-fixture')) returning id`.execute(db);
+    const catId = (catRows.rows[0] as { id: string }).id;
+    const short = `nb1${suffix}${Math.floor(Math.random() * 1e9)}`;
+    const courseRows = await sql`insert into course (category, tenant_id, full_name, short_name, visible, class_id) values (${catId}, (select tenant_id from course_categories where id = ${catId}), 'NB1 course', ${short}, ${opts.courseVisible ?? true}, ${await fixtureClassId()}) returning id`.execute(db);
+    const cid = (courseRows.rows[0] as { id: string }).id;
+    const secRows = await sql`insert into course_sections (course, section) values (${cid}, 0) returning id`.execute(db);
+    const secId = (secRows.rows[0] as { id: string }).id;
+    const cmRows = await sql`insert into course_modules (course, section, component, visible) values (${cid}, ${secId}, 'mod_assign', ${opts.cmVisible ?? true}) returning id`.execute(db);
+    const cmId = (cmRows.rows[0] as { id: string }).id;
+    const dueDate = opts.dueInHours === null ? null : new Date(Date.now() + opts.dueInHours * HOUR);
+    const assignment = await db.insertInto('assignments').values({ course: cid, cm_id: cmId, name: opts.name ?? 'Bài tập NB1', due_date: dueDate }).returningAll().executeTakeFirstOrThrow();
+    const inst = await db.insertInto('enrol').values({ course_id: cid, enrol: 'manual', status: 0 }).returningAll().executeTakeFirstOrThrow();
+    return { courseId: cid, assignmentId: assignment.id as string, instanceId: inst.id as string, dueDate };
+  }
+
+  async function addSubmission(assignmentId: string, userId: string, status: string) {
+    await db.insertInto('assign_submissions').values({ assignment_id: assignmentId, user_id: userId, status, attempt_number: 1 }).execute();
+  }
+
+  async function eventsForAssignment(assignmentId: string, userId?: string) {
+    const rows = await db.selectFrom('outbox_events').selectAll().where('type', '=', 'activity_due_reminder').execute();
+    return (rows as { payload: { assignmentId?: string; userId?: string; activityType?: string; timeClose?: string } }[])
+      .filter((e) => e.payload.assignmentId === assignmentId && (userId === undefined || e.payload.userId === userId));
+  }
+
+
+  // CLASS-0 đóng gói (PR #200): khoá dạy thật phải có class_id (CHECK
+  // course_class_required_check) — lớp fixture cho tenant worker-fixture,
+  // chủ lớp là user fixture riêng; mỗi lần gọi dựng một lớp mới.
+  async function fixtureClassId(): Promise<string> {
+    const ownerId = '01980000-0000-7000-8000-00000000c1a5';
+    await sql`insert into users (id, username, email, suspended, deleted) values (${ownerId}, 'wk-class-owner', 'wk-class-owner@x.io', false, false) on conflict (id) do nothing`.execute(db);
+    const coh = await sql`insert into cohort (tenant_id, name, context_id, component, visible) values ((select id from tenants where slug = 'worker-fixture'), 'wk fixture cohort', '01990000-0000-7000-8000-0000000000a1', 'class', false) returning id`.execute(db);
+    const cohId = (coh.rows[0] as { id: string }).id;
+    const cls = await sql`insert into classes (tenant_id, name, owner_id, cohort_id) values ((select id from tenants where slug = 'worker-fixture'), 'wk fixture class', ${ownerId}, ${cohId}) returning id`.execute(db);
+    return (cls.rows[0] as { id: string }).id;
+  }
+  let queue: Queue;
+
+  beforeAll(async () => {
+    harness = await bootWorkerModuleAsOrdinaryRole();
+    context = harness.context;
+    db = harness.adminDb;
+    // Tắt tài xế nền của chính queue này trong suốt lượt chạy của
+    // spec: module boot nguyên vẹn (như production) có scheduler
+    // đăng ký job lặp 5 phút cho CÙNG processor mà các ca dưới đây
+    // gọi trực tiếp — hai tài xế cùng quét thì lượt nền có thể chạy
+    // giữa lúc dựng fixture và lúc khẳng định, phát sự kiện cho
+    // trạng thái trung gian và làm số đếm lệch ngẫu nhiên (gốc cấu
+    // trúc của ca chập chờn ở spec này). Suite worker chạy nhiều
+    // file song song trên cùng một Redis và các context song song
+    // liên tục đăng ký lại scheduler của queue, nên gỡ scheduler
+    // không đủ: phải TẠM DỪNG queue (mọi worker đều tôn trọng cờ
+    // dừng ở tầng Redis) rồi chờ job đang chạy dở tại thời điểm dừng
+    // kết thúc — sau mốc này không lượt quét nền nào của queue chạy
+    // nữa. Mở lại queue ở afterAll. Harness giữ nguyên (vẫn boot cả
+    // scheduler như production), khẳng định nghiệp vụ không đổi.
+    queue = context.get<Queue>(getQueueToken('activity-due-reminders'));
+    await queue.pause();
+    await queue.removeJobScheduler('activity-due-reminder-scheduler');
+    const drainDeadline = Date.now() + 15000;
+    for (;;) {
+      const counts = await queue.getJobCounts('active');
+      if ((counts.active ?? 0) === 0) break;
+      if (Date.now() > drainDeadline) {
+        throw new Error(`activity-due-reminders queue still has active jobs after 15000ms (counts=${JSON.stringify(counts)})`);
+      }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    await sql`insert into tenants (slug, name, kind, status) values ('worker-fixture', 'Worker fixture tenant', 'school', 'active') on conflict (slug) do nothing`.execute(db);
+  });
+  afterAll(async () => {
+    if (queue) await queue.resume().catch(() => undefined);
+    await harness.close();
+  });
+
+  it('nhắc mỗi học viên đã ghi danh chưa nộp đúng một lần; chạy lại lượt quét không trùng lặp', async () => {
+    const { quizId, instanceId: inst } = await makeQuiz({ closeInHours: 12 });
+    const noAttempt = uid(1);
+    const finished = uid(2);
+    const inProgress = uid(3);
+    const suspendedEnrol = uid(4);
+    const expiredEnrol = uid(5);
+    // Attempt tạo TRƯỚC ghi danh: scheduler nền của WorkerModule có
+    // thể quét chen giữa các bước dựng dữ liệu — thứ tự này bảo đảm
+    // học sinh "đã nộp" luôn nhất quán (đã có attempt hoàn tất) ở mọi
+    // thời điểm quét, và mọi khẳng định đều dựa trên SỰ KIỆN outbox
+    // bền thay vì kết quả trả về của một lượt gọi cụ thể.
+    await addAttempt(quizId, finished, 'finished');
+    await addAttempt(quizId, inProgress, 'inprogress');
+    await enrolStudent(inst, noAttempt);
+    await enrolStudent(inst, finished);
+    await enrolStudent(inst, inProgress);
+    await enrolStudent(inst, suspendedEnrol, { status: 1 });
+    await enrolStudent(inst, expiredEnrol, { time_end: new Date(Date.now() - HOUR) });
+
+    const processor = context.get(ActivityDueReminderProcessor);
+    await processor.process({ data: {} } as never);
+    await processor.process({ data: {} } as never);
+    expect(await eventsFor(quizId, noAttempt)).toHaveLength(1);
+    expect(await eventsFor(quizId, inProgress)).toHaveLength(1);
+    expect(await eventsFor(quizId, finished)).toHaveLength(0);
+    expect(await eventsFor(quizId, suspendedEnrol)).toHaveLength(0);
+    expect(await eventsFor(quizId, expiredEnrol)).toHaveLength(0);
+    expect(await eventsFor(quizId)).toHaveLength(2);
+
+    // Lượt quét sau nữa (job chạy lại): không phát trùng cho cùng mốc hạn.
+    await processor.process({ data: {} } as never);
+    expect(await eventsFor(quizId, noAttempt)).toHaveLength(1);
+    expect(await eventsFor(quizId, inProgress)).toHaveLength(1);
+    expect(await eventsFor(quizId)).toHaveLength(2);
+  });
+
+  it('bỏ qua quiz ngoài cửa sổ 24h, đã đóng, không có hạn, trong khoá ẩn, hoặc sau module ẩn', async () => {
+    const processor = context.get(ActivityDueReminderProcessor);
+    const cases = [
+      await makeQuiz({ closeInHours: 48 }),
+      await makeQuiz({ closeInHours: -1 }),
+      await makeQuiz({ closeInHours: null }),
+      await makeQuiz({ closeInHours: 12, courseVisible: false }),
+      await makeQuiz({ closeInHours: 12, cmVisible: false }),
+    ];
+    for (const [i, c] of cases.entries()) {
+      await enrolStudent(c.instanceId, uid(10 + i));
+    }
+    await processor.process({ data: {} } as never);
+    for (const c of cases) {
+      expect(await eventsFor(c.quizId)).toHaveLength(0);
+    }
+  });
+
+  it('hạn bị dời là hạn mới: học viên được nhắc lại chỉ cho timeClose mới', async () => {
+    const { quizId, instanceId: inst, timeClose } = await makeQuiz({ closeInHours: 12 });
+    const student = uid(30);
+    await enrolStudent(inst, student);
+    const processor = context.get(ActivityDueReminderProcessor);
+    await processor.process({ data: {} } as never);
+    expect(await eventsFor(quizId, student)).toHaveLength(1);
+
+    const newClose = new Date(Date.now() + 20 * HOUR);
+    await db.updateTable('exam_pins').set({ time_close: newClose }).where('id', '=', quizId).execute();
+    await processor.process({ data: {} } as never);
+    const events = await eventsFor(quizId, student);
+    expect(events).toHaveLength(2);
+    expect(events.map((e) => e.payload.timeClose).sort()).toEqual([timeClose!.toISOString(), newClose.toISOString()].sort());
+
+    await processor.process({ data: {} } as never);
+    expect(await eventsFor(quizId, student)).toHaveLength(2);
+  });
+
+  it('NB-1: nhắc học viên đã ghi danh về bài tập đến hạn trong 24h đúng một lần; học viên đã nộp thì bỏ qua, học viên chỉ có bản nháp thì được nhắc', async () => {
+    const { assignmentId, instanceId: inst } = await makeAssignment({ dueInHours: 12 });
+    const noSubmission = uid(41);
+    const draftOnly = uid(42);
+    const submitted = uid(43);
+    const suspendedEnrol = uid(44);
+    // Bản nộp tạo TRƯỚC ghi danh như khuôn attempt của quiz: scheduler
+    // nền có thể quét chen giữa các bước dựng dữ liệu.
+    await addSubmission(assignmentId, draftOnly, 'draft');
+    await addSubmission(assignmentId, submitted, 'submitted');
+    await enrolStudent(inst, noSubmission);
+    await enrolStudent(inst, draftOnly);
+    await enrolStudent(inst, submitted);
+    await enrolStudent(inst, suspendedEnrol, { status: 1 });
+
+    const processor = context.get(ActivityDueReminderProcessor);
+    await processor.process({ data: {} } as never);
+    await processor.process({ data: {} } as never);
+    expect(await eventsForAssignment(assignmentId, noSubmission)).toHaveLength(1);
+    expect(await eventsForAssignment(assignmentId, draftOnly)).toHaveLength(1);
+    expect(await eventsForAssignment(assignmentId, submitted)).toHaveLength(0);
+    expect(await eventsForAssignment(assignmentId, suspendedEnrol)).toHaveLength(0);
+    const events = await eventsForAssignment(assignmentId);
+    expect(events).toHaveLength(2);
+    expect(events.every((e) => e.payload.activityType === 'assign')).toBe(true);
+  });
+
+  it('NB-1: bỏ qua bài tập ngoài cửa sổ 24h, đã quá hạn, không có hạn, trong khoá ẩn, hoặc sau module ẩn', async () => {
+    const processor = context.get(ActivityDueReminderProcessor);
+    const cases = [
+      await makeAssignment({ dueInHours: 48 }),
+      await makeAssignment({ dueInHours: -1 }),
+      await makeAssignment({ dueInHours: null }),
+      await makeAssignment({ dueInHours: 12, courseVisible: false }),
+      await makeAssignment({ dueInHours: 12, cmVisible: false }),
+    ];
+    for (const [i, c] of cases.entries()) {
+      await enrolStudent(c.instanceId, uid(50 + i));
+    }
+    await processor.process({ data: {} } as never);
+    for (const c of cases) {
+      expect(await eventsForAssignment(c.assignmentId)).toHaveLength(0);
+    }
+  });
+
+  it('NB-1: hạn bài tập bị dời thì nhắc lại chỉ cho dueDate mới', async () => {
+    const { assignmentId, instanceId: inst, dueDate } = await makeAssignment({ dueInHours: 12 });
+    const student = uid(60);
+    await enrolStudent(inst, student);
+    const processor = context.get(ActivityDueReminderProcessor);
+    await processor.process({ data: {} } as never);
+    expect(await eventsForAssignment(assignmentId, student)).toHaveLength(1);
+
+    const newDue = new Date(Date.now() + 20 * HOUR);
+    await db.updateTable('assignments').set({ due_date: newDue }).where('id', '=', assignmentId).execute();
+    await processor.process({ data: {} } as never);
+    const events = await eventsForAssignment(assignmentId, student);
+    expect(events).toHaveLength(2);
+    expect(events.map((e) => e.payload.timeClose).sort()).toEqual([dueDate!.toISOString(), newDue.toISOString()].sort());
+  });
+});

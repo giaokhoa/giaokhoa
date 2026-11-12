@@ -1,0 +1,53 @@
+{
+  "extends": "@lms/config/tsconfig/nest.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      // Subpath control plane của @lms/db (issue #580): package giữ
+      // moduleResolution Node10 nên TS không đọc được `exports` của
+      // package — ánh xạ thẳng tới bản dist đã build (đúng kỷ luật
+      // "app tiêu thụ dùng bản dist" của @lms/db). Runtime Node đọc
+      // `exports` trong package.json của @lms/db như thường.
+      "@lms/db/control-plane": [
+        "../../packages/db/dist/control-plane.d.ts"
+      ],
+      // Subpath kho ngân hàng của @lms/db (issue #585) — cùng lý do như
+      // subpath control plane ở trên.
+      "@lms/db/system-bank": [
+        "../../packages/db/dist/system-bank.d.ts"
+      ],
+      // Wildcard repository Kysely của @lms/db (chiến dịch chuyển
+      // ORM sang Kysely): khai MỘT dòng duy nhất cho mọi module
+      // repository về sau — cùng lý do Node10 như các subpath trên.
+      "@lms/db/repositories/*": [
+        "../../packages/db/dist/repositories/*.d.ts"
+      ],
+      // Điểm vào test-support của @lms/db (harness dựng DB test):
+      // chỉ test mới import, cùng cơ chế ánh xạ dist như trên.
+      "@lms/db/test-support": [
+        "../../packages/db/dist/test-support/index.d.ts"
+      ],
+      // Điểm vào bộ máy migration của @lms/db (issue #663): các
+      // runner phía API áp migration qua `applyStoreMigrations`
+      // của package — cùng cơ chế ánh xạ dist như trên.
+      "@lms/db/migrate": [
+        "../../packages/db/dist/migrate/apply.d.ts"
+      ]
+    },
+    // Chương trình typecheck (noEmit) bao gồm cả cầu dẫn test
+    // `test/support/sepay-sweep-driver.ts` vốn import code production
+    // của apps/worker (issue #539): rootDir phải chứa cả hai app thì
+    // tsc mới chấp nhận các file đó. Cấu hình build riêng
+    // (tsconfig.build.json) đã ghi đè rootDir về ./src nên đầu ra
+    // build không đổi.
+    "rootDir": ".."
+  },
+  "include": [
+    "src",
+    "test",
+    "vitest.config.ts"
+  ]
+}
