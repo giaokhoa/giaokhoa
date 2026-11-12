@@ -23,7 +23,7 @@
  * giữ handle socket (mở conversation tham gia kênh, composer phát
  * tín hiệu đang nhập).
  */
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { connectMessagingRealtime, type MessagingRealtimeHandle } from '../api/messaging-socket';
 import { withConversationMovedToSectionTop, withTreeUnread } from '../utils/page-helpers';
 import type { ConversationGroupTreeView, ConversationView, MessageView } from '../types/types';
@@ -98,14 +98,14 @@ export function useMessagesRealtime({
   realtimeRef,
   suspendRealtime,
 }: UseMessagesRealtimeParams) {
-  const typingTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-
   // Kênh realtime: nối một lần khi trang mở; handlers đọc state mới
   // nhất qua ref nên không phải nối lại khi state đổi. Người xem
   // chọn hiện diện "ngoại tuyến" thì không nối (và lượt nối trước
   // đã bị cleanup ngắt) — presence thật tắt đúng nghĩa của lựa chọn.
   useEffect(() => {
     if (!myId || suspendRealtime) return;
+    // Mỗi kết nối tự quản các timer gõ của mình; cleanup chỉ huỷ timer của đúng kết nối đang đóng.
+    const typingTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
     // Tập user đã có sự kiện hiện diện trực tiếp trong vòng đời
     // của handle socket mà setup này sắp tạo, kể từ ảnh chụp
     // presence gần nhất của chính handle đó — căn cứ phân xử
@@ -253,7 +253,7 @@ export function useMessagesRealtime({
       onTyping: ({ conversationId, userId }) => {
         if (activeRef.current?.id !== conversationId || userId === myId) return;
         setTypingUsers((prev) => ({ ...prev, [userId]: true }));
-        const timeouts = typingTimeoutsRef.current;
+        const timeouts = typingTimeouts;
         const existing = timeouts.get(userId);
         if (existing) clearTimeout(existing);
         timeouts.set(
@@ -328,8 +328,8 @@ export function useMessagesRealtime({
     return () => {
       handle.disconnect();
       realtimeRef.current = null;
-      for (const timeout of typingTimeoutsRef.current.values()) clearTimeout(timeout);
-      typingTimeoutsRef.current.clear();
+      for (const timeout of typingTimeouts.values()) clearTimeout(timeout);
+      typingTimeouts.clear();
     };
   }, [
     myId,

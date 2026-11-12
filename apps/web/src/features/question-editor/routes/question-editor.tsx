@@ -219,7 +219,7 @@ export function QuestionEditorPage({ mode }: { mode: 'new' | 'edit' }) {
         // Không tải được options bổ sung thì giữ nguyên phần đã nạp từ view.
       }
     },
-    [loadCurriculumLinks, loadLinkSubjects],
+    [loadCurriculumLinks, loadLinkSubjects, queryClient],
   );
 
   // Gác khởi tạo một lần của màn soạn: mảng phụ thuộc của hiệu

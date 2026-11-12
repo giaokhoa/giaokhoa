@@ -98,6 +98,7 @@ export function CompetencyAdmin() {
   const templatesQuery = useCompetencyTemplates();
   const frameworks = frameworksQuery.data ?? [];
   const templates = templatesQuery.data ?? [];
+  const firstTemplateId = templatesQuery.data?.[0]?.id;
   const [selectedFrameworkId, setSelectedFrameworkId] = useState('');
   const competenciesQuery = useFrameworkCompetencies(selectedFrameworkId);
   const competencies = competenciesQuery.data ?? [];
@@ -152,10 +153,10 @@ export function CompetencyAdmin() {
    * mỗi lần nạp lại hai danh sách khung quản trị.
    */
   useEffect(() => {
-    if (selectedTemplateId === '' && templates.length > 0) {
-      setSelectedTemplateId(templates[0]!.id);
+    if (selectedTemplateId === '' && firstTemplateId) {
+      setSelectedTemplateId(firstTemplateId);
     }
-  }, [templates, selectedTemplateId]);
+  }, [firstTemplateId, selectedTemplateId]);
 
   /** Tạo framework qua POST /frameworks với đúng body của `createCompetencyFrameworkSchema`. */
   async function createFramework(event: FormEvent) {

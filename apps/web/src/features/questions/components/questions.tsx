@@ -61,7 +61,9 @@ export function QuestionsPage({ area = 'my-questions' }: { area?: BankArea }) {
   const bankGate = perms.ready && perms.canUseQuestionBank;
   const categoriesQuery = useQuestionCategories(bankGate);
   const categories = categoriesQuery.data ?? [];
-  const questions = useCategoryQuestions(qCategory, bankGate).data ?? [];
+  const firstCategoryId = categoriesQuery.data?.[0]?.id;
+  const questionsQuery = useCategoryQuestions(qCategory, bankGate);
+  const questions = questionsQuery.data ?? [];
   const stimuliQuery = useCategoryStimuli(qCategory, bankGate);
   const stimuli = stimuliQuery.data ?? [];
 
@@ -78,8 +80,8 @@ export function QuestionsPage({ area = 'my-questions' }: { area?: BankArea }) {
   const displayMessage = message ?? loadError;
 
   useEffect(() => {
-    if (categories.length && !qCategory) setQCategory(String(categories[0]!.id));
-  }, [categories, qCategory]);
+    if (firstCategoryId && !qCategory) setQCategory(String(firstCategoryId));
+  }, [firstCategoryId, qCategory]);
   // Lớp bank của feat Ngân hàng câu hỏi chung (issue #70): khu vực ngân
   // hàng riêng của giáo viên + khu vực Ngân hàng hệ thống (bank chung).
   const banks = useQuestionBanks('question').data ?? [];
@@ -142,7 +144,8 @@ export function QuestionsPage({ area = 'my-questions' }: { area?: BankArea }) {
 
   const personalBank = banks.find((b) => b.scope === 'personal');
   const sharedBanks = banks.filter((b) => b.scope !== 'personal');
-  const myQuestions = useMyBankQuestions(personalBank).data ?? [];
+  const myQuestionsQuery = useMyBankQuestions(personalBank);
+  const myQuestions = myQuestionsQuery.data ?? [];
 
   const loadAttributionsFor = useCallback(async (views: QuestionView[]) => {
     const derived = views.filter(
@@ -173,8 +176,8 @@ export function QuestionsPage({ area = 'my-questions' }: { area?: BankArea }) {
   // Ghi công cho các câu copy trong bank cá nhân (trước đây do
   // loadMyQuestions gọi nối tiếp ngay sau khi nạp danh sách).
   useEffect(() => {
-    if (myQuestions.length) void loadAttributionsFor(myQuestions);
-  }, [myQuestions, loadAttributionsFor]);
+    if (myQuestionsQuery.data?.length) void loadAttributionsFor(myQuestionsQuery.data);
+  }, [myQuestionsQuery.data, loadAttributionsFor]);
 
 
   // --- ngân hàng ma trận (MB-1) -------------------------------------------------
@@ -228,8 +231,8 @@ export function QuestionsPage({ area = 'my-questions' }: { area?: BankArea }) {
 
 
   useEffect(() => {
-    void loadAttributionsFor(questions);
-  }, [questions, loadAttributionsFor]);
+    if (questionsQuery.data) void loadAttributionsFor(questionsQuery.data);
+  }, [questionsQuery.data, loadAttributionsFor]);
 
 
   // Chặn trang theo vai (issue #55 mục 1): sidebar đã ẩn mục điều hướng

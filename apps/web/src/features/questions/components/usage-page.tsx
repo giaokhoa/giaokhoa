@@ -95,7 +95,7 @@ export function QuestionUsagePage() {
       }
       return next;
     });
-  }, []);
+  }, [queryClient]);
 
   // Mỗi khi usage (lại) tải về thì nạp nội dung đã ghim cho các
   // attempt đã bắt đầu — đúng nhịp loadPinned sau mỗi reload() thủ

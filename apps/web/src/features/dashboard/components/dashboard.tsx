@@ -531,8 +531,6 @@ function StudentSection() {
 
   const badgeCount = badgesQuery.data ? badgesQuery.data.length : null;
   const unread = notificationsQuery.data ? notificationsQuery.data.unread : null;
-  const events = eventsQuery.data ?? [];
-
   const activityPcts: number[] = [];
   for (const access of learning) {
     for (const activity of gradebookOf(access)?.activities ?? []) {
@@ -579,6 +577,7 @@ function StudentSection() {
   ];
 
   const chartData: ChartPoint[] = useMemo(() => {
+    const events = eventsQuery.data ?? [];
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     return Array.from({ length: 30 }, (_, i) => {
@@ -590,7 +589,7 @@ function StudentSection() {
       }).length;
       return { label: formatWithOptions(day, i18n.language, { day: '2-digit', month: '2-digit' }), value };
     });
-  }, [events, i18n.language]);
+  }, [eventsQuery.data, i18n.language]);
 
   const columns: DataColumn<CourseAccess>[] = [
     {
