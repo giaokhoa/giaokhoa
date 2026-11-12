@@ -238,10 +238,9 @@ trình hiện tại trong tài liệu này.
    ngay khi tạo — cấm chỉ nhắc tới nhau bằng chữ trong thân issue.
    Việc con nằm gọn trong một issue thì theo dõi bằng task list
    trong thân issue và thân PR, không tách thành issue riêng.
-4. **Nhãn khi tạo issue.** Khi tạo issue, gắn label loại (`tính năng`
-   cho việc tính năng hoặc nghiệp vụ, `lỗi` cho việc báo lỗi) theo
-   đặc tả bộ label ở mục "Label trạng thái của issue"; khi bắt đầu
-   làm issue, gắn thêm label trạng thái `đang thi công`.
+4. **Nhãn khi tạo issue.** Gắn nhãn loại và trạng thái triage ban đầu
+   theo `docs/agents/triage-labels.md`. Tiến độ thi công và review
+   được theo dõi trong issue và PR.
 5. **Một issue = một feat.** Việc phát sinh thuộc cùng feat thì ghi
    vào đúng issue của feat đó (mở lại nếu đã đóng), không xé
    issue/PR mới.
@@ -288,13 +287,13 @@ trình hiện tại trong tài liệu này.
 4. Thân PR có đủ các mục "Việc con", "Bản đồ thay đổi theo phạm vi"
    và "Kỷ luật đã giữ" theo mẫu PR của repo, mở đầu bằng mục "Liên
    kết issue". Dòng `Closes #<số issue>` ở các điểm trên là bắt buộc
-   — đây là cơ chế duy nhất để đóng issue, theo mục "Đóng issue"
+   — đây là cơ chế đóng issue được triển khai, theo mục "Đóng issue"
    trong tài liệu này.
 
 ### Review và merge
 
-1. Đội thi công không tự merge và không tự đóng issue của mình; đội
-   đánh giá độc lập phán quyết trước.
+1. Đội thi công không tự merge và không tự đóng issue đang triển khai;
+   đội đánh giá độc lập phán quyết trước.
 2. Cổng merge gồm đủ: phán quyết đạt (hoặc đã thoả các điều kiện
    của phán quyết) + CI success trên head cuối theo phạm vi CI của
    loại PR đó (PR vào `main` — phát hành và hotfix — phải có CI đầy
@@ -305,9 +304,8 @@ trình hiện tại trong tài liệu này.
 3. PR của issue merge kiểu squash; issue tự đóng qua `Closes` trong
    thân PR. PR phát hành `dev → main` merge bằng merge commit theo
    mục "Flow nhánh dev và main" ở trên.
-4. Ở từng chặng (bắt đầu thi công, bắt đầu review, có phán quyết,
-   merge xong), label trạng thái của issue được đổi theo mục "Label
-   trạng thái của issue" trong tài liệu này.
+4. Ghi tiến độ thi công, kết quả review và merge trên issue hoặc PR.
+   Nhãn triage tuân theo `docs/agents/triage-labels.md`.
 5. **Cổng review hai lớp.** Sau khi đội thi công đẩy PR, PR phải
    qua hai lớp review độc lập trước khi merge: lớp thứ nhất là
    đội review độc lập nội bộ chấm PR tại nguồn; lớp thứ hai là
@@ -339,9 +337,9 @@ trình hiện tại trong tài liệu này.
    mới để hỏi lại. Phán quyết đạt ở điểm 2 của mục này là sự
    đồng thuận đạt của cả hai lớp trên đúng head SHA cuối của
    PR, thể hiện trên PR: chỉ khi cả hai lớp cùng đồng thuận
-   đạt trên head đó, PR mới chuyển sang trạng thái `chờ merge`
-   và merge theo điểm 2. Mỗi commit mới đẩy lên PR làm cả hai
-   phán quyết hết hiệu lực, hai lớp phải chấm lại phần thay
+   đạt trên head đó, PR mới đủ điều kiện merge theo điểm 2. Mỗi
+   commit mới đẩy lên PR làm cả hai phán quyết hết hiệu lực,
+   hai lớp phải chấm lại phần thay
    đổi. Mọi finding chặn (mức nghiêm trọng cao) phải về một
    trạng thái cuối: đã sửa và được bên nêu kiểm chứng lại;
    hoặc bên nêu tự rút kèm bằng chứng; hoặc chủ repo phân xử
@@ -367,43 +365,28 @@ trình hiện tại trong tài liệu này.
 
 ### Đóng issue
 
-1. Issue chỉ đóng bằng cơ chế tự đóng qua dòng `Closes #<số issue>` trong thân PR khi PR merge. Cấm đóng tay issue trước
-   khi PR của nó merge.
+1. Issue được triển khai chỉ đóng bằng cơ chế tự đóng qua dòng
+   `Closes #<số issue>` trong thân PR khi PR merge. Cấm đóng tay
+   issue đang triển khai trước khi PR của nó merge. Ngoại lệ:
+   issue có kết luận triage `wontfix` được đóng kèm lý do sau khi
+   người duy trì xác nhận kết luận, không cần PR triển khai.
 2. Sau khi merge, phải kiểm chứng issue đã thật sự đóng. Nếu PR
    đã merge mà issue chưa đóng (sai từ khoá đóng hoặc sai nhánh
    đích), đóng issue kèm comment dẫn tới commit merge.
 3. Issue cha chỉ đóng khi child issue cuối cùng về đích: PR
    cuối cùng ghi `Closes` cả child issue của nó lẫn issue cha.
 
-### Label trạng thái của issue
+## Agent skills
 
-1. Mọi issue đang mở mang đúng MỘT label trạng thái trong bộ
-   bốn label dưới đây, và label được đổi ngay khi chặng làm
-   việc đổi. Trạng thái của issue đọc từ label, không suy từ
-   ghi chú hay comment trong issue.
-2. `đang thi công` — đội thi công gắn khi bắt đầu làm issue.
-3. `đang review` — đội review gắn khi bắt đầu chấm.
-4. `chờ sửa` — đội review gắn khi phán quyết là chưa đạt; đội
-   thi công đổi ngược về `đang thi công` khi quay lại sửa.
-5. `chờ merge` — đội review gắn khi phán quyết đạt; đội merge
-   gỡ label trạng thái khi issue đóng sau khi merge.
-6. Các mẫu issue trong `.github/ISSUE_TEMPLATE/` không tự gắn
-   label khi tạo issue; label trạng thái do đội phụ trách gắn
-   theo vòng đời ở các điểm trên.
+### Theo dõi issue
 
-#### Đặc tả bộ label của repo
+Khi đọc, tạo hoặc cập nhật issue trên GitHub, đọc `docs/agents/issue-tracker.md`.
 
-Repo dùng đúng 6 label theo bảng dưới đây. Khi repo được tạo
-lại từ đầu, tạo đúng 6 label này (qua trang Labels của repo
-hoặc qua API) TRƯỚC khi mở issue đầu tiên; xoá các label mặc
-định tiếng Anh của GitHub không thuộc bộ này, không dùng bộ
-label mặc định đó.
+### Nhãn triage
 
-| Tên label       | Mã màu   | Mô tả                                 | Khi nào gắn                    | Ai gắn       |
-| --------------- | -------- | ------------------------------------- | ------------------------------ | ------------ |
-| `đang thi công` | `1d76db` | Đội thi công đang làm                 | Khi bắt đầu làm issue          | Đội thi công |
-| `đang review`   | `5319e7` | Đội review độc lập đang chấm          | Khi bắt đầu chấm               | Đội review   |
-| `chờ sửa`       | `d93f0b` | Review chưa đạt, chờ đội thi công sửa | Khi phán quyết chưa đạt        | Đội review   |
-| `chờ merge`     | `0e8a16` | Review đã đạt, chờ merge              | Khi phán quyết đạt             | Đội review   |
-| `lỗi`           | `d73a4a` | Có gì đó không hoạt động              | Label loại cho issue lỗi       | Đội mở issue |
-| `tính năng`     | `a2eeef` | Tính năng mới hoặc yêu cầu            | Label loại cho issue tính năng | Đội mở issue |
+Khi phân loại issue, dùng nhãn triage mặc định theo `docs/agents/triage-labels.md`.
+
+### Tài liệu miền nghiệp vụ
+
+Trước khi khảo sát mã nguồn, đọc `docs/agents/domain.md`: một `CONTEXT.md`
+và `docs/adr/` ở gốc repo (single-context).
