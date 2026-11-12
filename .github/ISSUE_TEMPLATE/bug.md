@@ -52,4 +52,4 @@ mức nghiêm trọng đề xuất và lý do. -->
 
 - [ ] Lỗi không còn tái hiện khi làm đúng các bước tái hiện ở trên.
 - [ ] Không phát sinh hồi quy ở luồng liên quan (ghi rõ luồng nào và cách
-  kiểm chứng).
+      kiểm chứng).

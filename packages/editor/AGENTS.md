@@ -40,8 +40,7 @@ của repo.
 
 ## Kiểm chứng bắt buộc
 
-- **Typecheck + test của package trước khi push**: `pnpm --filter @giaokhoa/editor
-  typecheck` và `pnpm --filter @giaokhoa/editor test`; build lại `dist` trước khi
+- **Typecheck + test của package trước khi push**: `pnpm --filter @giaokhoa/editor typecheck` và `pnpm --filter @giaokhoa/editor test`; build lại `dist` trước khi
   typecheck apps/web trong cùng feat.
 - CI là cổng chính; kết luận CI chỉ từ LOG THẬT. Suite nặng local giữ khoá
   `flock /tmp/giaokhoa-heavy-suite.lock`.
@@ -83,11 +82,11 @@ không dựa vào trí nhớ của trợ lý:
 - **Thành phần chính:** `src/rich-text-editor.tsx` — trình soạn (TipTap 3);
   `src/rich-text-view.tsx` — trình xem tĩnh cùng định dạng; `src/extensions.ts`
   — tập extension đã chốt của hợp đồng nội dung (gồm `UndoRedo`); `src/math.ts`
-  + `src/math-editor-panel.tsx` — soạn công thức bằng panel phủ (overlay);
-  `src/document-continuation.ts` — chuẩn hoá đuôi tài liệu
-  (`ensureTerminalContinuation` khi nạp, dạng đem-lưu `contentForSave` khi
-  phát); `src/editor.css` — vỏ vùng soạn + toolbar; xuất qua `src/index.ts`;
-  test ở `src/editor.spec.tsx`.
+  - `src/math-editor-panel.tsx` — soạn công thức bằng panel phủ (overlay);
+    `src/document-continuation.ts` — chuẩn hoá đuôi tài liệu
+    (`ensureTerminalContinuation` khi nạp, dạng đem-lưu `contentForSave` khi
+    phát); `src/editor.css` — vỏ vùng soạn + toolbar; xuất qua `src/index.ts`;
+    test ở `src/editor.spec.tsx`.
 - **Luồng dữ liệu:** `apps/web` gắn editor với tài liệu đầu vào đúng hợp đồng
   rich-text của `@giaokhoa/contracts` → tài liệu được bảo đảm đoạn viết tiếp ở
   cuối → người dùng soạn qua **một toolbar duy nhất cho editor đang active**

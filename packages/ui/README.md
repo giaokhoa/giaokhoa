@@ -13,11 +13,11 @@ phẩm, qua cùng một bộ component nền.
 
 ## Quyết định còn hiệu lực
 
-| Quyết định | Nguồn |
-|---|---|
-| Toàn bộ component shadcn/ui của dự án sống DUY NHẤT ở package này. `apps/web` chỉ dùng qua `@giaokhoa/ui/...`, cấm sao chép component vào app để sửa riêng. Component nghiệp vụ tự viết nằm ở `apps/web/src/components/`. | README gốc của package; README của apps/web |
-| Nhất quán hình thức là yêu cầu bắt buộc, không phải trang trí: các vỏ tương tác dùng chung (collapse/section, dialog, bảng…) dùng MỘT component/khuôn chung cho mọi trang — mỗi trang tự chế một kiểu vỏ là lỗi (đã ghi nhận 3 kiểu collapse khác nhau trên trang /questions, 25/10/2026 — lát UI-1 thống nhất vỏ). | Yêu cầu nghiệp vụ ngày 25/10/2026 23:04; issue #133 (UI-1) |
-| Font chữ của sản phẩm là Geist — Geist Sans cho font sans, Geist Mono cho font mono (bản Variable tự host qua `@fontsource-variable/geist` và `@fontsource-variable/geist-mono`), áp qua preset hiện hành — không nạp font ngoài theo trang. Tên font chỉ nằm ở chỗ nạp + hai token `--font-sans`/`--font-mono` trong `globals.css`; đổi họ font lần sau chỉ sửa đúng chỗ đó. | `globals.css` + ngoại lệ ghi ở cuối file |
+| Quyết định                                                                                                                                                                                                                                                                                                                                                                    | Nguồn                                                      |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Toàn bộ component shadcn/ui của dự án sống DUY NHẤT ở package này. `apps/web` chỉ dùng qua `@giaokhoa/ui/...`, cấm sao chép component vào app để sửa riêng. Component nghiệp vụ tự viết nằm ở `apps/web/src/components/`.                                                                                                                                                     | README gốc của package; README của apps/web                |
+| Nhất quán hình thức là yêu cầu bắt buộc, không phải trang trí: các vỏ tương tác dùng chung (collapse/section, dialog, bảng…) dùng MỘT component/khuôn chung cho mọi trang — mỗi trang tự chế một kiểu vỏ là lỗi (đã ghi nhận 3 kiểu collapse khác nhau trên trang /questions, 25/10/2026 — lát UI-1 thống nhất vỏ).                                                           | Yêu cầu nghiệp vụ ngày 25/10/2026 23:04; issue #133 (UI-1) |
+| Font chữ của sản phẩm là Geist — Geist Sans cho font sans, Geist Mono cho font mono (bản Variable tự host qua `@fontsource-variable/geist` và `@fontsource-variable/geist-mono`), áp qua preset hiện hành — không nạp font ngoài theo trang. Tên font chỉ nằm ở chỗ nạp + hai token `--font-sans`/`--font-mono` trong `globals.css`; đổi họ font lần sau chỉ sửa đúng chỗ đó. | `globals.css` + ngoại lệ ghi ở cuối file                   |
 
 ## Bất biến
 
@@ -33,9 +33,9 @@ phẩm, qua cùng một bộ component nền.
 ## Cách các ứng dụng dùng
 
 ```tsx
-import { Button } from '@giaokhoa/ui/components/button';
-import { useIsMobile } from '@giaokhoa/ui/hooks/use-mobile';
-import '@giaokhoa/ui/globals.css'; // chỉ import một lần ở root của app
+import { Button } from "@giaokhoa/ui/components/button";
+import { useIsMobile } from "@giaokhoa/ui/hooks/use-mobile";
+import "@giaokhoa/ui/globals.css"; // chỉ import một lần ở root của app
 ```
 
 Cấu trúc bao gói theo đúng mô hình monorepo chính thức của shadcn
@@ -74,8 +74,7 @@ build + test của `@giaokhoa/web`, đối chiếu diff của `components.json` 
   editor dùng class Tailwind trong component của chính nó (panel công
   thức dạng overlay, toolbar), không khai báo thì các class đó không
   sinh CSS ở bản dựng của `apps/web`.
-- `src/styles/globals.css`: khối `body { font-family: ui-sans-system
-  ... }` của CSS thời tiền-package (không phải hàng shadcn) đã bị xoá
+- `src/styles/globals.css`: khối `body { font-family: ui-sans-system ... }` của CSS thời tiền-package (không phải hàng shadcn) đã bị xoá
   khi áp preset Base Vega — khối đó không nằm trong layer nên thắng
   cả `@apply font-sans` của preset và chặn font Inter.
 - `src/components/message.tsx` (lát dọn gọn UI nhắn tin, nối tiếp

@@ -152,13 +152,13 @@ pnpm dev
 
 ### Tài khoản mẫu (được seed bằng `pnpm seed`)
 
-| Vai trò | Tên đăng nhập | Mật khẩu |
-|------|----------|----------|
-| Quản trị site | `admin` | `Admin123!` |
-| Giáo viên (giáo viên biên tập của khoá học mẫu) | `teacher1` | `Teacher123!` |
-| Học viên | `student1` | `Student123!` |
-| Học viên | `student2` | `Student123!` |
-| Phụ huynh (phụ huynh của học viên mẫu student1) | `parent1` | `Parent123!` |
+| Vai trò                                         | Tên đăng nhập | Mật khẩu      |
+| ----------------------------------------------- | ------------- | ------------- |
+| Quản trị site                                   | `admin`       | `Admin123!`   |
+| Giáo viên (giáo viên biên tập của khoá học mẫu) | `teacher1`    | `Teacher123!` |
+| Học viên                                        | `student1`    | `Student123!` |
+| Học viên                                        | `student2`    | `Student123!` |
+| Phụ huynh (phụ huynh của học viên mẫu student1) | `parent1`     | `Parent123!`  |
 
 Tài khoản admin do chính bootstrap của API tạo từ
 `ADMIN_USERNAME` / `ADMIN_PASSWORD` (các giá trị mặc định ở trên; ghi đè qua

@@ -12,10 +12,10 @@ cùng một kỷ luật kiểu. Package này **không mang quyết định nghi�
 
 ## Quyết định còn hiệu lực
 
-| Quyết định | Nguồn |
-|---|---|
+| Quyết định                                                                                                                                                                                                                        | Nguồn                                    |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
 | Hai dòng TypeScript tách riêng theo nền: dòng NestJS (apps/api, apps/worker) theo `nest.json` (TypeScript 6), dòng React (apps/web và các package giao diện) theo `react.json` (TypeScript 7). Không ép một dòng cho cả monorepo. | README gốc của repo (mục Version policy) |
-| Mọi package kế thừa từ các base này thay vì tự khai tsconfig rời — kỷ luật kiểu (strictness, module resolution) là dùng chung, đổi một chỗ áp cho toàn hệ. | Cấu trúc monorepo hiện hành |
+| Mọi package kế thừa từ các base này thay vì tự khai tsconfig rời — kỷ luật kiểu (strictness, module resolution) là dùng chung, đổi một chỗ áp cho toàn hệ.                                                                        | Cấu trúc monorepo hiện hành              |
 
 ## Ranh giới — package này KHÔNG làm gì
 

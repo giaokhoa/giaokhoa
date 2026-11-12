@@ -143,11 +143,10 @@ luồng nghiệp vụ — bằng tiếng Việt**; mọi tài liệu bằng ti�
   là tham số bắt buộc, cấm truyền `undefined`.
 - **jsonb.** Mọi giá trị ghi vào cột jsonb đi qua một helper
   serialize tường minh duy nhất
-  (`sql<T>\`${JSON.stringify(value)}::jsonb\``): driver `pg` tự
-  stringify object thường nhưng hiểu MẢNG cấp cao nhất là mảng
-  PostgreSQL, khiến cột jsonb lỗi `invalid input syntax for type
-  json`. Biến tích luỹ cho `.values()` có trường biểu thức phải
-  khai kiểu `InsertObject<DB, '<bảng>'>`.
+  (`sql<T>\`${JSON.stringify(value)}::jsonb\``): driver `pg`tự
+stringify object thường nhưng hiểu MẢNG cấp cao nhất là mảng
+PostgreSQL, khiến cột jsonb lỗi`invalid input syntax for type json`. Biến tích luỹ cho `.values()`có trường biểu thức phải
+khai kiểu`InsertObject<DB, '<bảng>'>`.
 - **onConflict.** `doNothing()` khi trùng không ném lỗi và
   `returning` trả mảng rỗng — repository ánh xạ thành `undefined`
   cho hợp đồng insert-if-absent; bên trong transaction, doNothing

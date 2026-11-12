@@ -12,7 +12,10 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "dev": "turbo run dev",
-    "seed": "pnpm --filter @giaokhoa/api build && pnpm --filter @giaokhoa/api seed:review"
+    "seed": "pnpm --filter @giaokhoa/api build && pnpm --filter @giaokhoa/api seed:review",
+    "format": "prettier --write .",
+    "format:docs": "prettier --write \"**/*.{md,mdx}\"",
+    "format:docs:check": "prettier --check \"**/*.{md,mdx}\""
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -22,6 +25,8 @@
     "globals": "^17.13.0",
     "turbo": "^2.11.10",
     "typescript": "6.0.3",
-    "typescript-eslint": "^8.72.1"
+    "typescript-eslint": "^8.72.1",
+    "prettier": "^3.9.10",
+    "prettier-plugin-tailwindcss": "^0.8.1"
   }
 }

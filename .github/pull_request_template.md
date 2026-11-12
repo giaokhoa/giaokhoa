@@ -40,8 +40,8 @@ QUY TẮC BẮT BUỘC — PR TỰ CHỨA:
 <!-- Liệt kê từng file/module đã đụng, thay đổi gì và lý do. -->
 
 | File / module | Thay đổi | Lý do |
-| --- | --- | --- |
-|  |  |  |
+| ------------- | -------- | ----- |
+|               |          |       |
 
 ## Đối chiếu tiêu chí nghiệm thu của issue
 
@@ -61,13 +61,13 @@ này — kết luận chỉ lấy từ log thật của job. -->
 ## Kỷ luật đã giữ
 
 - [ ] Comment trong code và tài liệu của PR này bằng tiếng Việt; code
-  (định danh, chuỗi kỹ thuật) bằng tiếng Anh.
+      (định danh, chuỗi kỹ thuật) bằng tiếng Anh.
 - [ ] Comment nghiệp vụ tiếng Việt trong code đã được cập nhật nếu có đổi
-  code; comment lệch code thật được sửa trong cùng lượt với sửa code.
+      code; comment lệch code thật được sửa trong cùng lượt với sửa code.
 - [ ] Tài liệu còn giữ trong repo (README/AGENTS.md của package liên quan)
-  đã được cập nhật nếu thay đổi này ảnh hưởng tới chúng.
+      đã được cập nhật nếu thay đổi này ảnh hưởng tới chúng.
 - [ ] Test bám spec và mục Nghiệm thu của issue; không yếu hoá assertion
-  để cho qua.
+      để cho qua.
 - [ ] Không tự merge — PR chờ đánh giá độc lập.
 
 ## Ngoài phạm vi / việc chưa làm

@@ -81,13 +81,6 @@ hoặc trong issue đặc tả của chính việc đó trên GitHub:
   lượt thay đổi; comment lệch code thật là lỗi phải sửa trong cùng
   lượt, không để tồn đọng.
 
-## Quy tắc xuống dòng cho tài liệu và comment
-
-- **Không tự hard-wrap văn xuôi theo độ rộng cột.** Trong `README.md`, `AGENTS.md`, `docs/**/*.md`, tài liệu của package, mô tả Issue/PR và comment hướng dẫn, mỗi đoạn văn xuôi phải nằm trên **một dòng vật lý trong tệp nguồn**; để trình xem Markdown hoặc editor tự soft-wrap khi hiển thị. Cấm xuống dòng chỉ vì đạt 70, 72, 80, 100 hay 120 ký tự; không dùng độ rộng của cửa sổ terminal làm giới hạn cho văn xuôi.
-- **Chỉ xuống dòng khi có ý nghĩa cấu trúc.** Tách dòng cho tiêu đề, đoạn văn mới (có dòng trống), từng mục danh sách/checklist, từng dòng bảng, blockquote, code fence hoặc ngắt dòng có chủ đích của Markdown. Không gộp những cấu trúc này thành một dòng. Với một mục danh sách chứa một đoạn văn dài, giữ toàn bộ đoạn đó trên cùng dòng với dấu đầu mục thay vì xuống dòng thụt lề theo độ rộng.
-- **Comment trong code cũng không hard-wrap.** Comment `//` ghi mỗi ý hoàn chỉnh trên một dòng. Trong TSDoc `/** ... */`, mỗi đoạn văn xuôi đặt trên một dòng ` * ...`; các tag `@param`, `@returns`, `@throws`, `@example` đặt trên những dòng riêng theo đúng cú pháp và mỗi đoạn có chủ đích. Không tách giữa câu chỉ để giữ giới hạn ký tự. Vẫn phải tuân thủ mức độ mô tả TSDoc của `AGENTS.md` từng package; lời khuyên comment ngắn trong skill bên ngoài không được dùng để lược bỏ thông tin bắt buộc.
-- **Giữ nguyên định dạng code.** Quy tắc này chỉ áp dụng cho văn xuôi, không thay thế formatter hay cách chia dòng TypeScript, JSON, YAML, SQL, bảng, đoạn code và chuỗi có ngắt dòng mang ngữ nghĩa. Khi sửa nội dung cũ, chỉ chỉnh các đoạn tài liệu/comment thuộc phạm vi thay đổi; không reflow hàng loạt các tệp không liên quan.
-
 ## Quy trình tạo Issue và PR
 
 Chương này là chuẩn GitHub đầy đủ và duy nhất của repo: flow
@@ -108,8 +101,7 @@ chương này.
    dùng worktree gốc để quản lý Git worktree.
 2. **Kiểm tra trước khi thi công.** Tại worktree gốc, chạy
    `git status --short` và `git worktree list` trước khi tạo worktree.
-   Tạo bằng lệnh `git worktree add -b <type>/<số-issue>-<slug>
-   .worktrees/<type>-<số-issue>-<slug> dev`. Chỉ dùng `main`
+   Tạo bằng lệnh `git worktree add -b <type>/<số-issue>-<slug> .worktrees/<type>-<số-issue>-<slug> dev`. Chỉ dùng `main`
    làm nhánh gốc nếu `dev` chưa được thiết lập. Quy tắc tên nhánh
    vẫn theo mục "Đặt tên branch" ở dưới.
 3. **Chưa có số Issue.** Khi cần chuẩn bị trước khi có Issue, dùng
@@ -259,8 +251,7 @@ trình hiện tại trong tài liệu này.
    mỗi issue (theo mục "Flow nhánh dev và main" ở trên; trong giai
    đoạn chuyển tiếp chưa có nhánh `dev` thì nhánh từ `main`, PR vào
    `main`).
-2. Thân PR theo `.github/pull_request_template.md`, gồm: `Closes
-   #<số issue>`; tóm tắt thay đổi; bản đồ thay đổi theo phạm vi; task
+2. Thân PR theo `.github/pull_request_template.md`, gồm: `Closes #<số issue>`; tóm tắt thay đổi; bản đồ thay đổi theo phạm vi; task
    list toàn bộ việc con của issue (mang từ issue sang) và tích khi
    xong từng mục; đối chiếu nghiệm thu từng tiêu chí kèm bằng chứng;
    kết quả kiểm chứng và CI.
@@ -351,8 +342,7 @@ trình hiện tại trong tài liệu này.
 
 ### Đóng issue
 
-1. Issue chỉ đóng bằng cơ chế tự đóng qua dòng `Closes #<số
-   issue>` trong thân PR khi PR merge. Cấm đóng tay issue trước
+1. Issue chỉ đóng bằng cơ chế tự đóng qua dòng `Closes #<số issue>` trong thân PR khi PR merge. Cấm đóng tay issue trước
    khi PR của nó merge.
 2. Sau khi merge, phải kiểm chứng issue đã thật sự đóng. Nếu PR
    đã merge mà issue chưa đóng (sai từ khoá đóng hoặc sai nhánh
@@ -384,11 +374,11 @@ hoặc qua API) TRƯỚC khi mở issue đầu tiên; xoá các label mặc
 định tiếng Anh của GitHub không thuộc bộ này, không dùng bộ
 label mặc định đó.
 
-| Tên label | Mã màu | Mô tả | Khi nào gắn | Ai gắn |
-| --- | --- | --- | --- | --- |
-| `đang thi công` | `1d76db` | Đội thi công đang làm | Khi bắt đầu làm issue | Đội thi công |
-| `đang review` | `5319e7` | Đội review độc lập đang chấm | Khi bắt đầu chấm | Đội review |
-| `chờ sửa` | `d93f0b` | Review chưa đạt, chờ đội thi công sửa | Khi phán quyết chưa đạt | Đội review |
-| `chờ merge` | `0e8a16` | Review đã đạt, chờ merge | Khi phán quyết đạt | Đội review |
-| `lỗi` | `d73a4a` | Có gì đó không hoạt động | Label loại cho issue lỗi | Đội mở issue |
-| `tính năng` | `a2eeef` | Tính năng mới hoặc yêu cầu | Label loại cho issue tính năng | Đội mở issue |
+| Tên label       | Mã màu   | Mô tả                                 | Khi nào gắn                    | Ai gắn       |
+| --------------- | -------- | ------------------------------------- | ------------------------------ | ------------ |
+| `đang thi công` | `1d76db` | Đội thi công đang làm                 | Khi bắt đầu làm issue          | Đội thi công |
+| `đang review`   | `5319e7` | Đội review độc lập đang chấm          | Khi bắt đầu chấm               | Đội review   |
+| `chờ sửa`       | `d93f0b` | Review chưa đạt, chờ đội thi công sửa | Khi phán quyết chưa đạt        | Đội review   |
+| `chờ merge`     | `0e8a16` | Review đã đạt, chờ merge              | Khi phán quyết đạt             | Đội review   |
+| `lỗi`           | `d73a4a` | Có gì đó không hoạt động              | Label loại cho issue lỗi       | Đội mở issue |
+| `tính năng`     | `a2eeef` | Tính năng mới hoặc yêu cầu            | Label loại cho issue tính năng | Đội mở issue |
