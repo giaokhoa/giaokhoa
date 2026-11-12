@@ -34,7 +34,7 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
     getSessionThrows?: boolean;
     defaultTenantId?: string | null;
     suspended?: boolean;
-    /** Chế độ kho mà sổ đăng ký trả cho slug của Host: mặc định slug chưa đăng ký (đường kho chung). */
+    /** Chế độ kho mà sổ đăng ký trả cho slug của Host: mặc định slug chưa đăng ký (fail-closed). */
     spaceMode?: 'dedicated' | 'shared';
     /** Lỗi phân giải mà bộ phân giải ném ra (lệch bí mật/role của kho đích). */
     resolveError?: Error;
@@ -265,27 +265,37 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
       expect(users.getByIdOrUndefined).not.toHaveBeenCalled();
     });
 
-    it('tầng định tuyến chưa cấu hình: token mang centre_id tại địa chỉ trung tâm bị từ chối và không tra tài khoản ở kho chung', async () => {
+    it('tầng định tuyến chưa cấu hình: token mang centre_id tại Host trung tâm bị chặn trước khi đọc kho', async () => {
       const token = sign({ sub: 'u9', username: 'u9', sid: 's1', tid: 'tenant-a', centre_id: SPACE_ID });
       const { auth, users, probe } = build({
         resolveError: new SpaceRoutingError('space_routing.not_configured', 'Space routing is not configured'),
         betterAuthEnabled: false,
       });
-      const identity = await auth.authenticateHandshake({ headers: { host: HOST }, auth: { token } });
-      expect(identity).toBeNull();
+      await expect(auth.authenticateHandshake({ headers: { host: HOST }, auth: { token } }))
+        .rejects.toMatchObject({ code: 'space_routing.not_configured' });
       expect(users.getByIdOrUndefined).not.toHaveBeenCalled();
       expect(probe.reads).toEqual([]);
     });
 
-    it('tầng định tuyến chưa cấu hình: token không mang centre_id vẫn được phục vụ từ kho chung như trước', async () => {
+    it('tầng định tuyến chưa cấu hình: token không centre_id cũng không được fallback sang kho chung', async () => {
       const token = sign({ sub: 'u9', username: 'u9', sid: 's1', tid: 'tenant-a' });
-      const { auth, probe } = build({
+      const { auth, users, probe } = build({
         resolveError: new SpaceRoutingError('space_routing.not_configured', 'Space routing is not configured'),
         betterAuthEnabled: false,
       });
-      const identity = await auth.authenticateHandshake({ headers: { host: HOST }, auth: { token } });
-      expect(identity).toEqual({ userId: 'u9', username: 'user-u9', tenantId: 'tenant-a', spaceSlug: null });
-      expect(probe.reads).toEqual([{ kind: 'user', insideSpace: false }]);
+      await expect(auth.authenticateHandshake({ headers: { host: HOST }, auth: { token } }))
+        .rejects.toMatchObject({ code: 'space_routing.not_configured' });
+      expect(users.getByIdOrUndefined).not.toHaveBeenCalled();
+      expect(probe.reads).toEqual([]);
+    });
+
+    it('slug Host chưa đăng ký bị chặn, không tra tài khoản từ shared', async () => {
+      const token = sign({ sub: 'u9', username: 'u9', sid: 's1', tid: 'tenant-a' });
+      const { auth, users, probe } = build({ betterAuthEnabled: false });
+      await expect(auth.authenticateHandshake({ headers: { host: HOST }, auth: { token } }))
+        .rejects.toMatchObject({ code: 'space_routing.space_not_found' });
+      expect(users.getByIdOrUndefined).not.toHaveBeenCalled();
+      expect(probe.reads).toEqual([]);
     });
 
     it('địa chỉ của trung tâm ở kho chung (sổ ghi shared) → đường kho chung như cũ, không vào phạm vi kho riêng', async () => {
