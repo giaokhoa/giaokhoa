@@ -69,8 +69,7 @@ function sameIds(left: string[], right: string[]): boolean {
 }
 
 /**
- * Dựng extension decoration vẽ cặp radio Đúng/Sai cho từng mệnh đề
- * (port từ giaokhoa).
+ * Decoration vẽ cặp radio Đúng/Sai cho từng mệnh đề mà không ghi đáp án vào cấu trúc tài liệu.
  *
  * Decoration chỉ dựng lại khi TẬP id mệnh đề thay đổi (mệnh đề mới
  * sinh id, mệnh đề bị xoá, thứ tự đổi) — đáp án hiện tại được đọc từ

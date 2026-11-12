@@ -1,9 +1,5 @@
 /**
- * Repository của cụm EVENT LOG trên Kysely — chuyển đổi bộ máy cũ →
- * Kysely thuộc nhóm G8 của chiến dịch chuyển tầng dữ liệu (issue
- * #648). Repository này chỉ phụ trách đường ĐỌC (truy vấn
- * logstore); đường ghi event_log/outbox ở tầng hạ tầng thuộc hạng
- * mục D1, không nằm ở đây.
+ * Repository chỉ ĐỌC nhật ký sự kiện qua Kysely; các đường ghi `event_log` và outbox do tầng hạ tầng của ứng dụng thực hiện.
  *
  * Ca T-13 của nhóm (khuôn ghép điều kiện động — ca bổ sung BS-1 đã
  * chốt ở phòng thí nghiệm): điều kiện lọc dựng bằng MỘT hàm xây

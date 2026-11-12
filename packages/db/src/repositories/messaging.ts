@@ -8,21 +8,12 @@ import {
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 
 /**
- * Kho dữ liệu nhắn tin và thông báo trên Kysely (issue #658, nhóm
- * G11 — nhóm cuối của chiến dịch chuyển tầng dữ liệu sang Kysely):
- * chuyển nguyên vẹn bề mặt của `MessagingRepository` cũ ở
- * `apps/api` (bộ máy cũ, 2.250 dòng) sang đây — conversation, thành
- * viên, message, block, notification, nhật ký dispatch, cùng các
- * phép đọc bảng dùng chung (role/context/enrol/ghi danh/lớp/khoá)
- * mà các cổng nghiệp vụ của messaging cần.
+ * Kho dữ liệu nhắn tin và thông báo trên Kysely: quản lý hội thoại, thành viên, tin nhắn, chặn liên lạc, thông báo và nhật ký phân phối; cung cấp các phép đọc context, vai trò, ghi danh và lớp/khoá mà nghiệp vụ nhắn tin cần.
  *
- * Khuôn truy vấn theo đúng pilot kho control plane và các
- * repository đã chuyển trước đó:
+ * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Cột đọc khai tường minh kèm bí danh camelCase dùng chung cho
  *   select và returning — KHÔNG bật CamelCasePlugin.
- * - Kiểu dòng công khai khai tay trong file này, khớp hình dạng
- *   `$inferSelect` của repository cũ để phía tiêu thụ không đổi
- *   hợp đồng.
+ * - Kiểu dòng công khai khai tường minh bằng camelCase để biên API không phụ thuộc lược đồ cột snake_case.
  * - Ghi qua hàm ánh xạ Insert loại `undefined` tường minh từng
  *   trường (thử nghiệm T-4).
  * - Khoá chính `uuidv7()` do database sinh (phụ lục U): insert bỏ
@@ -69,9 +60,7 @@ export type MessagingDb = CentreDb | CentreTx;
 /** Handle giao dịch kho trung tâm. */
 export type MessagingTx = CentreTx;
 
-// ---------------------------------------------------------------------------
-// Kiểu dòng đọc (hợp đồng công khai — khớp `$inferSelect` của repository cũ)
-// ---------------------------------------------------------------------------
+// Kiểu dòng công khai: tên thuộc tính camelCase ánh xạ từ cột PostgreSQL.
 
 /** Dòng `message_conversations`. */
 export interface ConversationRow {

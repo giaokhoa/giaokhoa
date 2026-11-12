@@ -16,7 +16,7 @@ import {
 @ApiTags('curriculum')
 @Controller({ path: 'curriculum', version: '1' })
 /**
- * API chương trình (curriculum GDPT 2018, port từ giaokhoa):
+ * API chương trình GDPT 2018:
  * subjects → curricula → cây nodes → learning outcomes.
  * Đọc cần curriculum:view, ghi cần curriculum:manage tại
  * context của môn học (qua PermissionEvaluator, trong service).

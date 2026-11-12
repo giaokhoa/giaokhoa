@@ -3,14 +3,9 @@ import type { CentreDb, CentreTx } from '../client';
 import type { Json } from '../types/centre-db';
 
 /**
- * Kho dữ liệu khoá học trên Kysely (issue #645, nhóm G5 của chiến
- * dịch chuyển tầng dữ liệu sang Kysely): TOÀN BỘ bề mặt của
- * `CoursesRepository` cũ ở `apps/api`  được chuyển nguyên
- * vẹn sang đây — category (cây có path vật chất hoá), course,
- * section, course module (cm), neo khung chương trình/SGK chụp kèm
- * section, và format options.
+ * Kho dữ liệu khoá học trên Kysely: quản lý cây danh mục, khoá học, section, course module, neo khung chương trình/SGK của section và tuỳ chọn định dạng.
  *
- * Khuôn truy vấn theo đúng pilot kho control plane (issue #640):
+ * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Cột đọc khai tường minh kèm bí danh camelCase
  *   (`'tenant_id as tenantId'`) dùng chung cho select và returning —
  *   KHÔNG bật CamelCasePlugin (một nguồn sự thật là database thật).
@@ -28,10 +23,7 @@ import type { Json } from '../types/centre-db';
  *   hoặc handle giao dịch) để phía gọi lồng thao tác vào giao dịch
  *   của mình.
  *
- * Bề mặt kiểu dòng (hàng `*Row` xuất khẩu dưới đây) giữ đúng hình
- * dạng `$inferSelect` của repository cũ để phía tiêu thụ trong
- * module courses không đổi hợp đồng: cột `availability` không có
- * `$type<>` ở schema bộ máy cũ nên giữ là `unknown` như hợp đồng cũ.
+ * Các kiểu dòng `*Row` ở biên repository dùng camelCase; trường jsonb `availability` giữ kiểu `unknown` vì nội dung không có lược đồ xác định.
  */
 
 /** Handle kho trung tâm mà repository chấp nhận: thường hoặc trong giao dịch. */
@@ -39,9 +31,7 @@ export type CoursesDb = CentreDb | CentreTx;
 /** Handle giao dịch kho trung tâm (tham số bắt buộc của các thao tác đa bước). */
 export type CoursesTx = CentreTx;
 
-// ---------------------------------------------------------------------------
-// Kiểu dòng đọc (hợp đồng công khai — khớp `$inferSelect` của repository cũ)
-// ---------------------------------------------------------------------------
+// Kiểu dòng công khai: tên thuộc tính camelCase ánh xạ từ cột PostgreSQL.
 
 /** Dòng `course_categories` (bảng này không có cột `created_at`). */
 export interface CategoryRow {

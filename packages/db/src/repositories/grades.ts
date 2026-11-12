@@ -1,14 +1,9 @@
 import type { CentreDb, CentreTx } from '../client';
 
 /**
- * Kho dữ liệu điểm theo bài trên Kysely (issue #644, nhóm G4 của
- * chiến dịch chuyển tầng dữ liệu sang Kysely): TOÀN BỘ bề mặt của
- * `GradesRepository` cũ ở `apps/api`  được chuyển nguyên
- * vẹn sang đây — grade item (một item = một bài/hoạt động), điểm
- * theo user, lịch sử điểm và vết công bố cấp bài.
+ * Kho dữ liệu điểm theo bài trên Kysely: quản lý mục điểm, điểm của người học, lịch sử chấm và trạng thái công bố cấp bài.
  *
- * Khuôn truy vấn theo đúng pilot kho control plane (issue #640) và
- * repository câu hỏi (issue #642):
+ * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Cột đọc khai tường minh kèm bí danh camelCase
  *   (`'item_id as itemId'`) dùng chung cho select và returning —
  *   KHÔNG bật CamelCasePlugin (một nguồn sự thật là database thật).
@@ -32,9 +27,7 @@ import type { CentreDb, CentreTx } from '../client';
  * dòng điểm + dòng lịch sử + dòng outbox `grade_updated` trong
  * MỘT giao dịch — và chạy trên chính bề mặt này:
  * `transaction` + `upsertGrade`/`updateGrade`/`insertHistory`
- * kèm `enqueueKysely` của OutboxService (lật ở issue #663 khi
- * repository chuyển tiếp phía bộ máy cũ bị xoá cùng đợt gỡ
- * bộ máy cũ khỏi cây).
+ * kèm `enqueueKysely` của OutboxService, để điểm, lịch sử và sự kiện commit/rollback cùng nhau.
  */
 
 /** Dòng `grade_items`. */

@@ -49,9 +49,7 @@ import { SpacePoolManager } from './space-pool-manager';
  * lười, có trần, đóng khi nhàn rỗi; pool kho riêng cũng là
  * `TenantAwarePool` để chính sách RLS tiếp tục fail-closed theo
  * tenant của ngữ cảnh; không kết nối "siêu quyền" cho đường nền.
- *
- * (Facade song song phía bộ máy cũ đã xoá ở issue #663 cùng đợt gỡ
- * bộ máy cũ khỏi cây: khung nay chỉ còn một facade Kysely.)
+
  */
 @Injectable()
 export class SpaceDatabaseService implements OnModuleDestroy {

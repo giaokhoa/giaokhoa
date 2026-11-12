@@ -1,7 +1,5 @@
 /**
- * Repository của cụm PRIVACY trên Kysely — chuyển đổi bộ máy cũ →
- * Kysely thuộc nhóm G8 của chiến dịch chuyển tầng dữ liệu (issue
- * #648).
+ * Repository của cụm PRIVACY trên Kysely.
  *
  * Vai trò: mọi truy cập tới hai bảng privacy_requests và
  * privacy_export_files của kho trung tâm tập trung ở đây. Việc

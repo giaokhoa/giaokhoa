@@ -6,7 +6,7 @@ import {
 } from '../../support/identity-access-helpers';
 
 /**
- * Curriculum GDPT 2018 — Chặng 1 của issue #20 (port từ giaokhoa).
+ * Kiểm thử xuyên HTTP cho luồng chương trình GDPT 2018: tạo môn, chương trình, cây nội dung và kiểm tra phân quyền.
  * Oracle: mô hình giaokhoa đã kiểm chứng tận schema
  * (packages/database/src/schema/curriculum.ts): subjects (slug duy nhất) →
  * curricula (duy nhất theo môn + khối 1–12) → curriculum_nodes (cây, khoá

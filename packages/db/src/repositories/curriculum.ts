@@ -1,7 +1,5 @@
 /**
- * Repository của cụm CHƯƠNG TRÌNH trên Kysely — chuyển đổi từ
- * repository bộ máy cũ của module curriculum phía `apps/api` (issue
- * #646, nhóm G6 của chiến dịch chuyển tầng dữ liệu sang Kysely).
+ * Repository của cụm CHƯƠNG TRÌNH trên Kysely.
  *
  * Vai trò: mọi truy cập tới năm bảng chương trình của kho trung tâm
  * (subjects → curricula → curriculum_nodes dạng cây →
@@ -16,8 +14,7 @@
  * đang mở) để phía gọi ghép nhiều thao tác vào một transaction khi
  * cần.
  *
- * Khuôn hình dạng dữ liệu ở biên repository (theo playbook chuyển
- * đổi của package, đúc từ pilot kho control plane):
+ * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong repository, truy vấn viết trên interface schema sinh
  *   bằng codegen: tên bảng/cột giữ nguyên snake_case của database.
  * - Bên ngoài, repository trả/nhận các hình dạng dòng camelCase như

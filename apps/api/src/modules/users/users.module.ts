@@ -26,11 +26,7 @@ import { UsersService } from './users.service';
  * thuộc tầng dữ liệu).
  */
 @Module({
-  // SpaceRoutingModule (thêm ở issue #641): UsersRepository đã
-  // chuyển sang `@giaokhoa/db` trên Kysely nên module lắp nó bằng
-  // factory provider trên facade định tuyến `routedKysely`; trước
-  // đây repository tự inject handle qua nhà cung cấp kết nối
-  // bộ máy cũ nên module chưa cần cạnh import này.
+  // SpaceRoutingModule cấp `routedKysely` cho UsersRepository; handle phải phân giải kho theo ngữ cảnh của từng request.
   imports: [AccessModule, CustomFieldsModule, EventsModule, SpaceRoutingModule, forwardRef(() => BetterAuthModule), forwardRef(() => AuthModule)],
   controllers: [UsersController],
   providers: [

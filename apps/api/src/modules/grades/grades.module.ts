@@ -15,18 +15,9 @@ import { LegacyGradesCourseController, LegacyGradesPhantomController } from './l
 import { GradesService } from './grades.service';
 
 /**
- * GradesModule facade: GradesService (điểm theo từng bài). Depends on
- * Courses, Enrol, Access, Completion (chỉ qua facade). Đăng ký các
- * evaluator của nó vào Completion/Courses lúc khởi động.
+ * Module điểm theo bài: cung cấp GradesService, dùng Courses/Enrol/Access/Completion để kiểm tra ngữ cảnh và quyền, đồng thời đăng ký evaluator cho các luồng đánh giá.
  *
- * GradesRepository là repository Kysely của `@giaokhoa/db` (issue
- * #644): provider dựng bằng factory với handle kho trung tâm đã
- * định tuyến theo không gian (`routedKysely` của
- * SpaceDatabaseService). Ba luồng ghi điểm (`setGrade`,
- * `recordActivityGrade`, `updateGrade`) chạy trọn trong
- * transaction Kysely của repository này kèm `enqueueKysely` của
- * OutboxService — repository chuyển tiếp phía bộ máy cũ của chúng
- * đã xoá ở issue #663 khi bộ máy cũ rời khỏi cây.
+ * GradesRepository nhận handle Kysely định tuyến `routedKysely`. Các luồng `setGrade`, `recordActivityGrade` và `updateGrade` ghi điểm, lịch sử và outbox trong cùng transaction để không công bố sự kiện trước khi dữ liệu được commit.
  */
 @Module({
   imports: [

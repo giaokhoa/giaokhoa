@@ -1,7 +1,5 @@
 /**
- * Repository của cụm GHIM ĐỀ + LƯỢT LÀM trên Kysely — nhóm G3 của
- * chiến dịch chuyển tầng dữ liệu sang Kysely (issue #643),
- * chuyển từ `apps/api/src/modules/quiz/quiz.repository.ts`.
+ * Repository của cụm GHIM ĐỀ + LƯỢT LÀM trên Kysely.
  *
  * Vai trò: mọi truy cập tới các bảng của lần ghim đề (exam_pins),
  * ghi đè cài đặt (exam_pin_overrides), dải nhận xét (exam_pin_feedbacks),
@@ -17,8 +15,7 @@
  * (instance gốc hoặc transaction đang mở) để phía gọi ghép nhiều
  * thao tác vào một transaction khi cần.
  *
- * Khuôn hình dạng dữ liệu ở biên repository (khuôn pilot #640 — xem
- * mục playbook trong `AGENTS.md` của package):
+ * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong repository, truy vấn viết trên interface schema sinh
  *   bằng codegen: tên bảng/cột giữ nguyên snake_case của database,
  *   kiểu dòng nội bộ qua `Selectable`/`Insertable`/`Updateable`.

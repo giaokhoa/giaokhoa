@@ -1,6 +1,5 @@
 /**
- * Repository của cụm XÁC THỰC trên Kysely — chuyển đổi bộ máy cũ →
- * Kysely của chiến dịch chuyển tầng dữ liệu (issue #641, nhóm G1).
+ * Repository của cụm XÁC THỰC trên Kysely.
  *
  * Vai trò: mọi truy cập tới bốn bảng của kho trung tâm thuộc cụm
  * auth (họ refresh token, nhật ký lần thử đăng nhập, liên kết đăng
@@ -10,9 +9,7 @@
  * Kysely (instance gốc hoặc transaction đang mở) do tầng ứng dụng
  * truyền vào.
  *
- * Khuôn hình dạng dữ liệu ở biên repository — cùng khuôn pilot kho
- * control plane (xem `control-plane.ts` và playbook trong
- * `AGENTS.md` của package):
+ * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong, truy vấn viết trên interface schema sinh bằng
  *   codegen: tên bảng/cột giữ nguyên snake_case của database.
  * - Bên ngoài, repository trả/nhận hình dạng dòng camelCase như

@@ -61,13 +61,9 @@ export function validateEnv(config: Record<string, unknown>): Env {
 }
 
 /**
- * Dựng tham số `connection` cho bộ máy cũ từ URL và cờ TLS.
+ * Chuyển URL PostgreSQL thành cấu hình kết nối mà driver `pg` chấp nhận.
  *
- * Không bật TLS thì trả nguyên chuỗi (hành vi cũ). Bật thì trả PoolConfig
- * có `ssl.rejectUnauthorized = false` — chứng chỉ của nhà cung cấp
- * PostgreSQL do CA riêng của nhà cung cấp ký nên không kiểm chứng theo
- * CA hệ thống được; đây là cấu hình driver `pg` cần khi gặp CA riêng
- * như vậy.
+ * Khi `ssl` bật, trả `PoolConfig` với TLS nhưng `rejectUnauthorized: false`: chứng chỉ máy chủ KHÔNG được xác thực, nên đường kết nối có nguy cơ bị giả mạo nếu mạng không đáng tin. Khi tắt TLS, giữ nguyên URL; không tự biến đổi thông tin truy cập.
  */
 export function databaseConnectionFromEnv(url: string, ssl: boolean): string | PoolConfig {
   if (!ssl) return url;
@@ -88,8 +84,7 @@ export function redisConnectionFromUrl(url: string): {
     port: parsed.port ? Number(parsed.port) : 6379,
     username: parsed.username || undefined,
     password: parsed.password || undefined,
-    // URL dạng rediss:// bắt buộc TLS. Chứng chỉ phía dịch vụ không
-    // kiểm chứng theo CA hệ thống được nên tắt kiểm chứng cho ioredis.
+    // rediss:// bật TLS nhưng tắt xác thực chứng chỉ máy chủ; kết nối chỉ phù hợp mạng tin cậy.
     ...(parsed.protocol === 'rediss:' ? { tls: { rejectUnauthorized: false } } : {}),
     maxRetriesPerRequest: null,
   };

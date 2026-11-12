@@ -1,6 +1,5 @@
 /**
- * Repository CẤU HÌNH SITE trên Kysely — chuyển đổi bộ máy cũ →
- * Kysely của chiến dịch chuyển tầng dữ liệu (issue #641, nhóm G1).
+ * Repository CẤU HÌNH SITE trên Kysely.
  *
  * Vai trò: mọi truy cập tới ba bảng của tầng hạ tầng — `config`
  * cho setting của core (giá trị jsonb), `plugin_config` cho

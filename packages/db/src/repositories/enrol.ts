@@ -1,18 +1,14 @@
 import type { CentreDb, CentreTx } from '../client';
 
 /**
- * Kho dữ liệu ghi danh trên Kysely (issue #645, nhóm G5 của chiến
- * dịch chuyển tầng dữ liệu sang Kysely): TOÀN BỘ bề mặt của
- * `EnrolRepository` cũ ở `apps/api`  được chuyển nguyên
- * vẹn sang đây — enrol instance (phương thức ghi danh của khoá
- * học) và user enrolment (ghi danh của từng user).
+ * Kho dữ liệu ghi danh trên Kysely: quản lý phương thức ghi danh của khoá học và trạng thái ghi danh của từng người dùng.
  *
  * Hai bảng này DÙNG CHUNG với package `@giaokhoa/enrol` (bề mặt vật
  * chất hoá cohort) — thứ tự chuyển đổi G5 trước, D5 (#657) sau
  * giữ nguyên như kế hoạch; repository này không đổi hình dạng
  * bảng hay ngữ nghĩa ghi nào của bề mặt đó.
  *
- * Khuôn truy vấn theo đúng pilot kho control plane (issue #640):
+ * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Cột đọc khai tường minh kèm bí danh camelCase dùng chung cho
  *   select và returning — KHÔNG bật CamelCasePlugin.
  * - Ghi qua hàm ánh xạ Insert/Update loại `undefined` tường minh
@@ -29,9 +25,7 @@ import type { CentreDb, CentreTx } from '../client';
  * `listExpiredActive`) giữ nguyên cách làm: chúng là một phần của
  * hợp đồng hành vi đã chốt, không đổi sang lọc tại SQL.
  *
- * Bề mặt kiểu dòng giữ đúng hình dạng `$inferSelect` của
- * repository cũ để phía tiêu thụ trong module enrol không đổi
- * hợp đồng.
+ * Kiểu dòng công khai dùng camelCase, được ánh xạ từ tên cột snake_case của database.
  */
 
 /** Handle kho trung tâm mà repository chấp nhận: thường hoặc trong giao dịch. */
@@ -39,9 +33,7 @@ export type EnrolDb = CentreDb | CentreTx;
 /** Handle giao dịch kho trung tâm. */
 export type EnrolTx = CentreTx;
 
-// ---------------------------------------------------------------------------
-// Kiểu dòng đọc (hợp đồng công khai — khớp `$inferSelect` của repository cũ)
-// ---------------------------------------------------------------------------
+// Kiểu dòng công khai: tên thuộc tính camelCase ánh xạ từ cột PostgreSQL.
 
 /** Dòng `enrol` (instance ghi danh của một khoá học). */
 export interface EnrolRow {

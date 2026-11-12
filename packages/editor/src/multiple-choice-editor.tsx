@@ -72,7 +72,7 @@ function sameIds(left: string[], right: string[]): boolean {
 }
 
 /**
- * Dựng extension decoration vẽ radio đáp án đúng (port từ giaokhoa).
+ * Decoration hiển thị radio đáp án đúng bên cạnh lựa chọn mà không thay đổi nội dung tài liệu.
  *
  * Decoration chỉ dựng lại khi TẬP id choice thay đổi (choice mới sinh
  * id, choice bị xoá, thứ tự đổi) — lựa chọn hiện tại được đọc từ

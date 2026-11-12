@@ -10,17 +10,9 @@ import { ProgramDumpService } from './program-dump.service';
 import { ProgramImportService } from './program-import.service';
 
 /**
- * CurriculumModule: chương trình GDPT 2018 (port từ giaokhoa). Phụ
- * thuộc Access cho PermissionEvaluator + ContextsService; Courses để
- * đăng ký frame provider (K0a). Tầng sách đã tách hẳn sang
- * BooksModule (K0b tái cấu trúc).
+ * Module chương trình GDPT 2018: dùng Access để kiểm tra quyền và Courses để gắn chương trình với khoá học; nghiệp vụ sách giáo khoa do BooksModule đảm nhiệm.
  *
- * Từ issue #646, CurriculumRepository sống ở `@giaokhoa/db` (lớp thuần,
- * không phụ thuộc Nest) nên module lắp nó bằng factory provider:
- * handle là handle Kysely định tuyến của kho trung tâm
- * (`SpaceDatabaseService.routedKysely`, dựng trên cùng
- * TenantAwarePool với phía bộ máy cũ để GUC/RLS theo ngữ cảnh tenant
- * hoạt động như cũ).
+ * `CurriculumRepository` được dựng từ handle Kysely `routedKysely` thay vì một kết nối cố định: mọi truy vấn phải vào đúng kho trung tâm của ngữ cảnh tenant và tuân thủ GUC/RLS.
  */
 @Module({
   imports: [AccessModule, CoursesModule, SpaceRoutingModule],

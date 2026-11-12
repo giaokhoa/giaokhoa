@@ -1,8 +1,5 @@
 /**
- * Repository của cụm XÃ HỘI trên Kysely — hạng mục nhân rộng G7
- * của chiến dịch chuyển tầng dữ liệu (issue #647), chuyển từ
- * repository cũ trước chuyển đổi ở
- * `apps/api/src/modules/social/social.repository.ts`.
+ * Repository của cụm XÃ HỘI trên Kysely.
  *
  * Vai trò: mọi truy cập tới bảy bảng của kho trung tâm thuộc
  * module xã hội — `tag_collection`, `tag`, `tag_instance`,

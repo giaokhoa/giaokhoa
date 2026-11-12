@@ -1,6 +1,5 @@
 /**
- * Repository của kho CONTROL PLANE trên Kysely — pilot chuyển đổi
- * bộ máy cũ → Kysely của chiến dịch chuyển tầng dữ liệu (issue #640).
+ * Repository của kho CONTROL PLANE trên Kysely.
  *
  * Vai trò: mọi truy cập tới sáu bảng của database control plane
  * (sổ đăng ký không gian, lịch sử quản trị sổ, registry phiên bản
@@ -12,8 +11,7 @@
  * thao tác vào một transaction khi cần bất biến "sổ + lịch sử cùng
  * thành/bại".
  *
- * Khuôn hình dạng dữ liệu ở biên repository (các nhóm nhân rộng làm
- * theo — xem mục playbook trong `AGENTS.md` của package):
+ * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong repository, truy vấn viết trên interface schema sinh
  *   bằng codegen: tên bảng/cột giữ nguyên snake_case của database,
  *   kiểu dòng nội bộ qua `Selectable`/`Insertable`/`Updateable`.

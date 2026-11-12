@@ -1,7 +1,5 @@
 /**
- * Repository của cụm BACKUP trên Kysely — chuyển đổi bộ máy cũ →
- * Kysely thuộc nhóm G8 của chiến dịch chuyển tầng dữ liệu (issue
- * #648).
+ * Repository của cụm BACKUP trên Kysely.
  *
  * Vai trò: mọi truy cập tới ba bảng backup_jobs, backup_job_steps
  * và backup_id_mappings của kho trung tâm tập trung ở đây. Phần dữ

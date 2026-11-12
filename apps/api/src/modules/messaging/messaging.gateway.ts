@@ -175,6 +175,8 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
    * `typing` không chuyển tiếp. Hội thoại nhóm không bị chạm.
    */
   /**
+   * Kiểm tra quan hệ chặn hai phía cho hội thoại trực tiếp; bỏ qua các hội thoại không phải loại một-một.
+   *
    * @param blockedIdsSource - Nguồn danh sách chặn dùng thay cho tra
    *   trực tiếp: `handleConnection` truyền vào một hàm tải-lười-một-
    *   lần để cả vòng lặp vào room dùng chung đúng một lượt tra; các

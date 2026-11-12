@@ -1,7 +1,5 @@
 /**
- * Repository của cụm SEARCH trên Kysely — chuyển đổi bộ máy cũ →
- * Kysely thuộc nhóm G8 của chiến dịch chuyển tầng dữ liệu (issue
- * #648).
+ * Repository của cụm SEARCH trên Kysely.
  *
  * Vai trò: mọi truy cập tới bảng search_documents của kho trung
  * tâm tập trung ở đây (ghi/gỡ tài liệu chỉ mục + engine truy vấn

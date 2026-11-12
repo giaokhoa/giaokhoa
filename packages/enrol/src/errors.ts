@@ -20,6 +20,8 @@ export class SharedDomainError extends Error {
   readonly code: string;
 
   /**
+   * Giữ mã nghiệp vụ riêng với thông điệp để tầng API dịch sang ProblemDetails ổn định.
+   *
    * @param code - mã lỗi kỹ thuật ổn định, không đổi theo ngôn ngữ hiển thị.
    * @param message - thông điệp lỗi tiếng Anh như bề mặt API hiện hành.
    */
@@ -44,6 +46,8 @@ export const ROLE_CONTEXT_CONFLICT_CODE = 'access.role_context_conflict';
  */
 export class RoleContextConflictError extends SharedDomainError {
   /**
+   * Gắn mã xung đột vai dùng chung cho mọi đường chặn gán vai và ghi danh.
+   *
    * @param message - thông điệp lỗi tiếng Anh như bề mặt API hiện hành.
    */
   constructor(message: string) {

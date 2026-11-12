@@ -1,7 +1,5 @@
 /**
- * Repository của cụm INTEGRATIONS trên Kysely — chuyển đổi
- * bộ máy cũ → Kysely thuộc nhóm G8 của chiến dịch chuyển tầng dữ
- * liệu (issue #648).
+ * Repository của cụm INTEGRATIONS trên Kysely.
  *
  * Vai trò: mọi truy cập tới hai bảng external_services và
  * external_tokens của kho trung tâm tập trung ở đây, cộng một truy

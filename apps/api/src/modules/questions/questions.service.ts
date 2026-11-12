@@ -109,7 +109,7 @@ interface NormalisedContent {
   answerKey: { guidance: RichTextDocument | null; solution: StoredSolution | null };
 }
 
-/** Bóc lỗi vi phạm unique của PostgreSQL (23505) dù bộ máy cũ có bọc qua cause hay không. */
+/** Kiểm tra unique violation 23505 cả khi PostgreSQL trả lỗi trực tiếp lẫn khi lỗi nằm trong `cause`. */
 function isUniqueViolation(err: unknown): boolean {
   let e: unknown = err;
   while (e !== null && typeof e === 'object') {

@@ -1,7 +1,5 @@
 /**
- * Repository của BỀ MẶT PHỤ HUYNH CHỈ-XEM trên Kysely — một phần của
- * nhóm G9 trong chiến dịch chuyển tầng dữ liệu sang Kysely
- * (issue #649).
+ * Repository của BỀ MẶT PHỤ HUYNH CHỈ-XEM trên Kysely.
  *
  * Vai trò: mọi truy vấn đọc phục vụ bề mặt tổng quan của phụ huynh
  * (PH-1, issue #130) tập trung ở đây: mốc xem trước của phụ huynh cho

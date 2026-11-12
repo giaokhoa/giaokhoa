@@ -1,7 +1,5 @@
 /**
- * `KyselyModule` — wiring NestJS tự dựng cho các handle Kysely, thay
- * vai trò mà module kết nối cơ sở dữ liệu của NestJS từng giữ cho
- * phía bộ máy cũ.
+ * `KyselyModule` đăng ký các handle Kysely cho ba kho thông qua provider NestJS và quản lý vòng đời của pool tương ứng.
  *
  * Vì sao tự dựng: Kysely không phát hành module NestJS chính thức;
  * pattern được nhà phát hành tài liệu hoá là tự tạo provider giữ

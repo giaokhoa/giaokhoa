@@ -2,32 +2,11 @@ import { Pool, type PoolClient, type PoolConfig } from 'pg';
 import { tenantAls } from '../modules/tenants/tenant-als';
 
 /**
- * Pool PostgreSQL gắn ngữ cảnh tenant vào mọi kết nối (TENANT-1, #196).
+ * Pool PostgreSQL gắn ngữ cảnh tenant từ `tenantAls` vào mọi kết nối ngay trước truy vấn đầu tiên sau mỗi lượt checkout.
  *
- * Vì sao ở tầng pool: 102 điểm inject `Database` trong API dùng chung
- * một pool của bộ máy cũ và chạy truy vấn trực tiếp trên pool (không qua
- * transaction bọc theo request). RLS fail-closed đòi hỏi MỌI truy vấn
- * trên các bảng mang `tenant_id` phải chạy với GUC đã đặt; đặt GUC ở
- * đây — một điểm duy nhất — là cơ chế tương đương wrapper: khi một kết
- * nối được checkout trong lúc ALS `tenantAls` mang ngữ cảnh tenant
- * (TenantGuard/TenantContextInterceptor nạp cho request,
- * TenantDbService nạp cho job/consumer), câu truy vấn đầu tiên trên kết
- * nối đó được chèn trước một `set_config` mức phiên:
+ * Vì truy vấn Kysely có thể chạy ngoài transaction tường minh, GUC dùng `set_config(..., false)` ở mức phiên. Ngữ cảnh tenant đặt `app.tenant_id` và `app.platform = 'off'`; ngữ cảnh platform đặt `app.platform = 'on'`; không có ngữ cảnh thì đặt tenant rỗng và platform tắt để RLS từ chối dữ liệu tenant.
  *
- *   - ngữ cảnh tenant: `app.tenant_id = <tenant>`, `app.platform='off'`
- *   - ngữ cảnh platform tường minh: `app.platform = 'on'`
- *   - ngoài ngữ cảnh: `app.tenant_id = ''`, `app.platform = 'off'`
- *     (fail-closed: chỉ thấy dòng platform ở các bảng cho phép)
- *
- * GUC mức phiên (tham số thứ ba = false) vì một checkout không đồng
- * nghĩa một transaction: các truy vấn thường của bộ máy cũ chạy ngoài
- * transaction tường minh. Client trả về pool rồi được checkout lại chỉ
- * CẬP NHẬT state gắn GUC (không bọc chồng hàm query) và gắn lại trước
- * câu truy vấn đầu tiên, nên GUC của ngữ cảnh trước không bao giờ rò
- * sang ngữ cảnh sau. Transaction tường minh (db.transaction) cũng
- * checkout qua đây: GUC phiên đặt trước BEGIN nên nhất quán trong
- * transaction, và `set_config(..., true)` trong TenantDbService vẫn
- * thắng ở phạm vi transaction.
+ * Khi pool tái sử dụng một client, trạng thái `tagged` được đặt lại để GUC từ request trước không rò sang request sau. Transaction cũng checkout qua pool này; `set_config(..., true)` trong transaction có thể ghi đè GUC ở phạm vi giao dịch khi cần.
  */
 interface TenantTagState {
   tagged: boolean;

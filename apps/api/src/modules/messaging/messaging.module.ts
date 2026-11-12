@@ -44,13 +44,7 @@ import { NotificationUnreadStreamService } from './notification-unread-stream.se
   controllers: [MessagingController, NotificationsController],
   providers: [
     {
-      // MessagingRepository nay là repository Kysely của `@giaokhoa/db`
-      // (issue #658): provider dựng bằng factory với handle kho
-      // trung tâm ĐÃ ĐỊNH TUYẾN THEO KHÔNG GIAN (`routedKysely`
-      // của SpaceDatabaseService) và cài đặt của cổng store dùng
-      // chung do `@giaokhoa/messaging` cấp trên cùng handle đó —
-      // repository uỷ quyền các phép đọc dùng chung qua cổng, nên
-      // `@giaokhoa/db` không phụ thuộc ngược vào `@giaokhoa/messaging`.
+      // Dùng cùng handle Kysely cho repository và `createMessagingStore`; repository uỷ quyền truy vấn đọc dùng chung qua cổng store để `@giaokhoa/db` không phụ thuộc ngược `@giaokhoa/messaging`.
       provide: MessagingRepository,
       useFactory: (spaceDb: SpaceDatabaseService) => new MessagingRepository(
         spaceDb.routedKysely,

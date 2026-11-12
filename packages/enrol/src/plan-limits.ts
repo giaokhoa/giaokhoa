@@ -77,6 +77,8 @@ export interface TenantSlotFacts {
  */
 export class PlanLimitsCore {
   /**
+   * Nhận handle dữ liệu và cổng platform để đếm slot không bị RLS của tenant hiện hành che khuất.
+   *
    * @param db - tay cầm Kysely của host.
    * @param runInPlatformScope - cổng chạy trong ngữ cảnh platform của host.
    */
@@ -138,13 +140,7 @@ export class PlanLimitsCore {
    * (context hệ thống/người dùng ở tầng platform).
    */
   async tenantIdForContext(contextId: string, tx?: EnrolDatabase): Promise<string | null> {
-    // Bên gọi có thể truyền handle của một transaction Kysely đang
-    // mở để việc đọc thấy đúng trạng thái trong giao dịch đó; không
-    // truyền thì đọc qua handle mặc định của bề mặt. Handle này CHỈ
-    // là handle Kysely: đường transaction bộ máy cũ của API (createClass)
-    // được facade `PlanLimitsService` giữ lại ở nhánh riêng của nó
-    // (điểm nối chuyển tiếp, chủ đóng #651) — lõi này không bao giờ
-    // nhận handle bộ máy cũ.
+    // Dùng handle transaction của caller để thấy dữ liệu chưa commit trong cùng giao dịch; nếu không có thì dùng handle mặc định.
     const db = tx ?? this.db;
     const row = await db.selectFrom('context').select(CONTEXT_COLUMNS_FOR_TENANT_ID).where('id', '=', contextId).executeTakeFirst();
     if (!row) return null;

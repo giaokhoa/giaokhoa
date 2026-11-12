@@ -42,11 +42,7 @@ import { ExamsService } from './exams.service';
   imports: [AccessModule, EventsModule, forwardRef(() => QuestionsModule), forwardRef(() => QuizModule), SiteConfigModule, TenantsModule, SpaceRoutingModule],
   controllers: [ExamsController, ExamPapersAliasController, CourseExamPinsController, ExamPinsController, ExamPinOverridesController, ExamPinFeedbacksController],
   providers: [
-    // Repository nay thuộc package @giaokhoa/db (issue #643): dựng trên
-    // handle Kysely định tuyến theo trung tâm — cùng pool
-    // TenantAwarePool với đường cũ trước đây nên ngữ cảnh
-    // GUC/RLS giữ nguyên. Token lớp giữ nguyên để các điểm tiêm và
-    // `app.get(ExamsRepository)` không đổi.
+    // ExamsRepository nhận handle định tuyến theo không gian để GUC/RLS và kho dữ liệu khớp với ngữ cảnh của request.
     { provide: ExamsRepository, useFactory: (spaceDb: SpaceDatabaseService) => new ExamsRepository(spaceDb.routedKysely), inject: [SpaceDatabaseService] },
     ExamsService, ExamDossiersService,
   ],

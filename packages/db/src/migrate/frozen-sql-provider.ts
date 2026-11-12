@@ -38,7 +38,7 @@ import { join } from 'node:path';
 import { sql } from 'kysely';
 import type { Migration, MigrationProvider } from 'kysely/migration';
 
-/** Dấu phân tách câu lệnh trong file migration — cùng dấu bộ máy bộ máy cũ dùng. */
+/** Dấu phân tách câu lệnh trong `migration.sql`; giữ nguyên để thực thi các carrier SQL đã đóng băng. */
 const STATEMENT_BREAKPOINT = '--> statement-breakpoint';
 
 /**

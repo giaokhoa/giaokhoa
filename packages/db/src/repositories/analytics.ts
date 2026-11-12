@@ -1,7 +1,5 @@
 /**
- * Repository của cụm ANALYTICS trên Kysely — chuyển đổi bộ máy cũ →
- * Kysely thuộc nhóm G8 của chiến dịch chuyển tầng dữ liệu (issue
- * #648).
+ * Repository của cụm ANALYTICS trên Kysely.
  *
  * Vai trò: mọi truy cập tới ba bảng analytics_models,
  * analytics_predictions và insights của kho trung tâm tập trung ở
@@ -9,8 +7,7 @@
  * provider, tính điểm và gác quyền nằm ở tầng service phía ứng
  * dụng; repository chỉ nhận handle do tầng ứng dụng truyền vào.
  *
- * Khuôn hình dạng dữ liệu ở biên repository (theo khuôn pilot kho
- * control plane):
+ * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong repository, truy vấn viết trên interface schema sinh
  *   bằng codegen: tên bảng/cột giữ nguyên snake_case của database.
  * - Bên ngoài, repository nhận/trả các hình dạng dòng camelCase như

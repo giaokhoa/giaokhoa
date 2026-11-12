@@ -154,7 +154,7 @@ export const CAPABILITY_DEFINITIONS: CapabilityDefinition[] = [
   { name: 'assign:manage', capType: 'write', contextLevel: 70, component: 'mod_assign', archetypes: { manager: CAP_ALLOW, editingteacher: CAP_ALLOW } },
   { name: 'assign:grade', capType: 'write', contextLevel: 70, component: 'mod_assign', archetypes: { manager: CAP_ALLOW, editingteacher: CAP_ALLOW, teacher: CAP_ALLOW } },
   { name: 'assign:viewallsubmissions', capType: 'read', contextLevel: 70, component: 'mod_assign', archetypes: { manager: CAP_ALLOW, editingteacher: CAP_ALLOW, teacher: CAP_ALLOW } },
-  // Curriculum (GDPT 2018, port từ giaokhoa — neo tại context của môn học)
+  // Capability chương trình GDPT 2018 đăng ký ở mức hệ thống (contextLevel 10); service kiểm tra tại context đích.
   { name: 'curriculum:view', capType: 'read', contextLevel: 10, component: 'core_curriculum', archetypes: { ...ALL_STAFF } },
   { name: 'curriculum:manage', capType: 'write', contextLevel: 10, component: 'core_curriculum', archetypes: { manager: CAP_ALLOW } },
   // Giao tiếp & Tương tác

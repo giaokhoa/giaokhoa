@@ -26,11 +26,7 @@ import { ClassesService } from './classes.service';
   controllers: [ClassesController],
   providers: [
     {
-      // ClassesRepository nay là repository Kysely của `@giaokhoa/db`
-      // (issue #645): provider dựng bằng factory với handle kho
-      // trung tâm ĐÃ ĐỊNH TUYẾN THEO KHÔNG GIAN (`routedKysely`
-      // của SpaceDatabaseService), cùng khuôn với các repository
-      // đã chuyển trước đó.
+      // Tạo repository trên handle Kysely định tuyến, tránh gắn cố định vào một kho khi request thuộc trung tâm có database riêng.
       provide: ClassesRepository,
       useFactory: (spaceDb: SpaceDatabaseService) => new ClassesRepository(spaceDb.routedKysely),
       inject: [SpaceDatabaseService],

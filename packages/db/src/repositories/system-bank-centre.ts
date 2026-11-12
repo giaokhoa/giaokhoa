@@ -1,8 +1,5 @@
 /**
- * Repository phía TRUNG TÂM của kho ngân hàng hệ thống trên
- * Kysely — hạng mục nhân rộng G10 của chiến dịch chuyển tầng dữ
- * liệu (issue #650), chuyển từ repository bộ máy cũ phía `apps/api`
- * theo khuôn pilot kho control plane (issue #640).
+ * Repository phía TRUNG TÂM của kho ngân hàng hệ thống trên Kysely.
  *
  * Vai trò: các bảng vệ tinh nằm trong kho nghiệp vụ của trung
  * tâm — bản ghi nhập bản chụp (`system_question_imports`), vết

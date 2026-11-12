@@ -3,13 +3,9 @@ import type { PaperQuality, PaperReading, PaperRosterEntry, PaperSlotLayout } fr
 import type { CentreDb } from '../client';
 
 /**
- * Kho dữ liệu của chấm bài giấy trên Kysely (CAM-0, issue #112;
- * chuyển Kysely tại issue #644, nhóm G4 của chiến dịch): lô phiếu
- * in (layout + roster đã chụp) và từng phiếu đã quét kèm vòng đời
- * hàng chờ. Mọi truy vấn nghiệp vụ nằm ở PaperGradingService; kho
- * này chỉ làm CRUD mỏng trên hai bảng `exam_batches`/`exam_scans`.
+ * Kho dữ liệu chấm bài giấy trên Kysely: lưu lô phiếu in cùng bố cục/danh sách học viên đã chụp và từng phiếu quét. Các phép cập nhật trạng thái dùng bảng `exam_batches` và `exam_scans`; quyết định nghiệp vụ thuộc `PaperGradingService`.
  *
- * Khuôn truy vấn theo đúng pilot kho control plane (issue #640):
+ * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Cột đọc khai tường minh kèm bí danh camelCase
  *   (`'exam_pin_id as examPinId'`) dùng chung cho select và
  *   returning — KHÔNG bật CamelCasePlugin (một nguồn sự thật là

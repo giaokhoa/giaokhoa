@@ -63,6 +63,8 @@ export class EventLogWriter {
   private readonly logger = new Logger(EventLogWriter.name);
 
   /**
+   * Cấp handle mặc định và bộ phân giải kho tuỳ chọn; mỗi lượt ghi cần dùng đúng kết nối của ngữ cảnh hiện hành.
+   *
    * @param db - Handle Kysely kho trung tâm (ở tầng ứng dụng là
    * facade định tuyến theo không gian).
    * @param resolveDb - Hàm phân giải handle theo ngữ cảnh, tuỳ

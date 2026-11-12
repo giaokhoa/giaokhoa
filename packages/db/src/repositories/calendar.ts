@@ -1,7 +1,5 @@
 /**
- * Repository của cụm LỊCH trên Kysely — hạng mục nhân rộng G7 của
- * chiến dịch chuyển tầng dữ liệu (issue #647), chuyển từ repository
- * bộ máy cũ ở `apps/api/src/modules/calendar/calendar.repository.ts`.
+ * Repository của cụm LỊCH trên Kysely.
  *
  * Vai trò: mọi truy cập tới ba bảng của kho trung tâm thuộc module
  * lịch — `calendar_events` (sự kiện, kèm chuỗi lặp và exception),
@@ -13,9 +11,7 @@
  * transaction đang mở) để phía gọi ghép nhiều thao tác vào một
  * transaction khi cần.
  *
- * Khuôn hình dạng dữ liệu ở biên repository — cùng khuôn pilot kho
- * control plane (xem mục "Sổ tay chuyển đổi repository sang Kysely"
- * trong `AGENTS.md` của package):
+ * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong, truy vấn viết trên interface schema sinh bằng
  *   codegen: tên bảng/cột giữ nguyên snake_case của database.
  * - Bên ngoài, repository trả/nhận các hình dạng dòng camelCase như

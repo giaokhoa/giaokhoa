@@ -21,10 +21,7 @@ import { PaperGradingService } from './paper-grading.service';
  * (outbox → event log cho các thao tác gán/sửa ở hàng chờ, như biên
  * bản sửa lỗi).
  *
- * PaperGradingRepository nay là repository Kysely của `@giaokhoa/db`
- * (issue #644): provider dựng bằng factory với handle kho trung
- * tâm đã định tuyến theo không gian (`routedKysely` của
- * SpaceDatabaseService).
+ * PaperGradingRepository dùng `routedKysely` từ SpaceDatabaseService để các phiếu và kết quả quét được ghi đúng kho của trung tâm.
  */
 @Module({
   imports: [AccessModule, QuizModule, EnrolModule, UsersModule, FilesModule, SiteConfigModule, EventsModule, SpaceRoutingModule],

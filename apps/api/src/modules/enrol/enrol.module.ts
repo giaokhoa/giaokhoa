@@ -24,11 +24,7 @@ import { EnrolService } from './enrol.service';
   controllers: [EnrolController, CourseEnrolmentsController],
   providers: [
     {
-      // EnrolRepository nay là repository Kysely của `@giaokhoa/db`
-      // (issue #645): provider dựng bằng factory với handle kho
-      // trung tâm ĐÃ ĐỊNH TUYẾN THEO KHÔNG GIAN (`routedKysely`
-      // của SpaceDatabaseService), cùng khuôn với các repository
-      // đã chuyển trước đó.
+      // Dùng handle Kysely định tuyến để mọi thao tác ghi danh thuộc database của trung tâm hiện hành.
       provide: EnrolRepository,
       useFactory: (spaceDb: SpaceDatabaseService) => new EnrolRepository(spaceDb.routedKysely),
       inject: [SpaceDatabaseService],

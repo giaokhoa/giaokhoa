@@ -3,19 +3,9 @@ import type { CentreDb, CentreTx } from '../client';
 import type { CourseRow } from './courses';
 
 /**
- * Kho dữ liệu lớp học trên Kysely (issue #645, nhóm G5 của chiến
- * dịch chuyển tầng dữ liệu sang Kysely): TOÀN BỘ bề mặt của
- * `ClassesRepository` cũ ở `apps/api`  được chuyển nguyên
- * vẹn sang đây — bảng `classes`, các truy vấn vật chất hoá phía lớp
- * (khoá của lớp, ghi danh active/đình chỉ suy từ instance cohort),
- * mã tham gia và hàng chờ tự báo danh. Ba lệnh ghi của giao dịch
- * tạo lớp (cohort nền qua repository groups, dòng lớp qua
- * `insertClass` tại đây, nối context cho cohort qua
- * `updateCohort` của repository groups) đã lật sang Kysely cùng
- * đợt access (#651) khi điểm nối C-8/B được hấp thụ: giao dịch
- * tạo lớp nay mở bằng `transaction` của repository này.
+ * Kho dữ liệu lớp học trên Kysely: quản lý lớp, mã tham gia, hàng chờ tự báo danh và các truy vấn khoá/ghi danh của lớp. Transaction tạo lớp gộp thao tác tạo cohort nền, tạo lớp và gắn context cho cohort để không để lại dữ liệu dở dang.
  *
- * Khuôn truy vấn theo đúng pilot kho control plane (issue #640):
+ * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Cột đọc khai tường minh kèm bí danh camelCase dùng chung cho
  *   select và returning — KHÔNG bật CamelCasePlugin.
  * - Ghi qua hàm ánh xạ Insert/Update loại `undefined` tường minh
@@ -29,9 +19,7 @@ import type { CourseRow } from './courses';
  *   đồng cũ (T-7: `count(*)` là int8, qua pg sẽ là `string` nếu
  *   không ép).
  *
- * Bề mặt kiểu dòng giữ đúng hình dạng `$inferSelect` của
- * repository cũ để phía tiêu thụ trong module classes không đổi
- * hợp đồng.
+ * Kiểu dòng công khai dùng camelCase, được ánh xạ từ tên cột snake_case của database.
  */
 
 /** Handle kho trung tâm mà repository chấp nhận: thường hoặc trong giao dịch. */
@@ -45,9 +33,7 @@ export const CLASS_WHOLE_GROUP_NAME = 'Cả lớp';
 /** Component đánh dấu backing cohort do module classes quản (không hiện ở bề mặt quản cohort thủ công). */
 export const CLASS_COHORT_COMPONENT = 'class';
 
-// ---------------------------------------------------------------------------
-// Kiểu dòng đọc (hợp đồng công khai — khớp `$inferSelect` của repository cũ)
-// ---------------------------------------------------------------------------
+// Kiểu dòng công khai: tên thuộc tính camelCase ánh xạ từ cột PostgreSQL.
 
 /** Dòng `classes`. */
 export interface ClassRow {
