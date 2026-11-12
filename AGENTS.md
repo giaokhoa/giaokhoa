@@ -29,6 +29,14 @@ hoặc trong issue đặc tả của chính việc đó trên GitHub:
   chính thư viện đó trước — tài liệu, cách dùng khuyến nghị, bộ
   rule và quy ước của nhà phát hành — và dùng đúng như vậy. Cấm
   đoán hành vi của thư viện hay uốn nó theo thói quen từ nơi khác.
+- **Không sinh script hạ tầng nếu framework đã hỗ trợ:** trước khi tạo
+  file `.js`/`.mjs`/`.sh`/`.sql` phục vụ bootstrap, build, proxy, CI hoặc
+  devcontainer, phải đối chiếu tài liệu chính thức của công cụ hiện tại
+  (pnpm, Docker Compose/PostgreSQL, Dev Containers, Nest CLI, React Router,
+  Kysely, Vitest). Ưu tiên cấu hình khai báo và CLI có sẵn. Chỉ viết code
+  điều phối riêng khi có hành vi thật sự chưa được hỗ trợ và có kiểm chứng
+  tương đương; ghi rõ trách nhiệm và thời điểm chạy của nó. Không coi việc
+  chuyển đoạn shell sang script mới là dọn sạch code.
 - **Thay đổi tối thiểu theo đúng task:** mọi thay đổi phải là tối
   thiểu cần thiết cho task: không mở rộng phạm vi, không refactor
   tiện tay, không đụng code không liên quan. Phát hiện ngoài phạm

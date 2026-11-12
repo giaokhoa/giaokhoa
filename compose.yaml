@@ -2,14 +2,12 @@
 # thống trên một máy (nền tảng đích: Dokploy quản lý chính file compose
 # này, Cloudflare Tunnel công bố service web ra ngoài).
 #
-# Topology GIỮ NGUYÊN một-origin như đường chạy production hiện hành:
-# trình duyệt chỉ nói chuyện với service web (cổng web là cổng duy nhất
-# của ứng dụng được publish ra host); web proxy /api/*, /socket.io/*,
-# /mcp và /.well-known/* về service api qua mạng nội bộ của compose
-# (GIAOKHOA_API_INTERNAL_URL), nên cookie đăng nhập và realtime hoạt động
-# đúng như trước. Ngoài cổng web, stack chỉ còn publish cổng 8085 của
-# Keycloak — và cổng đó bị bind vào loopback của host, chỉ Cloudflare
-# Tunnel chạy ngay trên host mới tới được (xem khối Keycloak ở dưới).
+# Topology một-origin: chỉ gateway Caddy publish cổng ứng dụng.
+# Caddy chuyển /api, /socket.io, /mcp và các endpoint OAuth metadata
+# về NestJS; các route còn lại về @react-router/serve để SSR. Cookie,
+# Host gốc và WebSocket được reverse_proxy quản lý theo Caddyfile.
+# API/worker/web không mở cổng công khai. Keycloak vẫn publish cổng
+# riêng 8085 nhưng chỉ bind loopback cho Cloudflare Tunnel.
 #
 # Cách dùng:
 #   cp .env.example .env   # rồi điền các giá trị bí mật thật
@@ -198,18 +196,35 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      PORT: 8080
+      PORT: 3000
       GIAOKHOA_API_INTERNAL_URL: http://api:3100
-    ports:
-      # Cổng của ứng dụng được publish ra host. Khi gắn Cloudflare
-      # Tunnel, tunnel trỏ vào đúng cổng này của máy host. (Keycloak
-      # có cổng riêng 8085 nhưng chỉ bind loopback — xem khối đó.)
-      - "${WEB_PORT:-8080}:8080"
     depends_on:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8080/login').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/login').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  # Mặt tiền HTTP duy nhất; toàn bộ proxy và chính sách tài liệu HTML
+  # nằm ở Caddyfile, không có server Node tự quản lý HTTP/WebSocket.
+  gateway:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      # Giữ cùng cổng công khai trước khi tách gateway.
+      - "${WEB_PORT:-8080}:8080"
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/api/v1/health"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -463,7 +478,7 @@ services:
       # dụng như trước.
       # Số cổng phía host lấy từ biến KEYCLOAK_HOST_PORT của môi
       # trường triển khai, mặc định 8085 — cùng khuôn với
-      # WEB_PORT của service web ở trên: một cổng host chỉ một
+      # WEB_PORT của service gateway ở trên: một cổng host chỉ một
       # stack giữ được, nên các stack nhân bản từ compose này
       # (chẳng hạn preview theo nhánh) phải đặt cổng riêng qua
       # biến này trong môi trường của service trên Dokploy;

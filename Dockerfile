@@ -64,14 +64,13 @@ USER node
 CMD ["node", "dist/main.js"]
 
 # ----- Runtime web -----
-# Chạy thẳng server production của web (server/prod-server.mjs): phục vụ
-# bản build SSR + tệp tĩnh và proxy /api/*, /socket.io/*, /mcp,
-# /.well-known/* về API nội bộ qua biến GIAOKHOA_API_INTERNAL_URL — giữ
-# nguyên topology một-origin như đường chạy production hiện hành.
+# Server SSR chính thức của React Router chỉ phục vụ trang và asset.
+# Caddy (service gateway) chịu trách nhiệm proxy API/Socket.IO/MCP,
+# CSP và cổng HTTP công khai; tiến trình web không tự proxy nữa.
 FROM node:24-bookworm-slim AS web
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build --chown=node:node /out/web ./
 USER node
-EXPOSE 8080
-CMD ["node", "server/prod-server.mjs"]
+EXPOSE 3000
+CMD ["./node_modules/.bin/react-router-serve", "build/server/index.js"]

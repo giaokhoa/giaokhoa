@@ -3,27 +3,17 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { Request } from 'express';
 
 /**
- * Số chặng proxy tin cậy đứng trước ứng dụng: đúng MỘT chặng — tiến
- * trình web (prod-server) đứng ở biên, sau Cloudflare Tunnel. Chặng
- * proxy ở biên nối địa chỉ IP gốc mà nó quan sát được vào PHÍA PHẢI
- * của header `X-Forwarded-For` (prod-server giữ nguyên các chặng
- * trước rồi nối IP của socket nó nhận — xem
- * apps/web/server/prod-server.mjs), nên IP khách thật luôn là phần
- * tử phải nhất của danh sách; mọi phần tử bên trái đều do khách tự
- * khai và có thể giả mạo.
+ * Số chặng proxy mà Express/Nest tin cậy: đúng MỘT gateway Caddy.
  *
- * Theo tài liệu chính thức của Express (guide "Behind proxies"),
- * `trust proxy` dạng số n nghĩa là chỉ tin tối đa n chặng tính từ
- * `req.socket.remoteAddress` đi ngược từ phải sang trái trong
- * `X-Forwarded-For`. Với n = 1, `req.ip` cho ra đúng phần tử phải
- * nhất (do chặng proxy ở biên nối thêm) khi chạy qua topology
- * production, và cho ra địa chỉ socket trực tiếp khi chạy local
- * không qua proxy — đúng ở cả hai môi trường.
+ * Caddy (`Caddyfile`) giữ nguyên Host, đọc địa chỉ khách theo
+ * `trusted_proxies_strict` từ phải sang trái, rồi gửi API duy nhất
+ * một IP đã chuẩn hóa qua `X-Forwarded-For: {client_ip}`. Vì vậy
+ * `trust proxy = 1` lấy chính IP đó thay vì tin chuỗi XFF gốc,
+ * vốn có thể chứa các phần tử giả mạo do client tự khai.
  *
- * KHÔNG dùng `trust proxy = true`: giá trị đó tin toàn bộ danh sách
- * và lấy phần tử TRÁI NHẤT — phần tử khách giả mạo được — khiến mọi
- * nơi ghi IP (phiên, nhật ký đăng nhập, đối chiếu allowlist của đối
- * tác) đều bị qua mặt.
+ * Khi gọi API trực tiếp tại local (không qua gateway), Express lấy
+ * địa chỉ socket. Không bật `trust proxy = true`: nó tin mọi
+ * phần tử XFF và có thể nhận IP giả ở đầu chuỗi.
  */
 export const TRUSTED_PROXY_HOPS = 1;
 

@@ -14,7 +14,7 @@
  *       trùng cho cùng query (đây là giá trị nghiệp vụ của lát —
  *       trang hết vòng chờ + tải hai lần).
  *   (c) CHƯA đăng nhập: loader không gọi bất kỳ API dữ liệu nghiệp
- *       vụ nào và trả state rỗng — mặt công khai (bản prerender)
+ *       vụ nào và trả state rỗng — mặt công khai (SSR không cookie)
  *       không dính dữ liệu cá nhân.
  *   (d) HTTP status sống sót qua đường prefetch: đáp ứng 403 thì
  *       `serverQueryFn` ném `ApiError` đúng status và QueryClient
@@ -426,7 +426,7 @@ describe('SL-1 — bộ nạp / (dashboard)', () => {
     expect(findQuery(dehydratedState, queryKeys.courseAccess('course-1'))).toBeUndefined();
   });
 
-  it('chưa đăng nhập: không gọi API nào, state rỗng — bản prerender mặt công khai không dính dữ liệu cá nhân', async () => {
+  it('chưa đăng nhập: không gọi API nào, state rỗng — HTML SSR công khai không dính dữ liệu cá nhân', async () => {
     const spy = stubHomeApi(STUDENT_ACCESS);
     const { dehydratedState } = await homeLoader({ request: anonymousRequest('/') });
     expect(spy).not.toHaveBeenCalled();

@@ -1,0 +1,42 @@
+# Mặt tiền duy nhất cho Docker Compose; Caddy quản lý proxy, websocket,
+# streaming, header và nén bằng tính năng chính thức, không dùng Node tự chế.
+{
+	admin off
+
+	servers {
+		# Caddy chạy sau Cloudflare Tunnel/Docker gateway: giữ nguyên
+		# X-Forwarded-Proto của chặng nội bộ đáng tin, tránh đưa HTTPS
+		# công khai thành HTTP khi API dựng URL đăng nhập/OAuth.
+		trusted_proxies static private_ranges
+		# Các proxy phía trước thêm IP ở bên phải; không tin IP
+		# giả ở đầu chuỗi do client tự khai.
+		trusted_proxies_strict
+	}
+}
+
+:8080 {
+	# Nén nội dung trả về; phản hồi SSE được Caddy stream trực tiếp.
+	encode zstd gzip
+
+	# So khớp exact và tiền tố có dấu /, không nuốt /apixyz hay /mcpfoo.
+	@api {
+		path /api /api/* /socket.io /socket.io/* /mcp /mcp/* /.well-known/oauth-protected-resource /.well-known/oauth-protected-resource/* /.well-known/oauth-authorization-server /.well-known/oauth-authorization-server/*
+	}
+	handle @api {
+		reverse_proxy {$GIAOKHOA_API_UPSTREAM:api:3100} {
+			# API dùng Express trust proxy = 1: chỉ một địa chỉ khách
+			# đã chuẩn hóa từ Caddy, không truyền nguyên chuỗi XFF.
+			header_up X-Forwarded-For {client_ip}
+		}
+	}
+
+	handle {
+		# Chỉ HTML nhận CSP; không thay đổi response API hay file JS/CSS.
+		header {
+			Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-src 'self' blob: https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+			X-Content-Type-Options nosniff
+			match header Content-Type *text/html*
+		}
+		reverse_proxy {$GIAOKHOA_WEB_UPSTREAM:web:3000}
+	}
+}

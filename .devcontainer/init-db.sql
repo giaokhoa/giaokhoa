@@ -1,4 +1,3 @@
--- Các DB test dùng tên chung với cấu hình API, worker và CI.
-CREATE DATABASE giaokhoa_test;
+-- Database test tách riêng cho API và worker để tránh ghi đè dữ liệu giữa các suite.
 CREATE DATABASE giaokhoa_test_api;
 CREATE DATABASE giaokhoa_test_worker;

@@ -49,4 +49,9 @@ biến nằm ở `apps/api`; web không tự "gác" nghiệp vụ bằng cách g
   `lib/auth-client.ts`); phía server, `lib/server-api.ts` đọc cùng cookie
   đó cho loader/SSR. Không còn token Bearer ở localStorage (đã chuyển sang
   cookie từ PR #257).
-- Dev: `pnpm dev` (proxy `/api` sang backend cổng 3000).
+- Dev: `pnpm dev` (Vite proxy `/api`, `/socket.io`, `/mcp` và
+  OAuth metadata về backend cổng 3000).
+- Production: `@react-router/serve` chỉ phục vụ SSR + asset trên
+  cổng nội bộ 3000; service Caddy ở `compose.yaml` làm reverse proxy
+  và gắn CSP cho HTML theo `Caddyfile`. Không prerender trang dựa
+  cookie; `/` và `/login` đều SSR theo request.

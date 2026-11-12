@@ -24,7 +24,7 @@ không bao giờ import code backend hay schema cơ sở dữ liệu.
 ## Điều kiện tiên quyết
 
 - Node 24 (trường `engines` của `package.json` gốc), pnpm theo trường `packageManager` của `package.json` gốc
-- PostgreSQL 18.6 tại `localhost:5432` (người dùng `postgres`/`postgres`, các DB `giaokhoa` và `giaokhoa_test`) — bắt buộc bản 18.x: khoá chính mặc định dùng hàm `uuidv7()` native
+- PostgreSQL 18.6 tại `localhost:5432` (người dùng `postgres`/`postgres`, DB `giaokhoa` và hai DB test riêng `giaokhoa_test_api`/`giaokhoa_test_worker`) — bắt buộc bản 18.x: khoá chính mặc định dùng hàm `uuidv7()` native
 - Redis tại `localhost:6379`
 
 ## Phát triển trong Dev Container
@@ -36,13 +36,14 @@ Features để cài Node 24, pnpm 12.14.0 (theo `packageManager` trong
 namespace với PostgreSQL 18.6 và Redis 7, vì vậy API, worker và test
 tiếp tục kết nối qua `localhost:5432` và `localhost:6379`.
 
-PostgreSQL tạo các database `giaokhoa`, `giaokhoa_test`, `giaokhoa_test_api` và
-`giaokhoa_test_worker` khi khởi tạo volume mới (tài khoản/mật khẩu:
-`postgres`/`postgres`). Đây là tên database kỹ thuật còn được sử dụng
-trong cấu hình API, worker, test và CI; tên workspace và tên hiển thị
-Dev Container đã dùng `GiaoKhoa`. Với volume PostgreSQL đã tồn tại,
-`init-db.sql` không chạy lại; cần tạo riêng các database còn thiếu,
-không xóa volume nếu muốn giữ dữ liệu.
+PostgreSQL tạo database `giaokhoa` qua biến `POSTGRES_DB`; hai database
+`giaokhoa_test_api` và `giaokhoa_test_worker` được khởi tạo bởi cơ chế chính
+thức `/docker-entrypoint-initdb.d` của PostgreSQL (tài khoản/mật
+khẩu: `postgres`/`postgres`). API và worker test dùng database
+riêng để không giẫm lên dữ liệu nhau. Dev Container chỉ khởi động
+sau khi PostgreSQL và Redis báo healthy. Với volume PostgreSQL đã
+tồn tại, `init-db.sql` không chạy lại; cần tạo riêng các database
+còn thiếu, không xóa volume nếu muốn giữ dữ liệu.
 
 Lần đầu tạo container sẽ chạy `pnpm install --frozen-lockfile` và tạo
 `apps/api/.env` / `apps/worker/.env` từ `.env.example` nếu chưa tồn
@@ -81,19 +82,19 @@ Toàn bộ stack production chạy tự host bằng Docker Compose trên máy
 chủ tự quản; nền tảng quản lý đích là Dokploy (quản lý chính file
 compose này) và Cloudflare Tunnel công bố service web ra ngoài.
 
-- `compose.yaml` ở gốc repo khai báo năm service: `postgres`
-  (image `postgres:18.6` — bắt buộc vì schema dùng `uuidv7()` của
-  PostgreSQL 18), `redis`, `api`, `worker`, `web`; kèm healthcheck,
-  thứ tự khởi động theo healthcheck và volume bền cho dữ liệu
-  PostgreSQL, Redis và tệp tải lên.
+- `compose.yaml` ở gốc repo khai báo `postgres`, `redis`, `api`,
+  `worker`, `web` và `gateway` (Caddy). PostgreSQL 18.6 cung cấp
+  `uuidv7()` native. Healthcheck/depends_on quản lý thứ tự khởi động;
+  volume giữ dữ liệu PostgreSQL, Redis và tệp tải lên.
 - `Dockerfile` ở gốc repo build cả ba ứng dụng từ monorepo (pnpm +
   turbo) và đóng gói bằng `pnpm deploy --prod` thành ba target
   runtime `api`, `worker`, `web`.
-- Topology giữ một-origin: chỉ service `web` publish cổng ra máy chủ
-  (mặc định 8080, đổi bằng biến `WEB_PORT` trong `.env`); web proxy
-  `/api/*`, `/socket.io/*`, `/mcp` và `/.well-known/*` về `api` trong
-  mạng nội bộ của compose, nên cookie đăng nhập và realtime giữ
-  nguyên hành vi như đường chạy production trước đây.
+- Topology một-origin: chỉ `gateway` (Caddy) publish cổng 8080,
+  có thể đổi bằng `WEB_PORT`. `Caddyfile` chuyển `/api`,
+  `/socket.io`, `/mcp` và OAuth metadata tới API, các request còn
+  lại tới `@react-router/serve` của service `web`. Caddy giữ Host
+  gốc, cookie và WebSocket/SSE; CSP gắn vào HTML. Web chạy SSR động,
+  không prerender `/`/`/login` để loader luôn nhận cookie của request.
 
 Dựng stack trên máy trống:
 
