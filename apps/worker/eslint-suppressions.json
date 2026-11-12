@@ -1,0 +1,57 @@
+{
+  "src/db/routing/space-job-runner.spec.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/processors/notification-digest.processor.ts": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "test/integration/activity/activity-due-reminder.int-spec.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "test/integration/classes/class-enrol-reconcile.int-spec.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "test/integration/engagement/engagement-jobs.int-spec.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "test/integration/enrol/enrol-completion-jobs.int-spec.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "test/integration/guardians/guardian-digest.int-spec.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "test/integration/notifications/notification-admin-policy.int-spec.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "test/integration/notifications/notification-badge-award.int-spec.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "test/integration/notifications/notification-email.int-spec.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "test/integration/platform/platform-jobs.int-spec.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  }
+}

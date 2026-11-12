@@ -1,3 +1,5 @@
+# Worktree riêng theo từng Issue (không đưa vào Git)
+/.worktrees/
 node_modules/
 dist/
 build/

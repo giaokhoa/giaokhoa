@@ -89,6 +89,34 @@ commit, đóng issue, review và merge, vòng đời label. Khi repo
 được tạo lại từ đầu, toàn bộ quy trình được dựng lại theo đúng
 chương này.
 
+### Worktree bắt buộc khi xử lý Issue
+
+1. **Mỗi Issue một worktree riêng dưới `.worktrees/`.** Tất cả
+   worktree phục vụ Issue phải đặt trong `<repo-root>/.worktrees/`
+   (ví dụ `.worktrees/fix-442-tenant-api-prefix`), và đường dẫn
+   `/.worktrees/` phải được khai trong `.gitignore`. Mỗi Issue có
+   worktree và nhánh riêng; không tái sử dụng worktree cho Issue khác.
+   Cấm sửa file nguồn, tạo commit hoặc chạy lệnh làm thay đổi code
+   trong worktree gốc đang checkout `main` hoặc `dev`; chỉ được
+   dùng worktree gốc để quản lý Git worktree.
+2. **Kiểm tra trước khi thi công.** Tại worktree gốc, chạy
+   `git status --short` và `git worktree list` trước khi tạo worktree.
+   Tạo bằng lệnh `git worktree add -b <type>/<số-issue>-<slug>
+   .worktrees/<type>-<số-issue>-<slug> dev`. Chỉ dùng `main`
+   làm nhánh gốc nếu `dev` chưa được thiết lập. Quy tắc tên nhánh
+   vẫn theo mục "Đặt tên branch" ở dưới.
+3. **Chưa có số Issue.** Khi cần chuẩn bị trước khi có Issue, dùng
+   worktree trong `.worktrees/` và nhánh tạm riêng, không tự đặt
+   số Issue giả. Đổi về nhánh đúng quy ước khi có Issue và trước PR.
+4. **Bảo toàn thay đổi.** Khi phát hiện sửa nhầm trong worktree gốc,
+   phải sao lưu, chuyển và đối chiếu đầy đủ thay đổi trước khi dọn
+   bản sai chỗ. Cấm dùng `git reset --hard` hoặc `git clean -fd`
+   để xoá dữ liệu chưa được xác minh đã chuyển an toàn.
+5. **Kiểm chứng và bàn giao.** Chạy lint, typecheck, test trong worktree
+   của Issue. Báo rõ đường dẫn worktree, nhánh, trạng thái Git và
+   giữ worktree gốc sạch (ngoại trừ thay đổi do người dùng chủ động
+   giữ lại).
+
 ### Flow nhánh dev và main
 
 Flow này có hiệu lực từ khi nhánh `dev` được thiết lập trong đợt tái

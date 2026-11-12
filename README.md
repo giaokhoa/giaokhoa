@@ -202,6 +202,20 @@ Giao diện mặc định là **tiếng Việt**. Chuyển sang tiếng Anh bằ
 chọn "Ngôn ngữ / Language" trên thanh trên cùng; API cũng trả lời bằng
 tiếng Việt theo mặc định và tôn trọng `Accept-Language: en`.
 
+## Kiểm tra lint
+
+`pnpm lint` ở root chỉ chạy `turbo run lint`; mỗi workspace có mã JS/TS tự
+khai `lint: eslint .` trong `package.json`. Turbo chạy song song và cache
+theo từng workspace; thay đổi ở `eslint.config.mjs` tại root sẽ làm mới
+cache của các task lint. Cấu hình ESLint duy nhất ở root tự phân rule
+JavaScript/Node, TypeScript, React Hooks và Vitest bằng glob. Package
+`@lms/config` chỉ có JSON nên không khai lint.
+
+Chạy riêng bằng `pnpm --filter @lms/web lint`. Những package còn lỗi cũ
+có `eslint-suppressions.json` của chính package, không tắt rule chung.
+Khi sửa hết một nhóm lỗi, chạy `pnpm --filter @lms/web exec eslint . --prune-suppressions`
+(ví dụ với web) để cập nhật baseline, rồi chạy lại `pnpm lint`.
+
 ## Kiểm chứng (định nghĩa "xanh")
 
 ```bash
