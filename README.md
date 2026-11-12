@@ -84,10 +84,11 @@ của Node 24, nhưng vẫn ưu tiên biến môi trường đã được export
 ở cổng 3000, web ở cổng 5173; worker xử lý tác vụ nền.
 
 Mỗi Git worktree có thư mục `apps/api` và `apps/worker` riêng:
-file `.env` không được Git đưa sang worktree mới. Khi tạo worktree,
-cần tạo hai file `.env` ở worktree đó theo mẫu (hoặc sao chép cấu hình
-local phù hợp từ worktree chính) rồi chạy migrate và `pnpm dev` ở
-đường dẫn worktree cần làm việc.
+file `.env` không được Git đưa sang worktree mới. **Ngay sau khi tạo
+worktree**, sao chép cả hai file `.env` từ worktree gốc sang worktree
+đích (không ghi đè file đã có), theo lệnh và yêu cầu bảo vệ bí mật trong
+`AGENTS.md`. Nếu file nguồn chưa tồn tại, tạo từ `.env.example` và
+cấu hình trước khi chạy migrate hoặc `pnpm dev` trong worktree mới.
 
 Nếu Dev Container sử dụng volume PostgreSQL **cũ** từ trước khi đổi tên
 database `lms` thành `giaokhoa`, biến `POSTGRES_DB` và
