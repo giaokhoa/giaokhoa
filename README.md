@@ -251,6 +251,10 @@ shareable để cache không dùng lại kết quả cũ khi rule thay đổi.
   config riêng `.oxlintrc.json`, kế thừa preset `@giaokhoa/oxlint-config`.
   Oxlint chạy typed linting và kiểm tra kiểu bằng compiler TS7; rule
   React Compiler và Vitest quan trọng đều có severity `error`.
+  Các workspace phụ thuộc vào declaration build của package khác
+  (`web`, `editor`, `messaging`) khai `lint.dependsOn: ["^build"]`
+  trong `turbo.json` riêng, vì type-aware lint cần `dist/*.d.ts` của
+  dependency ngay cả trên checkout CI sạch.
 - `packages/config` và `packages/oxlint-config` chỉ chứa JSON nên
   không cần task lint riêng; `packages/eslint-config` tự lint mã JS.
 
