@@ -37,7 +37,7 @@ function enqueueEvent(event: QueuedEvent): void {
 }
 
 async function flushEventQueue(): Promise<void> {
-  let queue: QueuedEvent[] = [];
+  let queue: QueuedEvent[];
   try {
     queue = JSON.parse(localStorage.getItem(QUEUE_KEY) ?? '[]') as QueuedEvent[];
   } catch {
@@ -133,11 +133,14 @@ export function PlayerPage() {
   // đổi mục.
   const file = data?.content.type === 'resource' ? data.content.file : undefined;
   const hls = file ? isHls(file.fileName, file.mimeType) : false;
+  const playableFileId = file && !hls && isInlineMime(file.mimeType) ? file.id : null;
+  const [previousPlayableFileId, setPreviousPlayableFileId] = useState(playableFileId);
+  if (playableFileId !== previousPlayableFileId) {
+    setPreviousPlayableFileId(playableFileId);
+    setFileUrl(null);
+  }
   useEffect(() => {
-    if (!file || hls || !isInlineMime(file.mimeType)) {
-      setFileUrl(null);
-      return;
-    }
+    if (!file || hls || !isInlineMime(file.mimeType)) return;
     let alive = true;
     let objectUrl: string | null = null;
     void (async () => {

@@ -23,10 +23,23 @@ import {
  * tenant), fixture và đọc kiểm chứng đi qua kết nối quản trị của
  * harness — khẳng định nghiệp vụ của spec không đổi.
  */
+type BackupArchiveView = {
+  format: string;
+  version: number;
+  scope?: string;
+  courseId?: string | null;
+  contributors: {
+    questions: { categories: number; questions: number; entries: number; versions: number };
+    badges: { badges: number; criteria: number };
+    calendar: { events: number; subscriptions: number };
+    courses?: unknown;
+  };
+};
+
 describe('Dịch vụ platform của worker: backup, reindex tìm kiếm, analytics, lịch báo cáo, riêng tư, thanh toán', () => {
   let context: INestApplicationContext;
   let harness: OrdinaryWorkerModuleHarness;
-  let db: any;
+  let db: OrdinaryWorkerModuleHarness["adminDb"];
   const suffix = Date.now() % 100000;
   const userId = `01950000-0000-7000-8000-${String(950000 + suffix).padStart(12, '0')}`;
   const teacherId = `01960000-0000-7000-8000-${String(960000 + suffix).padStart(12, '0')}`;
@@ -85,9 +98,10 @@ describe('Dịch vụ platform của worker: backup, reindex tìm kiếm, analyt
     const first = await processor.process({ data: { jobId: job.id } } as never);
     expect(first.status).toBe('completed');
     expect(first.sections).toBe(2);
-    const [row] = await db.selectFrom('backup_jobs').selectAll().where('id', '=', job.id).execute();
-    expect(row.archive.format).toBe('giaokhoa-backup');
-    expect(row.archive.version).toBe(1);
+    const row = await db.selectFrom('backup_jobs').selectAll().where('id', '=', job.id).executeTakeFirstOrThrow();
+    const archive = row.archive as BackupArchiveView;
+    expect(archive.format).toBe('giaokhoa-backup');
+    expect(archive.version).toBe(1);
     const second = await processor.process({ data: { jobId: job.id } } as never);
     expect(second.status).toBe('duplicate');
   });
@@ -116,12 +130,13 @@ describe('Dịch vụ platform của worker: backup, reindex tìm kiếm, analyt
     const processor = context.get(BackupProcessor);
     const result = await processor.process({ data: { jobId: job.id } } as never);
     expect(result.status).toBe('completed');
-    const [row] = await db.selectFrom('backup_jobs').selectAll().where('id', '=', job.id).execute();
-    expect(row.archive.format).toBe('giaokhoa-backup');
-    expect(row.archive.version).toBe(1);
-    expect(row.archive.contributors.questions).toEqual({ categories: 1, questions: 1, entries: 1, versions: 2 });
-    expect(row.archive.contributors.badges).toEqual({ badges: 1, criteria: 2 });
-    expect(row.archive.contributors.calendar).toEqual({ events: 1, subscriptions: 1 });
+    const row = await db.selectFrom('backup_jobs').selectAll().where('id', '=', job.id).executeTakeFirstOrThrow();
+    const archive = row.archive as BackupArchiveView;
+    expect(archive.format).toBe('giaokhoa-backup');
+    expect(archive.version).toBe(1);
+    expect(archive.contributors.questions).toEqual({ categories: 1, questions: 1, entries: 1, versions: 2 });
+    expect(archive.contributors.badges).toEqual({ badges: 1, criteria: 2 });
+    expect(archive.contributors.calendar).toEqual({ events: 1, subscriptions: 1 });
     const steps = await sql`select name from backup_job_steps where job_id = ${job.id}`.execute(db);
     expect((steps.rows as { name: string }[]).map((s) => s.name)).toEqual(
       expect.arrayContaining(['questions', 'badges', 'calendar']));
@@ -136,12 +151,13 @@ describe('Dịch vụ platform của worker: backup, reindex tìm kiếm, analyt
     const processor = context.get(BackupProcessor);
     const result = await processor.process({ data: { jobId: job.id } } as never);
     expect(result.status).toBe('completed');
-    const [row] = await db.selectFrom('backup_jobs').selectAll().where('id', '=', job.id).execute();
-    expect(row.archive.scope).toBe('site');
-    expect(row.archive.courseId).toBeNull();
-    expect(row.archive.contributors.questions.categories).toBeGreaterThanOrEqual(1);
-    expect(row.archive.contributors.badges.badges).toBeGreaterThanOrEqual(1);
-    expect(row.archive.contributors.courses).toBeUndefined();
+    const row = await db.selectFrom('backup_jobs').selectAll().where('id', '=', job.id).executeTakeFirstOrThrow();
+    const archive = row.archive as BackupArchiveView;
+    expect(archive.scope).toBe('site');
+    expect(archive.courseId).toBeNull();
+    expect(archive.contributors.questions.categories).toBeGreaterThanOrEqual(1);
+    expect(archive.contributors.badges.badges).toBeGreaterThanOrEqual(1);
+    expect(archive.contributors.courses).toBeUndefined();
   });
 
   it('bộ xử lý restore sao chép các mục sang khoá học đích và ghi ánh xạ id (không bao giờ là id gốc)', async () => {
@@ -191,8 +207,8 @@ describe('Dịch vụ platform của worker: backup, reindex tìm kiếm, analyt
     const processor = context.get(ReportScheduleProcessor);
     const result = await processor.process({ data: { scheduleId: schedule.id } } as never);
     expect(result.status).toBe('completed');
-    const [row] = await db.selectFrom('report_builder_schedule').selectAll().where('id', '=', schedule.id).execute();
-    expect(row.last_result.ranAs).toBe(teacherId);
+    const row = await db.selectFrom('report_builder_schedule').selectAll().where('id', '=', schedule.id).executeTakeFirstOrThrow();
+    expect(row.last_result).toHaveProperty('ranAs', teacherId);
     const notes = await sql`select id from notifications where user_id_to = ${teacherId} and event_type = 'report_scheduled'`.execute(db);
     expect(notes.rows.length).toBeGreaterThanOrEqual(1);
   });

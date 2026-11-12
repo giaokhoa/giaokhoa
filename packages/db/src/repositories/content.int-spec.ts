@@ -31,7 +31,7 @@ let pool: Pool;
 let db: CentreDb;
 let repo: ContentRepository;
 let courseId = '';
-let cmIds: string[] = [];
+const cmIds: string[] = [];
 
 beforeAll(async () => {
   if (!adminUrl) throw new Error('Thiếu GIAOKHOA_DB_TEST_ADMIN_URL/DATABASE_URL cho spec tích hợp');

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { ErrorAlert } from '#components/error-alert';
@@ -36,8 +37,8 @@ interface ConsentContext {
   oauthQuery: string;
 }
 
-function readConsentContext(): ConsentContext | null {
-  const search = window.location.search.replace(/^\?/, '');
+function readConsentContext(rawQuery: string): ConsentContext | null {
+  const search = rawQuery.replace(/^\?/, '');
   const params = new URLSearchParams(search);
   // AS có thể gói chuỗi authorize vào một tham số oauth_query duy
   // nhất, hoặc trải phẳng các tham số lên URL của trang này — đọc cả hai.
@@ -55,21 +56,19 @@ function readConsentContext(): ConsentContext | null {
 }
 
 export default function McpConsentPage() {
-  const [context, setContext] = useState<ConsentContext | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const location = useLocation();
+  const initialContext = useMemo(() => readConsentContext(location.search), [location.search]);
+  const [context, setContext] = useState<ConsentContext | null>(initialContext);
+  const [loadError] = useState<string | null>(() => initialContext ? null : 'Liên kết uỷ quyền không hợp lệ (thiếu thông tin ứng dụng). Hãy bắt đầu lại từ ứng dụng AI của bạn.');
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(
+    initialContext?.scopes.filter((scope) => scope !== 'giaokhoa.questions.write') ?? [],
+  ));
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
-    const parsed = readConsentContext();
-    if (!parsed) {
-      setLoadError('Liên kết uỷ quyền không hợp lệ (thiếu thông tin ứng dụng). Hãy bắt đầu lại từ ứng dụng AI của bạn.');
-      return;
-    }
-    setContext(parsed);
-    // Mọi scope NGOẠI TRỪ write được tích sẵn; write phải chủ động bật.
-    setSelected(new Set(parsed.scopes.filter((scope) => scope !== 'giaokhoa.questions.write')));
+    const parsed = initialContext;
+    if (!parsed) return;
     void (async () => {
       try {
         const res = await fetch(
@@ -89,7 +88,7 @@ export default function McpConsentPage() {
         // Không lấy được tên client thì hiển thị client_id — vẫn dùng được.
       }
     })();
-  }, []);
+  }, [initialContext]);
 
   async function submit(accept: boolean) {
     if (!context) return;

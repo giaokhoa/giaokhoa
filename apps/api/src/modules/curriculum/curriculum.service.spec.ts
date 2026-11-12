@@ -131,7 +131,7 @@ describe('CurriculumService.createOutcome — ghi tay gói text thành tài li�
       getNode: vi.fn(async () => ({ id: 'node-1', curriculumId: 'curr-1' })),
       getCurriculum: vi.fn(async () => ({ id: 'curr-1', subjectId: 'subj-1' })),
       getSubject: vi.fn(async () => ({ id: 'subj-1', contextId: 'ctx-sys' })),
-      insertOutcome: vi.fn(async (v: unknown) => inserted),
+      insertOutcome: vi.fn(async (_v: unknown) => inserted),
     };
     const evaluator = { requireCapability: vi.fn(async () => undefined) };
     const service = new CurriculumService(repo as never, {} as never, evaluator as never, { registerCurriculumFrameProvider: vi.fn() } as never);

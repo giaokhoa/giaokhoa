@@ -554,7 +554,7 @@ export function processSheetImage(data: Buffer, geometry: SheetGeometry, thresho
   const variantCode = variantDigits !== null ? { code: variantDigits } : null;
 
   // QR trên ảnh đã nắn (jsQR cần RGBA).
-  let qrText: string | null = null;
+  let qrText: string | null;
   try {
     const rgba = new Uint8ClampedArray(TEMPLATE_WIDTH * TEMPLATE_HEIGHT * 4);
     for (let i = 0; i < warped.gray.length; i++) {

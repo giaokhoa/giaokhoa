@@ -101,7 +101,7 @@ export function CalendarPage() {
   const [evCategoryId, setEvCategoryId] = useState('');
   const [subName, setSubName] = useState('');
   const [subUrl, setSubUrl] = useState('');
-  const now = useMemo(() => new Date(), []);
+  const [now] = useState(() => new Date());
   // Khoảng tháng cho query sự kiện: tính theo múi giờ ứng dụng qua
   // helper dùng chung với loader SL-1 (trước đây tính theo giờ máy
   // của trình duyệt — hai phía lệch múi giờ là key không bao giờ

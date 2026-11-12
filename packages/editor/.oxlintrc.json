@@ -1,0 +1,8 @@
+{
+  "extends": ["../oxlint-config/base.json", "../oxlint-config/react.json"],
+  "plugins": [],
+  "options": {
+    "typeAware": true,
+    "typeCheck": true
+  }
+}

@@ -80,13 +80,14 @@ describe('GradeFormula — bộ phân tích/đánh giá chuẩn (tính toán đi
   it('cú pháp sai và hàm không hỗ trợ bị từ chối bằng GradeFormulaError rõ lý do (foo không phải hàm Moodle)', () => {
     expect(() => parseGradeFormula('=sum([[a]],)')).toThrow(GradeFormulaError);
     expect(() => parseGradeFormula('=[[a]]+')).toThrow(/syntax|Unexpected/);
+    let thrown: unknown;
     try {
       parseGradeFormula('=foo([[a]],2)');
-      expect.unreachable();
-    } catch (e) {
-      expect(e).toBeInstanceOf(GradeFormulaError);
-      expect((e as GradeFormulaError).reason).toBe('unknown_function');
+    } catch (error) {
+      thrown = error;
     }
+    expect(thrown).toBeInstanceOf(GradeFormulaError);
+    expect((thrown as GradeFormulaError).reason).toBe('unknown_function');
     expect(() => parseGradeFormula('=[[a]]; process.exit(1)')).toThrow(GradeFormulaError); // không eval: ký tự lạ bị token hoá từ chối
   });
 
@@ -152,13 +153,14 @@ describe('GradeFormula — bộ phân tích/đánh giá chuẩn (tính toán đi
 
   it('sai số đối số của hàm mới bị từ chối lúc phân tích (power thiếu mũ, if thiếu nhánh, pi có đối số, round rỗng)', () => {
     for (const f of ['=power(1)', '=power(1,2,3)', '=if(1,2)', '=mod(1)', '=pi(1)', '=round()', '=sum()']) {
+      let thrown: unknown;
       try {
         parseGradeFormula(f);
-        expect.unreachable(f);
-      } catch (e) {
-        expect(e).toBeInstanceOf(GradeFormulaError);
-        expect((e as GradeFormulaError).reason).toBe('syntax');
+      } catch (error) {
+        thrown = error;
       }
+      expect(thrown).toBeInstanceOf(GradeFormulaError);
+      expect((thrown as GradeFormulaError).reason).toBe('syntax');
     }
   });
 

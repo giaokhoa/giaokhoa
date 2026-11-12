@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
@@ -145,15 +145,19 @@ export function MatrixImportPage() {
 
   // Đổi môn: giữ chương trình nếu còn thuộc môn mới, không thì tự
   // chọn chương trình đầu (cùng nhịp effect của màn tạo ma trận tay).
-  useEffect(() => {
+  const [previousCurriculumScope, setPreviousCurriculumScope] = useState({
+    subjectId: '',
+    curricula: undefined as typeof curriculaQuery.data,
+  });
+  if (previousCurriculumScope.subjectId !== subjectId || previousCurriculumScope.curricula !== curriculaQuery.data) {
+    setPreviousCurriculumScope({ subjectId, curricula: curriculaQuery.data });
     if (!subjectId) {
       setCurriculumId('');
-      return;
+    } else if (curriculaQuery.data) {
+      const rows = curriculaQuery.data;
+      setCurriculumId((prev) => (rows.some((c) => c.id === prev) ? prev : (rows[0]?.id ?? '')));
     }
-    const rows = curriculaQuery.data;
-    if (!rows) return;
-    setCurriculumId((prev) => (rows.some((c) => c.id === prev) ? prev : (rows[0]?.id ?? '')));
-  }, [subjectId, curriculaQuery.data]);
+  }
 
   /**
    * Bước 1 — tải workbook mẫu do server sinh cho đúng (môn, chương

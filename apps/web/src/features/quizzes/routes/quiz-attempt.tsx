@@ -197,17 +197,20 @@ export function QuizAttemptPage() {
   // chốt): lấp các ô trả lời cục bộ còn trống bằng response phía
   // server — đúng nhịp gộp của reload thủ công trước đây, không bao
   // giờ đè lên chữ người dùng đang gõ.
-  useEffect(() => {
+  const [previousAttemptData, setPreviousAttemptData] = useState<typeof attemptQuery.data>(undefined);
+  if (previousAttemptData !== attemptQuery.data) {
+    setPreviousAttemptData(attemptQuery.data);
     const fresh = attemptQuery.data;
-    if (!fresh) return;
-    setResponses((prev) => {
-      const next = { ...prev };
-      for (const q of fresh.questions) {
-        if (next[q.questionAttemptId] === undefined && q.response !== null) next[q.questionAttemptId] = q.response;
-      }
-      return next;
-    });
-  }, [attemptQuery.data]);
+    if (fresh) {
+      setResponses((prev) => {
+        const next = { ...prev };
+        for (const q of fresh.questions) {
+          if (next[q.questionAttemptId] === undefined && q.response !== null) next[q.questionAttemptId] = q.response;
+        }
+        return next;
+      });
+    }
+  }
 
   const inProgress = view?.attempt.state === 'inprogress';
   const deadline = useMemo(() => {
@@ -226,7 +229,7 @@ export function QuizAttemptPage() {
   // tự chốt lượt ở tương tác này) — ref giữ hàm refetch mới nhất để
   // effect chỉ chạy theo hai điều kiện dưới đây như bản thủ công.
   const refetchRef = useRef(attemptQuery.refetch);
-  refetchRef.current = attemptQuery.refetch;
+  useEffect(() => { refetchRef.current = attemptQuery.refetch; }, [attemptQuery.refetch]);
   useEffect(() => {
     if (remainingSeconds === 0 && inProgress) void refetchRef.current().catch(() => undefined);
   }, [remainingSeconds, inProgress]);

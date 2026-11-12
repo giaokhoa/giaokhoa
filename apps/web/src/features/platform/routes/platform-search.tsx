@@ -97,20 +97,27 @@ export function SearchPage() {
   // Đồng bộ theo q trên URL: chạy mỗi lần q xuất hiện/đổi (lần vào
   // trang đầu tiên cũng là một lần q "xuất hiện"). Không có tham số
   // q (vào /search trần) thì giữ nguyên trạng thái khởi tạo.
-  useEffect(() => {
-    if (urlQ === null) return;
-    setQ(urlQ);
-    if (urlQ.trim()) {
-      void runSearch(urlQ);
-    } else {
-      // Dọn về trạng thái chưa tìm VÀ vô hiệu hoá mọi lượt đang bay:
-      // kết quả của chúng về sau không được hồi sinh danh sách vừa
-      // dọn.
-      latestSearchRef.current += 1;
+  // Dữ liệu trong URL chỉ cập nhật form khi chính URL thay đổi.
+  const [previousUrlQ, setPreviousUrlQ] = useState<string | null>(null);
+  if (previousUrlQ !== urlQ) {
+    setPreviousUrlQ(urlQ);
+    if (urlQ !== null) setQ(urlQ);
+    if (urlQ === '') {
       setResults([]);
       setSearched(false);
     }
-  }, [urlQ, runSearch]);
+  }
+  useEffect(() => {
+    if (urlQ === null) return;
+    const runId = ++latestSearchRef.current;
+    if (!urlQ.trim()) return;
+    // Request chỉ được ghi vào state nếu còn là lượt mới nhất.
+    void queryClient.fetchQuery(globalSearchQueryOptions(urlQ)).then((docs) => {
+      if (runId !== latestSearchRef.current) return;
+      setResults(docs);
+      setSearched(true);
+    });
+  }, [urlQ, queryClient]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();

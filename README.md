@@ -238,17 +238,28 @@ tiếng Việt theo mặc định và tôn trọng `Accept-Language: en`.
 
 ## Kiểm tra lint
 
-`pnpm lint` ở root chỉ chạy `turbo run lint`; mỗi workspace có mã JS/TS tự
-khai `lint: eslint .` trong `package.json`. Turbo chạy song song và cache
-theo từng workspace; thay đổi ở `eslint.config.mjs` tại root sẽ làm mới
-cache của các task lint. Cấu hình ESLint duy nhất ở root tự phân rule
-JavaScript/Node, TypeScript, React Hooks và Vitest bằng glob. Package
-`@giaokhoa/config` chỉ có JSON nên không khai lint.
+`pnpm lint` tại root chỉ điều phối qua `turbo run lint`. Mỗi workspace
+sở hữu lệnh `lint` và file cấu hình của mình; Turbo theo dõi cấu hình
+shareable để cache không dùng lại kết quả cũ khi rule thay đổi.
 
-Chạy riêng bằng `pnpm --filter @giaokhoa/web lint`. Những package còn lỗi cũ
-có `eslint-suppressions.json` của chính package, không tắt rule chung.
-Khi sửa hết một nhóm lỗi, chạy `pnpm --filter @giaokhoa/web exec eslint . --prune-suppressions`
-(ví dụ với web) để cập nhật baseline, rồi chạy lại `pnpm lint`.
+- **TypeScript 6** (`api`, `worker`, `db`, `enrol`, `payments`): dùng
+  ESLint 10 + `typescript-eslint` 8, config riêng `eslint.config.mjs`,
+  kế thừa preset `@giaokhoa/eslint-config`. Parser dùng TypeScript 6
+  riêng từ alias `@typescript/typescript6` (không bật typed linting).
+- **TypeScript 7** (`web`, `contracts`, `editor`, `grades`, `messaging`,
+  `ui`): dùng Oxlint 1.93.0 + `oxlint-tsgolint` 7,
+  config riêng `.oxlintrc.json`, kế thừa preset `@giaokhoa/oxlint-config`.
+  Oxlint chạy typed linting và kiểm tra kiểu bằng compiler TS7; rule
+  React Compiler và Vitest quan trọng đều có severity `error`.
+- `packages/config` và `packages/oxlint-config` chỉ chứa JSON nên
+  không cần task lint riêng; `packages/eslint-config` tự lint mã JS.
+
+Lệnh chạy riêng: `pnpm --filter @giaokhoa/web lint` hoặc
+`pnpm --filter @giaokhoa/api lint`. Chỉ API còn baseline
+`eslint-suppressions.json` cho lỗi cũ; những workspace đã sạch đã bỏ file.
+Khi sửa lỗi API, chạy
+`pnpm --filter @giaokhoa/api exec eslint . --prune-suppressions` để
+xóa những mục không còn cần.
 
 ## Kiểm chứng (định nghĩa "xanh")
 

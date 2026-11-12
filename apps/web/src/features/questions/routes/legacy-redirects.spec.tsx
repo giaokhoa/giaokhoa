@@ -144,9 +144,7 @@ describe('URL ngân hàng cũ — chuyển hướng sang path mới (issue #221)
       );
 
       await waitFor(() => expect(router.state.location.pathname).toBe(redirectCase.toPath));
-      if (redirectCase.toSearch !== undefined) {
-        expect(router.state.location.search).toBe(redirectCase.toSearch);
-      }
+      expect(redirectCase.toSearch === undefined || router.state.location.search === redirectCase.toSearch).toBe(true);
     });
   }
 });
@@ -207,9 +205,7 @@ describe('URL kho học liệu cũ — chuyển hướng sang path mới (issue 
       );
 
       await waitFor(() => expect(router.state.location.pathname).toBe(redirectCase.toPath));
-      if (redirectCase.toSearch !== undefined) {
-        expect(router.state.location.search).toBe(redirectCase.toSearch);
-      }
+      expect(redirectCase.toSearch === undefined || router.state.location.search === redirectCase.toSearch).toBe(true);
     });
   }
 });

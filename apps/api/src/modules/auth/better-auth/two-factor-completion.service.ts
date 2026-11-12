@@ -137,7 +137,7 @@ export class TwoFactorCompletionService {
     if (!this.totp) {
       throw new TwoFactorCompletionError(500, 'mfa_status_unavailable', 'Could not verify multi-factor authentication status');
     }
-    let valid = false;
+    let valid: boolean;
     try {
       valid = await this.totp.verifyForUser(challenge.userId, code);
     } catch {
@@ -187,7 +187,7 @@ export class TwoFactorCompletionService {
     const origin = req.headers.origin;
     if (origin) {
       const trustedOrigins = ctx.options.trustedOrigins ?? [];
-      let baseOrigin: string | null = null;
+      let baseOrigin: string | null;
       try {
         baseOrigin = new URL(ctx.baseURL).origin;
       } catch {

@@ -11,11 +11,11 @@ import { MatrixImportService } from './matrix-import.service';
 import { ExamsService } from '../exams/exams.service';
 import {
   copyExamMatrixSchema, createExamMatrixCellSchema, createExamMatrixSchema, createMatrixContributionSchema,
-  generateFromMatrixSchema, gradeQuizQuestionSchema, manualGradeQuizSchema,
+  generateFromMatrixSchema, manualGradeQuizSchema,
   recordQuizAttemptEventSchema, submitQuizResponseSchema, updateExamMatrixCellSchema, updateExamMatrixSchema,
   withdrawExamMatrixSchema,
   type CopyExamMatrixDto, type CreateExamMatrixCellDto, type CreateExamMatrixDto, type CreateMatrixContributionDto,
-  type GenerateFromMatrixDto, type GradeQuizQuestionDto, type ManualGradeQuizDto,
+  type GenerateFromMatrixDto, type ManualGradeQuizDto,
   type RecordQuizAttemptEventDto, type SubmitQuizResponseDto, type UpdateExamMatrixCellDto, type UpdateExamMatrixDto,
   type WithdrawExamMatrixDto,
 } from './dto/quiz.dto';

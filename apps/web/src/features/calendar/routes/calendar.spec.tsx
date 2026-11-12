@@ -163,8 +163,8 @@ describe('Trang lịch — tạo sự kiện và đăng ký', () => {
       expect(calls.some((c) => c.url === '/api/v1/calendar/events' && c.method === 'POST')).toBe(true),
     );
     const createCall = calls.find((c) => c.url === '/api/v1/calendar/events' && c.method === 'POST');
-    expect(createCall?.body).toMatchObject({ name: 'Họp nhóm', eventType: 'user', timeDuration: 3600 });
-    expect(typeof (createCall?.body as { timeStart?: unknown }).timeStart).toBe('string');
+    expect(createCall!.body).toMatchObject({ name: 'Họp nhóm', eventType: 'user', timeDuration: 3600 });
+    expect(typeof (createCall!.body as { timeStart?: unknown }).timeStart).toBe('string');
     expect(await screen.findByText('Họp nhóm')).toBeInTheDocument();
     expect(await screen.findByText('Đã tạo sự kiện.')).toBeInTheDocument();
   });
@@ -182,7 +182,7 @@ describe('Trang lịch — tạo sự kiện và đăng ký', () => {
       expect(calls.some((c) => c.url === '/api/v1/calendar/subscriptions' && c.method === 'POST')).toBe(true),
     );
     const createCall = calls.find((c) => c.url === '/api/v1/calendar/subscriptions' && c.method === 'POST');
-    expect(createCall?.body).toEqual({ name: 'Lịch trường', url: 'https://example.com/cal.ics', eventType: 'user' });
+    expect(createCall!.body).toEqual({ name: 'Lịch trường', url: 'https://example.com/cal.ics', eventType: 'user' });
 
     await userEvent.click(await screen.findByRole('button', { name: 'Nhập ngay' }));
     await waitFor(() =>

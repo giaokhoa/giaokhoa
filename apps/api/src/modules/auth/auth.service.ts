@@ -298,7 +298,7 @@ export class AuthService {
    * hành mang `@PlatformRoute()`; user bật MFA thì dừng ở challenge
    * của luồng platform như luồng token.
    */
-  async platformLogin(username: string, password: string, ip?: string, userAgent?: string): Promise<PlatformLoginOutcome> {
+  async platformLogin(username: string, password: string, ip?: string, _userAgent?: string): Promise<PlatformLoginOutcome> {
     const user = await this.validateCredentials(username, password, ip);
     if (!(await this.evaluator.isPlatformSiteAdmin(user.id))) {
       throw new ForbiddenException({ message: 'Only platform administrators may use this login surface', code: 'auth.platform_admin_required' });
@@ -320,7 +320,7 @@ export class AuthService {
    * (cùng lý do: không dùng phép hợp nhất một chiều của
    * `isSiteAdmin` cho cổng platform).
    */
-  async verifyPlatformMfa(challengeToken: string, code: string, ip?: string, userAgent?: string): Promise<{ user: UserRow; accessToken: string; expiresIn: number }> {
+  async verifyPlatformMfa(challengeToken: string, code: string, ip?: string, _userAgent?: string): Promise<{ user: UserRow; accessToken: string; expiresIn: number }> {
     const user = await this.passMfaChallenge(challengeToken, code, ip, 'platform');
     if (!(await this.evaluator.isPlatformSiteAdmin(user.id))) {
       throw new ForbiddenException({ message: 'Only platform administrators may use this login surface', code: 'auth.platform_admin_required' });

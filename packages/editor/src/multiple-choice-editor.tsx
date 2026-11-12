@@ -1,4 +1,5 @@
-import { useId, useMemo, useRef } from 'react';
+import { useEffect, useId, useState, useMemo } from 'react';
+import { createEditorControlStore } from './editor-control-store.js';
 import { Decoration, Extension, type WidgetDecoration } from '@tiptap/core';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { RichTextDocument } from '@giaokhoa/contracts';
@@ -83,7 +84,7 @@ function sameIds(left: string[], right: string[]): boolean {
  * @param controlRef - Ref giữ điều khiển radio mới nhất.
  * @returns Extension Tiptap mang decoration radio.
  */
-function createCorrectChoiceDecoration(controlRef: { current: CorrectChoiceControl }) {
+function createCorrectChoiceDecoration(getControl: () => CorrectChoiceControl) {
   return Extension.create({
     name: 'correctChoiceDecoration',
 
@@ -111,13 +112,13 @@ function createCorrectChoiceDecoration(controlRef: { current: CorrectChoiceContr
 
                   const input = document.createElement('input');
                   input.type = 'radio';
-                  input.name = controlRef.current.groupName;
+                  input.name = getControl().groupName;
                   input.className = 'giaokhoa-choice__correct-input';
                   input.setAttribute('aria-label', 'Đặt làm đáp án đúng');
-                  input.checked = controlRef.current.correctChoiceId === choiceId;
+                  input.checked = getControl().correctChoiceId === choiceId;
                   input.addEventListener('change', () => {
                     if (input.checked) {
-                      controlRef.current.onCorrectChoiceChange(choiceId);
+                      getControl().onCorrectChoiceChange(choiceId);
                     }
                   });
 
@@ -183,18 +184,14 @@ export function MultipleChoiceEditor({
   onRequestImage,
 }: MultipleChoiceEditorProps) {
   const groupName = useId();
-  const controlRef = useRef<CorrectChoiceControl>({
-    groupName,
-    correctChoiceId,
-    onCorrectChoiceChange,
-  });
-  controlRef.current.groupName = groupName;
-  controlRef.current.correctChoiceId = correctChoiceId;
-  controlRef.current.onCorrectChoiceChange = onCorrectChoiceChange;
+  const [control] = useState(() => createEditorControlStore({ groupName, correctChoiceId, onCorrectChoiceChange }));
+  useEffect(() => {
+    control.update({ groupName, correctChoiceId, onCorrectChoiceChange });
+  }, [control, groupName, correctChoiceId, onCorrectChoiceChange]);
 
   const extensions = useMemo(
-    () => [...multipleChoiceExtensions, createCorrectChoiceDecoration(controlRef)],
-    [],
+    () => [...multipleChoiceExtensions, createCorrectChoiceDecoration(control.get)],
+    [control.get],
   );
 
   return (

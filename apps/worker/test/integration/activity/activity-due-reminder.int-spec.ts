@@ -38,7 +38,7 @@ import {
 describe('Nhắc sắp đến hạn hoạt động của worker (N5, issue #50)', () => {
   let context: INestApplicationContext;
   let harness: OrdinaryWorkerModuleHarness;
-  let db: any;
+  let db: OrdinaryWorkerModuleHarness["adminDb"];
   const suffix = Date.now();
 
   const uid = (n: number) => `01900000-0000-7000-8000-${String(910000 + n * 37 + (suffix % 1000)).padStart(12, '0')}`;

@@ -95,7 +95,7 @@ describe('Ngân hàng câu hỏi dùng chung (feat #70)', () => {
     return bank!;
   }
 
-  async function createQuestion(token: string, categoryId: string, name: string, text: string): Promise<QuestionViewBody> {
+  async function createQuestion(token: string, categoryId: string, _name: string, text: string): Promise<QuestionViewBody> {
     const res = await http(app).post('/api/v1/questions').set(bearer(token)).send({
       categoryId, qtype: 'multichoice', questionText: text,
       answers: [{ text: 'Đáp án đúng', correct: true }, { text: 'Đáp án sai', correct: false }, { text: 'Đáp án khác 1', correct: false }, { text: 'Đáp án khác 2', correct: false }],

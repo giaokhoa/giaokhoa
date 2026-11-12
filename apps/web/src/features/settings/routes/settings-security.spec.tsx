@@ -22,12 +22,6 @@ const PROFILE = {
   customFields: [],
 };
 
-const GOOGLE_LINK = {
-  id: '01900000-0000-7000-8000-000000000101',
-  issuer: 'google',
-  email: 'learner@gmail.example.com',
-  createdAt: '2026-10-01T08:00:00.000Z',
-};
 
 const CURRENT_SESSION = {
   id: '01900000-0000-7000-8000-000000000201',

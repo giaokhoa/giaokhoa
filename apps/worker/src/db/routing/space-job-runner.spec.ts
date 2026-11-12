@@ -70,7 +70,7 @@ function makeRunner(options?: { target?: ResolvedSpaceConnection; resolveError?:
 
 describe('Bộ chạy job theo trung tâm', () => {
   it('job của trung tâm ở kho riêng chạy trong phiên theo trung tâm: ngữ cảnh mang slug và tenant của job', async () => {
-    const { runner, sessions, spaceDb } = makeRunner();
+    const { runner, sessions } = makeRunner();
     const observed = await runner.runForJob(
       { spaceSlug: 'trung-tam-a', tenantId: 'tenant-a' },
       async () => tenantAls.getStore(),

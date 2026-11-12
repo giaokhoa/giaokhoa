@@ -17,7 +17,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit && react-router build",
-    "lint": "eslint .",
+    "lint": "oxlint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
@@ -65,6 +65,9 @@
     "tailwindcss": "^4.3.3",
     "typescript": "catalog:",
     "vite": "^8.3.5",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@giaokhoa/oxlint-config": "workspace:*",
+    "oxlint": "1.93.0",
+    "oxlint-tsgolint": "7.0.2006"
   }
 }

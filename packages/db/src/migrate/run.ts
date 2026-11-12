@@ -37,9 +37,6 @@ import {
   createCentreKysely,
   createControlPlaneKysely,
   createSystemBankKysely,
-  type CentreDb,
-  type ControlPlaneDb,
-  type SystemBankDb,
 } from '../client';
 import { applyStoreMigrations } from './apply';
 import { isMigrationStoreKey, MIGRATION_STORES, type MigrationStoreKey } from './stores';
@@ -83,18 +80,6 @@ function poolConfigFor(store: MigrationStoreKey): PoolConfig {
   return { connectionString: url };
 }
 
-/** Dựng handle Kysely của kho trên pool đã cấp (đúng factory của package). */
-function createStoreKysely(store: MigrationStoreKey, pool: Pool): Kysely<any> {
-  switch (store) {
-    case 'centre':
-      return createCentreKysely(pool) as CentreDb as Kysely<any>;
-    case 'control-plane':
-      return createControlPlaneKysely(pool) as ControlPlaneDb as Kysely<any>;
-    case 'system-bank':
-      return createSystemBankKysely(pool) as SystemBankDb as Kysely<any>;
-  }
-}
-
 /** In hướng dẫn dùng rồi trả mã thoát cho lỗi tham số (không ném stack dài cho lỗi gõ lệnh). */
 function usage(): number {
   console.error(
@@ -115,7 +100,23 @@ async function main(argv: string[]): Promise<number> {
   const store = storeArg as MigrationStoreKey;
   const migrationsDir = join(packageRoot(), 'migrations', MIGRATION_STORES[store].migrationsDirName);
   const pool = new Pool(poolConfigFor(store));
-  const db = createStoreKysely(store, pool);
+  switch (store) {
+    case 'centre':
+      return runWithStoreDb(createCentreKysely(pool), store, migrationsDir, verifyOnly);
+    case 'control-plane':
+      return runWithStoreDb(createControlPlaneKysely(pool), store, migrationsDir, verifyOnly);
+    case 'system-bank':
+      return runWithStoreDb(createSystemBankKysely(pool), store, migrationsDir, verifyOnly);
+  }
+}
+
+/** Chạy migration trên handle có schema riêng mà không làm mất kiểu DB. */
+async function runWithStoreDb<DB>(
+  db: Kysely<DB>,
+  store: MigrationStoreKey,
+  migrationsDir: string,
+  verifyOnly: boolean,
+): Promise<number> {
   try {
     if (verifyOnly) {
       const result = await verifyStore(db, store);
@@ -153,6 +154,7 @@ async function main(argv: string[]): Promise<number> {
     await db.destroy().catch(() => undefined);
   }
 }
+
 
 // Điểm vào CLI: chỉ chạy khi file được gọi trực tiếp (không chạy
 // khi module bị import từ spec — spec import các hàm qua module

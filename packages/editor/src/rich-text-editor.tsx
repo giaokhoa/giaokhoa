@@ -194,10 +194,13 @@ export function RichTextEditor({
 }: RichTextEditorProps) {
   const [mathPanel, setMathPanel] = useState<MathPanelState | null>(null);
   const [active, setActive] = useState(false);
-  const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
+  const headerTarget =
+    active && typeof document !== 'undefined' ? document.getElementById(toolbarSlotId) : null;
   const ownerId = useId();
   const onRequestImageRef = useRef(onRequestImage);
-  onRequestImageRef.current = onRequestImage;
+  useEffect(() => {
+    onRequestImageRef.current = onRequestImage;
+  }, [onRequestImage]);
 
   /**
    * Mở panel sửa công thức cho node công thức tại một vị trí trong tài
@@ -333,11 +336,7 @@ export function RichTextEditor({
   // data-editor-owner của CHÍNH editor này (vùng soạn, toolbar, panel
   // công thức) thì tắt active + đóng panel.
   useEffect(() => {
-    if (!active) {
-      setHeaderTarget(null);
-      return undefined;
-    }
-    setHeaderTarget(document.getElementById(toolbarSlotId));
+    if (!active) return undefined;
     const belongsToEditor = (target: EventTarget | null) =>
       target instanceof Element &&
       target.closest('[data-editor-owner]')?.getAttribute('data-editor-owner') === ownerId;

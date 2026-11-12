@@ -99,21 +99,17 @@ describe('Bản đồ route của lát R2–R4 (chuẩn đường dẫn #221)', 
       const paramSegments = segments.filter((segment) => segment.startsWith(':'));
       // Mọi segment tham số đều là định danh của chính tài nguyên
       // đứng ngay trước nó (subjects→:subjectId, nodes→:nodeId…).
-      segments.forEach((segment, index) => {
-        if (segment.startsWith(':')) {
-          expect(RESOURCE_PARAM[segments[index - 1]!]).toBe(segment);
-        }
-      });
-      if (segments[segments.length - 1] === 'new') {
-        // Hình dạng (a) TẠO: tối đa một tham số — định danh của cha
-        // trực tiếp; segment ngay trước 'new' là tên tài nguyên con.
-        expect(paramSegments.length).toBeLessThanOrEqual(1);
-        expect(Object.keys(RESOURCE_PARAM)).toContain(segments[segments.length - 2]);
-      } else {
-        // Hình dạng (b) SỬA/CHI TIẾT: đúng một tham số là định danh
-        // của tài nguyên chính, không lồng theo cha nào khác.
-        expect(paramSegments.length).toBe(1);
-      }
+      const invalidParams = segments.flatMap((segment, index) =>
+        segment.startsWith(':') && RESOURCE_PARAM[segments[index - 1]!] !== segment
+          ? [segment]
+          : [],
+      );
+      expect(invalidParams).toEqual([]);
+      const creating = segments[segments.length - 1] === 'new';
+      // Trang tạo có tối đa một tham số và kết thúc bằng tên tài nguyên;
+      // trang chi tiết/sửa có đúng một tham số.
+      expect(creating ? paramSegments.length <= 1 : paramSegments.length === 1).toBe(true);
+      expect(!creating || Object.keys(RESOURCE_PARAM).includes(segments[segments.length - 2]!)).toBe(true);
     }
   });
 });

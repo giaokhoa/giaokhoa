@@ -63,8 +63,8 @@ export interface ApplyStoreMigrationsResult {
  *   `migrateToLatest()` nên hàm này chuyển `{ error, results }`
  *   thành ngoại lệ tường minh.
  */
-export async function applyStoreMigrations(
-  db: Kysely<any>,
+export async function applyStoreMigrations<DB>(
+  db: Kysely<DB>,
   store: MigrationStoreKey,
   migrationsDir: string,
   options?: { allowUnorderedMigrations?: boolean },

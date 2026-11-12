@@ -35,7 +35,7 @@ import {
 describe('Đối chiếu ghi danh lớp của worker (CLASS-0, #184)', () => {
   let context_: INestApplicationContext;
   let harness: OrdinaryWorkerModuleHarness;
-  let db: any;
+  let db: OrdinaryWorkerModuleHarness["adminDb"];
   const suffix = `${Date.now() % 100000000}`;
   const uid = (n: number) => `01900000-0000-7000-8000-${String(700000 + n).padStart(12, '0')}`;
   const teacherId = uid(1);

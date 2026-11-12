@@ -35,19 +35,23 @@ export function HealthPage({ initialHealth }: { initialHealth?: HealthStatus | n
 
   /** Một lượt fetch phía client: dùng cho luồng dự phòng khi loader
    * không có dữ liệu và cho nút kiểm tra lại thủ công (F-09). */
-  const loadHealth = useCallback(async (): Promise<void> => {
+  const fetchHealthState = useCallback(async (): Promise<State> => {
     try {
       const res = await fetch('/api/v1/health');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const health = (await res.json()) as HealthStatus;
-      setState({ kind: 'ready', health });
+      return { kind: 'ready', health };
     } catch (error: unknown) {
-      setState({
+      return {
         kind: 'error',
         message: error instanceof Error ? error.message : t('unknownError'),
-      });
+      };
     }
   }, [t]);
+
+  const loadHealth = useCallback(async (): Promise<void> => {
+    setState(await fetchHealthState());
+  }, [fetchHealthState]);
 
   useEffect(() => {
     // Loader đã cấp dữ liệu (SSR) thì KHÔNG fetch lại khi mount — request
@@ -56,8 +60,12 @@ export function HealthPage({ initialHealth }: { initialHealth?: HealthStatus | n
     // fetch phía client như trước; sau đó trang chỉ fetch lại khi người
     // dùng bấm nút kiểm tra lại.
     if (initialHealth) return;
-    void loadHealth();
-  }, [initialHealth, loadHealth]);
+    let active = true;
+    void fetchHealthState().then((next) => {
+      if (active) setState(next);
+    });
+    return () => { active = false; };
+  }, [initialHealth, fetchHealthState]);
 
   const reload = async () => {
     setRefreshing(true);

@@ -206,12 +206,10 @@ describe('Khối RichTextEditor', () => {
     });
     const paragraph = lastChange()?.content[0];
     expect(paragraph?.type).toBe('paragraph');
-    if (paragraph?.type === 'paragraph') {
-      expect(paragraph.content).toContainEqual({
-        type: 'inlineMath',
-        attrs: { latex: 'x^2 + y^2 = z^2' },
-      });
-    }
+    expect(paragraph?.type === 'paragraph' ? paragraph.content : []).toContainEqual({
+      type: 'inlineMath',
+      attrs: { latex: 'x^2 + y^2 = z^2' },
+    });
     // Tài liệu editor sinh ra phải qua được hợp đồng contracts ở biên.
     expect(richTextDocumentSchema.parse(lastChange())).toEqual(lastChange());
     expect(screen.queryByTestId('math-panel')).toBeNull();
@@ -285,16 +283,15 @@ describe('Khối RichTextEditor', () => {
       expect(JSON.stringify(lastChange())).toContain('a + c');
     });
     const paragraph = lastChange()?.content[0];
-    if (paragraph?.type === 'paragraph') {
-      expect(paragraph.content).toContainEqual({
-        type: 'inlineMath',
-        attrs: { latex: 'a + c' },
-      });
-      expect(paragraph.content).not.toContainEqual({
-        type: 'inlineMath',
-        attrs: { latex: 'a + b' },
-      });
-    }
+    expect(paragraph?.type).toBe('paragraph');
+    expect(paragraph?.type === 'paragraph' ? paragraph.content : []).toContainEqual({
+      type: 'inlineMath',
+      attrs: { latex: 'a + c' },
+    });
+    expect(paragraph?.type === 'paragraph' ? paragraph.content : []).not.toContainEqual({
+      type: 'inlineMath',
+      attrs: { latex: 'a + b' },
+    });
   });
 
   it('đổi đoạn hiện tại thành danh sách dấu đầu dòng từ thanh công cụ', async () => {

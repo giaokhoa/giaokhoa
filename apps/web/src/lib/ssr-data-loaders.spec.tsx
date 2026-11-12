@@ -317,7 +317,7 @@ describe('SL-1 — bộ nạp /notifications', () => {
 
     const groups = findQuery(dehydratedState, notificationsQueryKeys.notificationGroups('all', false));
     expect(groups?.state.status).toBe('success');
-    expect((groups?.state.data as { pages: unknown[] }).pages).toEqual([page]);
+    expect((groups!.state.data as { pages: unknown[] }).pages).toEqual([page]);
 
     expect(findQuery(dehydratedState, notificationsQueryKeys.messagePreferences)?.state.data).toEqual([
       { id: 'pref-1' },

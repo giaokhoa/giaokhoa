@@ -126,7 +126,7 @@ describe('Đặc trưng hoá view của các đường liệt kê câu hỏi (is
           { type: 'paragraph', content: [{ type: 'text', text: 'Ngữ liệu chung cho câu Đúng–Sai.' }] },
           {
             type: 'statementList',
-            content: tfCorrects.map((v, i) => ({
+            content: tfCorrects.map((_v, i) => ({
               type: 'statement', attrs: { id: `s${i + 1}` },
               content: [{ type: 'paragraph', content: [{ type: 'text', text: `Mệnh đề ${i + 1}` }] }],
             })),

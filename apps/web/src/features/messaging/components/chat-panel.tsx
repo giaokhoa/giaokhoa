@@ -222,6 +222,7 @@ export function ChatPanel({
   messageSearch, onSearchMessages, onClearMessageSearch, onJumpToSearchResult, memberPanel,
 }: ChatPanelProps) {
   const { t, i18n } = useTranslation('app');
+  const [today] = useState(() => new Date());
   const unblockContact = onUnblockContact;
   const blockContact = onBlockContact;
   const reportActiveConversation = onReportConversation;
@@ -467,16 +468,18 @@ export function ChatPanel({
     ...messagingPersonProfileQueryOptions(panelPartnerId ?? ''),
     enabled: panelPartnerId !== undefined && infoOpen,
   });
-  useEffect(() => {
+  // State cục bộ phải thuộc đúng hội thoại, không mang sang hội thoại kế.
+  const conversationKey = active?.id;
+  const [previousConversationKey, setPreviousConversationKey] = useState(conversationKey);
+  if (conversationKey !== previousConversationKey) {
+    setPreviousConversationKey(conversationKey);
     setSearchOpen(false);
     setInfoOpen(false);
     setEmojiOpen(false);
     setNoteEmojiOpen(false);
     setSearchDraft('');
-    // Thông báo ghi chú của hội thoại trước không bám sang
-    // hội thoại mới (vòng sửa issue #623).
     setNoteNoticeFor(null);
-  }, [active?.id]);
+  }
 
   if (!active) {
     // Đang nạp lần đầu (issue #591): khung phải hiện skeleton
@@ -639,7 +642,7 @@ export function ChatPanel({
    */
   const dayLabelOf = (iso: string) => {
     const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-    const diffDays = Math.round((startOfDay(new Date()) - startOfDay(new Date(iso))) / 86_400_000);
+    const diffDays = Math.round((startOfDay(today) - startOfDay(new Date(iso))) / 86_400_000);
     if (diffDays <= 0) return t('messagesToday');
     if (diffDays === 1) return t('messagesYesterday');
     return formatWithOptions(iso, i18n.language, { month: 'short', day: 'numeric' });

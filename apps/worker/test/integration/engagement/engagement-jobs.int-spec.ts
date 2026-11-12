@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { INestApplicationContext } from '@nestjs/common';
-import { sql } from '@giaokhoa/db';
+import { sql, type JsonValue } from '@giaokhoa/db';
 import { BadgeAwardProcessor } from '../../../src/processors/badge-award.processor';
 import { CalendarImportProcessor } from '../../../src/processors/calendar-import.processor';
 import { CalendarReminderProcessor } from '../../../src/processors/calendar-reminder.processor';
@@ -30,7 +30,7 @@ import {
 describe('Engagement của worker: gửi thông báo, nhắc/lấy lịch, tự trao huy hiệu', () => {
   let context: INestApplicationContext;
   let harness: OrdinaryWorkerModuleHarness;
-  let db: any;
+  let db: OrdinaryWorkerModuleHarness["adminDb"];
   const suffix = Date.now() % 100000;
   const userA = `01920000-0000-7000-8000-${String(920000 + suffix).padStart(12, '0')}`;
   const userSuspended = `01930000-0000-7000-8000-${String(930000 + suffix).padStart(12, '0')}`;
@@ -187,7 +187,7 @@ describe('Engagement của worker: gửi thông báo, nhắc/lấy lịch, tự 
     const courseId = (courseRows.rows[0] as { id: string }).id;
     await db.insertInto('course_completions').values({ user_id: userA, course: courseId, status: 'complete', time_started: new Date(), time_completed: new Date() }).execute();
 
-    const mkBadge = async (name: string, leaves: { criteriaType: string; params: Record<string, unknown> }[]) => {
+    const mkBadge = async (name: string, leaves: { criteriaType: string; params: Record<string, JsonValue> }[]) => {
       const row = await db.insertInto('badge').values({ name, type: 1, status: 1, issuer_name: 'Giáo khoa' }).returningAll().executeTakeFirstOrThrow();
       await db.insertInto('badge_criteria').values({ badge_id: row.id, criteria_type: 'overall', method: 1, params: {} }).execute();
       for (const leaf of leaves) await db.insertInto('badge_criteria').values({ badge_id: row.id, criteria_type: leaf.criteriaType, method: 1, params: leaf.params }).execute();

@@ -92,7 +92,6 @@ const REPORT = {
   publications: {},
   rows: [{ userId: '01900000-0000-7000-8000-000000000007', displayName: 'Học Viên Mẫu', grades: {} }],
 };
-const FORBIDDEN = { type: 'about:blank', title: 'Forbidden', status: 403, code: 'access.capability_denied' };
 
 interface RecordedCall {
   url: string;
@@ -101,102 +100,6 @@ interface RecordedCall {
 }
 
 /** Stub fetch ghi lại mọi lời gọi; mô phỏng giáo viên của khoá COURSE_ID trên các điểm dò quyền. */
-function stubFetch(calls: RecordedCall[]) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string, init?: RequestInit) => {
-      const method = init?.method ?? 'GET';
-      calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
-      const respond = (body: unknown, status = 200) =>
-        new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
-      if (isGetSessionUrl(url)) return respond(baSessionBody({ id: PROFILE.id, username: PROFILE.username, email: PROFILE.email }));
-      if (url === '/api/v1/users/me') return respond(PROFILE);
-      if (url === '/api/v1/users/me/capabilities') {
-        return respond({
-          userId: TEACHER_ID,
-          isSiteAdmin: false,
-          assignments: [
-            {
-              id: '01900000-0000-7000-8000-0000000000f1',
-              roleId: '01900000-0000-7000-8000-0000000000b9',
-              roleShortname: 'editingteacher',
-              roleName: 'Teacher',
-              contextId: CONTENT.contextId,
-              contextLevel: 50,
-              contextPath: '/1/9/10',
-              instanceId: COURSE_ID,
-            },
-          ],
-          contexts: [
-            {
-              contextId: '01900000-0000-7000-8000-0000000000e1',
-              contextLevel: 10,
-              contextPath: '/1',
-              capabilities: [],
-            },
-            {
-              contextId: CONTENT.contextId,
-              contextLevel: 50,
-              contextPath: '/1/9/10',
-              capabilities: [
-                'grade:viewall',
-                'course:update',
-                'question:useall',
-                'completion:manage',
-              ],
-            },
-          ],
-        });
-      }
-      if (url === '/api/v1/users?pageSize=1') return respond(FORBIDDEN, 403);
-      if (url === '/api/v1/access/roles') return respond(FORBIDDEN, 403);
-      if (url === '/api/v1/questions/categories') return respond([]);
-      if (url === '/api/v1/courses' && method === 'GET') return respond([COURSE]);
-      if (url === `/api/v1/courses/${COURSE_ID}/enrolments/me`)
-        return respond({ courseId: COURSE_ID, userId: TEACHER_ID, enrolled: true, active: true });
-      if (url === `/api/v1/courses/${COURSE_ID}/gradebook/report`) return respond(REPORT);
-      if (url === `/api/v1/courses/${COURSE_ID}/gradebook`)
-        return respond({ courseId: COURSE_ID, userId: TEACHER_ID, activities: [] });
-      if (url === `/api/v1/courses/${COURSE_ID}` && method === 'GET')
-        return respond({ ...COURSE, contextId: CONTENT.contextId, customFields: [], formatOptions: {} });
-      if (url === `/api/v1/courses/${COURSE_ID}/content`) return respond(CONTENT);
-      if (url === `/api/v1/courses/${COURSE_ID}/sections` && method === 'POST') {
-        return respond({
-          id: '01900000-0000-7000-8000-000000000101',
-          course: COURSE_ID,
-          section: 1,
-          name: 'Week 1',
-          summary: '',
-          visible: true,
-          availability: null,
-          modules: [],
-        });
-      }
-      if (url === `/api/v1/courses/${COURSE_ID}/modules/${MODULE_ID}` && method === 'DELETE')
-        return respond({ deleted: true });
-      if (url === `/api/v1/courses/${COURSE_ID}/modules/${MODULE_ID}` && method === 'PATCH')
-        return respond({ ...CONTENT.sections[0]!.modules[0] });
-      if (url === `/api/v1/courses/${COURSE_ID}/sections/${SECTION_ID}` && method === 'PATCH')
-        return respond({ ...CONTENT.sections[0], modules: undefined });
-      if (url === `/api/v1/courses/${COURSE_ID}/groupings`) return respond([]);
-      if (url === `/api/v1/courses/${COURSE_ID}/grade-items`) return respond([]);
-      // Các khu cũ của trang quản trị khoá: trả danh sách rỗng.
-      if (url === `/api/v1/courses/${COURSE_ID}/groups`) return respond([]);
-      if (url === '/api/v1/cohorts') return respond([]);
-      if (url === `/api/v1/courses/${COURSE_ID}/enrol/instances`) return respond([]);
-      if (url === `/api/v1/courses/${COURSE_ID}/enrolments`) return respond([]);
-      if (url === `/api/v1/courses/${COURSE_ID}/completion`) return respond([]);
-      // Tiêu chí hoàn thành: PUT thay toàn bộ bộ tiêu chí, recalculate trả về số bản ghi đã tính lại.
-      if (url === `/api/v1/courses/${COURSE_ID}/completion/criteria`) {
-        if (init?.method === 'PUT') return respond({ method: 1, criteria: [] });
-        return respond({ method: 1, criteria: [] });
-      }
-      if (url === `/api/v1/courses/${COURSE_ID}/completion/recalculate` && init?.method === 'POST')
-        return respond({ courseId: COURSE_ID, enrolled: 1, evaluated: 1, completed: 0 });
-      return respond({}, 404);
-    }),
-  );
-}
 
 /** Render trang quản trị khoá trong đúng khung provider của ứng dụng thật. */
 function renderCourseAdmin() {

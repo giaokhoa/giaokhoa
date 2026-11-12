@@ -21,12 +21,18 @@ export interface ContentViolation {
 
 // C0 controls except \t (0009) and \n (000A); \r (000D) được chuẩn hoá
 // thành \n TRƯỚC khi quét nên không nằm trong tập cấm ở đây.
-const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
+function containsForbiddenControl(value: string): boolean {
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    if (code <= 8 || code === 11 || code === 12 || (code >= 14 && code <= 31) || code === 127) return true;
+  }
+  return false;
+}
 // Ký tự zero-width (200B–200D, FEFF) + nhúng/ghi đè bidi (202A–202E, 2066–2069).
 const INVISIBLE_CHARS = /[\u200B-\u200D\uFEFF\u202A-\u202E\u2066-\u2069]/;
 
 function scanString(value: string, fieldPath: string, out: ContentViolation[]): void {
-  if (CONTROL_CHARS.test(value)) {
+  if (containsForbiddenControl(value)) {
     out.push({ fieldPath, message: 'Content contains forbidden control characters' });
   }
   if (INVISIBLE_CHARS.test(value)) {

@@ -66,8 +66,7 @@ export function GradingPanel({
   const releaseMutation = useReleaseSubmission();
   const createBankEntryMutation = useCreateCommentBankEntry();
 
-  const loadDetail = useCallback(async () => {
-    const fresh = await queryClient.fetchQuery(submissionDetailQueryOptions(assignmentId, summary.userId));
+  const applyDetail = useCallback((fresh: NonNullable<typeof detail>) => {
     setGradeInput(fresh.grade?.grade !== null && fresh.grade?.grade !== undefined ? String(fresh.grade.grade) : '');
     setLevelInput(fresh.grade?.level ?? '');
     setFeedback(fresh.grade?.feedback ?? '');
@@ -82,11 +81,24 @@ export function GradingPanel({
         ]),
       ),
     );
-  }, [assignmentId, queryClient, summary.userId]);
+  }, []);
+
+  const loadDetail = useCallback(async () => {
+    const fresh = await queryClient.fetchQuery(submissionDetailQueryOptions(assignmentId, summary.userId));
+    applyDetail(fresh);
+  }, [applyDetail, assignmentId, queryClient, summary.userId]);
 
   useEffect(() => {
-    void loadDetail().catch(() => setError(t('assignLoadFailed')));
-  }, [loadDetail, t]);
+    let active = true;
+    void queryClient.fetchQuery(submissionDetailQueryOptions(assignmentId, summary.userId))
+      .then((fresh) => {
+        if (active) applyDetail(fresh);
+      })
+      .catch(() => {
+        if (active) setError(t('assignLoadFailed'));
+      });
+    return () => { active = false; };
+  }, [applyDetail, assignmentId, queryClient, summary.userId, t]);
 
   async function act(run: () => Promise<unknown>, doneNotice?: string) {
     setBusy(true);

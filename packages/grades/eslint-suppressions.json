@@ -1,7 +1,0 @@
-{
-  "src/grade-formula.spec.ts": {
-    "vitest/no-conditional-expect": {
-      "count": 4
-    }
-  }
-}

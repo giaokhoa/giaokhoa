@@ -501,7 +501,10 @@ export type UpdatePage = z.infer<typeof updatePageSchema>;
  * (HTTP 400) cho cùng ràng buộc.
  */
 function isSafeExternalResourceUrl(url: string): boolean {
-  const normalized = url.replace(/^[\s\u0000-\u001f]+/, '').toLowerCase();
+  // Gạt ký tự điều khiển ASCII và khoảng trắng đầu chuỗi.
+  let start = 0;
+  while (start < url.length && (url.charCodeAt(start) <= 0x1f || /\s/u.test(url[start]!))) start += 1;
+  const normalized = url.slice(start).toLowerCase();
   return normalized.startsWith('http://') || normalized.startsWith('https://');
 }
 

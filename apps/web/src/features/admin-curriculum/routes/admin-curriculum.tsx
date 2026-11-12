@@ -175,10 +175,9 @@ function BookRow({
   onLoadError: () => void;
 }) {
   const { t } = useTranslation('app');
-  const [everOpened, setEverOpened] = useState(false);
-  useEffect(() => {
-    if (open) setEverOpened(true);
-  }, [open ]);
+  const [everOpened, setEverOpened] = useState(open);
+  // Mở lần đầu mới nạp dữ liệu; cập nhật trong render có điều kiện.
+  if (open && !everOpened) setEverOpened(true);
   const treeQuery = useBookTree(book.id, everOpened);
 
   useEffect(() => {

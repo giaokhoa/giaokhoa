@@ -602,7 +602,7 @@ describe('Quiz attempt page — hướng dẫn & lời giải theo mô hình gia
       expect(calls.some((c) => c.url.endsWith('/responses') && c.method === 'POST')).toBe(true),
     );
     const save = calls.find((c) => c.url.endsWith('/responses'));
-    expect((save?.body as { response: string }).response).toBe('{"tf1":true,"tf2":false}');
+    expect((save!.body as { response: string }).response).toBe('{"tf1":true,"tf2":false}');
   });
 
   it('xem lại truefalse TF-A: đúng/sai TỪNG Ý từ solution.statements + response đã lưu', async () => {

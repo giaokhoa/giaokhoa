@@ -28,7 +28,7 @@ import {
 describe('Lượt quét digest phụ huynh của worker (PH-2, issue #159)', () => {
   let context: INestApplicationContext;
   let harness: OrdinaryWorkerModuleHarness;
-  let db: any;
+  let db: OrdinaryWorkerModuleHarness["adminDb"];
   let processor: GuardianDigestProcessor;
   let fixtureTenantId = '';
   const suffix = Date.now();
@@ -58,7 +58,7 @@ describe('Lượt quét digest phụ huynh của worker (PH-2, issue #159)', () 
     for (const provider of ['guardian_digest', 'guardian_overdue_alert']) {
       await db.insertInto('user_preferences').values({
         user_id: guardianId, name: `message_provider_${provider}_email_v2`, value: 'immediate',
-      }).onConflict((oc: any) => oc.doNothing()).execute();
+      }).onConflict((oc) => oc.doNothing()).execute();
     }
   }
 

@@ -364,8 +364,7 @@ describe('Trang ngân hàng câu hỏi — ngang bằng admin (issue #70)', () =
   function stubBankFetch(username: string, capabilitiesBody: unknown) {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (url: string, init?: RequestInit) => {
-        const method = init?.method ?? 'GET';
+      vi.fn(async (url: string, _init?: RequestInit) => {
         const respond = (body: unknown) =>
           new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
         if (isGetSessionUrl(url)) return respond(baSessionBody({ id: PROFILE.id, username: PROFILE.username, email: PROFILE.email }));
@@ -463,6 +462,7 @@ describe('Trang ngân hàng câu hỏi — ngang bằng admin (issue #70)', () =
   it('site admin thấy và dùng được khu vực ngân hàng cá nhân đúng như giáo viên', async () => {
     stubBankFetch('admin', { userId: PROFILE.id, isSiteAdmin: true, assignments: [], contexts: [] });
     await expectFullBankSurface();
+    expect(screen.queryByRole('button', { name: 'Thêm mới' })).toBeNull();
   });
 
   it('giáo viên (năng lực qua ngữ cảnh, không phải site admin) thấy bề mặt giống hệt', async () => {
@@ -478,6 +478,7 @@ describe('Trang ngân hàng câu hỏi — ngang bằng admin (issue #70)', () =
       ],
     });
     await expectFullBankSurface();
+    expect(screen.queryByRole('button', { name: 'Thêm mới' })).toBeNull();
   });
 });
 
@@ -563,18 +564,22 @@ describe('Khu vực ngân hàng câu hỏi — theo đường dẫn (issue #221)
       // Dấu hiệu bề mặt của khu đã hiện NGAY, không cần thao tác mở
       // thẻ: nút tạo ở PageHeader (khu cá nhân) / neo phần (khu hệ
       // thống) / danh mục §9 (trang Ngữ liệu dùng chung khung).
-      if (areaCase.area === 'my-questions') {
-        expect(await screen.findByRole('link', { name: 'Câu hỏi mới' })).toBeInTheDocument();
-      } else if (areaCase.area === 'my-exams') {
-        expect(await screen.findByRole('button', { name: 'Đề mới' })).toBeInTheDocument();
-      } else if (areaCase.area === 'my-matrices') {
-        expect(await screen.findByRole('button', { name: 'Ma trận mới' })).toBeInTheDocument();
-      } else if (areaCase.area === 'stimuli') {
-        expect(await screen.findByText('General')).toBeInTheDocument();
-      } else {
-        const anchorId = areaCase.area === 'system-exams' ? 'system-papers' : areaCase.area;
-        await waitFor(() => expect(document.getElementById(anchorId)).not.toBeNull());
-      }
+      const landmark =
+        areaCase.area === 'my-questions'
+          ? await screen.findByRole('link', { name: 'Câu hỏi mới' })
+          : areaCase.area === 'my-exams'
+            ? await screen.findByRole('button', { name: 'Đề mới' })
+            : areaCase.area === 'my-matrices'
+              ? await screen.findByRole('button', { name: 'Ma trận mới' })
+              : areaCase.area === 'stimuli'
+                ? await screen.findByText('General')
+                : await waitFor(() => {
+                    const anchorId = areaCase.area === 'system-exams' ? 'system-papers' : areaCase.area;
+                    const node = document.getElementById(anchorId);
+                    if (!node) throw new Error('Chưa có khu vực ngân hàng tương ứng');
+                    return node;
+                  });
+      expect(landmark).toBeInTheDocument();
       // Không còn toggle thu/mở của BẤT KỲ khu ngân hàng nào, và
       // không còn nút "Thêm mới" lặp trong danh sách.
       for (const other of ALL_TOGGLES) {
@@ -620,8 +625,7 @@ describe('Khu vực ngân hàng câu hỏi — theo đường dẫn (issue #221)
       await waitFor(() => expect(document.getElementById(part.id)).not.toBeNull());
       expect(screen.queryByRole('button', { name: /Ngân hàng hệ thống/ })).toBeNull();
       for (const other of parts) {
-        if (other.id === part.id) expect(document.getElementById(other.id)).not.toBeNull();
-        else expect(document.getElementById(other.id)).toBeNull();
+        expect(document.getElementById(other.id) !== null).toBe(other.id === part.id);
       }
       cleanup();
     }

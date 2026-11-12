@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { Tenant, TenantMembership } from '@giaokhoa/contracts';
 import { Badge } from '@giaokhoa/ui/components/badge';
@@ -77,12 +77,10 @@ export function AdminTenantsPage() {
   // Tenant đầu tiên là lựa chọn mặc định ở chế độ platform để khu thành
   // viên có một đích xác định ngay khi danh sách tải xong; người dùng
   // đổi lựa chọn thì mọi truy vấn thành viên đi theo lựa chọn mới.
-  useEffect(() => {
-    if (!platformMode || platformTenants.length === 0) return;
-    if (!platformTenants.some((tenant) => tenant.id === selectedTenantId)) {
-      setSelectedTenantId(platformTenants[0]!.id);
-    }
-  }, [platformMode, platformTenants, selectedTenantId]);
+  const firstPlatformTenantId = platformMode ? platformTenants[0]?.id : undefined;
+  if (firstPlatformTenantId && !platformTenants.some((tenant) => tenant.id === selectedTenantId)) {
+    setSelectedTenantId(firstPlatformTenantId);
+  }
 
   // Cả hai chế độ đều giữ bản ghi tenant đầy đủ `Tenant`: endpoint
   // current trả cùng DTO với danh sách platform, nên thẻ hiển thị ở

@@ -25,7 +25,7 @@
  * hữu; `realtimeRef` để báo socket tham gia conversation vừa mở.
  * @returns Trạng thái hội thoại đang mở và handler cho trang lắp ghép.
  */
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { conversationDetailQueryOptions, conversationMessagesPageQueryOptions } from '../queries/messaging';
 import { queryKeys } from '../queries/keys';
@@ -105,7 +105,7 @@ export function useActiveConversation({
     return { ...(summary ?? {}), ...detailView } as ConversationView;
   }, [activeId, detail, openedSummary]);
   const activeRef = useRef<ConversationView | null>(null);
-  activeRef.current = active;
+  useEffect(() => { activeRef.current = active; }, [active]);
 
   /**
    * Cửa sổ tin đang hiển thị: gộp các trang cũ hơn vào cửa sổ chi

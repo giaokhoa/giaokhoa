@@ -13,7 +13,6 @@ import type {
 import { OutboxService } from '../../infra/events/outbox.service';
 import { TenantContextService } from '../tenants/tenant-context.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
-import { CoursesService } from '../courses/courses.service';
 import { CurriculumService } from '../curriculum/curriculum.service';
 import { QuestionBanksService } from '../questions/question-banks.service';
 import type { QuestionBankRow } from '@giaokhoa/db/repositories/question-banks';

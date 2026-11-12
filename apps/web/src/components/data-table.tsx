@@ -62,8 +62,29 @@ const features = tableFeatures({
   sortFns: { alphanumeric: sortFn_alphanumeric, text: sortFn_text },
 });
 
+/** Kho giữ callback cột mới nhất cho các widget TanStack, không phải dữ liệu render của React. */
+function createLatestColumnsStore<T>(initial: T) {
+  let current = initial;
+  let version = 0;
+  const listeners = new Set<() => void>();
+  return {
+    get: () => current,
+    getVersion: () => version,
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => { listeners.delete(listener); };
+    },
+    update: (next: T) => {
+      if (current === next) return;
+      current = next;
+      version += 1;
+      for (const listener of listeners) listener();
+    },
+  };
+}
+
 /** Định nghĩa một cột theo ngôn ngữ nghiệp vụ của trang gọi, không lộ chi tiết TanStack. */
-export interface DataColumn<T extends Record<string, any>> {
+export interface DataColumn<T extends object> {
   id: string;
   header: string;
   cell: (row: T) => React.ReactNode;
@@ -141,7 +162,7 @@ function pageNumberList(pageCount: number, current: number): (number | 'ellipsis
  * dữ liệu của trang gọi (accessor, cell, getRowId) — bề mặt props vẫn
  * được kiểm kiểu đầy đủ theo T.
  */
-export function DataTable<T extends Record<string, any>>({
+export function DataTable<T extends object>({
   title,
   data,
   columns,
@@ -195,7 +216,7 @@ export function DataTable<T extends Record<string, any>>({
   /** data-testid cho từng hàng — giữ tay cầm kiểm thử/điều hướng của trang gọi. */
   rowTestId?: (row: T) => string;
 }) {
-  type AnyRow = Record<string, any>;
+  type AnyRow = Record<string, unknown>;
   const [columnVisibility, setColumnVisibility] = React.useState<ColumnVisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -219,12 +240,15 @@ export function DataTable<T extends Record<string, any>>({
    * rơi vào node đã rời cây khiến handler của trang không bao giờ chạy
    * (đã gặp thật ở ngân hàng câu hỏi). Vì vậy bảng chỉ dựng lại cột khi
    * tập (id, tiêu đề, khả năng sắp xếp) thay đổi; nội dung ô và hàm tính
-   * giá trị luôn đọc bản cột mới nhất qua ref. Chữ ký JSON chứa đủ
+   * giá trị luôn đọc bản cột mới nhất qua store theo commit. Chữ ký JSON chứa đủ
    * cấu hình cần dựng cột để useMemo không phụ thuộc mảng columns
    * mới được tạo sau mỗi lần render.
    */
-  const columnsRef = React.useRef(columns);
-  columnsRef.current = columns;
+  const [columnsStore] = React.useState(() => createLatestColumnsStore(columns));
+  // Cột TanStack giữ nguyên id nhưng callback thay đổi khi props cập nhật.
+  // Store thông báo lần commit mới để cell render lại mà không remount input.
+  React.useSyncExternalStore(columnsStore.subscribe, columnsStore.getVersion, columnsStore.getVersion);
+  React.useLayoutEffect(() => { columnsStore.update(columns); }, [columnsStore, columns]);
   const columnSignature = JSON.stringify(
     columns.map((col) => [col.id, col.header, Boolean(col.sortValue)]),
   );
@@ -235,7 +259,7 @@ export function DataTable<T extends Record<string, any>>({
       shapes.map(([id, header, sortable]) =>
         helper.accessor(
           (row: AnyRow): string | number => {
-            const latest = columnsRef.current.find((c) => c.id === id);
+            const latest = columnsStore.get().find((c) => c.id === id);
             return latest?.filterValue
               ? latest.filterValue(row as T)
               : latest?.sortValue
@@ -247,14 +271,14 @@ export function DataTable<T extends Record<string, any>>({
             header,
             enableSorting: sortable,
             cell: (info) => {
-              const latest = columnsRef.current.find((c) => c.id === id);
+              const latest = columnsStore.get().find((c) => c.id === id);
               return latest ? latest.cell(info.row.original as T) : null;
             },
           },
         ),
       ),
     );
-  }, [columnSignature]);
+  }, [columnSignature, columnsStore]);
 
   const table = useTable({
     features,

@@ -1,0 +1,9 @@
+{
+  "plugins": ["react"],
+  "rules": {
+    "react/hooks": "error",
+    "react/refs": "error",
+    "react/set-state-in-effect": "error",
+    "react/purity": "error"
+  }
+}

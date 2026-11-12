@@ -163,7 +163,7 @@ export class NotificationDigestProcessor extends WorkerHost {
         .execute();
       const adminDisabledProviders = new Set<string>();
       for (const policy of policyRows) {
-        let disabled = false;
+        let disabled: boolean;
         try { disabled = JSON.parse(policy.value ?? 'null') === false; } catch { disabled = false; }
         if (disabled) adminDisabledProviders.add(policy.name.replace('provider_', '').replace('_enabled', ''));
       }

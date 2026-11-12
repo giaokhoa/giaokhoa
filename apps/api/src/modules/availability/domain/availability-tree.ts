@@ -166,7 +166,7 @@ export async function evaluateTree(
 
   const failedDescriptions: string[] = [];
   if (!available && !informationHidden) {
-    node.c.forEach((child, i) => {
+    node.c.forEach((_child, i) => {
       const negated = node.op === '!&' || node.op === '!|';
       const causesFailure = negated ? values[i]! : !values[i]!;
       if (!causesFailure) return;

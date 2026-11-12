@@ -128,11 +128,10 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 
   // Chọn chương đầu tiên khi nội dung khoá đích tải về (cùng nhịp
   // hộp ghim của panel ngân hàng).
-  useEffect(() => {
-    if (pinContentQuery.data && !pinSectionId) {
-      setPinSectionId(pinContentQuery.data.sections[0]?.id ?? '');
-    }
-  }, [pinContentQuery.data, pinSectionId]);
+  const firstPinSectionId = pinContentQuery.data?.sections[0]?.id;
+  if (!pinSectionId && firstPinSectionId) {
+    setPinSectionId(firstPinSectionId);
+  }
 
   /**
    * Ghim đề vào khoá đã chọn (toàn khoá hoặc một nhóm đích) — một

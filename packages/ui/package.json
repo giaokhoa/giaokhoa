@@ -19,7 +19,10 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "tailwindcss": "^4.3.3",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "@giaokhoa/oxlint-config": "workspace:*",
+    "oxlint": "1.93.0",
+    "oxlint-tsgolint": "7.0.2006"
   },
   "exports": {
     "./components/*": "./src/components/*.tsx",
@@ -35,7 +38,7 @@
   "name": "@giaokhoa/ui",
   "private": true,
   "scripts": {
-    "lint": "eslint .",
+    "lint": "oxlint .",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "sideEffects": [

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
@@ -104,15 +104,19 @@ export function MatrixNewPage() {
 
   // Đổi môn: giữ lựa chọn chương trình nếu còn thuộc môn mới, không
   // thì tự chọn chương trình đầu (đúng nhịp effect thủ công trước đây).
-  useEffect(() => {
+  const [previousCurriculumScope, setPreviousCurriculumScope] = useState({
+    subjectId: '',
+    curricula: undefined as typeof curriculaQuery.data,
+  });
+  if (previousCurriculumScope.subjectId !== subjectId || previousCurriculumScope.curricula !== curriculaQuery.data) {
+    setPreviousCurriculumScope({ subjectId, curricula: curriculaQuery.data });
     if (!subjectId) {
       setCurriculumId('');
-      return;
+    } else if (curriculaQuery.data) {
+      const rows = curriculaQuery.data;
+      setCurriculumId((prev) => (rows.some((c) => c.id === prev) ? prev : (rows[0]?.id ?? '')));
     }
-    const rows = curriculaQuery.data;
-    if (!rows) return;
-    setCurriculumId((prev) => (rows.some((c) => c.id === prev) ? prev : (rows[0]?.id ?? '')));
-  }, [subjectId, curriculaQuery.data]);
+  }
 
   const createMutation = useCreateMatrix();
 
@@ -327,15 +331,18 @@ export function MatrixEditPage() {
 
   // Khởi tạo các trường form từ bản ghi mỗi khi chi tiết (lại) tải về —
   // đúng nhịp loadMatrix cũ, vốn chạy lại sau mỗi đột biến thành công.
-  useEffect(() => {
-    if (!detailQuery.data) return;
-    const row = detailQuery.data;
-    setName(row.name);
-    setStatus(row.status);
-    setIsTemplate(row.isTemplate);
-    setIncludeAdvanced(row.levelSet === 'four');
-    setTotalScore(String(row.totalScore));
-  }, [detailQuery.data]);
+  const [previousMatrixData, setPreviousMatrixData] = useState<typeof detailQuery.data | undefined>(undefined);
+  if (previousMatrixData !== detailQuery.data) {
+    setPreviousMatrixData(detailQuery.data);
+    if (detailQuery.data) {
+      const row = detailQuery.data;
+      setName(row.name);
+      setStatus(row.status);
+      setIsTemplate(row.isTemplate);
+      setIncludeAdvanced(row.levelSet === 'four');
+      setTotalScore(String(row.totalScore));
+    }
+  }
 
   async function saveMatrix(event: FormEvent) {
     event.preventDefault();

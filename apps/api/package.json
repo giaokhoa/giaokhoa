@@ -89,6 +89,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@giaokhoa/eslint-config": "workspace:*",
     "@nestjs/testing": "^12.2.0",
     "@swc/core": "^1.16.18",
     "@types/compression": "^1.8.1",

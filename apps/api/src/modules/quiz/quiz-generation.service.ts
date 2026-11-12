@@ -264,7 +264,7 @@ export class QuizGenerationService {
    * Tham số `actorId` giữ lại cho chữ ký chung của builder; các
    * đường tham chiếu nội bộ không dùng tới nó.
    */
-  private async buildSpecification(actorId: string, matrix: ExamMatrixRow, opts: {
+  private async buildSpecification(_actorId: string, matrix: ExamMatrixRow, opts: {
     quiz: { id: string; name: string } | null;
     slots: SpecificationSlot[] | null;
   }): Promise<MatrixSpecification> {
@@ -329,10 +329,10 @@ export class QuizGenerationService {
         // định nghĩa "hiện hành" với pool sinh đề (issue #161).
         const outcomes = await this.curriculum.listOutcomesReference(node.id);
         for (const outcome of outcomes) {
-          let programContent: string | null = null;
+          let programContent: string;
           let derivedContent: string | null = null;
           let position: number | null = outcome.position;
-          let code: string | null = null;
+          let code: string | null;
           if (outcome.sourceKind === 'derived' && outcome.derivedFromId) {
             const parent = await this.curriculum.getOutcomeReference(outcome.derivedFromId).catch(() => undefined);
             if (!parent || parent.retiredAt !== null) continue;

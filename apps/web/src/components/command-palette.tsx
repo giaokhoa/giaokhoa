@@ -196,6 +196,9 @@ export function CommandPalette() {
     function onKeyDown(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
+        setQuery('');
+        setDebouncedQuery('');
+        setActiveIndex(0);
         setOpen((prev) => !prev);
       }
     }
@@ -203,19 +206,12 @@ export function CommandPalette() {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  // Mỗi lần mở: xoá truy vấn cũ, chọn mục đầu, dồn focus vào ô gõ.
+  // Dồn focus vào ô tìm khi bảng lệnh mở, không reset state trong effect.
   useEffect(() => {
     if (!open) return;
-    setQuery('');
-    setDebouncedQuery('');
-    setActiveIndex(0);
     const raf = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(raf);
-  }, [open ]);
-
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [query]);
+  }, [open]);
 
   // Giữ mục đang chọn luôn trong tầm mắt khi di chuyển bằng phím.
   useEffect(() => {
@@ -268,7 +264,10 @@ export function CommandPalette() {
           <input
             ref={inputRef}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setActiveIndex(0);
+            }}
             placeholder={t('app:palettePlaceholder')}
             aria-label={t('app:paletteTitle')}
             className="h-11 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"

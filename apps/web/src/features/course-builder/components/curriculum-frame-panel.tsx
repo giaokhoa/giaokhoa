@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { Course } from '@giaokhoa/contracts';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
@@ -52,11 +52,15 @@ export function CurriculumFramePanel({
   const loadedCourseId = course?.id;
   const loadedSubjectId = course?.subjectId;
   const loadedGrade = course?.grade;
-  useEffect(() => {
-    if (loadedCourseId == null) return;
-    setSubjectId(loadedSubjectId ?? '');
-    setGrade(loadedGrade != null ? String(loadedGrade) : '');
-  }, [loadedCourseId, loadedSubjectId, loadedGrade]);
+  const loadedCourseScope = String(loadedCourseId) + ':' + String(loadedSubjectId) + ':' + String(loadedGrade);
+  const [previousLoadedScope, setPreviousLoadedScope] = useState<string | null>(null);
+  if (previousLoadedScope !== loadedCourseScope) {
+    setPreviousLoadedScope(loadedCourseScope);
+    if (loadedCourseId != null) {
+      setSubjectId(loadedSubjectId ?? '');
+      setGrade(loadedGrade != null ? String(loadedGrade) : '');
+    }
+  }
 
   // Danh sách môn đọc qua hook TanStack kèm forCourseId = chính khoá
   // này: giáo viên cấp khoá đọc được qua nhánh course:update tại khoá
@@ -75,9 +79,12 @@ export function CurriculumFramePanel({
   const curriculumId = frameUnitsQuery.data?.curriculumId ?? null;
   const units = frameUnitsQuery.data?.units ?? [];
 
-  useEffect(() => {
+  const frameSelectionScope = subjectId + ':' + grade;
+  const [previousFrameSelectionScope, setPreviousFrameSelectionScope] = useState(frameSelectionScope);
+  if (previousFrameSelectionScope !== frameSelectionScope) {
+    setPreviousFrameSelectionScope(frameSelectionScope);
     setSelected([]);
-  }, [subjectId, grade]);
+  }
 
   /** Lưu môn/khối của khoá qua PATCH /courses/:id. */
   async function saveCourseInfo() {
@@ -235,9 +242,12 @@ export function BookFramePanel({
   const bookId = chaptersQuery.data?.bookId ?? null;
   const chapters = chaptersQuery.data?.chapters ?? [];
 
-  useEffect(() => {
+  const bookSelectionScope = subjectId + ':' + grade + ':' + courseId;
+  const [previousBookSelectionScope, setPreviousBookSelectionScope] = useState(bookSelectionScope);
+  if (previousBookSelectionScope !== bookSelectionScope) {
+    setPreviousBookSelectionScope(bookSelectionScope);
     setSelected([]);
-  }, [subjectId, grade, courseId]);
+  }
 
   const applyBookFrameMutation = useApplyBookFrame();
 

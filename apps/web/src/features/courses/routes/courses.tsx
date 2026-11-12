@@ -1,13 +1,12 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { useQueries, useQuery } from '@tanstack/react-query';
-import type { Course, CourseCategory, CourseCategoryTreeNode } from '@giaokhoa/contracts';
+import type { CourseCategory, CourseCategoryTreeNode } from '@giaokhoa/contracts';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { Empty, EmptyHeader, EmptyTitle } from '@giaokhoa/ui/components/empty';
 import { Field, FieldGroup, FieldLabel } from '@giaokhoa/ui/components/field';
 import { Input } from '@giaokhoa/ui/components/input';
-import { Label } from '@giaokhoa/ui/components/label';
 import {
   Select,
   SelectContent,

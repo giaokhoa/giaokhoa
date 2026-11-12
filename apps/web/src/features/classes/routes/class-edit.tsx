@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { Checkbox } from '@giaokhoa/ui/components/checkbox';
@@ -48,20 +48,23 @@ export function ClassEditPage() {
   const [feePaymentAccountId, setFeePaymentAccountId] = useState('');
   const [message, setMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    const cls = classQuery.data;
-    if (!cls) return;
-    setName(cls.name);
-    setCode(cls.code ?? '');
-    setSchoolYear(cls.schoolYear ?? '');
-    setDescription(cls.description ?? '');
-    setOnLeave(cls.onLeave);
-    setAllowSelfReport(cls.allowSelfReport);
-    setJoinAutoApprove(cls.joinAutoApprove);
-    setFeeCost(cls.feeCost === null ? '' : String(cls.feeCost));
-    setFeeCurrency(cls.feeCurrency);
-    setFeePaymentAccountId(cls.feePaymentAccountId ?? '');
-  }, [classQuery.data]);
+  const [previousClassData, setPreviousClassData] = useState<typeof classQuery.data | undefined>(undefined);
+  if (previousClassData !== classQuery.data) {
+    setPreviousClassData(classQuery.data);
+    if (classQuery.data) {
+      const cls = classQuery.data;
+      setName(cls.name);
+      setCode(cls.code ?? '');
+      setSchoolYear(cls.schoolYear ?? '');
+      setDescription(cls.description ?? '');
+      setOnLeave(cls.onLeave);
+      setAllowSelfReport(cls.allowSelfReport);
+      setJoinAutoApprove(cls.joinAutoApprove);
+      setFeeCost(cls.feeCost === null ? '' : String(cls.feeCost));
+      setFeeCurrency(cls.feeCurrency);
+      setFeePaymentAccountId(cls.feePaymentAccountId ?? '');
+    }
+  }
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: classesQueryKeys.classRoot(classId) });

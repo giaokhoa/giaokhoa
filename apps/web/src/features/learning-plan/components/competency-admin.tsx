@@ -27,7 +27,7 @@
  *     state cục bộ của component như bản thủ công; riêng lỗi tải dữ
  *     liệu phơi thẳng từ trạng thái lỗi của các query.
  */
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@giaokhoa/ui/components/badge';
@@ -152,11 +152,9 @@ export function CompetencyAdmin() {
    * được chọn — đúng mặc định của bản thủ công, vốn chọn sẵn mẫu đầu
    * mỗi lần nạp lại hai danh sách khung quản trị.
    */
-  useEffect(() => {
-    if (selectedTemplateId === '' && firstTemplateId) {
-      setSelectedTemplateId(firstTemplateId);
-    }
-  }, [firstTemplateId, selectedTemplateId]);
+  if (selectedTemplateId === '' && firstTemplateId) {
+    setSelectedTemplateId(firstTemplateId);
+  }
 
   /** Tạo framework qua POST /frameworks với đúng body của `createCompetencyFrameworkSchema`. */
   async function createFramework(event: FormEvent) {

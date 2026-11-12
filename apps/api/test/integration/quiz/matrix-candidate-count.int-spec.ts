@@ -137,7 +137,7 @@ describe('Đặc trưng hoá số đếm ứng viên ô ma trận theo người 
           { type: 'paragraph', content: [{ type: 'text', text: 'Ngữ liệu cho câu Đúng–Sai đếm ứng viên.' }] },
           {
             type: 'statementList',
-            content: tfCorrects.map((v, i) => ({
+            content: tfCorrects.map((_v, i) => ({
               type: 'statement', attrs: { id: `s${i + 1}` },
               content: [{ type: 'paragraph', content: [{ type: 'text', text: `Mệnh đề ${i + 1}` }] }],
             })),

@@ -76,7 +76,7 @@ describe('Ngang bằng admin ngân hàng (feat #70 follow-up)', () => {
     return (res.body as BankBody[]).find((b) => b.scope === 'personal' && b.ownerId === ownerId);
   }
 
-  async function createQuestion(token: string, categoryId: string, name: string): Promise<void> {
+  async function createQuestion(token: string, categoryId: string, _name: string): Promise<void> {
     const res = await http(app).post('/api/v1/questions').set(bearer(token)).send({
       categoryId, qtype: 'multichoice', questionText: 'Thân câu hỏi parity?',
       answers: [{ text: 'Đáp án đúng', correct: true }, { text: 'Đáp án sai', correct: false }, { text: 'Đáp án khác 1', correct: false }, { text: 'Đáp án khác 2', correct: false }],

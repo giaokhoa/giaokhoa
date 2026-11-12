@@ -325,8 +325,8 @@ describe('Trang tin nhắn — gửi lạc quan và cập nhật realtime', () =
     await waitFor(() => {
       const send = calls.find((c) => c.url === `/api/v1/messages/conversations/${CONV_ID}/messages` && c.method === 'POST');
       expect(send).toBeDefined();
-      expect(typeof (send?.body as { clientMessageId?: unknown }).clientMessageId).toBe('string');
-      expect((send?.body as { text?: unknown }).text).toBe('xin chào lạc quan');
+      expect(typeof (send!.body as { clientMessageId?: unknown }).clientMessageId).toBe('string');
+      expect((send!.body as { text?: unknown }).text).toBe('xin chào lạc quan');
     });
     // Từ lát M1, xem trước ở danh sách cũng phản ánh tin vừa gửi nên
     // các khẳng định chống trùng dưới đây được khoanh trong khung tin.
@@ -334,7 +334,7 @@ describe('Trang tin nhắn — gửi lạc quan và cập nhật realtime', () =
 
     // Echo của chính tin đó qua socket (cùng id + clientMessageId) không nhân đôi.
     const sendCall = calls.find((c) => c.url === `/api/v1/messages/conversations/${CONV_ID}/messages` && c.method === 'POST');
-    const clientMessageId = (sendCall?.body as { clientMessageId: string }).clientMessageId;
+    const clientMessageId = (sendCall!.body as { clientMessageId: string }).clientMessageId;
     act(() => {
       realtime.handlers?.onNewMessage({
         conversationId: CONV_ID,
@@ -1397,7 +1397,7 @@ describe('Messages page — M3: trả lời trích dẫn (issue #229)', () => {
 
     await waitFor(() => {
       const sendCall = calls.find((c) => c.method === 'POST' && /\/messages$/.test(c.url));
-      expect(sendCall?.body).toMatchObject({ text: 'đồng ý với câu này', replyToMessageId: M3_ORIG.id });
+      expect(sendCall!.body).toMatchObject({ text: 'đồng ý với câu này', replyToMessageId: M3_ORIG.id });
     });
     expect(screen.queryByTestId('reply-chip')).not.toBeInTheDocument();
   });
@@ -1419,8 +1419,8 @@ describe('Messages page — M3: trả lời trích dẫn (issue #229)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Gửi' }));
     await waitFor(() => {
       const sendCall = calls.find((c) => c.method === 'POST' && /\/messages$/.test(c.url));
-      expect(sendCall?.body).toMatchObject({ text: 'tin thường thôi' });
-      expect((sendCall?.body as { replyToMessageId?: string })?.replyToMessageId).toBeUndefined();
+      expect(sendCall!.body).toMatchObject({ text: 'tin thường thôi' });
+      expect((sendCall!.body as { replyToMessageId?: string })?.replyToMessageId).toBeUndefined();
     });
   });
 
@@ -2780,9 +2780,9 @@ describe('Messages page — fix nhân đôi tin: khoá idempotency theo bản nh
 
     // Chỉ đúng MỘT request ra khỏi client, mang một clientMessageId.
     await waitFor(() => expect(sendPosts(calls)).toHaveLength(1));
-    const key = (sendPosts(calls)[0]?.body as { clientMessageId?: unknown }).clientMessageId;
+    const key = (sendPosts(calls)[0]!.body as { clientMessageId?: unknown }).clientMessageId;
     expect(typeof key).toBe('string');
-    expect((sendPosts(calls)[0]?.body as { text?: unknown }).text).toBe('tin chống trùng');
+    expect((sendPosts(calls)[0]!.body as { text?: unknown }).text).toBe('tin chống trùng');
     // Trong lúc lượt gửi đang bay, nút Gửi bị vô hiệu.
     expect(screen.getByRole('button', { name: 'Gửi' })).toBeDisabled();
     // Danh sách chỉ hiện MỘT bản của tin (bản lạc quan đang gửi).
@@ -2818,8 +2818,8 @@ describe('Messages page — fix nhân đôi tin: khoá idempotency theo bản nh
     await userEvent.click(screen.getByRole('button', { name: 'Gửi' }));
     await waitFor(() => expect(sendPosts(calls)).toHaveLength(2));
 
-    const firstKey = (sendPosts(calls)[0]?.body as { clientMessageId?: unknown }).clientMessageId;
-    const secondKey = (sendPosts(calls)[1]?.body as { clientMessageId?: unknown }).clientMessageId;
+    const firstKey = (sendPosts(calls)[0]!.body as { clientMessageId?: unknown }).clientMessageId;
+    const secondKey = (sendPosts(calls)[1]!.body as { clientMessageId?: unknown }).clientMessageId;
     expect(typeof firstKey).toBe('string');
     expect(typeof secondKey).toBe('string');
     expect(secondKey).not.toBe(firstKey);
@@ -3681,7 +3681,7 @@ describe('Messages page — hồi quy vòng sửa PR #530 (tin ở hội thoại
     // Bản tạm hiện trong khung trong lúc chờ xác nhận.
     expect(await within(thread).findByText('nội dung sẽ bị xoá cứng')).toBeInTheDocument();
     const sendCall = calls.find((c) => c.url === `/api/v1/messages/conversations/${CONV_ID}/messages` && c.method === 'POST');
-    const clientMessageId = (sendCall?.body as { clientMessageId: string }).clientMessageId;
+    const clientMessageId = (sendCall!.body as { clientMessageId: string }).clientMessageId;
 
     // Socket xác nhận tin thật trước (cùng id + clientMessageId mà server sẽ trả qua REST).
     act(() => {

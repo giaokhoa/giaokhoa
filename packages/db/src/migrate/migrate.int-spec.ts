@@ -328,7 +328,7 @@ describe('bộ máy migration của package cho ba kho', () => {
     const provider = new FrozenSqlProvider(packageMigrationsDir('control-plane'));
     const migrations = await provider.getMigrations();
     const first = Object.values(migrations)[0]!;
-    await expect(first.down!(null as unknown as Kysely<any>)).rejects.toThrow(/không có down/);
+    await expect(first.down!(null as unknown as Kysely<unknown>)).rejects.toThrow(/không có down/);
   });
 
   it('chuỗi shim uuidv7 trong package khớp từng byte với hằng trong centre-provision', () => {
@@ -371,7 +371,7 @@ describe('bộ máy migration của package cho ba kho', () => {
       async getMigrations() {
         return {
           '0001_tao_bang': {
-            async up(db2: Kysely<any>) {
+            async up(db2: Kysely<unknown>) {
               await db2.schema.createTable('t2_first').addColumn('id', 'integer').execute();
             },
           },
@@ -455,7 +455,7 @@ const { Migrator } = require('kysely/migration');
           async getMigrations() {
             return {
               '0002_probe': {
-                async up(db2: Kysely<any>) {
+                async up(db2: Kysely<unknown>) {
                   await db2.schema.createTable('t3_probe').addColumn('id', 'integer').execute();
                 },
               },

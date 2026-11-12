@@ -12,15 +12,17 @@ export function useNavigationPending(): boolean {
   const navigation = useNavigation();
   const loading = navigation.state === 'loading';
   const [visible, setVisible] = useState(false);
+  const [previousLoading, setPreviousLoading] = useState(loading);
+  if (previousLoading !== loading) {
+    setPreviousLoading(loading);
+    setVisible(false);
+  }
   useEffect(() => {
-    if (!loading) {
-      setVisible(false);
-      return;
-    }
+    if (!loading) return;
     const timer = window.setTimeout(() => setVisible(true), 150);
     return () => window.clearTimeout(timer);
   }, [loading]);
-  return visible;
+  return loading && visible;
 }
 
 /**

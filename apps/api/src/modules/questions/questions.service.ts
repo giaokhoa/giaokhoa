@@ -609,7 +609,7 @@ export class QuestionsService {
    * solution — version không có dòng nào thì phía đọc quy về cả hai
    * null (xem `answerKeyOf`).
    */
-  private async writeVersionContent(tx: QuestionsTx, qtype: SupportedQtype, versionId: string, content: NormalisedContent): Promise<void> {
+  private async writeVersionContent(tx: QuestionsTx, _qtype: SupportedQtype, versionId: string, content: NormalisedContent): Promise<void> {
     const inserted: AnswerRow[] = [];
     for (const [index, a] of content.answers.entries()) {
       inserted.push(await this.repo.insertAnswer({

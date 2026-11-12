@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -29,33 +29,6 @@ const GOOGLE_LINK = {
   createdAt: '2026-10-01T08:00:00.000Z',
 };
 
-const CURRENT_SESSION = {
-  id: '01900000-0000-7000-8000-000000000201',
-  kind: 'web',
-  createdAt: '2026-10-23T01:00:00.000Z',
-  lastActivityAt: '2026-10-23T06:00:00.000Z',
-  ip: '203.0.113.10',
-  userAgent: 'Mozilla/5.0 (X11; Linux x86_64) Chrome/140.0',
-  current: true,
-};
-const OTHER_SESSION = {
-  id: '01900000-0000-7000-8000-000000000202',
-  kind: 'api',
-  createdAt: '2026-10-22T01:00:00.000Z',
-  lastActivityAt: '2026-10-22T02:00:00.000Z',
-  ip: '198.51.100.7',
-  userAgent: 'Giáo khoa mobile app',
-  current: false,
-};
-const THIRD_SESSION = {
-  id: '01900000-0000-7000-8000-000000000203',
-  kind: 'web',
-  createdAt: '2026-10-21T01:00:00.000Z',
-  lastActivityAt: '2026-10-21T02:00:00.000Z',
-  ip: null,
-  userAgent: null,
-  current: false,
-};
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
