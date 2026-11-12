@@ -409,16 +409,16 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
       await copyMemberToCentre(member.id, tenantId);
     }
 
-    // Token của A cho tenant của trung tâm qua đường chuyển tenant
-    // như người dùng thật — token này mang claim centre_id. Token
-    // cũ không claim được ký tay cùng hình dạng phiên cấp trước khi
-    // trung tâm tách kho.
-    const apexA = await helpers.login(app, memberA.username, helpers.STRONG_PASSWORD);
-    const switched = (await must(
-      await helpers.http(app).post(`/api/v1/auth/switch-tenant/${tenantId}`).set(auth(apexA.accessToken)),
-      'switch A to tenant',
+    // Phiên của A được cấp từ kho A qua hostname thật, không
+    // chuyển tenant ở site chính rồi tiếp tục dùng token trung tâm
+    // tại host khác. Token cũ không claim vẫn được ký thủ công
+    // để kiểm chứng hành vi từ chối phiên tiền di trú.
+    const centreLoginA = (await must(
+      await helpers.http(app).post('/api/v1/auth/token').set('Host', HOST)
+        .send({ username: memberA.username, password: helpers.STRONG_PASSWORD }),
+      'login member A at centre',
     )) as { accessToken: string };
-    tokenWithClaim = switched.accessToken;
+    tokenWithClaim = centreLoginA.accessToken;
     const jwtService = app.get(JwtService);
     tokenWithoutClaim = await jwtService.signAsync({
       sub: memberAId,
@@ -436,8 +436,11 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
       .send({ type: 2, memberIds: [memberAId, memberBId], name: 'Nhóm kho riêng 587' });
     expect(conv.status).toBe(201);
     convId = (conv.body as { id: string }).id;
+    // Dữ kiện đang được tạo ở shared TRƯỚC khi sao sang kho A:
+    // dùng phiên legacy không centre_id tại site chính, tránh
+    // chuyển token kho A sang host shared chỉ để chuẩn bị fixture.
     const sent = await helpers.http(app).post(`/api/v1/messages/conversations/${convId}/messages`)
-      .set(auth(tokenWithClaim))
+      .set(auth(tokenWithoutClaim))
       .send({ text: MESSAGE_TEXT });
     expect(sent.status).toBe(201);
     // Hội thoại do quản trị tạo nên mang tenant của trang chính;

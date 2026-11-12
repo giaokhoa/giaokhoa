@@ -415,14 +415,16 @@ describe('Các cổng tiền di trú ở kho riêng (đầu-cuối, issue #587)'
       );
     });
 
-    // Token của giáo viên cho tenant A qua đường chuyển tenant như
-    // người dùng thật — token này mang claim centre_id.
-    const teacherApex = await helpers.login(app, teacherUsername, helpers.STRONG_PASSWORD);
-    const switched = (await must(
-      await helpers.http(app).post(`/api/v1/auth/switch-tenant/${tenantAId}`).set(auth(teacherApex.accessToken)),
-      'switch teacher to tenant A',
+    // Phiên trung tâm chỉ được cấp tại Host của chính trung tâm:
+    // không chuyển tenant từ site chính sang kho riêng vì thao tác
+    // đó sinh phiên có thể dùng sai địa chỉ. Tài khoản đã có ở
+    // kho A, nên đăng nhập thật qua HTTP tại A để lấy centre_id.
+    const teacherLoginA = (await must(
+      await helpers.http(app).post('/api/v1/auth/token').set('Host', HOST_A)
+        .send({ username: teacherUsername, password: helpers.STRONG_PASSWORD }),
+      'login teacher at centre A',
     )) as { accessToken: string };
-    teacherTokenA = switched.accessToken;
+    teacherTokenA = teacherLoginA.accessToken;
 
     // Tài khoản chỉ còn ở kho riêng: tạo ở kho chung, sao vào kho
     // A, rồi XOÁ khỏi kho chung (membership trước, user sau) —
@@ -503,21 +505,21 @@ describe('Các cổng tiền di trú ở kho riêng (đầu-cuối, issue #587)'
     sharedOnlyBaId = sharedBaCreated.id;
     sharedOnlyBaUsername = sharedBaUsername;
 
-    // Tài khoản sẽ bị thu hồi: tạo, sao vào kho A, lấy token
-    // chuyển tenant khi membership còn hiệu lực — ca thu hồi sẽ
-    // kết thúc membership ở kho đích rồi dùng lại chính token này.
+    // Tài khoản sẽ bị thu hồi: tạo, sao vào kho A, đăng nhập tại
+    // địa chỉ A khi membership còn hiệu lực — ca thu hồi sẽ kết
+    // thúc membership ở kho đích rồi dùng lại chính token này.
     const revoked = await helpers.createUserViaApi(app, adminToken);
     await must(
       await helpers.http(app).post(`/api/v1/tenants/${tenantAId}/members`).set(auth(adminToken)).send({ userId: revoked.id }),
       'add revoked user to tenant A',
     );
     await copyMemberToCentre(revoked.id, tenantAId, null);
-    const revokedApex = await helpers.login(app, revoked.username, helpers.STRONG_PASSWORD);
-    const revokedSwitched = (await must(
-      await helpers.http(app).post(`/api/v1/auth/switch-tenant/${tenantAId}`).set(auth(revokedApex.accessToken)),
-      'switch revoked user to tenant A',
+    const revokedLoginA = (await must(
+      await helpers.http(app).post('/api/v1/auth/token').set('Host', HOST_A)
+        .send({ username: revoked.username, password: helpers.STRONG_PASSWORD }),
+      'login revocable user at centre A',
     )) as { accessToken: string };
-    revokedTokenA = revokedSwitched.accessToken;
+    revokedTokenA = revokedLoginA.accessToken;
   }, 300_000);
 
   afterAll(async () => {

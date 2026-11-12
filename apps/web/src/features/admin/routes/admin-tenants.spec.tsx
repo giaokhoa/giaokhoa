@@ -8,8 +8,9 @@ import { AdminTenantsPage } from './admin-tenants';
 
 /**
  * Spec trang quản trị tenant theo đúng các tiêu chí nghiệm thu của bề
- * mặt này: người quản trị nền tảng thấy danh sách mọi tenant, tạo được
- * tenant mới và đọc membership của tenant đang chọn; người chỉ có
+ * mặt này: người quản trị nền tảng thấy danh sách mọi tenant, tạo
+ * trường học kho chung (không tạo trung tâm kho riêng qua form)
+ * và đọc membership của tenant đang chọn; người chỉ có
  * capability xem phía platform không thấy điều khiển ghi; chủ trung
  * tâm chỉ làm việc với tenant hiệu lực của mình (trang không nạp danh
  * sách platform) và quản lý được membership trong tenant đó; vai trò
@@ -211,7 +212,7 @@ describe('Trang quản trị tenant', () => {
     localStorage.clear();
   });
 
-  it('platform manager: thấy mọi tenant, membership đi theo tenant đang chọn, tạo tenant gửi đúng payload', async () => {
+  it('platform manager: thấy mọi tenant, tạo trường kho chung và gửi đúng payload không cấp trung tâm mới', async () => {
     const calls: RecordedCall[] = [];
     stubFetch(calls, { systemCaps: ['tenant:manage'] });
     renderPage();
@@ -228,15 +229,20 @@ describe('Trang quản trị tenant', () => {
     expect(screen.queryByText('membera')).not.toBeInTheDocument();
     expect(calls.some((c) => c.url === `/api/v1/tenants/${TENANT_B_ID}/members` && c.method === 'GET')).toBe(true);
 
-    // Tạo tenant: payload đúng hợp đồng tạo (không gửi plan khi để trống).
-    await userEvent.type(screen.getByLabelText('Tên trung tâm'), 'Trung tâm Gamma');
-    await userEvent.type(screen.getByLabelText('Mã định danh (slug)'), 'trung-tam-gamma');
-    await userEvent.click(screen.getByRole('button', { name: 'Tạo trung tâm' }));
+    // Không có nút tạo trung tâm kho riêng trên form legacy; UI phải
+    // hướng dẫn sử dụng pipeline cấp phát của người vận hành.
+    expect(screen.getByText(/Trung tâm giáo dục mới phải được vận hành cấp database/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Tạo trung tâm' })).not.toBeInTheDocument();
+    // Chỉ tạo trường học dùng shared; không gửi kind=center hoặc plan
+    // khi người quản trị chưa chọn gói.
+    await userEvent.type(screen.getByLabelText('Tên trung tâm'), 'Trường Gamma');
+    await userEvent.type(screen.getByLabelText('Mã định danh (slug)'), 'truong-gamma');
+    await userEvent.click(screen.getByRole('button', { name: 'Tạo trường học' }));
     await waitFor(() => expect(calls.some((c) => c.url === '/api/v1/tenants' && c.method === 'POST')).toBe(true));
     const post = calls.find((c) => c.url === '/api/v1/tenants' && c.method === 'POST');
-    expect(post?.body).toEqual({ name: 'Trung tâm Gamma', slug: 'trung-tam-gamma', kind: 'center' });
-    expect(await screen.findByText('Đã tạo trung tâm.')).toBeInTheDocument();
-    expect(screen.getByText('Trung tâm Gamma')).toBeInTheDocument();
+    expect(post?.body).toEqual({ name: 'Trường Gamma', slug: 'truong-gamma', kind: 'school' });
+    expect(await screen.findByText('Đã tạo trường học trong kho chung.')).toBeInTheDocument();
+    expect(screen.getByText('Trường Gamma')).toBeInTheDocument();
   });
 
   it('platform viewer: xem được danh sách và thành viên nhưng không có điều khiển ghi nào', async () => {
@@ -247,7 +253,7 @@ describe('Trang quản trị tenant', () => {
     expect(await screen.findByText('Trung tâm Alpha')).toBeInTheDocument();
     expect(await screen.findByText('membera')).toBeInTheDocument();
     expect(screen.queryByLabelText('Tên trung tâm')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Tạo trung tâm' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Tạo trường học' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Thêm thành viên' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Tạm dừng' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Kết thúc' })).not.toBeInTheDocument();
