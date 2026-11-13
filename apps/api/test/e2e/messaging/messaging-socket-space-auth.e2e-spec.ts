@@ -383,18 +383,15 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
     const centreUrl = clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD);
     await copyRowById(process.env.DATABASE_URL!, centreUrl, 'tenants', tenantId);
 
-    // Hai thành viên của trung tâm: tạo ở kho chung, thêm membership bằng API, sao user + membership vào kho riêng.
-    // Fixture cấp vai quản trị trong tenant; quyền platform tự nó không được phép thêm thành viên.
-    await helpers.grantTenantManagerFixture(app, adminToken, tenantId);
+    // Hai thành viên được tạo ở kho chung và gieo membership bằng
+    // fixture tiền di trú, sau đó sao sang kho riêng. Cổng quản trị
+    // platform không được thêm thành viên trên Host kho riêng.
     const memberA = await helpers.createUserViaApi(app, adminToken);
     const memberB = await helpers.createUserViaApi(app, adminToken);
     memberAId = memberA.id;
     memberBId = memberB.id;
     for (const member of [memberA, memberB]) {
-      await must(
-        await helpers.http(app).post(`/api/v1/tenants/${tenantId}/members`).set(auth(adminToken)).send({ userId: member.id }),
-        'add member to tenant',
-      );
+      await helpers.seedTenantMembershipFixture(app, tenantId, member.id);
       await copyMemberToCentre(member.id, tenantId);
     }
 

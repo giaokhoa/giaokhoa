@@ -10,6 +10,7 @@ import {
   createTestApp,
   createUserViaApi,
   grantTenantManagerFixture,
+  seedTenantMembershipFixture,
   http,
   login,
 } from '../../support/identity-access-helpers';
@@ -297,17 +298,14 @@ describe('Định tuyến theo trung tâm ở tầng API (đầu-cuối)', () =>
     await copyRow(process.env.DATABASE_URL!, clusterUrl(CENTRE_B_DATABASE, CENTRE_B_ROLE, CENTRE_B_PASSWORD), 'tenants', 'id', tenantBId);
 
     // Giáo viên là thành viên của trung tâm A: tạo ở kho chung,
-    // thêm membership bằng API, rồi sao dòng user + dòng
+    // gieo membership trong fixture trước di trú, rồi sao dòng
+    // user + dòng
     // membership vào kho A và đóng dấu phân biệt lên dòng user
     // ở kho A.
-    await grantTenantManagerFixture(app, adminToken, tenantAId);
     const teacher = await createUserViaApi(app, adminToken);
     teacherId = teacher.id;
     teacherUsername = teacher.username;
-    await must(
-      await http(app).post(`/api/v1/tenants/${tenantAId}/members`).set(auth(adminToken)).send({ userId: teacherId }),
-      'add teacher to tenant A',
-    );
+    await seedTenantMembershipFixture(app, tenantAId, teacherId);
     await copyRow(process.env.DATABASE_URL!, clusterUrl(CENTRE_A_DATABASE, CENTRE_A_ROLE, CENTRE_A_PASSWORD), 'users', 'id', teacherId);
     const membershipRow = await withClient(process.env.DATABASE_URL!, async (client) => {
       await client.query("SELECT set_config('app.platform', 'on', false)");

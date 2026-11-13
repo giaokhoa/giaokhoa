@@ -353,17 +353,14 @@ describe('Các cổng tiền di trú ở kho riêng (đầu-cuối, issue #587)'
     );
 
     // Giáo viên chính là thành viên của trung tâm A: tạo ở kho
-    // chung, thêm membership bằng API, rồi sao dòng user + dòng
+    // chung, gieo membership trong fixture trước di trú, rồi sao dòng
+    // user + dòng
     // membership vào kho A và đóng dấu phân biệt lên dòng user ở
     // kho A.
-    await helpers.grantTenantManagerFixture(app, adminToken, tenantAId);
     const teacher = await helpers.createUserViaApi(app, adminToken);
     teacherUsername = teacher.username;
     teacherId = teacher.id;
-    await must(
-      await helpers.http(app).post(`/api/v1/tenants/${tenantAId}/members`).set(auth(adminToken)).send({ userId: teacher.id }),
-      'add teacher to tenant A',
-    );
+    await helpers.seedTenantMembershipFixture(app, tenantAId, teacher.id);
     await copyMemberToCentre(teacher.id, tenantAId, CENTRE_A_FIRST_NAME);
 
     // Phiên Better Auth của giáo viên gieo thẳng vào kho đích (bảng
@@ -395,10 +392,7 @@ describe('Các cổng tiền di trú ở kho riêng (đầu-cuối, issue #587)'
     const dedicatedOnly = await helpers.createUserViaApi(app, adminToken);
     dedicatedOnlyId = dedicatedOnly.id;
     dedicatedOnlyUsername = dedicatedOnly.username;
-    await must(
-      await helpers.http(app).post(`/api/v1/tenants/${tenantAId}/members`).set(auth(adminToken)).send({ userId: dedicatedOnlyId }),
-      'add dedicated-only user to tenant A',
-    );
+    await helpers.seedTenantMembershipFixture(app, tenantAId, dedicatedOnlyId);
     await copyMemberToCentre(dedicatedOnlyId, tenantAId, null);
     await withClient(process.env.DATABASE_URL!, async (client) => {
       await client.query("SELECT set_config('app.platform', 'on', false)");
@@ -431,10 +425,7 @@ describe('Các cổng tiền di trú ở kho riêng (đầu-cuối, issue #587)'
     });
     dedicatedOnlyBaId = baCreated.id;
     dedicatedOnlyBaUsername = baUsername;
-    await must(
-      await helpers.http(app).post(`/api/v1/tenants/${tenantAId}/members`).set(auth(adminToken)).send({ userId: dedicatedOnlyBaId }),
-      'add dedicated-only BA user to tenant A',
-    );
+    await helpers.seedTenantMembershipFixture(app, tenantAId, dedicatedOnlyBaId);
     await copyMemberToCentre(dedicatedOnlyBaId, tenantAId, 'DauAnKhoBA587');
     await copyRow(
       process.env.DATABASE_URL!,
@@ -472,10 +463,7 @@ describe('Các cổng tiền di trú ở kho riêng (đầu-cuối, issue #587)'
     // địa chỉ A khi membership còn hiệu lực — ca thu hồi sẽ kết
     // thúc membership ở kho đích rồi dùng lại chính token này.
     const revoked = await helpers.createUserViaApi(app, adminToken);
-    await must(
-      await helpers.http(app).post(`/api/v1/tenants/${tenantAId}/members`).set(auth(adminToken)).send({ userId: revoked.id }),
-      'add revoked user to tenant A',
-    );
+    await helpers.seedTenantMembershipFixture(app, tenantAId, revoked.id);
     await copyMemberToCentre(revoked.id, tenantAId, null);
     const revokedLoginA = (await must(
       await helpers.http(app).post('/api/v1/auth/token').set('Host', HOST_A)
