@@ -60,3 +60,6 @@ export interface ExamQuestionSnapshot {
   package: import('@giaokhoa/contracts').SystemBankPackage;
   answerIds: string[];
 }
+
+/** Package học liệu công bố dùng cùng hợp đồng Zod của API và web. */
+export type { SystemMaterialPackage } from '@giaokhoa/contracts';

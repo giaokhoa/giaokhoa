@@ -14,7 +14,7 @@ import type { Queue } from 'bullmq';
  *   mới đóng dấu và phản chiếu dòng đã phát vào `event_log`.
  * - "Phát cho phía tiêu thụ" với loại sự kiện đã có consumer trên
  *   hàng đợi ở worker là đẩy job BullMQ vào MỌI hàng đợi đích của
- *   loại đó: tên job là chính loại sự kiện, `jobId` là id của dòng
+ *   loại đó: tên job là chính loại sự kiện, `jobId` ghép định danh kho bất biến với id của dòng
  *   outbox, dữ liệu job là toàn bộ dòng outbox đã chuẩn hoá (xem
  *   {@link OutboxEventJobData}).
  *   `jobId` là khoá chống trùng của BullMQ NHƯNG chỉ trong cửa sổ
@@ -46,7 +46,7 @@ import type { Queue } from 'bullmq';
  *   issue chuyển consumer tương ứng.
  * - Chống trùng hai lớp, phân vai rõ ràng: cam kết của cơ chế này
  *   là at-least-once (`publishedAt` là dấu đã phát, không phải dấu
- *   hoàn thành xử lý). Lớp thứ nhất là `jobId` bằng id dòng outbox,
+ *   hoàn thành xử lý). Lớp thứ nhất là `jobId` ghép định danh kho bất biến với id dòng outbox,
  *   chỉ có hiệu lực trong cửa sổ lưu giữ của hàng đợi như mô tả ở
  *   trên. Lớp thứ hai — và là hàng rào chính ngoài cửa sổ đó — là
  *   processor của hàng đợi được định tuyến: processor PHẢI
@@ -67,7 +67,7 @@ import type { Queue } from 'bullmq';
  * sách và chỉ đóng dấu `publishedAt` sau khi MỌI đích đã nhận job
  * thành công — lỗi ở bất kỳ đích nào thì dòng chưa được đóng dấu
  * và được phát lại ở nhịp sau (đích đã nhận không sinh job trùng
- * trong cửa sổ lưu giữ nhờ `jobId` bằng id dòng outbox; ngoài cửa
+ * trong cửa sổ lưu giữ nhờ `jobId` ghép định danh kho bất biến với id dòng outbox; ngoài cửa
  * sổ đó, hàng rào chống tác dụng phụ lần hai là tính idempotent
  * theo `outboxId` của processor ở đích đó). Các consumer của cùng
  * một loại sự kiện vẫn độc lập hoàn toàn: relay không chờ consumer
@@ -201,14 +201,14 @@ export type OutboxEventQueues = ReadonlyMap<string, Queue>;
 /**
  * Dữ liệu của MỘT job phát từ MỘT dòng outbox: mang đủ định danh và nội dung của dòng để consumer trên hàng đợi xử lý mà không phải đọc lại bảng outbox, đồng thời truy vết được về đúng dòng gốc.
  *
- * - `outboxId`: id của dòng outbox — đồng thời là `jobId` của job.
+ * - `outboxId`: id dòng outbox, còn BullMQ `jobId` là cặp `spaceId`/shared + `outboxId`.
  * - `seq`: mốc thứ tự toàn cục của dòng trong bảng outbox.
  * - `aggregate` / `type`: phân hệ và loại sự kiện như đã ghi ở dòng.
  * - `payload`: nội dung sự kiện nguyên văn như đã ghi ở dòng (relay
  *   không biến đổi payload).
  * - `tenantId`: tenant của ngữ cảnh phát sinh sự kiện (có thể null).
  * - `spaceSlug`: slug của trung tâm mà tenant của sự kiện thuộc
- *   về trong sổ đăng ký control plane (issue #582) — relay suy ra từ chính tenant của dòng lúc phát (slug của tenant và slug đăng ký của trung tâm là một); null khi sự kiện không gắn tenant hoặc tenant không còn dòng tương ứng. Consumer dùng trường này qua `SpaceJobRunner` để mở đúng kho của trung tâm; dòng được relay đọc từ kho riêng của một trung tâm mang slug của chính trung tâm đó theo cùng cơ chế suy ra này.
+ *   về trong sổ đăng ký control plane (issue #582) — relay suy ra từ chính tenant của dòng lúc phát (slug của tenant và slug đăng ký của trung tâm là một); null chỉ khi sự kiện không gắn tenant; tenant đã bị xoá được từ chối thay vì rơi về platform. Consumer dùng trường này qua `SpaceJobRunner` để mở đúng kho của trung tâm; dòng được relay đọc từ kho riêng của một trung tâm mang slug của chính trung tâm đó theo cùng cơ chế suy ra này.
  * - `occurredAt`: thời điểm phát sinh sự kiện, dạng chuỗi ISO 8601
  *   (dữ liệu job đi qua Redis nên chỉ giữ dạng JSON hoá được).
  */
@@ -220,5 +220,7 @@ export interface OutboxEventJobData {
   payload: Record<string, unknown> | null;
   tenantId: string | null;
   spaceSlug: string | null;
+  /** Định danh bất biến của sổ trung tâm khi job sinh từ kho riêng. */
+  spaceId?: string | null;
   occurredAt: string;
 }

@@ -304,5 +304,10 @@
     "shared_requires_pinned": "Câu hệ thống bắt buộc ghim phiên bản",
     "pin_preparing": "Đợt giao đang được chuẩn bị; hãy thử lại cùng khoá yêu cầu",
     "pin_request_id_required": "Tạo đề mới hoặc giao câu hệ thống cần khoá yêu cầu để thử lại an toàn"
+  },
+  "system_material": {
+    "invalid_package": "Học liệu cần tác giả, nguồn, giấy phép và tệp hoặc liên kết hợp lệ thuộc trung tâm.",
+    "not_found": "Không tìm thấy học liệu công bố hoặc phiên bản này.",
+    "reference_immutable": "Học liệu đang dùng được ghim vào phiên bản bất biến; hãy chọn phiên bản khác để thêm mới."
   }
 }

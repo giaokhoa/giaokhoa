@@ -136,7 +136,7 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
     const identity = await auth.authenticateHandshake({
       headers: { cookie: 'better-auth.session_token=abc123' },
     });
-    expect(identity).toEqual({ userId: 'u1', username: 'user-u1', tenantId: 'tenant-default', spaceSlug: null });
+    expect(identity).toEqual({ userId: 'u1', username: 'user-u1', tenantId: 'tenant-default', spaceSlug: null, spaceId: null });
   });
 
   it('cookie có tiền tố __Secure- vẫn nhận', async () => {
@@ -154,7 +154,7 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
       headers: { cookie: 'better-auth.session_token=abc123' },
       auth: { token },
     });
-    expect(identity).toEqual({ userId: 'u2', username: 'user-u2', tenantId: 'tenant-t', spaceSlug: null });
+    expect(identity).toEqual({ userId: 'u2', username: 'user-u2', tenantId: 'tenant-t', spaceSlug: null, spaceId: null });
   });
 
   it('phiên cookie hỏng → rơi xuống token dự phòng thay vì từ chối ngay', async () => {
@@ -164,7 +164,7 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
       headers: { cookie: 'better-auth.session_token=bad' },
       auth: { token },
     });
-    expect(identity).toEqual({ userId: 'u3', username: 'user-u3', tenantId: null, spaceSlug: null });
+    expect(identity).toEqual({ userId: 'u3', username: 'user-u3', tenantId: null, spaceSlug: null, spaceId: null });
   });
 
   it('cookie hợp lệ nhưng tài khoản bị khoá → null khi không có token', async () => {
@@ -209,7 +209,7 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
       const identity = await auth.authenticateHandshake({
         headers: { host: HOST, cookie: 'better-auth.session_token=abc123' },
       });
-      expect(identity).toEqual({ userId: 'u1', username: 'user-u1', tenantId: 'tenant-a', spaceSlug: SLUG });
+      expect(identity).toEqual({ userId: 'u1', username: 'user-u1', tenantId: 'tenant-a', spaceSlug: SLUG, spaceId: SPACE_ID });
       // Cả ba lượt đọc đều nằm trong phạm vi kho của trung tâm, theo
       // đúng thứ tự phiên → tài khoản → tenant mặc định; không lượt
       // nào chạy ngoài phạm vi (tức ở kho chung).
@@ -221,7 +221,7 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
       expect(probe.spaceSlugs.every((slug) => slug === SLUG)).toBe(true);
       // Lượt suy tenant mặc định giữ ngữ cảnh platform KÈM slug của
       // trung tâm trong store ALS — mất slug là rơi về kho chung.
-      expect(probe.alsStores[0]).toMatchObject({ platform: true, spaceSlug: SLUG });
+      expect(probe.alsStores[0]).toMatchObject({ platform: true, spaceSlug: SLUG, spaceId: SPACE_ID });
     });
 
     it('JWT của trung tâm A tại hostname gốc bị từ chối trước khi đọc user ở shared, dù có bản sao legacy', async () => {
@@ -261,7 +261,7 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
       const identity = await auth.authenticateHandshake({
         headers: { host: 'giaokhoa.example' }, auth: { token },
       });
-      expect(identity).toEqual({ userId: 'platform-admin', username: 'user-platform-admin', tenantId: 'tenant-platform', spaceSlug: null });
+      expect(identity).toEqual({ userId: 'platform-admin', username: 'user-platform-admin', tenantId: 'tenant-platform', spaceSlug: null, spaceId: null });
       expect(users.getByIdOrUndefined).toHaveBeenCalledOnce();
       expect(probe.reads).toEqual([{ kind: 'user', insideSpace: false }]);
       expect(tenants.platformTenant).toHaveBeenCalledOnce();
@@ -383,7 +383,7 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
       const token = sign({ sub: 'u9', username: 'u9', sid: 's1', tid: 'tenant-a', centre_id: SPACE_ID });
       const { auth, probe } = build({ spaceMode: 'dedicated', spaceId: SPACE_ID, betterAuthEnabled: false });
       const identity = await auth.authenticateHandshake({ headers: { host: HOST }, auth: { token } });
-      expect(identity).toEqual({ userId: 'u9', username: 'user-u9', tenantId: 'tenant-a', spaceSlug: SLUG });
+      expect(identity).toEqual({ userId: 'u9', username: 'user-u9', tenantId: 'tenant-a', spaceSlug: SLUG, spaceId: SPACE_ID });
       expect(probe.reads).toEqual([{ kind: 'user', insideSpace: true }]);
     });
 
@@ -408,7 +408,7 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
       const token = sign({ sub: 'admin-1', username: 'admin-1', sid: 's1', tid: 'tenant-platform' });
       const { auth, probe } = build({ spaceMode: 'dedicated', spaceId: SPACE_ID, betterAuthEnabled: false });
       const identity = await auth.authenticateHandshake({ headers: { host: HOST }, auth: { token } });
-      expect(identity).toEqual({ userId: 'admin-1', username: 'user-admin-1', tenantId: 'tenant-platform', spaceSlug: null });
+      expect(identity).toEqual({ userId: 'admin-1', username: 'user-admin-1', tenantId: 'tenant-platform', spaceSlug: null, spaceId: null });
       expect(probe.reads).toEqual([{ kind: 'user', insideSpace: false }]);
     });
 
@@ -465,7 +465,7 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
       const identity = await auth.authenticateHandshake({
         headers: { host: HOST, cookie: 'better-auth.session_token=abc123' },
       });
-      expect(identity).toEqual({ userId: 'u1', username: 'user-u1', tenantId: 'tenant-s', spaceSlug: null });
+      expect(identity).toEqual({ userId: 'u1', username: 'user-u1', tenantId: 'tenant-s', spaceSlug: null, spaceId: null });
       expect(spaceDb.withSpaceKysely).not.toHaveBeenCalled();
       expect(probe.reads.every((read) => !read.insideSpace)).toBe(true);
     });

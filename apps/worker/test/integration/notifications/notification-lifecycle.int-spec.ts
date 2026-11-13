@@ -96,7 +96,7 @@ describe('Worker NB-6: lưu giữ thông báo + luật gửi chung', () => {
   it('nhắc lịch gửi qua luật chung: thông báo + log gửi đã giao, phát lại là trùng lặp', async () => {
     const processor = context.get(CalendarReminderProcessor);
     const eventId = await mkEvent(plainUser, `NB6 exam ${suffix}`);
-    const first = await processor.process({ data: { eventId, userId: plainUser, minutesBefore: 30 } } as never);
+    const first = await processor.process({ data: { spaceSlug: null, spaceId: null, eventId, userId: plainUser, minutesBefore: 30 } } as never);
     expect(first.status).toBe('notified');
     const notes = await notesOf(plainUser, 'calendar_reminder');
     expect(notes).toHaveLength(1);
@@ -107,7 +107,7 @@ describe('Worker NB-6: lưu giữ thông báo + luật gửi chung', () => {
     expect(logs).toHaveLength(1);
     expect(logs[0].dedupe_key).toBe(`popup-${notes[0].id}`);
     expect(logs[0].notification_id).toBe(notes[0].id);
-    const replay = await processor.process({ data: { eventId, userId: plainUser, minutesBefore: 30 } } as never);
+    const replay = await processor.process({ data: { spaceSlug: null, spaceId: null, eventId, userId: plainUser, minutesBefore: 30 } } as never);
     expect(replay.status).toBe('duplicate');
     expect(await notesOf(plainUser, 'calendar_reminder')).toHaveLength(1);
   });
@@ -115,7 +115,7 @@ describe('Worker NB-6: lưu giữ thông báo + luật gửi chung', () => {
   it('nhắc lịch tôn trọng tuỳ chọn v2: tắt ⇒ không lưu gì, ghi log skipped-preference', async () => {
     const processor = context.get(CalendarReminderProcessor);
     const eventId = await mkEvent(v2OffUser, `NB6 exam off ${suffix}`);
-    const result = await processor.process({ data: { eventId, userId: v2OffUser, minutesBefore: 30 } } as never);
+    const result = await processor.process({ data: { spaceSlug: null, spaceId: null, eventId, userId: v2OffUser, minutesBefore: 30 } } as never);
     expect(result.status).toBe('skipped-preference');
     expect(await notesOf(v2OffUser, 'calendar_reminder')).toHaveLength(0);
     expect(await dispatchOf(v2OffUser, 'calendar_reminder', 'skipped-preference')).toHaveLength(1);
@@ -124,11 +124,11 @@ describe('Worker NB-6: lưu giữ thông báo + luật gửi chung', () => {
   it('nhắc lịch tôn trọng tuỳ chọn cũ theo cách suy ra chung (loggedin, rồi loggedoff)', async () => {
     const processor = context.get(CalendarReminderProcessor);
     const inEvent = await mkEvent(legacyInOffUser, `NB6 legacy in ${suffix}`);
-    const inResult = await processor.process({ data: { eventId: inEvent, userId: legacyInOffUser, minutesBefore: 30 } } as never);
+    const inResult = await processor.process({ data: { spaceSlug: null, spaceId: null, eventId: inEvent, userId: legacyInOffUser, minutesBefore: 30 } } as never);
     expect(inResult.status).toBe('skipped-preference');
     expect(await notesOf(legacyInOffUser, 'calendar_reminder')).toHaveLength(0);
     const outEvent = await mkEvent(legacyOutOffUser, `NB6 legacy out ${suffix}`);
-    const outResult = await processor.process({ data: { eventId: outEvent, userId: legacyOutOffUser, minutesBefore: 30 } } as never);
+    const outResult = await processor.process({ data: { spaceSlug: null, spaceId: null, eventId: outEvent, userId: legacyOutOffUser, minutesBefore: 30 } } as never);
     expect(outResult.status).toBe('skipped-preference');
     expect(await notesOf(legacyOutOffUser, 'calendar_reminder')).toHaveLength(0);
   });
@@ -136,7 +136,7 @@ describe('Worker NB-6: lưu giữ thông báo + luật gửi chung', () => {
   it('nhắc lịch không gửi gì cho người dùng bị đình chỉ và ghi log skipped-suspended', async () => {
     const processor = context.get(CalendarReminderProcessor);
     const eventId = await mkEvent(suspendedUser, `NB6 exam susp ${suffix}`);
-    const result = await processor.process({ data: { eventId, userId: suspendedUser, minutesBefore: 30 } } as never);
+    const result = await processor.process({ data: { spaceSlug: null, spaceId: null, eventId, userId: suspendedUser, minutesBefore: 30 } } as never);
     expect(result.status).toBe('skipped-suspended');
     expect(await notesOf(suspendedUser, 'calendar_reminder')).toHaveLength(0);
     expect(await dispatchOf(suspendedUser, 'calendar_reminder', 'skipped-suspended')).toHaveLength(1);
@@ -166,7 +166,15 @@ describe('Worker NB-6: lưu giữ thông báo + luật gửi chung', () => {
       const messagePromise = new Promise<string>((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error('badge signal not received in 5s')), 5000);
         subscriber.on('message', (_channel: string, message: string) => {
-          if (message === plainUser) { clearTimeout(timer); resolve(message); }
+          try {
+            const signal = JSON.parse(message) as { userId?: string; spaceId?: string | null };
+            if (signal.userId === plainUser && signal.spaceId === null) {
+              clearTimeout(timer);
+              resolve(signal.userId);
+            }
+          } catch {
+            // Chỉ tín hiệu JSON đúng hợp đồng realtime mới thoả điều kiện chờ.
+          }
         });
       });
       // Gọi service trực tiếp nên spec tự đặt ngữ cảnh platform —
@@ -192,7 +200,7 @@ describe('Worker NB-6: lưu giữ thông báo + luật gửi chung', () => {
       report_id: report.id, created_by: plainUser, cron: 'daily', enabled: true,
     }).returningAll().executeTakeFirstOrThrow();
     const processor = context.get(ReportScheduleProcessor);
-    const result = await processor.process({ data: { scheduleId: schedule.id } } as never);
+    const result = await processor.process({ data: { spaceSlug: null, spaceId: null, scheduleId: schedule.id } } as never);
     expect(result.status).toBe('completed');
     const notes = await notesOf(plainUser, 'report_scheduled');
     expect(notes.length).toBeGreaterThanOrEqual(1);
@@ -212,7 +220,7 @@ describe('Worker NB-6: lưu giữ thông báo + luật gửi chung', () => {
       const schedule = await db.insertInto('report_builder_schedule').values({
         report_id: report.id, created_by: creator, cron: 'daily', enabled: true,
       }).returningAll().executeTakeFirstOrThrow();
-      const result = await processor.process({ data: { scheduleId: schedule.id } } as never);
+      const result = await processor.process({ data: { spaceSlug: null, spaceId: null, scheduleId: schedule.id } } as never);
       expect(result.status).toBe('completed');
       return report.id as string;
     }
@@ -282,7 +290,7 @@ describe('Worker NB-6: lưu giữ thông báo + luật gửi chung', () => {
 
   it('lượt chạy tiến trình lưu giữ để lại một dòng task_log thành công', async () => {
     const processor = context.get(NotificationRetentionProcessor);
-    await processor.process({ data: {} } as never);
+    await processor.process({ data: { spaceSlug: null, spaceId: null,} } as never);
     const rows = await db.selectFrom('task_log').selectAll()
       .where('task_name', '=', 'notification-retention').where('started_at', '>=', startedAt)
       .orderBy('started_at', 'desc').execute();

@@ -3,6 +3,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException,
 import type { Queue } from 'bullmq';
 import { createHash, randomBytes } from 'node:crypto';
 import { OutboxService } from '../../infra/events/outbox.service';
+import { backgroundJobContext, backgroundJobId } from '../../db/routing/background-job-context';
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { CoursesService } from '../courses/courses.service';
@@ -321,8 +322,8 @@ export class CalendarService {
     }
     const remindAt = new Date(event.timeStart.getTime() - minutesBefore * 60_000);
     const delayMs = Math.max(0, remindAt.getTime() - Date.now());
-    await this.reminderQueue.add('remind', { eventId, userId: actorId, minutesBefore }, {
-      jobId: `cal-reminder-${eventId}-${actorId}-${minutesBefore}`,
+    await this.reminderQueue.add('remind', { eventId, userId: actorId, minutesBefore, ...backgroundJobContext() }, {
+      jobId: backgroundJobId(`cal-reminder-${eventId}-${actorId}-${minutesBefore}`),
       delay: delayMs, attempts: 3, removeOnComplete: true,
     });
     return { eventId, userId: actorId, remindAt: remindAt.toISOString(), delayMs };
@@ -346,7 +347,7 @@ export class CalendarService {
       userId: actorId, pollInterval: input.pollInterval ?? 604800,
     });
     if (subscription.icsData) {
-      await this.importQueue.add('import', { subscriptionId: subscription.id }, { jobId: `cal-import-${subscription.id}`, attempts: 3 });
+      await this.importQueue.add('import', { subscriptionId: subscription.id, ...backgroundJobContext() }, { jobId: backgroundJobId(`cal-import-${subscription.id}`), attempts: 3 });
     }
     return subscription;
   }
@@ -367,7 +368,7 @@ export class CalendarService {
     const sub = await this.repo.getSubscription(subscriptionId);
     if (!sub) throw new NotFoundException({ message: `Subscription ${subscriptionId} not found`, code: 'calendar.subscription_not_found' });
     await this.evaluator.requireCapability(actorId, 'calendar:managesubscriptions', await this.systemCtx());
-    await this.importQueue.add('import', { subscriptionId }, { jobId: `cal-import-${subscriptionId}-${Date.now()}`, attempts: 3 });
+    await this.importQueue.add('import', { subscriptionId, ...backgroundJobContext() }, { jobId: backgroundJobId(`cal-import-${subscriptionId}-${Date.now()}`), attempts: 3 });
     return { queued: true, subscriptionId };
   }
 }

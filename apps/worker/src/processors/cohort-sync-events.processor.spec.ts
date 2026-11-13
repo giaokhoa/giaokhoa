@@ -43,6 +43,7 @@ function makeJob(partial: Partial<OutboxEventJobData> = {}) {
     payload: { cohortId: 'cohort-1', userId: 'user-1' },
     tenantId: null,
     spaceSlug: null,
+    spaceId: null,
     occurredAt: '2026-10-30T00:00:00.000Z',
     ...partial,
   };

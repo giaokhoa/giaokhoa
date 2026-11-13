@@ -6,6 +6,7 @@ import Redis from 'ioredis';
 import { redisConnectionFromUrl } from './config/env';
 import { tenantAls } from './db/tenant-als';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
+import { outboxRelayJobId } from './outbox-relay.scheduler';
 import { COHORT_SYNC_EVENT_TYPES } from './processors/cohort-sync-events.processor';
 import type { OutboxEventJobData } from './outbox-event-routes';
 
@@ -284,15 +285,7 @@ export class CohortSyncCatchupService implements OnModuleInit, OnModuleDestroy {
           .limit(DRAIN_BATCH_SIZE)
           .execute();
         if (rows.length === 0) break;
-        const tenantIds = [...new Set(rows.map((row) => row.tenantId).filter((id) => id !== null))];
-        const slugRows = tenantIds.length
-          ? await this.spaceDb.routedKysely
-              .selectFrom('tenants')
-              .select(['id', 'slug'])
-              .where('id', 'in', tenantIds)
-              .execute()
-          : [];
-        const spaceSlugs = new Map(slugRows.map((row) => [row.id, row.slug] as const));
+        // Phát bù chỉ đọc nguồn shared lịch sử; tenantId vẫn giữ nguyên để xử lý trong kho chung.
         for (const row of rows) {
           cursor = Number(row.seq);
           const data: OutboxEventJobData = {
@@ -304,14 +297,11 @@ export class CohortSyncCatchupService implements OnModuleInit, OnModuleDestroy {
             type: row.type,
             payload: row.payload as Record<string, unknown> | null,
             tenantId: row.tenantId,
-            // Định danh trung tâm suy từ tenant của dòng trong
-            // chính kho đang xả (một truy vấn theo lô, cùng cách
-            // của relay): consumer mở đúng kho của trung tâm khi
-            // xử lý job được xả bù này.
-            spaceSlug: row.tenantId ? (spaceSlugs.get(row.tenantId) ?? null) : null,
+            spaceSlug: null,
+            spaceId: null,
             occurredAt: row.occurredAt.toISOString(),
           };
-          await this.queue.add(row.type, data, { jobId: row.id });
+          await this.queue.add(row.type, data, { jobId: outboxRelayJobId(null, row.id) });
           enqueued += 1;
           onProgress(enqueued);
         }

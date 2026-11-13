@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Interval } from '@nestjs/schedule';
 import type { CentreDb } from '@giaokhoa/db';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
+import { SpaceRoutingError } from './db/routing/space-connection-resolver';
 import { mapWithConcurrencyLimit } from './db/routing/space-sweep';
 import { EventLogWriter } from './event-log-writer.service';
 import { TaskLogService } from './task-log.service';
@@ -44,7 +45,7 @@ interface OutboxRow {
  *    - Nếu loại sự kiện có trong bảng định tuyến
  *      {@link OUTBOX_EVENT_QUEUE_ROUTES}: bước phát là đẩy một job
  *      BullMQ vào MỌI hàng đợi đích của loại đó (tên job là loại
- *      sự kiện, `jobId` là id của dòng outbox, dữ liệu job là toàn
+ *      sự kiện, `jobId` là định danh kho ghép id của dòng outbox, dữ liệu job là toàn
  *      bộ dòng — xem {@link OutboxEventJobData}). Mọi đích đều đẩy
  *      thành công mới được coi là đã phát: loại có nhiều consumer
  *      (fan-out) chỉ được đóng dấu khi mọi consumer đều đã có job
@@ -96,7 +97,7 @@ interface OutboxRow {
  *   lại ở nhịp relay sau.
  * - Tính idempotent / at-least-once: tiến trình sập sau khi đẩy job
  *   mà trước khi đóng dấu thì nhịp sau phát lại cùng dòng; `jobId`
- *   bằng id dòng outbox khiến BullMQ trả lại job đã có thay vì tạo
+ *   ghép id kho bất biến với id dòng outbox khiến BullMQ trả lại job đã có thay vì tạo
  *   job trùng, nên phía hàng đợi vẫn đúng một job cho một dòng —
  *   NHƯNG chỉ trong cửa sổ hàng đợi còn lưu giữ job theo chính sách
  *   `removeOnComplete` / `removeOnFail` hiện hành. Job đã bị dọn
@@ -126,6 +127,15 @@ interface OutboxRow {
  * ghi cột `publishedAt` của `outbox_events`, chèn dòng `event_log`
  * qua `EventLogWriter`, ghi `task_log` qua `TaskLogService`.
  */
+/**
+ * Định danh job theo kho bất biến để outbox UUID trùng nhau ở các database
+ * không chiếm cùng một vị trí trong BullMQ. Dùng chung cho cầu dẫn e2e
+ * để dọn đúng job đã phát, kể cả ở nhánh lỗi trước khi đóng dấu.
+ */
+export function outboxRelayJobId(spaceId: string | null, outboxId: string): string {
+  return `${spaceId ?? 'shared'}-${outboxId}`;
+}
+
 @Injectable()
 export class OutboxRelayScheduler {
   private readonly logger = new Logger(OutboxRelayScheduler.name);
@@ -252,9 +262,13 @@ export class OutboxRelayScheduler {
     const failedSlugs: string[] = [];
     await mapWithConcurrencyLimit(dedicated, this.sweepConcurrency, async (space) => {
       try {
-        published += await this.spaceDb.withSpaceKysely(space.slug, (db) =>
-          this.publishPendingFrom(db, limitPerCentre),
+        // Không dùng `published += await ...`: phép cộng đọc giá trị
+        // trước khi await, hai trung tâm hoàn tất song song sẽ ghi đè
+        // nhau và báo thiếu số lượng đã phát trong nhịp.
+        const count = await this.spaceDb.withSpaceKysely(space.slug, (db) =>
+          this.publishPendingFrom(db, limitPerCentre, { slug: space.slug, id: space.id }),
         );
+        published += count;
       } catch (err) {
         failedSlugs.push(space.slug);
         this.logger.warn(
@@ -271,7 +285,11 @@ export class OutboxRelayScheduler {
    * đúng handle `db` được truyền (handle kho chung, hoặc handle
    * của kho trung tâm trong phiên theo trung tâm).
    */
-  private async publishPendingFrom(db: CentreDb, limit: number): Promise<number> {
+  private async publishPendingFrom(
+    db: CentreDb,
+    limit: number,
+    origin?: { slug: string; id: string },
+  ): Promise<number> {
     const pendingRaw = await db
       .selectFrom('outbox_events')
       .select([
@@ -298,7 +316,18 @@ export class OutboxRelayScheduler {
     const spaceSlugs = await this.resolveSpaceSlugs(db, pending);
     let published = 0;
     for (const row of pending) {
-      await this.dispatchRow(row, spaceSlugs.get(row.tenantId ?? '') ?? null);
+      const tenantSlug = spaceSlugs.get(row.tenantId ?? '') ?? null;
+      if (row.tenantId && !tenantSlug) {
+        throw new SpaceRoutingError('space_routing.outbox_tenant_missing', `Outbox ${row.id} has no owning tenant`);
+      }
+      if (origin && tenantSlug && tenantSlug !== origin.slug) {
+        throw new SpaceRoutingError('space_routing.outbox_space_mismatch', `Outbox ${row.id} belongs to a different space`);
+      }
+      // Không suy kho từ tên tenant khi đã quét trong kho riêng:
+      // job phải mang đúng id sổ của kho nơi dòng được đọc.
+      // Kho phát là nguồn xác nhận miền: chỉ lượt quét dedicated mới mang slug/id sổ đăng ký.
+      // Lượt quét kho chung đóng dấu shared tường minh; slug tenant vẫn được dùng để kiểm tra chủ sở hữu ở trên.
+      await this.dispatchRow(row, origin?.slug ?? null, origin?.id ?? null);
       await db
         .updateTable('outbox_events')
         .set({ published_at: new Date() })
@@ -346,7 +375,7 @@ export class OutboxRelayScheduler {
    * (phía tiêu thụ của dòng vẫn đọc trực tiếp bảng outbox như hiện
    * hành). Hàm chỉ resolve khi MỌI đích đã nhận job — mọi lỗi đều
    * ném ra để dòng không bị đóng dấu: phát lại ở nhịp sau an toàn ở
-   * các đích đã nhận nhờ `jobId` bằng id dòng outbox (BullMQ trả
+   * các đích đã nhận nhờ `jobId` ghép id kho với id dòng outbox (BullMQ trả
    * lại job đã có thay vì tạo job thứ hai), nên bất biến "đóng dấu
    * chỉ sau khi phát thành công" giữ nguyên cả khi fan-out nhiều
    * đích.
@@ -354,9 +383,9 @@ export class OutboxRelayScheduler {
    * @param row Dòng outbox đang phát (chưa có `publishedAt` tại thời
    * điểm hàm chạy — job được đẩy trong khi dòng còn chưa có dấu).
    * @param spaceSlug Slug của trung tâm mà tenant của dòng thuộc
-   * về, đã suy ra cho cả lô (null khi không xác định được).
+   * về, đã suy ra cho cả lô (null chỉ khi dòng không gắn tenant).
    */
-  private async dispatchRow(row: OutboxRow, spaceSlug: string | null): Promise<void> {
+  private async dispatchRow(row: OutboxRow, spaceSlug: string | null, spaceId: string | null): Promise<void> {
     const route = this.routes[row.type];
     if (!route) return;
     const data: OutboxEventJobData = {
@@ -367,6 +396,7 @@ export class OutboxRelayScheduler {
       payload: row.payload as Record<string, unknown> | null,
       tenantId: row.tenantId,
       spaceSlug,
+      spaceId,
       occurredAt: row.occurredAt.toISOString(),
     };
     for (const queueName of queueNamesOfRoute(route)) {
@@ -376,12 +406,16 @@ export class OutboxRelayScheduler {
           `Outbox event type "${row.type}" is routed to queue "${queueName}" but that queue is not registered`,
         );
       }
-      // jobId bằng id của dòng outbox (không chứa dấu ':' theo luật của
+      // jobId ghép định danh kho với id dòng outbox (không chứa dấu ':' theo luật của
       // package): phát lại cùng một dòng trong lúc job còn được BullMQ
       // lưu giữ thì không tạo job trùng ở đích đó; ngoài cửa sổ lưu
       // giữ đó, chống trùng tác dụng phụ là việc của processor
       // (idempotent theo outboxId — xem outbox-event-routes.ts).
-      await queue.add(row.type, data, { jobId: row.id });
+      await queue.add(row.type, data, {
+        // BullMQ dùng Redis chung: cùng outbox UUID ở hai database
+        // phải là hai công việc độc lập, kể cả khi relay retry.
+        jobId: outboxRelayJobId(spaceId, row.id),
+      });
     }
   }
 }

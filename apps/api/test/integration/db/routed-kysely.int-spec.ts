@@ -62,6 +62,15 @@ function fakeConfig(values: Record<string, unknown>): ConfigService {
   return { get: (key: string) => values[key] } as unknown as ConfigService;
 }
 
+/** Spec đã biết slug dedicated phải tự ghim identity khi dựng ALS thủ công. */
+async function runPinned<T>(
+  spaceDb: SpaceDatabaseService, slug: string, fn: () => Promise<T>,
+  binding = spaceDb.preparedSpaceScope(slug),
+): Promise<T> {
+  // Chụp đúng object handle của lần chuẩn bị, không đọc lại registry.
+  return tenantAls.run({ spaceSlug: slug, ...binding }, fn);
+}
+
 async function rowsIn(dbUrl: string, id: string): Promise<number> {
   const client = new Client({ connectionString: dbUrl });
   await client.connect();
@@ -152,7 +161,7 @@ describe('Facade Kysely định tuyến phía API (integration)', () => {
 
   it('routedKysely ghi/đọc đúng kho theo spaceSlug trong ALS, ngoài ALS về kho chung', async () => {
     await service.getKyselyForSpace(CENTRE_A_SLUG);
-    await tenantAls.run({ spaceSlug: CENTRE_A_SLUG }, async () => {
+    await runPinned(service, CENTRE_A_SLUG, async () => {
       await service.routedKysely
         .insertInto('tenants')
         .values({ id: TENANT_A_ID, slug: CENTRE_A_SLUG, name: 'Trung tâm A 639', kind: 'center' })
@@ -192,7 +201,7 @@ describe('Facade Kysely định tuyến phía API (integration)', () => {
 
   it('transaction qua facade commit và rollback đúng trên kho hiệu lực', async () => {
     await service.getKyselyForSpace(CENTRE_B_SLUG);
-    await tenantAls.run({ spaceSlug: CENTRE_B_SLUG }, async () => {
+    await runPinned(service, CENTRE_B_SLUG, async () => {
       await service.routedKysely.transaction().execute(async (trx) => {
         await trx
           .insertInto('tenants')
@@ -216,7 +225,7 @@ describe('Facade Kysely định tuyến phía API (integration)', () => {
 
   it('getter schema qua facade tạo bảng thăm dò trên đúng kho hiệu lực', async () => {
     await service.getKyselyForSpace(CENTRE_A_SLUG);
-    await tenantAls.run({ spaceSlug: CENTRE_A_SLUG }, async () => {
+    await runPinned(service, CENTRE_A_SLUG, async () => {
       await service.routedKysely.schema.createTable('kysely_probe_639').addColumn('id', 'integer').execute();
     });
     const inA = new Client({ connectionString: centreAUrl });
@@ -229,14 +238,14 @@ describe('Facade Kysely định tuyến phía API (integration)', () => {
     } finally {
       await inA.end();
     }
-    await tenantAls.run({ spaceSlug: CENTRE_A_SLUG }, async () => {
+    await runPinned(service, CENTRE_A_SLUG, async () => {
       await service.routedKysely.schema.dropTable('kysely_probe_639').execute();
     });
   });
 
   it('builder lười qua facade chỉ thực thi khi execute, thấy dòng insert sau khi tạo builder', async () => {
     await service.getKyselyForSpace(CENTRE_A_SLUG);
-    await tenantAls.run({ spaceSlug: CENTRE_A_SLUG }, async () => {
+    await runPinned(service, CENTRE_A_SLUG, async () => {
       const pending = service.routedKysely
         .selectFrom('tenants')
         .selectAll()
@@ -266,11 +275,12 @@ describe('Facade Kysely định tuyến phía API (integration)', () => {
     );
     try {
       await shortService.getKyselyForSpace(CENTRE_B_SLUG);
-      await tenantAls.run({ spaceSlug: CENTRE_B_SLUG }, async () => {
+      const pinnedScope = shortService.preparedSpaceScope(CENTRE_B_SLUG);
+      await runPinned(shortService, CENTRE_B_SLUG, async () => {
         await shortService.routedKysely.selectFrom('tenants').selectAll().limit(1).execute();
       });
       await new Promise((resolve) => setTimeout(resolve, SHORT_IDLE_TIMEOUT_MS + 2400));
-      await tenantAls.run({ spaceSlug: CENTRE_B_SLUG }, async () => {
+      await runPinned(shortService, CENTRE_B_SLUG, async () => {
         // Mã lỗi nằm ở thuộc tính `code` của SpaceRoutingError (mẫu
         // khẳng định của ca #581), không nằm trong thông điệp.
         let readError: unknown;
@@ -280,9 +290,95 @@ describe('Facade Kysely định tuyến phía API (integration)', () => {
           readError = error;
         }
         expect((readError as SpaceRoutingError).code).toBe('space_routing.prepared_revoked');
-      });
+      }, pinnedScope);
     } finally {
       await shortService.onModuleDestroy();
     }
   });
+
+  it.each([
+    { caseName: 'registry ID mới', preserveId: false },
+    { caseName: 'registry ID giữ nguyên nhưng database đổi', preserveId: true },
+    { caseName: 'registry ID và database giữ nguyên nhưng secret đổi', preserveId: true, rotateSecret: true },
+  ])('đổi slug A sang kho B giữa hai truy vấn ($caseName): phiên A không ghi sang B', async ({ preserveId, rotateSecret }) => {
+    const cpDb = controlPlane.kysely!;
+    const original = await cpDb.selectFrom('space_registry')
+      .select(['id', 'database_name as databaseName', 'secret_ref as secretRef'])
+      .where('slug', '=', CENTRE_A_SLUG).executeTakeFirstOrThrow();
+    const bRegistry = await cpDb.selectFrom('space_registry')
+      .selectAll().where('slug', '=', CENTRE_B_SLUG).executeTakeFirstOrThrow();
+    let bUnregistered = false;
+    const reboundId = preserveId ? original.id : '01963900-0000-7000-8000-0000000000f7';
+    const markerId = '01963900-0000-7000-8000-0000000000f8';
+    const rotatedSecretEnv = 'SPACE_RACE_ROTATED_API_639_URL';
+    if (rotateSecret) {
+      const rotatedUrl = new URL(clusterUrl('postgres'));
+      rotatedUrl.searchParams.set('application_name', 'review-same-db-secret-rotation');
+      process.env[rotatedSecretEnv] = rotatedUrl.toString();
+    }
+    let enter!: () => void;
+    let resume!: () => void;
+    const entered = new Promise<void>((r) => { enter = r; });
+    const held = new Promise<void>((r) => { resume = r; });
+
+    const oldSession = service.withSpaceKysely(CENTRE_A_SLUG, async () => {
+      // Đọc đầu tiên ở A xong rồi ngưng ở await, giữ nguyên ALS A.
+      await service.routedKysely.selectFrom('tenants').select('id').limit(1).execute();
+      const pinnedId = tenantAls.getStore()?.spaceId;
+      expect(pinnedId).toBe(original.id);
+      enter();
+      await held;
+      // Wrapper lồng nhau cũng không được tái chuẩn bị âm thầm thành
+      // phiên kho B khi ngữ cảnh parent vẫn ghim handle kho A.
+      let nestedRan = false;
+      await expect(service.withSpaceKysely(CENTRE_A_SLUG, async () => {
+        nestedRan = true;
+      })).rejects.toMatchObject({ code: 'space_routing.prepared_identity_mismatch' });
+      expect(nestedRan).toBe(false);
+      // Không được lấy handle B từ Map theo slug khi ALS vẫn là A.
+      await expect((async () => service.routedKysely.insertInto('tenants').values({
+        id: markerId, slug: 'late-api-639', name: 'LATE API A', kind: 'center',
+      }).execute())()).rejects.toMatchObject({ code: 'space_routing.prepared_identity_mismatch' });
+      expect(() => service.currentContextDatabaseName()).toThrowError(SpaceRoutingError);
+    });
+    try {
+      await entered;
+      // Một database dedicated chỉ thuộc MỘT dòng registry: để
+      // tái hiện slug bị cấp lại, huỷ đăng ký B trước khi gán
+      // database B cho slug A (không vô hiệu hoá unique index).
+      if (!rotateSecret) {
+        await cpDb.deleteFrom('space_registry').where('slug', '=', CENTRE_B_SLUG).execute();
+        bUnregistered = true;
+      }
+      await cpDb.updateTable('space_registry')
+        .set({
+          id: reboundId,
+          database_name: rotateSecret ? original.databaseName : CENTRE_B_DATABASE,
+          ...(rotateSecret ? { secret_ref: `env:${rotatedSecretEnv}` } : {}),
+        })
+        .where('slug', '=', CENTRE_A_SLUG).execute();
+      service.invalidate(CENTRE_A_SLUG);
+      // Một request B mới chuẩn bị CÙNG slug; bảng mutable đổi handle.
+      await service.getKyselyForSpace(CENTRE_A_SLUG);
+      await service.withSpaceKysely(CENTRE_A_SLUG, async () => {
+        expect(tenantAls.getStore()?.spaceId).toBe(reboundId);
+        await service.routedKysely.selectFrom('tenants').select('id').limit(1).execute();
+      });
+      resume();
+      await oldSession;
+    } finally {
+      resume();
+      await oldSession.catch(() => undefined);
+      await cpDb.updateTable('space_registry')
+        .set({ id: original.id, database_name: original.databaseName, secret_ref: original.secretRef })
+        .where('slug', '=', CENTRE_A_SLUG).execute();
+      if (bUnregistered) await cpDb.insertInto('space_registry').values(bRegistry).execute();
+      service.invalidate(CENTRE_A_SLUG);
+      await service.getKyselyForSpace(CENTRE_A_SLUG);
+      delete process.env[rotatedSecretEnv];
+    }
+    expect(await rowsIn(centreAUrl, markerId)).toBe(0);
+    expect(await rowsIn(centreBUrl, markerId)).toBe(0);
+    expect(await rowsIn(sharedUrl, markerId)).toBe(0);
+  }, 60_000);
 });

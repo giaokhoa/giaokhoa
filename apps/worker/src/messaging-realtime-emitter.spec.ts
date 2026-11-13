@@ -109,6 +109,8 @@ function jobOf(outboxId: string, messageId: string, seq: number): never {
       type: 'message_sent',
       payload: { messageId },
       tenantId,
+      spaceSlug: null,
+      spaceId: null,
       occurredAt: new Date().toISOString(),
     },
   } as never;

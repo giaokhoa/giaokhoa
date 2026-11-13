@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TestProviders } from '#test/providers';
+import '#config/i18n';
 import { PlayerPage } from './player';
 
 const COURSE_ID = '01900000-0000-7000-8000-000000000010';
@@ -119,4 +120,26 @@ describe('Trang trình phát (K2)', () => {
       expect(JSON.parse(String(post!.init?.body))).toEqual({ userId: USER_ID, complete: true });
     });
   });
+
+  it('học viên xem bản công bố qua URL kiểm audience của khoá và thấy tác giả/giấy phép/phiên bản', async () => {
+    const contentUrl = '/api/v1/resources/pinned-resource/system-material/content';
+    const calls = stubFetch((url) => {
+      if (url === `/api/v1/courses/${COURSE_ID}/player/${URL_CM}`) return playerPayload({
+        cm: { id: URL_CM, name: 'Học liệu công bố', component: 'mod_resource', instanceId: 'pinned-resource' },
+        content: {
+          type: 'resource', embedUrl: null,
+          resource: { id: 'pinned-resource', name: 'Học liệu công bố', kind: 'file', url: null, transcript: null,
+            publication: { version: 1, package: { source: { originalAuthor: 'Tác giả A', centreSlug: 'centre-a', sourceCitation: null, license: 'CC BY' } } } },
+          file: { id: 'pinned-resource', fileName: 'bai-hoc.pdf', mimeType: 'application/pdf', fileSize: 12, signedUrl: contentUrl, contentUrl },
+        },
+      });
+      if (url === contentUrl) return 'pdf bytes';
+      return undefined;
+    });
+    renderPlayer(URL_CM);
+    await screen.findByText(/Phiên bản 1.*Tác giả gốc: Tác giả A.*CC BY/);
+    await waitFor(() => expect(calls.some((call) => call.url === contentUrl)).toBe(true));
+    expect(calls.some((call) => call.url === '/api/v1/files/pinned-resource/content')).toBe(false);
+  });
+
 });

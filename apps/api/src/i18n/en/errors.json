@@ -304,5 +304,10 @@
     "shared_requires_pinned": "System questions require pinned versions",
     "pin_preparing": "Assignment preparation is in progress; retry with the same request key",
     "pin_request_id_required": "Creating an exam or assigning system questions requires a request key for safe retries"
+  },
+  "system_material": {
+    "invalid_package": "Material requires author, source, license and a valid owned file or external link.",
+    "not_found": "Published material or version not found.",
+    "reference_immutable": "This material references an immutable version; choose another version to add."
   }
 }

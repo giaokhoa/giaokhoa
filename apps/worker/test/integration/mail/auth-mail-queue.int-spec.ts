@@ -4,7 +4,7 @@ import type { ConfigService } from '@nestjs/config';
 import { DelayedError, Queue } from 'bullmq';
 import Redis from 'ioredis';
 import { redisConnectionFromUrl } from '../../../src/config/env';
-import { OutboxRelayScheduler } from '../../../src/outbox-relay.scheduler';
+import { OutboxRelayScheduler, outboxRelayJobId } from '../../../src/outbox-relay.scheduler';
 import { SpaceJobRunner } from '../../../src/db/routing/space-job-runner';
 import type { SpaceDatabaseService } from '../../../src/db/routing/space-database.service';
 import {
@@ -23,7 +23,7 @@ import {
  * Đường mail auth qua hàng đợi ở worker (issue #517) trên hạ tầng thật của suite worker (DB `giaokhoa_test_worker`, Redis thật):
  *
  * - Một dòng outbox `auth_mail_requested` được relay duy nhất phát
- *   thành job trên hàng đợi `auth-mail` theo bảng định tuyến: job mang `jobId` bằng id của dòng và dữ liệu là toàn bộ dòng; dòng được đóng dấu `publishedAt` và phản chiếu vào `event_log` như mọi dòng outbox khác.
+ *   thành job trên hàng đợi `auth-mail` theo bảng định tuyến: job mang `jobId` ghép tiền tố `shared` với id của dòng và dữ liệu là toàn bộ dòng; dòng được đóng dấu `publishedAt` và phản chiếu vào `event_log` như mọi dòng outbox khác.
  * - Processor xử lý dữ liệu job đó bằng hàng rào hai trạng thái
  *   trên Redis thật: dấu ĐÃ GỬI chỉ ghi sau khi transport nhận mail, nên xử lý lại cùng một sự kiện (cùng `outboxId`) không gửi lần hai; hai lượt xử lý ĐỒNG THỜI cùng một sự kiện cũng chỉ gửi đúng một mail (lease ĐANG XỬ LÝ chiếm nguyên tử `SET ... NX` phía Redis, lượt thua ném tín hiệu hẹn thử lại `DelayedError` chứ không kết thúc như đã xử lý); lượt giữ lease chết trước khi gửi thì lease hết hạn và lượt sau gửi được mail (khôi phục sau sập); nhả lease kiểm tra token chủ sở hữu bằng script Lua phía Redis. Hàng rào còn phải đọc lại dấu ĐÃ GỬI trong lúc đang giữ lease, trước khi gọi transport:
  *   một lượt đọc dấu là chưa có rồi bị giữ lại trước khi chiếm lease, trong lúc lượt khác gửi trọn và nhả lease, mà dựa vào kết quả kiểm tra cũ thì gửi lần hai dù không có lỗi nào xảy ra — ca xen kẽ có điều phối thứ tự ở dưới ghim cửa sổ này trên Redis thật. Tính idempotent theo `outboxId` kiểm chứng ở tầng hạ tầng thật chứ không chỉ bằng bản giả trong bộ nhớ của spec unit.
@@ -160,8 +160,8 @@ describe('Worker: mail auth qua hàng đợi (issue #517)', () => {
   });
 
   /** Dựng một bản dấu Redis thật mới (kết nối riêng) như một tiến trình worker riêng. */
-  // Bộ chạy job dùng cho các processor dựng tay trong spec:
-  // dịch vụ định tuyến không cấu hình sổ nên mọi job đều chạy ở phiên platform trên kho chung như trước (định tuyến theo trung tâm có spec riêng ở tầng worker).
+  // Bộ chạy job dùng cho các processor dựng tay trong spec: dữ liệu job
+  // có scope shared tường minh, nên không cần truy vấn sổ đăng ký.
   const jobRunner = new SpaceJobRunner({
     resolveTarget: async () => {
       throw new Error('spec không cấu hình sổ đăng ký');
@@ -183,6 +183,8 @@ describe('Worker: mail auth qua hàng đợi (issue #517)', () => {
       type: 'auth_mail_requested',
       payload: { kind: 'email_otp', to: recipient, otp: '482916', otpType: 'sign-in' },
       tenantId: null,
+      spaceSlug: null,
+      spaceId: null,
       occurredAt: new Date().toISOString(),
     };
   }
@@ -205,10 +207,10 @@ describe('Worker: mail auth qua hàng đợi (issue #517)', () => {
     });
 
     await waitFor('job của dòng xuất hiện trên hàng đợi auth-mail', async () => {
-      const job = await queue.getJob(row.id);
+      const job = await queue.getJob(outboxRelayJobId(null, row.id));
       return job !== undefined;
     });
-    const job = await queue.getJob(row.id);
+    const job = await queue.getJob(outboxRelayJobId(null, row.id));
     expect(job?.name).toBe('auth_mail_requested');
     expect(job?.data?.outboxId).toBe(row.id);
     expect(job?.data?.type).toBe('auth_mail_requested');

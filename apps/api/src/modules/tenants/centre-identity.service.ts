@@ -56,9 +56,9 @@ export class CentreIdentityService {
    * Nhận diện công khai của trung tâm (chưa có dòng thì lấy tên tenant làm mặc định). Đường đọc này KHÔNG chạm control plane khi trung tâm đã chuẩn bị trong tiến trình (lần đọc đầu đã phân giải + chuẩn bị kho): handle đã-chuẩn-bị đủ để đọc kho của trung tâm — đúng tiêu chí nghiệm thu "tắt control plane sau khi đã định tuyến, bề mặt vẫn hiển thị đúng nhận diện". Khi chưa chuẩn bị thì vẫn phải phân giải + chuẩn bị trước (đọc thẳng qua handle định tuyến khi chưa chuẩn bị sẽ rơi về kho chung — sai kho).
    */
   async getIdentity(slug: string) {
-    if (!this.spaceDb.isSpacePrepared(slug)) {
-      await this.bindCentreSpace(slug, false);
-    }
+    const binding = this.spaceDb.isSpacePrepared(slug)
+      ? this.spaceDb.preparedSpaceScope(slug)
+      : await this.bindCentreSpace(slug, false);
     return this.runInCentreSpace(slug, async () => {
       const tenant = await this.tenants.getTenantBySlug(slug);
       if (!tenant) throw new NotFoundException({ message: 'Centre not found', code: 'centre.not_found' });
@@ -69,12 +69,12 @@ export class CentreIdentityService {
         logoPath: identity?.logoPath ?? null,
         brandColor: identity?.brandColor ?? null,
       };
-    });
+    }, binding);
   }
 
   /** Sửa nhận diện — chỉ quản trị của chính trung tâm đó (đọc từ kho của trung tâm). */
   async updateIdentity(slug: string, actorId: string, dto: UpdateCentreIdentityDto) {
-    await this.bindCentreSpace(slug, true);
+    const binding = await this.bindCentreSpace(slug, true);
     return this.runInCentreSpace(slug, async () => {
       const tenant = await this.tenants.getTenantBySlug(slug);
       if (!tenant) throw new NotFoundException({ message: 'Centre not found', code: 'centre.not_found' });
@@ -84,14 +84,14 @@ export class CentreIdentityService {
       }
       const row = await this.centreRepo.upsertIdentity(tenant.id, dto);
       return { tenantId: tenant.id, displayName: row.displayName, logoPath: row.logoPath, brandColor: row.brandColor };
-    });
+    }, binding);
   }
 
   /**
    * Kích hoạt tài khoản quản trị đầu tiên bằng lời mời. Thứ tự đốt-trước-đặt-mật-khẩu-sau là cố ý (fail-closed cho token): nếu đặt mật khẩu thất bại (ví dụ mật khẩu yếu bị chính sách chặn), lời mời đã cháy và quản trị phải phát hành lại bằng CLI — ngược lại, mật khẩu đặt xong mà lời mời còn hiệu lực sẽ để lại một token dùng được sau khi tài khoản đã có mật khẩu.
    */
   async activateInvite(dto: ActivateCentreInviteDto) {
-    await this.bindCentreSpace(dto.slug, true);
+    const binding = await this.bindCentreSpace(dto.slug, true);
     const invite = await this.runInCentreSpace(dto.slug, async () => {
       const tenant = await this.tenants.getTenantBySlug(dto.slug);
       if (!tenant) throw new NotFoundException({ message: 'Centre not found', code: 'centre.not_found' });
@@ -103,11 +103,11 @@ export class CentreIdentityService {
       const marked = await this.centreRepo.markInviteUsed(found.id);
       if (!marked) throw new ConflictException({ message: 'Invite has already been used', code: 'centre.invite_consumed' });
       return found;
-    });
+    }, binding);
     // Đặt mật khẩu trong cùng kho đã gắn (handle định tuyến theo slug): updateUser không truyền actor nên bỏ qua chốt chặn tự đặt mật khẩu — đây là hành động hệ thống theo lời mời, không phải người dùng tự đổi mật khẩu của mình.
     await this.runInCentreSpace(dto.slug, async () => {
       await this.users.updateUser(invite.userId, { password: dto.password });
-    });
+    }, binding);
     return { activated: true as const, userId: invite.userId };
   }
 
@@ -115,7 +115,9 @@ export class CentreIdentityService {
    * Gắn trung tâm: phân giải + (tuỳ chọn) chặn khi chưa `active` + chuẩn bị kho đích. Lỗi định tuyến được dịch sang mã lỗi API
    * (404/503) thay vì để lỗi nội bộ của khung rò ra ngoài.
    */
-  private async bindCentreSpace(slug: string, requireActive: boolean): Promise<void> {
+  private async bindCentreSpace(
+    slug: string, requireActive: boolean,
+  ): Promise<ReturnType<SpaceDatabaseService['preparedSpaceScope']>> {
     let target;
     try {
       target = await this.spaceDb.resolveTarget(slug);
@@ -126,16 +128,29 @@ export class CentreIdentityService {
       throw new ForbiddenException({ message: 'Centre is not active', code: 'space.not_active' });
     }
     try {
-      // Chuẩn bị đủ cả hai facade như ở SpaceContextGuard: ngữ cảnh chạy trong kho của trung tâm có thể chạm module đã chuyển Kysely, mà facade Kysely chưa chuẩn bị thì fail-closed theo hợp đồng dùng chung `dedicatedSlugs`.
-      await this.spaceDb.getKyselyForSpace(slug);
-      await this.spaceDb.getKyselyForSpace(slug);
+      // Chuẩn bị một lần rồi chụp cả ID đăng ký + handle của đúng
+      // lần đó. Các giai đoạn đọc/ghi nối tiếp giữ cùng binding;
+      // shared hợp lệ không cần ID/handle của một kho dedicated.
+      const db = await this.spaceDb.getKyselyForSpace(slug);
+      const binding = this.spaceDb.preparedSpaceScope(slug, db);
+      if ((target.mode === 'dedicated' && binding.spaceId !== target.spaceId)
+        || (target.mode === 'shared' && !!binding.spaceId)) {
+        throw new SpaceRoutingError('space_routing.prepared_identity_mismatch', `Space ${slug} changed during preparation`);
+      }
+      return binding;
     } catch (err) {
       throw this.mapRoutingError(err);
     }
   }
 
-  private runInCentreSpace<T>(slug: string, fn: () => Promise<T>): Promise<T> {
-    return tenantAls.run({ platform: true, spaceSlug: slug }, async () => fn());
+  private runInCentreSpace<T>(
+    slug: string, fn: () => Promise<T>,
+    binding: ReturnType<SpaceDatabaseService['preparedSpaceScope']>,
+  ): Promise<T> {
+    // Dùng CHÍNH binding đã chụp khi qua cổng, kể cả khi có await
+    // giữa hai giai đoạn kích hoạt lời mời. Không đọc lại sổ khi đã
+    // chuẩn bị (đường nhận diện vẫn phục vụ lúc control plane mất).
+    return tenantAls.run({ platform: true, spaceSlug: slug, ...binding }, async () => fn());
   }
 
   private mapRoutingError(err: unknown): Error {

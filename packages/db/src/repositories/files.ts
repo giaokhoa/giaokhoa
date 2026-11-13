@@ -147,6 +147,12 @@ export class FilesRepository {
     return db.selectFrom('files').select(FILE_COLUMNS).where('id', '=', id).limit(1).executeTakeFirst();
   }
 
+  /** Tenant sở hữu học liệu nguồn; không suy sở hữu từ context cá nhân dùng chung hoặc hash. */
+  async contentBankTenant(itemId: string): Promise<string | undefined> {
+    const row = await this.db().selectFrom('content_bank_content').select('tenant_id').where('id', '=', itemId).executeTakeFirst();
+    return row?.tenant_id;
+  }
+
   /**
    * Suy tenant chủ của context chứa file legacy theo context level 20 trong
    * cây path; không tìm được context trả undefined (fail-closed), context

@@ -5,6 +5,7 @@ import { I18nService } from '@nestjs/i18n';
 import type { Queue } from 'bullmq';
 import { createHash, randomUUID } from 'node:crypto';
 import { OutboxService } from '../../infra/events/outbox.service';
+import { backgroundJobContext, backgroundJobId } from '../../db/routing/background-job-context';
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { RolesService } from '../access/roles.service';
@@ -91,8 +92,8 @@ export class BadgesService implements OnModuleInit {
   }
 
   private async enqueueEvaluation(userId: string, trigger: string): Promise<void> {
-    await this.awardQueue.add('evaluate', { userId, trigger }, {
-      jobId: `badge-award-${userId}-${trigger}-${Date.now()}`,
+    await this.awardQueue.add('evaluate', { userId, trigger, ...backgroundJobContext() }, {
+      jobId: backgroundJobId(`badge-award-${userId}-${trigger}-${Date.now()}`),
       attempts: 3, removeOnComplete: true,
     }).catch(() => undefined);
   }

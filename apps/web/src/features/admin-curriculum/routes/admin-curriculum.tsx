@@ -9,6 +9,7 @@ import { Empty, EmptyHeader, EmptyTitle } from '@giaokhoa/ui/components/empty';
 import { ErrorAlert } from '#components/error-alert';
 import { PageHeader, PageShell } from '#components/page-shell';
 import { errorText } from '../utils/shared';
+import { ProgrammePackagePanel } from '../components/programme-package-panel';
 import { ApiError } from '#lib/api';
 import { accessContextsQueryOptions, useAccessContexts, type ContextRow } from '#lib/access';
 import { queryClient } from '#lib/query-client';
@@ -301,6 +302,7 @@ export function AdminCurriculumPage() {
   return (
     <PageShell>
       <PageHeader title={t('curriculumAdminTitle')} description={t('curriculumAdminDescription')} />
+      <ProgrammePackagePanel subjects={subjects} />
       {forbidden ? (
         <ErrorAlert variant="destructive">
           {t('curriculumForbidden')}

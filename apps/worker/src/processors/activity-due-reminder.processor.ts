@@ -45,7 +45,11 @@ export class ActivityDueReminderProcessor extends WorkerHost {
 
   private async processInContext(_job: Job): Promise<ActivityDueReminderResult> {
     void _job;
-    return this.taskLog.run('activity-due-reminders', () => this.sweep(), (r) => `reminded ${r.reminded.length} (student, activity) pair(s)`);
+    return this.spaceDb.sweepSharedAndDedicated(() =>
+      this.taskLog.run('activity-due-reminders', () => this.sweep(),
+        (r) => `reminded ${r.reminded.length} (student, activity) pair(s)`), (a, b) => ({
+          checkedAt: a.checkedAt, reminded: [...a.reminded, ...b.reminded],
+        }));
   }
 
   private async sweep(): Promise<ActivityDueReminderResult> {

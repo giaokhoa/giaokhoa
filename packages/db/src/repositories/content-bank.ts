@@ -42,6 +42,7 @@ import type { JsonValue } from '../types/centre-db';
 /** Một dòng học liệu trong kho; các cột jsonb giữ `unknown` như hình dạng `$inferSelect` cũ (bộ máy cũ không gắn `$type`). */
 export interface ContentRow {
   id: string;
+  tenantId: string;
   name: string;
   contentType: string;
   contextId: string;
@@ -84,6 +85,7 @@ export interface ContentRow {
 /** Dữ kiện ghi một học liệu mới (khớp `$inferInsert` cũ). */
 export interface NewContent {
   id?: string;
+  tenantId?: string;
   name: string;
   contentType?: string;
   contextId: string;
@@ -168,6 +170,7 @@ function jsonbValue<T>(value: T): RawBuilder<T> {
 /** Danh sách cột tường minh có bí danh camelCase cho bảng content_bank_content (dùng cho cả select lẫn returning). */
 const CONTENT_COLUMNS = [
   'id',
+  'tenant_id as tenantId',
   'name',
   'content_type as contentType',
   'context_id as contextId',
@@ -241,6 +244,7 @@ function contentInsertValues(values: NewContent): InsertObject<CentreDB, 'conten
     creator_id: values.creatorId,
   };
   if (values.id !== undefined) row.id = values.id;
+  if (values.tenantId !== undefined) row.tenant_id = values.tenantId;
   if (values.contentType !== undefined) row.content_type = values.contentType;
   if (values.visibility !== undefined) row.visibility = values.visibility;
   if (values.fileId !== undefined) row.file_id = values.fileId;

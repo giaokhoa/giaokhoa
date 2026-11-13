@@ -72,6 +72,7 @@ function makeJob(partial: Partial<OutboxEventJobData> = {}) {
     occurredAt: '2026-10-29T00:00:00.000Z',
     ...partial,
     spaceSlug: partial.spaceSlug ?? null,
+    spaceId: partial.spaceId ?? null,
   };
   const moveToDelayed = vi.fn(async () => undefined);
   return { job: { data, moveToDelayed }, moveToDelayed };

@@ -1,7 +1,8 @@
 /**
  * Định nghĩa ba kho và bước tiền-migration dùng chung cho bộ máy migration của `@giaokhoa/db` (runner `run.ts`, hậu kiểm `verify.ts`, harness test dựng database từ rỗng).
  *
- * Ba kho có bộ carrier riêng (danh sách đóng băng khai tại đây; file SQL nằm trong thư mục migration của kho ở `packages/db/migrations/`, cùng thư mục với các migration native), số đếm kỳ vọng riêng và biến môi trường kết nối riêng — bảng này là nơi duy nhất ghi các giá trị đó, để runner, hậu kiểm và harness không tự chế bản sao lệch nhau. Số đếm kỳ vọng đo lại tại thời điểm thi công PR-N2 từ database dựng bằng đường bộ máy cũ (mốc hiện hành: trung tâm 204 bảng + 23 policy RLS + 424 index, control plane 4 bảng sau migration issue #9, ngân hàng hệ thống 10 bảng).
+ * Ba kho có bộ carrier riêng (danh sách đóng băng khai tại đây; file SQL nằm trong thư mục migration của kho ở `packages/db/migrations/`, cùng thư mục với các migration native), số đếm kỳ vọng riêng và biến môi trường kết nối riêng — bảng này là nơi duy nhất ghi các giá trị đó, để runner, hậu kiểm và harness không tự chế bản sao lệch nhau. Số đếm kỳ vọng đo lại tại thời điểm thi công PR-N2 từ database dựng bằng đường bộ máy cũ (mốc hiện hành: trung tâm 204 bảng + 25 policy RLS + 425 index, control plane 4 bảng sau migration issue #9, ngân hàng hệ thống 14 bảng).
+
  */
 import { sql, type Kysely } from 'kysely';
 
@@ -45,7 +46,8 @@ export const MIGRATION_STORES: Record<MigrationStoreKey, MigrationStore> = {
   centre: {
     migrationsDirName: 'centre',
     carrierNames: ['20261025163710_baseline'],
-    expected: { tables: 204, policies: 23, indexes: 424, journalRows: 4 },
+    expected: { tables: 204, policies: 25, indexes: 425, journalRows: 6 },
+
     connectionEnvVars: ['MIGRATION_DATABASE_URL', 'DATABASE_URL'],
   },
   'control-plane': {
@@ -57,7 +59,7 @@ export const MIGRATION_STORES: Record<MigrationStoreKey, MigrationStore> = {
   'system-bank': {
     migrationsDirName: 'system-bank',
     carrierNames: ['20261031025416_unique_scarecrow'],
-    expected: { tables: 10, journalRows: 1 },
+    expected: { tables: 14, journalRows: 4 },
     connectionEnvVars: ['SYSTEM_BANK_DATABASE_URL'],
   },
 };

@@ -3,6 +3,7 @@
  * Please do not edit it manually.
  */
 
+import type { SystemMaterialPackage } from "../jsonb-types";
 import type { ColumnType } from "kysely";
 
 export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
@@ -31,11 +32,45 @@ export interface SystemBankEvents {
   type: string;
 }
 
+export interface SystemMaterials {
+  centre_slug: string;
+  id: Generated<string>;
+  source_content_id: string;
+}
+
+export interface SystemMaterialSubmissions {
+  centre_slug: string;
+  checksum: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  package: SystemMaterialPackage;
+  published_material_id: string | null;
+  published_version: number | null;
+  rejection_reason: string | null;
+  reviewed_at: Timestamp | null;
+  reviewed_by: string | null;
+  source_content_id: string;
+  source_revision: string;
+  status: "pending" | "approved" | "rejected";
+  submitted_by: string;
+}
+
+export interface SystemMaterialVersions {
+  checksum: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  material_id: string;
+  package: SystemMaterialPackage;
+  version: number;
+}
+
 export interface SystemOutcomePackageCurricula {
   curriculum_id: string;
   grade: number;
   id: Generated<string>;
   package_id: string;
+  subject_name: string | null;
+  subject_position: Generated<number>;
   subject_slug: string;
 }
 
@@ -72,12 +107,17 @@ export interface SystemOutcomePackageOutcomes {
 }
 
 export interface SystemOutcomePackages {
+  centre_slug: string | null;
   checksum: string;
   created_at: Generated<Timestamp>;
   created_by: string | null;
   id: Generated<string>;
   outcome_count: Generated<number>;
+  rejection_reason: string | null;
+  reviewed_at: Timestamp | null;
+  reviewed_by: string | null;
   scope: string;
+  status: Generated<string>;
   version: string;
 }
 
@@ -139,6 +179,9 @@ export interface SystemQuestionVersions {
 
 export interface DB {
   system_bank_events: SystemBankEvents;
+  system_material_submissions: SystemMaterialSubmissions;
+  system_material_versions: SystemMaterialVersions;
+  system_materials: SystemMaterials;
   system_outcome_package_curricula: SystemOutcomePackageCurricula;
   system_outcome_package_mappings: SystemOutcomePackageMappings;
   system_outcome_package_nodes: SystemOutcomePackageNodes;

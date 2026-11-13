@@ -115,7 +115,7 @@ export class TenantsService {
     // khi vào ngữ cảnh platform để truy vấn không rơi về kho chung.
     const publicStore = tenantAls.getStore()?.spaceSlug === PUBLIC_LEARNING_SLUG;
     return tenantAls.run(
-      { platform: true, ...(publicStore ? { spaceSlug: PUBLIC_LEARNING_SLUG } : {}) },
+      { platform: true, ...(publicStore ? { spaceSlug: PUBLIC_LEARNING_SLUG, spaceId: tenantAls.getStore()?.spaceId, spaceHandle: tenantAls.getStore()?.spaceHandle } : {}) },
       () => this.platformTenantInContext(),
     );
   }
@@ -813,7 +813,7 @@ export class TenantsService {
     const spaceSlug = store?.spaceSlug;
     const currentTenantId = activeTenantId ?? store?.tenantId;
     return tenantAls.run(
-      { platform: true, ...(spaceSlug ? { spaceSlug } : {}) },
+      { platform: true, ...(spaceSlug ? { spaceSlug, spaceId: store?.spaceId, spaceHandle: store?.spaceHandle } : {}) },
       () => this.listMyTenantsInContext(userId, currentTenantId),
     );
   }
@@ -851,7 +851,7 @@ export class TenantsService {
     // của user ở mọi tenant — chạy trong ngữ cảnh platform như platformTenant.
     const publicStore = tenantAls.getStore()?.spaceSlug === PUBLIC_LEARNING_SLUG;
     return tenantAls.run(
-      { platform: true, ...(publicStore ? { spaceSlug: PUBLIC_LEARNING_SLUG } : {}) },
+      { platform: true, ...(publicStore ? { spaceSlug: PUBLIC_LEARNING_SLUG, spaceId: tenantAls.getStore()?.spaceId, spaceHandle: tenantAls.getStore()?.spaceHandle } : {}) },
       () => this.resolveDefaultTenantInContext(userId),
     );
   }
@@ -884,7 +884,7 @@ export class TenantsService {
     // trong ngữ cảnh platform như platformTenant.
     const publicStore = tenantAls.getStore()?.spaceSlug === PUBLIC_LEARNING_SLUG;
     return tenantAls.run(
-      { platform: true, ...(publicStore ? { spaceSlug: PUBLIC_LEARNING_SLUG } : {}) },
+      { platform: true, ...(publicStore ? { spaceSlug: PUBLIC_LEARNING_SLUG, spaceId: tenantAls.getStore()?.spaceId, spaceHandle: tenantAls.getStore()?.spaceHandle } : {}) },
       () => this.resolveSwitchTargetInContext(userId, tenantId),
     );
   }
