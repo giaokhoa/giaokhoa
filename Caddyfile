@@ -3,9 +3,14 @@
 	admin off
 
 	servers {
-		# Caddy chạy sau Cloudflare Tunnel/Docker gateway: giữ nguyên X-Forwarded-Proto của chặng nội bộ đáng tin, tránh đưa HTTPS công khai thành HTTP khi API dựng URL đăng nhập/OAuth.
-		trusted_proxies static private_ranges
-		# Các proxy phía trước thêm IP ở bên phải; không tin IP giả ở đầu chuỗi do client tự khai.
+		# Không tin toàn bộ RFC1918: chỉ proxy Docker/tunnel trước Caddy
+		# (mặc định subnet Docker 172.16/12); production NÊN khai CIDR
+		# IP proxy thật qua GIAOKHOA_TRUSTED_PROXY_CIDRS. Lưu ý Docker
+		# NAT có thể đổi địa chỉ peer; kiểm lại remote IP từ access log.
+		trusted_proxies static {$GIAOKHOA_TRUSTED_PROXY_CIDRS:172.16.0.0/12}
+		# Cloudflare Tunnel gửi CF-Connecting-IP. Chỉ đọc header này từ
+		# proxy đáng tin nói trên, không tin khách tự khai từ Internet.
+		client_ip_headers CF-Connecting-IP X-Forwarded-For
 		trusted_proxies_strict
 	}
 }
