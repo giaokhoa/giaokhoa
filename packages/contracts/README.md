@@ -35,4 +35,4 @@
 
 ## Học liệu hệ thống (issue #16)
 
-`system-material.ts` tách hợp đồng học liệu tệp/liên kết khỏi gói câu hỏi: bản chụp tự đủ bắt buộc tác giả/nguồn/giấy phép và đúng một nguồn (manifest byte hoặc URL http/https). Gói không mang `fileId` riêng, category câu hỏi, khoá hoặc người học. `useSystemMaterialSchema` bắt buộc số phiên bản dương cùng khoá/section; không tự chọn bản mới nhất. API kiểm chủ sở hữu file, sao byte độc lập, checksum và quyền thực tế; web dùng cùng kiểu để chọn bản, xem nguồn và đưa vào khoá.
+`system-material.ts` tách hợp đồng học liệu tệp/liên kết khỏi gói câu hỏi: bản chụp tự đủ bắt buộc tác giả/nguồn/giấy phép và đúng một nguồn (manifest byte hoặc URL http/https (URL là tham chiếu ngoài không cam kết lưu byte; API loại đường riêng, host nội bộ và URL chứa token)). Gói không mang `fileId` riêng, category câu hỏi, khoá hoặc người học. `useSystemMaterialSchema` bắt buộc số phiên bản dương cùng khoá/section; không tự chọn bản mới nhất. API kiểm chủ sở hữu file, sao byte độc lập, checksum và quyền thực tế; web dùng cùng kiểu để chọn bản, xem nguồn và đưa vào khoá.

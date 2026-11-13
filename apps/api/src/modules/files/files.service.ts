@@ -220,6 +220,10 @@ export class FilesService {
     if (file.component === 'core_contentbank') {
       const owner = file.itemId ? await this.repo.contentBankTenant(file.itemId) : undefined;
       if (!owner || owner !== tenantAls.getStore()?.tenantId) return false;
+      // File học liệu cũ neo tại USER/SYSTEM không có tenant trên context.
+      // Chỉ file gắn vào bản ghi học liệu cùng tenant mới được qua cổng legacy;
+      // các component khác vẫn phải xác nhận tenant từ cây context gốc.
+      if (file.storageDomain === LEGACY_FILE_DOMAIN) return true;
     }
     if (file.storageDomain === LEGACY_FILE_DOMAIN) return this.canReadLegacy(file);
     return file.storageDomain === await this.currentStorageDomain();

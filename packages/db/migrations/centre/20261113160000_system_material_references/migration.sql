@@ -14,24 +14,40 @@ ALTER TABLE "resources"
 -- Kho học liệu riêng phải mang tenant ngay cả khi context cá nhân nằm dưới hệ thống.
 ALTER TABLE "content_bank_content" ADD COLUMN "tenant_id" uuid REFERENCES "tenants"("id") ON DELETE RESTRICT;
 --> statement-breakpoint
--- Dữ liệu cũ neo vào context khoá/tổ giữ tenant tương ứng; dữ liệu cá nhân
--- chưa lưu trung tâm sở hữu thuộc Trang chính, không mở chung cho các trung tâm.
+-- Dữ liệu lịch sử có thể neo context USER hoặc SYSTEM dù do trung tâm tạo.
+-- Chỉ backfill khi có chứng cứ chủ sở hữu từ context/khoá/tổ hoặc duy nhất
+-- một membership của tác giả. Không được đoán tenant platform cho dữ liệu mơ hồ.
 DO $$
-DECLARE previous_platform text := current_setting('app.platform', true);
+DECLARE
+  previous_platform text := current_setting('app.platform', true);
+  unresolved_count integer;
+  unresolved_examples text;
 BEGIN
-  -- Role migration không BYPASSRLS; chỉ mở quyền vận hành trong khối backfill này.
+  -- Role migration không BYPASSRLS; chỉ mở quyền vận hành trong khối này.
   PERFORM set_config('app.platform', 'on', true);
   UPDATE "content_bank_content" AS item SET "tenant_id" = COALESCE(
-  (SELECT tenant.id FROM "context" AS anchor JOIN "context" AS tenant_context
-    ON tenant_context.context_level = 20 AND anchor.path LIKE tenant_context.path || '%'
-    JOIN "tenants" AS tenant ON tenant.id = tenant_context.instance_id
-    WHERE anchor.id = item.context_id LIMIT 1),
-  (SELECT course.tenant_id FROM "context" AS anchor JOIN "context" AS course_context
-    ON course_context.context_level = 50 AND anchor.path LIKE course_context.path || '%'
-    JOIN "course" ON course.id = course_context.instance_id WHERE anchor.id = item.context_id LIMIT 1),
-  (SELECT tenant_id FROM "cohort" WHERE id = item.space_id),
-  (SELECT id FROM "tenants" WHERE kind = 'platform' LIMIT 1)
+    (SELECT tenant.id FROM "context" AS anchor JOIN "context" AS tenant_context
+      ON tenant_context.context_level = 20 AND
+        (anchor.path = tenant_context.path OR anchor.path LIKE tenant_context.path || '/%')
+      JOIN "tenants" AS tenant ON tenant.id = tenant_context.instance_id
+      WHERE anchor.id = item.context_id LIMIT 1),
+    (SELECT course.tenant_id FROM "context" AS anchor JOIN "context" AS course_context
+      ON course_context.context_level = 50 AND
+        (anchor.path = course_context.path OR anchor.path LIKE course_context.path || '/%')
+      JOIN "course" ON course.id = course_context.instance_id
+      WHERE anchor.id = item.context_id LIMIT 1),
+    (SELECT tenant_id FROM "cohort" WHERE id = item.space_id),
+    (SELECT min(m.tenant_id::text)::uuid FROM "tenant_memberships" AS m
+      WHERE m.user_id = item.creator_id
+      HAVING count(DISTINCT m.tenant_id) = 1)
   );
+  SELECT count(*) INTO unresolved_count FROM "content_bank_content" WHERE "tenant_id" IS NULL;
+  IF unresolved_count > 0 THEN
+    SELECT string_agg(id::text, ', ') INTO unresolved_examples FROM
+      (SELECT id FROM "content_bank_content" WHERE "tenant_id" IS NULL ORDER BY id LIMIT 5) AS samples;
+    RAISE EXCEPTION 'contentbank.legacy_owner_unresolved: % items (examples: %); resolve ownership before migration',
+      unresolved_count, unresolved_examples;
+  END IF;
   PERFORM set_config('app.platform', COALESCE(previous_platform, ''), true);
 END;
 $$;

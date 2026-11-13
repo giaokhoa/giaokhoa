@@ -9,9 +9,9 @@
  * Fixture quyền dùng service chỉ để thiết lập vai; mọi hành vi sản phẩm qua HTTP.
  */
 import { ConflictException, type INestApplication } from '@nestjs/common';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '@giaokhoa/db/test-support';
@@ -20,7 +20,7 @@ import { RolesService } from '../../../src/modules/access/roles.service';
 import { tenantAls } from '../../../src/modules/tenants/tenant-als';
 import { OBJECT_STORAGE, type ObjectStorage } from '../../../src/modules/files/storage';
 import { SystemMaterialReferencesRepository } from '@giaokhoa/db/repositories/system-material-references';
-import { SYSTEM_FILE_DOMAIN } from '@giaokhoa/db';
+import { LEGACY_FILE_DOMAIN, SYSTEM_FILE_DOMAIN } from '@giaokhoa/db';
 import { publicationMediaStorageKey } from '../../../src/modules/system-bank/system-bank-media.service';
 
 let identity: typeof import('../../support/identity-access-helpers');
@@ -198,6 +198,33 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
     expect(preserved.body).toEqual(bytes);
   });
 
+  it('học liệu cá nhân và file legacy neo context USER được chủ trung tâm A đọc, B không vượt tenant', async () => {
+    const data = Buffer.from('%PDF-1.4\nTai lieu cu A');
+    const created = await identity.http(app).post('/api/v1/contentbank').set(bearer(teacherA)).send({
+      name: 'Học liệu USER cũ A', originalAuthor: 'Tác giả A', sourceKind: 'self', license: 'CC BY',
+    });
+    expect(created.status).toBe(201);
+    const sourceId = created.body.id as string;
+    const uploaded = await identity.http(app).post(`/api/v1/contentbank/${sourceId}/file`).set(bearer(teacherA))
+      .send({ fileName: 'legacy.pdf', mimeType: 'application/pdf', contentBase64: data.toString('base64') });
+    expect(uploaded.status).toBe(201);
+    const fileId = uploaded.body.fileId as string;
+    const original = (await pg.query('select content_hash from files where id = $1', [fileId])).rows[0];
+    const storage = app.get<ObjectStorage>(OBJECT_STORAGE);
+    const legacyPath = storage.keyFor(LEGACY_FILE_DOMAIN, original.content_hash);
+    await mkdir(dirname(legacyPath), { recursive: true });
+    await writeFile(legacyPath, data);
+    // Mô phỏng metadata file tồn tại trước khi chia miền vật lý mà không dùng endpoint người dùng sửa DB.
+    await pg.query('update files set storage_domain = $1 where id = $2', [LEGACY_FILE_DOMAIN, fileId]);
+    expect((await identity.http(app).get(`/api/v1/contentbank/${sourceId}`).set(bearer(teacherA))).status).toBe(200);
+    expect((await identity.http(app).get(`/api/v1/contentbank/${sourceId}`).set(bearer(managerB))).status).toBe(404);
+    const received = await identity.http(app).get(`/api/v1/files/${fileId}/content`).set(bearer(teacherA));
+    expect(received.status, JSON.stringify(received.body)).toBe(200);
+    expect(received.body).toEqual(data);
+    expect((await identity.http(app).get(`/api/v1/files/${fileId}/content`).set(bearer(managerB))).status).toBe(404);
+    expect((await identity.http(app).get(`/api/v1/files/${fileId}`).set(bearer(managerB))).status).toBe(404);
+  });
+
   it('giáo viên B ghim phiên bản, chỉ học viên đúng nhóm xem được qua player, ID tài nguyên và URL byte', async () => {
     const use = await identity.http(app).post(`${ROOT}/use`).set(bearer(teacherB)).send({ materialId, version: 1, courseId, sectionId });
     expect(use.status, JSON.stringify(use.body)).toBe(201);
@@ -285,6 +312,13 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
     for (const input of [
       { license: '', externalUrl: 'https://example.org/lesson' },
       { externalUrl: 'https://example.org/api/v1/files/01961300-0000-7000-8000-000000000123/content' },
+      { externalUrl: 'https://centre-a.example.org/private/storage/student-session.pdf' },
+      { externalUrl: 'https://centre-a.example.org/download.pdf?access_token=temporary-secret' },
+      { externalUrl: 'http://localhost/private-file.pdf' },
+      { externalUrl: 'https://files.internal/lesson.pdf' },
+      ...(process.env.BETTER_AUTH_URL
+        ? [{ externalUrl: `https://trung-tam-a.${new URL(process.env.BETTER_AUTH_URL).hostname}/lesson` }]
+        : []),
       { resourceType: 'question_set' },
       { sourceKind: 'cited', externalUrl: 'https://example.org/lesson' },
     ]) {

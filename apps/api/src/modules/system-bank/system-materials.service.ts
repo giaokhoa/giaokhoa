@@ -4,6 +4,7 @@
  * đọc nội dung hoặc media đều kiểm tra lại khoá, module và audience.
  */
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { isIP } from 'node:net';
 import { systemMaterialPackageSchema, type SystemMaterialPackage, type SystemMaterialVersion, type UseSystemMaterial } from '@giaokhoa/contracts';
 import { SYSTEM_FILE_DOMAIN } from '@giaokhoa/db';
 import { SystemMaterialsRepository } from '@giaokhoa/db/repositories/system-materials';
@@ -57,6 +58,32 @@ export class SystemMaterialsService {
     }
   }
 
+  /**
+   * Liên kết công bố chỉ là tham chiếu web ngoài, không phải byte bất biến.
+   * Loại nguồn nội bộ/đường riêng, host nội bộ và URL có token phiên; chỉ
+   * tài liệu upload mới được sao byte vào ngân hàng bảo đảm tồn tại độc lập.
+   */
+  private assertPublicExternalReference(externalUrl: string): void {
+    let url: URL;
+    try { url = new URL(externalUrl); } catch { this.invalid(); }
+    const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    if (!['https:', 'http:'].includes(url.protocol)
+      || url.username || url.password || isIP(host)
+      || host === 'localhost' || /\.(?:localhost|local|internal|home\.arpa)$/.test(host)) this.invalid();
+    // Host gốc và các tên miền con của hệ là nguồn do trung tâm kiểm soát;
+    // không nhận URL này thay cho bản sao tệp công bố.
+    const configuredBase = process.env.BETTER_AUTH_URL;
+    if (configuredBase) {
+      let baseHost: string;
+      try { baseHost = new URL(configuredBase).hostname.toLowerCase(); } catch { this.invalid(); }
+      if (host === baseHost || host.endsWith(`.${baseHost}`)) this.invalid();
+    }
+    let path: string;
+    try { path = decodeURIComponent(url.pathname); } catch { this.invalid(); }
+    if (/(?:^|\/)(?:api|files?|courses?|content-bank|private|storage|students?|login|sign-?in|auth|sessions?)(?:\/|$)/i.test(path)) this.invalid();
+    if ([...url.searchParams.keys()].some((key) => /^(?:token|access_token|auth|authorization|session|sessionid|sig|signature|expires|x-amz-.*)$/i.test(key))) this.invalid();
+  }
+
   /** Danh sách nguồn cùng tenant cho quản trị, kể cả học liệu riêng của giáo viên khác. */
   async sources(actorId: string) {
     await this.manager(actorId);
@@ -82,11 +109,7 @@ export class SystemMaterialsService {
       file = { contentHash: owned.contentHash, fileName: owned.fileName, mimeType: owned.mimeType ?? 'application/octet-stream', fileSize: data.length };
     }
     const externalUrl = file ? null : row.externalUrl;
-    if (externalUrl) {
-      let url: URL;
-      try { url = new URL(externalUrl); } catch { return this.invalid(); }
-      if (/^\/(?:api|files|courses|content-bank)(?:\/|$)/i.test(url.pathname)) this.invalid();
-    }
+    if (externalUrl) this.assertPublicExternalReference(externalUrl);
     const parsed = systemMaterialPackageSchema.safeParse({
       name: row.name, resourceType: row.resourceType, description: row.description,
       language: row.language, subjectId: row.subjectId, grade: row.grade, level: row.level,
