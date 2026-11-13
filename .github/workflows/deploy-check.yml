@@ -57,6 +57,12 @@ jobs:
       # Service migrate tự chạy trước và phải thành công thì api/worker mới khởi động; chỉ dùng image vừa build, không build lại ở shell.
       - name: Verify Caddy config with current trusted-proxy policy
         run: |
+          # Không cấu hình ingress riêng trong CI thì Caddy không được
+          # tin cả Docker bridge: cổng host dùng NAT có thể bị giả IP.
+          if [ -z "${GIAOKHOA_TRUSTED_PROXY_CIDRS:-}" ]; then
+            effective=$(docker compose -f compose.yaml -f compose.ci.yaml config --format json | jq -r '.services.gateway.environment.GIAOKHOA_TRUSTED_PROXY_CIDRS')
+            test "$effective" = "127.0.0.1/32"
+          fi
           docker compose -f compose.yaml -f compose.ci.yaml run --rm --no-deps gateway caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
       - name: Start the stack

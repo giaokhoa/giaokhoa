@@ -3,13 +3,16 @@
 	admin off
 
 	servers {
-		# Không tin toàn bộ RFC1918: chỉ proxy Docker/tunnel trước Caddy
-		# (mặc định subnet Docker 172.16/12); production NÊN khai CIDR
-		# IP proxy thật qua GIAOKHOA_TRUSTED_PROXY_CIDRS. Lưu ý Docker
-		# NAT có thể đổi địa chỉ peer; kiểm lại remote IP từ access log.
-		trusted_proxies static {$GIAOKHOA_TRUSTED_PROXY_CIDRS:172.16.0.0/12}
-		# Cloudflare Tunnel gửi CF-Connecting-IP. Chỉ đọc header này từ
-		# proxy đáng tin nói trên, không tin khách tự khai từ Internet.
+		# Mặc định KHÔNG tin dải Docker bridge: cổng host publish có thể
+		# SNAT mọi client thành IP gateway 172.x, cho phép giả mạo header
+		# CF-Connecting-IP/XFF nếu tin cả subnet. Chỉ loopback nội bộ
+		# container được tin khi chưa khai IP/CIDR proxy thật.
+		# Muốn giữ client IP/HTTPS qua Cloudflare Tunnel hoặc ingress,
+		# cấu hình GIAOKHOA_TRUSTED_PROXY_CIDRS bằng IP/CIDR peer
+		# ingress CHÍNH XÁC và chặn truy cập trực tiếp đến cổng 8080.
+		trusted_proxies static {$GIAOKHOA_TRUSTED_PROXY_CIDRS:127.0.0.1/32}
+		# Chỉ nhận header từ peer proxy tin cậy, không lấy IP tự
+		# khai của khách truy cập trực tiếp vào Caddy.
 		client_ip_headers CF-Connecting-IP X-Forwarded-For
 		trusted_proxies_strict
 	}
