@@ -154,7 +154,7 @@ describe('Trình quản lý pool theo database', () => {
     expect(created()).toBe(3);
   });
 
-  it('pool ném lỗi khi đóng ở vòng quét: vẫn nhận thông báo đã đóng, không tính là đóng thành công, và các pool còn lại vẫn được đóng ở cùng vòng', async () => {
+  it('pool đóng lỗi vẫn giữ slot và không phát tín hiệu đã đóng, đồng thời vòng quét vẫn đóng được kho khác', async () => {
     const { manager, create, closedNotifications, advance } = makeManager();
     const brokenPool = new FakePool();
     brokenPool.end = async () => {
@@ -168,8 +168,9 @@ describe('Trình quản lý pool theo database', () => {
     await manager.getHandle('kho_b', create);
     advance(2_000);
     await expect(manager.closeIdlePools()).resolves.toEqual(['kho_b']);
-    expect(closedNotifications).toEqual(['kho_a', 'kho_b']);
-    expect(manager.size).toBe(0);
+    expect(closedNotifications).toEqual(['kho_b']);
+    expect(manager.size).toBe(1);
+    await expect(manager.getHandle('kho_a', create)).rejects.toThrow(/chưa thể đóng an toàn/);
   });
 
   it('closeAll đóng mọi pool đang sống và dọn sổ về rỗng', async () => {
@@ -207,6 +208,106 @@ describe('Trình quản lý pool theo database', () => {
     expect(closed).toEqual(['a']);
     expect(pools.get('a')?.ended).toBe(true);
     expect(pools.get('b')?.ended).toBe(false);
+  });
+
+  it('rotation kho A đang chờ end không chặn truy vấn kho B hoặc mở kho C còn chỗ', async () => {
+    const manager = new SpacePoolManager<string>({ idleTimeoutMs: 1000, maxPools: 3 });
+    const draining = new FakePool();
+    let finishDrain!: () => void;
+    draining.end = () => new Promise<void>((resolve) => { finishDrain = resolve; });
+    const create = (databaseName: string): SpacePoolHandle<string> => ({
+      databaseName,
+      pool: new FakePool(),
+      db: databaseName,
+    });
+
+    await manager.getHandleForIdentity('a', 'version-1', (databaseName) => ({
+      databaseName, pool: draining, db: databaseName,
+    }));
+    const b = await manager.getHandleForIdentity('b', 'version-1', create);
+    const rotatedA = manager.getHandleForIdentity('a', 'version-2', create);
+
+    const available = Promise.all([
+      manager.getHandleForIdentity('b', 'version-1', create),
+      manager.getHandleForIdentity('c', 'version-1', create),
+    ]);
+    try {
+      const progress = await Promise.race([
+        available.then(() => 'ready'),
+        new Promise<string>((resolve) => setTimeout(() => resolve('blocked'), 300)),
+      ]);
+      expect(progress).toBe('ready');
+      const [againB, c] = await available;
+      expect(againB).toBe(b);
+      expect(c.databaseName).toBe('c');
+      expect(manager.size).toBe(3);
+    } finally {
+      finishDrain();
+    }
+    const nextA = await rotatedA;
+    expect(nextA.databaseName).toBe('a');
+    expect(nextA.pool).not.toBe(draining);
+    expect(manager.size).toBe(3);
+  });
+
+  it('yêu cầu đồng thời không mở vượt ngân sách trong lúc pool cũ đang đóng', async () => {
+    let now = 0;
+    const manager = new SpacePoolManager<string>({ idleTimeoutMs: 100, maxPools: 1, now: () => now });
+    const retiring = new FakePool();
+    retiring.totalCount = 1;
+    retiring.idleCount = 1;
+    let finishDrain!: () => void;
+    retiring.end = () => new Promise<void>((resolve) => { finishDrain = resolve; });
+    await manager.getHandle('old', (databaseName) => ({
+      databaseName, pool: retiring, db: databaseName,
+    }));
+    now = 200;
+    let created = 0;
+    const create = (databaseName: string) => {
+      created += 1;
+      return { databaseName, pool: new FakePool(), db: databaseName };
+    };
+    const first = manager.getHandle('new-a', create);
+    const second = manager.getHandle('new-b', create);
+    await expect(second).rejects.toThrow(/trần pool kho riêng/);
+    expect(manager.size).toBe(1);
+    expect(created).toBe(0);
+    finishDrain();
+    const result = await first;
+    expect(result.databaseName).toBe('new-a');
+    expect(manager.size).toBe(1);
+    expect(created).toBe(1);
+  });
+
+  it('đóng pool cũ thất bại giữ slot và báo lỗi chính xác thay vì từ chối giả một lần', async () => {
+    let now = 0;
+    const errors: string[] = [];
+    const closed: string[] = [];
+    const manager = new SpacePoolManager<string>({
+      idleTimeoutMs: 100,
+      maxPools: 1,
+      now: () => now,
+      onPoolClosed: (name) => closed.push(name),
+      onPoolCloseError: (name) => errors.push(name),
+    });
+    const failing = new FakePool();
+    failing.totalCount = 1;
+    failing.idleCount = 1;
+    failing.end = async () => { throw new Error('I/O failure'); };
+    await manager.getHandle('a', (databaseName) => ({
+      databaseName, pool: failing, db: databaseName,
+    }));
+    now = 200;
+    const create = (databaseName: string) => ({
+      databaseName, pool: new FakePool(), db: databaseName,
+    });
+    await expect(manager.getHandle('b', create)).rejects.toThrow(/Không thể đóng pool kho riêng/);
+    expect(manager.size).toBe(1);
+    expect(errors).toEqual(['a']);
+    expect(closed).toEqual([]);
+    await expect(manager.getHandle('b', create)).rejects.toThrow(/trần pool kho riêng/);
+    await expect(manager.getHandle('a', create)).rejects.toThrow(/chưa thể đóng an toàn/);
+    expect(manager.size).toBe(1);
   });
 
   it('không ngắt kết nối đang mượn khi trần pool đã đầy', async () => {

@@ -1,4 +1,4 @@
-import { Injectable, type OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createCentreKysely, type CentreDb } from '@giaokhoa/db';
 import { databaseConnectionFromEnv } from '../../config/env';
@@ -67,6 +67,15 @@ export class SpaceDatabaseService implements OnModuleDestroy {
       idleTimeoutMs,
       maxPools: config.get<number>('SPACE_DB_MAX_POOLS') ?? 6,
 
+      onPoolCloseError: (databaseName, error) => {
+        for (const [slug, entry] of [...this.preparedKysely]) {
+          if (entry.databaseName === databaseName) this.preparedKysely.delete(slug);
+        }
+        new Logger(SpaceDatabaseService.name).error(
+          'Không thể giải phóng pool kho riêng ' + databaseName,
+          error instanceof Error ? error.stack : String(error),
+        );
+      },
       onPoolClosed: (databaseName) => {
         for (const [slug, entry] of [...this.preparedKysely]) {
           if (entry.databaseName === databaseName) this.preparedKysely.delete(slug);
