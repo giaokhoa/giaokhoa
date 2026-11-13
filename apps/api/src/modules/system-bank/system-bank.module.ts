@@ -61,6 +61,6 @@ import { SystemBankMediaService } from './system-bank-media.service';
     SystemBankSubmissionsService,
     SystemBankService,
   ],
-  exports: [SystemBankService, SystemBankConnection],
+  exports: [SystemBankService, SystemBankConnection, SystemBankMediaService],
 })
 export class SystemBankModule {}

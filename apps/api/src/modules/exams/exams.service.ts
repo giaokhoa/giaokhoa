@@ -15,6 +15,7 @@ import { RolesService } from '../access/roles.service';
 import { CAP_ALLOW } from '../access/domain/permission';
 import { QuestionBanksService, QBANK_LEAD_ROLE, QBANK_MEMBER_ROLE } from '../questions/question-banks.service';
 import type { QuestionBankRow } from '@giaokhoa/db/repositories/question-banks';
+import { ExamQuestionSnapshotsService } from '../quiz/exam-question-snapshots.service';
 import { QuizService, type MatrixSpecification } from '../quiz/quiz.service';
 import { SiteConfigService } from '../site-config/site-config.service';
 import { TenantConfigService } from '../tenants/tenant-config.service';
@@ -67,6 +68,7 @@ export interface ExamSlotView {
   position: number;
   section: string;
   questionId: string;
+  sourceDomain: string;
   questionName: string | null;
   qtype: string | null;
   /** Trạng thái entry hiện tại của câu trong ngân hàng câu hỏi (đề đã chụp vẫn đọc được kể cả khi câu bị rút). */
@@ -181,6 +183,7 @@ export interface ExamContributionView extends ExamContributionRow {
 @Injectable()
 export class ExamsService {
   constructor(
+    private readonly snapshots: ExamQuestionSnapshotsService,
     private readonly repo: ExamsRepository,
     private readonly banks: QuestionBanksService,
     private readonly contexts: ContextsService,
@@ -367,32 +370,26 @@ export class ExamsService {
    * tồn tại và có bản ready (ghim bản ready mới nhất — cùng điểm phân
    * giải của quiz.addSlot QB-3); câu draft/hidden bị chặn tại cổng này.
    */
-  private async resolveSlots(slots: ExamSlotInput[]): Promise<{
-    questionId: string; pinnedVersionId: string; pinnedVersionNumber: number;
-    maxMark: number; section: string; clusterId: string | null;
-  }[]> {
+  private async resolveSlots(actorId: string, slots: ExamSlotInput[]): Promise<Omit<import('@giaokhoa/db/repositories/exams').NewExamSlot, 'examVersionId' | 'position'>[]> {
     const resolved = [];
     for (const s of slots) {
+      if (s.sourceDomain === 'bank-system') {
+        if (!s.sourceVersionNumber) throw new BadRequestException({ code: 'exam.source_version_required' });
+        const snapshot = await this.snapshots.readSystem(actorId, s.questionId, s.sourceVersionNumber);
+        resolved.push({ questionId: s.questionId, sourceDomain: 'bank-system', sourceSnapshot: snapshot,
+          pinnedVersionId: snapshot.versionId, pinnedVersionNumber: snapshot.versionNumber,
+          maxMark: s.maxMark ?? snapshot.defaultMark, section: s.section ?? '', clusterId: null });
+        continue;
+      }
       if (!(await this.repo.questionExists(s.questionId))) {
         throw new NotFoundException({ message: `Question ${s.questionId} not found`, code: 'exam.slot_question_not_found' });
       }
       const ready = await this.repo.resolveReadyVersion(s.questionId);
-      if (!ready) {
-        throw new BadRequestException({
-          message: `Question ${s.questionId} has no ready version; only ready questions can enter a paper`,
-          code: 'exam.slot_question_not_ready',
-        });
-      }
-      resolved.push({
-        questionId: s.questionId,
-        pinnedVersionId: ready.versionId,
-        pinnedVersionNumber: ready.versionNumber,
-        // Không ghi điểm cho slot = lấy điểm mặc định của phiên bản
-        // câu hỏi đã ghim (khuôn quiz cũ: điểm slot thắng khi ghi rõ).
-        maxMark: s.maxMark ?? ready.defaultMark,
-        section: s.section ?? '',
-        clusterId: null,
-      });
+      if (!ready) throw new BadRequestException({ code: 'exam.slot_question_not_ready' });
+      await this.snapshots.readLocal(actorId, s.questionId, ready.versionId);
+      resolved.push({ questionId: s.questionId, pinnedVersionId: ready.versionId,
+        pinnedVersionNumber: ready.versionNumber, maxMark: s.maxMark ?? ready.defaultMark,
+        section: s.section ?? '', clusterId: null });
     }
     return resolved;
   }
@@ -405,7 +402,7 @@ export class ExamsService {
   // --- view -------------------------------------------------------------------
 
   private async slotViews(slots: ExamSlotRow[]): Promise<ExamSlotView[]> {
-    const questionIds = [...new Set(slots.map((s) => s.questionId))];
+    const questionIds = [...new Set(slots.filter((s) => s.sourceDomain !== 'bank-system').map((s) => s.questionId))];
     const [infos, statuses] = await Promise.all([
       this.repo.listSlotQuestionInfo(questionIds),
       this.repo.listQuestionEntryStatuses(questionIds),
@@ -429,9 +426,10 @@ export class ExamsService {
         position: s.position,
         section: s.section,
         questionId: s.questionId,
-        questionName: infoById.get(s.questionId)?.name ?? null,
-        qtype: infoById.get(s.questionId)?.qtype ?? null,
-        entryStatus: statusById.get(s.questionId) ?? null,
+        sourceDomain: s.sourceDomain,
+        questionName: s.sourceSnapshot ? this.snapshots.excerpt(s.sourceSnapshot) : infoById.get(s.questionId)?.name ?? null,
+        qtype: s.sourceSnapshot?.qtype ?? infoById.get(s.questionId)?.qtype ?? null,
+        entryStatus: s.sourceDomain === 'bank-system' ? 'published' : statusById.get(s.questionId) ?? null,
         pinnedVersionId: s.pinnedVersionId,
         pinnedVersionNumber: s.pinnedVersionNumber,
         latestReadyVersionNumber,
@@ -549,7 +547,7 @@ export class ExamsService {
   async createPaper(actorId: string, bankId: string, input: CreateExam): Promise<ExamView> {
     const bank = await this.getExamBank(actorId, bankId);
     await this.evaluator.requireCapability(actorId, EXAM_CAPABILITIES.add, bank.contextId);
-    const slots = await this.resolveSlots(input.slots ?? []);
+    const slots = await this.resolveSlots(actorId, input.slots ?? []);
     let paper: ExamRow | undefined;
     await this.repo.transaction(async (tx) => {
       paper = await this.repo.insertPaper({
@@ -601,6 +599,7 @@ export class ExamsService {
       }, tx);
       await this.repo.insertSlots(currentSlots.map((s) => ({
         examVersionId: version.id, position: s.position, section: s.section,
+        sourceDomain: s.sourceDomain, sourceSnapshot: s.sourceSnapshot,
         questionId: s.questionId, pinnedVersionId: s.pinnedVersionId,
         pinnedVersionNumber: s.pinnedVersionNumber, maxMark: s.maxMark, clusterId: s.clusterId,
         matrixCellId: s.matrixCellId,
@@ -620,7 +619,7 @@ export class ExamsService {
     const bank = await this.bankOfPaper(paper);
     await this.assertCanEditPaper(actorId, paper, bank);
     const current = await this.currentVersion(paper);
-    const slots = await this.resolveSlots(input.slots);
+    const slots = await this.resolveSlots(actorId, input.slots);
     const next = paper.latestVersion + 1;
     await this.repo.transaction(async (tx) => {
       const version = await this.repo.insertVersion({
@@ -841,6 +840,7 @@ export class ExamsService {
       }, tx);
       await this.repo.insertSlots(sourceSlots.map((s) => ({
         examVersionId: version.id, position: s.position, section: s.section,
+        sourceDomain: s.sourceDomain, sourceSnapshot: s.sourceSnapshot,
         questionId: s.questionId, pinnedVersionId: s.pinnedVersionId,
         pinnedVersionNumber: s.pinnedVersionNumber, maxMark: s.maxMark, clusterId: s.clusterId,
         matrixCellId: s.matrixCellId,
@@ -1059,7 +1059,8 @@ export class ExamsService {
         }, tx);
         await this.repo.insertSlots(sourceSlots.map((s) => ({
           examVersionId: version.id, position: s.position, section: s.section,
-          questionId: s.questionId, pinnedVersionId: s.pinnedVersionId,
+          sourceDomain: s.sourceDomain, sourceSnapshot: s.sourceSnapshot,
+        questionId: s.questionId, pinnedVersionId: s.pinnedVersionId,
           pinnedVersionNumber: s.pinnedVersionNumber, maxMark: s.maxMark,
           clusterId: s.clusterId, matrixCellId: s.matrixCellId,
         })), tx);
@@ -1275,6 +1276,8 @@ export class ExamsService {
    * QuizService.createPinRecord lo.
    */
   async createPin(actorId: string, courseId: string, input: CreateExamPin): Promise<QuizView> {
+    const existing = input.requestId ? await this.quiz.getPinByRequest(courseId, actorId, input.requestId) : undefined;
+    if (existing) return existing;
     let examId = input.examId;
     let examVersionId = input.examVersionId;
     if (input.newExam) {
@@ -1309,7 +1312,9 @@ export class ExamsService {
     if (!version || version.examId !== paper.id) {
       throw new NotFoundException({ message: `Exam version ${examVersionId} not found for exam ${paper.id}`, code: 'exam.version_not_found' });
     }
-    return this.quiz.createPinRecord(actorId, courseId, {
+    try {
+      return await this.quiz.createPinRecord(actorId, courseId, {
+      requestId: input.requestId,
       sectionId: input.sectionId, examId: paper.id, examVersionId: version.id,
       name: input.name, intro: input.intro,
       timeOpen: input.timeOpen, timeClose: input.timeClose, timeLimitSeconds: input.timeLimitSeconds,
@@ -1323,7 +1328,16 @@ export class ExamsService {
       variantCount: input.variantCount,
       versionMode: input.versionMode,
       targetGroupId: input.targetGroupId ?? null,
-    });
+      });
+    } catch (error) {
+      /** UNIQUE cùng khoá retry ngăn hai request đồng thời tạo hai đợt giao. */
+      if (input.requestId && (error as { code?: string; constraint?: string }).code === '23505'
+        && (error as { constraint?: string }).constraint === 'exam_pins_request_idx') {
+        const existing = await this.quiz.getPinByRequest(courseId, actorId, input.requestId);
+        if (existing) return existing;
+      }
+      throw error;
+    }
   }
 
   /**
@@ -1451,6 +1465,8 @@ export class ExamsService {
       }, tx);
       await this.repo.insertSlots(slots.map((s) => ({
         examVersionId: version.id, position: s.position, section: s.section,
+        sourceDomain: s.id === slot.id ? 'centre' : s.sourceDomain,
+        sourceSnapshot: s.id === slot.id ? null : s.sourceSnapshot,
         questionId: s.id === slot.id ? input.questionId : s.questionId,
         pinnedVersionId: s.id === slot.id ? ready.versionId : s.pinnedVersionId,
         pinnedVersionNumber: s.id === slot.id ? ready.versionNumber : s.pinnedVersionNumber,

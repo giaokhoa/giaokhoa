@@ -155,7 +155,8 @@
     "invalid_filename": "Tên file không hợp lệ",
     "not_found": "Không tìm thấy file",
     "signature_invalid": "Chữ ký truy cập file không hợp lệ hoặc đã hết hạn",
-    "signature_missing": "Thiếu chữ ký truy cập file"
+    "signature_missing": "Thiếu chữ ký truy cập file",
+    "snapshot_locked": "Không được xoá media thuộc bản chụp thi"
   },
   "grades": {
     "bad_aggregation": "Phương thức tổng hợp điểm không hợp lệ",
@@ -297,5 +298,11 @@
     "invalid_value": "Giá trị không hợp lệ cho cấu hình này",
     "override_not_found": "Cấu hình này chưa có giá trị ghi đè",
     "unknown_setting": "Khoá cấu hình chưa được đăng ký"
+  },
+  "exam": {
+    "source_version_required": "Phải chọn phiên bản câu hệ thống",
+    "shared_requires_pinned": "Câu hệ thống bắt buộc ghim phiên bản",
+    "pin_preparing": "Đợt giao đang được chuẩn bị; hãy thử lại cùng khoá yêu cầu",
+    "pin_request_id_required": "Giao câu hệ thống cần khoá yêu cầu để thử lại an toàn"
   }
 }

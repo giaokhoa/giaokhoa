@@ -47,3 +47,16 @@ export type SchemaMigrationStep = {
   status: string;
   detail?: string;
 };
+
+/** Bản chụp câu phục vụ thi tại trung tâm; không phải tài nguyên ngân hàng có thể biên tập. */
+export interface ExamQuestionSnapshot {
+  sourceDomain: 'centre' | 'bank-system';
+  questionId: string;
+  versionId: string;
+  versionNumber: number;
+  qtype: string;
+  defaultMark: number;
+  checksum: string;
+  package: import('@giaokhoa/contracts').SystemBankPackage;
+  answerIds: string[];
+}

@@ -155,7 +155,8 @@
     "invalid_filename": "Invalid file name",
     "not_found": "File not found",
     "signature_invalid": "The file access signature is invalid or has expired",
-    "signature_missing": "Missing file access signature"
+    "signature_missing": "Missing file access signature",
+    "snapshot_locked": "Exam snapshot media cannot be deleted"
   },
   "grades": {
     "bad_aggregation": "Unknown aggregation method",
@@ -297,5 +298,11 @@
     "invalid_value": "Invalid value for this setting",
     "override_not_found": "This setting has no stored override",
     "unknown_setting": "This setting key is not registered"
+  },
+  "exam": {
+    "source_version_required": "A system question version is required",
+    "shared_requires_pinned": "System questions require pinned versions",
+    "pin_preparing": "Assignment preparation is in progress; retry with the same request key",
+    "pin_request_id_required": "Assigning system questions requires a request key for safe retries"
   }
 }

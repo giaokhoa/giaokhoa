@@ -1,0 +1,414 @@
+/**
+ * Luồng giáo viên ghép câu công bố và local rồi giao bằng snapshot trung tâm.
+ * Oracle questionusagebyactivity_test của Moodle: ghim dữ kiện chấm tại lượt,
+ * chấm tự động khi nộp, essay chờ chấm tay, xem lại theo mặt nạ và công bố điểm.
+ * Mọi hành động sản phẩm qua HTTP AppModule thật; SQL chỉ dựng lỗi và hậu kiểm.
+ */
+import { VersioningType, type INestApplication } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Test } from '@nestjs/testing';
+import { AppModule } from '../../../src/app.module';
+import { validateEnv } from '../../../src/config/env';
+import { ProblemDetailsFilter } from '../../../src/common/problem-details.filter';
+import { randomUUID } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { Client, type Pool } from 'pg';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { buildTestDatabase, dropTestDatabase, withDatabase } from '@giaokhoa/db/test-support';
+import { SYSTEM_FILE_DOMAIN } from '@giaokhoa/db';
+import type { SystemBankPackage } from '@giaokhoa/contracts';
+import { adminToken, assignRole, createUserViaApi, http, login, roleIdByShortname,
+  seedTenantMembershipFixture, STRONG_PASSWORD, systemContextId, uniqueName } from '../../support/identity-access-helpers';
+import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstSectionId } from '../../support/course-enrolment-helpers';
+import { createReadyQuestion, personalExamBankId } from '../../support/exam-pin-helpers';
+import { runSpaceProvision, type SpaceProvisionResult } from '../../../src/modules/tenants/space-provision-runner';
+import { SpaceDatabaseService } from '../../../src/db/routing/space-database.service';
+import { SystemBankConnection } from '../../../src/modules/system-bank/system-bank.connection';
+import { UsersService } from '../../../src/modules/users/users.service';
+import { TenantsService } from '../../../src/modules/tenants/tenants.service';
+import { ContextsService } from '../../../src/modules/access/contexts.service';
+import { RolesService } from '../../../src/modules/access/roles.service';
+import { tenantAls } from '../../../src/modules/tenants/tenant-als';
+import { OBJECT_STORAGE, sha256Hex, type ObjectStorage } from '../../../src/modules/files/storage';
+import { publicationMediaStorageKey } from '../../../src/modules/system-bank/system-bank-media.service';
+
+/**
+ * Nest dùng provider cấu hình theo environment của fixture, tránh cache validate lúc
+ * nạp AppModule. Chỉ thay cấu hình kết nối; toàn bộ guard/service/HTTP là ứng dụng thật.
+ */
+async function createSnapshotTestApp(): Promise<INestApplication> {
+  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+    .overrideProvider(ConfigService).useValue(new ConfigService(validateEnv({ ...process.env }))).compile();
+  const app = moduleRef.createNestApplication();
+  app.setGlobalPrefix('api');
+  app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
+  app.useGlobalFilters(new ProblemDetailsFilter());
+  await app.init();
+  return app;
+}
+
+const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
+const doc = (text: string) => ({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] });
+const emptyPackage = (): SystemBankPackage => ({ questionText: doc('Nội dung hệ thống'), generalFeedback: doc('Phản hồi đã chụp'),
+  stimulusContent: doc('Ngữ liệu đã chụp'), answers: [], answerKey: null, options: null, outcomes: [], media: [] });
+const mcPackage = (): SystemBankPackage => ({ ...emptyPackage(), answers: ['Đúng', 'Sai 1', 'Sai 2', 'Sai 3'].map((text, i) => ({
+  answer: doc(text), isCorrect: i === 0, feedback: doc(`Nhận xét ${i}`), sortOrder: i,
+})) });
+
+describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm', () => {
+  let app: INestApplication;
+  let offlineApp: INestApplication | undefined;
+  let admin: string;
+  let teacher: string;
+  let manager: string;
+  let student: string;
+  let outsider: string;
+  let foreign: string;
+  let centre: Client;
+  let bank: Client;
+  let courseId: string;
+  let sectionId: string;
+  let groupId: string;
+  let tenantA: string;
+  let tenantB: string;
+  let studentId: string;
+  let examBankId: string;
+  let localId: string;
+  let storageDir: string;
+  let bankUrl: string;
+  const originalEnv = { DATABASE_URL: process.env.DATABASE_URL, SYSTEM_BANK_DATABASE_URL: process.env.SYSTEM_BANK_DATABASE_URL,
+    FILE_STORAGE_DIR: process.env.FILE_STORAGE_DIR };
+  const adminUrl = withDatabase(process.env.DATABASE_URL!, 'postgres');
+  const suffix = randomUUID().slice(0, 8);
+  const centreName = `giaokhoa_test_shared_centre_${suffix}`;
+  const bankName = `giaokhoa_test_shared_bank_${suffix}`;
+
+  /** Người dùng có phiên riêng; chuyển tenant qua HTTP để giữ đủ guard/ALS/RLS. */
+  async function session(user: { username: string }, tenantId?: string) {
+    const token = (await login(app, user.username, STRONG_PASSWORD)).accessToken;
+    if (!tenantId) return token;
+    const switched = await http(app).post(`/api/v1/auth/switch-tenant/${tenantId}`).set(bearer(token));
+    expect(switched.status, JSON.stringify(switched.body)).toBe(201);
+    return switched.body.accessToken as string;
+  }
+
+  beforeAll(async () => {
+    process.env.DATABASE_URL = await buildTestDatabase({ adminUrl, database: centreName, store: 'centre' });
+    bankUrl = await buildTestDatabase({ adminUrl, database: bankName, store: 'system-bank' });
+    process.env.SYSTEM_BANK_DATABASE_URL = bankUrl;
+    storageDir = await mkdtemp(join(tmpdir(), 'giaokhoa-shared-'));
+    process.env.FILE_STORAGE_DIR = storageDir;
+    app = await createSnapshotTestApp();
+    admin = await adminToken(app);
+    centre = new Client({ connectionString: process.env.DATABASE_URL }); await centre.connect();
+    bank = new Client({ connectionString: bankUrl }); await bank.connect();
+    const a = await http(app).post('/api/v1/tenants').set(bearer(admin)).send({ name: uniqueName('Trung tâm A'), slug: uniqueName('shared-a'), kind: 'school' });
+    expect(a.status).toBe(201); tenantA = a.body.id;
+    const b = await http(app).post('/api/v1/tenants').set(bearer(admin)).send({ name: uniqueName('Trung tâm B'), slug: uniqueName('shared-b'), kind: 'school' });
+    expect(b.status).toBe(201); tenantB = b.body.id;
+    const [m, t, s, o, f] = await Promise.all(Array.from({ length: 5 }, () => createUserViaApi(app, admin)));
+    studentId = s.id;
+    const systemId = await systemContextId(app, admin);
+    await assignRole(app, admin, t.id, await roleIdByShortname(app, admin, 'teacher'), systemId);
+    for (const u of [m, t, s, o]) await seedTenantMembershipFixture(app, tenantA, u.id);
+    await seedTenantMembershipFixture(app, tenantB, f.id);
+    const managerRole = await roleIdByShortname(app, admin, 'manager');
+    const tenantCtx = await tenantAls.run({ platform: true }, () => app.get(ContextsService).ensureTenantContext(tenantA));
+    await tenantAls.run({ platform: true }, () => app.get(RolesService).assignRole(m.id, managerRole, tenantCtx.id));
+    manager = await session(m, tenantA); teacher = await session(t, tenantA);
+    student = await session(s, tenantA); outsider = await session(o, tenantA); foreign = await session(f, tenantB);
+    const category = await createCategory(app, manager);
+    courseId = (await createCourse(app, manager, category.id)).id;
+    sectionId = await getFirstSectionId(app, manager, courseId);
+    const courseCtx = (await centre.query('SELECT id FROM context WHERE context_level = 50 AND instance_id = $1', [courseId])).rows[0];
+    const editingRole = await roleIdByShortname(app, admin, 'editingteacher');
+    await tenantAls.run({ tenantId: tenantA }, () => app.get(RolesService).assignRole(t.id, editingRole, courseCtx.id));
+    const instance = await createEnrolInstance(app, manager, courseId);
+    await enrolUser(app, manager, courseId, instance.id, s.id);
+    await enrolUser(app, manager, courseId, instance.id, o.id);
+    const group = await http(app).post(`/api/v1/courses/${courseId}/groups`).set(bearer(teacher)).send({ name: 'Nhóm nhận đề' });
+    expect(group.status, JSON.stringify(group.body)).toBe(201); groupId = group.body.id;
+    expect((await http(app).post(`/api/v1/courses/${courseId}/groups/${groupId}/members`).set(bearer(teacher)).send({ userId: s.id })).status).toBe(201);
+    examBankId = await personalExamBankId(app, teacher);
+    localId = await createReadyQuestion(app, teacher, 'Câu riêng không đổi');
+  }, 180_000);
+
+  afterAll(async () => {
+    await offlineApp?.close(); await app?.close();
+    await offlineApp?.get<Pool>('SHARED_CENTRE_KYSELY').end();
+    await app?.get<Pool>('SHARED_CENTRE_KYSELY').end();
+    await centre?.end(); await bank?.end();
+    await dropTestDatabase(adminUrl, centreName); await dropTestDatabase(adminUrl, bankName);
+    if (storageDir) await rm(storageDir, { recursive: true, force: true });
+    for (const [key, value] of Object.entries(originalEnv)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  });
+
+  /** Phát hành qua HTTP để giữ đúng hợp đồng version và checksum. */
+  async function publish(qtype: string, pkg: SystemBankPackage) {
+    const response = await http(app).post('/api/v1/system-bank/questions').set(bearer(admin)).send({ qtype, package: pkg });
+    expect(response.status, JSON.stringify(response.body)).toBe(201);
+    return response.body as { question: { id: string }; version: { id: string; checksum: string } };
+  }
+
+  /** Soạn đề trộn từ tham chiếu tường minh; đưa đề về ready qua cùng API của UI. */
+  async function paper(questionIds: string[]) {
+    const created = await http(app).post(`/api/v1/exams/banks/${examBankId}/exams`).set(bearer(teacher)).send({
+      name: 'Đề trộn nguồn chung và riêng', totalScore: questionIds.length + 1,
+      slots: [...questionIds.map((questionId) => ({ questionId, sourceDomain: 'bank-system', sourceVersionNumber: 1 })), { questionId: localId }],
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    expect(created.body.slots.filter((s: { sourceDomain: string }) => s.sourceDomain === 'bank-system')).toHaveLength(questionIds.length);
+    const ready = await http(app).post(`/api/v1/exams/${created.body.paper.id}/status`).set(bearer(teacher)).send({ status: 'ready' });
+    expect(ready.status).toBe(201);
+    return created.body.paper.id as string;
+  }
+
+  const pinBody = (examId: string, requestId = randomUUID()) => ({ examId, requestId, sectionId, targetGroupId: groupId,
+    reviewAttempt: 0x11110, reviewCorrectness: 0x11110, reviewMarks: 0x11110, reviewSpecificFeedback: 0x11110,
+    reviewGeneralFeedback: 0x11110, reviewRightAnswer: 0x11110 });
+
+  it('ghép đủ bốn dạng, không nhập câu editable; bank ngừng truy cập vẫn làm, chấm, nhận xét và xem lại theo quyền công bố', async () => {
+    const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jFxoAAAAASUVORK5CYII=', 'base64');
+    const hash = sha256Hex(image);
+    await app.get<ObjectStorage>(OBJECT_STORAGE).put(SYSTEM_FILE_DOMAIN, publicationMediaStorageKey(hash), image);
+    const pkg = mcPackage();
+    pkg.questionText = { type: 'doc', content: [...doc('Câu có ảnh bất biến').content, { type: 'image', attrs: { src: `bank-media://${hash}`, alt: 'Ảnh đã công bố' } }] };
+    pkg.media = [{ contentHash: hash, fileName: 'anh.png', mimeType: 'image/png' }];
+    const mc = await publish('multichoice', pkg);
+    const tf = await publish('truefalse', { ...emptyPackage(), questionText: { type: 'doc', content: [...doc('Đúng sai bốn ý').content, {
+      type: 'statementList', content: [1, 2, 3, 4].map((i) => ({ type: 'statement', attrs: { id: `s${i}` }, content: doc(`Ý ${i}`).content })),
+    }] }, answerKey: { guidance: null, solution: { answers: [1, 2, 3, 4].map((i) => ({ statementId: `s${i}`, value: true })) } } });
+    const sa = await publish('shortanswer', { ...emptyPackage(), answers: [{ answer: doc('HaNoi'), isCorrect: true, feedback: null, sortOrder: 0 }], options: { useCase: true } });
+    const essay = await publish('essay', { ...emptyPackage(), answerKey: { guidance: doc('Hướng dẫn làm bài'), solution: { answer: doc('Lời giải bí mật') } } });
+    const examId = await paper([mc.question.id, tf.question.id, sa.question.id, essay.question.id]);
+    const body = pinBody(examId);
+    const pinned = await http(app).post(`/api/v1/courses/${courseId}/exam-pins`).set(bearer(teacher)).send(body);
+    expect(pinned.status, JSON.stringify(pinned.body)).toBe(201);
+    const pinId = pinned.body.id as string;
+    const item = await centre.query('SELECT id FROM grade_items WHERE item_instance = $1', [pinned.body.cmId]);
+    const policy = await http(app).put(`/api/v1/grade-items/${item.rows[0].id}/posting-policy`).set(bearer(teacher)).send({ policy: 'manual' });
+    expect(policy.status).toBe(200);
+    const repeat = await http(app).post(`/api/v1/courses/${courseId}/exam-pins`).set(bearer(teacher)).send(body);
+    expect(repeat.status).toBe(201); expect(repeat.body.id).toBe(pinId);
+    expect((await centre.query('SELECT id FROM question WHERE id = ANY($1::uuid[])', [[mc.question.id, tf.question.id, sa.question.id, essay.question.id]])).rowCount).toBe(0);
+    const snapshot = await centre.query('SELECT question_snapshots, preparation_state FROM exam_pins WHERE id = $1', [pinId]);
+    expect(snapshot.rows[0].preparation_state).toBe('ready');
+    expect(snapshot.rows[0].question_snapshots).toHaveLength(5);
+    expect(JSON.stringify(snapshot.rows[0].question_snapshots)).not.toContain('bank-media://');
+    expect(JSON.stringify(snapshot.rows[0].question_snapshots)).toContain('Ngữ liệu đã chụp');
+    const copiedFiles = await centre.query('SELECT f.content_hash, cr.tenant_id FROM files f JOIN context c ON c.id = f.context_id JOIN course cr ON cr.id = c.instance_id WHERE c.context_level = 50 AND c.instance_id = $1', [courseId]);
+    expect(copiedFiles.rows).toEqual([{ content_hash: hash, tenant_id: tenantA }]);
+    const immutableFile = (await centre.query("SELECT id FROM files WHERE file_area = 'exam_snapshot' AND content_hash = $1", [hash])).rows[0];
+    const removed = await http(app).delete(`/api/v1/files/${immutableFile.id}`).set(bearer(teacher));
+    expect(removed.status).toBe(403); expect(removed.body.code).toBe('file.snapshot_locked');
+    await app.get<ObjectStorage>(OBJECT_STORAGE).delete(SYSTEM_FILE_DOMAIN, publicationMediaStorageKey(hash));
+    const newer = await http(app).post(`/api/v1/system-bank/questions/${sa.question.id}/versions`).set(bearer(admin)).send({ package: { ...emptyPackage(), answers: [{ answer: doc('Sai mới'), isCorrect: true, feedback: null, sortOrder: 0 }] } });
+    expect(newer.status).toBe(201);
+    /** Tắt kết nối bank tại ứng dụng thứ hai, cùng kho trung tâm và file đích đã chụp. */
+    delete process.env.SYSTEM_BANK_DATABASE_URL;
+    offlineApp = await createSnapshotTestApp();
+    expect(offlineApp.get(SystemBankConnection).isConfigured).toBe(false);
+    for (const token of [outsider, foreign]) {
+      const denied = await http(offlineApp).post(`/api/v1/exam-pins/${pinId}/attempts`).set(bearer(token)).send({});
+      expect([403, 404]).toContain(denied.status);
+    }
+    const started = await http(offlineApp).post(`/api/v1/exam-pins/${pinId}/attempts`).set(bearer(student)).send({});
+    expect(started.status, JSON.stringify(started.body)).toBe(201);
+    const attemptId = started.body.attempt.id as string;
+    expect(started.body.questions).toHaveLength(5);
+    expect(JSON.stringify(started.body)).not.toContain('Lời giải bí mật');
+    expect(started.body.questions[2].answers).toEqual([]);
+    const imageNode = started.body.questions[0].questionText.content.find((n: { type: string }) => n.type === 'image');
+    const imageDownload = await http(offlineApp).get(imageNode.attrs.src);
+    expect(imageDownload.status).toBe(200); expect(sha256Hex(imageDownload.body)).toBe(hash);
+    expect(started.body.questions[0].stimulus.content).toMatchObject(doc('Ngữ liệu đã chụp'));
+    const responses = [started.body.questions[0].answers[0].id, JSON.stringify({ s1: true, s2: true, s3: true, s4: true }), 'HaNoi', 'Bài tự luận của học sinh', started.body.questions[4].answers[0].id];
+    for (const [index, response] of responses.entries()) {
+      const saved = await http(offlineApp).post(`/api/v1/quiz-attempts/${attemptId}/responses`).set(bearer(student))
+        .send({ questionAttemptId: started.body.questions[index].questionAttemptId, response });
+      expect(saved.status, JSON.stringify(saved.body)).toBe(201);
+    }
+    const submitted = await http(offlineApp).post(`/api/v1/quiz-attempts/${attemptId}/submit`).set(bearer(student)).send({});
+    expect(submitted.status, JSON.stringify(submitted.body)).toBe(201); expect(submitted.body.attempt.state).toBe('needsgrading');
+    const graded = await http(offlineApp).post(`/api/v1/quiz-attempts/${attemptId}/questions/${started.body.questions[3].questionAttemptId}/grade`)
+      .set(bearer(teacher)).send({ mark: 1, comment: 'Nhận xét chỉ lưu ở A' });
+    expect(graded.status, JSON.stringify(graded.body)).toBe(201); expect(graded.body.attempt.grade).toBe(5);
+    const hidden = await http(offlineApp).get(`/api/v1/quiz-attempts/${attemptId}`).set(bearer(student));
+    expect(hidden.body.attempt.grade).toBeNull(); expect(hidden.body.attempt.sumGrades).toBeNull();
+    expect(hidden.body.questions.every((q: { mark: unknown; fraction: unknown }) => q.mark === null && q.fraction === null)).toBe(true);
+    expect((await http(offlineApp).get(`/api/v1/question-usages/${started.body.attempt.usageId}`).set(bearer(student))).status).toBe(404);
+    expect((await http(offlineApp).post(`/api/v1/question-usages/${started.body.attempt.usageId}/finish`).set(bearer(student)).send({})).status).toBe(403);
+    const published = await http(offlineApp).post(`/api/v1/exam-pins/${pinId}/publish`).set(bearer(teacher)).send({});
+    expect(published.status).toBe(201);
+    const stillHidden = await http(offlineApp).get(`/api/v1/quiz-attempts/${attemptId}`).set(bearer(student));
+    expect(stillHidden.body.attempt.grade).toBeNull();
+    const itemPublished = await http(offlineApp).post(`/api/v1/grade-items/${item.rows[0].id}/publish`).set(bearer(teacher)).send({});
+    expect(itemPublished.status).toBe(201);
+    const reviewed = await http(offlineApp).get(`/api/v1/quiz-attempts/${attemptId}`).set(bearer(student));
+    expect(reviewed.status).toBe(200); expect(reviewed.body.attempt.grade).toBe(5);
+    expect(reviewed.body.questions[3].manualComment).toBe('Nhận xét chỉ lưu ở A');
+    expect(reviewed.body.questions[2].solution).toEqual({ acceptedAnswers: ['HaNoi'] });
+    const closedReview = await http(offlineApp).patch(`/api/v1/exam-pins/${pinId}`).set(bearer(teacher)).send({ reviewSpecificFeedback: 0, reviewRightAnswer: 0 });
+    expect(closedReview.status).toBe(200);
+    const masked = await http(offlineApp).get(`/api/v1/quiz-attempts/${attemptId}`).set(bearer(student));
+    expect(masked.body.questions.every((q: { solution: unknown; manualComment: unknown }) => q.solution === null && q.manualComment === null)).toBe(true);
+    expect((await http(offlineApp).get(`/api/v1/quiz-attempts/${attemptId}`).set(bearer(foreign))).status).toBe(403);
+    expect((await centre.query('SELECT user_id FROM exam_attempts WHERE id = $1', [attemptId])).rows[0].user_id).toBe(studentId);
+    expect((await bank.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('exam_attempts','question_attempts','grade_grades')")).rowCount).toBe(0);
+    process.env.SYSTEM_BANK_DATABASE_URL = bankUrl;
+  }, 90_000);
+
+  it('thiếu quyền, phiên bản, media hoặc checksum không tạo pin sẵn sàng; lỗi ghi snapshot được retry cùng khoá không nhân bản', async () => {
+    const published = await publish('multichoice', mcPackage());
+    const questionId = published.question.id;
+    const examId = await paper([questionId]);
+    const before = Number((await centre.query('SELECT count(*) FROM exam_pins')).rows[0].count);
+    const denied = await http(app).post(`/api/v1/exams/banks/${examBankId}/exams`).set(bearer(student)).send({ name: 'Không đủ quyền', slots: [{ questionId, sourceDomain: 'bank-system', sourceVersionNumber: 1 }] });
+    expect([403, 404]).toContain(denied.status);
+    const invalidVersion = await http(app).post(`/api/v1/exams/banks/${examBankId}/exams`).set(bearer(teacher)).send({ name: 'Phiên bản không tồn tại', slots: [{ questionId, sourceDomain: 'bank-system', sourceVersionNumber: 999 }] });
+    expect(invalidVersion.status).toBe(404);
+    await bank.query("UPDATE system_question_versions SET checksum = repeat('0',64) WHERE id = $1", [published.version.id]);
+    const corrupt = await http(app).post(`/api/v1/courses/${courseId}/exam-pins`).set(bearer(teacher)).send(pinBody(examId));
+    expect(corrupt.status).toBe(400); expect(corrupt.body.code).toBe('system_bank.checksum_mismatch');
+    await bank.query('UPDATE system_question_versions SET checksum = $1 WHERE id = $2', [published.version.checksum, published.version.id]);
+    const missingMedia = mcPackage();
+    missingMedia.questionText = { type: 'doc', content: [{ type: 'image', attrs: { src: `bank-media://${'0'.repeat(64)}` } }] };
+    missingMedia.media = [{ contentHash: '0'.repeat(64), fileName: 'mat.png', mimeType: 'image/png' }];
+    const bad = await publish('multichoice', missingMedia);
+    const badExamId = await paper([bad.question.id]);
+    expect((await http(app).post(`/api/v1/courses/${courseId}/exam-pins`).set(bearer(teacher)).send(pinBody(badExamId))).status).toBeGreaterThanOrEqual(400);
+    expect(Number((await centre.query('SELECT count(*) FROM exam_pins')).rows[0].count)).toBe(before);
+    const body = pinBody(examId);
+    await centre.query(`CREATE FUNCTION reject_shared_pin() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'snapshot write failed'; END $$;
+      CREATE TRIGGER reject_shared_pin BEFORE INSERT ON exam_pins FOR EACH ROW EXECUTE FUNCTION reject_shared_pin()`);
+    try {
+      expect((await http(app).post(`/api/v1/courses/${courseId}/exam-pins`).set(bearer(teacher)).send(body)).status).toBe(500);
+    } finally {
+      await centre.query('DROP TRIGGER reject_shared_pin ON exam_pins; DROP FUNCTION reject_shared_pin()');
+    }
+    const retried = await http(app).post(`/api/v1/courses/${courseId}/exam-pins`).set(bearer(teacher)).send(body);
+    expect(retried.status, JSON.stringify(retried.body)).toBe(201);
+    const repeated = await http(app).post(`/api/v1/courses/${courseId}/exam-pins`).set(bearer(teacher)).send(body);
+    expect(repeated.status).toBe(201); expect(repeated.body.id).toBe(retried.body.id);
+    expect(Number((await centre.query('SELECT count(*) FROM exam_pins WHERE request_id = $1', [body.requestId])).rows[0].count)).toBe(1);
+  }, 90_000);
+  it('hai kho A/B riêng biệt giữ snapshot, media, lượt làm và điểm ở A khi bank không còn kết nối', async () => {
+    const cpName = `giaokhoa_test_shared_cp_${suffix}`;
+    const previousCp = process.env.CONTROL_PLANE_DATABASE_URL;
+    const provisioned: SpaceProvisionResult[] = [];
+    let routed: INestApplication | undefined;
+    let offline: INestApplication | undefined;
+    const dbSecret = 'Test-only-shared-14!';
+    const cpUrl = await buildTestDatabase({ adminUrl, database: cpName, store: 'control-plane' });
+    /** URL test gắn đúng role riêng của trung tâm, không tái dùng role postgres cho HTTP. */
+    const urlFor = (space: SpaceProvisionResult) => {
+      const url = new URL(adminUrl); url.pathname = `/${space.databaseName}`;
+      url.username = space.connectionRole; url.password = dbSecret; return url.toString();
+    };
+    try {
+      for (const label of ['a', 'b']) {
+        const space = await runSpaceProvision({ slug: `exam14-${label}-${suffix}`, name: `Trung tâm ${label}`,
+          adminUsername: 'admin14', adminEmail: `exam14-${label}-${suffix}@example.com`, databasePassword: dbSecret,
+          actorId: randomUUID(), env: { ...process.env, CONTROL_PLANE_DATABASE_URL: cpUrl }, log: () => undefined });
+        provisioned.push(space); process.env[space.secretEnvVar] = urlFor(space);
+      }
+      process.env.CONTROL_PLANE_DATABASE_URL = cpUrl;
+      process.env.SYSTEM_BANK_DATABASE_URL = bankUrl;
+      routed = await createSnapshotTestApp();
+      const [a, b] = provisioned;
+      const hostA = `${a.slug}.test.local`; const hostB = `${b.slug}.test.local`;
+      for (const space of provisioned) {
+        const activated = await http(routed).post('/api/v1/centres/activate-invite')
+          .send({ slug: space.slug, token: space.inviteToken, password: STRONG_PASSWORD });
+        expect(activated.status, JSON.stringify(activated.body)).toBe(201);
+      }
+      const loginA = await http(routed).post('/api/v1/auth/token').set('Host', hostA).send({ username: 'admin14', password: STRONG_PASSWORD });
+      const loginB = await http(routed).post('/api/v1/auth/token').set('Host', hostB).send({ username: 'admin14', password: STRONG_PASSWORD });
+      expect(loginA.status).toBe(201); expect(loginB.status).toBe(201);
+      const tokenA = loginA.body.accessToken as string; const tokenB = loginB.body.accessToken as string;
+      /** Quản trị vận hành không có quyền nghiệp vụ ngầm; fixture gán vai quản lý thật tại kho A. */
+      await routed.get(SpaceDatabaseService).withSpaceKysely(a.slug, async () => {
+        const roles = routed!.get(RolesService); const contexts = routed!.get(ContextsService);
+        const role = await roles.getRoleByShortname('manager');
+        const system = await contexts.ensureSystemContext();
+        const tenant = await contexts.ensureTenantContext(a.tenantId!);
+        await roles.assignRole(a.adminUserId!, role!.id, system.id);
+        await roles.assignRole(a.adminUserId!, role!.id, tenant.id);
+      }, { tenantId: a.tenantId!, userId: a.adminUserId! });
+
+      const category = await http(routed).post('/api/v1/courses/categories').set('Host', hostA).set(bearer(tokenA)).send({ name: 'Danh mục thử đề' });
+      expect(category.status, JSON.stringify(category.body)).toBe(201);
+      const cls = await http(routed).post('/api/v1/classes').set('Host', hostA).set(bearer(tokenA)).send({ name: 'Lớp nhận đề' });
+      expect(cls.status).toBe(201);
+      const course = await http(routed).post('/api/v1/courses').set('Host', hostA).set(bearer(tokenA))
+        .send({ category: category.body.id, classId: cls.body.id, shortName: 'SNAP14', fullName: 'Khoá nhận đề trộn' });
+      expect(course.status, JSON.stringify(course.body)).toBe(201);
+      const courseContent = await http(routed).get(`/api/v1/courses/${course.body.id}/content`).set('Host', hostA).set(bearer(tokenA));
+      const learnerUser = await routed.get(SpaceDatabaseService).withSpaceKysely(a.slug, async () => {
+        const user = await routed!.get(UsersService).createUser({ username: 'student14', email: 'student14@example.com',
+          password: STRONG_PASSWORD, firstName: 'Học', lastName: 'Sinh' });
+        await routed!.get(TenantsService).ensureActiveMembership(a.tenantId!, user.id);
+        return user;
+      }, { tenantId: a.tenantId!, userId: a.adminUserId! });
+      const learner = { body: learnerUser };
+      const enrol = await http(routed).post(`/api/v1/courses/${course.body.id}/enrol/instances`).set('Host', hostA).set(bearer(tokenA)).send({ method: 'manual' });
+      expect(enrol.status).toBe(201);
+      expect((await http(routed).post(`/api/v1/courses/${course.body.id}/enrol/instances/${enrol.body.id}/enrol`).set('Host', hostA).set(bearer(tokenA)).send({ userId: learner.body.id })).status).toBe(201);
+      const learnerLogin = await http(routed).post('/api/v1/auth/token').set('Host', hostA).send({ username: 'student14', password: STRONG_PASSWORD });
+      expect(learnerLogin.status).toBe(201); const studentA = learnerLogin.body.accessToken as string;
+      const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jFxoAAAAASUVORK5CYII=', 'base64');
+      const hash = sha256Hex(image);
+      await app.get<ObjectStorage>(OBJECT_STORAGE).put(SYSTEM_FILE_DOMAIN, publicationMediaStorageKey(hash), image);
+      const pkg = mcPackage(); pkg.questionText = { type: 'doc', content: [...doc('Ảnh chuyển sang miền A').content,
+        { type: 'image', attrs: { src: `bank-media://${hash}` } }] };
+      pkg.media = [{ contentHash: hash, fileName: 'anh14.png', mimeType: 'image/png' }];
+      const source = await publish('multichoice', pkg);
+      const pinned = await http(routed).post(`/api/v1/courses/${course.body.id}/exam-pins`).set('Host', hostA).set(bearer(tokenA))
+        .send({ sectionId: courseContent.body.sections[0].id, requestId: randomUUID(), newExam: { name: 'Đề giao trực tiếp', totalScore: 1,
+          slots: [{ questionId: source.question.id, sourceDomain: 'bank-system', sourceVersionNumber: 1 }] } });
+      expect(pinned.status, JSON.stringify(pinned.body)).toBe(201);
+      const dbA = new Client({ connectionString: urlFor(a) }); const dbB = new Client({ connectionString: urlFor(b) });
+      await dbA.connect(); await dbB.connect();
+      try {
+        /** Truy vấn hậu kiểm dùng GUC tenant thật; role của kho không được vượt RLS. */
+        await dbA.query("SELECT set_config('app.tenant_id', $1, false)", [a.tenantId]);
+        await dbB.query("SELECT set_config('app.tenant_id', $1, false)", [b.tenantId]);
+        const files = await dbA.query("SELECT storage_domain FROM files WHERE file_area = 'exam_snapshot'");
+        expect(files.rows).toEqual([{ storage_domain: `space-${a.spaceId}` }]);
+        expect((await dbA.query('SELECT id FROM question WHERE id = $1', [source.question.id])).rowCount).toBe(0);
+        delete process.env.SYSTEM_BANK_DATABASE_URL;
+        offline = await createSnapshotTestApp();
+        expect(offline.get(SystemBankConnection).isConfigured).toBe(false);
+        expect((await http(offline).get(`/api/v1/exam-pins/${pinned.body.id}`).set('Host', hostB).set(bearer(tokenB))).status).toBe(404);
+        const started = await http(offline).post(`/api/v1/exam-pins/${pinned.body.id}/attempts`).set('Host', hostA).set(bearer(studentA)).send({});
+        expect(started.status, JSON.stringify(started.body)).toBe(201);
+        const question = started.body.questions[0];
+        expect((await http(offline).post(`/api/v1/quiz-attempts/${started.body.attempt.id}/responses`).set('Host', hostA).set(bearer(studentA))
+          .send({ questionAttemptId: question.questionAttemptId, response: question.answers[0].id })).status).toBe(201);
+        const finished = await http(offline).post(`/api/v1/quiz-attempts/${started.body.attempt.id}/submit`).set('Host', hostA).set(bearer(studentA)).send({});
+        expect(finished.status).toBe(201); expect(finished.body.attempt.state).toBe('finished');
+        expect((await dbA.query('SELECT count(*) FROM exam_attempts')).rows[0].count).toBe('1');
+        expect((await dbB.query('SELECT count(*) FROM exam_attempts')).rows[0].count).toBe('0');
+        expect((await dbB.query('SELECT count(*) FROM question_attempts')).rows[0].count).toBe('0');
+        expect((await dbB.query('SELECT count(*) FROM grade_grades')).rows[0].count).toBe('0');
+        const score = await dbA.query('SELECT final_grade FROM grade_grades WHERE user_id = $1 AND item_id = (SELECT id FROM grade_items WHERE item_instance = $2)', [learner.body.id, pinned.body.cmId]);
+        expect(Number(score.rows[0].final_grade)).toBe(1);
+      } finally { await dbA.end(); await dbB.end(); }
+    } finally {
+      await offline?.close(); await routed?.close();
+      await offline?.get<Pool>('SHARED_CENTRE_KYSELY').end(); await routed?.get<Pool>('SHARED_CENTRE_KYSELY').end();
+      process.env.SYSTEM_BANK_DATABASE_URL = bankUrl;
+      if (previousCp === undefined) delete process.env.CONTROL_PLANE_DATABASE_URL; else process.env.CONTROL_PLANE_DATABASE_URL = previousCp;
+      for (const space of provisioned) {
+        delete process.env[space.secretEnvVar]; await dropTestDatabase(adminUrl, space.databaseName);
+      }
+      const cluster = new Client({ connectionString: adminUrl }); await cluster.connect();
+      try { for (const space of provisioned) await cluster.query(`DROP ROLE "${space.connectionRole}"`); } finally { await cluster.end(); }
+      await dropTestDatabase(adminUrl, cpName);
+    }
+  }, 180_000);
+
+
+});

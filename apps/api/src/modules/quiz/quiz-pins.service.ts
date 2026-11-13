@@ -26,6 +26,7 @@ import {
   type ExamPinOverrideRow,
   type ExamPinRow,
 } from '@giaokhoa/db/repositories/quiz';
+import { ExamQuestionSnapshotsService } from './exam-question-snapshots.service';
 import { QuizSharedService } from './quiz-shared.service';
 import { QuizAttemptsService } from './quiz-attempts.service';
 import { QUIZ_COMPONENT } from './quiz-shared.service';
@@ -40,6 +41,7 @@ import type { PinRow } from './quiz.service';
 
 export class QuizPinsService {
   constructor(
+    private readonly snapshots: ExamQuestionSnapshotsService,
     private readonly repo: QuizRepository,
     private readonly courses: CoursesService,
     private readonly evaluator: PermissionEvaluator,
@@ -115,6 +117,7 @@ export class QuizPinsService {
   }
 
   async createPinRecord(actorId: string, courseId: string, input: {
+    requestId?: string;
     sectionId: string; examId: string; examVersionId: string;
     name?: string; intro?: string;
     timeOpen?: string | null; timeClose?: string | null; timeLimitSeconds?: number | null;
@@ -128,6 +131,11 @@ export class QuizPinsService {
     versionMode?: 'pinned' | 'float_latest_ready';
   }): Promise<QuizView> {
     await this.courses.getCourse(courseId);
+    const courseContextId = await this.courses.courseContextId(courseId);
+    await this.evaluator.requireCapability(actorId, 'course:manageactivities', courseContextId);
+    await this.evaluator.requireCapability(actorId, 'grade:manage', courseContextId);
+    const section = await this.courses.getSection(input.sectionId);
+    if (section.course !== courseId) throw new BadRequestException({ code: 'course.section_course_mismatch' });
     await this.assertTargetGroup(courseId, input.targetGroupId);
     const version = await this.repo.getExamVersion(input.examVersionId);
     if (!version || version.examId !== input.examId) {
@@ -145,7 +153,16 @@ export class QuizPinsService {
     const preset = input.preset ? EXAM_KIND_PRESETS[input.preset] : null;
     const name = input.name ?? version.name;
     const variantCount = input.variantCount ?? 1;
+    const slots = await this.repo.listExamSlots(version.id);
+    if (slots.some((s) => s.sourceDomain === 'bank-system') && !input.requestId) {
+      throw new BadRequestException({ code: 'exam.pin_request_id_required' });
+    }
+    if (slots.some((s) => s.sourceDomain === 'bank-system') && input.versionMode === 'float_latest_ready') {
+      throw new BadRequestException({ code: 'exam.shared_requires_pinned' });
+    }
+    const questionSnapshots = await this.snapshots.prepare(actorId, slots, courseContextId, input.versionMode);
     const pin = await this.repo.insertPin({
+      questionSnapshots, requestId: input.requestId, preparationState: 'preparing',
       examId: input.examId, examVersionId: input.examVersionId, courseId, cmId: null,
       name: input.name ?? null, intro: input.intro ?? '',
       timeOpen, timeClose, timeLimit: input.timeLimitSeconds ?? null,
@@ -171,17 +188,21 @@ export class QuizPinsService {
       ...(input.reviewRightAnswer !== undefined ? { reviewRightAnswer: input.reviewRightAnswer } : (preset ? { reviewRightAnswer: preset.reviewRightAnswer } : {})),
       ...(input.reviewOverallFeedback !== undefined ? { reviewOverallFeedback: input.reviewOverallFeedback } : (preset ? { reviewOverallFeedback: preset.reviewOverallFeedback } : {})),
     });
+    let createdCmId: string | undefined;
     try {
       const cm = await this.courses.createCm(actorId, courseId, {
         sectionId: input.sectionId, component: QUIZ_COMPONENT, instanceId: pin.id, name,
         completion: 2, completionUseGrade: true,
       });
+      createdCmId = cm.id;
       await this.repo.updatePin(pin.id, { cmId: cm.id });
       await this.grades.createItem(actorId, courseId, {
         itemName: name, itemType: 'mod', cmId: cm.id, gradeMax: version.totalScore,
       });
+      await this.repo.updatePin(pin.id, { preparationState: 'ready' });
     } catch (err) {
       // Dọn dẹp best-effort để không để lại pin mồ côi không có cm.
+      if (createdCmId) await this.courses.deleteCm(actorId, createdCmId).catch(() => undefined);
       await this.repo.deletePin(pin.id).catch(() => undefined);
       throw err;
     }
@@ -269,6 +290,7 @@ export class QuizPinsService {
         throw new NotFoundException({ message: `Exam version ${input.examVersionId} not found for exam ${pin.examId}`, code: 'exam.version_not_found' });
       }
       newVersion = v;
+      patch.questionSnapshots = await this.snapshots.prepare(actorId, await this.repo.listExamSlots(v.id), await this.courses.courseContextId(pin.course), input.versionMode ?? pin.versionMode);
       patch.examVersionId = input.examVersionId;
     }
     if (input.variantCount !== undefined && input.variantCount !== pin.variantCount) {
@@ -280,6 +302,9 @@ export class QuizPinsService {
     const nextClose = patch.timeClose !== undefined ? patch.timeClose : pin.timeClose;
     if (nextOpen && nextClose && nextClose <= nextOpen) {
       throw new BadRequestException({ message: 'timeClose must be after timeOpen', code: 'quiz.bad_window' });
+    }
+    if ((patch.versionMode ?? pin.versionMode) === 'float_latest_ready' && (patch.questionSnapshots ?? pin.questionSnapshots)?.some((s) => s.sourceDomain === 'bank-system')) {
+      throw new BadRequestException({ code: 'exam.shared_requires_pinned' });
     }
     if (Object.keys(patch).length) await this.repo.updatePin(pin.id, patch);
     const updated = await this.shared.getPin(pin.id);
@@ -431,7 +456,8 @@ export class QuizPinsService {
         code: 'exam.version_not_latest',
       });
     }
-    await this.repo.updatePin(pin.id, { examVersionId: target.id });
+    const questionSnapshots = await this.snapshots.prepare(actorId, await this.repo.listExamSlots(target.id), await this.courses.courseContextId(pin.course), pin.versionMode);
+    await this.repo.updatePin(pin.id, { examVersionId: target.id, questionSnapshots });
     await this.repo.insertPinVersionUpdate({
       pinId: pin.id, actorId, fromExamVersionId: pin.examVersionId, toExamVersionId: target.id,
     });
