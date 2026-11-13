@@ -275,10 +275,20 @@ describe('Xác thực: đăng nhập, khoá tài khoản, xoay refresh, phiên, 
     expect(newSecret).toBeTruthy();
     expect(newSecret).not.toBe(activeSecret);
     const statusPending = await http(app).get('/api/v1/auth/mfa/status').set(auth);
-    expect(statusPending.body).toEqual({ enabled: false });
+    expect(statusPending.body).toEqual({ enabled: true });
 
-    // Confirm bằng secret mới ⇒ MFA bật lại; authenticator cũ hết giá trị,
-    // đăng nhập bị chặn và chỉ mở bằng mã của factor mới.
+    // Khi thay thiết bị còn chờ xác nhận, mã của thiết bị cũ vẫn phải
+    // hoàn tất đăng nhập: không có khoảng trống MFA.
+    const pendingLogin = await http(app).post('/api/v1/auth/token')
+      .send({ username: user.username, password: STRONG_PASSWORD });
+    expect(pendingLogin.status).toBe(201);
+    expect(pendingLogin.body.mfaRequired).toBe(true);
+    const pendingVerifiedOld = await http(app).post('/api/v1/auth/mfa/verify')
+      .send({ challengeToken: pendingLogin.body.challengeToken, code: await currentTotpCode(activeSecret) });
+    expect(pendingVerifiedOld.status).toBe(201);
+    expect(pendingVerifiedOld.body.accessToken).toBeTruthy();
+
+    // Chỉ sau khi confirm bằng secret mới, authenticator cũ mới hết hiệu lực.
     const confirm = await http(app).post('/api/v1/auth/mfa/totp/confirm').set(auth)
       .send({ code: await currentTotpCode(newSecret) });
     expect(confirm.status).toBe(201);
