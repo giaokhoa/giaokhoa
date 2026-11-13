@@ -1,4 +1,5 @@
 import { IconDotsVertical, IconLogout, IconSettings, IconUserCircle } from '@tabler/icons-react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
@@ -41,6 +42,7 @@ export function NavUser() {
   const { t } = useTranslation('app');
   const { isMobile } = useSidebar();
   const navigate = useNavigate();
+  const [logoutFailed, setLogoutFailed] = useState(false);
   if (!user) return null;
   const name = `${user.firstName} ${user.lastName}`.trim() || user.username;
   return (
@@ -98,7 +100,8 @@ export function NavUser() {
             <TenantSwitcherMenu />
             <DropdownMenuItem
               onClick={() => {
-                void logout().then(() => navigate('/login'));
+                setLogoutFailed(false);
+                void logout().then(() => navigate('/login')).catch(() => setLogoutFailed(true));
               }}
             >
               <IconLogout />
@@ -106,6 +109,8 @@ export function NavUser() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        {/* Menu đóng sau khi bấm logout, nên lỗi phải hiện BÊN NGOÀI menu để người dùng thấy và thử lại. */}
+        {logoutFailed && <span role="alert" className="text-destructive px-2 text-sm">{t('logoutFailed')}</span>}
       </SidebarMenuItem>
     </SidebarMenu>
   );

@@ -147,23 +147,96 @@ describe('AuthRepository — họ refresh token, TOTP, liên kết OAuth, nhật
     expect(await authRepo.listActiveFamiliesByUser(user.id)).toHaveLength(0);
   });
 
-  it('TOTP: upsert lần đầu chèn mới, upsert lại thay secret và đưa trạng thái về chưa xác nhận trên cùng một dòng', async () => {
+  it('TOTP: chỉ thay secret pending trước khi bật MFA, setup muộn không thể hạ factor đã xác nhận', async () => {
     const user = await makeUser('auth-totp');
     const first = await authRepo.upsertPendingTotp(user.id, 'secret-ma-hoa-1');
-    expect(first.confirmed).toBe(false);
-    await authRepo.confirmTotp(user.id);
+    expect(first?.confirmed).toBe(false);
+
+    const replacedPending = await authRepo.upsertPendingTotp(user.id, 'secret-ma-hoa-2');
+    expect(replacedPending?.id).toBe(first?.id);
+    expect(replacedPending?.secretEncrypted).toBe('secret-ma-hoa-2');
+    expect(replacedPending?.confirmed).toBe(false);
+
+    // Confirm phải trùng với đúng secret đã kiểm; snapshot cũ không được bật nhầm.
+    expect(await authRepo.confirmTotp(user.id, 'secret-ma-hoa-1')).toBe(false);
+    expect(await authRepo.confirmTotp(user.id, 'secret-ma-hoa-2')).toBe(true);
     const confirmed = await authRepo.getTotpByUserId(user.id);
     expect(confirmed?.confirmed).toBe(true);
     expect(confirmed?.confirmedAt).toBeInstanceOf(Date);
 
-    const replaced = await authRepo.upsertPendingTotp(user.id, 'secret-ma-hoa-2');
-    expect(replaced.id).toBe(first.id);
-    expect(replaced.secretEncrypted).toBe('secret-ma-hoa-2');
-    expect(replaced.confirmed).toBe(false);
-    expect(replaced.confirmedAt).toBeNull();
+    // Mô phỏng setup đã đọc pending=false trước khi request khác confirm.
+    const staleSetup = await authRepo.upsertPendingTotp(user.id, 'secret-ma-hoa-3');
+    expect(staleSetup).toBeUndefined();
+    expect(await authRepo.getTotpByUserId(user.id)).toEqual(confirmed);
+    expect(await authRepo.confirmTotp(user.id, 'secret-ma-hoa-3')).toBe(false);
 
     await authRepo.deleteTotp(user.id);
     expect(await authRepo.getTotpByUserId(user.id)).toBeUndefined();
+  });
+
+  it('TOTP: pending ràng buộc phiên bản active; stage/confirm cũ bị từ chối sau khi active thay đổi', async () => {
+    const user = await makeUser('totp-version-cas');
+    await authRepo.upsertPendingTotp(user.id, 'secret-nguon-A');
+    expect(await authRepo.confirmTotp(user.id, 'secret-nguon-A')).toBe(true);
+    expect(await authRepo.stageTotpReplacement(user.id, 'secret-pending-B', 'secret-nguon-A')).toBe(true);
+    const original = await authRepo.getPendingTotpReplacement(user.id);
+    expect(original).toEqual({
+      secretEncrypted: 'secret-pending-B',
+      activeSecretEncrypted: 'secret-nguon-A',
+    });
+
+    // Mô phỏng request khác vừa chuyển active A thành C.
+    await db.updateTable('user_totp')
+      .set({ secret_encrypted: 'secret-active-C', confirmed: true, confirmed_at: new Date() })
+      .where('user_id', '=', user.id)
+      .execute();
+    expect(await authRepo.stageTotpReplacement(user.id, 'secret-pending-D', 'secret-nguon-A')).toBe(false);
+    // Kể cả pending B còn nằm trong verification thì confirm B vẫn phải
+    // kiểm phiên bản nguồn A; tuyệt đối không được hoán đổi C.
+    expect(await authRepo.activateTotpReplacement(user.id, original!)).toBe(false);
+    expect((await authRepo.getTotpByUserId(user.id))?.secretEncrypted).toBe('secret-active-C');
+
+    expect(await authRepo.stageTotpReplacement(user.id, 'secret-pending-E', 'secret-active-C')).toBe(true);
+    const current = await authRepo.getPendingTotpReplacement(user.id);
+    expect(await authRepo.activateTotpReplacement(user.id, original!)).toBe(false);
+    expect(await authRepo.activateTotpReplacement(user.id, current!)).toBe(true);
+    expect((await authRepo.getTotpByUserId(user.id))?.secretEncrypted).toBe('secret-pending-E');
+    expect(await authRepo.getPendingTotpReplacement(user.id)).toBeUndefined();
+  });
+
+  it('TOTP: reset rồi bật lại không hồi sinh pending từ phiên bản active cũ', async () => {
+    const user = await makeUser('totp-reset-cas');
+    await authRepo.upsertPendingTotp(user.id, 'secret-truoc-reset');
+    expect(await authRepo.confirmTotp(user.id, 'secret-truoc-reset')).toBe(true);
+    expect(await authRepo.stageTotpReplacement(user.id, 'secret-pending-cu', 'secret-truoc-reset')).toBe(true);
+    const beforeReset = await authRepo.getPendingTotpReplacement(user.id);
+
+    // Reset xóa factor active, tài khoản bật lại từ secret hoàn toàn khác.
+    // Ngay cả nếu pending cũ chưa được cleanup thì nó cũng không thể
+    // thay thế factor mới: CAS kiểm secret của thời điểm tái xác thực.
+    await authRepo.deleteTotp(user.id);
+    expect(await authRepo.getPendingTotpReplacement(user.id)).toBeUndefined();
+    await authRepo.upsertPendingTotp(user.id, 'secret-sau-reset');
+    expect(await authRepo.confirmTotp(user.id, 'secret-sau-reset')).toBe(true);
+    expect(await authRepo.stageTotpReplacement(user.id, 'secret-moi', 'secret-truoc-reset')).toBe(false);
+    expect(await authRepo.activateTotpReplacement(user.id, beforeReset!)).toBe(false);
+    expect((await authRepo.getTotpByUserId(user.id))?.secretEncrypted).toBe('secret-sau-reset');
+  });
+
+  it('TOTP: lệnh disable với mã cũ không được xoá factor vừa đổi; reset huỷ pending cùng giao dịch', async () => {
+    const user = await makeUser('totp-stale-disable');
+    await authRepo.upsertPendingTotp(user.id, 'factor-A');
+    expect(await authRepo.confirmTotp(user.id, 'factor-A')).toBe(true);
+    expect(await authRepo.stageTotpReplacement(user.id, 'factor-B', 'factor-A')).toBe(true);
+    const pending = await authRepo.getPendingTotpReplacement(user.id);
+    expect(await authRepo.activateTotpReplacement(user.id, pending!)).toBe(true);
+
+    expect(await authRepo.disableTotpIfMatches(user.id, 'factor-A')).toBe(false);
+    expect((await authRepo.getTotpByUserId(user.id))?.secretEncrypted).toBe('factor-B');
+    expect(await authRepo.stageTotpReplacement(user.id, 'factor-C', 'factor-B')).toBe(true);
+    expect(await authRepo.disableTotpIfMatches(user.id, 'factor-B')).toBe(true);
+    expect(await authRepo.getTotpByUserId(user.id)).toBeUndefined();
+    expect(await authRepo.getPendingTotpReplacement(user.id)).toBeUndefined();
   });
 
   it('liên kết OAuth: tạo, tra theo tài khoản provider, liệt kê theo user và xoá', async () => {

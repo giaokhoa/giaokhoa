@@ -385,6 +385,7 @@ export const enResources = {
     navGroupUsersAccess: 'Users & access',
     navGroupSystemData: 'System settings',
     logout: 'Log out',
+    logoutFailed: 'Could not end the server session. Please try logging out again.',
     signIn: 'Sign in',
 
     homeDescription:
@@ -433,6 +434,10 @@ export const enResources = {
     twoFactorDisabledStatus: 'Off',
     enableTwoFactor: 'Turn on two-factor authentication',
     disableTwoFactor: 'Turn off two-factor authentication',
+    replaceTwoFactor: 'Replace authenticator',
+    replaceTwoFactorInstruction: 'Enter the code from your current authenticator before setting up a new device. MFA stays enabled until you confirm the new one.',
+    replaceTwoFactorNext: 'Continue replacement',
+    twoFactorReplacedSuccess: 'Authenticator replaced successfully. MFA remains enabled.',
     twoFactorSetupInstruction:
       'Scan the QR code below with an authenticator app (Google Authenticator, Authy, 1Password…), then enter the 6-digit code the app shows to confirm.',
     twoFactorSecretLabel: 'Or type this secret key into the app manually:',

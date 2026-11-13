@@ -193,6 +193,10 @@ export interface BetterAuthFactoryDeps {
   legacyPasswordSync?: {
     syncFromCredentialAccount: (userId: string) => Promise<void>;
   } | null;
+  /** Khi BA đổi/reset mật khẩu, thu hồi family JWT và phiên Redis của user trong cùng kho trung tâm. */
+  sessionRevocation?: {
+    revokeLegacySessions: (userId: string) => Promise<void>;
+  } | null;
   /**
    * Cấu hình máy chủ OAuth (AS) cho MCP (issue #163, lát MCP-1): có
    * giá trị thì factory compose thêm `jwt()` + `mcp()` + `cimd()` —
@@ -410,11 +414,15 @@ export function createBetterAuth(deps: BetterAuthFactoryDeps) {
         // mật khẩu hiện tại…) thì hash không đổi, lần chép này là
         // no-op vô hại — cơ chế đồng bộ theo trạng thái, không theo
         // sự kiện thành công.
-        if (!deps.legacyPasswordSync) return;
         if (ctx.path !== '/change-password' && ctx.path !== '/set-password') return;
+        if (ctx.context.returned instanceof APIError) return;
         const userId = ctx.context.session?.user?.id;
         if (!userId) return;
-        await deps.legacyPasswordSync.syncFromCredentialAccount(userId);
+        if (deps.legacyPasswordSync) await deps.legacyPasswordSync.syncFromCredentialAccount(userId);
+        // Đổi mật khẩu trong BA cũng phải thu hồi các phiên của hệ cũ.
+        if (ctx.path === '/change-password' && deps.sessionRevocation) {
+          await deps.sessionRevocation.revokeLegacySessions(userId);
+        }
       })),
     },
     // Khi compose AS: tắt endpoint `/token` của plugin jwt() theo tài
@@ -460,10 +468,13 @@ export function createBetterAuth(deps: BetterAuthFactoryDeps) {
       // onPasswordReset, đã đối chiếu dist) — nên một điểm nối phủ đủ
       // mọi đường reset; service tự đọc hash hiện hành từ dòng
       // credential rồi chép về users.password_hash.
-      ...(deps.legacyPasswordSync
+      ...(deps.legacyPasswordSync || deps.sessionRevocation
         ? {
             onPasswordReset: async ({ user }: { user: { id: string } }): Promise<void> => {
-              await deps.legacyPasswordSync!.syncFromCredentialAccount(user.id);
+              // Phục hồi tương thích mật khẩu cũ khi bake, nhưng luôn thu hồi phiên
+              // JWT/Redis nếu hệ BA reset credential thành công.
+              if (deps.legacyPasswordSync) await deps.legacyPasswordSync.syncFromCredentialAccount(user.id);
+              if (deps.sessionRevocation) await deps.sessionRevocation.revokeLegacySessions(user.id);
             },
           }
         : {}),

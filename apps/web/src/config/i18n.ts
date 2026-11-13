@@ -388,6 +388,7 @@ export const appResources = {
       navGroupUsersAccess: 'Người dùng & quyền',
       navGroupSystemData: 'Cài đặt hệ thống',
       logout: 'Đăng xuất',
+      logoutFailed: 'Không thể kết thúc phiên trên máy chủ. Vui lòng thử đăng xuất lại.',
       signIn: 'Đăng nhập',
 
       homeDescription:
@@ -436,6 +437,10 @@ export const appResources = {
       twoFactorDisabledStatus: 'Chưa bật',
       enableTwoFactor: 'Bật xác thực hai lớp',
       disableTwoFactor: 'Tắt xác thực hai lớp',
+      replaceTwoFactor: 'Đổi ứng dụng xác thực',
+      replaceTwoFactorInstruction: 'Nhập mã của ứng dụng xác thực hiện tại trước khi quét thiết bị mới. MFA cũ vẫn hoạt động đến khi bạn xác nhận thiết bị mới.',
+      replaceTwoFactorNext: 'Tiếp tục đổi thiết bị',
+      twoFactorReplacedSuccess: 'Đã thay ứng dụng xác thực. MFA vẫn được bật.',
       twoFactorSetupInstruction:
         'Quét mã QR bên dưới bằng ứng dụng xác thực (Google Authenticator, Authy, 1Password…), rồi nhập mã 6 số ứng dụng hiển thị để xác nhận.',
       twoFactorSecretLabel: 'Hoặc nhập thủ công khoá bí mật này vào ứng dụng:',

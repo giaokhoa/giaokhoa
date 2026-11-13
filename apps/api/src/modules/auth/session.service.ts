@@ -125,6 +125,11 @@ export class SessionService {
    * Huỷ mọi phiên web của user ngoại trừ `keepId` (phiên hiện tại khi
    * người dùng bấm "huỷ mọi phiên khác"); trả số phiên đã huỷ.
    */
+  /** Password reset/change: revoke all Redis web sessions, including current. */
+  async destroyAllForUser(userId: string): Promise<number> {
+    return this.destroyOthersForUser(userId);
+  }
+
   async destroyOthersForUser(userId: string, keepId?: string): Promise<number> {
     const listed = await this.listForUser(userId);
     let destroyed = 0;
