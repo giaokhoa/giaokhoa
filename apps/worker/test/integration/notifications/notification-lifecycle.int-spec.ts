@@ -20,11 +20,6 @@ import {
 
 const DAY_MS = 24 * 3600_000;
 
-/**
- * NB-6 (issue #174, G9 + G10): vòng đời dữ liệu thông báo + hai đường phát nền (calendar reminder, report schedule) quy về hàm luật phân phối dùng chung của worker. Oracle: mô hình đích D.6 (đã đọc 90 ngày / chưa đọc 180 ngày / dispatch log 90 ngày) + luật `notify()` phía API sau NB-2 (v2 → suy dữ liệu cũ loggedin → loggedoff → mặc định bật; loại bắt buộc P2 ép bật; người bị đình chỉ không nhận gì).
- *
- * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness role thường (`test/ordinary-worker-module.ts`): module chạy bằng role NOSUPERUSER/NOBYPASSRLS như production, fixture và đọc kiểm chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ của spec không đổi. Hệ quả của việc chạy bằng role thường: ca nào gọi trực tiếp service phân phối (không qua processor) phải tự đặt ngữ cảnh platform bằng `tenantAls.run({ platform: true }, ...)` như mọi processor vẫn làm trước khi gọi service trong production — ngoài ngữ cảnh, RLS fail-closed chặn cả dòng thông báo không gắn tenant, vốn chỉ được phép ở ngữ cảnh platform.
- */
 describe('Worker NB-6: lưu giữ thông báo + luật gửi chung', () => {
   let context: INestApplicationContext;
   let harness: OrdinaryWorkerModuleHarness;
@@ -82,13 +77,9 @@ describe('Worker NB-6: lưu giữ thông báo + luật gửi chung', () => {
     await mkUser(legacyOutOffUser, `nb6-logout-off-${suffix}`);
     await mkUser(suspendedUser, `nb6-susp-${suffix}`, true);
     await mkUser(retentionUser, `nb6-ret-${suffix}`);
-    // v2OffUser tắt popup theo mô hình v2 cho cả hai provider của lát.
     await setPref(v2OffUser, 'message_provider_calendar_reminder_popup_v2', '0');
     await setPref(v2OffUser, 'message_provider_report_scheduled_popup_v2', '0');
-    // legacyInOffUser chỉ tắt theo khoá cũ ở trạng thái loggedin.
     await setPref(legacyInOffUser, 'message_provider_calendar_reminder_popup_loggedin', '0');
-    // legacyOutOffUser chỉ có khoá cũ ở trạng thái loggedoff: luật chung
-    // (như API sau NB-2) suy loggedin → loggedoff nên vẫn tính là tắt.
     await setPref(legacyOutOffUser, 'message_provider_calendar_reminder_popup_loggedoff', '0');
   });
   afterAll(async () => { await harness.close(); });
@@ -101,7 +92,6 @@ describe('Worker NB-6: lưu giữ thông báo + luật gửi chung', () => {
     const notes = await notesOf(plainUser, 'calendar_reminder');
     expect(notes).toHaveLength(1);
     expect(notes[0].context_url).toBe(`/calendar/events/${eventId}`);
-    // Giữ nguyên bề mặt hiển thị cũ: smallMessage là subject.
     expect(notes[0].small_message).toBe(notes[0].subject);
     const logs = await dispatchOf(plainUser, 'calendar_reminder', 'delivered');
     expect(logs).toHaveLength(1);
@@ -143,8 +133,6 @@ describe('Worker NB-6: lưu giữ thông báo + luật gửi chung', () => {
   });
 
   it('provider bắt buộc (P2) không thể tắt: bước phân giải ép bật kênh in-app', async () => {
-    // v2OffUser không có khoá nào cho provider bắt buộc này — gieo thêm
-    // khoá v2 tắt tường minh rồi vẫn phải bị ép bật khi mandatory.
     await setPref(v2OffUser, 'message_provider_enrol_expiry_warning_popup_v2', '0');
     const law = { name: 'enrol_expiry_warning', component: 'core_enrol', mandatoryInApp: true };
     expect(await delivery.resolvePopupEnabled(v2OffUser, law)).toBe(true);
@@ -173,13 +161,9 @@ describe('Worker NB-6: lưu giữ thông báo + luật gửi chung', () => {
               resolve(signal.userId);
             }
           } catch {
-            // Chỉ tín hiệu JSON đúng hợp đồng realtime mới thoả điều kiện chờ.
           }
         });
       });
-      // Gọi service trực tiếp nên spec tự đặt ngữ cảnh platform —
-      // trong production service luôn được processor gọi từ bên
-      // trong ngữ cảnh platform/tenant mà processor đã bọc.
       const result = await tenantAls.run({ platform: true }, () => delivery.deliverInApp(plainUser, 'report_scheduled', {
         subject: `NB6 signal ${suffix}`, body: 'body', smallMessage: `NB6 signal ${suffix}`,
         contextUrl: '/reports/signal',

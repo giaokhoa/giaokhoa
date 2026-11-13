@@ -7,9 +7,6 @@ import { QuizPage } from './quiz';
 import { QuizAttemptPage } from './quiz-attempt';
 import { QuizResultsPage } from './quiz-results';
 
-/**
- * Giả lập @giaokhoa/editor cho spec trang attempt: chỉ cần RichTextView dựng nội dung rich text thành chữ đọc được — spec trang kiểm LUỒNG NGHIỆP VỤ phía học sinh (hướng dẫn/lời giải hiện theo cổng), cơ chế render Tiptap thật thuộc spec của chính package editor (mẫu P4).
- */
 vi.mock('@giaokhoa/editor', async () => {
   const React = await import('react');
   interface NodeLike {
@@ -28,10 +25,6 @@ vi.mock('@giaokhoa/editor', async () => {
   };
 });
 
-/**
- * Spec web của hoạt động Quiz (issue #30 chặng 1) theo endpoint thật:
- * giáo viên dựng đề (thêm slot cố định từ ngân hàng), học sinh làm bài qua trang attempt (lưu từng câu rồi nộp để chốt điểm), giáo viên chấm tay essay ở trang kết quả và điểm bài được tính lại.
- */
 const COURSE_ID = '01900000-0000-7000-8000-0000000000c1';
 const QUIZ_ID = '01900000-0000-7000-8000-0000000000c2';
 const CATEGORY_ID = '01900000-0000-7000-8000-0000000000c3';
@@ -163,29 +156,23 @@ describe('Trang ghim — bề mặt đề đã ghim (#226)', () => {
     const router = createMemoryRouter([{ path: '/courses/:id/exams/:pinId', element: <QuizPage /> }], {
       initialEntries: [`/courses/${COURSE_ID}/exams/${QUIZ_ID}`],
     });
-    // Trang lần ghim đã chuyển sang TanStack Query (F-01 đợt 1, #133):
-    // render qua TestProviders để có QueryClient như cây provider thật.
     render(
       <TestProviders>
         <RouterProvider router={router} />
       </TestProviders>,
     );
 
-    // Slot đã ghim hiện tên câu + điểm, CHỈ ĐỌC (không còn ô sửa điểm/soạn slot trong khoá).
     const slotEl = await screen.findByTestId(`slot-${SLOT_ID}`);
     expect(slotEl).toHaveTextContent('Capital');
     expect(slotEl).toHaveTextContent('5 điểm');
     expect(slotEl.querySelector('input')).toBeNull();
 
-    // Nút mở trình soạn đề trỏ về trang Đề.
     const editorLink = await screen.findByRole('link', { name: 'Mở trình soạn đề' });
     expect(editorLink.getAttribute('href')).toBe(`/exams/${EXAM_ID}/edit`);
 
-    // Huy hiệu bản đề mới hiện ở cấp pin (đang ghim v1, bank đã có v2 ready).
     expect(await screen.findByText('Có bản đề ready mới: v2')).toBeTruthy();
     expect(screen.getByText('Đang ghim bản đề v1')).toBeTruthy();
 
-    // Cập nhật TƯỜNG MINH (#254): xem diff từng slot TRƯỚC, xác nhận rồi mới áp.
     await userEvent.click(await screen.findByRole('button', { name: 'Xem thay đổi & cập nhật' }));
     expect(await screen.findByText('Từ bản đề v1 lên v2')).toBeTruthy();
     expect(screen.getByText(/Version câu: v1 → v2/)).toBeTruthy();
@@ -197,7 +184,6 @@ describe('Trang ghim — bề mặt đề đã ghim (#226)', () => {
         body: { toExamVersionId: NEW_VERSION_ID },
       }),
     );
-    // Sau khi áp, huy hiệu bản mới biến mất (pin đã ở bản mới nhất).
     await waitFor(() => expect(screen.queryByText('Có bản đề ready mới: v2')).toBeNull());
   });
 });
@@ -272,8 +258,6 @@ describe('Trang làm bài quiz — endpoint thật', () => {
     const router = createMemoryRouter([{ path: '/quiz-attempts/:attemptId', element: <QuizAttemptPage /> }], {
       initialEntries: [`/quiz-attempts/${ATTEMPT_ID}`],
     });
-    // Trang lần ghim đã chuyển sang TanStack Query (F-01 đợt 1, #133):
-    // render qua TestProviders để có QueryClient như cây provider thật.
     render(
       <TestProviders>
         <RouterProvider router={router} />
@@ -354,8 +338,6 @@ describe('Trang làm bài quiz — endpoint thật', () => {
     const router = createMemoryRouter([{ path: '/quiz-attempts/:attemptId', element: <QuizAttemptPage /> }], {
       initialEntries: [`/quiz-attempts/${ATTEMPT_ID}`],
     });
-    // Trang lần ghim đã chuyển sang TanStack Query (F-01 đợt 1, #133):
-    // render qua TestProviders để có QueryClient như cây provider thật.
     render(
       <TestProviders>
         <RouterProvider router={router} />
@@ -439,14 +421,11 @@ describe('Quiz attempt page — hướng dẫn & lời giải theo mô hình gia
 
   it('hiện Hướng dẫn kèm câu hỏi ngay trong lúc làm, không lộ lời giải hay đáp án đúng (D-4)', async () => {
     renderAttempt(viewWith('inprogress', mcQuestion({})));
-    // Guidance là gợi ý cách làm: học sinh thấy ngay trong lúc làm bài.
     const guidance = await screen.findByTestId('quiz-guidance-1');
     expect(guidance).toHaveTextContent('Hướng dẫn');
     expect(guidance).toHaveTextContent('Hãy nhớ lại vị trí các thủ đô châu Âu.');
-    // Solution chỉ thuộc màn xem lại: không khối Lời giải, không đánh dấu đáp án đúng.
     expect(screen.queryByTestId('quiz-solution-1')).toBeNull();
     expect(document.querySelector('[data-correct="true"]')).toBeNull();
-    // Multichoice luôn là radio chọn một — không còn ô checkbox chọn-nhiều.
     expect(screen.getAllByRole('radio')).toHaveLength(2);
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
   });
@@ -467,14 +446,11 @@ describe('Quiz attempt page — hướng dẫn & lời giải theo mô hình gia
         }),
       ),
     );
-    // Đáp án đúng được đánh dấu trực tiếp trên lựa chọn Paris; lựa chọn sai đã chọn không bị đánh dấu.
     const correctLabel = (await screen.findByText('Paris')).closest('label');
     expect(correctLabel?.getAttribute('data-correct')).toBe('true');
     const chosenLabel = screen.getByText('London').closest('label');
     expect(chosenLabel?.getAttribute('data-correct')).toBeNull();
-    // Guidance vẫn hiện ở màn xem lại, cùng vị trí như lúc làm.
     expect(screen.getByTestId('quiz-guidance-1')).toHaveTextContent('Hãy nhớ lại vị trí các thủ đô châu Âu.');
-    // Khối Lời giải gồm đáp án đúng dạng chữ + feedback của đáp án đã chọn + generalFeedback.
     const solution = screen.getByTestId('quiz-solution-1');
     expect(solution).toHaveTextContent('Lời giải');
     expect(solution).toHaveTextContent('Đáp án đúng: Paris');
@@ -584,7 +560,6 @@ describe('Quiz attempt page — hướng dẫn & lời giải theo mô hình gia
         <RouterProvider router={router} />
       </TestProviders>,
     );
-    // 4 mệnh đề, mỗi mệnh đề một cặp radio Đ/S riêng; chưa có đáp án nào lộ.
     expect(await screen.findByTestId('quiz-tf-statement-1-0')).toHaveTextContent('Mệnh đề 1.');
     expect(screen.getAllByRole('radio')).toHaveLength(8);
     expect(document.querySelector('[data-correct="true"]')).toBeNull();
@@ -622,7 +597,6 @@ describe('Quiz attempt page — hướng dẫn & lời giải theo mô hình gia
         questionExcerpt: 'Xét các mệnh đề sau:',
         questionText: tfDoc,
         answers: [],
-        // tf1 chọn đúng, tf2 chọn sai phía, tf3 bỏ trống, tf4 chọn đúng.
         response: '{"tf1":true,"tf2":true,"tf4":false}',
         state: 'gradedpartial',
         fraction: 0.25,
@@ -642,7 +616,6 @@ describe('Quiz attempt page — hướng dẫn & lời giải theo mô hình gia
     expect(screen.getByTestId('quiz-tf-statement-1-1').getAttribute('data-verdict')).toBe('incorrect');
     expect(screen.getByTestId('quiz-tf-statement-1-2').getAttribute('data-verdict')).toBe('unanswered');
     expect(screen.getByTestId('quiz-tf-statement-1-3').getAttribute('data-verdict')).toBe('correct');
-    // Mỗi mệnh đề có đúng một phía được đánh dấu "Đáp án đúng".
     expect(document.querySelectorAll('[data-correct="true"]')).toHaveLength(4);
     const solution = screen.getByTestId('quiz-solution-1');
     expect(solution).toHaveTextContent('Đáp án đúng: Đúng, Sai, Đúng, Sai');
@@ -705,8 +678,6 @@ describe('Trang kết quả quiz — chấm thủ công', () => {
       [{ path: '/courses/:id/exams/:pinId/results', element: <QuizResultsPage /> }],
       { initialEntries: [`/courses/${COURSE_ID}/exams/${QUIZ_ID}/results`] },
     );
-    // Trang kết quả đã chuyển sang TanStack Query (F-01 đợt 1, #133):
-    // render qua TestProviders để có QueryClient như cây provider thật.
     render(
       <TestProviders>
         <RouterProvider router={router} />
@@ -782,13 +753,11 @@ describe('Trang kết quả quiz — chấm thủ công', () => {
       </TestProviders>,
     );
 
-    // Câu sai nhiều nhất (API đã xếp slot 1 lên đầu) kèm tên học sinh sai.
     const first = await screen.findByTestId('question-stat-1');
     expect(first).toHaveTextContent('Capital');
     expect(first).toHaveTextContent('2/2');
     expect(await screen.findByTestId(`question-stat-1-wrong-${STUDENT_ID}`)).toHaveTextContent('Trần Minh Quân');
     expect(await screen.findByTestId(`question-stat-1-wrong-${STUDENT2_ID}`)).toHaveTextContent('Phạm Thu Hằng');
-    // Slot ngẫu nhiên không có tên câu; không ai sai thì báo rõ.
     const second = await screen.findByTestId('question-stat-2');
     expect(second).toHaveTextContent('Câu ngẫu nhiên');
     expect(second).toHaveTextContent('Chưa có học sinh nào làm sai câu này.');
@@ -867,8 +836,6 @@ describe('Ghi đè quiz — bề mặt giáo viên (#182)', () => {
     const router = createMemoryRouter([{ path: '/courses/:id/exams/:pinId', element: <QuizPage /> }], {
       initialEntries: [`/courses/${COURSE_ID}/exams/${QUIZ_ID}`],
     });
-    // Trang lần ghim đã chuyển sang TanStack Query (F-01 đợt 1, #133):
-    // render qua TestProviders để có QueryClient như cây provider thật.
     render(
       <TestProviders>
         <RouterProvider router={router} />
@@ -879,22 +846,18 @@ describe('Ghi đè quiz — bề mặt giáo viên (#182)', () => {
 
   it('chặn ghi đè học viên mở cửa sổ mà không có lý do, rồi tạo nó khi đã có lý do', async () => {
     const { calls } = setup();
-    // Ghi đè nhóm có sẵn hiện với tên nhóm + lý do.
     const groupRow = await screen.findByTestId(`override-${OVERRIDE_GROUP_ID}`);
     expect(groupRow).toHaveTextContent('Nhóm 1');
     expect(groupRow).toHaveTextContent('Nhóm học chậm hơn');
 
-    // Chọn học sinh (giáo viên trong roster bị lọc khỏi ô chọn), mở cửa sổ riêng, KHÔNG nhập lý do.
     await userEvent.click(await screen.findByLabelText('Chọn học sinh'));
     await userEvent.click(await screen.findByRole('option', { name: 'Trần Minh Quân' }));
     fireEvent.change(screen.getByLabelText('Mở riêng lúc'), { target: { value: '2026-10-26T08:00' } });
     await userEvent.click(screen.getByRole('button', { name: 'Thêm ghi đè' }));
 
-    // Bị chặn ngay ở web: hiện lỗi lý do và KHÔNG có POST nào được phát.
     expect(await screen.findByText(/bắt buộc phải có lý do/)).toBeInTheDocument();
     expect(calls.some((c) => c.url === `/api/v1/exam-pins/${QUIZ_ID}/overrides` && c.method === 'POST')).toBe(false);
 
-    // Bổ sung lý do → tạo thành công đúng payload cho đúng học sinh đó.
     await userEvent.type(screen.getByLabelText('Lý do ghi đè'), 'Ốm, kiểm tra bù');
     await userEvent.click(screen.getByRole('button', { name: 'Thêm ghi đè' }));
     await waitFor(() =>
@@ -911,7 +874,6 @@ describe('Ghi đè quiz — bề mặt giáo viên (#182)', () => {
         },
       }),
     );
-    // Dòng ghi đè mới hiện tên học sinh + nhãn Kiểm tra bù (cửa sổ riêng cho học sinh).
     const userRow = await screen.findByTestId(`override-${OVERRIDE_USER_ID}`);
     expect(userRow).toHaveTextContent('Trần Minh Quân');
     expect(userRow).toHaveTextContent('Kiểm tra bù');
@@ -922,7 +884,6 @@ describe('Ghi đè quiz — bề mặt giáo viên (#182)', () => {
     const groupRow = await screen.findByTestId(`override-${OVERRIDE_GROUP_ID}`);
     await userEvent.click(within(groupRow).getByRole('button', { name: 'Sửa' }));
 
-    // Form nạp sẵn giá trị hiện tại: 2700 giây = 45 phút, lý do có sẵn.
     const limitInput = screen.getByLabelText('Thời gian làm riêng (phút)');
     expect(limitInput).toHaveValue('45');
     expect(screen.getByLabelText('Lý do ghi đè')).toHaveValue('Nhóm học chậm hơn');
@@ -975,8 +936,6 @@ describe('Trang quiz — học viên thấy cài đặt hiệu dụng (đã ghi 
     const router = createMemoryRouter([{ path: '/courses/:id/exams/:pinId', element: <QuizPage /> }], {
       initialEntries: [`/courses/${COURSE_ID}/exams/${QUIZ_ID}`],
     });
-    // Trang lần ghim đã chuyển sang TanStack Query (F-01 đợt 1, #133):
-    // render qua TestProviders để có QueryClient như cây provider thật.
     render(
       <TestProviders>
         <RouterProvider router={router} />
@@ -984,7 +943,6 @@ describe('Trang quiz — học viên thấy cài đặt hiệu dụng (đã ghi 
     );
 
     expect(await screen.findByText('Đang áp dụng ghi đè riêng cho bạn — cửa sổ và giới hạn dưới đây là của riêng bạn.')).toBeInTheDocument();
-    // Giới hạn hiệu lực 45 phút (ghi đè) chứ không phải 30 phút (cài đặt chung); số lần làm 2 chứ không phải 1.
     expect(screen.getByText(/Giới hạn thời gian làm bài: 45/)).toBeInTheDocument();
     expect(screen.queryByText(/Giới hạn thời gian làm bài: 30/)).not.toBeInTheDocument();
     expect(screen.getByText(/Số lần làm cho phép: 2/)).toBeInTheDocument();

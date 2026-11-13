@@ -13,28 +13,16 @@ import { courseConversationQueryOptions } from '#features/messaging/queries/mess
 import { coursePageQueryOptions, myPaymentsQueryOptions, useCoursePage, useMyPayments, usePayFee, useSelfEnrol, useToggleManualCompletion } from '../queries/course';
 import { queryClient } from '#lib/query-client';
 
-/** Một course module trong nội dung khoá học (kiểu `CourseModule` của contracts, đã gồm `completionManual`). */
 type CourseModuleView = CourseContent['sections'][number]['modules'][number];
 
-/**
- * Module có cho phép đánh dấu thủ công hay không — khớp đúng điều kiện phía server (completion.service markManual): tracking phải bật
- * (completion ≠ 0) và module dùng hoàn thành thủ công
- * (completionManual hoặc completion = 1).
- */
 function allowsManualCompletion(cm: CourseModuleView): boolean {
   return cm.completion !== 0 && (cm.completionManual === true || cm.completion === 1);
 }
 
-/**
- * Trang khoá học: người đã ghi danh đang hoạt động thấy nội dung
- * (section + module kèm availability) như trước, kèm nút tự đánh dấu
- * hoàn thành thủ công cho các module cho phép. Người chưa ghi danh không còn ăn lỗi "access denied" trơ trọi: trang tải độc lập thông tin khoá, danh sách enrol instance và ghi danh của tôi, rồi hiện panel ghi danh với các instance self/fee đang bật (status = 0 là đang bật theo schema enrol; manual/cohort/guest bị bỏ qua vì không phải đường tự ghi danh). Instance fee KHÔNG tự ghi danh trực tiếp — chỉ tạo payment qua POST /payments/fee/:instanceId; ghi danh chỉ kích hoạt khi cổng thanh toán xác nhận qua webhook phía server.
- */
 export function CoursePage() {
   const { t } = useTranslation('app');
   const { id } = useParams();
   const navigate = useNavigate();
-  // Dữ liệu trang qua TanStack (F-01 đợt 1): clientLoader đã prefetch gói trang + thanh toán của tôi vào cùng khoá factory trước khi mount; các hành động ghi danh/thanh toán/đánh dấu hoàn thành đi qua mutation — thành công tự invalidate đúng query thay cho nạp lại thủ công. Gói trang vẫn tải từng endpoint độc lập (lỗi một đầu không sập cả trang) đúng nhịp thủ công trước đây.
   const pageQuery = useCoursePage(id);
   const page = pageQuery.data;
   const course = page?.course ?? null;
@@ -60,9 +48,6 @@ export function CoursePage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [completionError, setCompletionError] = useState<string | null>(null);
 
-  /**
-   * Mở chat toàn lớp của khoá: GET ensure conversation cấp khoá phía messaging (cấp phát lười phía server) rồi điều hướng sang trang Tin nhắn mở đúng conversation qua deep-link `?conversation=` sẵn có.
-   */
   async function openClassChat() {
     setChatBusy(true);
     setChatError(null);
@@ -76,7 +61,6 @@ export function CoursePage() {
     }
   }
 
-  /** Tự ghi danh qua instance self: POST không body, mutation invalidate gói trang để nạp lại trạng thái/nội dung. */
   async function selfEnrol(instanceId: string) {
     setActionError(null);
     setMessage(null);
@@ -88,12 +72,6 @@ export function CoursePage() {
     }
   }
 
-  /**
-   * Tạo payment cho instance fee. Tuyệt đối không gọi self-enrol ở đây:
-   * server trả enrol.payment_required cho fee — ghi danh chỉ kích hoạt
-   * sau khi webhook của cổng thanh toán xác nhận payment thành công.
-   * Mutation invalidate query thanh toán của tôi để hiển thị trạng thái thật.
-   */
   async function payFee(instanceId: string) {
     setActionError(null);
     setMessage(null);
@@ -105,12 +83,6 @@ export function CoursePage() {
     }
   }
 
-  /**
-   * Tự đánh dấu hoàn thành thủ công cho một module: body theo
-   * markManualCompletionSchema ({ userId, complete }) — userId lấy từ
-   * ghi danh của tôi (hoặc từ bản ghi completion của tôi khi thiếu).
-   * Lỗi từ server chỉ hiện thông điệp thân thiện, không sập trang.
-   */
   async function toggleManualCompletion(cmId: string, complete: boolean) {
     const userId = enrolment?.userId ?? completion?.course.userId;
     if (!userId) {
@@ -125,8 +97,6 @@ export function CoursePage() {
     }
   }
 
-  // Chờ lần tải đầu chuẩn hoá trên isPending của query với skeleton sẵn
-  // có (F-14): gói trang chưa về thì hiện khung chờ, không trang trắng.
   if (pageQuery.isPending)
     return (
       <PageShell width="wide">
@@ -163,8 +133,6 @@ export function CoursePage() {
                 </Link>
               ) : null}
               {(() => {
-                // Ôn lại (K2-B6): lối vào riêng tới mục chưa xong đầu
-                // tiên của section yếu nhất — khác lối "Học tiếp".
                 const weakest = [...progress.sections]
                   .filter((s) => s.percent !== null && s.percent < 100)
                   .sort((a, b) => (a.percent ?? 0) - (b.percent ?? 0))[0];
@@ -320,7 +288,6 @@ export function CoursePage() {
     );
   }
 
-  // Chưa truy cập được nội dung: panel ghi danh (chỉ self/fee đang bật).
   const enrolOptions = instances.filter((i) => i.status === 0 && (i.enrol === 'self' || i.enrol === 'fee'));
   const headerCourse = course;
   return (
@@ -421,14 +388,8 @@ export function CoursePage() {
   );
 }
 
-/** Export mặc định cho route module React Router framework mode (xem src/routes.ts). */
 export default CoursePage;
 
-/**
- * clientLoader (F-01 đợt 1 + bổ sung clientLoader, rà soát #133):
- * prefetch gói trang khoá học + thanh toán của tôi vào QueryClient
- * singleton dùng chung, đúng khoá factory, trước khi component mount.
- */
 export async function clientLoader({ params }: { params: Record<string, string | undefined> }) {
   if (params.id) {
     await Promise.all([
@@ -439,7 +400,6 @@ export async function clientLoader({ params }: { params: Record<string, string |
   return null;
 }
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { appKeyMeta } from '#lib/route-meta';
 export function meta() {

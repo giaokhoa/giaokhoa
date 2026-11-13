@@ -10,11 +10,6 @@ import {
   type OrdinaryWorkerModuleHarness,
 } from '../../support/ordinary-worker-module';
 
-/**
- * Các job tương tác (engagement) của worker. Oracles: report §2#12 (luật phân phối theo preference + suspended, được kiểm tra lại tại thời điểm phân phối), §2#13/#14 (các nhắc trở thành thông báo; badge auto-award có tính idempotent — bao gồm các lá cohort / profile và tham số by-date của coursecompletion, Behat badges/tests/behat criteria_cohort.feature, criteria_profile.feature, award_badge.feature), calendar/tests/lib_test test_add_subscription (hình dạng counts của kết quả nhập ICS). User được chèn thô (raw-insert) với id cao duy nhất để giữ độc lập với dữ liệu còn sót lại từ các lần chạy trước của suite này trong giaokhoa_test_worker.
- *
- * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness role thường (`test/ordinary-worker-module.ts`): module chạy bằng role NOSUPERUSER/NOBYPASSRLS như production, fixture và đọc kiểm chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ của spec không đổi.
- */
 describe('Engagement của worker: gửi thông báo, nhắc/lấy lịch, tự trao huy hiệu', () => {
   let context: INestApplicationContext;
   let harness: OrdinaryWorkerModuleHarness;
@@ -25,9 +20,6 @@ describe('Engagement của worker: gửi thông báo, nhắc/lấy lịch, tự 
   const userPrefOff = `01940000-0000-7000-8000-${String(940000 + suffix).padStart(12, '0')}`;
 
 
-  // CLASS-0 đóng gói (PR #200): khoá dạy thật phải có class_id (CHECK
-  // course_class_required_check) — lớp fixture cho tenant worker-fixture,
-  // chủ lớp là user fixture riêng; mỗi lần gọi dựng một lớp mới.
   async function fixtureClassId(): Promise<string> {
     const ownerId = '01980000-0000-7000-8000-00000000c1a5';
     await sql`insert into users (id, username, email, suspended, deleted) values (${ownerId}, 'wk-class-owner', 'wk-class-owner@x.io', false, false) on conflict (id) do nothing`.execute(db);
@@ -44,14 +36,12 @@ describe('Engagement của worker: gửi thông báo, nhắc/lấy lịch, tự 
     await sql`insert into users (id, username, email, suspended, deleted) values (${userA}, ${`wk-a-${suffix}`}, ${`wka${suffix}@x.io`}, false, false) on conflict (id) do nothing`.execute(db);
     await sql`insert into users (id, username, email, suspended, deleted) values (${userSuspended}, ${`wk-s-${suffix}`}, ${`wks${suffix}@x.io`}, true, false) on conflict (id) do nothing`.execute(db);
     await sql`insert into users (id, username, email, suspended, deleted) values (${userPrefOff}, ${`wk-p-${suffix}`}, ${`wkp${suffix}@x.io`}, false, false) on conflict (id) do nothing`.execute(db);
-    // Tuỳ chọn tắt ở CẢ HAI trạng thái đăng nhập cho kênh email của grade_updated.
     await db.insertInto('user_preferences').values({ user_id: userPrefOff, name: 'message_provider_grade_updated_email_loggedin', value: '0' }).execute();
     await db.insertInto('user_preferences').values({ user_id: userPrefOff, name: 'message_provider_grade_updated_email_loggedoff', value: '0' }).execute();
   });
   afterAll(async () => { await harness.close(); });
 
   it('gửi thông báo ghi skipped-not-configured cho email khi kênh Resend chưa cấu hình, lũy đẳng theo dedupeKey', async () => {
-    // NB-5 (issue #174): kênh email gửi thật qua Resend ở worker. Môi trường test không có RESEND_API_KEY/MAIL_FROM nên transport ở chế độ fail-soft có khai báo: không gửi, dispatch log ghi 'skipped-not-configured' (trước NB-5 ca này kỳ vọng 'logged'). Đường gửi thật 'sent' + digest được khẳng định ở notification-email.spec.ts bằng transport giả.
     const processor = context.get(NotificationDispatchProcessor);
     const job = { data: { spaceSlug: null, spaceId: null, userId: userA, provider: 'grade_updated', channel: 'email', subject: 'Grade posted', body: 'b', dedupeKey: `test-dispatch-${suffix}` } } as never;
     const first = await processor.process(job);
@@ -91,7 +81,6 @@ describe('Engagement của worker: gửi thông báo, nhắc/lấy lịch, tự 
       .where('context_url', '=', `/calendar/events/${event.id}`)
       .execute();
     expect(rows).toHaveLength(1);
-    // User bị đình chỉ: không có gì được tạo.
     const susp = await processor.process({ data: { spaceSlug: null, spaceId: null, eventId: event.id, userId: userSuspended, minutesBefore: 15 } } as never);
     expect(susp.status).toBe('skipped-suspended');
   });
@@ -149,9 +138,6 @@ describe('Engagement của worker: gửi thông báo, nhắc/lấy lịch, tự 
   });
 
   it('tự trao huy hiệu tôn trọng lá cohort + profile và coursecompletion theo ngày (bản song sinh worker của bộ đánh giá API)', async () => {
-    // Cohort và tư cách thành viên chỉ dành cho userA. Test tự tạo context
-    // hệ thống theo cùng mẫu idempotent của platform-jobs, thay vì mượn
-    // context do suite khác để lại — trên database mới bảng context rỗng.
     await sql`insert into context (id, context_level, instance_id, path, depth)
       select '01990000-0000-7000-8000-0000000000a1', 10, null, '/01990000-0000-7000-8000-0000000000a1', 1
       where not exists (select 1 from context where context_level = 10 and instance_id is null)`.execute(db);
@@ -160,12 +146,10 @@ describe('Engagement của worker: gửi thông báo, nhắc/lấy lịch, tự 
     const cohortRows = await sql`insert into cohort (name, context_id, tenant_id) values (${`wk-cohort-${suffix}`}, ${systemCtxId}, (select id from tenants where slug = 'worker-fixture')) returning id`.execute(db);
     const cohortId = (cohortRows.rows[0] as { id: string }).id;
     await db.insertInto('cohort_members').values({ cohort_id: cohortId, user_id: userA }).execute();
-    // Trường tuỳ chỉnh hồ sơ (core_user/user) với giá trị chỉ dành cho userA.
     const shortName = `wkdept${suffix}`;
     const category = await db.insertInto('custom_field_category').values({ component: 'core_user', area: 'user', name: `WK ${suffix}` }).returningAll().executeTakeFirstOrThrow();
     const field = await db.insertInto('custom_field_field').values({ category_id: category.id, short_name: shortName, name: 'WK department', type: 'text' }).returningAll().executeTakeFirstOrThrow();
     await db.insertInto('custom_field_data').values({ field_id: field.id, instance_id: userA, value: 'Engineering' }).execute();
-    // Một khoá học đã hoàn thành cho userA (hoàn thành tại thời điểm hiện tại).
     const courseRows = await sql`insert into course (category, tenant_id, full_name, short_name, class_id) values ((select id from course_categories order by id limit 1), (select tenant_id from course_categories order by id limit 1), 'Worker leaf course', ${`wklc${suffix}`}, ${await fixtureClassId()}) returning id`.execute(db);
     const courseId = (courseRows.rows[0] as { id: string }).id;
     await db.insertInto('course_completions').values({ user_id: userA, course: courseId, status: 'complete', time_started: new Date(), time_completed: new Date() }).execute();
@@ -193,7 +177,6 @@ describe('Engagement của worker: gửi thông báo, nhắc/lấy lịch, tự 
     expect(issuedA).toContain(profileBadgeId);
     expect(issuedA).toContain(inTimeBadgeId);
     expect(issuedA).not.toContain(tooLateBadgeId);
-    // userPrefOff không thuộc cohort nào, không có giá trị hồ sơ và không có completion: không nhận huy hiệu mới nào.
     await processor.process({ data: { spaceSlug: null, spaceId: null, userId: userPrefOff, trigger: 'test-leaves' } } as never);
     const issuedOther = (await db.selectFrom('badge_issued').selectAll().where('user_id', '=', userPrefOff).execute() as { badge_id: string }[])
       .map((r) => r.badge_id);

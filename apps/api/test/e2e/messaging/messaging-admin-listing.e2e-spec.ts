@@ -5,11 +5,6 @@ import {
 } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
 
-/**
- * Hội thoại lớp/khoá của quản trị hệ thống được LIỆT KÊ, không chỉ đếm (issue #592, điểm D11): quản trị viên mở chat lớp/khoá từ bề mặt của chính lớp/khoá (ensure) thì trở thành thành viên; từ đó danh sách chat của họ giữ hàng lớp/khoá (không bị đồng bộ lười gỡ ra dù không nằm trong tập roster/staff đích), số chưa đọc khớp vũ trụ chuẩn, và mở/đọc được như mọi vai trò khác.
- *
- * Dàn dựng: một khoá và một lớp, mỗi nơi có giáo viên + học viên; giáo viên ensure trước (tạo conversation), quản trị viên ensure sau (được cấp membership theo phạm vi quản trị), giáo viên gửi tin. Kỳ vọng: danh sách của quản trị viên có cả hai hàng với đúng số chưa đọc; chi tiết mở được; đọc xong thì badge và hàng cùng về 0 cho hội thoại đó, hàng còn lại vẫn ở nguyên.
- */
 interface Person { id: string; username: string; token: string }
 interface ListRow { id: string; unread: number; component: string | null; itemType: string | null }
 
@@ -20,11 +15,6 @@ describe('Messaging — danh sách chat của quản trị viên có hàng lớp
   let student: Person;
   let courseConvId: string;
   let classConvId: string;
-  /**
-   * Mốc huy hiệu của quản trị viên TRƯỚC khi dàn dựng: các spec khác trong cùng shard e2e dùng chung một DB nên quản trị viên
-   * (tài khoản dùng chung) có thể đã mang tin chưa đọc từ dữ kiện
-   * của spec khác — khẳng định huy hiệu phải tính theo PHẦN TĂNG do chính spec này dàn dựng, không khẳng định tổng tuyệt đối phụ thuộc thứ tự chạy trong shard.
-   */
   let baselineBadge = 0;
 
   async function person(firstName: string, lastName: string): Promise<Person> {
@@ -54,8 +44,6 @@ describe('Messaging — danh sách chat của quản trị viên có hàng lớp
     teacher = await person('Giang', 'DayLop');
     student = await person('Hanh', 'HocLop');
 
-    // Mọi user là thành viên tenant hiệu lực (cổng membership của
-    // evaluator — cùng tiền lệ spec chat lớp).
     const current = await http(app).get('/api/v1/tenants/current').set('Authorization', `Bearer ${admin}`);
     const tenantId = (current.body as { id: string }).id;
     for (const p of [teacher, student]) {
@@ -63,8 +51,6 @@ describe('Messaging — danh sách chat của quản trị viên có hàng lớp
         .set('Authorization', `Bearer ${admin}`).send({ userId: p.id });
     }
 
-    // Chân khoá: giáo viên + học viên ghi danh, giáo viên ensure
-    // trước rồi quản trị viên ensure sau (được cấp membership).
     const category = await createCategory(app, admin);
     const course = await createCourse(app, admin, category.id);
     const instance = await createEnrolInstance(app, admin, course.id);
@@ -82,8 +68,6 @@ describe('Messaging — danh sách chat của quản trị viên có hàng lớp
     expect((await http(app).post(`/api/v1/messages/conversations/${courseConvId}/messages`)
       .set('Authorization', `Bearer ${teacher.token}`).send({ text: 'tin khoá hai' })).status).toBe(201);
 
-    // Chân lớp: giáo viên là chủ lớp, học viên vào roster; cùng
-    // thứ tự ensure giáo viên trước, quản trị viên sau.
     const created = await http(app).post('/api/v1/classes')
       .set('Authorization', `Bearer ${admin}`).send({ name: 'Lớp chat quản trị', ownerId: teacher.id });
     expect(created.status).toBe(201);
@@ -101,10 +85,6 @@ describe('Messaging — danh sách chat của quản trị viên có hàng lớp
     expect((classAdminEnsured.body as { id: string }).id).toBe(classConvId);
     expect((await http(app).post(`/api/v1/messages/conversations/${classConvId}/messages`)
       .set('Authorization', `Bearer ${teacher.token}`).send({ text: 'tin lớp một' })).status).toBe(201);
-    // Dàn dựng hai cấu trúc (khoá + lớp) kèm ghi danh/roster nên
-    // lượt chạy trên máy tải nặng có thể vượt mốc hook mặc định
-    // 30 giây — nới riêng cho khối dàn dựng này, khẳng định trong
-    // các ca vẫn giữ mốc 30 giây.
   }, 60000);
 
   afterAll(async () => {
@@ -119,12 +99,6 @@ describe('Messaging — danh sách chat của quản trị viên có hàng lớp
     expect(courseRow!.unread).toBe(2);
     expect(classRow).toBeDefined();
     expect(classRow!.unread).toBe(1);
-    // Huy hiệu đếm theo CONVERSATION có tin chưa đọc (vũ trụ chuẩn),
-    // không đếm theo tin: dàn dựng thêm đúng 2 conversation có tin
-    // chưa đọc (khoá + lớp) nên huy hiệu tăng đúng 2 so với mốc trước
-    // dàn dựng; số tin trong hai hàng (khoá 2, lớp 1) đã khẳng định ở
-    // trên. Tổng tuyệt đối phụ thuộc dữ kiện spec khác trong cùng
-    // shard nên không khẳng định.
     expect(await adminBadge()).toBe(baselineBadge + 2);
   });
 
@@ -139,9 +113,6 @@ describe('Messaging — danh sách chat của quản trị viên có hàng lớp
       .set('Authorization', `Bearer ${admin}`).send({});
     expect(read.status).toBe(201);
 
-    // Đọc xong: huy hiệu còn mốc + 1 (chỉ tin lớp), hàng khoá về 0
-    // nhưng vẫn ở lại danh sách (đồng bộ lười không gỡ quản trị
-    // viên), hàng lớp vẫn giữ số 1.
     expect(await adminBadge()).toBe(baselineBadge + 1);
     const rows = await adminList();
     expect(rows.find((row) => row.id === courseConvId)?.unread).toBe(0);

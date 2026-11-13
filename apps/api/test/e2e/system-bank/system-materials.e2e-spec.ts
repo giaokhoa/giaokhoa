@@ -1,13 +1,3 @@
-/**
- * Luồng HTTP thật của issue #16, dịch oracle Moodle contentbank + resource:
- * lưu riêng, duyệt bản chụp, dùng tài nguyên trong khoá và áp availability.
- * Oracle: moodle/moodle public/contentbank/tests/content_test.php::test_import_file_upload
- * và public/availability/condition/group/tests/condition_test.php::test_usage:
- * lưu nội dung/tệp, chặn người ngoài nhóm, thêm thành viên thì mở, xoá thì chặn lại.
- * Luồng gửi/duyệt/ghim phiên bản và cách ly tenant là phần mở rộng của issue #16.
- * Database trung tâm/ngân hàng và thư mục byte riêng cho mỗi lượt chạy.
- * Fixture quyền dùng service chỉ để thiết lập vai; mọi hành vi sản phẩm qua HTTP.
- */
 import { ConflictException, type INestApplication } from '@nestjs/common';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -96,8 +86,6 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
     const slugB = owners.rows.find((row) => row.id === tenantB)!.slug;
     hostA = `${slugA}.test.local`;
     hostB = `${slugB}.test.local`;
-    // Đăng ký thật hai host kho chung vào control plane của suite để
-    // xác minh URL ký đổi host qua toàn bộ guard HTTP, không mock guard.
     for (const slug of [slugA, slugB]) {
       await controlPlane.query(
         `insert into space_registry (slug, name, kind, status, database_name, storage_mode, connection_role_ref, schema_version)
@@ -121,7 +109,6 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
       const context = await tenantAls.run({ platform: true }, () => app.get(ContextsService).ensureTenantContext(index === 0 ? tenantA : tenantB));
       await tenantAls.run({ platform: true }, () => app.get(RolesService).assignRole(actors[index]!.id, managerRole, context.id));
     }
-    /** Giáo viên A có vai hệ thống để dùng kho riêng; B chỉ có vai tại khoá để kiểm đúng seam quyền dùng ngân hàng. */
     await identity.assignRole(app, admin, actors[2]!.id, editingRole, system);
     managerA = await switchTo(0, tenantA);
     managerB = await switchTo(1, tenantB);
@@ -217,7 +204,6 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
     expect(published.body.package.source).toMatchObject({ originalAuthor: 'Tác giả A', license: 'CC BY 4.0', sourceKind: 'self', contentId: sourceId });
     expect(JSON.stringify(published.body.package)).not.toContain(fileId);
     expect((await identity.http(app).delete(`/api/v1/files/${fileId}`).set(bearer(teacherA))).status).toBe(200);
-    /** Mô phỏng kết quả cleanup thật của byte nguồn; không dùng service để chứng minh đường đọc sản phẩm. */
     const storage = app.get<ObjectStorage>(OBJECT_STORAGE);
     const hash = published.body.package.file.contentHash as string;
     await storage.delete(SYSTEM_FILE_DOMAIN, hash);
@@ -267,7 +253,6 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
     const legacyPath = storage.keyFor(LEGACY_FILE_DOMAIN, original.content_hash);
     await mkdir(dirname(legacyPath), { recursive: true });
     await writeFile(legacyPath, data);
-    // Mô phỏng metadata file tồn tại trước khi chia miền vật lý mà không dùng endpoint người dùng sửa DB.
     await pg.query('update files set storage_domain = $1 where id = $2', [LEGACY_FILE_DOMAIN, fileId]);
     expect((await identity.http(app).get(`/api/v1/contentbank/${sourceId}`).set(bearer(teacherA))).status).toBe(200);
     expect((await identity.http(app).get(`/api/v1/contentbank/${sourceId}`).set(bearer(managerB))).status).toBe(404);
@@ -298,7 +283,6 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
     }
     expect(expiredSigned.status).toBe(201);
     expect((await identity.http(app).get(expiredSigned.body.url)).status).toBe(401);
-    // Chữ ký gắn ID file và miền; thay ID trên URL không được đọc file khác.
     const other = await identity.http(app).post('/api/v1/contentbank').set(bearer(teacherA)).send({
       name: 'Học liệu USER khác A', originalAuthor: 'Tác giả A', sourceKind: 'self', license: 'CC BY',
     });
@@ -357,7 +341,6 @@ describe('Công bố học liệu và dùng phiên bản trong đúng audience k
     for (const forbidden of ['course_id', 'student_id', 'cm_id', 'enrolment_id']) expect(columns.rows.map((row) => row.column_name)).not.toContain(forbidden);
     const courseData = JSON.stringify((await bank.query('select package from system_material_versions')).rows);
     for (const privateId of [courseId, studentBId, outsideBId, cmId]) expect(courseData).not.toContain(privateId);
-    /** Đổi audience phải thu hồi cả URL đã nhận, không chỉ giấu module trong outline. */
     expect((await identity.http(app).delete(`/api/v1/courses/${courseId}/groups/${group.body.id}/members/${studentBId}`).set(bearer(teacherB))).status).toBe(200);
     expect((await identity.http(app).get(contentPath).set(bearer(studentB))).status).toBe(403);
   });

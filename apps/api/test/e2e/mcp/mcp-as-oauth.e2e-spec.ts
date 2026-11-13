@@ -6,26 +6,6 @@ import { Test } from '@nestjs/testing';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-/**
- * Lát MCP-1 (issue #163) — máy chủ OAuth cho MCP bằng plugin Better Auth + bộ tool batch/stimulus/publish/tra YCCĐ. Spec chạy với CẢ HAI cờ BETTER_AUTH_ENABLED + MCP_AS_ENABLED bật và kiểm các cổng bắt buộc của issue trên HTTP thật:
- *  - discovery: AS metadata + JWKS + PRM trỏ issuer của BA.
- *  - luồng DCR (kỷ nguyên legacy): register → sign-in phiên BA →
- *    authorize → consent → token PKCE; JWT đúng iss/aud/client_id/ scope, TTL 3600s. Client MCP gọi tool ở CẢ hai kỷ nguyên.
- *  - bộ tool MCP-1: batch từng-item + idempotency từng câu, nhóm ngữ
- *    liệu NGUYÊN TỬ (một câu lỗi → không gì được tạo), publish draft→ready + publish_not_draft, search_questions, check_duplicates, search_curriculum_outcomes, submit_contribution hồi quy trên đường AS.
- *  - ca scope hẹp dựng được: token chỉ giaokhoa.questions.read → tạo câu
- *    và publish đều 403 insufficient_scope (-32003) ở tầng mount.
- *  - token cầu auth cũ (JWT hệ thống HS256) bị RS từ chối 401; token
- *    bị sửa chữ ký → 401; không token → 401.
- *  - refresh token xoay vòng: refresh cũ dùng lại bị chặn
- *    (refreshTokenReuseInterval = 0).
- *  - luồng CIMD (kỷ nguyên 2026-07-28): client_id là URL tài liệu
- *    metadata (app riêng có transport CIMD được tiêm để chạy loopback) authorize → token → gọi tool đạt.
- *
- * Biến môi trường phải tồn tại TRƯỚC khi AppModule được nạp nên mọi
- * import của app đều là import động trong beforeAll (mẫu của spec
- * better-auth-flow).
- */
 process.env.BETTER_AUTH_ENABLED = 'true';
 process.env.MCP_AS_ENABLED = 'true';
 process.env.BETTER_AUTH_SECRET = ['mcp-as-spec', 'secret', '0123456789abcdef'].join('-');
@@ -122,7 +102,6 @@ function sessionCookieFrom(setCookie: string[] | undefined): string {
   return raw.split(';')[0]!;
 }
 
-/** Đăng nhập phiên Better Auth bằng username (đường của trang /mcp-login). */
 async function signInBetterAuth(app: INestApplication, username: string): Promise<string> {
   const res = await helpers
     .http(app)
@@ -140,11 +119,6 @@ interface TokenSet {
   scope: string;
 }
 
-/**
- * Chạy trọn luồng authorize cho một client đã biết (DCR hoặc CIMD):
- * authorize (kèm cookie phiên) → consent accept → token PKCE.
- * `clientId` của CIMD là URL tài liệu metadata.
- */
 async function runAuthorizeFlow(
   app: INestApplication,
   cookie: string,
@@ -152,13 +126,6 @@ async function runAuthorizeFlow(
   scope: string,
   options?: { offlineAccess?: boolean },
 ): Promise<TokenSet> {
-  // `offline_access` là scope GIAO THỨC phía AS (không phải scope
-  // quyền Giáo khoa): plugin oauth-provider CHỈ cấp refresh token khi
-  // authorize xin scope này (kiểm chứng trong dist 1.7.12) — luồng
-  // chính xin kèm để có refresh token mà xoay vòng. Access token
-  // mang offline_access trong claim scope (resource không ghim
-  // allowedScopes — xem better-auth.instance.ts); RS bỏ qua scope
-  // này khi gác theo tool.
   const requestedScope = options?.offlineAccess ? `${scope} offline_access` : scope;
   const { verifier, challenge } = pkcePair();
   const authorizeParams = new URLSearchParams({
@@ -183,17 +150,9 @@ async function runAuthorizeFlow(
   const location = authorizeRes.headers.location as string;
   let callbackUrl: URL;
   if (location.startsWith(REDIRECT_URI)) {
-    // AS BỎ QUA trang consent khi consent đã lưu của (user, client)
-    // bao phủ scope đang xin (kiểm chứng chạy thật: lượt authorize
-    // thứ hai cho cùng client chuyển thẳng về callback kèm code) —
-    // client thật phải chấp nhận cả hai hình redirect này.
     callbackUrl = new URL(location);
   } else {
     expect(location).toContain('/mcp-consent');
-    // Chuỗi query authorize đã ký mà AS gắn vào URL consent — gửi lại
-    // nguyên văn làm oauth_query (đúng cách trang web consent làm):
-    // plugin đóng gói TOÀN BỘ query authorize vào một tham số
-    // `oauth_query` đã ký; trang consent không tự tách từng tham số.
     const consentUrl = new URL(location, ORIGIN);
     const packed = consentUrl.searchParams.get('oauth_query');
     const oauthQuery = packed ?? consentUrl.search.replace(/^\?/, '');
@@ -241,7 +200,6 @@ async function runAuthorizeFlow(
   };
 }
 
-/** Đăng ký client qua DCR (đường legacy) — public client + PKCE. */
 async function registerClient(app: INestApplication, name: string): Promise<string> {
   const res = await helpers
     .http(app)
@@ -253,11 +211,6 @@ async function registerClient(app: INestApplication, name: string): Promise<stri
       grant_types: ['authorization_code', 'refresh_token'],
       response_types: ['code'],
       token_endpoint_auth_method: 'none',
-      // Client đăng ký cả `offline_access`: authorize validate scope
-      // xin theo ĐÚNG tập scope client đã đăng ký (client.scopes của
-      // plugin), và refresh token chỉ được cấp khi offline_access
-      // nằm trong scope đã duyệt — client thật muốn phiên dài đều
-      // đăng ký như vậy.
       scope: `${ALL_SCOPES} offline_access`,
     });
   expect(res.status, `DCR failed: ${res.text.slice(0, 400)}`).toBe(201);
@@ -280,12 +233,6 @@ async function createAsApp(cimdFetch?: (input: unknown, init?: unknown) => Promi
 
   let moduleBuilder = Test.createTestingModule({ imports: [AppModule] });
   if (cimdFetch) {
-    // App CIMD: thay instance BA bằng bản có transport CIMD tiêm riêng
-    // (transport Node chính chủ chặn loopback theo chính sách SSRF —
-    // spec chạy metadata server trên 127.0.0.1 nên phải tiêm fetch).
-    // Issue #654 (D2): factory nhận handle Kysely định tuyến
-    // (`routedKysely`), không còn handle của bộ máy cũ — override này phải
-    // chích SpaceDatabaseService như BetterAuthService thật làm.
     moduleBuilder = moduleBuilder.overrideProvider(BetterAuthService).useFactory({
       factory: (spaceDb: InstanceType<typeof SpaceDatabaseService>, passwordService: InstanceType<typeof PasswordService>) => {
         const mcpAs = {
@@ -323,12 +270,6 @@ async function createAsApp(cimdFetch?: (input: unknown, init?: unknown) => Promi
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
   app.useGlobalFilters(new ProblemDetailsFilter());
   await app.init();
-  // RS kiểm access token bằng JWKS lấy qua HTTP THẬT từ issuer
-  // (http://localhost:3100/api/v1/auth/jwks — đường
-  // createMcpProtectedRequestHandler của plugin): app phải NGHE ở
-  // đúng cổng của issuer thì fetch JWKS mới tới nơi; chỉ init +
-  // supertest in-process là JWKS fetch chết ECONNREFUSED và mọi
-  // tool call đều bị RS bác (kiểm chứng chạy thật lúc nối lại).
   await app.listen(3100);
   return app;
 }
@@ -359,8 +300,6 @@ describe('MCP-1: máy chủ OAuth (AS) + RS + bộ tool mới (issue #163)', () 
     await pg.connect();
     adminLegacy = await helpers.adminToken(app);
 
-    // Giáo viên có credential Better Auth (cầu nối của GĐ1) + vai
-    // teacher tại hệ thống để có bank cá nhân như giáo viên thật.
     const { CredentialBridgeService } = await import('../../../src/modules/auth/better-auth/credential-bridge.service');
     const bridge = app.get(CredentialBridgeService);
     teacherUsername = helpers.uniqueName('mcpteacher');
@@ -427,9 +366,6 @@ describe('MCP-1: máy chủ OAuth (AS) + RS + bộ tool mới (issue #163)', () 
     expect(claims.aud).toBe(RESOURCE);
     expect(claims.sub).toBe(teacherId);
     expect(claims.client_id).toBe(clientId);
-    // Claim scope = 4 scope quyền + offline_access (scope giao thức
-    // đi kèm để vòng đời refresh token xoay vòng được — xem
-    // better-auth.instance.ts mục resources).
     expect(new Set((claims.scope as string).split(' '))).toEqual(
       new Set([...ALL_SCOPES.split(' '), 'offline_access']),
     );
@@ -506,8 +442,6 @@ describe('MCP-1: máy chủ OAuth (AS) + RS + bộ tool mới (issue #163)', () 
       [createdQuestionId],
     );
     expect(row.source_kind).toBe('ai');
-    // Khác kỷ nguyên cầu auth (clientInfo tự giới thiệu): source_ref
-    // mang client_id do AS cấp, đã xác thực trên token.
     expect(row.source_ref).toBe(`client:${clientId}`);
     expect(row.status).toBe('draft');
 
@@ -584,7 +518,6 @@ describe('MCP-1: máy chủ OAuth (AS) + RS + bộ tool mới (issue #163)', () 
     expect(byItem.get('cau-2')!.existingQuestionId).toBe(createdQuestionId);
     expect(byItem.get('cau-3')!.status).toBe('created');
     batchQuestionId = byItem.get('cau-1')!.questionId as string;
-    // Câu batch bám đúng ngữ liệu đã khai trong lô.
     const link = await sqlOne<{ stimulus_id: string | null }>(
       'select stimulus_id from question_versions where question_id = $1',
       [batchQuestionId],
@@ -726,8 +659,6 @@ describe('MCP-1: máy chủ OAuth (AS) + RS + bộ tool mới (issue #163)', () 
     expect(verdicts.get('soi-1')).toBe('exact');
     expect(verdicts.get('soi-2')).toBe('none');
 
-    // YCCĐ gieo thẳng SQL vào context hệ thống (môn Toán lớp 5) — giáo
-    // viên đọc được qua curriculum:view như bề mặt chương trình thật.
     const systemContextId = await helpers.systemContextId(app, adminLegacy);
     const subject = await sqlOne<{ id: string }>(
       `insert into subjects (context_id, name, slug) values ($1, $2, $3) returning id`,
@@ -741,9 +672,6 @@ describe('MCP-1: máy chủ OAuth (AS) + RS + bộ tool mới (issue #163)', () 
       `insert into curriculum_nodes (curriculum_id, title, kind, position) values ($1, 'Số thập phân', 'topic', 1) returning id`,
       [curriculum.id],
     );
-    // Cột content nay là jsonb (issue #334): gieo tài liệu một đoạn
-    // văn thay vì text trần — text trần bị Postgres từ chối 22P02.
-    // Khẳng định về tool tìm kiếm bên dưới giữ nguyên, không nới.
     await pg.query(
       `insert into learning_outcomes (node_id, content, position, source_ref) values ($1, $2::jsonb, 1, 'MCP1-YCCD-1')`,
       [node.id, JSON.stringify({
@@ -835,15 +763,12 @@ describe('MCP-1: máy chủ OAuth (AS) + RS + bộ tool mới (issue #163)', () 
     expect(reuse.status).toBeGreaterThanOrEqual(400);
     expect((reuse.body as { error?: string }).error).toBeTruthy();
 
-    // Access token mới từ refresh vẫn gọi tool được.
     const probe = await callTool(app, rotated.access_token, 'list_my_banks', {});
     expect(probe.isError).toBe(false);
     tokens = { ...tokens, accessToken: rotated.access_token, refreshToken: rotated.refresh_token };
   });
 
   it('MCP + tài khoản đã bật MFA: authorize không tiến được trước bước TOTP; qua TOTP thì authorize → token → tool chạy trọn', async () => {
-    // Giáo viên thứ hai có bật MFA (factor TOTP đã xác nhận trong
-    // `user_totp` qua chính TotpService của hệ).
     const { CredentialBridgeService } = await import('../../../src/modules/auth/better-auth/credential-bridge.service');
     const { TotpService } = await import('../../../src/modules/auth/totp.service');
     const { generate } = await import('otplib');
@@ -867,8 +792,6 @@ describe('MCP-1: máy chủ OAuth (AS) + RS + bộ tool mới (issue #163)', () 
     const { secret } = await totpService.setup(created.id, mfaUsername);
     await totpService.confirm(created.id, await generate({ secret }));
 
-    // Đăng nhập web (đường của trang /mcp-login) bị cổng MFA gác:
-    // đáp ứng là dấu twoFactorRedirect, KHÔNG có cookie phiên.
     const signIn = await helpers
       .http(app)
       .post('/api/v1/auth/sign-in/username')
@@ -877,8 +800,6 @@ describe('MCP-1: máy chủ OAuth (AS) + RS + bộ tool mới (issue #163)', () 
     expect(signIn.status, `sign-in failed: ${signIn.text.slice(0, 300)}`).toBe(200);
     expect((signIn.body as { twoFactorRedirect?: boolean }).twoFactorRedirect).toBe(true);
     const signInCookies = (signIn.headers['set-cookie'] as unknown as string[] | undefined) ?? [];
-    // Không entry cookie phiên nào mang GIÁ TRỊ sống (entry xoá
-    // cookie của cổng — tên + giá trị rỗng — là dấu đúng phải có).
     expect(
       signInCookies
         .filter((c) => c.startsWith('better-auth.session_token='))
@@ -888,8 +809,6 @@ describe('MCP-1: máy chủ OAuth (AS) + RS + bộ tool mới (issue #163)', () 
     expect(twoFactorRaw).toBeTruthy();
     const twoFactorCookie = twoFactorRaw!.split(';')[0]!;
 
-    // Authorize mang chỉ cookie chờ bước hai: không có phiên nên bị
-    // đưa về trang login của MCP như chưa đăng nhập.
     const { challenge } = pkcePair();
     const params = new URLSearchParams({
       client_id: clientId,
@@ -908,7 +827,6 @@ describe('MCP-1: máy chủ OAuth (AS) + RS + bộ tool mới (issue #163)', () 
     expect(blocked.status).toBe(302);
     expect(blocked.headers.location as string).toContain('/mcp-login');
 
-    // Qua bước TOTP ở endpoint hoàn tất → cookie phiên thật.
     const verify = await helpers
       .http(app)
       .post('/api/v1/auth/two-factor/verify-totp')
@@ -918,7 +836,6 @@ describe('MCP-1: máy chủ OAuth (AS) + RS + bộ tool mới (issue #163)', () 
     expect(verify.status, `verify-totp failed: ${verify.text.slice(0, 300)}`).toBe(200);
     const mfaCookie = sessionCookieFrom(verify.headers['set-cookie'] as unknown as string[] | undefined);
 
-    // Từ đây luồng uỷ quyền chạy trọn như tài khoản không MFA.
     const mfaTokens = await runAuthorizeFlow(app, mfaCookie, clientId, ALL_SCOPES);
     const probe = await callTool(app, mfaTokens.accessToken, 'list_my_banks', {});
     expect(probe.isError).toBe(false);
@@ -939,8 +856,6 @@ describe('MCP-1: luồng CIMD — client_id là URL tài liệu metadata (issue 
 
   it('authorize bằng client CIMD (không đăng ký trước) → token → gọi tool đạt', async () => {
     helpers = await import('../../support/identity-access-helpers');
-    // Metadata server tí hon: tài liệu CIMD của client, client_id
-    // chính là URL của tài liệu (hồ sơ mcp-2026-07-28).
     let clientUrl = '';
     metadataServer = createServer((req, res) => {
       if (req.url === '/client.json') {
@@ -964,13 +879,6 @@ describe('MCP-1: luồng CIMD — client_id là URL tài liệu metadata (issue 
     await new Promise<void>((resolve) => metadataServer.listen(0, '127.0.0.1', resolve));
     const address = metadataServer.address();
     if (!address || typeof address === 'string') throw new Error('metadata server has no port');
-    // Plugin CIMD 1.7.12 CHỈ phân giải client_id là URL HTTPS trỏ
-    // host CÔNG KHAI (validateClientIdUrl chặn https-thiếu/loopback/
-    // private ở tầng chính sách TRƯỚC cả fetch, kiểm chứng trong
-    // dist) — client_id vì thế là một URL https trên tên miền công
-    // khai dạng văn bản; fetch tiêm riêng ÁNH XẠ URL đó về metadata
-    // server loopback của spec (tài liệu vẫn do server tí hon này
-    // phục vụ, client_id trong tài liệu khớp URL https).
     clientUrl = 'https://mcp-cimd-spec.example.com/client.json';
     const localMetadataUrl = `http://127.0.0.1:${address.port}/client.json`;
 

@@ -5,21 +5,6 @@ import { createSystemBankKysely, type SystemBankDb } from '../client';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
 import { SystemBankRepository } from './system-bank';
 
-/**
- * Spec tích hợp của repository kho NGÂN HÀNG HỆ THỐNG trên Kysely
- * (hạng mục G10, issue #650).
- *
- * Database kho ngân hàng được dựng từ rỗng bằng chính cầu nối migration của package (carrier đóng băng của kho system-bank) trên cụm PostgreSQL thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ `DATABASE_URL` của package). Mọi ca chạy qua repository production ở `system-bank.ts` — không mô phỏng handle.
- *
- * Các ca khoá hành vi của đường chuyển đổi:
- * - Phát hành câu + phiên bản: insert bỏ khoá chính nhận id
- *   UUIDv7 do database sinh; id tường minh (đường di trú) giữ nguyên; phiên bản cũ bất biến khi phiên bản mới được tạo.
- * - Rút câu + sự kiện + sổ importer: truy vết nguồn giữ nguyên —
- *   sự kiện rút trỏ đúng câu nguồn, danh sách trung tâm đã nhập đọc lại được, ghi importer trùng là idempotent.
- * - Khám phá chỉ thấy câu đang phát hành (câu đã rút biến mất).
- * - Gói YCCĐ: tạo gói kèm items trong một transaction, đọc lại
- *   khớp từng trường — gồm nội dung YCCĐ là MẢNG jsonb ở cấp cao nhất (đường ghi phải qua serialize + `::jsonb`, driver `pg` hiểu mảng trần là mảng PostgreSQL).
- */
 const adminUrl =
   process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
@@ -33,7 +18,6 @@ let pool: Pool;
 let db: SystemBankDb;
 let repo: SystemBankRepository;
 
-/** Gói câu multichoice mẫu theo hợp đồng `SystemBankPackage`. */
 function samplePackage(text: string, outcomeId?: string): SystemBankPackage {
   return {
     questionText: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] },

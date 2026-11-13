@@ -12,12 +12,6 @@ import { CompletionController, CourseModuleCompletionController } from './comple
 import { CompletionReaggregationOutboxConsumer } from './completion-reaggregation-outbox.consumer';
 import { COMPLETION_QUEUE, CompletionService } from './completion.service';
 
-/** Facade của CompletionModule: CompletionService. Phụ thuộc Courses, Enrol, registry Availability, Access (report §3.12).
- * Consumer tái tổng hợp sau gỡ ghi danh sống trong module này vì nó là phía
- * tiêu thụ sự kiện `course_completion_reaggregation_requested` qua mốc seq riêng.
- * Repository của module nằm ở `@giaokhoa/db/repositories/completion` trên Kysely và
- * được dựng bằng factory trên facade định tuyến kho trung tâm
- * (`SpaceDatabaseService.routedKysely`). */
 @Module({
   imports: [
     AccessModule, CoursesModule, EnrolModule, AvailabilityModule, EventsModule, SpaceRoutingModule,
@@ -35,5 +29,4 @@ import { COMPLETION_QUEUE, CompletionService } from './completion.service';
   ],
   exports: [CompletionService],
 })
-/** Module theo dõi hoàn thành. */
 export class CompletionModule {}

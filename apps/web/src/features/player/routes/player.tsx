@@ -1,4 +1,3 @@
-/** Player đọc nội dung và media qua cổng khoá; học liệu công bố giữ URL kiểm audience cùng attribution của phiên bản. */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Button } from '@giaokhoa/ui/components/button';
@@ -17,9 +16,6 @@ function isHls(fileName: string, mime: string | null): boolean {
   return fileName.toLowerCase().endsWith('.m3u8') || mime === 'application/vnd.apple.mpegurl' || mime === 'application/x-mpegurl';
 }
 
-/**
- * Hàng đợi gửi bù sự kiện học (K2-B2): view/progress là hồ sơ quá trình học — khi mạng rớt, sự kiện được giữ trong localStorage và gửi lại khi có mạng hoặc lần mở player sau, học sinh mạng yếu không bị mất tiến độ đã học thật.
- */
 const QUEUE_KEY = 'giaokhoa-learn-event-queue';
 interface QueuedEvent { path: string; body: string }
 
@@ -30,7 +26,6 @@ function enqueueEvent(event: QueuedEvent): void {
     queue.push(event);
     localStorage.setItem(QUEUE_KEY, JSON.stringify(queue.slice(-100)));
   } catch {
-    // localStorage không dùng được (chế độ riêng tư…) — bỏ qua lặng lẽ.
   }
 }
 
@@ -53,11 +48,9 @@ async function flushEventQueue(): Promise<void> {
   try {
     localStorage.setItem(QUEUE_KEY, JSON.stringify(remaining));
   } catch {
-    // Bỏ qua như trên.
   }
 }
 
-/** Gửi một sự kiện học; thất bại (rớt mạng) thì vào hàng đợi gửi bù. */
 async function postLearningEvent(path: string, body: unknown): Promise<boolean> {
   try {
     await apiJson(path, { method: 'POST', body: JSON.stringify(body ?? {}) });
@@ -70,19 +63,12 @@ async function postLearningEvent(path: string, body: unknown): Promise<boolean> 
 
 const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 2];
 
-/**
- * Trang học (player) của K2: nội dung của một mục khoá học kèm outline kề bên (dấu ✓ theo completion của chính học sinh), nút Trước/Tiếp, tự ghi nhận đã xem qua endpoint /view sẵn có, báo tiến độ xem cho video
- * (lưu bền + gửi bù khi rớt mạng, phát tiếp đúng vị trí dở, đổi tốc độ
- * phát), và nút "Đánh dấu đã học" cho mục hoàn thành thủ công.
- */
 export function PlayerPage() {
   const { t } = useTranslation('app');
   const { id, cmId } = useParams();
-  // Dữ liệu trang qua TanStack (F-01 đợt 1): clientLoader của route đã prefetch cùng khoá trước khi mount; chờ tải đầu trên isPending của query (F-14). queryFn giữ semantics probe: lỗi tải → data null, trang báo lỗi tải như trước.
   const viewQuery = usePlayerView(id, cmId);
   const data = viewQuery.data ?? null;
   const { refetch } = viewQuery;
-  // "Đánh dấu đã học" qua đột biến của lib/player-data (F-01): hai bước probe + POST nằm trong đột biến, thành công thì view tự làm mới qua làm-mới-khoá (thay refetch tay trước đây).
   const markLearnedMutation = useMarkPlayerModuleLearned(id, cmId);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -92,12 +78,10 @@ export function PlayerPage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const lastProgressSentAt = useRef(0);
 
-  // Gửi bù hàng đợi sự kiện học mỗi khi mở một mục (nhịp flush mà load() thủ công trước đây chạy trước khi tải dữ liệu).
   useEffect(() => {
     void flushEventQueue();
   }, [cmId]);
 
-  // Tự ghi nhận đã xem qua endpoint /view sẵn có — một lần cho mỗi mục: dữ liệu về mà completion kiểu view và chưa xem thì gửi sự kiện, gửi thành công thì refetch để nhận trạng thái viewed mới.
   useEffect(() => {
     if (!data || !id || !cmId) return;
     if (data.completion.mode !== 'view' || data.completion.viewed || viewedPostedFor.current === cmId) return;
@@ -108,17 +92,12 @@ export function PlayerPage() {
     })();
   }, [data, id, cmId, refetch]);
 
-  // Có mạng trở lại thì gửi bù hàng đợi sự kiện học.
   useEffect(() => {
     const onOnline = () => void flushEventQueue();
     window.addEventListener('online', onOnline);
     return () => window.removeEventListener('online', onOnline);
   }, []);
 
-  // Tệp xem trực tuyến: tải nội dung qua endpoint có kiểm quyền rồi phát
-  // bằng blob URL (PDF/ảnh/video thường); HLS (.m3u8) phát thẳng bằng
-  // URL đã ký để trình duyệt tự chọn mốc bitrate theo mạng. Dọn URL khi
-  // đổi mục.
   const file = data?.content.type === 'resource' ? data.content.file : undefined;
   const hls = file ? isHls(file.fileName, file.mimeType) : false;
   const playableFileId = file && !hls && isInlineMime(file.mimeType) ? file.id : null;
@@ -148,7 +127,6 @@ export function PlayerPage() {
     };
   }, [file, hls]);
 
-  /** Báo tiến độ xem video: % đã xem + vị trí hiện tại (gửi bù khi rớt mạng). */
   const reportVideoProgress = useCallback(
     (force = false) => {
       const video = videoRef.current;
@@ -164,7 +142,6 @@ export function PlayerPage() {
     [id, cmId],
   );
 
-  // Phát tiếp đúng vị trí dở + áp tốc độ phát đã chọn khi video sẵn sàng.
   const resumeAt = data?.itemProgress?.positionSeconds ?? null;
   useEffect(() => {
     const video = videoRef.current;
@@ -175,7 +152,6 @@ export function PlayerPage() {
     }
   }, [data, rate, resumeAt]);
 
-  /** "Đánh dấu đã học" cho mục hoàn thành thủ công: gọi endpoint manual sẵn có với chính mình. */
   async function markLearned() {
     if (!id || !cmId) return;
     setBusy(true);
@@ -360,15 +336,8 @@ export function PlayerPage() {
   );
 }
 
-/** Route module là chính trang này (src/routes.ts trỏ thẳng vào file): cần default export để framework mode coi đây là route có component — thiếu nó, request tài liệu phía server bị xếp vào resource route và trả 400 (GĐ4 của issue #7 phát hiện khi rà SSR toàn bộ route). */
 export default PlayerPage;
 
-/**
- * clientLoader (F-01 đợt 1 + bổ sung clientLoader, rà soát #133):
- * prefetch query chính vào QueryClient singleton dùng chung (đúng
- * khoá factory) trước khi component mount. prefetchQuery không ném
- * lỗi: tải hỏng thì component tự xử lý qua useQuery như trước.
- */
 export async function clientLoader({ params }: { params: Record<string, string | undefined> }) {
   if (params.id && params.cmId) {
     await queryClient.prefetchQuery(playerViewQueryOptions(params.id, params.cmId));
@@ -376,7 +345,6 @@ export async function clientLoader({ params }: { params: Record<string, string |
   return null;
 }
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { titleMeta } from '#lib/route-meta';
 export function meta() {

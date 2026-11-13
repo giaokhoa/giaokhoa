@@ -8,12 +8,10 @@ import { MessagingModule } from '../messaging/messaging.module';
 import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
 
-/** Facade của ReportsModule: ReportsService. */
 @Module({
   imports: [AccessModule, CoursesModule, MessagingModule, SpaceRoutingModule],
   controllers: [ReportsController],
   providers: [
-    // Repository của package @giaokhoa/db chạy trên handle Kysely đã định tuyến theo không gian (issue #648).
     {
       provide: ReportsRepository,
       useFactory: (spaceDatabase: SpaceDatabaseService) => new ReportsRepository(spaceDatabase.routedKysely),

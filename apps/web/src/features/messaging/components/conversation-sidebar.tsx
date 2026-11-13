@@ -29,115 +29,30 @@ import {
   initialsOf, presenceStatusOf,
 } from '../utils/utils';
 
-/**
- * Khung trái màn Tin nhắn: một ô tìm kiếm duy nhất phía trên
- * một thanh tab gồm bốn tab lọc ngang hàng — Tất cả / Chưa
- * đọc / Nhóm / Lưu trữ (ba tab đầu theo hình dạng demo của
- * issue #606; tab Lưu trữ thay tab Yêu thích của demo theo
- * phán quyết tại issue #623, xem mục tab Lưu trữ dưới đây;
- * cấu trúc hai tab Trò chuyện / Nhóm kèm chip lọc của lát
- * MSG-T3 đã được thay bằng hình dạng này):
- *
- * - Tab **Tất cả**: MỌI hội thoại của người xem
- *   (mọi loại — 1–1 và nhóm), đúng ngữ nghĩa hợp của tab All
- *   ở bản demo (phán quyết nghiệm thu preview của PR #607 đã
- *   thay ngữ nghĩa phân vùng 1–1/nhóm của cấu trúc hai tab cũ
- *   mà bản dựng đầu của issue này mang sang). Trong tab, danh
- *   sách chia thành các mục thu gọn **Ghim** (chỉ hiện khi có
- *   hội thoại đã ghim) và **Gần đây** — đúng hai mục của bản
- *   demo; cột không có mục lưu trữ (issue #623) — hội thoại
- *   đã lưu trữ không thuộc tab này: chúng chỉ hiện ở tab Lưu
- *   trữ, và danh sách của tab này là đúng tập chưa lưu trữ
- *   của server.
- * - Tab **Chưa đọc**: cùng danh sách mọi loại đó nhưng chỉ
- *   gồm hội thoại có tin chưa đọc — số đếm của tab vì vậy
- *   luôn khớp tổng chưa đọc ở tiêu đề trang (trang chứa tính
- *   tổng đó từ chính danh sách này, không lọc theo loại).
- * - Tab **Nhóm**: mọi mục nhóm của cây server (Lớp → Khoá →
- *   Nhóm con + Khoá ngoài lớp + Nhóm tự do) trình bày thành
- *   một danh sách phẳng ({@link GroupListNav}); bấm một hàng
- *   là mở ngay chat của hàng đó ở khung phải, kể cả hàng chưa
- *   có hội thoại (đi đường ensure của trang chứa như cây
- *   trước đây).
- * - Tab **Lưu trữ**: chứa riêng tập hội thoại đã lưu trữ
- *   của người xem (đường `?archived=true` của server), phân
- *   mục Ghim / Gần đây và dựng hàng như tab Tất cả. Tab này
- *   THAY tab Yêu thích trong thanh tab theo phán quyết tại
- *   issue #623: hệ đã có Ghim nên yêu thích là thừa — schema
- *   trạng thái hội thoại chỉ nhận pinned/archived/muted,
- *   yêu thích không có dữ kiện ở bất kỳ tầng nào (số đếm của
- *   tab từng ghi cứng 0 và mục Thêm vào yêu thích từng là
- *   hình dạng vô hiệu) — trong khi lưu trữ là chức năng thật
- *   cần bề mặt riêng. Đây là điểm hình dạng chủ động khác
- *   bản demo theo quyết định đã ghi tại issue, không phải
- *   lệch sót so với demo.
- * - Mỗi tab hiện số đếm của chính tab đó trong ngoặc đơn ngay
- *   trên trigger (số hội thoại mọi loại chưa lưu trữ, số hội
- *   thoại chưa lưu trữ có tin chưa đọc, số mục nhóm, số hội
- *   thoại đã lưu trữ), tính trên toàn bộ tập của tab, không
- *   chịu ô tìm —
- *   như số đếm trên chip lọc trước đây. Ô tìm phía trên thanh
- *   tab lọc nội dung của tab đang mở theo tên hiển thị (chỉ
- *   lọc mục đã có — không phải tìm người).
- * - Nút **Tin nhắn mới** cạnh tiêu đề mở hộp thoại cùng tên
- *   ({@link NewMessageDialog} — hộp thoại nằm giữa màn hình như
- *   bản demo từ issue #591, thay ngăn kéo trượt bên phải trước
- *   đây): nơi tab Danh bạ cũ bị hạ xuống — lời mời kết
- *   bạn (kèm huy hiệu số lượng trên chính nút này), chọn người từ
- *   liên hệ/roster lớp/khoá, và mục liên hệ đã chặn.
- * - Tiêu đề khung trái kèm avatar của chính người xem — ánh xạ nút
- *   Invite của bản demo (đường vào hộp thoại mời vẫn là nút Tin
- *   nhắn mới, giữ nhãn tiếng Việt hiện có).
- *
- * Tab đang chọn do TRANG chứa giữ (và lưu bền cùng hội thoại đang
- * mở) để quay lại màn Tin nhắn là gặp đúng ngữ cảnh gần nhất; các
- * trạng thái thoáng qua của riêng khung trái (từ khoá tìm, trạng
- * thái mở của các mục thu gọn, sheet đang mở) ở lại component này.
- */
 interface ConversationSidebarProps {
-  /** Danh sách chính của tôi (mọi loại, CHƯA lưu trữ — đường mặc định của server chỉ trả tập này; tab Tất cả lấy toàn bộ, tab Chưa đọc thêm lọc chưa đọc). */
   conversations: ConversationView[];
-  /** Tập hội thoại đã lưu trữ của tôi (đường `?archived=true` của server) — dữ kiện của tab Lưu trữ, phân mục Ghim / Gần đây và dựng hàng như tab Tất cả. */
   archivedConversations: ConversationView[];
-  /** Cây nhóm của tôi do server dựng (lát MSG-T1) cho danh sách của tab Nhóm. */
   groupTree: ConversationGroupTreeView | null;
   active: ConversationView | null;
   error: string | null;
   myId: string | undefined;
-  /** Email của người xem (khởi tạo trường Email trong sheet hồ sơ của chính mình); null khi phiên không mang. */
   myEmail: string | null;
-  /** Tên đăng nhập của người xem (dòng định danh phụ `@username` trong sheet hồ sơ của chính mình); null khi không có. */
   myUsername: string | null;
-  /**
-   * Mức hiện diện người xem đang chọn (giai đoạn 2 của vòng sửa PR #610): online = socket realtime đang nối (presence thật bật), offline = socket đã ngắt theo lựa chọn (presence thật tắt). Chấm trên avatar của người xem và bộ chọn trong sheet hồ sơ của chính mình cùng đọc giá trị này.
-   */
   selfPresence: SelfPresenceChoice;
-  /** Đổi mức hiện diện của chính người xem (trang chứa đổi nối socket tương ứng). */
   onSelfPresenceChange: (presence: SelfPresenceChoice) => void;
   onlineUsers: Record<string, boolean>;
   onOpenConversation: (conversation: ConversationView) => void;
-  /** Mở một conversation theo id (nút cây đã có conversationId). */
   onOpenConversationById: (conversationId: string) => void;
-  /** Mở chat cấp lớp từ nút lớp của cây (trang chứa ensure). */
   onOpenClassChat: (classId: string) => void;
-  /** Mở chat cấp khoá từ nút khoá của cây (trang chứa ensure). */
   onOpenCourseChat: (courseId: string) => void;
-  /** Mở chat của một nhóm con chưa có conversation (trang chứa tạo/lấy). */
   onOpenGroupConversation: (groupId: string) => void;
-  /** Người xem có vai dạy/staff trên cây — quyết định hiện nút tạo nhóm tự do. */
   canCreateFreeGroup: boolean;
-  /** Tạo nhóm tự do (trang chứa gọi API); resolve true khi tạo thành công để khung trái đóng sheet. */
   onCreateFreeGroup: (name: string, memberIds: string[]) => Promise<boolean>;
-  /** Lỗi tạo nhóm gần nhất (trang chứa dịch từ mã lỗi server); null khi không có. */
   groupCreateError: string | null;
-  /** Lỗi của lần đổi trạng thái gần nhất (lát M5 — đổi ở menu đầu khung/panel của cuộc trò chuyện đã mở, trang chứa truyền xuống để hiện cùng một bề mặt lỗi); null khi không có. */
   stateError: string | null;
   nameOf: (userId: string) => string;
-  /** Tab đang chọn — trang chứa giữ để nhớ ngữ cảnh gần nhất. */
   tab: string;
-  /** Đổi tab (trang chứa lưu bền giá trị mới). */
   onTabChange: (tab: string) => void;
-  // --- Dữ kiện + sự kiện cho hai sheet (trang chứa giữ, khung trái trình bày) ---
   contacts: string[];
   contactMessage: string | null;
   incomingRequests: ContactRequestView[];
@@ -148,56 +63,22 @@ interface ConversationSidebarProps {
   onSendContactRequest: (userId: string) => void;
   onRespondContactRequest: (userId: string, action: 'accept' | 'decline') => void;
   onUnblockContact: (userId: string) => void;
-  /** Ngữ cảnh chọn người đang chọn trong bộ chọn của hai sheet. */
   pickerContext: PeoplePickerContext;
-  /** Đổi ngữ cảnh chọn người (trang chứa nạp roster tương ứng). */
   onSelectPickerContext: (context: PeoplePickerContext) => void;
-  /** Các lớp của tôi cho ngữ cảnh theo lớp của bộ chọn. */
   pickerClasses: { classId: string; name: string }[];
-  /** Các khoá của tôi cho ngữ cảnh theo khoá của bộ chọn. */
   pickerCourses: MessagingCourse[];
-  /** Một trang roster của ngữ cảnh lớp/khoá đang chọn trong bộ chọn. */
   pickerMembers: RosterMember[];
-  /** Lỗi nạp roster của bộ chọn; null khi không có. */
   pickerRosterError: string | null;
-  /** Con trỏ trang roster kế của bộ chọn; null là đã hết trang. */
   pickerRosterCursor: string | null;
-  /** Tải trang roster tiếp theo cho bộ chọn. */
   onLoadMorePicker: () => void;
-  /**
-   * Danh sách hội thoại đang nạp lần đầu (issue #591): khung trái hiện khung đang tải (skeleton) đúng hình dạng trang thay cho trạng thái rỗng giả; rỗng thật chỉ hiện sau khi nạp xong và xác nhận không có dữ kiện.
-   */
   loading?: boolean;
-  /**
-   * Cây nhóm đang nạp (vòng sửa PR #593): trạng thái tải của cây lấy từ chính query cây nhóm của trang — khung trái truyền thẳng xuống danh sách nhóm để nó hiện khung đang tải theo nhịp của nó, không mượn cờ đang tải của danh sách hội thoại (hai query về lệch nhịp nhau).
-   */
   groupTreeLoading?: boolean;
-  /**
-   * Lỗi nạp cây nhóm lần đầu (vòng sửa 2 PR #593): khung trái truyền thẳng xuống danh sách nhóm để nó hiện thông báo lỗi thay cho câu rỗng giả; null khi cây đã có dữ kiện hoặc chưa lỗi.
-   */
   groupTreeError?: string | null;
-  /**
-   * Tập đã lưu đang nạp lần đầu (vòng sửa issue #623): trạng thái tải của panel Lưu trữ lấy từ chính query tập đã lưu của trang — panel không mượn cờ của danh sách chính, vì hai query về lệch nhịp và mượn cờ nhau làm tab Lưu trữ khẳng định rỗng giả trong lúc tập của nó còn đang nạp.
-   */
   archivedLoading?: boolean;
-  /**
-   * Lỗi nạp tập đã lưu lần đầu (vòng sửa issue #623): panel Lưu trữ hiện thông báo lỗi kèm nút thử lại thay cho câu rỗng giả; null khi tập đã có dữ kiện hoặc chưa lỗi.
-   */
   archivedError?: string | null;
-  /** Nạp lại riêng truy vấn tập đã lưu (nút thử lại của panel Lưu trữ). */
   onRetryArchived?: () => void;
 }
 
-/**
- * Trình bày khung trái Tin nhắn: tiêu đề + avatar người xem + nút
- * Tin nhắn mới, bốn tab Tất cả / Chưa đọc / Nhóm / Lưu trữ dưới
- * một ô tìm kiếm duy nhất (trong tab Tất cả là các mục thu gọn
- * Ghim / Gần đây), hộp thoại Tin nhắn mới và sheet
- * Tạo nhóm.
- *
- * @param props - Dữ kiện và sự kiện do trang Tin nhắn đưa xuống.
- * @returns Khung trái hoàn chỉnh của màn master–detail.
- */
 export function ConversationSidebar({
   conversations, archivedConversations, groupTree, active, error, myId, myEmail, myUsername,
   selfPresence, onSelfPresenceChange, onlineUsers,
@@ -214,38 +95,15 @@ export function ConversationSidebar({
   const open = onOpenConversation;
   const [newMessageOpen, setNewMessageOpen] = useState(false);
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
-  /** Sheet hồ sơ của chính người xem (mở từ nút avatar ở đầu cột — giai đoạn 2 của vòng sửa PR #610). */
   const [ownProfileOpen, setOwnProfileOpen] = useState(false);
-  /**
-   * Trạng thái mở của hai mục thu gọn trong các tab danh sách
-   * (issue #564; mỗi tab còn đúng hai mục Ghim / Gần đây từ
-   * issue #623): cả hai mở mặc định để hội thoại không bị giấu sau một lần bấm thêm.
-   */
   const [pinnedOpen, setPinnedOpen] = useState(true);
   const [recentOpen, setRecentOpen] = useState(true);
-  /**
-   * Lọc bằng ô tìm duy nhất phía trên thanh tab (lát M4, issue
-   * #237; tính duy nhất và vị trí của ô từ issue #606): lọc ngay
-   * tại client trên dữ kiện đã tải, khớp chuỗi con không phân
-   * biệt hoa thường trên TÊN HIỂN THỊ của hội thoại hoặc NỘI DUNG
-   * TIN CUỐI của nó — đúng luật của ô tìm ở bản demo (giai đoạn 2
-   * của vòng sửa PR #610, mục T-01: bản demo khớp tên HOẶC đoạn
-   * xem trước tin cuối; xem trước của bản dựng là nội dung tin
-   * cuối nên khớp trên chính nội dung đó). Chỉ lọc mục ĐÃ CÓ —
-   * không phải tìm người theo tên. Cùng một từ khoá áp cho tab
-   * đang mở: danh sách hội thoại ở tab Tất cả / Chưa đọc; các
-   * mục nhóm ở tab Nhóm theo luật lọc nút của {@link GroupListNav}.
-   */
   const [searchText, setSearchText] = useState('');
-  /**
-   * Nhắn tin từ sheet Tin nhắn mới thì đóng sheet, khung trái về tab Tất cả để thấy hội thoại 1–1 vừa mở ở khung phải.
-   */
   const messageContact = (userId: string) => {
     setNewMessageOpen(false);
     onTabChange('all');
     onMessageContact(userId);
   };
-  /** Tạo nhóm thành công thì đóng sheet tạo nhóm và về tab Nhóm để thấy nhóm vừa tạo trong danh sách. */
   const createFreeGroup = async (name: string, memberIds: string[]) => {
     const created = await onCreateFreeGroup(name, memberIds);
     if (created) {
@@ -253,9 +111,6 @@ export function ConversationSidebar({
       onTabChange('groups');
     }
   };
-  /**
-   * Tên hiển thị của hội thoại: hội thoại có tên (nhóm) dùng tên đó. Hội thoại 1–1 không có tên — backend không đặt tên cho 1–1 — thì hiện tên ĐỐI TÁC suy từ danh sách thành viên; chỉ khi không xác định được đối tác mới rơi về nhãn dự phòng liệt kê mọi thành viên. Ô lọc danh sách khớp trên chính nhãn này nên tìm theo tên đối tác vẫn trúng sau thay đổi.
-   */
   const labelOf = (c: ConversationView) => {
     if (c.name !== null) return c.name;
     const otherId = c.type === 1 ? c.members.find((id) => id !== myId) : undefined;
@@ -268,41 +123,20 @@ export function ConversationSidebar({
     !filterNeedle
     || labelOf(c).toLocaleLowerCase('vi').includes(filterNeedle)
     || (c.lastMessage?.fullMessage.toLocaleLowerCase('vi').includes(filterNeedle) ?? false);
-  // Tab Tất cả và tab Chưa đọc chứa MỌI hội thoại CHƯA LƯU TRỮ (mọi loại — 1–1 lẫn nhóm), đúng ngữ nghĩa hợp của bản demo: hội thoại nhóm xuất hiện ở cả hai tab này với đúng nhận diện nhóm, và tab Nhóm chỉ là một góc nhìn riêng theo cấu trúc lớp/khoá/nhóm, không còn là nơi duy nhất chứa hội thoại nhóm. Tab Chưa đọc thêm đúng một điều kiện so với tab Tất cả: hội thoại có tin chưa đọc. Tập đã lưu trữ đứng ngoài cả hai tab này — nó là danh sách riêng của tab Lưu trữ, dựng qua cùng hàm dựng panel ở dưới với nguồn là `archivedConversations`.
-  /**
-   * Số đếm trong ngoặc đơn trên thanh tab: tính trên TOÀN BỘ tập của từng tab (không chịu ô tìm hay tab đang chọn) để tab luôn cho biết quy mô thật của tập đó — như số đếm trên chip lọc trước đây; danh sách bên dưới vẫn lọc theo ô tìm như trước. Số chưa đọc của tab Chưa đọc tính trên mọi loại hội thoại chưa lưu trữ nên luôn khớp tổng chưa đọc ở tiêu đề trang (trang chứa tính tổng đó từ chính danh sách này). Số của tab Nhóm là số hàng của danh sách nhóm phẳng trên cây chưa lọc; số của tab Lưu trữ là số hội thoại trong tập đã lưu của server (issue #623).
-   */
   const allCount = conversations.length;
   const unreadCountTotal = conversations.filter((c) => (c.unread ?? 0) > 0).length;
   const groupCount = groupTree ? countGroupListEntries(groupTree) : 0;
   const archivedCount = archivedConversations.length;
 
-  /** Một dòng hội thoại chuẩn app nhắn tin: một nút nguyên khối mang avatar + tên + trích đoạn/giờ + cụm biểu tượng trạng thái (ghim/tắt tiếng). */
   const renderConversationItem = (c: ConversationView) => {
     const isActive = active?.id === c.id;
     const otherId = c.type === 1 ? c.members.find((id) => id !== myId) : undefined;
-    /**
-     * Hiện diện của đối tác trên hàng hội thoại giữ BA trạng thái như ở đầu khung (vòng sửa PR #593): đã xác nhận trực tuyến thì chấm xanh lá, đã xác nhận ngoại tuyến thì chấm xám, chưa biết (chưa có sự kiện nào) thì không chấm — không gộp chưa biết thành ngoại tuyến.
-     */
     const otherPresence = otherId ? onlineUsers[otherId] : undefined;
     const otherStatus = presenceStatusOf(otherPresence);
     const avatarLabel = c.name ?? (otherId ? nameOf(otherId) : labelOf(c));
     const unreadCount = c.unread ?? 0;
     return (
       <li key={c.id}>
-        {/*
-          Hàng là MỘT nút nguyên khối như bản demo (điểm C16,
-          trích chuỗi class từ chunk của demo): hàng đang chọn
-          mang nền `bg-muted` kèm ring 1px `ring-border` KHẢM
-          TRONG (`ring-inset`) ngay trên nút, `overflow-hidden`
-          như lớp nền của chuỗi demo để nội dung hàng bị cắt
-          theo góc bo tròn; hàng chưa chọn chỉ mang
-          `hover:bg-muted/75` như class điều kiện của demo.
-          Nút phụ ⋯ từng đứng ở cuối hàng đã bỏ hẳn theo phán
-          quyết điểm C3 (issue #623) — hàng của demo không có
-          nút phụ, và ghim/tắt tiếng đã có đường vào ở menu
-          đầu khung cùng panel của cuộc trò chuyện đã mở.
-        */}
           <button
             type="button"
             aria-current={isActive || undefined}
@@ -327,12 +161,6 @@ export function ConversationSidebar({
             </span>
             <span className="min-w-0 flex-1">
               <span className="flex items-baseline gap-2">
-                {/*
-                  Độ đậm tên trên hàng theo LOẠI hội thoại như
-                  bản demo (issue #608): nhóm đậm 600 màu đầy
-                  đủ, 1–1 vừa 500 màu 90% — cố định, không phụ
-                  thuộc trạng thái đã đọc như trước.
-                */}
                 <span
                   className={cn(
                     'min-w-0 flex-1 truncate text-sm',
@@ -350,14 +178,6 @@ export function ConversationSidebar({
               <span className="mt-0.5 flex items-center gap-1.5">
                 {c.lastMessage ? (
                   <span className="min-w-0 flex-1 truncate text-xs leading-4 text-muted-foreground">
-                    {/*
-                      Xem trước tin cuối: tin của chính người xem
-                      mang tiền tố "Bạn:"; ở hội thoại NHÓM, tin
-                      của người khác mang tiền tố tên người gửi —
-                      đúng nhận diện nhóm như hàng ở tab Nhóm
-                      (hàng 1–1 không cần tiền tố vì tên đối tác
-                      đã là tiêu đề hàng).
-                    */}
                     {c.lastMessage.userIdFrom === myId
                       ? `${t('lastMessageOwnPrefix')} `
                       : c.type === 1
@@ -368,13 +188,6 @@ export function ConversationSidebar({
                 ) : (
                   <span className="min-w-0 flex-1" />
                 )}
-                {/*
-                  Cụm biểu tượng cuối hàng theo đúng khuôn demo
-                  (issue #608, trích từ SSR và chunk của demo):
-                  mỗi biểu tượng nằm trong ô lưới 20px căn giữa;
-                  ghim là icon 12px tô đặc mờ 70%, tắt tiếng là
-                  icon 12px màu muted.
-                */}
                 {c.pinnedAt ? (
                   <span data-testid={`conversation-pinned-${c.id}`} className="grid size-5 shrink-0 place-items-center">
                     <Pin className="size-3 fill-current opacity-70" aria-hidden />
@@ -402,35 +215,9 @@ export function ConversationSidebar({
     );
   };
 
-  /**
-   * Bản đồ hội thoại theo id cho danh sách nhóm (issue #591):
-   * hàng nhóm trong tab Nhóm tra hội thoại tương ứng ở đây để
-   * hiện xem trước tin cuối + ngày + biểu tượng tắt tiếng như
-   * các hàng còn lại.
-   */
   const conversationsById = new Map(conversations.map((c) => [c.id, c]));
-  /**
-   * Đang nạp lần đầu và chưa có dữ kiện nào trong cache: khung
-   * trái hiện skeleton thay cho mọi trạng thái rỗng (issue
-   * #591 — cấm trạng thái rỗng giả lúc tải).
-   */
   const initialLoading = Boolean(loading) && conversations.length === 0 && !error;
 
-  /**
-   * Một mục thu gọn trong các tab danh sách (issue #564; số đo
-   * căn lại theo bản demo ở issue #608): tiêu đề phẳng kiểu
-   * demo — nhãn 12px vừa màu muted, đệm ngang 12px, đệm dưới
-   * 8px, chevron 12px, KHÔNG số đếm, hover chỉ đổi màu chữ —
-   * dựng trên primitive Collapsible của @giaokhoa/ui, không dùng vỏ
-   * Card của CollapsibleSection dùng chung và không tự chế
-   * kiểu collapse riêng.
-   *
-   * @param title - Nhãn của mục.
-   * @param open - Mục đang mở hay đóng.
-   * @param onOpenChange - Đổi trạng thái mở của mục.
-   * @param children - Nội dung mục khi mở.
-   * @returns Mục thu gọn hoàn chỉnh.
-   */
   const renderSection = (
     title: string,
     open: boolean,
@@ -442,36 +229,10 @@ export function ConversationSidebar({
         <span>{title}</span>
         <ChevronDown aria-hidden className={cn('ml-auto size-3 shrink-0 transition-transform', open && 'rotate-180')} />
       </CollapsibleTrigger>
-      {/*
-        Nội dung chỉ render khi mục mở: section đóng thì các dòng
-        trong đó biến khỏi cây hoàn toàn (không chỉ ẩn bằng CSS),
-        để hội thoại đã ghim không còn tính là "đang hiện" ở
-        danh sách khi mục đóng.
-      */}
       <CollapsibleContent>{open ? children : null}</CollapsibleContent>
     </Collapsible>
   );
 
-  /**
-   * Nội dung cuộn của các tab danh sách (Tất cả / Chưa đọc /
-   * Lưu trữ): danh sách hội thoại đã lọc của tab, tách thành
-   * mục Ghim / Gần đây (issue #564: hội thoại mang `pinnedAt`
-   * lên mục Ghim, còn lại về Gần đây; mục Ghim chỉ render khi
-   * có hội thoại đã ghim — cơ chế áp cho toàn tập, gồm cả hội
-   * thoại nhóm). Không tab nào mang mục lưu trữ thu gọn trong
-   * cột (issue #623): hội thoại đã lưu trữ có tab Lưu trữ
-   * riêng, dựng bằng chính hàm này trên tập đã lưu với câu
-   * rỗng riêng của nó.
-   *
-   * @param unreadOnly - true ở tab Chưa đọc: chỉ hội thoại có tin chưa đọc.
-   * @param source - Tập nguồn của tab (mặc định là danh sách chính; tab Lưu trữ truyền tập đã lưu).
-   * @param emptyText - Câu rỗng riêng của tab khi danh sách trống (mặc định suy theo tab Tất cả / Chưa đọc).
-   * @param panelStatus - Trạng thái nạp riêng của CHÍNH tập nguồn (vòng sửa issue #623 — tab Lưu
-   *   trữ truyền trạng thái của query tập đã lưu): khi có mặt, khung đang tải và nhánh lỗi/thử lại
-   *   lấy từ trạng thái này thay cho cờ của danh sách chính, và câu rỗng chỉ hiện khi query của
-   *   chính tập đó đã thành công. Vắng mặt (hai tab của danh sách chính) thì giữ luật hiện hành.
-   * @returns Khối cuộn của panel tab.
-   */
   const renderConversationPanel = (
     unreadOnly: boolean,
     source: ConversationView[] = conversations,
@@ -487,13 +248,6 @@ export function ConversationSidebar({
     return (
       <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 py-2">
         {panelLoading ? (
-          /*
-            Khung đang tải lần đầu (issue #591): các dòng
-            skeleton giữ đúng hình dạng hàng hội thoại
-            (avatar tròn + hai dòng chữ) để trang không nhảy
-            hình khi dữ kiện về; trạng thái rỗng chỉ được
-            hiện ở nhánh dưới, sau khi nạp xong.
-          */
           <div data-testid="conversations-loading" className="space-y-3 px-2" aria-label={t('conversationsLoading')}>
             {[0, 1, 2, 3, 4].map((i) => (
               <div key={i} className="flex items-center gap-3">
@@ -506,15 +260,6 @@ export function ConversationSidebar({
             ))}
           </div>
         ) : panelStatus?.error ? (
-          /*
-            Nhánh lỗi của CHÍNH tập nguồn (vòng sửa issue
-            #623): query của tập lỗi mà chưa từng có dữ kiện
-            thì hiện báo lỗi kèm nút thử lại ngay trong panel
-            — không im lặng hiện rỗng như thể tập thật sự
-            trống. Chỉ áp cho panel có trạng thái riêng (tab
-            Lưu trữ); hai tab của danh sách chính giữ cơ chế
-            banner lỗi dùng chung ở trên.
-          */
           <div className="flex flex-col items-center gap-2 p-10 text-center">
             <MessageSquare className="size-9 text-muted-foreground/40" aria-hidden />
             <p role="alert" className="text-sm font-medium">{panelStatus.error}</p>
@@ -525,26 +270,6 @@ export function ConversationSidebar({
             ) : null}
           </div>
         ) : (panelStatus ? visible.length === 0 : !error && visible.length === 0) ? (
-          /*
-            Nhánh rỗng chỉ hiện khi KHÔNG có lỗi tải (vòng
-            sửa 2 PR #593): tải lần đầu lỗi thì chỉ banner
-            lỗi ở trên hiện — câu "chưa có hội thoại" trên
-            đường lỗi là trạng thái rỗng giả mà issue #591
-            cấm (chưa tải xong, chưa xác nhận là rỗng thật).
-            Panel có trạng thái riêng (vòng sửa issue #623)
-            chỉ tới được nhánh này sau khi query của chính
-            nó đã thành công — đang nạp và lỗi đã rẽ nhánh ở
-            trên — nên rỗng ở đây là rỗng thật của chính tập
-            đó.
-          */
-          /*
-            Khối rỗng của danh sách theo đúng khuôn demo
-            (issue #608): icon MessageSquare 36px màu muted ở
-            40%, chữ 14px font-medium màu foreground, căn
-            giữa, đệm 40px — cùng một khuôn cho cả ba câu
-            rỗng của danh sách (rỗng thật, lọc chưa đọc, tìm
-            không khớp).
-          */
           <div className="flex flex-col items-center gap-2 p-10 text-center">
             <MessageSquare className="size-9 text-muted-foreground/40" aria-hidden />
             <p className="text-sm font-medium">
@@ -574,23 +299,10 @@ export function ConversationSidebar({
   };
 
   return (
-    /*
-      Nhịp của cột danh sách theo bản demo (issue #608): cột là
-      flex dọc khoảng 12px, đệm dọc 12px; các mục con mang đệm
-      ngang 12px. Dưới hàng đầu cột là một Separator như demo.
-    */
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 py-3">
       <div className="flex items-center justify-between gap-2 px-3">
         <div className="flex min-w-0 items-center gap-2">
           {myId ? (
-            /*
-              Avatar của chính người xem là một NÚT mở sheet hồ
-              sơ của chính mình (giai đoạn 2 của vòng sửa
-              PR #610 — đúng hành vi bản demo: bấm avatar mở hồ
-              sơ, hover làm mờ nhẹ). Chấm hiện diện trên avatar
-              đọc mức người xem ĐANG CHỌN (online/offline nối
-              thật qua nối socket — xem OwnProfileSheet).
-            */
             <button
               type="button"
               title={t('myProfile')}
@@ -609,23 +321,8 @@ export function ConversationSidebar({
               />
             </button>
           ) : null}
-          {/*
-            Tiêu đề cột chỉ gồm chữ như bản demo (issue #608):
-            hậu tố số chưa đọc tổng từng nằm trong tiêu đề đã
-            bỏ — số chưa đọc sống ở huy hiệu trên từng hàng và
-            trên tab Nhóm. Tiêu đề cắt ba chấm khi thiếu chỗ
-            như demo.
-          */}
           <h2 className="min-w-0 truncate text-lg font-semibold">{t('messagesTitle')}</h2>
         </div>
-        {/*
-          Nút mở hộp thoại Tin nhắn mới theo đúng hình dạng
-          demo (issue #608): nút ghost chỉ biểu tượng UserPlus
-          32px. Số lời mời kết bạn đang chờ là chức năng thật
-          của sản phẩm (đường vào trả lời lời mời nằm trong
-          hộp thoại) nên giữ làm huy hiệu nhỏ ở góc nút, kèm
-          nhãn đọc màn hình — liệt kê trong thân PR.
-        */}
         <Button
           type="button"
           variant="ghost"
@@ -655,19 +352,6 @@ export function ConversationSidebar({
         }}
         className="min-h-0 min-w-0 flex-1 px-3"
       >
-        {/*
-          Ô tìm DUY NHẤT phía trên thanh tab (issue #606 — đúng
-          vị trí của bản demo): lọc nội dung của tab đang mở.
-          Nhãn và gợi ý của ô đổi theo tab: tab Nhóm lọc các mục
-          nhóm theo tên lớp/khoá/nhóm; các tab còn lại lọc danh
-          sách hội thoại theo tên hiển thị.
-        */}
-        {/*
-          Cấu trúc ô tìm theo bản demo (issue #608): InputGroup
-          của @giaokhoa/ui — hộp 36px bo 8px, addon kính lúp 16px
-          màu muted ở đầu, ô nhập trong suốt không viền bên
-          trong.
-        */}
         <InputGroup>
           <InputGroupAddon>
             <Search aria-hidden />
@@ -680,16 +364,6 @@ export function ConversationSidebar({
             onChange={(e) => setSearchText(e.target.value)}
           />
         </InputGroup>
-        {/*
-          Thanh tab bốn tab lọc ngang hàng như bản demo (issue
-          #606): TabsList variant `line` của @giaokhoa/ui, mỗi trigger
-          là nhãn chữ nhỏ độ đậm thường kèm số đếm của tab trong
-          ngoặc đơn dạng chữ màu phụ — đúng dạng "Tất cả (3)"
-          của demo. Số đếm nằm trong span `aria-hidden` và
-          trigger mang `aria-label` là nhãn thuần, để tên truy
-          cập của tab vẫn đúng nhãn của nó (như huy hiệu trên
-          trigger Nhóm trước đây).
-        */}
         <TabsList variant="line" className="w-full border-b">
           <TabsTrigger value="all" aria-label={t('messagesFilterAll')} className="gap-1 text-xs font-normal">
             {t('messagesFilterAll')}
@@ -735,19 +409,6 @@ export function ConversationSidebar({
           </div>
         </TabsContent>
         <TabsContent value="archived" className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {/*
-            Tab Lưu trữ (issue #623): tập hội thoại đã lưu
-            trữ của server dựng bằng cùng khuôn panel như tab
-            Tất cả — phân mục Ghim / Gần đây, cùng cách dựng
-            hàng, cùng ô tìm lọc — chỉ khác tập nguồn và câu
-            rỗng riêng của tab. Hội thoại ở đây mở như mọi
-            hội thoại khác; bỏ lưu trữ qua menu đầu khung của
-            cuộc trò chuyện đã mở. Trạng thái đang nạp / lỗi
-            của panel là của CHÍNH query tập đã lưu (vòng sửa
-            issue #623): panel chỉ khẳng định rỗng sau khi
-            query đó thành công, lỗi thì hiện báo lỗi kèm nút
-            thử lại riêng của nó.
-          */}
           {renderConversationPanel(false, archivedConversations, t('archivedEmpty'), {
             loading: Boolean(archivedLoading),
             error: archivedError ?? null,

@@ -13,15 +13,6 @@ import {
   type OrdinaryWorkerModuleHarness,
 } from '../../support/ordinary-worker-module';
 
-/**
- * Cơ chế phát bù một lần khi chuyển đổi consumer đồng bộ cohort
- * (điểm chặn 1 trên PR #550): các dòng outbox cohort đã bị relay
- * đóng dấu `publishedAt` khi còn chưa có trong bảng định tuyến — relay không bao giờ phát lại chúng, consumer polling cũ đọc theo watermark thì đã bị gỡ — phải được phát bù thành job đúng một lần theo watermark cũ trước khi khoá watermark bị xoá.
- *
- * Các ca đi qua đường thật của production: dòng outbox được chèn đúng hình dạng phía phát vẫn ghi (kèm `publishedAt` đã đóng dấu), khoá watermark cũ được đặt trên Redis thật, rồi gọi `drainLegacyBacklog()` của service thật — hoặc để `OnModuleInit` tự chạy khi boot module mới — và khẳng định tác dụng phụ nghiệp vụ ở tầng DB (ghi danh, sự kiện phát tiếp), không khẳng định qua chi tiết triển khai.
- *
- * Mỗi ca dùng đồ thị riêng (id ngẫu nhiên) nên các ca độc lập dữ kiện nghiệp vụ. Các dòng đã đóng dấu không bị relay quét lại giữa chừng (relay chỉ lấy dòng chưa có dấu) nên khẳng định "không có job" là khẳng định thật, không phải do relay chen ngang.
- */
 describe('Worker cohort sync catchup (phát bù tồn đọng khi chuyển đổi ở #550)', () => {
   let context: INestApplicationContext;
   let harness: OrdinaryWorkerModuleHarness;
@@ -72,12 +63,6 @@ describe('Worker cohort sync catchup (phát bù tồn đọng khi chuyển đổ
     return rows.rows;
   }
 
-  /**
-   * Chèn một dòng sự kiện cohort ĐÃ BỊ ĐÓNG DẤU `publishedAt`
-   * (đúng trạng thái dòng tồn đọng tại thời điểm chuyển đổi:
-   * relay đã quét qua và đóng dấu khi loại này chưa có trong
-   * bảng định tuyến) và trả id + seq để đặt watermark và chờ job.
-   */
   async function emitMarkedRow(
     type: 'cohort_member_added' | 'cohort_member_removed',
     payload: Record<string, unknown>,
@@ -88,7 +73,6 @@ describe('Worker cohort sync catchup (phát bù tồn đọng khi chuyển đổ
     return { id: row.id, seq: Number(row.seq) };
   }
 
-  /** Chờ job của một dòng outbox trên hàng đợi cohort-sync-events đạt trạng thái completed. */
   async function waitJobCompleted(outboxId: string, timeoutMs = 90000): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
@@ -99,13 +83,6 @@ describe('Worker cohort sync catchup (phát bù tồn đọng khi chuyển đổ
     }
   }
 
-  /**
-   * Thêm thành viên qua đường phát bù trực tiếp (không qua
-   * relay): đẩy job vào hàng đợi với jobId mới, chờ completed
-   * — dùng để dựng trạng thái "đã ghi danh" trước ca phát bù
-   * sự kiện rút thành viên, đúng hình dạng phát lại ngoài cửa
-   * sổ lưu giữ của `jobId`.
-   */
   async function enrolDirectly(type: string, outboxId: string, payload: Record<string, unknown>): Promise<void> {
     const job = await eventsQueue.add(type, {
       outboxId, seq: 0, aggregate: 'cohort', type, payload, tenantId, spaceSlug: null, spaceId: null, occurredAt: new Date().toISOString(),
@@ -125,8 +102,6 @@ describe('Worker cohort sync catchup (phát bù tồn đọng khi chuyển đổ
     eventsQueue = context.get<Queue>(getQueueToken('cohort-sync-events'));
     catchup = context.get<CohortSyncCatchupService>(CohortSyncCatchupService);
 
-    // Khoá watermark cũ dựng đúng cách consumer polling cũ
-    // dựng: tiền tố + tên database trong DATABASE_URL của suite.
     const databaseName = new URL(process.env.DATABASE_URL!).pathname.replace(/^\//, '') || 'default';
     legacyWatermarkKey = `giaokhoa:cohort-sync:${databaseName}:seq`;
     redis = new Redis({ ...redisConnectionFromUrl(process.env.REDIS_URL ?? 'redis://localhost:6379') });
@@ -171,7 +146,6 @@ describe('Worker cohort sync catchup (phát bù tồn đọng khi chuyển đổ
     expect(await outboxOf('user_enrolled', userId)).toHaveLength(1);
     expect(await eventsQueue.getJob(outboxRelayJobId(null, below.id))).toBeFalsy();
     expect(await redis.get(legacyWatermarkKey)).toBeNull();
-    // Phát bù lại sau khi khoá đã xoá là no-op, không sinh job mới.
     expect(await catchup.drainLegacyBacklog()).toBe(0);
     expect(await outboxOf('user_enrolled', userId)).toHaveLength(1);
   }, 180000);
@@ -217,8 +191,6 @@ describe('Worker cohort sync catchup (phát bù tồn đọng khi chuyển đổ
     const marked = await emitMarkedRow('cohort_member_added', { cohortId: graph.cohortId, userId });
     await redis.set(legacyWatermarkKey, String(marked.seq - 1));
 
-    // Boot module mới: OnModuleInit của service phát bù chạy
-    // trong lúc init, không cần gọi drainLegacyBacklog() tay.
     const second = await bootWorkerModuleAsOrdinaryRole();
     try {
       await waitJobCompleted(marked.id);
@@ -239,11 +211,6 @@ describe('Worker cohort sync catchup (phát bù tồn đọng khi chuyển đổ
     const marked = await emitMarkedRow('cohort_member_added', payload);
     await redis.set(legacyWatermarkKey, String(marked.seq - 1));
 
-    // Tiêm lỗi thoáng qua: lần queue.add đầu tiên cho đúng dòng
-    // tồn đọng này ném lỗi, mọi lần đẩy khác đi qua bình thường.
-    // Tại thời điểm lỗi nổ ra, ghi lại giá trị khoá để khẳng
-    // định khoá vẫn còn nguyên — khoá chỉ được xoá sau khi rút
-    // cạn thành công.
     const originalAdd = eventsQueue.add.bind(eventsQueue);
     let faultArmed = true;
     let keyValueAtFailure: string | null = null;
@@ -257,8 +224,6 @@ describe('Worker cohort sync catchup (phát bù tồn đọng khi chuyển đổ
       return (originalAdd as unknown as (...a: unknown[]) => Promise<unknown>)(...args);
     }) as unknown as typeof eventsQueue.add;
 
-    // Bắt log error của chính service phát bù để khẳng định lần
-    // thử thất bại được ghi kèm số lần thử, không nuốt lặng.
     const loggerRef = (catchup as unknown as {
       logger: { error: (...args: unknown[]) => void };
     }).logger;
@@ -277,9 +242,6 @@ describe('Worker cohort sync catchup (phát bù tồn đọng khi chuyển đổ
       loggerRef.error = originalError;
     }
 
-    // Lỗi đã thật sự nổ ở lần thử đầu, khoá còn nguyên tại thời
-    // điểm đó, và lượt phát bù tự hồi phục trong cùng tiến trình:
-    // rút cạn đủ dòng trên watermark ở lần thử sau.
     expect(faultArmed).toBe(false);
     expect(keyValueAtFailure).toBe(String(marked.seq - 1));
     expect(errorMessages.some((message) => message.includes('lần thử 1'))).toBe(true);
@@ -293,17 +255,6 @@ describe('Worker cohort sync catchup (phát bù tồn đọng khi chuyển đổ
     expect(await redis.get(legacyWatermarkKey)).toBeNull();
   }, 180000);
 
-  /**
-   * Ca hồi quy cho nửa "không trùng" của yêu cầu ngắt-rồi-chạy-lại
-   * (điểm chặn còn lại trên PR #550 sau phân xử `6507833974`): ca
-   * tiêm lỗi trước đây chỉ có một dòng và lỗi ngay lần đẩy đầu
-   * tiên nên chưa từng đẩy lại dòng đã đẩy thành công. Ca này
-   * dùng hai đồ thị độc lập: dòng đầu đẩy thành công, dòng tiếp
-   * theo lỗi — lần thử sau quét lại từ watermark nên đẩy lại
-   * dòng đầu, và khẳng định mỗi hệ quả nghiệp vụ chỉ xuất hiện
-   * đúng một lần (không trùng) trong khi cả hai dòng đều được xử
-   * lý (không sót), khoá chỉ bị xoá sau khi rút cạn trọn vẹn.
-   */
   it('phát bù bị ngắt giữa lô rồi chạy lại: dòng đã đẩy không sinh tác dụng phụ lần hai, dòng chưa đẩy vẫn được xử lý, khoá chỉ bị xoá sau khi rút cạn', async () => {
     const graphA = await makeCourseGraph('unenrol');
     const userA = await insertUser();
@@ -317,10 +268,6 @@ describe('Worker cohort sync catchup (phát bù tồn đọng khi chuyển đổ
     expect(rowB.seq).toBeGreaterThan(rowA.seq);
     await redis.set(legacyWatermarkKey, String(rowA.seq - 1));
 
-    // Tiêm lỗi giữa lô: lần đẩy đầu tiên của dòng B ném lỗi,
-    // mọi lần đẩy khác — kể cả đẩy lại dòng A ở lần thử sau —
-    // đi qua bình thường. Tại thời điểm lỗi, ghi lại giá trị
-    // khoá để khẳng định khoá vẫn còn nguyên.
     const originalAdd = eventsQueue.add.bind(eventsQueue);
     let faultArmed = true;
     let keyValueAtFailure: string | null = null;
@@ -341,8 +288,6 @@ describe('Worker cohort sync catchup (phát bù tồn đọng khi chuyển đổ
       eventsQueue.add = originalAdd as typeof eventsQueue.add;
     }
 
-    // Lỗi đã thật sự nổ giữa lô, khoá còn nguyên tại thời điểm
-    // đó, và lần thử sau rút cạn đủ cả hai dòng trên watermark.
     expect(faultArmed).toBe(false);
     expect(keyValueAtFailure).toBe(String(rowA.seq - 1));
     expect(enqueued).toBe(2);
@@ -355,8 +300,6 @@ describe('Worker cohort sync catchup (phát bù tồn đọng khi chuyển đổ
     const ueB = await ueRow(graphB.instanceId, userB);
     expect(ueB).toBeDefined();
     expect(ueB?.status).toBe(0);
-    // Dòng A bị đẩy lại ở lần thử sau nhưng mỗi hệ quả nghiệp vụ
-    // chỉ xuất hiện đúng một lần — không trùng tác dụng phụ.
     expect(await outboxOf('user_enrolled', userA)).toHaveLength(1);
     expect(await outboxOf('user_enrolled', userB)).toHaveLength(1);
     expect(await redis.get(legacyWatermarkKey)).toBeNull();

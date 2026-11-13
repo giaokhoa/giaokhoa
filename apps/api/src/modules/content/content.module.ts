@@ -13,14 +13,6 @@ import {
 import { ContentService } from './content.service';
 import { SystemBankModule } from '../system-bank/system-bank.module';
 
-/**
- * ContentModule facade: học liệu trong khoá (mod_page + mod_resource), trang học (player), tiến độ học và mốc lớp. Phụ thuộc Courses (course module + cổng truy cập), Completion (trạng thái hoàn thành), Files
- * (tệp + URL đã ký) và Access (PermissionEvaluator) — không vòng phụ
- * thuộc vì không module nào trong số đó phụ thuộc Content.
- *
- * Từ issue #646, ContentRepository sống ở `@giaokhoa/db` (lớp thuần, không phụ thuộc Nest) nên module lắp nó bằng factory provider với handle Kysely định tuyến của kho trung tâm
- * (`SpaceDatabaseService.routedKysely`).
- */
 @Module({
   imports: [AccessModule, CoursesModule, CompletionModule, FilesModule, EventsModule, SpaceRoutingModule, SystemBankModule],
   controllers: [CoursePagesController, PagesController, CourseResourcesController, ResourcesController, PlayerController],
@@ -34,5 +26,4 @@ import { SystemBankModule } from '../system-bank/system-bank.module';
   ],
   exports: [ContentService],
 })
-/** Module học liệu + player + tiến độ học (K2). */
 export class ContentModule {}

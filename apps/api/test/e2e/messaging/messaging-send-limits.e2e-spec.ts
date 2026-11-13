@@ -4,15 +4,6 @@ import {
   adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWORD,
 } from '../../support/identity-access-helpers';
 
-/**
- * Chặn lạm dụng đường gửi tin (lát M2, issue #212; chính sách P2 đã chốt ở issue #33):
- *   (1) trần độ dài một tin đọc qua site-config
- *       `core/messagingmaxmessagelength` (mặc định 10.000) — đếm theo ký tự người dùng thấy (grapheme), vượt trần → 400 `messaging.message_too_long`;
- *   (2) throttle gửi theo từng người dùng bằng Redis — cửa sổ bùng
- *       phát (`messagingsendburstlimit` tin / `messagingsendburstwindowseconds` giây) + cửa sổ duy trì
- *       (`messagingsendperminutelimit` tin/phút), mọi mức qua
- *       site-config; vượt → 429 `messaging.rate_limited`, hết cửa sổ thì gửi lại được. Mỗi ca dùng một CẶP người dùng mới (kết bạn + hội thoại 1–1 riêng) nên bộ đếm throttle theo userId không rò giữa các ca; mọi ghi đè site-config đều được xoá trong finally/afterAll để không rò sang spec khác (suite chạy tuần tự theo file nhưng dùng chung DB/Redis).
- */
 
 interface Person { id: string; username: string; token: string }
 
@@ -33,7 +24,6 @@ describe('Messaging — trần độ dài + throttle gửi tin (M2, issue #212)'
     return { id: u.id, username: u.username, token: session.accessToken };
   }
 
-  /** Hai người dùng mới đã là liên hệ của nhau + hội thoại 1–1 của họ. */
   async function pair(): Promise<{ a: Person; b: Person; conversationId: string }> {
     const a = await person();
     const b = await person();
@@ -91,7 +81,6 @@ describe('Messaging — trần độ dài + throttle gửi tin (M2, issue #212)'
     const { a, conversationId } = await pair();
     const emoji = await send(a.token, conversationId, '👍'.repeat(6000));
     expect(emoji.status).toBe(201);
-    // 'ế' dạng tổ hợp = 2 code point nhưng 1 ký tự người dùng thấy.
     const combining = await send(a.token, conversationId, 'e\u0301'.repeat(10000));
     expect(combining.status).toBe(201);
     const emojiOver = await send(a.token, conversationId, '👍'.repeat(10001));
@@ -133,11 +122,8 @@ describe('Messaging — trần độ dài + throttle gửi tin (M2, issue #212)'
       const limited = await send(a.token, conversationId, 'tin thứ tư trong cửa sổ');
       expect(limited.status).toBe(429);
       expect(limited.body.code).toBe('messaging.rate_limited');
-      // Người còn lại trong cùng hội thoại KHÔNG bị dính throttle của
-      // người gửi (bộ đếm theo từng người dùng).
       const other = await send(b.token, conversationId, 'tin của người còn lại');
       expect(other.status).toBe(201);
-      // Hết cửa sổ 2 giây → gửi lại được.
       await new Promise((resolve) => { setTimeout(resolve, 2300); });
       const afterWindow = await send(a.token, conversationId, 'tin sau cửa sổ');
       expect(afterWindow.status).toBe(201);
@@ -171,12 +157,9 @@ describe('Messaging — trần độ dài + throttle gửi tin (M2, issue #212)'
       const { a, conversationId } = await pair();
       const first = await send(a.token, conversationId, 'tin gửi lạc quan', 'm2-retry-1');
       expect(first.status).toBe(201);
-      // Trần burst = 1 đã cạn, nhưng lượt THỬ LẠI cùng khoá phải trả
-      // chính tin đã lưu (điểm trả trùng nằm trước cổng throttle).
       const retry = await send(a.token, conversationId, 'tin gửi lạc quan', 'm2-retry-1');
       expect(retry.status).toBe(201);
       expect(retry.body.id).toBe(first.body.id);
-      // Tin MỚI khác khoá thì chạm trần thật.
       const fresh = await send(a.token, conversationId, 'tin mới khác', 'm2-retry-2');
       expect(fresh.status).toBe(429);
       expect(fresh.body.code).toBe('messaging.rate_limited');

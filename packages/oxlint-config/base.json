@@ -47,7 +47,7 @@
     "no-delete-var": "error",
     "no-dupe-else-if": "error",
     "no-duplicate-case": "error",
-    "no-empty": "error",
+    "no-empty": ["error", { "allowEmptyCatch": true }],
     "no-empty-character-class": "error",
     "no-empty-pattern": "error",
     "no-empty-static-block": "error",

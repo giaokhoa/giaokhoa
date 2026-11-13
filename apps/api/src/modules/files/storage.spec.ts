@@ -15,7 +15,6 @@ const DOMAIN_A = fileDomainForSpace('11111111-1111-7111-8111-111111111111');
 const DOMAIN_B = fileDomainForSpace('22222222-2222-7222-8222-222222222222');
 const DOMAIN_PUBLIC = fileDomainForSpace('33333333-3333-7333-8333-333333333333');
 
-/** Config giả tối thiểu cho các adapter/service — giá trị ở đây là fixture test, không phải khoá thật. */
 function fakeConfig(values: Record<string, unknown>): ConfigService {
   return {
     get: (key: string) => values[key],
@@ -31,10 +30,6 @@ function s3Error(name: string, httpStatusCode: number): Error {
   return Object.assign(new Error(name), { name, $metadata: { httpStatusCode } });
 }
 
-/**
- * Double S3 trong bộ nhớ cho tầng test hợp đồng: cài đặt đúng ngữ nghĩa
- * Head/Put/Get/Delete theo key mà adapter dùng, không cần mạng/MinIO.
- */
 class FakeS3Client {
   readonly objects = new Map<string, Buffer>();
   readonly sent: string[] = [];
@@ -76,12 +71,6 @@ function makeS3Storage(): { storage: S3ObjectStorage; fake: FakeS3Client } {
   return { storage, fake };
 }
 
-/**
- * Bộ test HỢP ĐỒNG của port ObjectStorage — chạy nguyên vẹn cho mọi adapter:
- * vòng put/get/delete/exists, và ngữ nghĩa dedup (put trùng hash
- * KHÔNG ghi đè nội dung đã lưu). Bố cục key nội bộ và số lần gọi adapter
- * là chi tiết triển khai — không khẳng định ở đây (rà soát #219).
- */
 function storageContract(name: string, make: () => Promise<{ storage: ObjectStorage; cleanup: () => Promise<void> }>): void {
   describe(`Hợp đồng ObjectStorage — ${name}`, () => {
     const dataA = Buffer.from('noi-dung-phieu-A');

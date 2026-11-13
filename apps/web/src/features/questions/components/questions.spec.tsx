@@ -15,9 +15,6 @@ import SystemBankQuestionsRoute from '../routes/system-bank-questions';
 import SystemBankExamsRoute from '../routes/system-bank-exams';
 import SystemBankMatricesRoute from '../routes/system-bank-matrices';
 
-/**
- * Spec flow làm bài theo endpoint thật của question engine: tạo usage từ các câu hỏi đã chọn (POST /question-usages, component mod_quiz, slots chỉ gồm questionId), rồi trên trang usage nộp bài qua POST .../submit và chốt điểm qua POST /question-usages/:id/finish (deferredfeedback).
- */
 const USAGE_ID = '01900000-0000-7000-8000-000000000009';
 const ATTEMPT_ID = '01900000-0000-7000-8000-000000000011';
 const QUESTION_ID = '01900000-0000-7000-8000-000000000004';
@@ -46,7 +43,6 @@ interface RecordedCall {
   body: unknown;
 }
 
-/** Stub fetch ghi lời gọi và mô phỏng máy trạng thái attempt ở phía server. */
 function stubFetch(calls: RecordedCall[]) {
   const categories = [{ id: CATEGORY_ID, name: 'General', contextId: SYSTEM_CTX_ID, info: '', parent: null }];
   const state = {
@@ -213,7 +209,6 @@ describe('Luồng sử dụng câu hỏi — endpoint thật', () => {
     expect(submitCall?.method).toBe('POST');
     expect(submitCall?.url).toBe(`/api/v1/question-usages/${USAGE_ID}/attempts/${ATTEMPT_ID}/submit`);
     expect(submitCall?.body).toEqual({ response: 'true' });
-    // deferredfeedback: đã nộp (complete) nhưng chưa có điểm.
     await waitFor(() => expect(screen.getByTestId(`attempt-${ATTEMPT_ID}`)).toHaveTextContent('complete'));
     expect(screen.getByTestId(`attempt-${ATTEMPT_ID}`)).not.toHaveTextContent('hệ số');
 
@@ -243,15 +238,10 @@ describe('Luồng sử dụng câu hỏi — endpoint thật', () => {
       </TestProviders>,
     );
 
-    // §9: trang danh sách KHÔNG còn form tạo danh mục inline — chỉ có
-    // liên kết sang màn tạo riêng.
     await screen.findByText('General');
     expect(screen.queryByRole('button', { name: 'Tạo danh mục' })).toBeNull();
     await userEvent.click(screen.getByRole('link', { name: 'Danh mục mới' }));
 
-    // Ngữ cảnh là một Select tử tế của @giaokhoa/ui (không còn ô gõ ID thô
-    // điền sẵn "1"), mặc định ngữ cảnh hệ thống: trigger hiện nhãn "Hệ
-    // thống" và danh sách mở ra có tuỳ chọn đó.
     const contextTrigger = await screen.findByLabelText('Ngữ cảnh');
     expect(contextTrigger).toHaveTextContent('Hệ thống');
     await userEvent.click(contextTrigger);
@@ -269,7 +259,6 @@ describe('Luồng sử dụng câu hỏi — endpoint thật', () => {
     const createCall = calls.find((c) => c.url === '/api/v1/questions/categories' && c.method === 'POST');
     expect(createCall?.body).toEqual({ name: 'Danh mục mới của tôi', contextId: SYSTEM_CTX_ID });
 
-    // Tạo xong quay về danh sách và danh mục mới hiện ngay trong danh sách.
     expect(await screen.findByText('Danh mục mới của tôi')).toBeInTheDocument();
   });
 });
@@ -312,8 +301,6 @@ describe('Trang ngân hàng câu hỏi — cổng vai trò (issue #55)', () => {
       </TestProviders>,
     );
 
-    // waitFor với truy vấn tươi mỗi nhịp: chịu được việc cây React bị dựng
-    // lại khi máy kiểm thử quá tải (findByText giữ phần tử của cây cũ).
     await waitFor(
       () => expect(screen.getByText('Bạn không có quyền truy cập ngân hàng câu hỏi.')).toBeInTheDocument(),
       { timeout: 15_000 },
@@ -324,17 +311,6 @@ describe('Trang ngân hàng câu hỏi — cổng vai trò (issue #55)', () => {
   });
 });
 
-/**
- * Parity admin ↔ giáo viên trên bề mặt ngân hàng (việc nối tiếp feat
- * #70, đính chính 25/10/2026): admin có khu riêng ĐÚNG NHƯ giáo viên.
- * Từ lát R1 (chuẩn đường dẫn #221) mỗi khu vực là một trang theo path
- * riêng (/questions, /matrices, /exams, /system-bank/*) và
- * trang chỉ render khu vực của nó; danh sách của khu hiện THẲNG,
- * không qua thẻ thu/mở (chốt 23:43 ngày 26/10/2026, issue #228);
- * nút tạo ở PageHeader dùng được (không disabled oan) cho CẢ admin
- * (isSiteAdmin) lẫn giáo viên (capability qua context, không phải
- * site admin).
- */
 describe('Trang ngân hàng câu hỏi — ngang bằng admin (issue #70)', () => {
   afterEach(() => {
     cleanup();
@@ -407,11 +383,6 @@ describe('Trang ngân hàng câu hỏi — ngang bằng admin (issue #70)', () =
   const AREA_TOGGLES = [/Ngân hàng riêng của tôi/, /Ma trận của tôi/, /Đề của tôi/, /Ngân hàng hệ thống/];
 
   async function expectFullBankSurface() {
-    // Câu hỏi của tôi (/questions): danh sách khu riêng hiện THẲNG —
-    // không còn thẻ thu/mở của bất kỳ khu ngân hàng nào; nút tạo nằm
-    // ở PageHeader (link Câu hỏi mới trỏ đúng đích theo category
-    // đang chọn, link Danh mục mới) và KHÔNG còn nút "Thêm mới" lặp
-    // trong danh sách.
     renderArea('my-questions');
     const newQuestionLink = await screen.findByRole('link', { name: 'Câu hỏi mới' });
     await waitFor(() =>
@@ -424,9 +395,6 @@ describe('Trang ngân hàng câu hỏi — ngang bằng admin (issue #70)', () =
     for (const toggle of AREA_TOGGLES) expect(screen.queryByRole('button', { name: toggle })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Thêm mới' })).toBeNull();
     cleanup();
-    // Ma trận của tôi (/matrices): nút Ma trận mới + Nhập từ file ở
-    // PageHeader; Ma trận mới dùng được (bank cá nhân có sẵn) —
-    // không disabled oan theo vai.
     renderArea('my-matrices');
     const newMatrixButton = await screen.findByRole('button', { name: 'Ma trận mới' });
     expect(newMatrixButton).not.toBeDisabled();
@@ -434,18 +402,10 @@ describe('Trang ngân hàng câu hỏi — ngang bằng admin (issue #70)', () =
     for (const toggle of AREA_TOGGLES) expect(screen.queryByRole('button', { name: toggle })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Thêm mới' })).toBeNull();
     cleanup();
-    // Đề của tôi (/exams): nút Đề mới ở PageHeader. Stub của
-    // describe này không cấp bank đề nên nút disabled đúng luật
-    // (chưa có bank cá nhân thì không tạo được); trạng thái enabled
-    // + đích khi CÓ bank được khẳng định ở describe đích điều hướng
-    // bên dưới.
     renderArea('my-exams');
     expect(await screen.findByRole('button', { name: 'Đề mới' })).toBeDisabled();
     for (const toggle of AREA_TOGGLES) expect(screen.queryByRole('button', { name: toggle })).toBeNull();
     cleanup();
-    // Ngân hàng hệ thống (/system-bank/questions): phần câu hỏi
-    // hiện thẳng với neo của nó, không qua thẻ thu/mở "Ngân hàng hệ
-    // thống" và đầu trang không có nút tạo nào.
     renderArea('system-questions');
     await waitFor(() => expect(document.getElementById('system-questions')).not.toBeNull());
     expect(document.getElementById('system-papers')).toBeNull();
@@ -479,17 +439,6 @@ describe('Trang ngân hàng câu hỏi — ngang bằng admin (issue #70)', () =
   });
 });
 
-/**
- * Khu vực ngân hàng theo PATH (chuẩn đường dẫn #221, lát R1 — thay
- * cơ chế liên kết sâu ?bank=&section= của issue #70): mỗi khu vực có
- * path riêng và trang chỉ render đúng khu vực của path đó; danh
- * sách của khu hiện THẲNG ngay từ lần dựng đầu, không qua thẻ
- * thu/mở nào (bỏ bọc collapse — chốt 23:43 ngày 26/10/2026, issue
- * #228), các khu khác KHÔNG có trong trang. Ba phần của Ngân hàng
- * hệ thống giữ neo #system-questions / #system-papers /
- * #system-matrices trên từng trang con; thẻ Ngữ liệu giữ neo
- * #stimuli ở /questions/stimuli.
- */
 describe('Khu vực ngân hàng câu hỏi — theo đường dẫn (issue #221)', () => {
   afterEach(() => {
     cleanup();
@@ -558,9 +507,6 @@ describe('Khu vực ngân hàng câu hỏi — theo đường dẫn (issue #221)
         </TestProviders>,
       );
 
-      // Dấu hiệu bề mặt của khu đã hiện NGAY, không cần thao tác mở
-      // thẻ: nút tạo ở PageHeader (khu cá nhân) / neo phần (khu hệ
-      // thống) / danh mục §9 (trang Ngữ liệu dùng chung khung).
       const landmark =
         areaCase.area === 'my-questions'
           ? await screen.findByRole('link', { name: 'Câu hỏi mới' })
@@ -577,8 +523,6 @@ describe('Khu vực ngân hàng câu hỏi — theo đường dẫn (issue #221)
                     return node;
                   });
       expect(landmark).toBeInTheDocument();
-      // Không còn toggle thu/mở của BẤT KỲ khu ngân hàng nào, và
-      // không còn nút "Thêm mới" lặp trong danh sách.
       for (const other of ALL_TOGGLES) {
         expect(screen.queryByRole('button', { name: other })).toBeNull();
       }
@@ -617,8 +561,6 @@ describe('Khu vực ngân hàng câu hỏi — theo đường dẫn (issue #221)
           <RouterProvider router={router} />
         </TestProviders>,
       );
-      // Phần của trang hiện thẳng với neo của nó — không còn nút
-      // thu/mở "Ngân hàng hệ thống" phải bấm mở trước.
       await waitFor(() => expect(document.getElementById(part.id)).not.toBeNull());
       expect(screen.queryByRole('button', { name: /Ngân hàng hệ thống/ })).toBeNull();
       for (const other of parts) {
@@ -629,13 +571,6 @@ describe('Khu vực ngân hàng câu hỏi — theo đường dẫn (issue #221)
   });
 });
 
-/**
- * Nút tạo ở PageHeader điều hướng đúng đích (bỏ bọc collapse —
- * chốt 23:43 ngày 26/10/2026, issue #228): Đề mới →
- * /exams/new?bank=<bank đề cá nhân>; Ma trận mới → /matrices/new;
- * Nhập từ file → /matrices/import. Khu Hệ thống KHÔNG có bất kỳ
- * nút tạo nào ở đầu trang.
- */
 describe('Trang danh sách ngân hàng — nút tạo ở header (issue #228)', () => {
   afterEach(() => {
     cleanup();
@@ -738,15 +673,6 @@ describe('Trang danh sách ngân hàng — nút tạo ở header (issue #228)', 
   });
 });
 
-/**
- * Thanh tab Cá nhân | Hệ thống trên màn danh sách ngân hàng (quyết
- * định trình bày 11:40 ngày 26/10/2026, issue #228 — thay mục
- * "Ngân hàng hệ thống" ở sidebar): cả 6 màn danh sách (câu hỏi / đề /
- * ma trận × cá nhân / hệ thống) dùng CHUNG một thanh tab ở đầu vùng
- * danh sách; tab đang đứng mang aria-current="page", bấm tab là điều
- * hướng sang route của khu vực kia (path riêng, không query định danh
- * khu vực). Vào từ sidebar luôn là tab Cá nhân.
- */
 describe('Bank area tabs — Cá nhân | Hệ thống (issue #228)', () => {
   afterEach(() => {
     cleanup();
@@ -792,9 +718,6 @@ describe('Bank area tabs — Cá nhân | Hệ thống (issue #228)', () => {
   }
 
   function renderBankRoutes(initialPath: string) {
-    // Dùng đúng route module thật như app (mỗi route là một component
-    // riêng nên điều hướng qua tab remount trang đích — trạng thái
-    // collapse của khu vực đích khởi tạo đúng theo area của nó).
     const router = createMemoryRouter(
       [
         { path: '/questions', element: <QuestionsRoute /> },
@@ -826,9 +749,6 @@ describe('Bank area tabs — Cá nhân | Hệ thống (issue #228)', () => {
     expect(personalTab).not.toHaveAttribute('aria-current');
 
     await userEvent.click(personalTab);
-    // Đã sang trang cá nhân thật: bề mặt ngân hàng riêng hiện thẳng
-    // (nút Câu hỏi mới ở PageHeader) và tab Cá nhân thành tab đang
-    // đứng.
     expect(
       await screen.findByRole('link', { name: 'Câu hỏi mới' }, { timeout: 10_000 }),
     ).toBeInTheDocument();
@@ -849,7 +769,6 @@ describe('Bank area tabs — Cá nhân | Hệ thống (issue #228)', () => {
     expect(systemTab).not.toHaveAttribute('aria-current');
 
     await userEvent.click(systemTab);
-    // Đã sang trang hệ thống của đề: phần hệ thống render đúng neo.
     await waitFor(() => expect(document.getElementById('system-papers')).not.toBeNull(), { timeout: 10_000 });
     expect(router.state.location.pathname).toBe('/system-bank/exams');
     expect(screen.getByRole('link', { name: 'Hệ thống' })).toHaveAttribute('aria-current', 'page');
@@ -869,11 +788,6 @@ describe('Bank area tabs — Cá nhân | Hệ thống (issue #228)', () => {
 });
 
 
-/**
- * Stub fetch theo handler cho describe trang ngân hàng được dời từ
- * grades.spec.tsx: handler trả body thì đáp 200 với body đó, trả
- * undefined thì đáp 404 — đúng khuôn stub của file gốc.
- */
 function stubBankPageFetch(handler: (url: string, init?: RequestInit) => unknown) {
   vi.stubGlobal(
     'fetch',
@@ -893,9 +807,6 @@ describe('Trang ngân hàng câu hỏi — huy hiệu phiên bản và trang usa
   });
 
   it('hiện huy hiệu phiên bản, sửa câu thì huy hiệu tăng lên phiên bản mới', async () => {
-    // Trang ngân hàng nay đọc usePermissions() (cổng issue #55): phải bọc
-    // TestProviders và stub ảnh chụp quyền có quyền ngân hàng, nếu không
-    // trang ném lỗi thiếu PermissionsProvider (lỗi CI của PR #61).
     let edited = false;
     const questionView = (version: number) => ({
       question: {
@@ -976,7 +887,6 @@ describe('Trang ngân hàng câu hỏi — huy hiệu phiên bản và trang usa
         edited = true;
         return questionView(2);
       }
-      // Các endpoint màn sửa riêng (/questions/:id/edit) mà nút Sửa điều hướng tới.
       if (url.startsWith('/api/v1/stimuli')) return [];
       if (url === '/api/v1/questions/01900000-0000-7000-8000-000000000004/versions')
         return [questionView(edited ? 2 : 1).latestVersion];
@@ -1011,7 +921,6 @@ describe('Trang ngân hàng câu hỏi — huy hiệu phiên bản và trang usa
       expect(screen.getByTestId('version-badge-01900000-0000-7000-8000-000000000004')).toHaveTextContent('v1'),
     );
     await userEvent.click(screen.getByRole('link', { name: /Sửa \(phiên bản mới\)/ }));
-    // Sửa mở editor theo dạng của câu hỏi; lưu trong editor mới tạo phiên bản mới.
     await userEvent.click(await screen.findByRole('button', { name: 'Lưu thành phiên bản mới' }));
     await waitFor(() =>
       expect(screen.getByTestId('version-badge-01900000-0000-7000-8000-000000000004')).toHaveTextContent('v2'),
@@ -1020,8 +929,6 @@ describe('Trang ngân hàng câu hỏi — huy hiệu phiên bản và trang usa
   });
 
   it('trang usage hiện trạng thái attempt, chuỗi steps và phiên bản đã ghim', async () => {
-    // Trang usage cũng đọc usePermissions() (cổng issue #55): cùng cách bọc
-    // và stub quyền như test ngân hàng ở trên.
     stubBankPageFetch((url) => {
       if (isGetSessionUrl(url))
         return baSessionBody({ id: '01900000-0000-7000-8000-0000000000a9', username: 'teacher1', email: 'teacher1@example.com' });
@@ -1122,16 +1029,6 @@ describe('Trang ngân hàng câu hỏi — huy hiệu phiên bản và trang usa
   });
 });
 
-/**
- * Đường đóng góp DUY NHẤT của đề (issue #228, S4/Q4): bộ hồ sơ không
- * còn đường ghi riêng — nộp bộ hồ sơ là đề xuất đóng góp kèm đính kèm
- * (`withDossier`), duyệt hai cấp đi trên trạng thái của đóng góp
- * (pending = cấp 1, pending_board = cấp 2 ban giám hiệu), và hàng chờ
- * hồ sơ (bề mặt đọc lịch sử) thao tác duyệt qua đóng góp đã chuyển
- * đổi từ chính hồ sơ đó (sourceDossierId). Các ca dưới đây khoá đúng
- * các lời gọi API của ba thao tác đó và khẳng định KHÔNG còn lời gọi
- * ghi nào tới bề mặt hồ sơ (nơi API đã đóng, trả 410).
- */
 describe('Ghi hồ sơ đề đi theo đường đóng góp duy nhất (issue #228 Q4)', () => {
   afterEach(() => {
     cleanup();
@@ -1286,7 +1183,6 @@ describe('Ghi hồ sơ đề đi theo đường đóng góp duy nhất (issue #2
     const rows = await screen.findAllByTestId('dossier-queue-row');
     expect(rows).toHaveLength(2);
 
-    // Bộ đang pending: nút Duyệt gọi approve trên ĐÓNG GÓP liên kết.
     await userEvent.click(within(rows[0]!).getByRole('button', { name: 'Duyệt' }));
     await waitFor(() =>
       expect(
@@ -1298,8 +1194,6 @@ describe('Ghi hồ sơ đề đi theo đường đóng góp duy nhất (issue #2
       ).toBe(true),
     );
 
-    // Bộ đang pending_board: nút BGH duyệt gọi approve trên ĐÓNG GÓP liên kết.
-    // (Truy vấn lại hàng sau lượt duyệt cấp 1 vì danh sách được nạp lại.)
     const rowsAfter = await screen.findAllByTestId('dossier-queue-row');
     await userEvent.click(within(rowsAfter[1]!).getByRole('button', { name: 'BGH duyệt' }));
     await waitFor(() =>
@@ -1335,11 +1229,9 @@ describe('Ghi hồ sơ đề đi theo đường đóng góp duy nhất (issue #2
     expect(within(row).getByText('Chờ BGH duyệt')).toBeInTheDocument();
     expect(within(row).getByText(/Đề v3 · Ma trận v2/)).toBeInTheDocument();
 
-    // Bản đặc tả đã chụp mở tại chỗ từ payload đóng góp.
     await userEvent.click(within(row).getByRole('button', { name: 'Xem đặc tả' }));
     expect(await screen.findByTestId('contribution-spec-panel')).toHaveTextContent('Tổng: 10 câu · 10 điểm');
 
-    // BGH từ chối kèm lý do bắt buộc → reject trên chính đóng góp.
     await userEvent.click(within(row).getByRole('button', { name: 'BGH từ chối' }));
     await waitFor(() =>
       expect(

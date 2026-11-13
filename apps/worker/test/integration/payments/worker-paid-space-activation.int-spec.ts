@@ -21,33 +21,6 @@ import { WorkerPaidEnrolActivationService } from '../../../src/worker-paid-enrol
 import { WorkerPaymentSettlementService } from '../../../src/worker-payment-settlement.service';
 import { WorkerPaymentSpaceScope } from '../../../src/worker-payment-space-scope.service';
 
-/**
- * Đặc tả tiền điều kiện Phần B của issue #587 — hạng mục 2: nhịp quét matching SePay của worker phải kích hoạt ghi danh trả phí tại ĐÚNG KHO của trung tâm sở hữu payment.
- *
- * Cách dựng: đồ thị service dựng tay đúng ngăn xếp production của nhịp quét (repository + writer + service của `@giaokhoa/payments`, ba cổng hiệu ứng của worker; scheduler không tham gia — spec gọi thẳng `SepayMatchingService.sweep` trong bọc platform của nhịp như `SepayMatchingScheduler.sweepTick` làm), khung định tuyến là `SpaceDatabaseService` thật đọc sổ đăng ký ở một database control plane tự cấp phát của ca. Ba trung tâm trên cùng một nhịp:
- *
- * - Trung tâm KHO RIÊNG: sổ đăng ký trỏ về một database riêng tự
- *   cấp phát (baseline nghiệp vụ đầy đủ); instance thu phí / lớp thu phí CHỈ tồn tại ở kho riêng. Dòng thư mục của tenant (bảng `tenants`) nằm ở KHO CHUNG như nghĩa vụ thư mục của đợt di trú — điểm phân giải tra slug từ đó.
- * - Trung tâm KHO CHUNG: sổ đăng ký ghi chế độ kho chung; dữ kiện
- *   ở database test của worker như hiện tại.
- * - Trung tâm LỖI: sổ đăng ký ghi kho riêng nhưng bí mật kết nối
- *   không tồn tại — phân giải phải hỏng tường minh (fail-closed).
- *
- * Các ca ghim:
- *
- * 1. `enrol_fee` của trung tâm kho riêng: payment `succeeded`,
- *    ghi danh ACTIVE và outbox `user_enrolled` nằm Ở KHO RIÊNG, kho chung không có ghi danh nào cho instance đó; quét lại không nhân đôi. (Trước hạng mục này: đối chiếu đích đọc ở kho chung không thấy instance nên payment rơi `needs_review`, hoặc kích hoạt ném `instance_not_found` — tiền đã khớp mà quyền học không mở.)
- * 2. `enrol_fee` của trung tâm kho chung: hành vi hiện tại không
- *    đổi — `succeeded`, ghi danh ở kho chung.
- * 3. `class_fee` của trung tâm kho riêng: thành viên cohort +
- *    membership + cả hai outbox nằm ở kho riêng, kho chung sạch.
- * 4. MỘT nhịp gồm payment của cả hai trung tâm: mỗi payment kích
- *    hoạt ở đúng kho của trung tâm mình — phân giải theo TỪNG payment, không theo nhịp.
- * 5. Trung tâm lỗi: payment ở lại `pending`, sự kiện không
- *    `matched`, không ghi danh ở bất kỳ kho nào — dù instance thu phí của payment đó CÓ nằm ở kho chung (không rơi về kho chung để kích hoạt bừa).
- *
- * Shim `uuidv7()` chỉ áp khi server PostgreSQL dưới 18 (môi trường chạy local bằng PG16): PG18 — bản ở CI và production — có sẵn hàm này, shim sẽ che mất hàm gốc nên tuyệt đối không áp ở đó. Khuôn cấp phát + áp migration chép theo spec khung định tuyến (`test/integration/db/space-routing.int-spec.ts`).
- */
 const CP_DATABASE = 'giaokhoa_test_cp_td1';
 const CENTRE_DATABASE = 'giaokhoa_test_centre_td1';
 const tag = randomUUID().slice(0, 8);
@@ -65,14 +38,12 @@ interface TenantFrame {
   tenantCtxId: string;
 }
 
-/** Dựng URL kết nối tới một database trên cùng cụm với database test của worker. */
 function clusterUrl(database: string): string {
   const base = new URL(process.env.DATABASE_URL!);
   base.pathname = `/${database}`;
   return base.toString();
 }
 
-/** Bọc một định danh Postgres trong dấu nháy kép cho các câu lệnh quản trị của ca test. */
 function quoted(identifier: string): string {
   return `"${identifier.replace(/"/g, '""')}"`;
 }
@@ -87,7 +58,6 @@ async function withClient<T>(connectionString: string, fn: (client: Client) => P
   }
 }
 
-/** Áp một file migration SQL (tách theo dấu phân đoạn statement-breakpoint) lên một database qua kết nối cho trước. */
 async function applySqlFile(connectionString: string, filePath: string): Promise<void> {
   await withClient(connectionString, async (client) => {
     const version = await client.query<{ server_version_num: string }>('SHOW server_version_num');
@@ -120,7 +90,6 @@ describe('Kích hoạt ghi danh trả phí theo không gian của payment (integ
   let sharedFrame: TenantFrame;
   let brokenFrame: TenantFrame;
 
-  /** Một nhịp quét đúng hình production: bọc platform của scheduler, gọi thẳng service matching dùng chung. */
   async function sweepOnce(): Promise<void> {
     await tenantAls.run({ platform: true }, () => matching.sweep(20));
   }
@@ -134,14 +103,12 @@ describe('Kích hoạt ghi danh trả phí theo không gian của payment (integ
     return id;
   }
 
-  /** Dòng thư mục của tenant ở KHO CHUNG — nguồn tra slug của điểm phân giải (chỉ dòng `tenants`, không kèm dữ kiện nghiệp vụ). */
   async function seedDirectoryRow(tenantId: string, slug: string): Promise<void> {
     await sharedPg.query('INSERT INTO tenants (id, slug, name, kind) VALUES ($1, $2, $3, $4)', [
       tenantId, slug, `Trung tâm ${slug}`, 'school',
     ]);
   }
 
-  /** Khung tenant nghiệp vụ trong kho của chính trung tâm: dòng tenant + context hệ thống + context tenant. */
   async function seedLocalFrame(pg: Client, tenantId: string, slug: string): Promise<TenantFrame> {
     const systemCtxId = uid();
     const tenantCtxId = uid();
@@ -157,7 +124,6 @@ describe('Kích hoạt ghi danh trả phí theo không gian của payment (integ
     return { systemCtxId, tenantCtxId };
   }
 
-  /** Khoá + instance thu phí `fee` giá 100.000 trong một kho cho một tenant. */
   async function makeFeeCourse(
     pg: Client,
     frame: TenantFrame,
@@ -189,7 +155,6 @@ describe('Kích hoạt ghi danh trả phí theo không gian của payment (integ
     return { courseId, instanceId };
   }
 
-  /** Lớp thu phí kèm backing cohort trong một kho cho một tenant (khuôn của spec kích hoạt cấp lớp). */
   async function makeFeeClass(
     pg: Client,
     frame: TenantFrame,
@@ -214,7 +179,6 @@ describe('Kích hoạt ghi danh trả phí theo không gian của payment (integ
     return { classId, cohortId };
   }
 
-  /** Payment `pending` ở kho chung (bảng payments là dữ kiện kho chung). */
   async function makePayment(input: {
     tenantId: string;
     accountId: string;
@@ -232,7 +196,6 @@ describe('Kích hoạt ghi danh trả phí theo không gian của payment (integ
     return { paymentId, code };
   }
 
-  /** Sự kiện tiền về SePay khớp đủ 3 điều kiện với payment (mã, số tiền, tài khoản). */
   async function makeCreditEvent(input: {
     tenantId: string;
     accountId: string;
@@ -297,11 +260,6 @@ describe('Kích hoạt ghi danh trả phí theo không gian của payment (integ
     const businessDatabase = decodeURIComponent(businessUrl.pathname.replace(/^\//, ''));
     const businessRole = decodeURIComponent(businessUrl.username);
 
-    // Cấp phát control plane + kho riêng của trung tâm trên cùng
-    // cụm test bằng tên mới của riêng ca này (khuôn spec khung
-    // định tuyến; ở ca này mọi kho dùng chung role của database
-    // test vì ca chỉ ghim đích ghi của kích hoạt, không ghim cách
-    // ly CONNECT theo role).
     await withClient(clusterUrl('postgres'), async (admin) => {
       for (const database of [CP_DATABASE, CENTRE_DATABASE]) {
         await admin.query(`DROP DATABASE IF EXISTS ${quoted(database)} WITH (FORCE)`);
@@ -321,11 +279,6 @@ describe('Kích hoạt ghi danh trả phí theo không gian của payment (integ
       join(__dirname, '..', '..', '..', '..', '..', 'packages', 'db', 'migrations', 'centre', '20261025163710_baseline', 'migration.sql'),
     );
 
-    // Gieo sổ đăng ký: trung tâm kho riêng trỏ database riêng
-    // (chuỗi bí mật mang tên database mặc định của role — resolver
-    // chốt đích về `databaseName` trong sổ và kiểm chứng role
-    // khớp `connectionRoleRef`), trung tâm kho chung, trung tâm
-    // lỗi trỏ một bí mật không tồn tại.
     process.env.SPACE_TEST_TD1_URL = clusterUrl('postgres');
     const cpSeedPool = new Pool({ connectionString: clusterUrl(CP_DATABASE) });
     try {
@@ -351,10 +304,6 @@ describe('Kích hoạt ghi danh trả phí theo không gian của payment (integ
       await cpSeedPool.end();
     }
 
-    // Đồ thị service của nhịp quét — đúng ngăn xếp production,
-    // handle inject là handle ĐỊNH TUYẾN của khung như module
-    // worker gắn; handle Kysely kho chung gắn vào khung như factory
-    // của module làm lúc khởi động.
     spaceDb = new SpaceDatabaseService({
       get: (key: string) =>
         ({
@@ -366,11 +315,6 @@ describe('Kích hoạt ghi danh trả phí theo không gian của payment (integ
         })[key],
     } as unknown as ConfigService);
     sharedPool = new TenantAwarePool({ connectionString: process.env.DATABASE_URL! });
-    // Handle Kysely trên pool dùng chung (đúng như factory của
-    // module worker) cho repository + writer của `@giaokhoa/payments` và
-    // cho toàn bộ adapter của worker qua khung định tuyến này: điểm
-    // phân giải không gian chỉ cần khung, hai adapter kích hoạt
-    // và settlement chạy trên handle Kysely định tuyến của khung.
     spaceDb.bindSharedKysely(createCentreKysely(sharedPool));
 
     const repo = new PaymentsRepository(spaceDb.routedKysely);
@@ -392,16 +336,11 @@ describe('Kích hoạt ghi danh trả phí theo không gian của payment (integ
     centrePg = new Client({ connectionString: clusterUrl(CENTRE_DATABASE) });
     await centrePg.connect();
 
-    // Khung dữ kiện của ba trung tâm: dòng thư mục của cả ba nằm
-    // ở kho chung; khung nghiệp vụ nằm ở kho của từng trung tâm
-    // (trung tâm kho chung và trung tâm lỗi: chính kho chung;
-    // trung tâm kho riêng: kho riêng của nó).
     await seedDirectoryRow(centreTenantId, CENTRE_SLUG);
     centreFrame = await seedLocalFrame(centrePg, centreTenantId, CENTRE_SLUG);
     sharedFrame = await seedLocalFrame(sharedPg, sharedTenantId, SHARED_SLUG);
     brokenFrame = await seedLocalFrame(sharedPg, brokenTenantId, BROKEN_SLUG);
 
-    // Tài khoản nhận tiền của ba tenant đều là dữ kiện kho chung.
     for (const [accountId, tenantId] of [
       [centreAccountId, centreTenantId],
       [sharedAccountId, sharedTenantId],
@@ -442,9 +381,6 @@ describe('Kích hoạt ghi danh trả phí theo không gian của payment (integ
     expect(await eventStatus(eventId)).toBe('matched');
     expect(await enrolmentStatus(centrePg, instanceId, buyer)).toBe(0);
     expect(await outboxCount(centrePg, 'user_enrolled', buyer)).toBe(1);
-    // Kho chung không có ghi danh nào cho instance của kho riêng,
-    // và outbox payment_succeeded vẫn phát ở kho chung (payment là
-    // dữ kiện kho chung).
     expect(
       await countRows(sharedPg, 'SELECT count(*)::int AS c FROM user_enrolments WHERE enrol_id = $1 AND user_id = $2', [instanceId, buyer]),
     ).toBe(0);
@@ -456,7 +392,6 @@ describe('Kích hoạt ghi danh trả phí theo không gian của payment (integ
       ),
     ).toBe(1);
 
-    // Quét lại: sự kiện đã matched không được xử lý lần hai.
     await sweepOnce();
     expect(await enrolmentStatus(centrePg, instanceId, buyer)).toBe(0);
     expect(await outboxCount(centrePg, 'user_enrolled', buyer)).toBe(1);
@@ -540,9 +475,6 @@ describe('Kích hoạt ghi danh trả phí theo không gian của payment (integ
   });
 
   it('trung tâm kho riêng mà bí mật kết nối không tồn tại: payment ở lại pending, không matched, không ghi danh ở bất kỳ kho nào', async () => {
-    // Instance thu phí của payment nằm ở KHO CHUNG (kho của chính
-    // trung tâm lỗi theo thư mục): nếu phân giải rơi về kho chung,
-    // đối chiếu sẽ khớp và kích hoạt sẽ ghi bừa vào kho chung.
     const buyer = await insertUser(sharedPg);
     const { instanceId } = await makeFeeCourse(sharedPg, brokenFrame, brokenTenantId);
     const { paymentId, code } = await makePayment({

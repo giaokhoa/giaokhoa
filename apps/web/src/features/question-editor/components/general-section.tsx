@@ -1,23 +1,3 @@
-/**
- * Khối thông tin chung của form soạn câu hỏi (tách cấu trúc từ
- * `pages/question-editor.tsx` theo đợt A của issue #223): chọn
- * danh mục đích (chỉ khi tạo mới), chọn loại câu hỏi, chọn ngữ
- * liệu đính kèm và trường thân câu cho các loại soạn trên trường
- * rich text thường (trả lời ngắn, tự luận). Khối chỉ trình bày và
- * chuyển thao tác qua props; trạng thái form và các handler đổi
- * danh mục/đổi loại do trang giữ.
- *
- * @param props.form - Trạng thái form hiện tại.
- * @param props.patchForm - Hàm vá một phần trạng thái form của trang.
- * @param props.categories - Danh sách danh mục câu hỏi đã nạp.
- * @param props.categoryId - Danh mục đích đang chọn.
- * @param props.editing - Đang sửa câu có sẵn (khoá chọn loại, ẩn chọn danh mục).
- * @param props.stimuli - Ngữ liệu của danh mục đích.
- * @param props.contextId - Context của bank đích cho đường chèn ảnh.
- * @param props.itemId - Id câu hỏi đang sửa (định danh mục của file ảnh).
- * @param props.onCategoryChange - Handler đổi danh mục đích của trang.
- * @param props.onQtypeChange - Handler đổi loại câu hỏi của trang.
- */
 import type { QuestionCategory, StimulusView } from '@giaokhoa/contracts';
 import { Field, FieldLabel } from '@giaokhoa/ui/components/field';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@giaokhoa/ui/components/select';

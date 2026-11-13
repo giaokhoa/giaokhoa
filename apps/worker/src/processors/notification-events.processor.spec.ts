@@ -7,15 +7,10 @@ import { SpaceJobRunner } from '../db/routing/space-job-runner';
 import type { SpaceDatabaseService } from '../db/routing/space-database.service';
 import { NotificationEventsProcessor } from './notification-events.processor';
 
-/**
- * Đặc tả hoá chốt chống trùng theo `outboxId` của consumer thông báo sự kiện (issue con #520 của #491) — chạy processor THẬT với marker giả trong bộ nhớ (đúng ngữ nghĩa hai khoá của marker thật:
- * dấu đã xử lý chỉ ghi sau khi xử lý xong; lease có token chủ và chỉ chủ mới nhả được) và handler giả đếm số lần chạy. Các khẳng định đều là hệ quả nghiệp vụ quan sát được: handler của một sự kiện chạy tối đa một lần dù job bị phát lại, chạy song song xen kẽ, hay bị thử lại sau lỗi; job bị hoãn vì lease không bị tính là đã xử lý và cũng không đốt một lần thử.
- */
 class FakeMarker {
   readonly processed = new Set<string>();
   private readonly leases = new Map<string, string>();
   private tokenCounter = 0;
-  /** Cổng chặn lần chiếm lease đầu tiên — dựng kịch bản xen kẽ. */
   firstClaimGate: Promise<void> | null = null;
   private claimCalls = 0;
 
@@ -40,7 +35,6 @@ class FakeMarker {
     if (this.leases.get(outboxId) === token) this.leases.delete(outboxId);
   }
 
-  /** Lease hiện tại của một sự kiện có đang bị giữ hay không. */
   leaseHeld(outboxId: string): boolean {
     return this.leases.has(outboxId);
   }
@@ -78,13 +72,6 @@ function makeJob(partial: Partial<OutboxEventJobData> = {}) {
   return { job: { data, moveToDelayed }, moveToDelayed };
 }
 
-/**
- * Bộ chạy job THẬT với khung định tuyến không có sổ phía sau
- * (issue #582): các job của spec này không mang slug trung tâm
- * nên bộ chạy luôn mở ngữ cảnh platform như đường xử lý trước
- * đợt này — spec khoá hành vi của processor, không khoá định
- * tuyến kho (định tuyến có spec riêng của bộ chạy và của relay).
- */
 function makeJobRunner(): SpaceJobRunner {
   return new SpaceJobRunner({
     resolveTarget: async () => {
@@ -134,20 +121,13 @@ describe('NotificationEventsProcessor — chống trùng theo outboxId', () => {
     let openGate!: () => void;
     marker.firstClaimGate = new Promise<void>((resolve) => { openGate = resolve; });
 
-    // Lượt A: qua được lần đọc nhanh (chưa có dấu) rồi bị giữ ngay
-    // trước khi chiếm lease.
     const runA = processor.process(job as never, 'worker-token');
-    // Xả hàng đợi microtask để A thật sự đang đứng ở cổng chiếm
-    // lease (lần chiếm đầu tiên) rồi mới bắt đầu lượt B.
     await new Promise((resolve) => setImmediate(resolve));
     await new Promise((resolve) => setImmediate(resolve));
 
-    // Lượt B chạy trọn: chiếm lease, xử lý, ghi dấu, nhả lease.
     const resultB = await processor.process(job as never, 'worker-token');
     expect(resultB).toEqual({ handled: true });
 
-    // Mở cổng cho A: A chiếm được lease trống nhưng lần đọc lại
-    // trong lease thấy dấu đã xử lý nên kết luận trùng.
     openGate();
     const resultA = await runA;
     expect(resultA).toEqual({ handled: true, duplicate: true });

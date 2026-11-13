@@ -3,7 +3,6 @@ import { describeUserAgent } from './user-agent';
 
 const UNKNOWN_LABEL = 'Không rõ';
 
-/** Hàm dịch mẫu dùng trong test: đúng mẫu vi "{{browser}} trên {{os}}" của catalog. */
 function formatDescription(browser: string, os: string): string {
   return `${browser} trên ${os}`;
 }

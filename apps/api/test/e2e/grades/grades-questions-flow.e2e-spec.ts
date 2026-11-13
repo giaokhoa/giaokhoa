@@ -6,14 +6,6 @@ import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWO
 import { createCategory, createCm, createCourse, createEnrolInstance, enrolUser, getFirstSectionId } from '../../support/course-enrolment-helpers';
 import { createGradeItem, getGradebook, setGrade } from '../../support/assessment-helpers';
 
-/**
- * Assessment flows — điểm theo TỪNG BÀI (issue #224: không còn tổng hợp theo khoá/category, không còn letters/scales/outcomes/calculated). Oracle: Moodle 5.3 PHPUnit:
- *  - public/question/engine/tests/questionusagebyactivity_test.php
- *    (usage nhóm các lần thử, phản hồi trì hoãn, các bước) — ĐÃ KIỂM CHỨNG ở bản 5.3;
- *  - các trường hợp điểm của public/lib/tests/completionlib_test.php
- *    (test_internal_get_state_with_grade_criteria, test_inform_grade_changed)
- *    — ĐÃ KIỂM CHỨNG ở bản 5.3: hoàn thành đi theo điểm.
- */
 describe('Điểm và câu hỏi', () => {
   let app: INestApplication;
   let admin: string;
@@ -46,20 +38,16 @@ describe('Điểm và câu hỏi', () => {
     const { course, student, instance } = await setupCourse();
     const item = await createGradeItem(app, admin, course.id, { itemName: 'Exam', gradeMax: 100 });
     const grade = await setGrade(app, admin, item.id, student.id, 40);
-    // Giáo viên ghi đè điểm cuối cùng thành 88.
     const patched = await http(app).patch(`/api/v1/grades/${grade.id}`).set('Authorization', `Bearer ${admin}`)
       .send({ overridden: true, finalGrade: 88 });
     expect(patched.status).toBe(200);
     expect(patched.body.finalGrade).toBe(88);
-    // Nhập điểm gốc mới bị từ chối trong khi đang ghi đè…
     const refused = await http(app).post(`/api/v1/grade-items/${item.id}/grades`).set('Authorization', `Bearer ${admin}`)
       .send({ userId: student.id, rawGrade: 10 });
     expect(refused.status).toBe(403);
-    // …và góc nhìn theo từng hoạt động vẫn hiển thị 88 đã ghi đè.
     const book = await getGradebook(app, admin, course.id, student.id);
     const leaf = book.activities.find((i) => i.item.id === item.id);
     expect(leaf?.grade?.finalGrade).toBe(88);
-    // Khoá ITEM chặn nhập đối với mọi người.
     await http(app).patch(`/api/v1/grade-items/${item.id}`).set('Authorization', `Bearer ${admin}`).send({ locked: true });
     const other = await createUserViaApi(app, admin);
     await enrolUser(app, admin, course.id, instance.id, other.id);
@@ -75,16 +63,13 @@ describe('Điểm và câu hỏi', () => {
     const { course, student } = await setupCourse();
     const item = await createGradeItem(app, admin, course.id, { itemName: 'Penalised', gradeMax: 100, multiplicator: 0.5 });
     const grade = await setGrade(app, admin, item.id, student.id, 80);
-    expect(grade.finalGrade).toBeCloseTo(40, 6); // 80 * 0.5 hình phạt áp dụng một lần
+    expect(grade.finalGrade).toBeCloseTo(40, 6);
     expect(grade.frozen).toBe(true);
-    // Giáo viên gỡ hình phạt sau đó: điểm đã đông cứng KHÔNG được thay đổi.
     await http(app).patch(`/api/v1/grade-items/${item.id}`).set('Authorization', `Bearer ${admin}`).send({ multiplicator: 1 });
     let book = await getGradebook(app, admin, course.id, student.id);
     expect(book.activities.find((i) => i.item.id === item.id)?.grade?.finalGrade).toBeCloseTo(40, 6);
-    // Rã đông + nhập lại áp dụng công thức hiện tại.
     const gradeId = book.activities.find((i) => i.item.id === item.id)?.grade?.id;
     await http(app).patch(`/api/v1/grades/${gradeId}`).set('Authorization', `Bearer ${admin}`).send({ frozen: false });
-    // Nhập lại cùng điểm gốc nay tính lại mà không có hình phạt.
     const reentered = await http(app).post(`/api/v1/grade-items/${item.id}/grades`).set('Authorization', `Bearer ${admin}`)
       .send({ userId: student.id, rawGrade: 80 });
     expect(reentered.status).toBeLessThan(300);
@@ -112,7 +97,6 @@ describe('Điểm và câu hỏi', () => {
   });
 
 
-  // Payload TF-A của spec: thân + 4 mệnh đề với đáp án cho trước.
   const tfBody = (stem: string, values: boolean[]) => ({
     qtype: 'truefalse',
     questionText: {
@@ -151,13 +135,9 @@ describe('Điểm và câu hỏi', () => {
     expect(edit.body.latestVersion.version).toBe(2);
     const versions = await http(app).get(`/api/v1/questions/${qid}/versions`).set('Authorization', `Bearer ${admin}`);
     expect(versions.body).toHaveLength(2);
-    // questionText nay là tài liệu Tiptap (jsonb): text thuần nằm ở node text đầu tiên.
     const docText = (doc: { content: { content?: { text?: string }[] }[] }) => doc.content[0]?.content?.[0]?.text;
     expect(docText(versions.body[0].questionText)).toBe('The sky is blue.');
     expect(docText(versions.body[1].questionText)).toBe('The sky is green.');
-    // Đáp án TF-A nằm ở phía đáp án (question_answer_keys.solution)
-    // theo TỪNG VERSION: v1 giữ nguyên đáp án gốc, v2 mang đáp án đã
-    // lật — kiểm chứng thẳng ở DB và qua view.
     const keyOf = async (versionId: string) => {
       const rows = await pg.query(
         'select solution from question_answer_keys where question_version_id = $1', [versionId]);
@@ -185,12 +165,6 @@ describe('Điểm và câu hỏi', () => {
     const qid = qRes.body.question.id as string;
     const student = await createUserViaApi(app, admin);
     const studentToken = (await login(app, student.username, STRONG_PASSWORD)).accessToken;
-    // Usage được tạo và BẮT ĐẦU khi v1 là mới nhất ⇒ ghim v1.
-    // Mẫu dựng sau khi #60 (chủ sở hữu) + #55 (cổng tạo usage qua HTTP
-    // đòi question:useall) cùng có mặt: usage do hoạt động tạo ở tầng
-    // service với actor là chính học sinh (trước đây học sinh tự tạo
-    // qua HTTP — cổng #55 chặn 404 vì usage thô qua HTTP là đường đọc
-    // đáp án). Mọi assertion bất biến version bên dưới giữ nguyên.
     const created = await app.get(QuestionsService).createUsage(student.id, {
       component: 'mod_quiz', instanceId: '01900000-0000-7000-8000-000000000042', slots: [{ questionId: qid }],
     });
@@ -199,9 +173,7 @@ describe('Điểm và câu hỏi', () => {
     expect(created.attempts[0].state).toBe('notstarted');
     const v1Id = qRes.body.latestVersion.id as string;
     await http(app).post(`/api/v1/question-usages/${usageId}/attempts/${attemptId}/start`).set('Authorization', `Bearer ${studentToken}`);
-    // NAY giáo viên sửa câu hỏi: đáp án đúng lật ở v2.
     await http(app).patch(`/api/v1/questions/${qid}`).set('Authorization', `Bearer ${admin}`).send({ solution: tfBody('Water is wet.', [false, false, false, false]).solution });
-    // Học viên trả lời 'true' và hoàn tất: chấm theo v1 ⇒ đúng.
     const submit = await http(app).post(`/api/v1/question-usages/${usageId}/attempts/${attemptId}/submit`).set('Authorization', `Bearer ${studentToken}`).send({ response: TF_ALL_TRUE });
     expect(submit.body.state).toBe('complete');
     const finished = await http(app).post(`/api/v1/question-usages/${usageId}/finish`).set('Authorization', `Bearer ${studentToken}`);
@@ -210,10 +182,8 @@ describe('Điểm và câu hỏi', () => {
     expect(attempt.questionVersionId).toBe(v1Id);
     expect(attempt.state).toBe('gradedright');
     expect(attempt.fraction).toBe(1);
-    // Các bước ghi lại mọi chuyển đổi: todo → complete → gradedright.
     expect(attempt.steps.map((s: { state: string }) => s.state)).toEqual(['todo', 'complete', 'gradedright']);
     expect(attempt.steps[1].data.answer).toBe(TF_ALL_TRUE);
-    // Một usage MỚI ghim v2: cùng đáp án nay thành sai.
     const created2 = await app.get(QuestionsService).createUsage(student.id, {
       component: 'mod_quiz', instanceId: '01900000-0000-7000-8000-000000000042', slots: [{ questionId: qid }],
     });
@@ -235,21 +205,17 @@ describe('Điểm và câu hỏi', () => {
       name: 'Next lesson',
       availability: { op: '&', show: true, showc: [true], c: [{ type: 'grade', id: item.id, min: 50 }] },
     });
-    // Trước khi có điểm: hoạt động bị gác cổng trả 403 và hoàn thành ở trạng thái chưa hoàn thành.
     expect((await http(app).get(`/api/v1/courses/${course.id}/modules/${cmNext.id}/access`).set('Authorization', `Bearer ${studentToken}`)).status).toBe(403);
     let progress = await http(app).get(`/api/v1/courses/${course.id}/completion/users/${student.id}`).set('Authorization', `Bearer ${admin}`);
     expect(progress.body.activities.find((a: { cmId: string }) => a.cmId === cmQuiz.id)?.state).toBe(0);
-    // Điểm trượt (40 < ngưỡng đạt 50): hoàn thành trở thành complete-fail (3), cổng vẫn đóng (40% < 50%).
     await setGrade(app, admin, item.id, student.id, 40);
     progress = await http(app).get(`/api/v1/courses/${course.id}/completion/users/${student.id}`).set('Authorization', `Bearer ${admin}`);
     expect(progress.body.activities.find((a: { cmId: string }) => a.cmId === cmQuiz.id)?.state).toBe(3);
     expect((await http(app).get(`/api/v1/courses/${course.id}/modules/${cmNext.id}/access`).set('Authorization', `Bearer ${studentToken}`)).status).toBe(403);
-    // Điểm đạt (80): hoàn thành trở thành complete-pass (2) và cổng mở.
     await setGrade(app, admin, item.id, student.id, 80);
     progress = await http(app).get(`/api/v1/courses/${course.id}/completion/users/${student.id}`).set('Authorization', `Bearer ${admin}`);
     expect(progress.body.activities.find((a: { cmId: string }) => a.cmId === cmQuiz.id)?.state).toBe(2);
     expect((await http(app).get(`/api/v1/courses/${course.id}/modules/${cmNext.id}/access`).set('Authorization', `Bearer ${studentToken}`)).status).toBe(200);
-    // Chuỗi bền vững tồn tại trong outbox: grade_updated + cm_completion_changed.
     const types = await outboxTypes('courseId', course.id);
     expect(types).toContain('grade_updated');
     const cmEvents = await pg.query("select count(*)::int as n from outbox_events where type='cm_completion_changed' and payload->>'cmId' = $1", [String(cmQuiz.id)]);

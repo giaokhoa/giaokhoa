@@ -5,46 +5,6 @@ import { createCentreKysely, type CentreDb } from '../client';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
 import { MessagingRepository, type MessagingStorePort } from './messaging';
 
-/**
- * Spec tích hợp của repository nhắn tin trên Kysely (issue #658).
- *
- * Database trung tâm dựng từ rỗng bằng chính cầu nối migration
- * của package trên cụm PostgreSQL thật của môi trường test. Mọi
- * ca chạy qua repository production ở `messaging.ts` — không mô
- * phỏng handle.
- *
- * Phạm vi khoá ở đây (bề mặt NATIVE của repository):
- * - Conversation + thành viên + cấp seq trong transaction (kèm
- *   rollback trọn vẹn khi hàm giao dịch ném lỗi) và insert bỏ
- *   khoá chính với id uuidv7 do database sinh (phụ lục U).
- * - Vòng đời tin: chèn/đọc theo khoá chống trùng, xoá mềm, thu
- *   hồi, xoá cứng, cờ xoá-phía-mình, tìm ILIKE có thoát ký tự
- *   mẫu, dấu vết kiểm duyệt.
- * - Danh sách hội thoại một truy vấn (lateral): số chưa đọc theo
- *   vũ trụ chuẩn (tắt tiếng → 0), tin cuối, lọc đã lưu trữ, ẩn
- *   hội thoại 1–1 khi có quan hệ chặn.
- * - Hai trang roster bằng SQL thô (khoá + lớp): thứ tự trang,
- *   phân trang con trỏ, loại tài khoản đã xoá/tạm ngưng/chính
- *   người xem/phía chặn.
- * - Cụm notification: đủ 9 method nhận `tenantId` tường minh —
- *   có tenant thì lọc đúng tenant đó, không truyền thì không lọc
- *   (đúng ngữ nghĩa chỗ đọc ALS cũ); danh sách GỘP là ca kết quả
- *   thật của khuôn `sql.join` T-11 (gộp theo loại × nguồn ×
- *   ngày Asia/Ho_Chi_Minh, lọc theo tập loại, unreadOnly qua
- *   HAVING, phân trang keyset qua cursor), danh sách phẳng +
- *   đánh dấu đã đọc theo khoá gộp.
- * - Nhật ký dispatch: doNothing theo `dedupe_key` + đọc lại đúng
- *   dòng đã ghi.
- *
- * Các method UỶ QUYỀN qua cổng {@link MessagingStorePort} (đọc
- * dùng chung: cửa sổ tin, đếm chưa đọc một conversation, gắn
- * trích dẫn, danh sách chặn...) là passthrough một dòng — SQL
- * của chúng sống tại `packages/messaging` và được khoá bởi bộ
- * e2e/spec messaging phía API qua đúng wiring production
- * (factory dựng repository với `createMessagingStore`), nên
- * spec này gắn cổng bằng bản giả ném lỗi: method native nào lỡ
- * gọi cổng sẽ fail rõ ràng thay vì lặng lẽ qua.
- */
 
 const adminUrl =
   process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
@@ -54,7 +14,6 @@ const TEST_DB = 'giaokhoa_db_g658_messaging';
 
 const UUIDV7_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
-/** Cổng store giả cho spec này: bề mặt native không được phép chạm cổng (xem ghi chú đầu file). */
 const unusedStore: MessagingStorePort = new Proxy({} as MessagingStorePort, {
   get: () => () => {
     throw new Error('Spec tích hợp #658 chỉ kiểm bề mặt native — method uỷ quyền qua cổng không thuộc phạm vi này.');
@@ -71,7 +30,6 @@ const userC = randomUUID();
 let tenantId: string;
 let otherTenantId: string;
 
-/** Gieo một user tối thiểu cho các ca cần dòng `users` thật (roster). */
 async function seedUser(id: string, username: string, firstName: string, lastName: string): Promise<void> {
   await db
     .insertInto('users')
@@ -79,7 +37,6 @@ async function seedUser(id: string, username: string, firstName: string, lastNam
     .execute();
 }
 
-/** Gieo một notification với mốc tạo tường minh (điều khiển ngày/giờ cho ca gộp + keyset). */
 async function seedNotification(v: {
   userIdTo: string;
   tenantId?: string | null;
@@ -304,8 +261,6 @@ describe('cụm notification và tham số tenant tường minh', () => {
   const reader = randomUUID();
 
   beforeAll(async () => {
-    // Hai ngày lịch khác nhau theo Asia/Ho_Chi_Minh: 2026-10-01 10:00
-    // +07 = 03:00Z; 2026-10-02 10:00 +07 = 03:00Z ngày kế.
     const day1 = new Date('2026-10-01T03:00:00.000Z');
     const day1Later = new Date('2026-10-01T04:00:00.000Z');
     const day2 = new Date('2026-10-02T03:00:00.000Z');
@@ -419,8 +374,6 @@ describe('trang roster bằng SQL thô', () => {
     const student = randomUUID();
     await seedUser(teacher, 'g658-teacher', 'Giao', 'Vien');
     await seedUser(student, 'g658-student', 'Hoc', 'Sinh');
-    // Khoá thật làm đích FK cho `enrol`/`context` (khoá mẫu để qua
-    // check khoá-thuộc-lớp; spec chỉ cần khoá làm đích FK).
     const rosterTenant = await db
       .insertInto('tenants')
       .values({ slug: 'g658-roster', name: 'Tenant roster G11', kind: 'center', status: 'active' })

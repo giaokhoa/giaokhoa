@@ -19,11 +19,9 @@ export const STRONG_PASSWORD = 'Passw0rd!';
 export async function createTestApp(): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
   const app = moduleRef.createNestApplication();
-  // Khớp main.ts: tin đúng một chặng proxy để req.ip là IP khách thật trong test như trên production — xem common/client-ip.ts.
   enableTrustedProxy(app as NestExpressApplication);
   app.setGlobalPrefix('api');
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
-  // Validation qua APP_PIPE của AppModule (Standard Schema + i18n) — khớp main.ts.
   app.useGlobalFilters(new ProblemDetailsFilter());
   await app.init();
   return app;
@@ -101,14 +99,6 @@ export async function hasCapability(app: INestApplication, token: string, userId
 }
 
 
-/**
- * Tiền điều kiện E2E khi dựng một tenant kho chung: tài khoản quản trị
- * platform không được tự quản lý người dùng của tenant bằng quyền nền.
- * Cấp membership + vai manager ngay trong context tenant bằng fixture,
- * rồi mọi request nghiệp vụ vẫn phải đi qua HTTP như người dùng thật.
- * KHÔNG dùng đường này trong product code hay biến quyền platform
- * thành quyền nghiệp vụ toàn hệ.
- */
 export async function grantTenantManagerFixture(app: INestApplication, token: string, tenantId: string): Promise<void> {
   const actor = await app.get(JwtService, { strict: false }).verifyAsync<{ sub: string }>(token);
   const tenants = app.get(TenantsService, { strict: false });
@@ -123,7 +113,6 @@ export async function grantTenantManagerFixture(app: INestApplication, token: st
   });
 }
 
-/** Seed thành viên trong fixture khi chủ đích kiểm cổng KHÔNG cấp vai quản trị platform cho người gọi. */
 export async function seedTenantMembershipFixture(app: INestApplication, tenantId: string, userId: string): Promise<void> {
   const tenants = app.get(TenantsService, { strict: false });
   await tenantAls.run({ platform: true }, () => tenants.ensureActiveMembership(tenantId, userId));

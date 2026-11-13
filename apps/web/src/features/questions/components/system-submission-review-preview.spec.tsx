@@ -1,7 +1,3 @@
-/**
- * Kiểm chứng bản xem trước của biên tập viên hiển thị toàn bộ nội dung,
- * khoá đáp án đúng/sai, lời giải tự luận và URL ảnh đã gác quyền.
- */
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import '#config/i18n';
@@ -15,7 +11,6 @@ const doc = (text: string) => ({
   content: [{ type: 'paragraph' as const, content: [{ type: 'text' as const, text }] }],
 });
 
-/** Bản chụp chứa các trường cần được trình bày trước khi xét duyệt. */
 function submission(qtype: SystemQuestionSubmission['qtype']): SystemQuestionSubmission {
   return {
     id: ID, centreSlug: 'trung-tam-a', sourceQuestionId: ID,

@@ -5,19 +5,6 @@ import { createCentreKysely, type CentreDb } from '../client';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
 import { GroupsRepository } from './groups';
 
-/**
- * Spec tích hợp của repository nhóm/cohort trên Kysely (issue #645).
- *
- * Database trung tâm dựng từ rỗng bằng chính cầu nối migration của package trên cụm PostgreSQL thật của môi trường test. Mọi ca chạy qua repository production ở `groups.ts` — không mô phỏng handle.
- *
- * Các tính chất chốt tại đây:
- * - Ba điểm `onConflictDoNothing` của bản cũ trước chuyển đổi giữ đúng
- *   ngữ nghĩa: thêm thành viên nhóm trùng không lỗi, đưa nhóm vào grouping trùng không nhân đôi liên kết, và `addCohortMember` trả `true` đúng lần chèn thật, `false` khi đã là thành viên (hợp đồng sự kiện của GroupsService neo vào cờ này).
- * - `removeCohortMember` trả `true` đúng khi có dòng bị xoá.
- * - Insert không truyền id nhận id UUIDv7 do database sinh
- *   (phụ lục U); các truy vấn thành viên/nhóm của user khớp
- *   dữ kiện đã gieo.
- */
 
 const adminUrl =
   process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
@@ -76,7 +63,6 @@ describe('GroupsRepository trên Kysely (issue #645)', () => {
     expect(await repo.isMember(group.id, userId)).toBe(true);
     expect((await repo.groupsOfUser(courseId, userId)).map((g) => g.id)).toEqual([group.id]);
 
-    // Unique thật của `groups_members` là (group, user, component, item_id): chống trùng của `onConflictDoNothing` chỉ neo được khi item_id khác null — đúng hành vi của bản cũ trước chuyển đổi.
     const componentUser = randomUUID();
     const itemId = randomUUID();
     await repo.addMember(group.id, componentUser, 'auto', itemId);

@@ -6,16 +6,7 @@ import { ControlPlaneConnectionModule } from '../../db/control-plane-connection.
 import { ControlPlaneController } from './control-plane.controller';
 import { ControlPlaneRegistryService } from './control-plane.service';
 
-/**
- * ControlPlaneModule (issue #580): sổ đăng ký không gian + registry phiên bản schema trên database control plane riêng. Import AccessModule để dùng PermissionEvaluator/ContextsService cho cổng quản trị platform; xuất ControlPlaneRegistryService để SeedModule gieo hai không gian hiện hữu khi khởi động, và tái xuất ControlPlaneConnectionModule để khung định tuyến theo trung tâm (issue #581) đọc sổ đăng ký qua đúng một kết nối control plane của tiến trình thay vì tự mở kết nối thứ hai. Từ issue #587 (hạng mục 3) module còn xuất ControlPlaneRepository: thư mục định tuyến của không gian kho riêng (thành viên + mã tham gia lớp) nằm trong cùng repository của control plane để các module nghiệp vụ
- * (tenants, classes) đọc/ghi thư mục qua đúng một điểm truy cập
- * của database này.
- *
- * Từ pilot Kysely (issue #640), repository sống ở `@giaokhoa/db` (lớp thuần, không phụ thuộc Nest) nên module lắp nó bằng factory provider: handle lấy từ adapter `ControlPlaneConnection`, và hàm dựng lỗi chưa-cấu-hình là `ServiceUnavailableException` mang mã `control_plane.not_configured` — đúng hình dạng lỗi 503 mà đường bộ máy cũ trước đây ném từ trong repository.
- */
 @Module({
-  // Kết nối control plane sống độc lập trong ControlPlaneConnectionModule;
-  // import AccessModule không còn tạo vòng với SpaceRoutingModule.
   imports: [AccessModule, ControlPlaneConnectionModule],
   controllers: [ControlPlaneController],
   providers: [

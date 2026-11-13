@@ -111,9 +111,6 @@ function stubFetch(handler: (url: string) => unknown) {
   );
 }
 
-/**
- * Render trang trong đúng khung provider của ứng dụng thật: trang danh mục nay đọc `usePermissions()` để chỉ hiện khu quản trị cho `canAdminister`, nên test phải bọc AuthProvider + PermissionsProvider như main.tsx. Khi không có token đăng nhập, PermissionsProvider kết luận không có quyền quản trị mà không gọi thêm endpoint nào.
- */
 function renderWithProviders(router: ReturnType<typeof createMemoryRouter>) {
   render(
     <TestProviders>
@@ -160,11 +157,9 @@ describe('Trang khoá học', () => {
       initialEntries: ['/courses'],
     });
     renderWithProviders(router);
-    // Biệt danh thay tên hiển thị; tên khoá gốc vẫn còn ở title của liên kết.
     const link = await screen.findByRole('link', { name: /Vật lý của tui/ });
     expect(link).toHaveAttribute('title', 'Physics 101');
     expect(screen.getByTestId('course-card-color-dot')).toBeInTheDocument();
-    // Mở editor tại dòng: thấy đủ 10 lựa chọn màu + ô biệt danh có sẵn giá trị.
     await userEvent.click(screen.getByTestId('course-card-edit'));
     const editor = await screen.findByTestId('course-card-pref-editor');
     expect(editor).toBeInTheDocument();
@@ -200,10 +195,6 @@ describe('Trang khoá học — quản trị danh mục (admin)', () => {
     localStorage.clear();
   });
 
-  /**
-   * Tạo danh mục từ trang khoá học khi là admin: khu quản trị chỉ hiện vì điểm dò quyền cấp hệ thống (GET /users) gọi được — stub dưới đây mô phỏng đúng bề mặt API đó, và lời gọi tạo phải là POST /api/v1/courses/categories với body đúng `createCourseCategorySchema`
-   * (chỉ `name` khi tạo ở cấp cao nhất, không gửi `parent`).
-   */
   it('tạo danh mục qua POST /courses/categories với body contracts khi là admin', async () => {
     const profile = {
       id: '01900000-0000-7000-8000-0000000000a1',
@@ -263,7 +254,6 @@ describe('Trang khoá học — quản trị danh mục (admin)', () => {
     });
     renderWithProviders(router);
 
-    // Khu quản trị danh mục chỉ xuất hiện sau khi PermissionsProvider dò xong quyền admin.
     await userEvent.type(await screen.findByLabelText('Tên danh mục'), 'Biology');
     await userEvent.click(screen.getByRole('button', { name: 'Tạo danh mục' }));
 

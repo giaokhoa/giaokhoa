@@ -1,10 +1,4 @@
-/**
- * Hình dạng dòng trong ARCHIVE sao lưu (định dạng `giaokhoa-backup` v1) — chuyển Kysely, issue #648.
- *
- * Các interface này là hình dạng camelCase của một dòng dữ kiện khi nằm trong archive (và khi contributor đọc lại để khôi phục): trước đây chúng là `typeof <bảng>.$inferSelect` của schema bộ máy cũ. Khi tầng dữ liệu chuyển sang Kysely, hình dạng archive phải giữ NGUYÊN — archive cũ vẫn khôi phục được và archive mới vẫn mang đúng các khoá camelCase như trước — nên các interface được khai tường minh tại đây, thuộc về chính định dạng archive của module backup. Cột jsonb được khôi phục bằng insert mang kiểu `ArchiveJsonValue` (khớp kiểu `Json` mà codegen sinh cho các cột đó — hình dạng cũ phía bộ máy cũ là `unknown` vì jsonb không khai `$type<>`); các cột jsonb chỉ đọc trong archive giữ `unknown`. `seq`/int8 không xuất hiện trong các bảng này (size_bytes của content bank không thuộc phạm vi contributor của backup).
- */
 
-/** Giá trị JSON thuần trong archive — khớp cấu trúc đệ quy của kiểu `Json` phía codegen. */
 export type ArchiveJsonValue =
   | string
   | number
@@ -13,7 +7,6 @@ export type ArchiveJsonValue =
   | ArchiveJsonValue[]
   | { [key: string]: ArchiveJsonValue | undefined };
 
-/** Một dòng của bảng course trong archive. */
 export interface CourseRow {
   id: string;
   tenantId: string;
@@ -38,7 +31,6 @@ export interface CourseRow {
   updatedAt: Date;
 }
 
-/** Một dòng của bảng course_sections trong archive. */
 export interface CourseSectionsRow {
   id: string;
   course: string;
@@ -51,7 +43,6 @@ export interface CourseSectionsRow {
   updatedAt: Date;
 }
 
-/** Một dòng của bảng course_modules trong archive. */
 export interface CourseModulesRow {
   id: string;
   course: string;
@@ -73,7 +64,6 @@ export interface CourseModulesRow {
   added: Date;
 }
 
-/** Một dòng của bảng enrol trong archive. */
 export interface EnrolRow {
   id: string;
   courseId: string;
@@ -97,7 +87,6 @@ export interface EnrolRow {
   updatedAt: Date;
 }
 
-/** Một dòng của bảng user_enrolments trong archive. */
 export interface UserEnrolmentsRow {
   id: string;
   enrolId: string;
@@ -110,7 +99,6 @@ export interface UserEnrolmentsRow {
   updatedAt: Date;
 }
 
-/** Một dòng của bảng course_groups trong archive. */
 export interface CourseGroupsRow {
   id: string;
   courseId: string;
@@ -122,7 +110,6 @@ export interface CourseGroupsRow {
   updatedAt: Date;
 }
 
-/** Một dòng của bảng groups_members trong archive. */
 export interface GroupsMembersRow {
   id: string;
   groupId: string;
@@ -132,7 +119,6 @@ export interface GroupsMembersRow {
   itemId: string | null;
 }
 
-/** Một dòng của bảng groupings trong archive. */
 export interface GroupingsRow {
   id: string;
   courseId: string;
@@ -143,14 +129,12 @@ export interface GroupingsRow {
   updatedAt: Date;
 }
 
-/** Một dòng của bảng groupings_groups trong archive. */
 export interface GroupingsGroupsRow {
   groupingId: string;
   groupId: string;
   timeAdded: Date;
 }
 
-/** Một dòng của bảng grade_items trong archive. */
 export interface GradeItemsRow {
   id: string;
   courseId: string;
@@ -173,7 +157,6 @@ export interface GradeItemsRow {
   updatedAt: Date;
 }
 
-/** Một dòng của bảng grade_grades trong archive. */
 export interface GradeGradesRow {
   id: string;
   itemId: string;
@@ -196,7 +179,6 @@ export interface GradeGradesRow {
   updatedAt: Date;
 }
 
-/** Một dòng của bảng course_modules_completion trong archive. */
 export interface CourseModulesCompletionRow {
   id: string;
   courseModuleId: string;
@@ -207,7 +189,6 @@ export interface CourseModulesCompletionRow {
   updatedAt: Date;
 }
 
-/** Một dòng của bảng course_completions trong archive. */
 export interface CourseCompletionsRow {
   id: string;
   userId: string;
@@ -219,7 +200,6 @@ export interface CourseCompletionsRow {
   reAggregate: Date;
 }
 
-/** Một dòng của bảng course_completion_criteria trong archive. */
 export interface CourseCompletionCriteriaRow {
   id: string;
   course: string;
@@ -233,7 +213,6 @@ export interface CourseCompletionCriteriaRow {
   createdAt: Date;
 }
 
-/** Một dòng của bảng course_completion_crit_compl trong archive. */
 export interface CourseCompletionCritComplRow {
   id: string;
   criteriaId: string;
@@ -242,13 +221,11 @@ export interface CourseCompletionCritComplRow {
   timeCompleted: Date;
 }
 
-/** Một dòng của bảng course_completion_settings trong archive. */
 export interface CourseCompletionSettingsRow {
   course: string;
   method: number;
 }
 
-/** Một dòng của bảng files trong archive. */
 export interface FilesRow {
   id: string;
   contentHash: string;
@@ -267,7 +244,6 @@ export interface FilesRow {
   updatedAt: Date;
 }
 
-/** Một dòng của bảng question_categories trong archive. */
 export interface QuestionCategoriesRow {
   id: string;
   name: string;
@@ -281,7 +257,6 @@ export interface QuestionCategoriesRow {
   updatedAt: Date;
 }
 
-/** Một dòng của bảng question trong archive. */
 export interface QuestionRow {
   id: string;
   category: string;
@@ -300,7 +275,6 @@ export interface QuestionRow {
   updatedAt: Date;
 }
 
-/** Một dòng của bảng question_bank_entries trong archive. */
 export interface QuestionBankEntriesRow {
   id: string;
   questionCategoryId: string;
@@ -314,7 +288,6 @@ export interface QuestionBankEntriesRow {
   updatedAt: Date;
 }
 
-/** Một dòng của bảng question_versions trong archive. */
 export interface QuestionVersionsRow {
   id: string;
   questionBankEntryId: string;
@@ -329,7 +302,6 @@ export interface QuestionVersionsRow {
   createdAt: Date;
 }
 
-/** Một dòng của bảng stimuli trong archive. */
 export interface StimuliRow {
   id: string;
   categoryId: string;
@@ -339,7 +311,6 @@ export interface StimuliRow {
   updatedAt: Date;
 }
 
-/** Một dòng của bảng question_answers trong archive. */
 export interface QuestionAnswersRow {
   id: string;
   questionVersionId: string;
@@ -349,7 +320,6 @@ export interface QuestionAnswersRow {
   sortOrder: number;
 }
 
-/** Một dòng của bảng question_answer_keys trong archive. */
 export interface QuestionAnswerKeysRow {
   id: string;
   questionVersionId: string;
@@ -357,7 +327,6 @@ export interface QuestionAnswerKeysRow {
   solution: ArchiveJsonValue | null;
 }
 
-/** Một dòng của bảng qtype_multichoice_options trong archive. */
 export interface QtypeMultichoiceOptionsRow {
   id: string;
   questionVersionId: string;
@@ -368,7 +337,6 @@ export interface QtypeMultichoiceOptionsRow {
   showStandardInstruction: boolean;
 }
 
-/** Một dòng của bảng question_truefalse trong archive. */
 export interface QuestionTruefalseRow {
   id: string;
   questionVersionId: string;
@@ -377,7 +345,6 @@ export interface QuestionTruefalseRow {
   showStandardInstruction: boolean;
 }
 
-/** Một dòng của bảng qtype_shortanswer_options trong archive. */
 export interface QtypeShortanswerOptionsRow {
   id: string;
   questionVersionId: string;
@@ -388,7 +355,6 @@ export interface QtypeShortanswerOptionsRow {
   numericAllowDecimal: boolean;
 }
 
-/** Một dòng của bảng qtype_essay_options trong archive. */
 export interface QtypeEssayOptionsRow {
   id: string;
   questionVersionId: string;
@@ -401,7 +367,6 @@ export interface QtypeEssayOptionsRow {
   responseTemplate: ArchiveJsonValue | null;
 }
 
-/** Một dòng của bảng badge trong archive. */
 export interface BadgeRow {
   id: string;
   name: string;
@@ -422,7 +387,6 @@ export interface BadgeRow {
   updatedAt: Date;
 }
 
-/** Một dòng của bảng badge_criteria trong archive. */
 export interface BadgeCriteriaRow {
   id: string;
   badgeId: string;
@@ -432,7 +396,6 @@ export interface BadgeCriteriaRow {
   description: string;
 }
 
-/** Một dòng của bảng calendar_events trong archive. */
 export interface CalendarEventsRow {
   id: string;
   name: string;
@@ -457,7 +420,6 @@ export interface CalendarEventsRow {
   updatedAt: Date;
 }
 
-/** Một dòng của bảng calendar_subscriptions trong archive. */
 export interface CalendarSubscriptionsRow {
   id: string;
   name: string;

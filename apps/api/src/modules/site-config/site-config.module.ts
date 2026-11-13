@@ -8,7 +8,6 @@ import { SiteConfigController } from './site-config.controller';
 import { SiteConfigService } from './site-config.service';
 
 @Module({
-  // SpaceRoutingModule cấp handle `routedKysely` cho SiteConfigRepository qua factory, để cấu hình đọc/ghi đúng kho của request.
   imports: [AccessModule, TenantsModule, SpaceRoutingModule],
   controllers: [SiteConfigController],
   providers: [
@@ -21,5 +20,4 @@ import { SiteConfigService } from './site-config.service';
   ],
   exports: [SiteConfigService],
 })
-/** Module cấu hình site và cấu hình theo plugin (admin settings). */
 export class SiteConfigModule {}

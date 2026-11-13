@@ -1,4 +1,3 @@
-# Các tệp sinh tự động, thư mục làm việc và lockfile không chạy formatter.
 node_modules/
 .worktrees/
 dist/
@@ -6,6 +5,5 @@ build/
 coverage/
 .turbo/
 pnpm-lock.yaml
-# Skill bên ngoài quản lý qua skills-lock.json, không format lại nội dung vendor.
 .agents/skills/
 packages/db/src/types/*.d.ts

@@ -6,10 +6,6 @@ import {
   isDedicatedDatabaseNameConflict,
 } from './control-plane';
 
-/**
- * Ca đơn vị của repository control plane trên Kysely (issue #640):
- * khuôn nhận diện lỗi `pg` (thử nghiệm T-10) ở dạng thuần — không cần database. Hình dạng lỗi đưa vào đây là hình dạng ĐÃ ĐO trên database thật ở spec tích hợp đi kèm: qua Kysely lỗi `pg` ném trực tiếp (có `code`/`constraint`, không có `cause`); qua bộ máy cũ lỗi bị bọc thành lớp lỗi truy vấn mang `cause` là lỗi `pg` gốc.
- */
 describe('isDedicatedDatabaseNameConflict — khuôn đọc lỗi pg (T-10)', () => {
   it('nhận diện lỗi pg trực tiếp qua Kysely: code 23505 và constraint là chỉ số dedicated', () => {
     const err = { code: '23505', constraint: DEDICATED_DATABASE_NAME_UNIQUE_INDEX, message: 'duplicate key' };

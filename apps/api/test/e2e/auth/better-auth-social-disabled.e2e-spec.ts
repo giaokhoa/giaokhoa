@@ -1,6 +1,3 @@
-/**
- * E2E: thiếu env của provider xã hội → provider đó tắt êm, app vẫn boot và các luồng Better Auth khác không bị ảnh hưởng (issue #7, chặng 2.3). File này chủ động XOÁ cả bốn biến họ GOOGLE và FACEBOOK trước khi app nạp env — hành vi mong đợi: POST /sign-in/social với provider google/facebook bị Better Auth từ chối (404) vì provider không được đăng ký vào instance.
- */
 
 process.env.BETTER_AUTH_ENABLED = 'true';
 if (!process.env['BETTER_AUTH_' + 'SECRET']) {

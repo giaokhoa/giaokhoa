@@ -8,10 +8,6 @@ import {
 import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstSectionId } from '../../support/course-enrolment-helpers';
 import { addExamSlot, createExamDraft, pinExam } from '../../support/exam-pin-helpers';
 
-/**
- * Issue #248 (lát QE-2) — luồng ảnh nhúng trong câu hỏi, đầu-cuối:
- * giáo viên tải ảnh vào bank CÁ NHÂN của mình (endpoint chỉ nhận ảnh thật theo magic bytes), ảnh nằm trong thân câu bằng định danh bền; học sinh ghi danh trong khoá làm bài thì THẤY ảnh (server phát URL ký ở bề mặt attempt) và tải được byte ảnh từ URL ký đó mà không cần đăng nhập — nhưng học sinh KHÔNG tự mint được URL ký cũng như không đọc thẳng được file qua các đường có gác, vì em không có quyền tại context bank cá nhân của giáo viên.
- */
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
@@ -126,17 +122,14 @@ describe('Ảnh nhúng câu hỏi: GV tải vào bank cá nhân → HS thấy tr
   it('đầu-cuối: ảnh trong thân câu tới học sinh qua URL ký ở attempt; đường trực tiếp vẫn khoá với học sinh', async () => {
     const f = await flow();
 
-    // GV tạo câu trong bank cá nhân (API nhận thân câu dạng chuỗi thường).
     const created = await http(app).post('/api/v1/questions').set(bearer(f.teacher.token)).send({
-      categoryId: f.personalCatId, qtype: 'multichoice', 
+      categoryId: f.personalCatId, qtype: 'multichoice',
       questionText: 'Nhìn hình rồi chọn đáp án đúng?', defaultMark: 1,
       answers: [{ text: 'Đáp án đúng', correct: true }, { text: 'Đáp án sai', correct: false }, { text: 'Đáp án khác 1', correct: false }, { text: 'Đáp án khác 2', correct: false }],
     });
     expect(created.status, JSON.stringify(created.body)).toBe(201);
     const questionId = created.body.question.id as string;
 
-    // Chèn node ảnh (định danh bền) vào thân câu của version hiện hành —
-    // mô phỏng đúng tài liệu editor QE-1 sẽ lưu khi contracts có node image.
     const view0 = await http(app).get(`/api/v1/questions/${questionId}`).set(bearer(f.teacher.token));
     expect(view0.status).toBe(200);
     const versionId = view0.body.latestVersion.id as string;
@@ -152,12 +145,10 @@ describe('Ảnh nhúng câu hỏi: GV tải vào bank cá nhân → HS thấy tr
     };
     await pg.query('UPDATE question_versions SET question_text = $1::jsonb WHERE id = $2', [JSON.stringify(docWithImage), versionId]);
 
-    // GV đọc lại câu: bề mặt đọc đã phát URL ký thay định danh bền.
     const viewTeacher = await http(app).get(`/api/v1/questions/${questionId}`).set(bearer(f.teacher.token));
     expect(viewTeacher.status).toBe(200);
     expect(imageSrcOf(viewTeacher.body.latestVersion.questionText)).toContain('/download?sig=');
 
-    // Ghim câu vào khoá, học sinh bắt đầu làm bài.
     const draft = await createExamDraft(app, f.teacher.token, 'Đề có câu hình 248', 10);
     await addExamSlot(app, f.teacher.token, draft, { questionId });
     const pin = await pinExam(app, f.teacher.token, f.courseId, draft, { sectionId: f.sectionId });
@@ -171,7 +162,6 @@ describe('Ảnh nhúng câu hỏi: GV tải vào bank cá nhân → HS thấy tr
     expect(servedSrc).toContain('/download?sig=');
     expect(servedSrc).not.toBe(f.canonicalSrc);
 
-    // URL ký tải được byte ảnh KHÔNG cần đăng nhập (đúng bản chất URL ký).
     const dl = await http(app).get(servedSrc as string).buffer(true).parse((res, cb) => {
       const chunks: Buffer[] = [];
       res.on('data', (c: Buffer) => chunks.push(c));
@@ -180,8 +170,6 @@ describe('Ảnh nhúng câu hỏi: GV tải vào bank cá nhân → HS thấy tr
     expect(dl.status).toBe(200);
     expect((dl.body as Buffer).equals(PNG_1PX)).toBe(true);
 
-    // Nhưng học sinh không tự lấy được URL ký cũng không đọc thẳng được
-    // file: em không có files:view tại context bank cá nhân của GV.
     const mint = await http(app).post(`/api/v1/files/${f.fileId}/signed-url`).set(bearer(f.student.token)).send({});
     expect(mint.status).toBe(403);
     const direct = await http(app).get(`/api/v1/files/${f.fileId}/content`).set(bearer(f.student.token));

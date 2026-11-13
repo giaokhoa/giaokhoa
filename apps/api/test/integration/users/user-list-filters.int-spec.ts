@@ -3,9 +3,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminToken, createTestApp, createUserViaApi, http, uniqueName } from '../../support/identity-access-helpers';
 import { UsersRepository } from '@giaokhoa/db/repositories/users';
 
-/**
- * Issue #560 (đợt 1 backend của đợt danh sách thành viên, cha #559): hợp đồng truy vấn của `GET /users` — lọc theo trạng thái suy ra từ hai cờ suspended/deleted (mặc định ẩn tài khoản đã xoá, tài khoản đã xoá chỉ hiện khi lọc đích danh), sắp xếp theo tập trường đóng (name/createdAt/lastLogin) ở cả hai chiều với thứ tự mặc định theo id được giữ nguyên khi không truyền tham số, và trần pageSize 100 bị chặn ở validation. Mọi ca lái qua HTTP thật; trạng thái và mốc thời gian của dữ kiện được đặt thẳng qua repository để kết quả tất định, và mỗi ca tự cô lập bằng tiền tố username duy nhất truyền qua `search`.
- */
 describe('Danh sách người dùng: lọc trạng thái, sắp xếp và trần pageSize (issue #560)', () => {
   let app: INestApplication;
   let admin: string;
@@ -31,13 +28,11 @@ describe('Danh sách người dùng: lọc trạng thái, sắp xếp và trần
     await repo.updateUser(suspended.id, { suspended: true });
     await repo.updateUser(deleted.id, { deleted: true });
 
-    // Mặc định: tài khoản đã xoá vắng mặt, hai tài khoản còn lại theo thứ tự id (thứ tự tạo).
     const byDefault = await list({ search: marker });
     expect(byDefault.status).toBe(200);
     expect(byDefault.body.total).toBe(2);
     expect(idsOf(byDefault.body)).toEqual([active.id, suspended.id]);
 
-    // Từng trạng thái trả đúng nhóm của nó, tổng khớp số dòng.
     const byActive = await list({ search: marker, status: 'active' });
     expect(byActive.body.total).toBe(1);
     expect(idsOf(byActive.body)).toEqual([active.id]);
@@ -46,7 +41,6 @@ describe('Danh sách người dùng: lọc trạng thái, sắp xếp và trần
     expect(bySuspended.body.total).toBe(1);
     expect(idsOf(bySuspended.body)).toEqual([suspended.id]);
 
-    // Tài khoản đã xoá chỉ xuất hiện khi lọc đích danh theo trạng thái đã xoá.
     const byDeleted = await list({ search: marker, status: 'deleted' });
     expect(byDeleted.body.total).toBe(1);
     expect(idsOf(byDeleted.body)).toEqual([deleted.id]);
@@ -59,16 +53,13 @@ describe('Danh sách người dùng: lọc trạng thái, sắp xếp và trần
     const anY = await createUserViaApi(app, admin, { username: `${marker}any`, firstName: 'An', lastName: 'Yankee' });
     const anA = await createUserViaApi(app, admin, { username: `${marker}ana`, firstName: 'An', lastName: 'Alpha' });
 
-    // Tăng dần: An Alpha, An Yankee, Binh Zulu — trùng firstName thì lastName phân định.
     const asc = await list({ search: marker, sortBy: 'name', sortDirection: 'asc' });
     expect(asc.status).toBe(200);
     expect(idsOf(asc.body)).toEqual([anA.id, anY.id, binh.id]);
 
-    // Giảm dần đảo ngược đúng thứ tự trên.
     const desc = await list({ search: marker, sortBy: 'name', sortDirection: 'desc' });
     expect(idsOf(desc.body)).toEqual([binh.id, anY.id, anA.id]);
 
-    // Có sortBy mà không truyền chiều thì mặc định tăng dần.
     const defaultDirection = await list({ search: marker, sortBy: 'name' });
     expect(idsOf(defaultDirection.body)).toEqual([anA.id, anY.id, binh.id]);
   });
@@ -95,9 +86,7 @@ describe('Danh sách người dùng: lọc trạng thái, sắp xếp và trần
     const late = await createUserViaApi(app, admin, { username: `${marker}late` });
     await repo.updateUser(early.id, { lastLogin: new Date('2026-02-01T00:00:00.000Z') });
     await repo.updateUser(late.id, { lastLogin: new Date('2026-02-03T00:00:00.000Z') });
-    // `never` giữ lastLogin null như tài khoản mới tạo chưa từng đăng nhập.
 
-    // Postgres: tăng dần thì NULL đứng cuối, giảm dần thì NULL đứng đầu.
     const asc = await list({ search: marker, sortBy: 'lastLogin', sortDirection: 'asc' });
     expect(idsOf(asc.body)).toEqual([early.id, late.id, never.id]);
     const desc = await list({ search: marker, sortBy: 'lastLogin', sortDirection: 'desc' });

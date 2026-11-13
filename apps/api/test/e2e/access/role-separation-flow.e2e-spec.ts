@@ -8,36 +8,6 @@ import {
 } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
 
-/**
- * Tách vai giáo viên/học viên theo ngữ cảnh (issue #425).
- *
- * Quyết định áp dụng (viết trọn vẹn): vai trò phải rõ ràng theo ngữ cảnh — trong khoá một tài khoản ghi danh học thì tài khoản đó thuần là học viên của khoá đó; trong khoá mình dạy thì thuần giáo viên. Đường giáo viên tham gia khoá/lớp KHÁC được giữ (hai tập khoá không giao nhau). Điều bị cấm tuyệt đối là LẪN VAI CÙNG MỘT KHOÁ/LỚP: một tài khoản đồng thời có cấp quyền giảng dạy bao phủ một khoá và ghi danh học viên đang hoạt động trong chính khoá đó (hoặc lớp chứa khoá đó).
- *
- * Định nghĩa dùng chung duy nhất ở RoleSeparationService (tầng Access):
- * - Kiểm (a): tồn tại gán vai archetype editingteacher/teacher KHÔNG
- *   do ghi danh cấp (component <> 'enrol') tại một context trên đường tổ tiên của context khoá (trừ context hệ thống).
- * - Kiểm (b): tồn tại user_enrolments status = 0 qua một enrol
- *   instance của khoá mà vai cấp kèm không thuộc archetype giảng dạy.
- *
- * Các ca dưới đây khoá hành vi ở BA funnel ghi danh và chốt chiều ngược:
- *  1. Funnel 1 — ghi danh tay giáo viên vào chính khoá mình dạy qua
- *     EnrolService.enrolUserInternal: bị từ chối `access.role_context_conflict`, không tạo ghi danh, không gán vai học viên.
- *  2. Funnel 2 — thêm roster lớp bằng EMAIL của chính chủ lớp qua
- *     GroupsService.addCohortMember: bị từ chối cùng mã; chủ lớp không vào cohort, không có ghi danh ở khoá của lớp; học sinh thường vẫn nạp được (đối chứng dương).
- *  3. Đối chứng giữ đường tham gia: giáo viên ghi danh vào khoá
- *     KHÔNG liên quan vẫn thành công và ở khoá đó chỉ là học viên
- *     (không có grade:viewall).
- *  4. Chiều ngược — gán vai giảng dạy tại context khoá và context
- *     lớp cho học viên đang học đang hoạt động trong khoá bị bao phủ: bị từ chối cùng mã; gán cho người không có ghi danh như vậy vẫn thành công (đối chứng dương).
- *  5. Funnel 3 — restore backup chứa ghi danh của người đang dạy
- *     khoá đích: restore hoàn tất, ghi danh vi phạm bị bỏ qua và được đếm vào chi tiết bước restore
- *     (skippedRoleConflictEnrolments = 1), ghi danh hợp lệ trong
- *     cùng backup vẫn được khôi phục.
- *  6. Đường kích hoạt lại ghi danh đã đình chỉ: gán vai giảng dạy
- *     trong lúc ghi danh đang đình chỉ là hợp lệ (ghi danh chưa hoạt động), nhưng kích hoạt lại sau đó bị từ chối cùng mã và ghi danh giữ nguyên trạng thái đình chỉ.
- *  7. Kiểm toán chỉ đọc: dữ kiện lẫn vai dựng thẳng vào DB (mô
- *     phỏng dữ kiện có sẵn trước khi có chốt) được phân loại vào NHÓM CÙNG KHOÁ; tài khoản dạy khoá này học khoá khác vào NHÓM KHÁC KHOÁ; lượt kiểm toán không ghi bất kỳ dữ kiện nào.
- */
 describe('Tách vai trò theo ngữ cảnh (#425)', () => {
   let app: INestApplication;
   let pg: Client;
@@ -47,7 +17,6 @@ describe('Tách vai trò theo ngữ cảnh (#425)', () => {
   let editingTeacherRoleId: string;
   let teacherRoleId: string;
 
-  // Định danh dùng chung giữa các ca (ca kiểm toán ở cuối đọc lại trạng thái của các ca trước).
   let ownCourseTeacherId: string;
   let crossCourseTeacherId: string;
   let classOwnerId: string;
@@ -88,8 +57,6 @@ describe('Tách vai trò theo ngữ cảnh (#425)', () => {
     const res = await http(app).get('/api/v1/access/assignments')
       .query({ userId, contextId }).set('Authorization', `Bearer ${admin}`);
     expect(res.status).toBe(200);
-    // Từ issue #545: phản hồi liệt kê gán vai là trang
-    // `{ assignments, total, page, pageSize }`, không còn là mảng trần.
     return res.body.assignments as AssignmentRow[];
   }
 
@@ -117,7 +84,6 @@ describe('Tách vai trò theo ngữ cảnh (#425)', () => {
     expect(blocked.status).toBe(400);
     expect(blocked.body.code).toBe('access.role_context_conflict');
 
-    // Không bản ghi ghi danh, không dòng gán vai học viên nào được tạo.
     expect(await enrolmentCount(course.id, teacher.id)).toBe(0);
     const rows = await assignmentsOf(teacher.id, ctxId);
     expect(rows.filter((a) => a.roleId === studentRoleId)).toHaveLength(0);
@@ -134,8 +100,6 @@ describe('Tách vai trò theo ngữ cảnh (#425)', () => {
     const ownerLogin = await login(app, owner.username, STRONG_PASSWORD);
     const ownerToken = ownerLogin.accessToken;
 
-    // Chủ lớp phải là thành viên tenant và giữ vai editingteacher tại
-    // context tenant — đúng đường giáo viên thật tạo lớp của mình.
     const current = await http(app).get('/api/v1/tenants/current').set('Authorization', `Bearer ${admin}`);
     const tenantId = current.body.id as string;
     await http(app).post(`/api/v1/tenants/${tenantId}/members`).set('Authorization', `Bearer ${admin}`).send({ userId: owner.id });
@@ -151,8 +115,6 @@ describe('Tách vai trò theo ngữ cảnh (#425)', () => {
     expect(course.status).toBe(201);
     const courseId = course.body.id as string;
 
-    // Email của chính chủ lớp khớp tài khoản có sẵn — chốt funnel 2
-    // phải chặn trước khi dòng thành viên cohort được tạo.
     const blocked = await http(app).post(`/api/v1/classes/${classId}/roster/identity`)
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ fullName: 'Class Owner', email: owner.email });
@@ -167,8 +129,6 @@ describe('Tách vai trò theo ngữ cảnh (#425)', () => {
     expect(memberRows.rowCount).toBe(0);
     expect(await enrolmentCount(courseId, owner.id)).toBe(0);
 
-    // Đối chứng dương: học sinh thường nạp bằng email vẫn vào lớp và
-    // được ghi danh xuống khoá của lớp.
     const student = await createUserViaApi(app, admin);
     const added = await http(app).post(`/api/v1/classes/${classId}/roster/identity`)
       .set('Authorization', `Bearer ${ownerToken}`)
@@ -195,8 +155,6 @@ describe('Tách vai trò theo ngữ cảnh (#425)', () => {
     const instance = await createEnrolInstance(app, admin, learned.id, { method: 'manual' });
     await enrolUser(app, admin, learned.id, instance.id, teacher.id);
 
-    // Ở khoá đang học: thuần học viên — không grade:viewall, nhưng
-    // vào được nội dung khoá theo tư cách người học.
     expect(await hasCapability(app, admin, teacher.id, 'grade:viewall', learnedCtx)).toBe(false);
     const teacherLogin = await login(app, teacher.username, STRONG_PASSWORD);
     const mine = await http(app).get(`/api/v1/courses/${learned.id}/enrolments/me`)
@@ -221,8 +179,6 @@ describe('Tách vai trò theo ngữ cảnh (#425)', () => {
     expect(blockedCourse.body.code).toBe('access.role_context_conflict');
     expect((await assignmentsOf(learner.id, ctxId)).filter((a) => a.roleId === editingTeacherRoleId)).toHaveLength(0);
 
-    // Biến thể context lớp: học viên đang học ở một khoá thuộc lớp
-    // không nhận được vai giảng dạy tại context của chính lớp đó.
     const cls = await http(app).post('/api/v1/classes').set('Authorization', `Bearer ${admin}`).send({ name: `Reverse gate class ${Date.now().toString(36)}` });
     expect(cls.status).toBe(201);
     const classId = cls.body.id as string;
@@ -237,8 +193,6 @@ describe('Tách vai trò theo ngữ cảnh (#425)', () => {
     expect(blockedClass.status).toBe(400);
     expect(blockedClass.body.code).toBe('access.role_context_conflict');
 
-    // Đối chứng dương: người không có ghi danh học viên đang hoạt
-    // động trong khoá bị bao phủ vẫn nhận vai giảng dạy bình thường.
     const fresh = await createUserViaApi(app, admin);
     const ok = await http(app).post('/api/v1/access/assignments')
       .set('Authorization', `Bearer ${admin}`)
@@ -254,8 +208,6 @@ describe('Tách vai trò theo ngữ cảnh (#425)', () => {
     await enrolUser(app, admin, source.id, instance.id, conflicting.id);
     await enrolUser(app, admin, source.id, instance.id, valid.id);
 
-    // Người thứ nhất dạy khoá ĐÍCH (chỉ dạy ở đích, học ở nguồn —
-    // hai khoá khác nhau nên gán vai này hợp lệ).
     const target = await createCourse(app, admin, categoryId);
     const targetCtx = await courseContextId(target.id);
     await assignRole(app, admin, conflicting.id, editingTeacherRoleId, targetCtx);
@@ -275,8 +227,6 @@ describe('Tách vai trò theo ngữ cảnh (#425)', () => {
     expect(enrolStep).toBeDefined();
     expect(enrolStep!.detail?.skippedRoleConflictEnrolments).toBe(1);
 
-    // Ghi danh vi phạm không được tạo ở khoá đích; ghi danh hợp lệ
-    // trong cùng backup vẫn khôi phục đầy đủ.
     expect(await enrolmentCount(target.id, conflicting.id)).toBe(0);
     expect(await enrolmentCount(target.id, valid.id)).toBe(1);
     const validLogin = await login(app, valid.username, STRONG_PASSWORD);
@@ -290,17 +240,11 @@ describe('Tách vai trò theo ngữ cảnh (#425)', () => {
     const instance = await createEnrolInstance(app, admin, course.id, { method: 'manual' });
     const learner = await createUserViaApi(app, admin);
     await enrolUser(app, admin, course.id, instance.id, learner.id);
-    // Đình chỉ ghi danh: từ thời điểm này ghi danh không còn "đang
-    // hoạt động" theo định nghĩa kiểm (b).
     const suspend = await http(app)
       .post(`/api/v1/courses/${course.id}/enrol/instances/${instance.id}/users/${learner.id}/suspend`)
       .set('Authorization', `Bearer ${admin}`);
     expect(suspend.status).toBe(201);
-    // Gán vai giảng dạy tại context khoá: hợp lệ ở thời điểm này vì
-    // chốt chiều ngược chỉ xét ghi danh đang hoạt động.
     await assignRole(app, admin, learner.id, editingTeacherRoleId, await courseContextId(course.id));
-    // Kích hoạt lại sẽ biến ghi danh thành ghi danh học viên đang
-    // hoạt động trong chính khoá người dùng đang dạy → bị từ chối.
     const reactivate = await http(app)
       .post(`/api/v1/courses/${course.id}/enrol/instances/${instance.id}/users/${learner.id}/reactivate`)
       .set('Authorization', `Bearer ${admin}`);
@@ -315,9 +259,6 @@ describe('Tách vai trò theo ngữ cảnh (#425)', () => {
   });
 
   it('kiểm toán: dữ liệu cùng-khoá sẵn có xếp loại vi phạm, khác-khoá xếp loại hợp lệ, và kiểm toán không ghi gì', async () => {
-    // Dữ kiện lẫn vai CÙNG khoá dựng thẳng vào DB — mô phỏng trạng
-    // thái có sẵn từ trước khi có chốt chặn (đường ghi API hiện nay
-    // không tạo nổi trạng thái này nữa).
     const legacy = await createUserViaApi(app, admin);
     const course = await createCourse(app, admin, categoryId);
     const ctxId = await courseContextId(course.id);
@@ -340,9 +281,6 @@ describe('Tách vai trò theo ngữ cảnh (#425)', () => {
     expect(legacyEntry!.conflictingCourseIds).toContain(course.id);
     expect(report.crossCourse.some((e) => e.userId === legacy.id)).toBe(false);
 
-    // Giáo viên của ca 3 (dạy khoá này, học khoá khác) thuộc nhóm
-    // hợp lệ; giáo viên ca 1 và chủ lớp ca 2 (chỉ dạy, không học)
-    // không xuất hiện trong cả hai nhóm.
     expect(report.crossCourse.some((e) => e.userId === crossCourseTeacherId)).toBe(true);
     expect(report.sameCourse.some((e) => e.userId === crossCourseTeacherId)).toBe(false);
     expect(report.sameCourse.some((e) => e.userId === ownCourseTeacherId)).toBe(false);

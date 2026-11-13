@@ -9,13 +9,7 @@ export interface CompletionRecalculateResult { courseId: string; users: number; 
 
 const ENROL_WITHDRAWN = 2;
 
-/**
- * Tính lại completion (report §2#9): khi tiêu chí của khoá học thay đổi sau khi dữ liệu completion đã tồn tại, API gắn cờ reaggregation và đưa job này vào queue; job tính lại course_completions của mọi user đã ghi danh từ các tiêu chí HIỆN TẠI — đủ 8 loại tiêu chí của Moodle với cùng ngữ nghĩa như evaluator phía API (module/date/grade/self/course/ duration/role/unenrol) — một cách idempotent, trong worker, không chạy inline trong request. Khi user mới hoàn thành một khoá học mà các khoá học khác liệt kê là điều kiện tiên quyết, các job tính lại sẽ được đưa vào queue cho các khoá phụ thuộc đó.
- */
 @Processor('completion-recalculate')
-/**
- * Xử lý job tính lại completion hàng loạt cho khoá học.
- */
 export class CompletionRecalculateProcessor extends WorkerHost {
   constructor(
     private readonly spaceDb: SpaceDatabaseService,
@@ -23,11 +17,7 @@ export class CompletionRecalculateProcessor extends WorkerHost {
     @InjectQueue('completion-recalculate') private readonly recalcQueue: Queue,
   ) { super(); }
 
-  /**
-   * Xử lý một job của queue tương ứng.
-   */
   async process(job: Job<CompletionRecalculateJobData>): Promise<CompletionRecalculateResult> {
-    // Issue #11: mọi lượt xử lý/retry phải kiểm sổ và giữ đúng kho đã đóng dấu khi enqueue; không chạy hộ trên platform.
     return this.jobRunner.runForJob(job.data, () => this.processInContext(job));
   }
 
@@ -47,9 +37,8 @@ export class CompletionRecalculateProcessor extends WorkerHost {
       .select('method')
       .where('course', '=', courseId)
       .executeTakeFirst();
-    const method = settings?.method ?? 1; // 1=ALL, 2=ANY
+    const method = settings?.method ?? 1;
 
-    // User ứng viên: mọi người đã ghi danh vào khoá học (bất kỳ instance nào) cộng với bất kỳ ai đã có một completion của khoá học được lưu.
     const instances = await this.spaceDb.routedKysely
       .selectFrom('enrol')
       .select(['id', 'status'])
@@ -75,9 +64,6 @@ export class CompletionRecalculateProcessor extends WorkerHost {
     for (const cc of existingCompletions) userIds.add(cc.userId);
     const candidateIds = [...userIds];
 
-    // Dữ kiện ghi danh theo từng user: mốc neo duration trải khắp mọi instance
-    // (như trong evaluator phía API), trong khi trạng thái unenrol phản chiếu
-    // EnrolService.isEnrolled — chỉ các instance ENABLED mới được tính.
     const liveUesByUser = new Map<string, typeof ues>();
     const enabledInstanceIds = new Set(instances.filter((i) => i.status === 0).map((i) => i.id));
     const enrolledUserIds = new Set<string>();
@@ -88,7 +74,6 @@ export class CompletionRecalculateProcessor extends WorkerHost {
       liveUesByUser.set(ue.userId, list);
       if (enabledInstanceIds.has(ue.enrolId)) enrolledUserIds.add(ue.userId);
     }
-    // Các dòng bằng chứng của tiêu chí thủ công (self/role) cho mọi ứng viên trong một lần.
     const manualIds = criteria.filter((c) => c.criteriaType === 'self' || c.criteriaType === 'role').map((c) => c.id);
     const marks = manualIds.length && candidateIds.length
       ? await this.spaceDb.routedKysely
@@ -99,7 +84,6 @@ export class CompletionRecalculateProcessor extends WorkerHost {
         .execute()
       : [];
     const markedKeys = new Set(marks.map((m) => `${m.criteriaId}|${m.userId}`));
-    // Các completion tiên quyết (các dòng đã lưu của các khoá học được tham chiếu).
     const prereqIds = [...new Set(criteria.filter((c) => c.criteriaType === 'course' && c.courseInstance).map((c) => c.courseInstance as string))];
     const prereqRows = prereqIds.length && candidateIds.length
       ? await this.spaceDb.routedKysely
@@ -133,7 +117,6 @@ export class CompletionRecalculateProcessor extends WorkerHost {
         } else if (c.criteriaType === 'date' && c.date) {
           results.push(now >= c.date);
         } else if (c.criteriaType === 'grade') {
-          // Điểm: tiêu chí điểm của khoá học — tổng điểm của khoá học đạt gradePass của item của khoá học.
           const courseItem = await this.spaceDb.routedKysely
             .selectFrom('grade_items')
             .select(['id', 'grade_pass as gradePass'])
@@ -194,9 +177,6 @@ export class CompletionRecalculateProcessor extends WorkerHost {
         .execute();
     }
 
-    // Lan truyền tiên quyết: user mới hoàn thành có thể thoả mãn tiêu chí 'course'
-    // trong các khoá học phụ thuộc. Chỉ completion MỚI mới đưa vào queue, nên một
-    // chu trình tiên quyết sẽ lắng xuống thay vì ping-pong mãi mãi.
     if (newlyCompletedUsers.length) {
       const dependents = await this.spaceDb.routedKysely
         .selectFrom('course_completion_criteria')

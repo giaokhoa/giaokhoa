@@ -10,11 +10,6 @@ import {
   type OrdinaryWorkerModuleHarness,
 } from '../../support/ordinary-worker-module';
 
-/**
- * Các job nền tảng (platform) của worker. Oracles: report §4 platform-services DoD (các bước backup, search reindex, analytics không side-effect, report schedule, privacy lan đủ, payment webhook replay) + các file PHPUnit tương ứng của platform services. User/course được raw-insert với id cao độc nhất như các worker spec trước.
- *
- * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness role thường (`test/ordinary-worker-module.ts`): module chạy bằng role NOSUPERUSER/NOBYPASSRLS như production (các job nền tảng bọc ngữ cảnh platform tường minh, vai trò này vẫn chịu RLS ở các bảng tenant), fixture và đọc kiểm chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ của spec không đổi.
- */
 type BackupArchiveView = {
   format: string;
   version: number;
@@ -39,9 +34,6 @@ describe('Dịch vụ platform của worker: backup, reindex tìm kiếm, analyt
   let courseCtxId = '';
 
 
-  // CLASS-0 đóng gói (PR #200): khoá dạy thật phải có class_id (CHECK
-  // course_class_required_check) — lớp fixture cho tenant worker-fixture,
-  // chủ lớp là user fixture riêng; mỗi lần gọi dựng một lớp mới.
   async function fixtureClassId(): Promise<string> {
     const ownerId = '01980000-0000-7000-8000-00000000c1a5';
     await sql`insert into users (id, username, email, suspended, deleted) values (${ownerId}, 'wk-class-owner', 'wk-class-owner@x.io', false, false) on conflict (id) do nothing`.execute(db);
@@ -59,10 +51,6 @@ describe('Dịch vụ platform của worker: backup, reindex tìm kiếm, analyt
     const catId = (catRows.rows[0] as { id: string }).id;
     const courseRows = await sql`insert into course (category, tenant_id, full_name, short_name, class_id) values (${catId}, (select tenant_id from course_categories where id = ${catId}), ${`Worker Platform Course ${suffix}`}, ${`wk5c${suffix}`}, ${await fixtureClassId()}) returning id`.execute(db);
     courseId = (courseRows.rows[0] as { id: string }).id;
-    // Chuỗi context phải hợp lệ theo bất biến của cây context: path gồm
-    // các id UUID thật và kết thúc bằng id của chính context — tài liệu
-    // search gắn với context này được PermissionEvaluator ở phía API
-    // duyệt lại theo path, path hư cấu sẽ làm nổ truy vấn đó.
     await sql`insert into context (id, context_level, instance_id, path, depth)
       select '01990000-0000-7000-8000-0000000000a1', 10, null, '/01990000-0000-7000-8000-0000000000a1', 1
       where not exists (select 1 from context where context_level = 10 and instance_id is null)`.execute(db);
@@ -76,7 +64,6 @@ describe('Dịch vụ platform của worker: backup, reindex tìm kiếm, analyt
     await sql`insert into users (id, username, email, first_name, last_name, suspended, deleted) values (${teacherId}, ${`wk5-t-${suffix}`}, ${`wk5t${suffix}@x.io`}, 'Teach', 'Er', false, false) on conflict (id) do nothing`.execute(db);
     await sql`insert into course_sections (course, section, name) values (${courseId}, 0, 'General')`.execute(db);
     await sql`insert into course_sections (course, section, name) values (${courseId}, 1, 'Week 1')`.execute(db);
-    // Teacher assignment ở course context (role editingteacher có sẵn từ seed API? tạo nếu thiếu).
     await sql`insert into role (name, short_name, archetype, sort_order) values ('Teacher', ${`wkteach${suffix}`}, 'editingteacher', 3) on conflict (short_name) do nothing`.execute(db);
     const roleRows = await sql`select id from role where short_name = ${`wkteach${suffix}`}`.execute(db);
     const roleId = (roleRows.rows[0] as { id: string }).id;
@@ -99,10 +86,8 @@ describe('Dịch vụ platform của worker: backup, reindex tìm kiếm, analyt
   });
 
   it('kho lưu trữ của bộ xử lý backup chứa các mục questions/badges/calendar mới (cùng định dạng giaokhoa-backup v1 như API)', async () => {
-    // Ngân hàng câu hỏi ở context của khoá + badge của khoá + sự kiện/subscription của khoá.
     const qCatRows = await sql`insert into question_categories (name, context_id) values (${`wk5-bank-${suffix}`}, ${courseCtxId}) returning id`.execute(db);
     const qCatId = (qCatRows.rows[0] as { id: string }).id;
-    // Câu hỏi không còn cột `name` (mô hình chốt 12:04: nhãn = trích đoạn nội dung) nên fixture chỉ chèn đúng cột còn tồn tại.
     const qRows = await sql`insert into question (category, qtype) values (${qCatId}, 'truefalse') returning id`.execute(db);
     const qId = (qRows.rows[0] as { id: string }).id;
     const entryRows = await sql`insert into question_bank_entries (question_category_id, question_id, latest_version) values (${qCatId}, ${qId}, 2) returning id`.execute(db);

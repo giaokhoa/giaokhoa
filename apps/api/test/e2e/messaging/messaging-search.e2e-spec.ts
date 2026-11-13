@@ -7,20 +7,6 @@ import {
 import { createCategory, createCourse, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
 import { addGroupMember, contextIdByLevelInstance, createGroupViaApi } from '../../support/engagement-helpers';
 
-/**
- * Lát M4 — TÌM KIẾM trong bề mặt nhắn tin (issue #237): lọc nội dung tin CHỈ tồn tại trong từng conversation, qua đúng cổng của đường đọc tin. Các ca kiểm chứng đúng luồng nghiệp vụ:
- *  - thành viên tìm trong conversation của mình: chỉ tin khớp, mới
- *    nhất trước, excerpt quanh chỗ khớp, khớp không phân biệt hoa thường; không khớp → rỗng;
- *  - truy vấn rỗng/toàn khoảng trắng → 400 xác định; thiếu q → 400;
- *  - người ngoài conversation bị chặn như đường đọc tin; conversation
- *    không tồn tại → 404;
- *  - tin đã THU HỒI không bao giờ khớp (kể cả qua excerpt của tin trả
- *    lời trích dẫn nó) với người thường, nhưng người có thẩm quyền kiểm duyệt vẫn tìm thấy theo tầm nhìn truy vết;
- *  - tin tác giả đã ẩn-phía-mình: chính tác giả tìm không ra, phía
- *    kia tìm vẫn ra;
- *  - CHẶN thắng mọi bề mặt: trong nhóm, kết quả của cả hai phía đều
- *    loại tin của phía có quan hệ chặn; hội thoại 1–1 đang bị chặn thì tìm cũng 404 như không tồn tại.
- */
 
 interface Person { id: string; username: string; token: string }
 
@@ -70,17 +56,6 @@ async function searchResults(token: string, conversationId: string, q: string): 
   return res.body.results as SearchResultBody[];
 }
 
-/**
- * Ghi thẳng một dòng gán vai vào DB cho fixture. Các fixture của bộ
- * spec nhắn tin dựng persona giáo viên vừa ghi danh trong khoá vừa
- * giữ vai giảng dạy tại context khoá (giáo viên hiện diện trong khoá
- * như một thành viên và giữ vai trò kiểm duyệt). Từ issue #425,
- * trạng thái lẫn vai cùng khoá này không còn tạo được qua API — cả
- * hai chiều ghi danh/gán vai đều bị chốt tách vai chặn — và chỉ còn
- * tồn tại như dữ kiện có sẵn; các ca của bộ spec này kiểm hành vi
- * nhắn tin trên đúng dữ kiện đó, nên dòng gán vai được ghi thẳng
- * vào DB trong lúc phần ghi danh vẫn đi qua API như cũ.
- */
 async function insertAssignmentRow(roleId: string, userId: string, contextId: string): Promise<void> {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
@@ -108,8 +83,6 @@ describe('Messaging M4 — tìm kiếm trong conversation (issue #237)', () => {
     await befriend(a, b);
     convId = await openConversation(a, b);
 
-    // Bối cảnh nhóm khoá (khuôn M3/lifecycle): giáo viên kiểm duyệt +
-    // hai học sinh cùng nhóm — nơi luật chặn và tầm nhìn truy vết áp.
     const category = await createCategory(app, admin);
     const course = await createCourse(app, admin, category.id);
     const instance = await createEnrolInstance(app, admin, course.id);
@@ -119,8 +92,6 @@ describe('Messaging M4 — tìm kiếm trong conversation (issue #237)', () => {
     for (const p of [teacher, s1, s2]) await enrolUser(app, admin, course.id, instance.id, p.id);
     const courseCtx = await contextIdByLevelInstance(app, admin, 50, course.id);
     const editingTeacher = await roleIdByShortname(app, admin, 'editingteacher');
-    // Persona giáo viên ở đây vừa ghi danh vừa giữ vai giảng dạy tại
-    // chính khoá: dòng gán vai ghi thẳng vào DB (xem insertAssignmentRow).
     await insertAssignmentRow(editingTeacher, teacher.id, courseCtx);
     const group = await createGroupViaApi(app, admin, course.id, 'Nhóm tìm kiếm M4');
     for (const p of [teacher, s1, s2]) await addGroupMember(app, admin, course.id, group.id, p.id);
@@ -148,14 +119,11 @@ describe('Messaging M4 — tìm kiếm trong conversation (issue #237)', () => {
     expect(results[0]!.excerpt).toContain('hàm số');
     expect(results[1]!.excerpt).toContain('hàm số');
 
-    // Không phân biệt hoa thường.
     const upper = await searchResults(b.token, convId, 'HÀM SỐ');
     expect(upper.map((r) => r.id)).toEqual([m2.body.id, m1.body.id]);
 
-    // Không khớp → danh sách rỗng, vẫn 200.
     expect(await searchResults(b.token, convId, 'không hề tồn tại')).toEqual([]);
 
-    // Giới hạn kết quả được tôn trọng.
     const limited = await http(app).get(`/api/v1/messages/conversations/${convId}/search?q=${encodeURIComponent('hàm số')}&limit=1`)
       .set('Authorization', `Bearer ${b.token}`);
     expect(limited.status).toBe(200);
@@ -191,7 +159,6 @@ describe('Messaging M4 — tìm kiếm trong conversation (issue #237)', () => {
   });
 
   it('4. người ngoài conversation bị chặn như đường đọc tin; conversation không tồn tại → 404', async () => {
-    // Cùng cổng với GET .../messages: người ngoài nhận 403 not_member.
     const readAttempt = await http(app).get(`/api/v1/messages/conversations/${convId}/messages`)
       .set('Authorization', `Bearer ${outsider.token}`);
     const searchAttempt = await search(outsider.token, convId, 'hàm số');
@@ -218,7 +185,6 @@ describe('Messaging M4 — tìm kiếm trong conversation (issue #237)', () => {
     expect(res.status).toBe(200);
     expect(res.body.results).toEqual([]);
     expect(JSON.stringify(res.body)).not.toContain('abc123');
-    // Chính tác giả (cũng là người thường ở hội thoại 1–1) cũng không khớp lại nội dung đã thu hồi.
     expect(await searchResults(a.token, convId, 'wifi')).toEqual([]);
   });
 
@@ -254,7 +220,6 @@ describe('Messaging M4 — tìm kiếm trong conversation (issue #237)', () => {
     const fromS2 = await send(s2.token, groupConvId, 'báo cáo nhóm m4 đã xong');
     expect(fromS2.status).toBe(201);
 
-    // Chưa chặn: cả hai phía tìm thấy cả hai tin.
     expect((await searchResults(s1.token, groupConvId, 'nhóm m4')).map((r) => r.id).sort())
       .toEqual([fromS1.body.id, fromS2.body.id].sort());
 
@@ -262,13 +227,10 @@ describe('Messaging M4 — tìm kiếm trong conversation (issue #237)', () => {
       .set('Authorization', `Bearer ${s1.token}`).send({});
     expect(block.status).toBe(201);
 
-    // S1 đã chặn S2: kết quả của S1 loại tin của S2.
     expect((await searchResults(s1.token, groupConvId, 'nhóm m4')).map((r) => r.id))
       .toEqual([fromS1.body.id]);
-    // Chiều ngược cũng thắng: S2 (phía bị chặn) cũng không thấy tin của S1 qua tìm kiếm.
     expect((await searchResults(s2.token, groupConvId, 'nhóm m4')).map((r) => r.id))
       .toEqual([fromS2.body.id]);
-    // Giáo viên không có quan hệ chặn với ai: thấy đủ cả hai.
     expect((await searchResults(teacher.token, groupConvId, 'nhóm m4')).map((r) => r.id).sort())
       .toEqual([fromS1.body.id, fromS2.body.id].sort());
   });

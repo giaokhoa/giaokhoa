@@ -45,23 +45,6 @@ import {
   presenceLabelKey, presenceStatusOf, quoteExcerptOfText,
 } from '../utils/utils';
 
-/**
- * Dựng nội dung tin thành cây React có định dạng nhẹ (giai đoạn 2
- * của vòng sửa PR #610 — mục T-09 của đợt rà soát hành vi bản
- * demo): đúng hai khuôn của bản demo — `**đoạn**` thành chữ đậm
- * (`font-semibold`) và `[nhãn](url)` thành liên kết mở tab mới
- * với rel an toàn. Cặp nút Bold / Insert link ở ô soạn chèn đúng
- * hai khuôn này nên soạn và hiển thị khớp nhau.
- *
- * An toàn hiển thị: nội dung là chữ do người dùng nhập nên mọi
- * phần đều dựng thành TEXT NODE hoặc phần tử React — tuyệt đối
- * không chèn HTML thô chưa qua xử lý; href chỉ chấp nhận sơ đồ
- * `http(s)://` và `mailto:` (khuôn khác dựng thành chữ thường)
- * để không lọt sơ đồ nguy hiểm kiểu `javascript:`.
- *
- * @param props - `text` là nội dung tin nguyên văn phía server.
- * @returns Cây React của nội dung đã áp hai khuôn định dạng.
- */
 function RichMessageText({ text }: { text: string }) {
   const parts = text.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g);
   return (
@@ -89,9 +72,6 @@ function RichMessageText({ text }: { text: string }) {
   );
 }
 
-/**
- * Lưới emoji của bộ chọn ở ô soạn (issue #591; tập và thứ tự căn đúng theo bản demo ở issue #608 — trích nguyên mảng emoji từ chunk JS của demo): dựng trên component Popover của `@giaokhoa/ui` (vòng sửa PR #593 — bản trước dùng DropdownMenu đã bị cả hai lớp review bác vì khác component và khác ngữ nghĩa), dạng lưới 5 cột × 4 hàng. Chọn emoji chèn ký tự TẠI VỊ TRÍ CON TRỎ trong ô soạn (đúng hành vi bản demo; nối cuối nháp như trước là điểm lệch đã sửa ở giai đoạn 2 của vòng sửa PR #610); không thêm thư viện picker.
- */
 const EMOJI_GRID_OPTIONS = [
   '😀', '😂', '😊', '😍', '🥳',
   '👍', '👏', '🙏', '❤️', '🔥',
@@ -99,16 +79,8 @@ const EMOJI_GRID_OPTIONS = [
   '😅', '🙌', '💪', '✨', '🚀',
 ];
 
-/**
- * Bộ cảm xúc của bộ chọn reactions trên tin — CHỈ HÌNH DẠNG
- * (issue #591, xem khối render ở toolbar nổi của bong bóng):
- * reactions chưa có phán quyết chức năng nên lưới này chỉ để trình bày, các mục đều vô hiệu.
- */
 const REACTION_SHAPE_EMOJIS = ['❤️', '😂', '😮', '😢', '👍'];
 
-/**
- * Cầu nối tới handle cuộn của MessageScroller: hook chỉ gọi được trong cây của Provider nên một component con không-render giữ handle vào ref của trang — nút trích dẫn ở bong bóng dùng ref này để nhảy tới tin gốc (lát M3).
- */
 function ScrollerBridge({ bridgeRef }: { bridgeRef: RefObject<ScrollerHandle | null> }) {
   const scroller = useMessageScroller();
   useEffect(() => {
@@ -122,9 +94,7 @@ interface ChatPanelProps {
   active: ConversationView | null;
   myId: string | undefined;
   onlineUsers: Record<string, boolean>;
-  /** Mốc đã đọc theo từng thành viên của conversation đang mở (memberReadMarkers của API) — nguồn cho panel thông tin "ai đã xem" (N7). */
   readMarkers: Record<string, number>;
-  /** Quay lại danh sách hội thoại (chỉ hiện nút ở mobile, issue #256). */
   onBack: () => void;
   blocked: string[];
   onUnblockContact: (userId: string) => void;
@@ -145,17 +115,8 @@ interface ChatPanelProps {
   canRecall: (message: MessageView) => boolean;
   onRecallMessage: (message: MessageView) => void;
   onHardDeleteMessage: (message: MessageView) => void;
-  /**
-   * Đặt một cờ trạng thái cá nhân (ghim / tắt tiếng) cho hội thoại đang mở (issue #591): hành động tắt/bật thông báo và ghim/bỏ ghim ở đầu khung và panel thông tin đi qua đây — cùng một đường đổi trạng thái với menu trên hàng danh sách.
-   */
   onUpdateConversationState: (conversation: ConversationView, patch: ConversationStatePatch) => void;
-  /**
-   * Bản đồ tóm tắt người dùng của trang (issue #591): panel thông tin lấy tên đăng nhập thật của đối tác qua đây để adapter hồ sơ dựng đúng trường đã có nguồn.
-   */
   people: Record<string, PersonSummary>;
-  /**
-   * Trang đang nạp dữ kiện lần đầu (issue #591): khi chưa có hội thoại đang mở thì hiện khung đang tải đúng hình dạng thay cho trạng thái trống.
-   */
   loading?: boolean;
   typingNames: string[];
   draft: string;
@@ -163,16 +124,13 @@ interface ChatPanelProps {
   onNoteTyping: () => void;
   onSend: (event: FormEvent) => void;
   sendError: string | null;
-  /** Conversation đang mở đang có lượt gửi bay (fix nhân đôi tin, issue #33): composer vô hiệu đường gửi trong lúc này. */
   sendInFlight: boolean;
-  /** Lát M3 (issue #229): đích trích đang chờ gửi + các thao tác trích dẫn. */
   replyTarget: MessageView | null;
   onStartReply: (message: MessageView) => void;
   onCancelReply: () => void;
   onJumpToQuote: (quote: MessageQuoteView) => void;
   highlightedMessageId: string | null;
   scrollerRef: RefObject<ScrollerHandle | null>;
-  /** Lát M4 (issue #237): tìm nội dung tin trong conversation đang mở. */
   messageSearch: {
     query: string;
     results: MessageSearchResultView[];
@@ -183,13 +141,9 @@ interface ChatPanelProps {
   onSearchMessages: (query: string) => void;
   onClearMessageSearch: () => void;
   onJumpToSearchResult: (result: MessageSearchResultView) => void;
-  /**
-   * Gói PANEL THÀNH VIÊN (lát MSG-T4): ngữ cảnh roster + các dòng thành viên trang đã nạp cho conversation đang mở, kèm các sự kiện thao tác trên thành viên. Null khi conversation không phải hội thoại nhóm hoặc trang chưa xác định được ngữ cảnh.
-   */
   memberPanel: MemberPanelBundle | null;
 }
 
-/** Khung phải màn Tin nhắn (issue #256): header hội thoại + luồng tin + composer dính đáy. */
 export function ChatPanel({
   active, myId, onlineUsers, readMarkers, onBack, blocked, onUnblockContact, onBlockContact, onReportConversation,
   onToggleChat, reportMessage, actionMessage, hasMoreBefore, onLoadOlder, selectedForBulk,
@@ -213,42 +167,16 @@ export function ChatPanel({
   const hardDeleteMessage = onHardDeleteMessage;
   const noteTyping = onNoteTyping;
   const send = onSend;
-  /** Ô nhập từ khoá tìm trong conversation (lát M4): nháp cục bộ của panel, gửi lên trang chạy tìm. */
   const [searchDraft, setSearchDraft] = useState('');
-  /** Tìm trong hội thoại ẩn sau nút bật/tắt ở header (chuẩn app nhắn tin, issue #256). */
   const [searchOpen, setSearchOpen] = useState(false);
-  /** Panel thông tin cuộc trò chuyện (thành viên + ai đã xem, N7) — bật/tắt ở header. */
   const [infoOpen, setInfoOpen] = useState(false);
-  /** Bộ chọn emoji ở ô soạn đang mở hay không (vòng sửa PR #593): Popover được điều khiển tường minh để chọn xong một emoji là đóng lại như hành vi menu trước đây. */
   const [emojiOpen, setEmojiOpen] = useState(false);
-  /** Bộ chọn emoji của ô soạn GHI CHÚ đang mở hay không (vòng sửa issue #623): trạng thái riêng của form ghi chú — hai form dùng cùng khuôn hàng công cụ nhưng mỗi form giữ popover của chính nó. */
   const [noteEmojiOpen, setNoteEmojiOpen] = useState(false);
-  /**
-   * Tab đang chọn của hộp soạn (issue #623): hộp Tabs là Tabs điều khiển thật với hai trị `reply` / `note` như bản demo — `reply` là ô soạn tin nhắn thường, `note` là ô soạn ghi chú nội bộ cục bộ (xem `noteDrafts` ngay dưới).
-   */
   const [composerTab, setComposerTab] = useState<'reply' | 'note'>('reply');
-  /**
-   * Nháp GHI CHÚ NỘI BỘ theo từng conversation — dữ kiện cục bộ thuần của panel: chức năng ghi chú nội bộ chưa có phán quyết và chưa có backend, nên nháp không rời client, không qua đường gửi tin và không phát tín hiệu đang nhập; gửi ở chế độ ghi chú chỉ hiện thông báo cục bộ rồi xoá nháp, đúng hành vi phía demo.
-   */
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
-  /** Nháp ghi chú của conversation đang mở (rỗng khi chưa chọn hội thoại nào). */
   const noteDraft = active ? noteDrafts[active.id] ?? '' : '';
-  /**
-   * Conversation vừa gửi ghi chú xong — thông báo cục bộ của nó hiện thoáng qua dưới hộp soạn như toast của phía demo
-   * (vòng sửa issue #623): tự tắt sau vài giây, và bị xoá
-   * ngay khi chuyển tab soạn hoặc chuyển hội thoại, không bám lại dưới hộp như trước.
-   */
   const [noteNoticeFor, setNoteNoticeFor] = useState<string | null>(null);
 
-  /**
-   * Gửi ghi chú nội bộ (issue #623): xử lý CỤC BỘ thuần như
-   * phía demo — chặn submit mặc định, xoá nháp của conversation
-   * đang mở và bật thông báo cục bộ. Không gọi API, không qua
-   * đường gửi tin, không gửi gì vào luồng: chức năng ghi chú
-   * nội bộ thật chưa có phán quyết nên không nối backend.
-   *
-   * @param event - Sự kiện submit của form ghi chú.
-   */
   const sendNote = (event: FormEvent) => {
     event.preventDefault();
     if (!active) return;
@@ -256,28 +184,15 @@ export function ChatPanel({
     setNoteDrafts((prev) => ({ ...prev, [active.id]: '' }));
     setNoteNoticeFor(active.id);
   };
-  // Thông báo ghi chú tự tắt sau vài giây (hiệu ứng toast thoáng qua của phía demo — vòng sửa issue #623): hết giờ là xoá khỏi bề mặt; chuyển tab soạn / chuyển hội thoại cũng xoá ngay ở hai đường đổi ngữ cảnh tương ứng.
   useEffect(() => {
     if (!noteNoticeFor) return;
     const timer = setTimeout(() => setNoteNoticeFor(null), 4000);
     return () => clearTimeout(timer);
   }, [noteNoticeFor]);
-  /** Hồ sơ rút gọn của thành viên đang xem từ menu avatar/tên (lát MSG-T4) — một sheet dùng chung cho cả panel và dòng tin. */
   const memberProfile = useMemberProfile();
-  /**
-   * Lần chạm gần nhất lên một bong bóng (vòng sửa sau nghiệm thu PR #610): cơ chế trả lời của bản demo là nhấn đúp / chạm hai lần trên bong bóng (hồ sơ trích xuất E21) — chuột có sự kiện nhấn đúp sẵn của trình duyệt, nhưng cảm ứng không có sự kiện tương đương đáng tin nên khung chat tự nhận diện hai lần chạm liên tiếp trên CÙNG một bong bóng
-   * (khoảng cách thời gian + vị trí gần nhau) từ ref này. Chỉ
-   * là bộ nhớ thao tác thoáng qua, không phải dữ kiện.
-   */
   const lastBubbleTapRef = useRef<{ messageId: string; at: number; x: number; y: number } | null>(null);
-  /**
-   * Ô nhập của ô soạn (giai đoạn 2 của vòng sửa PR #610): các thao tác định dạng (Bold, Insert link) và bộ chọn emoji đều tác động TẠI VÙNG CHỌN/CON TRỎ hiện tại của ô nhập như bản demo — đọc selectionStart/selectionEnd từ chính phần tử và khôi phục vùng chọn sau khi nháp đổi (state React vẽ lại ô nhập theo giá trị mới nên phải đặt lại con trỏ tường minh ở khung hình kế tiếp).
-   */
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
-  /**
-   * Thay đoạn [start, end) của nháp hiện tại bằng `inserted` rồi khôi phục vùng chọn [selectStart, selectEnd) trong đoạn vừa chèn sau khi React vẽ lại — mẫu dùng chung của Bold, Insert link và emoji để con trỏ không nhảy về cuối nháp.
-   */
   const replaceDraftRange = (start: number, end: number, inserted: string, selectStart: number, selectEnd: number) => {
     if (!active) return;
     const nextDraft = `${draft.slice(0, start)}${inserted}${draft.slice(end)}`;
@@ -291,12 +206,6 @@ export function ChatPanel({
     });
   };
 
-  /**
-   * Nút Bold (mục T-14): bọc vùng chọn bằng `**`; vùng chọn đã là
-   * một đoạn đậm nguyên vẹn (bắt đầu và kết thúc bằng `**`, dài
-   * hơn 4 ký tự) thì BỎ bọc — đúng thuật toán của bản demo. Vùng
-   * chọn sau thao tác phủ đúng đoạn kết quả như demo neo.
-   */
   const applyBold = () => {
     const el = composerRef.current;
     if (!el) return;
@@ -308,13 +217,6 @@ export function ChatPanel({
     replaceDraftRange(start, end, inserted, start, start + inserted.length);
   };
 
-  /**
-   * Nút Insert link (mục T-15): hỏi URL bằng hộp thoại của trình
-   * duyệt (đúng cơ chế bản demo), tự thêm `https://` khi URL chưa
-   * có sơ đồ, rồi bọc vùng chọn thành `[vùng chọn](url)` — không
-   * có vùng chọn thì chèn `[url](url)` tại con trỏ. Huỷ hộp thoại
-   * hoặc URL trống thì không đổi nháp.
-   */
   const insertLink = () => {
     const el = composerRef.current;
     const raw = window.prompt(t('insertLinkPrompt'));
@@ -329,7 +231,6 @@ export function ChatPanel({
     replaceDraftRange(start, end, inserted, start, start + inserted.length);
   };
 
-  /** Chèn emoji TẠI con trỏ (thay vùng chọn nếu có) và đặt con trỏ ngay sau emoji — đúng hành vi bản demo. */
   const insertEmojiAtCursor = (emoji: string) => {
     const el = composerRef.current;
     const start = el?.selectionStart ?? draft.length;
@@ -338,24 +239,8 @@ export function ChatPanel({
     setEmojiOpen(false);
   };
 
-  /**
-   * Ô nhập của form GHI CHÚ NỘI BỘ (vòng sửa issue #623): phía
-   * demo dùng CHUNG một component soạn cho cả hai tab nên form
-   * ghi chú mang cùng hàng công cụ như form Trả lời — các thao
-   * tác định dạng dưới đây là cùng thuật toán với phía Trả lời
-   * (Bold bọc/bỏ bọc `**`, Insert link qua hộp thoại của trình
-   * duyệt, emoji chèn tại con trỏ) nhưng tác động lên NHÁP GHI
-   * CHÚ của conversation đang mở và ô nhập của chính form ghi
-   * chú. Mọi thao tác vẫn cục bộ thuần: không gọi API, không
-   * phát tín hiệu đang nhập như đường soạn tin.
-   */
   const noteComposerRef = useRef<HTMLTextAreaElement | null>(null);
 
-  /**
-   * Thay đoạn [start, end) của nháp ghi chú bằng `inserted` rồi
-   * khôi phục vùng chọn trong đoạn vừa chèn sau khi React vẽ
-   * lại — cùng khuôn với `replaceDraftRange` của nháp trả lời.
-   */
   const replaceNoteDraftRange = (start: number, end: number, inserted: string, selectStart: number, selectEnd: number) => {
     if (!active) return;
     const nextDraft = `${noteDraft.slice(0, start)}${inserted}${noteDraft.slice(end)}`;
@@ -368,7 +253,6 @@ export function ChatPanel({
     });
   };
 
-  /** Nút Bold của form ghi chú: bọc/bỏ bọc `**` quanh vùng chọn của nháp ghi chú — cùng thuật toán với form Trả lời. */
   const applyNoteBold = () => {
     const el = noteComposerRef.current;
     if (!el) return;
@@ -380,7 +264,6 @@ export function ChatPanel({
     replaceNoteDraftRange(start, end, inserted, start, start + inserted.length);
   };
 
-  /** Nút Insert link của form ghi chú: cùng cơ chế hộp thoại của trình duyệt và cùng khuôn bọc liên kết như form Trả lời, áp lên nháp ghi chú. */
   const insertNoteLink = () => {
     const el = noteComposerRef.current;
     const raw = window.prompt(t('insertLinkPrompt'));
@@ -395,7 +278,6 @@ export function ChatPanel({
     replaceNoteDraftRange(start, end, inserted, start, start + inserted.length);
   };
 
-  /** Chèn emoji tại con trỏ của ô ghi chú và đóng bộ chọn — cùng hành vi với form Trả lời. */
   const insertNoteEmojiAtCursor = (emoji: string) => {
     const el = noteComposerRef.current;
     const start = el?.selectionStart ?? noteDraft.length;
@@ -404,14 +286,6 @@ export function ChatPanel({
     setNoteEmojiOpen(false);
   };
 
-  /**
-   * Query hồ sơ đối tác 1–1 phục vụ panel thông tin (issue #592):
-   * đặt ở đây — trước return sớm khi chưa chọn hội thoại — nên id
-   * đối tác tính trực tiếp từ props (cùng luật với `otherId` tính
-   * lại ở dưới sau return sớm: thành viên khác mình đầu tiên của
-   * hội thoại 1–1). Query chỉ bật khi panel thông tin đang mở và
-   * đang ở hội thoại 1–1; chưa mở panel thì không tải hồ sơ.
-   */
   const panelPartnerId = active && active.type !== 2
     ? active.members.find((memberId) => memberId !== myId)
     : undefined;
@@ -419,7 +293,6 @@ export function ChatPanel({
     ...messagingPersonProfileQueryOptions(panelPartnerId ?? ''),
     enabled: panelPartnerId !== undefined && infoOpen,
   });
-  // State cục bộ phải thuộc đúng hội thoại, không mang sang hội thoại kế.
   const conversationKey = active?.id;
   const [previousConversationKey, setPreviousConversationKey] = useState(conversationKey);
   if (conversationKey !== previousConversationKey) {
@@ -433,10 +306,6 @@ export function ChatPanel({
   }
 
   if (!active) {
-    // Đang nạp lần đầu (issue #591): khung phải hiện skeleton
-    // đúng hình dạng (đầu khung + vài bong bóng) — không hiện
-    // trạng thái trống giả rồi mới đầy dữ kiện; trạng thái
-    // trống thật chỉ hiện khi đã nạp xong.
     if (loading) {
       return (
         <div data-testid="thread-loading" className="flex min-h-0 flex-1 flex-col" aria-label={t('conversationsLoading')}>
@@ -458,14 +327,6 @@ export function ChatPanel({
         </div>
       );
     }
-    /*
-      Trạng thái chưa chọn hội thoại theo đúng khuôn của bản
-      demo (issue #608): icon MessageSquare 48px trần màu
-      muted ở 30%, tiêu đề 14px vừa màu muted, dòng phụ 12px
-      màu muted ở 70%, khoảng 12px, căn giữa — dựng tại nơi
-      dùng trong feature này, không sửa component Empty dùng
-      chung cho các trang khác.
-    */
     return (
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-12 text-center">
         <MessageSquare className="size-12 text-muted-foreground/30" aria-hidden />
@@ -478,56 +339,14 @@ export function ChatPanel({
   const others = active.members.filter((memberId) => memberId !== myId);
   const isGroup = active.type === 2;
   const otherId = !isGroup ? others[0] : undefined;
-  /**
-   * Trạng thái hiện diện của đối tác có BA trạng thái theo dữ
-   * kiện client: `true` khi đã có sự kiện hiện diện xác nhận
-   * trực tuyến, `false` khi đã có sự kiện xác nhận ngoại tuyến,
-   * `undefined` khi CHƯA BIẾT — chưa nhận sự kiện nào của đối
-   * tác. Từ đợt backend #592, máy chủ gửi ảnh chụp hiện diện ban
-   * đầu cho socket vừa nối (tập đối tác đang trực tuyến trong phạm
-   * vi hội thoại), nên đối tác trực tuyến sẵn từ trước khi trang
-   * tải đã có bản ghi `true` ngay từ đầu; đối tác ngoại tuyến lúc
-   * nối vắng khỏi ảnh chụp nên vẫn là `undefined` — `undefined`
-   * tuyệt đối không được gộp thành ngoại tuyến, bề mặt hiện chữ
-   * trạng thái chỉ được khẳng định khi đã có sự kiện xác nhận.
-   * Chấm hiện diện trên avatar (đầu khung và panel) bám đúng ba
-   * trạng thái này: xanh lá khi `true`, xám khi `false`, vắng hẳn
-   * khi `undefined` — vắng chấm khi chưa biết không khẳng định
-   * điều gì sai.
-   */
   const otherPresence = otherId ? onlineUsers[otherId] : undefined;
-  /**
-   * Trạng thái hiện diện HIỂN THỊ của đối tác (issue #608):
-   * ánh xạ từ dữ kiện ba trạng thái ở trên qua tầng hiển thị
-   * bốn trạng thái — chấm hiện diện và dòng trạng thái ở mọi
-   * bề mặt của khung chat đều lấy màu/nhãn từ bản đồ chung
-   * này (dữ kiện hiện hành chỉ cho ra trực tuyến/ngoại
-   * tuyến/chưa biết).
-   */
   const otherStatus = presenceStatusOf(otherPresence);
-  /**
-   * Tiêu đề đầu khung — panel thông tin dùng lại đúng biến này:
-   * hội thoại có tên thì dùng tên; hội thoại 1–1 không có tên
-   * (backend không đặt tên cho 1–1) thì hiện tên đối tác; chỉ khi
-   * không xác định được đối tác mới rơi về nhãn dự phòng liệt kê
-   * mọi thành viên.
-   */
   const title = active.name !== null
     ? active.name
     : otherId
       ? nameOf(otherId)
       : t('conversationWithUser', { members: active.members.map((id) => nameOf(id)).join(', ') });
   const avatarLabel = active.name ?? (otherId ? nameOf(otherId) : title);
-  /**
-   * Dòng phụ đầu khung: đang nhập → nhóm hiện số thành viên →
-   * 1–1 hiện trạng thái của đối tác theo đúng ba trạng thái
-   * hiện diện: đã xác nhận trực tuyến thì hiện nhãn trực
-   * tuyến, đã xác nhận ngoại tuyến thì hiện "Ngoại tuyến",
-   * chưa biết (chưa có sự kiện nào của đối tác — gồm cả ca
-   * đối tác đã ngoại tuyến sẵn từ trước khi trang tải) thì
-   * KHÔNG hiện dòng trạng thái, vì client không có dữ kiện
-   * để khẳng định.
-   */
   const subtitle = typingNames.length > 0
     ? t('typingIndicator', { userId: nameOf(typingNames[0]!) })
     : isGroup
@@ -535,25 +354,8 @@ export function ChatPanel({
       : otherStatus !== undefined
         ? t(presenceLabelKey(otherStatus))
         : '';
-  /** Seq tin mới nhất đang có — mốc so "đã xem" của từng thành viên ở panel thông tin. */
   const newestSeq = visibleMessages.reduce((max, m) => Math.max(max, m.seq), 0) || active.lastMessageSeq || 0;
-  /**
-   * Dòng panel theo từng thành viên (lát MSG-T4): avatar trên dòng
-   * tin tra ở đây để mở đúng menu quan hệ của tác giả tin; tác giả
-   * không còn trong danh sách thành viên (đã rời nhóm…) thì avatar
-   * giữ dạng tĩnh như trước.
-   */
   const panelEntryById = new Map((memberPanel?.entries ?? []).map((entry) => [entry.userId, entry]));
-  /**
-   * Gói panel BỔ SUNG chặn/bỏ chặn (quyết định 23:16 ngày
-   * 26/10/2026, sổ quyết định mục D): chặn là hành động theo từng
-   * người — ở chat nhóm nó đi qua menu hành động của thành viên,
-   * không còn nằm ở thanh header. Trang chỉ đưa handler chặn xuống
-   * ChatPanel (props `blocked`/`onBlockContact`/`onUnblockContact`),
-   * nên khung chat luồn chúng vào gói panel tại đây để MemberPanel
-   * và menu trên avatar dòng tin dùng chung một đường, thay vì sửa
-   * bề mặt dựng gói ở trang.
-   */
   const memberPanelBundle: MemberPanelBundle | null = memberPanel
     ? {
       ...memberPanel,
@@ -562,19 +364,6 @@ export function ChatPanel({
       onUnblockContact: unblockContact,
     }
     : null;
-  /**
-   * Mốc đã xem ở mức hội thoại (issue #591): seq lớn nhất mà
-   * MỌI phía còn lại đều đã đọc qua — suy từ `memberReadMarkers`
-   * (mốc đọc theo seq của từng thành viên): lấy mốc nhỏ nhất
-   * trong các phía còn lại. Mốc này chỉ còn nuôi dấu đã xem
-   * trên bong bóng của chính người gửi — tin của mình có seq
-   * không vượt mốc thì mang dấu đã xem, còn lại mang dấu đã
-   * gửi. Dòng "Đã xem" riêng ở mức hội thoại đã bỏ ở issue
-   * #608: bản demo không có dòng đó, trạng thái xem chỉ nằm
-   * ở dấu tích trong chân từng bong bóng; thông tin "ai đã
-   * xem" chi tiết vẫn sống ở panel thành viên (mốc đọc của
-   * từng thành viên), không mất đường vào.
-   */
   const seenThroughSeq = others.length > 0
     ? Math.min(...others.map((memberId) => readMarkers[memberId] ?? 0))
     : 0;
@@ -583,14 +372,6 @@ export function ChatPanel({
     const d = new Date(iso);
     return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
   };
-  /**
-   * Nhãn ngăn cách ngày theo đúng hàm phía bản demo (issue
-   * #608, trích từ chunk JS của demo): hôm nay và hôm qua
-   * dùng nhãn chữ; cũ hơn dùng ngày lịch dạng tháng viết tắt
-   * + ngày theo ngôn ngữ hiển thị (ví dụ "Jun 5" / "5 thg
-   * 6"), không kèm năm — thay khuôn ngày giờ đầy đủ trước
-   * đây.
-   */
   const dayLabelOf = (iso: string) => {
     const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
     const diffDays = Math.round((startOfDay(today) - startOfDay(new Date(iso))) / 86_400_000);
@@ -598,18 +379,6 @@ export function ChatPanel({
     if (diffDays === 1) return t('messagesYesterday');
     return formatWithOptions(iso, i18n.language, { month: 'short', day: 'numeric' });
   };
-  /**
-   * Luồng tin kèm ngăn cách theo ngày (issue #608): các nhóm
-   * ngày cách nhau 24px; trong một ngày, tin đầu mỗi CỤM
-   * (đổi người gửi hoặc sang ngày mới) cách 16px, các tin
-   * tiếp trong cụm cách 4px — đúng nhịp cụm của bản demo.
-   * Dấu phân ngày là hộp Badge variant ghost 20px ở giữa
-   * luồng. Tên người gửi và avatar chỉ hiện ở tin đầu cụm
-   * (tên chỉ ở chat nhóm — chat 1–1 không hiện tên phía trên
-   * bong bóng như demo); các tin sau trong cụm giữ một
-   * khoảng trống đúng bề ngang avatar để bong bóng thẳng
-   * cột.
-   */
   const threadItems: ReactNode[] = [];
   let lastDayKey = '';
   let prevMessage: MessageView | null = null;
@@ -626,26 +395,12 @@ export function ChatPanel({
         </div>,
       );
     }
-    /** Tin này có mở đầu một cụm mới không (đổi ngày hoặc đổi người gửi so với tin ngay trước). */
     const firstOfCluster = !prevMessage || prevMessage.userIdFrom !== m.userIdFrom || dayKeyOf(prevMessage.createdAt) !== dayKey;
     prevMessage = m;
     const mine = m.userIdFrom === myId;
-    /** Tin của mình đã được mọi phía còn lại xem qua chưa (theo mốc `seenThroughSeq`) — quyết định dấu đã xem trong bong bóng. */
     const seenByOthers = mine && !m.localStatus && m.seq > 0 && m.seq <= seenThroughSeq;
-    /**
-     * Ghi chú trạng thái GẮN RIÊNG tin này (đã xoá/đã thu hồi bởi
-     * ai, đang gửi/gửi lỗi): luôn ở tại tin đó bất kể vị trí — chỉ
-     * phần GIỜ của footer mới tuân quy tắc tin cuối.
-     */
     const hasOwnStatusNote = Boolean(m.deletedAt || m.recalledAt || m.localStatus);
-    /** Dòng panel của tác giả tin này (lát MSG-T4) — có thì avatar dòng tin thành nút mở menu quan hệ. */
     const authorEntry = isGroup && !mine ? panelEntryById.get(m.userIdFrom) : undefined;
-    // Cụm hành động trên tin (quyết định ngày 26/10, sổ quyết định mục D):
-    // icon nhỏ hiện khi hover/focus tin thay cho hàng nút chữ luôn hiện
-    // (dòng 11:20); cách ĐẶT đã thay theo dòng 23:16 — toolbar NỔI
-    // cạnh bong bóng, bỏ hẳn khỏi luồng dọc (xem khối render dưới).
-    // Điều kiện hiển thị từng hành động GIỮ NGUYÊN như trước — chỉ đổi
-    // cách trình bày/kích hoạt.
     const showReplyAction = !m.deletedAt && !m.localStatus;
     const showRecallAction = canRecall(m);
     const showDeleteMineAction = showReplyAction && mine;
@@ -685,12 +440,6 @@ export function ChatPanel({
               </MemberActionMenu>
             ) : (
               <Avatar>
-                {/*
-                  Màu avatar chữ viết tắt trong luồng theo
-                  phía như bản demo (issue #608): tin của
-                  mình nền primary chữ primary-foreground,
-                  tin đến nền muted chữ foreground.
-                */}
                 <AvatarFallback className={mine ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'}>
                   {initialsOf(nameOf(m.userIdFrom))}
                 </AvatarFallback>
@@ -698,32 +447,12 @@ export function ChatPanel({
             )}
           </MessageAvatar>
           ) : (
-            // Tin tiếp trong cụm: giữ khoảng trống đúng bề
-            // ngang avatar để cột bong bóng thẳng hàng (issue
-            // #608 — avatar chỉ hiện ở tin đầu cụm như demo).
             <div aria-hidden className="w-8 shrink-0" />
           )}
           <MessageContent>
             {!mine && isGroup && firstOfCluster ? (
               <MessageHeader className="px-1">{nameOf(m.userIdFrom)}</MessageHeader>
             ) : null}
-            {/*
-              Thao tác trên chính bong bóng (vòng sửa sau
-              nghiệm thu PR #610 — cơ chế của bản demo, hồ sơ
-              trích xuất E21): nhấn đúp chuột, chạm hai lần
-              trên cảm ứng, hoặc Enter/Space khi bong bóng
-              đang được focus đều bắt đầu trả lời ĐÚNG tin
-              này — cùng một hiệu lực với nút Trả lời trên
-              toolbar nổi (`onStartReply`), và chỉ gắn ở
-              những tin mà hành động Trả lời đang khả dụng
-              (`showReplyAction`). Nhấn đơn không làm gì như
-              demo. Nhấn đúp chuột còn bôi đen chữ theo mặc
-              định trình duyệt: ngăn mặc định + xoá vùng chọn
-              để thao tác chỉ còn nghĩa trả lời. Đường bàn
-              phím chỉ nhận khi sự kiện nhắm thẳng vào bong
-              bóng (không phải phần tử con tương tác được như
-              khối trích dẫn hay nút trên toolbar nổi).
-            */}
             <Bubble
               variant={m.deletedAt || m.recalledAt ? 'destructive' : mine ? 'default' : 'muted'}
               align={mine ? 'end' : 'start'}
@@ -758,16 +487,6 @@ export function ChatPanel({
                 }
               } : undefined}
             >
-              {/*
-                Nội dung bong bóng (issue #591): khối trích dẫn
-                nằm TRONG bong bóng như bản demo (trước đây nằm
-                phía trên bong bóng), nội dung tin ở giữa, và
-                mốc GIỜ của chính tin này ở góc dưới của bong
-                bóng — mọi bong bóng đều mang giờ của nó, kèm
-                dấu đã xem / đã gửi trên bong bóng của chính
-                người gửi. Bấm khối trích dẫn vẫn nhảy tới tin
-                gốc như trước.
-              */}
               <BubbleContent>
                 {m.replyTo ? (
                   <button
@@ -775,20 +494,12 @@ export function ChatPanel({
                     data-testid={`quote-block-${m.id}`}
                     className={cn(
                       'mb-1 block w-full max-w-full cursor-pointer rounded-lg border-l-2 px-2.5 py-1.5 text-left',
-                      // Màu khối trích dẫn theo phía như bản
-                      // demo (issue #608): trong bong bóng của
-                      // mình là lớp phủ primary-foreground, trong
-                      // bong bóng đến là nền đặc + viền primary.
                       mine
                         ? 'border-primary-foreground/50 bg-primary-foreground/15'
                         : 'border-primary/70 bg-background',
                     )}
                     onClick={() => onJumpToQuote(m.replyTo!)}
                     onDoubleClick={(e) => {
-                      // Khối trích dẫn có thao tác riêng (nhảy
-                      // tới tin gốc): nhấn đúp trên khối không
-                      // được rò lên bong bóng thành thao tác
-                      // trả lời (vòng sửa PR #610).
                       e.stopPropagation();
                     }}
                   >
@@ -801,16 +512,6 @@ export function ChatPanel({
                 <span className="block">
                   {m.recalledAt ? t('messageRecalled') : <RichMessageText text={m.fullMessage} />}
                 </span>
-                {/*
-                  Mốc giờ + dấu trạng thái trong bong bóng
-                  (vòng sửa PR #593, theo đúng giá trị demo):
-                  giờ cỡ 10px; dấu trạng thái cỡ 12px và có BA
-                  trạng thái như demo — đang gửi (chưa có seq
-                  phía server) là dấu đơn mờ 70%, đã tới server
-                  nhưng chưa ai xem là dấu đôi mờ 70%, đã được
-                  mọi phía còn lại xem (`seenByOthers`) là dấu
-                  đôi đủ độ đậm.
-                */}
                 <span
                   data-testid={`message-time-${m.id}`}
                   className="mt-1 flex items-center justify-end gap-1 text-[10px] leading-none"
@@ -830,36 +531,12 @@ export function ChatPanel({
                   ) : null}
                 </span>
               </BubbleContent>
-              {/*
-                Toolbar hành động NỔI (quyết định 23:16 ngày
-                26/10/2026, sổ quyết định mục D — theo cách
-                Messenger): cụm icon nằm NGOÀI luồng dọc, định vị
-                tuyệt đối theo chính bong bóng (Bubble là
-                `relative`) và canh theo ĐẦU bong bóng — tin của
-                mình nổi ở phía TRÁI bong bóng, tin người khác nổi
-                ở phía PHẢI, tức luôn ở phía đối diện chiều căn
-                lề. Lý do bỏ khỏi luồng: khi còn là một hàng
-                trong MessageContent, cụm này chiếm chiều cao
-                của MỌI dòng tin kể cả lúc opacity-0 chưa hover;
-                ở dạng nổi nó không đẩy chiều cao dòng tin nữa.
-                Bong bóng bị giới hạn max-w-sm (issue #608,
-                theo trần 384px của demo) nên phía nổi luôn còn
-                khoảng trống của cột nội dung, không tràn mép
-                khung cuộn. Điều kiện hiển thị (hover/
-                focus-within cả dòng tin; thiết bị không hover
-                thì mờ 60% như trước) và handler/quyền/testid
-                giữ nguyên.
-              */}
               {showReplyAction || showMoreMenu ? (
                 <div
                   data-slot="message-actions"
                   data-placement="floating"
                   className={`absolute top-0 z-10 flex items-center gap-0.5 opacity-100 transition-opacity focus-within:opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/message:opacity-100 [@media(hover:hover)]:focus-within:opacity-100 [@media(hover:none)]:opacity-60 ${mine ? 'right-full mr-1' : 'left-full ml-1'}`}
                   onDoubleClick={(e) => {
-                    // Toolbar nổi nằm trong bong bóng nhưng các
-                    // nút của nó có thao tác riêng: nhấn đúp trên
-                    // toolbar không thành thao tác trả lời của
-                    // bong bóng (vòng sửa PR #610).
                     e.stopPropagation();
                   }}
                 >
@@ -876,15 +553,6 @@ export function ChatPanel({
                   </Button>
                 ) : null}
                 {showReplyAction ? (
-                  /*
-                    Bộ chọn cảm xúc (reactions) — CHỈ HÌNH DẠNG
-                    (issue #591): reactions là điểm chưa có phán
-                    quyết về chức năng và chưa có dữ kiện ở mọi
-                    tầng, nên nút và lưới cảm xúc chỉ hiện đúng
-                    hình dạng của demo ở trạng thái vô hiệu —
-                    không ghi cảm xúc nào, không phát sinh tác
-                    dụng giả.
-                  */
                   <DropdownMenu>
                     <DropdownMenuTrigger
                       render={
@@ -923,16 +591,7 @@ export function ChatPanel({
                     >
                       <Ellipsis aria-hidden />
                     </DropdownMenuTrigger>
-                    {/* Bề rộng + không xuống dòng theo hằng ở utils: mặc định của @giaokhoa/ui ghim bề rộng theo nút ⋯ hẹp làm nhãn bẻ nhiều dòng. */}
                     <DropdownMenuContent align={mine ? 'end' : 'start'} sideOffset={4} className={CHAT_MENU_CONTENT_CLASS}>
-                      {/*
-                        Mục Thảo luận (thread) — CHỈ HÌNH DẠNG
-                        (issue #591): thread là điểm chưa có phán
-                        quyết về chức năng, hệ chỉ có trích dẫn
-                        một cấp — mục này hiện đúng hình dạng của
-                        demo ở trạng thái vô hiệu, không mở bề
-                        mặt thread nào.
-                      */}
                       <DropdownMenuItem disabled className={CHAT_MENU_ITEM_CLASS}>
                         <MessagesSquare aria-hidden />
                         {t('threadAction')}
@@ -975,16 +634,6 @@ export function ChatPanel({
                 </div>
               ) : null}
             </Bubble>
-            {/*
-              Footer dòng tin (issue #591): GIỜ của tin đã
-              chuyển vào trong bong bóng (mọi bong bóng đều
-              mang giờ của chính nó như bản demo) nên footer
-              chỉ còn các ghi chú trạng thái gắn riêng tin này
-              (đã xoá / đã thu hồi / đang gửi / gửi lỗi), render
-              bất kể vị trí; tin không có ghi chú trạng thái
-              thì KHÔNG render footer — tránh để lại một dòng
-              trống trong luồng.
-            */}
             {hasOwnStatusNote ? (
               <MessageFooter className="flex-wrap gap-2">
               {m.deletedAt ? (
@@ -1013,15 +662,6 @@ export function ChatPanel({
       </MessageScrollerItem>,
     );
   }
-  /*
-    Chỉ báo đang nhập nằm TRONG luồng tin ở cuối luồng
-    (issue #608 — thay dòng chữ trần phía trên khung soạn
-    trước đây): hàng giống một tin đến — avatar 32px của
-    người đang nhập đầu tiên + bong bóng nền muted bo 14px
-    chứa ba chấm 6px màu muted ở 60% nảy lệch nhịp
-    0/150/300ms như bản demo. Dòng trạng thái ở đầu khung
-    vẫn báo chữ "đang nhập" song song như hiện hành.
-  */
   if (typingNames.length > 0) {
     const firstTyper = typingNames[0]!;
     const lastMessage = visibleMessages[visibleMessages.length - 1];
@@ -1047,26 +687,7 @@ export function ChatPanel({
     );
   }
 
-  /**
-   * Cột thứ ba của khung chat (issue #564; dựng lại theo hình
-   * dạng hồ sơ của bản demo ở issue #591): panel thông tin mở
-   * theo yêu cầu, không chèn ép cột chính. Nhóm dùng nguyên
-   * MemberPanel hiện có; chat 1–1 dùng panel HỒ SƠ NGƯỜI theo
-   * đúng hình dạng demo — các trường hồ sơ backend chưa có đi
-   * qua lớp adapter dữ kiện (xem `person-profile-adapter.ts`)
-   * và hiện dấu gạch ngang ở đúng vị trí, thân PR ghi rõ
-   * trường nào chờ đợt backend #592.
-   */
   const showInfoAside = infoOpen && ((isGroup && memberPanelBundle !== null) || (!isGroup && otherId !== undefined));
-  /**
-   * Hồ sơ hiển thị của đối tác 1–1 qua lớp adapter (issue
-   * #591) + nguồn backend (issue #592): tên + tên đăng nhập là
-   * dữ kiện thật từ trang; email lấy từ endpoint hồ sơ khi query
-   * đã về (trước đó giữ giá trị rỗng của adapter để panel không
-   * hiện email giả trong lúc tải); các trường hồ sơ mở rộng còn
-   * lại chưa có nguồn trong hệ nên vẫn qua adapter với giá trị
-   * rỗng (xem `person-profile-adapter.ts`).
-   */
   const serverPersonProfile = personProfileQuery.data;
   const partnerProfile = !isGroup && otherId
     ? {
@@ -1084,18 +705,10 @@ export function ChatPanel({
           : {}),
       }
     : null;
-  /** Các tệp đã chia sẻ của hội thoại đang mở qua adapter — nguồn hiện tại rỗng (đính kèm chưa có phán quyết chức năng). */
   const sharedFiles = getSharedFiles(active.id);
 
   return (
     <div className="relative flex min-h-0 flex-1">
-      {/*
-        Cột chính của khung chat theo nhịp demo (issue #608):
-        các khối xếp dọc cách nhau 12px; thanh đầu khung
-        không còn đường kẻ dưới và không đệm dưới — khoảng
-        tách với luồng tin do nhịp dọc của cột và đệm trên
-        của vùng cuộn gánh.
-      */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
       <div className="flex items-center justify-between gap-4 px-2 pt-3">
         <Button
@@ -1108,13 +721,6 @@ export function ChatPanel({
         >
           <ChevronLeft aria-hidden />
         </Button>
-        {/*
-          Avatar header là nút mở panel duy nhất (theo mẫu demo:
-          bấm avatar mở panel thông tin) — thay nút Info icon riêng
-          của nhóm trước đây, để cả hai loại hội thoại chỉ có đúng
-          một nút mang tên này. Tên truy cập cố ý KHÔNG chứa tiêu đề
-          hội thoại để không đụng tên nút dòng hội thoại trong test.
-        */}
         <button
           type="button"
           aria-label={t('conversationInfoTitle')}
@@ -1135,46 +741,11 @@ export function ChatPanel({
           ) : null}
         </button>
         <div className="min-w-0 flex-1">
-          {/*
-            Tiêu đề đầu khung chỉ gồm tên như bản demo (issue
-            #608): icon tắt tiếng từng đứng cạnh tiêu đề đã
-            gỡ — phía demo icon tắt tiếng chỉ có ở ô cuối
-            hàng danh sách và trạng thái tắt tiếng đọc được
-            trong menu More actions; panel và menu vẫn mang
-            hành động tắt/bật tiếng như cũ.
-          */}
           <p className="flex items-center gap-1.5">
             <span className="truncate text-sm font-medium">{title}</span>
           </p>
           {subtitle ? <p className="truncate text-xs leading-3 text-muted-foreground">{subtitle}</p> : null}
         </div>
-        {/*
-          Cụm nút hành động ở đầu khung theo đúng demo
-          (issue #608): ba nút ghost 32px — Call, Video call
-          và More actions (EllipsisVertical). Call/Video là
-          HÌNH DẠNG THUẦN ở trạng thái vô hiệu: chức năng
-          gọi chưa có quyết định, không nối đường gọi nào.
-          Đúng như demo, Call và Video call mang Tooltip
-          thật (component `tooltip` của `@giaokhoa/ui`) hiện
-          đúng nhãn của nút khi di chuột; riêng More
-          actions KHÔNG có tooltip — ở demo nút này là
-          trigger trần của menu thả xuống, thêm tooltip
-          vào sẽ thành lệch mới (phán quyết điều phối
-          trên PR #610). Trigger của tooltip KHÔNG gắn
-          thẳng lên nút: class gốc của Button mang
-          `disabled:pointer-events-none` nên nút vô hiệu
-          không nhận được sự kiện di chuột nào — trigger
-          gắn thẳng lên nút thì tooltip không bao giờ
-          kích hoạt được. Trigger vì vậy là một phần tử
-          bọc `inline-flex` nhận hover quanh nút; nút bên
-          trong vẫn giữ nguyên trạng thái vô hiệu, kích
-          thước và vị trí trong cụm (phán quyết điều phối
-          vòng sửa 2 trên PR #610). Nút Tìm kiếm riêng
-          từng đứng ở đây đã gỡ; chức năng tìm trong
-          cuộc trò chuyện dời vào menu More actions bên
-          dưới (vẫn một bấm tới được như demo đặt mọi
-          hành động phụ vào menu).
-        */}
         <Tooltip>
           <TooltipTrigger render={<span className="inline-flex" />}>
             <Button type="button" variant="ghost" size="icon-sm" aria-label={t('callAction')} disabled>
@@ -1191,25 +762,6 @@ export function ChatPanel({
           </TooltipTrigger>
           <TooltipContent>{t('videoCallAction')}</TooltipContent>
         </Tooltip>
-        {/*
-          Menu More actions của đầu khung (issue #591; cấu
-          trúc và bề rộng căn theo menu demo ở issue #608 —
-          trích từ chunk JS của demo): bề rộng cố định 192px,
-          các mục chỉ chữ theo đúng thứ tự demo: Xem hồ sơ
-          (chỉ 1–1) → Tắt/Bật thông báo → Separator →
-          Ghim/Bỏ ghim → Lưu trữ/Bỏ lưu trữ (hành động thật
-          qua cùng đường đổi trạng thái — bề mặt chứa hội
-          thoại đã lưu là tab Lưu trữ ở cột danh sách, issue
-          #623) → Separator → Xoá lịch sử trò chuyện (hình dạng
-          thuần, vô hiệu) → Chặn/Bỏ chặn (destructive, chỉ
-          1–1, kèm tên đối tác như luật đã chốt) → Xoá
-          (destructive, hình dạng thuần, vô hiệu). Sau
-          Separator cuối là các chức năng thật riêng của sản
-          phẩm mà demo không có: Tìm trong cuộc trò chuyện
-          (dời từ nút riêng ở đầu khung), Báo cáo cuộc trò
-          chuyện, Tắt/Bật chat (chỉ khi có thẩm quyền quản
-          lý) — giữ nguyên đường vào, liệt kê trong thân PR.
-        */}
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -1291,12 +843,6 @@ export function ChatPanel({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      {/*
-        Dòng thông tin trạng thái dưới đầu khung (không phải
-        hàng hành động): đối tác đã bị chặn thì ghi rõ kèm tên;
-        thông báo kết quả báo cáo / hành động hiện ở đây như
-        trước.
-      */}
       {(!isGroup && otherId && blocked.includes(otherId)) || reportMessage || actionMessage ? (
         <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2">
           {!isGroup && otherId && blocked.includes(otherId) ? (
@@ -1392,18 +938,6 @@ export function ChatPanel({
         <ScrollerBridge bridgeRef={scrollerRef} />
         <MessageScroller className="min-h-0 flex-1">
           <MessageScrollerViewport aria-label={t('messagesListLabel')}>
-            {/*
-              Đệm vùng cuộn theo demo (issue #608): ngang
-              8px, dọc 32px. MessageScrollerContent mang
-              gap-8 (32px) mặc định trong chính component,
-              nên nơi dùng ghi đè gap-0 để triệt khoảng
-              cách đều của vùng chứa — khoảng cách giữa
-              các mục chỉ do chính từng mục mang (nhóm
-              ngày 24px, cụm tin 16/4px). Thiếu ghi đè
-              này thì gap mặc định cộng dồn vào margin
-              của từng mục thành 36/48px (vòng sửa
-              PR #610).
-            */}
             <MessageScrollerContent className="gap-0 px-2 py-8">
               {threadItems}
             </MessageScrollerContent>
@@ -1411,12 +945,6 @@ export function ChatPanel({
           <MessageScrollerButton />
         </MessageScroller>
       </MessageScrollerProvider>
-      {/*
-        Khung bọc khung soạn theo nhịp demo (issue #608):
-        cột dọc khoảng 12px, đệm ngang 12px, đệm dưới 8px,
-        không đường kẻ trên — chỉ báo đang nhập đã chuyển
-        vào trong luồng tin (xem khối dựng `threadItems`).
-      */}
       <div className="flex flex-col gap-3 px-3 pb-2">
         {active.enabled === false && !active.canManage ? (
           <p role="status" className="text-sm text-muted-foreground">{t('chatDisabledNotice')}</p>
@@ -1425,41 +953,6 @@ export function ChatPanel({
             {active.enabled === false ? (
               <p role="status" className="text-sm text-muted-foreground">{t('chatDisabledForMembers')}</p>
             ) : null}
-            {/*
-              Ô soạn theo bản demo (issue #591; vòng sửa PR
-              #593 đưa về đúng dạng XẾP CHỒNG của demo; cấu
-              trúc hộp tab sửa ở issue #623):
-              - Chip trả lời nhanh nằm PHÍA TRÊN hộp tab: CHỈ
-                HÌNH DẠNG từ lớp adapter, vô hiệu, không chèn
-                nội dung nào (điểm chưa có phán quyết).
-              - Hộp tab Trả lời / Ghi chú nội bộ: Tabs điều
-                khiển thật bọc cả thanh tab và hai ô soạn
-                trong MỘT hộp viền — tab Ghi chú nội bộ bấm
-                chuyển được và mở ô soạn ghi chú riêng mang
-                CÙNG hàng công cụ như tab Trả lời (phía demo
-                dùng chung một component soạn cho cả hai
-                tab), nhưng chức năng ghi chú nội bộ CHƯA có
-                phán quyết và chưa có backend: gửi ở chế độ
-                ghi chú chỉ xử lý cục bộ (thông báo thoáng
-                qua + xoá nháp), không gọi API, không vào
-                luồng (xem `sendNote`).
-              - Ô nhập nằm PHÍA TRÊN, hàng công cụ nằm PHÍA
-                DƯỚI (cột dọc như demo): hàng công cụ theo
-                thứ tự Bold → Emoji → Attach → Link ở nhóm
-                trái và nút Gửi ở phía phải (issue #608); nút
-                Bold và nút Insert link HOẠT ĐỘNG THẬT từ giai
-                đoạn 2 của vòng sửa PR #610 (bọc/bỏ bọc `**` và
-                chèn `[…](url)` tại vùng chọn — cặp hiển thị ở
-                bong bóng xem RichMessageText), nút đính kèm
-                vẫn là hình dạng vô hiệu (điểm chưa có phán
-                quyết chức năng); nút emoji mở POPOVER lưới
-                (component Popover của `@giaokhoa/ui`) và chèn TẠI
-                con trỏ; nút Gửi là nút BIỂU TƯỢNG, vẫn vô hiệu
-                khi nháp trống; KHÔNG còn bộ đếm ký tự và khung
-                nhập phình to như trước (trần ký tự vẫn được
-                cổng gửi chặn như cũ, lỗi hiện ở dòng báo lỗi
-                dưới ô soạn).
-            */}
             <div className="flex flex-wrap gap-1.5">
               {QUICK_REPLY_SHAPE_SAMPLES.map((sample) => (
                 <Button
@@ -1474,27 +967,10 @@ export function ChatPanel({
                 </Button>
               ))}
             </div>
-            {/*
-              Hộp tab của khung soạn theo đúng cấu trúc demo
-              (issue #623): Tabs điều khiển thật (value +
-              onValueChange, hai trị reply / note) mang class
-              hộp viền bo góc của demo; TabsList variant line
-              mang đúng chuỗi class của demo — bề ngang đầy
-              đủ, căn trái, đường kẻ dưới, chiều cao hàng
-              ngang và đệm ngang của trigger đặt qua selector
-              của list; mỗi trigger tự thân là flex-none px-1
-              và không tab nào vô hiệu. Nội dung tab Trả lời
-              chứa thanh xem trước trả lời (bọc đệm trong hộp)
-              và form soạn tin; nội dung tab Ghi chú nội bộ
-              chứa form ghi chú cục bộ.
-            */}
             <Tabs
               value={composerTab}
               onValueChange={(value) => {
                 setComposerTab(value === 'note' ? 'note' : 'reply');
-                // Chuyển tab soạn là rời ngữ cảnh của thông
-                // báo ghi chú: xoá ngay, không để nó bám lại
-                // dưới hộp ở tab bên kia (vòng sửa issue #623).
                 setNoteNoticeFor(null);
               }}
               className="border-border rounded-md border"
@@ -1513,14 +989,6 @@ export function ChatPanel({
                       data-testid="reply-chip"
                       className="flex items-center gap-2 rounded-lg border-l-2 border-primary bg-muted/50 px-3 py-2"
                     >
-                      {/*
-                        Nội dung thanh xem trước trả lời xếp HAI
-                        dòng như bản demo (issue #608): dòng tác
-                        giả 12px vừa màu primary ở trên, dòng trích
-                        12px màu muted cắt một dòng ở dưới. Nút xoá
-                        trích dẫn là nút ghost chỉ biểu tượng X
-                        như demo (issue #623).
-                      */}
                       <span className="min-w-0 flex-1">
                         <span className="block text-xs font-medium text-primary">{t('replyingTo', { user: nameOf(replyTarget.userIdFrom) })}</span>
                         <span className="block truncate text-xs text-muted-foreground">
@@ -1548,37 +1016,16 @@ export function ChatPanel({
                     className="max-h-32 min-h-10 min-w-0 resize-none rounded-none border-0 px-0 py-2 text-sm shadow-none focus-visible:ring-0"
                     value={draft}
                     onChange={(e) => {
-                      // Nháp ghi theo conversation đang mở (lát M1,
-                      // issue #204) — soạn dở ở conversation này
-                      // không lẫn sang conversation khác.
                       setDrafts((prev) => ({ ...prev, [active.id]: e.target.value }));
                       noteTyping();
                     }}
                     onKeyDown={(e) => {
-                      // Enter gửi, Shift+Enter xuống dòng (lát M1,
-                      // issue #204) — ngữ nghĩa chuẩn app nhắn tin
-                      // cho composer nhiều dòng. Đang có lượt gửi bay thì
-                      // Enter không kích thêm lượt gửi nào (fix nhân đôi
-                      // tin, issue #33); Shift+Enter vẫn xuống dòng.
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
                         if (!sendInFlight) e.currentTarget.form?.requestSubmit();
                       }
                     }}
                   />
-                  {/*
-                    Hàng công cụ soạn theo đúng thứ tự và khuôn
-                    phía demo (issue #608): hàng tách hai phía —
-                    nhóm trái khoảng 4px gồm Bold (nút ghost chứa
-                    chữ "B" như demo), Emoji, Attach, Link; nút
-                    Send ở phía phải với glyph Send. Bold và Link
-                    hoạt động thật (giai đoạn 2 của vòng sửa
-                    PR #610), Attach vẫn là hình dạng vô hiệu
-                    (điểm chưa có phán quyết); bộ chọn emoji dùng
-                    khuôn đã trích từ demo: PopoverContent
-                    `w-64 p-2`, lưới 5 cột khoảng 4px, nút emoji
-                    đệm 8px.
-                  */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1">
                       <Button
@@ -1654,23 +1101,6 @@ export function ChatPanel({
                 </form>
               </TabsContent>
               <TabsContent value="note" className="m-0">
-                {/*
-                  Ô soạn GHI CHÚ NỘI BỘ (issue #623; hàng công
-                  cụ bổ sung ở vòng sửa cùng issue theo phán
-                  quyết thống nhất): cùng khuôn ô nhập như tab
-                  Trả lời với placeholder riêng qua i18n, và
-                  mang CÙNG hàng công cụ như form Trả lời —
-                  Bold → Emoji → Attach → Link ở nhóm trái,
-                  nút Gửi ở phía phải — vì phía demo dùng
-                  chung một component soạn cho cả hai tab.
-                  Các thao tác định dạng tác động lên NHÁP
-                  GHI CHÚ (xem các handler `*Note*` ở trên);
-                  nút đính kèm giữ hình dạng vô hiệu như ở
-                  tab Trả lời (chức năng chưa có phán quyết).
-                  Gửi chỉ xử lý cục bộ qua `sendNote` (thông
-                  báo thoáng qua + xoá nháp) — form này không
-                  chạm đường gửi tin, không gọi API.
-                */}
                 <form onSubmit={sendNote} className="flex flex-col gap-2 px-3 pb-2">
                   <Textarea
                     ref={noteComposerRef}
@@ -1684,8 +1114,6 @@ export function ChatPanel({
                       setNoteNoticeFor(null);
                     }}
                     onKeyDown={(e) => {
-                      // Enter gửi, Shift+Enter xuống dòng — cùng
-                      // ngữ nghĩa như ô soạn tin nhắn.
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
                         e.currentTarget.form?.requestSubmit();
@@ -1782,14 +1210,6 @@ export function ChatPanel({
           data-testid="info-aside"
           className="absolute inset-y-0 right-0 z-20 flex w-[85vw] max-w-[320px] min-w-0 flex-col overflow-x-hidden overflow-y-auto border-l bg-background shadow-xl md:static md:z-auto md:w-[320px] md:shrink-0 md:shadow-none"
         >
-          {/*
-            Panel không còn thanh tiêu đề riêng và nút đóng
-            riêng như trước (issue #608): phía demo đầu panel
-            là chính khối hồ sơ, panel là một cột của khung —
-            đóng panel bằng nút avatar ở đầu khung. Riêng ở
-            di động panel là lớp phủ che mất nút avatar đó
-            nên giữ một nút đóng nhỏ chỉ hiện ở di động.
-          */}
           {isGroup && memberPanelBundle ? (
             <>
               <div className="flex justify-end px-3 pt-2 md:hidden">
@@ -1803,14 +1223,6 @@ export function ChatPanel({
                   <X aria-hidden />
                 </Button>
               </div>
-              {/*
-                Hàng hành động của panel nhóm (issue #591):
-                Tắt/Bật tiếng và Ghim/Bỏ ghim là hành động
-                THẬT trên trạng thái cá nhân của hội thoại —
-                cùng đường đổi trạng thái với menu đầu khung —
-                để trạng thái tắt tiếng hiện và đổi được nhất
-                quán ở mọi bề mặt của nhóm.
-              */}
               <div className="flex flex-wrap gap-2 border-b px-3 py-2">
                 <Button
                   type="button"
@@ -1843,29 +1255,7 @@ export function ChatPanel({
             </>
           ) : null}
           {!isGroup && otherId && partnerProfile ? (
-            /*
-              Panel HỒ SƠ NGƯỜI của chat 1–1 (issue #591;
-              hình dạng căn lại theo demo ở issue #608) —
-              đầu panel là khối hồ sơ dính trên cùng (avatar
-              40px bên trái tên, các thẻ), danh sách hành
-              động dọc bề ngang đầy đủ, các hàng trường kèm
-              icon, đoạn giới thiệu riêng và khối tệp đã
-              chia sẻ; nút Xoá nằm ở đáy panel. Dữ kiện đi
-              qua lớp adapter (`partnerProfile`): trường nào
-              backend chưa có thì KHÔNG dựng hàng tương ứng
-              (luật của demo, thay luật hiện dấu "—" trước
-              đây), không bịa giá trị, chờ đợt backend thay
-              nguồn.
-            */
             <div data-testid="partner-panel" className="flex min-h-full flex-col">
-              {/*
-                Đầu panel là CHÍNH khối hồ sơ, dính trên cùng
-                khi cuộn (issue #608): avatar 40px ở bên trái
-                tên, dòng vai trò và dòng trạng thái chỉ hiện
-                khi có dữ kiện (trường trống không dựng hàng
-                — cùng luật với các trường hồ sơ bên dưới),
-                các thẻ là huy hiệu outline ở cuối khối.
-              */}
               <div className="sticky top-0 z-10 flex items-start gap-3 bg-background px-4 py-4">
                 <span className="relative shrink-0">
                   <Avatar size="lg">
@@ -1916,21 +1306,6 @@ export function ChatPanel({
               </div>
               <div className="space-y-4 px-4 pb-4">
                 <Separator />
-                {/*
-                  Danh sách hành động của panel theo đúng
-                  hình dạng demo (issue #608, trích từ chunk
-                  JS của demo): các nút outline bề ngang đầy
-                  đủ, chữ căn trái, xếp dọc cách 8px, chỉ chữ.
-                  Tắt tiếng / Ghim / Chặn là hành động THẬT
-                  qua cùng đường đổi trạng thái và chặn liên
-                  lạc như mọi bề mặt khác; Xoá lịch sử trò
-                  chuyện là chức năng sản phẩm chưa có — chỉ
-                  dựng hình dạng ở trạng thái vô hiệu theo
-                  luật điểm chưa quyết, ghi rõ trong thân PR.
-                  (Mục Thêm vào yêu thích từng đứng ở đây đã
-                  gỡ hẳn theo phán quyết issue #623 — yêu
-                  thích không có dữ kiện ở bất kỳ tầng nào.)
-                */}
                 <div className="flex flex-col gap-2">
                   <Button
                     type="button"
@@ -1976,12 +1351,6 @@ export function ChatPanel({
                     </Button>
                   )}
                 </div>
-                {/*
-                  Đoạn giới thiệu (About) là một đoạn văn
-                  riêng màu muted như demo — không còn là một
-                  hàng trong bảng trường. Chỉ dựng khi adapter
-                  có dữ kiện.
-                */}
                 {partnerProfile.bio ? (
                   <div className="space-y-1">
                     <p className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -1991,20 +1360,6 @@ export function ChatPanel({
                     <p className="text-sm leading-relaxed text-muted-foreground">{partnerProfile.bio}</p>
                   </div>
                 ) : null}
-                {/*
-                  Các hàng trường hồ sơ theo khuôn demo: nhãn
-                  màu muted kèm icon 16px, giá trị đẩy phải
-                  (`ml-auto`) và cắt đúng một dòng. Trường nào
-                  adapter chưa có dữ kiện thì KHÔNG dựng hàng
-                  (issue #608 — thay luật hiện dấu "—" trước
-                  đây); dữ kiện vẫn đi qua lớp adapter như
-                  cũ, không bịa giá trị. Ba trường liên lạc
-                  (email/điện thoại/website) dựng giá trị thành
-                  LIÊN KẾT thật — mailto:, tel: (bỏ khoảng
-                  trắng) và mở tab mới — đúng hành vi neo của
-                  bản demo (giai đoạn 2 của vòng sửa PR #610,
-                  mục T-17); các trường còn lại giữ chữ thường.
-                */}
                 <dl className="space-y-2 text-sm">
                   {([
                     ['profileEmail', partnerProfile.email, Mail],
@@ -2035,16 +1390,6 @@ export function ChatPanel({
                     </div>
                   ))}
                 </dl>
-                {/*
-                  Khối tệp đã chia sẻ (điểm G9): đúng hành vi
-                  của bản demo — khối CHỈ hiện khi hội thoại
-                  có tệp đã chia sẻ, mỗi tệp là thẻ tệp theo
-                  khuôn demo (điểm E19, component FileCard).
-                  Nguồn dữ kiện qua adapter hiện luôn rỗng vì
-                  đính kèm chưa có phán quyết chức năng, nên
-                  khối không hiện ở trạng thái hiện tại; đợt
-                  backend chỉ thay nguồn của adapter.
-                */}
                 {sharedFiles.length > 0 ? (
                   <div className="space-y-2">
                     <h4 className="text-sm font-medium">{t('sharedFilesTitle')}</h4>
@@ -2058,15 +1403,6 @@ export function ChatPanel({
                   </div>
                 ) : null}
               </div>
-              {/*
-                Nút Xoá ở ĐÁY panel theo đúng vị trí demo
-                (issue #608): nút destructive bề ngang đầy
-                đủ, icon thùng rác 16px, bị đẩy xuống đáy
-                bằng `mt-auto`. Chức năng xoá cuộc trò
-                chuyện chưa có đường dữ kiện phía client
-                nên chỉ dựng hình dạng ở trạng thái vô hiệu
-                như trước.
-              */}
               <div className="mt-auto px-4 pb-4 pt-2">
                 <Button type="button" variant="destructive" className="w-full gap-2" disabled>
                   <Trash className="size-4" aria-hidden />

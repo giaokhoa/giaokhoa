@@ -1,9 +1,3 @@
-/**
- * Worker tiêu thụ job cleanup-orphan từ FilesService.
- * Job phải mang miền sở hữu; worker đối chiếu miền với ID sổ đăng ký,
- * đếm tham chiếu trong đúng database rồi xoá key của đúng miền.
- * Job thiếu/sai miền không bao giờ được suy đoán hay xoá byte.
- */
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -17,14 +11,12 @@ import {
 import { tenantAls } from '../db/tenant-als';
 import { SpaceDatabaseService } from '../db/routing/space-database.service';
 
-/** Payload có miền bắt buộc, slug là định danh định tuyến cho database của miền. */
 export interface FileCleanupJobData {
   contentHash: string;
   storageDomain: string;
   spaceSlug?: string;
 }
 
-/** Kết quả được ghi kèm miền để đối chiếu và kiểm toán. */
 export interface FileCleanupResult {
   contentHash: string;
   storageDomain: string;
@@ -32,7 +24,6 @@ export interface FileCleanupResult {
   refcount: number;
 }
 
-/** Dọn byte theo miền sở hữu sau khi kiểm tra lại tham chiếu thật. */
 @Processor('file-cleanup')
 export class FileCleanupProcessor extends WorkerHost {
   private readonly logger = new Logger(FileCleanupProcessor.name);
@@ -43,10 +34,6 @@ export class FileCleanupProcessor extends WorkerHost {
     private readonly config: ConfigService,
   ) { super(); }
 
-  /**
-   * Chặn job thiếu miền, miền sai hoặc không khớp sổ trước khi mở kho
-   * dữ liệu hay xoá vật lý. Không chấp nhận miền legacy vì không di trú file cũ.
-   */
   async process(job: Job<FileCleanupJobData>): Promise<FileCleanupResult> {
     const data = job.data;
     if (!data || typeof data.storageDomain !== 'string' || typeof data.contentHash !== 'string') {
@@ -61,7 +48,6 @@ export class FileCleanupProcessor extends WorkerHost {
     }
     if (!slug || typeof slug !== 'string') throw new Error('file.cleanup_space_required');
 
-    // Định danh sổ đăng ký là nguồn sự thật của miền, không tin giá trị trong job.
     const target = await this.spaceDb.resolveTarget(slug);
     if (fileDomainForSpace(target.spaceId) !== data.storageDomain) {
       throw new Error('file.cleanup_domain_mismatch');
@@ -71,7 +57,6 @@ export class FileCleanupProcessor extends WorkerHost {
     );
   }
 
-  /** Kiểm tham chiếu trong đúng handle của kho đích ngay trước khi xoá byte. */
   private async processInContext(data: FileCleanupJobData): Promise<FileCleanupResult> {
     const { contentHash, storageDomain } = data;
     const row = await this.spaceDb.routedKysely.selectFrom('files')
@@ -89,10 +74,6 @@ export class FileCleanupProcessor extends WorkerHost {
     return { contentHash, storageDomain, removed: true, refcount: 0 };
   }
 
-  /**
-   * Driver trùng cấu hình API: local xoá đường dẫn đã kiểm định; S3 gửi
-   * DeleteObject tới cùng bucket/key; lỗi truyền ra để BullMQ retry.
-   */
   private async removePhysicalObject(domain: string, hash: string): Promise<void> {
     const key = fileContentKey(domain, hash);
     const driver = this.config.get<string>('FILE_STORAGE_DRIVER') ?? 'local';
@@ -107,7 +88,6 @@ export class FileCleanupProcessor extends WorkerHost {
     await this.s3Client().send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
   }
 
-  /** Khởi tạo lười SDK với đúng endpoint và danh tính của API. */
   private s3Client(): S3Client {
     if (this.s3) return this.s3;
     const accessKeyId = this.config.get<string>('FILE_STORAGE_S3_ACCESS_KEY_ID');

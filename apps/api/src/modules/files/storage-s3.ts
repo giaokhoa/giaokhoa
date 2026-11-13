@@ -5,15 +5,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { contentKey, type ObjectStorage, type PresignedDownloadStorage } from './storage';
 import { assertFileStorageDomain } from '@giaokhoa/db';
 
-/**
- * Adapter vật lý tương thích S3 cho port ObjectStorage: cùng bố cục khoá theo miền và nội dung như adapter cục bộ
- * (`<2 chars>/<next 2 chars>/<sha256>`), để bucket có thể được kiểm tra và
- * đối soát với đúng cùng dạng như filedir cục bộ. Hoạt động với AWS S3 và các endpoint tương thích S3 (Cloudflare R2, Backblaze B2, MinIO) qua FILE_STORAGE_S3_ENDPOINT. Mọi cấu hình đều đến từ env duy nhất; constructor fail fast (nêu tên các biến còn thiếu, không bao giờ nêu giá trị của chúng) khi thiếu các thiết lập bắt buộc của driver.
- */
 @Injectable()
-/**
- * Kho lưu trữ nội dung file trên S3 / endpoint tương thích S3, khoá theo miền sở hữu và contentHash — cùng bố cục key với adapter local để hai kho đối chiếu được với nhau. Cấu hình (bucket/endpoint/khoá) chỉ đọc từ env; thiếu biến bắt buộc thì fail-fast khi khởi tạo.
- */
 export class S3ObjectStorage implements ObjectStorage, PresignedDownloadStorage {
   private readonly client: S3Client;
   private readonly bucket: string;
@@ -45,14 +37,8 @@ export class S3ObjectStorage implements ObjectStorage, PresignedDownloadStorage 
     }
   }
 
-  /**
-   * Suy key S3 từ contentHash — cùng bố cục với adapter local.
-   */
   keyFor(domain: string, contentHash: string): string { return contentKey(domain, contentHash); }
 
-  /**
-   * Kiểm key đã có nội dung chưa (HeadObject; 404 → false, lỗi khác ném ra).
-   */
   async exists(domain: string, contentHash: string): Promise<boolean> {
     try {
       await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: this.keyFor(domain, contentHash) }));
@@ -63,19 +49,12 @@ export class S3ObjectStorage implements ObjectStorage, PresignedDownloadStorage 
     }
   }
 
-  /**
-   * Ghi nội dung theo key; bỏ qua khi key đã tồn tại (dedup chỉ trong cùng miền và content hash —
-   * cùng hash là cùng nội dung, không bao giờ ghi đè).
-   */
   async put(domain: string, contentHash: string, data: Buffer): Promise<void> {
     assertFileStorageDomain(domain);
-    if (await this.exists(domain, contentHash)) return; // dedup: nội dung giống hệt đã được lưu vật lý một lần
+    if (await this.exists(domain, contentHash)) return;
     await this.client.send(new PutObjectCommand({ Bucket: this.bucket, Key: this.keyFor(domain, contentHash), Body: data }));
   }
 
-  /**
-   * Đọc nội dung theo key; key vắng thì lỗi của S3 (NoSuchKey/404) truyền thẳng ra như ENOENT ở local.
-   */
   async get(domain: string, contentHash: string): Promise<Buffer> {
     const res = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: this.keyFor(domain, contentHash) }));
     if (!res.Body) throw new Error(`S3 object body missing for key ${this.keyFor(domain, contentHash)}`);
@@ -84,18 +63,11 @@ export class S3ObjectStorage implements ObjectStorage, PresignedDownloadStorage 
     return Buffer.concat(chunks);
   }
 
-  /**
-   * Xoá nội dung theo key (DeleteObject vốn idempotent ở S3).
-   */
   async delete(domain: string, contentHash: string): Promise<void> {
     assertFileStorageDomain(domain);
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: this.keyFor(domain, contentHash) }));
   }
 
-  /**
-   * Phát URL tải presigned trỏ thẳng tới S3, kèm tên file/loại nội dung khi tải về
-   * để hành vi tải xuống ngang với đường local (attachment + đúng mime).
-   */
   async presignGetUrl(domain: string, contentHash: string, expiresInSeconds: number, opts?: { fileName?: string; mimeType?: string }): Promise<string> {
     const command = new GetObjectCommand({
       Bucket: this.bucket,
@@ -107,9 +79,6 @@ export class S3ObjectStorage implements ObjectStorage, PresignedDownloadStorage 
   }
 }
 
-/**
- * Lỗi "không có object" của S3 (HeadObject trả 404 tên NotFound; GetObject trả NoSuchKey).
- */
 function isS3NotFound(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) return false;
   const e = err as { name?: string; $metadata?: { httpStatusCode?: number } };

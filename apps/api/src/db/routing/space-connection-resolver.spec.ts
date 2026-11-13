@@ -6,9 +6,6 @@ import {
   type SpaceRegistryEntry,
 } from './space-connection-resolver';
 
-/**
- * Ca đơn vị của bộ phân giải đích kết nối (issue #581): đường đọc sổ được thay bằng hàm giả đếm lượt đọc, đồng hồ được điều khiển bằng tay — các ca khoá đúng ba luật của bộ phân giải: quyết định đích theo chế độ kho trong sổ, kiểm chứng role/bí mật fail-closed cho kho riêng, và đệm có TTL + vô hiệu hoá theo sự kiện đổi sổ.
- */
 
 const DEDICATED_ENTRY: SpaceRegistryEntry = {
   id: 'id-dang-ky-a',
@@ -32,7 +29,6 @@ const SHARED_ENTRY: SpaceRegistryEntry = {
   schemaVersion: 'v1',
 };
 
-/** Dựng bộ phân giải với đường đọc giả trên một sổ cho trước và đồng hồ điều khiển được. */
 function makeResolver(entries: Record<string, SpaceRegistryEntry>, cacheTtlMs = 1_000) {
   let reads = 0;
   let now = 1_000_000;
@@ -84,7 +80,6 @@ describe('Bộ phân giải đích kết nối theo trung tâm', () => {
     const { resolver } = makeResolver({ 'trung-tam-a': DEDICATED_ENTRY });
     const target = await resolver.resolve('trung-tam-a');
     expect(target.mode).toBe('dedicated');
-    // Chuỗi bí mật gốc trỏ /postgres (database mặc định của role) — đích cuối phải là databaseName của sổ.
     expect(target.connectionString).toBe('postgres://centre_a_app:pw@db.internal:5432/giaokhoa_centre_a');
     expect(target.connectionRole).toBe('centre_a_app');
     expect(target.schemaVersion).toBe('v3');
@@ -123,7 +118,6 @@ describe('Bộ phân giải đích kết nối theo trung tâm', () => {
     await resolver.resolve('trung-tam-a');
     await resolver.resolve('trung-tam-a');
     expect(reads()).toBe(1);
-    // Qua TTL thì lần phân giải kế tiếp đọc lại sổ.
     advance(1_001);
     await resolver.resolve('trung-tam-a');
     expect(reads()).toBe(2);
@@ -136,7 +130,6 @@ describe('Bộ phân giải đích kết nối theo trung tâm', () => {
     await resolver.resolve('trung-tam-a');
     await resolver.resolve('trang-chinh');
     expect(reads()).toBe(2);
-    // Sổ đổi trạng thái của trung tâm A và phát sự kiện: phân giải lại A đọc sổ ngay (thấy trạng thái mới), trang-chinh vẫn đệm.
     entries['trung-tam-a'] = { ...DEDICATED_ENTRY, status: 'suspended' };
     emitSpaceRegistryChanged('trung-tam-a');
     const resolved = await resolver.resolve('trung-tam-a');
@@ -148,7 +141,6 @@ describe('Bộ phân giải đích kết nối theo trung tâm', () => {
   });
 
   it('sự kiện vô hiệu hoá tới trong lúc lần đọc sổ còn đang chờ thì kết quả cũ không được đệm: lần phân giải kế tiếp đọc lại sổ và trả đích mới', async () => {
-    // Hình đua đã phân xử ở vòng chấm lại của PR #594: lần đọc sổ bắt đầu TRƯỚC khi thay đổi được commit nên nó trả ảnh chụp cũ; nếu kết quả đó vẫn bị đệm lại, đích cũ sống tiếp sau sự kiện vô hiệu hoá cho tới hết TTL. Ca này giữ lần đọc đầu treo bằng một promise điều khiển bằng tay, phát sự kiện qua đúng kênh thật trong lúc đọc còn chờ, rồi mới thả lần đọc với dòng trước thay đổi.
     const slug = 'trung-tam-a';
     let currentEntry: SpaceRegistryEntry = { ...DEDICATED_ENTRY };
     let reads = 0;
@@ -168,13 +160,10 @@ describe('Bộ phân giải đích kết nối theo trung tâm', () => {
         ref === 'env:CENTRE_A_URL' ? 'postgres://centre_a_app:pw@db.internal:5432/postgres' : undefined,
     });
     const firstResolve = resolver.resolve(slug);
-    // Sổ đổi trạng thái và sự kiện vô hiệu hoá tới trong lúc lần đọc đầu còn đang chờ.
     currentEntry = { ...DEDICATED_ENTRY, status: 'suspended' };
     emitSpaceRegistryChanged(slug);
-    // Lần đọc treo trả dòng TRƯỚC thay đổi (ảnh chụp cũ).
     releaseFirstRead!({ ...DEDICATED_ENTRY });
     await firstResolve;
-    // Lần phân giải kế tiếp phải đọc lại sổ (lượt đọc tăng lên 2) và thấy đích sau thay đổi, không phục vụ kết quả cũ từ đệm.
     const second = await resolver.resolve(slug);
     expect(second.status).toBe('suspended');
     expect(reads).toBe(2);

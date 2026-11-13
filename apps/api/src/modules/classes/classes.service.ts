@@ -47,9 +47,7 @@ import { CLASS_WHOLE_GROUP_NAME, ClassesRepository, type ClassJoinRequestRow, ty
 
 export type { ClassRow };
 
-/** Vai của chủ lớp tại context lớp (vai hệ thống sẵn có — hồ sơ mục 2.2). */
 export const CLASS_OWNER_ROLE = 'editingteacher';
-/** Ba vai hệ thống gán tại context lớp cho đồng GV — tương ứng đúng 3 quyền kiểu Azota (hồ sơ mục 2.2). */
 export const CLASS_ASSIGNER_ROLE = 'classassigner';
 export const CLASS_GRADER_ROLE = 'classgrader';
 export const CLASS_ROSTER_MANAGER_ROLE = 'classrostermanager';
@@ -60,9 +58,6 @@ const CLASS_ROLE_DEFS = [
   { shortName: CLASS_ROSTER_MANAGER_ROLE, name: 'Class roster manager', description: 'Đồng GV được quản lý danh sách học sinh của lớp (quyền 3 kiểu Azota).' },
 ] as const;
 
-/**
- * Bộ capability vật chất hoá tại context lớp cho từng vai khi lớp được tạo (khuôn qbankmember/qbanklead của ngân hàng): override chỉ tồn tại ở ĐÚNG context lớp đó, và chỉ ai được gán vai tại context lớp mới hưởng — quyền trên lớp không tự chảy sang lớp khác. `cohort:manage` đi kèm quyền quản roster vì roster THỰC CHẤT là cohort_members của backing cohort và đường ghi đi qua GroupsService.
- */
 const CLASS_ROLE_GRANTS: Record<string, string[]> = {
   [CLASS_OWNER_ROLE]: [
     'class:view', 'class:update', 'class:delete', 'class:manageroster', 'class:assignwork', 'class:grade', 'class:share',
@@ -77,7 +72,6 @@ const CLASS_ROLE_GRANTS: Record<string, string[]> = {
   [CLASS_ROSTER_MANAGER_ROLE]: ['class:view', 'class:manageroster', 'cohort:manage', 'cohort:view'],
 };
 
-/** Bảng chữ mã tham gia tự báo danh: bỏ ký tự dễ nhầm (0/O, 1/I/L). */
 const JOIN_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
 function generateJoinCode(): string {
@@ -85,7 +79,6 @@ function generateJoinCode(): string {
   return Array.from(bytes, (b) => JOIN_CODE_ALPHABET[b % JOIN_CODE_ALPHABET.length]).join('');
 }
 
-/** Hình dạng lớp ở bề mặt API; `joinCode` chỉ lộ cho người có quyền quản roster (bí mật như enrolment_key). Học phí (`fee*`, CLASS-3) là thông tin gói công khai của lớp nên đi kèm mọi hình dạng lớp. */
 export function toClassDto(row: ClassRow, canSeeJoinCode: boolean): ClassView {
   return {
     id: row.id,
@@ -109,9 +102,6 @@ export function toClassDto(row: ClassRow, canSeeJoinCode: boolean): ClassView {
   };
 }
 
-/**
- * Đích thu học phí của một lớp (CLASS-3) — gói dữ kiện PaymentsService cần để tạo payment `class_fee`: tenant sở hữu lớp (căn cứ chọn tài khoản nhận + cổng tenant của payment), số tiền và đơn vị tiền của gói. Trả về từ `resolveClassFeePurchase` sau khi đã qua mọi cổng phía lớp.
- */
 export interface ClassFeeTarget {
   classId: string;
   tenantId: string;
@@ -121,17 +111,6 @@ export interface ClassFeeTarget {
 }
 
 @Injectable()
-/**
- * Nghiệp vụ lớp học hạng nhất (issue #184, CLASS-0).
- *
- * Bất biến của lát nền:
- *  - Lớp sở hữu đúng một backing cohort; roster của lớp ≡ cohort_members
- *    của cohort đó — KHÔNG có bảng thành viên thứ hai. Mọi thay đổi roster đi qua GroupsService.addCohortMember/removeCohortMember để dùng chung một đường phát sự kiện (in-process + outbox) cho cohort sync vật chất hoá xuống từng khoá.
- *  - Context lớp (CLASS=45) là cha của context các khoá trong lớp; quyền
- *    tại lớp chảy xuống khoá qua cây path của PermissionEvaluator.
- *  - Khoá tạo trong lớp tự có group "cả lớp" + enrol instance cohort
- *    (qua móc CourseClassHook đăng ký vào CoursesService).
- */
 export class ClassesService implements OnModuleInit {
   constructor(
     private readonly repo: ClassesRepository,
@@ -148,7 +127,6 @@ export class ClassesService implements OnModuleInit {
     private readonly groupsRepo: GroupsRepository,
   ) {}
 
-  /** Đăng ký neo lớp vào đường tạo khoá của CoursesService (dependency inversion — Courses không import Classes). */
   onModuleInit(): void {
     this.courses.registerClassHook({
       resolveClass: (classId, tenantId) => this.resolveClass(classId, tenantId),
@@ -156,21 +134,17 @@ export class ClassesService implements OnModuleInit {
     });
   }
 
-  // --- helpers ---------------------------------------------------------------
 
-  /** Tenant hiệu lực: ngữ cảnh request; ngoài request (seed/job) rơi về tenant-zero — cùng khuôn CoursesService. */
   private async effectiveTenantId(): Promise<string> {
     return this.tenantContext.currentTenantId() ?? (await this.tenants.fallbackTenantId());
   }
 
-  /** Context lớp; ném class.context_missing khi cây chưa dựng (trạng thái hỏng — lớp luôn tạo kèm context). */
   private async classContextId(classId: string): Promise<string> {
     const ctx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.CLASS, classId);
     if (!ctx) throw new NotFoundException({ message: `No context for class ${classId}`, code: 'class.context_missing' });
     return ctx.id;
   }
 
-  /** Lớp theo id trong phạm vi tenant hiệu lực; lớp của tenant khác = không tồn tại (404 đồng nhất như TENANT-0). */
   async getClassRow(id: string): Promise<ClassRow> {
     const row = await this.repo.getClass(id);
     const tenantId = await this.effectiveTenantId();
@@ -180,14 +154,12 @@ export class ClassesService implements OnModuleInit {
     return row;
   }
 
-  /** Người xem thấy được mã tham gia khi có quyền quản roster của lớp (hoặc là chủ lớp / quản trị tenant). `knownCtxId` cho phép nơi gọi đã tra context lớp rồi dùng lại, tránh tra trùng. */
   private async canSeeJoinCode(actorId: string, row: ClassRow, knownCtxId?: string): Promise<boolean> {
     if (actorId === row.ownerId) return true;
     const ctxId = knownCtxId ?? (await this.classContextId(row.id));
     return this.evaluator.hasCapability(actorId, 'class:manageroster', ctxId);
   }
 
-  /** Quyền xem lớp: capability `class:view` tại context lớp, HOẶC là thành viên roster (học sinh xem lớp của mình), HOẶC chủ lớp. */
   private async canViewClass(actorId: string, row: ClassRow): Promise<boolean> {
     if (actorId === row.ownerId) return true;
     const ctxId = await this.classContextId(row.id);
@@ -195,19 +167,6 @@ export class ClassesService implements OnModuleInit {
     return this.groups.isCohortMember(row.cohortId, actorId);
   }
 
-  /**
-   * Lọc các lớp người xem thấy được khi KHÔNG ở chế độ thấy toàn bộ,
-   * giữ đúng cổng của `canViewClass` cho từng lớp (chủ lớp → capability
-   * `class:view` → thành viên roster) nhưng đánh giá capability THEO
-   * LÔ cho cả tập lớp: context của mọi lớp không do người xem sở hữu
-   * được phân giải trong MỘT lượt `resolveCapabilitiesForContexts`
-   * thay cho một lượt `hasCapability` cho từng lớp. Phép phân giải
-   * theo lô tương đương theo từng cặp với `hasCapability` (bất biến
-   * đã chốt trong đặc tả của PermissionEvaluator) nên tập lớp thấy
-   * được không đổi; thứ tự đáp ứng giữ nguyên thứ tự của `rows`. Lớp
-   * thiếu context vẫn ném `class.context_missing` như đường cũ (qua
-   * cùng thông điệp và mã lỗi của `classContextId`).
-   */
   private async filterVisibleClasses(actorId: string, rows: ClassRow[]): Promise<ClassRow[]> {
     const evaluated: { row: ClassRow; ctx: ContextRow }[] = [];
     for (const row of rows) {
@@ -239,29 +198,7 @@ export class ClassesService implements OnModuleInit {
     return visible;
   }
 
-  // --- vòng đời lớp ------------------------------------------------------------
 
-  /**
-   * Tạo lớp: backing cohort + context lớp + bộ override quyền cho 4 vai
-   * tại context lớp + gán vai chủ lớp (editingteacher) cho owner. Chỉ
-   * `name` bắt buộc. `ownerId` khác người tạo chỉ khi người tạo có
-   * `tenant:manage` (admin tạo lớp hộ giáo viên — đường review-seed dùng).
-   *
-   * Nguyên tử (issue #490, DL-09): toàn bộ chuỗi GHI sở hữu bởi lớp —
-   * cohort nền, dòng lớp, context lớp, nối context cho cohort, bộ
-   * override quyền, gán vai chủ lớp và dòng outbox `class_created` —
-   * chạy trong MỘT transaction: lỗi ở bất kỳ bước nào thì không trạng
-   * thái dở dang nào tồn tại (trước đây một lần tạo lớp chết giữa
-   * chừng để lại cohort/lớp/context mồ côi). Các cổng đọc/điều kiện
-   * đứng trước (capability, tồn tại owner, trùng mã lớp, membership
-   * hiệu lực) nằm ngoài transaction như cũ. Việc đảm bảo sẵn các VAI
-   * HỆ THỐNG dùng chung (`ensureClassRoles`) chạy TRƯỚC khi
-   * transaction mở: vai là dữ kiện toàn cục không thuộc lớp này và
-   * hàm đảm bảo chỉ tra-rồi-chèn theo shortname (idempotent, không
-   * có cơ chế bắt lỗi đua nhau — cơ chế `.catch` đọc lại khi đua
-   * nhau chỉ có ở `ensureBankRoles` của bank câu hỏi), nên lỗi tại
-   * đây huỷ luồng trước khi bất kỳ trạng thái lớp nào được ghi.
-   */
   async createClass(actorId: string, input: CreateClass): Promise<ClassView> {
     const tenantId = await this.effectiveTenantId();
     const tenantCtx = await this.contexts.ensureTenantContext(tenantId);
@@ -274,22 +211,9 @@ export class ClassesService implements OnModuleInit {
     if (input.code && (await this.repo.getClassByCode(tenantId, input.code))) {
       throw new ConflictException({ message: `Class code ${input.code} is taken in this tenant`, code: 'class.code_taken' });
     }
-    // Chủ lớp phải là thành viên hiệu lực của tenant — nếu không, cổng
-    // membership của evaluator sẽ vô hiệu mọi vai tại lớp vừa gán.
     await this.tenants.ensureActiveMembership(tenantId, ownerId);
-    // Đảm bảo các vai hệ thống của lớp tồn tại TRƯỚC khi mở
-    // transaction: vai là dữ kiện toàn cục dùng chung (không thuộc
-    // lớp đang tạo), và transaction tạo lớp không bị giữ mở trong
-    // lúc thực hiện các thao tác này bằng kết nối thường.
     await this.ensureClassRoles();
 
-    // Điểm nối C-8/B đã được hấp thụ ở đợt access (#651):
-    // `roles.assignRole` nay có biến thể Kysely kèm toàn bộ side
-    // effect nên giao dịch tạo lớp mở phía Kysely qua
-    // `ClassesRepository.transaction` — cohort nền qua
-    // GroupsRepository, dòng lớp qua ClassesRepository, nối
-    // context cho cohort qua GroupsRepository — và outbox qua
-    // `enqueueKysely` trong cùng transaction.
     const row = await this.repo.transaction(async (tx) => {
       const cohortRow = await this.groupsRepo.insertCohort({
         tenantId,
@@ -329,7 +253,6 @@ export class ClassesService implements OnModuleInit {
     return toClassDto(row, true);
   }
 
-  /** Ba vai lớp là vai hệ thống: tạo lười lần đầu (idempotent theo shortname), archetype `teacher`. */
   private async ensureClassRoles(): Promise<void> {
     for (const def of CLASS_ROLE_DEFS) {
       if (!(await this.roles.getRoleByShortname(def.shortName))) {
@@ -338,7 +261,6 @@ export class ClassesService implements OnModuleInit {
     }
   }
 
-  /** Vật chất hoá bộ capability của 4 vai tại đúng context lớp này (gọi lúc tạo lớp, bên trong transaction của `createClass`). Hàm này KHÔNG tự đảm bảo vai: bên gọi phải đã chạy `ensureClassRoles` trước khi mở transaction — vai là dữ kiện toàn cục dùng chung, xem ghi chú ở `createClass`. */
   private async applyClassRoleGrants(classContextId: string, modifierId: string, tx?: CentreTx): Promise<void> {
     for (const [shortName, caps] of Object.entries(CLASS_ROLE_GRANTS)) {
       const role = await this.roles.getRoleByShortname(shortName);
@@ -349,20 +271,6 @@ export class ClassesService implements OnModuleInit {
     }
   }
 
-  /**
-   * Danh sách lớp của tenant hiệu lực mà người xem có liên hệ (chủ lớp / có vai tại lớp / thành viên roster); quản trị tenant thấy toàn bộ.
-   *
-   * Mỗi dòng kèm bốn cờ khả năng do server suy cho ĐÚNG người gọi để
-   * trang danh sách vẽ hành động theo vai (học viên không thấy các
-   * hành động quản trị mình không có quyền): khả năng tạo lớp neo tại
-   * context tenant (`class:create`, tính một lần cho cả đáp số); ba
-   * cờ còn lại neo tại context của TỪNG lớp — chủ lớp luôn có đủ,
-   * các vai khác suy qua evaluator như gói tổng quan suy
-   * `canManageRoster`/`canShare`. Cờ xoá phản ánh trọn cổng xoá hiện
-   * hành: `class:delete` tại context lớp và, khi người gọi không
-   * phải chủ lớp, thêm `tenant:manage` tại context tenant. Các cờ
-   * chỉ phục vụ hiển thị — gác quyền thật vẫn ở từng endpoint ghi.
-   */
   async listClasses(actorId: string): Promise<ClassListItem[]> {
     const tenantId = await this.effectiveTenantId();
     const rows = await this.repo.listClassesByTenant(tenantId);
@@ -388,7 +296,6 @@ export class ClassesService implements OnModuleInit {
     }));
   }
 
-  /** Chi tiết một lớp (cổng xem như canViewClass). */
   async getClass(actorId: string, id: string): Promise<ClassView> {
     const row = await this.getClassRow(id);
     if (!(await this.canViewClass(actorId, row))) {
@@ -397,38 +304,6 @@ export class ClassesService implements OnModuleInit {
     return toClassDto(row, await this.canSeeJoinCode(actorId, row));
   }
 
-  /**
-   * Dashboard theo lớp (CLASS-2): gói tổng quan MỘT lớp cho đúng vai
-   * của người gọi — dữ kiện các endpoint hiện có không cho biết quan hệ
-   * của người gọi với lớp, và danh sách khoá của lớp trả mọi khoá trong
-   * khi học sinh chỉ được thấy khoá mình đang học, nên gói này suy cả
-   * hai ở phía server.
-   *
-   * Flow:
-   *  1. Cổng xem lớp như mọi đường đọc của lớp (canViewClass): người
-   *     ngoài lớp nhận 404 đồng nhất, không lộ sự tồn tại của lớp.
-   *  2. Suy quan hệ của người gọi từ dữ kiện thật: chủ lớp → `owner`;
-   *     giữ ít nhất một trong 3 vai lớp gán tay tại context lớp (cùng
-   *     cách liệt kê của listStaff) hoặc có cờ quản roster/phân vai →
-   *     `staff`; thuộc roster → `member`; còn lại là người xem được lớp
-   *     nhờ quyền quản trị cấp trên (site admin / tenant:manage) →
-   *     `staff` ở mức xem, các thao tác quản trị vẫn gác riêng bằng
-   *     `canManageRoster`/`canShare` đi kèm trong gói.
-   *  3. Danh sách khoá lọc theo vai: owner/staff nhận mọi khoá của
-   *     lớp; member chỉ nhận các khoá mình đang ghi danh ACTIVE —
-   *     đình chỉ ở một khoá thì khoá đó biến mất khỏi gói.
-   *
-   * Bất biến: gói KHÔNG mang bất kỳ dữ kiện điểm nào — dashboard là
-   * bề mặt tổng quan/điều hướng; mô hình điểm (chốt 23:49 25/10/2026)
-   * chỉ có điểm theo từng bài, cấm tổng hợp theo lớp/khoá.
-   *
-   * @param actorId - Người gọi đã xác thực.
-   * @param id - Id của lớp.
-   * @returns Gói tổng quan khớp `classOverviewSchema` phía contracts
-   *   (danh sách khoá là bản ghi khoá thô như endpoint khoá của lớp).
-   * @throws NotFoundException `class.not_found` khi lớp không thuộc
-   *   tenant hiệu lực hoặc người gọi không có quan hệ với lớp.
-   */
   async getClassOverview(actorId: string, id: string): Promise<Omit<ClassOverview, 'courses'> & { courses: CourseRow[] }> {
     const row = await this.getClassRow(id);
     if (!(await this.canViewClass(actorId, row))) {
@@ -439,9 +314,6 @@ export class ClassesService implements OnModuleInit {
     const canManageRoster = isOwner || (await this.evaluator.hasCapability(actorId, 'class:manageroster', ctxId));
     const canShare = isOwner || (await this.evaluator.hasCapability(actorId, 'class:share', ctxId));
 
-    // Đồng GV = được gán TAY (component rỗng) ít nhất một trong 3 vai
-    // lớp tại đúng context lớp này — cùng khuôn liệt kê của listStaff;
-    // các dòng gán do ghi danh cấp không phải vai lớp nên không lẫn vào.
     const staffRoleIds = new Set<string>();
     for (const shortName of [CLASS_ASSIGNER_ROLE, CLASS_GRADER_ROLE, CLASS_ROSTER_MANAGER_ROLE]) {
       const role = await this.roles.getRoleByShortname(shortName);
@@ -477,7 +349,6 @@ export class ClassesService implements OnModuleInit {
     };
   }
 
-  /** Sửa lớp; đổi `onLeave` thì đẩy xuống mọi instance cohort hiện có của lớp; xoay mã tham gia làm mã cũ mất hiệu lực ngay. Đặt/đổi học phí gói lớp (CLASS-3) cũng qua đường này — cùng cổng `class:update` tại context lớp. */
   async updateClass(actorId: string, id: string, input: UpdateClass): Promise<ClassView> {
     const row = await this.getClassRow(id);
     const ctxId = await this.classContextId(id);
@@ -498,9 +369,6 @@ export class ClassesService implements OnModuleInit {
     if (input.onLeave !== undefined) patch.onLeave = input.onLeave;
     if (input.allowSelfReport !== undefined) patch.allowSelfReport = input.allowSelfReport;
     if (input.joinAutoApprove !== undefined) patch.joinAutoApprove = input.joinAutoApprove;
-    // CLASS-3: đặt/đổi học phí gói lớp đi qua đúng PATCH này (gác
-    // `class:update` ở trên — chủ lớp giữ sẵn qua vai editingteacher).
-    // feeCurrency chuẩn hoá chữ hoa như mọi mã tiền tệ của payments.
     if (input.feeCost !== undefined) patch.feeCost = input.feeCost;
     if (input.feeCurrency !== undefined) patch.feeCurrency = input.feeCurrency.toUpperCase();
     if (input.feePaymentAccountId !== undefined) patch.feePaymentAccountId = input.feePaymentAccountId;
@@ -508,8 +376,6 @@ export class ClassesService implements OnModuleInit {
       patch.joinCode = generateJoinCode();
     }
     if (patch.joinCode) {
-      // Mã tham gia chỉ có nghĩa trong kho của địa chỉ hiện tại;
-      // không đăng ký hay tra cứu mã lớp ở control plane.
       const taken = await this.repo.getClassByJoinCode(patch.joinCode);
       if (taken && taken.id !== id) {
         throw new ConflictException({ message: 'Class join code already exists in this store', code: 'class.join_code_taken' });
@@ -523,7 +389,6 @@ export class ClassesService implements OnModuleInit {
     return toClassDto(updated, await this.canSeeJoinCode(actorId, updated));
   }
 
-  /** Lưu trữ lớp (cuối năm): đóng băng ghi danh mới + tạo khoá mới, giữ nguyên dữ liệu để đọc lại. */
   async archiveClass(actorId: string, id: string): Promise<ClassView> {
     const row = await this.getClassRow(id);
     const ctxId = await this.classContextId(id);
@@ -540,11 +405,6 @@ export class ClassesService implements OnModuleInit {
     return toClassDto(updated, await this.canSeeJoinCode(actorId, updated));
   }
 
-  /**
-   * Xoá lớp: chỉ chủ lớp (hoặc quản trị tenant kèm `class:delete`) và chỉ
-   * khi lớp không còn khoá nào — FK RESTRICT là lưới cuối, kiểm trước ở
-   * đây để trả lỗi nghiệp vụ rõ ràng. Xoá kèm backing cohort + context.
-   */
   async deleteClass(actorId: string, id: string): Promise<void> {
     const row = await this.getClassRow(id);
     const ctxId = await this.classContextId(id);
@@ -566,21 +426,7 @@ export class ClassesService implements OnModuleInit {
     });
   }
 
-  // --- roster (≡ cohort_members của backing cohort) ---------------------------
 
-  /**
-   * Danh sách học sinh của lớp kèm thông tin hiển thị của tài khoản (cổng xem lớp).
-   *
-   * Thu hẹp trường liên hệ theo quyền của người gọi: email là dữ
-   * kiện phía quản trị/người được giao quyền, không phải dữ kiện bạn
-   * học được xem; `username` của tài khoản tạo qua đường nạp roster
-   * chính là số điện thoại nên cũng thuộc diện liên hệ. Người gọi có
-   * quyền quản roster của lớp này (chủ lớp hoặc `class:manageroster`
-   * tại context lớp) nhận đáp số đầy đủ; mọi người xem được lớp còn
-   * lại nhận các dòng đã làm rỗng `email` và `username`, giữ nguyên
-   * họ tên và thời điểm vào lớp để các hiển thị lớp học thông thường
-   * (danh sách bạn học theo tên) vẫn dùng được.
-   */
   async listRoster(actorId: string, classId: string): Promise<ClassRosterMember[]> {
     const row = await this.getClassRow(classId);
     if (!(await this.canViewClass(actorId, row))) {
@@ -603,11 +449,6 @@ export class ClassesService implements OnModuleInit {
     });
   }
 
-  /**
-   * Thêm học sinh vào lớp = thêm vào backing cohort qua GroupsService —
-   * cohort sync (in-process + consumer outbox) vật chất hoá ghi danh
-   * xuống mọi khoá của lớp. Lớp đã lưu trữ thì đóng băng roster.
-   */
   async addToRoster(actorId: string, classId: string, userId: string): Promise<void> {
     const row = await this.getClassRow(classId);
     if (row.status === 'archived') {
@@ -620,7 +461,6 @@ export class ClassesService implements OnModuleInit {
     await this.groups.addCohortMember(actorId, row.cohortId, userId);
   }
 
-  /** Gỡ học sinh khỏi lớp: cohort sync đình chỉ/rút ghi danh ở mọi khoá theo `on_leave` của lớp. */
   async removeFromRoster(actorId: string, classId: string, userId: string): Promise<void> {
     const row = await this.getClassRow(classId);
     if (row.status === 'archived') {
@@ -631,7 +471,6 @@ export class ClassesService implements OnModuleInit {
     await this.groups.removeCohortMember(actorId, row.cohortId, userId);
   }
 
-  /** Mọi khoá thuộc lớp (cổng xem lớp). */
   async listClassCourses(actorId: string, classId: string): Promise<CourseRow[]> {
     const row = await this.getClassRow(classId);
     if (!(await this.canViewClass(actorId, row))) {
@@ -640,9 +479,7 @@ export class ClassesService implements OnModuleInit {
     return this.repo.listCoursesInClass(classId);
   }
 
-  // --- nạp roster theo định danh + import Excel (CLASS-1) ----------------------
 
-  /** Cổng quản roster dùng chung cho các đường nạp: lớp chưa lưu trữ + capability `class:manageroster` tại context lớp. */
   private async requireRosterManager(actorId: string, row: ClassRow): Promise<void> {
     if (row.status === 'archived') {
       throw new BadRequestException({ message: 'Class is archived; roster is frozen', code: 'class.archived' });
@@ -651,20 +488,17 @@ export class ClassesService implements OnModuleInit {
     await this.evaluator.requireCapability(actorId, 'class:manageroster', ctxId);
   }
 
-  /** Họ tên hiển thị của một tài khoản: "Họ Tên" theo thứ tự VN, rơi về username khi trống. */
   private displayNameOf(user: UserRow): string {
     const full = `${user.lastName} ${user.firstName}`.trim();
     return full || user.username;
   }
 
-  /** Tách họ tên đầy đủ kiểu VN: từ CUỐI là tên, phần còn lại là họ + đệm. */
   private splitFullName(fullName: string): { firstName: string; lastName: string } {
     const tokens = fullName.trim().split(/\s+/).filter(Boolean);
     if (tokens.length === 0) return { firstName: '', lastName: '' };
     return { firstName: tokens[tokens.length - 1]!, lastName: tokens.slice(0, -1).join(' ') };
   }
 
-  /** Mật khẩu tạm cho tài khoản học sinh mới tạo qua roster: đủ 4 lớp ký tự theo chính sách mặc định, buộc đổi ở lần đăng nhập đầu (forcePasswordChange). */
   private generateTemporaryPassword(): string {
     const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
     const bytes = randomBytes(12);
@@ -672,7 +506,6 @@ export class ClassesService implements OnModuleInit {
     return `GiaoKhoa@9${core}`;
   }
 
-  /** Username chưa bị chiếm, bắt đầu từ `base`; trùng thì thêm hậu tố số tăng dần. */
   private async uniqueUsername(base: string): Promise<string> {
     const stem = base || 'hocvien';
     let candidate = stem;
@@ -684,15 +517,6 @@ export class ClassesService implements OnModuleInit {
     return candidate;
   }
 
-  /**
-   * Phân giải một định danh học sinh thành tài khoản: khớp theo EMAIL
-   * trước, rồi theo SĐT (= username); không khớp thì TẠO tài khoản mới
-   * (username = SĐT hoặc phần trước @ của email; chưa có email thì dùng
-   * hộp thư giữ chỗ `<username>@roster.local` — tài khoản đăng nhập bằng
-   * username, hộp thư này chỉ để thoả ràng buộc email duy nhất, đã ghi
-   * rõ ở hợp đồng contracts). Tài khoản mới mang mật khẩu tạm + cờ buộc
-   * đổi mật khẩu.
-   */
   private async resolveStudentAccount(input: RosterStudentIdentity): Promise<{ user: UserRow; created: boolean; temporaryPassword: string | null }> {
     const email = input.email?.trim().toLowerCase() || undefined;
     const phone = input.phone ? input.phone.replace(/[^0-9]/g, '') || undefined : undefined;
@@ -717,7 +541,6 @@ export class ClassesService implements OnModuleInit {
     return { user: created, created: true, temporaryPassword };
   }
 
-  /** Nạp một học sinh theo định danh vào lớp đã qua cổng quản roster; trả kết quả kèm mật khẩu tạm khi vừa tạo tài khoản. */
   private async addStudentByIdentity(row: ClassRow, actorId: string, input: RosterStudentIdentity): Promise<AddRosterStudentResult> {
     const { user, created, temporaryPassword } = await this.resolveStudentAccount(input);
     const already = await this.groups.isCohortMember(row.cohortId, user.id);
@@ -732,18 +555,12 @@ export class ClassesService implements OnModuleInit {
     };
   }
 
-  /** POST /classes/:id/roster/identity — GV thêm một học sinh bằng họ tên + email/SĐT thay vì phải biết userId. */
   async addRosterStudentByIdentity(actorId: string, classId: string, input: RosterStudentIdentity): Promise<AddRosterStudentResult> {
     const row = await this.getClassRow(classId);
     await this.requireRosterManager(actorId, row);
     return this.addStudentByIdentity(row, actorId, input);
   }
 
-  /**
-   * Import roster (nhiều dòng): mỗi dòng độc lập — dòng lỗi ghi vào báo
-   * cáo kèm mã lỗi, không chặn các dòng còn lại; GV sửa đúng dòng lỗi
-   * trong file rồi nạp lại riêng dòng đó.
-   */
   async importRoster(actorId: string, classId: string, rows: RosterStudentIdentity[]): Promise<ClassRosterImportReport> {
     const row = await this.getClassRow(classId);
     await this.requireRosterManager(actorId, row);
@@ -774,7 +591,6 @@ export class ClassesService implements OnModuleInit {
     return { total: rows.length, added, created, alreadyMembers, failed, results };
   }
 
-  /** Đọc một file Excel roster (sheet đầu tiên) thành các dòng định danh: tự nhận diện hàng tiêu đề theo từ khoá cột (Họ tên | SĐT | Email | Ngày sinh), thiếu tiêu đề thì đọc theo đúng thứ tự cột đó. */
   async parseRosterWorkbook(buffer: Buffer): Promise<RosterStudentIdentity[]> {
     const ExcelJS = await import('exceljs');
     const wb = new ExcelJS.Workbook();
@@ -834,7 +650,6 @@ export class ClassesService implements OnModuleInit {
     return out;
   }
 
-  /** File mẫu roster .xlsx cho GV tải về: đúng 4 cột kiểu Azota (Họ tên | Số điện thoại | Email | Ngày sinh) + một dòng ví dụ. */
   async buildRosterTemplateWorkbook(): Promise<{ filename: string; buffer: Buffer }> {
     const ExcelJS = await import('exceljs');
     const wb = new ExcelJS.Workbook();
@@ -847,14 +662,7 @@ export class ClassesService implements OnModuleInit {
     return { filename: 'mau-danh-sach-hoc-sinh.xlsx', buffer };
   }
 
-  // --- phân quyền đồng GV tại context lớp (CLASS-1) -----------------------------
 
-  /**
-   * Bề mặt phân quyền của lớp: chủ lớp + mọi đồng GV đang giữ một trong
-   * 3 vai lớp tại context lớp (gán tay — component rỗng; các dòng do ghi
-   * danh cấp không phải vai lớp nên không lẫn vào). Phân quyền vẫn là cơ
-   * chế vai/context sẵn có, KHÔNG có bảng quyền song song.
-   */
   async listStaff(actorId: string, classId: string): Promise<ClassStaffView> {
     const row = await this.getClassRow(classId);
     if (!(await this.canViewClass(actorId, row))) {
@@ -900,19 +708,10 @@ export class ClassesService implements OnModuleInit {
     return { staff, canShare, canManageRoster };
   }
 
-  /**
-   * Đặt lại bộ 3 vai lớp cho một đồng GV (chỉ người có `class:share`):
-   * gán vai còn thiếu, gỡ vai thừa — chỉ đụng các dòng gán TAY tại đúng
-   * context lớp này. Chủ lớp giữ vai editingteacher cố định, không sửa
-   * qua đường này.
-   */
   async setStaffRoles(actorId: string, classId: string, input: { userId?: string; email?: string; roles: ClassStaffRole[] }): Promise<ClassStaffView> {
     const row = await this.getClassRow(classId);
     const ctxId = await this.classContextId(classId);
     await this.evaluator.requireCapability(actorId, 'class:share', ctxId);
-    // Định danh đồng GV: userId hoặc email của tài khoản CÓ SẴN (đường
-    // phân quyền không tự tạo tài khoản — tạo tài khoản là việc của
-    // quản trị/roster, tránh cấp quyền cho một tài khoản vừa sinh nhầm).
     let targetId = input.userId;
     if (!targetId && input.email) {
       const byEmail = await this.users.getByEmail(input.email.trim().toLowerCase());
@@ -943,13 +742,9 @@ export class ClassesService implements OnModuleInit {
     return this.listStaff(actorId, classId);
   }
 
-  // --- tự báo danh bằng mã tham gia (CLASS-1) -----------------------------------
 
-  /** Phân giải mã lớp chỉ trong kho của Host hiện tại, không dò kho khác. */
   private async resolveClassByJoinCode(joinCode: string): Promise<ClassRow> {
     const code = joinCode.trim().toUpperCase();
-    // Giữ nguyên không gian của Host khi mở RLS để phân giải mã;
-    // không cho mã lớp ở kho khác dẫn đường đến hồ sơ người dùng.
     const row = await tenantAls.run({ ...tenantAls.getStore(), platform: true }, () =>
       this.repo.getClassByJoinCode(code),
     );
@@ -960,12 +755,10 @@ export class ClassesService implements OnModuleInit {
     return row;
   }
 
-  /** Tra lớp theo mã trong kho hiện tại, không tra control plane. */
   private async classByJoinCode(joinCode: string): Promise<ClassRow> {
     return this.resolveClassByJoinCode(joinCode);
   }
 
-  /** Xem trước lớp từ mã tham gia (học sinh xác nhận đúng lớp trước khi xin vào). */
   async previewJoin(joinCode: string): Promise<{ classId: string; name: string; schoolYear: string | null; ownerName: string }> {
     const row = await this.resolveClassByJoinCode(joinCode);
     const owner = await this.users.getByIdOrUndefined(row.ownerId);
@@ -977,10 +770,6 @@ export class ClassesService implements OnModuleInit {
     };
   }
 
-  /**
-   * Xin vào lớp qua mã trong kho của địa chỉ hiện tại. Cùng id
-   * ở một kho khác không tạo liên kết thành viên hoặc phiên.
-   */
   async joinByCode(actorId: string, joinCode: string): Promise<JoinClassResult> {
     const row = await this.resolveClassByJoinCode(joinCode);
     if (row.status === 'archived') {
@@ -1011,7 +800,6 @@ export class ClassesService implements OnModuleInit {
     return tenantAls.run({ ...tenantAls.getStore(), platform: true }, body);
   }
 
-  /** Hàng chờ duyệt tự báo danh của lớp (cổng quản roster). */
   async listJoinRequests(actorId: string, classId: string): Promise<ClassJoinRequestView[]> {
     await this.getClassRow(classId);
     const ctxId = await this.classContextId(classId);
@@ -1036,7 +824,6 @@ export class ClassesService implements OnModuleInit {
     };
   }
 
-  /** Duyệt (đưa vào roster qua đúng đường CLASS-0) hoặc từ chối (chỉ đóng yêu cầu) một yêu cầu tự báo danh. */
   async decideJoinRequest(actorId: string, classId: string, requestId: string, approve: boolean): Promise<ClassJoinRequestView> {
     await this.getClassRow(classId);
     const ctxId = await this.classContextId(classId);
@@ -1059,14 +846,7 @@ export class ClassesService implements OnModuleInit {
     return this.toJoinRequestView(updated, user);
   }
 
-  // --- thành viên đã đình chỉ (CLASS-1) ------------------------------------------
 
-  /**
-   * Danh sách học sinh đã đình chỉ khỏi lớp: đã gỡ khỏi roster theo chế
-   * độ `suspend` (ghi danh ở các khoá đang SUSPENDED, giữ dữ liệu) và
-   * chưa vào lại. Thêm lại vào roster (đường roster thường) là kích
-   * hoạt lại đúng các dòng ghi danh cũ.
-   */
   async listSuspendedMembers(actorId: string, classId: string): Promise<ClassSuspendedMember[]> {
     const row = await this.getClassRow(classId);
     if (!(await this.canViewClass(actorId, row))) {
@@ -1089,23 +869,7 @@ export class ClassesService implements OnModuleInit {
     });
   }
 
-  // --- học phí theo lớp (CLASS-3) ----------------------------------------------
 
-  /**
-   * Gói CÔNG KHAI của lớp cho người chưa ghi danh (bề mặt mua gói lớp):
-   * bất kỳ người dùng đã đăng nhập nào trong tenant hiệu lực cũng xem
-   * được — đây là trang bán gói của lớp, khác các đường đọc nội bộ vốn
-   * chỉ mở cho người có quan hệ với lớp. Gói chỉ mang thông tin người
-   * mua cần (tên lớp, chủ lớp, học phí) + hai cờ suy cho đúng người gọi
-   * (`isMember`, `canPurchase`); tuyệt đối không mang cohort, mã tham
-   * gia hay tài khoản nhận tiền.
-   *
-   * @param actorId - Người gọi đã xác thực.
-   * @param id - Id của lớp.
-   * @returns Gói khớp `classPublicViewSchema` phía contracts.
-   * @throws NotFoundException `class.not_found` khi lớp không thuộc
-   *   tenant hiệu lực (giữ nguyên tắc không lộ sự tồn tại xuyên tenant).
-   */
   async getClassPublic(actorId: string, id: string): Promise<ClassPublicView> {
     const row = await this.getClassRow(id);
     const owner = await this.users.getByIdOrUndefined(row.ownerId);
@@ -1123,31 +887,10 @@ export class ClassesService implements OnModuleInit {
       feeCurrency: row.feeCurrency,
       feeEnabled,
       isMember,
-      // Đã ghi danh ACTIVE (thuộc roster) thì không bị mời mua lại;
-      // lớp đã lưu trữ đóng băng ghi danh mới nên cũng không bán nữa.
       canPurchase: feeEnabled && !isMember && row.status === 'active',
     };
   }
 
-  /**
-   * Cổng phía lớp cho việc TẠO payment `class_fee` — PaymentsService
-   * gọi trước khi chọn tài khoản và tạo payment. Mọi luật thuộc về lớp
-   * nằm ở đây; luật tiền (chọn tài khoản, cổng tenant của account, sinh
-   * mã/QR) nằm ở PaymentsService, cùng khuôn `createFeePayment` của
-   * `enrol_fee`:
-   *  1. Lớp phải thuộc tenant hiệu lực (trang mua gói nằm trong tenant)
-   *     — lớp của tenant khác nhận 404 như không tồn tại.
-   *  2. Lớp đã lưu trữ → 400 `class.archived` (roster đóng băng, không
-   *     bán ghi danh mới vào lớp đã đóng).
-   *  3. Lớp không bật thu học phí (`feeCost` null/0) → 400
-   *     `payment.no_fee` (cùng mã lỗi với instance fee không có phí).
-   *  4. Người mua đã thuộc roster → 409 `class.already_member`: đã ghi
-   *     danh ACTIVE thì không mua lại gói lớp.
-   *
-   * @param classId - Id của lớp được mua gói.
-   * @param userId - Người mua.
-   * @returns Đích thu học phí của lớp (tenant + số tiền + tài khoản chỉ định riêng nếu có).
-   */
   async resolveClassFeePurchase(classId: string, userId: string): Promise<ClassFeeTarget> {
     const row = await this.getClassRow(classId);
     if (row.status === 'archived') {
@@ -1168,22 +911,6 @@ export class ClassesService implements OnModuleInit {
     };
   }
 
-  /**
-   * Đích học phí của lớp phục vụ ĐỐI CHIẾU tại điểm kích hoạt quyền
-   * lợi của pipeline thanh toán (issue #419): chỉ đọc tenant sở hữu
-   * và học phí đang cấu hình của lớp từ bản ghi phía server, KHÔNG
-   * áp các cổng phía người mua của `resolveClassFeePurchase` — tại
-   * thời điểm kích hoạt, lớp đã lưu trữ hay người mua đã thuộc
-   * roster đều là trạng thái có thể hợp lệ của một payment đã tạo
-   * trước đó, và phép đối chiếu chỉ cần trả lời "payment có khớp
-   * giá + tenant của lớp đích hay không". Chạy trong ngữ cảnh
-   * platform tường minh vì các điểm kích hoạt (matching SePay bất
-   * đồng bộ, webhook gateway) không mang phiên tenant của lớp đích
-   * — cùng khuôn đọc của `activatePaidClassEnrol` ngay dưới đây.
-   *
-   * @param classId - Id của lớp (chính là `item_id` của payment `class_fee`).
-   * @returns Tenant sở hữu và học phí đang cấu hình của lớp; null khi lớp không tồn tại.
-   */
   async getClassFeeTarget(classId: string): Promise<{ tenantId: string; feeCost: number | null } | null> {
     return this.tenantContext.run({ platform: true }, async () => {
       const row = await this.repo.getClass(classId);
@@ -1192,35 +919,6 @@ export class ClassesService implements OnModuleInit {
     });
   }
 
-  /**
-   * Kích hoạt ghi danh cấp lớp sau khi payment `class_fee` thành công —
-   * hàm song song với `EnrolService.activatePaidEnrol`, chỉ
-   * PaymentsService gọi sau khi payment đã `succeeded` qua đường đã xác
-   * thực (webhook manual đã verify / matching SePay khớp đủ 3 điều
-   * kiện). Quyết định cho vào đã nằm ở payment thành công nên đường này
-   * đi qua cổng HỆ THỐNG của cohort, không gác capability của một actor.
-   *
-   * Flow:
-   *  1. Chạy trong ngữ cảnh platform tường minh: webhook/IPN không có
-   *     ngữ cảnh tenant của request, lớp đích có thể thuộc tenant khác
-   *     tenant nền — cùng tiền lệ tra mã tham gia của CLASS-1.
-   *  2. Đảm bảo tư cách thành viên tenant của lớp cho người mua (học
-   *     sinh tự do ở trang chính mua lớp của trung tâm thì được cấp
-   *     membership của trung tâm ở bước này, như đường tự báo danh).
-   *  3. Thêm vào backing cohort qua `addCohortMemberInternal` — cohort
-   *     sync vật chất hoá ghi danh xuống MỌI khoá của lớp.
-   *
-   * Idempotent: đã thuộc roster thì đường cohort tự bỏ qua (không phát
-   * sự kiện, không ghi danh trùng) — webhook replay / matching chạy lại
-   * / tiêu thụ outbox lặp đều an toàn.
-   *
-   * @param classId - Id của lớp (chính là `item_id` của payment).
-   * @param userId - Người mua (chính là `user_id` của payment).
-   * @throws NotFoundException `class.not_found` khi lớp không tồn tại.
-   * @throws BadRequestException `class.archived` khi lớp đã lưu trữ —
-   *   payment đã thu tiền nhưng roster đóng băng: vận hành xử lý bằng
-   *   hoàn tiền, không tự phá luật đóng băng của CLASS-0.
-   */
   async activatePaidClassEnrol(classId: string, userId: string): Promise<void> {
     await this.tenantContext.run({ platform: true }, async () => {
       const row = await this.repo.getClass(classId);
@@ -1230,8 +928,6 @@ export class ClassesService implements OnModuleInit {
       if (row.status === 'archived') {
         throw new BadRequestException({ message: 'Class is archived; roster is frozen', code: 'class.archived' });
       }
-      // Đã thuộc roster (kích hoạt lặp / webhook replay) → dừng tại
-      // đây: không phát lại sự kiện vào lớp, không ghi danh trùng.
       if (await this.groups.isCohortMember(row.cohortId, userId)) return;
       await this.tenants.ensureActiveMembership(row.tenantId, userId);
       await this.groups.addCohortMemberInternal(row.cohortId, userId);
@@ -1243,36 +939,6 @@ export class ClassesService implements OnModuleInit {
     });
   }
 
-  /**
-   * Đảo quyền lợi khi payment `class_fee` bị hoàn TOÀN BỘ — đối tác của
-   * `activatePaidClassEnrol`, chỉ PaymentsService gọi từ đường refund
-   * (đã gác `payment:manageaccounts` ở đó, kèm lệnh chi đã xác nhận).
-   *
-   * Cơ chế: gỡ người học khỏi backing cohort qua đường hệ thống —
-   * cohort sync áp chế độ rời của từng instance cohort của lớp xuống
-   * mọi khoá; chế độ mặc định của lớp là `suspend` nên ghi danh thành
-   * SUSPENDED, GIỮ NGUYÊN điểm và dữ liệu học tập (luật rời lớp mặc
-   * định của mô hình lớp). Học sinh rơi vào danh sách "đã đình chỉ"
-   * của lớp và được kích hoạt lại nguyên trạng nếu vào lại roster.
-   *
-   * Khác đường gỡ roster thủ công ở hai điểm có chủ đích: (1) không
-   * gác capability của actor — quyết định nằm ở lệnh hoàn tiền đã xác
-   * thực; (2) lớp ĐÃ LƯU TRỮ vẫn gỡ được — hoàn tiền là giao dịch bù
-   * trừ tài chính, không phải thao tác sửa roster, nên luật đóng băng
-   * roster không chặn nó. Không thuộc roster thì bỏ qua (idempotent).
-   *
-   * @param classId - Id của lớp (chính là `item_id` của payment).
-   * @param userId - Người bị đình chỉ (chính là `user_id` của payment).
-   * @param tx - Transaction của settle hoàn tiền (issue #490) khi bên
-   *   gọi đang settle: việc gỡ roster chạy trong đúng transaction đó
-   *   để rollback của settle cũng huỷ việc gỡ. Khi truyền `tx`, sự
-   *   kiện `cohort_member_removed` trong-tiến-trình KHÔNG phát ở đây
-   *   (handler đồng bộ đọc trạng thái đã commit — phát giữa
-   *   transaction sẽ thấy thành viên vẫn còn và bỏ qua) — hàm trả về
-   *   cohortId của lần gỡ để bên gọi phát bù qua
-   *   `notifyPaidClassMemberRemoved` SAU khi transaction của nó
-   *   commit. Không truyền `tx` thì hành vi như cũ, trả về null.
-   */
   async suspendPaidClassMember(classId: string, userId: string, tx?: CentreTx): Promise<string | null> {
     return this.tenantContext.run({ platform: true }, async () => {
       const row = await this.repo.getClass(classId);
@@ -1282,25 +948,11 @@ export class ClassesService implements OnModuleInit {
     });
   }
 
-  /**
-   * Phát bù sự kiện rời cohort cho một lần gỡ roster đã commit trong
-   * transaction của bên gọi (settle hoàn tiền — xem
-   * `suspendPaidClassMember`): cohort sync của EnrolService nhận sự
-   * kiện này mới đình chỉ/rút các ghi danh tương ứng, và nó phải đọc
-   * được trạng thái thành viên ĐÃ commit nên chỉ được phát sau
-   * commit.
-   */
   async notifyPaidClassMemberRemoved(cohortId: string, userId: string): Promise<void> {
     await this.groups.emitCohortMemberRemoved(cohortId, userId);
   }
 
-  // --- móc cho đường tạo khoá (CourseClassHook) --------------------------------
 
-  /**
-   * Phân giải lớp đích khi tạo khoá: lớp phải tồn tại trong đúng tenant
-   * của danh mục đích và chưa lưu trữ; trả context lớp làm cha context
-   * khoá + cổng capability `course:create`.
-   */
   async resolveClass(classId: string, tenantId: string): Promise<{ classId: string; contextId: string }> {
     const row = await this.repo.getClass(classId);
     if (!row || row.tenantId !== tenantId) {
@@ -1312,11 +964,6 @@ export class ClassesService implements OnModuleInit {
     return { classId: row.id, contextId: await this.classContextId(row.id) };
   }
 
-  /**
-   * Vật chất hoá phía lớp ngay khi một khoá được tạo trong lớp: group
-   * "cả lớp" + enrol instance cohort trỏ vào backing cohort (backfill
-   * toàn bộ roster hiện có qua cơ chế instance cohort sẵn có).
-   */
   async onCourseCreated(course: CourseRow): Promise<void> {
     if (!course.classId) return;
     const row = await this.repo.getClass(course.classId);

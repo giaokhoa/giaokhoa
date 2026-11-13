@@ -9,9 +9,6 @@ import { ErrorAlert } from '#components/error-alert';
 import { PageHeader, PageShell } from '#components/page-shell';
 import { useCreatePrivacyRequest, useDecidePrivacyRequest, usePrivacyRequests } from '../queries/platform';
 
-/**
- * Privacy requests (platform services): user tự gửi yêu cầu export/delete cho chính mình; admin thấy mọi yêu cầu và duyệt/từ chối. Dữ liệu đọc qua tầng TanStack Query (`lib/platform-data.ts`, khoá `privacyRequests`; `clientLoader` của route nạp trước đúng khoá này); gửi yêu cầu và duyệt/từ chối qua đột biến, thành công thì làm mới danh sách như lần tải lại thủ công trước đây.
- */
 export function PrivacyPage() {
   const { t: t } = useTranslation();
   const requestsQuery = usePrivacyRequests();
@@ -94,15 +91,12 @@ export function PrivacyPage() {
   );
 }
 
-/** Route module gộp (issue #500): nội dung trang bên dưới vốn ở module pages riêng, phần khung route (biên lỗi + tiêu đề) vốn ở wrapper routes riêng — hai module nhập một theo bản đồ features/. */
 export { PrivacyPage as default };
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { platformKeyMeta } from '#lib/route-meta';
 export function meta() {
   return platformKeyMeta('privacyTitle');
 }
 
-// clientLoader (F-01, rà soát #133): nạp trước dữ liệu đúng khoá trang sẽ đọc.
 export { privacyPageClientLoader as clientLoader } from '../queries/platform';

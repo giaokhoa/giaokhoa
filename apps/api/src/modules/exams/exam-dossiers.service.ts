@@ -14,40 +14,6 @@ import {
 } from '@giaokhoa/db/repositories/exams';
 import { ExamsService, EXAM_CAPABILITIES, examPaperContentHash } from './exams.service';
 
-/**
- * Luồng duyệt BỘ HỒ SƠ đề (EB-3, issue #165) — đơn vị duyệt của
- * đề/ma trận là TOÀN BỘ tài liệu (khác câu hỏi duyệt từng câu, hồ sơ
- * ngân hàng đề mục A.3/F.2): một bộ hồ sơ ghim bộ ba {phiên bản ma
- * trận + phiên bản đề + bản đặc tả chụp tại lúc nộp} vào một bank đề
- * dùng chung và đi qua các cấp duyệt:
- *
- * - Cấp 1: người có `exam:moderate` tại context bank đích (tổ trưởng
- *   ở bank tổ, người được uỷ quyền ở bank trường) — cùng khuôn duyệt
- *   QB-4/MB-1: duyệt đạt là chốt bản vào bank đích và chịu trách
- *   nhiệm về bản chung.
- * - Cấp 2 (ban giám hiệu): CHỈ tồn tại khi cấu hình bật — xem điểm
- *   seam {@link ExamDossiersService.boardApprovalRequired}. Khi bật,
- *   cấp 1 duyệt chỉ đưa bộ sang `pending_board`; bộ hiệu lực (đề vào
- *   bank đích) sau khi qua cấp 2 bởi người có `exam:moderate` tại
- *   context HỆ THỐNG (vai lãnh đạo cấp trường/site admin).
- *
- * Mỗi mốc duyệt ghi một dòng `exam_dossier_reviews` độc lập + một sự
- * kiện audit ở outbox. Từ chối ở bất kỳ cấp nào cũng bắt buộc lý do
- * và đưa bộ về trạng thái `rejected` — người đóng góp xem được lý do
- *
- * VAI TRÒ HIỆN TẠI (issue #228, lát S4) — LỊCH SỬ CHỈ-ĐỌC: đường
- * hồ sơ đã bị HẤP THỤ vào đường đóng góp duy nhất của đề
- * (`exam_contributions`): bộ hồ sơ thành phần đính kèm tuỳ chọn của
- * một đóng góp, cấp duyệt 2 thành trạng thái `pending_board` của
- * đóng góp. Service này không còn nhận thao tác ghi nào (mọi method
- * ghi trả 410 `exam.dossier_path_closed`); nó phục vụ xem lại lịch
- * sử hồ sơ + đợt chuyển đổi hồ sơ treo một lần
- * ({@link ExamDossiersService.convertLegacyDossiers}). Mô tả luồng
- * duyệt hai cấp dưới đây là LỊCH SỬ của cơ chế EB-3 — giữ lại để
- * người đọc hiểu dữ kiện lịch sử (các mốc duyệt, trạng thái
- * `pending_board`) đang xem.
- * trong danh sách bộ hồ sơ của mình, sửa đề và lập bộ mới.
- */
 @Injectable()
 export class ExamDossiersService {
   constructor(
@@ -59,16 +25,7 @@ export class ExamDossiersService {
     private readonly outbox: OutboxService,
   ) {}
 
-  // --- điểm seam cấu hình cấp duyệt 2 ---------------------------------------------
 
-  /**
-   * Công tắc cấp duyệt 2 cho một bộ hồ sơ — UỶ THÁC sang điểm seam
-   * dùng chung {@link ExamsService.boardApprovalRequiredForBank}
-   * (nơi DUY NHẤT đọc khoá `exam/requireboardapproval`): tenant của
-   * bank đích của hồ sơ quyết định. Hàm này chỉ còn là vỏ tương
-   * thích cho bề mặt đọc (view cần cờ hiệu lực hiện tại); không nơi
-   * nào trong service này tự đọc khoá cấu hình nữa.
-   */
   async boardApprovalRequired(dossier?: ExamDossierRow): Promise<boolean> {
     if (!dossier) return false;
     const bank = await this.banks.findBankById(dossier.targetBankId);
@@ -77,7 +34,6 @@ export class ExamDossiersService {
   }
 
 
-  // --- helpers ----------------------------------------------------------------------
 
   private async getDossierOrThrow(id: string): Promise<ExamDossierRow> {
     const row = await this.repo.getDossier(id);
@@ -85,7 +41,6 @@ export class ExamDossiersService {
     return row;
   }
 
-  /** Lỗi đóng đường dùng chung cho mọi thao tác ghi của bề mặt hồ sơ: 410 kèm chỉ đường sang đường đóng góp duy nhất. */
   private static pathClosed(): GoneException {
     return new GoneException({
       message: 'The dossier path is closed: contribute the paper through the single contribution path (with an attached dossier when the paper is an official exam)',
@@ -94,7 +49,6 @@ export class ExamDossiersService {
   }
 
 
-  /** Quyền xem một bộ hồ sơ: người đóng góp, site admin, hoặc người duyệt (exam:moderate) của bank đích. */
   private async canViewDossier(actorId: string, dossier: ExamDossierRow): Promise<boolean> {
     if (dossier.proposerId === actorId) return true;
     if (await this.evaluator.isSiteAdmin(actorId)) return true;
@@ -148,33 +102,21 @@ export class ExamDossiersService {
     };
   }
 
-  // --- lập + nộp ----------------------------------------------------------------------
 
-  /**
-   * Lập bộ hồ sơ nháp — ĐÃ ĐÓNG: đường hồ sơ bị hấp thụ vào ĐƯỜNG
-   * ĐÓNG GÓP DUY NHẤT của đề (đóng góp kèm bộ hồ sơ đính kèm qua
-   * `withDossier`). Mọi thao tác GHI của bề mặt này trả 410
-   * `exam.dossier_path_closed`; bề mặt ĐỌC (chi tiết, danh sách,
-   * đặc tả) giữ nguyên để xem lại lịch sử.
-   */
   async createDossier(_actorId: string, _examId: string, _input: CreateExamDossier): Promise<ExamDossierView> {
     throw ExamDossiersService.pathClosed();
   }
 
-  /** Nộp bộ hồ sơ — ĐÃ ĐÓNG, xem {@link ExamDossiersService.createDossier}. */
   async submitDossier(_actorId: string, _dossierId: string): Promise<ExamDossierView> {
     throw ExamDossiersService.pathClosed();
   }
 
-  /** Xoá bộ hồ sơ nháp — ĐÃ ĐÓNG, xem {@link ExamDossiersService.createDossier}. */
   async deleteDossier(_actorId: string, _dossierId: string): Promise<{ id: string; deleted: true }> {
     throw ExamDossiersService.pathClosed();
   }
 
 
-  // --- đọc --------------------------------------------------------------------------------
 
-  /** Chi tiết một bộ hồ sơ kèm toàn bộ vết duyệt (người đóng góp / người duyệt bank đích / site admin). */
   async getDossier(actorId: string, dossierId: string): Promise<ExamDossierView> {
     const dossier = await this.getDossierOrThrow(dossierId);
     if (!(await this.canViewDossier(actorId, dossier))) {
@@ -183,7 +125,6 @@ export class ExamDossiersService {
     return this.dossierView(dossier);
   }
 
-  /** Hàng chờ bộ hồ sơ của một bank đích: người duyệt thấy tất cả; người khác chỉ thấy bộ của mình (như hàng chờ đóng góp QB-4). */
   async listBankDossiers(actorId: string, bankId: string): Promise<ExamDossierView[]> {
     const bank = await this.papers.getExamBank(actorId, bankId);
     const canModerate = await this.evaluator.hasCapability(actorId, EXAM_CAPABILITIES.moderate, bank.contextId);
@@ -194,7 +135,6 @@ export class ExamDossiersService {
     return views;
   }
 
-  /** Mọi bộ hồ sơ của chính người dùng (theo dõi kết quả duyệt + lý do từ chối xuyên bank). */
   async listMyDossiers(actorId: string): Promise<ExamDossierView[]> {
     const rows = await this.repo.listDossiersByProposer(actorId);
     const views: ExamDossierView[] = [];
@@ -202,12 +142,6 @@ export class ExamDossiersService {
     return views;
   }
 
-  /**
-   * Bản đặc tả ĐÃ CHỤP trong bộ hồ sơ — bề mặt duyệt trong hàng chờ:
-   * tổ trưởng mở đặc tả ngay tại hàng chờ, đọc đúng nội dung đã nộp
-   * (không phải nội dung sống của ma trận/đề tại thời điểm mở). Lần
-   * mở của người duyệt được ghi audit `exam_dossier_spec_viewed`.
-   */
   async getDossierSpecification(actorId: string, dossierId: string): Promise<Record<string, unknown>> {
     const dossier = await this.getDossierOrThrow(dossierId);
     if (!(await this.canViewDossier(actorId, dossier))) {
@@ -229,71 +163,29 @@ export class ExamDossiersService {
     return dossier.specSnapshot;
   }
 
-  /** Xuất bản đặc tả đã chụp trong bộ hồ sơ ra xlsx/docx (cùng renderer với mọi bề mặt đặc tả). */
   async exportDossierSpecification(actorId: string, dossierId: string, format: string): Promise<{ filename: string; contentType: string; buffer: Buffer }> {
     const snapshot = await this.getDossierSpecification(actorId, dossierId);
     return this.quiz.renderSpecification(snapshot as unknown as MatrixSpecification, format);
   }
 
-  // --- duyệt (ĐÃ ĐÓNG — đường hồ sơ chỉ còn đọc lịch sử) --------------------------------
 
-  /**
-   * Duyệt cấp 1 — ĐÃ ĐÓNG cùng toàn bộ đường ghi của hồ sơ: duyệt
-   * đề vào bank chung nay đi qua ĐƯỜNG ĐÓNG GÓP DUY NHẤT
-   * (`exam_contributions`, kèm bộ hồ sơ đính kèm khi là đề chính
-   * thức). Hồ sơ đang chờ tại thời điểm cắt đường đã được chuyển
-   * thành đóng góp bởi đợt chuyển đổi một lần
-   * ({@link ExamDossiersService.convertLegacyDossiers}).
-   */
   async approveDossier(_actorId: string, _dossierId: string): Promise<ExamDossierView> {
     throw ExamDossiersService.pathClosed();
   }
 
-  /** Từ chối cấp 1 — ĐÃ ĐÓNG, xem {@link ExamDossiersService.approveDossier}. */
   async rejectDossier(_actorId: string, _dossierId: string, _input: RejectExamDossier): Promise<ExamDossierView> {
     throw ExamDossiersService.pathClosed();
   }
 
-  /** Duyệt cấp 2 — ĐÃ ĐÓNG, xem {@link ExamDossiersService.approveDossier}. */
   async boardApproveDossier(_actorId: string, _dossierId: string): Promise<ExamDossierView> {
     throw ExamDossiersService.pathClosed();
   }
 
-  /** Từ chối cấp 2 — ĐÃ ĐÓNG, xem {@link ExamDossiersService.approveDossier}. */
   async boardRejectDossier(_actorId: string, _dossierId: string, _input: RejectExamDossier): Promise<ExamDossierView> {
     throw ExamDossiersService.pathClosed();
   }
 
-  // --- chuyển đổi hồ sơ treo (chạy một lần khi cắt đường) -------------------------------
 
-  /**
-   * Chuyển đổi toàn bộ hồ sơ còn treo sang ĐƯỜNG ĐÓNG GÓP DUY NHẤT
-   * — thao tác vận hành đã chạy MỘT LẦN ở ngữ cảnh platform khi cắt
-   * đường hồ sơ, quy tắc theo quyết định hấp thụ đường hồ sơ:
-   *
-   * - Hồ sơ `pending`/`pending_board`: sinh MỘT đóng góp mode 'new'
-   *   mang NGUYÊN trạng thái đang chờ + bộ hồ sơ đã ghim (version
-   *   đề, version ma trận, bản đặc tả) + người lập/ghi chú/thời
-   *   điểm lập của hồ sơ; toàn bộ mốc duyệt đã có của hồ sơ được
-   *   sao sang sổ mốc duyệt của đóng góp để lịch sử duyệt liền
-   *   mạch; hash chống trùng tính lại trên version đề đã ghim và
-   *   near_duplicate_of quét trong bank đích như một đề xuất mới.
-   *   Đóng góp trỏ về hồ sơ gốc qua `source_dossier_id` — neo này
-   *   cũng là khoá idempotent: hồ sơ đã có đóng góp mang nó thì bỏ
-   *   qua, chạy lại không nhân đôi đóng góp lẫn mốc duyệt.
-   * - Hồ sơ `draft`: ĐÓNG BĂNG tại chỗ (giữ nguyên trạng thái làm
-   *   dấu vết việc đang soạn dở) + một sự kiện thông báo cho người
-   *   lập để họ lập lại dưới dạng đóng góp nếu còn nhu cầu. Phần
-   *   thông báo mang ngữ nghĩa "chạy một lần": mỗi lần chạy lại,
-   *   hồ sơ draft còn tồn tại lại được tính vào báo cáo — vận hành
-   *   chỉ chạy đợt chuyển đổi đúng một lần.
-   * - Hồ sơ `approved`/`rejected`: giữ nguyên làm lịch sử kết quả,
-   *   không sinh đóng góp (việc của chúng đã xong trước khi cắt
-   *   đường).
-   *
-   * Trả báo cáo đếm trước/sau theo trạng thái + số đã chuyển + số
-   * draft đóng băng để vận hành đối chiếu.
-   */
   async convertLegacyDossiers(): Promise<{
     before: Record<string, number>;
     converted: number;

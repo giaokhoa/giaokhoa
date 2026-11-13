@@ -1,22 +1,3 @@
-/**
- * Thẻ ghi đè theo người dùng/nhóm của lần ghim đề (tách cấu
- * trúc từ `pages/quiz.tsx` theo đợt A của issue #223): danh
- * sách ghi đè hiện có kèm sửa/xoá và form tạo/sửa ghi đè dùng
- * chung. Trạng thái form ghi đè là trạng thái cục bộ của riêng
- * khối này nên panel tự giữ (theo tiền lệ đợt 1: component con
- * tự giữ trạng thái cục bộ của khối mình), kèm các đột biến ghi
- * đè qua lớp hooks dữ liệu hiện hữu; trang chỉ truyền dữ liệu
- * đã nạp (danh sách ghi đè, roster, nhóm) và cờ bận dùng chung.
- *
- * @param props.pinId - Id lần ghim (khoá của các đột biến ghi đè).
- * @param props.overrides - Danh sách ghi đè của lần ghim.
- * @param props.overridesLoaded - Danh sách đã tải xong (để hiện trạng thái rỗng).
- * @param props.overridesIsError - Lượt tải danh sách ghi đè có lỗi hay không (panel suy thông báo lỗi tải ngay khi render).
- * @param props.roster - Danh sách thành viên khoá (chọn học sinh đích).
- * @param props.groups - Nhóm của khoá (chọn nhóm đích).
- * @param props.busy - Đang có thao tác ghi chạy ở trang (khoá nút).
- * @param props.setBusy - Setter của cờ bận dùng chung.
- */
 import { useState, type Dispatch, type FormEvent, type SetStateAction } from 'react';
 import type { CourseRosterMember, ExamPinOverrideView as QuizOverrideView } from '@giaokhoa/contracts';
 import { CourseGroup } from '#features/progress-report/types/progress-report';
@@ -67,12 +48,9 @@ export function OverridesPanel({
   const [ovReason, setOvReason] = useState('');
   const [ovError, setOvError] = useState<string | null>(null);
 
-  // Lỗi tải danh sách suy ngay khi render từ cờ lỗi của query — không chép qua effect vào state như bản cũ: banner hiện lỗi của thao tác (ovError) nếu có, không thì lỗi tải.
   const loadError = overridesIsError ? t('quizOverridesLoadFailed') : null;
   const displayOvError = ovError ?? loadError;
 
-  // Các đột biến ghi đè của lần ghim (F-01 của rà soát #133):
-  // đột biến tự làm mới danh sách ghi đè sau mỗi thao tác.
   const createOverrideMutation = useCreateExamPinOverride(pinId);
   const updateOverrideMutation = useUpdateExamPinOverride(pinId);
   const deleteOverrideMutation = useDeleteExamPinOverride(pinId);
@@ -105,7 +83,6 @@ export function OverridesPanel({
     setOvError(null);
   }
 
-  /** Chạy một thao tác ghi đè (đột biến tự làm mới danh sách); mã lỗi của API được dịch riêng cho luật lý do. */
   async function actOverride(run: () => Promise<unknown>) {
     setOvError(null);
     setBusy(true);
@@ -125,7 +102,6 @@ export function OverridesPanel({
 
   async function submitOverride(event: FormEvent) {
     event.preventDefault();
-    // Cùng điều kiện bắt buộc lý do như API: ghi đè cho HỌC SINH mà cộng giờ hoặc mở cửa sổ riêng.
     const isUserTarget = editingOverride ? editingOverride.userId !== null : ovTargetKind === 'user';
     const needsReason = isUserTarget && (ovTimeOpen !== '' || ovLimitMinutes.trim() !== '');
     if (needsReason && !ovReason.trim()) {

@@ -7,22 +7,6 @@ import {
   adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWORD,
 } from '../../support/identity-access-helpers';
 
-/**
- * Đường đọc presence tại thời điểm nối socket (sự kiện `presence.snapshot`, bổ sung trên PR #610): sự kiện `presence.changed` chỉ phát khi trạng thái THAY ĐỔI, nên người đã trực tuyến TRƯỚC khi người xem mở trang không phát sinh sự kiện nào và người xem không bao giờ học được họ đang trực tuyến — đây là kịch bản đã làm vòng nghiệm thu trình duyệt của PR #610 trượt ở panel thành viên và đầu khung 1–1. Kịch bản kiểm chứng:
- *
- * - B (thành viên nhóm chung) nối socket TRƯỚC và presence đã ghi
- *   trong Redis; A nối SAU thì ảnh chụp A nhận được vẫn chứa B.
- * - C (không có hội thoại chung nào với A) cũng đang trực tuyến
- *   nhưng KHÔNG xuất hiện trong ảnh chụp của A — presence không lộ ra ngoài quan hệ hội thoại chung; ảnh chụp của chính C cũng không chứa B.
- * - D là phía bên kia của hội thoại 1–1 mà A đã chặn: D đang trực
- *   tuyến nhưng bị loại khỏi ảnh chụp của A (cùng luật nhìn thấy với sự kiện presence.changed và các bề mặt định danh).
- * - E là thành viên nhóm chung nhưng không nối socket (ngoại tuyến)
- *   và chính A: cả hai đều vắng mặt trong ảnh chụp.
- *
- * Kiểm chứng đột biến: gỡ lời phát `presence.snapshot` ở gateway
- * (hoặc lời gọi `listOnlineCoMemberIds`) thì ca này đỏ vì A không
- * nhận được ảnh chụp nào; khôi phục thì xanh.
- */
 
 interface Person { id: string; username: string; token: string }
 
@@ -47,7 +31,6 @@ describe('Messaging — ảnh chụp presence lúc nối socket (PR #610)', () =
     return { id: u.id, username: u.username, token: session.accessToken };
   }
 
-  /** Nối socket và thu MỌI ảnh chụp presence socket này nhận được. */
   function connectSocket(token: string): { socket: Socket; snapshots: { onlineUserIds: string[] }[]; connected: Promise<Socket> } {
     const snapshots: { onlineUserIds: string[] }[] = [];
     const socket: Socket = io(`${base}/messaging`, {
@@ -67,7 +50,6 @@ describe('Messaging — ảnh chụp presence lúc nối socket (PR #610)', () =
     return { socket, snapshots, connected };
   }
 
-  /** Chờ khoá presence của một user xuất hiện trong Redis (gateway đã ghi lúc nối). */
   async function waitForPresenceKey(userId: string): Promise<void> {
     const deadline = Date.now() + 5000;
     for (;;) {
@@ -78,7 +60,6 @@ describe('Messaging — ảnh chụp presence lúc nối socket (PR #610)', () =
     }
   }
 
-  /** Chờ socket nhận được ít nhất một ảnh chụp presence. */
   async function waitForSnapshot(snapshots: { onlineUserIds: string[] }[]): Promise<{ onlineUserIds: string[] }> {
     const deadline = Date.now() + 5000;
     for (;;) {
@@ -102,15 +83,11 @@ describe('Messaging — ảnh chụp presence lúc nối socket (PR #610)', () =
     d = await person('Dung', 'BlockedPeer');
     e = await person('Em', 'OfflineMember');
 
-    // Nhóm chung (type 2) của A, B, E — admin tạo hộ vì cổng lập nhóm tự do chỉ cho staff/admin (mẫu của spec ẩn-khi-chặn).
     const admin = await adminToken(app);
     const group = await http(app).post('/api/v1/messages/conversations')
       .set('Authorization', `Bearer ${admin}`).send({ type: 2, memberIds: [a.id, b.id, e.id], name: 'Nhóm ảnh chụp presence' });
     expect(group.status).toBe(201);
 
-    // Hội thoại 1–1 A–D (kết bạn hai chiều rồi mở hội thoại), sau đó
-    // A chặn D: D vẫn là "phía bên kia" trên dữ kiện nhưng quan hệ
-    // chặn phải loại D khỏi mọi bề mặt presence của A.
     const req = await http(app).post(`/api/v1/messages/contacts/${d.id}`)
       .set('Authorization', `Bearer ${a.token}`).send({});
     expect(req.status).toBe(201);
@@ -131,9 +108,6 @@ describe('Messaging — ảnh chụp presence lúc nối socket (PR #610)', () =
   });
 
   it('người xem nối sau vẫn học được người đã trực tuyến từ trước qua ảnh chụp lúc nối, đúng phạm vi quan hệ hội thoại chung', async () => {
-    // B, C, D nối TRƯỚC A và presence của họ đã ghi trong Redis —
-    // đúng thứ tự của kịch bản đã hỏng (trực tuyến có từ trước lúc
-    // người xem mở trang, không có sự kiện thay đổi nào để học).
     const bConn = connectSocket(b.token);
     const cConn = connectSocket(c.token);
     const dConn = connectSocket(d.token);
@@ -143,13 +117,9 @@ describe('Messaging — ảnh chụp presence lúc nối socket (PR #610)', () =
       await waitForPresenceKey(c.id);
       await waitForPresenceKey(d.id);
 
-      // Ảnh chụp của C (người lạ, không hội thoại chung với ai ở
-      // đây) không chứa B: presence không lộ ra ngoài quan hệ.
       const cSnapshot = await waitForSnapshot(cConn.snapshots);
       expect(cSnapshot.onlineUserIds).not.toContain(b.id);
 
-      // A nối SAU CÙNG: ảnh chụp của A chứa B (thành viên nhóm chung
-      // đang trực tuyến) và chỉ vậy trong các chủ thể đã dựng.
       const aConn = connectSocket(a.token);
       try {
         await aConn.connected;

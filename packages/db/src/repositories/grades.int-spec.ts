@@ -4,22 +4,6 @@ import { createCentreKysely, type CentreDb } from '../client';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
 import { GradesRepository, type GradeRow, type ItemRow, type NewGrade } from './grades';
 
-/**
- * Spec tích hợp của repository điểm theo bài trên Kysely (issue #644).
- *
- * Database trung tâm dựng từ rỗng bằng chính cầu nối migration của package trên cụm PostgreSQL thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ `DATABASE_URL`). Mọi ca chạy qua repository production ở `grades.ts` — không mô phỏng handle.
- *
- * Các tính chất chốt tại đây:
- * - CRUD item và các đường tìm item khớp oracle độc lập (cùng truy
- *   vấn dựng bằng Kysely thô ngoài repository) trên CÙNG dữ kiện mẫu.
- * - `upsertGrade` hai nhánh insert/xung đột theo khoá composite
- *   (item, user) cho kết quả TỪNG TRƯỜNG bằng oracle độc lập —
- *   gồm điểm sắc nhất của nhóm theo T-4 (rủi ro R-G4-2): trường phía gọi không truyền (`undefined`) phải được GIỮ NGUYÊN ở nhánh xung đột ở cả hai phía, còn `null` tường minh thì ghi NULL ở cả hai phía; `updated_at` luôn làm mới.
- * - Patch item/grade theo T-4: trường không truyền không đổi.
- * - Lịch sử điểm và vết công bố giữ đúng thứ tự của bản cũ.
- * - Giao dịch của repository nguyên tử: lỗi giữa chừng rollback
- *   sạch dòng điểm đã ghi trong giao dịch.
- */
 
 const adminUrl =
   process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
@@ -28,7 +12,6 @@ const adminUrl =
 const TEST_DB = 'giaokhoa_db_g644_grades';
 const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
-/** User/actor cố định — `grade_grades.user_id` không có khoá ngoại nên chỉ cần uuid hợp lệ. */
 const U1 = '019276a1-4444-7000-8000-0000000000e1';
 const U2 = '019276a1-4444-7000-8000-0000000000e2';
 const ACTOR = '019276a1-4444-7000-8000-0000000000e3';
@@ -49,7 +32,6 @@ interface Seed {
 
 let seed: Seed;
 
-/** Gieo tenant + khoá qua Kysely thô, item qua chính repository. */
 async function seedData(): Promise<Seed> {
   const tenant = await db.insertInto('tenants')
     .values({ slug: 'g644-grades', name: 'Tenant điểm G644', kind: 'centre' })
@@ -71,8 +53,6 @@ async function seedData(): Promise<Seed> {
   const itemB = await repo.insertItem({
     courseId: courseRow.id, itemType: 'manual', itemName: 'Bài tay 2', sortOrder: 1,
   });
-  // Item sinh đôi cho oracle upsert: cùng hình dạng với itemA để hai phía chạy độc lập; itemInstance phải khác itemA vì ràng buộc unique
-  // (course_id, item_type, item_instance, item_module) của bảng grade_items.
   const itemTwin = await repo.insertItem({
     courseId: courseRow.id, itemType: 'mod', itemModule: 'quiz', itemInstance: CM_TWIN_ID,
     itemName: 'Bài kiểm tra 1 (sinh đôi)', sortOrder: 3, gradeMax: 10,
@@ -97,11 +77,7 @@ afterAll(async () => {
   if (adminUrl) await dropTestDatabase(adminUrl, TEST_DB);
 });
 
-// ---------------------------------------------------------------------------
-// Oracle độc lập: nguyên văn ngữ nghĩa `upsertGrade` của repository cũ (trước #644) dựng lại bằng Kysely thô ngoài repository, để đối chiếu tương đương trên cùng chuỗi lệnh ghi. Tập trường SET ở nhánh xung đột chép đúng danh sách của bản cũ (11 trường nghiệp vụ + `updated_at`); trường `undefined` bị bỏ khỏi cả INSERT lẫn SET như hành vi của bản cũ.
-// ---------------------------------------------------------------------------
 
-/** Bí danh đọc dòng `grade_grades` về đúng hình dạng `GradeRow` của repository. */
 const GRADE_ROW_COLUMNS = [
   'id',
   'item_id as itemId',
@@ -160,7 +136,6 @@ async function oracleUpsertGrade(v: NewGrade): Promise<GradeRow> {
   return row as unknown as GradeRow;
 }
 
-/** Chiếu dòng điểm xuống các trường nghiệp vụ để so hai phía (bỏ định danh/thời gian). */
 function comparableGrade(row: GradeRow) {
   return {
     userId: row.userId, rawGrade: row.rawGrade, finalGrade: row.finalGrade,
@@ -223,7 +198,6 @@ describe('GradesRepository trên Kysely (issue #644)', () => {
   });
 
   it('upsertGrade nhánh xung đột: trường không truyền được giữ nguyên, null tường minh ghi NULL — khớp oracle độc lập từng trường', async () => {
-    // Chuỗi hai lần ghi GIỐNG HỆT nhau cho hai phía trên hai item độc lập.
     const first = {
       rawGrade: 7, rawGradeMin: 0, rawGradeMax: 10, finalGrade: 7, feedback: 'Lần 1',
       hidden: true, locked: false, overridden: false, excluded: false, frozen: false,
@@ -232,7 +206,6 @@ describe('GradesRepository trên Kysely (issue #644)', () => {
     await repo.upsertGrade({ itemId: seed.itemA.id, userId: U2, ...first });
     await oracleUpsertGrade({ itemId: seed.itemTwin.id, userId: U2, ...first });
 
-    // Lần hai: feedback/hidden/aggregationWeight KHÔNG truyền (undefined); lockTime truyền null tường minh; finalGrade đổi.
     const second = {
       rawGrade: 9, rawGradeMin: 0, rawGradeMax: 10, finalGrade: 9,
       locked: false, overridden: true, excluded: false, frozen: false,
@@ -242,7 +215,6 @@ describe('GradesRepository trên Kysely (issue #644)', () => {
     const oracle = await oracleUpsertGrade({ itemId: seed.itemTwin.id, userId: U2, ...second });
 
     expect(comparableGrade(mine)).toEqual(comparableGrade(oracle));
-    // Chốt tường minh ba trạng thái của T-4 ở phía Kysely:
     expect(mine.feedback).toBe('Lần 1');
     expect(mine.hidden).toBe(true);
     expect(mine.aggregationWeight).toBe(0.5);

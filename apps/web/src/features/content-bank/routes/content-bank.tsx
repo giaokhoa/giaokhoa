@@ -1,4 +1,3 @@
-/** Kho học liệu riêng cùng panel công bố hệ thống, dữ liệu và quyết định đều qua API theo vai. */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SystemMaterialsPanel } from '../components/system-materials-panel';
 import { Link } from 'react-router';
@@ -33,17 +32,6 @@ function itemSpaceKey(item: LibraryItem): string {
   return `${item.scope}:${item.scope === 'org' ? (item.spaceId ?? '') : ''}`;
 }
 
-/**
- * Trang Kho học liệu (CB-1, chuẩn §9): danh sách học liệu theo KHÔNG GIAN
- * (của tôi / từng tổ chuyên môn / toàn trường), bấm vào không gian thì
- * thu/mở danh sách; lọc theo môn – khối – loại – trạng thái duyệt; tạo
- * mới là màn riêng, mỗi dòng có Sửa/Xoá ngay tại dòng. Học liệu chia sẻ
- * có nút Gửi duyệt; người duyệt (tổ trưởng) thấy nút Duyệt/Từ chối ngay
- * tại dòng đang chờ. "Thêm vào khoá" mở panel chọn khoá + section rồi
- * cắm học liệu vào khoá bằng bản sao (API insert). Học liệu chưa duyệt
- * không xuất hiện ở scope tổ/trường — phía server đã gác, trang chỉ
- * hiển thị những gì API trả.
- */
 export function ContentBankLibraryPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -73,11 +61,6 @@ export function ContentBankLibraryPage() {
   const [insertSections, setInsertSections] = useState<CourseContent['sections']>([]);
   const [insertSectionId, setInsertSectionId] = useState('');
 
-  // Nạp (lại) không gian + học liệu: đọc qua tầng TanStack Query
-  // (fetchQuery với options của lib/content-bank-data.ts, staleTime 0
-  // nên luôn lấy số tươi như bản fetch thủ công — F-01 của rà soát
-  // #133). Trang giữ máy trạng thái riêng nên nhịp nạp vẫn do trang
-  // chủ động gọi: lần đầu và sau mỗi thao tác ghi thành công.
   const applyLoadedRows = useCallback((spaceRows: LibrarySpace[], itemRows: LibraryItem[]) => {
     setSpaces(spaceRows);
     setItems(itemRows);
@@ -513,9 +496,7 @@ export function ContentBankLibraryPage() {
 
 export default ContentBankLibraryPage;
 
-/** Route module gộp (issue #500): nội dung trang bên dưới vốn ở module pages riêng, phần khung route (biên lỗi + tiêu đề) vốn ở wrapper routes riêng — hai module nhập một theo bản đồ features/. */
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { platformKeyMeta } from '#lib/route-meta';
 export function meta() {

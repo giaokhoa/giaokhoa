@@ -1,15 +1,8 @@
-/**
- * Hàng chờ câu hỏi do trung tâm gửi nằm hoàn toàn trong kho ngân hàng.
- * Gói và dấu vết nguồn được chụp tại thời điểm gửi, không giữ FK xuyên kho.
- * Duyệt dùng một giao dịch và khoá theo câu nguồn: retry hoặc hai người duyệt
- * cùng lúc chỉ tạo đúng một bản công bố, các phiên bản trước bất biến.
- */
 import { sql, type RawBuilder } from 'kysely';
 import type { SystemBankPackage } from '@giaokhoa/contracts';
 import type { SystemBankDb } from '../client';
 import type { Json } from '../types/system-bank-db';
 
-/** Dòng hàng chờ; phần package chỉ được đưa tới người có quyền duyệt. */
 export interface SystemQuestionSubmissionRow {
   id: string;
   centreSlug: string;
@@ -41,7 +34,6 @@ const COLUMNS = [
   'published_version as publishedVersion', 'created_at as createdAt',
 ] as const;
 
-/** Đóng gói jsonb theo chuỗi để driver PostgreSQL không đổi mảng thành SQL array. */
 function jsonb(value: unknown): RawBuilder<Json> {
   return sql<Json>`${JSON.stringify(value)}::jsonb`;
 }
@@ -52,16 +44,11 @@ export class SystemBankSubmissionsRepository {
     private readonly notConfiguredError: () => Error = () => new Error('system_bank.not_configured'),
   ) {}
 
-  /** Kho ngân hàng không cấu hình thì không thể gửi/duyệt, nhưng ứng dụng vẫn khởi động. */
   private db(): SystemBankDb {
     if (!this.handle) throw this.notConfiguredError();
     return this.handle;
   }
 
-  /**
-   * Tạo bản chụp một lần theo phiên bản nguồn, trả lại chính bản cũ khi retry.
-   * Giao dịch kho ngân hàng không đụng tới kết nối của trung tâm.
-   */
   async submit(input: {
     centreSlug: string; sourceQuestionId: string; sourceVersionId: string;
     sourceVersionNumber: number; qtype: string; package: SystemBankPackage;
@@ -89,25 +76,21 @@ export class SystemBankSubmissionsRepository {
     });
   }
 
-  /** Một trung tâm chỉ xem lịch sử của chính mình. */
   async listForCentre(centreSlug: string): Promise<SystemQuestionSubmissionRow[]> {
     return this.db().selectFrom('system_question_submissions').select(COLUMNS)
       .where('centre_slug', '=', centreSlug).orderBy('created_at', 'desc').execute();
   }
 
-  /** Hàng chờ của biên tập viên, không trả các dòng từ chối/duyệt. */
   async listPending(): Promise<SystemQuestionSubmissionRow[]> {
     return this.db().selectFrom('system_question_submissions').select(COLUMNS)
       .where('status', '=', 'pending').orderBy('created_at', 'asc').execute();
   }
 
-  /** Dòng đầy đủ để người duyệt kiểm tra trước khi ra quyết định. */
   async get(id: string): Promise<SystemQuestionSubmissionRow | null> {
     return await this.db().selectFrom('system_question_submissions').select(COLUMNS)
       .where('id', '=', id).executeTakeFirst() ?? null;
   }
 
-  /** Từ chối có lý do, chỉ chuyển trạng thái pending một lần. */
   async reject(id: string, reviewerId: string, reason: string): Promise<SystemQuestionSubmissionRow | null> {
     return this.db().transaction().execute(async (tx) => {
       const current = await tx.selectFrom('system_question_submissions').select(COLUMNS)
@@ -120,19 +103,12 @@ export class SystemBankSubmissionsRepository {
     });
   }
 
-  /**
-   * Khoá hàng chờ và khoá định danh câu nguồn trong MỘT giao dịch.
-   * Lượt duyệt đầu tạo danh tính câu + version 1; lượt duyệt của bản nguồn
-   * mới nối version vào chính danh tính ấy. Retry trên hàng đã duyệt chỉ đọc,
-   * kể cả khi chạy đồng thời và kể cả khi trung tâm đã xoá câu gốc.
-   */
   async approve(id: string, reviewerId: string): Promise<SystemQuestionSubmissionRow | null> {
     return this.db().transaction().execute(async (tx) => {
       const current = await tx.selectFrom('system_question_submissions').select(COLUMNS)
         .where('id', '=', id).forUpdate().executeTakeFirst();
       if (!current || current.status !== 'pending') return current ?? null;
 
-      // Khoá xuyên hàng gửi để hai phiên bản của cùng câu không cùng tạo danh tính mới.
       await sql`select pg_advisory_xact_lock(hashtextextended(${current.centreSlug} || ':' || ${current.sourceQuestionId}, 0))`.execute(tx);
       const prior = await tx.selectFrom('system_question_submissions')
         .select(['published_question_id as publishedQuestionId'])

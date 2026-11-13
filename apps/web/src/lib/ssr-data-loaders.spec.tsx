@@ -1,20 +1,3 @@
-/**
- * Kiểm chứng luồng nghiệp vụ của lát SL-1 (#7) — server loader + dehydrate cho 5 route đã có TanStack:
- *
- *   (a) Người dùng CÓ phiên: loader của từng route trả dehydrated
- *       state chứa ĐÚNG các query key hiện hữu của trang đó, trạng thái success, dữ liệu đúng như API trả — để trang mở ra là hiện dữ liệu ngay. Riêng dashboard: dữ liệu điểm theo khoá chỉ prefetch cho khoá người dùng thuộc về, và khối quản trị chỉ prefetch khi có quyền quản trị — loader không rò dữ liệu ngoài vai của phiên, cũng không thiếu dữ liệu của vai đó.
- *   (b) Hydrate state vào cache phía client rồi render hook thật của
- *       trang: dữ liệu của server hiện ngay và KHÔNG phát sinh fetch trùng cho cùng query (đây là giá trị nghiệp vụ của lát — trang hết vòng chờ + tải hai lần).
- *   (c) CHƯA đăng nhập: loader không gọi bất kỳ API dữ liệu nghiệp
- *       vụ nào và trả state rỗng — mặt công khai (SSR không cookie) không dính dữ liệu cá nhân.
- *   (d) HTTP status sống sót qua đường prefetch: đáp ứng 403 thì
- *       `serverQueryFn` ném `ApiError` đúng status và QueryClient KHÔNG thử lại (đúng 1 lượt gọi); đáp ứng 500 vẫn thử lại đủ 3 lượt theo chính sách retry chung.
- *
- * Cộng kiểm chứng tính tất định của hai helper khoảng ngày theo múi giờ ứng dụng: mốc biên tháng/tuần phải ra cùng một khoảng ở mọi múi giờ của tiến trình chạy test, vì server (UTC) và client
- * (VN) phải tính ra cùng một query key.
- *
- * Cách kiểm: stub `fetch` ở biên mạng (loader gọi API nội bộ qua URL tuyệt đối như `lib/server-api.ts`), so dữ liệu dehydrate với payload stub theo từng query key — không soi chi tiết triển khai trong của loader ngoài các key/dữ liệu mà trang thật tiêu thụ.
- */
 import { render, screen } from '@testing-library/react';
 import { QueryClientProvider, hashKey, hydrate, type DehydratedState } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -35,7 +18,6 @@ import { loader as siteConfigLoader } from '#features/admin/routes/admin-site-co
 import { loader as notificationsLoader } from '#features/notifications/routes/notifications';
 import { loader as homeLoader } from '#features/dashboard/routes/home-index';
 
-/** Cookie phiên Better Auth như trình duyệt gửi kèm request đã đăng nhập. */
 const SESSION_COOKIE = 'better-auth.session_token=phien-thu';
 
 function sessionRequest(path: string): Request {
@@ -51,9 +33,6 @@ interface StubRoute {
   body: unknown;
 }
 
-/**
- * Stub fetch theo pathname: loader gọi URL tuyệt đối tới API nội bộ, phía client gọi đường dẫn tương đối — cả hai đều quy về pathname. Trả spy để đếm lượt gọi (khẳng định "không fetch trùng/không gọi khi ẩn danh" là khẳng định về số lượt gọi này).
- */
 function stubApi(routes: Record<string, StubRoute>) {
   const spy = vi.fn(async (input: unknown) => {
     const raw = typeof input === 'string' ? input : (input as { url: string }).url;
@@ -67,7 +46,6 @@ function stubApi(routes: Record<string, StubRoute>) {
   return spy;
 }
 
-/** Tìm một query trong dehydrated state theo query key của trang. */
 function findQuery(state: DehydratedState, key: readonly unknown[]) {
   return state.queries.find((q) => q.queryHash === hashKey(key));
 }
@@ -78,7 +56,6 @@ afterEach(() => {
 
 describe('SL-1 — khoảng ngày theo múi giờ ứng dụng (tất định hai phía)', () => {
   it('mốc 00:30 ngày 1/11 giờ VN thuộc khoảng tháng 11, không phải tháng 10', () => {
-    // 2026-10-31T17:30:00Z = 00:30 ngày 01/11/2026 giờ Việt Nam.
     const range = currentMonthRangeIso(new Date('2026-10-31T17:30:00.000Z'));
     expect(range).toEqual({
       from: '2026-10-31T17:00:00.000Z',
@@ -87,7 +64,6 @@ describe('SL-1 — khoảng ngày theo múi giờ ứng dụng (tất định ha
   });
 
   it('giữa tháng 10 giờ VN cho đúng biên tháng 10', () => {
-    // 2026-10-26T02:00:00Z = 09:00 ngày 26/10/2026 giờ Việt Nam.
     const range = currentMonthRangeIso(new Date('2026-10-26T02:00:00.000Z'));
     expect(range).toEqual({
       from: '2026-09-30T17:00:00.000Z',
@@ -151,7 +127,6 @@ describe('SL-1 — bộ nạp /calendar', () => {
     const { dehydratedState } = await calendarLoader({ request: sessionRequest('/calendar') });
     serverSpy.mockClear();
 
-    // Phía client sau điều hướng: fetch stub trả dữ liệu KHÁC hẳn — nếu trang fetch lại thì tên sự kiện mới sẽ thắng và test đỏ.
     const clientSpy = stubApi({
       '/api/v1/calendar/events': {
         body: [{ id: 'ev-2', name: 'Sự kiện chỉ có khi fetch lại phía client' }],
@@ -230,7 +205,6 @@ describe('SL-1 — bộ nạp /admin/site-config', () => {
 });
 
 describe('SSR — HTTP status phải sống sót qua đường prefetch (chính sách retry tôn trọng status)', () => {
-  /** Đếm lượt gọi fetch tới một pathname trong spy của stubApi. */
   function countCalls(spy: ReturnType<typeof stubApi>, pathname: string): number {
     return spy.mock.calls.filter((call) => {
       const raw = typeof call[0] === 'string' ? call[0] : (call[0] as { url: string }).url;
@@ -302,7 +276,6 @@ describe('SL-1 — bộ nạp /notifications', () => {
     expect(findQuery(dehydratedState, notificationsQueryKeys.messagePreferences)?.state.data).toEqual([
       { id: 'pref-1' },
     ]);
-    // Trang kỳ vọng MẢNG ghi đè (queryFn phía client bóc .courses) — dehydrate phải mang đúng hình mảng đó, không phải nguyên thân đáp ứng.
     expect(findQuery(dehydratedState, notificationsQueryKeys.messageCourseOverrides)?.state.data).toEqual([
       { courseId: 'course-1', muted: true },
     ]);
@@ -318,7 +291,6 @@ describe('SL-1 — bộ nạp /notifications', () => {
   });
 });
 
-/** Ảnh chụp quyền của một học viên thuộc đúng một khoá (gán vai tại context khoá). */
 const STUDENT_ACCESS = {
   userId: '11111111-1111-7111-8111-111111111111',
   isSiteAdmin: false,
@@ -389,7 +361,6 @@ describe('SL-1 — bộ nạp / (dashboard)', () => {
       gradebook: GRADEBOOK,
     });
 
-    // Người không có quyền quản trị thì loader không tải dữ liệu quản trị.
     expect(findQuery(dehydratedState, queryKeys.adminUsers(1, 100))).toBeUndefined();
     expect(findQuery(dehydratedState, queryKeys.categoryTree)).toBeUndefined();
     expect(findQuery(dehydratedState, queryKeys.roles)).toBeUndefined();
@@ -401,7 +372,6 @@ describe('SL-1 — bộ nạp / (dashboard)', () => {
     expect(findQuery(dehydratedState, queryKeys.adminUsers(1, 100))?.state.status).toBe('success');
     expect(findQuery(dehydratedState, queryKeys.categoryTree)?.state.status).toBe('success');
     expect(findQuery(dehydratedState, queryKeys.roles)?.state.status).toBe('success');
-    // Không thuộc khoá nào thì không có dữ liệu điểm theo khoá.
     expect(findQuery(dehydratedState, queryKeys.courseAccess('course-1'))).toBeUndefined();
   });
 

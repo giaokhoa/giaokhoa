@@ -1,9 +1,3 @@
-/**
- * Khám phá và nhập câu đã được biên tập viên công bố ở ngân hàng hệ
- * thống (#13). Danh sách chỉ chứa metadata/phiên bản, không có đáp án;
- * xem trước gọi endpoint gác question:useall, nhập gọi endpoint có cổng
- * question:add ở context bank đích. Câu chưa duyệt không xuất hiện.
- */
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@giaokhoa/ui/components/button';
@@ -19,7 +13,6 @@ const PAGE_SIZE = 20;
 
 type Selected = { questionId: string; version: number };
 
-/** Bộ chọn phiên bản và bản xem trước chỉ thuộc trang giáo viên/người quản lý bank. */
 export function SystemPublishedQuestionsPanel() {
   const { t } = useTranslation('app');
   const permissions = usePermissions();

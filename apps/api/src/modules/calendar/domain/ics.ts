@@ -1,10 +1,4 @@
-/**
- * Serializer iCalendar (RFC 5545) cho calendar export — phía đối tác của parser ICS phía worker (`apps/worker/src/domain/ics.ts`): cùng dùng dạng ngày UTC `YYYYMMDDTHHMMSSZ`, cùng quy ước escape (\n cho xuống dòng, \, cho dấu phẩy) để file export nhập lại được bằng chính parser đó. Sự kiện lặp KHÔNG xuất RRULE: listing đã materialise từng occurrence
- * (và exception đã thay occurrence tương ứng) nên mỗi dòng sự kiện thành
- * một VEVENT độc lập, đúng nội dung người dùng đang thấy.
- */
 
-/** Dữ liệu tối thiểu của một sự kiện cần để ghi VEVENT khi xuất lịch. */
 export interface IcsExportEvent {
   id: string;
   name: string;
@@ -15,18 +9,11 @@ export interface IcsExportEvent {
   updatedAt: Date;
 }
 
-/**
- * Định dạng một mốc thời gian thành dạng UTC của ICS (`YYYYMMDDTHHMMSSZ`) — dạng worker parser đọc lại được.
- */
 export function formatIcsDate(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}T${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())}Z`;
 }
 
-/**
- * Escape văn bản theo RFC 5545: gạch chéo, dấu chấm phẩy, dấu phẩy và ký tự
- * xuống dòng phải được escape trước khi đưa vào một dòng thuộc tính ICS.
- */
 export function escapeIcsText(value: string): string {
   return value
     .replace(/\\/g, '\\\\')
@@ -35,12 +22,6 @@ export function escapeIcsText(value: string): string {
     .replace(/\r\n|\r|\n/g, '\\n');
 }
 
-/**
- * Serialize danh sách sự kiện thành nội dung file .ics hoàn chỉnh
- * (VCALENDAR bọc các VEVENT, ngắt dòng CRLF). UID ổn định theo id của
- * sự kiện (`<id>@giaokhoa`) nên xuất lại nhiều lần không đổi danh tính sự kiện;
- * DTEND luôn có mặt: bằng DTSTART cộng timeDuration (giây).
- */
 export function serializeCalendar(events: IcsExportEvent[], options: { calName?: string } = {}): string {
   const lines: string[] = [
     'BEGIN:VCALENDAR',

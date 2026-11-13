@@ -28,9 +28,6 @@ import LegacyContentBankRoute from '#features/content-bank/routes/legacy-content
 import LegacyContentBankNewRoute from '#features/content-bank/routes/legacy-contentbank-new';
 import LegacyContentBankEditRoute from '#features/content-bank/routes/legacy-contentbank-edit';
 
-/**
- * Spec hợp nhất của lớp tương thích đường dẫn cũ (chuẩn đường dẫn #221): cả hai họ URL cũ — cụm ngân hàng (query `?bank=...` và các path `/exam-papers*`, `/questions/matrices/*`, `/system-bank/papers`) và họ Kho học liệu viết dính `/contentbank*` — đều phải CHUYỂN HƯỚNG THAY THẾ sang path mới tương ứng. Mỗi họ chạy bảng ca của mình qua route module thật trong memory router và khẳng định pathname (và phần query còn giữ) ở đích. Hai họ dùng hai stub fetch khác nhau vì trang đích khác nhau: họ ngân hàng dùng hồ sơ admin, họ kho học liệu dùng hồ sơ giáo viên.
- */
 const PROFILE = {
   id: '01900000-0000-7000-8000-0000000000a9',
   username: 'teacher1',
@@ -51,9 +48,6 @@ const SYSTEM_CTX_ID = '01900000-0000-7000-8000-0000000000a1';
 const ITEM_ID = '01900000-0000-7000-8000-0000000000e5';
 
 
-/**
- * Lớp tương thích đường dẫn cũ (chuẩn đường dẫn #221, mục 3.5 của hồ sơ): URL cũ ?bank=...&section=... và /questions/matrices/* phải CHUYỂN HƯỚNG THAY THẾ sang path mới tương ứng — kiểm bằng route module thật trong memory router, khẳng định pathname cuối cùng. Query thuộc diện F2 còn lại (ngoài bank/section) được giữ nguyên.
- */
 describe('URL ngân hàng cũ — chuyển hướng sang path mới (issue #221)', () => {
   afterEach(() => {
     cleanup();
@@ -137,10 +131,6 @@ describe('URL ngân hàng cũ — chuyển hướng sang path mới (issue #221)
   }
 });
 
-/**
- * Stub fetch cho họ kho học liệu: phiên giáo viên, bề mặt
- * contentbank trả danh sách rỗng; các endpoint khác 404.
- */
 function stubContentBankRedirectFetch() {
   vi.stubGlobal(
     'fetch',

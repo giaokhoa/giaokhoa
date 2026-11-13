@@ -7,9 +7,6 @@ import {
 } from '../../support/identity-access-helpers';
 import { UsersRepository } from '@giaokhoa/db/repositories/users';
 
-/**
- * Issue #568 (con C-backend của đợt #571): endpoint đọc gộp `GET /access/users-with-assignments` cho bảng người dùng của trang vai trò — phân trang theo NGƯỜI DÙNG (không theo dòng gán), `total` đếm người dùng khớp lọc, ba bộ lọc tìm kiếm + vai trò + trạng thái áp đồng thời phía server, và mảng gán của mỗi người mang tên vai, số cấp context cùng `component` để nhận biết gán do ghi danh. Các endpoint hiện hành không dựng được bảng này: `GET /users` không trả dữ kiện vai và không lọc theo vai, còn `GET /access/assignments` phân trang theo dòng gán và không mang cờ trạng thái người dùng. Mọi ca lái qua HTTP thật; cờ trạng thái đặt thẳng qua repository và dòng gán ghi danh chèn thẳng qua SQL để kết quả tất định; mỗi ca tự cô lập bằng tiền tố duy nhất truyền qua `search`.
- */
 describe('Access: danh sách người dùng kèm gán vai cho trang vai trò (issue #568)', () => {
   let app: INestApplication;
   let pg: Client;
@@ -64,15 +61,12 @@ describe('Access: danh sách người dùng kèm gán vai cho trang vai trò (is
     expect(pageTwo.body.total).toBe(12);
     expect(usersOf(pageTwo.body)).toHaveLength(2);
 
-    // Hai trang gộp lại đủ 12 người đã tạo, không trùng, thứ tự theo id tăng dần.
     const all = [...usersOf(pageOne.body), ...usersOf(pageTwo.body)];
     expect(new Set(all.map((u) => u.id)).size).toBe(12);
     expect(new Set(all.map((u) => u.id))).toEqual(new Set(created));
     const ids = all.map((u) => u.id);
     expect(ids).toEqual([...ids].sort());
 
-    // Mỗi phần tử mang đủ thông tin tài khoản cho một dòng bảng, kèm
-    // createdAt dạng chuỗi thời gian và mảng gán (rỗng khi chưa giữ vai).
     for (const user of all) {
       expect(user.username.startsWith(marker)).toBe(true);
       expect(typeof user.firstName).toBe('string');
@@ -98,7 +92,6 @@ describe('Access: danh sách người dùng kèm gán vai cho trang vai trò (is
 
     const res = await list({ search: marker });
     expect(res.status).toBe(200);
-    // Ba dòng gán nhưng total vẫn là 1: đơn vị đếm là người dùng.
     expect(res.body.total).toBe(1);
     const rows = usersOf(res.body);
     expect(rows).toHaveLength(1);
@@ -132,8 +125,6 @@ describe('Access: danh sách người dùng kèm gán vai cho trang vai trò (is
     await assignRole(app, admin, userA.id, roleY, systemId);
     await assignRole(app, admin, userB.id, roleY, systemId);
 
-    // Lọc vai X: chỉ người A khớp, và mảng gán của A vẫn đủ cả X và Y
-    // (bộ lọc vai không cắt mảng gán theo vai đang lọc).
     const byX = await list({ search: marker, roleId: roleX });
     expect(byX.status).toBe(200);
     expect(byX.body.total).toBe(1);
@@ -142,7 +133,6 @@ describe('Access: danh sách người dùng kèm gán vai cho trang vai trò (is
     expect(rowsX[0].id).toBe(userA.id);
     expect(rowsX[0].assignments.map((a) => a.roleId).sort()).toEqual([roleX, roleY].sort());
 
-    // Lọc vai Y: cả A và B đều khớp.
     const byY = await list({ search: marker, roleId: roleY });
     expect(byY.body.total).toBe(2);
     expect(usersOf(byY.body).map((u) => u.id).sort()).toEqual([userA.id, userB.id].sort());
@@ -183,24 +173,16 @@ describe('Access: danh sách người dùng kèm gán vai cho trang vai trò (is
     const roleX = await createRoleViaApi(app, admin);
     const roleY = await createRoleViaApi(app, admin);
 
-    // Bốn người được dựng sao cho giao của ba điều kiện phân biệt được:
-    // mỗi người lệch đúng một điều kiện so với giao.
-    // A khớp cả ba: đúng từ khoá, giữ vai X, đang hoạt động.
     const userA = await createUserViaApi(app, admin, { username: `${marker}a` });
     await assignRole(app, admin, userA.id, roleX, systemId);
-    // B khớp từ khoá và vai X nhưng đang bị đình chỉ.
     const userB = await createUserViaApi(app, admin, { username: `${marker}b` });
     await assignRole(app, admin, userB.id, roleX, systemId);
     await usersRepo.updateUser(userB.id, { suspended: true });
-    // C khớp từ khoá và đang hoạt động nhưng chỉ giữ vai Y.
     const userC = await createUserViaApi(app, admin, { username: `${marker}c` });
     await assignRole(app, admin, userC.id, roleY, systemId);
-    // D giữ vai X và đang hoạt động nhưng tên đăng nhập nằm ngoài từ khoá.
     const userD = await createUserViaApi(app, admin, { username: `ngoai568${Date.now()}` });
     await assignRole(app, admin, userD.id, roleX, systemId);
 
-    // Đối chứng: từng cặp bộ lọc đều trả nhiều hơn giao của cả ba, nên
-    // một kết quả bộ ba đúng không thể là trùng hợp của từng cặp.
     const pairRole = await list({ search: marker, roleId: roleX });
     expect(pairRole.body.total).toBe(2);
     expect(usersOf(pairRole.body).map((u) => u.id).sort()).toEqual([userA.id, userB.id].sort());
@@ -208,8 +190,6 @@ describe('Access: danh sách người dùng kèm gán vai cho trang vai trò (is
     expect(pairStatus.body.total).toBe(2);
     expect(usersOf(pairStatus.body).map((u) => u.id).sort()).toEqual([userA.id, userC.id].sort());
 
-    // Bộ ba với trạng thái đang hoạt động: chỉ A, và mảng gán của A vẫn
-    // chứa vai X (bộ lọc vai không cắt mảng gán).
     const tripleActive = await list({ search: marker, roleId: roleX, status: 'active' });
     expect(tripleActive.status).toBe(200);
     expect(tripleActive.body.total).toBe(1);
@@ -217,8 +197,6 @@ describe('Access: danh sách người dùng kèm gán vai cho trang vai trò (is
     expect(rowsActive.map((u) => u.id)).toEqual([userA.id]);
     expect(rowsActive[0].assignments.map((a) => a.roleId)).toContain(roleX);
 
-    // Bộ ba với trạng thái đình chỉ: chỉ B; với trạng thái đã xoá: rỗng
-    // vì không người nào trong fixture đã xoá.
     const tripleSuspended = await list({ search: marker, roleId: roleX, status: 'suspended' });
     expect(tripleSuspended.body.total).toBe(1);
     expect(usersOf(tripleSuspended.body).map((u) => u.id)).toEqual([userB.id]);
@@ -241,7 +219,6 @@ describe('Access: danh sách người dùng kèm gán vai cho trang vai trò (is
       expect(res.status).toBe(200);
       expect(usersOf(res.body).map((u) => u.id)).toContain(user.id);
     }
-    // Tìm theo họ tên đầy đủ chỉ ra đúng người này trong nhóm đánh dấu.
     const byFullName = await list({ search: 'Tim568 Kiem568' });
     expect(usersOf(byFullName.body)).toHaveLength(1);
 
@@ -256,9 +233,6 @@ describe('Access: danh sách người dùng kèm gán vai cho trang vai trò (is
     const manualRole = await createRoleViaApi(app, admin);
     const user = await createUserViaApi(app, admin, { username: `${marker}one` });
     await assignRole(app, admin, user.id, manualRole, systemId);
-    // Gán do ghi danh không đi qua API gán tay (API luôn để component
-    // rỗng) nên chèn thẳng một dòng với component 'enrol' như enrol
-    // plugin ghi, kèm itemId là id của enrol instance.
     await pg.query(
       'insert into role_assignments (role_id, user_id, context_id, component, item_id) values ($1, $2, $3, $4, $5)',
       [enrolRole, user.id, systemId, 'enrol', uuidv7()],
@@ -284,8 +258,6 @@ describe('Access: danh sách người dùng kèm gán vai cho trang vai trò (is
     expect(denied.body.code).toBe('access.capability_denied');
     expect(denied.headers['content-type']).toContain('application/problem+json');
 
-    // Trạng thái ngoài tập đóng và pageSize vượt trần 100 bị validation
-    // chặn bằng mã lỗi thật của cơ chế ProblemDetails.
     const badStatus = await list({ status: 'archived' });
     expect(badStatus.status).toBe(400);
     expect(badStatus.body.code).toBe('http.validation_failed');

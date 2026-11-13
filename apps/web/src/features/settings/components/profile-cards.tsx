@@ -25,25 +25,11 @@ import { formatDate, formatDateTime } from '#utils/date-format';
 import { describeUserAgent } from '../utils/user-agent';
 import { queryKeys } from '#lib/query-keys';
 
-/**
- * Ba thẻ CÀI ĐẶT tài khoản tự chứa, tách khỏi trang Hồ sơ (issue #288 — quyết định 21:29 ngày 26/10/2026 theo research chuẩn site lớn: Hồ sơ chỉ còn thông tin user, mọi cài đặt nằm ở khu Cài đặt riêng):
- *
- * - `LinkedAccountsCard` — tài khoản liên kết OAuth, đặt ở
- *   `/settings/linked-accounts`.
- * - `TwoFactorCard` — xác thực hai lớp TOTP, đặt ở `/settings/security`.
- * - `SessionsCard` — phiên đăng nhập, đặt ở `/settings/security`.
- *
- * Flow chung: mỗi thẻ tự nạp dữ liệu bằng TanStack Query (khoá ở `#lib/query-keys`), tự giữ trạng thái luồng con (setup/tắt 2FA, lỗi thao tác) và tự vô hiệu hoá đúng khoá truy vấn sau mỗi đột biến — trang chứa chỉ cần đặt thẻ vào khung, không truyền props. Lát #288 chỉ DI CHUYỂN nguyên trạng các thẻ này từ `pages/profile.tsx` sang đây; nghiệp vụ bên trong (endpoint, mã lỗi được dịch, ràng buộc gỡ liên kết cuối cùng, luật huỷ phiên) không đổi một dòng.
- */
 
-/** Nhãn hiển thị của issuer lấy từ catalog i18n theo khoá riêng từng nhà cung cấp. */
 function issuerLabel(t: (key: string) => string, issuer: OAuthIssuer): string {
   return issuer === 'google' ? t('oauthProviderGoogle') : t('oauthProviderFacebook');
 }
 
-/**
- * Thẻ "Tài khoản liên kết" (trang Linked logins của Moodle): liệt kê các liên kết đăng nhập ngoài của chính người dùng, cho gỡ từng liên kết và cho liên kết thêm issuer đang bật mà chưa có liên kết (đi qua endpoint link của backend rồi chuyển hướng toàn trang tới nhà cung cấp). Ràng buộc nghiệp vụ phía API — tài khoản không mật khẩu không được gỡ liên kết cuối cùng — trả về mã `auth.last_login_method` và được dịch sang thông báo i18n riêng thay vì hiện chi tiết kỹ thuật; khi `hasPassword=false` thẻ cũng hiện sẵn gợi ý đặt mật khẩu trước.
- */
 export function LinkedAccountsCard() {
   const { t, i18n } = useTranslation('app');
   const queryClient = useQueryClient();
@@ -72,7 +58,6 @@ export function LinkedAccountsCard() {
       ),
   });
 
-  /** Bắt đầu liên kết một issuer: backend trả URL authorize kèm phiên đăng nhập hiện tại, trình duyệt chuyển hướng toàn trang tới nhà cung cấp. */
   async function startLink(issuer: OAuthIssuer) {
     setActionError(null);
     try {
@@ -146,15 +131,6 @@ export function LinkedAccountsCard() {
   );
 }
 
-/**
- * Thẻ "Xác thực hai lớp" (factor TOTP của tool_mfa trong Moodle): MFA
- * mặc định TẮT và chỉ bật khi chính người dùng đi hết luồng tại đây —
- * gọi setup lấy secret + otpauth URL rồi confirm bằng mã 6 số mới.
- * Nếu thay thiết bị đang bật, UI yêu cầu mã TOTP CŨ trước khi setup;
- * server giữ factor cũ hoạt động tới khi xác nhận mã trên thiết bị mới.
- * Trạng thái hiển thị đọc từ GET /auth/mfa/status. Tắt cũng phải có
- * mã hiện tại; mã sai trả `auth.mfa_invalid_code` và hiển thị lỗi rõ ràng.
- */
 export function TwoFactorCard() {
   const { t } = useTranslation('app');
   const queryClient = useQueryClient();
@@ -172,7 +148,6 @@ export function TwoFactorCard() {
   });
   const enabled = statusQuery.data?.enabled ?? false;
 
-  /** Kết thúc một luồng con (bật hoặc tắt): dọn mã đã nhập và nạp lại trạng thái thật từ API. */
   function finishFlow(successMessage: string) {
     setStep('idle');
     setIsReplacing(false);
@@ -183,7 +158,6 @@ export function TwoFactorCard() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.mfaStatus });
   }
 
-  /** Map lỗi API sang thông báo: mã sai có thông báo riêng để người dùng nhập lại, còn lại dùng thông báo chung. */
   function showActionError(err: unknown) {
     setActionError(
       err instanceof ApiError && err.problem.code === 'auth.mfa_invalid_code'
@@ -222,7 +196,6 @@ export function TwoFactorCard() {
     onError: showActionError,
   });
 
-  /** Sao chép khoá bí mật cho người dùng không quét được QR; clipboard không khả dụng thì bỏ qua lặng lẽ (khoá vẫn hiện dạng chữ). */
   async function copySecret() {
     if (!setupData) return;
     try {
@@ -240,8 +213,6 @@ export function TwoFactorCard() {
         <CardDescription>{t('twoFactorDescription')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Huy hiệu trạng thái chỉ hiện khi đã có dữ liệu thật: lúc
-            đang tải mà hiện "Chưa bật" là khẳng định sai về tài khoản. */}
         {statusQuery.isError ? (
           <ErrorAlert variant="destructive">
             {t('twoFactorLoadFailed')}
@@ -415,15 +386,6 @@ export function TwoFactorCard() {
   );
 }
 
-/**
- * Thẻ "Phiên đăng nhập" (trang quản lý phiên của chính người dùng,
- * report_usersessions của Moodle): bảng mọi phiên đang hoạt động —
- * phiên Better Auth cookie, Redis web và JWT API — kèm IP và
- * thiết bị; phiên hiện tại mang huy hiệu riêng và không có nút huỷ
- * (huỷ chính mình thì dùng đăng xuất), các phiên khác huỷ được từng
- * phiên hoặc huỷ tất cả trong một thao tác. Sau mỗi đột biến, danh
- * sách được vô hiệu hoá để tải lại trạng thái thật từ API.
- */
 export function SessionsCard() {
   const { t, i18n } = useTranslation('app');
   const queryClient = useQueryClient();

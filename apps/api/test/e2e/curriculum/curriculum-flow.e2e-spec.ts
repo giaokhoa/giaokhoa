@@ -5,12 +5,6 @@ import {
   roleIdByShortname, STRONG_PASSWORD, systemContextId, uniqueName,
 } from '../../support/identity-access-helpers';
 
-/**
- * Kiểm thử xuyên HTTP cho luồng chương trình GDPT 2018: tạo môn, chương trình, cây nội dung và kiểm tra phân quyền. Oracle: mô hình giaokhoa đã kiểm chứng tận schema
- * (packages/database/src/schema/curriculum.ts): subjects (slug duy nhất) →
- * curricula (duy nhất theo môn + khối 1–12) → curriculum_nodes (cây, khoá ngoại ghép giữ node con trong cùng chương trình) → learning_outcomes. Phần Giáo khoa bổ sung: môn neo context + capability curriculum:view|manage qua PermissionEvaluator (mẫu ngân hàng câu hỏi/stimulus), node có kind
- * (strand = mạch nội dung) và thời lượng/% thời lượng cho số hoá GDPT 2018.
- */
 
 interface NodeView {
   id: string; title: string; kind: string; parentId: string | null;
@@ -39,7 +33,6 @@ describe('Luồng chương trình (môn học → chương trình → cây node 
 
     const teacher = await createUserViaApi(app, admin);
     teacherId = teacher.id;
-    // Gán role TRƯỚC mọi lần kiểm tra quyền của user này (evaluator có cache).
     await assignRole(app, admin, teacher.id, await roleIdByShortname(app, admin, 'editingteacher'), systemCtxId);
     teacherToken = (await login(app, teacher.username, STRONG_PASSWORD)).accessToken;
   });
@@ -48,7 +41,6 @@ describe('Luồng chương trình (môn học → chương trình → cây node 
   const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
   it('dựng đầy đủ cây chương trình GDPT và đọc lại', async () => {
-    // Môn học neo vào context hệ thống.
     const slug = uniqueName('toan');
     const subjectRes = await http(app).post('/api/v1/curriculum/subjects').set(bearer(admin))
       .send({ contextId: systemCtxId, name: 'Toán', slug });
@@ -58,13 +50,11 @@ describe('Luồng chương trình (môn học → chương trình → cây node 
     expect(subject.contextId).toBe(systemCtxId);
     expect(subject.position).toBe(1);
 
-    // Slug là duy nhất toàn hệ.
     const dupSlug = await http(app).post('/api/v1/curriculum/subjects').set(bearer(admin))
       .send({ contextId: systemCtxId, name: 'Toán trùng', slug });
     expect(dupSlug.status).toBe(409);
     expect(dupSlug.body.code).toBe('curriculum.subject_slug_taken');
 
-    // Chương trình khối 10; mỗi cặp môn + khối chỉ có một chương trình.
     const currRes = await http(app).post('/api/v1/curriculum/curricula').set(bearer(admin))
       .send({ subjectId: subject.id, grade: 10 });
     expect(currRes.status).toBe(201);
@@ -74,12 +64,10 @@ describe('Luồng chương trình (môn học → chương trình → cây node 
       .send({ subjectId: subject.id, grade: 10 });
     expect(dupGrade.status).toBe(409);
     expect(dupGrade.body.code).toBe('curriculum.grade_exists');
-    // Khối ngoài 1–12 bị từ chối ở biên validate.
     const badGrade = await http(app).post('/api/v1/curriculum/curricula').set(bearer(admin))
       .send({ subjectId: subject.id, grade: 13 });
     expect(badGrade.status).toBe(400);
 
-    // Cây: mạch nội dung (strand, có % thời lượng) → chủ đề → bài.
     const strandRes = await http(app).post('/api/v1/curriculum/nodes').set(bearer(admin))
       .send({ curriculumId: curriculum.id, title: 'Số và Đại số', kind: 'strand', position: 1, durationPercent: 40, durationPeriods: 28 });
     expect(strandRes.status).toBe(201);
@@ -99,7 +87,6 @@ describe('Luồng chương trình (môn học → chương trình → cây node 
     expect(lessonRes.status).toBe(201);
     const lesson = lessonRes.body as NodeView;
 
-    // Yêu cầu cần đạt treo dưới node chủ đề.
     const oc1 = await http(app).post('/api/v1/curriculum/outcomes').set(bearer(admin))
       .send({ nodeId: topic.id, content: 'Nhận biết được khái niệm hàm số.', position: 1 });
     expect(oc1.status).toBe(201);
@@ -107,7 +94,6 @@ describe('Luồng chương trình (môn học → chương trình → cây node 
       .send({ nodeId: topic.id, content: 'Vẽ được đồ thị hàm số bậc hai.', position: 2 });
     expect(oc2.status).toBe(201);
 
-    // Đọc lại trọn cây: cấu trúc lồng nhau + outcomes đúng thứ tự.
     const treeRes = await http(app).get(`/api/v1/curriculum/curricula/${curriculum.id}/tree`).set(bearer(admin));
     expect(treeRes.status).toBe(200);
     const tree = treeRes.body as { curriculum: { id: string }; subject: { id: string }; nodes: NodeView[] };
@@ -126,20 +112,17 @@ describe('Luồng chương trình (môn học → chương trình → cây node 
     ]);
     expect(topicView.children.map((c) => c.id)).toEqual([lesson.id]);
 
-    // Danh sách theo cấp cha cũng đọc lại được.
     const subjectsRes = await http(app).get('/api/v1/curriculum/subjects').query({ contextId: systemCtxId }).set(bearer(admin));
     expect(subjectsRes.status).toBe(200);
     expect((subjectsRes.body as { id: string }[]).some((s) => s.id === subject.id)).toBe(true);
     const curriculaRes = await http(app).get('/api/v1/curriculum/curricula').query({ subjectId: subject.id }).set(bearer(admin));
     expect((curriculaRes.body as { grade: number }[]).map((c) => c.grade)).toEqual([10]);
 
-    // Sửa node: đổi % thời lượng.
     const patchNode = await http(app).patch(`/api/v1/curriculum/nodes/${topic.id}`).set(bearer(admin))
       .send({ durationPercent: 55.5 });
     expect(patchNode.status).toBe(200);
     expect((patchNode.body as NodeView).durationPercent).toBe(55.5);
 
-    // Node cha thuộc chương trình khác bị chặn tường minh (400).
     const otherCurr = await http(app).post('/api/v1/curriculum/curricula').set(bearer(admin))
       .send({ subjectId: subject.id, grade: 11 });
     expect(otherCurr.status).toBe(201);
@@ -151,7 +134,6 @@ describe('Luồng chương trình (môn học → chương trình → cây node 
     expect(crossParent.status).toBe(400);
     expect(crossParent.body.code).toBe('curriculum.node_parent_mismatch');
 
-    // Xoá node chủ đề: cả subtree (bài) và outcomes biến mất khỏi cây; xoá môn thì chương trình cũng đi theo.
     const delNode = await http(app).delete(`/api/v1/curriculum/nodes/${topic.id}`).set(bearer(admin));
     expect(delNode.status).toBe(200);
     const treeAfter = await http(app).get(`/api/v1/curriculum/curricula/${curriculum.id}/tree`).set(bearer(admin));
@@ -168,24 +150,19 @@ describe('Luồng chương trình (môn học → chương trình → cây node 
   });
 
   it('cổng đọc và ghi theo năng lực tại ngữ cảnh môn học', async () => {
-    // Kiểm tra thẳng qua evaluator API: user thường không có cả view lẫn manage;
-    // editingteacher được view theo archetype nhưng không có manage.
     expect(await hasCapability(app, admin, plainId, 'curriculum:view', systemCtxId)).toBe(false);
     expect(await hasCapability(app, admin, plainId, 'curriculum:manage', systemCtxId)).toBe(false);
     expect(await hasCapability(app, admin, teacherId, 'curriculum:view', systemCtxId)).toBe(true);
     expect(await hasCapability(app, admin, teacherId, 'curriculum:manage', systemCtxId)).toBe(false);
 
-    // User không quyền: đọc bị từ chối 403 với mã capability_denied.
     const plainList = await http(app).get('/api/v1/curriculum/subjects').query({ contextId: systemCtxId }).set(bearer(plainToken));
     expect(plainList.status).toBe(403);
     expect(plainList.body.code).toBe('access.capability_denied');
-    // User không quyền: ghi bị từ chối 403.
     const plainCreate = await http(app).post('/api/v1/curriculum/subjects').set(bearer(plainToken))
       .send({ contextId: systemCtxId, name: 'Ngữ văn', slug: uniqueName('ngu-van') });
     expect(plainCreate.status).toBe(403);
     expect(plainCreate.body.code).toBe('access.capability_denied');
 
-    // Giáo viên (có view, không manage): đọc được, ghi bị từ chối.
     const teacherList = await http(app).get('/api/v1/curriculum/subjects').query({ contextId: systemCtxId }).set(bearer(teacherToken));
     expect(teacherList.status).toBe(200);
     const teacherCreate = await http(app).post('/api/v1/curriculum/subjects').set(bearer(teacherToken))

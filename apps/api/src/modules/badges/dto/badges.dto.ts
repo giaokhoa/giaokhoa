@@ -11,9 +11,6 @@ import {
   type UpdateBadge,
 } from '@giaokhoa/contracts';
 
-/**
- * Validation của Badges dùng Zod qua Standard Schema — schema nền ở `@giaokhoa/contracts` là nguồn sự thật duy nhất.
- */
 export { badgeUserSchema, createBadgeSchema, setBadgeCriteriaSchema, setBadgeStatusSchema, updateBadgeSchema };
 export type CreateBadgeDto = CreateBadge;
 export type UpdateBadgeDto = UpdateBadge;

@@ -4,9 +4,6 @@ import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWO
 import { createCategory, createCm, createCourse, createEnrolInstance, createSection, enrolUser, getFirstSectionId } from '../../support/course-enrolment-helpers';
 import { addExamSlot, createExamDraft, createReadyQuestion, pinExam } from '../../support/exam-pin-helpers';
 
-/**
- * K1 (issue #68): wizard tạo khoá — nhân bản khoá theo bảng Re-run, dùng lại nội dung từ khoá khác, Builder Outline (đổi thứ tự, nhân bản tại dòng), khoá mẫu tổ/trường và gác ngày mở `open_at`. Oracle nghiệp vụ: bảng sao chép Re-run trong thân issue #68 (có cấu trúc/nội dung/cài đặt/chính sách điểm — KHÔNG người học/bài làm/tiến độ; bản sao nháp; hạn lùi theo mốc mới).
- */
 describe('K1: nhân bản khoá, outline, mẫu và ngày mở', () => {
   let app: INestApplication;
   let admin: string;
@@ -26,7 +23,6 @@ describe('K1: nhân bản khoá, outline, mẫu và ngày mở', () => {
     const s0 = await getFirstSectionId(app, admin, source.id);
     const s1 = await createSection(app, admin, source.id, { name: 'Tuần 1' });
     const page = await createCm(app, admin, source.id, s1.id, { component: 'mod_page', name: 'Trang mở đầu' });
-    // Hạn mở của module: 2026-03-10 → kỳ vọng lùi đúng delta của ngày bắt đầu mới.
     await http(app).patch(`/api/v1/courses/${source.id}/modules/${page.id}`).set('Authorization', `Bearer ${admin}`)
       .send({ openAt: '2026-03-10T00:00:00.000Z' }).expect(200);
     const kQuestion = await createReadyQuestion(app, admin, 'Câu tuần 1');
@@ -35,15 +31,12 @@ describe('K1: nhân bản khoá, outline, mẫu và ngày mở', () => {
     const sourceQuiz = await pinExam(app, admin, source.id, kDraft, {
       sectionId: s1.id, timeOpen: '2026-03-12T00:00:00.000Z', timeClose: '2026-03-13T00:00:00.000Z',
     });
-    // Chính sách điểm: một item thủ công trong sổ điểm của khoá nguồn.
     const itemRes = await http(app).post(`/api/v1/courses/${source.id}/grade-items`).set('Authorization', `Bearer ${admin}`)
       .send({ itemName: 'Bài tập về nhà', itemType: 'manual', gradeMax: 20 });
     expect(itemRes.status).toBe(201);
-    // Tiêu chí hoàn thành theo ngày của khoá nguồn — mốc này cũng phải lùi theo delta.
     const criteriaRes = await http(app).put(`/api/v1/courses/${source.id}/completion/criteria`).set('Authorization', `Bearer ${admin}`)
       .send({ method: 1, criteria: [{ criteriaType: 'date', date: '2026-04-15' }] });
     expect(criteriaRes.status).toBe(200);
-    // Người học trong khoá nguồn — bản sao KHÔNG được chứa.
     const student = await createUserViaApi(app, admin);
     const instance = await createEnrolInstance(app, admin, source.id);
     await enrolUser(app, admin, source.id, instance.id, student.id);
@@ -54,9 +47,8 @@ describe('K1: nhân bản khoá, outline, mẫu và ngày mở', () => {
     expect(dupRes.status).toBe(201);
     const copy = dupRes.body;
     expect(copy.shortName).toBe(newShort);
-    expect(copy.visible).toBe(false); // bản sao luôn là nháp
+    expect(copy.visible).toBe(false);
     expect(copy.isTemplate).toBe(false);
-    // Delta: 2026-03-02 → 2026-09-07 = +189 ngày; hạn kết thúc 2026-05-30 → 2026-12-05.
     expect(String(copy.startDate).slice(0, 10)).toBe('2026-09-07');
     expect(String(copy.endDate).slice(0, 10)).toBe('2026-12-05');
 
@@ -66,25 +58,22 @@ describe('K1: nhân bản khoá, outline, mẫu và ngày mở', () => {
     expect(copiedS1).toBeTruthy();
     expect(copiedS1.modules).toHaveLength(2);
     const copiedPage = copiedS1.modules.find((m: { component: string }) => m.component === 'mod_page');
-    expect(String(copiedPage.openAt).slice(0, 10)).toBe('2026-09-15'); // 2026-03-10 + 189 ngày
+    expect(String(copiedPage.openAt).slice(0, 10)).toBe('2026-09-15');
     const copiedQuizCm = copiedS1.modules.find((m: { component: string }) => m.component === 'mod_quiz');
     expect(copiedQuizCm.instanceId).toBeTruthy();
-    expect(copiedQuizCm.instanceId).not.toBe(sourceQuiz.id); // instance quiz mới, không dùng chung
+    expect(copiedQuizCm.instanceId).not.toBe(sourceQuiz.id);
     const quizzesRes = await http(app).get(`/api/v1/courses/${copy.id}/exam-pins`).set('Authorization', `Bearer ${admin}`);
     expect(quizzesRes.body).toHaveLength(1);
-    expect(String(quizzesRes.body[0].timeOpen).slice(0, 10)).toBe('2026-09-17'); // 2026-03-12 + 189 ngày
+    expect(String(quizzesRes.body[0].timeOpen).slice(0, 10)).toBe('2026-09-17');
     expect(String(quizzesRes.body[0].timeClose).slice(0, 10)).toBe('2026-09-18');
 
-    // Chính sách điểm được chép (item thủ công + item của quiz), điểm thì không.
     const itemsRes = await http(app).get(`/api/v1/courses/${copy.id}/grade-items`).set('Authorization', `Bearer ${admin}`);
     const names = itemsRes.body.map((i: { itemName: string }) => i.itemName);
     expect(names).toContain('Bài tập về nhà');
 
-    // Không người học trong bản sao.
     const enrolRes = await http(app).get(`/api/v1/courses/${copy.id}/enrolments`).set('Authorization', `Bearer ${admin}`);
     expect(enrolRes.status).toBe(200);
     expect(enrolRes.body).toHaveLength(0);
-    // Ngày của tiêu chí hoàn thành lùi đúng delta: 2026-04-15 + 189 ngày = 2026-10-21.
     const copyCriteria = await http(app).get(`/api/v1/courses/${copy.id}/completion/criteria`).set('Authorization', `Bearer ${admin}`);
     expect(copyCriteria.status).toBe(200);
     const dateCriterion = copyCriteria.body.criteria.find((c: { criteriaType: string }) => c.criteriaType === 'date');
@@ -132,8 +121,6 @@ describe('K1: nhân bản khoá, outline, mẫu và ngày mở', () => {
     const sectionsWith2 = content.sections.filter((s: { modules: unknown[] }) => s.modules.length === 2);
     expect(sectionsWith2).toHaveLength(2);
 
-    // Item điểm 'mod' của module có idNumber: nhân bản trong CÙNG khoá
-    // không được vi phạm unique (courseId, idNumber) của grade_items.
     const modItem = await http(app).post(`/api/v1/courses/${course.id}/grade-items`).set('Authorization', `Bearer ${admin}`)
       .send({ itemName: 'Điểm mục 2', itemType: 'mod', cmId: m2.id, idNumber: 'MUC-2', gradeMax: 10 });
     expect(modItem.status).toBe(201);
@@ -180,7 +167,7 @@ describe('K1: nhân bản khoá, outline, mẫu và ngày mở', () => {
     const teacherView = await contentOf(course.id, admin);
     const scheduled = teacherView.sections.find((s: { id: string }) => s.id === s1.id);
     expect(scheduled.status).toBe('scheduled');
-    expect(scheduled.modules[0].status).toBe('open'); // module không đặt lịch riêng thì vẫn "open" theo chính nó
+    expect(scheduled.modules[0].status).toBe('open');
 
     const studentView = await contentOf(course.id, studentLogin.accessToken);
     expect(studentView.sections.find((s: { id: string }) => s.id === s1.id)).toBeUndefined();

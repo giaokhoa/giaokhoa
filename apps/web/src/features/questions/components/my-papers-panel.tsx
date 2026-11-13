@@ -1,6 +1,3 @@
-/**
- * Panel "Đề của tôi" của trang ngân hàng câu hỏi: danh sách đề trong bank đề cá nhân của giáo viên (đổi trạng thái/xoá tại dòng, hộp ghim đề vào khoá học), form đề xuất đóng góp một đề lên bank chung, form nộp BỘ HỒ SƠ kèm đề xuất đóng góp và danh sách lịch sử hồ sơ của chính giáo viên. Dữ liệu danh sách đề do trang nạp rồi truyền xuống; các query phụ của hộp ghim (khoá học/chương/nhóm) và danh sách hồ sơ của tôi là cục bộ của panel nên panel tự gọi hook. Đột biến qua hook của lib/questions-data; làm mới sau đột biến qua các hàm refresh của trang truyền xuống; ghim thành công điều hướng thẳng tới màn đề của khoá đích.
- */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
@@ -20,30 +17,16 @@ import { useDeleteExamPaper, useDeployExamPin, useMyDossiers, useProposeExamDoss
 import type { BankLite, PaperSummaryLite } from '../types/questions';
 import { dossierStatusKey, withApiReason } from '../utils/shared';
 
-/** Props của panel "Đề của tôi". */
 export interface MyPapersPanelProps {
-  /** Các đề trong bank đề cá nhân (trang nạp bằng hook useBankExams). */
   myPapers: PaperSummaryLite[];
-  /** Các bank đề chung để chọn đích đề xuất đóng góp/nộp hồ sơ. */
   sharedExamBanks: BankLite[];
-  /** Bank đề chung đang chọn ở khu vực hệ thống (đổi trạng thái đề làm mới cả cụm đó khi đã chọn). */
   systemExamBankId: string;
-  /** Làm mới cụm bank đề + danh sách bank cá nhân + hồ sơ của tôi (hàm của trang). */
   refreshExamBanks: () => void;
-  /** Làm mới cụm đề chung của một bank (hàm của trang). */
   refreshSystemPapers: (bankId: string) => void;
-  /** Làm mới danh sách hồ sơ của tôi (hàm của trang). */
   refreshMyDossiers: () => void;
-  /** Báo thông báo kết quả lên khung trang. */
   setMessage: (message: string | null) => void;
 }
 
-/**
- * Panel "Đề của tôi".
- *
- * @param props - Dữ liệu, các hàm làm mới và bộ báo thông báo của trang.
- * @returns Danh sách đề cá nhân + hộp ghim + hai form đề xuất + lịch sử hồ sơ.
- */
 export function MyPapersPanel({
   myPapers,
   sharedExamBanks,
@@ -79,7 +62,6 @@ export function MyPapersPanel({
   const [deployGroupId, setDeployGroupId] = useState('');
   const [deployVariantCount, setDeployVariantCount] = useState('1');
 
-  // Chọn chương đầu tiên khi nội dung khoá đích tải về (nhịp của loadDeployQuizzes thủ công trước đây).
   const firstDeploySectionId = deployContentQuery.data?.sections[0]?.id;
   if (!deploySectionId && firstDeploySectionId) {
     setDeploySectionId(firstDeploySectionId);
@@ -106,7 +88,6 @@ export function MyPapersPanel({
     }
   }
 
-  /** Đề xuất một đề của tôi lên bank đề chung (khuôn QB-4 cho đơn vị đề; trường định danh theo hợp đồng là `examId`). */
   async function proposePaper() {
     if (!proposePaperId || !proposePaperBankId) return;
     try {
@@ -117,9 +98,6 @@ export function MyPapersPanel({
     }
   }
 
-  /** Mở hộp thoại GHIM: danh sách khoá học là query dùng chung khoá
-   *  factory courses (bật khi hộp thoại mở); invalidate để danh sách
-   *  tươi như nhịp tải lại mỗi lần mở trước đây. */
   function openDeploy(paper: PaperSummaryLite) {
     setDeployPaper(paper);
     setDeploySectionId('');
@@ -127,7 +105,6 @@ export function MyPapersPanel({
     void queryClient.invalidateQueries({ queryKey: queryKeys.courses });
   }
 
-  /** Ghim đề vào khoá đã chọn (toàn khoá hoặc một nhóm đích) — một thao tác exam-pins. */
   async function runDeploy() {
     if (!deployPaper || !deployCourseId || !deploySectionId) return;
     try {
@@ -148,22 +125,11 @@ export function MyPapersPanel({
     }
   }
 
-  /**
-   * Nộp một BỘ HỒ SƠ: từ S4/Q4 (issue #228) bộ hồ sơ không còn là
-   * đường riêng — thao tác này là ĐỀ XUẤT ĐÓNG GÓP kèm bộ hồ sơ đính
-   * kèm (`withDossier: true`) trên ĐƯỜNG ĐÓNG GÓP DUY NHẤT của đề.
-   * Phía API ghim bộ ba (version đề + version ma trận + bản đặc tả)
-   * tại đúng lúc đề xuất và tính chống trùng như mọi đóng góp; duyệt
-   * hai cấp đi theo trạng thái của chính đóng góp (`pending` →
-   * `pending_board` khi tenant của bank đích bật cấp duyệt 2).
-   */
   async function proposeDossier() {
     if (!dossierPaperId || !dossierBankId) return;
     try {
       await proposeDossierContributionMutation.mutateAsync({ bankId: dossierBankId, examId: dossierPaperId });
       setMessage(t('dossierProposedOk'));
-      // Đóng góp mới thuộc hàng chờ của bank đích: làm tươi đúng cụm
-      // khoá của bank đích (hàng đóng góp + bề mặt hồ sơ lịch sử).
       void queryClient.invalidateQueries({ queryKey: questionsQueryKeys.bankExamContributions(dossierBankId) });
       void queryClient.invalidateQueries({ queryKey: questionsQueryKeys.bankDossiers(dossierBankId) });
       refreshMyDossiers();
@@ -174,12 +140,6 @@ export function MyPapersPanel({
 
   return (
     <>
-  {/* Khu vực "Đề của tôi" (EB-1): khu vực riêng của giáo viên
-      cho ĐỀ — song song khu câu hỏi ở trên theo mô hình hai khu
-      vực đã chốt. Danh sách đề của chính giáo viên hiện THẲNG
-      trong trang, không bọc thẻ thu/mở — chốt 23:43 ngày
-      26/10/2026 (sổ quyết định mục B); nút Đề mới nằm ở
-      PageHeader, Sửa/Xoá tại dòng. */}
   <div className="space-y-4">
         {myPapers.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t('examPaperEmpty')}</p>
@@ -334,12 +294,6 @@ export function MyPapersPanel({
             </Button>
           </div>
         ) : null}
-        {/* Nộp BỘ HỒ SƠ (EB-3): đề ready CÓ ma trận nộp theo cả bộ
-            (ma trận + đề + đặc tả) vào bank tổ/trường. Từ S4/Q4
-            thao tác này là đề xuất ĐÓNG GÓP kèm bộ hồ sơ đính kèm
-            trên đường đóng góp duy nhất (xem proposeDossier);
-            trạng thái và lý do từ chối theo dõi ở hàng chờ đóng
-            góp/hồ sơ của bank đích và danh sách lịch sử dưới đây. */}
         {sharedExamBanks.length > 0 && myPapers.length > 0 ? (
           <div className="space-y-2">
             <div className="flex flex-wrap items-end gap-2">

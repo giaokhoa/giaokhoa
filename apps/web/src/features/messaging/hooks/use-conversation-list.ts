@@ -1,24 +1,3 @@
-/**
- * Hook điều phối danh sách hội thoại của trang Tin nhắn (đợt C của
- * issue #223, lát 1; chuyển sang cache TanStack ở CN-13, issue
- * #493): danh sách chính, tập đã lưu của server, cây nhóm và khoá
- * của tôi đều là dữ kiện máy chủ — chúng sống trong CACHE của TanStack Query
- * qua các options của `lib/messaging-data` và hook này chỉ ĐĂNG KÝ
- * (useQuery) rồi suy ra giá trị hiển thị; state cục bộ chỉ còn tab
- * khung trái, bản đồ tên hiển thị (dữ kiện suy ra, không có
- * endpoint riêng) và lỗi của thao tác đổi trạng thái. Đột biến
- * thành công tự invalidate/vá cache ở tầng dữ kiện; `reload` là
- * invalidate đồng loạt các khoá danh sách; `markRead` áp mốc đọc
- * của chính mình lên cache chi tiết qua callback của trang. Lỗi ở
- * các đường phụ (khoá, cây nhóm) không làm hỏng danh sách chính;
- * server là nguồn sự thật của từng mục danh sách.
- *
- * @param params - Tham số điều phối chéo: id người xem hiện tại và
- * callback dùng-chung do trang cung cấp (xem ghi chú về callback
- * dùng-chung trong file trang): `applyReadMarker` để `markRead`
- * phản ánh mốc đọc của chính mình lên cache chi tiết hội thoại.
- * @returns Trạng thái danh sách và handler cho trang lắp ghép.
- */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -34,11 +13,8 @@ import type {
 } from '../types/types';
 
 export interface UseConversationListParams {
-  /** Id người xem hiện tại (để `markRead` ghi mốc đọc của chính mình). */
   myId: string | undefined;
-  /** Áp mốc đọc của một thành viên lên cache chi tiết hội thoại — do hook hội thoại đang mở sở hữu, trang nối qua callback dùng-chung. */
   applyReadMarker: (conversationId: string, userId: string, lastReadSeq: number) => void;
-  /** Mốc seq cao nhất đã thấy của từng conversation — trang sở hữu chung, bốn hook cùng dùng. */
   lastSeqRef: { current: Map<string, number> };
 }
 
@@ -46,79 +22,44 @@ export function useConversationList({ myId, applyReadMarker, lastSeqRef }: UseCo
   const { t } = useTranslation('app');
   const queryClient = useQueryClient();
 
-  // Dữ kiện máy chủ của khung trái — đăng ký trực tiếp trên cache.
   const conversationsQuery = useQuery(messagingConversationsQueryOptions());
   const conversations = useMemo(() => conversationsQuery.data ?? [], [conversationsQuery.data]);
-  /**
-   * Tập ĐÃ LƯU của server (lát M5, issue #240): endpoint riêng `?archived=true`, nạp CÙNG NHỊP với danh sách chính — từ issue #623 tập này là dữ kiện của tab Lưu trữ ở cột danh sách (tab thay cho tab Yêu thích) nên không nạp lười theo thao tác mở tab: số đếm trên tab phải đúng ngay từ khi trang nạp. Hai tập KHÔNG trộn nhau — hội thoại đã lưu trữ chỉ hiện ở tab Lưu trữ, không thuộc danh sách chính và không tính vào số đếm của tab Tất cả / Chưa đọc; server là nguồn sự thật của từng tập.
-   */
   const archivedQuery = useQuery(messagingArchivedConversationsQueryOptions());
   const archivedConversations = useMemo(() => archivedQuery.data ?? [], [archivedQuery.data]);
-  /**
-   * Cờ đang nạp của CHÍNH tập đã lưu (vòng sửa issue #623): panel Lưu trữ dùng cờ này để hiện khung đang tải theo nhịp của truy vấn của chính nó — mượn cờ của truy vấn chính làm tab Lưu trữ khẳng định rỗng giả trong lúc `?archived=true` còn đang trên đường về. Cùng khuôn với cờ của cây nhóm ở dưới.
-   */
   const archivedLoading = archivedQuery.isPending;
-  /**
-   * Lỗi nạp tập đã lưu lần đầu (vòng sửa issue #623): cùng luật với lỗi cây nhóm — chỉ tính khi query lỗi mà chưa từng có dữ kiện trong cache; tập đã có dữ kiện thì vẫn hiện dữ kiện cũ, không báo lỗi. Panel Lưu trữ hiện báo lỗi kèm nút thử lại thay cho câu rỗng giả khi cờ này có trị.
-   */
   const archivedError =
     archivedQuery.isError && !archivedQuery.data ? t('archivedLoadFailed') : null;
-  /** Nạp lại riêng truy vấn tập đã lưu — nút thử lại của panel Lưu trữ. */
   const refetchArchived = archivedQuery.refetch;
   const retryArchived = useCallback(() => {
     void refetchArchived();
   }, [refetchArchived]);
-  /**
-   * CÂY NHÓM của tôi (lát MSG-T1 dựng ở server, MSG-T3 trình bày ở tab Nhóm): đăng ký cùng nhịp với danh sách hội thoại; lỗi thì giữ cây gần nhất trong cache như các đường phụ khác của trang.
-   */
   const groupTreeQuery = useQuery(messagingGroupTreeQueryOptions());
   const groupTree = groupTreeQuery.data ?? null;
-  /**
-   * Cờ đang nạp của CHÍNH cây nhóm (vòng sửa PR #593): bề mặt cây dùng cờ này để hiện khung đang tải theo nhịp của cây, không mượn cờ của query danh sách hội thoại — hai query về lệch nhịp, mượn cờ nhau làm cây hiện trạng thái rỗng giả trong lúc nó còn đang nạp.
-   */
   const groupTreeLoading = groupTreeQuery.isPending;
-  /**
-   * Lỗi nạp cây nhóm lần đầu (vòng sửa 2 PR #593): cùng luật với lỗi danh sách chính — chỉ tính khi query lỗi mà chưa từng có dữ kiện trong cache; cây đã có dữ kiện thì vẫn hiện cây cũ, không báo lỗi. Khung trái truyền xuống cây để cây hiện thông báo lỗi thay cho câu rỗng giả.
-   */
   const groupTreeError =
     groupTreeQuery.isError && !groupTreeQuery.data ? t('groupTreeLoadFailed') : null;
-  // Tìm bạn theo KHOÁ (mô hình chốt lại 24/10/2026): khoá của tôi → chọn khoá → roster thành viên (phân trang con trỏ phía server).
   const coursesQuery = useQuery(messagingCoursesQueryOptions());
   const myCourses = useMemo(() => coursesQuery.data?.courses ?? [], [coursesQuery.data]);
 
-  /** Lỗi của lần đổi trạng thái hội thoại gần nhất (lát M5). */
   const [stateError, setStateError] = useState<string | null>(null);
-  /** Lỗi nạp danh sách chính lần đầu (chưa từng có dữ kiện trong cache). */
   const error =
     conversationsQuery.isError && !conversationsQuery.data ? t('messagesLoadFailed') : null;
-  /** Đã nạp xong danh sách conversation ít nhất một lần — mốc cho deep-link mở đúng cuộc trò chuyện. */
   const listLoaded = conversationsQuery.isSuccess;
-  // Tên hiển thị gom từ mọi response của API (profiles/memberProfiles):
-  // bản đồ SUY RA phục vụ tra cứu tên đồng bộ, không có endpoint riêng.
   const [people, setPeople] = useState<Record<string, PersonSummary>>({});
-  /**
-   * Tab khung trái đang chọn (lát MSG-T3): giữ ở trang và LƯU BỀN cùng hội thoại đang mở — quay lại màn Tin nhắn (kể cả sau khi tải lại trang) là gặp đúng ngữ cảnh gần nhất.
-   */
   const [sidebarTab, setSidebarTabState] = useState<string>(() => readStoredMessagesTab());
 
-  /**
-   * Số conversation chưa đọc — SUY RA từ danh sách trong cache (mỗi mục mang unread của chính user). Đi kèm là `recountUnread` cho kênh realtime gọi mỗi khi có sự kiện đổi số chưa đọc: số của trang tự khớp vì cùng suy từ cache, còn huy hiệu Tin nhắn của sidebar đọc truy vấn riêng nên phải làm mới bằng invalidate để server vẫn là nguồn số đếm cuối cùng (lát M1, issue #204). Danh sách ở đây là danh sách chính (chưa lưu trữ) nên tổng này không gồm hội thoại đã lưu trữ — khớp luật số đếm của tab Tất cả / Chưa đọc (issue #623).
-   */
   const unread = useMemo(() => conversations.filter((c) => (c.unread ?? 0) > 0).length, [conversations]);
   const recountUnread = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.messageUnreadCount });
   }, [queryClient]);
 
-  /** Gom tên hiển thị từ một response (profiles/memberProfiles) vào bản đồ tên dùng chung của trang. */
   const mergePeople = useCallback((profiles: Record<string, PersonSummary> | undefined) => {
     if (!profiles) return;
     setPeople((prev) => ({ ...prev, ...profiles }));
   }, []);
 
-  /** Tên hiển thị của một user; chưa tra được thông tin thì lùi về chính id như trước. */
   const nameOf = useCallback((userId: string) => people[userId]?.displayName ?? userId, [people]);
 
-  // Mỗi khi danh sách trong cache đổi bản (nạp lần đầu, invalidate, vá realtime): gom hồ sơ thành viên của hai danh sách vào bản đồ tên. Điều chỉnh state ngay trong render theo khuôn React dành cho state suy từ dữ kiện ngoài (chỉ chạy khi tham chiếu dữ kiện thật sự đổi), không qua hiệu ứng phụ.
   const [mergedProfilesSource, setMergedProfilesSource] = useState<{
     list?: ConversationView[];
     archived?: ConversationView[];
@@ -131,8 +72,6 @@ export function useConversationList({ myId, applyReadMarker, lastSeqRef }: UseCo
     for (const c of conversationsQuery.data ?? []) mergePeople(c.memberProfiles);
     for (const c of archivedQuery.data ?? []) mergePeople(c.memberProfiles);
   }
-  // Nâng mốc seq cao nhất đã thấy của từng conversation mỗi khi một trong hai danh sách đổi — mốc xin đồng bộ khi nối lại của kênh realtime và chốt chặn sự kiện cũ đến muộn của handler conversation.updated (chỉ ghi ref trong hiệu ứng, không đụng state). Cả hai tập phải cùng nâng mốc (vòng sửa issue #623):
-  // hội thoại chỉ sống ở tập đã lưu mà mốc vẫn 0 thì một sự kiện cũ phân phối muộn vượt qua chốt và ghi đè tin cuối / số chưa đọc trong cache tập đã lưu bằng số của thời điểm cũ.
   useEffect(() => {
     for (const c of [...conversations, ...archivedConversations]) {
       if (c.lastMessageSeq !== undefined) {
@@ -142,10 +81,6 @@ export function useConversationList({ myId, applyReadMarker, lastSeqRef }: UseCo
     }
   }, [conversations, archivedConversations, lastSeqRef]);
 
-  /**
-   * Ghi danh sách chính vào CACHE thay cho state (bộ chuyển đổi giữ nguyên chữ ký cập nhật-hàm như setter cũ cho các hook tiêu thụ:
-   * khôi phục ngữ cảnh chèn hội thoại lấy theo id, realtime áp sự kiện conversation.updated, hành động nhóm chèn hội thoại vừa ensure).
-   */
   const setConversations = useCallback(
     (updater: ConversationView[] | ((prev: ConversationView[]) => ConversationView[])) => {
       queryClient.setQueryData<ConversationView[]>(messagingQueryKeys.messagingConversations, (old) =>
@@ -155,9 +90,6 @@ export function useConversationList({ myId, applyReadMarker, lastSeqRef }: UseCo
     [queryClient],
   );
 
-  /**
-   * Ghi tập đã lưu vào CACHE — cùng khuôn bộ chuyển đổi với `setConversations`: kênh realtime áp sự kiện conversation.updated lên cả cache này (vá tại chỗ khi tin mới là của chính người xem; dời hội thoại sang danh sách chính khi server đã tự bỏ lưu trữ cho người xem — xem hook realtime).
-   */
   const setArchivedConversations = useCallback(
     (updater: ConversationView[] | ((prev: ConversationView[]) => ConversationView[])) => {
       queryClient.setQueryData<ConversationView[]>(messagingQueryKeys.messagingArchivedConversations, (old) =>
@@ -167,7 +99,6 @@ export function useConversationList({ myId, applyReadMarker, lastSeqRef }: UseCo
     [queryClient],
   );
 
-  /** Ghi cây nhóm vào CACHE — bộ chuyển đổi cho kênh realtime áp số chưa đọc mới lên cây. */
   const setGroupTree = useCallback(
     (
       updater:
@@ -184,26 +115,18 @@ export function useConversationList({ myId, applyReadMarker, lastSeqRef }: UseCo
     [queryClient],
   );
 
-  // Thao tác ghi của trang qua các đột biến của lib/messaging-data:
-  // đột biến tự invalidate/vá đúng khoá trong cache khi thành công
-  // (xem tầng dữ kiện), hook này chỉ còn bắt lỗi để hiện thông báo.
   const conversationStateMutation = useSetConversationState();
   const markReadMutation = useMarkConversationRead();
 
-  /** Nạp cây nhóm cho tab Nhóm (lát MSG-T3): invalidate để query đang đăng ký nạp lại; lỗi thì giữ cây gần nhất trong cache. */
   const loadGroupTree = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: messagingQueryKeys.messagingGroupTree });
   }, [queryClient]);
 
-  /** Đổi tab khung trái (lát MSG-T3): cập nhật state + lưu bền để lần quay lại vẫn gặp tab này. */
   const setSidebarTab = useCallback((value: string) => {
     setSidebarTabState(value);
     storeMessagesTab(value);
   }, []);
 
-  /**
-   * Nạp lại toàn bộ dữ kiện khung trái + danh bạ: invalidate đồng loạt các khoá danh sách/cây/khoá/danh bạ — mọi query của khung trái đều đang đăng ký nên nạp lại ngay. Lời gọi chờ các lần nạp lại đang hoạt động settle như nhịp nạp đầy đủ trước đây.
-   */
   const reload = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: messagingQueryKeys.messagingConversations }),
@@ -216,10 +139,6 @@ export function useConversationList({ myId, applyReadMarker, lastSeqRef }: UseCo
     ]);
   }, [queryClient]);
 
-  /**
-   * Đặt một cờ trạng thái cá nhân trên một cuộc trò chuyện (lát M5):
-   * server trả trạng thái đầy đủ sau khi đặt; đột biến đã khai invalidate cả hai danh sách + chi tiết nên cache tự hội tụ về trạng thái server (ghim thì thứ tự nạp lại khớp thứ tự server; lưu trữ / bỏ lưu trữ thì hội thoại dời giữa danh sách chính và tập của tab Lưu trữ) — hook chỉ bắt lỗi. Thao tác lưu trữ đặt ở menu đầu khung của cuộc trò chuyện đã mở (issue #623), không còn ở cột danh sách.
-   */
   const updateConversationState = useCallback(
     async (conversation: ConversationView, patch: ConversationStatePatch) => {
       setStateError(null);
@@ -232,9 +151,6 @@ export function useConversationList({ myId, applyReadMarker, lastSeqRef }: UseCo
     [conversationStateMutation, t],
   );
 
-  /**
-   * Đánh dấu đã đọc ở server: đột biến vá tại chỗ mục hội thoại trong cache danh sách (unread về 0) + invalidate huy hiệu chưa đọc; mốc đọc của chính mình áp lên cache chi tiết qua callback của trang để dòng "đã xem" của khung chat khớp ngay. Cây nhóm cũng được vá tại đây (vòng sửa sau nghiệm thu PR #610): cây là cache RIÊNG mang số chưa đọc theo từng nút mà đột biến không đụng tới, nên trước vòng này tab Nhóm giữ huy hiệu cũ sau khi hội thoại lớp/khoá đã đọc trong lúc tab Tất cả/Chưa đọc đã xoá số — vá bằng đúng bộ chuyển đổi `withTreeUnread` mà kênh realtime dùng cho sự kiện tin mới, để số của nút đích về 0 và tổng của các nút cha (lớp = chat lớp + mọi nút con) được tính lại theo cùng một luật.
-   */
   const markRead = useCallback(
     async (conversationId: string) => {
       try {
@@ -242,7 +158,6 @@ export function useConversationList({ myId, applyReadMarker, lastSeqRef }: UseCo
         if (myId) applyReadMarker(conversationId, myId, res.lastReadSeq);
         setGroupTree((prev) => withTreeUnread(prev, conversationId, 0));
       } catch {
-        // Đánh dấu đã đọc lỗi thì để lần mở/đọc sau thử lại — không chặn đọc tin.
       }
     },
     [applyReadMarker, markReadMutation, myId, setGroupTree],

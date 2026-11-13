@@ -12,9 +12,6 @@ import { FILE_CLEANUP_QUEUE, FilesService } from './files.service';
 import { OBJECT_STORAGE } from './storage';
 import { createObjectStorage } from './storage-factory';
 
-/**
- * Module quản lý file. Từ issue #647, repository của module sống ở `@giaokhoa/db` trên Kysely (lớp thuần, không phụ thuộc Nest) nên module lắp nó bằng factory provider trên handle định tuyến theo không gian (`SpaceDatabaseService.routedKysely`) — cùng khuôn lắp repository của pilot control plane.
- */
 @Module({
   imports: [AccessModule, SpaceRoutingModule, BullModule.registerQueue({ name: FILE_CLEANUP_QUEUE })],
   controllers: [FilesController],
@@ -25,10 +22,8 @@ import { createObjectStorage } from './storage-factory';
       inject: [SpaceDatabaseService],
     },
     FilesService, FileSigningService, FilesListener,
-    // Driver vật lý được chọn theo env (FILE_STORAGE_DRIVER=local|s3, mặc định local).
     { provide: OBJECT_STORAGE, useFactory: (config: ConfigService) => createObjectStorage(config), inject: [ConfigService] },
   ],
   exports: [FilesService, OBJECT_STORAGE],
 })
-/** Module quản lý file. */
 export class FilesModule {}

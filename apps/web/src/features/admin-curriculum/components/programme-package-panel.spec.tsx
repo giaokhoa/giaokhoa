@@ -1,9 +1,3 @@
-/**
- * Test theo vai của panel gói chương trình (#17): quản trị trung tâm
- * gửi và cài phiên bản đã duyệt; biên tập viên xem YCCĐ, từ chối có
- * lý do. Các phản hồi API được giả lập, bảo vệ hợp đồng giao diện
- * và đường gọi backend mà không tạo dữ liệu ngoài test.
- */
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

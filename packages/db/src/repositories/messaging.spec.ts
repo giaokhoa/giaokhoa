@@ -2,25 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createRecordingDb } from '../test-support/recording-db';
 import { MessagingRepository, type MessagingStorePort } from './messaging';
 
-/**
- * Ca đơn vị của ba điểm ghép đoạn động `sql.join` (thử nghiệm T-11) tại `MessagingRepository.listNotificationGroups` — tầng BIÊN DỊCH, không cần database: driver ghi lại truy vấn đã biên dịch
- * (SQL + thứ tự tham số) thay cho kết nối thật.
- *
- * Ba điểm ghép cần khoá (đúng ba điểm `sql.join` của bản bộ máy cũ cũ tại repository messaging):
- * - Danh sách `IN` của `eventTypes`: 0 phần tử thì KHÔNG có mảnh
- *   IN nào trong WHERE (tầng gọi gác danh sách rỗng — `IN ()` không phải SQL hợp lệ); 1 và nhiều phần tử thì các tham số nối tiếp theo đúng thứ tự mảng, đứng sau tham số của các điều kiện
- *   WHERE đi trước (userId, tenantId).
- * - Mệnh đề WHERE ghép bằng ` and `: mọi đoạn đều mang tham số
- *   bắt buộc, thứ tự tham số toàn cục giữ theo thứ tự đoạn.
- * - Mệnh đề HAVING: không có điều kiện thì KHÔNG phát `having`;
- *   đoạn cursor chứa biểu thức con `array_agg(...)` — biểu thức con không mang tham số nên vị trí tham số của cursor
- *   (latestAt, latestId) nằm đúng tại vị trí của đoạn trong danh
- *   sách, và tham số `limit` luôn đứng cuối cùng.
- *
- * Kết quả chạy thật trên database (tổng hợp + phân trang keyset) nằm ở spec tích hợp đi kèm `messaging.int-spec.ts`.
- */
 
-/** Cổng store không tham gia vào `listNotificationGroups` — bản giả rỗng là đủ cho tầng biên dịch. */
 const storeStub = {} as unknown as MessagingStorePort;
 
 const USER_ID = '01a19887-6b35-7760-8e64-a5960bfd0875';
@@ -28,7 +10,6 @@ const TENANT_ID = '01a19887-6b35-7760-8e64-a5960bfd0876';
 const CURSOR_ID = '01a19887-6b35-7760-8e64-a5960bfd0877';
 const CURSOR_AT = new Date('2026-10-01T03:04:05.000Z');
 
-/** Dựng repository trên handle ghi lại để soi SQL đã biên dịch của `listNotificationGroups`. */
 function repoOnRecordingDriver(): { repo: MessagingRepository; driver: ReturnType<typeof createRecordingDb>['driver'] } {
   const { db, driver } = createRecordingDb();
   return { repo: new MessagingRepository(db, storeStub), driver };

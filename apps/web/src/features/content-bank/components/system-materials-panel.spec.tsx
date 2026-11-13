@@ -1,4 +1,3 @@
-/** Kiểm luồng chọn nguồn/gửi/duyệt/chọn phiên bản/dùng trong khoá qua panel thật với API mock. */
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -32,7 +31,6 @@ const pkg: SystemMaterialPackage = {
   source: { centreSlug: 'centre-a', contentId: '01961300-0000-7000-8000-000000000123', originalAuthor: 'Tác giả A', sourceKind: 'self', sourceCitation: null, license: 'CC BY 4.0' },
 };
 
-/** Provider riêng cho mỗi lần render để hàng chờ/cache không rò giữa các vai. */
 function showPanel() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   render(<MemoryRouter><QueryClientProvider client={client}><SystemMaterialsPanel /></QueryClientProvider></MemoryRouter>);

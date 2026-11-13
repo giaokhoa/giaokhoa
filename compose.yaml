@@ -1,39 +1,16 @@
-# compose.yaml ở gốc repo — stack production TỰ HOST toàn bộ hệ thống trên một máy (nền tảng đích: Dokploy quản lý chính file compose này, Cloudflare Tunnel công bố service web ra ngoài).
-#
-# Topology một-origin: chỉ gateway Caddy publish cổng ứng dụng. Caddy chuyển /api, /socket.io, /mcp và các endpoint OAuth metadata về NestJS; các route còn lại về @react-router/serve để SSR. Cookie, Host gốc và WebSocket được reverse_proxy quản lý theo Caddyfile. API/worker/web không mở cổng công khai. Keycloak vẫn publish cổng riêng 8085 nhưng chỉ bind loopback cho Cloudflare Tunnel.
-#
-# Cách dùng:
-#   cp .env.example .env   # rồi điền các giá trị bí mật thật docker compose up -d --build Kiểm tra: curl http://localhost:8080/api/v1/health
-#
-# Migration cơ sở dữ liệu tự chạy ở mỗi lần khởi động stack: service migrate luôn thuộc stack và api/worker chỉ khởi động sau khi nó kết thúc thành công (depends_on điều kiện service_completed_successfully), nên cơ sở dữ liệu trống được tự dựng ở lần up đầu tiên. Cần áp riêng thì chạy tay vẫn được:
-#   docker compose run --rm migrate
-#
-# Seed dữ liệu mẫu (CHỈ cho môi trường thử nghiệm, không chạy trên production thật): docker compose --profile seed run --rm seed
-#
-# postgres và redis KHÔNG publish cổng ra host — cần quản trị thì vào qua `docker compose exec postgres psql ...` hoặc `docker compose exec redis redis-cli ...`.
 
-# Khối biến môi trường dùng chung cho service api và các service chạy một lần dựa trên image api (migrate, seed).
 x-api-env: &api-env
   NODE_ENV: production
-  # Mô hình role của kho nghiệp vụ (issue #586): tầng ứng dụng chạy bằng role RUNTIME `giaokhoa_runtime` — không phải superuser, không sở hữu đối tượng nào, chỉ có quyền dữ liệu tối thiểu do bước migrate cấp (script runtime-roles-setup). Role và quyền được cấp phát ở bước migrate trước khi api khởi động; mật khẩu của role chỉ sống trong file .env của môi trường triển khai.
   DATABASE_URL: postgres://giaokhoa_runtime:${RUNTIME_POSTGRES_PASSWORD:?Can dat RUNTIME_POSTGRES_PASSWORD trong file .env}@postgres:5432/${POSTGRES_DB:-giaokhoa}
-  # Trần kết nối của pool nghiệp vụ phía api trong ngân sách kết nối của cụm (issue #586) — xem ghi chú RUNTIME_POSTGRES_PASSWORD trong .env.example để biết cách cộng ngân sách.
   DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
   CONTROL_PLANE_POOL_MAX: ${CONTROL_PLANE_POOL_MAX:-4}
-  # Database control plane (issue #580): database riêng `giaokhoa_control_plane` trên cùng cụm Postgres, role kết nối riêng `giaokhoa_control_plane` — role và database được cấp phát idempotent bởi bước migrate (script control-plane-setup), không khai ở service postgres.
   CONTROL_PLANE_DATABASE_URL: postgres://giaokhoa_control_plane:${CONTROL_PLANE_POSTGRES_PASSWORD:?Can dat CONTROL_PLANE_POSTGRES_PASSWORD trong file .env}@postgres:5432/giaokhoa_control_plane
-  # Database kho ngân hàng hệ thống (issue #585): database riêng trên cùng cụm, role kết nối riêng — database và role được cấp phát idempotent bởi bước migrate (script system-bank-setup). Khai báo TRƠ như các biến tuỳ chọn phía dưới: Compose chỉ truyền vào api/worker khi biến thật sự được đặt ở môi trường triển khai; chưa đặt thì các route kho ngân hàng báo chưa cấu hình (503) thay vì làm ứng dụng gãy kiểm tra biến môi trường (schema yêu cầu độ dài tối thiểu khi biến CÓ MẶT). Service migrate khai riêng biến này trong khối environment của nó.
   SYSTEM_BANK_DATABASE_URL:
-  # Database kho riêng của trung tâm thí điểm nhantin (issue #587):
-  # sổ đăng ký control plane chỉ giữ tham chiếu `env:SPACE_NHANTIN_DATABASE_URL`, tầng ứng dụng đọc URL thật từ biến này khi phân giải phiên theo trung tâm. Khai báo TRƠ như SYSTEM_BANK_DATABASE_URL ở trên: Compose chỉ truyền vào api/worker khi biến thật sự được đặt ở môi trường triển khai; chưa đặt thì không có đường phân giải nào dùng tới biến và ứng dụng không gãy kiểm tra biến môi trường.
   SPACE_NHANTIN_DATABASE_URL:
-  # Kho riêng công cộng; cấu hình sau provision-public, truyền cả
-  # cho API lẫn worker để giao nhận bài/điểm không vào kho chung.
   SPACE_CONG_CONG_DATABASE_URL:
   PUBLIC_LEARNING_ENABLED: ${PUBLIC_LEARNING_ENABLED:-false}
   REDIS_URL: redis://redis:6379
   JWT_SECRET: ${JWT_SECRET:?Can dat JWT_SECRET trong file .env}
-  # Các biến tuỳ chọn có kiểm tra độ dài tối thiểu phía ứng dụng (MFA_ENCRYPTION_KEY, RESEND_API_KEY, MAIL_FROM) khai báo TRƠ — khoá không giá trị — như dưới đây: Compose chỉ truyền vào container khi biến thật sự được đặt ở môi trường triển khai. Khuôn ${BIEN:-} luôn tiêm chuỗi rỗng khi chưa cấu hình và làm ứng dụng lỗi kiểm tra biến môi trường (schema yêu cầu độ dài tối thiểu khi biến CÓ MẶT), nên không dùng khuôn đó cho các biến này.
   MFA_ENCRYPTION_KEY:
   BETTER_AUTH_ENABLED: ${BETTER_AUTH_ENABLED:-true}
   BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Can dat BETTER_AUTH_SECRET trong file .env}
@@ -47,7 +24,6 @@ x-api-env: &api-env
   RESEND_API_KEY:
   MAIL_FROM:
   FILE_STORAGE_DIR: /app/data/files
-  # API và worker phải dùng cùng driver S3 để cleanup xoá đúng object.
   FILE_STORAGE_DRIVER: ${FILE_STORAGE_DRIVER:-local}
   FILE_STORAGE_S3_ENDPOINT:
   FILE_STORAGE_S3_REGION: ${FILE_STORAGE_S3_REGION:-us-east-1}
@@ -65,7 +41,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Can dat POSTGRES_PASSWORD trong file .env}
       POSTGRES_DB: ${POSTGRES_DB:-giaokhoa}
     volumes:
-      # PostgreSQL 18 đổi bố cục: mount phải đặt tại /var/lib/postgresql (image tự quản thư mục con theo major version). Mount vào /var/lib/postgresql/data như khuôn của bản 17 trở xuống sẽ làm container lỗi khởi động.
       - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-giaokhoa}"]
@@ -76,7 +51,6 @@ services:
   redis:
     image: redis:7
     restart: unless-stopped
-    # Bật AOF để hàng đợi BullMQ và cache còn giữ được qua lần khởi động lại.
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redisdata:/data
@@ -96,7 +70,6 @@ services:
       <<: *api-env
       PORT: 3100
     volumes:
-      # Tệp tải lên (driver lưu trữ local mặc định) phải nằm trên volume bền, nếu không sẽ mất mỗi lần tạo lại container.
       - api-files:/app/data/files
     depends_on:
       postgres:
@@ -120,9 +93,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      # Worker dùng cùng role RUNTIME như api (issue #586 — xem x-api-env): không superuser, không sở hữu đối tượng.
       DATABASE_URL: postgres://giaokhoa_runtime:${RUNTIME_POSTGRES_PASSWORD:?Can dat RUNTIME_POSTGRES_PASSWORD trong file .env}@postgres:5432/${POSTGRES_DB:-giaokhoa}
-      # Khung định tuyến theo trung tâm phía worker (issue #581) đọc sổ đăng ký ở control plane qua đúng biến này như api — thiếu nó thì mọi đường mở phiên theo trung tâm của worker ném lỗi chưa cấu hình trong triển khai mặc định.
       CONTROL_PLANE_DATABASE_URL: postgres://giaokhoa_control_plane:${CONTROL_PLANE_POSTGRES_PASSWORD:?Can dat CONTROL_PLANE_POSTGRES_PASSWORD trong file .env}@postgres:5432/giaokhoa_control_plane
       SYSTEM_BANK_DATABASE_URL:
       SPACE_NHANTIN_DATABASE_URL:
@@ -138,11 +109,9 @@ services:
       FILE_STORAGE_S3_ACCESS_KEY_ID:
       FILE_STORAGE_S3_SECRET_ACCESS_KEY:
       FILE_STORAGE_S3_FORCE_PATH_STYLE: ${FILE_STORAGE_S3_FORCE_PATH_STYLE:-false}
-      # Biến mail tuỳ chọn: khai báo trơ như x-api-env — chỉ truyền vào container khi đã đặt thật ở môi trường triển khai.
       RESEND_API_KEY:
       MAIL_FROM:
     volumes:
-      # Worker đọc/ghi cùng kho tệp tải lên với api.
       - api-files:/app/data/files
     depends_on:
       postgres:
@@ -172,14 +141,12 @@ services:
       retries: 12
       start_period: 20s
 
-  # Mặt tiền HTTP duy nhất; toàn bộ proxy và chính sách tài liệu HTML nằm ở Caddyfile, không có server Node tự quản lý HTTP/WebSocket.
   gateway:
     image: caddy:2.10.2-alpine
     restart: unless-stopped
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
     ports:
-      # Giữ cùng cổng công khai trước khi tách gateway.
       - "${WEB_PORT:-8080}:8080"
     depends_on:
       web:
@@ -193,44 +160,30 @@ services:
       retries: 12
       start_period: 20s
 
-  # Áp migration (thư mục migration trong package @giaokhoa/db đi kèm image api) rồi kết thúc. Service này luôn thuộc stack, không nằm trong profile: api và worker khai depends_on điều kiện service_completed_successfully vào nó nên mỗi lần `docker compose up`, migration được áp xong (phần đã áp được bỏ qua, chạy lại an toàn) mới tới lượt api/worker khởi động. Nền tảng quản lý qua giao diện như Dokploy không chạy được service one-off theo profile, nên cổng thứ tự này là cơ chế kích hoạt migrate ở đó. Áp riêng khi cần:
-  #   docker compose run --rm migrate
   migrate:
     build:
       context: .
       dockerfile: Dockerfile
       target: api
     environment:
-      # DATABASE_URL của bước migrate là role MIGRATION (issue
-      # #586): script cấp phát control plane suy ra đích nghiệp vụ
-      # (database + role được cấp CONNECT) từ biến này, và nó là dự phòng khi DATABASE_ADMIN_URL vắng mặt.
       DATABASE_URL: postgres://giaokhoa_migrator:${MIGRATOR_POSTGRES_PASSWORD:?Can dat MIGRATOR_POSTGRES_PASSWORD trong file .env}@postgres:5432/${POSTGRES_DB:-giaokhoa}
-      # Kết nối quản trị của cụm — CHỈ dùng ở bước cấp phát role và database (hai script setup), không còn đường dữ kiện nào của ứng dụng chạy bằng kết nối này.
       DATABASE_ADMIN_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Can dat POSTGRES_PASSWORD trong file .env}@postgres:5432/postgres
-      # Hai URL đích của mô hình role: script runtime-roles-setup đảm bảo hai role tồn tại, database thuộc sở hữu của role migration và role runtime chỉ giữ quyền dữ liệu; cấu hình runner migration của kho nghiệp vụ ưu tiên MIGRATION_DATABASE_URL nên migration được áp bằng đúng role chủ sở hữu.
       MIGRATION_DATABASE_URL: postgres://giaokhoa_migrator:${MIGRATOR_POSTGRES_PASSWORD:?Can dat MIGRATOR_POSTGRES_PASSWORD trong file .env}@postgres:5432/${POSTGRES_DB:-giaokhoa}
       RUNTIME_DATABASE_URL: postgres://giaokhoa_runtime:${RUNTIME_POSTGRES_PASSWORD:?Can dat RUNTIME_POSTGRES_PASSWORD trong file .env}@postgres:5432/${POSTGRES_DB:-giaokhoa}
       CONTROL_PLANE_DATABASE_URL: postgres://giaokhoa_control_plane:${CONTROL_PLANE_POSTGRES_PASSWORD:?Can dat CONTROL_PLANE_POSTGRES_PASSWORD trong file .env}@postgres:5432/giaokhoa_control_plane
-      # URL kho ngân hàng hệ thống (issue #585) — TUỲ CHỌN, truyền xuyên từ file .env; chưa đặt thì chuỗi migrate bỏ qua bước (4) cấp phát + migration kho ngân hàng (xem command ở cuối service này). Khi kích hoạt kho ngân hàng, đặt biến này ở cả service api/worker trên Dokploy (môi trường chạy) lẫn ở đây (bước migrate).
       SYSTEM_BANK_DATABASE_URL: ${SYSTEM_BANK_DATABASE_URL:-}
-      # Công cụ vận hành đội kho (issue #586): các lệnh fleet:* chạy MỘT LẦN qua chính service này (cùng image api, đủ cả URL quản trị, URL migration và URL control plane ở trên):
-      #   docker compose run --rm migrate node dist/modules/fleet/fleet-migration-runner.js docker compose run --rm migrate node dist/modules/fleet/fleet-backup.js docker compose run --rm migrate node dist/modules/fleet/fleet-restore-test.js Thư mục sao lưu đặt cố định vào volume riêng fleet-backups gắn ở dưới (vận hành thật thay bằng bind mount ra vùng lưu trữ ngoài máy cụm). Khoá mã hoá khai báo TRƠ như các bí mật tuỳ chọn ở x-api-env: chỉ truyền vào khi đã đặt trong file .env — và thiếu khoá thì công cụ từ chối chụp sao lưu (fail-closed, không có chế độ lưu thô).
       FLEET_BACKUP_DIR: /app/data/fleet-backups
       FLEET_BACKUP_ENCRYPTION_KEY:
     volumes:
-      # Volume của thư mục sao lưu đội kho (xem ghi chú FLEET_BACKUP_DIR ở khối environment của service này).
       - fleet-backups:/app/data/fleet-backups
     depends_on:
       postgres:
         condition: service_healthy
-    # Thứ tự bắt buộc trong một lượt migrate: (0) cấp phát role migration + role runtime và chuyển quyền sở hữu kho nghiệp vụ về role migration (idempotent, script runtime-roles-setup — kho đã tồn tại từ trước với đối tượng thuộc role quản trị được chuyển chủ tại bước này), (1) cấp phát database + role của control plane (script control-plane-setup), (2) migration của kho nghiệp vụ bằng role migration, (2b) ensure idempotent cho 3 bảng vệ tinh của Ngân hàng hệ thống trong kho nghiệp vụ (script system-bank-centre-tables-setup, issue #585 — database đã áp baseline trước khi 3 bảng được nối vào file baseline thì migration bỏ qua thư mục baseline, bước ensure bù đúng phần đó; database mới đã có đủ qua baseline nên là no-op), (3) migration của control plane bằng runner migration Kysely của package (issue #639), (4) ensure phần delta schema của issue #583 (script centre-schema-delta-ensure — lấp 3 bảng trung tâm + policy RLS và chỉ mục control plane mà bộ migration bỏ qua vì delta gộp thêm vào migration đã phát hành; database mới thì bước này là no-op), (5) CÓ ĐIỀU KIỆN — chỉ khi SYSTEM_BANK_DATABASE_URL đã đặt: <redacted> kho ngân hàng hệ thống (script system-bank-setup, issue #585) rồi migration của kho ngân hàng bằng runner migration Kysely của package (issue #639). Bước (5) bỏ qua lặng lẽ khi biến chưa đặt để các môi trường chưa kích hoạt kho ngân hàng không gãy (bài học PR #589: biến bắt buộc mới làm gãy deploy). Một bước hỏng thì cả service migrate hỏng và api/worker không khởi động.
     command:
       - sh
       - -c
       - "node dist/modules/fleet/runtime-roles-setup.js && node dist/modules/control-plane/control-plane-setup.js && node node_modules/@giaokhoa/db/dist/migrate/run.js centre && node dist/modules/system-bank/system-bank-centre-tables-setup.js && node node_modules/@giaokhoa/db/dist/migrate/run.js control-plane && node dist/modules/tenants/centre-schema-delta-ensure.js && if [ -n \"$SYSTEM_BANK_DATABASE_URL\" ]; then node dist/modules/system-bank/system-bank-setup.js && node node_modules/@giaokhoa/db/dist/migrate/run.js system-bank; fi"
 
-  # Chạy một lần để seed dữ liệu mẫu (tài khoản demo + khoá học mẫu). CHỈ dùng cho môi trường thử nghiệm tự host lần đầu; TUYỆT ĐỐI không chạy trên cơ sở dữ liệu production đã khôi phục từ bản sao lưu:
-  #   docker compose --profile seed run --rm seed
   seed:
     build:
       context: .
@@ -245,24 +198,14 @@ services:
         condition: service_healthy
     command: ["node", "dist/modules/seed/review-seed.js"]
 
-  # Keycloak — nền xác thực tập trung của hệ thống (issue #704):
-  # Keycloak quản lý danh tính, organization và gán vai cấp trung tâm; app phân giải và thực thi capability nghiệp vụ theo ngữ cảnh. Hai service dưới đây chỉ cộng thêm vào stack — không service hiện hữu nào phụ thuộc vào chúng nên hành vi của các service hiện hữu không đổi.
-  #
-  # Dữ kiện danh tính của Keycloak (realm, người dùng, organization) nằm trong PostgreSQL RIÊNG của nó (service kc-db ngay dưới) trên volume có tên keycloak-db-data — không dùng chung cụm Postgres của ứng dụng và không được mất khi container bị tạo lại ở các lần deploy.
-  #
-  # Realm không nằm trong repo: realm, client và cấu hình trong realm là dữ kiện vận hành của bản cài, do admin tạo và quản trong trang quản trị Keycloak (Admin Console) và qua Admin API — service keycloak dưới đây chạy thẳng image gốc của Keycloak, không đóng gói file realm nào và không nạp realm lúc khởi động. Hệ quả: nếu cơ sở dữ liệu của Keycloak bị xoá sạch và dựng lại từ đầu, realm không tự xuất hiện lại — admin tạo lại realm trong trang quản trị.
-  #
-  # Hai service này chạy trên mạng riêng keycloak-net (khai ở khối networks cuối file), tách khỏi mạng mặc định của stack: kc-db chỉ cần nói chuyện với keycloak, và các container của ứng dụng không còn đường mạng nội bộ nào tới Keycloak.
   kc-db:
     image: postgres:17
     restart: unless-stopped
     environment:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak
-      # Một biến bí mật duy nhất cho cả hai phía của cùng một mật khẩu: POSTGRES_PASSWORD ở đây (phía server) và KC_DB_PASSWORD của service keycloak (phía client) cùng nội suy từ KEYCLOAK_DB_PASSWORD của môi trường triển khai.
       POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Can dat KEYCLOAK_DB_PASSWORD trong file .env}
     volumes:
-      # PostgreSQL 17 giữ bố cục thư mục dữ kiện cổ điển /var/lib/postgresql/data — khác service postgres của stack (PostgreSQL 18, mount tại /var/lib/postgresql).
       - keycloak-db-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
@@ -281,28 +224,18 @@ services:
       KC_DB_URL: jdbc:postgresql://kc-db:5432/keycloak
       KC_DB_USERNAME: keycloak
       KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Can dat KEYCLOAK_DB_PASSWORD trong file .env}
-      # Tài khoản quản trị BOOTSTRAP của Keycloak: tài khoản quản trị thuộc realm master với quyền quản trị đầy đủ (không chỉ quyền vào Admin Console), được Keycloak tạo ở lần khởi động đầu tiên trên cơ sở dữ liệu trống từ mật khẩu nội suy ở đây. Đây là tài khoản TẠM của lần dựng đầu: KEYCLOAK_ADMIN_PASSWORD cần có ở lần deploy đầu tiên để bootstrap tạo được tài khoản; sau khi đã có tài khoản quản trị lâu dài thì xoá tài khoản tạm này và gỡ biến khỏi môi trường triển khai theo quy trình kết thúc bootstrap ở mục nghiệm thu của issue #704.
-      #
-      # Chỉ mật khẩu được khai ở đây; tên tài khoản bootstrap TUYỆT ĐỐI không ghim trong compose. Keycloak kiểm chứng cặp tuỳ chọn này ngay ở bước kiểm chứng cấu hình của lệnh start: tên tài khoản bootstrap chỉ hợp lệ khi mật khẩu bootstrap đang được đặt, và tên đến từ biến môi trường là giá trị người dùng sửa được nên điều kiện kiểm chứng đó có chạy. Ghim tên tài khoản trong khi mật khẩu là biến tuỳ chọn khiến lần khởi động đầu tiên sau khi biến mật khẩu bị gỡ chết tại bước kiểm chứng (PropertyException "bootstrap-admin-username available only when bootstrap admin password is set", tiến trình thoát mã 2, container restart lặp vô hạn — sự cố production ngày 02/11/2026, issue #724). Không ghim tên thì giá trị mặc định `temp-admin` của Keycloak không qua điều kiện kiểm chứng đó, nên lỗi không xảy ra ở mọi trạng thái của biến mật khẩu; riêng dòng mật khẩu không gắn điều kiện kiểm chứng nào nên đứng một mình vẫn an toàn. Nội suy mật khẩu dùng dạng ${...:-} (mặc định rỗng) thay cho dạng bắt buộc ${...:?} để việc gỡ biến sau khi kết thúc bootstrap không chặn deploy — khẳng định này chỉ đúng khi tên tài khoản không bị ghim như trên.
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-}
-      # Địa chỉ công khai duy nhất của Keycloak: trình duyệt chỉ gặp Keycloak qua tên miền này (Cloudflare Tunnel trỏ auth.fuckr.net về cổng host 8085 ở dưới), nên issuer trong token luôn mang tiền tố https://auth.fuckr.net/realms/.
       KC_HOSTNAME: https://auth.fuckr.net
-      # TLS kết thúc ở Cloudflare Tunnel phía trước; container chỉ nhận HTTP nội bộ và tin các header X-Forwarded-*. Biên tin cậy của việc tin header này: từ ngoài host, cổng 8085 ở dưới bị bind vào loopback nên chỉ cloudflared chạy ngay trên host mới tới được cổng; từ trong stack, keycloak đã tách sang mạng riêng keycloak-net nên các container của ứng dụng không còn đường mạng nội bộ nào tới keycloak:8080; tiến trình chạy ngay trên host vốn thuộc biên tin cậy của host. Vì vậy vẫn không đặt KC_PROXY_TRUSTED_ADDRESSES: chưa có bằng chứng về địa chỉ peer mà container thật sự nhìn thấy phía sau docker proxy trên mạng riêng — địa chỉ đó sẽ đối chiếu từ log của Keycloak ở bước nghiệm thu hậu merge trước khi quyết định có ghim hay không.
       KC_HTTP_ENABLED: "true"
       KC_PROXY_HEADERS: xforwarded
       KC_HEALTH_ENABLED: "true"
-      # Bật thêm endpoint metrics trên cùng cổng quản trị 9000:
-      # readiness (/health/ready) khi đó kiểm cả connection pool tới kc-db, nên healthcheck ở dưới phản ánh đúng việc Keycloak đã dùng được database của nó. Cổng 9000 không publish ra host — chỉ healthcheck trong container và vận hành qua exec mới dùng tới.
       KC_METRICS_ENABLED: "true"
     ports:
-      # Cổng host dành riêng cho Keycloak, bind vào loopback (127.0.0.1) thay vì mọi giao diện của host: Cloudflare Tunnel chạy ngay trên host và ingress của nó trỏ vào cổng này trên localhost, nên bind loopback là đủ cho đường công khai qua auth.fuckr.net, đồng thời không ai ngoài chính host vào thẳng được cổng này để vượt qua tunnel hay giả mạo các header X-Forwarded-* mà Keycloak tin (KC_PROXY_HEADERS ở trên). Web vẫn là cửa vào của ứng dụng như trước. Số cổng phía host lấy từ biến KEYCLOAK_HOST_PORT của môi trường triển khai, mặc định 8085 — cùng khuôn với WEB_PORT của service gateway ở trên: một cổng host chỉ một stack giữ được, nên các stack nhân bản từ compose này (chẳng hạn preview theo nhánh) phải đặt cổng riêng qua biến này trong môi trường của service trên Dokploy; production không đặt biến nên vẫn dùng 8085 như trước, và ingress của tunnel phải trỏ đúng cổng mà stack của nó dùng.
       - "127.0.0.1:${KEYCLOAK_HOST_PORT:-8085}:8080"
     depends_on:
       kc-db:
         condition: service_healthy
     healthcheck:
-      # Image Keycloak không có curl: thăm readiness bằng Bash /dev/tcp — mở kết nối TCP tới cổng quản trị 9000, gửi request HTTP và đòi dòng trạng thái đáp án chứa 200. start_period dài để lần khởi động đầu (tạo schema) không bị tính là lỗi. Healthcheck chỉ để quan sát trạng thái và cho CI chờ readiness — không cơ chế nào restart container theo healthcheck, nên database chập chờn không làm Keycloak bị khởi động lại. Biến $status của shell trong lệnh dưới đây PHẢI viết thành $$status: Compose nội suy mọi $... ngay trong chuỗi lệnh của healthcheck, viết một $ thì biến bị thay bằng chuỗi rỗng trước khi lệnh tới container và probe hỏng lặng lẽ (đã vấp ở lượt CI đầu của healthcheck này:
-      # log job có cảnh báo "status variable is not set" trong khi Keycloak khởi động hoàn toàn bình thường).
       test: ["CMD", "bash", "-c", 'exec 3<>/dev/tcp/127.0.0.1/9000 || exit 1; printf "GET /health/ready HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n" >&3; IFS= read -r status <&3; case "$$status" in *" 200 "*) exit 0 ;; *) exit 1 ;; esac']
       interval: 10s
       timeout: 5s
@@ -316,9 +249,7 @@ volumes:
   redisdata:
   api-files:
   fleet-backups:
-  # Dữ kiện PostgreSQL riêng của Keycloak (issue #704) — xem service kc-db trong khối services.
   keycloak-db-data:
 
 networks:
-  # Mạng riêng của cặp Keycloak (issue #704): chỉ kc-db và keycloak thuộc mạng này, và cả hai rời mạng mặc định của stack — kc-db không lộ diện với các container của ứng dụng, keycloak trên mạng nội bộ chỉ còn nhận kết nối từ kc-db, cộng cổng loopback đã publish cho Cloudflare Tunnel trên host. Các service hiện hữu không khai networks nên vẫn ở mạng mặc định như trước.
   keycloak-net:

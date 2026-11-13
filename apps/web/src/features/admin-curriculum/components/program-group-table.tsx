@@ -4,26 +4,16 @@ import { Badge } from '@giaokhoa/ui/components/badge';
 import { Button } from '@giaokhoa/ui/components/button';
 import type { CurriculumTreeNode } from '#lib/curriculum';
 
-/**
- * Trình bày cây chương trình theo MẪU CỦA BỘ (GDPT-SEED, issue #161):
- * mỗi mạch nội dung (node strand ở gốc cây) là một bảng hai cột "Nội dung | Yêu cầu cần đạt". Các bậc ở giữa (section/topic) không thành dòng riêng nếu không mang YCCĐ — tựa của chúng flatten vào đường đi ở cột Nội dung; node mang YCCĐ ở bất kỳ bậc nào cũng thành dòng. Hành vi quản trị giữ nguyên §9: thêm node con / thêm YCCĐ / Sửa mở màn riêng, Xoá tại dòng.
- *
- * Chế độ `readOnly` (trang xem chương trình của GIÁO VIÊN, issue #161 lát T2): cùng một cách trình bày mẫu Bộ nhưng KHÔNG nút thao tác — giáo viên chỉ xem, sửa chương trình thuộc khu quản trị.
- *
- * Nội dung YCCĐ được trình bày GIỮ CẤU TRÚC DÒNG (điểm T3 của issue #161): text canonical của một YCCĐ có thể gồm nhiều dòng (các ý đã tách ở dataset, gồm danh sách ý cha–con) — mỗi dòng render thành một khối riêng thay vì một đoạn chạy liền mất phân cấp dòng. Từ khi cột lưu trữ chuyển sang tài liệu Tiptap (jsonb), YCCĐ có ý con được render PHÂN CẤP CHA–CON nhìn thấy được: ý cha là một khối, ý con thụt lề dưới ý cha với dấu gạch đầu dòng, danh sách lồng sâu hơn thụt lề thêm một mức — đúng cấu trúc tài liệu, áp dụng nhất quán cho cả bề mặt quản trị lẫn bề mặt giáo viên (cùng dùng component này, chế độ chỉ đọc chỉ ẩn nút thao tác).
- */
 export interface ProgramRow {
   node: CurriculumTreeNode;
   path: string[];
 }
 
-/** Flatten một subtree thành các dòng bảng (cha trước con, giữ thứ tự cây). */
 export function flattenProgramRows(node: CurriculumTreeNode, path: string[], out: ProgramRow[]): void {
   if (node.kind === 'lesson' || node.outcomes.length > 0) out.push({ node, path });
   for (const child of node.children) flattenProgramRows(child, [...path, node.title], out);
 }
 
-/** Các nút thao tác tại dòng của một node (dùng cho cả tiêu đề mạch lẫn dòng nội dung). */
 export function NodeRowActions({
   node, curriculumId, onDeleteNode,
 }: {
@@ -50,19 +40,6 @@ export function NodeRowActions({
   );
 }
 
-/**
- * Nội dung một YCCĐ giữ cấu trúc dòng: YCCĐ một dòng render nguyên như
- * cũ; YCCĐ nhiều dòng thì mỗi dòng là một khối riêng trong cùng ô
- * (thứ tự dòng giữ nguyên thứ tự canonical của dataset).
- *
- * Khi có tài liệu Tiptap (`contentDoc`), render theo đúng cấu trúc
- * tài liệu thay vì phẳng hoá theo dòng text: đoạn văn thành một
- * khối; mục danh sách thành một khối thụt lề kèm dấu gạch đầu dòng,
- * và danh sách lồng bên trong mục đó thụt lề thêm một mức (đệ quy).
- * Nhờ đó quan hệ cha–con nhìn thấy được ngay trong ô, không cần
- * đọc text để đoán. Không có tài liệu (dữ liệu cũ hoặc bề mặt chưa
- * trả trường này) thì giữ đúng hành vi cũ: tách text theo dòng.
- */
 export function OutcomeContent({
   content,
   contentDoc,
@@ -91,14 +68,6 @@ export function OutcomeContent({
   );
 }
 
-/**
- * Một node trong tài liệu Tiptap của một YCCĐ, render theo độ sâu
- * lồng của nó: đoạn văn là một khối text; mục danh sách là một khối
- * thụt lề (`pl-4`) kèm dấu gạch đầu dòng nằm cùng dòng với đoạn văn
- * của chính mục, danh sách lồng bên trong mục thụt lề thêm một mức.
- * Node lạ không thuộc các dạng này được bỏ qua thay vì làm vỡ cả
- * ô — text canonical ở `content` vẫn là nguồn đối chiếu đầy đủ.
- */
 function OutcomeDocNode({
   node,
 }: {
@@ -112,9 +81,6 @@ function OutcomeDocNode({
     return <span className="block">{text}</span>;
   }
   if (node.type === 'listItem') {
-    // Dấu gạch đầu dòng nằm cùng dòng với đoạn văn của chính mục
-    // này; danh sách lồng bên trong (nếu có) render thành các khối
-    // riêng thụt lề thêm một mức dưới nó.
     const children = node.content ?? [];
     const ownText = children
       .filter((child) => child.type === 'paragraph')
@@ -148,7 +114,6 @@ function OutcomeDocNode({
   return null;
 }
 
-/** Một bảng chương trình: tiêu đề mạch (nếu có) + các dòng Nội dung | Yêu cầu cần đạt. */
 export function ProgramGroupTable({
   title, groupNode, rows, curriculumId, onDeleteNode, onDeleteOutcome, continued = false, readOnly = false,
 }: {
@@ -158,9 +123,7 @@ export function ProgramGroupTable({
   curriculumId: string;
   onDeleteNode?: (node: CurriculumTreeNode) => void;
   onDeleteOutcome?: (node: CurriculumTreeNode, outcomeId: string) => void;
-  /** Mạch này đã bắt đầu ở trang trước (phân trang cắt qua mạch) → tiêu đề kèm dấu (tiếp) như văn bản in. */
   continued?: boolean;
-  /** Chỉ xem (trang giáo viên): ẩn mọi nút thao tác tại dòng và tại tiêu đề mạch. */
   readOnly?: boolean;
 }) {
   const { t } = useTranslation('app');

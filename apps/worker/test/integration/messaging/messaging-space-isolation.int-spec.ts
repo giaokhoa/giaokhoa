@@ -19,14 +19,6 @@ import {
   MESSAGING_DISTRIBUTED_KEY_PREFIX, MessagingRealtimeProcessor,
 } from '../../../src/processors/messaging-realtime.processor';
 
-/**
- * Luồng Redis + Socket.IO + processor thật cho hai kho khác nhau,
- * cố tình có CÙNG tenantId, userId, conversationId, messageId và
- * outboxId. Chỉ dùng store giả tại biên truy vấn dữ liệu; phát và
- * nhận sự kiện, chống trùng Redis, xác nhận retry đi qua adapter,
- * processor và client thực. Đây là phép kiểm tra đầu-cuối của miền
- * thông điệp, không thay thế kiểm thử HTTP/database của khung API.
- */
 const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
 const spaceA = { slug: 'test-queue-room-a', id: randomUUID() };
 const spaceB = { slug: 'test-queue-room-b', id: randomUUID() };
@@ -182,9 +174,6 @@ describe('Hai kho trùng ID vẫn cách ly Redis marker và Socket.IO', () => {
   }, 60_000);
 
   it('sự kiện presence và typing nhắm room A không tới B hoặc khu công cộng dù mọi ID nội bộ trùng', async () => {
-    // Bộ room của API/worker lấy cùng một hàm từ package messaging.
-    // Kiểm tra trực tiếp các sự kiện on-wire tới ba socket thật,
-    // thay vì chỉ so sánh chuỗi tên room.
     const aRoom = conversationRoom(tenantId, conversationId, spaceA.id);
     server.of('/messaging').to(aRoom).emit(MESSAGING_SOCKET_EVENTS.typing, { conversationId, userId });
     server.of('/messaging').to(aRoom).emit(MESSAGING_SOCKET_EVENTS.presenceChanged, { userId, online: true });
@@ -192,8 +181,6 @@ describe('Hai kho trùng ID vẫn cách ly Redis marker và Socket.IO', () => {
     expect(signalsB).toEqual([]);
     expect(signalsPublic).toEqual([]);
     expect(signalsA).toEqual(['typing', 'presence']);
-    // Chứng minh socket B và khu công cộng vẫn giữ đúng room riêng,
-    // không bị đẩy khỏi các kênh sau khi nhận phát A.
     const rooms = server.of('/messaging').adapter.rooms;
     expect(rooms.get(conversationRoom(tenantId, conversationId, spaceB.id))?.size).toBe(1);
     expect(rooms.get(conversationRoom(tenantId, conversationId, null))?.size).toBe(1);

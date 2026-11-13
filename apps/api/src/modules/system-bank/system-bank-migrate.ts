@@ -1,19 +1,3 @@
-/**
- * CLI di trú dữ kiện Ngân hàng hệ thống từ kho nghiệp vụ chung sang kho ngân hàng riêng (issue #585) — chạy BẰNG TAY sau khi kho ngân hàng đã tồn tại (setup + migration kho ngân hàng), KHÔNG nằm trong chuỗi migrate của compose (như seed):
- * `DATABASE_URL=<kho nghiệp vụ> SYSTEM_BANK_DATABASE_URL=<kho ngân hàng> pnpm system-bank:migrate [--with-outcome-package <phiên bản>]`
- *
- * Nguồn: câu hỏi thuộc bank platform (category.bank_id trỏ bank có scope='platform' và kind='question' — chỉ liên kết bank_id tường minh mới tính là câu hệ thống; category chưa gán bank được app suy về bank trường/cá nhân, không bao giờ suy về platform nên không di trú). Ánh xạ trạng thái entry → trạng thái câu ngân hàng:
- * ready → published; hidden → withdrawn (kèm lý do/người/thời điểm rút từ entry); draft → BỎ QUA và báo cáo (câu đang soạn chưa phát hành không được phơi thành câu hệ thống).
- *
- * Ghi: upsert theo id giữ nguyên (câu + version + liên kết YCCĐ) nên chạy lại an toàn; gói phiên bản đóng theo đúng hợp đồng gói bất biến (nội dung + đáp án + quy tắc chấm + phản hồi + ngữ liệu + liên kết YCCĐ của câu, không phải của version — liên kết gắn ở cấp câu nên mọi version của cùng câu mang cùng tập liên kết tại thời điểm di trú). Checksum tính lại bằng cùng hàm canonical với service
- * (lệch là di trú vỡ, thoát lỗi ngay).
- *
- * Đối soát: in số lượng trước/sau (câu, version, ngữ liệu phân biệt, liên kết chuẩn) + số câu draft bỏ qua. Hàng platform trong kho chung GIỮ NGUYÊN sau di trú (không xoá): slot đề cũ còn trỏ id câu trong kho chung; việc cụ thể hoá bản chụp cho đề cũ thuộc issue #587. Từ sau PR này, ghi mới cho câu hệ thống chỉ qua admin API của kho ngân hàng; bank platform trong kho chung thành dữ kiện cũ chỉ đọc.
- *
- * Cờ `--with-outcome-package <phiên bản>`: phát hành thêm gói YCCĐ đầu tiên từ cây chương trình hiện hành (chỉ YCCĐ chuẩn platform đang hiện hành: tenantId NULL, retiredAt NULL) — cùng bộ lọc với đường phát hành gói của service; đây là công cụ di trú một lần nên phần chụp cây viết trực tiếp trong script (service là đường chạy thường xuyên, không phải đường di trú).
- *
- * Mọi truy cập dữ kiện qua handle Kysely của `@giaokhoa/db` (kho nghiệp vụ) và `@giaokhoa/db/system-bank` (kho ngân hàng); các câu đọc đặt bí danh camelCase cho cột để phần thân dưới giữ nguyên hình dạng dữ kiện như trước (đặc biệt là các mảng trung gian đưa vào checksum của gói YCCĐ — đổi hình dạng là đổi checksum).
- */
 import { Pool } from 'pg';
 import { createCentreKysely, sql, type JsonValue } from '@giaokhoa/db';
 import { createSystemBankKysely } from '@giaokhoa/db/system-bank';
@@ -304,9 +288,6 @@ async function main(): Promise<void> {
           throw new Error(`system-bank-migrate: question ${q.id} version ${version.version} failed package validation: ${validation}`);
         }
         const checksum = checksumPackage(pkg);
-        // Cột `package` là jsonb: serialize tường minh kèm `::jsonb`
-        // như mọi đường ghi jsonb của hệ (driver `pg` không tự
-        // stringify giá trị object do Kysely truyền xuống).
         const packageValue = sql<JsonValue>`${JSON.stringify(pkg)}::jsonb`;
         await bank
           .insertInto('system_question_versions')
@@ -461,8 +442,6 @@ async function main(): Promise<void> {
               outcome_id: row.outcomeId,
               node_id: row.nodeId,
               position: row.position,
-              // Cột `content` là jsonb (tài liệu YCCĐ): serialize
-              // tường minh kèm `::jsonb` như cột `package` ở trên.
               content: sql<JsonValue>`${JSON.stringify(row.content)}::jsonb`,
               source_kind: row.sourceKind,
               source_ref: row.sourceRef,

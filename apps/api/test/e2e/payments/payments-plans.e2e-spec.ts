@@ -5,14 +5,8 @@ import {
   adminToken, assignRole, createTestApp, createUserViaApi, http, login,
   roleIdByShortname, STRONG_PASSWORD, systemContextId,
 } from '../../support/identity-access-helpers';
-// Từ issue #539, nhịp quét matching chạy ở worker nên tiến trình API trong test không còn tự quét: mỗi vòng chờ dẫn một nhịp qua cầu dẫn này rồi mới đọc trạng thái.
 import { closeSepaySweepDriver, driveSepaySweep } from '../../support/sepay-sweep-driver';
 
-/**
- * Lát 2 của issue #189 — mô hình gói `tenant_plan`/`teacher_plan` với GIÁ TỪ CẤU HÌNH HỆ THỐNG: mua gói chạy trọn pipeline VietQR → IPN SePay → khớp 3 điều kiện → kích hoạt quyền lợi đúng bên hưởng + đúng cửa sổ chu kỳ; đổi giá trong Cài đặt hệ thống thì khoản thu tạo sau dùng giá mới (không cần triển khai lại); lệch đối soát → `needs_review` và không sinh quyền lợi; hoàn đủ → đình chỉ quyền lợi của chính payment đó.
- *
- * Giá trị khởi tạo trong registry (component `payments`): gói trung tâm 6.000.000đ / 365 ngày, gói giáo viên 990.000đ / 365 ngày — spec đọc các số này qua hành vi (số tiền của payment tạo ra), không qua hằng số riêng nào khác ngoài chính kỳ vọng nghiệm thu dưới đây.
- */
 const SEPAY_KEY = 'sk-test-sepay-plan-001';
 const SEPAY_XID = 'xid-test-plan-001';
 const BANK_ACCOUNT = '113366669999';
@@ -97,10 +91,6 @@ describe('Mua gói: tenant_plan + teacher_plan qua pipeline VietQR (issue #189, 
       });
     expect(res.status).toBeLessThan(300);
     sepayAccountId = res.body.id as string;
-    // Mua gói chọn tài khoản đang bật của tenant platform: vô hiệu hoá
-    // tạm các tài khoản khác của tenant đó (fixture của các spec chạy
-    // trước để lại) để đường mua gói trong spec này xác định duy nhất;
-    // khôi phục nguyên trạng ở afterAll.
     const others = await pg.query(
       'select id from payment_accounts where tenant_id = (select tenant_id from payment_accounts where id = $1) and id <> $1 and enabled = true',
       [sepayAccountId],
@@ -127,7 +117,6 @@ describe('Mua gói: tenant_plan + teacher_plan qua pipeline VietQR (issue #189, 
     expect(payment.component).toBe('tenant_plan');
     expect(payment.accountId).toBe(sepayAccountId);
     expect(payment.paymentCode).toMatch(/^GKH[0-9A-HJKMNP-TV-Z]{9}$/);
-    // Ghi vết giá đã áp vào chính bản ghi payment.
     expect(payment.data?.plan?.configuredPrice).toBe(TENANT_PLAN_DEFAULT_PRICE);
     expect(payment.data?.plan?.periodDays).toBe(365);
 
@@ -138,18 +127,12 @@ describe('Mua gói: tenant_plan + teacher_plan qua pipeline VietQR (issue #189, 
     expect(entitlement).toBeTruthy();
     expect(entitlement!.component).toBe('tenant_plan');
     expect(entitlement!.user_id).toBeNull();
-    // Bên hưởng của quyền lợi là tenant ghi trong ẢNH CHỤP của payment
-    // (data.plan.beneficiaryTenantId — tenant hiệu lực của người mua),
-    // KHÔNG phải tenant của tài khoản nhận tiền (payment.tenantId):
-    // hai khái niệm này chỉ trùng nhau ở fixture này vì người mua
-    // đang ở tenant mặc định, cũng là tenant của tài khoản platform.
     expect(entitlement!.tenant_id).toBe(payment.data.plan.beneficiaryTenantId);
     expect(entitlement!.status).toBe('active');
     const windowMs = new Date(entitlement!.expires_at).getTime() - new Date(entitlement!.starts_at).getTime();
     expect(Math.abs(windowMs - 365 * DAY_MS)).toBeLessThan(60_000);
     expect(new Date(entitlement!.starts_at).getTime()).toBeLessThanOrEqual(Date.now());
 
-    // Bề mặt "gói của tôi" của người mua thấy quyền lợi này.
     const mine = await http(app).get('/api/v1/payments/plans/me').set('Authorization', `Bearer ${token}`);
     expect(mine.status).toBeLessThan(300);
     expect((mine.body as { paymentId: string }[]).some((e) => e.paymentId === payment.id)).toBe(true);
@@ -207,7 +190,6 @@ describe('Mua gói: tenant_plan + teacher_plan qua pipeline VietQR (issue #189, 
         .set('Authorization', `Bearer ${admin}`);
       expect(clear.status).toBeLessThan(300);
     }
-    // Xoá ghi đè xong, giá hiệu lực trở về giá trị khởi tạo.
     const restored = await buyPlan(token, 'tenant_plan');
     expect(restored.amount).toBe(TENANT_PLAN_DEFAULT_PRICE);
   });
@@ -227,8 +209,6 @@ describe('Mua gói: tenant_plan + teacher_plan qua pipeline VietQR (issue #189, 
     await waitPaymentStatus(payment.id, 'succeeded');
     expect((await entitlementOf(payment.id))!.status).toBe('active');
 
-    // Hoàn 100% luôn HAI CẤP dù số tiền dưới ngưỡng mặc định: tạo yêu
-    // cầu ở `requested`; quyền lợi chưa bị đụng cho tới mốc settled.
     const refund = await http(app).post(`/api/v1/payments/${payment.id}/refunds`)
       .set('Authorization', `Bearer ${admin}`)
       .send({ amount: TEACHER_PLAN_DEFAULT_PRICE, reason: 'full refund', externalTransactionId: `ft-out-plan-${Date.now()}` });

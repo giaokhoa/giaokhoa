@@ -1,18 +1,3 @@
-/**
- * Thẻ thông tin lần ghim đề (tách cấu trúc từ `pages/quiz.tsx`
- * theo đợt A của issue #223): thông tin tổ chức theo cài đặt hiệu
- * lực của chính người xem, các nút bắt đầu/tiếp tục/xem trước,
- * điểm của tôi, danh sách lượt làm của tôi và các lần chấm lại
- * của tôi. Dữ liệu lần ghim được truyền trọn qua props; thao tác
- * bắt đầu lượt làm do trang giữ và truyền xuống.
- *
- * @param props.courseId - Id khoá học trên route (đích các liên kết giáo viên).
- * @param props.quizId - Id lần ghim trên route (đích các liên kết giáo viên).
- * @param props.data - View lần ghim đã nạp.
- * @param props.myRegrades - Các lần chấm lại đã áp lên lượt làm của người xem.
- * @param props.actionError - Lỗi thao tác hiện tại (trang giữ).
- * @param props.startAttempt - Handler bắt đầu lượt làm (preview = xem trước).
- */
 import type { PinRegradeLogEntry } from '@giaokhoa/contracts';
 import { formatDateTime } from '#utils/date-format';
 import { QuizForUser } from '../types/quiz';
@@ -35,7 +20,6 @@ export function AttemptsPanel({ courseId, quizId, data, myRegrades, actionError,
   const { t } = useTranslation('app');
   const navigate = useNavigate();
   const { quiz, permissions } = data;
-  // Cửa sổ/giới hạn hiện theo cài đặt HIỆU LỰC của chính người xem (API đã hợp nhất ghi đè) — học sinh thuộc diện ghi đè thấy đúng giờ của mình, không phải giờ chung của đề.
   const eff = data.effective;
   const hasOwnOverride =
     eff.timeOpen !== quiz.timeOpen ||

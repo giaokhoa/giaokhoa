@@ -19,27 +19,18 @@ import { examPinQueryOptions, examPinVersionUpdateQueryOptions, regradeQuestionV
 import { courseGroupsQueryOptions } from '#features/progress-report/queries/progress-report';
 import { queryClient } from '#lib/query-client';
 
-/**
- * Trang LẦN GHIM đề (sau gộp Đề #226, route /courses/:id/exams/:pinId):
- * thông tin lần tổ chức cho mọi người xem được; học sinh bắt đầu/tiếp tục lượt làm và xem điểm của mình; giáo viên có quyền manage thì sửa CẤU HÌNH TỔ CHỨC của lần ghim tại trang — nội dung đề (slots) thuộc về ĐỀ ở ngân hàng, tại đây chỉ xem bản đã ghim + nâng version đề.
- */
 export function QuizPage() {
   const { t } = useTranslation('app');
   const { id: courseId, pinId: quizId } = useParams();
   const navigate = useNavigate();
-  // Dữ liệu trang qua TanStack (F-01 đợt 1): lần ghim là một query
-  // (clientLoader đã prefetch cùng khoá); lỗi tải đầu hiển thị qua
-  // trạng thái lỗi của query như reload() thủ công trước đây (F-14).
   const pinQuery = useExamPin(quizId ?? '');
   const data = pinQuery.data?.view ?? null;
   const slotNames = pinQuery.data?.slotNames ?? {};
   const { refetch } = pinQuery;
-  // Lỗi tải suy ngay khi render từ trạng thái query — không chép qua effect vào state như bản cũ; nút thử lại chỉ refetch, refetch thành công thì màn hình lỗi tự rời.
   const error = pinQuery.isError ? t('quizLoadFailed') : null;
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Form cài đặt (chỉ giáo viên manage dùng).
   const [name, setName] = useState('');
   const [intro, setIntro] = useState('');
   const [timeOpen, setTimeOpen] = useState('');
@@ -51,32 +42,23 @@ export function QuizPage() {
   const [shuffleAnswers, setShuffleAnswers] = useState(false);
   const [versionMode, setVersionMode] = useState<'pinned' | 'float_latest_ready'>('pinned');
 
-  // Cập nhật version của pin (issue #254): xem trước diff rồi mới áp — preview là dữ kiện của API, áp dùng đúng exam version đã xem trước.
   const [updatePreview, setUpdatePreview] = useState<PinVersionUpdatePreview | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
 
-  // Chấm lại theo đáp án (issue #254): chọn câu + version đúng → dry-run xem điểm đổi → áp → nhật ký các lần đã áp.
   const [regradeQuestionId, setRegradeQuestionId] = useState('');
   const [regradeVersions, setRegradeVersions] = useState<{ id: string; version: number; status: string }[]>([]);
   const [regradeVersionId, setRegradeVersionId] = useState('');
   const [regradePreview, setRegradePreview] = useState<PinRegradeResult | null>(null);
   const [regradeError, setRegradeError] = useState<string | null>(null);
 
-  // Lịch sử sửa điểm của chính người xem (API tự gác cổng công bố:
-  // chưa công bố thì trả rỗng, mục này tự ẩn).
   const myRegradesQuery = useExamPinMyRegrades(quizId ?? '');
   const myRegrades = myRegradesQuery.data ?? [];
 
-  // Nhật ký chấm lại của pin: query bật khi người xem có quyền chấm
-  // (panel chấm lại dùng chung dữ kiện này); lỗi tải thì coi như
-  // nhật ký rỗng như bản thủ công.
   const regradeLogQuery = useExamPinRegrades(quizId ?? '', !!data?.permissions.grade);
   const regradeLog: PinRegradeLogEntry[] | null = regradeLogQuery.isError ? [] : (regradeLogQuery.data ?? null);
 
-  // Thông tin ĐỀ nguồn của lần ghim (tên + version hiện hành ở bank) — chỉ tải khi có quyền manage.
   const examInfo = useExamSource(data?.quiz.examId, !!data?.permissions.manage).data ?? null;
 
-  // Ghi đè (chỉ người có quiz:manageoverrides dùng): danh sách + dữ liệu chọn đích + form tạo/sửa dùng chung. Ghi đè + danh sách thành viên đích: chỉ tải khi có quyền quản ghi đè. Nhóm của khoá dùng chung khoá factory courseGroups (F-03).
   const overridesQuery = useExamPinOverrides(quizId ?? '', !!data?.permissions.manageOverrides);
   const overrides = overridesQuery.data ?? [];
   const overridesLoaded = overridesQuery.isSuccess || overridesQuery.isError;
@@ -88,7 +70,6 @@ export function QuizPage() {
       enabled: !!courseId && !!(data?.permissions.manage || data?.permissions.manageOverrides),
     }).data ?? [];
 
-  // Khởi tạo form cài đặt từ dữ liệu lần ghim mỗi khi dữ liệu (lại) tải về — đúng phần khởi tạo của reload() thủ công trước đây.
   const [previousQuizData, setPreviousQuizData] = useState<typeof data | undefined>(undefined);
   if (previousQuizData !== data) {
     setPreviousQuizData(data);
@@ -106,13 +87,11 @@ export function QuizPage() {
     }
   }
 
-  // Nạp lại view lần ghim sau các thao tác ghi không qua đột biến tự làm mới (chấm lại áp thật): refetch của query; lỗi refetch vẫn ném ra để các nhánh bắt lỗi cũ chạy nguyên trạng.
   const reload = useCallback(async () => {
     const result = await refetch();
     if (result.error) throw result.error;
   }, [refetch]);
 
-  // Các đột biến của trang lần ghim (F-01 của rà soát #133): cài đặt, cập nhật version, chấm lại, bắt đầu lượt làm. (Đột biến ghi đè nằm ở OverridesPanel cùng trạng thái form của khối đó.)
   const settingsMutation = useUpdateExamPinSettings(quizId ?? '');
   const versionUpdateMutation = useApplyExamPinVersionUpdate(quizId ?? '');
   const regradeMutation = useRunExamPinRegrade(quizId ?? '');
@@ -120,7 +99,6 @@ export function QuizPage() {
 
   async function saveSettings(event: FormEvent) {
     event.preventDefault();
-    // Lỗi chế độ version phải hiện đúng lý do nghiệp vụ (chỉ luyện tập mới được trôi) thay vì thông báo lỗi chung — API là nơi gác, ở đây chỉ dịch mã lỗi của nó.
     setActionError(null);
     setBusy(true);
     try {
@@ -148,7 +126,6 @@ export function QuizPage() {
     }
   }
 
-  /** Tải xem trước cập nhật version (diff từng slot) cho lần ghim này — đọc theo yêu cầu qua fetchQuery. */
   async function loadUpdatePreview() {
     setUpdateError(null);
     setBusy(true);
@@ -161,7 +138,6 @@ export function QuizPage() {
     }
   }
 
-  /** Áp cập nhật lên đúng exam version đã xem trước; bị khoá bởi lượt làm thật thì hiện lý do của API. */
   async function applyUpdate() {
     if (!updatePreview?.toExamVersionId) return;
     setUpdateError(null);
@@ -181,7 +157,6 @@ export function QuizPage() {
     }
   }
 
-  /** Tải các version của câu được chọn cho panel chấm lại, mặc định chọn bản ready mới nhất. */
   async function loadRegradeVersions(questionId: string) {
     setRegradePreview(null);
     setRegradeError(null);
@@ -202,13 +177,11 @@ export function QuizPage() {
     }
   }
 
-  /** Đổi câu hỏi chấm lại: chốt câu được chọn và nạp các version của câu đó. */
   function handleRegradeQuestionChange(v: string | null) {
     setRegradeQuestionId(v ?? '');
     void loadRegradeVersions(v ?? '');
   }
 
-  /** Chạy chấm lại (dryRun = chỉ xem trước điểm đổi, không ghi). */
   async function runRegrade(dryRun: boolean) {
     if (!regradeQuestionId || !regradeVersionId) return;
     setRegradeError(null);
@@ -254,8 +227,6 @@ export function QuizPage() {
             type="button"
             variant="outline"
             onClick={() => {
-              // Lỗi refetch bị nuốt tại đây: query vẫn ở trạng thái
-              // lỗi nên màn hình lỗi suy từ query giữ nguyên.
               void reload().catch(() => undefined);
             }}
           >
@@ -364,17 +335,10 @@ export function QuizPage() {
   );
 }
 
-/** Export mặc định cho route module React Router framework mode (xem src/routes.ts). */
 export default function QuizRoute() {
   return <QuizPage />;
 }
 
-/**
- * clientLoader (F-01 đợt 1 + bổ sung clientLoader, rà soát #133):
- * prefetch lần ghim (kèm tên slot) vào QueryClient singleton (đúng
- * khoá factory) trước khi component mount. prefetchQuery không ném
- * lỗi: tải hỏng thì component tự xử lý qua useQuery.
- */
 export async function clientLoader({ params }: { params: Record<string, string | undefined> }) {
   if (params.pinId) {
     await queryClient.prefetchQuery(examPinQueryOptions(params.pinId));
@@ -382,7 +346,6 @@ export async function clientLoader({ params }: { params: Record<string, string |
   return null;
 }
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { titleMeta } from '#lib/route-meta';
 export function meta() {

@@ -1,4 +1,3 @@
-/** Soạn đề trộn hai nguồn, giữ phiên bản câu hệ thống và giao trực tiếp bằng snapshot trung tâm. */
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -25,7 +24,6 @@ import type { DiscoveryItemLite, PaperView } from '../types/exam-paper';
 import { clearQuestionBankListCache } from '#features/questions/queries/questions';
 import { withApiReason } from '#features/questions/utils/shared';
 
-/** Slot đang soạn trong form (chưa ghim — server ghim bản ready mới nhất khi lưu). */
 interface SlotDraft {
   sourceDomain?: 'centre' | 'bank-system';
   sourceVersionNumber?: number;
@@ -34,10 +32,8 @@ interface SlotDraft {
   maxMark: string;
   section: string;
   pinnedVersionNumber: number | null;
-  /** Số version ready mới nhất của câu + cờ có bản mới (chỉ để hiện huy hiệu, không gửi lên khi lưu). */
   latestReadyVersionNumber: number | null;
   hasNewerVersion: boolean;
-  /** Ô ma trận nguồn (EB-2): slot có trường này thì đổi câu bằng swap-cùng-ô. */
   matrixCellId?: string | null;
 }
 
@@ -52,9 +48,6 @@ const EXAM_KIND_LABEL_KEYS: Record<(typeof EXAM_KINDS)[number], string> = {
 
 const selectClass = 'h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs';
 
-/**
- * Màn soạn đề RIÊNG theo chuẩn §9 (EB-1, issue #113): tạo mới /exams/new?bank=<bankId>, sửa /exams/:paperId/edit. Soạn tự do: metadata + chọn câu từ ngân hàng câu hỏi (khám phá theo từ khoá) → thứ tự/phần/điểm từng câu → lưu. Lưu sửa tạo paper version mới phía server (metadata qua PATCH, slots qua PUT — chỉ gọi phần thật sự đổi); server ghim bản ready mới nhất của mỗi câu. Ở chế độ sửa, thẻ các lần ghim còn cho ghim đề vào khoá ngay tại chỗ (đề `ready` + cờ `capabilities.deploy`): cùng thao tác exam-pins, cùng cổng quyền với hộp ghim của panel "Đề của tôi" ở trang ngân hàng — luồng soạn → soát → giao liền một mạch, trạng thái lần ghim hiển thị đọc từ cùng nguồn `GET /exams/:id/pins`.
- */
 export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
   const { t } = useTranslation('app');
   const navigate = useNavigate();
@@ -70,10 +63,8 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
   const [slots, setSlots] = useState<SlotDraft[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [keyword, setKeyword] = useState('');
-  /** Vị trí slot đang ở chế độ đổi câu cùng ô (EB-2); null = chế độ thêm câu thường. */
   const [swapPosition, setSwapPosition] = useState<number | null>(null);
 
-  // Dữ liệu trang qua TanStack Query (F-01 của #133, `lib/exam-paper-data.ts`): chi tiết đề là query chính ở chế độ sửa (clientLoader của route sửa nạp trước cùng khoá), các lần ghim là query phụ; tìm câu để thêm/đổi là query theo tham số đã chốt khi bấm tìm, giữ kết quả lần trước trong lúc tải lần mới như bản thủ công.
   const queryClient = useQueryClient();
   const paperQuery = useExamPaper(paperId, mode === 'edit');
   const original = paperQuery.data ?? null;
@@ -91,9 +82,6 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
   const results = discoveryQuery.data ?? [];
   const searched = submittedSearch !== null && !discoveryQuery.isFetching;
 
-  // --- Ghim đề vào khoá ngay tại màn sửa -------------------------------------
-  //
-  // Form ghim chỉ mở khi đề đã `ready` và người xem có cờ deploy tại bank của đề — đúng điều kiện hiện nút ghim của panel "Đề của tôi" ở trang ngân hàng. Các query chọn khoá/chương/nhóm và đột biến ghim dùng chung đúng bộ của hộp ghim ở panel đó (không có đường ghim thứ hai): danh sách khoá là query dùng chung toàn app, chương và nhóm nạp theo khoá đã chọn.
   const deployPin = useDeployExamPin();
   const pinRequest = useRef<{ key: string; id: string } | null>(null);
   const [systemPreview, setSystemPreview] = useState<{ id: string; version: number } | null>(null);
@@ -118,15 +106,11 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
     enabled: canPin && !!pinCourseId,
   }).data ?? [];
 
-  // Chọn chương đầu tiên khi nội dung khoá đích tải về (cùng nhịp hộp ghim của panel ngân hàng).
   const firstPinSectionId = pinContentQuery.data?.sections[0]?.id;
   if (!pinSectionId && firstPinSectionId) {
     setPinSectionId(firstPinSectionId);
   }
 
-  /**
-   * Ghim đề vào khoá đã chọn (toàn khoá hoặc một nhóm đích) — một thao tác exam-pins như ở panel ngân hàng. Thành công: báo kèm số phiên bản đã ghim, nạp lại danh sách lần ghim của đề từ cùng nguồn dữ kiện phía khoá đọc để lần ghim mới hiện ngay tại chỗ, và làm mới gói dựng khoá + nội dung của khoá đích. Thất bại: báo kèm lý do API trả và giữ nguyên lựa chọn trong form.
-   */
   async function runPin() {
     if (!paperId || !original || !pinCourseId || !pinSectionId) return;
     setMessage(null);
@@ -153,7 +137,6 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
     }
   }
 
-  /** Ánh xạ slots của view đề thành slots nháp của form. */
   function toSlotDrafts(view: PaperView): SlotDraft[] {
     return view.slots.map((s) => ({
       questionId: s.questionId,
@@ -169,7 +152,6 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
     }));
   }
 
-  // Khởi tạo toàn bộ form từ view đề khi MỞ một đề (đề khác với đề đang soạn) — đúng nhịp loadPaper thủ công; các lần view đổi vì đổi câu cùng ô không qua đây (doSwap tự đồng bộ slots) để không đè lên metadata người dùng đang sửa dở.
   const loadedPaperIdRef = useRef<string | null>(null);
   useEffect(() => {
     const view = paperQuery.data;
@@ -184,11 +166,9 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
     setSlots(toSlotDrafts(view));
   }, [paperQuery.data]);
 
-  // Lỗi nạp chi tiết đề suy ngay khi render từ trạng thái query — không chép qua effect vào state như bản cũ (cùng khuôn pages/questions.tsx): banner hiện thông báo của thao tác nếu có, không thì lỗi nạp kèm lý do API trả.
   const loadError = paperQuery.isError ? withApiReason(t('examPaperSaveFailed'), paperQuery.error) : null;
   const displayMessage = message ?? loadError;
 
-  /** Đổi câu của slot đang chọn sang câu khác CÙNG Ô (server gác pool của ô nguồn). */
   async function doSwap(questionId: string) {
     if (!paperId || swapPosition == null) return;
     setMessage(null);
@@ -202,7 +182,6 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
     }
   }
 
-  /** In đề theo một lần ghim + mã đề: tải HTML kèm token rồi mở tab in. */
   async function printVariant(pinId: string, code: string) {
     if (!paperId) return;
     setMessage(null);
@@ -266,8 +245,6 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
           },
         });
         setMessage(t('examPaperSaved', { version: created.version.version }));
-        // Điểm lưu: xoá cache danh sách ngân hàng để danh sách đề mở
-        // lại là nạp tươi, như màn soạn câu hỏi (tiền lệ F-01 đợt 1).
         clearQuestionBankListCache(queryClient);
         await navigate('/exams');
         return;
@@ -310,7 +287,6 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
     }
   }
 
-  /** Thứ tự slot nháp còn khớp bản đã lưu thì mới ánh xạ được vị trí cho swap-cùng-ô. */
   const orderIntact = !!original && slots.length === original.slots.length
     && slots.every((s, i) => s.questionId === original.slots[i]!.questionId);
 
@@ -502,10 +478,6 @@ export function ExamPaperEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 
         <Button type="submit" disabled={!name.trim()}>{t('saveAction')}</Button>
       </form>
-      {/* Thẻ các lần ghim (chế độ sửa): danh sách đọc từ cùng nguồn
-          phía khoá đọc; form ghim hiện khi đề ready + có cờ deploy —
-          thẻ hiện cả khi chưa có lần ghim nào nếu người dùng được
-          ghim, để bước giao bài làm được ngay tại màn soạn. */}
       {mode === 'edit' && (pins.length > 0 || canPin) ? (
         <Card>
           <CardHeader>

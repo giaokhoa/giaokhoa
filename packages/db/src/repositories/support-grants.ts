@@ -1,17 +1,8 @@
-/**
- * Repository của quyền hỗ trợ hữu hạn trong kho của từng trung tâm.
- *
- * Mọi phép đọc/ghi chỉ nhận handle Kysely đã được gắn tenant qua
- * TenantAwarePool; repository không tự chọn kho, đặt GUC hay cấp quyền.
- * Danh sách grant, trạng thái thu hồi và audit nằm cùng kho và cùng
- * chính sách RLS của trung tâm. Audit không lưu dữ liệu nghiệp vụ.
- */
 import { sql } from "kysely";
 import type { CentreDb, CentreTx } from "../client";
 
 export type SupportHandle = CentreDb | CentreTx;
 
-/** Hình dạng dòng grant trả về biên repository, giữ thời gian kiểu Date. */
 export interface SupportGrantRow {
   id: string;
   tenantId: string;
@@ -25,7 +16,6 @@ export interface SupportGrantRow {
   createdAt: Date;
 }
 
-/** Hình dạng một dòng audit chỉ chứa metadata cần cho trung tâm. */
 export interface SupportAuditRow {
   id: string;
   tenantId: string;
@@ -59,14 +49,9 @@ const AUDIT_COLUMNS = [
   "created_at as createdAt",
 ] as const;
 
-/**
- * Tầng truy cập thuần: caller sở hữu transaction, cấp tenant và handle,
- * tránh một transaction chạm nhiều kho.
- */
 export class SupportGrantsRepository {
   constructor(private readonly db: CentreDb) {}
 
-  /** Trả danh sách grant của đúng tenant hiệu lực (kể cả hết hạn/thu hồi). */
   async listGrants(
     tenantId: string,
     db: SupportHandle = this.db,
@@ -80,11 +65,6 @@ export class SupportGrantsRepository {
       .execute();
   }
 
-  /**
-   * Tra các grant của người nhận TRƯỚC khi giới hạn danh sách.
-   * Không lọc sau LIMIT tenant vì nhiều grant của nhân sự khác có
-   * thể che mất grant còn hiệu lực ở trang sau.
-   */
   async listGrantsForRecipient(
     tenantId: string,
     recipientId: string,
@@ -100,7 +80,6 @@ export class SupportGrantsRepository {
       .execute();
   }
 
-  /** Tìm grant theo id và tenant; không lộ grant của tenant khác. */
   async findGrant(
     tenantId: string,
     id: string,
@@ -114,7 +93,6 @@ export class SupportGrantsRepository {
       .executeTakeFirst();
   }
 
-  /** Lưu grant vừa qua kiểm chứng của service; UUIDv7 do DB cấp. */
   async createGrant(
     data: {
       tenantId: string;
@@ -140,10 +118,6 @@ export class SupportGrantsRepository {
       .executeTakeFirstOrThrow();
   }
 
-  /**
-   * Thu hồi nguyên tử, chỉ trên grant chưa thu hồi của tenant hiện tại.
-   * Không xoá dòng để audit luôn gắn được người nhận/phạm vi ban đầu.
-   */
   async revokeGrant(
     tenantId: string,
     grantId: string,
@@ -163,10 +137,6 @@ export class SupportGrantsRepository {
       .executeTakeFirst();
   }
 
-  /**
-   * Chỉ grant của người nhận, tenant và thao tác đang hiệu lực tại
-   * thời gian DB mới được chọn; không dựa trên claim hoặc cache phiên.
-   */
   async findActiveGrant(
     tenantId: string,
     recipientId: string,
@@ -186,7 +156,6 @@ export class SupportGrantsRepository {
       .executeTakeFirst();
   }
 
-  /** Ghi kết quả kiểm quyền mà không lưu dữ liệu riêng hoặc bí mật. */
   async appendAudit(
     data: {
       tenantId: string;
@@ -209,7 +178,6 @@ export class SupportGrantsRepository {
       .executeTakeFirstOrThrow();
   }
 
-  /** Audit của riêng tenant, giới hạn số dòng để không lộ lịch sử khác. */
   async listAudit(
     tenantId: string,
     db: SupportHandle = this.db,
@@ -223,7 +191,6 @@ export class SupportGrantsRepository {
       .execute();
   }
 
-  /** Chiếu các lớp trong tenant; không xuất mã tham gia hay danh sách học viên. */
   async listClasses(tenantId: string, db: SupportHandle = this.db) {
     return db
       .selectFrom("classes")
@@ -234,7 +201,6 @@ export class SupportGrantsRepository {
       .execute();
   }
 
-  /** Chiếu các khoá học trong tenant; không xuất bài làm, điểm hoặc nội dung. */
   async listCourses(tenantId: string, db: SupportHandle = this.db) {
     return db
       .selectFrom("course")

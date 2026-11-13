@@ -7,12 +7,10 @@ import { CoursesModule } from '../courses/courses.module';
 import { IntegrationsController } from './integrations.controller';
 import { IntegrationsService } from './integrations.service';
 
-/** Facade của IntegrationTokensModule: IntegrationsService (hàm registry + token bên ngoài). */
 @Module({
   imports: [AccessModule, CoursesModule, SpaceRoutingModule],
   controllers: [IntegrationsController],
   providers: [
-    // Repository của package @giaokhoa/db chạy trên handle Kysely đã định tuyến theo không gian (issue #648).
     {
       provide: IntegrationsRepository,
       useFactory: (spaceDatabase: SpaceDatabaseService) => new IntegrationsRepository(spaceDatabase.routedKysely),

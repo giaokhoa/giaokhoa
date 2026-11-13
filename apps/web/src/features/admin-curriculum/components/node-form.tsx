@@ -41,7 +41,6 @@ export function NodeForm({ curriculumId, initial, parentId }: { curriculumId: st
   const [durationPeriods, setDurationPeriods] = useState(initial?.durationPeriods != null ? String(initial.durationPeriods) : '');
   const [durationPercent, setDurationPercent] = useState(initial?.durationPercent != null ? String(initial.durationPercent) : '');
   const [error, setError] = useState<string | null>(null);
-  // Danh sách node cha chọn được lấy từ cây của chương trình qua TanStack Query (F-01 của rà soát #133): cây tải lỗi thì danh sách rỗng như bản thủ công; loại chính node đang sửa khỏi ứng viên cha.
   const treeQuery = useCurriculumTreeScoped(curriculumId, undefined);
   const parentOptions = treeQuery.data
     ? flattenNodes(treeQuery.data.nodes).filter((n) => n.id !== initial?.id)

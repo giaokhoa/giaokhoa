@@ -7,24 +7,6 @@ import Shell from '../app/shell';
 import { queryClient } from '#lib/query-client';
 import { baSessionResponse, isGetSessionUrl } from '#test/ba-session';
 
-/**
- * Test cho cây điều hướng sidebar sau Lát 1 của hồ sơ UI/UX (sidebar collapse theo cơ chế sidebar-07): 5 mục trực tiếp + các mục cha thu/mở (Học tập / Người dùng & quyền / Vai trò & Quyền / Cài đặt hệ thống) thay cho 3 nhóm phẳng cũ — nhóm Vai trò & Quyền tách riêng mang hai mục Vai trò và Quyền. Mục "Tìm kiếm" không còn ở sidebar từ chốt 23:52 ngày 26/10/2026 (issue #303 — ô tìm kiếm chuyển ra giữa header). Dựng đúng cây thật (App → Shell → AppSidebar) như sidebar-notification-count.spec, stub fetch theo vai trò:
- *
- * - Admin thấy đủ cây (3 mục cha); nhóm cha đóng mặc định, bấm mới mở
- *   mục con; các nhóm mở độc lập (không accordion).
- * - Trạng thái mở của nhóm lưu ở localStorage `giaokhoa:sidebar:open-groups`
- *   — "F5" (gỡ cây, dựng lại) vẫn giữ; nhóm chứa route đang xem thì luôn tự mở và mục con + nút cha cùng mang trạng thái active.
- * - Ba mục ngân hàng CẤP CAO NHẤT ngay sau Học tập (chốt lại của Lão
- *   gia 11:40 ngày 26/10/2026, issue #228 — BỎ hẳn mục "Ngân hàng hệ thống" ở sidebar), gác canUseQuestionBank: "Ngân hàng câu hỏi"
- *   (link /questions, thu/mở ra mục con "Ngữ liệu" ở
- *   /questions/stimuli), "Ngân hàng đề" (/exams), "Ngân hàng ma trận"
- *   (/matrices) — mỗi khu vực một PATH RIÊNG theo chuẩn đường dẫn
- *   (issue #221, lát R1); khu hệ thống đi qua thanh tab Cá nhân | Hệ
- *   thống trong chính màn danh sách, không qua sidebar. Đang ở path của khu vực thì mục/nhóm tương ứng tự mở và active. Học viên không thấy mục ngân hàng nào; giáo viên có capability câu hỏi thì thấy đủ ba.
- * - Cookie `sidebar_state=false` → sidebar ở chế độ rail icon
- *   (data-collapsible="icon", có SidebarRail); bấm mục cha ở chế độ
- *   này bung sidebar ra và mở nhóm.
- */
 
 const ADMIN_ID = '01900000-0000-7000-8000-0000000000a1';
 const STUDENT_ID = '01900000-0000-7000-8000-0000000000b2';
@@ -48,12 +30,6 @@ function profileOf(id: string, username: string) {
   };
 }
 
-/**
- * Fixture ảnh chụp quyền dùng chung: cả ba đều có dấu chân học tập qua
- * hiện vật (hasLearnerArtifacts: true) nên nhóm "Học tập" hiện đủ cho
- * các test cây điều hướng — quy tắc dấu chân (kể cả ca GV thuần ẩn)
- * khoá riêng ở describe "nhóm Học tập theo dấu chân" cuối file.
- */
 const ADMIN_ACCESS = { userId: ADMIN_ID, isSiteAdmin: true, assignments: [], contexts: [], hasLearnerArtifacts: true };
 const STUDENT_ACCESS = { userId: STUDENT_ID, isSiteAdmin: false, assignments: [], contexts: [], hasLearnerArtifacts: true };
 const TEACHER_ACCESS = {
@@ -92,7 +68,6 @@ function stubFetch(
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
-      // Phiên cookie Better Auth: id phiên khớp id hồ sơ của vai đang stub.
       if (isGetSessionUrl(url)) return baSessionResponse({ id: (profile as { id: string }).id });
       if (url === '/api/v1/users/me') return jsonResponse(profile);
       if (url === '/api/v1/users/me/capabilities') return jsonResponse(access);
@@ -190,34 +165,23 @@ describe('cây điều hướng sidebar — admin', () => {
     stubFetch(profileOf(ADMIN_ID, 'admin'), ADMIN_ACCESS, 2);
     renderShell();
 
-    // 5 mục trực tiếp là link thật, đúng thứ tự cây của hồ sơ §4.1.
     for (const name of ['Tổng quan', 'Khoá học', 'Lịch', 'Tin nhắn', 'Thông báo']) {
       expect(await screen.findByRole('link', { name: new RegExp(name) })).toBeInTheDocument();
     }
-    // Mục "Tìm kiếm" KHÔNG còn ở sidebar (chốt 23:52 ngày 26/10/2026,
-    // issue #303): tìm nội dung đi qua ô giữa header, sidebar không
-    // giữ link /search nữa — ai thêm lại link này thì test phải đỏ.
     expect(screen.queryByRole('link', { name: /Tìm kiếm/ })).not.toBeInTheDocument();
-    // Huy hiệu số chưa đọc vẫn nằm trên mục Thông báo.
     const notifications = await screen.findByRole('link', { name: /Thông báo/ });
     expect(await within(notifications).findByText('2')).toBeInTheDocument();
 
-    // Các mục cha là nút thu/mở thuần (button, không phải link).
     for (const name of ['Học tập', 'Người dùng & quyền', 'Vai trò & Quyền', 'Cài đặt hệ thống']) {
       expect(await screen.findByRole('button', { name })).toBeInTheDocument();
       expect(screen.queryByRole('link', { name })).not.toBeInTheDocument();
     }
-    // Ba mục ngân hàng là mục CẤP CAO NHẤT dạng link, hiện ngay; bản
-    // thân "Ngân hàng câu hỏi" là link (không phải nút cha bọc ngoài).
     for (const name of ['Ngân hàng câu hỏi', 'Ngân hàng đề', 'Ngân hàng ma trận']) {
       expect(await screen.findByRole('link', { name })).toBeInTheDocument();
     }
     expect(screen.queryByRole('button', { name: 'Ngân hàng câu hỏi' })).not.toBeInTheDocument();
-    // BỎ hẳn mục "Ngân hàng hệ thống" ở sidebar (chốt 26/10/2026,
-    // issue #228): không nút, không link, không mục con hệ thống nào.
     expect(screen.queryByRole('button', { name: 'Ngân hàng hệ thống' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Ngân hàng hệ thống' })).not.toBeInTheDocument();
-    // Nhóm đang đóng: không mục con nào xuất hiện.
     expect(screen.queryByRole('link', { name: 'Sao lưu' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Vai trò' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Huy hiệu' })).not.toBeInTheDocument();
@@ -231,9 +195,7 @@ describe('cây điều hướng sidebar — admin', () => {
     stubFetch(profileOf(ADMIN_ID, 'admin'), ADMIN_ACCESS);
     renderShell();
 
-    // Thân mục cha là link tới danh sách câu hỏi (tab Cá nhân mặc định).
     expect(await screen.findByRole('link', { name: 'Ngân hàng câu hỏi' })).toHaveAttribute('href', '/questions');
-    // Chưa mở collapse: chưa thấy Ngữ liệu.
     expect(screen.queryByRole('link', { name: 'Ngữ liệu' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Thu/mở Ngân hàng câu hỏi' }));
     expect(await screen.findByRole('link', { name: 'Ngữ liệu' })).toHaveAttribute('href', '/questions/stimuli');
@@ -245,20 +207,11 @@ describe('cây điều hướng sidebar — admin', () => {
 
     const label = await screen.findByRole('link', { name: 'Ngân hàng câu hỏi' });
     const toggle = screen.getByRole('button', { name: 'Thu/mở Ngân hàng câu hỏi' });
-    // Một nút liền: nhãn (link) và chevron (nút thu/mở) chung đúng một
-    // sidebar-menu-item — chevron gắn ở cuối cùng bề mặt nút của nhãn,
-    // không còn là hộp trigger 32px (h-8 w-8) tách riêng đứng cạnh
-    // (chốt sổ quyết định [26/10 23:16], issue #70).
-    // Lưu ý: li của nhóm collapse mang data-slot="collapsible" (gốc
-    // Collapsible ghi đè data-slot của SidebarMenuItem) nên neo theo
-    // data-sidebar="menu-item" mới ổn định.
     const item = label.closest('li[data-sidebar="menu-item"]');
     expect(item).not.toBeNull();
     expect(item!.contains(toggle)).toBe(true);
     expect(toggle.className).not.toMatch(/\bh-8\b/);
     expect(toggle.className).not.toMatch(/\bw-8\b/);
-    // "Ngân hàng đề" và "Ngân hàng ma trận" chưa có mục con: liên kết
-    // thuần, không nút thu/mở nào.
     expect(screen.queryByRole('button', { name: 'Thu/mở Ngân hàng đề' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Thu/mở Ngân hàng ma trận' })).not.toBeInTheDocument();
   });
@@ -276,7 +229,6 @@ describe('cây điều hướng sidebar — admin', () => {
     const { container } = renderShell();
 
     expect(await screen.findByRole('link', { name: 'Ngân hàng câu hỏi' })).toBeInTheDocument();
-    // Không phần tử nào trong sidebar trỏ vào /system-bank/* nữa.
     const sidebar = sidebarRoot(container);
     expect(sidebar.querySelector('a[href^="/system-bank"]')).toBeNull();
     expect(within(sidebar).queryByText('Ngân hàng hệ thống')).not.toBeInTheDocument();
@@ -312,14 +264,10 @@ describe('cây điều hướng sidebar — admin', () => {
     }
     expect(hrefs).toEqual(expectedOrder);
 
-    // Mở thêm nhóm thứ hai: cả hai cùng mở (không accordion). Mục Vai
-    // trò đứng ở nhóm Vai trò & Quyền riêng, không còn nằm trong nhóm
-    // Người dùng & quyền.
     await userEvent.click(screen.getByRole('button', { name: 'Vai trò & Quyền' }));
     expect(await screen.findByRole('link', { name: 'Vai trò' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Sao lưu' })).toBeInTheDocument();
 
-    // Đóng nhóm Hệ thống: mục con của nó ẩn, nhóm Vai trò vẫn mở.
     await userEvent.click(screen.getByRole('button', { name: 'Cài đặt hệ thống' }));
     expect(screen.queryByRole('link', { name: 'Sao lưu' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Vai trò' })).toBeInTheDocument();
@@ -344,11 +292,9 @@ describe('cây điều hướng sidebar — trạng thái nhóm', () => {
     expect(await screen.findByRole('link', { name: 'Huy hiệu' })).toBeInTheDocument();
     expect(JSON.parse(localStorage.getItem('giaokhoa:sidebar:open-groups') ?? '[]')).toEqual(['learning']);
 
-    // F5: gỡ toàn bộ cây, dựng lại từ đầu — localStorage còn nguyên.
     first.unmount();
     renderShell();
     expect(await screen.findByRole('link', { name: 'Huy hiệu' })).toBeInTheDocument();
-    // Nhóm khác không bị mở lây.
     expect(screen.queryByRole('link', { name: 'Sao lưu' })).not.toBeInTheDocument();
   });
 
@@ -370,8 +316,6 @@ describe('cây điều hướng sidebar — trạng thái nhóm', () => {
     const child = await screen.findByRole('link', { name: 'Ngân hàng đề' });
     expect(child).toHaveAttribute('href', '/exams');
     expect(child.hasAttribute('data-active')).toBe(true);
-    // Mỗi khu vực có pathname riêng (chuẩn #221) nên hai mục ngân
-    // hàng còn lại không thể active lây.
     expect(screen.getByRole('link', { name: 'Ngân hàng câu hỏi' }).hasAttribute('data-active')).toBe(false);
     expect(screen.getByRole('link', { name: 'Ngân hàng ma trận' }).hasAttribute('data-active')).toBe(false);
   });
@@ -380,9 +324,6 @@ describe('cây điều hướng sidebar — trạng thái nhóm', () => {
     stubFetch(profileOf(TEACHER_ID, 'teacher1'), TEACHER_ACCESS);
     renderShell('/system-bank/exams');
 
-    // Khu hệ thống không còn là bề mặt của sidebar (chốt 26/10/2026):
-    // ngữ cảnh Cá nhân/Hệ thống do thanh tab trong trang danh sách
-    // mang, sidebar không mục nào nhận active ở path hệ thống.
     expect(await screen.findByRole('link', { name: 'Ngân hàng đề' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Ngân hàng hệ thống' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Đề hệ thống' })).not.toBeInTheDocument();
@@ -397,9 +338,6 @@ describe('cây điều hướng sidebar — trạng thái nhóm', () => {
 
     const parent = await screen.findByRole('link', { name: 'Ngân hàng câu hỏi' });
     expect(parent.hasAttribute('data-active')).toBe(true);
-    // Nhóm tự mở theo URL của chính nó: Ngữ liệu hiện sẵn, không cần
-    // bấm nút chevron; chưa ở /questions/stimuli nên Ngữ liệu chưa
-    // active.
     const child = await screen.findByRole('link', { name: 'Ngữ liệu' });
     expect(child).toHaveAttribute('href', '/questions/stimuli');
     expect(child.hasAttribute('data-active')).toBe(false);
@@ -409,9 +347,6 @@ describe('cây điều hướng sidebar — trạng thái nhóm', () => {
     stubFetch(profileOf(TEACHER_ID, 'teacher1'), TEACHER_ACCESS);
     renderShell('/questions/stimuli');
 
-    // Route con làm sáng cả cha (khớp tiền tố path) lẫn chính nó
-    // (khớp chính xác) — hành vi đã chốt ở nghiệm thu #203, nay theo
-    // path thay cho query.
     const parent = await screen.findByRole('link', { name: 'Ngân hàng câu hỏi' });
     expect(parent.hasAttribute('data-active')).toBe(true);
     const child = await screen.findByRole('link', { name: 'Ngữ liệu' });
@@ -433,9 +368,6 @@ describe('cây điều hướng sidebar — lọc theo quyền', () => {
     expect(screen.queryByRole('link', { name: 'Ngân hàng đề' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Ngân hàng ma trận' })).not.toBeInTheDocument();
 
-    // Nhóm Học tập nay gác theo ảnh chụp quyền (bất đồng bộ): phải chờ
-    // nút cha xuất hiện sau khi snapshot về, không dùng getByRole đồng
-    // bộ như khi nhóm còn render vô điều kiện.
     await userEvent.click(await screen.findByRole('button', { name: 'Học tập' }));
     expect(await screen.findByRole('link', { name: 'Huy hiệu' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Kế hoạch học tập' })).toBeInTheDocument();
@@ -446,29 +378,20 @@ describe('cây điều hướng sidebar — lọc theo quyền', () => {
     stubFetch(profileOf(TEACHER_ID, 'teacher1'), TEACHER_ACCESS);
     renderShell();
 
-    // Ba mục ngân hàng là link cấp cao nhất, đúng href từng khu vực
-    // (đây là tab Cá nhân mặc định của từng màn danh sách).
     expect(await screen.findByRole('link', { name: 'Ngân hàng câu hỏi' })).toHaveAttribute('href', '/questions');
     expect(screen.getByRole('link', { name: 'Ngân hàng đề' })).toHaveAttribute('href', '/exams');
     expect(screen.getByRole('link', { name: 'Ngân hàng ma trận' })).toHaveAttribute('href', '/matrices');
-    // Ngữ liệu nằm trong collapse của chính "Ngân hàng câu hỏi".
     expect(screen.queryByRole('link', { name: 'Ngữ liệu' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Thu/mở Ngân hàng câu hỏi' }));
     expect(await screen.findByRole('link', { name: 'Ngữ liệu' })).toHaveAttribute('href', '/questions/stimuli');
-    // Không còn mục "Ngân hàng hệ thống" và không link hệ thống nào.
     expect(screen.queryByRole('button', { name: 'Ngân hàng hệ thống' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Câu hỏi hệ thống' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Đề hệ thống' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Ma trận hệ thống' })).not.toBeInTheDocument();
-    // Giáo viên thuần vẫn không thấy nhóm quản trị.
     expect(screen.queryByRole('button', { name: 'Người dùng & quyền' })).not.toBeInTheDocument();
   });
 
   it('chủ trung tâm không có quyền quản trị site: nhóm Người dùng & quyền chỉ chứa mục Trung tâm', async () => {
-    // Chủ trung tâm: không capability hệ thống nào ngoài quyền tại
-    // context tenant của chính mình (tenant:manage ở cấp 20) — bề mặt
-    // quản trị tenant phải tới được, còn các mục quản trị site và nhóm
-    // Cài đặt hệ thống vẫn ẩn hẳn.
     const tenantOwnerAccess = {
       userId: TEACHER_ID,
       isSiteAdmin: false,
@@ -512,15 +435,12 @@ describe('cây điều hướng sidebar — chế độ rail icon', () => {
     stubFetch(profileOf(ADMIN_ID, 'admin'), ADMIN_ACCESS);
     const { container } = renderShell();
 
-    // Chờ phiên resolve và sidebar vẽ xong (trước đó là khung giữ chỗ).
     const parentButton = await screen.findByRole('button', { name: 'Học tập' });
     const root = sidebarRoot(container);
     expect(root).toHaveAttribute('data-state', 'collapsed');
     expect(root).toHaveAttribute('data-collapsible', 'icon');
     expect(container.querySelector('[data-slot="sidebar-rail"]')).not.toBeNull();
 
-    // Bấm mục cha ở chế độ icon: sidebar bung ra (data-state đổi) và
-    // nhóm mở — mục con hiện để bấm tiếp.
     await userEvent.click(parentButton);
     expect(sidebarRoot(container)).toHaveAttribute('data-state', 'expanded');
     expect(await screen.findByRole('link', { name: 'Huy hiệu' })).toBeInTheDocument();
@@ -530,8 +450,6 @@ describe('cây điều hướng sidebar — chế độ rail icon', () => {
 describe('nhóm Học tập theo dấu chân (issue #176, quy tắc M+A)', () => {
   const TEACHER_PURE = { ...TEACHER_ACCESS, hasLearnerArtifacts: false };
   const NO_FOOTPRINT = { userId: STUDENT_ID, isSiteAdmin: false, assignments: [], contexts: [], hasLearnerArtifacts: false };
-  // Gán vai học viên tại context khoá (không phải staff: không có
-  // grade:viewall) — nhánh (M): khoá lọt vào perms.learning.
   const LEARNER_ACCESS = {
     userId: STUDENT_ID,
     isSiteAdmin: false,
@@ -612,9 +530,6 @@ describe('nhóm Học tập theo dấu chân (issue #176, quy tắc M+A)', () =>
 });
 
 describe('mục quản lý liên kết phụ huynh — gác theo guardian:manage (gói kích hoạt phụ huynh)', () => {
-  // Người phụ trách có guardian:manage ở một context tenant (cấp 30)
-  // — đúng hình dạng gán vai thật mà cổng API của module guardians
-  // kiểm (capability từ gán vai ở bất kỳ context nào).
   const GUARDIAN_MANAGER_ACCESS = {
     userId: TEACHER_ID,
     isSiteAdmin: false,

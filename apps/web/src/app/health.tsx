@@ -13,9 +13,6 @@ import { fetchApiJson } from '#lib/server-api';
 
 type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; health: HealthStatus };
 
-/**
- * Loader phía server (SSR, Giai đoạn 3 của issue #7): trạng thái hệ thống là dữ liệu công khai (endpoint @Public) nên lấy ngay trong loader qua API nội bộ — HTML trả về đã chứa kết quả kiểm tra thay vì khung giữ chỗ. API không với tới được → trả null, trang rơi về luồng fetch phía client như trước.
- */
 export async function loader(): Promise<{ health: HealthStatus | null }> {
   const body = await fetchApiJson('/api/v1/health');
   const parsed = healthStatusSchema.safeParse(body);
@@ -29,8 +26,6 @@ export function HealthPage({ initialHealth }: { initialHealth?: HealthStatus | n
   );
   const [refreshing, setRefreshing] = useState(false);
 
-  /** Một lượt fetch phía client: dùng cho luồng dự phòng khi loader
-   * không có dữ liệu và cho nút kiểm tra lại thủ công (F-09). */
   const fetchHealthState = useCallback(async (): Promise<State> => {
     try {
       const res = await fetch('/api/v1/health');
@@ -50,11 +45,6 @@ export function HealthPage({ initialHealth }: { initialHealth?: HealthStatus | n
   }, [fetchHealthState]);
 
   useEffect(() => {
-    // Loader đã cấp dữ liệu (SSR) thì KHÔNG fetch lại khi mount — request
-    // trùng làm mất giá trị của loader (F-09 trong rà soát #133). Chỉ khi
-    // loader không với tới được API (initialHealth null) mới rơi về luồng
-    // fetch phía client như trước; sau đó trang chỉ fetch lại khi người
-    // dùng bấm nút kiểm tra lại.
     if (initialHealth) return;
     let active = true;
     void fetchHealthState().then((next) => {
@@ -122,18 +112,11 @@ export function HealthPage({ initialHealth }: { initialHealth?: HealthStatus | n
   );
 }
 
-/**
- * Export mặc định cho route module React Router framework mode (xem
- * src/app/routes.ts): bọc mỏng đọc dữ liệu loader rồi truyền xuống
- * HealthPage thuần — test render trực tiếp HealthPage vẫn chạy như
- * trước.
- */
 export default function HealthRoute() {
   const loaderData = useLoaderData<typeof loader>();
   return <HealthPage initialHealth={loaderData?.health ?? null} />;
 }
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { appKeyMeta } from '#lib/route-meta';
 export function meta() {

@@ -8,17 +8,6 @@ import {
   addCohortMember, courseContextId, createCohortViaApi, markCmComplete, setCourseCompletionCriteria,
 } from '../../support/engagement-helpers';
 
-/**
- * Kiểm thử luồng Badges + Competencies. Oracle (Moodle MOODLE_503_STABLE, đọc ngày 2026-10-22):
- *  - public/badges/tests/badgeslib_test.php: test_create_badge_criteria,
- *    test_badge_awards, test_clone_badge (duplicate = cách để sửa), test_delete_badge (delete = archive). Báo cáo §2#14: cây tiêu chí ALL/ANY; tiêu chí bị ĐÔNG CỨNG khi đã cấp/đang hoạt động; assertion bất biến; revoke ≠ delete.
- *  - Behat (badges/tests/behat): criteria_cohort.feature (lá cohort),
- *    criteria_profile.feature (lá profile), award_badge.feature / "Badge awarded depending on the course completion by-date"
- *    (lá coursecompletion tôn trọng tham số by-date của nó). Các bước UI
- *    của những kịch bản đó được bỏ qua theo quy ước; các bước nghiệp vụ và kết quả cấp huy hiệu kỳ vọng được khẳng định qua API bên dưới.
- *  - public/competency/tests/api_test.php: test_list_frameworks,
- *    test_create_plan_from_template, test_create_template_cohort, test_complete_plan, test_plan_request_review / test_plan_start_review / test_plan_stop_review / test_approve_plan / test_unapprove_plan, test_add_evidence_complete, test_add_evidence_and_send_for_review, test_validate_grade_in_user_competency, test_set_ruleoutcome_course_competency, test_observe_course_completed. Báo cáo §2#15: mức thành thạo (proficiency) đến từ THANG (SCALE) của framework, không bao giờ từ điểm số.
- */
 describe('Huy hiệu và năng lực', () => {
   let app: INestApplication;
   let admin: string;
@@ -57,7 +46,6 @@ describe('Huy hiệu và năng lực', () => {
     const badgeRes = await http(app).post('/api/v1/badges').set('Authorization', `Bearer ${admin}`)
       .send({ name: 'Finisher', type: 1, issuerName: 'Giáo khoa HQ' });
     const badgeId = badgeRes.body.id as string;
-    // Không thể kích hoạt khi không có tiêu chí.
     const early = await http(app).post(`/api/v1/badges/${badgeId}/status`).set('Authorization', `Bearer ${admin}`).send({ status: 1 });
     expect(early.status).toBe(400);
     expect(early.body.code).toBe('badges.no_criteria');
@@ -67,16 +55,12 @@ describe('Huy hiệu và năng lực', () => {
     await http(app).put(`/api/v1/badges/${badgeId}/criteria`).set('Authorization', `Bearer ${admin}`)
       .send({ method: 1, criteria: [{ criteriaType: 'activitycompletion', params: { cmId: cm.id } }, { criteriaType: 'coursecompletion', params: { courseId: course.id } }] });
     await http(app).post(`/api/v1/badges/${badgeId}/status`).set('Authorization', `Bearer ${admin}`).send({ status: 1 });
-    // Bị đông cứng khi đang hoạt động.
     const frozen = await http(app).put(`/api/v1/badges/${badgeId}/criteria`).set('Authorization', `Bearer ${admin}`)
       .send({ method: 2, criteria: [{ criteriaType: 'manual', params: {} }] });
     expect(frozen.status).toBe(403);
     expect(frozen.body.code).toBe('badges.criteria_frozen');
-    // Trước khi hoàn thành: chưa thoả mãn theo ALL.
     let evaluation = await http(app).post(`/api/v1/badges/${badgeId}/evaluate`).set('Authorization', `Bearer ${admin}`).send({ userId: student.id });
     expect(evaluation.body.satisfied).toBe(false);
-    // Hoàn thành hoạt động thì hoàn thành khoá học → cả hai lá đều đúng →
-    // hook hoàn thành tự động cấp huy hiệu.
     await markCmComplete(app, admin, course.id, cm.id, student.id);
     const studentToken = (await login(app, student.username, STRONG_PASSWORD)).accessToken;
     const mine = await http(app).get('/api/v1/badges/mine').set('Authorization', `Bearer ${studentToken}`);
@@ -87,7 +71,6 @@ describe('Huy hiệu và năng lực', () => {
     expect(awarded!.snapshot.criteria).toHaveLength(2);
     evaluation = await http(app).post(`/api/v1/badges/${badgeId}/evaluate`).set('Authorization', `Bearer ${admin}`).send({ userId: student.id });
     expect(evaluation.body.satisfied).toBe(true);
-    // Và việc cấp đó tạo ra một thông báo badge_awarded cho học viên.
     const notifications = await http(app).get('/api/v1/notifications/items').set('Authorization', `Bearer ${studentToken}`);
     expect((notifications.body.items as { eventType: string }[]).some((n) => n.eventType === 'badge_awarded')).toBe(true);
   });
@@ -101,7 +84,6 @@ describe('Huy hiệu và năng lực', () => {
       .send({ method: 2, criteria: [{ criteriaType: 'competency', params: { competencyId: competency.id } }] });
     await http(app).post(`/api/v1/badges/${badgeId}/status`).set('Authorization', `Bearer ${admin}`).send({ status: 1 });
     const user = await createUserViaApi(app, admin);
-    // Trở nên thành thạo (duyệt review) kích hoạt listener của competency → tự động cấp.
     const evidence = await http(app).post('/api/v1/competencies/evidence').set('Authorization', `Bearer ${admin}`)
       .send({ userId: user.id, competencyId: competency.id, description: 'Portfolio', sendForReview: true });
     const usercompId = evidence.body.usercomp.id as string;
@@ -111,19 +93,16 @@ describe('Huy hiệu và năng lực', () => {
     const mine = await http(app).get('/api/v1/badges/mine').set('Authorization', `Bearer ${userToken}`);
     const assertion = (mine.body as { id: string; badgeId: string }[]).find((r) => r.badgeId === badgeId);
     expect(assertion).toBeTruthy();
-    // Huỷ kích hoạt, rồi thử sửa tiêu chí: vẫn bị đông cứng vì đã có lần cấp.
     await http(app).post(`/api/v1/badges/${badgeId}/status`).set('Authorization', `Bearer ${admin}`).send({ status: 0 });
     const frozen = await http(app).put(`/api/v1/badges/${badgeId}/criteria`).set('Authorization', `Bearer ${admin}`)
       .send({ method: 1, criteria: [{ criteriaType: 'manual', params: {} }] });
     expect(frozen.status).toBe(403);
-    // Nhân bản (động từ chuẩn `copy` trên path canonical) là đường sửa được phép: bản sao không hoạt động và sửa được.
     const copy = await http(app).post(`/api/v1/badges/${badgeId}/copy`).set('Authorization', `Bearer ${admin}`).send({});
     expect(copy.status).toBe(201);
     expect(copy.body.status).toBe(0);
     const editCopy = await http(app).put(`/api/v1/badges/${copy.body.id}/criteria`).set('Authorization', `Bearer ${admin}`)
       .send({ method: 1, criteria: [{ criteriaType: 'manual', params: {} }] });
     expect(editCopy.status).toBe(200);
-    // Thu hồi (revoke): dòng assertion vẫn sống sót, được đánh dấu đã thu hồi.
     const revoked = await http(app).post(`/api/v1/badges/issued/${assertion!.id}/revoke`).set('Authorization', `Bearer ${admin}`).send({});
     expect(revoked.status).toBe(201);
     expect(revoked.body.revoked).toBe(true);
@@ -182,7 +161,6 @@ describe('Huy hiệu và năng lực', () => {
     const member = await createUserViaApi(app, admin);
     const outsider = await createUserViaApi(app, admin);
     await addCohortMember(app, admin, cohort.id, member.id);
-    // Lá cohort thiếu tham chiếu cohort của nó bị từ chối tại thời điểm đặt tiêu chí.
     const probe = await http(app).post('/api/v1/badges').set('Authorization', `Bearer ${admin}`).send({ name: 'Cohort probe', type: 1 });
     const badParams = await http(app).put(`/api/v1/badges/${probe.body.id}/criteria`).set('Authorization', `Bearer ${admin}`)
       .send({ method: 1, criteria: [{ criteriaType: 'cohort', params: {} }] });
@@ -192,7 +170,6 @@ describe('Huy hiệu và năng lực', () => {
     const badgeId = await activeBadgeWithCriteria('Cohort member badge', [{ criteriaType: 'cohort', params: { cohortId: cohort.id } }]);
     expect((await evaluateLeaves(badgeId, member.id)).satisfied).toBe(true);
     expect((await evaluateLeaves(badgeId, outsider.id)).satisfied).toBe(false);
-    // Đường tự động cấp: đánh giá huy hiệu của thành viên sẽ cấp nó; người ngoài không nhận được gì.
     await http(app).post('/api/v1/badges/evaluate-user').set('Authorization', `Bearer ${admin}`).send({ userId: member.id });
     await http(app).post('/api/v1/badges/evaluate-user').set('Authorization', `Bearer ${admin}`).send({ userId: outsider.id });
     const memberToken = (await login(app, member.username, STRONG_PASSWORD)).accessToken;
@@ -210,10 +187,6 @@ describe('Huy hiệu và năng lực', () => {
     const field = await http(app).post('/api/v1/custom-fields/fields').set('Authorization', `Bearer ${admin}`)
       .send({ categoryId: cat.body.id, shortName, name: 'Badge department', type: 'text', configData: {} });
     expect(field.status).toBe(201);
-    // DB kiểm thử của api tồn tại qua các lượt chạy và được dùng chung bởi các spec của suite này
-    // : một spec khác có thể đã khai báo các trường core_user BẮT BUỘC
-    // (ví dụ một select `department`), và việc tạo người dùng kiểm chứng mọi
-    // trường bắt buộc — hãy thoả mãn chúng theo cách tổng quát.
     const fieldsRes = await http(app).get('/api/v1/custom-fields/fields?component=core_user&area=user').set('Authorization', `Bearer ${admin}`);
     expect(fieldsRes.status).toBe(200);
     const requiredValues: Record<string, string> = {};
@@ -233,12 +206,11 @@ describe('Huy hiệu và năng lực', () => {
     const matchingToken = (await login(app, matching.username, STRONG_PASSWORD)).accessToken;
     expect(await issuedBadgeIdsFor(matching.id, matchingToken)).toContain(badgeId);
 
-    // Các trường hồ sơ chuẩn hoạt động qua cùng một lá (không có `value` ⇒ trường phải được điền).
     const stdBadgeId = await activeBadgeWithCriteria('Has a last name', [{ criteriaType: 'profile', params: { field: 'lastName' } }]);
     expect((await evaluateLeaves(stdBadgeId, matching.id)).satisfied).toBe(true);
     const stdValueBadgeId = await activeBadgeWithCriteria('Last name is User', [{ criteriaType: 'profile', params: { field: 'lastName', value: 'User' } }]);
     expect((await evaluateLeaves(stdValueBadgeId, matching.id)).satisfied).toBe(true);
-    expect((await evaluateLeaves(stdValueBadgeId, different.id)).satisfied).toBe(true); // lastName mặc định của helper cũng là 'User'
+    expect((await evaluateLeaves(stdValueBadgeId, different.id)).satisfied).toBe(true);
     const stdMissBadgeId = await activeBadgeWithCriteria('Last name is Nobody', [{ criteriaType: 'profile', params: { field: 'lastName', value: 'Nobody' } }]);
     expect((await evaluateLeaves(stdMissBadgeId, matching.id)).satisfied).toBe(false);
   });
@@ -247,7 +219,6 @@ describe('Huy hiệu và năng lực', () => {
     const { course, instance, cm } = await completableCourse();
     const student = await createUserViaApi(app, admin);
     await enrolUser(app, admin, course.id, instance.id, student.id);
-    // Hoàn thành khoá học NGAY BÂY GIỜ, trước khi bất kỳ huy hiệu nào tồn tại.
     await markCmComplete(app, admin, course.id, cm.id, student.id);
     const now = Date.now();
     const futureCutoff = new Date(now + 30 * 86400_000).toISOString();
@@ -286,10 +257,10 @@ describe('Huy hiệu và năng lực', () => {
     const rows = usercomps.body as { competencyId: string; proficiency: boolean | null; grade: number | null; id: string }[];
     const completeRow = rows.find((r) => r.competencyId === competency.id);
     expect(completeRow?.proficiency).toBe(true);
-    expect(completeRow?.grade).toBe(1); // chỉ số thành thạo đầu tiên của thang
+    expect(completeRow?.grade).toBe(1);
     const evidenceRow = rows.find((r) => r.competencyId === competency2.id);
     expect(evidenceRow).toBeTruthy();
-    expect(evidenceRow?.proficiency).not.toBe(true); // bằng chứng (evidence) KHÔNG đặt mức thành thạo
+    expect(evidenceRow?.proficiency).not.toBe(true);
     const evidence = await http(app).get(`/api/v1/competencies/usercomp/${evidenceRow!.id}/evidence`).set('Authorization', `Bearer ${admin}`);
     expect((evidence.body as { action: string }[]).some((e) => e.action === 'course_completed')).toBe(true);
   });
@@ -307,13 +278,12 @@ describe('Huy hiệu và năng lực', () => {
       .send({ cohortId: cohort.id });
     const created = await http(app).post(`/api/v1/competencies/templates/${template.body.id}/create-plans`).set('Authorization', `Bearer ${admin}`).send({});
     expect(created.body.created).toBe(1);
-    // Lũy đẳng (idempotent): lượt chạy thứ hai không tạo gì mới.
     const again = await http(app).post(`/api/v1/competencies/templates/${template.body.id}/create-plans`).set('Authorization', `Bearer ${admin}`).send({});
     expect(again.body.created).toBe(0);
     const memberToken = (await login(app, member.username, STRONG_PASSWORD)).accessToken;
     const plans = await http(app).get(`/api/v1/competencies/plans/user/${member.id}`).set('Authorization', `Bearer ${memberToken}`);
     expect(plans.body).toHaveLength(1);
-    expect(plans.body[0].status).toBe(1); // active
+    expect(plans.body[0].status).toBe(1);
     const view = await http(app).get(`/api/v1/competencies/plans/${plans.body[0].id}`).set('Authorization', `Bearer ${memberToken}`);
     expect(view.body.competencies).toHaveLength(1);
     expect(view.body.competencies[0].competency.id).toBe(competency.id);
@@ -327,20 +297,17 @@ describe('Huy hiệu và năng lực', () => {
       .send({ name: 'My growth plan' });
     const planId = plan.body.id as string;
     expect(plan.body.status).toBe(0);
-    // Chuyển đổi sai: không thể yêu cầu review từ trạng thái draft.
     const badReq = await http(app).post(`/api/v1/competencies/plans/${planId}/request-review`).set('Authorization', `Bearer ${ownerToken}`).send({});
     expect(badReq.status).toBe(400);
     await http(app).post(`/api/v1/competencies/plans/${planId}/activate`).set('Authorization', `Bearer ${ownerToken}`).send({});
     const requested = await http(app).post(`/api/v1/competencies/plans/${planId}/request-review`).set('Authorization', `Bearer ${ownerToken}`).send({});
     expect(requested.body.status).toBe(2);
-    // Chủ sở hữu không thể review kế hoạch của chính mình (không có capability review) — một
-    // giáo viên có capability review tại một assignment thật thì có thể.
     const startByOwner = await http(app).post(`/api/v1/competencies/plans/${planId}/start-review`).set('Authorization', `Bearer ${ownerToken}`).send({});
     expect(startByOwner.status).toBe(403);
     const started = await http(app).post(`/api/v1/competencies/plans/${planId}/start-review`).set('Authorization', `Bearer ${admin}`).send({});
     expect(started.body.status).toBe(3);
     const approved = await http(app).post(`/api/v1/competencies/plans/${planId}/approve`).set('Authorization', `Bearer ${admin}`).send({});
-    expect(approved.body.status).toBe(1); // approve đưa kế hoạch trở về active (Moodle approve_plan)
+    expect(approved.body.status).toBe(1);
     const completed = await http(app).post(`/api/v1/competencies/plans/${planId}/complete`).set('Authorization', `Bearer ${ownerToken}`).send({});
     expect(completed.body.status).toBe(4);
     const view = await http(app).get(`/api/v1/competencies/plans/${planId}`).set('Authorization', `Bearer ${ownerToken}`);
@@ -352,7 +319,6 @@ describe('Huy hiệu và năng lực', () => {
     const { competency } = await frameworkWithCompetency();
     const learner = await createUserViaApi(app, admin);
     const learnerToken = (await login(app, learner.username, STRONG_PASSWORD)).accessToken;
-    // Điểm nằm ngoài thang (thang có các chỉ số 0..1) bị từ chối (test_validate_grade_in_user_competency).
     const badGrade = await http(app).post('/api/v1/competencies/usercomp/grade').set('Authorization', `Bearer ${admin}`)
       .send({ userId: learner.id, competencyId: competency.id, grade: 5 });
     expect(badGrade.status).toBe(400);
@@ -362,22 +328,20 @@ describe('Huy hiệu và năng lực', () => {
       .send({ userId: learner.id, competencyId: competency.id, description: 'My portfolio', sendForReview: true });
     expect(evidence.status).toBe(201);
     const usercompId = evidence.body.usercomp.id as string;
-    expect(evidence.body.usercomp.status).toBe(1); // đang chờ review
-    expect(evidence.body.usercomp.proficiency).toBeNull(); // bằng chứng tự nộp không bao giờ tự chứng nhận
+    expect(evidence.body.usercomp.status).toBe(1);
+    expect(evidence.body.usercomp.proficiency).toBeNull();
 
     await http(app).post(`/api/v1/competencies/usercomp/${usercompId}/start-review`).set('Authorization', `Bearer ${admin}`).send({});
     const rejected = await http(app).post(`/api/v1/competencies/usercomp/${usercompId}/reject`).set('Authorization', `Bearer ${admin}`).send({ note: 'Not enough evidence' });
     expect(rejected.body.status).toBe(0);
     expect(rejected.body.proficiency).not.toBe(true);
 
-    // Nộp lại và duyệt với giá trị thang thành thạo.
     await http(app).post(`/api/v1/competencies/usercomp/${usercompId}/request-review`).set('Authorization', `Bearer ${learnerToken}`).send({});
     await http(app).post(`/api/v1/competencies/usercomp/${usercompId}/start-review`).set('Authorization', `Bearer ${admin}`).send({});
     const approved = await http(app).post(`/api/v1/competencies/usercomp/${usercompId}/approve`).set('Authorization', `Bearer ${admin}`).send({ grade: 1 });
     expect(approved.body.proficiency).toBe(true);
     expect(approved.body.grade).toBe(1);
     expect(approved.body.status).toBe(0);
-    // Nhật ký bằng chứng là toàn bộ lịch sử.
     const history = await http(app).get(`/api/v1/competencies/usercomp/${usercompId}/evidence`).set('Authorization', `Bearer ${admin}`);
     const actions = (history.body as { action: string }[]).map((e) => e.action);
     expect(actions).toContain('evidence');
@@ -387,7 +351,6 @@ describe('Huy hiệu và năng lực', () => {
     void assignRole; void roleIdByShortname; void courseContextId;
   });
 
-  /** Helper: đưa một user competency của learner qua đường duyệt (evidence → start → approve) tới proficiency. */
   async function approveChild(learnerId: string, competencyId: string) {
     const evidence = await http(app).post('/api/v1/competencies/evidence').set('Authorization', `Bearer ${admin}`)
       .send({ userId: learnerId, competencyId, description: 'Portfolio', sendForReview: true });
@@ -418,18 +381,15 @@ describe('Huy hiệu và năng lực', () => {
   it('điểm quy tắc năng lực: cha tự đạt proficiency khi con đủ điểm yêu cầu, không sớm hơn (Moodle competency_rule_points; hình dạng config từ api_test test_duplicate_framework)', async () => {
     const { framework, parent, childA, childB } = await parentChildFramework(`${Date.now()}-pts`);
     const ruleUrl = `/api/v1/competencies/frameworks/${framework.id}/competencies/${parent.id}/rule`;
-    // Luật không thể đạt (điểm yêu cầu cao hơn tổng của các con) bị từ chối tại thời điểm đặt (validate_config).
     const unreachable = await http(app).post(ruleUrl).set('Authorization', `Bearer ${admin}`)
       .send({ outcome: 'complete', pointsRequired: 99, entries: [{ competencyId: childA.id, points: 3, required: false }, { competencyId: childB.id, points: 2, required: true }] });
     expect(unreachable.status).toBe(400);
     expect(unreachable.body.code).toBe('competency.rule_invalid');
-    // Một phần tử không phải con không thể đóng góp điểm.
     const { competency: stranger } = await frameworkWithCompetency();
     const nonChild = await http(app).post(ruleUrl).set('Authorization', `Bearer ${admin}`)
       .send({ outcome: 'complete', pointsRequired: 1, entries: [{ competencyId: stranger.id, points: 1, required: false }] });
     expect(nonChild.status).toBe(400);
     expect(nonChild.body.code).toBe('competency.rule_invalid');
-    // Hình dạng cấu hình kiểm thử của chính Moodle: cơ sở 4 điểm; con A = 3 (tuỳ chọn), con B = 2 (bắt buộc).
     const set = await http(app).post(ruleUrl).set('Authorization', `Bearer ${admin}`)
       .send({ outcome: 'complete', pointsRequired: 4, entries: [{ competencyId: childA.id, points: 3, required: false }, { competencyId: childB.id, points: 2, required: true }] });
     expect(set.status).toBe(201);
@@ -444,15 +404,12 @@ describe('Huy hiệu và năng lực', () => {
       return (rows.body as { competencyId: string; proficiency: boolean | null; grade: number | null; id: string }[])
         .find((r) => r.competencyId === parent.id);
     };
-    // Con B bắt buộc được duyệt (2 điểm < 4 điểm yêu cầu): cha CHƯA thành thạo.
     await approveChild(learner.id, childB.id);
     expect((await parentRow())?.proficiency).not.toBe(true);
-    // Con A cũng được duyệt (2 + 3 = 5 >= 4, điều kiện bắt buộc đã thoả): cha tự động đạt mức thành thạo từ thang.
     await approveChild(learner.id, childA.id);
     const parentUc = await parentRow();
     expect(parentUc?.proficiency).toBe(true);
     expect(parentUc?.grade).toBe(1);
-    // Lũy đẳng: chấm lại một con sẽ đánh giá lại luật nhưng không ghi bằng chứng luật thứ hai.
     await http(app).post('/api/v1/competencies/usercomp/grade').set('Authorization', `Bearer ${admin}`)
       .send({ userId: learner.id, competencyId: childA.id, grade: 1 });
     const evidence = await http(app).get(`/api/v1/competencies/usercomp/${parentUc!.id}/evidence`).set('Authorization', `Bearer ${admin}`);
@@ -479,21 +436,19 @@ describe('Huy hiệu và năng lực', () => {
     const rows = importedComps.body as { id: string; shortName: string; parentId: string | null; path: string }[];
     expect(rows).toHaveLength(3);
     const sourceIds = new Set([parent.id, childA.id, childB.id]);
-    for (const row of rows) expect(sourceIds.has(row.id)).toBe(false); // toàn bộ id đều mới
+    for (const row of rows) expect(sourceIds.has(row.id)).toBe(false);
     const newParent = rows.find((r) => r.shortName === 'Parent skill')!;
     const newChildA = rows.find((r) => r.shortName === 'Child A')!;
     const newChildB = rows.find((r) => r.shortName === 'Child B')!;
     expect(newChildA.parentId).toBe(newParent.id);
     expect(newChildB.parentId).toBe(newParent.id);
     expect(newChildA.path).toBe(`/${newParent.id}/${newChildA.id}`);
-    // Rule được mang sang với id con ĐÃ remap sang framework mới.
     const rule = await http(app).get(`/api/v1/competencies/frameworks/${imported.body.id}/competencies/${newParent.id}/rule`).set('Authorization', `Bearer ${admin}`);
     expect(rule.body.type).toBe('points');
     expect(rule.body.outcome).toBe('complete');
     expect(rule.body.config.pointsRequired).toBe(4);
     expect(new Set(rule.body.config.entries.map((e: { competencyId: string }) => e.competencyId))).toEqual(new Set([newChildA.id, newChildB.id]));
 
-    // Copy: idNumber chưa dùng với hậu tố _1 (đúng oracle), cây + rule nguyên vẹn.
     const duplicate = await http(app).post(`/api/v1/competencies/frameworks/${framework.id}/copy`).set('Authorization', `Bearer ${admin}`).send({});
     expect(duplicate.status).toBe(201);
     expect(duplicate.body.id).not.toBe(framework.id);
@@ -508,11 +463,9 @@ describe('Huy hiệu và năng lực', () => {
     const before = await http(app).get('/api/v1/competencies/frameworks').set('Authorization', `Bearer ${admin}`);
     const countBefore = (before.body as unknown[]).length;
     const scale = { values: ['Not competent', 'Competent'], proficient: [1] };
-    // Sai version → Zod từ chối.
     const wrongVersion = await http(app).post('/api/v1/competencies/frameworks/import').set('Authorization', `Bearer ${admin}`)
       .send({ format: 'giaokhoa-competency-framework', version: 2, framework: { shortName: 'Bad', idNumber: '', description: '', visible: true, taxonomies: 'competency', scale }, competencies: [] });
     expect(wrongVersion.status).toBe(400);
-    // Đúng hình dạng nhưng rule tham chiếu competency không phải con trực tiếp → import_invalid, rollback toàn bộ.
     const badRef = await http(app).post('/api/v1/competencies/frameworks/import').set('Authorization', `Bearer ${admin}`)
       .send({
         format: 'giaokhoa-competency-framework', version: 1,
@@ -525,10 +478,8 @@ describe('Huy hiệu và năng lực', () => {
       });
     expect(badRef.status).toBe(400);
     expect(badRef.body.code).toBe('competency.import_invalid');
-    // Thiếu hẳn trường bắt buộc → 400.
     const missing = await http(app).post('/api/v1/competencies/frameworks/import').set('Authorization', `Bearer ${admin}`).send({ format: 'giaokhoa-competency-framework' });
     expect(missing.status).toBe(400);
-    // Không framework rác nào được tạo.
     const after = await http(app).get('/api/v1/competencies/frameworks').set('Authorization', `Bearer ${admin}`);
     expect((after.body as unknown[]).length).toBe(countBefore);
   });

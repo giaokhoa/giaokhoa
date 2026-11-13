@@ -1,15 +1,3 @@
--- =====================================================================
--- DUMP ĐÔNG CỨNG DỮ LIỆU CHƯƠNG TRÌNH GDPT 2018 — KHÔNG SỬA TAY.
--- Version dump: 2026-10-29.3
--- Sinh lúc: 2026-10-29T06:32:15.420Z
--- Nguồn: DB chuẩn đã nạp/patch bằng ProgramImportService từ các dataset
--- đã kiểm chứng nguyên văn với văn bản của Bộ (TT 32/2018/TT-BGDĐT).
--- Số dòng: subjects=19, curricula=146, curriculum_nodes=3718, learning_outcomes=7802, curriculum_program_records=2171.
--- Mọi môi trường restore nguyên văn file này khi seed (ProgramDumpService),
--- KHÔNG chạy importer. ID là hằng số literal nên khớp 100% giữa các môi trường.
--- Cập nhật dữ liệu chuẩn: patch DB chuẩn bằng importer → chạy export-program-dump
--- → commit bản mới kèm tăng PROGRAM_DUMP_VERSION.
--- =====================================================================
 
 INSERT INTO "subjects" ("id", "context_id", "name", "slug", "position", "created_at", "updated_at") VALUES ('7c20af26-a862-517c-90c5-e7805b544190', '01a18659-c2fc-7aaf-bbf9-4d16210960a8', 'Toán', 'toan', 1, '2026-10-26T13:42:54.447Z', '2026-10-29T06:30:01.514Z');
 INSERT INTO "subjects" ("id", "context_id", "name", "slug", "position", "created_at", "updated_at") VALUES ('64f4e48c-a7c1-5837-94b7-944833b9f75b', '01a18659-c2fc-7aaf-bbf9-4d16210960a8', 'Ngữ văn', 'ngu-van', 2, '2026-10-26T13:42:55.797Z', '2026-10-29T06:30:01.514Z');

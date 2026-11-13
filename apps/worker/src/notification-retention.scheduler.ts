@@ -2,18 +2,11 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Queue } from 'bullmq';
 
-/** Đăng ký lượt quét retention thông báo lặp lại (mỗi 24 giờ, BullMQ job scheduler). Bản thân job có tính idempotent. */
 @Injectable()
-/**
- * Lập lịch quét retention thông báo theo chu kỳ (đưa job notification-retention vào queue).
- */
 export class NotificationRetentionScheduler implements OnModuleInit {
   private readonly logger = new Logger(NotificationRetentionScheduler.name);
   constructor(@InjectQueue('notification-retention') private readonly queue: Queue) {}
 
-  /**
-   * Khởi tạo: đăng ký job lặp cho queue retention thông báo.
-   */
   async onModuleInit(): Promise<void> {
     await this.queue.upsertJobScheduler(
       'notification-retention-scheduler',

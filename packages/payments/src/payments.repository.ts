@@ -2,29 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { sql, type CentreDB, type CentreDb, type CentreTx } from '@giaokhoa/db';
 import type { DbTx } from './database';
 
-/**
- * Kiểu JSON của cột jsonb theo codegen của kho trung tâm — đồng cấu trúc với `JsonValue` của Kysely nên biểu thức SQL mang kiểu này gán được cho mọi cột jsonb. Lấy qua chỉ mục bảng thay vì import trực tiếp từ `kysely` (barrel `@giaokhoa/db` không re-export kiểu đó). Helper này cố tình KHÔNG export khỏi package: kiểu trả về của `sql` tham chiếu tới kiểu của `kysely` mà `package.json` của package không khai phụ thuộc, nên đưa nó vào `.d.ts` công khai sẽ làm build lỗi TS2883 — mỗi file cần ghi jsonb giữ một bản private giống hệt nhau thay vì một helper export chung.
- */
 type CentreJson = NonNullable<CentreDB['payments']['data']>;
 
-/**
- * Xâu hoá một giá trị jsonb để ghi qua Kysely, đúng khuôn sổ tay chuyển đổi của `@giaokhoa/db`.
- *
- * Driver `pg` tự stringify object thường nhưng hiểu MẢNG cấp cao nhất là mảng PostgreSQL, nên mọi lần ghi jsonb đều xâu hoá trước rồi ép kiểu `::jsonb` trong SQL — kể cả khi giá trị là object
- * (để mọi đường ghi jsonb dùng chung một cơ chế, không tuỳ từng
- * hình dạng). `null` không đi qua đây: cột jsonb nullable nhận `null` thẳng để ghi SQL NULL, không ghi JSON `null`.
- */
 function jsonbValue(value: unknown) {
   return sql<CentreJson>`${JSON.stringify(value)}::jsonb`;
 }
 
-/**
- * Dòng account thanh toán (đọc từ `payment_accounts`).
- *
- * `config` là cột jsonb: khi đọc, driver trả về giá trị đã giải mã
- * (object/mảng/số/chuỗi/boolean/null), không phải chuỗi JSON; phía
- * gọi tự ép kiểu sang hình dạng config cụ thể khi cần.
- */
 export interface AccountRow {
   id: string;
   tenantId: string;
@@ -35,7 +18,6 @@ export interface AccountRow {
   createdAt: Date;
 }
 
-/** Dòng khoản thu (đọc từ `payments`). */
 export interface PaymentRow {
   id: string;
   accountId: string;
@@ -59,16 +41,6 @@ export interface PaymentRow {
   updatedAt: Date;
 }
 
-/**
- * Dòng hoàn tiền (đọc từ `payment_refunds`).
- *
- * Nullability theo đúng kiểu sinh codegen của kho trung tâm (nguồn
- * thật là DB): `created_by`, `approval_level`,
- * `approval_threshold` đều nullable trong DB — khác với khai báo
- * `.notNull()` cũ của schema bộ máy cũ; contract `@giaokhoa/contracts`
- * cũng đã khai nullable cho đúng ba trường này nên phía gọi không
- * đổi gì.
- */
 export interface RefundRow {
   id: string;
   paymentId: string;
@@ -93,7 +65,6 @@ export interface RefundRow {
   updatedAt: Date;
 }
 
-/** Dòng quyền lợi gói (đọc từ `plan_entitlements`). */
 export interface EntitlementRow {
   id: string;
   tenantId: string;
@@ -107,7 +78,6 @@ export interface EntitlementRow {
   updatedAt: Date;
 }
 
-/** Dòng coupon giảm giá (đọc từ `payment_coupons`). */
 export interface CouponRow {
   id: string;
   code: string;
@@ -118,20 +88,11 @@ export interface CouponRow {
   endsAt: Date | null;
   maxRedemptions: number | null;
   isActive: boolean;
-  // Nullable trong DB theo codegen (contract cũng khai nullable).
   createdBy: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
-/**
- * Dòng sự kiện thô của cổng (đọc từ `payment_provider_events`).
- *
- * Bảng này KHÔNG có `created_at`/`updated_at` (theo codegen) — chỉ
- * có `received_at` làm mốc thời gian. `tenant_id` nullable trong
- * DB (sự kiện chưa định tuyến được account nào vẫn ghi sổ với
- * tenant null); `amount` và `content` bắt buộc có.
- */
 export interface ProviderEventRow {
   id: string;
   provider: string;
@@ -148,11 +109,6 @@ export interface ProviderEventRow {
   raw: unknown;
 }
 
-/**
- * Dữ kiện ghi account mới. Các cột có giá trị mặc định ở DB
- * (`id`, `gateway`, `enabled`, `created_at`) được phép bỏ qua; cột
- * jsonb `config` nhận giá trị đã giải mã, hoặc null để ghi SQL NULL.
- */
 export interface AccountInsert {
   id?: string;
   tenantId: string;
@@ -163,7 +119,6 @@ export interface AccountInsert {
   createdAt?: Date;
 }
 
-/** Dữ kiện ghi khoản thu mới. */
 export interface PaymentInsert {
   id?: string;
   accountId: string;
@@ -187,7 +142,6 @@ export interface PaymentInsert {
   updatedAt?: Date;
 }
 
-/** Dữ kiện ghi hoàn tiền mới. */
 export interface RefundInsert {
   id?: string;
   paymentId: string;
@@ -212,7 +166,6 @@ export interface RefundInsert {
   updatedAt?: Date;
 }
 
-/** Dữ kiện ghi quyền lợi gói mới. */
 export interface EntitlementInsert {
   id?: string;
   tenantId: string;
@@ -226,7 +179,6 @@ export interface EntitlementInsert {
   updatedAt?: Date;
 }
 
-/** Dữ kiện ghi coupon mới. */
 export interface CouponInsert {
   id?: string;
   code: string;
@@ -242,11 +194,6 @@ export interface CouponInsert {
   updatedAt?: Date;
 }
 
-/**
- * Dữ kiện ghi sự kiện thô mới của cổng (bảng không có
- * `created_at`/`updated_at`). `amount` bắt buộc có vì cột này
- * không nullable và không có mặc định trong DB.
- */
 export interface ProviderEventInsert {
   id?: string;
   provider: string;
@@ -263,12 +210,6 @@ export interface ProviderEventInsert {
   raw?: unknown | null;
 }
 
-/**
- * Danh sách cột đọc của từng bảng, bí danh về tên camelCase của
- * interface dòng tương ứng. Mọi SELECT/RETURNING của repository đều
- * dùng đúng danh sách này — không đọc `*`, không để kiểu dòng suy
- * từ cột snake_case rồi ép kiểu ở biên.
- */
 const ACCOUNT_COLUMNS = [
   'id',
   'tenant_id as tenantId',
@@ -370,7 +311,6 @@ const PROVIDER_EVENT_COLUMNS = [
   'raw',
 ] as const;
 
-/** Bỏ các khóa `undefined` khỏi một object ghi — Kysely không tự làm việc này. */
 function stripUndefined<T extends Record<string, unknown>>(values: T): T {
   for (const key of Object.keys(values)) {
     if (values[key] === undefined) delete values[key];
@@ -491,36 +431,14 @@ function mapProviderEventInsert(input: ProviderEventInsert) {
   });
 }
 
-/**
- * Kho dữ liệu payment_accounts / payments / payment_refunds.
- *
- * Repository này là tầng truy cập dữ liệu thanh toán của package
- * dùng chung `@giaokhoa/payments` (issue #538): nó chỉ thao tác dữ liệu
- * qua Kysely trên kho trung tâm của `@giaokhoa/db`, không chứa luật
- * nghiệp vụ và không phụ thuộc module nào của tiến trình chủ — mọi
- * phía (facade thanh toán phía apps/api, luồng matching dùng chung)
- * dùng đúng repository này, không có bản sao thứ hai.
- *
- * Các method ghi của vòng đời hoàn tiền (lát 3, issue #189) nhận
- * transaction tuỳ chọn để cổng cộng dồn chạy trong MỘT transaction
- * có khoá dòng `payments`.
- */
 @Injectable()
 export class PaymentsRepository {
   constructor(private readonly db: CentreDb) {}
 
-  /** Handle kho trung tâm đã tiêm — tiến trình chủ dùng khi cần mở transaction. */
   get dbHandle(): CentreDb {
     return this.db;
   }
 
-  /**
-   * Mở một transaction Kysely trên handle đã tiêm và chạy `fn` trong
-   * đó. Tiến trình chủ dùng phương thức này cho các luồng cần nguyên
-   * tử (settle/refund) rồi truyền `tx` nhận được vào các repository
-   * và service cùng tham gia — mọi lần ghi của luồng đó đi trên một
-   * kết nối duy nhất, commit hoặc rollback cùng nhau.
-   */
   async transaction<T>(fn: (tx: CentreTx) => Promise<T>): Promise<T> {
     return this.db.transaction().execute(fn);
   }
@@ -566,13 +484,6 @@ export class PaymentsRepository {
     return this.db.selectFrom('payments').select(PAYMENT_COLUMNS).execute();
   }
 
-  /**
-   * Ba con số đối soát tối giản, đếm ngay ở SQL bằng tổng có điều
-   * kiện (`count(*) filter (...)`) trong MỘT truy vấn — khâu đối soát
-   * không nạp toàn bộ bảng `payments` về tầng ứng dụng để đếm ở JS.
-   * Điều kiện "chưa có mã giao dịch ngoài" giữ đúng ngữ nghĩa đếm cũ
-   * ở tầng ứng dụng (giá trị falsy): `NULL` hoặc chuỗi rỗng đều tính.
-   */
   async countPaymentsForReconcile(): Promise<{ total: number; succeeded: number; pendingWithoutExternalTx: number }> {
     const row = await this.db
       .selectFrom('payments')
@@ -626,7 +537,6 @@ export class PaymentsRepository {
       .execute();
   }
 
-  /** Tổng đã hoàn của một payment (cổng cộng dồn 5.5 — issue #189). */
   async sumRefunds(paymentId: string): Promise<number> {
     const row = await this.db
       .selectFrom('payment_refunds')
@@ -636,7 +546,6 @@ export class PaymentsRepository {
     return row?.total ?? 0;
   }
 
-  // --- Vòng đời hoàn tiền (lát 3, issue #189) ------------------------------
   async getRefund(id: string, tx?: DbTx): Promise<RefundRow | undefined> {
     const db = tx ?? this.db;
     return db.selectFrom('payment_refunds').select(REFUND_COLUMNS).where('id', '=', id).executeTakeFirst();
@@ -652,19 +561,6 @@ export class PaymentsRepository {
       .executeTakeFirstOrThrow();
   }
 
-  /**
-   * Cập nhật một dòng hoàn CHỈ KHI trạng thái hiện tại của nó còn thuộc
-   * `fromStatuses` — điều kiện trạng thái nằm ngay trong `WHERE` của
-   * câu cập nhật nên hai lượt chuyển trạng thái song song không thể
-   * cùng thắng: lượt sau khớp 0 dòng và nhận `undefined` (theo khuôn
-   * kiểm-tra-rồi-ghi an toàn ở Read Committed — đọc trạng thái ở tầng
-   * ứng dụng rồi cập nhật vô điều kiện theo `id` là dạng đua mà hai
-   * người duyệt song song cùng qua cổng, người ghi sau thắng lặng lẽ).
-   * Tầng service dịch `undefined` thành đúng mã lỗi trạng thái của
-   * đường gọi đó. Dùng cho các khâu duyệt/từ chối (không có khoá dòng
-   * bao ngoài); khâu xác nhận chi không dùng hàm này vì nó đã đọc lại
-   * và quyết định dưới khoá `FOR UPDATE` của dòng khoản thu.
-   */
   async updateRefundFromStatuses(
     id: string,
     fromStatuses: string[],
@@ -681,15 +577,6 @@ export class PaymentsRepository {
       .executeTakeFirst();
   }
 
-  /**
-   * Tổng cộng dồn của các dòng hoàn thuộc một TẬP TRẠNG THÁI cho trước.
-   * Cổng cộng dồn dùng tập {requested, approved, settled} (mọi dòng
-   * chưa bị từ chối đều giữ chỗ ngân sách hoàn); mốc đảo quyền lợi dùng
-   * tập {settled} (chỉ tiền đã xác nhận chi mới tính tiền đã ra). Dòng
-   * `rejected` không thuộc tập nào cả nên ngân sách được giải phóng.
-   * Chạy trong transaction có khoá dòng `payments` khi gọi từ cổng tạo
-   * yêu cầu hoàn / khâu xác nhận chi (truyền `tx`).
-   */
   async sumRefundsByStatuses(paymentId: string, statuses: string[], tx?: DbTx): Promise<number> {
     const db = tx ?? this.db;
     const row = await db
@@ -701,13 +588,6 @@ export class PaymentsRepository {
     return row?.total ?? 0;
   }
 
-  /**
-   * Dòng hoàn ứng viên cho một sự kiện `debit`: đang `approved` (chờ xác
-   * nhận chi), tài khoản của khoản thu gốc trùng tài khoản nhận sự
-   * kiện, số tiền bằng nhau, và mã lệnh chi ghi trên dòng hoàn (mã dự
-   * kiến lúc tạo) trùng mã giao dịch ngoài HOẶC mã tham chiếu của sự
-   * kiện. Lấy dòng cũ nhất trước khi có nhiều dòng hoàn cùng chờ.
-   */
   async findRefundCandidateForDebit(input: {
     accountId: string;
     amount: number;
@@ -818,7 +698,6 @@ export class PaymentsRepository {
     };
   }
 
-  /** Dòng hoàn đã được xác nhận chi bởi chính sự kiện này — căn cứ idempotency khi sự kiện bị phát lại. */
   async getRefundBySettledEventId(eventId: string): Promise<RefundRow | undefined> {
     return this.db
       .selectFrom('payment_refunds')
@@ -827,8 +706,6 @@ export class PaymentsRepository {
       .executeTakeFirst();
   }
 
-  // --- Hàng đợi needs_review (lát 3, issue #189) ---------------------------
-  /** Mọi khoản thu đang chờ xử lý tay thuộc các tenant cho trước (phạm vi hàng đợi của người xem). */
   async listNeedsReviewPayments(tenantIds: string[]): Promise<PaymentRow[]> {
     if (tenantIds.length === 0) return [];
     return this.db
@@ -840,13 +717,6 @@ export class PaymentsRepository {
       .execute();
   }
 
-  /**
-   * Mọi sự kiện provider đang `needs_review` MÀ KHÔNG gắn khoản thu nào
-   * (matched_payment_id rỗng) thuộc các tenant cho trước — đây là các
-   * sự kiện "mồ côi" (mã lạ, debit không khớp dòng hoàn) cần xuất hiện
-   * như mục độc lập trong hàng đợi. Sự kiện đã gắn khoản thu được trình
-   * bày như ngữ cảnh của chính khoản thu đó, không thành mục riêng.
-   */
   async listNeedsReviewEvents(tenantIds: string[]): Promise<ProviderEventRow[]> {
     if (tenantIds.length === 0) return [];
     return this.db
@@ -859,12 +729,6 @@ export class PaymentsRepository {
       .execute();
   }
 
-  /**
-   * Sự kiện provider liên quan gần nhất của một khoản thu: sự kiện đã
-   * được gắn vào khoản thu (matched_payment_id) hoặc sự kiện mang mã
-   * trích xuất trùng mã thanh toán của khoản thu — dùng làm ngữ cảnh
-   * đối soát khi trình bày khoản chờ trong hàng đợi.
-   */
   async getLatestEventForPayment(payment: PaymentRow): Promise<ProviderEventRow | undefined> {
     return this.db
       .selectFrom('payment_provider_events')
@@ -879,8 +743,6 @@ export class PaymentsRepository {
       .executeTakeFirst();
   }
 
-  // --- VietQR / SePay (lát 1, issue #189) -----------------------------------
-  /** Số thứ tự tiếp theo cho mã thanh toán — sequence chỉ tăng, mã không tái sử dụng. */
   async nextPaymentCodeValue(): Promise<number> {
     const result = await sql<{ v: number }>`select nextval('payment_code_seq')::int as v`.execute(this.db);
     return result.rows[0]!.v;
@@ -890,7 +752,6 @@ export class PaymentsRepository {
     return this.db.selectFrom('payments').select(PAYMENT_COLUMNS).where('payment_code', '=', code).executeTakeFirst();
   }
 
-  /** Tenant sở hữu một khoá — căn cứ cổng tenant cho createFeePayment (6.4.6). */
   async getCourseTenantId(courseId: string): Promise<string | undefined> {
     const row = await this.db
       .selectFrom('course')
@@ -900,7 +761,6 @@ export class PaymentsRepository {
     return row?.tenantId;
   }
 
-  /** Định tuyến IPN: account theo `sepayBankAccountXid` trong config (định danh tổ chức SePay). */
   async findAccountBySepayXid(xid: string): Promise<AccountRow | undefined> {
     return this.db
       .selectFrom('payment_accounts')
@@ -909,7 +769,6 @@ export class PaymentsRepository {
       .executeTakeFirst();
   }
 
-  /** Định tuyến IPN dự phòng: account theo số tài khoản ngân hàng trong config. */
   async findAccountByBankNumber(accountNumber: string): Promise<AccountRow | undefined> {
     return this.db
       .selectFrom('payment_accounts')
@@ -918,10 +777,6 @@ export class PaymentsRepository {
       .executeTakeFirst();
   }
 
-  /**
-   * Ghi sự kiện kênh: unique (provider, external_transaction_id) là cổng
-   * idempotency — bản ghi trùng (SePay retry) trả `undefined`, không ghi hai lần.
-   */
   async insertProviderEvent(input: ProviderEventInsert): Promise<ProviderEventRow | undefined> {
     return this.db
       .insertInto('payment_provider_events')
@@ -948,7 +803,6 @@ export class PaymentsRepository {
       .executeTakeFirst();
   }
 
-  /** Sự kiện đang chờ matching: `received`, cộng `processing` treo quá lâu (tiến trình chết giữa chừng). */
   async listPendingProviderEvents(limit: number, staleProcessingBefore: Date): Promise<ProviderEventRow[]> {
     return this.db
       .selectFrom('payment_provider_events')
@@ -967,12 +821,6 @@ export class PaymentsRepository {
       .execute();
   }
 
-  /**
-   * Nhận việc một sự kiện: đổi trạng thái khớp sang `processing` khi
-   * sự kiện còn ở `received` hoặc đã ở `processing` (nhận lại
-   * idempotent của cùng nhịp quét); trả false chỉ khi sự kiện đã
-   * sang trạng thái khớp khác.
-   */
   async claimProviderEvent(id: string): Promise<boolean> {
     const result = await this.db
       .updateTable('payment_provider_events')
@@ -992,7 +840,6 @@ export class PaymentsRepository {
       .execute();
   }
 
-  // --- Quyền lợi gói (lát 2, issue #189) ------------------------------------
   async insertEntitlement(input: EntitlementInsert): Promise<EntitlementRow> {
     return this.db
       .insertInto('plan_entitlements')
@@ -1001,7 +848,6 @@ export class PaymentsRepository {
       .executeTakeFirstOrThrow();
   }
 
-  /** Quyền lợi sinh từ một payment gói — căn cứ idempotency của khâu kích hoạt. */
   async getEntitlementByPayment(paymentId: string): Promise<EntitlementRow | undefined> {
     return this.db
       .selectFrom('plan_entitlements')
@@ -1010,12 +856,6 @@ export class PaymentsRepository {
       .executeTakeFirst();
   }
 
-  /**
-   * Mốc hết hạn muộn nhất trong các quyền lợi đang `active` của cùng một
-   * bên hưởng + cùng loại gói — căn cứ nối tiếp cửa sổ khi mua tiếp.
-   * Bên hưởng của `tenant_plan` xác định bằng (tenant_id, user_id NULL);
-   * của `teacher_plan` bằng user_id.
-   */
   async maxActiveEntitlementExpiry(
     component: string,
     tenantId: string,
@@ -1035,7 +875,6 @@ export class PaymentsRepository {
     return row?.m ? new Date(row.m) : null;
   }
 
-  /** Mọi quyền lợi gói giáo viên của một người dùng (theo thứ tự bắt đầu tăng dần). */
   async listEntitlementsForUser(userId: string): Promise<EntitlementRow[]> {
     return this.db
       .selectFrom('plan_entitlements')
@@ -1045,7 +884,6 @@ export class PaymentsRepository {
       .execute();
   }
 
-  /** Mọi quyền lợi gói trung tâm của một tenant (theo thứ tự bắt đầu tăng dần). */
   async listTenantPlanEntitlements(tenantId: string): Promise<EntitlementRow[]> {
     return this.db
       .selectFrom('plan_entitlements')
@@ -1056,7 +894,6 @@ export class PaymentsRepository {
       .execute();
   }
 
-  /** Đảo quyền lợi khi hoàn đủ: quyền lợi của chính payment chuyển `suspended`. */
   async suspendEntitlementsByPayment(paymentId: string, tx?: DbTx): Promise<void> {
     const db = tx ?? this.db;
     await db
@@ -1066,7 +903,6 @@ export class PaymentsRepository {
       .execute();
   }
 
-  // --- Coupon giảm giá mua gói (phần còn lại của lát 2, issue #189) --------
   async insertCoupon(input: CouponInsert): Promise<CouponRow> {
     return this.db
       .insertInto('payment_coupons')
@@ -1079,7 +915,6 @@ export class PaymentsRepository {
     return this.db.selectFrom('payment_coupons').select(COUPON_COLUMNS).where('id', '=', id).executeTakeFirst();
   }
 
-  /** Tra coupon theo mã đã chuẩn hoá chữ hoa (mã là duy nhất toàn hệ). */
   async getCouponByCode(code: string): Promise<CouponRow | undefined> {
     return this.db.selectFrom('payment_coupons').select(COUPON_COLUMNS).where('code', '=', code).executeTakeFirst();
   }
@@ -1097,12 +932,6 @@ export class PaymentsRepository {
       .executeTakeFirstOrThrow();
   }
 
-  /**
-   * Số lượt dùng đã tiêu thụ của một coupon: số payment gói mang
-   * coupon này trong ảnh chụp `data.plan` và đang ở trạng thái
-   * `pending` hoặc `succeeded` — payment `failed` không tính (lượt
-   * dùng được hoàn lại), đúng đặc tả coupon của issue.
-   */
   async countCouponRedemptions(couponId: string): Promise<number> {
     const row = await this.db
       .selectFrom('payments')

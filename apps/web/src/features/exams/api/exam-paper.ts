@@ -8,39 +8,15 @@ import type {
   UpdateExamPaperMetaBody,
 } from '../types/exam-paper';
 
-/**
- * Tầng gọi API thuần của màn soạn đề thuộc feature exams: chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành queryOptions, hook và đột biến. Tách từ module dữ liệu phẳng `src/lib/exam-paper-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
- */
 
-/**
- * Khám phá ngân hàng câu hỏi theo chuỗi tham số đã chốt khi bấm
- * tìm (GET /questions/discovery).
- *
- * @param params - Chuỗi tham số truy vấn.
- * @returns Danh sách dòng khám phá.
- */
 export function fetchExamQuestionDiscovery(params: string) {
   return apiJson<DiscoveryItemLite[]>(`/api/v1/questions/discovery?${params}`);
 }
 
-/**
- * Đọc chi tiết đề (GET /exams/:id).
- *
- * @param paperId - Định danh đề.
- * @returns Chi tiết đề.
- */
 export function fetchExamPaper(paperId: string) {
   return apiJson<PaperView>(`/api/v1/exams/${paperId}`);
 }
 
-/**
- * Đọc các lần ghim của đề (GET /exams/:id/pins). Nhịp thủ công:
- * tải lần ghim hỏng thì coi như chưa có lần ghim nào (khu vực in
- * đề chỉ ẩn đi, không chặn việc soạn đề).
- *
- * @param paperId - Định danh đề.
- * @returns Danh sách lần ghim (rỗng khi lỗi tải).
- */
 export async function fetchExamPaperPins(paperId: string): Promise<PinViewLite[]> {
   try {
     return await apiJson<PinViewLite[]>(`/api/v1/exams/${paperId}/pins`);
@@ -49,13 +25,6 @@ export async function fetchExamPaperPins(paperId: string): Promise<PinViewLite[]
   }
 }
 
-/**
- * Tạo đề mới trong một bank đề (POST /exams/banks/:bankId/exams).
- *
- * @param bankId - Định danh bank đề.
- * @param body - Thân tạo đề.
- * @returns View đề vừa tạo.
- */
 export function createExamPaper(bankId: string, body: CreateExamPaperBody) {
   return apiJson<PaperView>(`/api/v1/exams/banks/${bankId}/exams`, {
     method: 'POST',
@@ -63,13 +32,6 @@ export function createExamPaper(bankId: string, body: CreateExamPaperBody) {
   });
 }
 
-/**
- * Sửa metadata của đề (PATCH /exams/:id) — server tạo paper version mới.
- *
- * @param paperId - Định danh đề.
- * @param body - Thân sửa metadata.
- * @returns View đề sau khi sửa.
- */
 export function updateExamPaperMeta(paperId: string, body: UpdateExamPaperMetaBody) {
   return apiJson<PaperView>(`/api/v1/exams/${paperId}`, {
     method: 'PATCH',
@@ -77,13 +39,6 @@ export function updateExamPaperMeta(paperId: string, body: UpdateExamPaperMetaBo
   });
 }
 
-/**
- * Thay toàn bộ slots của đề (PUT /exams/:id/slots).
- *
- * @param paperId - Định danh đề.
- * @param slots - Danh sách slot mới.
- * @returns View đề sau khi thay.
- */
 export function replaceExamPaperSlots(
   paperId: string,
   slots: ExamSlotInput[],
@@ -94,14 +49,6 @@ export function replaceExamPaperSlots(
   });
 }
 
-/**
- * Đổi câu của một slot sang câu khác CÙNG Ô ma trận (POST /exams/:id/swap).
- *
- * @param paperId - Định danh đề.
- * @param position - Vị trí slot.
- * @param questionId - Định danh câu mới.
- * @returns View đề mới.
- */
 export function swapExamPaperSlot(paperId: string, position: number, questionId: string) {
   return apiJson<PaperView>(`/api/v1/exams/${paperId}/swap`, {
     method: 'POST',
@@ -109,14 +56,12 @@ export function swapExamPaperSlot(paperId: string, position: number, questionId:
   });
 }
 
-/** Metadata nguồn công bố cho picker của đề; không gọi đường Copy/Import. */
 export function fetchSystemExamQuestions(offset: number) {
   return apiJson<{ items: { id: string; qtype: string; versions: { version: number }[] }[]; total: number }>(
     `/api/v1/system-bank/discovery?limit=20&offset=${offset}`,
   );
 }
 
-/** Xem trước nội dung phiên bản công bố qua cổng quyền nguồn của API. */
 export function fetchSystemExamQuestionPreview(questionId: string, version: number) {
   return apiJson<{ package: import('@giaokhoa/contracts').SystemBankPackage }>(
     `/api/v1/system-bank/questions/${questionId}/versions/${version}`,

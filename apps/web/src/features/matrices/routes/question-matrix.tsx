@@ -20,18 +20,9 @@ import { usePermissions } from '#lib/permissions';
 import { COGNITIVE_LEVELS, LEVEL_LABEL_KEYS, QTYPES, QTYPE_LABEL_KEYS, withApiReason } from '#features/questions/utils/shared';
 import type { CurriculumTreeNode } from '#features/questions/utils/shared';
 
-/**
- * Màn tạo/sửa MA TRẬN trong ngân hàng ma trận (MB-1, issue #111) — chuẩn §9: tạo mới và sửa là MÀN RIÊNG, danh sách (collapse "Ma trận của tôi" ở trang ngân hàng) chỉ có nút Thêm mới và Sửa/Xoá tại dòng. Ma trận tạo từ đây luôn thuộc bank ma trận CÁ NHÂN của giáo viên
- * (bank_id gửi kèm; API gác quyền phụ trách tại chính bank đó).
- *
- * Flow tổng thể của file: route module prefetch dữ liệu nền qua các queryOptions của `lib/matrix-data.ts` → trang đọc lại bằng cùng khoá qua hooks (chi tiết ma trận là query chính; cây chương trình + khả dụng kho câu là query phụ) → form sửa gửi qua các mutation của cùng module dữ liệu, mutation thành công thì invalidate để trang nạp lại trạng thái mới.
- *
- * Mục BẢN ĐẶC TẢ (SPEC-1, issue #233) ở cuối trang sửa: dữ liệu vào là view model đặc tả do API SUY RA từ các ô của ma trận → trang chỉ trình bày (bảng phẳng một dòng = một ô, cột YCCĐ lấy từ ĐVK của ô) và xuất file qua endpoint export sẵn có; trang KHÔNG có thao tác nhập/sửa đặc tả vì đặc tả không phải dữ liệu nhập riêng.
- */
 
 const SELECT_CLASS = 'h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs';
 
-/** Bung cây chương trình thành danh sách ĐƠN VỊ KIẾN THỨC (node) cho bộ chọn ô ma trận — ô neo ĐVK, không neo YCCĐ (issue #249). Nhãn kèm thụt cấp theo độ sâu để phân biệt chủ đề/bài. */
 function flattenNodes(nodes: CurriculumTreeNode[], depth = 0): { id: string; title: string }[] {
   const out: { id: string; title: string }[] = [];
   for (const node of nodes) {
@@ -41,42 +32,18 @@ function flattenNodes(nodes: CurriculumTreeNode[], depth = 0): { id: string; tit
   return out;
 }
 
-/**
- * Mã vị trí hiển thị của một YCCĐ trong bản đặc tả.
- *
- * Mã chuẩn theo sổ quyết định mục B là `<mã bản ghi>.<số thứ tự 2 chữ
- * số>` (vd `TOAN-0001.02`). Từ đợt neo lại định danh theo vị trí
- * (issue #161), API đặc tả TRẢ SẴN mã này trong trường `code` (backend
- * tính từ sổ đăng ký + position — một nguồn sự thật duy nhất cho vị
- * trí); web chỉ hiển thị, TUYỆT ĐỐI không tự suy từ `sourceRef`/thứ
- * tự như trước đây. `code` là null khi node không thuộc bản ghi
- * dataset nào — khi đó không hiện tiền tố.
- *
- * @param outcome - YCCĐ cần lấy mã.
- * @returns Mã vị trí dạng tiền tố, hoặc null khi API không cấp mã.
- */
 function outcomeCodePrefix(outcome: SpecificationOutcomeLite): string | null {
   return outcome.code;
 }
 
-/** Màn tạo ma trận mới trong bank ma trận cá nhân (route /matrices/new). */
 export function MatrixNewPage() {
   const { t } = useTranslation('app');
   const navigate = useNavigate();
   const perms = usePermissions();
-  // Dữ liệu nền qua TanStack (F-01 đợt 1): bank ma trận + môn học chỉ
-  // tải khi quyền đã rõ (clientLoader của route new đã prefetch cùng
-  // khoá); chương trình theo môn đang chọn qua query keyed theo môn.
   const canLoad = perms.ready && perms.canUseQuestionBank;
   const banksQuery = useMatrixBanks(canLoad);
   const personalBankId = banksQuery.data?.find((b) => b.scope === 'personal')?.id ?? null;
   const bankLoaded = banksQuery.isSuccess || banksQuery.isError;
-  // Khoá của giáo viên để mở nhánh đọc khung theo khoá, cùng gốc
-  // điểm nghẽn D-3 của issue #233 như wizard nhập ma trận: danh sách
-  // môn/chương trình là dữ liệu quốc gia chung nên khoá nào của giáo
-  // viên cũng cho cùng danh sách — `forCourseId` chỉ mở cổng đọc.
-  // Danh sách khoá phải về trước mới gọi, để tránh lượt gọi không kèm
-  // khoá rồi nhận lỗi trước khi khoá kịp về.
   const coursesQuery = useCourseList();
   const forCourseId = coursesQuery.data?.[0]?.id;
   const subjects = useCurriculumSubjects(canLoad && coursesQuery.data !== undefined, forCourseId).data ?? [];
@@ -91,8 +58,6 @@ export function MatrixNewPage() {
   const [status, setStatus] = useState('draft');
   const [message, setMessage] = useState<string | null>(null);
 
-  // Đổi môn: giữ lựa chọn chương trình nếu còn thuộc môn mới, không
-  // thì tự chọn chương trình đầu (đúng nhịp effect thủ công trước đây).
   const [previousCurriculumScope, setPreviousCurriculumScope] = useState({
     subjectId: '',
     curricula: undefined as typeof curriculaQuery.data,
@@ -231,16 +196,11 @@ export function MatrixNewPage() {
   );
 }
 
-/** Màn sửa ma trận (route /matrices/:matrixId/edit): thông tin chung + các ô + khả dụng theo ô. */
 export function MatrixEditPage() {
   const { t } = useTranslation('app');
   const navigate = useNavigate();
   const perms = usePermissions();
   const { matrixId } = useParams<{ matrixId: string }>();
-  // Dữ liệu trang qua TanStack (F-01 đợt 1): chi tiết ma trận là query
-  // chính (clientLoader của route edit đã prefetch cùng khoá); cây
-  // chương trình + khả dụng là query phụ; chờ tải đầu qua trạng thái
-  // chưa có dữ liệu chi tiết như trước (F-14).
   const canLoad = perms.ready && perms.canUseQuestionBank;
   const detailQuery = useMatrixDetail(matrixId, canLoad);
   const matrix = detailQuery.data ?? null;
@@ -251,10 +211,6 @@ export function MatrixEditPage() {
   const [name, setName] = useState('');
   const [status, setStatus] = useState('draft');
   const [isTemplate, setIsTemplate] = useState(false);
-  // Checkbox Vận dụng cao (I-3, issue #233): màn tạo đã có checkbox
-  // này từ trước; màn sửa bổ sung cùng một điều khiển thay cho mọi
-  // lựa chọn levelSet dạng select (không còn select nào trên web) —
-  // tick = levelSet 'four', không tick = 'three'.
   const [includeAdvanced, setIncludeAdvanced] = useState(false);
   const [totalScore, setTotalScore] = useState('10');
   const [cellNodeId, setCellNodeId] = useState('');
@@ -267,23 +223,10 @@ export function MatrixEditPage() {
   const addCellMutation = useAddMatrixCell();
   const deleteCellMutation = useDeleteMatrixCell();
 
-  // Bản đặc tả (SPEC-1, issue #233): mục riêng trong trang sửa ma trận,
-  // chỉ tải khi giáo viên mở xem — đặc tả là bảng SUY RA từ các ô nên
-  // luôn khớp trạng thái ma trận hiện tại, không có thao tác sửa ở đây.
   const [specOpen, setSpecOpen] = useState(false);
   const specQuery = useMatrixSpecification(matrixId, canLoad && !!matrix && specOpen);
   const spec = specQuery.data ?? null;
 
-  /**
-   * Xuất bản đặc tả của ma trận đang sửa ra file và tải về máy.
-   *
-   * Flow: uỷ thác toàn bộ lượt tải cho `downloadMatrixSpecification`
-   * (tầng dữ liệu lo endpoint + tên file của server); lỗi HTTP thì
-   * bắt tại đây và báo lên banner của trang kèm lý do API, theo đúng
-   * khuôn báo lỗi của các thao tác khác trong trang.
-   *
-   * @param format - 'xlsx' cho bản Excel, 'docx' cho bản Word.
-   */
   async function exportSpec(format: 'xlsx' | 'docx') {
     if (!matrix) return;
     try {
@@ -293,16 +236,9 @@ export function MatrixEditPage() {
     }
   }
 
-  // Lỗi tải chi tiết suy ngay khi render từ trạng thái query —
-  // không chép qua effect vào state như bản cũ: banner hiện
-  // message của thao tác nếu có, không thì lỗi tải.
   const loadError = detailQuery.isError ? t('matrixLoadFailed') : null;
   const displayMessage = message ?? loadError;
 
-  // Các dòng phẳng của bản đặc tả (một dòng = một ô ma trận, STT
-  // chạy toàn bảng như bản xuất xlsx/docx) + hai Map tra cứu cho
-  // từng ô: memo theo đúng dữ kiện nguồn — bản cũ tính flatMap lại
-  // mỗi render kể cả khi gõ phím và tìm tuyến tính (.find) từng ô.
   const specRows = useMemo(
     () =>
       spec
@@ -318,8 +254,6 @@ export function MatrixEditPage() {
     [availability],
   );
 
-  // Khởi tạo các trường form từ bản ghi mỗi khi chi tiết (lại) tải về —
-  // đúng nhịp loadMatrix cũ, vốn chạy lại sau mỗi đột biến thành công.
   const [previousMatrixData, setPreviousMatrixData] = useState<typeof detailQuery.data | undefined>(undefined);
   if (previousMatrixData !== detailQuery.data) {
     setPreviousMatrixData(detailQuery.data);
@@ -535,15 +469,6 @@ export function MatrixEditPage() {
             </form>
           </div>
 
-          {/*
-            Mục BẢN ĐẶC TẢ (SPEC-1): ba trạng thái hiển thị theo nhịp
-            tải lười — chưa mở thì chỉ có nút Xem + hai nút xuất (xuất
-            không cần mở xem vì endpoint export tự dựng lại đặc tả ở
-            server); đang tải thì khung xương; lỗi thì banner tại chỗ;
-            có dữ liệu thì bảng phẳng + dòng tổng. Ma trận chưa có ô
-            nào thì API trả topics rỗng → hiện câu trạng thái rỗng
-            thay cho bảng.
-          */}
           <div className="space-y-3">
             <h3 className="font-medium">{t('specSectionTitle')}</h3>
             <p className="text-sm text-muted-foreground">{t('specSectionHint')}</p>
@@ -592,7 +517,6 @@ export function MatrixEditPage() {
                                   <td className="p-2">{rowIndex + 1}</td>
                                   <td className="p-2">{topic.topicTitle}</td>
                                   <td className="p-2">{node.nodeTitle}</td>
-                                  {/* Cột YCCĐ đọc từ NODE chứ không từ ô: mọi ô của cùng một ĐVK dùng chung danh sách YCCĐ của ĐVK đó (mô hình #249). */}
                                   <td className="p-2">
                                     {node.outcomes.length === 0 ? (
                                       <span className="text-muted-foreground">—</span>
@@ -623,10 +547,8 @@ export function MatrixEditPage() {
                                   <td className="p-2">
                                     {t(QTYPE_LABEL_KEYS[cell.qtype as (typeof QTYPES)[number]] ?? 'qtypeMultichoice')}
                                   </td>
-                                  {/* Số câu theo đúng cách đếm của bản xuất: câu Đúng–Sai chùm tính 4 ý. */}
                                   <td className="p-2">{cell.qtype === 'truefalse' ? cell.questionCount * 4 : cell.questionCount}</td>
                                   <td className="p-2">{cell.cellScore}</td>
-                                  {/* Số thứ tự câu chỉ có khi đặc tả dựng theo một lần ghim cụ thể; đặc tả theo ma trận thuần luôn vắng → hiện ghi chú rút (nếu có) hoặc dấu —. */}
                                   <td className="p-2">
                                     {cell.slotNumbers && cell.slotNumbers.length
                                       ? cell.drawNote

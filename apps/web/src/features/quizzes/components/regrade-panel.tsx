@@ -1,25 +1,3 @@
-/**
- * Thẻ chấm lại theo version câu hỏi (tách cấu trúc từ
- * `pages/quiz.tsx` theo đợt A của issue #223): chọn câu và
- * version đích, chạy xem trước (dry-run) hoặc áp chấm lại, xem
- * danh sách điểm đổi và nhật ký các lần chấm lại đã áp. Trạng
- * thái chọn và các handler chạy chấm lại do trang giữ và truyền
- * xuống.
- *
- * @param props.quiz - Phần lần ghim của view (danh sách slot để chọn câu).
- * @param props.slotNames - Tên hiển thị của từng slot theo id.
- * @param props.roster - Danh sách thành viên khoá (hiện tên học sinh ở dòng điểm đổi).
- * @param props.regradeError - Lỗi chấm lại hiện tại.
- * @param props.regradeQuestionId - Câu đang chọn để chấm lại.
- * @param props.regradeVersions - Các version của câu đang chọn.
- * @param props.regradeVersionId - Version đích đang chọn.
- * @param props.regradePreview - Kết quả xem trước/áp gần nhất (null khi chưa chạy).
- * @param props.regradeLog - Nhật ký chấm lại của lần ghim (null khi chưa tải).
- * @param props.busy - Đang có thao tác ghi chạy (khoá nút).
- * @param props.onRegradeQuestionChange - Handler đổi câu chấm lại của trang.
- * @param props.setRegradeVersionId - Setter của version đích.
- * @param props.runRegrade - Handler chạy chấm lại (dryRun = chỉ xem trước).
- */
 import type { CourseRosterMember, PinRegradeLogEntry, PinRegradeResult, QuizView } from '@giaokhoa/contracts';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ipMatchesSubnetList, isValidSubnetList } from './subnet';
 
-/** Kiểm thử thuần cho đối chiếu subnet kiểu Moodle `quiz.subnet` (IPv4/IPv6/CIDR, dạng mapped). */
 describe('Khớp subnet của quiz', () => {
   it('khớp IP thuần và dải CIDR (v4)', () => {
     expect(ipMatchesSubnetList('127.0.0.1', '127.0.0.1')).toBe(true);

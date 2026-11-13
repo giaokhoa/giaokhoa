@@ -7,12 +7,7 @@ import {
   roleIdByShortname, STRONG_PASSWORD, systemContextId,
 } from '../../support/identity-access-helpers';
 
-/**
- * K0a (issue #66) — cơ chế nạp dữ liệu chương trình chuẩn GDPT 2018. Oracle: chính các file dataset đã kiểm chứng nguyên văn với văn bản ban hành kèm Thông tư 32/2018/TT-BGDĐT (hồ sơ kiểm chứng của dự án:
- * Toán 314/314, Ngữ văn 238/238, 0 chênh lệch chữ) — bản sao vendor tại `src/modules/curriculum/program-data/`. Spec này đối chiếu TỪNG bản ghi qua API cây: vị trí trong cây (mạch → section → topic → nội dung), toàn bộ YCCĐ theo thứ tự, và truy vết nguồn (source_ref chứa mã bản ghi + trang) — khớp 100% mới đạt, theo đúng tiêu chí xong của issue.
- */
 
-/** Node của một YCCĐ dạng Tiptap doc trong dataset (doc/paragraph/text + bulletList/listItem cho ý con). */
 interface OutcomeDocNode {
   type: string;
   text?: string;
@@ -35,9 +30,6 @@ function loadDataset(fileName: string): ProgramDataset {
   return JSON.parse(readFileSync(join(process.cwd(), 'src/modules/curriculum/program-data', fileName), 'utf8')) as ProgramDataset;
 }
 
-/**
- * Text của một YCCĐ dạng doc — ORACLE trích độc lập trong spec (không dùng code nạp, giữ tính độc lập của oracle): mỗi paragraph là một dòng, listItem cho dòng của paragraph của nó rồi tới các dòng của bulletList lồng bên trong (đệ quy); các dòng nối bằng '\n', cắt khoảng trắng hai đầu — đúng semantics text canonical mà hệ lưu vào `learning_outcomes.content` nay là cột jsonb lưu trực tiếp tài liệu này; text canonical trích từ tài liệu bằng đúng semantics này.
- */
 function docOutcomeText(doc: OutcomeDoc): string {
   const lines: string[] = [];
   const walk = (node: OutcomeDocNode): void => {
@@ -51,7 +43,6 @@ function docOutcomeText(doc: OutcomeDoc): string {
   return lines.join('\n').trim();
 }
 
-/** Các dòng YCCĐ kỳ vọng của một bản ghi — cùng quy tắc với cơ chế nạp (outcomes[] → từng dòng, phần tử dạng doc trích text bằng docOutcomeText; rỗng + outcome_text → một dòng; cả hai rỗng → không dòng). */
 function expectedOutcomeTexts(r: ProgramRecord): string[] {
   if (r.outcomes.length > 0) {
     return r.outcomes.map((o) => (typeof o === 'string' ? o : docOutcomeText(o)));
@@ -60,7 +51,6 @@ function expectedOutcomeTexts(r: ProgramRecord): string[] {
   return [];
 }
 
-/** Đường tổ tiên kỳ vọng của một bản ghi: mạch (stream) → section → topic. */
 function expectedPath(r: ProgramRecord): string[] {
   const path = [r.stream];
   if (r.section) path.push(r.section);
@@ -120,7 +110,6 @@ describe('Nhập chương trình K0a (dataset GDPT 2018 đã kiểm chứng → 
     return out;
   }
 
-  /** Đối chiếu toàn bộ bản ghi của một dataset với cây đã nạp, từng bản ghi một. */
   async function verifyDatasetAgainstTree(slug: string, dataset: ProgramDataset): Promise<void> {
     const grades = [...new Set(dataset.records.map((r) => r.grade))].sort((a, b) => a - b);
     let lessonTotal = 0;
@@ -135,12 +124,10 @@ describe('Nhập chương trình K0a (dataset GDPT 2018 đã kiểm chứng → 
       lessonTotal += lessons.length;
       for (const record of records) {
         const texts = expectedOutcomeTexts(record);
-        // Truy bản ghi qua truy vết nguồn: mọi YCCĐ của nó mang source_ref chứa mã bản ghi.
         const mine = lessons.flatMap((l) => l.outcomes.map((o) => ({ lesson: l, outcome: o })))
           .filter((x) => x.outcome.sourceRef?.includes(`bản ghi ${record.id}`));
         if (texts.length === 0) {
           expect(mine.length, `${record.id} must have no outcomes`).toBe(0);
-          // Node nội dung vẫn phải tồn tại đúng vị trí với tựa nguyên văn.
           const atPath = lessons.filter((l) => l.title === record.content
             && l.outcomes.length === 0
             && JSON.stringify(l.path) === JSON.stringify(expectedPath(record)));
@@ -172,7 +159,6 @@ describe('Nhập chương trình K0a (dataset GDPT 2018 đã kiểm chứng → 
     const nguvanRow = rows.find((r) => r.datasetKey === 'nguvan');
     expect(toanRow?.totalRecords).toBe(toan.records.length);
     expect(nguvanRow?.totalRecords).toBe(238);
-    // importedRecords có thể đã > 0 nếu một spec khác trong cùng DB đã nạp — chỉ chốt tổng số bản ghi ở đây.
 
     const plainStatus = await http(app).get('/api/v1/curriculum/program-import').set(bearer(plainToken));
     expect(plainStatus.status).toBe(403);
@@ -180,13 +166,10 @@ describe('Nhập chương trình K0a (dataset GDPT 2018 đã kiểm chứng → 
     const plainImport = await http(app).post('/api/v1/curriculum/program-import').set(bearer(plainToken)).send({ datasetKey: 'toan' });
     expect(plainImport.status).toBe(403);
     expect(plainImport.body.code).toBe('access.capability_denied');
-    // Giáo viên có curriculum:view nhưng không có curriculum:manage → đọc trạng thái được, nạp bị từ chối.
     const teacherStatus = await http(app).get('/api/v1/curriculum/program-import').set(bearer(teacherToken));
     expect(teacherStatus.status).toBe(200);
     const teacherImport = await http(app).post('/api/v1/curriculum/program-import').set(bearer(teacherToken)).send({ datasetKey: 'toan' });
     expect(teacherImport.status).toBe(403);
-    // Dataset không có trong manifest → 404 tường minh (khoá bịa —
-    // mọi khoá môn thật đều đã vào manifest từ #161).
     const bogus = await http(app).post('/api/v1/curriculum/program-import').set(bearer(admin)).send({ datasetKey: 'mon-khong-ton-tai' });
     expect(bogus.status).toBe(404);
     expect(bogus.body.code).toBe('curriculum.program_dataset_not_found');
@@ -203,7 +186,6 @@ describe('Nhập chương trình K0a (dataset GDPT 2018 đã kiểm chứng → 
 
     await verifyDatasetAgainstTree('toan', toan);
 
-    // TOAN-0096: lỗi in "thí 2 nghiệm" có thật trong PDF của Bộ — nạp phải giữ nguyên văn, không tự sửa.
     const lessons5 = await treeLessons('toan', 5);
     const typo = lessons5.flatMap((l) => l.outcomes).find((o) => o.sourceRef?.includes('bản ghi TOAN-0096'));
     expect(typo?.content).toContain('thí 2 nghiệm');

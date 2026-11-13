@@ -14,13 +14,9 @@ import { quizResultsQueryOptions, useGradeQuizQuestion, useQuizResults } from '.
 import type { NeedsGradingItem } from '../types/quiz-results';
 import { queryClient } from '#lib/query-client';
 
-/**
- * Trang kết quả quiz cho giáo viên: điểm bài hiện tại của từng học sinh, mọi lượt làm, và hàng đợi chấm tay essay — chấm ngay tại trang, điểm bài được API tính lại và ghi sổ sau mỗi lần chấm.
- */
 export function QuizResultsPage() {
   const { t } = useTranslation('app');
   const { id: courseId, pinId: quizId } = useParams();
-  // Dữ liệu trang qua TanStack (F-01 đợt 1): clientLoader đã prefetch cùng khoá trước khi mount; chấm tay qua mutation — thành công tự invalidate query kết quả thay cho reload thủ công. Trạng thái chờ lần tải đầu trên isPending của query với skeleton sẵn có (F-14).
   const resultsQuery = useQuizResults(quizId);
   const data = resultsQuery.data ?? null;
   const gradeMutation = useGradeQuizQuestion();
@@ -205,16 +201,10 @@ export function QuizResultsPage() {
   );
 }
 
-/** Export mặc định cho route module React Router framework mode (xem src/routes.ts). */
 export default function QuizResultsRoute() {
   return <QuizResultsPage />;
 }
 
-/**
- * clientLoader (F-01 đợt 1 + bổ sung clientLoader, rà soát #133):
- * prefetch query kết quả vào QueryClient singleton dùng chung, đúng
- * khoá factory, trước khi component mount.
- */
 export async function clientLoader({ params }: { params: Record<string, string | undefined> }) {
   if (params.pinId) {
     await queryClient.prefetchQuery(quizResultsQueryOptions(params.pinId));
@@ -222,7 +212,6 @@ export async function clientLoader({ params }: { params: Record<string, string |
   return null;
 }
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { titleMeta } from '#lib/route-meta';
 export function meta() {

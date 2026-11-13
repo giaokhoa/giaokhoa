@@ -9,24 +9,6 @@ import type {
   PaymentSettlementPort,
 } from './sepay-matching-ports';
 
-/**
- * Test đặc trưng hoá luồng matching IPN SePay (issue #538).
- *
- * Các ca này ghim HÀNH VI HIỆN TẠI của `SepayMatchingService` tại thời điểm trích xuất service từ apps/api sang package dùng chung `@giaokhoa/payments` — chúng là mốc đối chiếu để việc trích xuất chứng minh bảo toàn hành vi, và là đặc tả thực thi của các luật đã ghi trong docblock của service:
- *
- * - Luật khớp 3 điều kiện (mã thanh toán, số tiền, tài khoản nhận)
- *   cộng payment còn `pending` và chưa hết hạn, cộng phép đối chiếu đích phía server (issue #419) TRƯỚC khi kích hoạt bất cứ quyền lợi nào.
- * - Bất biến đồng bộ của nhịp chốt: kích hoạt MỌI quyền lợi TRƯỚC
- *   nhịp lật payment sang `succeeded`, rồi mới phát đúng outbox `payment_succeeded` và chốt sự kiện `matched` — thứ tự này được ghim bằng nhật ký thứ tự gọi chung của các bản giả.
- * - Thiếu bất kỳ điều kiện nào: payment còn `pending` chuyển
- *   `needs_review`, sự kiện chuyển `needs_review`, KHÔNG kích hoạt gì và KHÔNG phát outbox.
- * - Sự kiện `debit` uỷ thác trọn cho cổng xác nhận chi hoàn, không
- *   đi đường khớp tiền về.
- * - Hoàn tất idempotent: payment đã `succeeded` bởi chính giao dịch
- *   này thì chỉ chốt sự kiện, không kích hoạt lại.
- *
- * Tầng dữ liệu và các cổng được thay bằng bản giả ghi lại lời gọi — hành vi đầu-cuối trên DB thật do các suite e2e payments của apps/api ghim (vietqr, class-fee, coupons-slots, entitlement-gate, plans, refund-lifecycle, webhook-verify).
- */
 
 const PAYMENT_ID = '0f8fad5b-d9cb-469f-a165-70867728950e';
 const EVENT_ID = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
@@ -35,7 +17,6 @@ const TENANT_ID = '9a7b4d2e-5f36-4a1e-b28c-3d5e7f90a1b2';
 const USER_ID = 'b3f7c21d-8a4e-4c5d-9e62-1f0a2b3c4d5e';
 const ITEM_ID = 'c4a8d32e-9b5f-4d6e-af73-2a1b3c4d5e6f';
 
-/** Payment `enrol_fee` đang `pending`, khớp mẫu với sự kiện tiền về chuẩn. */
 function makePayment(overrides: Partial<PaymentRow> = {}): PaymentRow {
   return {
     id: PAYMENT_ID,
@@ -62,7 +43,6 @@ function makePayment(overrides: Partial<PaymentRow> = {}): PaymentRow {
   };
 }
 
-/** Sự kiện tiền về SePay chuẩn: số tiền và tài khoản khớp payment mẫu. */
 function makeEvent(overrides: Partial<ProviderEventRow> = {}): ProviderEventRow {
   return {
     id: EVENT_ID,
@@ -84,7 +64,6 @@ function makeEvent(overrides: Partial<ProviderEventRow> = {}): ProviderEventRow 
 
 interface Harness {
   service: SepayMatchingService;
-  /** Nhật ký thứ tự gọi chung — ghim thứ tự các bước trong nhịp chốt. */
   calls: string[];
   outboxInputs: OutboxEventInput[];
   paymentsById: Map<string, PaymentRow>;
@@ -92,17 +71,12 @@ interface Harness {
   listPendingArgs: { limit: number; staleBefore: Date }[];
   settleCalls: ProviderEventRow[];
   verifyCalls: PaymentRow[];
-  /** Tham số của hai cổng kích hoạt theo thứ tự gọi — ghim việc truyền `tenantId` của payment qua cổng. */
   activationCalls: { port: 'enrol' | 'class'; itemId: string; userId: string; tenantId: string }[];
   setVerifyResult: (value: boolean) => void;
   setClaim: (fn: (id: string) => boolean) => void;
   setPending: (events: ProviderEventRow[]) => void;
 }
 
-/**
- * Dựng service với tầng dữ liệu và ba cổng là bản giả trong bộ nhớ:
- * repository giữ payment/sự kiện trong Map (ghi cập nhật hợp nhất vào Map để bước đọc lại sau khi lật trạng thái thấy đúng trạng thái mới, như DB thật), mọi khâu kích hoạt và phát outbox ghi vào cùng một nhật ký `calls` để khẳng định thứ tự.
- */
 function createHarness(): Harness {
   const calls: string[] = [];
   const outboxInputs: OutboxEventInput[] = [];
@@ -187,7 +161,6 @@ function createHarness(): Harness {
   };
 }
 
-/** Nạp một cặp payment + sự kiện chuẩn vào harness. */
 function seedPair(h: Harness, payment: PaymentRow, event: ProviderEventRow): void {
   h.paymentsById.set(payment.id, payment);
   h.eventsById.set(event.id, event);
@@ -259,8 +232,6 @@ describe('SepayMatchingService — đặc trưng hoá luồng matching IPN SePay
 
     await h.service.processEvent(EVENT_ID);
 
-    // Thứ tự là bất biến nghiệp vụ của nhịp chốt: kích hoạt → lật
-    // trạng thái → phát outbox → chốt sự kiện.
     expect(h.calls).toEqual([
       'activate:enrol',
       'payment:succeeded',
@@ -285,9 +256,6 @@ describe('SepayMatchingService — đặc trưng hoá luồng matching IPN SePay
     expect(h.paymentsById.get(PAYMENT_ID)!.status).toBe('succeeded');
     expect(h.paymentsById.get(PAYMENT_ID)!.externalTransactionId).toBe('TXN-EXT-1');
     expect(h.eventsById.get(EVENT_ID)!.matchedPaymentId).toBe(PAYMENT_ID);
-    // Cổng kích hoạt nhận đủ định danh của payment, gồm `tenantId`
-    // của payment để tiến trình chủ phân giải không gian của
-    // trung tâm sở hữu payment.
     expect(h.activationCalls).toEqual([
       { port: 'enrol', itemId: ITEM_ID, userId: USER_ID, tenantId: TENANT_ID },
     ]);

@@ -56,9 +56,6 @@ function buildGuard(input: {
 
 const COOKIE = 'better-auth.session_token=tok.abc; other=1';
 
-/**
- * Guard mỏng của Better Auth (issue #7, Giai đoạn 1): chỉ đặt danh tính khi phiên Better Auth hợp lệ VÀ tài khoản còn hoạt động; mọi trường hợp còn lại phải để nguyên cho đường JWT hiện tại quyết định.
- */
 describe('Khối BetterAuthSessionGuard', () => {
   it('cho qua nguyên vẹn khi Better Auth đang tắt', async () => {
     const { guard, getSession } = buildGuard({ enabled: false });

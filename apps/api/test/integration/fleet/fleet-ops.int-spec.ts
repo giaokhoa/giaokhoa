@@ -10,15 +10,6 @@ import { runFleetMigration } from '../../../src/modules/fleet/fleet-migration-ru
 import { runFleetRestoreTest } from '../../../src/modules/fleet/fleet-restore-test';
 import { runRuntimeRolesSetup } from '../../../src/modules/fleet/runtime-roles-setup';
 
-/**
- * Ca tích hợp của CÔNG CỤ VẬN HÀNH ĐỘI KHO (issue #586): tách role runtime/migration, runner migration theo đợt, sao lưu định kỳ, kiểm thử khôi phục và ngân sách kết nối — kiểm chứng đầu cuối trên một cụm test thật với các database và role TÊN MỚI của riêng ca này.
- *
- * Bố cục: một database control plane riêng (`giaokhoa_test_cp_586`, áp bộ migration của control plane từ rỗng như ca của issue #580), một kho nghiệp vụ trầy (`giaokhoa_test_biz_586`) cho phần tách role, và BỐN kho đã đăng ký trong sổ — kho nền tảng `trang-chinh-586`, trung tâm canary `tt-a-canary-586`, trung tâm `tt-b-loi-586` bị phá hoại có chủ đích ở lượt migration đầu (một bảng trùng tên với bảng của baseline được tạo trước để bước áp migration của riêng kho đó phải hỏng và dừng ở trạng thái có ghi nhận, trong khi các kho cùng đợt vẫn hoàn tất), và trung tâm `tt-c-586` cùng đợt với kho bị phá. Các kho được đăng ký với `secretRef` trỏ tới URL của role RUNTIME: runner chỉ áp được migration khi nó thay thông tin đăng nhập bằng của role migration theo đúng luật suy ra URL vận hành — role runtime tự nó không có quyền tạo bảng trong các kho.
- *
- * Cô lập hai chiều được kiểm ở ĐÚNG bước mở kết nối bằng đúng các role thật của mô hình mới: role runtime không mở được kết nối vào database control plane, role của control plane không mở được kết nối vào kho nghiệp vụ — sau khi role runtime đã bị hạ khỏi superuser bởi chính script cấp phát của issue này.
- *
- * Shim `uuidv7()` chỉ áp khi server PostgreSQL dưới 18 (môi trường chạy local bằng PG16): PG18 — bản ở CI và production — có sẵn hàm này, shim sẽ che mất hàm gốc nên tuyệt đối không áp ở đó. Tệp sao lưu của ca ghi vào thư mục riêng trong cây làm việc và được dọn ở afterAll, cùng toàn bộ database/role trầy của ca.
- */
 const CP_DATABASE = 'giaokhoa_test_cp_586';
 const CP_ROLE = 'giaokhoa_cp_test_586';
 const CP_PASSWORD = 'cp-test-586';
@@ -27,8 +18,6 @@ const RUNTIME_ROLE = 'giaokhoa_runtime_test_586';
 const RUNTIME_PASSWORD = 'runtime-test-586';
 const MIGRATOR_ROLE = 'giaokhoa_migrator_test_586';
 const MIGRATOR_PASSWORD = 'migrator-test-586';
-// Dùng chính danh sách thư mục migration mà runner xử lý, không đóng băng
-// version trong fixture (migration mới phải được suite fleet chấp nhận).
 const CENTRE_MIGRATIONS_DIR = join(__dirname, '..', '..', '..', '..', '..', 'packages', 'db', 'migrations', 'centre');
 function latestCentreVersion(): string {
   const latest = listMigrationFolders(CENTRE_MIGRATIONS_DIR).at(-1);
@@ -46,7 +35,6 @@ const SPACES = [
 
 const UUIDV7_SHIM = `CREATE OR REPLACE FUNCTION uuidv7() RETURNS uuid AS $$ DECLARE ts_ms bigint := (extract(epoch from clock_timestamp()) * 1000)::bigint; b bytea; BEGIN b := decode(lpad(to_hex(ts_ms), 12, '0'), 'hex') || gen_random_bytes(10); b := set_byte(b, 6, (get_byte(b, 6) & 15) | 112); b := set_byte(b, 8, (get_byte(b, 8) & 63) | 128); RETURN encode(b, 'hex')::uuid; END; $$ LANGUAGE plpgsql VOLATILE`;
 
-/** Dựng URL kết nối tới một database trên cùng cụm với database nghiệp vụ test. */
 function clusterUrl(database: string, username?: string, secret?: string): string {
   const base = new URL(process.env.DATABASE_URL!);
   base.pathname = `/${database}`;
@@ -55,7 +43,6 @@ function clusterUrl(database: string, username?: string, secret?: string): strin
   return base.toString();
 }
 
-/** Bọc một định danh Postgres trong dấu nháy kép cho các câu lệnh quản trị của ca test. */
 function quoted(identifier: string): string {
   return `"${identifier.replace(/"/g, '""')}"`;
 }
@@ -70,7 +57,6 @@ async function withClient<T>(connectionString: string, fn: (client: Client) => P
   }
 }
 
-/** Áp shim uuidv7 khi server dưới PostgreSQL 18 (xem ghi chú đầu file). */
 async function applyUuidV7ShimIfNeeded(connectionString: string): Promise<void> {
   await withClient(connectionString, async (client) => {
     const version = await client.query<{ server_version_num: string }>('SHOW server_version_num');
@@ -81,7 +67,6 @@ async function applyUuidV7ShimIfNeeded(connectionString: string): Promise<void> 
   });
 }
 
-/** Áp bộ migration riêng của control plane từ rỗng (đọc chính file SQL đã sinh trong repo). */
 async function applyControlPlaneMigrations(connectionString: string): Promise<void> {
   const outDir = join(__dirname, '..', '..', '..', '..', '..', 'packages', 'db', 'migrations', 'control-plane');
   const folders = readdirSync(outDir, { withFileTypes: true })
@@ -100,7 +85,6 @@ async function applyControlPlaneMigrations(connectionString: string): Promise<vo
   });
 }
 
-/** Đọc một trường của registry phiên bản schema của một kho theo slug, qua kết nối của role control plane. */
 async function registryState(slug: string): Promise<{
   currentVersion: string | null;
   lastBackupStatus: string | null;
@@ -129,7 +113,6 @@ async function registryState(slug: string): Promise<{
   });
 }
 
-/** Các lượt chạy migration đã ghi vào nhật ký cho một kho, theo thứ tự thời gian. */
 async function migrationRuns(slug: string): Promise<{ status: string; steps: { name: string; status: string }[] }[]> {
   return withClient(clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD), async (client) => {
     const result = await client.query<{ status: string; steps: { name: string; status: string }[] }>(
@@ -162,13 +145,11 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
     process.env.DATABASE_ADMIN_URL = clusterUrl('postgres');
     process.env.FLEET_BACKUP_DIR = BACKUP_DIR;
     process.env.FLEET_TEST_SPACE_URL = clusterUrl('postgres', RUNTIME_ROLE, RUNTIME_PASSWORD);
-    // Mã hoá sao lưu là bắt buộc (fail-closed): mọi đường chụp trong ca này phải có khoá, và tệp lưu trên đĩa là `.dump.enc`.
     process.env.FLEET_BACKUP_ENCRYPTION_KEY = 'fleet-test-586-passphrase';
     mkdirSync(BACKUP_DIR, { recursive: true });
 
     const adminUrl = clusterUrl('postgres');
     await withClient(adminUrl, async (admin) => {
-      // Dọn tàn dư của một lượt chạy dở trước đó để ca tự cấp phát lại từ sạch trên cùng tên (tên là của riêng ca này).
       for (const database of [CP_DATABASE, BIZ_DATABASE, ...SPACES.map((space) => space.database)]) {
         await admin.query(
           `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`,
@@ -190,15 +171,12 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       }
     });
 
-    // Database control plane: chỉ role của nó mở được kết nối.
     await withClient(adminUrl, async (admin) => {
       await admin.query(`REVOKE CONNECT ON DATABASE ${quoted(CP_DATABASE)} FROM PUBLIC`);
       await admin.query(`GRANT CONNECT ON DATABASE ${quoted(CP_DATABASE)} TO ${quoted(CP_ROLE)}`);
     });
     await applyControlPlaneMigrations(clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD));
 
-    // Các kho của đội kho: chủ là role migration; kết nối chỉ cấp
-    // tường minh cho role migration và role runtime.
     for (const space of SPACES) {
       await withClient(adminUrl, async (admin) => {
         await admin.query(`REVOKE CONNECT ON DATABASE ${quoted(space.database)} FROM PUBLIC`);
@@ -208,15 +186,11 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       await applyUuidV7ShimIfNeeded(clusterUrl(space.database, MIGRATOR_ROLE, MIGRATOR_PASSWORD));
     }
 
-    // Kho nghiệp vụ trầy ở trạng thái TRƯỚC mô hình role mới: một
-    // bảng do chính role quản trị của cụm sở hữu (di sản của thời
-    // migration chạy bằng role quản trị).
     await withClient(clusterUrl(BIZ_DATABASE), async (admin) => {
       await admin.query('CREATE TABLE legacy_probe (id integer PRIMARY KEY, note text NOT NULL)');
       await admin.query(`INSERT INTO legacy_probe (id, note) VALUES (1, 'di san truoc tach role')`);
     });
 
-    // Ghi sổ đăng ký cho bốn kho + dòng registry trống cho từng kho.
     await withClient(clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD), async (client) => {
       for (const space of SPACES) {
         const inserted = await client.query<{ id: string }>(
@@ -280,8 +254,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
         );
         expect(owner.rows[0]!.owner).toBe(MIGRATOR_ROLE);
       });
-      // Chủ sở hữu của bảng di sản phải đọc trong chính kho nghiệp
-      // vụ (pg_tables là danh mục theo từng database).
       await withClient(clusterUrl(BIZ_DATABASE), async (admin) => {
         const tableOwner = await admin.query<{ tableowner: string }>(
           `SELECT tableowner FROM pg_tables WHERE schemaname = 'public' AND tablename = 'legacy_probe'`,
@@ -356,10 +328,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
     });
 
     it('lượt đầu: kho bị phá hoại dừng ở trạng thái hỏng có ghi nhận, các kho còn lại hoàn tất và sổ khớp sự thật trong từng kho', async () => {
-      // Phá hoại có chủ đích: tạo trước một bảng trùng tên với bảng
-      // users của baseline trong kho tt-b — bước áp migration của
-      // riêng kho đó phải hỏng và cuốn toàn bộ giao dịch của nó về
-      // trạng thái chưa có phiên bản.
       await withClient(clusterUrl('giaokhoa_test_space_loi_586', MIGRATOR_ROLE, MIGRATOR_PASSWORD), async (client) => {
         await client.query('CREATE TABLE users (id integer)');
       });
@@ -373,7 +341,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       expect(bySlug.get('tt-c-586')).toBe('migrated');
       expect(summary.failedCount).toBe(1);
 
-      // Sổ khớp sự thật trong từng kho sau lượt chạy.
       for (const slug of ['trang-chinh-586', 'tt-a-canary-586', 'tt-c-586']) {
         expect((await registryState(slug)).currentVersion).toBe(latestCentreVersion());
       }
@@ -389,9 +356,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       );
       expect(platformDbVersion).toBe(latestCentreVersion());
 
-      // Nhật ký: mỗi kho đúng một lượt; lượt của kho hỏng ghi bước
-      // áp migration thất bại, bản chốt trước migration của nó vẫn
-      // được chụp (điểm khôi phục tồn tại kể cả khi migration hỏng).
       const brokenRuns = await migrationRuns('tt-b-loi-586');
       expect(brokenRuns).toHaveLength(1);
       expect(brokenRuns[0]!.status).toBe('failed');
@@ -410,8 +374,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       await withClient(clusterUrl('giaokhoa_test_space_loi_586', MIGRATOR_ROLE, MIGRATOR_PASSWORD), async (client) => {
         await client.query('DROP TABLE users');
       });
-      // Gây lệch sổ có chủ đích cho canary: registry ghi một phiên
-      // bản không có thật trong khi database của kho đã ở đích.
       await withClient(clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD), async (client) => {
         await client.query(
           `UPDATE space_schema_registry SET current_version = 'phien-ban-lech'
@@ -429,8 +391,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
 
       expect((await registryState('tt-a-canary-586')).currentVersion).toBe(latestCentreVersion());
       expect((await registryState('tt-b-loi-586')).currentVersion).toBe(latestCentreVersion());
-      // Chỉ kho tt-b có thêm lượt chạy thứ hai; các kho khác giữ
-      // nguyên một lượt — đồng bộ sổ không bịa lượt chạy.
       expect(await migrationRuns('tt-b-loi-586')).toHaveLength(2);
       expect(await migrationRuns('tt-a-canary-586')).toHaveLength(1);
       expect(await migrationRuns('trang-chinh-586')).toHaveLength(1);
@@ -440,9 +400,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
 
   describe('sao lưu định kỳ và kiểm thử khôi phục', () => {
     it('sao lưu định kỳ chụp đủ mọi kho và control plane, ghi trạng thái vào registry, và chế độ kiểm bắt đúng kho quá hạn', async () => {
-      // Gieo tài khoản quản trị vào từng kho trước khi chụp: kiểm
-      // tra khói của kiểm thử khôi phục đối chiếu đúng tài khoản
-      // gieo sẵn này trong bản khôi phục của mỗi kho.
       for (const space of SPACES) {
         await withClient(clusterUrl(space.database, MIGRATOR_ROLE, MIGRATOR_PASSWORD), async (client) => {
           await client.query(`INSERT INTO users (username, email) VALUES ('admin', $1)`, [
@@ -469,8 +426,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
 
       const healthy = await checkFleetBackups({ env: process.env, backupDir: BACKUP_DIR });
       expect(healthy.overdue).toEqual([]);
-      // Đẩy mốc sao lưu của tt-c về quá khứ: chế độ kiểm phải bắt
-      // đúng kho đó là quá hạn (đây là điểm móc cảnh báo vận hành).
       await withClient(clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD), async (client) => {
         await client.query(
           `UPDATE space_schema_registry SET last_backup_at = now() - interval '3 days'
@@ -559,10 +514,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       });
       const countConnections = async (database: string): Promise<number> =>
         withClient(clusterUrl('postgres'), async (admin) => {
-          // Chỉ đếm backend của client: các tiến trình nền của
-          // chính server (autovacuum, phân tích) cũng mang tên
-          // database trong pg_stat_activity nhưng không thuộc ngân
-          // sách kết nối của ứng dụng.
           const counted = await admin.query<{ n: number }>(
             `SELECT count(*)::int AS n FROM pg_stat_activity
               WHERE datname = $1 AND pid <> pg_backend_pid() AND backend_type = 'client backend'`,
@@ -571,10 +522,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
           return counted.rows[0]!.n;
         });
       try {
-        // Bắn đồng thời nhiều truy vấn giữ kết nối hơn trần của
-        // từng pool: số kết nối thật mở tới mỗi kho không bao giờ
-        // vượt trần của pool đó, và tổng không vượt tổng ngân sách
-        // 3 + 3 + 2 đã cấu hình.
         const loads = [
           ...Array.from({ length: 6 }, () => canaryPool.query('SELECT pg_sleep(0.6)')),
           ...Array.from({ length: 6 }, () => cPool.query('SELECT pg_sleep(0.6)')),
@@ -591,8 +538,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
         expect(canaryCount + cCount + cpCount).toBeLessThanOrEqual(8);
         await Promise.all(loads);
 
-        // Sau khi hết việc và qua thời gian thu hồi kết nối nhàn,
-        // các kho không còn giữ kết nối nào.
         await new Promise((resolve) => setTimeout(resolve, 600));
         expect(await countConnections('giaokhoa_test_space_canary_586')).toBe(0);
         expect(await countConnections('giaokhoa_test_space_c_586')).toBe(0);
@@ -606,14 +551,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
   });
 
   describe('hồi quy vòng sửa: cô lập lỗi theo kho, tập migration còn thiếu, sao lưu fail-closed và kiểm tra khói', () => {
-    // Bộ ca này dùng sổ control plane RIÊNG (`giaokhoa_test_cp_fx595`)
-    // và các kho riêng để không chạm vào trạng thái registry của
-    // các bộ ca trên; role dùng lại bộ role của ca chính (được tạo
-    // ở beforeAll ngoài cùng và dọn ở afterAll ngoài cùng). Bộ
-    // migration tổng hợp hai thư mục: một migration "cũ" và một
-    // migration "đích" — kho fx595-d được áp trước RIÊNG thư mục
-    // đích để dựng đúng hình kho có migration mới nhất mà thiếu
-    // migration cũ.
     const FX_CP_DATABASE = 'giaokhoa_test_cp_fx595';
     const FX_BACKUP_DIR = join(__dirname, 'fleet-fx595-artifacts');
     const FX_MIGRATIONS_FULL = join(__dirname, 'fleet-fx595-migrations-full');
@@ -718,8 +655,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
         await admin.query(`CREATE DATABASE ${quoted(FX_CP_DATABASE)} OWNER ${quoted(CP_ROLE)}`);
         await admin.query(`REVOKE CONNECT ON DATABASE ${quoted(FX_CP_DATABASE)} FROM PUBLIC`);
         await admin.query(`GRANT CONNECT ON DATABASE ${quoted(FX_CP_DATABASE)} TO ${quoted(CP_ROLE)}`);
-        // Kho chết fx595-b KHÔNG được tạo database: mọi kết nối tới
-        // nó phải hỏng ngay ở bước mở kết nối của bước thăm dò.
         for (const space of FX_SPACES) {
           if (space.slug === 'fx595-b-chet') continue;
           await admin.query(`CREATE DATABASE ${quoted(space.database)} OWNER ${quoted(MIGRATOR_ROLE)}`);
@@ -736,9 +671,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       for (const space of FX_SPACES) {
         await fxRegisterSpace(space);
       }
-      // Dựng hình kho thiếu migration cũ: chỉ áp thư mục đích vào
-      // kho fx595-d — nhật ký của nó có migration mới nhất nhưng
-      // không có migration cũ.
       const stalePool = new Pool({
         connectionString: clusterUrl('giaokhoa_test_fx595_stale', MIGRATOR_ROLE, MIGRATOR_PASSWORD),
       });
@@ -782,10 +714,7 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       expect(summary.targetVersion).toBe(FX_TARGET_VERSION);
       expect(bySlug.get('fx595-nen-tang')).toBe('migrated');
       expect(bySlug.get('fx595-a-canary')).toBe('migrated');
-      // Kho chết hỏng ngay ở bước thăm dò (mở kết nối) nhưng vẫn có
-      // ghi nhận failed của chính nó trong registry...
       expect(bySlug.get('fx595-b-chet')).toBe('failed');
-      // ...và hai kho CÙNG ĐỢT với nó vẫn hoàn tất bình thường.
       expect(bySlug.get('fx595-c-tot')).toBe('migrated');
       expect(bySlug.get('fx595-d-thieu-cu')).toBe('migrated');
       expect(summary.failedCount).toBe(1);
@@ -795,9 +724,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       expect(deadRuns[0]!.status).toBe('failed');
       expect((await fxRegistryState('fx595-b-chet')).currentVersion).toBeNull();
 
-      // Kho thiếu migration cũ: sau lượt chạy, bảng của migration
-      // cũ tồn tại trong kho, nhật ký đủ cả hai migration và sổ
-      // ghi đúng phiên bản đích.
       const staleRuns = await fxMigrationRuns('fx595-d-thieu-cu');
       expect(staleRuns).toHaveLength(1);
       expect(staleRuns[0]!.status).toBe('success');
@@ -809,8 +735,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
         expect(tables.rows.map((row) => row.tablename)).toEqual(['fx_older_probe', 'fx_target_probe']);
       });
 
-      // Chạy lại: kho đã đạt đích bị bỏ qua hết, chỉ kho lỗi bị xử
-      // lý lại và nhận thêm đúng một ghi nhận failed nữa.
       const rerun = await runFleetMigration({
         env: fxEnv(),
         migrationsDir: FX_MIGRATIONS_FULL,
@@ -835,8 +759,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
 
       const deadState = await fxRegistryState('fx595-b-chet');
       expect(deadState.lastBackupStatus).toBe('failed');
-      // Mốc của cổng kiểm vẫn là null: kho này chưa từng sao lưu
-      // thành công, lượt hỏng vừa rồi không được tự gia hạn cho nó.
       expect(deadState.lastBackupAt).toBeNull();
 
       const check = await checkFleetBackups({ env: fxEnv(), backupDir: FX_BACKUP_DIR });
@@ -862,8 +784,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       const dir = join(FX_BACKUP_DIR, 'direct-encfail');
       const at = new Date();
       const runId = 'fx595-encfail';
-      // Ép lỗi ở đúng bước ghi tệp mã hoá: chiếm trước đường dẫn
-      // của tệp .enc bằng một THƯ MỤC cùng tên.
       const encName = backupFileName('scheduled', runId, at, true);
       mkdirSync(join(dir, encName), { recursive: true });
       await expect(
@@ -877,8 +797,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
           env: fxEnv(),
         }),
       ).rejects.toThrow();
-      // Trên đĩa chỉ còn thư mục chiếm chỗ; tệp thô của pg_dump
-      // không được phép ở lại sau bất kỳ đường lỗi nào.
       expect(readdirSync(dir)).toEqual([encName]);
     }, 60_000);
 
@@ -891,9 +809,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
         await admin.query(`GRANT CONNECT ON DATABASE ${quoted(FX_NOUSERS_SPACE.database)} TO ${quoted(RUNTIME_ROLE)}`);
       });
       await applyUuidV7ShimIfNeeded(clusterUrl(FX_NOUSERS_SPACE.database, MIGRATOR_ROLE, MIGRATOR_PASSWORD));
-      // Kho có bảng nghiệp vụ thật nhưng TUYỆT ĐỐI không có bảng
-      // users — đúng hình bản sao mà kiểm tra khói không đối
-      // chiếu được gì.
       await withClient(clusterUrl(FX_NOUSERS_SPACE.database, MIGRATOR_ROLE, MIGRATOR_PASSWORD), async (client) => {
         await client.query('CREATE TABLE fx_business_probe (id integer PRIMARY KEY, note text NOT NULL)');
         await client.query(`INSERT INTO fx_business_probe (id, note) VALUES (1, 'du kien that')`);
@@ -919,7 +834,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       expect(result.detail).toMatch(/users/);
       expect((await fxRegistryState(FX_NOUSERS_SPACE.slug)).lastRestoreStatus).toBe('failed');
 
-      // Đường tắt hợp lệ duy nhất: tắt tường minh kiểm tra khói.
       const bypassed = await runFleetRestoreTest({
         env: { ...fxEnv(), FLEET_SMOKE_CHECK: 'off' },
         backupDir: FX_BACKUP_DIR,
@@ -937,10 +851,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
         await admin.query(`GRANT CONNECT ON DATABASE ${quoted(FX_DEADCONNECT_SPACE.database)} TO ${quoted(MIGRATOR_ROLE)}`);
         await admin.query(`GRANT CONNECT ON DATABASE ${quoted(FX_DEADCONNECT_SPACE.database)} TO ${quoted(RUNTIME_ROLE)}`);
       });
-      // Kho có dữ kiện thật (bảng users với tài khoản quản trị
-      // gieo sẵn như một kho đang vận hành) để bản sao lưu của nó
-      // là một bản dump hoàn chỉnh — đúng thứ sẽ bị bỏ lại ở dạng
-      // thô nếu đường dọn dẹp của kiểm thử khôi phục bị hở.
       await withClient(clusterUrl(FX_DEADCONNECT_SPACE.database, MIGRATOR_ROLE, MIGRATOR_PASSWORD), async (client) => {
         await client.query('CREATE TABLE users (id integer PRIMARY KEY, username text NOT NULL)');
         await client.query(`INSERT INTO users (id, username) VALUES (1, 'admin')`);
@@ -957,10 +867,6 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       });
       expect((await fxRegistryState(FX_DEADCONNECT_SPACE.slug)).lastRestoreStatus).toBeNull();
 
-      // Ép kết nối quản trị hỏng: URL quản trị trỏ vào một cổng
-      // không có tiến trình nào nghe, nên bước mở kết nối tới
-      // database tạm hỏng ngay — tại thời điểm đó tệp dump thô
-      // trung gian đã được ghi xuống thư mục sao lưu rồi.
       const deadAdmin = new URL(clusterUrl('postgres'));
       deadAdmin.port = '59999';
       const result = await runFleetRestoreTest({
@@ -970,14 +876,8 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
         log: () => undefined,
       });
 
-      // Lượt hỏng được ghi nhận như mọi lỗi vận hành sau khi đã
-      // chọn kho, thay vì để ngoại lệ thoát thẳng làm mất dấu.
       expect(result.status).toBe('failed');
       expect((await fxRegistryState(FX_DEADCONNECT_SPACE.slug)).lastRestoreStatus).toBe('failed');
-      // Tệp dump thô trung gian không được ở lại trên đĩa ở bất
-      // kỳ đường ra nào: nó là toàn bộ dữ kiện của kho ở dạng
-      // đọc được, và tên của nó không khớp khuôn tệp sao lưu nên
-      // không cơ chế dọn theo hạn nào nhìn thấy nó.
       expect(readdirSync(FX_BACKUP_DIR).filter((name) => name.startsWith('.restore-'))).toEqual([]);
     }, 120_000);
   });

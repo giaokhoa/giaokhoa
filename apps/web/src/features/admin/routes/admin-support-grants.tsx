@@ -1,8 +1,3 @@
-/**
- * Giao diện chủ trung tâm cấp quyền hỗ trợ có hạn (issue #19).
- * Không có quyền liên trung tâm, impersonation hoặc quyền wildcard;
- * mọi thao tác đều đợi API xác nhận rồi mới làm mới trạng thái.
- */
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -38,7 +33,6 @@ import {
   useRevokeSupportGrant,
 } from "../queries/support-grants";
 
-/** Tên hiển thị của phạm vi đã cấp, không có thao tác cập nhật dữ liệu. */
 const SCOPE_LABELS: Record<SupportScope, string> = {
   "classes:read": "Xem danh sách lớp",
   "courses:read": "Xem danh sách khoá học",
@@ -57,10 +51,6 @@ const EVENT_LABELS = {
   access_denied: "Truy cập bị từ chối",
 };
 
-/**
- * Form và hai bảng hoạt động trong tenant hiệu lực của người dùng,
- * không có trường chọn tenant khác. Dữ liệu server là nguồn sự thật.
- */
 export default function AdminSupportGrantsPage() {
   const perms = usePermissions();
   const [recipientId, setRecipientId] = useState("");
@@ -88,7 +78,6 @@ export default function AdminSupportGrantsPage() {
   const create = useCreateSupportGrant();
   const revoke = useRevokeSupportGrant();
 
-  /** Gửi ISO có offset UTC, không gửi tenantId từ form. */
   function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage(null);
@@ -119,7 +108,6 @@ export default function AdminSupportGrantsPage() {
     );
   }
 
-  /** Lật một thao tác đọc trong tập thao tác được phép cố định. */
   function toggleScope(scope: SupportScope) {
     setScopes((current) =>
       current.includes(scope)
@@ -128,7 +116,6 @@ export default function AdminSupportGrantsPage() {
     );
   }
 
-  /** Thu hồi qua API, không báo thành công trước khi server ghi vết. */
   function handleRevoke(grantId: string) {
     setMessage(null);
     revoke.mutate(grantId, {

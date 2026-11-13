@@ -11,80 +11,22 @@ import { useTranslation } from 'react-i18next';
 import type { ConversationView, MemberPanelContext, MemberPanelEntry } from '../types/types';
 import { CHAT_MENU_CONTENT_CLASS, CHAT_MENU_ITEM_CLASS, initialsOf } from '../utils/utils';
 
-/**
- * Panel THÀNH VIÊN + menu trên avatar/tên của khung chat nhóm (lát
- * MSG-T4, issue #33 — mục 4.3 của hồ sơ cấu trúc nhắn tin).
- *
- * Flow tổng thể:
- * 1. Trang Tin nhắn xác định NGỮ CẢNH ROSTER của conversation đang
- *    mở (lớp / khoá / nhóm con lọc theo roster khoá / nhóm tự do) và
- *    nạp sẵn các dòng thành viên ({@link MemberPanelEntry}) — server
- *    đã tính `relationship` + `canDirectMessage` cho roster lớp/khoá;
- *    nhóm tự do suy quan hệ từ danh bạ của chính người xem. File này
- *    CHỈ trình bày và phát sự kiện lên trang, không tự gọi API và
- *    không tự suy luật quan hệ nào khác.
- * 2. Panel (mở bằng nút Info ở header khung chat) gồm: thông tin
- *    nhóm (tên, loại, thuộc lớp/khoá nào, số thành viên) + công tắc
- *    Bật/Tắt chat khi người xem có thẩm quyền quản lý; rồi danh
- *    sách thành viên phân hai nhóm theo loại (Giáo viên/Học sinh
- *    cho nhóm cấu trúc, Quản trị viên/Thành viên cho nhóm tự do),
- *    mỗi dòng giữ chấm online kèm chữ trạng thái trực tuyến và
- *    mốc đã xem như panel cũ.
- * 3. Bấm avatar/tên một thành viên — trong panel hoặc trên dòng
- *    tin — mở {@link MemberActionMenu}: các mục hiện theo ĐÚNG luật
- *    quan hệ đã chốt (nhắn riêng khi đã là liên hệ / có cờ nhắn
- *    thẳng GV→HS / đã có hội thoại 1–1 mở trước; chưa quan hệ thì
- *    Kết bạn; chặn thì không hiện nhắn riêng), cộng Xem thông tin
- *    (hồ sơ rút gọn trong phạm vi ngữ cảnh chung), Chặn/Bỏ chặn
- *    theo từng người (quyết 23:16 ngày 26/10/2026 — đường chặn
- *    duy nhất ở chat nhóm, handler do khung chat luồn vào gói) và
- *    hành động quản trị theo loại nhóm (nhóm cấu trúc dẫn về màn
- *    roster, nhóm tự do gỡ thành viên tại chỗ qua API).
- *
- * Bất biến: thành viên nhóm CẤU TRÚC không bao giờ bị gỡ/sửa ngay
- * trong chat — nguồn sự thật là roster lớp/khoá; menu của nhóm cấu
- * trúc chỉ chứa đường dẫn về màn roster tương ứng.
- */
 
-/** Dữ kiện + sự kiện của panel thành viên do trang Tin nhắn đưa xuống khung chat. */
 export interface MemberPanelBundle {
-  /** Ngữ cảnh roster của conversation đang mở. */
   context: MemberPanelContext;
-  /** Các dòng thành viên đã nạp; null = đang nạp. */
   entries: MemberPanelEntry[] | null;
-  /** Lần nạp roster gần nhất lỗi (panel hiện câu lỗi, giữ khung). */
   failed: boolean;
-  /** Thông báo kết quả hành động danh bạ gần nhất (kết bạn/chấp nhận…) để hiện trong panel. */
   notice: string | null;
-  /** Tập user đã có hội thoại 1–1 với tôi — căn cứ nhánh "GV đã mở trước" của luật nhắn riêng. */
   directPartnerIds: ReadonlySet<string>;
-  /** Mở hội thoại 1–1 với một thành viên (trang gọi API tạo/lấy conversation). */
   onMessageMember: (userId: string) => void;
-  /** Gửi yêu cầu kết bạn tới một thành viên. */
   onSendContactRequest: (userId: string) => void;
-  /** Chấp nhận/từ chối một yêu cầu kết bạn đang chờ. */
   onRespondContactRequest: (userId: string, action: 'accept' | 'decline') => void;
-  /** Gỡ một thành viên khỏi nhóm tự do (chỉ trang/API mới thực thi cổng canManage). */
   onRemoveMember: (userId: string) => void;
-  /**
-   * Tập user TÔI đã chặn — khung chat bổ sung từ props của trang khi đưa gói xuống panel (quyết 23:16 ngày 26/10/2026: chặn ở chat nhóm đi qua menu thành viên). Trang dựng gói không đặt trường này; thiếu thì menu không hiện mục bỏ chặn.
-   */
   blockedIds?: ReadonlySet<string>;
-  /** Chặn một thành viên ngay từ menu hành động của họ (handler của trang, khung chat luồn vào gói). */
   onBlockContact?: (userId: string) => void;
-  /** Bỏ chặn một thành viên ngay từ menu hành động của họ (handler của trang, khung chat luồn vào gói). */
   onUnblockContact?: (userId: string) => void;
 }
 
-/**
- * Nhãn vai trò của một dòng thành viên trong panel: nhóm cấu trúc
- * dùng cặp Giáo viên/Học sinh, nhóm tự do dùng Quản trị viên/Thành
- * viên — cùng các khoá i18n với tiêu đề hai nhóm của danh sách.
- *
- * @param role - Vai trò của dòng thành viên.
- * @param t - Hàm dịch của i18next.
- * @returns Nhãn vai trò đã dịch.
- */
 function roleLabel(role: MemberPanelEntry['role'], t: (key: string) => string): string {
   switch (role) {
     case 'teacher': return t('memberGroupTeachers');
@@ -94,13 +36,6 @@ function roleLabel(role: MemberPanelEntry['role'], t: (key: string) => string): 
   }
 }
 
-/**
- * Nhãn trạng thái quan hệ trong hồ sơ rút gọn của một thành viên.
- *
- * @param entry - Dòng thành viên cần nhãn quan hệ.
- * @param t - Hàm dịch của i18next.
- * @returns Nhãn quan hệ đã dịch.
- */
 function relationshipLabel(entry: MemberPanelEntry, t: (key: string) => string): string {
   if (entry.canDirectMessage && entry.relationship !== 'contact') return t('memberRelDirect');
   switch (entry.relationship) {
@@ -113,66 +48,24 @@ function relationshipLabel(entry: MemberPanelEntry, t: (key: string) => string):
 }
 
 interface MemberActionMenuProps {
-  /** Thành viên mà menu thao tác trên. */
   entry: MemberPanelEntry;
-  /** Id của chính người xem (menu trên chính mình chỉ còn Xem thông tin). */
   myId: string | undefined;
-  /** Loại ngữ cảnh của conversation (quyết định mục quản trị trong menu). */
   context: MemberPanelContext;
-  /** Người xem có thẩm quyền quản lý conversation hay không (server tính, client chỉ trình bày). */
   canManage: boolean;
-  /** Đã có hội thoại 1–1 với thành viên này hay chưa. */
   hasDirectConversation: boolean;
-  /** Phần tử kích mở menu (avatar + tên) — do nơi gọi dựng theo bố cục của nó. */
   children: ReactNode;
-  /** Class cho nút kích mở menu (bố cục dòng của nơi gọi). */
   triggerClassName?: string;
-  /** Nhãn truy cập của nút kích mở menu. */
   triggerLabel: string;
   onMessageMember: (userId: string) => void;
   onSendContactRequest: (userId: string) => void;
   onRespondContactRequest: (userId: string, action: 'accept' | 'decline') => void;
   onRemoveMember: (userId: string) => void;
-  /** Mở hồ sơ rút gọn của thành viên (sheet ở khung chat). */
   onViewProfile: (entry: MemberPanelEntry) => void;
-  /** Thành viên này đang bị CHÍNH TÔI chặn hay không (danh sách đã chặn của trang, nơi gọi luồn vào). */
   isBlockedByMe?: boolean;
-  /** Chặn thành viên này (handler của trang) — menu chỉ hiện mục khi được cấp handler. */
   onBlockContact?: (userId: string) => void;
-  /** Bỏ chặn thành viên này (handler của trang) — menu chỉ hiện mục khi được cấp handler. */
   onUnblockContact?: (userId: string) => void;
 }
 
-/**
- * Menu thao tác trên MỘT thành viên, mở khi bấm avatar/tên của họ.
- *
- * Các mục được dựng theo đúng luật quan hệ đã chốt (sổ quyết định
- * mục D + mục 4.3 của hồ sơ cấu trúc nhắn tin):
- * - "Nhắn riêng" chỉ hiện khi luật cho phép NGAY LÚC NÀY: đã là
- *   liên hệ, hoặc có cờ `canDirectMessage` (GV nhắn thẳng HS thuộc
- *   lớp/khoá của mình), hoặc đã có hội thoại 1–1 tồn tại (nhánh GV
- *   đã mở trước ở chiều HS→GV — cổng cuối vẫn là `assertCanContact`
- *   phía server khi mở/gửi). Quan hệ chặn thì mục này KHÔNG hiện —
- *   chặn thắng mọi bề mặt.
- * - Chưa quan hệ, không có cờ nhắn thẳng và cũng chưa có hội
- *   thoại 1–1 nào tồn tại: hiện "Kết bạn" thay cho Nhắn riêng
- *   (HS↔HS vẫn phải kết bạn trước). Đang chờ đến thì Chấp
- *   nhận/Từ chối; đang chờ đi thì một mục mờ ghi trạng thái.
- * - "Xem thông tin" luôn có (trừ khi bị chặn hai chiều — dòng đó
- *   vốn đã bị ẩn khỏi roster/panel ở tầng dữ liệu).
- * - Chặn/Bỏ chặn (quyết định 23:16 ngày 26/10/2026 — chặn ở
- *   chat nhóm đi qua menu này, không còn nút ở header): chưa bị
- *   tôi chặn thì có mục "Chặn liên lạc"; người TÔI đã chặn thì
- *   menu rút gọn còn "Bỏ chặn" + "Xem thông tin" để còn đường
- *   mở lại, dù quan hệ đang là `blocked`. Chỉ hiện khi nơi gọi
- *   cấp handler chặn (khung chat luồn từ props của trang).
- * - Mục quản trị chỉ khi `canManage`: nhóm cấu trúc dẫn về màn
- *   roster (không gỡ tay trong chat); nhóm tự do gỡ thành viên tại
- *   chỗ, trừ người tạo nhóm và trừ chính mình.
- *
- * @param props - Thành viên đích, ngữ cảnh và các sự kiện lên trang/khung chat.
- * @returns Menu thả xuống bọc phần tử kích hoạt được truyền vào.
- */
 export function MemberActionMenu({
   entry, myId, context, canManage, hasDirectConversation, children, triggerClassName,
   triggerLabel, onMessageMember, onSendContactRequest, onRespondContactRequest,
@@ -182,24 +75,15 @@ export function MemberActionMenu({
   const navigate = useNavigate();
   const isSelf = entry.userId === myId;
   const blocked = entry.relationship === 'blocked';
-  /** Người này do CHÍNH TÔI chặn — khác với `blocked` hai chiều ở chỗ tôi còn đường bỏ chặn qua menu. */
   const blockedByMe = Boolean(isBlockedByMe);
-  /** Nhánh cho phép nhắn riêng ngay — xem TSDoc của component; chặn thắng tất cả. */
   const canMessageNow = !blocked && !isSelf
     && (entry.relationship === 'contact' || entry.canDirectMessage || hasDirectConversation);
-  /** Đường về màn roster của ngữ cảnh — chỉ nhóm cấu trúc mới có. */
   const rosterHref = context.kind === 'class'
     ? `/classes/${context.id}`
     : context.kind === 'course'
       ? `/courses/${context.id}`
       : null;
 
-  // Bị chặn hai chiều mà KHÔNG phải do tôi chặn: dòng thành viên
-  // không mang menu nào cả — giữ đúng luật "liên hệ đã chặn ẩn
-  // khỏi mọi bề mặt nhắn tin". Ngoại lệ duy nhất: người do chính
-  // tôi chặn thì menu vẫn mở ở dạng rút gọn (mục Bỏ chặn bên
-  // dưới), vì bỏ chặn cũng đi qua chính menu này theo quyết
-  // 23:16 — chặn một chiều không được tự khoá đường mở lại.
   if (blocked && !blockedByMe) return <>{children}</>;
 
   return (
@@ -209,7 +93,6 @@ export function MemberActionMenu({
       >
         {children}
       </DropdownMenuTrigger>
-      {/* Bề rộng + không xuống dòng theo hằng ở utils: mặc định của @giaokhoa/ui ghim bề rộng theo avatar hẹp làm nhãn bẻ nhiều dòng. */}
       <DropdownMenuContent align="start" sideOffset={4} className={CHAT_MENU_CONTENT_CLASS}>
         {canMessageNow ? (
           <DropdownMenuItem className={CHAT_MENU_ITEM_CLASS} onClick={() => onMessageMember(entry.userId)}>
@@ -273,26 +156,12 @@ export function MemberActionMenu({
 }
 
 interface MemberProfileSheetProps {
-  /** Thành viên đang xem hồ sơ rút gọn; null = sheet đóng. */
   entry: MemberPanelEntry | null;
-  /** Tên ngữ cảnh chung (lớp/khoá của conversation) để ghi phạm vi hồ sơ. */
   contextName: string;
-  /** Thành viên đang trực tuyến hay không (bản đồ presence của trang). */
   online: boolean;
-  /** Đóng sheet. */
   onClose: () => void;
 }
 
-/**
- * Hồ sơ RÚT GỌN của một thành viên trong phạm vi ngữ cảnh chung
- * (mục 4.3 của hồ sơ cấu trúc nhắn tin): tên, định danh, vai trò
- * trong ngữ cảnh của conversation đang mở, trạng thái quan hệ với
- * người xem và trạng thái trực tuyến. Không hiển thị bất kỳ dữ kiện
- * nào ngoài phạm vi lớp/khoá/nhóm chung này.
- *
- * @param props - Thành viên + ngữ cảnh chung + sự kiện đóng.
- * @returns Sheet hồ sơ trượt từ phải.
- */
 export function MemberProfileSheet({ entry, contextName, online, onClose }: MemberProfileSheetProps) {
   const { t } = useTranslation('app');
   return (
@@ -349,46 +218,15 @@ export function MemberProfileSheet({ entry, contextName, online, onClose }: Memb
 }
 
 interface MemberPanelProps {
-  /** Conversation nhóm đang mở (tên/loại/số thành viên/cờ bật tắt + thẩm quyền của người xem). */
   conversation: ConversationView;
-  /** Gói dữ kiện + sự kiện panel do trang đưa xuống. */
   bundle: MemberPanelBundle;
-  /** Id của chính người xem. */
   myId: string | undefined;
-  /** Bản đồ trực tuyến theo user (presence của trang). */
   onlineUsers: Record<string, boolean>;
-  /** Mốc đã đọc theo từng thành viên của conversation (cho huy hiệu Đã xem). */
   readMarkers: Record<string, number>;
-  /** Seq tin mới nhất đang có — mốc so "đã xem" của từng thành viên. */
   newestSeq: number;
-  /** Mở hồ sơ rút gọn của một thành viên. */
   onViewProfile: (entry: MemberPanelEntry) => void;
 }
 
-/**
- * Thân PANEL THÔNG TIN của một hội thoại nhóm: thông tin nhóm
- * (kèm trạng thái bật/tắt chat — công tắc nằm ở thanh hành động
- * của khung chat, chỉ người có thẩm quyền quản lý mới thấy) +
- * danh sách thành viên phân nhóm, thay cho danh sách id thô của
- * panel cũ.
- *
- * Luồng hiển thị: trang nạp roster theo ngữ cảnh và đưa các dòng
- * xuống qua `bundle.entries`; panel phân hai nhóm theo `role`
- * (Giáo viên/Học sinh cho nhóm cấu trúc; Quản trị viên/Thành viên
- * cho nhóm tự do — người tạo nhóm tự do là dòng quản trị viên duy
- * nhất vì thẩm quyền của nhóm neo vào người tạo), giữ chấm online
- * kèm chữ "Trực tuyến" và huy hiệu đã xem/chưa xem theo mốc đọc
- * như panel cũ. Trạng thái trực tuyến đọc từ bản đồ presence của
- * trang (`onlineUsers`): chỉ khẳng định khi bản đồ đã có bản ghi
- * của thành viên — chưa có bản ghi (chưa nhận sự kiện hiện diện
- * nào của họ) thì dòng không hiện cả chấm lẫn chữ, không gộp
- * chưa-biết thành ngoại tuyến như mọi bề mặt hiện diện khác của
- * trang chat. Mỗi dòng bấm được vào avatar/tên để mở
- * {@link MemberActionMenu}.
- *
- * @param props - Conversation đang mở + gói panel + các bản đồ trạng thái của khung chat.
- * @returns Khối panel hiển thị dưới header khung chat khi nút Info đang bật.
- */
 export function MemberPanel({
   conversation, bundle, myId, onlineUsers, readMarkers, newestSeq, onViewProfile,
 }: MemberPanelProps) {
@@ -399,13 +237,11 @@ export function MemberPanel({
     : context.kind === 'course'
       ? (context.subgroup ? t('memberTypeGroup') : t('memberTypeCourse'))
       : t('memberTypeFree');
-  /** Hai nhóm trình bày theo loại conversation (xem TSDoc của component). */
   const primaryRoles: MemberPanelEntry['role'][] = context.kind === 'free' ? ['admin'] : ['teacher'];
   const secondaryRoles: MemberPanelEntry['role'][] = context.kind === 'free' ? ['member'] : ['student'];
   const primary = entries?.filter((e) => primaryRoles.includes(e.role)) ?? [];
   const secondary = entries?.filter((e) => secondaryRoles.includes(e.role)) ?? [];
 
-  /** Một dòng thành viên: nút avatar + tên mở menu thao tác; huy hiệu vai và mốc đã xem nằm ngoài nút. */
   const memberRow = (entry: MemberPanelEntry) => {
     const seen = newestSeq > 0 && (readMarkers[entry.userId] ?? 0) >= newestSeq;
     const online = Boolean(onlineUsers[entry.userId]);
@@ -436,32 +272,9 @@ export function MemberPanel({
               <span className="absolute right-0 bottom-0 size-2.5 rounded-full bg-green-500 ring-2 ring-background" />
             ) : null}
           </span>
-          {/*
-            Tên thành viên KHÔNG cắt ngắn (issue #591): tên và
-            tên đăng nhập xếp hai dòng trong cột linh hoạt để
-            tên dài hiện trọn trong panel 320px thay vì bị
-            truncate thành "Lan Anh N…" như trước. Hàng mang
-            sàn bề ngang cho cột tên (min-w-36 ở nút mở menu)
-            và cho phép các huy hiệu rớt xuống dòng dưới
-            (flex-wrap ở phần tử dòng): dòng của người tạo
-            nhóm kiêm quản trị mang cùng lúc ba huy hiệu không
-            co lại được (tổng bề ngang xấp xỉ 232px), không có
-            hai cơ chế này thì cột tên bị ép về gần 0px và tên
-            xếp chồng từng ký tự dù đã đặt break-words.
-          */}
           <span className="min-w-0 flex-1 text-sm">
             <span className="block break-words">{entry.displayName}</span>
             <span className="block text-xs text-muted-foreground">@{entry.username}</span>
-            {/*
-              Chữ trạng thái trực tuyến đi cùng chấm xanh trên
-              avatar (vòng sửa sau nghiệm thu PR #610): trước
-              vòng này dòng chỉ có chấm khi presence đã biết,
-              nghiệm thu trình duyệt không đọc được trạng thái
-              từ một chấm đơn độc — nay thành viên đang trực
-              tuyến hiện thêm chữ "Trực tuyến" ngay dưới tên
-              đăng nhập, cùng khoá dịch `onlineNow` với dòng
-              trạng thái ở đầu khung 1–1.
-            */}
             {online ? (
               <span className="block text-xs font-medium text-green-600">{t('onlineNow')}</span>
             ) : null}
@@ -477,12 +290,6 @@ export function MemberPanel({
   };
 
   return (
-    /*
-      Panel nằm trong cột thứ ba của khung chat (issue #591):
-      tiêu đề "Thông tin cuộc trò chuyện" chỉ hiện MỘT lần ở
-      đầu cột do khung chat dựng — panel này không lặp lại
-      tiêu đề như trước (bản cũ hiện tiêu đề hai lần).
-    */
     <div className="space-y-3 px-3 py-2" data-testid="member-panel">
       <dl className="space-y-1 text-sm">
         <div className="flex justify-between gap-3">
@@ -539,13 +346,6 @@ export function MemberPanel({
   );
 }
 
-/**
- * Gói trạng thái hồ sơ rút gọn dùng chung cho khung chat: giữ
- * thành viên đang xem + thao tác mở/đóng, để cả menu trong panel
- * lẫn menu trên avatar dòng tin cùng mở một sheet.
- *
- * @returns Entry đang xem (null = đóng) và hai thao tác mở/đóng.
- */
 export function useMemberProfile() {
   const [entry, setEntry] = useState<MemberPanelEntry | null>(null);
   return {

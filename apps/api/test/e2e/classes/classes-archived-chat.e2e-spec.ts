@@ -5,10 +5,6 @@ import {
   adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWORD,
 } from '../../support/identity-access-helpers';
 
-/**
- * Ca e2e còn nợ của cụm lớp (ghi trên issue #184, comment 6410263474 — đối chiếu ĐG MSG-T2): lớp ARCHIVED thì chat cấp lớp đóng băng — ensure conversation và roster chat lớp trả 404 cho cả học sinh lẫn giáo viên, tập thành viên của conversation không đổi bất chấp thao tác sau đó. Hành vi đã thi công ở MSG-T2 (PR #271); file này là bằng chứng e2e riêng còn thiếu, bổ sung ở CLASS-3. Đổi luật đóng băng
- * (archived vẫn mở được chat / thành viên vẫn trôi) thì ca phải đỏ.
- */
 interface Person { id: string; username: string; token: string }
 
 describe('Chat cấp lớp khi lớp archived — đóng băng (issue #184, nợ ĐG MSG-T2)', () => {
@@ -91,19 +87,16 @@ describe('Chat cấp lớp khi lớp archived — đóng băng (issue #184, nợ
     expect(archived.status).toBeLessThan(300);
     expect((archived.body as { status: string }).status).toBe('archived');
 
-    // Ensure và roster chat lớp: 404 đồng nhất cho mọi vai thuộc lớp.
     expect((await ensure(s1.token)).status).toBe(404);
     expect((await ensure(teacher.token)).status).toBe(404);
     expect((await chatRoster(s1.token)).status).toBe(404);
     expect((await chatRoster(teacher.token)).status).toBe(404);
 
-    // Roster lớp cũng đóng băng: thêm học sinh mới bị chặn ở API lớp.
     const addLate = await http(app).post(`/api/v1/classes/${classId}/roster`)
       .set('Authorization', `Bearer ${teacher.token}`).send({ userId: s2.id });
     expect(addLate.status).toBe(400);
     expect(JSON.stringify(addLate.body)).toContain('class.archived');
 
-    // Tập thành viên của conversation không hề đổi sau mọi thao tác trên.
     expect(await memberIds()).toEqual(frozenMembers);
     expect(await memberIds()).not.toContain(s2.id);
   });

@@ -4,17 +4,11 @@ import { AuthRepository } from '@giaokhoa/db/repositories/auth';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWORD } from '../../support/identity-access-helpers';
 
-/**
- * Kiểm thử luồng Auth.
- * Oracle: lib/tests/authlib_test.php (MOODLE_503_STABLE) — test_lockout, test_authenticate_user_login; xoay refresh + phát hiện tái sử dụng theo báo cáo §3.7 (tự xây dựng, thực hành bảo mật OAuth tốt nhất). Oracle MFA TOTP: blueprint §2#3 (MFA hook) + ngữ nghĩa factor_totp của Moodle tool_mfa — chỉ mật khẩu là chưa đủ khi một nhân tố TOTP đã được xác nhận.
- */
 
-/** Mã TOTP hiện tại cho secret, sinh bằng chính thư viện otplib đã cài. */
 async function currentTotpCode(secret: string): Promise<string> {
   return generate({ secret });
 }
 
-/** Một mã 6 số chắc chắn KHÔNG khớp cửa sổ kiểm chứng (±1 bước) của secret. */
 async function wrongTotpCode(secret: string): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const valid = new Set<string>();
@@ -25,7 +19,6 @@ async function wrongTotpCode(secret: string): Promise<string> {
   throw new Error('no wrong-code candidate available');
 }
 
-/** Setup + confirm MFA cho một user qua API, trả secret để sinh mã trong test. */
 async function enableMfaViaApi(app: INestApplication, accessToken: string): Promise<string> {
   const setup = await http(app).post('/api/v1/auth/mfa/totp/setup').set('Authorization', `Bearer ${accessToken}`);
   expect(setup.status).toBe(201);
@@ -53,7 +46,7 @@ describe('Xác thực: đăng nhập, khoá tài khoản, xoay refresh, phiên, 
     const me = await http(app).get('/api/v1/users/me').set('Authorization', `Bearer ${viaToken.body.accessToken}`);
     expect(me.status).toBe(200);
     expect(me.body.username).toBe(user.username);
-    expect(me.body.email).toBe(user.email); // hồ sơ của chính mình luôn hiển thị các trường định danh của chính mình
+    expect(me.body.email).toBe(user.email);
   });
 
   it('từ chối mật khẩu sai bằng 401 Problem Details', async () => {
@@ -81,7 +74,6 @@ describe('Xác thực: đăng nhập, khoá tài khoản, xoay refresh, phiên, 
     const rotated = await http(app).post('/api/v1/auth/refresh').send({ refreshToken: first.refreshToken });
     expect(rotated.status).toBe(201);
     expect(rotated.body.refreshToken).not.toBe(first.refreshToken);
-    // Tái sử dụng token đã bị xoay ra = tín hiệu bị đánh cắp ⇒ họ (family) bị thu hồi.
     const reuse = await http(app).post('/api/v1/auth/refresh').send({ refreshToken: first.refreshToken });
     expect(reuse.status).toBe(401);
     expect(reuse.body.code).toBe('auth.refresh_reuse_detected');
@@ -111,7 +103,6 @@ describe('Xác thực: đăng nhập, khoá tài khoản, xoay refresh, phiên, 
     const second = await http(app).post('/api/v1/auth/token').send({ username: user.username, password: 'NewPassw0rd!' });
     expect(second.status).toBe(201);
     expect(second.body.user.forcePasswordChange).toBe(false);
-    // mật khẩu mới yếu bị chính sách đã cấu hình từ chối
     const weak = await http(app).post('/api/v1/auth/change-password')
       .set('Authorization', `Bearer ${second.body.accessToken}`)
       .send({ currentPassword: 'NewPassw0rd!', newPassword: 'weak' });
@@ -125,14 +116,12 @@ describe('Xác thực: đăng nhập, khoá tài khoản, xoay refresh, phiên, 
     const sid1 = first.body.sessionId as string;
     const me1 = await http(app).get('/api/v1/auth/session/me').set('x-session-id', sid1);
     expect(me1.status).toBe(200);
-    // Lần đăng nhập thứ hai mang id cũ phải xoay nó (bảo vệ chống fixation).
     const second = await http(app).post('/api/v1/auth/session/login')
       .set('Cookie', `giaokhoa_session=${sid1}`).send({ username: user.username, password: STRONG_PASSWORD });
     const sid2 = second.body.sessionId as string;
     expect(sid2).not.toBe(sid1);
     const oldMe = await http(app).get('/api/v1/auth/session/me').set('x-session-id', sid1);
     expect(oldMe.status).toBe(401);
-    // Đình chỉ huỷ phiên đang sống.
     await http(app).post(`/api/v1/users/${user.id}/suspend`).set('Authorization', `Bearer ${admin}`);
     const suspendedMe = await http(app).get('/api/v1/auth/session/me').set('x-session-id', sid2);
     expect(suspendedMe.status).toBe(401);
@@ -170,13 +159,11 @@ describe('Xác thực: đăng nhập, khoá tài khoản, xoay refresh, phiên, 
 
   it('MFA TOTP: thiết lập → xác nhận → đăng nhập dừng ở MFA → verify cho vào; tắt về lại đăng nhập trực tiếp (tool_mfa factor_totp)', async () => {
     const user = await createUserViaApi(app, admin);
-    // Chưa bật MFA: đăng nhập thẳng như cũ, và trạng thái MFA báo chưa bật.
     const plain = await login(app, user.username, STRONG_PASSWORD);
     const statusOff = await http(app).get('/api/v1/auth/mfa/status').set('Authorization', `Bearer ${plain.accessToken}`);
     expect(statusOff.status).toBe(200);
     expect(statusOff.body).toEqual({ enabled: false });
 
-    // Setup: secret + otpauth URL chỉ lộ ở bước này.
     const setup = await http(app).post('/api/v1/auth/mfa/totp/setup').set('Authorization', `Bearer ${plain.accessToken}`);
     expect(setup.status).toBe(201);
     const secret = setup.body.secret as string;
@@ -184,12 +171,10 @@ describe('Xác thực: đăng nhập, khoá tài khoản, xoay refresh, phiên, 
     expect(setup.body.otpauthUrl).toContain('otpauth://totp/');
     expect(setup.body.otpauthUrl).toContain(secret);
 
-    // Confirm sai mã bị từ chối; đúng mã mới kích hoạt.
     const badConfirm = await http(app).post('/api/v1/auth/mfa/totp/confirm')
       .set('Authorization', `Bearer ${plain.accessToken}`).send({ code: await wrongTotpCode(secret) });
     expect(badConfirm.status).toBe(401);
     expect(badConfirm.body.code).toBe('auth.mfa_invalid_code');
-    // Setup chưa confirm thì trạng thái vẫn là chưa bật.
     const statusPending = await http(app).get('/api/v1/auth/mfa/status').set('Authorization', `Bearer ${plain.accessToken}`);
     expect(statusPending.body).toEqual({ enabled: false });
     const confirm = await http(app).post('/api/v1/auth/mfa/totp/confirm')
@@ -199,7 +184,6 @@ describe('Xác thực: đăng nhập, khoá tài khoản, xoay refresh, phiên, 
     const statusOn = await http(app).get('/api/v1/auth/mfa/status').set('Authorization', `Bearer ${plain.accessToken}`);
     expect(statusOn.body).toEqual({ enabled: true });
 
-    // Đăng nhập đúng mật khẩu nhưng bị chặn ở bước MFA: không có cặp token.
     const blocked = await http(app).post('/api/v1/auth/token').send({ username: user.username, password: STRONG_PASSWORD });
     expect(blocked.status).toBe(201);
     expect(blocked.body.mfaRequired).toBe(true);
@@ -208,11 +192,9 @@ describe('Xác thực: đăng nhập, khoá tài khoản, xoay refresh, phiên, 
     const challengeToken = blocked.body.challengeToken as string;
     expect(challengeToken).toBeTruthy();
 
-    // Challenge token KHÔNG dùng gọi API thường được.
     const meWithChallenge = await http(app).get('/api/v1/users/me').set('Authorization', `Bearer ${challengeToken}`);
     expect([401, 403]).toContain(meWithChallenge.status);
 
-    // Verify sai mã → 401; verify đúng mã → cặp token như đăng nhập thường.
     const badVerify = await http(app).post('/api/v1/auth/mfa/verify')
       .send({ challengeToken, code: await wrongTotpCode(secret) });
     expect(badVerify.status).toBe(401);
@@ -226,7 +208,6 @@ describe('Xác thực: đăng nhập, khoá tài khoản, xoay refresh, phiên, 
     expect(me.status).toBe(200);
     expect(me.body.id).toBe(user.id);
 
-    // Disable bằng mã đúng ⇒ đăng nhập thẳng trở lại.
     const disable = await http(app).post('/api/v1/auth/mfa/totp/disable')
       .set('Authorization', `Bearer ${verified.body.accessToken}`).send({ code: await currentTotpCode(secret) });
     expect(disable.status).toBe(201);
@@ -245,15 +226,12 @@ describe('Xác thực: đăng nhập, khoá tài khoản, xoay refresh, phiên, 
     const activeSecret = await enableMfaViaApi(app, plain.accessToken);
     const auth = { Authorization: `Bearer ${plain.accessToken}` };
 
-    // Setup lại không kèm mã hiện tại ⇒ 401 tái xác thực; MFA vẫn bật nguyên.
     const noCode = await http(app).post('/api/v1/auth/mfa/totp/setup').set(auth);
     expect(noCode.status).toBe(401);
     expect(noCode.body.code).toBe('auth.mfa_reauth_required');
     const statusAfterNoCode = await http(app).get('/api/v1/auth/mfa/status').set(auth);
     expect(statusAfterNoCode.body).toEqual({ enabled: true });
 
-    // Setup lại với mã hiện tại sai ⇒ 401 mã không hợp lệ; MFA vẫn bật nguyên,
-    // và đăng nhập vẫn bị chặn ở bước MFA với authenticator hiện tại.
     const wrong = await http(app).post('/api/v1/auth/mfa/totp/setup').set(auth)
       .send({ currentCode: await wrongTotpCode(activeSecret) });
     expect(wrong.status).toBe(401);
@@ -264,7 +242,6 @@ describe('Xác thực: đăng nhập, khoá tài khoản, xoay refresh, phiên, 
       .send({ challengeToken: stillBlocked.body.challengeToken, code: await currentTotpCode(activeSecret) });
     expect(verifiedOld.status).toBe(201);
 
-    // Setup lại với mã hiện tại đúng ⇒ secret mới ở trạng thái chờ xác nhận.
     const replaced = await http(app).post('/api/v1/auth/mfa/totp/setup').set(auth)
       .send({ currentCode: await currentTotpCode(activeSecret) });
     expect(replaced.status).toBe(201);
@@ -274,8 +251,6 @@ describe('Xác thực: đăng nhập, khoá tài khoản, xoay refresh, phiên, 
     const statusPending = await http(app).get('/api/v1/auth/mfa/status').set(auth);
     expect(statusPending.body).toEqual({ enabled: true });
 
-    // Khi thay thiết bị còn chờ xác nhận, mã của thiết bị cũ vẫn phải
-    // hoàn tất đăng nhập: không có khoảng trống MFA.
     const pendingLogin = await http(app).post('/api/v1/auth/token')
       .send({ username: user.username, password: STRONG_PASSWORD });
     expect(pendingLogin.status).toBe(201);
@@ -285,7 +260,6 @@ describe('Xác thực: đăng nhập, khoá tài khoản, xoay refresh, phiên, 
     expect(pendingVerifiedOld.status).toBe(201);
     expect(pendingVerifiedOld.body.accessToken).toBeTruthy();
 
-    // Chỉ sau khi confirm bằng secret mới, authenticator cũ mới hết hiệu lực.
     const confirm = await http(app).post('/api/v1/auth/mfa/totp/confirm').set(auth)
       .send({ code: await currentTotpCode(newSecret) });
     expect(confirm.status).toBe(201);
@@ -310,8 +284,6 @@ describe('Xác thực: đăng nhập, khoá tài khoản, xoay refresh, phiên, 
     expect(first.status).toBe(201);
     const activeSecret = first.body.secret as string;
 
-    // Chặn setup thứ hai NGAY SAU khi service đã đọc trạng thái
-    // pending=false, mô phỏng hai request HTTP với hai kết nối DB.
     const repo = app.get(AuthRepository);
     const upsert = repo.upsertPendingTotp.bind(repo);
     let pause!: () => void;
@@ -401,8 +373,6 @@ describe('Xác thực: đăng nhập, khoá tài khoản, xoay refresh, phiên, 
     expect((await http(app).post('/api/v1/auth/mfa/totp/confirm')
       .set(auth).send({ code: await currentTotpCode(secretA) })).status).toBe(201);
 
-    // Request B đã kiểm mã A nhưng tạm dừng TRƯỚC ghi pending.
-    // Request C dùng mã A và hoàn tất hoán đổi C trước khi B tiếp tục.
     const repo = app.get(AuthRepository);
     const realStage = repo.stageTotpReplacement.bind(repo);
     let signal!: () => void;
@@ -472,7 +442,6 @@ describe('Xác thực: đăng nhập, khoá tài khoản, xoay refresh, phiên, 
       expect(reset.status).toBe(201);
       expect(reset.body.reset).toBe(true);
 
-      // Đăng ký authenticator mới như lần đầu, không có mã của A.
       const fresh = await http(app).post('/api/v1/auth/mfa/totp/setup').set(auth);
       expect(fresh.status).toBe(201);
       const secretD = fresh.body.secret as string;
@@ -605,7 +574,6 @@ describe('Xác thực: đăng nhập, khoá tài khoản, xoay refresh, phiên, 
     const plain = await login(app, user.username, STRONG_PASSWORD);
     await enableMfaViaApi(app, plain.accessToken);
 
-    // User thường không có capability quản trị ⇒ không reset được MFA của người khác.
     const other = await createUserViaApi(app, admin);
     const otherLogin = await login(app, other.username, STRONG_PASSWORD);
     const denied = await http(app).post(`/api/v1/auth/mfa/users/${user.id}/reset`)
@@ -613,7 +581,6 @@ describe('Xác thực: đăng nhập, khoá tài khoản, xoay refresh, phiên, 
     expect(denied.status).toBe(403);
     expect(denied.body.code).toBe('access.capability_denied');
 
-    // Admin reset ⇒ user đăng nhập thẳng, không bị hỏi MFA nữa.
     const reset = await http(app).post(`/api/v1/auth/mfa/users/${user.id}/reset`).set('Authorization', `Bearer ${admin}`);
     expect(reset.status).toBe(201);
     expect(reset.body.reset).toBe(true);

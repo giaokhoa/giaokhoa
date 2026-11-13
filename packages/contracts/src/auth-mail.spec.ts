@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderAuthMail } from './auth-mail.js';
 
-/**
- * Mẫu mail auth (hợp đồng dùng chung của sự kiện `auth_mail_requested`):
- * nội dung người dùng nhận được phải mang đúng bí mật của luồng (liên kết reset / mã OTP) và đúng hạn hiệu lực đã cấu hình ở Better Auth — sai một trong hai là luồng nghiệp vụ gãy ở tay người dùng thật. Spec này vốn nằm cạnh bản cài đặt cũ trong module mail phía API và được chuyển nguyên vẹn (chỉ dịch mô tả) khi bề mặt dùng chung được trích xuất vào package này.
- */
 describe('Khối renderAuthMail', () => {
   it('dựng mail đặt lại mật khẩu mang liên kết dùng một lần và hạn 1 giờ', () => {
     const url = 'http://localhost:3100/api/v1/auth/reset-password/abc123?callbackURL=%2Freset-password';

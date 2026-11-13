@@ -81,10 +81,8 @@ describe('Trang trình phát (K2)', () => {
     });
     renderPlayer(PAGE_CM);
     await waitFor(() => expect(screen.getByText('Nội dung bài đọc')).toBeInTheDocument());
-    // Outline kề bên có cả hai mục, mục sau nối sang player của nó.
     expect(screen.getByRole('link', { name: 'Video bài giảng' })).toHaveAttribute('href', `/courses/${COURSE_ID}/learn/${URL_CM}`);
     expect(screen.getByRole('link', { name: 'Tiếp' })).toHaveAttribute('href', `/courses/${COURSE_ID}/learn/${URL_CM}`);
-    // Tự ghi nhận đã xem qua endpoint /view sẵn có.
     await waitFor(() =>
       expect(calls.some((c) => c.url.endsWith(`/modules/${PAGE_CM}/view`) && c.init?.method === 'POST')).toBe(true),
     );

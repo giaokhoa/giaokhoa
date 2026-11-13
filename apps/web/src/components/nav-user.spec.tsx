@@ -7,10 +7,6 @@ import Shell from '../app/shell';
 import { queryClient } from '#lib/query-client';
 import { baSessionResponse, isGetSessionUrl } from '#test/ba-session';
 
-/**
- * Test hồi quy cho menu tài khoản ở chân sidebar (NavUser): trên bản live sau đợt chuyển Radix → Base UI, bấm nút ba chấm cạnh hồ sơ làm sập toàn màn hình sang trang lỗi dự phòng ở cả phiên admin lẫn học viên. Test dựng đúng cây thật (App của root → Shell → sidebar thật), phiên đăng nhập resolve ngay, rồi bấm mở menu như người dùng:
- * menu phải hiện đủ mục "Hồ sơ" và "Đăng xuất" và không được ném lỗi render nào (không có trang lỗi dự phòng nào thay thế màn hình).
- */
 
 const ADMIN_ID = '01900000-0000-7000-8000-0000000000a1';
 
@@ -42,7 +38,6 @@ function stubFetch() {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
-      // Phiên cookie Better Auth: get-session báo danh tính admin.
       if (isGetSessionUrl(url)) return baSessionResponse({ id: ADMIN_ID, username: 'admin', email: 'admin@example.com' });
       if (url === '/api/v1/users/me') return jsonResponse(PROFILE);
       if (url === '/api/v1/users/me/capabilities') return jsonResponse(ACCESS);
@@ -81,7 +76,6 @@ beforeAll(() => {
     removeEventListener: vi.fn(),
     dispatchEvent: vi.fn(),
   }));
-  // jsdom không có ResizeObserver; lớp định vị của menu (Floating UI qua Base UI) quan sát kích thước phần tử neo khi menu mở.
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -105,14 +99,11 @@ describe('menu tài khoản ở chân sidebar', () => {
     const user = userEvent.setup();
     renderShell();
 
-    // Nút mở menu là nút hồ sơ ở chân sidebar, hiện tên người dùng.
     const trigger = await screen.findByRole('button', { name: /Quản Trị/ });
     await user.click(trigger);
 
-    // Menu mở: đủ hai mục thao tác với chính mình.
     expect(await screen.findByRole('menuitem', { name: /Hồ sơ/ })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /Đăng xuất/ })).toBeInTheDocument();
-    // Màn hình chính vẫn nguyên, không bị trang lỗi dự phòng thay thế.
     expect(screen.getByTestId('home-probe')).toBeInTheDocument();
   });
 });

@@ -1,52 +1,20 @@
 import { useMemo } from 'react';
 import { renderMathHtml } from './math.js';
 
-/** Loại node công thức mà panel đang soạn: trong dòng hoặc tách dòng. */
 export type MathNodeKind = 'inlineMath' | 'blockMath';
 
-/**
- * Thuộc tính của {@link MathEditorPanel}.
- */
 export interface MathEditorPanelProps {
-  /** Mã LaTeX hiện tại trong ô nhập. */
   latex: string;
-  /** Loại công thức đang soạn (trong dòng / tách dòng). */
   kind: MathNodeKind;
-  /** Thông báo lỗi cú pháp sau lần xác nhận bị chặn; không có thì panel đang sạch. */
   error?: string;
-  /**
-   * Mã định danh chủ sở hữu của editor đang mở panel; khi truyền, panel
-   * mang thuộc tính `data-editor-owner` để cơ chế một-toolbar của
-   * {@link RichTextEditor} biết tương tác trong panel vẫn thuộc về
-   * editor đó (không tắt trạng thái active của editor).
-   */
   ownerId?: string;
-  /** Được gọi mỗi khi mã LaTeX thay đổi. */
   onLatexChange: (latex: string) => void;
-  /** Được gọi khi người soạn đổi loại công thức. */
   onKindChange: (kind: MathNodeKind) => void;
-  /** Xác nhận: phía chứa kiểm tra cú pháp trước khi áp vào tài liệu. */
   onConfirm: () => void;
-  /** Huỷ bỏ, đóng panel mà không đổi tài liệu. */
   onCancel: () => void;
-  /** Xoá công thức đang sửa; chỉ truyền khi panel đang sửa một công thức có sẵn. */
   onDelete?: () => void;
 }
 
-/**
- * Panel soạn một công thức LaTeX: ô nhập mã, nút gạt tách dòng, và vùng
- * xem trước render trực tiếp bằng KaTeX theo từng thay đổi. Enter trong ô
- * nhập là xác nhận, Escape là huỷ. Việc kiểm tra cú pháp và áp vào tài
- * liệu nằm ở phía chứa ({@link RichTextEditor}) — panel chỉ trình bày.
- *
- * Trình bày: overlay nổi ở đầu trang (class `giaokhoa-math-panel` trong
- * `editor.css`: fixed, shadow lớn) theo đúng mẫu overlay công thức của
- * editor giaokhoa — trước lát E1 panel là một khối inline không style
- * đẩy toàn bộ nội dung form xuống mỗi lần mở.
- *
- * @param props - Thuộc tính của panel.
- * @returns Phần tử panel soạn công thức.
- */
 export function MathEditorPanel({
   latex,
   kind,

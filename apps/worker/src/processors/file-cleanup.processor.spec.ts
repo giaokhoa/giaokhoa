@@ -14,10 +14,6 @@ const HASH = 'f'.repeat(64);
 const BODY = Buffer.from('s3-same-bytes-for-every-domain-10');
 const BUCKET = 'bucket-10';
 
-/**
- * Giao thức S3 chạy qua HTTP thật của AWS SDK tới máy chủ tệp thử nghiệm.
- * Đo byte còn/mất trên máy chủ sau DeleteObject, không chỉ kiểm mock send().
- */
 describe('Worker cleanup S3: xoá key đúng miền qua HTTP', () => {
   const objects = new Map<string, Buffer>();
   const requests: string[] = [];

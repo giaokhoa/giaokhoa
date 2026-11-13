@@ -4,9 +4,6 @@ import { createCentreKysely, type CentreDb } from '../client';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
 import { CompetenciesRepository } from './competencies';
 
-/**
- * Spec tích hợp của CompetenciesRepository phía Kysely (issue #646, nhóm G6). Database kho trung tâm dựng từ rỗng bằng cầu nối migration của package trên cụm PostgreSQL thật; mọi ca chạy qua repository production. Các ca khoá: ghi jsonb (object và MẢNG ở cấp cao nhất — ca lỗi mảng PostgreSQL của driver), upsert onConflict có cập nhật của liên kết khoá/module, doNothing của liên kết mẫu/kế hoạch, và ngữ nghĩa NULL tường minh của `findUsercomp`.
- */
 const adminUrl =
   process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);

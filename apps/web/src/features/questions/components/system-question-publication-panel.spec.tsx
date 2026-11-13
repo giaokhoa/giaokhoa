@@ -1,7 +1,3 @@
-/**
- * Bộ chọn gửi duyệt: quản trị chọn được câu do giáo viên tạo trong
- * ngân hàng trung tâm mà không phải nhập UUID; gửi theo phiên bản.
- */
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '#config/i18n';

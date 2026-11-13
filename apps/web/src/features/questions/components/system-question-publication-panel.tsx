@@ -1,9 +1,3 @@
-/**
- * Giao diện hai vai cho luồng công bố câu hỏi chung (#13):
- * quản trị trung tâm chọn câu trong bank riêng, biên tập viên hệ thống
- * xem trọn bản chụp/ảnh/nguồn/đáp án rồi duyệt hoặc từ chối kèm lý do.
- * Cổng quyền phía API luôn là nguồn quyết định cuối cùng.
- */
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@giaokhoa/ui/components/button';
@@ -19,12 +13,10 @@ import {
 import { QTYPE_LABEL_KEYS, QTYPES, systemBankPlainText, type Qtype } from '../utils/shared';
 import { SystemSubmissionReviewPreview } from './system-submission-review-preview';
 
-/** Chuỗi văn bản gọn để người duyệt xem cùng đáp án, không hiển thị JSON thô. */
 function excerpt(doc: SystemQuestionSubmission['package']['questionText']): string {
   return systemBankPlainText(doc).slice(0, 320);
 }
 
-/** Panel công bố chỉ hiện khi người dùng có vai trò quản trị trung tâm hoặc biên tập hệ thống. */
 export function SystemQuestionPublicationPanel() {
   const { t } = useTranslation('app');
   const permissions = usePermissions();

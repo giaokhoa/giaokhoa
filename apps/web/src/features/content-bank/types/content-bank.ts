@@ -1,11 +1,5 @@
 import type { ContentBankContent } from '@giaokhoa/contracts';
 
-/**
- * Kiểu và hằng của Kho học liệu thuộc feature content-bank
- * (CB-1, issue #69). Tách từ module phẳng `src/lib/content-bank.ts`
- * khi tổ chức lại apps/web theo mô hình features/ (issue #500):
- * kiểu/hằng nằm ở tầng types/, lời gọi API thuần ở tầng api/, hàm thuần ở tầng utils/, tuỳ chọn truy vấn và đột biến ở tầng queries/ (từ `content-bank-data.ts`). Học liệu là `ContentBankContent` của contracts (đã gồm metadata chương trình, scope và trạng thái duyệt); trang kho và màn tạo/sửa dùng chung các kiểu này.
- */
 
 export type LibraryItem = ContentBankContent;
 
@@ -16,7 +10,6 @@ export interface LibrarySpace {
   canReview: boolean;
 }
 
-/** Loại học liệu: đúng 5 nhóm Điều 7 TT 09/2021 (CB1-B2). */
 export const RESOURCE_TYPES = ['multimedia_lecture', 'lab_guide', 'simulation', 'question_set', 'reference'] as const;
 export const REVIEW_STATUSES = ['draft', 'pending', 'approved', 'rejected'] as const;
 export const LEVELS = ['primary', 'lower_secondary', 'upper_secondary', 'multi'] as const;
@@ -67,13 +60,11 @@ export interface LibraryItemInput {
   derivedFromId?: string | null;
 }
 
-/** Một danh mục câu hỏi cho bộ chọn tham chiếu của học liệu loại bộ câu hỏi (GET /questions/categories?contextId=). */
 export interface QuestionCategoryView {
   id: string;
   name: string;
 }
 
-/** Một node chương trình đã phẳng hoá kèm YCCĐ của toàn bộ cây con (phục vụ bộ chọn node ở màn tạo/sửa). */
 export interface FlatNode {
   id: string;
   title: string;

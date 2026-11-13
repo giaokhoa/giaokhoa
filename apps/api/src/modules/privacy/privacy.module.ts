@@ -8,12 +8,10 @@ import { UsersModule } from '../users/users.module';
 import { PrivacyController } from './privacy.controller';
 import { PrivacyService } from './privacy.service';
 
-/** PrivacyModule facade: PrivacyService (provider registry đảo ngược). */
 @Module({
   imports: [AccessModule, FilesModule, UsersModule, SpaceRoutingModule],
   controllers: [PrivacyController],
   providers: [
-    // Repository của package @giaokhoa/db chạy trên handle Kysely đã định tuyến theo không gian (issue #648).
     {
       provide: PrivacyRepository,
       useFactory: (spaceDatabase: SpaceDatabaseService) => new PrivacyRepository(spaceDatabase.routedKysely),

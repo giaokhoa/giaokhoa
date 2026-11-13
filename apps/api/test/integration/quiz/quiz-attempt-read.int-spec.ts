@@ -12,9 +12,6 @@ import {
 } from '../../support/course-enrolment-helpers';
 import { addExamSlot, createExamDraft, createReadyQuestion, pinExam } from '../../support/exam-pin-helpers';
 
-/**
- * Đặc trưng hoá DL-03 (issue #489): đường đọc kết quả quiz — tóm tắt lượt làm, điểm bài hiện tại theo grade_method và trang kết quả của giáo viên — trên dữ kiện nhiều học sinh × nhiều lượt. Hình dạng đáp ứng, thứ tự và các số điểm kỳ vọng dưới đây được tính độc lập từ dữ kiện gieo (điểm lượt = sumGrades / tổng maxMark của usage × điểm bài) và phải giữ nguyên khi đường đọc chuyển sang nạp theo lô.
- */
 describe('Quiz: đặc trưng hoá đường đọc kết quả lượt làm (DL-03, issue #489)', () => {
   let app: INestApplication;
   let pg: Client;
@@ -156,7 +153,6 @@ describe('Quiz: đặc trưng hoá đường đọc kết quả lượt làm (DL
   });
   afterAll(async () => { await pg.end(); await app.close(); });
 
-  /** Thứ tự liệt kê lượt của repository: userId tăng dần rồi số lượt tăng dần, bỏ lượt preview. */
   function expectedOrder(): SeedAttempt[] {
     return seeds.filter((s) => !s.preview)
       .sort((x, y) => x.userId.localeCompare(y.userId) || x.attemptNumber - y.attemptNumber);
@@ -172,7 +168,6 @@ describe('Quiz: đặc trưng hoá đường đọc kết quả lượt làm (DL
       expect(summary.attemptNumber).toBe(seed.attemptNumber);
       expect(summary.state).toBe(seed.state);
       expect(summary.sumGrades).toBe(seed.sumGrades);
-      // Tổng maxMark mỗi usage là 10, điểm bài là 10 → điểm lượt bằng sumGrades.
       expect(summary.grade).toBe(seed.sumGrades === null ? null : seed.sumGrades);
     }
   });
@@ -184,7 +179,6 @@ describe('Quiz: đặc trưng hoá đường đọc kết quả lượt làm (DL
     expect(byUser.get(studentIds[1]!)).toBe(4);
     expect(byUser.get(studentIds[2]!)).toBe(5);
     expect(byUser.has(idleStudentId)).toBe(false);
-    // Thứ tự gradesByUser là thứ tự xuất hiện đầu tiên trong danh sách lượt đã sắp.
     const expectedUsers = [...new Set(expectedOrder().map((s) => s.userId))];
     expect(results.gradesByUser.map((g) => g.userId)).toEqual(expectedUsers);
   });

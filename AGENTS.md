@@ -4,7 +4,7 @@ Tài liệu này chứa các quy định chung áp dụng cho mọi app/package 
 
 ## Nguồn sự thật
 
-Mọi thông tin cần để hiểu và thi công một việc đều nằm trong repo này hoặc trong issue đặc tả của chính việc đó trên GitHub:
+Code và cấu hình thực thi là nguồn sự thật duy nhất về hành vi, hợp đồng và thực trạng của hệ thống. Tài liệu và issue hỗ trợ xác định yêu cầu, quy trình và phạm vi, nhưng không thay thế hoặc diễn giải trái với code. Các nguồn ngữ cảnh được phép tham khảo:
 
 1. `README.md` ở thư mục gốc — cấu trúc repo, cách chạy, quy ước chung và định nghĩa kiểm chứng.
 2. `README.md` của package — quyết định nghiệp vụ còn hiệu lực của package đó.
@@ -21,13 +21,14 @@ Mọi thông tin cần để hiểu và thi công một việc đều nằm tron
 ## Chuẩn ngôn ngữ
 
 - **Code viết bằng tiếng Anh:** định danh, tên hàm/biến/lớp và các chuỗi kỹ thuật (log key, mã lỗi, khoá cấu hình, thông điệp do máy đọc) viết bằng tiếng Anh.
-- **Comment trong code viết bằng tiếng Việt:** toàn bộ comment trong code — gồm comment mô tả luồng nghiệp vụ — viết bằng tiếng Việt.
+- **Cấm comment trong code và cấu hình:** không viết TSDoc/JSDoc, comment đầu file, comment nội tuyến, JSX comment, comment SQL/shell/CSS/YAML hay comment giải thích flow. Code tự diễn đạt hành vi và test kiểm chứng hành vi; không lưu quyết định hoặc mô tả triển khai trong comment. Comment dễ sai lệch so với code, đồng thời gây tốn token đọc, viết và bảo trì.
 - **Mô tả test viết bằng tiếng Việt:** chuỗi mô tả của `describe`, `it` và `test` trong các file test viết bằng tiếng Việt; mỗi mô tả phải nêu rõ hành vi đang được kiểm chứng — cấm mô tả mơ hồ, không nói lên hành vi (ví dụ chỉ ghi tên hàm hoặc "hoạt động đúng").
 - **Phân tầng test:** test e2e đi theo quy ước chính thức của NestJS — file nằm trong thư mục `test/`, hậu tố `*.e2e-spec.ts`, khởi động ứng dụng đầy đủ và kích hoạt qua HTTP bằng supertest. Tầng integration là quy định riêng của dự án (NestJS không quy ước tầng này): test gọi trực tiếp service là integration test — phải đặt tên, vị trí và cách chạy đúng tầng integration, không mang danh e2e.
 - **Cấu trúc thư mục test:** backend tách test theo tầng — `test/e2e/<module>/…` chỉ chứa test e2e (hậu tố `*.e2e-spec.ts`), `test/integration/<module>/…` chỉ chứa integration test (hậu tố `*.int-spec.ts`); việc chia thư mục con theo module trong mỗi tầng và toàn bộ tầng integration là quy định riêng của dự án. Test đơn vị (unit) đặt cạnh mã nguồn trong `src`, hậu tố `*.spec.ts`, theo quy ước chính thức của NestJS. Worker hiện đã phân tầng: unit `src/**/*.spec.ts`, integration `test/integration/**/*.int-spec.ts`; không còn ngoại lệ 19 file test tích hợp mang hậu tố unit. Riêng `packages/db` giữ integration spec tại `src/**/*.int-spec.ts` theo cấu hình Vitest của package; đây là ngoại lệ ở package dữ liệu, không áp đặt đường dẫn test của app lên package này.
 - **Cấu hình chạy test (Vitest):** pattern khám phá mặc định của Vitest không nhận cả `.e2e-spec.ts` lẫn `.int-spec.ts`, nên mỗi tầng bắt buộc khai `include` tường minh neo đúng thư mục và hậu tố của tầng đó trong `projects` của `vitest.config.ts`; quên khai là test âm thầm không chạy. Cấm pattern lỏng (ví dụ `**/*spec.ts`) và include cả thư mục, vì chúng phá tính tách bạch giữa các tầng và có thể làm test chạy trùng. Chạy tách theo từng loại bằng `--project` hoặc script riêng (`test:unit`, `test:int`, `test:e2e`).
 - **Tài liệu và văn bản GitHub viết bằng tiếng Việt:** mọi tài liệu trong repo (README, các file AGENTS, tài liệu của package) và mọi văn bản trên GitHub (issue, PR, comment) viết bằng tiếng Việt, văn phong kỹ thuật trung tính.
-- **Sửa code phải cập nhật comment khớp code:** khi sửa code, comment tiếng Việt liên quan phải được cập nhật khớp với code trong cùng lượt thay đổi; comment lệch code thật là lỗi phải sửa trong cùng lượt, không để tồn đọng.
+- **Ngoại lệ cho directive bắt buộc:** giữ nguyên chỉ thị có cú pháp giống comment nhưng được công cụ thực thi đọc để quyết định hành vi, ví dụ shebang `#!`, chỉ thị `# syntax=` của Dockerfile và dấu `--> statement-breakpoint` của bộ chạy migration SQL. Chúng là dữ liệu điều khiển của code, không phải chú thích mô tả. Không xóa hoặc thay đổi những chỉ thị này khi dọn comment.
+- **Code là nguồn sự thật duy nhất:** khi có mâu thuẫn giữa code với diễn giải trong tài liệu, kiểm tra code và test thực tế, cập nhật tài liệu hoặc sửa code theo yêu cầu đã được duyệt; tuyệt đối không thêm comment để tạo thêm một bản mô tả song song.
 
 ## Quy trình tạo Issue và PR
 
@@ -65,7 +66,7 @@ Flow này có hiệu lực từ khi nhánh `dev` được thiết lập trong đ
 2. **Quyết định viết trọn vẹn tại nơi sử dụng.** Khi một issue hoặc PR dựa trên một quyết định đã có, nội dung đầy đủ của quyết định đó phải được viết lại ngay trong văn bản đang dùng nó, trình bày dưới dạng yêu cầu/sự kiện kỹ thuật.
 3. **Cấm trích dẫn quyết định mơ hồ.** Không viết các câu dạng "theo quyết định đã chốt", "như đã thống nhất", "theo chỉ đạo trước đó" hoặc trích kèm mốc thời gian của một cuộc trao đổi/sổ ghi nằm ngoài repo thay cho nội dung quyết định.
 4. **Cấm dẫn file ngoài repo làm căn cứ.** Không viện dẫn sổ quyết định, hồ sơ nghiên cứu, ghi chú hay bất kỳ tệp nào nằm ngoài repo này — kể cả khi tệp đó tồn tại trên máy của người viết — làm căn cứ cho đặc tả, phạm vi hay tiêu chí nghiệm thu. Tài liệu trong repo (README, AGENTS.md, tài liệu trong `docs/`) được dẫn theo đường dẫn trong repo như bình thường.
-5. **Ngôn ngữ và văn phong.** Code, comment và tài liệu tuân theo mục "Chuẩn ngôn ngữ" của tài liệu này: code bằng tiếng Anh; comment trong code và mọi tài liệu bằng tiếng Việt. Mọi văn bản thuộc codebase — issue, PR, commit, comment, tài liệu — dùng văn phong kỹ thuật trung tính. Tuyệt đối không dùng danh xưng hay cách xưng hô nội bộ trong văn bản của codebase, và không ghi quyết định thuộc về cá nhân nào — quyết định luôn được trình bày là yêu cầu kỹ thuật.
+5. **Ngôn ngữ và văn phong.** Code và cấu hình tuân theo mục "Chuẩn ngôn ngữ" của tài liệu này: code bằng tiếng Anh, không viết comment trong code; tài liệu, issue, PR, commit và trao đổi trên GitHub bằng tiếng Việt. Mọi văn bản thuộc codebase dùng văn phong kỹ thuật trung tính. Tuyệt đối không dùng danh xưng hay cách xưng hô nội bộ trong văn bản của codebase, và không ghi quyết định thuộc về cá nhân nào — quyết định luôn được trình bày là yêu cầu kỹ thuật.
 6. **Mẫu là cơ chế thực thi chuẩn.** Issue mở qua một mẫu trong `.github/ISSUE_TEMPLATE/`; PR mở theo `.github/pull_request_template.md`. Issue trống (không theo mẫu) bị tắt có chủ đích trong `.github/ISSUE_TEMPLATE/config.yml` để mọi issue đều đi qua một mẫu có đủ các mục bắt buộc.
 
 ### Đặt tên branch

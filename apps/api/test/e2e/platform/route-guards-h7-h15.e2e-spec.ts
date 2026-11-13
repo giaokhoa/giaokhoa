@@ -10,10 +10,6 @@ import {
 import { addExamSlot, createExamDraft, createReadyQuestion, pinExam } from '../../support/exam-pin-helpers';
 import { courseContextId } from '../../support/engagement-helpers';
 
-/**
- * Vá đợt 4 của rà soát gác quyền #134 (H7–H15): các đường ĐỌC bị sót gác. Mỗi cụm có ca âm (user thường/ngoài khoá bị chặn: 403, riêng cohort + privacy là 404 như không tồn tại, catalogue/list là bị lọc khỏi danh sách) và ca dương (chủ thể / người có capability / người trong khoá chạy như cũ):
- *  H7  backup jobs: đọc đòi backup:backupcourse|restorecourse tại context khoá/system. H8  usercomp + evidence: chỉ chủ thể hoặc holder planview/usercompetencyreview. H9  danh sách quiz của khoá: qua cổng truy cập khoá (slots là cấu trúc đề). H10 cohorts: đòi cohort:view/manage tại context của cohort. H11 calendar subscriptions: chỉ của chính chủ. H12 catalogue: khoá/category ẩn chỉ hiện với holder course:viewhiddencourses. H13 badges evaluate/evaluate-user: chỉ chủ thể hoặc holder badges:awardbadge. H14 cấu trúc theo khoá (assignments, completion criteria, grades, links): cổng truy cập khoá. H15 privacy requests: chủ thể/người gửi/privacy:manage; reports metadata: reportbuilder:manage.
- */
 describe('Route guards đợt 4 (H7–H15, #134)', () => {
   let app: INestApplication;
   let admin: string;
@@ -50,7 +46,6 @@ describe('Route guards đợt 4 (H7–H15, #134)', () => {
       .set('Authorization', `Bearer ${admin}`).send({ visible: false });
     expect(hideCourse.status).toBeLessThan(300);
 
-    // Giáo viên tại context khoá + học sinh ghi danh + người ngoài khoá.
     const ctxId = await courseContextId(app, admin, courseId);
     const teacherUser = await createUserViaApi(app, admin);
     const teacherRole = await roleIdByShortname(app, admin, 'editingteacher');
@@ -84,7 +79,6 @@ describe('Route guards đợt 4 (H7–H15, #134)', () => {
     expect(badge.status).toBeLessThan(300);
     badgeId = badge.body.id as string;
 
-    // Framework + competency; học sinh tự nộp evidence → có usercomp.
     const fw = await http(app).post('/api/v1/competencies/frameworks')
       .set('Authorization', `Bearer ${admin}`)
       .send({ shortName: `FW guard ${Date.now()}`, scale: { values: ['Not competent', 'Competent'], proficient: [1] } });
@@ -131,8 +125,6 @@ describe('Route guards đợt 4 (H7–H15, #134)', () => {
   });
 
   it('H14: assignments + completion criteria + grades structure + competency links theo khoá — người ngoài 403, người trong khoá 200', async () => {
-    // #224: bề mặt điểm tổng hợp (categories/letters/scales/outcomes)
-    // đã gỡ hẳn — danh sách chỉ còn các route điểm theo bài còn sống.
     const courseScoped = [
       `/api/v1/courses/${courseId}/assignments`,
       `/api/v1/courses/${courseId}/completion/criteria`,
@@ -146,10 +138,8 @@ describe('Route guards đợt 4 (H7–H15, #134)', () => {
       const allowed = await http(app).get(path).set('Authorization', `Bearer ${teacher}`);
       expect(allowed.status, path).toBe(200);
     }
-    // Route điểm tổng hợp mức site không còn tồn tại (404 kể cả admin).
     const removed = await http(app).get('/api/v1/grades/outcomes').set('Authorization', `Bearer ${admin}`);
     expect(removed.status).toBe(404);
-    // Rule của framework: user thường 403, admin 200.
     const ruleDenied = await http(app).get(`/api/v1/competencies/frameworks/${frameworkId}/competencies/${competencyId}/rule`)
       .set('Authorization', `Bearer ${outsider}`);
     expect(ruleDenied.status).toBe(403);
@@ -195,8 +185,6 @@ describe('Route guards đợt 4 (H7–H15, #134)', () => {
       .set('Authorization', `Bearer ${admin}`).send({ name: adminSubName, eventType: 'site', icsData: ics });
     expect(adminSub.status).toBe(201);
     const ownSubName = `Outsider feed ${Date.now()}`;
-    // Subscription cá nhân (eventType 'user') — loại 'site' vốn đã đòi
-    // calendar:managesubscriptions ở đường tạo, không thuộc phạm vi H11.
     const ownSub = await http(app).post('/api/v1/calendar/subscriptions')
       .set('Authorization', `Bearer ${outsider}`).send({ name: ownSubName, eventType: 'user', icsData: ics });
     expect(ownSub.status).toBe(201);

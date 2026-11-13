@@ -1,6 +1,3 @@
-/**
- * DTO của lớp Ngân hàng đề (EB-1): hợp đồng dùng chung một nguồn sự thật ở `@giaokhoa/contracts` (schema Zod) — file này chỉ đặt tên kiểu cho controller/service dùng thống nhất với các module khác.
- */
 export {
   createExamSchema, updateExamSchema, setExamSlotsSchema,
   setExamStatusSchema, copyExamSchema, createExamContributionSchema,

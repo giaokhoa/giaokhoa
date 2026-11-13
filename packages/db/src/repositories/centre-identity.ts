@@ -1,17 +1,6 @@
-/**
- * Repository NHẬN DIỆN TRUNG TÂM trên Kysely.
- *
- * Vai trò: mọi truy cập tới ba bảng `centre_identity`, `centre_invites` và `config` (đường đọc danh sách quản trị của kho) thuộc nghiệp vụ nhận diện và lời mời của trung tâm (issue #583) tập trung ở đây. Repository không chứa luật nghiệp vụ — phân giải trung tâm, cổng trạng thái và dịch lỗi định tuyến nằm ở tầng service phía ứng dụng.
- *
- * Repository này chạy qua handle được định tuyến (`routedKysely`):
- * khi service bọc lời gọi trong ngữ cảnh ALS mang `spaceSlug` của trung tâm đã chuẩn bị, mọi truy vấn ở đây đều chạm kho của chính trung tâm đó — kể cả khi trung tâm đang ở kho riêng. Vì vậy repository KHÔNG tự phân giải slug hay tự chuẩn bị kho: việc đó là trách nhiệm của service trước khi gọi vào đây.
- *
- * Khuôn hình dạng dữ liệu ở biên repository — cùng khuôn pilot kho control plane (xem `control-plane.ts` và playbook trong `AGENTS.md` của package): truy vấn viết trên interface schema sinh bằng codegen (tên bảng/cột snake_case), cột được chọn bằng danh sách tường minh có bí danh camelCase, giá trị `undefined` bị loại tường minh khỏi patch ghi trước khi gọi builder (quy tắc T-4), và mọi giá trị where đều là tham số bắt buộc. Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng dụng, không tự mở pool.
- */
 import type { Insertable, Updateable } from 'kysely';
 import type { CentreDb, CentreDB } from '../client';
 
-/** Một dòng nhận diện của trung tâm (tên hiển thị, logo, màu thương hiệu). */
 export interface CentreIdentityRow {
   id: string;
   tenantId: string;
@@ -21,7 +10,6 @@ export interface CentreIdentityRow {
   updatedAt: Date;
 }
 
-/** Một dòng lời mời tham gia trung tâm (token chỉ lưu dạng hàm băm). */
 export interface CentreInviteRow {
   id: string;
   tenantId: string;
@@ -34,7 +22,6 @@ export interface CentreInviteRow {
   createdAt: Date;
 }
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng nhận diện trung tâm. */
 const CENTRE_IDENTITY_COLUMNS = [
   'id',
   'tenant_id as tenantId',
@@ -44,7 +31,6 @@ const CENTRE_IDENTITY_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng lời mời trung tâm. */
 const CENTRE_INVITE_COLUMNS = [
   'id',
   'tenant_id as tenantId',
@@ -57,13 +43,9 @@ const CENTRE_INVITE_COLUMNS = [
   'created_at as createdAt',
 ] as const;
 
-/**
- * Kho đọc/ghi nhận diện và lời mời của trung tâm (issue #583).
- */
 export class CentreIdentityRepository {
   constructor(private readonly handle: CentreDb) {}
 
-  /** Nhận diện hiện tại của tenant trong kho đang được định tuyến. */
   async getIdentity(tenantId: string): Promise<CentreIdentityRow | undefined> {
     return this.handle
       .selectFrom('centre_identity')
@@ -73,7 +55,6 @@ export class CentreIdentityRepository {
       .executeTakeFirst();
   }
 
-  /** Tạo hoặc cập nhật nhận diện của tenant (một dòng duy nhất cho mỗi tenant). */
   async upsertIdentity(
     tenantId: string,
     patch: { displayName?: string; logoPath?: string | null; brandColor?: string | null },
@@ -93,7 +74,6 @@ export class CentreIdentityRepository {
         .execute();
       return rows[0]!;
     }
-    // Patch cập nhật dựng tường minh theo từng trường có mặt: trường vắng mặt (`undefined`) KHÔNG được chạm tới — cùng ngữ nghĩa rải-có-điều-kiện của đường cũ trước đây, và là quy tắc T-4 (không để `undefined` lọt vào set).
     const set: Updateable<CentreDB['centre_identity']> = { updated_at: new Date() };
     if (patch.displayName !== undefined) set.display_name = patch.displayName;
     if (patch.logoPath !== undefined) set.logo_path = patch.logoPath;
@@ -107,7 +87,6 @@ export class CentreIdentityRepository {
     return rows[0]!;
   }
 
-  /** Lời mời theo hàm băm token (token gốc không bao giờ lưu). */
   async findInviteByTokenHash(tokenHash: string): Promise<CentreInviteRow | undefined> {
     return this.handle
       .selectFrom('centre_invites')
@@ -117,9 +96,6 @@ export class CentreIdentityRepository {
       .executeTakeFirst();
   }
 
-  /**
-   * Đánh dấu lời mời đã dùng — nguyên tử: chỉ thành công khi lời mời vẫn chưa dùng và chưa thu hồi tại thời điểm ghi. Trả về dòng đã đánh dấu, hoặc undefined khi có lượt khác đốt trước (đua).
-   */
   async markInviteUsed(id: string): Promise<CentreInviteRow | undefined> {
     const rows = await this.handle
       .updateTable('centre_invites')
@@ -132,7 +108,6 @@ export class CentreIdentityRepository {
     return rows[0];
   }
 
-  /** Thu hồi mọi lời mời đang chờ của một tài khoản (phát hành lại). */
   async revokePendingInvites(userId: string): Promise<void> {
     await this.handle
       .updateTable('centre_invites')
@@ -143,9 +118,6 @@ export class CentreIdentityRepository {
       .execute();
   }
 
-  /**
-   * Danh sách quản trị của kho đang được định tuyến, đọc thẳng từ bảng `config` của kho đó. KHÔNG dùng `PermissionEvaluator` ở đây: bộ đánh giá của app được xây với khoá cache gắn theo tên database lúc khởi động (kho chung), nên đọc qua nó cho một kho trung tâm sẽ trả nhầm danh sách cache của kho chung. Đường PATCH nhận diện chỉ quản trị trung tâm mới được gọi, tần suất thấp — đọc thẳng nguồn sự thật là đúng.
-   */
   async listSiteAdmins(): Promise<string[]> {
     const row = await this.handle
       .selectFrom('config')

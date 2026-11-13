@@ -1,33 +1,10 @@
 import type { CentreDb, CentreTx } from '../client';
 
-/**
- * Kho dữ liệu ghi danh trên Kysely: quản lý phương thức ghi danh của khoá học và trạng thái ghi danh của từng người dùng.
- *
- * Hai bảng này DÙNG CHUNG với package `@giaokhoa/enrol` (bề mặt vật chất hoá cohort) — thứ tự chuyển đổi G5 trước, D5 (#657) sau giữ nguyên như kế hoạch; repository này không đổi hình dạng bảng hay ngữ nghĩa ghi nào của bề mặt đó.
- *
- * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
- * - Cột đọc khai tường minh kèm bí danh camelCase dùng chung cho
- *   select và returning — KHÔNG bật CamelCasePlugin.
- * - Ghi qua hàm ánh xạ Insert/Update loại `undefined` tường minh
- *   từng trường (thử nghiệm T-4).
- * - Khoá chính `uuidv7()` do database sinh (phụ lục U): insert bỏ
- *   qua `id` và lấy id qua `returning`.
- * - Điểm mở giao dịch của repository là `transaction(fn)`; các
- *   phương thức nhận handle tuỳ chọn (`EnrolDb` = handle thường hoặc handle giao dịch) để phía gọi lồng thao tác vào giao dịch của mình (luồng hết hạn ghi danh, đường tự mở giao dịch của `setSuspended`).
- *
- * Hai ca lọc tại bộ nhớ của repository cũ (`listCohortInstances`, `listExpiredActive`) giữ nguyên cách làm: chúng là một phần của hợp đồng hành vi đã chốt, không đổi sang lọc tại SQL.
- *
- * Kiểu dòng công khai dùng camelCase, được ánh xạ từ tên cột snake_case của database.
- */
 
-/** Handle kho trung tâm mà repository chấp nhận: thường hoặc trong giao dịch. */
 export type EnrolDb = CentreDb | CentreTx;
-/** Handle giao dịch kho trung tâm. */
 export type EnrolTx = CentreTx;
 
-// Kiểu dòng công khai: tên thuộc tính camelCase ánh xạ từ cột PostgreSQL.
 
-/** Dòng `enrol` (instance ghi danh của một khoá học). */
 export interface EnrolRow {
   id: string;
   courseId: string;
@@ -51,7 +28,6 @@ export interface EnrolRow {
   updatedAt: Date;
 }
 
-/** Dòng `user_enrolments` (ghi danh của một user qua một instance). */
 export interface UserEnrolmentRow {
   id: string;
   enrolId: string;
@@ -64,11 +40,7 @@ export interface UserEnrolmentRow {
   updatedAt: Date;
 }
 
-// ---------------------------------------------------------------------------
-// Kiểu ghi vào (khớp `$inferInsert` của repository cũ)
-// ---------------------------------------------------------------------------
 
-/** Giá trị chèn `enrol`. */
 export interface NewEnrolInstance {
   id?: string;
   courseId: string;
@@ -90,7 +62,6 @@ export interface NewEnrolInstance {
   welcomeMessage?: string | null;
 }
 
-/** Giá trị chèn `user_enrolments`. */
 export interface NewUserEnrolment {
   id?: string;
   enrolId: string;
@@ -101,9 +72,6 @@ export interface NewUserEnrolment {
   modifierId?: string | null;
 }
 
-// ---------------------------------------------------------------------------
-// Danh sách cột đọc (dùng chung cho select và returning)
-// ---------------------------------------------------------------------------
 
 const ENROL_COLUMNS = [
   'id',
@@ -140,9 +108,6 @@ const USER_ENROLMENT_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-// ---------------------------------------------------------------------------
-// Ánh xạ ghi: loại `undefined` tường minh từng trường (T-4).
-// ---------------------------------------------------------------------------
 
 function enrolInsertValues(v: NewEnrolInstance) {
   return {
@@ -212,18 +177,13 @@ function userEnrolmentUpdateValues(v: Partial<NewUserEnrolment>) {
   };
 }
 
-/**
- * Kho dữ liệu ghi danh: enrol instance (phương thức ghi danh của khoá học) và user enrolment (ghi danh của từng user).
- */
 export class EnrolRepository {
   constructor(private readonly handle: CentreDb) {}
 
-  /** Mở một transaction trên kho trung tâm. */
   async transaction<T>(fn: (tx: EnrolTx) => Promise<T>): Promise<T> {
     return this.handle.transaction().execute(fn);
   }
 
-  /** Chèn enrol instance. */
   async insertInstance(v: NewEnrolInstance, db: EnrolDb = this.handle): Promise<EnrolRow> {
     return db
       .insertInto('enrol')
@@ -232,7 +192,6 @@ export class EnrolRepository {
       .executeTakeFirstOrThrow() as Promise<EnrolRow>;
   }
 
-  /** Lấy instance theo id. */
   async getInstance(id: string): Promise<EnrolRow | undefined> {
     return this.handle
       .selectFrom('enrol')
@@ -241,7 +200,6 @@ export class EnrolRepository {
       .executeTakeFirst() as Promise<EnrolRow | undefined>;
   }
 
-  /** Instance của một khoá học. */
   async listInstances(courseId: string): Promise<EnrolRow[]> {
     return this.handle
       .selectFrom('enrol')
@@ -251,7 +209,6 @@ export class EnrolRepository {
       .execute() as Promise<EnrolRow[]>;
   }
 
-  /** Instance theo phương thức (manual, self, cohort, paypal…). */
   async listInstancesByMethod(method: string): Promise<EnrolRow[]> {
     return this.handle
       .selectFrom('enrol')
@@ -261,7 +218,6 @@ export class EnrolRepository {
       .execute() as Promise<EnrolRow[]>;
   }
 
-  /** Các instance đồng bộ cohort đang trỏ tới một cohort. */
   async listCohortInstances(cohortId: string): Promise<EnrolRow[]> {
     const rows = (await this.handle
       .selectFrom('enrol')
@@ -271,7 +227,6 @@ export class EnrolRepository {
     return rows.filter((r) => r.customInt1 === cohortId);
   }
 
-  /** Cập nhật instance. */
   async updateInstance(id: string, v: Partial<NewEnrolInstance>): Promise<void> {
     await this.handle
       .updateTable('enrol')
@@ -280,12 +235,10 @@ export class EnrolRepository {
       .execute();
   }
 
-  /** Xoá instance. */
   async deleteInstance(id: string): Promise<void> {
     await this.handle.deleteFrom('enrol').where('id', '=', id).execute();
   }
 
-  /** Chèn ghi danh của user. */
   async insertUserEnrolment(v: NewUserEnrolment, db: EnrolDb = this.handle): Promise<UserEnrolmentRow> {
     return db
       .insertInto('user_enrolments')
@@ -294,7 +247,6 @@ export class EnrolRepository {
       .executeTakeFirstOrThrow() as Promise<UserEnrolmentRow>;
   }
 
-  /** Lấy ghi danh theo (instance, user). */
   async getUserEnrolment(enrolId: string, userId: string): Promise<UserEnrolmentRow | undefined> {
     return this.handle
       .selectFrom('user_enrolments')
@@ -304,7 +256,6 @@ export class EnrolRepository {
       .executeTakeFirst() as Promise<UserEnrolmentRow | undefined>;
   }
 
-  /** Cập nhật ghi danh (trạng thái, thời hạn). */
   async updateUserEnrolment(id: string, v: Partial<NewUserEnrolment>, db: EnrolDb = this.handle): Promise<void> {
     await db
       .updateTable('user_enrolments')
@@ -313,12 +264,10 @@ export class EnrolRepository {
       .execute();
   }
 
-  /** Xoá ghi danh. */
   async deleteUserEnrolment(id: string): Promise<void> {
     await this.handle.deleteFrom('user_enrolments').where('id', '=', id).execute();
   }
 
-  /** Mọi ghi danh trong khoá học, kèm phương thức của instance sở hữu. */
   async listUserEnrolmentsForCourse(courseId: string): Promise<(UserEnrolmentRow & { enrolMethod: string })[]> {
     const instances = await this.listInstances(courseId);
     if (!instances.length) return [];
@@ -331,7 +280,6 @@ export class EnrolRepository {
     return rows.map((r) => ({ ...r, enrolMethod: methodById.get(r.enrolId) ?? '' }));
   }
 
-  /** Mọi ghi danh của một user. */
   async listUserEnrolmentsForUser(userId: string): Promise<UserEnrolmentRow[]> {
     return this.handle
       .selectFrom('user_enrolments')
@@ -340,7 +288,6 @@ export class EnrolRepository {
       .execute() as Promise<UserEnrolmentRow[]>;
   }
 
-  /** Mọi ghi danh qua một instance — đầu vào của việc gán lại role khi instance đổi role. */
   async listUserEnrolmentsForInstance(enrolId: string): Promise<UserEnrolmentRow[]> {
     return this.handle
       .selectFrom('user_enrolments')
@@ -349,7 +296,6 @@ export class EnrolRepository {
       .execute() as Promise<UserEnrolmentRow[]>;
   }
 
-  /** Các ghi danh đang hiệu lực nhưng đã quá hạn — đầu vào của tiến trình hết hạn. */
   async listExpiredActive(now: Date): Promise<UserEnrolmentRow[]> {
     const rows = (await this.handle
       .selectFrom('user_enrolments')

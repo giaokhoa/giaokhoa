@@ -12,18 +12,6 @@ import { SystemBankConnection } from '../../../src/modules/system-bank/system-ba
 import { checksumPackage } from '../../../src/modules/system-bank/system-bank-package';
 import { SystemBankService } from '../../../src/modules/system-bank/system-bank.service';
 
-/**
- * Ca tích hợp của KHO NGÂN HÀNG HỆ THỐNG (issue #585): service phía ngân hàng + repository phía trung tâm chạy trên database thật, tự cấp phát trên cùng cụm với database nghiệp vụ test, toàn bộ bằng TÊN MỚI của riêng đợt này: một database kho ngân hàng
- * (`giaokhoa_test_bank_585`) với role riêng và một database trung tâm
- * (`giaokhoa_test_centre_585`) với role riêng, CONNECT của PUBLIC bị thu
- * hồi và chỉ cấp lại cho role của kho đó, migration kho ngân hàng áp vào kho ngân hàng và baseline nghiệp vụ (đã gồm 3 bảng vệ tinh trung tâm) áp vào kho trung tâm, đều bằng chính role chủ kho như đường triển khai thật. Shim `uuidv7()` chỉ áp khi server dưới PG18.
- *
- * Ca tích hợp bảo toàn cả nghiệp vụ ngân hàng câu hỏi (#585) và
- * quy trình chương trình (#17): gói pending→review→published, checksum
- * và ảnh chụp bất biến, cài lại không thay đổi dữ liệu, xung đột ID bị
- * từ chối, rollback khi lỗi giữa chừng, hai kho A/B cài độc lập.
- * Test dựng các database riêng và tự xoá sau khi chạy.
- */
 const BANK_DATABASE = 'giaokhoa_test_bank_585';
 const BANK_ROLE = 'giaokhoa_bank_test_585';
 const BANK_PASSWORD = 'bank585test';
@@ -136,11 +124,6 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
           : undefined,
     } as never);
     const connection = bankConnection;
-    // Repository chuyển sang package `@giaokhoa/db` (hạng mục G10, issue
-    // #650): kho ngân hàng nhận handle Kysely của adapter kết nối
-    // kèm hàm dựng lỗi 503 chưa-cấu-hình đúng hình dạng module dùng;
-    // repository phía trung tâm nhận MỘT handle Kysely trên pool
-    // trung tâm của spec, dùng chung với stub `withPlatform`.
     centreKysely = createCentreKysely(centrePool);
     const repo = new SystemBankRepository(connection.kysely, () =>
       new ServiceUnavailableException({
@@ -191,18 +174,11 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
       source_kind: 'program',
       source_ref: 'CT Toán 12',
     }).execute();
-  // Migrate cả baseline nghiệp vụ (983 statement) nên hook vượt quá
-  // hookTimeout 30s mặc định của project int — nới riêng cho hook này.
   }, 180000);
 
   afterAll(async () => {
-    // Đóng pool của kết nối kho ngân hàng TRƯỚC khi xoá database, nếu
-    // không các kết nối idle bị DROP DATABASE ... WITH (FORCE) cắt
-    // ngang (FATAL 57P01) và vitest báo lỗi dù mọi ca đã xanh.
     await bankConnection?.onModuleDestroy();
     await bankPool?.end();
-    // destroy() của handle Kysely trung tâm đóng luôn pool của nó —
-    // không end pool lần nữa.
     await centreKysely?.destroy();
     const adminUrl = clusterUrl('postgres');
     for (const [database, role] of [
@@ -278,32 +254,25 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
       { source_question_id: questionId, centre_slug: 'trung-tam-b', imported_by: ADMIN_ID },
     ]).execute();
     await service.withdrawQuestion(ADMIN_ID, questionId, { reason: 'Nội dung lỗi thời' });
-    // Trung tâm A liệt kê mà không biết trước id sự kiện: sự kiện
-    // rút của câu vừa nhập hiện ra từ chính danh sách này.
     const pendingA = await tenantAls.run({ spaceSlug: 'trung-tam-a' }, () => service.listPendingEvents(ADMIN_ID));
     const mine = pendingA.filter((event) => event.sourceQuestionId === questionId);
     expect(mine).toHaveLength(1);
     expect(mine[0]!.type).toBe('question_withdrawn');
-    // Ghi nhận bằng id lấy từ danh sách: danh sách của A hết sự
-    // kiện đó, trung tâm B chưa ghi nhận nên vẫn thấy.
     await tenantAls.run({ spaceSlug: 'trung-tam-a' }, () => service.acknowledgeEvent(ADMIN_ID, mine[0]!.id));
     const pendingAfterAck = await tenantAls.run({ spaceSlug: 'trung-tam-a' }, () => service.listPendingEvents(ADMIN_ID));
     expect(pendingAfterAck.find((event) => event.sourceQuestionId === questionId)).toBeUndefined();
     const pendingB = await tenantAls.run({ spaceSlug: 'trung-tam-b' }, () => service.listPendingEvents(ADMIN_ID));
     expect(pendingB.find((event) => event.sourceQuestionId === questionId)).toBeDefined();
-    // Trung tâm C chưa từng nhập câu này thì không thấy sự kiện.
     const pendingC = await tenantAls.run({ spaceSlug: 'trung-tam-c' }, () => service.listPendingEvents(ADMIN_ID));
     expect(pendingC.find((event) => event.sourceQuestionId === questionId)).toBeUndefined();
   });
 
-  /** Ngữ cảnh trung tâm giả lập kho vật lý riêng, dùng cho các ca gói. */
   const asCentre = <T>(fn: () => Promise<T>) =>
     tenantAls.run({
       tenantId: '01958500-0000-7000-8000-000000000099',
       spaceSlug: 'trung-tam-a',
     }, fn);
 
-  /** Gửi → duyệt là hai thao tác riêng, chỉ bản duyệt mới cài được. */
   const submitProgramme = (version: string) =>
     asCentre(() => service.createOutcomePackage(ADMIN_ID, { version, scope: SUBJECT_SLUG, mappings: [] }));
   const installProgramme = (version: string) =>
@@ -338,8 +307,6 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
     expect(retried.install.installedAt).toEqual(installed.install.installedAt);
     const trace = await asCentre(() => service.listInstalledOutcomePackages(ADMIN_ID));
     expect(trace.filter((row) => row.packageVersion === '2026.10.31.1')).toHaveLength(1);
-    // Dòng lịch sử cũ nâng cấp thiếu checksum: chỉ bù checksum, không
-    // đụng nội dung chuẩn hoặc thời điểm cài.
     await centreDb.updateTable('outcome_package_installs')
       .set({ package_checksum: '' }).where('package_version', '=', '2026.10.31.1').execute();
     const legacyRetry = await installProgramme('2026.10.31.1');
@@ -349,8 +316,6 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
   });
 
   it('nội dung YCCĐ mới có ID mới và ánh xạ nguồn, bản v1 không sửa ngược', async () => {
-    // Không cập nhật văn bản cùng outcomeId. Bản sửa v2 được gắn ID mới
-    // và mapping từ bản gốc cho người dùng chủ động di chuyển liên kết.
     await centreDb.insertInto('learning_outcomes').values({
       id: REVISED_OUTCOME_ID, node_id: NODE_ID, position: 2,
       content: doc('YCCĐ v2'), source_kind: 'program', source_ref: 'CT Toán 12 v2',
@@ -420,7 +385,6 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
   it('lỗi ghi YCCĐ ở giữa transaction rollback toàn bộ node và vết cài; xung đột ID cũng không gộp', async () => {
     await submitProgramme('2026.10.31.12');
     await approveProgramme('2026.10.31.12');
-    // Xoá cây đích để thử ghi lại, sau đó cài trigger giả lập lỗi ở thao tác cuối.
     await centreDb.deleteFrom('curriculum_nodes').where('id', '=', NODE_ID).execute();
     await centrePool.query("CREATE FUNCTION fail_programme_install() RETURNS trigger LANGUAGE plpgsql AS $func$ BEGIN RAISE EXCEPTION 'forced install failure'; END $func$");
     await centrePool.query('CREATE TRIGGER fail_programme_install BEFORE INSERT ON learning_outcomes FOR EACH ROW EXECUTE FUNCTION fail_programme_install()');
@@ -433,7 +397,6 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
       await centrePool.query('DROP TRIGGER IF EXISTS fail_programme_install ON learning_outcomes');
       await centrePool.query('DROP FUNCTION IF EXISTS fail_programme_install()');
     }
-    // Chương trình cùng môn/khối nhưng id khác phải bị chặn, không tự gộp.
     await centreDb.deleteFrom('curricula').where('id', '=', CURRICULUM_ID).execute();
     await centreDb.insertInto('curricula').values({
       id: '01958500-0000-7000-8000-000000000021',
@@ -448,8 +411,6 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
   });
 
   it('trung tâm A/B có kho độc lập và cài hai phiên bản khác nhau mà không ghi chéo', async () => {
-    // Kho B được tạo riêng bằng baseline và migration thật; A đã có
-    // các lần cài v1/v2/v9 ở các ca trước. B chọn v1 vẫn giữ nguyên A.
     const database = 'giaokhoa_test_centre_17_b';
     const role = 'giaokhoa_centre_test_17_b';
     const password = 'centre17testb';
@@ -491,8 +452,6 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
       }, () => otherService.installOutcomePackage(ADMIN_ID, '2026.10.31.1'));
       expect(resultB.unchanged).toBe(false);
       expect(resultB.install.packageVersion).toBe('2026.10.31.1');
-      // Một câu hỏi ở kho B đang gắn YCCĐ v1 (FK RESTRICT).
-      // Cài v2 thêm YCCĐ mới nhưng không thay nội dung/ID câu đã dùng.
       const categoryId = '01958500-0000-7000-8000-000000000031';
       const questionId = '01958500-0000-7000-8000-000000000032';
       await otherDb.insertInto('question_categories').values({
@@ -526,7 +485,6 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
         })]);
       expect((await otherDb.selectFrom('outcome_package_installs').select('package_version').execute())
         .map((row) => row.package_version)).toEqual(['2026.10.31.1', '2026.10.31.2']);
-      // Không một hành động cài nào ở B được ghi sang vết của A.
       expect(await centreDb.selectFrom('outcome_package_installs').select('package_version').execute()).toEqual(aBefore);
 
       expect((await asCentre(() => service.listInstalledOutcomePackages(ADMIN_ID)))[0]!.packageVersion).toBe(versionA);

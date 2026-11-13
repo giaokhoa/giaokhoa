@@ -21,13 +21,6 @@ import {
   type UpdateCoupon,
 } from '@giaokhoa/contracts';
 
-/**
- * Validation Payments dùng Zod qua Standard Schema — schema nền ở `@giaokhoa/contracts`; số tiền là số nguyên đơn vị nhỏ nhất được ép ngay ở schema
- * (`z.number().int()`), không chờ xuống service.
- * Lát 3 (issue #189): hoàn tiền đi qua vòng đời duyệt nên có thêm schema cho từng bước — tạo yêu cầu (`createRefundSchema`, lý do bắt buộc), từ chối (`rejectRefundSchema`, lý do bắt buộc), xác nhận chi
- * (`settleRefundSchema`) — và schema xử lý hàng đợi `needs_review`
- * (`resolvePaymentReviewSchema`, quyết định + lý do bắt buộc).
- */
 export {
   createCouponSchema, createPaymentAccountSchema, createPaymentSchema, createRefundSchema,
   paymentWebhookSchema, purchasePlanSchema, rejectRefundSchema, resolvePaymentReviewSchema,

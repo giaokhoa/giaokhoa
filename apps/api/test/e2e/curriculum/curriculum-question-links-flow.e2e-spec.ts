@@ -5,10 +5,6 @@ import {
   adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWORD, systemContextId, uniqueName,
 } from '../../support/identity-access-helpers';
 
-/**
- * Curriculum Chặng 2 của issue #20 (theo hồ sơ thiết kế tổng hợp, mục A):
- * hai bảng nối ở cấp DANH TÍNH câu hỏi (question_subjects, question_learning_outcomes), mức độ nhận thức nằm trên dòng nối câu × YCCĐ (biet/hieu/van_dung + van_dung_cao dự phòng), truy vết nguồn nguyên văn chương trình cho learning_outcomes (A.3), và sửa lỗi updateNode chưa chặn vòng cha–con gián tiếp (A.7).
- */
 
 const RANDOM_UUID = '018e0000-0000-7000-8000-000000000000';
 
@@ -35,7 +31,6 @@ describe('Chương trình giai đoạn 2 (liên kết câu hỏi ↔ chương tr
   });
   afterAll(async () => { await pg.end(); await app.close(); });
 
-  /** Dựng một môn + chương trình khối 10 + cây strand → topic → lesson, mỗi node một outcome; trả mọi id. */
   async function mkTree(): Promise<{ subjectId: string; curriculumId: string; topicId: string; lessonId: string; outcomeTopic: string; outcomeLesson: string }> {
     const subjectRes = await http(app).post('/api/v1/curriculum/subjects').set(bearer(admin))
       .send({ contextId: systemCtxId, name: 'Môn kiểm chứng', slug: uniqueName('mon') });
@@ -110,12 +105,10 @@ describe('Chương trình giai đoạn 2 (liên kết câu hỏi ↔ chương tr
     const categoryId = await mkCategory();
     const q = await mkQuestion(categoryId, 'multichoice');
 
-    // Ban đầu chưa gắn gì.
     const empty = await getLinks(q);
     expect(empty.status).toBe(200);
     expect(empty.body).toEqual({ questionId: q, subjectIds: [], outcomes: [] });
 
-    // Gắn môn; gắn trùng → 409; môn không tồn tại → 404.
     const attach = await http(app).post(`/api/v1/questions/${q}/subjects`).set(bearer(admin)).send({ subjectId: tree.subjectId });
     expect(attach.status).toBe(201);
     expect((attach.body as LinksView).subjectIds).toEqual([tree.subjectId]);
@@ -126,7 +119,6 @@ describe('Chương trình giai đoạn 2 (liên kết câu hỏi ↔ chương tr
     expect(ghost.status).toBe(404);
     expect(ghost.body.code).toBe('curriculum.subject_not_found');
 
-    // Gắn YCCĐ kèm mức; gắn trùng → 409; mức không hợp lệ → 400 ở biên validate.
     const link = await http(app).post(`/api/v1/questions/${q}/outcomes`).set(bearer(admin))
       .send({ outcomeId: tree.outcomeTopic, cognitiveLevel: 'biet' });
     expect(link.status).toBe(201);
@@ -139,10 +131,6 @@ describe('Chương trình giai đoạn 2 (liên kết câu hỏi ↔ chương tr
       .send({ outcomeId: tree.outcomeLesson, cognitiveLevel: 'kho' });
     expect(badLevel.status).toBe(400);
 
-    // KHÔNG còn quy tắc lệch môn (vòng sửa F1): gắn YCCĐ thuộc môn khác
-    // hẳn môn đã khai tường minh vẫn được — môn của câu khi lọc là hợp
-    // nhất khai tường minh và môn suy ngược từ YCCĐ đã gắn. Gắn rồi gỡ
-    // ngay để các khẳng định phía dưới giữ nguyên trạng thái.
     const crossSubject = await http(app).post(`/api/v1/questions/${q}/outcomes`).set(bearer(admin))
       .send({ outcomeId: other.outcomeTopic, cognitiveLevel: 'hieu' });
     expect(crossSubject.status).toBe(201);
@@ -150,7 +138,6 @@ describe('Chương trình giai đoạn 2 (liên kết câu hỏi ↔ chương tr
     expect(detachCross.status).toBe(200);
     expect((detachCross.body as LinksView).outcomes).toEqual([{ outcomeId: tree.outcomeTopic, cognitiveLevel: 'biet' }]);
 
-    // Đổi mức trên dòng nối; đổi mức của dòng chưa gắn → 404.
     const relevel = await http(app).patch(`/api/v1/questions/${q}/outcomes/${tree.outcomeTopic}`).set(bearer(admin))
       .send({ cognitiveLevel: 'van_dung' });
     expect(relevel.status).toBe(200);
@@ -160,14 +147,12 @@ describe('Chương trình giai đoạn 2 (liên kết câu hỏi ↔ chương tr
     expect(relevelGhost.status).toBe(404);
     expect(relevelGhost.body.code).toBe('question.outcome_link_not_found');
 
-    // Sửa câu (ra version mới) KHÔNG làm mất gắn kết — gắn ở cấp danh tính.
     const edit = await http(app).patch(`/api/v1/questions/${q}`).set(bearer(admin)).send({ questionText: 'Thân câu đã sửa.' });
     expect(edit.status).toBe(200);
     const afterEdit = await getLinks(q);
     expect((afterEdit.body as LinksView).subjectIds).toEqual([tree.subjectId]);
     expect((afterEdit.body as LinksView).outcomes).toEqual([{ outcomeId: tree.outcomeTopic, cognitiveLevel: 'van_dung' }]);
 
-    // Gỡ gắn YCCĐ rồi gỡ gắn môn; gỡ lần hai → 404.
     const detachOutcome = await http(app).delete(`/api/v1/questions/${q}/outcomes/${tree.outcomeTopic}`).set(bearer(admin));
     expect(detachOutcome.status).toBe(200);
     expect((detachOutcome.body as LinksView).outcomes).toEqual([]);
@@ -181,7 +166,6 @@ describe('Chương trình giai đoạn 2 (liên kết câu hỏi ↔ chương tr
     expect(detachSubject2.status).toBe(404);
     expect(detachSubject2.body.code).toBe('question.subject_link_not_found');
 
-    // Câu hỏi không tồn tại → 404.
     const ghostQ = await getLinks(RANDOM_UUID);
     expect(ghostQ.status).toBe(404);
     expect(ghostQ.body.code).toBe('question.not_found');
@@ -196,7 +180,6 @@ describe('Chương trình giai đoạn 2 (liên kết câu hỏi ↔ chương tr
     expect(link.status).toBe(201);
     expect((link.body as LinksView).subjectIds).toEqual([]);
     expect((link.body as LinksView).outcomes).toEqual([{ outcomeId: tree.outcomeLesson, cognitiveLevel: 'hieu' }]);
-    // Lọc theo môn vẫn tìm thấy câu qua YCCĐ thuộc môn đó.
     const bySubject = await http(app).get('/api/v1/questions').query({ subjectId: tree.subjectId }).set(bearer(admin));
     expect(bySubject.status).toBe(200);
     expect((bySubject.body as { question: { id: string } }[]).map((v) => v.question.id)).toContain(q);
@@ -207,9 +190,6 @@ describe('Chương trình giai đoạn 2 (liên kết câu hỏi ↔ chương tr
     const treeB = await mkTree();
     const categoryId = await mkCategory();
 
-    // Cửa 1 — gắn YCCĐ của môn B TRƯỚC, khai môn A SAU: trước vòng sửa,
-    // gắn tiếp YCCĐ thứ hai của B bị 400 outcome_subject_mismatch dù câu
-    // đã mang sẵn một YCCĐ của B. Nay cả ba thao tác đều 201.
     const q1 = await mkQuestion(categoryId, 'multichoice');
     const linkB1 = await http(app).post(`/api/v1/questions/${q1}/outcomes`).set(bearer(admin))
       .send({ outcomeId: treeB.outcomeTopic, cognitiveLevel: 'biet' });
@@ -226,12 +206,9 @@ describe('Chương trình giai đoạn 2 (liên kết câu hỏi ↔ chương tr
       { outcomeId: treeB.outcomeTopic, cognitiveLevel: 'biet' },
       { outcomeId: treeB.outcomeLesson, cognitiveLevel: 'hieu' },
     ]));
-    // Môn của câu khi lọc là hợp nhất: lọc theo B vẫn thấy câu qua YCCĐ.
     const bySubjectB = await http(app).get('/api/v1/questions').query({ subjectId: treeB.subjectId }).set(bearer(admin));
     expect((bySubjectB.body as { question: { id: string } }[]).map((v) => v.question.id)).toContain(q1);
 
-    // Cửa 2 — câu khai {A, B} và đã gắn YCCĐ của B; gỡ môn B → 200, rồi
-    // gắn tiếp YCCĐ của B phải 201 (trước vòng sửa bị 400 như cửa 1).
     const q2 = await mkQuestion(categoryId, 'truefalse');
     const attachA2 = await http(app).post(`/api/v1/questions/${q2}/subjects`).set(bearer(admin))
       .send({ subjectId: treeA.subjectId });
@@ -283,7 +260,6 @@ describe('Chương trình giai đoạn 2 (liên kết câu hỏi ↔ chương tr
     expect(ids(bySubject.body)).toEqual(expect.arrayContaining([mc, tf]));
     const byOutcome = await http(app).get('/api/v1/questions').query({ outcomeId: tree.outcomeTopic }).set(bearer(admin));
     expect(ids(byOutcome.body)).toEqual(expect.arrayContaining([mc, tf]));
-    // outcomeId + cognitiveLevel phải khớp trên CÙNG một dòng nối.
     const sameRow = await http(app).get('/api/v1/questions')
       .query({ outcomeId: tree.outcomeTopic, cognitiveLevel: 'hieu' }).set(bearer(admin));
     expect(ids(sameRow.body)).toContain(tf);
@@ -291,19 +267,16 @@ describe('Chương trình giai đoạn 2 (liên kết câu hỏi ↔ chương tr
     const byLevelOnly = await http(app).get('/api/v1/questions').query({ cognitiveLevel: 'van_dung_cao' }).set(bearer(admin));
     expect(ids(byLevelOnly.body)).not.toContain(mc);
     expect(ids(byLevelOnly.body)).not.toContain(tf);
-    // Lọc thêm theo dạng câu.
     const byType = await http(app).get('/api/v1/questions')
       .query({ subjectId: tree.subjectId, qtype: 'truefalse' }).set(bearer(admin));
     expect(ids(byType.body)).toContain(tf);
     expect(ids(byType.body)).not.toContain(mc);
-    // Lọc theo trạng thái bank entry.
     const byStatus = await http(app).get('/api/v1/questions')
       .query({ subjectId: tree.subjectId, status: 'ready' }).set(bearer(admin));
     expect(ids(byStatus.body)).toEqual(expect.arrayContaining([mc, tf]));
     const byBadStatus = await http(app).get('/api/v1/questions')
       .query({ subjectId: tree.subjectId, status: 'archived' }).set(bearer(admin));
     expect(ids(byBadStatus.body)).not.toContain(mc);
-    // Bộ lọc không hợp lệ → 400 tường minh.
     const badUuid = await http(app).get('/api/v1/questions').query({ subjectId: 'khong-phai-uuid' }).set(bearer(admin));
     expect(badUuid.status).toBe(400);
     expect(badUuid.body.code).toBe('question.invalid_filter');
@@ -333,14 +306,12 @@ describe('Chương trình giai đoạn 2 (liên kết câu hỏi ↔ chương tr
     ]));
     expect(counts).toHaveLength(3);
 
-    // Câu rời trạng thái ready thì không còn được đếm.
     await pg.query(`update question_bank_entries set status = 'draft' where question_id = $1`, [mcHieu]);
     const afterDraft = await http(app).get(`/api/v1/curriculum/outcomes/${tree.outcomeTopic}/question-counts`).set(bearer(admin));
     const countsAfter = (afterDraft.body as { counts: { cognitiveLevel: string; qtype: string; count: number }[] }).counts;
     expect(countsAfter).toHaveLength(2);
     expect(countsAfter.some((c) => c.cognitiveLevel === 'hieu')).toBe(false);
 
-    // Quyền đọc cây curriculum được tôn trọng; outcome không tồn tại → 404.
     const denied = await http(app).get(`/api/v1/curriculum/outcomes/${tree.outcomeTopic}/question-counts`).set(bearer(plainToken));
     expect(denied.status).toBe(403);
     const ghost = await http(app).get(`/api/v1/curriculum/outcomes/${RANDOM_UUID}/question-counts`).set(bearer(admin));
@@ -350,7 +321,6 @@ describe('Chương trình giai đoạn 2 (liên kết câu hỏi ↔ chương tr
 
   it('lưu vết nguồn trên outcome học tập (program so với derived)', async () => {
     const tree = await mkTree();
-    // Mặc định: nguyên văn chương trình.
     const originRes = await http(app).get(`/api/v1/curriculum/outcomes/${tree.outcomeTopic}`).set(bearer(admin));
     expect(originRes.status).toBe(200);
     const origin = originRes.body as OutcomeRow;
@@ -358,7 +328,6 @@ describe('Chương trình giai đoạn 2 (liên kết câu hỏi ↔ chương tr
     expect(origin.sourceRef).toBeNull();
     expect(origin.derivedFromId).toBeNull();
 
-    // YCCĐ tách mức bởi tổ chuyên môn: trỏ về gốc + trích dẫn nguồn.
     const derivedRes = await http(app).post('/api/v1/curriculum/outcomes').set(bearer(admin)).send({
       nodeId: tree.topicId, content: 'Nhận biết được khái niệm hàm số (mức Biết).', position: 9,
       sourceKind: 'derived', sourceRef: 'TT 32/2018/TT-BGDĐT — CT môn Toán, lớp 10', derivedFromId: tree.outcomeTopic,
@@ -369,24 +338,20 @@ describe('Chương trình giai đoạn 2 (liên kết câu hỏi ↔ chương tr
     expect(derived.sourceRef).toBe('TT 32/2018/TT-BGDĐT — CT môn Toán, lớp 10');
     expect(derived.derivedFromId).toBe(tree.outcomeTopic);
 
-    // derivedFromId chỉ dùng với sourceKind = derived.
     const mismatch = await http(app).post('/api/v1/curriculum/outcomes').set(bearer(admin)).send({
       nodeId: tree.topicId, content: 'YCCĐ sai kiểu nguồn.', sourceKind: 'program', derivedFromId: tree.outcomeTopic,
     });
     expect(mismatch.status).toBe(400);
     expect(mismatch.body.code).toBe('curriculum.outcome_derived_from_mismatch');
-    // Gốc không tồn tại → 404.
     const ghostOrigin = await http(app).post('/api/v1/curriculum/outcomes').set(bearer(admin)).send({
       nodeId: tree.topicId, content: 'YCCĐ mồ côi.', sourceKind: 'derived', derivedFromId: RANDOM_UUID,
     });
     expect(ghostOrigin.status).toBe(404);
     expect(ghostOrigin.body.code).toBe('curriculum.outcome_not_found');
-    // Tự suy từ chính mình → 400.
     const selfDerived = await http(app).patch(`/api/v1/curriculum/outcomes/${derived.id}`).set(bearer(admin))
       .send({ derivedFromId: derived.id });
     expect(selfDerived.status).toBe(400);
     expect(selfDerived.body.code).toBe('curriculum.outcome_derived_from_self');
-    // Sửa truy vết nguồn qua PATCH chạy được.
     const reRef = await http(app).patch(`/api/v1/curriculum/outcomes/${derived.id}`).set(bearer(admin))
       .send({ sourceRef: 'TT 32/2018/TT-BGDĐT — CT môn Toán, lớp 10 (bản sửa đổi TT 13/2022)' });
     expect(reRef.status).toBe(200);
@@ -395,41 +360,32 @@ describe('Chương trình giai đoạn 2 (liên kết câu hỏi ↔ chương tr
 
   it('bắt buộc derivedFromId mỗi khi sourceKind là derived, lúc tạo và lúc PATCH (F2)', async () => {
     const tree = await mkTree();
-    // Tạo mới: derived không kèm gốc → 400.
     const noOrigin = await http(app).post('/api/v1/curriculum/outcomes').set(bearer(admin)).send({
       nodeId: tree.topicId, content: 'YCCĐ phái sinh không gốc.', sourceKind: 'derived',
     });
     expect(noOrigin.status).toBe(400);
     expect(noOrigin.body.code).toBe('curriculum.outcome_derived_from_required');
-    // Tạo mới: derived kèm gốc có thật → 201.
     const withOrigin = await http(app).post('/api/v1/curriculum/outcomes').set(bearer(admin)).send({
       nodeId: tree.topicId, content: 'YCCĐ phái sinh có gốc.', sourceKind: 'derived', derivedFromId: tree.outcomeTopic,
     });
     expect(withOrigin.status).toBe(201);
     expect((withOrigin.body as OutcomeRow).derivedFromId).toBe(tree.outcomeTopic);
 
-    // PATCH chỉ lật kind sang 'derived', không kèm gốc, và bản ghi hiện
-    // tại (program) chưa có gốc → trạng thái gộp thiếu gốc → 400.
     const flipNoOrigin = await http(app).patch(`/api/v1/curriculum/outcomes/${tree.outcomeLesson}`).set(bearer(admin))
       .send({ sourceKind: 'derived' });
     expect(flipNoOrigin.status).toBe(400);
     expect(flipNoOrigin.body.code).toBe('curriculum.outcome_derived_from_required');
-    // Bản ghi không đổi sau PATCH bị từ chối.
     const unchanged = await http(app).get(`/api/v1/curriculum/outcomes/${tree.outcomeLesson}`).set(bearer(admin));
     expect((unchanged.body as OutcomeRow).sourceKind).toBe('program');
     expect((unchanged.body as OutcomeRow).derivedFromId).toBeNull();
-    // PATCH lật kind KÈM gốc → 200.
     const flipWithOrigin = await http(app).patch(`/api/v1/curriculum/outcomes/${tree.outcomeLesson}`).set(bearer(admin))
       .send({ sourceKind: 'derived', derivedFromId: tree.outcomeTopic });
     expect(flipWithOrigin.status).toBe(200);
     expect((flipWithOrigin.body as OutcomeRow).sourceKind).toBe('derived');
     expect((flipWithOrigin.body as OutcomeRow).derivedFromId).toBe(tree.outcomeTopic);
-    // Bản ghi đã là derived có gốc: PATCH không đụng truy vết → 200
-    // (trạng thái gộp vẫn đủ gốc).
     const touchDerived = await http(app).patch(`/api/v1/curriculum/outcomes/${tree.outcomeLesson}`).set(bearer(admin))
       .send({ content: 'Xét được tính đơn điệu của hàm số (bản phái sinh).' });
     expect(touchDerived.status).toBe(200);
-    // PATCH gỡ gốc khỏi bản ghi derived → trạng thái gộp thiếu gốc → 400.
     const clearOrigin = await http(app).patch(`/api/v1/curriculum/outcomes/${tree.outcomeLesson}`).set(bearer(admin))
       .send({ derivedFromId: null });
     expect(clearOrigin.status).toBe(400);
@@ -438,30 +394,24 @@ describe('Chương trình giai đoạn 2 (liên kết câu hỏi ↔ chương tr
 
   it('chặn chu trình cha gián tiếp trong updateNode nhưng vẫn cho reparenting hợp lệ', async () => {
     const tree = await mkTree();
-    // Chuỗi hiện tại: strand → topic → lesson.
     const strandRes = await http(app).get(`/api/v1/curriculum/curricula/${tree.curriculumId}/tree`).set(bearer(admin));
     const strandId = (strandRes.body as { nodes: { id: string }[] }).nodes[0]!.id;
-    // Vòng qua 3 nấc: đặt strand (tổ tiên xa nhất) làm con của lesson (hậu duệ sâu nhất).
     const cycle3 = await http(app).patch(`/api/v1/curriculum/nodes/${strandId}`).set(bearer(admin))
       .send({ parentId: tree.lessonId });
     expect(cycle3.status).toBe(400);
     expect(cycle3.body.code).toBe('curriculum.node_parent_cycle');
-    // Vòng 2 nấc: đặt topic làm con của chính con nó (lesson).
     const cycle2 = await http(app).patch(`/api/v1/curriculum/nodes/${tree.topicId}`).set(bearer(admin))
       .send({ parentId: tree.lessonId });
     expect(cycle2.status).toBe(400);
     expect(cycle2.body.code).toBe('curriculum.node_parent_cycle');
-    // Tự làm cha vẫn bị chặn như trước.
     const selfParent = await http(app).patch(`/api/v1/curriculum/nodes/${tree.topicId}`).set(bearer(admin))
       .send({ parentId: tree.topicId });
     expect(selfParent.status).toBe(400);
     expect(selfParent.body.code).toBe('curriculum.node_parent_self');
-    // Đổi cha hợp lệ không bị chặn nhầm: đưa lesson lên thẳng dưới strand.
     const valid = await http(app).patch(`/api/v1/curriculum/nodes/${tree.lessonId}`).set(bearer(admin))
       .send({ parentId: strandId });
     expect(valid.status).toBe(200);
     expect((valid.body as { parentId: string }).parentId).toBe(strandId);
-    // Cây vẫn đọc được trọn vẹn sau các lần đổi cha.
     const treeAfter = await http(app).get(`/api/v1/curriculum/curricula/${tree.curriculumId}/tree`).set(bearer(admin));
     expect(treeAfter.status).toBe(200);
     const roots = (treeAfter.body as { nodes: { id: string; children: { id: string }[] }[] }).nodes;

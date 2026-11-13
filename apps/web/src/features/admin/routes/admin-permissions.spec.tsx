@@ -5,17 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TestProviders } from '#test/providers';
 import { AdminPermissionsPage } from './admin-permissions';
 
-/**
- * Spec trang Quyền độc lập (issue #597, bề mặt 4): bảng ma trận toàn trang dựng từ ĐÚNG MỘT lần gọi ma trận theo ngữ cảnh (không gọi ma trận riêng cho từng vai), ba thẻ tổng quan đếm đúng tại ngữ cảnh đang chọn (thẻ Cho phép đếm trực tiếp từ các ô đang hiển thị), sửa từng ô áp dụng ngay qua đúng một lần gọi ghi từng ô, ghi lỗi thì ô hoàn lại kèm thông báo, đổi ngữ cảnh thì tải lại ma trận của ngữ cảnh mới, và ma trận chưa tải xong thì không có ô nào sửa được. Nhãn của bộ chọn ngữ cảnh là tên cấp dạng chữ qua adapter (Hệ thống / Trung tâm). Stub giữ kho ma trận theo ngữ cảnh để các lần gọi POST đổi thật dữ kiện mà lần gọi GET sau đó trả về.
- *
- * Vòng sửa theo phán quyết điều phối (PR #601): ghi ô thành công thì nháp của lần ghi đó bị xoá để giá trị mới từ server hiện lên thay vì bị nháp cũ che; nháp mang cả ngữ cảnh của lần ghi nên lỗi muộn của ngữ cảnh cũ không xoá nháp mới ở ngữ cảnh mới dù trùng giá trị.
- *
- * Vòng sửa 3 theo phán quyết 6539398880 (hình dạng demo, dữ kiện thật): ô select bốn trạng thái thay bằng nút toggle icon hai trạng thái (bật = Cho phép, tắt = Kế thừa); ô đang mang Ngăn chặn/Cấm hẳn đã lưu thì toggle bị khoá kèm huy hiệu trạng thái và không thao tác nào ghi đè được — fixture mang sẵn một ô Cấm hẳn ở ngữ cảnh hệ thống và một ô Ngăn chặn ở ngữ cảnh trung tâm để ghim hành vi này.
- *
- * Vòng sửa bố cục (PR #601): bảng gom mỗi resource thành đúng MỘT hàng như bảng mẫu — ô của một (resource × vai trò) chứa các nút toggle của mọi năng lực thuộc resource đó cạnh nhau, tên năng lực truy được qua aria-label và title của nút thay vì một hàng riêng cho từng năng lực. Mọi hành vi ghi từng ô, hoàn lại khi lỗi và khoá ô chặn đã ghim ở các vòng trước giữ nguyên.
- *
- * Vòng căn chỉnh khớp demo (issue #624): ô chọn ngữ cảnh chuyển từ `<select>` native sang Select của `@giaokhoa/ui` — các ca đổi ngữ cảnh chọn theo nhãn nhìn thấy của lựa chọn qua helper `chooseOption`; toggle chưa cấp dùng variant outline, huy hiệu khoá đặt cạnh nút toggle như hộp thoại ma trận.
- */
 const ROLE_A_ID = '01900000-0000-7000-8000-0000000000b1';
 const ROLE_B_ID = '01900000-0000-7000-8000-0000000000b2';
 const SYSTEM_CONTEXT_ID = '01900000-0000-7000-8000-000000000010';
@@ -28,20 +17,15 @@ interface RecordedCall {
 }
 
 interface StubOptions {
-  /** Ma trận treo mãi không về (ca chặn sửa khi chưa tải xong). */
   matrixBehavior?: 'pending';
-  /** POST /access/overrides luôn trả lỗi 500 (ca hoàn lại khi ghi lỗi). */
   postError?: boolean;
-  /** POST /access/overrides treo chờ điều khiển tay (ca đổi ngữ cảnh khi lưu còn chờ). */
   onPostDeferred?: (controls: {
     resolvePost: () => void;
     rejectPost: (reason?: unknown) => void;
   }) => void;
-  /** Ghi đè kho sau khi POST ghi từng ô áp dụng xong (mô phỏng quản trị viên khác đổi cùng ô). */
   afterPostApply?: (store: Record<string, Record<string, Record<string, number>>>) => void;
 }
 
-/** Kho ghi đè theo ngữ cảnh, khởi tạo lại mỗi lần stub. */
 function initialStore(): Record<string, Record<string, Record<string, number>>> {
   return {
     [SYSTEM_CONTEXT_ID]: {
@@ -136,15 +120,11 @@ function renderPage() {
   );
 }
 
-/**
- * Chọn một lựa chọn trong ô Select của `@giaokhoa/ui` theo nhãn nhìn thấy: bấm nút mở rồi bấm lựa chọn trong danh sách xổ — danh sách xổ render qua portal ở tầng document nên truy vấn bằng `screen`.
- */
 async function chooseOption(trigger: HTMLElement, optionLabel: string) {
   await userEvent.click(trigger);
   await userEvent.click(await screen.findByRole('option', { name: optionLabel }));
 }
 
-/** Nút toggle của một cặp vai trò × năng lực; trạng thái bật/tắt đọc ở thuộc tính aria-pressed. */
 function cellToggle(roleName: string, capability: string) {
   return screen.getByRole('button', { name: `Quyền ${capability} của vai trò ${roleName}` });
 }
@@ -162,15 +142,9 @@ describe('Trang Quyền độc lập — ma trận toàn trang và ghi từng ô
     renderPage();
 
     await screen.findByRole('button', { name: 'Quyền course:view của vai trò Giáo viên' });
-    // Ma trận toàn trang chỉ gọi đúng một lần cho ngữ cảnh hệ thống,
-    // không gọi ma trận riêng cho từng vai.
     const matrixCalls = calls.filter((call) => call.url.startsWith('/api/v1/access/capability-matrix'));
     expect(matrixCalls).toHaveLength(1);
     expect(matrixCalls[0]?.url).toContain(`contextId=${SYSTEM_CONTEXT_ID}`);
-    // Hai hàng resource (mỗi resource một hàng như bảng mẫu); năng
-    // lực không còn là một hàng riêng — tên của nó nằm ở aria-label
-    // và title của nút toggle trong ô của hàng resource, đủ 6 cặp
-    // vai trò × năng lực đều có đúng một nút.
     expect(screen.getByText('course')).toBeInTheDocument();
     expect(screen.getByText('user')).toBeInTheDocument();
     for (const roleName of ['Giáo viên', 'Quản trị viên']) {
@@ -179,26 +153,17 @@ describe('Trang Quyền độc lập — ma trận toàn trang và ghi từng ô
         expect(cellToggle(roleName, capability)).toHaveAttribute('title', capability);
       }
     }
-    // Bảng chỉ còn đúng hai hàng thân (một hàng mỗi resource) cộng hàng tiêu đề.
     expect(screen.getAllByRole('row')).toHaveLength(3);
-    // Tiêu đề cột đầu của bảng là "Tài nguyên" — cột đó chứa tên
-    // resource của từng hàng, không mang nhãn năng lực.
     expect(screen.getByRole('columnheader', { name: 'Tài nguyên' })).toBeInTheDocument();
-    // Tiêu đề cột vai trò kèm số người giữ phân biệt.
     expect(screen.getByText('Giáo viên')).toBeInTheDocument();
     expect(screen.getByText('5 người dùng')).toBeInTheDocument();
     expect(screen.getByText('Quản trị viên')).toBeInTheDocument();
     expect(screen.getByText('2 người dùng')).toBeInTheDocument();
-    // Ba thẻ: 2 vai trò, 2 resource, 1 ô Cho phép tại ngữ cảnh hệ thống.
     expect(screen.getByText('Vai trò')).toBeInTheDocument();
-    // "Tài nguyên" xuất hiện đúng hai lần trên trang: tiêu đề cột
-    // đầu của bảng (đã khẳng định theo role ở trên) và nhãn của thẻ
-    // tổng kết số resource ở đây.
     expect(screen.getAllByText('Tài nguyên')).toHaveLength(2);
     expect(screen.getByText('Quyền đang cho phép')).toBeInTheDocument();
     const cards = document.querySelectorAll('[data-slot="card"]');
     expect(cards.length).toBeGreaterThanOrEqual(3);
-    // Ô đã lưu Cho phép hiện toggle đang bật, ô chưa có ghi đè hiện toggle đang tắt.
     expect(cellToggle('Giáo viên', 'course:view')).toHaveAttribute('aria-pressed', 'true');
     expect(cellToggle('Quản trị viên', 'course:view')).toHaveAttribute('aria-pressed', 'false');
   });
@@ -220,10 +185,8 @@ describe('Trang Quyền độc lập — ma trận toàn trang và ghi từng ô
       contextId: SYSTEM_CONTEXT_ID,
       permission: 1,
     });
-    // Thẻ Cho phép tăng từ 1 lên 2 ngay khi bật ô, không cần tải lại.
     const allowCard = screen.getByText('Quyền đang cho phép').closest('[data-slot="card"]');
     expect(within(allowCard as HTMLElement).getByText('2')).toBeInTheDocument();
-    // Tắt ô Cho phép sẵn có thì ghi Kế thừa (0) và thẻ giảm ngay về 1.
     const allowCell = cellToggle('Giáo viên', 'course:view');
     await userEvent.click(allowCell);
     await waitFor(() => {
@@ -266,9 +229,6 @@ describe('Trang Quyền độc lập — ma trận toàn trang và ghi từng ô
     expect(
       calls.filter((call) => call.url.startsWith('/api/v1/access/capability-matrix'))[1]?.url,
     ).toContain(`contextId=${TENANT_CONTEXT_ID}`);
-    // Ma trận ngữ cảnh mới: course:view của Giáo viên về Kế thừa (toggle tắt),
-    // course:edit của Giáo viên và course:view của Quản trị viên đang Cho phép
-    // (toggle bật) — thẻ Cho phép thành 2.
     expect(cellToggle('Giáo viên', 'course:view')).toHaveAttribute('aria-pressed', 'false');
     expect(cellToggle('Giáo viên', 'course:edit')).toHaveAttribute('aria-pressed', 'true');
     expect(cellToggle('Quản trị viên', 'course:view')).toHaveAttribute('aria-pressed', 'true');
@@ -291,14 +251,10 @@ describe('Trang Quyền độc lập — ma trận toàn trang và ghi từng ô
     const cell = await screen.findByRole('button', { name: 'Quyền course:edit của vai trò Giáo viên' });
     expect(cell).toHaveAttribute('aria-pressed', 'false');
     await userEvent.click(cell);
-    // Ô đang chờ ghi thì bị khoá tại ngữ cảnh hệ thống, và lần ghi
-    // đã thực sự bay đi (treo chờ điều khiển tay).
     await waitFor(() => {
       expect(cellToggle('Giáo viên', 'course:edit')).toBeDisabled();
       expect(postControls).toBeDefined();
     });
-    // Đổi sang ngữ cảnh tenant trong lúc lần ghi còn chờ: ô cùng vị
-    // trí ở ngữ cảnh mới không bị khoá nhầm theo lần ghi cũ.
     const picker = screen.getByLabelText('Ngữ cảnh');
     await chooseOption(picker, 'Trung tâm');
     await waitFor(() => {
@@ -309,20 +265,11 @@ describe('Trang Quyền độc lập — ma trận toàn trang và ghi từng ô
     const tenantCell = cellToggle('Giáo viên', 'course:edit');
     expect(tenantCell).not.toBeDisabled();
     expect(tenantCell).toHaveAttribute('aria-pressed', 'true');
-    // Lỗi muộn của lần ghi ở ngữ cảnh hệ thống về sau khi đã đổi ngữ
-    // cảnh: cho chuỗi xử lý lỗi chạy xong rồi mới khẳng định banner
-    // không hiện sai chỗ.
     await act(async () => {
       postControls?.rejectPost(new Error('Lỗi ghi muộn'));
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     expect(screen.queryByText('Không lưu được ô này — giá trị đã hoàn lại.')).not.toBeInTheDocument();
-    // Quay lại ngữ cảnh hệ thống: lần ghi đã lỗi nên ô hoàn về giá
-    // trị đã lưu và không còn bị khoá. Ma trận hệ thống còn tươi
-    // trong cache nên lần quay lại này không gọi lại server — chỉ
-    // khẳng định giá trị hiển thị, không đếm lần gọi. Lưu ý: phải
-    // tìm lại bộ chọn ngữ cảnh vì khối chứa nó đã tháo ra rồi gắn
-    // lại trong lúc tải ma trận của ngữ cảnh mới (nút cũ đã rời cây).
     const pickerBack = screen.getByLabelText('Ngữ cảnh');
     await chooseOption(pickerBack, 'Hệ thống');
     await waitFor(() => {
@@ -336,8 +283,6 @@ describe('Trang Quyền độc lập — ma trận toàn trang và ghi từng ô
     const calls: RecordedCall[] = [];
     stubFetch(calls, {
       afterPostApply: (store) => {
-        // Quản trị viên khác đổi cùng ô ngay sau lần ghi của mình,
-        // trước khi ma trận tải lại sau ghi thành công.
         const roleStore = store[SYSTEM_CONTEXT_ID]?.[ROLE_A_ID];
         if (roleStore) roleStore['course:view'] = 1;
       },
@@ -356,9 +301,6 @@ describe('Trang Quyền độc lập — ma trận toàn trang và ghi từng ô
       contextId: SYSTEM_CONTEXT_ID,
       permission: 0,
     });
-    // Ma trận làm mới sau ghi thành công trả về giá trị mới (Cho
-    // phép): ô phải hiện đang bật, không giữ nháp cũ (đang tắt) che
-    // mất giá trị mới.
     await waitFor(() => {
       expect(cellToggle('Giáo viên', 'course:view')).toHaveAttribute('aria-pressed', 'true');
     });
@@ -379,11 +321,8 @@ describe('Trang Quyền độc lập — ma trận toàn trang và ghi từng ô
 
     const systemCell = await screen.findByRole('button', { name: 'Quyền course:view của vai trò Giáo viên' });
     expect(systemCell).toHaveAttribute('aria-pressed', 'true');
-    // Tắt ô ở ngữ cảnh hệ thống (ghi Kế thừa), treo chờ.
     await userEvent.click(systemCell);
     await waitFor(() => expect(posts).toHaveLength(1));
-    // Đổi sang ngữ cảnh tenant: nháp cũ bị xoá theo hành vi gốc, ô
-    // cùng vị trí hiện giá trị đã lưu tại ngữ cảnh mới (Kế thừa — đang tắt).
     const picker = screen.getByLabelText('Ngữ cảnh');
     await chooseOption(picker, 'Trung tâm');
     await waitFor(() => {
@@ -393,11 +332,8 @@ describe('Trang Quyền độc lập — ma trận toàn trang và ghi từng ô
     });
     const tenantCell = cellToggle('Giáo viên', 'course:view');
     expect(tenantCell).toHaveAttribute('aria-pressed', 'false');
-    // Bật cùng ô ở ngữ cảnh mới (ghi Cho phép), treo chờ.
     await userEvent.click(tenantCell);
     await waitFor(() => expect(posts).toHaveLength(2));
-    // Lỗi muộn của lần ghi ở ngữ cảnh hệ thống về: nháp mới ở tenant
-    // phải còn nguyên, ô vẫn hiện đang bật, không hiện banner sai chỗ.
     await act(async () => {
       posts[0]?.rejectPost(new Error('Lỗi ghi muộn'));
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -406,7 +342,6 @@ describe('Trang Quyền độc lập — ma trận toàn trang và ghi từng ô
       expect(cellToggle('Giáo viên', 'course:view')).toHaveAttribute('aria-pressed', 'true');
     });
     expect(screen.queryByText('Không lưu được ô này — giá trị đã hoàn lại.')).not.toBeInTheDocument();
-    // Dọn lần ghi tenant còn treo để không rò rỉ promise qua cuối test.
     await act(async () => {
       posts[1]?.resolvePost();
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -418,8 +353,6 @@ describe('Trang Quyền độc lập — ma trận toàn trang và ghi từng ô
     stubFetch(calls, { matrixBehavior: 'pending' });
     renderPage();
 
-    // Danh mục và cây context đã về nhưng ma trận vẫn treo: trang vẫn
-    // ở trạng thái chờ, không hiện nút toggle hay bộ chọn ngữ cảnh nào.
     await waitFor(() => {
       expect(calls.filter((call) => call.url.startsWith('/api/v1/access/capability-matrix'))).toHaveLength(1);
     });
@@ -435,17 +368,14 @@ describe('Trang Quyền độc lập — ma trận toàn trang và ghi từng ô
     stubFetch(calls);
     renderPage();
 
-    // Ngữ cảnh hệ thống: user:view của Quản trị viên đang Cấm hẳn (−1000).
     const prohibitCell = await screen.findByRole('button', {
       name: 'Quyền user:view của vai trò Quản trị viên',
     });
     expect(prohibitCell).toBeDisabled();
     expect(prohibitCell).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByText('Cấm hẳn')).toBeInTheDocument();
-    // Bấm vào ô khoá không phát sinh lần ghi nào.
     await userEvent.click(prohibitCell);
     expect(calls.filter((call) => call.url === '/api/v1/access/overrides')).toHaveLength(0);
-    // Đổi sang ngữ cảnh trung tâm: user:view của Giáo viên đang Ngăn chặn (−1) — cũng khoá.
     const picker = screen.getByLabelText('Ngữ cảnh');
     await chooseOption(picker, 'Trung tâm');
     const preventCell = await screen.findByRole('button', {
@@ -455,7 +385,6 @@ describe('Trang Quyền độc lập — ma trận toàn trang và ghi từng ô
     expect(screen.getByText('Ngăn chặn')).toBeInTheDocument();
     await userEvent.click(preventCell);
     expect(calls.filter((call) => call.url === '/api/v1/access/overrides')).toHaveLength(0);
-    // Ô thường ở cùng ngữ cảnh vẫn sửa được — khoá chỉ áp cho ô mang giá trị chặn.
     expect(cellToggle('Giáo viên', 'course:view')).not.toBeDisabled();
   });
 
@@ -469,8 +398,6 @@ describe('Trang Quyền độc lập — ma trận toàn trang và ghi từng ô
     await waitFor(() => {
       expect(cellToggle('Giáo viên', 'course:view')).toHaveAttribute('aria-pressed', 'false');
     });
-    // Tải lại trang từ đầu (QueryClient mới, không còn sửa đổi lạc
-    // quan): ô vẫn đang tắt vì dòng ghi đè đã bị xoá phía server.
     cleanup();
     renderPage();
     const reloaded = await screen.findByRole('button', {

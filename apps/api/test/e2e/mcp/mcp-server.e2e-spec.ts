@@ -18,31 +18,6 @@ import {
 import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstSectionId } from '../../support/course-enrolment-helpers';
 import { createExamDraft } from '../../support/exam-pin-helpers';
 
-/**
- * Lát MCP-0 (issue #110) — nền MCP server + nhập câu hỏi nháp bằng AI. Bao phủ tiêu chí nghiệm thu Phần 4.3 của hồ sơ research:
- *  - một endpoint POST /mcp phục vụ cả hai kỷ nguyên (modern
- *    2026-07-28 + legacy 2025-11-25): tools/list + tools/call chạy ở cả hai; PRM chạy; không token → 401.
- *  - create_question đủ 4 qtype vào bank personal của chính chủ token,
- *    trạng thái draft, source_kind='ai' + source_ref='client:<id>'
- *    (kiểm bằng SQL); draft KHÔNG rút được vào usage/slot ngẫu
- *    nhiên/slot quiz/startAttempt; phát hành ready thì dùng được và chấm đúng (gồm truefalse chùm TF-A 4 mệnh đề qua dạng answers chuẩn của MCP: thân câu + 4 mệnh đề kèm giá trị Đúng/Sai).
- *  - validate: lỗi nghiệp vụ kèm fieldPath; trường lạ bị schema chặn;
- *    nội dung HTML lưu thành text thuần; ký tự điều khiển bị từ chối.
- *  - phân quyền: học viên / giáo viên khác bị từ chối (bank của người
- *    khác coi như không tồn tại), 0 bản ghi sinh ra.
- *  - idempotency: phát lại cùng key → kết quả cũ không nhân đôi; cùng
- *    key khác payload → question.idempotency_conflict; trùng hoàn toàn → verdict duplicate_exact không tạo bản sao.
- *  - mọi tools/call ghi outbox aggregate 'mcp' (worker relay mirror
- *    sang event_log — cùng cơ chế mọi aggregate khác).
- *  - rate limit tạo câu: vượt hạn → 429 + mã -32029 (app riêng, hạn 2).
- *  - submit_contribution (lát MCP-2, mở lại #110): câu của chính chủ
- *    (draft → ready) nộp vào bank trường thành contribution pending ở
- *    cả hai kỷ nguyên; approve qua REST → deep copy vào bank trường
- *    (derived_from trỏ câu gốc); chặn câu chưa ready / câu của người
- *    khác / đích bank personal / câu không tồn tại; idempotency replay
- *    + conflict; trần thiếu scope giaokhoa.banks.contribute → HTTP 403
- *    insufficient_scope (app riêng).
- */
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 const MODERN_META = {
@@ -62,7 +37,6 @@ interface McpReply {
 function parseMcpBody(raw: string): { result?: any; error?: { code: number; message: string } } {
   const trimmed = raw.trim();
   if (trimmed.startsWith('{')) return JSON.parse(trimmed);
-  // Legacy stateless trả khung SSE: lấy dòng data: đầu tiên.
   for (const line of trimmed.split('\n')) {
     if (line.startsWith('data:')) return JSON.parse(line.slice(5).trim());
   }
@@ -105,8 +79,6 @@ async function createMountedMcpApp(mountDeps?: (app: INestApplication) => McpMou
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
   const app = moduleRef.createNestApplication();
   enableTrustedProxy(app as NestExpressApplication);
-  // Mount MCP trước init — đúng thứ tự như main.ts (trước prefix/route của Nest);
-  // deps mặc định lấy qua facade McpDepsService của McpModule (issue #138).
   mountMcp(app as NestExpressApplication, mountDeps ? mountDeps(app) : app.get(McpDepsService).createMountDeps());
   app.setGlobalPrefix('api');
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
@@ -137,7 +109,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
     return { id: u.id, username: u.username, token: session.accessToken };
   }
 
-  /** Giáo viên = vai teacher tại hệ thống (nhóm staff được cấp bank cá nhân). */
   async function mkStaffUser(): Promise<{ id: string; username: string; token: string }> {
     const u = await mkUser();
     await assignRole(app, admin, u.id, await roleIdByShortname(app, admin, 'teacher'), await systemContextId(app, admin));
@@ -149,7 +120,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
     return res.rows[0] as T;
   }
 
-  /** Đếm câu theo thân câu của version mới nhất (câu hỏi không còn trường tên — không đếm theo tên được nữa). */
   async function countQuestionsWithText(text: string): Promise<number> {
     const row = await sqlOne<{ n: number }>(
       `select count(*)::int as n from question_versions v join question_bank_entries e on e.id = v.question_bank_entry_id
@@ -170,10 +140,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
     teacherB = await mkStaffUser();
     student = await mkUser();
     const banksRes = await callTool(app, teacherA.token, 'list_my_banks', {});
-    // list_my_banks dùng đúng listBanks của REST: sau issue #123 bank
-    // personal của giáo viên khác không còn xuất hiện trong danh sách;
-    // bank GHI của MCP là bank personal CỦA CHÍNH chủ token (lọc theo
-    // ownerId như trước).
     const personal = (banksRes.structured?.banks as any[]).find((b) => b.scope === 'personal' && b.kind === 'question' && b.ownerId === teacherA.id);
     bankA = personal.id as string;
     catA = personal.defaultCategoryId as string;
@@ -212,12 +178,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
   });
 
   it('tools/list ở cả hai kỷ nguyên: đúng danh mục tool hiện hành (5 của MCP-0 + 6 của MCP-1)', async () => {
-    // Danh mục tool là MỘT sổ đăng ký dùng chung cho cả hai kỷ
-    // nguyên (gác theo scope ở từng lần gọi, không gác theo kỷ
-    // nguyên): MCP-1 (issue #163) thêm create_questions_batch,
-    // create_stimulus_with_questions, publish_questions,
-    // search_questions, check_duplicates, search_curriculum_outcomes
-    // vào cùng danh mục 5 tool của MCP-0.
     const EXPECTED_TOOLS = [
       'check_duplicates', 'create_question', 'create_questions_batch',
       'create_stimulus_with_questions', 'get_question', 'list_categories',
@@ -352,8 +312,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
   }
 
   it('truefalse chùm TF-A qua dạng answers chuẩn: map Đúng/Sai đủ 4 mệnh đề chấm đúng (và ngược lại)', async () => {
-    // TF-A (lát P5): thân câu + 4 mệnh đề, mỗi mệnh đề kèm giá trị
-    // Đúng/Sai; tool MCP dựng statementList id s1..s4 theo thứ tự gửi.
     const res = await callTool(app, teacherA.token, 'create_question', {
       bankId: bankA, categoryId: catA, qtype: 'truefalse',
       questionText: 'Xét các mệnh đề về Mặt Trời.',
@@ -368,7 +326,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
     expect(res.isError).toBe(false);
     const qid = res.structured!.questionId as string;
     await banks.setQuestionStatus(qid, 'ready');
-    // Trả lời khớp toàn bộ 4 mệnh đề → đúng trọn; trả lời ngược toàn bộ → sai trọn.
     const allRight = JSON.stringify({ s1: true, s2: false, s3: true, s4: false });
     const allWrong = JSON.stringify({ s1: false, s2: true, s3: false, s4: true });
     expect(await gradeViaUsage(qid, allRight)).toMatchObject({ state: 'gradedright', fraction: 1 });
@@ -397,7 +354,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
   });
 
   it('cổng draft 3: slot đề chặn câu chưa ready (exam.slot_question_not_ready), ready thì thêm được', async () => {
-    // Khoá + quiz do teacherA quản (editingteacher tại context khoá).
     const cat = await createCategory(app, admin);
     const course = await createCourse(app, admin, cat.id);
     const sectionId = await getFirstSectionId(app, admin, course.id);
@@ -417,8 +373,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
     });
     const draftQ = draftRes.structured!.questionId as string;
 
-    // Soạn slot đề với câu còn draft: bị chặn ở cổng resolve (chưa có
-    // version ready nào để ghim) — mã cổng của họ Đề sau gộp (#226).
     draft0.slots.push({ questionId: draftQ });
     const denied = await http(app).put(`/api/v1/exams/${draft0.examId}/slots`).set(bearer(teacherA.token)).send({ slots: draft0.slots });
     expect(denied.status).toBe(400);
@@ -431,7 +385,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
   });
 
   it('cổng draft 2 (đường đề): slot theo category đã bỏ hẳn — soạn slot bắt buộc câu cụ thể (#226)', async () => {
-    // Category riêng trong bank personal của teacherA, chỉ chứa 1 draft.
     const bankRow = await sqlOne<{ context_id: string }>('select context_id from question_banks where id = $1', [bankA]);
     const catRes = await http(app).post('/api/v1/questions/categories').set(bearer(teacherA.token))
       .send({ name: uniqueName('mcpPoolCat'), contextId: bankRow.context_id, bankId: bankA });
@@ -445,10 +398,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
     expect(draftRes.isError).toBe(false);
     expect(await questions.listUsableQuestionIdsInCategory(poolCat)).toEqual([]);
 
-    // Mô hình gộp Đề: slot của đề luôn là câu CỤ THỂ đã ghim version —
-    // không còn slot ngẫu nhiên theo category ở bề mặt soạn đề (rút
-    // ngẫu nhiên chỉ qua sinh đề từ ma trận, xem quiz-matrix-flow).
-    // Gửi slot chỉ có categoryId → schema chặn 400.
     const draft0 = await createExamDraft(app, teacherA.token, uniqueName('mcpExamCat'));
     const slot = await http(app).put(`/api/v1/exams/${draft0.examId}/slots`).set(bearer(teacherA.token))
       .send({ slots: [{ categoryId: poolCat, maxMark: 2 }] });
@@ -456,8 +405,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
   });
 
   it('cổng draft 4: startAttempt follow_latest không lùi về version của câu draft', async () => {
-    // Câu ready tạo qua REST, dựng usage, rồi hạ về draft: attempt bắt
-    // đầu sau đó phải báo thiếu version thay vì phục vụ bản draft.
     const systemCtx = await systemContextId(app, admin);
     const catRes = await http(app).post('/api/v1/questions/categories').set(bearer(admin))
       .send({ name: uniqueName('mcpGateCat'), contextId: systemCtx });
@@ -479,7 +426,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
   });
 
   it('validate: lỗi nghiệp vụ kèm fieldPath; trường lạ/quá dài bị schema chặn; ký tự cấm bị từ chối', async () => {
-    // Multichoice sai luật đáp án (chỉ 2 lựa chọn thay vì đúng 4) -> lỗi nghiệp vụ kèm fieldPath.
     const badAnswers = await callTool(app, teacherA.token, 'create_question', {
       bankId: bankA, categoryId: catA, qtype: 'multichoice',
       questionText: 'Trắc nghiệm thiếu lựa chọn.',
@@ -561,8 +507,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
 
   it('idempotency: phát lại trả kết quả cũ; cùng key khác payload → conflict; trùng exact → verdict, không nhân đôi', async () => {
     const key = uniqueName('key');
-    // Thân câu duy nhất theo lượt chạy (đếm theo thân câu nên phải
-    // phân biệt được với dữ liệu của lượt chạy trước trên cùng DB).
     const idemText = `Câu kiểm idempotency ${uniqueName('mcpIdem')}.`;
     const payload = {
       bankId: bankA, categoryId: catA, qtype: 'multichoice',
@@ -594,7 +538,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
     expect(dup.structured!.existingQuestionId).toBe(qid);
     expect(await countQuestionsWithText(idemText)).toBe(1);
 
-    // Gần trùng: cùng thân câu, đáp án khác → vẫn tạo nhưng gắn cờ near.
     const near = await callTool(app, teacherA.token, 'create_question', {
       ...payload,
       answers: [
@@ -612,8 +555,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
   });
 
   it('#316: chống trùng TF-A qua MCP gồm giá trị Đ/S từng mệnh đề — khác Đ/S thì tạo mới, giống hệt thì duplicate_exact', async () => {
-    // Thân câu + mệnh đề duy nhất theo lượt chạy (chống trùng đếm theo
-    // nội dung nên phải phân biệt được với dữ liệu của lượt chạy trước).
     const stem = `Nhận định MCP ${uniqueName('tf316')}`;
     const tfPayload = (values: boolean[]) => ({
       bankId: bankA, categoryId: catA, qtype: 'truefalse',
@@ -627,16 +568,11 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
     expect(first.structured!.status).toBe('created');
     const firstId = first.structured!.questionId as string;
 
-    // Giống hệt cả chữ lẫn Đ/S từng mệnh đề → trùng hoàn toàn, trỏ về câu đã có.
     const identical = await callTool(app, teacherA.token, 'create_question', tfPayload([true, true, true, true]));
     expect(identical.isError, identical.text).toBe(false);
     expect(identical.structured!.status).toBe('duplicate_exact');
     expect(identical.structured!.existingQuestionId).toBe(firstId);
 
-    // Cùng chữ, khác Đ/S ở ý 4 → KHÔNG trùng hoàn toàn: tạo câu mới
-    // (chỉ gần trùng theo thân câu), và hash của payload phải khớp
-    // hash của version đã lưu — chứng minh bằng lần tạo thứ hai y hệt
-    // bản khác-Đ/S cũng bị bắt trùng hoàn toàn với chính nó.
     const flipped = await callTool(app, teacherA.token, 'create_question', tfPayload([true, true, true, false]));
     expect(flipped.isError, flipped.text).toBe(false);
     expect(flipped.structured!.status).toBe('created');
@@ -668,7 +604,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
     expect(await countQuestionsWithText('Học viên không được tạo.')).toBe(0);
     expect(await countQuestionsWithText('Giáo viên khác không ghi vào bank của người khác.')).toBe(0);
 
-    // Bank trường (dùng chung) cũng KHÔNG phải đích ghi của MCP-0.
     const banksRes = await callTool(app, teacherA.token, 'list_my_banks', {});
     const school = (banksRes.structured!.banks as any[]).find((b) => b.scope === 'school');
     const intoSchool = await callTool(app, teacherA.token, 'create_question', {
@@ -687,10 +622,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
     expect(JSON.stringify(mine.structured)).not.toContain('source_kind');
     expect(JSON.stringify(mine.structured)).not.toContain('source_ref');
 
-    // Cổng đọc là assertQuestionReadable của REST dùng chung: từ issue
-    // #123, câu thuộc bank personal của người khác → not found ở MỌI
-    // bề mặt (REST và MCP parity — MCP không tự thêm luật riêng);
-    // học viên cũng not found như trước.
     const foreignTeacher = await callTool(app, teacherB.token, 'get_question', { questionId: draftMcId });
     expect(foreignTeacher.isError).toBe(true);
     expect(foreignTeacher.structured!.error.code).toBe('question.not_found');
@@ -700,7 +631,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
   });
 
   it('submit_contribution: câu MCP (draft → ready) nộp vào bank trường thành pending, cả hai kỷ nguyên + idempotency', async () => {
-    // Bank trường lấy qua đúng đường khám phá của MCP + service bảo đảm tồn tại.
     const schoolBank = await banks.ensureSchoolBank(teacherA.id);
     schoolBankId = schoolBank.id;
     const banksRes = await callTool(app, teacherA.token, 'list_my_banks', {});
@@ -709,8 +639,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
     const mkReady = async (n: number): Promise<string> => {
       const res = await callTool(app, teacherA.token, 'create_question', {
         bankId: bankA, categoryId: catA, qtype: 'essay',
-        // Mỗi lượt test dùng nội dung mới: chống trùng đối chiếu trên toàn kho
-        // nên fixture cố định sẽ bị coi đã đóng góp ở lần chạy trước.
         questionText: `Câu đóng góp số ${n} của giáo viên A — ${uniqueName('mcpcontrib')}.`,
         idempotencyKey: uniqueName('key'),
       });
@@ -738,14 +666,12 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
     expect(row.target_bank_id).toBe(schoolBankId);
     expect(row.proposer_id).toBe(teacherA.id);
 
-    // Kỷ nguyên legacy dùng chung factory tool — nộp được như modern.
     const sub2 = await callTool(app, teacherA.token, 'submit_contribution', {
       targetBankId: schoolBankId, questionIds: [contribQ2], idempotencyKey: uniqueName('key'),
     }, 'legacy');
     expect(sub2.isError).toBe(false);
     expect((sub2.structured!.results as any[])[0].status).toBe('pending');
 
-    // Phát lại cùng key + cùng payload → kết quả cũ, không nhân đôi đề xuất.
     const replay = await callTool(app, teacherA.token, 'submit_contribution', {
       targetBankId: schoolBankId, questionIds: [contribQ1], note: 'Đóng góp từ MCP', idempotencyKey: key1,
     });
@@ -755,7 +681,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
       'SELECT COUNT(*)::text AS n FROM question_bank_contributions WHERE question_id = $1', [contribQ1]);
     expect(Number(cnt.n)).toBe(1);
 
-    // Cùng key, payload khác → idempotency_conflict.
     const conflict = await callTool(app, teacherA.token, 'submit_contribution', {
       targetBankId: schoolBankId, questionIds: [contribQ2], idempotencyKey: key1,
     });
@@ -797,7 +722,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
     expect(nr.status).toBe('failed');
     expect(nr.code).toBe('question.contribution_source_not_ready');
 
-    // Câu ready của giáo viên B — A không nộp thay được, 0 đề xuất sinh ra.
     const banksB = await callTool(app, teacherB.token, 'list_my_banks', {});
     const personalB = (banksB.structured!.banks as any[]).find((b) => b.scope === 'personal' && b.ownerId === teacherB.id);
     const qB = await callTool(app, teacherB.token, 'create_question', {
@@ -816,7 +740,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
       'SELECT COUNT(*)::text AS n FROM question_bank_contributions WHERE question_id = $1', [qBId]);
     expect(Number(cntB.n)).toBe(0);
 
-    // Đích là bank personal của chính mình → cổng QB-4 chặn.
     const toPersonal = await callTool(app, teacherA.token, 'submit_contribution', {
       targetBankId: bankA, questionIds: [contribQ2], idempotencyKey: uniqueName('key'),
     });
@@ -824,7 +747,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
     expect(tp.status).toBe('failed');
     expect(tp.code).toBe('question.contribution_target_personal');
 
-    // Câu không tồn tại.
     const ghost = await callTool(app, teacherA.token, 'submit_contribution', {
       targetBankId: schoolBankId, questionIds: ['01900000-0000-7000-8000-000000000099'], idempotencyKey: uniqueName('key'),
     });
@@ -834,7 +756,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
   });
 
   it('submit_contribution đối xứng đề + ma trận (issue #228): examIds/matrixIds của chính chủ thành pending, của người khác bị chặn ở biên, payload rỗng bị schema chặn', async () => {
-    // Bank đích dùng chung cho đề và cho ma trận (admin tạo qua REST).
     const examSchool = await http(app).post('/api/v1/question-banks').set(bearer(admin))
       .send({ name: uniqueName('Bank đề trường MCP'), scope: 'school', bankKind: 'exam' });
     expect(examSchool.status, JSON.stringify(examSchool.body)).toBeLessThan(300);
@@ -844,7 +765,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
     expect(matrixSchool.status, JSON.stringify(matrixSchool.body)).toBeLessThan(300);
     const matrixSchoolId = matrixSchool.body.id as string;
 
-    // ── Đề ready của teacherA trong bank đề cá nhân ──
     const examBanks = await http(app).get('/api/v1/question-banks?kind=exam').set(bearer(teacherA.token));
     const myExamBank = (examBanks.body as any[]).find((b) => b.scope === 'personal' && b.ownerId === teacherA.id);
     const qRes = await http(app).post('/api/v1/questions').set(bearer(teacherA.token)).send({
@@ -874,7 +794,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
     expect(erow.status).toBe('pending');
     expect(erow.mode).toBe('new');
 
-    // ── Đề của teacherB: A không nộp thay được (cổng chủ sở hữu ở biên chạy trước mọi cổng nghiệp vụ) ──
     const examBanksB = await http(app).get('/api/v1/question-banks?kind=exam').set(bearer(teacherB.token));
     const bankB = (examBanksB.body as any[]).find((b) => b.scope === 'personal' && b.ownerId === teacherB.id);
     const paperB = await http(app).post(`/api/v1/exams/banks/${bankB.id}/exams`).set(bearer(teacherB.token))
@@ -890,7 +809,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
       'SELECT COUNT(*)::text AS n FROM exam_contributions WHERE exam_id = $1', [paperBId]);
     expect(Number(cntE.n)).toBe(0);
 
-    // ── Ma trận ready của teacherA trong bank ma trận cá nhân ──
     const contexts = await http(app).get('/api/v1/access/contexts').set(bearer(admin));
     const systemCtx = (contexts.body as any[]).find((c) => c.contextLevel === 10);
     const subj = await http(app).post('/api/v1/curriculum/subjects').set(bearer(admin))
@@ -919,7 +837,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
     expect(mrow.status).toBe('pending');
     expect(mrow.content_hash).toBeTruthy();
 
-    // ── Ma trận của admin: A không nộp thay được ──
     const adminMatrix = await http(app).post('/api/v1/exam-matrices').set(bearer(admin)).send({
       name: 'Ma trận của admin', subjectId: subj.body.id, curriculumId: curr.body.id, totalScore: 10,
     });
@@ -931,7 +848,6 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
     expect(fm.status).toBe('failed');
     expect(fm.code).toBe('quiz.matrix_contribution_source_not_own');
 
-    // ── Payload không có danh sách nào: schema chặn ở biên tool ──
     const empty = await callTool(app, teacherA.token, 'submit_contribution', {
       targetBankId: examSchoolId, idempotencyKey: uniqueName('key'),
     });
@@ -960,8 +876,6 @@ describe('MCP rate limit (app riêng, hạn tạo = 2/giờ)', () => {
 
   beforeAll(async () => {
     app2 = await createMountedMcpApp((a) => {
-      // Deps chuẩn từ facade của McpModule, chỉ ghi đè rate limiter
-      // bằng hạn chặt cho ca kiểm giới hạn (issue #138).
       const base = a.get(McpDepsService).createMountDeps();
       return {
         ...base,
@@ -996,8 +910,6 @@ describe('MCP submit_contribution thiếu scope (app riêng, trần không có g
 
   beforeAll(async () => {
     app3 = await createMountedMcpApp((a) => {
-      // Deps chuẩn từ facade của McpModule (issue #138), chỉ thu hẹp
-      // trần scope để kiểm cổng insufficient_scope của submit_contribution.
       const deps = a.get(McpDepsService).createMountDeps();
       return { ...deps, grantedScopes: ['giaokhoa.questions.read', 'giaokhoa.questions.draft'] };
     });

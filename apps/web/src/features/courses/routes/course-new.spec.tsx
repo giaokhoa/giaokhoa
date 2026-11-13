@@ -5,10 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TestProviders } from '#test/providers';
 import { CourseNewPage } from './course-new';
 
-/**
- * Spec wizard tạo khoá (K1 — issue #68): năm đường tạo khoá trên màn riêng `/courses/new`. Kiểm hai đường chính bằng endpoint thật:
- * nhân bản khoá có sẵn (chọn nguồn → tên/mã điền sẵn → tạo, chuyển thẳng tới builder của bản sao) và khoá trắng; đường khung SGK phải hiển thị trạng thái chờ nối K0b một cách trung thực.
- */
 const CATEGORY_ID = '01900000-0000-7000-8000-000000000001';
 const SOURCE_ID = '01900000-0000-7000-8000-000000000010';
 const COPY_ID = '01900000-0000-7000-8000-000000000099';
@@ -16,7 +12,6 @@ const BLANK_ID = '01900000-0000-7000-8000-000000000098';
 const CLASS_ID = '01900000-0000-7000-8000-0000000000c1';
 const NEW_CLASS_ID = '01900000-0000-7000-8000-0000000000c2';
 
-/** Lớp có sẵn của GV (CLASS-1): wizard chọn sẵn lớp đang hoạt động đầu tiên cho khoá mới. */
 const MY_CLASS = {
   id: CLASS_ID,
   tenantId: '01900000-0000-7000-8000-0000000000a1',
@@ -110,7 +105,6 @@ describe('Wizard tạo khoá K1', () => {
 
     await userEvent.click(await screen.findByTestId('wizard-path-duplicate'));
     await userEvent.selectOptions(await screen.findByLabelText('Khoá nguồn để nhân bản'), SOURCE_ID);
-    // Tên/mã bản sao được điền sẵn từ khoá nguồn — giáo viên không phải gõ lại.
     expect((await screen.findByLabelText('Tên đầy đủ của khoá học') as HTMLInputElement).value).toBe('Toán 10 — Học kỳ 1 (bản sao)');
     expect((screen.getByLabelText('Tên ngắn của khoá học') as HTMLInputElement).value).toBe('TOAN10-HK1-copy');
     await userEvent.type(screen.getByLabelText('Ngày bắt đầu'), '2027-09-06');
@@ -142,7 +136,6 @@ describe('Wizard tạo khoá K1', () => {
 
     await waitFor(() => expect(calls.some((c) => c.url === '/api/v1/courses' && c.method === 'POST')).toBe(true));
     const call = calls.find((c) => c.url === '/api/v1/courses' && c.method === 'POST');
-    // CLASS-1: khoá bắt buộc thuộc một lớp — wizard gửi kèm classId của lớp đã chọn sẵn.
     expect(call?.body).toEqual({ fullName: 'Ngữ văn 11', shortName: 'VAN11', category: CATEGORY_ID, classId: CLASS_ID });
   });
 
@@ -152,7 +145,6 @@ describe('Wizard tạo khoá K1', () => {
     renderWizard();
 
     await userEvent.click(await screen.findByTestId('wizard-path-blank'));
-    // Không có lớp → ô nhập tên lớp mới hiện ngay trong wizard kèm lời dẫn.
     const classInput = await screen.findByLabelText('Tên lớp mới');
     await userEvent.type(classInput, 'Lớp 11B2');
     await userEvent.type(screen.getByLabelText('Tên đầy đủ của khoá học'), 'Hoá 11');

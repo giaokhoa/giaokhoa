@@ -4,16 +4,6 @@ import { Card, CardDescription, CardHeader, CardTitle, CardContent } from '@giao
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@giaokhoa/ui/components/collapsible';
 import { cn } from '@giaokhoa/ui/lib/utils';
 
-/**
- * UI-1: MỘT khuôn collapse/section dùng chung cho toàn web — Card + Collapsible của @giaokhoa/ui, trigger full-width có chevron xoay theo trạng thái mở, hover/focus rõ, tiêu đề CardTitle + mô tả CardDescription nhất quán, nội dung trong CollapsibleContent.
- *
- * Trước component này, trang /questions có ba kiểu collapse tự chế khác nhau (nút button trơn trong CardHeader cho các thẻ ngân hàng; CollapsibleTrigger với span font-semibold trơn cho danh mục; lẫn lộn trạng thái mở/đóng) — mọi collapse mới phải dùng khuôn này.
- *
- * Hành vi giữ nguyên theo nơi dùng: component là controlled
- * (open/onOpenChange do trang giữ), nội dung chỉ render khi mở
- * (CollapsibleContent tự gỡ khỏi DOM khi đóng) nên các luồng tải dữ
- * liệu lười khi mở không đổi.
- */
 export function CollapsibleSection({
   title,
   description,
@@ -29,14 +19,9 @@ export function CollapsibleSection({
   description?: ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Neo id đặt trên Card (vd cho liên kết sâu cuộn tới). */
   id?: string;
   className?: string;
-  /** Class cho CardContent khi paddedContent=true (mặc định 'space-y-4'). */
   contentClassName?: string;
-  /**
-   * true (mặc định): nội dung bọc trong CardContent có padding của Card. false: nội dung tự quản padding (vd DataTable đã có px riêng) — chỉ dùng khi nội dung thật sự cần full-width trong thẻ.
-   */
   paddedContent?: boolean;
   children: ReactNode;
 }) {

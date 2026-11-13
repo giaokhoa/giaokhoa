@@ -2,9 +2,6 @@ import { type RouteConfig, relative } from '@react-router/dev/routes';
 
 const { route } = relative(import.meta.dirname);
 
-/**
- * Khu route của feature questions: ngân hàng câu hỏi, ngữ liệu, nơi dùng; gốc cây Đề (/exams) và gốc cây ma trận (/matrices) là trang khu vực của feature này; Ngân hàng hệ thống (chuẩn đường dẫn #221, lát R1): gốc chỉ chuyển hướng tới Câu hỏi hệ thống, ba khu vực có path riêng.
- */
 export default [
   route('questions', 'routes/questions.tsx'),
   route('questions/stimuli', 'routes/question-stimuli.tsx'),

@@ -10,9 +10,6 @@ import { QuizRepository, type ExamMatrixCellRow, type ExamMatrixContributionRow,
 import { QuizService } from './quiz.service';
 import { isMatrixContentSignatureConflict, matrixContentSignature } from './matrix-content-signature';
 
-/**
- * Dòng ghi công của một ma trận (theo đúng khuôn AttributionView của câu hỏi): ma trận nguồn đã copy, bank nguồn, tác giả gốc và hai bộ đếm dùng thật — số lượt được copy đi và số version đề đã sinh từ ma trận này.
- */
 export interface MatrixAttributionView {
   matrixId: string;
   isCopy: boolean;
@@ -25,11 +22,6 @@ export interface MatrixAttributionView {
   useCount: number;
 }
 
-/**
- * Bộ capability của lớp ngân hàng ma trận — đủ bộ matrix:* use/add/edit/copy/share/moderate sau đợt đồng bộ khuôn ngân hàng
- * (issue #228, lát S3; MB-1 của issue #111 mở đầu bằng
- * copy/share/moderate và còn neo xem/sửa vào quiz:* của Chặng 3). Tất cả đánh giá TẠI CONTEXT CỦA BANK (E-8).
- */
 export const MATRIX_BANK_CAPS = {
   view: 'matrix:use',
   add: 'matrix:add',
@@ -40,16 +32,6 @@ export const MATRIX_BANK_CAPS = {
 } as const;
 
 @Injectable()
-/**
- * Lớp BANK của Ngân hàng ma trận (MB-1, issue #111) — khuôn QB-1→QB-4 của ngân hàng câu hỏi áp cho ma trận:
- *
- * - Bank là question_banks với bank_kind='matrix' (bảng đa loại của
- *   PR #83); exam_matrices.bank_id neo vào bank, quyền MỘT nguồn duy nhất là context của bank (resolver trong QuizService).
- * - Copy mẫu → ma trận làm việc: deep copy toàn bộ ô với danh tính
- *   mới, derived_from_matrix_id trỏ về mẫu, version về 1, hạ cánh `ready` (quy tắc hoàn thiện: sao chép vào bank là đường vào bank ở dạng đã hoàn thiện) — sửa bản copy fork version mới, không đụng mẫu (bất biến truy vết).
- * - Đóng góp + duyệt: giáo viên đề xuất ma trận ready của mình vào
- *   bank chung; người có matrix:moderate tại bank đích duyệt (= copy sâu vào bank đích, bản vào bank tổ/trường là MẪU) hoặc từ chối kèm lý do hiện lại cho người gửi.
- */
 export class MatrixBanksService {
   constructor(
     private readonly repo: QuizRepository,
@@ -59,9 +41,7 @@ export class MatrixBanksService {
     private readonly outbox: OutboxService,
   ) {}
 
-  // --- helpers -----------------------------------------------------------------
 
-  /** Bank ma trận theo id: không có → 404; bank loại khác → 400. */
   private async getMatrixBankOrThrow(bankId: string): Promise<QuestionBankRow> {
     const bank = await this.banks.findBankById(bankId);
     if (!bank) throw new NotFoundException({ message: `Matrix bank ${bankId} not found`, code: 'quiz.matrix_bank_not_found' });
@@ -77,12 +57,6 @@ export class MatrixBanksService {
     return row;
   }
 
-  /**
-   * Bộ quyền của actor trên một ma trận NGUỒN: ma trận thuộc bank thì
-   * đọc quyền bank-local của bank đó (vai chuyên dụng tại context
-   * bank); ma trận chưa thuộc bank thì đọc PermissionEvaluator tại
-   * context môn (hành vi Chặng 3).
-   */
   private async sourceCapsOf(actorId: string, matrix: ExamMatrixRow): Promise<{
     view: boolean; add: boolean; manage: boolean; copy: boolean; share: boolean; moderate: boolean;
   }> {
@@ -101,26 +75,6 @@ export class MatrixBanksService {
     return { view, add, manage, copy, share, moderate };
   }
 
-  /**
-   * Deep copy một ma trận vào bank đích trong MỘT transaction: dòng
-   * ma trận mang danh tính mới + toàn bộ ô sao nguyên (giữ
-   * curriculum_node_id — ô neo ĐVK của chương trình, không neo bank);
-   * derived_from_matrix_id trỏ về nguồn; version về 1 — và version 1
-   * đó là hàng version bất biến của chính bản copy (chụp cấu hình
-   * của nguồn tại thời điểm copy), toàn bộ ô sao thuộc về version
-   * này: bản copy có lịch sử version độc lập với nguồn ngay từ đầu.
-   *
-   * Chữ ký nội dung của bản sao (lát chống trùng của issue #233)
-   * tính từ ĐÚNG nội dung của bản sao — tên sau ghi đè nếu có + phần
-   * đầu và toàn bộ ô của nguồn — và ghi ngay trong transaction: nếu
-   * bank đích đã có một ma trận trùng toàn bộ nội dung, ràng buộc
-   * duy nhất (bank, chữ ký) chặn bản sao và toàn bộ transaction
-   * rollback, dịch thành 409 `quiz.matrix_duplicate_content` thay vì
-   * lỗi 500 thô.
-   *
-   * @throws ConflictException khi bank đích đã có ma trận trùng toàn
-   *   bộ nội dung với bản sao.
-   */
   private async deepCopyMatrix(actorId: string, source: ExamMatrixRow, targetBank: QuestionBankRow, opts: {
     status: 'draft' | 'ready'; isTemplate: boolean; name?: string;
   }): Promise<ExamMatrixRow> {
@@ -141,9 +95,6 @@ export class MatrixBanksService {
           contextId: source.contextId,
           bankId: targetBank.id, status: opts.status, isTemplate: opts.isTemplate,
           derivedFromMatrixId: source.id, version: 1,
-          // Truy vết copy đầy đủ theo khuôn câu hỏi: bank nguồn tại
-          // thời điểm copy + tác giả gốc giữ nguyên qua các đời copy;
-          // bộ đếm của nguồn tăng trong cùng transaction.
           derivedFromBankId: source.bankId,
           originalAuthorId: source.originalAuthorId ?? source.createdBy,
           presetKind: source.presetKind,
@@ -193,15 +144,6 @@ export class MatrixBanksService {
     };
   }
 
-  /**
-   * Hash nội dung của một ma trận (chống trùng đóng góp): cấu hình
-   * định hình lưới (preset, tỉ lệ dạng/mức, bộ mức, phạm vi, tổng
-   * điểm) + toàn bộ ô của version hiện hành đã sắp theo vị trí
-   * (nút chương trình, mức nhận thức, dạng câu, số câu, điểm, thang
-   * Đ–S). Tên ma trận KHÔNG vào hash — trùng ở đây là trùng CẤU
-   * TRÚC lưới, hai ma trận khác tên vẫn là một lưới. Khuôn hash
-   * ngang hàng `examPaperContentHash` của đề.
-   */
   private matrixContentHash(matrix: ExamMatrixRow, cells: ExamMatrixCellRow[]): string {
     const config = [
       matrix.presetKind, matrix.levelSet, String(matrix.totalScore),
@@ -218,23 +160,13 @@ export class MatrixBanksService {
     return createHash('sha256').update(`${config}::${body}`).digest('hex');
   }
 
-  /** Tra một ma trận theo id KHÔNG gác quyền — chỉ dùng ở biên MCP để kiểm chủ sở hữu trước khi đề xuất đóng góp (cổng đầy đủ vẫn nằm ở proposeContribution). */
   async findMatrixById(matrixId: string): Promise<ExamMatrixRow | undefined> {
     return this.repo.getMatrix(matrixId);
   }
 
-  // --- danh sách ma trận trong bank ---------------------------------------------
 
-  /**
-   * Các ma trận của một bank ma trận: cổng vào là quyền XEM bank-local
-   * (thành viên/phụ trách bank — người ngoài bank, kể cả gọi API trực
-   * tiếp, nhận 403, khớp tiêu chí "không thấy bank tổ"). Ma trận ready
-   * thấy cho mọi người vào được bank; draft/hidden chỉ chủ sở hữu,
-   * người phụ trách bank và site admin thấy.
-   */
   async listBankMatrices(actorId: string, bankId: string): Promise<ExamMatrixView[]> {
     const bank = await this.getMatrixBankOrThrow(bankId);
-    // Bank ma trận personal của người khác → 404 như bank không tồn tại (issue #123).
     if (await this.banks.isForeignPersonalBank(actorId, bank)) {
       throw new NotFoundException({ message: `Matrix bank ${bankId} not found`, code: 'quiz.matrix_bank_not_found' });
     }
@@ -251,18 +183,7 @@ export class MatrixBanksService {
     return out;
   }
 
-  // --- copy mẫu → ma trận làm việc ----------------------------------------------
 
-  /**
-   * Copy một ma trận về bank đích (mặc định bank ma trận cá nhân của
-   * người copy): cổng nguồn là matrix:copy trên nguồn (bank-local khi
-   * nguồn trong bank), cổng đích là cổng TẠO matrix:add tại bank đích
-   * (bank-local; copy là ghi một ma trận mới vào bank đích — khuôn
-   * S3). Ma trận hidden chỉ chủ sở hữu/người duyệt mới copy được.
-   * Bản copy hạ cánh `ready` tại bank đích theo quy tắc hoàn thiện
-   * (sao chép vào bank ở dạng đã hoàn thiện — cùng hạ cánh với
-   * đường duyệt đóng góp), version 1.
-   */
   async copyMatrix(actorId: string, matrixId: string, input: CopyExamMatrixDto): Promise<ExamMatrixView> {
     const source = await this.getMatrixRow(matrixId);
     const sourceCaps = await this.sourceCapsOf(actorId, source);
@@ -288,20 +209,7 @@ export class MatrixBanksService {
     return this.quiz.viewMatrixRow(copy);
   }
 
-  // --- đóng góp + duyệt (khuôn QB-4) ----------------------------------------------
 
-  /**
-   * Đề xuất đóng góp: ma trận nguồn phải ready; cổng matrix:share tại
-   * context nguồn; đích phải là bank ma trận dùng chung (không phải
-   * bank cá nhân); một đề xuất đang chờ cho cùng ma trận + cùng người
-   * gửi + cùng bank đích thì không gửi trùng (409).
-   *
-   * Chống trùng (issue #228 — ngang hàng câu hỏi và đề): hash nội
-   * dung của ma trận nguồn tính tại lúc đề xuất; một ma trận trong
-   * bank đích có cùng hash thì ghi near_duplicate_of trỏ tới ma
-   * trận đó để người duyệt cân nhắc (trùng suy từ chính ma trận
-   * nguồn bị chặn 409 lúc duyệt — xem approveContribution).
-   */
   async proposeContribution(actorId: string, matrixId: string, input: CreateMatrixContributionDto): Promise<ExamMatrixContributionView> {
     const target = await this.getMatrixBankOrThrow(input.targetBankId);
     if (target.scope === 'personal') {
@@ -339,11 +247,6 @@ export class MatrixBanksService {
     return this.contributionView(row);
   }
 
-  /**
-   * Hàng chờ đóng góp của một bank: người duyệt (bank-local moderate)
-   * thấy tất cả; thành viên thường chỉ thấy đề xuất của chính mình (để
-   * xem kết quả duyệt và lý do từ chối).
-   */
   async listContributions(actorId: string, bankId: string, status?: string): Promise<ExamMatrixContributionView[]> {
     const bank = await this.getMatrixBankOrThrow(bankId);
     await this.banks.syncBankMembership(bank);
@@ -358,7 +261,6 @@ export class MatrixBanksService {
     return out;
   }
 
-  /** Mọi đề xuất đóng góp của chính người dùng (xem kết quả duyệt xuyên bank). */
   async listMyContributions(actorId: string): Promise<ExamMatrixContributionView[]> {
     const rows = await this.repo.listMatrixContributionsByProposer(actorId);
     const out: ExamMatrixContributionView[] = [];
@@ -377,7 +279,6 @@ export class MatrixBanksService {
     return row;
   }
 
-  /** Cổng duyệt: quyền moderate bank-local tại bank đích (sau đồng bộ thành viên). */
   private async requireModerator(actorId: string, bank: QuestionBankRow): Promise<void> {
     await this.banks.syncBankMembership(bank);
     const caps = await this.banks.bankLocalMatrixCaps(actorId, bank);
@@ -386,15 +287,6 @@ export class MatrixBanksService {
     }
   }
 
-  /**
-   * Duyệt đóng góp = copy sâu ma trận nguồn vào bank đích (người duyệt
-   * chịu trách nhiệm về bản chung như QB-4): bản vào bank tổ/trường là
-   * MẪU (is_template = true, status ready); truy vết giữ đủ ba đầu —
-   * proposer_id trên hàng chờ, derived_from_matrix_id trên bản đích,
-   * reviewer_id là người duyệt. Bank đích đã có bản copy suy từ
-   * chính ma trận nguồn thì chặn 409 — chống trùng tuyệt đối ngang
-   * hàng đường duyệt đóng góp của đề (`exam.duplicate_in_bank`).
-   */
   async approveContribution(actorId: string, bankId: string, contributionId: string): Promise<ExamMatrixContributionView> {
     const bank = await this.getMatrixBankOrThrow(bankId);
     await this.requireModerator(actorId, bank);
@@ -420,11 +312,6 @@ export class MatrixBanksService {
     return this.contributionView((await this.repo.getMatrixContribution(contribution.id))!);
   }
 
-  /**
-   * Dòng ghi công của một ma trận: cổng là quyền XEM trên ma trận
-   * nguồn (cùng bộ quyền nguồn của copy/đóng góp) — người không xem
-   * được ma trận thì không đọc được truy vết của nó.
-   */
   async getAttribution(actorId: string, matrixId: string): Promise<MatrixAttributionView> {
     const matrix = await this.getMatrixRow(matrixId);
     const caps = await this.sourceCapsOf(actorId, matrix);
@@ -449,7 +336,6 @@ export class MatrixBanksService {
     };
   }
 
-  /** Từ chối đóng góp: lý do BẮT BUỘC (DTO đã chặn rỗng), hiện lại cho người gửi trong hàng chờ của họ. */
   async rejectContribution(actorId: string, bankId: string, contributionId: string, input: RejectMatrixContributionDto): Promise<ExamMatrixContributionView> {
     const bank = await this.getMatrixBankOrThrow(bankId);
     await this.requireModerator(actorId, bank);

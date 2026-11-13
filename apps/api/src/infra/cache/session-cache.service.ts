@@ -5,9 +5,6 @@ import Keyv from 'keyv';
 import { cacheRedisConfigFromUrl } from '../../config/env';
 import { tenantAls } from '../../modules/tenants/tenant-als';
 
-/**
- * Chế độ "session" của MUC: backed bởi Redis nhưng nằm trong namespace riêng (`giaokhoa:session`), tách biệt về mặt vật lý khỏi các khoá cache của ứng dụng.
- */
 @Injectable()
 export class SessionCacheService implements OnModuleDestroy {
   private readonly keyv: Keyv;
@@ -20,12 +17,6 @@ export class SessionCacheService implements OnModuleDestroy {
     });
   }
 
-  /**
-   * Session và OAuth handoff chỉ tồn tại trong kho nơi request đang
-   * chạy. Không dùng ID người dùng hay chuỗi bí mật làm namespace:
-   * định danh bất biến của kho được nạp vào ALS sau khi xác thực
-   * tuyến đường, các kho chia sẻ không gian key vẫn tách biệt.
-   */
   private keyForSpace(key: string): string {
     const spaceId = tenantAls.getStore()?.spaceId;
     return spaceId ? `space:${spaceId}:${key}` : key;

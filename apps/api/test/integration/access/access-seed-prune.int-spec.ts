@@ -7,9 +7,6 @@ import {
   adminToken, createContextViaApi, createTestApp, roleIdByShortname, systemContextId,
 } from '../../support/identity-access-helpers';
 
-/**
- * Issue #35: định danh capability không có tiền tố (`<area>:<name>`). Rào chắn hồi quy cho đồng bộ seed: cơ sở dữ liệu từng được seed theo một sơ đồ đặt tên có tiền tố cũ không được giữ các dòng lỗi thời sau khi seed lại — cả trong `capabilities` lẫn trong `role_capabilities` (bất kỳ context nào). Tên cũ được lắp ghép bằng nối chuỗi có chủ đích, để spec này tự nó không mang literal capability có tiền tố.
- */
 describe('Access: seed cắt bỏ các định nghĩa năng lực đã cũ (issue #35)', () => {
   let app: INestApplication;
   let pg: Client;
@@ -25,10 +22,8 @@ describe('Access: seed cắt bỏ các định nghĩa năng lực đã cũ (issu
     const admin = await adminToken(app);
     const systemId = await systemContextId(app, admin);
     const managerId = await roleIdByShortname(app, admin, 'manager');
-    // Một context thứ hai, không thuộc hệ thống: các ghi đè lỗi thời ở đó cũng phải ra đi.
     const catId = (await createContextViaApi(app, admin, 40, uuidv7(), systemId)).id;
 
-    // Mô phỏng trạng thái trước khi đổi tên: các định nghĩa và ghi đè mà tên của chúng mang một trong các tiền tố đã loại bỏ (ba sơ đồ cũ).
     const staleCourse = 'moodle/' + 'course:update';
     const staleQuiz = 'mod/' + 'quiz:attempt';
     const staleCompletion = 'giaokhoa/' + 'completion:manage';
@@ -63,13 +58,6 @@ describe('Access: seed cắt bỏ các định nghĩa năng lực đã cũ (issu
     );
     expect(Number(staleOverrides.rows[0].n)).toBe(0);
 
-    // Registry vẫn nguyên vẹn: 125 định nghĩa
-    // (105 + 6 quyền exam:* của Ngân hàng đề EB-1, issue #113:
-    // exam:view, exam:edit, exam:copy, exam:share, exam:moderate, exam:deploy) + 1 quyền moderation:manage của vòng đời tin nhắn theo vai (issue #124) → 112, + 1 quyền quiz:gradepaper của CAM-0
-    // (issue #112) → 113, + 2 quyền tenant:manage / tenant:viewall
-    // của nền multi-tenant (TENANT-0, issue #168) → 115, + 1 quyền search:manage của đợt vá gác route ghi search (sổ #134, H2+H5) → 116, − 3 quyền blog:create / blog:view / blog:manageentries khi gỡ hẳn tính năng Blog (issue #173) → 113, + 8 quyền class:* của lớp học hạng nhất (CLASS-0, issue #184: create/view/update/ delete/manageroster/assignwork/grade/share) → 121,
-    // + 2 quyền của đợt đồng bộ khuôn ngân hàng (issue #228, lát S3:
-    // bỏ quiz:viewmatrix + quiz:managematrix, thêm matrix:use / matrix:add / matrix:edit và exam:add, exam:view đổi tên thành exam:use — ròng +2) → 123, + 1 quyền payment:managecoupons của bề mặt quản trị coupon mua gói (phần còn lại của lát 2, issue #189) → 124, + 1 quyền systembank:review của luồng duyệt câu hệ thống (issue #13) → 125, mọi định nghĩa đều không có tiền tố, và các mặc định đã đổi tên đã được seed lại tại context hệ thống.
     const defs = await pg.query<{ n: string }>(`select count(*) as n from capabilities`);
     expect(Number(defs.rows[0].n)).toBe(125);
     const renamed = await pg.query<{ permission: number }>(

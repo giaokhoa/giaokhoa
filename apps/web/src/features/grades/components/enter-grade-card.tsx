@@ -1,6 +1,3 @@
-/**
- * Card nhập điểm trên trang Điểm theo bài (pages/grades.tsx), chỉ render cho staff của khoá: form chọn bài, học sinh, điểm và phản hồi để nhập/sửa điểm một bài cho một học sinh; khối lịch sử điểm nằm ngay bên dưới trong cùng card — chọn bài + học sinh rồi xem các lần ghi điểm của học viên đó trên mục điểm. State form, state lịch sử và kết quả lịch sử do file trang giữ; thao tác ghi và tải lịch sử đi qua handler của trang truyền xuống qua props.
- */
 import type { FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,52 +11,27 @@ import { ErrorAlert } from '#components/error-alert';
 
 import { GradeHistoryView } from '../types/course-grade';
 
-/** Props của card nhập điểm (gồm khối lịch sử điểm). */
 export interface EnterGradeCardProps {
-  /** Các mục điểm của khoá (đích chọn của form nhập điểm và form lịch sử). */
   items: GradeItem[];
-  /** Các dòng học sinh của lưới lớp (đích chọn học sinh ở cả hai form). */
   rows: CourseActivityGrid['rows'];
-  /** Mục điểm đang chọn ở form nhập điểm. */
   gradeItemId: string;
-  /** Cập nhật mục điểm đang chọn ở form nhập điểm. */
   onGradeItemIdChange: (value: string) => void;
-  /** Học sinh đang chọn ở form nhập điểm. */
   gradeUserId: string;
-  /** Cập nhật học sinh đang chọn ở form nhập điểm. */
   onGradeUserIdChange: (value: string) => void;
-  /** Giá trị điểm đang nhập (chuỗi, trang chuyển số khi gửi). */
   gradeValue: string;
-  /** Cập nhật giá trị điểm đang nhập. */
   onGradeValueChange: (value: string) => void;
-  /** Phản hồi đang nhập kèm điểm. */
   gradeFeedback: string;
-  /** Cập nhật phản hồi đang nhập. */
   onGradeFeedbackChange: (value: string) => void;
-  /** Gửi form nhập/sửa điểm. */
   onSubmitGrade: (event: FormEvent) => Promise<void>;
-  /** Mục điểm đang chọn ở form lịch sử. */
   historyItemId: string;
-  /** Cập nhật mục điểm đang chọn ở form lịch sử. */
   onHistoryItemIdChange: (value: string) => void;
-  /** Học sinh đang chọn ở form lịch sử. */
   historyUserId: string;
-  /** Cập nhật học sinh đang chọn ở form lịch sử. */
   onHistoryUserIdChange: (value: string) => void;
-  /** Các dòng lịch sử đã tải (null khi chưa tải hoặc đang tải lại). */
   historyRows: GradeHistoryView[] | null;
-  /** Lỗi tải lịch sử (null khi không có lỗi). */
   historyError: string | null;
-  /** Gửi form xem lịch sử điểm. */
   onLoadHistory: (event: FormEvent) => Promise<void>;
 }
 
-/**
- * Card nhập điểm và lịch sử điểm.
- *
- * @param props - State form nhập điểm, state lịch sử và các handler của trang.
- * @returns Card gồm form nhập điểm và khối lịch sử điểm bên dưới.
- */
 export function EnterGradeCard({
   items,
   rows,

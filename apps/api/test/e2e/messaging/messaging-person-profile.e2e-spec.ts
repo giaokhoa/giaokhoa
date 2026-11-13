@@ -4,14 +4,6 @@ import {
   adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWORD,
 } from '../../support/identity-access-helpers';
 
-/**
- * Endpoint hồ sơ người phục vụ panel chat 1–1 (issue #592):
- * trả định danh + tên hiển thị + tên đăng nhập + email từ dữ kiện người dùng thật, chỉ trong cổng hẹp: chính chủ, hoặc chung hội thoại 1–1 không bị chặn với đối tác, hoặc người xem có capability xem định danh. Chung nhóm tự do nhưng không chung 1–1 và không có capability thì 404 — cổng cũ "chung conversation nhìn thấy được" lộ email qua đồng bộ lười nên đã bị thu hẹp. Các trường hồ sơ mở rộng chưa có nguồn trong hệ
- * (giới thiệu, điện thoại, website…) KHÔNG có trong response này
- * — chúng vẫn qua adapter ở web với giá trị rỗng, tuyệt đối không bịa.
- *
- * Năm ca: chung nhóm nhưng không chung 1–1 thì 404; chung 1–1 thì thấy hồ sơ thật; người lạ không chung hội thoại nào thì 404; đối tác của hội thoại 1–1 đang chặn thì 404 như không tồn tại; chính chủ xem hồ sơ của mình thì được.
- */
 interface Person { id: string; username: string; email: string; token: string }
 
 describe('Messaging — endpoint hồ sơ người cho panel chat (issue #592)', () => {
@@ -45,15 +37,10 @@ describe('Messaging — endpoint hồ sơ người cho panel chat (issue #592)',
     blockedViewer = await person('Duc', 'ChanNguoi');
     blockedPeer = await person('Khanh', 'BiChan');
 
-    // Người xem và đối tác chung một nhóm tự do (không chung 1–1,
-    // không có capability) — theo cổng hẹp thì KHÔNG được xem hồ
-    // sơ của nhau nữa.
     const group = await http(app).post('/api/v1/messages/conversations')
       .set('Authorization', `Bearer ${admin}`).send({ memberIds: [viewer.id, partner.id], type: 2 });
     expect(group.status).toBe(201);
 
-    // Cặp 1–1 không chặn: kết bạn hai chiều rồi mở 1–1 — theo
-    // cổng hẹp thì được xem hồ sơ của nhau.
     dmViewer = await person('Minh', 'MotMot');
     dmPartner = await person('Thu', 'HaiHai');
     const dmReq = await http(app).post(`/api/v1/messages/contacts/${dmPartner.id}`)
@@ -66,8 +53,6 @@ describe('Messaging — endpoint hồ sơ người cho panel chat (issue #592)',
       .set('Authorization', `Bearer ${dmViewer.token}`).send({ memberIds: [dmPartner.id], type: 1 });
     expect(dmAllowed.status).toBe(201);
 
-    // Cặp chặn: kết bạn hai chiều, mở 1–1, rồi phía xem chặn phía
-    // kia — hội thoại 1–1 này không còn tính là chung nữa.
     const req = await http(app).post(`/api/v1/messages/contacts/${blockedViewer.id}`)
       .set('Authorization', `Bearer ${blockedPeer.token}`).send({});
     expect(req.status).toBe(201);

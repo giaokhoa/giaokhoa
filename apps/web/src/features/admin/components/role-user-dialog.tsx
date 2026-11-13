@@ -15,53 +15,14 @@ import type { ContextRow } from '#lib/access';
 import { assignmentContextLabel } from '../api/context-labels';
 import { RoleUnassignDialog, type UnassignTarget } from './role-unassign-dialog';
 
-/**
- * Hộp thoại quản lý vai trò của đúng một người dùng trên trang vai
- * trò, mở từ nút thao tác của dòng người đó trong bảng người dùng
- * kèm vai trò, dựng trên component Dialog thật của `@giaokhoa/ui`.
- *
- * Luồng nghiệp vụ: hộp thoại liệt kê mọi gán vai của người dùng — mỗi
- * gán bày tên vai kèm nhãn ngữ cảnh qua adapter nhãn ngữ cảnh (cấp
- * dạng chữ kèm số thứ tự trong cấp khi cây có nhiều ngữ cảnh cùng
- * cấp), không bày mã định danh hay đường dẫn ngữ cảnh, để hai gán
- * cùng vai ở hai ngữ cảnh cùng cấp phân biệt được — hộp thoại xác
- * nhận gỡ dùng đúng nhãn này nên quản trị viên biết mình đang gỡ gán
- * nào. Gán tay có nút gỡ mở hộp thoại xác nhận gỡ hiện hành; gán do
- * ghi danh cấp (`component = 'enrol'`) không có thao tác gỡ và hiện
- * thẳng lý do không gỡ trực tiếp được. Nút gán thêm mở hộp thoại gán
- * hiện hành với người dùng này chọn sẵn (qua hàm gọi lại của trang,
- * hộp thoại quản lý đóng trước để không chồng hai hộp thoại). Sau
- * gán/gỡ thành công, bảng tải lại qua việc làm mới gốc khoá truy vấn
- * nên lần mở lại hộp thoại thấy gán mới nhất; trong một lần mở, danh
- * sách lấy từ dữ kiện bảng hiện tại do trang truyền vào nên cũng tự
- * cập nhật khi bảng tải lại.
- *
- * Về lồng hộp thoại: hộp thoại xác nhận gỡ được render BÊN TRONG nội
- * dung của hộp thoại quản lý (không phải hộp thoại anh em bên ngoài)
- * để thao tác bên ngoài hộp thoại xác nhận không bị hộp thoại quản lý
- * hiểu là bấm ra ngoài mà tự đóng; yêu cầu đóng từ hộp thoại quản lý
- * cũng bị giữ lại trong lúc hộp thoại xác nhận đang mở.
- *
- * @param props - Trạng thái mở, dòng người dùng kèm gán vai, cây
- * ngữ cảnh để phân giải nhãn gán, hàm đóng và hàm mở hộp thoại gán
- * cho chính người này.
- */
 export interface RoleUserDialogProps {
-  /** Hộp thoại đang mở hay không. */
   open: boolean;
-  /** Dòng người dùng kèm toàn bộ gán vai của người đó. */
   user: UserWithAssignmentsListItem;
-  /** Cây ngữ cảnh đã tải ở trang, dùng để phân giải nhãn từng dòng gán. */
   contexts: ContextRow[];
-  /** Đóng hộp thoại. */
   onClose: () => void;
-  /** Mở hộp thoại gán vai cho chính người dùng này (người dùng chọn sẵn). */
   onAssignForUser: (user: UserWithAssignmentsListItem) => void;
 }
 
-/**
- * Tên hiển thị của người dùng: họ tên đầy đủ khi có, lùi về tên đăng nhập khi hồ sơ trống cả họ lẫn tên.
- */
 export function userDisplayName(user: UserWithAssignmentsListItem): string {
   const fullName = `${user.firstName} ${user.lastName}`.trim();
   return fullName === '' ? user.username : fullName;
@@ -69,7 +30,6 @@ export function userDisplayName(user: UserWithAssignmentsListItem): string {
 
 export function RoleUserDialog({ open, user, contexts, onClose, onAssignForUser }: RoleUserDialogProps) {
   const { t } = useTranslation('app');
-  /** Dòng gán đang chờ xác nhận gỡ; null khi hộp thoại xác nhận đóng. */
   const [unassignTarget, setUnassignTarget] = useState<UnassignTarget | null>(null);
 
   if (!open) return null;
@@ -80,7 +40,6 @@ export function RoleUserDialog({ open, user, contexts, onClose, onAssignForUser 
     <Dialog
       open
       onOpenChange={(nextOpen) => {
-        // Giữ hộp thoại quản lý mở trong lúc hộp thoại xác nhận gỡ đang mở.
         if (!nextOpen && unassignTarget === null) onClose();
       }}
     >
@@ -138,7 +97,6 @@ export function RoleUserDialog({ open, user, contexts, onClose, onAssignForUser 
             {t('userRolesAssignMore')}
           </Button>
         </DialogFooter>
-        {/* Hộp thoại xác nhận gỡ nằm trong nội dung hộp thoại quản lý để không bị hiểu là bấm ra ngoài. */}
         {unassignTarget !== null ? (
           <RoleUnassignDialog open target={unassignTarget} onClose={() => setUnassignTarget(null)} />
         ) : null}

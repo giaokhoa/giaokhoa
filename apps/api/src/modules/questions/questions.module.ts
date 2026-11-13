@@ -12,15 +12,6 @@ import { QuestionBanksService } from './question-banks.service';
 import { QuestionsController, QuestionUsagesController, StimuliController } from './questions.controller';
 import { QuestionsService } from './questions.service';
 
-/**
- * Module câu hỏi và ngân hàng câu hỏi: cung cấp QuestionsService và QuestionBanksService, kiểm tra quyền qua Access và lấy thành viên nhóm qua Groups.
- *
- * Controller question-banks thuộc AssessmentRoutesModule (tầng HTTP), nơi
- * tổng hợp các facade của Questions và Quiz. Module nghiệp vụ Questions
- * không còn cần import QuizModule ngược chiều.
- *
- * Cả QuestionsRepository và QuestionBanksRepository nhận `routedKysely` từ SpaceDatabaseService qua factory provider, nên các thao tác đọc/ghi vào đúng kho của ngữ cảnh request. Luồng `buildBank` sử dụng transaction Kysely để cập nhật ngân hàng và danh mục nhất quán.
- */
 @Module({
   imports: [AccessModule, EventsModule, GroupsModule, TenantsModule, FilesModule, SpaceRoutingModule],
   controllers: [QuestionsController, QuestionUsagesController, StimuliController],
@@ -39,5 +30,4 @@ import { QuestionsService } from './questions.service';
   ],
   exports: [QuestionsService, QuestionBanksService],
 })
-/** Module ngân hàng câu hỏi và question engine. */
 export class QuestionsModule {}

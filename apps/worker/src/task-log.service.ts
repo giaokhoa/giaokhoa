@@ -1,26 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
 
-/**
- * Ghi `task_log` cho các tác vụ định kỳ của worker (Moodle task log): mỗi
- * lượt chạy khép lại bằng một dòng (tên task, khoảng thời gian, trạng thái
- * success/failed, thông điệp tóm tắt hoặc lỗi). Ghi log không bao giờ được
- * làm hỏng tác vụ — lỗi ghi chỉ cảnh báo.
- *
- * @remarks
- * Dòng được ghi qua handle Kysely định tuyến của khung định tuyến theo
- * trung tâm (`SpaceDatabaseService.routedKysely`): các lượt ghi đều chạy
- * trong ngữ cảnh platform hoặc phiên theo trung tâm mà phía gọi đã mở,
- * nên handle vào đúng kho của ngữ cảnh đó — cùng đích kho với handle
- * bộ máy cũ định tuyến trước đây.
- */
 @Injectable()
 export class TaskLogService {
   private readonly logger = new Logger(TaskLogService.name);
 
   constructor(private readonly spaceDb: SpaceDatabaseService) {}
 
-  /** Chạy `fn` như một lượt tác vụ và ghi kết quả vào task_log; lỗi của tác vụ được ném lại nguyên vẹn. */
   async run<T>(taskName: string, fn: () => Promise<T>, summarize?: (result: T) => string): Promise<T> {
     const startedAt = new Date();
     try {
@@ -33,7 +19,6 @@ export class TaskLogService {
     }
   }
 
-  /** Ghi một lượt chạy đã kết thúc (cho các điểm gọi tự quản thời gian bắt đầu, vd nhịp relay). */
   async recordRun(taskName: string, startedAt: Date, status: 'success' | 'failed', message?: string): Promise<void> {
     try {
       await this.spaceDb.routedKysely

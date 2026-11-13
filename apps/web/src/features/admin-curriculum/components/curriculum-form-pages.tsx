@@ -16,7 +16,6 @@ export function AdminCurriculumNewPage() {
   const navigate = useNavigate();
   const [grade, setGrade] = useState('1');
   const [error, setError] = useState<string | null>(null);
-  // Tạo chương trình qua đột biến của lib/curriculum (F-01 của rà soát #133) — danh sách chương trình của môn được làm mới sau ghi.
   const createRow = useCreateCurriculumRow();
 
   async function submit(event: FormEvent) {
@@ -69,13 +68,11 @@ export function AdminCurriculumEditPage() {
   const navigate = useNavigate();
   const [grade, setGrade] = useState('');
   const [error, setError] = useState<string | null>(null);
-  // Đọc chương trình qua TanStack Query để lấy khối hiện tại làm giá trị đầu của form; ghi qua đột biến sửa khối (F-01, rà soát #133).
   const rowQuery = useCurriculumRow(curriculumId);
   const updateRow = useUpdateCurriculumRow();
   const appliedRowId = useRef<string | null>(null);
 
   useEffect(() => {
-    // Chỉ nạp khối vào form một lần cho mỗi chương trình mở ra — không ghi đè lựa chọn đang sửa dở khi truy vấn chạy lại.
     if (rowQuery.data && appliedRowId.current !== rowQuery.data.id) {
       appliedRowId.current = rowQuery.data.id;
       setGrade(String(rowQuery.data.grade));

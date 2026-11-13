@@ -1,5 +1,3 @@
--- Gói mới chỉ được khám phá/cài sau khi biên tập viên duyệt.
--- Bản phát hành cũ vẫn được công nhận để không làm mất dữ liệu đã dùng.
 ALTER TABLE "system_outcome_packages"
   ADD COLUMN "status" text NOT NULL DEFAULT 'published',
   ADD COLUMN "centre_slug" text,
@@ -13,7 +11,6 @@ ALTER TABLE "system_outcome_packages"
     OR ("status" = 'rejected' AND "reviewed_at" IS NOT NULL AND "rejection_reason" IS NOT NULL AND length(btrim("rejection_reason")) > 0)
   );
 --> statement-breakpoint
--- Lưu tên/vị trí môn trong ảnh chụp; không dùng nhầm môn cùng slug ở kho khác.
 ALTER TABLE "system_outcome_package_curricula"
   ADD COLUMN "subject_name" text,
   ADD COLUMN "subject_position" integer NOT NULL DEFAULT 1;

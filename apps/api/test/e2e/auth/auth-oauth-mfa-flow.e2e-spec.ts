@@ -6,28 +6,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWORD, uniqueName } from '../../support/identity-access-helpers';
 import type { SessionCacheService } from '../../../src/infra/cache/session-cache.service';
 
-/**
- * Cổng MFA trên luồng OAuth hệ cũ (đăng nhập Google/Facebook qua `/auth/oauth/*` + đổi mã bàn giao `/auth/oauth/handoff`) — cùng nguồn trạng thái MFA duy nhất `user_totp` với mọi đường đăng nhập khác:
- *
- * - (d) Tài khoản có factor TOTP đã xác nhận: callback khớp tài
- *   khoản xong vẫn KHÔNG tạo phiên, KHÔNG sinh mã bàn giao — trình duyệt bị đưa về trang đăng nhập mang challenge MFA
- *   (`/login?mfaChallenge=`). Mã sai bị từ chối
- *   (`auth.mfa_invalid_code`); mã đúng qua
- *   `POST /auth/oauth/mfa/verify` mới sinh phiên (cookie `giaokhoa_session`) và mã bàn giao; mã bàn giao đổi được cặp token dùng thật và chỉ dùng được một lần.
- * - (d2) Lớp gác thứ hai tại điểm đổi bàn giao: một mã bàn giao ở
- *   định dạng cũ (giá trị là userId thuần, không có dấu đã-qua-MFA) của tài khoản đang bật MFA bị từ chối
- *   (`auth.oauth_mfa_required`) — điểm đổi là cổng cuối, không
- *   đường vòng nào qua được.
- * - (e) Hồi quy: tài khoản chưa bật MFA đi trọn luồng như cũ
- *   (callback → bàn giao → token).
- *
- * Provider được giả lập tại biên HTTP như spec OAuth hệ cũ; mọi bước bên trong (authorize, callback, khớp tài khoản, challenge, bàn giao, phiên) đều chạy thật.
- */
 
-/** Hồ sơ userinfo giả lập theo authorization code. */
 const profilesByCode = new Map<string, Record<string, unknown>>();
 
-/** Máy chủ giả lập provider: POST /token đổi code → access token; GET /userinfo trả hồ sơ của code đó. */
 function startMockProvider(): Promise<{ server: Server; baseUrl: string }> {
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
@@ -70,12 +51,10 @@ function startMockProvider(): Promise<{ server: Server; baseUrl: string }> {
   });
 }
 
-/** Mã TOTP hiện tại cho secret (cùng thư viện otplib với server). */
 async function currentTotpCode(secret: string): Promise<string> {
   return generate({ secret });
 }
 
-/** Một mã 6 số chắc chắn không khớp cửa sổ kiểm chứng của secret. */
 async function wrongTotpCode(secret: string): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const valid = new Set<string>();
@@ -86,7 +65,6 @@ async function wrongTotpCode(secret: string): Promise<string> {
   throw new Error('no wrong-code candidate available');
 }
 
-/** Bật MFA cho user qua API hệ cũ, trả secret để sinh mã trong test. */
 async function enableMfaViaApi(app: INestApplication, accessToken: string): Promise<string> {
   const setup = await http(app).post('/api/v1/auth/mfa/totp/setup').set('Authorization', `Bearer ${accessToken}`);
   expect(setup.status).toBe(201);
@@ -127,7 +105,6 @@ describe('OAuth hệ cũ: cổng MFA tại callback và điểm đổi bàn giao
     provider.close();
   });
 
-  /** Chạy trọn luồng authorize → callback cho một code đã đăng ký hồ sơ; trả đáp ứng callback thô. */
   async function runCallback(code: string) {
     const authorizeRes = await http(app).get('/api/v1/auth/oauth/google/authorize');
     expect(authorizeRes.status).toBe(200);
@@ -148,22 +125,18 @@ describe('OAuth hệ cũ: cổng MFA tại callback và điểm đổi bàn giao
     const callback = await runCallback('google-mfa-gate');
     expect(callback.status).toBe(302);
     const location = callback.headers.location as string;
-    // Bị gác: về trang đăng nhập mang challenge, KHÔNG có handoff.
     expect(location).toContain('/login?mfaChallenge=');
     expect(location).not.toContain('handoff=');
-    // Không cookie phiên nào được đặt ở callback bị gác.
     const cookies = ((callback.headers['set-cookie'] as unknown as string[] | undefined) ?? []).join(';');
     expect(cookies).not.toContain('giaokhoa_session=');
     const challengeToken = new URL(location, 'http://localhost').searchParams.get('mfaChallenge');
     expect(challengeToken).toBeTruthy();
 
-    // Mã sai bị từ chối, chưa có gì được cấp.
     const wrong = await http(app).post('/api/v1/auth/oauth/mfa/verify')
       .send({ challengeToken, code: await wrongTotpCode(secret) });
     expect(wrong.status).toBe(401);
     expect(wrong.body.code).toBe('auth.mfa_invalid_code');
 
-    // Mã đúng: phiên (cookie) + mã bàn giao.
     const ok = await http(app).post('/api/v1/auth/oauth/mfa/verify')
       .send({ challengeToken, code: await currentTotpCode(secret) });
     expect(ok.status).toBe(201);
@@ -172,7 +145,6 @@ describe('OAuth hệ cũ: cổng MFA tại callback và điểm đổi bàn giao
     const okCookies = ((ok.headers['set-cookie'] as unknown as string[] | undefined) ?? []).join(';');
     expect(okCookies).toContain('giaokhoa_session=');
 
-    // Bàn giao đổi được cặp token dùng thật, và chỉ một lần.
     const exchanged = await http(app).post('/api/v1/auth/oauth/handoff').send({ code: ok.body.handoffCode });
     expect(exchanged.status).toBe(201);
     expect(exchanged.body.accessToken).toBeTruthy();
@@ -187,9 +159,6 @@ describe('OAuth hệ cũ: cổng MFA tại callback và điểm đổi bàn giao
     const user = await createUserViaApi(app, admin);
     const session = await login(app, user.username, STRONG_PASSWORD);
     await enableMfaViaApi(app, session.accessToken);
-    // Chế tạo thẳng một mã bàn giao ở định dạng TRƯỚC khi có cổng
-    // (giá trị lưu là userId thuần) — như một mã lọt ra từ đường cấp
-    // nào chưa qua cổng: điểm đổi phải tự gác.
     const legacyCode = `legacy-${uniqueName('handoff')}`;
     await store.set(`oauthhandoff:${legacyCode}`, user.id, 120_000);
     const res = await http(app).post('/api/v1/auth/oauth/handoff').send({ code: legacyCode });

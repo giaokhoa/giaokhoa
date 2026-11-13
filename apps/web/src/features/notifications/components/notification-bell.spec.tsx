@@ -5,18 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TestProviders } from '#test/providers';
 import { NotificationBell } from './notification-bell';
 
-/**
- * Spec lát NB-3 (issue #174) cho chuông thông báo ở header:
- * - Huy hiệu lấy số từ GET /notifications/unread-count (cùng khoá
- *   `notificationUnreadCount` với sidebar): có số > 0 thì hiện, đọc xong thì số khớp lại giá trị server trả ở lần làm mới kế tiếp.
- * - Dropdown liệt kê các dòng GỘP mới nhất theo đúng thứ tự API trả
- *   (API list nhóm đã sắp theo hoạt động mới nhất), tối đa 8 dòng.
- * - Bấm dòng đơn chưa đọc → POST /notifications/:id/read rồi đi tới
- *   contextUrl; bấm dòng gộp còn chưa đọc → POST /notifications/ read-group với đúng khoá gộp rồi đi tới contextUrl; dòng đã đọc thì đi thẳng, không gọi API đọc.
- * - Chân dropdown đi tới /notifications; không có thông báo thì
- *   hiện trạng thái rỗng.
- * Chuông nằm trong một layout vỏ dùng chung mọi route (như SiteHeader thật) để khẳng định được cả điều hướng lẫn số huy hiệu sau điều hướng.
- */
 
 const SINGLE_ID = '01900000-0000-7000-8000-0000000000b1';
 const GROUP_LATEST_ID = '01900000-0000-7000-8000-0000000000b2';
@@ -169,7 +157,6 @@ describe('Khối NotificationBell (NB-3)', () => {
 
     await user.click(bell);
     const items = await screen.findAllByRole('menuitem');
-    // 3 dòng thông báo + 1 chân dropdown "Xem tất cả thông báo".
     expect(items).toHaveLength(4);
     expect(items[0]).toHaveTextContent('Bài tập mới được giao');
     expect(items[1]).toHaveTextContent('Học sinh nộp bài');
@@ -195,7 +182,6 @@ describe('Khối NotificationBell (NB-3)', () => {
       method: 'POST',
       body: {},
     });
-    // Mutation làm mới khoá unread-count → huy hiệu khớp số server mới (2).
     expect(await screen.findByText('2')).toBeInTheDocument();
   });
 

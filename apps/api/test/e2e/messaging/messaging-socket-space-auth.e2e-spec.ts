@@ -10,9 +10,6 @@ import { io, type Socket } from 'socket.io-client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createControlPlaneKysely } from '@giaokhoa/db/control-plane';
 
-/**
- * Better Auth phải bật ngay từ lúc AppModule được import (khuôn của spec các cổng tiền di trú Phần A): đặt biến môi trường ở đầu file, rồi import helpers ĐỘNG trong beforeAll.
- */
 const BETTER_AUTH_SECRET = 'test-better-auth-secret-at-least-32-chars';
 process.env.BETTER_AUTH_ENABLED = 'true';
 process.env.BETTER_AUTH_SECRET = BETTER_AUTH_SECRET;
@@ -21,7 +18,6 @@ process.env.BETTER_AUTH_TRUSTED_ORIGINS = 'http://localhost:5173';
 type Helpers = typeof import('../../support/identity-access-helpers');
 let helpers: Helpers;
 
-/** Dựng app test đúng khuôn bootstrap thật (main.ts): mount handler Better Auth kèm khung định tuyến kho trước khi init. */
 async function createMountedTestApp(): Promise<INestApplication> {
   const { Test } = await import('@nestjs/testing');
   const { AppModule } = await import('../../../src/app.module');
@@ -47,32 +43,11 @@ async function createMountedTestApp(): Promise<INestApplication> {
   return app;
 }
 
-/**
- * Ký giá trị cookie phiên Better Auth đúng định dạng handler kiểm chứng khi đọc (xem spec các cổng tiền di trú Phần A): cookie không ký bị `getSession` bỏ qua trước khi tra bảng phiên.
- */
 function signedBetterAuthCookie(token: string): string {
   const signature = createHmac('sha256', BETTER_AUTH_SECRET).update(token).digest('base64');
   return `better-auth.session_token=${encodeURIComponent(`${token}.${signature}`)}`;
 }
 
-/**
- * Ca đầu-cuối của HẠNG MỤC 1 tiền điều kiện Phần B (issue #587):
- * socket realtime của messaging tại địa chỉ của một trung tâm ở kho riêng. Hạ tầng dựng đúng khuôn spec các cổng Phần A: trung tâm kiểm chứng có database riêng trên cùng cụm test
- * (`giaokhoa_test_centre_sock587`), sổ đăng ký ở database control plane
- * riêng (`giaokhoa_test_cp_sock587`) mà ứng dụng đọc qua `CONTROL_PLANE_DATABASE_URL`. Hai thành viên A/B, hội thoại nhóm của họ và một tin nhắn được tạo bằng API công khai ở kho chung rồi sao sang kho riêng và XOÁ khỏi kho chung — đúng trạng thái sau di trú: phiên Better Auth (gieo thẳng vào bảng `session` ở kho riêng), tài khoản, membership và dữ kiện hội thoại chỉ tồn tại ở kho riêng, đường đọc kho chung không còn gì để phục vụ.
- *
- * Các ca khoá đúng nghiệm thu của hạng mục 1 ở bề mặt socket:
- * - thành viên chỉ ở kho riêng nối socket bằng cookie tại địa chỉ
- *   của trung tâm và nhận ảnh chụp presence (gỡ phân giải không gian ở lớp auth là phiên không thấy ở kho chung → bị ngắt);
- * - hai thành viên trao đổi qua socket: `sync` trả tin chỉ có ở
- *   kho riêng, join/typing được chấp nhận và tín hiệu typing tới được phía bên kia (gỡ phạm vi kho ở gateway là membership vô hình → sync rỗng, join/typing bị từ chối);
- * - phiên chỉ tồn tại ở kho chung mang tới địa chỉ kho riêng bị
- *   ngắt, không được phục vụ lặng lẽ từ kho chung;
- * - token mang claim `centre_id` nối được tại địa chỉ trung tâm,
- *   token cũ không mang claim bị ngắt (cổng 1a/1b phía socket).
- *
- * Khẳng định về PHÂN PHỐI sự kiện qua hàng đợi phía worker nằm ngoài spec này, cùng ranh giới với spec realtime-flow hiện hữu.
- */
 const CP_DATABASE = 'giaokhoa_test_cp_sock587';
 const CP_ROLE = 'giaokhoa_cp_sock587';
 const CP_PASSWORD = 'cp-test-sock587';
@@ -86,7 +61,6 @@ const MESSAGE_TEXT = 'Tin chi o kho rieng 587';
 
 const UUIDV7_SHIM = `CREATE OR REPLACE FUNCTION uuidv7() RETURNS uuid AS $$ DECLARE ts_ms bigint := (extract(epoch from clock_timestamp()) * 1000)::bigint; b bytea; BEGIN b := decode(lpad(to_hex(ts_ms), 12, '0'), 'hex') || gen_random_bytes(10); b := set_byte(b, 6, (get_byte(b, 6) & 15) | 112); b := set_byte(b, 8, (get_byte(b, 8) & 63) | 128); RETURN encode(b, 'hex')::uuid; END; $$ LANGUAGE plpgsql VOLATILE`;
 
-/** Dựng URL kết nối tới một database trên cùng cụm với database nghiệp vụ test. */
 function clusterUrl(database: string, username?: string, secret?: string): string {
   const base = new URL(process.env.DATABASE_URL!);
   base.pathname = `/${database}`;
@@ -95,7 +69,6 @@ function clusterUrl(database: string, username?: string, secret?: string): strin
   return base.toString();
 }
 
-/** Bọc một định danh Postgres trong dấu nháy kép cho các câu lệnh quản trị của ca test. */
 function quoted(identifier: string): string {
   return `"${identifier.replace(/"/g, '""')}"`;
 }
@@ -110,7 +83,6 @@ async function withClient<T>(connectionString: string, fn: (client: Client) => P
   }
 }
 
-/** Áp một file migration SQL (tách theo dấu phân đoạn của file) lên một database qua kết nối cho trước. */
 async function applySqlFile(connectionString: string, filePath: string, withUuidShim: boolean): Promise<void> {
   await withClient(connectionString, async (client) => {
     if (withUuidShim) {
@@ -128,7 +100,6 @@ async function applySqlFile(connectionString: string, filePath: string, withUuid
   });
 }
 
-/** Áp bộ migration riêng của control plane từ rỗng (đọc chính các file SQL đã sinh trong repo). */
 async function applyControlPlaneMigrations(connectionString: string): Promise<void> {
   const outDir = join(__dirname, '..', '..', '..', '..', '..', 'packages', 'db', 'migrations', 'control-plane');
   const folders = readdirSync(outDir, { withFileTypes: true })
@@ -140,13 +111,11 @@ async function applyControlPlaneMigrations(connectionString: string): Promise<vo
   }
 }
 
-/** Áp baseline nghiệp vụ vào một kho riêng bằng kết nối của chính role chủ kho đó. */
 async function applyBusinessBaseline(connectionString: string): Promise<void> {
   const baseline = join(__dirname, '..', '..', '..', '..', '..', 'packages', 'db', 'migrations', 'centre', '20261025163710_baseline', 'migration.sql');
   await applySqlFile(connectionString, baseline, true);
 }
 
-/** Sao MỌI dòng khớp điều kiện từ một bảng ở kho nguồn sang cùng bảng ở kho đích với nguyên bộ cột. */
 async function copyRows(
   sourceUrl: string,
   targetUrl: string,
@@ -175,12 +144,10 @@ async function copyRows(
   });
 }
 
-/** Sao một dòng theo khoá chính `id`. */
 async function copyRowById(sourceUrl: string, targetUrl: string, table: string, id: string): Promise<void> {
   await copyRows(sourceUrl, targetUrl, table, 'id', id);
 }
 
-/** Sao dòng user + dòng membership của tài khoản ở đúng tenant kiểm chứng vào kho đích (khuôn spec Phần A). */
 async function copyMemberToCentre(userId: string, tenantId: string): Promise<void> {
   const centreUrl = clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD);
   await copyRowById(process.env.DATABASE_URL!, centreUrl, 'users', userId);
@@ -196,7 +163,6 @@ async function copyMemberToCentre(userId: string, tenantId: string): Promise<voi
   await copyRowById(process.env.DATABASE_URL!, centreUrl, 'tenant_memberships', membershipRow.id);
 }
 
-/** Đếm dòng theo một cột định danh trong một bảng ở một kho (nền platform tường minh). */
 async function countRows(
   connectionString: string,
   table: string,
@@ -213,7 +179,6 @@ async function countRows(
   });
 }
 
-/** Gieo một dòng phiên Better Auth thẳng vào bảng `session` của một kho cho một tài khoản. */
 async function seedSession(connectionString: string, token: string, userId: string): Promise<void> {
   await withClient(connectionString, async (client) => {
     await client.query("SELECT set_config('app.platform', 'on', false)");
@@ -248,7 +213,6 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
 
   const sockets: Socket[] = [];
 
-  /** Tạo socket trên Host bất kỳ để kiểm thử cùng JWT ở các ranh giới hostname. */
   function socketAtHost(host: string, opts: { cookieToken?: string; token?: string }): Socket {
     const socket = io(`${base}/messaging`, {
       auth: opts.token ? { token: opts.token } : undefined,
@@ -264,12 +228,10 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
     return socket;
   }
 
-  /** Tạo socket hướng tới hostname của trung tâm kho riêng. */
   function centreSocket(opts: { cookieToken?: string; token?: string }): Socket {
     return socketAtHost(HOST, opts);
   }
 
-  /** Chờ socket nối thành công; lỗi xác thực phía server ngắt kết nối ngay. */
   async function awaitConnected(socket: Socket): Promise<void> {
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('socket connect timeout')), 8000);
@@ -278,7 +240,6 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
     });
   }
 
-  /** Chờ một sự kiện của socket khớp điều kiện, có timeout rõ ràng. */
   async function waitForSocketEvent<T>(
     socket: Socket,
     event: string,
@@ -300,7 +261,6 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
     });
   }
 
-  /** Chờ socket bị phía server ngắt (kết quả mong đợi cho handshake bị từ chối). */
   async function awaitRejected(socket: Socket): Promise<void> {
     const outcome = await new Promise<string>((resolve) => {
       const timer = setTimeout(() => resolve('timeout'), 8000);
@@ -370,7 +330,6 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
 
     const adminToken = (await helpers.login(app, 'admin', 'Admin123!')).accessToken;
 
-    // Tenant của trung tâm tạo bằng API công khai ở kho chung, rồi sao dòng tenant vào kho riêng — trạng thái sau di trú.
     const created = (await must(
       await helpers.http(app).post('/api/v1/tenants').set(auth(adminToken)).send({
         name: 'Trung tâm socket (spec 587)',
@@ -383,9 +342,6 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
     const centreUrl = clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD);
     await copyRowById(process.env.DATABASE_URL!, centreUrl, 'tenants', tenantId);
 
-    // Hai thành viên được tạo ở kho chung và gieo membership bằng
-    // fixture tiền di trú, sau đó sao sang kho riêng. Cổng quản trị
-    // platform không được thêm thành viên trên Host kho riêng.
     const memberA = await helpers.createUserViaApi(app, adminToken);
     const memberB = await helpers.createUserViaApi(app, adminToken);
     memberAId = memberA.id;
@@ -395,10 +351,6 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
       await copyMemberToCentre(member.id, tenantId);
     }
 
-    // Phiên của A được cấp từ kho A qua hostname thật, không
-    // chuyển tenant ở site chính rồi tiếp tục dùng token trung tâm
-    // tại host khác. Token cũ không claim vẫn được ký thủ công
-    // để kiểm chứng hành vi từ chối phiên tiền di trú.
     const centreLoginA = (await must(
       await helpers.http(app).post('/api/v1/auth/token').set('Host', HOST)
         .send({ username: memberA.username, password: helpers.STRONG_PASSWORD }),
@@ -413,25 +365,15 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
       tid: tenantId,
     });
 
-    // Hội thoại nhóm của A và B kèm một tin nhắn của A — tạo ở kho
-    // chung (quản trị tạo nhóm theo chính sách hiện hữu), rồi sao
-    // toàn bộ dòng hội thoại/thành viên/tin sang kho riêng. Sao
-    // SAU khi gửi tin để trạng thái thành viên là bản cuối.
     const conv = await helpers.http(app).post('/api/v1/messages/conversations')
       .set(auth(adminToken))
       .send({ type: 2, memberIds: [memberAId, memberBId], name: 'Nhóm kho riêng 587' });
     expect(conv.status).toBe(201);
     convId = (conv.body as { id: string }).id;
-    // Dữ kiện đang được tạo ở shared TRƯỚC khi sao sang kho A:
-    // dùng phiên legacy không centre_id tại site chính, tránh
-    // chuyển token kho A sang host shared chỉ để chuẩn bị fixture.
     const sent = await helpers.http(app).post(`/api/v1/messages/conversations/${convId}/messages`)
       .set(auth(tokenWithoutClaim))
       .send({ text: MESSAGE_TEXT });
     expect(sent.status).toBe(201);
-    // Hội thoại do quản trị tạo nên mang tenant của trang chính;
-    // kho đích phải có dòng tenant mà dữ kiện của nó tham chiếu
-    // (FK duy nhất của bảng hội thoại) trước khi sao hội thoại.
     const convTenantId = await withClient(process.env.DATABASE_URL!, async (client) => {
       await client.query("SELECT set_config('app.platform', 'on', false)");
       const result = await client.query<{ tenant_id: string }>(
@@ -447,9 +389,6 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
     await copyRows(process.env.DATABASE_URL!, centreUrl, 'message_conversation_members', 'conversation_id', convId);
     await copyRows(process.env.DATABASE_URL!, centreUrl, 'message', 'conversation_id', convId);
 
-    // Xoá sạch phía kho chung: tin, thành viên hội thoại, hội
-    // thoại, membership của A/B và chính hai tài khoản — trạng
-    // thái sau di trú, kho chung không còn gì để phục vụ lặng lẽ.
     await withClient(process.env.DATABASE_URL!, async (client) => {
       await client.query("SELECT set_config('app.platform', 'on', false)");
       await client.query('DELETE FROM message WHERE conversation_id = $1', [convId]);
@@ -462,14 +401,11 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
       await client.query('DELETE FROM users WHERE id = ANY($1)', [[memberAId, memberBId]]);
     });
 
-    // Phiên Better Auth của A và B gieo thẳng vào kho riêng.
     sessionTokenA = `sock587-a-${RUN_SUFFIX}-${randomUUID()}`;
     sessionTokenB = `sock587-b-${RUN_SUFFIX}-${randomUUID()}`;
     await seedSession(centreUrl, sessionTokenA, memberAId);
     await seedSession(centreUrl, sessionTokenB, memberBId);
 
-    // Tài khoản chỉ ở kho chung + phiên của họ ở kho chung: mang
-    // tới địa chỉ kho riêng phải bị từ chối.
     const sharedOnly = await helpers.createUserViaApi(app, adminToken);
     sharedOnlyId = sharedOnly.id;
     sessionTokenSharedOnly = `sock587-c-${RUN_SUFFIX}-${randomUUID()}`;
@@ -492,8 +428,6 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
   });
 
   it('thành viên chỉ ở kho riêng nối socket bằng cookie tại địa chỉ trung tâm và nhận ảnh chụp presence', async () => {
-    // Bất biến dữ kiện: kho chung không còn tài khoản/membership/
-    // phiên của B, kho riêng còn đủ.
     expect(await countRows(process.env.DATABASE_URL!, 'users', 'id', memberBId)).toBe(0);
     expect(await countRows(process.env.DATABASE_URL!, 'tenant_memberships', 'user_id', memberBId)).toBe(0);
     expect(await countRows(process.env.DATABASE_URL!, 'session', 'user_id', memberBId)).toBe(0);
@@ -517,19 +451,13 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
     await awaitConnected(socketA);
     await awaitConnected(socketB);
 
-    // B đồng bộ thiếu hụt: tin của A chỉ tồn tại ở kho riêng phải
-    // được trả qua ack của sự kiện sync.
     const syncResult = await socketB.emitWithAck('sync', { [convId]: 0 }) as Record<string, WireMessage[]>;
     expect(syncResult[convId]?.map((m) => m.fullMessage)).toEqual([MESSAGE_TEXT]);
     expect(syncResult[convId]?.[0]?.userIdFrom).toBe(memberAId);
 
-    // B xin vào room của hội thoại: membership chỉ có ở kho riêng
-    // phải được công nhận.
     const joinAck = await socketB.emitWithAck('conversation.join', { conversationId: convId }) as { joined: boolean };
     expect(joinAck.joined).toBe(true);
 
-    // B báo đang nhập: A (đã vào room từ lúc nối) nhận được tín
-    // hiệu typing của B qua room.
     const typingSeen = waitForSocketEvent<{ conversationId: string; userId: string }>(
       socketA, 'typing', (p) => p.conversationId === convId && p.userId === memberBId,
     );
@@ -564,9 +492,6 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
   });
 
   it('JWT trung tâm A tại hostname gốc bị ngắt dù user vẫn có bản sao legacy trong database chung (P1 PR #21)', async () => {
-    // Thêm lại tạm thời user đã chuyển kho để mô phỏng giai đoạn
-    // dữ kiện legacy vẫn còn ở shared: nếu auth socket không kiểm
-    // centre_id TRƯỚC khi tra user, handshake này sẽ được cho qua.
     const centreUrl = clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD);
     expect(await countRows(process.env.DATABASE_URL!, 'users', 'id', memberAId)).toBe(0);
     await copyRowById(centreUrl, process.env.DATABASE_URL!, 'users', memberAId);

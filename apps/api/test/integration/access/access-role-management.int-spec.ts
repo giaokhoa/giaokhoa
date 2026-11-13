@@ -6,11 +6,6 @@ import {
   adminToken, assignRole, createContextViaApi, createRoleViaApi, createTestApp, createUserViaApi, http, roleIdByShortname, setOverride, systemContextId, uniqueName,
 } from '../../support/identity-access-helpers';
 
-/**
- * Issue #545 (đợt 1 của chuỗi vai trò & phân quyền): bốn bổ sung backend cho module access — (1) `GET /access/roles` kèm số người giữ phân biệt và tổng hợp năng lực phía server; (2) `PUT /access/roles/:id/capabilities` lưu ma trận thay toàn bộ, nguyên tử;
- * (3) `GET /access/assignments` lọc theo role, tìm theo người dùng,
- * phân trang phía server, mỗi dòng kèm tên/email; (4) chốt chặn xoá role dựng sẵn và role đang còn người giữ. Mọi ca lái qua HTTP thật và đối chiếu chéo với dữ kiện gốc trong hai bảng `role_assignments` / `role_capabilities` bằng truy vấn SQL độc lập.
- */
 describe('Access: tổng hợp vai trò, ma trận thay toàn bộ, bảng gán vai và chốt xoá (issue #545)', () => {
   let app: INestApplication;
   let pg: Client;
@@ -32,7 +27,6 @@ describe('Access: tổng hợp vai trò, ma trận thay toàn bộ, bảng gán 
   });
   afterAll(async () => { await pg.end(); await app.close(); });
 
-  /** Ba năng lực mẫu có kiểu đã biết trước: một read, một write cùng resource với nó, một write khác resource. */
   function sampleCapabilities() {
     const readCap = catalog.find((c) => c.capType === 'read');
     const writeSameResource = catalog.find((c) => c.capType === 'write' && resourceOf(c.name) === resourceOf(readCap!.name));
@@ -68,13 +62,10 @@ describe('Access: tổng hợp vai trò, ma trận thay toàn bộ, bảng gán 
     const userA = await createUserViaApi(app, admin);
     const userB = await createUserViaApi(app, admin);
 
-    // Người A giữ vai ở HAI context (hai dòng gán), người B giữ ở một
-    // context: số người giữ phải là 2 theo người phân biệt, không phải 3 dòng.
     await assignRole(app, admin, userA.id, roleId, systemId);
     await assignRole(app, admin, userA.id, roleId, catContextId);
     await assignRole(app, admin, userB.id, roleId, systemId);
 
-    // Ba ghi đè trên hai resource: 1 read + 2 write.
     await setOverride(app, admin, roleId, readCap.name, systemId, 1);
     await setOverride(app, admin, roleId, writeSameResource.name, systemId, -1);
     await setOverride(app, admin, roleId, writeOtherResource.name, catContextId, 1);
@@ -86,7 +77,6 @@ describe('Access: tổng hợp vai trò, ma trận thay toàn bộ, bảng gán 
     expect(row.writeOverrideCount).toBe(2);
     expect(row.resourceCount).toBe(2);
 
-    // Đối chiếu chéo với dữ kiện gốc tính độc lập bằng SQL.
     const pgUsers = await pg.query<{ n: string }>(
       'select count(distinct user_id) as n from role_assignments where role_id = $1', [roleId]);
     expect(Number(pgUsers.rows[0].n)).toBe(row.userCount);
@@ -103,7 +93,6 @@ describe('Access: tổng hợp vai trò, ma trận thay toàn bộ, bảng gán 
     expect(Number(pgAgg.rows[0].writes)).toBe(row.writeOverrideCount);
     expect(Number(pgAgg.rows[0].resources)).toBe(row.resourceCount);
 
-    // Vai mới tinh chưa có gán/ghi đè nào: mọi số tổng hợp đều bằng 0.
     const emptyRoleId = await createRoleViaApi(app, admin);
     const emptyRow = await roleRowFromList(emptyRoleId);
     expect(emptyRow.userCount).toBe(0);
@@ -118,7 +107,6 @@ describe('Access: tổng hợp vai trò, ma trận thay toàn bộ, bảng gán 
     const roleId = await createRoleViaApi(app, admin);
     const contextId = (await createContextViaApi(app, admin, 40, uuidv7(), systemId)).id;
 
-    // Tập cũ tại context: capA và capB đều ALLOW qua đường đặt từng ghi đè.
     await setOverride(app, admin, roleId, capA.name, contextId, 1);
     await setOverride(app, admin, roleId, capB.name, contextId, 1);
 
@@ -127,8 +115,6 @@ describe('Access: tổng hợp vai trò, ma trận thay toàn bộ, bảng gán 
         .set('Authorization', `Bearer ${admin}`)
         .send({ contextId, overrides });
 
-    // Thay toàn bộ: capB đổi sang PREVENT, capC thêm mới PROHIBIT, capD
-    // gửi INHERIT tường minh; capA vắng mặt trong tập gửi lên.
     const applied = await put([
       { capability: capB.name, permission: -1 },
       { capability: capC.name, permission: -1000 },
@@ -142,27 +128,22 @@ describe('Access: tổng hợp vai trò, ma trận thay toàn bộ, bảng gán 
       { capability: capC.name, permission: -1000 },
     ].sort((a, b) => a.capability.localeCompare(b.capability));
     expect(applied.body.overrides).toEqual(expectedSaved);
-    // Tập đã lưu đọc lại qua API và qua bảng gốc đều bằng đúng tập mới:
-    // capA đã trở về kế thừa (không còn dòng), capD không sinh dòng.
     expect(await savedOverridesAt(roleId, contextId)).toEqual(expectedSaved);
     const pgRows = await pg.query<{ capability: string; permission: number }>(
       'select capability, permission from role_capabilities where role_id = $1 and context_id = $2 order by capability',
       [roleId, contextId]);
     expect(pgRows.rows).toEqual(expectedSaved);
 
-    // Tên năng lực ngoài danh mục: bị từ chối bằng mã lỗi riêng, dữ kiện không đổi.
     const unknown = await put([{ capability: 'nosuch:capability', permission: 1 }]);
     expect(unknown.status).toBe(400);
     expect(unknown.body.code).toBe('access.unknown_capability');
     expect(await savedOverridesAt(roleId, contextId)).toEqual(expectedSaved);
 
-    // Giá trị quyền ngoài bốn trạng thái: bị từ chối, dữ kiện không đổi.
     const badPermission = await put([{ capability: capA.name, permission: 7 }]);
     expect(badPermission.status).toBe(400);
     expect(badPermission.body.code).toBe('access.invalid_permission');
     expect(await savedOverridesAt(roleId, contextId)).toEqual(expectedSaved);
 
-    // Cùng một năng lực xuất hiện hai lần trong một tập: bị từ chối, dữ kiện không đổi.
     const duplicated = await put([
       { capability: capA.name, permission: 1 },
       { capability: capA.name, permission: -1 },
@@ -171,7 +152,6 @@ describe('Access: tổng hợp vai trò, ma trận thay toàn bộ, bảng gán 
     expect(duplicated.body.code).toBe('access.duplicate_capability_override');
     expect(await savedOverridesAt(roleId, contextId)).toEqual(expectedSaved);
 
-    // Thay bằng tập rỗng: toàn bộ ghi đè tại context bị gỡ về kế thừa.
     const cleared = await put([]);
     expect(cleared.status).toBe(200);
     expect(cleared.body.overrides).toEqual([]);
@@ -195,8 +175,6 @@ describe('Access: tổng hợp vai trò, ma trận thay toàn bộ, bảng gán 
     const list = (query: Record<string, string | number>) =>
       http(app).get('/api/v1/access/assignments').query(query).set('Authorization', `Bearer ${admin}`);
 
-    // Lọc theo vai: đúng 3 dòng của vai này, mỗi dòng kèm tên/email và
-    // giữ nguyên các trường của dòng gán (component, updatedAt).
     const byRole = await list({ roleId });
     expect(byRole.status).toBe(200);
     expect(byRole.body.total).toBe(3);
@@ -214,7 +192,6 @@ describe('Access: tổng hợp vai trò, ma trận thay toàn bộ, bảng gán 
     expect(rowsOfOne[0].userName).toBe('Kiem545 Tra545');
     expect(rowsOfOne[0].userEmail).toBe(`${marker}@example.com`);
 
-    // Tìm theo họ, theo tên đầy đủ và theo email đều ra đúng người đó.
     const byLastName = await list({ roleId, search: 'Tra545' });
     expect(byLastName.body.total).toBe(2);
     const byFullName = await list({ roleId, search: 'Kiem545 Tra545' });
@@ -225,13 +202,10 @@ describe('Access: tổng hợp vai trò, ma trận thay toàn bộ, bảng gán 
     expect(byOther.body.total).toBe(1);
     expect((byOther.body.assignments as { userId: string }[])[0].userId).toBe(userTwo.id);
 
-    // Lọc kết hợp vai + context: chỉ còn dòng tại context danh mục.
     const byContext = await list({ roleId, contextId: catContextId });
     expect(byContext.body.total).toBe(1);
     expect((byContext.body.assignments as { contextId: string }[])[0].contextId).toBe(catContextId);
 
-    // Phân trang: 5 dòng của một vai riêng, trang 2 dòng — tổng khớp 5,
-    // ba trang gộp lại đủ 5 dòng không trùng nhau.
     const pageRoleId = await createRoleViaApi(app, admin);
     for (let i = 0; i < 5; i += 1) {
       const pageUser = await createUserViaApi(app, admin);
@@ -261,17 +235,14 @@ describe('Access: tổng hợp vai trò, ma trận thay toàn bộ, bảng gán 
       firstName: 'Loc560', lastName: 'Rieng560', email: `${marker}@example.com`,
     });
     const userTwo = await createUserViaApi(app, admin);
-    // Người một giữ 3 dòng gán: vai chính ở hai context và vai phụ ở context hệ thống.
     await assignRole(app, admin, userOne.id, roleId, systemId);
     await assignRole(app, admin, userOne.id, roleId, catContextId);
     await assignRole(app, admin, userOne.id, otherRoleId, systemId);
-    // Người hai giữ cùng vai chính để lọc theo người phải tách ra được.
     await assignRole(app, admin, userTwo.id, roleId, systemId);
 
     const list = (query: Record<string, string | number>) =>
       http(app).get('/api/v1/access/assignments').query(query).set('Authorization', `Bearer ${admin}`);
 
-    // Chỉ theo userId: đúng 3 dòng của người một, không lẫn dòng của người khác.
     const byUser = await list({ userId: userOne.id });
     expect(byUser.status).toBe(200);
     expect(byUser.body.total).toBe(3);
@@ -280,32 +251,27 @@ describe('Access: tổng hợp vai trò, ma trận thay toàn bộ, bảng gán 
       expect(row.userId).toBe(userOne.id);
     }
 
-    // userId của một người không có dòng gán nào: trả rỗng, tổng 0.
     const noAssignments = await createUserViaApi(app, admin);
     const byEmptyUser = await list({ userId: noAssignments.id });
     expect(byEmptyUser.status).toBe(200);
     expect(byEmptyUser.body.total).toBe(0);
     expect(byEmptyUser.body.assignments).toEqual([]);
 
-    // Kết hợp userId + roleId: chỉ còn dòng của người đó ở vai được lọc.
     const byUserAndRole = await list({ userId: userOne.id, roleId: otherRoleId });
     expect(byUserAndRole.body.total).toBe(1);
     expect((byUserAndRole.body.assignments as { roleId: string }[])[0].roleId).toBe(otherRoleId);
     const byUserAndMainRole = await list({ userId: userOne.id, roleId });
     expect(byUserAndMainRole.body.total).toBe(2);
 
-    // Kết hợp userId + contextId: chỉ còn dòng của người đó tại context được lọc.
     const byUserAndContext = await list({ userId: userOne.id, contextId: catContextId });
     expect(byUserAndContext.body.total).toBe(1);
     expect((byUserAndContext.body.assignments as { contextId: string }[])[0].contextId).toBe(catContextId);
 
-    // Kết hợp userId + tìm kiếm: từ khoá khớp người đó thì còn dòng, từ khoá của người khác thì rỗng.
     const byUserAndSearch = await list({ userId: userOne.id, search: 'Rieng560' });
     expect(byUserAndSearch.body.total).toBe(3);
     const byUserAndForeignSearch = await list({ userId: userTwo.id, search: 'Rieng560' });
     expect(byUserAndForeignSearch.body.total).toBe(0);
 
-    // Kết hợp userId + phân trang: 3 dòng, trang 2 dòng thì trang hai còn đúng 1 dòng, tổng không đổi.
     const pageTwo = await list({ userId: userOne.id, page: 2, pageSize: 2 });
     expect(pageTwo.status).toBe(200);
     expect(pageTwo.body.total).toBe(3);
@@ -315,14 +281,12 @@ describe('Access: tổng hợp vai trò, ma trận thay toàn bộ, bảng gán 
   });
 
   it('xoá vai bị chặn với vai dựng sẵn và vai đang còn người giữ — hai lỗi phân biệt được; vai thường không còn người giữ xoá được', async () => {
-    // Vai dựng sẵn (archetype manager): bị chặn bằng mã lỗi riêng, vai còn nguyên.
     const managerId = await roleIdByShortname(app, admin, 'manager');
     const builtin = await http(app).delete(`/api/v1/access/roles/${managerId}`).set('Authorization', `Bearer ${admin}`);
     expect(builtin.status).toBe(400);
     expect(builtin.body.code).toBe('access.role_archetype_delete_forbidden');
     expect((await http(app).get(`/api/v1/access/roles/${managerId}`).set('Authorization', `Bearer ${admin}`)).status).toBe(200);
 
-    // Vai thường đang còn người giữ: bị chặn bằng mã lỗi khác, vai còn nguyên.
     const heldRoleId = await createRoleViaApi(app, admin);
     const holder = await createUserViaApi(app, admin);
     await assignRole(app, admin, holder.id, heldRoleId, systemId);
@@ -332,7 +296,6 @@ describe('Access: tổng hợp vai trò, ma trận thay toàn bộ, bảng gán 
     expect(held.body.code).not.toBe(builtin.body.code);
     expect((await http(app).get(`/api/v1/access/roles/${heldRoleId}`).set('Authorization', `Bearer ${admin}`)).status).toBe(200);
 
-    // Vai thường chỉ còn ghi đè, không còn người giữ: xoá được, ghi đè bị cascade theo.
     const overrideOnlyRoleId = await createRoleViaApi(app, admin);
     const anyCap = catalog[0].name;
     await setOverride(app, admin, overrideOnlyRoleId, anyCap, systemId, 1);
@@ -343,7 +306,6 @@ describe('Access: tổng hợp vai trò, ma trận thay toàn bộ, bảng gán 
       'select count(*) as n from role_capabilities where role_id = $1', [overrideOnlyRoleId]);
     expect(Number(pgLeftovers.rows[0].n)).toBe(0);
 
-    // Vai thường không còn gì: xoá được và đọc lại thì 404.
     const plainRoleId = await createRoleViaApi(app, admin);
     const removed = await http(app).delete(`/api/v1/access/roles/${plainRoleId}`).set('Authorization', `Bearer ${admin}`);
     expect(removed.status).toBe(200);

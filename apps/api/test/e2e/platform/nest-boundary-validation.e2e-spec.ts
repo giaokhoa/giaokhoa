@@ -2,11 +2,6 @@ import type { INestApplication } from '@nestjs/common';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminToken, createTestApp, http } from '../../support/identity-access-helpers';
 
-/**
- * Hồi quy biên HTTP cho tham số GET: schema Zod từ chối dữ liệu sai
- * trước khi service tạo Date hoặc chọn sai loại ngân hàng; dữ liệu hợp
- * lệ và giá trị mặc định cũ vẫn sử dụng được khi người dùng đăng nhập.
- */
 describe('Kiểm chứng query của lịch và ngân hàng câu hỏi theo Nest Standard Schema', () => {
   let app: INestApplication;
   let token: string;

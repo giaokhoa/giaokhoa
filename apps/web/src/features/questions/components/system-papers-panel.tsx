@@ -1,6 +1,3 @@
-/**
- * Panel đề chung trong khu vực Ngân hàng hệ thống: chọn một bank đề chung → danh sách đề ready của bank đó (sao chép về bank đề cá nhân tại dòng) + hàng chờ đóng góp đề của bank, nơi người duyệt xử lý từng mốc duyệt hai cấp và mở bản đặc tả đã chụp của đóng góp kèm hồ sơ ngay tại dòng. State chọn bank do TRANG giữ (hàng chờ bộ hồ sơ bên dưới dùng chung bank đang chọn) nên panel nhận qua props; danh sách đề của bank panel tự nạp qua hook của lib/questions-data. Đột biến qua hook của lib; làm mới qua các hàm refresh của trang.
- */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
@@ -12,30 +9,16 @@ import { useBankExams, useCopyExamPaper, useReviewExamPaperContribution } from '
 import type { BankLite, DossierSpecLite, ExamContributionLite } from '../types/questions';
 import { dossierStatusKey, withApiReason } from '../utils/shared';
 
-/** Props của panel đề chung. */
 export interface SystemPapersPanelProps {
-  /** Bank đề chung đang chọn (state của trang, dùng chung với hàng chờ bộ hồ sơ). */
   systemExamBankId: string;
-  /** Đổi bank đề chung đang chọn. */
   setSystemExamBankId: (bankId: string) => void;
-  /** Các bank đề chung để chọn bank đang xem. */
   sharedExamBanks: BankLite[];
-  /** Hàng chờ đóng góp đề của bank đang chọn (trang suy ra từ đóng góp của bank). */
   paperContributions: ExamContributionLite[];
-  /** Làm mới cụm bank đề + danh sách bank cá nhân + hồ sơ của tôi (hàm của trang). */
   refreshExamBanks: () => void;
-  /** Làm mới cụm đề chung của một bank (hàm của trang). */
   refreshSystemPapers: (bankId: string) => void;
-  /** Báo thông báo kết quả lên khung trang. */
   setMessage: (message: string | null) => void;
 }
 
-/**
- * Panel đề chung (Ngân hàng hệ thống).
- *
- * @param props - Dữ liệu, các hàm làm mới và bộ báo thông báo của trang.
- * @returns Nội dung section đề chung: chọn bank + danh sách đề + hàng chờ đóng góp đề.
- */
 export function SystemPapersPanel({
   systemExamBankId,
   setSystemExamBankId,
@@ -50,10 +33,8 @@ export function SystemPapersPanel({
   const copyPaperMutation = useCopyExamPaper();
   const reviewPaperContributionMutation = useReviewExamPaperContribution();
   const systemPapers = useBankExams(systemExamBankId || undefined).data ?? [];
-  // Bản đặc tả đang mở của một ĐÓNG GÓP kèm hồ sơ: đặc tả đã chụp nằm ngay trong payload đóng góp (dossierSpecSnapshot) nên mở tại chỗ, không gọi thêm endpoint như bề mặt hồ sơ lịch sử.
   const [openContributionSpec, setOpenContributionSpec] = useState<{ contributionId: string; spec: DossierSpecLite } | null>(null);
 
-  /** Copy một đề từ ngân hàng hệ thống về ngân hàng đề cá nhân (cầu nối hai khu vực cho ĐỀ). */
   async function copyPaperToMine(paperId: string) {
     try {
       await copyPaperMutation.mutateAsync(paperId);
@@ -64,9 +45,6 @@ export function SystemPapersPanel({
     }
   }
 
-  /**
-   * Một mốc duyệt của một đề xuất đóng góp đề tại bank đích: chỉ còn một động từ `approve`/`reject` (issue #345, giai đoạn 2) — cấp 1 khi đóng góp `pending`, cấp 2 ban giám hiệu khi đóng góp `pending_board` (chỉ đóng góp kèm bộ hồ sơ mới lên được trạng thái này), do phía server phân biệt bằng trạng thái và quyền; từ chối ở cả hai cấp đều bắt buộc lý do.
-   */
   async function reviewPaperContribution(
     bankId: string,
     contributionId: string,
@@ -86,7 +64,6 @@ export function SystemPapersPanel({
     }
   }
 
-  /** Mở/đóng bản đặc tả ĐÃ CHỤP của một đóng góp kèm hồ sơ ngay trong hàng chờ đóng góp (đặc tả nằm sẵn trong payload đóng góp). */
   function toggleContributionSpec(contribution: ExamContributionLite) {
     if (openContributionSpec?.contributionId === contribution.id) { setOpenContributionSpec(null); return; }
     if (contribution.dossierSpecSnapshot) {

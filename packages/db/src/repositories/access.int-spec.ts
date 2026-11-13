@@ -5,21 +5,6 @@ import { createCentreKysely, type CentreDb } from '../client';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
 import { AccessRepository } from './access';
 
-/**
- * Spec tích hợp của repository phân quyền trên Kysely (issue #651).
- *
- * Database trung tâm dựng từ rỗng bằng chính cầu nối migration của package trên cụm PostgreSQL thật của môi trường test. Mọi ca chạy qua repository production ở `access.ts` — không mô phỏng handle. Kho test không cần GUC platform (như spec của repository lớp học): các phép đọc cổng tenant ở đây là truy vấn thuần, ngữ cảnh platform là trách nhiệm của tầng service.
- *
- * Các tính chất chốt tại đây:
- * - Mọi phương thức của repository cũ đều có mặt với cùng hợp
- *   đồng (tên, tham số, hình dạng dòng) — spec này đi hết bề mặt: context, capability, role, gán vai, override, config và bốn phép đọc cổng tenant.
- * - Insert bỏ khoá chính, id trả về khớp regex uuidv7 (phụ lục U).
- * - `count(*)` trả `number` thật (ép `::int`, T-7) và timestamp
- *   đọc thành `Date`.
- * - Ghi đè theo khoá phức hợp, doNothing + đọc lại khớp đúng
- *   nguồn, và các bảo vệ danh sách rỗng đều giữ nguyên ngữ nghĩa của bản cũ trước chuyển đổi.
- * - Transaction của repository rollback trọn vẹn khi hàm ném lỗi.
- */
 
 const adminUrl =
   process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
@@ -41,7 +26,6 @@ let userBId: string;
 let userCId: string;
 let userDId: string;
 
-/** Chèn một context qua repository rồi gán path/depth thật cho nó. */
 async function makeContext(contextLevel: number, instanceId: string | null, parentPath: string, parentDepth: number): Promise<string> {
   const row = await repo.insertContext({ contextLevel, instanceId, path: '', depth: 0 });
   const path = `${parentPath}/${row.id}`;
@@ -49,7 +33,6 @@ async function makeContext(contextLevel: number, instanceId: string | null, pare
   return row.id;
 }
 
-/** Chèn một role mới với shortName duy nhất. */
 async function makeRole(shortName: string): Promise<string> {
   const row = await repo.insertRole({ name: `Vai ${shortName}`, shortName });
   return row.id;
@@ -80,8 +63,6 @@ beforeAll(async () => {
     ])
     .returning('id')
     .execute();
-  // Seed chèn đúng 4 user; chỉ số mảng + id đều khẳng định non-null
-  // theo khuôn `rows[0]!` của package (noUncheckedIndexedAccess).
   userAId = users[0]!.id!;
   userBId = users[1]!.id!;
   userCId = users[2]!.id!;
@@ -237,10 +218,6 @@ describe('gán vai', () => {
     expect(first.updatedAt).toBeInstanceOf(Date);
     const again = await repo.insertAssignment({ roleId, userId: userAId, contextId: courseCtxId });
     expect(again.id).toBe(first.id);
-    // Nguồn khác (component enrol) là dòng khác, và chèn trùng nguồn
-    // đó phải đọc lại đúng dòng enrol — không được trả nhầm dòng tay.
-    // itemId là cột uuid nên phải là uuid thật (id của instance enrol),
-    // không dùng chuỗi giả như 'inst-1' (Postgres từ chối).
     const enrolItemId = randomUUID();
     const enrol = await repo.insertAssignment({ roleId, userId: userAId, contextId: courseCtxId, component: 'enrol', itemId: enrolItemId });
     expect(enrol.id).not.toBe(first.id);
@@ -255,10 +232,6 @@ describe('gán vai', () => {
     const roleId = await makeRole(`g651-lst-${randomUUID()}`);
     await repo.insertAssignment({ roleId, userId: userAId, contextId: courseCtxId });
     await repo.insertAssignment({ roleId, userId: userBId, contextId: tenantCtxId });
-    // Spec chạy chung một DB cho cả file nên userA/context tenant đã mang
-    // gán từ các test trước — khẳng định lọc trên tập của chính role mới
-    // tạo trong test này (cùng khuôn lọc theo roleId như test
-    // listAllRoleCapabilitiesAtContext), không khẳng định tổng toàn cục.
     const byUser = (await repo.listAssignments({ userId: userAId })).filter((r) => r.roleId === roleId);
     expect(byUser).toHaveLength(1);
     const byContext = (await repo.listAssignments({ contextId: tenantCtxId })).filter((r) => r.roleId === roleId);
@@ -272,8 +245,6 @@ describe('gán vai', () => {
     await repo.insertAssignment({ roleId, userId: userAId, contextId: courseCtxId });
     await repo.insertAssignment({ roleId, userId: userAId, contextId: tenantCtxId });
     const rows = await repo.getAssignmentsForUserInContexts(userAId, [courseCtxId]);
-    // Như test trên: chỉ xét tập của role mới tạo, vì userA đã mang gán
-    // ở courseCtxId từ các test trước trong cùng file.
     expect(rows.filter((r) => r.roleId === roleId).map((r) => r.contextId)).toEqual([courseCtxId]);
     await expect(repo.getAssignmentsForUserInContexts(userAId, [])).resolves.toEqual([]);
   });
@@ -308,9 +279,6 @@ describe('gán vai', () => {
     await repo.insertAssignment({ roleId: roleX, userId: userDId, contextId: courseCtxId });
     const filtered = await repo.listUsersWithAssignmentsPage({ roleId: roleX, status: 'active' }, 1, 10);
     expect(filtered.rows.map((r) => r.id)).toEqual([userAId]);
-    // Người A vẫn mang đủ cả hai gán dù lọc theo roleX — mảng gán trả về
-    // là toàn bộ gán của người đó nên chỉ xét tập của hai role mới tạo
-    // trong test này (userA đã mang gán từ các test trước cùng file).
     const ownAssignments = filtered.rows[0]!.assignments.filter((a) => a.roleId === roleX || a.roleId === roleY);
     expect(ownAssignments.map((a) => a.roleId).sort()).toEqual([roleX, roleY].sort());
     expect(ownAssignments[0]).toMatchObject({ roleName: expect.any(String), contextLevel: expect.any(Number) });
@@ -397,11 +365,6 @@ describe('override capability', () => {
     await repo.upsertRoleCapability({ contextId: courseCtxId, roleId, capability: 'unknown:thing', permission: 1 });
     const aggregates = await repo.getRoleOverrideAggregates();
     const found = aggregates.find((a) => a.roleId === roleId);
-    // Resource = `split_part(capability, ':', 1)` trên MỌI ghi đè (đúng
-    // hành vi bản cũ trước chuyển đổi, PR #549): hai tên không có dấu hai chấm
-    // thành hai resource riêng, cộng `unknown` từ `unknown:thing` = 3.
-    // Chỉ cột read/write mới loại capability ngoài danh mục (ghép trái
-    // không thấy capType); ghi đè ngoài danh mục vẫn tính vào tổng.
     expect(found).toMatchObject({ overrideCount: 4, readOverrideCount: 2, writeOverrideCount: 1, resourceCount: 3 });
   });
 });

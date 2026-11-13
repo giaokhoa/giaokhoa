@@ -22,7 +22,6 @@ interface CompletionCardProps {
   selectClass: string;
 }
 
-/** Thẻ tiêu chí hoàn thành khoá của trang Xây dựng khoá (chỉ hiện khi có quyền completion:manage). */
 export function CompletionCard({
   canManageCompletion, criteriaMethod, setCriteriaMethod, criteriaDraft, setCriteriaDraft,
   sections, onSaveCriteria, onRecalculate, selectClass,

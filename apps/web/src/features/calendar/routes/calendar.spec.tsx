@@ -4,9 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TestProviders } from '#test/providers';
 import { CalendarPage } from './calendar';
 
-/**
- * Spec lịch theo endpoint thật: tạo sự kiện qua POST /calendar/events với đúng DTO, subscription qua POST /calendar/subscriptions và nhập ngay qua POST /calendar/subscriptions/:id/import.
- */
 const EVENT_ID = '01900000-0000-7000-8000-000000000031';
 const SUB_ID = '01900000-0000-7000-8000-000000000032';
 
@@ -16,7 +13,6 @@ interface RecordedCall {
   body: unknown;
 }
 
-/** Stub fetch ghi lời gọi; sự kiện/subscription mới tạo xuất hiện ở lần GET sau. */
 function stubFetch(calls: RecordedCall[]) {
   const state = {
     events: [] as Record<string, unknown>[],
@@ -60,7 +56,6 @@ function stubFetch(calls: RecordedCall[]) {
       }
       if (url === `/api/v1/calendar/subscriptions/${SUB_ID}/import` && method === 'POST')
         return respond({ queued: true, subscriptionId: SUB_ID });
-      // Xuất lịch: token bắt đầu chưa có; POST tạo, GET đọc lại, DELETE thu hồi.
       if (url === '/api/v1/calendar/export-token' && method === 'GET') return respond(state.exportToken);
       if (url === '/api/v1/calendar/export-token' && method === 'POST') {
         state.exportToken = {
@@ -83,7 +78,6 @@ function stubFetch(calls: RecordedCall[]) {
   );
 }
 
-/** Render trang lịch trong khung provider của ứng dụng thật (trang đã chuyển sang TanStack Query ở F-01). */
 function renderCalendar() {
   render(
     <TestProviders>
@@ -92,7 +86,6 @@ function renderCalendar() {
   );
 }
 
-/** Chuỗi datetime-local của thời điểm hiện tại (để sự kiện nằm trong tháng đang xem). */
 function localNowInput(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -151,7 +144,6 @@ describe('Trang lịch — tạo sự kiện và đăng ký', () => {
     stubFetch(calls);
     renderCalendar();
 
-    // §5.6: form sự kiện nằm trong Sheet — mở Sheet trước rồi mới điền.
     await userEvent.click(screen.getByRole('button', { name: 'Sự kiện mới' }));
     await userEvent.type(await screen.findByLabelText('Tên sự kiện'), 'Họp nhóm');
     fireEvent.change(screen.getByLabelText('Thời gian bắt đầu'), { target: { value: localNowInput() } });

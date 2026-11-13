@@ -27,16 +27,13 @@ import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { PageShell } from '#components/page-shell';
 
-/** Hình dạng sự kiện lịch mà trang này cần (khớp EventView của trang lịch). */
 
 
 
-/** Lỗi có phải 403 hay không — để hiện thông báo thân thiện thay vì lỗi thô. */
 function isForbidden(error: unknown): boolean {
   return error instanceof ApiError && error.problem.status === 403;
 }
 
-/** Tiêu đề một khối vai trò trên trang tổng quan. */
 function SectionHeading({ title }: { title: string }) {
   return (
     <h2 className="px-4 text-lg font-semibold lg:px-6" data-testid="dashboard-section-title">
@@ -45,13 +42,7 @@ function SectionHeading({ title }: { title: string }) {
   );
 }
 
-/**
- * Khối tổng hợp DASH1 dùng chung cho cả hai vai: đúng MỘT query `GET /dashboard/overview` (TanStack dedupe theo queryKey nên khối GV và khối HS trên cùng trang chỉ phát một request). Endpoint đồng thời cập nhật mốc xem trước phía server khi tính xong danh sách "mới". Hook nay nằm ở tầng queries của feature notifications (F-01 của rà soát #133).
- */
 
-/**
- * Khối "Việc cần làm" của học sinh (DASH1): hoạt động sắp đến hạn trong 7 ngày (quá hạn tách lên đầu, có badge trạng thái) và điểm/phản hồi mới đã công bố kể từ lần xem trước. Dữ liệu đã qua cổng công bố PH-0 phía server — khối này không bao giờ thấy điểm chưa công bố.
- */
 function StudentTodoBlock() {
   const { t, i18n } = useTranslation('dashboard');
   const overview = useDashboardOverview();
@@ -130,13 +121,6 @@ function StudentTodoBlock() {
   );
 }
 
-/**
- * Khối "Hàng đợi chấm" của giáo viên (DASH1): số bài chờ chấm gộp theo
- * khoá (bài nộp C2 chưa trả bài + lượt quiz chờ chấm tay + phiếu giấy
- * CAM-0 chờ xử lý) và bài chờ lâu nhất; bấm vào tới sổ điểm của khoá để
- * xử lý hàng đợi, riêng phần phiếu giấy là deep-link thẳng tới bề mặt rà
- * soát CAM-0 của quiz có phiếu chờ lâu nhất (issue #187).
- */
 function TeacherGradingBlock() {
   const { t, i18n } = useTranslation('dashboard');
   const overview = useDashboardOverview();
@@ -196,25 +180,14 @@ function TeacherGradingBlock() {
   );
 }
 
-/** Thông báo khi một khối không tải được (kể cả 403 do quyền vừa thay đổi). */
 function BlockNotice() {
   const { t } = useTranslation('dashboard');
   return <p className="px-4 text-sm text-muted-foreground lg:px-6">{t('blockForbidden')}</p>;
 }
 
-/**
- * Khối quản trị hệ thống: chỉ render khi PermissionsProvider đã xác nhận
- * người dùng có capability quản trị, và chỉ gọi các endpoint quản trị
- * (danh sách người dùng, cây danh mục, danh sách vai trò). Số liệu lấy từ
- * chính các response đó — tổng người dùng từ trường `total` của API, biểu
- * đồ gom tài khoản theo tuần tạo từ `createdAt`.
- */
 function AdminSection() {
   const { t, i18n } = useTranslation(['dashboard', 'app']);
   const perms = usePermissions();
-  // Ba nguồn dữ liệu của khối là ba query độc lập: TanStack Query cho
-  // chúng chạy SONG SONG (trước đây nạp tuần tự trong một effect), và
-  // từng thẻ/bảng tự lấp khi nguồn của nó về thay vì chờ cả khối.
   const usersQuery = useQuery(adminUsersQueryOptions(1, 100, ''));
   const treeQuery = useQuery(categoryTreeQueryOptions());
   const rolesQuery = useAccessRoles();
@@ -235,8 +208,6 @@ function AdminSection() {
   const roles = rolesQuery.data ?? null;
   const failed = usersQuery.isError && isForbidden(usersQuery.error);
 
-  // Lưới thẻ LUÔN đủ 4 ô: ô nào chưa có dữ liệu thì ở trạng thái loading
-  // (giữ ô) hoặc hiện "—" khi nguồn lỗi, thay vì mọc thêm từng thẻ.
   const active = users ? users.users.filter((u) => !u.suspended && !u.deleted).length : 0;
   const cards: StatCard[] = [
     {
@@ -352,14 +323,6 @@ function AdminSection() {
   );
 }
 
-/**
- * Khối giảng dạy: phân loại khoá dạy lấy từ PermissionsProvider, còn
- * lưới điểm theo bài toàn lớp tải lười tại khối này qua
- * `useCoursesGradeData` (F-02, rà soát #133 — provider không còn dò
- * dữ liệu điểm khi nạp app). Thẻ "chưa có điểm" là hàng đợi chấm thật
- * — học viên chưa có điểm ở bất kỳ bài nào. Biểu đồ phân bố điểm tính
- * theo từng ô của lưới, chuẩn hoá theo điểm tối đa của bài đó.
- */
 function TeacherSection() {
   const { t } = useTranslation('dashboard');
   const perms = usePermissions();
@@ -401,10 +364,6 @@ function TeacherSection() {
     ];
     const counts = buckets.map(() => 0);
     for (const access of teaching) {
-      // Đọc thẳng báo cáo từ gradeData thay vì gọi reportOf của
-      // component: reportOf là hàm tạo mới ở mỗi lần render nên
-      // không thể nằm trong mảng phụ thuộc của useMemo này;
-      // phép đọc ở đây tương đương đúng định nghĩa của reportOf.
       const report = gradeData.get(access.course.id)?.report ?? null;
       const maxByItem = new Map((report?.items ?? []).map((i) => [i.id, i.gradeMax]));
       for (const row of report?.rows ?? []) {
@@ -486,14 +445,6 @@ function TeacherSection() {
   );
 }
 
-/**
- * Khối học tập của học viên: khoá đang học lấy từ tầng quyền (ghi
- * danh), điểm của chính mình theo từng khoá tải lười tại khối này qua
- * `useCoursesGradeData` (F-02, rà soát #133); huy hiệu đã cấp
- * và thông báo chưa đọc gọi các endpoint tự phục vụ tương ứng; biểu đồ là
- * sự kiện lịch 30 ngày tới theo ngày. Học viên không bao giờ chạm endpoint
- * quản trị hay báo cáo lớp từ khối này.
- */
 function StudentSection() {
   const { t, i18n } = useTranslation(['dashboard', 'app']);
   const perms = usePermissions();
@@ -501,20 +452,8 @@ function StudentSection() {
   const learning = perms.learning;
   const gradeData = useCoursesGradeData(learning.map((c) => c.course.id));
   const gradebookOf = (c: CourseAccess) => gradeData.get(c.course.id)?.gradebook ?? null;
-  // Huy hiệu, thông báo và sự kiện lịch là ba query độc lập chạy SONG
-  // SONG — trước đây một effect await lần lượt từng endpoint nên thẻ
-  // thống kê mọc nối tiếp và đẩy bố cục (nguồn CLS đội audit đo được).
   const badgesQuery = useMyBadges();
-  // Chỉ cần SỐ chưa đọc cho thẻ thống kê: dùng endpoint đếm riêng,
-  // không tải toàn bộ lịch sử thông báo về rồi lọc phía client nữa
-  // (trung tâm thông báo v2, issue #51).
   const notificationsQuery = useQuery(dashboardUnreadCountQueryOptions());
-  // Cửa sổ sự kiện 30 ngày: tính theo múi giờ ứng dụng qua helper
-  // dùng chung với loader SL-1 của route `/` (trước đây lấy đúng mốc
-  // tức thời lúc mount — key chứa mốc mili-giây thì loader phía
-  // server không bao giờ tính lại trùng để dehydrate được; xem
-  // `upcomingDaysRangeIso` ở features/calendar/utils/calendar). Cửa sổ mới bắt đầu từ
-  // 00:00 hôm nay nên phủ đúng ô ngày đầu của biểu đồ bên dưới.
   const eventRange = useMemo(() => upcomingDaysRangeIso(30), []);
   const eventsQuery = useCalendarEvents(eventRange.from, eventRange.to);
 
@@ -533,9 +472,6 @@ function StudentSection() {
       ? activityPcts.reduce((sum, pct) => sum + pct, 0) / activityPcts.length
       : null;
 
-  // Lưới thẻ luôn đủ 4 ô: thẻ huy hiệu/thông báo giữ ô ở trạng thái
-  // loading trong lúc query chạy và hiện "—" nếu nguồn lỗi, thay vì
-  // biến mất rồi làm lưới co lại như trước.
   const cards: StatCard[] = [
     {
       id: 'student-courses',
@@ -655,24 +591,11 @@ function StudentSection() {
   );
 }
 
-/**
- * Trang tổng quan sau đăng nhập (route `/` khi đã đăng nhập), khung trình
- * bày theo block dashboard-01. Nội dung CHIA THEO VAI TRÒ từ ảnh chụp
- * quyền: khối quản trị chỉ hiện với người có capability quản trị, khối
- * giảng dạy chỉ với người đang dạy ít nhất một khoá, khối học tập chỉ với
- * người đang học ít nhất một khoá. Người có nhiều vai trò thấy các khối
- * tương ứng xếp chồng — mỗi khối chỉ chứa chức năng vai trò đó thao tác
- * được, không có phần tử thừa dẫn tới 403.
- */
 export function DashboardPage() {
   const { t } = useTranslation(['dashboard', 'app']);
   const { user } = useAuth();
   const perms = usePermissions();
 
-  // Chưa phân loại được vai trò (ảnh chụp quyền + danh sách khoá đang
-  // về — hai query song song) thì hiện khung giữ chỗ đúng hình học của
-  // trang thay vì một dòng chữ "Đang tải…" chiếm cả trang như trước;
-  // từng khối sau đó tự lấp dữ liệu theo query của nó.
   if (!perms.ready) {
     return <DashboardSkeleton />;
   }
@@ -681,8 +604,6 @@ export function DashboardPage() {
   const name = user ? `${user.firstName} ${user.lastName}`.trim() || user.username : '';
 
   return (
-    // PageShell wide (1280px) theo §3.2; các khối bên trong tự giữ đệm
-    // ngang px-4/lg:px-6 của riêng chúng nên PageShell tắt đệm của mình.
     <PageShell width="wide" className="px-0 lg:px-0">
       <h1 className="px-4 text-2xl font-semibold lg:px-6">{t('dashboard:welcome', { name })}</h1>
       {perms.canAdminister ? <AdminSection /> : null}
