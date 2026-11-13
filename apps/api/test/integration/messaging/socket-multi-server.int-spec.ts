@@ -38,7 +38,7 @@ async function createReplica(redisUrl: string): Promise<ApiReplica> {
   };
 }
 
-/** Lắng nghe trước khi connect để không bỏ lỡ ACK kết nối rất nhanh. */
+
 function connectTo(replica: ApiReplica, transport: 'polling' | 'websocket', origin = ALLOWED): Promise<Socket> {
   return new Promise<Socket>((resolve, reject) => {
     const socket = io(`${replica.url}/messaging`, {
@@ -78,8 +78,8 @@ describe('Redis Socket.IO adapter: origin, hai API replica và emitter của wor
     connected.forEach((socket) => socket.disconnect());
     if (replicaA) await replicaA.adapter.close(replicaA.server);
     if (replicaB) await replicaB.adapter.close(replicaB.server);
-    // Headless Server không có engine/HTTP listener: close() của Socket.IO
-    // gọi engine.close() trên undefined. Chỉ giải phóng Redis clients.
+
+
     if (emitterServer) emitterServer.removeAllListeners();
     await Promise.all([
       emitterPub?.quit().catch(() => emitterPub.disconnect()),

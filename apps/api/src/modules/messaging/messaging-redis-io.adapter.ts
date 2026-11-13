@@ -54,7 +54,7 @@ export class MessagingRedisIoAdapter extends IoAdapter {
     }
   }
 
-  /** Áp cùng allowlist cho polling CORS và bắt tay WebSocket (CORS không tự chặn WS). */
+
   override createIOServer(port: number, options?: ServerOptions): Server {
     if (!this.adapterFactory) throw new Error('Redis Socket.IO adapter chưa được khởi tạo');
     const server = super.createIOServer(port, {
@@ -68,7 +68,7 @@ export class MessagingRedisIoAdapter extends IoAdapter {
     return server;
   }
 
-  /** Đóng kết nối pub/sub khi Nest đóng WebSocket server. */
+
   override async close(server: Server): Promise<void> {
     await super.close(server);
     await Promise.all(this.clients.map(async (client) => client.quit().catch(() => client.disconnect())));

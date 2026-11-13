@@ -194,8 +194,8 @@ export class CompletionRecalculateProcessor extends ObservedWorkerHost {
         .execute();
       for (const dependentId of [...new Set(dependents.map((d) => d.course))]) {
         if (dependentId === courseId) continue;
-        // Các khoá phụ thuộc khác nhau hoặc hai thay đổi đồng thời
-        // đều phải có job riêng; dedupe millisecond không bảo toàn.
+
+
         await this.recalcQueue.add('recalculate', { courseId: dependentId,
           spaceSlug: job.data.spaceSlug, spaceId: job.data.spaceId, tenantId: job.data.tenantId },
           { jobId: `${job.data.spaceId ?? 'shared'}-completion-recalc-${dependentId}-${randomUUID()}`, attempts: 3 }).catch(() => undefined);

@@ -106,16 +106,16 @@ export class BackupProcessor extends ObservedWorkerHost {
 }
 
 @Processor('restore')
-/**
- * Xử lý job khôi phục khoá học nền.
- */
+
+
+
 export class RestoreProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(job: Job<{ jobId: string }>): Promise<{ status: string; mapped?: number }> {
     validateWorkerJobPayload(workerPayloadSchemas['restore'], job.data, 'restore');
-    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
-    // ngữ cảnh platform tường minh để RLS fail-closed không làm mù
-    // dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
+
+
+
     return tenantAls.run({ platform: true }, () => this.processInContext(job));
   }
 
@@ -173,9 +173,9 @@ export class RestoreProcessor extends ObservedWorkerHost {
 }
 
 @Processor('search-reindex')
-/**
- * Xử lý job dựng lại chỉ mục tìm kiếm.
- */
+
+
+
 export class SearchReindexProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(_job: Job<Record<string, never>>): Promise<{ indexed: number }> {
@@ -251,16 +251,16 @@ export class SearchReindexProcessor extends ObservedWorkerHost {
 }
 
 @Processor('analytics-run')
-/**
- * Xử lý job chạy mô hình phân tích (insights).
- */
+
+
+
 export class AnalyticsRunProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(job: Job<{ courseId: string }>): Promise<{ predictions: number; insights: number }> {
     validateWorkerJobPayload(workerPayloadSchemas['analytics-run'], job.data, 'analytics-run');
-    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
-    // ngữ cảnh platform tường minh để RLS fail-closed không làm mù
-    // dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
+
+
+
     return tenantAls.run({ platform: true }, () => this.processInContext(job));
   }
 
@@ -342,13 +342,13 @@ export class AnalyticsRunProcessor extends ObservedWorkerHost {
 }
 
 @Processor('report-schedule')
-/**
- * Xử lý job báo cáo theo lịch: sinh báo cáo và gửi notification (nội dung từ catalog i18n).
- * Thông báo đi qua hàm luật phân phối dùng chung ({@link NotificationDeliveryService},
- * NB-6): trước lát này processor insert thẳng vào bảng notifications —
- * không kiểm đình chỉ, không kiểm tuỳ chọn, không ghi dispatch log; nay áp
- * đúng luật như `notify()` phía API cho kênh trong-app.
- */
+
+
+
+
+
+
+
 export class ReportScheduleProcessor extends ObservedWorkerHost {
   constructor(
     private readonly i18n: I18nService,
@@ -357,9 +357,9 @@ export class ReportScheduleProcessor extends ObservedWorkerHost {
   ) { super(); }
   async process(job: Job<{ scheduleId: string }>): Promise<{ rows: number; status: string }> {
     validateWorkerJobPayload(workerPayloadSchemas['report-schedule'], job.data, 'report-schedule');
-    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
-    // ngữ cảnh platform tường minh để RLS fail-closed không làm mù
-    // dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
+
+
+
     return tenantAls.run({ platform: true }, () => this.processInContext(job));
   }
 
@@ -403,16 +403,16 @@ export class ReportScheduleProcessor extends ObservedWorkerHost {
 }
 
 @Processor('privacy')
-/**
- * Xử lý job quyền riêng tư (xuất/xoá dữ liệu cá nhân).
- */
+
+
+
 export class PrivacyProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(job: Job<{ requestId: string }>): Promise<{ status: string; subsystems: string[] }> {
     validateWorkerJobPayload(workerPayloadSchemas['privacy'], job.data, 'privacy');
-    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
-    // ngữ cảnh platform tường minh để RLS fail-closed không làm mù
-    // dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
+
+
+
     return tenantAls.run({ platform: true }, () => this.processInContext(job));
   }
 
@@ -490,16 +490,16 @@ export class PrivacyProcessor extends ObservedWorkerHost {
 }
 
 @Processor('payment-reconciliation')
-/**
- * Xử lý job đối soát thanh toán.
- */
+
+
+
 export class PaymentReconciliationProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(job: Job<{ paymentId?: string; externalTransactionId?: string; status?: string }>): Promise<{ status: string; duplicate?: boolean; succeeded?: number }> {
     validateWorkerJobPayload(workerPayloadSchemas['payment-reconciliation'], job.data, 'payment-reconciliation');
-    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
-    // ngữ cảnh platform tường minh để RLS fail-closed không làm mù
-    // dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
+
+
+
     return tenantAls.run({ platform: true }, () => this.processInContext(job));
   }
 

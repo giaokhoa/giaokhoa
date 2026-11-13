@@ -277,8 +277,8 @@ export class CompletionService implements OnModuleInit {
       for (const cc of completions) {
         await this.repo.upsertCourseCompletion({ ...cc, reAggregate: new Date() });
       }
-      // Mỗi lần tiêu chí đổi là một sự kiện tính lại độc lập:
-      // timestamp millisecond không phải định danh duy nhất.
+
+
       await this.recalcQueue.add('recalculate', { courseId, ...backgroundJobContext() }, { jobId: backgroundJobId(`completion-recalc-${courseId}-${randomUUID()}`), attempts: 3 });
       await this.outbox.enqueueStandalone({ aggregate: 'completion', type: 'completion_criteria_changed', payload: { courseId, reAggregate: true } });
     }

@@ -53,8 +53,8 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         if (Array.isArray(record.message)) {
           detail = 'Validation failed';
           errors = record.message.map((issue) => {
-            // Pipe Standard Schema truyền thông điệp đã dịch và path có
-            // cấu trúc; các exception cũ vẫn dùng chuỗi thông điệp.
+
+
             if (issue && typeof issue === 'object') {
               const item = issue as Record<string, unknown>;
               return {

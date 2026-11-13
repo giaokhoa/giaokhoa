@@ -268,27 +268,27 @@ export function createBetterAuth(deps: BetterAuthFactoryDeps) {
               allowDynamicClientRegistration: true,
               allowUnauthenticatedClientRegistration: true,
               clientRegistrationDefaultApplicationType: 'infer',
-              // Đăng ký client không xác thực phải bắt đầu với quyền đọc;
-              // bước nâng quyền OAuth chỉ cấp thêm sau khi người dùng đồng ý,
-              // không mặc nhiên đưa mọi scope ghi vào danh sách mặc định.
+
+
+
               clientRegistrationDefaultScopes: ['giaokhoa.questions.read'],
-              // `offline_access` là scope GIAO THỨC phía AS, không
-              // phải scope quyền của resource /mcp: plugin chỉ cho
-              // client đăng ký scope này khi AS khai tường minh tại
-              // đây, và chỉ cấp refresh token khi authorize xin nó
-              // (cơ chế oauth-provider 1.7.12 — kiểm chứng trong
-              // dist + e2e mcp-as-oauth; thiếu khai này thì DCR của
-              // client xin phiên dài chết invalid_scope ngay).
+
+
+
+
+
+
+
               clientRegistrationAllowedScopes: [...MCP_OAUTH_SCOPES.filter((scope) => scope !== 'giaokhoa.questions.read'), 'offline_access'],
-              // ── Ánh xạ bảng OAuth → bảng vật lý (issue #654, D2) ──
-              // Cơ chế chính thức: plugin oauth-provider đọc
-              // `opts.schema?.<model>.modelName/fields` qua `mergeSchema`
-              // (chỉ override field đã có trong schema gốc). Bảng vật lý
-              // có tiền tố `oauth_` + tên cột snake_case; `usePlural`
-              // không dùng được vì nó số nhiều hoá cả `session` →
-              // `sessions`. Bảng `jwks` của plugin jwt được override
-              // riêng tại khối `jwt()` bên dưới (không thuộc schema
-              // của plugin oauth-provider).
+
+
+
+
+
+
+
+
+
               schema: {
                 oauthClient: {
                   modelName: 'oauth_client',

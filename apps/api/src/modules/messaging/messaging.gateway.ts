@@ -107,11 +107,11 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
     }
   }
 
-  /**
-   * Socket.IO chờ callback của namespace middleware trước khi công nhận
-   * kết nối. Không xác thực trong onConnect bất đồng bộ vì Socket.IO không
-   * chờ hook đó, client chưa được kiểm tra đã có thể emit sự kiện.
-   */
+
+
+
+
+
   afterInit(server: Namespace): void {
     this.realtime.attachServer(server);
     server.use((client, next) => {
@@ -135,9 +135,9 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
       resolveAuth = resolve;
     });
     try {
-      // Handshake production đã được kiểm chứng trước ACK ở server.use.
-      // Fallback chỉ dành cho test gọi trực tiếp hook; không tái kiểm
-      // tra phiên trong cửa sổ chuyển từ middleware sang handleConnection.
+
+
+
       const preAuthenticated = client.data.authIdentity as MessagingSocketIdentity | undefined;
       delete client.data.authIdentity;
       const identity = preAuthenticated ?? await this.auth.authenticateHandshake(client.handshake);

@@ -221,9 +221,9 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
         ...(opts.cookieToken ? { Cookie: signedBetterAuthCookie(opts.cookieToken) } : {}),
       },
       transports: ['websocket'],
-      // Đăng ký listener trước khi mở socket: hai kết nối liên tiếp
-      // có thể ACK trước lượt await của socket thứ hai, làm test
-      // bỏ lỡ sự kiện connect dù kết nối thực tế đã thành công.
+
+
+
       autoConnect: false,
       reconnection: false,
       timeout: 5000,

@@ -113,12 +113,12 @@ export class AuthMailProcessor extends ObservedWorkerHost {
   }
 
   async process(job: Job<OutboxEventJobData>, token?: string): Promise<AuthMailProcessResult> {
-    // Job chạy trong phiên đúng với trung tâm mà sự kiện thuộc về
-    // qua `SpaceJobRunner` (issue #582) — cùng một đường như mọi
-    // consumer của relay: trung tâm ở kho riêng thì phiên theo
-    // trung tâm được mở trước khi thân xử lý chạy; trung tâm ở
-    // kho chung thì là ngữ cảnh platform như hiện tại. Thân xử
-    // lý ở `processInContext` không đổi.
+
+
+
+
+
+
     validateWorkerJobPayload(workerPayloadSchemas['outbox-event'], job.data, 'auth-mail');
     return this.jobRunner.runForJob(job.data, () => this.processInContext(job, token));
   }
@@ -127,8 +127,8 @@ export class AuthMailProcessor extends ObservedWorkerHost {
     const data = job.data;
     const result = authMailPayloadSchema.safeParse(data?.payload ?? null);
     if (!result.success) {
-      // Không đưa payload thô vào log: reset URL mang token bí mật,
-      // OTP cũng là mã đăng nhập còn hiệu lực.
+
+
       this.logger.error(
         `Payload mail auth không hợp lệ, bỏ qua job ${data?.outboxId ?? 'unknown'}; trường lỗi: ${result.error.issues.map((issue) => issue.path.join('.')).join(', ')}`,
       );

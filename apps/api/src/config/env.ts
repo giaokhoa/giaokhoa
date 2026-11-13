@@ -131,12 +131,12 @@ export function validateEnv(config: Record<string, unknown>): Env {
   return parsed.data;
 }
 
-/**
- * Kết nối DB an toàn khi DATABASE_SSL=true. Node-postgres có thể âm
- * thầm ghi đè `PoolConfig.ssl` bằng sslmode/sslrootcert/sslcert/sslkey
- * trong chuỗi URL; loại những tham số này trước khi đặt object SSL.
- * Không hỗ trợ bỏ xác minh TLS trên mạng production.
- */
+
+
+
+
+
+
 export function databaseConnectionFromEnv(url: string, ssl: boolean): string | PoolConfig {
   if (!ssl) return url;
   const parsed = new URL(url);
@@ -146,7 +146,7 @@ export function databaseConnectionFromEnv(url: string, ssl: boolean): string | P
   return { connectionString: parsed.toString(), ssl: { rejectUnauthorized: true, ...(ca ? { ca } : {}) } };
 }
 
-/** Tuỳ chọn Redis TLS dùng chung ioredis và Socket.IO pub/sub. */
+
 export function redisTlsFromUrl(url: string): { tls?: { rejectUnauthorized: true; ca?: string } } {
   if (new URL(url).protocol !== 'rediss:') return {};
   const caFile = process.env.REDIS_TLS_CA_FILE;
@@ -154,7 +154,7 @@ export function redisTlsFromUrl(url: string): { tls?: { rejectUnauthorized: true
   return { tls: { rejectUnauthorized: true, ...(ca ? { ca } : {}) } };
 }
 
-/** Kết nối Keyv Redis: xác thực chứng chỉ máy chủ qua CA hệ thống/PEM. */
+
 export function cacheRedisConfigFromUrl(url: string): {
   url: string;
   socket?: { tls: true; rejectUnauthorized: true; ca?: string };
@@ -178,11 +178,11 @@ export function redisConnectionFromUrl(url: string): {
     port: parsed.port ? Number(parsed.port) : 6379,
     username: parsed.username || undefined,
     password: parsed.password || undefined,
-    // Mặc định kiểm tra CA công khai, có thể mount CA nội bộ qua REDIS_TLS_CA_FILE.
+
     ...redisTlsFromUrl(url),
-    // API chỉ là producer BullMQ: từ chối enqueue sớm nếu Redis mất kết
-    // nối, không treo request HTTP vô hạn hay giữ lệnh trong offline queue.
-    // Worker ở apps/worker có cấu hình riêng để nhận job sau khi Redis hồi phục.
+
+
+
     maxRetriesPerRequest: 1,
     enableOfflineQueue: false,
   };

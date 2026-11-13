@@ -46,9 +46,9 @@ function weekStartUtc(now: Date): Date {
 }
 
 @Processor('guardian-digests')
-/**
- * Xử lý job quét digest phụ huynh: chốt các lượt digest/đẩy quá hạn đến hạn và phát sự kiện outbox cho nửa tiêu thụ phía worker tổng hợp + gửi.
- */
+
+
+
 export class GuardianDigestProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService, private readonly taskLog: TaskLogService) { super(); }
 

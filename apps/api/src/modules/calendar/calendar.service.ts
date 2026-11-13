@@ -284,9 +284,9 @@ export class CalendarService {
     const sub = await this.repo.getSubscription(subscriptionId);
     if (!sub) throw new NotFoundException({ message: `Subscription ${subscriptionId} not found`, code: 'calendar.subscription_not_found' });
     await this.evaluator.requireCapability(actorId, 'calendar:managesubscriptions', await this.systemCtx());
-    // Mỗi lần người quản trị yêu cầu import là một lần xử lý mới;
-    // không dedupe theo millisecond (hai request cùng tick có thể
-    // dùng chung id và lần thứ hai bị BullMQ bỏ qua âm thầm).
+
+
+
     await this.importQueue.add('import', { subscriptionId, ...backgroundJobContext() }, { jobId: backgroundJobId(`cal-import-${subscriptionId}-${randomUUID()}`), attempts: 3 });
     return { queued: true, subscriptionId };
   }

@@ -47,7 +47,7 @@ export function validateEnv(config: Record<string, unknown>): Env {
   return parsed.data;
 }
 
-/** Cấu hình DB giống API: bỏ sslmode trước khi bật xác minh CA. */
+
 export function databaseConnectionFromEnv(url: string, ssl: boolean): string | PoolConfig {
   if (!ssl) return url;
   const parsed = new URL(url);
@@ -57,7 +57,7 @@ export function databaseConnectionFromEnv(url: string, ssl: boolean): string | P
   return { connectionString: parsed.toString(), ssl: { rejectUnauthorized: true, ...(ca ? { ca } : {}) } };
 }
 
-/** Redis TLS xác minh CA và cho phép mount CA nội bộ khi triển khai. */
+
 export function redisTlsFromUrl(url: string): { tls?: { rejectUnauthorized: true; ca?: string } } {
   if (new URL(url).protocol !== 'rediss:') return {};
   const caFile = process.env.REDIS_TLS_CA_FILE;
@@ -79,7 +79,7 @@ export function redisConnectionFromUrl(url: string): {
     port: parsed.port ? Number(parsed.port) : 6379,
     username: parsed.username || undefined,
     password: parsed.password || undefined,
-    // rediss:// xác minh chứng chỉ qua CA hệ thống hoặc CA được mount.
+
     ...redisTlsFromUrl(url),
     maxRetriesPerRequest: null,
   };

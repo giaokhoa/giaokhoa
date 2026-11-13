@@ -56,8 +56,8 @@ describe('Graceful shutdown BullMQ của vòng đời Nest (được gọi từ 
       closing = app.close();
       let closed = false;
       void closing.then(() => { closed = true; });
-      // OnApplicationShutdown của BullExplorer phải chờ worker.close,
-      // và worker.close phải chờ job đang active hoàn thành.
+
+
       await new Promise((resolve) => setTimeout(resolve, 150));
       expect(closed).toBe(false);
       expect(jobCompleted).toBe(false);

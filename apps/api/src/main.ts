@@ -57,8 +57,8 @@ async function bootstrap(): Promise<void> {
       },
     });
     app.use((req: Request, res: Response, next: NextFunction) => {
-      // Kiểm tra đúng biên path: /apixyz là SPA route hợp lệ, còn MCP,
-      // Socket.IO và OAuth metadata không được nhận nhầm HTML.
+
+
       const apiPaths = ['/api', '/mcp', '/socket.io', '/.well-known'];
       if (req.method !== 'GET' || apiPaths.some((path) => req.path === path || req.path.startsWith(`${path}/`))) return next();
       res.setHeader('Cache-Control', 'no-cache');
@@ -72,7 +72,7 @@ async function bootstrap(): Promise<void> {
     .setVersion('1.0')
     .addBearerAuth()
     .build();
-  // Chỉ dựng OpenAPI khi truy cập tài liệu, giảm thời gian bootstrap.
+
   SwaggerModule.setup('api/docs', app, () => SwaggerModule.createDocument(app, documentConfig));
 
   await app.listen(config.get<number>('PORT') ?? 3000);
