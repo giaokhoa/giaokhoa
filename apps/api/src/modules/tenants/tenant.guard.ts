@@ -28,7 +28,7 @@ import { TenantContextService } from './tenant-context.service';
  *
  * Đường kho riêng (issue #584): request ở địa chỉ của một trung tâm ở kho riêng KHÔNG đi qua cổng membership của kho chung nữa — tài khoản của trung tâm đó không tồn tại ở kho chung nên cổng cũ sẽ từ chối oan. Nhánh kho riêng phân giải tenant từ CHÍNH kho của trung tâm (dòng tenant mang slug của địa chỉ): tenant đó phải active; tenant school/center đòi membership active TRONG kho riêng
  * (thành viên nội bộ của trung tâm, không nối tới tài khoản toàn
- * cục); tenant kind `platform` (site chính ở kho riêng) mở như tenant-zero của đường chung. Ngoại lệ duy nhất giữ luồng cũ là phiên mang `tid` của tenant platform — đường vận hành platform, để `SpaceContextGuard` miễn trừ sau đó như trước.
+ * cục); tenant kind `platform` (site chính ở kho riêng) mở như tenant-zero của đường chung. Ngoại lệ duy nhất giữ luồng cũ là phiên mang `tid` của tenant platform — đường vận hành platform, để kiểm tra danh tính vận hành ở kho chung. SpaceContextGuard KHÔNG miễn kiểm tra Host hay trạng thái trung tâm cho phiên này; chỉ route metadata control plane được khai báo riêng mới bỏ qua khâu gắn kho nghiệp vụ và vẫn kiểm tra audience/capability.
  */
 @Injectable()
 export class TenantGuard implements CanActivate {

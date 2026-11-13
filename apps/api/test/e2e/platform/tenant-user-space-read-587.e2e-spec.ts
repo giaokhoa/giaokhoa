@@ -7,6 +7,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createControlPlaneKysely } from '@giaokhoa/db/control-plane';
 import { SpaceDatabaseService } from '../../../src/db/routing/space-database.service';
 import { PermissionEvaluator } from '../../../src/modules/access/permission-evaluator.service';
+import { RolesService } from '../../../src/modules/access/roles.service';
+import { ContextsService } from '../../../src/modules/access/contexts.service';
 import { tenantAls } from '../../../src/modules/tenants/tenant-als';
 import { TenantsService } from '../../../src/modules/tenants/tenants.service';
 import { UsersService } from '../../../src/modules/users/users.service';
@@ -410,6 +412,66 @@ describe('Phân tách quyền vận hành và dữ liệu trung tâm qua HTTP (i
     expect(memberIds).toContain(createdBody.id);
   });
 
+  it('quản trị A/B thêm, đình chỉ và kích hoạt thành viên chỉ trong kho mình; platform và token chéo bị chặn', async () => {
+    const spaceDb = app.get(SpaceDatabaseService, { strict: false });
+    const users = app.get(UsersService, { strict: false });
+    const candidate = async (slug: string, tid: string, label: string) => {
+      const username = uniqueName(label);
+      return spaceDb.withSpaceKysely(slug, () => users.createUser({
+        username,
+        email: username + '@example.com',
+        password: STRONG_PASSWORD,
+        firstName: 'Nguoi',
+        lastName: 'Moi',
+      }), { tenantId: tid });
+    };
+    // Dữ kiện đầu vào của fixture chỉ tạo tài khoản tại từng kho;
+    // membership bắt buộc do API thực hiện để kiểm đường ghi thật.
+    const userA = await candidate(CENTRE_SLUG, tenantId, 'hoivienA');
+    const userB = await candidate(CENTRE_B_SLUG, tenantBId, 'hoivienB');
+
+    const addA = await http(app).post(`/api/v1/tenants/${tenantId}/members`)
+      .set('Host', HOST).set(auth(centreAdminToken)).send({ userId: userA.id });
+    expect(addA.status, JSON.stringify(addA.body)).toBe(201);
+    expect(addA.body.status).toBe('active');
+
+    const suspended = await http(app).patch(`/api/v1/tenants/${tenantId}/members/${userA.id}`)
+      .set('Host', HOST).set(auth(centreAdminToken)).send({ status: 'suspended' });
+    expect(suspended.status, JSON.stringify(suspended.body)).toBe(200);
+    expect(suspended.body.status).toBe('suspended');
+
+    const restored = await http(app).patch(`/api/v1/tenants/${tenantId}/members/${userA.id}`)
+      .set('Host', HOST).set(auth(centreAdminToken)).send({ status: 'active' });
+    expect(restored.status, JSON.stringify(restored.body)).toBe(200);
+    expect(restored.body.status).toBe('active');
+
+    const addB = await http(app).post(`/api/v1/tenants/${tenantBId}/members`)
+      .set('Host', HOST_B).set(auth(centreBAdminToken)).send({ userId: userB.id });
+    expect(addB.status, JSON.stringify(addB.body)).toBe(201);
+    expect(addB.body.status).toBe('active');
+
+    expect(await countRows(centreUrl(), 'tenant_memberships', 'user_id', userA.id)).toBe(1);
+    expect(await countRows(centreBUrl(), 'tenant_memberships', 'user_id', userA.id)).toBe(0);
+    expect(await countRows(process.env.DATABASE_URL!, 'tenant_memberships', 'user_id', userA.id)).toBe(0);
+    expect(await countRows(centreBUrl(), 'tenant_memberships', 'user_id', userB.id)).toBe(1);
+    expect(await countRows(centreUrl(), 'tenant_memberships', 'user_id', userB.id)).toBe(0);
+    expect(await countRows(process.env.DATABASE_URL!, 'tenant_memberships', 'user_id', userB.id)).toBe(0);
+
+    for (const token of [adminToken, centreBAdminToken]) {
+      const deniedAdd = await http(app).post(`/api/v1/tenants/${tenantId}/members`)
+        .set('Host', HOST).set(auth(token)).send({ userId: userA.id });
+      expect([401, 403]).toContain(deniedAdd.status);
+      const deniedPatch = await http(app).patch(`/api/v1/tenants/${tenantId}/members/${userA.id}`)
+        .set('Host', HOST).set(auth(token)).send({ status: 'ended' });
+      expect([401, 403]).toContain(deniedPatch.status);
+    }
+    const check = await http(app).get(`/api/v1/tenants/${tenantId}/members`)
+      .set('Host', HOST).set(auth(centreAdminToken));
+    expect(check.status).toBe(200);
+    expect((check.body as { userId: string; status: string }[])
+      .find((member) => member.userId === userA.id)?.status).toBe('active');
+  });
+
   it('hai trung tâm có tài khoản cùng tên/email nhưng không liên kết, không đọc chéo và không dùng chung mật khẩu', async () => {
     expect(await countRows(process.env.DATABASE_URL!, 'tenants', 'slug', CENTRE_B_SLUG)).toBe(0);
     expect(await countRows(centreUrl(), 'users', 'username', centreAdminUsername)).toBe(1);
@@ -468,6 +530,125 @@ describe('Phân tách quyền vận hành và dữ liệu trung tâm qua HTTP (i
       )).rows,
     );
     expect(tables).toHaveLength(0);
+  });
+
+  it('mã tham gia trùng chuỗi tại A/B chỉ phân giải và kết nạp vào lớp trong kho của Host', async () => {
+    const spaceDb = app.get(SpaceDatabaseService, { strict: false });
+    const users = app.get(UsersService, { strict: false });
+    const tenants = app.get(TenantsService, { strict: false });
+    const roles = app.get(RolesService, { strict: false });
+    const contexts = app.get(ContextsService, { strict: false });
+
+    // Kho mới bắt đầu từ migration rỗng. Gieo vai mặc định và gán
+    // manager TẠI context của chính trung tâm để người tạo lớp có
+    // capability tường minh (siteadmins không tự có quyền tạo lớp).
+    for (const [slug, tid, adminId] of [
+      [CENTRE_SLUG, tenantId, centreAdminId],
+      [CENTRE_B_SLUG, tenantBId, centreBAdminId],
+    ] as const) {
+      await tenantAls.run({ platform: true }, () =>
+        spaceDb.withSpaceKysely(slug, async () => {
+          await roles.seedDefaults();
+          const manager = await roles.getRoleByShortname('manager');
+          if (!manager) throw new Error('Thiếu vai manager của kho trung tâm');
+          const ctx = await contexts.ensureTenantContext(tid);
+          await roles.assignRole(adminId, manager.id, ctx.id);
+        }, { tenantId: tid }),
+      );
+    }
+
+    const createOpenClass = async (host: string, token: string, name: string) => {
+      const created = await http(app).post('/api/v1/classes')
+        .set('Host', host).set(auth(token)).send({ name });
+      expect(created.status, JSON.stringify(created.body)).toBe(201);
+      const id = (created.body as { id: string }).id;
+      const updated = await http(app).patch(`/api/v1/classes/${id}`)
+        .set('Host', host).set(auth(token))
+        .send({ allowSelfReport: true, joinAutoApprove: true });
+      expect(updated.status, JSON.stringify(updated.body)).toBe(200);
+      return id;
+    };
+    const classA = await createOpenClass(HOST, centreAdminToken, 'Lớp chỉ ở A');
+    const classB = await createOpenClass(HOST_B, centreBAdminToken, 'Lớp chỉ ở B');
+    const classAOnly = await createOpenClass(HOST, centreAdminToken, 'Lớp A có mã khác');
+
+    // Cùng mã hợp lệ trong hai database độc lập. Ký hiệu kiểm thử
+    // cố định để chứng minh không có bảng mã chung áp unique toàn cục.
+    const sharedCode = 'SHR' + RUN_SUFFIX.toUpperCase();
+    const onlyACode = 'ONE' + RUN_SUFFIX.toUpperCase();
+    for (const [url, classId, code] of [
+      [centreUrl(), classA, sharedCode],
+      [centreBUrl(), classB, sharedCode],
+      [centreUrl(), classAOnly, onlyACode],
+    ]) {
+      await withClient(url, async (client) => {
+        await client.query("SELECT set_config('app.platform', 'on', false)");
+        await client.query('UPDATE classes SET join_code = $1 WHERE id = $2', [code, classId]);
+      });
+    }
+
+    const studentIn = async (slug: string, tid: string, host: string, label: string) => {
+      const username = uniqueName(label);
+      await spaceDb.withSpaceKysely(slug, async () => {
+        const student = await users.createUser({
+          username, email: username + '@example.com', password: STRONG_PASSWORD,
+          firstName: 'Hoc', lastName: 'Sinh',
+        });
+        await tenants.ensureActiveMembership(tid, student.id);
+      }, { tenantId: tid });
+      return (await loginAt(host, username, STRONG_PASSWORD)).accessToken;
+    };
+    const studentA = await studentIn(CENTRE_SLUG, tenantId, HOST, 'studentA');
+    const studentB = await studentIn(CENTRE_B_SLUG, tenantBId, HOST_B, 'studentB');
+
+    const previewA = await http(app).get('/api/v1/classes/join-preview')
+      .query({ code: sharedCode }).set('Host', HOST).set(auth(studentA));
+    expect(previewA.status, JSON.stringify(previewA.body)).toBe(200);
+    expect(previewA.body.classId).toBe(classA);
+    const previewB = await http(app).get('/api/v1/classes/join-preview')
+      .query({ code: sharedCode }).set('Host', HOST_B).set(auth(studentB));
+    expect(previewB.status, JSON.stringify(previewB.body)).toBe(200);
+    expect(previewB.body.classId).toBe(classB);
+    expect(classA).not.toBe(classB);
+
+    const joinedA = await http(app).post('/api/v1/classes/join')
+      .set('Host', HOST).set(auth(studentA)).send({ joinCode: sharedCode });
+    expect(joinedA.status, JSON.stringify(joinedA.body)).toBe(201);
+    expect(joinedA.body).toMatchObject({ outcome: 'joined', class: { id: classA } });
+    const joinedB = await http(app).post('/api/v1/classes/join')
+      .set('Host', HOST_B).set(auth(studentB)).send({ joinCode: sharedCode });
+    expect(joinedB.status, JSON.stringify(joinedB.body)).toBe(201);
+    expect(joinedB.body).toMatchObject({ outcome: 'joined', class: { id: classB } });
+
+    // Mã chỉ tồn tại ở A không được xem trước hoặc dùng để xin
+    // vào lớp tại B, dù cùng người dùng đang có phiên hợp lệ ở B.
+    const aOnly = await http(app).get('/api/v1/classes/join-preview')
+      .query({ code: onlyACode }).set('Host', HOST).set(auth(studentA));
+    expect(aOnly.status).toBe(200);
+    expect(aOnly.body.classId).toBe(classAOnly);
+    const deniedPreview = await http(app).get('/api/v1/classes/join-preview')
+      .query({ code: onlyACode }).set('Host', HOST_B).set(auth(studentB));
+    expect(deniedPreview.status).toBe(404);
+    expect(deniedPreview.body.code).toBe('class.join_code_invalid');
+    const deniedJoin = await http(app).post('/api/v1/classes/join')
+      .set('Host', HOST_B).set(auth(studentB)).send({ joinCode: onlyACode });
+    expect(deniedJoin.status).toBe(404);
+    expect(deniedJoin.body.code).toBe('class.join_code_invalid');
+
+    const wrongHostToken = await http(app).post('/api/v1/classes/join')
+      .set('Host', HOST_B).set(auth(studentA)).send({ joinCode: sharedCode });
+    expect([401, 403]).toContain(wrongHostToken.status);
+    const membershipCount = async (url: string, classId: string) => withClient(url, async (client) => {
+      await client.query("SELECT set_config('app.platform', 'on', false)");
+      const result = await client.query<{ count: number }>(
+        'SELECT count(*)::int AS count FROM cohort_members cm JOIN classes c ON c.cohort_id = cm.cohort_id WHERE c.id = $1',
+        [classId],
+      );
+      return result.rows[0]!.count;
+    });
+    expect(await membershipCount(centreUrl(), classA)).toBe(1);
+    expect(await membershipCount(centreBUrl(), classB)).toBe(1);
+    expect(await membershipCount(centreUrl(), classAOnly)).toBe(0);
   });
 
   it('quản trị platform không được quyền quản trị nghiệp vụ kho riêng dù cache danh tính đã ấm', async () => {

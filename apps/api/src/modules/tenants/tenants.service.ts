@@ -571,14 +571,14 @@ export class TenantsService {
     return ensureActiveTenantMembership(this.spaceDb.routedKysely, tenantId, userId);
   }
 
+  /**
+   * Thêm thành viên trong đúng kho sở hữu tenant. Bọc platform ở
+   * ngoài khung định tuyến giữ nguyên spaceSlug của Host (giống
+   * đường listMembers), tránh đọc/ghi membership nhầm kho chung.
+   * Quyền quản trị vẫn được kiểm tại kho đích trước mọi thao tác.
+   */
   async addMember(actorId: string, tenantId: string, dto: AddTenantMemberDto): Promise<TenantMembershipDto> {
-    // Ngữ cảnh platform (HOTFIX #196 vòng 2): đây là điểm seed chết ở
-    // production — platform admin đứng trong ngữ cảnh tenant-zero gọi
-    // `getTenant(tenant trường)` bị RLS giấu → 404 `tenant.not_found`
-    // giả; ghi membership + outbox cho tenant đích cũng cần tầm nhìn
-    // platform. Cổng assertTenantManager chạy nguyên vẹn bên trong.
-    const result = await tenantAls.run({ platform: true }, () => this.addMemberInContext(actorId, tenantId, dto));
-    return result;
+    return this.runInTenantTargetStore(tenantId, () => this.addMemberInContext(actorId, tenantId, dto));
   }
 
   private async addMemberInContext(actorId: string, tenantId: string, dto: AddTenantMemberDto): Promise<TenantMembershipDto> {
@@ -612,18 +612,16 @@ export class TenantsService {
     return toMembershipDto(row);
   }
 
+  /** Đổi trạng thái thành viên tại kho của tenant, không đánh rơi Host/spaceSlug. */
   async setMemberStatus(
     actorId: string,
     tenantId: string,
     userId: string,
     status: 'active' | 'suspended' | 'ended',
   ): Promise<TenantMembershipDto> {
-    // Ngữ cảnh platform (HOTFIX #196 vòng 2) — cùng lý do với addMember:
-    // đọc/sửa membership của tenant đích từ ngữ cảnh của tenant khác.
-    const result = await tenantAls.run({ platform: true }, () =>
+    return this.runInTenantTargetStore(tenantId, () =>
       this.setMemberStatusInContext(actorId, tenantId, userId, status),
     );
-    return result;
   }
 
   private async setMemberStatusInContext(
@@ -682,11 +680,11 @@ export class TenantsService {
   // --- người dùng trong tenant ------------------------------------------------
 
   /**
-   * Tenant admin tạo người dùng: tạo tài khoản TOÀN CỤC rồi gắn
-   * membership ngay — tài khoản vẫn là một người duy nhất trên toàn hệ
-   * thống (đăng nhập một lần, thuộc được nhiều tenant). Đáp ứng ra
-   * HTTP là `TenantUserView` đã chiếu qua `toTenantUserView` — dòng
-   * `users` đầy đủ (gồm `passwordHash`) chỉ ở lại tầng nội bộ.
+   * Tenant admin tạo người dùng chỉ tại kho chứa tenant đích rồi
+   * gắn membership nội bộ; không dùng định danh xuyên trung tâm.
+   * Ở kho dùng chung, các tenant chia sẻ kho tài khoản đó nhưng
+   * vẫn kiểm tra quyền và membership trong đúng tenant.
+   * Đáp ứng HTTP là TenantUserView, không chứa passwordHash.
    *
    * Đường kho riêng (issue #584): khi tenant đích là trung tâm ở kho
    * riêng, tài khoản mới CHỈ được tạo trong kho của trung tâm đó —
