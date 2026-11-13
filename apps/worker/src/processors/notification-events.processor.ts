@@ -1,3 +1,4 @@
+import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
 import { Processor } from '@nestjs/bullmq';
 import { ObservedWorkerHost } from '../observed-worker-host';
 import { DelayedError, type Job } from 'bullmq';
@@ -87,6 +88,7 @@ export class NotificationEventsProcessor extends ObservedWorkerHost {
     job: Job<OutboxEventJobData>,
     token?: string,
   ): Promise<{ handled: boolean; duplicate?: boolean }> {
+    validateWorkerJobPayload(workerPayloadSchemas['outbox-event'], job.data, 'notification-events');
     return this.jobRunner.runForJob(job.data, async () => {
       const { outboxId, type, payload } = job.data;
       if (!(NOTIFICATION_EVENT_TYPES as readonly string[]).includes(type)) {

@@ -1,3 +1,4 @@
+import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
 import { Processor } from '@nestjs/bullmq';
 import { ObservedWorkerHost } from '../observed-worker-host';
 import { Inject, Logger } from '@nestjs/common';
@@ -136,6 +137,7 @@ export class MessagingRealtimeProcessor extends ObservedWorkerHost {
     if (!data || typeof data.outboxId !== 'string' || data.outboxId.length === 0 || typeof data.type !== 'string') {
       throw new Error('Messaging realtime job is missing its outboxId or event type');
     }
+    validateWorkerJobPayload(workerPayloadSchemas['outbox-event'], job.data, 'messaging-realtime');
     await this.jobRunner.runForJob(data, async () => {
       const markKey = `${MESSAGING_DISTRIBUTED_KEY_PREFIX}${scopedOutboxId(data.outboxId)}`;
       try {

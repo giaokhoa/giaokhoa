@@ -1,3 +1,4 @@
+import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
 import { Processor } from '@nestjs/bullmq';
 import { ObservedWorkerHost } from '../observed-worker-host';
 import { Logger } from '@nestjs/common';
@@ -78,6 +79,7 @@ export class GuardianDigestEventsProcessor extends ObservedWorkerHost {
    * Xử lý một job sự kiện digest: trả `{ handled: true }` khi sự kiện thuộc hai loại digest và payload đúng hình dạng (handler đã chạy — kết quả nghiệp vụ nằm ở vết lượt); các trường hợp còn lại (payload sai hình dạng, handler ném lỗi, loại lạ lạc vào hàng đợi) đều hoàn thành lặng lẽ với `handled: false` theo ngữ nghĩa nuốt lỗi của consumer phía API trước đây.
    */
   async process(job: Job<OutboxEventJobData>): Promise<{ handled: boolean }> {
+    validateWorkerJobPayload(workerPayloadSchemas['outbox-event'], job.data, 'guardian-digest-events');
     return this.jobRunner.runForJob(job.data, async () => {
       const { type, payload } = job.data;
       try {

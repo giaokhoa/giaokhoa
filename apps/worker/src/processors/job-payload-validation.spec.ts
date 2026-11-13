@@ -48,3 +48,43 @@ describe('Biên kiểm chứng job từ Redis trước khi đọc kho dữ liệ
     expect(message).not.toContain('secret-body');
   });
 });
+
+describe('Phong bì job outbox: không tin dữ liệu JSON từ Redis', () => {
+  const valid = {
+    outboxId: '0191e8f2-7c3a-7b21-9f00-000000000517',
+    seq: 517,
+    aggregate: 'auth',
+    type: 'auth_mail_requested',
+    payload: { resetUrl: 'https://example.org/reset/very-secret' },
+    tenantId: null,
+    spaceSlug: null,
+    occurredAt: '2026-11-13T12:00:00.000Z',
+  };
+
+  it('chấp nhận phong bì outbox lịch sử với payload nghiệp vụ tuỳ biến', () => {
+    expect(validateWorkerJobPayload(workerPayloadSchemas['outbox-event'], valid, 'auth-mail'))
+      .toMatchObject(valid);
+  });
+
+  it('từ chối định danh và số thứ tự outbox không hợp lệ trước khi chạy consumer', () => {
+    expect(() => validateWorkerJobPayload(workerPayloadSchemas['outbox-event'], {
+      ...valid, outboxId: '', seq: '517',
+    }, 'auth-mail')).toThrow(/outboxId, seq/);
+    expect(() => validateWorkerJobPayload(workerPayloadSchemas['outbox-event'], {
+      ...valid, spaceSlug: 42,
+    }, 'auth-mail')).toThrow('spaceSlug');
+  });
+
+  it('không đưa reset URL hoặc dữ liệu khách hàng vào thông báo lỗi', () => {
+    let message = '';
+    try {
+      validateWorkerJobPayload(workerPayloadSchemas['outbox-event'], {
+        ...valid, type: null,
+      }, 'auth-mail');
+    } catch (error) {
+      message = String(error);
+    }
+    expect(message).toContain('type');
+    expect(message).not.toContain('very-secret');
+  });
+});

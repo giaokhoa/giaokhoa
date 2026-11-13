@@ -13,6 +13,19 @@ const spaceScope = {
 };
 
 export const workerPayloadSchemas = {
+  // Phong bì chung của transactional outbox, kiểm trước khi định
+  // tuyến kho để lỗi shape không thể bị hiểu là sự kiện hợp lệ.
+  // Không kiểm schema `payload` nghiệp vụ ở đây: mỗi consumer
+  // dùng contract chuyên biệt và có luật tương thích dữ liệu cũ.
+  'outbox-event': z.looseObject({
+    outboxId: z.string().min(1),
+    seq: z.number().int().nonnegative(),
+    aggregate: z.string().min(1),
+    type: z.string().min(1),
+    payload: z.record(z.string(), z.unknown()).nullable(),
+    occurredAt: z.string().min(1),
+    ...spaceScope,
+  }),
   'calendar-import': z.looseObject({ subscriptionId: z.string().min(1), ...spaceScope }),
   'calendar-reminders': z.looseObject({
     eventId: z.string().min(1),

@@ -1,3 +1,4 @@
+import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
 import { Processor } from '@nestjs/bullmq';
 import { ObservedWorkerHost } from '../observed-worker-host';
 import { Logger } from '@nestjs/common';
@@ -88,6 +89,7 @@ export class CohortSyncEventsProcessor extends ObservedWorkerHost {
    * @throws Lỗi của bề mặt hoặc hạ tầng được truyền ra để BullMQ thử lại job.
    */
   async process(job: Job<OutboxEventJobData>): Promise<{ handled: boolean }> {
+    validateWorkerJobPayload(workerPayloadSchemas['outbox-event'], job.data, 'cohort-sync-events');
     return this.jobRunner.runForJob(job.data, async () => {
       const { type, payload } = job.data;
       if (type === 'cohort_member_added' || type === 'cohort_member_removed') {

@@ -1,3 +1,4 @@
+import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -320,6 +321,7 @@ export class AuthMailProcessor extends ObservedWorkerHost {
     // trung tâm được mở trước khi thân xử lý chạy; trung tâm ở
     // kho chung thì là ngữ cảnh platform như hiện tại. Thân xử
     // lý ở `processInContext` không đổi.
+    validateWorkerJobPayload(workerPayloadSchemas['outbox-event'], job.data, 'auth-mail');
     return this.jobRunner.runForJob(job.data, () => this.processInContext(job, token));
   }
 
