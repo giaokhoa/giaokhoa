@@ -5,6 +5,7 @@ import { CAPABILITY_DEFINITIONS } from '../../../src/modules/access/domain/capab
 import {
   adminToken, assignRole, createContextViaApi, createRoleViaApi, createTestApp, createUserViaApi,
   hasCapability, http, login, roleIdByShortname, setOverride, STRONG_PASSWORD, systemContextId, uniqueName,
+  seedTenantMembershipFixture,
 } from '../../support/identity-access-helpers';
 import { EXPECTED_SNAPSHOTS } from '../../support/users-my-access-snapshot.fixture';
 
@@ -130,9 +131,9 @@ describe('Người dùng: tương đương phân giải batch my-access', () => 
     const member = await addUser('tenantMember');
     await assignRole(app, admin, member.id, customRole, tenantCourse.id);
     await assignRole(app, admin, member.id, customRole, systemId);
-    const memberRes = await http(app).post(`/api/v1/tenants/${tenantId}/members`).set('Authorization', `Bearer ${admin}`)
-      .send({ userId: member.id });
-    expect([200, 201]).toContain(memberRes.status);
+    // Fixture tạo membership, không cấp quyền nghiệp vụ cho platform admin:
+    // phần kiểm chứng quyền phía dưới cố ý giữ admin ngoài tenant.
+    await seedTenantMembershipFixture(app, tenantId, member.id);
 
     const outsider = await addUser('tenantOutsider');
     await assignRole(app, admin, outsider.id, customRole, tenantCourse.id);
@@ -195,9 +196,9 @@ describe('Người dùng: tương đương phân giải batch my-access', () => 
     // Sau khi thành thành viên: vẫn KHÔNG có lối tắt admin — tập
     // capability là phép phân giải thật theo gán vai, hẹp hơn trọn bộ
     // 124 capability và bằng đúng oracle.
-    const addRes = await http(app).post(`/api/v1/tenants/${t.tenantId}/members`).set('Authorization', `Bearer ${admin}`)
-      .send({ userId: adminId });
-    expect([200, 201]).toContain(addRes.status);
+    // Fixture mô phỏng quyền cấp membership của trung tâm; không để
+    // admin platform tự kết nạp vào tenant qua HTTP.
+    await seedTenantMembershipFixture(app, t.tenantId, adminId);
     const adminAfter = await snapshotOf('admin');
     const adminCourse = adminAfter.contexts.find((c) => c.contextId === t.tenantCourseId)!;
     expect(adminCourse.capabilities).toEqual(await oracleCapabilities(adminId, t.tenantCourseId));

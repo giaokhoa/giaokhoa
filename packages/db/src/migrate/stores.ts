@@ -1,7 +1,7 @@
 /**
  * Định nghĩa ba kho và bước tiền-migration dùng chung cho bộ máy migration của `@giaokhoa/db` (runner `run.ts`, hậu kiểm `verify.ts`, harness test dựng database từ rỗng).
  *
- * Ba kho có bộ carrier riêng (danh sách đóng băng khai tại đây; file SQL nằm trong thư mục migration của kho ở `packages/db/migrations/`, cùng thư mục với các migration native), số đếm kỳ vọng riêng và biến môi trường kết nối riêng — bảng này là nơi duy nhất ghi các giá trị đó, để runner, hậu kiểm và harness không tự chế bản sao lệch nhau. Số đếm kỳ vọng đo lại tại thời điểm thi công PR-N2 từ database dựng bằng đường bộ máy cũ (mốc phương án: trung tâm 202 bảng + 21 policy RLS + 416 index, control plane 6 bảng, ngân hàng hệ thống 10 bảng).
+ * Ba kho có bộ carrier riêng (danh sách đóng băng khai tại đây; file SQL nằm trong thư mục migration của kho ở `packages/db/migrations/`, cùng thư mục với các migration native), số đếm kỳ vọng riêng và biến môi trường kết nối riêng — bảng này là nơi duy nhất ghi các giá trị đó, để runner, hậu kiểm và harness không tự chế bản sao lệch nhau. Số đếm kỳ vọng đo lại tại thời điểm thi công PR-N2 từ database dựng bằng đường bộ máy cũ (mốc phương án: trung tâm 202 bảng + 21 policy RLS + 416 index, control plane 4 bảng sau migration issue #9, ngân hàng hệ thống 10 bảng).
  */
 import { sql, type Kysely } from 'kysely';
 
@@ -51,7 +51,7 @@ export const MIGRATION_STORES: Record<MigrationStoreKey, MigrationStore> = {
   'control-plane': {
     migrationsDirName: 'control-plane',
     carrierNames: ['20261030132145_zippy_impossible_man', '20261101061412_melodic_jubilee'],
-    expected: { tables: 6, journalRows: 3 },
+    expected: { tables: 4, journalRows: 4 },
     connectionEnvVars: ['CONTROL_PLANE_DATABASE_URL'],
   },
   'system-bank': {

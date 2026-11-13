@@ -15,7 +15,6 @@ import {
 } from '@giaokhoa/ui/components/dropdown-menu';
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@giaokhoa/ui/components/sidebar';
 import { useAuth } from '#lib/auth';
-import { TenantSwitcherMenu } from '#components/tenant-switcher';
 import '#config/i18n';
 
 /** Chữ viết tắt từ họ tên để làm avatar khi người dùng chưa có ảnh đại diện. */
@@ -91,7 +90,6 @@ export function NavUser() {
               <IconSettings />
               {t('navSettings')}
             </DropdownMenuItem>
-            <TenantSwitcherMenu />
             <DropdownMenuItem
               onClick={() => {
                 setLogoutFailed(false);

@@ -27,8 +27,6 @@ import type {
 } from '@giaokhoa/contracts';
 import { OutboxService } from '../../infra/events/outbox.service';
 import type { CentreTx } from '@giaokhoa/db';
-import { SpaceDatabaseService } from '../../db/routing/space-database.service';
-import { ControlPlaneRepository } from '@giaokhoa/db/repositories/control-plane';
 import { tenantAls } from '../tenants/tenant-als';
 import type { ContextRow } from '@giaokhoa/db/repositories/access';
 import { GroupsRepository } from '@giaokhoa/db/repositories/groups';
@@ -122,14 +120,6 @@ export interface ClassFeeTarget {
   feePaymentAccountId: string | null;
 }
 
-/**
- * Kết quả phân giải một mã tham gia (issue #587, hạng mục 3 — thiết kế C1): dòng lớp và slug của không gian kho riêng giữ lớp đó (`null` khi lớp ở kho chung). `joinByCode` cần slug để chạy toàn bộ các bước ghi của nó trong đúng kho của lớp.
- */
-interface JoinCodeResolution {
-  row: ClassRow;
-  spaceSlug: string | null;
-}
-
 @Injectable()
 /**
  * Nghiệp vụ lớp học hạng nhất (issue #184, CLASS-0).
@@ -155,8 +145,6 @@ export class ClassesService implements OnModuleInit {
     private readonly tenants: TenantsService,
     private readonly tenantContext: TenantContextService,
     private readonly outbox: OutboxService,
-    private readonly spaceDb: SpaceDatabaseService,
-    private readonly directory: ControlPlaneRepository,
     private readonly groupsRepo: GroupsRepository,
   ) {}
 
@@ -519,18 +507,15 @@ export class ClassesService implements OnModuleInit {
     if (input.rotateJoinCode || (patch.allowSelfReport === true && !row.joinCode)) {
       patch.joinCode = generateJoinCode();
     }
-    // Mã mới của lớp thuộc không gian kho riêng phải đăng ký vào
-    // thư mục TRƯỚC khi dòng lớp đổi (thiết kế C1 — xem
-    // claimJoinCodeForClass): va chạm toàn hệ bị chặn ở đây,
-    // trước khi bất kỳ dữ kiện nào của lớp thay đổi.
-    const claimedSpaceSlug = patch.joinCode ? await this.claimJoinCodeForClass(row, patch.joinCode) : null;
-    if (Object.keys(patch).length) await this.repo.updateClass(id, patch);
-    // Cập nhật xong: mã cũ (nếu có và khác mã mới) không còn lớp
-    // nào giữ — gỡ mục thư mục của nó để mã hết hiệu lực ở mọi
-    // đường phân giải, khớp hiệu lực tức thì của việc xoay mã.
-    if (claimedSpaceSlug && row.joinCode && row.joinCode !== patch.joinCode) {
-      await this.removeJoinCodeDirectoryEntry(row);
+    if (patch.joinCode) {
+      // Mã tham gia chỉ có nghĩa trong kho của địa chỉ hiện tại;
+      // không đăng ký hay tra cứu mã lớp ở control plane.
+      const taken = await this.repo.getClassByJoinCode(patch.joinCode);
+      if (taken && taken.id !== id) {
+        throw new ConflictException({ message: 'Class join code already exists in this store', code: 'class.join_code_taken' });
+      }
     }
+    if (Object.keys(patch).length) await this.repo.updateClass(id, patch);
     if (patch.onLeave !== undefined && patch.onLeave !== row.onLeave) {
       await this.repo.syncOnLeaveToInstances(row.cohortId, patch.onLeave);
     }
@@ -579,11 +564,6 @@ export class ClassesService implements OnModuleInit {
       payload: { classId: id, tenantId: row.tenantId, actorId },
       tenantId: row.tenantId,
     });
-    // Lớp ở kho riêng bị xoá thì mã tham gia của nó cũng rời
-    // thư mục (thiết kế C1): mã không còn trỏ vào một không
-    // gian cho một lớp không tồn tại, và được giải phóng cho
-    // tính duy nhất toàn hệ.
-    await this.removeJoinCodeDirectoryEntry(row);
   }
 
   // --- roster (≡ cohort_members của backing cohort) ---------------------------
@@ -965,63 +945,30 @@ export class ClassesService implements OnModuleInit {
 
   // --- tự báo danh bằng mã tham gia (CLASS-1) -----------------------------------
 
-  /**
-   * Phân giải mã tham gia thành lớp đích (issue #587, tiền điều
-   * kiện Phần B, hạng mục 3 — thiết kế C1):
-   * 1. Tra THƯ MỤC mã tham gia ở control plane trước. Mã có mục
-   *    thư mục → lớp thuộc không gian kho riêng của mục đó: đọc
-   *    dòng lớp tại chính kho đích (`withSpaceKysely` — repository
-   *    lớp đã chuyển Kysely ở issue #645 nên bước chuẩn bị phải là
-   *    của facade Kysely), bọc platform đặt ngoài khung định
-   *    tuyến theo khuôn các đường đọc kho riêng của
-   *    TenantsService. Thư mục trỏ tới kho đích mà chuẩn bị kho
-   *    lỗi → lỗi ném ra nguyên trạng, không rơi về tra kho chung.
-   * 2. Mã không có mục thư mục → đường hiện tại ở kho chung:
-   *    tra ở ngữ cảnh platform (mã là bí mật toàn hệ, lớp đích
-   *    có thể thuộc tenant khác tenant hiệu lực của người gọi —
-   *    hồ sơ hotfix #196: tra cứu xuyên tenant phải bọc platform
-   *    tường minh, quyết định nghiệp vụ nằm ở tầng service).
-   * Cả hai đường đều chốt cùng một điều kiện hiệu lực của mã:
-   * lớp tồn tại, đang mở tự báo danh và còn mang mã.
-   */
-  private async resolveClassByJoinCode(joinCode: string): Promise<JoinCodeResolution> {
+  /** Phân giải mã lớp chỉ trong kho của Host hiện tại, không dò kho khác. */
+  private async resolveClassByJoinCode(joinCode: string): Promise<ClassRow> {
     const code = joinCode.trim().toUpperCase();
-    if (this.directory.isConfigured()) {
-      const entry = await this.directory.findJoinCodeDirectory(code);
-      if (entry) {
-        const row = await tenantAls.run({ platform: true }, () =>
-          this.spaceDb.withSpaceKysely(entry.spaceSlug, () => this.repo.getClassByJoinCode(code)),
-        );
-        if (!row || !row.allowSelfReport || !row.joinCode) {
-          throw new NotFoundException({ message: 'Join code is not valid for any open class', code: 'class.join_code_invalid' });
-        }
-        return { row, spaceSlug: entry.spaceSlug };
-      }
+    // Giữ nguyên không gian của Host khi mở RLS để phân giải mã;
+    // không cho mã lớp ở kho khác dẫn đường đến hồ sơ người dùng.
+    const row = await tenantAls.run({ ...tenantAls.getStore(), platform: true }, () =>
+      this.repo.getClassByJoinCode(code),
+    );
+    const activeTenantId = this.tenantContext.currentTenantId();
+    if (!row || !row.allowSelfReport || !row.joinCode || (activeTenantId && row.tenantId !== activeTenantId)) {
+      throw new NotFoundException({ message: 'Join code is not valid for any open class in this space', code: 'class.join_code_invalid' });
     }
-    const row = await this.tenantContext.run({ platform: true }, () => this.repo.getClassByJoinCode(code));
-    if (!row || !row.allowSelfReport || !row.joinCode) {
-      throw new NotFoundException({ message: 'Join code is not valid for any open class', code: 'class.join_code_invalid' });
-    }
-    return { row, spaceSlug: null };
+    return row;
   }
 
-  /** Tra lớp theo mã tham gia (phân giải qua thư mục trước — xem `resolveClassByJoinCode`). */
+  /** Tra lớp theo mã trong kho hiện tại, không tra control plane. */
   private async classByJoinCode(joinCode: string): Promise<ClassRow> {
-    return (await this.resolveClassByJoinCode(joinCode)).row;
+    return this.resolveClassByJoinCode(joinCode);
   }
 
   /** Xem trước lớp từ mã tham gia (học sinh xác nhận đúng lớp trước khi xin vào). */
   async previewJoin(joinCode: string): Promise<{ classId: string; name: string; schoolYear: string | null; ownerName: string }> {
-    const { row, spaceSlug } = await this.resolveClassByJoinCode(joinCode);
-    // Chủ lớp của một lớp ở kho riêng cũng chỉ tồn tại ở kho
-    // đích: đọc hồ sơ chủ lớp tại đúng kho của lớp, không đọc
-    // kho chung (ở đó hoặc không có tài khoản này, hoặc là một
-    // tài khoản khác hẳn cùng định danh).
-    const owner = spaceSlug
-      ? await tenantAls.run({ platform: true }, () =>
-          this.spaceDb.withSpaceKysely(spaceSlug, () => this.users.getByIdOrUndefined(row.ownerId)),
-        )
-      : await this.users.getByIdOrUndefined(row.ownerId);
+    const row = await this.resolveClassByJoinCode(joinCode);
+    const owner = await this.users.getByIdOrUndefined(row.ownerId);
     return {
       classId: row.id,
       name: row.name,
@@ -1031,23 +978,11 @@ export class ClassesService implements OnModuleInit {
   }
 
   /**
-   * Xin vào lớp bằng mã tham gia. Luật chốt cứng: lớp TRỐNG → vào
-   * thẳng; lớp đã có học sinh → hàng chờ duyệt, trừ khi lớp bật tự
-   * duyệt (`joinAutoApprove`). Vào thẳng đi qua đường nội bộ của cohort
-   * (người xin là học sinh, không có `cohort:manage` — quyết định cho
-   * vào đã nằm ở luật này + công tắc của lớp).
-   *
-   * Lớp thuộc không gian kho riêng (phân giải qua thư mục mã —
-   * thiết kế C1): TOÀN BỘ các bước ghi của luồng (đảm bảo
-   * membership, thêm vào roster, ghi outbox, tạo yêu cầu chờ
-   * duyệt) chạy trong kho của lớp qua phiên theo trung tâm của
-   * khung định tuyến (`withSpaceKysely` — thân luồng chỉ còn dùng
-   * repository Kysely và đường outbox Kysely), bọc platform đặt
-   * ngoài khung định tuyến như các đường kho riêng khác; kho
-   * chung không nhận bất kỳ lượt ghi nào của luồng này.
+   * Xin vào lớp qua mã trong kho của địa chỉ hiện tại. Cùng id
+   * ở một kho khác không tạo liên kết thành viên hoặc phiên.
    */
   async joinByCode(actorId: string, joinCode: string): Promise<JoinClassResult> {
-    const { row, spaceSlug } = await this.resolveClassByJoinCode(joinCode);
+    const row = await this.resolveClassByJoinCode(joinCode);
     if (row.status === 'archived') {
       throw new BadRequestException({ message: 'Class is archived; roster is frozen', code: 'class.archived' });
     }
@@ -1073,70 +1008,7 @@ export class ClassesService implements OnModuleInit {
       }
       return { outcome: 'pending' as const, class: view };
     };
-    if (spaceSlug) {
-      // Mọi truy vấn của thân luồng đi qua facade Kysely của khung
-      // định tuyến: mở phiên theo trung tâm để kho của lớp được
-      // chuẩn bị và ngữ cảnh mang slug của nó.
-      return tenantAls.run({ platform: true }, () =>
-        this.spaceDb.withSpaceKysely(spaceSlug, body),
-      );
-    }
-    return this.tenantContext.run({ platform: true }, body);
-  }
-
-  /**
-   * Đăng ký trước một mã tham gia mới cho lớp thuộc không gian
-   * kho riêng vào thư mục ở control plane (thiết kế C1): chạy
-   * TRƯỚC khi dòng lớp được cập nhật, để va chạm với mã của một
-   * không gian khác bị từ chối (`class.join_code_taken`) trước
-   * khi bất kỳ dữ kiện nào đổi — ràng buộc duy nhất của thư mục
-   * là chốt giữ tính duy nhất toàn hệ của mã. Lớp ở kho chung
-   * không đăng ký mã vào thư mục (đăng ký sẽ phá đường phân giải
-   * đi vào kho riêng khi có mục), nhưng vẫn được kiểm tra va
-   * chạm: mã đã thuộc một không gian khác cũng bị từ chối, để
-   * lớp kho chung không bị lớp kho riêng che lặng khi tra mã
-   * (đường phân giải ưu tiên thư mục). Control plane chưa cấu
-   * hình → trả `null`, không có gì phải kiểm tra hay đăng ký.
-   * Trả slug của không gian khi đã đăng ký (bên gọi dùng để gỡ
-   * mục của mã cũ sau khi cập nhật thành công).
-   */
-  private async claimJoinCodeForClass(row: ClassRow, joinCode: string): Promise<string | null> {
-    if (!this.directory.isConfigured()) return null;
-    const target = await this.tenants.spaceTargetForTenant(row.tenantId);
-    if (!target?.dedicated) {
-      // Lớp ở kho chung (hoặc không phân giải được đích): chỉ
-      // kiểm tra, tuyệt đối không đăng ký — mã đã có trong thư
-      // mục thuộc về một không gian khác nên phải từ chối trước
-      // khi lớp đổi mã, nếu không đường phân giải ưu tiên thư
-      // mục sẽ trỏ mã về lớp kho riêng đó và che lớp kho chung
-      // này.
-      const entry = await this.directory.findJoinCodeDirectory(joinCode);
-      if (entry) {
-        throw new ConflictException({ message: 'Join code is already registered to another space', code: 'class.join_code_taken' });
-      }
-      return null;
-    }
-    const claim = await this.directory.claimJoinCodeDirectory(joinCode, target.slug);
-    if (claim === 'conflict') {
-      throw new ConflictException({ message: 'Join code is already registered to another space', code: 'class.join_code_taken' });
-    }
-    return target.slug;
-  }
-
-  /**
-   * Gỡ mục thư mục của mã tham gia hiện tại của lớp (mã bị đổi
-   * hoặc lớp bị xoá): chỉ gỡ khi mục đang trỏ về chính không
-   * gian của lớp — mục trỏ sang không gian khác là trạng thái
-   * lệch dữ kiện thuộc về không gian đó, không tự ý xoá.
-   */
-  private async removeJoinCodeDirectoryEntry(row: ClassRow): Promise<void> {
-    if (!row.joinCode || !this.directory.isConfigured()) return;
-    const target = await this.tenants.spaceTargetForTenant(row.tenantId);
-    if (!target?.dedicated) return;
-    const entry = await this.directory.findJoinCodeDirectory(row.joinCode);
-    if (entry && entry.spaceSlug === target.slug) {
-      await this.directory.deleteJoinCodeDirectory(row.joinCode);
-    }
+    return tenantAls.run({ ...tenantAls.getStore(), platform: true }, body);
   }
 
   /** Hàng chờ duyệt tự báo danh của lớp (cổng quản roster). */

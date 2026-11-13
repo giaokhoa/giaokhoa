@@ -36,7 +36,7 @@ Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng 
 - Cột jsonb có hình dạng nghiệp vụ (hình dạng giữ ở `src/jsonb-types.ts`) phải có override từng cột trong `scripts/codegen/<kho>.json` ở cùng lượt chạm tới cột đó; `--type-mapping` của codegen là ánh xạ theo kiểu dữ liệu toàn cục, cấm dùng thay override từng cột.
 - Mọi repository Kysely nhận handle qua kiểu của `src/client.ts` (`CentreDb`/`CentreTx`, `ControlPlaneDb`/`ControlPlaneTx`, `SystemBankDb`/`SystemBankTx`); cấm repository import từ `apps/*`, đọc ALS/ngữ cảnh app, tự mở pool hay đọc biến môi trường. Package không tự mở pool ở bất kỳ đâu ngoài harness test (`src/test-support/`).
 - Mọi đường dữ liệu đi qua Kysely; cấm giao dịch lai (một thao tác mở đồng thời hai giao dịch trên hai handle độc lập).
-- Cổng đếm kiểu sinh trên cụm PG18: số cột `id` có mặc định `uuidv7()` theo catalog là trung tâm 187 / control plane 5 / ngân hàng hệ thống 10 — đổi schema làm lệch các con số này phải cập nhật README của package bằng con số đếm thật trong cùng PR.
+- Cổng đếm kiểu sinh trên cụm PG18: số cột `id` có mặc định `uuidv7()` theo catalog là trung tâm 187 / control plane 4 / ngân hàng hệ thống 10 — đổi schema làm lệch các con số này phải cập nhật README của package bằng con số đếm thật trong cùng PR.
 
 ## Kỷ luật test theo nghiệp vụ
 

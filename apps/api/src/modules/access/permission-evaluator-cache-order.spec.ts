@@ -333,7 +333,7 @@ describe('PermissionEvaluator — cô lập cache site admin theo cơ sở dữ 
     expect(processB.counters.configReads).toBe(0);
   });
 
-  it('cùng một tiến trình phục vụ hai kho: ngữ cảnh kho riêng hợp nhất một chiều với danh sách platform, ngữ cảnh kho chung không bao giờ thấy danh sách kho riêng', async () => {
+  it('cùng một tiến trình phục vụ hai kho: ngữ cảnh kho riêng chỉ nhận quản trị của kho mình, không nhận quản trị platform', async () => {
     // Mô hình của tiền điều kiện TĐ6 (issue #587): một tiến trình vừa
     // phục vụ kho chung vừa phục vụ một trung tâm kho riêng qua
     // handle định tuyến, dùng chung một Redis. Tầng dữ liệu giả lập
@@ -361,13 +361,13 @@ describe('PermissionEvaluator — cô lập cache site admin theo cơ sở dữ 
     // Chuyển ngữ cảnh sang kho riêng (danh tính kho do khung định
     // tuyến báo): evaluator phải đọc lại từ tầng dữ liệu theo khoá
     // của kho riêng — không dùng mục kho chung vừa nạp — và nhận
-    // diện admin của kho riêng; đồng thời lớp phủ platform khiến
-    // admin kho chung cũng được nhận diện trong ngữ cảnh này.
+    // diện admin của kho riêng; quản trị platform không được
+    // nhận diện trong ngữ cảnh kho riêng.
     contextDatabaseName = 'giaokhoa_space_rieng';
     state.siteAdmins = ['admin-kho-rieng'];
     await expect(evaluator.isSiteAdmin('admin-kho-rieng')).resolves.toBe(true);
     expect(counters.configReads).toBeGreaterThan(readsAfterSharedPrime);
-    await expect(evaluator.isSiteAdmin('admin-kho-chung')).resolves.toBe(true);
+    await expect(evaluator.isSiteAdmin('admin-kho-chung')).resolves.toBe(false);
 
     // Ghi xuyên trong ngữ cảnh kho riêng chỉ chạm mục của kho
     // riêng: quay lại ngữ cảnh kho chung, danh sách hiệu lực vẫn

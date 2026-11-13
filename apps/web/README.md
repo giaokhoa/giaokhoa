@@ -34,3 +34,12 @@
 - Route đã đăng nhập tải dữ liệu phía client bằng cookie phiên Better Auth (client gửi kèm credentials cùng nguồn — xem `src/lib/api.ts` và `lib/auth-client.ts`); phía server, `lib/server-api.ts` đọc cùng cookie đó cho loader/SSR. Không còn token Bearer ở localStorage (đã chuyển sang cookie từ PR #257).
 - Dev: `pnpm dev` (Vite proxy `/api`, `/socket.io`, `/mcp` và OAuth metadata về backend cổng 3000).
 - Production: `@react-router/serve` chỉ phục vụ SSR + asset trên cổng nội bộ 3000; service Caddy ở `compose.yaml` làm reverse proxy và gắn CSP cho HTML theo `Caddyfile`. Không prerender trang dựa cookie; `/` và `/login` đều SSR theo request.
+
+### Điều hướng theo trung tâm (issue #9)
+
+Không hiển thị bộ chọn toàn bộ trung tâm theo một danh tính user chung.
+Mỗi trung tâm có Host và kho tài khoản riêng; người dùng đăng nhập trên
+địa chỉ của trung tâm mình, không chuyển tài khoản A sang B thông qua
+danh bạ platform. Vỏ người dùng không còn menu chuyển trung tâm.
+Màn registry vận hành tiếp tục quản lý metadata và vòng đời trung tâm
+theo quyền platform, không suy ra quyền xem hồ sơ hoặc điểm của trung tâm.

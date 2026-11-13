@@ -1,9 +1,9 @@
 /**
  * Repository của kho CONTROL PLANE trên Kysely.
  *
- * Vai trò: mọi truy cập tới sáu bảng của database control plane
+ * Vai trò: mọi truy cập tới bốn bảng của database control plane
  * (sổ đăng ký không gian, lịch sử quản trị sổ, registry phiên bản
- * schema, nhật ký migration, thư mục thành viên và thư mục mã tham gia của các không gian kho riêng) tập trung ở đây. Repository không chứa luật nghiệp vụ — gác quyền, ghi lịch sử và giao dịch nằm ở tầng service phía ứng dụng; repository chỉ nhận handle
+ * schema và nhật ký migration) tập trung ở đây. Repository không chứa luật nghiệp vụ — gác quyền, ghi lịch sử và giao dịch nằm ở tầng service phía ứng dụng; repository chỉ nhận handle
  * (instance gốc hoặc transaction đang mở) để phía gọi ghép nhiều
  * thao tác vào một transaction khi cần bất biến "sổ + lịch sử cùng thành/bại".
  *
@@ -81,27 +81,6 @@ export interface SpaceSchemaMigrationRunRow {
   steps: SchemaMigrationStep[];
   startedAt: Date;
   finishedAt: Date | null;
-}
-
-/** Một dòng thư mục thành viên của không gian kho riêng (cặp tài khoản toàn cục + không gian). */
-export interface SpaceMembershipDirectoryRow {
-  id: string;
-  globalUserId: string;
-  spaceSlug: string;
-  spaceUserId: string;
-  /** active | suspended | ended — khớp trạng thái membership ở kho đích. */
-  status: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-/** Một dòng thư mục mã tham gia lớp của không gian kho riêng (mã → slug). */
-export interface SpaceJoinCodeDirectoryRow {
-  id: string;
-  joinCode: string;
-  spaceSlug: string;
-  createdAt: Date;
-  updatedAt: Date;
 }
 
 /** Dữ kiện ghi một dòng đăng ký mới (đã qua kiểm chứng ở tầng service/contract). */
@@ -264,26 +243,6 @@ const SPACE_SCHEMA_MIGRATION_RUN_COLUMNS = [
   'steps',
   'started_at as startedAt',
   'finished_at as finishedAt',
-] as const;
-
-/** Danh sách cột tường minh có bí danh camelCase cho bảng thư mục thành viên. */
-const SPACE_MEMBERSHIP_DIRECTORY_COLUMNS = [
-  'id',
-  'global_user_id as globalUserId',
-  'space_slug as spaceSlug',
-  'space_user_id as spaceUserId',
-  'status',
-  'created_at as createdAt',
-  'updated_at as updatedAt',
-] as const;
-
-/** Danh sách cột tường minh có bí danh camelCase cho bảng thư mục mã tham gia. */
-const SPACE_JOIN_CODE_DIRECTORY_COLUMNS = [
-  'id',
-  'join_code as joinCode',
-  'space_slug as spaceSlug',
-  'created_at as createdAt',
-  'updated_at as updatedAt',
 ] as const;
 
 /**
@@ -607,141 +566,8 @@ export class ControlPlaneRepository {
       .execute();
   }
 
-  // --- thư mục định tuyến của không gian kho riêng (issue #587, hạng mục 3) ---
-
-  /**
-   * Control plane đã cấu hình hay chưa — các đường đọc thư mục
-   * dùng để tự bỏ qua khi hệ chưa có control plane (thế giới
-   * trước định tuyến theo kho: mọi không gian ở kho chung, thư
-   * mục rỗng theo định nghĩa), thay vì ném `control_plane.not_configured`
-   * vào các luồng nghiệp vụ vốn không cần control plane.
-   */
+  /** Control plane chỉ có thể thao tác khi đã cấu hình kết nối. */
   isConfigured(): boolean {
     return this.handle !== null;
-  }
-
-  /**
-   * Ghi/đè một mục thư mục thành viên cho cặp (tài khoản toàn
-   * cục, không gian): khoá duy nhất của cặp khiến mọi điểm ghi
-   * (thêm thành viên, tạo người dùng trong kho riêng, cấp phát,
-   * lấp thư mục) đều hội tụ về đúng một dòng — chạy lại không
-   * nhân đôi. `spaceUserId` và `status` luôn lấy theo giá trị
-   * mới nhất bên gọi cung cấp (trạng thái ở kho đích tại thời
-   * điểm đồng bộ).
-   */
-  async upsertMembershipDirectory(
-    values: { globalUserId: string; spaceSlug: string; spaceUserId: string; status: string },
-    db: CpDb = this.db(),
-  ): Promise<SpaceMembershipDirectoryRow> {
-    const rows = await db
-      .insertInto('space_membership_directory')
-      .values({
-        global_user_id: values.globalUserId,
-        space_slug: values.spaceSlug,
-        space_user_id: values.spaceUserId,
-        status: values.status,
-      })
-      .onConflict((oc) =>
-        oc.columns(['global_user_id', 'space_slug']).doUpdateSet({
-          space_user_id: values.spaceUserId,
-          status: values.status,
-          updated_at: new Date(),
-        }),
-      )
-      .returning(SPACE_MEMBERSHIP_DIRECTORY_COLUMNS)
-      .execute();
-    return rows[0]!;
-  }
-
-  /**
-   * Đồng bộ trạng thái của một mục thư mục thành viên đã có
-   * (điểm đổi trạng thái membership): chỉ cập nhật khi mục tồn
-   * tại — trạng thái membership đổi ở nơi chưa từng có mục thư
-   * mục không tự sinh mục mới ở đây, vì mục mới phải mang cả
-   * `spaceUserId` do điểm ghi có đủ dữ kiện quyết định. Trả về
-   * số dòng đã cập nhật (0 = không có mục).
-   */
-  async updateMembershipDirectoryStatus(
-    globalUserId: string,
-    spaceSlug: string,
-    status: string,
-    db: CpDb = this.db(),
-  ): Promise<number> {
-    const updated = await db
-      .updateTable('space_membership_directory')
-      .set({ status, updated_at: new Date() })
-      .where('global_user_id', '=', globalUserId)
-      .where('space_slug', '=', spaceSlug)
-      .returning(['id'])
-      .execute();
-    return updated.length;
-  }
-
-  /**
-   * Mọi mục thư mục thành viên của một người: khớp theo định
-   * danh toàn cục (tài khoản ở kho chung tra bộ chọn sau khi
-   * trung tâm đã chuyển) HOẶC theo định danh tại kho đích
-   * (phiên của chính kho riêng gọi bộ chọn — định danh người
-   * gọi lúc đó là `spaceUserId`). Một mục khớp cả hai chiều vẫn
-   * chỉ trả một dòng (điều kiện OR trên cùng một dòng).
-   */
-  async listMembershipDirectoryForUser(userId: string, db: CpDb = this.db()): Promise<SpaceMembershipDirectoryRow[]> {
-    return db
-      .selectFrom('space_membership_directory')
-      .select(SPACE_MEMBERSHIP_DIRECTORY_COLUMNS)
-      .where((eb) => eb.or([eb('global_user_id', '=', userId), eb('space_user_id', '=', userId)]))
-      .orderBy('created_at', 'asc')
-      .orderBy('id', 'asc')
-      .execute();
-  }
-
-  /** Tra một mã tham gia trong thư mục: trả dòng thư mục hoặc undefined khi mã chưa đăng ký. */
-  async findJoinCodeDirectory(joinCode: string, db: CpDb = this.db()): Promise<SpaceJoinCodeDirectoryRow | undefined> {
-    return db
-      .selectFrom('space_join_code_directory')
-      .select(SPACE_JOIN_CODE_DIRECTORY_COLUMNS)
-      .where('join_code', '=', joinCode)
-      .limit(1)
-      .executeTakeFirst();
-  }
-
-  /**
-   * Đăng ký một mã tham gia cho một không gian, giữ tính duy
-   * nhất toàn hệ của mã bằng chính ràng buộc duy nhất của bảng:
-   * - `claimed`: mã chưa có — dòng vừa ghi thuộc về không gian này.
-   * - `already`: mã đã đăng ký cho CHÍNH không gian này (ghi lại
-   *   cùng trạng thái — idempotent).
-   * - `conflict`: mã đã thuộc về một không gian khác — bên gọi
-   *   phải từ chối thao tác đặt mã, tuyệt đối không ghi đè.
-   */
-  async claimJoinCodeDirectory(
-    joinCode: string,
-    spaceSlug: string,
-    db: CpDb = this.db(),
-  ): Promise<'claimed' | 'already' | 'conflict'> {
-    const inserted = await db
-      .insertInto('space_join_code_directory')
-      .values({ join_code: joinCode, space_slug: spaceSlug })
-      .onConflict((oc) => oc.column('join_code').doNothing())
-      .returning(SPACE_JOIN_CODE_DIRECTORY_COLUMNS)
-      .execute();
-    if (inserted[0]) return 'claimed';
-    const existing = await this.findJoinCodeDirectory(joinCode, db);
-    return existing && existing.spaceSlug === spaceSlug ? 'already' : 'conflict';
-  }
-
-  /** Gỡ một mã khỏi thư mục (mã bị đổi hoặc lớp bị xoá); mã không có trong thư mục thì không làm gì. */
-  async deleteJoinCodeDirectory(joinCode: string, db: CpDb = this.db()): Promise<void> {
-    await db.deleteFrom('space_join_code_directory').where('join_code', '=', joinCode).execute();
-  }
-
-  /** Mọi mã đã đăng ký cho một không gian (công cụ lấp thư mục đối chiếu sau khi chạy). */
-  async listJoinCodeDirectoryForSpace(spaceSlug: string, db: CpDb = this.db()): Promise<SpaceJoinCodeDirectoryRow[]> {
-    return db
-      .selectFrom('space_join_code_directory')
-      .select(SPACE_JOIN_CODE_DIRECTORY_COLUMNS)
-      .where('space_slug', '=', spaceSlug)
-      .orderBy('join_code', 'asc')
-      .execute();
   }
 }

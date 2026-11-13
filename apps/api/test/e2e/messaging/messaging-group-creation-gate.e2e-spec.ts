@@ -2,7 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   adminToken, assignRole, createTestApp, createUserViaApi, http, login, roleIdByShortname,
-  STRONG_PASSWORD, systemContextId, uniqueName,
+  STRONG_PASSWORD, systemContextId, uniqueName, grantTenantManagerFixture,
 } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
 import { addGroupMember, contextIdByLevelInstance, createGroupViaApi } from '../../support/engagement-helpers';
@@ -100,6 +100,7 @@ describe('Messaging — cổng tạo nhóm tự do chỉ dành cho quản trị 
       .set('Authorization', `Bearer ${admin}`).send({ name: 'Trường kiểm cổng tạo nhóm', slug, kind: 'school' });
     if (tenantRes.status !== 201) throw new Error(`create tenant failed: ${tenantRes.status} ${JSON.stringify(tenantRes.body)}`);
     const centreTenantId = (tenantRes.body as { id: string }).id;
+    await grantTenantManagerFixture(app, admin, centreTenantId);
     owner = await person();
     centreMember = await person();
     for (const p of [owner, centreMember]) {

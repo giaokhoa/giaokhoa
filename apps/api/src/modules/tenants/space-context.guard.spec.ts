@@ -8,7 +8,6 @@ import {
   type ResolvedSpaceConnection,
 } from '../../db/routing/space-connection-resolver';
 import type { SpaceDatabaseService } from '../../db/routing/space-database.service';
-import type { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { SkipSpaceContext } from './skip-space-context.decorator';
 import { SpaceContextGuard } from './space-context.guard';
 import type { TenantsRepository } from '@giaokhoa/db/repositories/tenants';
@@ -77,7 +76,6 @@ function makeGuard(options?: {
   const guard = new SpaceContextGuard(
     spaceDb as unknown as SpaceDatabaseService,
     repo as unknown as TenantsRepository,
-    evaluator as unknown as PermissionEvaluator,
     new Reflector(),
   );
   return { guard, spaceDb, repo, evaluator };
@@ -195,7 +193,7 @@ describe('Guard gắn ngữ cảnh trung tâm theo địa chỉ', () => {
     expect(spaceDb.getKyselyForSpace).not.toHaveBeenCalled();
   });
 
-  it('quản trị viên site chính đứng ở tenant platform thì đi qua cả khi trung tâm bị đình chỉ, không bị ghim vào kho của trung tâm', async () => {
+  it('quản trị platform không được đi vào địa chỉ trung tâm bị đình chỉ dù có quyền vận hành', async () => {
     const { guard, spaceDb } = makeGuard({
       target: { ...DEDICATED_TARGET, status: 'suspended' },
       platformTenantId: 'tenant-zero',
@@ -206,9 +204,24 @@ describe('Guard gắn ngữ cảnh trung tâm theo địa chỉ', () => {
       tenantId: 'tenant-zero',
       user: { id: 'admin', username: 'admin' },
     };
-    await expect(guard.canActivate(httpContext(request))).resolves.toBe(true);
+    await expect(guard.canActivate(httpContext(request))).rejects.toMatchObject({
+      response: { code: 'space.not_active' },
+    });
     expect(spaceDb.getKyselyForSpace).not.toHaveBeenCalled();
     expect(request.spaceSlug).toBeUndefined();
+  });
+
+  it('quản trị platform không được sử dụng token thiếu centre_id tại địa chỉ trung tâm đang hoạt động', async () => {
+    const { guard, spaceDb } = makeGuard({ platformTenantId: 'tenant-zero', isSiteAdmin: true });
+    const request: FakeRequest = {
+      headers: { host: HOST_A },
+      tenantId: 'tenant-zero',
+      user: { id: 'admin', username: 'admin' },
+    };
+    await expect(guard.canActivate(httpContext(request))).rejects.toMatchObject({
+      response: { code: 'auth.centre_mismatch' },
+    });
+    expect(spaceDb.getKyselyForSpace).not.toHaveBeenCalled();
   });
 
   it('token mang centre_id của trung tâm khác tới địa chỉ kho riêng thì bị từ chối 401 TRƯỚC bước chuẩn bị', async () => {

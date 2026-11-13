@@ -199,20 +199,20 @@ describe('Seed bootstrap trên DB trống bằng role thường dưới RLS fail
     }
   });
 
-  it('bộ chọn tenant của admin qua GET /auth/tenants trả đủ hai tenant (route auth tự viết không bị handler Better Auth nuốt khi AS bật)', async () => {
+  it('GET /auth/tenants chỉ tiết lộ tenant hiện hành, không liệt kê trường theo định danh toàn cục', async () => {
     const tok = await adminToken();
     const res = await apiCall('GET', '/auth/tenants', tok);
     expect(res.status, `GET /auth/tenants: ${JSON.stringify(res.body)}`).toBe(200);
     const slugs = (res.body as { slug: string }[]).map((t) => t.slug).sort();
-    expect(slugs).toEqual(['trang-chinh', 'truong-mac-dinh']);
+    expect(slugs).toEqual(['trang-chinh']);
   });
 
-  it('platform admin thêm được thành viên vào tenant trường và chuyển phiên sang tenant đó (đường review-seed chết ở production)', async () => {
+  it('quản trị bootstrap có vai manager tường minh ở trường mẫu và chuyển phiên trong cùng kho', async () => {
     const tok = await adminToken();
-    const mine = await apiCall('GET', '/auth/tenants', tok);
-    expect(mine.status, `GET /auth/tenants: ${JSON.stringify(mine.body)}`).toBe(200);
-    const school = (mine.body as { id: string; slug: string }[]).find((t) => t.slug === 'truong-mac-dinh');
-    expect(school, 'tenant trường mặc định phải có trong bộ chọn của admin').toBeDefined();
+    const registry = await apiCall('GET', '/tenants', tok);
+    expect(registry.status, 'Cổng registry của platform phải hoạt động').toBe(200);
+    const school = (registry.body as { id: string; slug: string }[]).find((t) => t.slug === 'truong-mac-dinh');
+    expect(school, 'registry phải có tenant trường mặc định').toBeDefined();
 
     // Danh sách tenant cấp platform phải thấy MỌI tenant, không chỉ
     // tenant hiệu lực của phiên (claim tid = tenant-zero).

@@ -264,7 +264,10 @@ describe('bộ máy migration của package cho ba kho', () => {
     const dir = packageMigrationsDir('control-plane');
     const allNames = listMigrationNames(dir);
     const nativeNames = allNames.filter((name) => !CP_CARRIERS.includes(name));
-    expect(nativeNames).toHaveLength(1);
+    // Issue #9 thêm migration native xoá hai bảng directory sau migration native cũ.
+    // Trạng thái chỉ có carrier phải áp đủ cả hai migration đang chờ.
+    expect(nativeNames).toHaveLength(2);
+    expect(nativeNames).toContain('20261113043200_remove_business_directories');
     const prodUrl = await freshDatabase(PROD_DB);
     const pool = new Pool({ connectionString: prodUrl });
     const db = new Kysely({ dialect: new PostgresDialect({ pool }) });

@@ -105,8 +105,10 @@ async function main(): Promise<void> {
     // thuộc tenant-1. Ghi danh vào khoá cũng tự đảm bảo membership qua
     // móc enrol, nhưng vai giáo viên gán ở bước sau cần membership có
     // hiệu lực ngay từ đầu phiên tenant.
-    const myTenants = must(await call('GET', '/auth/tenants', admin), 'list admin tenants') as { id: string; slug: string }[];
-    const school = myTenants.find((t) => t.slug === 'truong-mac-dinh');
+    // Tra registry của platform để tìm trường mẫu: bộ chọn phiên
+    // chỉ công bố tenant hiện hành, không tìm theo định danh user toàn cục.
+    const registry = must(await call('GET', '/tenants', admin), 'list registry tenants') as { id: string; slug: string }[];
+    const school = registry.find((t) => t.slug === 'truong-mac-dinh');
     if (!school) throw new Error('default school tenant (truong-mac-dinh) is not seeded');
     // Phụ huynh mẫu cũng phải là thành viên tenant: tạo liên kết giám
     // hộ trong tenant này đòi cả hai phía là thành viên đang hiệu lực

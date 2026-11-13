@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Put } from '@nestjs/common';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { PlatformRoute } from '../../common/platform-route.decorator';
+import { SkipSpaceContext } from '../tenants/skip-space-context.decorator';
 import { ControlPlaneRegistryService } from './control-plane.service';
 import {
   changeSpaceStatusSchema,
@@ -34,7 +35,11 @@ import {
  *
  * Tách bề mặt (issue #584): toàn bộ controller mang `@PlatformRoute()` — chỉ token mang audience `platform` (cấp từ bề mặt đăng nhập quản trị platform riêng) mới được gọi; token nghiệp vụ thường bị `AudienceGuard` từ chối trước cả cổng capability của service.
  */
+// Đường vận hành metadata dùng token audience platform, luôn đọc control
+// plane tại địa chỉ gốc. Không cho SpaceContextGuard gắn nó vào kho
+// nghiệp vụ của tenant công cộng; AudienceGuard + capability vẫn gác.
 @PlatformRoute()
+@SkipSpaceContext()
 @Controller({ path: 'control-plane/spaces', version: '1' })
 export class ControlPlaneController {
   constructor(private readonly registry: ControlPlaneRegistryService) {}
