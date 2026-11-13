@@ -19,6 +19,7 @@ import {
 import { Input } from "@giaokhoa/ui/components/input";
 import { Label } from "@giaokhoa/ui/components/label";
 import { usePermissions } from "#lib/permissions";
+import { ApiError } from "#lib/api";
 import {
   fetchInstalledProgrammes,
   fetchMyProgrammes,
@@ -32,6 +33,26 @@ import {
   type ProgrammePackageInstall,
   type ProgrammePackageMeta,
 } from "../api/programme-packages";
+
+/**
+ * Phân biệt lỗi xung đột cụ thể từ API. Không phơi chi tiết SQL hay
+ * nguyên nhân nội bộ; chỉ dùng các mã nghiệp vụ đã được API công bố.
+ */
+function programmeInstallError(error: unknown, t: (key: string) => string): string {
+  if (error instanceof ApiError) {
+    const code = error.problem.code;
+    const key = ({
+      "system_bank.curriculum_conflict": "programmePackagesCurriculumConflict",
+      "system_bank.node_conflict": "programmePackagesNodeConflict",
+      "system_bank.outcome_conflict": "programmePackagesOutcomeConflict",
+      "system_bank.package_conflict": "programmePackagesChecksumConflict",
+      "system_bank.bad_package": "programmePackagesInvalidPackage",
+      "system_bank.dedicated_centre_required": "programmePackagesDedicatedRequired",
+    } as Record<string, string>)[code ?? ""];
+    if (key) return t(key);
+  }
+  return t("programmePackagesInstallFailed");
+}
 
 /** Chuyển nội dung Tiptap thành văn bản để biên tập viên đọc được trước duyệt. */
 function programmeOutcomePlainText(value: unknown): string {
@@ -156,8 +177,8 @@ export function ProgrammePackagePanel({
             : "programmePackagesInstalled",
         ),
       );
-    } catch {
-      setNotice(t("programmePackagesInstallFailed"));
+    } catch (error) {
+      setNotice(programmeInstallError(error, t));
     } finally {
       setBusy(false);
     }
@@ -330,13 +351,21 @@ export function ProgrammePackagePanel({
                 {t("programmePackagesNoAvailable")}
               </p>
             )}
+            <h4 className="font-medium">{t("programmePackagesInstallHistory")}</h4>
             {installed.length ? (
-              <p className="text-sm text-muted-foreground">
-                {t("programmePackagesLatestInstalled", {
-                  version: installed[0]!.packageVersion,
-                })}
-              </p>
-            ) : null}
+              <ul className="space-y-2" aria-label={t("programmePackagesInstallHistory")}>
+                {installed.map((entry) => (
+                  <li key={entry.id} className="rounded-md border p-2 text-sm space-y-1">
+                    <p><strong>{entry.packageVersion}</strong> · {entry.scope}</p>
+                    <p>{t("programmePackagesPreviousVersion")}: {entry.previousVersion ?? t("programmePackagesFirstVersion")}</p>
+                    <p>{t("programmePackagesInstalledAt")}: {new Date(entry.installedAt).toLocaleString()}</p>
+                    <p className="break-all">{t("programmePackagesChecksum")}: <code>{entry.packageChecksum || t("programmePackagesLegacyChecksum")}</code></p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">{t("programmePackagesNoHistory")}</p>
+            )}
           </section>
         ) : null}
 

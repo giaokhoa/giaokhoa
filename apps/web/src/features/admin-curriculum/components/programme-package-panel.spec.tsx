@@ -4,11 +4,12 @@
  * lý do. Các phản hồi API được giả lập, bảo vệ hợp đồng giao diện
  * và đường gọi backend mà không tạo dữ liệu ngoài test.
  */
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ProgrammePackagePanel } from "./programme-package-panel";
 import "#config/i18n";
+import { ApiError } from "#lib/api";
 
 const mocks = vi.hoisted(() => ({
   role: "centre" as "centre" | "reviewer" | "viewer",
@@ -180,4 +181,37 @@ describe("Gói chương trình — theo vai người dùng", () => {
     expect(container).toBeEmptyDOMElement();
     expect(mocks.published).not.toHaveBeenCalled();
   });
+  it("hiện lịch sử cài đầy đủ theo phạm vi, phiên bản trước, checksum và thời gian", async () => {
+    mocks.installed.mockResolvedValue([
+      { id: "trace-2", packageVersion: "2026.11.13.2", packageChecksum: "c".repeat(64),
+        scope: "toan", previousVersion: "2026.11.13.1", installedAt: "2026-11-13T12:00:00.000Z" },
+      { id: "trace-1", packageVersion: "2026.11.13.1", packageChecksum: "a".repeat(64),
+        scope: "toan", previousVersion: null, installedAt: "2026-11-12T12:00:00.000Z" },
+    ]);
+    render(<ProgrammePackagePanel subjects={[]} />);
+    const history = await screen.findByRole("list", { name: "Lịch sử cài theo phạm vi" });
+    expect(within(history).getAllByRole("listitem")).toHaveLength(2);
+    expect(history).toHaveTextContent("2026.11.13.2");
+    expect(history).toHaveTextContent("2026.11.13.1");
+    expect(history).toHaveTextContent("c".repeat(64));
+    expect(history).toHaveTextContent("a".repeat(64));
+    expect(history).toHaveTextContent("Phiên bản trước");
+    expect(history).toHaveTextContent("Thời điểm cài");
+  });
+
+  it.each([
+    ["system_bank.curriculum_conflict", "môn/khối đã có chương trình"],
+    ["system_bank.node_conflict", "node chương trình có cùng ID"],
+    ["system_bank.outcome_conflict", "YCCĐ có cùng ID"],
+  ])("hiện nguyên nhân nghiệp vụ của lỗi %s thay vì lỗi chung", async (code, message) => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    mocks.install.mockRejectedValueOnce(new ApiError({
+      type: "about:blank", title: "Conflict", status: 409, code,
+    }));
+    render(<ProgrammePackagePanel subjects={[]} />);
+    await screen.findByText(/2026\.11\.13\.1 · toan/);
+    await userEvent.click(screen.getByRole("button", { name: "Cài phiên bản" }));
+    expect(await screen.findByRole("status")).toHaveTextContent(message);
+  });
+
 });

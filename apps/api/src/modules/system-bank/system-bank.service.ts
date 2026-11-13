@@ -539,8 +539,19 @@ export class SystemBankService {
     return { centreSlug, centreContextId: context.id };
   }
 
-  /** Biên tập viên quản lý hàng chờ ở quyền hệ thống, tách người gửi. */
+  /**
+   * Chỉ biên tập viên ở ĐỊA CHỈ PLATFORM được duyệt chương trình.
+   * Context hệ thống ở kho riêng là context của chính trung tâm và
+   * siteadmin của kho ấy có thể vượt quyền khi kiểm ở context cấp 10;
+   * tuyệt đối không coi nó là context hệ thống của ngân hàng chung.
+   */
   private async assertProgrammeReviewer(actorId: string): Promise<void> {
+    if (tenantAls.getStore()?.spaceSlug) {
+      throw new ForbiddenException({
+        message: 'Programme review is only available at the platform',
+        code: 'system_bank.review_platform_only',
+      });
+    }
     const system = await this.contexts.ensureSystemContext();
     await this.evaluator.requireCapability(actorId, 'systembank:review', system.id);
   }
