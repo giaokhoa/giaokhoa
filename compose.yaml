@@ -57,11 +57,11 @@ services:
   redis:
     image: redis:7.4.12
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--save", "900 1 300 10 60 10000", "--maxmemory-policy", "noeviction", "--maxmemory", "${REDIS_MAXMEMORY:-0}"]
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--save", "900 1 300 10 60 10000", "--maxmemory-policy", "noeviction", "--maxmemory", "${REDIS_MAXMEMORY:?Phai khai REDIS_MAXMEMORY sau khi tinh RAM Redis queue va host}"]
     volumes:
       - redisdata:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "test \"$(redis-cli ping)\" = PONG && test \"$(redis-cli --raw CONFIG GET maxmemory | tail -n 1)\" -gt 0"]
       interval: 5s
       timeout: 3s
       retries: 12
@@ -145,7 +145,15 @@ services:
       migrate:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"const Redis=require('ioredis');const r=new Redis(process.env.REDIS_URL,{maxRetriesPerRequest:1,connectTimeout:2000});r.ping().then(v=>{r.disconnect();process.exit(v==='PONG'?0:1)}).catch(()=>{r.disconnect();process.exit(1)})\""]
+      test:
+        - CMD-SHELL
+        - >-
+          node -e "const Redis=require('ioredis');const
+          {redisConnectionFromUrl}=require('./dist/config/env.js');const
+          r=new Redis({...redisConnectionFromUrl(process.env.REDIS_URL),
+          maxRetriesPerRequest:1,connectTimeout:2000,retryStrategy:()=>null});
+          r.ping().then(v=>{r.disconnect();process.exit(v==='PONG'?0:1)})
+          .catch(()=>{r.disconnect();process.exit(1)})"
       interval: 30s
       timeout: 5s
       retries: 3

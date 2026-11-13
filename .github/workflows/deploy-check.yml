@@ -15,6 +15,8 @@ jobs:
     name: verify-stack
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      REDIS_MAXMEMORY: 512mb
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -32,6 +34,14 @@ jobs:
 
       - name: Validate compose configuration
         run: docker compose -f compose.yaml -f compose.ci.yaml config > /dev/null
+
+      - name: Verify Redis queue memory budget must be configured
+        run: |
+          if env -u REDIS_MAXMEMORY docker compose -f compose.yaml -f compose.ci.yaml config > /dev/null 2> "$RUNNER_TEMP/budget-error.txt"; then
+            echo "Compose vẫn chấp nhận chạy Redis queue không có ngân sách RAM" >&2
+            exit 1
+          fi
+          grep -q REDIS_MAXMEMORY "$RUNNER_TEMP/budget-error.txt"
 
       - name: Export the Compose build definition
         run: docker compose -f compose.yaml -f compose.ci.yaml build --print api worker web migrate > "$RUNNER_TEMP/compose-build.json"
@@ -87,6 +97,28 @@ jobs:
           fs.unlinkSync(api);
           NODE
 
+      - name: Verify worker Redis TLS configuration used by healthcheck
+        run: |
+          docker compose -f compose.yaml -f compose.ci.yaml exec -T worker node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const path = '/tmp/audit-private-redis-ca.pem';
+          const healthConfig = require('./dist/config/env.js');
+          fs.writeFileSync(path, 'audit-ci-ca');
+          const previous = process.env.REDIS_TLS_CA_FILE;
+          try {
+            process.env.REDIS_TLS_CA_FILE = path;
+            assert.deepEqual(healthConfig.redisConnectionFromUrl('rediss://redis.internal:6380').tls, {
+              rejectUnauthorized: true,
+              ca: 'audit-ci-ca',
+            });
+          } finally {
+            if (previous === undefined) delete process.env.REDIS_TLS_CA_FILE;
+            else process.env.REDIS_TLS_CA_FILE = previous;
+            fs.unlinkSync(path);
+          }
+          NODE
+
       - name: Verify Better Auth and MCP CORS preflight
         run: |
           for path in /api/v1/auth/sign-in/username /mcp; do
@@ -113,6 +145,7 @@ jobs:
           budget=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis redis-cli --raw CONFIG GET maxmemory | tail -n 1)
           test "$policy" = noeviction
           printf '%s\n' "$budget" | grep -Eq '^[0-9]+$'
+          test "$budget" -gt 0
           echo "Redis: maxmemory-policy=$policy, maxmemory=$budget bytes"
           aof=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis redis-cli --raw CONFIG GET appendonly | tail -n 1)
           fsync=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis redis-cli --raw CONFIG GET appendfsync | tail -n 1)
