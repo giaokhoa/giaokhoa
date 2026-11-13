@@ -24,6 +24,7 @@ export function buildCentreSatelliteEnsureStatements(): string[] {
 	"package_version" text NOT NULL,
 	"previous_version" text,
 	"scope" text NOT NULL,
+	"package_checksum" text NOT NULL DEFAULT '',
 	"installed_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"installed_by" uuid
 )`,
@@ -54,5 +55,7 @@ export function buildCentreSatelliteEnsureStatements(): string[] {
 		ALTER TABLE "system_question_imports" ADD CONSTRAINT "system_question_imports_question_id_question_id_fkey" FOREIGN KEY ("question_id") REFERENCES "question"("id") ON DELETE CASCADE;
 	END IF;
 END $$`,
+    // Bảng vệ tinh do phiên bản trước tạo có thể chưa có checksum.
+    `ALTER TABLE "outcome_package_installs" ADD COLUMN IF NOT EXISTS "package_checksum" text NOT NULL DEFAULT ''`,
   ];
 }

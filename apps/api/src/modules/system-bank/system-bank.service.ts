@@ -16,8 +16,9 @@
  * (`SYSTEM_BANK_DATABASE_URL`); chưa cấu hình thì repository ném
  * `system_bank.not_configured` (503). Mọi thao tác ghi gác bằng capability quản trị platform hiện hữu (`tenant:manage` tại context hệ thống — site admin vượt qua cổng này theo lối tắt của evaluator); tầng này không sinh capability mới.
  */
-import { createHash } from 'node:crypto';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { sql as kyselySql } from '@giaokhoa/db';
+import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SystemBankCentreRepository } from '@giaokhoa/db/repositories/system-bank-centre';
 import { SystemBankRepository } from '@giaokhoa/db/repositories/system-bank';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
@@ -28,6 +29,7 @@ import type { RichTextInput, SystemBankPackage } from '@giaokhoa/contracts';
 import { QuestionsService, type QuestionContentInput } from '../questions/questions.service';
 import { QuestionBanksService } from '../questions/question-banks.service';
 import { canonicalizeJson, checksumPackage, packageValidationError, verifyPackageChecksum } from './system-bank-package';
+import { assertProgrammePackageIntegrity, programmePackageChecksum, programmeNodesParentsFirst } from './programme-package-integrity';
 import { SystemBankConnection } from './system-bank.connection';
 import { SystemBankMediaService } from './system-bank-media.service';
 import type {
@@ -65,6 +67,7 @@ export class SystemBankService {
     private readonly questions: QuestionsService,
     private readonly banks: QuestionBanksService,
     @Optional() private readonly media?: SystemBankMediaService,
+    @Optional() private readonly spaceDb?: SpaceDatabaseService,
   ) {}
 
   /** Kho ngân hàng đã được cấu hình kết nối hay chưa. */
@@ -513,24 +516,42 @@ export class SystemBankService {
   }
 
   /**
-   * Phát hành một gói YCCĐ phía platform (quản trị platform): chụp cây
-   * chương trình hiện hành từ kho nghiệp vụ trong ngữ cảnh platform
-   * (một transaction đọc nhất quán) rồi ghi nguyên trạng vào kho ngân
-   * hàng kèm checksum trên JSON canonical của toàn bộ items.
-   * - Phạm vi `all`: toàn bộ cây; phạm vi slug môn: chỉ môn đó (môn
-   *   không có ở cây platform thì 404).
-   * - Chỉ chụp YCCĐ chuẩn platform (tenantId NULL) và đang hiện hành
-   *   (retiredAt NULL): YCCĐ đã rút khỏi chương trình không được hồi
-   *   sinh qua gói; YCCĐ derived thuộc trung tâm không phải nội dung
-   *   platform nên không nằm trong gói.
-   * - Môn học không nằm trong gói (môn mang context phân quyền, thuộc
-   *   dữ kiện nền của trung tâm): gói chỉ mang subjectSlug để bản cài
-   *   giải quyết môn ở trung tâm.
-   * - Định danh phiên bản trùng thì 409 (không ghi đè gói đã phát hành).
+   * Quản trị trung tâm có kho vật lý riêng mới được gửi/cài gói.
+   * Kho chung không bảo đảm A và B giữ phiên bản độc lập nên từ chối.
+   */
+  private async assertCentrePackageManager(actorId: string): Promise<{ centreSlug: string; centreContextId: string }> {
+    const tenantId = tenantAls.getStore()?.tenantId;
+    if (!tenantId) {
+      throw new ForbiddenException({ message: 'Centre context required', code: 'system_bank.centre_context_required' });
+    }
+    const context = await this.contexts.getTenantContext(tenantId);
+    if (!context) {
+      throw new ForbiddenException({ message: 'Centre context required', code: 'system_bank.centre_context_required' });
+    }
+    await this.evaluator.requireCapability(actorId, 'tenant:manage', context.id);
+    const centreSlug = tenantAls.getStore()?.spaceSlug ?? await this.centreRepo.resolveTenantSlug(tenantId);
+    if (!centreSlug || !this.spaceDb || (await this.spaceDb.resolveTarget(centreSlug)).mode !== 'dedicated') {
+      throw new ForbiddenException({
+        message: 'Installing programme packages requires a dedicated centre store',
+        code: 'system_bank.dedicated_centre_required',
+      });
+    }
+    return { centreSlug, centreContextId: context.id };
+  }
+
+  /** Biên tập viên quản lý hàng chờ ở quyền hệ thống, tách người gửi. */
+  private async assertProgrammeReviewer(actorId: string): Promise<void> {
+    const system = await this.contexts.ensureSystemContext();
+    await this.evaluator.requireCapability(actorId, 'systembank:review', system.id);
+  }
+
+  /**
+   * Quản trị gửi ảnh chụp chương trình ở kho riêng vào hàng chờ.
+   * Nguồn và định danh không bị sửa khi biên tập viên duyệt về sau.
    */
   async createOutcomePackage(actorId: string, dto: CreateSystemOutcomePackageDto) {
-    await this.assertPlatformManager(actorId);
-    const snapshot = await this.tenantDb.withPlatform(async (tx) => {
+    const { centreSlug } = await this.assertCentrePackageManager(actorId);
+    const snapshot = await this.tenantDb.withCurrent(async (tx) => {
       // Chụp cây chương trình bằng truy vấn Kysely trên handle định
       // tuyến (hạng mục G10, issue #650): danh sách cột tường minh có
       // bí danh camelCase khớp hình dạng dòng mà phần dựng gói phía
@@ -551,7 +572,7 @@ export class SystemBankService {
           : await tx.selectFrom('subjects').select(subjectColumns).where('slug', '=', dto.scope).execute();
       if (dto.scope !== 'all' && subjectRows.length === 0) {
         throw new NotFoundException({
-          message: `Subject ${dto.scope} not found in the platform programme`,
+          message: `Subject ${dto.scope} not found in centre programme`,
           code: 'curriculum.subject_not_found',
         });
       }
@@ -609,10 +630,12 @@ export class SystemBankService {
               .execute();
       return { subjectRows, curriculumRows, nodeRows, outcomeRows };
     });
-    const subjectSlugById = new Map(snapshot.subjectRows.map((row) => [row.id, row.slug]));
+    const subjectById = new Map(snapshot.subjectRows.map((row) => [row.id, row]));
     const packageCurricula = snapshot.curriculumRows.map((row) => ({
       curriculumId: row.id,
-      subjectSlug: subjectSlugById.get(row.subjectId) ?? '',
+      subjectSlug: subjectById.get(row.subjectId)?.slug ?? '',
+      subjectName: subjectById.get(row.subjectId)?.name ?? '',
+      subjectPosition: subjectById.get(row.subjectId)?.position ?? 1,
       grade: row.grade,
     }));
     const packageNodes = snapshot.nodeRows.map((row) => ({
@@ -633,16 +656,16 @@ export class SystemBankService {
       sourceKind: row.sourceKind,
       sourceRef: row.sourceRef,
     }));
-    const checksum = createHash('sha256')
-      .update(
-        canonicalizeJson({
-          curricula: packageCurricula,
-          nodes: packageNodes,
-          outcomes: packageOutcomes,
-          mappings: dto.mappings,
-        }),
-      )
-      .digest('hex');
+    const items = { curricula: packageCurricula, nodes: packageNodes, outcomes: packageOutcomes, mappings: dto.mappings };
+    const checksum = programmePackageChecksum(items);
+    try {
+      assertProgrammePackageIntegrity({
+        version: dto.version, scope: dto.scope, checksum,
+        outcomeCount: packageOutcomes.length, centreSlug,
+      }, items);
+    } catch (error) {
+      throw new BadRequestException({ message: String(error), code: 'system_bank.bad_package' });
+    }
     try {
       const pkg = await this.repo.createPackageWithItems({
         version: dto.version,
@@ -650,6 +673,7 @@ export class SystemBankService {
         checksum,
         outcomeCount: packageOutcomes.length,
         createdBy: actorId,
+        centreSlug,
         curricula: packageCurricula,
         nodes: packageNodes,
         outcomes: packageOutcomes,
@@ -667,148 +691,204 @@ export class SystemBankService {
     }
   }
 
-  /** Liệt kê các gói YCCĐ đã phát hành (mới nhất trước). */
+  /** Khám phá: chỉ trả các phiên bản đã được biên tập viên phê duyệt. */
   async listOutcomePackages() {
     return this.repo.listPackages();
   }
 
-  /** Đọc một gói YCCĐ theo định danh phiên bản (kèm items). */
+  /** Trung tâm xem các phiên bản chính mình gửi và trạng thái duyệt. */
+  async listMyOutcomePackages(actorId: string) {
+    const { centreSlug } = await this.assertCentrePackageManager(actorId);
+    return this.repo.listCentrePackages(centreSlug);
+  }
+
+  /** Bản cài ở kho riêng trung tâm, kèm checksum và phiên bản trước. */
+  async listInstalledOutcomePackages(actorId: string) {
+    await this.assertCentrePackageManager(actorId);
+    return this.centreRepo.listOutcomePackageInstalls();
+  }
+
+  /** Hàng chờ kiểm duyệt, chỉ khả dụng cho biên tập viên hệ thống. */
+  async listPendingOutcomePackages(actorId: string) {
+    await this.assertProgrammeReviewer(actorId);
+    return this.repo.listPendingPackages();
+  }
+
+  /** Đọc bản gửi đầy đủ của biên tập viên, không công bố trước duyệt. */
+  async getOutcomePackageForReview(actorId: string, version: string) {
+    await this.assertProgrammeReviewer(actorId);
+    const pkg = await this.repo.getPackageByVersion(version);
+    if (!pkg) throw new NotFoundException({ message: 'Package not found', code: 'system_bank.package_not_found' });
+    return { package: pkg, ...await this.repo.getPackageItems(pkg.id) };
+  }
+
+  /** Quyết định xuất bản/từ chối; gói sai checksum hoặc quan hệ không thể được duyệt. */
+  async reviewOutcomePackage(actorId: string, version: string, approve: boolean, reason?: string) {
+    await this.assertProgrammeReviewer(actorId);
+    const pkg = await this.repo.getPackageByVersion(version);
+    if (!pkg) throw new NotFoundException({ message: 'Package not found', code: 'system_bank.package_not_found' });
+    if (approve) {
+      const items = await this.repo.getPackageItems(pkg.id);
+      try {
+        assertProgrammePackageIntegrity(pkg, items);
+      } catch (error) {
+        throw new BadRequestException({ message: String(error), code: 'system_bank.bad_package' });
+      }
+    }
+    if (!approve && !reason?.trim()) {
+      throw new BadRequestException({ message: 'Rejection reason is required', code: 'system_bank.rejection_reason_required' });
+    }
+    try {
+      return await this.repo.reviewPackage(version, actorId, approve, reason?.trim() ?? null);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'system_bank.package_already_reviewed') {
+        throw new ConflictException({ message: 'Package was already reviewed', code: 'system_bank.package_already_reviewed' });
+      }
+      throw error;
+    }
+  }
+
+  /** Đọc đầy đủ một bản phát hành, che nội dung bản đang chờ hoặc từ chối. */
   async getOutcomePackage(version: string) {
     const pkg = await this.repo.getPackageByVersion(version);
-    if (!pkg) {
-      throw new NotFoundException({
-        message: `Outcome package ${version} not found`,
-        code: 'system_bank.package_not_found',
-      });
+    if (!pkg || pkg.status !== 'published') {
+      throw new NotFoundException({ message: `Outcome package ${version} not found`, code: 'system_bank.package_not_found' });
     }
-    const items = await this.repo.getPackageItems(pkg.id);
-    return { package: pkg, ...items };
+    return { package: pkg, ...await this.repo.getPackageItems(pkg.id) };
   }
 
   /**
-   * Cài một gói YCCĐ vào kho trung tâm (trung tâm chủ động nhận gói
-   * mới): upsert chương trình → node (cha trước, depth tính từ chuỗi
-   * cha trong code vì bảng node gốc không có cột depth) → YCCĐ theo
-   * id giữ nguyên, cập nhật nội dung tại chỗ. Vì gắn chuẩn trỏ theo
-   * id nên cập nhật gói KHÔNG sửa ngược các gắn chuẩn đã có; ánh xạ
-   * mã cũ→mã mới trong gói chỉ là thông tin tham chiếu.
-   * - Gác quyền: `curriculum:manage` tại context của từng môn mà gói
-   *   chạm tới trong kho trung tâm (đúng cổng ghi chương trình hiện
-   *   hữu) — môn chưa có ở trung tâm thì fail-closed (trung tâm cần
-   *   dữ kiện nền môn trước, thuộc bước cấp phát).
-   * - Xung đột chương trình: trung tâm đã có chương trình (môn, khối)
-   *   với id khác id gói thì fail-closed kèm cặp (slug môn, khối) —
-   *   không tự gộp hai cây khác id.
-   * - Gói hỏng (node cha vắng khỏi gói hoặc cha khác chương trình)
-   *   thì fail-closed trước khi ghi.
-   * - Ở thế giới kho chung, cây chương trình và vết cài là dùng chung
-   *   giữa các trung tâm chung DB — cài theo trung tâm thật sự chỉ
-   *   có sau khi #587 tách kho vật lý; int-spec chạy trên DB trung
-   *   tâm riêng nên kiểm được ngữ nghĩa theo trung tâm.
+   * Cài bản phát hành vào riêng kho vật lý của trung tâm.
+   * Toàn bộ kiểm tra định danh, cây, YCCĐ và vết cài nằm trong một
+   * transaction. Giữ nguyên dữ liệu đã được câu/đề tham chiếu:
+   * nếu cùng id nhưng khác nội dung, dừng và rollback, không upsert.
    */
   async installOutcomePackage(actorId: string, version: string) {
+    const { centreContextId } = await this.assertCentrePackageManager(actorId);
     const pkg = await this.repo.getPackageByVersion(version);
-    if (!pkg) {
-      throw new NotFoundException({
-        message: `Outcome package ${version} not found`,
-        code: 'system_bank.package_not_found',
-      });
+    if (!pkg || pkg.status !== 'published') {
+      throw new NotFoundException({ message: `Outcome package ${version} not found`, code: 'system_bank.package_not_found' });
     }
     const items = await this.repo.getPackageItems(pkg.id);
-    const subjectsBySlug = new Map<string, { id: string; contextId: string }>();
-    for (const curriculum of items.curricula) {
-      if (!subjectsBySlug.has(curriculum.subjectSlug)) {
-        const subject = await this.centreRepo.findSubjectBySlug(curriculum.subjectSlug);
-        if (!subject) {
+    try {
+      assertProgrammePackageIntegrity(pkg, items);
+    } catch (error) {
+      throw new BadRequestException({ message: String(error), code: 'system_bank.bad_package' });
+    }
+
+    return this.tenantDb.withCurrent(async (tx) => {
+      // Khoá mỗi transaction cài gói trên chính kho đích; hai kho A/B
+      // độc lập nên có thể chọn phiên bản riêng mà không chặn nhau.
+      await kyselySql`select pg_advisory_xact_lock(17, 17)`.execute(tx);
+      const already = await this.centreRepo.getOutcomePackageInstallByVersion(pkg.version, tx);
+      if (already) {
+        if (already.packageChecksum && already.packageChecksum !== pkg.checksum) {
+          throw new ConflictException({
+            message: 'Already installed package checksum differs', code: 'system_bank.package_conflict',
+          });
+        }
+        // Dòng cài trước migration #17 chưa có checksum. Khi tái thử,
+        // bổ sung riêng checksum sau khi đã xác thực bản nguồn; tuyệt đối
+        // không chèn lại cây và không đổi mốc installed_at đã lưu.
+        if (!already.packageChecksum) {
+          await tx.updateTable('outcome_package_installs')
+            .set({ package_checksum: pkg.checksum })
+            .where('id', '=', already.id).execute();
+        }
+        return { install: { ...already, packageChecksum: pkg.checksum }, package: pkg, unchanged: true,
+          counts: { curricula: items.curricula.length, nodes: items.nodes.length, outcomes: items.outcomes.length } };
+      }
+
+      const subjects = new Map<string, { id: string; contextId: string }>();
+      // Quyền tenant:manage đã được kiểm tra trước khi mở transaction.
+      // Môn mới thuộc context trung tâm, không đòi quyền quản trị hệ thống.
+      for (const curriculum of items.curricula) {
+        if (subjects.has(curriculum.subjectSlug)) continue;
+        const existing = await this.centreRepo.findSubjectBySlug(curriculum.subjectSlug, tx);
+        if (!existing && !curriculum.subjectName) {
           throw new BadRequestException({
-            message: `Centre has no subject ${curriculum.subjectSlug}; provision the centre foundation data first`,
+            message: `Package has no source subject snapshot for ${curriculum.subjectSlug}`,
             code: 'system_bank.subject_not_installed',
           });
         }
-        subjectsBySlug.set(curriculum.subjectSlug, { id: subject.id, contextId: subject.contextId });
+        const subject = existing ?? await this.centreRepo.insertSubject({
+          contextId: centreContextId, name: curriculum.subjectName!,
+          slug: curriculum.subjectSlug, position: curriculum.subjectPosition,
+        }, tx);
+        subjects.set(curriculum.subjectSlug, { id: subject.id, contextId: subject.contextId });
       }
-    }
-    for (const subject of subjectsBySlug.values()) {
-      await this.evaluator.requireCapability(actorId, 'curriculum:manage', subject.contextId);
-    }
-    for (const curriculum of items.curricula) {
-      const subject = subjectsBySlug.get(curriculum.subjectSlug)!;
-      const existing = await this.centreRepo.findCurriculumBySubjectGrade(subject.id, curriculum.grade);
-      if (existing && existing.id !== curriculum.curriculumId) {
-        throw new ConflictException({
-          message: `Centre already has a curriculum for subject ${curriculum.subjectSlug} grade ${curriculum.grade} with a different id`,
-          code: 'system_bank.curriculum_conflict',
-        });
-      }
-    }
-    const nodesById = new Map(items.nodes.map((node) => [node.nodeId, node]));
-    for (const node of items.nodes) {
-      if (node.parentId !== null) {
-        const parent = nodesById.get(node.parentId);
-        if (!parent || parent.curriculumId !== node.curriculumId) {
-          throw new BadRequestException({
-            message: `Outcome package ${version} has a corrupt node tree (node ${node.nodeId})`,
-            code: 'system_bank.bad_package',
+
+      for (const curriculum of items.curricula) {
+        const subject = subjects.get(curriculum.subjectSlug)!;
+        const byGrade = await this.centreRepo.findCurriculumBySubjectGrade(subject.id, curriculum.grade, tx);
+        const byId = await tx.selectFrom('curricula').select(['id', 'subject_id', 'grade'])
+          .where('id', '=', curriculum.curriculumId).executeTakeFirst();
+        if ((byGrade && byGrade.id !== curriculum.curriculumId)
+          || (byId && (byId.subject_id !== subject.id || byId.grade !== curriculum.grade))) {
+          throw new ConflictException({
+            message: `Curriculum identity conflict for ${curriculum.subjectSlug}/${curriculum.grade}`,
+            code: 'system_bank.curriculum_conflict',
           });
         }
       }
-    }
-    const depthOf = (nodeId: string, seen: Set<string>): number => {
-      if (seen.has(nodeId)) {
-        throw new BadRequestException({
-          message: `Outcome package ${version} has a cyclic node tree`,
-          code: 'system_bank.bad_package',
-        });
+      for (const node of items.nodes) {
+        const existing = await tx.selectFrom('curriculum_nodes').selectAll()
+          .where('id', '=', node.nodeId).executeTakeFirst();
+        if (existing && (existing.curriculum_id !== node.curriculumId
+          || existing.parent_id !== node.parentId
+          || existing.title !== node.title || existing.kind !== node.kind
+          || existing.position !== node.position
+          || existing.duration_periods !== node.durationPeriods
+          || existing.duration_percent !== node.durationPercent)) {
+          throw new ConflictException({
+            message: `Programme node id ${node.nodeId} conflicts with existing content`,
+            code: 'system_bank.node_conflict',
+          });
+        }
       }
-      const node = nodesById.get(nodeId)!;
-      if (node.parentId === null) return 0;
-      seen.add(nodeId);
-      return depthOf(node.parentId, seen) + 1;
-    };
-    const nodesByDepth = [...items.nodes].sort(
-      (a, b) => depthOf(a.nodeId, new Set()) - depthOf(b.nodeId, new Set()),
-    );
-    for (const curriculum of items.curricula) {
-      const subject = subjectsBySlug.get(curriculum.subjectSlug)!;
-      await this.centreRepo.upsertCurriculum({
-        id: curriculum.curriculumId,
-        subjectId: subject.id,
-        grade: curriculum.grade,
-      });
-    }
-    for (const node of nodesByDepth) {
-      await this.centreRepo.upsertCurriculumNode({
-        id: node.nodeId,
-        curriculumId: node.curriculumId,
-        parentId: node.parentId,
-        title: node.title,
-        kind: node.kind,
-        position: node.position,
-        durationPeriods: node.durationPeriods,
-        durationPercent: node.durationPercent,
-      });
-    }
-    for (const outcome of items.outcomes) {
-      await this.centreRepo.upsertLearningOutcome({
-        id: outcome.outcomeId,
-        nodeId: outcome.nodeId,
-        position: outcome.position,
-        content: outcome.content,
-        sourceKind: outcome.sourceKind,
-        sourceRef: outcome.sourceRef,
-      });
-    }
-    const previous = await this.centreRepo.getOutcomePackageInstall();
-    const install = await this.centreRepo.recordOutcomePackageInstall({
-      packageVersion: pkg.version,
-      previousVersion: previous?.packageVersion ?? null,
-      scope: pkg.scope,
-      installedBy: actorId,
+      for (const outcome of items.outcomes) {
+        const existing = await tx.selectFrom('learning_outcomes').selectAll()
+          .where('id', '=', outcome.outcomeId).executeTakeFirst();
+        if (existing && (existing.node_id !== outcome.nodeId
+          || existing.position !== outcome.position
+          || existing.tenant_id !== null || existing.source_kind !== outcome.sourceKind
+          || existing.source_ref !== outcome.sourceRef
+          || canonicalizeJson(existing.content) !== canonicalizeJson(outcome.content))) {
+          throw new ConflictException({
+            message: `Outcome id ${outcome.outcomeId} conflicts with existing content`,
+            code: 'system_bank.outcome_conflict',
+          });
+        }
+      }
+
+      for (const curriculum of items.curricula) {
+        await this.centreRepo.upsertCurriculum({
+          id: curriculum.curriculumId,
+          subjectId: subjects.get(curriculum.subjectSlug)!.id,
+          grade: curriculum.grade,
+        }, tx);
+      }
+      for (const node of programmeNodesParentsFirst(items)) {
+        await this.centreRepo.upsertCurriculumNode({
+          id: node.nodeId, curriculumId: node.curriculumId, parentId: node.parentId,
+          title: node.title, kind: node.kind, position: node.position,
+          durationPeriods: node.durationPeriods, durationPercent: node.durationPercent,
+        }, tx);
+      }
+      for (const outcome of items.outcomes) {
+        await this.centreRepo.upsertLearningOutcome({
+          id: outcome.outcomeId, nodeId: outcome.nodeId, position: outcome.position,
+          content: outcome.content, sourceKind: outcome.sourceKind, sourceRef: outcome.sourceRef,
+        }, tx);
+      }
+      const previous = await this.centreRepo.getOutcomePackageInstall(pkg.scope, tx);
+      const install = await this.centreRepo.recordOutcomePackageInstall({
+        packageVersion: pkg.version, packageChecksum: pkg.checksum,
+        previousVersion: previous?.packageVersion ?? null,
+        scope: pkg.scope, installedBy: actorId,
+      }, tx);
+      return { install, package: pkg, unchanged: false,
+        counts: { curricula: items.curricula.length, nodes: items.nodes.length, outcomes: items.outcomes.length } };
     });
-    return {
-      install,
-      package: pkg,
-      counts: { curricula: items.curricula.length, nodes: items.nodes.length, outcomes: items.outcomes.length },
-    };
   }
 }

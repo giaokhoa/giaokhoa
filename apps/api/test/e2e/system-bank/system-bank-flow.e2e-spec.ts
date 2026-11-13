@@ -1,5 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import { readFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -20,6 +21,7 @@ import {
 } from '../../support/identity-access-helpers';
 import { addExamSlot, createExamDraft } from '../../support/exam-pin-helpers';
 import { tenantAls } from '../../../src/modules/tenants/tenant-als';
+import { programmePackageChecksum } from '../../../src/modules/system-bank/programme-package-integrity';
 import { RolesService } from '../../../src/modules/access/roles.service';
 import { ContextsService } from '../../../src/modules/access/contexts.service';
 import { FilesService } from '../../../src/modules/files/files.service';
@@ -735,6 +737,77 @@ describe('Ngân hàng hệ thống thành kho riêng + API (issue #585)', () => 
       expect(copiedType.body.answerKey).toEqual(createdType.body.answerKey);
     }
   }, 180_000);
+
+  it('HTTP gói chương trình: chỉ bản duyệt được khám phá; biên tập viên xem nội dung và duyệt công bố', async () => {
+    // Bản gửi được seed vào kho hệ thống để cô lập phép thử HTTP
+    // reviewer/discovery khỏi nhánh định tuyến kho riêng của trung tâm.
+    const version = '2026.11.13.17-http';
+    const curriculumId = randomUUID();
+    const nodeId = randomUUID();
+    const outcomeId = randomUUID();
+    const text = doc('Yêu cầu cần đạt của chương trình chờ duyệt');
+    const items = {
+      curricula: [{ curriculumId, subjectSlug: 'toan', subjectName: 'Toán', subjectPosition: 1, grade: 6 }],
+      nodes: [{ nodeId, curriculumId, parentId: null, title: 'Số tự nhiên',
+        kind: 'topic', position: 1, durationPeriods: null, durationPercent: null }],
+      outcomes: [{ outcomeId, nodeId, position: 1,
+        content: text, sourceKind: 'program', sourceRef: 'CTGDPT 2018' }],
+      mappings: [],
+    };
+    const checksum = programmePackageChecksum(items as never);
+    const packageRow = await bankPg.query<{ id: string }>(
+      `INSERT INTO system_outcome_packages
+        (version, scope, checksum, outcome_count, status, centre_slug)
+       VALUES ($1, 'toan', $2, 1, 'pending', 'trung-tam-a')
+       RETURNING id`,
+      [version, checksum],
+    );
+    const packageId = packageRow.rows[0]!.id;
+    await bankPg.query(
+      `INSERT INTO system_outcome_package_curricula
+        (package_id, curriculum_id, subject_slug, subject_name, subject_position, grade)
+        VALUES ($1, $2, 'toan', 'Toán', 1, 6)`,
+      [packageId, curriculumId],
+    );
+    await bankPg.query(
+      `INSERT INTO system_outcome_package_nodes
+        (package_id, node_id, curriculum_id, parent_id, title, kind, position,
+         duration_periods, duration_percent)
+        VALUES ($1, $2, $3, NULL, 'Số tự nhiên', 'topic', 1, NULL, NULL)`,
+      [packageId, nodeId, curriculumId],
+    );
+    await bankPg.query(
+      `INSERT INTO system_outcome_package_outcomes
+        (package_id, outcome_id, node_id, position, content, source_kind, source_ref)
+        VALUES ($1, $2, $3, 1, $4::jsonb, 'program', 'CTGDPT 2018')`,
+      [packageId, outcomeId, nodeId, JSON.stringify(text)],
+    );
+
+    const base = '/api/v1/system-bank/outcome-packages';
+    const visibleBefore = await http(app).get(base).set(bearer(teacher.token));
+    expect(visibleBefore.status).toBe(200);
+    expect((visibleBefore.body as Array<{ version: string }>).some((row) => row.version === version)).toBe(false);
+    const hiddenBefore = await http(app).get(`${base}/${version}`).set(bearer(teacher.token));
+    expect(hiddenBefore.status).toBe(404);
+    const forbiddenReview = await http(app).post(`${base}/${version}/approve`).set(bearer(student.token)).send({});
+    expect(forbiddenReview.status).toBe(403);
+
+    const queue = await http(app).get(`${base}/pending`).set(bearer(admin));
+    expect(queue.status, JSON.stringify(queue.body)).toBe(200);
+    expect((queue.body as Array<{ version: string }>).map((row) => row.version)).toContain(version);
+    const preview = await http(app).get(`${base}/review/${version}`).set(bearer(admin));
+    expect(preview.status, JSON.stringify(preview.body)).toBe(200);
+    expect(preview.body.outcomes[0].content).toMatchObject(text);
+    const approval = await http(app).post(`${base}/${version}/approve`).set(bearer(admin)).send({});
+    expect(approval.status, JSON.stringify(approval.body)).toBe(201);
+    expect(approval.body).toMatchObject({ status: 'published', version, checksum });
+    const visibleAfter = await http(app).get(base).set(bearer(teacher.token));
+    expect((visibleAfter.body as Array<{ version: string }>).map((row) => row.version)).toContain(version);
+    const published = await http(app).get(`${base}/${version}`).set(bearer(teacher.token));
+    expect(published.status).toBe(200);
+    expect(published.body.package.checksum).toBe(checksum);
+    expect(published.body.outcomes[0].content).toMatchObject(text);
+  });
 
   it('bank-off: app không cấu hình kho ngân hàng vẫn đọc câu đã nhập và tạo đề từ câu đó', async () => {
     const created = await publish('Câu cho bank-off');
