@@ -49,7 +49,7 @@ export interface SpacePoolManagerDeps {
   /**
    * Trần pool kho riêng còn sống trong một tiến trình. Khi đạt giới hạn,
    * không mở kết nối mới ngoài ngân sách; người gọi nhận lỗi rõ để retry
-   * sau khi pool nhàn đã được thu hồi. Mặc định 3 cho Docker.
+   * sau khi pool nhàn đã được thu hồi. Mặc định 6 cho Docker.
    */
   maxPools?: number;
   /** Đồng hồ — tách ra để kiểm chứng vòng quét bằng thời gian giả. */

@@ -26,6 +26,16 @@ interface TenantTagState {
 const TAG_STATE = Symbol('tenantTagState');
 
 export class TenantAwarePool extends Pool {
+  private closingOnce: Promise<void> | null = null;
+
+  /** Nest dọn pool khi shutdown; test/owner cũ có thể còn gọi end().
+   * Đóng hai lần phải là no-op, không ném lỗi pg-pool "end more than once".
+   */
+  override end(): Promise<void> {
+    this.closingOnce ??= super.end();
+    return this.closingOnce;
+  }
+
   constructor(config: PoolConfig) {
     super(config);
     // Lỗi từ kết nối đang nhàn phát qua sự kiện Pool; thiếu listener

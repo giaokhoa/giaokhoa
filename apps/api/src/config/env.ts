@@ -23,10 +23,10 @@ export const envSchema = z.object({
   CONTROL_PLANE_POOL_MAX: z.coerce.number().int().positive().max(1000).optional(),
   // Khung định tuyến kết nối theo trung tâm (issue #581): bộ phân giải đọc sổ đăng ký ở control plane và đệm kết quả trong tiến trình — TTL của đệm là lưới dự phòng ngoài kênh vô hiệu hoá theo sự kiện đổi sổ. Trần kết nối áp cho pool của MỖI kho riêng (pool tạo lười theo database), và ngưỡng nhàn rỗi mà quá đó pool của kho không còn traffic bị đóng để trả ngân sách kết nối về cụm.
   SPACE_ROUTING_CACHE_TTL_MS: z.coerce.number().int().positive().default(5_000),
-  SPACE_DB_POOL_MAX: z.coerce.number().int().positive().default(5),
+  SPACE_DB_POOL_MAX: z.coerce.number().int().positive().default(3),
   // Trần số kho riêng có pool đồng thời trong MỘT tiến trình, khác
   // SPACE_DB_POOL_MAX là số kết nối tối đa BÊN TRONG mỗi pool.
-  SPACE_DB_MAX_POOLS: z.coerce.number().int().positive().max(100).default(3),
+  SPACE_DB_MAX_POOLS: z.coerce.number().int().positive().max(100).default(6),
   // #8: bật sau khi provision-public và cài SPACE_CONG_CONG_DATABASE_URL.
   // Tắt = tương thích kho chung cũ; bật = host gốc bắt buộc kho riêng.
   PUBLIC_LEARNING_ENABLED: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),

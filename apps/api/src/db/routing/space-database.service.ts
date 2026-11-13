@@ -93,7 +93,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   readonly routedKysely: CentreDb;
 
   constructor(config: ConfigService, controlPlane: ControlPlaneConnection) {
-    this.poolMax = config.get<number>('SPACE_DB_POOL_MAX') ?? 5;
+    this.poolMax = config.get<number>('SPACE_DB_POOL_MAX') ?? 3;
     this.ssl = config.get<boolean>('DATABASE_SSL') ?? false;
     const idleTimeoutMs = config.get<number>('SPACE_DB_POOL_IDLE_TIMEOUT_MS') ?? 60_000;
     this.resolver = new SpaceConnectionResolver({
@@ -127,7 +127,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
     });
     this.kyselyPools = new SpacePoolManager<CentreDb>({
       idleTimeoutMs,
-      maxPools: config.get<number>('SPACE_DB_MAX_POOLS') ?? 3,
+      maxPools: config.get<number>('SPACE_DB_MAX_POOLS') ?? 6,
       // Pool của một kho bị gỡ (đóng vì nhàn rỗi, hoặc bị thay vì sổ đổi danh tính kết nối) thì các trung tâm trỏ vào kho đó cũng hết trạng thái "đã chuẩn bị": handle của pool đã chết không còn được dùng. Việc chuẩn bị lại diễn ra ở lần gọi `getKyselyForSpace`/`withSpaceKysely` kế tiếp; riêng đường ĐỒNG BỘ của `routedKysely` không chuẩn bị lại được, nên với slug đã chuẩn bị ở kho riêng nó fail-closed (xem `dedicatedSlugs` và `currentKysely`) thay vì chạm vào handle đã chết hoặc rơi về kho chung.
       onPoolClosed: (databaseName) => {
         for (const [slug, entry] of [...this.preparedKysely]) {

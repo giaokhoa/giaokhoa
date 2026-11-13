@@ -20,8 +20,8 @@ x-api-env: &api-env
   # Trần kết nối của pool nghiệp vụ phía api trong ngân sách kết nối của cụm (issue #586) — xem ghi chú RUNTIME_POSTGRES_PASSWORD trong .env.example để biết cách cộng ngân sách.
   DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
   CONTROL_PLANE_POOL_MAX: ${CONTROL_PLANE_POOL_MAX:-4}
-  SPACE_DB_POOL_MAX: ${SPACE_DB_POOL_MAX:-5}
-  SPACE_DB_MAX_POOLS: ${SPACE_DB_MAX_POOLS:-3}
+  SPACE_DB_POOL_MAX: ${SPACE_DB_POOL_MAX:-3}
+  SPACE_DB_MAX_POOLS: ${SPACE_DB_MAX_POOLS:-6}
   # Database control plane (issue #580): database riêng `giaokhoa_control_plane` trên cùng cụm Postgres, role kết nối riêng `giaokhoa_control_plane` — role và database được cấp phát idempotent bởi bước migrate (script control-plane-setup), không khai ở service postgres.
   CONTROL_PLANE_DATABASE_URL: postgres://giaokhoa_control_plane:${CONTROL_PLANE_POSTGRES_PASSWORD:?Can dat CONTROL_PLANE_POSTGRES_PASSWORD trong file .env}@postgres:5432/giaokhoa_control_plane
   # Database kho ngân hàng hệ thống (issue #585): database riêng trên cùng cụm, role kết nối riêng — database và role được cấp phát idempotent bởi bước migrate (script system-bank-setup). Khai báo TRƠ như các biến tuỳ chọn phía dưới: Compose chỉ truyền vào api/worker khi biến thật sự được đặt ở môi trường triển khai; chưa đặt thì các route kho ngân hàng báo chưa cấu hình (503) thay vì làm ứng dụng gãy kiểm tra biến môi trường (schema yêu cầu độ dài tối thiểu khi biến CÓ MẶT). Service migrate khai riêng biến này trong khối environment của nó.
@@ -148,8 +148,8 @@ services:
       SPACE_NHANTIN_DATABASE_URL:
       SPACE_CONG_CONG_DATABASE_URL:
       DATABASE_POOL_MAX: ${WORKER_DATABASE_POOL_MAX:-10}
-      SPACE_DB_POOL_MAX: ${SPACE_DB_POOL_MAX:-5}
-      SPACE_DB_MAX_POOLS: ${SPACE_DB_MAX_POOLS:-3}
+      SPACE_DB_POOL_MAX: ${SPACE_DB_POOL_MAX:-3}
+      SPACE_DB_MAX_POOLS: ${SPACE_DB_MAX_POOLS:-6}
       DATABASE_SSL: ${DATABASE_SSL:-false}
       DATABASE_TLS_CA_FILE:
       REDIS_TLS_CA_FILE:
@@ -244,6 +244,10 @@ services:
       DATABASE_URL: postgres://giaokhoa_migrator:${MIGRATOR_POSTGRES_PASSWORD:?Can dat MIGRATOR_POSTGRES_PASSWORD trong file .env}@postgres:5432/${POSTGRES_DB:-giaokhoa}
       # Kết nối quản trị của cụm — CHỈ dùng ở bước cấp phát role và database (hai script setup), không còn đường dữ kiện nào của ứng dụng chạy bằng kết nối này.
       DATABASE_ADMIN_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Can dat POSTGRES_PASSWORD trong file .env}@postgres:5432/postgres
+      # Cùng chính sách SSL với API/worker. Khi dùng CA nội bộ, mount
+      # file PEM vào service migrate bằng volume read-only tương ứng.
+      DATABASE_SSL: ${DATABASE_SSL:-false}
+      DATABASE_TLS_CA_FILE:
       # Hai URL đích của mô hình role: script runtime-roles-setup đảm bảo hai role tồn tại, database thuộc sở hữu của role migration và role runtime chỉ giữ quyền dữ liệu; cấu hình runner migration của kho nghiệp vụ ưu tiên MIGRATION_DATABASE_URL nên migration được áp bằng đúng role chủ sở hữu.
       MIGRATION_DATABASE_URL: postgres://giaokhoa_migrator:${MIGRATOR_POSTGRES_PASSWORD:?Can dat MIGRATOR_POSTGRES_PASSWORD trong file .env}@postgres:5432/${POSTGRES_DB:-giaokhoa}
       RUNTIME_DATABASE_URL: postgres://giaokhoa_runtime:${RUNTIME_POSTGRES_PASSWORD:?Can dat RUNTIME_POSTGRES_PASSWORD trong file .env}@postgres:5432/${POSTGRES_DB:-giaokhoa}

@@ -408,8 +408,29 @@ export class FilesService {
    * @throws NotFoundException nếu file không ở đúng miền/host/chủ sở hữu.
    */
   async readSignedContent(fileId: string, token: string | undefined): Promise<{ file: FileRow; data: Buffer }> {
-    const slug = tenantAls.getStore()?.spaceSlug;
-    const platformScope = { platform: true, ...(slug ? { spaceSlug: slug } : {}) };
+    const scope = tenantAls.getStore();
+    // @Public download chỉ có Host (slug) và HMAC, không qua guard
+    // phiên đã ghim spaceHandle. Chuẩn bị phiên kho riêng trước khi
+    // tra file; thiếu bước này thì routedKysely báo identity_mismatch
+    // và biến chữ ký hợp lệ thành HTTP 500. Trong phiên đã có handle,
+    // giữ nguyên cổng identity fail-closed nếu handle bị thay.
+    if (scope?.spaceSlug && !scope.spaceHandle && this.spaceDb) {
+      return this.spaceDb.withSpaceKysely(scope.spaceSlug, () => this.readSignedContentInSpace(fileId, token));
+    }
+    return this.readSignedContentInSpace(fileId, token);
+  }
+
+  private async readSignedContentInSpace(fileId: string, token: string | undefined): Promise<{ file: FileRow; data: Buffer }> {
+    const scope = tenantAls.getStore();
+    const slug = scope?.spaceSlug;
+    // Nâng quyền tạm thời để đọc metadata nhưng PHẢI giữ cặp identity
+    // spaceId + spaceHandle của guard; tenantAls.run không tự hợp
+    // ngữ cảnh cha. Bỏ cặp này khiến routedKysely từ chối đường
+    // tải ký ở kho riêng dù chữ ký HMAC hợp lệ.
+    const platformScope = {
+      platform: true,
+      ...(slug ? { spaceSlug: slug, spaceId: scope?.spaceId, spaceHandle: scope?.spaceHandle } : {}),
+    };
     const file = await tenantAls.run(platformScope, () => this.repo.getById(fileId));
     if (!file) throw new NotFoundException({ message: `File ${fileId} not found`, code: 'file.not_found' });
 
