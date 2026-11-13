@@ -103,7 +103,7 @@ describe('MessagingGateway.handleConnection — danh sách chặn tải một l�
 
   it('namespace cho phép handshake hợp lệ và không xác thực lại sau connect ACK', async () => {
     const { gateway, auth, realtime, client } = build();
-    let guard!: (client: typeof client, next: (error?: Error) => void) => void;
+    let guard!: (socket: { handshake: unknown; data: Record<string, unknown> }, next: (error?: Error) => void) => void;
     gateway.afterInit({ use: (callback: typeof guard) => { guard = callback; } } as never);
     const failure = await new Promise<Error | undefined>((resolve) => guard(client, resolve));
     expect(failure).toBeUndefined();
