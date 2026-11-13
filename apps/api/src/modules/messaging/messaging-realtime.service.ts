@@ -2,9 +2,8 @@ import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MESSAGING_SOCKET_EVENTS } from '@giaokhoa/contracts';
 import { conversationRoom, tenantRealtimeSegment, userRoom } from '@giaokhoa/messaging';
-import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
-import type { Server } from 'socket.io';
+import type { Namespace } from 'socket.io';
 import { redisTlsFromUrl } from '../../config/env';
 import { MessagingRepository } from '@giaokhoa/db/repositories/messaging';
 
@@ -30,8 +29,7 @@ export class MessagingRealtimeService implements OnModuleDestroy {
   private readonly logger = new Logger(MessagingRealtimeService.name);
   private readonly redisUrl: string;
   private readonly redisOptions: Record<string, unknown>;
-  private server: Server | null = null;
-  private adapterClients: Redis[] = [];
+  private server: Namespace | null = null;
   private stateClient: Redis | null = null;
   private readonly presenceTtlSeconds: number;
   private readonly presenceRefreshMs: number;
@@ -52,20 +50,11 @@ export class MessagingRealtimeService implements OnModuleDestroy {
   }
 
   /**
-   * Gateway gắn server Socket.IO vào đây khi khởi tạo: tạo Redis adapter (hai connection pub/sub riêng). Redis lỗi lúc khởi động thì giữ adapter in-memory mặc định + cảnh báo — một tiến trình vẫn phân phối nội bộ được, không chặn app boot.
+   * Namespace /messaging đã được nối vào Redis tại IoAdapter trước khi boot.
+   * Service chỉ giữ tham chiếu namespace để phát sự kiện room theo tenant.
    */
-  attachServer(server: Server): void {
+  attachServer(server: Namespace): void {
     this.server = server;
-    try {
-      const pub = new Redis(this.redisUrl, this.redisOptions);
-      const sub = pub.duplicate();
-      pub.on('error', (error: Error) => this.logger.warn(`Redis adapter (pub) của messaging lỗi: ${error.message}`));
-      sub.on('error', (error: Error) => this.logger.warn(`Redis adapter (sub) của messaging lỗi: ${error.message}`));
-      this.adapterClients = [pub, sub];
-      server.adapter(createAdapter(pub, sub) as never);
-    } catch (error) {
-      this.logger.warn(`Không gắn được Redis adapter cho messaging, dùng adapter in-memory: ${(error as Error).message}`);
-    }
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -73,10 +62,8 @@ export class MessagingRealtimeService implements OnModuleDestroy {
     this.presenceTimer = null;
     this.localPresence.clear();
     await Promise.allSettled([
-      ...this.adapterClients.map((c) => c.quit()),
       ...(this.stateClient ? [this.stateClient.quit()] : []),
     ]);
-    this.adapterClients = [];
     this.stateClient = null;
     this.server = null;
   }

@@ -7,7 +7,7 @@ import {
   MESSAGING_SOCKET_EVENTS,
   type MessagingSyncRequest, type MessagingSyncResult,
 } from '@giaokhoa/contracts';
-import type { Server, Socket } from 'socket.io';
+import type { Namespace, Socket } from 'socket.io';
 import { Public } from '../../common/public.decorator';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { MessagingRepository } from '@giaokhoa/db/repositories/messaging';
@@ -57,12 +57,12 @@ const SYNC_MAX_CONVERSATIONS = 50;
 // JwtAuthGuard toàn cục (guard HTTP đọc header Authorization qua passport — không áp được cho context WebSocket và sẽ ném lỗi trên mọi message handler). Xác thực của kênh này nằm ở handleConnection:
 // không qua được lớp auth mỏng là kết nối bị ngắt trước khi bất kỳ handler nào chạy.
 @Public()
-@WebSocketGateway({ namespace: '/messaging', cors: { origin: true } })
+@WebSocketGateway({ namespace: '/messaging' })
 export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(MessagingGateway.name);
 
   @WebSocketServer()
-  private readonly server!: Server;
+  private readonly server!: Namespace;
 
   constructor(
     private readonly auth: MessagingSocketAuth,
@@ -80,7 +80,7 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
     return slug ? this.spaceDb.withSpaceKysely(slug, fn) : fn();
   }
 
-  afterInit(server: Server): void {
+  afterInit(server: Namespace): void {
     this.realtime.attachServer(server);
   }
 

@@ -15,6 +15,7 @@ import { mountBetterAuth } from './modules/auth/better-auth/better-auth.mount';
 import { BetterAuthService } from './modules/auth/better-auth/better-auth.service';
 import { McpDepsService } from './modules/mcp/mcp-deps.service';
 import { mountMcp } from './modules/mcp/mcp.mount';
+import { MessagingRedisIoAdapter } from './modules/messaging/messaging-redis-io.adapter';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -35,14 +36,16 @@ async function bootstrap(): Promise<void> {
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
   // Validation toàn cục đi qua APP_PIPE (I18nStandardSchemaValidationPipe) đã đăng ký trong AppModule — mọi payload đều là schema Zod.
   app.useGlobalFilters(new ProblemDetailsFilter());
-  // CORS chỉ mở cho các origin khai trong CORS_ORIGINS (mặc định là web dev); không phản chiếu mọi origin như mặc định của enableCors().
-  app.enableCors({
-    origin: (config.get<string>('CORS_ORIGINS') ?? 'http://localhost:5173')
-      .split(',')
-      .map((o) => o.trim())
-      .filter(Boolean),
-    credentials: true,
-  });
+  // REST, polling và WebSocket dùng cùng một allowlist. Adapter kết nối Redis
+  // trước app.listen() để không thể rơi về in-memory khi hệ có nhiều tiến trình.
+  const corsOrigins = (config.get<string>('CORS_ORIGINS') ?? 'http://localhost:5173')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  app.enableCors({ origin: corsOrigins, credentials: true });
+  const socketAdapter = new MessagingRedisIoAdapter(app, config.getOrThrow<string>('REDIS_URL'), corsOrigins);
+  await socketAdapter.connectToRedis();
+  app.useWebSocketAdapter(socketAdapter);
   app.enableShutdownHooks();
 
   // Nén gzip cho MỌI phản hồi (API JSON lẫn file tĩnh của web app) — đăng ký trước tầng file tĩnh để asset cũng được nén. Audit hiệu năng đo được bundle JS 1,7MB đi trên dây nguyên vẹn vì thiếu tầng này (gzip còn ~0,44MB).

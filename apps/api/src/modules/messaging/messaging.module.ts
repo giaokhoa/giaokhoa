@@ -45,7 +45,7 @@ import { NotificationUnreadStreamService } from './notification-unread-stream.se
     MessagingService, NotificationUnreadStreamService,
     // Throttle gửi tin theo người dùng bằng Redis (lát M2, issue #212).
     MessagingSendThrottleService,
-    // Realtime (issue #33): gateway Socket.IO + lớp auth mỏng + tầng realtime phía kết nối (Redis adapter, presence/typing).
+    // Realtime (issue #33): gateway Socket.IO + lớp auth mỏng + tầng realtime phía kết nối (presence/typing; Redis adapter được gắn từ bootstrap).
     MessagingSocketAuth, MessagingRealtimeService, MessagingGateway,
     // Cả hai consumer quét outbox đều đã chuyển sang worker: phân phối sự kiện messaging qua hàng đợi `messaging-realtime`
     // (issue con #521 của #491; consumer hàng đợi ở worker, luật
