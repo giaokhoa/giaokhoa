@@ -57,7 +57,7 @@ jobs:
       # Service migrate tự chạy trước và phải thành công thì api/worker mới khởi động; chỉ dùng image vừa build, không build lại ở shell.
       - name: Verify Caddy config with current trusted-proxy policy
         run: |
-          docker compose -f compose.yaml -f compose.ci.yaml run --rm --no-deps gateway caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          docker compose -f compose.yaml -f compose.ci.yaml run --rm --no-deps gateway validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
       - name: Start the stack
         run: docker compose -f compose.yaml -f compose.ci.yaml up -d --no-build

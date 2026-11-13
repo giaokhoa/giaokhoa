@@ -210,6 +210,8 @@ services:
   gateway:
     image: caddy:2.11.9-alpine
     restart: unless-stopped
+    environment:
+      GIAOKHOA_TRUSTED_PROXY_CIDRS: ${GIAOKHOA_TRUSTED_PROXY_CIDRS:-172.16.0.0/12}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # Giữ cấu hình và dữ liệu Caddy nếu sau này cấp TLS tại gateway.
