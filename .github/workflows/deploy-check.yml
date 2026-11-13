@@ -69,6 +69,24 @@ jobs:
             http://127.0.0.1:8080/api/v1/health -o smoke-health.json
           jq -e '.status == "ok" and .checks.database == "up" and .checks.redis == "up"' smoke-health.json
 
+      # Better Auth và MCP được mount thẳng lên Express, bên ngoài
+      # guard Nest: preflight phải qua CORS middleware trước khi auth
+      # đọc body, cả khi origin không đáng tin.
+      - name: Verify Better Auth and MCP CORS preflight
+        run: |
+          for path in /api/v1/auth/sign-in/username /mcp; do
+            headers=$(curl -fsS -i -X OPTIONS "http://127.0.0.1:8080$path" \
+              -H 'Origin: http://localhost:8080' -H 'Access-Control-Request-Method: POST' | tr -d '\r')
+            printf '%s\n' "$headers" | grep -qi '^access-control-allow-origin: http://localhost:8080$'
+            printf '%s\n' "$headers" | grep -qi '^access-control-allow-credentials: true$'
+            blocked=$(curl -fsS -i -X OPTIONS "http://127.0.0.1:8080$path" \
+              -H 'Origin: https://untrusted.example' -H 'Access-Control-Request-Method: POST' | tr -d '\r')
+            if printf '%s\n' "$blocked" | grep -qi '^access-control-allow-origin: https://untrusted.example$'; then
+              echo "Preflight cho phép origin ngoài danh sách tại $path" >&2
+              exit 1
+            fi
+          done
+
       # Nghiệm thu Redis/BullMQ qua cấu hình đang chạy (không chỉ chuỗi
       # trong Compose). Keycloak và kc-db phải biến mất khỏi toàn stack.
       - name: Verify Redis policy and retired Keycloak services
