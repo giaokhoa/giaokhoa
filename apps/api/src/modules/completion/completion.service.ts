@@ -3,6 +3,7 @@ import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundEx
 import { I18nService } from '@nestjs/i18n';
 import { OnEvent } from '@nestjs/event-emitter';
 import type { Queue } from 'bullmq';
+import { randomUUID } from 'node:crypto';
 import { sql, type CentreTx } from '@giaokhoa/db';
 import { CompletionRepository, type CourseCompletionRow } from '@giaokhoa/db/repositories/completion';
 import { OutboxService, type OutboxEventInput } from '../../infra/events/outbox.service';
@@ -397,7 +398,9 @@ export class CompletionService implements OnModuleInit {
       for (const cc of completions) {
         await this.repo.upsertCourseCompletion({ ...cc, reAggregate: new Date() });
       }
-      await this.recalcQueue.add('recalculate', { courseId, ...backgroundJobContext() }, { jobId: backgroundJobId(`completion-recalc-${courseId}-${Date.now()}`), attempts: 3 });
+      // Mỗi lần tiêu chí đổi là một sự kiện tính lại độc lập:
+      // timestamp millisecond không phải định danh duy nhất.
+      await this.recalcQueue.add('recalculate', { courseId, ...backgroundJobContext() }, { jobId: backgroundJobId(`completion-recalc-${courseId}-${randomUUID()}`), attempts: 3 });
       await this.outbox.enqueueStandalone({ aggregate: 'completion', type: 'completion_criteria_changed', payload: { courseId, reAggregate: true } });
     }
     return { method, criteria: await this.repo.listCriteria(courseId) };

@@ -93,7 +93,9 @@ export class BadgesService implements OnModuleInit {
 
   private async enqueueEvaluation(userId: string, trigger: string): Promise<void> {
     await this.awardQueue.add('evaluate', { userId, trigger, ...backgroundJobContext() }, {
-      jobId: backgroundJobId(`badge-award-${userId}-${trigger}-${Date.now()}`),
+      // Sự kiện đánh giá huy hiệu mới không được đè mất job cũ
+      // chỉ vì hai nguồn phát cùng millisecond.
+      jobId: backgroundJobId(`badge-award-${userId}-${trigger}-${randomUUID()}`),
       attempts: 3, removeOnComplete: true,
     }).catch(() => undefined);
   }

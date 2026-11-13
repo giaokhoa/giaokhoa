@@ -2,6 +2,7 @@ import { InjectQueue, Processor } from '@nestjs/bullmq';
 import { ObservedWorkerHost } from '../observed-worker-host';
 import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
 import type { Job, Queue } from 'bullmq';
+import { randomUUID } from 'node:crypto';
 import { SpaceJobRunner } from '../db/routing/space-job-runner';
 import { SpaceDatabaseService } from '../db/routing/space-database.service';
 import type { BackgroundJobScope } from '../db/routing/background-job-scope';
@@ -209,9 +210,11 @@ export class CompletionRecalculateProcessor extends ObservedWorkerHost {
         .execute();
       for (const dependentId of [...new Set(dependents.map((d) => d.course))]) {
         if (dependentId === courseId) continue;
+        // Các khoá phụ thuộc khác nhau hoặc hai thay đổi đồng thời
+        // đều phải có job riêng; dedupe millisecond không bảo toàn.
         await this.recalcQueue.add('recalculate', { courseId: dependentId,
           spaceSlug: job.data.spaceSlug, spaceId: job.data.spaceId, tenantId: job.data.tenantId },
-          { jobId: `${job.data.spaceId ?? 'shared'}-completion-recalc-${dependentId}-${Date.now()}`, attempts: 3 }).catch(() => undefined);
+          { jobId: `${job.data.spaceId ?? 'shared'}-completion-recalc-${dependentId}-${randomUUID()}`, attempts: 3 }).catch(() => undefined);
       }
     }
     return { courseId, users: userIds.size, completedUsers };
