@@ -79,6 +79,12 @@ jobs:
           test "$policy" = noeviction
           printf '%s\n' "$budget" | grep -Eq '^[0-9]+$'
           echo "Redis: maxmemory-policy=$policy, maxmemory=$budget bytes"
+          # Redis cache riêng PHẢI dùng eviction (không phải Redis BullMQ).
+          cache_policy=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis-cache redis-cli --raw CONFIG GET maxmemory-policy | tail -n 1)
+          cache_budget=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis-cache redis-cli --raw CONFIG GET maxmemory | tail -n 1)
+          test "$cache_policy" = allkeys-lru
+          test "$cache_budget" -gt 0
+          echo "Redis cache: maxmemory-policy=$cache_policy, maxmemory=$cache_budget bytes"
 
       # Cổng nghiệm thu SSR động: loader nhận JSON thực từ API nội bộ, và HTML chứa dữ liệu đã render trước khi hydrate.
       - name: Verify SSR, CSP and cache isolation

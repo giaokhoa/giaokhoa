@@ -13,7 +13,7 @@ const APP_CACHE_DEFAULT_TTL_MS = 300_000;
 
 /**
  * CacheInfraModule — ánh xạ hai chế độ của MUC trong Moodle:
- *  - application: kho Redis dùng chung qua @nestjs/cache-manager + Keyv (namespace `giaokhoa:app`)
+ *  - application: kho Redis cache tách vật lý khỏi BullMQ, qua @nestjs/cache-manager + Keyv (namespace `giaokhoa:app`)
  *  - session:     kho Redis với namespace riêng (`giaokhoa:session`), SessionCacheService
  *
  * Chế độ "request" của MUC không còn provider riêng: nhu cầu ghi nhớ trong phạm vi một request do AsyncLocalStorage của ngữ cảnh tenant đảm nhiệm. Provider cache request-scoped trước đây không có nơi sản xuất nào dùng và đã được gỡ — một provider `Scope.REQUEST` bị inject sẽ lặng lẽ kéo cả cây phụ thuộc của nó (kể cả controller) thành request-scoped, khuôn NestJS khuyến nghị tránh trừ khi thật cần thiết.
@@ -26,7 +26,7 @@ const APP_CACHE_DEFAULT_TTL_MS = 300_000;
       useFactory: (config: ConfigService) => ({
         stores: [
           new Keyv({
-            store: new KeyvRedis(cacheRedisConfigFromUrl(config.getOrThrow<string>('REDIS_URL'))),
+            store: new KeyvRedis(cacheRedisConfigFromUrl(config.get<string>('CACHE_REDIS_URL') ?? config.getOrThrow<string>('REDIS_URL'))),
             namespace: 'giaokhoa:app',
             ttl: APP_CACHE_DEFAULT_TTL_MS,
           }),

@@ -43,6 +43,9 @@ export const envSchema = z.object({
   DATABASE_TLS_CA_FILE: z.string().min(1).optional(),
   REDIS_TLS_CA_FILE: z.string().min(1).optional(),
   REDIS_URL: z.string().min(1),
+  // Cache ứng dụng có thể dùng Redis allkeys-lru riêng; session/queue
+  // giữ REDIS_URL/noeviction để không mất job hoặc token đăng nhập.
+  CACHE_REDIS_URL: z.string().min(1).optional(),
   // Presence của messaging realtime (issue #33): TTL của khoá presence trong Redis và nhịp gia hạn cho các kết nối còn sống. TTL là lưới an toàn để tiến trình chết đột ngột không để lại trạng thái "online" kẹt mãi; nhịp gia hạn phải nhỏ hơn TTL để một kết nối còn sống không bao giờ bị coi là offline giữa chừng (F2).
   MESSAGING_PRESENCE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
   MESSAGING_PRESENCE_REFRESH_MS: z.coerce.number().int().positive().default(120_000),
