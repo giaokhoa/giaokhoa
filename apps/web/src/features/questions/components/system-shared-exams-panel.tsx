@@ -13,7 +13,8 @@ import {
   approveSharedExam, assignSharedExam, fetchSharedExamForReview, fetchSharedExamSubmissions,
   fetchSharedExams, rejectSharedExam,
 } from '../api/questions';
-import { systemBankPlainText } from '../utils/shared';
+import { SystemSubmissionReviewPreview } from './system-submission-review-preview';
+import type { SystemQuestionSubmission } from '../api/questions';
 
 export function SystemSharedExamsPanel() {
   const { t } = useTranslation('app');
@@ -221,27 +222,30 @@ export function SystemSharedExamsPanel() {
           ))}
           {selectedReview && review.data ? (
             <div className="space-y-2 rounded-md border p-3">
-              <p className="font-medium">{review.data.package.name}</p>
-              <ol className="list-inside list-decimal space-y-2 text-sm">
-                {review.data.package.slots.map((slot) => (
-                  <li key={slot.position}>
-                    {systemBankPlainText(slot.package.questionText)} · {slot.qtype} · {slot.maxMark}
-                    {slot.package.media?.length ? (
-                      <ul className="ml-5 text-xs text-muted-foreground">
-                        {slot.package.media.map((file) => (
-                          <li key={file.contentHash} className="space-y-1">
-                            <span>{file.fileName} · {file.contentHash}</span>
-                            <img
-                              src={`/api/v1/system-bank/exams/${selectedReview}/media/${file.contentHash}`}
-                              alt={file.fileName}
-                              className="max-h-64 max-w-full rounded border object-contain"
-                            />
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </li>
-                ))}
+              <p className="font-medium">{review.data.package.name} · v{review.data.package.source.versionNumber}</p>
+              <dl className="grid gap-2 text-sm sm:grid-cols-2">
+                <div><dt className="font-medium">{t('sharedExamTotalScore')}</dt><dd>{review.data.package.totalScore}</dd></div>
+                <div><dt className="font-medium">{t('examDurationLabel')}</dt><dd>{review.data.package.durationMinutes ?? '—'}</dd></div>
+                <div><dt className="font-medium">{t('sharedExamExamKind')}</dt><dd>{review.data.package.examKind ?? '—'}</dd></div>
+                <div><dt className="font-medium">{t('sharedExamGrade')}</dt><dd>{review.data.package.grade ?? '—'}</dd></div>
+                <div><dt className="font-medium">{t('sharedExamTfScale')}</dt><dd>{review.data.package.tfScale?.join(' · ') ?? '—'}</dd></div>
+              </dl>
+              <ol className="list-inside list-decimal space-y-3 text-sm">
+                {review.data.package.slots.map((slot) => {
+                  const submission: SystemQuestionSubmission = {
+                    id: selectedReview, centreSlug: review.data.package.source.centreSlug,
+                    sourceQuestionId: slot.questionId, sourceVersionId: slot.versionId,
+                    sourceVersionNumber: slot.versionNumber, qtype: slot.qtype,
+                    package: slot.package, checksum: slot.checksum,
+                    status: 'pending', submittedBy: '', reviewedBy: null,
+                    rejectionReason: null, publishedQuestionId: null,
+                    publishedVersion: null, createdAt: '',
+                  };
+                  return <li key={slot.position} className="space-y-2 rounded-md border p-3">
+                    <p className="font-medium">{t('sharedExamSection')}: {slot.section} · {t('sharedExamMaxMark')}: {slot.maxMark}</p>
+                    <SystemSubmissionReviewPreview submission={submission} mediaBase="/api/v1/system-bank/exams" />
+                  </li>;
+                })}
               </ol>
               <Label htmlFor="shared-exam-reason">{t('systemRejectionReason')}</Label>
               <Input id="shared-exam-reason" value={reason} onChange={(event) => setReason(event.target.value)} />

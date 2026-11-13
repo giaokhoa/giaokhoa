@@ -1,14 +1,17 @@
+import { createContext, useContext } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RichTextDocument } from '@giaokhoa/contracts';
 import { RichTextView } from '@giaokhoa/editor';
 import type { SystemQuestionSubmission } from '../api/questions';
 import { QTYPE_LABEL_KEYS, QTYPES, type Qtype } from '../utils/shared';
 
-function reviewImageSrc(submissionId: string, hash: string): string {
-  return `/api/v1/system-bank/submissions/${submissionId}/media/${hash}`;
+const ReviewMediaBase = createContext('/api/v1/system-bank/submissions');
+
+function reviewImageSrc(base: string, submissionId: string, hash: string): string {
+  return `${base}/${submissionId}/media/${hash}`;
 }
 
-function renderableDocument(value: unknown, submission: SystemQuestionSubmission): RichTextDocument | null {
+function renderableDocument(value: unknown, submission: SystemQuestionSubmission, base: string): RichTextDocument | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const doc = value as Record<string, unknown>;
   if (doc.type !== 'doc' || !Array.isArray(doc.content)) return null;
@@ -23,7 +26,7 @@ function renderableDocument(value: unknown, submission: SystemQuestionSubmission
         ? original.attrs as Record<string, unknown> : {};
       const originalSrc = typeof attrs.src === 'string' ? attrs.src : '';
       const hash = originalSrc.startsWith('bank-media://') ? originalSrc.slice('bank-media://'.length) : '';
-      cloned.attrs = { ...attrs, src: allowedHashes.has(hash) ? reviewImageSrc(submission.id, hash) : '' };
+      cloned.attrs = { ...attrs, src: allowedHashes.has(hash) ? reviewImageSrc(base, submission.id, hash) : '' };
     }
     return cloned;
   };
@@ -32,7 +35,8 @@ function renderableDocument(value: unknown, submission: SystemQuestionSubmission
 
 function SnapshotValue({ value, submission }: { value: unknown; submission: SystemQuestionSubmission }) {
   const { t } = useTranslation('app');
-  const rich = renderableDocument(value, submission);
+  const base = useContext(ReviewMediaBase);
+  const rich = renderableDocument(value, submission, base);
   if (rich) return <div className="min-w-0 [&_img]:max-w-full"><RichTextView value={rich} /></div>;
   if (value === null || value === undefined) return <span>—</span>;
   if (typeof value === 'string' || typeof value === 'number') return <span>{value}</span>;
@@ -69,13 +73,16 @@ function SnapshotValue({ value, submission }: { value: unknown; submission: Syst
   return <span>—</span>;
 }
 
-export function SystemSubmissionReviewPreview({ submission }: { submission: SystemQuestionSubmission }) {
+export function SystemSubmissionReviewPreview({ submission, mediaBase = '/api/v1/system-bank/submissions' }: {
+  submission: SystemQuestionSubmission; mediaBase?: string;
+}) {
   const { t } = useTranslation('app');
   const pkg = submission.package;
   const qtype = (QTYPES as readonly string[]).includes(submission.qtype)
     ? submission.qtype as Qtype : 'essay';
 
   return (
+    <ReviewMediaBase.Provider value={mediaBase}>
     <div className="space-y-4 text-sm" data-testid="system-submission-preview">
       <p className="text-muted-foreground break-all">
         {t(QTYPE_LABEL_KEYS[qtype])} · {t('systemSourceCentre')}: {submission.centreSlug} ·
@@ -155,7 +162,7 @@ export function SystemSubmissionReviewPreview({ submission }: { submission: Syst
           <div className="flex flex-wrap gap-3">
             {pkg.media.map((file) => (
               <figure key={file.contentHash} className="max-w-64">
-                <img src={reviewImageSrc(submission.id, file.contentHash)} alt={file.fileName}
+                <img src={reviewImageSrc(mediaBase, submission.id, file.contentHash)} alt={file.fileName}
                   className="max-h-56 max-w-full rounded-md border object-contain" loading="lazy" />
                 <figcaption className="break-all text-xs text-muted-foreground">{file.fileName}</figcaption>
               </figure>
@@ -164,5 +171,6 @@ export function SystemSubmissionReviewPreview({ submission }: { submission: Syst
         </section>
       ) : null}
     </div>
+    </ReviewMediaBase.Provider>
   );
 }

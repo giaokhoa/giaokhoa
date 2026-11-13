@@ -23,13 +23,13 @@ Mỗi trung tâm và mỗi khoá học có đợt giao, lịch, điều kiện t
 
 ## Retry và các lỗi
 
-`requestId` là bắt buộc, khoá đồng thời theo `courseId + actorId + requestId`; nếu tạo pin thất bại sau khi đã tạo bản thực thi, lần gọi lại cùng mã nguồn đề/section sẽ sử dụng đúng một `exams` và `exam_versions` nội bộ. Nếu pin đã được tạo nhưng còn ở trạng thái `preparing`, quy trình #14 tiếp tục snapshot, course module và grade item thay vì nhân bản. Khác nguồn/section/loại pin với cùng khoá sẽ trả `409 exam.pin_request_conflict`.
+`requestId` là bắt buộc, khoá đồng thời theo `courseId + actorId + requestId`; checksum SHA-256 của toàn bộ nội dung giao đã chuẩn hoá (kể cả lịch, nhóm, số mã đề, quyền xem đáp án, mật khẩu và thời gian) được lưu ngay trong bản thực thi, đối chiếu trước mọi lần resume; nếu tạo pin thất bại sau khi đã tạo bản thực thi, lần gọi lại cùng mã nguồn đề/section sẽ sử dụng đúng một `exams` và `exam_versions` nội bộ. Nếu pin đã được tạo nhưng còn ở trạng thái `preparing`, quy trình #14 tiếp tục snapshot, course module và grade item thay vì nhân bản. Khác nguồn/section/lịch/nhóm/tùy chọn giao với cùng khoá sẽ trả `409 exam.pin_request_conflict`.
 
 Bản chưa duyệt/không tồn tại trả `404 system_exam.not_published`; thiếu quyền trả `403`. Gói checksum sai trả lỗi trước khi giao. Nếu media không có ở lần chuẩn bị, pin không đạt `ready` và không thể làm bài; phục hồi media rồi retry cùng `requestId` sẽ tiếp tục. Khi snapshot đã `ready`, mất kết nối DB hoặc file ở bank chung không ảnh hưởng bài thi, đáp án hay file bản sao của trung tâm. Không trả nội dung câu hỏi qua API liệt kê đề chung; chỉ giao diện duyệt có quyền lấy gói đầy đủ.
 
 ## Kiểm thử
 
-Kiểm thử e2e `apps/api/test/e2e/exams/system-shared-exams.e2e-spec.ts` tạo hai tenant và hai khoá học, chạy luồng gửi/duyệt/giao cùng phiên bản, kiểm tra isolation, snapshot và làm/chấm khi bank offline; có kiểm thử thiếu media/checksum, retry sau lỗi DB và requestId sai nguồn/section. Kiểm thử này dùng DB test sinh riêng và xóa cuối test. Chạy:
+Kiểm thử e2e `apps/api/test/e2e/exams/system-shared-exams.e2e-spec.ts` tạo tenant A/B và hai database trung tâm vật lý riêng bên cạnh database ngân hàng hệ thống, chạy luồng gửi/duyệt/giao cùng phiên bản, kiểm tra quyền truy cập chéo, snapshot và làm/chấm khi bank offline; có kiểm thử thiếu media/checksum, retry sau lỗi DB và requestId sai nguồn/section. Kiểm thử này dùng DB test sinh riêng và xóa cuối test. Chạy:
 
 ```bash
 flock /tmp/giaokhoa-heavy-suite.lock pnpm --filter @giaokhoa/api exec vitest run --project e2e test/e2e/exams/system-shared-exams.e2e-spec.ts

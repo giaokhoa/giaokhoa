@@ -280,7 +280,7 @@ export class QuizService {
       if (!sectionId) throw new ConflictException({ code: 'exam.pin_preparing' });
       return this.pins.resumePinRecord(actorId, courseId, pin, sectionId);
     }
-    return this.shared.pinView(await this.shared.getPin(pin.id));
+    return this.shared.pinView(await this.shared.getPin(pin.id), true);
   }
 
   async getPin(id: string): Promise<PinRow> {

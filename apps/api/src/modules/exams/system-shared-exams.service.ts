@@ -217,6 +217,43 @@ export class SystemSharedExamsService {
     return this.summary(updated);
   }
 
+  private requestChecksum(courseId: string, input: CreateExamPin): string {
+    const timestamp = (value: string | null | undefined): string | null => {
+      if (!value) return null;
+      const parsed = new Date(value);
+      if (!Number.isFinite(parsed.getTime())) throw new BadRequestException({ code: 'quiz.bad_window' });
+      return parsed.toISOString();
+    };
+    return checksumPackage({
+      courseId,
+      sharedExamVersionId: input.sharedExamVersionId,
+      sectionId: input.sectionId,
+      name: input.name ?? null,
+      intro: input.intro ?? '',
+      timeOpen: timestamp(input.timeOpen),
+      timeClose: timestamp(input.timeClose),
+      timeLimitSeconds: input.timeLimitSeconds ?? null,
+      attemptsAllowed: input.attemptsAllowed ?? null,
+      gradeMethod: input.gradeMethod ?? 'highest',
+      shuffleAnswers: input.shuffleAnswers ?? null,
+      password: input.password ?? null,
+      subnet: input.subnet ?? null,
+      reviewAttempt: input.reviewAttempt ?? null,
+      reviewCorrectness: input.reviewCorrectness ?? null,
+      reviewMarks: input.reviewMarks ?? null,
+      reviewSpecificFeedback: input.reviewSpecificFeedback ?? null,
+      reviewGeneralFeedback: input.reviewGeneralFeedback ?? null,
+      reviewRightAnswer: input.reviewRightAnswer ?? null,
+      reviewOverallFeedback: input.reviewOverallFeedback ?? null,
+      preset: input.preset ?? null,
+      lateEntryMinutes: input.lateEntryMinutes ?? null,
+      monitorEvents: input.monitorEvents ?? null,
+      variantCount: input.variantCount ?? 1,
+      targetGroupId: input.targetGroupId ?? null,
+      versionMode: input.versionMode ?? 'pinned',
+    });
+  }
+
   async assign(actorId: string, courseId: string, input: CreateExamPin) {
     if (!input.sharedExamVersionId || !input.requestId) {
       throw new BadRequestException({ code: 'exam.pin_request_id_required' });
@@ -232,9 +269,11 @@ export class SystemSharedExamsService {
   private async assignLocked(actorId: string, courseId: string, input: CreateExamPin) {
     const requestId = input.requestId!;
     const sharedId = input.sharedExamVersionId!;
+    const requestChecksum = this.requestChecksum(courseId, input);
     const previous = await this.examsRepo.findPaperByPinRequest(actorId, courseId, requestId);
     if (previous && (previous.kind !== 'system_execution' ||
-      previous.sharedExamVersionId !== sharedId || previous.sharedRequestedSectionId !== input.sectionId)) {
+      previous.sharedExamVersionId !== sharedId || previous.sharedRequestedSectionId !== input.sectionId ||
+      previous.sharedRequestChecksum !== requestChecksum)) {
       throw new ConflictException({ code: 'exam.pin_request_conflict' });
     }
     const priorPin = await this.quiz.getPinRequestRecord(courseId, actorId, requestId);
@@ -261,6 +300,7 @@ export class SystemSharedExamsService {
           pinRequestId: requestId, pinRequestCourseId: courseId,
           sharedExamVersionId: sharedId, sharedSourceExamId: row.sourceExamId,
           sharedSourceVersionNumber: row.sourceVersionNumber, sharedRequestedSectionId: input.sectionId,
+          sharedRequestChecksum: requestChecksum,
         }, tx);
         const version = await this.examsRepo.insertVersion({
           examId: paper.id, version: 1, name: pkg.name, grade: pkg.grade, examKind: pkg.examKind,

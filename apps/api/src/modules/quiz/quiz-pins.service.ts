@@ -230,7 +230,7 @@ export class QuizPinsService {
       aggregate: 'exam_pin', type: 'exam_pinned',
       payload: { examId: pin.examId, examVersionId: pin.examVersionId, pinId: pin.id, courseId, actorId },
     });
-    return this.shared.pinView(await this.shared.getPin(pin.id));
+    return this.shared.pinView(await this.shared.getPin(pin.id), true);
   }
 
   private makeVariants(seedSource: string, count: number): { code: string; seed: number }[] {
@@ -382,7 +382,7 @@ export class QuizPinsService {
       }
     }
     await this.outbox.enqueueStandalone({ aggregate: 'quiz', type: 'quiz_updated', payload: { pinId: pin.id, courseId: pin.course, actorId } });
-    return this.shared.pinView(updated);
+    return this.shared.pinView(updated, true);
   }
 
   async deletePin(actorId: string, pinId: string): Promise<void> {
@@ -503,7 +503,7 @@ export class QuizPinsService {
       aggregate: 'quiz', type: 'exam_pin_version_updated',
       payload: { pinId: pin.id, courseId: pin.course, fromExamVersionId: pin.examVersionId, toExamVersionId: target.id, actorId },
     });
-    return this.shared.pinView(updated);
+    return this.shared.pinView(updated, true);
   }
 
   async regradePinQuestion(actorId: string, pinId: string, input: { questionId: string; toVersionId: string; dryRun: boolean }): Promise<PinRegradeResult> {
@@ -667,7 +667,7 @@ export class QuizPinsService {
     const out: QuizView[] = [];
     for (const r of rows) {
       if (myGroupIds && r.targetGroupId && !myGroupIds.has(r.targetGroupId)) continue;
-      out.push(await this.shared.pinView(await this.shared.enrichPin(r)));
+      out.push(await this.shared.pinView(await this.shared.enrichPin(r), canManage));
     }
     return out;
   }
@@ -709,14 +709,14 @@ export class QuizPinsService {
     const pin = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, pin, QUIZ_CAPABILITIES.manage);
     await this.repo.updatePin(pin.id, { resultsPublishedAt: new Date() });
-    return this.shared.pinView(await this.shared.getPin(pin.id));
+    return this.shared.pinView(await this.shared.getPin(pin.id), true);
   }
 
   async unpublishResults(actorId: string, pinId: string): Promise<QuizView> {
     const pin = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, pin, QUIZ_CAPABILITIES.manage);
     await this.repo.updatePin(pin.id, { resultsPublishedAt: null });
-    return this.shared.pinView(await this.shared.getPin(pin.id));
+    return this.shared.pinView(await this.shared.getPin(pin.id), true);
   }
 
   async updatePinOverride(actorId: string, overrideId: string, dto: UpdateExamPinOverrideDto): Promise<ExamPinOverrideView> {

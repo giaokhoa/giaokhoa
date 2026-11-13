@@ -15,6 +15,10 @@ import { AppModule } from '../../../src/app.module';
 import { ProblemDetailsFilter } from '../../../src/common/problem-details.filter';
 import { validateEnv } from '../../../src/config/env';
 import { ContextsService } from '../../../src/modules/access/contexts.service';
+import { SpaceDatabaseService } from '../../../src/db/routing/space-database.service';
+import { runSpaceProvision, type SpaceProvisionResult } from '../../../src/modules/tenants/space-provision-runner';
+import { UsersService } from '../../../src/modules/users/users.service';
+import { TenantsService } from '../../../src/modules/tenants/tenants.service';
 import { RolesService } from '../../../src/modules/access/roles.service';
 import { tenantAls } from '../../../src/modules/tenants/tenant-als';
 import {
@@ -181,6 +185,19 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
     expect(assignB.body.sharedSource).toEqual(assignA.body.sharedSource);
     expect(assignA.body.versionMode).toBe('pinned');
     expect(assignB.body.versionMode).toBe('pinned');
+    const studentPin = await http(app).get(`/api/v1/exam-pins/${assignA.body.id}`).set(bearer(studentA));
+    const teacherPin = await http(app).get(`/api/v1/exam-pins/${assignA.body.id}`).set(bearer(managerA));
+    expect(studentPin.status, JSON.stringify(studentPin.body)).toBe(200);
+    expect(teacherPin.status, JSON.stringify(teacherPin.body)).toBe(200);
+    expect(studentPin.body.quiz).not.toHaveProperty('sharedSource');
+    expect(teacherPin.body.quiz.sharedSource).toEqual({ examId, versionId: publishedId, versionNumber: 1 });
+    const studentList = await http(app).get(`/api/v1/courses/${courseA}/exam-pins`).set(bearer(studentA));
+    const managerList = await http(app).get(`/api/v1/courses/${courseA}/exam-pins`).set(bearer(managerA));
+    expect(studentList.status).toBe(200);
+    expect(managerList.status).toBe(200);
+    expect(studentList.body.find((pin: { id: string }) => pin.id === assignA.body.id)).not.toHaveProperty('sharedSource');
+    expect(managerList.body.find((pin: { id: string }) => pin.id === assignA.body.id).sharedSource.versionId).toBe(publishedId);
+
 
     const internalA = (await centre.query('SELECT kind, bank_id FROM exams WHERE id = $1', [assignA.body.examId])).rows[0];
     const internalB = (await centre.query('SELECT kind, bank_id FROM exams WHERE id = $1', [assignB.body.examId])).rows[0];
@@ -197,14 +214,35 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
     expect(snapA.question_snapshots).toHaveLength(1);
     expect(snapB.question_snapshots).toHaveLength(1);
     expect(snapA.question_snapshots[0].checksum).toBe(snapB.question_snapshots[0].checksum);
+    const nextSource = await http(app).patch(`/api/v1/exams/${examId}`).set(bearer(managerA))
+      .send({ name: 'Đề chung phiên bản nguồn mới' });
+    expect(nextSource.status, JSON.stringify(nextSource.body)).toBe(200);
+    expect(nextSource.body.version.version).toBe(2);
+    const nextPublished = await http(app).post('/api/v1/system-bank/exams')
+      .set(bearer(managerA)).send({ examId });
+    expect(nextPublished.status, JSON.stringify(nextPublished.body)).toBe(201);
+    expect(nextPublished.body.id).not.toBe(publishedId);
+    expect(nextPublished.body.sourceVersionNumber).toBe(2);
+    expect((await http(app).post(`/api/v1/system-bank/exams/${nextPublished.body.id}/approve`)
+      .set(bearer(admin))).status).toBe(201);
+    const stableA = await http(app).get(`/api/v1/exam-pins/${assignA.body.id}`).set(bearer(managerA));
+    expect(stableA.body.quiz.sharedSource.versionId).toBe(publishedId);
+    expect(stableA.body.quiz.sharedSource.versionNumber).toBe(1);
+    expect(stableA.body.quiz.name).toBe('Đợt A');
+    const unchangedSnapshot = (await centre.query('SELECT question_snapshots FROM exam_pins WHERE id = $1',
+      [assignA.body.id])).rows[0].question_snapshots;
+    expect(unchangedSnapshot).toEqual(snapA.question_snapshots);
+
     const attemptsBefore = (await bank.query("SELECT COUNT(*)::int AS n FROM system_exam_versions")).rows[0].n;
-    expect(attemptsBefore).toBe(1);
+    expect(attemptsBefore).toBe(2);
 
     delete process.env.SYSTEM_BANK_DATABASE_URL;
     offlineApp = await testApp();
     const startedA = await http(offlineApp).post(`/api/v1/exam-pins/${assignA.body.id}/attempts`).set(bearer(studentA)).send({});
     const startedB = await http(offlineApp).post(`/api/v1/exam-pins/${assignB.body.id}/attempts`).set(bearer(studentB)).send({});
     expect(startedA.status, JSON.stringify(startedA.body)).toBe(201);
+    expect(startedA.body.quiz).not.toHaveProperty('sharedSource');
+
     expect(startedB.status, JSON.stringify(startedB.body)).toBe(201);
     expect(startedA.body.questions[0].questionExcerpt).toBe(startedB.body.questions[0].questionExcerpt);
     expect(startedA.body.questions[0].questionAttemptId).not.toBe(startedB.body.questions[0].questionAttemptId);
@@ -225,6 +263,10 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
     expect(attempts.rowCount).toBe(2);
     expect(attempts.rows.map((r) => r.pin_id).sort()).toEqual([assignA.body.id, assignB.body.id].sort());
     expect((await http(offlineApp).get(`/api/v1/quiz-attempts/${startedB.body.attempt.id}`).set(bearer(studentA))).status).toBe(403);
+    const ownerReview = await http(offlineApp).get(`/api/v1/quiz-attempts/${startedA.body.attempt.id}`).set(bearer(studentA));
+    expect(ownerReview.status).toBe(200);
+    expect(ownerReview.body.quiz).not.toHaveProperty('sharedSource');
+
     process.env.SYSTEM_BANK_DATABASE_URL = bankUrl;
   }, 150_000);
 
@@ -333,11 +375,39 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
       await centre.query('DROP TRIGGER reject_system_exam_pin ON exam_pins; DROP FUNCTION reject_system_exam_pin()');
     }
     expect((await centre.query('SELECT count(*)::int AS n FROM exams WHERE pin_request_id = $1', [requestId])).rows[0].n).toBe(1);
+    const changedDuringResume = await http(app).post(`/api/v1/courses/${courseB}/exam-pins`).set(bearer(managerB))
+      .send({ ...body, timeClose: '2026-12-15T12:00:00.000Z' });
+    expect(changedDuringResume.status).toBe(409);
+    expect(changedDuringResume.body.code).toBe('exam.pin_request_conflict');
+    expect((await centre.query('SELECT count(*)::int AS n FROM exam_pins WHERE request_id = $1', [requestId])).rows[0].n).toBe(0);
+
     const again = await http(app).post(`/api/v1/courses/${courseB}/exam-pins`).set(bearer(managerB)).send(body);
     expect(again.status, JSON.stringify(again.body)).toBe(201);
     const repeated = await http(app).post(`/api/v1/courses/${courseB}/exam-pins`).set(bearer(managerB)).send(body);
     expect(repeated.status).toBe(201);
     expect(repeated.body.id).toBe(again.body.id);
+    const equivalent = await http(app).post(`/api/v1/courses/${courseB}/exam-pins`).set(bearer(managerB))
+      .send({ ...body, versionMode: 'pinned', variantCount: 1, targetGroupId: null, timeOpen: null });
+    expect(equivalent.status).toBe(201);
+    expect(equivalent.body.id).toBe(again.body.id);
+    for (const change of [
+      { name: 'Tên khác' },
+      { intro: 'Hướng dẫn khác' },
+      { timeOpen: '2026-12-01T09:00:00Z' },
+      { timeClose: '2026-12-01T10:00:00Z' },
+      { targetGroupId: randomUUID() },
+      { attemptsAllowed: 2 },
+      { variantCount: 2 },
+      { reviewMarks: 0 },
+      { password: 'another-password' },
+      { preset: 'regular' },
+    ]) {
+      const conflict = await http(app).post(`/api/v1/courses/${courseB}/exam-pins`).set(bearer(managerB))
+        .send({ ...body, ...change });
+      expect(conflict.status, JSON.stringify({ change, body: conflict.body })).toBe(409);
+      expect(conflict.body.code).toBe('exam.pin_request_conflict');
+    }
+
     expect((await centre.query('SELECT count(*)::int AS n FROM exam_pins WHERE request_id = $1', [requestId])).rows[0].n).toBe(1);
     const wrong = await http(app).post(`/api/v1/courses/${courseB}/exam-pins`).set(bearer(managerB))
       .send({ ...body, sharedExamVersionId: randomUUID() });
@@ -348,5 +418,238 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
     const wrongMode = await http(app).post(`/api/v1/courses/${courseB}/exam-pins`).set(bearer(managerB))
       .send({ ...body, requestId: randomUUID(), versionMode: 'float_latest_ready' });
     expect(wrongMode.status).toBe(400);
+    const invalidTime = await http(app).post(`/api/v1/courses/${courseB}/exam-pins`).set(bearer(managerB))
+      .send({ ...body, requestId: randomUUID(), timeOpen: 'invalid-date' });
+    expect(invalidTime.status).toBe(400);
+    expect(invalidTime.body.code).toBe('quiz.bad_window');
+
   }, 90_000);
+
+  it('hai database trung tâm tách biệt giao cùng phiên bản, lưu kết quả riêng và công bố điểm độc lập', async () => {
+    const cpName = `giaokhoa_test_exam15_cp_${suffix}`;
+    const previousCp = process.env.CONTROL_PLANE_DATABASE_URL;
+    const provisioned: SpaceProvisionResult[] = [];
+    let routed: INestApplication | undefined;
+    let offline: INestApplication | undefined;
+    const dbSecret = 'Test-only-shared-15!';
+    const cpUrl = await buildTestDatabase({ adminUrl, database: cpName, store: 'control-plane' });
+    const urlFor = (space: SpaceProvisionResult) => {
+      const url = new URL(adminUrl);
+      url.pathname = `/${space.databaseName}`;
+      url.username = space.connectionRole;
+      url.password = dbSecret;
+      return url.toString();
+    };
+    try {
+      for (const label of ['a', 'b']) {
+        const space = await runSpaceProvision({
+          slug: `exam15-${label}-${suffix}`, name: `Trung tâm ${label}`,
+          adminUsername: 'admin15', adminEmail: `exam15-${label}-${suffix}@example.com`,
+          databasePassword: dbSecret, actorId: randomUUID(),
+          env: { ...process.env, CONTROL_PLANE_DATABASE_URL: cpUrl }, log: () => undefined,
+        });
+        provisioned.push(space);
+        process.env[space.secretEnvVar] = urlFor(space);
+      }
+      process.env.CONTROL_PLANE_DATABASE_URL = cpUrl;
+      process.env.SYSTEM_BANK_DATABASE_URL = bankUrl;
+      routed = await testApp();
+      const [a, b] = provisioned;
+      const hostA = `${a.slug}.test.local`;
+      const hostB = `${b.slug}.test.local`;
+      const hosts = [hostA, hostB];
+      const sessions: Array<{ admin: string; student: string; studentId: string; courseId: string; sectionId: string }> = [];
+      for (const [index, space] of provisioned.entries()) {
+        const activated = await http(routed).post('/api/v1/centres/activate-invite')
+          .send({ slug: space.slug, token: space.inviteToken, password: STRONG_PASSWORD });
+        expect(activated.status, JSON.stringify(activated.body)).toBe(201);
+        const loggedIn = await http(routed).post('/api/v1/auth/token').set('Host', hosts[index]!)
+          .send({ username: 'admin15', password: STRONG_PASSWORD });
+        expect(loggedIn.status, JSON.stringify(loggedIn.body)).toBe(201);
+        const adminToken = loggedIn.body.accessToken as string;
+        const student = await routed.get(SpaceDatabaseService).withSpaceKysely(space.slug, async () => {
+          const roles = routed!.get(RolesService);
+          const contexts = routed!.get(ContextsService);
+          const managerRole = await roles.getRoleByShortname('manager');
+          const system = await contexts.ensureSystemContext();
+          const tenant = await contexts.ensureTenantContext(space.tenantId!);
+          await roles.assignRole(space.adminUserId!, managerRole!.id, system.id);
+          await roles.assignRole(space.adminUserId!, managerRole!.id, tenant.id);
+          const user = await routed!.get(UsersService).createUser({
+            username: 'student15', email: `student15-${index}@example.com`,
+            password: STRONG_PASSWORD, firstName: 'Học', lastName: 'Sinh',
+          });
+          await routed!.get(TenantsService).ensureActiveMembership(space.tenantId!, user.id);
+          return user;
+        }, { tenantId: space.tenantId!, userId: space.adminUserId! });
+
+        const category = await http(routed).post('/api/v1/courses/categories').set('Host', hosts[index]!)
+          .set(bearer(adminToken)).send({ name: `Danh mục ${index}` });
+        expect(category.status, JSON.stringify(category.body)).toBe(201);
+        const cls = await http(routed).post('/api/v1/classes').set('Host', hosts[index]!)
+          .set(bearer(adminToken)).send({ name: `Lớp ${index}` });
+        expect(cls.status).toBe(201);
+        const course = await http(routed).post('/api/v1/courses').set('Host', hosts[index]!)
+          .set(bearer(adminToken)).send({
+            category: category.body.id, classId: cls.body.id,
+            shortName: `EX15${index}`, fullName: `Khoá riêng ${index}`,
+          });
+        expect(course.status, JSON.stringify(course.body)).toBe(201);
+        const content = await http(routed).get(`/api/v1/courses/${course.body.id}/content`)
+          .set('Host', hosts[index]!).set(bearer(adminToken));
+        expect(content.status).toBe(200);
+        const enrol = await http(routed).post(`/api/v1/courses/${course.body.id}/enrol/instances`)
+          .set('Host', hosts[index]!).set(bearer(adminToken)).send({ method: 'manual' });
+        expect(enrol.status).toBe(201);
+        const enrolled = await http(routed).post(
+          `/api/v1/courses/${course.body.id}/enrol/instances/${enrol.body.id}/enrol`,
+        ).set('Host', hosts[index]!).set(bearer(adminToken)).send({ userId: student.id });
+        expect(enrolled.status).toBe(201);
+        const learnerLogin = await http(routed).post('/api/v1/auth/token').set('Host', hosts[index]!)
+          .send({ username: 'student15', password: STRONG_PASSWORD });
+        expect(learnerLogin.status, JSON.stringify(learnerLogin.body)).toBe(201);
+        sessions.push({
+          admin: adminToken, student: learnerLogin.body.accessToken as string, studentId: student.id,
+          courseId: course.body.id, sectionId: content.body.sections[0].id,
+        });
+      }
+
+      const [userA, userB] = sessions;
+      const sendPin = (index: number) => {
+        const u = sessions[index]!;
+        const body = {
+          sharedExamVersionId: publishedId, sectionId: u.sectionId, requestId: randomUUID(),
+          name: `Đợt ${index === 0 ? 'A' : 'B'}`,
+          timeOpen: `2026-10-0${index + 1}T08:00:00.000Z`,
+          timeClose: `2026-12-2${index + 1}T08:00:00.000Z`,
+          timeLimitSeconds: index === 0 ? 900 : 1800,
+          reviewAttempt: 0x11110, reviewMarks: 0x11110, reviewRightAnswer: 0, reviewCorrectness: 0x11110,
+        };
+        return http(routed!).post(`/api/v1/courses/${u.courseId}/exam-pins`)
+          .set('Host', hosts[index]!).set(bearer(u.admin)).send(body);
+      };
+      const pinA = await sendPin(0);
+      const pinB = await sendPin(1);
+      expect(pinA.status, JSON.stringify(pinA.body)).toBe(201);
+      expect(pinB.status, JSON.stringify(pinB.body)).toBe(201);
+      expect(pinA.body.id).not.toBe(pinB.body.id);
+      expect(pinA.body.sharedSource).toEqual(pinB.body.sharedSource);
+      expect(pinA.body.sharedSource.versionId).toBe(publishedId);
+      expect(pinA.body.timeLimitSeconds).toBe(900);
+      expect(pinB.body.timeLimitSeconds).toBe(1800);
+      expect(pinA.body.timeOpen).not.toBe(pinB.body.timeOpen);
+
+      const dbA = new Client({ connectionString: urlFor(a) });
+      const dbB = new Client({ connectionString: urlFor(b) });
+      await dbA.connect();
+      await dbB.connect();
+      try {
+        await dbA.query("SELECT set_config('app.tenant_id', $1, false)", [a.tenantId]);
+        await dbB.query("SELECT set_config('app.tenant_id', $1, false)", [b.tenantId]);
+        const rowsA = await dbA.query('SELECT shared_exam_version_id FROM exams WHERE id = $1', [pinA.body.examId]);
+        const rowsB = await dbB.query('SELECT shared_exam_version_id FROM exams WHERE id = $1', [pinB.body.examId]);
+        expect(rowsA.rows[0].shared_exam_version_id).toBe(publishedId);
+        expect(rowsB.rows[0].shared_exam_version_id).toBe(publishedId);
+        expect((await dbA.query('SELECT id FROM exams WHERE id = $1', [pinB.body.examId])).rowCount).toBe(0);
+        expect((await dbB.query('SELECT id FROM exams WHERE id = $1', [pinA.body.examId])).rowCount).toBe(0);
+        expect((await dbA.query('SELECT jsonb_array_length(question_snapshots) AS n FROM exam_pins WHERE id = $1',
+          [pinA.body.id])).rows[0].n).toBe(1);
+        expect((await dbB.query('SELECT jsonb_array_length(question_snapshots) AS n FROM exam_pins WHERE id = $1',
+          [pinB.body.id])).rows[0].n).toBe(1);
+        const itemA = (await dbA.query('SELECT id FROM grade_items WHERE item_instance = $1', [pinA.body.cmId])).rows[0].id;
+        const itemB = (await dbB.query('SELECT id FROM grade_items WHERE item_instance = $1', [pinB.body.cmId])).rows[0].id;
+        for (const [index, itemId] of [itemA, itemB].entries()) {
+          const policy = await http(routed).put(`/api/v1/grade-items/${itemId}/posting-policy`)
+            .set('Host', hosts[index]!).set(bearer(sessions[index]!.admin)).send({ policy: 'manual' });
+          expect(policy.status, JSON.stringify(policy.body)).toBe(200);
+        }
+        delete process.env.SYSTEM_BANK_DATABASE_URL;
+        offline = await testApp();
+        expect((await http(offline).get(`/api/v1/exam-pins/${pinB.body.id}`)
+          .set('Host', hostA).set(bearer(userA.admin))).status).toBe(404);
+        expect((await http(offline).get(`/api/v1/exam-pins/${pinA.body.id}`)
+          .set('Host', hostB).set(bearer(userB.admin))).status).toBe(404);
+        expect((await http(offline).get(`/api/v1/exam-pins/${pinB.body.id}`)
+          .set('Host', hostB).set(bearer(userA.student))).status).not.toBe(200);
+
+        const started = [];
+        for (const [index, pin] of [pinA, pinB].entries()) {
+          const u = sessions[index]!;
+          const begin = await http(offline).post(`/api/v1/exam-pins/${pin.body.id}/attempts`)
+            .set('Host', hosts[index]!).set(bearer(u.student)).send({});
+          expect(begin.status, JSON.stringify(begin.body)).toBe(201);
+          expect(begin.body.quiz).not.toHaveProperty('sharedSource');
+          started.push(begin);
+          const saved = await http(offline).post(`/api/v1/quiz-attempts/${begin.body.attempt.id}/responses`)
+            .set('Host', hosts[index]!).set(bearer(u.student)).send({
+              questionAttemptId: begin.body.questions[0].questionAttemptId,
+              response: begin.body.questions[0].answers[0].id,
+            });
+          expect(saved.status, JSON.stringify(saved.body)).toBe(201);
+          const submitted = await http(offline).post(`/api/v1/quiz-attempts/${begin.body.attempt.id}/submit`)
+            .set('Host', hosts[index]!).set(bearer(u.student)).send({});
+          expect(submitted.status, JSON.stringify(submitted.body)).toBe(201);
+          const hidden = await http(offline).get(`/api/v1/quiz-attempts/${begin.body.attempt.id}`)
+            .set('Host', hosts[index]!).set(bearer(u.student));
+          expect(hidden.status).toBe(200);
+          expect(hidden.body.quiz).not.toHaveProperty('sharedSource');
+          expect(hidden.body.attempt.grade).toBeNull();
+          expect(hidden.body.questions[0].solution).toBeNull();
+        }
+        expect((await dbA.query('SELECT count(*)::int AS n FROM exam_attempts')).rows[0].n).toBe(1);
+        expect((await dbB.query('SELECT count(*)::int AS n FROM exam_attempts')).rows[0].n).toBe(1);
+        expect((await dbA.query('SELECT count(*)::int AS n FROM exam_attempts WHERE pin_id = $1',
+          [pinB.body.id])).rows[0].n).toBe(0);
+        expect((await dbB.query('SELECT count(*)::int AS n FROM exam_attempts WHERE pin_id = $1',
+          [pinA.body.id])).rows[0].n).toBe(0);
+        expect((await dbA.query('SELECT count(*)::int AS n FROM question_attempts')).rows[0].n).toBe(1);
+        expect((await dbB.query('SELECT count(*)::int AS n FROM question_attempts')).rows[0].n).toBe(1);
+
+        const releaseA = await http(offline).post(`/api/v1/exam-pins/${pinA.body.id}/publish`)
+          .set('Host', hostA).set(bearer(userA.admin)).send({});
+        expect(releaseA.status).toBe(201);
+        const publishGradeA = await http(offline).post(`/api/v1/grade-items/${itemA}/publish`)
+          .set('Host', hostA).set(bearer(userA.admin)).send({});
+        expect(publishGradeA.status).toBe(201);
+        const revealAnswersA = await http(offline).patch(`/api/v1/exam-pins/${pinA.body.id}`)
+          .set('Host', hostA).set(bearer(userA.admin)).send({ reviewRightAnswer: 0x11110 });
+        expect(revealAnswersA.status, JSON.stringify(revealAnswersA.body)).toBe(200);
+        const shownA = await http(offline).get(`/api/v1/quiz-attempts/${started[0]!.body.attempt.id}`)
+          .set('Host', hostA).set(bearer(userA.student));
+        const hiddenB = await http(offline).get(`/api/v1/quiz-attempts/${started[1]!.body.attempt.id}`)
+          .set('Host', hostB).set(bearer(userB.student));
+        expect(shownA.body.attempt.grade).toBe(1);
+        expect(hiddenB.body.attempt.grade).toBeNull();
+        expect(shownA.body.questions[0].solution).not.toBeNull();
+        expect(hiddenB.body.questions[0].solution).toBeNull();
+        expect(shownA.body.quiz).not.toHaveProperty('sharedSource');
+        expect((await dbA.query('SELECT final_grade FROM grade_grades WHERE user_id = $1 AND item_id = $2',
+          [userA.studentId, itemA])).rows[0].final_grade).toBeDefined();
+        expect((await dbB.query('SELECT final_grade FROM grade_grades WHERE user_id = $1 AND item_id = $2',
+          [userB.studentId, itemB])).rows[0].final_grade).toBeDefined();
+        expect((await bank.query("SELECT count(*)::int AS n FROM pg_tables WHERE tablename IN ('exam_attempts','question_attempts','grade_grades')")).rows[0].n).toBe(0);
+      } finally {
+        await dbA.end(); await dbB.end();
+      }
+    } finally {
+      await offline?.close(); await routed?.close();
+      await offline?.get<Pool>('SHARED_CENTRE_KYSELY').end();
+      await routed?.get<Pool>('SHARED_CENTRE_KYSELY').end();
+      process.env.SYSTEM_BANK_DATABASE_URL = bankUrl;
+      if (previousCp === undefined) delete process.env.CONTROL_PLANE_DATABASE_URL;
+      else process.env.CONTROL_PLANE_DATABASE_URL = previousCp;
+      for (const space of provisioned) {
+        delete process.env[space.secretEnvVar];
+        await dropTestDatabase(adminUrl, space.databaseName);
+      }
+      const cluster = new Client({ connectionString: adminUrl });
+      await cluster.connect();
+      try {
+        for (const space of provisioned) await cluster.query(`DROP ROLE "${space.connectionRole}"`);
+      } finally {
+        await cluster.end();
+      }
+      await dropTestDatabase(adminUrl, cpName);
+    }
+  }, 180_000);
 });

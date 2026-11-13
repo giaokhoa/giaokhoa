@@ -124,7 +124,7 @@ export class QuizSharedService {
     return this.evaluator.hasCapability(actorId, capability, await this.cmContextId(quiz));
   }
 
-  async pinView(quiz: PinRow): Promise<QuizView> {
+  async pinView(quiz: PinRow, revealSource = false): Promise<QuizView> {
     const slots = await this.effectiveSlots(quiz);
     const slotViews: QuizView['slots'] = [];
     for (const s of slots) {
@@ -190,7 +190,7 @@ export class QuizSharedService {
       examVersionId: quiz.examVersionId,
       examVersionNumber: quiz.examVersionNumber,
       latestExamVersionNumber: quiz.examLatestVersion,
-      sharedSource: quiz.sharedSource,
+      ...(revealSource ? { sharedSource: quiz.sharedSource } : {}),
       hasNewerExamVersion: quiz.examStatus === 'ready' && quiz.examLatestVersion > quiz.examVersionNumber,
       versionMode: quiz.versionMode === 'float_latest_ready' ? 'float_latest_ready' as const : 'pinned' as const,
       tfScale: quiz.tfScale,

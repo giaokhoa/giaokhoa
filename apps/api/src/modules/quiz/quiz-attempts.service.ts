@@ -218,7 +218,6 @@ export class QuizAttemptsService {
   }> {
     const quiz = await this.shared.getPin(pinId);
     await this.shared.requireAnyViewCap(actorId, quiz);
-    const view = await this.shared.pinView(quiz);
     const [manage, manageOverrides, grade, viewReports, preview, attempt] = await Promise.all([
       this.shared.hasCap(actorId, quiz, QUIZ_CAPABILITIES.manage),
       this.shared.hasCap(actorId, quiz, QUIZ_CAPABILITIES.manageOverrides),
@@ -228,6 +227,7 @@ export class QuizAttemptsService {
       this.shared.hasCap(actorId, quiz, QUIZ_CAPABILITIES.attempt),
     ]);
     const isStaffViewer = manage || grade || viewReports || preview;
+    const view = await this.shared.pinView(quiz, isStaffViewer);
     if (!isStaffViewer && !(await this.isInTargetGroup(quiz, actorId))) {
       throw new NotFoundException({ message: `Exam pin ${pinId} not found`, code: 'exam.pin_not_found' });
     }
