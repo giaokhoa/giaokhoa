@@ -8,24 +8,25 @@
 # Các image runtime dùng node:24-bookworm-slim cùng họ glibc với image build (bookworm đầy đủ) vì @giaokhoa/api có dependency native argon2 — bản binary biên dịch ở giai đoạn build phải nạp được ở giai đoạn runtime.
 
 # ----- Giai đoạn build dùng chung -----
-FROM node:24-bookworm AS build
+FROM node:24.22.3-bookworm AS build
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
 WORKDIR /repo
 # Tải dependency theo lockfile trước khi chép nguồn: sửa code không làm mất layer tải gói; bước install sau chỉ liên kết workspace và chạy build native.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN pnpm fetch
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm fetch --store-dir /pnpm/store
 COPY . .
-RUN pnpm install --offline --frozen-lockfile
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --offline --frozen-lockfile --store-dir /pnpm/store
 RUN pnpm exec turbo run build --filter=@giaokhoa/api --filter=@giaokhoa/worker --filter=@giaokhoa/web
-RUN pnpm --filter @giaokhoa/api deploy --prod /out/api \
-  && pnpm --filter @giaokhoa/worker deploy --prod /out/worker \
-  && pnpm --filter @giaokhoa/web deploy --prod /out/web
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm --filter @giaokhoa/api deploy --offline --prod --store-dir /pnpm/store /out/api \
+  && pnpm --filter @giaokhoa/worker deploy --offline --prod --store-dir /pnpm/store /out/worker \
+  && pnpm --filter @giaokhoa/web deploy --offline --prod --store-dir /pnpm/store /out/web
 
 # ----- Runtime API -----
 # Tiến trình API NestJS đã biên dịch (dist/main.js). Dữ liệu tệp tải lên nằm ở FILE_STORAGE_DIR (mặc định ./data/files theo cấu hình app) — compose.yaml gắn volume bền vào đúng thư mục này.
-FROM node:24-bookworm-slim AS api
+FROM node:24.22.3-bookworm-slim AS api
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build --chown=node:node /out/api ./
@@ -48,7 +49,7 @@ CMD ["node", "dist/main.js"]
 
 # ----- Runtime worker -----
 # Tiến trình worker (BullMQ + outbox relay) đã biên dịch (dist/main.js); worker không mở cổng HTTP.
-FROM node:24-bookworm-slim AS worker
+FROM node:24.22.3-bookworm-slim AS worker
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build --chown=node:node /out/worker ./
@@ -58,7 +59,7 @@ CMD ["node", "dist/main.js"]
 
 # ----- Runtime web -----
 # Server SSR chính thức của React Router chỉ phục vụ trang và asset. Caddy (service gateway) chịu trách nhiệm proxy API/Socket.IO/MCP, CSP và cổng HTTP công khai; tiến trình web không tự proxy nữa.
-FROM node:24-bookworm-slim AS web
+FROM node:24.22.3-bookworm-slim AS web
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build --chown=node:node /out/web ./

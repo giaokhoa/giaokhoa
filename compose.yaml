@@ -74,7 +74,7 @@ services:
       retries: 12
 
   redis:
-    image: redis:7
+    image: redis:7.4.12
     restart: unless-stopped
     # BullMQ không chấp nhận Redis eviction. Giới hạn bộ nhớ mặc định 0 (không giới hạn) để không làm mất job; production phải đặt REDIS_MAXMEMORY theo ngân sách máy và theo dõi OOM/used_memory.
     command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory-policy", "noeviction", "--maxmemory", "${REDIS_MAXMEMORY:-0}"]
@@ -151,6 +151,14 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    # Không có HTTP ở worker; probe Redis để phát hiện worker đang sống
+    # nhưng phụ thuộc xử lý hàng đợi không truy cập được.
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"const Redis=require('ioredis');const r=new Redis(process.env.REDIS_URL,{maxRetriesPerRequest:1,connectTimeout:2000});r.ping().then(v=>{r.disconnect();process.exit(v==='PONG'?0:1)}).catch(()=>{r.disconnect();process.exit(1)})\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   web:
     build:
@@ -174,10 +182,13 @@ services:
 
   # Mặt tiền HTTP duy nhất; toàn bộ proxy và chính sách tài liệu HTML nằm ở Caddyfile, không có server Node tự quản lý HTTP/WebSocket.
   gateway:
-    image: caddy:2.10.2-alpine
+    image: caddy:2.11.9-alpine
     restart: unless-stopped
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Giữ cấu hình và dữ liệu Caddy nếu sau này cấp TLS tại gateway.
+      - caddy-data:/data
+      - caddy-config:/config
     ports:
       # Giữ cùng cổng công khai trước khi tách gateway.
       - "${WEB_PORT:-8080}:8080"
@@ -251,3 +262,5 @@ volumes:
   redisdata:
   api-files:
   fleet-backups:
+  caddy-data:
+  caddy-config:
