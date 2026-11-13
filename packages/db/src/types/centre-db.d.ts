@@ -1254,6 +1254,11 @@ export interface Exams {
   original_author_id: string | null;
   pin_request_course_id: string | null;
   pin_request_id: string | null;
+  shared_exam_version_id: string | null;
+  shared_request_checksum: string | null;
+  shared_requested_section_id: string | null;
+  shared_source_exam_id: string | null;
+  shared_source_version_number: number | null;
   status: Generated<string>;
   tenant_id: string | null;
   updated_at: Generated<Timestamp>;

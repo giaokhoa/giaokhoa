@@ -204,6 +204,7 @@ export type PinRow = ExamPinRow & {
   examVersionNumber: number;
   examStatus: string;
   examLatestVersion: number;
+  sharedSource: { examId: string; versionId: string; versionNumber: number } | null;
 };
 
 export interface EffectiveSlotRow {
@@ -264,6 +265,10 @@ export class QuizService {
     return this.repo.withPinRequestLock(courseId, actorId, requestId, action);
   }
 
+  async getPinRequestRecord(courseId: string, actorId: string, requestId: string): Promise<ExamPinRow | undefined> {
+    return this.repo.getPinByRequest(courseId, actorId, requestId);
+  }
+
   async getPinByRequest(courseId: string, actorId: string, requestId: string, sectionId?: string): Promise<QuizView | undefined> {
     const pin = await this.repo.getPinByRequest(courseId, actorId, requestId);
     if (!pin) return undefined;
@@ -275,7 +280,7 @@ export class QuizService {
       if (!sectionId) throw new ConflictException({ code: 'exam.pin_preparing' });
       return this.pins.resumePinRecord(actorId, courseId, pin, sectionId);
     }
-    return this.shared.pinView(await this.shared.getPin(pin.id));
+    return this.shared.pinView(await this.shared.getPin(pin.id), true);
   }
 
   async getPin(id: string): Promise<PinRow> {

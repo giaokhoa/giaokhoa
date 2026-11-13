@@ -12,6 +12,7 @@ import {
   type GradeQuizQuestionDto, type RegradePinQuestionDto, type StartQuizAttemptDto, type UpdateExamPinDto, type UpdateExamPinOverrideDto,
 } from '../quiz/dto/quiz.dto';
 import { ExamsService } from './exams.service';
+import { SystemSharedExamsService } from './system-shared-exams.service';
 
 @ApiTags('exam-pins')
 @Controller({ path: 'courses/:courseId/exam-pins', version: '1' })
@@ -19,11 +20,14 @@ export class CourseExamPinsController {
   constructor(
     private readonly exams: ExamsService,
     private readonly quiz: QuizService,
+    private readonly systemExams: SystemSharedExamsService,
   ) {}
 
   @Post()
   async create(@Param('courseId', { schema: uuidIdSchema }) courseId: string, @Body({ schema: createExamPinSchema }) dto: CreateExamPinDto, @CurrentUser() actor: AuthenticatedUser) {
-    return this.exams.createPin(actor.id, courseId, dto);
+    return dto.sharedExamVersionId
+      ? this.systemExams.assign(actor.id, courseId, dto)
+      : this.exams.createPin(actor.id, courseId, dto);
   }
   @Get()
   async list(@Param('courseId', { schema: uuidIdSchema }) courseId: string, @CurrentUser() actor: AuthenticatedUser) {

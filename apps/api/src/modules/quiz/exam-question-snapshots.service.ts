@@ -63,15 +63,22 @@ export class ExamQuestionSnapshotsService {
     };
   }
 
-  async prepare(actorId: string, slots: ExamSlotRow[], targetContextId: string, versionMode = 'pinned', preparationId?: string): Promise<ExamQuestionSnapshot[] | null> {
+  async prepare(actorId: string, slots: ExamSlotRow[], targetContextId: string, versionMode = 'pinned', preparationId?: string, allowEmbeddedSystem = false): Promise<ExamQuestionSnapshot[] | null> {
     if (!slots.some((slot) => slot.sourceDomain === 'bank-system')) return null;
     if (versionMode !== 'pinned') throw new BadRequestException({ code: 'exam.shared_requires_pinned' });
     const snapshots: ExamQuestionSnapshot[] = [];
     for (const slot of slots) {
       const snapshot = slot.sourceDomain === 'bank-system'
-        ? await this.readSystem(actorId, slot.questionId, slot.pinnedVersionNumber!)
+        ? allowEmbeddedSystem && slot.sourceSnapshot?.package
+          ? slot.sourceSnapshot
+          : await this.readSystem(actorId, slot.questionId, slot.pinnedVersionNumber!)
         : await this.readLocal(actorId, slot.questionId, slot.pinnedVersionId!);
-      if (snapshot.versionId !== slot.pinnedVersionId ||
+      const verifiedPackage = systemBankPackageSchema.parse(snapshot.package);
+      if (checksumPackage(verifiedPackage) !== snapshot.checksum ||
+        packageValidationError(snapshot.qtype, verifiedPackage) ||
+        snapshot.questionId !== slot.questionId ||
+        snapshot.versionNumber !== slot.pinnedVersionNumber ||
+        snapshot.versionId !== slot.pinnedVersionId ||
         (slot.sourceSnapshot && snapshot.checksum !== slot.sourceSnapshot.checksum)) {
         throw new BadRequestException({ code: 'system_bank.checksum_mismatch' });
       }
