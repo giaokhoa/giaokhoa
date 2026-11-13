@@ -13,7 +13,8 @@
     "#test/providers": "./src/test/providers.tsx",
     "#features/*": "./src/features/*",
     "#utils/*": "./src/utils/*",
-    "#config/*": "./src/config/*"
+    "#config/*": "./src/config/*",
+    "#lib/theme": "./src/lib/theme.tsx"
   },
   "scripts": {
     "build": "pnpm run typecheck && react-router build",

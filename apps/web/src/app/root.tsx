@@ -15,6 +15,7 @@ import type { UserProfile } from '@giaokhoa/contracts';
 import { userProfileSchema } from '@giaokhoa/contracts';
 import { HydrationBoundary, QueryClientProvider, type DehydratedState } from '@tanstack/react-query';
 import { AuthProvider } from '#lib/auth';
+import { ThemeProvider } from '#lib/theme';
 import { PermissionsProvider } from '#lib/permissions';
 import { createQueryClient, queryClient } from '#lib/query-client';
 import { SidebarDefaultOpenContext } from '#lib/sidebar-default-open';
@@ -135,8 +136,9 @@ export default function App() {
   // Dehydrated state của route lá tầng SL (nếu có) cho lượt render này: phía server, loader của route con đã chạy xong trước khi cây render nên state có mặt ngay trong matches; phía client, mỗi lần điều hướng tới route SL cũng mang state mới qua matches và HydrationBoundary gộp nó vào client singleton (không xoá query cũ).
   const dehydratedState = collectDehydratedState(useMatches());
   return (
-    <SidebarDefaultOpenContext.Provider value={sidebarDefaultOpen}>
-      <QueryClientProvider client={requestQueryClient ?? queryClient}>
+    <ThemeProvider>
+      <SidebarDefaultOpenContext.Provider value={sidebarDefaultOpen}>
+        <QueryClientProvider client={requestQueryClient ?? queryClient}>
         <HydrationBoundary state={dehydratedState}>
           <AuthProvider initialUser={initialUser}>
             <PermissionsProvider>
@@ -144,8 +146,9 @@ export default function App() {
             </PermissionsProvider>
           </AuthProvider>
         </HydrationBoundary>
-      </QueryClientProvider>
-    </SidebarDefaultOpenContext.Provider>
+        </QueryClientProvider>
+      </SidebarDefaultOpenContext.Provider>
+    </ThemeProvider>
   );
 }
 

@@ -183,6 +183,8 @@ export const enResources = {
     requestLine: '#{{id}} user {{userId}} — {{type}} — {{status}}',
   },
   app: {
+    themeLight: 'Use light appearance',
+    themeDark: 'Use dark appearance',
     navProfile: 'Profile',
     navSettings: 'Settings',
     settingsTitle: 'Settings',

@@ -193,6 +193,8 @@ export const platformResources = {
 export const appResources = {
   vi: {
     app: {
+      themeLight: 'Dùng giao diện sáng',
+      themeDark: 'Dùng giao diện tối',
       navProfile: 'Hồ sơ',
       navSettings: 'Cài đặt',
       settingsTitle: 'Cài đặt',
