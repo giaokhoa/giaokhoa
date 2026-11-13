@@ -89,9 +89,10 @@ describe('PH-1: bề mặt phụ huynh chỉ-xem (issue #130)', () => {
 
   async function createQuiz(courseId: string, sectionId: string, teacher: string, overrides: Record<string, unknown>) {
     const contexts = await http(app).get('/api/v1/access/contexts').set('Authorization', `Bearer ${admin}`);
-    const systemCtx = (contexts.body as { id: string; contextLevel: number }[]).find((c) => c.contextLevel === 10)!;
+    const courseCtx = (contexts.body as { id: string; contextLevel: number; instanceId: string }[])
+      .find((c) => c.contextLevel === 50 && c.instanceId === courseId)!;
     const bankRes = await http(app).post('/api/v1/questions/categories').set('Authorization', `Bearer ${admin}`)
-      .send({ name: 'PH1 bank', contextId: systemCtx.id });
+      .send({ name: 'PH1 bank', contextId: courseCtx.id });
     const qRes = await http(app).post('/api/v1/questions').set('Authorization', `Bearer ${admin}`).send({
       categoryId: bankRes.body.id,
       qtype: 'multichoice', questionText: 'Capital of France?', defaultMark: 1,
