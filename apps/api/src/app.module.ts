@@ -43,6 +43,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { BackupModule } from './modules/backup/backup.module';
 import { ContentBankModule } from './modules/content-bank/content-bank.module';
 import { ControlPlaneModule } from './modules/control-plane/control-plane.module';
+import { SupportModule } from './modules/support/support.module';
 import { SystemBankModule } from './modules/system-bank/system-bank.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { PaymentsModule } from './modules/payments/payments.module';
@@ -72,7 +73,7 @@ import { SecurityHeadersMiddleware } from './common/security-headers.middleware'
  * (`/auth/platform/login`) cũng kiểm chứng mật khẩu quản trị nên nằm
  * trong cùng danh sách này.
  */
-const CREDENTIAL_ROUTES = /^\/api\/v\d+\/auth\/(token|login|session\/login|change-password|platform\/login)$/;
+const CREDENTIAL_ROUTES = /^\/api\/v\d+\/auth\/(token|login|session\/login|change-password|platform\/login|support\/login)$/;
 /** Đăng ký tự do có chi phí băm mật khẩu và ghi DB; áp hạn mức riêng
  * thay vì default 3.000/phút hoặc auth 300/phút. IP lấy từ ThrottlerGuard
  * và proxy đáng tin cậy của ứng dụng, không lấy trực tiếp từ payload. */
@@ -177,6 +178,7 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
     EventLogModule,
     ContentBankModule,
     ControlPlaneModule,
+    SupportModule,
     SystemBankModule,
     SpaceRoutingModule,
     PrivacyModule,

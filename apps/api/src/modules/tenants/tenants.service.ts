@@ -215,6 +215,21 @@ export class TenantsService {
     return (await this.platformTenant()).id;
   }
 
+  /**
+   * Danh tính nhân sự nền tảng cho bề mặt hỗ trợ #19: tài khoản chỉ
+   * có trong DB kho chung CHƯA đủ điều kiện. Phải có membership ACTIVE
+   * tường minh ở tenant vận hành platform (trang-chinh), khác với
+   * fallback tenant-zero của phiên login vốn mở cho mọi tài khoản.
+   * Tra từ database ở MỖI request, không tin claim hay cache.
+   */
+  async isPlatformSupportMember(userId: string): Promise<boolean> {
+    return tenantAls.run({ platform: true }, async () => {
+      const platform = await this.platformTenant();
+      const member = await this.repo.getMembership(platform.id, userId);
+      return member?.status === 'active';
+    });
+  }
+
   // --- cổng quyền ------------------------------------------------------------
 
   private async systemContextId(): Promise<string> {

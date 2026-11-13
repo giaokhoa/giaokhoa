@@ -49,3 +49,7 @@ Mỗi trung tâm có Host và kho tài khoản riêng; người dùng đăng nh�
 danh bạ platform. Vỏ người dùng không còn menu chuyển trung tâm.
 Màn registry vận hành tiếp tục quản lý metadata và vòng đời trung tâm
 theo quyền platform, không suy ra quyền xem hồ sơ hoặc điểm của trung tâm.
+
+## Quản trị quyền hỗ trợ có hạn (issue #19)
+
+Trang `/admin/support-grants` của trung tâm, có liên kết từ `/admin/tenants` khi người dùng có quyền quản trị tại trung tâm đang hoạt động. Chủ trung tâm nhập UUID của nhân sự platform có membership active tại tenant vận hành `trang-chinh` (cấp bởi bộ phận vận hành, không phải tài khoản nghiệp vụ legacy), chọn chỉ-đọc danh sách lớp/khoá, đặt hạn tối đa 30 ngày và lý do; danh sách trạng thái hiển thị `Đang hiệu lực`, `Đã hết hạn`, `Đã thu hồi`. Sau khi API xác nhận cấp/thu hồi, trang làm mới grant và nhật ký cả quyết định được phép/lẫn bị từ chối. Giao diện không cho chọn tenant khác; API thực thi lại quyền `tenant:manage`, RLS, thời hạn và recipient mỗi request. Nhân sự hỗ trợ sử dụng endpoint vận hành riêng với support token giới hạn (`POST /auth/support/login` ở host gốc), không cần vai quản trị platform; không mượn danh người dùng trung tâm.

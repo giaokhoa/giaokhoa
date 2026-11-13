@@ -48,9 +48,10 @@ export type SessionLoginOutcome =
  * (cấp cặp token), `session` → POST /auth/session/mfa/verify (tạo
  * phiên cookie), `oauth` → POST /auth/oauth/mfa/verify (tạo phiên web
  * + mã bàn giao của luồng OAuth), `platform` → POST
- * /auth/platform/mfa/verify (cấp access token platform). Challenge còn mang không gian kho riêng của lần đăng nhập đã cấp nó (claim `space`, issue #584): bước hai chỉ hoàn tất khi request đang ở đúng địa chỉ của không gian đó — challenge của trung tâm này không đổi được thành phiên của trung tâm khác.
+ * /auth/platform/mfa/verify (cấp access token platform), `support` →
+ * /auth/support/mfa/verify (cấp token aud=support). Challenge còn mang không gian kho riêng của lần đăng nhập đã cấp nó (claim `space`, issue #584): bước hai chỉ hoàn tất khi request đang ở đúng địa chỉ của không gian đó — challenge của trung tâm này không đổi được thành phiên của trung tâm khác.
  */
-export type MfaChallengeFlow = 'token' | 'session' | 'oauth' | 'platform';
+export type MfaChallengeFlow = 'token' | 'session' | 'oauth' | 'platform' | 'support';
 
 /**
  * Kết quả đăng nhập quản trị platform: hoặc đã đủ điều kiện cấp access token platform, hoặc bị chặn ở bước MFA với một challenge token ngắn hạn của luồng platform. Token platform CHỈ có access token (không có refresh family): hết hạn thì đăng nhập lại — bề mặt vận hành không dùng cơ chế xoay refresh của đường nghiệp vụ.
@@ -296,6 +297,56 @@ export class AuthService {
     const issued = await this.issuePlatformToken(user);
     await this.recordAuthEvent('user_logged_in', { userId: user.id, actorId: user.id, method: 'platform-totp', ip: ip ?? null });
     return { user, accessToken: issued.accessToken, expiresIn: issued.expiresIn };
+  }
+
+  /**
+   * Đăng nhập nhân sự hỗ trợ vào audience bị giới hạn riêng.
+   * Không cần và KHÔNG cấp vai siteadmin: grant mới là nguồn quyền
+   * duy nhất, được kiểm lại trên từng endpoint hỗ trợ.
+   *
+   * Credential phải tồn tại ở kho chung của platform (controller
+   * cấm host trung tâm). Vẫn dùng lockout, MFA và audit đăng nhập.
+   */
+  async supportLogin(username: string, password: string, ip?: string): Promise<PlatformLoginOutcome> {
+    const user = await this.validateCredentials(username, password, ip);
+    // Không cho mọi tài khoản legacy của kho chung tự trở thành nhân sự
+    // platform chỉ vì dùng chung DB. Phải có membership vận hành ACTIVE.
+    if (!(await this.tenants.isPlatformSupportMember(user.id))) {
+      throw new ForbiddenException({ message: 'Active platform membership required for support', code: 'auth.support_staff_required' });
+    }
+    if (await this.totp.isEnabled(user.id)) {
+      return { mfaRequired: true, user, challengeToken: await this.signMfaChallenge(user, 'support') };
+    }
+    await this.users.recordLogin(user.id);
+    const issued = await this.issueSupportToken(user);
+    await this.recordAuthEvent('user_logged_in', { userId: user.id, actorId: user.id, method: 'support-password', ip: ip ?? null });
+    return { mfaRequired: false, user, ...issued };
+  }
+
+  /** Bước hai giữ challenge MFA riêng không dùng được cho platform/admin. */
+  async verifySupportMfa(challengeToken: string, code: string, ip?: string): Promise<{ user: UserRow; accessToken: string; expiresIn: number }> {
+    const user = await this.passMfaChallenge(challengeToken, code, ip, 'support');
+    if (!(await this.tenants.isPlatformSupportMember(user.id))) {
+      throw new ForbiddenException({ message: 'Active platform membership required for support', code: 'auth.support_staff_required' });
+    }
+    await this.users.recordLogin(user.id);
+    const issued = await this.issueSupportToken(user);
+    await this.recordAuthEvent('user_logged_in', { userId: user.id, actorId: user.id, method: 'support-totp', ip: ip ?? null });
+    return { user, ...issued };
+  }
+
+  /**
+   * Phát JWT aud=support chỉ dành cho route @SupportRoute().
+   * Không có refresh family, không có quyền control plane.
+   */
+  private async issueSupportToken(user: UserRow): Promise<{ accessToken: string; expiresIn: number }> {
+    const platformTenant = await this.tenants.platformTenant();
+    const expiresIn = this.config.get<number>('ACCESS_TOKEN_TTL_SECONDS') ?? 900;
+    const accessToken = await this.jwt.signAsync(
+      { sub: user.id, username: user.username, sid: randomUUID(), tid: platformTenant.id, aud: 'support' },
+      { expiresIn },
+    );
+    return { accessToken, expiresIn };
   }
 
   /**

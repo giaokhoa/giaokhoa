@@ -2355,6 +2355,29 @@ export interface Subjects {
   updated_at: Generated<Timestamp>;
 }
 
+export interface SupportAccessEvents {
+  action: string;
+  actor_id: string;
+  created_at: Generated<Timestamp>;
+  grant_id: string | null;
+  id: Generated<string>;
+  scope: string | null;
+  tenant_id: string;
+}
+
+export interface SupportGrants {
+  created_at: Generated<Timestamp>;
+  created_by: string;
+  expires_at: Timestamp;
+  id: Generated<string>;
+  reason: string;
+  recipient_id: string;
+  revoked_at: Timestamp | null;
+  revoked_by: string | null;
+  scopes: string[];
+  tenant_id: string;
+}
+
 export interface SystemBankEventReceipts {
   centre_slug: string;
   event_id: string;
@@ -2732,6 +2755,8 @@ export interface DB {
   session: Session;
   stimuli: Stimuli;
   subjects: Subjects;
+  support_access_events: SupportAccessEvents;
+  support_grants: SupportGrants;
   system_bank_event_receipts: SystemBankEventReceipts;
   system_question_imports: SystemQuestionImports;
   tag: Tag;

@@ -85,13 +85,13 @@ export class JwtAuthStrategy extends PassportStrategy(JwtStrategy, 'jwt') {
     }
     // Token vận hành có audience riêng và danh tính CHỈ trong kho
     // chung; không lấy principal từ kho công cộng dù cùng hostname.
-    const space = payload.aud === 'platform'
+    const space = (payload.aud === 'platform' || payload.aud === 'support')
       ? null
       : await resolveDedicatedSpace(this.spaceDb, req.headers?.host);
     // Khi đã tách host gốc, token nghiệp vụ thiếu định danh kho
     // không được nhận từ kho vận hành (kể cả khi user đó là siteadmin).
-    // Chỉ audience vận hành riêng được tra kho chung.
-    if (isPublicLearningHost(req.headers?.host) && payload.aud !== 'platform' && !payload.centre_id) {
+    // Hai audience vận hành platform/support được tra kho chung; token support chỉ dùng route hỗ trợ.
+    if (isPublicLearningHost(req.headers?.host) && payload.aud !== 'platform' && payload.aud !== 'support' && !payload.centre_id) {
       throw new UnauthorizedException({ message: 'Public learning requires a store-bound session', code: 'auth.centre_mismatch' });
     }
     // Token của trung tâm A/B không dùng được ở địa chỉ khác hay

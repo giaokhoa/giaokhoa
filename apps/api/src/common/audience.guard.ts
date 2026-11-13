@@ -2,10 +2,16 @@ import { ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common
 import { Reflector } from '@nestjs/core';
 import type { AuthenticatedUser } from './current-user.decorator';
 import { IS_PLATFORM_ROUTE_KEY } from './platform-route.decorator';
+import { IS_SUPPORT_ROUTE_KEY } from './support-route.decorator';
 import { IS_PUBLIC_KEY } from './public.decorator';
 
 /**
- * Guard tách audience token (issue #584) — chạy ngay sau `JwtAuthGuard`, trước `TenantGuard`.
+ * Guard tách audience token (issue #584, mở rộng giới hạn hỗ trợ #19):
+ * token nghiệp vụ, platform admin và support là BA BỀ MẶT khác nhau.
+ * Chỉ `aud=support` được gọi `@SupportRoute()`; token support không
+ * vào `@PlatformRoute()` hoặc route nghiệp vụ, token platform không
+ * tự truy cập support route kể cả khi là siteadmin.
+ * Chạy ngay sau JwtAuthGuard, trước TenantGuard.
  *
  * Luật chỉ có hai chiều, không có ngoại lệ theo user hay capability:
  * - Token mang audience `platform` (cấp từ bề mặt đăng nhập quản
@@ -30,16 +36,21 @@ export class AudienceGuard {
       context.getHandler(),
       context.getClass(),
     ]);
-    const isPlatformToken = user.audience === 'platform';
-    if (isPlatformToken && !isPlatformRoute) {
+    // Support token tuyệt đối không được truy cập control plane hay
+    // nghiệp vụ; platform-admin token cũng không tự dùng hỗ trợ nếu
+    // chưa đăng nhập vào audience support được cấp riêng.
+    const isSupportRoute = this.reflector.getAllAndOverride<boolean>(IS_SUPPORT_ROUTE_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    const expectedAudience = isSupportRoute
+      ? 'support'
+      : isPlatformRoute
+        ? 'platform'
+        : undefined;
+    if (user.audience !== expectedAudience) {
       throw new ForbiddenException({
-        message: 'Platform tokens cannot call business APIs',
-        code: 'auth.audience_denied',
-      });
-    }
-    if (!isPlatformToken && isPlatformRoute) {
-      throw new ForbiddenException({
-        message: 'Business tokens cannot call platform operations APIs',
+        message: 'Token audience does not match this API surface',
         code: 'auth.audience_denied',
       });
     }

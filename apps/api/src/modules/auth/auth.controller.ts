@@ -8,6 +8,8 @@ import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.d
 import { Public } from '../../common/public.decorator';
 import { SkipSpaceContext } from '../tenants/skip-space-context.decorator';
 import { PlatformRoute } from '../../common/platform-route.decorator';
+import { SupportRoute } from '../../common/support-route.decorator';
+import { spaceSlugForHost } from '../tenants/space-resolution';
 import { isPublicLearningHost } from '../tenants/public-learning';
 import { resolveDedicatedSpace } from '../tenants/space-resolution';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
@@ -174,6 +176,40 @@ export class AuthController {
       this.auth.verifyPlatformMfa(dto.challengeToken, dto.code, clientIpOf(req), req.headers['user-agent']),
     );
     return { user: { id: user.id, username: user.username, forcePasswordChange: user.forcePasswordChange }, accessToken, expiresIn };
+  }
+
+  /**
+   * Nhân sự hỗ trợ có tài khoản ở kho platform đăng nhập tại Host gốc.
+   * Token aud=support chỉ gọi được API hỗ trợ có grant, không lấy được
+   * quyền site admin hoặc quyền nghiệp vụ của trung tâm.
+   */
+  private assertRootSupportHost(req: Request): void {
+    if (spaceSlugForHost(req.headers.host)) {
+      throw new ForbiddenException({ message: 'Support login requires platform root host', code: 'auth.support_root_only' });
+    }
+  }
+
+  @Public()
+  @SkipSpaceContext()
+  @SupportRoute()
+  @Post('support/login')
+  async supportLogin(@Body({ schema: loginSchema }) dto: LoginDto, @Req() req: Request) {
+    this.assertRootSupportHost(req);
+    const outcome = await this.auth.supportLogin(dto.username, dto.password, clientIpOf(req));
+    if (outcome.mfaRequired) {
+      return { mfaRequired: true as const, challengeToken: outcome.challengeToken, user: { id: outcome.user.id, username: outcome.user.username } };
+    }
+    return { user: { id: outcome.user.id, username: outcome.user.username }, accessToken: outcome.accessToken, expiresIn: outcome.expiresIn };
+  }
+
+  @Public()
+  @SkipSpaceContext()
+  @SupportRoute()
+  @Post('support/mfa/verify')
+  async supportMfaVerify(@Body({ schema: mfaVerifySchema }) dto: MfaVerifyDto, @Req() req: Request) {
+    this.assertRootSupportHost(req);
+    const { user, accessToken, expiresIn } = await this.auth.verifySupportMfa(dto.challengeToken, dto.code, clientIpOf(req));
+    return { user: { id: user.id, username: user.username }, accessToken, expiresIn };
   }
 
   @Post('mfa/users/:userId/reset')

@@ -91,3 +91,22 @@ hỗ trợ do trung tâm cấp sẽ được thiết kế ở issue #19, không 
 trong issue này. Endpoint liệt kê tenant của phiên chỉ trả tenant đang
 hiệu lực tại kho hiện hành; chuyển phiên trong kho chung không phải SSO
 giữa các trung tâm kho riêng.
+
+## Quyền hỗ trợ trung tâm có thời hạn (issue #19)
+
+Bề mặt cấp quyền tại Host **của trung tâm** (phiên nghiệp vụ, chủ trung tâm có `tenant:manage`):
+
+- `POST /api/v1/support-grants`: body `{recipientId, scopes, expiresAt, reason}`; người nhận là UUID nhân sự platform, thời hạn UTC có offset trong (0, 30 ngày], danh sách thao tác chỉ có `classes:read`, `courses:read`. Tenant được suy từ phiên và Host, không lấy từ request.
+- `GET /api/v1/support-grants`: trạng thái `active | expired | revoked` tính lại theo thời gian thực.
+- `POST /api/v1/support-grants/:grantId/revoke`: thu hồi vĩnh viễn, không làm mới session.
+- `GET /api/v1/support-grants/audit`: vết cấp/thu hồi và từng quyết định dùng grant của chính trung tâm.
+
+Bề mặt hỗ trợ tại **Host gốc platform**, với access token **`aud=support` riêng** (lấy từ `POST /api/v1/auth/support/login`, hoặc `POST /api/v1/auth/support/mfa/verify` nếu đã bật MFA; không dùng cookie nghiệp vụ và không cần vai siteadmin):
+
+- `GET /api/v1/support-centres/:slug/my-grants`: người nhận support token xem grant của chính mình.
+- `GET /api/v1/support-centres/:slug/classes`: chỉ chiếu `id, name, code, status` của lớp, cần `classes:read`.
+- `GET /api/v1/support-centres/:slug/courses`: chỉ chiếu `id, fullName, shortName, visible` của khoá, cần `courses:read`.
+
+Không grant nào cấp quyền `login-as`, quản lý user, xem bài làm/điểm hay gọi API nghiệp vụ trực tiếp. `AudienceGuard` vẫn cấm token support trên mọi route nghiệp vụ và control plane; token platform admin cũng không được gọi API hỗ trợ; request hỗ trợ kiểm grant, `expires_at > now()`, `revoked_at IS NULL`, người nhận và scope trực tiếp trong database của slug trước khi trả hình chiếu, đồng thời ghi `access_allowed/access_denied` ở bảng audit có RLS `tenant_id`. Không đưa tên học sinh, bài làm, mật khẩu, khóa phiên hay payload nghiệp vụ vào audit. Trung tâm B không đọc được grant/audit của A.
+
+**Ranh giới danh tính nhân sự:** để dùng quyền hỗ trợ, tài khoản phải (1) tồn tại và đang hoạt động trong **kho chung**, và (2) có **membership `active` tường minh của tenant platform vận hành `trang-chinh`**. Chỉ tồn tại trong bảng `users` của shared DB, hoặc được mặc định vào tenant-zero khi login, **không đủ điều kiện**: nhờ đó tài khoản nghiệp vụ legacy của các trung tâm không tự trở thành nhân sự hỗ trợ. Bộ phận vận hành cấp/kết thúc membership platform qua cơ chế quản lý thành viên hiện có; không cấp siteadmin. Khi cấp grant, khi đăng nhập/MFA support và khi đọc mỗi request, API đều kiểm trực tiếp trạng thái membership — kết thúc membership sẽ chặn request kế tiếp ngay cả khi token và grant còn hạn. Tài khoản riêng của trung tâm không hợp lệ. Đường `/auth/support/login` chỉ chạy tại host gốc, xác thực mật khẩu, lockout và MFA hiện hành, phát token `aud=support` có hạn (không refresh). Token chỉ được truy cập endpoint `@SupportRoute()` — không có quyền siteadmin, `login-as`, API nghiệp vụ hoặc control plane kể cả khi người nhận có grant. Cổng đăng nhập `/auth/platform/login` tiếp tục chỉ dành cho siteadmin như trước, không nới quyền.
