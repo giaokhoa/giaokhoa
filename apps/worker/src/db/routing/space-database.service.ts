@@ -1,4 +1,4 @@
-import { Injectable, type OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
 import { createCentreKysely, type CentreDb } from '@giaokhoa/db';
@@ -71,6 +71,8 @@ export class SpaceDatabaseService implements OnModuleDestroy {
    * vòng đời pool.
    */
   private sharedKysely: CentreDb | null = null;
+  /** Pool kho chung: chỉ đóng khi tiến trình kết thúc; không destroy handle Kysely riêng. */
+  private sharedPool: { end(): Promise<void> } | null = null;
   /**
    * Các trung tâm đã chuẩn bị xong: slug → handle + kho của handle. Đây là bảng tra ĐỒNG BỘ mà `routedKysely` dùng tại thời điểm mỗi lần gọi — phân giải (đọc sổ, mở pool) là thao tác bất đồng bộ nên phải xong từ bước chuẩn bị, không thể chen vào đường đồng bộ của một lần truy vấn.
    */
@@ -95,6 +97,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
       this.registryPool = new Pool(
         typeof connection === 'string' ? { connectionString: connection } : connection,
       );
+      this.registryPool.on('error', (error: Error) => new Logger(SpaceDatabaseService.name).error(`Kết nối control plane nhàn rỗi bị lỗi: ${error.message}`));
       this.registryDb = createControlPlaneKysely(this.registryPool);
     } else {
       this.registryPool = null;
@@ -144,8 +147,9 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   /**
    * Gắn handle Kysely kho chung — `worker.module.ts` gọi đúng một lần lúc khởi động, bằng handle dựng trên pool kho chung. Mọi đích `shared` và mọi ngữ cảnh chưa chuẩn bị trung tâm riêng đều uỷ thác về handle này qua `routedKysely`.
    */
-  bindSharedKysely(db: CentreDb): void {
+  bindSharedKysely(db: CentreDb, pool?: { end(): Promise<void> }): void {
     this.sharedKysely = db;
+    this.sharedPool = pool ?? null;
   }
 
   /** Phân giải đích kết nối của một trung tâm (không mở pool). */
@@ -325,6 +329,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   async onModuleDestroy(): Promise<void> {
     this.resolver.dispose();
     await this.kyselyPools.closeAll();
+    await this.sharedPool?.end();
     await this.registryPool?.end().catch(() => undefined);
   }
 }

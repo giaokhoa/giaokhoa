@@ -76,6 +76,8 @@ export class SpaceDatabaseService implements OnModuleDestroy {
    * Handle Kysely của kho chung cho đường định tuyến; null cho tới khi được gắn. Nhà cung cấp kết nối của API gắn nó bằng pool kho chung (`TenantAwarePool`) lúc khởi động; instance Kysely này KHÔNG được `destroy()` riêng (huỷ nó sẽ đóng luôn pool chung) — vòng đời của nó đi theo vòng đời pool.
    */
   private sharedKysely: CentreDb | null = null;
+  /** Pool kho chung: chỉ đóng khi tiến trình kết thúc; không destroy handle Kysely riêng. */
+  private sharedPool: { end(): Promise<void> } | null = null;
   /**
    * Các trung tâm đã chuẩn bị xong: slug → handle + kho của handle. Đây là bảng tra ĐỒNG BỘ mà `routedKysely` dùng tại thời điểm mỗi lần gọi — phân giải (đọc sổ, mở pool) là thao tác bất đồng bộ nên phải xong từ bước chuẩn bị, không thể chen vào đường đồng bộ của một lần truy vấn.
    */
@@ -142,8 +144,9 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   /**
    * Gắn handle Kysely kho chung — nhà cung cấp kết nối của API gọi đúng một lần lúc khởi động, bằng handle dựng trên pool kho chung. Chỉ ngữ cảnh KHÔNG mang slug hoặc đích được đăng ký `shared` đã chuẩn bị mới được dùng handle này.
    */
-  bindSharedKysely(db: CentreDb): void {
+  bindSharedKysely(db: CentreDb, pool?: { end(): Promise<void> }): void {
     this.sharedKysely = db;
+    this.sharedPool = pool ?? null;
   }
 
   /** Phân giải đích kết nối của một trung tâm (không mở pool) — tầng gắn ngữ cảnh dùng để xét trạng thái/chế độ kho. */
@@ -400,5 +403,6 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   async onModuleDestroy(): Promise<void> {
     this.resolver.dispose();
     await this.kyselyPools.closeAll();
+    await this.sharedPool?.end();
   }
 }

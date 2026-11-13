@@ -1,4 +1,4 @@
-import { Injectable, type OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createControlPlaneKysely, type ControlPlaneDb } from '@giaokhoa/db/control-plane';
 import { Pool } from 'pg';
@@ -39,6 +39,7 @@ export class ControlPlaneConnection implements OnModuleDestroy {
     const poolConfig = typeof connection === 'string' ? { connectionString: connection } : connection;
     const poolMax = config.get<number>('CONTROL_PLANE_POOL_MAX');
     this.pool = new Pool(poolMax ? { ...poolConfig, max: poolMax } : poolConfig);
+    this.pool.on('error', (error: Error) => new Logger(ControlPlaneConnection.name).error(`Kết nối control plane nhàn rỗi bị lỗi: ${error.message}`));
     this.kysely = createControlPlaneKysely(this.pool);
   }
 

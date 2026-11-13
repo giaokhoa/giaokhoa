@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { Pool, type PoolClient, type PoolConfig } from 'pg';
 import { tenantAls } from './tenant-als';
 
@@ -27,6 +28,10 @@ const TAG_STATE = Symbol('tenantTagState');
 export class TenantAwarePool extends Pool {
   constructor(config: PoolConfig) {
     super(config);
+    // Lỗi từ kết nối đang nhàn phát qua sự kiện Pool; thiếu listener
+    // khiến EventEmitter ném unhandled error và giết tiến trình.
+    const logger = new Logger(TenantAwarePool.name);
+    this.on('error', (error: Error) => logger.error(`Kết nối PostgreSQL nhàn rỗi bị lỗi: ${error.message}`));
   }
 
   /** Chuẩn bị state gắn GUC cho một client vừa checkout theo ngữ cảnh ALS hiện tại. */

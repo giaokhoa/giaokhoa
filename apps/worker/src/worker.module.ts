@@ -153,7 +153,7 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
         const poolConfig = typeof connection === 'string' ? { connectionString: connection } : connection;
         const poolMax = config.get<number>('DATABASE_POOL_MAX');
         const pool = new TenantAwarePool(poolMax ? { ...poolConfig, max: poolMax } : poolConfig);
-        spaceDatabase.bindSharedKysely(createCentreKysely(pool));
+        spaceDatabase.bindSharedKysely(createCentreKysely(pool), pool);
         return pool;
       },
     },
