@@ -1,25 +1,27 @@
 /**
  * Giao diện hai vai cho luồng công bố câu hỏi chung (#13):
- * quản trị trung tâm gửi câu theo ID hiện có, biên tập viên hệ thống
- * đọc bản chụp/nguồn/đáp án rồi duyệt hoặc từ chối kèm lý do.
+ * quản trị trung tâm chọn câu trong bank riêng, biên tập viên hệ thống
+ * xem trọn bản chụp/ảnh/nguồn/đáp án rồi duyệt hoặc từ chối kèm lý do.
  * Cổng quyền phía API luôn là nguồn quyết định cuối cùng.
  */
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Input } from '@giaokhoa/ui/components/input';
+import { ApiError } from '#lib/api';
 import { Label } from '@giaokhoa/ui/components/label';
 import { usePermissions } from '#lib/permissions';
 import {
-  approveSystemQuestionSubmission, fetchSystemQuestionSubmissions,
+  approveSystemQuestionSubmission, fetchSystemQuestionSubmissions, fetchSystemSubmissionSources,
   rejectSystemQuestionSubmission, submitSystemQuestion,
-  type SystemQuestionSubmission,
+  type SystemQuestionSubmission, type SystemSubmissionSource,
 } from '../api/questions';
-import { plainText } from '../utils/shared';
+import { QTYPE_LABEL_KEYS, QTYPES, systemBankPlainText, type Qtype } from '../utils/shared';
+import { SystemSubmissionReviewPreview } from './system-submission-review-preview';
 
 /** Chuỗi văn bản gọn để người duyệt xem cùng đáp án, không hiển thị JSON thô. */
 function excerpt(doc: SystemQuestionSubmission['package']['questionText']): string {
-  return plainText(doc).slice(0, 320);
+  return systemBankPlainText(doc).slice(0, 320);
 }
 
 /** Panel công bố chỉ hiện khi người dùng có vai trò quản trị trung tâm hoặc biên tập hệ thống. */
@@ -35,6 +37,7 @@ export function SystemQuestionPublicationPanel() {
   ) ?? false) || (access?.isSiteAdmin && !canSubmit) || false);
 
   const [sourceId, setSourceId] = useState('');
+  const [sources, setSources] = useState<SystemSubmissionSource[]>([]);
   const [license, setLicense] = useState('');
   const [mine, setMine] = useState<SystemQuestionSubmission[]>([]);
   const [pending, setPending] = useState<SystemQuestionSubmission[]>([]);
@@ -46,6 +49,11 @@ export function SystemQuestionPublicationPanel() {
   useEffect(() => {
     let active = true;
     if (canSubmit) {
+      void fetchSystemSubmissionSources().then((rows) => {
+        if (active) setSources(rows);
+      }).catch(() => {
+        if (active) setNotice(t('systemSourcesLoadFailed'));
+      });
       void fetchSystemQuestionSubmissions('mine').then((rows) => {
         if (active) setMine(rows);
       }).catch(() => {
@@ -67,7 +75,10 @@ export function SystemQuestionPublicationPanel() {
   const selected = pending.find((item) => item.id === selectedId);
 
   async function refresh() {
-    if (canSubmit) setMine(await fetchSystemQuestionSubmissions('mine'));
+    if (canSubmit) {
+      setMine(await fetchSystemQuestionSubmissions('mine'));
+      setSources(await fetchSystemSubmissionSources());
+    }
     if (canReview) setPending(await fetchSystemQuestionSubmissions('pending'));
   }
 
@@ -80,8 +91,9 @@ export function SystemQuestionPublicationPanel() {
       await refresh();
       setSourceId('');
       setNotice(t('systemSubmitSuccess'));
-    } catch {
-      setNotice(t('systemSubmitFailed'));
+    } catch (error) {
+      setNotice(error instanceof ApiError && error.problem.code === 'system_bank.submission_rejected_requires_new_version'
+        ? t('systemSubmitRejectedVersion') : t('systemSubmitFailed'));
     } finally {
       setBusy(false);
     }
@@ -123,8 +135,18 @@ export function SystemQuestionPublicationPanel() {
           <div className="flex flex-wrap items-end gap-3">
             <div className="min-w-64 flex-1">
               <Label htmlFor="system-submit-question">{t('systemSourceQuestionId')}</Label>
-              <Input id="system-submit-question" value={sourceId}
-                onChange={(event) => setSourceId(event.target.value)} />
+              <select id="system-submit-question" value={sourceId}
+                className="h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs"
+                onChange={(event) => setSourceId(event.target.value)}>
+                <option value="">{t('systemSelectSourcePlaceholder')}</option>
+                {sources.map((source) => (
+                  <option key={source.id} value={source.id}>
+                    {systemBankPlainText(source.questionText).slice(0, 100) || source.id} ·
+                    {' '}{t(QTYPE_LABEL_KEYS[(QTYPES as readonly string[]).includes(source.qtype) ? source.qtype as Qtype : 'essay'])}
+                    {' '}· v{source.version}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="min-w-48 flex-1">
               <Label htmlFor="system-submit-license">{t('systemSourceLicense')}</Label>
@@ -179,30 +201,7 @@ export function SystemQuestionPublicationPanel() {
           {selected ? (
             <div className="space-y-3 rounded-md border p-3">
               <h5 className="font-medium">{t('systemReviewDetails')}</h5>
-              <p className="text-sm">{excerpt(selected.package.questionText)}</p>
-              <p className="text-sm text-muted-foreground">
-                {t('systemSourceCentre')}: {selected.centreSlug} ·
-                {t('systemSourceVersion')}: {selected.sourceVersionNumber} ·
-                {t('systemSourceChecksum')}: {selected.checksum}
-              </p>
-              <p className="text-sm">
-                {t('systemSourceAuthor')}: {selected.package.source?.authorId ?? '—'} ·
-                {t('systemSourceReference')}: {selected.package.source?.sourceRef ?? '—'} ·
-                {t('systemSourceLicense')}: {selected.package.source?.license ?? '—'}
-              </p>
-              <p className="text-sm">
-                {t('systemMediaCount', { count: selected.package.media?.length ?? 0 })}
-              </p>
-              <h6 className="font-medium">{t('systemAnswerPreview')}</h6>
-              {selected.package.answers.length ? (
-                <ol className="list-inside list-decimal space-y-1 text-sm">
-                  {selected.package.answers.map((answer, index) => (
-                    <li key={index}>{excerpt(answer.answer)}
-                      {answer.isCorrect ? ` · ${t('systemCorrectAnswer')}` : ''}
-                    </li>
-                  ))}
-                </ol>
-              ) : <p className="text-sm">{t('systemAnswerInKey')}</p>}
+              <SystemSubmissionReviewPreview submission={selected} />
               <Label htmlFor="system-rejection-reason">{t('systemRejectionReason')}</Label>
               <Input id="system-rejection-reason" value={reason}
                 onChange={(event) => setReason(event.target.value)} />

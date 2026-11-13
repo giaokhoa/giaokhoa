@@ -13,7 +13,7 @@ import {
   fetchSystemPublishedQuestions, fetchSystemPublishedVersion, importSystemPublishedQuestion,
   type SystemPublishedDiscovery, type SystemPublishedQuestion, type SystemPublishedVersion,
 } from '../api/questions';
-import { plainText, QTYPE_LABEL_KEYS } from '../utils/shared';
+import { QTYPE_LABEL_KEYS, systemBankPlainText } from '../utils/shared';
 
 const PAGE_SIZE = 20;
 
@@ -166,7 +166,7 @@ export function SystemPublishedQuestionsPanel() {
       {selected && preview ? (
         <div className="space-y-2 rounded-md border p-3">
           <h4 className="font-medium">{t('systemPublishedPreview')} — v{selected.version}</h4>
-          <p className="text-sm">{plainText(preview.package.questionText)}</p>
+          <p className="text-sm">{systemBankPlainText(preview.package.questionText)}</p>
           <p className="text-xs text-muted-foreground">
             {t('systemSourceChecksum')}: {preview.checksum}
           </p>
@@ -178,7 +178,7 @@ export function SystemPublishedQuestionsPanel() {
           <h5 className="font-medium">{t('systemAnswerPreview')}</h5>
           <ul className="list-inside list-disc text-sm">
             {preview.package.answers.map((answer, i) => (
-              <li key={i}>{plainText(answer.answer)} {answer.isCorrect ? t('systemCorrectAnswer') : ''}</li>
+              <li key={i}>{systemBankPlainText(answer.answer)} {answer.isCorrect ? t('systemCorrectAnswer') : ''}</li>
             ))}
           </ul>
           <Button variant="ghost" disabled={busy} onClick={() => { setSelected(null); setPreview(null); }}>

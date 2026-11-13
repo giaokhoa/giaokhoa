@@ -63,15 +63,15 @@ describe('Access: seed cắt bỏ các định nghĩa năng lực đã cũ (issu
     );
     expect(Number(staleOverrides.rows[0].n)).toBe(0);
 
-    // Registry vẫn nguyên vẹn: 124 định nghĩa
+    // Registry vẫn nguyên vẹn: 125 định nghĩa
     // (105 + 6 quyền exam:* của Ngân hàng đề EB-1, issue #113:
     // exam:view, exam:edit, exam:copy, exam:share, exam:moderate, exam:deploy) + 1 quyền moderation:manage của vòng đời tin nhắn theo vai (issue #124) → 112, + 1 quyền quiz:gradepaper của CAM-0
     // (issue #112) → 113, + 2 quyền tenant:manage / tenant:viewall
     // của nền multi-tenant (TENANT-0, issue #168) → 115, + 1 quyền search:manage của đợt vá gác route ghi search (sổ #134, H2+H5) → 116, − 3 quyền blog:create / blog:view / blog:manageentries khi gỡ hẳn tính năng Blog (issue #173) → 113, + 8 quyền class:* của lớp học hạng nhất (CLASS-0, issue #184: create/view/update/ delete/manageroster/assignwork/grade/share) → 121,
     // + 2 quyền của đợt đồng bộ khuôn ngân hàng (issue #228, lát S3:
-    // bỏ quiz:viewmatrix + quiz:managematrix, thêm matrix:use / matrix:add / matrix:edit và exam:add, exam:view đổi tên thành exam:use — ròng +2) → 123, + 1 quyền payment:managecoupons của bề mặt quản trị coupon mua gói (phần còn lại của lát 2, issue #189) → 124, mọi định nghĩa đều không có tiền tố, và các mặc định đã đổi tên đã được seed lại tại context hệ thống.
+    // bỏ quiz:viewmatrix + quiz:managematrix, thêm matrix:use / matrix:add / matrix:edit và exam:add, exam:view đổi tên thành exam:use — ròng +2) → 123, + 1 quyền payment:managecoupons của bề mặt quản trị coupon mua gói (phần còn lại của lát 2, issue #189) → 124, + 1 quyền systembank:review của luồng duyệt câu hệ thống (issue #13) → 125, mọi định nghĩa đều không có tiền tố, và các mặc định đã đổi tên đã được seed lại tại context hệ thống.
     const defs = await pg.query<{ n: string }>(`select count(*) as n from capabilities`);
-    expect(Number(defs.rows[0].n)).toBe(124);
+    expect(Number(defs.rows[0].n)).toBe(125);
     const renamed = await pg.query<{ permission: number }>(
       `select permission from role_capabilities where context_id = $1 and role_id = $2 and capability = 'course:update'`,
       [systemId, managerId],

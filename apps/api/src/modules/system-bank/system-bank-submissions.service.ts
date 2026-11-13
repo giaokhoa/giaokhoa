@@ -52,7 +52,7 @@ export class SystemBankSubmissionsService {
   }
 
   /**
-   * Biên tập viên là actor có quyền moderate tại context hệ thống,
+   * Biên tập viên có quyền systembank:review tại context hệ thống,
    * tách biệt quyền quản trị tenant dùng để gửi. Cổng luôn chạy trước
    * khi lấy package có đáp án khỏi kho ngân hàng.
    */
@@ -73,7 +73,7 @@ export class SystemBankSubmissionsService {
       throw new NotFoundException({ message: 'Question not found in centre bank', code: 'question.not_found' });
     }
     const bank = await this.banks.getBankOrThrow(category.bankId);
-    if (bank.tenantId !== tenantId || bank.scope === 'platform') {
+    if (bank.tenantId !== tenantId || bank.bankKind !== 'question' || bank.scope === 'platform') {
       throw new NotFoundException({ message: 'Question not found in centre bank', code: 'question.not_found' });
     }
     if (view.entry.status !== 'ready') {
@@ -108,11 +108,46 @@ export class SystemBankSubmissionsService {
       throw new BadRequestException({ message: problem, code: 'system_bank.bad_package' });
     }
     const pkg = systemBankPackageSchema.parse(await this.media.snapshot(raw, category.contextId));
-    return this.repo.submit({
+    const submitted = await this.repo.submit({
       centreSlug, sourceQuestionId: questionId, sourceVersionId: view.latestVersion.id,
       sourceVersionNumber: view.latestVersion.version,
       qtype: view.question.qtype, package: pkg, checksum: checksumPackage(pkg), submittedBy: actorId,
     });
+    // Bản đã bị từ chối là terminal cho phiên bản nguồn này; retry
+    // không đổi được snapshot/giấy phép. Chỉnh câu để sinh version mới
+    // rồi gửi lại, giữ lịch sử quyết định của bản cũ bất biến.
+    if (submitted.status === 'rejected') {
+      throw new ConflictException({
+        message: 'Rejected source version cannot be submitted again; create a new version',
+        code: 'system_bank.submission_rejected_requires_new_version',
+      });
+    }
+    return submitted;
+  }
+
+  /**
+   * Liệt kê các câu sẵn sàng gửi thuộc bank riêng của trung tâm hiện tại,
+   * bao gồm bank cá nhân của giáo viên khác để quản trị không cần chép UUID.
+   * Chỉ trả metadata phục vụ bộ chọn; không chuyển đáp án qua API này.
+   */
+  async listSources(actorId: string): Promise<Array<{
+    id: string; qtype: string; questionText: unknown; version: number;
+  }>> {
+    const { tenantId } = await this.centreManager(actorId);
+    const sources: Array<{ id: string; qtype: string; questionText: unknown; version: number }> = [];
+    for (const category of await this.questions.listCategories()) {
+      if (!category.bankId) continue;
+      const bank = await this.banks.getBankOrThrow(category.bankId);
+      if (bank.tenantId !== tenantId || bank.bankKind !== 'question' || bank.scope === 'platform') continue;
+      for (const view of await this.questions.listQuestions(category.id)) {
+        if (view.entry.status !== 'ready') continue;
+        sources.push({
+          id: view.question.id, qtype: view.question.qtype,
+          questionText: view.latestVersion.questionText, version: view.latestVersion.version,
+        });
+      }
+    }
+    return sources;
   }
 
   /** Quản trị chỉ xem lịch sử của trung tâm hiệu lực, không thấy hàng chờ B. */
@@ -133,6 +168,16 @@ export class SystemBankSubmissionsService {
     const row = await this.repo.get(id);
     if (!row) throw new NotFoundException({ message: 'Submission not found', code: 'system_bank.submission_not_found' });
     return row;
+  }
+
+  /**
+   * Đọc byte ảnh trong bản chụp để biên tập viên thực sự xem được ảnh.
+   * Cổng editor chạy trước khi tìm hash trong manifest; không cấp URL
+   * công khai hay đọc file nguồn thuộc vòng đời trung tâm.
+   */
+  async readReviewMedia(actorId: string, id: string, hash: string) {
+    const row = await this.getForReview(actorId, id);
+    return this.media.readPreview(systemBankPackageSchema.parse(row.package), hash);
   }
 
   /**

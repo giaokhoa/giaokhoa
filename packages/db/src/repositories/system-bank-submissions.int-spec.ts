@@ -146,7 +146,7 @@ describe('Hàng chờ công bố câu hỏi chung (#13)', () => {
       sourceVersionNumber: number, qtype: 'multichoice',
       package: pkg(`Phiên bản ${number}`), checksum: `checksum-concurrent-${number}`, submittedBy: ACTOR,
     })));
-    const [first, second] = await Promise.all([repo.approve(a.id, REVIEWER), repo.approve(b.id, REVIEWER)]);
+    const [first, second] = await Promise.all([repo.approve(a!.id, REVIEWER), repo.approve(b!.id, REVIEWER)]);
     expect(first?.status).toBe('approved');
     expect(second?.status).toBe('approved');
     expect(first?.publishedQuestionId).toBe(second?.publishedQuestionId);

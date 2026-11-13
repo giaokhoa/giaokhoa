@@ -504,6 +504,17 @@ describe('Ngân hàng hệ thống thành kho riêng + API (issue #585)', () => 
     expect(ready.status, JSON.stringify(ready.body)).toBe(201);
 
     const submitPath = '/api/v1/system-bank/submissions';
+    // Quản trị phải chọn được câu của giáo viên khác qua bộ chọn:
+    // chỉ liệt kê metadata câu sẵn sàng của trung tâm, không đưa đáp án.
+    const sources = await http(app).get(`${submitPath}/sources`).set(bearer(managerToken));
+    expect(sources.status, JSON.stringify(sources.body)).toBe(200);
+    expect(sources.body).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: sourceId, qtype: 'multichoice', version: 1 }),
+    ]));
+    expect(JSON.stringify(sources.body)).not.toContain('Đáp án đúng G13');
+    for (const token of [teacherAToken, teacherBToken, studentToken]) {
+      expect((await http(app).get(`${submitPath}/sources`).set(bearer(token))).status).toBe(403);
+    }
     const teacherSubmit = await http(app).post(submitPath).set(bearer(teacherAToken)).send({ questionId: sourceId });
     expect(teacherSubmit.status).toBe(403);
     const managerSubmit = await http(app).post(submitPath).set(bearer(managerToken))
@@ -538,6 +549,15 @@ describe('Ngân hàng hệ thống thành kho riêng + API (issue #585)', () => 
     expect(rejected.body.status).toBe('rejected');
     expect(rejected.body.rejectionReason).toBe('Cần kiểm tra lời giải');
     expect((await http(app).get(`${submitPath}/mine`).set(bearer(managerToken))).body[0].status).toBe('rejected');
+    // Quyết định nghiệp vụ: một bản bị từ chối là terminal ở version
+    // nguồn đó. Gửi lại chỉ đổi giấy phép không được báo thành công,
+    // phải tạo version nguồn mới (giữ bản bị từ chối để truy vết).
+    const rejectedRetry = await http(app).post(submitPath).set(bearer(managerToken))
+      .send({ questionId: sourceId, license: 'CC BY 4.1' });
+    expect(rejectedRetry.status).toBe(409);
+    expect(rejectedRetry.body.code).toBe('system_bank.submission_rejected_requires_new_version');
+    expect((await http(app).get(`${submitPath}/mine`).set(bearer(managerToken))).body
+      .filter((row: { sourceQuestionId: string }) => row.sourceQuestionId === sourceId)).toHaveLength(1);
 
     // Chuyển sang phiên bản mới có ảnh raster; chỉ ảnh đã chụp trong
     // kho ngân hàng mới được truy cập ở B sau khi file gốc bị dọn.
@@ -569,6 +589,20 @@ describe('Ngân hàng hệ thống thành kho riêng + API (issue #585)', () => 
     const hash = secondSubmit.body.package.media[0].contentHash as string;
     expect(hash).toMatch(/^[0-9a-f]{64}$/);
     expect(JSON.stringify(secondSubmit.body.package.questionText)).toContain('bank-media://');
+    const reviewImagePath = `${submitPath}/${secondSubmit.body.id}/media/${hash}`;
+    // Ảnh xem trước thuộc kho bank-system, người không duyệt không được
+    // xem kể cả khi đoán đúng ID bản gửi và SHA-256 của ảnh.
+    for (const token of [teacherAToken, managerToken, teacherBToken, studentToken]) {
+      expect((await http(app).get(reviewImagePath).set(bearer(token))).status).toBe(403);
+    }
+    const reviewedImage = await http(app).get(reviewImagePath).set(bearer(editorToken));
+    expect(reviewedImage.status).toBe(200);
+    expect(reviewedImage.headers['content-type']).toMatch(/image\/png/);
+    expect(reviewedImage.headers['cache-control']).toBe('private, no-store');
+    expect(reviewedImage.body).toEqual(image);
+    const missingImage = await http(app).get(`${submitPath}/${secondSubmit.body.id}/media/${'0'.repeat(64)}`)
+      .set(bearer(editorToken));
+    expect(missingImage.status).toBe(400);
     const approved = await http(app).post(`${submitPath}/${secondSubmit.body.id}/approve`)
       .set(bearer(editorToken)).send({});
     expect(approved.status, JSON.stringify(approved.body)).toBe(201);
@@ -601,6 +635,9 @@ describe('Ngân hàng hệ thống thành kho riêng + API (issue #585)', () => 
     await tenantAls.run({ tenantId: tenantA, userId: teacherA.id }, () =>
       app.get(FilesService).cleanupOrphan(hash, SYSTEM_FILE_DOMAIN));
     expect(await storage.exists(SYSTEM_FILE_DOMAIN, publicationKey)).toBe(true);
+    const preservedPreview = await http(app).get(reviewImagePath).set(bearer(editorToken));
+    expect(preservedPreview.status).toBe(200);
+    expect(preservedPreview.body).toEqual(image);
 
     const imported = await http(app).post('/api/v1/system-bank/import').set(bearer(teacherBToken))
       .send({ sourceQuestionId: publishedId, sourceVersionNumber: 1 });

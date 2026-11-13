@@ -1,5 +1,5 @@
 import type {
-  QuestionCategory, QuestionUsage, QuestionView, RichTextDocument, StimulusView,
+  QuestionCategory, QuestionUsage, QuestionView, RichTextDocument, StimulusView, SystemBankPackage,
 } from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 import type {
@@ -41,12 +41,7 @@ export interface SystemQuestionSubmission {
   sourceVersionId: string;
   sourceVersionNumber: number;
   qtype: string;
-  package: {
-    questionText: RichTextDocument;
-    answers: Array<{ answer: RichTextDocument; isCorrect: boolean }>;
-    source?: { centreSlug: string; authorId: string | null; sourceRef: string | null; license: string | null };
-    media?: Array<{ contentHash: string; fileName: string }>;
-  };
+  package: SystemBankPackage;
   checksum: string;
   status: 'pending' | 'approved' | 'rejected';
   submittedBy: string;
@@ -55,6 +50,19 @@ export interface SystemQuestionSubmission {
   publishedQuestionId: string | null;
   publishedVersion: number | null;
   createdAt: string;
+}
+
+/** Câu nguồn sẵn sàng trong các bank riêng của trung tâm, kể cả bank giáo viên khác. */
+export interface SystemSubmissionSource {
+  id: string;
+  qtype: string;
+  questionText: RichTextDocument;
+  version: number;
+}
+
+/** Bộ chọn câu nguồn chỉ cho quản trị trung tâm, không trả đáp án. */
+export function fetchSystemSubmissionSources() {
+  return apiJson<SystemSubmissionSource[]>('/api/v1/system-bank/submissions/sources');
 }
 
 /** Hàng chờ và lịch sử gửi ở kho ngân hàng; API gác actor tương ứng. */

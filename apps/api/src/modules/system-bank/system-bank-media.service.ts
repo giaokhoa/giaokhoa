@@ -86,6 +86,24 @@ export class SystemBankMediaService {
   }
 
   /**
+   * Trả byte ảnh đã sao vào miền bank-system cho màn duyệt, khi hash
+   * có trong manifest bản gửi. Luôn kiểm tra checksum và MIME thực
+   * trước khi controller trả dữ liệu với cache private/no-store.
+   */
+  async readPreview(pkg: SystemBankPackage, contentHash: string): Promise<{ data: Buffer; mimeType: string }> {
+    const item = pkg.media?.find((file) => file.contentHash === contentHash);
+    if (!item) {
+      throw new BadRequestException({ message: 'Image missing from submission', code: 'system_bank.invalid_media' });
+    }
+    const data = await this.storage.get(SYSTEM_FILE_DOMAIN, publicationMediaStorageKey(contentHash));
+    if (sha256Hex(data) !== contentHash || data.length > QUESTION_IMAGE_MAX_BYTES ||
+      sniffImageMimeType(data) !== item.mimeType) {
+      throw new BadRequestException({ message: 'Published image checksum or format mismatch', code: 'system_bank.invalid_media' });
+    }
+    return { data, mimeType: item.mimeType };
+  }
+
+  /**
    * Đọc bản công bố từ kho vật lý bank-system, so hash từng đối tượng,
    * tạo file logic ở kho đích trước khi giao nội dung cho QuestionsService.
    * Gói nguồn không bị sửa; mọi lần nhập có bản sao file độc lập.
