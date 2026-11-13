@@ -1840,6 +1840,7 @@ export interface OutcomePackageInstalls {
   id: Generated<string>;
   installed_at: Generated<Timestamp>;
   installed_by: string | null;
+  package_checksum: Generated<string>;
   package_version: string;
   previous_version: string | null;
   scope: string;

@@ -132,7 +132,7 @@ export const importSystemBankQuestionSchema = z.strictObject({
 export type ImportSystemBankQuestion = z.infer<typeof importSystemBankQuestionSchema>;
 
 /**
- * Phát hành một gói YCCĐ phía platform: định danh phiên bản (duy nhất toàn kho, dạng `YYYY.MM.DD.N`) + phạm vi (`all` hoặc slug môn học). Ánh xạ mã cũ→mã mới là thông tin tham chiếu kèm theo gói (từ YCCĐ cũ sang YCCĐ mới khi tách/gộp/đổi vị trí) — bản cài không tự sửa các gắn chuẩn cũ theo ánh xạ.
+ * Gửi ảnh chụp chương trình/YCCĐ từ kho trung tâm vào hàng chờ kiểm duyệt: định danh phiên bản (duy nhất toàn kho, dạng `YYYY.MM.DD.N`) + phạm vi (`all` hoặc slug môn học). Ánh xạ mã cũ→mã mới là thông tin tham chiếu kèm theo gói (từ YCCĐ cũ sang YCCĐ mới khi tách/gộp/đổi vị trí) — bản cài không tự sửa các gắn chuẩn cũ theo ánh xạ.
  */
 export const createSystemOutcomePackageSchema = z.strictObject({
   version: z.string().min(1).max(50),
@@ -148,3 +148,7 @@ export const createSystemOutcomePackageSchema = z.strictObject({
     .default([]),
 });
 export type CreateSystemOutcomePackage = z.infer<typeof createSystemOutcomePackageSchema>;
+
+/** Lý do bắt buộc khi từ chối bản gửi chương trình; không chấp nhận chuỗi trắng. */
+export const rejectSystemOutcomePackageSchema = z.strictObject({ reason: z.string().trim().min(1).max(1000) });
+export type RejectSystemOutcomePackage = z.infer<typeof rejectSystemOutcomePackageSchema>;

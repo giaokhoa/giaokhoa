@@ -185,7 +185,8 @@ describe('Repository kho ngân hàng hệ thống (issue #650)', () => {
       checksum: 'checksum-package',
       outcomeCount: 1,
       createdBy: ADMIN_ID,
-      curricula: [{ curriculumId: '01965000-0000-7000-8000-000000000101', subjectSlug: 'toan', grade: 12 }],
+      centreSlug: 'trung-tam-650',
+      curricula: [{ curriculumId: '01965000-0000-7000-8000-000000000101', subjectSlug: 'toan', subjectName: 'Toán', subjectPosition: 1, grade: 12 }],
       nodes: [
         {
           nodeId: '01965000-0000-7000-8000-000000000102',
@@ -211,18 +212,23 @@ describe('Repository kho ngân hàng hệ thống (issue #650)', () => {
       mappings: [],
     });
     expect(pkg.version).toBe('2026.11.02.1');
+    expect(pkg.status).toBe('pending');
+    expect(pkg.centreSlug).toBe('trung-tam-650');
     expect(pkg.outcomeCount).toBe(1);
     const byVersion = await repo.getPackageByVersion('2026.11.02.1');
     expect(byVersion?.id).toBe(pkg.id);
     const items = await repo.getPackageItems(pkg.id);
     expect(items.curricula).toHaveLength(1);
-    expect(items.curricula[0]).toMatchObject({ subjectSlug: 'toan', grade: 12 });
+    expect(items.curricula[0]).toMatchObject({ subjectSlug: 'toan', subjectName: 'Toán', subjectPosition: 1, grade: 12 });
     expect(items.nodes).toHaveLength(1);
     expect(items.nodes[0]).toMatchObject({ title: 'Hàm số', durationPeriods: 10 });
     expect(items.outcomes).toHaveLength(1);
     expect(items.outcomes[0]?.content).toEqual(outcomeContent);
     const packages = await repo.listPackages();
-    expect(packages.map((row) => row.version)).toContain('2026.11.02.1');
+    expect(packages.map((row) => row.version)).not.toContain('2026.11.02.1');
+    const published = await repo.reviewPackage('2026.11.02.1', ADMIN_ID, true, null);
+    expect(published?.status).toBe('published');
+    expect((await repo.listPackages()).map((row) => row.version)).toContain('2026.11.02.1');
   });
 
   it('gói YCCĐ rỗng từng phần vẫn tạo được: guards mảng rỗng giữ nguyên như đường cũ', async () => {
@@ -232,6 +238,7 @@ describe('Repository kho ngân hàng hệ thống (issue #650)', () => {
       checksum: 'checksum-empty',
       outcomeCount: 0,
       createdBy: ADMIN_ID,
+      centreSlug: 'trung-tam-650',
       curricula: [],
       nodes: [],
       outcomes: [],

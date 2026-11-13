@@ -14,8 +14,8 @@ import { SystemBankCentreRepository } from './system-bank-centre';
  *   phiên bản nguồn + checksum gói; lật `pristine` → `derived`.
  * - Vết nhận sự kiện rút câu: ghi nhận trùng là idempotent theo
  *   cặp (sự kiện, trung tâm) và danh sách đã ghi nhận đọc lại được theo đúng slug trung tâm.
- * - Bản cài gói YCCĐ: upsert môn/chương trình/node/YCCĐ theo id
- *   giữ nguyên (cài lại cập nhật nội dung tại chỗ, gồm nội dung YCCĐ là tài liệu jsonb), vết cài ghi phiên bản trước và cài lại cùng phiên bản chỉ làm mới vết.
+ * - Bản cài gói YCCĐ: chèn id còn thiếu, không ghi đè YCCĐ đang được
+ *   câu/đề sử dụng; lần cài lại giữ nguyên vết và checksum gốc.
  * - Tra slug trung tâm theo tenant id của kho chung.
  */
 const adminUrl =
@@ -104,7 +104,7 @@ describe('Repository phía trung tâm của kho ngân hàng hệ thống (issue 
     expect(await repo.listEventReceiptEventIds('trung-tam-khac')).not.toContain(EVENT_ID);
   });
 
-  it('upsert môn, chương trình, node và YCCĐ theo id giữ nguyên: cài lại cập nhật nội dung tại chỗ', async () => {
+  it('chèn môn, chương trình, node và YCCĐ theo id, cài lại không ghi đè nội dung đã có', async () => {
     await db
       .insertInto('subjects')
       .values({ id: SUBJECT_ID, context_id: CONTEXT_ID, name: 'Toán', slug: 'toan-650' })
@@ -148,33 +148,40 @@ describe('Repository phía trung tâm của kho ngân hàng hệ thống (issue 
     });
     const rows = await db.selectFrom('learning_outcomes').select(['content']).where('id', '=', OUTCOME_ID).execute();
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.content).toEqual(doc('YCCĐ v2'));
+    expect(rows[0]?.content).toEqual(doc('YCCĐ v1'));
   });
 
-  it('vết cài gói: lần đầu previousVersion null, lần cài sau ghi phiên bản trước, cài lại cùng phiên bản chỉ làm mới vết', async () => {
+  it('vết cài gói: phiên bản trước, checksum và retry cùng phiên bản không sửa vết', async () => {
     const first = await repo.recordOutcomePackageInstall({
       packageVersion: '2026.11.02.1',
+      packageChecksum: 'checksum-v1',
       previousVersion: null,
       scope: 'all',
       installedBy: ADMIN_ID,
     });
     expect(first.previousVersion).toBeNull();
+    expect(first.packageChecksum).toBe('checksum-v1');
     const second = await repo.recordOutcomePackageInstall({
       packageVersion: '2026.11.02.2',
+      packageChecksum: 'checksum-v2',
       previousVersion: first.packageVersion,
       scope: 'all',
       installedBy: ADMIN_ID,
     });
     expect(second.previousVersion).toBe('2026.11.02.1');
+    expect(second.packageChecksum).toBe('checksum-v2');
     const current = await repo.getOutcomePackageInstall();
     expect(current?.packageVersion).toBe('2026.11.02.2');
     const refreshed = await repo.recordOutcomePackageInstall({
       packageVersion: '2026.11.02.2',
+      packageChecksum: 'checksum-v2',
       previousVersion: '2026.11.02.1',
       scope: 'toan-650',
       installedBy: ADMIN_ID,
     });
     expect(refreshed.id).toBe(second.id);
-    expect(refreshed.scope).toBe('toan-650');
+    expect(refreshed.scope).toBe('all');
+    expect(refreshed.installedAt).toEqual(second.installedAt);
+    expect(refreshed.packageChecksum).toBe(second.packageChecksum);
   });
 });

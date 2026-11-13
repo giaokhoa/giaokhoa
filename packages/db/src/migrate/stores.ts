@@ -45,7 +45,7 @@ export const MIGRATION_STORES: Record<MigrationStoreKey, MigrationStore> = {
   centre: {
     migrationsDirName: 'centre',
     carrierNames: ['20261025163710_baseline'],
-    expected: { tables: 204, policies: 23, indexes: 419, journalRows: 3 },
+    expected: { tables: 204, policies: 23, indexes: 419, journalRows: 4 },
     connectionEnvVars: ['MIGRATION_DATABASE_URL', 'DATABASE_URL'],
   },
   'control-plane': {
@@ -57,7 +57,7 @@ export const MIGRATION_STORES: Record<MigrationStoreKey, MigrationStore> = {
   'system-bank': {
     migrationsDirName: 'system-bank',
     carrierNames: ['20261031025416_unique_scarecrow'],
-    expected: { tables: 11, journalRows: 2 },
+    expected: { tables: 11, journalRows: 3 },
     connectionEnvVars: ['SYSTEM_BANK_DATABASE_URL'],
   },
 };

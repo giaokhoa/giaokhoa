@@ -99,6 +99,12 @@ export interface SystemOutcomePackageRow {
   outcomeCount: number;
   createdBy: string | null;
   createdAt: Date;
+  /** Trạng thái gửi, phát hành hoặc từ chối. */
+  status: string;
+  centreSlug: string | null;
+  reviewedBy: string | null;
+  reviewedAt: Date | null;
+  rejectionReason: string | null;
 }
 
 /** Một chương trình trong gói YCCĐ (id nguồn giữ nguyên qua bản cài). */
@@ -107,6 +113,8 @@ export interface SystemOutcomePackageCurriculumRow {
   packageId: string;
   curriculumId: string;
   subjectSlug: string;
+  subjectName: string | null;
+  subjectPosition: number;
   grade: number;
 }
 
@@ -234,6 +242,11 @@ const SYSTEM_OUTCOME_PACKAGE_COLUMNS = [
   'outcome_count as outcomeCount',
   'created_by as createdBy',
   'created_at as createdAt',
+  'status',
+  'centre_slug as centreSlug',
+  'reviewed_by as reviewedBy',
+  'reviewed_at as reviewedAt',
+  'rejection_reason as rejectionReason',
 ] as const;
 
 /** Danh sách cột tường minh có bí danh camelCase cho bảng chương trình trong gói. */
@@ -242,6 +255,8 @@ const SYSTEM_OUTCOME_PACKAGE_CURRICULUM_COLUMNS = [
   'package_id as packageId',
   'curriculum_id as curriculumId',
   'subject_slug as subjectSlug',
+  'subject_name as subjectName',
+  'subject_position as subjectPosition',
   'grade',
 ] as const;
 
@@ -639,7 +654,8 @@ export class SystemBankRepository {
     checksum: string;
     outcomeCount: number;
     createdBy: string | null;
-    curricula: Array<{ curriculumId: string; subjectSlug: string; grade: number }>;
+    centreSlug: string | null;
+    curricula: Array<{ curriculumId: string; subjectSlug: string; subjectName: string; subjectPosition: number; grade: number }>;
     nodes: Array<{
       nodeId: string;
       curriculumId: string;
@@ -671,6 +687,8 @@ export class SystemBankRepository {
             checksum: input.checksum,
             outcome_count: input.outcomeCount,
             created_by: input.createdBy,
+            centre_slug: input.centreSlug,
+            status: 'pending',
           })
           .returning(SYSTEM_OUTCOME_PACKAGE_COLUMNS)
           .execute();
@@ -686,6 +704,8 @@ export class SystemBankRepository {
                 package_id: pkg.id,
                 curriculum_id: curriculum.curriculumId,
                 subject_slug: curriculum.subjectSlug,
+                subject_name: curriculum.subjectName,
+                subject_position: curriculum.subjectPosition,
                 grade: curriculum.grade,
               })),
             )
@@ -753,13 +773,52 @@ export class SystemBankRepository {
     return row ?? null;
   }
 
-  /** Liệt kê các gói YCCĐ (mới nhất trước). */
+  /**
+   * Chỉ khám phá gói đã duyệt; không rò rỉ bản gửi/từ chối cho trung tâm khác.
+   */
   async listPackages(): Promise<SystemOutcomePackageRow[]> {
-    return this.db()
-      .selectFrom('system_outcome_packages')
+    return this.db().selectFrom('system_outcome_packages')
       .select(SYSTEM_OUTCOME_PACKAGE_COLUMNS)
-      .orderBy('created_at', 'desc')
-      .execute();
+      .where('status', '=', 'published')
+      .orderBy('created_at', 'desc').execute();
+  }
+
+  /** Hàng chờ duyệt của biên tập viên; không trả gói không thuộc quyền ở service. */
+  async listPendingPackages(): Promise<SystemOutcomePackageRow[]> {
+    return this.db().selectFrom('system_outcome_packages')
+      .select(SYSTEM_OUTCOME_PACKAGE_COLUMNS)
+      .where('status', '=', 'pending').orderBy('created_at', 'asc').execute();
+  }
+
+  /** Các gói gửi của chính trung tâm, bao gồm lịch sử quyết định. */
+  async listCentrePackages(centreSlug: string): Promise<SystemOutcomePackageRow[]> {
+    return this.db().selectFrom('system_outcome_packages')
+      .select(SYSTEM_OUTCOME_PACKAGE_COLUMNS)
+      .where('centre_slug', '=', centreSlug).orderBy('created_at', 'desc').execute();
+  }
+
+  /**
+   * Chốt trạng thái bằng khoá dòng trong một giao dịch ở kho hệ thống.
+   * Chỉ bản pending được quyết định; retry cùng quyết định là idempotent.
+   */
+  async reviewPackage(version: string, actorId: string, approve: boolean, reason: string | null): Promise<SystemOutcomePackageRow | null> {
+    return this.db().transaction().execute(async (tx) => {
+      const row = await tx.selectFrom('system_outcome_packages')
+        .select(SYSTEM_OUTCOME_PACKAGE_COLUMNS).where('version', '=', version)
+        .forUpdate().executeTakeFirst();
+      if (!row) return null;
+      if (row.status !== 'pending') {
+        if ((approve && row.status === 'published') || (!approve && row.status === 'rejected')) return row;
+        throw new Error('system_bank.package_already_reviewed');
+      }
+      return (await tx.updateTable('system_outcome_packages')
+        .set({
+          status: approve ? 'published' : 'rejected',
+          reviewed_by: actorId,
+          reviewed_at: new Date(),
+          rejection_reason: approve ? null : reason,
+        }).where('id', '=', row.id).returning(SYSTEM_OUTCOME_PACKAGE_COLUMNS).executeTakeFirst()) ?? null;
+    });
   }
 
   /** Đọc toàn bộ items của một gói (để trung tâm cài đặt). */
