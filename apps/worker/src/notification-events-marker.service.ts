@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { randomUUID } from 'node:crypto';
 import { redisConnectionFromUrl } from './config/env';
+import { scopedOutboxId } from './db/routing/outbox-redis-scope';
 
 /** Tiền tố khoá Redis của dấu "đang xử lý" (lease) theo outboxId. */
 const PROCESSING_KEY_PREFIX = 'giaokhoa:notification-events:processing:';
@@ -55,7 +56,7 @@ export class NotificationEventsMarker implements OnModuleDestroy {
    * @returns true khi sự kiện đã được xử lý xong ở một lượt trước.
    */
   async hasProcessed(outboxId: string): Promise<boolean> {
-    return (await this.redis.get(`${PROCESSED_KEY_PREFIX}${outboxId}`)) !== null;
+    return (await this.redis.get(`${PROCESSED_KEY_PREFIX}${scopedOutboxId(outboxId)}`)) !== null;
   }
 
   /**
@@ -68,7 +69,7 @@ export class NotificationEventsMarker implements OnModuleDestroy {
   async claimProcessing(outboxId: string): Promise<string | null> {
     const token = randomUUID();
     const result = await this.redis.set(
-      `${PROCESSING_KEY_PREFIX}${outboxId}`,
+      `${PROCESSING_KEY_PREFIX}${scopedOutboxId(outboxId)}`,
       token,
       'EX',
       PROCESSING_TTL_SECONDS,
@@ -84,7 +85,7 @@ export class NotificationEventsMarker implements OnModuleDestroy {
    * @param outboxId Id dòng outbox của sự kiện.
    */
   async markProcessed(outboxId: string): Promise<void> {
-    await this.redis.set(`${PROCESSED_KEY_PREFIX}${outboxId}`, '1', 'EX', PROCESSED_TTL_SECONDS);
+    await this.redis.set(`${PROCESSED_KEY_PREFIX}${scopedOutboxId(outboxId)}`, '1', 'EX', PROCESSED_TTL_SECONDS);
   }
 
   /**
@@ -100,7 +101,7 @@ export class NotificationEventsMarker implements OnModuleDestroy {
     await this.redis.eval(
       "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
       1,
-      `${PROCESSING_KEY_PREFIX}${outboxId}`,
+      `${PROCESSING_KEY_PREFIX}${scopedOutboxId(outboxId)}`,
       token,
     );
   }

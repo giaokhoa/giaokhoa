@@ -14,6 +14,13 @@
 - Bản ghi cũ nhận miền legacy, giữ nguyên bố cục hash cũ và chỉ đọc khi context được xác minh thuộc đúng tenant của host/phiên hiện tại (hoặc context toàn cục hợp lệ ở Trang chính). Không ghi mới và không cleanup legacy; di trú byte cũ nằm ngoài phạm vi issue này. Chữ ký HMAC của file legacy còn gắn miền hiệu lực để không dùng lại giữa các host.
 - Driver local/S3 của API và worker dùng cùng fileContentKey. Khi triển khai S3, cả API và worker phải có cùng FILE_STORAGE_DRIVER, FILE_STORAGE_S3_ENDPOINT/REGION/BUCKET/ACCESS_KEY_ID/SECRET_ACCESS_KEY/FORCE_PATH_STYLE qua biến môi trường. Không ghi bí mật vào repository. Backup/restore đầy đủ không thuộc issue này.
 
+## Miền dữ liệu phản hồi và tác vụ nền (issue #11)
+
+- Guard địa chỉ trung tâm kiểm tra sổ đăng ký trước khi mở kho riêng; interceptor mang `spaceSlug` và `space_registry.id` đã xác thực vào ALS. Cache phiên và cache capability đều phải phân biệt theo kho. Nếu ID của tài khoản, context hoặc tenant trùng nhau ở hai database, dữ kiện quyền của kho này không thể làm ấm cache của kho kia.
+- Hàng đợi do API tạo trực tiếp (lịch, huy hiệu, completion, phát notification) đóng dấu kho từ ALS đã xác thực lúc enqueue, không lấy từ body của khách. `jobId` BullMQ mang miền kho (không chứa dấu `:`); worker kiểm lại sổ trước handler và trước mỗi retry.
+- Search vẫn sử dụng `SearchRepository` trên handle Kysely định tuyến theo request và kiểm capability/audience bằng chính dữ kiện thuộc kho đã chọn. Không dựng chỉ mục tìm kiếm toàn cục hay cache kết quả tìm kiếm xuyên kho.
+- Room Socket.IO, presence, typing và sự kiện thay đổi số thông báo chưa đọc đều có phạm vi `space_registry.id` đối với kho riêng. Redis pub/sub không tự có ALS: các kết nối SSE ghi nhớ ngữ cảnh đã kiểm chứng và đọc lại qua đúng kho khi nhận tín hiệu; tín hiệu của A không kích hoạt SSE của B.
+
 ## Quyết định nghiệp vụ còn hiệu lực
 
 | Quyết định                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Nguồn                                                                              |

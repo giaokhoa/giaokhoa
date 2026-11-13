@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Interval } from '@nestjs/schedule';
 import type { CentreDb } from '@giaokhoa/db';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
+import { SpaceRoutingError } from './db/routing/space-connection-resolver';
 import { mapWithConcurrencyLimit } from './db/routing/space-sweep';
 import { EventLogWriter } from './event-log-writer.service';
 import { TaskLogService } from './task-log.service';
@@ -252,9 +253,13 @@ export class OutboxRelayScheduler {
     const failedSlugs: string[] = [];
     await mapWithConcurrencyLimit(dedicated, this.sweepConcurrency, async (space) => {
       try {
-        published += await this.spaceDb.withSpaceKysely(space.slug, (db) =>
-          this.publishPendingFrom(db, limitPerCentre),
+        // Không dùng `published += await ...`: phép cộng đọc giá trị
+        // trước khi await, hai trung tâm hoàn tất song song sẽ ghi đè
+        // nhau và báo thiếu số lượng đã phát trong nhịp.
+        const count = await this.spaceDb.withSpaceKysely(space.slug, (db) =>
+          this.publishPendingFrom(db, limitPerCentre, { slug: space.slug, id: space.id }),
         );
+        published += count;
       } catch (err) {
         failedSlugs.push(space.slug);
         this.logger.warn(
@@ -271,7 +276,11 @@ export class OutboxRelayScheduler {
    * đúng handle `db` được truyền (handle kho chung, hoặc handle
    * của kho trung tâm trong phiên theo trung tâm).
    */
-  private async publishPendingFrom(db: CentreDb, limit: number): Promise<number> {
+  private async publishPendingFrom(
+    db: CentreDb,
+    limit: number,
+    origin?: { slug: string; id: string },
+  ): Promise<number> {
     const pendingRaw = await db
       .selectFrom('outbox_events')
       .select([
@@ -298,7 +307,16 @@ export class OutboxRelayScheduler {
     const spaceSlugs = await this.resolveSpaceSlugs(db, pending);
     let published = 0;
     for (const row of pending) {
-      await this.dispatchRow(row, spaceSlugs.get(row.tenantId ?? '') ?? null);
+      const tenantSlug = spaceSlugs.get(row.tenantId ?? '') ?? null;
+      if (row.tenantId && !tenantSlug) {
+        throw new SpaceRoutingError('space_routing.outbox_tenant_missing', `Outbox ${row.id} has no owning tenant`);
+      }
+      if (origin && tenantSlug && tenantSlug !== origin.slug) {
+        throw new SpaceRoutingError('space_routing.outbox_space_mismatch', `Outbox ${row.id} belongs to a different space`);
+      }
+      // Không suy kho từ tên tenant khi đã quét trong kho riêng:
+      // job phải mang đúng id sổ của kho nơi dòng được đọc.
+      await this.dispatchRow(row, origin?.slug ?? tenantSlug, origin?.id ?? null);
       await db
         .updateTable('outbox_events')
         .set({ published_at: new Date() })
@@ -354,9 +372,9 @@ export class OutboxRelayScheduler {
    * @param row Dòng outbox đang phát (chưa có `publishedAt` tại thời
    * điểm hàm chạy — job được đẩy trong khi dòng còn chưa có dấu).
    * @param spaceSlug Slug của trung tâm mà tenant của dòng thuộc
-   * về, đã suy ra cho cả lô (null khi không xác định được).
+   * về, đã suy ra cho cả lô (null chỉ khi dòng không gắn tenant).
    */
-  private async dispatchRow(row: OutboxRow, spaceSlug: string | null): Promise<void> {
+  private async dispatchRow(row: OutboxRow, spaceSlug: string | null, spaceId: string | null): Promise<void> {
     const route = this.routes[row.type];
     if (!route) return;
     const data: OutboxEventJobData = {
@@ -367,6 +385,7 @@ export class OutboxRelayScheduler {
       payload: row.payload as Record<string, unknown> | null,
       tenantId: row.tenantId,
       spaceSlug,
+      spaceId,
       occurredAt: row.occurredAt.toISOString(),
     };
     for (const queueName of queueNamesOfRoute(route)) {
@@ -381,7 +400,11 @@ export class OutboxRelayScheduler {
       // lưu giữ thì không tạo job trùng ở đích đó; ngoài cửa sổ lưu
       // giữ đó, chống trùng tác dụng phụ là việc của processor
       // (idempotent theo outboxId — xem outbox-event-routes.ts).
-      await queue.add(row.type, data, { jobId: row.id });
+      await queue.add(row.type, data, {
+        // BullMQ dùng Redis chung: cùng outbox UUID ở hai database
+        // phải là hai công việc độc lập, kể cả khi relay retry.
+        jobId: `${spaceId ?? 'shared'}-${row.id}`,
+      });
     }
   }
 }

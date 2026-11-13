@@ -47,7 +47,7 @@ function makeRunner(options?: { target?: ResolvedSpaceConnection; resolveError?:
         sessions.push({ slug, context });
         // Mô phỏng đúng hợp đồng của khung thật: fn chạy trong ngữ cảnh ALS mang slug và tenant của phiên.
         return tenantAls.run(
-          { spaceSlug: slug, tenantId: context?.tenantId },
+          { spaceSlug: slug, spaceId: (options?.target ?? DEDICATED_TARGET).spaceId, tenantId: context?.tenantId },
           async () => fn({}),
         );
       },
@@ -64,7 +64,7 @@ describe('Bộ chạy job theo trung tâm', () => {
   it('job của trung tâm ở kho riêng chạy trong phiên theo trung tâm: ngữ cảnh mang slug và tenant của job', async () => {
     const { runner, sessions } = makeRunner();
     const observed = await runner.runForJob(
-      { spaceSlug: 'trung-tam-a', tenantId: 'tenant-a' },
+      { spaceSlug: 'trung-tam-a', spaceId: 'id-dang-ky-a', tenantId: 'tenant-a' },
       async () => tenantAls.getStore(),
     );
     expect(sessions).toEqual([{ slug: 'trung-tam-a', context: { tenantId: 'tenant-a' } }]);
@@ -98,7 +98,7 @@ describe('Bộ chạy job theo trung tâm', () => {
     const { runner, spaceDb } = makeRunner({ resolveError: failure });
     let ran = false;
     await expect(
-      runner.runForJob({ spaceSlug: 'trung-tam-da-go', tenantId: 'tenant-x' }, async () => {
+      runner.runForJob({ spaceSlug: 'trung-tam-da-go', spaceId: 'id-dang-ky-a', tenantId: 'tenant-x' }, async () => {
         ran = true;
       }),
     ).rejects.toBe(failure);
@@ -111,7 +111,7 @@ describe('Bộ chạy job theo trung tâm', () => {
     const { runner, spaceDb } = makeRunner({ resolveError: failure });
     let ran = false;
     await expect(
-      runner.runForJob({ spaceSlug: 'trung-tam-loi', tenantId: 'tenant-x' }, async () => {
+      runner.runForJob({ spaceSlug: 'trung-tam-loi', spaceId: 'id-dang-ky-a', tenantId: 'tenant-x' }, async () => {
         ran = true;
       }),
     ).rejects.toBe(failure);
@@ -124,7 +124,7 @@ describe('Bộ chạy job theo trung tâm', () => {
     const { runner, spaceDb } = makeRunner({ resolveError: failure });
     let ran = false;
     await expect(
-      runner.runForJob({ spaceSlug: 'trung-tam-loi', tenantId: 'tenant-x' }, async () => {
+      runner.runForJob({ spaceSlug: 'trung-tam-loi', spaceId: 'id-dang-ky-a', tenantId: 'tenant-x' }, async () => {
         ran = true;
       }),
     ).rejects.toBe(failure);
@@ -137,7 +137,7 @@ describe('Bộ chạy job theo trung tâm', () => {
     const { runner, spaceDb } = makeRunner({ resolveError: failure });
     let ran = false;
     await expect(
-      runner.runForJob({ spaceSlug: 'trung-tam-loi', tenantId: 'tenant-x' }, async () => {
+      runner.runForJob({ spaceSlug: 'trung-tam-loi', spaceId: 'id-dang-ky-a', tenantId: 'tenant-x' }, async () => {
         ran = true;
       }),
     ).rejects.toBe(failure);
@@ -145,31 +145,67 @@ describe('Bộ chạy job theo trung tâm', () => {
     expect(spaceDb.withSpaceKysely).not.toHaveBeenCalled();
   });
 
-  it('worker chưa cấu hình control plane thì job chạy trên platform như trước đợt định tuyến, không ném lỗi', async () => {
-    const failure = new SpaceRoutingError(
-      'space_routing.not_configured',
-      'Control plane database is not configured',
-    );
+  it('control plane chưa cấu hình không được phép chạy công việc của trung tâm trên platform', async () => {
+    const failure = new SpaceRoutingError('space_routing.not_configured', 'No control plane');
     const { runner, spaceDb } = makeRunner({ resolveError: failure });
-    const observed = await runner.runForJob(
-      { spaceSlug: 'trung-tam-chua-cau-hinh', tenantId: 'tenant-x' },
-      async () => tenantAls.getStore(),
-    );
+    let executed = false;
+    await expect(runner.runForJob({ spaceSlug: 'trung-tam-a', spaceId: 'id-dang-ky-a' }, async () => {
+      executed = true;
+    })).rejects.toBe(failure);
+    expect(executed).toBe(false);
     expect(spaceDb.withSpaceKysely).not.toHaveBeenCalled();
-    expect(observed?.platform).toBe(true);
+  });
+
+  it('job thiếu, sai, thu hồi identity hoặc thiếu slug bị từ chối trước mọi tác dụng phụ', async () => {
+    const { runner, spaceDb } = makeRunner();
+    let executed = false;
+    for (const context of [
+      { spaceSlug: 'trung-tam-a', tenantId: 'tenant-a' },
+      { spaceSlug: 'trung-tam-a', spaceId: 'id-dang-ky-b', tenantId: 'tenant-a' },
+      { spaceSlug: null, tenantId: 'tenant-a', spaceId: 'id-dang-ky-a' },
+    ]) {
+      await expect(runner.runForJob(context, async () => { executed = true; })).rejects.toBeInstanceOf(SpaceRoutingError);
+    }
+    expect(executed).toBe(false);
+    expect(spaceDb.withSpaceKysely).not.toHaveBeenCalled();
+    const closed = makeRunner({ target: { ...DEDICATED_TARGET, status: 'closed' } });
+    await expect(closed.runner.runForJob({ spaceSlug: 'trung-tam-a', spaceId: 'id-dang-ky-a' }, async () => {
+      executed = true;
+    })).rejects.toMatchObject({ code: 'space_routing.job_space_inactive' });
+    expect(executed).toBe(false);
+    const suspended = makeRunner({ target: { ...DEDICATED_TARGET, status: 'suspended' } });
+    await expect(suspended.runner.runForJob({ spaceSlug: 'trung-tam-a', spaceId: 'id-dang-ky-a' }, async () => {
+      executed = true;
+    })).rejects.toMatchObject({ code: 'space_routing.job_space_inactive' });
+    expect(executed).toBe(false);
+  });
+
+  it('retry giữ nguyên ID kho đã phát, sổ đổi kho giữa hai lượt thì không chạy handler ở kho mới', async () => {
+    const { runner, spaceDb } = makeRunner();
+    const original = { spaceSlug: 'trung-tam-a', spaceId: 'id-dang-ky-a', tenantId: 'tenant-a' };
+    const handled: string[] = [];
+    await runner.runForJob(original, async () => {
+      handled.push(tenantAls.getStore()?.spaceId ?? 'unknown');
+    });
+    spaceDb.resolveTarget.mockResolvedValue({ ...DEDICATED_TARGET, spaceId: 'id-dang-ky-b', databaseName: 'giaokhoa_centre_b' });
+    await expect(runner.runForJob(original, async () => {
+      handled.push(tenantAls.getStore()?.spaceId ?? 'unknown');
+    })).rejects.toMatchObject({ code: 'space_routing.job_identity_mismatch' });
+    expect(handled).toEqual(['id-dang-ky-a']);
+    expect(spaceDb.withSpaceKysely).toHaveBeenCalledTimes(1);
   });
 
   it('kết quả và lỗi của thân xử lý được truyền nguyên qua bộ chạy ở cả hai đường phiên', async () => {
     const { runner } = makeRunner();
     await expect(
-      runner.runForJob({ spaceSlug: 'trung-tam-a', tenantId: 'tenant-a' }, async () => 'kq-rieng'),
+      runner.runForJob({ spaceSlug: 'trung-tam-a', spaceId: 'id-dang-ky-a', tenantId: 'tenant-a' }, async () => 'kq-rieng'),
     ).resolves.toBe('kq-rieng');
     await expect(
       runner.runForJob({ spaceSlug: null, tenantId: null }, async () => 'kq-chung'),
     ).resolves.toBe('kq-chung');
     const failure = new Error('thân xử lý lỗi');
     await expect(
-      runner.runForJob({ spaceSlug: 'trung-tam-a', tenantId: 'tenant-a' }, async () => {
+      runner.runForJob({ spaceSlug: 'trung-tam-a', spaceId: 'id-dang-ky-a', tenantId: 'tenant-a' }, async () => {
         throw failure;
       }),
     ).rejects.toBe(failure);

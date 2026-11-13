@@ -57,6 +57,7 @@ export class SpaceContextGuard implements CanActivate {
       user?: AuthenticatedUser;
       tenantId?: string;
       spaceSlug?: string;
+      spaceId?: string;
       headers: Record<string, string | string[] | undefined>;
       [AUTHENTICATED_VIA_BETTER_AUTH]?: boolean;
     }>();
@@ -156,9 +157,11 @@ export class SpaceContextGuard implements CanActivate {
     // đường đồng bộ của handle định tuyến chỉ tra bảng đã-chuẩn-bị.
     await this.spaceDb.getKyselyForSpace(slug);
     request.spaceSlug = slug;
+    // Shared giữ miền tenant cũ, dedicated lấy id đăng ký bất biến.
+    request.spaceId = target.mode === 'dedicated' ? target.spaceId : undefined;
     const store = tenantAls.getStore();
     if (store && !store.spaceSlug) {
-      tenantAls.enterWith({ ...store, spaceSlug: slug });
+      tenantAls.enterWith({ ...store, spaceSlug: slug, ...(request.spaceId ? { spaceId: request.spaceId } : {}) });
     }
     return true;
   }

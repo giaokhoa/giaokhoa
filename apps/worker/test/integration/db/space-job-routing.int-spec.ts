@@ -367,6 +367,7 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
       outboxId: CENTRE_OUTBOX_ID,
       tenantId: CENTRE_TENANT_ID,
       spaceSlug: CENTRE_SLUG,
+      spaceId: expect.any(String),
     });
     // Kiểm chứng trực tiếp tại kho riêng bằng kết nối của role kho.
     const stamped = await withClient(clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD), async (client) => {

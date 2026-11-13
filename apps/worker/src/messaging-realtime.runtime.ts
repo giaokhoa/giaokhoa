@@ -7,6 +7,7 @@ import {
 } from '@giaokhoa/messaging';
 import Redis from 'ioredis';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
+import { tenantAls } from './db/tenant-als';
 import { createMessagingRealtimeEmitter, type MessagingRealtimeEmitterHandle } from './messaging-realtime-emitter';
 
 /**
@@ -43,6 +44,9 @@ export class MessagingRealtimeRuntime implements OnModuleDestroy {
       // không đổi so với đường cũ trước đây.
       store: createMessagingDistributionStore(spaceDb.routedKysely),
       emitter: this.emitterHandle.emitter,
+      // Mỗi job đã qua SpaceJobRunner; dùng đúng danh tính kho đã
+      // kiểm chứng của phiên cho cả phát sự kiện lẫn rà membership.
+      spaceId: () => tenantAls.getStore()?.spaceId,
       logger: {
         warn: (message) => logger.warn(message),
         error: (message) => logger.error(message),

@@ -74,7 +74,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   /**
    * Các trung tâm đã chuẩn bị xong: slug → handle + kho của handle. Đây là bảng tra ĐỒNG BỘ mà `routedKysely` dùng tại thời điểm mỗi lần gọi — phân giải (đọc sổ, mở pool) là thao tác bất đồng bộ nên phải xong từ bước chuẩn bị, không thể chen vào đường đồng bộ của một lần truy vấn.
    */
-  private readonly preparedKysely = new Map<string, { db: CentreDb; databaseName: string }>();
+  private readonly preparedKysely = new Map<string, { db: CentreDb; databaseName: string; spaceId: string }>();
   /**
    * Trình quản lý pool cho các handle Kysely của kho riêng (tạo lười, trần theo kho, đóng khi nhàn rỗi, thay pool khi danh tính kết nối đổi).
    */
@@ -183,7 +183,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
     const target = await this.resolver.resolve(slug);
     if (target.mode === 'shared') {
       const db = this.requireSharedKysely();
-      this.preparedKysely.set(slug, { db, databaseName: target.databaseName });
+      this.preparedKysely.set(slug, { db, databaseName: target.databaseName, spaceId: target.spaceId });
       this.dedicatedSlugs.delete(slug);
       return db;
     }
@@ -203,7 +203,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
       );
       return { databaseName, pool, db: createCentreKysely(pool) };
     });
-    this.preparedKysely.set(slug, { db: handle.db, databaseName: target.databaseName });
+    this.preparedKysely.set(slug, { db: handle.db, databaseName: target.databaseName, spaceId: target.spaceId });
     this.dedicatedSlugs.add(slug);
     return handle.db;
   }
@@ -225,7 +225,11 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   ): Promise<T> {
     const db = await this.getKyselyForSpace(slug);
     const parent = tenantAls.getStore();
-    const store: TenantAlsStore = { ...parent, ...context, spaceSlug: slug };
+    // Ghim danh tính bất biến của dòng sổ đã chuẩn bị vào cùng phiên;
+    // mọi Redis key và room bên dưới dùng chính giá trị này.
+    const spaceId = this.dedicatedSlugs.has(slug) ? this.preparedKysely.get(slug)?.spaceId : undefined;
+    if (this.dedicatedSlugs.has(slug) && !spaceId) throw new SpaceRoutingError('space_routing.not_prepared', `Space ${slug} has no prepared identity`);
+    const store: TenantAlsStore = { ...parent, ...context, spaceSlug: slug, spaceId };
     if (context?.tenantId) store.platform = false;
     // Bọc `fn` trong một hàm async ngay bên trong `run` — cùng lý
     // do với bản phía API: việc thực thi truy vấn chỉ bắt đầu tại

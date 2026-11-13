@@ -7,6 +7,7 @@ import {
   type OrdinaryWorkerModuleHarness,
 } from '../../support/ordinary-worker-module';
 import { NotificationDispatchProcessor } from '../../../src/processors/notification-dispatch.processor';
+import { SpaceJobRunner } from '../../../src/db/routing/space-job-runner';
 import { NotificationDigestProcessor } from '../../../src/processors/notification-digest.processor';
 import type { WorkerMailMessage, WorkerMailSendResult } from '../../../src/resend-mail.service';
 
@@ -106,7 +107,7 @@ describe('Kênh email thông báo của worker + digest hàng ngày (NB-5, issue
     // Hai processor tự dựng bằng tay phải chạy bằng kết nối role
     // thường của harness — dùng `db` quản trị ở đây sẽ đưa phần xử
     // lý cần kiểm chứng quay lại superuser và vô hiệu hoá lát #294.
-    dispatch = new NotificationDispatchProcessor(harness.spaceDb, mail as never);
+    dispatch = new NotificationDispatchProcessor(harness.spaceDb, mail as never, new SpaceJobRunner(harness.spaceDb));
     digest = new NotificationDigestProcessor(harness.spaceDb, mail as never, buildFakeI18n() as never);
   });
   afterAll(async () => { await harness.close(); });

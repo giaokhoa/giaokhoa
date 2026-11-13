@@ -500,4 +500,68 @@ describe('Định tuyến theo trung tâm ở tầng API (đầu-cuối)', () =>
     expect(atApex.status).toBe(200);
     expect((atApex.body as { id?: string }).id).toBe(member.id);
   });
+  it('cùng userId ở A/B có chỉ mục tìm kiếm và cache quyền riêng; HTTP chỉ trả nội dung kho của Host', async () => {
+    // Dựng một người có cùng UUID, username ở cả hai kho nhưng tên
+    // khác nhau để tìm kiếm phải đọc đúng DB lẫn kiểm lại metadata.
+    // Khởi tạo B sau bài chặn Host A→B để giữ assert không kết nối
+    // nào tới B trước request bị từ chối của bài đó.
+    await seedTenantMembershipFixture(app, tenantBId, teacherId);
+    await copyRow(process.env.DATABASE_URL!, clusterUrl(CENTRE_B_DATABASE, CENTRE_B_ROLE, CENTRE_B_PASSWORD), 'users', 'id', teacherId);
+    const membershipB = await withClient(process.env.DATABASE_URL!, async (client) => {
+      await client.query("SELECT set_config('app.platform', 'on', false)");
+      const result = await client.query<{ id: string }>(
+        'SELECT id FROM tenant_memberships WHERE tenant_id = $1 AND user_id = $2',
+        [tenantBId, teacherId],
+      );
+      return result.rows[0];
+    });
+    expect(membershipB).toBeDefined();
+    await copyRow(
+      process.env.DATABASE_URL!,
+      clusterUrl(CENTRE_B_DATABASE, CENTRE_B_ROLE, CENTRE_B_PASSWORD),
+      'tenant_memberships', 'id', membershipB!.id,
+    );
+    const bName = 'DauAnKhoB11';
+    await withClient(clusterUrl(CENTRE_B_DATABASE, CENTRE_B_ROLE, CENTRE_B_PASSWORD), async (client) => {
+      await client.query('UPDATE users SET first_name = $1 WHERE id = $2', [bName, teacherId]);
+    });
+
+    const { SearchService } = await import('../../../src/modules/search/search.service');
+    const { PermissionEvaluator } = await import('../../../src/modules/access/permission-evaluator.service');
+    const { SpaceDatabaseService } = await import('../../../src/db/routing/space-database.service');
+    const spaceDb = app.get(SpaceDatabaseService, { strict: false });
+    const search = app.get(SearchService, { strict: false });
+    const permissions = app.get(PermissionEvaluator, { strict: false });
+    await spaceDb.withSpaceKysely(CENTRE_A_SLUG, async () => {
+      await permissions.setSiteAdmins([teacherId]);
+      expect(await permissions.isSiteAdmin(teacherId)).toBe(true);
+      expect(await search.indexItem('users', teacherId)).toBe(true);
+    }, { tenantId: tenantAId });
+    await spaceDb.withSpaceKysely(CENTRE_B_SLUG, async () => {
+      // Cùng userId nhưng quyền A đã cache không được áp vào B.
+      expect(await permissions.isSiteAdmin(teacherId)).toBe(false);
+      await permissions.setSiteAdmins([teacherId]);
+      expect(await search.indexItem('users', teacherId)).toBe(true);
+    }, { tenantId: tenantBId });
+
+    const bToken = (await must(
+      await http(app).post('/api/v1/auth/token').set('Host', HOST_B)
+        .send({ username: teacherUsername, password: STRONG_PASSWORD }),
+      'login teacher at B for search isolation',
+    )) as { accessToken: string };
+    const path = `/api/v1/search?q=${encodeURIComponent(teacherUsername)}`;
+    const [fromA, fromB] = await Promise.all([
+      http(app).get(path).set('Host', HOST_A).set(auth(teacherTokenA)),
+      http(app).get(path).set('Host', HOST_B).set(auth(bToken.accessToken)),
+    ]);
+    expect(fromA.status).toBe(200);
+    expect(fromB.status).toBe(200);
+    const docsA = fromA.body as Array<{ itemId: string; title: string }>;
+    const docsB = fromB.body as Array<{ itemId: string; title: string }>;
+    expect(docsA.find((item) => item.itemId === teacherId)?.title).toContain(CENTRE_A_FIRST_NAME);
+    expect(docsB.find((item) => item.itemId === teacherId)?.title).toContain(bName);
+    expect(JSON.stringify(docsA)).not.toContain(bName);
+    expect(JSON.stringify(docsB)).not.toContain(CENTRE_A_FIRST_NAME);
+  });
+
 });

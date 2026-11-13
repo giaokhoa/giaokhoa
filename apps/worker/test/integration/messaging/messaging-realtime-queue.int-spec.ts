@@ -480,6 +480,7 @@ describe('Worker — phân phối realtime messaging qua hàng đợi (issue #52
       type: 'message_sent',
       payload: row!.payload as Record<string, unknown>,
       spaceSlug: null,
+      spaceId: null,
       tenantId,
       occurredAt: row!.occurred_at.toISOString(),
     };

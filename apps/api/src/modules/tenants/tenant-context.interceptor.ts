@@ -19,14 +19,16 @@ export class TenantContextInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest<{
       tenantId?: string;
       spaceSlug?: string;
+      spaceId?: string;
       user?: AuthenticatedUser;
     }>();
     const tenantId = request.tenantId;
     const spaceSlug = request.spaceSlug;
+    const spaceId = request.spaceId;
     if (!tenantId && !spaceSlug) return next.handle();
     return new Observable((subscriber) => {
       const subscription = this.tenantContext.run(
-        { tenantId, userId: request.user?.id, ...(spaceSlug ? { spaceSlug } : {}) },
+        { tenantId, userId: request.user?.id, ...(spaceSlug ? { spaceSlug } : {}), ...(spaceId ? { spaceId } : {}) },
         () => next.handle().subscribe(subscriber),
       );
       return () => subscription.unsubscribe();

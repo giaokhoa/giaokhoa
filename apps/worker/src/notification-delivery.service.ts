@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { redisConnectionFromUrl } from './config/env';
 import { sql, type CentreDB } from '@giaokhoa/db';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
+import { tenantAls } from './db/tenant-als';
 
 /**
  * Kênh Redis pub/sub mang tín hiệu "số thông báo chưa đọc của một user vừa thay đổi" — PHẢI khớp hằng số cùng tên phía API
@@ -243,7 +244,10 @@ export class NotificationDeliveryService implements OnModuleDestroy {
    */
   async signalUnreadCountChanged(userId: string): Promise<void> {
     try {
-      await this.publisherClient().publish(NOTIFICATION_UNREAD_CHANGED_CHANNEL, userId);
+      await this.publisherClient().publish(NOTIFICATION_UNREAD_CHANGED_CHANNEL, JSON.stringify({
+        userId,
+        spaceId: tenantAls.getStore()?.spaceId ?? null,
+      }));
     } catch {
       // Bỏ qua: client vẫn còn số khởi tạo từ REST và snapshot khi nối lại.
     }

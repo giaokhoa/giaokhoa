@@ -7,6 +7,7 @@ import Redis from 'ioredis';
 import { renderAuthMail, type AuthMailPayload } from '@giaokhoa/contracts';
 import { redisConnectionFromUrl } from '../config/env';
 import { SpaceJobRunner } from '../db/routing/space-job-runner';
+import { scopedOutboxId } from '../db/routing/outbox-redis-scope';
 import type { OutboxEventJobData } from '../outbox-event-routes';
 import { ResendMailService } from '../resend-mail.service';
 
@@ -215,13 +216,13 @@ export class RedisAuthMailSentMarker implements AuthMailSentMarker, OnModuleDest
   }
 
   async hasSent(outboxId: string): Promise<boolean> {
-    return (await this.redis().get(`${SENT_MARKER_KEY_PREFIX}${outboxId}`)) !== null;
+    return (await this.redis().get(`${SENT_MARKER_KEY_PREFIX}${scopedOutboxId(outboxId)}`)) !== null;
   }
 
   async claimProcessing(outboxId: string): Promise<string | null> {
     const ownerToken = randomUUID();
     const result = await this.redis().set(
-      `${PROCESSING_LEASE_KEY_PREFIX}${outboxId}`,
+      `${PROCESSING_LEASE_KEY_PREFIX}${scopedOutboxId(outboxId)}`,
       ownerToken,
       'EX',
       PROCESSING_LEASE_TTL_SECONDS,
@@ -231,14 +232,14 @@ export class RedisAuthMailSentMarker implements AuthMailSentMarker, OnModuleDest
   }
 
   async markSent(outboxId: string): Promise<void> {
-    await this.redis().set(`${SENT_MARKER_KEY_PREFIX}${outboxId}`, '1', 'EX', SENT_MARKER_TTL_SECONDS);
+    await this.redis().set(`${SENT_MARKER_KEY_PREFIX}${scopedOutboxId(outboxId)}`, '1', 'EX', SENT_MARKER_TTL_SECONDS);
   }
 
   async releaseProcessing(outboxId: string, ownerToken: string): Promise<void> {
     await this.redis().eval(
       RELEASE_PROCESSING_IF_OWNER_SCRIPT,
       1,
-      `${PROCESSING_LEASE_KEY_PREFIX}${outboxId}`,
+      `${PROCESSING_LEASE_KEY_PREFIX}${scopedOutboxId(outboxId)}`,
       ownerToken,
     );
   }

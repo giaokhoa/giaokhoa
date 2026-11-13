@@ -8,6 +8,13 @@ Queue file-cleanup chỉ chấp nhận job chứa storageDomain hợp lệ và c
 
 Worker phải có cùng FILE_STORAGE_DRIVER, FILE_STORAGE_DIR hoặc FILE_STORAGE_S3_* (endpoint, region, bucket, credentials, path-style) với API. Lỗi xóa S3 truyền lên BullMQ để retry. Spec worker integration kiểm database role thường, queue BullMQ và byte trên disk; spec processor S3 kiểm HTTP thực qua AWS SDK và nội dung còn lại tại máy chủ thử nghiệm.
 
+## Cách ly job/outbox theo kho (issue #11)
+
+- Relay gửi `spaceSlug` và `spaceId` (ID bất biến trong `space_registry`) từ nguồn outbox của kho riêng. `jobId` Redis có tiền tố `spaceId`/`shared`; xử lý đồng thời không ghi đè số lượng đã phát. Dòng outbox mang tenant không xác minh được hoặc lệch kho quét sẽ không bị coi là job platform.
+- `SpaceJobRunner` kiểm lại sổ mỗi lượt xử lý và retry. Với kho riêng, thiếu hoặc sai `spaceId`, slug bị thu hồi, trạng thái không còn được xử lý hay lỗi control plane đều dừng trước handler; tuyệt đối không tự chuyển qua shared. Job của các hàng đợi direct API cũng qua runner. Job hoàn thành sinh thêm job phải giữ nguyên phong bì và miền `jobId`.
+- Dấu idempotency của auth-mail, notification-events và messaging-realtime trong Redis tách theo `spaceId` trước `outboxId`; hai kho khác nhau có cùng UUID vẫn xử lý độc lập. Kho chung giữ namespace tương thích với dấu cũ.
+- Kiểm chứng: `src/outbox-relay.scheduler.spec.ts` (trùng UUID và retry), `src/db/routing/space-job-runner.spec.ts` (scope sai/thu hồi/CP lỗi), `test/integration/db/space-job-routing.int-spec.ts` (Postgres thật của kho riêng + thông báo), `test/integration/messaging/messaging-space-isolation.int-spec.ts` (Redis, adapter Socket.IO và hai socket thật với toàn bộ ID nội bộ trùng nhau).
+
 ## Kiểm thử đường phân phối sự kiện
 
 Các integration test kiểm tra nội dung/phân phối thông báo, digest, cohort và messaging kích hoạt `OutboxRelayScheduler.relayTick()` sau khi ghi fixture outbox, rồi chờ kết quả của hàng đợi thật. Điểm vào này tự gắn ngữ cảnh platform, nên vẫn chạy qua role DB thường và RLS như nhịp production; không phải chờ lịch 5 giây trong từng ca. Lịch production và các khẳng định chống trùng, cách ly tenant, chặn nội dung giữ nguyên.
