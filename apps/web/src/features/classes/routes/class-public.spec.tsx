@@ -227,11 +227,11 @@ describe('Loader phía server của trang lớp public (HTML đầu mang dữ ki
   });
 
   it('meta dùng tên lớp thật + mô tả công khai khi có dữ kiện loader; không có thì rơi về tiêu đề tĩnh', () => {
-    expect(classPublicMeta({ data: { classPublic: PUBLIC_SUMMARY } })).toEqual([
+    expect(classPublicMeta({ loaderData: { classPublic: PUBLIC_SUMMARY } } as Parameters<typeof classPublicMeta>[0])).toEqual([
       { title: 'Lớp 10A1 · Giáo khoa' },
       { name: 'description', content: 'Lớp toán nâng cao' },
     ]);
-    const fallback = classPublicMeta({ data: { classPublic: null } });
+    const fallback = classPublicMeta({ loaderData: { classPublic: null } } as Parameters<typeof classPublicMeta>[0]);
     expect(fallback).toHaveLength(1);
     expect(JSON.stringify(fallback)).not.toContain('Lớp 10A1');
   });

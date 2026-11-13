@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createQueryClient } from '#lib/query-client';
-import { SettingsIndexPage } from './routes/settings-index';
+import { SettingsIndexPage, loader as settingsIndexLoader } from './routes/settings-index';
 import { SettingsLinkedAccountsPage } from './routes/settings-linked-accounts';
 import { SettingsNotificationsPage } from './routes/settings-notifications';
 import { SettingsSecurityPage } from './routes/settings-security';
@@ -34,21 +34,28 @@ function stubFetch() {
 function renderSettings(initialEntry: string) {
   const router = createMemoryRouter(
     [
-      { path: '/settings', element: <SettingsIndexPage /> },
+      { path: '/settings', loader: settingsIndexLoader, element: <SettingsIndexPage /> },
       { path: '/settings/security', element: <SettingsSecurityPage /> },
       { path: '/settings/linked-accounts', element: <SettingsLinkedAccountsPage /> },
       { path: '/settings/notifications', element: <SettingsNotificationsPage /> },
     ],
     { initialEntries: [initialEntry] },
   );
-  return render(
+  const view = render(
     <QueryClientProvider client={createQueryClient()}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
+  return { ...view, router };
 }
 
 describe('Khu vực Cài đặt — menu trái, route mục, chuyển hướng gốc (#288)', () => {
+  it('loader của /settings trả HTTP 302 và Location trước khi hydrate', () => {
+    const response = settingsIndexLoader();
+    expect(response.status).toBe(302);
+    expect(response.headers.get('Location')).toBe('/settings/security');
+  });
+
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
@@ -57,10 +64,11 @@ describe('Khu vực Cài đặt — menu trái, route mục, chuyển hướng g
 
   it('/settings chuyển hướng tới mục đầu tiên (Security) kèm menu đánh dấu mục hiện tại', async () => {
     stubFetch();
-    renderSettings('/settings');
+    const { router } = renderSettings('/settings');
 
     // Đích redirect: thẻ 2FA của mục Bảo mật hiện ra.
     expect(await screen.findByText('Xác thực hai lớp')).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/settings/security');
     const securityLink = screen.getByRole('link', { name: /Bảo mật & đăng nhập/ });
     expect(securityLink).toHaveAttribute('aria-current', 'page');
     expect(securityLink).toHaveAttribute('href', '/settings/security');
