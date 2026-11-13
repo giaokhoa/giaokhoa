@@ -57,7 +57,7 @@ export function LoginPage({ initialProviders }: { initialProviders?: OAuthProvid
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // Bước MFA: sign-in trả twoFactorRedirect (chưa có phiên nào) thì chuyển sang nhập mã TOTP/mã dự phòng để hoàn tất ở endpoint bước hai (kiểm mã vào nguồn trạng thái MFA duy nhất phía API).
+  // Bước MFA: sign-in trả twoFactorRedirect (chưa có phiên nào) thì chuyển sang nhập mã TOTP từ ứng dụng xác thực để hoàn tất ở endpoint bước hai (kiểm mã vào nguồn trạng thái MFA duy nhất phía API).
   const [mfaCode, setMfaCode] = useState('');
   const [mfaError, setMfaError] = useState<string | null>(null);
   const [mfaBusy, setMfaBusy] = useState(false);
@@ -186,9 +186,9 @@ export function LoginPage({ initialProviders }: { initialProviders?: OAuthProvid
                 <Label htmlFor="mfa-code">{t('mfaCode')}</Label>
                 <Input
                   id="mfa-code"
-                  inputMode="text"
+                  inputMode="numeric"
                   autoComplete="one-time-code"
-                  maxLength={32}
+                  maxLength={6}
                   value={mfaCode}
                   onChange={(e) => setMfaCode(e.target.value)}
                   required

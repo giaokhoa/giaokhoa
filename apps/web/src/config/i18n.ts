@@ -422,7 +422,7 @@ export const appResources = {
       emailOtpSendFailed: 'Không gửi được mã. Vui lòng kiểm tra địa chỉ email và thử lại.',
       emailOtpInvalidCode: 'Mã OTP không đúng hoặc đã hết hạn.',
       mfaTitle: 'Xác thực hai lớp',
-      mfaDescription: 'Nhập mã 6 số từ ứng dụng xác thực (hoặc một mã dự phòng đã lưu) để hoàn tất đăng nhập.',
+      mfaDescription: 'Nhập mã 6 số từ ứng dụng xác thực để hoàn tất đăng nhập. Nếu mất thiết bị, liên hệ quản trị viên để đặt lại xác thực hai lớp.',
       mfaCode: 'Mã xác thực',
       mfaVerify: 'Xác thực',
       mfaVerifying: 'Đang xác thực…',

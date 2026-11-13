@@ -429,7 +429,7 @@ export const enResources = {
     emailOtpSendFailed: 'Could not send the code. Check the email address and try again.',
     emailOtpInvalidCode: 'The OTP code is incorrect or has expired.',
     mfaTitle: 'Two-factor verification',
-    mfaDescription: 'Enter the 6-digit code from your authenticator app (or a saved backup code) to finish signing in.',
+    mfaDescription: 'Enter the 6-digit code from your authenticator app to finish signing in. If you lose your device, contact an administrator to reset two-factor authentication.',
     mfaCode: 'Verification code',
     mfaVerify: 'Verify',
     mfaVerifying: 'Verifying…',

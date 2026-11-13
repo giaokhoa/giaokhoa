@@ -260,7 +260,7 @@ export function createBetterAuth(deps: BetterAuthFactoryDeps) {
       },
       accountLinking: {
         enabled: true,
-        // ĐÃ CHỐT trong kế hoạch GĐ2: Facebook KHÔNG vào trustedProviders — và theo source 1.7.12, Facebook luôn trả emailVerified=false (cả đường id_token lẫn userinfo) nên không bao giờ tự liên kết theo email; chỉ Google (có xác thực email của chính Google) mới liên kết ngầm.
+        // Không tin provider chưa xác minh email (Facebook); danh sách rỗng KHÔNG chặn tự liên kết Google: Better Auth 1.7.12 vẫn cho phép khi Google trả emailVerified=true và tài khoản đích cũng verified. Ca âm tính/tích cực được E2E social OAuth kiểm chứng.
         trustedProviders: [],
         // Issue #8: tài khoản công cộng tự đăng ký có emailVerified=false.
         // Chỉ xác thực email của Google là CHƯA đủ: kẻ xấu có thể giữ
@@ -437,6 +437,10 @@ export function createBetterAuth(deps: BetterAuthFactoryDeps) {
               allowDynamicClientRegistration: true,
               allowUnauthenticatedClientRegistration: true,
               clientRegistrationDefaultApplicationType: 'infer',
+              // Đăng ký client không xác thực phải bắt đầu với quyền đọc;
+              // bước nâng quyền OAuth chỉ cấp thêm sau khi người dùng đồng ý,
+              // không mặc nhiên đưa mọi scope ghi vào danh sách mặc định.
+              clientRegistrationDefaultScopes: ['giaokhoa.questions.read'],
               // `offline_access` là scope GIAO THỨC phía AS, không
               // phải scope quyền của resource /mcp: plugin chỉ cho
               // client đăng ký scope này khi AS khai tường minh tại
@@ -444,7 +448,7 @@ export function createBetterAuth(deps: BetterAuthFactoryDeps) {
               // (cơ chế oauth-provider 1.7.12 — kiểm chứng trong
               // dist + e2e mcp-as-oauth; thiếu khai này thì DCR của
               // client xin phiên dài chết invalid_scope ngay).
-              clientRegistrationAllowedScopes: ['offline_access'],
+              clientRegistrationAllowedScopes: [...MCP_OAUTH_SCOPES.filter((scope) => scope !== 'giaokhoa.questions.read'), 'offline_access'],
               // ── Ánh xạ bảng OAuth → bảng vật lý (issue #654, D2) ──
               // Cơ chế chính thức: plugin oauth-provider đọc
               // `opts.schema?.<model>.modelName/fields` qua `mergeSchema`

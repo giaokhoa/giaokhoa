@@ -173,14 +173,13 @@ export function AuthProvider({ children, initialUser }: { children: ReactNode; i
   );
 
   /**
-   * Hoàn tất đăng nhập sau `twoFactorRedirect`: mã 6 số là TOTP từ ứng dụng xác thực; mã dài hơn được gửi sang đường mã dự phòng — phía API kiểm cả hai vào nguồn trạng thái MFA duy nhất `user_totp` (sản phẩm hiện không phát mã dự phòng nên đường đó luôn từ chối, giữ nguyên hợp đồng client).
+   * Hoàn tất đăng nhập sau `twoFactorRedirect` bằng mã TOTP 6 chữ số; sản phẩm không cấp backup code. Khi mất thiết bị, chỉ có quản trị viên mới có thể reset MFA.
    */
   const completeMfaLogin = useCallback(
     async (code: string): Promise<UserProfile> => {
       const trimmed = code.trim();
-      const { error } = /^\d{6}$/.test(trimmed)
-        ? await authClient.twoFactor.verifyTotp({ code: trimmed })
-        : await authClient.twoFactor.verifyBackupCode({ code: trimmed });
+      if (!/^\d{6}$/.test(trimmed)) throw new Error('INVALID_TOTP_CODE');
+      const { error } = await authClient.twoFactor.verifyTotp({ code: trimmed });
       if (error) throw apiErrorFromAuthClient(error);
       return establishSession();
     },
