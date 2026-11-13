@@ -1,3 +1,4 @@
+import type { Route } from './+types/login';
 import { useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useLoaderData, useNavigate, useSearchParams } from 'react-router';
@@ -35,7 +36,7 @@ const OAUTH_BUTTON_KEYS: Record<OAuthIssuer, string> = {
 /**
  * Loader phía server (SSR, Giai đoạn 3 của issue #7): danh sách nhà cung cấp OAuth đang bật là dữ liệu CÔNG KHAI (endpoint @Public) nên lấy ngay trong loader qua API nội bộ và đưa vào HTML + cache truy vấn khởi tạo — trang đăng nhập render đủ nút OAuth từ paint đầu thay vì chờ fetch phía client. Lỗi phía API → trả null, trang vẫn render và truy vấn phía client tự thử lại như trước.
  */
-export async function loader(): Promise<{ providers: OAuthProvidersResponse | null }> {
+export async function loader(_args?: Route.LoaderArgs): Promise<{ providers: OAuthProvidersResponse | null }> {
   const body = await fetchApiJson('/api/v1/auth/oauth/providers');
   const parsed = oauthProvidersResponseSchema.safeParse(body);
   return { providers: parsed.success ? parsed.data : null };

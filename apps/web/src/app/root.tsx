@@ -1,3 +1,4 @@
+import type { Route } from '../+types/root';
 import { useState, type ReactNode } from 'react';
 import {
   Links,
@@ -46,11 +47,7 @@ function parseSidebarState(cookie: string): boolean {
  *
  * Loader còn trả `sidebarDefaultOpen`: trạng thái thu/mở sidebar đọc từ cookie `sidebar_state` CỦA CHÍNH REQUEST (F-11 của #133, việc #146) — chỉ đọc cookie, không gọi API thêm, nên nguyên tắc cách ly ở trên không đổi; shell khởi tạo sidebar từ giá trị này thay vì tự đọc cookie phía client, để SSR và hydrate đầu khớp nhau.
  */
-export async function loader({
-  request,
-}: {
-  request: Request;
-}): Promise<{ initialUser: UserProfile | null; sidebarDefaultOpen: boolean }> {
+export async function loader({ request }: Pick<Route.LoaderArgs, 'request'>): Promise<{ initialUser: UserProfile | null; sidebarDefaultOpen: boolean }> {
   const cookie = request.headers.get('Cookie') ?? '';
   const sidebarDefaultOpen = parseSidebarState(cookie);
   if (!/(?:^|;\s*)(?:__Secure-)?better-auth\.session_token=/.test(cookie)) return { initialUser: null, sidebarDefaultOpen };

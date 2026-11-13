@@ -1,3 +1,4 @@
+import type { Route } from './+types/home-index';
 import { Suspense, lazy } from 'react';
 import type {
   Course,
@@ -54,7 +55,7 @@ import { MyBadgeView } from '#features/badges/types/badges';
  * @param request - Request đang phục vụ (nguồn cookie phiên).
  * @returns Dehydrated state cho HydrationBoundary ở root.
  */
-export async function loader({ request }: { request: Request }): Promise<SsrLoaderData> {
+export async function loader({ request }: Pick<Route.LoaderArgs, 'request'>): Promise<SsrLoaderData> {
   return buildSsrLoaderData(request, async (queryClient, req) => {
     const range = upcomingDaysRangeIso(30);
     await Promise.all([

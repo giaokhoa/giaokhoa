@@ -1,3 +1,4 @@
+import type { Route } from './+types/health';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLoaderData } from 'react-router';
@@ -16,7 +17,7 @@ type State = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 
 /**
  * Loader phía server (SSR, Giai đoạn 3 của issue #7): trạng thái hệ thống là dữ liệu công khai (endpoint @Public) nên lấy ngay trong loader qua API nội bộ — HTML trả về đã chứa kết quả kiểm tra thay vì khung giữ chỗ. API không với tới được → trả null, trang rơi về luồng fetch phía client như trước.
  */
-export async function loader(): Promise<{ health: HealthStatus | null }> {
+export async function loader(_args?: Route.LoaderArgs): Promise<{ health: HealthStatus | null }> {
   const body = await fetchApiJson('/api/v1/health');
   const parsed = healthStatusSchema.safeParse(body);
   return { health: parsed.success ? parsed.data : null };
