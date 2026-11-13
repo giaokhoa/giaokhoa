@@ -162,11 +162,11 @@ export function reorderBuilderModules(
  */
 export function createBuilderExamPin(
   courseId: string,
-  vars: { sectionId: string; name: string },
+  vars: { sectionId: string; name: string; requestId: string },
 ) {
   return apiJson<{ id: string }>(`/api/v1/courses/${courseId}/exam-pins`, {
     method: 'POST',
-    body: JSON.stringify({ sectionId: vars.sectionId, newExam: { name: vars.name } }),
+    body: JSON.stringify({ sectionId: vars.sectionId, requestId: vars.requestId, newExam: { name: vars.name } }),
   });
 }
 

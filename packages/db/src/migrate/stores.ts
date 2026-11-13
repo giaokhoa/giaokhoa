@@ -1,7 +1,13 @@
 /**
  * Định nghĩa ba kho và bước tiền-migration dùng chung cho bộ máy migration của `@giaokhoa/db` (runner `run.ts`, hậu kiểm `verify.ts`, harness test dựng database từ rỗng).
  *
- * Ba kho có bộ carrier riêng, số đếm kỳ vọng riêng và biến môi trường kết nối riêng. Sau khi đồng bộ main (#11 và system materials), trung tâm có 204 bảng + 25 policy RLS + 420 index; control plane 4 bảng; system-bank 14 bảng và 4 migration. Các kỳ vọng phải được đối chứng bằng migration từ DB rỗng trên CI.
+ * Ba kho có bộ carrier đóng băng và migration native riêng trong
+ * `packages/db/migrations/`. Số đếm kỳ vọng chỉ khai tại MIGRATION_STORES
+ * để runner, hậu kiểm và harness không tự tạo bản sao lệch nhau.
+ * Trên main sau #14, trung tâm có 204 bảng, 25 policy RLS,
+ * 425 index và 6 dòng nhật ký; control plane 4 bảng, ngân hàng hệ thống
+ * 14 bảng và 4 dòng nhật ký. CI dựng database từ rỗng để đối chứng.
+
  */
 import { sql, type Kysely } from 'kysely';
 
@@ -45,7 +51,8 @@ export const MIGRATION_STORES: Record<MigrationStoreKey, MigrationStore> = {
   centre: {
     migrationsDirName: 'centre',
     carrierNames: ['20261025163710_baseline'],
-    expected: { tables: 204, policies: 25, indexes: 420, journalRows: 5 },
+    expected: { tables: 204, policies: 25, indexes: 425, journalRows: 6 },
+
     connectionEnvVars: ['MIGRATION_DATABASE_URL', 'DATABASE_URL'],
   },
   'control-plane': {

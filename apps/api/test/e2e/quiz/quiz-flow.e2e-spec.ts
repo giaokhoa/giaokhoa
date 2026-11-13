@@ -1,4 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminToken, assignRole, createTestApp, createUserViaApi, http, login, roleIdByShortname, STRONG_PASSWORD } from '../../support/identity-access-helpers';
@@ -68,12 +69,13 @@ describe('Hoạt động quiz (mod_quiz)', () => {
     await enrolUser(app, admin, course.id, instance.id, student.id);
     const studentToken = (await login(app, student.username, STRONG_PASSWORD)).accessToken;
 
-    const systemCtx = (contexts.body as { id: string; contextLevel: number }[]).find((c) => c.contextLevel === 10)!;
+    // Câu nguồn thuộc context khoá đang dạy để giáo viên thực sự có
+    // question:useall: fixture kiểm Quiz, không cấp ngầm quyền kho hệ thống.
     const bankRes = await http(app).post('/api/v1/questions/categories').set('Authorization', `Bearer ${admin}`)
-      .send({ name: 'Quiz bank', contextId: systemCtx.id });
+      .send({ name: 'Quiz bank', contextId: courseCtx.id });
     const bankCatId = bankRes.body.id as string;
     const randomRes = await http(app).post('/api/v1/questions/categories').set('Authorization', `Bearer ${admin}`)
-      .send({ name: 'Quiz random pool', contextId: systemCtx.id });
+      .send({ name: 'Quiz random pool', contextId: courseCtx.id });
     const randomCatId = randomRes.body.id as string;
 
     async function makeQuestion(categoryId: string, body: Record<string, unknown>): Promise<string> {
@@ -120,6 +122,8 @@ describe('Hoạt động quiz (mod_quiz)', () => {
       });
       if (name === 'R1') qRandom = id;
     }
+    const readable = await http(app).get(`/api/v1/questions/${qMc}`).set('Authorization', `Bearer ${teacher}`);
+    expect(readable.status, JSON.stringify(readable.body)).toBe(200);
     return { course, sectionId, teacher, teacherId: teacherUser.id, student, studentToken, bankCatId, randomCatId, qRandom, qMc, qTf, qSa, qEssay };
   }
 
@@ -687,7 +691,7 @@ describe('Hoạt động quiz (mod_quiz)', () => {
   it('tạo-đề-rồi-ghim (newExam): một thao tác tạo pin từ đề mới có slot — học sinh làm được ngay', async () => {
     const ctx = await setup();
     const res = await http(app).post(`/api/v1/courses/${ctx.course.id}/exam-pins`).set('Authorization', `Bearer ${ctx.teacher}`)
-      .send({ sectionId: ctx.sectionId, newExam: { name: 'Đề tạo nhanh', slots: [{ questionId: ctx.qMc }] } });
+      .send({ sectionId: ctx.sectionId, requestId: randomUUID(), newExam: { name: 'Đề tạo nhanh', slots: [{ questionId: ctx.qMc }] } });
     expect(res.status, JSON.stringify(res.body)).toBe(201);
     const pin = res.body as { id: string; examId: string; name: string };
     expect(pin.examId).toBeTruthy();

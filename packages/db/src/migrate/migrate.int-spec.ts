@@ -201,11 +201,12 @@ describe('bộ máy migration của package cho ba kho', () => {
     expect(result.ok).toBe(true);
     expect(result.tables).toBe(204);
     expect(result.policies).toBe(25);
-    expect(result.indexes).toBe(420);
+    expect(result.indexes).toBe(425);
     expect(result.journalRows).toBe(MIGRATION_STORES.centre.expected.journalRows);
     expect(await countPublic(centreUrl, 'tables')).toBe(204);
     expect(await countPublic(centreUrl, 'policies')).toBe(25);
-    expect(await countPublic(centreUrl, 'indexes')).toBe(420);
+    expect(await countPublic(centreUrl, 'indexes')).toBe(425);
+
   });
 
   it('hàm đọc nhật ký chỉ đọc kysely_migration: database trống trả tập rỗng, nhật ký cũ bị bỏ qua, nhật ký Kysely trả đúng tập tên', async () => {

@@ -462,7 +462,8 @@ describe('Dàn ý trình dựng K1 (giáo viên)', () => {
       expect(calls.some((c) => c.url === `/api/v1/courses/${COURSE_ID}/exam-pins` && c.method === 'POST')).toBe(true),
     );
     const call = calls.find((c) => c.url === `/api/v1/courses/${COURSE_ID}/exam-pins`);
-    expect(call?.body).toEqual({ sectionId: SECTION_ID, newExam: { name: 'Kiểm tra 15 phút' } });
+    expect(call?.body).toMatchObject({ sectionId: SECTION_ID, newExam: { name: 'Kiểm tra 15 phút' } });
+    expect((call?.body as { requestId: string } | undefined)?.requestId).toMatch(/^[0-9a-f]{8}-[0-9a-f-]{27,}$/);
     // Không còn đường tạo module bằng chuỗi component cho quiz.
     expect(calls.some((c) => c.url === `/api/v1/courses/${COURSE_ID}/modules` && c.method === 'POST')).toBe(false);
   });

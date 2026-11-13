@@ -501,15 +501,19 @@ export class QuizGenerationService {
       if (!slot.questionId) {
         throw new UnprocessableEntityException({ message: 'Paper sheets need a fixed paper: every slot must pin a specific question (no random category/matrix slots)', code: 'paper.requires_fixed_slots' });
       }
-      const view = await this.questions.getQuestion(slot.questionId);
-      const qtype = view.question.qtype;
+      const snapshot = quiz.questionSnapshots?.[slot.slot - 1];
+      const view = snapshot ? null : await this.questions.getQuestion(slot.questionId);
+      const qtype = snapshot?.qtype ?? view!.question.qtype;
       if (qtype !== 'multichoice' && qtype !== 'truefalse') {
         throw new UnprocessableEntityException({ message: `Question type ${qtype} cannot be printed on an OMR answer sheet`, code: 'paper.unsupported_qtype' });
       }
       const pinnedId = slot.versionMode === 'pinned' ? slot.pinnedVersionId : null;
-      const content = pinnedId && pinnedId !== view.latestVersion.id
+      const content = snapshot ? {
+        version: { id: snapshot.versionId, questionText: snapshot.package.questionText },
+        answers: snapshot.answerIds.map((id) => ({ id })),
+      } : pinnedId && pinnedId !== view!.latestVersion.id
         ? await this.questions.getVersionContent(slot.questionId, pinnedId)
-        : { version: view.latestVersion, answers: view.answers, options: view.options };
+        : { version: view!.latestVersion, answers: view!.answers };
       let answerIds: string[];
       let statementIds: string[] = [];
       if (qtype === 'truefalse') {
@@ -568,7 +572,9 @@ export class QuizGenerationService {
     const now = new Date();
     const usage = await this.questions.createUsage(input.studentId, {
       component: QUIZ_COMPONENT, instanceId: quiz.id, contextId: await this.shared.cmContextId(quiz),
-      slots: input.layout.map((s) => ({ questionId: s.questionId, maxMark: s.maxMark, pinnedVersionId: s.versionId })),
+      slots: input.layout.map((s) => ({ questionId: s.questionId, maxMark: s.maxMark, pinnedVersionId: s.versionId,
+        snapshot: quiz.questionSnapshots?.find((q) => q.questionId === s.questionId && q.versionId === s.versionId),
+      })),
     });
     try {
       await this.questions.startUsage(input.studentId, usage.usage.id);

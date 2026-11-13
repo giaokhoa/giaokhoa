@@ -4,6 +4,7 @@
 
 /** Một slot của đề như API exam-papers trả về (đã ghim version câu). */
 export interface PaperSlotView {
+  sourceDomain?: 'centre' | 'bank-system';
   position: number;
   section: string;
   questionId: string;
@@ -76,7 +77,7 @@ export interface CreateExamPaperBody {
   grade: number | null;
   durationMinutes: number | null;
   totalScore: number;
-  slots: { questionId: string; maxMark: number; section?: string }[];
+  slots: import('@giaokhoa/contracts').ExamSlotInput[];
 }
 
 /** Thân sửa metadata của đề (PATCH /exams/:id) — server tạo paper version mới. */

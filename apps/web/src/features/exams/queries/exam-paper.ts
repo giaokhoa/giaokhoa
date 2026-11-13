@@ -2,6 +2,8 @@ import { queryOptions, useMutation, useQuery, useQueryClient, type QueryClient }
 import { queryClient } from '#lib/query-client';
 import { queryKeys as sharedQueryKeys } from '#lib/query-keys';
 import {
+  fetchSystemExamQuestionPreview,
+  fetchSystemExamQuestions,
   createExamPaper,
   fetchExamPaper,
   fetchExamPaperPins,
@@ -96,7 +98,7 @@ export function useReplaceExamPaperSlots() {
       slots,
     }: {
       paperId: string;
-      slots: { questionId: string; maxMark: number; section?: string }[];
+      slots: import('@giaokhoa/contracts').ExamSlotInput[];
     }) => replaceExamPaperSlots(paperId, slots),
     onSuccess: (_view, vars) => invalidateExamPaper(client, vars.paperId),
   });
@@ -123,4 +125,14 @@ export async function examPaperEditPageClientLoader(paperId: string) {
     queryClient.prefetchQuery(examPaperPinsQueryOptions(paperId)),
   ]);
   return null;
+}
+
+/** Picker nguồn hệ thống dùng cache riêng theo trang, chỉ tải khi người dùng mở. */
+export function systemExamQuestionsQueryOptions(offset: number) {
+  return queryOptions({ queryKey: queryKeys.systemExamQuestions(offset), queryFn: () => fetchSystemExamQuestions(offset) });
+}
+
+/** Xem trước theo đúng id/version đang chọn; không đổi câu hoặc tạo bản nhập. */
+export function systemExamQuestionPreviewQueryOptions(id: string, version: number) {
+  return queryOptions({ queryKey: queryKeys.systemExamQuestionPreview(id, version), queryFn: () => fetchSystemExamQuestionPreview(id, version) });
 }

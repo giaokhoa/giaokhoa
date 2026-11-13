@@ -1,3 +1,4 @@
+import type { ExamQuestionSnapshot } from '../jsonb-types';
 import { sql, type RawBuilder } from 'kysely';
 import type { CentreDb, CentreTx } from '../client';
 import type { LearningOutcomeDoc } from '../jsonb-types';
@@ -479,6 +480,7 @@ export interface NewUsage {
 
 /** Giá trị chèn `question_attempts`. */
 export interface NewAttempt {
+  contentSnapshot?: ExamQuestionSnapshot;
   id?: string;
   questionUsageId: string;
   slot: number;
@@ -963,6 +965,7 @@ function attemptInsertValues(v: NewAttempt) {
   return {
     ...(v.id !== undefined ? { id: v.id } : {}),
     question_usage_id: v.questionUsageId,
+    ...(v.contentSnapshot !== undefined ? { content_snapshot: jsonbValue(v.contentSnapshot) } : {}),
     slot: v.slot,
     ...(v.behaviour !== undefined ? { behaviour: v.behaviour } : {}),
     question_id: v.questionId,
@@ -1546,6 +1549,19 @@ export class QuestionsRepository {
   }
 
   /** Attempt theo id. */
+  /** Bản chụp nội bộ có đáp án; không nằm trong các cột trả ra usage qua HTTP. */
+  /** Cổng kênh engine thô nhận biết usage do snapshot thi quản lý, không nạp đáp án. */
+  async usageHasSnapshots(usageId: string): Promise<boolean> {
+    return !!(await this.db().selectFrom('question_attempts').select('id')
+      .where('question_usage_id', '=', usageId).where('content_snapshot', 'is not', null).limit(1).executeTakeFirst());
+  }
+
+  async getAttemptSnapshot(id: string): Promise<ExamQuestionSnapshot | null> {
+    const row = await this.db().selectFrom('question_attempts').select('content_snapshot')
+      .where('id', '=', id).executeTakeFirst();
+    return row?.content_snapshot ?? null;
+  }
+
   async getAttempt(id: string): Promise<AttemptRow | undefined> {
     return this.handle
       .selectFrom('question_attempts')

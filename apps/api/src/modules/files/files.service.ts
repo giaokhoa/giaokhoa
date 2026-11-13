@@ -1,5 +1,5 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { ForbiddenException, BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import type { Queue } from 'bullmq';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { FilesRepository, type FileRow } from '@giaokhoa/db/repositories/files';
@@ -293,6 +293,8 @@ export class FilesService {
    */
   async deleteFile(id: string, actor?: { id: string }): Promise<{ deleted: true; contentHash: string; refcount: number }> {
     const row = await this.getFile(id);
+    /** Media thi đã chụp giữ bất biến dù giáo viên sửa hoặc xoá file nguồn. */
+    if (actor && row.fileArea === 'exam_snapshot') throw new ForbiddenException({ code: 'file.snapshot_locked' });
     if (actor) await this.assertSubmissionLockForDelete(row, actor);
     await this.repo.deleteById(id);
     const refcount = await this.repo.countByHash(row.contentHash, row.storageDomain);
@@ -307,6 +309,17 @@ export class FilesService {
       );
     }
     return { deleted: true, contentHash: row.contentHash, refcount };
+  }
+
+  /**
+   * Thu hồi media STAGING của lần chuẩn bị thất bại, chỉ gọi khi chắc chắn
+   * snapshot đó chưa được công bố ready. Reuse đường xoá có refcount
+   * và cleanup queue: byte cùng hash đang được dùng nơi khác vẫn còn.
+   */
+  async cleanupExamSnapshotFiles(itemId: string): Promise<void> {
+    for (const file of await this.repo.listExamSnapshotFiles(itemId)) {
+      await this.deleteFile(file.id);
+    }
   }
 
   /**

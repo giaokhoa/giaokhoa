@@ -4,7 +4,7 @@
  * Từ issue #663 (gỡ bộ máy cũ khỏi cây mã), package không còn lớp schema khai bảng: hình dạng bảng đến từ kiểu sinh bởi `kysely-codegen` trên database thật (`src/types/centre-db.d.ts`, cổng chống lệch `db:types` trong CI), và mọi truy cập dữ kiện đi qua handle Kysely (`client.ts`) cùng các repository trong `src/repositories/`. Phần GHI của bộ máy migration (trình tự áp dùng chung, runner CLI) được tiêu thụ qua điểm vào `@giaokhoa/db/migrate` và file `dist/migrate/run.js`, không qua barrel này.
  */
 export { createCentreKysely, type CentreDB, type CentreDb, type CentreTx } from './client';
-export type { ExamVariant, LearningOutcomeDoc, LearningOutcomeDocNode } from './jsonb-types';
+export type { ExamQuestionSnapshot, ExamVariant, LearningOutcomeDoc, LearningOutcomeDocNode } from './jsonb-types';
 /**
  * Hàm đọc nhật ký migration cho fleet/provision (issue #639): đọc tập tên/phiên bản đã áp của một database qua `pg.Client` từ nhật ký `kysely_migration` của chính database đó (mọi kho sống đều đã qua bước cấy nhật ký ở các PR trước của chiến dịch; bước cấy và đường đọc dự phòng nhật ký cũ đã gỡ cùng issue #663 — xem `migrate/journal.ts`).
  */
