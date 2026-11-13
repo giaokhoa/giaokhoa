@@ -102,7 +102,16 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
           || prepared.mode !== 'dedicated' || prepared.status !== 'active') {
           throw new SpaceRoutingError('space_routing.socket_identity_mismatch', `Space preparation changed for socket ${slug}`);
         }
-        return fn();
+        const result = await fn();
+        // Registry còn có thể đổi giữa các await bên TRONG handler
+        // (membership → lấy tin / join room / typing). Đọc ở tầng DB
+        // đã kiểm từng lần truy vấn; kiểm thêm sau handler để không
+        // ACK một sự kiện của socket đã bị thu hồi giữa chừng.
+        const after = await this.spaceDb.resolveTarget(slug);
+        if (after.spaceId !== pinnedSpaceId || after.mode !== 'dedicated' || after.status !== 'active') {
+          throw new SpaceRoutingError('space_routing.socket_identity_mismatch', `Space changed during socket handler ${slug}`);
+        }
+        return result;
       });
     } catch (error) {
       client.disconnect(true);

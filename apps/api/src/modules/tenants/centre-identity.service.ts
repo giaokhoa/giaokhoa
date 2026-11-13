@@ -135,7 +135,14 @@ export class CentreIdentityService {
   }
 
   private runInCentreSpace<T>(slug: string, fn: () => Promise<T>): Promise<T> {
-    return tenantAls.run({ platform: true, spaceSlug: slug }, async () => fn());
+    // Không đọc lại control plane trên đường đã chuẩn bị (cam kết
+    // nhận diện vẫn sống lúc sổ tạm mất kết nối). Ghim ID đăng ký từ
+    // chính handle đã chuẩn bị; mỗi query sẽ so với identity này.
+    const spaceId = this.spaceDb.preparedSpaceId(slug);
+    if (!spaceId) {
+      throw new SpaceRoutingError('space_routing.not_prepared', `Dedicated space ${slug} has no pinned identity`);
+    }
+    return tenantAls.run({ platform: true, spaceSlug: slug, spaceId }, async () => fn());
   }
 
   private mapRoutingError(err: unknown): Error {

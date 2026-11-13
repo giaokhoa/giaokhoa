@@ -228,10 +228,16 @@ export class SpaceDatabaseService implements OnModuleDestroy {
     context?: { tenantId?: string; userId?: string },
   ): Promise<T> {
     const db = await this.getKyselyForSpace(slug);
+    // Một request khác có thể chuẩn bị lại CÙNG slug giữa await
+    // trên và lúc ghim ALS: không lấy spaceId của handle B cho db A.
+    const prepared = this.preparedKysely.get(slug);
+    if (!prepared || prepared.db !== db) {
+      throw new SpaceRoutingError('space_routing.prepared_revoked', `Space ${slug} was re-prepared before its session started`);
+    }
     const parent = tenantAls.getStore();
     // Ghim danh tính bất biến của dòng sổ đã chuẩn bị vào cùng phiên;
     // mọi Redis key và room bên dưới dùng chính giá trị này.
-    const spaceId = this.dedicatedSlugs.has(slug) ? this.preparedKysely.get(slug)?.spaceId : undefined;
+    const spaceId = this.dedicatedSlugs.has(slug) ? prepared.spaceId : undefined;
     if (this.dedicatedSlugs.has(slug) && !spaceId) throw new SpaceRoutingError('space_routing.not_prepared', `Space ${slug} has no prepared identity`);
     const store: TenantAlsStore = { ...parent, ...context, spaceSlug: slug, spaceId };
     if (context?.tenantId) store.platform = false;
@@ -349,10 +355,28 @@ export class SpaceDatabaseService implements OnModuleDestroy {
    * `getKyselyForSpace`/`withSpaceKysely` rồi thử lại.
    */
   private currentKysely(): CentreDb {
-    const slug = tenantAls.getStore()?.spaceSlug;
+    const scope = tenantAls.getStore();
+    const slug = scope?.spaceSlug;
     if (slug) {
       const preparedEntry = this.preparedKysely.get(slug);
-      if (preparedEntry) return preparedEntry.db;
+      if (preparedEntry) {
+        // Mỗi lần dựng query builder (kể cả sau một await dài) phải
+        // kiểm tra identity của handle so với phiên đã ghim. Slug
+        // có thể được chuẩn bị lại sang B bởi request khác khi phiên
+        // A vẫn sống; chỉ tra slug sẽ làm callback A đọc/ghi B.
+        // Nếu dedicated chuyển thành shared, cũng không được rơi về
+        // kho chung dù registry vẫn giữ nguyên ID. Phiên dedicated
+        // thiếu `spaceId` cũng phải từ chối, không được dùng handle
+        // hiện tại theo slug khi identity phiên chưa được xác thực.
+        if ((this.dedicatedSlugs.has(slug) && (!scope?.spaceId || preparedEntry.spaceId !== scope.spaceId))
+          || (!this.dedicatedSlugs.has(slug) && !!scope?.spaceId)) {
+          throw new SpaceRoutingError(
+            'space_routing.prepared_identity_mismatch',
+            `Space ${slug} was re-prepared for a different identity while the current scope was active`,
+          );
+        }
+        return preparedEntry.db;
+      }
       if (this.dedicatedSlugs.has(slug)) {
         throw new SpaceRoutingError(
           'space_routing.prepared_revoked',

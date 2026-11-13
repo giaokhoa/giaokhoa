@@ -183,6 +183,40 @@ describe('MessagingGateway.handleConnection — danh sách chặn tải một l�
     expect(client.disconnect).toHaveBeenCalledWith(true);
   });
 
+  it.each(['join', 'sync', 'typing'] as const)(
+    'socket đang xử lý %s: đổi registry giữa await membership và lúc trả ACK thì ngắt, không ACK sang B',
+    async (event) => {
+      const { gateway, client, repo, realtime, spaceProbe, joinedRooms } = build({ spaceSlug: 'trung-tam-a' });
+      await gateway.handleConnection(client as never);
+      const roomsBefore = joinedRooms.length;
+      const scopesAfterSwitch: Array<string | undefined> = [];
+      repo.isMember.mockImplementation(async () => {
+        // Sự kiện bắt đầu trong ALS A và qua mọi chốt trước handler;
+        // chỉ khi membership đang await xong registry mới chuyển B.
+        expect(tenantAls.getStore()?.spaceId).toBe('space-a');
+        spaceProbe.currentSpaceId = 'space-b';
+        return true;
+      });
+      repo.getConversation.mockImplementation(async (id: string) => {
+        scopesAfterSwitch.push(tenantAls.getStore()?.spaceId);
+        return { id, type: 1, tenantId: TENANT_ID };
+      });
+      repo.listMessages.mockResolvedValue([]);
+      const call = event === 'join'
+        ? gateway.joinConversation(client as never, { conversationId: 'conv-open-a' })
+        : event === 'sync'
+          ? gateway.sync(client as never, { 'conv-open-a': 0 })
+          : gateway.typing(client as never, { conversationId: 'conv-open-a' });
+      await expect(call).rejects.toMatchObject({ code: 'space_routing.socket_identity_mismatch' });
+      expect(client.disconnect).toHaveBeenCalledWith(true);
+      // Nếu đã join thì chỉ room A cũ; Socket.IO tự rời toàn bộ
+      // room khi disconnect. Tuyệt đối không có room của B.
+      expect(joinedRooms.slice(roomsBefore).every((room) => !room.includes('space-b'))).toBe(true);
+      expect(scopesAfterSwitch.every((scope) => scope === 'space-a')).toBe(true);
+      expect(realtime.noteTyping).toHaveBeenCalledTimes(event === 'typing' ? 1 : 0);
+    },
+  );
+
   it('kết nối thuộc đường kho chung (không slug): không qua lớp bọc kho nào', async () => {
     const { gateway, client, spaceDb, spaceProbe } = build();
 

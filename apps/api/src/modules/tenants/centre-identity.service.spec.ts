@@ -16,6 +16,7 @@ function makeService(options?: { prepared?: boolean }) {
     isSpacePrepared: vi.fn(() => options?.prepared ?? false),
     resolveTarget: vi.fn(async () => ({ slug: 'trung-tam-a', status: 'active', mode: 'dedicated' })),
     getKyselyForSpace: vi.fn(async () => ({})),
+    preparedSpaceId: vi.fn(() => 'space-a'),
   };
   const tenants = {
     getTenantBySlug: vi.fn(
@@ -46,6 +47,7 @@ describe('Service nhận diện trung tâm', () => {
     expect(identity).toMatchObject({ displayName: 'Trung tâm A — tên riêng', brandColor: '#1d4ed8' });
     expect(spaceDb.resolveTarget).not.toHaveBeenCalled();
     expect(spaceDb.getKyselyForSpace).not.toHaveBeenCalled();
+    expect(spaceDb.preparedSpaceId).toHaveBeenCalledWith('trung-tam-a');
     expect(tenants.getTenantBySlug).toHaveBeenCalledWith('trung-tam-a');
   });
 

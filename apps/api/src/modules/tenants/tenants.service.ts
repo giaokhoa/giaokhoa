@@ -115,7 +115,7 @@ export class TenantsService {
     // khi vào ngữ cảnh platform để truy vấn không rơi về kho chung.
     const publicStore = tenantAls.getStore()?.spaceSlug === PUBLIC_LEARNING_SLUG;
     return tenantAls.run(
-      { platform: true, ...(publicStore ? { spaceSlug: PUBLIC_LEARNING_SLUG } : {}) },
+      { platform: true, ...(publicStore ? { spaceSlug: PUBLIC_LEARNING_SLUG, spaceId: tenantAls.getStore()?.spaceId } : {}) },
       () => this.platformTenantInContext(),
     );
   }

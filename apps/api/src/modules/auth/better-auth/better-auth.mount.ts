@@ -111,7 +111,7 @@ export function mountBetterAuth(
     // ngữ cảnh mang slug, đúng khuôn các điểm bọc handler khác của
     // hệ. Bước chuẩn bị ở trên đã ghi handle kho đích vào bảng
     // đã-chuẩn-bị nên handle định tuyến tra được kho đích ngay.
-    tenantAls.run({ spaceSlug: space.slug }, () => {
+    tenantAls.run({ spaceSlug: space.slug, spaceId: space.spaceId }, () => {
       handler(req, res);
     });
   });

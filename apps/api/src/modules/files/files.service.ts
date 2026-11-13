@@ -192,7 +192,7 @@ export class FilesService {
     const target = await this.spaceDb.resolveTarget(slug);
     // Đối chiếu chủ thật trong database đích, không dựa vào tên miền
     // tự khai hoặc tenantId của khách ẩn danh tải qua URL có chữ ký.
-    const tenant = await tenantAls.run({ platform: true, spaceSlug: slug }, async () =>
+    const tenant = await tenantAls.run({ platform: true, spaceSlug: slug, spaceId: store?.spaceId }, async () =>
       this.spaceDb!.routedKysely.selectFrom('tenants')
         .select(['id', 'kind']).where('slug', '=', slug).executeTakeFirst(),
     );
