@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client, Pool } from 'pg';
 import { Migrator, type MigrationProvider } from 'kysely/migration';
-import { Kysely, PostgresDialect } from 'kysely';
+import { Kysely, PostgresDialect, sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
 import { FrozenSqlProvider, listMigrationNames } from './frozen-sql-provider';
@@ -453,4 +453,57 @@ const { Migrator } = require('kysely/migration');
       await db.destroy().catch(() => undefined);
     }
   }, 300_000);
+
+  it('nâng cấp học liệu đã tồn tại bằng role chủ bảng không BYPASSRLS vẫn giữ tenant và trả GUC về trạng thái cũ', async () => {
+    const database = 'giaokhoa_db_material_upgrade_16';
+    const url = await freshDatabase(database);
+    const pool = new Pool({ connectionString: url, max: 1 });
+    const db = new Kysely({ dialect: new PostgresDialect({ pool }) });
+    const role = `g16_migration_${process.pid}`;
+    const tenantA = '01961300-0000-7000-8000-000000000001';
+    const platform = '01961300-0000-7000-8000-000000000002';
+    const contextA = '01961300-0000-7000-8000-000000000003';
+    const contextPersonal = '01961300-0000-7000-8000-000000000004';
+    let createdRole = false;
+    try {
+      const dir = packageMigrationsDir('centre');
+      const priorNames = listMigrationNames(dir).filter((name) => name !== '20261113160000_system_material_references');
+      const before = await new Migrator({ db, provider: providerOnly(dir, priorNames) }).migrateToLatest();
+      expect(before.error).toBeUndefined();
+      await sql`insert into tenants (id, name, slug, kind) values
+        (${tenantA}, 'Trung tâm A', 'upgrade-a', 'school'), (${platform}, 'Trang chính', 'upgrade-platform', 'platform')`.execute(db);
+      await sql`insert into context (id, context_level, instance_id, path, depth) values
+        (${contextA}, 20, ${tenantA}, ${'/' + contextA}, 1),
+        (${contextPersonal}, 30, ${platform}, ${'/' + contextPersonal}, 1)`.execute(db);
+      await sql`insert into content_bank_content (name, context_id, creator_id) values
+        ('Nguồn A', ${contextA}, ${tenantA}), ('Cá nhân cũ', ${contextPersonal}, ${platform})`.execute(db);
+      await sql.raw(`CREATE ROLE "${role}" NOLOGIN NOBYPASSRLS`).execute(db);
+      createdRole = true;
+      await sql.raw(`GRANT USAGE, CREATE ON SCHEMA public TO "${role}"`).execute(db);
+      await sql.raw(`GRANT ALL ON ALL TABLES IN SCHEMA public TO "${role}"`).execute(db);
+      await sql.raw(`ALTER TABLE content_bank_content OWNER TO "${role}"`).execute(db);
+      await sql.raw(`ALTER TABLE resources OWNER TO "${role}"`).execute(db);
+      await sql.raw(`SET ROLE "${role}"`).execute(db);
+      await sql`select set_config('app.platform', 'off', false), set_config('app.tenant_id', '', false)`.execute(db);
+      expect((await sql`select id from tenants`.execute(db)).rows).toEqual([]);
+      const upgrade = await new Migrator({ db, provider: new FrozenSqlProvider(dir) }).migrateToLatest();
+      expect(upgrade.error).toBeUndefined();
+      expect((await sql<{ value: string }>`select current_setting('app.platform', true) as value`.execute(db)).rows[0]?.value).toBe('off');
+      expect((await sql`select id from content_bank_content`.execute(db)).rows).toEqual([]);
+      await sql`select set_config('app.tenant_id', ${tenantA}, false)`.execute(db);
+      expect((await sql<{ name: string; tenant_id: string }>`select name, tenant_id from content_bank_content`.execute(db)).rows).toEqual([{ name: 'Nguồn A', tenant_id: tenantA }]);
+      await sql`select set_config('app.tenant_id', ${platform}, false)`.execute(db);
+      expect((await sql<{ name: string; tenant_id: string }>`select name, tenant_id from content_bank_content`.execute(db)).rows).toEqual([{ name: 'Cá nhân cũ', tenant_id: platform }]);
+    } finally {
+      await sql`RESET ROLE`.execute(db);
+      await db.destroy();
+      await dropTestDatabase(adminUrl, database);
+      if (createdRole) {
+        const admin = new Client({ connectionString: adminUrl });
+        await admin.connect();
+        try { await admin.query(`DROP ROLE "${role}"`); } finally { await admin.end(); }
+      }
+    }
+  });
+
 });
