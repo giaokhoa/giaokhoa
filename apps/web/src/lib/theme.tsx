@@ -26,18 +26,27 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [prefersDark, setPrefersDark] = useState(false);
 
   useEffect(() => {
+    let disposed = false;
     try {
       const saved = window.localStorage.getItem(STORAGE_KEY);
-      if (saved === 'dark' || saved === 'light') setChoice(saved);
+      if (saved === 'dark' || saved === 'light') {
+        // Trì hoãn tới microtask sau hydrate: không cập nhật state đồng
+        // bộ ngay trong effect, tránh render nối tầng và cảnh báo React.
+        queueMicrotask(() => { if (!disposed) setChoice(saved); });
+      }
     } catch {
       // Browser không có localStorage (private mode): vẫn dùng media query.
     }
     const media = window.matchMedia?.('(prefers-color-scheme: dark)');
-    if (!media) return;
-    setPrefersDark(media.matches);
+    if (media) {
+      queueMicrotask(() => { if (!disposed) setPrefersDark(media.matches); });
+    }
     const update = (event: MediaQueryListEvent) => setPrefersDark(event.matches);
-    media.addEventListener?.('change', update);
-    return () => media.removeEventListener?.('change', update);
+    media?.addEventListener?.('change', update);
+    return () => {
+      disposed = true;
+      media?.removeEventListener?.('change', update);
+    };
   }, []);
 
   const dark = resolveDarkTheme(choice, prefersDark);
