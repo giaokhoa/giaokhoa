@@ -18,10 +18,15 @@
     "types": [
       "vite/client",
       "vitest/globals"
+    ],
+    "rootDirs": [
+      ".",
+      "./.react-router/types"
     ]
   },
   "include": [
     "src",
+    ".react-router/types/**/*",
     "vite.config.ts",
     "vitest.config.ts",
     "react-router.config.ts"

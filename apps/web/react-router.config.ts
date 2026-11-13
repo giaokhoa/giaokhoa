@@ -9,5 +9,6 @@ import type { Config } from "@react-router/dev/config";
  */
 export default {
   ssr: true,
-  appDirectory: "src/app",
+  // Đặt toàn bộ src làm appDirectory để typegen nhận route modules ở src/features.
+  appDirectory: "src",
 } satisfies Config;

@@ -1,3 +1,9 @@
+/**
+ * Route tương thích `system-bank`: khi Framework Mode nhận request, loader
+ * trả HTTP 302 tới URL chuẩn, giữ trạng thái replace lúc navigation.
+ * Component hiện hữu là fallback cho các bài test chỉ render UI.
+ */
+import { replace } from 'react-router';
 import { SystemBankIndexRedirect } from '../components/legacy-bank-redirects';
 
 // Gốc khu hệ thống (/system-bank — chuẩn đường dẫn #221):
@@ -9,3 +15,8 @@ export function meta() {
 }
 
 export default SystemBankIndexRedirect;
+
+/** Trả redirect HTTP, thực thi trước khi render component route. */
+export function loader() {
+  return replace('/system-bank/questions');
+}

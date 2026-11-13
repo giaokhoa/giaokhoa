@@ -33,9 +33,9 @@ import settingsRoutes from '../features/settings/routes';
  * layout tại đây theo đúng thứ tự khai báo gốc. Mỗi trang là một route module riêng thuộc về feature của nó để framework tự chia chunk theo route. Hai trang uỷ quyền MCP của feature auth nằm ngoài shell (khối `standaloneRoutes`).
  */
 export default [
-  layout('shell.tsx', [
+  layout('app/shell.tsx', [
     ...dashboardRoutes,
-    route('health', 'health.tsx'),
+    route('health', 'app/health.tsx'),
     ...authRoutes,
     ...profileRoutes,
     ...settingsRoutes,

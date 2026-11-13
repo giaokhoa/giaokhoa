@@ -1,3 +1,4 @@
+import type { Route } from './+types/class-public';
 import { useEffect, useRef, useState } from 'react';
 import { classPublicViewSchema, type ClassPublicView } from '@giaokhoa/contracts';
 import { Button, buttonVariants } from '@giaokhoa/ui/components/button';
@@ -294,11 +295,11 @@ import { appKeyMeta, titleMeta } from '#lib/route-meta';
  * không kèm dữ kiện như các ca kiểm chứng khung) thì rơi về tiêu đề
  * tĩnh theo khoá i18n như trước.
  *
- * @param args - Đối số meta của React Router, `data` là dữ kiện loader của route.
+ * @param args - Đối số meta của React Router, `loaderData` là dữ kiện loader của route.
  * @returns Danh sách thẻ meta của trang.
  */
-export function meta(args?: { data?: ClassPublicLoaderData | null }) {
-  const summary = args?.data?.classPublic;
+export function meta({ loaderData }: Route.MetaArgs) {
+  const summary = loaderData?.classPublic;
   if (!summary) return appKeyMeta('classPublicTitle');
   return [
     ...titleMeta(summary.name),

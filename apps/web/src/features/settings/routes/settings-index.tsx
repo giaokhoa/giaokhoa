@@ -1,13 +1,20 @@
-import { Navigate } from 'react-router';
+import { replace } from 'react-router';
 
 /**
- * Route gốc của khu Cài đặt (`/settings`, issue #288): không có nội dung riêng — chuyển hướng THAY THẾ (replace, không để lại mục lịch sử thừa) tới mục đầu tiên của khu là Bảo mật, đúng cách các site lớn mở thẳng mục đầu khi người dùng vào gốc khu cài đặt.
+ * Route gốc `/settings` không có nội dung: loader chuyển thẳng tới
+ * màn Bảo mật bằng HTTP 302, giữ ngữ nghĩa thay thế entry lịch sử khi
+ * điều hướng phía client. Redirect ở loader còn hoạt động trước hydrate
+ * khi người dùng truy cập URL này trực tiếp bằng SSR.
  */
-export function SettingsIndexPage() {
-  return <Navigate to="/settings/security" replace />;
+export function loader() {
+  return replace('/settings/security');
 }
 
-/** Export mặc định cho route module React Router framework mode (xem src/routes.ts). */
+/** Framework route cần component mặc định, nhưng loader luôn chuyển hướng trước khi render. */
+export function SettingsIndexPage() {
+  return null;
+}
+
 export default SettingsIndexPage;
 
 // Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
