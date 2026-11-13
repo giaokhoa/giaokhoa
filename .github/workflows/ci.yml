@@ -179,6 +179,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node24-turbo-e2e-${{ matrix.shardIndex }}-
             ${{ runner.os }}-node24-turbo-
+      # Nghiệm thu HTTP restore của issue #12 dùng pg_dump/pg_restore;
+      # phải cùng major 18 với PostgreSQL server của shard.
+      - name: Install PostgreSQL 18 client tools for restore E2E
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-18
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
       - name: Create the test database of this shard
         run: PGPASSWORD=postgres psql -h localhost -U postgres -c 'CREATE DATABASE giaokhoa_test_api_${{ matrix.shardIndex }}'
       # Runner migration Kysely (issue #639) chạy từ dist đã build của @giaokhoa/db, nên phải build package này TRƯỚC bước migrate (bước Build API chạy sau migrate).

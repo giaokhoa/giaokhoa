@@ -11,6 +11,8 @@ import { quoteIdentifier } from '../control-plane/control-plane-provision';
 import { FleetRegistryWriter } from './fleet-registry-writer';
 import { parseBackupFileName, retargetUrl, runPgTool } from './fleet-common';
 import { readVerifiedSpaceArchive, restoreArchiveFilesToLocalDir, verifyRestoredFileMetadata } from './fleet-space-archive';
+import { parseRoleEndpoint } from './runtime-roles';
+import { runRuntimeRolesSetup } from './runtime-roles-setup';
 
 /** Tìm bản chụp đã hoàn tất mới nhất của đúng kho; không chọn tệp sidecar. */
 function newestBackup(dir: string): string {
@@ -52,6 +54,30 @@ export async function runFleetRestore(options: FleetRestoreOptions): Promise<{
   if (!/^[a-z][a-z0-9_]{2,62}$/.test(options.targetDatabase) || !/^[0-9a-f-]{36}$/.test(options.expectedSpaceId)) {
     throw new Error('invalid target database or expected space id');
   }
+  // Restore dùng role RIÊNG của staging, không tái sử dụng credential
+  // production. Khai hai URL qua env để bí mật không lộ trong argv.
+  const migratorUrl = env.FLEET_RESTORE_MIGRATION_URL;
+  const runtimeUrl = env.FLEET_RESTORE_RUNTIME_URL;
+  if (!migratorUrl || !runtimeUrl) {
+    throw new Error('FLEET_RESTORE_MIGRATION_URL and FLEET_RESTORE_RUNTIME_URL are required');
+  }
+  const migrator = parseRoleEndpoint(migratorUrl, 'FLEET_RESTORE_MIGRATION_URL');
+  const runtime = parseRoleEndpoint(runtimeUrl, 'FLEET_RESTORE_RUNTIME_URL');
+  const adminEndpoint = new URL(adminUrl);
+  for (const [url, endpoint] of [[migratorUrl, migrator], [runtimeUrl, runtime]] as const) {
+    const target = new URL(url);
+    if (endpoint.database !== options.targetDatabase || target.hostname !== adminEndpoint.hostname
+      || (target.port || '5432') !== (adminEndpoint.port || '5432')) {
+      throw new Error('restore role URLs must target the new database on the admin cluster');
+    }
+    if (!/^[a-z][a-z0-9_]{2,62}$/.test(endpoint.role) || !endpoint.rolePassword) {
+      throw new Error('restore requires new named roles with credentials');
+    }
+  }
+  if (migrator.role === runtime.role || [migrator.role, runtime.role].includes(decodeURIComponent(adminEndpoint.username))) {
+    throw new Error('restore migration/runtime roles must differ from each other and from admin');
+  }
+
   const output = resolve(options.targetFilesDir);
   const sourceRoot = resolve(env.FILE_STORAGE_DIR ?? './data/files');
   if (
@@ -96,6 +122,13 @@ export async function runFleetRestore(options: FleetRestoreOptions): Promise<{
     connected = true;
     const db = await admin.query('SELECT 1 FROM pg_database WHERE datname = $1', [options.targetDatabase]);
     if (db.rowCount !== 0) throw new Error('restore target database already exists');
+    // Tuyệt đối không đổi mật khẩu/tư thế quyền của role đã tồn tại:
+    // các role staging phải mới, không thuộc database sống nào.
+    const existingRoles = await admin.query(
+      'SELECT rolname FROM pg_roles WHERE rolname = ANY($1::text[])',
+      [[migrator.role, runtime.role]],
+    );
+    if (existingRoles.rowCount) throw new Error('restore roles already exist; refusing to modify shared credentials');
     await admin.query('CREATE DATABASE ' + quoteIdentifier(options.targetDatabase));
     created = true;
     writeFileSync(dumpPlainPath, archive.dump, { mode: 0o600 });
@@ -116,8 +149,26 @@ export async function runFleetRestore(options: FleetRestoreOptions): Promise<{
     } finally {
       await check.end();
     }
+    // Chuyển sở hữu về role migration và cấp quyền tối thiểu cho
+    // runtime như kho thật (CONNECT, bảng, sequence, hàm, default ACL).
+    await runRuntimeRolesSetup({
+      ...env,
+      MIGRATION_DATABASE_URL: migratorUrl,
+      RUNTIME_DATABASE_URL: runtimeUrl,
+    });
+    // Không dùng admin để báo xanh giả: xác nhận chính role runtime
+    // không-superuser đọc được dữ liệu restore dưới cơ chế RLS.
+    const probe = new Client({ connectionString: runtimeUrl });
+    try {
+      await probe.connect();
+      await probe.query("SELECT set_config('app.platform', 'on', false)");
+      await probe.query('SELECT * FROM public.users LIMIT 1');
+      await probe.query('SELECT * FROM public.files LIMIT 1');
+    } finally {
+      await probe.end().catch(() => undefined);
+    }
     renameSync(staging, output);
-    log('Isolated restore completed: ' + options.targetDatabase + ', ' + archive.files.length + ' file(s)');
+    log('Isolated restore completed: '  + options.targetDatabase + ', ' + archive.files.length + ' file(s)');
     return {
       database: options.targetDatabase,
       filesDir: output,
@@ -128,6 +179,11 @@ export async function runFleetRestore(options: FleetRestoreOptions): Promise<{
       await admin
         .query('DROP DATABASE IF EXISTS ' + quoteIdentifier(options.targetDatabase) + ' WITH (FORCE)')
         .catch(() => undefined);
+      // Role staging là role mới do lệnh này sở hữu; dọn nếu bất kỳ
+      // bước restore/quyền/kiểm tra nào hỏng để không để lại quyền mở.
+      for (const role of [runtime.role, migrator.role]) {
+        await admin.query('DROP ROLE IF EXISTS ' + quoteIdentifier(role)).catch(() => undefined);
+      }
     }
     throw error;
   } finally {

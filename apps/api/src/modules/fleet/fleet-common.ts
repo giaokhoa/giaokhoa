@@ -29,6 +29,8 @@ export type FleetSpace = {
   id: string;
   slug: string;
   kind: 'platform' | 'center';
+  /** Chỉ database dedicated mới được dump toàn bộ thành archive mang danh tính một kho. */
+  storageMode?: string;
   status: string;
   databaseName: string;
   secretRef: string | null;

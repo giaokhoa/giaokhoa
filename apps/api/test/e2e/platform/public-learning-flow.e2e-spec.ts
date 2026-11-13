@@ -727,4 +727,212 @@ describe('Khu công cộng #8 — E2E kho riêng, phiên và ranh giới quyền
       .set('Host', ROOT_HOST).send({});
     expect(excessive.status, JSON.stringify(excessive.body)).toBe(429);
   });
+  it('issue #12: phục hồi database vào staging và đăng nhập thật qua HTTP bằng role runtime', async () => {
+    const { mkdtemp } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { FleetRegistryWriter } = await import('../../../src/modules/fleet/fleet-registry-writer');
+    const { dumpSpaceArchive } = await import('../../../src/modules/fleet/fleet-space-archive');
+    const { runFleetRestore } = await import('../../../src/modules/fleet/fleet-restore');
+    const work = await mkdtemp(join(tmpdir(), 'giaokhoa-restore-http-'));
+    const stagingDb = 'giaokhoa_test_12_stage_' + SFX;
+    const stagingCp = 'giaokhoa_test_12_cp_' + SFX;
+    const runtimeRole = 'gk12runtime' + SFX;
+    const migratorRole = 'gk12migrator' + SFX;
+    const stagingFiles = join(work, 'files-restored');
+    const stagingEnv = {
+      ...process.env, CONTROL_PLANE_DATABASE_URL: clusterUrl(CP_DATABASE),
+      DATABASE_ADMIN_URL: clusterUrl('postgres'),
+      FLEET_BACKUP_DIR: join(work, 'backup'),
+      FLEET_BACKUP_ENCRYPTION_KEY: 'e2e-issue12-isolated-secret',
+      FILE_STORAGE_DRIVER: 'local',
+      FLEET_RESTORE_RUNTIME_URL: clusterUrl(stagingDb, runtimeRole, 'E2eRestore12!'),
+      FLEET_RESTORE_MIGRATION_URL: clusterUrl(stagingDb, migratorRole, 'E2eRestore12!'),
+    };
+    // Các ca trước đã đình chỉ admin A: mở lại tài khoản chỉ trong
+    // database kiểm thử trước khi chụp, rồi nghiệm thu staging sau cùng.
+    await withClient(storeUrl(centreSpace), (db) =>
+      db.query('UPDATE users SET suspended = false WHERE username = $1', [CENTRE_ADMIN_USERNAME]));
+    const previousCp = process.env.CONTROL_PLANE_DATABASE_URL;
+    const previousRuntime = process.env.FLEET_RESTORE_RUNTIME_URL;
+    const previousFileDir = process.env.FILE_STORAGE_DIR;
+    let stagingApp: INestApplication | undefined;
+    let sourceFilePath: string | undefined;
+    try {
+      const sourceLogin = await http(app.getHttpServer()).post('/api/v1/auth/sign-in/username')
+        .set('Host', CENTRE_HOST).set('Origin', ROOT_ORIGIN)
+        .send({ username: CENTRE_ADMIN_USERNAME, password: NEW_PASSWORD });
+      expect(sourceLogin.status, JSON.stringify(sourceLogin.body)).toBe(200);
+      const manager = { Cookie: cookieOf(sourceLogin) };
+      const category = await withClient(storeUrl(centreSpace), async (db) => {
+        await db.query("SELECT set_config('app.platform', 'on', false)");
+        const existing = await db.query<{ id: string }>('SELECT id FROM course_categories LIMIT 1');
+        if (existing.rows.length) return existing;
+        return db.query<{ id: string }>(
+          'INSERT INTO course_categories (tenant_id, name) VALUES ($1, $2) RETURNING id',
+          [centreSpace.tenantId, 'Danh mục phục hồi'],
+        );
+      });
+      // Danh mục fixture tạo trực tiếp cần context cấp 40 bên dưới
+      // context tenant; API chặn tạo course nếu chỉ có dòng danh mục.
+      await withClient(storeUrl(centreSpace), async (db) => {
+        const parent = await db.query<{ id: string; path: string; depth: number }>(
+          'SELECT id, path, depth FROM context WHERE context_level = 20 AND instance_id = $1',
+          [centreSpace.tenantId]);
+        const contextId = uuidv7();
+        await db.query(
+          'INSERT INTO context (id,context_level,instance_id,path,depth) VALUES ($1,40,$2,$3,$4)',
+          [contextId, category.rows[0]!.id, parent.rows[0]!.path + '/' + contextId, parent.rows[0]!.depth + 1]);
+      });
+      const cls = await http(app.getHttpServer()).post('/api/v1/classes').set('Host', CENTRE_HOST)
+        .set(manager).send({ name: 'Lớp A để nghiệm thu restore' });
+      expect(cls.status, JSON.stringify(cls.body)).toBe(201);
+      const course = await http(app.getHttpServer()).post('/api/v1/courses').set('Host', CENTRE_HOST)
+        .set(manager).send({ fullName: 'Khoá học phục hồi A', shortName: 'REST12' + SFX.toUpperCase(),
+          classId: cls.body.id, category: category.rows[0]!.id });
+      expect(course.status, JSON.stringify(course.body)).toBe(201);
+      const content = await http(app.getHttpServer())
+        .get('/api/v1/courses/' + course.body.id + '/content').set('Host', CENTRE_HOST).set(manager);
+      expect(content.status, JSON.stringify(content.body)).toBe(200);
+      const assignment = await http(app.getHttpServer())
+        .post('/api/v1/courses/' + course.body.id + '/assignments').set('Host', CENTRE_HOST)
+        .set(manager).send({ name: 'Bài tập phục hồi A', sectionId: content.body.sections[0].id, grade: 10 });
+      expect(assignment.status, JSON.stringify(assignment.body)).toBe(201);
+      const studentName = 'studentrestore12' + SFX;
+      const studentEmail = studentName + '@example.com';
+      const roster = await http(app.getHttpServer())
+        .post('/api/v1/classes/' + cls.body.id + '/roster/identity')
+        .set('Host', CENTRE_HOST).set(manager).send({ fullName: 'Học viên A', email: studentEmail });
+      expect(roster.status, JSON.stringify(roster.body)).toBe(201);
+      expect(roster.body.outcome).toBe('created');
+      // Luồng roster tạo user + mật khẩu tạm thật, không bỏ qua cổng user:create.
+      const student = { body: { id: roster.body.userId } };
+      const studentLogin = await http(app.getHttpServer()).post('/api/v1/auth/token')
+        .set('Host', CENTRE_HOST)
+        .send({ username: roster.body.username, password: roster.body.temporaryPassword });
+      expect(studentLogin.status, JSON.stringify(studentLogin.body)).toBe(201);
+      const learner = { Authorization: 'Bearer ' + studentLogin.body.accessToken };
+      const fileBytes = Buffer.from('Bài nộp thuộc A ' + SFX);
+      const upload = await http(app.getHttpServer())
+        .post('/api/v1/assignments/' + assignment.body.id + '/submission/files')
+        .set('Host', CENTRE_HOST).set(learner)
+        .attach('file', fileBytes, { filename: 'restore12.txt', contentType: 'application/octet-stream' });
+      expect(upload.status, JSON.stringify(upload.body)).toBe(201);
+      const submitted = await http(app.getHttpServer())
+        .post('/api/v1/assignments/' + assignment.body.id + '/submission/submit')
+        .set('Host', CENTRE_HOST).set(learner).send({});
+      expect(submitted.status, JSON.stringify(submitted.body)).toBe(201);
+      const grade = await http(app.getHttpServer())
+        .post('/api/v1/assignments/' + assignment.body.id + '/submissions/' + student.body.id + '/grade')
+        .set('Host', CENTRE_HOST).set(manager)
+        .send({ grade: 8.5, feedbackStrengths: 'Đúng', feedbackWeaknesses: 'Thiếu giải thích', feedbackProgress: 'Tiến bộ' });
+      expect(grade.status, JSON.stringify(grade.body)).toBe(201);
+      const released = await http(app.getHttpServer())
+        .post('/api/v1/assignments/' + assignment.body.id + '/submissions/' + student.body.id + '/release')
+        .set('Host', CENTRE_HOST).set(manager).send({});
+      expect(released.status, JSON.stringify(released.body)).toBe(201);
+      const savedFile = await withClient(storeUrl(centreSpace), (db) =>
+        db.query<{ id: string; content_hash: string }>(
+          'SELECT id, content_hash FROM files WHERE file_name = $1 LIMIT 1', ['restore12.txt']));
+      expect(savedFile.rows).toHaveLength(1);
+      sourceFilePath = app.get<ObjectStorage>(OBJECT_STORAGE).keyFor(
+        fileDomainForSpace(centreSpace.spaceId), savedFile.rows[0]!.content_hash,
+      );
+      const writer = new FleetRegistryWriter(stagingEnv);
+      const sourceSpace = (await writer.listFleetSpaces()).find((space) => space.slug === CENTRE_SLUG)!;
+      await writer.close();
+      await dumpSpaceArchive({
+        space: sourceSpace, url: clusterUrl(centreSpace.databaseName),
+        dir: join(work, 'backup', CENTRE_SLUG), kind: 'scheduled', runId: 'http-restore',
+        at: new Date(), encryptionKey: stagingEnv.FLEET_BACKUP_ENCRYPTION_KEY, env: stagingEnv,
+      });
+      const restored = await runFleetRestore({
+        slug: CENTRE_SLUG, expectedSpaceId: centreSpace.spaceId,
+        targetDatabase: stagingDb, targetFilesDir: stagingFiles,
+        env: stagingEnv, log: () => undefined,
+      });
+      expect(restored.database).toBe(stagingDb);
+      await withClient(clusterUrl('postgres'), (admin) =>
+        admin.query('CREATE DATABASE ' + quoted(stagingCp)));
+      await migrateStore(stagingCp, CP_MIGRATIONS);
+      await withClient(clusterUrl(stagingCp), async (db) => {
+        await db.query(
+          "INSERT INTO space_registry (id,slug,name,kind,status,database_name,storage_mode,connection_role_ref,secret_ref) " +
+          "VALUES ($1,$2,$3,'center','active',$4,'dedicated',$5,$6)",
+          [centreSpace.spaceId, CENTRE_SLUG, 'Trung tâm staging', stagingDb,
+            runtimeRole, 'env:FLEET_RESTORE_RUNTIME_URL'],
+        );
+        await db.query('INSERT INTO space_schema_registry (space_id) VALUES ($1)', [centreSpace.spaceId]);
+      });
+      process.env.CONTROL_PLANE_DATABASE_URL = clusterUrl(stagingCp);
+      process.env.FLEET_RESTORE_RUNTIME_URL = stagingEnv.FLEET_RESTORE_RUNTIME_URL!;
+      process.env.FILE_STORAGE_DIR = stagingFiles;
+      stagingApp = await createMountedTestApp();
+      const login = await http(stagingApp.getHttpServer()).post('/api/v1/auth/sign-in/username')
+        .set('Host', CENTRE_HOST).set('Origin', ROOT_ORIGIN)
+        .send({ username: CENTRE_ADMIN_USERNAME, password: NEW_PASSWORD });
+      expect(login.status, JSON.stringify(login.body)).toBe(200);
+      const me = await http(stagingApp.getHttpServer()).get('/api/v1/users/me')
+        .set('Host', CENTRE_HOST).set('Cookie', cookieOf(login));
+      expect(me.status, JSON.stringify(me.body)).toBe(200);
+      const stagingAdmin = { Cookie: cookieOf(login) };
+      const stagingStudentLogin = await http(stagingApp.getHttpServer()).post('/api/v1/auth/token')
+        .set('Host', CENTRE_HOST)
+        .send({ username: roster.body.username, password: roster.body.temporaryPassword });
+      expect(stagingStudentLogin.status, JSON.stringify(stagingStudentLogin.body)).toBe(201);
+      const stagingStudent = { Authorization: 'Bearer ' + stagingStudentLogin.body.accessToken };
+      const restoredMe = await http(stagingApp.getHttpServer()).get('/api/v1/users/me')
+        .set('Host', CENTRE_HOST).set(stagingStudent);
+      expect(restoredMe.status, JSON.stringify(restoredMe.body)).toBe(200);
+      expect(restoredMe.body.id).toBe(student.body.id);
+      const restoredContent = await http(stagingApp.getHttpServer())
+        .get('/api/v1/courses/' + course.body.id + '/content')
+        .set('Host', CENTRE_HOST).set(stagingAdmin);
+      expect(restoredContent.status, JSON.stringify(restoredContent.body)).toBe(200);
+      expect(restoredContent.body.sections).toHaveLength(content.body.sections.length);
+      const restoredHomework = await http(stagingApp.getHttpServer())
+        .get('/api/v1/assignments/' + assignment.body.id)
+        .set('Host', CENTRE_HOST).set(stagingStudent);
+      expect(restoredHomework.status, JSON.stringify(restoredHomework.body)).toBe(200);
+      expect(restoredHomework.body.mySubmission.grade.grade).toBe(8.5);
+      const restoredGrading = await http(stagingApp.getHttpServer())
+        .get('/api/v1/assignments/' + assignment.body.id + '/submissions/' + student.body.id)
+        .set('Host', CENTRE_HOST).set(stagingAdmin);
+      expect(restoredGrading.status, JSON.stringify(restoredGrading.body)).toBe(200);
+      const signed = stagingApp.get(FileSigningService)
+        .sign(savedFile.rows[0]!.id, fileDomainForSpace(centreSpace.spaceId)).token;
+      const downloaded = await http(stagingApp.getHttpServer())
+        .get('/api/v1/files/' + savedFile.rows[0]!.id + '/download')
+        .set('Host', CENTRE_HOST).query({ sig: signed });
+      expect(downloaded.status, JSON.stringify(downloaded.body)).toBe(200);
+      expect(Buffer.from(downloaded.body)).toEqual(fileBytes);
+      const publicUnchanged = await withClient(storeUrl(publicSpace), (db) =>
+        db.query<{ n: string }>('SELECT count(*)::text AS n FROM assign_submissions WHERE assignment_id = $1',
+          [assignment.body.id]));
+      expect(publicUnchanged.rows[0]!.n).toBe('0');
+      const sourceUnchanged = await withClient(storeUrl(centreSpace), (db) =>
+        db.query<{ n: string }>('SELECT count(*)::text AS n FROM assign_submissions WHERE assignment_id = $1',
+          [assignment.body.id]));
+      expect(sourceUnchanged.rows[0]!.n).toBe('1');
+    } finally {
+      await stagingApp?.close();
+      if (previousCp === undefined) delete process.env.CONTROL_PLANE_DATABASE_URL;
+      else process.env.CONTROL_PLANE_DATABASE_URL = previousCp;
+      if (previousRuntime === undefined) delete process.env.FLEET_RESTORE_RUNTIME_URL;
+      else process.env.FLEET_RESTORE_RUNTIME_URL = previousRuntime;
+      if (previousFileDir === undefined) delete process.env.FILE_STORAGE_DIR;
+      else process.env.FILE_STORAGE_DIR = previousFileDir;
+      await withClient(clusterUrl('postgres'), async (admin) => {
+        for (const name of [stagingDb, stagingCp]) {
+          await admin.query('DROP DATABASE IF EXISTS ' + quoted(name) + ' WITH (FORCE)');
+        }
+        for (const role of [runtimeRole, migratorRole]) {
+          await admin.query('DROP ROLE IF EXISTS ' + quoted(role));
+        }
+      }).catch(() => undefined);
+      if (sourceFilePath) await rm(sourceFilePath, { force: true });
+      await rm(work, { recursive: true, force: true });
+    }
+  }, 180_000);
+
+
 });

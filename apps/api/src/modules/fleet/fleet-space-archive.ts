@@ -123,6 +123,12 @@ export async function dumpSpaceArchive(options: {
   if (!options.encryptionKey) throw new Error('FLEET_BACKUP_ENCRYPTION_KEY is required');
   const env = options.env ?? process.env;
   const { space } = options;
+  // pg_dump xuất trọn DATABASE, không lọc theo tenant. Với shared, ngay
+  // cả kho không có file vẫn có thể chứa dữ liệu B: từ chối TRƯỚC khi
+  // kết nối hoặc tạo tệp để không bao giờ gắn nhãn A lên dump của B.
+  if (space.storageMode !== 'dedicated') {
+    throw new Error('fleet.archive_requires_dedicated_database: shared database cannot be exported as a single space');
+  }
   const storage = storageForEnv(env);
   const path = join(options.dir, backupFileName(options.kind, options.runId, options.at, true));
   const sidecars = archiveSidecarPaths(path);
@@ -233,6 +239,11 @@ export function readVerifiedSpaceArchive(
   manifest: SpaceArchiveManifest;
   files: { domain: string; hash: string; data: Buffer }[];
 } {
+  // Một dump toàn DB sinh trước khi có guard này cũng không được
+  // phục hồi như backup của một trung tâm trong kho shared.
+  if (space.storageMode !== 'dedicated') {
+    throw new Error('fleet.archive_requires_dedicated_database: cannot restore a shared database as one centre');
+  }
   const sidecars = archiveSidecarPaths(dumpPath);
   const dump = readVerifiedBackupFile(dumpPath, encryptionKey);
   const manifestBytes = readVerifiedBackupFile(sidecars.manifest, encryptionKey);

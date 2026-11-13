@@ -1085,6 +1085,9 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
     const dbA = 'giaokhoa_test_12_centre_a';
     const dbB = 'giaokhoa_test_12_centre_b';
     const restoredDb = 'giaokhoa_test_12_isolated';
+    const restoredMigratorRole = 'giaokhoa_test_12_stage_migrator';
+    const restoredRuntimeRole = 'giaokhoa_test_12_stage_runtime';
+    const restoreSecret = 'Test12StagePass!';
     const roleA = 'giaokhoa_test_12_a';
     const roleB = 'giaokhoa_test_12_b';
     const slugA = 'tt-issue-12-a';
@@ -1102,6 +1105,8 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       FLEET_BACKUP_ENCRYPTION_KEY: 'test-issue-12-passphrase',
       FILE_STORAGE_DRIVER: 'local',
       FILE_STORAGE_DIR: filesRoot,
+      FLEET_RESTORE_MIGRATION_URL: clusterUrl(restoredDb, restoredMigratorRole, restoreSecret),
+      FLEET_RESTORE_RUNTIME_URL: clusterUrl(restoredDb, restoredRuntimeRole, restoreSecret),
     });
     let spaceA: Awaited<ReturnType<FleetRegistryWriter['listFleetSpaces']>>[number];
     let spaceB: Awaited<ReturnType<FleetRegistryWriter['listFleetSpaces']>>[number];
@@ -1113,8 +1118,10 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
         for (const database of [restoredDb, dbA, dbB]) {
           await admin.query('DROP DATABASE IF EXISTS ' + quoted(database) + ' WITH (FORCE)');
         }
-        for (const role of [roleA, roleB]) {
+        for (const role of [roleA, roleB, restoredMigratorRole, restoredRuntimeRole]) {
           await admin.query('DROP ROLE IF EXISTS ' + quoted(role));
+        }
+        for (const role of [roleA, roleB]) {
           await admin.query('CREATE ROLE ' + quoted(role) + ' LOGIN');
         }
         await admin.query('CREATE DATABASE ' + quoted(dbA) + ' OWNER ' + quoted(roleA));
@@ -1177,12 +1184,41 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
         for (const db of [restoredDb, dbA, dbB]) {
           await admin.query('DROP DATABASE IF EXISTS ' + quoted(db) + ' WITH (FORCE)');
         }
-        for (const role of [roleA, roleB]) {
+        for (const role of [roleA, roleB, restoredMigratorRole, restoredRuntimeRole]) {
           await admin.query('DROP ROLE IF EXISTS ' + quoted(role));
         }
       }).catch(() => undefined);
       rmSync(dir, { recursive: true, force: true });
     });
+
+    it('shared: hai trung tâm cùng DB dù không có files đều bị từ chối export độc lập', async () => {
+      const sharedDb = 'giaokhoa_test_12_shared_no_files';
+      await withClient(clusterUrl('postgres'), async (admin) => {
+        await admin.query('CREATE DATABASE ' + quoted(sharedDb));
+      });
+      try {
+        await withClient(clusterUrl(sharedDb), async (client) => {
+          await client.query('CREATE TABLE members (centre text, user_name text)');
+          await client.query("INSERT INTO members VALUES ('A', 'alice'), ('B', 'bob')");
+        });
+        for (const space of [spaceA, spaceB]) {
+          const sharedSpace = { ...space, databaseName: sharedDb, storageMode: 'shared' };
+          const backupPath = join(dir, 'rejected-shared-' + space.slug);
+          await expect(dumpSpaceArchive({
+            space: sharedSpace, url: clusterUrl(sharedDb), dir: backupPath,
+            kind: 'scheduled', runId: 'shared-rejected', at: new Date(),
+            encryptionKey: env().FLEET_BACKUP_ENCRYPTION_KEY, env: env(),
+          })).rejects.toThrow(/archive_requires_dedicated_database/);
+          expect(existsSync(backupPath)).toBe(false);
+        }
+        const members = await withClient(clusterUrl(sharedDb), (client) =>
+          client.query<{ centre: string }>('SELECT centre FROM members ORDER BY centre'));
+        expect(members.rows.map((row) => row.centre)).toEqual(['A', 'B']);
+      } finally {
+        await withClient(clusterUrl('postgres'), (admin) =>
+          admin.query('DROP DATABASE IF EXISTS ' + quoted(sharedDb) + ' WITH (FORCE)'));
+      }
+    }, 60_000);
 
     it('sao lưu A với manifest toàn vẹn không chứa metadata hay miền file của B và ngân hàng', async () => {
       const at = new Date();
@@ -1247,6 +1283,22 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
         log: () => undefined,
       });
       expect(result.fileCount).toBe(1);
+      // Kiểm chứng bằng role runtime thật (không phải superuser),
+      // đọc cả tài khoản, điểm và thử DDL vượt quyền phải thất bại.
+      await withClient(env().FLEET_RESTORE_RUNTIME_URL!, async (runtime) => {
+        await runtime.query("SELECT set_config('app.platform', 'on', false)");
+        const users = await runtime.query<{ username: string }>('SELECT username FROM users');
+        expect(users.rows[0]!.username).toBe('admin');
+        const grades = await runtime.query<{ grade: number }>('SELECT grade FROM exam_grade_history');
+        expect(grades.rows[0]!.grade).toBe(92);
+        await expect(runtime.query('CREATE TABLE forbidden_by_runtime (id integer)')).rejects.toThrow(/permission denied/);
+      });
+      await withClient(clusterUrl('postgres'), async (admin) => {
+        const role = await admin.query<{ rolsuper: boolean }>(
+          'SELECT rolsuper FROM pg_roles WHERE rolname = $1', [restoredRuntimeRole],
+        );
+        expect(role.rows).toEqual([{ rolsuper: false }]);
+      });
       await withClient(clusterUrl(restoredDb), async (client) => {
         expect((await client.query<{ username: string }>('SELECT username FROM users')).rows[0]!.username).toBe('admin');
         expect((await client.query<{ grade: number }>('SELECT grade FROM exam_grade_history')).rows[0]!.grade).toBe(92);
