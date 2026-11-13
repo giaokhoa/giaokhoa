@@ -38,6 +38,10 @@ RUN apt-get update \
   && apt-get update \
   && apt-get install -y --no-install-recommends postgresql-client-18 \
   && rm -rf /var/lib/apt/lists/*
+# Thư mục dữ liệu thuộc node ngay từ lúc image được dựng: volume rỗng
+# gắn lên /app/data sẽ nhận đúng quyền truy cập ở lần khởi tạo đầu.
+RUN mkdir -p /app/data/files /app/data/fleet-backups \
+  && chown -R node:node /app/data
 USER node
 EXPOSE 3100
 CMD ["node", "dist/main.js"]
@@ -48,6 +52,7 @@ FROM node:24-bookworm-slim AS worker
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build --chown=node:node /out/worker ./
+RUN mkdir -p /app/data/files && chown -R node:node /app/data
 USER node
 CMD ["node", "dist/main.js"]
 

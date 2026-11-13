@@ -30,8 +30,14 @@ export class MessagingRealtimeRuntime implements OnModuleDestroy {
   ) {
     const logger = new Logger('MessagingDistribution');
     const redisUrl = config.getOrThrow<string>('REDIS_URL');
-    this.emitterHandle = createMessagingRealtimeEmitter(redisUrl);
-    this.redis = new Redis(redisUrl, { maxRetriesPerRequest: null });
+    // Redis adapter và dấu phân phối dùng cùng lựa chọn TLS của BullMQ:
+    // ioredis nhận URL rediss://, nhưng truyền tùy chọn TLS tường minh
+    // giúp ca dùng certificate nội bộ đồng nhất với các producer khác.
+    const redisOptions = redisUrl.startsWith('rediss://')
+      ? { tls: { rejectUnauthorized: false } }
+      : {};
+    this.emitterHandle = createMessagingRealtimeEmitter(redisUrl, redisOptions);
+    this.redis = new Redis(redisUrl, { maxRetriesPerRequest: null, ...redisOptions });
     this.redis.on('error', (error: Error) => {
       logger.warn(`Redis của consumer phân phối messaging lỗi: ${error.message}`);
     });
