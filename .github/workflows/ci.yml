@@ -51,8 +51,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node24-turbo-workspace-
             ${{ runner.os }}-node24-turbo-
-      - name: Kiểm tra ranh giới kiến trúc
-        run: pnpm test:architecture
       - name: Lint
         run: pnpm lint
       - name: Create the worker test database

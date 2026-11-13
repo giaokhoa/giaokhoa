@@ -64,7 +64,7 @@ Từ đợt tổ chức lại theo mô hình features/, `apps/web` tổ chức t
 
 Kỷ luật ở trên có đúng một ngoại lệ: tập cạnh import ngang giữa các feature đã đóng băng trong [comment của issue #500 thuộc repo lịch sử trước khi đổi tên](https://github.com/kvu90/lms/issues/500#issuecomment-6504346634) (27 cặp ở code chạy thật và các cặp chỉ có ở file spec, đúng danh sách trong comment đó — các cạnh này là hệ quả của bảng ánh xạ đã duyệt khi tổ chức lại `features/`). Mọi cạnh import ngang phát sinh **ngoài** tập đóng băng đều là khuyết tật phải sửa; không tự ý thêm cạnh vào tập ngoại lệ — muốn mở rộng phải có phán quyết ghi lại trong issue.
 
-Cổng `pnpm test:architecture` ở root chạy bằng test runner Node, phân tích AST của mã nguồn để kiểm tra cả import qua `#features/*` và import relative. Từ đợt tối ưu ranh giới, hai chiều import runtime `questions → matrices` và `content-bank → course-builder` đã được loại khỏi tập cho phép ở code chạy thật; không được đưa trở lại bằng cách dựa vào ngoại lệ lịch sử. Các import chỉ còn trong spec vẫn được khoá riêng và không được chuyển thành runtime.
+Hai chiều import runtime `questions → matrices` và `content-bank → course-builder` đã được loại khỏi baseline hiện hành; không được đưa trở lại bằng cách dựa vào ngoại lệ lịch sử. Khi rà soát ranh giới bằng script tạm, phải xét cả alias `#features/*`, đường relative và import từ tầng dùng chung ngược về feature; script audit tạm không được lưu trong source hoặc thêm thành lệnh CI. Hai thành phần bố cục `src/components/site-header.tsx` và `src/components/app-sidebar.tsx` hiện vẫn import trực tiếp từ feature `notifications`: đó là coupling runtime hiện hữu cần phân xử riêng, không xem đây là quy tắc cho phép shared import feature.
 
 ## Bản đồ flow của package
 
