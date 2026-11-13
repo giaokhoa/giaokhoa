@@ -256,6 +256,52 @@ describe('Better Auth — đăng nhập xã hội Google/Facebook (e2e, provider
     expect(users).toBe(1);
   });
 
+  it('P1 #8: email công cộng chưa xác minh bị chiếm chỗ không được Google liên kết ngầm', async () => {
+    // Đúng semantics của POST /auth/public/register: người dùng tự
+    // khai email, cầu nối tạo credential với emailVerified=false.
+    const email = 'preclaim-public@ba3.test';
+    const seeded = await bridge.createUserWithCredential({
+      email,
+      username: 'ba3preclaimpublic',
+      firstName: 'Claimed', lastName: 'Mailbox',
+      password: seedPass,
+      emailVerified: false,
+    });
+    currentGoogleIdToken = mintGoogleIdToken({
+      sub: 'google-owner-of-preclaimed-email', email, emailVerified: true,
+    });
+
+    // Google xác minh mailbox, nhưng tài khoản local chưa chứng minh
+    // quyền sở hữu nên không được nối Google vào mật khẩu kẻ giữ chỗ.
+    const { state, cookies } = await startSocial('google');
+    const callback = await runCallback('google', state, cookies);
+    expect(callback.status).toBe(302);
+    expect(callback.headers.location as string).toContain('error');
+    expect(sessionCookieValue(callback)).toBeNull();
+
+    const links = await countRows(
+      "SELECT count(*)::int AS n FROM account WHERE user_id = $1 AND provider_id = 'google'",
+      [seeded.id],
+    );
+    const sessions = await countRows(
+      'SELECT count(*)::int AS n FROM session WHERE user_id = $1',
+      [seeded.id],
+    );
+    expect(links).toBe(0);
+    expect(sessions).toBe(0);
+    const user = await pg.query<{ email_verified: boolean }>(
+      'SELECT email_verified FROM users WHERE id = $1', [seeded.id],
+    );
+    expect(user.rows[0]?.email_verified).toBe(false);
+
+    // Bảo đảm chặn OAuth không xoá credential hợp lệ đã tồn tại.
+    const credentials = await countRows(
+      "SELECT count(*)::int AS n FROM account WHERE user_id = $1 AND provider_id = 'credential'",
+      [seeded.id],
+    );
+    expect(credentials).toBe(1);
+  });
+
   it('Google lần hai: đăng nhập qua liên kết có sẵn, không tạo account trùng', async () => {
     const email = 'google-linked@ba3.test';
     const userRow = await pg.query<{ id: string }>(

@@ -178,20 +178,14 @@ export class CredentialBridgeService {
       // khai method "admin" (đúng cách plugin admin của chính Better
       // Auth gọi).
       //
-      // BA-1 — CHỐT SEMANTICS revokeUnprovenAccountAccess (comment
-      // 6405565755 trên #7): user do cầu nối tạo được tạo với
-      // emailVerified = true. Lý do: đăng ký tự do đã đóng
-      // (disableSignUp), nên mọi user trong hệ đều do một bên tin cậy
-      // (quản trị/hệ thống) tạo cho một mailbox đã biết — chính việc
-      // tạo đó đã là khẳng định quyền sở hữu mailbox, không phải một
-      // email tự khai chưa chứng minh. Giữ `false` thì lần đăng nhập
-      // OTP đầu tiên của user sẽ chạy revokeUnprovenAccountAccess của
-      // Better Auth: XOÁ toàn bộ account (kể cả credential mật khẩu
-      // vừa migrate) + mọi phiên rồi mới đánh dấu verified — mất
-      // credential đã migrate, trái mục đích của cầu nối. Với `true`,
-      // đường revoke thành no-op cho mọi user do hệ tạo (nó early-return
-      // khi emailVerified đã true); semantics xoá chỉ còn áp cho hàng
-      // tự khai chưa chứng minh — loại hàng mà hệ đã đóng đường tạo.
+      // Quy tắc #7/#8: tài khoản quản trị/hệ thống qua cầu nối mặc
+      // định emailVerified=true vì bên cấp đã xác nhận mailbox. Riêng
+      // khu công cộng tự khai email bắt buộc truyền false từ controller
+      // đăng ký: chưa được liên kết OAuth theo email cho tới khi xác
+      // minh. Lần OTP đầu của user chưa xác minh có thể kích hoạt
+      // revokeUnprovenAccountAccess của BA và thu hồi credential cũ
+      // trước khi đánh dấu verified; đó là hành vi bảo vệ khỏi người
+      // chiếm trước email, KHÔNG được tự đổi flag này thành true.
       const created = await txInternalAdapter.createUser(
         {
           email: input.email,
@@ -209,15 +203,24 @@ export class CredentialBridgeService {
       });
       return created;
     });
-    // Adapter ánh xạ field `name` của Better Auth lên cột `first_name`;
-    // `last_name` là cột nghiệp vụ riêng — ghi thẳng để bản ghi users
-    // đầy đủ như mọi user do hệ hiện tại tạo. Bước này nằm NGOÀI
-    // transaction ở trên vì model user của adapter cố ý không có field
-    // lastName để ghi qua adapter (ánh xạ Giai đoạn 1); nếu nó lỗi thì
-    // cặp user + credential đã commit nhất quán và user vẫn đăng nhập
-    // được — khác hẳn rủi ro mồ côi mà transaction này bịt.
+    // Adapter ánh xạ `name` → `first_name` nhưng chưa có
+    // `last_name` trong model. Phép cập nhật này nằm ngoài BA tx;
+    // nếu thất bại PHẢI bù user vừa tạo (FK cascade account) trước
+    // khi ném lỗi. Nếu không, PublicRegistrationService không có
+    // userId để bù khi cầu nối chưa trả về: retry bị kẹt UNIQUE.
     if (input.lastName) {
-      await this.db.updateTable('users').set({ last_name: input.lastName }).where('id', '=', user.id).execute();
+      try {
+        await this.db.updateTable('users').set({ last_name: input.lastName }).where('id', '=', user.id).execute();
+      } catch (error) {
+        try {
+          const removed = await this.db.deleteFrom('users')
+            .where('id', '=', user.id).returning('id').executeTakeFirst();
+          if (!removed) throw new Error('New user vanished while reverting name update', { cause: error });
+        } catch (cleanupError) {
+          throw new Error('Credential bridge cleanup failed after last_name update', { cause: cleanupError });
+        }
+        throw error;
+      }
     }
     return { id: user.id };
   }

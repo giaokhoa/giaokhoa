@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { CONTEXT_LEVELS } from '../access/domain/capabilities';
 import { ContextsService } from '../access/contexts.service';
 import { RolesService } from '../access/roles.service';
@@ -23,14 +23,18 @@ export interface PublicRegistrationInput {
  * Khu công cộng là một kho nghiệp vụ độc lập. Đường tạo tài khoản
  * đóng mặc định và tuyệt đối không tự chuyển xuống database chung.
  * Tài khoản/credential được tạo nguyên tử trong cùng kho nhờ cầu nối
- * Better Auth; membership và vai được gắn ngay sau đó tại context
- * của chính kho này (không tuyên bố các thao tác hậu đăng ký là một
- * transaction duy nhất).
+ * Better Auth. Nếu bước tạo context/membership/vai sau đó lỗi, một
+ * giao dịch bù trong chính kho công cộng xoá user mới + credential,
+ * context và các dòng quan hệ trước khi trả lỗi; người dùng có thể
+ * thử lại với cùng username/email mà không bị kẹt tài khoản mồ côi.
+ * Đây là compensation, không giả làm transaction xuyên BA + nghiệp vụ.
  * Người chọn dạy chỉ nhận quyền coursecreator trong khu công cộng,
  * không nhận manager/siteadmin hoặc quyền ở trung tâm nào khác.
  */
 @Injectable()
 export class PublicRegistrationService {
+  private readonly logger = new Logger(PublicRegistrationService.name);
+
   constructor(
     private readonly spaces: SpaceDatabaseService,
     private readonly tenants: TenantsService,
@@ -68,9 +72,41 @@ export class PublicRegistrationService {
           lastName: input.lastName,
           emailVerified: false,
         });
-        await this.contexts.createContext(CONTEXT_LEVELS.USER, user.id, system.id);
-        await this.tenants.ensureActiveMembership(tenant.id, user.id);
-        await this.roles.assignRole(user.id, role.id, tenantContext.id);
+        try {
+          await this.contexts.createContext(CONTEXT_LEVELS.USER, user.id, system.id);
+          await this.tenants.ensureActiveMembership(tenant.id, user.id);
+          await this.roles.assignRole(user.id, role.id, tenantContext.id);
+        } catch (error) {
+          // Bước BA đã commit user + credential. Không được để
+          // trạng thái không membership/role làm kẹt lần retry.
+          // Role assignment không có FK user; phải xoá tường minh.
+          // Context USER cũng không FK tới users; xoá trong cùng
+          // transaction với user, các account/session/membership
+          // còn lại được FK ON DELETE CASCADE dọn theo.
+          try {
+            await this.spaces.routedKysely.transaction().execute(async (tx) => {
+              await tx.deleteFrom('role_assignments').where('user_id', '=', user.id).execute();
+              await tx.deleteFrom('context')
+                .where('context_level', '=', CONTEXT_LEVELS.USER)
+                .where('instance_id', '=', user.id)
+                .execute();
+              const removed = await tx.deleteFrom('users').where('id', '=', user.id)
+                .returning('id').executeTakeFirst();
+              if (!removed) throw new Error('New public user disappeared during compensation');
+            });
+          } catch (cleanupError) {
+            // Log mã định danh nội bộ, KHÔNG log email hoặc mật khẩu.
+            this.logger.error(
+              'Unable to compensate public registration for ' + user.id,
+              cleanupError instanceof Error ? cleanupError.stack : String(cleanupError),
+            );
+            throw new ServiceUnavailableException({
+              message: 'Public registration cleanup failed',
+              code: 'public_learning.registration_cleanup_failed',
+            });
+          }
+          throw error;
+        }
         return { id: user.id };
       });
     });

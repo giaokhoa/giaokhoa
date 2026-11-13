@@ -38,6 +38,9 @@ export class ControlPlaneConnection implements OnModuleDestroy {
   /** Handle Kysely của control plane; null khi chưa cấu hình biến môi trường. */
   readonly kysely: ControlPlaneDb | null;
   private readonly pool: Pool | null;
+  // Control plane có thể bị tắt chủ động trước app.close() trong
+  // quy trình kiểm thử hỏng sổ; pool không được end() hai lần.
+  private closed = false;
 
   constructor(config: ConfigService) {
     const url = config.get<string>('CONTROL_PLANE_DATABASE_URL');
@@ -59,6 +62,8 @@ export class ControlPlaneConnection implements OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
+    if (this.closed) return;
+    this.closed = true;
     await this.pool?.end();
   }
 }

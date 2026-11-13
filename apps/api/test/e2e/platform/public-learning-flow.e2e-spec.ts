@@ -5,7 +5,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client } from 'pg';
 import http from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { SpaceProvisionResult } from '../../../src/modules/tenants/space-provision-runner';
 
 /**
@@ -44,6 +44,9 @@ setTestEnv('BETTER_AUTH_ENABLED', 'true');
 setTestEnv('BETTER_AUTH_SECRET', ROOT_SECRET);
 setTestEnv('BETTER_AUTH_URL', ROOT_ORIGIN);
 setTestEnv('BETTER_AUTH_TRUSTED_ORIGINS', ROOT_ORIGIN);
+// Bảy lượt đăng ký trong suite để kiểm chứng cả hai failure/retry;
+// production giữ hạn mức mặc định 5/phút.
+setTestEnv('RATE_LIMIT_REGISTRATION_PER_MINUTE', '7');
 
 function clusterUrl(db: string, username?: string, password?: string): string {
   const url = new URL(process.env.DATABASE_URL!);
@@ -236,6 +239,95 @@ describe('Khu công cộng #8 — E2E kho riêng, phiên và ranh giới quyền
       ));
       expect(excluded.rows[0]?.n).toBe('0');
     }
+  });
+
+  it('P2: lỗi ở bước gán quyền được bù toàn bộ và có thể đăng ký lại cùng tài khoản', async () => {
+    const { RolesService } = await import('../../../src/modules/access/roles.service');
+    const roles = app.get(RolesService);
+    const username = 'retry8' + SFX;
+    const email = 'retry8-' + SFX + '@example.com';
+    const body = {
+      username, email, password: PASSWORD, firstName: 'Thử',
+      lastName: 'Lại', role: 'teacher',
+    };
+    let failedUserId = '';
+    const injected = vi.spyOn(roles, 'assignRole').mockImplementationOnce(async (userId) => {
+      failedUserId = userId;
+      throw new Error('test: post-registration role failure');
+    });
+    let failed;
+    try {
+      failed = await http(app.getHttpServer()).post('/api/v1/auth/public/register')
+        .set('Host', ROOT_HOST).send(body);
+    } finally {
+      injected.mockRestore();
+    }
+    expect(failed.status).toBe(500);
+    expect(failedUserId).toBeTruthy();
+
+    const state = await withClient(storeUrl(publicSpace), async (db) => {
+      await db.query("SELECT set_config('app.platform', 'on', false)");
+      return db.query<{ users: string; credentials: string; contexts: string; members: string; roles: string }>(
+        "SELECT " +
+        "(SELECT count(*)::text FROM users WHERE id = $1 OR username = $2 OR email = $3) AS users, " +
+        "(SELECT count(*)::text FROM account WHERE user_id = $1) AS credentials, " +
+        "(SELECT count(*)::text FROM context WHERE context_level = 30 AND instance_id = $1) AS contexts, " +
+        "(SELECT count(*)::text FROM tenant_memberships WHERE user_id = $1) AS members, " +
+        "(SELECT count(*)::text FROM role_assignments WHERE user_id = $1) AS roles",
+        [failedUserId, username, email],
+      );
+    });
+    expect(state.rows[0]).toEqual({
+      users: '0', credentials: '0', contexts: '0', members: '0', roles: '0',
+    });
+    const retried = await http(app.getHttpServer()).post('/api/v1/auth/public/register')
+      .set('Host', ROOT_HOST).send(body);
+    expect(retried.status, JSON.stringify(retried.body)).toBe(201);
+    const login = await http(app.getHttpServer()).post('/api/v1/auth/sign-in/username')
+      .set('Host', ROOT_HOST).set('Origin', ROOT_ORIGIN)
+      .send({ username, password: PASSWORD });
+    expect(login.status, JSON.stringify(login.body)).toBe(200);
+  });
+
+  it('P2: lỗi cập nhật họ ngay trong cầu nối credential cũng được bù trước khi retry', async () => {
+    const username = 'lastname8' + SFX;
+    const email = 'lastname8-' + SFX + '@example.com';
+    const body = {
+      username, email, password: PASSWORD, firstName: 'Tên',
+      lastName: 'Injected failure', role: 'student',
+    };
+    // Trigger chỉ cản thao tác UPDATE last_name (sau khi transaction
+    // tạo user + credential của Better Auth đã commit). DB test riêng.
+    await withClient(storeUrl(publicSpace), async (db) => {
+      await db.query("CREATE FUNCTION reject_public_lastname() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN " +
+        "IF NEW.username LIKE 'lastname8%' AND NEW.last_name = 'Injected failure' THEN " +
+        "RAISE EXCEPTION 'injected lastname failure'; END IF; RETURN NEW; END $$");
+      await db.query('CREATE TRIGGER reject_public_lastname_update BEFORE UPDATE OF last_name ' +
+        'ON users FOR EACH ROW EXECUTE FUNCTION reject_public_lastname()');
+    });
+    try {
+      const rejected = await http(app.getHttpServer()).post('/api/v1/auth/public/register')
+        .set('Host', ROOT_HOST).send(body);
+      expect(rejected.status).toBe(500);
+      const count = await withClient(storeUrl(publicSpace), async (db) => {
+        await db.query("SELECT set_config('app.platform', 'on', false)");
+        return db.query<{ users: string; account: string }>(
+          "SELECT (SELECT count(*)::text FROM users WHERE username = $1 OR email = $2) AS users, " +
+          "(SELECT count(*)::text FROM account WHERE user_id IN " +
+          "(SELECT id FROM users WHERE username = $1 OR email = $2)) AS account",
+          [username, email],
+        );
+      });
+      expect(count.rows[0]).toEqual({ users: '0', account: '0' });
+    } finally {
+      await withClient(storeUrl(publicSpace), async (db) => {
+        await db.query('DROP TRIGGER IF EXISTS reject_public_lastname_update ON users');
+        await db.query('DROP FUNCTION IF EXISTS reject_public_lastname()');
+      });
+    }
+    const retry = await http(app.getHttpServer()).post('/api/v1/auth/public/register')
+      .set('Host', ROOT_HOST).send(body);
+    expect(retry.status, JSON.stringify(retry.body)).toBe(201);
   });
 
   it('cookie và JWT học viên công cộng dùng ở công cộng, không dùng ở A; và ngược lại', async () => {
@@ -461,5 +553,13 @@ describe('Khu công cộng #8 — E2E kho riêng, phiên và ranh giới quyền
     const wrongHost = await http(app.getHttpServer()).post('/api/v1/auth/platform/login')
       .set('Host', CENTRE_HOST).send({ username: 'admin', password: 'Admin123!' });
     expect(wrongHost.status).toBe(403);
+  });
+
+  it('P2: đăng ký quá hạn mức IP nhận 429 trước khi xử lý payload', async () => {
+    // Các ca trước gửi 7 lần POST đăng ký cùng IP (limit test 7/phút).
+    // Lần thứ tám phải bị throttler từ chối, kể cả body không hợp lệ.
+    const excessive = await http(app.getHttpServer()).post('/api/v1/auth/public/register')
+      .set('Host', ROOT_HOST).send({});
+    expect(excessive.status, JSON.stringify(excessive.body)).toBe(429);
   });
 });

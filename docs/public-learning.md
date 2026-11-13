@@ -73,7 +73,18 @@ với URL/role chính kho đó.
   transaction cùng kho, vai `student` hoặc `coursecreator`
   tại tenant `cong-cong`. Giáo viên không tự nhận role manager
   hoặc role của trung tâm khác. Email tự khai chưa được đánh
-  dấu đã xác minh.
+  dấu đã xác minh; Google/Facebook không được liên kết ngầm
+  theo email vào tài khoản này cho đến khi email phía LOCAL
+  đã được xác minh. Chỉ Google xác minh email là chưa đủ.
+  Credential và user được tạo nguyên tử trong Better Auth; nếu
+  bước context/membership/vai tiếp theo lỗi, server bù bằng
+  transaction xóa user mới và các quan hệ để cho phép thử lại.
+  Nếu bù cũng lỗi, server ghi log sự cố và trả mã
+  `public_learning.registration_cleanup_failed` (503).
+  Endpoint tự đăng ký áp hạn mức theo IP riêng mặc định **5
+  lượt/phút** (`RATE_LIMIT_REGISTRATION_PER_MINUTE`), ngoài hạn
+  mức chung. Khi chạy nhiều API instance phải dùng storage
+  throttler chung để hạn mức có hiệu lực trên toàn cụm.
 - Sau đăng ký, trang `/register` đăng nhập bằng
   `/api/v1/auth/sign-in/username` và điều hướng `/profile`.
   Truy vấn học tập/đăng nhập sau đó tự đi cùng cookie + hostname
