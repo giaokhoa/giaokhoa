@@ -17,7 +17,7 @@
  * `system_bank.not_configured` (503). Mọi thao tác ghi gác bằng capability quản trị platform hiện hữu (`tenant:manage` tại context hệ thống — site admin vượt qua cổng này theo lối tắt của evaluator); tầng này không sinh capability mới.
  */
 import { createHash } from 'node:crypto';
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { SystemBankCentreRepository } from '@giaokhoa/db/repositories/system-bank-centre';
 import { SystemBankRepository } from '@giaokhoa/db/repositories/system-bank';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
@@ -29,6 +29,7 @@ import { QuestionsService, type QuestionContentInput } from '../questions/questi
 import { QuestionBanksService } from '../questions/question-banks.service';
 import { canonicalizeJson, checksumPackage, packageValidationError, verifyPackageChecksum } from './system-bank-package';
 import { SystemBankConnection } from './system-bank.connection';
+import { SystemBankMediaService } from './system-bank-media.service';
 import type {
   CreateSystemBankQuestionDto,
   CreateSystemBankVersionDto,
@@ -63,6 +64,7 @@ export class SystemBankService {
     private readonly tenantDb: TenantDbService,
     private readonly questions: QuestionsService,
     private readonly banks: QuestionBanksService,
+    @Optional() private readonly media?: SystemBankMediaService,
   ) {}
 
   /** Kho ngân hàng đã được cấu hình kết nối hay chưa. */
@@ -398,6 +400,12 @@ export class SystemBankService {
       targetCategory = await this.banks.defaultCategoryOfBank(targetBank);
     }
     await this.evaluator.requireCapability(actorId, 'question:add', targetCategory.contextId);
+    // Bản công bố giữ ref ảnh theo hash của bank-system; khi nhập,
+    // tái tạo file của trung tâm đích từ byte đã sao độc lập.
+    // Chạy sau kiểm quyền để không tạo file khi yêu cầu bị từ chối.
+    const importPkg = this.media
+      ? await this.media.materialize(pkg, targetCategory.contextId, actorId)
+      : pkg;
     // Chỉ khi đích và cổng quyền đã qua mới ghi dòng importer (bước
     // 5 trong flow ở đầu hàm): nhập bị từ chối ở trên không để lại
     // vết nhập nào ở phía ngân hàng.
@@ -406,25 +414,35 @@ export class SystemBankService {
       centreSlug,
       importedBy: actorId,
     });
-    const stimulusId = pkg.stimulusContent
+    const stimulusId = importPkg.stimulusContent
       ? (await this.questions.createStimulus(actorId, {
           categoryId: targetCategory.id,
-          content: pkg.stimulusContent as RichTextInput,
+          content: importPkg.stimulusContent as RichTextInput,
         })).id
       : null;
+    // Kho gốc lưu các trường rich-text rỗng ở dạng null, trong khi
+    // QuestionsService nhận "không khai báo" (undefined), không nhận
+    // null ở options để đưa qua toRichTextDocument. Giữ nguyên gói
+    // công bố bất biến, chỉ chuẩn hoá bản nhập của trung tâm đích.
+    const importOptions = importPkg.options ? { ...importPkg.options } : undefined;
+    if (importOptions) {
+      for (const key of ['correctFeedback', 'incorrectFeedback', 'graderInfo', 'responseTemplate']) {
+        if (importOptions[key] === null) delete importOptions[key];
+      }
+    }
     const content: QuestionContentInput = {
-      questionText: pkg.questionText as RichTextInput,
-      generalFeedback: (pkg.generalFeedback ?? undefined) as RichTextInput | undefined,
-      guidance: (pkg.answerKey?.guidance ?? undefined) as RichTextInput | undefined,
+      questionText: importPkg.questionText as RichTextInput,
+      generalFeedback: (importPkg.generalFeedback ?? undefined) as RichTextInput | undefined,
+      guidance: (importPkg.answerKey?.guidance ?? undefined) as RichTextInput | undefined,
       stimulusId,
-      answers: pkg.answers.map((answer) => ({
+      answers: importPkg.answers.map((answer) => ({
         text: answer.answer as RichTextInput,
         correct: answer.isCorrect,
         feedback: (answer.feedback ?? undefined) as RichTextInput | undefined,
       })),
-      options: (pkg.options ?? undefined) as QuestionContentInput['options'],
-      solution: pkg.answerKey?.solution
-        ? (pkg.answerKey.solution as QuestionContentInput['solution'])
+      options: importOptions as QuestionContentInput['options'],
+      solution: importPkg.answerKey?.solution
+        ? (importPkg.answerKey.solution as QuestionContentInput['solution'])
         : undefined,
     };
     const created = await this.questions.createQuestion(actorId, {
@@ -432,7 +450,7 @@ export class SystemBankService {
       qtype: question.qtype,
       ...content,
     });
-    for (const outcome of pkg.outcomes) {
+    for (const outcome of importPkg.outcomes) {
       await this.questions.attachOutcome(actorId, created.question.id, outcome.outcomeId, outcome.cognitiveLevel);
     }
     const importRow = await this.centreRepo.insertImportRow({

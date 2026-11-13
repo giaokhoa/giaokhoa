@@ -8,6 +8,8 @@ import { useTranslation } from 'react-i18next';
 import { BankAreaTabs } from './bank-area-tabs';
 import { CategoryBrowser } from './category-browser';
 import { DiscoveryPanel } from './discovery-panel';
+import { SystemQuestionPublicationPanel } from './system-question-publication-panel';
+import { SystemPublishedQuestionsPanel } from './system-published-questions-panel';
 import { DossierQueuePanel } from './dossier-queue-panel';
 import { MyMatricesPanel, SystemMatricesPanel } from './my-matrices-panel';
 import { MyPapersPanel } from './my-papers-panel';
@@ -348,11 +350,15 @@ export function QuestionsPage({ area = 'my-questions' }: { area?: BankArea }) {
           nhân. Các neo #system-* trên từng <section> giữ nguyên. */}
       <div className="space-y-6">
             {area === 'system-questions' ? (
-              <DiscoveryPanel
-                sharedBanks={sharedBanks}
-                refreshBanks={refreshBanks}
-                setMessage={setMessage}
-              />
+              <>
+                <SystemQuestionPublicationPanel />
+                <SystemPublishedQuestionsPanel />
+                <DiscoveryPanel
+                  sharedBanks={sharedBanks}
+                  refreshBanks={refreshBanks}
+                  setMessage={setMessage}
+                />
+              </>
             ) : null}
             {area === 'system-exams' ? (
             <>

@@ -3,7 +3,7 @@
  *
  * Một phiên bản của câu hỏi hệ thống được lưu kèm một gói tự đủ
  * (self-contained): toàn bộ nội dung cần thiết để một trung tâm nhập
- * bản chụp mà không phải đọc thêm từ kho ngân hàng — nội dung câu, đáp án + quy tắc chấm, phản hồi, ngữ liệu kèm, tài nguyên, và các liên kết YCCĐ của câu (mã chuẩn + mức độ nhận thức từng liên kết). Tài nguyên (media) không có bảng riêng: tài liệu Tiptap mang tham chiếu `contentHash` tới kho đối tượng dùng chung (module files) nên tài liệu trong gói đã mang tham chiếu nguyên vẹn, không sao chép tệp.
+ * bản chụp mà không phải đọc thêm từ kho ngân hàng — nội dung câu, đáp án + quy tắc chấm, phản hồi, ngữ liệu kèm, tài nguyên, và các liên kết YCCĐ của câu (mã chuẩn + mức độ nhận thức từng liên kết). Tài nguyên (media) của các phiên bản xuất phát từ hàng chờ biên tập (#13) có manifest kèm bản sao byte ở miền bank-system dưới khoá riêng của nội dung công bố. Tài liệu Tiptap dùng `bank-media://<contentHash>`, không giữ fileId nguồn; khi trung tâm nhận, API tái tạo file ở miền đích. Các phiên bản phát hành trực tiếp cũ không có manifest vẫn giữ khả năng đọc theo gói gốc.
  *
  * Tính bất biến: nội dung đã phát hành không bao giờ bị ghi đè — mỗi lần sửa tạo một phiên bản mới với gói + checksum mới; phiên bản cũ đọc lại vẫn nguyên vẹn. Checksum là SHA-256 của dạng chuẩn hoá
  * (canonical JSON: khoá sắp xếp đệ quy) của gói, để phía trung tâm
@@ -52,6 +52,13 @@ export type SystemQuestionPackage = {
     /** Mức độ nhận thức của liên kết này. */
     cognitiveLevel: string;
   }>;
+  /** Dấu vết lưu bền của bản nguồn, không FK đến database trung tâm. */
+  source?: {
+    centreSlug: string; questionId: string; versionId: string; versionNumber: number;
+    authorId: string | null; sourceKind: string | null; sourceRef: string | null; license: string | null;
+  };
+  /** Manifest byte đã được sao sang kho vật lý độc lập trong miền bank-system. */
+  media?: Array<{ contentHash: string; fileName: string; mimeType: string }>;
 };
 
 /**

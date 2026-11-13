@@ -8,6 +8,8 @@ import {
   assignRole,
   createTestApp,
   createUserViaApi,
+  createRoleViaApi,
+  seedTenantMembershipFixture,
   http,
   login,
   roleIdByShortname,
@@ -17,6 +19,13 @@ import {
   uniqueName,
 } from '../../support/identity-access-helpers';
 import { addExamSlot, createExamDraft } from '../../support/exam-pin-helpers';
+import { tenantAls } from '../../../src/modules/tenants/tenant-als';
+import { RolesService } from '../../../src/modules/access/roles.service';
+import { ContextsService } from '../../../src/modules/access/contexts.service';
+import { FilesService } from '../../../src/modules/files/files.service';
+import { OBJECT_STORAGE, type ObjectStorage } from '../../../src/modules/files/storage';
+import { publicationMediaStorageKey } from '../../../src/modules/system-bank/system-bank-media.service';
+import { SYSTEM_FILE_DOMAIN } from '@giaokhoa/db';
 
 /**
  * Ca đầu-cuối của KHO NGÂN HÀNG HỆ THỐNG (issue #585): ứng dụng thật chạy với một database kho ngân hàng riêng dựng riêng cho đợt này
@@ -120,14 +129,15 @@ describe('Ngân hàng hệ thống thành kho riêng + API (issue #585)', () => 
       await client.query(`REVOKE CONNECT ON DATABASE ${quoted(BANK_DATABASE)} FROM PUBLIC`);
       await client.query(`GRANT CONNECT ON DATABASE ${quoted(BANK_DATABASE)} TO ${quoted(BANK_ROLE)}`);
     });
-    const bankMigrationDir = (await import('node:fs')).readdirSync(
+    const bankMigrationDirs = (await import('node:fs')).readdirSync(
       join(__dirname, '../../../../../packages/db/migrations/system-bank'),
-    ).filter((name) => name !== 'meta');
-    if (bankMigrationDir.length !== 1) throw new Error(`expected exactly one system-bank migration dir, found ${bankMigrationDir.length}`);
-    await applySqlFile(
-      clusterUrl(BANK_DATABASE, BANK_ROLE, BANK_PASSWORD),
-      join(__dirname, '../../../../../packages/db/migrations/system-bank', bankMigrationDir[0]!, 'migration.sql'),
-    );
+    ).filter((name) => name !== 'meta').sort();
+    for (const migrationDir of bankMigrationDirs) {
+      await applySqlFile(
+        clusterUrl(BANK_DATABASE, BANK_ROLE, BANK_PASSWORD),
+        join(__dirname, '../../../../../packages/db/migrations/system-bank', migrationDir, 'migration.sql'),
+      );
+    }
     process.env.SYSTEM_BANK_DATABASE_URL = clusterUrl(BANK_DATABASE, BANK_ROLE, BANK_PASSWORD);
     app = await createTestApp();
     admin = await adminToken(app);
@@ -424,6 +434,307 @@ describe('Ngân hàng hệ thống thành kho riêng + API (issue #585)', () => 
     );
     expect(importersAfter.rowCount).toBe(1);
   });
+
+  it('issue #13: giáo viên soạn riêng; quản trị gửi, biên tập duyệt/từ chối; B nhập sau khi A xoá nguồn và media', async () => {
+    // Mọi thao tác nghiệp vụ đi qua HTTP của AppModule thật. Mỗi
+    // người đăng nhập với token riêng, chuyển tenant để gác ALS/RLS.
+    const tenantAResponse = await http(app).post('/api/v1/tenants').set(bearer(admin)).send({
+      name: uniqueName('Trung tâm gửi G13'), slug: uniqueName('g13-a').toLowerCase(), kind: 'school',
+    });
+    expect(tenantAResponse.status, JSON.stringify(tenantAResponse.body)).toBe(201);
+    const tenantBResponse = await http(app).post('/api/v1/tenants').set(bearer(admin)).send({
+      name: uniqueName('Trung tâm nhận G13'), slug: uniqueName('g13-b').toLowerCase(), kind: 'school',
+    });
+    expect(tenantBResponse.status, JSON.stringify(tenantBResponse.body)).toBe(201);
+    const tenantA = tenantAResponse.body.id as string;
+    const tenantB = tenantBResponse.body.id as string;
+    const [managerA, teacherA, teacherB, editor, studentB] = await Promise.all(
+      Array.from({ length: 5 }, () => createUserViaApi(app, admin)),
+    );
+    const systemId = await systemContextId(app, admin);
+    const teacherRole = await roleIdByShortname(app, admin, 'editingteacher');
+    const managerRole = await roleIdByShortname(app, admin, 'manager');
+    const studentRole = await roleIdByShortname(app, admin, 'student');
+    await assignRole(app, admin, teacherA.id, teacherRole, systemId);
+    await assignRole(app, admin, teacherB.id, teacherRole, systemId);
+    await assignRole(app, admin, studentB.id, studentRole, systemId);
+    for (const id of [managerA.id, teacherA.id]) await seedTenantMembershipFixture(app, tenantA, id);
+    for (const id of [teacherB.id, studentB.id]) await seedTenantMembershipFixture(app, tenantB, id);
+    const contexts = app.get(ContextsService);
+    const managerContext = await tenantAls.run({ platform: true }, () => contexts.ensureTenantContext(tenantA));
+    await tenantAls.run({ platform: true }, () => app.get(RolesService).assignRole(managerA.id, managerRole, managerContext.id));
+
+    const editorRole = await createRoleViaApi(app, admin);
+    await setOverride(app, admin, editorRole, 'systembank:review', systemId, 1);
+    await assignRole(app, admin, editor.id, editorRole, systemId);
+
+    const switchTo = async (user: { username: string }, tenantId: string): Promise<string> => {
+      const root = await login(app, user.username, STRONG_PASSWORD);
+      const res = await http(app).post(`/api/v1/auth/switch-tenant/${tenantId}`).set(bearer(root.accessToken));
+      expect(res.status, JSON.stringify(res.body)).toBe(201);
+      return res.body.accessToken as string;
+    };
+    const managerToken = await switchTo(managerA, tenantA);
+    const teacherAToken = await switchTo(teacherA, tenantA);
+    const teacherBToken = await switchTo(teacherB, tenantB);
+    const studentToken = await switchTo(studentB, tenantB);
+    const editorToken = (await login(app, editor.username, STRONG_PASSWORD)).accessToken;
+
+    const banks = await http(app).get('/api/v1/question-banks').set(bearer(teacherAToken));
+    expect(banks.status, JSON.stringify(banks.body)).toBe(200);
+    const personal = (banks.body as Array<{
+      id: string; scope: string; ownerId: string; defaultCategoryId: string; contextId: string;
+    }>).find((b) => b.scope === 'personal' && b.ownerId === teacherA.id)!;
+    expect(personal?.defaultCategoryId).toBeTruthy();
+
+    const created = await http(app).post('/api/v1/questions').set(bearer(teacherAToken)).send({
+      categoryId: personal.defaultCategoryId, qtype: 'multichoice',
+      questionText: 'Câu G13 chỉ thuộc trung tâm A',
+      answers: [
+        { text: 'Đáp án đúng G13', correct: true },
+        { text: 'Sai một', correct: false },
+        { text: 'Sai hai', correct: false },
+        { text: 'Sai ba', correct: false },
+      ],
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const sourceId = created.body.question.id as string;
+    const ready = await http(app).post(`/api/v1/questions/${sourceId}/status`).set(bearer(teacherAToken))
+      .send({ status: 'ready' });
+    expect(ready.status, JSON.stringify(ready.body)).toBe(201);
+
+    const submitPath = '/api/v1/system-bank/submissions';
+    // Quản trị phải chọn được câu của giáo viên khác qua bộ chọn:
+    // chỉ liệt kê metadata câu sẵn sàng của trung tâm, không đưa đáp án.
+    const sources = await http(app).get(`${submitPath}/sources`).set(bearer(managerToken));
+    expect(sources.status, JSON.stringify(sources.body)).toBe(200);
+    expect(sources.body).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: sourceId, qtype: 'multichoice', version: 1 }),
+    ]));
+    expect(JSON.stringify(sources.body)).not.toContain('Đáp án đúng G13');
+    for (const token of [teacherAToken, teacherBToken, studentToken]) {
+      expect((await http(app).get(`${submitPath}/sources`).set(bearer(token))).status).toBe(403);
+    }
+    const teacherSubmit = await http(app).post(submitPath).set(bearer(teacherAToken)).send({ questionId: sourceId });
+    expect(teacherSubmit.status).toBe(403);
+    const managerSubmit = await http(app).post(submitPath).set(bearer(managerToken))
+      .send({ questionId: sourceId, license: 'CC BY 4.0' });
+    expect(managerSubmit.status, JSON.stringify(managerSubmit.body)).toBe(201);
+    expect(managerSubmit.body.status).toBe('pending');
+    const rejectedId = managerSubmit.body.id as string;
+    const retrySubmit = await http(app).post(submitPath).set(bearer(managerToken))
+      .send({ questionId: sourceId, license: 'CC BY 4.0' });
+    expect(retrySubmit.status).toBe(201);
+    expect(retrySubmit.body.id).toBe(rejectedId);
+
+    for (const token of [teacherAToken, managerToken, studentToken]) {
+      const forbidden = await http(app).get(`${submitPath}/pending`).set(bearer(token));
+      expect(forbidden.status).toBe(403);
+      const forbiddenReview = await http(app).get(`${submitPath}/${rejectedId}`).set(bearer(token));
+      expect(forbiddenReview.status).toBe(403);
+    }
+    const review = await http(app).get(`${submitPath}/${rejectedId}`).set(bearer(editorToken));
+    expect(review.status, JSON.stringify(review.body)).toBe(200);
+    expect(review.body.package.source.license).toBe('CC BY 4.0');
+    expect(review.body.package.answers).toHaveLength(4);
+    const managerApprove = await http(app).post(`${submitPath}/${rejectedId}/approve`).set(bearer(managerToken));
+    expect(managerApprove.status).toBe(403);
+    const before = await http(app).get('/api/v1/system-bank/discovery?qtype=multichoice&limit=100').set(bearer(teacherBToken));
+    expect(before.status).toBe(200);
+    const beforeIds = (before.body.items as { id: string }[]).map((item) => item.id);
+    expect(beforeIds).not.toContain(sourceId);
+    const rejected = await http(app).post(`${submitPath}/${rejectedId}/reject`).set(bearer(editorToken))
+      .send({ reason: 'Cần kiểm tra lời giải' });
+    expect(rejected.status, JSON.stringify(rejected.body)).toBe(201);
+    expect(rejected.body.status).toBe('rejected');
+    expect(rejected.body.rejectionReason).toBe('Cần kiểm tra lời giải');
+    expect((await http(app).get(`${submitPath}/mine`).set(bearer(managerToken))).body[0].status).toBe('rejected');
+    // Quyết định nghiệp vụ: một bản bị từ chối là terminal ở version
+    // nguồn đó. Gửi lại chỉ đổi giấy phép không được báo thành công,
+    // phải tạo version nguồn mới (giữ bản bị từ chối để truy vết).
+    const rejectedRetry = await http(app).post(submitPath).set(bearer(managerToken))
+      .send({ questionId: sourceId, license: 'CC BY 4.1' });
+    expect(rejectedRetry.status).toBe(409);
+    expect(rejectedRetry.body.code).toBe('system_bank.submission_rejected_requires_new_version');
+    expect((await http(app).get(`${submitPath}/mine`).set(bearer(managerToken))).body
+      .filter((row: { sourceQuestionId: string }) => row.sourceQuestionId === sourceId)).toHaveLength(1);
+
+    // Chuyển sang phiên bản mới có ảnh raster; chỉ ảnh đã chụp trong
+    // kho ngân hàng mới được truy cập ở B sau khi file gốc bị dọn.
+    const image = Buffer.concat([
+      Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'),
+      Buffer.from(uniqueName('-g13-source-image')),
+    ]);
+    const uploaded = await http(app).post('/api/v1/files/question-image').set(bearer(teacherAToken))
+      .field('contextId', personal.contextId).field('fileArea', 'questiontext')
+      .attach('file', image, 'so-do-g13.png');
+    expect(uploaded.status, JSON.stringify(uploaded.body)).toBe(201);
+    const fileId = (uploaded.body.file?.id ?? uploaded.body.id) as string;
+    expect(fileId).toBeTruthy();
+    const withImage = doc('Câu G13 có ảnh ở phiên bản mới');
+    (withImage.content as Array<unknown>).push({
+      type: 'image', attrs: { src: `/api/v1/files/${fileId}/content`, alt: 'Sơ đồ nguồn' },
+    });
+    const updated = await http(app).patch(`/api/v1/questions/${sourceId}`).set(bearer(teacherAToken))
+      .send({ questionText: withImage });
+    expect(updated.status, JSON.stringify(updated.body)).toBe(200);
+    const status2 = await http(app).post(`/api/v1/questions/${sourceId}/status`).set(bearer(teacherAToken))
+      .send({ status: 'ready' });
+    expect([200, 201]).toContain(status2.status);
+    const secondSubmit = await http(app).post(submitPath).set(bearer(managerToken))
+      .send({ questionId: sourceId, license: 'CC BY 4.0' });
+    expect(secondSubmit.status, JSON.stringify(secondSubmit.body)).toBe(201);
+    expect(secondSubmit.body.id).not.toBe(rejectedId);
+    expect(secondSubmit.body.package.media).toHaveLength(1);
+    const hash = secondSubmit.body.package.media[0].contentHash as string;
+    expect(hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(JSON.stringify(secondSubmit.body.package.questionText)).toContain('bank-media://');
+    const reviewImagePath = `${submitPath}/${secondSubmit.body.id}/media/${hash}`;
+    // Ảnh xem trước thuộc kho bank-system, người không duyệt không được
+    // xem kể cả khi đoán đúng ID bản gửi và SHA-256 của ảnh.
+    for (const token of [teacherAToken, managerToken, teacherBToken, studentToken]) {
+      expect((await http(app).get(reviewImagePath).set(bearer(token))).status).toBe(403);
+    }
+    const reviewedImage = await http(app).get(reviewImagePath).set(bearer(editorToken));
+    expect(reviewedImage.status).toBe(200);
+    expect(reviewedImage.headers['content-type']).toMatch(/image\/png/);
+    expect(reviewedImage.headers['cache-control']).toBe('private, no-store');
+    expect(reviewedImage.body).toEqual(image);
+    const missingImage = await http(app).get(`${submitPath}/${secondSubmit.body.id}/media/${'0'.repeat(64)}`)
+      .set(bearer(editorToken));
+    expect(missingImage.status).toBe(400);
+    const approved = await http(app).post(`${submitPath}/${secondSubmit.body.id}/approve`)
+      .set(bearer(editorToken)).send({});
+    expect(approved.status, JSON.stringify(approved.body)).toBe(201);
+    const publishedId = approved.body.publishedQuestionId as string;
+    expect(publishedId).toBeTruthy();
+    expect(approved.body.publishedVersion).toBe(1);
+    const approvedRetry = await http(app).post(`${submitPath}/${secondSubmit.body.id}/approve`)
+      .set(bearer(editorToken)).send({});
+    expect(approvedRetry.body.publishedVersion).toBe(1);
+    const after = await http(app).get('/api/v1/system-bank/discovery?qtype=multichoice&limit=100').set(bearer(teacherBToken));
+    expect(after.status).toBe(200);
+    expect((after.body.items as { id: string }[]).some((row) => row.id === publishedId)).toBe(true);
+    for (const path of [`/api/v1/system-bank/questions/${publishedId}`,
+      `/api/v1/system-bank/questions/${publishedId}/versions/1`]) {
+      expect((await http(app).get(path).set(bearer(studentToken))).status).toBe(404);
+    }
+    const v1 = await http(app).get(`/api/v1/system-bank/questions/${publishedId}/versions/1`).set(bearer(teacherBToken));
+    expect(v1.status).toBe(200);
+    expect(v1.body.package.source.license).toBe('CC BY 4.0');
+    expect(v1.body.package.media[0].contentHash).toBe(hash);
+
+    // Bản công bố cùng vật lý ở miền bank-system nhưng khoá riêng,
+    // nên dọn hash nguồn ở chính miền ấy vẫn không xoá bản công bố.
+    const storage = app.get<ObjectStorage>(OBJECT_STORAGE, { strict: false });
+    const publicationKey = publicationMediaStorageKey(hash);
+    expect(publicationKey).not.toBe(hash);
+    expect(await storage.exists(SYSTEM_FILE_DOMAIN, publicationKey)).toBe(true);
+    const deletedImage = await http(app).delete(`/api/v1/files/${fileId}`).set(bearer(teacherAToken));
+    expect([200, 204]).toContain(deletedImage.status);
+    await tenantAls.run({ tenantId: tenantA, userId: teacherA.id }, () =>
+      app.get(FilesService).cleanupOrphan(hash, SYSTEM_FILE_DOMAIN));
+    expect(await storage.exists(SYSTEM_FILE_DOMAIN, publicationKey)).toBe(true);
+    const preservedPreview = await http(app).get(reviewImagePath).set(bearer(editorToken));
+    expect(preservedPreview.status).toBe(200);
+    expect(preservedPreview.body).toEqual(image);
+
+    const imported = await http(app).post('/api/v1/system-bank/import').set(bearer(teacherBToken))
+      .send({ sourceQuestionId: publishedId, sourceVersionNumber: 1 });
+    expect(imported.status, JSON.stringify(imported.body)).toBe(201);
+    const importId = imported.body.question.question.id as string;
+    const importedView = await http(app).get(`/api/v1/questions/${importId}`).set(bearer(teacherBToken));
+    expect(importedView.status).toBe(200);
+    expect(JSON.stringify(importedView.body.latestVersion.questionText)).toContain('/api/v1/files/');
+    expect(JSON.stringify(importedView.body.latestVersion.questionText)).not.toContain('bank-media://');
+
+    // Một bản cập nhật nguồn mới được biên tập duyệt thành v2, v1
+    // vẫn có checksum và ảnh cũ; không giữ FK đến câu hoặc file A.
+    const v3Source = await http(app).patch(`/api/v1/questions/${sourceId}`).set(bearer(teacherAToken))
+      .send({ questionText: 'Câu G13 sửa sau khi đã công bố' });
+    expect(v3Source.status, JSON.stringify(v3Source.body)).toBe(200);
+    const thirdSubmit = await http(app).post(submitPath).set(bearer(managerToken)).send({ questionId: sourceId });
+    expect(thirdSubmit.status, JSON.stringify(thirdSubmit.body)).toBe(201);
+    const thirdApproval = await http(app).post(`${submitPath}/${thirdSubmit.body.id}/approve`)
+      .set(bearer(editorToken)).send({});
+    expect(thirdApproval.status, JSON.stringify(thirdApproval.body)).toBe(201);
+    expect(thirdApproval.body.publishedQuestionId).toBe(publishedId);
+    expect(thirdApproval.body.publishedVersion).toBe(2);
+    const originalAgain = await http(app).get(`/api/v1/system-bank/questions/${publishedId}/versions/1`)
+      .set(bearer(teacherBToken));
+    expect(originalAgain.status).toBe(200);
+    expect(originalAgain.body.checksum).toBe(v1.body.checksum);
+    expect(originalAgain.body.package).toEqual(v1.body.package);
+    const sourceRemoved = await http(app).delete(`/api/v1/questions/${sourceId}`).set(bearer(teacherAToken));
+    expect([200, 204]).toContain(sourceRemoved.status);
+    const afterSourceGone = await http(app).get(`/api/v1/system-bank/questions/${publishedId}/versions/1`)
+      .set(bearer(teacherBToken));
+    expect(afterSourceGone.status).toBe(200);
+    expect(afterSourceGone.body.package).toEqual(v1.body.package);
+
+    // Nghiệm thu cả 4 dạng câu: multichoice đã chứng minh ở trên;
+    // truefalse/shortanswer/essay đều đi qua HTTP gửi/duyệt/nhập.
+    // Kiểm answerKey/options bên nhận, không chỉ danh tính câu.
+    const additionalTypes: Array<{ qtype: string; questionText: unknown; answers?: unknown[]; solution?: unknown; options?: unknown }> = [
+      {
+        qtype: 'truefalse',
+        questionText: {
+          type: 'doc',
+          content: [
+            { type: 'paragraph', content: [{ type: 'text', text: 'Đánh giá các mệnh đề G13' }] },
+            { type: 'statementList', content: [1, 2, 3, 4].map((n) => ({
+              type: 'statement', attrs: { id: `g13-s${n}` },
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: `Mệnh đề ${n}` }] }],
+            })) },
+          ],
+        },
+        solution: { answers: [1, 2, 3, 4].map((n) => ({ statementId: `g13-s${n}`, value: n % 2 === 0 })) },
+      },
+      {
+        qtype: 'shortanswer', questionText: 'Câu G13 trả lời ngắn',
+        answers: [{ text: 'Hà Nội', correct: true }, { text: 'Ha Noi', correct: true }],
+        options: { useCase: false },
+      },
+      {
+        qtype: 'essay', questionText: 'Câu G13 tự luận',
+        solution: { answer: 'Phân tích theo ba luận điểm.' },
+        options: {
+          responseFormat: 'editor', responseRequired: true, minWordLimit: 5, maxWordLimit: 300,
+          graderInfo: 'Hướng dẫn chấm theo ba ý chính',
+          responseTemplate: 'Mở bài - Thân bài - Kết luận',
+        },
+      },
+    ];
+    for (const payload of additionalTypes) {
+      const createdType = await http(app).post('/api/v1/questions').set(bearer(teacherAToken))
+        .send({ categoryId: personal.defaultCategoryId, ...payload });
+      expect(createdType.status, `${payload.qtype}: ${JSON.stringify(createdType.body)}`).toBe(201);
+      const questionTypeId = createdType.body.question.id as string;
+      const readyType = await http(app).post(`/api/v1/questions/${questionTypeId}/status`)
+        .set(bearer(teacherAToken)).send({ status: 'ready' });
+      expect([200, 201]).toContain(readyType.status);
+      const submittedType = await http(app).post(submitPath).set(bearer(managerToken))
+        .send({ questionId: questionTypeId, license: 'Tác giả cho phép sử dụng' });
+      expect(submittedType.status, `${payload.qtype}: ${JSON.stringify(submittedType.body)}`).toBe(201);
+      const approvedType = await http(app).post(`${submitPath}/${submittedType.body.id}/approve`)
+        .set(bearer(editorToken)).send({});
+      expect(approvedType.status, `${payload.qtype}: ${JSON.stringify(approvedType.body)}`).toBe(201);
+      const publishedTypeId = approvedType.body.publishedQuestionId as string;
+      const readType = await http(app).get(`/api/v1/system-bank/questions/${publishedTypeId}/versions/1`)
+        .set(bearer(teacherBToken));
+      expect(readType.status).toBe(200);
+      expect(readType.body.package.source.license).toBe('Tác giả cho phép sử dụng');
+      const importedType = await http(app).post('/api/v1/system-bank/import').set(bearer(teacherBToken))
+        .send({ sourceQuestionId: publishedTypeId, sourceVersionNumber: 1 });
+      expect(importedType.status, `${payload.qtype}: ${JSON.stringify(importedType.body)}`).toBe(201);
+      const copiedType = await http(app).get(`/api/v1/questions/${importedType.body.question.question.id}`)
+        .set(bearer(teacherBToken));
+      expect(copiedType.status).toBe(200);
+      expect(copiedType.body.question.qtype).toBe(payload.qtype);
+      expect(copiedType.body.options).toEqual(createdType.body.options);
+      expect(copiedType.body.answerKey).toEqual(createdType.body.answerKey);
+    }
+  }, 180_000);
 
   it('bank-off: app không cấu hình kho ngân hàng vẫn đọc câu đã nhập và tạo đề từ câu đó', async () => {
     const created = await publish('Câu cho bank-off');
