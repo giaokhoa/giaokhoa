@@ -40,6 +40,10 @@ CREATE TABLE "support_access_events" (
 CREATE INDEX "support_access_events_tenant_time_idx"
   ON "support_access_events" ("tenant_id", "created_at" DESC);
 --> statement-breakpoint
+-- FK grant_id cũng cần index đứng đầu như mọi FK một cột khác.
+CREATE INDEX "support_access_events_grant_idx"
+  ON "support_access_events" ("grant_id");
+--> statement-breakpoint
 -- Mọi truy vấn hỗ trợ chạy với app.tenant_id thực của trung tâm;
 -- không có tenant thì cơ sở dữ liệu từ chối theo RLS fail-closed.
 ALTER TABLE "support_grants" ENABLE ROW LEVEL SECURITY;

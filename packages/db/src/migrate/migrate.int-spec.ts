@@ -199,13 +199,13 @@ describe('bộ máy migration của package cho ba kho', () => {
     const result = await verifyStore(verifyDb, 'centre');
     await verifyDb.destroy().catch(() => undefined);
     expect(result.ok).toBe(true);
-    expect(result.tables).toBe(202);
-    expect(result.policies).toBe(21);
-    expect(result.indexes).toBe(416);
+    expect(result.tables).toBe(204);
+    expect(result.policies).toBe(23);
+    expect(result.indexes).toBe(419);
     expect(result.journalRows).toBe(MIGRATION_STORES.centre.expected.journalRows);
-    expect(await countPublic(centreUrl, 'tables')).toBe(202);
-    expect(await countPublic(centreUrl, 'policies')).toBe(21);
-    expect(await countPublic(centreUrl, 'indexes')).toBe(416);
+    expect(await countPublic(centreUrl, 'tables')).toBe(204);
+    expect(await countPublic(centreUrl, 'policies')).toBe(23);
+    expect(await countPublic(centreUrl, 'indexes')).toBe(419);
   });
 
   it('hàm đọc nhật ký chỉ đọc kysely_migration: database trống trả tập rỗng, nhật ký cũ bị bỏ qua, nhật ký Kysely trả đúng tập tên', async () => {

@@ -81,10 +81,12 @@ Bề mặt cấp quyền tại Host **của trung tâm** (phiên nghiệp vụ, 
 - `POST /api/v1/support-grants/:grantId/revoke`: thu hồi vĩnh viễn, không làm mới session.
 - `GET /api/v1/support-grants/audit`: vết cấp/thu hồi và từng quyết định dùng grant của chính trung tâm.
 
-Bề mặt hỗ trợ tại **Host gốc platform**, với access token `audience=platform` (lấy từ `POST /api/v1/auth/platform/login`; không dùng cookie nghiệp vụ):
+Bề mặt hỗ trợ tại **Host gốc platform**, với access token **`aud=support` riêng** (lấy từ `POST /api/v1/auth/support/login`, hoặc `POST /api/v1/auth/support/mfa/verify` nếu đã bật MFA; không dùng cookie nghiệp vụ và không cần vai siteadmin):
 
-- `GET /api/v1/support-centres/:slug/my-grants`: người dùng platform xem grant của chính mình.
+- `GET /api/v1/support-centres/:slug/my-grants`: người nhận support token xem grant của chính mình.
 - `GET /api/v1/support-centres/:slug/classes`: chỉ chiếu `id, name, code, status` của lớp, cần `classes:read`.
 - `GET /api/v1/support-centres/:slug/courses`: chỉ chiếu `id, fullName, shortName, visible` của khoá, cần `courses:read`.
 
-Không grant nào cấp quyền `login-as`, quản lý user, xem bài làm/điểm hay gọi API nghiệp vụ trực tiếp. `AudienceGuard` vẫn cấm token platform trên mọi route nghiệp vụ; request hỗ trợ kiểm grant, `expires_at > now()`, `revoked_at IS NULL`, người nhận và scope trực tiếp trong database của slug trước khi trả hình chiếu, đồng thời ghi `access_allowed/access_denied` ở bảng audit có RLS `tenant_id`. Không đưa tên học sinh, bài làm, mật khẩu, khóa phiên hay payload nghiệp vụ vào audit. Trung tâm B không đọc được grant/audit của A.
+Không grant nào cấp quyền `login-as`, quản lý user, xem bài làm/điểm hay gọi API nghiệp vụ trực tiếp. `AudienceGuard` vẫn cấm token support trên mọi route nghiệp vụ và control plane; token platform admin cũng không được gọi API hỗ trợ; request hỗ trợ kiểm grant, `expires_at > now()`, `revoked_at IS NULL`, người nhận và scope trực tiếp trong database của slug trước khi trả hình chiếu, đồng thời ghi `access_allowed/access_denied` ở bảng audit có RLS `tenant_id`. Không đưa tên học sinh, bài làm, mật khẩu, khóa phiên hay payload nghiệp vụ vào audit. Trung tâm B không đọc được grant/audit của A.
+
+**Ranh giới danh tính nhân sự:** khi cấp grant, API kiểm `recipientId` là tài khoản đang hoạt động trong kho platform; tài khoản riêng của trung tâm không hợp lệ. Đường `/auth/support/login` chỉ chạy tại host gốc, xác thực mật khẩu, lockout và MFA hiện hành, phát token `aud=support` có hạn (không refresh). Token chỉ được truy cập endpoint `@SupportRoute()` — không có quyền siteadmin, `login-as`, API nghiệp vụ hoặc control plane kể cả khi người nhận có grant. Cổng đăng nhập `/auth/platform/login` tiếp tục chỉ dành cho siteadmin như trước, không nới quyền.

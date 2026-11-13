@@ -9,6 +9,7 @@ import { SpaceRoutingModule } from "../../db/routing/space-routing.module";
 import { SpaceDatabaseService } from "../../db/routing/space-database.service";
 import { AccessModule } from "../access/access.module";
 import { TenantsModule } from "../tenants/tenants.module";
+import { UsersModule } from "../users/users.module";
 import {
   SupportCentresController,
   SupportGrantsController,
@@ -17,7 +18,7 @@ import { SupportService } from "./support.service";
 
 /** Đăng ký hai controller và dependency của service; không xuất quyền. */
 @Module({
-  imports: [SpaceRoutingModule, AccessModule, TenantsModule],
+  imports: [SpaceRoutingModule, AccessModule, TenantsModule, UsersModule],
   controllers: [SupportGrantsController, SupportCentresController],
   providers: [
     {

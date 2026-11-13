@@ -25,6 +25,7 @@ import {
 } from "@giaokhoa/db/repositories/support-grants";
 import { SpaceDatabaseService } from "../../db/routing/space-database.service";
 import { TenantsService } from "../tenants/tenants.service";
+import { UsersService } from "../users/users.service";
 import { TenantContextService } from "../tenants/tenant-context.service";
 import { tenantAls } from "../tenants/tenant-als";
 
@@ -73,6 +74,7 @@ export class SupportService {
     private readonly tenants: TenantsService,
     private readonly tenantContext: TenantContextService,
     private readonly spaceDb: SpaceDatabaseService,
+    private readonly users: UsersService,
   ) {}
 
   /**
@@ -116,6 +118,19 @@ export class SupportService {
     dto: CreateSupportGrant,
   ): Promise<SupportGrant> {
     const tenantId = await this.requireCentreManager(actorId);
+    // Đối chiếu định danh người nhận trong KHO PLATFORM, không lấy
+    // tài khoản của A làm nhân sự hỗ trợ nền tảng. Không cấp cho
+    // tài khoản đã bị đình chỉ/đã xoá; không cấp quyền siteadmin.
+    const recipient = await tenantAls.run(
+      { platform: true },
+      () => this.users.getByIdOrUndefined(dto.recipientId),
+    );
+    if (!recipient || recipient.deleted || recipient.suspended) {
+      throw new BadRequestException({
+        message: "Recipient must be an active platform account",
+        code: "support.invalid_recipient",
+      });
+    }
     const expiresAt = new Date(dto.expiresAt);
     const remaining = expiresAt.getTime() - Date.now();
     if (remaining <= 0 || remaining > MAX_DURATION_MS) {
@@ -239,7 +254,7 @@ export class SupportService {
    * Kiểm grant theo recipient/centre/scope và thời gian DB tại mỗi
    * request; audit allowed/denied được ghi kể cả khi không có grant.
    * Bị từ chối không đọc bảng nghiệp vụ, grant không cấp login-as.
-   * @param actorId - Danh tính từ platform access token.
+   * @param actorId - Danh tính từ support token có audience riêng.
    * @param slug - Trung tâm được đăng ký.
    * @param scope - Thao tác cố định của route.
    * @throws support.access_denied nếu thiếu grant hợp lệ.
@@ -287,8 +302,7 @@ export class SupportService {
     return this.spaceDb.withSpaceKysely(
       slug,
       async (db) =>
-        (await this.repo.listGrants(tenantId, db))
-          .filter((grant) => grant.recipientId === actorId)
+        (await this.repo.listGrantsForRecipient(tenantId, actorId, db))
           .map(grantView),
       { tenantId },
     );

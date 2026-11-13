@@ -80,6 +80,26 @@ export class SupportGrantsRepository {
       .execute();
   }
 
+  /**
+   * Tra các grant của người nhận TRƯỚC khi giới hạn danh sách.
+   * Không lọc sau LIMIT tenant vì nhiều grant của nhân sự khác có
+   * thể che mất grant còn hiệu lực ở trang sau.
+   */
+  async listGrantsForRecipient(
+    tenantId: string,
+    recipientId: string,
+    db: SupportHandle = this.db,
+  ): Promise<SupportGrantRow[]> {
+    return db
+      .selectFrom("support_grants")
+      .select(GRANT_COLUMNS)
+      .where("tenant_id", "=", tenantId)
+      .where("recipient_id", "=", recipientId)
+      .orderBy("created_at", "desc")
+      .limit(100)
+      .execute();
+  }
+
   /** Tìm grant theo id và tenant; không lộ grant của tenant khác. */
   async findGrant(
     tenantId: string,

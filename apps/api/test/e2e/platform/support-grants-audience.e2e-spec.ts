@@ -55,6 +55,48 @@ describe("Hỗ trợ trung tâm: tách audience ở chuỗi guard thật", () =>
     expect(res.body.code).toBe("auth.audience_denied");
   });
 
+  it("platform admin token không dùng được bề mặt support nếu chưa có support token riêng", async () => {
+    const res = await http(app)
+      .get("/api/v1/support-centres/trung-tam-a/classes")
+      .set("Authorization", `Bearer ${platformToken}`);
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe("auth.audience_denied");
+  });
+
+  it("nhân sự hỗ trợ thông thường có token riêng nhưng không thể vào login-as hay control plane", async () => {
+    const created = await (await import("../../support/identity-access-helpers")).createUserViaApi(app, businessToken);
+    const login = await http(app)
+      .post("/api/v1/auth/support/login")
+      .send({ username: created.username, password: "Passw0rd!" });
+    expect(login.status).toBe(201);
+    const support = login.body.accessToken as string;
+    expect(support).toBeTruthy();
+    const loginAs = await http(app)
+      .post("/api/v1/auth/login-as")
+      .set("Authorization", `Bearer ${support}`)
+      .send({ userId: created.id, reason: "kiểm thử cổng" });
+    expect(loginAs.status).toBe(403);
+    expect(loginAs.body.code).toBe("auth.audience_denied");
+    const control = await http(app)
+      .get("/api/v1/control-plane/spaces/by-slug/any")
+      .set("Authorization", `Bearer ${support}`);
+    expect(control.status).toBe(403);
+    expect(control.body.code).toBe("auth.audience_denied");
+    const business = await http(app)
+      .get("/api/v1/users/me")
+      .set("Authorization", `Bearer ${support}`);
+    expect(business.status).toBe(403);
+  });
+
+  it("cấm đăng nhập hỗ trợ ở host trung tâm dù thông tin đăng nhập đúng", async () => {
+    const res = await http(app)
+      .post("/api/v1/auth/support/login")
+      .set("Host", "centre-a.test.local")
+      .send({ username: "admin", password: "Admin123!" });
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe("auth.support_root_only");
+  });
+
   it("request thiếu xác thực bị từ chối ngay trước khi tra grant/DB đích", async () => {
     const res = await http(app).get(
       "/api/v1/support-centres/trung-tam-a/classes",

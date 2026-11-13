@@ -1,7 +1,7 @@
 /**
  * Hai bề mặt HTTP hỗ trợ KHÔNG dùng chung audience:
  * - Trung tâm: phiên nghiệp vụ tại Host của mình, owner có tenant:manage.
- * - Nhân sự nền tảng: phiên platform tại Host gốc, thao tác chỉ-đọc
+ * - Nhân sự nền tảng: support token có audience riêng tại Host gốc, thao tác chỉ-đọc
  *   cố định và grant kiểm trực tiếp ở kho của slug mỗi request.
  * Không cung cấp endpoint login-as hoặc truyền token nghiệp vụ.
  */
@@ -24,7 +24,7 @@ import {
   CurrentUser,
   type AuthenticatedUser,
 } from "../../common/current-user.decorator";
-import { PlatformRoute } from "../../common/platform-route.decorator";
+import { SupportRoute } from "../../common/support-route.decorator";
 import { SkipSpaceContext } from "../tenants/skip-space-context.decorator";
 import { spaceSlugForHost } from "../tenants/space-resolution";
 import { SupportService } from "./support.service";
@@ -67,19 +67,19 @@ export class SupportGrantsController {
 }
 
 /**
- * Bề mặt vận hành chỉ cho token platform, tại Host gốc; bỏ qua ghim
+ * Bề mặt vận hành chỉ cho support token (aud=support), tại Host gốc; bỏ qua ghim
  * Host của kho nghiệp vụ để service tự phân giải đúng slug đã kiểm.
  * AudienceGuard từ chối mọi cookie/JWT nghiệp vụ trước handler.
  */
 @ApiTags("support-centres")
-@PlatformRoute()
+@SupportRoute()
 @SkipSpaceContext()
 @Controller({ path: "support-centres", version: "1" })
 export class SupportCentresController {
   constructor(private readonly support: SupportService) {}
 
   /**
-   * Không cho dùng phiên platform từ Host của một trung tâm khác:
+   * Không cho dùng support token từ Host của một trung tâm khác:
    * đường hỗ trợ chỉ được gọi qua địa chỉ gốc của nền tảng.
    */
   private assertPlatformHost(host?: string): void {

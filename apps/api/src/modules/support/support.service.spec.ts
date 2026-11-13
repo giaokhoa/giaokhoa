@@ -5,6 +5,14 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { SupportService } from "./support.service";
+import type {
+  SupportGrantRow,
+  SupportAuditRow,
+  SupportGrantsRepository,
+} from "@giaokhoa/db/repositories/support-grants";
+
+type NewGrant = Parameters<SupportGrantsRepository["createGrant"]>[0];
+type NewAudit = Parameters<SupportGrantsRepository["appendAudit"]>[0];
 
 const A = "00000000-0000-7000-8000-0000000000a1";
 const B = "00000000-0000-7000-8000-0000000000b1";
@@ -16,12 +24,12 @@ const OTHER = "00000000-0000-7000-8000-0000000000e1";
 function harness() {
   let currentTenant = A;
   let next = 0;
-  const grants: any[] = [];
-  const audit: any[] = [];
+  const grants: SupportGrantRow[] = [];
+  const audit: SupportAuditRow[] = [];
   const clock = () => new Date();
   const repo = {
-    createGrant: vi.fn(async (data: any) => {
-      const grant = {
+    createGrant: vi.fn(async (data: NewGrant) => {
+      const grant: SupportGrantRow = {
         id: `00000000-0000-7000-8000-${String(++next).padStart(12, "0")}`,
         ...data,
         revokedAt: null,
@@ -34,10 +42,13 @@ function harness() {
     listGrants: vi.fn(async (id: string) =>
       grants.filter((g) => g.tenantId === id),
     ),
+    listGrantsForRecipient: vi.fn(async (id: string, recipientId: string) =>
+      grants.filter((g) => g.tenantId === id && g.recipientId === recipientId),
+    ),
     listAudit: vi.fn(async (id: string) =>
       audit.filter((e) => e.tenantId === id),
     ),
-    appendAudit: vi.fn(async (event: any) => {
+    appendAudit: vi.fn(async (event: NewAudit) => {
       audit.push({
         id: `00000000-0000-7000-8000-${String(++next).padStart(12, "0")}`,
         ...event,
@@ -108,7 +119,7 @@ function harness() {
     },
     resolveTarget: vi.fn(async () => ({ status: "active" })),
     withSpaceKysely: vi.fn(
-      async (_slug: string, fn: (db: any) => Promise<unknown>) =>
+      async (_slug: string, fn: (db: typeof resolverDb) => Promise<unknown>) =>
         fn(resolverDb),
     ),
   };
@@ -117,6 +128,7 @@ function harness() {
     tenants as never,
     { currentTenantId: () => currentTenant } as never,
     spaceDb as never,
+    { getByIdOrUndefined: vi.fn(async (id: string) => ({ id, deleted: false, suspended: false })) } as never,
   );
   return {
     service,
@@ -232,6 +244,7 @@ describe("Cấp quyền hỗ trợ theo tenant, người nhận, thao tác và t
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
     });
     const row = h.grants.find((g) => g.id === after.id);
+    if (!row) throw new Error("Expected test grant");
     row.expiresAt = new Date(Date.now() - 1000);
     await expect(
       h.service.access(STAFF, "centre-a", "courses:read"),

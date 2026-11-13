@@ -72,7 +72,7 @@ import { SecurityHeadersMiddleware } from './common/security-headers.middleware'
  * (`/auth/platform/login`) cũng kiểm chứng mật khẩu quản trị nên nằm
  * trong cùng danh sách này.
  */
-const CREDENTIAL_ROUTES = /^\/api\/v\d+\/auth\/(token|login|session\/login|change-password|platform\/login)$/;
+const CREDENTIAL_ROUTES = /^\/api\/v\d+\/auth\/(token|login|session\/login|change-password|platform\/login|support\/login)$/;
 /** Đăng ký tự do có chi phí băm mật khẩu và ghi DB; áp hạn mức riêng
  * thay vì default 3.000/phút hoặc auth 300/phút. IP lấy từ ThrottlerGuard
  * và proxy đáng tin cậy của ứng dụng, không lấy trực tiếp từ payload. */
