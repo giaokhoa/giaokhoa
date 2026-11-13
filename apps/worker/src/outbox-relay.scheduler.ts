@@ -45,7 +45,7 @@ interface OutboxRow {
  *    - Nếu loại sự kiện có trong bảng định tuyến
  *      {@link OUTBOX_EVENT_QUEUE_ROUTES}: bước phát là đẩy một job
  *      BullMQ vào MỌI hàng đợi đích của loại đó (tên job là loại
- *      sự kiện, `jobId` là id của dòng outbox, dữ liệu job là toàn
+ *      sự kiện, `jobId` là định danh kho ghép id của dòng outbox, dữ liệu job là toàn
  *      bộ dòng — xem {@link OutboxEventJobData}). Mọi đích đều đẩy
  *      thành công mới được coi là đã phát: loại có nhiều consumer
  *      (fan-out) chỉ được đóng dấu khi mọi consumer đều đã có job
@@ -97,7 +97,7 @@ interface OutboxRow {
  *   lại ở nhịp relay sau.
  * - Tính idempotent / at-least-once: tiến trình sập sau khi đẩy job
  *   mà trước khi đóng dấu thì nhịp sau phát lại cùng dòng; `jobId`
- *   bằng id dòng outbox khiến BullMQ trả lại job đã có thay vì tạo
+ *   ghép id kho bất biến với id dòng outbox khiến BullMQ trả lại job đã có thay vì tạo
  *   job trùng, nên phía hàng đợi vẫn đúng một job cho một dòng —
  *   NHƯNG chỉ trong cửa sổ hàng đợi còn lưu giữ job theo chính sách
  *   `removeOnComplete` / `removeOnFail` hiện hành. Job đã bị dọn
@@ -127,6 +127,15 @@ interface OutboxRow {
  * ghi cột `publishedAt` của `outbox_events`, chèn dòng `event_log`
  * qua `EventLogWriter`, ghi `task_log` qua `TaskLogService`.
  */
+/**
+ * Định danh job theo kho bất biến để outbox UUID trùng nhau ở các database
+ * không chiếm cùng một vị trí trong BullMQ. Dùng chung cho cầu dẫn e2e
+ * để dọn đúng job đã phát, kể cả ở nhánh lỗi trước khi đóng dấu.
+ */
+export function outboxRelayJobId(spaceId: string | null, outboxId: string): string {
+  return `${spaceId ?? 'shared'}-${outboxId}`;
+}
+
 @Injectable()
 export class OutboxRelayScheduler {
   private readonly logger = new Logger(OutboxRelayScheduler.name);
@@ -364,7 +373,7 @@ export class OutboxRelayScheduler {
    * (phía tiêu thụ của dòng vẫn đọc trực tiếp bảng outbox như hiện
    * hành). Hàm chỉ resolve khi MỌI đích đã nhận job — mọi lỗi đều
    * ném ra để dòng không bị đóng dấu: phát lại ở nhịp sau an toàn ở
-   * các đích đã nhận nhờ `jobId` bằng id dòng outbox (BullMQ trả
+   * các đích đã nhận nhờ `jobId` ghép id kho với id dòng outbox (BullMQ trả
    * lại job đã có thay vì tạo job thứ hai), nên bất biến "đóng dấu
    * chỉ sau khi phát thành công" giữ nguyên cả khi fan-out nhiều
    * đích.
@@ -395,7 +404,7 @@ export class OutboxRelayScheduler {
           `Outbox event type "${row.type}" is routed to queue "${queueName}" but that queue is not registered`,
         );
       }
-      // jobId bằng id của dòng outbox (không chứa dấu ':' theo luật của
+      // jobId ghép định danh kho với id dòng outbox (không chứa dấu ':' theo luật của
       // package): phát lại cùng một dòng trong lúc job còn được BullMQ
       // lưu giữ thì không tạo job trùng ở đích đó; ngoài cửa sổ lưu
       // giữ đó, chống trùng tác dụng phụ là việc của processor
@@ -403,7 +412,7 @@ export class OutboxRelayScheduler {
       await queue.add(row.type, data, {
         // BullMQ dùng Redis chung: cùng outbox UUID ở hai database
         // phải là hai công việc độc lập, kể cả khi relay retry.
-        jobId: `${spaceId ?? 'shared'}-${row.id}`,
+        jobId: outboxRelayJobId(spaceId, row.id),
       });
     }
   }

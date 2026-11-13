@@ -519,13 +519,15 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
     const cookieForB = await sessionLogin();
     const meAtB = await http(app).get('/api/v1/auth/session/me').set('Host', HOST_B).set('Cookie', cookieForB);
     expect(meAtB.status).toBe(401);
-    expect((meAtB.body as { code?: string }).code).toBe('auth.session_space_mismatch');
-    // Phiên bị huỷ ngay khi phát hiện lệch không gian nên ca ở
-    // site chính cần một phiên mới.
+    expect((meAtB.body as { code?: string }).code).toBe('auth.session_expired');
+    // Kho B không nhìn thấy phiên trong namespace Redis của A; không được huỷ nhầm phiên của A.
+    expect((await http(app).get('/api/v1/auth/session/me').set('Host', HOST_A).set('Cookie', cookieForB)).status).toBe(200);
+    // Site chính cũng không thể tra hoặc huỷ phiên đã tạo trong kho A.
     const cookieForMain = await sessionLogin();
     const meAtMain = await http(app).get('/api/v1/auth/session/me').set('Host', HOST_MAIN).set('Cookie', cookieForMain);
     expect(meAtMain.status).toBe(401);
-    expect((meAtMain.body as { code?: string }).code).toBe('auth.session_space_mismatch');
+    expect((meAtMain.body as { code?: string }).code).toBe('auth.session_expired');
+    expect((await http(app).get('/api/v1/auth/session/me').set('Host', HOST_A).set('Cookie', cookieForMain)).status).toBe(200);
   });
 
   it('chuyển tenant không áp dụng ở trung tâm kho riêng', async () => {

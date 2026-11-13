@@ -8,7 +8,7 @@ import { EventLogWriter } from '../../../worker/src/event-log-writer.service';
 import { TaskLogService } from '../../../worker/src/task-log.service';
 import type { ConfigService } from '@nestjs/config';
 import { SpaceDatabaseService } from '../../../worker/src/db/routing/space-database.service';
-import { OutboxRelayScheduler } from '../../../worker/src/outbox-relay.scheduler';
+import { OutboxRelayScheduler, outboxRelayJobId } from '../../../worker/src/outbox-relay.scheduler';
 import {
   OUTBOX_EVENT_QUEUE_ROUTES,
   allQueueNamesOfRoutes,
@@ -57,7 +57,7 @@ import {
  * lượt xả có thể đã sinh job (xem {@link flushWorkerRelay}) và khi
  * đóng thì XOÁ ĐÚNG các job mang id đó khỏi hàng đợi trước khi
  * đóng kết nối (xem {@link closeWorkerRelayDriver}) — `jobId` của
- * job do relay đẩy chính là id của dòng outbox. Sau khi đóng,
+ * job do relay đẩy có tiền tố định danh kho bất biến (với kho chung là `shared-`). Sau khi đóng,
  * không job nào của lượt chạy còn ở trạng thái một worker thường
  * tiêu thụ được; job của tiến trình khác trên cùng Redis không bị
  * đụng vì việc xoá chỉ theo đúng các id ứng viên của DB test này.
@@ -78,7 +78,7 @@ let queues: Queue[] = [];
  * Tập ứng viên dọn: id các dòng outbox của DB test này mà cầu dẫn
  * có thể đã sinh job cho chúng kể từ lần dựng (cách chụp tập ở
  * {@link flushWorkerRelay}). Đồng thời là `jobId` của các job
- * BullMQ tương ứng trên mọi hàng đợi đích. Đây là danh sách dọn
+ * BullMQ tương ứng trên mọi hàng đợi đích sau khi thêm tiền tố `shared-`. Đây là danh sách dọn
  * duy nhất khi đóng: chỉ job mang một trong các id này mới bị
  * xoá, và xoá một id chưa từng sinh job là thao tác rỗng an toàn.
  */
@@ -258,7 +258,7 @@ export async function closeWorkerRelayDriver(): Promise<void> {
     toClose.map(async (queue) => {
       for (const jobId of jobIds) {
         try {
-          await queue.remove(jobId);
+          await queue.remove(outboxRelayJobId(null, jobId));
         } catch (error) {
           removalErrors.push(error);
         }

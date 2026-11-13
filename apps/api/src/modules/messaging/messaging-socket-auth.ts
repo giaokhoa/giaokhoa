@@ -165,7 +165,7 @@ export class MessagingSocketAuth {
    * kho chung trả rỗng, và phiên chỉ tồn tại ở kho chung mang tới
    * địa chỉ này cũng không được phục vụ lặng lẽ từ kho chung.
    * Lượt suy tenant mặc định vẫn chạy trong ngữ cảnh platform
-   * nhưng store ALS PHẢI giữ `spaceSlug` của trung tâm: thay toàn
+   * nhưng store ALS PHẢI giữ `spaceSlug` và `spaceId` của trung tâm: thay toàn
    * bộ store bằng `{ platform: true }` trần sẽ đánh rơi slug và
    * handle định tuyến rơi về kho chung (đúng lớp lỗi A4 của Phần A
    * đã sửa ở các wrapper phía service).
@@ -201,7 +201,7 @@ export class MessagingSocketAuth {
     if (!user || user.suspended || user.deleted) return null;
     const tenantId = space
       ? await this.spaceDb.withSpaceKysely(space.slug, () =>
-          tenantAls.run({ platform: true, spaceSlug: space.slug }, () =>
+          tenantAls.run({ platform: true, spaceSlug: space.slug, spaceId: space.spaceId }, () =>
             this.repo.getUserDefaultTenantId(user.id),
           ),
         )
