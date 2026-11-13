@@ -24,7 +24,17 @@ const USERNAME = 'teacher1';
 /** Kho lưu bản ghi TOTP trong bộ nhớ, mô phỏng đúng các thao tác repository mà service dùng. */
 function buildService() {
   let row: UserTotpRow | undefined;
+  let pending: string | undefined;
   const repo = {
+    stageTotpReplacement: async (_userId: string, encryptedSecret: string) => { pending = encryptedSecret; },
+    getPendingTotpReplacement: async () => pending,
+    activateTotpReplacement: async (_userId: string, encryptedSecret: string) => {
+      if (!row?.confirmed || encryptedSecret !== pending) return false;
+      row = { ...row, secretEncrypted: encryptedSecret };
+      pending = undefined;
+      return true;
+    },
+    clearPendingTotpReplacement: async () => { pending = undefined; },
     getTotpByUserId: async () => row,
     upsertPendingTotp: async (userId: string, secretEncrypted: string) => {
       row = {
@@ -143,14 +153,24 @@ describe('Cổng tái xác thực khi thiết lập TotpService', () => {
     const replacement = await service.setup(USER_ID, USERNAME, await currentCode(activeSecret));
 
     expect(replacement.secret).not.toBe(activeSecret);
-    // Secret mới ở trạng thái chờ xác nhận: MFA tạm chưa bật cho tới khi
-    // confirm bằng mã của secret mới, đúng luồng setup thường.
-    expect(storedRow()?.confirmed).toBe(false);
-    expect(await service.isEnabled(USER_ID)).toBe(false);
-    // Authenticator cũ không còn giá trị; confirm bằng secret mới bật lại MFA.
-    expect(await service.verifyForUser(USER_ID, await currentCode(activeSecret))).toBe(false);
+    // Thiết bị mới đang chờ, nhưng factor cũ và cổng đăng nhập phải còn bật.
+    expect(storedRow()?.confirmed).toBe(true);
+    expect(await service.isEnabled(USER_ID)).toBe(true);
+    expect(await service.verifyForUser(USER_ID, await currentCode(activeSecret))).toBe(true);
+    expect(await service.verifyForUser(USER_ID, await currentCode(replacement.secret))).toBe(false);
     await service.confirm(USER_ID, await currentCode(replacement.secret));
     expect(await service.isEnabled(USER_ID)).toBe(true);
     expect(await service.verifyForUser(USER_ID, await currentCode(replacement.secret))).toBe(true);
+    expect(await service.verifyForUser(USER_ID, await currentCode(activeSecret))).toBe(false);
+  });
+
+  it('bỏ dở việc thay thiết bị không hạ MFA và vẫn đăng nhập được bằng authenticator cũ', async () => {
+    const { service, storedRow } = buildService();
+    const activeSecret = await enableFactor(service);
+    const before = storedRow();
+    await service.setup(USER_ID, USERNAME, await currentCode(activeSecret));
+    expect(storedRow()).toEqual(before);
+    expect(await service.isEnabled(USER_ID)).toBe(true);
+    expect(await service.verifyForUser(USER_ID, await currentCode(activeSecret))).toBe(true);
   });
 });

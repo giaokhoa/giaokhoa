@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { Link, Outlet } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@giaokhoa/ui/components/button';
@@ -64,6 +64,7 @@ function AuthenticatedShell() {
 function PublicShell() {
   const { user, logout } = useAuth();
   const { t } = useTranslation('app');
+  const [logoutFailed, setLogoutFailed] = useState(false);
   return (
     <div>
       <header className="flex items-center gap-4 border-b px-8 py-3">
@@ -76,9 +77,13 @@ function PublicShell() {
           {user ? (
             <>
               <span>{user.username}</span>
-              <Button type="button" variant="outline" onClick={() => void logout()}>
+              <Button type="button" variant="outline" onClick={() => {
+                setLogoutFailed(false);
+                void logout().catch(() => setLogoutFailed(true));
+              }}>
                 {t('logout')}
               </Button>
+              {logoutFailed && <span role="alert" className="text-destructive">{t('logoutFailed')}</span>}
             </>
           ) : (
             <Link to="/login">{t('signIn')}</Link>

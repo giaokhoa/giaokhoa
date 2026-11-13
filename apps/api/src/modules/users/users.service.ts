@@ -6,6 +6,7 @@ import { OutboxService } from '../../infra/events/outbox.service';
 import type { ContextRow } from '@giaokhoa/db/repositories/access';
 import { ContextsService } from '../access/contexts.service';
 import { CredentialBridgeService } from '../auth/better-auth/credential-bridge.service';
+import { SessionService } from '../auth/session.service';
 import { CONTEXT_LEVELS } from '../access/domain/capabilities';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { PlanLimitsService } from '../access/plan-limits.service';
@@ -57,6 +58,8 @@ export class UsersService {
     // liệu nên chuỗi provider kết thúc ở đó.
     @Inject(forwardRef(() => AuthRepository))
     private readonly authRepository: AuthRepository,
+    @Inject(forwardRef(() => SessionService))
+    private readonly sessions: SessionService,
   ) {}
 
   /**
@@ -363,6 +366,8 @@ export class UsersService {
     if (input.password !== undefined) {
       await this.syncCredential(id);
       await this.authRepository.revokeAllForUser(id);
+      await this.credentialBridge.revokeSessionsForUser(id);
+      await this.sessions.destroyAllForUser(id);
     }
     if (input.customFields) await this.customFields.setValuesForInstance(USER_COMPONENT, USER_AREA, id, input.customFields);
     return this.getUser(id);

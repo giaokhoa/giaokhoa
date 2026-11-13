@@ -1,6 +1,8 @@
 import type { ConfigService } from '@nestjs/config';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { SpaceDatabaseService } from '../../../db/routing/space-database.service';
+import type { AuthRepository } from '@giaokhoa/db/repositories/auth';
+import type { SessionService } from '../session.service';
 import type { AuthMailService } from '../../mail/auth-mail.service';
 import { PasswordService } from '../../users/password.service';
 import type { LoginLockoutService } from '../login-lockout.service';
@@ -109,6 +111,29 @@ describe('Khối BetterAuthService', () => {
     expect(typeof auth.options.databaseHooks?.account?.create?.after).toBe('function');
     expect(Object.keys(auth.options.databaseHooks?.account ?? {})).toEqual(['create']);
     expect(typeof auth.options.emailAndPassword?.onPasswordReset).toBe('function');
+  });
+
+  it('reset mật khẩu Better Auth thu hồi refresh JWT và phiên Redis dù cutover đang off', async () => {
+    const values = { BETTER_AUTH_ENABLED: true, BETTER_AUTH_SECRET: SECRET, PORT: 3000 };
+    const config = configStub(values);
+    const revokeJwt = vi.fn(async (_userId: string) => undefined);
+    const revokeRedis = vi.fn(async (_userId: string) => 2);
+    const service = new BetterAuthService(
+      config,
+      { routedKysely: {} } as unknown as SpaceDatabaseService,
+      new PasswordService(config),
+      undefined,
+      lockoutStub,
+      undefined,
+      { revokeAllForUser: revokeJwt } as unknown as AuthRepository,
+      { destroyAllForUser: revokeRedis } as unknown as SessionService,
+    );
+    expect(service.cutoverStage).toBe('off');
+    const onReset = service.requireAuth().options.emailAndPassword?.onPasswordReset;
+    expect(onReset).toBeDefined();
+    await (onReset as unknown as (input: { user: { id: string } }) => Promise<void>)({ user: { id: 'reset-user-id' } });
+    expect(revokeJwt).toHaveBeenCalledExactlyOnceWith('reset-user-id');
+    expect(revokeRedis).toHaveBeenCalledExactlyOnceWith('reset-user-id');
   });
 
   it('không có bề mặt mail khi cổng mail chưa nối (giai đoạn 2.5 chưa kết nối)', () => {

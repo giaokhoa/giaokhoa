@@ -11,6 +11,8 @@ import { UsersService } from '../users/users.service';
 import { changePasswordSchema, loginAsSchema, loginSchema, mfaTotpCodeSchema, mfaTotpSetupSchema, mfaVerifySchema, refreshTokenSchema, type ChangePasswordDto, type LoginAsDto, type LoginDto, type MfaTotpCodeDto, type MfaTotpSetupDto, type MfaVerifyDto, type RefreshDto } from './dto/auth.dto';
 import { AuthService, type PasswordLoginOutcome } from './auth.service';
 import { BetterAuthService } from './better-auth/better-auth.service';
+import { AUTHENTICATED_VIA_BETTER_AUTH } from '../../common/better-auth-session.guard';
+import type { CurrentSessionRefs } from './auth.service';
 
 
 export const SESSION_COOKIE = 'giaokhoa_session';
@@ -280,6 +282,15 @@ export class AuthController {
     return { loggedOut: true };
   }
 
+  /** Better Auth uses session.id for current identity; legacy JWT uses refresh family id. */
+  private currentSessionRefs(actor: AuthenticatedUser, req: Request): CurrentSessionRefs {
+    const viaBA = Boolean((req as Request & { [AUTHENTICATED_VIA_BETTER_AUTH]?: boolean })[AUTHENTICATED_VIA_BETTER_AUTH]);
+    return {
+      ...(viaBA ? { betterAuthSessionId: actor.sessionId } : { familyId: actor.sessionId }),
+      webSessionId: sessionCookieOf(req),
+    };
+  }
+
   // --- Phiên của tôi (report_usersessions: điều hướng hồ sơ của tôi) -------------
   @Get('sessions')
   /**
@@ -288,7 +299,7 @@ export class AuthController {
    * theo `sid` của access token và theo cookie phiên nếu request có mang.
    */
   async mySessions(@CurrentUser() actor: AuthenticatedUser, @Req() req: Request) {
-    const sessions = await this.auth.listMySessions(actor.id, { familyId: actor.sessionId, webSessionId: sessionCookieOf(req) });
+    const sessions = await this.auth.listMySessions(actor.id, this.currentSessionRefs(actor, req));
     return { sessions };
   }
   @Delete('sessions/others')
@@ -296,7 +307,7 @@ export class AuthController {
    * DELETE /auth/sessions/others — thu hồi mọi phiên khác, giữ phiên hiện tại của người gọi.
    */
   async revokeMyOtherSessions(@CurrentUser() actor: AuthenticatedUser, @Req() req: Request) {
-    return this.auth.revokeMyOtherSessions(actor.id, { familyId: actor.sessionId, webSessionId: sessionCookieOf(req) });
+    return this.auth.revokeMyOtherSessions(actor.id, this.currentSessionRefs(actor, req));
   }
   @Delete('sessions/:sessionId')
   /**
@@ -305,6 +316,6 @@ export class AuthController {
    * phiên web hoặc family id của phiên API).
    */
   async revokeMySession(@Param('sessionId', { schema: uuidIdSchema }) sessionId: string, @CurrentUser() actor: AuthenticatedUser, @Req() req: Request) {
-    return this.auth.revokeMySession(actor.id, sessionId, { familyId: actor.sessionId, webSessionId: sessionCookieOf(req) });
+    return this.auth.revokeMySession(actor.id, sessionId, this.currentSessionRefs(actor, req));
   }
 }

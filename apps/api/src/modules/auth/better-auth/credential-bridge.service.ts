@@ -328,6 +328,20 @@ export class CredentialBridgeService {
    * trả giá trị cookie phiên đã ký để phía gọi đặt lên response — đúng
    * định dạng `token.signature` mà Better Auth chấp nhận.
    */
+  /**
+   * Thu hồi toàn bộ phiên cookie Better Auth của user trong đúng kho trung tâm.
+   * @returns Số dòng session đã bị xoá để phục vụ audit và nghiệm thu.
+   */
+  async revokeSessionsForUser(userId: string): Promise<number> {
+    if (!this.betterAuth.auth) return 0;
+    const deleted = await this.db
+      .deleteFrom('session')
+      .where('user_id', '=', userId)
+      .returning('id')
+      .execute();
+    return deleted.length;
+  }
+
   async createProgrammaticSession(userId: string): Promise<{
     sessionId: string;
     token: string;

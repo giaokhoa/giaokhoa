@@ -279,8 +279,13 @@ export function AuthProvider({ children, initialUser }: { children: ReactNode; i
     if (error) throw apiErrorFromAuthClient(error);
   }, []);
 
+  /**
+   * Đăng xuất phải được server xác nhận trước khi xoá danh tính/cache phía Web.
+   * Lỗi mạng hoặc Better Auth trả lỗi phải nổi lên UI để người dùng có thể thử lại.
+   */
   const logout = useCallback(async () => {
-    await authClient.signOut().catch(() => undefined);
+    const { error } = await authClient.signOut();
+    if (error) throw apiErrorFromAuthClient(error);
     queryClient.clear();
     profileFlightRef.current = null;
     syncedForRef.current = null;

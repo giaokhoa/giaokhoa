@@ -1,6 +1,8 @@
 import { forwardRef, Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SpaceDatabaseService } from '../../../db/routing/space-database.service';
+import { AuthRepository } from '@giaokhoa/db/repositories/auth';
+import { SessionService } from '../session.service';
 import { PasswordService } from '../../users/password.service';
 import { AuthMailService } from '../../mail/auth-mail.service';
 import { LoginLockoutService } from '../login-lockout.service';
@@ -102,6 +104,14 @@ export class BetterAuthService {
     @Optional()
     @Inject(forwardRef(() => TotpService))
     totp?: TotpService,
+    // AuthModule xuất cả hai cổng thu hồi phiên legacy. DI tuỳ chọn giữ tương thích
+    // với các unit factory kiểm tra cấu hình BA bằng service dựng tay.
+    @Optional()
+    @Inject(forwardRef(() => AuthRepository))
+    authRepository?: AuthRepository,
+    @Optional()
+    @Inject(forwardRef(() => SessionService))
+    sessionService?: SessionService,
   ) {
     this.enabled = config.get<boolean>('BETTER_AUTH_ENABLED') ?? false;
     this.mcpAsEnabled = config.get<boolean>('MCP_AS_ENABLED') ?? false;
@@ -181,6 +191,17 @@ export class BetterAuthService {
       // nhất. Chưa có TotpService (nơi dựng tay) thì cổng không
       // gắn — app thật luôn có.
       mfa: totp ? { isMfaEnabled: (userId: string) => totp.isEnabled(userId) } : null,
+      // Reset/đổi mật khẩu phía BA phải vô hiệu hoá cả JWT refresh family và Redis.
+      sessionRevocation: authRepository && sessionService
+        ? {
+            revokeLegacySessions: async (userId: string): Promise<void> => {
+              await Promise.all([
+                authRepository.revokeAllForUser(userId),
+                sessionService.destroyAllForUser(userId),
+              ]);
+            },
+          }
+        : null,
       // Cửa sổ bake (chặng 2.7 bước A): mọi lần Better Auth ghi mật
       // khẩu credential mới (đổi mật khẩu, đặt lại qua reset, tạo
       // credential) đều đồng bộ ngược hash hiện hành về

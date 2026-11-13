@@ -82,19 +82,11 @@ export class TotpService {
    * - Chưa có bản ghi, hoặc bản ghi đang chờ xác nhận (chưa từng kích
    *   hoạt): setup/setup lại tự do, secret chờ bị thay — chưa có factor
    *   đang hoạt động nào bị hạ cấp.
-   * - Bản ghi ĐÃ xác nhận (MFA đang bật): setup lại là thao tác THAY một
-   *   factor đang hoạt động. Vì `upsertPendingTotp` đặt `confirmed`
-   *   về false mà cổng đăng nhập chỉ nhìn cờ đó, một lần ghi đè vô điều
-   *   kiện sẽ tắt MFA ngay lập tức và làm authenticator hiện tại thành
-   *   vô dụng — phiên bị lộ là đủ để gỡ im lặng lớp bảo vệ đang bật.
-   *   Do đó bước này áp CỔNG TÁI XÁC THỰC cùng khuôn với luồng tắt MFA:
-   *   người gọi phải trình mã TOTP hiện tại (đúng với secret đang hoạt
-   *   động) TRƯỚC khi ghi đè. Thiếu mã ⇒ `auth.mfa_reauth_required`;
-   *   mã sai ⇒ `auth.mfa_invalid_code`; cả hai trường hợp đều từ chối
-   *   khi CHƯA chạm vào bản ghi nên factor cũ giữ nguyên vẹn (secret
-   *   cũ, `confirmed` vẫn true, MFA vẫn bật). Mã đúng ⇒ ghi đè như
-   *   luồng setup thường: secret mới ở trạng thái chờ xác nhận, chờ
-   *   bước confirm kích hoạt lại.
+   * - Bản ghi ĐÃ xác nhận: setup lại đòi mã TOTP cũ để tái xác thực.
+   *   Secret mới chỉ lưu vào verification với TTL 10 phút, không thay
+   *   secret cũ hoặc cờ confirmed. Nếu người dùng bỏ dở, MFA vẫn bật.
+   *   Khi confirm mã của thiết bị mới thành công, giao dịch sẽ hoán
+   *   đổi secret đang hoạt động một lần duy nhất.
    *
    * @param currentCode Mã TOTP hiện tại — chỉ bắt buộc khi factor đang bật.
    */
@@ -109,18 +101,36 @@ export class TotpService {
       }
     }
     const secret = generateSecret();
-    await this.repo.upsertPendingTotp(userId, this.encryptSecret(secret));
+    if (existing?.confirmed) {
+      // Factor cũ vẫn bật trong suốt lúc người dùng quét và xác nhận thiết bị mới.
+      await this.repo.stageTotpReplacement(userId, this.encryptSecret(secret));
+    } else {
+      await this.repo.upsertPendingTotp(userId, this.encryptSecret(secret));
+    }
     const otpauthUrl = generateURI({ issuer: TOTP_ISSUER, label: username, secret });
     return { secret, otpauthUrl };
   }
 
   /**
    * Bước confirm: mã đúng với secret đang chờ ⇒ kích hoạt MFA cho user.
+   * Với factor đang bật, mã phải khớp pending replacement để hoán đổi atomically.
    * Chưa setup thì báo `auth.mfa_not_setup`; mã sai thì `auth.mfa_invalid_code`.
    */
   async confirm(userId: string, code: string): Promise<void> {
     const row = await this.repo.getTotpByUserId(userId);
     if (!row) throw new BadRequestException({ message: 'TOTP has not been set up for this account', code: 'auth.mfa_not_setup' });
+    if (row.confirmed) {
+      // Đổi factor: xác minh chính secret đang chờ, rồi hoán đổi atomically.
+      const pending = await this.repo.getPendingTotpReplacement(userId);
+      if (!pending) throw new BadRequestException({ message: 'TOTP replacement has expired or was not started', code: 'auth.mfa_not_setup' });
+      if (!(await this.verifyCode(this.decryptSecret(pending), code))) {
+        throw new UnauthorizedException({ message: 'Invalid two-factor authentication code', code: 'auth.mfa_invalid_code' });
+      }
+      if (!(await this.repo.activateTotpReplacement(userId, pending))) {
+        throw new BadRequestException({ message: 'TOTP replacement has expired or changed', code: 'auth.mfa_not_setup' });
+      }
+      return;
+    }
     if (!(await this.verifyCode(this.decryptSecret(row.secretEncrypted), code))) {
       throw new UnauthorizedException({ message: 'Invalid two-factor authentication code', code: 'auth.mfa_invalid_code' });
     }
@@ -138,6 +148,7 @@ export class TotpService {
       throw new UnauthorizedException({ message: 'Invalid two-factor authentication code', code: 'auth.mfa_invalid_code' });
     }
     await this.repo.deleteTotp(userId);
+    await this.repo.clearPendingTotpReplacement(userId);
   }
 
   /**
@@ -153,5 +164,6 @@ export class TotpService {
   /** Quản trị gỡ MFA cho user (mất authenticator): xoá hẳn bản ghi TOTP. */
   async resetForUser(userId: string): Promise<void> {
     await this.repo.deleteTotp(userId);
+    await this.repo.clearPendingTotpReplacement(userId);
   }
 }

@@ -556,7 +556,7 @@ export type SessionLoginResponse = z.infer<typeof sessionLoginResponseSchema>;
 /** Một phiên đang hoạt động của chính user trong trang quản lý phiên (report_usersessions của Moodle): `web` là phiên cookie phía server, `api` là một họ refresh token. */
 export const mySessionSchema = z.object({
   id: uuidIdSchema,
-  kind: z.enum(['web', 'api']),
+  kind: z.enum(['web', 'api', 'better-auth']),
   createdAt: z.string(),
   lastActivityAt: z.string(),
   ip: z.string().nullable(),
