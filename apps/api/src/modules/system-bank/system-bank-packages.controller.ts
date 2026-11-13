@@ -1,51 +1,86 @@
 /**
- * Bề mặt HTTP gói YCCĐ của kho ngân hàng hệ thống (issue #585):
- * - `POST /system-bank/outcome-packages` — phát hành một gói YCCĐ
- *   phía platform (quản trị platform): chụp cây chương trình hiện hành thành bản phát hành có checksum.
- * - `GET /system-bank/outcome-packages` — liệt kê các gói đã phát hành.
- * - `GET /system-bank/outcome-packages/:version` — đọc một gói kèm items.
- * - `POST /system-bank/outcome-packages/:version/install` — cài gói
- *   vào kho trung tâm (trung tâm chủ động nhận gói mới; gác quyền `curriculum:manage` tại context từng môn gói chạm tới).
- *
- * Controller chỉ là lớp vận chuyển mỏng; gác quyền và luật nghiệp vụ nằm ở service. Cập nhật gói không sửa ngược các gắn chuẩn đã có
- * (gắn chuẩn trỏ theo id YCCĐ); ánh xạ mã cũ→mã mới trong gói chỉ là
- * thông tin tham chiếu.
+ * HTTP gói chương trình: trung tâm gửi bản chụp, biên tập viên duyệt
+ * hoặc từ chối, trung tâm cài đúng phiên bản đã công bố vào kho riêng.
+ * Chỉ danh sách phát hành được công khai cho mọi trung tâm.
  */
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { SystemBankService } from './system-bank.service';
 import {
   createSystemOutcomePackageSchema,
+  rejectSystemOutcomePackageSchema,
   type CreateSystemOutcomePackageDto,
+  type RejectSystemOutcomePackageDto,
 } from './dto/system-bank.dto';
 
 @Controller({ path: 'system-bank/outcome-packages', version: '1' })
 export class SystemBankPackagesController {
   constructor(private readonly bank: SystemBankService) {}
 
+  /** Trung tâm gửi ảnh chụp vào hàng chờ, chưa được công bố. */
   @Post()
-  async createPackage(
+  createPackage(
     @Body({ schema: createSystemOutcomePackageSchema }) dto: CreateSystemOutcomePackageDto,
     @CurrentUser() actor: AuthenticatedUser,
   ) {
     return this.bank.createOutcomePackage(actor.id, dto);
   }
 
+  /** Danh sách đã công bố, không lộ gói chờ/từ chối. */
   @Get()
-  async listPackages() {
+  listPackages() {
     return this.bank.listOutcomePackages();
   }
 
+  /** Lịch sử gói đã gửi của trung tâm hiện tại. */
+  @Get('mine')
+  listMine(@CurrentUser() actor: AuthenticatedUser) {
+    return this.bank.listMyOutcomePackages(actor.id);
+  }
+
+  /** Trung tâm tra cứu phiên bản đã cài trong kho riêng của mình. */
+  @Get('installed')
+  listInstalled(@CurrentUser() actor: AuthenticatedUser) {
+    return this.bank.listInstalledOutcomePackages(actor.id);
+  }
+
+  /** Hàng chờ của biên tập viên hệ thống. */
+  @Get('pending')
+  listPending(@CurrentUser() actor: AuthenticatedUser) {
+    return this.bank.listPendingOutcomePackages(actor.id);
+  }
+
+  /** Bản gửi đầy đủ để kiểm duyệt. */
+  @Get('review/:version')
+  getForReview(@Param('version') version: string, @CurrentUser() actor: AuthenticatedUser) {
+    return this.bank.getOutcomePackageForReview(actor.id, version);
+  }
+
+  /** Phát hành phiên bản bất biến sau khi đối chiếu toàn vẹn. */
+  @Post(':version/approve')
+  approve(@Param('version') version: string, @CurrentUser() actor: AuthenticatedUser) {
+    return this.bank.reviewOutcomePackage(actor.id, version, true);
+  }
+
+  /** Từ chối bản gửi kèm lý do; không được khám phá/cài đặt. */
+  @Post(':version/reject')
+  reject(
+    @Param('version') version: string,
+    @Body({ schema: rejectSystemOutcomePackageSchema }) dto: RejectSystemOutcomePackageDto,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.bank.reviewOutcomePackage(actor.id, version, false, dto.reason);
+  }
+
+  /** Chỉ đọc bản đã công bố. */
   @Get(':version')
-  async getPackage(@Param('version') version: string) {
+  getPackage(@Param('version') version: string) {
     return this.bank.getOutcomePackage(version);
   }
 
+  /** Cài nguyên tử sau khi đã duyệt và kiểm tra checksum. */
   @Post(':version/install')
-  async installPackage(
-    @Param('version') version: string,
-    @CurrentUser() actor: AuthenticatedUser,
-  ) {
+  installPackage(@Param('version') version: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.bank.installOutcomePackage(actor.id, version);
   }
 }

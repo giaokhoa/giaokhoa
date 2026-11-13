@@ -51,6 +51,7 @@ export interface OutcomePackageInstallRow {
   id: string;
   /** Định danh phiên bản gói đã cài (khớp `system_outcome_packages.version` ở kho ngân hàng). */
   packageVersion: string;
+  packageChecksum: string;
   /** Phiên bản gói trước lần cài này, null ở lần cài đầu tiên. */
   previousVersion: string | null;
   /** all | slug môn học. */
@@ -119,6 +120,7 @@ const SYSTEM_BANK_EVENT_RECEIPT_COLUMNS = [
 const OUTCOME_PACKAGE_INSTALL_COLUMNS = [
   'id',
   'package_version as packageVersion',
+  'package_checksum as packageChecksum',
   'previous_version as previousVersion',
   'scope',
   'installed_at as installedAt',
@@ -275,19 +277,41 @@ export class SystemBankCentreRepository {
   }
 
   /** Đọc bản cài gói YCCĐ mới nhất của trung tâm (null khi chưa cài gói nào) — dùng suy phiên bản trước khi ghi vết cài mới. */
-  async getOutcomePackageInstall(): Promise<OutcomePackageInstallRow | null> {
-    const row = await this.db
+  async getOutcomePackageInstall(scope?: string, tx?: SbCentreDb): Promise<OutcomePackageInstallRow | null> {
+    let query = (tx ?? this.db)
       .selectFrom('outcome_package_installs')
-      .select(OUTCOME_PACKAGE_INSTALL_COLUMNS)
-      .orderBy('installed_at', 'desc')
-      .limit(1)
-      .executeTakeFirst();
+      .select(OUTCOME_PACKAGE_INSTALL_COLUMNS);
+    if (scope) query = query.where('scope', '=', scope);
+    const row = await query.orderBy('installed_at', 'desc').limit(1).executeTakeFirst();
     return row ?? null;
   }
 
+  /** Lịch sử bản cài của đúng kho trung tâm được định tuyến trong request. */
+  async listOutcomePackageInstalls(): Promise<OutcomePackageInstallRow[]> {
+    return this.db.selectFrom('outcome_package_installs')
+      .select(OUTCOME_PACKAGE_INSTALL_COLUMNS)
+      .orderBy('installed_at', 'desc').execute();
+  }
+
+  /** Tìm bản cài theo phiên bản: retry không cập nhật thời gian hay nội dung. */
+  async getOutcomePackageInstallByVersion(version: string, tx?: SbCentreDb): Promise<OutcomePackageInstallRow | null> {
+    return (await (tx ?? this.db).selectFrom('outcome_package_installs')
+      .select(OUTCOME_PACKAGE_INSTALL_COLUMNS).where('package_version', '=', version)
+      .executeTakeFirst()) ?? null;
+  }
+
+  /** Thêm môn chưa tồn tại trong kho đích; tên lấy từ ảnh chụp được duyệt. */
+  async insertSubject(input: { contextId: string; name: string; slug: string; position: number }, tx: SbCentreDb): Promise<SystemBankSubjectRow> {
+    const [row] = await tx.insertInto('subjects')
+      .values({ context_id: input.contextId, name: input.name, slug: input.slug, position: input.position })
+      .returning(SUBJECT_COLUMNS).execute();
+    if (!row) throw new Error('system bank: failed to install subject');
+    return row;
+  }
+
   /** Môn học của trung tâm theo slug duy nhất (null khi chưa có). */
-  async findSubjectBySlug(slug: string): Promise<SystemBankSubjectRow | null> {
-    const row = await this.db
+  async findSubjectBySlug(slug: string, tx?: SbCentreDb): Promise<SystemBankSubjectRow | null> {
+    const row = await (tx ?? this.db)
       .selectFrom('subjects')
       .select(SUBJECT_COLUMNS)
       .where('slug', '=', slug)
@@ -297,8 +321,8 @@ export class SystemBankCentreRepository {
   }
 
   /** Chương trình của trung tâm theo cặp (môn, khối) — dùng phát hiện xung đột id trước khi cài. */
-  async findCurriculumBySubjectGrade(subjectId: string, grade: number): Promise<SystemBankCurriculumRow | null> {
-    const row = await this.db
+  async findCurriculumBySubjectGrade(subjectId: string, grade: number, tx?: SbCentreDb): Promise<SystemBankCurriculumRow | null> {
+    const row = await (tx ?? this.db)
       .selectFrom('curricula')
       .select(CURRICULUM_COLUMNS)
       .where('subject_id', '=', subjectId)
@@ -309,12 +333,12 @@ export class SystemBankCentreRepository {
   }
 
   /** Upsert một chương trình theo id giữ nguyên (bản cài gói). */
-  async upsertCurriculum(input: { id: string; subjectId: string; grade: number }): Promise<void> {
-    await this.db
+  async upsertCurriculum(input: { id: string; subjectId: string; grade: number }, tx?: SbCentreDb): Promise<void> {
+    await (tx ?? this.db)
       .insertInto('curricula')
       .values({ id: input.id, subject_id: input.subjectId, grade: input.grade })
       .onConflict((oc) =>
-        oc.column('id').doUpdateSet({ subject_id: input.subjectId, grade: input.grade }),
+        oc.column('id').doNothing(),
       )
       .execute();
   }
@@ -329,8 +353,8 @@ export class SystemBankCentreRepository {
     position: number;
     durationPeriods: number | null;
     durationPercent: number | null;
-  }): Promise<void> {
-    await this.db
+  }, tx?: SbCentreDb): Promise<void> {
+    await (tx ?? this.db)
       .insertInto('curriculum_nodes')
       .values({
         id: input.id,
@@ -342,27 +366,13 @@ export class SystemBankCentreRepository {
         duration_periods: input.durationPeriods,
         duration_percent: input.durationPercent,
       })
-      .onConflict((oc) =>
-        oc.column('id').doUpdateSet({
-          curriculum_id: input.curriculumId,
-          parent_id: input.parentId,
-          title: input.title,
-          kind: input.kind,
-          position: input.position,
-          duration_periods: input.durationPeriods,
-          duration_percent: input.durationPercent,
-        }),
-      )
+      .onConflict((oc) => oc.column('id').doNothing())
       .execute();
   }
 
   /**
-   * Upsert một YCCĐ theo id giữ nguyên (bản cài gói): cập nhật
-   * nội dung tại chỗ — các gắn chuẩn cũ trỏ theo id nên không bị
-   * sửa ngược. `tenantId` không nằm trong gói và không được
-   * chạm: dòng cài luôn là YCCĐ chuẩn platform (tenantId NULL);
-   * dòng derived của trung tâm có id khác nên không bao giờ va
-   * vào upsert này.
+   * Chỉ chèn YCCĐ mới; id đã có sẽ được so toàn vẹn trong transaction
+   * phía service, không cập nhật nội dung cũ vì câu/đề có thể đang dùng.
    */
   async upsertLearningOutcome(input: {
     id: string;
@@ -371,8 +381,8 @@ export class SystemBankCentreRepository {
     content: unknown;
     sourceKind: string;
     sourceRef: string | null;
-  }): Promise<void> {
-    await this.db
+  }, tx?: SbCentreDb): Promise<void> {
+    await (tx ?? this.db)
       .insertInto('learning_outcomes')
       .values({
         id: input.id,
@@ -382,44 +392,33 @@ export class SystemBankCentreRepository {
         source_kind: input.sourceKind,
         source_ref: input.sourceRef,
       })
-      .onConflict((oc) =>
-        oc.column('id').doUpdateSet({
-          node_id: input.nodeId,
-          position: input.position,
-          content: jsonbColumn<LearningOutcomeDoc>(input.content),
-          source_kind: input.sourceKind,
-          source_ref: input.sourceRef,
-        }),
-      )
+      .onConflict((oc) => oc.column('id').doNothing())
       .execute();
   }
 
-  /** Ghi nhận một lần cài gói (upsert theo phiên bản gói — cài lại cùng phiên bản chỉ làm mới vết). */
+  /** Ghi nhận chỉ một lần sau khi cài đủ cây trong cùng transaction; retry không sửa vết. */
   async recordOutcomePackageInstall(input: {
     packageVersion: string;
+    packageChecksum: string;
     previousVersion: string | null;
     scope: string;
     installedBy: string | null;
-  }): Promise<OutcomePackageInstallRow> {
-    const [row] = await this.db
+  }, tx?: SbCentreDb): Promise<OutcomePackageInstallRow> {
+    const [row] = await (tx ?? this.db)
       .insertInto('outcome_package_installs')
       .values({
         package_version: input.packageVersion,
+        package_checksum: input.packageChecksum,
         previous_version: input.previousVersion,
         scope: input.scope,
         installed_by: input.installedBy,
       })
-      .onConflict((oc) =>
-        oc.column('package_version').doUpdateSet({
-          previous_version: input.previousVersion,
-          scope: input.scope,
-          installed_by: input.installedBy,
-          installed_at: new Date(),
-        }),
-      )
+      .onConflict((oc) => oc.column('package_version').doNothing())
       .returning(OUTCOME_PACKAGE_INSTALL_COLUMNS)
       .execute();
-    if (!row) throw new Error('system bank: failed to record outcome package install');
-    return row;
+    if (row) return row;
+    const existing = await this.getOutcomePackageInstallByVersion(input.packageVersion, tx);
+    if (!existing) throw new Error('system bank: failed to record outcome package install');
+    return existing;
   }
 }

@@ -36,6 +36,8 @@ export interface SystemOutcomePackageCurricula {
   grade: number;
   id: Generated<string>;
   package_id: string;
+  subject_name: string | null;
+  subject_position: Generated<number>;
   subject_slug: string;
 }
 
@@ -72,12 +74,17 @@ export interface SystemOutcomePackageOutcomes {
 }
 
 export interface SystemOutcomePackages {
+  centre_slug: string | null;
   checksum: string;
   created_at: Generated<Timestamp>;
   created_by: string | null;
   id: Generated<string>;
   outcome_count: Generated<number>;
+  rejection_reason: string | null;
+  reviewed_at: Timestamp | null;
+  reviewed_by: string | null;
   scope: string;
+  status: Generated<string>;
   version: string;
 }
 
