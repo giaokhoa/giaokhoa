@@ -140,7 +140,7 @@ export class FilesService {
       if (!match) return;
       const file = await this.repo.getById(match[1]);
       if (!file || file.component !== 'question' || !(await this.canAccessDomain(file))) return;
-      const target = await this.signing.createDownloadTarget(file);
+      const target = await this.signing.createDownloadTarget(await this.fileForSigning(file));
       attrs.src = target.url;
     }));
     return clone;
@@ -166,11 +166,58 @@ export class FilesService {
     return fileDomainForSpace(target.spaceId);
   }
 
+  /**
+   * Hàng legacy trước migration không có miền vật lý: byte vẫn nằm tại
+   * bố cục hash cũ. Chỉ khôi phục quyền đọc của context gốc nếu đúng
+   * tenant sở hữu; không coi mọi file legacy là của Trang chính.
+   *
+   * Request ở host trung tâm phải khớp tenant mang slug đã xác nhận
+   * trong sổ; đọc tenant qua đúng handle định tuyến trong scope
+   * platform TẠM THỜI (không cấp scope này cho caller).
+   * Chữ ký URL và capability vẫn được kiểm tra ở lớp gọi.
+   */
+  private async canReadLegacy(file: FileRow): Promise<boolean> {
+    if (typeof this.repo.getContextTenantId !== 'function') return false;
+    const ownerId = await this.repo.getContextTenantId(file.contextId);
+    if (ownerId === undefined) return false; // context không tồn tại
+    const store = tenantAls.getStore();
+    const slug = store?.spaceSlug;
+    if (!slug) {
+      // Trên host gốc, chỉ cấp cho context toàn cục hoặc đúng tenant
+      // hiệu lực đã được TenantGuard xác minh; không có phiên thì không
+      // được đoán chủ sở hữu của một context trung tâm.
+      return ownerId === null || (!!store?.tenantId && ownerId === store.tenantId);
+    }
+    if (!this.spaceDb) return false;
+    const target = await this.spaceDb.resolveTarget(slug);
+    // Đối chiếu chủ thật trong database đích, không dựa vào tên miền
+    // tự khai hoặc tenantId của khách ẩn danh tải qua URL có chữ ký.
+    const tenant = await tenantAls.run({ platform: true, spaceSlug: slug }, async () =>
+      this.spaceDb!.routedKysely.selectFrom('tenants')
+        .select(['id', 'kind']).where('slug', '=', slug).executeTakeFirst(),
+    );
+    if (!tenant) return false;
+    if (ownerId === tenant.id) return true;
+    // Kho riêng chỉ có thể chứa context toàn cục của chính kho đó.
+    // Kho chung tuyệt đối không dùng context toàn cục để vượt miền.
+    return ownerId === null && target.mode === 'dedicated';
+  }
+
+  /**
+   * Legacy giữ key vật lý cũ để tương thích, nhưng chữ ký HMAC phải
+   * mang miền sở hữu ĐANG PHỤC VỤ. Không tái sử dụng chữ ký legacy ở
+   * một host khác, kể cả khi hai database có cùng file id.
+   */
+  private async fileForSigning(file: FileRow): Promise<FileRow & { signingDomain?: string }> {
+    return file.storageDomain === LEGACY_FILE_DOMAIN
+      ? { ...file, signingDomain: await this.currentStorageDomain() }
+      : file;
+  }
+
   /** Chặn metadata từ miền khác, kể cả các trung tâm dùng chung database. */
   private async canAccessDomain(file: FileRow): Promise<boolean> {
-    const currentDomain = await this.currentStorageDomain();
-    return file.storageDomain === currentDomain ||
-      (file.storageDomain === LEGACY_FILE_DOMAIN && currentDomain === SYSTEM_FILE_DOMAIN);
+    if (file.storageDomain === LEGACY_FILE_DOMAIN) return this.canReadLegacy(file);
+    return file.storageDomain === await this.currentStorageDomain();
   }
 
   /** Số tham chiếu đúng miền sở hữu, không gộp file khác kho có cùng hash. */
@@ -190,10 +237,10 @@ export class FilesService {
    * Xoá bản ghi file; enqueue job chỉ khi refcount của cùng miền về 0.
    *
    * Luồng: lấy bản ghi → (khi có `actor`) áp chốt khoá bài nộp → xoá bản
-   * ghi → đếm lại số bản ghi còn tham chiếu cùng contentHash: còn tham
-   * chiếu thì byte vật lý giữ nguyên; refcount về 0 thì enqueue job dọn
-   * file mồ côi cho worker (jobId khử trùng các lần enqueue lặp lại cho
-   * cùng một hash). Bản ghi không xoá byte khi còn tham chiếu cùng miền và hash.
+   * ghi → đếm lại tham chiếu cùng miền và contentHash: còn tham chiếu
+   * thì byte vật lý giữ nguyên; refcount về 0 thì enqueue job cho worker.
+   * JobId gắn với ID bản ghi vừa xoá: khử trùng cùng sự kiện nhưng cho
+   * phép dọn lại khi nội dung trùng được tải lên rồi xoá ở vòng sau.
    *
    * Hai chế độ xoá, phân biệt bằng tham số `actor`:
    * - **Người dùng khởi tạo** (handler `DELETE /files/:id` truyền
@@ -227,7 +274,9 @@ export class FilesService {
       await this.cleanupQueue.add(
         'cleanup-orphan',
         { contentHash: row.contentHash, storageDomain: row.storageDomain, ...(spaceSlug ? { spaceSlug } : {}) },
-        { jobId: ['orphan', row.storageDomain, row.contentHash].join('-'), attempts: 3 },
+        // ID của lần xóa (file record) khử trùng job cùng sự kiện,
+        // nhưng không chặn cleanup của lần upload/xóa mới có cùng hash.
+        { jobId: ['orphan', row.storageDomain, row.contentHash, row.id].join('-'), attempts: 3 },
       );
     }
     return { deleted: true, contentHash: row.contentHash, refcount };
@@ -315,12 +364,17 @@ export class FilesService {
   async createSignedUrl(fileId: string, userId: string, isGuest = false): Promise<{ url: string; expiresAt: number }> {
     const file = await this.getFile(fileId);
     await this.evaluator.requireCapability(userId, 'files:view', file.contextId, { isGuest });
-    return this.signing.createDownloadTarget(file);
+    return this.signing.createDownloadTarget(await this.fileForSigning(file));
   }
   /**
    * Kiểm chữ ký URL (ủy quyền cho FileSigningService).
    */
-  async verifySignature(fileId: string, token: string | undefined): Promise<void> { const file = await this.getFile(fileId); this.signing.verify(fileId, file.storageDomain, token); }
+  async verifySignature(fileId: string, token: string | undefined): Promise<void> {
+    const file = await this.getFile(fileId);
+    const domain = file.storageDomain === LEGACY_FILE_DOMAIN
+      ? await this.currentStorageDomain() : file.storageDomain;
+    this.signing.verify(fileId, domain, token);
+  }
   /**
    * Đọc nội dung file (sau kiểm quyền) để trả về/tải xuống.
    */

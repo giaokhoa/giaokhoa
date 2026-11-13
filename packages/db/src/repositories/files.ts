@@ -3,7 +3,7 @@
  *
  * Vai trò: mọi truy cập tới bảng `files` của kho trung tâm (bản ghi logic của tệp theo khuôn Moodle: mỗi bản ghi là một file tại
  * (context, component, fileArea, itemId, filePath, fileName), nội
- * dung vật lý được deduplicate theo `contentHash` và refcount suy ra từ số bản ghi cùng hash) tập trung ở đây, kèm ba hình chiếu đọc tối thiểu trên các bảng của module Bài tập
+ * dung vật lý khử trùng trong cùng miền và `contentHash`, refcount đếm theo cặp miền/hash) tập trung ở đây, kèm ba hình chiếu đọc tối thiểu trên các bảng của module Bài tập
  * (`assign_submission_files`, `assign_submissions`,
  * `assign_grades`) phục vụ chốt khoá bài nộp của đường xoá tệp dùng chung. Luật nghiệp vụ (kiểm quyền context, URL ký, dọn nội dung vật lý khi refcount về 0) nằm ở tầng service phía ứng dụng; repository chỉ thực thi truy cập dữ kiện.
  *
@@ -147,13 +147,32 @@ export class FilesRepository {
     return db.selectFrom('files').select(FILE_COLUMNS).where('id', '=', id).limit(1).executeTakeFirst();
   }
 
+  /**
+   * Suy tenant chủ của context chứa file legacy theo context level 20 trong
+   * cây path; không tìm được context trả undefined (fail-closed), context
+   * toàn cục hợp lệ trả null. Không dùng tenant_id từ chính file cũ.
+   */
+  async getContextTenantId(contextId: string, db: RepoDb = this.db()): Promise<string | null | undefined> {
+    const context = await db.selectFrom('context')
+      .select(['context_level', 'instance_id', 'path'])
+      .where('id', '=', contextId).executeTakeFirst();
+    if (!context) return undefined;
+    if (context.context_level === 20) return context.instance_id ?? undefined;
+    const pathIds = context.path.split('/').filter(Boolean);
+    if (!pathIds.length) return null;
+    const owner = await db.selectFrom('context').select('instance_id')
+      .where('id', 'in', pathIds).where('context_level', '=', 20)
+      .executeTakeFirst();
+    return owner?.instance_id ?? null;
+  }
+
   /** Xoá bản ghi theo id. */
   async deleteById(id: string, db: RepoDb = this.db()): Promise<void> {
     await db.deleteFrom('files').where('id', '=', id).execute();
   }
 
   /**
-   * Đếm bản ghi cùng contentHash — refcount của nội dung vật lý
+   * Đếm bản ghi cùng miền và contentHash — refcount của nội dung vật lý
    * (ngữ nghĩa Moodle: dữ liệu vật lý còn sống khi refcount > 0).
    * Ép `::int` giữ kiểu runtime là `number` như đường cũ trước chuyển đổi.
    */

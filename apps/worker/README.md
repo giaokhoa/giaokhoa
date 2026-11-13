@@ -4,7 +4,7 @@
 
 ## Dọn dẹp file theo miền (issue #10)
 
-Queue file-cleanup chỉ chấp nhận job chứa storageDomain hợp lệ và contentHash SHA-256. Với trung tâm, spaceSlug phải đối chiếu được với space_registry.id, trước khi mở phiên withSpaceKysely. Worker đếm lại tham chiếu theo (storage_domain, content_hash) trong đúng database rồi xóa đường dẫn local hoặc gửi DeleteObject tới key S3 của đúng miền. Không tự đoán miền khi thiếu payload; không dọn dữ liệu legacy.
+Queue file-cleanup chỉ chấp nhận job chứa storageDomain hợp lệ và contentHash SHA-256. Với trung tâm, spaceSlug phải đối chiếu được với space_registry.id, trước khi mở phiên withSpaceKysely. Worker đếm lại tham chiếu theo (storage_domain, content_hash) trong đúng database rồi xóa đường dẫn local hoặc gửi DeleteObject tới key S3 của đúng miền. Không tự đoán miền khi thiếu payload; jobId được gắn lần xóa cụ thể để vòng đời mới không bị completed của vòng cũ cản; không dọn dữ liệu legacy.
 
 Worker phải có cùng FILE_STORAGE_DRIVER, FILE_STORAGE_DIR hoặc FILE_STORAGE_S3_* (endpoint, region, bucket, credentials, path-style) với API. Lỗi xóa S3 truyền lên BullMQ để retry. Spec worker integration kiểm database role thường, queue BullMQ và byte trên disk; spec processor S3 kiểm HTTP thực qua AWS SDK và nội dung còn lại tại máy chủ thử nghiệm.
 

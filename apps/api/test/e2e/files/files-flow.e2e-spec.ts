@@ -1,5 +1,9 @@
 import { INestApplication } from '@nestjs/common';
-import { fileDomainForSpace, SYSTEM_FILE_DOMAIN } from '@giaokhoa/db';
+import { getQueueToken } from '@nestjs/bullmq';
+import type { Queue } from 'bullmq';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
+import { fileDomainForSpace, LEGACY_FILE_DOMAIN, SYSTEM_FILE_DOMAIN } from '@giaokhoa/db';
 import { FilesRepository } from '@giaokhoa/db/repositories/files';
 import { FilesService } from '../../../src/modules/files/files.service';
 import { OBJECT_STORAGE, sha256Hex, type ObjectStorage } from '../../../src/modules/files/storage';
@@ -60,6 +64,55 @@ describe('File: khử trùng theo địa chỉ nội dung, dọn refcount, phụ
     expect(delA.body.refcount).toBe(1);
     const delB = await http(app).delete(`/api/v1/files/${b.id}`).set('Authorization', `Bearer ${uploaderToken}`);
     expect(delB.body.refcount).toBe(0);
+  });
+
+  it('hai đợt upload/xóa cùng hash sinh hai job cleanup độc lập, không bị BullMQ nuốt vì completed retention', async () => {
+    const content = 'hai-vong-xoa-10-' + Date.now();
+    const queue = app.get<Queue>(getQueueToken('file-cleanup'));
+    const first = await upload(uploaderToken, 'lap-mot.txt', content);
+    expect((await http(app).delete('/api/v1/files/' + first.id)
+      .set('Authorization', 'Bearer ' + uploaderToken)).status).toBe(200);
+    const firstId = ['orphan', SYSTEM_FILE_DOMAIN, first.contentHash, first.id].join('-');
+    expect(await queue.getJob(firstId)).toBeDefined();
+
+    const second = await upload(uploaderToken, 'lap-hai.txt', content);
+    expect(second.contentHash).toBe(first.contentHash);
+    expect(second.id).not.toBe(first.id);
+    expect((await http(app).delete('/api/v1/files/' + second.id)
+      .set('Authorization', 'Bearer ' + uploaderToken)).status).toBe(200);
+    const secondId = ['orphan', SYSTEM_FILE_DOMAIN, second.contentHash, second.id].join('-');
+    expect(secondId).not.toBe(firstId);
+    expect(await queue.getJob(secondId)).toBeDefined();
+  });
+
+  it('HTTP Trang chính đọc file legacy theo metadata/context hợp lệ, vẫn không dọn byte legacy', async () => {
+    const payload = Buffer.from('legacy-trang-chinh-10-' + Date.now());
+    const hash = sha256Hex(payload);
+    const storage = app.get<ObjectStorage>(OBJECT_STORAGE);
+    const repo = app.get(FilesRepository);
+    const path = storage.keyFor(LEGACY_FILE_DOMAIN, hash);
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, payload);
+    const legacy = await repo.insert({
+      contentHash: hash, storageDomain: LEGACY_FILE_DOMAIN,
+      contextId: courseCtx, component: 'core_user', fileArea: 'profile',
+      fileName: 'legacy.txt', fileSize: payload.length, mimeType: 'text/plain', userId: uploaderId,
+    });
+    const auth = { Authorization: 'Bearer ' + uploaderToken };
+    try {
+      const meta = await http(app).get('/api/v1/files/' + legacy.id).set(auth);
+      expect(meta.status).toBe(200);
+      const signed = await http(app).post('/api/v1/files/' + legacy.id + '/signed-url').set(auth);
+      expect(signed.status).toBe(201);
+      const download = await http(app).get(signed.body.url);
+      expect(download.status).toBe(200);
+      expect(download.text).toBe(payload.toString());
+      expect((await http(app).delete('/api/v1/files/' + legacy.id).set(auth)).status).toBe(200);
+      expect(await storage.exists(LEGACY_FILE_DOMAIN, hash)).toBe(true);
+    } finally {
+      await repo.deleteById(legacy.id);
+      await rm(path, { force: true });
+    }
   });
 
   it('phục vụ nội dung cho người có năng lực ngữ cảnh file qua URL đã ký và luồng có rào', async () => {

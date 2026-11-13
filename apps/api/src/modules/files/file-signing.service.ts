@@ -31,14 +31,14 @@ export class FileSigningService {
    * trỏ thẳng tới kho kèm hạn dùng; còn lại → URL tải qua API kèm chữ ký HMAC như hành vi cũ.
    * Kiểm quyền tại context do FilesService thực hiện TRƯỚC khi gọi hàm này.
    */
-  async createDownloadTarget(file: { id: string; storageDomain: string; contentHash: string; fileName: string; mimeType?: string | null }): Promise<{ url: string; expiresAt: number }> {
+  async createDownloadTarget(file: { id: string; storageDomain: string; signingDomain?: string; contentHash: string; fileName: string; mimeType?: string | null }): Promise<{ url: string; expiresAt: number }> {
     if (this.storage && supportsPresignedDownloads(this.storage)) {
       const url = await this.storage.presignGetUrl(file.storageDomain, file.contentHash, this.ttlSeconds, {
         fileName: file.fileName, mimeType: file.mimeType ?? undefined,
       });
       return { url, expiresAt: Math.floor(Date.now() / 1000) + this.ttlSeconds };
     }
-    const { token, expiresAt } = this.sign(file.id, file.storageDomain);
+    const { token, expiresAt } = this.sign(file.id, file.signingDomain ?? file.storageDomain);
     return { url: `/api/v1/files/${file.id}/download?sig=${encodeURIComponent(token)}`, expiresAt };
   }
   /**

@@ -21,7 +21,7 @@ Package này là tầng dữ liệu **Kysely** duy nhất của hệ: kiểu sin
 
 ## Miền sở hữu byte file (issue #10)
 
-Cột files.storage_domain thuộc migration native 20261113050000_file_storage_domain. Mỗi file mới phải có miền space-<space_registry.id> (trung tâm/khu công cộng) hoặc bank-system (ngân hàng/Trang chính). Định danh miền không phụ thuộc hostname/tên; hai kho có cùng content_hash không dùng chung byte hoặc refcount. FilesRepository.countByHash(hash, domain) yêu cầu miền. Hàm thuần fileDomainForSpace, fileContentKey và assertFileStorageDomain từ barrel @giaokhoa/db là hợp đồng chung của API/worker. Bản ghi trước migration có miền legacy và chỉ hỗ trợ đọc tại bề mặt Trang chính; cleanup không xóa legacy, không di trú byte/hash cũ trong issue này.
+Cột files.storage_domain thuộc migration native 20261113050000_file_storage_domain. Mỗi file mới phải có miền space-<space_registry.id> (trung tâm/khu công cộng) hoặc bank-system (ngân hàng/Trang chính). Định danh miền không phụ thuộc hostname/tên; hai kho có cùng content_hash không dùng chung byte hoặc refcount. FilesRepository.countByHash(hash, domain) yêu cầu miền. Hàm thuần fileDomainForSpace, fileContentKey và assertFileStorageDomain từ barrel @giaokhoa/db là hợp đồng chung của API/worker. Bản ghi trước migration có miền legacy và đọc tương thích qua kiểm tra tenant sở hữu context, kể cả trên host trung tâm có quyền; HMAC còn gắn miền host hiện hành. Cleanup không xóa legacy, không di trú byte/hash cũ trong issue này.
 
 ## Khung Kysely
 

@@ -94,6 +94,39 @@ describe('Worker file-cleanup: tách miền sở hữu khi cùng content hash', 
     expect(b).toHaveLength(1);
   });
 
+  it('hai vòng thêm/xóa metadata và byte cùng miền/hash đều có job thật hoàn tất dù job cũ còn trong Redis', async () => {
+    const queue = context.get<Queue>(getQueueToken('file-cleanup'));
+    const completedIds: string[] = [];
+    for (const round of [1, 2]) {
+      // Mô phỏng byte mới được upload lại vào cùng content key,
+      // không chỉ mock lời gọi xoá: worker phải thật sự xóa byte.
+      await writeFile(physicalSystem, content);
+      const record = await db.insertInto('files').values({
+        content_hash: hash, storage_domain: SYSTEM_FILE_DOMAIN,
+        context_id: '01900000-0000-7000-8000-0000000000aa',
+        component: 'core_user', file_area: 'profile',
+        item_id: null, file_path: '/', file_name: 'cycle-' + round + '.txt',
+        file_size: content.length,
+      }).returning('id').executeTakeFirstOrThrow();
+      expect(existsSync(physicalSystem)).toBe(true);
+      await db.deleteFrom('files').where('id', '=', record.id).execute();
+
+      // Cùng công thức jobId do FilesService dùng: sự kiện xóa id
+      // mới phải được xử lý ngay cả khi completed của vòng 1 còn lưu.
+      const jobId = ['orphan', SYSTEM_FILE_DOMAIN, hash, record.id].join('-');
+      const job = await queue.add('cleanup-orphan', {
+        contentHash: hash, storageDomain: SYSTEM_FILE_DOMAIN,
+      }, { jobId, attempts: 1 });
+      const result = await job.waitUntilFinished(events, 15000) as { removed: boolean; refcount: number };
+      expect(result).toMatchObject({ removed: true, refcount: 0 });
+      expect(existsSync(physicalSystem)).toBe(false);
+      expect(await queue.getJob(jobId)).toBeDefined();
+      completedIds.push(jobId);
+    }
+    expect(completedIds[0]).not.toBe(completedIds[1]);
+    expect(await readFile(physicalB)).toEqual(content);
+  });
+
   it('job thiếu miền, miền giả và job mang sai chủ đều bị từ chối trước khi xoá byte B', async () => {
     const processor = context.get(FileCleanupProcessor);
     await expect(processor.process({ data: { contentHash: hash } } as never))
