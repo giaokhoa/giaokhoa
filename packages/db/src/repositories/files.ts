@@ -196,6 +196,13 @@ export class FilesRepository {
       .execute();
   }
 
+  /** Chỉ chọn file snapshot của một thao tác chuẩn bị (itemId), không xoá file khác. */
+  async listExamSnapshotFiles(itemId: string, db: RepoDb = this.db()): Promise<FileRow[]> {
+    return db.selectFrom('files').select(FILE_COLUMNS)
+      .where('item_id', '=', itemId).where('component', '=', 'question')
+      .where('file_area', '=', 'exam_snapshot').orderBy('id', 'asc').execute();
+  }
+
   /**
    * Các bài nộp đang gắn với một tệp qua bảng liên kết của module Bài tập (`assign_submission_files`): tệp bài nộp nào cũng có đúng một dòng liên kết tại đây. Đường xoá dùng chung dùng kết quả này để biết tệp có đang chịu khoá bài nộp hay không trước khi xoá.
    */

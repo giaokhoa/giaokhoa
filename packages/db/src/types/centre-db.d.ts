@@ -1207,6 +1207,7 @@ export interface ExamPins {
   monitor_events: Generated<boolean>;
   name: string | null;
   password_hash: string | null;
+  pending_snapshot_id: string | null;
   preparation_state: Generated<string>;
   preset: string | null;
   question_snapshots: ExamQuestionSnapshot[] | null;
@@ -1253,6 +1254,8 @@ export interface Exams {
   kind: Generated<string>;
   latest_version: Generated<number>;
   original_author_id: string | null;
+  pin_request_course_id: string | null;
+  pin_request_id: string | null;
   status: Generated<string>;
   tenant_id: string | null;
   updated_at: Generated<Timestamp>;

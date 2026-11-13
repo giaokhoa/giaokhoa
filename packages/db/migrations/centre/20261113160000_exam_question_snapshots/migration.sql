@@ -29,3 +29,17 @@ ALTER TABLE question_attempts ADD CONSTRAINT question_attempts_local_question_fk
 ALTER TABLE question_attempts ADD CONSTRAINT question_attempts_local_version_fk FOREIGN KEY (local_question_version_id) REFERENCES question_versions(id) ON DELETE RESTRICT;
 CREATE INDEX question_attempts_local_question_idx ON question_attempts(local_question_id);
 CREATE INDEX question_attempts_local_version_idx ON question_attempts(local_question_version_id);
+
+-- Đề tạo từ course builder ghi khóa retry tại chính đề; tiến trình chết trước
+-- bước chèn pin vẫn có thể tiếp tục với đúng đề/version ban đầu.
+ALTER TABLE exams ADD COLUMN pin_request_id uuid;
+ALTER TABLE exams ADD COLUMN pin_request_course_id uuid;
+ALTER TABLE exams ADD CONSTRAINT exams_pin_request_pair_check CHECK
+  ((pin_request_id IS NULL) = (pin_request_course_id IS NULL));
+CREATE UNIQUE INDEX exams_pin_request_unique
+  ON exams(created_by, pin_request_course_id, pin_request_id)
+  WHERE pin_request_id IS NOT NULL;
+
+-- Lưu bước copy thay thế để retry sau crash còn tìm được media staging.
+-- Ghi pin version mới và xóa cờ pending trong CÙNG transaction.
+ALTER TABLE exam_pins ADD COLUMN pending_snapshot_id uuid;

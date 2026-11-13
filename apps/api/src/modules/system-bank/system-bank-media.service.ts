@@ -108,7 +108,7 @@ export class SystemBankMediaService {
    * tạo file logic ở kho đích trước khi giao nội dung cho QuestionsService.
    * Gói nguồn không bị sửa; mọi lần nhập có bản sao file độc lập.
    */
-  async materialize(pkg: SystemBankPackage, targetContextId: string, actorId: string, localSource = false, immutable = false): Promise<SystemBankPackage> {
+  async materialize(pkg: SystemBankPackage, targetContextId: string, actorId: string, localSource = false, immutable = false, preparationId?: string): Promise<SystemBankPackage> {
     const result = structuredClone(pkg);
     const manifest = new Map((result.media ?? []).map((file) => [file.contentHash, file]));
     const copied = new Map<string, string>();
@@ -132,7 +132,7 @@ export class SystemBankMediaService {
           throw new BadRequestException({ code: 'system_bank.invalid_media' });
         }
         const copy = await this.files.upload({ contextId: targetContextId, component: 'question',
-          fileArea: immutable ? 'exam_snapshot' : 'question', fileName: file.fileName, mimeType: file.mimeType!, data: bytes, userId: actorId });
+          fileArea: immutable ? 'exam_snapshot' : 'question', itemId: preparationId, fileName: file.fileName, mimeType: file.mimeType!, data: bytes, userId: actorId });
         attrs.src = questionFileContentSrc(copy.id);
         continue;
       }
@@ -152,7 +152,7 @@ export class SystemBankMediaService {
           throw new BadRequestException({ message: 'Published image checksum or format mismatch', code: 'system_bank.invalid_media' });
         }
         const file = await this.files.upload({
-          contextId: targetContextId, component: 'question', fileArea: immutable ? 'exam_snapshot' : 'question',
+          contextId: targetContextId, component: 'question', fileArea: immutable ? 'exam_snapshot' : 'question', itemId: preparationId,
           fileName: item.fileName, mimeType: item.mimeType, data: bytes, userId: actorId,
         });
         fileId = file.id;

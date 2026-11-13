@@ -544,7 +544,8 @@ export class ExamsService {
   }
 
   /** Tạo đề snapshot mới trong bank đề (metadata + slots tuỳ chọn; rỗng = đề trắng để soạn tiếp). Cổng tạo là exam:add (khuôn S3) — exam:edit chỉ gác sửa đề đã có. */
-  async createPaper(actorId: string, bankId: string, input: CreateExam): Promise<ExamView> {
+  async createPaper(actorId: string, bankId: string, input: CreateExam,
+    pinRequest?: { courseId: string; requestId: string }): Promise<ExamView> {
     const bank = await this.getExamBank(actorId, bankId);
     await this.evaluator.requireCapability(actorId, EXAM_CAPABILITIES.add, bank.contextId);
     const slots = await this.resolveSlots(actorId, input.slots ?? []);
@@ -552,6 +553,7 @@ export class ExamsService {
     await this.repo.transaction(async (tx) => {
       paper = await this.repo.insertPaper({
         tenantId: bank.tenantId, bankId: bank.id, kind: 'snapshot', status: 'draft', createdBy: actorId, latestVersion: 1,
+        ...(pinRequest ? { pinRequestId: pinRequest.requestId, pinRequestCourseId: pinRequest.courseId } : {}),
         derivedFromMatrixId: input.matrixId ?? null,
       }, tx);
       const version = await this.repo.insertVersion({
@@ -1276,7 +1278,24 @@ export class ExamsService {
    * QuizService.createPinRecord lo.
    */
   async createPin(actorId: string, courseId: string, input: CreateExamPin): Promise<QuizView> {
-    const existing = input.requestId ? await this.quiz.getPinByRequest(courseId, actorId, input.requestId) : undefined;
+    if (input.newExam && !input.requestId) {
+      throw new BadRequestException({ code: 'exam.pin_request_id_required' });
+    }
+    if (input.requestId) {
+      return this.quiz.withPinRequestLock(courseId, actorId, input.requestId,
+        () => this.createPinLocked(actorId, courseId, input));
+    }
+    return this.createPinLocked(actorId, courseId, input);
+  }
+
+  /**
+   * Cả tạo đề mới lẫn tạo pin chạy dưới khóa yêu cầu duy nhất; retry sau
+   * crash tìm lại đề/version và có thể tiếp tục pin đang chuẩn bị.
+   */
+  private async createPinLocked(actorId: string, courseId: string, input: CreateExamPin): Promise<QuizView> {
+    const existing = input.requestId
+      ? await this.quiz.getPinByRequest(courseId, actorId, input.requestId, input.sectionId)
+      : undefined;
     if (existing) return existing;
     let examId = input.examId;
     let examVersionId = input.examVersionId;
@@ -1286,9 +1305,21 @@ export class ExamsService {
       }
       const bankRow = await this.banks.ensurePersonalBank(actorId, 'exam');
       await this.ensureExamGrants(bankRow);
-      const created = await this.createPaper(actorId, bankRow.id, input.newExam);
-      examId = created.paper.id;
-      examVersionId = created.version.id;
+      const prior = input.requestId
+        ? await this.repo.findPaperByPinRequest(actorId, courseId, input.requestId)
+        : undefined;
+      if (prior) {
+        // Ghim đúng version ban đầu ngay cả khi người dùng đã sửa đề nháp.
+        const version = await this.repo.getVersionByNumber(prior.id, 1);
+        if (!version || prior.bankId !== bankRow.id) throw new ConflictException({ code: 'exam.pin_request_conflict' });
+        examId = prior.id;
+        examVersionId = version.id;
+      } else {
+        const created = await this.createPaper(actorId, bankRow.id, input.newExam,
+          input.requestId ? { courseId, requestId: input.requestId } : undefined);
+        examId = created.paper.id;
+        examVersionId = created.version.id;
+      }
       // Đề mới tạo giữ trạng thái draft và ghim ngay ở version vừa
       // tạo: đây là đề CỦA CHÍNH giáo viên trong khoá của mình (luồng
       // "tạo bài trong khoá" từ course builder) — cổng ready chỉ áp

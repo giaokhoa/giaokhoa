@@ -146,7 +146,7 @@ export function useReorderBuilderModules(courseId: string) {
 
 /** Đột biến tạo đề + ghim vào khoá (POST /courses/:id/exam-pins dạng newExam) — trả về id lần ghim để điều hướng. */
 export function useCreateBuilderExamPin(courseId: string) {
-  return useBuilderMutation(courseId, (vars: { sectionId: string; name: string }) =>
+  return useBuilderMutation(courseId, (vars: { sectionId: string; name: string; requestId: string }) =>
     createBuilderExamPin(courseId, vars),
   );
 }

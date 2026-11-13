@@ -53,7 +53,10 @@ export class ExamQuestionSnapshotsService {
 
   /** Chụp version local sau cổng đọc; giữ nguyên id đáp án để tương thích lượt làm hiện hành. */
   async readLocal(actorId: string, questionId: string, versionId: string): Promise<ExamQuestionSnapshot> {
-    const view = await this.questions.getQuestionForViewer(actorId, questionId);
+    // Câu local đã qua cổng ready của ExamsService: giữ quyền dùng câu
+    // theo luật cũ (kể cả câu trong bank chung trung tâm), không áp cổng
+    // xem chi tiết bank riêng của getQuestionForViewer ở đây.
+    const view = await this.questions.getQuestion(questionId);
     const content = await this.questions.getVersionContent(questionId, versionId);
     const stimulus = content.version.stimulusId ? await this.questions.getStimulus(content.version.stimulusId) : null;
     const pkg = systemBankPackageSchema.parse({
@@ -73,7 +76,7 @@ export class ExamQuestionSnapshotsService {
    * Chuẩn bị mọi slot vào miền trung tâm; lỗi quyền/version/hash/byte ném trước
    * khi pin sẵn sàng. Không dùng bản mới hơn bản đã chọn, không thay nguồn ngầm.
    */
-  async prepare(actorId: string, slots: ExamSlotRow[], targetContextId: string, versionMode = 'pinned'): Promise<ExamQuestionSnapshot[] | null> {
+  async prepare(actorId: string, slots: ExamSlotRow[], targetContextId: string, versionMode = 'pinned', preparationId?: string): Promise<ExamQuestionSnapshot[] | null> {
     if (!slots.some((slot) => slot.sourceDomain === 'bank-system')) return null;
     if (versionMode !== 'pinned') throw new BadRequestException({ code: 'exam.shared_requires_pinned' });
     const snapshots: ExamQuestionSnapshot[] = [];
@@ -86,7 +89,7 @@ export class ExamQuestionSnapshotsService {
         throw new BadRequestException({ code: 'system_bank.checksum_mismatch' });
       }
       snapshots.push({ ...snapshot, package: await this.media.materialize(
-        snapshot.package, targetContextId, actorId, snapshot.sourceDomain === 'centre', true,
+        snapshot.package, targetContextId, actorId, snapshot.sourceDomain === 'centre', true, preparationId,
       ) });
     }
     return snapshots;

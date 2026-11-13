@@ -303,6 +303,6 @@
     "source_version_required": "Phải chọn phiên bản câu hệ thống",
     "shared_requires_pinned": "Câu hệ thống bắt buộc ghim phiên bản",
     "pin_preparing": "Đợt giao đang được chuẩn bị; hãy thử lại cùng khoá yêu cầu",
-    "pin_request_id_required": "Giao câu hệ thống cần khoá yêu cầu để thử lại an toàn"
+    "pin_request_id_required": "Tạo đề mới hoặc giao câu hệ thống cần khoá yêu cầu để thử lại an toàn"
   }
 }

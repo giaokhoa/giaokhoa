@@ -294,6 +294,122 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
     expect(repeated.status).toBe(201); expect(repeated.body.id).toBe(retried.body.id);
     expect(Number((await centre.query('SELECT count(*) FROM exam_pins WHERE request_id = $1', [body.requestId])).rows[0].count)).toBe(1);
   }, 90_000);
+  it('retry newExam sau lỗi tạo pin giữ đúng một đề/version và một đợt giao', async () => {
+    const requestId = randomUUID();
+    const body = { sectionId, requestId,
+      newExam: { name: 'Đề tạo mới có khoá retry', totalScore: 1, slots: [{ questionId: localId }] } };
+    const withoutKey = await http(app).post(`/api/v1/courses/${courseId}/exam-pins`)
+      .set(bearer(teacher)).send({ sectionId, newExam: body.newExam });
+    expect(withoutKey.status).toBe(400);
+    expect(withoutKey.body.code).toBe('exam.pin_request_id_required');
+
+    await centre.query(`CREATE FUNCTION reject_new_exam_pin() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'pin write interrupted'; END $$;
+      CREATE TRIGGER reject_new_exam_pin BEFORE INSERT ON exam_pins
+      FOR EACH ROW EXECUTE FUNCTION reject_new_exam_pin()`);
+    try {
+      const failed = await http(app).post(`/api/v1/courses/${courseId}/exam-pins`).set(bearer(teacher)).send(body);
+      expect(failed.status).toBe(500);
+    } finally {
+      await centre.query('DROP TRIGGER reject_new_exam_pin ON exam_pins; DROP FUNCTION reject_new_exam_pin()');
+    }
+
+    const papers = await centre.query('SELECT id FROM exams WHERE pin_request_id = $1', [requestId]);
+    expect(papers.rowCount).toBe(1);
+    const versionCount = await centre.query('SELECT count(*)::int AS n FROM exam_versions WHERE exam_id = $1', [papers.rows[0].id]);
+    expect(versionCount.rows[0].n).toBe(1);
+    const retried = await http(app).post(`/api/v1/courses/${courseId}/exam-pins`).set(bearer(teacher)).send(body);
+    expect(retried.status, JSON.stringify(retried.body)).toBe(201);
+    expect(retried.body.examId).toBe(papers.rows[0].id);
+    const repeated = await http(app).post(`/api/v1/courses/${courseId}/exam-pins`).set(bearer(teacher)).send(body);
+    expect(repeated.status).toBe(201);
+    expect(repeated.body.id).toBe(retried.body.id);
+    expect((await centre.query('SELECT count(*)::int AS n FROM exams WHERE pin_request_id = $1', [requestId])).rows[0].n).toBe(1);
+    expect((await centre.query('SELECT count(*)::int AS n FROM exam_versions WHERE exam_id = $1', [papers.rows[0].id])).rows[0].n).toBe(1);
+    expect((await centre.query('SELECT count(*)::int AS n FROM exam_pins WHERE request_id = $1', [requestId])).rows[0].n).toBe(1);
+  }, 90_000);
+
+  it('tiếp tục pin dở sau crash ở snapshot, course module và grade item; dọn media staging không xóa file thật', async () => {
+    const published = await publish('multichoice', mcPackage());
+    const examId = await paper([published.question.id]);
+    const body = pinBody(examId);
+    const deployed = await http(app).post(`/api/v1/courses/${courseId}/exam-pins`).set(bearer(teacher)).send(body);
+    expect(deployed.status, JSON.stringify(deployed.body)).toBe(201);
+    const pinId = deployed.body.id as string;
+    let cmId = deployed.body.cmId as string;
+    const retry = async () => {
+      const res = await http(app).post(`/api/v1/courses/${courseId}/exam-pins`).set(bearer(teacher)).send(body);
+      expect(res.status, JSON.stringify(res.body)).toBe(201);
+      expect(res.body.id).toBe(pinId);
+      expect((await centre.query('SELECT preparation_state FROM exam_pins WHERE id = $1', [pinId])).rows[0].preparation_state).toBe('ready');
+      return res.body as { cmId: string };
+    };
+
+    // Crash ngay trước ready: grade item đã có; không thêm bản sao.
+    await centre.query("UPDATE exam_pins SET preparation_state = 'preparing' WHERE id = $1", [pinId]);
+    await retry();
+    expect((await centre.query('SELECT count(*)::int AS n FROM grade_items WHERE item_instance = $1', [cmId])).rows[0].n).toBe(1);
+
+    // Crash sau tạo cm nhưng trước grade item: chỉ điền grade item còn thiếu.
+    await centre.query('DELETE FROM grade_items WHERE item_instance = $1', [cmId]);
+    await centre.query("UPDATE exam_pins SET preparation_state = 'preparing' WHERE id = $1", [pinId]);
+    await retry();
+    expect((await centre.query('SELECT count(*)::int AS n FROM grade_items WHERE item_instance = $1', [cmId])).rows[0].n).toBe(1);
+
+    // Crash sau insert pin/snapshot nhưng trước tạo cm: tìm lại theo instance.
+    await centre.query('DELETE FROM grade_items WHERE item_instance = $1', [cmId]);
+    await centre.query("UPDATE exam_pins SET cm_id = NULL, preparation_state = 'preparing' WHERE id = $1", [pinId]);
+    await centre.query('DELETE FROM course_modules WHERE id = $1', [cmId]);
+    cmId = (await retry()).cmId;
+    expect((await centre.query('SELECT count(*)::int AS n FROM course_modules WHERE instance_id = $1', [pinId])).rows[0].n).toBe(1);
+    expect((await centre.query('SELECT count(*)::int AS n FROM grade_items WHERE item_instance = $1', [cmId])).rows[0].n).toBe(1);
+
+    // Crash trước khi lưu JSON snapshot: chạy lại chuẩn bị, không nhân pin.
+    await centre.query("UPDATE exam_pins SET question_snapshots = NULL, preparation_state = 'preparing' WHERE id = $1", [pinId]);
+    await retry();
+    expect((await centre.query('SELECT jsonb_array_length(question_snapshots) AS n FROM exam_pins WHERE id = $1', [pinId])).rows[0].n).toBe(2);
+
+    // File staging còn từ một lần cập nhật version bị ngắt: chỉ xóa file
+    // thuộc staging, không chạm file snapshot đã công bố của pin khác.
+    const original = (await centre.query("SELECT * FROM files WHERE file_area = 'exam_snapshot' ORDER BY id LIMIT 1")).rows[0];
+    expect(original).toBeDefined();
+    const pendingId = randomUUID();
+    await centre.query(`INSERT INTO files (content_hash, storage_domain, context_id, component,
+      file_area, item_id, file_path, file_name, file_size, mime_type)
+      VALUES ($1,$2,$3,'question','exam_snapshot',$4,'/',$5,$6,$7)`,
+      [original.content_hash, original.storage_domain, original.context_id, pendingId, original.file_name, original.file_size, original.mime_type]);
+    await centre.query('UPDATE exam_pins SET pending_snapshot_id = $1 WHERE id = $2', [pendingId, pinId]);
+    const patched = await http(app).patch(`/api/v1/exam-pins/${pinId}`).set(bearer(teacher)).send({ name: 'Đề đã khôi phục' });
+    expect(patched.status, JSON.stringify(patched.body)).toBe(200);
+    expect((await centre.query('SELECT count(*)::int AS n FROM files WHERE item_id = $1', [pendingId])).rows[0].n).toBe(0);
+    expect((await centre.query('SELECT pending_snapshot_id FROM exam_pins WHERE id = $1', [pinId])).rows[0].pending_snapshot_id).toBeNull();
+    expect((await centre.query('SELECT id FROM files WHERE id = $1', [original.id])).rowCount).toBe(1);
+  }, 90_000);
+
+  it('lỗi sau khi đã sao media slot trước phải dọn toàn bộ file staging và không tạo pin ready', async () => {
+    const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jFxoAAAAASUVORK5CYII=', 'base64');
+    const goodHash = sha256Hex(bytes);
+    await app.get<ObjectStorage>(OBJECT_STORAGE).put(SYSTEM_FILE_DOMAIN, publicationMediaStorageKey(goodHash), bytes);
+    const goodPkg = mcPackage();
+    goodPkg.questionText = { type: 'doc', content: [{ type: 'image', attrs: { src: `bank-media://${goodHash}` } }] };
+    goodPkg.media = [{ contentHash: goodHash, fileName: 'anh-dau.png', mimeType: 'image/png' }];
+    const good = await publish('multichoice', goodPkg);
+
+    const badPkg = mcPackage();
+    const badHash = '0'.repeat(64);
+    badPkg.questionText = { type: 'doc', content: [{ type: 'image', attrs: { src: `bank-media://${badHash}` } }] };
+    badPkg.media = [{ contentHash: badHash, fileName: 'anh-thieu.png', mimeType: 'image/png' }];
+    const bad = await publish('multichoice', badPkg);
+
+    const examId = await paper([good.question.id, bad.question.id]);
+    const beforeFiles = (await centre.query("SELECT count(*)::int AS n FROM files WHERE file_area = 'exam_snapshot'")).rows[0].n;
+    const body = pinBody(examId);
+    const failed = await http(app).post(`/api/v1/courses/${courseId}/exam-pins`).set(bearer(teacher)).send(body);
+    expect(failed.status).toBeGreaterThanOrEqual(400);
+    expect((await centre.query('SELECT count(*)::int AS n FROM exam_pins WHERE request_id = $1', [body.requestId])).rows[0].n).toBe(0);
+    expect((await centre.query("SELECT count(*)::int AS n FROM files WHERE file_area = 'exam_snapshot'")).rows[0].n).toBe(beforeFiles);
+  }, 90_000);
+
   it('hai kho A/B riêng biệt giữ snapshot, media, lượt làm và điểm ở A khi bank không còn kết nối', async () => {
     const cpName = `giaokhoa_test_shared_cp_${suffix}`;
     const previousCp = process.env.CONTROL_PLANE_DATABASE_URL;

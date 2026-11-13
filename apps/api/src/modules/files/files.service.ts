@@ -285,6 +285,17 @@ export class FilesService {
   }
 
   /**
+   * Thu hồi media STAGING của lần chuẩn bị thất bại, chỉ gọi khi chắc chắn
+   * snapshot đó chưa được công bố ready. Reuse đường xoá có refcount
+   * và cleanup queue: byte cùng hash đang được dùng nơi khác vẫn còn.
+   */
+  async cleanupExamSnapshotFiles(itemId: string): Promise<void> {
+    for (const file of await this.repo.listExamSnapshotFiles(itemId)) {
+      await this.deleteFile(file.id);
+    }
+  }
+
+  /**
    * Chốt khoá bài nộp cho đường xoá tệp do người dùng khởi tạo: tệp đang
    * gắn với một bài nộp thì chỉ được xoá khi vượt qua đúng ba chốt mà
    * module Bài tập áp ở đường gỡ tệp của chính nó

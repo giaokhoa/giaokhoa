@@ -52,6 +52,7 @@ export interface ExamPinRow {
   questionSnapshots: ExamQuestionSnapshot[] | null;
   requestId: string | null;
   preparationState: string;
+  pendingSnapshotId: string | null;
   attemptsAllowed: number;
   cmId: string | null;
   courseId: string;
@@ -92,6 +93,7 @@ export interface NewExamPin {
   questionSnapshots?: ExamQuestionSnapshot[] | null;
   requestId?: string | null;
   preparationState?: string;
+  pendingSnapshotId?: string | null;
   attemptsAllowed?: number;
   cmId?: string | null;
   courseId: string;
@@ -132,6 +134,7 @@ const EXAM_PIN_COLUMNS = [
   'question_snapshots as questionSnapshots',
   'request_id as requestId',
   'preparation_state as preparationState',
+  'pending_snapshot_id as pendingSnapshotId',
   'attempts_allowed as attemptsAllowed',
   'cm_id as cmId',
   'course_id as courseId',
@@ -184,6 +187,7 @@ function examPinInsertValues(values: NewExamPin): InsertObject<CentreDB, 'exam_p
   if (values.questionSnapshots !== undefined) row.question_snapshots = values.questionSnapshots === null ? null : jsonbValue(values.questionSnapshots);
   if (values.requestId !== undefined) row.request_id = values.requestId;
   if (values.preparationState !== undefined) row.preparation_state = values.preparationState;
+  if (values.pendingSnapshotId !== undefined) row.pending_snapshot_id = values.pendingSnapshotId;
   if (values.attemptsAllowed !== undefined) row.attempts_allowed = values.attemptsAllowed;
   if (values.cmId !== undefined) row.cm_id = values.cmId;
   if (values.createdAt !== undefined) row.created_at = values.createdAt;
@@ -226,6 +230,7 @@ function examPinUpdateSet(patch: Partial<ExamPinRow>): UpdateObject<CentreDB, 'e
   const set: UpdateObject<CentreDB, 'exam_pins'> = {};
   if (patch.questionSnapshots !== undefined) set.question_snapshots = patch.questionSnapshots === null ? null : jsonbValue(patch.questionSnapshots);
   if (patch.preparationState !== undefined) set.preparation_state = patch.preparationState;
+  if (patch.pendingSnapshotId !== undefined) set.pending_snapshot_id = patch.pendingSnapshotId;
   if (patch.attemptsAllowed !== undefined) set.attempts_allowed = patch.attemptsAllowed;
   if (patch.cmId !== undefined) set.cm_id = patch.cmId;
   if (patch.courseId !== undefined) set.course_id = patch.courseId;
@@ -1193,6 +1198,23 @@ export class QuizRepository {
   /** Mở một transaction trên kho trung tâm. */
   async transaction<T>(fn: (tx: QuizTx) => Promise<T>): Promise<T> {
     return this.db().transaction().execute(fn);
+  }
+
+  /**
+   * Khóa session theo (course, actor, requestId) xuyên cả saga tạo đề + pin.
+   * Không mở transaction chồng lên transaction của ExamsRepository;
+   * PostgreSQL giải phóng khóa session khi connection đứt do crash.
+   */
+  async withPinRequestLock<T>(courseId: string, actorId: string, requestId: string, action: () => Promise<T>): Promise<T> {
+    const key = `exam-pin:${courseId}:${actorId}:${requestId}`;
+    return this.db().connection().execute(async (connection) => {
+      await sql`select pg_advisory_lock(hashtextextended(${key}, 0))`.execute(connection);
+      try {
+        return await action();
+      } finally {
+        await sql`select pg_advisory_unlock(hashtextextended(${key}, 0))`.execute(connection);
+      }
+    });
   }
 
   /**

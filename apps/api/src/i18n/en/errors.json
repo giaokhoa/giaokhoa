@@ -303,6 +303,6 @@
     "source_version_required": "A system question version is required",
     "shared_requires_pinned": "System questions require pinned versions",
     "pin_preparing": "Assignment preparation is in progress; retry with the same request key",
-    "pin_request_id_required": "Assigning system questions requires a request key for safe retries"
+    "pin_request_id_required": "Creating an exam or assigning system questions requires a request key for safe retries"
   }
 }
