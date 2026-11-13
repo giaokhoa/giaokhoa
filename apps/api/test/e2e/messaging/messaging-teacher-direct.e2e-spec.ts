@@ -48,7 +48,6 @@ describe('Messaging — GV nhắn riêng học sinh trong khoá không cần k�
   let sD1: Person;
   let sD2: Person;
   // Khoá E: cặp gỡ vai dạy.
-  let courseE: string;
   let ctxE: string;
   let teacherE: Person;
   let sE: Person;
@@ -121,7 +120,6 @@ describe('Messaging — GV nhắn riêng học sinh trong khoá không cần k�
     [sD1, sD2] = d.students as [Person, Person];
 
     const e = await courseWithTeacher('Co', [['Hoc', 'Bay']]);
-    courseE = e.courseId;
     ctxE = e.ctxId;
     teacherE = e.teacher;
     [sE] = e.students as [Person];

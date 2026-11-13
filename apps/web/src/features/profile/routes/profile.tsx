@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import type { UserProfile } from '@giaokhoa/contracts';
 import { Button } from '@giaokhoa/ui/components/button';
@@ -56,7 +56,9 @@ export function ProfilePage() {
       }),
   });
 
-  useEffect(() => {
+  const [previousUser, setPreviousUser] = useState<typeof user | undefined>(undefined);
+  if (previousUser !== user) {
+    setPreviousUser(user);
     if (user) {
       setForm({
         firstName: user.firstName,
@@ -65,7 +67,7 @@ export function ProfilePage() {
         customFields: Object.fromEntries(user.customFields.map((f) => [f.shortName, f.value ?? ''])),
       });
     }
-  }, [user]);
+  }
 
   if (!user || !form)
     return (

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Label } from '@giaokhoa/ui/components/label';
@@ -161,11 +161,13 @@ export function TeacherCurriculumPage() {
   const [page, setPage] = useState(1);
   const groupsTopRef = useRef<HTMLDivElement | null>(null);
 
-  // Đổi (khoá, lớp) thì phân trang quay về trang đầu — như nhịp đặt
-  // lại ở bước tải cây của bản thủ công.
-  useEffect(() => {
+  // Khởi tạo lại trang khi phạm vi (chương trình, khoá) đổi.
+  const pageScope = curriculumId + ':' + courseId;
+  const [previousPageScope, setPreviousPageScope] = useState(pageScope);
+  if (pageScope !== previousPageScope) {
+    setPreviousPageScope(pageScope);
     setPage(1);
-  }, [curriculumId, courseId]);
+  }
 
   // Phân trang theo dòng Nội dung trên toàn cây — cùng quy tắc với
   // trang cây quản trị: mạch giữ nguyên thứ tự, mạch đang dở được

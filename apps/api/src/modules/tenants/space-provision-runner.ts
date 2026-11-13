@@ -68,7 +68,6 @@
  * bất biến ghi của tầng service.
  */
 import { createHash } from 'node:crypto';
-import { join } from 'node:path';
 import { Client, Pool } from 'pg';
 import type { SpaceRegistryRow } from '@giaokhoa/db/repositories/control-plane';
 import { applyStoreMigrations } from '@giaokhoa/db/migrate';
@@ -402,7 +401,7 @@ export async function runSpaceProvision(options: SpaceProvisionOptions): Promise
         });
       } catch (error) {
         if (isDedicatedDatabaseNameConflict(error)) {
-          throw new Error(`Database name ${databaseName} is already used by another dedicated space — refusing to provision a second centre on it`);
+          throw new Error(`Database name ${databaseName} is already used by another dedicated space — refusing to provision a second centre on it`, { cause: error });
         }
         throw error;
       }

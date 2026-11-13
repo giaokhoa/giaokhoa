@@ -1,8 +1,5 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import type {
-  Course, CourseContent, CourseGroup, CourseGrouping, GradeItem,
-} from '@giaokhoa/contracts';
 import { CurriculumFramePanel, BookFramePanel } from '../components/curriculum-frame-panel';
 import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { useTranslation } from 'react-i18next';
@@ -97,65 +94,68 @@ export function CourseBuilderPage() {
   // Khởi tạo các trường form/bản nháp từ gói dữ liệu mỗi khi gói
   // (lại) tải về — đúng phần khởi tạo của reload() thủ công trước đây
   // (chạy lúc mở trang và sau mỗi đột biến, qua refetch ở dưới).
-  useEffect(() => {
-    if (!builderData) return;
-    const { course: courseRes, content: contentRes, criteria: criteriaRes } = builderData;
-    if (criteriaRes) {
-      setCriteriaMethod(criteriaRes.method);
-      setCriteriaDraft(
-        criteriaRes.criteria.map((criterion) => ({
-          criteriaType: criterion.criteriaType,
-          moduleInstance: criterion.moduleInstance ?? '',
-          date: criterion.date ? String(criterion.date).slice(0, 10) : '',
-        })),
-      );
-    }
-    if (courseRes) {
-      setFullname(courseRes.fullName);
-      setShortname(courseRes.shortName);
-      setCourseCategory(courseRes.category);
-      setSummary(courseRes.summary);
-      setCourseVisible(courseRes.visible);
-      setIsTemplate(courseRes.isTemplate);
-      setStartdate(courseRes.startDate ? courseRes.startDate.slice(0, 10) : '');
-      setEnddate(courseRes.endDate ? courseRes.endDate.slice(0, 10) : '');
-    }
-    if (contentRes) {
-      setSectionEdits(
-        Object.fromEntries(
-          contentRes.sections.map((s) => [
-            s.id,
-            {
-              name: s.name ?? '',
-              status: statusChoiceOf(s.visible, s.openAt),
-              openAt: s.openAt ? String(s.openAt).slice(0, 10) : '',
-            },
-          ]),
-        ),
-      );
-      setModuleEdits(
-        Object.fromEntries(
-          contentRes.sections.flatMap((s) =>
-            s.modules.map((m) => [
-              m.id,
+  const [previousBuilderData, setPreviousBuilderData] = useState<typeof builderData | undefined>(undefined);
+  if (previousBuilderData !== builderData) {
+    setPreviousBuilderData(builderData);
+    if (builderData) {
+      const { course: courseRes, content: contentRes, criteria: criteriaRes } = builderData;
+      if (criteriaRes) {
+        setCriteriaMethod(criteriaRes.method);
+        setCriteriaDraft(
+          criteriaRes.criteria.map((criterion) => ({
+            criteriaType: criterion.criteriaType,
+            moduleInstance: criterion.moduleInstance ?? '',
+            date: criterion.date ? String(criterion.date).slice(0, 10) : '',
+          })),
+        );
+      }
+      if (courseRes) {
+        setFullname(courseRes.fullName);
+        setShortname(courseRes.shortName);
+        setCourseCategory(courseRes.category);
+        setSummary(courseRes.summary);
+        setCourseVisible(courseRes.visible);
+        setIsTemplate(courseRes.isTemplate);
+        setStartdate(courseRes.startDate ? courseRes.startDate.slice(0, 10) : '');
+        setEnddate(courseRes.endDate ? courseRes.endDate.slice(0, 10) : '');
+      }
+      if (contentRes) {
+        setSectionEdits(
+          Object.fromEntries(
+            contentRes.sections.map((s) => [
+              s.id,
               {
-                name: m.name,
-                status: statusChoiceOf(m.visible, m.openAt),
-                openAt: m.openAt ? String(m.openAt).slice(0, 10) : '',
+                name: s.name ?? '',
+                status: statusChoiceOf(s.visible, s.openAt),
+                openAt: s.openAt ? String(s.openAt).slice(0, 10) : '',
               },
             ]),
           ),
-        ),
-      );
-      setAvailabilityDrafts(
-        Object.fromEntries([
-          ...contentRes.sections.map((s) => [`section:${s.id}`, s.availability ?? null] as const),
-          ...contentRes.sections.flatMap((s) => s.modules.map((m) => [`module:${m.id}`, m.availability ?? null] as const)),
-        ]),
-      );
+        );
+        setModuleEdits(
+          Object.fromEntries(
+            contentRes.sections.flatMap((s) =>
+              s.modules.map((m) => [
+                m.id,
+                {
+                  name: m.name,
+                  status: statusChoiceOf(m.visible, m.openAt),
+                  openAt: m.openAt ? String(m.openAt).slice(0, 10) : '',
+                },
+              ]),
+            ),
+          ),
+        );
+        setAvailabilityDrafts(
+          Object.fromEntries([
+            ...contentRes.sections.map((s) => [`section:${s.id}`, s.availability ?? null] as const),
+            ...contentRes.sections.flatMap((s) => s.modules.map((m) => [`module:${m.id}`, m.availability ?? null] as const)),
+          ]),
+        );
+      }
+      if (!courseRes && !contentRes) setLoadError(t('builderLoadFailed'));
     }
-    if (!courseRes && !contentRes) setLoadError(t('builderLoadFailed'));
-  }, [builderData, t]);
+  }
 
   // Mọi thao tác ghi đi qua các đột biến của features/course-builder/queries/course-builder
   // (F-01): đột biến tự làm mới gói builder — dữ liệu mới về thì
@@ -183,10 +183,12 @@ export function CourseBuilderPage() {
   const saveCriteriaMutation = useSaveBuilderCriteria(courseId);
   const recalculateMutation = useRecalculateBuilderCompletion(courseId);
 
-  useEffect(() => {
+  const [previousImportSourceId, setPreviousImportSourceId] = useState(importSourceId);
+  if (previousImportSourceId !== importSourceId) {
+    setPreviousImportSourceId(importSourceId);
     setImportSections([]);
     setImportModules([]);
-  }, [importSourceId]);
+  }
 
   async function saveCourse(event: FormEvent) {
     event.preventDefault();

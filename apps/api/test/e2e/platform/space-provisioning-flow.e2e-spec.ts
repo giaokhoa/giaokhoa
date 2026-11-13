@@ -149,7 +149,6 @@ describe('Cấp phát trung tâm + nhận diện (đầu-cuối)', () => {
   let centreA: Awaited<ReturnType<typeof runSpaceProvision>>;
   let centreB: Awaited<ReturnType<typeof runSpaceProvision>>;
   let adminAToken = '';
-  let adminBToken = '';
   let teacherId = '';
   // Writer đã đóng trong ca tắt control plane (xem ca cuối) thì
   // afterAll không đóng lại nữa: pg-pool ném lỗi khi end() lần 2.
@@ -275,7 +274,6 @@ describe('Cấp phát trung tâm + nhận diện (đầu-cuối)', () => {
       .set('Host', HOST_B)
       .send({ username: ADMIN_B_USERNAME, password: STRONG_PASSWORD });
     expect(loginB.status).toBe(201);
-    adminBToken = loginB.body.accessToken;
 
     // Token của phiên trung tâm mang claim `centre_id` bằng định danh đăng ký của trung tâm.
     const spaceA = await writer.findSpaceBySlug(SLUG_A);
@@ -367,7 +365,7 @@ describe('Cấp phát trung tâm + nhận diện (đầu-cuối)', () => {
 
   it('tắt control plane sau khi đã định tuyến thì bề mặt trung tâm vẫn hiển thị đúng nhận diện đã nạp', async () => {
     // Ca cuối cùng của file: xoá hẳn database control plane của ca
-    // test (database dùng một lần của riêng spec này). Từ đây mọi
+    // kiểm thử (database dùng một lần của riêng spec này). Từ đây mọi
     // đường cần sổ đăng ký đều hỏng — chứng minh bằng một request
     // nghiệp vụ bị từ chối 401 fail-closed: sổ đăng ký không đọc
     // được nên khung định tuyến ném not_configured, chiến lược JWT

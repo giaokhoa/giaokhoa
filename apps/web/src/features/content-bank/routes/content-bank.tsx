@@ -76,28 +76,43 @@ export function ContentBankLibraryPage() {
   // nên luôn lấy số tươi như bản fetch thủ công — F-01 của rà soát
   // #133). Trang giữ máy trạng thái riêng nên nhịp nạp vẫn do trang
   // chủ động gọi: lần đầu và sau mỗi thao tác ghi thành công.
+  const applyLoadedRows = useCallback((spaceRows: LibrarySpace[], itemRows: LibraryItem[]) => {
+    setSpaces(spaceRows);
+    setItems(itemRows);
+    setOpenSpaces((prev) => {
+      const next = { ...prev };
+      for (const row of spaceRows) {
+        if (next[spaceKey(row)] === undefined) next[spaceKey(row)] = row.scope === 'personal';
+      }
+      return next;
+    });
+    setError(null);
+  }, []);
+
   const reload = useCallback(async () => {
     try {
       const [spaceRows, itemRows] = await Promise.all([
         queryClient.fetchQuery(contentBankSpacesQueryOptions()),
         queryClient.fetchQuery(contentBankItemsQueryOptions()),
       ]);
-      setSpaces(spaceRows);
-      setItems(itemRows);
-      setOpenSpaces((prev) => {
-        const next = { ...prev };
-        for (const s of spaceRows) if (next[spaceKey(s)] === undefined) next[spaceKey(s)] = s.scope === 'personal';
-        return next;
-      });
-      setError(null);
+      applyLoadedRows(spaceRows, itemRows);
     } catch (err) {
       setError(errorText(err, t('libraryLoadFailed')));
     }
-  }, [t, queryClient]);
+  }, [applyLoadedRows, t, queryClient]);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    let active = true;
+    void Promise.all([
+      queryClient.fetchQuery(contentBankSpacesQueryOptions()),
+      queryClient.fetchQuery(contentBankItemsQueryOptions()),
+    ]).then(([spaceRows, itemRows]) => {
+      if (active) applyLoadedRows(spaceRows, itemRows);
+    }).catch((err: unknown) => {
+      if (active) setError(errorText(err, t('libraryLoadFailed')));
+    });
+    return () => { active = false; };
+  }, [applyLoadedRows, queryClient, t]);
 
   useEffect(() => {
     void (async () => {

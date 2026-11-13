@@ -68,18 +68,6 @@ interface TreeBody {
  * nhắn tin trên đúng dữ kiện đó, nên dòng gán vai được ghi thẳng
  * vào DB trong lúc phần ghi danh vẫn đi qua API như cũ.
  */
-async function insertAssignmentRow(roleId: string, userId: string, contextId: string): Promise<void> {
-  const client = new Client({ connectionString: process.env.DATABASE_URL });
-  await client.connect();
-  try {
-    await client.query(
-      `insert into role_assignments (role_id, user_id, context_id, component) values ($1, $2, $3, '')`,
-      [roleId, userId, contextId],
-    );
-  } finally {
-    await client.end();
-  }
-}
 
 /**
  * Dựng thẳng vào DB một ghi danh học viên đang hoạt động cho

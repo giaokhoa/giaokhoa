@@ -79,9 +79,7 @@ export function QuestionsPage({ area = 'my-questions' }: { area?: BankArea }) {
       : null;
   const displayMessage = message ?? loadError;
 
-  useEffect(() => {
-    if (firstCategoryId && !qCategory) setQCategory(String(firstCategoryId));
-  }, [firstCategoryId, qCategory]);
+  if (firstCategoryId && !qCategory) setQCategory(String(firstCategoryId));
   // Lớp bank của feat Ngân hàng câu hỏi chung (issue #70): khu vực ngân
   // hàng riêng của giáo viên + khu vực Ngân hàng hệ thống (bank chung).
   const banks = useQuestionBanks('question').data ?? [];
@@ -132,10 +130,12 @@ export function QuestionsPage({ area = 'my-questions' }: { area?: BankArea }) {
   // sau khi sửa câu hỏi) qua router state — giữ phản hồi lưu thành công
   // mà editor inline trước đây hiện ngay trên trang này.
   const location = useLocation();
-  useEffect(() => {
+  const [lastNoticeKey, setLastNoticeKey] = useState<string | null>(null);
+  if (lastNoticeKey !== location.key) {
+    setLastNoticeKey(location.key);
     const notice = (location.state as { notice?: string } | null)?.notice;
     if (notice) setMessage(notice);
-  }, [location.state]);
+  }
 
   // (Đã gỡ cơ chế đọc ?bank=/?section= để mở collapse + cuộn neo:
   // khu vực nay do PATH quyết định — xem BankArea ở đầu component.
@@ -168,15 +168,20 @@ export function QuestionsPage({ area = 'my-questions' }: { area?: BankArea }) {
         }),
     );
     const loaded: (readonly [string, AttributionLite])[] = entries.filter((entry) => entry !== null);
-    if (loaded.length > 0) {
-      setAttributions((prev) => ({ ...prev, ...Object.fromEntries(loaded) }));
-    }
+    return loaded;
   }, [attributions, queryClient]);
 
   // Ghi công cho các câu copy trong bank cá nhân (trước đây do
   // loadMyQuestions gọi nối tiếp ngay sau khi nạp danh sách).
   useEffect(() => {
-    if (myQuestionsQuery.data?.length) void loadAttributionsFor(myQuestionsQuery.data);
+    if (!myQuestionsQuery.data?.length) return;
+    let active = true;
+    void loadAttributionsFor(myQuestionsQuery.data).then((loaded) => {
+      if (active && loaded.length > 0) {
+        setAttributions((prev) => ({ ...prev, ...Object.fromEntries(loaded) }));
+      }
+    });
+    return () => { active = false; };
   }, [myQuestionsQuery.data, loadAttributionsFor]);
 
 
@@ -231,7 +236,14 @@ export function QuestionsPage({ area = 'my-questions' }: { area?: BankArea }) {
 
 
   useEffect(() => {
-    if (questionsQuery.data) void loadAttributionsFor(questionsQuery.data);
+    if (!questionsQuery.data) return;
+    let active = true;
+    void loadAttributionsFor(questionsQuery.data).then((loaded) => {
+      if (active && loaded.length > 0) {
+        setAttributions((prev) => ({ ...prev, ...Object.fromEntries(loaded) }));
+      }
+    });
+    return () => { active = false; };
   }, [questionsQuery.data, loadAttributionsFor]);
 
 

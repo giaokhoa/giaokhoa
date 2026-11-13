@@ -28,7 +28,7 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
         { type: 'paragraph', content: [{ type: 'text', text: stem }] },
         {
           type: 'statementList',
-          content: values.map((v, i) => ({
+          content: values.map((_v, i) => ({
             type: 'statement',
             attrs: { id: `s${i + 1}` },
             content: [{ type: 'paragraph', content: [{ type: 'text', text: `${stem} — ý ${i + 1}` }] }],

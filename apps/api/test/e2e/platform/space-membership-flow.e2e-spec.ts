@@ -228,7 +228,6 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
   let tenantBId = '';
   let mainTenantId = '';
   let sharedTenantId = '';
-  let registryAId = '';
   let registryMainId = '';
   let adminAToken = '';
   let adminBToken = '';
@@ -317,7 +316,6 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
         ])
         .returning(['id', 'slug'])
         .execute();
-      registryAId = inserted.find((row) => row.slug === CENTRE_A_SLUG)!.id;
     } finally {
       await cpDb.destroy();
     }

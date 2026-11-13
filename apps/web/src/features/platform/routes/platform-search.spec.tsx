@@ -200,6 +200,41 @@ describe('trang kết quả tìm kiếm — đọc tham số q (issue #303)', ()
   });
 });
 
+describe('trang kết quả tìm kiếm — đổi URL thành từ khoá trắng', () => {
+  it('xoá kết quả tìm cũ và không gọi API khi q chỉ có khoảng trắng', async () => {
+    stubFetch();
+    const router = renderSearch('/search?q=math');
+    expect(await screen.findByText('Khoá Toán 10')).toBeInTheDocument();
+
+    await act(async () => { await router.navigate('/search?q=%20%20'); });
+    expect(screen.getByLabelText('Từ khoá tìm kiếm')).toHaveValue('  ');
+    expect(screen.queryByText('Khoá Toán 10')).not.toBeInTheDocument();
+    expect(screen.queryByText('Không tìm thấy kết quả')).not.toBeInTheDocument();
+    expect(searchCalls).toEqual(['/api/v1/search?q=math']);
+  });
+
+  it('kết quả request cũ trả về muộn không hồi sinh danh sách đã xoá', async () => {
+    let releaseOld!: (response: Response) => void;
+    const oldResponse = new Promise<Response>((resolve) => { releaseOld = resolve; });
+    searchCalls = [];
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      if (url.startsWith('/api/v1/search?q=')) {
+        searchCalls.push(url);
+        return oldResponse;
+      }
+      return Promise.resolve(jsonResponse({}, 404));
+    }));
+
+    const router = renderSearch('/search?q=math');
+    await act(async () => { await router.navigate('/search?q=%20%20'); });
+    await act(async () => { releaseOld(jsonResponse([DOC])); });
+
+    expect(screen.queryByText('Khoá Toán 10')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Từ khoá tìm kiếm')).toHaveValue('  ');
+    expect(searchCalls).toEqual(['/api/v1/search?q=math']);
+  });
+});
+
 describe('trang kết quả tìm kiếm — chốt trình tự các lượt tìm chồng nhau', () => {
   const SLOW_DOC = {
     id: 'doc-slow',

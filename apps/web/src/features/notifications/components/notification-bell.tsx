@@ -1,5 +1,5 @@
 import { IconBell } from '@tabler/icons-react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
@@ -14,12 +14,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@giaokhoa/ui/components/dropdown-menu';
-import { apiJson } from '#lib/api';
 import { formatDateTime } from '#utils/date-format';
 import { flattenNotificationGroups, updateNotificationGroupsCache, useMarkNotificationRead, useNotificationGroups, useNotificationUnreadCount, useReadNotificationGroup } from '../queries/notifications';
 import { notificationGroupKey } from '../utils/notifications';
 import type { NotificationGroupFilter, NotificationGroupView } from '../types/notifications';
-import { queryKeys } from '#lib/query-keys';
 import '#config/i18n';
 
 /** Số dòng gộp tối đa trong dropdown xem nhanh (audit NB-3, issue #174: 5–10 dòng mới nhất). */

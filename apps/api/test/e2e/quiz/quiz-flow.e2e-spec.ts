@@ -143,7 +143,7 @@ describe('Hoạt động quiz (mod_quiz)', () => {
   }
 
   /** "Tạo quiz" theo mô hình gộp: tạo ĐỀ trong bank đề cá nhân của giáo viên (chưa slot, chưa ghim). */
-  async function createQuiz(token: string, courseId: string, body: Record<string, unknown>) {
+  async function createQuiz(token: string, _courseId: string, body: Record<string, unknown>) {
     const bankId = await examBankId(token);
     const res = await http(app).post(`/api/v1/exams/banks/${bankId}/exams`).set('Authorization', `Bearer ${token}`)
       .send({ name: body.name, totalScore: body.grade ?? 10 });
@@ -259,7 +259,7 @@ describe('Hoạt động quiz (mod_quiz)', () => {
     view = await answerSlot(ctx.studentToken, attemptId, view, 1, paris.id);
     view = await answerSlot(ctx.studentToken, attemptId, view, 2, TF_ALL_TRUE);
     view = await answerSlot(ctx.studentToken, attemptId, view, 3, TF_ALL_TRUE);
-    view = await answerSlot(ctx.studentToken, attemptId, view, 4, 'My town is small and quiet.');
+    await answerSlot(ctx.studentToken, attemptId, view, 4, 'My town is small and quiet.');
 
     const submit = await http(app).post(`/api/v1/quiz-attempts/${attemptId}/submit`).set('Authorization', `Bearer ${ctx.studentToken}`).send({});
     expect(submit.status).toBe(201);
@@ -400,7 +400,7 @@ describe('Hoạt động quiz (mod_quiz)', () => {
       let view = start.body as AttemptViewBody;
       const attemptId = view.attempt.id;
       view = await answerSlot(ctx.studentToken, attemptId, view, 1, correctTf ? TF_ALL_TRUE : TF_ALL_FALSE);
-      view = await answerSlot(ctx.studentToken, attemptId, view, 2, correctSa ? 'Hanoi' : 'Hue');
+      await answerSlot(ctx.studentToken, attemptId, view, 2, correctSa ? 'Hanoi' : 'Hue');
       const submit = await http(app).post(`/api/v1/quiz-attempts/${attemptId}/submit`).set('Authorization', `Bearer ${ctx.studentToken}`).send({});
       expect(submit.status).toBe(201);
       return submit.body as AttemptViewBody;
@@ -486,10 +486,10 @@ describe('Hoạt động quiz (mod_quiz)', () => {
 
     const start = await http(app).post(`/api/v1/exam-pins/${quizId}/attempts`).set('Authorization', `Bearer ${ctx.teacher}`).send({ preview: true });
     expect(start.status).toBe(201);
-    let view = start.body as AttemptViewBody;
+    const view = start.body as AttemptViewBody;
     expect(view.attempt.preview).toBe(true);
     const attemptId = view.attempt.id;
-    view = await answerSlot(ctx.teacher, attemptId, view, 1, TF_ALL_TRUE);
+    await answerSlot(ctx.teacher, attemptId, view, 1, TF_ALL_TRUE);
     const submit = await http(app).post(`/api/v1/quiz-attempts/${attemptId}/submit`).set('Authorization', `Bearer ${ctx.teacher}`).send({});
     expect(submit.status).toBe(201);
     expect((submit.body as AttemptViewBody).attempt.state).toBe('finished');
@@ -505,7 +505,7 @@ describe('Hoạt động quiz (mod_quiz)', () => {
     const quizRes = await createQuiz(ctx.teacher, ctx.course.id, { sectionId: ctx.sectionId, name: 'Slots quiz' });
     const examId = quizRes.body.id as string;
     await addSlot(ctx.teacher, examId, { questionId: ctx.qTf, maxMark: 1 });
-    let view = await addSlot(ctx.teacher, examId, { questionId: ctx.qSa, maxMark: 2 });
+    const view = await addSlot(ctx.teacher, examId, { questionId: ctx.qSa, maxMark: 2 });
     expect(view.sumGrades).toBe(3);
 
     const pin = await pinQuiz(ctx.teacher, ctx.course.id, examId);
@@ -623,10 +623,10 @@ describe('Hoạt động quiz (mod_quiz)', () => {
 
     const start = await http(app).post(`/api/v1/exam-pins/${quizId}/attempts`).set('Authorization', `Bearer ${ctx.studentToken}`).send({});
     expect(start.status).toBe(201);
-    let view = start.body as AttemptViewBody;
+    const view = start.body as AttemptViewBody;
     const attemptId = view.attempt.id;
     // Trả lời đúng slot 1 TRƯỚC giờ đóng — phần này được giữ và tính.
-    view = await answerSlot(ctx.studentToken, attemptId, view, 1, TF_ALL_TRUE);
+    await answerSlot(ctx.studentToken, attemptId, view, 1, TF_ALL_TRUE);
 
     // Giáo viên dời giờ đóng về quá khứ trong lúc học sinh đang làm.
     const past = new Date(Date.now() - 60_000).toISOString();
@@ -673,9 +673,9 @@ describe('Hoạt động quiz (mod_quiz)', () => {
 
     const start = await http(app).post(`/api/v1/exam-pins/${quizId}/attempts`).set('Authorization', `Bearer ${ctx.studentToken}`).send({});
     expect(start.status).toBe(201);
-    let view = start.body as AttemptViewBody;
+    const view = start.body as AttemptViewBody;
     const attemptId = view.attempt.id;
-    view = await answerSlot(ctx.studentToken, attemptId, view, 1, TF_ALL_TRUE);
+    await answerSlot(ctx.studentToken, attemptId, view, 1, TF_ALL_TRUE);
     // Bản cũ: lỗi grades.item_locked từ pushGrade truyền thẳng ra ⇒
     // học sinh nhận 403 dù lượt đã chốt. Bản sửa: nộp vẫn 201, lượt
     // finished, chỉ điểm là không ghi được vào item đang khoá.

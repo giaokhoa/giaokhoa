@@ -1,4 +1,5 @@
-import { useId, useMemo, useRef } from 'react';
+import { useEffect, useId, useState, useMemo } from 'react';
+import { createEditorControlStore } from './editor-control-store.js';
 import { Decoration, Extension, type WidgetDecoration } from '@tiptap/core';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { RichTextDocument } from '@giaokhoa/contracts';
@@ -81,7 +82,7 @@ function sameIds(left: string[], right: string[]): boolean {
  * @param controlRef - Ref giữ điều khiển radio mới nhất.
  * @returns Extension Tiptap mang decoration radio Đ/S.
  */
-function createStatementAnswerDecoration(controlRef: { current: StatementAnswerControl }) {
+function createStatementAnswerDecoration(getControl: () => StatementAnswerControl) {
   return Extension.create({
     name: 'statementAnswerDecoration',
 
@@ -113,13 +114,13 @@ function createStatementAnswerDecoration(controlRef: { current: StatementAnswerC
 
                     const input = document.createElement('input');
                     input.type = 'radio';
-                    input.name = `${controlRef.current.groupPrefix}:${statementId}`;
+                    input.name = `${getControl().groupPrefix}:${statementId}`;
                     input.className = 'giaokhoa-statement__answer-input';
                     input.setAttribute('aria-label', ariaLabel);
-                    input.checked = controlRef.current.answers[statementId] === value;
+                    input.checked = getControl().answers[statementId] === value;
                     input.addEventListener('change', () => {
                       if (input.checked) {
-                        controlRef.current.onAnswerChange(statementId, value);
+                        getControl().onAnswerChange(statementId, value);
                       }
                     });
 
@@ -192,18 +193,14 @@ export function TrueFalseEditor({
   onRequestImage,
 }: TrueFalseEditorProps) {
   const groupPrefix = useId();
-  const controlRef = useRef<StatementAnswerControl>({
-    groupPrefix,
-    answers,
-    onAnswerChange,
-  });
-  controlRef.current.groupPrefix = groupPrefix;
-  controlRef.current.answers = answers;
-  controlRef.current.onAnswerChange = onAnswerChange;
+  const [control] = useState(() => createEditorControlStore({ groupPrefix, answers, onAnswerChange }));
+  useEffect(() => {
+    control.update({ groupPrefix, answers, onAnswerChange });
+  }, [control, groupPrefix, answers, onAnswerChange]);
 
   const extensions = useMemo(
-    () => [...trueFalseExtensions, createStatementAnswerDecoration(controlRef)],
-    [],
+    () => [...trueFalseExtensions, createStatementAnswerDecoration(control.get)],
+    [control.get],
   );
 
   return (

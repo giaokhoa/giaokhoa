@@ -4,92 +4,9 @@
       "count": 6
     }
   },
-  "src/modules/access/permission-evaluator-tenant-gate.spec.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "src/modules/auth/auth.controller.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "src/modules/auth/auth.service.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 2
-    }
-  },
-  "src/modules/auth/better-auth/mfa-gate.spec.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 4
-    }
-  },
-  "src/modules/auth/better-auth/two-factor-completion.service.ts": {
-    "no-useless-assignment": {
-      "count": 2
-    }
-  },
-  "src/modules/curriculum/curriculum.service.spec.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "src/modules/exams/exam-dossiers.service.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 18
-    }
-  },
-  "src/modules/exams/exams.service.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 4
-    }
-  },
-  "src/modules/grades/grades.controller.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "src/modules/grades/grades.service.ts": {
-    "no-useless-assignment": {
-      "count": 1
-    }
-  },
-  "src/modules/guardians/guardian-view.service.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "src/modules/integrations/integrations.service.spec.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 2
-    }
-  },
-  "src/modules/mcp/mcp-content.ts": {
-    "no-control-regex": {
-      "count": 1
-    }
-  },
   "src/modules/mcp/mcp-oauth-verifier.spec.ts": {
     "vitest/no-conditional-expect": {
       "count": 8
-    }
-  },
-  "src/modules/mcp/mcp.mount.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "src/modules/mcp/mcp.tools.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 4
-    },
-    "no-useless-assignment": {
-      "count": 1
-    }
-  },
-  "src/modules/messaging/messaging-messages.service.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
     }
   },
   "src/modules/messaging/messaging-notify.spec.ts": {
@@ -97,51 +14,8 @@
       "count": 1
     }
   },
-  "src/modules/paper-grading/domain/omr.ts": {
-    "no-useless-assignment": {
-      "count": 1
-    }
-  },
   "src/modules/paper-grading/domain/sheet-layout.checksum.spec.ts": {
     "vitest/no-conditional-expect": {
-      "count": 1
-    }
-  },
-  "src/modules/paper-grading/domain/sheet-render.ts": {
-    "no-useless-assignment": {
-      "count": 1
-    }
-  },
-  "src/modules/quiz/quiz-generation.service.ts": {
-    "no-useless-assignment": {
-      "count": 2
-    }
-  },
-  "src/modules/quiz/quiz-matrices.service.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "src/modules/quiz/quiz.controller.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 2
-    }
-  },
-  "src/modules/quiz/quiz.service.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 2
-    }
-  },
-  "src/modules/social/social.controller.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "src/modules/tenants/space-provision-runner.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    },
-    "preserve-caught-error": {
       "count": 1
     }
   },
@@ -160,16 +34,6 @@
       "count": 1
     }
   },
-  "test/e2e/dashboard/dashboard-dash1-flow.e2e-spec.ts": {
-    "prefer-const": {
-      "count": 1
-    }
-  },
-  "test/e2e/event-log/event-log-flow.e2e-spec.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
   "test/e2e/guardians/guardian-ph1-flow.e2e-spec.ts": {
     "vitest/no-conditional-expect": {
       "count": 2
@@ -185,29 +49,9 @@
       "count": 31
     }
   },
-  "test/e2e/messaging/messaging-group-tree.e2e-spec.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "test/e2e/messaging/messaging-quote.e2e-spec.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 2
-    }
-  },
-  "test/e2e/messaging/messaging-search.e2e-spec.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
   "test/e2e/messaging/messaging-socket-space-auth.e2e-spec.ts": {
     "vitest/expect-expect": {
       "count": 3
-    }
-  },
-  "test/e2e/messaging/messaging-teacher-direct.e2e-spec.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
     }
   },
   "test/e2e/messaging/notification-unread-stream-flow.e2e-spec.ts": {
@@ -225,27 +69,9 @@
       "count": 1
     }
   },
-  "test/e2e/platform/space-provisioning-flow.e2e-spec.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    },
-    "vitest/no-commented-out-tests": {
-      "count": 1
-    }
-  },
-  "test/e2e/platform/tenant-isolation.e2e-spec.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
   "test/e2e/platform/uuidv7-primary-keys-flow.e2e-spec.ts": {
     "vitest/no-conditional-expect": {
       "count": 2
-    }
-  },
-  "test/e2e/questions/banks-admin-parity.e2e-spec.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
     }
   },
   "test/e2e/quiz/quiz-access-rules-flow.e2e-spec.ts": {
@@ -258,25 +84,9 @@
       "count": 3
     }
   },
-  "test/e2e/quiz/quiz-flow.e2e-spec.ts": {
-    "no-useless-assignment": {
-      "count": 4
-    },
-    "prefer-const": {
-      "count": 1
-    }
-  },
-  "test/e2e/quiz/quiz-matrix-flow.e2e-spec.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
   "test/e2e/quiz/quiz-pin-version-updates-flow.e2e-spec.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 6
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
     }
   },
   "test/e2e/search/search-write-guard.e2e-spec.ts": {

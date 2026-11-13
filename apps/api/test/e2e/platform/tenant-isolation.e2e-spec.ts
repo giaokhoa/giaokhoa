@@ -39,7 +39,6 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
   let tenantB = '';
   let categoryA = '';
   let courseA = '';
-  let cohortA = '';
   let courseB = '';
   let categoryB = '';
   let cohortB = '';
@@ -126,7 +125,7 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
       return { categoryId: category.id, courseId: course.id, cohortId: cohort.id };
     };
     const inA = await seedTenantContent(adminA, 'A');
-    categoryA = inA.categoryId; courseA = inA.courseId; cohortA = inA.cohortId;
+    categoryA = inA.categoryId; courseA = inA.courseId;
     const inB = await seedTenantContent(adminB, 'B');
     categoryB = inB.categoryId; courseB = inB.courseId; cohortB = inB.cohortId;
 

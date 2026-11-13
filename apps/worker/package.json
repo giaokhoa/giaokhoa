@@ -37,6 +37,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@giaokhoa/eslint-config": "workspace:*",
     "@giaokhoa/config": "workspace:*",
     "@nestjs/testing": "^12.2.0",
     "@swc/core": "^1.16.18",

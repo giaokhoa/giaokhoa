@@ -1,5 +1,5 @@
 import {
-  BadRequestException, ForbiddenException, GoneException, Injectable, NotFoundException,
+  BadRequestException, GoneException, Injectable, NotFoundException,
 } from '@nestjs/common';
 import type {
   CreateExamDossier, ExamDossierView, RejectExamDossier,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { type PinRegradeLogEntry, type PinRegradeResult, type PinVersionUpdatePreview } from '@giaokhoa/contracts';
 import { Button } from '@giaokhoa/ui/components/button';
@@ -99,19 +99,22 @@ export function QuizPage() {
 
   // Khởi tạo form cài đặt từ dữ liệu lần ghim mỗi khi dữ liệu (lại)
   // tải về — đúng phần khởi tạo của reload() thủ công trước đây.
-  useEffect(() => {
-    if (!data) return;
-    setName(data.quiz.name);
-    setIntro(data.quiz.intro);
-    setTimeOpen(toLocalInput(data.quiz.timeOpen));
-    setTimeClose(toLocalInput(data.quiz.timeClose));
-    setTimeLimitMinutes(data.quiz.timeLimitSeconds ? String(Math.round(data.quiz.timeLimitSeconds / 60)) : '');
-    setAttemptsAllowed(String(data.quiz.attemptsAllowed));
-    setGradeMethod(data.quiz.gradeMethod);
-    setGrade(String(data.quiz.grade));
-    setShuffleAnswers(data.quiz.shuffleAnswers);
-    setVersionMode(data.quiz.versionMode);
-  }, [data]);
+  const [previousQuizData, setPreviousQuizData] = useState<typeof data | undefined>(undefined);
+  if (previousQuizData !== data) {
+    setPreviousQuizData(data);
+    if (data) {
+      setName(data.quiz.name);
+      setIntro(data.quiz.intro);
+      setTimeOpen(toLocalInput(data.quiz.timeOpen));
+      setTimeClose(toLocalInput(data.quiz.timeClose));
+      setTimeLimitMinutes(data.quiz.timeLimitSeconds ? String(Math.round(data.quiz.timeLimitSeconds / 60)) : '');
+      setAttemptsAllowed(String(data.quiz.attemptsAllowed));
+      setGradeMethod(data.quiz.gradeMethod);
+      setGrade(String(data.quiz.grade));
+      setShuffleAnswers(data.quiz.shuffleAnswers);
+      setVersionMode(data.quiz.versionMode);
+    }
+  }
 
   // Nạp lại view lần ghim sau các thao tác ghi không qua đột biến
   // tự làm mới (chấm lại áp thật): refetch của query; lỗi refetch vẫn

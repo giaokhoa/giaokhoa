@@ -24,7 +24,7 @@ import {
 describe('Worker NB-7: chính sách site của admin làm cổng gửi nền', () => {
   let context: INestApplicationContext;
   let harness: OrdinaryWorkerModuleHarness;
-  let db: any;
+  let db: OrdinaryWorkerModuleHarness["adminDb"];
   const suffix = (Date.now() % 100000) + 7;
   const uid = (slot: number) => `01970000-0000-7000-8000-${String(980000 + suffix * 10 + slot).padStart(12, '0')}`;
   const policyUser = uid(1);

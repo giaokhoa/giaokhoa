@@ -1,7 +1,7 @@
 import {
   BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException,
 } from '@nestjs/common';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import type {
   ApproveExamContribution, CopyExam, CreateExam, CreateExamContribution,
   CreateExamPin, ExamSlotInput, GenerateFromMatrix, QuizView,
@@ -23,7 +23,6 @@ import {
   ExamsRepository,
   type ExamContributionRow, type ExamRow, type ExamSlotRow, type ExamVersionRow,
 } from '@giaokhoa/db/repositories/exams';
-import type { ExamMatrixCellRow } from '@giaokhoa/db/repositories/quiz';
 
 /**
  * Bộ capability của lớp ngân hàng đề — mọi cổng đều đánh giá TẠI

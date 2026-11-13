@@ -25,7 +25,7 @@ import {
 describe('Ghi danh và hoàn thành của worker: bộ xử lý enrol-expiry + completion-recalculate', () => {
   let context: INestApplicationContext;
   let harness: OrdinaryWorkerModuleHarness;
-  let db: any;
+  let db: OrdinaryWorkerModuleHarness["adminDb"];
   const suffix = Date.now();
   const userId = `01900000-0000-7000-8000-${String(900000 + (suffix % 10000)).padStart(12, '0')}`;
   const userIdB = `01900000-0000-7000-8000-${String(900100 + (suffix % 10000)).padStart(12, '0')}`;
@@ -74,7 +74,7 @@ describe('Ghi danh và hoàn thành của worker: bộ xử lý enrol-expiry + c
     const result = await processor.process({ data: {} } as never);
     expect(result.suspendedIds).toContain(expired.id);
     expect(result.suspendedIds).not.toContain(alive.id);
-    const row = await db.selectFrom('user_enrolments').selectAll().where('id', '=', expired.id).executeTakeFirst();
+    const row = await db.selectFrom('user_enrolments').selectAll().where('id', '=', expired.id).executeTakeFirstOrThrow();
     expect(row.status).toBe(1);
     const events = await db.selectFrom('outbox_events').selectAll().where('type', '=', 'user_enrolment_suspended').execute();
     expect((events as { payload: { enrolmentId?: string } }[]).some((e) => e.payload.enrolmentId === expired.id)).toBe(true);
@@ -96,7 +96,7 @@ describe('Ghi danh và hoàn thành của worker: bộ xử lý enrol-expiry + c
     const later = await db.insertInto('user_enrolments').values({ enrol_id: instanceId, user_id: userD, status: 0, time_start: new Date(), time_end: outWindow }).returningAll().executeTakeFirstOrThrow();
     const warningsFor = async (enrolmentId: string) => (await db.selectFrom('outbox_events').selectAll()
       .where('type', '=', 'enrol_expiry_warning').execute())
-      .filter((e: { payload: { enrolmentId?: string } }) => e.payload.enrolmentId === enrolmentId);
+      .filter((e) => (e.payload as { enrolmentId?: string }).enrolmentId === enrolmentId);
     const first = await processor.process({ data: {} } as never);
     expect(first.warnedIds).toContain(soon.id);
     expect(first.warnedIds).not.toContain(later.id);
@@ -114,12 +114,12 @@ describe('Ghi danh và hoàn thành của worker: bộ xử lý enrol-expiry + c
   it('completion-recalculate tính lại hoàn thành khoá học từ tiêu chí hiện tại (AND), và mở lại khi tiêu chí thắt chặt', async () => {
     const processor = context.get(CompletionRecalculateProcessor);
     await db.insertInto('course_modules_completion').values({ course_module_id: cmId, user_id: userId, completion_state: 1, viewed: true }).execute();
-    await db.insertInto('course_completion_settings').values({ course: courseId, method: 1 }).onConflict((oc: any) => oc.doNothing()).execute();
+    await db.insertInto('course_completion_settings').values({ course: courseId, method: 1 }).onConflict((oc) => oc.doNothing()).execute();
     await db.insertInto('course_completion_criteria').values({ course: courseId, criteria_type: 'module', module_instance: cmId, sort_order: 0 }).execute();
     const result = await processor.process({ data: { courseId } } as never);
     expect(result.users).toBeGreaterThan(0);
     let cc = await db.selectFrom('course_completions').selectAll()
-      .where('course', '=', courseId).where('user_id', '=', userId).executeTakeFirst();
+      .where('course', '=', courseId).where('user_id', '=', userId).executeTakeFirstOrThrow();
     expect(cc.status).toBe('complete');
     expect(cc.time_completed).toBeTruthy();
 
@@ -127,7 +127,7 @@ describe('Ghi danh và hoàn thành của worker: bộ xử lý enrol-expiry + c
     await db.insertInto('course_completion_criteria').values({ course: courseId, criteria_type: 'date', date: new Date('2100-01-01'), sort_order: 1 }).execute();
     await processor.process({ data: { courseId } } as never);
     cc = await db.selectFrom('course_completions').selectAll()
-      .where('course', '=', courseId).where('user_id', '=', userId).executeTakeFirst();
+      .where('course', '=', courseId).where('user_id', '=', userId).executeTakeFirstOrThrow();
     expect(cc.status).not.toBe('complete');
     expect(cc.time_completed).toBeNull();
   });
@@ -139,7 +139,7 @@ describe('Ghi danh và hoàn thành của worker: bộ xử lý enrol-expiry + c
         .where('course', '=', courseId).where('user_id', '=', uid).executeTakeFirst();
       return row?.status as string | undefined;
     };
-    const replaceCriteria = async (rows: Record<string, unknown>[]) => {
+    const replaceCriteria = async (rows: { criteria_type: string; course_instance?: string; enrol_period_days?: number }[]) => {
       await db.deleteFrom('course_completion_criteria').where('course', '=', courseId).execute();
       for (const [i, r] of rows.entries()) {
         await db.insertInto('course_completion_criteria').values({ course: courseId, sort_order: i, ...r }).execute();

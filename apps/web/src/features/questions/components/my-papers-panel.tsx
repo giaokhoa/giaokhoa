@@ -10,7 +10,7 @@
  * hàm refresh của trang truyền xuống; ghim thành công điều hướng
  * thẳng tới màn đề của khoá đích.
  */
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
@@ -89,11 +89,10 @@ export function MyPapersPanel({
 
   // Chọn chương đầu tiên khi nội dung khoá đích tải về (nhịp của
   // loadDeployQuizzes thủ công trước đây).
-  useEffect(() => {
-    if (deployContentQuery.data && !deploySectionId) {
-      setDeploySectionId(deployContentQuery.data.sections[0]?.id ?? '');
-    }
-  }, [deployContentQuery.data, deploySectionId]);
+  const firstDeploySectionId = deployContentQuery.data?.sections[0]?.id;
+  if (!deploySectionId && firstDeploySectionId) {
+    setDeploySectionId(firstDeploySectionId);
+  }
 
   async function setPaperStatus(paperId: string, status: 'ready' | 'hidden' | 'draft') {
     try {

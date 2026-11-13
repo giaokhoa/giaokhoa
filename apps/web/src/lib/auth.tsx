@@ -128,7 +128,7 @@ export function AuthProvider({ children, initialUser }: { children: ReactNode; i
   const mountSettledRef = useRef(initialUser !== undefined);
   const consumedAtomDataRef = useRef<unknown>(undefined);
   const sessionDataRef = useRef(session.data);
-  sessionDataRef.current = session.data;
+  useEffect(() => { sessionDataRef.current = session.data; }, [session.data]);
   const [mountTick, setMountTick] = useState(0);
 
   useEffect(() => {

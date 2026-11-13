@@ -263,7 +263,7 @@ describe('DASH1: dashboard việc cần làm (issue #121)', () => {
     await insertScan(quizB.id, 'recorded', anHourAgo);
 
     let view = await overview(ctx.teacher);
-    let queue = view.gradingQueue.find((q) => q.courseId === ctx.course.id);
+    const queue = view.gradingQueue.find((q) => q.courseId === ctx.course.id);
     // 3 phiếu chờ, tách bạch khỏi bài nộp/lượt quiz; đích deep-link là
     // quiz A (phiếu chờ lâu nhất); mốc chờ lâu nhất lấy từ phiếu giấy.
     expect(queue).toMatchObject({

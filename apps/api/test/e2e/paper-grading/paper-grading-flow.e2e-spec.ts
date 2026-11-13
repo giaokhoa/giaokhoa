@@ -90,7 +90,7 @@ describe('Luồng chấm bài giấy CAM-0', () => {
           { type: 'paragraph', content: [{ type: 'text', text: 'The sky is blue. Xét các mệnh đề:' }] },
           {
             type: 'statementList',
-            content: [true, false, true, false].map((v, i) => ({
+            content: [true, false, true, false].map((_v, i) => ({
               type: 'statement',
               attrs: { id: `s${i + 1}` },
               content: [{ type: 'paragraph', content: [{ type: 'text', text: `Statement ${i + 1}` }] }],

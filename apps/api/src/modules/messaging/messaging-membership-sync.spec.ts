@@ -21,7 +21,7 @@ describe('MessagingMembershipSyncService.syncLinkedConversationMembers — giữ
     const repo = {
       listMembers: vi.fn(async () => [ADMIN_ID, TEACHER_ID]),
       addMember: vi.fn(async () => {}),
-      removeMember: vi.fn(async (conversationId: string, userId: string) => {
+      removeMember: vi.fn(async (_conversationId: string, userId: string) => {
         removed.push(userId);
       }),
     };

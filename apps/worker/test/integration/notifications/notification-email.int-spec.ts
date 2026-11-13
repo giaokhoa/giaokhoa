@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { INestApplicationContext } from '@nestjs/common';
 import { sql, type CentreDb } from '@giaokhoa/db';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -81,7 +80,6 @@ function buildFakeI18n() {
 }
 
 describe('Kênh email thông báo của worker + digest hàng ngày (NB-5, issue #174)', () => {
-  let context: INestApplicationContext;
   let harness: OrdinaryWorkerModuleHarness;
   let db: CentreDb;
   const suffix = Date.now() % 100000;
@@ -101,7 +99,6 @@ describe('Kênh email thông báo của worker + digest hàng ngày (NB-5, issue
 
   beforeAll(async () => {
     harness = await bootWorkerModuleAsOrdinaryRole();
-    context = harness.context;
     db = harness.adminDb;
     const rows: Array<[string, string, boolean]> = [
       [userActive, `nb5-a-${suffix}`, false],

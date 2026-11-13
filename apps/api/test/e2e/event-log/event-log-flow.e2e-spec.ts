@@ -3,7 +3,7 @@ import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeWorkerRelayDriver, flushWorkerRelay } from '../../support/worker-relay-driver';
 import {
-  adminToken, assignRole, createTestApp, createUserViaApi, http, login, roleIdByShortname, ADMIN, STRONG_PASSWORD,
+  assignRole, createTestApp, createUserViaApi, http, login, roleIdByShortname, ADMIN, STRONG_PASSWORD,
 } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
 import { createGradeItem, setGrade } from '../../support/assessment-helpers';

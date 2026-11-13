@@ -37,7 +37,7 @@ import {
 describe('Worker #174-A: tự trao huy hiệu gửi qua luật gửi chung (tắt tiếng theo khoá NB-4)', () => {
   let context: INestApplicationContext;
   let harness: OrdinaryWorkerModuleHarness;
-  let db: any;
+  let db: OrdinaryWorkerModuleHarness["adminDb"];
   const suffix = Date.now() % 100000;
   const uid = (slot: number) => `019a0000-0000-7000-8000-${String(980000 + suffix * 10 + slot).padStart(12, '0')}`;
   const mutedUser = uid(1);

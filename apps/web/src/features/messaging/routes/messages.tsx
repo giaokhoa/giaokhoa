@@ -69,7 +69,7 @@ import type { ContactRelationship, ConversationView } from '../types/types';
  *
  * @returns Cặp [hàm ổn định để truyền xuống, hàm gán triển khai thật].
  */
-function useLateCallback<Fn extends (...args: any[]) => any>() {
+function useLateCallback<Fn extends (...args: never[]) => unknown>() {
   const ref = useRef<Fn | null>(null);
   const call = useCallback((...args: Parameters<Fn>): ReturnType<Fn> | undefined => {
     return ref.current?.(...args) as ReturnType<Fn> | undefined;

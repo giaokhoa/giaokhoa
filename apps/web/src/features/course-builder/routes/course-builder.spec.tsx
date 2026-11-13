@@ -356,7 +356,7 @@ describe('Trình dựng khoá học (giáo viên)', () => {
       expect(calls.some((c) => c.url === `/api/v1/courses/${COURSE_ID}/sections` && c.method === 'POST')).toBe(true),
     );
     const createCall = calls.find((c) => c.url === `/api/v1/courses/${COURSE_ID}/sections` && c.method === 'POST');
-    expect(createCall?.body).toEqual({ name: 'Week 1' });
+    expect(createCall!.body).toEqual({ name: 'Week 1' });
   });
 
   it('lưu cây khả dụng của module qua PATCH /courses/:id/modules/:cmId', async () => {
@@ -388,7 +388,7 @@ describe('Trình dựng khoá học (giáo viên)', () => {
         c.method === 'PATCH' &&
         (c.body as { availability?: unknown })?.availability != null,
     );
-    const tree = (patch?.body as { availability: { op: string; c: { type: string; d: string; t: number }[] } })
+    const tree = (patch!.body as { availability: { op: string; c: { type: string; d: string; t: number }[] } })
       .availability;
     expect(tree.op).toBe('&');
     expect(tree.c).toHaveLength(1);
@@ -533,7 +533,7 @@ describe('Dàn ý trình dựng K1 (giáo viên)', () => {
         c.method === 'PATCH' &&
         (c.body as { openAt?: unknown })?.openAt != null,
     );
-    const body = patch?.body as { visible: boolean; openAt: string };
+    const body = patch!.body as { visible: boolean; openAt: string };
     expect(body.visible).toBe(true);
     expect(body.openAt.slice(0, 10)).toBe(openDay);
   });

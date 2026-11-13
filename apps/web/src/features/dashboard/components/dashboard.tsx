@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
@@ -28,11 +28,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/component
 import { PageShell } from '#components/page-shell';
 
 /** Hình dạng sự kiện lịch mà trang này cần (khớp EventView của trang lịch). */
-interface CalendarEventView {
-  id: string;
-  name: string;
-  timeStart: string;
-}
 
 
 
@@ -287,9 +282,10 @@ function AdminSection() {
     },
   ];
 
+  const [today] = useState(() => new Date());
   const chartData: ChartPoint[] = useMemo(() => {
     if (!users) return [];
-    const now = new Date();
+    const now = new Date(today.getTime());
     now.setHours(0, 0, 0, 0);
     return Array.from({ length: 8 }, (_, i) => {
       const start = new Date(now.getTime() - (7 - i) * 7 * 86_400_000);
@@ -300,7 +296,7 @@ function AdminSection() {
       }).length;
       return { label: formatWithOptions(start, i18n.language, { day: '2-digit', month: '2-digit' }), value };
     });
-  }, [users, i18n.language]);
+  }, [users, i18n.language, today]);
 
   const columns: DataColumn<UserListResponse['users'][number]>[] = [
     { id: 'username', header: t('app:username'), cell: (u) => u.username, sortValue: (u) => u.username },
@@ -576,9 +572,10 @@ function StudentSection() {
     },
   ];
 
+  const [today] = useState(() => new Date());
   const chartData: ChartPoint[] = useMemo(() => {
     const events = eventsQuery.data ?? [];
-    const start = new Date();
+    const start = new Date(today.getTime());
     start.setHours(0, 0, 0, 0);
     return Array.from({ length: 30 }, (_, i) => {
       const day = new Date(start.getTime() + i * 86_400_000);
@@ -589,7 +586,7 @@ function StudentSection() {
       }).length;
       return { label: formatWithOptions(day, i18n.language, { day: '2-digit', month: '2-digit' }), value };
     });
-  }, [eventsQuery.data, i18n.language]);
+  }, [eventsQuery.data, i18n.language, today]);
 
   const columns: DataColumn<CourseAccess>[] = [
     {

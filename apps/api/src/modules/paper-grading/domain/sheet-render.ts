@@ -235,9 +235,9 @@ export function simulatePhoto(sheet: RgbaImage, opts: PhotoSimOptions = {}): Buf
   let spare: number | null = null;
   const gauss = () => {
     if (spare !== null) { const v = spare; spare = null; return v; }
-    let u = 0, v = 0;
+    let u = rand();
     while (u === 0) u = rand();
-    v = rand();
+    const v = rand();
     const mag = Math.sqrt(-2 * Math.log(u));
     spare = mag * Math.sin(2 * Math.PI * v);
     return mag * Math.cos(2 * Math.PI * v);

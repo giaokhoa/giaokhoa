@@ -47,18 +47,6 @@ function migrationsDirFor(store: TestStoreKind): string {
   return join(packageRoot(), 'migrations', store);
 }
 
-/** Factory Kysely của kho tương ứng trên một pool. */
-function createStoreKysely(store: TestStoreKind, pool: Pool): Kysely<any> {
-  switch (store) {
-    case 'centre':
-      return createCentreKysely(pool);
-    case 'control-plane':
-      return createControlPlaneKysely(pool);
-    case 'system-bank':
-      return createSystemBankKysely(pool);
-  }
-}
-
 /** Thay tên database trong một connection string, giữ nguyên phần còn lại. */
 export function withDatabase(connectionString: string, database: string): string {
   const url = new URL(connectionString);
@@ -77,11 +65,21 @@ export function withDatabase(connectionString: string, database: string): string
  */
 async function applyCarrier(storeUrl: string, store: TestStoreKind): Promise<void> {
   const pool = new Pool({ connectionString: storeUrl });
-  const db = createStoreKysely(store, pool);
-  try {
-    await applyStoreMigrations(db, store, migrationsDirFor(store));
-  } finally {
-    await db.destroy().catch(() => undefined);
+  // Giữ schema DB cụ thể để TypeScript kiểm tra các handle riêng.
+  const run = async <DB>(db: Kysely<DB>) => {
+    try {
+      await applyStoreMigrations(db, store, migrationsDirFor(store));
+    } finally {
+      await db.destroy().catch(() => undefined);
+    }
+  };
+  switch (store) {
+    case 'centre':
+      return run(createCentreKysely(pool));
+    case 'control-plane':
+      return run(createControlPlaneKysely(pool));
+    case 'system-bank':
+      return run(createSystemBankKysely(pool));
   }
 }
 

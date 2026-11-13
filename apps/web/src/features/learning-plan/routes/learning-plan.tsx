@@ -9,7 +9,7 @@ import { usePermissions } from '#lib/permissions';
 import { useTranslation } from 'react-i18next';
 import { DataTable, type DataColumn } from '#components/data-table';
 import { CompetencyAdmin } from '../components/competency-admin';
-import { COMPETENCY_INDENT, type PlanDetail, type PlanView } from '../types/types';
+import { type PlanDetail, type PlanView } from '../types/types';
 import { PageHeader, PageShell } from '#components/page-shell';
 import { useLearningPlanDetail, useRequestCompetencyReview, useRequestPlanReview, useUserLearningPlans } from '../queries/learning-plan';
 import '#config/i18n';

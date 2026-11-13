@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router';
 import { IconSearch } from '@tabler/icons-react';
@@ -77,9 +77,11 @@ function HeaderSearch() {
 
   // URL là nguồn sự thật khi ở /search: q đổi (gửi lại từ chính ô
   // này, đi từ bảng lệnh, hay dán link) thì ô phải khớp theo.
-  useEffect(() => {
+  const [previousUrlKeyword, setPreviousUrlKeyword] = useState(urlKeyword);
+  if (urlKeyword !== previousUrlKeyword) {
+    setPreviousUrlKeyword(urlKeyword);
     if (urlKeyword !== null) setKeyword(urlKeyword);
-  }, [urlKeyword]);
+  }
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();

@@ -200,7 +200,7 @@ export function mountMcp(app: NestExpressApplication, deps: McpMountDeps): void 
     res.json(prm(req));
   });
 
-  server.all('/mcp', (req: Request, res: Response, next: NextFunction) => {
+  server.all('/mcp', (req: Request, res: Response, _next: NextFunction) => {
     void (async () => {
       if (req.method !== 'POST') {
         // Kỷ nguyên modern không có GET stream riêng; legacy stateless

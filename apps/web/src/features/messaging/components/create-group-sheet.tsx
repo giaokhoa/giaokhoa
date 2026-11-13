@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Input } from '@giaokhoa/ui/components/input';
 import { Label } from '@giaokhoa/ui/components/label';
@@ -86,14 +86,15 @@ export function CreateGroupSheet({
   const [name, setName] = useState('');
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
 
-  // Mỗi lượt mở là một lượt tạo mới: xoá tên + lựa chọn của lượt
-  // trước để không tạo nhầm nhóm bằng dữ liệu cũ.
-  useEffect(() => {
+  // Mỗi lần sheet chuyển từ đóng sang mở bắt đầu bằng dữ liệu sạch.
+  const [previousOpen, setPreviousOpen] = useState(open);
+  if (open !== previousOpen) {
+    setPreviousOpen(open);
     if (open) {
       setName('');
       setSelectedIds(new Set());
     }
-  }, [open ]);
+  }
 
   /** Đảo trạng thái chọn của một người (từ roster hoặc từ danh sách liên hệ). */
   const toggle = (userId: string) => {

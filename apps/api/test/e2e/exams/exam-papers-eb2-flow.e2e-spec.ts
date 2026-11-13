@@ -129,7 +129,7 @@ describe('EB-2 đề snapshot sinh ra + mã biến thể (sau merge)', () => {
     return matrix;
   }
 
-  async function generate(ctx: Ctx, matrixId: string, course: { id: string; sectionId: string }, name: string) {
+  async function generate(_ctx: Ctx, matrixId: string, course: { id: string; sectionId: string }, name: string) {
     return http(app).post(`/api/v1/exam-matrices/${matrixId}/generate`).set('Authorization', `Bearer ${admin}`)
       .send({ courseId: course.id, sectionId: course.sectionId, name });
   }

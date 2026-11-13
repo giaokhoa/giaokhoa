@@ -49,7 +49,7 @@ export interface VerifyResult {
 }
 
 /** Đếm một giá trị nguyên duy nhất từ một câu SQL. */
-async function countOne(db: Kysely<any>, query: string): Promise<number> {
+async function countOne<DB>(db: Kysely<DB>, query: string): Promise<number> {
   const { rows } = await sql.raw(query).execute(db) as { rows: Array<{ count: string }> };
   return Number(rows[0]?.count ?? 0);
 }
@@ -63,7 +63,7 @@ async function countOne(db: Kysely<any>, query: string): Promise<number> {
  *   là false — hàm này không tự thoát tiến trình để spec có thể
  *   kiểm kết quả trực tiếp.
  */
-export async function verifyStore(db: Kysely<any>, store: MigrationStoreKey): Promise<VerifyResult> {
+export async function verifyStore<DB>(db: Kysely<DB>, store: MigrationStoreKey): Promise<VerifyResult> {
   const expected = MIGRATION_STORES[store].expected;
   const tables = await countOne(
     db,

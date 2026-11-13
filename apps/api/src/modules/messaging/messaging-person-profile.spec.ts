@@ -72,7 +72,7 @@ describe('MessagingContactsService.getPersonProfile — cổng hồ sơ hẹp v�
   });
 
   it('người lạ không chung hội thoại nào thì nhận 404 và không tra bảng người dùng', async () => {
-    const { service, users } = build((viewerId, targetId) => targetId !== STRANGER_ID);
+    const { service, users } = build((_viewerId, targetId) => targetId !== STRANGER_ID);
 
     let error: unknown;
     try {

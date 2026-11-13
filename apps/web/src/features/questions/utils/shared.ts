@@ -76,16 +76,8 @@ export interface CurriculumTreeNode {
 
 
 /** Khoá học cho hộp thoại triển khai đề vào quiz. */
-interface CourseLite {
-  id: string;
-  fullName: string;
-}
 
 /** Nhóm của khoá cho hộp thoại ghim đề (GET /courses/:id/groups). */
-interface CourseGroupLite {
-  id: string;
-  name: string;
-}
 
 export function plainText(doc: RichTextDocument | null | undefined): string {
   return doc ? extractRichTextPlainText(doc) : '';

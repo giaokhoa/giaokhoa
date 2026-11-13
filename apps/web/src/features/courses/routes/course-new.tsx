@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import type { Course, CourseCategory, CourseCategoryTreeNode } from '@giaokhoa/contracts';
 import { Button } from '@giaokhoa/ui/components/button';
@@ -107,11 +107,13 @@ export function CourseNewPage() {
   const frameCurriculumId = frameQuery.data?.curriculumId ?? null;
   const [frameSelected, setFrameSelected] = useState<string[]>([]);
 
-  // Đổi (môn, khối) thì bỏ các đơn vị khung đã tích của cặp cũ — như
-  // nhịp đặt lại của bản thủ công.
-  useEffect(() => {
+  // Đổi (môn, khối) thì bỏ lựa chọn của cặp cũ ngay trong render.
+  const frameScope = subjectId + ':' + grade;
+  const [previousFrameScope, setPreviousFrameScope] = useState(frameScope);
+  if (frameScope !== previousFrameScope) {
+    setPreviousFrameScope(frameScope);
     setFrameSelected([]);
-  }, [subjectId, grade]);
+  }
 
   /** Chọn khoá nguồn (nhân bản/mẫu): điền sẵn tên + mã cho bản sao để giáo viên sửa tối thiểu. Lớp đích của bản sao do BƯỚC LỚP quyết (mặc định chọn sẵn lớp đang hoạt động đầu tiên và hiện rõ để GV đổi; API giữ lớp nguồn chỉ khi không gửi classId — wizard luôn gửi lớp đang hiện nên không có thừa kế ẩn). */
   function pickSource(course: Course | undefined) {

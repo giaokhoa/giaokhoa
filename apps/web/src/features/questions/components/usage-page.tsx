@@ -6,8 +6,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router';
+import type { QuestionUsage } from '@giaokhoa/contracts';
 
-import type { QuestionUsage, RichTextDocument } from '@giaokhoa/contracts';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { Field, FieldLabel } from '@giaokhoa/ui/components/field';
@@ -21,14 +21,6 @@ import { usePermissions } from '#lib/permissions';
 import { pinnedQuestionVersionsQueryOptions, stimulusDetailQueryOptions, useFinishQuestionUsage, useFinishUsageAttempt, useQuestionUsage, useStartQuestionUsage, useStartUsageAttempt, useSubmitUsageAttempt } from '../queries/questions';
 import { PageHeader, PageShell } from '#components/page-shell';
 import { plainText } from '../utils/shared';
-
-/** Một phiên bản câu hỏi như endpoint versions trả về (có stimulusId để tra ngữ liệu đã gắn). */
-interface PinnedVersion {
-  id: string;
-  version: number;
-  questionText: RichTextDocument;
-  stimulusId: string | null;
-}
 
 /** Nội dung hiển thị của một attempt: đề của phiên bản đã pin + ngữ liệu gắn kèm (nếu có). */
 interface PinnedContent {
@@ -88,20 +80,26 @@ export function QuestionUsagePage() {
           }
         }),
     );
-    setPinned((prev) => {
-      const next = { ...prev };
-      for (const entry of entries) {
-        if (entry) next[entry[0]] = entry[1];
-      }
-      return next;
-    });
+    return entries;
   }, [queryClient]);
 
   // Mỗi khi usage (lại) tải về thì nạp nội dung đã ghim cho các
   // attempt đã bắt đầu — đúng nhịp loadPinned sau mỗi reload() thủ
   // công trước đây (mở trang và sau mỗi thao tác).
   useEffect(() => {
-    if (usageQuery.data) void loadPinned(usageQuery.data);
+    if (!usageQuery.data) return;
+    let active = true;
+    void loadPinned(usageQuery.data).then((entries) => {
+      if (!active) return;
+      setPinned((prev) => {
+        const next = { ...prev };
+        for (const entry of entries) {
+          if (entry) next[entry[0]] = entry[1];
+        }
+        return next;
+      });
+    });
+    return () => { active = false; };
   }, [usageQuery.data, loadPinned]);
 
   /** Chạy một thao tác làm bài (đột biến tự làm mới usage); lỗi hiện thân thiện qua i18n. */

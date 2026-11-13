@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { INestApplicationContext } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
+import { OutboxRelayScheduler } from '../../../src/outbox-relay.scheduler';
 import { GuardianDigestEventsProcessor } from '../../../src/processors/guardian-digest-events.processor';
 import type { OutboxEventJobData } from '../../../src/outbox-event-routes';
 import { sql, type RawBuilder } from '@giaokhoa/db';
@@ -188,8 +189,9 @@ describe('Worker guardian digest delivery (PH-2, issue #159; chuyển worker ở
     return { status: row.status, newResultsCount: row.new_results_count, notificationId: row.notification_id };
   }
 
-  /** Chờ vết lượt rời trạng thái queued (relay + processor đã xử lý xong sự kiện). */
+  /** Kích hoạt relay thật với ngữ cảnh platform rồi chờ digest rời queued, không đợi lịch 5 giây. */
   async function waitDigestStatus(id: string, timeoutMs = 90000) {
+    await context.get(OutboxRelayScheduler).relayTick();
     const deadline = Date.now() + timeoutMs;
     for (;;) {
       const row = await digestRow(id);

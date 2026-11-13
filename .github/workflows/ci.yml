@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
+  verify-workspace:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -32,13 +32,9 @@ jobs:
           --health-cmd "redis-cli ping"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      # Each test suite owns its database — api: giaokhoa_test_api (created by
-      # the postgres service via POSTGRES_DB), worker: giaokhoa_test_worker
-      # (created by a step below) — because turbo runs the suites in
-      # parallel and they must not share mutable global tables (the
-      # outbox backlog race is the failure this isolation prevents).
-      # The vitest configs pin those names; this job-level DATABASE_URL
-      # only serves steps outside the suites (kept on the api database).
+      # Worker dùng giaokhoa_test_worker; DB giaokhoa_test_api ở job
+      # này chỉ phục vụ migrate và kiểm tra kiểu. Test API chạy trên
+      # runner riêng để không phải chờ test worker hoàn tất.
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/giaokhoa_test_api
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: ci-secret-at-least-16-chars
@@ -51,21 +47,18 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      # Chỉ lưu kết quả build/lint/typecheck; task test luôn chạy thật
+      # vì còn phụ thuộc trạng thái PostgreSQL/Redis ngoài input nguồn.
+      - name: Cache Turbo tasks
+        uses: actions/cache@v6
+        with:
+          path: .turbo/cache
+          key: ${{ runner.os }}-node24-turbo-workspace-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-node24-turbo-workspace-
+            ${{ runner.os }}-node24-turbo-
       - name: Lint
         run: pnpm lint
-      # Công cụ PostgreSQL 18 cho test của đội kho (issue #586):
-      # pg_dump của runner từ chối dump khi bản của nó cũ hơn bản
-      # của server (service postgres 18.6) nên bản client 16 mặc
-      # định của runner không dùng được cho các spec đó. psql ở các
-      # bước khác không bị giới hạn này và không đổi hành vi.
-      - name: Install PostgreSQL 18 client tools
-        run: |
-          sudo install -d /usr/share/postgresql-common/pgdg
-          sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
-          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client-18
-          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
       - name: Create the worker test database
         run: PGPASSWORD=postgres psql -h localhost -U postgres -c 'CREATE DATABASE giaokhoa_test_worker'
       # Runner migration Kysely (issue #639) chạy từ dist đã build
@@ -91,19 +84,71 @@ jobs:
         run: pnpm exec turbo run build
       - name: Typecheck
         run: pnpm exec turbo run typecheck
-      # E2e của API không còn chạy trong job này: nó chạy ở 4 job
-      # shard song song của job test-api-e2e bên dưới để rút thời gian
-      # tường của bước Test. Job này chạy mọi suite còn lại — các
-      # package ngoài API qua turbo, cộng project unit và project int
-      # của API qua script riêng đã khai trong package.json của API.
+      # Các suite ngoài API chạy qua Turbo; unit/int API có job riêng,
+      # e2e API giữ bốn shard. Không dùng cache kết quả test.
       - name: Test
-        run: |
-          pnpm exec turbo run test --filter='!@giaokhoa/api'
-          pnpm --filter @giaokhoa/api run test:unit
-          pnpm --filter @giaokhoa/api run test:int
+        run: pnpm exec turbo run test --filter='!@giaokhoa/api'
       # Smoke production chạy trên toàn bộ topology Compose (Caddy +
       # React Router SSR + NestJS) ở job deploy-check/verify-stack,
       # thay cho tự quản lý hai tiến trình bằng setsid/kill/trap ở đây.
+
+  test-api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: giaokhoa_test_api
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/giaokhoa_test_api
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-secret-at-least-16-chars
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Cache Turbo tasks
+        uses: actions/cache@v6
+        with:
+          path: .turbo/cache
+          key: ${{ runner.os }}-node24-turbo-api-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-node24-turbo-api-
+            ${{ runner.os }}-node24-turbo-
+      # Test fleet dùng pg_dump/pg_restore cùng major với server.
+      - name: Install PostgreSQL 18 client tools
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-18
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
+      - name: Build the API and its dependencies
+        run: pnpm exec turbo run build --filter=@giaokhoa/api...
+      - name: Migrate the test database from empty
+        run: pnpm --filter @giaokhoa/api db:migrate
+      - name: Test API unit
+        run: pnpm --filter @giaokhoa/api run test:unit
+      - name: Test API integration
+        run: pnpm --filter @giaokhoa/api run test:int
 
   # E2e của API chia thành 4 shard chạy song song bằng matrix, theo
   # khuôn chính thức của Vitest (mục Sharding trong tài liệu
@@ -157,6 +202,14 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Cache Turbo tasks
+        uses: actions/cache@v6
+        with:
+          path: .turbo/cache
+          key: ${{ runner.os }}-node24-turbo-e2e-${{ matrix.shardIndex }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-node24-turbo-e2e-${{ matrix.shardIndex }}-
+            ${{ runner.os }}-node24-turbo-
       - name: Create the test database of this shard
         run: PGPASSWORD=postgres psql -h localhost -U postgres -c 'CREATE DATABASE giaokhoa_test_api_${{ matrix.shardIndex }}'
       # Runner migration Kysely (issue #639) chạy từ dist đã build
@@ -229,3 +282,22 @@ jobs:
           sed -e 's/\x1b\[[0-9;]*m//g' "$RUNNER_TEMP/merge-reports.txt" > "$RUNNER_TEMP/merge-reports-clean.txt" || true
           summary=$(grep -E '^[[:space:]]*(Test Files|Tests)[[:space:]]' "$RUNNER_TEMP/merge-reports-clean.txt" | sed 's/^ *//' | paste -sd '; ') || true
           echo "Kết quả gộp blob report e2e: $summary"
+
+  # Giữ status check verify làm cổng chung: một suite lỗi, bị huỷ hoặc
+  # bị bỏ qua đều không được biến thành kết quả xanh của cổng merge.
+  verify:
+    if: ${{ always() }}
+    needs: [verify-workspace, test-api, test-api-e2e, merge-e2e-reports]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every verification job to succeed
+        env:
+          WORKSPACE_RESULT: ${{ needs.verify-workspace.result }}
+          API_RESULT: ${{ needs.test-api.result }}
+          E2E_RESULT: ${{ needs.test-api-e2e.result }}
+          REPORT_RESULT: ${{ needs.merge-e2e-reports.result }}
+        run: |
+          test "$WORKSPACE_RESULT" = success
+          test "$API_RESULT" = success
+          test "$E2E_RESULT" = success
+          test "$REPORT_RESULT" = success

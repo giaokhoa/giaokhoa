@@ -3,7 +3,7 @@ import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminToken, assignRole, createTestApp, createUserViaApi, http, login, roleIdByShortname, STRONG_PASSWORD, uniqueName } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstSectionId } from '../../support/course-enrolment-helpers';
-import { addExamSlot, createExamDraft, createReadyQuestion, personalExamBankId, pinExam } from '../../support/exam-pin-helpers';
+import { addExamSlot, createExamDraft, createReadyQuestion, pinExam } from '../../support/exam-pin-helpers';
 
 /**
  * Issue #254 — mô hình lai tham chiếu version câu hỏi, đối chiếu 8 tiêu

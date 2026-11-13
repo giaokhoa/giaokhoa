@@ -69,12 +69,23 @@ jobs:
       - name: Validate compose configuration
         run: docker compose -f compose.yaml -f compose.ci.yaml config > /dev/null
 
-      # Service migrate tự chạy trước và phải kết thúc thành công thì
-      # api/worker mới khởi động (cổng depends_on trong compose), nên
-      # lệnh up này bao phủ cả bước áp migration vào cơ sở dữ liệu
-      # trống của runner.
-      - name: Build and start the stack
-        run: docker compose -f compose.yaml -f compose.ci.yaml up -d --build
+      # Compose xuất định nghĩa Bake cùng tag/cache của từng service;
+      # action Docker cấp runtime token cho cache gha mà bước shell
+      # không tự nhận được. Không tự dựng lại định nghĩa build riêng.
+      - name: Export the Compose build definition
+        run: docker compose -f compose.yaml -f compose.ci.yaml build --print api worker web migrate > "$RUNNER_TEMP/compose-build.json"
+
+      - name: Build the stack with GitHub Actions cache
+        uses: docker/bake-action@v7
+        with:
+          source: .
+          files: ${{ runner.temp }}/compose-build.json
+          load: true
+
+      # Service migrate tự chạy trước và phải thành công thì api/worker
+      # mới khởi động; chỉ dùng image vừa build, không build lại ở shell.
+      - name: Start the stack
+        run: docker compose -f compose.yaml -f compose.ci.yaml up -d --no-build
 
       # HTTP probe qua cổng công khai Caddy. Docker Compose đã chờ
       # healthcheck của API/web qua depends_on; curl có retry chính thức

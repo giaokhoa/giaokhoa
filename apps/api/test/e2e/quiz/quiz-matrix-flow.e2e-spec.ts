@@ -172,7 +172,7 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
           { type: 'paragraph', content: [{ type: 'text', text: 'Cho hàm số y = x² − 2x + 1. Xét tính đúng sai của các mệnh đề sau.' }] },
           {
             type: 'statementList',
-            content: tfCorrects.map((v, i) => ({
+            content: tfCorrects.map((_v, i) => ({
               type: 'statement',
               attrs: { id: `s${i + 1}` },
               content: [{ type: 'paragraph', content: [{ type: 'text', text: `Mệnh đề ${i + 1}` }] }],

@@ -486,7 +486,7 @@ export class GradesService implements OnModuleInit {
   async listUserActivityGrades(viewerId: string, courseId: string, targetUserId: string): Promise<{
     courseId: string; userId: string; activities: ActivityGradeView[];
   }> {
-    let seeAll = false;
+    let seeAll: boolean;
     if (viewerId !== targetUserId) {
       await this.requireCap(viewerId, 'grade:viewall', courseId);
       seeAll = true;

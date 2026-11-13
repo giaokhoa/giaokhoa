@@ -603,7 +603,9 @@ describe('Hợp đồng rich text', () => {
 
   it('chấp nhận tài liệu văn bản thuần có dấu cơ bản và một đoạn trống', () => {
     const parsed = richTextDocumentSchema.parse(doc);
-    expect(parsed.content[0]?.content?.[0]?.marks?.[0]?.type).toBe('bold');
+    const firstBlock = parsed.content[0];
+    const firstInline = firstBlock?.type === 'paragraph' ? firstBlock.content?.[0] : undefined;
+    expect(firstInline?.type === 'text' ? firstInline.marks?.[0]?.type : undefined).toBe('bold');
     expect(richTextInputSchema.parse('chuỗi thuần')).toBe('chuỗi thuần');
     expect(richTextInputSchema.parse(doc)).toEqual(doc);
   });
@@ -1164,7 +1166,8 @@ describe('bank sync contracts (issue #228: đóng góp đề khuôn QB-4 + truy 
       version: 1, cells: [], warnings: [],
     };
     expect(examMatrixViewSchema.parse(view).withdrawnReason).toBe('Sai cấu trúc');
-    const { withdrawnReason: _omit, ...missingField } = view;
+    const missingField = { ...view };
+    Reflect.deleteProperty(missingField, "withdrawnReason");
     expect(() => examMatrixViewSchema.parse(missingField)).toThrow();
   });
 
@@ -1176,7 +1179,8 @@ describe('bank sync contracts (issue #228: đóng góp đề khuôn QB-4 + truy 
       createdAt: '2026-10-27T00:00:00.000Z', updatedAt: '2026-10-27T00:00:00.000Z',
     };
     expect(examMatrixContributionViewSchema.parse(row).nearDuplicateOf).toBe(matrixId);
-    const { contentHash: _omit, ...missingHash } = row;
+    const missingHash = { ...row };
+    Reflect.deleteProperty(missingHash, "contentHash");
     expect(() => examMatrixContributionViewSchema.parse(missingHash)).toThrow();
   });
 });
@@ -1379,7 +1383,8 @@ describe('Hợp đồng kho ngân hàng hệ thống (gói phiên bản bất bi
 
   it('gói hợp lệ thì qua, gói thiếu khoá bắt buộc hoặc thừa khoá lạ bị từ chối (strict)', () => {
     expect(systemBankPackageSchema.parse(validPackage)).toMatchObject({ answers: expect.any(Array) });
-    const { questionText, ...missingText } = validPackage;
+    const missingText = { ...validPackage };
+    Reflect.deleteProperty(missingText, "questionText");
     expect(() => systemBankPackageSchema.parse(missingText)).toThrow();
     expect(() => systemBankPackageSchema.parse({ ...validPackage, checksum: 'abc' })).toThrow();
   });

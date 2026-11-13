@@ -1,1 +1,28 @@
-{"devDependencies":{"@giaokhoa/config":"workspace:*","typescript":"catalog:","vitest":"catalog:"},"exports":{".":{"default":"./dist/index.js","types":"./dist/index.d.ts"}},"main":"./dist/index.js","name":"@giaokhoa/grades","private":true,"scripts":{"build":"tsc -p tsconfig.json","lint":"eslint .","test":"vitest run","test:unit":"vitest run","typecheck":"tsc -p tsconfig.test.json"},"types":"./dist/index.d.ts","version":"0.1.0"}
+{
+  "devDependencies": {
+    "@giaokhoa/config": "workspace:*",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "@giaokhoa/oxlint-config": "workspace:*",
+    "oxlint": "1.93.0",
+    "oxlint-tsgolint": "7.0.2006"
+  },
+  "exports": {
+    ".": {
+      "default": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "main": "./dist/index.js",
+  "name": "@giaokhoa/grades",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "oxlint .",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "typecheck": "tsc -p tsconfig.test.json"
+  },
+  "types": "./dist/index.d.ts",
+  "version": "0.1.0"
+}

@@ -1199,7 +1199,7 @@ export function registerMcpTools(server: McpServer, actor: McpActor, deps: McpTo
           results.push({ questionId, status: 'failed', code: 'question.not_found', message: `Question ${questionId} not found` });
           continue;
         }
-        let bank: BankRow | null = null;
+        let bank: BankRow | null;
         try {
           const category = await deps.questions.getCategory(view.question.category);
           bank = await deps.banks.findBankForCategory(category);

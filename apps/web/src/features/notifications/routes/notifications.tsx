@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent } from '@giaokhoa/ui/components/card';
@@ -139,11 +139,13 @@ export function NotificationsPage() {
   const groups = flattenNotificationGroups(groupsQuery.data);
   const error = groupsQuery.isError || expandError ? t('notificationsLoadFailed') : null;
 
-  // Đổi bộ lọc = danh sách mới: thu gọn mọi dòng đang mở như hành vi cũ
-  // (loadFirstPage trước đây luôn xoá bản đồ mở rộng).
-  useEffect(() => {
+  // Đổi bộ lọc thì thu gọn toàn bộ dòng trước khi render danh sách mới.
+  const filterKey = groupFilter + ':' + String(unreadOnly);
+  const [previousFilterKey, setPreviousFilterKey] = useState(filterKey);
+  if (filterKey !== previousFilterKey) {
+    setPreviousFilterKey(filterKey);
     setExpandedItems(new Map());
-  }, [groupFilter, unreadOnly]);
+  }
 
   function loadMore() {
     if (groupsQuery.hasNextPage) void groupsQuery.fetchNextPage();

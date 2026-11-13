@@ -48,9 +48,7 @@ interface MessageBody {
 let app: INestApplication;
 let admin: string;
 
-let counter = 0;
 async function person(_prefix: string): Promise<Person> {
-  counter += 1;
   const created = await createUserViaApi(app, admin);
   const session = await login(app, created.username, STRONG_PASSWORD);
   return { id: created.id, username: created.username, token: session.accessToken };

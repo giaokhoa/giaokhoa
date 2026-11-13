@@ -121,7 +121,7 @@ export const UUIDV7_SHIM = `CREATE OR REPLACE FUNCTION uuidv7() RETURNS uuid AS 
  * @returns `'installed'` khi đã cài shim, `'skipped-pg18'` khi cụm
  *   từ 18 trở lên và bước này không làm gì.
  */
-export async function installUuidv7Shim(db: Kysely<any>): Promise<'installed' | 'skipped-pg18'> {
+export async function installUuidv7Shim<DB>(db: Kysely<DB>): Promise<'installed' | 'skipped-pg18'> {
   const { rows } = await sql<{ server_version_num: string }>`SHOW server_version_num`.execute(db);
   const major = Math.floor(Number(rows[0]?.server_version_num ?? '0') / 10000);
   if (major >= 18) return 'skipped-pg18';
