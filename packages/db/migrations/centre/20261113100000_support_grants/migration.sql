@@ -1,5 +1,3 @@
--- Quyền hỗ trợ gắn đúng một tenant; nhân sự platform được tham chiếu
--- bằng UUID, không tạo tài khoản platform trong kho trung tâm.
 CREATE TABLE "support_grants" (
   "id" uuid PRIMARY KEY DEFAULT uuidv7(),
   "tenant_id" uuid NOT NULL REFERENCES "tenants"("id") ON DELETE RESTRICT,
@@ -40,12 +38,9 @@ CREATE TABLE "support_access_events" (
 CREATE INDEX "support_access_events_tenant_time_idx"
   ON "support_access_events" ("tenant_id", "created_at" DESC);
 --> statement-breakpoint
--- FK grant_id cũng cần index đứng đầu như mọi FK một cột khác.
 CREATE INDEX "support_access_events_grant_idx"
   ON "support_access_events" ("grant_id");
 --> statement-breakpoint
--- Mọi truy vấn hỗ trợ chạy với app.tenant_id thực của trung tâm;
--- không có tenant thì cơ sở dữ liệu từ chối theo RLS fail-closed.
 ALTER TABLE "support_grants" ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
 ALTER TABLE "support_grants" FORCE ROW LEVEL SECURITY;

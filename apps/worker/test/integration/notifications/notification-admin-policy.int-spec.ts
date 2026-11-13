@@ -7,11 +7,6 @@ import {
   type OrdinaryWorkerModuleHarness,
 } from '../../support/ordinary-worker-module';
 
-/**
- * NB-7 phía worker (issue #174): hàm luật phân phối dùng chung của worker (`NotificationDeliveryService.deliverInApp`) cũng phải tôn trọng chính sách admin cấp site — cùng thứ tự luật với notify() phía API: chính sách admin TRƯỚC tuỳ chọn người dùng. Admin tắt một loại → đường nền không phát, dispatch log ghi `skipped-admin-disabled`; bật lại (hoặc không có ghi đè) → phát bình thường.
- *
- * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness role thường (`test/ordinary-worker-module.ts`): module chạy bằng role NOSUPERUSER/NOBYPASSRLS như production, fixture và đọc kiểm chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ của spec không đổi.
- */
 describe('Worker NB-7: chính sách site của admin làm cổng gửi nền', () => {
   let context: INestApplicationContext;
   let harness: OrdinaryWorkerModuleHarness;
@@ -56,7 +51,6 @@ describe('Worker NB-7: chính sách site của admin làm cổng gửi nền', (
   });
 
   afterAll(async () => {
-    // Trả chính sách về mặc định (không ghi đè) cho các suite khác.
     await setPolicy(null);
     await harness.close();
   });
@@ -79,7 +73,6 @@ describe('Worker NB-7: chính sách site của admin làm cổng gửi nền', (
       .execute();
     expect(logs.length).toBeGreaterThan(0);
 
-    // Bật lại → cùng đường nền phát bình thường.
     await setPolicy('true');
     const event2 = await mkEvent(policyUser, `NB7 allowed exam ${suffix}`);
     const allowed = await processor.process({ data: { spaceSlug: null, spaceId: null, eventId: event2, userId: policyUser, minutesBefore: 30 } } as never);
@@ -89,7 +82,6 @@ describe('Worker NB-7: chính sách site của admin làm cổng gửi nền', (
       .execute();
     expect(notes2).toHaveLength(1);
 
-    // Người dùng khác khi không còn ghi đè (xoá dòng) cũng phát bình thường.
     await setPolicy(null);
     const event3 = await mkEvent(freeUser, `NB7 default exam ${suffix}`);
     const dflt = await processor.process({ data: { spaceSlug: null, spaceId: null, eventId: event3, userId: freeUser, minutesBefore: 30 } } as never);

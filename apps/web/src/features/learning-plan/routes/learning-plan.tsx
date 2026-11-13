@@ -14,13 +14,6 @@ import { PageHeader, PageShell } from '#components/page-shell';
 import { useLearningPlanDetail, useRequestCompetencyReview, useRequestPlanReview, useUserLearningPlans } from '../queries/learning-plan';
 import '#config/i18n';
 
-/**
- * Kế hoạch học tập: học viên thấy các kế hoạch của mình, mức thành thạo của từng competency (do thang của framework quyết định, không bao giờ suy ra từ điểm) và trạng thái review, và có thể yêu cầu review một competency — hành động khởi đầu quy trình của người review.
- *
- * Dữ liệu phần người học đọc qua tầng TanStack Query
- * (`lib/learning-plan-data.ts`): danh sách kế hoạch theo khoá của
- * người dùng trong phiên, chi tiết theo khoá của kế hoạch đang chọn xem; gửi yêu cầu duyệt qua đột biến làm mới đúng bề mặt liên quan.
- */
 export function LearningPlanPage() {
   const { t } = useTranslation('app');
   const PLAN_STATUS: Record<number, string> = {
@@ -44,7 +37,6 @@ export function LearningPlanPage() {
   const detail = detailQuery.data ?? null;
   const requestPlanReview = useRequestPlanReview();
   const requestCompetencyReviewMutation = useRequestCompetencyReview();
-  /** Cột của bảng năng lực trong một kế hoạch trên DataTable dùng chung: sắp xếp/lọc theo tên năng lực và mức thành thạo, thao tác gửi duyệt giữ nguyên ở cột cuối. */
   const planCompetencyColumns: DataColumn<PlanDetail['competencies'][number]>[] = [
     {
       id: 'competency',
@@ -182,10 +174,8 @@ export function LearningPlanPage() {
   );
 }
 
-/** Export mặc định cho route module React Router framework mode (xem src/routes.ts). */
 export default LearningPlanPage;
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { appKeyMeta } from '#lib/route-meta';
 export function meta() {

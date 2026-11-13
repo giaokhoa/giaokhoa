@@ -5,7 +5,6 @@ services:
     volumes:
       - ..:/giaokhoa:cached
     command: sleep infinity
-    # Dùng chung localhost với PostgreSQL và Redis theo cấu hình ứng dụng.
     network_mode: service:db
     depends_on:
       db:
@@ -19,12 +18,10 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      # Tên DB phải khớp cấu hình API, worker, test và CI hiện tại.
       POSTGRES_DB: giaokhoa
     volumes:
       - pgdata:/var/lib/postgresql
       - ./init-db.sql:/docker-entrypoint-initdb.d/10-init-db.sql:ro
-    # Dùng TCP để chỉ báo healthy sau khi init SQL kết thúc và server PostgreSQL thực sự lắng nghe (tránh postgres tạm dùng Unix socket).
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d giaokhoa"]
       interval: 5s

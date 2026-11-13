@@ -1,6 +1,3 @@
-/**
- * Panel hàng chờ BỘ HỒ SƠ trong section đề chung (khu vực Ngân hàng hệ thống): bề mặt đọc lịch sử của các bộ hồ sơ đang chờ của bank đang chọn — người duyệt mở/tải bản đặc tả đã chụp ngay tại hàng chờ; thao tác duyệt đi trên đóng góp đã chuyển đổi từ chính bộ hồ sơ (trang truyền bản đồ nối hồ sơ → đóng góp xuống). Dữ liệu hàng chờ do trang nạp và lọc; panel giữ state bản đặc tả đang mở, tự nạp đặc tả qua query options của lib/questions-data và tải file đặc tả xlsx qua apiFetch (thao tác tải file có sẵn của bề mặt này). Làm mới sau duyệt qua các hàm refresh của trang truyền xuống.
- */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,28 +10,15 @@ import { examDossierSpecQueryOptions, useReviewExamPaperContribution } from '../
 import type { DossierSpecLite, ExamContributionLite, ExamDossierLite } from '../types/questions';
 import { dossierStatusKey, withApiReason } from '../utils/shared';
 
-/** Props của panel hàng chờ bộ hồ sơ. */
 export interface DossierQueuePanelProps {
-  /** Các bộ hồ sơ đang chờ của bank đang chọn (trang nạp và lọc theo trạng thái đóng góp liên kết). */
   bankDossiers: ExamDossierLite[];
-  /** Bản đồ hồ sơ gốc → đóng góp đã chuyển đổi từ hồ sơ đó (khoá thao tác duyệt). */
   contributionBySourceDossierId: Map<string, ExamContributionLite>;
-  /** Bank đề chung đang chọn (state của trang). */
   systemExamBankId: string;
-  /** Làm mới cụm đề chung của một bank (hàm của trang). */
   refreshSystemPapers: (bankId: string) => void;
-  /** Làm mới danh sách hồ sơ của tôi (hàm của trang). */
   refreshMyDossiers: () => void;
-  /** Báo thông báo kết quả lên khung trang. */
   setMessage: (message: string | null) => void;
 }
 
-/**
- * Panel hàng chờ bộ hồ sơ.
- *
- * @param props - Dữ liệu, các hàm làm mới và bộ báo thông báo của trang.
- * @returns Khối hàng chờ bộ hồ sơ (chỉ hiện khi đã chọn bank và có bộ đang chờ).
- */
 export function DossierQueuePanel({
   bankDossiers,
   contributionBySourceDossierId,
@@ -48,11 +32,6 @@ export function DossierQueuePanel({
   const reviewPaperContributionMutation = useReviewExamPaperContribution();
   const [openDossierSpec, setOpenDossierSpec] = useState<{ dossierId: string; spec: DossierSpecLite } | null>(null);
 
-  /**
-   * Một mốc duyệt tại hàng chờ BỘ HỒ SƠ: hồ sơ là bề mặt CHỈ-ĐỌC
-   * (lịch sử) — thao tác duyệt thật đi trên ĐÓNG GÓP đã chuyển đổi từ
-   * chính hồ sơ đó, nối bằng `sourceDossierId` (đợt chuyển đổi hồ sơ treo của Q4); cấp do trạng thái đóng góp quyết định ở phía server (issue #345, giai đoạn 2): `pending` → cấp 1, `pending_board` → cấp 2 BGH, cùng gọi một động từ `approve`/`reject`; từ chối bắt buộc lý do. Hồ sơ chưa có đóng góp liên kết (chưa qua đợt chuyển đổi) thì không còn thao tác ghi nào — đường ghi hồ sơ đã đóng (API trả 410).
-   */
   async function reviewDossier(dossierId: string, action: 'approve' | 'reject') {
     const contribution = contributionBySourceDossierId.get(dossierId);
     if (!contribution || !systemExamBankId) return;
@@ -80,7 +59,6 @@ export function DossierQueuePanel({
     }
   }
 
-  /** Mở/đóng bản đặc tả ĐÃ CHỤP của bộ hồ sơ ngay trong hàng chờ. */
   async function toggleDossierSpec(dossierId: string) {
     if (openDossierSpec?.dossierId === dossierId) { setOpenDossierSpec(null); return; }
     try {
@@ -91,7 +69,6 @@ export function DossierQueuePanel({
     }
   }
 
-  /** Tải bản đặc tả đã chụp của bộ hồ sơ ra file xlsx. */
   async function downloadDossierSpec(dossierId: string) {
     try {
       const res = await apiFetch(`/api/v1/exams/dossiers/${dossierId}/specification/export?format=xlsx`);
@@ -110,13 +87,6 @@ export function DossierQueuePanel({
 
   return (
     <>
-    {/* Hàng chờ BỘ HỒ SƠ (EB-3): bề mặt ĐỌC lịch sử của các
-        bộ đã nộp theo đường hồ sơ cũ — người duyệt mở bản
-        đặc tả đã chụp ngay tại hàng chờ. Thao tác DUYỆT đi
-        trên đóng góp đã chuyển đổi từ chính bộ hồ sơ (nối
-        bằng sourceDossierId): cấp 1 khi đóng góp `pending`,
-        cấp 2 (BGH) khi đóng góp `pending_board`; bộ chưa có
-        đóng góp liên kết thì chỉ còn xem/tải đặc tả. */}
     {systemExamBankId && bankDossiers.length > 0 ? (
       <div className="space-y-2">
         <h4 className="font-medium">{t('dossierQueue')}</h4>

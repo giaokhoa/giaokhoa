@@ -6,7 +6,6 @@ import { ContextsService } from '../access/contexts.service';
 import { CoursesService } from '../courses/courses.service';
 import { MessagingService } from '../messaging/messaging.service';
 
-/** Một dataSource đăng ký: read model theo entity, mỗi dòng kèm courseId để lọc quyền theo context. */
 export interface ReportDatasource {
   name: string;
   columns: string[];
@@ -14,9 +13,6 @@ export interface ReportDatasource {
 }
 export const REPORT_DATASOURCES = ['enrolments', 'grades', 'completion'] as const;
 
-/**
- * Facade của ReportsModule (Moodle core_reportbuilder, §2#24). Bất biến: quyền xem = audience ∩ quyền trên TỪNG DÒNG theo context của dòng đó. Filter do user cấu hình KHÔNG BAO GIỜ nới quyền — filter chỉ thu hẹp tập dòng đã được phép. Báo cáo theo lịch chạy dưới danh tính người tạo với quyền TẠI THỜI ĐIỂM CHẠY.
- */
 @Injectable()
 export class ReportsService {
   private readonly datasources = new Map<string, ReportDatasource>();
@@ -32,9 +28,6 @@ export class ReportsService {
     this.registerBuiltinDatasources();
   }
 
-  /**
-   * Cổng metadata báo cáo (H15, rà soát #134 + §7.3): định nghĩa báo cáo, datasource và lịch chạy là thông tin vận hành nội bộ — mọi đường đọc metadata và đường kích hoạt chạy theo lịch đều đòi `reportbuilder:manage` tại system, cùng cổng với createReport/ createSchedule. Dữ liệu báo cáo vẫn gác riêng theo audience + từng dòng ở runReport, không đổi.
-   */
   private async requireManage(actorId: string): Promise<void> {
     const sys = await this.contexts.ensureSystemContext();
     await this.evaluator.requireCapability(actorId, 'reportbuilder:manage', sys.id);
@@ -107,18 +100,15 @@ export class ReportsService {
     });
     for (const uid of input.audienceUserIds ?? []) await this.repo.insertAudience({ reportId: report.id, userId: uid });
     for (const role of input.audienceRoles ?? []) await this.repo.insertAudience({ reportId: report.id, role });
-    // Người tạo luôn thuộc audience của báo cáo của mình.
     if (!(input.audienceUserIds ?? []).includes(actorId)) await this.repo.insertAudience({ reportId: report.id, userId: actorId });
     return report;
   }
 
-  /** Đọc thô một report theo id — đường nội bộ (runReport/createSchedule/worker), không gác tại đây. */
   private async getReportRow(id: string): Promise<ReportRow> {
     const row = await this.repo.getReport(id);
     if (!row) throw new NotFoundException({ message: `Report ${id} not found`, code: 'report.not_found' });
     return row;
   }
-  /** Chi tiết report qua HTTP: qua cổng metadata (H15). */
   async getReport(actorId: string, id: string): Promise<ReportRow> {
     await this.requireManage(actorId);
     return this.getReportRow(id);
@@ -128,26 +118,16 @@ export class ReportsService {
     return this.repo.listReports();
   }
 
-  /** Kiểm tra audience: user có trong audience trực tiếp hoặc qua role shortName tại system context. */
   async isInAudience(userId: string, report: ReportRow): Promise<boolean> {
     if (report.createdBy === userId) return true;
     if (await this.evaluator.isSiteAdmin(userId)) return true;
     const audience = await this.repo.listAudience(report.id);
     if (audience.some((a) => a.userId === userId)) return true;
-    // Audience theo role: resolve bằng bảng role_assignments (role shortName).
     const roleNames = audience.filter((a) => a.role).map((a) => a.role!);
     if (!roleNames.length) return false;
-    // Truy vấn ghép danh sách tên vai trò bằng sql.join nằm ở
-    // repository (khuôn T-11 chốt tại issue #648).
     return this.repo.userHasAnyRole(userId, roleNames);
   }
 
-  /**
-   * Chạy báo cáo cho một viewer: audience ∩ lọc từng dòng theo quyền.
-   * Một dòng course chỉ hiện nếu viewer có course:view ở course
-   * context của dòng (hoặc là chính chủ dòng dữ liệu của mình cho grades/
-   * enrolments/completion của bản thân — học viên xem được dòng của mình).
-   */
   async runReport(viewerId: string, reportId: string): Promise<{ report: ReportRow; rows: Record<string, unknown>[] }> {
     const report = await this.getReportRow(reportId);
     if (!(await this.isInAudience(viewerId, report))) {
@@ -157,7 +137,6 @@ export class ReportsService {
     if (!ds) throw new BadRequestException({ message: 'Datasource no longer registered', code: 'report.datasource_missing' });
     const allRows = await ds.fetchRows();
     const filters = (report.filters ?? {}) as Record<string, unknown>;
-    // Filter cấu hình chỉ thu hẹp: áp dụng TRƯỚC lọc quyền cũng không đổi kết quả quyền.
     const filtered = allRows.filter((row) => Object.entries(filters).every(([k, v]) => v === undefined || v === null || row[k] === v));
     const columns = (report.columns as string[]) ?? ds.columns;
     const out: Record<string, unknown>[] = [];
@@ -171,7 +150,6 @@ export class ReportsService {
         }
         const ctxId = ctxCache.get(courseId)!;
         if (ctxId) {
-          // Staff có grade:viewall thấy mọi dòng của course; người thường chỉ thấy dòng của chính mình trong course họ được xem.
           allowed = (await this.evaluator.hasCapability(viewerId, 'grade:viewall', ctxId))
             || ((await this.evaluator.hasCapability(viewerId, 'course:view', ctxId)) && String(row.userId) === viewerId);
         }
@@ -181,7 +159,6 @@ export class ReportsService {
       if (!allowed) continue;
       const projected: Record<string, unknown> = {};
       for (const c of columns) projected[c] = row[c];
-      // Giữ courseId/userId để client và test đối chiếu, kể cả khi không nằm trong columns đã chọn.
       projected.courseId = row.courseId; projected.userId = row.userId;
       out.push(projected);
     }
@@ -198,17 +175,11 @@ export class ReportsService {
     await this.requireManage(actorId);
     return this.repo.listSchedules();
   }
-  /** Kích hoạt chạy một schedule qua HTTP: qua cổng metadata (H15) rồi chạy bằng engine nội bộ. */
   async triggerSchedule(actorId: string, scheduleId: string): Promise<{ scheduleId: string; rows: number }> {
     await this.requireManage(actorId);
     return this.runSchedule(scheduleId);
   }
 
-  /**
-   * Chạy một schedule: chạy báo cáo DƯỚI DANH TÍNH NGƯỜI TẠO với quyền tại
-   * thời điểm chạy, lưu kết quả vào schedule, và gửi notification qua
-   * MessagingModule cho người tạo.
-   */
   async runSchedule(scheduleId: string): Promise<{ scheduleId: string; rows: number }> {
     const schedule = await this.repo.getSchedule(scheduleId);
     if (!schedule) throw new NotFoundException({ message: `Schedule ${scheduleId} not found`, code: 'report.schedule_not_found' });

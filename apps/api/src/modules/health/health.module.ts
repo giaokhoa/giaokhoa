@@ -8,5 +8,4 @@ import { HealthService } from './health.service';
   controllers: [HealthController],
   providers: [HealthService],
 })
-/** Module kiểm tra sức khoẻ hệ thống. */
 export class HealthModule {}

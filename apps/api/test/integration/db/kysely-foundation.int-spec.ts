@@ -1,16 +1,3 @@
-/**
- * Spec tích hợp của khung Kysely phía `apps/api`: chứng minh trên database trung tâm dựng từ rỗng bằng harness của `@giaokhoa/db` rằng handle Kysely đi qua `TenantAwarePool` THẬT của hệ (không phải bản phục vụ test trong package) vẫn giữ đúng hợp đồng GUC/RLS, và wiring NestJS tự dựng (`KyselyModule` + `@InjectKysely`) cấp đúng handle cho service.
- *
- * Ba tính chất được kiểm chứng:
- *   (i)   Trong ngữ cảnh tenant (nạp qua `tenantAls` thật) chỉ
- *         thấy dòng của tenant đó; ngữ cảnh platform thấy mọi dòng; ngoài ngữ cảnh thì fail-closed.
- *   (ii)  Giao dịch qua handle `CentreTx` truyền vào repository
- *         mẫu: ném lỗi thì rollback sạch, hoàn tất thì ghi thật.
- *   (iii) `KyselyModule.forRoot(...)` inject đúng handle theo
- *         `@InjectKysely()` / `@InjectKysely('control-plane')`, handle kho trung tâm chạy được trên `TenantAwarePool` thật, và đóng module thì instance bị huỷ (pool đóng theo).
- *
- * Môi trường: kết nối quản trị lấy từ `GIAOKHOA_TEST_DATABASE_URL` (ghi đè chuẩn của suite api) hoặc `DATABASE_URL` do cấu hình Vitest của api đặt, thay tên database thành `postgres`. Database và role test dùng tên cố định dưới đây, được xoá/dựng lại mỗi lượt chạy; role là role thường (không superuser) để RLS có hiệu lực.
- */
 import { Injectable } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Client } from 'pg';
@@ -39,7 +26,6 @@ let db: CentreDb;
 let tenantAId: string;
 let tenantBId: string;
 
-/** Repository mẫu: ghi một tenant — nhận handle thường hoặc handle giao dịch. */
 async function createTenantRow(handle: CentreDb | CentreTx, slug: string): Promise<string> {
   const row = await handle
     .insertInto('tenants')
@@ -49,13 +35,11 @@ async function createTenantRow(handle: CentreDb | CentreTx, slug: string): Promi
   return row.id;
 }
 
-/** Repository mẫu: liệt kê slug của mọi tenant mà handle hiện tại nhìn thấy. */
 async function listVisibleTenantSlugs(handle: CentreDb | CentreTx): Promise<string[]> {
   const rows = await handle.selectFrom('tenants').select('slug').orderBy('slug').execute();
   return rows.map((row) => row.slug);
 }
 
-/** Service mẫu nhận handle Kysely qua decorator tự dựng của repo. */
 @Injectable()
 class KyselyHandleConsumer {
   constructor(
@@ -152,8 +136,6 @@ describe('khung Kysely phía apps/api', () => {
   });
 
   it('KyselyModule cấp đúng handle qua @InjectKysely và huỷ instance khi module đóng', async () => {
-    // Mỗi kho một pool riêng, đúng hình dạng production (module sở
-    // hữu và đóng pool của từng kho khi ứng dụng đóng).
     const modulePool = new TenantAwarePool({
       connectionString: pool.options.connectionString,
     });
@@ -171,15 +153,11 @@ describe('khung Kysely phía apps/api', () => {
     expect(consumer.centre).toBeDefined();
     expect(consumer.controlPlane).toBeDefined();
     expect(consumer.controlPlane).not.toBe(consumer.centre);
-    // Handle kho trung tâm được inject chạy thật trên TenantAwarePool
-    // và tôn trọng ngữ cảnh platform qua tenantAls.
     await expect(
       tenantAls.run({ platform: true }, () => listVisibleTenantSlugs(consumer.centre)),
     ).resolves.toEqual(['n1-alpha', 'n1-beta']);
 
     await moduleRef.close();
-    // Đóng module huỷ instance Kysely, kéo theo pool của module đóng:
-    // mọi truy vấn mới trên pool đó bị từ chối.
     await expect(modulePool.query('select 1')).rejects.toThrow();
   });
 });

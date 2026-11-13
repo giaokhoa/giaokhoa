@@ -75,7 +75,6 @@ describe('Cài đặt — trang bảo mật, thẻ phiên (chuyển từ Hồ s�
     localStorage.clear();
   });
   afterEach(() => {
-    // Dự án không bật auto-cleanup của Testing Library nên phải dọn DOM tường minh, tránh cây render của test trước sót sang test sau.
     cleanup();
     vi.unstubAllGlobals();
   });
@@ -104,19 +103,13 @@ describe('Cài đặt — trang bảo mật, thẻ phiên (chuyển từ Hồ s�
     await waitFor(() => expect(screen.getByText('Hiện tại')).toBeInTheDocument());
     expect(screen.getByText('203.0.113.10')).toBeInTheDocument();
     expect(screen.getByText('198.51.100.7')).toBeInTheDocument();
-    // Cột loại phiên đã bỏ: không còn header "Loại phiên" và không còn
-    // ô nhãn loại "Web"/"API" trong phạm vi bảng phiên.
     const sessionsTable = screen.getByRole('table');
     expect(within(sessionsTable).queryByRole('columnheader', { name: 'Loại phiên' })).not.toBeInTheDocument();
     expect(within(sessionsTable).queryByText('Loại phiên')).not.toBeInTheDocument();
     expect(within(sessionsTable).queryByText('Web')).not.toBeInTheDocument();
     expect(within(sessionsTable).queryByText('API')).not.toBeInTheDocument();
-    // Thiết bị hiện mô tả dễ hiểu phân tích từ user-agent thay vì chuỗi thô:
-    // Chrome/Linux đọc thành "Chrome trên Linux"; user-agent lạ không
-    // phân tích được thì hiện nguyên chuỗi gốc.
     expect(within(sessionsTable).getByText('Chrome trên Linux')).toBeInTheDocument();
     expect(within(sessionsTable).getByText('Giáo khoa mobile app')).toBeInTheDocument();
-    // Chỉ phiên khác mới có nút huỷ (phiên hiện tại dùng huy hiệu thay thế).
     const revokeButtons = screen.getAllByRole('button', { name: 'Huỷ phiên' });
     expect(revokeButtons).toHaveLength(1);
     await userEvent.click(revokeButtons[0]);
@@ -148,16 +141,13 @@ describe('Cài đặt — trang bảo mật, thẻ phiên (chuyển từ Hồ s�
     renderPage();
     await waitFor(() => expect(screen.getByText('Hiện tại')).toBeInTheDocument());
     const table = screen.getByRole('table');
-    expect(within(table).getAllByRole('row')).toHaveLength(4); // header + 3 phiên
-    // Không còn cột loại phiên trong bảng này.
+    expect(within(table).getAllByRole('row')).toHaveLength(4);
     expect(within(table).queryByText('Loại phiên')).not.toBeInTheDocument();
     expect(within(table).queryByText('Web')).not.toBeInTheDocument();
     expect(within(table).queryByText('API')).not.toBeInTheDocument();
-    // Phiên thứ ba có user-agent null và IP null: cả hai ô đều hiện nhãn không rõ.
     const thirdRow = within(table).getAllByRole('row')[3];
     expect(within(thirdRow).getAllByText('Không rõ').length).toBeGreaterThanOrEqual(1);
     expect(within(thirdRow).queryByText('Chrome trên Linux')).not.toBeInTheDocument();
-    // Phiên hiện tại vẫn hiện mô tả thiết bị đã phân tích và IP của nó.
     expect(within(table).getByText('Chrome trên Linux')).toBeInTheDocument();
     expect(within(table).getByText('Giáo khoa mobile app')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Huỷ mọi phiên khác' }));
@@ -168,8 +158,6 @@ describe('Cài đặt — trang bảo mật, thẻ phiên (chuyển từ Hồ s�
 });
 
 const TOTP_SECRET = 'JBSWY3DPEHPK3PXP';
-// URL otpauth của fixture được nối từ từng đoạn nhỏ (tham số khoá bí
-// mật tách rời) để nguyên liệu test không bị nhầm với credential thật.
 const TOTP_OTPAUTH_URL = 'otpauth://totp/Giáo khoa:learner?' + 'sec' + 'ret=' + TOTP_SECRET + '&issuer=Giáo khoa';
 const TOTP_SETUP_RESPONSE: Record<string, string> = { otpauthUrl: TOTP_OTPAUTH_URL };
 TOTP_SETUP_RESPONSE['sec' + 'ret'] = TOTP_SECRET;
@@ -183,12 +171,6 @@ describe('Cài đặt — trang bảo mật, thẻ hai yếu tố (chuyển từ
     vi.unstubAllGlobals();
   });
 
-  /**
-   * Dựng mock fetch dùng chung cho thẻ hai lớp: các thẻ khác (liên
-   * kết, phiên) trả dữ liệu rỗng để không sinh cảnh báo phụ; trạng
-   * thái MFA nằm trong biến `state` để confirm/disable lật qua lại
-   * như backend thật, và mã đúng duy nhất được chấp nhận là 123456.
-   */
   function stubFetch(state: { enabled: boolean }) {
     vi.stubGlobal(
       'fetch',
@@ -233,7 +215,6 @@ describe('Cài đặt — trang bảo mật, thẻ hai yếu tố (chuyển từ
     const { container } = renderPage();
     await waitFor(() => expect(screen.getByText('Chưa bật')).toBeInTheDocument());
     await userEvent.click(screen.getByRole('button', { name: 'Bật xác thực hai lớp' }));
-    // Bước setup: QR (svg của qrcode.react) + khoá bí mật dạng chữ cùng hiện.
     await waitFor(() => expect(screen.getByText(TOTP_SECRET)).toBeInTheDocument());
     expect(container.querySelector('svg')).not.toBeNull();
     expect(screen.getByText(/Quét mã QR bên dưới/)).toBeInTheDocument();
@@ -242,7 +223,6 @@ describe('Cài đặt — trang bảo mật, thẻ hai yếu tố (chuyển từ
     await waitFor(() => expect(screen.getByText('Đang bật')).toBeInTheDocument());
     expect(screen.getByText(/Đã bật xác thực hai lớp/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Tắt xác thực hai lớp' })).toBeInTheDocument();
-    // Bước setup đã đóng: khoá bí mật không còn lộ trên trang.
     expect(screen.queryByText(TOTP_SECRET)).not.toBeInTheDocument();
   });
 
@@ -256,7 +236,6 @@ describe('Cài đặt — trang bảo mật, thẻ hai yếu tố (chuyển từ
     await userEvent.type(screen.getByLabelText('Mã xác thực 6 số'), '000000');
     await userEvent.click(screen.getByRole('button', { name: 'Xác nhận và bật' }));
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Mã xác thực không đúng'));
-    // Vẫn ở bước setup để nhập lại: QR/khoá còn đó, trạng thái chưa bật.
     expect(screen.getByText(TOTP_SECRET)).toBeInTheDocument();
     expect(screen.getByText('Chưa bật')).toBeInTheDocument();
     expect(state.enabled).toBe(false);

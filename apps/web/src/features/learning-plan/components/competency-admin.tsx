@@ -1,20 +1,3 @@
-/**
- * Khu quản lý competency + hàng đợi duyệt của trang kế hoạch học tập
- * (`pages/learning-plan.tsx`): trang chỉ render component này khi
- * người dùng có quyền quản trị (`canAdminister` từ `usePermissions()` ở trang).
- *
- * Luồng dữ liệu đi qua tầng TanStack Query
- * (`lib/learning-plan-data.ts`, khuôn F-01 của rà soát #133) thay cho
- * vòng fetch thủ công bằng `useState`/`useEffect` + `apiJson` trước đây:
- *   - Đọc: danh sách framework, danh sách mẫu kế hoạch, cây năng lực
- *     của framework đang chọn, danh sách người dùng cho ô chọn duyệt và cặp dữ liệu hàng đợi duyệt (kế hoạch + năng lực của người dùng đang xét) đều là `useQuery` theo khoá của `lib/query-keys.ts`. Cây năng lực và hàng đợi giữ dữ liệu trước trong lúc tải dữ liệu mới (`keepPreviousData`) như bản thủ công chỉ thay danh sách khi lần tải xong.
- *   - Ghi: mọi thao tác là `useMutation`; thành công thì invalidate
- *     đúng cụm khoá liên quan (tạo/nhập framework và tạo mẫu làm mới cả hai danh sách khung; thêm năng lực làm mới cây của framework đó; thao tác duyệt làm mới hàng đợi) thay cho lời gọi nạp lại thủ công.
- *   - Xuất framework là lần đọc tại thời điểm bấm: lấy tài liệu qua
- *     `fetchQuery` với `staleTime: 0` rồi đóng gói Blob tải xuống ngay trên trình duyệt, không qua máy chủ tệp.
- *   - Thông báo thành công/thất bại theo từng thao tác vẫn giữ ở
- *     state cục bộ của component như bản thủ công; riêng lỗi tải dữ liệu phơi thẳng từ trạng thái lỗi của các query.
- */
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
@@ -38,26 +21,7 @@ import { frameworkExportQueryOptions, useAddTemplateCohort, useAddTemplateCompet
 import type { PlanReviewActionName, UsercompReviewActionName } from '../types/learning-plan';
 import { COMPETENCY_INDENT, type FrameworkView } from '../types/types';
 
-/** Nhãn trạng thái dịch qua catalog ở thời điểm render (xem hook trong component). */
 
-/**
- * Khu quản lý competency + hàng đợi duyệt, chỉ render khi người dùng có quyền quản trị (`canAdminister` từ `usePermissions()`).
- *
- * Đối chiếu DTO ở `packages/contracts/src/engagement.ts` (bản ở worktree này) và controller/service ở `apps/api/src/modules/competencies`:
- * - Tạo framework: `createCompetencyFrameworkSchema` = `{ shortName,
- *   idNumber?, description?, scale: { values: string[], proficient:
- *   number[] }, visible? }` — form thu values/proficient dạng danh sách phân tách bằng dấu phẩy rồi đóng gói đúng hình dạng đó.
- * - Thêm competency: `createCompetencySchema` = `{ shortName, idNumber?,
- *   description?, parentId? }` vào `POST /frameworks/:id/competencies`.
- * - Tạo template: `createLearningPlanTemplateSchema` = `{ shortName,
- *   description?, dueDate? }`; gắn competency/cohort lần lượt là `addTemplateCompetencySchema` = `{ competencyId }` và `addTemplateCohortSchema` = `{ cohortId }`; `create-plans` không có body.
- *
- * Quy tắc hiện nút duyệt lấy đúng từ `planTransition` và `transitionUsercompReview` trong competencies.service:
- * - Plan (0 nháp, 1 đang thực hiện, 2 chờ duyệt, 3 đang duyệt, 4 hoàn
- *   thành): start-review chỉ từ 2; approve chỉ từ 3; unapprove chỉ từ 1; complete từ 1 hoặc 3.
- * - Usercomp (0 chưa duyệt, 1 chờ duyệt, 2 đang duyệt): start-review chỉ
- *   từ 1; approve/reject từ 1 hoặc 2, body lần lượt là `competencyReviewDecisionSchema` và `competencyNoteSchema` (mọi trường đều tuỳ chọn nên gửi `{}` khi không nhập grade/note).
- */
 export function CompetencyAdmin() {
   const { t } = useTranslation('app');
   const PLAN_STATUS: Record<number, string> = {
@@ -83,9 +47,6 @@ export function CompetencyAdmin() {
   const competencies = competenciesQuery.data ?? [];
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [adminMessage, setAdminMessage] = useState<string | null>(null);
-  /**
-   * Lỗi tải dữ liệu của khu quản trị (danh sách framework/template hoặc cây năng lực) phơi thẳng từ trạng thái lỗi của các query — tương đương bản thủ công đặt lỗi khi lần nạp ban đầu hoặc lần nạp cây thất bại; lần nạp lại thành công thì lỗi tự biến mất.
-   */
   const adminError =
     frameworksQuery.isError || templatesQuery.isError || competenciesQuery.isError
       ? t('compAdminLoadFailed')
@@ -123,14 +84,10 @@ export function CompetencyAdmin() {
   const planReviewMutation = usePlanReviewAction();
   const usercompReviewMutation = useUsercompReviewAction();
 
-  /**
-   * Chọn sẵn mẫu đầu tiên khi danh sách mẫu đã nạp mà chưa có mẫu nào được chọn — đúng mặc định của bản thủ công, vốn chọn sẵn mẫu đầu mỗi lần nạp lại hai danh sách khung quản trị.
-   */
   if (selectedTemplateId === '' && firstTemplateId) {
     setSelectedTemplateId(firstTemplateId);
   }
 
-  /** Tạo framework qua POST /frameworks với đúng body của `createCompetencyFrameworkSchema`. */
   async function createFramework(event: FormEvent) {
     event.preventDefault();
     setAdminMessage(null);
@@ -158,9 +115,6 @@ export function CompetencyAdmin() {
     }
   }
 
-  /**
-   * Xuất framework ra file JSON: GET /frameworks/:id/export trả tài liệu JSON của hệ thống (framework + cây competency + rule); trang đóng gói thành Blob tải xuống ngay trên trình duyệt, không qua máy chủ tệp.
-   */
   async function exportFramework(fw: FrameworkView) {
     setAdminMessage(null);
     try {
@@ -178,13 +132,6 @@ export function CompetencyAdmin() {
     }
   }
 
-  /**
-   * Nhập framework từ file JSON đã xuất: đọc file ngay trên trình duyệt,
-   * phân tích JSON rồi POST /frameworks/import — backend kiểm chứng toàn
-   * vẹn tài liệu bằng `frameworkExportSchema` và tạo framework MỚI (mọi id
-   * đều mới). Lỗi toàn vẹn của API (Problem Details) được hiện nguyên văn
-   * `detail` để quản trị sửa file, không nuốt thành thông báo chung chung.
-   */
   async function importFramework(event: FormEvent) {
     event.preventDefault();
     setAdminMessage(null);
@@ -211,7 +158,6 @@ export function CompetencyAdmin() {
     }
   }
 
-  /** Thêm competency vào framework đang chọn qua POST /frameworks/:id/competencies (`createCompetencySchema`). */
   async function createCompetency(event: FormEvent) {
     event.preventDefault();
     if (!selectedFrameworkId) return;
@@ -233,7 +179,6 @@ export function CompetencyAdmin() {
     }
   }
 
-  /** Tạo template qua POST /templates (`createLearningPlanTemplateSchema`). */
   async function createTemplate(event: FormEvent) {
     event.preventDefault();
     setAdminMessage(null);
@@ -251,7 +196,6 @@ export function CompetencyAdmin() {
     }
   }
 
-  /** Gắn competency vào template đang chọn: POST /templates/:id/competencies với `{ competencyId }`. */
   async function addTemplateCompetency(event: FormEvent) {
     event.preventDefault();
     if (!selectedTemplateId) return;
@@ -268,7 +212,6 @@ export function CompetencyAdmin() {
     }
   }
 
-  /** Gắn cohort vào template đang chọn: POST /templates/:id/cohorts với `{ cohortId }`. */
   async function addTemplateCohort(event: FormEvent) {
     event.preventDefault();
     if (!selectedTemplateId) return;
@@ -285,7 +228,6 @@ export function CompetencyAdmin() {
     }
   }
 
-  /** Sinh plan cho mọi thành viên cohort đã gắn: POST /templates/:id/create-plans (không body). */
   async function createPlansFromTemplate() {
     if (!selectedTemplateId) return;
     setAdminMessage(null);
@@ -297,12 +239,6 @@ export function CompetencyAdmin() {
     }
   }
 
-  /**
-   * Tải plans + usercomp của người dùng đang nhập trong hàng đợi
-   * duyệt: bật cặp query của hàng đợi cho người dùng đó và chờ cả hai
-   * qua `fetchQuery` để báo lỗi đúng như bản thủ công — lỗi thì hiện
-   * thông báo không tải được, hàng đợi cũ (nếu có) vẫn ở lại.
-   */
   async function loadReviewQueue() {
     const uid = reviewUserId.trim();
     if (!uid) return;
@@ -317,18 +253,11 @@ export function CompetencyAdmin() {
     }
   }
 
-  /**
-   * Sau thao tác duyệt, bản thủ công nạp lại hàng đợi theo đúng id
-   * đang nhập ở ô hàng đợi: nếu id đó là người dùng khác với hàng đợi
-   * đang hiển thị thì chuyển hàng đợi sang người dùng đó (cặp query tự
-   * tải); trùng thì invalidate của đột biến đã làm mới tại chỗ.
-   */
   function syncQueueWithInput() {
     const uid = reviewUserId.trim();
     if (uid && uid !== queueUserId) setQueueUserId(uid);
   }
 
-  /** Thao tác duyệt trên một plan (start-review/approve/unapprove/complete), xong tải lại hàng đợi. */
   async function planReviewAction(planId: string, action: PlanReviewActionName) {
     setAdminMessage(null);
     try {
@@ -340,7 +269,6 @@ export function CompetencyAdmin() {
     }
   }
 
-  /** Thao tác duyệt trên một usercomp (start-review/approve/reject), xong tải lại hàng đợi. */
   async function usercompReviewAction(usercompId: string, action: UsercompReviewActionName) {
     setAdminMessage(null);
     try {
@@ -384,7 +312,6 @@ export function CompetencyAdmin() {
                     variant="outline"
                     onClick={() => {
                       if (fw.id === selectedFrameworkId) {
-                        // Bấm lại framework đang chọn: nạp lại cây của nó như bản thủ công gọi lại mỗi lần bấm.
                         void competenciesQuery.refetch();
                       } else {
                         setSelectedFrameworkId(fw.id);

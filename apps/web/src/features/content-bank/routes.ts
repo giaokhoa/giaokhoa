@@ -2,9 +2,6 @@ import { type RouteConfig, relative } from '@react-router/dev/routes';
 
 const { index, prefix, route } = relative(import.meta.dirname);
 
-/**
- * Khu route của feature content-bank — Kho học liệu (chuẩn đường dẫn #221, lát R3): tên tài nguyên viết tách là /content-bank; cả ba path cũ viết dính giữ làm lớp tương thích chuyển hướng thay thế sang path mới.
- */
 export default [
   ...prefix('content-bank', [
     index('routes/content-bank.tsx'),

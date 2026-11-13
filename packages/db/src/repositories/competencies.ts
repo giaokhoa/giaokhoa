@@ -1,47 +1,10 @@
-/**
- * Repository của cụm NĂNG LỰC trên Kysely.
- *
- * Vai trò: mọi truy cập tới các bảng năng lực của kho trung tâm
- * (competency_framework, competency dạng cây, các bảng liên kết
- * course/module/template/cohort/plan, learning_plans,
- * competency_plan_review, competency_user_comp,
- * competency_evidence) tập trung ở đây. Repository không chứa luật
- * nghiệp vụ — thang đo, rule points, vòng đời plan/review và giao
- * dịch nhiều bảng nằm ở tầng service phía ứng dụng; repository chỉ
- * nhận handle (instance gốc hoặc transaction đang mở) để phía gọi
- * ghép nhiều thao tác vào một transaction khi cần.
- *
- * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
- * - Bên trong repository, truy vấn viết trên interface schema sinh
- *   bằng codegen: tên bảng/cột giữ nguyên snake_case của database.
- * - Bên ngoài, repository trả/nhận các hình dạng dòng camelCase như
- *   phía tiêu thụ đang dùng (khớp `$inferSelect`/`$inferInsert` của
- *   repository cũ trước chuyển đổi): cột được chọn bằng danh sách tường minh
- *   có bí danh, giá trị ghi được ánh xạ từng trường ở các hàm
- *   `*InsertValues`/`*UpdateSet` trong file này. Kiểu dòng công
- *   khai khai ngay trong file này, không import từ file schema
- *   bộ máy cũ.
- * - Giá trị `undefined` bị LOẠI khỏi values/set trước khi gọi
- *   builder (quy tắc T-4 đã chốt ở pilot); mọi giá trị where là
- *   tham số bắt buộc.
- * - Cột jsonb khi ghi (`scale_configuration`, `rule_config`) đi
- *   qua helper serialize tường minh + ép kiểu `::jsonb`
- *   ({@link jsonbValue}) — khuôn duy nhất cho mọi giá trị jsonb.
- * - `onConflict`: liên kết course/module dùng khoá phức hợp
- *   `columns([...]).doUpdateSet(...)` chỉ cập nhật `rule_outcome`;
- *   các bảng liên kết template/plan dùng `doNothing()` không đích
- *   (mọi va chạm unique đều bỏ qua như đường cũ trước chuyển đổi).
- */
 import { sql, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
 
-/** Handle giao dịch của kho trung tâm — kiểu `Transaction<CentreDB>` của package. */
 export type CompetenciesTx = CentreTx;
-/** Handle đọc/ghi mà repository nhận: transaction đang mở hoặc chính instance gốc. */
 type Db = CentreDb | CentreTx;
 
-/** Một dòng khung năng lực; `scaleConfiguration` là cấu hình thang đo (jsonb không gắn kiểu nghiệp vụ ở tầng repository). */
 export interface FrameworkRow {
   id: string;
   shortName: string;
@@ -56,7 +19,6 @@ export interface FrameworkRow {
   updatedAt: Date;
 }
 
-/** Dữ kiện ghi một khung năng lực mới (khớp `$inferInsert` cũ). */
 export interface NewFramework {
   id?: string;
   shortName: string;
@@ -71,7 +33,6 @@ export interface NewFramework {
   updatedAt?: Date;
 }
 
-/** Một dòng năng lực trong cây của một khung; `ruleConfig` là cấu hình rule points (jsonb không gắn kiểu ở tầng repository). */
 export interface CompetencyRow {
   id: string;
   frameworkId: string;
@@ -89,7 +50,6 @@ export interface CompetencyRow {
   updatedAt: Date;
 }
 
-/** Dữ kiện ghi một năng lực mới (khớp `$inferInsert` cũ). */
 export interface NewCompetency {
   id?: string;
   frameworkId: string;
@@ -107,7 +67,6 @@ export interface NewCompetency {
   updatedAt?: Date;
 }
 
-/** Một dòng liên kết khoá học ↔ năng lực. */
 export interface CourseLinkRow {
   id: string;
   courseId: string;
@@ -117,7 +76,6 @@ export interface CourseLinkRow {
   createdAt: Date;
 }
 
-/** Dữ kiện ghi một liên kết khoá học ↔ năng lực mới. */
 export interface NewCourseLink {
   id?: string;
   courseId: string;
@@ -127,7 +85,6 @@ export interface NewCourseLink {
   createdAt?: Date;
 }
 
-/** Một dòng liên kết course module ↔ năng lực. */
 export interface ModuleLinkRow {
   id: string;
   courseModuleId: string;
@@ -137,7 +94,6 @@ export interface ModuleLinkRow {
   createdAt: Date;
 }
 
-/** Dữ kiện ghi một liên kết course module ↔ năng lực mới. */
 export interface NewModuleLink {
   id?: string;
   courseModuleId: string;
@@ -147,7 +103,6 @@ export interface NewModuleLink {
   createdAt?: Date;
 }
 
-/** Một dòng mẫu kế hoạch học tập. */
 export interface TemplateRow {
   id: string;
   shortName: string;
@@ -160,7 +115,6 @@ export interface TemplateRow {
   updatedAt: Date;
 }
 
-/** Dữ kiện ghi một mẫu kế hoạch học tập mới (khớp `$inferInsert` cũ). */
 export interface NewTemplate {
   id?: string;
   shortName: string;
@@ -173,7 +127,6 @@ export interface NewTemplate {
   updatedAt?: Date;
 }
 
-/** Một dòng kế hoạch học tập của một user. */
 export interface PlanRow {
   id: string;
   name: string;
@@ -187,7 +140,6 @@ export interface PlanRow {
   updatedAt: Date;
 }
 
-/** Dữ kiện ghi một kế hoạch học tập mới (khớp `$inferInsert` cũ). */
 export interface NewPlan {
   id?: string;
   name: string;
@@ -201,7 +153,6 @@ export interface NewPlan {
   updatedAt?: Date;
 }
 
-/** Một dòng lịch sử duyệt của một kế hoạch học tập. */
 export interface PlanReviewRow {
   id: string;
   planId: string;
@@ -213,7 +164,6 @@ export interface PlanReviewRow {
   createdAt: Date;
 }
 
-/** Dữ kiện ghi một dòng lịch sử duyệt mới (khớp `$inferInsert` cũ). */
 export interface NewPlanReview {
   id?: string;
   planId: string;
@@ -225,7 +175,6 @@ export interface NewPlanReview {
   createdAt?: Date;
 }
 
-/** Một dòng vị thế của một user trên một năng lực (usercomp). */
 export interface UsercompRow {
   id: string;
   userId: string;
@@ -240,7 +189,6 @@ export interface UsercompRow {
   updatedAt: Date;
 }
 
-/** Dữ kiện ghi một usercomp mới (khớp `$inferInsert` cũ). */
 export interface NewUsercomp {
   id?: string;
   userId: string;
@@ -255,7 +203,6 @@ export interface NewUsercomp {
   updatedAt?: Date;
 }
 
-/** Một dòng nhật ký bằng chứng cho một usercomp. */
 export interface EvidenceRow {
   id: string;
   userCompetencyId: string;
@@ -269,7 +216,6 @@ export interface EvidenceRow {
   createdAt: Date;
 }
 
-/** Dữ kiện ghi một dòng bằng chứng mới (khớp `$inferInsert` cũ). */
 export interface NewEvidence {
   id?: string;
   userCompetencyId: string;
@@ -283,22 +229,10 @@ export interface NewEvidence {
   createdAt?: Date;
 }
 
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh
- * (khuôn của pilot): serialize + ép kiểu `::jsonb` cho MỌI giá trị
- * jsonb khi ghi, vì driver `pg` hiểu mảng ở cấp cao nhất là mảng
- * PostgreSQL và cột jsonb sẽ lỗi `invalid input syntax for type
- * json`.
- *
- * @param value - Giá trị nghiệp vụ sẽ nằm trong cột jsonb.
- * @returns Biểu thức Kysely mang chuỗi JSON đã serialize, giữ
- *   nguyên kiểu `T` ở tầng TypeScript.
- */
 function jsonbValue<T>(value: T): RawBuilder<T> {
   return sql<T>`${JSON.stringify(value)}::jsonb`;
 }
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng competency_framework (dùng cho cả select lẫn returning). */
 const FRAMEWORK_COLUMNS = [
   'id',
   'short_name as shortName',
@@ -313,7 +247,6 @@ const FRAMEWORK_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng competency. */
 const COMPETENCY_COLUMNS = [
   'id',
   'framework_id as frameworkId',
@@ -331,7 +264,6 @@ const COMPETENCY_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng competency_course_comp. */
 const COURSE_LINK_COLUMNS = [
   'id',
   'course_id as courseId',
@@ -341,7 +273,6 @@ const COURSE_LINK_COLUMNS = [
   'created_at as createdAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng competency_module_comp. */
 const MODULE_LINK_COLUMNS = [
   'id',
   'course_module_id as courseModuleId',
@@ -351,7 +282,6 @@ const MODULE_LINK_COLUMNS = [
   'created_at as createdAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng competency_template. */
 const TEMPLATE_COLUMNS = [
   'id',
   'short_name as shortName',
@@ -364,7 +294,6 @@ const TEMPLATE_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng learning_plans. */
 const PLAN_COLUMNS = [
   'id',
   'name',
@@ -378,7 +307,6 @@ const PLAN_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng competency_plan_review. */
 const PLAN_REVIEW_COLUMNS = [
   'id',
   'plan_id as planId',
@@ -390,7 +318,6 @@ const PLAN_REVIEW_COLUMNS = [
   'created_at as createdAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng competency_user_comp. */
 const USERCOMP_COLUMNS = [
   'id',
   'user_id as userId',
@@ -405,7 +332,6 @@ const USERCOMP_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng competency_evidence. */
 const EVIDENCE_COLUMNS = [
   'id',
   'user_competency_id as userCompetencyId',
@@ -419,7 +345,6 @@ const EVIDENCE_COLUMNS = [
   'created_at as createdAt',
 ] as const;
 
-/** Ánh xạ dữ kiện ghi khung năng lực sang values insert (snake_case), loại `undefined` (quy tắc T-4); `scale_configuration` qua {@link jsonbValue}. */
 function frameworkInsertValues(values: NewFramework): InsertObject<CentreDB, 'competency_framework'> {
   const row: InsertObject<CentreDB, 'competency_framework'> = {
     short_name: values.shortName,
@@ -437,7 +362,6 @@ function frameworkInsertValues(values: NewFramework): InsertObject<CentreDB, 'co
   return row;
 }
 
-/** Ánh xạ dữ kiện ghi năng lực sang values insert (snake_case), loại `undefined` (quy tắc T-4); `rule_config` qua {@link jsonbValue}. */
 function competencyInsertValues(values: NewCompetency): InsertObject<CentreDB, 'competency'> {
   const row: InsertObject<CentreDB, 'competency'> = {
     framework_id: values.frameworkId,
@@ -458,12 +382,6 @@ function competencyInsertValues(values: NewCompetency): InsertObject<CentreDB, '
   return row;
 }
 
-/**
- * Ánh xạ một patch năng lực (hình dạng dòng đầy đủ từng phần như
- * phía tiêu thụ đang truyền) sang set update (snake_case), loại
- * `undefined` từng trường (quy tắc T-4); `rule_config` qua
- * {@link jsonbValue}, giữ NULL tường minh khi patch đặt null.
- */
 function competencyUpdateSet(patch: Partial<CompetencyRow>): UpdateObject<CentreDB, 'competency'> {
   const set: UpdateObject<CentreDB, 'competency'> = {};
   if (patch.id !== undefined) set.id = patch.id;
@@ -482,7 +400,6 @@ function competencyUpdateSet(patch: Partial<CompetencyRow>): UpdateObject<Centre
   return set;
 }
 
-/** Ánh xạ dữ kiện ghi liên kết khoá học ↔ năng lực sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
 function courseLinkInsertValues(values: NewCourseLink): InsertObject<CentreDB, 'competency_course_comp'> {
   const row: InsertObject<CentreDB, 'competency_course_comp'> = {
     course_id: values.courseId,
@@ -495,7 +412,6 @@ function courseLinkInsertValues(values: NewCourseLink): InsertObject<CentreDB, '
   return row;
 }
 
-/** Ánh xạ dữ kiện ghi liên kết course module ↔ năng lực sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
 function moduleLinkInsertValues(values: NewModuleLink): InsertObject<CentreDB, 'competency_module_comp'> {
   const row: InsertObject<CentreDB, 'competency_module_comp'> = {
     course_module_id: values.courseModuleId,
@@ -508,7 +424,6 @@ function moduleLinkInsertValues(values: NewModuleLink): InsertObject<CentreDB, '
   return row;
 }
 
-/** Ánh xạ dữ kiện ghi mẫu kế hoạch sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
 function templateInsertValues(values: NewTemplate): InsertObject<CentreDB, 'competency_template'> {
   const row: InsertObject<CentreDB, 'competency_template'> = {
     short_name: values.shortName,
@@ -524,7 +439,6 @@ function templateInsertValues(values: NewTemplate): InsertObject<CentreDB, 'comp
   return row;
 }
 
-/** Ánh xạ dữ kiện ghi kế hoạch học tập sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
 function planInsertValues(values: NewPlan): InsertObject<CentreDB, 'learning_plans'> {
   const row: InsertObject<CentreDB, 'learning_plans'> = {
     name: values.name,
@@ -541,7 +455,6 @@ function planInsertValues(values: NewPlan): InsertObject<CentreDB, 'learning_pla
   return row;
 }
 
-/** Ánh xạ một patch kế hoạch học tập sang set update (snake_case), loại `undefined` từng trường (quy tắc T-4). */
 function planUpdateSet(patch: Partial<PlanRow>): UpdateObject<CentreDB, 'learning_plans'> {
   const set: UpdateObject<CentreDB, 'learning_plans'> = {};
   if (patch.id !== undefined) set.id = patch.id;
@@ -556,7 +469,6 @@ function planUpdateSet(patch: Partial<PlanRow>): UpdateObject<CentreDB, 'learnin
   return set;
 }
 
-/** Ánh xạ dữ kiện ghi một dòng lịch sử duyệt sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
 function planReviewInsertValues(values: NewPlanReview): InsertObject<CentreDB, 'competency_plan_review'> {
   const row: InsertObject<CentreDB, 'competency_plan_review'> = {
     plan_id: values.planId,
@@ -571,7 +483,6 @@ function planReviewInsertValues(values: NewPlanReview): InsertObject<CentreDB, '
   return row;
 }
 
-/** Ánh xạ dữ kiện ghi usercomp sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
 function usercompInsertValues(values: NewUsercomp): InsertObject<CentreDB, 'competency_user_comp'> {
   const row: InsertObject<CentreDB, 'competency_user_comp'> = {
     user_id: values.userId,
@@ -589,7 +500,6 @@ function usercompInsertValues(values: NewUsercomp): InsertObject<CentreDB, 'comp
   return row;
 }
 
-/** Ánh xạ một patch usercomp sang set update (snake_case), loại `undefined` từng trường (quy tắc T-4). */
 function usercompUpdateSet(patch: Partial<UsercompRow>): UpdateObject<CentreDB, 'competency_user_comp'> {
   const set: UpdateObject<CentreDB, 'competency_user_comp'> = {};
   if (patch.id !== undefined) set.id = patch.id;
@@ -605,7 +515,6 @@ function usercompUpdateSet(patch: Partial<UsercompRow>): UpdateObject<CentreDB, 
   return set;
 }
 
-/** Ánh xạ dữ kiện ghi bằng chứng sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
 function evidenceInsertValues(values: NewEvidence): InsertObject<CentreDB, 'competency_evidence'> {
   const row: InsertObject<CentreDB, 'competency_evidence'> = {
     user_competency_id: values.userCompetencyId,
@@ -622,32 +531,21 @@ function evidenceInsertValues(values: NewEvidence): InsertObject<CentreDB, 'comp
   return row;
 }
 
-/**
- * Kho dữ liệu năng lực: framework, competency (cây), liên kết
- * course/module, template, plan, user competency, evidence và
- * review.
- */
 export class CompetenciesRepository {
   constructor(private readonly handle: CentreDb) {}
 
-  /** Instance gốc của repository. */
   private db(): CentreDb {
     return this.handle;
   }
 
-  /** Handle DB gốc — tầng service mở transaction khi cần ghi nguyên tử nhiều bảng. */
   get dbHandle(): CentreDb {
     return this.db();
   }
 
-  /** Mở một transaction trên kho trung tâm và chạy `fn` với handle giao dịch. */
   async transaction<T>(fn: (tx: CompetenciesTx) => Promise<T>): Promise<T> {
     return this.db().transaction().execute(fn);
   }
 
-  /**
-   * Chèn framework năng lực.
-   */
   async insertFramework(v: NewFramework, db: Db = this.db()): Promise<FrameworkRow> {
     const rows = await db
       .insertInto('competency_framework')
@@ -657,9 +555,6 @@ export class CompetenciesRepository {
     return rows[0]!;
   }
 
-  /**
-   * Lấy framework theo id.
-   */
   async getFramework(id: string, db: Db = this.db()): Promise<FrameworkRow | undefined> {
     const row = await db
       .selectFrom('competency_framework')
@@ -669,9 +564,6 @@ export class CompetenciesRepository {
     return row;
   }
 
-  /**
-   * Liệt kê framework.
-   */
   async listFrameworks(db: Db = this.db()): Promise<FrameworkRow[]> {
     return db
       .selectFrom('competency_framework')
@@ -681,9 +573,6 @@ export class CompetenciesRepository {
       .execute();
   }
 
-  /**
-   * Chèn competency.
-   */
   async insertCompetency(v: NewCompetency, db: Db = this.db()): Promise<CompetencyRow> {
     const rows = await db
       .insertInto('competency')
@@ -693,9 +582,6 @@ export class CompetenciesRepository {
     return rows[0]!;
   }
 
-  /**
-   * Các competency con TRỰC TIẾP của một competency (dùng để kiểm tra rule points).
-   */
   async listChildren(parentId: string, db: Db = this.db()): Promise<CompetencyRow[]> {
     return db
       .selectFrom('competency')
@@ -706,9 +592,6 @@ export class CompetenciesRepository {
       .execute();
   }
 
-  /**
-   * Lấy competency theo id.
-   */
   async getCompetency(id: string, db: Db = this.db()): Promise<CompetencyRow | undefined> {
     const row = await db
       .selectFrom('competency')
@@ -718,9 +601,6 @@ export class CompetenciesRepository {
     return row;
   }
 
-  /**
-   * Competency trong framework.
-   */
   async listCompetencies(frameworkId: string, db: Db = this.db()): Promise<CompetencyRow[]> {
     return db
       .selectFrom('competency')
@@ -731,9 +611,6 @@ export class CompetenciesRepository {
       .execute();
   }
 
-  /**
-   * Cập nhật competency.
-   */
   async updateCompetency(id: string, patch: Partial<CompetencyRow>, db: Db = this.db()): Promise<void> {
     await db
       .updateTable('competency')
@@ -742,13 +619,6 @@ export class CompetenciesRepository {
       .execute();
   }
 
-  /**
-   * Liên kết competency với khoá học. Trùng cặp (khoá, năng lực)
-   * thì cập nhật `rule_outcome` theo giá trị mới. Phía gọi production
-   * luôn truyền ruleOutcome đã kiểm hợp lệ; ca không truyền (chỉ
-   * còn ở tầng repository) lấy mặc định của DB là 'nothing' — khớp
-   * giá trị đường insert cũng sẽ nhận — để mệnh đề SET không rỗng.
-   */
   async insertCourseLink(v: NewCourseLink, db: Db = this.db()): Promise<CourseLinkRow> {
     const rows = await db
       .insertInto('competency_course_comp')
@@ -761,9 +631,6 @@ export class CompetenciesRepository {
     return rows[0]!;
   }
 
-  /**
-   * Liên kết của khoá học.
-   */
   async listCourseLinks(courseId: string, db: Db = this.db()): Promise<CourseLinkRow[]> {
     return db
       .selectFrom('competency_course_comp')
@@ -772,10 +639,6 @@ export class CompetenciesRepository {
       .execute();
   }
 
-  /**
-   * Liên kết competency với course module. Trùng cặp (module, năng
-   * lực) thì cập nhật `rule_outcome` như {@link insertCourseLink}.
-   */
   async insertModuleLink(v: NewModuleLink, db: Db = this.db()): Promise<ModuleLinkRow> {
     const rows = await db
       .insertInto('competency_module_comp')
@@ -788,9 +651,6 @@ export class CompetenciesRepository {
     return rows[0]!;
   }
 
-  /**
-   * Liên kết của module.
-   */
   async listModuleLinks(courseModuleId: string, db: Db = this.db()): Promise<ModuleLinkRow[]> {
     return db
       .selectFrom('competency_module_comp')
@@ -799,9 +659,6 @@ export class CompetenciesRepository {
       .execute();
   }
 
-  /**
-   * Chèn template kế hoạch học tập.
-   */
   async insertTemplate(v: NewTemplate, db: Db = this.db()): Promise<TemplateRow> {
     const rows = await db
       .insertInto('competency_template')
@@ -811,9 +668,6 @@ export class CompetenciesRepository {
     return rows[0]!;
   }
 
-  /**
-   * Lấy template theo id.
-   */
   async getTemplate(id: string, db: Db = this.db()): Promise<TemplateRow | undefined> {
     const row = await db
       .selectFrom('competency_template')
@@ -823,9 +677,6 @@ export class CompetenciesRepository {
     return row;
   }
 
-  /**
-   * Liệt kê template.
-   */
   async listTemplates(db: Db = this.db()): Promise<TemplateRow[]> {
     return db
       .selectFrom('competency_template')
@@ -834,9 +685,6 @@ export class CompetenciesRepository {
       .execute();
   }
 
-  /**
-   * Thêm competency vào template.
-   */
   async addTemplateCompetency(templateId: string, competencyId: string, db: Db = this.db()): Promise<void> {
     await db
       .insertInto('competency_template_comp')
@@ -845,9 +693,6 @@ export class CompetenciesRepository {
       .execute();
   }
 
-  /**
-   * Competency của template.
-   */
   async listTemplateCompetencies(templateId: string, db: Db = this.db()): Promise<CompetencyRow[]> {
     const links = await db
       .selectFrom('competency_template_comp')
@@ -863,9 +708,6 @@ export class CompetenciesRepository {
     return out;
   }
 
-  /**
-   * Gắn cohort vào template (để sinh plan hàng loạt).
-   */
   async addTemplateCohort(templateId: string, cohortId: string, db: Db = this.db()): Promise<void> {
     await db
       .insertInto('competency_template_cohort')
@@ -874,9 +716,6 @@ export class CompetenciesRepository {
       .execute();
   }
 
-  /**
-   * Cohort của template.
-   */
   async listTemplateCohorts(templateId: string, db: Db = this.db()): Promise<string[]> {
     const rows = await db
       .selectFrom('competency_template_cohort')
@@ -886,9 +725,6 @@ export class CompetenciesRepository {
     return rows.map((r) => r.cohortId);
   }
 
-  /**
-   * Chèn learning plan.
-   */
   async insertPlan(v: NewPlan, db: Db = this.db()): Promise<PlanRow> {
     const rows = await db
       .insertInto('learning_plans')
@@ -898,9 +734,6 @@ export class CompetenciesRepository {
     return rows[0]!;
   }
 
-  /**
-   * Lấy plan theo id.
-   */
   async getPlan(id: string, db: Db = this.db()): Promise<PlanRow | undefined> {
     const row = await db
       .selectFrom('learning_plans')
@@ -910,9 +743,6 @@ export class CompetenciesRepository {
     return row;
   }
 
-  /**
-   * Plan của user.
-   */
   async listPlansForUser(userId: string, db: Db = this.db()): Promise<PlanRow[]> {
     return db
       .selectFrom('learning_plans')
@@ -922,9 +752,6 @@ export class CompetenciesRepository {
       .execute();
   }
 
-  /**
-   * Plan đã sinh từ template cho user (chống trùng).
-   */
   async findPlanFromTemplate(userId: string, templateId: string, db: Db = this.db()): Promise<PlanRow | undefined> {
     const row = await db
       .selectFrom('learning_plans')
@@ -934,9 +761,6 @@ export class CompetenciesRepository {
     return row;
   }
 
-  /**
-   * Cập nhật plan (trạng thái, reviewer…).
-   */
   async updatePlan(id: string, patch: Partial<PlanRow>, db: Db = this.db()): Promise<void> {
     await db
       .updateTable('learning_plans')
@@ -945,9 +769,6 @@ export class CompetenciesRepository {
       .execute();
   }
 
-  /**
-   * Thêm competency vào plan.
-   */
   async addPlanCompetency(planId: string, competencyId: string, db: Db = this.db()): Promise<void> {
     await db
       .insertInto('competency_plan_comp')
@@ -956,9 +777,6 @@ export class CompetenciesRepository {
       .execute();
   }
 
-  /**
-   * Competency id trong plan.
-   */
   async listPlanCompetencyIds(planId: string, db: Db = this.db()): Promise<string[]> {
     const rows = await db
       .selectFrom('competency_plan_comp')
@@ -969,16 +787,10 @@ export class CompetenciesRepository {
     return rows.map((r) => r.competencyId);
   }
 
-  /**
-   * Ghi một vòng review của plan.
-   */
   async insertPlanReview(v: NewPlanReview, db: Db = this.db()): Promise<void> {
     await db.insertInto('competency_plan_review').values(planReviewInsertValues(v)).execute();
   }
 
-  /**
-   * Các vòng review của plan.
-   */
   async listPlanReviews(planId: string, db: Db = this.db()): Promise<PlanReviewRow[]> {
     return db
       .selectFrom('competency_plan_review')
@@ -988,12 +800,6 @@ export class CompetenciesRepository {
       .execute();
   }
 
-  /**
-   * Tìm bản ghi năng lực của user (usercomp) theo user + competency.
-   * Phạm vi plan/khoá: NULL là một giá trị khớp tường minh (điều
-   * kiện `is null`), không phải "không lọc" — giữ nguyên ngữ nghĩa
-   * của đường cũ trước chuyển đổi.
-   */
   async findUsercomp(
     userId: string,
     competencyId: string,
@@ -1016,9 +822,6 @@ export class CompetenciesRepository {
     return row;
   }
 
-  /**
-   * Lấy usercomp theo id.
-   */
   async getUsercomp(id: string, db: Db = this.db()): Promise<UsercompRow | undefined> {
     const row = await db
       .selectFrom('competency_user_comp')
@@ -1028,9 +831,6 @@ export class CompetenciesRepository {
     return row;
   }
 
-  /**
-   * Chèn usercomp.
-   */
   async insertUsercomp(v: NewUsercomp, db: Db = this.db()): Promise<UsercompRow> {
     const rows = await db
       .insertInto('competency_user_comp')
@@ -1040,9 +840,6 @@ export class CompetenciesRepository {
     return rows[0]!;
   }
 
-  /**
-   * Cập nhật usercomp (proficiency, review status, grader).
-   */
   async updateUsercomp(id: string, patch: Partial<UsercompRow>, db: Db = this.db()): Promise<void> {
     await db
       .updateTable('competency_user_comp')
@@ -1051,9 +848,6 @@ export class CompetenciesRepository {
       .execute();
   }
 
-  /**
-   * Usercomp thuộc các competency của plan.
-   */
   async listUsercompsForPlan(planId: string, userId: string, db: Db = this.db()): Promise<UsercompRow[]> {
     return db
       .selectFrom('competency_user_comp')
@@ -1062,9 +856,6 @@ export class CompetenciesRepository {
       .execute();
   }
 
-  /**
-   * Mọi usercomp của user.
-   */
   async listUsercompsForUser(userId: string, db: Db = this.db()): Promise<UsercompRow[]> {
     return db
       .selectFrom('competency_user_comp')
@@ -1074,9 +865,6 @@ export class CompetenciesRepository {
       .execute();
   }
 
-  /**
-   * Ghi một bằng chứng (evidence) cho usercomp.
-   */
   async insertEvidence(v: NewEvidence, db: Db = this.db()): Promise<EvidenceRow> {
     const rows = await db
       .insertInto('competency_evidence')
@@ -1086,9 +874,6 @@ export class CompetenciesRepository {
     return rows[0]!;
   }
 
-  /**
-   * Bằng chứng của usercomp.
-   */
   async listEvidence(userCompetencyId: string, db: Db = this.db()): Promise<EvidenceRow[]> {
     return db
       .selectFrom('competency_evidence')

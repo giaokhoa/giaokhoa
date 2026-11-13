@@ -11,7 +11,6 @@ import { QUIZ_COMPONENT } from './quiz-shared.service';
 import { QUIZ_CAPABILITIES } from './quiz-shared.service';
 import type { MatrixSpecification, SpecificationSlot, PinRow } from './quiz.service';
 
-/** Nhãn hiển thị của các dạng câu trong tài liệu đặc tả. */
 export const QTYPE_LABELS: Record<string, string> = {
   multichoice: 'Trắc nghiệm',
   truefalse: 'Đúng–Sai',
@@ -19,7 +18,6 @@ export const QTYPE_LABELS: Record<string, string> = {
   essay: 'Tự luận',
 };
 
-/** Nhãn hiển thị của các mức nhận thức trong tài liệu đặc tả. */
 export const LEVEL_LABELS: Record<string, string> = {
   biet: 'Biết',
   hieu: 'Hiểu',
@@ -27,7 +25,6 @@ export const LEVEL_LABELS: Record<string, string> = {
   van_dung_cao: 'Vận dụng cao',
 };
 
-/** Bung view model đặc tả thành các dòng phẳng cho bảng xuất file (một dòng = một ô ma trận; cột YCCĐ = mọi YCCĐ thuộc ĐVK của ô). */
 export function flattenSpecification(spec: MatrixSpecification): {
   index: number; topicTitle: string; nodeTitle: string; outcomeText: string;
   levelLabel: string; qtypeLabel: string; questionCount: number; cellScore: number; slotText: string;
@@ -39,7 +36,6 @@ export function flattenSpecification(spec: MatrixSpecification): {
   let index = 0;
   for (const topic of spec.topics) {
     for (const node of topic.nodes) {
-      // Dòng văn của outcome program được tiền tố bằng mã YCCĐ vị trí (P2, sổ mục B) khi có mã; derived trình bày nguyên văn gốc (tiền tố mã của gốc) kèm bản tách mức như trước.
       const outcomeText = node.outcomes.map((outcome) => {
         const prefix = outcome.code ? `${outcome.code} ` : '';
         return outcome.derivedContent
@@ -68,19 +64,6 @@ export function flattenSpecification(spec: MatrixSpecification): {
   return rows;
 }
 
-/**
- * Cụm sinh đề và đặc tả của QuizService (cụm 3 của issue #295): ma
- * trận dùng cho sinh đề, rút slot cố định, đặc tả ma trận (dựng, xuất
- * file, render), và cặp lượt làm trên giấy `resolvePaperLayout` /
- * `recordPaperAttempt` (thuộc cụm này theo bản đồ đặc tả, dù nằm xen
- * trong vùng lượt làm của file gốc). `recordPaperAttempt` gọi chốt
- * lượt qua `finalizeAttempt` của cụm lượt làm; còn lại cụm chỉ gọi
- * xuống tầng thấp dùng chung.
- *
- * Ba khối top-level phục vụ đặc tả (`QTYPE_LABELS`, `LEVEL_LABELS`,
- * `flattenSpecification`) chuyển về đây cùng nơi dùng thật, facade
- * re-export lại để bề mặt import cũ không đổi.
- */
 
 export class QuizGenerationService {
   constructor(
@@ -92,7 +75,6 @@ export class QuizGenerationService {
     private readonly attempts: QuizAttemptsService,
   ) {}
 
-  /** Trộn ngẫu nhiên một bản sao của mảng (Fisher–Yates) cho các phép rút câu. */
   private shuffled<T>(items: T[]): T[] {
     const out = [...items];
     for (let i = out.length - 1; i > 0; i--) {
@@ -102,7 +84,6 @@ export class QuizGenerationService {
     return out;
   }
 
-  /** Chi tiết thiếu câu theo từng ô cho lỗi cứng của generate (mục C.3 bước 1). */
   private async matrixDeficits(actorId: string, cells: ExamMatrixCellRow[]): Promise<{
     deficits: { cellId: string; curriculumNodeId: string; cognitiveLevel: string; qtype: string; required: number; available: number; deficit: number }[];
     pools: Map<string, { candidates: QuestionView[] }>;
@@ -124,14 +105,7 @@ export class QuizGenerationService {
     return { deficits, pools };
   }
 
-  // --- Facade cho EB-2 (generate hai bước matrix → paper → deploy) -------------
 
-  /**
-   * Đọc ma trận cho generate (cổng matrix:edit tại context của
-   * bank — E-8 qua requireMatrixCap) + các ô. EB-2: ExamsService
-   * là phía điều phối generate; QuizService chỉ còn là nguồn dữ liệu
-   * ma trận/pool và phía ghi slots vào quiz.
-   */
   async matrixForGeneration(actorId: string, matrixId: string): Promise<{ matrix: ExamMatrixRow; cells: ExamMatrixCellRow[] }> {
     const matrix = await this.shared.getMatrixRow(matrixId);
     await this.shared.requireMatrixCap(actorId, matrix, QUIZ_CAPABILITIES.manageMatrix);
@@ -142,16 +116,6 @@ export class QuizGenerationService {
     return { matrix, cells };
   }
 
-  /**
-   * Rút MỘT bộ câu cố định cho các ô (cơ chế fixed của Chặng 3, tách
-   * ra dùng chung cho generate snapshot + materialize recipe ở
-   * EB-2): thiếu câu ở BẤT KỲ ô nào → 422
-   * `quiz.matrix_insufficient_questions` kèm chi tiết từng ô, không
-   * rút một phần. Không lặp câu trong toàn bộ; mọi ô — kể cả ô
-   * truefalse — rút theo CÂU (một câu TF-A là một slot nguyên vẹn
-   * mang trọn điểm của một đơn vị ô, không chia phần cho từng ý).
-   * page = thứ tự của ô trong ma trận.
-   */
   async drawFixedSlots(actorId: string, cells: ExamMatrixCellRow[]): Promise<{
     questionId: string; matrixCellId: string; maxMark: number; page: number;
   }[]> {
@@ -183,7 +147,6 @@ export class QuizGenerationService {
     return out;
   }
 
-  /** Câu có thuộc pool của ô hay không (pool thô theo ĐVK + mức + dạng + ready — điểm neo swap-cùng-ô của EB-2 như swapSlot đã dùng). */
   async cellPoolContains(cellId: string, questionId: string): Promise<boolean> {
     const cell = await this.repo.getMatrixCell(cellId);
     if (!cell) return false;
@@ -191,7 +154,6 @@ export class QuizGenerationService {
     return candidates.some((v) => v.question.id === questionId);
   }
 
-  /** Đề đã có lượt làm thật thì cấu trúc slots đóng băng (đúng ngữ nghĩa Chặng 1: attempt đã pin câu). */
   private async assertNoRealAttempts(quiz: PinRow): Promise<void> {
     const attempts = await this.repo.listAttempts(quiz.id, QUIZ_PIN_ATTEMPTS_LIMIT);
     if (attempts.some((a) => !a.preview)) {
@@ -199,18 +161,6 @@ export class QuizGenerationService {
     }
   }
 
-  /**
-   * Dựng view model bản đặc tả theo Mẫu 2 của phụ lục CV 7991: hàng
-   * Chủ đề → Nội dung/đơn vị kiến thức → YCCĐ (cột YCCĐ = mọi YCCĐ
-   * thuộc ĐVK của ô: nguyên văn chương trình `source_kind='program'`
-   * + bản tách mức của tổ chuyên môn `derived`), cột số câu/điểm
-   * theo dạng × mức từ các ô;
-   * khi đã sinh đề (pinId của đề sinh từ chính ma trận này) thì thêm
-   * vị trí slot thật — đề per_student ghi rõ rút ngẫu nhiên theo ô.
-   * Chân bảng: tổng theo dạng (điểm + %). Trường nhãn năng lực để dành
-   * trong view model (competencyRefs) — chặng này chưa có cơ chế gắn
-   * mã năng lực vào outcome nên luôn rỗng.
-   */
   async getMatrixSpecification(actorId: string, matrixId: string, pinId?: string): Promise<MatrixSpecification> {
     const matrix = await this.shared.getMatrixRow(matrixId);
     await this.shared.requireMatrixCap(actorId, matrix, QUIZ_CAPABILITIES.viewMatrix);
@@ -230,14 +180,6 @@ export class QuizGenerationService {
     });
   }
 
-  /**
-   * Bản đặc tả neo theo ĐỀ (EB-3, điểm E-6 của hồ sơ ngân hàng đề):
-   * cùng một builder với đặc tả theo ma trận, nhưng vị trí câu lấy từ
-   * SLOTS CỦA PAPER VERSION đã ghim (đề là neo chính; quiz chỉ là một
-   * lần triển khai của đề). Hàm này KHÔNG tự gác capability của ma
-   * trận — cổng quyền nằm ở phía gọi (ExamPapersService gác theo đề,
-   * gồm lớp bảo mật đề định kỳ A.3.4).
-   */
   async buildSpecificationForPaper(actorId: string, matrixId: string, paperSlots: { matrixCellId: string | null; position: number; questionId: string | null }[]): Promise<MatrixSpecification> {
     const matrix = await this.shared.getMatrixRow(matrixId);
     return this.buildSpecification(actorId, matrix, {
@@ -246,22 +188,6 @@ export class QuizGenerationService {
     });
   }
 
-  /**
-   * Builder dùng chung của bản đặc tả: lưới ô của ma trận + (tuỳ
-   * chọn) vị trí câu của một tập slot cụ thể — slot của quiz (đặc tả
-   * theo ma trận, C.6) hoặc slot của paper version (đặc tả theo đề,
-   * E-6). `slots = null` nghĩa là bản đặc tả dự kiến chưa có vị trí.
-   * Các lần đọc môn/chương trình/node/YCCĐ trong builder đi qua
-   * đường tham chiếu nội bộ của CurriculumService (không tự đòi
-   * `curriculum:view` tại context của môn), vì cổng quyền của bản
-   * đặc tả đã neo ở nơi khác trước khi vào builder: wrapper theo
-   * ma trận chốt quyền xem ma trận tại bank đích, còn bản đặc tả
-   * theo đề thì phía gọi của đề đã gác cổng của đề. Đọc qua đường
-   * công khai ở đây từng chặn nhầm giáo viên chủ bank cá nhân
-   * (đã qua cổng xem ma trận) khi môn neo tại context hệ thống.
-   * Tham số `actorId` giữ lại cho chữ ký chung của builder; các
-   * đường tham chiếu nội bộ không dùng tới nó.
-   */
   private async buildSpecification(_actorId: string, matrix: ExamMatrixRow, opts: {
     quiz: { id: string; name: string } | null;
     slots: SpecificationSlot[] | null;
@@ -280,8 +206,6 @@ export class QuizGenerationService {
       return node;
     };
     type OutcomeAcc = MatrixSpecification['topics'][number]['nodes'][number]['outcomes'][number];
-    // Mã bản ghi theo node (tra sổ đăng ký) — đệm theo node để mỗi
-    // node chỉ tra một lần trong một lượt dựng đặc tả.
     const recordIdByNode = new Map<string, string | null>();
     const recordIdForNode = async (nodeId: string): Promise<string | null> => {
       let recordId = recordIdByNode.get(nodeId);
@@ -291,7 +215,6 @@ export class QuizGenerationService {
       }
       return recordId;
     };
-    /** Mã YCCĐ vị trí từ mã bản ghi + position; null khi node không thuộc dataset. */
     const outcomeCode = (recordId: string | null, position: number): string | null =>
       (recordId ? `${recordId}.${String(position).padStart(2, '0')}` : null);
     type NodeCells = MatrixSpecification['topics'][number]['nodes'][number]['cells'];
@@ -299,10 +222,7 @@ export class QuizGenerationService {
     const byForm = new Map<string, { qtype: string; questionCount: number; score: number }>();
     let totalQuestions = 0;
     for (const cell of cells) {
-      // Ô neo ĐVK (issue #249): cột YCCĐ của bản đặc tả = MỌI YCCĐ
-      // thuộc ĐVK của ô (program + derived tách mức như trước).
       const node = await getNode(cell.curriculumNodeId);
-      // Chủ đề = node tổ tiên có kind 'topic'; không có thì lấy node gốc cao nhất của chuỗi.
       let topic = node;
       let cursor = node;
       while (cursor.parentId) {
@@ -321,10 +241,6 @@ export class QuizGenerationService {
       if (!nodeAcc) {
         nodeAcc = { nodeId: node.id, nodeTitle: node.title, outcomes: new Map(), cells: [] };
         topicAcc.nodes.set(node.id, nodeAcc);
-        // listOutcomes mặc định đã loại dòng program ĐÃ RÚT. Derived
-        // mang trạng thái hiện hành của GỐC: gốc đã rút (hoặc không
-        // còn tra được) thì derived cũng rời bản đặc tả — cùng một
-        // định nghĩa "hiện hành" với pool sinh đề (issue #161).
         const outcomes = await this.curriculum.listOutcomesReference(node.id);
         for (const outcome of outcomes) {
           let programContent: string;
@@ -336,7 +252,6 @@ export class QuizGenerationService {
             if (!parent || parent.retiredAt !== null) continue;
             programContent = parent.content;
             derivedContent = outcome.content;
-            // Derived là ý tách của gốc: position/mã là của dòng gốc.
             position = parent.position;
             code = outcomeCode(await recordIdForNode(parent.nodeId), parent.position);
           } else {
@@ -388,11 +303,6 @@ export class QuizGenerationService {
     };
   }
 
-  /**
-   * Xuất bản đặc tả ra file (xlsx qua exceljs — cùng hạ tầng với xuất
-   * điểm vnEdu; docx qua gói docx): cùng một view model, hai định dạng
-   * nộp/lưu hồ sơ. Định dạng khác → 400 quiz.spec_export_format.
-   */
   async exportMatrixSpecification(actorId: string, matrixId: string, format: string, pinId?: string): Promise<{ filename: string; contentType: string; buffer: Buffer }> {
     if (format !== 'xlsx' && format !== 'docx') {
       throw new BadRequestException({ message: 'Specification export format must be xlsx or docx', code: 'quiz.spec_export_format' });
@@ -401,12 +311,6 @@ export class QuizGenerationService {
     return this.renderSpecification(spec, format);
   }
 
-  /**
-   * Render một view model đặc tả ra file (xlsx qua exceljs — cùng hạ
-   * tầng với xuất điểm vnEdu; docx qua gói docx): dùng chung cho đặc
-   * tả theo ma trận (C.6), đặc tả theo đề và bản chụp trong bộ hồ sơ
-   * (EB-3) — cùng một view model, hai định dạng nộp/lưu hồ sơ.
-   */
   async renderSpecification(spec: MatrixSpecification, format: string): Promise<{ filename: string; contentType: string; buffer: Buffer }> {
     if (format !== 'xlsx' && format !== 'docx') {
       throw new BadRequestException({ message: 'Specification export format must be xlsx or docx', code: 'quiz.spec_export_format' });
@@ -477,17 +381,7 @@ export class QuizGenerationService {
     return { filename: `ban-dac-ta-${spec.matrix.id.slice(0, 8)}.docx`, contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', buffer };
   }
 
-  // --- thông tin cho người xem ---------------------------------------------------
 
-  /**
-   * Phân giải layout phiếu in cho một quiz (cổng quiz:gradepaper): mọi
-   * slot phải là câu CỐ ĐỊNH thuộc loại trắc nghiệm/đúng-sai — phiếu
-   * giấy là một đề cố định, slot ngẫu nhiên theo category/ma trận
-   * không in được. Mỗi slot được GHIM vào đúng version sẽ in (slot
-   * pinned dùng version đã ghim; slot follow_latest ghim version mới
-   * nhất tại thời điểm sinh phiếu) kèm đáp án của version đó theo thứ
-   * tự in, để lúc ghi điểm chấm đúng bản đã phát cho học sinh.
-   */
   async resolvePaperLayout(actorId: string, pinId: string): Promise<{ quiz: PinRow; layout: PaperSlotLayout[] }> {
     const quiz = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, quiz, QUIZ_CAPABILITIES.gradePaper);
@@ -517,11 +411,6 @@ export class QuizGenerationService {
       let answerIds: string[];
       let statementIds: string[] = [];
       if (qtype === 'truefalse') {
-        // TF-A: một slot phiếu mang 4 ý, mỗi ý một cặp ô Đ/S theo đúng
-        // thứ tự mệnh đề của version đã ghim — layout ghi statementIds
-        // để lúc ghi điểm quy các cặp ô về đáp án theo từng mệnh đề.
-        // Đáp án đúng KHÔNG nằm ở layout (nó ở phía đáp án của version,
-        // engine tự tra khi chấm).
         const statements = getTrueFalseStatements(content.version.questionText as RichTextDocument);
         if (!statements || statements.length !== TRUE_FALSE_STATEMENT_COUNT) {
           throw new UnprocessableEntityException({ message: 'True/false question is missing its four statements', code: 'paper.bad_truefalse' });
@@ -543,20 +432,6 @@ export class QuizGenerationService {
     return { quiz, layout };
   }
 
-  /**
-   * Ghi một phiếu giấy đã được giáo viên xác nhận thành attempt của
-   * học sinh (cổng quiz:gradepaper, kiểm tại resolvePaperLayout của lô
-   * — hàm này tin layout do module paper-grading truyền vào sau khi đã
-   * kiểm quyền). Attempt là attempt THẬT của học sinh: usage dựng từ
-   * đúng các version đã ghim trên phiếu, đáp án nộp qua engine như
-   * attempt online, chốt bằng đúng đường finalizeAttempt (điểm chảy
-   * vào sổ điểm như thường). appliedSettings mang dấu nguồn giấy
-   * {source: 'paper-scan', scanId, batchId, variantCode} để báo cáo
-   * phân biệt được lượt thi giấy. responses[i] là chuỗi đáp án theo
-   * ngữ nghĩa engine cho slot i (multichoice: answerId đã chọn;
-   * truefalse TF-A: JSON bản đồ statementId → boolean quy từ 4 cặp ô
-   * Đ/S của slot; null: để trống).
-   */
   async recordPaperAttempt(actorId: string, pinId: string, input: {
     studentId: string;
     layout: PaperSlotLayout[];
@@ -599,12 +474,9 @@ export class QuizGenerationService {
       const updated = await this.shared.getAttemptRow(row.id);
       return { attemptId: updated.id, state: updated.state, sumGrades: updated.sumGrades };
     } catch (err) {
-      // Cùng kỷ luật dọn dẹp với startAttempt: attempt chưa thành hình
-      // thì xoá usage mồ côi (hàng attempt, nếu đã chèn, cascade theo).
       await this.questions.deleteUsage(usage.usage.id).catch(() => undefined);
       throw err;
     }
   }
 
-  // --- báo cáo + chấm tay ---------------------------------------------------------
 }

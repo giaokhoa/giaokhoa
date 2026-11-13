@@ -57,7 +57,6 @@ describe('Khối HealthPage', () => {
       </MemoryRouter>,
     );
 
-    // Dữ liệu loader hiện ngay, và fetch phía client không hề chạy.
     expect(await screen.findByText('2026-10-22T00:00:00.000Z')).toBeInTheDocument();
     expect(screen.getAllByText('up')).toHaveLength(2);
     expect(fetchMock).not.toHaveBeenCalled();
@@ -90,7 +89,6 @@ describe('Khối HealthPage', () => {
     expect(await screen.findByText('2026-10-22T00:00:00.000Z')).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra trạng thái API' }));
-    // Sau khi bấm: đúng 1 request và dữ liệu mới thay dữ liệu loader.
     expect(await screen.findByText('2026-10-22T02:00:00.000Z')).toBeInTheDocument();
     expect(screen.getByText('degraded')).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);

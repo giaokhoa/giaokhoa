@@ -1,8 +1,3 @@
-/**
- * Dịch vụ chấm bài giấy bằng camera (CAM-0, issue #112): sinh lô IN phiếu (ghim layout qua QuizService.resolvePaperLayout + chụp roster lớp + mã đề 4 số), sinh PDF phiếu (mặc định phiếu DÙNG CHUNG in hàng loạt; cá nhân hoá là tuỳ chọn hẹp), tiếp nhận ảnh chụp theo lô in hoặc theo BUỔI (lô chụp — định tuyến từng phiếu về lô in theo mã đề đọc từ lưới tô, QR làm lớp dự phòng) qua CỔNG CHẤT LƯỢNG (ảnh hỏng bị từ chối ngay, không vào hàng chờ), đọc OMR xác định, hai hàng chờ của giáo viên (gán lô/gán định danh + xác nhận ca mơ hồ) và ghi attempt "thi giấy" qua QuizService.recordPaperAttempt.
- *
- * Nguyên tắc cứng của lát: điểm KHÔNG BAO GIỜ tự chảy — phiếu chỉ được ghi khi định danh chắc chắn (QR thuộc lô + có trong roster, hoặc mã tô đúng số kiểm tra và khớp roster, hoặc giáo viên gán tay) và mọi câu mơ hồ đã được giáo viên xác nhận. Mã đề cũng vậy: đọc không chắc chắn thì phiếu vào hàng chờ, hệ thống KHÔNG đoán mã đề và không chấm theo layout của mã đề khác. Mọi thao tác gán/sửa của giáo viên trong hàng chờ đều ghi event log qua outbox (biên bản sửa lỗi của lớp học). Mọi thao tác đều gác bằng capability `quiz:gradepaper` tại context của hoạt động quiz, giống hệt các đường chấm khác của Quiz.
- */
 import { randomUUID } from 'node:crypto';
 import {
   BadRequestException, ConflictException, Injectable, NotFoundException, UnprocessableEntityException,
@@ -36,7 +31,6 @@ const GRADE_PAPER_CAP = 'quiz:gradepaper';
 export interface ScanUploadOutcome {
   fileName: string;
   stored: boolean;
-  /** Lý do cổng chất lượng từ chối (chỉ khi stored = false): missing_fiducials | blurry | glare | too_dark | unreadable_image. */
   reasons?: string[];
   scan?: PaperScan;
 }
@@ -55,9 +49,7 @@ export class PaperGradingService {
     private readonly outbox: OutboxService,
   ) {}
 
-  // --- helpers ---------------------------------------------------------------
 
-  /** Context của course module chứa quiz — cùng quy ước với QuizService. */
   private async cmContextId(quiz: PinRow): Promise<string> {
     if (quiz.cmId) {
       const ctx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.MODULE, quiz.cmId);
@@ -86,7 +78,6 @@ export class PaperGradingService {
     return row;
   }
 
-  /** Layout của lô theo thứ tự in (slot tăng dần) — vị trí thứ i trong mảng này là hàng thứ i+1 trên phiếu. */
   private sortedLayout(batch: PaperBatchRow) {
     return [...batch.layout].sort((a, b) => a.slot - b.slot);
   }
@@ -106,17 +97,11 @@ export class PaperGradingService {
     };
   }
 
-  /** Hình học template của một lô in (theo layout đã ghim + cấu hình số cột lưới mã của lô). */
   private geometryOf(batch: PaperBatchRow): SheetGeometry {
     const layout = this.sortedLayout(batch);
     return computeSheetGeometry(layout.map((l) => l.optionCount), batch.codeDigits);
   }
 
-  /**
-   * Ứng viên gợi ý cho hàng chờ định danh của một phiếu: học sinh
-   * trong roster của lô in CHƯA khớp phiếu nào khác, giữ đúng thứ tự
-   * roster (thứ tự danh sách lớp — kiêm gợi ý theo thứ tự thu bài).
-   */
   private candidatesFrom(rows: PaperScanRow[], self: PaperScanRow, batch: PaperBatchRow): PaperRosterEntry[] {
     const held = new Set(rows
       .filter((s) => s.batchId === batch.id && s.id !== self.id && s.studentId)
@@ -145,7 +130,6 @@ export class PaperGradingService {
     };
   }
 
-  /** View đầy đủ của một phiếu: tự nạp lô in (có thể chưa gắn) + ứng viên hàng chờ. */
   private async scanViewFull(row: PaperScanRow): Promise<PaperScan> {
     const batch = row.batchId ? (await this.repo.getBatch(row.batchId)) ?? null : null;
     if (!batch) return this.scanView(row, null, []);
@@ -166,19 +150,7 @@ export class PaperGradingService {
     };
   }
 
-  // --- lô phiếu ---------------------------------------------------------------
 
-  /**
-   * Sinh một lô IN phiếu (một mã đề): layout ghim qua QuizService (cổng
-   * quiz:gradepaper + chặn slot ngẫu nhiên/loại câu không in được nằm
-   * ở đó), roster chụp từ danh sách ghi danh đang hiệu lực của khoá —
-   * chỉ học sinh có quyền làm bài (quiz:attempt) mới có phiếu, sắp
-   * theo tên để đánh mã tô theo thứ tự danh sách. Mã đề 4 số
-   * (examCode): giáo viên truyền hoặc hệ thống tự cấp dãy từ 1001 —
-   * học sinh ghi + tô mã này lên phiếu dùng chung, hệ thống khớp
-   * phiếu đã chụp về đúng lô theo mã đó. codeDigits chọn lưới mã học
-   * sinh: 4 (tại lớp) hoặc 8 (thi thử SBD).
-   */
   async createBatch(actorId: string, pinId: string, input: CreatePaperBatch): Promise<PaperBatch> {
     const { quiz, layout } = await this.quiz.resolvePaperLayout(actorId, pinId);
     const existing = await this.repo.listBatchesForPin(pinId);
@@ -234,7 +206,6 @@ export class PaperGradingService {
     }
   }
 
-  /** Mã đề số tự cấp cho lô mới: dãy 4 số bắt đầu từ 1001, tăng theo mã lớn nhất đã có của quiz. */
   private nextExamCode(used: (string | null)[]): string {
     let max = 1000;
     for (const code of used) {
@@ -261,15 +232,6 @@ export class PaperGradingService {
     return this.batchView(row);
   }
 
-  /**
-   * Tải PDF phiếu của lô: MẶC ĐỊNH là phiếu trắng DÙNG CHUNG theo
-   * buổi/lô (in hàng loạt một chồng, học sinh tự ghi + tô mã — số bản
-   * mặc định bằng sĩ số roster, giáo viên truyền `copies` để in thêm
-   * dự phòng). Cá nhân hoá là TUỲ CHỌN HẸP do giáo viên chủ động chọn
-   * (`kind=personalized` cho cả danh sách, hoặc `studentId` cho một
-   * học sinh — nhóm nhỏ/kiểm tra bù/hỗ trợ đặc biệt); `kind=blank`
-   * vẫn được chấp nhận như tên cũ của phiếu dùng chung.
-   */
   async sheetsPdf(actorId: string, batchId: string, opts: { studentId?: string; kind?: string; copies?: number }): Promise<{ buffer: Buffer; fileName: string }> {
     const batch = await this.repo.getBatch(batchId);
     if (!batch) throw new NotFoundException({ message: `Paper batch ${batchId} not found`, code: 'paper.batch_not_found' });
@@ -301,15 +263,7 @@ export class PaperGradingService {
     return { buffer, fileName: `phieu-tra-loi-${batch.variantCode}-${suffix}.pdf` };
   }
 
-  // --- tiếp nhận ảnh ------------------------------------------------------------
 
-  /**
-   * Định danh một phiếu đã đọc theo lô in đích: QR cá nhân hoá (phải
-   * thuộc đúng lô này + học sinh có trong roster) → ô tô mã (đúng số
-   * kiểm tra + mã có trong roster). Một học sinh đã có phiếu khác
-   * trong cùng lô giữ thì phiếu này KHÔNG tự nhận trùng — về hàng chờ
-   * cho giáo viên quyết (đúng nguyên tắc không đoán).
-   */
   private resolveIdentity(
     processed: ProcessedSheet,
     batch: PaperBatchRow,
@@ -338,7 +292,6 @@ export class PaperGradingService {
     return { studentId, identitySource, identityCode };
   }
 
-  /** Ánh xạ kết quả đọc của engine (số thứ tự hàng) về slot thật của layout đã ghim. */
   private mapReadings(processed: ProcessedSheet, batch: PaperBatchRow): PaperReading[] {
     const layout = this.sortedLayout(batch);
     return processed.readings.map((r) => ({
@@ -349,11 +302,6 @@ export class PaperGradingService {
     }));
   }
 
-  /**
-   * Tập số hàng (1-based theo thứ tự layout đã sắp = thứ tự hàng trên
-   * phiếu) của các slot đúng/sai chùm TF-A trong lô: các hàng này OMR
-   * đọc theo từng cặp ô Đ/S.
-   */
   private pairSlotsOf(batch: PaperBatchRow): Set<number> {
     const out = new Set<number>();
     this.sortedLayout(batch).forEach((entry, i) => {
@@ -362,17 +310,6 @@ export class PaperGradingService {
     return out;
   }
 
-  /**
-   * Tiếp nhận MỘT ảnh trong một lượt tải (một lô chụp): cổng chất
-   * lượng chạy ngay — ảnh hỏng bị từ chối kèm lý do, không lưu. Ảnh
-   * đạt cổng được định tuyến về LÔ IN theo thứ tự tin cậy: (1) mã đề
-   * đọc chắc chắn từ lưới tô → lô mang examCode đó; (2) QR (mang
-   * batchId của lô in) khi mã đề không chắc chắn; (3) lô neo của lượt
-   * tải theo-lô. Tải theo buổi không có lô neo: không định tuyến được
-   * thì phiếu vẫn được lưu CHƯA GẮN LÔ (readings để trống) vào hàng
-   * chờ gán lô — hệ thống không đoán lô. Khi lô đích khác lô dùng để
-   * đọc lượt đầu, ảnh được đọc lại bằng đúng hình học của lô đích.
-   */
   private async ingestOne(
     actorId: string,
     quiz: PinRow,
@@ -399,7 +336,6 @@ export class PaperGradingService {
       return { fileName, stored: false, reasons: processed.qualityReasons };
     }
 
-    // Định tuyến về lô in: mã đề (lưới tô) → QR → lô neo.
     let variantCodeRead = processed.variantCode?.code ?? null;
     let target: PaperBatchRow | undefined;
     if (variantCodeRead) {
@@ -412,7 +348,6 @@ export class PaperGradingService {
     if (!target && opts.anchor) target = opts.anchor;
 
     if (target && target.id !== routingBatch.id) {
-      // Đọc lại bằng hình học của lô đích (layout + số cột lưới mã có thể khác).
       try {
         processed = processSheetImage(opts.file.buffer, this.geometryOf(target), opts.thresholds, this.pairSlotsOf(target));
         variantCodeRead = processed.variantCode?.code ?? variantCodeRead;
@@ -456,7 +391,6 @@ export class PaperGradingService {
     return { fileName, stored: true, scan: await this.scanViewFull(scan) };
   }
 
-  /** Chạy một lượt tải ảnh (một lô chụp): dùng chung cho cả đường theo-lô và theo-buổi. */
   private async ingestUpload(
     actorId: string,
     quiz: PinRow,
@@ -474,7 +408,6 @@ export class PaperGradingService {
     expiresAt.setMonth(expiresAt.getMonth() + retentionMonths);
     const cmCtx = await this.cmContextId(quiz);
     const sessionId = randomUUID();
-    // Học sinh đã có phiếu giữ trong từng lô (mọi lượt trước) — phiếu mới không tự nhận trùng.
     const claimedByBatch = new Map<string, Set<string>>();
     for (const s of await this.repo.listScansForPin(quiz.id)) {
       if (s.batchId && s.studentId) {
@@ -499,12 +432,6 @@ export class PaperGradingService {
     return outcomes;
   }
 
-  /**
-   * Tiếp nhận một lượt tải ảnh chụp cho một lô IN: từng ảnh chạy qua
-   * cổng chất lượng ngay tại đây; định tuyến vẫn tôn trọng mã đề đọc
-   * được (phiếu lạc chồng được trả về đúng lô của mã đề đó), lô của
-   * URL là lô neo khi không tín hiệu nào định tuyến được.
-   */
   async uploadScans(actorId: string, batchId: string, files: { originalname: string; buffer: Buffer; mimetype: string }[]): Promise<ScanUploadOutcome[]> {
     const anchor = await this.repo.getBatch(batchId);
     if (!anchor) throw new NotFoundException({ message: `Paper batch ${batchId} not found`, code: 'paper.batch_not_found' });
@@ -513,19 +440,12 @@ export class PaperGradingService {
     return this.ingestUpload(actorId, quiz, anchor, files);
   }
 
-  /**
-   * Tiếp nhận một lượt tải ảnh theo BUỔI (lô chụp): một buổi gồm
-   * nhiều mã đề — giáo viên tải cả chồng phiếu đã thu một lượt, hệ
-   * thống định tuyến từng phiếu về lô in theo mã đề/QR; phiếu không
-   * định tuyến được vẫn được lưu chưa gắn lô để vào hàng chờ gán lô.
-   */
   async uploadSessionScans(actorId: string, pinId: string, files: { originalname: string; buffer: Buffer; mimetype: string }[]): Promise<ScanUploadOutcome[]> {
     const quiz = await this.quiz.getPin(pinId);
     await this.requireGradePaper(actorId, quiz);
     return this.ingestUpload(actorId, quiz, null, files);
   }
 
-  // --- hàng chờ -----------------------------------------------------------------
 
   async listScans(actorId: string, pinId: string, status?: string): Promise<PaperScan[]> {
     const quiz = await this.quiz.getPin(pinId);
@@ -550,7 +470,6 @@ export class PaperGradingService {
     return this.scanViewFull(scan);
   }
 
-  /** Ảnh gốc/ảnh đã nắn của phiếu — chỉ trả qua cổng quiz:gradepaper của chính quiz chứa phiếu. */
   async scanImage(actorId: string, scanId: string, kind: string): Promise<{ data: Buffer; mimeType: string; fileName: string }> {
     const scan = await this.getScanRow(scanId);
     const quiz = await this.quiz.getPin(scan.examPinId);
@@ -561,12 +480,6 @@ export class PaperGradingService {
     return { data, mimeType: file.mimeType ?? 'application/octet-stream', fileName: file.fileName };
   }
 
-  /**
-   * Hàng chờ gán định danh: giáo viên chọn đúng học sinh (phải có
-   * trong roster của lô in phiếu thuộc về). Mọi lần gán/sửa đều ghi
-   * event log qua outbox — ai gán, khi nào, từ mã/học sinh nào sang
-   * mã/học sinh nào — như biên bản sửa lỗi của Bộ.
-   */
   async assignIdentity(actorId: string, scanId: string, studentId: string): Promise<PaperScan> {
     const scan = await this.getScanRow(scanId);
     if (scan.status === 'recorded') throw new ConflictException({ message: 'Scan is already recorded as an attempt', code: 'paper.already_recorded' });
@@ -594,15 +507,6 @@ export class PaperGradingService {
     return this.scanViewFull(updated);
   }
 
-  /**
-   * Hàng chờ gán lô in: giáo viên gắn phiếu chưa định tuyến được (tải
-   * theo buổi mà mã đề + QR đều không định tuyến nổi) về đúng lô in —
-   * hoặc sửa một phiếu bị gắn sai mã đề sang lô đúng. Hệ thống đọc
-   * lại phiếu từ ảnh đã nắn bằng hình học của lô mới (đáp án + mã học
-   * sinh + mã đề), định danh lại từ đầu theo roster của lô mới; đọc
-   * lại không đạt cổng thì giữ nguyên kết quả đọc cũ và chỉ đổi lô.
-   * Thao tác ghi event log như một dòng biên bản (lô cũ → lô mới).
-   */
   async assignBatch(actorId: string, scanId: string, batchId: string): Promise<PaperScan> {
     const scan = await this.getScanRow(scanId);
     if (scan.status === 'recorded') throw new ConflictException({ message: 'Scan is already recorded as an attempt', code: 'paper.already_recorded' });
@@ -638,19 +542,13 @@ export class PaperGradingService {
           identityCode = identity.identityCode;
         }
       } catch {
-        // Đọc lại thất bại (ảnh đã nắn không còn/không đạt cổng): giữ kết quả cũ, chỉ đổi lô.
       }
     }
     if (!reread) {
-      // Không đọc lại được: định danh cũ thuộc roster của lô trước — không mang sang lô mới.
       identityCode = scan.batchId === batch.id ? scan.identityCode : null;
       studentId = scan.batchId === batch.id ? scan.studentId : null;
       identitySource = scan.batchId === batch.id ? (scan.identitySource as typeof identitySource) : null;
     }
-    // Giáo viên gán lô = xác nhận mã đề của phiếu thuộc lô đó (như ký
-    // biên bản sửa lỗi của Bộ): mã đề hiệu lực lấy theo lô được gán,
-    // còn BẢN ĐỌC GỐC của máy được giữ nguyên trong event log bên
-    // dưới (machineReadVariantCode) để truy vết.
     const machineReadVariantCode = variantCodeRead;
     const teacherConfirmedVariant = Boolean(
       batch.examCode && machineReadVariantCode && machineReadVariantCode !== batch.examCode,
@@ -672,12 +570,6 @@ export class PaperGradingService {
     return this.scanViewFull(updated);
   }
 
-  /**
-   * Hàng chờ ca mơ hồ: giáo viên quyết ô chọn cho từng câu đang
-   * ambiguous (chosen null = để trống). Slot đúng/sai chùm TF-A quyết
-   * theo TỪNG Ý qua `pairChoices` (ý k: 0 = Đ, 1 = S, null = để trống
-   * ý đó) — một ý mơ hồ không ép giáo viên đoán cả câu.
-   */
   async resolveReadings(actorId: string, scanId: string, input: ResolvePaperReadings): Promise<PaperScan> {
     const scan = await this.getScanRow(scanId);
     if (scan.status === 'recorded') throw new ConflictException({ message: 'Scan is already recorded as an attempt', code: 'paper.already_recorded' });
@@ -722,14 +614,6 @@ export class PaperGradingService {
     return this.scanViewFull(updated);
   }
 
-  /**
-   * Ghi phiếu đã sẵn sàng thành attempt thi giấy: đáp án theo đúng
-   * layout đã ghim của lô (multichoice = answerId; đúng/sai chùm
-   * TF-A = JSON bản đồ statementId → boolean quy từ 4 cặp ô Đ/S của
-   * slot — cặp tô ô Đ là true, ô S là false, cặp trống thì mệnh đề
-   * vắng mặt trong bản đồ; cả slot trống = null) qua đường
-   * finalizeAttempt của Quiz — điểm vào sổ như attempt online.
-   */
   async recordScan(actorId: string, scanId: string): Promise<PaperScan & { sumGrades: number | null }> {
     const scan = await this.getScanRow(scanId);
     if (scan.status === 'recorded') throw new ConflictException({ message: 'Scan is already recorded as an attempt', code: 'paper.already_recorded' });
@@ -743,9 +627,6 @@ export class PaperGradingService {
     }
     const batch = await this.repo.getBatch(scan.batchId);
     if (!batch) throw new NotFoundException({ message: 'Paper batch of this scan no longer exists', code: 'paper.batch_not_found' });
-    // Mã đề đọc được trên phiếu khác mã đề của lô = phiếu thuộc mã đề
-    // khác: không chấm theo layout của lô này (xử lý lại qua hàng chờ
-    // gán lô hoặc xoá và tải lại đúng buổi).
     if (scan.variantCodeRead && batch.examCode && scan.variantCodeRead !== batch.examCode) {
       throw new ConflictException({
         message: `Sheet exam code ${scan.variantCodeRead} does not match batch exam code ${batch.examCode}`,
@@ -781,7 +662,6 @@ export class PaperGradingService {
     return { ...(await this.scanViewFull(updated)), sumGrades: result.sumGrades };
   }
 
-  /** Xoá một phiếu chưa ghi (sai/thừa) khỏi hàng chờ, kèm bản ghi file của nó. Phiếu đã ghi là bằng chứng điểm — không xoá. */
   async deleteScan(actorId: string, scanId: string): Promise<void> {
     const scan = await this.getScanRow(scanId);
     if (scan.status === 'recorded') throw new ConflictException({ message: 'A recorded scan is grade evidence and cannot be deleted', code: 'paper.scan_recorded' });

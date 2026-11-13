@@ -1,10 +1,3 @@
-# Workflow kiểm chứng khả năng deploy của stack tự host ngay trong CI.
-#
-# Mục đích: kiểm tra khả năng dựng stack production tự host qua Compose, API, SSR và gateway. Không khởi động dịch vụ xác thực đã loại bỏ.
-#
-# Chuỗi status context của job dưới đây là "deploy-check / verify-stack" (theo khuôn "<tên workflow> / <tên job>") — đây là chuỗi cần chọn trong ruleset của nhánh main.
-#
-# Mọi lệnh compose trong workflow đều gộp thêm file override compose.ci.yaml (chỉ dùng trong CI) để các build dùng cache layer qua GitHub Actions cache; file compose.yaml chính giữ nguyên cho đường deploy thật.
 
 name: deploy-check
 
@@ -13,7 +6,6 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Huỷ lượt kiểm của head cũ ngay khi PR có head mới: group tách riêng theo từng PR (dự phòng bằng ref cho lượt chạy tay qua workflow_dispatch) và mang tên workflow này nên không huỷ lẫn với workflow CI; cổng merge vẫn xét lượt completed/success của head cuối như cũ.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -27,11 +19,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # Dựng builder Buildx (driver docker-container): driver mặc định của Docker trên runner không xuất được cache layer, nên cần builder này để cache_from/cache_to kiểu type=gha khai trong compose.ci.yaml hoạt động (đọc cache từ GitHub Actions cache trước khi build và ghi lại sau khi build).
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      # Dùng workflow command chính thức GITHUB_ENV thay cho tạo .env.example rồi sed/grep từng bí mật. Compose đọc trực tiếp biến môi trường của runner, các giá trị tùy chọn lấy mặc định từ compose.yaml. Mỗi bí mật sinh riêng và được mask trong log.
       - name: Generate CI environment variables
         run: |
           for name in POSTGRES_PASSWORD CONTROL_PLANE_POSTGRES_PASSWORD RUNTIME_POSTGRES_PASSWORD MIGRATOR_POSTGRES_PASSWORD JWT_SECRET BETTER_AUTH_SECRET; do
@@ -43,7 +33,6 @@ jobs:
       - name: Validate compose configuration
         run: docker compose -f compose.yaml -f compose.ci.yaml config > /dev/null
 
-      # Compose xuất định nghĩa Bake cùng tag/cache của từng service; action Docker cấp runtime token cho cache gha mà bước shell không tự nhận được. Không tự dựng lại định nghĩa build riêng.
       - name: Export the Compose build definition
         run: docker compose -f compose.yaml -f compose.ci.yaml build --print api worker web migrate > "$RUNNER_TEMP/compose-build.json"
 
@@ -54,11 +43,8 @@ jobs:
           files: ${{ runner.temp }}/compose-build.json
           load: true
 
-      # Service migrate tự chạy trước và phải thành công thì api/worker mới khởi động; chỉ dùng image vừa build, không build lại ở shell.
       - name: Verify Caddy config with current trusted-proxy policy
         run: |
-          # Không cấu hình ingress riêng trong CI thì Caddy không được
-          # tin cả Docker bridge: cổng host dùng NAT có thể bị giả IP.
           if [ -z "${GIAOKHOA_TRUSTED_PROXY_CIDRS:-}" ]; then
             effective=$(docker compose -f compose.yaml -f compose.ci.yaml config --format json | jq -r '.services.gateway.environment.GIAOKHOA_TRUSTED_PROXY_CIDRS')
             test "$effective" = "127.0.0.1/32"
@@ -68,16 +54,12 @@ jobs:
       - name: Start the stack
         run: docker compose -f compose.yaml -f compose.ci.yaml up -d --no-build
 
-      # HTTP probe qua cổng công khai Caddy. Docker Compose đã chờ healthcheck của API/web qua depends_on; curl có retry chính thức thay cho vòng lặp shell chờ từng dịch vụ.
       - name: Verify API through the public gateway
         run: |
           curl --fail --silent --show-error --retry 60 --retry-delay 5 --retry-all-errors --max-time 5 \
             http://127.0.0.1:8080/api/v1/health -o smoke-health.json
           jq -e '.status == "ok" and .checks.database == "up" and .checks.redis == "up"' smoke-health.json
 
-      # Chạy với USER node trong hai image thật, trên named volume bền
-      # `api-files` Compose vừa tạo. Ghi/đọc hai chiều sẽ bắt lỗi
-      # ownership/perms khi mount volume che quyền thư mục image.
       - name: Verify non-root API and worker share writable file volume
         run: |
           docker compose -f compose.yaml -f compose.ci.yaml exec -T api node - "$GITHUB_RUN_ID" <<'NODE'
@@ -105,9 +87,6 @@ jobs:
           fs.unlinkSync(api);
           NODE
 
-      # Better Auth và MCP được mount thẳng lên Express, bên ngoài
-      # guard Nest: preflight phải qua CORS middleware trước khi auth
-      # đọc body, cả khi origin không đáng tin.
       - name: Verify Better Auth and MCP CORS preflight
         run: |
           for path in /api/v1/auth/sign-in/username /mcp; do
@@ -123,8 +102,6 @@ jobs:
             fi
           done
 
-      # Nghiệm thu Redis/BullMQ qua cấu hình đang chạy (không chỉ chuỗi
-      # trong Compose). Keycloak và kc-db phải biến mất khỏi toàn stack.
       - name: Verify Redis policy and retired Keycloak services
         run: |
           services=$(docker compose -f compose.yaml -f compose.ci.yaml config --services)
@@ -137,8 +114,6 @@ jobs:
           test "$policy" = noeviction
           printf '%s\n' "$budget" | grep -Eq '^[0-9]+$'
           echo "Redis: maxmemory-policy=$policy, maxmemory=$budget bytes"
-          # Redis CLI nhận đủ flags: xác minh AOF + fsync và RDB
-          # snapshot thật; không suy từ câu lệnh Docker Compose.
           aof=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis redis-cli --raw CONFIG GET appendonly | tail -n 1)
           fsync=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis redis-cli --raw CONFIG GET appendfsync | tail -n 1)
           snapshots=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis redis-cli --raw CONFIG GET save | tail -n 1)
@@ -146,14 +121,12 @@ jobs:
           test "$fsync" = everysec
           test "$snapshots" = '900 1 300 10 60 10000'
           echo "Redis persistence: AOF=$aof fsync=$fsync RDB=$snapshots"
-          # Redis cache riêng PHẢI dùng eviction (không phải Redis BullMQ).
           cache_policy=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis-cache redis-cli --raw CONFIG GET maxmemory-policy | tail -n 1)
           cache_budget=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis-cache redis-cli --raw CONFIG GET maxmemory | tail -n 1)
           test "$cache_policy" = allkeys-lru
           test "$cache_budget" -gt 0
           echo "Redis cache: maxmemory-policy=$cache_policy, maxmemory=$cache_budget bytes"
 
-      # Cổng nghiệm thu SSR động: loader nhận JSON thực từ API nội bộ, và HTML chứa dữ liệu đã render trước khi hydrate.
       - name: Verify SSR, CSP and cache isolation
         run: |
           curl -fsS --max-time 15 http://127.0.0.1:8080/health -o smoke-ssr.html
@@ -166,12 +139,6 @@ jobs:
           grep -qi '^cache-control: private, no-cache' smoke-login.headers
           curl -fsS -o /dev/null http://127.0.0.1:8080/
 
-      # Kiểm chứng sticky cookie trên hai Socket.IO Server thật với
-      # Redis adapter dùng chung, qua chính Caddy production. Nếu Caddy
-      # xem hostname Docker có hai A record là MỘT upstream thì polling
-      # có thể đổi replica giữa handshake/POST dẫn tới 400 unknown SID.
-      # Dùng hostname container riêng cho replica thứ hai, không tạo
-      # service mới hoặc cổng host mới trên production.
       - name: Verify Socket.IO polling affinity across two API replicas
         run: |
           trap 'docker rm -f giaokhoa-api-2 >/dev/null 2>&1 || true; docker compose -f compose.yaml -f compose.ci.yaml up -d --no-build --force-recreate gateway || true' EXIT
@@ -211,15 +178,8 @@ jobs:
           echo "12 Engine.IO polling handshakes + POST đạt trên $distinct upstream có cookie affinity."
           unset GIAOKHOA_API_UPSTREAM
 
-      # Health phải trả 503 TRÊN HTTP THẬT khi một phụ thuộc ngừng
-      # (unit test controller không kiểm chứng wiring Redis/PG hay
-      # healthcheck lắng nghe). Chạy sau smoke để không làm nhiễu các
-      # bước xác minh khác; gọi HTTP loopback từ chính container API,
-      # không đi qua gateway đang tự chặn upstream unhealthy.
       - name: Verify HTTP 503 on real Redis and PostgreSQL outages
         run: |
-          # Luôn khởi động lại phụ thuộc trước khi bước cleanup/log chạy,
-          # kể cả khi assertion 503 thất bại.
           trap 'docker compose -f compose.yaml -f compose.ci.yaml start redis postgres || true' EXIT
           assert_down() {
             docker compose -f compose.yaml -f compose.ci.yaml exec -T api node - "$1" <<'NODE'
@@ -243,8 +203,6 @@ jobs:
           assert_down database
           docker compose -f compose.yaml -f compose.ci.yaml start postgres
 
-      # Lưu chứng cứ trước khi dọn stack, kể cả khi một container chưa
-      # qua healthcheck và Compose trả lỗi ngay ở bước khởi động.
       - name: Diagnose failed stack before cleanup
         if: failure()
         run: |

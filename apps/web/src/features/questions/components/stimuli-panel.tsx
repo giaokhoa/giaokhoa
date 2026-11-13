@@ -1,6 +1,3 @@
-/**
- * Panel ngữ liệu của trang ngân hàng câu hỏi (thẻ #stimuli ở khu vực ngữ liệu): danh sách ngữ liệu của danh mục đang chọn + form tạo/sửa ngay trong thẻ. Dữ liệu danh sách do trang nạp rồi truyền xuống; panel giữ state nội dung đang soạn + ngữ liệu đang sửa và tự gọi các đột biến của lib/questions-data; làm mới danh sách qua invalidate đúng khoá factory của danh mục đang chọn như khi còn trong trang.
- */
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,22 +13,12 @@ import { queryKeys } from '../queries/keys';
 import { useCreateStimulus, useDeleteStimulus, useUpdateStimulus } from '../queries/questions';
 import { plainText } from '../utils/shared';
 
-/** Props của panel ngữ liệu. */
 export interface StimuliPanelProps {
-  /** Các ngữ liệu của danh mục đang chọn (trang nạp bằng hook useCategoryStimuli). */
   stimuli: StimulusView[];
-  /** Danh mục đang chọn (khoá làm mới + danh mục đích khi tạo ngữ liệu). */
   qCategory: string;
-  /** Báo thông báo kết quả lên khung trang. */
   setMessage: (message: string | null) => void;
 }
 
-/**
- * Panel ngữ liệu.
- *
- * @param props - Dữ liệu và bộ báo thông báo của trang.
- * @returns Thẻ ngữ liệu: danh sách + form tạo/sửa.
- */
 export function StimuliPanel({ stimuli, qCategory, setMessage }: StimuliPanelProps) {
   const { t } = useTranslation('app');
   const queryClient = useQueryClient();

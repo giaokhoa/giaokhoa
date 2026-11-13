@@ -12,17 +12,6 @@ import { SiteConfigRepository } from '@giaokhoa/db/repositories/site-config';
 import { TenantsRepository } from '@giaokhoa/db/repositories/tenants';
 import { TenantContextService } from './tenant-context.service';
 
-/**
- * TenantConfigService — phân giải cấu hình theo tenant (TENANT-0, #168;
- * hồ sơ mục 3.5): giá trị hiệu lực của một khoá cho một tenant =
- * ghi đè của tenant (bảng `tenant_config`) → giá trị platform (bảng
- * `config`/`plugin_config` qua cùng quy tắc lưu trữ của SiteConfig) →
- * mặc định trong registry. Chỉ các setting có scope `tenant`/`both` mới
- * được tenant ghi đè; setting scope `platform` tenant admin không chạm
- * được. Mọi thay đổi của tenant đều ghi vết vào `admin_setting_audit`
- * với tenant_id đi kèm — đây là seam mà công tắc cấp duyệt của EB-3 sẽ
- * đọc qua {@link getEffectiveValue} khi chuyển về tenant_config.
- */
 @Injectable()
 export class TenantConfigService {
   constructor(
@@ -37,22 +26,10 @@ export class TenantConfigService {
     return `${def.component}/${def.name}`;
   }
 
-  /**
-   * Giá trị đã lưu ở tầng platform; undefined khi chưa có ghi đè.
-   * Quy tắc lưu trữ (bảng `config` cho core, `plugin_config` cho
-   * component kèm nhánh đọc JSON) do `SiteConfigRepository` của
-   * `@giaokhoa/db` giữ — service này uỷ quyền thẳng, không giữ bản sao
-   * đường truy vấn riêng.
-   */
   private async platformStoredValue(component: string, name: string): Promise<unknown> {
     return this.siteConfig.getStoredValue(component, name);
   }
 
-  /**
-   * Giá trị hiệu lực của một setting cho một tenant cụ thể — API đọc
-   * chuẩn cho mọi module cần cấu hình theo tenant (EB-3 đọc công tắc
-   * duyệt qua đây). Setting chưa đăng ký trả về undefined.
-   */
   async getEffectiveValue<T = unknown>(tenantId: string, component: string, name: string): Promise<T | undefined> {
     const def = findSiteSetting(component, name);
     if (!def) return undefined;
@@ -64,7 +41,6 @@ export class TenantConfigService {
     return (stored === undefined ? def.defaultValue : stored) as T;
   }
 
-  /** Giá trị hiệu lực cho tenant của request hiện tại (ngoài request: tầng platform). */
   async getValueForCurrentTenant<T = unknown>(component: string, name: string): Promise<T | undefined> {
     const tenantId = this.tenantContext.currentTenantId();
     if (!tenantId) {
@@ -76,7 +52,6 @@ export class TenantConfigService {
     return this.getEffectiveValue<T>(tenantId, component, name);
   }
 
-  /** Một setting chiếu theo hiệu lực cho một tenant: ghi đè tenant → ghi đè platform → mặc định code. */
   async viewForTenant(tenantId: string, component: string, name: string): Promise<SiteSetting> {
     const def = findSiteSetting(component, name);
     if (!def) {
@@ -98,7 +73,6 @@ export class TenantConfigService {
     };
   }
 
-  /** Danh sách setting của tenant hiệu lực (scope tenant|both) kèm giá trị hiệu lực — cổng xem: tenant:viewall/manage tại context tenant. */
   async listForTenant(actorId: string, tenantId: string): Promise<SiteSetting[]> {
     const tenantCtx = await this.contexts.ensureTenantContext(tenantId);
     const canView =
@@ -118,7 +92,6 @@ export class TenantConfigService {
     return views;
   }
 
-  /** Tenant admin đặt ghi đè cho tenant của mình (gác `tenant:manage` tại context tenant ngay trong service). */
   async setForTenant(
     actorId: string,
     tenantId: string,
@@ -141,7 +114,6 @@ export class TenantConfigService {
     return this.viewForTenant(tenantId, component, name);
   }
 
-  /** Tenant admin xoá ghi đè của tenant (giá trị hiệu lực trở về tầng platform/mặc định). */
   async clearForTenant(actorId: string, tenantId: string, component: string, name: string): Promise<SiteSetting> {
     const def = this.requireTenantDefinition(component, name);
     await this.assertTenantSettingsManager(actorId, tenantId);

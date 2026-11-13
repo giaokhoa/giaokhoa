@@ -20,8 +20,6 @@ export function AdminNodeNewPage() {
 export function AdminNodeEditPage() {
   const { t } = useTranslation('app');
   const { nodeId } = useParams();
-  // Đọc node qua TanStack Query (F-01 của rà soát #133); chưa có dữ
-  // liệu thì màn giữ trạng thái đang tải như trước.
   const nodeQuery = useCurriculumNode(nodeId);
   const node = nodeQuery.data;
   if (!node) {

@@ -23,9 +23,6 @@ import {
 } from './true-false.js';
 import { TrueFalseEditor } from './true-false-editor.js';
 
-/**
- * Đưa editor vào trạng thái active bằng cách focus vùng soạn — từ lát E3 toolbar chỉ hiện cho editor đang active, nên các ca bấm nút toolbar phải focus trước như người dùng thật.
- */
 async function focusEditor(container: HTMLElement): Promise<void> {
   const editable = container.querySelector('.ProseMirror');
   expect(editable).not.toBeNull();
@@ -37,11 +34,6 @@ afterEach(() => {
   cleanup();
 });
 
-/**
- * Spec của package editor: trình hiển thị chỉ-đọc phải dựng đúng HTML của lát văn bản thuần (paragraph + mark đậm), tài liệu rỗng không gây lỗi.
- * (Rà soát #219: ca liệt kê danh sách extension nội bộ đã bỏ — đó là chi
- * tiết triển khai; luật "chỉ lát văn bản thuần" được khẳng định ở tầng nghiệp vụ bởi e2e question-types-stimulus: tài liệu ngoài lát bị từ chối.)
- */
 describe('Khối RichTextView', () => {
   it('kết xuất một đoạn có chữ đậm ra HTML', () => {
     const document: RichTextDocument = {
@@ -165,16 +157,7 @@ describe('Khối RichTextView', () => {
   });
 });
 
-/**
- * Luồng soạn thảo phía {@link RichTextEditor}: người soạn dùng đúng các
- * nút/panel mà giao diện thật cung cấp (không chạm vào nội bộ Tiptap),
- * tài liệu sinh ra qua `onChange` là thứ sẽ được lưu — các ca này khoá
- * hành vi nghiệp vụ của editor: chèn được công thức/danh sách/ảnh, sửa
- * được công thức đã chèn, và LaTeX sai thì bị chặn, không lọt vào tài
- * liệu đã lưu.
- */
 describe('Khối RichTextEditor', () => {
-  /** Thu thập mọi tài liệu editor phát qua onChange, mới nhất ở cuối. */
   function collectChanges() {
     const changes: RichTextDocument[] = [];
     return {
@@ -206,7 +189,6 @@ describe('Khối RichTextEditor', () => {
       type: 'inlineMath',
       attrs: { latex: 'x^2 + y^2 = z^2' },
     });
-    // Tài liệu editor sinh ra phải qua được hợp đồng contracts ở biên.
     expect(richTextDocumentSchema.parse(lastChange())).toEqual(lastChange());
     expect(screen.queryByTestId('math-panel')).toBeNull();
   });
@@ -327,7 +309,6 @@ describe('Khối RichTextEditor', () => {
         attrs: { src: '/api/v1/files/abc-123/content', alt: 'Đồ thị hàm số', title: null },
       });
     });
-    // Node ảnh không được mang thuộc tính ngoài hợp đồng (width/height của extension gốc) — schema strictObject sẽ từ chối ở biên API.
     expect(richTextDocumentSchema.parse(lastChange())).toEqual(lastChange());
     expect(onRequestImage).toHaveBeenCalledTimes(1);
   });
@@ -342,13 +323,11 @@ describe('Khối RichTextEditor', () => {
   it('chỉ hiện thanh công cụ khi editor đang hoạt động (được focus)', async () => {
     const { container } = render(<RichTextEditor />);
 
-    // Chưa focus: không toolbar nào — trước lát E3 toolbar luôn hiện trên mọi editor của form.
     expect(screen.queryByRole('toolbar')).toBeNull();
 
     await focusEditor(container);
     expect(screen.getByRole('toolbar')).toBeInTheDocument();
 
-    // Tương tác ra ngoài editor: toolbar ẩn đi.
     fireEvent.pointerDown(document.body);
     await waitFor(() => {
       expect(screen.queryByRole('toolbar')).toBeNull();
@@ -371,7 +350,6 @@ describe('Khối RichTextEditor', () => {
     const { container } = render(<RichTextEditor onChange={onChange} />);
     await focusEditor(container);
 
-    // Chưa có gì để hoàn tác: cả hai nút đều disabled theo can().
     expect(screen.getByRole('button', { name: 'Hoàn tác' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Làm lại' })).toBeDisabled();
 
@@ -415,9 +393,6 @@ describe('Khối RichTextEditor', () => {
   });
 });
 
-/**
- * Vệ sinh tài liệu (lát E3, theo `contentForSave`/`ensureTerminal Continuations` của giaokhoa): paragraph tiếp nối sau block nguyên tử là hạ tầng soạn thảo, không phải nội dung — dạng đem lưu phải dọn nó, dạng nạp vào phải có nó để người soạn viết tiếp được.
- */
 describe('Hàm hỗ trợ nối tiếp tài liệu', () => {
   it('chỉ lược đoạn nối tiếp trống sau khối nguyên tử cuối', () => {
     const document: RichTextDocument = {
@@ -457,7 +432,6 @@ describe('Hàm hỗ trợ nối tiếp tài liệu', () => {
       { type: 'blockMath', attrs: { latex: 'x^2' } },
       { type: 'paragraph' },
     ]);
-    // Đã có paragraph chốt đuôi thì giữ nguyên tham chiếu.
     const withParagraph: RichTextDocument = {
       type: 'doc',
       content: [
@@ -469,11 +443,6 @@ describe('Hàm hỗ trợ nối tiếp tài liệu', () => {
   });
 });
 
-/**
- * Spec của editor trắc nghiệm thống nhất (lát P4 #248): các ca kiểm LUỒNG SOẠN–TÁCH–LẮP của mô hình giaokhoa — soạn trên một tài liệu
- * (thân câu + lựa chọn), đáp án đúng là id nằm ngoài tài liệu, khi
- * tách để lưu thì thân câu không còn node lựa chọn và thứ tự lựa chọn trong tài liệu là thứ tự đáp án. Đổi ngược mô hình (đáp án đúng nằm trong nội dung lựa chọn, thân câu còn choiceList khi lưu) thì các ca này phải đỏ.
- */
 describe('Tài liệu soạn thảo MultipleChoice', () => {
   const textDoc = (text: string): RichTextDocument => ({
     type: 'doc',
@@ -500,10 +469,8 @@ describe('Tài liệu soạn thảo MultipleChoice', () => {
     const document = composeMultipleChoiceDocument(textDoc('Thủ đô của Việt Nam?'), answers);
     const { question, choices } = splitMultipleChoiceDocument(document);
 
-    // Thân câu sau khi tách là tài liệu hợp đồng thuần: không còn node choice/choiceList nào (bất biến của quyết 12:12).
     expect(JSON.stringify(question)).not.toContain('choice');
     expect(question.content?.[0]?.content?.[0]?.text).toBe('Thủ đô của Việt Nam?');
-    // Thứ tự đáp án khi tách = thứ tự sortOrder đã lắp vào.
     expect(choices.map((choice) => choice.attrs.id)).toEqual(['ans-1', 'ans-2', 'ans-3', 'ans-4']);
     expect(choices[0]?.content?.[0]?.content?.[0]?.text).toBe('Phương án A');
     expect(isCompleteMultipleChoice(document, 'ans-1')).toBe(true);
@@ -518,7 +485,6 @@ describe('Tài liệu soạn thảo MultipleChoice', () => {
       sortOrder: n,
     }));
     const document = composeMultipleChoiceDocument(textDoc('Câu hỏi?'), answers);
-    // Mô phỏng kéo-thả: choice cuối lên đầu trong tài liệu thống nhất.
     const choiceList = document.content[document.content.length - 1] as {
       content: MultipleChoiceDocumentJson['content'];
     };
@@ -551,7 +517,6 @@ describe('Tài liệu soạn thảo MultipleChoice', () => {
     expect(radios).toHaveLength(MULTIPLE_CHOICE_COUNT);
     expect((radios[1] as HTMLInputElement).checked).toBe(true);
     expect((radios[0] as HTMLInputElement).checked).toBe(false);
-    // Tài liệu ProseMirror chứa đúng 4 node choice trong choiceList.
     expect(container.querySelectorAll('[data-choice]')).toHaveLength(MULTIPLE_CHOICE_COUNT);
 
     fireEvent.click(radios[3] as HTMLInputElement);
@@ -569,7 +534,6 @@ describe('Tài liệu soạn thảo TrueFalse (TF-A)', () => {
     expect(stem.content).toHaveLength(1);
     expect(statements).toHaveLength(TRUE_FALSE_STATEMENT_COUNT);
     expect(new Set(statements.map((s) => s.attrs.id)).size).toBe(TRUE_FALSE_STATEMENT_COUNT);
-    // Chưa có đáp án Đ/S cho mệnh đề nào -> chưa hoàn chỉnh.
     expect(isCompleteTrueFalse(document, {})).toBe(false);
   });
 
@@ -589,7 +553,6 @@ describe('Tài liệu soạn thảo TrueFalse (TF-A)', () => {
       ],
     };
     const document = composeTrueFalseDocument(stored);
-    // Tài liệu TF lưu trữ THỐNG NHẤT với tài liệu soạn: compose không đổi hình dạng.
     expect(document).toEqual(stored);
     expect(getTrueFalseStatementIds(document)).toEqual(['m1', 'm2', 'm3', 'm4']);
     const { stem, statements } = splitTrueFalseDocument(document);
@@ -598,9 +561,7 @@ describe('Tài liệu soạn thảo TrueFalse (TF-A)', () => {
 
     const answers = { m1: true, m2: false, m3: true, m4: false };
     expect(isCompleteTrueFalse(document, answers)).toBe(true);
-    // Thiếu đáp án của một mệnh đề -> chưa hoàn chỉnh (mỗi mệnh đề phải có Đ/S).
     expect(isCompleteTrueFalse(document, { m1: true, m2: false, m3: true })).toBe(false);
-    // Thân câu rỗng -> chưa hoàn chỉnh dù đáp án đủ.
     const emptyStem = composeTrueFalseDocument({
       type: 'doc',
       content: [

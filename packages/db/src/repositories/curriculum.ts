@@ -1,63 +1,11 @@
-/**
- * Repository của cụm CHƯƠNG TRÌNH trên Kysely.
- *
- * Vai trò: mọi truy cập tới năm bảng chương trình của kho trung tâm
- * (subjects → curricula → curriculum_nodes dạng cây →
- * learning_outcomes, và sổ đăng ký nạp dữ liệu chuẩn
- * curriculum_program_records) tập trung ở đây, cộng các truy vấn đếm
- * liên kết chỉ-đọc sang bảng của cụm câu hỏi/SGK (question,
- * question_bank_entries, question_learning_outcomes, book_mappings,
- * exam_matrix_cells) mà repository cũ đã thực hiện. Repository
- * không chứa luật nghiệp vụ — gác quyền, thuật toán diff của
- * importer và giao dịch nhiều bảng nằm ở tầng service phía ứng
- * dụng; repository chỉ nhận handle (instance gốc hoặc transaction
- * đang mở) để phía gọi ghép nhiều thao tác vào một transaction khi
- * cần.
- *
- * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
- * - Bên trong repository, truy vấn viết trên interface schema sinh
- *   bằng codegen: tên bảng/cột giữ nguyên snake_case của database.
- * - Bên ngoài, repository trả/nhận các hình dạng dòng camelCase như
- *   phía tiêu thụ đang dùng (khớp `$inferSelect`/`$inferInsert` của
- *   repository cũ trước chuyển đổi): cột được chọn bằng danh sách tường minh
- *   có bí danh (`context_id as contextId`), giá trị ghi được ánh xạ
- *   từng trường từ camelCase sang snake_case ở các hàm
- *   `*InsertValues`/`*UpdateSet` trong file này. Kiểu dòng công
- *   khai khai ngay trong file này, không import từ file schema
- *   bộ máy cũ (các file schema đó bị xoá ở hạng mục gỡ bộ máy cũ).
- * - Giá trị `undefined` bị LOẠI khỏi values/set trước khi gọi
- *   builder (thử nghiệm T-4 đã chốt ở pilot: `undefined` lọt vào
- *   mệnh đề WHERE sẽ lặng lẽ thành so sánh với NULL và trả 0 dòng —
- *   vì vậy mọi giá trị where trong repository đều là tham số bắt
- *   buộc).
- * - Cột jsonb khi ghi (`learning_outcomes.content`,
- *   `curriculum_program_records.source`) đi qua helper serialize
- *   tường minh + ép kiểu `::jsonb` ({@link jsonbValue}): driver
- *   `pg` hiểu MẢNG ở cấp cao nhất là mảng PostgreSQL thay vì JSON.
- * - Ghép điều kiện động (thử nghiệm T-13 đã chốt): mảng điều kiện
- *   dựng trong callback `where` rồi gộp bằng `eb.and(...)` /
- *   `eb.or(...)`; cấm chép nguyên khuôn `where(undefined)` của
- *   bộ máy cũ.
- * - Chiếu toàn bảng trong select (thử nghiệm T-14, chốt tại issue
- *   này): Kysely không có hình chiếu lồng "cả bảng dưới một khoá"
- *   như `select({ outcome: learningOutcomes, … })` của bộ máy cũ —
- *   tương đương là chọn tường minh từng cột của bảng với bí danh
- *   tiền tố riêng rồi LỒNG LẠI thành object ở biên repository;
- *   hình dạng trả ra khớp sâu với hình dạng cũ (ca
- *   {@link CurriculumRepository.searchOutcomes}, có spec tích hợp
- *   khoá hình dạng).
- */
 import { sql, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { LearningOutcomeDoc } from '../jsonb-types';
 import type { JsonValue } from '../types/centre-db';
 
-/** Handle giao dịch của kho trung tâm — kiểu `Transaction<CentreDB>` của package. */
 export type CurriculumTx = CentreTx;
-/** Handle đọc/ghi mà repository nhận: transaction đang mở hoặc chính instance gốc. */
 type Db = CentreDb | CentreTx;
 
-/** Một dòng môn học (hình dạng camelCase phía tiêu thụ dùng, khớp `$inferSelect` cũ). */
 export interface SubjectRow {
   id: string;
   contextId: string;
@@ -68,7 +16,6 @@ export interface SubjectRow {
   updatedAt: Date;
 }
 
-/** Dữ kiện ghi một môn học mới (khớp `$inferInsert` cũ: trường có default ở DB thì tuỳ chọn). */
 export interface NewSubject {
   id?: string;
   contextId: string;
@@ -79,7 +26,6 @@ export interface NewSubject {
   updatedAt?: Date;
 }
 
-/** Một dòng chương trình của một môn ở một khối lớp. */
 export interface CurriculumRow {
   id: string;
   subjectId: string;
@@ -88,7 +34,6 @@ export interface CurriculumRow {
   updatedAt: Date;
 }
 
-/** Dữ kiện ghi một chương trình mới. */
 export interface NewCurriculum {
   id?: string;
   subjectId: string;
@@ -97,7 +42,6 @@ export interface NewCurriculum {
   updatedAt?: Date;
 }
 
-/** Một node trong cây nội dung của một chương trình. */
 export interface CurriculumNodeRow {
   id: string;
   curriculumId: string;
@@ -111,7 +55,6 @@ export interface CurriculumNodeRow {
   updatedAt: Date;
 }
 
-/** Dữ kiện ghi một node nội dung mới. */
 export interface NewCurriculumNode {
   id?: string;
   curriculumId: string;
@@ -125,11 +68,6 @@ export interface NewCurriculumNode {
   updatedAt?: Date;
 }
 
-/**
- * Một dòng yêu cầu cần đạt (YCCĐ). `content` là tài liệu Tiptap
- * (jsonb có override kiểu `LearningOutcomeDoc` ở codegen — cùng
- * hình dạng với tài liệu dataset phía ứng dụng).
- */
 export interface LearningOutcomeRow {
   id: string;
   tenantId: string | null;
@@ -144,7 +82,6 @@ export interface LearningOutcomeRow {
   updatedAt: Date;
 }
 
-/** Dữ kiện ghi một YCCĐ mới. */
 export interface NewLearningOutcome {
   id?: string;
   tenantId?: string | null;
@@ -159,7 +96,6 @@ export interface NewLearningOutcome {
   updatedAt?: Date;
 }
 
-/** Một dòng sổ đăng ký nạp dữ liệu chương trình chuẩn; `source` là đối tượng truy vết nguồn của dataset (jsonb không gắn kiểu nghiệp vụ). */
 export interface ProgramRecordRow {
   id: string;
   datasetKey: string;
@@ -173,7 +109,6 @@ export interface ProgramRecordRow {
   updatedAt: Date;
 }
 
-/** Dữ kiện ghi một dòng sổ đăng ký mới. */
 export interface NewProgramRecord {
   id?: string;
   datasetKey: string;
@@ -187,22 +122,10 @@ export interface NewProgramRecord {
   updatedAt?: Date;
 }
 
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh
- * (khuôn của pilot): serialize + ép kiểu `::jsonb` cho MỌI giá trị
- * jsonb khi ghi, vì driver `pg` hiểu mảng ở cấp cao nhất là mảng
- * PostgreSQL và cột jsonb sẽ lỗi `invalid input syntax for type
- * json`.
- *
- * @param value - Giá trị nghiệp vụ sẽ nằm trong cột jsonb.
- * @returns Biểu thức Kysely mang chuỗi JSON đã serialize, giữ
- *   nguyên kiểu `T` ở tầng TypeScript.
- */
 function jsonbValue<T>(value: T): RawBuilder<T> {
   return sql<T>`${JSON.stringify(value)}::jsonb`;
 }
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng subjects (dùng cho cả select lẫn returning). */
 const SUBJECT_COLUMNS = [
   'id',
   'context_id as contextId',
@@ -213,7 +136,6 @@ const SUBJECT_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng curricula. */
 const CURRICULUM_COLUMNS = [
   'id',
   'subject_id as subjectId',
@@ -222,7 +144,6 @@ const CURRICULUM_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng curriculum_nodes. */
 const CURRICULUM_NODE_COLUMNS = [
   'id',
   'curriculum_id as curriculumId',
@@ -236,7 +157,6 @@ const CURRICULUM_NODE_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng learning_outcomes. */
 const LEARNING_OUTCOME_COLUMNS = [
   'id',
   'tenant_id as tenantId',
@@ -251,7 +171,6 @@ const LEARNING_OUTCOME_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng curriculum_program_records. */
 const PROGRAM_RECORD_COLUMNS = [
   'id',
   'dataset_key as datasetKey',
@@ -265,11 +184,6 @@ const PROGRAM_RECORD_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/**
- * Ánh xạ dữ kiện ghi môn học (camelCase) sang values insert
- * (snake_case), LOẠI mọi trường mang `undefined` (quy tắc T-4:
- * trường vắng mặt để default của database quyết định).
- */
 function subjectInsertValues(values: NewSubject): InsertObject<CentreDB, 'subjects'> {
   const row: InsertObject<CentreDB, 'subjects'> = {
     context_id: values.contextId,
@@ -283,7 +197,6 @@ function subjectInsertValues(values: NewSubject): InsertObject<CentreDB, 'subjec
   return row;
 }
 
-/** Ánh xạ một patch môn học sang set update (snake_case), loại `undefined` từng trường (quy tắc T-4). */
 function subjectUpdateSet(patch: Partial<NewSubject>): UpdateObject<CentreDB, 'subjects'> {
   const set: UpdateObject<CentreDB, 'subjects'> = {};
   if (patch.id !== undefined) set.id = patch.id;
@@ -296,7 +209,6 @@ function subjectUpdateSet(patch: Partial<NewSubject>): UpdateObject<CentreDB, 's
   return set;
 }
 
-/** Ánh xạ dữ kiện ghi chương trình sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
 function curriculumInsertValues(values: NewCurriculum): InsertObject<CentreDB, 'curricula'> {
   const row: InsertObject<CentreDB, 'curricula'> = {
     subject_id: values.subjectId,
@@ -308,7 +220,6 @@ function curriculumInsertValues(values: NewCurriculum): InsertObject<CentreDB, '
   return row;
 }
 
-/** Ánh xạ một patch chương trình sang set update (snake_case), loại `undefined` từng trường (quy tắc T-4). */
 function curriculumUpdateSet(patch: Partial<NewCurriculum>): UpdateObject<CentreDB, 'curricula'> {
   const set: UpdateObject<CentreDB, 'curricula'> = {};
   if (patch.id !== undefined) set.id = patch.id;
@@ -319,7 +230,6 @@ function curriculumUpdateSet(patch: Partial<NewCurriculum>): UpdateObject<Centre
   return set;
 }
 
-/** Ánh xạ dữ kiện ghi node nội dung sang values insert (snake_case), loại `undefined` (quy tắc T-4). */
 function curriculumNodeInsertValues(values: NewCurriculumNode): InsertObject<CentreDB, 'curriculum_nodes'> {
   const row: InsertObject<CentreDB, 'curriculum_nodes'> = {
     curriculum_id: values.curriculumId,
@@ -336,7 +246,6 @@ function curriculumNodeInsertValues(values: NewCurriculumNode): InsertObject<Cen
   return row;
 }
 
-/** Ánh xạ một patch node nội dung sang set update (snake_case), loại `undefined` từng trường (quy tắc T-4). */
 function curriculumNodeUpdateSet(patch: Partial<NewCurriculumNode>): UpdateObject<CentreDB, 'curriculum_nodes'> {
   const set: UpdateObject<CentreDB, 'curriculum_nodes'> = {};
   if (patch.id !== undefined) set.id = patch.id;
@@ -352,11 +261,6 @@ function curriculumNodeUpdateSet(patch: Partial<NewCurriculumNode>): UpdateObjec
   return set;
 }
 
-/**
- * Ánh xạ dữ kiện ghi YCCĐ sang values insert (snake_case), loại
- * `undefined` (quy tắc T-4); cột `content` là jsonb nên đi qua
- * {@link jsonbValue}.
- */
 function learningOutcomeInsertValues(values: NewLearningOutcome): InsertObject<CentreDB, 'learning_outcomes'> {
   const row: InsertObject<CentreDB, 'learning_outcomes'> = {
     node_id: values.nodeId,
@@ -374,7 +278,6 @@ function learningOutcomeInsertValues(values: NewLearningOutcome): InsertObject<C
   return row;
 }
 
-/** Ánh xạ một patch YCCĐ sang set update (snake_case), loại `undefined` từng trường; `content` qua {@link jsonbValue}. */
 function learningOutcomeUpdateSet(patch: Partial<NewLearningOutcome>): UpdateObject<CentreDB, 'learning_outcomes'> {
   const set: UpdateObject<CentreDB, 'learning_outcomes'> = {};
   if (patch.id !== undefined) set.id = patch.id;
@@ -391,11 +294,6 @@ function learningOutcomeUpdateSet(patch: Partial<NewLearningOutcome>): UpdateObj
   return set;
 }
 
-/**
- * Ánh xạ dữ kiện ghi dòng sổ đăng ký sang values insert
- * (snake_case), loại `undefined` (quy tắc T-4); cột `source` là
- * jsonb nên đi qua {@link jsonbValue}.
- */
 function programRecordInsertValues(values: NewProgramRecord): InsertObject<CentreDB, 'curriculum_program_records'> {
   const row: InsertObject<CentreDB, 'curriculum_program_records'> = {
     dataset_key: values.datasetKey,
@@ -412,7 +310,6 @@ function programRecordInsertValues(values: NewProgramRecord): InsertObject<Centr
   return row;
 }
 
-/** Ánh xạ một patch dòng sổ đăng ký sang set update (snake_case), loại `undefined` từng trường; `source` qua {@link jsonbValue}. */
 function programRecordUpdateSet(patch: Partial<NewProgramRecord>): UpdateObject<CentreDB, 'curriculum_program_records'> {
   const set: UpdateObject<CentreDB, 'curriculum_program_records'> = {};
   if (patch.id !== undefined) set.id = patch.id;
@@ -428,32 +325,22 @@ function programRecordUpdateSet(patch: Partial<NewProgramRecord>): UpdateObject<
   return set;
 }
 
-/**
- * Kho dữ liệu Curriculum: subjects → curricula → curriculum_nodes
- * (cây) → learning_outcomes. Thứ tự hiển thị luôn là position tăng
- * dần, rồi thời gian tạo để ổn định khi trùng position.
- */
 export class CurriculumRepository {
   constructor(private readonly handle: CentreDb) {}
 
-  /** Instance gốc của repository. */
   private db(): CentreDb {
     return this.handle;
   }
 
-  /** Handle DB gốc — tầng service mở transaction khi cần ghi nguyên tử nhiều bảng (nạp dataset). */
   get dbHandle(): CentreDb {
     return this.db();
   }
 
-  /** Mở một transaction trên kho trung tâm và chạy `fn` với handle giao dịch. */
   async transaction<T>(fn: (tx: CurriculumTx) => Promise<T>): Promise<T> {
     return this.db().transaction().execute(fn);
   }
 
-  // --- subjects -------------------------------------------------------------
 
-  /** Chèn môn học. */
   async insertSubject(v: NewSubject, db: Db = this.db()): Promise<SubjectRow> {
     const rows = await db
       .insertInto('subjects')
@@ -463,7 +350,6 @@ export class CurriculumRepository {
     return rows[0]!;
   }
 
-  /** Lấy môn học theo slug (định danh đường dẫn duy nhất toàn hệ). */
   async getSubjectBySlug(slug: string, db: Db = this.db()): Promise<SubjectRow | undefined> {
     const row = await db
       .selectFrom('subjects')
@@ -473,7 +359,6 @@ export class CurriculumRepository {
     return row;
   }
 
-  /** Lấy môn học theo id. */
   async getSubject(id: string, db: Db = this.db()): Promise<SubjectRow | undefined> {
     const row = await db
       .selectFrom('subjects')
@@ -483,7 +368,6 @@ export class CurriculumRepository {
     return row;
   }
 
-  /** Liệt kê môn học trong một context. */
   async listSubjects(contextId: string, db: Db = this.db()): Promise<SubjectRow[]> {
     return db
       .selectFrom('subjects')
@@ -494,7 +378,6 @@ export class CurriculumRepository {
       .execute();
   }
 
-  /** Sửa môn học (đã lọc trường ở tầng service). */
   async updateSubject(id: string, v: Partial<NewSubject>, db: Db = this.db()): Promise<void> {
     await db
       .updateTable('subjects')
@@ -503,14 +386,11 @@ export class CurriculumRepository {
       .execute();
   }
 
-  /** Xoá môn học; curricula/nodes/outcomes con bị xoá theo cascade. */
   async deleteSubject(id: string, db: Db = this.db()): Promise<void> {
     await db.deleteFrom('subjects').where('id', '=', id).execute();
   }
 
-  // --- curricula --------------------------------------------------------------
 
-  /** Chèn chương trình (môn + khối). */
   async insertCurriculum(v: NewCurriculum, db: Db = this.db()): Promise<CurriculumRow> {
     const rows = await db
       .insertInto('curricula')
@@ -520,7 +400,6 @@ export class CurriculumRepository {
     return rows[0]!;
   }
 
-  /** Lấy chương trình theo id. */
   async getCurriculum(id: string, db: Db = this.db()): Promise<CurriculumRow | undefined> {
     const row = await db
       .selectFrom('curricula')
@@ -530,7 +409,6 @@ export class CurriculumRepository {
     return row;
   }
 
-  /** Liệt kê chương trình của một môn, theo khối tăng dần. */
   async listCurricula(subjectId: string, db: Db = this.db()): Promise<CurriculumRow[]> {
     return db
       .selectFrom('curricula')
@@ -540,7 +418,6 @@ export class CurriculumRepository {
       .execute();
   }
 
-  /** Sửa chương trình. */
   async updateCurriculum(id: string, v: Partial<NewCurriculum>, db: Db = this.db()): Promise<void> {
     await db
       .updateTable('curricula')
@@ -549,14 +426,11 @@ export class CurriculumRepository {
       .execute();
   }
 
-  /** Xoá chương trình; cây node và outcomes bị xoá theo cascade. */
   async deleteCurriculum(id: string, db: Db = this.db()): Promise<void> {
     await db.deleteFrom('curricula').where('id', '=', id).execute();
   }
 
-  // --- nodes ------------------------------------------------------------------
 
-  /** Chèn node nội dung. */
   async insertNode(v: NewCurriculumNode, db: Db = this.db()): Promise<CurriculumNodeRow> {
     const rows = await db
       .insertInto('curriculum_nodes')
@@ -566,7 +440,6 @@ export class CurriculumRepository {
     return rows[0]!;
   }
 
-  /** Lấy node theo id. */
   async getNode(id: string, db: Db = this.db()): Promise<CurriculumNodeRow | undefined> {
     const row = await db
       .selectFrom('curriculum_nodes')
@@ -576,7 +449,6 @@ export class CurriculumRepository {
     return row;
   }
 
-  /** Toàn bộ node của một chương trình, phẳng, theo position. */
   async listNodes(curriculumId: string, db: Db = this.db()): Promise<CurriculumNodeRow[]> {
     return db
       .selectFrom('curriculum_nodes')
@@ -587,7 +459,6 @@ export class CurriculumRepository {
       .execute();
   }
 
-  /** Sửa node. */
   async updateNode(id: string, v: Partial<NewCurriculumNode>, db: Db = this.db()): Promise<void> {
     await db
       .updateTable('curriculum_nodes')
@@ -596,14 +467,11 @@ export class CurriculumRepository {
       .execute();
   }
 
-  /** Xoá node; node con và outcomes bị xoá theo cascade. */
   async deleteNode(id: string, db: Db = this.db()): Promise<void> {
     await db.deleteFrom('curriculum_nodes').where('id', '=', id).execute();
   }
 
-  // --- outcomes -----------------------------------------------------------------
 
-  /** Chèn yêu cầu cần đạt. */
   async insertOutcome(v: NewLearningOutcome, db: Db = this.db()): Promise<LearningOutcomeRow> {
     const rows = await db
       .insertInto('learning_outcomes')
@@ -613,7 +481,6 @@ export class CurriculumRepository {
     return rows[0]!;
   }
 
-  /** Lấy yêu cầu cần đạt theo id. */
   async getOutcome(id: string, db: Db = this.db()): Promise<LearningOutcomeRow | undefined> {
     const row = await db
       .selectFrom('learning_outcomes')
@@ -623,16 +490,6 @@ export class CurriculumRepository {
     return row;
   }
 
-  /**
-   * Liệt kê yêu cầu cần đạt HIỆN HÀNH của một node — ĐIỂM LỌC DUY
-   * NHẤT của trạng thái rút (đợt neo lại định danh, issue #161): mặc
-   * định loại các dòng đã rút (`retired_at` khác NULL); mọi bề mặt
-   * "chương trình hiện hành" (cây quản trị, bản đặc tả qua tầng
-   * service, khung nạp vào khoá) đều kế thừa mặc định này. Chỉ đường
-   * nội bộ cần thấy cả dòng đã rút (gác xoá node, importer) mới
-   * truyền `includeRetired: true`. Tra cứu đích danh theo id
-   * (getOutcome) KHÔNG lọc — id là địa chỉ lịch sử hợp lệ.
-   */
   async listOutcomes(
     nodeId: string,
     opts?: { includeRetired?: boolean },
@@ -652,7 +509,6 @@ export class CurriculumRepository {
       .execute();
   }
 
-  /** Toàn bộ outcomes hiện hành của nhiều node (dựng cây của một chương trình); `includeRetired` như listOutcomes. */
   async listOutcomesForNodes(
     nodeIds: string[],
     opts?: { includeRetired?: boolean },
@@ -673,15 +529,6 @@ export class CurriculumRepository {
       .execute();
   }
 
-  /**
-   * Toàn bộ dòng YCCĐ thuộc DIỆN DATASET QUẢN của một node — đường
-   * đọc riêng của importer: `source_kind = 'program'` VÀ `source_ref`
-   * khác NULL (dòng dataset luôn ghi kèm source_ref của bản ghi; dòng
-   * program do admin tạo tay có source_ref NULL nên không thuộc diện
-   * quản, importer không bao giờ đụng), GỒM CẢ dòng đã rút để thuật
-   * toán diff ghép cặp phân hai tập hiện hành / đã rút. Dòng `derived`
-   * không nằm trong diện này.
-   */
   async listDatasetManagedOutcomes(nodeId: string, db: Db = this.db()): Promise<LearningOutcomeRow[]> {
     return db
       .selectFrom('learning_outcomes')
@@ -698,12 +545,6 @@ export class CurriculumRepository {
       .execute();
   }
 
-  /**
-   * Đếm liên kết đang trỏ vào từng YCCĐ trong một tập (gắn câu hỏi +
-   * ánh xạ sách theo outcome) — số liệu importer ghi vào báo cáo thay
-   * đổi cho các ca rút dòng/sửa chữ để người duyệt thấy ảnh hưởng.
-   * Trả Map theo outcomeId; id không có liên kết nào thì vắng khỏi Map.
-   */
   async countOutcomeLinks(
     outcomeIds: string[],
     db: Db = this.db(),
@@ -740,7 +581,6 @@ export class CurriculumRepository {
     return out;
   }
 
-  /** Tổng số dòng YCCĐ đang ở trạng thái đã rút của một dataset (đọc từ sổ: node của các bản ghi thuộc dataset). */
   async countRetiredOutcomesForDataset(datasetKey: string, db: Db = this.db()): Promise<number> {
     const row = await db
       .selectFrom('learning_outcomes')
@@ -758,7 +598,6 @@ export class CurriculumRepository {
     return row?.n ?? 0;
   }
 
-  /** Sửa yêu cầu cần đạt (đường nạp truyền tx để diff commit nguyên tử cùng node + dòng sổ). */
   async updateOutcome(id: string, v: Partial<NewLearningOutcome>, db: Db = this.db()): Promise<void> {
     await db
       .updateTable('learning_outcomes')
@@ -767,18 +606,6 @@ export class CurriculumRepository {
       .execute();
   }
 
-  /**
-   * Đếm các tham chiếu "cứng" đang trỏ vào một tập node + YCCĐ từ các
-   * bề mặt khác (ánh xạ sách, ô ma trận đề, gắn câu hỏi): đây là các
-   * FK đã đổi từ cascade sang restrict (GDPT-SEED) — bề mặt quản trị
-   * xoá phải hỏi hàm này trước và từ chối bằng lỗi nghiệp vụ rõ ràng
-   * thay vì để lỗi FK thô của Postgres lộ ra.
-   *
-   * Ghép điều kiện theo khuôn T-13 đã chốt: điều kiện của bảng ánh
-   * xạ sách dựng trong callback `where` — một điều kiện thì dùng
-   * thẳng, hai điều kiện thì gộp `eb.or(...)`; cả hai tập đều rỗng
-   * thì không chạy truy vấn của bảng đó (số đếm giữ 0 như cũ).
-   */
   async countGuardedReferences(
     nodeIds: string[],
     outcomeIds: string[],
@@ -801,8 +628,6 @@ export class CurriculumRepository {
     }
     let examMatrixCellsCount = 0;
     let questionOutcomesCount = 0;
-    // Ô ma trận neo NODE (issue #249 — không còn neo YCCĐ): đếm theo
-    // tập node sắp xoá, độc lập với tập YCCĐ.
     if (nodeIds.length > 0) {
       const cells = await db
         .selectFrom('exam_matrix_cells')
@@ -822,20 +647,6 @@ export class CurriculumRepository {
     return { bookMappings: bookMappingsCount, examMatrixCells: examMatrixCellsCount, questionOutcomes: questionOutcomesCount };
   }
 
-  /**
-   * Tìm YCCĐ theo từ khoá trong nội dung (không phân biệt hoa thường),
-   * kèm ngữ cảnh hiển thị (tên node, khối, môn + context của môn để
-   * tầng service gác quyền đọc). Lọc cứng theo môn/khối khi caller
-   * truyền; trần `limit` chặn ở SQL — tầng service còn lọc quyền theo
-   * từng môn rồi mới cắt theo hạn mức của caller.
-   *
-   * Hình chiếu toàn bảng của dòng YCCĐ (thử nghiệm T-14, chốt tại
-   * issue này): bộ máy cũ chọn `outcome: learningOutcomes` (cả
-   * bảng lồng dưới khoá `outcome`); Kysely không có hình chiếu lồng
-   * tương đương nên ở đây chọn tường minh từng cột của bảng YCCĐ
-   * với bí danh tiền tố `outcome…` rồi lồng lại thành object
-   * `outcome` ở biên — hình dạng trả ra khớp sâu với hình dạng cũ.
-   */
   async searchOutcomes(
     input: { query: string; subjectId?: string; grade?: number; limit: number },
     db: Db = this.db(),
@@ -847,15 +658,6 @@ export class CurriculumRepository {
     subjectName: string;
     subjectContextId: string;
   }[]> {
-    // Tìm kiếm là đường đọc "chương trình hiện hành": dòng đã rút
-    // (retired_at khác NULL) không được xuất hiện — cùng luật với
-    // listOutcomes, áp ngay tại truy vấn này vì nó không qua listOutcomes.
-    // Cột content nay là jsonb (tài liệu Tiptap) nên không ILIKE trực
-    // tiếp được: ép sang text để khớp trên văn bản trong tài liệu.
-    // Khớp có thể chạm cả cú pháp JSON của tài liệu, nhưng từ khoá
-    // tìm kiếm là văn bản YCCĐ nên kết quả thực tế vẫn là các dòng
-    // chứa từ khoá đó; tầng service vẫn trả text canonical trích
-    // từ tài liệu, không trả JSON thô.
     const rows = await db
       .selectFrom('learning_outcomes')
       .innerJoin('curriculum_nodes', 'curriculum_nodes.id', 'learning_outcomes.node_id')
@@ -915,10 +717,6 @@ export class CurriculumRepository {
     }));
   }
 
-  /**
-   * Đếm câu hỏi sẵn sàng đã gắn vào một YCCĐ, nhóm theo (mức × dạng câu). "Sẵn sàng" = trạng thái ready ở cấp danh tính câu hỏi
-   * (question_bank_entries.status) — nền cho đếm ứng viên ma trận (A.6).
-   */
   async countReadyQuestionsForOutcome(
     outcomeId: string,
     db: Db = this.db(),
@@ -941,14 +739,11 @@ export class CurriculumRepository {
       .execute();
   }
 
-  /** Xoá yêu cầu cần đạt. */
   async deleteOutcome(id: string, db: Db = this.db()): Promise<void> {
     await db.deleteFrom('learning_outcomes').where('id', '=', id).execute();
   }
 
-  // --- sổ đăng ký nạp dữ liệu chuẩn (K0a) --------------------------------
 
-  /** Tổng số dòng sổ đăng ký — căn cứ xét "DB đã có dữ liệu chương trình chưa" cho đường restore dump khi seed. */
   async countProgramRecords(db: Db = this.db()): Promise<number> {
     const row = await db
       .selectFrom('curriculum_program_records')
@@ -957,7 +752,6 @@ export class CurriculumRepository {
     return row?.n ?? 0;
   }
 
-  /** Tra một bản ghi đã nạp theo định danh ổn định (dataset, mã bản ghi). */
   async getProgramRecord(datasetKey: string, recordId: string, db: Db = this.db()): Promise<ProgramRecordRow | undefined> {
     const row = await db
       .selectFrom('curriculum_program_records')
@@ -967,7 +761,6 @@ export class CurriculumRepository {
     return row;
   }
 
-  /** Tra dòng sổ theo node nội dung — phục vụ suy mã bản ghi (mã YCCĐ vị trí) cho một node thuộc dataset. */
   async getProgramRecordByNodeId(nodeId: string, db: Db = this.db()): Promise<ProgramRecordRow | undefined> {
     const row = await db
       .selectFrom('curriculum_program_records')
@@ -977,7 +770,6 @@ export class CurriculumRepository {
     return row;
   }
 
-  /** Toàn bộ dòng sổ của một dataset (phục vụ trạng thái nạp + đối chiếu). */
   async listProgramRecords(datasetKey: string, db: Db = this.db()): Promise<ProgramRecordRow[]> {
     return db
       .selectFrom('curriculum_program_records')
@@ -987,7 +779,6 @@ export class CurriculumRepository {
       .execute();
   }
 
-  /** Ghi một dòng sổ khi nạp mới một bản ghi. */
   async insertProgramRecord(v: NewProgramRecord, db: Db = this.db()): Promise<ProgramRecordRow> {
     const rows = await db
       .insertInto('curriculum_program_records')
@@ -997,7 +788,6 @@ export class CurriculumRepository {
     return rows[0]!;
   }
 
-  /** Cập nhật một dòng sổ khi bản ghi được nạp lại sau đính chính nguồn. */
   async updateProgramRecord(id: string, v: Partial<NewProgramRecord>, db: Db = this.db()): Promise<void> {
     await db
       .updateTable('curriculum_program_records')
@@ -1006,7 +796,6 @@ export class CurriculumRepository {
       .execute();
   }
 
-  /** Toàn bộ dòng sổ của một môn (mọi dataset) — tầng SGK (K0b) truy vết mã bản ghi theo node đích của ánh xạ. */
   async listProgramRecordsBySubject(subjectId: string, db: Db = this.db()): Promise<ProgramRecordRow[]> {
     return db
       .selectFrom('curriculum_program_records')

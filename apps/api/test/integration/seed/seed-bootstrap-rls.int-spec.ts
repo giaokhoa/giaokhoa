@@ -4,20 +4,6 @@ import { join } from 'node:path';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-/**
- * Hồi quy sự cố triển khai TENANT-1 (#196, PR #202): production reset DB theo baseline fail-closed xong app KHÔNG boot được — SeedService chạy `onApplicationBootstrap` ngoài ngữ cảnh tenant nên `TenantsService.ensurePlatformTenant` bị RLS WITH CHECK chặn (42501), web crash-loop, seed không chạy được. Mọi e2e thường không bắt được lớp lỗi này vì kết nối test là superuser (bỏ qua RLS kể cả FORCE) và vì app-under-test boot trong cùng tiến trình test.
- *
- * Spec này tái hiện ĐÚNG điều kiện production: dựng một DB trống riêng, áp đúng baseline hiện hành, tạo một role NOSUPERUSER/NOBYPASSRLS, rồi boot app thật (`dist/main.js`, tiến trình con riêng, DATABASE_URL trỏ role thường vào DB trống) và chờ đăng nhập admin thành công qua HTTP. Trước hotfix: tiến trình con chết 42501 ở bootstrap, spec đỏ. Sau hotfix: boot qua, seed gieo đủ tenant nền tảng + tenant trường mặc định + membership của admin.
- *
- * Yêu cầu: dist của apps/api phải được build trước (CI luôn build trước bước test; chạy local: `pnpm --filter @giaokhoa/api build`).
- *
- * Tự vệ chống test rỗng: spec cũng khẳng định role thường NGOÀI ngữ cảnh thấy 0 tenant và INSERT bị 42501 — tức RLS thật sự cắn role này, nên boot qua được chỉ có thể nhờ ngữ cảnh platform của seed.
- *
- * Vòng 2 (#196, sau triển khai PR #236): boot qua được chưa đủ — production vẫn chết ở bước review-seed thêm thành viên tenant
- * (`POST /tenants/{id}/members` → 404 `tenant.not_found` giả vì
- * TenantsService chưa bọc ngữ cảnh platform cho bề mặt vòng đời/ membership) và `GET /auth/tenants` trả 404 rỗng trên web live vì handler Better Auth (được mount khi `MCP_AS_ENABLED` bật như production) nuốt hai segment `tenants`/`switch-tenant` chưa có trong LEGACY_AUTH_SEGMENTS — tiến trình seed không mount Better Auth nên trong seed vẫn 200. App con vì vậy được bật `MCP_AS_ENABLED` đúng hình dạng production, và spec lái trọn đường review-seed qua HTTP:
- * đăng nhập admin → bộ chọn tenant → tạo user → thêm thành viên → chuyển phiên. Các spec in-process (createTestApp) không tái hiện được cả hai lớp lỗi này (không mount Better Auth, kết nối superuser).
- */
 
 const ADMIN_URL =
   process.env.DATABASE_URL ??
@@ -56,7 +42,6 @@ async function tryAdminLogin(): Promise<boolean> {
   }
 }
 
-/** Gọi HTTP vào app con (cùng đường review-seed dùng) — trả status + body đã parse. */
 async function apiCall(
   method: string,
   path: string,
@@ -84,7 +69,6 @@ describe('Seed bootstrap trên DB trống bằng role thường dưới RLS fail
   let childExitCode: number | null = null;
 
   beforeAll(async () => {
-    // 1) DB trống riêng + baseline hiện hành, dựng bằng kết nối quản trị.
     const admin = await pg(urlFor('postgres'));
     try {
       await admin.query(`DROP DATABASE IF EXISTS ${SCRATCH_DB} WITH (FORCE)`);
@@ -101,9 +85,6 @@ describe('Seed bootstrap trên DB trống bằng role thường dưới RLS fail
         .map((d) => join(migrationsDir, d.name, 'migration.sql'));
       expect(baselines).toHaveLength(1);
       await scratchAdmin.query(readFileSync(baselines[0]!, 'utf8'));
-      // Role ứng dụng: thường tuyệt đối — không superuser, không
-      // bypassrls, không phải chủ sở hữu bảng. Đây là đúng hình dạng kết
-      // nối production đã làm app crash-loop.
       await scratchAdmin.query(
         `CREATE ROLE ${APP_ROLE} LOGIN PASSWORD '${APP_ROLE_PASSWORD}' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE`,
       );
@@ -115,7 +96,6 @@ describe('Seed bootstrap trên DB trống bằng role thường dưới RLS fail
       await scratchAdmin.end();
     }
 
-    // 2) Boot app thật bằng role thường trên DB trống (tiến trình con).
     const mainJs = join(process.cwd(), 'dist', 'main.js');
     if (!existsSync(mainJs)) {
       throw new Error(
@@ -127,9 +107,6 @@ describe('Seed bootstrap trên DB trống bằng role thường dưới RLS fail
       DATABASE_URL: urlFor(SCRATCH_DB, APP_ROLE, APP_ROLE_PASSWORD),
       PORT: String(APP_PORT),
       NODE_ENV: 'test',
-      // Đúng hình dạng production: AS của MCP bật → main.ts mount
-      // handler Better Auth lên /api/v1/auth/* (điều kiện nuốt route
-      // của vòng 2). Secret chỉ dùng trong spec này.
       MCP_AS_ENABLED: 'true',
       BETTER_AUTH_SECRET: 'seed-rls-spec-secret-not-production',
       BETTER_AUTH_URL: APP_BASE,
@@ -140,7 +117,6 @@ describe('Seed bootstrap trên DB trống bằng role thường dưới RLS fail
     child.stderr?.on('data', (d: Buffer) => { childOutput += d.toString(); });
     child.on('exit', (code) => { childExitCode = code; });
 
-    // 3) Chờ boot + seed xong qua dấu hiệu ngoài: admin đăng nhập được.
     const deadline = Date.now() + 180_000;
     for (;;) {
       if (childExitCode !== null) {
@@ -214,8 +190,6 @@ describe('Seed bootstrap trên DB trống bằng role thường dưới RLS fail
     const school = (registry.body as { id: string; slug: string }[]).find((t) => t.slug === 'truong-mac-dinh');
     expect(school, 'registry phải có tenant trường mặc định').toBeDefined();
 
-    // Danh sách tenant cấp platform phải thấy MỌI tenant, không chỉ
-    // tenant hiệu lực của phiên (claim tid = tenant-zero).
     const list = await apiCall('GET', '/tenants', tok);
     expect(list.status, `GET /tenants: ${JSON.stringify(list.body)}`).toBe(200);
     expect((list.body as { slug: string }[]).map((t) => t.slug).sort()).toEqual(['trang-chinh', 'truong-mac-dinh']);

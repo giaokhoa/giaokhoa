@@ -3,9 +3,6 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AvailabilityEditor, type AvailabilityNodeModel } from './availability-editor';
 
-/**
- * Spec trình sửa cây availability: mô hình phát ra qua `onChange` phải khớp đúng hình dạng cây JSON phía API (nút `{ op, c, show?, showc? }`, lá date/grade/completion/group/grouping/profile với đúng khoá tham số mà evaluator của backend đọc — đối chiếu availability.service và các evaluator đăng ký ở completion/groups service).
- */
 const GROUP_ID = '01900000-0000-7000-8000-000000002001';
 const GROUPING_ID = '01900000-0000-7000-8000-000000002002';
 const MODULE_ID = '01900000-0000-7000-8000-000000001000';
@@ -57,7 +54,6 @@ describe('Khối AvailabilityEditor', () => {
     );
 
     const root = screen.getByTestId('availability-node-root');
-    // Select của @giaokhoa/ui: trigger hiện chữ của tuỳ chọn đang chọn thay cho value của <select> native.
     expect(screen.getByTestId('avail-op-root')).toHaveTextContent('Tất cả điều kiện (AND)');
     expect(within(root).getByLabelText('Mốc thời gian')).not.toHaveValue('');
     const nested = screen.getByTestId('availability-node-1');

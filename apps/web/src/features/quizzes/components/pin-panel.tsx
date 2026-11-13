@@ -1,21 +1,3 @@
-/**
- * Thẻ thông tin đề đã ghim (tách cấu trúc từ `pages/quiz.tsx`
- * theo đợt A của issue #223): nguồn đề, version đang ghim, xem
- * trước và áp cập nhật version, danh sách slot đã ghim. Chỉ
- * trình bày dữ liệu qua props; việc tải xem trước và áp cập
- * nhật do trang giữ và truyền xuống.
- *
- * @param props.quiz - Phần lần ghim của view (chứa slots và version).
- * @param props.slotNames - Tên hiển thị của từng slot theo id.
- * @param props.examInfo - Thông tin đề nguồn ở ngân hàng (tên + version hiện hành).
- * @param props.groups - Nhóm của khoá (hiện tên nhóm đích của lần ghim).
- * @param props.updatePreview - Bản xem trước cập nhật version (null khi chưa tải).
- * @param props.updateError - Lỗi cập nhật version hiện tại.
- * @param props.busy - Đang có thao tác ghi chạy (khoá nút).
- * @param props.loadUpdatePreview - Handler tải xem trước cập nhật version.
- * @param props.applyUpdate - Handler áp cập nhật lên version đã xem trước.
- * @param props.setUpdatePreview - Setter của bản xem trước (nút huỷ đặt null).
- */
 import type { PinVersionUpdatePreview, QuizView } from '@giaokhoa/contracts';
 import { CourseGroup } from '#features/progress-report/types/progress-report';
 import { Button } from '@giaokhoa/ui/components/button';

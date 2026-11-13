@@ -5,18 +5,6 @@ import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWO
 import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstSectionId } from '../../support/course-enrolment-helpers';
 import { addExamSlot, createExamDraft, pinExam } from '../../support/exam-pin-helpers';
 
-/**
- * Quiz Chặng 3 (issue #30) — ma trận đề + sinh slots + chấm Đ–S chùm + bản đặc tả, đối chiếu hồ sơ thiết kế mục C:
- *  - ma trận neo Chương trình GDPT 2018 (môn → chương trình → ĐVK);
- *    ô = ĐVK × mức × dạng (issue #249 — ma trận KHÔNG gắn YCCĐ, YCCĐ chỉ hiện ở cột suy ra của bản đặc tả), preset chụp lúc tạo, lệch tỉ lệ chỉ cảnh báo;
- *  - generate khoá cứng 422 khi thiếu câu ở bất kỳ ô nào; generate
- *    rút MỘT bộ câu cố định ghim cứng vào slots của exam version
- *    (bỏ hẳn drawMode/per_student theo chốt #226) — hai học sinh làm
- *    cùng một pin nhận cùng một bộ câu;
- *  - chùm Đ–S (1 stimulus + 4 câu truefalse) chấm theo thang lũy tiến
- *    QĐ 764 mặc định [0,10,25,50,100]% — KHÔNG cộng tuyến tính;
- *  - bản đặc tả theo Mẫu 2 CV 7991 + xuất xlsx/docx.
- */
 describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () => {
   let app: INestApplication;
   let admin: string;
@@ -61,7 +49,6 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
     const contexts = await http(app).get('/api/v1/access/contexts').set('Authorization', `Bearer ${admin}`);
     const systemCtx = (contexts.body as { id: string; contextLevel: number }[]).find((c) => c.contextLevel === 10)!;
 
-    // Chương trình: môn → chương trình lớp 10 → chủ đề → đơn vị kiến thức → 2 YCCĐ.
     const subjRes = await http(app).post('/api/v1/curriculum/subjects').set('Authorization', `Bearer ${admin}`)
       .send({ contextId: systemCtx.id, name: 'Toán học', slug: `toan-${Date.now()}` });
     if (subjRes.status !== 201 && subjRes.status !== 200) throw new Error(`subject failed: ${subjRes.status} ${JSON.stringify(subjRes.body)}`);
@@ -83,8 +70,6 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
     };
     const outcomeBiet = await mkOutcome('Nhận biết được tính đồng biến, nghịch biến của hàm số bậc hai.');
     const outcomeHieu = await mkOutcome('Giải thích được mối liên hệ giữa đồ thị và dấu của hệ số a.');
-    // ĐVK khác cùng chủ đề (issue #249): câu của ĐVK này KHÔNG được
-    // tính vào pool của ô neo ĐVK "Hàm số bậc hai".
     const lesson2Res = await http(app).post('/api/v1/curriculum/nodes').set('Authorization', `Bearer ${admin}`)
       .send({ curriculumId, parentId: topicId, title: 'Hàm số bậc nhất', kind: 'lesson' });
     const lesson2Id = lesson2Res.body.id as string;
@@ -92,7 +77,6 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
       .send({ nodeId: lesson2Id, content: 'Nhận biết được hàm số bậc nhất.' });
     const outcomeOther = outcomeOtherRes.body.id as string;
 
-    // Khoá học + học sinh.
     const cat = await createCategory(app, admin);
     const course = await createCourse(app, admin, cat.id);
     const sectionId = await getFirstSectionId(app, admin, course.id);
@@ -105,7 +89,6 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
     const s1 = await mkStudent();
     const s2 = await mkStudent();
 
-    // Ngân hàng: category ở context hệ thống; câu gắn YCCĐ qua endpoint outcomes.
     const bankRes = await http(app).post('/api/v1/questions/categories').set('Authorization', `Bearer ${admin}`)
       .send({ name: 'Matrix bank', contextId: systemCtx.id });
     const bankCatId = bankRes.body.id as string;
@@ -137,15 +120,11 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
       await tag(q, outcomeHieu, 'hieu');
       mcPoolHieu.push(q);
     }
-    // Câu gắn YCCĐ "Hiểu" của CÙNG ĐVK ở mức Biết (issue #249): ô neo
-    // ĐVK phải tính câu này vào pool Biết — mô hình cũ neo từng YCCĐ
-    // sẽ bỏ sót.
     const mcCross = await mkQuestion({
       qtype: 'multichoice', questionText: 'MCX: chọn đáp án đúng.', defaultMark: 1,
       answers: [{ text: 'Đúng', correct: true }, { text: 'Sai', correct: false }, { text: 'Đáp án khác 1', correct: false }, { text: 'Đáp án khác 2', correct: false }],
     });
     await tag(mcCross, outcomeHieu, 'biet');
-    // Câu của ĐVK khác ở cùng mức Biết: không thuộc pool của ô.
     for (const name of ['MCO1', 'MCO2']) {
       const q = await mkQuestion({
         qtype: 'multichoice', questionText: `${name}: chọn đáp án đúng.`, defaultMark: 1,
@@ -153,9 +132,6 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
       });
       await tag(q, outcomeOther, 'biet');
     }
-    // Câu Đ–S TF-A: MỘT câu gồm thân chung + 4 mệnh đề (đáp án
-    // [Đ, S, Đ, S]) gắn cùng stimulus và outcome/mức Hiểu — chùm là
-    // chính câu hỏi, không còn 4 câu rời gom ở tầng ghim/sinh đề.
     const stimRes = await http(app).post('/api/v1/stimuli').set('Authorization', `Bearer ${admin}`)
       .send({ categoryId: bankCatId, content: 'Cho hàm số y = x² − 2x + 1. Xét tính đúng sai của các mệnh đề sau.' });
     if (stimRes.status !== 201 && stimRes.status !== 200) throw new Error(`stimulus failed: ${stimRes.status} ${JSON.stringify(stimRes.body)}`);
@@ -188,8 +164,6 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
   }
 
   async function createMatrix(ctx: Ctx, body: Record<string, unknown> = {}) {
-    // presetKind đã bỏ hẳn (chốt #226): ma trận luôn theo khuôn CV
-    // 7991 — thân cũ còn truyền presetKind thì lược bỏ tại đây.
     const { presetKind: _presetKind, ...rest } = body;
     const r = await http(app).post('/api/v1/exam-matrices').set('Authorization', `Bearer ${admin}`)
       .send({ name: 'Ma trận giữa kỳ', subjectId: ctx.subjectId, curriculumId: ctx.curriculumId, ...rest });
@@ -210,8 +184,6 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
     const start = await http(app).post(`/api/v1/exam-pins/${quizId}/attempts`).set('Authorization', `Bearer ${token}`).send({});
     if (start.status !== 201 && start.status !== 200) throw new Error(`start failed: ${start.status} ${JSON.stringify(start.body)}`);
     let view = start.body as AttemptViewBody;
-    // Đáp án đúng của 4 mệnh đề là `corrects` — trả đúng correctCount
-    // ý đầu, các ý còn lại trả ngược phía; response là JSON theo ý.
     const map: Record<string, boolean> = {};
     for (let i = 0; i < 4; i++) {
       map[`s${i + 1}`] = i < correctCount ? corrects[i]! : !corrects[i]!;
@@ -227,32 +199,28 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
     const matrix = await createMatrix(ctx, { presetKind: 'cv7991_periodic' });
     expect(matrix.targetFormPercents).toEqual({ multichoice: 30, truefalse: 20, shortanswer: 20, essay: 30 });
     expect(matrix.targetLevelPercents).toEqual({ biet: 40, hieu: 30, van_dung: 30 });
-    expect(matrix.warnings.length).toBeGreaterThan(0); // chưa có ô nào
+    expect(matrix.warnings.length).toBeGreaterThan(0);
 
     const cell = await addCell(matrix.id, {
       curriculumNodeId: ctx.lessonId, cognitiveLevel: 'biet', qtype: 'multichoice',
       questionCount: 2, cellScore: 4, minutes: 10,
     });
     expect(cell.status === 200 || cell.status === 201).toBe(true);
-    // Ô mang ĐVK, TUYỆT ĐỐI không còn trường YCCĐ (issue #249).
     const createdCell = (cell.body.cells as Record<string, unknown>[])[0]!;
     expect(createdCell.curriculumNodeId).toBe(ctx.lessonId);
     expect(createdCell.learningOutcomeId).toBeUndefined();
-    // Trùng khoá ô bị từ chối.
     const dup = await addCell(matrix.id, {
       curriculumNodeId: ctx.lessonId, cognitiveLevel: 'biet', qtype: 'multichoice',
       questionCount: 1, cellScore: 1,
     });
     expect(dup.status).toBe(400);
     expect(dup.body.code).toBe('quiz.matrix_cell_exists');
-    // van_dung_cao ngoài bộ ba mức bị từ chối.
     const vdc = await addCell(matrix.id, {
       curriculumNodeId: ctx.lessonId, cognitiveLevel: 'van_dung_cao', qtype: 'essay',
       questionCount: 1, cellScore: 1,
     });
     expect(vdc.status).toBe(400);
     expect(vdc.body.code).toBe('quiz.matrix_level_not_in_set');
-    // Tổng ô (4) khác tổng đích (10) → cảnh báo, không khoá.
     const view = await http(app).get(`/api/v1/exam-matrices/${matrix.id}`).set('Authorization', `Bearer ${admin}`);
     expect(view.body.warnings.some((w: string) => w.includes('Tổng điểm các ô'))).toBe(true);
   });
@@ -272,20 +240,15 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
     expect(avail.body.sufficient).toBe(false);
     const mcCell = (avail.body.cells as { required: number; available: number; deficit: number }[])
       .find((c) => c.required === 5)!;
-    // Pool của ô = câu gắn BẤT KỲ YCCĐ nào thuộc ĐVK ở mức Biết:
-    // 3 câu gắn YCCĐ Biết + 1 câu gắn YCCĐ Hiểu ở mức Biết = 4. Hai
-    // câu của ĐVK khác (cùng mức Biết) KHÔNG được tính — mô hình cũ
-    // neo từng YCCĐ chỉ đếm được 3, mô hình rò ĐVK sẽ đếm 6.
     expect(mcCell.available).toBe(4);
     expect(mcCell.deficit).toBe(1);
     const tfCell = (avail.body.cells as { required: number; available: number }[]).find((c) => c.required === 1)!;
-    expect(tfCell.available).toBe(1); // đúng 1 CÂU TF-A (mỗi câu là một chùm 4 ý)
+    expect(tfCell.available).toBe(1);
 
     const gen = await http(app).post(`/api/v1/exam-matrices/${matrix.id}/generate`).set('Authorization', `Bearer ${admin}`)
       .send({ courseId: ctx.courseId, sectionId: ctx.sectionId, name: 'Đề thiếu câu' });
     expect(gen.status).toBe(422);
     expect(gen.body.code).toBe('quiz.matrix_insufficient_questions');
-    // Chi tiết từng ô thiếu đi kèm trên wire (trường errors của problem details).
     const detailText = JSON.stringify(gen.body.errors ?? []);
     expect(detailText).toContain('required 5, available 4, deficit 1');
   });
@@ -311,11 +274,7 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
     const mcSlots = quiz.slots.filter((s) => s.matrixCellId && s.questionId && s.questionId !== ctx.tfQuestion);
     expect(mcSlots).toHaveLength(2);
     expect(new Set(mcSlots.map((s) => s.questionId)).size).toBe(2);
-    // Pool của ô Biết = mọi câu multichoice mức Biết thuộc ĐVK (gồm cả
-    // câu gắn YCCĐ khác của cùng ĐVK — ctx.mcCross).
     for (const s of mcSlots) expect([...ctx.mcPool, ctx.mcCross]).toContain(s.questionId);
-    // Ô TF questionCount=1 → ĐÚNG MỘT slot mang cả câu TF-A với
-    // trọn điểm của ô (không còn bẻ chùm thành 4 slot danh nghĩa).
     const tfSlots = quiz.slots.filter((s) => s.questionId === ctx.tfQuestion);
     expect(tfSlots).toHaveLength(1);
     expect(tfSlots[0]!.maxMark).toBeCloseTo(4, 6);
@@ -331,14 +290,11 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
     const gen = await http(app).post(`/api/v1/exam-matrices/${matrix.id}/generate`).set('Authorization', `Bearer ${admin}`)
       .send({ courseId: ctx.courseId, sectionId: ctx.sectionId, name: 'Đề chùm' });
     const quiz = gen.body as QuizBody;
-    // 2/4 ý đúng → thang QĐ 764 cho 25% × 4 = 1 điểm (tuyến tính sẽ là 2).
     const two = await playTfQuiz(ctx.student, quiz.id, 2, ctx.tfQuestion, ctx.tfCorrects);
     expect(two.attempt.state).toBe('finished');
     expect(two.attempt.sumGrades).toBeCloseTo(1, 6);
-    // 3/4 ý đúng → 50% × 4 = 2 điểm (tuyến tính sẽ là 3).
     const three = await playTfQuiz(ctx.student2, quiz.id, 3, ctx.tfQuestion, ctx.tfCorrects);
     expect(three.attempt.sumGrades).toBeCloseTo(2, 6);
-    // Điểm bài đã ghi: thang grade của quiz = 4 nên điểm = sumGrades.
     const info = await http(app).get(`/api/v1/exam-pins/${quiz.id}`).set('Authorization', `Bearer ${ctx.student}`);
     expect(info.body.myGrade).toBeCloseTo(1, 6);
   });
@@ -363,8 +319,6 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
       .send({ courseId: ctx.courseId, sectionId: ctx.sectionId, name: 'Đề cố định' });
     expect(gen.status === 200 || gen.status === 201).toBe(true);
     const quiz = gen.body as QuizBody & { examId: string };
-    // Mọi slot đều đã ghim câu cụ thể ngay từ lúc sinh đề (không còn
-    // slot chỉ mang ô chờ rút lúc attempt).
     expect(quiz.slots).toHaveLength(4);
     expect(quiz.slots.every((x) => x.questionId !== null)).toBe(true);
     const mcFromA = quiz.slots.filter((x) => x.matrixCellId === cellA);
@@ -372,17 +326,12 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
     const bietPool = [...ctx.mcPool, ctx.mcCross];
     for (const x of mcFromA) expect(bietPool).toContain(x.questionId);
 
-    // Swap-cùng-ô trên ĐỀ: thay câu của slot đầu ô A bằng câu còn lại
-    // của pool ô A → version đề mới; pin vẫn chỉ version cũ cho tới
-    // khi được nâng.
     const slotA = mcFromA[0]!;
     const spare = bietPool.find((q) => !mcFromA.some((x) => x.questionId === q))!;
     const swap = await http(app).post(`/api/v1/exams/${quiz.examId}/swap`).set('Authorization', `Bearer ${admin}`)
       .send({ position: slotA.slot, questionId: spare });
     expect(swap.status === 200 || swap.status === 201).toBe(true);
 
-    // Hai học sinh làm cùng pin nhận CÙNG một bộ câu (bộ đã ghim của
-    // version pin đang giữ — chưa gồm câu vừa swap ở version mới).
     const start1 = await http(app).post(`/api/v1/exam-pins/${quiz.id}/attempts`).set('Authorization', `Bearer ${ctx.student}`).send({});
     expect(start1.status === 200 || start1.status === 201).toBe(true);
     const view1 = start1.body as AttemptViewBody;
@@ -393,7 +342,6 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
     expect(view2.questions.map((q) => q.questionId).sort()).toEqual(view1.questions.map((q) => q.questionId).sort());
     expect(view1.questions.map((q) => q.questionId)).not.toContain(spare);
 
-    // Đã có lượt thật → nâng pin lên version mới bị khoá.
     const newVersionId = (swap.body.version as { id: string }).id;
     const frozen = await http(app).patch(`/api/v1/exam-pins/${quiz.id}`).set('Authorization', `Bearer ${admin}`)
       .send({ examVersionId: newVersionId });
@@ -422,9 +370,6 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
     expect(spec.body.topics[0].topicTitle).toBe('Hàm số');
     const outcomeTexts = JSON.stringify(spec.body.topics);
     expect(outcomeTexts).toContain('Nhận biết được tính đồng biến');
-    // Cột YCCĐ của bản đặc tả = MỌI YCCĐ thuộc ĐVK của ô (issue #249):
-    // cả hai YCCĐ của bài "Hàm số bậc hai" đều hiện, dù mỗi ô trước
-    // đây chỉ neo đúng một YCCĐ; ô nằm ở cấp ĐVK, không nằm dưới YCCĐ.
     const specNode = spec.body.topics[0].nodes[0] as {
       outcomes: { content: string }[];
       cells: { cellId: string }[];
@@ -435,13 +380,12 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
     ]));
     expect(specNode.cells).toHaveLength(2);
     expect(spec.body.totals.totalScore).toBeCloseTo(6, 6);
-    expect(spec.body.totals.totalQuestions).toBe(3); // 2 MC + 1 câu TF-A (ô TF đếm theo CÂU)
+    expect(spec.body.totals.totalQuestions).toBe(3);
     expect(spec.body.quiz).toBeNull();
 
     const specWithQuiz = await http(app).get(`/api/v1/exam-matrices/${matrix.id}/specification?pinId=${quiz.id}`).set('Authorization', `Bearer ${admin}`);
     expect(specWithQuiz.status).toBe(200);
     expect(JSON.stringify(specWithQuiz.body)).toContain('slotNumbers":[1,2]');
-    // pinId của lần ghim không thuộc ma trận → 400.
     const otherDraft = await createExamDraft(app, admin, 'Đề lạ');
     await addExamSlot(app, admin, otherDraft, { questionId: ctx.mcPool[0]! });
     const other = await pinExam(app, admin, ctx.courseId, otherDraft, { sectionId: ctx.sectionId });
@@ -465,12 +409,9 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
 
   it('slot TF-A làm tay: một slot TF-A duy nhất trong đề dựng tay chấm theo thang tf một mình', async () => {
     const ctx = await setup();
-    // Không còn cơ chế gom chùm ở tầng ghim: đề tay chỉ gồm MỘT slot
-    // TF-A; thang áp ngay trên chính slot đó.
     const draft = await createExamDraft(app, admin, 'Đề tay TF-A', 4);
     await addExamSlot(app, admin, draft, { questionId: ctx.tfQuestion, maxMark: 4 });
     const pin = await pinExam(app, admin, ctx.courseId, draft, { sectionId: ctx.sectionId });
-    // 1/4 ý đúng → thang mặc định QĐ 764: 10% × 4 = 0,4 (tuyến tính = 1).
     const one = await playTfQuiz(ctx.student, pin.id as string, 1, ctx.tfQuestion, ctx.tfCorrects);
     expect(one.attempt.sumGrades).toBeCloseTo(0.4, 6);
   });
@@ -483,11 +424,9 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
     expect(matrix.isTemplate).toBe(false);
     expect(matrix.bankId).toBeNull();
     expect(matrix.derivedFromMatrixId).toBeNull();
-    // Sửa khi còn draft: version giữ nguyên.
     const draftEdit = await http(app).patch(`/api/v1/exam-matrices/${matrix.id}`).set('Authorization', `Bearer ${admin}`)
       .send({ name: 'Ma trận nháp v1' });
     expect(draftEdit.body.version).toBe(1);
-    // Chuyển ready rồi sửa nội dung → version tăng.
     const ready = await http(app).patch(`/api/v1/exam-matrices/${matrix.id}`).set('Authorization', `Bearer ${admin}`)
       .send({ status: 'ready' });
     expect(ready.body.status).toBe('ready');
@@ -495,9 +434,6 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
     const edit = await http(app).patch(`/api/v1/exam-matrices/${matrix.id}`).set('Authorization', `Bearer ${admin}`)
       .send({ name: 'Ma trận đã duyệt — sửa tên' });
     expect(edit.body.version).toBe(2);
-    // Thêm/sửa/xoá Ô trên ma trận đã ready cũng tăng version: bản đặc
-    // tả sinh trực tiếp từ ô, sửa ô lặng lẽ sẽ làm đặc tả đã nộp lệch
-    // version mà không ai biết.
     const withCell = await addCell(matrix.id, {
       curriculumNodeId: ctx.lessonId, cognitiveLevel: 'biet', qtype: 'multichoice',
       questionCount: 1, cellScore: 2,
@@ -522,12 +458,6 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
     const gen = await http(app).post(`/api/v1/exam-matrices/${matrix.id}/generate`).set('Authorization', `Bearer ${admin}`)
       .send({ courseId: ctx.courseId, sectionId: ctx.sectionId, name: 'Đề TF-A review' });
     const quiz = gen.body as QuizBody;
-    // Pin sinh từ ma trận mang reviewRightAnswer mặc định DB = 272
-    // (laterWhileOpen 256 + afterClose 16, KHÔNG có bit immediatelyAfter
-    // 4096) nên GET ngay sau nộp — trong cửa sổ 2 phút sau khi nộp —
-    // sẽ bị cổng reviewRightAnswer đóng và solution = null là ĐÚNG
-    // chính sách. Ca này kiểm solution nên mở cổng ngay sau nộp:
-    // 4368 = 272 + immediatelyAfter 4096.
     const openReview = await http(app).patch(`/api/v1/exam-pins/${quiz.id}`).set('Authorization', `Bearer ${admin}`)
       .send({ reviewRightAnswer: 4368 });
     expect(openReview.status).toBeLessThan(300);
@@ -538,8 +468,6 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
       solution: { statements: { statementId: string; value: boolean }[] } | null;
       rightAnswer: string | null;
     }[];
-    // Câu TF-A là MỘT question attempt: 2/4 ý đúng → fraction 0,25
-    // theo thang, điểm = 25% × 4 = 1; không còn khối cluster.
     expect(qs).toHaveLength(1);
     const q = qs[0]!;
     expect(q.fraction).toBeCloseTo(0.25, 6);
@@ -603,7 +531,6 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
     const start = await http(app).post(`/api/v1/exam-pins/${quizId}/attempts`).set('Authorization', `Bearer ${ctx.student}`).send({});
     const view = start.body as AttemptViewBody;
     const q = view.questions[0]!;
-    // Đáp án đúng của câu MC trong pool: dòng đáp án mang isCorrect — lấy qua view của giáo viên.
     const teacherView = await http(app).get(`/api/v1/questions/${ctx.mcPool[0]}`).set('Authorization', `Bearer ${admin}`);
     const rightId = (teacherView.body.answers as { id: string; isCorrect: boolean }[]).find((a) => a.isCorrect)!.id;
     await http(app).post(`/api/v1/quiz-attempts/${view.attempt.id}/responses`).set('Authorization', `Bearer ${ctx.student}`)
@@ -626,11 +553,8 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
     const quiz = gen.body as QuizBody;
     await playTfQuiz(ctx.student, quiz.id, 2, ctx.tfQuestion, ctx.tfCorrects);
     await playTfQuiz(ctx.student2, quiz.id, 4, ctx.tfQuestion, ctx.tfCorrects);
-    // Endpoint thống kê chùm đã xoá hẳn cùng cơ chế chùm.
     const gone = await http(app).get(`/api/v1/exam-pins/${quiz.id}/cluster-statistics`).set('Authorization', `Bearer ${admin}`);
     expect(gone.status).toBe(404);
-    // Thống kê theo câu: slot TF-A là MỘT câu — 2 lượt làm, 1 lượt
-    // chưa trọn (2/4 ý), không lượt nào sai toàn phần.
     const results = await http(app).get(`/api/v1/exam-pins/${quiz.id}/results`).set('Authorization', `Bearer ${admin}`);
     expect(results.status).toBe(200);
     const stats = results.body.questionStats as { questionId: string | null; attemptsCount: number; wrongCount: number; fullyWrongCount: number }[];
@@ -642,9 +566,6 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
 
   it('level-set downgrade guard (issue #233, lát D-2): four→three is blocked while a van_dung_cao cell exists; allowed after removing the cell', async () => {
     const ctx = await setup();
-    // Ma trận bộ 4 mức có một ô Vận dụng cao — tiền đề của ca chặn:
-    // mức Vận dụng cao là tuỳ chọn bật thêm của CV 7991, hạ về bộ 3
-    // mức trong khi ô của mức đó còn tồn tại sẽ làm mất ô lặng lẽ.
     const matrix = await createMatrix(ctx, { levelSet: 'four' });
     expect(matrix.levelSet).toBe('four');
     const withCell = await addCell(matrix.id, {
@@ -656,8 +577,6 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
       .find((c) => c.cognitiveLevel === 'van_dung_cao')!;
     expect(vdcCell).toBeTruthy();
 
-    // Hạ bộ mức → 400 quiz.matrix_level_in_use và ma trận KHÔNG đổi
-    // (vẫn bộ bốn mức, vẫn còn ô, version không tăng).
     const blocked = await http(app).patch(`/api/v1/exam-matrices/${matrix.id}`).set('Authorization', `Bearer ${admin}`)
       .send({ levelSet: 'three' });
     expect(blocked.status).toBe(400);
@@ -667,7 +586,6 @@ describe('Sinh ma trận quiz + chấm TF-A + đặc tả (giai đoạn 3)', () 
     expect(afterBlocked.body.version).toBe(matrix.version);
     expect(afterBlocked.body.cells).toHaveLength(1);
 
-    // Ca đối chứng: xoá ô Vận dụng cao trước thì hạ bộ mức thành công.
     const del = await http(app).delete(`/api/v1/exam-matrices/${matrix.id}/cells/${vdcCell.id}`).set('Authorization', `Bearer ${admin}`);
     expect(del.status).toBeLessThan(300);
     const lowered = await http(app).patch(`/api/v1/exam-matrices/${matrix.id}`).set('Authorization', `Bearer ${admin}`)

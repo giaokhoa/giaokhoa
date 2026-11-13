@@ -13,7 +13,6 @@ import { CalendarRepository, type CalendarEventRow, type CalendarExportTokenRow,
 import { serializeCalendar } from './domain/ics';
 import { formatRrule, occurrenceStarts, parseRrule } from './domain/rrule';
 
-/** Băm token xuất lịch để lưu trữ — token thô chỉ trả về đúng một lần khi tạo/đổi (đúng mẫu webservice tokens). */
 function hashExportToken(raw: string): string { return createHash('sha256').update(raw).digest('hex'); }
 
 export const CALENDAR_REMINDER_QUEUE = 'calendar-reminders';
@@ -34,20 +33,7 @@ export interface CreateEventInput {
   repeat?: { freq: string; count?: number; until?: string };
 }
 
-/**
- * Facade của CalendarModule (core_calendar của Moodle):
- *  - LOẠI sự kiện quyết định ai thấy được nó, qua cây context:
- *    site → mọi người; category → user của các khoá học trong category; course → ghi danh đang hiệu lực (+ staff có đường course:view thật); group → người xem khoá học là thành viên nhóm (hoặc accessallgroups); user → chỉ chủ sở hữu.
- *  - Một sự kiện lặp là một SERIES: các dòng occurrence dùng chung repeatId với
- *    gốc, gốc mang RRULE, và một dòng exception thay thế occurrence của nó trong danh sách.
- *  - Subscription giữ dữ liệu ICS ngoài; việc import là job của worker.
- *  - Reminder là job DELAYED của BullMQ trên 'calendar-reminders'; worker
- *    biến chúng thành notification của MessagingModule (provider calendar_reminder) khi tới giờ phát.
- */
 @Injectable()
-/**
- * Nghiệp vụ lịch: sự kiện theo phạm vi (site/category/course/group/user), chuỗi lặp RRULE và exception từng occurrence. Đối chiếu Moodle: calendar/classes (calendar_event) và lib.php của calendar. Nguyên tắc hiển thị: user chỉ thấy sự kiện thuộc các phạm vi mình liên quan (khoá học đã enrol, nhóm của mình, sự kiện cá nhân/site); exception thay thế occurrence tương ứng của chuỗi thay vì tạo sự kiện độc lập.
- */
 export class CalendarService {
   constructor(
     private readonly repo: CalendarRepository,
@@ -65,7 +51,6 @@ export class CalendarService {
     return (await this.contexts.ensureSystemContext()).id;
   }
 
-  /** Context mà sự kiện được quản lý trong đó, theo loại. */
   private async manageContextId(input: { eventType: string; courseId?: string; categoryId?: string; userId?: string }): Promise<string> {
     switch (input.eventType) {
       case 'course':
@@ -83,7 +68,6 @@ export class CalendarService {
   private async requireManage(actorId: string, input: { eventType: string; courseId?: string; categoryId?: string; userId?: string }): Promise<void> {
     if (input.eventType === 'user') {
       if (input.userId !== undefined && input.userId !== actorId) {
-        // Quản lý sự kiện cá nhân của người khác cần manageentries ở cấp site.
         await this.evaluator.requireCapability(actorId, 'calendar:manageentries', await this.systemCtx());
         return;
       }
@@ -95,9 +79,6 @@ export class CalendarService {
     await this.evaluator.requireCapability(actorId, capability, await this.manageContextId(input));
   }
 
-  /**
-   * Tạo sự kiện (có thể kèm RRULE) tại một phạm vi.
-   */
   async createEvent(actorId: string, input: CreateEventInput): Promise<{ event: CalendarEventRow; occurrences: CalendarEventRow[] }> {
     if (!EVENT_TYPES.includes(input.eventType)) {
       throw new BadRequestException({ message: `Unknown event type ${input.eventType}`, code: 'calendar.bad_type' });
@@ -143,19 +124,12 @@ export class CalendarService {
     return { event: root!, occurrences };
   }
 
-  /**
-   * Lấy sự kiện; ném calendar.event_not_found khi vắng.
-   */
   async getEvent(id: string): Promise<CalendarEventRow> {
     const row = await this.repo.getEvent(id);
     if (!row) throw new NotFoundException({ message: `Calendar event ${id} not found`, code: 'calendar.event_not_found' });
     return row;
   }
 
-  /** Tạo exception: một occurrence thay thế cho một instance của series. */
-  /**
-   * Tạo exception cho một occurrence của chuỗi lặp (đổi giờ/nội dung riêng lần đó).
-   */
   async createException(actorId: string, occurrenceId: string, input: { name?: string; timeStart: string; description?: string }): Promise<CalendarEventRow> {
     const occurrence = await this.getEvent(occurrenceId);
     if (!occurrence.repeatId) throw new BadRequestException({ message: 'Only a series occurrence can have an exception', code: 'calendar.not_series' });
@@ -170,15 +144,11 @@ export class CalendarService {
     return exception;
   }
 
-  /**
-   * Xoá sự kiện (hoặc một occurrence qua exception tuỳ chọn).
-   */
   async deleteEvent(actorId: string, id: string): Promise<{ deleted: boolean; seriesDeleted: number }> {
     const event = await this.getEvent(id);
     await this.requireManage(actorId, { eventType: event.eventType, courseId: event.courseId || undefined, categoryId: event.categoryId || undefined, userId: event.userId || undefined });
     let count = 1;
     if (event.repeatId && event.id === event.repeatId) {
-      // Xoá gốc thì xoá toàn bộ series (ngữ nghĩa Moodle).
       const series = await this.repo.listSeries(event.repeatId);
       for (const row of series) { await this.repo.deleteEvent(row.id); count = series.length; }
     } else {
@@ -187,7 +157,6 @@ export class CalendarService {
     return { deleted: true, seriesDeleted: count };
   }
 
-  // --- tính hiển thị --------------------------------------------------------------
 
   private async canViewCoursePart(viewerId: string, courseId: string | undefined): Promise<boolean> {
     if (!courseId) return false;
@@ -197,12 +166,8 @@ export class CalendarService {
     return this.evaluator.hasCapabilityFromRealAssignment(viewerId, 'course:view', ctx, { excludeArchetypes: ['student'] });
   }
 
-  /**
-   * User có được thấy sự kiện này theo phạm vi của nó hay không.
-   */
   async isVisibleTo(event: CalendarEventRow, viewerId: string): Promise<boolean> {
     if (!event.visible) {
-      // Sự kiện ẩn chỉ hiển thị với người quản lý chúng.
       return this.requireManage(viewerId, { eventType: event.eventType, courseId: event.courseId || undefined, categoryId: event.categoryId || undefined, userId: event.userId || undefined }).then(() => true).catch(() => false);
     }
     switch (event.eventType) {
@@ -232,10 +197,6 @@ export class CalendarService {
     }
   }
 
-  /** Các sự kiện người xem thấy được trong [from, to]; dòng exception thay thế occurrence của chúng. */
-  /**
-   * Sự kiện hiển thị cho user trong khoảng thời gian, đã mở rộng chuỗi lặp và áp exception.
-   */
   async listEventsForUser(viewerId: string, filter: { from?: string; to?: string; eventType?: string }): Promise<CalendarEventRow[]> {
     const from = filter.from ? new Date(filter.from) : new Date(Date.now() - 31 * 86400_000);
     const to = filter.to ? new Date(filter.to) : new Date(Date.now() + 62 * 86400_000);
@@ -243,63 +204,35 @@ export class CalendarService {
     const exceptedIds = new Set(rows.filter((r) => r.isException).map((r) => r.exceptionOf));
     const visible: CalendarEventRow[] = [];
     for (const row of rows) {
-      if (row.isException === false && row.exceptionOf === null && exceptedIds.has(row.id)) continue; // đã bị exception của nó thay thế
+      if (row.isException === false && row.exceptionOf === null && exceptedIds.has(row.id)) continue;
       if (filter.eventType && row.eventType !== filter.eventType) continue;
       if (await this.isVisibleTo(row, viewerId)) visible.push(row);
     }
     return visible;
   }
 
-  // --- xuất (tải ICS + URL xuất bằng token) ------------------------------
 
-  /**
-   * Xuất lịch của một user thành nội dung .ics: dùng lại đúng đường liệt kê
-   * `listEventsForUser` (cùng khoảng thời gian, cùng visibility matrix
-   * site/user/course/category/group, occurrence lặp đã materialise và
-   * exception đã thay thế) nên file xuất không bao giờ chứa sự kiện mà
-   * user không được thấy trên giao diện.
-   */
   async exportIcsForUser(userId: string, filter: { from?: string; to?: string; eventType?: string }): Promise<string> {
     const events = await this.listEventsForUser(userId, filter);
     return serializeCalendar(events);
   }
 
-  /**
-   * Tạo hoặc đổi token xuất lịch của chính user: token thô là 32 byte ngẫu
-   * nhiên dạng hex (không dùng UUID làm token), DB chỉ lưu hash SHA-256;
-   * token thô chỉ xuất hiện trong kết quả của lần gọi này. Đổi token ghi đè
-   * hash cũ nên URL xuất cũ chết ngay.
-   */
   async createOrRotateExportToken(userId: string): Promise<{ token: string; exportUrl: string; createdAt: Date; updatedAt: Date }> {
     const raw = randomBytes(32).toString('hex');
     const row = await this.repo.upsertExportToken(userId, hashExportToken(raw));
     return { token: raw, exportUrl: `/api/v1/calendar/export/${raw}.ics`, createdAt: row.createdAt, updatedAt: row.updatedAt };
   }
 
-  /**
-   * Trạng thái token xuất lịch của user — không bao giờ chứa token thô hay
-   * hash của token.
-   */
   async getExportTokenStatus(userId: string): Promise<{ hasToken: boolean; createdAt: Date | null; updatedAt: Date | null; lastAccess: Date | null }> {
     const row = await this.repo.getExportTokenByUser(userId);
     if (!row) return { hasToken: false, createdAt: null, updatedAt: null, lastAccess: null };
     return { hasToken: true, createdAt: row.createdAt, updatedAt: row.updatedAt, lastAccess: row.lastAccess };
   }
 
-  /**
-   * Thu hồi token xuất lịch của user: xoá bản ghi hash khiến URL xuất hiện
-   * tại chết ngay; gọi lại khi không còn token vẫn an toàn (revoked=false).
-   */
   async revokeExportToken(userId: string): Promise<{ revoked: boolean }> {
     return { revoked: await this.repo.deleteExportToken(userId) };
   }
 
-  /**
-   * Xuất lịch qua token thô (đường công khai, không cần JWT): tra hash của
-   * token để tìm chủ sở hữu rồi xuất đúng lịch của chủ đó. Token không tồn
-   * tại/đã đổi/đã thu hồi → 401 `calendar.export_token_invalid`; token thô
-   * không được ghi log ở bất cứ đâu.
-   */
   async exportIcsByToken(rawToken: string, filter: { from?: string; to?: string; eventType?: string }): Promise<string> {
     const row: CalendarExportTokenRow | undefined = await this.repo.getExportTokenByHash(hashExportToken(rawToken));
     if (!row) {
@@ -309,12 +242,7 @@ export class CalendarService {
     return this.exportIcsForUser(row.userId, filter);
   }
 
-  // --- reminder -----------------------------------------------------------------
 
-  /** Lên lịch reminder: một job delayed của BullMQ; worker gửi thông báo khi tới giờ phát. */
-  /**
-   * Lên lịch nhắc trước sự kiện (worker calendar-reminder sẽ gửi notification đã dịch).
-   */
   async scheduleReminder(actorId: string, eventId: string, minutesBefore: number): Promise<{ eventId: string; userId: string; remindAt: string; delayMs: number }> {
     const event = await this.getEvent(eventId);
     if (!(await this.isVisibleTo(event, actorId))) {
@@ -329,11 +257,7 @@ export class CalendarService {
     return { eventId, userId: actorId, remindAt: remindAt.toISOString(), delayMs };
   }
 
-  // --- subscription ----------------------------------------------------------------
 
-  /**
-   * Đăng ký lịch ngoài theo URL .ics.
-   */
   async createSubscription(actorId: string, input: { name: string; url?: string; icsData?: string; eventType?: string; courseId?: string; categoryId?: string; pollInterval?: number }): Promise<CalendarSubscriptionRow> {
     const eventType = input.eventType ?? 'site';
     if (eventType === 'site') {
@@ -352,18 +276,10 @@ export class CalendarService {
     return subscription;
   }
 
-  /**
-   * Subscription của user (H11, rà soát #134): chỉ trả subscription mà
-   * người gọi là chủ — trước đây handler không truyền actor nên lộ URL
-   * feed lịch ngoài của mọi user.
-   */
   async listSubscriptions(actorId: string): Promise<CalendarSubscriptionRow[]> {
     return this.repo.listSubscriptionsForUser(actorId);
   }
 
-  /**
-   * Đưa yêu cầu nhập/đồng bộ subscription vào hàng đợi worker.
-   */
   async requestImport(actorId: string, subscriptionId: string): Promise<{ queued: boolean; subscriptionId: string }> {
     const sub = await this.repo.getSubscription(subscriptionId);
     if (!sub) throw new NotFoundException({ message: `Subscription ${subscriptionId} not found`, code: 'calendar.subscription_not_found' });

@@ -9,15 +9,6 @@ import {
 } from '../../support/identity-access-helpers';
 import { EXPECTED_SNAPSHOTS } from '../../support/users-my-access-snapshot.fixture';
 
-/**
- * Tương đương phân giải của ảnh chụp quyền (`GET /users/me/capabilities`) sau khi chuyển sang phân giải THEO LÔ (issue: tăng tốc endpoint này):
- *   1. Chụp đáp ứng: với bộ dữ kiện dựng cố định (cây context khoá/lớp,
- *      override PROHIBIT/PREVENT/ALLOW trên một vai tuỳ chỉnh, các gán vai mẫu), đáp ứng cho từng vai mẫu phải khớp TỪNG TRƯỜNG với mốc đã chụp từ cài đặt cũ (đường gọi `hasCapability` tuần tự) — xem `users-my-access-snapshot.fixture.ts`.
- *   2. Đối chiếu oracle: tại các context nhạy cảm (gồm cây tenant có
- *      cổng membership), tập capability trong ảnh chụp phải bằng đúng tập suy từ endpoint kiểm tra quyền hiện hành `GET /access/has-capability` (đường `PermissionEvaluator` gốc) cho TỪNG capability đã đăng ký.
- *   3. Cổng tenant: người ngoài tenant bị chặn tuyệt đối trong cây
- *      tenant; site admin ở trong cây tenant KHÔNG có lối tắt — chỉ được phân giải như người thường theo gán vai neo trong tenant.
- */
 describe('Người dùng: tương đương phân giải batch my-access', () => {
   let app: INestApplication;
   let admin: string;
@@ -59,7 +50,6 @@ describe('Người dùng: tương đương phân giải batch my-access', () => 
     };
   }
 
-  /** Tập capability theo oracle hiện hành cho một (user, context): gọi has-capability cho TỪNG capability đã đăng ký. */
   async function oracleCapabilities(userId: string, contextId: string): Promise<string[]> {
     const granted: string[] = [];
     for (const def of CAPABILITY_DEFINITIONS) {
@@ -87,8 +77,6 @@ describe('Người dùng: tương đương phân giải batch my-access', () => 
     const customRole = await createRoleViaApi(app, admin);
     const rolesRes = await http(app).get('/api/v1/access/roles').set('Authorization', `Bearer ${admin}`);
     customRoleShortname = (rolesRes.body as { id: string; shortName: string }[]).find((r) => r.id === customRole)?.shortName ?? '';
-    // Bộ override phủ các nhánh ngữ nghĩa: ALLOW tại gốc, PREVENT tại tổ
-    // tiên giữa, ALLOW tại lá, PROHIBIT tại lá, ALLOW tại lớp.
     await setOverride(app, admin, customRole, 'question:add', systemId, 1);
     await setOverride(app, admin, customRole, 'question:add', coursecat.id, -1);
     await setOverride(app, admin, customRole, 'question:add', course.id, 1);
@@ -114,7 +102,6 @@ describe('Người dùng: tương đương phân giải batch my-access', () => 
 
     await addUser('plainUser');
 
-    // --- Dữ kiện cây tenant (cổng membership) dùng vai tuỳ chỉnh chung ---
     const slug = uniqueName('tenant').toLowerCase();
     const tenantRes = await http(app).post('/api/v1/tenants').set('Authorization', `Bearer ${admin}`)
       .send({ slug, name: `Trường ${slug}`, kind: 'school' });
@@ -131,16 +118,12 @@ describe('Người dùng: tương đương phân giải batch my-access', () => 
     const member = await addUser('tenantMember');
     await assignRole(app, admin, member.id, customRole, tenantCourse.id);
     await assignRole(app, admin, member.id, customRole, systemId);
-    // Fixture tạo membership, không cấp quyền nghiệp vụ cho platform admin:
-    // phần kiểm chứng quyền phía dưới cố ý giữ admin ngoài tenant.
     await seedTenantMembershipFixture(app, tenantId, member.id);
 
     const outsider = await addUser('tenantOutsider');
     await assignRole(app, admin, outsider.id, customRole, tenantCourse.id);
 
     tokens.set('admin', admin);
-    // Site admin nhận một gán vai trong cây tenant nhưng (chưa) có
-    // membership — ca kiểm chứng cổng chặn + không lối tắt ở các test dưới.
     await assignRole(app, admin, adminId, customRole, tenantCourse.id);
     (globalThis as Record<string, unknown>).__perfTenant = { tenantId, tenantCourseId: tenantCourse.id, tenantCtxId: tenantCtx!.id, memberId: member.id, outsiderId: outsider.id };
   }, 300000);
@@ -157,7 +140,6 @@ describe('Người dùng: tương đương phân giải batch my-access', () => 
   it('khớp oracle has-capability cũ trên mọi năng lực tại ngữ cảnh nhạy cảm', async () => {
     const teacherMulti = normalize(await snapshotOf('teacherMulti'));
     const userIds = new Map<string, string>();
-    // Lấy userId thật từ chính đáp ứng (snapshotOf không trả userId ra ngoài normalize).
     for (const key of ['teacherMulti', 'studentPlain']) {
       const res = await http(app).get('/api/v1/users/me/capabilities').set('Authorization', `Bearer ${tokens.get(key)}`);
       userIds.set(key, (res.body as { userId: string }).userId);
@@ -177,27 +159,18 @@ describe('Người dùng: tương đương phân giải batch my-access', () => 
     const t = (globalThis as Record<string, unknown>).__perfTenant as {
       tenantId: string; tenantCourseId: string; tenantCtxId: string; memberId: string; outsiderId: string;
     };
-    // Người ngoài tenant: bị chặn tuyệt đối ở cả context tenant lẫn khoá trong tenant.
     const outsider = await snapshotOf('tenantOutsider');
     expect(outsider.contexts.find((c) => c.contextId === t.tenantCourseId)?.capabilities).toEqual([]);
     expect(outsider.contexts.find((c) => c.contextId === t.tenantCtxId)?.capabilities).toEqual([]);
 
-    // Thành viên có gán vai trong tenant: phân giải thật, bằng oracle cho từng capability.
     const member = await snapshotOf('tenantMember');
     const memberCourse = member.contexts.find((c) => c.contextId === t.tenantCourseId)!;
     expect(memberCourse.capabilities).toEqual(await oracleCapabilities(t.memberId, t.tenantCourseId));
-    // Tại context hệ thống (ngoài cây tenant), gán vai tại hệ thống có hiệu lực bình thường.
     const memberSystem = member.contexts.find((c) => c.contextLevel === 10)!;
     expect(memberSystem.capabilities).toContain('question:add');
 
-    // Site admin chưa có membership: cổng chặn cả admin trong cây tenant.
     const adminBefore = await snapshotOf('admin');
     expect(adminBefore.contexts.find((c) => c.contextId === t.tenantCourseId)?.capabilities).toEqual([]);
-    // Sau khi thành thành viên: vẫn KHÔNG có lối tắt admin — tập
-    // capability là phép phân giải thật theo gán vai, hẹp hơn trọn bộ
-    // 124 capability và bằng đúng oracle.
-    // Fixture mô phỏng quyền cấp membership của trung tâm; không để
-    // admin platform tự kết nạp vào tenant qua HTTP.
     await seedTenantMembershipFixture(app, t.tenantId, adminId);
     const adminAfter = await snapshotOf('admin');
     const adminCourse = adminAfter.contexts.find((c) => c.contextId === t.tenantCourseId)!;

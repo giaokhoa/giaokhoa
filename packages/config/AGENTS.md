@@ -8,7 +8,7 @@
 
 ## Chuẩn ngôn ngữ
 
-Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng tiếng Anh. Toàn bộ comment trong code — gồm comment mô tả luồng nghiệp vụ — viết bằng tiếng Việt. Mọi tài liệu trong repo (README, các file AGENTS, tài liệu của package) và mọi văn bản trên GitHub (issue, PR, comment) viết bằng tiếng Việt. Khi sửa code, comment tiếng Việt liên quan phải được cập nhật khớp với code trong cùng lượt thay đổi. Nội dung đầy đủ của chuẩn này nằm ở mục "Chuẩn ngôn ngữ" trong `AGENTS.md` ở thư mục gốc của repo.
+Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng tiếng Anh. Cấm viết comment, gồm TSDoc/JSDoc, comment nội tuyến và comment mô tả luồng, trong mã nguồn hoặc cấu hình. Mã nguồn và cấu hình thực thi là nguồn sự thật duy nhất cho hành vi hiện hành; không dùng comment để lưu quyết định. Tài liệu trong repo và văn bản GitHub viết bằng tiếng Việt. Tuân thủ quy định tại `AGENTS.md` gốc.
 
 ## Ranh giới phạm vi
 
@@ -29,11 +29,9 @@ Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng 
 
 - Package không có test nghiệp vụ (và không được bịa test cho có): kiểm chứng của package này là typecheck của các app tiêu thụ, ghi ở mục trên.
 
-## Chuẩn comment TSDoc (sổ quyết định mục F — chốt 13:14 ngày 26/10/2026)
+## Không viết comment trong code
 
-Chuẩn comment tiếng Việt theo TSDoc của sổ mục F **không có đối tượng áp dụng trực tiếp trong package này**: `packages/config` chỉ chứa các file JSON cấu hình TypeScript (`tsconfig/*.json`) — không có file mã nguồn `.ts`/`.tsx` nào, và JSON không mang comment TSDoc. Ghi rõ để tránh hiểu nhầm khi rà soát đợt phủ comment (issue #272): package này không thuộc diện phủ comment.
-
-Nếu sau này có bất kỳ file `.ts` nào xuất hiện trong package (đồng nghĩa phá điều cấm "không thêm code runtime" ở trên — phải có quyết định riêng trước), thì chuẩn mục F áp **toàn bộ** cho file đó: TSDoc tiếng Việt ở đầu file mô tả vai trò + flow tổng thể, TSDoc cho mọi hàm/class trọng yếu (mục đích, `@param`/`@returns`, bước flow, bất biến, side-effect), comment nội tuyến cho logic phức tạp; đội đánh giá độc lập soi như tiêu chí đạt.
+Không thêm, giữ lại hoặc tái tạo comment trong code, kể cả TSDoc/JSDoc, comment JSX, comment giải thích flow và comment cấu hình. Thể hiện hành vi bằng code rõ ràng và test kiểm chứng. Code là nguồn sự thật duy nhất; comment có nguy cơ lệch code và tốn token. Quy tắc chung nằm trong `AGENTS.md` gốc.
 
 ## Bản đồ của package
 

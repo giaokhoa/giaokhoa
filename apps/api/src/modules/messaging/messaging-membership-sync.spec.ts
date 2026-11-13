@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MessagingMembershipSyncService } from './messaging-membership-sync.service';
 
-/**
- * Đồng bộ lười thành viên conversation gắn cấu trúc — ngoại lệ giữ lại quản trị hệ thống (issue #592): quản trị hệ thống là thành viên của conversation gắn LỚP/KHOÁ thì không bị gỡ dù không nằm trong tập đích roster/staff, để hàng hội thoại của họ ở lại danh sách và mở được; thành viên thường đã rời cấu trúc vẫn bị gỡ như cũ, và conversation gắn group không thuộc ngoại lệ này (phạm vi issue #592 chỉ nói lớp/khoá).
- */
 describe('MessagingMembershipSyncService.syncLinkedConversationMembers — giữ lại quản trị hệ thống ở conversation lớp/khoá', () => {
   const ADMIN_ID = 'admin-1';
   const TEACHER_ID = 'teacher-1';

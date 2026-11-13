@@ -9,18 +9,6 @@ import {
   type OrdinaryWorkerModuleHarness,
 } from '../../support/ordinary-worker-module';
 
-/**
- * Lát N5 (issue #50): nhắc hạn nộp tự động trước 24 giờ.
- *
- * Phía phát (worker): lượt quét activity-due-reminders tìm pin có time_close thuộc (hiện tại, hiện tại + 24h] và phát ĐÚNG MỘT sự kiện outbox `activity_due_reminder` cho từng (học sinh, pin) chưa nộp — học sinh đã có attempt hoàn tất (needsgrading/finished) thì không nhắc, attempt inprogress (chưa nộp) vẫn nhắc; chạy lại không phát trùng (dedupe theo (userId, pinId, timeClose) trên outbox); giáo viên dời hạn thì mốc hạn mới được nhắc lại.
- *
- * NB-1 (issue #174): cùng lượt quét phủ thêm BÀI TẬP theo assignments.due_date — sự kiện mang activityType 'assign' + assignmentId; "chưa nộp" = chưa có bản nộp ở trạng thái submitted
- * (bản nháp vẫn nhắc); dedupe theo (userId, assignmentId, dueDate).
- *
- * Nửa API (sự kiện → thông báo activity_due_soon) được kiểm chứng ở apps/api/test/notifications-providers-flow.e2e-spec.ts bằng đúng hình dạng sự kiện phát ở đây.
- *
- * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness role thường (`test/ordinary-worker-module.ts`): module chạy bằng role NOSUPERUSER/NOBYPASSRLS như production, fixture và đọc kiểm chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ của spec không đổi.
- */
 describe('Nhắc sắp đến hạn hoạt động của worker (N5, issue #50)', () => {
   let context: INestApplicationContext;
   let harness: OrdinaryWorkerModuleHarness;
@@ -41,9 +29,6 @@ describe('Nhắc sắp đến hạn hoạt động của worker (N5, issue #50)'
     const cmRows = await sql`insert into course_modules (course, section, component, visible) values (${cid}, ${secId}, 'mod_quiz', ${opts.cmVisible ?? true}) returning id`.execute(db);
     const cmId = (cmRows.rows[0] as { id: string }).id;
     const timeClose = opts.closeInHours === null ? null : new Date(Date.now() + opts.closeInHours * HOUR);
-    // Sau gộp Đề (#226): hoạt động được nhắc là LẦN GHIM (exam_pins)
-    // — dựng tối thiểu bank → đề → version → pin bằng SQL như các
-    // fixture khác của suite worker.
     const tenantRows = await sql`insert into tenants (slug, name, kind, status) values ('worker-fixture', 'Worker fixture tenant', 'school', 'active') on conflict (slug) do update set slug = excluded.slug returning id`.execute(db);
     const tenantId = (tenantRows.rows[0] as { id: string }).id;
     const bankRows = await sql`insert into question_banks (name, bank_kind, scope, context_id, created_by, tenant_id) values ('N5 bank', 'exam', 'personal', ${uid(900)}, ${uid(900)}, ${tenantId}) returning id`.execute(db);
@@ -104,9 +89,6 @@ describe('Nhắc sắp đến hạn hoạt động của worker (N5, issue #50)'
   }
 
 
-  // CLASS-0 đóng gói (PR #200): khoá dạy thật phải có class_id (CHECK
-  // course_class_required_check) — lớp fixture cho tenant worker-fixture,
-  // chủ lớp là user fixture riêng; mỗi lần gọi dựng một lớp mới.
   async function fixtureClassId(): Promise<string> {
     const ownerId = '01980000-0000-7000-8000-00000000c1a5';
     await sql`insert into users (id, username, email, suspended, deleted) values (${ownerId}, 'wk-class-owner', 'wk-class-owner@x.io', false, false) on conflict (id) do nothing`.execute(db);
@@ -121,20 +103,6 @@ describe('Nhắc sắp đến hạn hoạt động của worker (N5, issue #50)'
     harness = await bootWorkerModuleAsOrdinaryRole();
     context = harness.context;
     db = harness.adminDb;
-    // Tắt tài xế nền của chính queue này trong suốt lượt chạy của
-    // spec: module boot nguyên vẹn (như production) có scheduler
-    // đăng ký job lặp 5 phút cho CÙNG processor mà các ca dưới đây
-    // gọi trực tiếp — hai tài xế cùng quét thì lượt nền có thể chạy
-    // giữa lúc dựng fixture và lúc khẳng định, phát sự kiện cho
-    // trạng thái trung gian và làm số đếm lệch ngẫu nhiên (gốc cấu
-    // trúc của ca chập chờn ở spec này). Suite worker chạy nhiều
-    // file song song trên cùng một Redis và các context song song
-    // liên tục đăng ký lại scheduler của queue, nên gỡ scheduler
-    // không đủ: phải TẠM DỪNG queue (mọi worker đều tôn trọng cờ
-    // dừng ở tầng Redis) rồi chờ job đang chạy dở tại thời điểm dừng
-    // kết thúc — sau mốc này không lượt quét nền nào của queue chạy
-    // nữa. Mở lại queue ở afterAll. Harness giữ nguyên (vẫn boot cả
-    // scheduler như production), khẳng định nghiệp vụ không đổi.
     queue = context.get<Queue>(getQueueToken('activity-due-reminders'));
     await queue.pause();
     await queue.removeJobScheduler('activity-due-reminder-scheduler');
@@ -161,11 +129,6 @@ describe('Nhắc sắp đến hạn hoạt động của worker (N5, issue #50)'
     const inProgress = uid(3);
     const suspendedEnrol = uid(4);
     const expiredEnrol = uid(5);
-    // Attempt tạo TRƯỚC ghi danh: scheduler nền của WorkerModule có
-    // thể quét chen giữa các bước dựng dữ liệu — thứ tự này bảo đảm
-    // học sinh "đã nộp" luôn nhất quán (đã có attempt hoàn tất) ở mọi
-    // thời điểm quét, và mọi khẳng định đều dựa trên SỰ KIỆN outbox
-    // bền thay vì kết quả trả về của một lượt gọi cụ thể.
     await addAttempt(quizId, finished, 'finished');
     await addAttempt(quizId, inProgress, 'inprogress');
     await enrolStudent(inst, noAttempt);
@@ -184,7 +147,6 @@ describe('Nhắc sắp đến hạn hoạt động của worker (N5, issue #50)'
     expect(await eventsFor(quizId, expiredEnrol)).toHaveLength(0);
     expect(await eventsFor(quizId)).toHaveLength(2);
 
-    // Lượt quét sau nữa (job chạy lại): không phát trùng cho cùng mốc hạn.
     await processor.process({ data: {} } as never);
     expect(await eventsFor(quizId, noAttempt)).toHaveLength(1);
     expect(await eventsFor(quizId, inProgress)).toHaveLength(1);
@@ -234,8 +196,6 @@ describe('Nhắc sắp đến hạn hoạt động của worker (N5, issue #50)'
     const draftOnly = uid(42);
     const submitted = uid(43);
     const suspendedEnrol = uid(44);
-    // Bản nộp tạo TRƯỚC ghi danh như khuôn attempt của quiz: scheduler
-    // nền có thể quét chen giữa các bước dựng dữ liệu.
     await addSubmission(assignmentId, draftOnly, 'draft');
     await addSubmission(assignmentId, submitted, 'submitted');
     await enrolStudent(inst, noSubmission);

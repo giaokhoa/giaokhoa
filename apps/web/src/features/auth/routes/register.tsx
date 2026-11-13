@@ -11,11 +11,6 @@ import { ApiError, apiJson } from '#lib/api';
 import { useAuth } from '#lib/auth';
 import '#config/i18n';
 
-/**
- * Tài khoản được đăng ký tại chính host của khu học tập: API sẽ
- * đối chiếu host và kho riêng trước khi ghi. Web không gửi slug hay
- * tenant id do người dùng tự chọn (không có đường tạo chéo trung tâm).
- */
 export function PublicRegistrationPage() {
   const { t } = useTranslation('app');
   const navigate = useNavigate();
@@ -38,8 +33,6 @@ export function PublicRegistrationPage() {
         method: 'POST',
         body: JSON.stringify({ username, email, firstName, lastName, password, role }),
       });
-      // Đăng nhập tại CÙNG địa chỉ; phiên Better Auth được lưu trong
-      // chính kho công cộng, không dùng token của kho vận hành.
       await login(username, password);
       navigate('/profile');
     } catch (err) {

@@ -6,19 +6,6 @@ import {
 } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstSectionId } from '../../support/course-enrolment-helpers';
 
-/**
- * Lát S5 của issue #228 — truy vết rút cho đề và ma trận (ngang hàng QB-3 của câu hỏi) + ý nghĩa trạng thái theo quy tắc hoàn thiện:
- *  - rút đề/ma trận: lý do BẮT BUỘC (schema chặn rỗng), trạng thái
- *    về hidden kèm bộ ba truy vết (lý do/người rút/thời điểm) hiện trong view; rút hai lần → 409 already_withdrawn.
- *  - đề đã rút: đổi trạng thái qua đường status thường → 409
- *    exam.status_withdrawn (phải khôi phục đúng nghi thức); pin đã ghim vẫn phục vụ lượt làm bình thường; ghim mới bị chặn như mọi đề chưa ready.
- *  - ma trận đã rút: đổi trạng thái qua PATCH → 409
- *    quiz.matrix_status_withdrawn; sửa trường khác vẫn được; đóng góp ma trận đã rút bị chặn ở cổng ready như thường lệ.
- *  - khôi phục: về ready + truy vết xoá sạch; khôi phục khi chưa
- *    rút → 409 not_withdrawn.
- *  - mặc định tạo mới theo quy tắc hoàn thiện giữ nguyên hiện
- *    trạng: đề tạo từ rỗng vào draft, ma trận tạo từ rỗng vào draft (kênh máy AI/MCP vào draft và câu hỏi vào ready đã có spec riêng ở các lát trước).
- */
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
@@ -71,12 +58,10 @@ describe('Bank withdraw trace S5 (issue #228): rút/khôi phục đề + ma tr�
     const paperRes = await http(app).post(`/api/v1/exams/banks/${eBank.id}/exams`).set(bearer(owner.token))
       .send({ name: 'Đề S5-1', examKind: 'regular', slots: [{ questionId: q1 }] });
     const paper = paperRes.body as PaperBody;
-    // Mặc định hoàn thiện: đề tạo từ rỗng vào draft.
     expect(paper.paper.status).toBe('draft');
     expect(paper.paper.withdrawnReason).toBeNull();
     await http(app).post(`/api/v1/exams/${paper.paper.id}/status`).set(bearer(owner.token)).send({ status: 'ready' });
 
-    // Khoá + học sinh + một lần ghim đang hoạt động.
     const cat = await createCategory(app, admin);
     const course = await createCourse(app, admin, cat.id);
     const sectionId = await getFirstSectionId(app, admin, course.id);
@@ -93,11 +78,9 @@ describe('Bank withdraw trace S5 (issue #228): rút/khôi phục đề + ma tr�
     expect(pin.status, JSON.stringify(pin.body)).toBe(201);
     const pinId = (pin.body as { id: string }).id;
 
-    // Lý do rỗng bị schema chặn.
     const emptyReason = await http(app).post(`/api/v1/exams/${paper.paper.id}/withdraw`).set(bearer(owner.token)).send({ reason: '   ' });
     expect(emptyReason.status).toBe(400);
 
-    // Rút: hidden + truy vết + danh sách pin chịu ảnh hưởng.
     const withdrawn = await http(app).post(`/api/v1/exams/${paper.paper.id}/withdraw`).set(bearer(owner.token))
       .send({ reason: 'Đề lỗi cấu trúc phần 2' });
     expect(withdrawn.status, JSON.stringify(withdrawn.body)).toBe(201);
@@ -109,12 +92,10 @@ describe('Bank withdraw trace S5 (issue #228): rút/khôi phục đề + ma tr�
     expect(viewPaper.withdrawnBy).toBe(owner.id);
     expect(viewPaper.withdrawnAt).toBeTruthy();
 
-    // Đổi trạng thái qua đường thường khi đang rút → 409 riêng.
     const flip = await http(app).post(`/api/v1/exams/${paper.paper.id}/status`).set(bearer(owner.token)).send({ status: 'ready' });
     expect(flip.status).toBe(409);
     expect((flip.body as { code?: string }).code).toBe('exam.status_withdrawn');
 
-    // Pin đã ghim vẫn phục vụ lượt làm; ghim mới bị chặn như đề chưa ready; rút lần nữa → 409.
     const start = await http(app).post(`/api/v1/exam-pins/${pinId}/attempts`).set(bearer(student)).send({});
     expect(start.status, JSON.stringify(start.body)).toBe(201);
     expect((start.body as { questions: unknown[] }).questions).toHaveLength(1);
@@ -126,7 +107,6 @@ describe('Bank withdraw trace S5 (issue #228): rút/khôi phục đề + ma tr�
     expect(again.status).toBe(409);
     expect((again.body as { code?: string }).code).toBe('exam.already_withdrawn');
 
-    // Khôi phục: ready + truy vết xoá sạch; khôi phục lần nữa → 409.
     const restored = await http(app).post(`/api/v1/exams/${paper.paper.id}/restore`).set(bearer(owner.token)).send({});
     expect(restored.status, JSON.stringify(restored.body)).toBe(201);
     expect(restored.body).toMatchObject({ examId: paper.paper.id, status: 'ready' });
@@ -153,7 +133,6 @@ describe('Bank withdraw trace S5 (issue #228): rút/khôi phục đề + ma tr�
       .send({ name: 'Ma trận S5-2', subjectId: subj.body.id, curriculumId: curr.body.id, bankId: matrixBank.id, totalScore: 10 });
     expect(matrixRes.status, JSON.stringify(matrixRes.body)).toBeLessThan(300);
     const matrix = matrixRes.body as MatrixBody;
-    // Mặc định hoàn thiện: ma trận tạo từ rỗng vào draft, chưa có truy vết.
     expect(matrix.status).toBe('draft');
     expect(matrix.withdrawnAt).toBeNull();
     const ready = await http(app).patch(`/api/v1/exam-matrices/${matrix.id}`).set(bearer(owner.token)).send({ status: 'ready' });
@@ -173,14 +152,12 @@ describe('Bank withdraw trace S5 (issue #228): rút/khôi phục đề + ma tr�
     expect(viewMatrix.withdrawnBy).toBe(owner.id);
     expect(viewMatrix.withdrawnAt).toBeTruthy();
 
-    // PATCH đổi trạng thái khi đang rút → 409; sửa tên vẫn được.
     const flip = await http(app).patch(`/api/v1/exam-matrices/${matrix.id}`).set(bearer(owner.token)).send({ status: 'ready' });
     expect(flip.status).toBe(409);
     expect((flip.body as { code?: string }).code).toBe('quiz.matrix_status_withdrawn');
     const rename = await http(app).patch(`/api/v1/exam-matrices/${matrix.id}`).set(bearer(owner.token)).send({ name: 'Ma trận S5-2 (đã rút)' });
     expect(rename.status, JSON.stringify(rename.body)).toBe(200);
 
-    // Đóng góp ma trận đã rút bị chặn ở cổng ready; rút lần nữa → 409.
     const schoolRes = await http(app).post('/api/v1/question-banks').set(bearer(admin))
       .send({ name: uniqueName('Bank ma trận trường S5'), scope: 'school', bankKind: 'matrix' });
     const propose = await http(app).post(`/api/v1/exam-matrices/${matrix.id}/contributions`).set(bearer(owner.token))
@@ -191,7 +168,6 @@ describe('Bank withdraw trace S5 (issue #228): rút/khôi phục đề + ma tr�
     expect(again.status).toBe(409);
     expect((again.body as { code?: string }).code).toBe('quiz.matrix_already_withdrawn');
 
-    // Khôi phục: ready + truy vết rỗng; khôi phục lần nữa → 409.
     const restored = await http(app).post(`/api/v1/exam-matrices/${matrix.id}/restore`).set(bearer(owner.token)).send({});
     expect(restored.status, JSON.stringify(restored.body)).toBe(201);
     expect(restored.body).toMatchObject({ matrixId: matrix.id, status: 'ready' });

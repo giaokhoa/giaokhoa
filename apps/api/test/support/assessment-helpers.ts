@@ -15,7 +15,6 @@ export async function setGrade(app: INestApplication, token: string, itemId: str
   return res.body;
 }
 
-/** Điểm theo từng bài của một học sinh trong khoá (GET gradebook — hình mới từ issue #224: không còn categories/courseTotal). */
 export async function getGradebook(app: INestApplication, token: string, courseId: string, userId?: string): Promise<{
   courseId: string; userId: string;
   activities: {

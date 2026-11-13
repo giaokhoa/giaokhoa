@@ -11,37 +11,15 @@ import { SpaceDatabaseService } from '../db/routing/space-database.service';
 import type { BackgroundJobScope } from '../db/routing/background-job-scope';
 import { NotificationDeliveryService } from '../notification-delivery.service';
 
-/** Các trường hồ sơ chuẩn mà lá `profile` đọc từ bảng users (khớp phía API; ngoài ra lá nhận custom field theo shortName). */
 const PROFILE_STANDARD_FIELDS = ['username', 'email', 'firstName', 'lastName'] as const;
 
 export interface BadgeAwardJobData extends BackgroundJobScope { userId: string; trigger?: string }
 export interface BadgeAwardResult { evaluated: number; issued: string[] }
 
-/**
- * Đánh giá cấp huy hiệu tự động (badge auto-award): bản song sinh phía worker của evaluator phía API,
- * được nuôi bằng các sự kiện completion/competency qua queue 'badge-award'.
- * Nó suy lại cây tiêu chí của từng badge ACTIVE (overall ALL/ANY trên
- * course-completion — tôn trọng hạn by-date tuỳ chọn của lá /
- * các lá activity-completion / competency-proficiency / other-badge / manual /
- * cohort-membership / profile-field) từ ĐÚNG các dữ kiện đã lưu
- * mà API dùng,
- * và cấp các assertion còn thiếu. Hoàn toàn idempotent:
- * khoá duy nhất (badgeId, userId) cộng với bước kiểm tra tồn tại bảo đảm lần chạy thứ hai
- * không cấp trùng gì cả. Mỗi lần cấp mới cũng sinh ra thông báo badge_awarded
- * (kênh popup) và một sự kiện outbox badge_issued.
- *
- * Thông báo đi qua hàm luật phân phối trong-app dùng chung của worker
- * ({@link NotificationDeliveryService}, lát #174-A) — KHÔNG ghi thẳng
- * như trước (lớp G10): chính sách cấp site (NB-7), tắt tiếng theo
- * khoá (NB-4, qua courseId của huy hiệu) và tuỳ chọn của chính người
- * nhận đều áp dụng, và mọi kết quả đều để lại một dòng dispatch log.
- * Phát bị chặn không bao giờ thu hồi huy hiệu: assertion vẫn đứng,
- * chỉ thông báo bị giữ lại — đúng như đường phía API.
- */
 @Processor('badge-award')
-/**
- * Xử lý job cấp huy hiệu nền: đánh giá tiêu chí cho user được chỉ định và cấp nếu đủ điều kiện.
- */
+
+
+
 export class BadgeAwardProcessor extends ObservedWorkerHost {
   constructor(
     private readonly i18n: I18nService,
@@ -63,7 +41,6 @@ export class BadgeAwardProcessor extends ObservedWorkerHost {
           .where('user_id', '=', userId)
           .executeTakeFirst();
         if (row?.status !== 'complete') return false;
-        // By-date (khớp phía API): có `byDate` thì timeCompleted phải ≤ ngày cắt.
         const byDate = typeof params.byDate === 'string' ? params.byDate : undefined;
         if (byDate !== undefined) {
           const cutoff = Date.parse(byDate);
@@ -73,7 +50,6 @@ export class BadgeAwardProcessor extends ObservedWorkerHost {
         return true;
       }
       case 'cohort': {
-        // Lá cohort (khớp phía API): thuộc cohort chỉ định; `cohortIds` yêu cầu thuộc TẤT CẢ.
         const ids = typeof params.cohortId === 'string'
           ? [params.cohortId]
           : Array.isArray(params.cohortIds) ? params.cohortIds.filter((i): i is string => typeof i === 'string') : [];
@@ -90,7 +66,6 @@ export class BadgeAwardProcessor extends ObservedWorkerHost {
         return true;
       }
       case 'profile': {
-        // Lá profile (khớp phía API): trường chuẩn trên users hoặc custom field (shortName, scope core_user/user); có `value` thì phải bằng đúng, không có thì trường phải được điền (khác rỗng).
         const field = typeof params.field === 'string' ? params.field : '';
         if (!field) return false;
         let actual: string | null | undefined;
@@ -170,11 +145,8 @@ export class BadgeAwardProcessor extends ObservedWorkerHost {
     }
   }
 
-  /**
-   * Xử lý một job của queue tương ứng.
-   */
   async process(job: Job<BadgeAwardJobData>): Promise<BadgeAwardResult> {
-    // Issue #11: mọi lượt xử lý/retry phải kiểm sổ và giữ đúng kho đã đóng dấu khi enqueue; không chạy hộ trên platform.
+
     validateWorkerJobPayload(workerPayloadSchemas['badge-award'], job.data, 'badge-award');
     return this.jobRunner.runForJob(job.data, () => this.processInContext(job));
   }
@@ -230,12 +202,7 @@ export class BadgeAwardProcessor extends ObservedWorkerHost {
         .executeTakeFirst();
       if (!issued) continue;
       issuedIds.push(issued.id);
-      // Text thông báo tra catalog i18n; worker ngoài request context nên
-      // truyền locale tường minh (mặc định 'vi' như các processor nền tảng).
       const recipientLocale = 'vi';
-      // TENANT-1 (#196): tenant của notification = tenant của khoá chứa
-      // huy hiệu; huy hiệu cấp platform (không gắn khoá) thì lấy tenant
-      // mặc định của người nhận theo membership.
       let tenantId: string | null = null;
       if (badgeRow.courseId) {
         const courseRow = await this.spaceDb.routedKysely
@@ -246,14 +213,6 @@ export class BadgeAwardProcessor extends ObservedWorkerHost {
         tenantId = courseRow?.tenantId ?? null;
       }
       if (!tenantId) tenantId = await resolveDefaultTenantId(this.spaceDb.routedKysely, userId);
-      // Phát qua hàm luật phân phối chung của worker (lát #174-A, xem
-      // docblock đầu file): truyền `courseId` của huy hiệu để ghi đè
-      // tắt tiếng theo khoá (NB-4) áp đúng như đường API — huy hiệu
-      // cấp site (không gắn khoá) truyền null, ghi đè không áp. Nội
-      // dung giữ nguyên văn như đường ghi thẳng trước đây (subject /
-      // body / smallMessage từ cùng khoá i18n); kết quả phát bị chặn
-      // (mute / admin tắt / tuỳ chọn tắt) KHÔNG ảnh hưởng assertion
-      // vừa cấp ở trên.
       await this.delivery.deliverInApp(userId, 'badge_awarded', {
         subject: this.i18n.t('platform.badgeAwardedSubject', { locale: recipientLocale, args: { name: badgeRow.name } }),
         body: this.i18n.t('platform.badgeAwardedBody', { locale: recipientLocale, args: { name: badgeRow.name, issuer: badgeRow.issuerName } }),

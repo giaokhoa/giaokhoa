@@ -12,25 +12,6 @@ import type { CredentialBridgeService } from '../../../src/modules/auth/better-a
 import type { TotpService } from '../../../src/modules/auth/totp.service';
 import type { MailMessage } from '../../../src/modules/mail/mail.types';
 
-/**
- * Cổng MFA thống nhất trên các đường đăng nhập của Better Auth.
- *
- * Quy tắc nghiệp vụ được kiểm chứng (nguồn trạng thái MFA DUY NHẤT là bảng `user_totp` của module auth — factor TOTP đã xác nhận):
- * - (a) Đăng nhập bằng username/mật khẩu: mật khẩu đúng vẫn CHƯA có
- *   phiên dùng được — đáp ứng là dấu `twoFactorRedirect` + cookie chờ của bước hai, không cookie phiên, không dòng session. Mã TOTP sai bị từ chối; ngân sách thử của một challenge có hạn (hết ngân sách thì mã đúng cũng bị từ chối, phải đăng nhập lại); mã đúng trong ngân sách → phiên thật, dùng được trên route nghiệp vụ.
- * - (b) Đăng nhập bằng email OTP: cùng khuôn — OTP email đúng vẫn
- *   dừng ở bước TOTP.
- * - (c) Callback social (Google): tài khoản đã liên kết + đã bật MFA
- *   → bị gác: redirect mang `twoFactorRedirect=true`, không phiên; qua bước TOTP mới có phiên.
- * - Kho `two_factor` của plugin KHÔNG tham gia ở bất kỳ bước nào:
- *   bước hoàn tất (endpoint Nest `/auth/two-factor/verify-totp`) kiểm mã thẳng vào `user_totp` — không bản ghi two_factor nào được tạo cho người dùng trong suốt luồng.
- * - (e) Hồi quy: người chưa bật MFA đăng nhập như cũ ở mọi đường;
- *   người bị đình chỉ vẫn bị guard chặn trên route nghiệp vụ.
- *
- * Biến môi trường phải tồn tại TRƯỚC khi AppModule được nạp nên các
- * import của AppModule đều là import động bên trong beforeAll — như
- * các spec Better Auth khác. Provider Google được giả lập ở biên HTTP bằng cách thay `globalThis.fetch` (JWKS/token) như spec social.
- */
 process.env.BETTER_AUTH_ENABLED = 'true';
 const BA_SECRET = 'mfa-gate-e2e-secret-mfa-gate-e2e-secret-42';
 process.env.BETTER_AUTH_SECRET = BA_SECRET;
@@ -69,7 +50,6 @@ async function createMountedTestApp(): Promise<INestApplication> {
   return app;
 }
 
-/** Cặp cookie theo tên từ header set-cookie của một đáp ứng (null khi cookie vắng hoặc bị xoá rỗng). */
 function cookiePairFrom(setCookie: string[] | undefined, name: string): string | null {
   const raw = (setCookie ?? []).find((value) => value.startsWith(`${name}=`));
   if (!raw) return null;
@@ -77,11 +57,6 @@ function cookiePairFrom(setCookie: string[] | undefined, name: string): string |
   return pair.length > name.length + 1 ? pair : null;
 }
 
-/**
- * Đáp ứng có mang cookie phiên SỐNG nào không — kiểm mọi entry,
- * không phụ thuộc thứ tự: entry xoá cookie của cổng (tên + giá trị
- * rỗng) không tính là phiên sống.
- */
 function hasLiveSessionCookie(setCookie: string[] | undefined): boolean {
   return (setCookie ?? [])
     .filter((c) => c.startsWith('better-auth.session_token='))
@@ -99,7 +74,6 @@ function base64urlJson(value: unknown): string {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
 }
 
-/** Một mã TOTP 6 số chắc chắn không khớp cửa sổ kiểm chứng của secret. */
 async function wrongTotpCode(secret: string): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const valid = new Set<string>();
@@ -119,9 +93,7 @@ describe('Cổng MFA thống nhất của Better Auth (user_totp là nguồn duy
   let googleJwks: { keys: unknown[] };
   let currentGoogleIdToken = '';
   const realFetch = globalThis.fetch;
-  /** Mail đã bắt được (dựng từ dòng outbox, xem waitForMailTo). */
   const sentMails: MailMessage[] = [];
-  /** Id các dòng outbox đã dựng thành mail, tránh bắt trùng một dòng hai lần. */
   const capturedRowIds = new Set<string>();
 
   function mintGoogleIdToken(claims: { sub: string; email: string }): string {
@@ -155,7 +127,6 @@ describe('Cổng MFA thống nhất của Better Auth (user_totp là nguồn duy
     return { id: created.id, username, email };
   }
 
-  /** Bật MFA cho user qua chính TotpService của hệ (setup + confirm), trả secret để sinh mã. */
   async function enableMfa(userId: string, username: string): Promise<string> {
     const { secret } = await totp.setup(userId, username);
     await totp.confirm(userId, await generate({ secret }));
@@ -167,14 +138,6 @@ describe('Cổng MFA thống nhất của Better Auth (user_totp là nguồn duy
     return rows.rows[0].n;
   }
 
-  /**
-   * Chờ tới khi có mail gửi cho địa chỉ này: nội dung mail được dựng
-   * từ dòng outbox `auth_mail_requested` của chính địa chỉ đó bằng
-   * `renderAuthMail` dùng chung ở `@giaokhoa/contracts` — hàm mà
-   * processor ở phía worker gọi khi gửi thật (khâu gửi đã chuyển
-   * sang hàng đợi ở worker, issue #517; dòng outbox được ghi đồng bộ
-   * trong request nên thường có ngay).
-   */
   async function waitForMailTo(email: string, timeoutMs = 9000): Promise<MailMessage> {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
@@ -198,7 +161,6 @@ describe('Cổng MFA thống nhất của Better Auth (user_totp là nguồn duy
     }
   }
 
-  /** Gọi endpoint hoàn tất bước hai với cookie chờ lấy từ đáp ứng bị gác. */
   async function verifyTotp(twoFactorCookie: string, code: string) {
     return http(app)
       .post('/api/v1/auth/two-factor/verify-totp')
@@ -258,7 +220,6 @@ describe('Cổng MFA thống nhất của Better Auth (user_totp là nguồn duy
       .set('Origin', TRUSTED_ORIGIN)
       .send({ username: user.username, password: FLOW_PASSWORD });
     expect(signIn.status).toBe(200);
-    // Đáp ứng là dấu chờ bước hai, KHÔNG phải đáp ứng đăng nhập đầy đủ.
     expect(signIn.body.twoFactorRedirect).toBe(true);
     expect(signIn.body.twoFactorMethods).toEqual(['totp']);
     expect(signIn.body.token).toBeUndefined();
@@ -266,26 +227,20 @@ describe('Cổng MFA thống nhất của Better Auth (user_totp là nguồn duy
     expect(hasLiveSessionCookie(setCookie)).toBe(false);
     const twoFactorCookie = cookiePairFrom(setCookie, 'better-auth.two_factor');
     expect(twoFactorCookie).toBeTruthy();
-    // Không tồn tại phiên nào trong DB và cookie chờ không tự nó là phiên.
     expect(await sessionCount(user.id)).toBe(0);
     const sessionProbe = await http(app).get('/api/v1/auth/get-session').set('Cookie', twoFactorCookie!);
     expect(sessionProbe.body ?? null).toBeNull();
 
-    // Kho của plugin twoFactor KHÔNG tham gia: không bản ghi
-    // two_factor nào được tạo — bước hoàn tất kiểm mã thẳng vào
-    // `user_totp` (nguồn duy nhất), không có hình chiếu nào để lệch.
     const record = await pg.query<{ n: number }>(
       'select count(*)::int as n from two_factor where user_id = $1',
       [user.id],
     );
     expect(record.rows[0].n).toBe(0);
 
-    // Mã sai bị từ chối, vẫn chưa có phiên.
     const wrong = await verifyTotp(twoFactorCookie!, await wrongTotpCode(secret));
     expect(wrong.status).toBe(401);
     expect(await sessionCount(user.id)).toBe(0);
 
-    // Mã đúng trong ngân sách thử → phiên thật dùng được.
     const ok = await verifyTotp(twoFactorCookie!, await generate({ secret }));
     expect(ok.status).toBe(200);
     const sessionCookie = cookiePairFrom(ok.headers['set-cookie'] as unknown as string[], 'better-auth.session_token');
@@ -310,7 +265,6 @@ describe('Cổng MFA thống nhất của Better Auth (user_totp là nguồn duy
     );
     expect(twoFactorCookie).toBeTruthy();
     const wrong = await wrongTotpCode(secret);
-    // Ngân sách của plugin là 5 lần thử cho một challenge.
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const res = await verifyTotp(twoFactorCookie!, wrong);
       expect(res.status).toBeGreaterThanOrEqual(400);
@@ -319,7 +273,6 @@ describe('Cổng MFA thống nhất của Better Auth (user_totp là nguồn duy
     expect(exhausted.status).toBeGreaterThanOrEqual(400);
     expect(await sessionCount(user.id)).toBe(0);
 
-    // Challenge mới từ một lần đăng nhập lại: mã đúng qua bình thường.
     const again = await http(app)
       .post('/api/v1/auth/sign-in/username')
       .set('Origin', TRUSTED_ORIGIN)
@@ -398,8 +351,6 @@ describe('Cổng MFA thống nhất của Better Auth (user_totp là nguồn duy
     expect(Number(budget.rows[0]!.value)).toBe(2);
     expect(await sessionCount(user.id)).toBe(0);
 
-    // Sau ba lượt sai tiếp theo, challenge hết ngân sách. Mã đúng cũng
-    // không thể tạo phiên và không thể hồi sinh challenge đã kết thúc.
     for (let i = 0; i < 3; i++) {
       expect((await verifyTotp(cookie!, wrong)).status).toBe(401);
     }
@@ -495,7 +446,6 @@ describe('Cổng MFA thống nhất của Better Auth (user_totp là nguồn duy
 
   it('(s2) đổi mật khẩu của user thu hồi toàn bộ Better Auth cookie session cũ', async () => {
     const user = await createUser('bapasswordrevoke');
-    // Bridge tạo tài khoản BA; mô phỏng thêm hash legacy như user đã di trú hai hệ.
     await pg.query(
       "update users set password_hash = (select password from account where user_id = $1 and provider_id = 'credential' limit 1) where id = $1",
       [user.id],
@@ -577,9 +527,6 @@ describe('Cổng MFA thống nhất của Better Auth (user_totp là nguồn duy
   it('(c) social callback: tài khoản đã liên kết + có MFA bị gác ở callback; qua TOTP mới có phiên', async () => {
     const user = await createUser('mfagatesocial');
     const secret = await enableMfa(user.id, user.username);
-    // sub duy nhất mỗi lượt chạy: sub cố định sẽ khớp vào account đã
-    // liên kết của một lượt chạy trước trên cùng DB test (callback
-    // khớp theo account trước khi khớp theo email).
     currentGoogleIdToken = mintGoogleIdToken({ sub: `mfagate-${helpers.uniqueName('gsub')}`, email: user.email });
 
     const start = await http(app)
@@ -601,7 +548,6 @@ describe('Cổng MFA thống nhất của Better Auth (user_totp là nguồn duy
     const twoFactorCookie = cookiePairFrom(callbackCookies, 'better-auth.two_factor');
     expect(twoFactorCookie).toBeTruthy();
     expect(await sessionCount(user.id)).toBe(0);
-    // Liên kết Google đã ghi (callback khớp tài khoản) nhưng chưa có phiên.
     const accounts = await pg.query<{ n: number }>(
       "select count(*)::int as n from account where user_id = $1 and provider_id = 'google'",
       [user.id],
@@ -633,7 +579,6 @@ describe('Cổng MFA thống nhất của Better Auth (user_totp là nguồn duy
     const me = await http(app).get('/api/v1/users/me').set('Cookie', sessionCookie!);
     expect(me.status).toBe(200);
 
-    // Social không MFA: callback cấp phiên ngay như cũ.
     currentGoogleIdToken = mintGoogleIdToken({ sub: `mfagate-${helpers.uniqueName('gsub')}`, email: plain.email });
     const start = await http(app)
       .post('/api/v1/auth/sign-in/social')
@@ -651,7 +596,6 @@ describe('Cổng MFA thống nhất của Better Auth (user_totp là nguồn duy
       cookiePairFrom(callback.headers['set-cookie'] as unknown as string[], 'better-auth.session_token'),
     ).toBeTruthy();
 
-    // Đình chỉ: phiên đăng nhập vẫn bị guard mỏng chặn trên route nghiệp vụ.
     await pg.query('update users set suspended = true where id = $1', [plain.id]);
     try {
       const blocked = await http(app).get('/api/v1/users/me').set('Cookie', sessionCookie!);

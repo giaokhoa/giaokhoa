@@ -1,10 +1,3 @@
-/**
- * Nghiệp vụ grant hỗ trợ có hạn của từng trung tâm (issue #19).
- * Quản trị trung tâm cấp/thu hồi với tenant của phiên nghiệp vụ.
- * Nhân sự platform chỉ truy cập route hỗ trợ riêng: mỗi request đọc
- * lại grant trong kho đích, ghi audit và chỉ trả hình chiếu đã cho phép.
- * Không chuyển audience, không login-as hoặc nâng quyền ngầm.
- */
 import {
   BadRequestException,
   ConflictException,
@@ -32,7 +25,6 @@ import { tenantAls } from "../tenants/tenant-als";
 const MAX_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,78}[a-z0-9]$/;
 
-/** Chiếu grant ra contract, trạng thái luôn được tính lại từ đồng hồ. */
 function grantView(row: SupportGrantRow): SupportGrant {
   return {
     id: row.id,
@@ -53,7 +45,6 @@ function grantView(row: SupportGrantRow): SupportGrant {
   };
 }
 
-/** Audit chỉ chiếu định danh/phạm vi/kết quả; không gửi dữ liệu riêng. */
 function auditView(row: SupportAuditRow): SupportAuditEntry {
   return {
     id: row.id,
@@ -66,7 +57,6 @@ function auditView(row: SupportAuditRow): SupportAuditEntry {
   };
 }
 
-/** Điều phối cấp, thu hồi, đọc audit và kiểm grant hỗ trợ theo request. */
 @Injectable()
 export class SupportService {
   constructor(
@@ -77,14 +67,6 @@ export class SupportService {
     private readonly users: UsersService,
   ) {}
 
-  /**
-   * Không nhận tenantId do client chỉ định: chỉ chủ của tenant center
-   * hiệu lực mới cấp/thu hồi hoặc xem grant. Quyền phải là gán vai
-   * thật ở cây tenant, không phải quyền site-admin trên platform.
-   * @param actorId - Danh tính nghiệp vụ đã qua guard.
-   * @returns Tenant ID thuộc trung tâm hiện thời.
-   * @throws support.centre_required hoặc access.capability_denied.
-   */
   private async requireCentreManager(actorId: string): Promise<string> {
     const tenantId = this.tenantContext.currentTenantId();
     if (!tenantId)
@@ -99,28 +81,15 @@ export class SupportService {
         code: "support.centre_required",
       });
     }
-    // Dùng đúng cổng quản trị đã chốt của TenantsService: quyền
-    // tenant:manage hoặc chủ site-admin CỦA CHÍNH kho trung tâm,
-    // với membership active và slug đối chiếu chặt tại service đó.
     await this.tenants.assertTenantManager(actorId, tenantId);
     return tenantId;
   }
 
-  /**
-   * Cấp grant tối đa 30 ngày, phạm vi đóng đã được Zod kiểm.
-   * Grant và vết cấp cùng commit hoặc cùng rollback trong kho A.
-   * @param actorId - Quản trị của trung tâm.
-   * @param dto - Người nhận, thao tác, lý do và hạn cuối.
-   * @returns Grant được cấp.
-   */
   async create(
     actorId: string,
     dto: CreateSupportGrant,
   ): Promise<SupportGrant> {
     const tenantId = await this.requireCentreManager(actorId);
-    // Đối chiếu định danh người nhận trong KHO PLATFORM, không lấy
-    // tài khoản của A làm nhân sự hỗ trợ nền tảng. Không cấp cho
-    // tài khoản đã bị đình chỉ/đã xoá; không cấp quyền siteadmin.
     const recipient = await tenantAls.run(
       { platform: true },
       () => this.users.getByIdOrUndefined(dto.recipientId),
@@ -171,16 +140,11 @@ export class SupportService {
     return grantView(row);
   }
 
-  /** Liệt kê cả grant đã thu hồi/hết hạn, chỉ trong tenant của chủ. */
   async list(actorId: string): Promise<SupportGrant[]> {
     const tenantId = await this.requireCentreManager(actorId);
     return (await this.repo.listGrants(tenantId)).map(grantView);
   }
 
-  /**
-   * Thu hồi nguyên tử cùng audit; không xoá lịch sử và không đổi
-   * token của nhân sự platform vì cổng sử dụng luôn đọc DB mới.
-   */
   async revoke(actorId: string, grantId: string): Promise<SupportGrant> {
     const tenantId = await this.requireCentreManager(actorId);
     const row = await this.spaceDb.routedKysely
@@ -212,17 +176,11 @@ export class SupportService {
     return grantView(row);
   }
 
-  /** Lịch sử các quyết định hỗ trợ chỉ của tenant trung tâm hiện hành. */
   async audit(actorId: string): Promise<SupportAuditEntry[]> {
     const tenantId = await this.requireCentreManager(actorId);
     return (await this.repo.listAudit(tenantId)).map(auditView);
   }
 
-  /**
-   * Phân giải slug qua control plane, đọc định danh tenant trong
-   * ngữ cảnh vận hành tối thiểu; mọi truy cập dữ liệu sau bước này
-   * phải nạp GUC app.tenant_id bằng chính id đã phân giải.
-   */
   private async resolveCentre(slug: string): Promise<string> {
     if (!SLUG_PATTERN.test(slug))
       throw new BadRequestException({
@@ -253,22 +211,11 @@ export class SupportService {
     return tenant.id;
   }
 
-  /**
-   * Kiểm grant theo recipient/centre/scope và thời gian DB tại mỗi
-   * request; audit allowed/denied được ghi kể cả khi không có grant.
-   * Bị từ chối không đọc bảng nghiệp vụ, grant không cấp login-as.
-   * @param actorId - Danh tính từ support token có audience riêng.
-   * @param slug - Trung tâm được đăng ký.
-   * @param scope - Thao tác cố định của route.
-   * @throws support.access_denied nếu thiếu grant hợp lệ.
-   */
   async access(actorId: string, slug: string, scope: SupportScope) {
     const tenantId = await this.resolveCentre(slug);
     return this.spaceDb.withSpaceKysely(
       slug,
       async (db) => {
-        // Membership platform thu hồi → request kế tiếp bị chặn, kể
-        // cả support token và grant trong centre vẫn còn hiệu lực.
         const staffActive = await this.tenants.isPlatformSupportMember(actorId);
         const grant = staffActive
           ? await this.repo.findActiveGrant(tenantId, actorId, scope, db)
@@ -296,10 +243,6 @@ export class SupportService {
     );
   }
 
-  /**
-   * Người nhận xem trạng thái grant của chính mình; không trả nội
-   * dung nghiệp vụ hoặc grant của nhân sự khác qua bề mặt platform.
-   */
   async myAccess(actorId: string, slug: string): Promise<SupportGrant[]> {
     if (!(await this.tenants.isPlatformSupportMember(actorId))) {
       throw new ForbiddenException({

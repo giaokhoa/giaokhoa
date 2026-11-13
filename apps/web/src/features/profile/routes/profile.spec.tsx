@@ -8,9 +8,6 @@ import { baSessionBody, isGetSessionUrl } from '#test/ba-session';
 import { createQueryClient } from '#lib/query-client';
 import { ProfilePage } from './profile';
 
-/**
- * Trang Hồ sơ sau issue #288: CHỈ còn form thông tin user. Ba thẻ cài đặt từng xếp chồng ở đây (liên kết OAuth, 2FA, phiên) đã chuyển sang khu Cài đặt — spec này gác hai phía của quyết định: form vẫn lưu được như cũ, và trang không còn dựng (cũng không còn GỌI API cho) bất kỳ khối cài đặt nào.
- */
 const PROFILE = {
   id: '01900000-0000-7000-8000-000000000007',
   username: 'learner',
@@ -65,16 +62,13 @@ describe('Trang hồ sơ — chỉ form thông tin sau khi tách Settings (#288)
     );
     renderProfile();
 
-    // Form thông tin vẫn là bề mặt duy nhất của trang.
     await waitFor(() => expect(screen.getByLabelText('Tên')).toHaveValue('Learn'));
     expect(screen.getByLabelText('Họ')).toHaveValue('Er');
     expect(screen.getByLabelText('Email')).toHaveValue('learner@example.com');
     expect(screen.getByRole('button', { name: 'Lưu hồ sơ' })).toBeInTheDocument();
-    // Ba khối cài đặt đã rời trang: không tiêu đề thẻ nào còn xuất hiện.
     expect(screen.queryByText('Tài khoản liên kết')).not.toBeInTheDocument();
     expect(screen.queryByText('Xác thực hai lớp')).not.toBeInTheDocument();
     expect(screen.queryByText('Phiên đăng nhập')).not.toBeInTheDocument();
-    // Và trang không hề gọi các endpoint của những khối đó nữa.
     expect(calls.some((u) => u.includes('/auth/oauth/'))).toBe(false);
     expect(calls.some((u) => u.includes('/auth/mfa/'))).toBe(false);
     expect(calls.some((u) => u.includes('/auth/sessions'))).toBe(false);
@@ -90,8 +84,6 @@ describe('Trang hồ sơ — chỉ form thông tin sau khi tách Settings (#288)
         if (url === '/api/v1/users/me') return jsonResponse(current);
         if (url === `/api/v1/users/${PROFILE.id}` && init?.method === 'PATCH') {
           saved = JSON.parse(String(init.body)) as Record<string, unknown>;
-          // Hồ sơ trả về giữ nguyên dạng thật của API (customFields là
-          // MẢNG) — chỉ họ/tên/email đổi theo body vừa lưu.
           current = { ...PROFILE, firstName: saved.firstName as string, lastName: saved.lastName as string, email: saved.email as string };
           return jsonResponse(current);
         }

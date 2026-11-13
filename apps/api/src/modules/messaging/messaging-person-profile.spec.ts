@@ -1,10 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MessagingContactsService } from './messaging-contacts.service';
 
-/**
- * Endpoint hồ sơ người phục vụ panel chat 1–1 (issue #592):
- * trả định danh + tên hiển thị + tên đăng nhập + email từ dữ kiện người dùng thật, chỉ trong cổng hẹp: chính chủ, hoặc chung hội thoại 1–1 không bị chặn với đối tác, hoặc người xem có capability xem định danh. Chung nhóm/lớp/khoá nhưng không chung 1–1 và không có capability thì nhận 404 — cổng cũ "chung conversation nhìn thấy được" lộ email qua đồng bộ lười nên đã bị thu hẹp. Người lạ không chung gì, và đối tác của hội thoại 1–1 đang chặn, đều nhận 404 như đối tác không tồn tại (không rò sự tồn tại).
- */
 describe('MessagingContactsService.getPersonProfile — cổng hồ sơ hẹp và dữ kiện thật', () => {
   const VIEWER_ID = 'viewer-1';
   const PARTNER_ID = 'partner-1';

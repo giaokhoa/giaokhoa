@@ -10,19 +10,6 @@ import {
 } from '../test-support/tenant-context';
 import { AssignmentsRepository } from './assignments';
 
-/**
- * Spec tích hợp của repository bài tập trên Kysely (issue #649).
- *
- * Database trung tâm được dựng từ rỗng bằng chính cầu nối migration của package trên cụm PostgreSQL thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ `DATABASE_URL` của package). Mọi ca chạy qua repository production trong ngữ cảnh tenant qua pool gắn GUC như đường production.
- *
- * Các bất biến được khoá ở đây là hợp đồng của đường bộ máy cũ trước đây mà tầng service dựa vào:
- * - Gói chấm và kết quả theo tiêu chí ghi/đè theo khoá duy nhất tự
- *   nhiên, nhánh cập nhật khi trùng ghi `null` tường minh cho các trường kết quả vắng mặt (ghi đè là thay toàn bộ, không giữ trường cũ).
- * - Cột jsonb `points` của dấu chấm đọc lại đúng mảng điểm đã ghi
- *   (đường ghi serialize tường minh + `::jsonb`), patch không nhắc
- *   tới `points` thì mảng điểm giữ nguyên, patch `points: null` thì xoá mảng điểm.
- * - Thứ tự các danh sách theo thứ tự tạo/hiển thị như đường cũ.
- */
 const TEST_DATABASE = 'giaokhoa_db_g649_assignments';
 const TEST_ROLE = 'giaokhoa_db_g649_assignments';
 const TEST_ROLE_PASSWORD = 'giaokhoa_db_g649_assignments_pw';

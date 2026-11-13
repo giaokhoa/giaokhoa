@@ -1,9 +1,9 @@
-/**
- * Cổng Socket.IO của API: gắn Redis adapter trên Server gốc trước khi Nest
- * tạo namespace /messaging. Mọi API replica phải dùng cùng Redis pub/sub;
- * lỗi khởi tạo Redis làm ứng dụng từ chối boot thay vì dùng in-memory adapter
- * và âm thầm đánh mất sự kiện do worker phát từ tiến trình khác.
- */
+
+
+
+
+
+
 import type { INestApplicationContext } from '@nestjs/common';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
@@ -11,11 +11,11 @@ import Redis from 'ioredis';
 import type { Server, ServerOptions } from 'socket.io';
 import { redisTlsFromUrl } from '../../config/env';
 
-/**
- * Kiểm tra Origin của handshake HTTP lẫn WebSocket. Client native không gửi
- * header Origin vẫn phải đi qua xác thực phiên/token của gateway; Origin là
- * cơ chế hạn chế trình duyệt, không phải cơ chế xác thực thay thế.
- */
+
+
+
+
+
 export function isMessagingOriginAllowed(origin: string | undefined, origins: readonly string[]): boolean {
   return origin === undefined || origins.includes(origin);
 }
@@ -32,11 +32,11 @@ export class MessagingRedisIoAdapter extends IoAdapter {
     super(app);
   }
 
-  /**
-   * Kết nối Redis trước khi mở cổng HTTP/Socket.IO. Không chấp nhận trạng thái
-   * chỉ có một phần cặp pub/sub kết nối thành công; mỗi client được dọn khi
-   * khởi tạo thất bại, và log của lỗi kết nối vẫn được giữ để chẩn đoán.
-   */
+
+
+
+
+
   async connectToRedis(): Promise<void> {
     const options = { maxRetriesPerRequest: null, lazyConnect: true, ...redisTlsFromUrl(this.redisUrl) };
     const pub = new Redis(this.redisUrl, options);

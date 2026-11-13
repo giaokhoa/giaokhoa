@@ -22,19 +22,9 @@ import { usePermissions } from '#lib/permissions';
 import type { ExamMatrixView, MatrixImportIssue, MatrixImportPreview } from '@giaokhoa/contracts';
 import { COGNITIVE_LEVELS, LEVEL_LABEL_KEYS, QTYPES, QTYPE_LABEL_KEYS, withApiReason } from '#features/questions/utils/shared';
 
-/**
- * Wizard NHẬP MA TRẬN TỪ FILE (lát I-3, issue #233) — bề mặt web của chuỗi I-1 (xem trước) → I-2 (ghi nguyên tử). Trang KHÔNG tự tính lại luật nào: mọi luật hợp lệ, tính tổng và khả dụng đều do server trả trong kết quả xem trước; web chỉ trình bày và chuyển file.
- *
- * Flow tổng thể 5 bước, file là nguồn sự thật duy nhất xuyên suốt:
- * (1) chọn môn + chương trình + checkbox Vận dụng cao → tải workbook
- * mẫu do server sinh cho đúng bộ mức đó; (2) tải file .xlsx đã điền lên; (3) xem trước: lưới ô dự thảo + cảnh báo + khả dụng, kèm bảng lỗi định vị (sheet/dòng/cột/mã) khi `valid=false` — nút xác nhận bị khoá khi còn lỗi; (4) xác nhận: gửi lại CHÍNH file đó lên bước ghi (server parse lại từ đầu, không tin kết quả xem trước phía client) — 422 kèm `matrixImportIssues` thì hiện lại bảng lỗi và KHÔNG có ma trận nào được tạo, gửi lại cùng nội dung thì server trả ma trận đã có thay vì tạo trùng; (5) kết quả: mở trang sửa của ma trận vừa ghi (hoặc bản đã có khi trùng).
- *
- * Bất biến giữ ở mọi bước: ô neo ĐƠN VỊ KIẾN THỨC × mức × dạng (ma trận KHÔNG gắn YCCĐ — YCCĐ trong xem trước chỉ để đối chiếu, ô không dùng YCCĐ làm khoá); số câu Đúng–Sai là số CHÙM (1 chùm = 4 ý theo chú thích 2 CV 7991); bộ mức mặc định 3 mức CV 7991, cột Vận dụng cao chỉ tồn tại khi giáo viên tick checkbox ở bước 1 (và file khai khớp) — không có select chọn levelSet nào trên luồng này.
- */
 
 const SELECT_CLASS = 'h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs';
 
-/** Các bước của wizard, theo đúng thứ tự nhiệm vụ I-3 giao. */
 const STEP_KEYS = [
   'matrixImportStep1',
   'matrixImportStep2',
@@ -43,17 +33,9 @@ const STEP_KEYS = [
   'matrixImportStep5',
 ] as const;
 
-/**
- * Một lỗi cứng định vị trong file nhập (cùng hình dạng
- * `MatrixImportIssue` của contracts, ở cả xem trước lẫn 422 lúc ghi).
- *
- * @param issue - Lỗi cần trình bày; `row`/`column` null khi lỗi thuộc
- *   toàn file hoặc khối thông tin chung không định vị được một ô.
- */
 function IssueTable({ issues }: { issues: MatrixImportIssue[] }) {
   const { t } = useTranslation('app');
   if (issues.length === 0) return null;
-  // Khoá hàng giữ đúng công thức của bảng tự vẽ trước đây (mã + dòng + cột + số thứ tự) để định danh hàng ổn định trong bảng dùng chung.
   const rows = issues.map((issue, index) => ({
     ...issue,
     rowKey: `${issue.code}-${issue.row ?? ''}-${issue.column ?? ''}-${index}`,
@@ -86,14 +68,11 @@ function IssueTable({ issues }: { issues: MatrixImportIssue[] }) {
   );
 }
 
-/** Trang wizard nhập ma trận từ file (route /matrices/import). */
 export function MatrixImportPage() {
   const { t } = useTranslation('app');
   const navigate = useNavigate();
   const perms = usePermissions();
 
-  // Bước hiện tại của wizard (1–5); file + kết quả xem trước được giữ
-  // xuyên suốt để bước ghi gửi lại đúng file đã xem trước.
   const [step, setStep] = useState(1);
   const [subjectId, setSubjectId] = useState('');
   const [curriculumId, setCurriculumId] = useState('');
@@ -107,12 +86,6 @@ export function MatrixImportPage() {
   const [previewBusy, setPreviewBusy] = useState(false);
   const [commitBusy, setCommitBusy] = useState(false);
 
-  // Khoá của giáo viên để mở nhánh đọc khung theo khoá (điểm nghẽn
-  // D-3 của issue #233): môn/chương trình là dữ liệu quốc gia chung
-  // nên khoá nào của giáo viên cũng cho cùng danh sách — `forCourseId`
-  // chỉ mở cổng đọc, không lọc danh sách theo khoá. Danh sách khoá
-  // phải về trước mới gọi, để tránh một lượt gọi không kèm khoá rồi
-  // hiện lỗi giả trước khi khoá kịp về.
   const coursesQuery = useCourseList();
   const forCourseId = coursesQuery.data?.[0]?.id;
   const subjectsQuery = useCurriculumSubjects(
@@ -122,13 +95,8 @@ export function MatrixImportPage() {
   const subjects = subjectsQuery.data ?? [];
   const curriculaQuery = useCurriculaBySubject(subjectId, forCourseId);
   const curricula = curriculaQuery.data ?? [];
-  // Lỗi tải danh sách nền không còn nuốt thành rỗng im lặng: hiện trạng
-  // thái lỗi ngay ở bước 1 để giáo viên biết đường liệt kê đang gãy
-  // thay vì thấy hai dropdown chỉ có "—" mà không rõ lý do.
   const subjectsLoadFailed = subjectsQuery.isError || curriculaQuery.isError;
 
-  // Đổi môn: giữ chương trình nếu còn thuộc môn mới, không thì tự
-  // chọn chương trình đầu (cùng nhịp effect của màn tạo ma trận tay).
   const [previousCurriculumScope, setPreviousCurriculumScope] = useState({
     subjectId: '',
     curricula: undefined as typeof curriculaQuery.data,
@@ -143,11 +111,6 @@ export function MatrixImportPage() {
     }
   }
 
-  /**
-   * Bước 1 — tải workbook mẫu do server sinh cho đúng (môn, chương
-   * trình, bộ mức) đã chọn. Tải xong vẫn ở bước 1 để giáo viên điền
-   * số rồi bấm Tiếp tục sang bước tải file lên.
-   */
   async function downloadTemplate() {
     if (!subjectId || !curriculumId) return;
     setTemplateBusy(true);
@@ -161,12 +124,6 @@ export function MatrixImportPage() {
     }
   }
 
-  /**
-   * Bước 2 → 3 — gửi file lên bước xem trước. Server luôn trả 200 kể
-   * cả khi file sai khuôn: `valid=false` kèm lỗi định vị thì trang
-   * vẫn sang bước 3 để hiện bảng lỗi và khoá nút xác nhận; chỉ lỗi
-   * mạng/HTTP mới báo banner và ở lại bước 2.
-   */
   async function runPreview() {
     if (!file) {
       setMessage(t('matrixImportNoFile'));
@@ -186,14 +143,6 @@ export function MatrixImportPage() {
     }
   }
 
-  /**
-   * Bước 4 → 5 — gửi lại CHÍNH file đã xem trước lên bước ghi.
-   * Thành công (201) thì sang bước kết quả với view ma trận server
-   * trả (bản mới tạo, hoặc bản đã có khi trùng nội dung — cả hai đều
-   * mở được từ cùng một id). Thất bại 422 kèm `matrixImportIssues`
-   * thì hiện lại bảng lỗi, ở lại bước 4, và KHÔNG có ma trận nào
-   * được tạo ở lượt này — giáo viên sửa file rồi tải lại từ bước 2.
-   */
   async function runCommit() {
     if (!file || !preview?.valid) return;
     setCommitBusy(true);
@@ -215,7 +164,6 @@ export function MatrixImportPage() {
     }
   }
 
-  /** Chọn file mới thì kết quả xem trước cũ hết hiệu lực — xoá để wizard không ghi bằng file cũ. */
   function onFileChange(next: File | null) {
     setFile(next);
     setPreview(null);
@@ -249,17 +197,11 @@ export function MatrixImportPage() {
     );
   }
 
-  // Khả dụng của một ô dự thảo: khớp theo (ĐVK, mức, dạng) vì ô dự
-  // thảo chưa có cellId (chỉ có sau khi ghi).
   const availabilityOf = (nodeId: string, level: string, qtype: string) =>
     preview?.availability.find(
       (a) => a.curriculumNodeId === nodeId && a.cognitiveLevel === level && a.qtype === qtype,
     );
 
-  // Hàng của bảng ô ma trận ở bước xem trước: làm phẳng cặp (hàng chủ
-  // đề, ô) thành từng hàng dữ liệu cho bảng dùng chung — thứ tự giữ
-  // đúng vòng lặp của bảng tự vẽ trước đây (theo thứ tự hàng chủ đề,
-  // trong mỗi hàng theo thứ tự ô của hàng đó).
   const previewCellRows = preview
     ? preview.rows.flatMap((row) =>
         preview.cells
@@ -302,7 +244,6 @@ export function MatrixImportPage() {
           {message}
         </ErrorAlert>
       ) : null}
-      {/* Chỉ báo bước: bước hiện tại đánh dấu aria-current, các bước đã qua giữ nguyên thứ tự để giáo viên biết mình đang ở đâu. */}
       <ol className="flex flex-wrap gap-2 text-sm">
         {STEP_KEYS.map((key, index) => (
           <li
@@ -518,12 +459,6 @@ export function MatrixImportPage() {
   );
 }
 
-/**
- * clientLoader (theo mẫu route ma trận): prefetch bank ma trận + danh
- * sách môn vào QueryClient singleton (đúng khoá factory) trước khi
- * component mount; component vẫn đọc bằng useQuery cùng khoá và tự
- * xử lý khi tải hỏng.
- */
 export async function clientLoader() {
   await Promise.all([
     queryClient.prefetchQuery(matrixBanksQueryOptions()),
@@ -532,7 +467,6 @@ export async function clientLoader() {
   return null;
 }
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { titleMeta } from '#lib/route-meta';
 export function meta() {

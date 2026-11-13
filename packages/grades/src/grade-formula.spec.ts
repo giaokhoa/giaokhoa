@@ -4,12 +4,6 @@ import {
   GradeFormulaError, calculateFromFormula, findFormulaCycle, formulaReferences, parseGradeFormula,
 } from './grade-formula.js';
 
-/**
- * GOLDEN calculated grade items — bộ đánh giá công thức an toàn (không eval).
- *
- * Nguồn oracle: MoodleDocs "Grade calculations" (docs.moodle.org/en/Grade_calculations, tra cứu trực tuyến 2026-10-23): công thức bắt đầu bằng `=`, tham chiếu idNumber trong ngoặc vuông kép, hàm sum/average/min/max, ví dụ của tài liệu gồm `=average([[1]], [[2]], [[3]])` (trung bình đều) và `=sum([[1]]*0.3, [[2]]*0.6, [[3]]*0.1)` (trọng số 30/60/10), `=max([[A]], [[B]], 100)`. Các số kỳ vọng dưới đây tính tay từ chính các ví dụ đó. Ngữ nghĩa riêng đã chốt và ghi trong grade-formula.ts: chia 0 → null, hàm bỏ qua đối số trống, phép toán hai ngôi có toán hạng trống → null, tham chiếu vòng và idNumber lạ bị từ chối lúc lưu (kiểm ở service, vòng kiểm ở đây bằng findFormulaCycle). Năm hàm bổ sung theo issue #24 (power/round/mod/pi/if) đối chiếu chính trang MoodleDocs trên: power(base, exponent) = base^exponent; round(number, count) làm tròn tới count chữ số thập phân; mod(dividend, divisor) là phần dư; pi() = 3.14159265…; if(cond, then, else) trả nhánh thứ hai khi điều kiện khác 0, nhánh thứ ba khi điều kiện bằng 0 — ví dụ 4 của tài liệu:
- * `=if([[midtermexam]]>=5, [[midtermexam]]+[[lab]], 0)`.
- */
 describe('GradeFormula — bộ phân tích/đánh giá chuẩn (tính toán điểm MoodleDocs)', () => {
   const grades: Record<string, number | null> = { a: 80, b: 60, c: 100, empty: null };
   const resolve = (idNumber: string): number | null => grades[idNumber] ?? null;
@@ -41,7 +35,7 @@ describe('GradeFormula — bộ phân tích/đánh giá chuẩn (tính toán đi
   it('chia cho 0 → null (không lỗi, không Infinity), kể cả mẫu số tính ra 0', () => {
     expect(calculateFromFormula('=[[a]]/0', resolve)).toBeNull();
     expect(calculateFromFormula('=[[a]]/([[b]]-[[b]])', resolve)).toBeNull();
-    expect(calculateFromFormula('=sum([[a]]/0, 5)', resolve)).toBe(5); // đối số null bị hàm bỏ qua
+    expect(calculateFromFormula('=sum([[a]]/0, 5)', resolve)).toBe(5);
   });
 
   it('điểm trống: hàm bỏ qua đối số trống; phép toán hai ngôi với toán hạng trống → null; tất cả trống → null', () => {
@@ -75,7 +69,7 @@ describe('GradeFormula — bộ phân tích/đánh giá chuẩn (tính toán đi
     }
     expect(thrown).toBeInstanceOf(GradeFormulaError);
     expect((thrown as GradeFormulaError).reason).toBe('unknown_function');
-    expect(() => parseGradeFormula('=[[a]]; process.exit(1)')).toThrow(GradeFormulaError); // không eval: ký tự lạ bị token hoá từ chối
+    expect(() => parseGradeFormula('=[[a]]; process.exit(1)')).toThrow(GradeFormulaError);
   });
 
   it('power: =power([[a]],2) = 6400; =power(2,10) = 1024; đối số trống → null; cơ số âm mũ phân số (NaN) → null', () => {
@@ -93,7 +87,7 @@ describe('GradeFormula — bộ phân tích/đánh giá chuẩn (tính toán đi
     expect(calculateFromFormula('=round([[a]]/3,2)', resolve)).toBeCloseTo(26.67, 9);
     expect(calculateFromFormula('=round(2.675,2)', resolve)).toBeCloseTo(2.68, 9);
     expect(calculateFromFormula('=round([[empty]])', resolve)).toBeNull();
-    expect(calculateFromFormula('=round([[b]])', resolve)).toBe(60); // ví dụ 7 của MoodleDocs: round([[Quiz]])
+    expect(calculateFromFormula('=round([[b]])', resolve)).toBe(60);
   });
 
   it('mod: phần dư theo dấu số bị chia — mod(10,3) = 1, mod(10.5,3) = 1.5, mod(-7,3) = -1; chia 0 → null', () => {
@@ -117,9 +111,9 @@ describe('GradeFormula — bộ phân tích/đánh giá chuẩn (tính toán đi
     expect(calculateFromFormula('=[[a]]<50', resolve)).toBe(0);
     expect(calculateFromFormula('=[[b]]==60', resolve)).toBe(1);
     expect(calculateFromFormula('=[[a]]!=[[b]]', resolve)).toBe(1);
-    expect(calculateFromFormula('=[[a]]>=[[b]]+20', resolve)).toBe(1); // (a) >= (b + 20) — cộng trừ tính trước
+    expect(calculateFromFormula('=[[a]]>=[[b]]+20', resolve)).toBe(1);
     expect(calculateFromFormula('=[[empty]]>1', resolve)).toBeNull();
-    expect(() => parseGradeFormula('=1<2<3')).toThrow(GradeFormulaError); // không chuỗi so sánh
+    expect(() => parseGradeFormula('=1<2<3')).toThrow(GradeFormulaError);
   });
 
   it('if: ví dụ 4 của MoodleDocs — =if([[mid]]>=5, [[mid]]+[[lab]], 0) cho 10 khi đạt và 0 khi không đạt', () => {
@@ -129,8 +123,8 @@ describe('GradeFormula — bộ phân tích/đánh giá chuẩn (tính toán đi
     expect(midterm(4, 3)).toBe(0);
     expect(calculateFromFormula('=if(1, [[a]], [[b]])', resolve)).toBe(80);
     expect(calculateFromFormula('=if(0, [[a]], [[b]])', resolve)).toBe(60);
-    expect(calculateFromFormula('=if([[empty]], 1, 0)', resolve)).toBeNull(); // điều kiện trống → null
-    expect(calculateFromFormula('=if(1, [[a]], [[empty]])', resolve)).toBe(80); // nhánh không chọn trống không ảnh hưởng
+    expect(calculateFromFormula('=if([[empty]], 1, 0)', resolve)).toBeNull();
+    expect(calculateFromFormula('=if(1, [[a]], [[empty]])', resolve)).toBe(80);
   });
 
   it('lồng hàm xuyên nhóm: =sum(if([[a]]>50, power(2,3), 0), round(9.6)) = 8 + 10 = 18; max của power/mod/round(pi())', () => {
@@ -152,7 +146,6 @@ describe('GradeFormula — bộ phân tích/đánh giá chuẩn (tính toán đi
   });
 
   it('calculator dùng điểm calculated như điểm của item trong tổng hợp category (natural)', () => {
-    // Hai item thường 80/100 và 60/100; calculated = average của chúng = 70/100.
     const calcValue = calculateFromFormula('=average([[a]],[[b]])', resolve)!;
     const r = calculateCategory({
       aggregation: 'natural', gradeMin: 0, gradeMax: 100,
@@ -162,7 +155,6 @@ describe('GradeFormula — bộ phân tích/đánh giá chuẩn (tính toán đi
         { itemId: 'calc', gradeMin: 0, gradeMax: 100, grade: calcValue },
       ],
     });
-    // natural: (80 + 60 + 70) / 300 của thang cấu trúc 300 ⇒ 210.
     expect(r.gradeMax).toBe(300);
     expect(r.finalGrade).toBeCloseTo(210, 9);
   });

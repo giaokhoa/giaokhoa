@@ -4,25 +4,6 @@ import { createCentreKysely, type CentreDb } from '../client';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
 import { CoursesRepository, type CategoryRow } from './courses';
 
-/**
- * Spec tích hợp của repository khoá học trên Kysely (issue #645).
- *
- * Database trung tâm dựng từ rỗng bằng chính cầu nối migration của package trên cụm PostgreSQL thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ `DATABASE_URL`). Mọi ca chạy qua repository production ở `courses.ts` — không mô phỏng handle.
- *
- * Các tính chất chốt tại đây:
- * - Insert không truyền id nhận id UUIDv7 do database sinh
- *   (phụ lục U) và đọc lại nguyên vẹn qua chính repository.
- * - Cây category: path vật chất hoá + `subtreeOf` theo tiền tố
- *   path + `countSiblingCategories` trả `number` thật (ép `::int`, T-7).
- * - Jsonb `availability`: ghi/đọc khớp cả object lẫn MẢNG ở tầng
- *   cao nhất (đường nhân bản cm chép mảng availability), và đủ ba trạng thái của T-4 ở update patch — `undefined` giữ nguyên, `null` ghi SQL NULL, giá trị ghi qua xâu hoá + `::jsonb`.
- * - `shiftSections` hai pass qua vùng đệm +100000 giữ unique
- *   (course, section) và cho đúng số section đích.
- * - `setFormatOption` giữ cả hai nhánh của hợp đồng cũ: upsert
- *   thủ công khi `sectionId` null và `onConflictDoUpdate` trên unique bốn cột khi có section.
- * - Giao dịch của repository nguyên tử: lỗi giữa chừng rollback
- *   sạch dòng vừa ghi.
- */
 
 const adminUrl =
   process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
@@ -58,7 +39,6 @@ afterAll(async () => {
   if (adminUrl) await dropTestDatabase(adminUrl, TEST_DB);
 });
 
-/** Tạo một category gốc hoàn chỉnh (path/depth như đường tạo của service). */
 async function makeCategory(name: string, parent: CategoryRow | null = null): Promise<CategoryRow> {
   const cat = await repo.insertCategory({
     tenantId,
@@ -121,14 +101,11 @@ describe('CoursesRepository trên Kysely (issue #645)', () => {
     });
     expect((await repo.getSection(section.id))?.availability).toEqual(availabilityObject);
 
-    // Patch không nhắc tới availability: giá trị giữ nguyên (undefined = không đổi).
     await repo.updateSection(section.id, { name: 'Section 0 đổi tên' });
     expect((await repo.getSection(section.id))?.availability).toEqual(availabilityObject);
-    // Patch availability = null: ghi SQL NULL thật.
     await repo.updateSection(section.id, { availability: null });
     expect((await repo.getSection(section.id))?.availability).toBeNull();
 
-    // Availability dạng MẢNG ở tầng cao nhất (cây điều kiện của cm).
     const availabilityArray = [{ type: 'date', time: 1893456000 }, { type: 'grade' }];
     const cm = await repo.insertCm({
       course: course.id, section: section.id, component: 'mod_quiz', instanceId: null,
@@ -147,7 +124,6 @@ describe('CoursesRepository trên Kysely (issue #645)', () => {
     const s2 = await repo.insertSection({ course: course.id, section: 2, name: 'S2', summary: '', visible: true });
 
     await repo.transaction(async (tx) => {
-      // Đúng hai pass của đường chèn khung: đẩy lên vùng đệm rồi kéo về vị trí đích +2.
       await repo.shiftSections(tx, course.id, 1, 100000);
       await repo.shiftSections(tx, course.id, 1 + 100000, 2 - 100000);
     });

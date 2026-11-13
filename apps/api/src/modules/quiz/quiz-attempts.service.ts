@@ -42,9 +42,6 @@ import type {
   EffectiveSlotRow,
 } from './quiz.service';
 
-/**
- * Bốn cửa sổ xem lại của Moodle (mod/quiz display options): mỗi khía cạnh xem lại là một bitmask trên bốn cửa sổ này. Hằng số theo mã nguồn mod/quiz: DURING = 0x10000, IMMEDIATELY_AFTER = 0x01000, LATER_WHILE_OPEN = 0x00100, AFTER_CLOSE = 0x00010. Cửa sổ "ngay sau nộp" kéo dài 2 phút kể từ lúc lượt được chốt (khoảng ngắn theo Moodle).
- */
 export const REVIEW_WINDOW = {
   during: 0x10000,
   immediatelyAfter: 0x01000,
@@ -52,17 +49,8 @@ export const REVIEW_WINDOW = {
   afterClose: 0x00010,
 } as const;
 
-/** Khoảng cửa sổ "ngay sau nộp" tính bằng mili-giây. */
 export const REVIEW_IMMEDIATELY_AFTER_MS = 2 * 60 * 1000;
 
-/**
- * Cụm lượt làm, chấm và kết quả của QuizService (cụm 4 của issue #295): thiết lập hiệu lực, bắt đầu lượt, nộp bài, chấm tay, hàng đợi chấm theo câu, kết quả/thống kê, và sự kiện lượt làm. Cụm này gọi xuống tầng thấp dùng chung (`QuizSharedService`); hai method vốn `private` nhưng cụm khác gọi (`pushGrade` cho chấm lại của cụm ghim, `finalizeAttempt` cho lượt giấy của cụm sinh đề) nay để public trong nội bộ module, không phải bề mặt API của module.
- *
- * Hai hằng cửa sổ xem lại (`REVIEW_WINDOW`, `REVIEW_IMMEDIATELY_AFTER_MS`) chuyển về đây cùng nơi dùng thật
- * (phép tính cửa sổ xem lại), facade re-export lại.
- *
- * Lưu ý duy nhất về log: hai cảnh báo ghi điểm của `pushGrade` trước đây mang tên logger `QuizService`, nay mang tên `QuizAttemptsService` (nơi chứa method thật) — nội dung cảnh báo không đổi.
- */
 
 export class QuizAttemptsService {
   private readonly logger = new Logger(QuizAttemptsService.name);
@@ -81,16 +69,12 @@ export class QuizAttemptsService {
     private readonly shared: QuizSharedService,
   ) {}
 
-  /** Người dùng có thuộc phạm vi đích của lần ghim không: ghim toàn khoá (targetGroupId null) thì mọi học sinh của khoá đều thuộc; ghim theo nhóm thì chỉ thành viên nhóm đích. */
   private async isInTargetGroup(quiz: PinRow, userId: string): Promise<boolean> {
     if (!quiz.targetGroupId) return true;
     const mine = await this.groups.groupsOfUser(quiz.course, userId);
     return mine.some((g) => g.id === quiz.targetGroupId);
   }
 
-  /**
-   * Bộ phân giải cài đặt hiệu lực (Chặng 2, mục B.3 của hồ sơ thiết kế — đối chiếu cơ chế hợp nhất override của Moodle): hợp nhất THEO TỪNG TRƯỜNG theo thứ tự override người dùng > override nhóm > cài đặt của quiz. Nhiều override nhóm: lấy giá trị RỘNG NHẤT cho từng trường — time_open sớm nhất, time_close muộn nhất, time_limit dài nhất, attempts lớn nhất; một trường để null trong override nhóm nghĩa là nhóm đó không giới hạn ở trường đó nên thắng (không giới hạn là giá trị rộng nhất), 0 ở attempts cũng là không giới hạn. Mật khẩu KHÔNG hợp nhất từng trường: override người dùng có mật khẩu thì chỉ mật khẩu đó có hiệu lực; không thì TẬP mật khẩu của các nhóm áp dụng (nhập đúng một trong các mật khẩu là được); không nữa thì mật khẩu của quiz.
-   */
   async resolveEffectiveSettings(quiz: PinRow, userId: string): Promise<EffectiveQuizSettings> {
     const overrides = await this.repo.listOverrides(quiz.id);
     const userOverride = overrides.find((o) => o.userId === userId);
@@ -100,7 +84,6 @@ export class QuizAttemptsService {
       groupOverrides = overrides.filter((o) => o.groupId !== null && myGroupIds.has(o.groupId));
     }
     const hasGroups = groupOverrides.length > 0;
-    // Giá trị hợp nhất của nhóm cho một trường ngày giờ: undefined = không có override nhóm nào; null = có nhóm không giới hạn trường này (thắng); ngược lại lấy mốc rộng nhất.
     const mergeDate = (pick: (o: ExamPinOverrideRow) => Date | null, widest: 'min' | 'max'): Date | null | undefined => {
       if (!hasGroups) return undefined;
       if (groupOverrides.some((o) => pick(o) === null)) return null;
@@ -143,7 +126,6 @@ export class QuizAttemptsService {
     };
   }
 
-  /** Học sinh còn được bắt đầu lượt mới hay không, và vì sao không (mọi kiểm tra đều trên cài đặt HIỆU LỰC của chính học sinh). */
   private async attemptEligibility(quiz: PinRow, userId: string, now: Date): Promise<{
     canAttempt: boolean; reason: string | null; inProgressAttemptId: string | null;
     nextAttemptAt: string | null; passwordRequired: boolean;
@@ -155,7 +137,6 @@ export class QuizAttemptsService {
     if (effective.timeOpen && now < effective.timeOpen) return { canAttempt: false, reason: 'not_yet_open', inProgressAttemptId: null, nextAttemptAt: null, passwordRequired: effective.passwordRequired };
     if (effective.timeClose && now > effective.timeClose) return { canAttempt: false, reason: 'closed', inProgressAttemptId: null, nextAttemptAt: null, passwordRequired: effective.passwordRequired };
     if (effective.attemptsAllowed > 0 && mine.length >= effective.attemptsAllowed) return { canAttempt: false, reason: 'no_more_attempts', inProgressAttemptId: null, nextAttemptAt: null, passwordRequired: effective.passwordRequired };
-    // Khoảng chờ giữa hai lượt (delay1/delay2 của quiz cũ) đã bỏ hẳn khỏi mô hình pin — không còn cổng chờ giữa các lượt.
     if (quiz.lateEntryMinutes !== null && effective.timeOpen
       && now.getTime() > effective.timeOpen.getTime() + quiz.lateEntryMinutes * 60_000) {
       return { canAttempt: false, reason: 'late_entry_closed', inProgressAttemptId: null, nextAttemptAt: null, passwordRequired: effective.passwordRequired };
@@ -165,29 +146,17 @@ export class QuizAttemptsService {
     return { canAttempt: true, reason: null, inProgressAttemptId: null, nextAttemptAt: null, passwordRequired: effective.passwordRequired };
   }
 
-  /**
-   * Điểm bài hiện tại của một học sinh theo grade_method của quiz (null khi chưa có lượt nào chốt điểm).
-   */
   async currentGradeForUser(quiz: PinRow, userId: string): Promise<number | null> {
     const finished = (await this.repo.listAttemptsForUser(quiz.id, userId)).filter((a) => a.state === 'finished' && a.sumGrades !== null);
     return this.gradeFromFinishedAttempts(quiz, finished);
   }
 
-  /**
-   * Điểm bài hiện tại từ tập lượt ĐÃ KẾT THÚC có sumGrades của một học sinh, chọn theo grade_method của bài (DL-03, issue #489):
-   * tổng maxMark của các usage trong tập được nạp MỘT lần theo lô thay vì `getUsage` theo từng lượt như trước, rồi tính qua `gradeFromTotals`. Đây là đường của phép tính cho MỘT học sinh
-   * (`currentGradeForUser`); trang kết quả không gọi hàm này theo
-   * từng học sinh — nó nạp tổng của toàn bộ lượt đã kết thúc của cả bài trong một lần rồi dùng thẳng `gradeFromTotals` cho từng học sinh.
-   */
   private async gradeFromFinishedAttempts(quiz: PinRow, finished: ExamAttemptRow[]): Promise<number | null> {
     if (!finished.length) return null;
     const totals = await this.questions.usageTotalMaxes(finished.map((a) => a.usageId));
     return this.gradeFromTotals(quiz, finished, totals);
   }
 
-  /**
-   * Tính điểm bài từ tập lượt ĐÃ KẾT THÚC của một học sinh khi map tổng maxMark theo usage đã được nạp sẵn: thuần tính trong bộ nhớ, không phát sinh truy vấn. Thứ tự `finished` quyết định first/last nên caller phải truyền đúng thứ tự liệt kê của repository (số lượt tăng dần cho một học sinh).
-   */
   private gradeFromTotals(quiz: PinRow, finished: ExamAttemptRow[], totals: Map<string, number>): number | null {
     const values: number[] = [];
     for (const a of finished) {
@@ -203,11 +172,6 @@ export class QuizAttemptsService {
     }
   }
 
-  /**
-   * Hạng mục điểm của bài đã ở trạng thái ĐÃ CÔNG BỐ hay chưa, hỏi qua cổng công bố chung của module điểm
-   * (`GradesService.itemPublicationState`): hạng mục có chính sách
-   * `auto` luôn coi là đã công bố; hạng mục `manual` chỉ được coi là đã công bố khi vết công bố theo phạm vi hạng mục gần nhất là hành động công bố. Bài chưa gắn course module, hoặc chưa có hạng mục điểm (lần ghim đời cũ, trước cơ chế hạng mục), thì không có cổng công bố nào áp lên được — coi như đã công bố để giữ nguyên hành vi cũ, phần gác còn lại do mặt nạ xem lại đảm nhiệm.
-   */
   private async gradeTotalsPublished(quiz: PinRow): Promise<boolean> {
     if (!quiz.cmId) return true;
     const item = await this.grades.getItemForCm(quiz.course, quiz.cmId).catch(() => undefined);
@@ -215,9 +179,6 @@ export class QuizAttemptsService {
     return (await this.grades.itemPublicationState(item)).published;
   }
 
-  /**
-   * Mặt nạ `reviewMarks` có đang mở cho CHỦ LƯỢT tại cửa sổ xem lại hiện tại của lượt này không — cùng phép tính với điểm từng câu trong `buildAttemptView`: cổng `reviewAttempt` phải mở tại cửa sổ hiện tại trước, rồi bit `reviewMarks` tại đúng cửa sổ đó mới có hiệu lực. Lượt đang làm dở thì chưa có điểm tổng nào được phép hiện.
-   */
   private async ownerMarksVisible(quiz: PinRow, row: ExamAttemptRow, now: Date): Promise<boolean> {
     if (row.state === 'inprogress') return false;
     const windowBit = await this.reviewWindowBit(quiz, row, now);
@@ -225,30 +186,12 @@ export class QuizAttemptsService {
     return (quiz.reviewMarks & windowBit) !== 0;
   }
 
-  /**
-   * Che điểm tổng (`grade` + `sumGrades`) trong tóm tắt lượt phía CHỦ LƯỢT (issue #411).
-   *
-   * Quy tắc nghiệp vụ (mục quy tắc về điểm trong `apps/api/AGENTS.md`):
-   * học sinh/phụ huynh chỉ thấy điểm ĐÃ CÔNG BỐ, và mọi đường đọc điểm phải qua cùng một cổng công bố. Điểm tổng vì thế chỉ hiện khi ĐỒNG THỜI thoả cả hai điều kiện độc lập:
-   *
-   * 1. mặt nạ `reviewMarks` đang mở tại cửa sổ xem lại hiện tại của
-   *    lượt (`marksVisible` do nơi gọi tính, dùng cùng phép tính với điểm từng câu); và
-   * 2. hạng mục điểm của bài đã ở trạng thái đã công bố qua cổng công
-   *    bố chung của module điểm (`gradeTotalsPublished`).
-   *
-   * Thiếu một trong hai điều kiện, cả `grade` lẫn `sumGrades` đều về `null` — che một mình `grade` là không đủ, vì `sumGrades` cùng thang tối đa của lượt cho phép suy ngược ra điểm. Lượt chưa có điểm nào (cả hai trường đang `null`) được trả nguyên, không tốn thêm lượt hỏi cổng công bố. Đường phía giáo viên/người có đặc quyền không đi qua hàm này và giữ nguyên số thật.
-   */
   private async maskOwnerTotals(quiz: PinRow, summary: QuizAttemptSummary, marksVisible: boolean): Promise<QuizAttemptSummary> {
     if (summary.grade === null && summary.sumGrades === null) return summary;
     if (marksVisible && (await this.gradeTotalsPublished(quiz))) return summary;
     return { ...summary, grade: null, sumGrades: null };
   }
 
-  /**
-   * Điểm bài hiện tại (`myGrade`) cho trang thông tin quiz phía CHỦ LƯỢT: nhân sự (quản lý/chấm/báo cáo/preview) thấy số thật như hiện tại; học viên chỉ thấy số thật khi điểm tổng qua được cổng che hai điều kiện của `maskOwnerTotals`, xét trên lượt đã chốt điểm GẦN NHẤT của chính người xem — lượt gần nhất có cửa sổ xem lại khắt khe nhất nên lấy nó làm chuẩn là phía an toàn. Đường ghi sổ điểm
-   * (`pushGrade`) KHÔNG đi qua hàm này: nó dùng thẳng
-   * `currentGradeForUser` để luôn ghi số thật vào sổ điểm.
-   */
   private async myGradeForViewer(quiz: PinRow, userId: string, ownAttempts: ExamAttemptRow[], isStaffViewer: boolean): Promise<number | null> {
     const value = await this.currentGradeForUser(quiz, userId);
     if (value === null || isStaffViewer) return value;
@@ -259,9 +202,6 @@ export class QuizAttemptsService {
     return marksVisible && (await this.gradeTotalsPublished(quiz)) ? value : null;
   }
 
-  /**
-   * Trang thông tin quiz cho người xem: cấu hình + slots, các lượt của chính người xem, điểm bài hiện tại và các cờ quyền để client hiển thị đúng thao tác. Điểm tổng trong các lượt của chính người xem và điểm bài hiện tại phía học viên đều qua cổng che hai điều kiện (mặt nạ reviewMarks + hạng mục điểm đã công bố) — xem maskOwnerTotals và myGradeForViewer (issue #411).
-   */
   async getQuizForUser(actorId: string, pinId: string): Promise<{
     quiz: QuizView;
     myAttempts: QuizAttemptSummary[];
@@ -269,7 +209,6 @@ export class QuizAttemptsService {
     canAttempt: boolean;
     attemptBlockedReason: string | null;
     inProgressAttemptId: string | null;
-    /** Cài đặt thi hiệu lực của chính người xem sau hợp nhất override — client hiển thị cửa sổ/giới hạn/mật khẩu theo các giá trị này, không theo cài đặt gốc của quiz. */
     effective: {
       timeOpen: string | null; timeClose: string | null;
       timeLimitSeconds: number | null; attemptsAllowed: number;
@@ -288,22 +227,15 @@ export class QuizAttemptsService {
       this.shared.hasCap(actorId, quiz, QUIZ_CAPABILITIES.preview),
       this.shared.hasCap(actorId, quiz, QUIZ_CAPABILITIES.attempt),
     ]);
-    // Phạm vi nhóm đích: người xem không có vai trò nhân sự (quản lý/chấm/báo cáo/preview) mà không thuộc nhóm đích thì lần ghim coi như không tồn tại (404 — không lộ sự tồn tại).
     const isStaffViewer = manage || grade || viewReports || preview;
     if (!isStaffViewer && !(await this.isInTargetGroup(quiz, actorId))) {
       throw new NotFoundException({ message: `Exam pin ${pinId} not found`, code: 'exam.pin_not_found' });
     }
     const mine = await this.repo.listAttemptsForUser(quiz.id, actorId, true);
-    // Tóm tắt theo lô (DL-03, issue #489): tổng điểm các usage nạp
-    // một lần cho cả danh sách lượt của người xem.
     const rawSummaries = await this.shared.attemptSummaries(quiz, mine);
     const summaries: QuizAttemptSummary[] = [];
     for (const [index, a] of mine.entries()) {
       const summary = rawSummaries[index]!;
-      // Điểm tổng phía học viên phải qua cổng che hai điều kiện (mặt
-      // nạ reviewMarks tại cửa sổ hiện tại + hạng mục điểm đã công
-      // bố) — xem maskOwnerTotals. Nhân sự và lượt preview của giáo
-      // viên không bị che.
       summaries.push(!isStaffViewer && !a.preview
         ? await this.maskOwnerTotals(quiz, summary, await this.ownerMarksVisible(quiz, a, new Date()))
         : summary);
@@ -329,15 +261,7 @@ export class QuizAttemptsService {
     };
   }
 
-  // --- lượt làm ------------------------------------------------------------------
 
-  /**
-   * Bắt đầu lượt làm mới (hoặc trả về lượt đang dở để tiếp tục): kiểm cửa
-   * sổ mở–đóng và số lần cho phép phía server, rút câu cho slot ngẫu
-   * nhiên, tạo usage của engine với maxMark lấy từ TỪNG SLOT, pin phiên
-   * bản câu ngay lúc bắt đầu. Preview của giáo viên (quiz:preview)
-   * bỏ qua cửa sổ/giới hạn và không ghi điểm về sau.
-   */
   async startAttempt(actorId: string, pinId: string, opts: { preview?: boolean; password?: string; clientIp?: string } = {}): Promise<QuizAttemptView> {
     const quiz = await this.shared.getPin(pinId);
     const preview = opts.preview === true;
@@ -346,8 +270,6 @@ export class QuizAttemptsService {
     } else {
       await this.shared.requireCap(actorId, quiz, QUIZ_CAPABILITIES.attempt);
       await this.courses.assertCourseAccess(actorId, quiz.course);
-      // Phạm vi nhóm đích: học sinh ngoài nhóm đích không mở được
-      // lượt làm của lần ghim này (403 như các cổng thi khác).
       if (!(await this.isInTargetGroup(quiz, actorId))) {
         throw new ForbiddenException({ message: 'This exam is limited to a specific group of this course', code: 'exam.pin_not_in_target_group' });
       }
@@ -355,8 +277,6 @@ export class QuizAttemptsService {
     const existing = await this.repo.listAttemptsForUser(quiz.id, actorId, true);
     const inProgress = existing.find((a) => a.state === 'inprogress' && a.preview === preview);
     if (inProgress) {
-      // Tiếp tục lượt dở cũng chịu mốc quá hạn: đã quá hạn thì chốt
-      // lượt phía server ngay tại tương tác này thay vì trả lượt sống.
       if (await this.isOverdue(quiz, inProgress)) return this.finalizeAttempt(quiz, inProgress, true);
       return this.buildAttemptView(quiz, inProgress, false);
     }
@@ -364,16 +284,11 @@ export class QuizAttemptsService {
     const now = new Date();
     let effectiveForSnapshot: EffectiveQuizSettings | null = null;
     if (!preview) {
-      // Mọi cổng đều xét trên cài đặt HIỆU LỰC của người này (override
-      // đã hợp nhất) — preview của giáo viên bỏ qua tất cả.
       const effective = await this.resolveEffectiveSettings(quiz, actorId);
       effectiveForSnapshot = effective;
       if (effective.timeOpen && now < effective.timeOpen) {
         throw new ForbiddenException({ message: 'This quiz is not open yet', code: 'quiz.not_yet_open' });
       }
-      // Trễ vào thi: quá mốc mở hiệu lực + late_entry_minutes thì từ
-      // chối dù cửa sổ còn mở (preset thi thử: 15 phút, Điều 21
-      // TT 24/2024).
       if (quiz.lateEntryMinutes !== null && effective.timeOpen
         && now.getTime() > effective.timeOpen.getTime() + quiz.lateEntryMinutes * 60_000) {
         throw new ForbiddenException({ message: 'The late-entry window for this quiz has passed', code: 'quiz.late_entry_closed' });
@@ -402,10 +317,6 @@ export class QuizAttemptsService {
     const slots = await this.shared.effectiveSlots(quiz);
     if (!slots.length) throw new BadRequestException({ message: 'This quiz has no questions yet', code: 'quiz.no_questions' });
 
-    // Attempt đọc THẲNG slots đã ghim của exam version (bỏ hẳn đường
-    // rút câu lúc bắt đầu lượt của recipe/per_student — chốt 26/10):
-    // mọi slot hiệu lực đều đã có câu + version ghim, hai học sinh làm
-    // cùng một pin nhận CÙNG một bộ câu.
     const resolvedSlots: { quizSlot: EffectiveSlotRow; questionId: string }[] = [];
     for (const s of slots) {
       if (!s.questionId) {
@@ -414,32 +325,17 @@ export class QuizAttemptsService {
       resolvedSlots.push({ quizSlot: s, questionId: s.questionId });
     }
 
-    // Moodle dùng MỘT dãy số lượt cho mỗi (bài, user) — preview chỉ là
-    // cờ trên lượt, không phải dãy riêng: ràng buộc duy nhất của
-    // exam_attempts là (pin_id, user_id, attempt_number) không phân
-    // biệt preview, đánh số riêng theo cờ sẽ va chạm khi một người vừa
-    // preview vừa làm thật.
     const attemptNumber = existing.length + 1;
     const usage = await this.questions.createUsage(actorId, {
       component: QUIZ_COMPONENT, instanceId: quiz.id, contextId: await this.shared.cmContextId(quiz),
       slots: resolvedSlots.map((e) => ({
         questionId: e.questionId, maxMark: e.quizSlot.maxMark,
         snapshot: quiz.versionMode === 'float_latest_ready' ? undefined : quiz.questionSnapshots?.[e.quizSlot.slot - 1],
-        // Chế độ tham chiếu version của pin (issue #254): pin `pinned`
-        // truyền version đã ghim trong exam version xuống engine (mọi
-        // lượt cùng một version); pin `float_latest_ready` KHÔNG truyền
-        // version — engine tự phân giải bản ready mới nhất của câu tại
-        // lúc bắt đầu lượt này rồi ghim cứng vào attempt (lượt đã bắt
-        // đầu không trôi theo bản mới hơn xuất hiện sau đó).
         pinnedVersionId: quiz.versionMode === 'float_latest_ready'
           ? undefined
           : (e.quizSlot.pinnedVersionId ?? undefined),
       })),
     });
-    // Nhãn kiểm tra bù + snapshot quy tắc đã áp: lượt bắt đầu trong cửa
-    // sổ CHỈ tồn tại nhờ user override mở riêng (mốc mở của override
-    // khác mốc mở gốc của quiz) là lượt bù; snapshot ghim toàn bộ quy
-    // tắc hiệu lực + nguồn override + thứ tự câu đã rút cho lượt này.
     const eff = effectiveForSnapshot;
     const userOv = eff?.userOverrideId ? (await this.repo.listOverrides(quiz.id)).find((o) => o.id === eff.userOverrideId) : undefined;
     const makeup = !preview && !!userOv && userOv.timeOpen !== null
@@ -472,17 +368,11 @@ export class QuizAttemptsService {
       });
       return this.buildAttemptView(quiz, row, false);
     } catch (err) {
-      // Dọn dẹp bù (cùng mẫu createQuiz): usage của engine đã tạo nhưng
-      // lượt không thành hình vì bất kỳ bước nào sau đó — xoá usage để
-      // không để lại question_usages mồ côi (hàng quiz_attempts, nếu đã
-      // chèn, cascade theo usage). Kiến trúc engine không nhận giao dịch
-      // ngoài nên không bọc transaction chung được.
       await this.questions.deleteUsage(usage.usage.id).catch(() => undefined);
       throw err;
     }
   }
 
-  /** Cổng subnet: quiz có đặt subnet thì IP khách thật phải khớp một mục trong danh sách (kiểm cả khi bắt đầu lượt và khi nộp từng đáp án). */
   private assertSubnetAllowed(quiz: PinRow, clientIp: string | undefined): void {
     if (!quiz.subnet) return;
     if (!clientIp || !ipMatchesSubnetList(clientIp, quiz.subnet)) {
@@ -490,15 +380,6 @@ export class QuizAttemptsService {
     }
   }
 
-  /**
-   * Mốc quá hạn của một lượt (null khi không mốc nào áp dụng): mốc SỚM
-   * NHẤT giữa hạn theo giới hạn thời lượng tính từ lúc bắt đầu và giờ
-   * đóng của quiz. Chỉ xét giới hạn thời lượng là không đủ — một lượt
-   * bắt đầu trước giờ đóng vẫn phải bị chốt khi quiz đã đóng, nếu không
-   * học sinh cứ trả lời tiếp và được tính điểm sau timeClose. Cả hai
-   * mốc đều là giá trị HIỆU LỰC của CHỦ LƯỢT (override áp cho người đó),
-   * không phải giá trị gốc của quiz và không chụp tại lúc bắt đầu.
-   */
   private async attemptDeadline(quiz: PinRow, row: ExamAttemptRow): Promise<Date | null> {
     const effective = await this.resolveEffectiveSettings(quiz, row.userId);
     let deadline: number | null = null;
@@ -515,16 +396,6 @@ export class QuizAttemptsService {
     return deadline !== null && new Date() > deadline;
   }
 
-  /**
-   * Cửa sổ xem lại hiện tại của một lượt ĐÃ NỘP xét cho chủ lượt:
-   * ngay sau nộp (2 phút từ time_finish) → sau đó khi đợt còn mở → sau
-   * khi đóng. Mốc đóng ở đây là mốc đóng MUỘN NHẤT CỦA CẢ ĐỢT
-   * (max timeClose của quiz và mọi override), KHÔNG phải mốc hiệu lực
-   * của riêng chủ lượt: các ca thi lệch nhau vì override mà dùng mốc
-   * riêng thì ca sớm xem được đáp án đúng trong khi ca sau chưa thi —
-   * lộ đề (hồ sơ thi trực tuyến VN điểm 5.1.4). Đợt không có mốc đóng
-   * thì không bao giờ sang cửa sổ sau-đóng.
-   */
   private async reviewWindowBit(quiz: PinRow, row: ExamAttemptRow, now: Date): Promise<number> {
     const finish = row.timeFinish?.getTime() ?? now.getTime();
     if (now.getTime() < finish + REVIEW_IMMEDIATELY_AFTER_MS) return REVIEW_WINDOW.immediatelyAfter;
@@ -533,21 +404,6 @@ export class QuizAttemptsService {
     return REVIEW_WINDOW.afterClose;
   }
 
-  /**
-   * Dựng view đầy đủ của một lượt: từng câu lấy nội dung của version ĐÃ
-   * PIN trong engine. Với CHỦ LƯỢT (không có quyền chấm/báo cáo), các
-   * khía cạnh sau nộp (đúng/sai, điểm câu, đáp án đúng, nhận xét) chỉ lộ
-   * khi bitmask review_* của quiz cho phép tại cửa sổ hiện tại — cổng
-   * nằm ở tầng server, client không nhận được dữ liệu bị tắt. Riêng
-   * trường `answers` của câu shortanswer cũng qua đúng cổng đáp án
-   * đúng này (xem chốt trong vòng lặp dựng câu): các dòng đáp án của
-   * shortanswer chính là tập đáp án được chấp nhận, để nguyên là lộ
-   * đáp án đúng dù `solution` đã bị che. Riêng điểm TỔNG của lượt
-   * còn phải qua thêm cổng công bố của hạng mục điểm (issue #411,
-   * xem maskOwnerTotals): mặt nạ reviewMarks mở là chưa đủ nếu điểm
-   * chưa được công bố. Người có
-   * quiz:grade/viewreports/manage và lượt preview không bị giới hạn.
-   */
   async buildAttemptView(quiz: PinRow, row: ExamAttemptRow, closedDueToTimeLimit: boolean, viewerId?: string): Promise<QuizAttemptView> {
     const usage = await this.questions.getUsage(row.usageId);
     const slots = await this.shared.effectiveSlots(quiz);
@@ -560,15 +416,12 @@ export class QuizAttemptsService {
         || (await this.shared.hasCap(viewer, quiz, QUIZ_CAPABILITIES.viewReports))
         || (await this.shared.hasCap(viewer, quiz, QUIZ_CAPABILITIES.manage));
     }
-    // Cổng review chỉ áp cho chủ lượt thường sau khi nộp; đang làm thì
-    // các khía cạnh vốn đã ẩn theo trạng thái inprogress như trước.
     let windowBit = 0;
     let hideContent = false;
     if (submitted && !privileged) {
       windowBit = await this.reviewWindowBit(quiz, row, new Date());
       hideContent = (quiz.reviewAttempt & windowBit) === 0;
     }
-    /** Snapshot thi không được lộ điểm từng câu/fraction trước cổng công bố chung. */
     const marksPublished = privileged || !quiz.questionSnapshots || await this.gradeTotalsPublished(quiz);
     const showAspects = submitted && (privileged || !hideContent);
     const aspectOn = (mask: number): boolean => privileged ? submitted : (showAspects && (mask & windowBit) !== 0);
@@ -584,40 +437,14 @@ export class QuizAttemptsService {
       const generalFeedback = (content.generalFeedback ?? null) as RichTextDocument | null;
       const pinnedAnswers = content.answers;
       const answerKey = content.answerKey;
-      // Chốt bảo mật cho câu shortanswer: các dòng đáp án của dạng câu
-      // này CHÍNH LÀ tập đáp án được chấp nhận (chấm khớp chính xác
-      // theo cờ đúng), nên trường `answers` — vốn dựng vô điều kiện ở
-      // cả hai đường trên cho mọi dạng câu — là đáp án đúng trá hình.
-      // Khi người xem là chủ lượt không đặc quyền và cổng đáp án đúng
-      // chưa mở cho người xem này (đúng điều kiện đang làm `solution`
-      // thành null ở dưới: đang làm bài, hoặc sau nộp mà
-      // reviewRightAnswer đóng tại cửa sổ hiện tại), trả `answers`
-      // rỗng để đáp án được chấp nhận không rời server ở bất kỳ bề
-      // mặt nào của lượt. Client không tiêu thụ trường này cho
-      // shortanswer (lúc làm chỉ render ô nhập; lúc xem lại đọc đáp
-      // án từ `solution` đã qua cổng) nên việc làm rỗng không phá
-      // tính năng. Các dạng câu khác giữ nguyên: dòng đáp án của
-      // multichoice là lựa chọn phải hiển thị, truefalse/essay không
-      // mang đáp án trong trường này. Người có đặc quyền không qua
-      // chốt này — vẫn thấy đủ như trước.
       if (!privileged && content.qtype === 'shortanswer' && !aspectOn(quiz.reviewRightAnswer)) {
         answers = [];
       }
       const lastResponse = [...a.steps].reverse().find((s) => s.data.answer !== undefined)?.data.answer ?? null;
-      // Step chấm tay gần nhất có nhận xét: engine ghi data.gradedBy +
-      // data.comment khi giáo viên chấm tay (manualGradeAttempt); các
-      // step khác (trả lời/chấm tự động) không mang gradedBy.
       const manualCommentStep = [...a.steps]
         .sort((x, y) => x.sequenceNumber - y.sequenceNumber)
         .reverse()
         .find((s) => s.data.gradedBy != null && typeof s.data.comment === 'string' && s.data.comment !== '');
-      // Solution HIỂN THỊ suy từ phía đáp án của version: đáp án đúng
-      // của multichoice/shortanswer nằm ở cờ isCorrect của các dòng
-      // answers; truefalse TF-A đáp án từng mệnh đề và essay lời giải
-      // mẫu đều nằm ở bản ghi phía đáp án (truefalse đổi hình dạng lưu
-      // trữ {answers} sang hình dạng hiển thị {statements}). Chỉ tính
-      // khi cổng reviewRightAnswer mở — cổng đóng thì trường này null,
-      // dữ liệu đáp án đúng không rời server.
       let solution: QuestionSolution | null = null;
       if (aspectOn(quiz.reviewRightAnswer)) {
         if (content.qtype === 'essay') {
@@ -655,8 +482,6 @@ export class QuizAttemptsService {
         state: a.state,
         response: lastResponse,
         fraction: submitted && marksPublished && aspectOn(quiz.reviewCorrectness) ? a.fraction : null,
-        // Điểm của câu luôn là fraction × maxMark của chính câu (câu
-        // TF-A đã mang fraction tra thang của lần ghim từ engine).
         mark: (submitted && marksPublished && aspectOn(quiz.reviewMarks) && a.fraction !== null) ? a.fraction * a.maxMark : null,
         rightAnswer: aspectOn(quiz.reviewRightAnswer) ? a.rightAnswer : null,
         feedback: aspectOn(quiz.reviewSpecificFeedback) && lastResponse !== null
@@ -668,26 +493,18 @@ export class QuizAttemptsService {
           : null,
       });
     }
-    // Ảnh nhúng trong nội dung câu: phát URL ký cho đúng người đang xem bài
-    // làm này (cổng của attempt — chủ attempt / người có quyền xem lại — đã
-    // gác ở các hàm gọi buildAttemptView). Học sinh không có quyền tại
-    // context bank của giáo viên nên đường files:view thuần không dùng được.
     for (const q of questions) {
       q.questionText = await this.files.resolveQuestionImageUrls(q.questionText);
       q.answers = await Promise.all(q.answers.map(async (a) => ({ ...a, text: await this.files.resolveQuestionImageUrls(a.text) })));
       if (q.stimulus) q.stimulus = { ...q.stimulus, content: await this.files.resolveQuestionImageUrls(q.stimulus.content) };
       q.feedback = await this.files.resolveQuestionImageUrls(q.feedback);
       q.generalFeedback = await this.files.resolveQuestionImageUrls(q.generalFeedback);
-      // Hướng dẫn hiện kèm câu hỏi cho chính người làm bài này nên ảnh
-      // nhúng trong đó cũng phải được phát URL ký theo cùng cổng của
-      // attempt; lời giải mẫu của essay (biến thể {answer}) cũng vậy.
       q.guidance = await this.files.resolveQuestionImageUrls(q.guidance);
       if (q.solution && 'answer' in q.solution) {
         q.solution = { answer: await this.files.resolveQuestionImageUrls(q.solution.answer) };
       }
     }
     const { pendingManual } = this.shared.syncFromUsage(usage);
-    // Tầng feedback thứ tư: nhận xét tổng quát theo dải % điểm.
     let overallFeedback: string | null = null;
     if (submitted && row.sumGrades !== null && aspectOn(quiz.reviewOverallFeedback)) {
       const totalMax = this.shared.usageTotalMax(usage);
@@ -699,12 +516,6 @@ export class QuizAttemptsService {
       }
     }
     const rawSummary = await this.shared.attemptSummary(quiz, row);
-    // Điểm tổng trong view của CHỦ LƯỢT thường phải qua cùng cổng che
-    // hai điều kiện như các đường đọc phía học viên khác (issue #411):
-    // mặt nạ reviewMarks tại cửa sổ hiện tại — dùng đúng aspectOn như
-    // điểm từng câu ở trên — cộng điều kiện hạng mục điểm đã công bố
-    // qua cổng công bố chung (xem maskOwnerTotals). Người có đặc quyền
-    // và lượt preview giữ nguyên số thật.
     const attemptSummary = !privileged && submitted
       ? await this.maskOwnerTotals(quiz, rawSummary, aspectOn(quiz.reviewMarks))
       : rawSummary;
@@ -719,11 +530,6 @@ export class QuizAttemptsService {
     };
   }
 
-  /**
-   * Đọc một lượt làm (chủ lượt hoặc giáo viên). Nếu lượt đang dở mà đã
-   * quá hạn làm bài, lần tương tác này chốt lượt phía server trước khi
-   * trả kết quả.
-   */
   async getAttemptView(actorId: string, attemptId: string): Promise<QuizAttemptView> {
     const row = await this.shared.getAttemptRow(attemptId);
     const quiz = await this.shared.getPin(row.pinId);
@@ -734,11 +540,6 @@ export class QuizAttemptsService {
     return this.buildAttemptView(quiz, row, false, actorId);
   }
 
-  /**
-   * Lưu câu trả lời của một câu trong lượt đang làm (ủy quyền engine ghi
-   * step). Quá hạn làm bài: lượt bị chốt phía server ngay tại tương tác
-   * này và view đã nộp được trả về thay vì ghi thêm đáp án.
-   */
   async submitResponse(actorId: string, attemptId: string, input: { questionAttemptId: string; response?: string | null }, clientIp?: string): Promise<QuizAttemptView> {
     const row = await this.shared.getAttemptRow(attemptId);
     const quiz = await this.shared.getPin(row.pinId);
@@ -748,7 +549,6 @@ export class QuizAttemptsService {
     if (row.state !== 'inprogress') {
       throw new BadRequestException({ message: 'This attempt is already submitted', code: 'quiz.attempt_already_submitted' });
     }
-    // Lượt preview của giáo viên không chịu subnet (như mọi cổng khác).
     if (!row.preview) this.assertSubnetAllowed(quiz, clientIp);
     if (await this.isOverdue(quiz, row)) {
       return this.finalizeAttempt(quiz, row, true);
@@ -761,24 +561,12 @@ export class QuizAttemptsService {
     return this.buildAttemptView(quiz, await this.shared.getAttemptRow(attemptId), false);
   }
 
-  /**
-   * Chốt một lượt phía server: engine chấm toàn bộ usage, tổng điểm được
-   * đồng bộ, lượt về finished (hoặc needsgrading khi còn essay), sự kiện
-   * quiz_attempt_finished được phát và — khi đã chốt hẳn — điểm bài theo
-   * grade_method được ghi vào sổ điểm.
-   */
   public async finalizeAttempt(quiz: PinRow, row: ExamAttemptRow, closedDueToTimeLimit: boolean): Promise<QuizAttemptView> {
     if (row.state !== 'inprogress') return this.buildAttemptView(quiz, row, false);
-    // Thang Đ–S của lần ghim đi cùng đường chốt usage để engine tra
-    // thang cho câu truefalse TF-A (cấu hình của lần ghim, không nằm
-    // trong câu hỏi); lần ghim không đặt thang thì engine dùng mặc
-    // định QĐ 764.
     const finishedUsage = await this.questions.finishUsage(row.userId, row.usageId, { tfScale: quiz.tfScale });
     const { sumGrades, pendingManual } = this.shared.syncFromUsage(finishedUsage);
     const state = pendingManual > 0 ? 'needsgrading' : 'finished';
     await this.repo.updateAttempt(row.id, { state, timeFinish: new Date(), sumGrades });
-    // Nộp tự động khi hết giờ là một sự kiện giám sát do SERVER ghi
-    // (chỉ khi quiz bật ghi nhận) — cùng nguyên tắc chỉ-ghi-nhận.
     if (closedDueToTimeLimit && quiz.monitorEvents && !row.preview) {
       await this.repo.insertAttemptEvent({ attemptId: row.id, type: 'auto_submit_timeout' }).catch(() => undefined);
     }
@@ -795,9 +583,6 @@ export class QuizAttemptsService {
     return this.buildAttemptView(quiz, updated, closedDueToTimeLimit);
   }
 
-  /**
-   * Học sinh nộp bài: chốt lượt hiện tại của chính mình.
-   */
   async submitAttempt(actorId: string, attemptId: string): Promise<QuizAttemptView> {
     const row = await this.shared.getAttemptRow(attemptId);
     const quiz = await this.shared.getPin(row.pinId);
@@ -807,11 +592,6 @@ export class QuizAttemptsService {
     return this.finalizeAttempt(quiz, row, await this.isOverdue(quiz, row));
   }
 
-  /**
-   * Ghi điểm bài hiện tại của một học sinh vào sổ điểm qua grade item của
-   * hoạt động (bỏ qua lặng lẽ nếu item chưa tồn tại — quiz tạo trước khi
-   * cơ chế item có hiệu lực; việc nộp bài không được hỏng vì sổ điểm).
-   */
   public async pushGrade(quiz: PinRow, userId: string): Promise<void> {
     if (!quiz.cmId) return;
     const value = await this.currentGradeForUser(quiz, userId);
@@ -824,21 +604,11 @@ export class QuizAttemptsService {
     try {
       await this.grades.recordActivityGrade(item.id, userId, value);
     } catch (err) {
-      // Sổ điểm từ chối ghi (vd item bị khoá — grades.item_locked) KHÔNG
-      // được phép làm hỏng việc nộp bài/chấm của học sinh: lượt đã chốt
-      // thành công ở tầng quiz, lỗi ghi điểm chỉ được log cảnh báo tại
-      // đây (đúng ý đồ của hàm này) chứ không truyền ra response.
       this.logger.warn(`quiz ${quiz.id}: could not record grade ${value} for user ${userId} on item ${item.id}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
-  // --- CAM-0: chấm bài giấy bằng camera (issue #112) -----------------------------
 
-  /**
-   * Trang kết quả của giáo viên (quiz:viewreports): mọi lượt làm,
-   * điểm bài hiện tại theo từng học sinh, hàng đợi essay chờ chấm tay,
-   * và thống kê câu sai theo từng slot (câu sai nhiều nhất xếp trước).
-   */
   async getResults(actorId: string, pinId: string): Promise<{
     quiz: QuizView;
     attempts: QuizAttemptSummary[];
@@ -850,16 +620,8 @@ export class QuizAttemptsService {
     const quiz = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, quiz, QUIZ_CAPABILITIES.viewReports);
     const rows = (await this.repo.listAttempts(quiz.id, QUIZ_PIN_ATTEMPTS_LIMIT)).filter((a) => !a.preview);
-    // Tóm tắt và điểm bài đều suy từ chính tập lượt đã nạp (DL-03,
-    // issue #489): tóm tắt theo lô một lần; tổng maxMark của toàn
-    // bộ lượt đã kết thúc của cả bài cũng nạp theo lô MỘT lần, điểm
-    // theo từng học sinh chỉ tính trong bộ nhớ từ các map đã nạp —
-    // không truy vấn lại theo từng học sinh như trước.
     const attempts = await this.shared.attemptSummaries(quiz, rows);
     const userIds = [...new Set(rows.map((r) => r.userId))];
-    // Gom lượt đã kết thúc theo học sinh, giữ nguyên thứ tự liệt kê
-    // của repository trong từng học sinh để ngữ nghĩa first/last
-    // của grade_method không đổi.
     const finishedByUser = new Map<string, ExamAttemptRow[]>();
     for (const r of rows) {
       if (r.state !== 'finished' || r.sumGrades === null) continue;
@@ -896,12 +658,6 @@ export class QuizAttemptsService {
     return { quiz: await this.shared.pinView(quiz), attempts, gradesByUser, needsGrading, questionStats, summary };
   }
 
-  /**
-   * Tổng quan tham gia + phổ điểm của bài (bộ Azota — issue #224):
-   * ghi danh lấy từ enrol của khoá chứa pin; "đã nộp" = có ít nhất
-   * một lượt finished/needsgrading (không tính preview của GV); phổ
-   * điểm tính trên điểm BÀI hiện tại của từng HS (gradesByUser).
-   */
   private async resultsSummary(
     quiz: PinRow,
     rows: ExamAttemptRow[],
@@ -936,13 +692,6 @@ export class QuizAttemptsService {
     };
   }
 
-  /**
-   * Gộp thống kê câu sai từ các lượt đã nộp (finished/needsgrading) của
-   * một quiz: duyệt usage của engine theo từng lượt, gộp theo slot. Tên
-   * học sinh sai được tra một lượt theo lô ở cuối; tên câu chỉ điền khi
-   * MỌI lượt ở slot dùng cùng một câu (slot cố định). Xếp wrongCount
-   * giảm dần để câu sai nhiều nhất lên đầu, hoà thì theo số slot.
-   */
   private async questionStats(quiz: PinRow, rows: ExamAttemptRow[]): Promise<QuizQuestionStat[]> {
     const submitted = rows.filter((r) => r.state === 'finished' || r.state === 'needsgrading');
     interface SlotAcc {
@@ -957,7 +706,6 @@ export class QuizAttemptsService {
       correct: { userId: string }[];
     }
     const bySlot = new Map<number, SlotAcc>();
-    // Usage của mọi lượt đã nộp nạp một lần theo lô (DL-03, issue #489).
     const usages = await this.questions.getUsages(submitted.map((r) => r.usageId));
     for (const r of submitted) {
       const usage = usages.get(r.usageId);
@@ -1008,8 +756,6 @@ export class QuizAttemptsService {
       if (questionId) {
         if (!questionNameById.has(questionId)) {
           const view = await this.questions.getQuestion(questionId).catch(() => undefined);
-          // Câu hỏi không còn trường tên: nhãn của câu trong thống kê
-          // là trích đoạn nội dung thân câu của version mới nhất.
           const snapshot = quiz.questionSnapshots?.find((q) => q.questionId === questionId);
           const questionText = snapshot?.package.questionText ?? view?.latestVersion.questionText;
           const text = questionText ? extractRichTextPlainText(questionText as RichTextDocument).trim() : '';
@@ -1038,12 +784,6 @@ export class QuizAttemptsService {
     return stats.sort((x, y) => y.wrongCount - x.wrongCount || x.slot - y.slot);
   }
 
-  /**
-   * Chấm tay một câu essay đang chờ (quiz:grade): điểm đi qua bước
-   * chấm của question engine (ghi step + fraction), tổng điểm của lượt
-   * được đồng bộ lại; khi câu cuối cùng được chấm, lượt về finished và
-   * điểm bài được ghi lại vào sổ điểm.
-   */
   async manualGrade(actorId: string, attemptId: string, input: { questionAttemptId: string; mark: number; comment?: string }): Promise<QuizAttemptView> {
     const row = await this.shared.getAttemptRow(attemptId);
     const quiz = await this.shared.getPin(row.pinId);
@@ -1071,14 +811,7 @@ export class QuizAttemptsService {
     return this.buildAttemptView(quiz, updated, false, actorId);
   }
 
-  // --- dải nhận xét tổng quát / sự kiện giám sát / chấm theo câu / thống kê chùm ---
 
-  /**
-   * Ghi một sự kiện giám sát do client báo (thoát fullscreen, mất
-   * focus, ngắt kết nối dài). Điều kiện: lượt của chính người báo, còn
-   * đang làm, quiz bật monitor_events. CHỈ GHI NHẬN — không có bất kỳ
-   * hệ quả tự động nào lên lượt làm.
-   */
   async recordAttemptEvent(actorId: string, attemptId: string, input: { type: string; data?: Record<string, unknown> }): Promise<ExamAttemptEventRow> {
     const row = await this.shared.getAttemptRow(attemptId);
     if (row.userId !== actorId) {
@@ -1094,7 +827,6 @@ export class QuizAttemptsService {
     return this.repo.insertAttemptEvent({ attemptId: row.id, type: input.type, data: input.data ?? null });
   }
 
-  /** Nhật ký sự kiện giám sát của một lượt (chủ lượt hoặc người có quyền chấm/báo cáo). */
   async listAttemptEvents(actorId: string, attemptId: string): Promise<ExamAttemptEventRow[]> {
     const row = await this.shared.getAttemptRow(attemptId);
     const quiz = await this.shared.getPin(row.pinId);
@@ -1102,11 +834,6 @@ export class QuizAttemptsService {
     return this.repo.listAttemptEvents(row.id);
   }
 
-  /**
-   * Hàng đợi chấm THEO CÂU (Q-b): mọi lượt đã nộp chứa câu này, kèm
-   * đáp án hiện tại và điểm đã có — giáo viên chấm một câu cho cả lớp
-   * trong một màn hình thay vì mở từng học sinh.
-   */
   async listQuestionGradingQueue(actorId: string, pinId: string, questionId: string): Promise<{
     attemptId: string; userId: string; displayName: string; attemptNumber: number;
     questionAttemptId: string; slot: number; state: string; response: string | null;
@@ -1125,7 +852,6 @@ export class QuizAttemptsService {
       const full = `${u.firstName} ${u.lastName}`.trim();
       nameById.set(u.id, full || u.username);
     }
-    // Usage của mọi lượt trong hàng đợi nạp một lần theo lô (DL-03, issue #489).
     const queueUsages = await this.questions.getUsages(submitted.map((r) => r.usageId));
     for (const r of submitted) {
       const usage = queueUsages.get(r.usageId);
@@ -1145,11 +871,6 @@ export class QuizAttemptsService {
     return rows.sort((x, y) => x.attemptNumber - y.attemptNumber || x.slot - y.slot);
   }
 
-  /**
-   * Chấm tay THEO CÂU cho nhiều lượt (Q-b): mỗi mục đi qua đúng đường
-   * chấm tay theo lượt hiện có (engine ghi step, tổng điểm đồng bộ,
-   * lượt cuối cùng hết câu chờ thì chốt + ghi sổ điểm).
-   */
   async gradeQuestionForAttempts(actorId: string, pinId: string, input: {
     questionId: string;
     grades: { attemptId: string; mark: number; comment?: string }[];
@@ -1175,14 +896,6 @@ export class QuizAttemptsService {
     return out;
   }
 
-  /**
-   * Các lượt làm của một quiz cho chủ nhân hoặc giáo viên — dùng cho
-   * trang thông tin (lượt của tôi) và báo cáo. Nhánh có
-   * quiz:viewreports (cả lớp) giữ nguyên số thật; nhánh chủ lượt thì
-   * điểm tổng phải qua cổng che hai điều kiện như mọi đường đọc phía
-   * học viên (xem maskOwnerTotals, issue #411), trừ người có quyền
-   * chấm/quản lý và lượt preview của giáo viên.
-   */
   async listAttemptSummaries(actorId: string, pinId: string): Promise<QuizAttemptSummary[]> {
     const quiz = await this.shared.getPin(pinId);
     await this.shared.requireAnyViewCap(actorId, quiz);
@@ -1194,7 +907,6 @@ export class QuizAttemptsService {
     const isStaffViewer = (await this.shared.hasCap(actorId, quiz, QUIZ_CAPABILITIES.grade))
       || (await this.shared.hasCap(actorId, quiz, QUIZ_CAPABILITIES.manage));
     const rows = await this.repo.listAttemptsForUser(quiz.id, actorId, true);
-    // Tóm tắt theo lô (DL-03, issue #489) rồi mới áp mặt nạ theo từng lượt.
     const rawSummaries = await this.shared.attemptSummaries(quiz, rows);
     const out: QuizAttemptSummary[] = [];
     for (const [index, r] of rows.entries()) {

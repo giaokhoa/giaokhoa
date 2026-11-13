@@ -6,17 +6,6 @@ import {
   roleIdByShortname, STRONG_PASSWORD, systemContextId, uniqueName,
 } from '../../support/identity-access-helpers';
 
-/**
- * Ngân hàng ma trận MB-1 (issue #111) — phủ 4 tiêu chí nghiệm thu ở tầng API (tiêu chí 5 kiểm chứng trình duyệt đổi vai do đội trình duyệt riêng chạy trên bản live):
- *  1. Tổ trưởng đưa mẫu lên bank tổ; thành viên thấy mẫu, copy về bank
- *     cá nhân (deep copy ô + derived_from), sửa ô trên bản copy và xem availability đúng theo pool câu gắn YCCĐ.
- *  2. GV ngoài tổ KHÔNG thấy bank tổ — cả ở danh sách bank lẫn API
- *     danh sách ma trận trực tiếp (403), dù có vai giáo viên ở hệ thống.
- *  3. Bất biến version: sửa ô trên mẫu ready → version của MẪU tăng;
- *     bản copy đã lấy trước đó không đổi (nội dung + version).
- *  4. Đóng góp → duyệt vào bank tổ có truy vết (proposer trên hàng
- *     chờ, derived_from trên bản vào bank, bản vào bank tổ là mẫu); từ chối có lý do hiện lại cho người gửi; người không có quyền duyệt thì duyệt → 403.
- */
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
@@ -58,14 +47,12 @@ describe('Ngân hàng ma trận MB-1 (issue #111)', () => {
     return { id: u.id, username: u.username, token: session.accessToken };
   }
 
-  /** Giáo viên: vai teacher tại context hệ thống (nhóm archetype staff — được cấp bank cá nhân). */
   async function mkStaffUser(): Promise<{ id: string; username: string; token: string }> {
     const u = await mkUser();
     await assignRole(app, admin, u.id, await roleIdByShortname(app, admin, 'teacher'), await systemContextId(app, admin));
     return u;
   }
 
-  /** Môn Toán → chương trình lớp 9 → chủ đề → bài → 2 YCCĐ (Biết/Hiểu). */
   async function setupCurriculum(): Promise<{ subjectId: string; curriculumId: string; lessonId: string; outcomeBiet: string; outcomeHieu: string }> {
     const systemCtxId = await systemContextId(app, admin);
     const subjRes = await http(app).post('/api/v1/curriculum/subjects').set(bearer(admin))
@@ -94,7 +81,6 @@ describe('Ngân hàng ma trận MB-1 (issue #111)', () => {
     };
   }
 
-  /** Một tổ (cohort) với tổ trưởng + thành viên + bank ma trận của tổ; kèm một GV ngoài tổ. */
   async function mkTeam() {
     const leader = await mkStaffUser();
     const member = await mkStaffUser();
@@ -134,7 +120,6 @@ describe('Ngân hàng ma trận MB-1 (issue #111)', () => {
     return res.body as MatrixBody;
   }
 
-  /** Mẫu Toán 9 của tổ: draft → 2 ô → chốt ready (vẫn version 1). */
   async function mkTeamTemplate(team: Awaited<ReturnType<typeof mkTeam>>, cur: Awaited<ReturnType<typeof setupCurriculum>>): Promise<MatrixBody> {
     const tpl = await createMatrix(team.leader.token, {
       name: 'Mẫu giữa kỳ Toán 9', subjectId: cur.subjectId, curriculumId: cur.curriculumId,
@@ -160,7 +145,6 @@ describe('Ngân hàng ma trận MB-1 (issue #111)', () => {
     const team = await mkTeam();
     const tpl = await mkTeamTemplate(team, cur);
 
-    // Pool câu cho availability: 3 câu Biết + 1 câu Hiểu, category ở context hệ thống (admin tạo).
     const systemCtxId = await systemContextId(app, admin);
     const catRes = await http(app).post('/api/v1/questions/categories').set(bearer(admin))
       .send({ name: uniqueName('Pool MB1'), contextId: systemCtxId });
@@ -181,14 +165,12 @@ describe('Ngân hàng ma trận MB-1 (issue #111)', () => {
     await mkQ('MB1-B3', cur.outcomeBiet, 'biet');
     await mkQ('MB1-H1', cur.outcomeHieu, 'hieu');
 
-    // Thành viên thấy mẫu trong bank tổ.
     const listRes = await http(app).get(`/api/v1/question-banks/${team.teamBank.id}/matrices`).set(bearer(team.member.token));
     expect(listRes.status, JSON.stringify(listRes.body)).toBe(200);
     const listed = (listRes.body as MatrixBody[]).find((m) => m.id === tpl.id);
     expect(listed).toBeTruthy();
     expect(listed!.isTemplate).toBe(true);
 
-    // Copy về bank cá nhân (đích mặc định): danh tính mới, derived_from = mẫu, ready (quy tắc hoàn thiện: sao chép vào bank hạ cánh ready), không phải mẫu, đủ 2 ô.
     const copyRes = await http(app).post(`/api/v1/exam-matrices/${tpl.id}/copy`).set(bearer(team.member.token)).send({});
     expect(copyRes.status, JSON.stringify(copyRes.body)).toBe(201);
     const copy = copyRes.body as MatrixBody;
@@ -201,9 +183,6 @@ describe('Ngân hàng ma trận MB-1 (issue #111)', () => {
     expect(copy.version).toBe(1);
     expect(copy.cells).toHaveLength(2);
 
-    // Sửa ô trên bản copy: ô Biết 2 → 3 câu. Bản copy đã ready nên
-    // sửa ô fork sang version 2 (bất biến version) — ô thuộc version
-    // mới mang danh tính mới, lấy lại từ đáp án PATCH.
     const bietCell = copy.cells.find((c) => c.cognitiveLevel === 'biet')!;
     const patchRes = await http(app).patch(`/api/v1/exam-matrices/${copy.id}/cells/${bietCell.id}`)
       .set(bearer(team.member.token)).send({ questionCount: 3 });
@@ -213,7 +192,6 @@ describe('Ngân hàng ma trận MB-1 (issue #111)', () => {
     const bietCellV2 = patched.cells.find((c) => c.cognitiveLevel === 'biet')!;
     expect(bietCellV2.questionCount).toBe(3);
 
-    // Availability của bản copy cho thành viên: Biết cần 3 có 3; Hiểu cần 1 có 1 → đủ.
     const avRes = await http(app).get(`/api/v1/exam-matrices/${copy.id}/availability`).set(bearer(team.member.token));
     expect(avRes.status, JSON.stringify(avRes.body)).toBe(200);
     const av = avRes.body as { sufficient: boolean; cells: { cellId: string; required: number; available: number; deficit: number }[] };
@@ -229,29 +207,23 @@ describe('Ngân hàng ma trận MB-1 (issue #111)', () => {
     const team = await mkTeam();
     const tpl = await mkTeamTemplate(team, cur);
 
-    // Danh sách bank ma trận của người ngoài không có bank tổ.
     const banksRes = await http(app).get('/api/v1/question-banks?kind=matrix').set(bearer(team.outsider.token));
     expect(banksRes.status).toBe(200);
     expect((banksRes.body as BankBody[]).some((b) => b.id === team.teamBank.id)).toBe(false);
 
-    // API danh sách ma trận của bank tổ trực tiếp → 403.
     const listRes = await http(app).get(`/api/v1/question-banks/${team.teamBank.id}/matrices`).set(bearer(team.outsider.token));
     expect(listRes.status).toBe(403);
 
-    // Chi tiết bank trực tiếp → 403.
     const bankRes = await http(app).get(`/api/v1/question-banks/${team.teamBank.id}`).set(bearer(team.outsider.token));
     expect(bankRes.status).toBe(403);
 
-    // Đọc thẳng ma trận mẫu → 403; copy mẫu → 403.
     const getRes = await http(app).get(`/api/v1/exam-matrices/${tpl.id}`).set(bearer(team.outsider.token));
     expect(getRes.status).toBe(403);
     const copyRes = await http(app).post(`/api/v1/exam-matrices/${tpl.id}/copy`).set(bearer(team.outsider.token)).send({});
     expect(copyRes.status).toBe(403);
 
-    // Thành viên tổ vẫn thấy bình thường (đối chứng cổng không chặn nhầm).
     const memberList = await http(app).get(`/api/v1/question-banks/${team.teamBank.id}/matrices`).set(bearer(team.member.token));
     expect(memberList.status).toBe(200);
-    // Khả năng theo bank-local trên view bank: thành viên copy được, không duyệt được; tổ trưởng duyệt được.
     const memberBanks = await http(app).get('/api/v1/question-banks?kind=matrix').set(bearer(team.member.token));
     const memberTeamBank = (memberBanks.body as BankBody[]).find((b) => b.id === team.teamBank.id)!;
     expect(memberTeamBank.capabilities.matrixCopy).toBe(true);
@@ -267,13 +239,11 @@ describe('Ngân hàng ma trận MB-1 (issue #111)', () => {
     const team = await mkTeam();
     const tpl = await mkTeamTemplate(team, cur);
 
-    // Thành viên copy mẫu (version 1, ô Biết 2 câu).
     const copyRes = await http(app).post(`/api/v1/exam-matrices/${tpl.id}/copy`).set(bearer(team.member.token)).send({});
     expect(copyRes.status, JSON.stringify(copyRes.body)).toBe(201);
     const copy = copyRes.body as MatrixBody;
     expect(copy.version).toBe(1);
 
-    // Tổ trưởng sửa ô Biết của MẪU (đang ready): 2 → 5 câu → version mẫu tăng lên 2.
     const tplCell = tpl.cells.find((c) => c.cognitiveLevel === 'biet')!;
     const patchRes = await http(app).patch(`/api/v1/exam-matrices/${tpl.id}/cells/${tplCell.id}`)
       .set(bearer(team.leader.token)).send({ questionCount: 5 });
@@ -282,7 +252,6 @@ describe('Ngân hàng ma trận MB-1 (issue #111)', () => {
     expect(tplAfter.version).toBe(2);
     expect(tplAfter.cells.find((c) => c.cognitiveLevel === 'biet')!.questionCount).toBe(5);
 
-    // Bản copy của thành viên không đổi: vẫn version 1, ô Biết vẫn 2 câu.
     const copyAfterRes = await http(app).get(`/api/v1/exam-matrices/${copy.id}`).set(bearer(team.member.token));
     expect(copyAfterRes.status, JSON.stringify(copyAfterRes.body)).toBe(200);
     const copyAfter = copyAfterRes.body as MatrixBody;
@@ -295,7 +264,6 @@ describe('Ngân hàng ma trận MB-1 (issue #111)', () => {
     const team = await mkTeam();
     await mkTeamTemplate(team, cur);
 
-    // Thành viên tạo ma trận ready trong bank cá nhân của mình.
     const myBank = await personalMatrixBank(team.member.token);
     const own = await createMatrix(team.member.token, {
       name: 'Ma trận ôn tập của thành viên', subjectId: cur.subjectId, curriculumId: cur.curriculumId,
@@ -305,7 +273,6 @@ describe('Ngân hàng ma trận MB-1 (issue #111)', () => {
       curriculumNodeId: cur.lessonId, cognitiveLevel: 'biet', qtype: 'multichoice', questionCount: 4, cellScore: 4,
     });
 
-    // Đề xuất đóng góp vào bank tổ.
     const proposeRes = await http(app).post(`/api/v1/exam-matrices/${own.id}/contributions`)
       .set(bearer(team.member.token)).send({ targetBankId: team.teamBank.id, note: 'Ma trận ôn tập dùng chung cho tổ' });
     expect(proposeRes.status, JSON.stringify(proposeRes.body)).toBe(201);
@@ -314,17 +281,14 @@ describe('Ngân hàng ma trận MB-1 (issue #111)', () => {
     expect(proposal.proposerId).toBe(team.member.id);
     expect(proposal.proposerName).toBeTruthy();
 
-    // Gửi trùng khi đang chờ → 409.
     const dupRes = await http(app).post(`/api/v1/exam-matrices/${own.id}/contributions`)
       .set(bearer(team.member.token)).send({ targetBankId: team.teamBank.id });
     expect(dupRes.status).toBe(409);
 
-    // Thành viên (không có quyền duyệt) tự duyệt → 403.
     const selfApprove = await http(app).post(`/api/v1/question-banks/${team.teamBank.id}/matrix-contributions/${proposal.id}/approve`)
       .set(bearer(team.member.token)).send({});
     expect(selfApprove.status).toBe(403);
 
-    // Tổ trưởng thấy hàng chờ và từ chối kèm lý do.
     const queueRes = await http(app).get(`/api/v1/question-banks/${team.teamBank.id}/matrix-contributions?status=pending`)
       .set(bearer(team.leader.token));
     expect(queueRes.status, JSON.stringify(queueRes.body)).toBe(200);
@@ -334,7 +298,6 @@ describe('Ngân hàng ma trận MB-1 (issue #111)', () => {
     expect(rejectRes.status, JSON.stringify(rejectRes.body)).toBe(201);
     expect((rejectRes.body as ContributionBody).status).toBe('rejected');
 
-    // Lý do từ chối hiện lại cho người gửi ở danh sách đóng góp của mình.
     const mineRes = await http(app).get('/api/v1/question-banks/matrix-contributions/mine').set(bearer(team.member.token));
     expect(mineRes.status, JSON.stringify(mineRes.body)).toBe(200);
     const mine = (mineRes.body as ContributionBody[]).find((c) => c.id === proposal.id)!;
@@ -342,7 +305,6 @@ describe('Ngân hàng ma trận MB-1 (issue #111)', () => {
     expect(mine.rejectReason).toBe('Thiếu ô mức Vận dụng, bổ sung rồi gửi lại');
     expect(mine.reviewerId).toBe(team.leader.id);
 
-    // Gửi lại (đề xuất mới) → tổ trưởng duyệt → ma trận vào bank tổ.
     const propose2Res = await http(app).post(`/api/v1/exam-matrices/${own.id}/contributions`)
       .set(bearer(team.member.token)).send({ targetBankId: team.teamBank.id, note: 'Đã bổ sung theo góp ý' });
     expect(propose2Res.status, JSON.stringify(propose2Res.body)).toBe(201);
@@ -354,7 +316,6 @@ describe('Ngân hàng ma trận MB-1 (issue #111)', () => {
     expect(approved.status).toBe('approved');
     expect(approved.resultMatrixId).toBeTruthy();
 
-    // Bản vào bank tổ: thuộc bank tổ, là MẪU, ready, derived_from trỏ về ma trận của thành viên, ô được copy đủ.
     const inBankRes = await http(app).get(`/api/v1/question-banks/${team.teamBank.id}/matrices`).set(bearer(team.leader.token));
     expect(inBankRes.status).toBe(200);
     const landed = (inBankRes.body as MatrixBody[]).find((m) => m.id === approved.resultMatrixId)!;

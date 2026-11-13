@@ -3,18 +3,6 @@ import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminToken, createTestApp, http } from '../../support/identity-access-helpers';
 
-/**
- * Version bất biến của ma trận (issue #228, lát S1) — đối chiếu tiêu chí nghiệm thu S1 của issue: "ma trận có versions bất biến — sửa ma trận tạo version mới, nội dung version cũ đọc lại được nguyên vẹn; spec chứng minh sửa không ghi đè mất nội dung cũ".
- *
- * Luật được khoá ở đây:
- *  - Tạo ma trận sinh ngay hàng version 1 bất biến; ô thuộc về đúng
- *    một version qua matrix_version_id.
- *  - Ma trận còn draft: sửa ô/cấu hình tại chỗ trên version đang mở,
- *    không sinh version mới.
- *  - Ma trận đã rời draft: sửa ô hoặc sửa cấu hình nội dung = sinh
- *    version mới mang toàn bộ ô; version cũ đọc lại qua GET /exam-matrices/:id/versions/:version nguyên vẹn từng giá trị.
- *  - Copy ma trận: bản copy có version 1 bất biến của riêng nó.
- */
 describe('Phiên bản ma trận bất biến (issue #228 S1)', () => {
   let app: INestApplication;
   let admin: string;
@@ -131,7 +119,6 @@ describe('Phiên bản ma trận bất biến (issue #228 S1)', () => {
     expect((patched.body as MatrixViewBody).version).toBe(2);
     expect((patched.body as MatrixViewBody).cells[0]!.questionCount).toBe(5);
 
-    // Version cũ còn nguyên giá trị cũ; version mới mang giá trị mới.
     const v1 = await getVersion(matrix.id, 1);
     expect(v1.status).toBe(200);
     expect(v1.body.cells).toHaveLength(1);
@@ -139,7 +126,6 @@ describe('Phiên bản ma trận bất biến (issue #228 S1)', () => {
     const v2 = await getVersion(matrix.id, 2);
     expect(v2.body.cells[0]!.questionCount).toBe(5);
 
-    // Ở tầng DB: hai bản ô cùng tồn tại, mỗi bản thuộc đúng một version.
     const cellRows = await pg.query<{ version: number; question_count: number }>(
       `select v.version, c.question_count from exam_matrix_cells c
          join exam_matrix_versions v on v.id = c.matrix_version_id
@@ -177,7 +163,6 @@ describe('Phiên bản ma trận bất biến (issue #228 S1)', () => {
     expect(renamed.status, JSON.stringify(renamed.body)).toBe(200);
     expect((renamed.body as MatrixViewBody).version).toBe(2);
 
-    // Cả hai version đều đọc được; ô và cấu hình mang nguyên trạng.
     const v1 = await getVersion(matrix.id, 1);
     expect(v1.status).toBe(200);
     expect(v1.body.cells).toHaveLength(1);

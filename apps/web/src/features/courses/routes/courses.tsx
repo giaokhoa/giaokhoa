@@ -28,24 +28,17 @@ import {
   type CourseCardPrefView,
 } from '#lib/course-cards';
 
-/** Map pref rỗng dùng chung khi query pref chưa có dữ liệu (tránh tạo Map mới mỗi lần render). */
 const EMPTY_CARD_PREFS = new Map<string, CourseCardPrefView>();
 import { CourseCardPrefEditor } from '../components/course-card-pref-editor';
 
-/**
- * Cây danh mục + danh sách khoá học cho mọi người dùng. Khu quản trị danh mục (tạo/đổi tên/xoá danh mục) và form tạo khoá học chỉ render khi `usePermissions().canAdminister` — quyền quản trị cấp hệ thống; API vẫn thực thi capability thật phía server cho từng thao tác ghi. Xoá danh mục luôn hỏi xác nhận, và lỗi phía server (ví dụ danh mục còn khoá học hoặc danh mục con) được hiển thị bằng thông điệp thân thiện.
- */
 export function CoursesPage() {
   const { t } = useTranslation('app');
   const perms = usePermissions();
   const { canAdminister } = perms;
-  // Cây danh mục đọc qua TanStack với ĐÚNG khoá `categoryTree` dùng chung với dashboard (F-03, rà soát #133): trước đây trang tự fetch bằng useEffect + state riêng, trùng dữ liệu dashboard vừa tải. Tuỳ chọn truy vấn nay nằm ở lib/courses-data (F-01).
   const treeQuery = useQuery(categoryTreeQueryOptions());
   const tree = useMemo(() => treeQuery.data ?? [], [treeQuery.data]);
-  // Danh sách khoá đọc qua TanStack với ĐÚNG khoá `courses` mà PermissionsProvider dùng (F-03, rà soát #133): trước đây trang tự fetch lại /courses trong khi provider vừa tải cùng dữ liệu — nay cache dùng chung, trang mở sau provider thì không tốn request.
   const coursesQuery = useQuery(coursesListQueryOptions());
   const courses = useMemo(() => coursesQuery.data ?? [], [coursesQuery.data]);
-  // Pref thẻ khoá của chính người dùng (DASH1) đọc qua query dùng chung khoá `courseCards` với dashboard (F-03/F-04): mutation lưu pref tự invalidate nên trang này tươi lại sau khi editor lưu — không còn state Map riêng + fetch thủ công khi mở trang. Lỗi tải pref thì lặng lẽ dùng tên gốc (pref là lớp phủ cá nhân, không chặn trang).
   const cardPrefsQuery = useCourseCardPrefs();
   const cardPrefs = cardPrefsQuery.data ?? EMPTY_CARD_PREFS;
   const [editingCardCourseId, setEditingCardCourseId] = useState<string | null>(null);
@@ -53,13 +46,11 @@ export function CoursesPage() {
   const [catName, setCatName] = useState('');
   const [catParent, setCatParent] = useState('0');
   const [catEdits, setCatEdits] = useState<Record<string, string>>({});
-  // Lỗi tải suy ngay khi render từ trạng thái hai query — không chép qua effect vào state như bản cũ: banner hiện message của thao tác nếu có, không thì lỗi tải.
   const loadError = coursesQuery.isError || treeQuery.isError ? t('coursesLoadFailed') : null;
   const displayMessage = message ?? loadError;
 
   const loading = treeQuery.isPending || coursesQuery.isPending;
 
-  // % tiến độ học của chính người dùng theo khoá (K2): CHỈ probe các khoá người dùng thuộc về (dạy/học theo ảnh chụp quyền) — khoá ngoài vốn luôn lỗi qua cổng khoá học và không hiện số nào. Mỗi khoá một query qua useQueries với khoá factory `courseMyProgress` (F-03); lỗi từng khoá thì percent = null và không hiện gì, như trước.
   const memberCourseIds = useMemo(
     () => new Set([...perms.teaching, ...perms.learning].map((c) => c.course.id)),
     [perms.teaching, perms.learning],
@@ -85,9 +76,6 @@ export function CoursesPage() {
   };
   walk(tree);
 
-  /**
-   * Vẽ cây danh mục: mọi cấp con — cả danh mục con lẫn khoá học trong danh mục — thụt vào cùng một mức `ml-4` để các mục con thẳng hàng theo cấp, thay vì mỗi loại danh sách một mức thụt khác nhau.
-   */
   function renderTree(nodes: CourseCategoryTreeNode[], nested = false) {
     return (
       <ul className={nested ? 'ml-4 list-disc' : 'list-disc'}>
@@ -152,12 +140,6 @@ export function CoursesPage() {
   const renameCategoryMutation = useRenameCourseCategory();
   const deleteCategoryMutation = useDeleteCourseCategory();
 
-  /**
-   * Tạo danh mục qua đột biến POST /courses/categories với đúng
-   * `createCourseCategorySchema`: `parent` chỉ gửi khi chọn một danh mục
-   * cha thật (ở cấp cao nhất thì bỏ qua hẳn trường này thay vì gửi giá trị
-   * không phải UUID).
-   */
   async function createCategory(event: FormEvent) {
     event.preventDefault();
     setMessage(null);
@@ -173,7 +155,6 @@ export function CoursesPage() {
     }
   }
 
-  /** Đổi tên một danh mục qua đột biến PATCH /courses/categories/:id (`updateCourseCategorySchema`). */
   async function renameCategory(cat: CourseCategory) {
     const name = catEdits[cat.id] ?? cat.name;
     setMessage(null);
@@ -185,11 +166,6 @@ export function CoursesPage() {
     }
   }
 
-  /**
-   * Xoá một danh mục qua đột biến DELETE /courses/categories/:id sau khi xác nhận.
-   * Lỗi phía server (danh mục còn khoá học/danh mục con, thiếu quyền…) chỉ
-   * hiện thông điệp thân thiện, không sập trang.
-   */
   async function deleteCategory(cat: CourseCategory) {
     if (!window.confirm(t('confirmDeleteCategory', { name: cat.name }))) return;
     setMessage(null);
@@ -321,18 +297,12 @@ export function CoursesPage() {
   );
 }
 
-/**
- * clientLoader (F-01, rà soát #133): nạp trước cây danh mục + danh
- * sách khoá vào đúng hai khoá dùng chung trang sẽ đọc.
- */
 export async function clientLoader() {
   return coursesPageClientLoader();
 }
 
-/** Export mặc định cho route module React Router framework mode (xem src/routes.ts). */
 export default CoursesPage;
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { appKeyMeta } from '#lib/route-meta';
 export function meta() {

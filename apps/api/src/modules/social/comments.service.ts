@@ -4,15 +4,7 @@ import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { CoursesService } from '../courses/courses.service';
 import { SocialRepository, type CommentRow } from '@giaokhoa/db/repositories/social';
 
-/**
- * CommentsModule (Moodle core_comment): các bình luận đa hình trên
- * (component, commentArea, itemId, contextId). Capability được kiểm tra TẠI
- * CONTEXT CỦA CHÍNH MỤC ĐÓ: comment:view để đọc, comment:post để thêm, comment:delete (hoặc quyền tác giả) để xoá (oracle: comment/tests/ externallib_test test_get_comments / test_add_comments_single).
- */
 @Injectable()
-/**
- * Bình luận theo (context, component, area, item). Đối chiếu Moodle: lib/commentlib (comment). Xoá là xoá mềm; chỉ tác giả hoặc người có capability mới xoá được.
- */
 export class CommentsService {
   constructor(
     private readonly repo: SocialRepository,
@@ -21,7 +13,6 @@ export class CommentsService {
     private readonly courses: CoursesService,
   ) {}
 
-  /** Với context của khoá học/module, việc bình luận còn yêu cầu quyền truy cập khoá học thật (chỉ riêng role 'user' ảo không bao giờ mở được một khoá học). */
   private async assertItemAccess(actorId: string, contextId: string): Promise<void> {
     const ctx = await this.contexts.getContext(contextId).catch(() => undefined);
     if (!ctx) return;
@@ -32,9 +23,6 @@ export class CommentsService {
     }
   }
 
-  /**
-   * Thêm bình luận vào item.
-   */
   async addComment(actorId: string, input: {
     contextId: string; component: string; commentArea: string; itemId: string; content: string;
   }): Promise<CommentRow> {
@@ -46,9 +34,6 @@ export class CommentsService {
     });
   }
 
-  /**
-   * Bình luận của item.
-   */
   async listComments(viewerId: string, input: {
     contextId: string; component: string; commentArea: string; itemId: string;
   }): Promise<{ comments: CommentRow[]; count: number; canpost: boolean }> {
@@ -59,9 +44,6 @@ export class CommentsService {
     return { comments: rows, count: rows.length, canpost };
   }
 
-  /**
-   * Xoá mềm bình luận (kiểm tác giả/capability).
-   */
   async deleteComment(actorId: string, commentId: string): Promise<{ deleted: boolean }> {
     const comment = await this.repo.getComment(commentId);
     if (!comment || comment.timeDeleted) throw new NotFoundException({ message: `Comment ${commentId} not found`, code: 'comments.not_found' });

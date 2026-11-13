@@ -11,10 +11,6 @@ import {
   useBookFrameChapters, useCurriculumFrameUnits, useCurriculumSubjectsScoped,
 } from '#lib/curriculum';
 
-/**
- * Panel "Thêm từ khung" (K0a, tách thành component dùng chung ở K1):
- * gắn môn × khối cho khoá (PATCH /courses/:id) rồi nạp các đơn vị khung đã chọn thành section mới kèm YCCĐ chụp tại lúc nạp (POST curriculum-frame), chèn tại vị trí chọn trong outline hoặc cuối outline. Nạp xong gọi `onApplied` để trang chứa nạp lại cấu trúc khoá. Đường đọc cây của panel đi kèm forCourseId = khoá này nên giáo viên có course:update tại khoá đọc được dù không có curriculum:view hệ thống; người không có cả hai chỉ thấy thông báo nhẹ — API vẫn là nơi thực thi quyền.
- */
 export function CurriculumFramePanel({
   courseId,
   course,
@@ -35,7 +31,6 @@ export function CurriculumFramePanel({
   const updateFrameInfoMutation = useUpdateCourseFrameInfo();
   const applyFrameMutation = useApplyCurriculumFrame();
 
-  // Khởi tạo môn/khối từ chính khoá khi dữ liệu khoá về. Ba giá trị nguyên thuỷ của khoá được tách ra trước hiệu ứng để mảng phụ thuộc bám đúng những gì hiệu ứng đọc: hiệu ứng chỉ chạy lại khi id/môn/khối của khoá thật sự đổi — không chạy lại khi các trường khác của khoá đổi (ví dụ sửa tên khoá ở thẻ thông tin cùng trang), tránh đè lựa chọn giáo viên đang chọn dở tại panel này.
   const loadedCourseId = course?.id;
   const loadedSubjectId = course?.subjectId;
   const loadedGrade = course?.grade;
@@ -49,14 +44,10 @@ export function CurriculumFramePanel({
     }
   }
 
-  // Danh sách môn đọc qua hook TanStack kèm forCourseId = chính khoá này: giáo viên cấp khoá đọc được qua nhánh course:update tại khoá mình dạy (issue #66); không cần đọc context hệ thống trước — API mặc định về context hệ thống khi không kèm contextId. Lỗi tải
-  // (kể cả 403 khi không có cả hai nhánh quyền) suy từ trạng thái
-  // query ngay khi render.
   const subjectsQuery = useCurriculumSubjectsScoped(null, courseId);
   const subjects = subjectsQuery.data ?? [];
   const loadFailed = subjectsQuery.isError;
 
-  // Đơn vị khung của cặp (môn, khối) đang chọn, cũng qua hook: đổi môn/khối là một khoá cache mới nên không còn race của effect cũ; lựa chọn đang tích được đặt lại mỗi khi cặp (môn, khối) đổi.
   const frameUnitsQuery = useCurriculumFrameUnits(subjectId, grade ? Number(grade) : null, courseId);
   const curriculumId = frameUnitsQuery.data?.curriculumId ?? null;
   const units = frameUnitsQuery.data?.units ?? [];
@@ -68,7 +59,6 @@ export function CurriculumFramePanel({
     setSelected([]);
   }
 
-  /** Lưu môn/khối của khoá qua PATCH /courses/:id. */
   async function saveCourseInfo() {
     setMessage(null);
     try {
@@ -83,7 +73,6 @@ export function CurriculumFramePanel({
     }
   }
 
-  /** Nạp các đơn vị khung đã chọn vào khoá ở vị trí đã chọn. */
   async function applyFrame() {
     if (!curriculumId || selected.length === 0) return;
     setMessage(null);
@@ -191,9 +180,6 @@ export function CurriculumFramePanel({
     </Card>
   );
 }
-/**
- * Panel khung SGK (K0b) trong quản trị khoá: với môn × khối đã gắn cho khoá (panel khung chương trình ở trên), nạp các chủ đề của cuốn SGK đã nạp thành section mới — các bài thành mục của section, YCCĐ của mỗi bài suy qua ánh xạ sang chương trình và chụp tại lúc nạp (POST book-frame). Đường đọc đi kèm forCourseId = khoá này, cùng nhánh quyền với panel khung chương trình.
- */
 export function BookFramePanel({
   courseId,
   course,
@@ -210,7 +196,6 @@ export function BookFramePanel({
   const [insertAt, setInsertAt] = useState('');
   const [message, setMessage] = useState<string | null>(null);
 
-  // Chủ đề SGK của cặp (môn, khối) đã gắn cho khoá, đọc qua hook TanStack: chưa gắn đủ (môn, khối) hoặc lỗi tải thì coi như chưa có sách nào để chọn; lựa chọn đang tích đặt lại khi cặp đổi.
   const subjectId = course?.subjectId ?? '';
   const grade = course?.grade ?? null;
   const chaptersQuery = useBookFrameChapters(subjectId, grade, courseId);
@@ -226,7 +211,6 @@ export function BookFramePanel({
 
   const applyBookFrameMutation = useApplyBookFrame();
 
-  /** Nạp các chủ đề SGK đã chọn vào khoá ở vị trí đã chọn. */
   async function applyBookFrame() {
     if (!bookId || selected.length === 0) return;
     setMessage(null);

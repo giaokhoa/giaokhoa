@@ -4,7 +4,7 @@ import { MetadataScanner } from '@nestjs/core';
 import { describe, expect, it, vi } from 'vitest';
 import { ObservedWorkerHost } from './observed-worker-host';
 
-/** Fake processor dùng để kiểm tra tính kế thừa metadata trên prototype. */
+
 class ProbeWorker extends ObservedWorkerHost {
   async process(): Promise<void> {}
 }

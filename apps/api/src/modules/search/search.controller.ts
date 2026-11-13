@@ -6,7 +6,6 @@ import { RequireCapability } from '../../common/require-capability.decorator';
 import { indexRawDocumentSchema, searchIndexItemSchema, type IndexItemDto, type IndexRawDto } from './dto/search.dto';
 import { SearchService } from './search.service';
 
-/** Controller tìm kiếm toàn cục — kết quả luôn qua lọc quyền ở service. */
 @ApiTags('search')
 @Controller({ path: 'search', version: '1' })
 export class SearchController {
@@ -17,7 +16,6 @@ export class SearchController {
   }
   @Get('areas')
   async areas() { return this.search.listAreas(); }
-  // Các route ghi/xoá/reindex dưới đây là thao tác bảo trì chỉ mục: gác bằng search:manage tại system context (vá H2+H5, sổ #134). Luồng nạp index hợp lệ trong hệ thống gọi thẳng SearchService ở tầng service, không qua HTTP.
   @Post('index')
   @RequireCapability('search:manage')
   async index(@Body({ schema: searchIndexItemSchema }) dto: IndexItemDto) { return { indexed: await this.search.indexItem(dto.area, dto.itemId) }; }

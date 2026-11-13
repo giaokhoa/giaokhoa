@@ -22,39 +22,39 @@ import { hasCourseAssignment, systemCapabilities } from '#lib/permissions';
 import { CourseGradeData } from '#hooks/use-courses-grade-data';
 import { MyBadgeView } from '#features/badges/types/badges';
 
-/**
- * Loader phía server cho route `/` (tầng SL-1 của #7).
- *
- * Hai mặt của route theo phiên:
- *   - CHƯA đăng nhập (không cookie phiên Better Auth): loader không
- *     gọi API nghiệp vụ nào, trả dehydrated state rỗng — mặt công
- *     khai giữ nguyên và được SSR động cho đúng cookie từng request.
- *   - ĐÃ đăng nhập: prefetch bằng cookie của chính request (xem
- *     `lib/ssr-data.ts`) rồi dehydrate cho root.tsx hydrate:
- *     lượt 1 gồm hai query gốc của PermissionsProvider (ảnh chụp
- *     quyền `capabilities` + danh sách khoá `courses` — có chúng thì
- *     provider phân loại vai ngay từ lần render đầu, dashboard hết
- *     hiện khung giữ chỗ chờ phân loại) và các query key cố định của
- *     các khối (tổng hợp `dashboardOverview`, huy hiệu của tôi
- *     `myBadges`, số chưa đọc `notifications`, sự kiện 30 ngày tới
- *     `calendarEvents` với khoảng ngày từ `upcomingDaysRangeIso`
- *     dùng chung hai phía); lượt 2 — chỉ khi lượt 1 có đủ ảnh chụp
- *     quyền + danh sách khoá — prefetch dữ liệu điểm theo khoá
- *     (`courseAccess`) cho đúng tập khoá người dùng THUỘC về (dạy ∪
- *     học, phân loại bằng chính các hàm thuần của `lib/permissions`)
- *     và, khi người dùng có quyền quản trị theo đúng công thức
- *     `canAdminister` của provider, ba query của khối quản trị
- *     (`adminUsers(1, 100)`, `categoryTree`, `roles`).
- *
- * Phần CHƯA lên loader (khai rõ): pref thẻ khoá (key `courseCards`)
- * — dữ liệu của query đó là một `Map` do `fetchCourseCardPrefs` dựng
- * phía client, không serialize qua dehydrate được (sẽ thành object
- * rỗng và làm hỏng lời gọi `.get()` của các khối); khối GV/HS vẫn
- * fetch query này phía client như trước SL-1.
- *
- * @param request - Request đang phục vụ (nguồn cookie phiên).
- * @returns Dehydrated state cho HydrationBoundary ở root.
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 export async function loader({ request }: Pick<Route.LoaderArgs, 'request'>): Promise<SsrLoaderData> {
   return buildSsrLoaderData(request, async (queryClient, req) => {
     const range = upcomingDaysRangeIso(30);
@@ -88,17 +88,11 @@ export async function loader({ request }: Pick<Route.LoaderArgs, 'request'>): Pr
       }),
     ]);
 
-    // Lượt 2 cần kết quả lượt 1: thiếu ảnh chụp quyền hoặc danh sách
-    // khoá (API lỗi phía server) thì dừng — phía client tự phân loại
-    // và tải như trước, loader không đoán tập khoá thay nó.
     const access = queryClient.getQueryData<MyAccessView>(queryKeys.capabilities);
     const courses = queryClient.getQueryData<Course[]>(queryKeys.courses);
     if (!access || !courses) return;
 
     const memberCourses = courses.filter((course) => hasCourseAssignment(access, course));
-    // Dữ liệu điểm theo khoá: cùng hình dạng + cùng ngữ nghĩa dò
-    // (endpoint lỗi độc lập thì phần đó null) với `fetchCourseGradeData`
-    // phía client — chỉ khác kênh gọi (cookie của request qua API nội bộ).
     const gradePrefetches = memberCourses.map((course) =>
       queryClient.prefetchQuery({
         queryKey: queryKeys.courseAccess(course.id),
@@ -112,9 +106,6 @@ export async function loader({ request }: Pick<Route.LoaderArgs, 'request'>): Pr
       }),
     );
 
-    // Khối quản trị chỉ hiện với canAdminister — prefetch đúng ba
-    // query của khối theo cùng công thức của PermissionsProvider
-    // (site admin, hoặc role:manage / site:config tại context hệ thống).
     const sysCaps = systemCapabilities(access);
     const canAdminister =
       access.isSiteAdmin || sysCaps.includes('role:manage') || sysCaps.includes('site:config');
@@ -139,18 +130,8 @@ export async function loader({ request }: Pick<Route.LoaderArgs, 'request'>): Pr
   });
 }
 
-/**
- * Trang tổng quan là chunk nặng (biểu đồ, bảng) nên nạp lười biếng: khách
- * chưa đăng nhập chỉ tải trang giới thiệu nhẹ; người đã đăng nhập thấy
- * khung giữ chỗ đúng hình học của trang tổng quan trong lúc chunk về.
- */
 const DashboardPage = lazy(() => import('../components/dashboard').then((m) => ({ default: m.DashboardPage })));
 
-/**
- * Route gốc `/`: đã đăng nhập thì là trang tổng quan theo vai trò, chưa
- * thì là trang giới thiệu — đúng hành vi của RootPage ở router cũ. Pha
- * phiên đang tải không tới được đây: Shell đã chặn bằng khung giữ chỗ.
- */
 export default function HomeIndexRoute() {
   const { user } = useAuth();
   if (!user) return <HomePage />;
@@ -161,7 +142,6 @@ export default function HomeIndexRoute() {
   );
 }
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 export function meta() {
   return [{ title: 'Giáo khoa' }];

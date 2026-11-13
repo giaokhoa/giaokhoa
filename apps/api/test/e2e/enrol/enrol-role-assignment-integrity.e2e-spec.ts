@@ -6,16 +6,6 @@ import {
 } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
 
-/**
- * Toàn vẹn gán vai theo ghi danh (issue #157, phát sinh từ phán quyết CHƯA ĐẠT của PR #152).
- *
- * Trạng thái cấm: một ghi danh còn hiệu lực mà không còn gán vai tại context khoá (định nghĩa "thuộc khoá" của #33 = ghi danh ∪ gán vai). Trước fix, trạng thái này chạm tới được qua API hai đường:
- *  1. ghi danh qua 2 instance cùng vai chỉ có MỘT dòng gán vai dùng
- *     chung (assignRole/insertAssignment không set component/itemId), mà unenrolInternal xoá mọi dòng khớp roleId của instance bị rút — rút 1 instance là mất vai dù ghi danh instance kia vẫn ACTIVE;
- *  2. DELETE /access/assignments/:id xoá cả dòng do enrol cấp.
- *
- * Sau fix: dòng gán của enrol mang component='enrol' + itemId=instance; unenrol/đổi vai chỉ gỡ dòng của chính instance; unassignRole qua API quản trị chặn xoá dòng nguồn enrol (`access.assignment_enrol_managed`); dòng cũ không component/itemId được coi là gán tay.
- */
 describe('Toàn vẹn gán vai trò ghi danh (#157)', () => {
   let app: INestApplication;
   let admin: string;
@@ -39,8 +29,6 @@ describe('Toàn vẹn gán vai trò ghi danh (#157)', () => {
     const res = await http(app).get('/api/v1/access/assignments')
       .query({ userId, contextId }).set('Authorization', `Bearer ${admin}`);
     expect(res.status).toBe(200);
-    // Từ issue #545: phản hồi liệt kê gán vai là trang
-    // `{ assignments, total, page, pageSize }`, không còn là mảng trần.
     return res.body.assignments as AssignmentRow[];
   }
 
@@ -58,13 +46,11 @@ describe('Toàn vẹn gán vai trò ghi danh (#157)', () => {
     await enrolUser(app, admin, course.id, instanceA.id, user.id);
     await enrolUser(app, admin, course.id, instanceB.id, user.id);
 
-    // Mỗi instance một dòng gán riêng, mang truy vết của chính nó.
     const before = (await assignmentsOf(user.id, ctxId)).filter((a) => a.roleId === studentRole);
     expect(before).toHaveLength(2);
     expect(before.map((a) => a.itemId).sort()).toEqual([instanceA.id, instanceB.id].sort());
     for (const a of before) expect(a.component).toBe('enrol');
 
-    // Rút khỏi A: chỉ dòng của A mất; vai, ghi danh ở B và capability còn nguyên.
     const del = await http(app).delete(`/api/v1/courses/${course.id}/enrol/instances/${instanceA.id}/users/${user.id}`)
       .set('Authorization', `Bearer ${admin}`);
     expect(del.body.withdrawn).toBe(false);
@@ -79,7 +65,6 @@ describe('Toàn vẹn gán vai trò ghi danh (#157)', () => {
     const content = await http(app).get(`/api/v1/courses/${course.id}/content`).set('Authorization', `Bearer ${userLogin.accessToken}`);
     expect(content.status).toBe(200);
 
-    // Rút luôn khỏi B: vai mới hết hẳn (hồi quy hành vi đơn instance).
     await http(app).delete(`/api/v1/courses/${course.id}/enrol/instances/${instanceB.id}/users/${user.id}`)
       .set('Authorization', `Bearer ${admin}`);
     expect((await assignmentsOf(user.id, ctxId)).filter((a) => a.roleId === studentRole)).toHaveLength(0);
@@ -104,7 +89,6 @@ describe('Toàn vẹn gán vai trò ghi danh (#157)', () => {
     const before = (await assignmentsOf(user.id, ctxId)).filter((a) => a.roleId === studentRole);
     expect(before.map((a) => a.itemId).sort()).toEqual([manual.id, cohortInstance.id].sort());
 
-    // Rời cohort ⇒ unenrol khỏi instance cohort: chỉ dòng cohort mất.
     await http(app).delete(`/api/v1/cohorts/${cohortId}/members/${user.id}`).set('Authorization', `Bearer ${admin}`);
     const after = (await assignmentsOf(user.id, ctxId)).filter((a) => a.roleId === studentRole);
     expect(after).toHaveLength(1);
@@ -130,15 +114,8 @@ describe('Toàn vẹn gán vai trò ghi danh (#157)', () => {
     const blocked = await http(app).delete(`/api/v1/access/assignments/${enrolRow.id}`).set('Authorization', `Bearer ${admin}`);
     expect(blocked.status).toBe(400);
     expect(blocked.body.code).toBe('access.assignment_enrol_managed');
-    // Dòng còn nguyên sau lần xoá bị chặn.
     expect((await assignmentsOf(user.id, ctxId)).some((a) => a.id === enrolRow.id)).toBe(true);
 
-    // Gán tay (không nguồn enrol) vẫn xoá được như cũ. Vai dùng cho
-    // dòng gán tay là một vai tự tạo KHÔNG thuộc archetype giảng dạy:
-    // từ issue #425, gán vai giảng dạy tại context khoá cho học viên
-    // đang học đang hoạt động trong chính khoá đó bị chốt tách vai
-    // chặn (lẫn vai cùng khoá), còn ngữ nghĩa xoá dòng gán tay được
-    // kiểm ở đây không phụ thuộc archetype của vai.
     const manualRole = await createRoleViaApi(app, admin);
     await assignRole(app, admin, user.id, manualRole, ctxId);
     const manualRow = (await assignmentsOf(user.id, ctxId)).find((a) => a.roleId === manualRole)!;
@@ -154,8 +131,6 @@ describe('Toàn vẹn gán vai trò ghi danh (#157)', () => {
     const instance = await createEnrolInstance(app, admin, course.id, { method: 'manual' });
     const user = await createUserViaApi(app, admin);
     await enrolUser(app, admin, course.id, instance.id, user.id);
-    // Gán tay cùng role student tại cùng context (dòng cũ không
-    // component/itemId cũng được coi là gán tay theo cùng quy tắc này).
     await assignRole(app, admin, user.id, studentRole, ctxId);
 
     const before = (await assignmentsOf(user.id, ctxId)).filter((a) => a.roleId === studentRole);
@@ -169,7 +144,6 @@ describe('Toàn vẹn gán vai trò ghi danh (#157)', () => {
     expect(after).toHaveLength(1);
     expect(after[0]!.component).toBe('');
     expect(after[0]!.itemId).toBeNull();
-    // Ghi danh đã hết nhưng vai gán tay vẫn hiệu lực ở tầng capability.
     expect(await hasCapability(app, admin, user.id, 'course:view', ctxId)).toBe(true);
   });
 });

@@ -9,10 +9,6 @@ import { curriculumSubjectsQueryOptions, fetchSubjects } from "./curriculum";
 
 vi.mock("#lib/api", () => ({ apiJson: vi.fn() }));
 
-/**
- * Khoá cache và đường đọc dùng chung phải giữ nguyên sau khi tách khỏi
- * các feature ma trận và builder; các route dùng lại cùng query options.
- */
 describe("query dùng chung giữa các feature", () => {
   beforeEach(() => vi.mocked(apiJson).mockReset());
 

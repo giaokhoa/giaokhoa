@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { Card, CardContent } from '@giaokhoa/ui/components/card';
 import { PageHeader, PageShell } from '#components/page-shell';
 
-/** Khung một màn form riêng (tạo/sửa) theo chuẩn §9: tiêu đề + quay lại danh sách. */
 export function FormScreen({
   title, backTo, children,
 }: {

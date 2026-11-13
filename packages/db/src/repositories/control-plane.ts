@@ -1,42 +1,17 @@
-/**
- * Repository của kho CONTROL PLANE trên Kysely.
- *
- * Vai trò: mọi truy cập tới bốn bảng của database control plane
- * (sổ đăng ký không gian, lịch sử quản trị sổ, registry phiên bản
- * schema và nhật ký migration) tập trung ở đây. Repository không chứa luật nghiệp vụ — gác quyền, ghi lịch sử và giao dịch nằm ở tầng service phía ứng dụng; repository chỉ nhận handle
- * (instance gốc hoặc transaction đang mở) để phía gọi ghép nhiều
- * thao tác vào một transaction khi cần bất biến "sổ + lịch sử cùng thành/bại".
- *
- * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
- * - Bên trong repository, truy vấn viết trên interface schema sinh
- *   bằng codegen: tên bảng/cột giữ nguyên snake_case của database, kiểu dòng nội bộ qua `Selectable`/`Insertable`/`Updateable`.
- * - Bên ngoài, repository trả NHẬN các hình dạng dòng camelCase như
- *   phía tiêu thụ đang dùng: cột được chọn bằng danh sách tường minh có bí danh (`database_name as databaseName`), giá trị ghi được ánh xạ từng trường từ camelCase sang snake_case ở các hàm `*InsertValues`/`*UpdateSet` trong file này. Phía tiêu thụ vì vậy chỉ đổi điểm import khi một kho chuyển đổi.
- * - Giá trị `undefined` bị LOẠI khỏi values/set trước khi gọi
- *   builder. Thử nghiệm T-4 của pilot đo được: Kysely tự loại `undefined` khỏi values/set khi biên dịch (khớp hành vi bộ máy cũ), nhưng repository vẫn loại tường minh để hành vi không phụ thuộc mặc định của thư viện. Ngược lại, `undefined` lọt vào mệnh đề WHERE được biên dịch thành một placeholder mà tham số giữ nguyên giá trị `undefined`; lúc thực thi driver gắn NULL nên phép so sánh không khớp dòng nào và lặng lẽ trả 0 dòng — vì vậy mọi giá trị where trong repository đều là tham số bắt buộc, không bao giờ `undefined`.
- * - Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh
- *   ứng dụng, không tự mở pool, không đọc biến môi trường: handle do tầng ứng dụng dựng bằng factory của package rồi truyền vào.
- */
 import { sql, type Insertable, type InsertObject, type RawBuilder, type Updateable } from 'kysely';
 import type { ControlPlaneDb, ControlPlaneTx, ControlPlaneDB } from '../client';
 import type { SchemaMigrationStep, SpaceRegistrySnapshot } from '../jsonb-types';
 
-/** Handle giao dịch của control plane — kiểu `Transaction<ControlPlaneDB>` của package. */
 export type CpTx = ControlPlaneTx;
-/** Handle đọc/ghi mà repository nhận: transaction đang mở hoặc chính instance gốc. */
 export type CpDb = ControlPlaneDb | ControlPlaneTx;
 
-/** Một dòng của sổ đăng ký không gian (hình dạng camelCase phía tiêu thụ dùng). */
 export interface SpaceRegistryRow {
   id: string;
   slug: string;
   name: string;
-  /** center | platform (platform chỉ cho Trang chính). */
   kind: string;
-  /** provisioning | active | suspended | closed. */
   status: string;
   databaseName: string;
-  /** shared | dedicated. */
   storageMode: string;
   connectionRoleRef: string;
   secretRef: string | null;
@@ -46,19 +21,16 @@ export interface SpaceRegistryRow {
   updatedAt: Date;
 }
 
-/** Một dòng lịch sử quản trị sổ đăng ký (ảnh chụp trước/sau nằm ở hai cột jsonb). */
 export interface SpaceRegistryHistoryRow {
   id: string;
   spaceId: string;
   actorId: string;
-  /** create | update | status_change. */
   action: string;
   before: SpaceRegistrySnapshot | null;
   after: SpaceRegistrySnapshot;
   createdAt: Date;
 }
 
-/** Một dòng registry phiên bản schema của một kho đã đăng ký (khoá chính là spaceId). */
 export interface SpaceSchemaRegistryRow {
   spaceId: string;
   currentVersion: string | null;
@@ -69,21 +41,18 @@ export interface SpaceSchemaRegistryRow {
   updatedAt: Date;
 }
 
-/** Một dòng nhật ký lượt chạy migration trên kho của một không gian (chỉ thêm, không sửa). */
 export interface SpaceSchemaMigrationRunRow {
   id: string;
   spaceId: string;
   runId: string;
   fromVersion: string | null;
   toVersion: string | null;
-  /** running | success | failed. */
   status: string;
   steps: SchemaMigrationStep[];
   startedAt: Date;
   finishedAt: Date | null;
 }
 
-/** Dữ kiện ghi một dòng đăng ký mới (đã qua kiểm chứng ở tầng service/contract). */
 export interface NewSpaceRegistration {
   id?: string;
   slug: string;
@@ -100,7 +69,6 @@ export interface NewSpaceRegistration {
   updatedAt?: Date;
 }
 
-/** Dữ kiện ghi/đè một dòng registry phiên bản schema. */
 export interface NewSpaceSchemaRegistry {
   spaceId: string;
   currentVersion?: string | null;
@@ -111,7 +79,6 @@ export interface NewSpaceSchemaRegistry {
   updatedAt?: Date;
 }
 
-/** Dữ kiện ghi một lượt chạy migration. */
 export interface NewSchemaMigrationRun {
   id?: string;
   spaceId: string;
@@ -124,11 +91,7 @@ export interface NewSchemaMigrationRun {
   finishedAt?: Date | null;
 }
 
-/**
- * Lỗi ném ra khi repository bị gọi mà chưa có handle (control plane chưa được cấu hình). Package không phụ thuộc tầng ứng dụng nên lỗi mang mã ổn định `control_plane.not_configured` dạng thuần; tầng ứng dụng cấp hàm dựng lỗi riêng qua tham số khởi tạo của repository để giữ đúng hình dạng lỗi HTTP của nó (xem điểm lắp ráp ở module control plane phía ứng dụng).
- */
 export class ControlPlaneNotConfiguredError extends Error {
-  /** Mã lỗi ổn định mà phía tiêu thụ dùng để nhận diện trạng thái chưa cấu hình. */
   readonly code = 'control_plane.not_configured';
 
   constructor() {
@@ -137,48 +100,12 @@ export class ControlPlaneNotConfiguredError extends Error {
   }
 }
 
-/** Tên chỉ số duy nhất riêng phần trên `space_registry.database_name` (chỉ phủ hàng dedicated). */
 export const DEDICATED_DATABASE_NAME_UNIQUE_INDEX = 'space_registry_database_name_dedicated_unique';
 
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh.
- *
- * Vì sao cần (đo tại pilot): `pg` tự `JSON.stringify` các OBJECT
- * thường khi gắn tham số, nhưng một MẢNG ở cấp cao nhất bị driver
- * hiểu là mảng PostgreSQL và gửi theo cú pháp mảng — cột jsonb
- * nhận vào sẽ lỗi `invalid input syntax for type json`. bộ máy cũ
- * tránh được vì nó tự serialize mọi giá trị jsonb thành chuỗi JSON
- * trước khi gắn tham số. Khuôn ở đây: serialize tường minh +
- * ép kiểu `::jsonb` cho MỌI giá trị jsonb khi ghi (object lẫn
- * mảng) để một khuôn duy nhất, không phụ thuộc nhánh xử lý riêng
- * của driver theo hình dạng giá trị.
- *
- * @param value - Giá trị nghiệp vụ sẽ nằm trong cột jsonb.
- * @returns Biểu thức Kysely mang chuỗi JSON đã serialize, giữ
- *   nguyên kiểu `T` ở tầng TypeScript.
- */
 function jsonbValue<T>(value: T): RawBuilder<T> {
   return sql<T>`${JSON.stringify(value)}::jsonb`;
 }
 
-/**
- * Lỗi có phải va chạm ĐÚNG chỉ số duy nhất riêng phần của tên
- * database dedicated hay không.
- *
- * PostgreSQL báo lỗi vi phạm unique bằng mã 23505. Qua Kysely, lỗi
- * `pg` được ném TRỰC TIẾP (không bọc `cause` như bộ máy cũ) nên mã và
- * tên ràng buộc đọc ngay trên object lỗi; vòng duyệt chuỗi `cause`
- * vẫn giữ để chịu được các lớp bọc lỗi phía trên (service/tầng ứng
- * dụng) nếu có. Mã 23505 một mình chưa đủ: chỉ khi tên ràng buộc là
- * chỉ số dedicated mới là va chạm này — các vi phạm unique khác
- * (ví dụ slug) không được nuốt thành "trùng tên database". Nhánh dự
- * phòng khớp tên chỉ số qua nội dung `message` giữ nguyên từ đường
- * bộ máy cũ: object lỗi của một số đường ném (ví dụ lỗi được dựng lại
- * từ thông điệp) không mang trường `constraint`.
- *
- * @param err - Lỗi bắt được từ thao tác ghi đăng ký.
- * @returns true khi lỗi là va chạm của chỉ số dedicated.
- */
 export function isDedicatedDatabaseNameConflict(err: unknown): boolean {
   let e: unknown = err;
   while (e !== null && typeof e === 'object') {
@@ -193,7 +120,6 @@ export function isDedicatedDatabaseNameConflict(err: unknown): boolean {
   return false;
 }
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng sổ đăng ký (dùng cho cả select lẫn returning). */
 const SPACE_REGISTRY_COLUMNS = [
   'id',
   'slug',
@@ -210,7 +136,6 @@ const SPACE_REGISTRY_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng lịch sử sổ đăng ký. */
 const SPACE_REGISTRY_HISTORY_COLUMNS = [
   'id',
   'space_id as spaceId',
@@ -221,7 +146,6 @@ const SPACE_REGISTRY_HISTORY_COLUMNS = [
   'created_at as createdAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng registry phiên bản schema. */
 const SPACE_SCHEMA_REGISTRY_COLUMNS = [
   'space_id as spaceId',
   'current_version as currentVersion',
@@ -232,7 +156,6 @@ const SPACE_SCHEMA_REGISTRY_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng nhật ký migration. */
 const SPACE_SCHEMA_MIGRATION_RUN_COLUMNS = [
   'id',
   'space_id as spaceId',
@@ -245,12 +168,6 @@ const SPACE_SCHEMA_MIGRATION_RUN_COLUMNS = [
   'finished_at as finishedAt',
 ] as const;
 
-/**
- * Ánh xạ dữ kiện ghi dòng đăng ký (camelCase) sang values insert
- * (snake_case), LOẠI mọi trường mang `undefined`: trường vắng mặt
- * phải để default của database quyết định, không được biên dịch
- * thành tham số `null` (quy tắc T-4 trong playbook của package).
- */
 function spaceRegistryInsertValues(values: NewSpaceRegistration): Insertable<ControlPlaneDB['space_registry']> {
   const row: Insertable<ControlPlaneDB['space_registry']> = {
     slug: values.slug,
@@ -270,12 +187,6 @@ function spaceRegistryInsertValues(values: NewSpaceRegistration): Insertable<Con
   return row;
 }
 
-/**
- * Ánh xạ một patch cập nhật dòng đăng ký (camelCase) sang set
- * update (snake_case), LOẠI mọi trường `undefined` — patch chỉ chứa
- * trường nào thì chỉ trường đó đổi, đúng ngữ nghĩa bỏ qua
- * `undefined` của đường cũ trước đây (quy tắc T-4).
- */
 function spaceRegistryUpdateSet(patch: Partial<NewSpaceRegistration>): Updateable<ControlPlaneDB['space_registry']> {
   const set: Updateable<ControlPlaneDB['space_registry']> = {};
   if (patch.id !== undefined) set.id = patch.id;
@@ -293,24 +204,12 @@ function spaceRegistryUpdateSet(patch: Partial<NewSpaceRegistration>): Updateabl
   return set;
 }
 
-/**
- * Repository của control plane trên Kysely: mọi truy cập tới sáu
- * bảng của database control plane tập trung ở đây.
- *
- * Handle gốc được truyền lúc khởi tạo (instance do factory của
- * package dựng trên pool của tầng ứng dụng); `null` khi control
- * plane chưa được cấu hình — mọi thao tác khi đó ném lỗi do hàm
- * dựng lỗi quyết định (mặc định {@link ControlPlaneNotConfiguredError}),
- * riêng `isConfigured()` trả lời `false` để các đường đọc thư mục
- * tự bỏ qua thay vì ném lỗi vào luồng nghiệp vụ.
- */
 export class ControlPlaneRepository {
   constructor(
     private readonly handle: ControlPlaneDb | null,
     private readonly notConfiguredError: () => Error = () => new ControlPlaneNotConfiguredError(),
   ) {}
 
-  /** Instance gốc; ném lỗi rõ ràng khi control plane chưa được cấu hình. */
   private db(): ControlPlaneDb {
     if (!this.handle) {
       throw this.notConfiguredError();
@@ -318,20 +217,10 @@ export class ControlPlaneRepository {
     return this.handle;
   }
 
-  /** Mở một transaction trên database control plane. */
   async transaction<T>(fn: (tx: CpTx) => Promise<T>): Promise<T> {
     return this.db().transaction().execute(fn);
   }
 
-  /**
-   * Thêm dòng đăng ký nếu slug chưa có; trả về dòng vừa thêm, hoặc
-   * undefined khi slug đã tồn tại. Cả hai đường ghi dùng nhánh này:
-   * đường gieo dữ kiện (chạy lại không tạo trùng, không ghi đè dữ
-   * kiện đã có) và đường tạo qua API — insert-bỏ-qua-khi-trùng ngay
-   * trong transaction khiến hai lượt tạo đồng thời cùng slug chỉ
-   * một lượt thành công, lượt còn lại được báo xung đột thay vì vấp
-   * ràng buộc unique thành lỗi máy chủ.
-   */
   async insertSpaceIfAbsent(values: NewSpaceRegistration, db: CpDb = this.db()): Promise<SpaceRegistryRow | undefined> {
     const rows = await db
       .insertInto('space_registry')
@@ -342,7 +231,6 @@ export class ControlPlaneRepository {
     return rows[0];
   }
 
-  /** Cập nhật một dòng đăng ký theo id và trả về dòng sau cập nhật. */
   async updateSpace(id: string, patch: Partial<NewSpaceRegistration>, db: CpDb = this.db()): Promise<SpaceRegistryRow> {
     const rows = await db
       .updateTable('space_registry')
@@ -357,13 +245,6 @@ export class ControlPlaneRepository {
     return db.selectFrom('space_registry').select(SPACE_REGISTRY_COLUMNS).where('id', '=', id).limit(1).executeTakeFirst();
   }
 
-  /**
-   * Đọc một dòng đăng ký KÈM KHOÁ DÒNG (`FOR UPDATE`) — chỉ dùng
-   * bên trong transaction: thao tác ghi nào đọc dòng này để hợp nhất
-   * / chụp ảnh `before` đều phải đọc qua đây, để hai thao tác ghi
-   * đồng thời trên cùng một dòng nối tiếp nhau thay vì cùng đọc một
-   * ảnh cũ rồi ghi đè lẫn nhau (mất dữ kiện, chuỗi lịch sử đứt).
-   */
   async findSpaceByIdForUpdate(id: string, db: CpDb): Promise<SpaceRegistryRow | undefined> {
     return db
       .selectFrom('space_registry')
@@ -374,21 +255,10 @@ export class ControlPlaneRepository {
       .executeTakeFirst();
   }
 
-  /** Tra cứu định tuyến theo slug — đường đọc chính của tầng ứng dụng. */
   async findSpaceBySlug(slug: string, db: CpDb = this.db()): Promise<SpaceRegistryRow | undefined> {
     return db.selectFrom('space_registry').select(SPACE_REGISTRY_COLUMNS).where('slug', '=', slug).limit(1).executeTakeFirst();
   }
 
-  /**
-   * Tra cứu dòng đăng ký theo tên database đích — đường kiểm tra trùng
-   * của cấp phát: một tên database không được hai dòng đăng ký cùng
-   * dùng. Lưu ý: tra cứu này phủ CẢ hàng shared (kho chung vốn được
-   * nhiều dòng cùng trỏ) vì tầng ứng dụng từ chối mọi databaseName
-   * đã có khi cấp phát kho dedicated — một kho dedicated mang tên
-   * trùng kho chung sẽ khiến trung tâm đó trỏ thẳng vào kho chung.
-   * Chỉ số duy nhất riêng phần trên database chỉ là chốt chặn cho
-   * cuộc đua dedicated-vs-dedicated; kiểm tra ở đây là lớp chính.
-   */
   async findSpaceByDatabaseName(databaseName: string, db: CpDb = this.db()): Promise<SpaceRegistryRow | undefined> {
     return db
       .selectFrom('space_registry')
@@ -398,18 +268,6 @@ export class ControlPlaneRepository {
       .executeTakeFirst();
   }
 
-  /**
-   * Tra cứu dòng đăng ký KHÁC theo tên database đích — đường kiểm tra
-   * trùng của cập nhật: khi kiểm tra một dòng đang cập nhật, dòng đó
-   * PHẢI bị loại trừ NGAY TRONG TRUY VẤN (`id <> ...`). Tra cứu
-   * `LIMIT 1` không loại trừ có thể trả về chính dòng đang sửa — hai
-   * dòng cùng tên là tiền đề thật vì các không gian kho chung cùng
-   * trỏ vào một database — khiến điều kiện so sánh ở phía gọi bỏ qua
-   * va chạm với dòng còn lại, mà chỉ số duy nhất riêng phần không
-   * cứu được vì dòng còn lại vẫn là `shared`. Lọc bằng code sau
-   * `LIMIT 1` không sửa được lỗi này vì dòng còn lại có thể đã bị
-   * truy vấn bỏ qua.
-   */
   async findOtherSpaceByDatabaseName(
     databaseName: string,
     excludeId: string,
@@ -424,36 +282,10 @@ export class ControlPlaneRepository {
       .executeTakeFirst();
   }
 
-  /**
-   * Toàn bộ sổ đăng ký theo thứ tự slug: đầu vào của các công cụ
-   * vận hành đội kho — runner migration đọc danh sách kho + phiên
-   * bản hiện tại từ đây, tác vụ sao lưu và kiểm thử khôi phục cũng
-   * duyệt cùng danh sách này. Thứ tự slug cố định để mọi lượt chạy
-   * duyệt các kho theo cùng một thứ tự xác định.
-   */
   async listSpaces(db: CpDb = this.db()): Promise<SpaceRegistryRow[]> {
     return db.selectFrom('space_registry').select(SPACE_REGISTRY_COLUMNS).orderBy('slug', 'asc').execute();
   }
 
-  /**
-   * Ghi một dòng lịch sử quản trị (gọi trong cùng transaction với thay đổi trên sổ).
-   *
-   * `created_at` được đóng dấu TƯỜNG MINH bằng `clock_timestamp()` —
-   * mốc thời gian thực mà PostgreSQL tính tại thời điểm câu INSERT
-   * thực thi, khi transaction của thao tác ghi đang giữ khoá dòng
-   * của sổ. Điểm đóng dấu này là bắt buộc của bất biến chuỗi lịch
-   * sử: ảnh before/after nối chuỗi theo thứ tự chiếm khoá, nên khoá
-   * sắp xếp lúc đọc (`listHistory` sắp theo `created_at`) cũng phải
-   * là mốc đóng tại cùng điểm nối tiếp hoá đó. Nếu để cột lấy mặc
-   * định `now()` thì mốc là thời điểm BẮT ĐẦU transaction — đóng
-   * dấu trước khi thao tác chờ khoá — thứ tự của nó lệch với thứ tự
-   * chiếm khoá khi nhiều thao tác ghi đồng thời trên cùng một
-   * dòng, làm chuỗi lịch sử đọc ra đứt ở điểm nối. Giá trị thời
-   * gian phía JavaScript (ví dụ `new Date()`) sai cùng một cách —
-   * cũng đóng dấu trước khi chiếm khoá — nên cấm dùng ở đây. Mặc
-   * định của cột trong database cũng đã đổi sang
-   * `clock_timestamp()` để mọi đường ghi khác giữ cùng ngữ nghĩa.
-   */
   async insertHistory(
     values: { spaceId: string; actorId: string; action: string; before: SpaceRegistrySnapshot | null; after: SpaceRegistrySnapshot },
     db: CpDb = this.db(),
@@ -473,7 +305,6 @@ export class ControlPlaneRepository {
     return rows[0]!;
   }
 
-  /** Lịch sử quản trị của một không gian, mới nhất trước. */
   async listHistory(spaceId: string, db: CpDb = this.db()): Promise<SpaceRegistryHistoryRow[]> {
     return db
       .selectFrom('space_registry_history')
@@ -484,7 +315,6 @@ export class ControlPlaneRepository {
       .execute();
   }
 
-  /** Trạng thái schema của một kho; undefined khi chưa có dòng registry cho kho đó. */
   async findSchemaRegistry(spaceId: string, db: CpDb = this.db()): Promise<SpaceSchemaRegistryRow | undefined> {
     return db
       .selectFrom('space_schema_registry')
@@ -494,7 +324,6 @@ export class ControlPlaneRepository {
       .executeTakeFirst();
   }
 
-  /** Ghi/đè trạng thái schema của một kho (một dòng duy nhất theo khoá chính spaceId). */
   async upsertSchemaRegistry(
     values: NewSpaceSchemaRegistry,
     db: CpDb = this.db(),
@@ -506,10 +335,6 @@ export class ControlPlaneRepository {
     if (values.lastRestoreStatus !== undefined) insert.last_restore_status = values.lastRestoreStatus;
     if (values.lastRestoreAt !== undefined) insert.last_restore_at = values.lastRestoreAt;
     if (values.updatedAt !== undefined) insert.updated_at = values.updatedAt;
-    // Set của nhánh cập nhật khi trùng khoá: dựng từ chính các
-    // trường có mặt trong values (loại `undefined` như mọi đường
-    // ghi khác), luôn kèm mốc cập nhật hiện tại — cùng hình dạng
-    // set tường minh của đường cũ trước đây.
     const updateSet: Updateable<ControlPlaneDB['space_schema_registry']> = { updated_at: new Date() };
     if (values.currentVersion !== undefined) updateSet.current_version = values.currentVersion;
     if (values.lastBackupStatus !== undefined) updateSet.last_backup_status = values.lastBackupStatus;
@@ -525,7 +350,6 @@ export class ControlPlaneRepository {
     return rows[0]!;
   }
 
-  /** Đảm bảo có dòng registry phiên bản schema cho kho (đường gieo dữ kiện; đã có thì giữ nguyên). */
   async ensureSchemaRegistry(spaceId: string, currentVersion: string, db: CpDb = this.db()): Promise<void> {
     await db
       .insertInto('space_schema_registry')
@@ -534,7 +358,6 @@ export class ControlPlaneRepository {
       .execute();
   }
 
-  /** Thêm một lượt chạy migration vào nhật ký (chỉ thêm, không sửa dòng cũ). */
   async insertMigrationRun(values: NewSchemaMigrationRun, db: CpDb = this.db()): Promise<SpaceSchemaMigrationRunRow> {
     const insert: InsertObject<ControlPlaneDB, 'space_schema_migration_runs'> = {
       space_id: values.spaceId,
@@ -555,7 +378,6 @@ export class ControlPlaneRepository {
     return rows[0]!;
   }
 
-  /** Các lượt chạy migration của một kho, cũ nhất trước (đúng thứ tự thời gian của nhật ký). */
   async listMigrationRuns(spaceId: string, db: CpDb = this.db()): Promise<SpaceSchemaMigrationRunRow[]> {
     return db
       .selectFrom('space_schema_migration_runs')
@@ -566,7 +388,6 @@ export class ControlPlaneRepository {
       .execute();
   }
 
-  /** Control plane chỉ có thể thao tác khi đã cấu hình kết nối. */
   isConfigured(): boolean {
     return this.handle !== null;
   }

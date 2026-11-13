@@ -10,9 +10,6 @@ import type { ProblemDetails } from '@giaokhoa/contracts';
 import { t } from '@nestjs/i18n';
 import type { Response } from 'express';
 
-/**
- * Filter Problem Details theo RFC 7807 dùng cho toàn hệ (tự dựng trên ExceptionFilter của Nest — Nest không có sẵn định dạng Problem Details).
- */
 const STATUS_TITLES: Record<number, string> = {
   400: 'Bad Request',
   401: 'Unauthorized',
@@ -74,12 +71,6 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         if (typeof record.code === 'string') {
           code = record.code;
         }
-        /**
-         * Extension member `blocked` của exception nội bộ (chốt cả lớp VN
-         * bị chặn) → mang sang problem dưới tên `blockedStudents`, chỉ nhận
-         * các phần tử đúng hình dạng đã khai trong contracts — dữ liệu lạ
-         * hình bị bỏ thay vì lộ nguyên ra ngoài.
-         */
         if (Array.isArray(record.blocked)) {
           const shaped = record.blocked.filter(
             (b): b is { userId: string; reason: 'awaiting_makeup' | 'incomplete'; roles: string[] } =>
@@ -96,14 +87,6 @@ export class ProblemDetailsFilter implements ExceptionFilter {
             }));
           }
         }
-        /**
-         * Extension member `matrixImportIssues` của exception nội bộ
-         * (ghi nhập ma trận bị từ chối nguyên tử, lát I-2 của #233) →
-         * mang nguyên sang problem: lỗi cứng ĐỊNH VỊ (sheet/dòng/cột)
-         * của đường parse file, chỉ nhận các phần tử đúng hình dạng
-         * `MatrixImportIssue` đã khai trong contracts — dữ liệu lạ
-         * hình bị bỏ thay vì lộ nguyên ra ngoài.
-         */
         if (Array.isArray(record.matrixImportIssues)) {
           const shaped = record.matrixImportIssues.filter(
             (i): i is { sheet: string | null; row: number | null; column: string | null; code: string; message: string } =>
@@ -124,20 +107,11 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       detail = 'An unexpected error occurred';
     }
 
-    /**
-     * Text hiển thị (detail) tra theo `code` ổn định trong catalog i18n
-     * (`errors.<code>`) theo ngôn ngữ của request hiện tại — exception nội bộ
-     * chỉ mang mã tiếng Anh, không mang chuỗi hiển thị. Mã nào chưa có trong
-     * catalog (module cũ chưa nối i18n) thì giữ nguyên detail gốc; ngoài
-     * request context, `t()` trả lại chính khoá nên phép so sánh dưới đây tự
-     * vô hiệu hoá.
-     */
     try {
       const key = `errors.${code}`;
       const translated = t(key as never);
       if (typeof translated === 'string' && translated !== key) detail = translated;
     } catch {
-      /* missingKey='throw' ngoài production: thiếu khoá thì giữ detail gốc. */
     }
 
     const problem: ProblemDetails = {

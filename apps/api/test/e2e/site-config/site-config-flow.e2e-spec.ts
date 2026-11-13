@@ -4,9 +4,6 @@ import {
   adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWORD,
 } from '../../support/identity-access-helpers';
 
-/**
- * Luồng Site Config (cài đặt quản trị). Oracle: blueprint §2#30 (Config/Admin) — config phân tầng: mặc định code < giá trị admin lưu DB < config theo plugin (`component + name`); mọi thay đổi qua UI/API đều qua capability `site:config` và có vết. Hành vi tương ứng phía Moodle: get_config/set_config (config + config_plugins) và admin setting tree chỉ dành cho user có site:config.
- */
 describe('Cấu hình site (cài đặt admin)', () => {
   let app: INestApplication;
   let admin: string;

@@ -8,7 +8,7 @@
 
 ## Chuẩn ngôn ngữ
 
-Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng tiếng Anh. Toàn bộ comment trong code — gồm comment mô tả luồng nghiệp vụ — viết bằng tiếng Việt. Mọi tài liệu trong repo (README, các file AGENTS, tài liệu của package) và mọi văn bản trên GitHub (issue, PR, comment) viết bằng tiếng Việt. Khi sửa code, comment tiếng Việt liên quan phải được cập nhật khớp với code trong cùng lượt thay đổi. Nội dung đầy đủ của chuẩn này nằm ở mục "Chuẩn ngôn ngữ" trong `AGENTS.md` ở thư mục gốc của repo.
+Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng tiếng Anh. Cấm viết comment, gồm TSDoc/JSDoc, comment nội tuyến và comment mô tả luồng, trong mã nguồn hoặc cấu hình. Mã nguồn và cấu hình thực thi là nguồn sự thật duy nhất cho hành vi hiện hành; không dùng comment để lưu quyết định. Tài liệu trong repo và văn bản GitHub viết bằng tiếng Việt. Tuân thủ quy định tại `AGENTS.md` gốc.
 
 ## Ranh giới phạm vi
 
@@ -33,16 +33,9 @@ Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng 
 - Test contracts phải kiểm các ràng buộc NGHIỆP VỤ của hình dạng (giới hạn độ dài, enum trạng thái đúng tập đã chốt, scope đúng tập đã chốt), không chỉ kiểm "schema parse được JSON mẫu". Nới một ràng buộc nghiệp vụ thì test phải fail.
 - Đổi schema mà mọi test vẫn xanh nguyên = dấu hiệu test chưa bám nghiệp vụ — bổ sung test bám quyết định trong cùng lượt.
 
-## Chuẩn comment TSDoc (sổ quyết định mục F — chốt 13:14 ngày 26/10/2026)
+## Không viết comment trong code
 
-Mọi code TypeScript viết mới hoặc sửa trong `packages/contracts` phải có comment **tiếng Việt theo chuẩn TSDoc**, chi tiết nhất có thể — ở package này comment flow mang thêm một vai trò riêng: ghi lại **quyết định nghiệp vụ mà hình dạng dữ liệu đang mã hoá**, để lần sửa schema sau dựa vào nội dung code đang có chứ không dựa vào trí nhớ của trợ lý:
-
-- Đầu mỗi file: khối TSDoc mô tả miền nghiệp vụ của file + các hợp đồng chính trong file + luồng sử dụng (ai định nghĩa → app nào tiêu thụ → ràng buộc nào được thực thi ở đâu).
-- Mỗi schema/type trọng yếu: TSDoc `/** ... */` tiếng Việt gồm ý nghĩa nghiệp vụ của trường/kiểu, ràng buộc đã chốt (giới hạn độ dài, tập enum, tập scope đóng…), mã lỗi tương ứng trong khuôn ProblemDetails khi ràng buộc bị phá, và quyết định trong sổ mà hình dạng này đang mã hoá (nếu có).
-- Ràng buộc khó nhìn (vì sao một trường optional, vì sao một enum chỉ có đúng các giá trị đó): comment nội tuyến tiếng Việt nói lý do — không lặp lại điều schema đã hiển nhiên.
-- Cú pháp/tag theo TSDoc (`@remarks`/`@example` khi cần); định danh và tên tag giữ tiếng Anh.
-- Sửa schema thì căn cứ vào comment đang có trong code; thấy comment lệch schema/quyết định thật thì sửa comment **trong cùng lượt** với sửa schema.
-- Đội đánh giá độc lập soi chuẩn này như một tiêu chí đạt — code thiếu comment flow đạt chuẩn là chưa đạt. Code cũ chưa có comment được phủ theo đợt riêng của issue #272, không tự trộn việc phủ vào feat đang bay.
+Không thêm, giữ lại hoặc tái tạo comment trong code, kể cả TSDoc/JSDoc, comment JSX, comment giải thích flow và comment cấu hình. Thể hiện hành vi bằng code rõ ràng và test kiểm chứng. Code là nguồn sự thật duy nhất; comment có nguy cơ lệch code và tốn token. Quy tắc chung nằm trong `AGENTS.md` gốc.
 
 ## Bản đồ flow của package
 

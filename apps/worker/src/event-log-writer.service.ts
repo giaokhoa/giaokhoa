@@ -3,11 +3,6 @@ import { uuidIdSchema } from '@giaokhoa/contracts';
 import { sql, type CentreDB } from '@giaokhoa/db';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
 
-/**
- * Các trường outbox cần để phản chiếu sự kiện vào `event_log`; không phụ thuộc kiểu dữ liệu của tầng ORM.
- *
- * `payload` chỉ nhận object hoặc null vì writer đọc các khoá có tên; `seq` đã được relay chuyển từ int8 PostgreSQL về `number`.
- */
 export interface OutboxRowLike {
   id: string;
   seq: number;
@@ -20,9 +15,6 @@ export interface OutboxRowLike {
 
 const COURSE_CONTEXT_LEVEL = 50;
 
-/**
- * Các khoá payload ứng viên đặt tên cho đối tượng chính của một sự kiện, theo từng outbox aggregate. Khoá đầu tiên hiện diện sẽ thắng; giá trị được đưa vào trường `objectId` đã chuẩn hoá của payload log đã lưu.
- */
 const OBJECT_ID_KEYS: Record<string, string[]> = {
   course: ['courseId'],
   course_category: ['categoryId'],
@@ -48,14 +40,6 @@ function str(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
-/**
- * Phản chiếu sự kiện đã phát từ outbox của worker sang `event_log`, chuẩn hoá actor, người liên quan, khoá học, đối tượng và địa chỉ IP.
- *
- * Lỗi ghi log được ghi nhận nhưng không làm thất bại relay, vì phát sự kiện và ghi log là hai trách nhiệm độc lập.
- *
- * @remarks
- * Writer dùng `SpaceDatabaseService.routedKysely` trong phiên kho đang xử lý, bảo đảm tra cứu context và ghi `event_log` cùng database với outbox gốc. Giá trị JSONB được serialize và ép `::jsonb` để mảng không bị driver `pg` diễn giải thành mảng PostgreSQL.
- */
 @Injectable()
 export class EventLogWriter {
   private readonly logger = new Logger(EventLogWriter.name);
@@ -76,8 +60,6 @@ export class EventLogWriter {
       const sourceComponent = str(source.component);
       const payload: Record<string, unknown> = {
         ...source,
-        // Một số payload đã mang sẵn trường `component` của riêng chúng (component hoạt động của một course module) — giữ nó dưới `sourceComponent`; `component` đã chuẩn hoá là phân hệ của sự kiện
-        // (outbox aggregate).
         ...(sourceComponent ? { sourceComponent } : {}),
         component: row.aggregate,
         action: row.type,
@@ -114,7 +96,6 @@ export class EventLogWriter {
     return str(payload.objectId);
   }
 
-  /** Tra cứu context của khoá học chỉ đọc; context bị thiếu thì cột để null (payload vẫn mang courseId). */
   private async courseContextId(courseId: string): Promise<string | null> {
     if (!uuidIdSchema.safeParse(courseId).success) return null;
     const row = await this.spaceDb.routedKysely

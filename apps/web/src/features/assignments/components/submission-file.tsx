@@ -24,12 +24,6 @@ const KIND_MARK: Record<string, { symbol: string; className: string }> = {
   draw: { symbol: '', className: '' },
 };
 
-/**
- * Một tệp của bài nộp: ảnh hiển thị trực tiếp kèm lớp dấu chấm vector
- * đè lên (toạ độ % neo theo khổ ảnh — ảnh gốc không bị đốt dấu); tệp
- * khác hiện dạng liên kết mở URL đã ký. Ở bề mặt chấm, bấm vào ảnh để
- * thả dấu (hoặc kéo để vẽ khi đang chọn nét vẽ).
- */
 export function SubmissionFileView({
   file,
   annotations,
@@ -81,7 +75,6 @@ export function SubmissionFileView({
     drawingRef.current = null;
     setPreview([]);
     if (!onPlace || !pts || pts.length === 0) return;
-    // Kéo thật sự (≥2 điểm cách nhau) = nét vẽ; còn lại là một cú bấm thả dấu.
     if (pts.length >= 2) onPlace(file.fileId, pts[0]!, pts);
   }
 

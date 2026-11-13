@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SpacePoolManager, type ManagedPool, type SpacePoolHandle } from './space-pool-manager';
 
-/**
- * Ca đơn vị của trình quản lý pool theo database (issue #581): pool được thay bằng vật giả có bộ đếm kết nối điều khiển được và đồng hồ điều khiển bằng tay — các ca khoá ba kỷ luật ngân sách: tạo lười theo kho, đóng pool khi nhàn rỗi quá ngưỡng (nhưng không đóng pool còn kết nối đang được mượn), và tổng kết nối cộng đúng trên các pool đang sống; cộng bất biến danh tính: pool bị buộc theo danh tính kết nối đã phân giải mà nó được tạo bằng, sổ đổi danh tính thì pool bị thay.
- */
 
 class FakePool implements ManagedPool {
   totalCount = 0;
@@ -22,13 +19,11 @@ class FakePool implements ManagedPool {
     return this;
   }
 
-  /** Giả lập pool cho mượn một kết nối (sự kiện acquire của pg). */
   acquire(): void {
     for (const listener of this.acquireListeners) listener();
   }
 }
 
-/** Dựng trình quản lý với nhà máy đếm số handle đã tạo và đồng hồ điều khiển được. */
 function makeManager(idleTimeoutMs = 1_000) {
   let created = 0;
   let now = 0;
@@ -91,8 +86,6 @@ describe('Trình quản lý pool theo database', () => {
     expect((handle.pool as FakePool).ended).toBe(true);
     expect(manager.size).toBe(0);
     expect(closedNotifications).toEqual(['kho_a']);
-    // Sau khi đóng vì nhàn rỗi, lần lấy handle kế tiếp tạo pool mới
-    // — đóng pool là trả ngân sách, không phải trạng thái cuối.
     const recreated = manager.getHandle('kho_a', create);
     expect(recreated).not.toBe(handle);
     expect(manager.size).toBe(1);
@@ -106,7 +99,6 @@ describe('Trình quản lý pool theo database', () => {
     advance(5_000);
     await expect(manager.closeIdlePools()).resolves.toEqual([]);
     expect(manager.size).toBe(1);
-    // Khi kết nối được trả hết, vòng quét sau mới đóng.
     (handle.pool as FakePool).idleCount = 2;
     await expect(manager.closeIdlePools()).resolves.toEqual(['kho_a']);
   });
@@ -137,16 +129,11 @@ describe('Trình quản lý pool theo database', () => {
     const same = manager.getHandleForIdentity('kho_a', 'identity-1', create);
     expect(same).toBe(first);
     expect(created()).toBe(1);
-    // Sổ đổi role/bí mật của kho: danh tính phân giải đã khác —
-    // pool cũ không còn được dùng, phải bị đóng và thay mới.
     const replaced = manager.getHandleForIdentity('kho_a', 'identity-2', create);
     expect(replaced).not.toBe(first);
     expect(created()).toBe(2);
     expect(manager.size).toBe(1);
-    // Việc thay pool báo ra như một lần đóng pool để chủ sở hữu
-    // đồng bộ các bảng tra cứu theo kho.
     expect(closedNotifications).toEqual(['kho_a']);
-    // Pool cũ thật sự bị đóng (đóng chạy nền nên chờ một nhịp).
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect((first.pool as FakePool).ended).toBe(true);
     expect((replaced.pool as FakePool).ended).toBe(false);
@@ -158,10 +145,6 @@ describe('Trình quản lý pool theo database', () => {
     const plain = manager.getHandle('kho_a', create);
     expect(plain).toBe(withIdentity);
     expect(created()).toBe(1);
-    // Pool của kho_b tạo qua đường không kèm danh tính: lần lấy
-    // kèm danh tính đầu tiên GHI NHẬN danh tính cho pool đó (chưa
-    // có căn cứ kết luận nó chạy sai), từ lần đổi danh tính sau
-    // đó mới thay pool.
     const untracked = manager.getHandle('kho_b', create);
     const adopted = manager.getHandleForIdentity('kho_b', 'identity-9', create);
     expect(adopted).toBe(untracked);

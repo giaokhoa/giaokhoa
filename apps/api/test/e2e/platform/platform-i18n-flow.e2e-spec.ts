@@ -5,13 +5,6 @@ import {
 } from '../../support/identity-access-helpers';
 import { createCategory, createCourse } from '../../support/course-enrolment-helpers';
 
-/**
- * Luồng i18n của các dịch vụ nền tảng: API trả text hiển thị tiếng Việt khi request không có Accept-Language (mặc định 'vi') và tiếng Anh khi `Accept-Language: en` — kiểm trên hai luồng vàng:
- * (1) lỗi 403 của external function (token của student gọi function cần
- * capability giáo viên) — detail tra theo error code trong catalog;
- * (2) lỗi validation của payments — thông điệp Zod được dịch qua ánh xạ
- * issue code → khoá catalog `validation.*` bởi pipe Standard Schema có i18n. Mã lỗi ổn định (`code`) luôn giữ tiếng Anh ở cả hai ngôn ngữ.
- */
 describe('Luồng i18n platform (e2e)', () => {
   let app: INestApplication;
   let admin: string;

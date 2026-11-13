@@ -3,21 +3,17 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import type { Queue } from 'bullmq';
 import { RetryingSchedulerRegistration } from './retrying-scheduler-registration';
 
-/** Đăng ký lượt quét đối soát ghi danh cấp lớp lặp lại (mỗi 15 phút — trần lệch một chu kỳ theo hồ sơ lớp học mục 4.2). Bản thân job có tính idempotent. */
 @Injectable()
-/**
- * Lập lịch đối soát ghi danh cấp lớp theo chu kỳ (đưa job
- * class-enrol-reconcile vào queue): so roster của lớp (nguồn sự thật)
- * với ghi danh đã vật chất hoá ở từng khoá và tự sửa lệch.
- */
+
+
+
+
+
 export class ClassEnrolReconcileScheduler implements OnModuleInit, OnModuleDestroy {
   private registration: RetryingSchedulerRegistration | null = null;
   private readonly logger = new Logger(ClassEnrolReconcileScheduler.name);
   constructor(@InjectQueue('class-enrol-reconcile') private readonly queue: Queue) {}
 
-  /**
-   * Khởi tạo: đăng ký job lặp cho queue đối soát ghi danh cấp lớp.
-   */
   async onModuleInit(): Promise<void> {
     this.registration = new RetryingSchedulerRegistration(
       () => this.queue.upsertJobScheduler(

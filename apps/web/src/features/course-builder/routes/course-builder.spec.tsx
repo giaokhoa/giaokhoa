@@ -7,9 +7,6 @@ import { baSessionBody, isGetSessionUrl } from '#test/ba-session';
 import { PermissionsProvider } from '#lib/permissions';
 import { CourseBuilderPage } from './course-builder';
 
-/**
- * Spec Builder Outline (K1 — issue #68): trang xây dựng khoá học riêng `/courses/:id/builder` tách khỏi trang quản trị gộp. Hai describe đầu di trú nguyên vẹn từ course-admin.spec (tiêu chí hoàn thành + thao tác section/module cơ bản) khi khối builder được tách trang; describe cuối kiểm các thao tác outline mới của K1: đổi thứ tự bằng nút lên/xuống, nhân bản tại dòng, thêm nội dung bằng menu chọn loại và trạng thái Mở theo lịch qua trường ngày mở riêng.
- */
 const TEACHER_ID = '01900000-0000-7000-8000-0000000000a2';
 const COURSE_ID = '01900000-0000-7000-8000-000000000010';
 const CATEGORY_ID = '01900000-0000-7000-8000-000000000001';
@@ -87,7 +84,6 @@ const CONTENT = {
   ],
 };
 
-/** Outline hai section cho các thao tác đổi thứ tự/nhân bản của K1. */
 const CONTENT_TWO_SECTIONS = {
   ...CONTENT,
   sections: [
@@ -106,7 +102,6 @@ const CONTENT_TWO_SECTIONS = {
   ],
 };
 
-/** Học liệu trong Kho (CB-1) mà panel "Thêm từ kho" của builder liệt kê. */
 const BANK_ITEM_LECTURE = {
   id: '01900000-0000-7000-8000-00000000ba01',
   name: 'Bài giảng video: Dao động điều hoà',
@@ -168,7 +163,6 @@ interface RecordedCall {
   body: unknown;
 }
 
-/** Stub fetch ghi lại mọi lời gọi; giáo viên có editingteacher tại context khoá kèm course:update + completion:manage. */
 function stubFetch(calls: RecordedCall[], content: unknown = CONTENT, bankItems: unknown = BANK_ITEMS) {
   vi.stubGlobal(
     'fetch',
@@ -258,7 +252,6 @@ function stubFetch(calls: RecordedCall[], content: unknown = CONTENT, bankItems:
   );
 }
 
-/** Render trang builder trong đúng khung provider của ứng dụng thật. */
 function renderCourseBuilder() {
   const router = createMemoryRouter(
     [
@@ -314,7 +307,6 @@ describe('Tiêu chí hoàn thành khoá học (giáo viên có completion:manage
 
     const typeSelect = within(box).getByLabelText('Loại tiêu chí') as HTMLSelectElement;
     expect(Array.from(typeSelect.options).map((o) => o.value)).toEqual(['module', 'date']);
-    // Tiêu chí mới thêm mặc định là hoàn thành hoạt động, không còn loại điểm tổng khoá.
     expect(typeSelect.value).toBe('module');
 
     await userEvent.selectOptions(typeSelect, 'date');
@@ -359,8 +351,6 @@ describe('Trình dựng khoá học (giáo viên)', () => {
     renderCourseBuilder();
 
     const availabilityBox = await screen.findByTestId(`module-availability-${MODULE_ID}`);
-    // Trình sửa điều kiện truy cập nay dùng Select của @giaokhoa/ui (không còn
-    // select native): bấm trigger rồi chọn option theo nhãn hiển thị.
     await userEvent.click(within(availabilityBox).getByLabelText('Loại điều kiện mới'));
     await userEvent.click(await screen.findByRole('option', { name: 'Ngày' }));
     await userEvent.click(within(availabilityBox).getByRole('button', { name: 'Thêm điều kiện' }));
@@ -421,7 +411,6 @@ describe('Dàn ý trình dựng K1 (giáo viên)', () => {
     renderCourseBuilder();
 
     const first = await screen.findByTestId(`section-builder-${SECTION_ID}`);
-    // Nút Xuống đầu tiên trong section là của chính section (trước các nút của module bên trong).
     await userEvent.click(within(first).getAllByRole('button', { name: 'Xuống' })[0]!);
 
     await waitFor(() =>
@@ -453,7 +442,6 @@ describe('Dàn ý trình dựng K1 (giáo viên)', () => {
 
     const sectionBox = await screen.findByTestId(`section-builder-${SECTION_ID}`);
     await userEvent.selectOptions(within(sectionBox).getByLabelText('Loại nội dung'), 'mod_quiz');
-    // Ô tên của form thêm mới (phân biệt với ô sửa tên của module hiện có bằng id).
     const nameInput = sectionBox.querySelector<HTMLInputElement>(`#module-new-name-${SECTION_ID}`);
     await userEvent.type(nameInput!, 'Kiểm tra 15 phút');
     await userEvent.click(within(sectionBox).getByRole('button', { name: 'Thêm module' }));
@@ -464,7 +452,6 @@ describe('Dàn ý trình dựng K1 (giáo viên)', () => {
     const call = calls.find((c) => c.url === `/api/v1/courses/${COURSE_ID}/exam-pins`);
     expect(call?.body).toMatchObject({ sectionId: SECTION_ID, newExam: { name: 'Kiểm tra 15 phút' } });
     expect((call?.body as { requestId: string } | undefined)?.requestId).toMatch(/^[0-9a-f]{8}-[0-9a-f-]{27,}$/);
-    // Không còn đường tạo module bằng chuỗi component cho quiz.
     expect(calls.some((c) => c.url === `/api/v1/courses/${COURSE_ID}/modules` && c.method === 'POST')).toBe(false);
   });
 
@@ -485,7 +472,6 @@ describe('Dàn ý trình dựng K1 (giáo viên)', () => {
     const call = calls.find((c) => c.url === `/api/v1/courses/${COURSE_ID}/assignments`);
     expect(call?.body).toEqual({ sectionId: SECTION_ID, name: 'Bài tập về nhà' });
     expect(calls.some((c) => c.url === `/api/v1/courses/${COURSE_ID}/modules` && c.method === 'POST')).toBe(false);
-    // Tạo xong điều hướng thẳng tới trang hoạt động bài tập để GV cài đặt tiếp.
     expect(await screen.findByText('assignment-editor')).toBeTruthy();
   });
 
@@ -494,9 +480,6 @@ describe('Dàn ý trình dựng K1 (giáo viên)', () => {
     stubFetch(calls);
     renderCourseBuilder();
 
-    // Ngày mở phải ở tương lai theo đồng hồ chạy test: tính tương đối
-    // (+7 ngày, giờ địa phương) thay vì ghim ngày cứng theo lịch — ngày
-    // cứng sẽ thành quá khứ và bị validation phía form/API bác.
     const openDay = (() => {
       const d = new Date();
       d.setDate(d.getDate() + 7);
@@ -549,13 +532,11 @@ describe('Builder — Thêm từ kho học liệu (CB-1, issue #107)', () => {
     const sectionBox = await screen.findByTestId(`section-builder-${SECTION_ID}`);
     await userEvent.click(within(sectionBox).getByRole('button', { name: 'Thêm từ kho' }));
 
-    // Panel liệt kê cả hai học liệu lấy từ GET /contentbank.
     const lectureRow = await screen.findByTestId(`bank-item-${BANK_ITEM_LECTURE.id}`);
     expect(within(lectureRow).getByText('Bài giảng video: Dao động điều hoà')).toBeTruthy();
     expect(screen.getByTestId(`bank-item-${BANK_ITEM_QUESTION_SET.id}`)).toBeTruthy();
     expect(calls.some((c) => c.url === '/api/v1/contentbank' && c.method === 'GET')).toBe(true);
 
-    // Lọc theo từ khoá "video": chỉ còn bài giảng, bộ câu hỏi biến mất.
     await userEvent.type(within(sectionBox).getByLabelText('Tìm học liệu trong kho'), 'video');
     await waitFor(() => expect(screen.queryByTestId(`bank-item-${BANK_ITEM_QUESTION_SET.id}`)).toBeNull());
     await userEvent.clear(within(sectionBox).getByLabelText('Tìm học liệu trong kho'));

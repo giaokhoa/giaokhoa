@@ -9,17 +9,6 @@ import type { BetterAuthService } from '../../../src/modules/auth/better-auth/be
 import type { CredentialBridgeService } from '../../../src/modules/auth/better-auth/credential-bridge.service';
 import type { MailMessage } from '../../../src/modules/mail/mail.types';
 
-/**
- * Flow test của lát BA-2 (issue #7, chặng 2.5): mail auth qua Resend + reset mật khẩu end-to-end + đăng nhập bằng email OTP.
- *
- * Cách kiểm chứng nội dung mail: MỌI mắt xích phía API là đồ thật — endpoint Better Auth → callback → AuthMailService ghi dòng outbox `auth_mail_requested` (đồng bộ trong request). Mail "người dùng nhận" được dựng từ chính dòng outbox đó bằng `renderAuthMail` của `@giaokhoa/contracts` — hàm dùng chung duy nhất mà processor ở phía worker gọi khi gửi thật (issue #517: khâu gửi đã chuyển sang hàng đợi ở worker; relay phát job, processor dựng nội dung và gọi transport Resend phía worker — khâu đó được kiểm chứng ở suite worker: spec unit của processor và spec tích hợp hàng đợi mail).
- *
- * Các cổng nghiệp vụ được chứng minh: reset đủ vòng (mail chứa liên kết → đặt mật khẩu mới → mật khẩu cũ chết, phiên cũ bị thu hồi, token dùng một lần); email không tồn tại nhận đáp ứng trung tính và không phát mail; mật khẩu yếu bị chính sách của dự án chặn TRƯỚC khi token bị tiêu thụ; OTP đăng nhập đủ vòng (mã sai bị từ chối, mã đúng tạo phiên dùng được ngay trên route nghiệp vụ, mã dùng một lần); email lạ KHÔNG tự thành tài khoản qua OTP (disableSignUp đã ghim ở plugin như toàn hệ) và nhận đáp ứng trung tính chống lộ thông tin; đặt lại mật khẩu bằng OTP; tài khoản bị đình chỉ vẫn bị chặn ở guard dù đăng nhập OTP thành công.
- *
- * BA-1 — chốt semantics revokeUnprovenAccountAccess (comment 6405565755 trên #7, thi công cùng PR này): user do cầu nối tạo là user do bên tin cậy tạo cho mailbox đã biết nên được tạo với email_verified = true, và instance ghim generateId "uuid" (id thường vẫn do PostgreSQL tự sinh UUIDv7 vì adapter khai supportsUUIDs; chỉ id tất định của verification lock mới đổi sang dạng UUID, hết lỗi 22P02). Nhờ đó đăng nhập OTP cho user bridge không còn chạy đường revoke xoá credential: ca bên dưới khẳng định credential mật khẩu còn nguyên và đăng nhập username/mật khẩu vẫn chạy sau khi đăng nhập OTP.
- *
- * Biến môi trường phải tồn tại TRƯỚC khi AppModule được nạp — như spec nền better-auth-flow.
- */
 process.env.BETTER_AUTH_ENABLED = 'true';
 process.env.BETTER_AUTH_SECRET = 'e2e-better-auth-secret-0123456789abcdef';
 const TRUSTED_ORIGIN = 'http://localhost:5173';
@@ -28,7 +17,6 @@ process.env.BETTER_AUTH_TRUSTED_ORIGINS = TRUSTED_ORIGIN;
 const OLD_PASSWORD = 'BridgePass123';
 const NEW_PASSWORD = 'NewBridgePass456';
 const OTP_RESET_PASSWORD = 'OtpResetPass789';
-/** Qua được độ dài tối thiểu của Better Auth nhưng thiếu chữ hoa — chính sách của dự án phải chặn. */
 const POLICY_WEAK_PASSWORD = 'alllowercase1';
 
 type Helpers = typeof import('../../support/identity-access-helpers');
@@ -68,9 +56,7 @@ describe('Mail Better Auth: đặt lại + OTP email (issue #7 giai đoạn 2.5)
   let app: INestApplication;
   let bridge: CredentialBridgeService;
   let pg: Client;
-  /** Mọi mail đã bắt được trong spec này (dựng từ dòng outbox của chính địa chỉ đó). */
   const sentMails: MailMessage[] = [];
-  /** Id các dòng outbox đã dựng thành mail, tránh bắt trùng một dòng hai lần. */
   const capturedRowIds = new Set<string>();
 
   async function createMailUser(prefix: string): Promise<{ id: string; username: string; email: string }> {
@@ -86,18 +72,10 @@ describe('Mail Better Auth: đặt lại + OTP email (issue #7 giai đoạn 2.5)
     return { id: created.id, username, email };
   }
 
-  /** Đưa user về trạng thái đã chứng minh quyền sở hữu email (như sau một luồng xác minh email thành công). */
   async function markEmailVerified(userId: string): Promise<void> {
     await pg.query('update users set email_verified = true where id = $1', [userId]);
   }
 
-  /**
-   * Chờ tới khi có mail gửi cho địa chỉ này: dòng outbox được
-   * AuthMailService ghi đồng bộ trong request nên thường có ngay;
-   * mail được dựng từ dòng đó bằng template dùng chung (xem docblock
-   * ở đầu file) và ghi vào danh sách đã bắt để các ca "không có mail"
-   * đối chiếu được.
-   */
   async function waitForMailTo(email: string, timeoutMs = 9000): Promise<MailMessage> {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
@@ -148,7 +126,6 @@ describe('Mail Better Auth: đặt lại + OTP email (issue #7 giai đoạn 2.5)
 
   it('đặt lại mật khẩu đầu-cuối: liên kết mail đặt lại, mật khẩu cũ chết, phiên bị thu hồi, token dùng một lần', async () => {
     const user = await createMailUser('bamailreset');
-    // Phiên sống trước reset — phải bị thu hồi bởi reset.
     const before = await signInByUsername(user.username, OLD_PASSWORD);
     expect(before.status).toBe(200);
     const cookieBefore = sessionCookieFrom(before.headers['set-cookie'] as unknown as string[]);
@@ -161,7 +138,6 @@ describe('Mail Better Auth: đặt lại + OTP email (issue #7 giai đoạn 2.5)
     expect(requested.status).toBe(200);
     expect(requested.body.status).toBe(true);
 
-    // Yêu cầu đã đi qua outbox thật (không gửi đồng bộ trong request).
     const outbox = await pg.query(
       "select count(*)::int as n from outbox_events where type = 'auth_mail_requested' and payload->>'to' = $1 and payload->>'kind' = 'password_reset'",
       [user.email],
@@ -180,16 +156,13 @@ describe('Mail Better Auth: đặt lại + OTP email (issue #7 giai đoạn 2.5)
     expect(reset.status).toBe(200);
     expect(reset.body.status).toBe(true);
 
-    // Mọi phiên trước reset bị thu hồi (revokeSessionsOnPasswordReset).
     const sessionAfter = await http(app).get('/api/v1/auth/get-session').set('Cookie', cookieBefore);
     expect(sessionAfter.body ?? null).toBeNull();
     expect((await http(app).get('/api/v1/users/me').set('Cookie', cookieBefore)).status).toBe(401);
 
-    // Mật khẩu cũ chết, mật khẩu mới sống.
     expect((await signInByUsername(user.username, OLD_PASSWORD)).status).toBe(401);
     expect((await signInByUsername(user.username, NEW_PASSWORD)).status).toBe(200);
 
-    // Token dùng một lần: dùng lại bị từ chối.
     const reuse = await http(app)
       .post('/api/v1/auth/reset-password')
       .set('Origin', TRUSTED_ORIGIN)
@@ -205,13 +178,6 @@ describe('Mail Better Auth: đặt lại + OTP email (issue #7 giai đoạn 2.5)
       .send({ email: ghost, redirectTo: `${TRUSTED_ORIGIN}/reset-password` });
     expect(res.status).toBe(200);
     expect(res.body.status).toBe(true);
-    // Neo chốt: dòng outbox được ghi đồng bộ trong request (callback
-    // trả về sau khi ghi xong), nên khi yêu cầu lạ đã có đáp ứng mà
-    // vẫn không có dòng nào cho nó thì nó không sinh mail — khẳng
-    // định trực tiếp trên bảng outbox ở dưới là kết luận cuối, danh
-    // sách mail đã bắt chỉ là đối chiếu phụ. Yêu cầu đặt lại THẬT
-    // cho người dùng có thật ngay sau đó giữ vai trò mốc thứ tự:
-    // mail của họ bắt được thì cửa sổ của yêu cầu lạ đã khép hẳn.
     const sentinel = await createMailUser('bamailchotreset');
     await http(app)
       .post('/api/v1/auth/request-password-reset')
@@ -243,7 +209,6 @@ describe('Mail Better Auth: đặt lại + OTP email (issue #7 giai đoạn 2.5)
       .send({ newPassword: POLICY_WEAK_PASSWORD, token });
     expect(weak.status).toBe(400);
 
-    // Cùng token, mật khẩu đạt chính sách → đặt lại thành công.
     const strong = await http(app)
       .post('/api/v1/auth/reset-password')
       .set('Origin', TRUSTED_ORIGIN)
@@ -254,10 +219,6 @@ describe('Mail Better Auth: đặt lại + OTP email (issue #7 giai đoạn 2.5)
 
   it('đăng nhập OTP email đầu-cuối: mã sai bị từ chối, mã đúng tạo phiên hoạt động, mã dùng một lần', async () => {
     const user = await createMailUser('bamailotp');
-    // User đã chứng minh email (trạng thái sau xác minh) — đường
-    // đăng nhập OTP chuẩn. User bridge nay được tạo với
-    // email_verified = true (chốt semantics BA-1), nên đường này
-    // không còn chạm revokeUnprovenAccountAccess.
     await markEmailVerified(user.id);
     const sent = await http(app)
       .post('/api/v1/auth/email-otp/send-verification-otp')
@@ -288,7 +249,6 @@ describe('Mail Better Auth: đặt lại + OTP email (issue #7 giai đoạn 2.5)
     expect(me.status).toBe(200);
     expect(me.body.username).toBe(user.username);
 
-    // Mã dùng một lần.
     const reuse = await http(app)
       .post('/api/v1/auth/sign-in/email-otp')
       .set('Origin', TRUSTED_ORIGIN)
@@ -302,15 +262,8 @@ describe('Mail Better Auth: đặt lại + OTP email (issue #7 giai đoạn 2.5)
       .post('/api/v1/auth/email-otp/send-verification-otp')
       .set('Origin', TRUSTED_ORIGIN)
       .send({ email: ghost, type: 'sign-in' });
-    // Đáp ứng trung tính 200 như email có thật (chống lộ thông tin
-    // tài khoản nào tồn tại) — nhưng KHÔNG có mail nào được gửi.
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    // Neo chốt (cùng lập luận với ca đặt lại mật khẩu cho email lạ ở
-    // trên): gửi OTP thật cho người dùng có thật ngay sau yêu cầu lạ
-    // và chờ mail OTP của họ — mail của họ bắt được thì cửa sổ của
-    // yêu cầu lạ đã khép hẳn; khẳng định kết luận nằm ở truy vấn
-    // outbox ngay dưới (dòng được ghi đồng bộ trong request).
     const sentinel = await createMailUser('bamailchototp');
     await http(app)
       .post('/api/v1/auth/email-otp/send-verification-otp')
@@ -325,7 +278,6 @@ describe('Mail Better Auth: đặt lại + OTP email (issue #7 giai đoạn 2.5)
     expect(ghostOutbox.rows[0].n).toBe(0);
     const users = await pg.query('select count(*)::int as n from users where email = $1', [ghost]);
     expect(users.rows[0].n).toBe(0);
-    // Và không có mã nào đăng nhập được cho email lạ (không tài khoản nào được tự tạo).
     const attempt = await http(app)
       .post('/api/v1/auth/sign-in/email-otp')
       .set('Origin', TRUSTED_ORIGIN)
@@ -333,15 +285,6 @@ describe('Mail Better Auth: đặt lại + OTP email (issue #7 giai đoạn 2.5)
     expect(attempt.status).toBe(400);
   });
 
-  // BA-1 — chốt semantics revokeUnprovenAccountAccess (comment
-  // 6405565755 trên #7): user do cầu nối tạo là user do bên tin cậy
-  // tạo cho mailbox đã biết nên được tạo với email_verified = true;
-  // đường revoke của Better Auth thành no-op với user đó. Ca này
-  // (trước đây ghim bằng it.fails vì blocker generateId) giờ là
-  // test thường và siết thêm hai assertion bảo vệ semantics: sau
-  // đăng nhập OTP, credential mật khẩu của user vẫn còn nguyên trong
-  // bảng account và đăng nhập bằng username/mật khẩu vẫn chạy — tức
-  // OTP không xoá credential đã migrate.
   it('đăng nhập OTP cho người dùng đã bridge thành công và giữ credential mật khẩu (ngữ nghĩa BA-1)', async () => {
     const user = await createMailUser('bamailotpunv');
     const sent = await http(app)

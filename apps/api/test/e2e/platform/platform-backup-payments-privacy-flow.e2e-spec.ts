@@ -10,13 +10,6 @@ import { courseContextId, createGroupViaApi, markCmComplete } from '../../suppor
 import { EXPECTED_PRIVACY_SUBSYSTEMS } from '../../../src/modules/privacy/privacy.service';
 import { PrivacyService } from '../../../src/modules/privacy/privacy.service';
 
-/**
- * Luồng Platform: Backup/Restore, Payments + ghi danh có phí, Privacy. Oracle Moodle 5.3 (đã kiểm chứng live 22/10/2026):
- * - backup/tests/backup_restore_permission_test.php + backup_restore_base_testcase.php
- *   (kế hoạch nhiều bước, restore id mapping — backup/tests/backup_test.php 404 đã ghi nhận)
- * - payment/tests/helper_test.php + generator_test.php (số tiền nguyên, gateway)
- * - privacy/tests/manager_test.php (request lifecycle + phê duyệt) và provider registry §2#28
- */
 describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng webhook thanh toán, đầy đủ riêng tư', () => {
 
   const tfBody = (stem: string, values: boolean[]) => ({
@@ -62,7 +55,6 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
     const item = await createGradeItem(app, admin, course.id, { itemName: 'Quiz' });
     await setGrade(app, admin, item.id, student.id, 80);
     await markCmComplete(app, admin, course.id, cm.id, student.id);
-    // File trong course context qua Files API.
     const content = await http(app).get(`/api/v1/courses/${course.id}/content`).set('Authorization', `Bearer ${admin}`);
     const courseCtx = content.body.contextId as string;
     const upload = await http(app).post('/api/v1/files').set('Authorization', `Bearer ${admin}`)
@@ -79,10 +71,6 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
     expect((steps.body as { name: string }[]).map((s) => s.name)).toEqual(
       expect.arrayContaining(['courses', 'enrol', 'groups', 'grades', 'completion', 'files']));
 
-    // CLASS-0 (đóng gói PR #200): restore-as-new tạo khoá dạy thật
-    // không lớp qua createCourse nên bị từ chối sạch 400
-    // course.class_required — đường khôi phục còn lại là vào khoá đích
-    // có sẵn (đã thuộc một lớp).
     const restoreNew = await http(app).post('/api/v1/backup/restore').set('Authorization', `Bearer ${admin}`)
       .send({ backupJobId: backup.body.id, mode: 'new' });
     expect(restoreNew.status).toBe(400);
@@ -101,21 +89,18 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
       expect(checklist.body[key].target, `checklist ${key}`).toBe(checklist.body[key].source);
     }
     expect(checklist.body.gradeItems.target).toBeGreaterThanOrEqual(checklist.body.gradeItems.source - 0);
-    // Id mapping: mọi mapping đều trỏ sang id khác gốc (trừ course mapping cũng khác).
     const mappings = await http(app).get(`/api/v1/backup/jobs/${restore.body.id}/mappings`).set('Authorization', `Bearer ${admin}`);
     const rows = mappings.body as { itemType: string; oldId: string; newId: string }[];
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.every((m) => m.newId !== m.oldId)).toBe(true);
     expect(rows.some((m) => m.itemType === 'cm' && m.oldId === cm.id)).toBe(true);
     expect(rows.some((m) => m.itemType === 'file')).toBe(true);
-    // File khôi phục tải được bằng signed URL trong course mới (admin xem).
     const fileMapping = rows.find((m) => m.itemType === 'file')!;
     const signed = await http(app).post(`/api/v1/files/${fileMapping.newId}/signed-url`).set('Authorization', `Bearer ${admin}`).send({});
     expect(signed.status).toBeLessThan(300);
     const download = await http(app).get(signed.body.url.replace('/api/v1', '/api/v1'));
     expect(download.status).toBe(200);
     expect(download.text).toContain('backup-file-content');
-    // Merge mode vào một course đích khác cũng chạy và tăng số cm.
     const target = await createCourse(app, admin, cat.id);
     const merge = await http(app).post('/api/v1/backup/restore').set('Authorization', `Bearer ${admin}`)
       .send({ backupJobId: backup.body.id, mode: 'merge', targetCourseId: target.id });
@@ -148,12 +133,10 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
     });
     const buyer = await createUserViaApi(app, admin);
     const buyerToken = (await login(app, buyer.username, STRONG_PASSWORD)).accessToken;
-    // Chưa trả tiền: self-enrol vào fee instance bị từ chối.
     const early = await http(app).post(`/api/v1/courses/${course.id}/enrol/instances/${feeInstance.id}/self-enrol`).set('Authorization', `Bearer ${buyerToken}`).send({});
     expect(early.status).toBe(400);
     const before = await http(app).get(`/api/v1/courses/${course.id}/enrolments/me`).set('Authorization', `Bearer ${buyerToken}`);
     expect(before.body.active).toBe(false);
-    // Tạo payment + webhook thành công.
     const payment = await http(app).post(`/api/v1/payments/fee/${feeInstance.id}`).set('Authorization', `Bearer ${buyerToken}`).send({});
     expect(payment.status).toBeLessThan(300);
     expect(payment.body.amount).toBe(50000);
@@ -167,15 +150,10 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
     const enrolments = await http(app).get(`/api/v1/courses/${course.id}/enrolments`).set('Authorization', `Bearer ${admin}`);
     const mine = (enrolments.body as { userId: string }[]).filter((e) => e.userId === buyer.id);
     expect(mine).toHaveLength(1);
-    // Replay webhook cùng external tx ⇒ duplicate, enrolment vẫn đúng 1, outbox payment_succeeded chỉ 1 (kiểm qua số enrolment + duplicate flag).
     const replay = await http(app).post('/api/v1/payments/webhook').set('x-payment-webhook-secret', process.env.PAYMENT_WEBHOOK_SECRET ?? '').send({ gateway: 'manual', externalTransactionId: txId, paymentId: payment.body.id, status: 'succeeded' });
     expect(replay.body.duplicate).toBe(true);
     const enrolments2 = await http(app).get(`/api/v1/courses/${course.id}/enrolments`).set('Authorization', `Bearer ${admin}`);
     expect((enrolments2.body as { userId: string }[]).filter((e) => e.userId === buyer.id)).toHaveLength(1);
-    // Refund là giao dịch bù trừ riêng; payment gốc giữ nguyên amount.
-    // Lát 3 (issue #189): hoàn đủ 100% đi qua vòng đời duyệt hai cấp +
-    // xác nhận chi — tạo yêu cầu ở `requested`, manager thứ hai duyệt,
-    // admin xác nhận chi thì payment mới lật `refunded`.
     const refund = await http(app).post(`/api/v1/payments/${payment.body.id}/refunds`).set('Authorization', `Bearer ${admin}`).send({ amount: 50000, reason: 'changed mind' });
     expect(refund.status).toBeLessThan(300);
     expect(refund.body.status).toBe('requested');
@@ -206,7 +184,6 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
   });
 
   it('riêng tư DoD: export gói mọi subsystem, và xoá đã duyệt lan tới mọi subsystem đã đăng ký', async () => {
-    // Dựng dữ liệu cá nhân ở nhiều subsystem cho một user.
     const cat = await createCategory(app, admin);
     const course = await createCourse(app, admin, cat.id);
     const sectionId = await getFirstSectionId(app, admin, course.id);
@@ -218,7 +195,6 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
     const item = await createGradeItem(app, admin, course.id, { itemName: 'Graded' });
     await setGrade(app, admin, item.id, user.id, 42);
     await markCmComplete(app, admin, course.id, cm.id, user.id);
-    // Export request: user tự gửi, admin duyệt ⇒ completed + file manifest qua FilesModule.
     const expReq = await http(app).post('/api/v1/privacy/requests').set('Authorization', `Bearer ${userToken}`).send({ type: 'export' });
     expect(expReq.status).toBeLessThan(300);
     const expDone = await http(app).post(`/api/v1/privacy/requests/${expReq.body.id}/decide`).set('Authorization', `Bearer ${admin}`).send({ decision: 'approved' });
@@ -227,21 +203,18 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
     const expFiles = await http(app).get(`/api/v1/privacy/requests/${expReq.body.id}/files`).set('Authorization', `Bearer ${admin}`);
     expect(expFiles.body).toHaveLength(1);
     expect(expFiles.body[0].fileId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-    // Student tự duyệt yêu cầu của mình ⇒ 403 (privacy:manage là của admin).
     const delReq = await http(app).post('/api/v1/privacy/requests').set('Authorization', `Bearer ${userToken}`).send({ type: 'delete' });
     const selfDecide = await http(app).post(`/api/v1/privacy/requests/${delReq.body.id}/decide`).set('Authorization', `Bearer ${userToken}`).send({ decision: 'approved' });
     expect(selfDecide.status).toBe(403);
     const delDone = await http(app).post(`/api/v1/privacy/requests/${delReq.body.id}/decide`).set('Authorization', `Bearer ${admin}`).send({ decision: 'approved' });
     expect(delDone.body.status).toBe('completed');
     for (const s of EXPECTED_PRIVACY_SUBSYSTEMS) expect(Object.keys(delDone.body.result.deleted)).toContain(s);
-    // Lan đủ subsystem: enrolment, grades, completion của user đều biến mất; user bị soft-delete/ẩn danh.
     const enrolments = await http(app).get(`/api/v1/courses/${course.id}/enrolments`).set('Authorization', `Bearer ${admin}`);
     expect((enrolments.body as { userId: string }[]).some((e) => e.userId === user.id)).toBe(false);
     const book = await http(app).get(`/api/v1/courses/${course.id}/gradebook?userId=${user.id}`).set('Authorization', `Bearer ${admin}`);
     const flat = JSON.stringify(book.body);
     expect(flat).not.toContain('"finalGrade":42');
     const profile = await http(app).get(`/api/v1/users/${user.id}`).set('Authorization', `Bearer ${admin}`);
-    // User đã deleted: profile API hoặc trả deleted=true, hoặc username đã bị mangle.
     const deletedFlag = profile.body.deleted === true || String(profile.body.username ?? '').includes('.deleted');
     expect(deletedFlag).toBe(true);
   });
@@ -254,7 +227,6 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
     const cm = await createCm(app, admin, course.id, section1.id, { name: 'Reading BK', completion: 1, completionManual: true });
     const group = await createGroupViaApi(app, admin, course.id, 'Group BK');
     const courseCtx = await courseContextId(app, admin, course.id);
-    // --- Question bank ở context của khoá: cây category 2 cấp + câu hỏi 2 version.
     const parentCat = await http(app).post('/api/v1/questions/categories').set('Authorization', `Bearer ${admin}`)
       .send({ name: `Bank parent ${suffix}`, contextId: courseCtx });
     expect(parentCat.status).toBeLessThan(300);
@@ -268,14 +240,12 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
     const edit = await http(app).patch(`/api/v1/questions/${qid}`).set('Authorization', `Bearer ${admin}`)
       .send({ questionText: tfBody('Version two text.', [false, true, false, true]).questionText, solution: tfBody('Version two text.', [false, true, false, true]).solution });
     expect(edit.body.entry.latestVersion).toBe(2);
-    // --- Competency dùng chung mức site (lá competency trỏ vào đây; KHÔNG nằm trong archive).
     const fw = await http(app).post('/api/v1/competencies/frameworks').set('Authorization', `Bearer ${admin}`)
       .send({ shortName: `BKFW ${suffix}`, scale: { values: ['Not competent', 'Competent'], proficient: [1] } });
     expect(fw.status).toBe(201);
     const comp = await http(app).post(`/api/v1/competencies/frameworks/${fw.body.id}/competencies`).set('Authorization', `Bearer ${admin}`)
       .send({ shortName: 'BK teamwork' });
     expect(comp.status).toBe(201);
-    // --- Hai badge của khoá: B tham chiếu A (badge), khoá (course), cm (activity) và competency.
     const badgeA = await http(app).post('/api/v1/badges').set('Authorization', `Bearer ${admin}`)
       .send({ name: `BK Badge A ${suffix}`, type: 2, courseId: course.id, issuerName: 'Giáo khoa' });
     expect(badgeA.status).toBeLessThan(300);
@@ -294,7 +264,6 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
           { criteriaType: 'badge', params: { badgeId: badgeA.body.id } },
         ],
       });
-    // --- Calendar: sự kiện khoá, sự kiện nhóm, chuỗi lặp của khoá và subscription của khoá.
     const soon = new Date(Date.now() + 3600_000).toISOString();
     const courseEv = await http(app).post('/api/v1/calendar/events').set('Authorization', `Bearer ${admin}`)
       .send({ name: `BK course lecture ${suffix}`, eventType: 'course', courseId: course.id, timeStart: soon });
@@ -321,7 +290,6 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
     expect(contributors.questions!.categories).toHaveLength(2);
     expect(contributors.questions!.questions).toHaveLength(1);
     expect(contributors.questions!.versions).toHaveLength(2);
-    // Dữ liệu vận hành KHÔNG vào archive: không usages/attempts, không assertions đã cấp.
     expect(contributors.questions).not.toHaveProperty('usages');
     expect(contributors.questions).not.toHaveProperty('attempts');
     expect(contributors.badges!.badges).toHaveLength(2);
@@ -329,8 +297,6 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
     expect(contributors.calendar!.events!.length).toBeGreaterThanOrEqual(4);
     expect(contributors.calendar!.subscriptions).toHaveLength(1);
 
-    // CLASS-0 (PR #200): restore-as-new bị chặn (xem ca DoD ở trên) —
-    // khôi phục bằng replace vào một khoá đích trống có sẵn.
     const freshTarget = await createCourse(app, admin, cat.id);
     const restore = await http(app).post('/api/v1/backup/restore').set('Authorization', `Bearer ${admin}`)
       .send({ backupJobId: backup.body.id, mode: 'replace', targetCourseId: freshTarget.id });
@@ -348,7 +314,6 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
     const rows = mappings.body as { itemType: string; oldId: string; newId: string }[];
     expect(rows.every((m) => m.newId !== m.oldId)).toBe(true);
     const mapOf = (itemType: string, oldId: string) => rows.find((m) => m.itemType === itemType && m.oldId === oldId);
-    // Question bank: category cha/con, câu hỏi và cả 2 version đều có id mới.
     const newParentCatId = mapOf('question_category', parentCat.body.id)?.newId;
     const newChildCatId = mapOf('question_category', childCat.body.id)?.newId;
     expect(newParentCatId).toBeTruthy();
@@ -365,10 +330,6 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
     expect(restoredQuestions.body[0].question.id).toBe(newQ!.newId);
     const restoredVersions = await http(app).get(`/api/v1/questions/${newQ!.newId}/versions`).set('Authorization', `Bearer ${admin}`);
     expect(restoredVersions.body).toHaveLength(2);
-    // questionText nay là tài liệu Tiptap: trích text thuần để so với bản gốc.
-    // Trích ĐỆ QUY qua mọi khối lồng nhau: statementList chứa các
-    // statement, mỗi statement chứa paragraph — helper cũ chỉ map một
-    // cấp nên mệnh đề TF-A đóng góp dòng rỗng ('Version two text.\n').
     const blockTexts = (block: { type?: string; text?: string; content?: { type?: string; text?: string; content?: never[] }[] }): string[] => {
       if (block.type === 'text') return [block.text ?? ''];
       if (block.type === 'statementList') return (block.content ?? []).flatMap((s) => blockTexts(s as never));
@@ -380,10 +341,6 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
     expect(docText(restoredVersions.body[1].questionText)).toBe(
       ['Version two text.', 'Version two text. — ý 1', 'Version two text. — ý 2', 'Version two text. — ý 3', 'Version two text. — ý 4'].join('\n'),
     );
-    // Nội dung chấm của version khôi phục đi theo archive ở dạng TF-A:
-    // KHÔNG có dòng question_answers (đáp án nằm ở thân câu + solution
-    // phía answerKey) và không có options trueAnswer kiểu TF-B cũ —
-    // version 2 của câu này có solution [Sai, Đúng, Sai, Đúng].
     expect(restoredQuestions.body[0].answers).toHaveLength(0);
     expect(restoredQuestions.body[0].options).toBeNull();
     expect((restoredQuestions.body[0].answerKey.solution as { answers: { statementId: string; value: boolean }[] }).answers).toEqual([
@@ -392,7 +349,6 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
       { statementId: 's3', value: false },
       { statementId: 's4', value: true },
     ]);
-    // Badges: badge mới thuộc khoá mới; criteria của B trỏ đúng khoá/cm/badge mới, competency giữ nguyên (thực thể site dùng chung).
     const newBadgeAId = mapOf('badge', badgeA.body.id)?.newId;
     const newBadgeBId = mapOf('badge', badgeB.body.id)?.newId;
     expect(newBadgeAId).toBeTruthy();
@@ -405,7 +361,6 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
     expect(leaves.find((l) => l.criteriaType === 'activitycompletion')?.params.cmId).toBe(mapOf('cm', cm.id)?.newId);
     expect(leaves.find((l) => l.criteriaType === 'competency')?.params.competencyId).toBe(comp.body.id);
     expect(leaves.find((l) => l.criteriaType === 'badge')?.params.badgeId).toBe(newBadgeAId);
-    // Calendar: mọi sự kiện khôi phục thuộc khoá mới; sự kiện nhóm trỏ nhóm mới; chuỗi lặp nối lại repeatId mới; subscription có mapping.
     const newGroupId = mapOf('group', group.id)?.newId;
     for (const oldEventId of [courseEv.body.event.id, groupEv.body.event.id, seriesRootId]) {
       const mapping = mapOf('calendar_event', oldEventId);
@@ -440,7 +395,6 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
       .send({ name: `Site day ${suffix}`, eventType: 'site', timeStart: soon });
     expect(siteEvent.status).toBe(201);
 
-    // Hợp đồng phạm vi: site + courseId bị từ chối; thiếu courseId ở phạm vi course cũng bị từ chối.
     const cat = await createCategory(app, admin);
     const someCourse = await createCourse(app, admin, cat.id);
     const mixed = await http(app).post('/api/v1/backup/jobs').set('Authorization', `Bearer ${admin}`).send({ scope: 'site', courseId: someCourse.id });
@@ -461,7 +415,6 @@ describe('Dịch vụ platform: tương đương backup→restore, luỹ đẳng
     expect(siteContributors.calendar).toBeTruthy();
     expect(siteContributors.courses).toBeUndefined();
 
-    // Site backup không nhận khoá đích / chế độ gộp.
     const badRestore = await http(app).post('/api/v1/backup/restore').set('Authorization', `Bearer ${admin}`)
       .send({ backupJobId: backup.body.id, mode: 'merge', targetCourseId: someCourse.id });
     expect(badRestore.status).toBe(400);

@@ -5,7 +5,6 @@ import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.d
 import { createPrivacyRequestServerSchema, decidePrivacyRequestSchema, type CreatePrivacyRequestDto, type DecidePrivacyRequestDto } from './dto/privacy.dto';
 import { PrivacyService } from './privacy.service';
 
-/** Controller Privacy: providers registry, requests, phê duyệt, export files. */
 @ApiTags('privacy')
 @Controller({ path: 'privacy', version: '1' })
 export class PrivacyController {

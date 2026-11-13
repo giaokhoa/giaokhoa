@@ -1,14 +1,3 @@
-/**
- * Thẻ cài đặt tổ chức của lần ghim đề (tách cấu trúc từ
- * `pages/quiz.tsx` theo đợt A của issue #223): form sửa tên, mô
- * tả, cửa sổ mở/đóng, giới hạn giờ, số lượt, cách tính điểm,
- * thang điểm, xáo trộn đáp án và chế độ version. Giá trị form và
- * các setter do trang giữ và truyền xuống; việc lưu do handler
- * của trang xử lý.
- *
- * @param props.busy - Đang có thao tác ghi chạy (khoá nút lưu).
- * @param props.saveSettings - Handler submit form cài đặt của trang.
- */
 import type { FormEvent } from 'react';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';

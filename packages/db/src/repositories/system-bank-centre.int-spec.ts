@@ -4,20 +4,6 @@ import { createCentreKysely, type CentreDb } from '../client';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
 import { SystemBankCentreRepository } from './system-bank-centre';
 
-/**
- * Spec tích hợp của repository PHÍA TRUNG TÂM của kho ngân hàng hệ thống trên Kysely (hạng mục G10, issue #650).
- *
- * Database trung tâm được dựng từ rỗng bằng chính cầu nối migration của package (carrier đóng băng của kho centre) trên cụm PostgreSQL thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ `DATABASE_URL` của package). Kết nối chạy bằng quyền quản trị của cụm test như spec pilot — RLS theo tenant không thuộc phạm vi của spec này (hành vi GUC/RLS của handle đã khoá ở spec khói của harness). Mọi ca chạy qua repository production ở `system-bank-centre.ts`.
- *
- * Các ca khoá hành vi của đường chuyển đổi:
- * - Truy vết nhập bản chụp: ghi dòng import trỏ đúng câu nguồn +
- *   phiên bản nguồn + checksum gói; lật `pristine` → `derived`.
- * - Vết nhận sự kiện rút câu: ghi nhận trùng là idempotent theo
- *   cặp (sự kiện, trung tâm) và danh sách đã ghi nhận đọc lại được theo đúng slug trung tâm.
- * - Bản cài gói YCCĐ: chèn id còn thiếu, không ghi đè YCCĐ đang được
- *   câu/đề sử dụng; lần cài lại giữ nguyên vết và checksum gốc.
- * - Tra slug trung tâm theo tenant id của kho chung.
- */
 const adminUrl =
   process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
@@ -52,7 +38,6 @@ beforeAll(async () => {
   pool = new Pool({ connectionString: centreUrl });
   db = createCentreKysely(pool);
   repo = new SystemBankCentreRepository(db);
-  // Dữ kiện nền tối thiểu: tenant (cho tra slug), môn + chương trình + node (cho upsert/tìm), và chuỗi cha tối thiểu của dòng truy vết nhập (category → question) vì `system_question_imports` mang khoá ngoại tới `question.id`.
   await db.insertInto('tenants').values({ id: TENANT_ID, slug: 'trung-tam-650', name: 'Trung tâm 650', kind: 'centre' }).execute();
   await db
     .insertInto('question_categories')

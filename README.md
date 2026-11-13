@@ -87,6 +87,12 @@ Toàn bộ stack production chạy tự host bằng Docker Compose trên máy ch
 - `Dockerfile` ở gốc repo build cả ba ứng dụng từ monorepo (pnpm + turbo) và đóng gói bằng `pnpm deploy --prod` thành ba target runtime `api`, `worker`, `web`.
 - Topology một-origin: chỉ `gateway` (Caddy) publish cổng 8080, có thể đổi bằng `WEB_PORT`. `Caddyfile` chuyển `/api`, `/socket.io`, `/mcp` và OAuth metadata tới API, các request còn lại tới `@react-router/serve` của service `web`. Caddy giữ Host gốc, cookie và WebSocket/SSE; CSP gắn vào HTML. Web chạy SSR động, không prerender `/`/`/login` để loader luôn nhận cookie của request.
 
+Trước khi triển khai qua Cloudflare Tunnel/ingress, sử dụng checklist
+[kiểm tra cấu hình production](docs/operations/compose-production.md):
+IP/CIDR proxy tin cậy, kết nối TLS/CA, ngân sách pool, Redis persistence,
+volume và bảo vệ truy cập trực tiếp cổng 8080. Không dùng toàn dải Docker
+bridge làm `GIAOKHOA_TRUSTED_PROXY_CIDRS`.
+
 Dựng stack trên máy trống:
 
 ```bash
@@ -193,8 +199,8 @@ Luôn dùng bản phát hành mới nhất của mọi dependency, trừ khi m�
 
 - **I18n là bắt buộc và tập trung**: không có chuỗi hiển thị bị hardcode. Backend/worker dùng **@nestjs/i18n** chính thức (ghim chính xác `0.0.1`) với các catalog JSON ở `src/i18n/<locale>/` — locale mặc định là **tiếng Việt**, tiếng Anh đi kèm; lỗi mang `code` tiếng Anh ổn định và văn bản hiển thị của chúng được tra cứu theo code. Frontend dùng i18next + react-i18next với tài nguyên tập trung (`apps/web/src/i18n.ts`).
 - **Validation chỉ dùng Zod**: các schema cơ sở nằm ở `packages/contracts` và là nguồn sự thật duy nhất cho API (Standard Schema pipe) và các form React; các trường chỉ dành cho server mở rộng từ schema cơ sở. class-validator/class-transformer đã bị loại bỏ hoàn toàn khỏi repo.
-- **Ngôn ngữ của code và tài liệu**: code bằng tiếng Anh (định danh, khoá log, mã lỗi và các chuỗi kỹ thuật khác); **toàn bộ comment trong code bằng tiếng Việt theo phong cách TSDoc** (`/** */` kèm `@param`/`@returns`/`@throws` khi phù hợp) cho mọi API công khai và cho logic nghiệp vụ không hiển nhiên; **mọi tài liệu bằng tiếng Việt** — README, các tài liệu còn giữ trong repo, AGENTS.md và cả tài liệu API — không có ngoại lệ tiếng Anh cho bất kỳ tài liệu nào.
+- **Ngôn ngữ của code và tài liệu**: code bằng tiếng Anh (định danh, khoá log, mã lỗi và các chuỗi kỹ thuật khác); **không viết comment trong mã nguồn hoặc cấu hình**, kể cả TSDoc/JSDoc và chú thích luồng nghiệp vụ. Code và cấu hình thực thi là nguồn sự thật duy nhất về hành vi hệ thống; test kiểm chứng hành vi, không lưu bản mô tả song song bằng comment để tránh lệch code và tốn token. **Mọi tài liệu bằng tiếng Việt** — README, các tài liệu còn giữ trong repo, AGENTS.md và tài liệu API. Ngoại lệ chỉ dành cho chỉ thị máy đọc bắt buộc như shebang, chỉ thị Docker syntax và dấu phân tách migration SQL.
 - **Hình dạng cơ sở dữ liệu chia theo bounded context**: hình dạng bảng của cả ba kho nằm ở package dùng chung `packages/db` dưới dạng kiểu sinh từ database thật (`packages/db/src/types/`), và mỗi bounded context sở hữu repository của mình tại `packages/db/src/repositories/` — cả API lẫn worker chỉ truy cập dữ kiện qua các repository và handle Kysely của package. Migration nằm ở `packages/db/migrations/<kho>` và áp bằng runner của package. Tên bảng/cột không bao giờ đổi khi tổ chức code thay đổi.
-- **Đặt tên & vệ sinh repo**: mọi thứ được đặt tên theo nghiệp vụ / bounded context — **không có nhãn giai đoạn** trong code, comment, tên ca test hay tiêu đề commit; **không bao giờ commit sản phẩm đã biên dịch** (`dist/`, các file `.js`/`.d.ts` lạc cạnh mã nguồn). Đây là kỷ luật viết, được giữ bằng cách viết code đúng ngay từ đầu và bằng review — cố ý không có cơ chế cưỡng chế tự động cho việc này.
+- **Đặt tên & vệ sinh repo**: mọi thứ được đặt tên theo nghiệp vụ / bounded context — **không có nhãn giai đoạn** trong code, tên ca test hay tiêu đề commit; **không bao giờ commit sản phẩm đã biên dịch** (`dist/`, các file `.js`/`.d.ts` lạc cạnh mã nguồn). Đây là kỷ luật viết, được giữ bằng cách viết code đúng ngay từ đầu và bằng review — cố ý không có cơ chế cưỡng chế tự động cho việc này.
 - **Nghiệm thu tính năng**: một tính năng chỉ được coi là xong khi luồng nghiệp vụ backend của nó được bao phủ bởi một flow test dịch từ oracle PHPUnit của Moodle.
 - **Phiên bản luôn ưu tiên bản mới nhất**: luôn dùng bản phát hành mới nhất; chỉ ghim hoặc hạ phiên bản khi có trở ngại đã ghi thành văn bản ở trên (trở ngại hiện tại: TypeScript 6 cho các app NestJS).

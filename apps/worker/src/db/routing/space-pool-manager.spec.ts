@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SpacePoolManager, type ManagedPool, type SpacePoolHandle } from './space-pool-manager';
 
-/**
- * Ca đơn vị của bản sao phía worker của trình quản lý pool theo database (issue #582). Bản worker là bản sao của cùng component phía API (xem khối "BẢN SAO" ở đầu `space-pool-manager.ts`), nên spec này khoá đúng hành vi vòng quét đóng pool nhàn rỗi của bản sao — đặc biệt là ca lỗi đóng (điểm O1 của kiểm toán hậu merge PR #594, chuyển sang issue #582): `end()` của một pool ném lỗi thì pool đó vẫn được báo qua `onPoolClosed` (nó đã ra khỏi sổ), không được tính là đã đóng thành công, và vòng quét không dừng giữa chừng — các pool còn lại vẫn được đóng ở cùng vòng. Pool được thay bằng vật giả có bộ đếm kết nối điều khiển được và đồng hồ điều khiển bằng tay.
- */
 
 class FakePool implements ManagedPool {
   totalCount = 0;
@@ -22,13 +19,11 @@ class FakePool implements ManagedPool {
     return this;
   }
 
-  /** Giả lập pool cho mượn một kết nối (sự kiện acquire của pg). */
   acquire(): void {
     for (const listener of this.acquireListeners) listener();
   }
 }
 
-/** Dựng trình quản lý với nhà máy đếm số handle đã tạo và đồng hồ điều khiển được. */
 function makeManager(idleTimeoutMs = 1_000) {
   let created = 0;
   let now = 0;

@@ -1,15 +1,5 @@
-/*
- * Vỏ trình bày của @giaokhoa/editor (lát E1, issue #248).
- *
- * Editor quy định CSS cho các nút ProseMirror và bề mặt xem chỉ đọc;
- * trước lát E1 package chưa có một rule CSS nào: nút toolbar là <button> trần không class, vùng soạn không khung/không chiều cao tối thiểu, panel công thức là khối inline không style. File này lo đúng phần ProseMirror/toolbar/panel không làm bằng Tailwind ở phía app được — theo đúng cách editor giaokhoa tách `editor.css` riêng khỏi Tailwind (115 dòng cho tay resize/selectedCell/bảng; ở đây chỉ gồm các trục đã có: khung vùng soạn, trạng thái pressed của toolbar, panel công thức dạng overlay nổi).
- *
- * Bề mặt chứa phải nạp file này một lần (apps/web nạp ở root:
- * `@giaokhoa/editor/editor.css`). Các biến màu (--background, --border, --muted, --primary, --destructive...) lấy từ bộ token của @giaokhoa/ui.
- */
 
-/* --- Khung vùng soạn: vùng soạn như một trang giấy (giaokhoa:
-       rounded-xl border bg-background, min-h-80 cho trường chính) --- */
+
 
 .giaokhoa-rich-text-editor__frame {
   overflow: hidden;
@@ -24,8 +14,6 @@
   outline: none;
 }
 
-/* Trường phụ (phương án, feedback, grader info...): bản nhỏ như
-   GuidanceEditor của giaokhoa (min-h-24). */
 .giaokhoa-rich-text-editor--compact .ProseMirror {
   min-height: 6rem;
 }
@@ -45,19 +33,12 @@
   height: auto;
 }
 
-/* Node nguyên tử đang được chọn (ảnh/công thức tách dòng) phải nhìn
-   thấy được là đang chọn. */
 .giaokhoa-rich-text-editor .ProseMirror .ProseMirror-selectednode {
   outline: 2px solid var(--ring);
   outline-offset: 1px;
   border-radius: 0.25rem;
 }
 
-/* --- Editor trắc nghiệm thống nhất (lát P4 #248, port giaokhoa):
-       danh sách lựa chọn là một <ol> không số thứ tự; mỗi lựa chọn là
-       một thẻ có viền, chừa cột trái cho radio đáp án đúng (widget
-       decoration chèn vào đầu choice). Kéo-thả đổi thứ tự dùng cơ chế
-       kéo node của ProseMirror trên chính thẻ lựa chọn này. --- */
 
 .giaokhoa-rich-text-editor .ProseMirror .giaokhoa-choice-list {
   margin: 0.75rem 0 0.25rem;
@@ -74,8 +55,6 @@
   border-radius: 0.5rem;
 }
 
-/* Radio đáp án đúng: widget decoration nằm tuyệt đối ở cột trái của
-   thẻ lựa chọn, canh giữa theo chiều dọc như bản giaokhoa. */
 .giaokhoa-rich-text-editor .ProseMirror .giaokhoa-choice__correct {
   position: absolute;
   top: 50%;
@@ -97,9 +76,6 @@
   accent-color: var(--primary);
 }
 
-/* --- Editor đúng/sai chùm TF-A (lát P5 #248, port giaokhoa):
-       danh sách mệnh đề là một <ol>; mỗi mệnh đề là một thẻ có viền,
-       cặp radio Đúng/Sai là widget decoration nằm ở dải đầu thẻ. --- */
 
 .giaokhoa-rich-text-editor .ProseMirror .giaokhoa-statement-list,
 .giaokhoa-statement-list {
@@ -108,8 +84,7 @@
   list-style: none;
 }
 
-/* RichTextView không có tổ tiên .ProseMirror: trình bày mỗi mệnh đề
-   đúng/sai theo cùng khung với editor, nhưng không hiển thị radio soạn thảo. */
+
 .giaokhoa-statement-list > li {
   margin: 0.5rem 0;
   padding: 0.75rem;
@@ -152,8 +127,6 @@
   accent-color: var(--primary);
 }
 
-/* --- Thanh công cụ: nút icon cỡ size-8 kiểu Button/Toggle ghost của
-       @giaokhoa/ui (giaokhoa: size="icon-sm", h-11, gap-1, px-2) --- */
 
 .giaokhoa-editor-toolbar {
   display: flex;
@@ -165,8 +138,6 @@
   overflow-x: auto;
 }
 
-/* Khi không có slot ở header trang, toolbar neo sticky ngay trên
-   editor đang active. */
 .giaokhoa-editor-toolbar--sticky {
   position: sticky;
   top: 0;
@@ -205,8 +176,6 @@
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
 }
 
-/* Trạng thái mark đang bật phải NHÌN THẤY được — trước lát này
-   aria-pressed đã khai nhưng không CSS nào hiển thị. */
 .giaokhoa-editor-toolbar__button[aria-pressed='true'] {
   background: var(--muted);
   color: var(--foreground);
@@ -232,9 +201,6 @@
   background: var(--border);
 }
 
-/* --- Panel công thức: overlay nổi giữa đầu trang như giaokhoa
-       (fixed top-16, max-w-xl, shadow-2xl) thay cho khối inline đẩy
-       nội dung form xuống --- */
 
 .giaokhoa-math-panel {
   position: fixed;

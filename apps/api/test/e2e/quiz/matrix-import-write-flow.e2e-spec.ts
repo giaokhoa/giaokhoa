@@ -10,23 +10,6 @@ import {
 import { createCategory, createCourse } from '../../support/course-enrolment-helpers';
 import { courseContextId } from '../../support/engagement-helpers';
 
-/**
- * Luồng nghiệp vụ của lát I-2 (issue #233) — GHI NGUYÊN TỬ khi nhập ma trận, nối tiếp lát I-1 (mẫu + xem trước):
- *
- * - Giáo viên tải lại CHÍNH file đã xem trước → POST
- *   /exam-matrices/import ghi ma trận mới + toàn bộ ô trong một lần, đọc lại được bằng các endpoint hiện hữu (chi tiết, availability, bản đặc tả) với ô/điểm/tổng khớp đúng kết quả xem trước.
- * - Gửi lại cùng một nội dung (double submit/retry) KHÔNG nhân đôi
- *   ma trận: trả chính ma trận đã ghi.
- * - File bị sửa tay sau xem trước mà vi phạm luật hợp lệ → ghi bị từ
- *   chối 422 kèm lỗi cứng ĐỊNH VỊ (extension member `matrixImportIssues`) và DB không còn dấu vết nào của lần ghi đó.
- * - Người không đủ tư cách dùng luồng nhập (không thuộc nhóm staff,
- *   không phụ trách được bank ma trận cá nhân) → bị chặn 403 tại cổng bank của luồng, không ghi.
- * - Giáo viên theo đúng mô hình gán vai của dữ liệu mẫu
- *   (editingteacher tại context khoá, KHÔNG vai nào tại context hệ
- *   thống) nhập trọn luồng được và tạo tay gắn bank được — hồi quy điểm chặn D-3 của chính issue này: trước đây đường nhập và đường tạo tay đòi thêm quyền tại context của môn (môn GDPT neo context hệ thống) nên giáo viên thật bị chặn dù thao tác ghi vốn đã chốt quyền tại bank đích.
- *
- * Dữ kiện tự dựng bằng API như spec của I-1: môn + chương trình khối 10 + chủ đề có hai ĐVK, mỗi ĐVK có YCCĐ, 3 câu ready ở outcome đầu của ĐVK 1 (availability của ô Biết/trắc nghiệm ở ĐVK 1 thiếu 1 câu — số đếm khả dụng phải khớp trước và sau khi ghi).
- */
 
 const http = (app: INestApplication) => request(app.getHttpServer());
 const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
@@ -38,7 +21,6 @@ let curriculumId: string;
 let lesson1Id: string;
 let lesson2Id: string;
 
-/** Đếm thẳng trong DB (bật ngữ cảnh platform để qua RLS tenant). */
 async function countMatricesByName(name: string): Promise<number> {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
@@ -68,32 +50,22 @@ async function downloadTemplate(token: string): Promise<ExcelJS.Workbook> {
   return wb;
 }
 
-/**
- * Điền file hợp lệ đúng ca của spec I-1: sheet `Ma trận` giữ cả khối
- * thông tin chung (B2 tên; B5 tổng 10 và B6 "Không" do mẫu điền sẵn;
- * mã môn/chương trình ở cột D — không đụng) lẫn lưới. Điểm mỗi câu ở
- * B7–B10; 9 ô có câu, tổng tự tính khớp đúng 10 điểm, tỉ lệ dạng khớp
- * khuôn 30/20/20/30. Cột: MC F–H, Đ–S I–K, Trả lời ngắn L–N, Tự luận
- * O–Q theo thứ tự Biết/Hiểu/Vận dụng; hàng 15 = ĐVK 1, 16 = ĐVK 2.
- */
 function fillValid(wb: ExcelJS.Workbook, name: string): void {
   const ws = wb.getWorksheet('Ma trận')!;
   ws.getCell('B2').value = name;
-  ws.getCell('B7').value = 0.25; // điểm mỗi câu Nhiều lựa chọn
-  ws.getCell('B8').value = 1; // điểm mỗi chùm Đúng–Sai
-  ws.getCell('B9').value = 0.5; // điểm mỗi câu Trả lời ngắn
-  ws.getCell('B10').value = 1.5; // điểm mỗi câu Tự luận
-  // ĐVK 1 (dòng 15)
-  ws.getCell('F15').value = 4; // MC Biết
-  ws.getCell('G15').value = 4; // MC Hiểu
-  ws.getCell('J15').value = 1; // Đ–S Hiểu (chùm)
-  ws.getCell('N15').value = 2; // Trả lời ngắn Vận dụng
-  ws.getCell('Q15').value = 1; // Tự luận Vận dụng
-  // ĐVK 2 (dòng 16)
-  ws.getCell('F16').value = 4; // MC Biết
-  ws.getCell('I16').value = 1; // Đ–S Biết (chùm)
-  ws.getCell('M16').value = 2; // Trả lời ngắn Hiểu
-  ws.getCell('Q16').value = 1; // Tự luận Vận dụng
+  ws.getCell('B7').value = 0.25;
+  ws.getCell('B8').value = 1;
+  ws.getCell('B9').value = 0.5;
+  ws.getCell('B10').value = 1.5;
+  ws.getCell('F15').value = 4;
+  ws.getCell('G15').value = 4;
+  ws.getCell('J15').value = 1;
+  ws.getCell('N15').value = 2;
+  ws.getCell('Q15').value = 1;
+  ws.getCell('F16').value = 4;
+  ws.getCell('I16').value = 1;
+  ws.getCell('M16').value = 2;
+  ws.getCell('Q16').value = 1;
 }
 
 async function toBuffer(wb: ExcelJS.Workbook): Promise<Buffer> {
@@ -152,9 +124,6 @@ beforeAll(async () => {
     const r = await http(app).post('/api/v1/questions').set(auth(admin)).send({
       categoryId: category.body.id, qtype: 'multichoice',
       questionText: `Câu I-2 ${i + 1}: chọn đáp án đúng.`, defaultMark: 1,
-      // Mô hình mới (quyết 12:04/12:12 ngày 26/10/2026): không còn
-      // name/fraction/single — MC đúng 4 lựa chọn, đúng một đáp án
-      // đúng đánh dấu bằng correct.
       answers: [
         { text: 'Đúng', correct: true },
         { text: 'Sai 1', correct: false },
@@ -194,8 +163,6 @@ describe('I-2: ghi nguyên tử khi nhập ma trận', () => {
       warnings: string[];
     };
     matrixId = view.id;
-    // Ma trận mới: draft, vào bank cá nhân của người nhập, đúng phạm
-    // vi hai ĐVK theo thứ tự hàng trong file.
     expect(view.name).toBe('Ma trận nhập thử');
     expect(view.status).toBe('draft');
     expect(view.bankId).toBeTruthy();
@@ -203,7 +170,6 @@ describe('I-2: ghi nguyên tử khi nhập ma trận', () => {
     expect(view.levelSet).toBe('three');
     expect(view.totalScore).toBe(10);
     expect(view.scopeNodeIds).toEqual([lesson1Id, lesson2Id]);
-    // Mọi ô khớp preview; position của ô = STT hàng của ĐVK trong file.
     expect(view.cells).toHaveLength(9);
     const key = (c: { curriculumNodeId: string; cognitiveLevel: string; qtype: string }) =>
       `${c.curriculumNodeId}|${c.cognitiveLevel}|${c.qtype}`;
@@ -215,17 +181,13 @@ describe('I-2: ghi nguyên tử khi nhập ma trận', () => {
       expect(got!.cellScore).toBe(expected.cellScore);
       expect(got!.position).toBe(expected.curriculumNodeId === lesson1Id ? 1 : 2);
     }
-    // Cảnh báo của view như đường tạo tay: tỉ lệ dạng câu khớp khuôn
-    // nên không cảnh báo; tỉ lệ mức lệch khuôn nên có cảnh báo mức.
     expect(view.warnings.some((w) => w.includes('theo dạng câu'))).toBe(false);
     expect(view.warnings.some((w) => w.includes('theo mức'))).toBe(true);
 
-    // Đọc lại bằng endpoint chi tiết hiện hữu: cùng một ma trận, ô khớp.
     const detail = await http(app).get(`/api/v1/exam-matrices/${matrixId}`).set(auth(admin)).expect(200);
     expect(detail.body.id).toBe(matrixId);
     expect(detail.body.cells).toHaveLength(9);
 
-    // Availability sau ghi khớp số đếm đã tính ở bước xem trước.
     const avail = await http(app).get(`/api/v1/exam-matrices/${matrixId}/availability`).set(auth(admin)).expect(200);
     const availBody = avail.body as { cells: { cellId: string; required: number; available: number; deficit: number }[] };
     const cellById = new Map(view.cells.map((c) => [c.id, c]));
@@ -240,7 +202,6 @@ describe('I-2: ghi nguyên tử khi nhập ma trận', () => {
       expect(row.deficit).toBe(expected.deficit);
     }
 
-    // Bản đặc tả hiện hữu dựng được từ ma trận vừa ghi.
     const spec = await http(app).get(`/api/v1/exam-matrices/${matrixId}/specification`).set(auth(admin)).expect(200);
     const nodeIds = (spec.body.topics as { nodes: { nodeId: string }[] }[]).flatMap((t) => t.nodes.map((n) => n.nodeId));
     expect(nodeIds).toContain(lesson1Id);
@@ -258,8 +219,6 @@ describe('I-2: ghi nguyên tử khi nhập ma trận', () => {
   });
 
   it('file bị sửa tay sau xem trước: 422 kèm lỗi định vị, DB không còn dấu vết', async () => {
-    // Ô chứa chữ thay vì số: xem trước từng hợp lệ (bản chưa sửa),
-    // bản gửi ghi đã bị sửa → server chạy lại luật và từ chối.
     const wb = await downloadTemplate(admin);
     fillValid(wb, 'Ma trận bị sửa tay');
     const clean = await postPreview(admin, await toBuffer(wb));
@@ -273,7 +232,6 @@ describe('I-2: ghi nguyên tử khi nhập ma trận', () => {
     expect(issues.some((i) => i.code === 'quiz.matrix_import_cell_value_invalid' && i.row === 15 && i.column === 'F')).toBe(true);
     expect(await countMatricesByName('Ma trận bị sửa tay')).toBe(0);
 
-    // Lệch tổng điểm khai báo: cũng từ chối toàn bộ, không ghi dở.
     const wb2 = await downloadTemplate(admin);
     fillValid(wb2, 'Ma trận lệch tổng');
     wb2.getWorksheet('Ma trận')!.getCell('B5').value = 9;
@@ -286,13 +244,6 @@ describe('I-2: ghi nguyên tử khi nhập ma trận', () => {
 
   it('người không đủ tư cách dùng luồng nhập: bị chặn 403 tại cổng bank của luồng và không ghi', async () => {
     const suffix = Date.now().toString(36);
-    // Diễn viên 1: vai tuỳ biến tại context hệ thống CHỈ có
-    // curriculum:view — đọc được môn/chương trình qua bề mặt công
-    // khai, nhưng không thuộc nhóm staff nên không có tư cách giữ
-    // bank ma trận cá nhân. Cổng của luồng nhập là cổng BANK (quyền
-    // phụ trách bank đích), không còn là cổng tại context của môn
-    // như trước đây: điểm chặn là bước tạo lười bank cá nhân ở bước
-    // parse của request ghi — 403 question.personal_bank_staff_only.
     const viewer = await createUserViaApi(app, admin, { username: `hs_i2_${suffix}` });
     expect(viewer.username).toBe(`hs_i2_${suffix}`);
     const roleId = await createRoleViaApi(app, admin);
@@ -306,13 +257,6 @@ describe('I-2: ghi nguyên tử khi nhập ma trận', () => {
     expect(res.body.code).toBe('question.personal_bank_staff_only');
     expect(await countMatricesByName('Ma trận của người chỉ xem')).toBe(0);
 
-    // Diễn viên 2: người dùng không có quyền nào — cùng một cổng
-    // bank chặn 403 ngay ở bước parse. (Trước đây đường parse đọc
-    // môn qua đường công khai bị gác curriculum:view nên che môn
-    // thành "không tồn tại" và trả 422; hành vi đó là hệ quả của
-    // cổng sai bối cảnh, đã bỏ khi cổng chuyển về bank đích — môn
-    // không tồn tại THẬT vẫn trả quiz.matrix_import_subject_not_found
-    // trong payload preview cho người đã qua cổng bank.)
     const nobody = await createUserViaApi(app, admin, { username: `nb_i2_${suffix}` });
     expect(nobody.username).toBe(`nb_i2_${suffix}`);
     const nobodyToken = (await login(app, `nb_i2_${suffix}`, STRONG_PASSWORD)).accessToken;
@@ -329,7 +273,6 @@ describe('I-2: ghi nguyên tử khi nhập ma trận', () => {
   });
 });
 
-/** Đọc thẳng cột chữ ký nội dung của một ma trận trong DB. */
 async function readMatrixSignature(matrixId: string): Promise<string | null> {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
@@ -342,33 +285,20 @@ async function readMatrixSignature(matrixId: string): Promise<string | null> {
   }
 }
 
-/**
- * Lát D-1 của issue #233 — đóng cửa sổ đua của chống trùng bằng
- * schema: chữ ký nội dung được ghi xuống DB (cột `content_signature`)
- * và ràng buộc duy nhất theo cặp (bank đích, chữ ký) giữ cho hai
- * request ghi trùng ĐỒNG THỜI tuyệt đối cũng chỉ tạo một ma trận.
- * Các ca dưới đây kiểm ở cả ba tầng: hành vi API khi đua, ràng buộc
- * ở tầng DB, và tính nhất quán của cột chữ ký qua các đường tạo/sửa.
- */
 describe('D-1 (issue #233): chữ ký nội dung ở DB và cửa sổ đua', () => {
   it('hai request ghi trùng đồng thời tuyệt đối: chỉ tạo một ma trận, cả hai request nhận cùng một ma trận, không request nào nhận lỗi', async () => {
     const wb = await downloadTemplate(admin);
     fillValid(wb, 'Ma trận đua đồng thời');
     const buffer = await toBuffer(wb);
-    // Bắn hai request cùng lúc bằng Promise.all: tầng đối chiếu trong
-    // code có thể cùng đọc "chưa có" — điểm giữ cuối cùng là ràng
-    // buộc duy nhất ở DB và đường thua cuộc phải nhận về bản thắng.
     const [r1, r2] = await Promise.all([postImport(admin, buffer), postImport(admin, buffer)]);
     expect(r1.status).toBe(201);
     expect(r2.status).toBe(201);
     expect((r1.body as { id: string }).id).toBe((r2.body as { id: string }).id);
     expect(await countMatricesByName('Ma trận đua đồng thời')).toBe(1);
-    // Bản thắng mang chữ ký đã ghi ở DB, không phải chỉ tính trong code.
     expect(await readMatrixSignature((r1.body as { id: string }).id)).toBeTruthy();
   });
 
   it('tầng DB: unique (bank_id, content_signature) chặn insert trùng trong cùng bank; bank_id null nằm ngoài ràng buộc', async () => {
-    // Bank đích lấy từ một lần nhập thật (bank cá nhân của admin).
     const wb = await downloadTemplate(admin);
     fillValid(wb, 'Ma trận neo bank D-1');
     const imported = await postImport(admin, await toBuffer(wb)).expect(201);
@@ -383,12 +313,9 @@ describe('D-1 (issue #233): chữ ký nội dung ở DB và cửa sổ đua', ()
       const signature = `d1-db-layer-${Date.now().toString(36)}`;
       const insertSql = `insert into exam_matrices (name, subject_id, curriculum_id, context_id, bank_id, content_signature)
         values ($1, $2, $3, $4, $5, $6) returning id`;
-      // context_id không có khoá ngoại (chỉ là neo ngữ cảnh của môn)
-      // nên một uuid bất kỳ là đủ cho ca kiểm ở tầng ràng buộc này.
       const baseParams = ['Ma trận D-1 tầng DB', subjectId, curriculumId, randomUUID()];
       const first = await client.query(insertSql, [...baseParams, bankId, signature]);
       insertedIds.push(first.rows[0].id as string);
-      // Cùng bank + cùng chữ ký: insert thứ hai PHẢI bị ràng buộc chặn.
       let violation: { code?: string; constraint?: string; message?: string } | null = null;
       try {
         await client.query(insertSql, [...baseParams, bankId, signature]);
@@ -397,9 +324,6 @@ describe('D-1 (issue #233): chữ ký nội dung ở DB và cửa sổ đua', ()
       }
       expect(violation?.code).toBe('23505');
       expect(violation?.constraint ?? violation?.message).toContain('exam_matrices_bank_content_signature_unique');
-      // bank_id NULL: hai bản ghi cùng chữ ký cùng tồn tại được (mỗi
-      // NULL là phân biệt theo ngữ nghĩa PostgreSQL) — đường nhập
-      // luôn có bank đích nên phạm vi này chấp nhận được.
       const nullBank1 = await client.query(insertSql, [...baseParams, null, signature]);
       const nullBank2 = await client.query(insertSql, [...baseParams, null, signature]);
       insertedIds.push(nullBank1.rows[0].id as string, nullBank2.rows[0].id as string);
@@ -412,8 +336,6 @@ describe('D-1 (issue #233): chữ ký nội dung ở DB và cửa sổ đua', ()
   });
 
   it('chữ ký được ghi ở đường tạo tay và tính lại khi nội dung đổi; sửa ngoài thành phần chữ ký thì chữ ký giữ nguyên', async () => {
-    // Tạo tay KHÔNG gắn bank: chữ ký vẫn được tính và ghi (việc ghi
-    // chữ ký không phụ thuộc bank; chỉ ràng buộc duy nhất mới theo bank).
     const created = await http(app).post('/api/v1/exam-matrices').set(auth(admin))
       .send({ name: 'Ma trận D-1 tạo tay', subjectId, curriculumId });
     expect(created.status).toBeLessThan(300);
@@ -421,7 +343,6 @@ describe('D-1 (issue #233): chữ ký nội dung ở DB và cửa sổ đua', ()
     const sig0 = await readMatrixSignature(id);
     expect(sig0).toBeTruthy();
 
-    // Thêm ô (đổi tập ô — thành phần chữ ký) → chữ ký đổi.
     const withCell = await http(app).post(`/api/v1/exam-matrices/${id}/cells`).set(auth(admin))
       .send({ curriculumNodeId: lesson1Id, cognitiveLevel: 'biet', qtype: 'multichoice', questionCount: 2, cellScore: 1 });
     expect(withCell.status).toBeLessThan(300);
@@ -429,7 +350,6 @@ describe('D-1 (issue #233): chữ ký nội dung ở DB và cửa sổ đua', ()
     expect(sig1).toBeTruthy();
     expect(sig1).not.toBe(sig0);
 
-    // Sửa số câu của ô → chữ ký đổi tiếp.
     const cellId = (withCell.body.cells as { id: string }[])[0]!.id;
     const cellPatch = await http(app).patch(`/api/v1/exam-matrices/${id}/cells/${cellId}`).set(auth(admin))
       .send({ questionCount: 3 });
@@ -437,14 +357,12 @@ describe('D-1 (issue #233): chữ ký nội dung ở DB và cửa sổ đua', ()
     const sig2 = await readMatrixSignature(id);
     expect(sig2).not.toBe(sig1);
 
-    // Đổi tên (thành phần chữ ký) ở tầng ma trận → chữ ký đổi.
     const renamed = await http(app).patch(`/api/v1/exam-matrices/${id}`).set(auth(admin))
       .send({ name: 'Ma trận D-1 đã đổi tên' });
     expect(renamed.status).toBeLessThan(300);
     const sig3 = await readMatrixSignature(id);
     expect(sig3).not.toBe(sig2);
 
-    // Đổi trạng thái (KHÔNG thuộc thành phần chữ ký) → chữ ký giữ nguyên.
     const statusOnly = await http(app).patch(`/api/v1/exam-matrices/${id}`).set(auth(admin))
       .send({ status: 'ready' });
     expect(statusOnly.status).toBeLessThan(300);
@@ -452,21 +370,6 @@ describe('D-1 (issue #233): chữ ký nội dung ở DB và cửa sổ đua', ()
   });
 });
 
-/**
- * Hồi quy điểm chặn D-3 (issue #233) — DIỄN VIÊN GIÁO VIÊN MÔ HÌNH
- * SEED: vai `editingteacher` tại context KHOÁ mình dạy, KHÔNG có bất
- * kỳ vai nào tại context hệ thống (đúng mô hình teacher1 trên
- * production; khuôn fixture của spec khung chương trình cho giáo
- * viên khoá). Môn/chương trình của spec neo tại context hệ thống như
- * chương trình GDPT thật. Trước lượt sửa phân quyền, giáo viên này
- * bị chặn ở cả ba đầu nhập (tải mẫu 403, preview báo "môn không tồn
- * tại", import 403) và ở đường tạo tay gắn bank, vì các luồng đó đòi
- * `curriculum:view`/`quiz:managematrix` tại context của môn — trong
- * khi thao tác ghi vốn chốt quyền tại bank đích. Các ca dưới đây
- * khoá hành vi đúng: giáo viên qua cổng bank của luồng thì dùng
- * được trọn vẹn; cổng đọc CÔNG KHAI của chương trình và nhánh tạo
- * tay không gắn bank (cổng tại context môn) giữ nguyên như cũ.
- */
 describe('I-2 với diễn viên giáo viên mô hình seed (hồi quy D-3, issue #233)', () => {
   let teacherA: { id: string; token: string };
   let teacherB: { id: string; token: string };
@@ -491,7 +394,6 @@ describe('I-2 với diễn viên giáo viên mô hình seed (hồi quy D-3, issu
     teacherA = await mkActor(`gv_seed_a_${suffix}`, editingTeacherRole, ctxA);
     teacherB = await mkActor(`gv_seed_b_${suffix}`, editingTeacherRole, ctxB);
     student = await mkActor(`hs_seed_${suffix}`, studentRole, ctxA);
-    // Bank ma trận cá nhân của giáo viên A (tạo lười qua danh sách).
     const banksRes = await http(app).get('/api/v1/question-banks?kind=matrix').set(auth(teacherA.token)).expect(200);
     const bankA = (banksRes.body as { id: string; scope: string }[]).find((b) => b.scope === 'personal');
     expect(bankA, 'giáo viên phải có bank ma trận cá nhân').toBeTruthy();
@@ -513,11 +415,9 @@ describe('I-2 với diễn viên giáo viên mô hình seed (hồi quy D-3, issu
     expect(view.createdBy).toBe(teacherA.id);
     expect(view.cells).toHaveLength(9);
 
-    // Đọc lại bằng endpoint chi tiết (cổng bank-local chiều đọc).
     const detail = await http(app).get(`/api/v1/exam-matrices/${view.id}`).set(auth(teacherA.token)).expect(200);
     expect(detail.body.id).toBe(view.id);
 
-    // Gửi lại cùng file: trả chính ma trận đã ghi, không nhân đôi.
     const again = await postImport(teacherA.token, buffer).expect(201);
     expect(again.body.id).toBe(view.id);
     expect(await countMatricesByName('Ma trận nhập của giáo viên seed')).toBe(1);
@@ -569,14 +469,6 @@ describe('I-2 với diễn viên giáo viên mô hình seed (hồi quy D-3, issu
   });
 
   it('giáo viên mở và xuất bản đặc tả của ma trận trong bank cá nhân của mình: đạt (điều kiện Mục 7, issue #233)', async () => {
-    // Ma trận của giáo viên A trong bank cá nhân của chính mình, nhập
-    // trọn luồng bằng chính tài khoản giáo viên (đường nhập đã qua
-    // cổng bank và đọc tham chiếu nội bộ): bản đặc tả dựng từ ma
-    // trận này phải đi qua các đường đọc tham chiếu nội bộ
-    // (môn/chương trình/node/YCCĐ), không còn vấp `curriculum:view`
-    // tại context hệ thống của môn. Trước điều kiện Mục 7, chính
-    // bước mở đặc tả này 403 dù giáo viên đã qua cổng xem ma trận
-    // tại bank đích.
     const wb = await downloadTemplate(teacherA.token);
     fillValid(wb, 'Ma trận đặc tả của giáo viên seed');
     const buffer = await toBuffer(wb);
@@ -605,11 +497,6 @@ describe('I-2 với diễn viên giáo viên mô hình seed (hồi quy D-3, issu
   });
 
   it('giáo viên khác xem đặc tả ma trận trong bank cá nhân của người khác: bị chặn tại cổng xem ma trận của bank', async () => {
-    // Giáo viên B mở đặc tả của ma trận trong bank cá nhân của giáo
-    // viên A: cổng `requireMatrixCap` chặn ngay từ nhánh bank cá
-    // nhân của người khác — ma trận hiện như không tồn tại (404
-    // quiz.matrix_not_found) thay vì lộ nội dung, đúng hành vi ẩn
-    // bank cá nhân của người khác đã chốt cho các bề mặt đọc ma trận.
     const created = await http(app).post('/api/v1/exam-matrices').set(auth(teacherA.token))
       .send({ name: 'Ma trận đặc tả riêng của giáo viên seed', subjectId, curriculumId, bankId: bankAId });
     expect(created.status, JSON.stringify(created.body)).toBe(201);

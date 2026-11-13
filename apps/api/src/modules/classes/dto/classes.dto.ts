@@ -15,9 +15,6 @@ import {
   type UpdateClass,
 } from '@giaokhoa/contracts';
 
-/**
- * Validation của module Classes dùng Zod qua Standard Schema — schema nền ở `@giaokhoa/contracts` là nguồn sự thật duy nhất (khuôn Tenants).
- */
 export {
   addClassRosterMemberSchema,
   createClassSchema,

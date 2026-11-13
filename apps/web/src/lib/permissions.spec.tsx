@@ -8,11 +8,6 @@ import { usePermissions } from '#lib/permissions';
 import { useCourseGradeData } from '#features/grades/queries/course-grade';
 import { useCoursesGradeData } from '#hooks/use-courses-grade-data';
 
-/**
- * Bảo chứng phân loại khoá dạy/học theo định nghĩa “thuộc khoá” đã chốt ở #33 (việc nối tiếp #66): thuộc khoá = ghi danh đang hiệu lực ∪ gán vai tại context khoá. Trước fix #66, permissions.tsx chỉ tính ghi danh (enrolments/me chỉ đọc user_enrolments) nên giáo viên được gán vai tại khoá mà không ghi danh — đúng thiết kế seed — rơi vào cả hai danh sách đều rỗng và trang tổng quan báo chưa ghi danh khoá nào.
- *
- * Từ F-02 (rà soát #133, issue #149) phân loại suy TRỌN từ ảnh chụp capabilities, provider không còn gọi enrolments/me nữa: phía API, nửa “ghi danh” của hợp nhất luôn hiện diện trong ảnh chụp dưới dạng gán vai — tầng ghi danh chốt roleId cho mọi instance (mặc định vai học viên), ghi danh thì cấp vai đó tại context khoá, rút ghi danh thì gỡ vai, đình chỉ thì giữ vai. Fixture dưới đây mô phỏng đúng hợp đồng đó: học sinh “đã ghi danh” có gán vai student trong ảnh chụp hệt học sinh được gán vai trực tiếp.
- */
 
 const TEACHER_ID = '01900000-0000-7000-8000-0000000000a2';
 const STUDENT_ID = '01900000-0000-7000-8000-0000000000a3';
@@ -67,7 +62,6 @@ function assignment(roleShortname: string, roleName: string) {
   };
 }
 
-/** Ảnh chụp quyền (GET /users/me/capabilities) theo từng kịch bản. */
 function accessView(scenario: Scenario) {
   const base = {
     userId:
@@ -97,10 +91,6 @@ function accessView(scenario: Scenario) {
     };
   }
   if (scenario === 'student-assigned' || scenario === 'student-enrolled') {
-    // Hai kịch bản cho cùng một ảnh chụp: API vật chất hoá ghi danh
-    // thành gán vai student tại context khoá, nên học sinh đã ghi danh
-    // và học sinh được gán vai trực tiếp không phân biệt được — và
-    // không cần phân biệt — trong ảnh chụp.
     return {
       ...base,
       assignments: [assignment('student', 'Học viên')],
@@ -115,7 +105,6 @@ function accessView(scenario: Scenario) {
 
 type Scenario = 'teacher-assigned' | 'student-enrolled' | 'student-assigned' | 'outsider';
 
-/** Mọi URL fetch đã gọi trong lần render hiện tại (để đếm request F-02). */
 const fetchCalls: string[] = [];
 
 function stubFetch(scenario: Scenario) {
@@ -132,14 +121,10 @@ function stubFetch(scenario: Scenario) {
       fetchCalls.push(url);
       const respond = (status: number, body: unknown) =>
         new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
-      // Phiên cookie Better Auth: id phiên khớp hồ sơ của kịch bản.
       if (isGetSessionUrl(url)) return respond(200, baSessionBody({ id: me.id, username: me.username, email: me.email }));
       if (url === '/api/v1/users/me') return respond(200, me);
       if (url === '/api/v1/users/me/capabilities') return respond(200, accessView(scenario));
       if (url === '/api/v1/courses') return respond(200, [COURSE]);
-      // KHÔNG stub enrolments/me: provider không được gọi nó nữa —
-      // nếu còn gọi, URL rơi về 404 ở đây và ca đếm request bắt được.
-      // Dữ liệu hiển thị theo khoá không quyết định phân loại; trả rỗng/403 đều được.
       return respond(404, {});
     }),
   );
@@ -159,17 +144,12 @@ function ClassificationProbe() {
 
 async function renderClassification(scenario: Scenario) {
   stubFetch(scenario);
-  // AuthProvider cần context router (giống dashboard.spec): thiếu router
-  // thì phiên không dựng được, provider quyền trả trạng thái rỗng.
   const router = createMemoryRouter([{ path: '/', element: <ClassificationProbe /> }]);
   render(
     <TestProviders>
       <RouterProvider router={router} />
     </TestProviders>,
   );
-  // Chờ đủ dữ liệu thật: provider trả ready=true cả ở trạng thái chưa
-  // đăng nhập (danh sách rỗng), nên phải chờ danh sách khoá nạp xong
-  // (course-count = 1) mới đọc phân loại, tránh đọc trạng thái rỗng đầu.
   await waitFor(() => {
     expect(screen.getByTestId('ready')).toHaveTextContent('true');
     expect(screen.getByTestId('course-count')).toHaveTextContent('1');
@@ -261,19 +241,12 @@ describe('F-02: provider không còn fan-out theo số khoá khi nạp app', () 
       expect(screen.getByTestId('course-count')).toHaveTextContent('3');
       expect(screen.getByTestId('teaching')).toHaveTextContent('DEMO101');
     });
-    // Cho mọi query đang bay cơ hội lộ diện trước khi kết luận số request.
     await waitFor(() => {
       expect(screen.getByTestId('ready')).toHaveTextContent('true');
     });
-    // Trước thay đổi này: provider tự dò thêm report + gradebook cho
-    // từng khoá thuộc về (tổng 2 + 2N request; N=1 ở fixture này → 4).
-    // Nay dữ liệu điểm KHÔNG còn qua provider: 0 request theo khoá.
     const perCourseCalls = fetchCalls.filter((u) => /\/courses\/[0-9a-f-]{36}\//.test(u));
     expect(perCourseCalls).toEqual([]);
     expect(fetchCalls).not.toEqual(expect.arrayContaining([expect.stringContaining('enrolments/me')]));
-    // Request phiên get-session là của AuthProvider (sau cutover cookie
-    // #257 nó luôn đi kèm khi nạp app), không phải của provider quyền —
-    // loại khỏi số đếm; khẳng định về provider quyền giữ nguyên.
     const providerCalls = fetchCalls.filter((u) => u !== '/api/v1/users/me' && !isGetSessionUrl(u));
     expect(providerCalls.sort()).toEqual(['/api/v1/courses', '/api/v1/users/me/capabilities']);
   });
@@ -298,12 +271,10 @@ describe('F-02: provider không còn fan-out theo số khoá khi nạp app', () 
     });
     const callsFor = (id: string, suffix: string) =>
       fetchCalls.filter((u) => u === `/api/v1/courses/${id}${suffix}`).length;
-    // Khoá được yêu cầu: mỗi endpoint đúng 1 lượt dù hai hook cùng đọc.
     expect(callsFor(COURSE_ID, '/gradebook/report')).toBe(1);
     expect(callsFor(COURSE_ID, '/gradebook')).toBe(1);
     expect(callsFor(OTHER_1.id, '/gradebook/report')).toBe(1);
     expect(callsFor(OTHER_1.id, '/gradebook')).toBe(1);
-    // Khoá không bề mặt nào yêu cầu: không tốn request nào.
     expect(callsFor(OTHER_2.id, '/gradebook/report')).toBe(0);
     expect(callsFor(OTHER_2.id, '/gradebook')).toBe(0);
   });
@@ -356,7 +327,6 @@ describe('F-15: provider phơi trạng thái lỗi của query capabilities', ()
       expect(screen.getByTestId('ready')).toHaveTextContent('true');
       expect(screen.getByTestId('capabilities-error')).toHaveTextContent('boom');
     });
-    // Suy biến mềm giữ nguyên: không cờ nào bật, không khoá nào được xếp loại.
     expect(screen.getByTestId('teaching-count')).toHaveTextContent('0');
     expect(screen.getByTestId('can-view-users')).toHaveTextContent('false');
   });

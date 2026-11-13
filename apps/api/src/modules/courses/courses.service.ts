@@ -22,46 +22,25 @@ export const COURSE_AREA = 'course';
 
 export type CategoryDeleteMode = 'moveup' | 'recursive';
 
-/** Trạng thái mở của section/module (K1) suy từ visible + openAt. */
 export type CourseItemStatus = 'draft' | 'open' | 'scheduled';
 
-/**
- * Suy trạng thái mở (K1): ẩn = Nháp; hiện + có ngày mở ở tương lai = Mở theo lịch; còn lại = Đã mở.
- */
 export function courseItemStatus(visible: boolean, openAt: Date | null, now: Date = new Date()): CourseItemStatus {
   if (!visible) return 'draft';
   if (openAt && openAt.getTime() > now.getTime()) return 'scheduled';
   return 'open';
 }
 
-/** Component có instance riêng được nhân bản sâu ở K1 (bảng instance + slot). */
 export const QUIZ_COMPONENT_NAME = 'mod_quiz';
 
-/** Do EnrolModule đăng ký lúc bootstrap — giữ Courses → Enrol không cần import (đảo ngược phụ thuộc, cf. registry Availability). */
 export interface EnrolChecker {
-  /**
-   * User có enrolment đang hiệu lực trong khoá học hay không (ủy quyền cho enrol checker đã đăng ký để tránh vòng phụ thuộc module).
-   */
   isEnrolled(courseId: string, userId: string, opts?: { onlyActive?: boolean }): Promise<boolean>;
 }
 
-/**
- * Neo lớp học cho đường tạo khoá (module classes cắm vào khi khởi tạo — issue #184, CLASS-0; cùng mẫu đăng ký như EnrolChecker để Courses không phụ thuộc Classes). Khi chưa có hook nào đăng ký (module classes chưa nạp), đường tạo khoá kèm `classId` bị từ chối tường minh.
- */
 export interface CourseClassHook {
-  /**
-   * Phân giải lớp đích cho một khoá sắp tạo: kiểm lớp tồn tại, cùng tenant với danh mục đích và chưa lưu trữ (ném lỗi nghiệp vụ khi không đạt); trả context của lớp để làm cha context khoá + cổng capability.
-   */
   resolveClass(classId: string, tenantId: string): Promise<{ classId: string; contextId: string }>;
-  /**
-   * Chạy sau khi khoá và context của nó đã tạo: vật chất hoá phía lớp — group "cả lớp" + enrol instance cohort trỏ vào backing cohort của lớp
-   * (backfill roster hiện có). Lỗi ở bước này KHÔNG được nuốt: khoá thuộc
-   * lớp mà thiếu instance cohort là trạng thái hỏng phải lộ ra ngay.
-   */
   onCourseCreated(course: CourseRow): Promise<void>;
 }
 
-/** Một đơn vị khung chương trình chọn được để nạp vào khoá (K0a): node khung + toàn bộ YCCĐ trong subtree của nó. */
 export interface CurriculumFrameUnit {
   nodeId: string;
   title: string;
@@ -69,35 +48,26 @@ export interface CurriculumFrameUnit {
   outcomes: { outcomeId: string; content: string }[];
 }
 
-/**
- * Nguồn đơn vị khung chương trình — CurriculumModule đăng ký lúc khởi tạo (dependency inversion như EnrolChecker/grade provider: Courses không import ngược Curriculum). Cổng quyền của đường này là `course:update` tại khoá đích do applyCurriculumFrame kiểm TRƯỚC khi gọi provider — provider không đòi thêm `curriculum:view` tại context hệ thống (giáo viên thật chỉ có vai tại context khoá, issue #66).
- */
 export interface CurriculumFrameProvider {
   getFrameUnits(actorId: string, curriculumId: string): Promise<CurriculumFrameUnit[]>;
 }
 
-/** Một đơn vị khung SGK: một chủ đề của cuốn sách — các bài trong chủ đề là mục của section sẽ tạo. */
 export interface BookFrameUnit {
   chapterNodeId: string;
   title: string;
   items: { lessonNodeId: string; title: string; outcomes: { outcomeId: string; content: string }[] }[];
 }
 
-/**
- * Nguồn đơn vị khung SGK — CurriculumModule đăng ký lúc khởi tạo (K0b, cùng mẫu dependency inversion với CurriculumFrameProvider). Cổng quyền là `course:update` tại khoá đích do applyBookFrame kiểm TRƯỚC khi gọi provider — provider không đòi thêm quyền.
- */
 export interface BookFrameProvider {
   getBookFrameUnits(actorId: string, bookId: string): Promise<BookFrameUnit[]>;
 }
 
-/** Khung đã neo trên một section trong khung hiển thị nội dung khoá (bản chụp lúc nạp). */
 export interface SectionFrameView {
   nodeId: string | null;
   nodeTitle: string;
   outcomes: { outcomeId: string | null; content: string }[];
 }
 
-/** Khung SGK đã neo trên một section (bản chụp lúc nạp, K0b): node chủ đề nguồn + các mục bài + YCCĐ chụp của từng mục. */
 export interface SectionBookFrameView {
   nodeId: string | null;
   bookId: string | null;
@@ -111,55 +81,31 @@ export interface CourseContentView {
   customFields: { shortName: string; value: string | null }[];
   sections: (SectionRow & {
     availabilityResult?: { available: boolean; visible: boolean; failedDescriptions: string[] };
-    /** Trạng thái mở Nháp/Đã mở/Mở theo lịch (K1). */
     status?: CourseItemStatus;
-    /** Neo khung chương trình (K0a): null khi section không xuất phát từ khung. */
     frame?: SectionFrameView | null;
     modules: (CmRow & { status?: CourseItemStatus; contextId?: string; availabilityResult?: { available: boolean; visible: boolean; failedDescriptions: string[] } })[];
-    /** Neo khung SGK (K0b): null khi section không xuất phát từ khung SGK. */
     bookFrame?: SectionBookFrameView | null;
   })[];
 }
 
-/**
- * Facade của CoursesModule (core_course của Moodle). Category và khoá học tạo cây/context: mỗi category nhận một context coursecat (40), mỗi khoá học một context khoá học (50) dưới category của nó, mỗi cm một context module (70) dưới khoá học của nó — tạo chỉ qua facade AccessModule.
- */
 @Injectable()
-/**
- * Nghiệp vụ khoá học: category, course, section và course module, kèm kiểm tra truy cập. Quy tắc truy cập (đối chiếu Moodle lib/accesslib + course/lib.php): khoá học ẩn chỉ xem được khi có capability xem khoá ẩn; học viên phải có enrolment đang hiệu lực mới xem được nội dung; section/cm còn phải qua cây điều kiện availability mới được coi là khả dụng.
- */
 export class CoursesService {
   private enrolChecker?: EnrolChecker;
-  /** Do GradesModule đăng ký: phần trăm điểm (0-100) theo user+khoá học cho lá 'grade' của availability. */
   private gradeProvider?: (userId: string, courseId: string) => Promise<Record<string, number>>;
-  /** Do CurriculumModule đăng ký: đơn vị khung chương trình cho cơ chế nạp khung vào khoá (K0a). */
   private frameProvider?: CurriculumFrameProvider;
-  /** Do CurriculumModule đăng ký: đơn vị khung SGK cho cơ chế nạp khung vào khoá (K0b). */
   private bookFrameProvider?: BookFrameProvider;
 
-  /**
-   * Đăng ký nguồn đơn vị khung chương trình (module curriculum cắm vào khi khởi tạo).
-   */
   registerCurriculumFrameProvider(provider: CurriculumFrameProvider): void {
     this.frameProvider = provider;
   }
 
-  /**
-   * Đăng ký nguồn đơn vị khung SGK (module curriculum cắm vào khi khởi tạo).
-   */
   registerBookFrameProvider(provider: BookFrameProvider): void {
     this.bookFrameProvider = provider;
   }
 
-  /**
-   * Đăng ký provider điểm cho availability (module grades cắm vào khi khởi tạo).
-   */
   registerGradeProvider(fn: (userId: string, courseId: string) => Promise<Record<string, number>>): void {
     this.gradeProvider = fn;
   }
-  /**
-   * Điểm hiện tại của user phục vụ điều kiện availability theo điểm.
-   */
   async gradesForAvailability(userId: string, courseId: string): Promise<Record<string, number> | undefined> {
     return this.gradeProvider ? this.gradeProvider(userId, courseId) : undefined;
   }
@@ -177,74 +123,44 @@ export class CoursesService {
     private readonly planLimits: PlanLimitsService,
   ) {}
 
-  // --- helper tenant (TENANT-0, #168) ---------------------------------------
-  /** Tenant hiệu lực: ngữ cảnh request; ngoài request (seed/job) rơi về tenant-zero. */
   private async effectiveTenantId(): Promise<string> {
     return this.tenantContext.currentTenantId() ?? (await this.tenants.fallbackTenantId());
   }
 
-  /** Dòng thuộc tenant khác với tenant hiệu lực của request = coi như không tồn tại (404 đồng nhất, hồ sơ mục 3.1). */
   private tenantHidden(rowTenantId: string): boolean {
     const active = this.tenantContext.currentTenantId();
     return active !== undefined && rowTenantId !== active;
   }
 
-  /**
-   * Đăng ký hàm kiểm tra enrolment (module enrol cắm vào).
-   */
   registerEnrolChecker(checker: EnrolChecker): void { this.enrolChecker = checker; }
 
-  /** Neo lớp học đã đăng ký (module classes cắm vào); xem CourseClassHook. */
   private classHook?: CourseClassHook;
-  /**
-   * Đăng ký neo lớp học cho đường tạo khoá (module classes cắm vào).
-   */
   registerClassHook(hook: CourseClassHook): void { this.classHook = hook; }
 
-  /**
-   * User có ghi danh ĐANG HIỆU LỰC trong khoá hay không (đã ghi danh, trạng thái active, trong cửa sổ thời gian) — qua đúng cổng EnrolChecker mà EnrolModule đăng ký, để các module khác (vd groups khi xếp thành viên) kiểm tra mà không import ngược Enrol. Chưa có checker nào đăng ký
-   * (không xảy ra ở app đầy đủ) thì coi như chưa ghi danh: cổng fail-closed.
-   */
   async isActivelyEnrolled(courseId: string, userId: string): Promise<boolean> {
     if (!this.enrolChecker) return false;
     return this.enrolChecker.isEnrolled(courseId, userId, { onlyActive: true });
   }
 
-  // --- helper context -----------------------------------------------------
-  /**
-   * Context id của category (tạo context nếu chưa có).
-   */
   async categoryContextId(categoryId: string): Promise<string> {
     const ctx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.COURSECAT, categoryId);
     if (!ctx) throw new NotFoundException({ message: `No context for category ${categoryId}`, code: 'course.category_context_missing' });
     return ctx.id;
   }
-  /**
-   * Context id của khoá học.
-   */
   async courseContextId(courseId: string): Promise<string> {
     const ctx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.COURSE, courseId);
     if (!ctx) throw new NotFoundException({ message: `No context for course ${courseId}`, code: 'course.context_missing' });
     return ctx.id;
   }
-  /**
-   * Context id của course module.
-   */
   async cmContextId(cmId: string): Promise<string | undefined> {
     return (await this.contexts.getByLevelInstance(CONTEXT_LEVELS.MODULE, cmId))?.id;
   }
 
-  // --- category ------------------------------------------------------------
-  /**
-   * Tạo category (kiểm capability tại context cha, tính path).
-   */
   async createCategory(actorId: string, input: { name: string; idNumber?: string; description?: string; parent?: string; visible?: boolean }): Promise<CategoryRow> {
     const parent = input.parent ?? null;
     let parentCtxId: string;
     let tenantId: string;
     if (parent === null) {
-      // Danh mục gốc sống trong không gian của tenant hiệu lực: context
-      // của nó neo dưới context tenant (không còn neo thẳng hệ thống).
       tenantId = await this.effectiveTenantId();
       parentCtxId = (await this.contexts.ensureTenantContext(tenantId)).id;
     } else {
@@ -268,27 +184,17 @@ export class CoursesService {
     return { ...cat, path, depth };
   }
 
-  /**
-   * Lấy category; ném course.category_not_found khi vắng.
-   */
   async getCategory(id: string): Promise<CategoryRow> {
     const row = await this.repo.getCategory(id);
     if (!row || this.tenantHidden(row.tenantId)) throw new NotFoundException({ message: `Category ${id} not found`, code: 'course.category_not_found' });
     return row;
   }
-  /**
-   * Liệt kê category (trong request: chỉ category của tenant hiệu lực).
-   */
   async listCategories(): Promise<CategoryRow[]> {
     const all = await this.repo.listCategories();
     const active = this.tenantContext.currentTenantId();
     return active ? all.filter((c) => c.tenantId === active) : all;
   }
 
-  /** Cây category cho UI: mảng children lồng nhau. */
-  /**
-   * Cây category kèm khoá học lồng bên trong.
-   */
   async categoryTree(): Promise<(CategoryRow & { children: unknown[] })[]> {
     const all = await this.listCategories();
     const byId = new Map<string, CategoryRow & { children: unknown[] }>(all.map((c) => [c.id, { ...c, children: [] }]));
@@ -300,9 +206,6 @@ export class CoursesService {
     return roots;
   }
 
-  /**
-   * Cập nhật category; đổi cha sẽ viết lại path cây con.
-   */
   async updateCategory(actorId: string, id: string, input: { name?: string; idNumber?: string; description?: string; visible?: boolean; parent?: string }): Promise<CategoryRow> {
     const cat = await this.getCategory(id);
     await this.evaluator.requireCapability(actorId, 'category:manage', await this.categoryContextId(id));
@@ -319,7 +222,6 @@ export class CoursesService {
     return this.getCategory(id);
   }
 
-  /** Di chuyển một category xuống dưới cha mới, viết lại path/depth của toàn cây con và đổi cha context của nó. */
   private async moveCategory(cat: CategoryRow, newParent: string | null, actorId?: string): Promise<void> {
     if (newParent === cat.id) throw new BadRequestException({ message: 'A category cannot be its own parent', code: 'course.category_cycle' });
     const subtree = await this.repo.subtreeOf(cat);
@@ -340,15 +242,6 @@ export class CoursesService {
     await this.outbox.enqueueStandalone({ aggregate: 'course_category', type: 'category_moved', payload: { categoryId: cat.id, fromParent: cat.parent, toParent: newParent, actorId: actorId ?? null } });
   }
 
-  /**
-   * Xoá một category — số phận của khoá học/category con bên trong PHẢI được
-   * tường minh (luật Moodle, report §2#4): 'moveup' đổi cha children và
-   * khoá học lên cha của category bị xoá; 'recursive' xoá chúng.
-   * Từ chối (400) khi category không rỗng và không có mode nào được cho.
-   */
-  /**
-   * Xoá category rỗng (còn khoá học/category con thì từ chối).
-   */
   async deleteCategory(actorId: string, id: string, mode?: CategoryDeleteMode): Promise<{ deleted: true; mode: CategoryDeleteMode | 'empty' }> {
     const cat = await this.getCategory(id);
     await this.evaluator.requireCapability(actorId, 'category:manage', await this.categoryContextId(id));
@@ -376,7 +269,6 @@ export class CoursesService {
       for (const sub of subtree) {
         for (const c of await this.repo.listCourses(sub.id)) await this.deleteCourseInternal(c, actorId);
       }
-      // Xoá category con sâu nhất trước (FK từ course.category là cascade, khoá học đã mất).
       for (const sub of subtree.sort((a, b) => b.depth - a.depth)) {
         if (sub.id !== id) {
           await this.contexts.deleteByLevelInstance(CONTEXT_LEVELS.COURSECAT, sub.id);
@@ -390,25 +282,15 @@ export class CoursesService {
     return { deleted: true, mode: effectiveMode };
   }
 
-  // --- khoá học ---------------------------------------------------------------
-  /**
-   * Tạo khoá học trong category, kèm context và category điểm gốc được tạo ở tầng grades qua hook.
-   */
   async createCourse(actorId: string, input: {
     fullName: string; shortName: string; category: string; idNumber?: string; summary?: string;
     format?: string; visible?: boolean; startDate?: string; endDate?: string; groupMode?: number; groupModeForce?: boolean;
     subjectId?: string | null; grade?: number | null;
-    /** Lớp học chứa khoá (issue #184): có lớp thì cổng tạo khoá + cha context neo vào lớp. */
     classId?: string | null;
     formatOptions?: Record<string, string>; customFields?: Record<string, string>;
   }): Promise<CourseRow> {
     const category = await this.getCategory(input.category);
     const categoryCtxId = await this.categoryContextId(category.id);
-    // Lớp học hạng nhất (issue #184): khoá tạo TRONG lớp thì capability
-    // `course:create` đánh giá tại context LỚP (cha của context khoá) thay
-    // cho context danh mục — quyền tại lớp (chủ lớp / vai classassigner)
-    // là căn cứ; danh mục lùi về phân loại hành chính. Không có lớp thì
-    // giữ nguyên cổng danh mục như trước.
     let classRef: { classId: string; contextId: string } | undefined;
     if (input.classId) {
       if (!this.classHook) {
@@ -417,24 +299,9 @@ export class CoursesService {
       classRef = await this.classHook.resolveClass(input.classId, category.tenantId);
       await this.evaluator.requireCapability(actorId, 'course:create', classRef.contextId);
     } else {
-      // Lớp học hạng nhất (issue #184 — điều kiện cứng ở cửa sổ đóng gói
-      // CLASS-0, PR #200): một khoá dạy thật PHẢI thuộc đúng một lớp.
-      // createCourse luôn tạo khoá dạy thật (is_template=false; khoá mẫu
-      // được đánh dấu sau qua updateCourse) nên thiếu classId là từ chối
-      // sạch 4xx tại đây — lưới cứng ở DB là CHECK
-      // course_class_required_check. Đường khôi phục backup (mode=new)
-      // gọi createCourse không kèm lớp cũng bị chặn ở chính cổng này.
       throw new BadRequestException({ message: 'A course must belong to a class: classId is required', code: 'course.class_required' });
     }
     if (input.subjectId != null) await this.assertSubjectExists(input.subjectId);
-    // Điểm chặn SLOT GÓI GIÁO VIÊN (issue #189 — đặc tả slot đã
-    // duyệt): tạo khoá là thời điểm đếm slot của gói giáo viên — khi
-    // khoá thuộc tenant platform, chủ khoá tương lai (chủ của lớp
-    // chứa khoá) bị chặn tạo thêm khoá khi số khoá đang làm chủ đã
-    // bằng hạn mức hiệu lực của gói giáo viên (hạn mức gói / ân hạn
-    // / mức nền). Khoá thuộc tenant khách hàng không qua điểm chặn
-    // này. Chặn TRƯỚC khi chèn bản ghi khoá; các khoá đang có của
-    // giáo viên không bị đụng tới.
     await this.planLimits.assertTeacherCourseSlotForNewCourse(category.tenantId, classRef.classId);
     const shortName = input.shortName.trim();
     if (await this.repo.getCourseByShortname(shortName)) {
@@ -460,13 +327,8 @@ export class CoursesService {
       await this.outbox.enqueueKysely(tx, { aggregate: 'course', type: 'course_created', payload: { courseId: row.id, categoryId: category.id, actorId }, tenantId: category.tenantId });
       return row;
     });
-    // Khoá thuộc lớp: context khoá neo dưới context LỚP (thay vì danh mục)
-    // để quyền tại lớp chảy xuống khoá qua cây path (issue #184).
     await this.contexts.createContext(CONTEXT_LEVELS.COURSE, created.id, classRef?.contextId ?? categoryCtxId);
-    // Mọi khoá học bắt đầu với section 0 (general), như Moodle.
     await this.repo.insertSection({ course: created.id, section: 0, name: null, summary: '', visible: true });
-    // Vật chất hoá phía lớp (group "cả lớp" + instance cohort + backfill
-    // roster) — hook của module classes; lỗi phải lộ ra, không nuốt.
     if (classRef) await this.classHook!.onCourseCreated(created);
     if (input.formatOptions) {
       for (const [name, value] of Object.entries(input.formatOptions)) {
@@ -477,44 +339,27 @@ export class CoursesService {
     return created;
   }
 
-  /** Neo môn của khoá phải trỏ tới một môn học có thật trong cây chương trình (K0a). */
   private async assertSubjectExists(subjectId: string): Promise<void> {
     if (!(await this.repo.getSubjectById(subjectId))) {
       throw new BadRequestException({ message: `Subject ${subjectId} not found`, code: 'course.subject_not_found' });
     }
   }
 
-  /** Tenant sở hữu khoá (KHÔNG lọc theo tenant hiệu lực — dùng cho các móc nội bộ như ghi danh → membership). */
   async getCourseTenantId(id: string): Promise<string | undefined> {
     const row = await this.repo.getCourse(id);
     return row?.tenantId;
   }
 
-  /**
-   * Lấy khoá học; ném course.not_found khi vắng.
-   */
   async getCourse(id: string): Promise<CourseRow> {
     const row = await this.repo.getCourse(id);
     if (!row || this.tenantHidden(row.tenantId)) throw new NotFoundException({ message: `Course ${id} not found`, code: 'course.not_found' });
     return row;
   }
-  /**
-   * Tìm/liệt kê khoá học — khoá mẫu tổ/trường (K1) KHÔNG hiện ở danh
-   * sách khoá thường; chúng chỉ được liệt kê qua `listTemplates`.
-   * Trong request: chỉ khoá của tenant hiệu lực.
-   */
   async listCourses(categoryId?: string): Promise<CourseRow[]> {
     const active = this.tenantContext.currentTenantId();
     return (await this.repo.listCourses(categoryId)).filter((c) => !c.isTemplate && (!active || c.tenantId === active));
   }
 
-  /**
-   * Catalogue khoá học qua HTTP (H12, rà soát #134 + §7.2): `visible`
-   * mang ngữ nghĩa Moodle — khoá ẩn KHÔNG xuất hiện trong danh sách của
-   * người thường; chỉ site admin hoặc người có
-   * `course:viewhiddencourses` tại context của chính khoá đó mới thấy.
-   * Đường nội bộ (calendar/integrations) vẫn dùng listCourses thô.
-   */
   async listCoursesFor(actorId: string, categoryId?: string): Promise<CourseRow[]> {
     const rows = await this.listCourses(categoryId);
     if (await this.evaluator.isSiteAdmin(actorId)) return rows;
@@ -525,11 +370,6 @@ export class CoursesService {
     return out;
   }
 
-  /**
-   * Cây category qua HTTP (H12): category ẩn bị cắt khỏi cây (kèm cả cây
-   * con) với người thường; site admin hoặc holder
-   * `course:viewhiddencourses` tại context của category thấy đủ.
-   */
   async categoryTreeFor(actorId: string): Promise<(CategoryRow & { children: unknown[] })[]> {
     const tree = await this.categoryTree();
     if (await this.evaluator.isSiteAdmin(actorId)) return tree;
@@ -547,12 +387,6 @@ export class CoursesService {
     return prune(tree);
   }
 
-  /**
-   * Danh sách khoá mẫu tổ/trường cho đường 5 của wizard tạo khoá (K1).
-   * Chỉ người có thể tạo khoá ở ít nhất một danh mục (hoặc quản trị hệ
-   * thống) mới thấy mẫu — người không có đường tạo khoá thì danh sách
-   * mẫu không có ý nghĩa và trả rỗng.
-   */
   async listTemplates(actorId: string): Promise<CourseRow[]> {
     if (!(await this.evaluator.isSiteAdmin(actorId))) {
       const categories = await this.repo.listCategories();
@@ -565,23 +399,14 @@ export class CoursesService {
     }
     return this.repo.listTemplateCourses();
   }
-  /**
-   * Tuỳ chọn định dạng của khoá học.
-   */
   async getFormatOptions(courseId: string): Promise<CourseFormatOptionRow[]> {
     return this.repo.listFormatOptions(courseId);
   }
-  /**
-   * Giá trị trường tuỳ biến của khoá học.
-   */
   async getCourseCustomFields(courseId: string): Promise<{ shortName: string; value: string | null }[]> {
     const values = await this.customFields.getValuesForInstance(COURSE_COMPONENT, COURSE_AREA, courseId);
     return values.map((v) => ({ shortName: v.field.shortName, value: v.value }));
   }
 
-  /**
-   * Cập nhật khoá học (shortName giữ duy nhất).
-   */
   async updateCourse(actorId: string, id: string, input: {
     fullName?: string; shortName?: string; category?: string; idNumber?: string; summary?: string;
     format?: string; visible?: boolean; startDate?: string | null; endDate?: string | null; groupMode?: number; groupModeForce?: boolean;
@@ -590,8 +415,6 @@ export class CoursesService {
   }): Promise<CourseRow> {
     const existing = await this.getCourse(id);
     await this.evaluator.requireCapability(actorId, 'course:update', await this.courseContextId(id));
-    // Hạ cờ mẫu của một khoá không lớp sẽ biến nó thành khoá dạy thật
-    // không lớp — từ chối sạch như mọi đường tạo khoá (issue #184).
     if (input.isTemplate === false && !existing.classId) {
       throw new BadRequestException({ message: 'A course without a class can only exist as a template', code: 'course.class_required' });
     }
@@ -636,16 +459,12 @@ export class CoursesService {
     return this.getCourse(id);
   }
 
-  /**
-   * Xoá khoá học và dữ liệu phụ thuộc qua sự kiện/hook của các module khác.
-   */
   async deleteCourse(actorId: string, id: string): Promise<void> {
     const courseRow = await this.getCourse(id);
     await this.evaluator.requireCapability(actorId, 'course:delete', await this.courseContextId(id));
     await this.deleteCourseInternal(courseRow, actorId);
   }
 
-  /** Xoá mà không kiểm tra lại capability (recursive delete của category đã kiểm tra capability của category). */
   private async deleteCourseInternal(courseRow: CourseRow, actorId?: string): Promise<void> {
     const cms = await this.repo.listCms(courseRow.id);
     for (const cm of cms) await this.emitCmDeleted(cm, actorId);
@@ -654,17 +473,6 @@ export class CoursesService {
     await this.outbox.enqueueStandalone({ aggregate: 'course', type: 'course_deleted', payload: { courseId: courseRow.id, actorId: actorId ?? null } });
   }
 
-  // --- cổng truy cập -------------------------------------------------------------
-  /**
-   * Cổng nội dung khoá học (report §2#5): ghi danh và capability là
-   * điều kiện ĐỘC LẬP. Truy cập = site admin, HOẶC một ghi danh ACTIVE, HOẶC
-   * một gán role thật (không phải student) cấp course:view.
-   * Một ghi danh bị đình chỉ vì vậy chặn cả user giữ role student
-   * — chỉ role thôi không bao giờ mở khoá học.
-   */
-  /**
-   * Cổng truy cập khoá học: ẩn + chưa enrol + thiếu capability → course.access_denied.
-   */
   async assertCourseAccess(userId: string, courseId: string): Promise<CourseRow> {
     const courseRow = await this.getCourse(courseId);
     if (await this.evaluator.isSiteAdmin(userId)) return courseRow;
@@ -677,18 +485,11 @@ export class CoursesService {
     throw new ForbiddenException({ message: 'User is not enrolled in this course (or the enrolment is not active)', code: 'course.not_enrolled' });
   }
 
-  /**
-   * User có capability xem hoạt động ẩn trong khoá học hay không.
-   */
   async canViewHiddenActivities(userId: string, courseId: string): Promise<boolean> {
     if (await this.evaluator.isSiteAdmin(userId)) return true;
     return this.evaluator.hasCapability(userId, 'course:viewhiddenactivities', await this.courseContextId(courseId));
   }
 
-  // --- section & module ------------------------------------------------------
-  /**
-   * Thêm section vào khoá học.
-   */
   async createSection(actorId: string, courseId: string, input: { name?: string; summary?: string; visible?: boolean; availability?: unknown; openAt?: string | null }): Promise<SectionRow> {
     await this.getCourse(courseId);
     await this.evaluator.requireCapability(actorId, 'course:update', await this.courseContextId(courseId));
@@ -702,21 +503,12 @@ export class CoursesService {
       openAt: input.openAt ? new Date(input.openAt) : null,
     });
   }
-  /**
-   * Lấy section; ném course.section_not_found khi vắng.
-   */
   async getSection(id: string): Promise<SectionRow> {
     const row = await this.repo.getSection(id);
     if (!row) throw new NotFoundException({ message: `Section ${id} not found`, code: 'course.section_not_found' });
     return row;
   }
-  /**
-   * Liệt kê section của khoá học.
-   */
   async listSections(courseId: string): Promise<SectionRow[]> { return this.repo.listSections(courseId); }
-  /**
-   * Cập nhật section (gồm cây availability dạng JSON).
-   */
   async updateSection(actorId: string, id: string, input: { name?: string; summary?: string; visible?: boolean; availability?: unknown; openAt?: string | null }): Promise<SectionRow> {
     const section = await this.getSection(id);
     await this.evaluator.requireCapability(actorId, 'course:update', await this.courseContextId(section.course));
@@ -730,9 +522,6 @@ export class CoursesService {
     if (Object.keys(patch).length) await this.repo.updateSection(id, patch);
     return this.getSection(id);
   }
-  /**
-   * Xoá section.
-   */
   async deleteSection(actorId: string, id: string): Promise<void> {
     const section = await this.getSection(id);
     await this.evaluator.requireCapability(actorId, 'course:update', await this.courseContextId(section.course));
@@ -741,9 +530,6 @@ export class CoursesService {
     await this.repo.deleteSection(id);
   }
 
-  /**
-   * Thêm course module (hoạt động/tài nguyên) vào section.
-   */
   async createCm(actorId: string, courseId: string, input: {
     sectionId: string; component: string; instanceId?: string; name?: string; visible?: boolean; groupMode?: number;
     availability?: unknown; completion?: number; completionView?: boolean; completionUseGrade?: boolean;
@@ -754,7 +540,6 @@ export class CoursesService {
     const section = await this.getSection(input.sectionId);
     if (section.course !== courseId) throw new BadRequestException({ message: 'Section does not belong to this course', code: 'course.section_course_mismatch' });
     if (input.availability !== undefined) this.availability.parse(input.availability);
-    // Module mới luôn nối cuối outline của section (K1: sortOrder tường minh).
     const siblings = await this.repo.listCmsInSection(section.id);
     const sortOrder = siblings.length ? Math.max(...siblings.map((c) => c.sortOrder)) + 1 : 0;
     const cm = await this.repo.insertCm({
@@ -774,21 +559,12 @@ export class CoursesService {
     void courseRow;
     return cm;
   }
-  /**
-   * Lấy cm; ném course.module_not_found khi vắng.
-   */
   async getCm(id: string): Promise<CmRow> {
     const row = await this.repo.getCm(id);
     if (!row) throw new NotFoundException({ message: `Course module ${id} not found`, code: 'course.cm_not_found' });
     return row;
   }
-  /**
-   * Liệt kê cm của khoá học.
-   */
   async listCms(courseId: string): Promise<CmRow[]> { return this.repo.listCms(courseId); }
-  /**
-   * Cập nhật cm (gồm availability và completion kỳ vọng).
-   */
   async updateCm(actorId: string, id: string, input: {
     name?: string; visible?: boolean; groupMode?: number; availability?: unknown; completion?: number;
     completionView?: boolean; completionUseGrade?: boolean; completionManual?: boolean; completionExpected?: string | null; openAt?: string | null; sectionId?: string;
@@ -823,8 +599,6 @@ export class CoursesService {
       aggregate: 'course_module', type: 'cm_deleted',
       payload: { cmId: cm.id, courseId: cm.course, contextId: contextId ?? null, component: cm.component, instanceId: cm.instanceId, actorId: actorId ?? null },
     });
-    // Phân phối trong tiến trình cho handler của các module sở hữu (completion, files);
-    // handler idempotent, nên relay outbox bền có thể phát lại an toàn.
     await this.emitter.emitAsync('cm_deleted', { cmId: cm.id, courseId: cm.course, contextId: contextId ?? null, component: cm.component, instanceId: cm.instanceId });
     if (contextId) await this.contexts.deleteContext(contextId);
   }
@@ -833,23 +607,12 @@ export class CoursesService {
     await this.emitCmDeleted(cm, actorId);
     await this.repo.deleteCm(cm.id);
   }
-  /**
-   * Xoá cm và phát sự kiện để module liên quan dọn dữ liệu.
-   */
   async deleteCm(actorId: string, id: string): Promise<void> {
     const cm = await this.getCm(id);
     await this.evaluator.requireCapability(actorId, 'course:manageactivities', await this.courseContextId(cm.course));
     await this.deleteCmInternal(cm, actorId);
   }
 
-  /**
-   * Ghi nhận một user đã xem một cm: xếp hàng sự kiện outbox bền `cm_viewed`
-   * VÀ phân phối trong tiến trình để listener của CompletionModule ghi
-   * trạng thái completionView (handler idempotent).
-   */
-  /**
-   * Ghi nhận lượt xem cm — đầu vào của completion theo lượt xem.
-   */
   async recordCmView(userId: string, cmId: string): Promise<CmRow> {
     const cm = await this.getCm(cmId);
     await this.assertCourseAccess(userId, cm.course);
@@ -860,10 +623,6 @@ export class CoursesService {
     return cm;
   }
 
-  /** Kiểm tra availability phía server cho một cm (availability của section VÀ availability của cm đều phải qua). */
-  /**
-   * Đánh giá truy cập một cm: hiển thị (show) tách khỏi khả dụng (available) theo semantics availability của Moodle.
-   */
   async checkCmAccess(userId: string, cm: CmRow, grades?: Record<string, number>): Promise<{ available: boolean; visible: boolean; failedDescriptions: string[] }> {
     const resolvedGrades = grades ?? (this.gradeProvider ? await this.gradesForAvailability(userId, cm.course) : undefined);
     const ctx: AvailabilityContext = { userId, courseId: cm.course, grades: resolvedGrades };
@@ -872,13 +631,10 @@ export class CoursesService {
       const s = await this.availability.evaluate(section.availability, ctx);
       if (!s.available) return { available: false, visible: s.visible, failedDescriptions: s.failedDescriptions };
     }
-    // Ngày mở theo lịch của section (K1): chưa tới ngày thì học viên
-    // không thấy mục con bên trong, trừ người xem được hoạt động ẩn.
     if (section?.openAt && section.openAt.getTime() > Date.now()) {
       const canSeeHidden = await this.canViewHiddenActivities(userId, cm.course);
       if (!canSeeHidden) return { available: false, visible: false, failedDescriptions: [] };
     }
-    // Ngày mở theo lịch của chính module (K1).
     if (cm.openAt && cm.openAt.getTime() > Date.now()) {
       const canSeeHidden = await this.canViewHiddenActivities(userId, cm.course);
       if (!canSeeHidden) return { available: false, visible: false, failedDescriptions: [] };
@@ -895,15 +651,10 @@ export class CoursesService {
     return { available: r.available, visible: r.visible, failedDescriptions: r.failedDescriptions };
   }
 
-  /**
-   * Đánh giá truy cập một section theo cây availability của nó.
-   */
   async checkSectionAccess(userId: string, section: SectionRow, grades?: Record<string, number>): Promise<{ available: boolean; visible: boolean; failedDescriptions: string[] }> {
     if (!section.visible && !(await this.canViewHiddenActivities(userId, section.course))) {
       return { available: false, visible: false, failedDescriptions: [] };
     }
-    // Ngày mở theo lịch (K1): section chưa tới ngày mở thì học viên
-    // không xem được, người xem được hoạt động ẩn vẫn thấy để soạn.
     if (section.openAt && section.openAt.getTime() > Date.now() && !(await this.canViewHiddenActivities(userId, section.course))) {
       return { available: false, visible: false, failedDescriptions: [] };
     }
@@ -912,20 +663,6 @@ export class CoursesService {
     return { available: r.available, visible: r.visible, failedDescriptions: r.failedDescriptions };
   }
 
-  /**
-   * Nạp khung chương trình vào khoá (K0a — bản sao có neo): mỗi node
-   * khung được chọn thành một section mới mang tựa của node và toàn bộ
-   * YCCĐ trong subtree của nó, chụp nguyên văn vào neo. `insertAtSection`
-   * chèn trước section mang số đó (đẩy các section từ đó xuống cuối
-   * đoạn chèn), bỏ trống thì nối cuối outline. Sửa cây chương trình sau
-   * đó không đổi các section đã nạp vì chúng đọc từ bản chụp.
-   * Nạp lại là IDEMPOTENT theo node: node đã có section neo trong khoá
-   * (từ chính khung này) thì bỏ qua — không sinh section trùng, không
-   * dịch outline — và kết quả chỉ gồm các section thật sự vừa tạo.
-   * Quyền: course:update tại context khoá đích là cổng duy nhất của
-   * đường nạp khung (provider khung tin cậy cổng này — xem
-   * CurriculumFrameProvider).
-   */
   async applyCurriculumFrame(actorId: string, courseId: string, input: {
     curriculumId: string; nodeIds: string[]; insertAtSection?: number;
   }): Promise<(SectionRow & { frame: SectionFrameView })[]> {
@@ -946,8 +683,6 @@ export class CoursesService {
       });
     }
     const existing = await this.repo.listSections(courseId);
-    // Idempotent theo node: node đã neo vào một section của khoá này
-    // (từ chính khung đang nạp) thì bỏ qua, không tạo section trùng.
     const existingAnchors = await this.repo.listAnchorsForSections(existing.map((s) => s.id));
     const alreadyApplied = new Set(
       existingAnchors.filter((a) => a.curriculumId === input.curriculumId).map((a) => a.nodeId),
@@ -967,7 +702,6 @@ export class CoursesService {
     await this.repo.transaction(async (tx) => {
       const handle = tx;
       if (input.insertAtSection !== undefined && insertAt <= maxSection) {
-        // Hai pass qua vùng đệm +100000 để unique (course, section) không vỡ giữa chừng.
         await this.repo.shiftSections(handle, courseId, insertAt, 100000);
         await this.repo.shiftSections(handle, courseId, insertAt + 100000, count - 100000);
       }
@@ -994,20 +728,11 @@ export class CoursesService {
     return created;
   }
 
-  // --- K1: nhân bản & dùng lại nội dung -------------------------------------
-  /**
-   * Dịch một mốc thời gian theo delta nhân bản (null giữ nguyên null).
-   */
   private shiftDate(d: Date | null, deltaMs: number): Date | null {
     if (!d || deltaMs === 0) return d;
     return new Date(d.getTime() + deltaMs);
   }
 
-  /**
-   * Dịch mọi lá `date` trong cây availability theo delta nhân bản: lá
-   * date của hệ thống mang `time` là epoch giây (số) hoặc chuỗi ISO —
-   * dịch đúng định dạng gốc, các lá khác giữ nguyên.
-   */
   private shiftAvailability(node: unknown, deltaMs: number): unknown {
     if (deltaMs === 0 || node === null || typeof node !== 'object') return node;
     if (Array.isArray(node)) return node.map((n) => this.shiftAvailability(n, deltaMs));
@@ -1024,11 +749,6 @@ export class CoursesService {
     return out;
   }
 
-  /**
-   * Quyền đọc nội dung khoá nguồn cho các đường sao chép (K1): qua
-   * cổng truy cập thường lệ, hoặc người có `course:update` tại khoá
-   * nguồn (giáo viên soạn khoá nhưng chưa/không cần ghi danh).
-   */
   private async assertCanCopyFrom(actorId: string, sourceCourseId: string): Promise<CourseRow> {
     const source = await this.getCourse(sourceCourseId);
     try {
@@ -1041,39 +761,12 @@ export class CoursesService {
     }
   }
 
-  /**
-   * Sao chép một course module sang khoá/section đích trong cùng
-   * transaction: instance của hoạt động đề (mod_quiz) được nhân bản
-   * thành một LẦN GHIM mới vào khoá đích trỏ CÙNG exam + exam version
-   * (slots nằm trên version — dùng chung, không chép; KHÔNG chép lượt
-   * làm bài; nhóm đích KHÔNG mang theo vì nhóm thuộc khoá nguồn); các
-   * component khác hiện không có bảng instance riêng do module sở hữu
-   * tạo qua API nên giữ nguyên `instanceId` (thực tế là null). Trả cm
-   * mới và ghi map id.
-   *
-   * Toàn bộ trường CẤU HÌNH của lần ghim được chép theo bản gốc —
-   * gồm cả cặp preset (khuôn ghim kiểm tra) và `versionMode` (chế độ
-   * version của các ô đề: ghim cứng hay bám version mới nhất của
-   * ngân hàng), vì hai trường này chỉ có nghĩa cùng nhau: một lần
-   * ghim "float" mà bản sao lặng lẽ rơi về mặc định `pinned` sẽ đóng
-   * băng version của học viên ở khoá mới mà không ai hay biết (lỗi
-   * sót danh sách chép đã sửa ở issue #228 — quyết định: cờ
-   * version_mode ĐI THEO bản sao). Trường KHÔNG chép có chủ đích:
-   * `resultsPublishedAt` (kết quả chưa công bố ở lần ghim mới) và
-   * `cmId` (gán lại theo module mới ngay sau).
-   */
   private async copyCmRow(
     tx: CentreTx, source: CmRow, targetCourseId: string, targetSectionId: string,
     deltaMs: number, cmMap: Map<string, string>,
   ): Promise<CmRow> {
     let instanceId = source.instanceId;
     if (source.component === QUIZ_COMPONENT_NAME && source.instanceId) {
-      // Đường ghi trực tiếp trên bảng `exam_pins` trong transaction
-      // nhân bản — đã chuyển sang Kysely cùng toàn bộ file này
-      // (điểm 5 của phán quyết C-8, cùng cơ chế với
-      // `copyGradeStructure`): bảng đã có trong kiểu sinh của kho
-      // trung tâm; cột `variants` là jsonb mang mảng ở tầng cao
-      // nhất nên ghi qua xâu hoá + `::jsonb` như mọi ghi jsonb.
       const pin = await tx.selectFrom('exam_pins').selectAll().where('id', '=', source.instanceId).executeTakeFirst();
       if (pin) {
         const newPin = await tx.insertInto('exam_pins').values({
@@ -1108,18 +801,10 @@ export class CoursesService {
     if (source.component === QUIZ_COMPONENT_NAME && instanceId && instanceId !== source.instanceId) {
       await tx.updateTable('exam_pins').set({ cm_id: newCm.id }).where('id', '=', instanceId).execute();
     }
-    // Context module cho cm mới (như createCm) — contexts nằm ngoài tx
-    // của courses trong luồng tạo thường; ở đây tạo sau khi tx commit
-    // qua danh sách chờ của caller là không khả thi, nên tạo trực tiếp:
-    // ContextsService dùng cùng kết nối DB nền, chấp nhận được.
     await this.contexts.createContext(CONTEXT_LEVELS.MODULE, newCm.id, await this.courseContextId(targetCourseId));
     return newCm;
   }
 
-  /**
-   * Sao chép một section (kèm neo khung + toàn bộ cm) vào khoá đích tại
-   * số section chỉ định, trong cùng transaction. Trả section mới.
-   */
   private async copySectionRow(
     tx: CentreTx, source: SectionRow, targetCourseId: string, targetNumber: number,
     deltaMs: number, cmMap: Map<string, string>,
@@ -1148,27 +833,15 @@ export class CoursesService {
     return newSection;
   }
 
-  /**
-   * Sao chép cấu trúc điểm (chính sách điểm) của khoá nguồn sang khoá
-   * đích: scale cấp khoá, outcome, cây category điểm, toàn bộ grade
-   * item (map lại instance/category/course) — KHÔNG chép điểm của học
-   * viên (grade_grades), theo đúng bảng sao chép Re-run của issue #68.
-   */
   private async copyGradeStructure(
     tx: CentreTx, sourceCourseId: string, targetCourseId: string, cmMap: Map<string, string>, deltaMs = 0,
   ): Promise<void> {
-    // Điểm 5 của phán quyết C-8: hàm này ghi trực tiếp các bảng
-    // grades/completion TRONG transaction của luồng nhân bản và
-    // được chuyển sang Kysely ngay tại đây (các bảng đã có trong
-    // kiểu sinh của kho trung tâm) thay vì chờ repository của các
-    // nhóm G4/G9 — file này thuộc chính cụm G5 và không chạm file
-    // repository của các nhóm đó.
     const sourceItems = await tx.selectFrom('grade_items').selectAll().where('course_id', '=', sourceCourseId).execute();
     for (const item of sourceItems) {
       let itemInstance = item.item_instance;
       if (item.item_type === 'mod') {
         itemInstance = item.item_instance ? cmMap.get(item.item_instance) ?? null : null;
-        if (!itemInstance) continue; // cm không được chép (không xảy ra ở nhân bản toàn khoá) — bỏ item mồ côi.
+        if (!itemInstance) continue;
       }
       await tx.insertInto('grade_items').values({
         course_id: targetCourseId,
@@ -1179,7 +852,6 @@ export class CoursesService {
         posting_policy: item.posting_policy,
       }).execute();
     }
-    // Cài đặt tổng hợp hoàn thành khoá + tiêu chí hoàn thành (cấu trúc, không phải tiến độ).
     const settings = await tx.selectFrom('course_completion_settings').selectAll().where('course', '=', sourceCourseId).executeTakeFirst();
     if (settings) {
       await tx.insertInto('course_completion_settings').values({ course: targetCourseId, method: settings.method }).onConflict((oc) => oc.doNothing()).execute();
@@ -1195,28 +867,13 @@ export class CoursesService {
     }
   }
 
-  /**
-   * Nhân bản khoá học (đường 3 của wizard K1 + nhân bản từ mẫu): sao
-   * chép theo bảng Re-run của issue #68 — cấu trúc (section/cm kèm
-   * instance quiz), cài đặt khoá, chính sách điểm, tiêu chí hoàn thành,
-   * neo khung chương trình, trường tuỳ biến; KHÔNG chép người học, ghi
-   * danh, lượt làm bài, điểm và tiến độ. Bản sao luôn ở trạng thái nháp
-   * (visible=false); khi có `startDate` mới, mọi mốc hạn trong khoá
-   * (ngày kết thúc, ngày mở, hạn hoàn thành, giờ mở/đóng quiz, lá date
-   * trong availability) lùi theo delta so với ngày bắt đầu của nguồn.
-   * Quyền: đọc được nội dung nguồn + `course:create` tại danh mục đích.
-   */
   async duplicateCourse(actorId: string, sourceCourseId: string, input: {
     fullName: string; shortName: string; category?: string; startDate?: string;
-    /** Lớp đích (issue #184): mặc định giữ lớp của khoá nguồn — đây là đường "nhân bản khoá mẫu vào lớp" của wizard; đích cuối cùng không có lớp (gồm `null` tường minh) bị từ chối `course.class_required`. */
     classId?: string | null;
   }): Promise<CourseRow> {
     const source = await this.assertCanCopyFrom(actorId, sourceCourseId);
     const targetCategory = input.category ? await this.getCategory(input.category) : await this.getCategory(source.category);
     const categoryCtxId = await this.categoryContextId(targetCategory.id);
-    // Lớp đích: tường minh qua input, mặc định là lớp của khoá nguồn
-    // (nhân bản trong cùng lớp). Có lớp đích thì cổng `course:create`
-    // neo vào context lớp như đường tạo khoá thường (issue #184).
     const targetClassId = input.classId !== undefined ? input.classId : source.classId;
     let classRef: { classId: string; contextId: string } | undefined;
     if (targetClassId) {
@@ -1226,12 +883,6 @@ export class CoursesService {
       classRef = await this.classHook.resolveClass(targetClassId, targetCategory.tenantId);
       await this.evaluator.requireCapability(actorId, 'course:create', classRef.contextId);
     } else {
-      // Bản sao luôn là khoá dạy thật (isTemplate=false ở insert dưới):
-      // không có lớp đích — gồm cả `classId: null` tường minh và nhân bản
-      // từ khoá mẫu vốn không lớp — là từ chối sạch 4xx (issue #184, điều
-      // kiện cứng đóng gói CLASS-0). Muốn nhân bản vào lớp thì truyền
-      // classId đích; bỏ trống chỉ hợp lệ khi khoá nguồn đã thuộc một lớp
-      // (giữ nguyên lớp nguồn).
       throw new BadRequestException({ message: 'A duplicated course must belong to a class: classId is required', code: 'course.class_required' });
     }
     const shortName = input.shortName.trim();
@@ -1261,10 +912,7 @@ export class CoursesService {
       await this.outbox.enqueueKysely(tx, { aggregate: 'course', type: 'course_duplicated', payload: { courseId: row.id, sourceCourseId, actorId }, tenantId: targetCategory.tenantId });
       return row;
     });
-    // Khoá thuộc lớp: context neo dưới context lớp như đường tạo thường.
     await this.contexts.createContext(CONTEXT_LEVELS.COURSE, created.id, classRef?.contextId ?? categoryCtxId);
-    // Vật chất hoá phía lớp cho bản sao (group "cả lớp" + instance cohort
-    // + backfill roster của lớp đích) — issue #184.
     if (classRef) await this.classHook!.onCourseCreated(created);
     const cmMap = new Map<string, string>();
     await this.repo.transaction(async (tx) => {
@@ -1277,8 +925,6 @@ export class CoursesService {
         await this.copySectionRow(tx, s, created.id, s.section, deltaMs, cmMap);
       }
       await this.copyGradeStructure(tx, sourceCourseId, created.id, cmMap, deltaMs);
-      // Format options (sectionId map lại theo section mới khi có) —
-      // đọc section mới ngay trong transaction để thấy dữ liệu vừa chèn.
       const sectionMap = new Map<string, string>();
       const newSections = await tx.selectFrom('course_sections').selectAll().where('course', '=', created.id).execute();
       for (const s of ordered) {
@@ -1305,14 +951,6 @@ export class CoursesService {
     return this.getCourse(created.id);
   }
 
-  /**
-   * "Dùng lại từ khoá khác" (K1): chép các section nguyên vẹn và/hoặc
-   * module lẻ từ khoá nguồn vào khoá đích, nối cuối outline. Module lẻ
-   * được gom theo section nguồn của chúng — mỗi nhóm thành một section
-   * mới mang tên section nguồn (trừ khi section đó đã được chép nguyên
-   * vẹn trong cùng lệnh). Ngày tháng giữ nguyên như nguồn (không lùi
-   * hạn — đây là dùng lại nội dung, không phải mở đợt học mới).
-   */
   async copyCourseContent(actorId: string, targetCourseId: string, input: {
     sourceCourseId: string; sectionIds?: string[]; moduleIds?: string[];
   }): Promise<{ sections: SectionRow[]; modules: CmRow[] }> {
@@ -1346,7 +984,6 @@ export class CoursesService {
         const created = await this.copySectionRow(tx, s, targetCourseId, nextNumber++, 0, cmMap);
         createdSections.push(created);
       }
-      // Nhóm module lẻ theo section nguồn: mỗi nhóm một section mới.
       const groups = new Map<string, CmRow[]>();
       for (const cm of looseCms) {
         const list = groups.get(cm.section) ?? [];
@@ -1373,11 +1010,6 @@ export class CoursesService {
     return { sections: createdSections, modules: createdCms };
   }
 
-  /**
-   * Nhân bản một section ngay tại outline (K1): bản sao (kèm cm +
-   * instance quiz + neo khung) chèn ngay sau section gốc, các section
-   * phía sau lùi một số.
-   */
   async duplicateSection(actorId: string, sectionId: string): Promise<SectionRow> {
     const section = await this.getSection(sectionId);
     await this.evaluator.requireCapability(actorId, 'course:update', await this.courseContextId(section.course));
@@ -1385,13 +1017,9 @@ export class CoursesService {
     let created!: SectionRow;
     await this.repo.transaction(async (tx) => {
       const handle = tx;
-      // Hai pass qua vùng đệm +100000 như đường chèn khung (K0a).
       await this.repo.shiftSections(handle, section.course, section.section + 1, 100000);
       await this.repo.shiftSections(handle, section.course, section.section + 1 + 100000, 1 - 100000);
       created = await this.copySectionRow(tx, section, section.course, section.section + 1, 0, cmMap);
-      // Item điểm 'mod' của các cm gốc trỏ sang cm bản sao (ghi trực
-      // tiếp trên `grade_items` trong cùng transaction — cùng cơ
-      // chế điểm 5 của phán quyết C-8 với `copyGradeStructure`).
       for (const [oldCmId, newCmId] of cmMap) {
         const items = await tx.selectFrom('grade_items').selectAll()
           .where('course_id', '=', section.course)
@@ -1412,27 +1040,18 @@ export class CoursesService {
     return created;
   }
 
-  /**
-   * Nhân bản một course module tại dòng (K1): bản sao chèn ngay sau
-   * module gốc trong cùng section (instance quiz nhân bản sâu; item
-   * điểm 'mod' tương ứng được chép trỏ sang bản sao).
-   */
   async duplicateCm(actorId: string, cmId: string): Promise<CmRow> {
     const cm = await this.getCm(cmId);
     await this.evaluator.requireCapability(actorId, 'course:manageactivities', await this.courseContextId(cm.course));
     const cmMap = new Map<string, string>();
     let created!: CmRow;
     await this.repo.transaction(async (tx) => {
-      // Đẩy các module sau module gốc xuống một bậc sortOrder.
       await tx.updateTable('course_modules')
         .set({ sort_order: sql<number>`sort_order + 1` })
         .where('section', '=', cm.section)
         .where('sort_order', '>', cm.sortOrder)
         .execute();
       created = await this.copyCmRow(tx, { ...cm, sortOrder: cm.sortOrder + 1 }, cm.course, cm.section, 0, cmMap);
-      // Item điểm 'mod' của cm gốc trỏ sang cm bản sao (ghi trực
-      // tiếp trên `grade_items` trong cùng transaction — cùng cơ
-      // chế điểm 5 của phán quyết C-8 với `copyGradeStructure`).
       const items = await tx.selectFrom('grade_items').selectAll()
         .where('course_id', '=', cm.course)
         .where('item_type', '=', 'mod')
@@ -1451,11 +1070,6 @@ export class CoursesService {
     return created;
   }
 
-  /**
-   * Đổi thứ tự section bằng danh sách id mới (K1 — kéo–thả + nút
-   * lên/xuống ở Builder Outline): danh sách phải đủ mọi section của
-   * khoá; số section được gán lại 0..n-1 theo đúng thứ tự truyền vào.
-   */
   async reorderSections(actorId: string, courseId: string, sectionIds: string[]): Promise<SectionRow[]> {
     await this.getCourse(courseId);
     await this.evaluator.requireCapability(actorId, 'course:update', await this.courseContextId(courseId));
@@ -1466,7 +1080,6 @@ export class CoursesService {
     }
     await this.repo.transaction(async (tx) => {
       const handle = tx;
-      // Vùng đệm +100000 tránh vỡ unique (course, section) giữa chừng.
       await this.repo.shiftSections(handle, courseId, 0, 100000);
       for (const [i, id] of sectionIds.entries()) {
         await tx.updateTable('course_sections').set({ section: i, updated_at: new Date() }).where('id', '=', id).execute();
@@ -1475,10 +1088,6 @@ export class CoursesService {
     return this.repo.listSections(courseId);
   }
 
-  /**
-   * Đổi thứ tự module trong một section bằng danh sách id mới (K1):
-   * danh sách phải đủ mọi module của section; sortOrder gán lại 0..n-1.
-   */
   async reorderModules(actorId: string, sectionId: string, moduleIds: string[]): Promise<CmRow[]> {
     const section = await this.getSection(sectionId);
     await this.evaluator.requireCapability(actorId, 'course:manageactivities', await this.courseContextId(section.course));
@@ -1495,16 +1104,6 @@ export class CoursesService {
     return this.repo.listCmsInSection(sectionId);
   }
 
-  /**
-   * Nạp khung SGK vào khoá (K0b — bản sao có neo kép): mỗi chủ đề được
-   * chọn thành một section mới mang tựa của chủ đề; các bài trong chủ
-   * đề thành mục của section, mỗi mục chụp toàn bộ YCCĐ suy qua ánh xạ
-   * (bài → node chương trình → YCCĐ của node) tại thời điểm nạp.
-   * `insertAtSection` như ở khung chương trình. Sửa cây sách hoặc ánh
-   * xạ sau đó không đổi các section đã nạp vì chúng đọc từ bản chụp.
-   * Quyền: course:update tại context khoá đích là cổng duy nhất (như
-   * K0a — provider khung tin cậy cổng này).
-   */
   async applyBookFrame(actorId: string, courseId: string, input: {
     bookId: string; chapterNodeIds: string[]; insertAtSection?: number;
   }): Promise<(SectionRow & { bookFrame: SectionBookFrameView })[]> {
@@ -1538,7 +1137,6 @@ export class CoursesService {
     await this.repo.transaction(async (tx) => {
       const handle = tx;
       if (input.insertAtSection !== undefined && insertAt <= maxSection) {
-        // Hai pass qua vùng đệm +100000 để unique (course, section) không vỡ giữa chừng (như khung chương trình).
         await this.repo.shiftSections(handle, courseId, insertAt, 100000);
         await this.repo.shiftSections(handle, courseId, insertAt + 100000, count - 100000);
       }
@@ -1572,15 +1170,10 @@ export class CoursesService {
     return created;
   }
 
-  /** View nội dung khoá học đầy đủ với availability từng mục đã đánh giá cho user NÀY; mục ẩn-không-khả-dụng bị bỏ. */
-  /**
-   * Dựng nội dung khoá học cho người xem: section + cm kèm kết quả availability đã đánh giá theo user.
-   */
   async getCourseContent(userId: string, courseId: string): Promise<CourseContentView> {
     const courseRow = await this.assertCourseAccess(userId, courseId);
     const sections = await this.repo.listSections(courseId);
     const cms = await this.repo.listCms(courseId);
-    // Neo khung (K0a): đọc bản chụp, không đọc lại cây chương trình.
     const anchors = await this.repo.listAnchorsForSections(sections.map((s) => s.id));
     const anchorOutcomes = await this.repo.listAnchorOutcomes(anchors.map((a) => a.id));
     const frameBySection = new Map<string, SectionFrameView>();
@@ -1591,7 +1184,6 @@ export class CoursesService {
           .map((o) => ({ outcomeId: o.outcomeId, content: o.content })),
       });
     }
-    // Neo khung SGK (K0b): cũng đọc bản chụp (neo → mục bài → YCCĐ chụp).
     const bookAnchors = await this.repo.listBookAnchorsForSections(sections.map((s) => s.id));
     const bookItems = await this.repo.listBookItems(bookAnchors.map((a) => a.id));
     const bookItemOutcomes = await this.repo.listBookItemOutcomes(bookItems.map((i) => i.id));

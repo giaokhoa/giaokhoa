@@ -14,31 +14,17 @@ export const COMPLETION_PASS = 2;
 export const COMPLETION_FAIL = 3;
 export const COMPLETION_DONE = 1;
 
-/** Trạng thái công bố của một item (PH-0, issue #116): policy neo trên item; published = điểm đang hiện phía học sinh. */
 export interface GradePublicationState {
   policy: 'auto' | 'manual';
   published: boolean;
 }
 
-/** Một dòng điểm theo bài trong lưới xem: item (bài) + điểm của user (null khi chưa có hoặc đang bị cổng công bố che) + trạng thái công bố. */
 export interface ActivityGradeView {
   item: ItemRow;
   grade: GradeRow | null;
   publication: GradePublicationState;
 }
 
-/**
- * GradesModule facade — ĐIỂM THEO TỪNG BÀI (quyết định 23:49 ngày 25/10/2026, issue #224). Nguồn sự thật duy nhất của điểm là điểm của từng hoạt động: quiz attempt ghi qua recordActivityGrade, bài tập chấm theo bài, GV nhập/sửa điểm của một bài qua setGrade/updateGrade. Mọi phép tính số học nằm ở engine thuần @giaokhoa/grades (adjustedGrade).
- *
- * ĐÃ GỠ HẲN ở #224: gradebook tổng hợp theo khoá (categories/letters/ scales/outcomes, điểm tổng khoá, regrade, export/import CSV) và Sổ điểm VN (vn-books TT 22/27). Không còn khái niệm điểm của khoá học.
- *
- * Kết nối (chỉ registry/facade, không dùng repository xuyên module):
- *  - đăng ký một provider phần trăm điểm vào CoursesService để
- *    lá 'grade' của Availability đánh giá trên điểm THẬT theo từng hoạt động;
- *  - đăng ký các evaluator điểm vào CompletionService để
- *    completionUseGrade đánh giá trên điểm của chính hoạt động đó;
- *  - sau khi điểm thay đổi, nó làm mới completion cho người dùng.
- */
 @Injectable()
 export class GradesService implements OnModuleInit {
   constructor(
@@ -51,26 +37,17 @@ export class GradesService implements OnModuleInit {
     private readonly users: UsersService,
   ) {}
 
-  /**
-   * Khởi tạo: đăng ký grade provider cho availability/completion.
-   */
   onModuleInit(): void {
     this.courses.registerGradeProvider(async (userId, courseId) => this.gradePercentagesForUser(userId, courseId));
     this.completion.registerGradeEvaluator(async (cmId, userId) => this.evaluateCmGrade(cmId, userId));
     this.completion.registerCourseGradeChecker(async (courseId, userId) => this.courseGradePassed(courseId, userId));
-    // Dữ liệu điểm là một họ "dữ liệu liên quan" quyết định giữ/xoá dòng ghi danh khi gỡ ghi danh: họ đó nay được truy vấn trực tiếp ở tầng dữ liệu dùng chung (@giaokhoa/enrol) thay cho probe đăng ký lúc khởi tạo tiến trình như trước đây.
   }
 
   private async requireCap(actorId: string, capability: string, courseId: string): Promise<void> {
     await this.evaluator.requireCapability(actorId, capability, await this.courses.courseContextId(courseId));
   }
 
-  // --- items ---------------------------------------------------------------
 
-  /**
-   * Kiểm tra idNumber không trùng với item khác trong cùng khoá học
-   * (idNumber là định danh duy nhất của item trong khoá khi không null).
-   */
   private async assertIdnumberFree(courseId: string, idNumber: string | null | undefined, selfItemId?: string): Promise<void> {
     if (!idNumber) return;
     const existing = await this.repo.findItemByIdnumber(courseId, idNumber);
@@ -79,11 +56,6 @@ export class GradesService implements OnModuleInit {
     }
   }
 
-  /**
-   * Tạo grade item: 'manual' (điểm nhập tay của một bài/đợt riêng) hoặc
-   * 'mod' (gắn một course module — đường quiz/assignment tự gọi khi tạo
-   * hoạt động). Mỗi cm chỉ có tối đa một item 'mod'.
-   */
   async createItem(actorId: string, courseId: string, input: {
     itemName: string; itemType?: string; cmId?: string;
     gradeMax?: number; gradeMin?: number; gradePass?: number; hidden?: boolean;
@@ -122,26 +94,16 @@ export class GradesService implements OnModuleInit {
     return item;
   }
 
-  /**
-   * Lấy item; ném grades.item_not_found khi vắng.
-   */
   async getItem(id: string): Promise<ItemRow> {
     const row = await this.repo.getItem(id);
     if (!row) throw new NotFoundException({ message: `Grade item ${id} not found`, code: 'grades.item_not_found' });
     return row;
   }
-  /**
-   * Item của khoá học.
-   */
   async listItems(actorId: string, courseId: string): Promise<ItemRow[]> {
     await this.courses.assertCourseAccess(actorId, courseId);
     return this.repo.listItems(courseId);
   }
 
-  /**
-   * Cập nhật item (tên/thang điểm/ngưỡng đạt/idNumber/ẩn/khoá) — đường
-   * quiz/assignment gọi khi hoạt động đổi tên hoặc thang điểm.
-   */
   async updateItem(actorId: string, itemId: string, input: {
     itemName?: string; gradeMax?: number; gradeMin?: number; gradePass?: number;
     idNumber?: string | null;
@@ -165,18 +127,13 @@ export class GradesService implements OnModuleInit {
     return this.getItem(itemId);
   }
 
-  /**
-   * Xoá item và điểm của nó.
-   */
   async deleteItem(actorId: string, itemId: string): Promise<void> {
     const item = await this.getItem(itemId);
     await this.requireCap(actorId, 'grade:manage', item.courseId);
     await this.repo.deleteItem(itemId);
   }
 
-  // --- nhập điểm -------------------------------------------------------
 
-  /** Điểm cuối của lá: điểm thô được điều chỉnh bởi multiplicator/offset; bị đóng băng một khi một công thức không phải identity đã sinh ra nó. */
   private leafFinal(item: ItemRow, raw: number | null, existing?: GradeRow): { finalGrade: number | null; frozen: boolean } {
     if (raw === null) return { finalGrade: null, frozen: false };
     if (existing?.frozen) return { finalGrade: existing.finalGrade, frozen: true };
@@ -188,13 +145,6 @@ export class GradesService implements OnModuleInit {
     return { finalGrade: adjusted, frozen: hasFormula };
   }
 
-  /**
-   * Đặt điểm cho user tại item: kiểm capability grade:edit, ghi lịch sử.
-   * `options` cho luồng nghiệp vụ phía trên ghi đúng nguồn truy vết vào
-   * history (`source`) và đặt cờ overridden khi giá trị là quyết định
-   * sửa tay của giáo viên; không truyền options thì hành vi mặc định là
-   * nhập tay (source 'manual', overridden=false).
-   */
   async setGrade(actorId: string, itemId: string, userId: string, input: { rawGrade?: number | null; feedback?: string }, options?: { source?: string; overridden?: boolean }): Promise<GradeRow> {
     const item = await this.getItem(itemId);
     await this.requireCap(actorId, 'grade:edit', item.courseId);
@@ -230,22 +180,10 @@ export class GradesService implements OnModuleInit {
     return (await this.repo.getGrade(itemId, userId))!;
   }
 
-  /**
-   * Grade item của một course module (item_type 'mod'), nếu hoạt động đã có.
-   */
   async getItemForCm(courseId: string, cmId: string): Promise<ItemRow | undefined> {
     return this.repo.findItemForCm(courseId, cmId);
   }
 
-  /**
-   * Đường ghi điểm CỦA HOẠT ĐỘNG (vd quiz ghi điểm bài sau khi chốt lượt
-   * làm): không qua capability của người dùng vì chủ thể ghi là chính
-   * hoạt động — lượt làm tự chốt phía server (hết giờ, đủ điểm) kể cả
-   * khi không có thao tác của giáo viên. Vẫn tôn trọng các khoá: item bị
-   * khoá thì từ chối, grade đã bị giáo viên ghi đè (overridden) hoặc
-   * khoá thì GIỮ NGUYÊN (hoạt động không đè quyết định của giáo viên —
-   * trả về grade hiện có). Ghi history với source là tên hoạt động.
-   */
   async recordActivityGrade(itemId: string, userId: string, rawGrade: number | null, source = 'mod/quiz'): Promise<GradeRow | undefined> {
     const item = await this.getItem(itemId);
     if (item.locked) throw new ForbiddenException({ message: 'This grade item is locked', code: 'grades.item_locked' });
@@ -275,9 +213,6 @@ export class GradesService implements OnModuleInit {
     return this.repo.getGrade(itemId, userId);
   }
 
-  /**
-   * Sửa một bản ghi điểm đã có (ghi đè/khoá/loại trừ/ẩn/gỡ đóng băng/kèm lịch sử).
-   */
   async updateGrade(actorId: string, gradeId: string, input: {
     overridden?: boolean; finalGrade?: number | null; locked?: boolean; excluded?: boolean;
     hidden?: boolean; frozen?: boolean; feedback?: string;
@@ -315,12 +250,7 @@ export class GradesService implements OnModuleInit {
     return (await this.repo.getGradeById(gradeId))!;
   }
 
-  // --- evaluator liên module ------------------------------------------------
 
-  /** Hook completion: trạng thái cho một cm có completionUseGrade. Null = chưa có điểm. */
-  /**
-   * Điểm phần trăm của user tại cm — đầu vào cho availability/completion theo điểm.
-   */
   async evaluateCmGrade(cmId: string, userId: string): Promise<number | null> {
     const cm = await this.courses.getCm(cmId).catch(() => undefined);
     if (!cm) return null;
@@ -332,21 +262,11 @@ export class GradesService implements OnModuleInit {
     return COMPLETION_DONE;
   }
 
-  /**
-   * Course-completion 'grade' criterion: trước đây neo vào ĐIỂM TỔNG
-   * KHOÁ. Mô hình điểm theo bài (#224) không còn điểm của khoá học nên
-   * tiêu chí này không còn nền để đạt — luôn trả false; hoàn thành theo
-   * điểm chỉ còn ở cấp hoạt động qua evaluateCmGrade.
-   */
   async courseGradePassed(courseId: string, userId: string): Promise<boolean> {
     void courseId; void userId;
     return false;
   }
 
-  /** Giá trị của lá 'grade' trong Availability: phần trăm (0-100) được khoá theo id của grade-item VÀ theo id của cm. */
-  /**
-   * Điểm phần trăm theo từng item của user (cho availability).
-   */
   async gradePercentagesForUser(userId: string, courseId: string): Promise<Record<string, number>> {
     const items = await this.repo.listItems(courseId);
     const grades = await this.repo.listGradesForCourse(courseId, userId);
@@ -361,23 +281,13 @@ export class GradesService implements OnModuleInit {
     return out;
   }
 
-  /** Điểm cuối thô của một item cho một người dùng (facade cho reports/các module khác). */
-  /**
-   * Điểm cuối cùng của user tại item (sau tính toán).
-   */
   async getFinalGrade(itemId: string, userId: string): Promise<number | null> {
     const g = await this.repo.getGrade(itemId, userId);
     return g?.finalGrade ?? null;
   }
-  /**
-   * Một dòng điểm đầy đủ tại item.
-   */
   async getGradeRow(itemId: string, userId: string): Promise<GradeRow | undefined> {
     return this.repo.getGrade(itemId, userId);
   }
-  /**
-   * Lịch sử thay đổi điểm.
-   */
   async listHistory(itemId: string, userId: string) {
     return this.repo.listHistory(itemId, userId);
   }
@@ -390,13 +300,7 @@ export class GradesService implements OnModuleInit {
     await this.completion.reaggregateCourseCompletion(userId, courseId);
   }
 
-  // --- Công bố điểm cấp bài (PH-0, issue #116) --------------------------------
 
-  /**
-   * Trạng thái công bố hiệu lực của mọi item trong một khoá: item 'auto' luôn
-   * coi là đã công bố (điểm hiện ngay khi chấm); item 'manual' chỉ hiện khi
-   * vết mới nhất trong grade_publications (scope item) là 'publish'.
-   */
   async publicationStatesForCourse(courseId: string, items?: ItemRow[]): Promise<Map<string, GradePublicationState>> {
     const rows = items ?? await this.repo.listItems(courseId);
     const publications = await this.repo.listPublications(courseId);
@@ -415,13 +319,11 @@ export class GradesService implements OnModuleInit {
     return states;
   }
 
-  /** Trạng thái công bố hiệu lực của một item. */
   async itemPublicationState(item: ItemRow): Promise<GradePublicationState> {
     const states = await this.publicationStatesForCourse(item.courseId, [item]);
     return states.get(item.id) ?? { policy: 'auto', published: true };
   }
 
-  /** Đặt chính sách công bố cho một item (grade:publish tại context khoá). */
   async setItemPostingPolicy(actorId: string, itemId: string, policy: 'auto' | 'manual'): Promise<ItemRow> {
     const item = await this.getItem(itemId);
     await this.requireCap(actorId, 'grade:publish', item.courseId);
@@ -433,7 +335,6 @@ export class GradesService implements OnModuleInit {
     return (await this.repo.getItem(itemId))!;
   }
 
-  /** Công bố / rút công bố điểm của một item cho mọi học sinh (grade:publish tại context khoá); ghi vết vào grade_publications + event_log qua outbox. */
   async setItemPublication(actorId: string, itemId: string, action: 'publish' | 'unpublish', note?: string): Promise<GradePublicationState> {
     const item = await this.getItem(itemId);
     await this.requireCap(actorId, 'grade:publish', item.courseId);
@@ -448,12 +349,6 @@ export class GradesService implements OnModuleInit {
     return this.itemPublicationState(await this.getItem(itemId));
   }
 
-  /**
-   * Audit sửa điểm sau công bố (research PH mục 5.2.7): khi giáo viên sửa
-   * một điểm ĐÃ TỒN TẠI trên item đang ở trạng thái công bố hiệu lực, phát
-   * thêm sự kiện grade_changed_after_publish vào event_log qua outbox —
-   * điểm đã tới tay học sinh/phụ huynh mà đổi thì phải có vết riêng.
-   */
   private async auditGradeChangeAfterPublish(actorId: string, item: ItemRow, userId: string, hadExistingGrade: boolean): Promise<void> {
     if (!hadExistingGrade) return;
     const state = await this.itemPublicationState(item).catch(() => null);
@@ -464,16 +359,7 @@ export class GradesService implements OnModuleInit {
     }).catch(() => undefined);
   }
 
-  // --- Lưới xem điểm theo bài (CHỈ-ĐỌC, issue #224) ----------------------------
 
-  /**
-   * Điểm theo bài của MỘT học sinh trong một khoá — thay cho sổ điểm
-   * tổng hợp cũ và cho ĐX-2 (HS xem ĐTB khoá). Viewer xem của người
-   * khác cần grade:viewall; học sinh xem chính mình (hoặc phụ huynh qua
-   * listPublishedActivityGrades) bị cổng công bố PH-0: item ẩn bị loại,
-   * điểm của item manual chưa công bố bị che (grade = null). Lưới này
-   * CHỈ ĐỌC: không lưu điểm tổng, không trọng số, không chốt.
-   */
   async listUserActivityGrades(viewerId: string, courseId: string, targetUserId: string): Promise<{
     courseId: string; userId: string; activities: ActivityGradeView[];
   }> {
@@ -491,12 +377,6 @@ export class GradesService implements OnModuleInit {
     };
   }
 
-  /**
-   * Điểm theo bài ĐÃ CÔNG BỐ của một học sinh — bề mặt phụ huynh có
-   * liên kết giám hộ (GuardiansService kiểm tra liên kết trước khi
-   * gọi): ẩn như phía học sinh tự xem (item/điểm ẩn bị loại, điểm của
-   * item manual chưa công bố bị che).
-   */
   async listPublishedActivityGrades(courseId: string, targetUserId: string): Promise<ActivityGradeView[]> {
     return this.buildActivityGradeViews(courseId, targetUserId, { maskUnpublished: true, hideHidden: true });
   }
@@ -515,12 +395,6 @@ export class GradesService implements OnModuleInit {
     });
   }
 
-  /**
-   * Lưới học sinh × các bài của khoá cho giáo viên (grade:viewall):
-   * một hàng mỗi học sinh đã ghi danh, mỗi ô là finalGrade của đúng bài
-   * đó (null = chưa có điểm). CHỈ ĐỌC — không điểm tổng, không trọng
-   * số, không chốt kỳ.
-   */
   async getCourseActivityGrid(viewerId: string, courseId: string): Promise<{
     courseId: string;
     items: ItemRow[];
@@ -551,29 +425,12 @@ export class GradesService implements OnModuleInit {
     return { courseId, items, publications, rows };
   }
 
-  // --- Xuất vnEdu (issue #53; nguồn đổi ở #224) --------------------------------
 
-  /** Năm học mặc định cho bảng xuất vnEdu: năm học VN bắt đầu tháng 8 (tháng 8–12 thuộc năm học bắt đầu năm đó, tháng 1–7 thuộc năm học bắt đầu năm trước). */
   private defaultVneduSchoolYear(now = new Date()): string {
     const startYear = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
     return `${startYear}-${startYear + 1}`;
   }
 
-  /**
-   * Xuất điểm ra Excel theo cấu trúc vnEdu (issue #53; khuôn mẫu giữ
-   * nguyên): một bảng cho một môn/lớp/học kỳ, cột STT/Mã học sinh (username)/
-   * Họ và tên, mỗi mục thường xuyên một cột (hệ số 1), giữa kỳ (hệ số 2),
-   * cuối kỳ (hệ số 3) và ĐTBmhk tính trong domain/vnedu-export (bản công
-   * thức ĐTB DUY NHẤT còn lại của hệ — phục vụ cột ĐTBmhk của chính mẫu
-   * file xuất, không phải sổ điểm). Ánh xạ bài → loại cột do giáo viên
-   * xác nhận tường minh trong payload.
-   *
-   * NGUỒN (đổi theo quyết định 23:49 ngày 25/10/2026, issue #224): chỉ
-   * các bài ĐÃ CÔNG BỐ mới được xuất — bài ở chính sách manual mà chưa
-   * công bố thì từ chối cả lượt xuất (grades.vnedu_item_not_published),
-   * vì điểm chưa công bố chưa phải điểm chính thức để rời hệ thống.
-   * Quyền: grade:viewall tại context khoá.
-   */
   async exportGradesVnedu(actorId: string, courseId: string, dto: ExportGradesVneduDto): Promise<{ filename: string; buffer: Buffer }> {
     const course = await this.courses.getCourse(courseId);
     await this.requireCap(actorId, 'grade:viewall', courseId);
@@ -630,7 +487,6 @@ export class GradesService implements OnModuleInit {
       for (const item of mappedItems) studentGrades.set(item.id, gradeByUserItem.get(`${userId}:${item.id}`) ?? null);
       return { code: user?.username ?? userId, fullName, grades: studentGrades };
     });
-    // Danh sách lớp VN xếp theo TÊN (từ cuối của họ tên), rồi họ tên đầy đủ, rồi mã — như sổ điểm giấy.
     students.sort((a, b) =>
       givenNameOf(a.fullName).localeCompare(givenNameOf(b.fullName), 'vi')
       || a.fullName.localeCompare(b.fullName, 'vi')

@@ -11,25 +11,14 @@ import { PlanLimitsService } from './plan-limits.service';
 import { RoleSeparationService } from './role-separation.service';
 import { RolesService } from './roles.service';
 
-/** Facade của AccessModule: ContextsService, RolesService, PermissionEvaluator. Các repository giữ ở chế độ private.
- * PlanLimitsService (thực thi giới hạn slot của gói, issue #189) đặt tại
- * module này vì đây là tầng chung thấp nhất mà mọi bề mặt điểm chặn
- * (access/tenants/users/courses) đều phụ thuộc vào.
- * RoleSeparationService (định nghĩa kiểm tra tách vai giáo viên/học viên
- * dùng chung) cũng đặt tại đây vì cả ba funnel ghi danh (enrol, groups,
- * backup) và đường gán vai đều phải gọi về đúng một định nghĩa này. */
 @Module({
   imports: [
     CacheInfraModule, EventsModule,
-    // PermissionEvaluator tra danh tính kho để tránh lẫn cache siteadmins;
-    // AccessRepository dùng facade routedKysely. Bộ định tuyến chỉ phụ
-    // thuộc adapter control plane, không kéo ControlPlaneModule quay lại.
     SpaceRoutingModule,
   ],
   controllers: [AccessController],
   providers: [
     {
-      // Evaluator dùng facade kho định tuyến của request để đọc quyền và cổng tenant trên đúng database hiệu lực.
       provide: AccessRepository,
       useFactory: (spaceDb: SpaceDatabaseService) => new AccessRepository(spaceDb.routedKysely),
       inject: [SpaceDatabaseService],
@@ -38,5 +27,4 @@ import { RolesService } from './roles.service';
   ],
   exports: [ContextsService, RolesService, PermissionEvaluator, PlanLimitsService, RoleSeparationService],
 })
-/** Module phân quyền: context, capability, role. */
 export class AccessModule {}

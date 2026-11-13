@@ -32,7 +32,6 @@ interface CourseInfoCardProps {
   message: string | null;
 }
 
-/** Thẻ thông tin khoá học của trang Xây dựng khoá (form sửa thông tin + thông điệp). */
 export function CourseInfoCard({
   course, loadError, courseId, fullName, setFullname, shortName, setShortname, courseCategory,
   setCourseCategory, summary, setSummary, startDate, setStartdate, endDate, setEnddate,

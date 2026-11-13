@@ -1,24 +1,13 @@
-/**
- * Bản xem trước CHÍNH XÁC của snapshot gửi xét duyệt (#13): hiển thị
- * nội dung Tiptap, ngữ liệu, đáp án theo loại, hướng dẫn, lời giải, phản
- * hồi, cấu hình, nguồn và byte ảnh riêng của kho ngân hàng. URL ảnh trỏ
- * tới route yêu cầu quyền systembank:review, không trỏ về file trung tâm.
- */
 import { useTranslation } from 'react-i18next';
 import type { RichTextDocument } from '@giaokhoa/contracts';
 import { RichTextView } from '@giaokhoa/editor';
 import type { SystemQuestionSubmission } from '../api/questions';
 import { QTYPE_LABEL_KEYS, QTYPES, type Qtype } from '../utils/shared';
 
-/** Chuyển hash ảnh của manifest thành đường xem an toàn qua cổng biên tập. */
 function reviewImageSrc(submissionId: string, hash: string): string {
   return `/api/v1/system-bank/submissions/${submissionId}/media/${hash}`;
 }
 
-/**
- * Tạo bản sao chỉ dành cho giao diện; thay mọi src ảnh bằng URL gác quyền,
- * không ghi đè snapshot gốc (checksum bản gửi phải giữ nguyên).
- */
 function renderableDocument(value: unknown, submission: SystemQuestionSubmission): RichTextDocument | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const doc = value as Record<string, unknown>;
@@ -34,7 +23,6 @@ function renderableDocument(value: unknown, submission: SystemQuestionSubmission
         ? original.attrs as Record<string, unknown> : {};
       const originalSrc = typeof attrs.src === 'string' ? attrs.src : '';
       const hash = originalSrc.startsWith('bank-media://') ? originalSrc.slice('bank-media://'.length) : '';
-      // Bản chụp bất thường không được biến thành một URL truy cập tùy ý.
       cloned.attrs = { ...attrs, src: allowedHashes.has(hash) ? reviewImageSrc(submission.id, hash) : '' };
     }
     return cloned;
@@ -42,7 +30,6 @@ function renderableDocument(value: unknown, submission: SystemQuestionSubmission
   return transform(value) as RichTextDocument;
 }
 
-/** Dựng giá trị câu/đáp án; giải mã riêng đáp án đúng/sai và lời giải tự luận. */
 function SnapshotValue({ value, submission }: { value: unknown; submission: SystemQuestionSubmission }) {
   const { t } = useTranslation('app');
   const rich = renderableDocument(value, submission);
@@ -82,11 +69,6 @@ function SnapshotValue({ value, submission }: { value: unknown; submission: Syst
   return <span>—</span>;
 }
 
-/**
- * Biên tập viên đọc toàn bộ package và media của một bản gửi để ra quyết
- * định. Nội dung chỉ xuất hiện trong panel đã gác systembank:review; ảnh
- * còn được API kiểm quyền lại riêng cho mỗi yêu cầu GET.
- */
 export function SystemSubmissionReviewPreview({ submission }: { submission: SystemQuestionSubmission }) {
   const { t } = useTranslation('app');
   const pkg = submission.package;

@@ -5,16 +5,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWORD } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
 
-/**
- * NB-4 (issue #174): ghi đè thông báo theo khoá học — bề mặt API.
- *
- * Tiêu chí theo hồ sơ rà soát mục NB-4 + chính sách P3 đã chốt:
- *  - GET /messages/preferences/courses liệt kê mọi khoá người dùng
- *    thuộc về kèm chế độ ('all' mặc định); PUT đặt 'mute'/'all' lưu vào user_preferences dưới khoá `notif.course.<courseId>`; khoá ngoài phạm vi → 404; gỡ mute khôi phục ngay.
- *
- * Ca kiểm chứng đường consumer thật của NB-4 (khoá bị mute thì thông báo thường của khoá đó không được sinh và có dispatch log 'skipped-course-mute'; khoá khác vẫn nhận bình thường; hai loại P3 — điểm mới và sắp hết hạn ghi danh — của chính khoá bị mute vẫn tới; gỡ mute khôi phục) đã chuyển sang tầng integration của worker cùng consumer thông báo sự kiện (issue con #520 của #491):
- * `apps/worker/test/integration/notifications/notification-events-delivery.int-spec.ts`.
- */
 describe('Ghi đè thông báo theo khoá (NB-4, issue #174)', () => {
   let app: INestApplication;
   let admin: string;
@@ -41,7 +31,6 @@ describe('Ghi đè thông báo theo khoá (NB-4, issue #174)', () => {
       .set('Authorization', `Bearer ${token}`).send({ courseId, mode });
   }
 
-  /** Một học sinh ghi danh vào HAI khoá (A và B) — sân khấu cho kiểm chứng ghi đè theo khoá. */
   async function setupStudentInTwoCourses() {
     const cat = await createCategory(app, admin);
     const courseA = await createCourse(app, admin, cat.id);
@@ -67,7 +56,6 @@ describe('Ghi đè thông báo theo khoá (NB-4, issue #174)', () => {
     expect(put.status).toBe(200);
     expect(put.body).toMatchObject({ courseId: courseA.id, mode: 'mute' });
 
-    // Lưu đúng hình dạng khoá hồ sơ audit chốt trong user_preferences.
     const stored = await pg.query(
       `select value from user_preferences where user_id = $1 and name = $2`,
       [student.id, `notif.course.${courseA.id}`],
@@ -78,15 +66,12 @@ describe('Ghi đè thông báo theo khoá (NB-4, issue #174)', () => {
     expect(after.find((c) => c.courseId === courseA.id)?.mode).toBe('mute');
     expect(after.find((c) => c.courseId === courseB.id)?.mode).toBe('all');
 
-    // Khoá không thuộc về người dùng: 404 y hệt khoá không tồn tại.
     const foreign = await setOverride(token, randomUUID(), 'mute');
     expect(foreign.status).toBe(404);
 
-    // Chế độ ngoài hợp đồng bị từ chối ở tầng schema.
     const badMode = await setOverride(token, courseA.id, 'sometimes');
     expect(badMode.status).toBe(400);
 
-    // Người dùng không thuộc khoá nào: danh sách rỗng, không lỗi.
     const outsider = await createUserViaApi(app, admin);
     const outsiderToken = (await login(app, outsider.username, STRONG_PASSWORD)).accessToken;
     expect(await overridesOf(outsiderToken)).toEqual([]);

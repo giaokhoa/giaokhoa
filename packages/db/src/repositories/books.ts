@@ -1,28 +1,9 @@
-/**
- * Repository của cụm SÁCH GIÁO KHOA trên Kysely.
- *
- * Vai trò: mọi truy cập tới bốn bảng của kho trung tâm thuộc tầng SGK — `books` (cuốn sách), `book_nodes` (cây chủ đề → bài), `book_mappings` (ánh xạ bài sang node chương trình hoặc YCCĐ) và `book_records` (sổ đăng ký nạp dataset, khoá idempotent của lượt nạp) — tập trung ở đây, kèm một hình chiếu đọc truy nguồn trên bảng `question` (cặp truy vết nguồn sách). Luật nạp dataset
- * (phân giải ánh xạ trước khi ghi, idempotent theo sổ) nằm ở tầng
- * service phía ứng dụng; repository chỉ nhận handle để service ghép các thao tác ghi của một bản ghi vào một transaction.
- *
- * Khuôn hình dạng dữ liệu ở biên repository — cùng khuôn pilot kho control plane (xem mục "Sổ tay chuyển đổi repository sang Kysely" trong `AGENTS.md` của package): bên trong dùng tên cột snake_case của interface schema codegen; bên ngoài trả/nhận hình dạng camelCase qua danh sách cột tường minh có bí danh và các hàm ánh xạ ghi loại `undefined` từng trường (thử nghiệm T-4); mọi giá trị where là tham số bắt buộc. Điều kiện lọc động của `listBooks` (môn/kind tuỳ chọn) được xâu chuỗi bằng các mệnh đề `.where` nối tiếp — khuôn T-13 đã chốt ở hạng mục nền, không chép dạng `where(undefined)` của bộ máy cũ. Cột jsonb `book_records.source` không mang hình dạng `$type` ở phía bộ máy cũ nên kiểu công khai ở biên là `unknown` như trước, và mọi lần ghi đều đi qua helper serialize `::jsonb` duy nhất trong file này.
- *
- * Hai hành vi giữ nguyên có chủ đích từ đường cũ trước chuyển đổi:
- * - `listBooks` sắp xếp ở tầng ứng dụng (khối lớp, rồi position,
- *   rồi thời gian tạo) sau khi đọc, không đẩy `ORDER BY` xuống truy vấn.
- * - Thứ tự hiển thị của cây sách luôn là position tăng dần rồi
- *   thời gian tạo — cùng quy ước của CurriculumRepository.
- *
- * Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng dụng, không tự mở pool, không đọc biến môi trường.
- */
 import { sql, type Insertable, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 import type { JsonValue } from '../types/centre-db';
 
-/** Handle đọc/ghi mà repository nhận: transaction đang mở hoặc chính instance gốc. */
 type RepoDb = CentreDb | CentreTx;
 
-/** Một dòng cuốn sách. */
 export interface BookRow {
   id: string;
   kind: string;
@@ -34,14 +15,12 @@ export interface BookRow {
   publisher: string | null;
   publishedYear: number | null;
   isbn: string | null;
-  /** true khi trang hiển thị được phép ghi nguồn sách công khai. */
   attributionPublic: boolean;
   position: number;
   createdAt: Date;
   updatedAt: Date;
 }
 
-/** Dữ kiện ghi một cuốn sách mới. */
 export interface NewBook {
   id?: string;
   kind?: string;
@@ -59,7 +38,6 @@ export interface NewBook {
   updatedAt?: Date;
 }
 
-/** Một dòng node trong cây sách: chủ đề (`chapter`) hoặc bài (`lesson`). */
 export interface BookNodeRow {
   id: string;
   bookId: string;
@@ -73,7 +51,6 @@ export interface BookNodeRow {
   updatedAt: Date;
 }
 
-/** Dữ kiện ghi một node sách mới. */
 export interface NewBookNode {
   id?: string;
   bookId: string;
@@ -87,7 +64,6 @@ export interface NewBookNode {
   updatedAt?: Date;
 }
 
-/** Một dòng ánh xạ bài SGK → node chương trình hoặc → YCCĐ (đúng một trong hai đích có giá trị). */
 export interface BookMappingRow {
   id: string;
   bookNodeId: string;
@@ -97,7 +73,6 @@ export interface BookMappingRow {
   createdAt: Date;
 }
 
-/** Dữ kiện ghi một dòng ánh xạ mới. */
 export interface NewBookMapping {
   id?: string;
   bookNodeId: string;
@@ -107,9 +82,6 @@ export interface NewBookMapping {
   createdAt?: Date;
 }
 
-/**
- * Một dòng sổ đăng ký nạp: cặp (dataset, mã bản ghi) đã được nạp vào node nào, kèm hash nội dung để lượt nạp sau nhận biết bản ghi không đổi và `source` là bản ghi nguồn nguyên văn (jsonb).
- */
 export interface BookRecordRow {
   id: string;
   datasetKey: string;
@@ -122,7 +94,6 @@ export interface BookRecordRow {
   updatedAt: Date;
 }
 
-/** Dữ kiện ghi một dòng sổ đăng ký mới. */
 export interface NewBookRecord {
   id?: string;
   datasetKey: string;
@@ -135,7 +106,6 @@ export interface NewBookRecord {
   updatedAt?: Date;
 }
 
-/** Hình chiếu truy nguồn sách → câu: chỉ định danh và siêu dữ liệu soạn thảo, không có nội dung câu. */
 export interface BookSourceQuestionRow {
   id: string;
   qtype: string;
@@ -144,7 +114,6 @@ export interface BookSourceQuestionRow {
   copyCount: number;
 }
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng sách. */
 const BOOK_COLUMNS = [
   'id',
   'kind',
@@ -162,7 +131,6 @@ const BOOK_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng node sách. */
 const BOOK_NODE_COLUMNS = [
   'id',
   'book_id as bookId',
@@ -176,7 +144,6 @@ const BOOK_NODE_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng ánh xạ sách. */
 const BOOK_MAPPING_COLUMNS = [
   'id',
   'book_node_id as bookNodeId',
@@ -186,7 +153,6 @@ const BOOK_MAPPING_COLUMNS = [
   'created_at as createdAt',
 ] as const;
 
-/** Danh sách cột tường minh có bí danh camelCase cho bảng sổ đăng ký nạp. */
 const BOOK_RECORD_COLUMNS = [
   'id',
   'dataset_key as datasetKey',
@@ -199,16 +165,10 @@ const BOOK_RECORD_COLUMNS = [
   'updated_at as updatedAt',
 ] as const;
 
-/**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh — helper serialize duy nhất của file này cho mọi lần ghi jsonb
- * (khuôn của pilot: driver `pg` tự stringify object thường nhưng
- * hiểu MẢNG cấp cao nhất là mảng PostgreSQL, khiến cột jsonb lỗi `invalid input syntax for type json`). Cột `source` không mang hình dạng `$type` ở phía bộ máy cũ nên giá trị ở biên là `unknown` — helper ghim kiểu biểu thức về `JsonValue` của codegen để khớp kiểu cột khi biên dịch, thay vì suy kiểu từ giá trị như khuôn generic của pilot.
- */
 function jsonbValue(value: unknown): RawBuilder<JsonValue> {
   return sql<JsonValue>`${JSON.stringify(value)}::jsonb`;
 }
 
-/** Ánh xạ dữ kiện ghi sách (camelCase) sang values insert (snake_case), LOẠI mọi trường `undefined` (T-4). */
 function bookInsertValues(values: NewBook): Insertable<CentreDB['books']> {
   const row: Insertable<CentreDB['books']> = { title: values.title };
   if (values.id !== undefined) row.id = values.id;
@@ -227,7 +187,6 @@ function bookInsertValues(values: NewBook): Insertable<CentreDB['books']> {
   return row;
 }
 
-/** Ánh xạ dữ kiện ghi node sách (camelCase) sang values insert (snake_case), LOẠI mọi trường `undefined` (T-4). */
 function bookNodeInsertValues(values: NewBookNode): Insertable<CentreDB['book_nodes']> {
   const row: Insertable<CentreDB['book_nodes']> = { book_id: values.bookId, title: values.title };
   if (values.id !== undefined) row.id = values.id;
@@ -241,11 +200,6 @@ function bookNodeInsertValues(values: NewBookNode): Insertable<CentreDB['book_no
   return row;
 }
 
-/**
- * Ánh xạ một patch sửa node sách (camelCase) sang set update
- * (snake_case), LOẠI mọi trường `undefined` — patch chỉ chứa
- * trường nào thì chỉ trường đó đổi (quy tắc T-4).
- */
 function bookNodeUpdateSet(patch: Partial<NewBookNode>): UpdateObject<CentreDB, 'book_nodes'> {
   const set: UpdateObject<CentreDB, 'book_nodes'> = {};
   if (patch.id !== undefined) set.id = patch.id;
@@ -260,7 +214,6 @@ function bookNodeUpdateSet(patch: Partial<NewBookNode>): UpdateObject<CentreDB, 
   return set;
 }
 
-/** Ánh xạ dữ kiện ghi ánh xạ (camelCase) sang values insert (snake_case), LOẠI mọi trường `undefined` (T-4). */
 function bookMappingInsertValues(values: NewBookMapping): Insertable<CentreDB['book_mappings']> {
   const row: Insertable<CentreDB['book_mappings']> = {
     book_node_id: values.bookNodeId,
@@ -273,12 +226,6 @@ function bookMappingInsertValues(values: NewBookMapping): Insertable<CentreDB['b
   return row;
 }
 
-/**
- * Ánh xạ dữ kiện ghi dòng sổ (camelCase) sang values insert
- * (snake_case), LOẠI mọi trường `undefined` (T-4); cột `source`
- * jsonb đi qua helper serialize. Biến tích luỹ khai kiểu
- * `InsertObject` vì values chứa trường biểu thức (theo sổ tay).
- */
 function bookRecordInsertValues(values: NewBookRecord): InsertObject<CentreDB, 'book_records'> {
   const row: InsertObject<CentreDB, 'book_records'> = {
     dataset_key: values.datasetKey,
@@ -294,11 +241,6 @@ function bookRecordInsertValues(values: NewBookRecord): InsertObject<CentreDB, '
   return row;
 }
 
-/**
- * Ánh xạ một patch sửa dòng sổ (camelCase) sang set update
- * (snake_case), LOẠI mọi trường `undefined` (T-4); cột `source`
- * jsonb đi qua helper serialize.
- */
 function bookRecordUpdateSet(patch: Partial<NewBookRecord>): UpdateObject<CentreDB, 'book_records'> {
   const set: UpdateObject<CentreDB, 'book_records'> = {};
   if (patch.id !== undefined) set.id = patch.id;
@@ -312,37 +254,27 @@ function bookRecordUpdateSet(patch: Partial<NewBookRecord>): UpdateObject<Centre
   return set;
 }
 
-/**
- * Repository tầng SGK trên Kysely: sách → cây node → ánh xạ sang
- * chương trình → sổ đăng ký nạp, trên kho trung tâm.
- */
 export class BookRepository {
   constructor(private readonly handle: CentreDb) {}
 
-  /** Instance gốc của repository. */
   private db(): CentreDb {
     return this.handle;
   }
 
-  /** Mở một transaction trên kho trung tâm qua handle của repository. */
   async transaction<T>(fn: (tx: CentreTx) => Promise<T>): Promise<T> {
     return this.db().transaction().execute(fn);
   }
 
-  // --- sách ----------------------------------------------------------------------
 
-  /** Chèn cuốn sách. */
   async insertBook(values: NewBook, db: RepoDb = this.db()): Promise<BookRow> {
     const rows = await db.insertInto('books').values(bookInsertValues(values)).returning(BOOK_COLUMNS).execute();
     return rows[0]!;
   }
 
-  /** Lấy cuốn sách theo id. */
   async getBook(id: string, db: RepoDb = this.db()): Promise<BookRow | undefined> {
     return db.selectFrom('books').select(BOOK_COLUMNS).where('id', '=', id).limit(1).executeTakeFirst();
   }
 
-  /** Tìm cuốn sách theo định danh tự nhiên (môn, khối, tựa) — khoá tìm-tạo của lượt nạp. */
   async findBook(subjectId: string, grade: number, title: string, db: RepoDb = this.db()): Promise<BookRow | undefined> {
     return db
       .selectFrom('books')
@@ -354,12 +286,6 @@ export class BookRepository {
       .executeTakeFirst();
   }
 
-  /**
-   * Liệt kê sách, tuỳ chọn lọc theo môn và loại. Điều kiện lọc
-   * động được xâu chuỗi bằng `.where` nối tiếp (khuôn T-13); thứ
-   * tự cuối cùng sắp ở tầng ứng dụng: khối lớp tăng dần, rồi
-   * position, rồi thời gian tạo — như đường cũ trước chuyển đổi.
-   */
   async listBooks(subjectId?: string, kind?: string, db: RepoDb = this.db()): Promise<BookRow[]> {
     let query = db.selectFrom('books').select(BOOK_COLUMNS);
     if (subjectId) query = query.where('subject_id', '=', subjectId);
@@ -370,9 +296,7 @@ export class BookRepository {
     );
   }
 
-  // --- cây sách --------------------------------------------------------------------
 
-  /** Chèn node sách (chủ đề hoặc bài). */
   async insertBookNode(values: NewBookNode, db: RepoDb = this.db()): Promise<BookNodeRow> {
     const rows = await db
       .insertInto('book_nodes')
@@ -382,12 +306,10 @@ export class BookRepository {
     return rows[0]!;
   }
 
-  /** Lấy node sách theo id. */
   async getBookNode(id: string, db: RepoDb = this.db()): Promise<BookNodeRow | undefined> {
     return db.selectFrom('book_nodes').select(BOOK_NODE_COLUMNS).where('id', '=', id).limit(1).executeTakeFirst();
   }
 
-  /** Toàn bộ node của một cuốn sách theo thứ tự cây (position, rồi thời gian tạo). */
   async listBookNodes(bookId: string, db: RepoDb = this.db()): Promise<BookNodeRow[]> {
     return db
       .selectFrom('book_nodes')
@@ -398,7 +320,6 @@ export class BookRepository {
       .execute();
   }
 
-  /** Sửa node sách (đã lọc trường ở tầng service); mốc `updated_at` luôn được làm mới ở đây. */
   async updateBookNode(id: string, values: Partial<NewBookNode>, db: RepoDb = this.db()): Promise<void> {
     await db
       .updateTable('book_nodes')
@@ -407,9 +328,7 @@ export class BookRepository {
       .execute();
   }
 
-  // --- ánh xạ ----------------------------------------------------------------------
 
-  /** Chèn một dòng ánh xạ bài → node chương trình hoặc → YCCĐ. */
   async insertMapping(values: NewBookMapping, db: RepoDb = this.db()): Promise<BookMappingRow> {
     const rows = await db
       .insertInto('book_mappings')
@@ -419,7 +338,6 @@ export class BookRepository {
     return rows[0]!;
   }
 
-  /** Mọi dòng ánh xạ của một node bài, theo position rồi thời gian tạo. */
   async listMappingsForNode(bookNodeId: string, db: RepoDb = this.db()): Promise<BookMappingRow[]> {
     return db
       .selectFrom('book_mappings')
@@ -430,7 +348,6 @@ export class BookRepository {
       .execute();
   }
 
-  /** Mọi dòng ánh xạ của nhiều node bài (cho cây sách/đơn vị khung); danh sách rỗng trả rỗng ngay, không truy vấn. */
   async listMappingsForNodes(bookNodeIds: string[], db: RepoDb = this.db()): Promise<BookMappingRow[]> {
     if (bookNodeIds.length === 0) return [];
     return db
@@ -442,14 +359,11 @@ export class BookRepository {
       .execute();
   }
 
-  /** Xoá toàn bộ ánh xạ của một node bài (thay mới khi dataset đính chính). */
   async deleteMappingsForNode(bookNodeId: string, db: RepoDb = this.db()): Promise<void> {
     await db.deleteFrom('book_mappings').where('book_node_id', '=', bookNodeId).execute();
   }
 
-  // --- sổ đăng ký nạp ----------------------------------------------------------------
 
-  /** Tra sổ đăng ký theo cặp (dataset, mã bản ghi) — khoá idempotent của lượt nạp. */
   async getBookRecord(datasetKey: string, recordId: string, db: RepoDb = this.db()): Promise<BookRecordRow | undefined> {
     return db
       .selectFrom('book_records')
@@ -460,17 +374,14 @@ export class BookRepository {
       .executeTakeFirst();
   }
 
-  /** Mọi dòng sổ của một dataset. */
   async listBookRecords(datasetKey: string, db: RepoDb = this.db()): Promise<BookRecordRow[]> {
     return db.selectFrom('book_records').select(BOOK_RECORD_COLUMNS).where('dataset_key', '=', datasetKey).execute();
   }
 
-  /** Mọi dòng sổ trỏ vào một cuốn sách (mọi dataset) — dựng mã bản ghi cho cây sách. */
   async listBookRecordsByBook(bookId: string, db: RepoDb = this.db()): Promise<BookRecordRow[]> {
     return db.selectFrom('book_records').select(BOOK_RECORD_COLUMNS).where('book_id', '=', bookId).execute();
   }
 
-  /** Ghi dòng sổ cho một bản ghi vừa nạp. */
   async insertBookRecord(values: NewBookRecord, db: RepoDb = this.db()): Promise<BookRecordRow> {
     const rows = await db
       .insertInto('book_records')
@@ -480,7 +391,6 @@ export class BookRepository {
     return rows[0]!;
   }
 
-  /** Cập nhật dòng sổ khi dataset đính chính; mốc `updated_at` luôn được làm mới ở đây. */
   async updateBookRecord(id: string, values: Partial<NewBookRecord>, db: RepoDb = this.db()): Promise<void> {
     await db
       .updateTable('book_records')
@@ -489,13 +399,6 @@ export class BookRepository {
       .execute();
   }
 
-  /**
-   * Các câu hỏi có nguồn gốc từ cuốn sách này (truy nguồn chiều
-   * sách → câu): quan hệ qua cặp truy vết (source_kind='book',
-   * source_ref = id sách dạng chữ) trên bảng question — không FK
-   * cứng theo thiết kế nguồn ngoài hệ thống. Chỉ trả định danh và
-   * siêu dữ liệu soạn thảo, không trả nội dung câu.
-   */
   async listQuestionsByBookSource(bookId: string, db: RepoDb = this.db()): Promise<BookSourceQuestionRow[]> {
     return db
       .selectFrom('question')

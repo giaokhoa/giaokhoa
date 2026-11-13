@@ -8,7 +8,7 @@
 
 ## Chuẩn ngôn ngữ
 
-Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng tiếng Anh. Toàn bộ comment trong code — gồm comment mô tả luồng nghiệp vụ — viết bằng tiếng Việt. Mọi tài liệu trong repo (README, các file AGENTS, tài liệu của package) và mọi văn bản trên GitHub (issue, PR, comment) viết bằng tiếng Việt. Khi sửa code, comment tiếng Việt liên quan phải được cập nhật khớp với code trong cùng lượt thay đổi. Nội dung đầy đủ của chuẩn này nằm ở mục "Chuẩn ngôn ngữ" trong `AGENTS.md` ở thư mục gốc của repo.
+Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng tiếng Anh. Cấm viết comment, gồm TSDoc/JSDoc, comment nội tuyến và comment mô tả luồng, trong mã nguồn hoặc cấu hình. Mã nguồn và cấu hình thực thi là nguồn sự thật duy nhất cho hành vi hiện hành; không dùng comment để lưu quyết định. Tài liệu trong repo và văn bản GitHub viết bằng tiếng Việt. Tuân thủ quy định tại `AGENTS.md` gốc.
 
 ## Ranh giới phạm vi
 
@@ -33,11 +33,11 @@ Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng 
 - Package này không mang nghiệp vụ nên không bịa test nghiệp vụ: kiểm chứng là typecheck + test của app tiêu thụ (apps/web) thể hiện luồng người dùng còn nguyên vẹn sau thay đổi ở package.
 - Đổi hành vi một component nền (đóng/mở, focus, phím…) phải có ca kiểm ở phía app thể hiện hành vi người dùng quan sát được, không test class nội bộ.
 
-## Tính chất vendored & đợt phủ comment TSDoc (sổ mục F — chốt 14:40 ngày 26/10/2026)
+## Tính chất vendored
 
 Toàn bộ code trong package này là **code shadcn vendored** (sinh bằng shadcn CLI từ upstream, xem `components.json` và README) — không phải code nghiệp vụ của dự án. Hệ quả đã chốt trong sổ quyết định:
 
-- **LOẠI HẲN khỏi đợt phủ comment TSDoc** (issue #272 và mọi đợt phủ sau): tuyệt đối **không viết comment TSDoc** (kể cả comment flow tiếng Việt theo chuẩn mục F) vào bất kỳ file code nào của package này. Chuẩn comment mục F áp cho code do dự án tự viết (apps/*, packages/contracts, packages/editor…) — không áp cho code vendored ở đây.
+- **Không bổ sung comment vào code vendored:** áp dụng quy tắc không comment của toàn repo, kể cả khi đồng bộ từ upstream.
 - **Hạn chế sửa trực tiếp** code vendored: thay đổi đi qua quy trình shadcn CLI / đồng bộ theo upstream như README và mục "Điều cấm" ở trên đã ghi; ngoại lệ bất khả kháng phải sửa tay thì sửa tối thiểu và ghi vào mục "Ngoại lệ" ở cuối README kèm lý do, trong cùng commit — để lần đồng bộ upstream sau không âm thầm mất dấu chỗ đã sửa.
 - Cần hành vi khác cho một luồng nghiệp vụ cụ thể thì **bọc component ở `apps/web/src/components/`**, không sửa bản vendored để phục vụ một trang.
 - Vì tính chất trên, AGENTS.md của package này **không có bản đồ flow nghiệp vụ**: package không mang flow nghiệp vụ nào — luồng người dùng nằm ở `apps/web`, package chỉ cung cấp component nền.

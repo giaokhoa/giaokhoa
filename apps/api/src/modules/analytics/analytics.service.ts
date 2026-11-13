@@ -4,21 +4,16 @@ import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { CoursesService } from '../courses/courses.service';
 import { EnrolService } from '../enrol/enrol.service';
 
-/** Một indicator đăng ký trong code: tính một tín hiệu cho (user, course). */
 export interface AnalyticsIndicator {
   name: string;
   calculate(userId: string, courseId: string): Promise<number>;
 }
-/** Một model đăng ký: target + danh sách indicator. */
 export interface AnalyticsModelProvider {
   name: string;
   target: string;
   indicators: string[];
 }
 
-/**
- * Facade của AnalyticsModule (Moodle core_analytics, §2#23). Model/indicator là provider đăng ký trong code. Insight là SUY LUẬN — chỉ hiển thị cho user có capability ở context liên quan, và dự đoán KHÔNG BAO GIỜ tự thay đổi điểm/ghi danh. Model thật tối giản: "students at risk" = không truy cập gần đây + điểm thấp.
- */
 @Injectable()
 export class AnalyticsService {
   private readonly indicators = new Map<string, AnalyticsIndicator>();
@@ -35,14 +30,12 @@ export class AnalyticsService {
     this.registerBuiltinIndicators();
   }
 
-  /** Đăng ký indicator — extension point của model. */
   registerIndicator(ind: AnalyticsIndicator): void { this.indicators.set(ind.name, ind); }
   listIndicators(): string[] { return [...this.indicators.keys()]; }
   listModelProviders(): AnalyticsModelProvider[] { return this.modelProviders; }
 
   private registerBuiltinIndicators(): void {
     const db = this.repo.dbHandle;
-    // Indicator: không truy cập gần đây — 1 nếu lastLogin cũ hơn 14 ngày hoặc chưa từng đăng nhập.
     this.registerIndicator({
       name: 'no_recent_access',
       calculate: async (userId) => {
@@ -55,7 +48,6 @@ export class AnalyticsService {
         return Date.now() - u.lastLogin.getTime() > 14 * 24 * 3600 * 1000 ? 1 : 0;
       },
     });
-    // Indicator: điểm thấp — tỉ lệ (1 - trung bình phần trăm điểm) của user trong khoá.
     this.registerIndicator({
       name: 'low_grade',
       calculate: async (userId, courseId) => {
@@ -70,7 +62,7 @@ export class AnalyticsService {
           .select(['user_id as userId', 'item_id as itemId', 'final_grade as finalGrade'])
           .execute();
         const mine = grades.filter((g) => g.userId === userId && items.some((i) => i.id === g.itemId) && g.finalGrade !== null);
-        if (!mine.length) return 0.5; // chưa có điểm: tín hiệu trung bình
+        if (!mine.length) return 0.5;
         const pct = mine.reduce((sum, g) => {
           const item = items.find((i) => i.id === g.itemId)!;
           return sum + (item.gradeMax > 0 ? (g.finalGrade ?? 0) / item.gradeMax : 0);
@@ -80,7 +72,6 @@ export class AnalyticsService {
     });
   }
 
-  /** Đồng bộ model providers từ code vào bảng analytics_models (idempotent). */
   async syncModels(): Promise<ModelRow[]> {
     const out: ModelRow[] = [];
     for (const p of this.modelProviders) out.push(await this.repo.upsertModel({ name: p.name, target: p.target, indicators: p.indicators, enabled: true }));
@@ -94,15 +85,7 @@ export class AnalyticsService {
     return row;
   }
 
-  /**
-   * Chạy model cho một khoá: với mỗi học viên active, tính score từ các
-   * indicator; score ≥ 0.6 ⇒ tạo prediction + insight cho các teacher của khoá.
-   * Hàm này CHỈ ghi analytics_predictions/insights — không chạm grades/enrol.
-   */
   async runModel(actorId: string, modelName: string, courseId: string): Promise<{ predictions: number; insights: number }> {
-    // H6 (#134): chạy mô hình là thao tác vận hành — đòi analytics:manage tại
-    // context khoá cho NGƯỜI GỌI (evaluator duyệt cây context: holder tại
-    // system qua được). Trước đây hàm không uỷ quyền người gọi chút nào.
     const ctxId = await this.courses.courseContextId(courseId);
     await this.evaluator.requireCapability(actorId, 'analytics:manage', ctxId);
     const model = await this.getModelByName(modelName);
@@ -111,7 +94,6 @@ export class AnalyticsService {
     const db = this.repo.dbHandle;
     const enrolments = await this.enrol.listEnrolmentsForCourse(courseId);
     const activeUserIds = [...new Set(enrolments.filter((e) => e.status === 0).map((e) => e.userId))];
-    // Recipients: mọi user (không suspended/deleted) có analytics:viewinsights ở course context.
     const recipients: string[] = [];
     const allUsers = await db
       .selectFrom('users')
@@ -123,7 +105,6 @@ export class AnalyticsService {
     }
     let predictions = 0; let insightCount = 0;
     for (const userId of activeUserIds) {
-      // Học viên là người chỉ có vai trò student (viewinsights=false) — vẫn là subject.
       const values: Record<string, number> = {};
       let score = 0;
       for (const indName of providerDef.indicators) {
@@ -150,7 +131,6 @@ export class AnalyticsService {
     return { predictions, insights: insightCount };
   }
 
-  /** Insight chỉ hiển thị cho recipient có capability viewinsights tại context của insight. */
   async listInsightsFor(userId: string): Promise<InsightRow[]> {
     const rows = await this.repo.listInsightsForRecipient(userId);
     const out: InsightRow[] = [];
@@ -159,13 +139,6 @@ export class AnalyticsService {
     }
     return out;
   }
-  /**
-   * Danh sách insight toàn cục (H4, #134): lọc theo ĐÚNG vị từ của
-   * listInsightsFor — chỉ trả dòng mà người gọi có analytics:viewinsights tại
-   * context của dòng (không kèm điều kiện recipient). User không có
-   * viewinsights ở context nào (học viên thường) nhận danh sách rỗng, không
-   * còn thấy insight dự báo của người khác.
-   */
   async listAllInsights(actorId: string): Promise<InsightRow[]> {
     const rows = await this.repo.listInsights();
     const out: InsightRow[] = [];

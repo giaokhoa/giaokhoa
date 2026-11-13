@@ -1,11 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MessagingService, coursePreferenceName } from './messaging.service';
 
-/**
- * Ghi đè theo khoá học (NB-4, issue #174): notify() áp tắt tiếng theo khoá TRƯỚC khi xét kênh — khoá nguồn bị mute thì không sinh thông báo ở kênh nào và ghi dispatch log 'skipped-course-mute'. Chính sách P3 đã chốt: điểm mới (grade_updated) và sắp hết hạn ghi danh
- * (enrol_expiry_warning) của khoá bị mute vẫn tới; hai loại bắt buộc
- * P2 (mandatoryInApp, gồm admin_announcement) cũng không bị chặn — luật toàn cục thắng ghi đè theo khoá.
- */
 describe('MessagingService.notify — override tắt tiếng theo khoá (NB-4)', () => {
   const MUTED_COURSE = 'course-muted';
   const OPEN_COURSE = 'course-open';
@@ -17,8 +12,6 @@ describe('MessagingService.notify — override tắt tiếng theo khoá (NB-4)',
     const repo = {
       insertNotification: vi.fn(async (v: Record<string, unknown>) => { inserted.push(v); return { id: 'notif-1', ...v }; }),
       insertDispatchLog: vi.fn(async (v: Record<string, unknown>) => { logs.push(v); return {}; }),
-      // TENANT-1 (#196): notify() phân giải tenant của người nhận qua repo trước khi áp cổng mute — fake cần có mặt phương thức này
-      // (null = người nhận không thuộc tenant nào, như messaging-notify.spec).
       getUserDefaultTenantId: vi.fn(async () => null),
     };
     const users = {
@@ -30,9 +23,7 @@ describe('MessagingService.notify — override tắt tiếng theo khoá (NB-4)',
     const dispatchQueue = { add: vi.fn(async (_name: string, data: Record<string, unknown>) => { jobs.push(data); }) };
     const outbox = { enqueueStandalone: vi.fn(async () => undefined) };
     const siteConfig = { getValue: vi.fn(async () => undefined) };
-    // Throttle gửi tin (lát M2, issue #212) là tham số thứ 10 của constructor: spec này chỉ đi đường notify() nên stub consume không làm gì là đủ (giữ nguyên hành vi spec của NB-4).
     const sendThrottle = { consume: vi.fn(async () => undefined) };
-    // I18n (tham số thứ 11, luật C-5 của issue #219): spec này không đi đường bản tóm tắt mặc định cho kênh ngoài nên stub rỗng đủ.
     const service = new MessagingService(
       repo as never, users as never, {} as never, {} as never, outbox as never,
       {} as never, unreadStream as never, dispatchQueue as never, siteConfig as never,
@@ -50,10 +41,8 @@ describe('MessagingService.notify — override tắt tiếng theo khoá (NB-4)',
     expect(result.skipped).toBe('course-mute');
     expect(result.notificationId).toBeNull();
     expect(result.channels).toEqual({});
-    // Không sinh hàng thông báo, không xếp hàng job kênh ngoài nào.
     expect(inserted).toHaveLength(0);
     expect(jobs).toHaveLength(0);
-    // Truy vết: đúng một dòng dispatch log với trạng thái riêng.
     expect(logs).toHaveLength(1);
     expect(logs[0]).toMatchObject({ provider: 'activity_due_soon', channel: 'popup', status: 'skipped-course-mute' });
   });
@@ -81,11 +70,6 @@ describe('MessagingService.notify — override tắt tiếng theo khoá (NB-4)',
     const { service, inserted } = buildService();
     const result = await service.notify('user-1', 'admin_announcement', {
       subject: 'Thông báo quản trị', body: 'Nội dung chính thức', courseId: MUTED_COURSE,
-      // Luật C-5 (issue #219): admin_announcement thuộc diện tối
-      // thiểu hoá kênh ngoài — nơi gọi thật của nó
-      // (sendSystemNotification) áp cứng bản tóm tắt mặc định; ca
-      // này chỉ kiểm cổng mute nên truyền bản tối thiểu hoá tường
-      // minh để lời gọi hợp lệ theo luật mới.
       externalSubject: 'Thông báo quản trị', externalBody: 'Nội dung chính thức',
     });
     expect(result.skipped).toBeUndefined();

@@ -2,9 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { buildProgramOutcomeRows } from './program-data-table';
 import type { CurriculumTree, CurriculumTreeNode } from '#lib/curriculum';
 
-/**
- * Spec hàm làm phẳng cây chương trình thành các dòng YCCĐ cho bảng Data Table của trang cây quản trị: mỗi YCCĐ là đúng một dòng, thứ tự cây được giữ nguyên, dòng biết mạch chứa nó và đường đi tổ tiên, node chưa có YCCĐ vẫn có một dòng giữ chỗ, và mạch rỗng vẫn có dòng giữ chỗ cho node mạch để thao tác quản trị không mất.
- */
 
 function node(partial: Partial<CurriculumTreeNode> & { id: string; title: string }): CurriculumTreeNode {
   return {
@@ -66,9 +63,7 @@ describe('buildProgramOutcomeRows — làm phẳng cây thành dòng YCCĐ', () 
     const rows = buildProgramOutcomeRows(TREE);
     const lessonRows = rows.filter((r) => r.node.id === 'lesson-1');
     expect(lessonRows.map((r) => r.outcome?.id)).toEqual(['o-1', 'o-2']);
-    // Chỉ dòng đầu của node mang cờ mở đầu node (điểm neo nút thao tác).
     expect(lessonRows.map((r) => r.isNodeStart)).toEqual([true, false]);
-    // Thứ tự toàn cục: hai dòng của lesson-1 đứng trước dòng của lesson-2.
     const ids = rows.map((r) => r.id);
     expect(ids.indexOf('lesson-1::o-2')).toBeLessThan(ids.indexOf('lesson-2::none'));
   });
@@ -87,7 +82,6 @@ describe('buildProgramOutcomeRows — làm phẳng cây thành dòng YCCĐ', () 
     expect(lessonRow!.strandTitle).toBe('Số và phép tính');
     expect(lessonRow!.strandNode?.id).toBe('strand-1');
     expect(lessonRow!.path).toEqual(['Số tự nhiên']);
-    // Dòng đầu tiên của nhóm mạch mang cờ mở đầu nhóm; các dòng sau không.
     expect(rows[0]!.isGroupStart).toBe(true);
     expect(rows[1]!.isGroupStart).toBe(false);
   });

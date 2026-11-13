@@ -2,33 +2,11 @@ import { sql, type RawBuilder } from 'kysely';
 import type { CentreDb, CentreTx } from '../client';
 import type { Json } from '../types/centre-db';
 
-/**
- * Kho dữ liệu khoá học trên Kysely: quản lý cây danh mục, khoá học, section, course module, neo khung chương trình/SGK của section và tuỳ chọn định dạng.
- *
- * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
- * - Cột đọc khai tường minh kèm bí danh camelCase
- *   (`'tenant_id as tenantId'`) dùng chung cho select và returning —
- *   KHÔNG bật CamelCasePlugin (một nguồn sự thật là database thật).
- * - Ghi qua hàm ánh xạ Insert/Update loại `undefined` tường minh
- *   từng trường (thử nghiệm T-4): `undefined` = không ghi/không đổi, `null` = ghi NULL — hai nghĩa không được lẫn.
- * - Mọi ghi jsonb (`availability` của section/cm) đi qua
- *   `jsonbValue` (xâu hoá tường minh + `::jsonb`); `null` của cột jsonb nullable giữ nguyên là SQL NULL.
- * - Khoá chính `uuidv7()` do database sinh (phụ lục U của kế
- *   hoạch): insert bỏ qua `id` (trừ khi phía gọi truyền tường minh) và lấy id qua `returning`.
- * - Điểm mở giao dịch của repository là `transaction(fn)`; các
- *   phương thức nhận handle tuỳ chọn (`CoursesDb` = handle thường hoặc handle giao dịch) để phía gọi lồng thao tác vào giao dịch của mình.
- *
- * Các kiểu dòng `*Row` ở biên repository dùng camelCase; trường jsonb `availability` giữ kiểu `unknown` vì nội dung không có lược đồ xác định.
- */
 
-/** Handle kho trung tâm mà repository chấp nhận: thường hoặc trong giao dịch. */
 export type CoursesDb = CentreDb | CentreTx;
-/** Handle giao dịch kho trung tâm (tham số bắt buộc của các thao tác đa bước). */
 export type CoursesTx = CentreTx;
 
-// Kiểu dòng công khai: tên thuộc tính camelCase ánh xạ từ cột PostgreSQL.
 
-/** Dòng `course_categories` (bảng này không có cột `created_at`). */
 export interface CategoryRow {
   id: string;
   tenantId: string;
@@ -43,7 +21,6 @@ export interface CategoryRow {
   updatedAt: Date;
 }
 
-/** Dòng `course`. */
 export interface CourseRow {
   id: string;
   tenantId: string;
@@ -67,7 +44,6 @@ export interface CourseRow {
   updatedAt: Date;
 }
 
-/** Dòng `course_sections`; `availability` là cây JSON giữ kiểu `unknown` như hợp đồng cũ. */
 export interface SectionRow {
   id: string;
   course: string;
@@ -80,7 +56,6 @@ export interface SectionRow {
   updatedAt: Date;
 }
 
-/** Dòng `course_modules`; `availability` giữ kiểu `unknown` như hợp đồng cũ. */
 export interface CmRow {
   id: string;
   course: string;
@@ -102,7 +77,6 @@ export interface CmRow {
   sortOrder: number;
 }
 
-/** Dòng `course_section_anchors` (neo khung chương trình chụp trên section). */
 export interface SectionAnchorRow {
   id: string;
   sectionId: string;
@@ -112,7 +86,6 @@ export interface SectionAnchorRow {
   createdAt: Date;
 }
 
-/** Dòng `course_section_anchor_outcomes` (YCCĐ chụp kèm một neo khung). */
 export interface SectionAnchorOutcomeRow {
   id: string;
   anchorId: string;
@@ -122,7 +95,6 @@ export interface SectionAnchorOutcomeRow {
   createdAt: Date;
 }
 
-/** Dòng `course_section_book_anchors` (neo khung SGK chụp trên section). */
 export interface SectionBookAnchorRow {
   id: string;
   sectionId: string;
@@ -132,7 +104,6 @@ export interface SectionBookAnchorRow {
   createdAt: Date;
 }
 
-/** Dòng `course_section_book_items` (mục bài SGK chụp trong một neo). */
 export interface SectionBookItemRow {
   id: string;
   anchorId: string;
@@ -142,7 +113,6 @@ export interface SectionBookItemRow {
   createdAt: Date;
 }
 
-/** Dòng `course_section_book_item_outcomes` (YCCĐ chụp kèm một mục bài SGK). */
 export interface SectionBookItemOutcomeRow {
   id: string;
   itemId: string;
@@ -152,7 +122,6 @@ export interface SectionBookItemOutcomeRow {
   createdAt: Date;
 }
 
-/** Dòng `course_format_options`. */
 export interface CourseFormatOptionRow {
   id: string;
   courseId: string;
@@ -162,11 +131,7 @@ export interface CourseFormatOptionRow {
   value: string | null;
 }
 
-// ---------------------------------------------------------------------------
-// Kiểu ghi vào (khớp `$inferInsert` của repository cũ)
-// ---------------------------------------------------------------------------
 
-/** Giá trị chèn `course_categories`. */
 export interface NewCategory {
   id?: string;
   tenantId: string;
@@ -180,7 +145,6 @@ export interface NewCategory {
   visible?: boolean;
 }
 
-/** Giá trị chèn `course`. */
 export interface NewCourse {
   id?: string;
   tenantId: string;
@@ -202,7 +166,6 @@ export interface NewCourse {
   isTemplate?: boolean;
 }
 
-/** Giá trị chèn `course_sections`. */
 export interface NewSection {
   id?: string;
   course: string;
@@ -214,7 +177,6 @@ export interface NewSection {
   openAt?: Date | null;
 }
 
-/** Giá trị chèn `course_modules`. */
 export interface NewCm {
   id?: string;
   course: string;
@@ -236,7 +198,6 @@ export interface NewCm {
   sortOrder?: number;
 }
 
-/** Giá trị chèn `course_section_anchors`. */
 export interface NewSectionAnchor {
   id?: string;
   sectionId: string;
@@ -245,7 +206,6 @@ export interface NewSectionAnchor {
   nodeTitle: string;
 }
 
-/** Giá trị chèn `course_section_anchor_outcomes`. */
 export interface NewSectionAnchorOutcome {
   id?: string;
   anchorId: string;
@@ -254,7 +214,6 @@ export interface NewSectionAnchorOutcome {
   position?: number;
 }
 
-/** Giá trị chèn `course_section_book_anchors`. */
 export interface NewSectionBookAnchor {
   id?: string;
   sectionId: string;
@@ -263,7 +222,6 @@ export interface NewSectionBookAnchor {
   nodeTitle: string;
 }
 
-/** Giá trị chèn `course_section_book_items`. */
 export interface NewSectionBookItem {
   id?: string;
   anchorId: string;
@@ -272,7 +230,6 @@ export interface NewSectionBookItem {
   position?: number;
 }
 
-/** Giá trị chèn `course_section_book_item_outcomes`. */
 export interface NewSectionBookItemOutcome {
   id?: string;
   itemId: string;
@@ -281,9 +238,6 @@ export interface NewSectionBookItemOutcome {
   position?: number;
 }
 
-// ---------------------------------------------------------------------------
-// Danh sách cột đọc (dùng chung cho select và returning)
-// ---------------------------------------------------------------------------
 
 const CATEGORY_COLUMNS = [
   'id',
@@ -409,23 +363,11 @@ const FORMAT_OPTION_COLUMNS = [
   'value',
 ] as const;
 
-// ---------------------------------------------------------------------------
-// Ánh xạ ghi: loại `undefined` tường minh từng trường (T-4); cột jsonb nullable phân biệt ba trạng thái — `undefined` bỏ qua, `null` ghi SQL NULL, giá trị thì xâu hoá qua `jsonbValue`.
-// ---------------------------------------------------------------------------
 
-/**
- * Biểu thức tham số jsonb cho một giá trị ghi: xâu hoá tường minh rồi ép `::jsonb` — pg không suy được kiểu tham số khi ghi jsonb, ghi thẳng object sẽ lỗi.
- */
 function jsonbValue<T>(value: T): RawBuilder<T> {
   return sql<T>`${JSON.stringify(value)}::jsonb`;
 }
 
-/**
- * Ánh xạ phần jsonb nullable cho values/set: giữ ba trạng thái như
- * ghi chú trên. Giá trị phía tiêu thụ là `unknown` (hợp đồng cũ
- * không có `$type<>` cho các cột này) nên ép về kiểu `Json` của
- * codegen tại điểm ghi — đúng kiểu cột mà Kysely kiểm chứng.
- */
 function jsonbField(value: unknown): RawBuilder<Json> | null | undefined {
   if (value === undefined) return undefined;
   if (value === null) return null;
@@ -629,21 +571,14 @@ function sectionBookItemOutcomeInsertValues(v: NewSectionBookItemOutcome) {
   };
 }
 
-/**
- * Kho dữ liệu khoá học: category (cây có path vật chất hoá), course,
- * section, course module (cm) và format options.
- */
 export class CoursesRepository {
   constructor(private readonly handle: CentreDb) {}
 
-  /** Mở một transaction trên kho trung tâm. */
   async transaction<T>(fn: (tx: CoursesTx) => Promise<T>): Promise<T> {
     return this.handle.transaction().execute(fn);
   }
 
-  // categories
 
-  /** Chèn category. */
   async insertCategory(v: NewCategory, db: CoursesDb = this.handle): Promise<CategoryRow> {
     return db
       .insertInto('course_categories')
@@ -652,7 +587,6 @@ export class CoursesRepository {
       .executeTakeFirstOrThrow() as Promise<CategoryRow>;
   }
 
-  /** Lấy category theo id. */
   async getCategory(id: string): Promise<CategoryRow | undefined> {
     return this.handle
       .selectFrom('course_categories')
@@ -661,7 +595,6 @@ export class CoursesRepository {
       .executeTakeFirst() as Promise<CategoryRow | undefined>;
   }
 
-  /** Liệt kê mọi category. */
   async listCategories(): Promise<CategoryRow[]> {
     return this.handle
       .selectFrom('course_categories')
@@ -671,7 +604,6 @@ export class CoursesRepository {
       .execute() as Promise<CategoryRow[]>;
   }
 
-  /** Các category con trực tiếp của một category. */
   async childrenOf(parent: string): Promise<CategoryRow[]> {
     return this.handle
       .selectFrom('course_categories')
@@ -681,7 +613,6 @@ export class CoursesRepository {
       .execute() as Promise<CategoryRow[]>;
   }
 
-  /** Category và mọi con cháu qua tiền tố path (path có dạng như /1/4/9). */
   async subtreeOf(cat: CategoryRow): Promise<CategoryRow[]> {
     return this.handle
       .selectFrom('course_categories')
@@ -690,7 +621,6 @@ export class CoursesRepository {
       .execute() as Promise<CategoryRow[]>;
   }
 
-  /** Cập nhật category. */
   async updateCategory(id: string, v: Partial<NewCategory>, db: CoursesDb = this.handle): Promise<void> {
     await db
       .updateTable('course_categories')
@@ -699,7 +629,6 @@ export class CoursesRepository {
       .execute();
   }
 
-  /** Viết lại path/depth khi di chuyển category. */
   async updateCategoryPath(id: string, path: string, depth: number): Promise<void> {
     await this.handle
       .updateTable('course_categories')
@@ -708,12 +637,10 @@ export class CoursesRepository {
       .execute();
   }
 
-  /** Xoá category. */
   async deleteCategory(id: string, db: CoursesDb = this.handle): Promise<void> {
     await db.deleteFrom('course_categories').where('id', '=', id).execute();
   }
 
-  /** Số category anh em (phục vụ sortOrder). */
   async countSiblingCategories(parent: string | null): Promise<number> {
     let query = this.handle.selectFrom('course_categories').select(sql<number>`count(*)::int`.as('n'));
     query = parent === null ? query.where('parent', 'is', null) : query.where('parent', '=', parent);
@@ -721,9 +648,7 @@ export class CoursesRepository {
     return row?.n ?? 0;
   }
 
-  // courses
 
-  /** Chèn khoá học. */
   async insertCourse(v: NewCourse, db: CoursesDb = this.handle): Promise<CourseRow> {
     return db
       .insertInto('course')
@@ -732,7 +657,6 @@ export class CoursesRepository {
       .executeTakeFirstOrThrow() as Promise<CourseRow>;
   }
 
-  /** Lấy khoá học theo id. */
   async getCourse(id: string): Promise<CourseRow | undefined> {
     return this.handle
       .selectFrom('course')
@@ -741,7 +665,6 @@ export class CoursesRepository {
       .executeTakeFirst() as Promise<CourseRow | undefined>;
   }
 
-  /** Lấy khoá học theo shortName duy nhất. */
   async getCourseByShortname(shortName: string): Promise<CourseRow | undefined> {
     return this.handle
       .selectFrom('course')
@@ -750,7 +673,6 @@ export class CoursesRepository {
       .executeTakeFirst() as Promise<CourseRow | undefined>;
   }
 
-  /** Liệt kê khoá học. */
   async listCourses(categoryId?: string): Promise<CourseRow[]> {
     let query = this.handle
       .selectFrom('course')
@@ -761,7 +683,6 @@ export class CoursesRepository {
     return query.execute() as Promise<CourseRow[]>;
   }
 
-  /** Khoá học thuộc các category cho trước. */
   async listCoursesInCategories(categoryIds: string[]): Promise<CourseRow[]> {
     if (!categoryIds.length) return [];
     const rows: CourseRow[] = [];
@@ -769,7 +690,6 @@ export class CoursesRepository {
     return rows;
   }
 
-  /** Cập nhật khoá học. */
   async updateCourse(id: string, v: Partial<NewCourse>, db: CoursesDb = this.handle): Promise<void> {
     await db
       .updateTable('course')
@@ -778,14 +698,11 @@ export class CoursesRepository {
       .execute();
   }
 
-  /** Xoá khoá học. */
   async deleteCourse(id: string, db: CoursesDb = this.handle): Promise<void> {
     await db.deleteFrom('course').where('id', '=', id).execute();
   }
 
-  // sections
 
-  /** Chèn section. */
   async insertSection(v: NewSection, db: CoursesDb = this.handle): Promise<SectionRow> {
     return db
       .insertInto('course_sections')
@@ -794,17 +711,10 @@ export class CoursesRepository {
       .executeTakeFirstOrThrow() as Promise<SectionRow>;
   }
 
-  /** Lấy môn học theo id (đối chiếu neo môn × khối của khoá — K0a). */
   async getSubjectById(id: string): Promise<{ id: string } | undefined> {
     return this.handle.selectFrom('subjects').select('id').where('id', '=', id).executeTakeFirst();
   }
 
-  /**
-   * Dịch số thứ tự của các section từ `fromSection` trở đi trong một
-   * khoá (phục vụ chèn khung tại vị trí): cộng `delta` vào số section —
-   * lượt chèn chạy hai pass qua vùng đệm lớn để không vi phạm unique
-   * (course, section) giữa chừng.
-   */
   async shiftSections(tx: CoursesTx, courseId: string, fromSection: number, delta: number): Promise<void> {
     await tx
       .updateTable('course_sections')
@@ -814,7 +724,6 @@ export class CoursesRepository {
       .execute();
   }
 
-  /** Ghi neo khung cho một section vừa tạo từ khung chương trình. */
   async insertSectionAnchor(v: NewSectionAnchor, db: CoursesDb = this.handle): Promise<SectionAnchorRow> {
     return db
       .insertInto('course_section_anchors')
@@ -823,13 +732,11 @@ export class CoursesRepository {
       .executeTakeFirstOrThrow() as Promise<SectionAnchorRow>;
   }
 
-  /** Ghi các YCCĐ chụp kèm một neo khung (đúng thứ tự position truyền vào). */
   async insertSectionAnchorOutcomes(v: NewSectionAnchorOutcome[], db: CoursesDb = this.handle): Promise<void> {
     if (v.length === 0) return;
     await db.insertInto('course_section_anchor_outcomes').values(v.map(sectionAnchorOutcomeInsertValues)).execute();
   }
 
-  /** Toàn bộ neo khung của nhiều section (dựng khung hiển thị trong nội dung khoá). */
   async listAnchorsForSections(sectionIds: string[]): Promise<SectionAnchorRow[]> {
     if (sectionIds.length === 0) return [];
     return this.handle
@@ -839,7 +746,6 @@ export class CoursesRepository {
       .execute() as Promise<SectionAnchorRow[]>;
   }
 
-  /** Toàn bộ YCCĐ chụp của nhiều neo khung, theo position. */
   async listAnchorOutcomes(anchorIds: string[]): Promise<SectionAnchorOutcomeRow[]> {
     if (anchorIds.length === 0) return [];
     return this.handle
@@ -851,7 +757,6 @@ export class CoursesRepository {
       .execute() as Promise<SectionAnchorOutcomeRow[]>;
   }
 
-  /** Ghi neo khung SGK cho một section vừa tạo từ khung sách (K0b). */
   async insertSectionBookAnchor(v: NewSectionBookAnchor, db: CoursesDb = this.handle): Promise<SectionBookAnchorRow> {
     return db
       .insertInto('course_section_book_anchors')
@@ -860,7 +765,6 @@ export class CoursesRepository {
       .executeTakeFirstOrThrow() as Promise<SectionBookAnchorRow>;
   }
 
-  /** Ghi một mục bài SGK chụp trong một neo khung SGK. */
   async insertSectionBookItem(v: NewSectionBookItem, db: CoursesDb = this.handle): Promise<SectionBookItemRow> {
     return db
       .insertInto('course_section_book_items')
@@ -869,13 +773,11 @@ export class CoursesRepository {
       .executeTakeFirstOrThrow() as Promise<SectionBookItemRow>;
   }
 
-  /** Ghi các YCCĐ chụp kèm một mục bài SGK (đúng thứ tự position truyền vào). */
   async insertSectionBookItemOutcomes(v: NewSectionBookItemOutcome[], db: CoursesDb = this.handle): Promise<void> {
     if (v.length === 0) return;
     await db.insertInto('course_section_book_item_outcomes').values(v.map(sectionBookItemOutcomeInsertValues)).execute();
   }
 
-  /** Toàn bộ neo khung SGK của nhiều section (dựng khung SGK hiển thị trong nội dung khoá). */
   async listBookAnchorsForSections(sectionIds: string[]): Promise<SectionBookAnchorRow[]> {
     if (sectionIds.length === 0) return [];
     return this.handle
@@ -885,7 +787,6 @@ export class CoursesRepository {
       .execute() as Promise<SectionBookAnchorRow[]>;
   }
 
-  /** Toàn bộ mục bài SGK chụp của nhiều neo, theo position. */
   async listBookItems(anchorIds: string[]): Promise<SectionBookItemRow[]> {
     if (anchorIds.length === 0) return [];
     return this.handle
@@ -897,7 +798,6 @@ export class CoursesRepository {
       .execute() as Promise<SectionBookItemRow[]>;
   }
 
-  /** Toàn bộ YCCĐ chụp của nhiều mục bài SGK, theo position. */
   async listBookItemOutcomes(itemIds: string[]): Promise<SectionBookItemOutcomeRow[]> {
     if (itemIds.length === 0) return [];
     return this.handle
@@ -909,7 +809,6 @@ export class CoursesRepository {
       .execute() as Promise<SectionBookItemOutcomeRow[]>;
   }
 
-  /** Lấy section theo id. */
   async getSection(id: string): Promise<SectionRow | undefined> {
     return this.handle
       .selectFrom('course_sections')
@@ -918,7 +817,6 @@ export class CoursesRepository {
       .executeTakeFirst() as Promise<SectionRow | undefined>;
   }
 
-  /** Liệt kê section của khoá học theo thứ tự. */
   async listSections(courseId: string): Promise<SectionRow[]> {
     return this.handle
       .selectFrom('course_sections')
@@ -928,7 +826,6 @@ export class CoursesRepository {
       .execute() as Promise<SectionRow[]>;
   }
 
-  /** Cập nhật section (tên, summary, availability JSON). */
   async updateSection(id: string, v: Partial<NewSection>): Promise<void> {
     await this.handle
       .updateTable('course_sections')
@@ -937,14 +834,11 @@ export class CoursesRepository {
       .execute();
   }
 
-  /** Xoá section. */
   async deleteSection(id: string): Promise<void> {
     await this.handle.deleteFrom('course_sections').where('id', '=', id).execute();
   }
 
-  // mô-đun của khoá học
 
-  /** Chèn course module. */
   async insertCm(v: NewCm, db: CoursesDb = this.handle): Promise<CmRow> {
     return db
       .insertInto('course_modules')
@@ -953,7 +847,6 @@ export class CoursesRepository {
       .executeTakeFirstOrThrow() as Promise<CmRow>;
   }
 
-  /** Lấy cm theo id. */
   async getCm(id: string): Promise<CmRow | undefined> {
     return this.handle
       .selectFrom('course_modules')
@@ -962,11 +855,6 @@ export class CoursesRepository {
       .executeTakeFirst() as Promise<CmRow | undefined>;
   }
 
-  /**
-   * Liệt kê mọi cm của khoá học theo thứ tự outline (K1: `sortOrder`
-   * tường minh, id uuidv7 làm khoá phụ giữ nguyên thứ tự tạo cho dữ
-   * liệu cũ mọi sortOrder đều bằng 0).
-   */
   async listCms(courseId: string): Promise<CmRow[]> {
     return this.handle
       .selectFrom('course_modules')
@@ -978,7 +866,6 @@ export class CoursesRepository {
       .execute() as Promise<CmRow[]>;
   }
 
-  /** Cm trong một section theo thứ tự outline (K1). */
   async listCmsInSection(sectionId: string): Promise<CmRow[]> {
     return this.handle
       .selectFrom('course_modules')
@@ -990,10 +877,6 @@ export class CoursesRepository {
       .execute() as Promise<CmRow[]>;
   }
 
-  /**
-   * Khoá mẫu tổ/trường (K1): các khoá `is_template` — danh sách nguồn
-   * của đường 5 trong wizard tạo khoá.
-   */
   async listTemplateCourses(): Promise<CourseRow[]> {
     return this.handle
       .selectFrom('course')
@@ -1004,19 +887,15 @@ export class CoursesRepository {
       .execute() as Promise<CourseRow[]>;
   }
 
-  /** Cập nhật cm. */
   async updateCm(id: string, v: Partial<NewCm>): Promise<void> {
     await this.handle.updateTable('course_modules').set(cmUpdateValues(v)).where('id', '=', id).execute();
   }
 
-  /** Xoá cm. */
   async deleteCm(id: string, db: CoursesDb = this.handle): Promise<void> {
     await db.deleteFrom('course_modules').where('id', '=', id).execute();
   }
 
-  // tuỳ chọn định dạng
 
-  /** Ghi một tuỳ chọn định dạng khoá học (format option). */
   async setFormatOption(
     courseId: string,
     format: string,
@@ -1025,9 +904,6 @@ export class CoursesRepository {
     sectionId: string | null = null,
   ): Promise<void> {
     if (sectionId === null) {
-      // sectionId NULL không tham gia unique conflict (NULL luôn khác
-      // nhau trong PostgreSQL) nên upsert thủ công cho tuỳ chọn cấp
-      // khoá học.
       const existing = await this.handle
         .selectFrom('course_format_options')
         .select(FORMAT_OPTION_COLUMNS)
@@ -1057,7 +933,6 @@ export class CoursesRepository {
       .execute();
   }
 
-  /** Đọc các tuỳ chọn định dạng của khoá học. */
   async listFormatOptions(courseId: string): Promise<CourseFormatOptionRow[]> {
     return this.handle
       .selectFrom('course_format_options')

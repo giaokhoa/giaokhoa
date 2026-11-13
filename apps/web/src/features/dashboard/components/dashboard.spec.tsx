@@ -77,7 +77,6 @@ const FORBIDDEN = { type: 'about:blank', title: 'Forbidden', status: 403, code: 
 const SYS_CTX_ID = '01900000-0000-7000-8000-0000000000e1';
 const COURSE_CTX_ID = '01900000-0000-7000-8000-0000000000e2';
 
-/** Ảnh chụp quyền (GET /users/me/capabilities) mà API thật trả cho từng vai trò. */
 function accessView(role: 'admin' | 'teacher' | 'student') {
   const me = role === 'admin' ? PROFILES.admin : role === 'teacher' ? PROFILES.teacher1 : PROFILES.student1;
   if (role === 'admin') {
@@ -134,12 +133,6 @@ function forbidden() {
   return { status: 403, body: FORBIDDEN };
 }
 
-/**
- * Stub fetch theo đúng bề mặt API thật: quyền của từng vai trò được khai
- * qua GET /users/me/capabilities (đúng nguồn PermissionsProvider đọc),
- * còn các endpoint dữ liệu bị khoá quyền vẫn trả 403 như PermissionEvaluator
- * của API để test kiểm chứng cả dữ liệu hiển thị theo vai trò.
- */
 function stubFetch(handler: Handler) {
   vi.stubGlobal(
     'fetch',
@@ -173,7 +166,6 @@ function renderApp() {
 function baseHandler(role: 'admin' | 'teacher' | 'student'): Handler {
   const me = role === 'admin' ? PROFILES.admin : role === 'teacher' ? PROFILES.teacher1 : PROFILES.student1;
   return (url) => {
-    // Phiên cookie Better Auth: id phiên khớp hồ sơ của vai đang stub.
     if (isGetSessionUrl(url)) return ok(baSessionBody({ id: me.id, username: me.username, email: me.email }));
     if (url === '/api/v1/users/me') return ok(me);
     if (url === '/api/v1/users/me/capabilities') return ok(accessView(role));
@@ -234,7 +226,6 @@ function baseHandler(role: 'admin' | 'teacher' | 'student'): Handler {
       return role === 'admin' ? forbidden() : ok(GRADEBOOK);
     }
     if (url === '/api/v1/badges/mine') return ok([{ id: 'x' }, { id: 'y' }]);
-    // DASH1 (issue #121): endpoint tổng hợp dashboard + thẻ khoá.
     if (url.startsWith('/api/v1/dashboard/overview')) {
       const soon = new Date(Date.now() + 2 * 86_400_000).toISOString();
       const past = new Date(Date.now() - 3_600_000).toISOString();
@@ -262,7 +253,6 @@ function baseHandler(role: 'admin' | 'teacher' | 'student'): Handler {
       });
     }
     if (url === '/api/v1/dashboard/course-cards') return ok({ prefs: [] });
-    // Dashboard chỉ còn hỏi SỐ chưa đọc (trung tâm v2, issue #51).
     if (url === '/api/v1/notifications/unread-count') {
       return ok({ unread: 1 });
     }
@@ -277,7 +267,6 @@ function baseHandler(role: 'admin' | 'teacher' | 'student'): Handler {
 describe('Dashboard theo vai trò', () => {
   beforeEach(() => {
     localStorage.clear();
-    // jsdom thiếu matchMedia/ResizeObserver mà sidebar và biểu đồ cần.
     vi.stubGlobal('matchMedia', (query: string) => ({
       matches: false,
       media: query,
@@ -292,13 +281,10 @@ describe('Dashboard theo vai trò', () => {
       'ResizeObserver',
       class {
         observe() {
-          /* no-op cho jsdom */
         }
         unobserve() {
-          /* no-op cho jsdom */
         }
         disconnect() {
-          /* no-op cho jsdom */
         }
       },
     );
@@ -312,19 +298,15 @@ describe('Dashboard theo vai trò', () => {
   it('student thấy khối việc cần làm DASH1 ở đầu dashboard: quá hạn tách rõ + điểm mới', async () => {
     stubFetch(baseHandler('student'));
     renderApp();
-    // Chờ nội dung thật (skeleton chờ tải mang cùng testid nên không chờ theo testid).
     expect(await screen.findByText('Bài nộp quá hạn')).toBeInTheDocument();
     expect(screen.getByTestId('dashboard-todo')).toBeInTheDocument();
     const items = screen.getAllByTestId('todo-due-item');
     expect(items).toHaveLength(2);
-    // Quá hạn đứng đầu danh sách (API đã sắp) và mang nhãn Quá hạn.
     expect(items[0]).toHaveTextContent('Bài nộp quá hạn');
     expect(items[0]).toHaveTextContent('Quá hạn');
     expect(items[1]).toHaveTextContent('Quiz sắp đến hạn');
-    // ĐX-5 (issue #179): việc cần làm trỏ thẳng tới trang hoạt động, không về trang khoá chung.
     expect(items[0].querySelector('a')?.getAttribute('href')).toBe(`/courses/${COURSE_ID}/assignments/a-overdue`);
     expect(items[1].querySelector('a')?.getAttribute('href')).toBe(`/courses/${COURSE_ID}/exams/q-soon`);
-    // Điểm mới đã công bố hiện kèm điểm số.
     const fresh = screen.getByTestId('todo-new-result');
     expect(fresh).toHaveTextContent('Điểm kiểm tra');
     expect(fresh).toHaveTextContent('9 / 10');
@@ -337,12 +319,8 @@ describe('Dashboard theo vai trò', () => {
     expect(screen.getByTestId('dashboard-grading-queue')).toBeInTheDocument();
     expect(row).toHaveTextContent('Khoá học mẫu');
     expect(row).toHaveTextContent('5');
-    // Bấm vào hàng đợi tới thẳng trang điểm của khoá (href nằm ở thẻ
-    // liên kết bao quanh hàng — Button render qua Link của Base UI).
     const queueLink = row.closest('a') ?? row.querySelector('a');
     expect(queueLink?.getAttribute('href')).toBe(`/courses/${COURSE_ID}/grades`);
-    // Phần phiếu giấy CAM-0 (#187): đếm tách bạch + deep-link thẳng tới
-    // bề mặt rà soát phiếu của đúng quiz có phiếu chờ lâu nhất.
     const paperLink = screen.getByTestId('grading-paper-link');
     expect(paperLink).toHaveTextContent('2 phiếu giấy chờ xử lý');
     expect(paperLink.getAttribute('href')).toBe(`/courses/${COURSE_ID}/exams/quiz-paper-1/paper`);
@@ -353,7 +331,6 @@ describe('Dashboard theo vai trò', () => {
     renderApp();
     expect(await screen.findByText('Quản trị hệ thống')).toBeInTheDocument();
     expect(await screen.findByText('Tổng người dùng')).toBeInTheDocument();
-    // Bảng người dùng thật từ API quản trị.
     expect(await screen.findByText('teacher1')).toBeInTheDocument();
     expect(screen.queryByText('Giảng dạy')).not.toBeInTheDocument();
     expect(screen.queryByText('Học tập của tôi')).not.toBeInTheDocument();
@@ -363,10 +340,7 @@ describe('Dashboard theo vai trò', () => {
     stubFetch(baseHandler('student'));
     renderApp();
     expect(await screen.findByText('Học tập của tôi')).toBeInTheDocument();
-    // Điểm trung bình từ điểm bài 8.5/10 đã công bố của học sinh — hiện ở
-    // cả thẻ thống kê lẫn cột điểm của khoá trong bảng (cùng một giá trị).
     expect((await screen.findAllByText('85.0%')).length).toBeGreaterThanOrEqual(1);
-    // Bảng khoá học của tôi có khoá đã ghi danh.
     expect(await screen.findByText('Khoá học mẫu')).toBeInTheDocument();
     expect(screen.queryByText('Quản trị hệ thống')).not.toBeInTheDocument();
     expect(screen.queryByText('Giảng dạy')).not.toBeInTheDocument();
@@ -376,7 +350,6 @@ describe('Dashboard theo vai trò', () => {
     stubFetch(baseHandler('teacher'));
     renderApp();
     expect(await screen.findByText('Giảng dạy')).toBeInTheDocument();
-    // Báo cáo lớp có 2 học viên, 1 người chưa có điểm → thẻ "Chưa có điểm" = 1.
     const ungradedCard = await screen.findByTestId('stat-card-teacher-ungraded');
     await waitFor(() => expect(ungradedCard).toHaveTextContent('1'));
     expect(screen.queryByText('Quản trị hệ thống')).not.toBeInTheDocument();

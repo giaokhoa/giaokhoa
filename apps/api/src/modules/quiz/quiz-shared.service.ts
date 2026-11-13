@@ -27,11 +27,6 @@ export const QUIZ_CAPABILITIES = {
   attempt: 'quiz:attempt',
   manage: 'quiz:manage',
   manageOverrides: 'quiz:manageoverrides',
-  /**
-   * Quyền ma trận đã về area `matrix:*` ở đợt đồng bộ khuôn ngân hàng (issue #228, lát S3) — KHÔNG còn neo vào quiz:*: viewMatrix = matrix:use (xem/dùng), addMatrix = matrix:add (tạo mới: tạo tay, nhập file, copy vào bank đích), manageMatrix = matrix:edit
-   * (sửa ma trận và các ô đã có). Khoá nội bộ giữ nguyên tên để các
-   * điểm gác không đổi hình dạng.
-   */
   viewMatrix: 'matrix:use',
   addMatrix: 'matrix:add',
   manageMatrix: 'matrix:edit',
@@ -41,17 +36,6 @@ export const QUIZ_CAPABILITIES = {
   preview: 'quiz:preview',
 } as const;
 
-/**
- * Tầng thấp dùng chung của QuizService (không phải một cụm ca sử dụng):
- * các primitive tải pin/ma trận, cổng quyền theo context, view pin, và các phép tính điểm/chấm từ usage mà nhiều cụm cùng dùng. Tách riêng tầng này giữ đồ thị phụ thuộc giữa các service cụm không có vòng:
- * cụm ghim, cụm ma trận, cụm sinh đề và cụm lượt làm đều chỉ trỏ xuống tầng này (cụm lượt làm là trung gian cho hai phép gọi chéo còn lại:
- * cụm ghim gọi chấm lại qua `pushGrade`, cụm sinh đề gọi chốt lượt qua `finalizeAttempt`).
- *
- * Các method vốn là `private` của QuizService cũ nhưng được cụm khác gọi nay để public trong nội bộ module (không phải bề mặt API của module): toàn bộ method của service này đều thuộc diện đó, trừ các method vốn đã public. Bề mặt công khai ra ngoài module không đổi — vẫn đi qua facade QuizService.
- *
- * Hai hằng `QUIZ_COMPONENT`/`QUIZ_CAPABILITIES` chuyển về đây cùng với nhóm cổng quyền (nơi dùng thật), facade re-export lại để bề mặt
- * import cũ không đổi.
- */
 
 export class QuizSharedService {
   constructor(
@@ -64,25 +48,17 @@ export class QuizSharedService {
     private readonly tenants: TenantsService,
   ) {}
 
-  /** Tenant cho ma trận không gắn bank: tenant hiệu lực của request; ngoài request rơi về tenant-zero. */
   public async matrixTenantId(): Promise<string> {
     return this.tenantContext.currentTenantId() ?? (await this.tenants.fallbackTenantId());
   }
 
-  // --- helpers ---------------------------------------------------------------
 
-  /**
-   * Lấy pin đã LÀM GIÀU; ném exam.pin_not_found khi vắng. Hàng exam_pins được gộp với các trường suy từ exam version đã ghim
-   * (thang điểm, tên hiển thị, ma trận, thang Đ–S) và exam (kind)
-   * thành một "bài kiểm tra trong khoá" thống nhất cho các tầng trên.
-   */
   async getPin(id: string): Promise<PinRow> {
     const row = await this.repo.getPin(id);
     if (!row || row.preparationState !== 'ready') throw new NotFoundException({ message: `Exam pin ${id} not found`, code: 'exam.pin_not_found' });
     return this.enrichPin(row);
   }
 
-  /** Hàng pin thô (chưa làm giàu) cho các seam cần đúng bản ghi đã ghim (vd in đề theo pin). */
   async getPinRow(id: string): Promise<ExamPinRow | undefined> {
     return this.repo.getPin(id);
   }
@@ -105,11 +81,6 @@ export class QuizSharedService {
     };
   }
 
-  /**
-   * Slots HIỆU LỰC của một pin — không còn bảng slots riêng của bài:
-   * - Đề snapshot: đọc thẳng exam_slots của version đã ghim (page suy
-   *   từ thứ tự xuất hiện của section, như lúc triển khai trước đây).
-   */
   async effectiveSlots(pin: PinRow): Promise<EffectiveSlotRow[]> {
     const slots = await this.repo.listExamSlots(pin.examVersionId);
     const pageBySection = new Map<string, number>();
@@ -132,7 +103,6 @@ export class QuizSharedService {
     return row;
   }
 
-  /** Context của course module chứa quiz — mọi capability quiz:* kiểm tại đây. */
   public async cmContextId(quiz: PinRow): Promise<string> {
     if (quiz.cmId) {
       const ctx = await this.contexts.getByLevelInstance(CONTEXT_LEVELS.MODULE, quiz.cmId);
@@ -151,12 +121,6 @@ export class QuizSharedService {
     return this.evaluator.hasCapability(actorId, capability, await this.cmContextId(quiz));
   }
 
-  /**
-   * View của quiz kèm slots và tổng điểm slot. Slot cố định mang thêm
-   * thông tin bank nguồn + kỷ luật version (QB-3): chế độ ghim, version
-   * đang ghim, version ready mới nhất và cờ có bản mới để UI hiển thị
-   * "Câu thuộc Ngân hàng [tên] · đang ghim v[n] · đã có v[m]".
-   */
   async pinView(quiz: PinRow): Promise<QuizView> {
     const slots = await this.effectiveSlots(quiz);
     const slotViews: QuizView['slots'] = [];
@@ -223,8 +187,6 @@ export class QuizSharedService {
       examVersionId: quiz.examVersionId,
       examVersionNumber: quiz.examVersionNumber,
       latestExamVersionNumber: quiz.examLatestVersion,
-      // Huy hiệu bản đề mới (issue #254): chỉ khi đề đang ready và bản
-      // mới nhất mới hơn bản đang ghim thì mới có đích cập nhật.
       hasNewerExamVersion: quiz.examStatus === 'ready' && quiz.examLatestVersion > quiz.examVersionNumber,
       versionMode: quiz.versionMode === 'float_latest_ready' ? 'float_latest_ready' as const : 'pinned' as const,
       tfScale: quiz.tfScale,
@@ -237,12 +199,10 @@ export class QuizSharedService {
     };
   }
 
-  /** Tổng maxMark của một usage (mẫu số điểm lượt — lấy từ question attempt đã pin, không phải slot hiện tại). */
   public usageTotalMax(usage: UsageView): number {
     return usage.attempts.reduce((sum, a) => sum + a.maxMark, 0);
   }
 
-  /** Điểm một lượt đã quy về thang điểm của quiz (null khi chưa chốt hoặc đề rỗng). */
   public attemptGradeValue(quiz: PinRow, row: ExamAttemptRow, totalMax: number): number | null {
     if (row.sumGrades === null || totalMax <= 0) return null;
     return (row.sumGrades / totalMax) * quiz.grade;
@@ -257,13 +217,6 @@ export class QuizSharedService {
     return this.buildAttemptSummary(quiz, row, totalMax);
   }
 
-  /**
-   * Tóm tắt NHIỀU lượt trong một lượt nạp tổng điểm (DL-03, issue
-   * #489): các trang liệt kê lượt (kết quả, lịch sử của học sinh) cần
-   * tóm tắt cho mọi lượt trên trang — tổng maxMark của các usage được
-   * nạp một lần theo lô thay vì gọi `getUsage` cho từng lượt như
-   * trước. Thứ tự tóm tắt giữ đúng thứ tự dòng đầu vào.
-   */
   public async attemptSummaries(quiz: PinRow, rows: ExamAttemptRow[]): Promise<QuizAttemptSummary[]> {
     const gradedRows = rows.filter((r) => r.sumGrades !== null);
     const totals = gradedRows.length
@@ -274,7 +227,6 @@ export class QuizSharedService {
     ));
   }
 
-  /** Lắp tóm tắt một lượt từ tổng maxMark đã nạp sẵn (null = lượt chưa có sumGrades, không cần tổng). */
   private buildAttemptSummary(quiz: PinRow, row: ExamAttemptRow, totalMax: number | null): QuizAttemptSummary {
     const grade = totalMax === null ? null : this.attemptGradeValue(quiz, row, totalMax);
     return {
@@ -287,15 +239,6 @@ export class QuizSharedService {
     };
   }
 
-  /**
-   * Đồng bộ tổng điểm của một lượt từ usage của engine: tổng tuyến
-   * tính các câu ĐÃ có fraction (mỗi câu đóng góp fraction × maxMark
-   * của chính nó; essay chưa chấm đóng góp 0) + số câu còn chờ chấm
-   * tay. Câu truefalse TF-A tự mang fraction đã tra thang Đ–S ở tầng
-   * engine (thang của lần ghim truyền vào lúc chốt usage) nên KHÔNG
-   * còn ngoại lệ chùm ở tầng tổng hợp này — mô hình chùm gom nhiều
-   * slot đã bỏ hẳn theo điểm quyết D-1.
-   */
   public syncFromUsage(usage: UsageView): { sumGrades: number; pendingManual: number } {
     let sum = 0;
     let pending = 0;
@@ -312,27 +255,10 @@ export class QuizSharedService {
     return row;
   }
 
-  /**
-   * ĐIỂM NEO QUYỀN DUY NHẤT của ma trận (MB-0, điểm E-8 của hồ sơ ngân
-   * hàng đề/ma trận): mọi kiểm tra quyền trên ma trận đều đi qua đây.
-   * Nguồn quyền chốt là BANK — ma trận nằm trong bank nào thì quyền
-   * theo bank đó; context môn (matrix.contextId) chỉ là PHẠM VI DỮ
-   * LIỆU. MB-1 (issue #111) đã cắm bank, với hai lưu ý thực thi:
-   * - Quyền tại bank đọc từ HAI VAI CHUYÊN DỤNG tại context bank
-   *   (QuestionBanksService.bankLocalMatrixCaps: matrix:use ↔ thành
-   *   viên + phụ trách; matrix:add và matrix:edit ↔ phụ trách),
-   *   KHÔNG qua PermissionEvaluator — evaluator kế thừa mặc định
-   *   archetype từ mọi context tổ tiên nên giáo viên có vai ở context
-   *   hệ thống sẽ lọt cổng bank kín của tổ dù không phải thành viên.
-   * - Ma trận chưa thuộc bank nào (hoặc bank đã bị xoá) giữ hành vi
-   *   Chặng 3: PermissionEvaluator tại context môn.
-   */
   public async requireMatrixCap(actorId: string, matrix: ExamMatrixRow, capability: string): Promise<void> {
     if (matrix.bankId) {
       const bank = await this.banks.findBankById(matrix.bankId);
       if (bank) {
-        // Ma trận thuộc bank personal của người khác → 404 như ma trận
-        // không tồn tại (issue #123), trước mọi cổng capability.
         if (await this.banks.isForeignPersonalBank(actorId, bank)) {
           throw new NotFoundException({ message: `Exam matrix ${matrix.id} not found`, code: 'quiz.matrix_not_found' });
         }
@@ -350,13 +276,6 @@ export class QuizSharedService {
     await this.evaluator.requireCapability(actorId, capability, matrix.contextId);
   }
 
-  /**
-   * Ứng viên thô của một ô: câu ready gắn BẤT KỲ YCCĐ nào thuộc ĐVK
-   * của ô ở đúng mức của ô, đúng dạng (qua
-   * question_learning_outcomes / Curriculum Chặng 2 — mức nằm trên
-   * dòng nối câu × YCCĐ; issue #249). Chưa xét quyền dùng ngân hàng
-   * của người gọi.
-   */
   public async cellCandidates(cell: Pick<ExamMatrixCellRow, 'curriculumNodeId' | 'cognitiveLevel' | 'qtype'>): Promise<QuestionView[]> {
     return this.questions.listQuestionsByCurriculumFilter({
       nodeId: cell.curriculumNodeId, cognitiveLevel: cell.cognitiveLevel,
@@ -364,11 +283,6 @@ export class QuizSharedService {
     });
   }
 
-  /**
-   * Ứng viên một NGƯỜI DÙNG được dùng: ứng viên thô lọc theo quyền
-   * question:useall tại context của category chứa câu (cùng quy tắc
-   * quyền ngân hàng hiện hành).
-   */
   public async cellCandidatesForUser(actorId: string, cell: Pick<ExamMatrixCellRow, 'curriculumNodeId' | 'cognitiveLevel' | 'qtype'>): Promise<QuestionView[]> {
     const all = await this.cellCandidates(cell);
     const out: QuestionView[] = [];
@@ -385,17 +299,6 @@ export class QuizSharedService {
     return out;
   }
 
-  /**
-   * Số ứng viên của một ô cho một người dùng — bản ĐẾM của
-   * cellCandidatesForUser (issue #488): số lượng tính bằng `count()` ở
-   * SQL trên đúng cùng điều kiện ứng viên (câu ready gắn bất kỳ YCCĐ
-   * nào thuộc ĐVK của ô ở đúng mức của ô, đúng dạng), nhóm theo
-   * category của bank entry; cổng quyền giữ nguyên — vẫn là
-   * PermissionEvaluator kiểm `question:useall` tại context của
-   * category chứa câu, cache theo context như đường nạp view. Chỉ các
-   * category mà người dùng dùng được mới cộng vào tổng. Đường này
-   * không nạp danh sách ứng viên và không lắp view.
-   */
   public async cellCandidateCountForUser(actorId: string, cell: Pick<ExamMatrixCellRow, 'curriculumNodeId' | 'cognitiveLevel' | 'qtype'>): Promise<number> {
     const groups = await this.questions.countQuestionsByCurriculumFilterByCategory({
       nodeId: cell.curriculumNodeId, cognitiveLevel: cell.cognitiveLevel,
@@ -415,18 +318,7 @@ export class QuizSharedService {
     return total;
   }
 
-  /**
-   * Số câu khả dụng của một ô cho một người dùng: mọi qtype đều đếm
-   * theo CÂU — câu truefalse TF-A tự nó đã là một chùm 4 ý hoàn chỉnh
-   * trong một câu, không còn phép gom chùm từ 4 câu rời theo ngữ liệu
-   * như mô hình cũ.
-   */
 
-  /**
-   * Mở cổng xem quiz: người xem cần một trong các capability của hoạt
-   * động tại context của module (học sinh: view/attempt; giáo viên:
-   * manage/grade/viewreports/preview).
-   */
   public async requireAnyViewCap(actorId: string, quiz: PinRow): Promise<void> {
     const ctx = await this.cmContextId(quiz);
     for (const cap of [QUIZ_CAPABILITIES.view, QUIZ_CAPABILITIES.attempt, QUIZ_CAPABILITIES.manage, QUIZ_CAPABILITIES.grade, QUIZ_CAPABILITIES.viewReports, QUIZ_CAPABILITIES.preview]) {
@@ -435,7 +327,6 @@ export class QuizSharedService {
     await this.evaluator.requireCapability(actorId, QUIZ_CAPABILITIES.view, ctx);
   }
 
-  /** Quyền xem một lượt: chủ lượt, hoặc người có quiz:grade/viewreports tại module. */
   public async requireAttemptReadable(actorId: string, quiz: PinRow, row: ExamAttemptRow): Promise<void> {
     if (row.userId === actorId) return;
     const ctx = await this.cmContextId(quiz);

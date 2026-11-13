@@ -1,9 +1,9 @@
-/**
- * Đăng ký BullMQ Job Scheduler bền trước lúc Redis chưa sẵn sàng:
- * lần đầu thử ngay; nếu bị lỗi/treo, cứ giãn dần 1s → 60s rồi thử lại.
- * upsertJobScheduler idempotent theo tên scheduler nên không tạo duplicate.
- * Khi shutdown, xoá timer và không lên lịch thêm lần nào nữa.
- */
+
+
+
+
+
+
 import type { Logger } from '@nestjs/common';
 
 export class RetryingSchedulerRegistration {

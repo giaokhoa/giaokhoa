@@ -2,9 +2,6 @@ import { INestApplication } from '@nestjs/common';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestApp, http, login } from '../../support/identity-access-helpers';
 
-/**
- * Cờ Better Auth TẮT (mặc định — trạng thái của mọi môi trường hiện tại): handler của Better Auth không được mount nên đường `/api/v1/auth/*` của nó là 404 của Nest, và đường auth hiện tại xử lý mọi request nguyên vẹn (issue #7, Giai đoạn 1: rollback = tắt cờ / gỡ mount + guard; trạng thái này phải luôn là trạng thái an toàn).
- */
 describe('Better Auth tắt mặc định (issue #7 giai đoạn 1)', () => {
   let app: INestApplication;
 

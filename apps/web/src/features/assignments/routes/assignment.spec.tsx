@@ -5,9 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TestProviders } from '#test/providers';
 import { AssignmentPage } from './assignment';
 
-/**
- * Spec web của hoạt động Bài tập (mod_assign, issue #179) theo endpoint thật: học sinh nộp tệp → chốt nộp → mở lại; giáo viên chấm nháp → thả dấu → trả bài (từng em + theo đợt); học sinh sau khi được trả thấy điểm/lời phê/dấu chấm trên bài của mình.
- */
 const COURSE_ID = '01900000-0000-7000-8000-0000000000c1';
 const ASSIGNMENT_ID = '01900000-0000-7000-8000-0000000000d1';
 const STUDENT_ID = '01900000-0000-7000-8000-0000000000d2';
@@ -77,8 +74,6 @@ function renderPage() {
     [{ path: '/courses/:id/assignments/:assignmentId', element: <AssignmentPage /> }],
     { initialEntries: [`/courses/${COURSE_ID}/assignments/${ASSIGNMENT_ID}`] },
   );
-  // Trang đã chuyển sang TanStack Query (F-01 đợt 1, #133): render qua
-  // TestProviders để có QueryClient như cây provider thật ở root.
   render(
     <TestProviders>
       <RouterProvider router={router} />
@@ -151,12 +146,10 @@ describe('Trang bài tập — luồng nộp bài của học viên', () => {
 
     renderPage();
 
-    // Rubric công khai + trạng thái chưa nộp.
     const panel = await screen.findByTestId('assign-student-panel');
     expect(panel).toHaveTextContent('Chưa nộp');
     expect(screen.getByText('Đúng nội dung')).toBeTruthy();
 
-    // Tải tệp lên → chuyển sang nháp, tệp hiện trong bài nộp.
     const input = within(panel).getByLabelText('Thêm tệp/ảnh vào bài nộp');
     await userEvent.upload(input, new File(['jpeg-bytes'], 'bai-lam.jpg', { type: 'image/jpeg' }));
     await userEvent.click(within(panel).getByRole('button', { name: 'Tải lên' }));
@@ -164,7 +157,6 @@ describe('Trang bài tập — luồng nộp bài của học viên', () => {
     expect(calls.some((c) => c.url.endsWith('/submission/files') && c.method === 'POST')).toBe(true);
     expect(within(panel).getByAltText('bai-lam.jpg')).toBeTruthy();
 
-    // Chốt nộp → Đã nộp; mở lại → về nháp; chốt nộp lại.
     await userEvent.click(within(panel).getByRole('button', { name: 'Chốt nộp bài' }));
     await waitFor(() => expect(panel).toHaveTextContent('Đã nộp'));
     await userEvent.click(within(panel).getByRole('button', { name: 'Mở lại để sửa' }));
@@ -234,11 +226,9 @@ describe('Trang bài tập — luồng nộp bài của học viên', () => {
     expect(result).toHaveTextContent('Làm tốt');
     expect(result).toHaveTextContent('Đúng ý chính');
     expect(result).toHaveTextContent('Tốt (6)');
-    // Nhãn trễ + dấu chấm đúng trên ảnh.
     expect(screen.getByTestId('assign-student-panel')).toHaveTextContent('Nộp trễ');
     expect(screen.getByTitle('Đúng')).toBeTruthy();
 
-    // Học sinh gửi được tin trao đổi trên bài đã trả (khối hội thoại hiện sau khi /users/me về).
     await userEvent.type(await screen.findByLabelText('Trao đổi về bài này'), 'Em cảm ơn cô');
     await userEvent.click(screen.getByRole('button', { name: 'Gửi' }));
     await waitFor(() =>
@@ -337,21 +327,18 @@ describe('Trang bài tập — luồng chấm của giáo viên', () => {
 
     renderPage();
 
-    // Danh sách bài nộp có tên học sinh + trạng thái (tải bất đồng bộ — chờ tên hiện).
     const teacherPanel = await screen.findByTestId('assign-teacher-panel');
     await within(teacherPanel).findByText('Trần Minh Quân');
     expect(teacherPanel).toHaveTextContent('Trần Minh Quân');
     expect(teacherPanel).toHaveTextContent('Phạm Thu Hằng');
     expect(teacherPanel).toHaveTextContent('Chưa chấm');
 
-    // Mở bề mặt chấm của học sinh đã nộp.
     const gradeButtons = within(teacherPanel).getAllByRole('button', { name: 'Chấm bài' });
     await userEvent.click(gradeButtons[0]!);
     const grading = await screen.findByTestId('assign-grading-panel');
     expect(grading).toHaveTextContent('Chấm bài: Trần Minh Quân');
     expect(within(grading).getByAltText('bai-lam.jpg')).toBeTruthy();
 
-    // Thả dấu đúng lên ảnh (jsdom: rect bằng 0 nên điểm rơi về (0,0) — vẫn là một lần POST hợp lệ).
     const img = within(grading).getByAltText('bai-lam.jpg');
     const wrap = img.parentElement!;
     vi.spyOn(wrap, 'getBoundingClientRect').mockReturnValue({
@@ -366,24 +353,20 @@ describe('Trang bài tập — luồng chấm của giáo viên', () => {
     const annCall = calls.find((c) => c.url.endsWith('/annotations') && c.method === 'POST');
     expect(annCall?.body).toMatchObject({ fileId: FILE_ID, kind: 'correct' });
 
-    // Lưu gói chấm nháp với điểm 8.5.
     await userEvent.type(within(grading).getByLabelText('Điểm (thang 10)'), '8.5');
     await userEvent.click(within(grading).getByRole('button', { name: 'Lưu gói chấm (nháp)' }));
     await waitFor(() => expect(grading).toHaveTextContent('Đã lưu gói chấm nháp'));
     const gradeCall = calls.find((c) => c.url.endsWith('/grade') && c.method === 'POST');
     expect(gradeCall?.body).toMatchObject({ grade: 8.5 });
 
-    // Trả bài cho học sinh này.
     await userEvent.click(within(grading).getByRole('button', { name: 'Trả bài cho học sinh này' }));
     await waitFor(() =>
       expect(calls.some((c) => c.url.endsWith('/release') && c.method === 'POST')).toBe(true),
     );
 
-    // Trả bài theo đợt: kết quả hiện rõ số trả/số bỏ qua.
     await userEvent.click(within(teacherPanel).getByRole('button', { name: 'Trả bài theo đợt' }));
     await waitFor(() => expect(teacherPanel).toHaveTextContent('Đã trả 1 bài; bỏ qua 1 bài chưa đủ điều kiện.'));
 
-    // Sửa cài đặt: đổi tên bài → PATCH.
     const manage = await screen.findByTestId('assign-manage-panel');
     const nameInput = within(manage).getByLabelText('Tên bài tập');
     await userEvent.clear(nameInput);

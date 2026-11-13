@@ -7,11 +7,6 @@ import {
   type OrdinaryWorkerModuleHarness,
 } from '../../support/ordinary-worker-module';
 
-/**
- * PH-2 (issue #159) — phía phát hiện ở worker: lượt quét guardian-digests chốt lượt digest định kỳ (cửa sổ tuần/ngày đã đóng, theo tần suất của phụ huynh cho từng con, mặc định weekly) và lượt đẩy riêng quá hạn ≥7 ngày, mỗi lượt đúng MỘT lần nhờ dedupe_key unique của guardian_digests; chỉ lượt thật sự mới chốt mới sinh sự kiện outbox cho nửa tiêu thụ. Nửa tiêu thụ (sự kiện → tổng hợp đã công bố → thông báo) nằm cùng phía worker từ issue con #518 của #491 (trước đó là consumer polling phía API) và được kiểm chứng ở test/integration/guardians/guardian-digest-delivery.int-spec.ts bằng đúng hình dạng sự kiện phát ở đây.
- *
- * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness role thường (`test/ordinary-worker-module.ts`): module chạy bằng role NOSUPERUSER/NOBYPASSRLS như production, fixture và đọc kiểm chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ của spec không đổi.
- */
 describe('Lượt quét digest phụ huynh của worker (PH-2, issue #159)', () => {
   let context: INestApplicationContext;
   let harness: OrdinaryWorkerModuleHarness;
@@ -27,13 +22,6 @@ describe('Lượt quét digest phụ huynh của worker (PH-2, issue #159)', () 
     await sql`insert into users (id, username, email, suspended, deleted) values (${id}, ${`ph2-${id.slice(-6)}-${suffix}`}, ${`ph2-${id.slice(-6)}-${suffix}@x.io`}, false, false) on conflict (id) do nothing`.execute(db);
   }
 
-  /**
-   * Cách ly dữ kiện email giữa các spec tích hợp: phụ huynh fixture đặt tường minh tần suất email `immediate` cho hai provider digest phụ huynh. Nếu để tần suất mặc định theo nhóm (`daily`), mỗi dispatch email sinh ra từ các ca dưới đây sẽ nằm chờ ở trạng thái `digest-queued` trong database dùng chung của suite, và lượt quét tổng hợp ngày của spec email
-   * (notifications/notification-email.int-spec.ts) — vốn khẳng định
-   * tổng số trên TOÀN database — sẽ gom cả các mục chờ đó vào kết quả của nó. Với `immediate`, dispatch vẫn đi trọn đường thật
-   * (notify → hàng đợi dispatch → processor phát) nhưng chốt ngay
-   * bằng một dòng dispatch log, không vào bể chờ digest; luật gộp digest ngày tự nó được kiểm chứng ở chính spec email.
-   */
   async function setEmailImmediate(guardianId: string) {
     for (const provider of ['guardian_digest', 'guardian_overdue_alert']) {
       await db.insertInto('user_preferences').values({
@@ -44,8 +32,6 @@ describe('Lượt quét digest phụ huynh của worker (PH-2, issue #159)', () 
 
   async function makeLink(guardianId: string, studentId: string, createdDaysAgo = 10, status = 'active') {
     await setEmailImmediate(guardianId);
-    // SQL thô: bảng thật còn các cột NOT NULL (relationship, created_by)
-    // nằm ngoài view subset của worker.
     const rows = await sql`insert into guardian_links (guardian_user_id, student_user_id, relationship, status, created_by, created_at, updated_at, tenant_id) values (${guardianId}, ${studentId}, 'Cha', ${status}, ${guardianId}, ${new Date(Date.now() - createdDaysAgo * DAY)}, now(), (select id from tenants where slug = 'worker-fixture')) returning id`.execute(db);
     return (rows.rows[0] as { id: string }).id;
   }
@@ -68,7 +54,6 @@ describe('Lượt quét digest phụ huynh của worker (PH-2, issue #159)', () 
     return (rows as { payload: { guardianUserId?: string } }[]).filter((e) => e.payload.guardianUserId === guardianId);
   }
 
-  /** Khoá + lần ghim đề có hạn đóng cách đây `closedDaysAgo` ngày + ghi danh cho học sinh. */
   async function makeOverdueQuiz(studentId: string, closedDaysAgo: number) {
     const catRows = await sql`insert into course_categories (name, path, tenant_id) values (${`ph2-cat-${suffix}-${Math.random()}`}, '', (select id from tenants where slug = 'worker-fixture')) returning id`.execute(db);
     const catId = (catRows.rows[0] as { id: string }).id;
@@ -77,7 +62,6 @@ describe('Lượt quét digest phụ huynh của worker (PH-2, issue #159)', () 
     const courseId = (courseRows.rows[0] as { id: string }).id;
     const secRows = await sql`insert into course_sections (course, section) values (${courseId}, 0) returning id`.execute(db);
     const secId = (secRows.rows[0] as { id: string }).id;
-    // Sau gộp Đề (#226): hoạt động quá hạn là LẦN GHIM (exam_pins).
     const cmRows0 = await sql`insert into course_modules (course, section, component, visible, deletion_in_progress) values (${courseId}, ${secId}, 'mod_quiz', true, false) returning id`.execute(db);
     const cmId = (cmRows0.rows[0] as { id: string }).id;
     const tenantRows = await sql`insert into tenants (slug, name, kind, status) values ('worker-fixture', 'Worker fixture tenant', 'school', 'active') on conflict (slug) do update set slug = excluded.slug returning id`.execute(db);
@@ -102,9 +86,6 @@ describe('Lượt quét digest phụ huynh của worker (PH-2, issue #159)', () 
   }
 
 
-  // CLASS-0 đóng gói (PR #200): khoá dạy thật phải có class_id (CHECK
-  // course_class_required_check) — lớp fixture cho tenant worker-fixture,
-  // chủ lớp là user fixture riêng; mỗi lần gọi dựng một lớp mới.
   async function fixtureClassId(): Promise<string> {
     const ownerId = '01980000-0000-7000-8000-00000000c1a5';
     await sql`insert into users (id, username, email, suspended, deleted) values (${ownerId}, 'wk-class-owner', 'wk-class-owner@x.io', false, false) on conflict (id) do nothing`.execute(db);
@@ -138,7 +119,6 @@ describe('Lượt quét digest phụ huynh của worker (PH-2, issue #159)', () 
     expect(rows).toHaveLength(1);
     expect(rows[0].kind).toBe('weekly');
     expect(rows[0].status).toBe('queued');
-    // Cửa sổ tuần: [Thứ Hai tuần trước 00:00 UTC, Thứ Hai tuần này 00:00 UTC).
     const end = rows[0].window_end as Date;
     const start = rows[0].window_start as Date;
     expect(end.getTime() - start.getTime()).toBe(7 * DAY);
@@ -176,9 +156,6 @@ describe('Lượt quét digest phụ huynh của worker (PH-2, issue #159)', () 
     await setFrequency(guardian, student, 'off');
     const overdue = await makeOverdueQuiz(student, 9);
 
-    // `off` là tần suất CỦA digest: digest định kỳ tắt hẳn, nhưng đẩy
-    // riêng quá hạn là ngoại lệ tách khỏi digest (research điểm chính
-    // sách 6) — vẫn chốt đúng 1 lượt + 1 sự kiện cho phụ huynh này.
     const result = await sweep();
     const mine = result.queued.filter((q) => q.guardianUserId === guardian);
     expect(mine).toHaveLength(1);
@@ -201,9 +178,8 @@ describe('Lượt quét digest phụ huynh của worker (PH-2, issue #159)', () 
     await makeUser(guardian); await makeUser(student);
     await makeLink(guardian, student, 10);
     const overdue = await makeOverdueQuiz(student, 8);
-    await makeOverdueQuiz(student, 6); // chưa đủ 7 ngày
+    await makeOverdueQuiz(student, 6);
     const done = await makeOverdueQuiz(student, 9);
-    // Attempt đã hoàn tất cho quiz thứ ba → không còn tính quá hạn chưa nộp.
     const usageRows = await sql`insert into question_usages (component, user_id) values ('mod_quiz', ${student}) returning id`.execute(db);
     const usageId = (usageRows.rows[0] as { id: string }).id;
     await sql`insert into exam_attempts (pin_id, user_id, attempt_number, usage_id, state, preview) values (${done.quizId}, ${student}, 1, ${usageId}, 'finished', false)`.execute(db);
@@ -230,7 +206,7 @@ describe('Lượt quét digest phụ huynh của worker (PH-2, issue #159)', () 
     await makeLink(gRevoked, sRevoked, 10, 'revoked');
     const gFresh = uid(11); const sFresh = uid(12);
     await makeUser(gFresh); await makeUser(sFresh);
-    await makeLink(gFresh, sFresh, 0); // tạo hôm nay — sau khi cửa sổ tuần/ngày vừa đóng kết thúc
+    await makeLink(gFresh, sFresh, 0);
 
     const result = await sweep();
     expect(result.queued.filter((q) => q.guardianUserId === gRevoked)).toHaveLength(0);

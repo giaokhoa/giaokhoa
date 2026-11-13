@@ -1,4 +1,3 @@
-/** Bất biến của gói học liệu tự đủ và yêu cầu ghim phiên bản, dùng chung cho API/web. */
 import { describe, expect, it } from 'vitest';
 import { systemMaterialPackageSchema, useSystemMaterialSchema } from './system-material.js';
 

@@ -18,26 +18,9 @@ import {
 } from '#lib/curriculum';
 import '#config/i18n';
 
-/**
- * TRANG XEM CHƯƠNG TRÌNH GDPT CHO GIÁO VIÊN (issue #161, lát T2 — quyết định 3 của issue: mọi bề mặt nhìn chương trình đều trình bày môn → lớp → bảng nhóm theo Mạch nội dung, 2 cột "Nội dung | Yêu cầu cần đạt" theo mẫu bảng của Bộ).
- *
- * Bối cảnh: trước lát này bề mặt xem bảng Bộ chỉ có ở khu QUẢN TRỊ
- * (gate `curriculum:view` tại context quốc gia) — giáo viên thật
- * không vào được, dù chính họ là người tra cứu chương trình khi soạn bài, soạn câu hỏi và xây dựng đề. Trang này là bề mặt CHỈ XEM cho giáo viên, dùng lại đúng component trình bày của phía quản trị ở chế độ `readOnly`.
- *
- * QUYỀN ĐỌC — bám đúng cổng phía API (`assertCanRead`): chương trình quốc gia neo ở context hệ thống; giáo viên đọc được khi có `curriculum:view` tại context của môn, HOẶC khi ngữ cảnh khoá
- * (`forCourseId`) cấp `course:update` tại một khoá họ dạy (tiền lệ đã
- * chốt cho phía giáo viên). Vì vậy mọi lời đọc của trang đều mang `forCourseId` = khoá đang chọn; khoá ở đây CHỈ là ngữ cảnh quyền xem — không một dữ liệu nào của khoá bị thay đổi. Người dùng không có khoá nào thì trang thử đọc trực tiếp (phủ trường hợp có `curriculum:view`); vẫn 403 thì hiện thông báo giải thích thay vì trang trắng.
- *
- * Điều hướng mặc định theo khoá: khoá học đã gắn môn + khối lớp của chương trình thì khi chọn khoá, trang mở sẵn đúng môn và lớp đó
- * (giáo viên vẫn đổi sang môn/lớp khác bằng các bộ chọn).
- *
- * Điểm trình bày T1 (bản ghi thiếu nhóm mạch) ở lát này: bản ghi không thuộc mạch nào render vào bảng không tiêu đề nhóm — đúng hành vi hiện tại của bề mặt quản trị; việc gán mạch cho đủ 2.115 bản ghi là việc dữ liệu, làm riêng theo quy trình đối chiếu văn bản chính chủ. Điểm T3 (giữ cấu trúc dòng của YCCĐ) được sửa ở component trình bày dùng chung. Điểm T4 (số đếm bị cắt ở ký tự đặc biệt) là việc dữ liệu, không thuộc lát trình bày này.
- */
 
 type ProgramGroup = ReturnType<typeof buildProgramGroups>[number];
 
-/** Danh sách số trang ở nút phân trang — cùng quy tắc rút gọn với trang cây quản trị (1 … quanh trang hiện tại … cuối). */
 function pageNumberItems(total: number, current: number): (number | 'gap')[] {
   if (total <= 12) return Array.from({ length: total }, (_, i) => i + 1);
   const wanted = new Set([1, 2, total - 1, total, current - 1, current, current + 1]);
@@ -54,10 +37,6 @@ function pageNumberItems(total: number, current: number): (number | 'gap')[] {
 
 export function TeacherCurriculumPage() {
   const { t } = useTranslation('app');
-  // Chuỗi đọc phụ thuộc khoá → môn → lớp → cây qua TanStack Query
-  // (F-01 của #133): khoá qua khoá `courses`, môn/lớp/cây qua các
-  // hook có phạm vi của `lib/curriculum.ts` với khoá gồm cả ngữ cảnh khoá (quyền đọc đổi theo khoá). Lựa chọn hiệu lực suy từ dữ liệu theo đúng thứ tự ưu tiên của các effect thủ công trước đây: môn gắn sẵn của khoá thắng lựa chọn cũ, lớp theo khối của khoá thắng lựa chọn cũ, còn lại giữ lựa chọn nếu còn hợp lệ, cuối cùng là phần tử đầu. Trạng thái "chưa tải" (null) và "tải hỏng thì rỗng" giữ nguyên như bản thủ công; 403 ở các bước môn/chương trình/cây thì forbidden — riêng 403 ở bước danh sách context thì không tính
-  // (môn vẫn đọc được qua nhánh khoá, xem ghi chú ở `forbidden`).
   const coursesQuery = useCourseList();
   const courses = coursesQuery.data ?? null;
   const [courseSelection, setCourseSelection] = useState<string | null>(null);
@@ -120,7 +99,6 @@ export function TeacherCurriculumPage() {
 
   const isForbiddenError = (error: unknown) =>
     error instanceof ApiError && error.problem.status === 403;
-  // Lỗi ở `/access/contexts` KHÔNG còn tính là cấm: từ điểm nghẽn D-3 của issue #233, trang vẫn xem được chương trình qua nhánh khoá (môn mặc định về context hệ thống, cổng mở theo khoá) dù giáo viên không đọc được danh sách context. Chỉ lỗi ở các bước môn/chương trình/cây mới là cấm xem chương trình.
   const forbidden = [
     subjectsQuery.error,
     curriculaQuery.error,
@@ -130,7 +108,6 @@ export function TeacherCurriculumPage() {
   const [page, setPage] = useState(1);
   const groupsTopRef = useRef<HTMLDivElement | null>(null);
 
-  // Khởi tạo lại trang khi phạm vi (chương trình, khoá) đổi.
   const pageScope = curriculumId + ':' + courseId;
   const [previousPageScope, setPreviousPageScope] = useState(pageScope);
   if (pageScope !== previousPageScope) {
@@ -138,7 +115,6 @@ export function TeacherCurriculumPage() {
     setPage(1);
   }
 
-  // Phân trang theo dòng Nội dung trên toàn cây — cùng quy tắc với trang cây quản trị: mạch giữ nguyên thứ tự, mạch đang dở được trình bày tiếp ở trang sau với tiêu đề lặp lại kèm dấu (tiếp).
   const groups: ProgramGroup[] = tree ? buildProgramGroups(tree) : [];
   const totalRows = groups.reduce((n, g) => n + g.rows.length, 0);
   const totalPages = Math.max(1, Math.ceil(totalRows / PROGRAM_PAGE_SIZE));
@@ -297,24 +273,10 @@ export function TeacherCurriculumPage() {
   );
 }
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { appKeyMeta } from '#lib/route-meta';
 export function meta() {
   return appKeyMeta('teacherProgrammeTitle');
 }
 
-/**
- * Export mặc định cho route module: framework React Router chỉ lấy
- * component của route từ export mặc định (hoặc export tên
- * `Component`) của route module. File trang trước đây chỉ xuất
- * component dưới tên riêng `TeacherCurriculumPage`, không có export
- * mặc định — mà route trỏ thẳng vào file trang thì trình duyệt thật
- * render trống hoàn toàn vùng nội dung (tiêu đề vẫn hiện vì `meta()`
- * chạy độc lập, khung shell vẫn hiện, không có thông báo lỗi; lỗi
- * này không lộ qua spec vì spec gắn component trực tiếp, không qua
- * router). Một wrapper mỏng từng cấp export mặc định này; khi tổ
- * chức lại theo mô hình features/ (issue #500), wrapper gộp thẳng
- * vào route module này.
- */
 export default TeacherCurriculumPage;

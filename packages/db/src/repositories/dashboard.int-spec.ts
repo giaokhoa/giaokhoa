@@ -5,27 +5,15 @@ import { createCentreKysely, type CentreDb } from '../client';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
 import { DashboardRepository, type ContextLevels } from './dashboard';
 
-/**
- * Spec tích hợp của repository DASHBOARD trên Kysely (issue #652).
- *
- * Database kho trung tâm được dựng từ rỗng bằng chính cầu nối migration của package (carrier đóng băng) trên cụm PostgreSQL thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ `DATABASE_URL` của package). Mọi ca chạy qua repository production ở `dashboard.ts` — không mô phỏng handle.
- *
- * Đối chiếu số liệu là tiêu chí nghiệm thu trung tâm của issue: với MỖI method của repository, spec chạy cùng một truy vấn trên cùng một dữ kiện mẫu qua hai đường — bản thực thi cũ (sao nguyên văn logic thân method của repository cũ vào các hàm `old*` dưới đây; từ #663 các hàm này dựng bằng Kysely thô vì ORM cũ đã rời khỏi cây) và repository hiện hành — và khẳng định kết quả khớp nhau. Các method ghi được kiểm hai chiều: ghi bằng đường này, đọc lại bằng đường kia.
- *
- * Cổng registry ngữ cảnh: repository chỉ đọc khoá `COURSE` qua cổng. Dữ kiện mẫu của spec tự chọn số mức cho context khoá là `COURSE_LEVEL` (một giá trị riêng của spec, khác mọi giá trị registry thật) và implementation cổng của spec cấp đúng giá trị đó — nếu repository dùng bất kỳ hằng số mức nào khác ngoài cổng, ca gán vai sẽ lệch kết quả ngay. Các khoá còn lại của cổng không được repository tiêu thụ nên spec cấp 0.
- */
 const adminUrl =
   process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   (process.env.DATABASE_URL ? withDatabase(process.env.DATABASE_URL, 'postgres') : undefined);
 
 const TEST_DB = 'giaokhoa_db_dash_652';
 
-/** Số mức của context khoá trong dữ kiện mẫu — giá trị riêng của spec, chỉ chảy qua cổng. */
 const COURSE_LEVEL = 777;
-/** Số mức của context không phải khoá trong dữ kiện mẫu. */
 const OTHER_LEVEL = 555;
 
-/** Implementation cổng của spec: chỉ khoá `COURSE` mang giá trị của dữ kiện mẫu. */
 const TEST_CONTEXT_LEVELS: ContextLevels = {
   SYSTEM: 0,
   TENANT: 0,
@@ -52,13 +40,9 @@ let pool: Pool;
 let db: CentreDb;
 let repo: DashboardRepository;
 
-// ---------------------------------------------------------------------------
-// Bản thực thi cũ — sao nguyên văn logic thân method của repository cũ (`apps/api/src/modules/dashboard/dashboard.repository.ts` tại main trước lượt chuyển đổi), chỉ đổi điểm nhận handle và hằng mức khoá qua cổng mẫu. Từ #663 các hàm này dựng bằng Kysely thô trên cùng handle (ORM cũ đã rời khỏi cây); logic truy vấn giữ nguyên từng điều kiện/nối/sắp xếp của bản sao.
-// ---------------------------------------------------------------------------
 
 type OldDb = CentreDb;
 
-/** Bản cũ của enrolledCourseIds (sao nguyên văn để đối chiếu trước/sau). */
 async function oldEnrolledCourseIds(oldDb: OldDb, userId: string, now: Date): Promise<string[]> {
   const rows = await oldDb
     .selectFrom('user_enrolments')
@@ -75,7 +59,6 @@ async function oldEnrolledCourseIds(oldDb: OldDb, userId: string, now: Date): Pr
   return rows.map((r) => r.courseId);
 }
 
-/** Bản cũ của roleAssignedCourseIds (sao nguyên văn để đối chiếu trước/sau). */
 async function oldRoleAssignedCourseIds(oldDb: OldDb, userId: string): Promise<string[]> {
   const rows = await oldDb
     .selectFrom('role_assignments')
@@ -89,7 +72,6 @@ async function oldRoleAssignedCourseIds(oldDb: OldDb, userId: string): Promise<s
   return rows.map((r) => r.courseId!).filter(Boolean);
 }
 
-/** Bản cũ của courseNames (sao nguyên văn để đối chiếu trước/sau). */
 async function oldCourseNames(oldDb: OldDb, courseIds: string[]): Promise<Map<string, string>> {
   if (!courseIds.length) return new Map();
   const rows = await oldDb.selectFrom('course')
@@ -99,7 +81,6 @@ async function oldCourseNames(oldDb: OldDb, courseIds: string[]): Promise<Map<st
   return new Map(rows.map((r) => [r.id, r.fullName]));
 }
 
-/** Bản cũ của quizDueRows (sao nguyên văn để đối chiếu trước/sau). */
 async function oldQuizDueRows(oldDb: OldDb, courseIds: string[], userId: string, until: Date) {
   if (!courseIds.length) return [];
   return oldDb
@@ -128,7 +109,6 @@ async function oldQuizDueRows(oldDb: OldDb, courseIds: string[], userId: string,
     .execute();
 }
 
-/** Bản cũ của assignmentDueRows (sao nguyên văn để đối chiếu trước/sau). */
 async function oldAssignmentDueRows(oldDb: OldDb, courseIds: string[], userId: string, until: Date) {
   if (!courseIds.length) return [];
   return oldDb
@@ -155,7 +135,6 @@ async function oldAssignmentDueRows(oldDb: OldDb, courseIds: string[], userId: s
     .execute();
 }
 
-/** Cột đọc của hai bản cũ gradeRows* — đúng hình dạng `DashboardGradeRow`. */
 const OLD_GRADE_ROW_COLUMNS = [
   'grade_grades.id as gradeId',
   'grade_items.course_id as courseId',
@@ -168,10 +147,8 @@ const OLD_GRADE_ROW_COLUMNS = [
   'grade_grades.updated_at as updatedAt',
 ] as const;
 
-/** Mảnh điều kiện hiển thị của bản cũ: có điểm, hoặc có phản hồi khác rỗng. */
 const OLD_VISIBLE_GRADE = kyselySql<boolean>`(grade_grades.final_grade is not null or (grade_grades.feedback is not null and grade_grades.feedback <> ''))`;
 
-/** Bản cũ của gradeRowsSince (sao nguyên văn để đối chiếu trước/sau). */
 async function oldGradeRowsSince(oldDb: OldDb, courseIds: string[], userId: string, since: Date) {
   if (!courseIds.length) return [];
   return oldDb
@@ -186,7 +163,6 @@ async function oldGradeRowsSince(oldDb: OldDb, courseIds: string[], userId: stri
     .execute();
 }
 
-/** Bản cũ của itemPublications (sao nguyên văn để đối chiếu trước/sau). */
 async function oldItemPublications(oldDb: OldDb, courseIds: string[]) {
   if (!courseIds.length) return [];
   return oldDb
@@ -201,7 +177,6 @@ async function oldItemPublications(oldDb: OldDb, courseIds: string[]) {
     .execute();
 }
 
-/** Bản cũ của gradeRowsForItems (sao nguyên văn để đối chiếu trước/sau). */
 async function oldGradeRowsForItems(oldDb: OldDb, itemIds: string[], userId: string) {
   if (!itemIds.length) return [];
   return oldDb
@@ -214,7 +189,6 @@ async function oldGradeRowsForItems(oldDb: OldDb, itemIds: string[], userId: str
     .execute();
 }
 
-/** Bản cũ của assignmentPendingRows (sao nguyên văn để đối chiếu trước/sau). */
 async function oldAssignmentPendingRows(oldDb: OldDb, courseIds: string[]) {
   if (!courseIds.length) return [];
   return oldDb
@@ -234,7 +208,6 @@ async function oldAssignmentPendingRows(oldDb: OldDb, courseIds: string[]) {
     .execute();
 }
 
-/** Bản cũ của quizPendingRows (sao nguyên văn để đối chiếu trước/sau). */
 async function oldQuizPendingRows(oldDb: OldDb, courseIds: string[]) {
   if (!courseIds.length) return [];
   return oldDb
@@ -251,7 +224,6 @@ async function oldQuizPendingRows(oldDb: OldDb, courseIds: string[]) {
     .execute();
 }
 
-/** Bản cũ của paperPendingRows (sao nguyên văn để đối chiếu trước/sau). */
 async function oldPaperPendingRows(oldDb: OldDb, courseIds: string[]) {
   if (!courseIds.length) return [];
   return oldDb
@@ -267,7 +239,6 @@ async function oldPaperPendingRows(oldDb: OldDb, courseIds: string[]) {
     .execute();
 }
 
-/** Cột đọc của hai bảng mốc xem/tuỳ chọn với bí danh camelCase (dùng cho select + returning). */
 const OLD_STATE_COLUMNS = [
   'user_id as userId', 'last_seen_at as lastSeenAt', 'created_at as createdAt', 'updated_at as updatedAt',
 ] as const;
@@ -275,7 +246,6 @@ const OLD_PREF_COLUMNS = [
   'user_id as userId', 'course_id as courseId', 'color', 'nickname', 'created_at as createdAt', 'updated_at as updatedAt',
 ] as const;
 
-/** Bản cũ của getState (sao nguyên văn để đối chiếu trước/sau). */
 async function oldGetState(oldDb: OldDb, userId: string) {
   return oldDb.selectFrom('user_dashboard_state')
     .select(OLD_STATE_COLUMNS)
@@ -283,7 +253,6 @@ async function oldGetState(oldDb: OldDb, userId: string) {
     .executeTakeFirst();
 }
 
-/** Bản cũ của touchState (sao nguyên văn để đối chiếu trước/sau). */
 async function oldTouchState(oldDb: OldDb, userId: string, at: Date): Promise<void> {
   await oldDb.insertInto('user_dashboard_state')
     .values({ user_id: userId, last_seen_at: at })
@@ -291,7 +260,6 @@ async function oldTouchState(oldDb: OldDb, userId: string, at: Date): Promise<vo
     .execute();
 }
 
-/** Bản cũ của listPrefs (sao nguyên văn để đối chiếu trước/sau). */
 async function oldListPrefs(oldDb: OldDb, userId: string) {
   return oldDb.selectFrom('user_course_card_prefs')
     .select(OLD_PREF_COLUMNS)
@@ -300,7 +268,6 @@ async function oldListPrefs(oldDb: OldDb, userId: string) {
     .execute();
 }
 
-/** Bản cũ của upsertPref (sao nguyên văn để đối chiếu trước/sau). */
 async function oldUpsertPref(oldDb: OldDb, userId: string, courseId: string, color: string | null, nickname: string | null) {
   return oldDb.insertInto('user_course_card_prefs')
     .values({ user_id: userId, course_id: courseId, color, nickname })
@@ -309,7 +276,6 @@ async function oldUpsertPref(oldDb: OldDb, userId: string, courseId: string, col
     .executeTakeFirstOrThrow();
 }
 
-/** Bản cũ của deletePref (sao nguyên văn để đối chiếu trước/sau). */
 async function oldDeletePref(oldDb: OldDb, userId: string, courseId: string): Promise<void> {
   await oldDb.deleteFrom('user_course_card_prefs')
     .where('user_id', '=', userId)
@@ -317,9 +283,6 @@ async function oldDeletePref(oldDb: OldDb, userId: string, courseId: string): Pr
     .execute();
 }
 
-// ---------------------------------------------------------------------------
-// Dữ kiện mẫu: một trung tâm, ba người dùng, hai khoá. Khoá A chứa đủ các nguồn của dashboard; khoá B chỉ để kiểm các biên lọc (ghi danh hết hạn).
-// ---------------------------------------------------------------------------
 
 let itemModId = '';
 let itemManualId = '';
@@ -341,24 +304,18 @@ beforeAll(async () => {
   const category = await db.insertInto('course_categories')
     .values({ name: 'Danh mục 652', tenant_id: TENANT_ID }).returning('id').executeTakeFirstOrThrow();
   for (const [id, fullName, shortName] of [[COURSE_A, 'Khoá Toán 652', 'TOAN652'], [COURSE_B, 'Khoá Văn 652', 'VAN652']] as const) {
-    // is_template = true để qua check course_class_required_check
-    // (khoá mẫu của spec không gắn lớp học thật).
     await db.insertInto('course').values({ id, category: category.id, full_name: fullName, short_name: shortName, tenant_id: TENANT_ID, is_template: true }).execute();
   }
   const section = await db.insertInto('course_sections').values({ course: COURSE_A }).returning('id').executeTakeFirstOrThrow();
   const sectionB = await db.insertInto('course_sections').values({ course: COURSE_B }).returning('id').executeTakeFirstOrThrow();
   void sectionB;
 
-  // Ghi danh: học sinh hiệu lực ở khoá A; hết hạn ở khoá B; giáo viên có
-  // dòng ghi danh không hiệu lực (status khác 0) ở khoá A.
   const enrolA = await db.insertInto('enrol').values({ course_id: COURSE_A, enrol: 'manual' }).returning('id').executeTakeFirstOrThrow();
   const enrolB = await db.insertInto('enrol').values({ course_id: COURSE_B, enrol: 'manual' }).returning('id').executeTakeFirstOrThrow();
   await db.insertInto('user_enrolments').values({ enrol_id: enrolA.id, user_id: STUDENT_ID, status: 0, time_end: null }).execute();
   await db.insertInto('user_enrolments').values({ enrol_id: enrolB.id, user_id: STUDENT_ID, status: 0, time_end: new Date('2026-10-01T00:00:00.000Z') }).execute();
   await db.insertInto('user_enrolments').values({ enrol_id: enrolA.id, user_id: TEACHER_ID, status: 1, time_end: null }).execute();
 
-  // Context: một context mức khoá (qua cổng) gắn khoá A, một context mức
-  // khác gắn khoá B, một context mức khoá không gắn instance.
   const role = await db.insertInto('role').values({ short_name: 'dash-teacher-role' }).returning('id').executeTakeFirstOrThrow();
   const ctxCourse = await db.insertInto('context')
     .values({ context_level: COURSE_LEVEL, instance_id: COURSE_A, path: '/1/777', depth: 2 }).returning('id').executeTakeFirstOrThrow();
@@ -371,8 +328,6 @@ beforeAll(async () => {
   await db.insertInto('role_assignments').values({ role_id: role.id, user_id: TEACHER_ID, context_id: ctxNoInstance.id }).execute();
   await db.insertInto('role_assignments').values({ role_id: role.id, user_id: STUDENT_ID, context_id: ctxCourse.id }).execute();
 
-  // Chuỗi đề: ngân hàng → đề → phiên bản → ba pin (một pin không đặt tên
-  // riêng để kiểm coalesce, một pin quá mốc until).
   const bank = await db.insertInto('question_banks')
     .values({ tenant_id: TENANT_ID, name: 'Ngân hàng 652', scope: 'school', context_id: ctxCourse.id, created_by: TEACHER_ID })
     .returning('id').executeTakeFirstOrThrow();
@@ -394,9 +349,6 @@ beforeAll(async () => {
   await mkCm('mod_quiz', pinLate.id);
   await mkCm('mod_quiz', pin1.id, false);
 
-  // Attempt của học sinh trên pin1: một attempt thật đang làm, một attempt
-  // xem trước (phải bị điều kiện ON của left join loại). Attempt chờ chấm
-  // tay của người khác trên pin2 cho hàng đợi chấm.
   const mkUsage = async (userId: string) => db.insertInto('question_usages')
     .values({ component: 'mod_quiz', user_id: userId }).returning('id').executeTakeFirstOrThrow();
   const usage1 = await mkUsage(STUDENT_ID);
@@ -406,10 +358,6 @@ beforeAll(async () => {
   await db.insertInto('exam_attempts').values({ pin_id: pin1.id, user_id: STUDENT_ID, usage_id: usage2.id, attempt_number: 2, state: 'finished', preview: true, time_start: new Date('2026-11-02T08:30:00.000Z') }).execute();
   await db.insertInto('exam_attempts').values({ pin_id: pin2.id, user_id: OTHER_ID, usage_id: usage3.id, attempt_number: 1, state: 'needsgrading', preview: false, time_start: new Date('2026-11-02T09:00:00.000Z'), time_finish: new Date('2026-11-02T09:20:00.000Z') }).execute();
 
-  // Bài tập: một bài có hạn nộp kèm bài nộp nháp của học sinh và bài nộp
-  // đã nộp của người khác (kèm gói chấm attempt hiện tại); một bài không
-  // hạn nộp (bị lọc khỏi danh sách đến hạn nhưng bài nộp của nó vẫn vào
-  // hàng đợi chờ chấm khi đã nộp).
   const assignment1 = await db.insertInto('assignments')
     .values({ course: COURSE_A, name: 'Bài tập 1', due_date: new Date('2026-11-04T10:00:00.000Z') }).returning('id').executeTakeFirstOrThrow();
   const assignment2 = await db.insertInto('assignments')
@@ -421,10 +369,6 @@ beforeAll(async () => {
   await db.insertInto('assign_submissions').values({ assignment_id: assignment2.id, user_id: OTHER_ID, status: 'submitted', attempt_number: 1, submitted_at: new Date('2026-11-02T07:30:00.000Z') }).execute();
   await db.insertInto('assign_grades').values({ assignment_id: assignment1.id, user_id: OTHER_ID, grader_id: TEACHER_ID, attempt_number: 1, status: 'released' }).execute();
 
-  // Điểm: bốn item (mỗi cặp item/người học chỉ có một dòng điểm theo
-  // unique của bảng) phủ các nhánh của mảnh điều kiện hiển thị (có
-  // điểm / chỉ có phản hồi / cả hai đều trống) và mốc thời gian (sau
-  // mốc xem / trước mốc xem).
   const itemMod = await db.insertInto('grade_items')
     .values({ course_id: COURSE_A, item_name: 'Quiz 1', item_type: 'mod', grade_max: 10 }).returning('id').executeTakeFirstOrThrow();
   const itemManual = await db.insertInto('grade_items')
@@ -446,11 +390,9 @@ beforeAll(async () => {
   await mkGrade(itemBlank.id, { finalGrade: null, feedback: '', updatedAt: new Date('2026-11-01T12:10:00.000Z') });
   await mkGrade(itemOld.id, { finalGrade: 7, feedback: null, updatedAt: new Date('2026-10-01T12:00:00.000Z') });
 
-  // Vết công bố: một vết scope item sau mốc, một vết scope khác (bị lọc).
   await db.insertInto('grade_publications').values({ course_id: COURSE_A, scope: 'item', item_id: itemManual.id, action: 'publish', actor_id: TEACHER_ID, created_at: new Date('2026-11-01T13:00:00.000Z') }).execute();
   await db.insertInto('grade_publications').values({ course_id: COURSE_A, scope: 'course', item_id: null, action: 'publish', actor_id: TEACHER_ID, created_at: new Date('2026-11-01T13:05:00.000Z') }).execute();
 
-  // Phiếu giấy: hai trạng thái chờ + một trạng thái đã đủ điều kiện ghi.
   const mkScan = async (status: string, createdAt: Date) => db.insertInto('exam_scans')
     .values({ exam_pin_id: pin1.id, file_id: '01a19887-6b35-7760-8e64-a5960bfd0099', uploaded_by: TEACHER_ID, status, created_at: createdAt }).execute();
   await mkScan('needs_review', new Date('2026-11-02T06:00:00.000Z'));
@@ -463,7 +405,6 @@ afterAll(async () => {
   await dropTestDatabase(adminUrl!, TEST_DB).catch(() => undefined);
 });
 
-/** Sắp xếp ổn định cho các method không có thứ tự hợp đồng, để so hai đường theo tập dòng. */
 function sortedBy<T>(rows: T[], key: (row: T) => string): T[] {
   return [...rows].sort((a, b) => key(a).localeCompare(key(b)));
 }
@@ -544,9 +485,6 @@ describe('đối chiếu dashboard: điểm và công bố', () => {
     const expected = await oldGradeRowsForItems(db, [itemManualId, itemModId, itemOldId], STUDENT_ID);
     const actual = await repo.gradeRowsForItems([itemManualId, itemModId, itemOldId], STUDENT_ID);
     expect(sortedBy(actual, (r) => r.gradeId)).toEqual(sortedBy(expected, (r) => r.gradeId));
-    // Ba dòng: điểm hiện tại, dòng chỉ có phản hồi, và dòng điểm cũ
-    // trước mốc xem (method này không có điều kiện thời gian); dòng
-    // không có điểm lẫn phản hồi khác rỗng bị mảnh điều kiện loại.
     expect(actual).toHaveLength(3);
   });
 });

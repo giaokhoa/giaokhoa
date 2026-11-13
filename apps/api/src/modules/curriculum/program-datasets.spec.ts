@@ -12,15 +12,6 @@ import {
   type ProgramRecord,
 } from './program-datasets';
 
-/**
- * Issue #161 — chuyển YCCĐ của dataset GDPT sang Tiptap doc:
- *
- * - Text canonical của một YCCĐ trích từ doc bằng ĐÚNG MỘT hàm
- *   (programOutcomeDocText): id/hash tính trên text này nên đổi
- *   định dạng lưu không được đổi id của cùng một nội dung chữ.
- * - Kiểm chứng toàn vẹn: doc đã tách phải khớp `outcome_text`
- *   nguyên văn (bỏ qua các token gạch đầu dòng là dấu trình bày); lệch chữ thật là lỗi dataset, không nạp thầm.
- */
 
 const text = (t: string) => ({ type: 'text', text: t });
 const paragraph = (t: string): ProgramOutcomeDocNode => ({

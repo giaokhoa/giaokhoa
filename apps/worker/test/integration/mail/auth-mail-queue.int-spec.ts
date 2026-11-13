@@ -19,19 +19,7 @@ import {
   type OrdinaryWorkerModuleHarness,
 } from '../../support/ordinary-worker-module';
 
-/**
- * Đường mail auth qua hàng đợi ở worker (issue #517) trên hạ tầng thật của suite worker (DB `giaokhoa_test_worker`, Redis thật):
- *
- * - Một dòng outbox `auth_mail_requested` được relay duy nhất phát
- *   thành job trên hàng đợi `auth-mail` theo bảng định tuyến: job mang `jobId` ghép tiền tố `shared` với id của dòng và dữ liệu là toàn bộ dòng; dòng được đóng dấu `publishedAt` và phản chiếu vào `event_log` như mọi dòng outbox khác.
- * - Processor xử lý dữ liệu job đó bằng hàng rào hai trạng thái
- *   trên Redis thật: dấu ĐÃ GỬI chỉ ghi sau khi transport nhận mail, nên xử lý lại cùng một sự kiện (cùng `outboxId`) không gửi lần hai; hai lượt xử lý ĐỒNG THỜI cùng một sự kiện cũng chỉ gửi đúng một mail (lease ĐANG XỬ LÝ chiếm nguyên tử `SET ... NX` phía Redis, lượt thua ném tín hiệu hẹn thử lại `DelayedError` chứ không kết thúc như đã xử lý); lượt giữ lease chết trước khi gửi thì lease hết hạn và lượt sau gửi được mail (khôi phục sau sập); nhả lease kiểm tra token chủ sở hữu bằng script Lua phía Redis. Hàng rào còn phải đọc lại dấu ĐÃ GỬI trong lúc đang giữ lease, trước khi gọi transport:
- *   một lượt đọc dấu là chưa có rồi bị giữ lại trước khi chiếm lease, trong lúc lượt khác gửi trọn và nhả lease, mà dựa vào kết quả kiểm tra cũ thì gửi lần hai dù không có lỗi nào xảy ra — ca xen kẽ có điều phối thứ tự ở dưới ghim cửa sổ này trên Redis thật. Tính idempotent theo `outboxId` kiểm chứng ở tầng hạ tầng thật chứ không chỉ bằng bản giả trong bộ nhớ của spec unit.
- *
- * Vì sao processor ở các ca sau ca đầu được dựng tay: module đã boot có processor nền riêng đang tiêu thụ cùng hàng đợi (đúng như production), nên việc "job nào tới processor nào" không xác định giữa các spec chạy song song — mẫu chung của suite này (xem `notification-email.int-spec.ts`) là dựng processor cần kiểm chứng bằng tay với transport giả, còn ca thứ nhất chỉ khẳng định các hệ quả bền của relay (dấu trên dòng, job trong hàng đợi, bản phản chiếu) vốn không phụ thuộc processor nào tiêu thụ job.
- */
 
-/** Transport giả ghi lại mọi mail được yêu cầu gửi. */
 class FakeMailer {
   readonly sent: WorkerMailMessage[] = [];
 
@@ -41,9 +29,6 @@ class FakeMailer {
   }
 }
 
-/**
- * Transport giả có cổng chặn: mọi lượt `send` treo lại cho tới khi test mở cổng — ép hai lượt xử lý đồng thời chồng lấn tại cửa sổ gửi để kiểm chứng hàng rào lease nguyên tử trên Redis thật.
- */
 class GatedMailer {
   readonly sent: WorkerMailMessage[] = [];
   calls = 0;
@@ -64,9 +49,6 @@ class GatedMailer {
   }
 }
 
-/**
- * Bọc bản dấu Redis thật bằng cổng chặn ở lượt chiếm lease ĐẦU TIÊN: lượt gọi `claimProcessing` đầu tiên được báo hiệu qua `firstClaimParked` rồi treo lại cho tới khi test mở cổng; mọi thao tác còn lại đi thẳng xuống Redis thật. Dùng để ép lịch xen kẽ xác định trên hạ tầng thật: lượt A đọc dấu đã gửi (chưa có) rồi bị giữ ngay trước khi chiếm lease, trong lúc lượt B chạy trọn chu trình gửi và nhả lease.
- */
 class FirstClaimGatedRedisMarker implements AuthMailSentMarker {
   private claimCalls = 0;
   private openClaimGate!: () => void;
@@ -74,7 +56,6 @@ class FirstClaimGatedRedisMarker implements AuthMailSentMarker {
     this.openClaimGate = resolve;
   });
   private signalFirstClaimParked!: () => void;
-  /** Giải quyết khi lượt chiếm lease đầu tiên đã bị giữ ở cổng. */
   readonly firstClaimParked = new Promise<void>((resolve) => {
     this.signalFirstClaimParked = resolve;
   });
@@ -102,18 +83,15 @@ class FirstClaimGatedRedisMarker implements AuthMailSentMarker {
     return this.inner.releaseProcessing(outboxId, ownerToken);
   }
 
-  /** Mở cổng: lượt chiếm lease đầu tiên đang bị giữ được tiếp tục. */
   releaseFirstClaim(): void {
     this.openClaimGate();
   }
 
-  /** Đóng kết nối Redis của bản dấu được bọc khi ca kết thúc. */
   async onModuleDestroy(): Promise<void> {
     await this.inner.onModuleDestroy();
   }
 }
 
-/** Chờ một điều kiện hạ tầng thành đúng (thăm dò 250ms), hết hạn thì ném lỗi rõ trạng thái cuối. */
 async function waitFor(description: string, condition: () => Promise<boolean>, timeoutMs = 20000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
@@ -123,7 +101,6 @@ async function waitFor(description: string, condition: () => Promise<boolean>, t
   }
 }
 
-/** Bọc kết quả một lượt xử lý thành dạng phân biệt được thắng/thua để khẳng định trên cả hai lượt đồng thời. */
 type SettledOutcome =
   | { outcome: 'resolved'; result: AuthMailProcessResult }
   | { outcome: 'rejected'; error: unknown };
@@ -159,9 +136,6 @@ describe('Worker: mail auth qua hàng đợi (issue #517)', () => {
     await harness?.close();
   });
 
-  /** Dựng một bản dấu Redis thật mới (kết nối riêng) như một tiến trình worker riêng. */
-  // Bộ chạy job dùng cho các processor dựng tay trong spec: dữ liệu job
-  // có scope shared tường minh, nên không cần truy vấn sổ đăng ký.
   const jobRunner = new SpaceJobRunner({
     resolveTarget: async () => {
       throw new Error('spec không cấu hình sổ đăng ký');
@@ -174,7 +148,6 @@ describe('Worker: mail auth qua hàng đợi (issue #517)', () => {
     } as unknown as ConfigService);
   }
 
-  /** Dựng dữ liệu job như relay phát cho một outboxId cho trước. */
   function makeJobData(outboxId: string, seq: number): Record<string, unknown> {
     return {
       outboxId,
@@ -197,7 +170,6 @@ describe('Worker: mail auth qua hàng đợi (issue #517)', () => {
     }).returningAll().executeTakeFirstOrThrow();
     expect(row?.id).toBeTruthy();
 
-    // Chủ động xả một lượt relay thay vì chờ nhịp nền 5 giây; nhịp nền có thể đã phát dòng này trước thì các khẳng định dưới đây vẫn đúng nguyên trạng.
     const relay = context.get(OutboxRelayScheduler);
     await relay.publishPending().catch(() => undefined);
 
@@ -250,12 +222,6 @@ describe('Worker: mail auth qua hàng đợi (issue #517)', () => {
   });
 
   it('hai lượt xử lý đồng thời cùng outboxId trên Redis thật chỉ gửi đúng một mail và lượt thua bị hẹn thử lại', async () => {
-    // Hai processor và hai bản dấu riêng (mỗi bản một kết nối) trên
-    // cùng một Redis — mô phỏng hai tiến trình worker cùng nhận xử
-    // lý một sự kiện (job mất khoá BullMQ được nhận lại trong lúc
-    // lượt đầu còn đang gửi). Lượt nào chiếm được lease trước là
-    // không xác định qua mạng, nên khẳng định đặt trên CẶP kết quả:
-    // đúng một lượt gửi thành công, lượt còn lại ném DelayedError.
     const mailer = new GatedMailer();
     const markerA = makeMarker();
     const markerB = makeMarker();
@@ -274,10 +240,6 @@ describe('Worker: mail auth qua hàng đợi (issue #517)', () => {
       const first = track(settleProcess(processorA.process(job as never)));
       const second = track(settleProcess(processorB.process(job as never)));
 
-      // Chờ đường đua bộc lộ: một lượt đã tới transport (đang treo
-      // ở cổng) và lượt còn lại đã bị hàng rào chặn xong (ném tín
-      // hiệu hẹn thử lại) — hoặc cả hai cùng tới transport nếu
-      // hàng rào thủng, khi đó ca này phải đỏ.
       const deadline = Date.now() + 10000;
       while (!(mailer.calls >= 2 || (mailer.calls >= 1 && settledCount >= 1))) {
         if (Date.now() > deadline) throw new Error('Hết hạn chờ hai lượt xử lý đồng thời tới điểm quyết định');
@@ -311,7 +273,6 @@ describe('Worker: mail auth qua hàng đợi (issue #517)', () => {
     const job = { data: makeJobData(outboxId, 3) };
 
     try {
-      // Một lượt xử lý khác đang giữ lease của sự kiện này.
       const otherLease = await marker.claimProcessing(outboxId);
       expect(otherLease).not.toBeNull();
 
@@ -336,27 +297,18 @@ describe('Worker: mail auth qua hàng đợi (issue #517)', () => {
     });
 
     try {
-      // Lượt xử lý trước chiếm lease rồi chết ngay: không gửi,
-      // không nhả lease, không ghi dấu đã gửi.
       const deadLease = await marker.claimProcessing(outboxId);
       expect(deadLease).not.toBeNull();
       expect(mailer.sent).toHaveLength(0);
 
-      // Rút hạn lease xuống 1 mili-giây để mô phỏng TTL 60 giây
-      // trôi qua — đúng trạng thái Redis tự tới khi tiến trình giữ
-      // lease đã chết và hạn lease đáo hạn, mà test không phải chờ
-      // thật 60 giây.
       await raw.pexpire(`giaokhoa:auth-mail:processing:${outboxId}`, 1);
       await new Promise((resolve) => setTimeout(resolve, 60));
 
-      // Hàng đợi phát lại job sau khi worker cũ chết: mail phải
-      // được gửi, không bị coi là đã xử lý.
       const recovered = await processor.process(job as never);
       expect(recovered.status).toBe('sent');
       expect(mailer.sent).toHaveLength(1);
       expect(mailer.sent[0]?.to).toBe(recipient);
 
-      // Sau khôi phục, dấu đã gửi đã đứng: phát lại nữa thì bỏ qua.
       const replay = await processor.process(job as never);
       expect(replay.status).toBe('duplicate');
       expect(mailer.sent).toHaveLength(1);
@@ -367,10 +319,6 @@ describe('Worker: mail auth qua hàng đợi (issue #517)', () => {
   });
 
   it('lượt đọc dấu đã gửi là chưa có rồi bị giữ trước khi chiếm lease, trong lúc lượt khác gửi trọn và nhả lease trên Redis thật, thì khi chiếm lại lease phải đọc lại dấu và không gửi lần hai', async () => {
-    // Hai processor với hai bản dấu trên cùng một Redis thật —
-    // lượt A qua bản dấu có cổng chặn, lượt B qua bản dấu thường.
-    // Lịch xen kẽ được ép xác định bằng cổng, không dựa vào thời
-    // gian chờ may rủi.
     const mailer = new FakeMailer();
     const gatedMarker = new FirstClaimGatedRedisMarker(makeMarker());
     const markerB = makeMarker();
@@ -380,22 +328,13 @@ describe('Worker: mail auth qua hàng đợi (issue #517)', () => {
     const job = { data: makeJobData(outboxId, 5) };
 
     try {
-      // Lượt A bắt đầu trước: đọc dấu đã gửi trên Redis thật
-      // (chưa có) rồi bị cổng giữ lại ngay trước khi chiếm
-      // lease — kết quả kiểm tra của lượt A từ đây là dữ kiện cũ.
       const turnA = processorA.process(job as never);
       await gatedMarker.firstClaimParked;
 
-      // Lượt B chạy trọn trong cửa sổ lượt A bị giữ: chiếm
-      // lease, gửi đúng một mail, ghi dấu đã gửi và nhả lease.
       const turnB = await processorB.process(job as never);
       expect(turnB.status).toBe('sent');
       expect(mailer.sent).toHaveLength(1);
 
-      // Mở cổng cho lượt A tiếp tục: lượt A chiếm được lease
-      // lượt B vừa nhả. Lần đọc lại dấu trong lúc giữ lease
-      // phải thấy dấu đã đứng nên lượt A kết thúc trùng lặp,
-      // transport không bị gọi lần hai.
       gatedMarker.releaseFirstClaim();
       const turnAResult = await turnA;
       expect(turnAResult.status).toBe('duplicate');
@@ -415,12 +354,9 @@ describe('Worker: mail auth qua hàng đợi (issue #517)', () => {
       const ownerToken = await markerA.claimProcessing(outboxId);
       expect(ownerToken).not.toBeNull();
 
-      // Bản dấu của tiến trình khác nhả bằng token sai: lease của
-      // chủ thật phải còn nguyên (script Lua chỉ xoá khi token khớp).
       await markerB.releaseProcessing(outboxId, 'token-khong-phai-cua-chu-lease');
       expect(await markerB.claimProcessing(outboxId)).toBeNull();
 
-      // Chủ lease nhả bằng token đúng: lease mất, lượt khác chiếm lại được.
       await markerA.releaseProcessing(outboxId, ownerToken as string);
       const reclaimed = await markerB.claimProcessing(outboxId);
       expect(reclaimed).not.toBeNull();

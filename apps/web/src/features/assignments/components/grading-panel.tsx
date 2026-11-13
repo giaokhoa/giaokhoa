@@ -16,9 +16,6 @@ import { dateLabel, selectClass } from '../utils/shared';
 
 const BANK_CATEGORIES = ['strengths', 'weaknesses', 'improvement', 'progress', 'general'] as const;
 
-/**
- * Bề mặt chấm một bài nộp: xem tệp + thả dấu vector + gói chấm nháp + trả bài. Chi tiết bài nộp và ngân hàng nhận xét là dữ kiện máy chủ nên đọc trực tiếp từ cache TanStack (CN-13, issue #493); panel chỉ giữ STATE BIỂU MẪU (điểm/mức/lời phê/đánh giá rubric đang soạn) — `loadDetail` nạp tươi chi tiết qua cache rồi gieo lại biểu mẫu từ bản mới nhất, chạy lúc mở panel và sau mỗi hành động ghi như trước.
- */
 export function GradingPanel({
   assignmentId,
   resultMode,
@@ -336,8 +333,6 @@ export function GradingPanel({
                 void (async () => {
                   setBusy(true);
                   try {
-                    // Mục vừa tạo do đột biến vá thẳng vào cache ngân
-                    // hàng ở tầng dữ kiện — danh sách tự cập nhật.
                     await createBankEntryMutation.mutateAsync({
                       category: bankCategory,
                       text: bankDraft.trim(),

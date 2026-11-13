@@ -18,11 +18,6 @@ import { ErrorAlert } from '#components/error-alert';
 import { PageHeader, PageShell } from '#components/page-shell';
 import { useCreateReport, usePlatformReports, useReportRun, useScheduleReport } from '../queries/platform';
 
-/**
- * Report builder tối thiểu (platform services): chọn dataSource/column, xem kết quả, đặt lịch. Dữ liệu đọc qua tầng TanStack Query
- * (`lib/platform-data.ts`, khoá `platformReports`/`reportRun`;
- * `clientLoader` của route nạp trước danh sách báo cáo); kết quả chạy chỉ tải khi người dùng bấm chạy một báo cáo, tạo báo cáo qua đột biến làm mới danh sách như lần tải lại thủ công trước đây.
- */
 export function ReportsPage() {
   const { t: t } = useTranslation();
   const reportsQuery = usePlatformReports();
@@ -134,15 +129,12 @@ export function ReportsPage() {
   );
 }
 
-/** Route module gộp (issue #500): nội dung trang bên dưới vốn ở module pages riêng, phần khung route (biên lỗi + tiêu đề) vốn ở wrapper routes riêng — hai module nhập một theo bản đồ features/. */
 export { ReportsPage as default };
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { platformKeyMeta } from '#lib/route-meta';
 export function meta() {
   return platformKeyMeta('reportsTitle');
 }
 
-// clientLoader (F-01, rà soát #133): nạp trước dữ liệu đúng khoá trang sẽ đọc.
 export { reportsPageClientLoader as clientLoader } from '../queries/platform';

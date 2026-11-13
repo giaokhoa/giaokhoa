@@ -21,7 +21,7 @@ interface ApiReplica {
 
 const connected: Socket[] = [];
 
-/** Tạo hai API server Socket.IO độc lập nhưng dùng chung Redis pub/sub. */
+
 async function createReplica(redisUrl: string): Promise<ApiReplica> {
   const http = createServer();
   const adapter = new MessagingRedisIoAdapter(http as never, redisUrl, [ALLOWED]);

@@ -4,7 +4,6 @@ import {
 } from './files.service';
 import type { FileRow } from '@giaokhoa/db/repositories/files';
 
-/** PNG 1x1 thật (byte đầy đủ) để kiểm tra đường vui. */
 const PNG_1PX = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
   'base64',

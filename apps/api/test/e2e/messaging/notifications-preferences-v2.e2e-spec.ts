@@ -3,22 +3,6 @@ import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminToken, assignRole, createTestApp, createUserViaApi, http, login, roleIdByShortname, STRONG_PASSWORD, systemContextId } from '../../support/identity-access-helpers';
 
-/**
- * NB-2 (issue #174): mô hình tuỳ chọn thông báo v2.
- *
- * Tiêu chí theo hồ sơ rà soát + chính sách đã chốt trên #174:
- *  - GET /messages/preferences trả MỘT dòng cho mỗi provider, mang
- *    nhãn + mô tả vi/en từ registry ở API (không khoá thô), phân loại 3 nhóm, nhãn theo vai cho loại chỉ GV nhận, cờ bắt buộc của P2 — và KHÔNG có bề mặt push hay trục loggedin/loggedoff nào.
- *  - Đổi tuỳ chọn có hiệu lực ngay ở lần phát kế tiếp (kiểm qua
- *    POST /notifications/send — điểm phát chuẩn của admin — và đọc trường channels của NotifyResult + số thông báo đã lưu).
- *  - Tắt email của grade_updated vẫn giữ popup hoạt động độc lập.
- *  - Loại bắt buộc (P2): enrol_expiry_warning + admin_announcement
- *    không tắt được popup (400) nhưng email vẫn tắt được tuyệt đối, và lần phát vẫn giao popup.
- *  - Dữ liệu tuỳ chọn CŨ (khoá provider × kênh × trạng thái) được suy
- *    về giá trị tương đương ở hậu trường: hàng cũ giữ nguyên không bị ghi đè, khoá v2 khi đã đặt thì thắng hàng cũ.
- *  - Phân chia theo vai + context (việc nối tiếp của issue #288):
- *    GET chỉ trả provider thuộc AUDIENCE của user — registry ở API là nguồn sự thật, audience chốt bằng truy vết điểm phát notify() thật. Giáo viên thuần không thấy loại chỉ học sinh nhận (báo điểm là ca bị bắt tại trận) hay loại của phụ huynh; người hai vai dạy + học thấy cả phía học sinh; nhân sự có liên kết giám hộ hiệu lực thấy thêm loại phụ huynh; site admin đủ 20. PUT ngoài audience bị server từ chối 403 — không chỉ giấu giao diện.
- */
 describe('Tuỳ chọn thông báo v2 (NB-2, issue #174)', () => {
   let app: INestApplication;
   let admin: string;
@@ -43,17 +27,10 @@ describe('Tuỳ chọn thông báo v2 (NB-2, issue #174)', () => {
   async function freshUser(): Promise<{ id: string; token: string }> {
     const user = await createUserViaApi(app, admin);
     const token = (await login(app, user.username, STRONG_PASSWORD)).accessToken;
-    // NB-7: bề mặt tuỳ chọn theo loại chỉ còn cho nhân sự — fixture của suite này dùng vai teacher (gán ở context hệ thống) để kiểm mô hình v2 như trước; phần chặn học sinh có spec riêng
-    // (notifications-admin-policy).
     await assignRole(app, admin, user.id, await roleIdByShortname(app, admin, 'teacher'), await systemContextId(app, admin));
     return { id: user.id, token };
   }
 
-  /**
-   * Người dùng HAI VAI dạy + học: teacher và student cùng gán ở context hệ thống → có cả context nhân sự lẫn context học sinh
-   * (nhánh gán-vai của phép xác định context học sinh). Các ca cơ
-   * chế tuỳ chọn đụng loại phía học sinh (grade_updated…) dùng fixture này; ca nguyên mẫu giáo viên thuần dùng freshUser().
-   */
   async function freshDualUser(): Promise<{ id: string; token: string }> {
     const user = await createUserViaApi(app, admin);
     const sys = await systemContextId(app, admin);
@@ -63,9 +40,6 @@ describe('Tuỳ chọn thông báo v2 (NB-2, issue #174)', () => {
     return { id: user.id, token };
   }
 
-  /**
-   * Nhân sự kiêm PHỤ HUYNH: vai teacher như freshUser() cộng một liên kết giám hộ đang hiệu lực (chèn thẳng hàng guardian_links với tenant nền tảng đã seed — cùng kỷ luật chèn dữ liệu fixture qua pg của suite này).
-   */
   async function freshGuardianStaffUser(): Promise<{ id: string; token: string }> {
     const { id, token } = await freshUser();
     const child = await createUserViaApi(app, admin);
@@ -93,11 +67,6 @@ describe('Tuỳ chọn thông báo v2 (NB-2, issue #174)', () => {
   it('GET trả một dòng v2 có nhãn cho mỗi provider trong audience giáo viên thuần — không khoá thô, không push, không trục trạng thái đăng nhập', async () => {
     const { token } = await freshUser();
     const rows = await preferencesOf(token);
-    // Audience theo vai (issue #288): giáo viên THUẦN chỉ thấy phía
-    // nhân sự + mọi-vai = 10 trong 20 loại. Tám loại chỉ học sinh
-    // nhận (grade_updated là ca bị bắt tại trận) và hai loại của phụ
-    // huynh nằm ngoài bề mặt của họ; bề mặt đầy đủ nằm ở ca nguyên
-    // mẫu audience bên dưới.
     expect(rows.map((r) => r.provider).sort()).toEqual([
       'admin_announcement', 'assignment_submitted', 'badge_awarded', 'calendar_reminder',
       'competency_review_requested', 'contact_request', 'conversation_reported',
@@ -108,34 +77,21 @@ describe('Tuỳ chọn thông báo v2 (NB-2, issue #174)', () => {
       expect(row.label.en.length).toBeGreaterThan(0);
       expect(row.description.vi.length).toBeGreaterThan(0);
       expect(row.description.en.length).toBeGreaterThan(0);
-      // Không còn bề mặt của mô hình cũ / kênh chưa có hạ tầng.
       expect(row).not.toHaveProperty('state');
       expect(row).not.toHaveProperty('channel');
       expect(row).not.toHaveProperty('channels');
-      // Trung thực kênh: từ NB-5 (issue #174) email gửi thật qua
-      // Resend nên cờ khả dụng trong registry đã bật — trước NB-5 ca
-      // này kỳ vọng false (kênh còn là cổng ghi log), PR NB-5 cập
-      // nhật kỳ vọng theo luật mới cùng lượt với việc bật cờ.
       expect(row.emailAvailable).toBe(true);
     }
     const byName = new Map(rows.map((r) => [r.provider, r]));
-    // Mặc định tần suất theo P1: nhóm Lớp & mọi người = ngay.
     expect(byName.get('message_new')).toMatchObject({ group: 'people', emailFrequency: 'immediate' });
-    // Nhãn theo vai (suy ra từ audience): hai loại chỉ phía nhân
-    // sự/quản trị nhận mang nhãn "chỉ giáo viên"; loại hai phía thì không.
     expect(byName.get('quiz_attempt_finished')?.teacherOnly).toBe(true);
     expect(byName.get('conversation_reported')?.teacherOnly).toBe(true);
     expect(byName.get('assignment_submitted')?.teacherOnly).toBe(false);
-    // P2 trong bề mặt giáo viên thuần: chỉ admin_announcement thuộc
-    // audience của họ — loại bắt buộc phía học sinh
-    // (enrol_expiry_warning) không hiện ở đây (đủ cả hai ở ca admin).
     expect(rows.filter((r) => r.mandatoryInApp).map((r) => r.provider)).toEqual(['admin_announcement']);
     expect(byName.get('admin_announcement')).toMatchObject({ group: 'system', popupEnabled: true, emailFrequency: 'immediate' });
   });
 
   it('nguyên mẫu audience (issue #288): vai kép thấy phía học viên, staff phụ huynh thấy loại phụ huynh, admin thấy cả 20', async () => {
-    // Hai vai dạy + học: thấy cả phía học sinh (18 loại), chưa có
-    // phía phụ huynh.
     const dual = await freshDualUser();
     const dualRows = await preferencesOf(dual.token);
     const dualNames = dualRows.map((r) => r.provider);
@@ -145,12 +101,9 @@ describe('Tuỳ chọn thông báo v2 (NB-2, issue #174)', () => {
     expect(dualNames).not.toContain('guardian_digest');
     expect(dualNames).not.toContain('guardian_overdue_alert');
     const dualByName = new Map(dualRows.map((r) => [r.provider, r]));
-    // Mặc định tần suất P1 phía học tập = tổng hợp ngày; provider
-    // không có kênh email → emailFrequency null.
     expect(dualByName.get('grade_updated')).toMatchObject({ group: 'learning', teacherOnly: false, mandatoryInApp: false, popupEnabled: true, emailFrequency: 'daily' });
     expect(dualByName.get('course_completed')?.emailFrequency).toBeNull();
 
-    // Nhân sự + liên kết giám hộ hiệu lực: thêm đúng hai loại phụ huynh.
     const guardianStaff = await freshGuardianStaffUser();
     const guardianNames = (await preferencesOf(guardianStaff.token)).map((r) => r.provider);
     expect(guardianNames).toHaveLength(12);
@@ -161,7 +114,6 @@ describe('Tuỳ chọn thông báo v2 (NB-2, issue #174)', () => {
     expect(guardianPut.status).toBe(200);
     expect((guardianPut.body as PrefRow).popupEnabled).toBe(false);
 
-    // Site admin: context admin phủ mọi phía — đủ 20 loại.
     expect(await preferencesOf(admin)).toHaveLength(20);
   });
 
@@ -176,17 +128,13 @@ describe('Tuỳ chọn thông báo v2 (NB-2, issue #174)', () => {
   });
 
   it('thay đổi hiệu lực ngay ở lần phân phối tiếp theo; tắt email giữ popup độc lập', async () => {
-    // Hai vai: grade_updated là loại phía học sinh (#288).
     const { id, token } = await freshDualUser();
-    // Mặc định: popup giao thật, email xếp hàng (tần suất daily vẫn
-    // xếp hàng job log-only cho tới NB-5 — chỉ 'off' mới chặn).
     expect(await send(id, 'grade_updated')).toMatchObject({ popup: 'delivered', email: 'queued' });
 
     const off = await http(app).put('/api/v1/messages/preferences').set('Authorization', `Bearer ${token}`)
       .send({ provider: 'grade_updated', emailFrequency: 'off' });
     expect(off.status).toBe(200);
     expect((off.body as PrefRow).emailFrequency).toBe('off');
-    // Tắt email: popup vẫn giao độc lập, email bị chặn ngay lần phát này.
     expect(await send(id, 'grade_updated')).toMatchObject({ popup: 'delivered', email: 'skipped-preference' });
 
     const popupOff = await http(app).put('/api/v1/messages/preferences').set('Authorization', `Bearer ${token}`)
@@ -194,25 +142,21 @@ describe('Tuỳ chọn thông báo v2 (NB-2, issue #174)', () => {
     expect(popupOff.status).toBe(200);
     expect(await send(id, 'grade_updated')).toMatchObject({ popup: 'skipped-preference', email: 'skipped-preference' });
 
-    // Bật lại cũng hiệu lực ngay.
     await http(app).put('/api/v1/messages/preferences').set('Authorization', `Bearer ${token}`)
       .send({ provider: 'grade_updated', popupEnabled: true });
     expect(await send(id, 'grade_updated')).toMatchObject({ popup: 'delivered', email: 'skipped-preference' });
 
-    // Đúng 3 lần popup giao thật → 3 thông báo đã lưu (2 trước + 1 sau khi bật lại).
     const list = await http(app).get('/api/v1/notifications/items').set('Authorization', `Bearer ${token}`);
     expect((list.body as { items: unknown[] }).items).toHaveLength(3);
   });
 
   it('provider bắt buộc từ chối tắt popup (400) nhưng cho tắt email, và popup vẫn phân phối', async () => {
-    // Hai vai: enrol_expiry_warning là loại phía học sinh (#288).
     const { id, token } = await freshDualUser();
     for (const provider of ['enrol_expiry_warning', 'admin_announcement']) {
       const refused = await http(app).put('/api/v1/messages/preferences').set('Authorization', `Bearer ${token}`)
         .send({ provider, popupEnabled: false });
       expect(refused.status).toBe(400);
       expect((refused.body as { code?: string }).code).toBe('messaging.preference_mandatory');
-      // Email của loại bắt buộc vẫn là quyền cá nhân tuyệt đối.
       const emailOff = await http(app).put('/api/v1/messages/preferences').set('Authorization', `Bearer ${token}`)
         .send({ provider, emailFrequency: 'off' });
       expect(emailOff.status).toBe(200);
@@ -223,9 +167,7 @@ describe('Tuỳ chọn thông báo v2 (NB-2, issue #174)', () => {
   });
 
   it('dòng v1 cũ được tôn trọng qua suy dẫn, không bao giờ viết lại; ghi v2 thắng legacy', async () => {
-    // Hai vai: grade_updated là loại phía học sinh (#288).
     const { id, token } = await freshDualUser();
-    // Gieo đúng hình dạng dữ liệu cũ: khoá provider × kênh × trạng thái.
     await pg.query(
       `insert into user_preferences (user_id, name, value) values ($1, 'message_provider_grade_updated_popup_loggedin', '0'), ($1, 'message_provider_grade_updated_email_loggedin', '0')`,
       [id],
@@ -233,16 +175,14 @@ describe('Tuỳ chọn thông báo v2 (NB-2, issue #174)', () => {
     let row = (await preferencesOf(token)).find((r) => r.provider === 'grade_updated');
     expect(row?.popupEnabled).toBe(false);
     expect(row?.emailFrequency).toBe('off');
-    // Lần phát kế tiếp tôn trọng giá trị suy từ dữ liệu cũ.
     expect(await send(id, 'grade_updated')).toMatchObject({ popup: 'skipped-preference', email: 'skipped-preference' });
 
-    // Ghi v2: chỉ khoá v2 được tạo, khoá cũ giữ nguyên từng chữ.
     const put = await http(app).put('/api/v1/messages/preferences').set('Authorization', `Bearer ${token}`)
       .send({ provider: 'grade_updated', popupEnabled: true });
     expect(put.status).toBe(200);
     row = (await preferencesOf(token)).find((r) => r.provider === 'grade_updated');
-    expect(row?.popupEnabled).toBe(true); // v2 thắng hàng cũ ở popup
-    expect(row?.emailFrequency).toBe('off'); // email chưa ghi v2 → vẫn suy từ hàng cũ
+    expect(row?.popupEnabled).toBe(true);
+    expect(row?.emailFrequency).toBe('off');
     const stored = await pg.query(`select name, value from user_preferences where user_id = $1 order by name`, [id]);
     expect(stored.rows).toEqual([
       { name: 'message_provider_grade_updated_email_loggedin', value: '0' },
@@ -252,9 +192,6 @@ describe('Tuỳ chọn thông báo v2 (NB-2, issue #174)', () => {
   });
 
   it('kiểm chứng: provider lạ, patch rỗng, và tần suất email trên provider không có email đều 400', async () => {
-    // Hai vai để các ca kiểm chứng payload tới được đúng tầng
-    // validation (provider phía học sinh ngoài audience của giáo
-    // viên thuần sẽ dừng ở 403 audience trước — ca đó ở ca PUT gate).
     const { token } = await freshDualUser();
     const unknown = await http(app).put('/api/v1/messages/preferences').set('Authorization', `Bearer ${token}`)
       .send({ provider: 'khong_ton_tai', popupEnabled: true });

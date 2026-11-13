@@ -7,13 +7,8 @@ import {
   roleIdByShortname, STRONG_PASSWORD, systemContextId,
 } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, createEnrolInstance } from '../../support/course-enrolment-helpers';
-// Từ issue #539, nhịp quét matching chạy ở worker nên tiến trình API trong test không còn tự quét: mỗi vòng chờ dẫn một nhịp qua cầu dẫn này rồi mới đọc trạng thái.
 import { closeSepaySweepDriver, driveSepaySweep } from '../../support/sepay-sweep-driver';
 
-/**
- * Lát 1 VietQR (issue #189, hồ sơ payment-vietqr §6.4) — bộ nghiệm thu 6.4.1–6.4.7: IPN SePay (verify hai lớp, idempotency, matching 3 điều kiện), QR động, che config 6.4.5, cách ly tenant 6.4.6, cổng cộng dồn hoàn + đảo quyền lợi 6.4.7. Riêng vector vàng 6.4.4 nằm ở spec unit `src/modules/payments/vietqr.spec.ts`.
- */
-/** Secret webhook gateway 'manual' (cổng verify fail-closed của H1, PR #191): vitest config cấp qua env, spec đọc cùng giá trị để gắn header. */
 const WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET ?? '';
 const SEPAY_KEY = 'sk-test-sepay-9f27c1d4aa';
 const SEPAY_XID = 'xid-test-org-001';
@@ -86,16 +81,6 @@ describe('VietQR lát 1: pipeline IPN SePay cho enrol_fee (issue #189, §6.4)', 
     throw new Error(`payment ${id} did not reach status ${want} (last: ${String(last.status)})`);
   }
 
-  /**
-   * Chờ chuỗi đối soát của một payment chốt xong: sự kiện nhà cung
-   * cấp đã sang trạng thái 'matched' — matching chỉ chốt 'matched' ở
-   * cuối nhịp xử lý của nó, sau khi đã kích hoạt quyền lợi, lật trạng
-   * thái payment và ghi sự kiện outbox `payment_succeeded` — đồng
-   * thời sự kiện outbox đó đã tồn tại. Sau mốc này không còn khâu bất
-   * đồng bộ nào trong chuỗi payment có thể đổi các số đếm được khẳng
-   * định, nên việc đếm sau replay IPN chờ tín hiệu này thay cho sleep
-   * cố định (cùng khuôn với spec payments-class-fee).
-   */
   async function waitForPaymentReconciled(paymentId: string, timeoutMs = 12000): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
@@ -142,7 +127,6 @@ describe('VietQR lát 1: pipeline IPN SePay cho enrol_fee (issue #189, §6.4)', 
     expect(decoded.amount).toBe('100000');
     expect((decoded.additionalData as { purpose?: string }).purpose).toBe(payment.paymentCode);
 
-    // 6.4.5: cả hai endpoint đọc account đều không lộ khoá SePay nguyên văn.
     const list = await http(app).get('/api/v1/payments/accounts').set('Authorization', `Bearer ${admin}`);
     const listed = (list.body as { id: string; config: Record<string, unknown> }[]).find((a) => a.id === sepayAccountId);
     expect(listed).toBeTruthy();
@@ -161,7 +145,6 @@ describe('VietQR lát 1: pipeline IPN SePay cho enrol_fee (issue #189, §6.4)', 
     expect(second.paymentCode).toMatch(/^GKH[0-9A-HJKMNP-TV-Z]{9}$/);
     expect(second.paymentCode).not.toBe(first.paymentCode);
     expect(second.id).not.toBe(first.id);
-    // Mã đã sinh là bất biến: đọc lại payment không sinh mã mới.
     const reread = await http(app).get(`/api/v1/payments/${first.id}`).set('Authorization', `Bearer ${admin}`);
     expect(reread.body.paymentCode).toBe(first.paymentCode);
   });
@@ -213,10 +196,6 @@ describe('VietQR lát 1: pipeline IPN SePay cho enrol_fee (issue #189, §6.4)', 
     const replay = await postIpn(body);
     expect(replay.status).toBeLessThan(300);
     expect(replay.body.duplicate).toBe(true);
-    // Replay bị từ chối ĐỒNG BỘ ngay trong response (duplicate) nên
-    // không phát sinh xử lý nền nào từ phía nó; phía chuỗi đầu thì chờ
-    // tín hiệu chốt đối soát tường minh rồi mới đếm — thay sleep cố
-    // định 1.500ms không gắn với tín hiệu hoàn tất nào.
     await waitForPaymentReconciled(payment.id);
 
     const events = await pg.query(
@@ -288,7 +267,6 @@ describe('VietQR lát 1: pipeline IPN SePay cho enrol_fee (issue #189, §6.4)', 
 
   it('6.4.6: tạo payment cho khoá gắn account của tenant khác bị chặn ở service', async () => {
     const { instance, buyerToken } = await createFeeCourse(sepayAccountId);
-    // Phẫu thuật fixture: chuyển khoá sang tenant khác trong DB — account giữ nguyên tenant cũ.
     const tenants = await pg.query(`select id from tenants`);
     const courseRow = await pg.query('select tenant_id from course where id = (select course_id from enrol where id = $1)', [instance.id]);
     const otherTenant = (tenants.rows as { id: string }[]).find((t) => t.id !== courseRow.rows[0].tenant_id);
@@ -316,10 +294,6 @@ describe('VietQR lát 1: pipeline IPN SePay cho enrol_fee (issue #189, §6.4)', 
     expect(hook.body.status).toBe('succeeded');
     expect(await enrolmentActive(course.id, buyerToken)).toBe(true);
 
-    // Lát 3 (issue #189): hoàn tiền là vòng đời duyệt — tạo yêu cầu
-    // (`POST :id/refunds`) → duyệt (một cấp tự duyệt / hai cấp khác
-    // người tạo) → xác nhận chi (`settle`) mới tính tiền đã ra. Hoàn
-    // một phần dưới ngưỡng: MỘT cấp — `approved` ngay khi tạo.
     const partial1 = await http(app).post(`/api/v1/payments/${payment.id}/refunds`).set('Authorization', `Bearer ${admin}`)
       .send({ amount: 40000, reason: 'partial', externalTransactionId: `ft-out-${Date.now()}-1` });
     expect(partial1.status).toBeLessThan(300);
@@ -339,7 +313,6 @@ describe('VietQR lát 1: pipeline IPN SePay cho enrol_fee (issue #189, §6.4)', 
     const settled2 = await http(app).post(`/api/v1/payments/${payment.id}/refunds/${partial2.body.id}/settle`)
       .set('Authorization', `Bearer ${admin}`).send({});
     expect(settled2.body.status).toBe('settled');
-    // Đã chi 80.000/100.000: khoản thu vẫn succeeded, quyền lợi còn nguyên.
     const midState = await http(app).get(`/api/v1/payments/${payment.id}`).set('Authorization', `Bearer ${admin}`);
     expect(midState.body.status).toBe('succeeded');
     expect(await enrolmentActive(course.id, buyerToken)).toBe(true);
@@ -349,8 +322,6 @@ describe('VietQR lát 1: pipeline IPN SePay cho enrol_fee (issue #189, §6.4)', 
     expect(exceeding.status).toBe(400);
     expect(JSON.stringify(exceeding.body)).toContain('payment.refund_exceeds_total');
 
-    // Phần còn lại 20.000 làm cộng dồn đạt 100% → HAI CẤP: tạo bởi
-    // manager thứ hai (ở `requested`), admin duyệt, admin xác nhận chi.
     const mgr2 = await createUserViaApi(app, admin);
     await assignRole(app, admin, mgr2.id, await roleIdByShortname(app, admin, 'manager'), await systemContextId(app, admin));
     const mgr2Token = (await login(app, mgr2.username, STRONG_PASSWORD)).accessToken;
@@ -359,7 +330,6 @@ describe('VietQR lát 1: pipeline IPN SePay cho enrol_fee (issue #189, §6.4)', 
     expect(final.status).toBeLessThan(300);
     expect(final.body.status).toBe('requested');
     expect(final.body.approvalLevel).toBe(2);
-    // Chưa xác nhận chi thì khoản thu chưa `refunded`, quyền lợi chưa đảo.
     const beforeSettle = await http(app).get(`/api/v1/payments/${payment.id}`).set('Authorization', `Bearer ${admin}`);
     expect(beforeSettle.body.status).toBe('succeeded');
     expect(await enrolmentActive(course.id, buyerToken)).toBe(true);

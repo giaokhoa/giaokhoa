@@ -1,11 +1,7 @@
 import type { CurriculumTreeNode } from '#lib/curriculum';
 import type { FlatNode } from '../types/content-bank';
 
-/**
- * Hàm thuần của Kho học liệu thuộc feature content-bank. Tách từ các module phẳng `src/lib/content-bank.ts` và `src/lib/content-bank-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
- */
 
-/** Phẳng hoá cây chương trình theo chiều sâu, gom YCCĐ của từng cây con vào chính node tổ tiên của nó. */
 export function flattenNodes(nodes: CurriculumTreeNode[], depth = 0, out: FlatNode[] = []): FlatNode[] {
   for (const node of nodes) {
     const subtreeOutcomes: { id: string; content: string }[] = [];
@@ -20,7 +16,6 @@ export function flattenNodes(nodes: CurriculumTreeNode[], depth = 0, out: FlatNo
   return out;
 }
 
-/** Đọc File của input[type=file] thành base64 thuần (bỏ tiền tố data:...;base64,). */
 export function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

@@ -1,13 +1,6 @@
 import i18n, { type BackendModule } from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
-/**
- * i18n phía frontend (i18next + react-i18next): catalog tiếng Việt tập trung tại file này và được đóng gói sẵn trong bundle khởi tạo (locale mặc định), kèm tiếng Anh NẠP LƯỜI — cùng quy ước với catalog của backend
- * (@nestjs/i18n). Mọi chuỗi hiển thị trên các màn hình phải tra qua
- * `t('...')`, không nhúng chuỗi cứng trong component.
- *
- * Luồng nạp tiếng Anh (issue #503, bước gọn i18n ở root; pattern lazy loading chính thức của i18next — backend plugin + `partialBundledLanguages`): catalog en nằm ở module riêng `i18n-en.ts`, KHÔNG nằm trong bundle khởi tạo vì giao diện mặc định chỉ dùng tiếng Việt (trước khi tách, en chiếm ~47% số byte catalog nạp ở root). Khi ngôn ngữ được chuyển sang `en`, i18next gọi `read` của backend dưới đây cho từng namespace; backend dynamic import `i18n-en.ts` (Vite cắt thành chunk riêng, chỉ tải ở đúng lượt chuyển ngôn ngữ đó) rồi trả object chuỗi của namespace — i18next chờ nạp xong mới phát sự kiện đổi ngôn ngữ nên giao diện không bao giờ hiện khoá thô. Tiếng Việt đã đóng gói sẵn nên backend không bao giờ được gọi cho `vi`.
- */
 export const platformResources = {
   vi: {
     platform: {
@@ -187,9 +180,6 @@ export const platformResources = {
   }
 } as const;
 
-/**
- * Resources cho các màn hình lõi (đăng nhập, hồ sơ, khoá học, điểm, câu hỏi, tin nhắn, lịch, huy hiệu, kế hoạch học tập, quản trị): namespace `app`, cùng quy ước tập trung một chỗ — component chỉ gọi `t('...')`.
- */
 export const appResources = {
   vi: {
     app: {
@@ -1257,7 +1247,6 @@ export const appResources = {
       sharedExamBank: 'Ngân hàng đề chung',
       sharedMatrixBank: 'Ngân hàng ma trận chung',
       comingSoon: 'Chưa triển khai — chờ nền ma trận của Quiz.',
-      // MB-1 (issue #111): ngân hàng ma trận.
       matrixBank: 'Ngân hàng ma trận',
       myMatrixBank: 'Ma trận của tôi',
       myMatrixBankDescription: 'Ma trận đề của chính bạn. Ma trận copy từ mẫu chung về đây là bản làm việc của bạn — sửa ô tự do, mẫu gốc không đổi.',
@@ -1421,7 +1410,6 @@ export const appResources = {
       examPinsTitle: 'Các lần ghim của đề',
       matrixCv7991Note: 'Ma trận theo đặc tả CV 7991 (mặc định 3 mức: Biết / Hiểu / Vận dụng).',
       matrixIncludeAdvanced: 'Thêm mức Vận dụng cao',
-      // I-3 (issue #233): wizard nhập ma trận từ file, 5 bước.
       matrixImport: 'Nhập ma trận từ file',
       matrixImportFromFile: 'Nhập từ file',
       matrixImportStep1: '1. Chọn môn và tải mẫu',
@@ -2814,9 +2802,6 @@ export const appResources = {
   }
 } as const;
 
-/**
- * Resources cho trang tổng quan (dashboard) và khung sidebar/header của khu vực đã đăng nhập: namespace `dashboard`. Mọi nhãn của khung dashboard-01 đều tra tại đây — không nhúng chuỗi tiếng Anh của block mẫu vào UI.
- */
 export const dashboardResources = {
   vi: {
     dashboard: {
@@ -2909,9 +2894,6 @@ export const dashboardResources = {
   }
 } as const;
 
-/**
- * Resources cho bề mặt phụ huynh chỉ-xem (PH-1, issue #130): namespace `guardian`. Mọi nhãn của trang /guardian tra tại đây; bề mặt này chỉ-xem tuyệt đối — không khoá nào gợi hành động thay con.
- */
 export const guardianResources = {
   vi: {
     guardian: {
@@ -2962,15 +2944,8 @@ export const guardianResources = {
   }
 } as const;
 
-/** Promise import module catalog en — dùng chung cho mọi lần `read` (bốn
- * namespace) để chunk en chỉ tải đúng một lần trong suốt phiên. Nếu lần
- * nạp lỗi (mạng/CDN) thì cache tự xoá ở điểm gán trong `read` bên dưới,
- * để lần yêu cầu sau nạp lại từ đầu thay vì dùng lại promise đã reject. */
 let englishCatalogModule: Promise<typeof import('#config/i18n-en')> | undefined;
 
-/**
- * Backend nạp lười của i18next cho DUY NHẤT locale `en`: `read` được i18next gọi theo từng namespace khi locale đó được yêu cầu (đổi ngôn ngữ hoặc `loadLanguages('en')`); các locale đã đóng gói sẵn (vi) không đi qua backend này nhờ `partialBundledLanguages: true` ở init dưới.
- */
 const englishCatalogBackend: BackendModule = {
   type: 'backend',
   init: () => undefined,
@@ -2980,8 +2955,6 @@ const englishCatalogBackend: BackendModule = {
       return;
     }
     englishCatalogModule ??= import('#config/i18n-en').catch((error: unknown) => {
-      // Nạp lỗi: xoá cache trước khi ném tiếp lỗi cho `read` xử lý, để
-      // lần `read` sau import lại từ đầu; giữ nguyên lỗi gốc khi reject.
       englishCatalogModule = undefined;
       throw error;
     });
@@ -2993,13 +2966,6 @@ const englishCatalogBackend: BackendModule = {
         callback(null, bundles[namespace] ?? {});
       })
       .catch((error: unknown) => {
-        // Báo lỗi KÈM dữ liệu rỗng thay vì `false`: theo cơ chế của
-        // i18next, callback chỉ nhận lỗi (không kèm dữ liệu) bị coi là
-        // lỗi chết — cặp ngôn ngữ|namespace bị đánh dấu state -1 và
-        // không lần `changeLanguage` nào trong phiên nạp lại nữa. Kèm
-        // dữ liệu rỗng thì i18next coi là lỗi tạm thời: tự thử lại
-        // `read` theo `maxRetries`/`retryTimeout`, và sau khi hết lượt
-        // thử vẫn để state 0 để lần chuyển ngôn ngữ sau nạp lại được.
         callback(error instanceof Error ? error : new Error(String(error)), {});
       });
   },
@@ -3018,10 +2984,6 @@ void i18n
       },
     },
     partialBundledLanguages: true,
-    // Khai tường minh bốn namespace: i18next chỉ nạp lười qua backend
-    // cho các namespace nằm ở `ns` này (mặc định là ['translation'] —
-    // thiếu khai báo này thì đổi sang `en` không tải được namespace
-    // nào). Với `vi` đã đóng gói sẵn, khai báo không đổi hành vi tra cứu.
     ns: ['platform', 'app', 'dashboard', 'guardian'],
     lng: 'vi',
     fallbackLng: 'vi',

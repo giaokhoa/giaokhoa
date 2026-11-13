@@ -12,12 +12,6 @@ import { addExamSlot, createExamDraft, createReadyQuestion } from '../../support
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
-/**
- * Đặc trưng hoá DL-05 (issue #489): view của slot đề gắn kèm thông tin
- * bank của câu hỏi (bank tường minh qua bank_id của category và số
- * version ready mới nhất) — khẳng định trên hành vi HIỆN TẠI để giữ
- * nguyên khi phép tra bank theo từng câu chuyển sang nạp theo lô.
- */
 describe('Exams: đặc trưng hoá thông tin bank trong view slot đề (DL-05, issue #489)', () => {
   let app: INestApplication;
   let exams: ExamsService;
@@ -55,8 +49,6 @@ describe('Exams: đặc trưng hoá thông tin bank trong view slot đề (DL-05
     await addExamSlot(app, teacherToken, draft, { questionId: q1, maxMark: 3 });
     await addExamSlot(app, teacherToken, draft, { questionId: q2, maxMark: 4 });
 
-    // Câu 1 có thêm một version ready mới sau khi đã ghim vào đề: slot
-    // phải báo latestReadyVersionNumber = 2 và hasNewerVersion = true.
     const view = await questions.getQuestion(q1);
     await questions.updateQuestion(teacherId, q1, {
       questionText: view.latestVersion.questionText as RichTextDocument,

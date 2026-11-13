@@ -1,12 +1,3 @@
-/**
- * Ca tích hợp của các wrapper trong `TenantDbService` (issue #639 dựng ba wrapper giao dịch ở mức pilot cần, issue #655 hoàn thiện nốt hai runner ngữ cảnh ALS; bản song song phía bộ máy cũ đã xoá ở issue #663): các wrapper giữ ngữ nghĩa transaction + GUC trên handle Kysely định tuyến — và GIỮ `spaceSlug` của ngữ cảnh cha khi hợp ngữ cảnh ALS (wrapper thay toàn bộ store ALS sẽ làm rơi slug định tuyến kho). Hai runner
- * (`runInTenantContext` / `runInPlatformContext`)
- * không mở transaction: GUC đi theo đường pool gắn theo ngữ cảnh ALS ở mức phiên.
- *
- * Ca dựng `TenantDbService` trực tiếp với một `SpaceDatabaseService` giả chỉ mang `routedKysely` thật (các wrapper chỉ dùng đúng thuộc tính này của khung định tuyến) trên pool kho trung tâm gắn ngữ cảnh tenant — đủ để chứng minh GUC/transaction mà không cần dựng cả khung định tuyến.
- *
- * Môi trường: một database trung tâm dựng từ rỗng bằng harness của `@giaokhoa/db`.
- */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCentreKysely, sql as kyselySql, type CentreDb } from '@giaokhoa/db';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '@giaokhoa/db/test-support';
@@ -39,8 +30,6 @@ describe('Wrapper của TenantDbService (integration)', () => {
     dbUrl = await buildTestDatabase({ adminUrl, database: TEST_DATABASE, store: 'centre' });
     pool = new TenantAwarePool({ connectionString: dbUrl });
     kysely = createCentreKysely(pool);
-    // Các wrapper chỉ đọc `spaceDb.routedKysely` — giả này
-    // đủ, không cần khung định tuyến thật.
     const spaceDb = { routedKysely: kysely } as unknown as SpaceDatabaseService;
     service = new TenantDbService(new TenantContextService(), spaceDb);
   }, 180_000);

@@ -7,19 +7,6 @@ import { baSessionBody, isGetSessionUrl } from '#test/ba-session';
 import { MatrixImportPage } from './matrix-import';
 import { MatrixEditPage } from './question-matrix';
 
-/**
- * Wizard nhập ma trận từ file (lát I-3, issue #233) ở tầng UI:
- *  - 5 bước đi hết: chọn môn + tải mẫu → tải file → xem trước
- *    (lưới ô + khả dụng) → xác nhận → kết quả mở trang sửa;
- *  - xem trước không hợp lệ: bảng lỗi định vị hiện ra, nút xác nhận
- *    bị khoá, không có ma trận nào được ghi;
- *  - ghi bị 422 kèm matrixImportIssues: ở lại bước xác nhận với bảng
- *    lỗi lúc ghi, không sang bước kết quả;
- *  - màn sửa ma trận: checkbox Vận dụng cao gửi levelSet 'four' khi
- *    lưu (thay cho mọi select levelSet — web không còn select nào);
- *  - người dùng thiếu capability quản trị ma trận (chỉ xem được ma
- *    trận, không phải site admin): trang hiện thẻ chặn thay cho wizard và không gọi các endpoint của wizard (lát D-2, issue #233).
- */
 
 const PROFILE = {
   id: '01900000-0000-7000-8000-0000000000a9',
@@ -93,7 +80,6 @@ function invalidPreview() {
 
 type ImportMode = 'ok' | 'rejected-422';
 
-/** Stub fetch cho wizard: preview/import đổi theo mode; FormData không parse JSON mà ghi dấu 'formdata'. */
 function stubFetchImport(calls: RecordedCall[], previewBody: unknown, mode: ImportMode) {
   vi.stubGlobal(
     'fetch',
@@ -140,12 +126,6 @@ function stubFetchImport(calls: RecordedCall[], previewBody: unknown, mode: Impo
   );
 }
 
-/**
- * Stub cho người dùng CHỈ XEM ma trận: ảnh chụp quyền không phải site
- * admin, capability tại context hệ thống chỉ có `quiz:viewmatrix`
- * (xem) — THIẾU `quiz:managematrix` và thiếu mọi capability ngân
- * hàng câu hỏi, nên điều kiện mở trang nhập không đạt.
- */
 function stubFetchViewerOnly(calls: RecordedCall[]) {
   vi.stubGlobal(
     'fetch',
@@ -178,7 +158,6 @@ function stubFetchViewerOnly(calls: RecordedCall[]) {
   );
 }
 
-/** Stub tối thiểu cho màn sửa ma trận: chi tiết + cây rỗng + khả dụng + PATCH ghi lại body. */
 function stubFetchEdit(calls: RecordedCall[]) {
   vi.stubGlobal(
     'fetch',
@@ -226,7 +205,6 @@ function renderImport(calls: RecordedCall[], previewBody: unknown, mode: ImportM
   return router;
 }
 
-/** Chờ option của một select xuất hiện rồi mới chọn — query môn/chương trình là bất đồng bộ, chọn ngay khi label vừa hiện sẽ gặp select còn rỗng. */
 async function selectWithOptions(label: string, value: string) {
   const select = await screen.findByLabelText(label);
   await waitFor(() =>
@@ -274,7 +252,6 @@ describe('Trình hướng dẫn nhập ma trận (I-3)', () => {
       await userEvent.upload(fileInput, new File(['fake'], 'ma-tran.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
       await userEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
 
-      // Bước 3: tên dự thảo + tổng + cảnh báo + một ô kèm khả dụng.
       expect(await screen.findByText('Ma trận cuối kỳ Toán 9')).toBeInTheDocument();
       expect(screen.getByText('Tổng: 2 câu · 1 điểm')).toBeInTheDocument();
       expect(screen.getByText(/không có ô nào/)).toBeInTheDocument();
@@ -286,7 +263,6 @@ describe('Trình hướng dẫn nhập ma trận (I-3)', () => {
       expect(await screen.findByRole('button', { name: 'Ghi ma trận' })).toBeInTheDocument();
       await userEvent.click(screen.getByRole('button', { name: 'Ghi ma trận' }));
 
-      // Bước 5: ghi gọi đúng endpoint bằng chính file đã xem trước, kết quả mở được trang sửa.
       await waitFor(() =>
         expect(calls.some((c) => c.url === '/api/v1/exam-matrices/import' && c.method === 'POST' && c.body === 'formdata')).toBe(true),
       );
@@ -345,25 +321,17 @@ describe('Trình hướng dẫn nhập ma trận (I-3)', () => {
       </TestProviders>,
     );
 
-    // Thẻ chặn hiện thay cho wizard: tiêu đề khu vực ma trận của tôi
-    // + thông báo tài khoản không có ngân hàng ma trận cá nhân. Mọi
-    // khẳng định nằm trong CÙNG một waitFor vì thẻ chỉ hiện sau khi
-    // ảnh chụp quyền tải xong và giao diện còn dao động ngắn qua
-    // khung đang tải trong lúc phiên được nạp lại ở đầu phiên test.
     await waitFor(
       () => {
         expect(
           screen.getByText('Tài khoản của bạn không có ngân hàng ma trận cá nhân (chỉ giáo viên mới có).'),
         ).toBeInTheDocument();
         expect(screen.getByText('Ma trận của tôi')).toBeInTheDocument();
-        // Wizard không dựng: không có bước chọn môn, không có nút tải mẫu.
         expect(screen.queryByLabelText('Môn học')).toBeNull();
         expect(screen.queryByRole('button', { name: 'Tải file mẫu' })).toBeNull();
       },
       { timeout: 5000 },
     );
-    // Và tuyệt đối không phát sinh lời gọi nào tới các endpoint của
-    // wizard (template/preview/import) hay danh sách ma trận.
     expect(calls.some((c) => c.url.startsWith('/api/v1/exam-matrices'))).toBe(false);
     expect(router.state.location.pathname).toBe('/matrices/import');
   });
@@ -381,8 +349,6 @@ describe('Trình hướng dẫn nhập ma trận (I-3)', () => {
       </TestProviders>,
     );
 
-    // Checkbox Base UI: nhãn + phần tử role=checkbox đều mang cùng
-    // chuỗi, nên chọn theo role + tên (findByLabelText gặp trùng).
     const checkbox = await screen.findByRole('checkbox', { name: 'Thêm mức Vận dụng cao' });
     expect(checkbox.getAttribute('aria-checked')).toBe('false');
     await userEvent.click(checkbox);

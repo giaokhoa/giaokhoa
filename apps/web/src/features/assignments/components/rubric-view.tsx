@@ -2,7 +2,6 @@ import type { AssignRubricCriterionView } from '@giaokhoa/contracts';
 import { Badge } from '@giaokhoa/ui/components/badge';
 import { useTranslation } from 'react-i18next';
 
-/** Bảng tiêu chí công khai của bài (học sinh xem trước khi nộp; giáo viên xem lại khi chấm). */
 export function RubricView({ criteria }: { criteria: AssignRubricCriterionView[] }) {
   const { t } = useTranslation('app');
   return (

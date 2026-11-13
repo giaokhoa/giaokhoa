@@ -1,4 +1,3 @@
-# Worktree riêng theo từng Issue (không đưa vào Git)
 /.worktrees/
 node_modules/
 dist/
@@ -10,11 +9,8 @@ coverage/
 *.log
 .DS_Store
 
-# local content-addressed file storage (dev default)
 data/
 
-# Compiled output lives only in dist/ — never next to sources:
-# app-root config builds (e.g. các file cấu hình ở gốc app) and stray emit in src/test.
 apps/*/*.js
 apps/*/*.d.ts
 apps/*/*.js.map
@@ -27,11 +23,8 @@ apps/*/test/**/*.js.map
 packages/*/src/**/*.js
 packages/*/src/**/*.d.ts
 packages/*/src/**/*.js.map
-# Ngoại lệ có chủ đích: file kiểu Kysely của @giaokhoa/db được kysely-codegen sinh từ DB thật và COMMIT vào repo tại src/types (CI kiểm lệch bằng cách sinh lại rồi so git diff) — chúng là nguồn, không phải bản biên dịch, nên phải thoát khỏi pattern *.d.ts ở trên.
 !packages/db/src/types/*.d.ts
 
-# Vitest 5 dùng chung thư mục artifact/reporter.
 .vitest/
 
-# Cache pnpm khi cửa hàng được tạo trong workspace do khác thiết bị.
 .pnpm-store/

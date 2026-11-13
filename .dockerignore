@@ -1,4 +1,3 @@
-# Ngữ cảnh build Docker ở gốc repo: loại mọi thứ không cần cho bước build trong Dockerfile (node_modules được cài mới bằng `pnpm install --frozen-lockfile`, dist/build được biên dịch mới trong image), và loại file .env thật để bí mật không lọt vào image.
 .git
 .worktrees
 **/node_modules

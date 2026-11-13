@@ -17,18 +17,6 @@ import { queryKeys } from '#lib/query-keys';
 import { queryKeys as badgesQueryKeys } from '../queries/keys';
 import { buildSsrLoaderData, serverQueryFn, type SsrLoaderData } from '#lib/ssr-data';
 
-/**
- * Loader phía server (tầng SL-1 của #7): prefetch hai danh sách mà
- * trang luôn tải khi mở — huy hiệu của tôi (key `myBadges`) và toàn
- * bộ huy hiệu (key `badgesAll`) — bằng cookie của chính request rồi
- * dehydrate cho root.tsx hydrate vào cache (xem `lib/ssr-data.ts`).
- * Danh sách đã cấp của một badge (key `badgeIssued`) chỉ tải khi
- * người dùng chọn xem một badge cụ thể nên KHÔNG prefetch. Không có
- * cookie phiên thì không gọi API nào.
- *
- * @param request - Request đang phục vụ (nguồn cookie phiên).
- * @returns Dehydrated state cho HydrationBoundary ở root.
- */
 export async function loader({ request }: { request: Request }): Promise<SsrLoaderData> {
   return buildSsrLoaderData(request, async (queryClient, req) => {
     await Promise.all([
@@ -44,13 +32,6 @@ export async function loader({ request }: { request: Request }): Promise<SsrLoad
   });
 }
 
-/**
- * Trang huy hiệu: "huy hiệu của tôi" (từ GET /badges/mine — server tự suy người dùng từ phiên đăng nhập, không còn endpoint theo userId) hiện cho mọi người dùng; panel quản trị (tạo badge, đặt tiêu chí, kích hoạt qua POST /badges/:id/status, xem danh sách đã cấp của một badge qua GET /badges/:id/issued) chỉ render khi usePermissions().canAdminister. Tiêu chí của huy hiệu đang hoạt động bị đóng băng phía server; panel chỉ hiển thị kết quả từ chối đó.
- *
- * Dữ liệu qua TanStack Query (lib/badges.ts, F-01): hai danh sách là hai query dùng chung cache với mọi bề mặt huy hiệu khác; các đột biến của panel quản trị làm mới cả ba truy vấn (mọi huy hiệu / của tôi / đã cấp) qua tiền tố khoá factory thay vì nạp lại cục bộ như trước. Từ lát SL-1
- * (#7), loader của route prefetch hai danh sách phía server (khi có
- * cookie phiên) và trang hydrate từ cache thay vì fetch lại khi mở.
- */
 export function BadgesPage() {
   const { t } = useTranslation('app');
   const STATUS_LABEL: Record<number, string> = {
@@ -81,11 +62,9 @@ export function BadgesPage() {
   const loadFailed = mineQuery.isError || allQuery.isError;
   const issuedError = issuedBadgeId !== null && issuedQuery.isError ? t('issuedLoadFailed') : null;
 
-  /** Tên huy hiệu của một bản ghi đã cấp: ưu tiên badge lồng trong /mine. */
   const badgeName = (entry: MyBadgeView) =>
     entry.badge?.name ?? all.find((b) => b.id === entry.badgeId)?.name ?? t('badgeFallback', { id: entry.badgeId });
 
-  /** Tạo một site badge mới (panel quản trị). */
   function createBadge(event: FormEvent) {
     event.preventDefault();
     createBadgeMutation.mutate(name, {
@@ -97,7 +76,6 @@ export function BadgesPage() {
     });
   }
 
-  /** Đặt tiêu chí hoàn thành khoá học cho một badge (panel quản trị). */
   function setCriteria(event: FormEvent) {
     event.preventDefault();
     criteriaMutation.mutate(
@@ -109,7 +87,6 @@ export function BadgesPage() {
     );
   }
 
-  /** Kích hoạt badge: đổi trạng thái qua POST /badges/:id/status với { status: 1 }. */
   function activate(id: string) {
     statusMutation.mutate(
       { badgeId: id, status: 1 },
@@ -120,7 +97,6 @@ export function BadgesPage() {
     );
   }
 
-  /** Xem (hoặc ẩn) danh sách đã cấp của một badge qua GET /badges/:id/issued. */
   function toggleIssued(badge: BadgeView) {
     setIssuedBadgeId((current) => (current === badge.id ? null : badge.id));
   }
@@ -282,10 +258,8 @@ export function BadgesPage() {
   );
 }
 
-/** Export mặc định cho route module React Router framework mode (xem src/routes.ts). */
 export default BadgesPage;
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { appKeyMeta } from '#lib/route-meta';
 export function meta() {

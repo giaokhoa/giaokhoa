@@ -2,9 +2,6 @@ import { INestApplication } from '@nestjs/common';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWORD, uniqueName } from '../../support/identity-access-helpers';
 
-/**
- * Kiểm thử luồng trường tuỳ chỉnh (phạm vi hồ sơ người dùng). Oracle: public/customfield/tests/api_test.php (MOODLE_503_STABLE) — test_create_category, test_delete_category_with_fields, CRUD danh mục/trường; kiểm chứng giá trị tuân theo khai báo của từng loại trường (trình xử lý core_customfield).
- */
 describe('CustomFields: trường hồ sơ định nghĩa dạng metadata và kiểm chứng khi lưu', () => {
   let app: INestApplication;
   let admin: string;

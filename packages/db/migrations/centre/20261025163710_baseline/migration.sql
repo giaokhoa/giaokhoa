@@ -3093,26 +3093,6 @@ ALTER TABLE "payments" ADD CONSTRAINT "payments_tenant_id_tenants_id_fkey" FOREI
 ALTER TABLE "privacy_export_files" ADD CONSTRAINT "privacy_export_files_request_id_privacy_requests_id_fkey" FOREIGN KEY ("request_id") REFERENCES "privacy_requests"("id") ON DELETE CASCADE;
 ALTER TABLE "exam_matrices" ADD COLUMN "content_signature" text;--> statement-breakpoint
 ALTER TABLE "exam_matrices" ADD CONSTRAINT "exam_matrices_bank_content_signature_unique" UNIQUE("bank_id","content_signature");--> statement-breakpoint
--- TENANT-0 (issue #168) + TENANT-1 (issue #196): ROW LEVEL SECURITY —
--- cổng cách ly cứng ở tầng cơ sở dữ liệu. Mọi bảng mang tenant_id đều
--- ENABLE + FORCE RLS với MỘT policy "tenant_isolation":
---   * Phiên platform tường minh (GUC app.platform = 'on', chỉ mã vận
---     hành hệ thống đã qua cổng capability mới được đặt — TenantDbService
---     .withPlatform / TenantAwarePool theo ngữ cảnh ALS platform) thấy
---     mọi dòng.
---   * Phiên tenant (GUC app.tenant_id = <uuid>): chỉ thấy dòng của
---     tenant đó; các bảng nội dung/bank CHUNG của platform mang
---     tenant_id NULL thì mọi tenant đều thấy (đọc/copy xuống được).
---   * TENANT-1 lật FAIL-CLOSED: phiên CHƯA đặt GUC hoặc GUC rỗng KHÔNG
---     còn được cho qua (TENANT-0 để hở nhánh này chờ phủ wrapper). Mọi
---     so sánh đi qua NULLIF(current_setting('app.tenant_id', true), '')
---     ::uuid — GUC rỗng thành NULL nên phép so sánh ra NULL (không thấy
---     dòng nào) thay vì lỗi ép kiểu ''::uuid (bẫy N3 gây 500).
---   * notifications + notification_dispatch_log có RLS từ TENANT-1:
---     dòng chưa gắn tenant chỉ hiển thị ở ngữ cảnh platform.
--- Role ứng dụng không có BYPASSRLS; FORCE khiến cả chủ sở hữu bảng
--- cũng chịu policy.
--- =====================================================================
 
 ALTER TABLE "tenants" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "tenants" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -3163,8 +3143,6 @@ ALTER TABLE "notification_dispatch_log" ENABLE ROW LEVEL SECURITY;--> statement-
 ALTER TABLE "notification_dispatch_log" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "tenant_isolation" ON "notification_dispatch_log" USING (current_setting('app.platform', true) = 'on' OR "tenant_id" = NULLIF(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (current_setting('app.platform', true) = 'on' OR "tenant_id" = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 --> statement-breakpoint
--- CLASS-0 (issue #184): bảng `classes` mang tenant_id NOT NULL — cùng
--- khuôn RLS tenant_isolation FAIL-CLOSED của TENANT-1 như các bảng trên.
 ALTER TABLE "classes" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "classes" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "tenant_isolation" ON "classes" USING (current_setting('app.platform', true) = 'on' OR "tenant_id" = NULLIF(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (current_setting('app.platform', true) = 'on' OR "tenant_id" = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
@@ -3173,9 +3151,6 @@ ALTER TABLE "message_conversation_members" ADD COLUMN "pinned_at" timestamp with
 ALTER TABLE "message_conversation_members" ADD COLUMN "archived_at" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "message_conversation_members" ADD COLUMN "muted" boolean DEFAULT false NOT NULL;
 --> statement-breakpoint
--- CLASS-1 (issue #184): cột `join_auto_approve` trên `classes` + bảng
--- hàng chờ duyệt tự báo danh `class_join_requests` — gộp tay vào
--- baseline duy nhất, cùng cách M3 thêm cột reply_to_message_id.
 CREATE TABLE "class_join_requests" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7(),
 	"tenant_id" uuid NOT NULL,
@@ -3198,17 +3173,10 @@ ALTER TABLE "class_join_requests" ADD CONSTRAINT "class_join_requests_tenant_id_
 ALTER TABLE "class_join_requests" ADD CONSTRAINT "class_join_requests_class_id_classes_id_fkey" FOREIGN KEY ("class_id") REFERENCES "classes"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "class_join_requests" ADD CONSTRAINT "class_join_requests_user_id_users_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "class_join_requests" ADD CONSTRAINT "class_join_requests_decided_by_users_id_fkey" FOREIGN KEY ("decided_by") REFERENCES "users"("id") ON DELETE RESTRICT;--> statement-breakpoint
--- CLASS-1 (issue #184): `class_join_requests` mang tenant_id NOT NULL —
--- cùng khuôn RLS tenant_isolation FAIL-CLOSED của TENANT-1 như `classes`.
 ALTER TABLE "class_join_requests" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "class_join_requests" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "tenant_isolation" ON "class_join_requests" USING (current_setting('app.platform', true) = 'on' OR "tenant_id" = NULLIF(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (current_setting('app.platform', true) = 'on' OR "tenant_id" = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 --> statement-breakpoint
--- CLASS-3 (issue #184): học phí theo lớp — `fee_cost` (số nguyên đơn vị
--- nhỏ nhất; NULL/0 = không thu qua hệ, chính là công tắc thu phí),
--- `fee_currency` (mặc định VND) và `fee_payment_account_id` (tài khoản
--- nhận chỉ định riêng cho lớp; NULL = tài khoản mặc định của tenant).
--- Gộp tay vào baseline duy nhất như các lát trước.
 ALTER TABLE "classes" ADD COLUMN "fee_cost" integer;--> statement-breakpoint
 ALTER TABLE "classes" ADD COLUMN "fee_currency" text DEFAULT 'VND' NOT NULL;--> statement-breakpoint
 ALTER TABLE "classes" ADD COLUMN "fee_payment_account_id" uuid;--> statement-breakpoint
@@ -3217,12 +3185,6 @@ ALTER TABLE "classes" ADD CONSTRAINT "classes_fee_payment_account_id_payment_acc
 ALTER TABLE "learning_outcomes" ADD COLUMN "retired_at" timestamp with time zone;--> statement-breakpoint
 CREATE UNIQUE INDEX "learning_outcomes_dataset_slot_unique" ON "learning_outcomes" ("node_id","position") WHERE "source_kind" = 'program' and "source_ref" is not null and "retired_at" is null;
 
--- Lát 2 (issue #189): mô hình gói `tenant_plan`/`teacher_plan` — bảng
--- `plan_entitlements` ghi quyền lợi gói của payment gói thành công
--- (cửa sổ hiệu lực starts_at → expires_at; hoàn đủ thì suspended).
--- Bảng nghiệp vụ tầng platform như các bảng payments: không bật RLS,
--- cách ly bằng tenant_id tường minh ở tầng service. Gộp tay vào
--- baseline duy nhất như các lát trước.
 CREATE TABLE "plan_entitlements" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7(),
 	"tenant_id" uuid NOT NULL,
@@ -3243,13 +3205,6 @@ CREATE INDEX "plan_entitlements_payment_id_idx" ON "plan_entitlements" ("payment
 ALTER TABLE "plan_entitlements" ADD CONSTRAINT "plan_entitlements_tenant_id_tenants_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT;--> statement-breakpoint
 ALTER TABLE "plan_entitlements" ADD CONSTRAINT "plan_entitlements_payment_id_payments_id_fkey" FOREIGN KEY ("payment_id") REFERENCES "payments"("id") ON DELETE NO ACTION;--> statement-breakpoint
 
--- Phần còn lại của lát 2 (issue #189): bảng `payment_coupons` — coupon
--- giảm giá cho đường mua gói, là dữ liệu do quản trị platform tạo (mã,
--- loại giảm, mức giảm, phạm vi gói, cửa sổ hiệu lực, giới hạn lượt
--- dùng); không có giá trị giảm nào ghim trong code. Bảng nghiệp vụ
--- tầng platform như các bảng payments: không bật RLS, gác bằng
--- capability ở tầng service. Gộp tay vào baseline duy nhất như các
--- lát trước.
 CREATE TABLE "payment_coupons" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7(),
 	"code" text NOT NULL,
@@ -3269,16 +3224,6 @@ CREATE TABLE "payment_coupons" (
 CREATE INDEX "payment_coupons_created_by_idx" ON "payment_coupons" ("created_by");--> statement-breakpoint
 ALTER TABLE "payment_coupons" ADD CONSTRAINT "payment_coupons_created_by_users_id_fkey" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE RESTRICT;--> statement-breakpoint
 
--- Lát 3 (issue #189): vòng đời hoàn tiền + vết xử lý hàng đợi
--- `needs_review`. `payment_refunds` thêm cột trạng thái vòng đời
--- (requested/approved/settled/rejected), cấp duyệt + ngưỡng hiệu lực
--- tại thời điểm tạo, và trọn vết kiểm toán (người tạo, người duyệt,
--- người từ chối kèm lý do, xác nhận chi bởi người hoặc bởi sự kiện
--- `debit` của provider) — không thêm bảng mới. `payments` thêm bốn
--- cột vết xử lý tay của hàng đợi (quyết định, lý do, người xử lý,
--- thời điểm). Mọi khoá ngoại cột đơn mới đều có index dẫn đầu theo
--- đúng kỷ luật của spec uuidv7 (mục 6b). Gộp tay vào baseline duy
--- nhất như các lát trước.
 ALTER TABLE "payment_refunds" ADD COLUMN "status" text DEFAULT 'requested' NOT NULL;--> statement-breakpoint
 ALTER TABLE "payment_refunds" ADD COLUMN "created_by" uuid;--> statement-breakpoint
 ALTER TABLE "payment_refunds" ADD COLUMN "approval_level" integer;--> statement-breakpoint
@@ -3426,12 +3371,6 @@ ALTER TABLE "centre_invites" ADD CONSTRAINT "centre_invites_tenant_id_tenants_id
 ALTER TABLE "centre_invites" ADD CONSTRAINT "centre_invites_user_id_users_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "program_package_installs" ADD CONSTRAINT "program_package_installs_tenant_id_tenants_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT;
 --> statement-breakpoint
--- Issue #583 (chương trình tenant #579): ba bảng riêng của trung tâm
--- mang tenant_id NOT NULL — cùng khuôn RLS tenant_isolation
--- FAIL-CLOSED của TENANT-1 như `tenant_config`: phiên platform
--- tường minh thấy mọi dòng, phiên tenant chỉ thấy dòng của tenant
--- mình, phiên chưa đặt GUC không thấy dòng nào. RLS viết tay ở đây
--- vì drizzle-kit không sinh policy (xem khối RLS gốc của baseline).
 ALTER TABLE "centre_identity" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "centre_identity" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "tenant_isolation" ON "centre_identity" USING (current_setting('app.platform', true) = 'on' OR "tenant_id" = NULLIF(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK (current_setting('app.platform', true) = 'on' OR "tenant_id" = NULLIF(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint

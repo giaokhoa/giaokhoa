@@ -10,111 +10,16 @@ import { outboxRelayJobId } from './outbox-relay.scheduler';
 import { COHORT_SYNC_EVENT_TYPES } from './processors/cohort-sync-events.processor';
 import type { OutboxEventJobData } from './outbox-event-routes';
 
-/**
- * Tiền tố khoá watermark của consumer polling đồng bộ cohort phía API trước đây: khoá đầy đủ là `${LEGACY_WATERMARK_KEY_PREFIX}<tên database>:seq`, giá trị là `seq` của dòng outbox cuối cùng consumer cũ đã xử lý xong. Tên khoá và ngữ nghĩa giá trị lấy đúng từ consumer cũ — cơ chế phát bù đọc lại chính khoá đó, không dựng khoá song song.
- */
 const LEGACY_WATERMARK_KEY_PREFIX = 'giaokhoa:cohort-sync:';
-/** Số dòng tồn đọng tối đa đọc trong một lô phát bù — cùng cỡ lô quét của consumer cũ. */
 const DRAIN_BATCH_SIZE = 200;
-/**
- * Nhịp chờ đầu tiên trước lần thử phát bù kế tiếp khi một lần thử bị lỗi — cùng quy ước backoff mũ của hàng đợi trong hệ
- * (`defaultJobOptions` ở `worker.module.ts`: backoff
- * exponential, delay 1000 ms).
- */
 const DRAIN_RETRY_BASE_DELAY_MS = 1_000;
-/** Trần nhịp chờ giữa hai lần thử phát bù: backoff gấp đôi sau mỗi lần thử lỗi nhưng không vượt mức này. */
 const DRAIN_RETRY_MAX_DELAY_MS = 30_000;
 
-/**
- * Cơ chế chuyển tiếp MỘT LẦN của consumer đồng bộ cohort (issue
- * con #528 của #519; bổ sung theo phân xử điểm chặn trên PR #550):
- * phát bù các dòng outbox cohort bị kẹt lại tại thời điểm gỡ
- * consumer polling phía API.
- *
- * @remarks
- * Bối cảnh bắt buộc phải có cơ chế này: consumer polling cũ đọc
- * dòng theo `seq > watermark` KHÔNG phụ thuộc `publishedAt`, còn
- * relay outbox đóng dấu `publishedAt` vô điều kiện cho cả loại sự
- * kiện chưa có trong bảng định tuyến. Tại thời điểm PR #550 triển
- * khai (hai loại cohort vào bảng định tuyến, consumer cũ bị gỡ),
- * mọi dòng cohort có `seq` lớn hơn watermark cuối của consumer cũ
- * đều đã mang `publishedAt`: relay không bao giờ phát chúng thành
- * job (relay chỉ lấy dòng chưa có dấu), và reader theo watermark
- * đã bị gỡ — sự kiện tương ứng mất vĩnh viễn và lặng lẽ nếu không
- * có bước chuyển tiếp. Job đối soát `class-enrol-reconcile` chạy
- * định kỳ không thay thế được bước này: nó chỉ sửa lệch bằng
- * quét-so sánh dòng ghi danh/vai trò, không phát lại các dòng
- * outbox bị kẹt và không phát bù các tác dụng phụ sự kiện
- * (`user_enrolled`/`user_unenrolled`, yêu cầu tái tổng hợp khi
- * rút).
- *
- * Flow (kích hoạt khi module khởi động — `onModuleInit` chờ
- * lượt phát bù rút cạn xong mới hoàn tất khởi tạo, đúng mẫu
- * hook async của NestJS; trong ngữ cảnh platform tường minh
- * như relay vì việc quét xuyên tenant):
- * 1. Dựng lại khoá watermark của consumer cũ từ tên database
- *    trong `DATABASE_URL` — đúng cách consumer cũ dựng — và đọc
- *    giá trị đã lưu. Khoá không tồn tại nghĩa là hệ mới tinh
- *    (consumer cũ chưa từng chạy trên đời DB này): dừng ngay,
- *    không làm gì thêm.
- * 2. Đọc các dòng thuộc hai loại sự kiện cohort có `seq` lớn
- *    hơn watermark, theo thứ tự `seq` tăng dần, từng lô
- *    {@link DRAIN_BATCH_SIZE} dòng, BẤT KỂ dòng đã có
- *    `publishedAt` hay chưa (dòng chưa có dấu thì relay cũng sẽ
- *    phát — hai đường gặp nhau ở khoá chống trùng dưới đây).
- * 3. Mỗi dòng được phát thành job vào hàng đợi
- *    `cohort-sync-events` theo đúng hình dạng relay phát: tên
- *    job là loại sự kiện, `jobId` là id của dòng, dữ liệu là
- *    toàn bộ dòng đã chuẩn hoá ({@link OutboxEventJobData}).
- * 4. Rút cạn hết các lô thì XOÁ khoá watermark cũ: dấu vết
- *    chuyển tiếp không còn, các lần khởi động sau là no-op.
- *
- * Bất biến:
- * - Chống trùng hai lớp, cùng khuôn toàn hệ outbox: `jobId`
- *   bằng id dòng khiến BullMQ trả lại job đã có thay vì tạo job
- *   thứ hai khi dòng được phát hai đường (phát bù và relay) hoặc
- *   phát bù chạy lại sau một lần rút cạn dở dang; ngoài cửa sổ
- *   lưu giữ của hàng đợi, processor `CohortSyncEventsProcessor`
- *   chống trùng theo trạng thái hiện tại của `cohort_members`
- *   trong bề mặt — dòng đã xử lý rồi không sinh tác dụng phụ
- *   thứ hai.
- * - Đây KHÔNG phải consumer polling thứ hai: cơ chế chỉ chạy
- *   khi còn khoá watermark cũ (triển khai lần đầu) và tự xoá
- *   khoá khi rút cạn xong. Đường thường trực duy nhất vẫn là
- *   relay → hàng đợi như thiết kế gốc.
- * - Tự neo khi DB dựng lại: watermark lưu lớn hơn `seq` lớn
- *   nhất hiện có nghĩa là khoá thuộc về đời DB trước (seq đã
- *   thụt lùi sau reset) — không dòng nào của đời DB này nằm
- *   trên watermark đó, phần rút cạn hoàn tất rỗng và khoá cũ
- *   được xoá như thường, không kẹt lại cho các lần khởi động
- *   sau.
- *
- * Hành vi khi lỗi (theo bài học vòng 2 của PR #542): lỗi ở bất
- * kỳ bước nào (đọc khoá, đọc DB, đẩy job) làm LẦN THỬ đang chạy
- * dừng ngay tại đó; khoá watermark cũ KHÔNG bị xoá. Lượt phát bù
- * tự thử lại ngay trong cùng tiến trình, có backoff mũ
- * ({@link DRAIN_RETRY_BASE_DELAY_MS} gấp đôi mỗi lần, trần
- * {@link DRAIN_RETRY_MAX_DELAY_MS}), cho tới khi rút cạn trọn
- * vẹn — mỗi lần thử thất bại ghi log mức error kèm số lần thử
- * và nhịp chờ kế tiếp, không nuốt lặng. Vòng thử chỉ dừng hẳn
- * khi module bị huỷ (`onModuleDestroy`, tiến trình đang đóng):
- * lần khởi động kế tiếp vẫn gặp khoá cũ và phát bù lại từ đầu.
- * Vì `onModuleInit` chờ lượt phát bù, một hạ tầng đang lỗi kéo
- * dài việc khởi tạo module tương ứng — đây là lựa chọn có chủ
- * đích: thà worker chậm lên còn hơn chuyển tiếp kẹt lặng lẽ; hệ
- * không còn khoá cũ (trạng thái thường trực sau chuyển đổi) thì
- * lượt phát bù là no-op tức thì và khởi tạo không bị ảnh hưởng.
- *
- * Side-effect: đẩy job BullMQ vào hàng đợi `cohort-sync-events`
- * và xoá khoá Redis của consumer cũ sau khi rút cạn. Không ghi
- * DB, không đóng dấu `publishedAt` (dấu đó là của relay).
- */
 @Injectable()
 export class CohortSyncCatchupService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CohortSyncCatchupService.name);
   private readonly redis: Redis;
   private readonly legacyWatermarkKey: string;
-  /** Cờ báo module đang bị huỷ: vòng thử lại của lượt phát bù dừng hẳn thay vì quay tiếp trong tiến trình đang đóng. */
   private destroying = false;
 
   constructor(
@@ -125,24 +30,14 @@ export class CohortSyncCatchupService implements OnModuleInit, OnModuleDestroy {
     this.redis = new Redis({
       ...redisConnectionFromUrl(config.getOrThrow<string>('REDIS_URL')),
     });
-    // Dựng khoá đúng cách consumer polling cũ dựng: tên database là path của DATABASE_URL bỏ dấu gạch đầu; không parse được thì dùng tên mặc định — cả hai phía cùng một luật nên khoá luôn gặp nhau.
     let databaseName = 'default';
     try {
       databaseName = new URL(config.getOrThrow<string>('DATABASE_URL')).pathname.replace(/^\//, '') || 'default';
     } catch {
-      // DATABASE_URL không parse được: giữ tên mặc định như consumer cũ.
     }
     this.legacyWatermarkKey = `${LEGACY_WATERMARK_KEY_PREFIX}${databaseName}:seq`;
   }
 
-  /**
-   * Điểm vào khi module khởi động: chạy lượt phát bù và chờ nó
-   * rút cạn xong mới hoàn tất khởi tạo (hook async được NestJS
-   * chờ theo đúng vòng đời của framework).
-   * {@link drainLegacyBacklog} tự thử lại có backoff khi gặp
-   * lỗi thoáng qua nên hook này không ném; nó chỉ trở về sớm
-   * khi module bị huỷ giữa chừng (tiến trình đang đóng).
-   */
   async onModuleInit(): Promise<void> {
     await this.drainLegacyBacklog();
   }
@@ -152,35 +47,10 @@ export class CohortSyncCatchupService implements OnModuleInit, OnModuleDestroy {
     await this.redis.quit().catch(() => undefined);
   }
 
-  /**
-   * Rút cạn tồn đọng theo watermark cũ và phát bù thành job,
-   * tự thử lại có backoff cho tới khi rút cạn trọn vẹn.
-   *
-   * @returns Số job đã phát trong lần thử hoàn tất: 0 khi
-   * không có khoá watermark cũ (hệ mới tinh, hoặc chuyển tiếp
-   * đã hoàn tất ở một lần khởi động trước), 0 khi tồn đọng
-   * rỗng, và 0 khi vòng thử bị dừng vì module đang bị huỷ.
-   * Các dòng đã phát ở một lần thử dở dang được phát lại ở lần
-   * thử kế tiếp và được BullMQ trả về job đã có theo `jobId`,
-   * nên con số này đếm theo lần thử hoàn tất, không cộng dồn
-   * qua các lần thử.
-   */
   async drainLegacyBacklog(): Promise<number> {
     return tenantAls.run({ platform: true }, () => this.drainWithRetry());
   }
 
-  /**
-   * Vòng thử lại của lượt phát bù: chạy từng lần thử rút cạn
-   * ({@link drainAttempt}) cho tới khi một lần thử hoàn tất.
-   * Mỗi lần thử thất bại ghi log mức error kèm số lần thử, số
-   * job đã phát được trong lần thử đó và nhịp chờ backoff
-   * trước lần thử kế tiếp — tồn đọng không bao giờ kẹt lặng
-   * lẽ trong lúc tiến trình còn sống. Vòng chỉ dừng hẳn khi
-   * module đang bị huỷ.
-   *
-   * @returns Số job đã phát trong lần thử hoàn tất (0 khi bị
-   * dừng vì module đang bị huỷ).
-   */
   private async drainWithRetry(): Promise<number> {
     let attempt = 0;
     for (;;) {
@@ -210,22 +80,6 @@ export class CohortSyncCatchupService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /**
-   * Một lần thử rút cạn trong ngữ cảnh platform đã bọc: đọc
-   * khoá watermark cũ và rút cạn các dòng trên nó. Lỗi ở bất
-   * kỳ bước nào được ném ra cho {@link drainWithRetry} quyết
-   * định thử lại — hàm này không tự nuốt lỗi.
-   *
-   * Hai trạng thái kết thúc không phải lỗi: không có khoá cũ
-   * (hệ mới tinh hoặc chuyển tiếp đã xong — no-op) và giá trị
-   * khoá không phải số (dữ kiện hỏng cố định, thử lại không
-   * sửa được: ghi log mức warn và giữ nguyên khoá, giữ đúng
-   * hành vi trước đây).
-   *
-   * @param onProgress Báo số job đã phát sau mỗi job, để tầng
-   * gọi ghi được con số thật của lần thử khi nó dừng vì lỗi.
-   * @returns Số job đã phát trong lần thử này.
-   */
   private async drainAttempt(onProgress: (enqueued: number) => void): Promise<number> {
     const storedRaw = await this.redis.get(this.legacyWatermarkKey);
     if (storedRaw === null) return 0;
@@ -240,24 +94,11 @@ export class CohortSyncCatchupService implements OnModuleInit, OnModuleDestroy {
     return this.drainFromWatermark(watermark, onProgress);
   }
 
-  /**
-   * Rút cạn các dòng trên `watermark` và xoá khoá cũ khi xong.
-   *
-   * @param watermark Giá trị `seq` đã lưu của consumer cũ.
-   * @param onProgress Báo số job đã phát sau mỗi job, để tầng
-   * gọi giữ được con số thật khi lượt rút cạn dừng vì lỗi.
-   * @returns Tổng số job đã phát bù trong lượt này.
-   */
   private async drainFromWatermark(
     watermark: number,
     onProgress: (enqueued: number) => void,
   ): Promise<number> {
 
-    // Neo khi DB đã dựng lại: watermark vượt quá seq lớn nhất
-    // hiện có thì không dòng nào của đời DB này nằm trên
-    // watermark — tồn đọng rỗng theo định nghĩa. Cột `seq` là
-    // int8: Kysely đọc thành chuỗi nên giá trị lớn nhất được
-    // chuyển về số tường minh tại biên đọc này.
     const maxRow = await this.spaceDb.routedKysely
       .selectFrom('outbox_events')
       .select((eb) => eb.fn.max('seq').as('value'))
@@ -266,11 +107,6 @@ export class CohortSyncCatchupService implements OnModuleInit, OnModuleDestroy {
 
     let enqueued = 0;
     if (watermark < dbMax) {
-      // Đọc tồn đọng theo đúng hình dạng truy vấn của consumer
-      // cũ: `seq > watermark AND type IN (hai loại cohort)`,
-      // thứ tự seq tăng dần, từng lô — chỉ khác ở chỗ cơ chế
-      // này đọc bất kể `publishedAt` và đích đến là hàng đợi
-      // thay vì handler trực tiếp.
       let cursor = watermark;
       for (;;) {
         const rows = await this.spaceDb.routedKysely
@@ -285,13 +121,10 @@ export class CohortSyncCatchupService implements OnModuleInit, OnModuleDestroy {
           .limit(DRAIN_BATCH_SIZE)
           .execute();
         if (rows.length === 0) break;
-        // Phát bù chỉ đọc nguồn shared lịch sử; tenantId vẫn giữ nguyên để xử lý trong kho chung.
         for (const row of rows) {
           cursor = Number(row.seq);
           const data: OutboxEventJobData = {
             outboxId: row.id,
-            // `seq` int8 đọc thành chuỗi qua Kysely; dữ liệu job
-            // giữ hợp đồng số như đường relay.
             seq: Number(row.seq),
             aggregate: row.aggregate,
             type: row.type,

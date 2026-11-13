@@ -115,7 +115,6 @@ function ok(body: unknown) {
   return { status: 200, body };
 }
 
-/** Tần suất digest đã lưu theo con trong stub (mặc định weekly như server). */
 const savedFrequencies = new Map<string, string>();
 
 function baseHandler(withChildren: boolean): Handler {
@@ -173,24 +172,18 @@ describe('Trang phụ huynh chỉ-xem (PH-1, issue #130)', () => {
     renderPage();
 
     expect(await screen.findByText('Theo dõi học tập của con')).toBeTruthy();
-    // Khối tuần: số liệu + một việc quá hạn.
     expect(await screen.findByText('Bài nộp quá hạn')).toBeTruthy();
     expect(screen.getByText('Quá hạn')).toBeTruthy();
     expect(screen.getByText('Quiz sắp đến hạn')).toBeTruthy();
-    // Khối kết quả mới: điểm + lời phê đã công bố.
     expect(screen.getByText('Điểm kiểm tra')).toBeTruthy();
     expect(screen.getByText('9 / 10')).toBeTruthy();
     expect(screen.getByText('Làm tốt')).toBeTruthy();
-    // Khối thông báo lớp.
     expect(screen.getByText('Thông báo lớp PH1')).toBeTruthy();
-    // Khối tiến độ: 50% + khoá chưa theo dõi.
     expect(screen.getByText(/50%/)).toBeTruthy();
     expect(screen.getByText('Khoá chưa bật theo dõi hoàn thành')).toBeTruthy();
-    // Kết quả theo môn: điểm theo bài đã công bố (định dạng vi) + lời phê của bài.
     expect(screen.getByText('Kiểm tra giữa kỳ')).toBeTruthy();
     expect(screen.getByText('7,9 / 10')).toBeTruthy();
     expect(screen.getByText(/Tiến bộ rõ rệt/)).toBeTruthy();
-    // Chỉ-xem về dữ liệu của con: các nút duy nhất là chọn con + tần suất digest của CHÍNH phụ huynh (PH-2) — không nút hành động thay con.
     expect(await screen.findByRole('button', { name: 'Hàng tuần' })).toBeTruthy();
     const buttons = screen.getAllByRole('button');
     expect(buttons.map((b) => b.textContent)).toEqual(['Trần An', 'Trần Bình', 'Hàng tuần', 'Hàng ngày', 'Tắt']);
@@ -203,7 +196,6 @@ describe('Trang phụ huynh chỉ-xem (PH-1, issue #130)', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Trần Bình' }));
 
-    // Chọn con là điều hướng theo path (chuẩn #221, lát R2): URL cuối là path của con thứ hai, dữ liệu hiện của đúng con đó.
     await waitFor(() => expect(router.state.location.pathname).toBe(`/guardian/students/${CHILD_B}`));
     expect(await screen.findByText('Tuần này con không có việc nào đến hạn.')).toBeTruthy();
     expect(screen.getByText('Chưa có kết quả mới kể từ lần xem trước.')).toBeTruthy();
@@ -223,8 +215,6 @@ describe('Trang phụ huynh chỉ-xem (PH-1, issue #130)', () => {
     stubFetch(baseHandler(true));
     const router = renderPage(`/guardian?student=${CHILD_B}`);
 
-    // Đích cuối là path của con B (không còn ở URL dạng query), và
-    // con B (khối trống) được chọn, không phải con đầu tiên.
     await waitFor(() => expect(router.state.location.pathname).toBe(`/guardian/students/${CHILD_B}`));
     expect(router.state.location.search).toBe('');
     expect(await screen.findByText('Tuần này con không có việc nào đến hạn.')).toBeTruthy();
@@ -246,10 +236,6 @@ describe('Trang phụ huynh chỉ-xem (PH-1, issue #130)', () => {
     stubFetch(baseHandler(true));
     const router = renderPage('/guardian?student=01900000-0000-7000-8000-0000000000ff');
 
-    // Pathname vốn đã là /guardian ngay từ đầu nên phải chờ cả hai
-    // dấu hiệu của lượt chuyển hướng: pathname giữ /guardian VÀ
-    // query ?student= đã bị xoá (chờ riêng pathname sẽ xong trước
-    // khi chuyển hướng kịp chạy).
     await waitFor(() => {
       expect(router.state.location.pathname).toBe('/guardian');
       expect(router.state.location.search).toBe('');
@@ -278,7 +264,6 @@ describe('Trang phụ huynh chỉ-xem (PH-1, issue #130)', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Hàng ngày' }).getAttribute('aria-pressed')).toBe('true'));
     expect(savedFrequencies.get(CHILD_A)).toBe('daily');
-    // Tần suất là theo từng con: chuyển sang con B vẫn là mặc định weekly.
     await userEvent.click(screen.getByRole('button', { name: 'Trần Bình' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Hàng tuần' }).getAttribute('aria-pressed')).toBe('true'));
   });

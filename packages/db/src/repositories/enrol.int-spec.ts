@@ -5,23 +5,6 @@ import { createCentreKysely, type CentreDb } from '../client';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
 import { EnrolRepository } from './enrol';
 
-/**
- * Spec tích hợp của repository ghi danh trên Kysely (issue #645).
- *
- * Database trung tâm dựng từ rỗng bằng chính cầu nối migration của package trên cụm PostgreSQL thật của môi trường test. Mọi ca chạy qua repository production ở `enrol.ts` — không mô phỏng handle.
- *
- * Các tính chất chốt tại đây:
- * - Insert instance/ghi danh không truyền id nhận id UUIDv7 do
- *   database sinh (phụ lục U) và đọc lại nguyên vẹn.
- * - Giao dịch của repository nguyên tử cho đường tự mở giao
- *   dịch của `setSuspended`/`expireEnrolments`: cập nhật trong giao dịch rồi huỷ thì trạng thái dòng không đổi.
- * - Patch cập nhật loại `undefined` tường minh (T-4): trường
- *   không nhắc tới giữ nguyên giá trị.
- * - `listExpiredActive` giữ đúng hợp đồng lọc tại bộ nhớ của
- *   bản cũ: chỉ dòng ACTIVE (status = 0) có `timeEnd` đã qua.
- * - `listUserEnrolmentsForCourse` gắn đúng phương thức của
- *   instance sở hữu lên từng dòng.
- */
 
 const adminUrl =
   process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
@@ -105,7 +88,6 @@ describe('EnrolRepository trên Kysely (issue #645)', () => {
     expect(after?.status).toBe(1);
     expect(after?.modifierId).toBe(userId);
 
-    // T-4: patch chỉ nhắc `name` — `customText1` và `status` của instance giữ nguyên.
     await repo.updateInstance(instance.id, { name: 'Tên mới' });
     const patched = await repo.getInstance(instance.id);
     expect(patched?.name).toBe('Tên mới');

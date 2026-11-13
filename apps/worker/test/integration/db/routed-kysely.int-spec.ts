@@ -1,8 +1,3 @@
-/**
- * Ca tích hợp của FACADE KYSELY ĐỊNH TUYẾN phía WORKER (issue #639) — bản mirror của ca phía API trên khung định tuyến riêng của worker (constructor chỉ nhận `ConfigService`, registry pool tự giữ): cùng bộ kiểm — handle theo chế độ kho, định tuyến theo `spaceSlug` trong ALS, transaction commit/rollback, getter `schema`, builder lười, slug chưa chuẩn bị về kho chung, và fail-closed khi pool kho riêng bị thu hồi vì nhàn rỗi.
- *
- * Môi trường: tự cấp phát control plane + hai kho riêng + một kho đóng vai kho chung bằng harness của `@giaokhoa/db` (database dựng từ rỗng bằng Migrator của package). Chuỗi bí mật cố ý trỏ về database `postgres` để bộ phân giải phải chốt đích theo `databaseName` trong sổ.
- */
 import type { ConfigService } from '@nestjs/config';
 import { Client, Pool } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -42,12 +37,10 @@ function fakeConfig(values: Record<string, unknown>): ConfigService {
   return { get: (key: string) => values[key] } as unknown as ConfigService;
 }
 
-/** Spec đã biết slug dedicated phải tự ghim identity khi dựng ALS thủ công. */
 async function runPinned<T>(
   spaceDb: SpaceDatabaseService, slug: string, fn: () => Promise<T>,
   binding = spaceDb.preparedSpaceScope(slug),
 ): Promise<T> {
-  // Chụp đúng object handle của lần chuẩn bị, không đọc lại registry.
   return tenantAls.run({ spaceSlug: slug, ...binding }, fn);
 }
 
@@ -80,8 +73,6 @@ describe('Facade Kysely định tuyến phía worker (integration)', () => {
     process.env.SPACE_TEST_A_W639_URL = clusterUrl('postgres');
     process.env.SPACE_TEST_B_W639_URL = clusterUrl('postgres');
 
-    // Worker tự đọc sổ qua CONTROL_PLANE_DATABASE_URL trong config
-    // của chính nó (không có ControlPlaneConnection riêng như API).
     service = new SpaceDatabaseService(
       fakeConfig({
         CONTROL_PLANE_DATABASE_URL: cpUrl,
@@ -91,7 +82,6 @@ describe('Facade Kysely định tuyến phía worker (integration)', () => {
         DATABASE_SSL: false,
       }),
     );
-    // Ghi dòng đăng ký qua Kysely trên một pool đọc sổ riêng.
     const registryPool = new Pool({ connectionString: cpUrl });
     const registryDb = createControlPlaneKysely(registryPool);
     await registryDb.insertInto('space_registry').values([
@@ -250,8 +240,6 @@ describe('Facade Kysely định tuyến phía worker (integration)', () => {
       });
       await new Promise((resolve) => setTimeout(resolve, SHORT_IDLE_TIMEOUT_MS + 2400));
       await runPinned(shortService, CENTRE_B_SLUG, async () => {
-        // Mã lỗi nằm ở thuộc tính `code` của SpaceRoutingError,
-        // không nằm trong thông điệp.
         let readError: unknown;
         try {
           shortService.routedKysely.selectFrom('tenants');
@@ -296,8 +284,6 @@ describe('Facade Kysely định tuyến phía worker (integration)', () => {
       expect(tenantAls.getStore()?.spaceId).toBe(original.id);
       enter();
       await held;
-      // Wrapper lồng nhau cũng không được tái chuẩn bị âm thầm thành
-      // phiên kho B khi ngữ cảnh parent vẫn ghim handle kho A.
       let nestedRan = false;
       await expect(service.withSpaceKysely(CENTRE_A_SLUG, async () => {
         nestedRan = true;
@@ -309,8 +295,6 @@ describe('Facade Kysely định tuyến phía worker (integration)', () => {
     });
     try {
       await entered;
-      // Đích B chỉ có một chủ dedicated; xóa đăng ký B trước khi
-      // tái gán, vẫn tôn trọng unique index của control plane.
       if (!rotateSecret) {
         await cpDb.deleteFrom('space_registry').where('slug', '=', CENTRE_B_SLUG).execute();
         bUnregistered = true;

@@ -11,13 +11,6 @@ import {
   type OrdinaryWorkerModuleHarness,
 } from '../../support/ordinary-worker-module';
 
-/**
- * Consumer đồng bộ cohort ở worker (issue con #528 của #519) — các ca hành vi của ca (6) trong e2e vòng đời lớp phía API chuyển nguyên sang tầng này, đi qua ĐƯỜNG THẬT của production: chèn dòng sự kiện outbox đúng hình dạng phía phát vẫn ghi (bỏ qua đường in-process) → relay outbox duy nhất đóng dấu `publishedAt` và định tuyến vào hàng đợi `cohort-sync-events` → `CohortSyncEventsProcessor` → host `CohortSyncService` gọi bề mặt vật chất hoá cohort dùng chung của issue con #527.
- *
- * Giữ nguyên khẳng định nghiệp vụ của ca e2e cũ (ghi danh được vật chất hoá đúng như hành vi hiện tại ở cả hai chiều thêm/bớt thành viên, sự kiện `user_enrolment_suspended` vẫn được phát tiếp khi có trường hợp áp dụng), cộng các ca ghim tính idempotent hai tầng đã chốt cho issue này: phát lại cùng một sự kiện (job mới mang cùng `outboxId` + payload, mô phỏng phát lại ngoài cửa sổ lưu giữ của `jobId`) không sinh ghi danh trùng, không phát lại `user_enrolled`/`user_unenrolled`, không kích hoạt lại ghi danh đã đình chỉ/rút.
- *
- * Khác biệt bề mặt duy nhất so với e2e cũ: dữ kiện (tenant, cây context, khoá, cohort, instance, vai trò) được dựng bằng SQL trực tiếp theo khuôn spec đặc tả hoá bề mặt ở phía worker của #527, và khẳng định đọc ở tầng DB thay vì qua endpoint — đúng tiền lệ chuyển ca của issue #520. Mỗi ca dùng đồ thị riêng (id ngẫu nhiên) nên các ca độc lập dữ kiện nghiệp vụ.
- */
 describe('Worker cohort sync events delivery (chuyển consumer ở #528)', () => {
   let context: INestApplicationContext;
   let harness: OrdinaryWorkerModuleHarness;
@@ -65,7 +58,6 @@ describe('Worker cohort sync events delivery (chuyển consumer ở #528)', () =
     return rows.rows;
   }
 
-  /** Chèn một dòng sự kiện outbox đúng hình dạng phía phát vẫn ghi; trả outboxId để chờ job. */
   async function emit(type: string, payload: Record<string, unknown>): Promise<string> {
     const row = await db.insertInto('outbox_events').values({
       aggregate: 'cohort', type, tenant_id: tenantId, payload: sql<JsonValue>`${JSON.stringify(payload)}::jsonb`,
@@ -73,7 +65,6 @@ describe('Worker cohort sync events delivery (chuyển consumer ở #528)', () =
     return row.id;
   }
 
-  /** Kích hoạt relay thật với ngữ cảnh platform rồi chờ job hoàn tất, không đợi lịch 5 giây. */
   async function waitJobCompleted(outboxId: string, timeoutMs = 90000): Promise<void> {
     await context.get(OutboxRelayScheduler).relayTick();
     const deadline = Date.now() + timeoutMs;
@@ -85,12 +76,6 @@ describe('Worker cohort sync events delivery (chuyển consumer ở #528)', () =
     }
   }
 
-  /**
-   * Phát lại một sự kiện ngoài cửa sổ lưu giữ của `jobId`: job mới
-   * mang cùng `outboxId` + payload nhưng `jobId` khác, đúng hình
-   * dạng phát lại mà relay tạo khi dòng đã bị dọn khỏi hàng đợi.
-   * Chờ job phát lại này completed rồi mới khẳng định.
-   */
   async function redeliver(type: string, outboxId: string, payload: Record<string, unknown>): Promise<void> {
     const job = await eventsQueue.add(type, {
       outboxId, seq: 0, aggregate: 'cohort', type, payload, tenantId, spaceSlug: null, spaceId: null, occurredAt: new Date().toISOString(),
@@ -198,13 +183,6 @@ describe('Worker cohort sync events delivery (chuyển consumer ở #528)', () =
     const rows = await sql`SELECT * FROM user_enrolments WHERE enrol_id = ${graph.instanceId} AND user_id = ${userId}`.execute(db) as unknown as { rows: Array<Record<string, unknown>> };
     expect(rows.rows).toHaveLength(1);
     expect(rows.rows[0]?.status).toBe(1);
-    // Ghi chú: phát lại ở chế độ đình chỉ phát thêm một dòng
-    // `user_enrolment_suspended` (đường đình chỉ của bề mặt phát sự
-    // kiện trong transaction riêng sau khi cập nhật trạng thái) —
-    // trạng thái ghi danh bền không đổi và loại sự kiện này hiện
-    // chưa có consumer nào, nên dòng trùng không gây tác dụng phụ
-    // nghiệp vụ nào. Khẳng định ở đây ghim trạng thái bền, không
-    // ghim số dòng sự kiện đình chỉ.
   }, 180000);
 
   it('rời cohort ở chế độ rút khi không còn dữ liệu liên quan qua relay + hàng đợi: xoá cứng ghi danh, gỡ vai, phát user_unenrolled và yêu cầu tái tổng hợp', async () => {

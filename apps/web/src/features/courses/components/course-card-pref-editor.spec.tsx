@@ -6,9 +6,6 @@ import { createQueryClient } from '#lib/query-client';
 import { CourseCardPrefEditor } from './course-card-pref-editor';
 import '#config/i18n';
 
-/**
- * Spec của editor tuỳ biến thẻ khoá — viết lại theo rà soát #219. Bản cũ khẳng định cơ chế invalidate của React Query (đếm số lần GET course-cards trước/sau khi lưu) — chi tiết triển khai: đổi cách làm tươi dữ liệu mà hành vi giữ nguyên vẫn bị đỏ oan. Bản này chỉ khẳng định hợp đồng nghiệp vụ: chọn màu rồi Lưu thì gửi đúng pref lên API của đúng khoá và báo lại pref đã lưu cho nơi gọi. (Việc thẻ khoá hiện màu/biệt danh đã lưu được khẳng định ở courses.spec.tsx — ca DASH1 thẻ khoá.)
- */
 
 const COURSE_ID = '01900000-0000-7000-8000-000000000010';
 

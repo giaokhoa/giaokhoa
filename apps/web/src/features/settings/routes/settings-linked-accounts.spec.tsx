@@ -54,7 +54,6 @@ describe('Cài đặt — trang tài khoản liên kết (thẻ chuyển từ H�
     localStorage.clear();
   });
   afterEach(() => {
-    // Dự án không bật auto-cleanup của Testing Library nên phải dọn DOM tường minh, tránh cây render của test trước sót sang test sau.
     cleanup();
     vi.unstubAllGlobals();
   });
@@ -89,7 +88,6 @@ describe('Cài đặt — trang tài khoản liên kết (thẻ chuyển từ H�
     renderPage();
     await waitFor(() => expect(screen.getByText('learner@gmail.example.com')).toBeInTheDocument());
     expect(screen.getByText('Google')).toBeInTheDocument();
-    // Issuer đã liên kết thì không còn nút liên kết; issuer chưa liên kết thì có.
     expect(screen.queryByRole('button', { name: 'Liên kết Google' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Liên kết Facebook' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Gỡ liên kết' }));
@@ -117,11 +115,9 @@ describe('Cài đặt — trang tài khoản liên kết (thẻ chuyển từ H�
     );
     renderPage();
     await waitFor(() => expect(screen.getByText('learner@gmail.example.com')).toBeInTheDocument());
-    // Tài khoản chưa có mật khẩu: gợi ý đặt mật khẩu hiện sẵn trong thẻ.
     expect(screen.getByText(/chưa có mật khẩu/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Gỡ liên kết' }));
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Đây là cách đăng nhập duy nhất của bạn'));
-    // Liên kết vẫn còn vì API đã từ chối.
     expect(screen.getByText('learner@gmail.example.com')).toBeInTheDocument();
   });
 });

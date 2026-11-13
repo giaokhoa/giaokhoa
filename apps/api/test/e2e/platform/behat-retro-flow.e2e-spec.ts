@@ -4,9 +4,6 @@ import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWO
 import { createCategory, createCourse, createEnrolInstance } from '../../support/course-enrolment-helpers';
 import { createGroupViaApi } from '../../support/engagement-helpers';
 
-/**
- * Rà soát ngược oracle Behat (MOODLE_503_STABLE): các scenario hành trình có ý nghĩa nghiệp vụ mà bộ e2e trước đây chưa phủ. Các bước gắn với giao diện PHP (bấm nút, điền form) được bỏ qua theo quy ước; chỉ dịch bước nghiệp vụ + kết quả kỳ vọng thành lời gọi HTTP. Nguồn đối chiếu ghi tại từng test.
- */
 describe('Hành trình kiểm toán ngược Behat', () => {
   let app: INestApplication;
   let admin: string;
@@ -23,7 +20,6 @@ describe('Hành trình kiểm toán ngược Behat', () => {
     const cohortId = cohortRes.body.id as string;
     await createEnrolInstance(app, admin, course.id, { method: 'cohort', cohortId, groupId: group.id });
     const user = await createUserViaApi(app, admin);
-    // Vào cohort ⇒ được ghi danh qua cohort sync VÀ vào group của instance.
     await http(app).post(`/api/v1/cohorts/${cohortId}/members`).set('Authorization', `Bearer ${admin}`).send({ userId: user.id });
     const userToken = (await login(app, user.username, STRONG_PASSWORD)).accessToken;
     const mine = await http(app).get(`/api/v1/courses/${course.id}/enrolments/me`).set('Authorization', `Bearer ${userToken}`);
@@ -36,20 +32,16 @@ describe('Hành trình kiểm toán ngược Behat', () => {
   it('badge criteria can require another badge: badge B is issued only after badge A (Behat: badges/tests/behat/criteria_*.feature họ tiêu chí; lá "badge" của evaluator)', async () => {
     const student = await createUserViaApi(app, admin);
     const studentToken = (await login(app, student.username, STRONG_PASSWORD)).accessToken;
-    // Badge A: tiêu chí manual, cấp thủ công.
     const aRes = await http(app).post('/api/v1/badges').set('Authorization', `Bearer ${admin}`).send({ name: 'Step one', type: 1, issuerName: 'Giáo khoa HQ' });
     const aId = aRes.body.id as string;
     await http(app).put(`/api/v1/badges/${aId}/criteria`).set('Authorization', `Bearer ${admin}`).send({ method: 1, criteria: [{ criteriaType: 'manual', params: {} }] });
     await http(app).post(`/api/v1/badges/${aId}/status`).set('Authorization', `Bearer ${admin}`).send({ status: 1 });
-    // Badge B: yêu cầu đã có badge A.
     const bRes = await http(app).post('/api/v1/badges').set('Authorization', `Bearer ${admin}`).send({ name: 'Step two', type: 1, issuerName: 'Giáo khoa HQ' });
     const bId = bRes.body.id as string;
     await http(app).put(`/api/v1/badges/${bId}/criteria`).set('Authorization', `Bearer ${admin}`).send({ method: 1, criteria: [{ criteriaType: 'badge', params: { badgeId: aId } }] });
     await http(app).post(`/api/v1/badges/${bId}/status`).set('Authorization', `Bearer ${admin}`).send({ status: 1 });
-    // Chưa có A ⇒ đánh giá B không đạt, B chưa được cấp.
     const evaluation = await http(app).post(`/api/v1/badges/${bId}/evaluate`).set('Authorization', `Bearer ${admin}`).send({ userId: student.id });
     expect(evaluation.body.satisfied).toBe(false);
-    // Cấp A thủ công ⇒ lần đánh giá toàn cục tiếp theo cấp B.
     await http(app).post(`/api/v1/badges/${aId}/award`).set('Authorization', `Bearer ${admin}`).send({ userId: student.id });
     await http(app).post('/api/v1/badges/evaluate-user').set('Authorization', `Bearer ${admin}`).send({ userId: student.id });
     const mine = await http(app).get('/api/v1/badges/mine').set('Authorization', `Bearer ${studentToken}`);

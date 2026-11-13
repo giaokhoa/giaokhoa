@@ -9,15 +9,6 @@ import {
 import { SITE_SETTINGS, findSiteSetting } from './settings-registry';
 import { SiteConfigService } from './site-config.service';
 
-/**
- * NB-7 (issue #174): họ khoá chính sách thông báo trong site-config.
- *
- * - Đúng MỘT khoá boolean cho mỗi provider của registry thông báo,
- *   sinh từ chính MESSAGE_PROVIDERS (không lệch sổ), mặc định bật, scope platform (tenant không ghi đè được).
- * - Hai loại bắt buộc P2: SiteConfigService từ chối đặt false
- *   (site_config.notification_mandatory) — admin cũng không tắt được;
- *   đặt true/bật lại thì được.
- */
 describe('Cài đặt chính sách site cho thông báo (NB-7)', () => {
   it('đăng ký đúng một cài đặt platform boolean cho mỗi provider thông báo, mặc định bật', () => {
     const policySettings = SITE_SETTINGS.filter((s) => s.component === NOTIFICATION_POLICY_COMPONENT);

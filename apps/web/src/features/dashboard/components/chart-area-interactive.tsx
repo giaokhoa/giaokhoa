@@ -5,22 +5,17 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@giaokhoa/ui/components/chart';
 import { ToggleGroup, ToggleGroupItem } from '@giaokhoa/ui/components/toggle-group';
 
-/** Một điểm dữ liệu của biểu đồ: trục hoành là nhãn, giá trị nằm ở khoá `value`. */
 export interface ChartPoint {
   label: string;
   value: number;
 }
 
-/** Một lựa chọn khoảng hiển thị: giữ `count` điểm cuối của chuỗi. */
 export interface ChartRange {
   value: string;
   label: string;
   count: number;
 }
 
-/**
- * Biểu đồ vùng tương tác theo block dashboard-01 (Recharts AreaChart trong ChartContainer, có chuyển khoảng hiển thị ở góc phải header). Chuỗi số được truyền từ trang gọi — là dữ liệu thật của API (người dùng mới theo tuần, phân bố điểm, sự kiện theo ngày); khi chuỗi rỗng component hiện dòng trạng thái trống đã dịch thay vì vẽ biểu đồ giả.
- */
 export function ChartAreaInteractive({
   title,
   description,
@@ -73,8 +68,6 @@ export function ChartAreaInteractive({
             <p className="py-10 text-center text-sm text-muted-foreground">{emptyText}</p>
           ) : (
             <ChartContainer config={config} className="aspect-auto h-62.5 w-full">
-              {/* Lề trái/phải 12 theo mẫu biểu đồ của shadcn: thiếu lề
-                  phải, nhãn trục hoành ở điểm cuối bị cắt ở mép thẻ. */}
               <AreaChart data={visible} margin={{ left: 12, right: 12 }}>
                 <defs>
                   <linearGradient id="dashboardChartFill" x1="0" y1="0" x2="0" y2="1">

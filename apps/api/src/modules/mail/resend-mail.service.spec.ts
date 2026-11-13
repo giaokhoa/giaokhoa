@@ -13,9 +13,6 @@ const MESSAGE = {
   html: '<p>Mã của bạn là <b>123456</b></p>',
 };
 
-/**
- * Transport Resend (issue #7 chặng 2.5): có cấu hình thì gửi qua HTTP API của Resend đúng hình đã khai; Resend lỗi thì ném để consumer outbox thử lại; thiếu cấu hình thì fail-soft ghi log (không gọi Resend, không ném) để app vẫn chạy ở môi trường chưa cấp khoá.
- */
 describe('Khối ResendMailService', () => {
   afterEach(() => {
     vi.unstubAllGlobals();

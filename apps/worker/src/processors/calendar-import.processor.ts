@@ -10,24 +10,16 @@ import type { BackgroundJobScope } from '../db/routing/background-job-scope';
 export interface CalendarImportJobData extends BackgroundJobScope { subscriptionId: string }
 export interface CalendarImportResult { eventsimported: number; eventsskipped: number; eventsupdated: 0; eventsdeleted: 0 }
 
-/**
- * Nhập lịch đăng ký (calendar subscription): phân tích payload ICS của subscription ở mức cơ bản và vật chất hoá các VEVENT của nó thành calendar_events gắn với subscription. Chạy lại có tính idempotent — một sự kiện mà
- * (subscriptionId, UID) của nó đã tồn tại sẽ bị bỏ qua, phản chiếu đúng hình dạng counts
- * của calendar_import_events_from_ical của Moodle (oracle: calendar/ tests/lib_test test_add_subscription).
- */
 @Processor('calendar-import', { concurrency: 5 })
-/**
- * Xử lý job nhập lịch subscription: tải .ics, phân tích bằng domain/ics và đồng bộ sự kiện (không trùng theo uuid). Concurrency 5: job thuần I/O (tải tệp .ics từ xa) — concurrency mặc định 1 để một nguồn lịch chậm chặn mọi subscription phía sau; việc nhập lại idempotent theo
- * (subscriptionId, UID) nên chạy song song an toàn.
- */
+
+
+
+
 export class CalendarImportProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService, private readonly jobRunner: SpaceJobRunner) { super(); }
 
-  /**
-   * Xử lý một job của queue tương ứng.
-   */
   async process(job: Job<CalendarImportJobData>): Promise<CalendarImportResult> {
-    // Issue #11: mọi lượt xử lý/retry phải kiểm sổ và giữ đúng kho đã đóng dấu khi enqueue; không chạy hộ trên platform.
+
     validateWorkerJobPayload(workerPayloadSchemas['calendar-import'], job.data, 'calendar-import');
     return this.jobRunner.runForJob(job.data, () => this.processInContext(job));
   }

@@ -1,8 +1,3 @@
-/**
- * Kiểm thử cổng cấp và sử dụng grant theo từng request (issue #19).
- * Stub DB có trạng thái biến đổi để chứng minh quyết định không
- * nằm trong token/phiên hay cache, và audit cả lần từ chối.
- */
 import { describe, expect, it, vi } from "vitest";
 import { SupportService } from "./support.service";
 import type {
@@ -20,7 +15,6 @@ const OWNER = "00000000-0000-7000-8000-0000000000c1";
 const STAFF = "00000000-0000-7000-8000-0000000000d1";
 const OTHER = "00000000-0000-7000-8000-0000000000e1";
 
-/** Mô phỏng giao dịch trên handle đã định tuyến, không đưa SQL vào unit. */
 function harness() {
   let currentTenant = A;
   let next = 0;
@@ -209,8 +203,6 @@ describe("Cấp quyền hỗ trợ theo tenant, người nhận, thao tác và t
       h.service.access(STAFF, "centre-b", "classes:read"),
     ).rejects.toMatchObject({ response: { code: "support.access_denied" } });
     expect(await h.service.list(OWNER)).toEqual([]);
-    // Trung tâm B chỉ thấy lần thử bị từ chối ngay tại B,
-    // không thấy sự kiện cấp quyền hay truy cập ở A.
     expect((await h.service.audit(OWNER)).map((event) => event.action)).toEqual(
       ["access_denied"],
     );

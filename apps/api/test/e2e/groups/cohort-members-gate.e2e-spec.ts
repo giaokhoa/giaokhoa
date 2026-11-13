@@ -7,14 +7,6 @@ import {
 } from '../../support/identity-access-helpers';
 import { createCategory } from '../../support/course-enrolment-helpers';
 
-/**
- * Issue #44 (việc nối tiếp) — cổng xem thành viên cohort
- * (GET /cohorts/:id/members).
- *
- * Trước đợt này handler không nhận actor: bất kỳ tài khoản đăng nhập nào cũng lấy được `userId` của mọi thành viên của mọi cohort. Nay người xem phải có capability `cohort:view` hoặc `cohort:manage` tại chính context của cohort — cùng chuẩn capability/context với các thao tác cohort còn lại; người ngoài nhận 404 `cohort.not_found`, giống hệt cohort không tồn tại, để không lộ sự tồn tại của cohort. Các đường nội bộ
- * (đồng bộ ghi danh theo cohort của Enrol, sinh learning plan của
- * Competencies) gọi service không kèm actor nên giữ nguyên hành vi.
- */
 describe('Cổng thành viên cohort (issue #44 follow-up)', () => {
   let app: INestApplication;
   let admin: string;
@@ -95,7 +87,6 @@ describe('Cổng thành viên cohort (issue #44 follow-up)', () => {
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
 
-    // cohort:view không kéo theo cohort:manage: ghi vẫn bị chặn như trước.
     const other = await createUserViaApi(app, admin);
     const write = await http(app).post(`/api/v1/cohorts/${cohort.id}/members`)
       .set('Authorization', `Bearer ${viewerLogin.accessToken}`).send({ userId: other.id });
@@ -111,7 +102,6 @@ describe('Cổng thành viên cohort (issue #44 follow-up)', () => {
     expect(cohortA.contextId).not.toBe(cohortB.contextId);
     const teacherRole = await roleIdByShortname(app, admin, 'teacher');
 
-    // Gán vai teacher tại đúng context của cohort A → xem được A.
     const inContext = await createUserViaApi(app, admin);
     await assignRole(app, admin, inContext.id, teacherRole, cohortA.contextId);
     const inContextLogin = await login(app, inContext.username, STRONG_PASSWORD);
@@ -119,7 +109,6 @@ describe('Cổng thành viên cohort (issue #44 follow-up)', () => {
       .set('Authorization', `Bearer ${inContextLogin.accessToken}`);
     expect(ok.status).toBe(200);
 
-    // Gán vai teacher tại context của cohort B (nhánh khác) → không xem được A.
     const wrongContext = await createUserViaApi(app, admin);
     await assignRole(app, admin, wrongContext.id, teacherRole, cohortB.contextId);
     const wrongContextLogin = await login(app, wrongContext.username, STRONG_PASSWORD);

@@ -15,23 +15,6 @@ import { formatDate, formatDateTime } from '#utils/date-format';
 import { queryKeys } from '../queries/keys';
 import { buildSsrLoaderData, serverProbe, serverQueryFn, type SsrLoaderData } from '#lib/ssr-data';
 
-/**
- * Loader phía server (tầng SL-1 của #7): prefetch bằng cookie của
- * chính request rồi dehydrate cho root.tsx hydrate vào cache (xem
- * `lib/ssr-data.ts`):
- *   - Trang ĐẦU của danh sách nhóm ở bộ lọc mặc định mà trang mở ra
- *     (nhóm 'all', không chỉ-chưa-đọc — key `notificationGroups('all',
- *     false)`, infinite query): cuộn tiếp/tải thêm và đổi bộ lọc vẫn
- *     chạy phía client như trước; các bộ lọc khác không prefetch vì
- *     key của chúng chỉ sinh khi người dùng chọn.
- *   - Toàn bộ dòng tuỳ chọn (key `messagePreferences`) và ghi đè theo
- *     khoá (key `messageCourseOverrides`, dữ liệu dehydrate là MẢNG
- *     `courses` đã bóc như queryFn phía client).
- * Không có cookie phiên thì không gọi API nào.
- *
- * @param request - Request đang phục vụ (nguồn cookie phiên).
- * @returns Dehydrated state cho HydrationBoundary ở root.
- */
 export async function loader({ request }: { request: Request }): Promise<SsrLoaderData> {
   return buildSsrLoaderData(request, async (queryClient, req) => {
     await Promise.all([
@@ -67,7 +50,6 @@ function groupKey(g: Pick<NotificationGroupView, 'eventType' | 'contextUrl' | 'd
   return notificationGroupKey(g);
 }
 
-/** Nhãn đầu mục ngày: Hôm nay / Hôm qua theo ngày lịch của trình duyệt, còn lại in ngày cụ thể. */
 function dayLabel(day: string, t: (key: string) => string): string {
   const localDay = (d: Date) => {
     const m = `${d.getMonth() + 1}`.padStart(2, '0');
@@ -80,7 +62,6 @@ function dayLabel(day: string, t: (key: string) => string): string {
   return formatDate(`${day}T00:00:00`);
 }
 
-/** Thời gian tương đối cho mục mới nhất ("vừa xong", "3 giờ trước"…); quá một tuần thì in ngày giờ cụ thể. */
 function relativeTime(iso: string, t: (key: string, opts?: Record<string, unknown>) => string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
   if (diffMs < 60_000) return t('justNow');
@@ -93,32 +74,6 @@ function relativeTime(iso: string, t: (key: string, opts?: Record<string, unknow
   return formatDateTime(iso);
 }
 
-/**
- * Trung tâm thông báo. Trung tâm này là danh sách đã nhóm dạng v2 (issue
- * #51): các dòng được nhóm theo (type × source × day) với phân trang
- * theo cursor, bộ lọc theo nhóm/chưa đọc, chi tiết mở rộng được, deep link
- * qua context_url để đánh dấu đã đọc, và xoá theo từng dòng.
- *
- * Từ issue #288 trang này CHỈ còn trung tâm thông báo: phần tuỳ
- * chọn (mô hình v2 của NB-2, issue #174) và ngoại lệ theo khoá đã
- * chuyển hẳn sang mục Thông báo của khu Cài đặt
- * (`/settings/notifications`) — tách "xem thông báo" khỏi "cài đặt
- * thông báo" đúng chuẩn các site lớn trong research #288. Trang này
- * không còn gọi API preferences nữa.
- *
- * Dữ liệu qua TanStack Query (lib/notifications.ts, F-01): danh sách
- * nhóm là infinite query theo khoá bộ lọc, các mục mở rộng tải qua
- * fetchQuery vào cùng cache, tuỳ chọn là một query + mutation lạc quan
- * trên cache. Điểm khác hành vi cũ quan trọng nhất: mọi thao tác
- * đọc/đọc-nhóm/đọc-hết/xoá đều LÀM MỚI khoá `notificationUnreadCount`
- * — huy hiệu chuông ở sidebar/header dùng chung khoá đó (trước đây
- * trang này không hề invalidate nên huy hiệu giữ số cũ sau khi đã
- * đọc ở đây). Các cập nhật đếm tại chỗ vẫn giữ nguyên, nay áp thẳng
- * lên cache qua setQueriesData thay cho state cục bộ. Từ lát SL-1
- * (#7), loader của route prefetch trang đầu của bộ lọc mặc định +
- * tuỳ chọn + ghi đè theo khoá phía server (khi có cookie phiên) và
- * trang hydrate từ cache thay vì fetch lại khi mở.
- */
 export function NotificationsPage() {
   const { t } = useTranslation('app');
   const navigate = useNavigate();
@@ -139,7 +94,6 @@ export function NotificationsPage() {
   const groups = flattenNotificationGroups(groupsQuery.data);
   const error = groupsQuery.isError || expandError ? t('notificationsLoadFailed') : null;
 
-  // Đổi bộ lọc thì thu gọn toàn bộ dòng trước khi render danh sách mới.
   const filterKey = groupFilter + ':' + String(unreadOnly);
   const [previousFilterKey, setPreviousFilterKey] = useState(filterKey);
   if (filterKey !== previousFilterKey) {
@@ -176,7 +130,6 @@ export function NotificationsPage() {
     }
   }
 
-  /** Đánh dấu một mục đã đọc ở trạng thái hiển thị (cache nhóm + mục đang mở rộng). */
   function applyItemRead(group: NotificationGroupView, itemId: string) {
     const key = groupKey(group);
     updateNotificationGroupsCache(queryClient, (prev) =>
@@ -193,7 +146,6 @@ export function NotificationsPage() {
     });
   }
 
-  /** Bấm vào một mục: đánh dấu đã đọc rồi đi tới đúng ngữ cảnh của mục đó. */
   function openItem(group: NotificationGroupView, item: Pick<NotificationItemView, 'id' | 'contextUrl' | 'timeRead'>) {
     const target = item.contextUrl ?? group.contextUrl;
     if (!item.timeRead) {
@@ -208,7 +160,6 @@ export function NotificationsPage() {
     if (target) navigate(target);
   }
 
-  /** Bấm vào thân dòng gộp: đi tới ngữ cảnh của nguồn và đánh dấu đã đọc cả nhóm. */
   function openGroup(group: NotificationGroupView) {
     if (group.count === 1) {
       openItem(group, { id: group.latest.id, contextUrl: group.contextUrl, timeRead: group.latest.timeRead });
@@ -233,7 +184,6 @@ export function NotificationsPage() {
     navigate(group.contextUrl);
   }
 
-  /** Xoá một mục ngay tại dòng (§9): cập nhật đếm của dòng gộp, dòng rỗng thì biến mất. */
   function deleteItem(group: NotificationGroupView, item: NotificationItemView) {
     deleteMutation.mutate(item.id, {
       onSettled: () => {
@@ -288,8 +238,6 @@ export function NotificationsPage() {
     { value: 'system', label: groupLabel.system },
   ];
 
-  // Các dòng gộp đã sắp theo hoạt động mới nhất nên ngày chỉ lùi dần:
-  // chèn đầu mục ngày mỗi khi ngày đổi so với dòng trước.
   const rows: { dayHeader: string | null; group: NotificationGroupView }[] = [];
   let lastDay: string | null = null;
   for (const group of groups) {
@@ -433,10 +381,8 @@ export function NotificationsPage() {
   );
 }
 
-/** Export mặc định cho route module React Router framework mode (xem src/routes.ts). */
 export default NotificationsPage;
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { appKeyMeta } from '#lib/route-meta';
 export function meta() {

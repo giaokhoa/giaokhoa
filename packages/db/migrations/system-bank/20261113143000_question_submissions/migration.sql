@@ -1,5 +1,3 @@
--- Bản chụp do quản trị trung tâm gửi được giữ tại kho ngân hàng trước khi biên tập viên duyệt.
--- Khoá tự nhiên theo phiên bản nguồn bảo đảm gửi lại không tạo nhiều hàng chờ.
 CREATE TABLE "system_question_submissions" (
   "id" uuid PRIMARY KEY DEFAULT uuidv7(),
   "centre_slug" text NOT NULL,

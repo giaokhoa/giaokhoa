@@ -7,17 +7,6 @@ import { baSessionBody, isGetSessionUrl } from '#test/ba-session';
 import { QuestionsPage } from '#features/questions/components/questions';
 import { MatrixEditPage, MatrixNewPage } from './routes/question-matrix';
 
-/**
- * Ngân hàng ma trận (MB-1, issue #111) ở tầng UI:
- *  - trang /matrices liệt kê ma trận cá nhân hiện thẳng (không bọc
- *    thẻ thu/mở — chốt 23:43 ngày 26/10/2026) + nút Ma trận mới ở PageHeader;
- *  - section "Ngân hàng ma trận chung" trong Ngân hàng hệ thống: chọn
- *    bank → thấy mẫu → nút "Lấy về" gọi đúng endpoint;
- *  - màn tạo ma trận riêng (§9) gửi bankId = bank ma trận cá nhân;
- *  - màn sửa ma trận: thêm ô neo ĐƠN VỊ KIẾN THỨC — body POST mang
- *    curriculumNodeId của node đã chọn, không còn learningOutcomeId
- *    (ma trận neo ĐVK theo #249/#259).
- */
 
 const PROFILE = {
   id: '01900000-0000-7000-8000-0000000000a9',
@@ -131,7 +120,6 @@ function stubFetch(calls: RecordedCall[]) {
   );
 }
 
-/** Stub cho màn SỬA ma trận: chi tiết ma trận + cây chương trình (chủ đề → ĐVK) + khả dụng. */
 function stubFetchEdit(calls: RecordedCall[]) {
   vi.stubGlobal(
     'fetch',
@@ -165,10 +153,6 @@ function stubFetchEdit(calls: RecordedCall[]) {
         return respond({ id: `${MY_MATRIX}-cell-new` });
       }
       if (url === `/api/v1/exam-matrices/${MY_MATRIX}/specification`) {
-        // Bản đặc tả SUY RA: hai ô ở hai ĐVK khác nhau; cột YCCĐ của mỗi
-        // ô = mọi YCCĐ thuộc ĐVK của ô đó (ô không neo YCCĐ — #249).
-        // API đặc tả là nguồn sự thật duy nhất cho mã YCCĐ: mỗi
-        // outcome mang sẵn position + code (đợt #161), web chỉ hiển thị.
         const outcome = (id: string, content: string, record: string, position: number) => ({
           outcomeId: id, content, sourceKind: 'program',
           sourceRef: `Thông tư 32/2018/TT-BGDĐT — chuong-trinh.pdf, trang 5 — bản ghi ${record}`,
@@ -208,9 +192,6 @@ function stubFetchEdit(calls: RecordedCall[]) {
         });
       }
       if (url === `/api/v1/exam-matrices/${MY_MATRIX}/specification/export?format=xlsx`) {
-        // Bản xuất thật là file nhị phân (xlsx là zip, mở đầu "PK") kèm
-        // Content-Disposition mang tên file server đặt — ca test xuất
-        // đặc tả khẳng định web giữ đúng tên này khi tải về.
         return new Response(new Blob(['PK']), {
           status: 200,
           headers: {
@@ -234,12 +215,6 @@ describe('Giao diện ngân hàng ma trận (MB-1)', () => {
   it('hai khu vực phân biệt: trang /matrices có ma trận của tôi; trang /system-bank/matrices có mẫu chung và copy về được', async () => {
     const calls: RecordedCall[] = [];
     stubFetch(calls);
-    // Khu riêng ở path riêng (chuẩn đường dẫn #221): danh sách ma
-    // trận cá nhân hiện THẲNG ở /matrices (không bọc thẻ thu/mở —
-    // chốt 23:43 ngày 26/10/2026) → thấy ma trận cá nhân + nút Ma
-    // trận mới ở PageHeader, không còn nút Thêm mới trong danh sách.
-    // (Tên ma trận cũng xuất hiện ở <option> của select đề xuất đóng góp
-    // nên đếm mọi phần tử khớp thay vì findByText đơn nhất.)
     const myRouter = createMemoryRouter([{ path: '/matrices', element: <QuestionsPage area="my-matrices" /> }], {
       initialEntries: ['/matrices'],
     });
@@ -254,8 +229,6 @@ describe('Giao diện ngân hàng ma trận (MB-1)', () => {
     expect(screen.getByRole('button', { name: 'Sửa' })).toBeInTheDocument();
     cleanup();
 
-    // Khu hệ thống ở /system-bank/matrices: chọn bank tổ → thấy mẫu
-    // → copy về.
     const systemRouter = createMemoryRouter(
       [{ path: '/system-bank/matrices', element: <QuestionsPage area="system-matrices" /> }],
       { initialEntries: ['/system-bank/matrices'] },
@@ -272,8 +245,6 @@ describe('Giao diện ngân hàng ma trận (MB-1)', () => {
     expect(await screen.findByText('Mẫu giữa kỳ Toán 9')).toBeInTheDocument();
     expect(screen.getByText('Mẫu')).toBeInTheDocument();
 
-    // Nút tại dòng mang nhãn gọn "Lấy về" và tên đầy đủ cho
-    // title/aria-label (quyết định về nhãn chữ ngày 26/10/2026).
     const copyButton = screen.getByRole('button', { name: 'Lấy về ngân hàng của tôi' });
     expect(copyButton).toHaveTextContent('Lấy về');
     expect(copyButton).toHaveAttribute('title', 'Lấy về ngân hàng của tôi');
@@ -332,9 +303,6 @@ describe('Giao diện ngân hàng ma trận (MB-1)', () => {
       </TestProviders>,
     );
 
-    // Bộ chọn ô là bộ chọn ĐƠN VỊ KIẾN THỨC (node của cây chương trình),
-    // chọn node lá rồi thêm ô với mức/dạng mặc định. Cây chương trình là
-    // query riêng sau chi tiết — chờ option của node lá xuất hiện đã.
     const nodeSelect = await screen.findByLabelText('Đơn vị kiến thức');
     await waitFor(() =>
       expect(nodeSelect.querySelector(`option[value="${LEAF_NODE_ID}"]`)).not.toBeNull(),
@@ -377,7 +345,6 @@ describe('Giao diện ngân hàng ma trận (MB-1)', () => {
         </TestProviders>,
       );
 
-      // Đặc tả chỉ tải khi giáo viên mở mục Bản đặc tả ở trang ma trận.
       await screen.findByLabelText('Đơn vị kiến thức');
       expect(calls.some((c) => c.url === `/api/v1/exam-matrices/${MY_MATRIX}/specification`)).toBe(false);
       await userEvent.click(screen.getByRole('button', { name: 'Xem bản đặc tả' }));
@@ -385,8 +352,6 @@ describe('Giao diện ngân hàng ma trận (MB-1)', () => {
         expect(calls.some((c) => c.url === `/api/v1/exam-matrices/${MY_MATRIX}/specification` && c.method === 'GET')).toBe(true),
       );
 
-      // Dòng của ô "Phép cộng" mang đúng hai YCCĐ thuộc ĐVK Phép cộng
-      // (kèm mã vị trí tiền tố), KHÔNG lẫn YCCĐ của ĐVK Phép trừ.
       const addRow = (await screen.findByText('Phép cộng')).closest('tr');
       expect(addRow?.textContent).toContain('Nhận biết được phép cộng trong phạm vi 10.');
       expect(addRow?.textContent).toContain('Thực hiện được phép cộng trong phạm vi 10.');
@@ -399,12 +364,9 @@ describe('Giao diện ngân hàng ma trận (MB-1)', () => {
       const subRow = screen.getByText('Phép trừ').closest('tr');
       expect(subRow?.textContent).toContain('Nhận biết được phép trừ trong phạm vi 10.');
       expect(subRow?.textContent).toContain('TOAN-0002.01');
-      // Câu Đúng–Sai chùm: 1 ô × 4 ý như cách đếm của bản xuất.
       expect(subRow?.textContent).toContain('4');
       expect(await screen.findByText('Tổng: 6 câu · 6 điểm')).toBeInTheDocument();
 
-      // Xuất bản đặc tả: gọi đúng endpoint export xlsx và tải file với
-      // đúng tên server trả trong Content-Disposition.
       await userEvent.click(screen.getByRole('button', { name: 'Xuất Excel' }));
       await waitFor(() =>
         expect(

@@ -13,31 +13,16 @@ import { systemCapabilities, usePermissions } from '#lib/permissions';
 import { globalSearchQueryOptions } from '../queries/search';
 import { globalSearchTarget, type GlobalSearchDoc } from '#lib/search-target';
 
-/** Khoá nhãn loại kết quả theo `area` của API tìm kiếm; area lạ chưa có nhãn thì hiển thị nguyên mã area. */
 const AREA_LABEL_KEYS: Record<string, string> = {
   courses: 'searchAreaCourses',
   users: 'searchAreaUsers',
   contentbank: 'searchAreaContentBank',
 };
 
-/**
- * Tìm kiếm toàn cục (platform services): kết quả đã được server lọc theo quyền của người tìm tại thời điểm truy vấn — client không tự lọc thêm.
- *
- * Nguồn từ khoá có hai đường, hợp nhất ở `runSearch`:
- * 1. Tham số `q` trên URL — đường chính từ ô tìm kiếm giữa header
- *    (chốt 23:52 ngày 26/10/2026, issue #303): vào trang có `q` (kể
- *    cả khi `q` đổi trong lúc đang ở trang) thì ô của trang điền đúng `q` đó và chạy tìm NGAY, không chờ người dùng bấm nút. `q` rỗng/trắng thì dọn về trạng thái chưa tìm thay vì gọi API bằng từ khoá trống.
- * 2. Form ngay trong trang — giữ nguyên hành vi cũ: gõ tiếp rồi bấm
- *    "Tìm kiếm" là chạy lại bằng chữ đang có trong ô, không đổi URL.
- *
- * Mỗi kết quả ĐIỀU HƯỚNG ĐƯỢC vào đúng item (chốt gộp tìm kiếm ngày 27/10/2026 — trước đó danh sách chỉ là chữ tĩnh không bấm được):
- * đích lấy từ ánh xạ dùng chung lib/search-target (khoá học → trang khoá, người dùng → màn quản trị người dùng, học liệu → màn của học liệu đó), cùng ánh xạ với nhóm "Nội dung" của bề mặt Ctrl/Cmd+K. Kết quả thuộc area chưa có route đích thì giữ dạng khối thông tin không liên kết, không bịa đường dẫn. Riêng kết quả người dùng: đích màn quản trị CHỈ gắn khi ảnh chụp quyền của người đang tìm có quyền quản trị người dùng (site admin hoặc `user:update` tại context hệ thống) — mọi vai trò đều nhận kết quả `users` từ API nhưng vai trò không có quyền đó bấm vào màn quản trị chỉ là ngõ cụt, nên giữ dạng khối thông tin như area chưa có đích.
- */
 export function SearchPage() {
   const { t: t } = useTranslation();
   const queryClient = useQueryClient();
   const perms = usePermissions();
-  // Quyền quản trị người dùng của chính người đang tìm, suy từ ảnh chụp quyền: điều kiện duy nhất để kết quả `users` gắn đích màn quản trị (màn đích tự gác `user:update`). Ảnh chụp chưa tải được thì coi như không có quyền — kết quả giữ dạng thông tin, đúng chiều an toàn của ánh xạ.
   const canManageUsers =
     (perms.access?.isSiteAdmin ?? false) ||
     (perms.access ? systemCapabilities(perms.access).includes('user:update') : false);
@@ -46,14 +31,8 @@ export function SearchPage() {
   const [q, setQ] = useState('');
   const [results, setResults] = useState<GlobalSearchDoc[]>([]);
   const [searched, setSearched] = useState(false);
-  // Chốt trình tự các lượt tìm: số thứ tự của lượt MỚI NHẤT còn hiệu lực. Mỗi lượt chạy lấy một số tăng dần; một lượt chỉ được ghi kết quả khi số của nó vẫn là mới nhất lúc request trả về — lượt cũ về sau (mạng chậm) không ghi đè kết quả của lượt mới hơn, và nhánh dọn trạng thái cũng tăng số này để vô hiệu hoá mọi lượt đang bay.
   const latestSearchRef = useRef(0);
 
-  /**
-   * Chạy một lượt tìm bằng đúng từ khoá đưa vào và ghi kết quả + cờ đã tìm. Đọc qua tầng TanStack Query (`fetchQuery` với options của `lib/search-data.ts`, khoá `globalSearch` — F-01 của rà soát #133): trang giữ máy trạng thái riêng nên không đổi sang `useQuery` khai báo; options đặt `staleTime: 0` để mỗi lượt chạy tìm gọi API thật như bản fetch thủ công.
-   *
-   * Hai lượt tìm chồng nhau dùng hai khoá khác nhau nên cả hai request đều chạy thật tới khi trả về; chốt trình tự ở đây là nơi duy nhất quyết định lượt nào được ghi vào state (chỉ lượt mới nhất — xem `latestSearchRef`).
-   */
   const runSearch = useCallback(async (keyword: string) => {
     const runId = ++latestSearchRef.current;
     const docs = await queryClient.fetchQuery(globalSearchQueryOptions(keyword));
@@ -62,12 +41,10 @@ export function SearchPage() {
     setSearched(true);
   }, [queryClient]);
 
-  // Đồng bộ theo q trên URL: chạy mỗi lần q xuất hiện/đổi (lần vào trang đầu tiên cũng là một lần q "xuất hiện"). Không có tham số q (vào /search trần) thì giữ nguyên trạng thái khởi tạo. Dữ liệu trong URL chỉ cập nhật form khi chính URL thay đổi.
   const [previousUrlQ, setPreviousUrlQ] = useState<string | null>(null);
   if (previousUrlQ !== urlQ) {
     setPreviousUrlQ(urlQ);
     if (urlQ !== null) setQ(urlQ);
-    // URL có q chỉ gồm khoảng trắng cũng xóa kết quả tìm kiếm cũ. Effect bên dưới tăng runId để chặn request trước đó về muộn.
     if (urlQ !== null && !urlQ.trim()) {
       setResults([]);
       setSearched(false);
@@ -77,7 +54,6 @@ export function SearchPage() {
     if (urlQ === null) return;
     const runId = ++latestSearchRef.current;
     if (!urlQ.trim()) return;
-    // Request chỉ được ghi vào state nếu còn là lượt mới nhất.
     void queryClient.fetchQuery(globalSearchQueryOptions(urlQ)).then((docs) => {
       if (runId !== latestSearchRef.current) return;
       setResults(docs);
@@ -144,10 +120,8 @@ export function SearchPage() {
   );
 }
 
-/** Route module gộp (issue #500): nội dung trang bên dưới vốn ở module pages riêng, phần khung route (biên lỗi + tiêu đề) vốn ở wrapper routes riêng — hai module nhập một theo bản đồ features/. */
 export { SearchPage as default };
 
-// Biên lỗi + tiêu đề theo route (cụm khung SSR #146, từ rà soát #133).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { platformKeyMeta } from '#lib/route-meta';
 export function meta() {

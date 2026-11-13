@@ -5,11 +5,6 @@ import { adminToken, assignRole, createTestApp, createUserViaApi, http, login, r
 import { createCategory, createCourse, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
 import { contextIdByLevelInstance, courseContextId, setCourseCompletionCriteria } from '../../support/engagement-helpers';
 
-/**
- * Tiêu chí hoàn thành khoá học — trọn bộ 8 loại của Moodle (issue #23). Oracle: MOODLE_503_STABLE completion/criteria/* (completion_criteria_self, completion_criteria_course, completion_criteria_duration, completion_criteria_role, completion_criteria_unenrol) và biểu mẫu cài đặt hoàn thành khoá học (course/completion_form.php): self = người học tự đánh dấu cho mình; role = người giữ vai được nêu tên đánh dấu cho người học
- * ("manual completion by others"); course = khoá tiên quyết đã hoàn thành;
- * duration = N ngày sau khi ghi danh; unenrol = hoàn thành khi đã huỷ ghi danh.
- */
 describe('Tiêu chí hoàn thành — đủ 8 loại Moodle', () => {
   let app: INestApplication;
   let admin: string;
@@ -63,7 +58,6 @@ describe('Tiêu chí hoàn thành — đủ 8 loại Moodle', () => {
     res = await put([{ criteriaType: 'nonsense' }]);
     expect(res.status).toBe(400); expect(res.body.code).toBe('completion.bad_criteria_type');
 
-    // Cả 8 loại cùng lúc, được tham số hoá đầy đủ: được chấp nhận và lưu bền vững.
     const other = await createCourse(app, admin, (await createCategory(app, admin)).id);
     const teacherRoleId = await roleIdByShortname(app, admin, 'teacher');
     res = await put([
@@ -120,19 +114,15 @@ describe('Tiêu chí hoàn thành — đủ 8 loại Moodle', () => {
     const courseB = await createCourse(app, admin, cat.id);
     const instA = await createEnrolInstance(app, admin, courseA.id);
     const instB = await createEnrolInstance(app, admin, courseB.id);
-    // A hoàn thành theo một ngày trong quá khứ; B yêu cầu A.
     await setCourseCompletionCriteria(app, admin, courseA.id, [{ criteriaType: 'date', date: '2020-01-01T00:00:00.000Z' }]);
     await setCourseCompletionCriteria(app, admin, courseB.id, [{ criteriaType: 'course', courseInstance: courseA.id }]);
 
     const { student, token } = await setupStudent(courseB.id, instB.id);
     await enrolUser(app, admin, courseA.id, instA.id, student.id);
-    // A chưa được đánh giá cho người dùng này ⇒ B không được hoàn thành.
     expect(await userStatus(courseB.id, student.id)).not.toBe('complete');
-    // Hoàn thành A (tổng hợp lại lười biếng khi đọc) lan truyền vào B.
     expect(await myStatus(token, courseA.id)).toBe('complete');
     expect(await myStatus(token, courseB.id)).toBe('complete');
 
-    // Người học thứ hai chỉ ghi danh vào B thì không bao giờ hoàn thành B.
     const only = await setupStudent(courseB.id, instB.id);
     expect(await myStatus(only.token, courseB.id)).not.toBe('complete');
   });
@@ -160,13 +150,11 @@ describe('Tiêu chí hoàn thành — đủ 8 loại Moodle', () => {
     const { student, token } = await setupStudent(course.id, instance.id);
     expect(await myStatus(token, course.id)).not.toBe('complete');
 
-    // Người học không giữ vai giáo viên: việc đánh dấu bị cấm.
     const selfMark = await http(app).post(`/api/v1/courses/${course.id}/completion/criteria/${criteriaId}/mark`)
       .set('Authorization', `Bearer ${token}`).send({ userId: student.id, complete: true });
     expect(selfMark.status).toBe(403);
     expect(selfMark.body.code).toBe('completion.role_marker_forbidden');
 
-    // Người duyệt giữ vai giáo viên tại context khoá học thì đánh dấu được.
     const approver = await createUserViaApi(app, admin);
     await assignRole(app, admin, approver.id, teacherRoleId, await courseContextId(app, admin, course.id));
     const approverToken = (await login(app, approver.username, STRONG_PASSWORD)).accessToken;
@@ -176,7 +164,6 @@ describe('Tiêu chí hoàn thành — đủ 8 loại Moodle', () => {
     expect(marked.body.status).toBe('complete');
     expect(await myStatus(token, course.id)).toBe('complete');
 
-    // Bỏ đánh dấu mở lại khoá học.
     const unmarked = await http(app).post(`/api/v1/courses/${course.id}/completion/criteria/${criteriaId}/mark`)
       .set('Authorization', `Bearer ${approverToken}`).send({ userId: student.id, complete: false });
     expect(unmarked.status).toBeLessThan(300);
@@ -194,9 +181,6 @@ describe('Tiêu chí hoàn thành — đủ 8 loại Moodle', () => {
       .post(`/api/v1/courses/${course.id}/completion/criteria/${criteriaId}/mark`)
       .set('Authorization', `Bearer ${bearer}`).send({ userId: student.id, complete });
 
-    // Người đánh dấu giữ vai giáo viên tại context HỆ THỐNG (gốc của
-    // đường tổ tiên của context khoá học) có thể đánh dấu — role_assign của Moodle kế thừa
-    // xuống cây, đúng như cách PermissionEvaluator phân giải capability.
     const sysMarker = await createUserViaApi(app, admin);
     await assignRole(app, admin, sysMarker.id, teacherRoleId, await systemContextId(app, admin));
     const sysToken = (await login(app, sysMarker.username, STRONG_PASSWORD)).accessToken;
@@ -208,9 +192,6 @@ describe('Tiêu chí hoàn thành — đủ 8 loại Moodle', () => {
     expect(unBySystem.status).toBeLessThan(300);
     expect(await myStatus(token, course.id)).not.toBe('complete');
 
-    // Tương tự với một lần gán tại context LỚP (CLASS) của khoá (phần giữa
-    // of the path since CLASS-0, PR #200): context khoá neo dưới context
-    // lớp nên gán vai tại lớp phủ mọi khoá trong lớp.
     const classMarker = await createUserViaApi(app, admin);
     await assignRole(app, admin, classMarker.id, teacherRoleId, await contextIdByLevelInstance(app, admin, 45, course.classId!));
     const classToken = (await login(app, classMarker.username, STRONG_PASSWORD)).accessToken;
@@ -222,9 +203,6 @@ describe('Tiêu chí hoàn thành — đủ 8 loại Moodle', () => {
     expect(unByClass.status).toBeLessThan(300);
     expect(await myStatus(token, course.id)).not.toBe('complete');
 
-    // Ngược lại, context DANH MỤC không còn nằm trên đường tổ tiên của
-    // khoá (CLASS-0 neo khoá dưới lớp, danh mục chỉ là phân loại hành
-    // chính): gán vai tại danh mục của chính khoá cũng KHÔNG còn quyền.
     const catMarker = await createUserViaApi(app, admin);
     await assignRole(app, admin, catMarker.id, teacherRoleId, await contextIdByLevelInstance(app, admin, 40, cat.id));
     const catToken = (await login(app, catMarker.username, STRONG_PASSWORD)).accessToken;
@@ -232,8 +210,6 @@ describe('Tiêu chí hoàn thành — đủ 8 loại Moodle', () => {
     expect(byCategory.status).toBe(403);
     expect(byCategory.body.code).toBe('completion.role_marker_forbidden');
 
-    // Và một lần gán trong một nhánh KHÔNG LIÊN QUAN (một danh mục khác) cũng
-    // không nằm trên đường của khoá này: vẫn bị cấm.
     const otherCat = await createCategory(app, admin);
     const strayMarker = await createUserViaApi(app, admin);
     await assignRole(app, admin, strayMarker.id, teacherRoleId, await contextIdByLevelInstance(app, admin, 40, otherCat.id));
@@ -253,11 +229,6 @@ describe('Tiêu chí hoàn thành — đủ 8 loại Moodle', () => {
     const del = await http(app).delete(`/api/v1/courses/${course.id}/enrol/instances/${instance.id}/users/${student.id}`)
       .set('Authorization', `Bearer ${admin}`);
     expect(del.status).toBeLessThan(300);
-    // Việc tổng hợp lại completion sau unenrol đi qua sự kiện outbox
-    // course_completion_reaggregation_requested và consumer đích
-    // danh phía API (không còn hook đồng bộ trong giao dịch rút):
-    // chờ trạng thái quan sát được chuyển thành hoàn thành, khẳng
-    // định cuối giữ nguyên như khi cơ chế còn đồng bộ.
     let status = await userStatus(course.id, student.id);
     for (let attempt = 0; attempt < 40 && status !== 'complete'; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 250));
@@ -268,7 +239,6 @@ describe('Tiêu chí hoàn thành — đủ 8 loại Moodle', () => {
 
   it('tổng hợp vẫn chi phối loại mới: ALL cần mọi tiêu chí, ANY cần một', async () => {
     const { course, instance } = await setupCourse();
-    // duration 0 ngày được thoả mãn ngay sau khi ghi danh; self thì không.
     await setCourseCompletionCriteria(app, admin, course.id, [
       { criteriaType: 'duration', enrolPeriodDays: 0 },
       { criteriaType: 'self' },

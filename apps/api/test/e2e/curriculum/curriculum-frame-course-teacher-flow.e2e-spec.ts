@@ -9,13 +9,7 @@ import {
 import { createCategory, createCourse } from '../../support/course-enrolment-helpers';
 import { courseContextId } from '../../support/engagement-helpers';
 
-/**
- * K0a (issue #66) — hồi quy điểm chặn của review độc lập (comment 6382849325): giáo viên theo đúng mô hình gán vai THẬT của seed
- * (editingteacher TẠI CONTEXT KHOÁ, như teacher1 dạy DEMO101) phải nạp
- * được khung vào khoá mình dạy và đọc được bề mặt chọn khung cho khoá đó — dù không có bất kỳ vai nào tại context hệ thống. Spec cũ che điểm này vì gán coursecreator tại context hệ thống (kéo theo curriculum:view tại hệ thống). Các ca chặn giữ nguyên: học sinh 403 mọi bề mặt, giáo viên khoá khác 403 với khoá không phải của mình, cổng quản trị cây (curriculum:manage) không nới cho giáo viên.
- */
 
-/** Node của một YCCĐ dạng Tiptap doc trong dataset (doc/paragraph/text + bulletList/listItem cho ý con). */
 interface OutcomeDocNode {
   type: string;
   text?: string;
@@ -34,9 +28,6 @@ const toan = JSON.parse(
   readFileSync(join(process.cwd(), 'src/modules/curriculum/program-data/program-toan.json'), 'utf8'),
 ) as { records: ProgramRecord[] };
 
-/**
- * Text của một YCCĐ dạng doc — ORACLE trích độc lập trong spec (không dùng code nạp, giữ tính độc lập của oracle): mỗi paragraph là một dòng, listItem cho dòng của paragraph của nó rồi tới các dòng của bulletList lồng bên trong (đệ quy); các dòng nối bằng '\n', cắt khoảng trắng hai đầu — đúng semantics text canonical mà hệ lưu vào `learning_outcomes.content` nay là cột jsonb lưu trực tiếp tài liệu này; text canonical trích từ tài liệu bằng đúng semantics này.
- */
 function docOutcomeText(doc: OutcomeDoc): string {
   const lines: string[] = [];
   const walk = (node: OutcomeDocNode): void => {
@@ -50,7 +41,6 @@ function docOutcomeText(doc: OutcomeDoc): string {
   return lines.join('\n').trim();
 }
 
-/** Các dòng YCCĐ kỳ vọng của một bản ghi (phần tử dạng doc trích text bằng docOutcomeText). */
 function outcomeTexts(r: ProgramRecord): string[] {
   if (r.outcomes.length > 0) {
     return r.outcomes.map((o) => (typeof o === 'string' ? o : docOutcomeText(o)));
@@ -113,8 +103,6 @@ describe('Truy cập khung K0a cho giáo viên cấp khoá học (mô hình vai 
     expect(tree.status).toBe(200);
     tree5 = (tree.body as { nodes: TreeNode[] }).nodes;
 
-    // Hai khoá do admin tạo; giáo viên được gán editingteacher TẠI
-    // CONTEXT của đúng khoá mình dạy — nguyên mô hình seed teacher1.
     const category = await createCategory(app, admin);
     courseA = (await createCourse(app, admin, category.id, { subjectId, grade: 5 })).id;
     courseB = (await createCourse(app, admin, category.id, { subjectId, grade: 5 })).id;
@@ -181,7 +169,6 @@ describe('Truy cập khung K0a cho giáo viên cấp khoá học (mô hình vai 
     const applyOther = await http(app).post(`/api/v1/courses/${courseB}/curriculum-frame`).set(bearer(teacherA))
       .send({ curriculumId: curriculum5Id, nodeIds: [topic.id] });
     expect(applyOther.status).toBe(403);
-    // Đối chứng dương: giáo viên của chính khoá B thì nạp được.
     const applyOwn = await http(app).post(`/api/v1/courses/${courseB}/curriculum-frame`).set(bearer(teacherB))
       .send({ curriculumId: curriculum5Id, nodeIds: [topic.id] });
     expect(applyOwn.status).toBe(201);

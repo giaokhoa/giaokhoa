@@ -5,29 +5,6 @@ import {
   roleIdByShortname, STRONG_PASSWORD, systemContextId, uniqueName,
 } from '../../support/identity-access-helpers';
 
-/**
- * Issue #123 — siết riêng tư ngân hàng CÁ NHÂN ở tầng QB:
- *
- * Ngân hàng riêng của từng giáo viên là khu vực riêng ("của tôi"). Trước lát này, cổng đọc chỉ dựa `question:useall` tại context bank — context bank personal là con của context hệ thống nên GV staff khác kế thừa quyền xuống bank personal của đồng nghiệp: listBanks liệt kê bank personal của GV khác (mọi kind), GET chi tiết bank trả 200, đọc được câu/attribution/ma trận trong bank riêng của đồng nghiệp ở cả REST lẫn MCP (bằng chứng phán quyết MCP-0 6391128869 + EB-1 6391268932).
- *
- * Ma trận ca của spec này:
- *  - Chủ sở hữu: 200/201 mọi đường (bank, câu, category, attribution,
- *    ma trận, bank ma trận).
- *  - GV staff khác: bank personal của đồng nghiệp KHÔNG xuất hiện
- *    trong listBanks (question/exam/matrix); mọi đường đọc thẳng theo id → 404; copy nguồn thuộc bank personal của đồng nghiệp → 403; khám phá không rò câu.
- *  - Học sinh: 404 các đường đọc bank personal.
- *  - Bank trường/tổ: hành vi KHÔNG đổi (GV trường đọc được bank trường;
- *    thành viên tổ đọc được bank tổ).
- *  - Khuôn UI "bank personal đầu tiên trong listBanks" còn đúng: bank
- *    personal duy nhất trong danh sách của mỗi GV là của chính họ. Site admin giữ toàn quyền như bất biến hiện hành (khớp MB-1 E-8).
- *
- * VÒNG 2 (phán quyết đánh giá 6392040333 — điểm chặn sườn GHI): spec vòng 1 dùng archetype `teacher` (không có question:add/editall) nên mù lỗ hổng ghi — đồng nghiệp archetype `editingteacher` kế thừa add/editall/managecategory từ context hệ thống xuống bank personal của người khác, sửa/xoá/chen được nội dung. Vòng 2 khoá bằng cổng ghi chủ sở hữu ở QuestionsService (+ phía nguồn của đóng góp):
- *  - editingteacher khác: PATCH câu, POST câu/stimulus vào category
- *    của đồng nghiệp, PATCH/DELETE stimulus, gắn/gỡ subject + YCCĐ, tạo category trong bank của đồng nghiệp, đề xuất đóng góp bằng câu của đồng nghiệp → 404 (mã not-found của chính tài nguyên).
- *  - Chủ sở hữu editingteacher + site admin: ghi bình thường.
- *  - Bank trường: editingteacher không phải chủ câu vẫn ghi theo
- *    capability như cũ (cổng chỉ áp bank personal).
- */
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
@@ -49,7 +26,6 @@ describe('Riêng tư cá nhân của ngân hàng (issue #123)', () => {
   let teacherC: { id: string; username: string; token: string };
   let student: { id: string; username: string; token: string };
 
-  // Vòng 2: cặp editingteacher (có add/editall thật) — nạn nhân + kẻ tấn công.
   let editorA: { id: string; username: string; token: string };
   let editorB: { id: string; username: string; token: string };
   let bankEA: BankBody;
@@ -79,14 +55,12 @@ describe('Riêng tư cá nhân của ngân hàng (issue #123)', () => {
     return { id: u.id, username: u.username, token: session.accessToken };
   }
 
-  /** Giáo viên: vai teacher tại context hệ thống (nhóm archetype staff). */
   async function mkStaffUser(): Promise<{ id: string; username: string; token: string }> {
     const u = await mkUser();
     await assignRole(app, admin, u.id, await roleIdByShortname(app, admin, 'teacher'), await systemContextId(app, admin));
     return u;
   }
 
-  /** GV archetype editingteacher — vai Teacher thật, CÓ question:add/editall/managecategory. */
   async function mkEditorUser(): Promise<{ id: string; username: string; token: string }> {
     const u = await mkUser();
     await assignRole(app, admin, u.id, await roleIdByShortname(app, admin, 'editingteacher'), await systemContextId(app, admin));
@@ -116,7 +90,6 @@ describe('Riêng tư cá nhân của ngân hàng (issue #123)', () => {
     teacherC = await mkStaffUser();
     student = await mkUser();
 
-    // Bank personal (kind question) của A + một câu riêng.
     const banksA = await listBanks(teacherA.token);
     bankA = banksA.find((b) => b.scope === 'personal')!;
     expect(bankA).toBeTruthy();
@@ -124,13 +97,11 @@ describe('Riêng tư cá nhân của ngân hàng (issue #123)', () => {
     catA = bankA.defaultCategoryId!;
     questionA = await createQuestion(teacherA.token, catA, 'Câu riêng của A', SECRET_TEXT);
 
-    // Bank personal kind exam + kind matrix của A (tạo lười qua list).
     examBankA = (await listBanks(teacherA.token, 'exam')).find((b) => b.scope === 'personal')!;
     expect(examBankA).toBeTruthy();
     matrixBankA = (await listBanks(teacherA.token, 'matrix')).find((b) => b.scope === 'personal')!;
     expect(matrixBankA).toBeTruthy();
 
-    // Ma trận riêng của A trong bank ma trận personal của A.
     const systemCtxId = await systemContextId(app, admin);
     const subjRes = await http(app).post('/api/v1/curriculum/subjects').set(bearer(admin))
       .send({ contextId: systemCtxId, name: uniqueName('Toán 123'), slug: `toan-123-${Date.now()}-${Math.floor(Math.random() * 1e6)}` });
@@ -145,12 +116,10 @@ describe('Riêng tư cá nhân của ngân hàng (issue #123)', () => {
     expect(matrixRes.status, JSON.stringify(matrixRes.body)).toBe(201);
     matrixAId = (matrixRes.body as { id: string }).id;
 
-    // Bank trường + câu chung của trường (A tạo).
     schoolBank = banksA.find((b) => b.scope === 'school')!;
     expect(schoolBank).toBeTruthy();
     questionSchool = await createQuestion(teacherA.token, schoolBank.defaultCategoryId!, 'Câu của trường', 'Câu hỏi chung của trường?');
 
-    // Bank tổ (cohort gồm A + C), A là tổ trưởng, một câu của tổ.
     const cohortRes = await http(app).post('/api/v1/cohorts').set(bearer(admin)).send({ name: uniqueName('Tổ 123') });
     expect(cohortRes.status, JSON.stringify(cohortRes.body)).toBe(201);
     const cohortId = (cohortRes.body as { id: string }).id;
@@ -164,7 +133,6 @@ describe('Riêng tư cá nhân của ngân hàng (issue #123)', () => {
     teamBank = teamRes.body as BankBody;
     questionTeam = await createQuestion(teacherA.token, teamBank.defaultCategoryId!, 'Câu của tổ', 'Câu hỏi của tổ chuyên môn?');
 
-    // --- Vòng 2: fixtures editingteacher -------------------------------------
     editorA = await mkEditorUser();
     editorB = await mkEditorUser();
     bankEA = (await listBanks(editorA.token)).find((b) => b.scope === 'personal')!;
@@ -177,7 +145,6 @@ describe('Riêng tư cá nhân của ngân hàng (issue #123)', () => {
     expect(stimRes.status, JSON.stringify(stimRes.body)).toBe(201);
     stimEA = (stimRes.body as { id: string }).id;
 
-    // Môn + YCCĐ cho các ca gắn/gỡ link trên câu của editorA.
     const mkSubject = async (label: string): Promise<string> => {
       const res = await http(app).post('/api/v1/curriculum/subjects').set(bearer(admin))
         .send({ contextId: systemCtxId, name: uniqueName(label), slug: `priv123-${label}-${Date.now()}-${Math.floor(Math.random() * 1e6)}` });
@@ -195,7 +162,6 @@ describe('Riêng tư cá nhân của ngân hàng (issue #123)', () => {
       .send({ nodeId: (nodeRes.body as { id: string }).id, content: 'YCCĐ cho ca gắn link 123.' });
     expect(outcomeRes.status, JSON.stringify(outcomeRes.body)).toBe(201);
     linkOutcomeId = (outcomeRes.body as { id: string }).id;
-    // Chủ sở hữu gắn sẵn subject + outcome — nền cho các ca gỡ trái phép ở vòng 2.
     const attachSubj = await http(app).post(`/api/v1/questions/${questionEA.question.id}/subjects`)
       .set(bearer(editorA.token)).send({ subjectId: linkSubjectId });
     expect(attachSubj.status, JSON.stringify(attachSubj.body)).toBe(201);
@@ -232,7 +198,6 @@ describe('Riêng tư cá nhân của ngân hàng (issue #123)', () => {
       expect(personals).toHaveLength(1);
       expect(personals[0]!.ownerId).toBe(teacherB.id);
     }
-    // Danh sách mặc định (kind question) cũng sạch.
     const banks = await listBanks(teacherB.token);
     expect(banks.some((b) => b.id === bankA.id)).toBe(false);
   });
@@ -256,7 +221,6 @@ describe('Riêng tư cá nhân của ngân hàng (issue #123)', () => {
       expect(res.status, label).toBe(404);
       expect(JSON.stringify(res.body), label).not.toContain(SECRET_TEXT);
     }
-    // Mã lỗi của chi tiết bank đúng mã not-found hiện hành.
     const bankRes = await http(app).get(`/api/v1/question-banks/${bankA.id}`).set(bearer(teacherB.token));
     expect((bankRes.body as { code?: string }).code).toBe('question.bank_not_found');
   });
@@ -280,14 +244,12 @@ describe('Riêng tư cá nhân của ngân hàng (issue #123)', () => {
   });
 
   it('bank trường + bank tổ giữ nguyên hành vi cho GV khác/thành viên', async () => {
-    // GV khác (không phải chủ) vẫn đọc được bank trường + câu của trường.
     const school = await http(app).get(`/api/v1/question-banks/${schoolBank.id}`).set(bearer(teacherB.token));
     expect(school.status).toBe(200);
     const qSchool = await http(app).get(`/api/v1/questions/${questionSchool.question.id}`).set(bearer(teacherB.token));
     expect(qSchool.status).toBe(200);
     const banksB = await listBanks(teacherB.token);
     expect(banksB.some((b) => b.id === schoolBank.id)).toBe(true);
-    // Thành viên tổ vẫn đọc được bank tổ + câu của tổ.
     const team = await http(app).get(`/api/v1/question-banks/${teamBank.id}`).set(bearer(teacherC.token));
     expect(team.status).toBe(200);
     const qTeam = await http(app).get(`/api/v1/questions/${questionTeam.question.id}`).set(bearer(teacherC.token));
@@ -296,21 +258,16 @@ describe('Riêng tư cá nhân của ngân hàng (issue #123)', () => {
 
   it('vòng 2: editingteacher khác KHÔNG ghi được vào bank personal của đồng nghiệp (câu/stimulus/category/link/đóng góp)', async () => {
     const qid = questionEA.question.id;
-    // PATCH câu của đồng nghiệp → 404 question.not_found, câu còn nguyên.
     const patch = await http(app).patch(`/api/v1/questions/${qid}`).set(bearer(editorB.token))
       .send({ questionText: 'PRIV123-HACKED-TEXT' });
     expect(patch.status, JSON.stringify(patch.body)).toBe(404);
     expect((patch.body as { code?: string }).code).toBe('question.not_found');
     const still = await http(app).get(`/api/v1/questions/${qid}`).set(bearer(editorA.token));
     expect(still.status).toBe(200);
-    // Câu còn nguyên: thân câu vẫn là nội dung gốc, không có dấu vết
-    // của lần PATCH lạ (câu hỏi không còn trường tên — bất biến kiểm
-    // trên chính nội dung thân câu).
     expect(JSON.stringify(still.body)).toContain('PRIV123-EDITOR-SECRET');
     expect(JSON.stringify(still.body)).not.toContain('PRIV123-HACKED-TEXT');
     expect((still.body as { entry: { latestVersion: number } }).entry.latestVersion).toBe(1);
 
-    // POST câu vào category của đồng nghiệp → 404 question.category_not_found, không chèn được.
     const create = await http(app).post('/api/v1/questions').set(bearer(editorB.token)).send({
       categoryId: catEA, qtype: 'multichoice', questionText: 'injected',
       answers: [{ text: 'x', correct: true }, { text: 'y', correct: false }, { text: 'Đáp án khác 1', correct: false }, { text: 'Đáp án khác 2', correct: false }],
@@ -320,7 +277,6 @@ describe('Riêng tư cá nhân của ngân hàng (issue #123)', () => {
     const inCat = await http(app).get(`/api/v1/questions/categories/${catEA}/questions`).set(bearer(editorA.token));
     expect(JSON.stringify(inCat.body)).not.toContain('Câu lạ chèn vào bank editorA');
 
-    // POST/PATCH/DELETE stimulus trong bank của đồng nghiệp → 404.
     const createStim = await http(app).post('/api/v1/stimuli').set(bearer(editorB.token))
       .send({ categoryId: catEA, content: 'stimulus lạ' });
     expect(createStim.status, JSON.stringify(createStim.body)).toBe(404);
@@ -333,7 +289,6 @@ describe('Riêng tư cá nhân của ngân hàng (issue #123)', () => {
     const stimStill = await http(app).get(`/api/v1/stimuli/${stimEA}`).set(bearer(editorA.token));
     expect(stimStill.status).toBe(200);
 
-    // Gắn/gỡ subject + YCCĐ trên câu của đồng nghiệp → 404 mọi đường, link còn nguyên.
     const attachSubj = await http(app).post(`/api/v1/questions/${qid}/subjects`).set(bearer(editorB.token))
       .send({ subjectId: linkSubject2Id });
     expect(attachSubj.status, JSON.stringify(attachSubj.body)).toBe(404);
@@ -352,7 +307,6 @@ describe('Riêng tư cá nhân của ngân hàng (issue #123)', () => {
     expect((links.body as { subjectIds: string[] }).subjectIds).toContain(linkSubjectId);
     expect((links.body as { outcomes: { outcomeId: string }[] }).outcomes.map((o) => o.outcomeId)).toContain(linkOutcomeId);
 
-    // Tạo category trong bank của đồng nghiệp (tường minh bankId + ngầm qua context) → 404 bank_not_found.
     const catExplicit = await http(app).post('/api/v1/questions/categories').set(bearer(editorB.token))
       .send({ name: 'Category lạ', contextId: bankEA.contextId, bankId: bankEA.id });
     expect(catExplicit.status, JSON.stringify(catExplicit.body)).toBe(404);
@@ -361,7 +315,6 @@ describe('Riêng tư cá nhân của ngân hàng (issue #123)', () => {
       .send({ name: 'Category lạ 2', contextId: bankEA.contextId });
     expect(catImplicit.status, JSON.stringify(catImplicit.body)).toBe(404);
 
-    // Đề xuất đóng góp bằng câu của đồng nghiệp vào bank trường → 404 question.not_found.
     const contrib = await http(app).post(`/api/v1/question-banks/${schoolBank.id}/contributions`).set(bearer(editorB.token))
       .send({ questionId: qid });
     expect(contrib.status, JSON.stringify(contrib.body)).toBe(404);
@@ -386,7 +339,6 @@ describe('Riêng tư cá nhân của ngân hàng (issue #123)', () => {
     const cat = await http(app).post('/api/v1/questions/categories').set(bearer(editorA.token))
       .send({ name: 'Category riêng của editorA', contextId: bankEA.contextId, bankId: bankEA.id });
     expect(cat.status, JSON.stringify(cat.body)).toBe(201);
-    // Gỡ + gắn lại link của chính mình chạy như cũ.
     const detach = await http(app).delete(`/api/v1/questions/${qid}/subjects/${linkSubjectId}`).set(bearer(editorA.token));
     expect(detach.status, JSON.stringify(detach.body)).toBe(200);
     const reattach = await http(app).post(`/api/v1/questions/${qid}/subjects`).set(bearer(editorA.token))
@@ -399,7 +351,7 @@ describe('Riêng tư cá nhân của ngân hàng (issue #123)', () => {
       .send({ questionText: 'Câu hỏi chung của trường (editorB sửa)?' });
     expect(patch.status, JSON.stringify(patch.body)).toBe(200);
     const create = await http(app).post('/api/v1/questions').set(bearer(editorB.token)).send({
-      categoryId: schoolBank.defaultCategoryId!, qtype: 'multichoice', 
+      categoryId: schoolBank.defaultCategoryId!, qtype: 'multichoice',
       questionText: 'Câu hỏi chung do editorB tạo?',
       answers: [{ text: 'Đúng', correct: true }, { text: 'Sai', correct: false }, { text: 'Đáp án khác 1', correct: false }, { text: 'Đáp án khác 2', correct: false }],
     });

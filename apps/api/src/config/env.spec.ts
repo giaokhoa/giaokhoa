@@ -132,7 +132,7 @@ describe('Hàm redisConnectionFromUrl', () => {
     expect(conn.host).toBe('localhost');
     expect(conn.port).toBe(6379);
     expect(conn.tls).toBeUndefined();
-    // Producer HTTP không được chờ mãi nếu Redis chết giữa request.
+
     expect(conn).toMatchObject({ maxRetriesPerRequest: 1, enableOfflineQueue: false });
   });
 

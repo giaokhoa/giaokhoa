@@ -8,24 +8,6 @@ import { CAP_ALLOW } from './domain/permission';
 import { PermissionEvaluator } from './permission-evaluator.service';
 import { tenantAls } from '../tenants/tenant-als';
 
-/**
- * Bộ spec phân quyền cho việc tái thứ tự tra cứu của PermissionEvaluator
- * (BE-05): ma trận vai trò × ngữ cảnh × trạng thái cache, khẳng định hai
- * lớp hệ quả phải giữ tuyệt đối khi thứ tự tra cứu đổi:
- *
- *  1. Kết quả cho/chặn của từng trường hợp KHÔNG đổi so với hành vi
- *     hiện tại — ma trận kết quả trong spec này đạt trên code hiện tại và phải đạt y hệt sau refactor (đây là lưới an toàn của việc đổi thứ tự).
- *  2. Chi phí truy vấn đổi đúng theo thiết kế cache-trước: ở lượt kiểm
- *     lặp lại cùng đầu vào (cache ấm), tầng dữ liệu đánh giá (gán vai, override), dữ kiện cổng tenant (thông tin tenant + membership) và cấu hình site admin KHÔNG bị hỏi lại — mọi tầng cache đều được tra trước truy vấn DB mà chúng thay thế. Hai truy vấn nạp context/path là ngoại lệ có chủ đích: chúng dựng dấu version — chính khoá vô hiệu hoá của mọi tầng cache — nên luôn đọc từ DB; spec ghim bất biến này bằng bộ đếm contextReads vẫn tăng ở lượt lặp lại.
- *
- *  3. Vô hiệu hoá giữ nguyên điều kiện và tính tức thì hiện hành: mọi
- *     thay đổi dữ kiện quyền trong sản phẩm đều bump version của context liên quan qua `markContextDirty` (gỡ gán vai bump context của gán, đổi trạng thái membership/tenant bump context tenant, đặt override bump context của override). Spec mô phỏng đúng các bump đó và khẳng định kết quả lật ngay ở lượt kiểm sau. Danh sách site admin đổi qua `setSiteAdmins` — điểm ghi duy nhất của cấu hình này — cũng phải hiệu lực ngay.
- *
- *  4. Mục cache của cấu hình site admin được cô lập theo cơ sở dữ
- *     liệu: giá trị của nó là id người dùng, chỉ có nghĩa trong đúng một DB, trong khi nhiều tiến trình trỏ vào các DB khác nhau có thể dùng chung một Redis (CI chạy nhiều DB test trên một Redis). Hai tiến trình khác DB không bao giờ được đọc/ghi lẫn mục của nhau — nếu không, một tiến trình sẽ thấy admin của DB lạ và quyết định sai (điển hình: seed của app con trên DB trống tưởng admin đầu tiên đã tồn tại nên bỏ qua việc tạo). Ngược lại, hai tiến trình cùng một DB vẫn dùng chung mục như thiết kế cache-trước vốn có.
- *
- * Thế giới kiểm chứng dựng trong bộ nhớ với tầng dữ liệu giả lập đếm số lần bị hỏi theo từng loại đọc; `ContextsService` và `PermissionEvaluator` đều là service THẬT.
- */
 
 const SYS_ID = '00000000-0000-4000-8000-000000000010';
 const TEN_ID = '00000000-0000-4000-8000-000000000020';
@@ -46,11 +28,6 @@ function makeWorld(opts?: { databaseUrl?: string; cacheStore?: Map<string, unkno
     tenantInfo: { kind: 'center', status: 'active' } as { kind: string; status: string } | undefined,
     memberships: new Map<string, string>([['tenant-1|user-member', 'active'], ['tenant-1|user-plain', 'active']]),
     siteAdmins: ['user-admin'] as string[],
-    // Danh sách site admin của KHO CHUNG, chỉ phép đọc ghim
-    // platform của evaluator (`isPlatformSiteAdmin`, TĐ6) mới
-    // thấy: tầng dữ liệu giả lập phân biệt lượt đọc này bằng
-    // ngữ cảnh ALS platform đã lược slug (xem `getConfigValue`
-    // và `currentContextDatabaseName` giả lập dưới đây).
     platformSiteAdmins: ['user-admin'] as string[],
     assignments: [
       { userId: 'user-member', roleId: 'role-viewer', contextId: CRS_ID },
@@ -76,7 +53,6 @@ function makeWorld(opts?: { databaseUrl?: string; cacheStore?: Map<string, unkno
   };
 
   const repo = {
-    // --- contexts ---------------------------------------------------
     async getContextById(id: string) {
       counters.contextReads += 1;
       return contexts.find((c) => c.id === id);
@@ -90,7 +66,6 @@ function makeWorld(opts?: { databaseUrl?: string; cacheStore?: Map<string, unkno
         if (c.path === pathPrefix || c.path.startsWith(`${pathPrefix}/`)) c.version += 1;
       }
     },
-    // --- cổng tenant / cấu hình --------------------------------------
     async getTenantGateInfo(tenantId: string) {
       counters.gateInfoReads += 1;
       return tenantId === 'tenant-1' ? state.tenantInfo : undefined;
@@ -102,11 +77,6 @@ function makeWorld(opts?: { databaseUrl?: string; cacheStore?: Map<string, unkno
     async getConfigValue(key: string) {
       counters.configReads += 1;
       if (key !== 'siteadmins') return undefined;
-      // Lượt đọc ghim platform của evaluator chạy trong ngữ
-      // cảnh ALS platform đã lược slug: tầng dữ liệu thật lúc
-      // đó đọc kho chung, nên giả lập trả danh sách platform
-      // riêng thay vì danh sách của "kho đang được ngữ cảnh
-      // đọc" mà các ca thường dùng.
       const store = tenantAls.getStore();
       if (store?.platform && !store?.spaceSlug) return state.platformSiteAdmins;
       return state.siteAdmins;
@@ -114,7 +84,6 @@ function makeWorld(opts?: { databaseUrl?: string; cacheStore?: Map<string, unkno
     async setConfigValue(key: string, value: unknown) {
       if (key === 'siteadmins') state.siteAdmins = value as string[];
     },
-    // --- gán vai / override -------------------------------------------
     async getAssignmentsForUserInContexts(userId: string, contextIds: string[]) {
       counters.assignmentReads += 1;
       return state.assignments.filter((a) => a.userId === userId && contextIds.includes(a.contextId));
@@ -131,10 +100,6 @@ function makeWorld(opts?: { databaseUrl?: string; cacheStore?: Map<string, unkno
     },
   };
 
-  // Kho cache và URL cơ sở dữ liệu được truyền vào khi spec cần dựng
-  // nhiều "tiến trình" dùng chung một Redis (cùng `cacheStore`) nhưng
-  // trỏ vào các DB khác nhau (khác `databaseUrl`); mặc định mỗi thế
-  // giới có kho riêng và DB tên `giaokhoa_test_api`.
   const cacheStore = opts?.cacheStore ?? new Map<string, unknown>();
   const cache = {
     async get(key: string) { return cacheStore.get(key); },
@@ -147,14 +112,6 @@ function makeWorld(opts?: { databaseUrl?: string; cacheStore?: Map<string, unkno
   const config = {
     getOrThrow: () => opts?.databaseUrl ?? 'postgres://user:pass@localhost:5432/giaokhoa_test_api',
   } as unknown as ConfigService;
-  // Khung định tuyến kho giả lập cho các ca cần ngữ cảnh kho riêng:
-  // chỉ phơi đúng phép tra danh tính kho của ngữ cảnh mà evaluator
-  // dùng để dựng khoá cache `siteadmins`; mặc định không có ngữ
-  // cảnh kho riêng (trả undefined — kho chung) như các ca còn lại.
-  // Lượt đọc ghim platform của evaluator lược slug khỏi ALS nên
-  // khung thật lúc đó cũng báo "không phải kho riêng": giả lập
-  // trả undefined trong ngữ cảnh ALS platform đã lược slug để
-  // khoá cache của lượt đọc đó rơi về kho chung như code thật.
   const spaceDb = {
     currentContextDatabaseName: () => {
       const store = tenantAls.getStore();
@@ -207,21 +164,17 @@ describe('PermissionEvaluator — ma trận cho/chặn theo vai trò và ngữ c
 describe('PermissionEvaluator — lượt kiểm lặp lại khi cache đã ấm', () => {
   it('cho cùng kết quả và không hỏi lại tầng dữ liệu đánh giá, cổng tenant và cấu hình; chỉ dấu version được đọc lại từ DB', async () => {
     const { evaluator, counters } = makeWorld();
-    // Lượt đầu (cache nguội) cho bốn trường hợp đại diện.
     await expect(evaluator.hasCapability('user-member', 'course:view', CRS_ID)).resolves.toBe(true);
     await expect(evaluator.hasCapability('user-member', 'course:delete', CRS_ID)).resolves.toBe(false);
     await expect(evaluator.hasCapability('user-admin', 'course:view', OUT_ID)).resolves.toBe(true);
     await expect(evaluator.hasCapability('user-plain', 'course:view', CRS_ID)).resolves.toBe(false);
 
     const before = { ...counters };
-    // Lượt lặp lại: kết quả giữ nguyên tuyệt đối.
     await expect(evaluator.hasCapability('user-member', 'course:view', CRS_ID)).resolves.toBe(true);
     await expect(evaluator.hasCapability('user-member', 'course:delete', CRS_ID)).resolves.toBe(false);
     await expect(evaluator.hasCapability('user-admin', 'course:view', OUT_ID)).resolves.toBe(true);
     await expect(evaluator.hasCapability('user-plain', 'course:view', CRS_ID)).resolves.toBe(false);
 
-    // Mọi tầng cache đều trúng: không tầng dữ liệu nào bị hỏi lại,
-    // trừ phép đọc context/path dựng dấu version (khoá vô hiệu hoá).
     expect(counters.assignmentReads).toBe(before.assignmentReads);
     expect(counters.overrideReads).toBe(before.overrideReads);
     expect(counters.gateInfoReads).toBe(before.gateInfoReads);
@@ -237,8 +190,6 @@ describe('PermissionEvaluator — thay đổi dữ kiện quyền có hiệu l�
     await expect(evaluator.hasCapability('user-member', 'course:view', CRS_ID)).resolves.toBe(true);
     const readsBefore = counters.membershipReads + counters.gateInfoReads;
 
-    // Mô phỏng TenantsService.setMemberStatus: đổi trạng thái + bump
-    // version của context tenant.
     state.memberships.set('tenant-1|user-member', 'suspended');
     await contextsService.markContextDirty(TEN_ID);
 
@@ -250,7 +201,6 @@ describe('PermissionEvaluator — thay đổi dữ kiện quyền có hiệu l�
     const { evaluator, contextsService, state } = makeWorld();
     await expect(evaluator.hasCapability('user-member', 'course:view', CRS_ID)).resolves.toBe(true);
 
-    // Mô phỏng TenantsService.updateTenant đổi status: bump context tenant.
     state.tenantInfo = { kind: 'center', status: 'suspended' };
     await contextsService.markContextDirty(TEN_ID);
 
@@ -262,7 +212,6 @@ describe('PermissionEvaluator — thay đổi dữ kiện quyền có hiệu l�
     await expect(evaluator.hasCapability('user-member', 'course:view', CRS_ID)).resolves.toBe(true);
     const readsBefore = counters.assignmentReads;
 
-    // Mô phỏng RolesService.unassignRole: xoá gán + bump context của gán.
     state.assignments = state.assignments.filter((a) => a.userId !== 'user-member');
     await contextsService.markContextDirty(CRS_ID);
 
@@ -274,7 +223,6 @@ describe('PermissionEvaluator — thay đổi dữ kiện quyền có hiệu l�
     const { evaluator, contextsService, state } = makeWorld();
     await expect(evaluator.hasCapability('user-member', 'course:delete', CRS_ID)).resolves.toBe(false);
 
-    // Mô phỏng RolesService.setCapabilityOverride: thêm override + bump.
     state.overrides.push({ roleId: 'role-viewer', capability: 'course:delete', contextId: CRS_ID, permission: CAP_ALLOW });
     await contextsService.markContextDirty(CRS_ID);
 
@@ -283,8 +231,6 @@ describe('PermissionEvaluator — thay đổi dữ kiện quyền có hiệu l�
 
   it('cấp rồi thu hồi site admin qua setSiteAdmins có hiệu lực ngay ở lượt kiểm sau', async () => {
     const { evaluator } = makeWorld();
-    // Ngoài cây tenant, user-plain không có quyền nào: bị chặn, kết quả
-    // đánh giá được cache.
     await expect(evaluator.hasCapability('user-plain', 'course:view', OUT_ID)).resolves.toBe(false);
     await evaluator.setSiteAdmins(['user-plain']);
     await expect(evaluator.hasCapability('user-plain', 'course:view', OUT_ID)).resolves.toBe(true);
@@ -295,10 +241,6 @@ describe('PermissionEvaluator — thay đổi dữ kiện quyền có hiệu l�
 
 describe('PermissionEvaluator — cô lập cache site admin theo cơ sở dữ liệu khi dùng chung Redis', () => {
   it('tiến trình trên DB trống không thấy danh sách site admin mà tiến trình của DB khác đã ghi xuyên vào Redis chung', async () => {
-    // Đúng hình thù làm CI đỏ ở spec seed-bootstrap: app chính boot
-    // trên DB của nó và seed ghi xuyên admin đầu tiên vào Redis dùng
-    // chung; app con trên DB trống khác sau đó quyết định việc tạo
-    // admin đầu tiên dựa trên danh sách site admin nó đọc được.
     const sharedStore = new Map<string, unknown>();
     const processA = makeWorld({ databaseUrl: 'postgres://localhost:5432/giaokhoa_db_a', cacheStore: sharedStore });
     const processB = makeWorld({ databaseUrl: 'postgres://localhost:5432/giaokhoa_db_b', cacheStore: sharedStore });
@@ -306,8 +248,6 @@ describe('PermissionEvaluator — cô lập cache site admin theo cơ sở dữ 
 
     await processA.evaluator.setSiteAdmins(['admin-cua-db-a']);
 
-    // B phải đọc danh sách của chính DB của nó (rỗng) từ DB, không
-    // được đọc trúng mục A đã ghi vào Redis chung.
     await expect(processB.evaluator.listSiteAdmins()).resolves.toEqual([]);
     await expect(processB.evaluator.isSiteAdmin('admin-cua-db-a')).resolves.toBe(false);
     expect(processB.counters.configReads).toBeGreaterThan(0);
@@ -334,17 +274,6 @@ describe('PermissionEvaluator — cô lập cache site admin theo cơ sở dữ 
   });
 
   it('cùng một tiến trình phục vụ hai kho: ngữ cảnh kho riêng chỉ nhận quản trị của kho mình, không nhận quản trị platform', async () => {
-    // Mô hình của tiền điều kiện TĐ6 (issue #587): một tiến trình vừa
-    // phục vụ kho chung vừa phục vụ một trung tâm kho riêng qua
-    // handle định tuyến, dùng chung một Redis. Tầng dữ liệu giả lập
-    // là một repository duy nhất, nên test hoán đổi danh sách site
-    // admin của repository theo "kho đang được ngữ cảnh đọc" để
-    // đóng vai hai kho; phần bị kiểm chứng là khoá cache mà
-    // evaluator dựng từ danh tính kho của ngữ cảnh — khoá đó phải
-    // tự tách hai kho dù cache vật lý là một — cộng lớp hợp nhất
-    // một chiều của isSiteAdmin: ngữ cảnh kho riêng nhận diện cả
-    // admin của kho mình và admin platform (lượt đọc ghim platform
-    // trả danh sách platform riêng của giả lập).
     const sharedStore = new Map<string, unknown>();
     let contextDatabaseName: string | undefined;
     const { evaluator, state, counters } = makeWorld({
@@ -354,25 +283,15 @@ describe('PermissionEvaluator — cô lập cache site admin theo cơ sở dữ 
     state.siteAdmins = ['admin-kho-chung'];
     state.platformSiteAdmins = ['admin-kho-chung'];
 
-    // Ngữ cảnh kho chung nạp cache trước: thấy admin của kho chung.
     await expect(evaluator.isSiteAdmin('admin-kho-chung')).resolves.toBe(true);
     const readsAfterSharedPrime = counters.configReads;
 
-    // Chuyển ngữ cảnh sang kho riêng (danh tính kho do khung định
-    // tuyến báo): evaluator phải đọc lại từ tầng dữ liệu theo khoá
-    // của kho riêng — không dùng mục kho chung vừa nạp — và nhận
-    // diện admin của kho riêng; quản trị platform không được
-    // nhận diện trong ngữ cảnh kho riêng.
     contextDatabaseName = 'giaokhoa_space_rieng';
     state.siteAdmins = ['admin-kho-rieng'];
     await expect(evaluator.isSiteAdmin('admin-kho-rieng')).resolves.toBe(true);
     expect(counters.configReads).toBeGreaterThan(readsAfterSharedPrime);
     await expect(evaluator.isSiteAdmin('admin-kho-chung')).resolves.toBe(false);
 
-    // Ghi xuyên trong ngữ cảnh kho riêng chỉ chạm mục của kho
-    // riêng: quay lại ngữ cảnh kho chung, danh sách hiệu lực vẫn
-    // là danh sách của kho chung, admin ghi ở kho riêng không rò
-    // sang.
     await evaluator.setSiteAdmins(['admin-kho-rieng', 'admin-rieng-hai']);
     contextDatabaseName = undefined;
     state.siteAdmins = ['admin-kho-chung'];

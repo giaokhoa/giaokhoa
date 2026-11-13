@@ -7,17 +7,6 @@ import {
 import { createCategory, createCourse, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
 import { addGroupMember, contextIdByLevelInstance, createGroupViaApi } from '../../support/engagement-helpers';
 
-/**
- * Lát M3 — TRẢ LỜI TRÍCH DẪN (issue #229): người dùng trả lời MỘT tin cụ thể trong cùng hội thoại; tin mới mang tham chiếu reply-to và khối tóm tắt (quote) do server dựng theo quyền của người đọc. Các ca kiểm chứng đúng luồng nghiệp vụ:
- *  - gửi kèm trích dẫn → response + đường đọc của cả hai phía mang
- *    quote đầy đủ (người gửi gốc, seq, excerpt rút gọn 120 ký tự);
- *  - gác service: trích dẫn tin của hội thoại KHÁC hoặc id không tồn
- *    tại → cùng một 400 `messaging.reply_target_not_found`, không tin nào được tạo (không lộ sự tồn tại của tin ở nơi khác);
- *  - trần ký tự của M2 tính trên nội dung tin MỚI, không tính trích
- *    dẫn;
- *  - tin gốc bị thu hồi / bị tác giả ẩn phía mình → quote chuyển
- *    `unavailable`, excerpt rỗng, nội dung gốc KHÔNG xuất hiện ở bất kỳ trường nào của payload người thường; tin gốc bị moderator xoá cứng → tham chiếu mất hẳn (replyTo null qua FK SET NULL). Khẳng định realtime "`message.new` mang đủ dữ kiện trích dẫn" không còn ở file này: từ issue #521, phân phối realtime chạy ở hàng đợi phía worker (không còn consumer trong tiến trình API để phát tới socket gắn ở đây) — khẳng định đó cư trú ở spec tích hợp `apps/worker/test/integration/messaging/messaging-realtime-queue.int-spec.ts`. Trạng thái xoá mềm toàn cục (deletedAt) hiện không còn đường API nào đặt (luật quote vẫn xử lý cho dữ liệu cũ + moderator) — hai trạng thái "không còn hiển thị" kiểm chứng sống ở đây là thu hồi và ẩn-phía-người-đọc.
- */
 
 interface Person { id: string; username: string; token: string }
 
@@ -68,17 +57,6 @@ async function listMessages(token: string, conversationId: string): Promise<Mess
   return res.body.messages as MessageBody[];
 }
 
-/**
- * Ghi thẳng một dòng gán vai vào DB cho fixture. Các fixture của bộ
- * spec nhắn tin dựng persona giáo viên vừa ghi danh trong khoá vừa
- * giữ vai giảng dạy tại context khoá (giáo viên hiện diện trong khoá
- * như một thành viên và giữ vai trò kiểm duyệt). Từ issue #425,
- * trạng thái lẫn vai cùng khoá này không còn tạo được qua API — cả
- * hai chiều ghi danh/gán vai đều bị chốt tách vai chặn — và chỉ còn
- * tồn tại như dữ kiện có sẵn; các ca của bộ spec này kiểm hành vi
- * nhắn tin trên đúng dữ kiện đó, nên dòng gán vai được ghi thẳng
- * vào DB trong lúc phần ghi danh vẫn đi qua API như cũ.
- */
 async function insertAssignmentRow(roleId: string, userId: string, contextId: string): Promise<void> {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
@@ -107,7 +85,6 @@ describe('Messaging M3 — trả lời trích dẫn (issue #229)', () => {
     await befriend(a, b);
     convId = await openConversation(a, b);
 
-    // Bối cảnh nhóm khoá cho ca moderator xoá cứng (khuôn lifecycle).
     const category = await createCategory(app, admin);
     const course = await createCourse(app, admin, category.id);
     const instance = await createEnrolInstance(app, admin, course.id);
@@ -117,8 +94,6 @@ describe('Messaging M3 — trả lời trích dẫn (issue #229)', () => {
     for (const p of [teacher, s1, s2]) await enrolUser(app, admin, course.id, instance.id, p.id);
     const courseCtx = await contextIdByLevelInstance(app, admin, 50, course.id);
     const editingTeacher = await roleIdByShortname(app, admin, 'editingteacher');
-    // Persona giáo viên ở đây vừa ghi danh vừa giữ vai giảng dạy tại
-    // chính khoá: dòng gán vai ghi thẳng vào DB (xem insertAssignmentRow).
     await insertAssignmentRow(editingTeacher, teacher.id, courseCtx);
     const group = await createGroupViaApi(app, admin, course.id, 'Lớp trích dẫn M3');
     for (const p of [teacher, s1, s2]) await addGroupMember(app, admin, course.id, group.id, p.id);
@@ -129,7 +104,6 @@ describe('Messaging M3 — trả lời trích dẫn (issue #229)', () => {
   }, 180000);
 
   afterAll(async () => {
-    // Dọn site-config trần ký tự nếu ca trần chết giữa chừng.
     await http(app).delete('/api/v1/site-config/core/messagingmaxmessagelength')
       .set('Authorization', `Bearer ${admin}`).catch(() => undefined);
     await app.close();
@@ -159,7 +133,6 @@ describe('Messaging M3 — trả lời trích dẫn (issue #229)', () => {
       expect(seen?.replyTo?.unavailable).toBe(false);
     }
 
-    // Chi tiết hội thoại (đường trang web tải khi mở) cũng mang quote.
     const detail = await http(app).get(`/api/v1/messages/conversations/${convId}`)
       .set('Authorization', `Bearer ${b.token}`);
     expect(detail.status).toBe(200);

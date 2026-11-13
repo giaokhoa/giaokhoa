@@ -1,5 +1,3 @@
--- Tài nguyên trong khoá là bản tiếp nhận ghim phiên bản, không là bản sao biên tập.
--- Không tạo FK xuyên database; resources kế thừa tenant của course qua RLS.
 ALTER TABLE "resources"
   ADD COLUMN "system_material_id" uuid,
   ADD COLUMN "system_material_version" integer,
@@ -11,19 +9,14 @@ ALTER TABLE "resources"
       AND "file_id" IS NULL AND "url" IS NULL AND "transcript" IS NULL)
   );
 --> statement-breakpoint
--- Kho học liệu riêng phải mang tenant ngay cả khi context cá nhân nằm dưới hệ thống.
 ALTER TABLE "content_bank_content" ADD COLUMN "tenant_id" uuid REFERENCES "tenants"("id") ON DELETE RESTRICT;
 --> statement-breakpoint
--- Dữ liệu lịch sử có thể neo context USER hoặc SYSTEM dù do trung tâm tạo.
--- Chỉ backfill khi có chứng cứ chủ sở hữu từ context/khoá/tổ hoặc duy nhất
--- một membership của tác giả. Không được đoán tenant platform cho dữ liệu mơ hồ.
 DO $$
 DECLARE
   previous_platform text := current_setting('app.platform', true);
   unresolved_count integer;
   unresolved_examples text;
 BEGIN
-  -- Role migration không BYPASSRLS; chỉ mở quyền vận hành trong khối này.
   PERFORM set_config('app.platform', 'on', true);
   UPDATE "content_bank_content" AS item SET "tenant_id" = COALESCE(
     (SELECT tenant.id FROM "context" AS anchor JOIN "context" AS tenant_context

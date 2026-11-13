@@ -3,16 +3,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWORD } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, createEnrolInstance, createSection, enrolUser, getFirstSectionId } from '../../support/course-enrolment-helpers';
 
-/**
- * K2 — Học liệu thật + Player + tiến độ học (issue #85), gồm phần hấp thụ nghiên cứu học liệu số VN (K2-B1→B6):
- *  - B1: mặc định hoàn thành theo loại nội dung (trang đọc/tài liệu =
- *    manual: mở xem + tự xác nhận; video = progress ≥ 90%; tệp khác/ liên kết ngoài = none: chỉ ghi truy cập, ngoài % hoàn thành).
- *  - B2: sự kiện học lưu bền + bản ghi hồ sơ chụp tên mục khi hoàn
- *    thành (Điều 8 TT 09/2021).
- *  - B4: báo cáo tiến độ GV (ma trận lớp × mục + CSV + lọc nhóm).
- *  - B5: mẫu cấu trúc bài học theo khung CV 5512.
- * % tiến độ luôn đối chiếu với dữ liệu completion qua API completion.
- */
 describe('Nội dung học tập, trình phát và tiến độ K2', () => {
   let app: INestApplication;
   let admin: string;
@@ -55,21 +45,17 @@ describe('Nội dung học tập, trình phát và tiến độ K2', () => {
       if (res.status !== 201) throw new Error(`upload ${fileName} failed: ${res.status} ${JSON.stringify(res.body)}`);
       return res.body.id as string;
     }
-    // Trang đọc ở section 1 (mặc định manual theo B1).
     const pageRes = await http(app).post(`/api/v1/courses/${course.id}/pages`).set('Authorization', `Bearer ${admin}`)
       .send({ sectionId, name: 'Bài đọc 1', content: '<p>Nội dung bài đọc</p>' });
     if (pageRes.status !== 201) throw new Error(`create page failed: ${pageRes.status} ${JSON.stringify(pageRes.body)}`);
-    // Tài liệu văn bản ở section 1 (mặc định manual theo B1).
     const docFileId = await upload('phieu-bai-tap.txt', 'text/plain', 'tai-lieu-hoc-tap');
     const docRes = await http(app).post(`/api/v1/courses/${course.id}/resources`).set('Authorization', `Bearer ${admin}`)
       .send({ sectionId, name: 'Phiếu bài tập', kind: 'file', fileId: docFileId });
     if (docRes.status !== 201) throw new Error(`create doc resource failed: ${docRes.status} ${JSON.stringify(docRes.body)}`);
-    // Video ở section 2 (mặc định progress theo B1) kèm transcript.
     const videoFileId = await upload('bai-giang.mp4', 'video/mp4', 'fake-video-bytes');
     const videoRes = await http(app).post(`/api/v1/courses/${course.id}/resources`).set('Authorization', `Bearer ${admin}`)
       .send({ sectionId: section2.id, name: 'Video bài giảng', kind: 'file', fileId: videoFileId, transcript: 'Bản chữ của bài giảng.' });
     if (videoRes.status !== 201) throw new Error(`create video resource failed: ${videoRes.status} ${JSON.stringify(videoRes.body)}`);
-    // Liên kết ngoài ở section 2 (mặc định none theo B1).
     const urlRes = await http(app).post(`/api/v1/courses/${course.id}/resources`).set('Authorization', `Bearer ${admin}`)
       .send({ sectionId: section2.id, name: 'Video ngoài', kind: 'url', url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' });
     if (urlRes.status !== 201) throw new Error(`create url resource failed: ${urlRes.status} ${JSON.stringify(urlRes.body)}`);
@@ -104,10 +90,8 @@ describe('Nội dung học tập, trình phát và tiến độ K2', () => {
     const urlRead = await http(app).get(`/api/v1/resources/${f.urlRes.id}`).set('Authorization', `Bearer ${me}`);
     expect(urlRead.body.resource.completionMode).toBe('none');
     expect(urlRead.body.embedUrl).toBe('https://www.youtube.com/embed/dQw4w9WgXcQ');
-    // Mẫu số tiến độ chỉ gồm 3 mục được theo dõi (liên kết ngoài %).
     const progress = await http(app).get(`/api/v1/courses/${f.course.id}/progress/me`).set('Authorization', `Bearer ${me}`);
     expect(progress.body.total).toBe(3);
-    // Người ngoài khoá không đọc được học liệu.
     const outsider = await createUserViaApi(app, admin);
     const outsiderToken = (await login(app, outsider.username, STRONG_PASSWORD)).accessToken;
     expect((await http(app).get(`/api/v1/pages/${f.page.id}`).set('Authorization', `Bearer ${outsiderToken}`)).status).toBe(403);
@@ -128,7 +112,6 @@ describe('Nội dung học tập, trình phát và tiến độ K2', () => {
 
     const viewed = await http(app).post(`/api/v1/courses/${f.course.id}/modules/${f.page.cmId}/view`).set('Authorization', `Bearer ${me}`);
     expect(viewed.status).toBeLessThan(300);
-    // Đã xem ≠ đã hoàn thành với mục manual.
     const completionMe = await http(app).get(`/api/v1/courses/${f.course.id}/completion/me`).set('Authorization', `Bearer ${me}`);
     const pageActivity = (completionMe.body.activities as { cmId: string; state: number; viewed: boolean }[]).find((a) => a.cmId === f.page.cmId);
     expect(pageActivity?.viewed).toBe(true);
@@ -147,7 +130,6 @@ describe('Nội dung học tập, trình phát và tiến độ K2', () => {
     expect(progress.body.percent).toBe(33);
     const s1 = (progress.body.sections as { sectionId: string; percent: number | null }[]).find((s) => s.sectionId === f.sectionId);
     expect(s1?.percent).toBe(50);
-    // Học tiếp: mục theo dõi đầu tiên chưa xong = phiếu bài tập.
     expect(progress.body.resume.cmId).toBe(f.docRes.cmId);
   });
 
@@ -161,14 +143,12 @@ describe('Nội dung học tập, trình phát và tiến độ K2', () => {
     expect(half.status).toBeLessThan(300);
     expect(half.body.state).toBe(0);
     expect(half.body.percent).toBe(50);
-    // Vị trí dở được player trả lại để học tiếp đúng chỗ.
     const player = await http(app).get(`/api/v1/courses/${f.course.id}/player/${f.videoRes.cmId}`).set('Authorization', `Bearer ${me}`);
     expect(player.body.itemProgress).toEqual({ percent: 50, positionSeconds: 120, page: null });
     const done = await post(95, 570);
     expect(done.body.state).toBe(1);
     const progress = await http(app).get(`/api/v1/courses/${f.course.id}/progress/me`).set('Authorization', `Bearer ${me}`);
     expect(progress.body.completed).toBe(1);
-    // Ôn lại: báo lại 10% không làm mất hoàn thành, % giữ mức cao nhất.
     const again = await post(10, 60);
     expect(again.body.percent).toBe(95);
     expect(again.body.state).toBe(1);
@@ -228,22 +208,18 @@ describe('Nội dung học tập, trình phát và tiến độ K2', () => {
     const s1 = (report.body.students as { userId: string; percent: number; records: { cmId: string; cmName: string }[] }[])
       .find((s) => s.userId === f.students[0]!.id);
     expect(s1?.percent).toBe(67);
-    // Hồ sơ hoàn thành chụp đúng tên mục tại thời điểm hoàn thành.
     expect(s1?.records.map((r) => r.cmName).sort()).toEqual(['Bài đọc 1', 'Phiếu bài tập']);
-    // Lọc theo nhóm: tạo nhóm chỉ gồm học sinh 2 → báo cáo chỉ còn 1 HS.
     const group = await http(app).post(`/api/v1/courses/${f.course.id}/groups`).set('Authorization', `Bearer ${admin}`).send({ name: 'Tổ 1' });
     await http(app).post(`/api/v1/courses/${f.course.id}/groups/${group.body.id}/members`)
       .set('Authorization', `Bearer ${admin}`).send({ userId: f.students[1]!.id });
     const filtered = await http(app).get(`/api/v1/courses/${f.course.id}/progress/report?groupId=${group.body.id}`).set('Authorization', `Bearer ${admin}`);
     expect(filtered.body.students).toHaveLength(1);
     expect(filtered.body.students[0].userId).toBe(f.students[1]!.id);
-    // CSV.
     const csv = await http(app).get(`/api/v1/courses/${f.course.id}/progress/reports?format=csv`).set('Authorization', `Bearer ${admin}`);
     expect(csv.status).toBe(200);
     expect(csv.headers['content-type']).toContain('text/csv');
     expect(csv.text.split('\n')[0]).toContain('Bài đọc 1');
     expect(csv.text).toContain('x');
-    // Học sinh không có quyền quản completion → 403.
     const denied = await http(app).get(`/api/v1/courses/${f.course.id}/progress/report`).set('Authorization', `Bearer ${f.tokens[0]}`);
     expect(denied.status).toBe(403);
   });

@@ -4,17 +4,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWORD } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstSectionId } from '../../support/course-enrolment-helpers';
 
-/**
- * EB-2 hậu gộp Đề (#226; bản gốc issue #153 về recipe/materialize đã bị thay thế bởi chốt bỏ recipe 26/10) — generate từ ma trận + mã đề:
- *  - generate rút MỘT bộ câu cố định → exams(kind=snapshot, ghim
- *    matrix version) → ghim vào khoá (exam_pins); exam_id là truy vết chính, matrix_id là truy vết phụ;
- *  - cùng một đề ghim cho 2 khoá: MỌI học sinh nhận CÙNG một bộ câu
- *    (không còn rút lại theo từng học sinh);
- *  - đề sinh ra là snapshot thường: sửa trực tiếp bằng swap-cùng-ô
- *    (version mới), lượt thi trước + pin cũ nguyên vẹn;
- *  - mã đề (variant_code) sinh ở tầng GHIM kèm seed; in đề kèm mã đề
- *    theo pin.
- */
 describe('EB-2 đề snapshot sinh ra + mã biến thể (sau merge)', () => {
   let app: INestApplication;
   let admin: string;
@@ -138,7 +127,6 @@ describe('EB-2 đề snapshot sinh ra + mã biến thể (sau merge)', () => {
     return start.body as AttemptViewBody;
   }
 
-  /** Bộ câu của một attempt theo ô: slot 1–3 thuộc ô A, slot 4 thuộc ô B. */
   function setsByCell(view: AttemptViewBody): { a: Set<string>; b: Set<string> } {
     const a = new Set(view.questions.filter((q) => q.slot <= 3).map((q) => q.questionId));
     const b = new Set(view.questions.filter((q) => q.slot === 4).map((q) => q.questionId));
@@ -152,8 +140,6 @@ describe('EB-2 đề snapshot sinh ra + mã biến thể (sau merge)', () => {
     const gen = await generate(ctx, matrix.id, ctx.course1, 'Đề luyện tập');
     expect(gen.status === 200 || gen.status === 201).toBe(true);
     const quiz1 = gen.body as QuizBody;
-    // Truy vết: exam là chính, matrix là phụ; slots đã ghim câu cụ thể
-    // ngay từ lúc sinh (bỏ hẳn slot chỉ-mang-ô của recipe).
     expect(quiz1.examId).toBeTruthy();
     expect(quiz1.matrixId).toBe(matrix.id);
     expect(quiz1.slots).toHaveLength(4);
@@ -163,7 +149,6 @@ describe('EB-2 đề snapshot sinh ra + mã biến thể (sau merge)', () => {
     }
     expect(quiz1.variants.map((v) => v.code)).toEqual(['001']);
 
-    // Đề đã nằm trong ngân hàng đề: snapshot ready, ghim matrix version.
     const paperRes = await http(app).get(`/api/v1/exams/${quiz1.examId}`).set('Authorization', `Bearer ${admin}`);
     const paper = paperRes.body as PaperBody;
     expect(paper.paper.kind).toBe('snapshot');
@@ -173,7 +158,6 @@ describe('EB-2 đề snapshot sinh ra + mã biến thể (sau merge)', () => {
     expect(paper.slots).toHaveLength(4);
     expect(new Set(paper.slots.map((x) => x.questionId))).toEqual(new Set(quiz1.slots.map((x) => x.questionId)));
 
-    // Ghim cùng đề sang khoá 2 với 2 mã đề.
     const pin2Res = await http(app).post(`/api/v1/courses/${ctx.course2.id}/exam-pins`).set('Authorization', `Bearer ${admin}`)
       .send({ sectionId: ctx.course2.sectionId, examId: quiz1.examId, name: 'Đề luyện tập lớp 2', variantCount: 2 });
     expect(pin2Res.status === 200 || pin2Res.status === 201).toBe(true);
@@ -181,8 +165,6 @@ describe('EB-2 đề snapshot sinh ra + mã biến thể (sau merge)', () => {
     expect(pin2.examId).toBe(quiz1.examId);
     expect(pin2.variants.map((v) => v.code)).toEqual(['001', '002']);
 
-    // Hai khoá làm bài: cấu trúc theo ô giữ nguyên (3 câu ô A + 1 câu
-    // ô B, đều thuộc pool của ô) và MỌI lượt nhận CÙNG một bộ câu.
     const seen = new Set<string>();
     const checkAttempt = async (token: string, quizId: string) => {
       const view = await startAttempt(token, quizId);
@@ -198,8 +180,6 @@ describe('EB-2 đề snapshot sinh ra + mã biến thể (sau merge)', () => {
     for (const t of ctx.students2) await checkAttempt(t, pin2.id);
     expect(seen.size).toBe(1);
 
-    // Sổ ghim của đề theo khoá: mỗi khoá đúng một pin của đề này, số
-    // mã đề theo từng lần ghim (1 và 2).
     const pins1 = await http(app).get(`/api/v1/courses/${ctx.course1.id}/exam-pins`).set('Authorization', `Bearer ${admin}`);
     const pins2 = await http(app).get(`/api/v1/courses/${ctx.course2.id}/exam-pins`).set('Authorization', `Bearer ${admin}`);
     const mine1 = (pins1.body as QuizBody[]).filter((x) => x.examId === quiz1.examId);
@@ -215,12 +195,9 @@ describe('EB-2 đề snapshot sinh ra + mã biến thể (sau merge)', () => {
     const gen = await generate(ctx, matrix.id, ctx.course1, 'Đề sinh từ ma trận');
     const quiz1 = gen.body as QuizBody;
     const examId = quiz1.examId!;
-    // Một lượt thi TRƯỚC khi swap — phải nguyên vẹn về sau.
     const before = await startAttempt(ctx.students1[0]!, quiz1.id);
     const beforeSet = new Set(before.questions.map((q) => q.questionId));
 
-    // Đề sinh ra sửa tay trực tiếp được (không còn khoá recipe): đổi
-    // toàn bộ slots qua setSlots tạo version mới.
     const paperRes = await http(app).get(`/api/v1/exams/${examId}`).set('Authorization', `Bearer ${admin}`);
     const snapshot = paperRes.body as PaperBody;
     expect(snapshot.paper.kind).toBe('snapshot');
@@ -230,7 +207,6 @@ describe('EB-2 đề snapshot sinh ra + mã biến thể (sau merge)', () => {
       expect(sl.pinnedVersionNumber).toBeTruthy();
     }
 
-    // Swap-cùng-ô: câu ngoài pool của ô bị chặn; câu trong pool được.
     const slotA = snapshot.slots.find((x) => x.position <= 3)!;
     const wrongCell = await http(app).post(`/api/v1/exams/${examId}/swap`).set('Authorization', `Bearer ${admin}`)
       .send({ position: slotA.position, questionId: ctx.poolB[0] });
@@ -245,7 +221,6 @@ describe('EB-2 đề snapshot sinh ra + mã biến thể (sau merge)', () => {
     expect(after.paper.latestVersion).toBe(2);
     expect(after.slots.find((x) => x.position === slotA.position)?.questionId).toBe(candidate);
 
-    // Ghim version đã sửa (pin mới, 3 mã đề); học sinh thấy đúng bộ đã swap.
     const pin2Res = await http(app).post(`/api/v1/courses/${ctx.course1.id}/exam-pins`).set('Authorization', `Bearer ${admin}`)
       .send({ sectionId: ctx.course1.sectionId, examId, examVersionId: after.version.id, name: 'Đề đã sửa', variantCount: 3 });
     expect(pin2Res.status === 200 || pin2Res.status === 201).toBe(true);
@@ -254,22 +229,17 @@ describe('EB-2 đề snapshot sinh ra + mã biến thể (sau merge)', () => {
     const view2 = await startAttempt(ctx.students1[1]!, pin2.id);
     expect(new Set(view2.questions.map((q) => q.questionId))).toEqual(new Set(after.slots.map((x) => x.questionId)));
 
-    // In đề kèm mã đề theo pin.
     const print = await http(app).get(`/api/v1/exams/${examId}/print`)
       .query({ pinId: pin2.id, variantCode: '002' })
       .set('Authorization', `Bearer ${admin}`);
     expect(print.status).toBe(200);
     expect(print.text).toContain('Mã đề: 002');
-    // In theo pin gốc (version 1) cũng được — mọi đề đã ghim đều là
-    // snapshot in được, không còn lớp recipe bị chặn in.
     const print1 = await http(app).get(`/api/v1/exams/${examId}/print`)
       .query({ pinId: quiz1.id, variantCode: '001' })
       .set('Authorization', `Bearer ${admin}`);
     expect(print1.status).toBe(200);
     expect(print1.text).toContain('Mã đề: 001');
 
-    // Đề gốc ở version 2 sau swap; pin gốc vẫn ghim version 1 và lượt
-    // thi trước nguyên vẹn.
     const examAfter = await http(app).get(`/api/v1/exams/${examId}`).set('Authorization', `Bearer ${admin}`);
     const examBody = examAfter.body as PaperBody;
     expect(examBody.paper.latestVersion).toBe(2);
@@ -295,7 +265,6 @@ describe('EB-2 đề snapshot sinh ra + mã biến thể (sau merge)', () => {
     const paper = paperRes.body as PaperBody;
     expect(paper.paper.kind).toBe('snapshot');
     expect(paper.paper.status).toBe('ready');
-    // Không còn trường recipeSpec trên version (bỏ hẳn recipe).
     expect((paper.version as unknown as Record<string, unknown>).recipeSpec).toBeUndefined();
     expect(new Set(paper.slots.map((s) => s.questionId))).toEqual(new Set(quiz.slots.map((s) => s.questionId)));
   }, 120_000);

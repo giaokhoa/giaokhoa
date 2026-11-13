@@ -16,17 +16,6 @@ import type { McpMountDeps } from './mcp.mount';
 import { McpOAuthVerifier } from './mcp-oauth-verifier';
 import { McpRateLimiter } from './mcp-rate-limit';
 
-/**
- * Facade dựng deps cho tầng mount MCP (issue #138, mục 8.1 của #134).
- *
- * Trước đây deps của mount được dựng trong mcp.mount.ts bằng cách lấy provider nới phạm vi khỏi container — vòng qua hệ module, lấy thẳng repository câu hỏi vốn không được QuestionsModule export và dựng repository idempotency tay từ handle DB của repository đó. Nay mọi dependency đều là service/repository ĐÃ ĐƯỢC module sở hữu
- * export và được Nest inject như mọi module khác: QuestionsService +
- * QuestionBanksService (facade của QuestionsModule), UsersService, OutboxService, và McpIdempotencyRepository của chính McpModule
- * (inject bộ máy cũ trực tiếp). Bootstrap chỉ còn `app.get(McpDepsService)`
- * như tiền lệ BetterAuthService.
- *
- * Lát MCP-1 (issue #163) thêm đường RS OAuth: khi BetterAuthService báo AS đã bật (`mcpAsEnabled`), facade dựng McpOAuthVerifier trỏ đúng issuer/JWKS của instance BA vừa compose + hàm resolveActor kiểm tra tài khoản còn hoạt động; PRM khi đó quảng bá issuer của AS. AS tắt thì deps giữ nguyên hình MCP-0 (cầu bridge là đường auth duy nhất).
- */
 @Injectable()
 export class McpDepsService {
   constructor(
@@ -43,13 +32,11 @@ export class McpDepsService {
     private readonly tenants: TenantsService,
   ) {}
 
-  /** Dựng deps của mount từ các provider đã inject (gọi trong main.ts sau NestFactory.create, như mountBetterAuth). */
   createMountDeps(): McpMountDeps {
     const readLimit = Number(this.config.get<string>('MCP_RATE_READ_PER_HOUR') ?? 300);
     const createLimit = Number(this.config.get<string>('MCP_RATE_CREATE_PER_HOUR') ?? 120);
     const publishLimit = Number(this.config.get<string>('MCP_RATE_PUBLISH_PER_HOUR') ?? 10);
     const port = this.config.get<number>('PORT') ?? 3000;
-    // Origin công khai theo đúng thứ tự ưu tiên mà BetterAuthService dùng để chốt `resource` của AS — hai nơi PHẢI ra cùng một gốc, nếu không `aud` của token và audience RS kỳ vọng sẽ lệch nhau.
     const publicBaseUrl =
       this.config.get<string>('MCP_PUBLIC_BASE_URL') ??
       this.config.get<string>('BETTER_AUTH_URL') ??
@@ -76,8 +63,6 @@ export class McpDepsService {
         resolveActor: async (userId: string) => {
           const user = await this.users.getByIdOrUndefined(userId);
           if (!user || user.deleted || user.suspended) return null;
-          // TENANT-1 (#196): tenant của phiên OAuth = tenant mặc định
-          // của user theo membership (khi token AS không mang `tid`).
           const tenant = await this.tenants.resolveDefaultTenant(userId).catch(() => null);
           return { username: user.username, tenantId: tenant?.id ?? null };
         },

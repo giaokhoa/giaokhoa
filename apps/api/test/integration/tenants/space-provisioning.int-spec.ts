@@ -7,13 +7,6 @@ import { runSpaceProvision, manageCentreInvite } from '../../../src/modules/tena
 import { buildCentreDatabaseUrl, deriveCentreRoleName } from '../../../src/modules/tenants/centre-provision';
 import { FleetRegistryWriter } from '../../../src/modules/fleet/fleet-registry-writer';
 
-/**
- * Ca tích hợp của PIPELINE CẤP PHÁT TRUNG TÂM (issue #583): chạy đúng lệnh cấp phát trên cụm Postgres thật — sổ đăng ký control plane riêng, database + role riêng cho trung tâm, baseline nghiệp vụ hiện hành, gói chương trình, tenant + membership + quản trị đầu tiên + lời mời — rồi chạy lại và cấp phát dở dang để khoá tính chạy-lại-an-toàn, và khoá yêu cầu từ chối databaseName trùng (ghi chú điều phối trên issue #583, điểm P1-2b của review PR #594) ở cả tầng ứng dụng lẫn tầng database.
- *
- * Mọi tên đều mang hậu tố ngẫu nhiên theo lượt chạy: chạy lại spec trên cùng cụm không va chạm, và không tái dùng tên database cũ
- * (tránh khoá cache siteadmins cũ trong Redis theo tên database).
- * Cụm test lấy từ `DATABASE_URL` đã được Vitest phân giải (biến `GIAOKHOA_TEST_DATABASE_URL` ghi đè khi chạy ngoài CI).
- */
 const RUN_SUFFIX = Math.random().toString(36).slice(2, 8);
 const CP_DATABASE = `giaokhoa_test_cp_583_${RUN_SUFFIX}`;
 const SLUG = `trung-tam-583-${RUN_SUFFIX}`;
@@ -25,7 +18,6 @@ const CENTRE_NAME = 'Trung tâm kiểm chứng 583';
 
 const UUIDV7_SHIM = `CREATE OR REPLACE FUNCTION uuidv7() RETURNS uuid AS $$ DECLARE ts_ms bigint := (extract(epoch from clock_timestamp()) * 1000)::bigint; b bytea; BEGIN b := decode(lpad(to_hex(ts_ms), 12, '0'), 'hex') || gen_random_bytes(10); b := set_byte(b, 6, (get_byte(b, 6) & 15) | 112); b := set_byte(b, 8, (get_byte(b, 8) & 63) | 128); RETURN encode(b, 'hex')::uuid; END; $$ LANGUAGE plpgsql VOLATILE`;
 
-/** Dựng URL kết nối tới một database trên cùng cụm với database test. */
 function clusterUrl(database: string, username?: string, secret?: string): string {
   const base = new URL(process.env.DATABASE_URL!);
   base.pathname = `/${database}`;
@@ -34,7 +26,6 @@ function clusterUrl(database: string, username?: string, secret?: string): strin
   return base.toString();
 }
 
-/** Bọc một định danh Postgres trong dấu nháy kép cho các câu lệnh quản trị của ca test. */
 function quoted(identifier: string): string {
   return `"${identifier.replace(/"/g, '""')}"`;
 }
@@ -49,7 +40,6 @@ async function withClient<T>(connectionString: string, fn: (client: Client) => P
   }
 }
 
-/** Áp một file migration SQL (tách theo dấu phân đoạn statement-breakpoint) lên một database qua kết nối cho trước. */
 async function applySqlFile(connectionString: string, filePath: string): Promise<void> {
   await withClient(connectionString, async (client) => {
     const version = await client.query<{ server_version_num: string }>('SHOW server_version_num');
@@ -65,7 +55,6 @@ async function applySqlFile(connectionString: string, filePath: string): Promise
   });
 }
 
-/** Áp bộ migration riêng của control plane từ rỗng (đọc chính các file SQL đã sinh trong repo). */
 async function applyControlPlaneMigrations(connectionString: string): Promise<void> {
   const outDir = join(__dirname, '..', '..', '..', '..', '..', 'packages', 'db', 'migrations', 'control-plane');
   const folders = readdirSync(outDir, { withFileTypes: true })
@@ -77,7 +66,6 @@ async function applyControlPlaneMigrations(connectionString: string): Promise<vo
   }
 }
 
-/** Env chạy lệnh cấp phát: sổ control plane riêng + cụm test + mật khẩu role do ca test cấp. */
 function provisionEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   return {
     ...process.env,
@@ -132,7 +120,6 @@ describe('Cấp phát trung tâm mới (tích hợp)', () => {
     expect(provisioned.inviteToken).toBeTruthy();
     expect(provisioned.inviteExpiresAt).not.toBeNull();
 
-    // Sổ đăng ký: dòng dedicated, trạng thái active, bí mật chỉ ghi tham chiếu.
     const space = await writer.findSpaceBySlug(SLUG);
     expect(space).toBeTruthy();
     expect(space!.storageMode).toBe('dedicated');
@@ -142,29 +129,20 @@ describe('Cấp phát trung tâm mới (tích hợp)', () => {
     expect(space!.secretRef).toBe(`env:${provisioned.secretEnvVar}`);
     expect(space!.secretRef).not.toContain(DB_PASSWORD);
 
-    // Database riêng thuộc role riêng, PUBLIC không còn quyền CONNECT.
     await withClient(clusterUrl('postgres'), async (admin) => {
       const owner = await admin.query<{ owner: string }>(
         'SELECT pg_get_userbyid(datdba) AS owner FROM pg_database WHERE datname = $1',
         [provisioned.databaseName],
       );
       expect(owner.rows[0]!.owner).toBe(provisioned.connectionRole);
-      // PUBLIC không phải role nên không dùng được has_database_privilege
-      // với nó — kiểm tra trực tiếp danh sách quyền của database: sau
-      // REVOKE CONNECT FROM PUBLIC, không còn mục nào của PUBLIC (mục
-      // bắt đầu bằng `=`) mang quyền CONNECT (ký tự `c`).
       const acl = await admin.query<{ datacl: string | null }>('SELECT datacl FROM pg_database WHERE datname = $1', [
         provisioned.databaseName,
       ]);
-      // pg trả cột aclitem[] dạng chuỗi `{mục,mục}` (không parse thành
-      // mảng): tách tay theo dấu phẩy — chuỗi quyền không chứa phẩy.
       const raw = acl.rows[0]!.datacl ?? '';
       const entries = raw.replace(/^\{|\}$/g, '').split(',').filter(Boolean);
       expect(entries.some((entry) => /^=[^/]*c/.test(entry))).toBe(false);
     });
 
-    // Kho trung tâm: 3 bảng mới của issue #583 + gói chương trình đã
-    // cài + tenant/membership/quản trị/lời mời đúng hình.
     const centreUrl = clusterUrl(provisioned.databaseName, provisioned.connectionRole, DB_PASSWORD);
     await withClient(centreUrl, async (client) => {
       await client.query(`SELECT set_config('app.platform', 'on', false)`);
@@ -233,11 +211,7 @@ describe('Cấp phát trung tâm mới (tích hợp)', () => {
   });
 
   it('cấp phát lại khi đã có database + role nhưng chưa có sổ đăng ký thì hoàn tất mà không tạo trùng', async () => {
-    // Giả lập cấp phát dở dang giữa bước 1 và bước 2: xoá dòng đăng
-    // ký nhưng giữ nguyên database + role + dữ kiện trong kho.
     await withClient(clusterUrl(CP_DATABASE), async (client) => {
-      // Các bảng con tham chiếu sổ với onDelete restrict: phải dọn
-      // chúng trước mới xoá được dòng đăng ký.
       await client.query('DELETE FROM space_schema_migration_runs');
       await client.query('DELETE FROM space_schema_registry');
       await client.query('DELETE FROM space_registry_history');
@@ -286,9 +260,6 @@ describe('Cấp phát trung tâm mới (tích hợp)', () => {
   });
 
   it('từ chối databaseName trùng với dòng kho chung trong sổ (chỉ mục từng phần không bắt được ca này)', async () => {
-    // Dòng kho chung trỏ về database dùng chung — ghi trực tiếp vào
-    // sổ (đường seedExistingSpaces tạo ra các dòng này trong thực
-    // tế, không qua cấp phát).
     const sharedDb = `giaokhoa_shared_583_${RUN_SUFFIX}`;
     await withClient(clusterUrl(CP_DATABASE), async (client) => {
       await client.query(
@@ -364,10 +335,6 @@ describe('Cấp phát trung tâm mới (tích hợp)', () => {
   });
 
   it('role đã tồn tại mang quyền đặc quyền thì bị từ chối nhận nuôi, cả thuộc tính lẫn tư cách thành viên', async () => {
-    // Mỗi lượt cấp phát vấp ở bước 2 đều để lại một dòng đăng ký
-    // ở trạng thái provisioning trong database control plane riêng
-    // của lượt chạy này (database đó bị dọn ở afterAll) nên không
-    // ảnh hưởng các ca khác; chỉ role tạo sẵn mới cần dọn tay.
     const adminConn = clusterUrl('postgres');
     const superSlug = `trung-tam-sieu-${RUN_SUFFIX}`;
     const superRole = deriveCentreRoleName(superSlug);
@@ -387,8 +354,6 @@ describe('Cấp phát trung tâm mới (tích hợp)', () => {
           log: () => undefined,
         }),
       ).rejects.toThrow(/privileged/);
-      // Từ chối trước mọi ALTER nên role đặc quyền còn nguyên vẹn,
-      // không bị chuẩn hoá lén thành role thường.
       await withClient(adminConn, async (admin) => {
         const kept = await admin.query('SELECT rolsuper FROM pg_roles WHERE rolname = $1', [superRole]);
         expect(kept.rows[0]?.rolsuper).toBe(true);
@@ -398,8 +363,6 @@ describe('Cấp phát trung tâm mới (tích hợp)', () => {
         await admin.query(`DROP ROLE IF EXISTS ${quoted(superRole)}`);
       });
     }
-    // Tư cách thành viên: role trung tâm tự nó sạch nhưng là thành
-    // viên của một role đặc quyền thì vẫn bị từ chối.
     const memberSlug = `trung-tam-thanh-vien-${RUN_SUFFIX}`;
     const memberRole = deriveCentreRoleName(memberSlug);
     const privilegedRole = `giaokhoa_quyen_611_${RUN_SUFFIX}`;
@@ -449,8 +412,6 @@ describe('Cấp phát trung tâm mới (tích hợp)', () => {
     await expect(runSpaceProvision(lifecycleArgs)).rejects.toThrow(/suspended/);
     await writer.changeSpaceStatus(space!.id, 'closed', ACTOR_ID);
     await expect(runSpaceProvision(lifecycleArgs)).rejects.toThrow(/closed/);
-    // Mở lại chỉ được qua thao tác vòng đời tường minh: đổi lại
-    // active bằng writer rồi chạy lại thì vẫn về already-active.
     await writer.changeSpaceStatus(space!.id, 'active', ACTOR_ID);
     const again = await runSpaceProvision(lifecycleArgs);
     expect(again.status).toBe('already-active');
@@ -461,11 +422,6 @@ describe('Cấp phát trung tâm mới (tích hợp)', () => {
   }, 120000);
 
   it('cấp phát với mật khẩu chứa ký tự phần trăm thì thành công và kết nối được bằng đúng mật khẩu đó', async () => {
-    // Mật khẩu thô mang %40 (vốn sẽ thành @ nếu giải mã hai lần)
-    // và %25 cùng một ký tự % trần (vốn sẽ vấp URIError nếu giải
-    // mã hai lần): toàn bộ pipeline bước 3–6 đều kết nối bằng URL
-    // dựng từ mật khẩu này nên cấp phát thành công đã chứng minh
-    // mật khẩu không bị biến dạng.
     const percentPassword = 'p%40ss%25%word';
     const slug = `trung-tam-phan-tram-${RUN_SUFFIX}`;
     const created = await runSpaceProvision({
@@ -479,14 +435,6 @@ describe('Cấp phát trung tâm mới (tích hợp)', () => {
       log: () => undefined,
     });
     expect(created.status).toBe('active');
-    // Kết nối kiểm chứng phải đi qua đúng hàm dựng URL của
-    // production: helper clusterUrl dùng bộ gán password của WHATWG
-    // URL, vốn giữ nguyên các dãy %XX có sẵn nên pg giải mã một lần
-    // thành mật khẩu khác ('p@ss%%word') và vấp lỗi xác thực — đó
-    // là lỗi của helper test, không phải của pipeline (pipeline
-    // dùng buildCentreDatabaseUrl và đã cấp phát thành công trước
-    // khi tới bước kiểm chứng này, như lần tái hiện lỗi đã chứng
-    // minh: cấp phát chạy đủ ~26s rồi mới rớt ở kết nối kiểm chứng).
     const baseUrl = new URL(process.env.DATABASE_URL!);
     const centreUrl = buildCentreDatabaseUrl({
       host: baseUrl.hostname,

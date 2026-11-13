@@ -4,10 +4,6 @@ import {
   type QuestionContentInput,
 } from './question-content-normalizer';
 
-/**
- * Kiểm chứng luật phần trả lời bất biến của câu hỏi trên các đường
- * REST/MCP/nội bộ; không cần DB vì bộ chuẩn hoá không có side-effect.
- */
 describe('Chuẩn hoá nội dung câu hỏi dùng chung giữa HTTP và nghiệp vụ', () => {
   const answers = (): NonNullable<QuestionContentInput['answers']> => [
     { text: 'A', correct: true },

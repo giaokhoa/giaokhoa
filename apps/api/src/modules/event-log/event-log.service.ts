@@ -5,7 +5,6 @@ import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { EventLogRepository, type EventLogRow } from '@giaokhoa/db/repositories/event-log';
 import type { ListEventLogsQueryDto } from './dto/event-log.dto';
 
-/** Capability đọc nhật ký sự kiện (Moodle `log:view`). */
 export const EVENT_LOG_VIEW_CAPABILITY = 'log:view';
 
 export interface EventLogView {
@@ -29,10 +28,6 @@ function payloadString(payload: Record<string, unknown> | null, key: string): st
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
-/**
- * Đường đọc của logstore — nền cho báo cáo "ai đã làm gì" (Moodle report_log):
- * quyền xem được kiểm tại context của khoá khi lọc theo khoá, tại context hệ thống khi xem toàn site, qua PermissionEvaluator như mọi module khác.
- */
 @Injectable()
 export class EventLogService {
   constructor(
@@ -56,8 +51,6 @@ export class EventLogService {
       {
         userId: query.userId, relatedUserId: query.relatedUserId, courseId: query.courseId,
         contextId: query.contextId, component: query.component, eventType: query.eventType,
-        // Mốc thời gian trên đường truyền là chuỗi ISO 8601 (xem DTO) —
-        // chuyển sang Date tại biên service cho repository.
         from: query.from ? new Date(query.from) : undefined,
         to: query.to ? new Date(query.to) : undefined,
       },
@@ -71,9 +64,6 @@ export class EventLogService {
     const payload = (row.payload ?? null) as Record<string, unknown> | null;
     return {
       id: row.id,
-      // seq là cột int8: qua Kysely nó đọc về là chuỗi (luật int8 của
-      // package @giaokhoa/db) — chuyển lại thành số tại biên này để giữ
-      // nguyên hợp đồng `seq: number` của view/API.
       seq: Number(row.seq),
       eventType: row.eventType,
       component: payloadString(payload, 'component'),

@@ -10,13 +10,11 @@ import { TenantsModule } from '../tenants/tenants.module';
 import { CohortsController, CourseGroupingsController, CourseGroupsController } from './groups.controller';
 import { GroupsService } from './groups.service';
 
-/** Facade của GroupsModule: GroupsService (groups, groupings, cohorts). Phụ thuộc Courses + Access + registry Availability. */
 @Module({
   imports: [AccessModule, CoursesModule, AvailabilityModule, EventsModule, TenantsModule, SpaceRoutingModule],
   controllers: [CourseGroupsController, CourseGroupingsController, CohortsController],
   providers: [
     {
-      // Dùng handle Kysely định tuyến để thao tác nhóm và cohort cùng kho với các thực thể nghiệp vụ.
       provide: GroupsRepository,
       useFactory: (spaceDb: SpaceDatabaseService) => new GroupsRepository(spaceDb.routedKysely),
       inject: [SpaceDatabaseService],
@@ -25,5 +23,4 @@ import { GroupsService } from './groups.service';
   ],
   exports: [GroupsService],
 })
-/** Module nhóm và cohort. */
 export class GroupsModule {}

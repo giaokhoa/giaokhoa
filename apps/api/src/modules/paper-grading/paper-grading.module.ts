@@ -12,13 +12,6 @@ import { UsersModule } from '../users/users.module';
 import { ExamBatchesController, ExamScansController } from './paper-grading.controller';
 import { PaperGradingService } from './paper-grading.service';
 
-/**
- * PaperGradingModule (CAM-0, issue #112): chấm bài giấy bằng camera — lô in phiếu + OMR xác định + hai hàng chờ + attempt thi giấy. Dùng facade của Quiz (layout ghim + ghi attempt), Enrol + Users (roster), Files (lưu ảnh gốc/ảnh đã nắn), SiteConfig (ngưỡng OMR + hạn giữ ảnh), Access (cổng quiz:gradepaper tại context hoạt động) và Events
- * (outbox → event log cho các thao tác gán/sửa ở hàng chờ, như biên
- * bản sửa lỗi).
- *
- * PaperGradingRepository dùng `routedKysely` từ SpaceDatabaseService để các phiếu và kết quả quét được ghi đúng kho của trung tâm.
- */
 @Module({
   imports: [AccessModule, QuizModule, EnrolModule, UsersModule, FilesModule, SiteConfigModule, EventsModule, SpaceRoutingModule],
   controllers: [ExamBatchesController, ExamScansController],

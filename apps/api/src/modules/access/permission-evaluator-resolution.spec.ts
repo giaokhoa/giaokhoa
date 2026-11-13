@@ -6,15 +6,6 @@ import type { ContextsService } from './contexts.service';
 import { CAPABILITY_DEFINITIONS } from './domain/capabilities';
 import { PermissionEvaluator } from './permission-evaluator.service';
 
-/**
- * Kiểm chứng phép phân giải THEO LÔ của ảnh chụp quyền
- * (`resolveCapabilitiesForContexts`) so với đường phân giải hiện hành
- * (`hasCapability`) trên cùng một thế giới dữ kiện dựng trong bộ nhớ:
- *   - tương đương: với mọi người dùng × mọi context đích × mọi
- *     capability đã đăng ký, kết quả theo lô bằng đúng kết quả gọi `hasCapability` từng cặp;
- *   - chi phí: phép theo lô chỉ chạm tầng dữ liệu một số lần có chặn
- *     trên nhỏ, trong khi đường từng cặp tốn hàng trăm lần cho cùng một ảnh chụp. Thế giới dữ kiện phủ các nhánh ngữ nghĩa nhạy cảm: PROHIBIT ở tổ tiên thắng ALLOW ở lá, PREVENT ở tổ tiên gần hơn thắng ALLOW ở gốc, vai mặc định `user`/`guest`, cổng tenant (thu hẹp gán vai, chặn khi không phải thành viên, chặn khi tenant bị đình chỉ) và lối tắt site admin (áp dụng ngoài cây tenant, KHÔNG áp dụng trong cây tenant).
- */
 
 type Ctx = ContextRow;
 const ctx = (id: string, contextLevel: number, path: string, instanceId: string | null = null): Ctx =>
@@ -50,13 +41,10 @@ const ALLOW = 1;
 const PREVENT = -1;
 const PROHIBIT = -1000;
 const OVERRIDES: OverrideRow[] = [
-  // Vai mặc định `user`: hai capability nền tại context hệ thống.
   { roleId: 'role-user', capability: 'files:view', contextId: S.id, permission: ALLOW },
   { roleId: 'role-user', capability: 'course:view', contextId: S.id, permission: ALLOW },
-  // Vai mặc định `guest`: thấy tệp nhưng PREVENT xem khoá tại gốc.
   { roleId: 'role-guest', capability: 'files:view', contextId: S.id, permission: ALLOW },
   { roleId: 'role-guest', capability: 'course:view', contextId: S.id, permission: PREVENT },
-  // Vai tuỳ chỉnh teacherx: chuỗi ALLOW/PREVENT/PROHIBIT trên cây.
   { roleId: 'role-teacherx', capability: 'question:add', contextId: S.id, permission: ALLOW },
   { roleId: 'role-teacherx', capability: 'question:add', contextId: CAT.id, permission: PREVENT },
   { roleId: 'role-teacherx', capability: 'question:add', contextId: C1.id, permission: ALLOW },
@@ -64,7 +52,6 @@ const OVERRIDES: OverrideRow[] = [
   { roleId: 'role-teacherx', capability: 'site:config', contextId: C1.id, permission: PROHIBIT },
   { roleId: 'role-teacherx', capability: 'course:view', contextId: CL.id, permission: ALLOW },
   { roleId: 'role-teacherx', capability: 'question:delete', contextId: S.id, permission: ALLOW },
-  // Vai assistant: PROHIBIT question:add tại tổ tiên danh mục.
   { roleId: 'role-assistant', capability: 'question:add', contextId: CAT.id, permission: PROHIBIT },
 ];
 
@@ -83,7 +70,6 @@ const ROLES: Record<string, { id: string; shortName: string }> = {
   guest: { id: 'role-guest', shortName: 'guest' },
 };
 
-/** Tầng dữ liệu giả lập: mỗi lần gọi phương thức = một "truy vấn", đếm vào dbCalls. */
 function makeWorld() {
   const counter = { dbCalls: 0 };
   const byId = new Map(ALL_CONTEXTS.map((c) => [c.id, c]));
@@ -193,41 +179,31 @@ describe('Hàm PermissionEvaluator.resolveCapabilitiesForContexts', () => {
   it('giữ ngữ nghĩa tính tay của các nhánh khó', async () => {
     const { evaluator, byId } = makeWorld();
     const teacher = await evaluator.resolveCapabilitiesForContexts('user-teacher', [C1, CL], byId);
-    // ALLOW tại lá thắng PREVENT tại tổ tiên gần hơn; PROHIBIT tại lá thắng ALLOW tại gốc.
     expect(teacher.get(C1.id)).toContain('question:add');
     expect(teacher.get(C1.id)).not.toContain('site:config');
     expect(teacher.get(CL.id)).toContain('course:view');
 
     const cat = await evaluator.resolveCapabilitiesForContexts('user-cat', [CAT, C1], byId);
-    // Gán vai tại danh mục: tại chính danh mục, PREVENT là override gần
-    // nhất không phải INHERIT nên thắng ALLOW tại gốc; xuống khoá con,
-    // ALLOW tại lá của khoá thắng PREVENT của danh mục.
     expect(cat.get(CAT.id)).not.toContain('question:add');
     expect(cat.get(C1.id)).toContain('question:add');
 
     const both = await evaluator.resolveCapabilitiesForContexts('user-both', [C1], byId);
-    // Một vai phụ có PROHIBIT trên path là đủ chặn, dù vai chính ALLOW tại lá.
     expect(both.get(C1.id)).not.toContain('question:add');
 
     const outsider = await evaluator.resolveCapabilitiesForContexts('user-outsider', [TC], byId);
-    // Không phải thành viên tenant → cổng chặn tuyệt đối trong cây tenant.
     expect(outsider.get(TC.id)).toEqual([]);
 
     const suspended = await evaluator.resolveCapabilitiesForContexts('user-suspended-tenant', [TSC], byId);
-    // Tenant bị đình chỉ → cổng chặn kể cả thành viên đang active.
     expect(suspended.get(TSC.id)).toEqual([]);
 
     const admin = await evaluator.resolveCapabilitiesForContexts('user-admin', [S, TC], byId);
-    // Ngoài cây tenant: site admin có trọn bộ capability đã đăng ký.
     expect(admin.get(S.id)).toEqual(ALL_DEFS);
-    // Trong cây tenant: KHÔNG có lối tắt — kết quả là phép phân giải thật, hẹp hơn trọn bộ.
     expect(admin.get(TC.id)!.length).toBeLessThan(ALL_DEFS.length);
     expect(admin.get(TC.id)).toEqual(
       await legacySnapshot(evaluator, 'user-admin', [TC]).then((m) => m.get(TC.id)),
     );
 
     const guest = await evaluator.resolveCapabilitiesForContexts('user-plain', [S], byId, { isGuest: true });
-    // Vai mặc định của khách là `guest`, không phải `user`.
     expect(guest.get(S.id)).toContain('files:view');
     expect(guest.get(S.id)).not.toContain('course:view');
   });
@@ -238,15 +214,10 @@ describe('Hàm PermissionEvaluator.resolveCapabilitiesForContexts', () => {
     counter.dbCalls = 0;
     await evaluator.resolveCapabilitiesForContexts('user-teacher', targets, byId);
     const batchCalls = counter.dbCalls;
-    // Nạp bổ sung context (0) + cổng tenant (2) + gán vai (1) + vai mặc
-    // định (1) + override (1) — cộng dự phòng vẫn phải ở mức một chữ số
-    // thấp, không tỉ lệ với 124 × số context.
     expect(batchCalls).toBeLessThanOrEqual(10);
 
     counter.dbCalls = 0;
     await legacySnapshot(evaluator, 'user-teacher', targets);
-    // Đường từng cặp: mỗi cặp trả ít nhất đọc context + path + cấu hình
-    // site admin, cache trượt còn thêm ba truy vấn đánh giá.
     expect(counter.dbCalls).toBeGreaterThan(500);
   });
 });

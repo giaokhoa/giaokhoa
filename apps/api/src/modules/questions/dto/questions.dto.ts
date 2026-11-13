@@ -37,9 +37,6 @@ import {
   type WithdrawQuestion,
 } from '@giaokhoa/contracts';
 
-/**
- * Validation của Questions dùng Zod qua Standard Schema — schema nền ở `@giaokhoa/contracts` là nguồn sự thật duy nhất.
- */
 export {
   approveContributionSchema,
   attachQuestionOutcomeSchema,

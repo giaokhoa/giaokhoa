@@ -1,9 +1,3 @@
-/**
- * Nghiệm thu HTTP quyền hỗ trợ issue #19 với hai kho trung tâm riêng
- * được pipeline provision thật dựng từ database rỗng. Không mock guard,
- * Kysely, service, JWT, role hoặc routing. Một support token còn hạn
- * không thể vượt grant A, scope, tenant B hoặc trạng thái thu hồi.
- */
 import type { INestApplication } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -25,7 +19,6 @@ const actorId = '22222222-2222-4222-8222-222222222222';
 const migrationsDir = join(__dirname, '..', '..', '..', '..', '..', 'packages', 'db', 'migrations', 'centre');
 const cpMigrationsDir = join(__dirname, '..', '..', '..', '..', '..', 'packages', 'db', 'migrations', 'control-plane');
 
-/** Chuỗi kết nối từng DB test trên cùng cụm PostgreSQL. */
 function connection(database: string, username?: string, password?: string): string {
   const url = new URL(process.env.DATABASE_URL!);
   url.pathname = `/${database}`;
@@ -34,7 +27,6 @@ function connection(database: string, username?: string, password?: string): str
   return url.toString();
 }
 
-/** Dùng client thật và luôn trả kết nối về pool. */
 async function withClient<T>(url: string, fn: (client: Client) => Promise<T>): Promise<T> {
   const client = new Client({ connectionString: url });
   await client.connect();
@@ -42,7 +34,6 @@ async function withClient<T>(url: string, fn: (client: Client) => Promise<T>): P
   finally { await client.end(); }
 }
 
-/** Khởi tạo sổ control plane từ đúng carrier SQL hiện hành. */
 async function initControlPlane() {
   await withClient(connection(cpDatabase), async (client) => {
     const folders = readdirSync(cpMigrationsDir, { withFileTypes: true })
@@ -56,7 +47,6 @@ async function initControlPlane() {
   });
 }
 
-/** Dữ kiện grant theo hợp đồng HTTP, hạn tính lại ở lúc test. */
 function draft(recipientId: string, scopes: Array<'classes:read' | 'courses:read'>) {
   return {
     recipientId, scopes, reason: 'Hỗ trợ kiểm tra lỗi lớp của trung tâm A',
@@ -120,7 +110,6 @@ describe('Hỗ trợ hữu hạn: HTTP thật giữa trung tâm A, B và nhân s
     adminA = aLogin.body.accessToken as string;
     adminB = bLogin.body.accessToken as string;
 
-    // Người hỗ trợ là user thường kho platform (không siteadmin).
     const platformAdmin = await adminToken(app);
     const staff = await createUserViaApi(app, platformAdmin);
     const other = await createUserViaApi(app, platformAdmin);
@@ -137,7 +126,6 @@ describe('Hỗ trợ hữu hạn: HTTP thật giữa trung tâm A, B và nhân s
     supportToken = supportLogin.body.accessToken as string;
     otherToken = otherLogin.body.accessToken as string;
 
-    // Một lớp A cho phép xác nhận dữ liệu trả về thực sự đến kho A.
     classId = await withClient(centreDb(a), async (client) => {
       await client.query("SELECT set_config('app.platform', 'on', false)");
       const cohort = await client.query<{ id: string }>(
@@ -189,8 +177,6 @@ describe('Hỗ trợ hữu hạn: HTTP thật giữa trung tâm A, B và nhân s
       .send({ username: legacy.username, password: STRONG_PASSWORD });
     expect(login.status).toBe(403);
     expect(login.body.code).toBe('auth.support_staff_required');
-    // Dù quản trị A biết UUID thật trong kho chung, người không
-    // là nhân sự platform không thể nhận grant hỗ trợ.
     const grant = await http(app).post('/api/v1/support-grants')
       .set('Host', hostA).set(authed(adminA)).send(draft(legacy.id, ['classes:read']));
     expect(grant.status).toBe(400);
@@ -250,8 +236,6 @@ describe('Hỗ trợ hữu hạn: HTTP thật giữa trung tâm A, B và nhân s
     const id = create.body.id as string;
     const before = await http(app).get(`/api/v1/support-centres/${slugA}/courses`).set(authed(supportToken));
     expect(before.status).toBe(200);
-    // Thay đổi thời gian trong database test bằng role của kho A;
-    // giữ CHECK expires_at > created_at khi mô phỏng hết hạn.
     await withClient(centreDb(a), async (client) => {
       await client.query("SELECT set_config('app.platform', 'on', false)");
       await client.query(
@@ -288,8 +272,6 @@ describe('Hỗ trợ hữu hạn: HTTP thật giữa trung tâm A, B và nhân s
           [sharedSlug, sharedDatabase],
         );
       });
-      // Fixture gán vai manager + membership của đúng tenant kho chung;
-      // request HTTP thật vẫn đi qua mọi guard và RLS.
       await grantTenantManagerFixture(app, platformAdmin, sharedTenant);
       const switched = await http(app).post(`/api/v1/auth/switch-tenant/${sharedTenant}`)
         .set(authed(platformAdmin));
@@ -353,8 +335,6 @@ describe('Hỗ trợ hữu hạn: HTTP thật giữa trung tâm A, B và nhân s
     expect(grant.status, JSON.stringify(grant.body)).toBe(201);
     const active = await http(app).get(`/api/v1/support-centres/${slugA}/classes`).set(authed(supportToken));
     expect(active.status).toBe(200);
-    // Mô phỏng bộ phận vận hành kết thúc tư cách nhân sự platform
-    // trong kho chung. Bất biến kiểm trực tiếp mỗi request, không JWT.
     await withClient(process.env.DATABASE_URL!, async (client) => {
       await client.query("SELECT set_config('app.platform', 'on', false)");
       const platform = await client.query<{ id: string }>("SELECT id FROM tenants WHERE slug = 'trang-chinh'");

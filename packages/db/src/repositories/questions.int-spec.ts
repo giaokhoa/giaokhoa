@@ -6,25 +6,6 @@ import type { LearningOutcomeDoc } from '../jsonb-types';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
 import { QuestionsRepository, type EntryRow } from './questions';
 
-/**
- * Spec tích hợp của repository câu hỏi trên Kysely (issue #642).
- *
- * Database trung tâm dựng từ rỗng bằng chính cầu nối migration của package trên cụm PostgreSQL thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ `DATABASE_URL`). Mọi ca chạy qua repository production ở `questions.ts` — không mô phỏng handle.
- *
- * Các tính chất chốt tại đây:
- * - Insert không truyền id nhận id UUIDv7 do database sinh
- *   (phụ lục U) và đọc lại nguyên vẹn qua chính repository.
- * - Ghi/đọc jsonb nội dung khớp hai chiều repository ↔ oracle
- *   độc lập (Kysely thô ngoài repository) trên cùng dữ kiện mẫu, gồm điểm sắc nhất của T-4: cột jsonb nullable phân biệt `null`
- *   (SQL NULL) với giá trị và với `undefined` (không đổi) ở cả
- *   insert lẫn update patch.
- * - Giao dịch của repository nguyên tử: lỗi giữa chừng rollback
- *   sạch mọi bảng đã ghi; `markSystemImportDerived` đổi cờ trong giao dịch và rollback cùng giao dịch khi giao dịch huỷ.
- * - `countQuestionsByCurriculumFilterPerCategory` trả `number`
- *   thật (ép `::int` — rủi ro R-G2-1: `count(*)` là int8, qua pg sẽ là `string` nếu không ép).
- * - Bộ lọc chương trình tương đương hành vi với bản cũ: oracle
- *   trong spec này là chính các truy vấn của repository cũ (trước #642) dựng lại bằng Kysely thô trên CÙNG dữ kiện mẫu (gồm YCCĐ đã rút, YCCĐ phái sinh từ gốc đã rút, và điều kiện khớp cùng dòng nối outcomeId + cognitiveLevel) — hai phía phải cho cùng tập id.
- */
 
 const adminUrl =
   process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
@@ -33,7 +14,6 @@ const adminUrl =
 const TEST_DB = 'giaokhoa_db_g642_questions';
 const UUIDV7_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
-/** Ngữ cảnh/actor cố định — các cột `context_id`/`created_by` không có khoá ngoại nên chỉ cần uuid hợp lệ. */
 const CONTEXT_ID = '019276a1-1111-7000-8000-0000000000c1';
 const ACTOR_ID = '019276a1-1111-7000-8000-0000000000a1';
 
@@ -41,7 +21,6 @@ let pool: Pool;
 let db: CentreDb;
 let repo: QuestionsRepository;
 
-/** Tài liệu rich-text mẫu cho các cột jsonb nội dung. */
 const DOC_A = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Nội dung A' }] }] };
 const DOC_B = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Nội dung B' }] }] };
 
@@ -63,7 +42,6 @@ interface Seed {
 
 let seed: Seed;
 
-/** Gieo đồ thị dữ kiện mẫu qua chính repository (phần câu hỏi) + Kysely thô (phần chương trình/bank). */
 async function seedData(): Promise<Seed> {
   const bank = await db
     .insertInto('question_banks')
@@ -137,17 +115,11 @@ afterAll(async () => {
   if (adminUrl) await dropTestDatabase(adminUrl, TEST_DB);
 });
 
-// ---------------------------------------------------------------------------
-// Oracle độc lập: nguyên văn đường phân giải + lọc của repository
-// cũ (apps/api trước #642) dựng lại bằng Kysely thô ngoài
-// repository, để đối chiếu tương đương trên cùng dữ kiện.
-// ---------------------------------------------------------------------------
 
 type OracleFilter = {
   subjectId?: string; outcomeId?: string; nodeId?: string; cognitiveLevel?: string; qtype?: string; status?: string;
 };
 
-/** Điều kiện "YCCĐ đang hiệu lực" của bản cũ: chưa rút, và gốc phái sinh (nếu có) cũng chưa rút. */
 function activeOutcomeWheres<DB, TB extends keyof DB & string, O>(
   query: import('kysely').SelectQueryBuilder<DB, TB, O>,
 ): import('kysely').SelectQueryBuilder<DB, TB, O> {
@@ -230,7 +202,6 @@ describe('QuestionsRepository trên Kysely (issue #642)', () => {
       questionBankEntryId: seed.entry1.id, questionId: seed.q1, version: 1,
       questionText: DOC_A, generalFeedback: DOC_B, defaultMark: 1, penalty: 0, stimulusId: null,
     });
-    // Đọc qua oracle độc lập (Kysely thô ngoài repository): nội dung phải khớp từng phần tử.
     const viaOracle = await db.selectFrom('question_versions')
       .select(['question_text as questionText', 'general_feedback as generalFeedback'])
       .where('id', '=', version.id)
@@ -238,7 +209,6 @@ describe('QuestionsRepository trên Kysely (issue #642)', () => {
     expect(viaOracle.questionText).toEqual(DOC_A);
     expect(viaOracle.generalFeedback).toEqual(DOC_B);
 
-    // Ghi qua oracle độc lập, đọc qua repository: cùng một tài liệu phải khớp.
     const oracleVersion = await db.insertInto('question_versions').values({
       question_bank_entry_id: seed.entry1.id, question_id: seed.q1, version: 2,
       question_text: sql`${JSON.stringify(DOC_B)}::jsonb`, general_feedback: sql`${JSON.stringify(DOC_A)}::jsonb`,
@@ -262,7 +232,6 @@ describe('QuestionsRepository trên Kysely (issue #642)', () => {
       questionBankEntryId: seed.entry1.id, questionId: seed.q1, version: 3,
       questionText: DOC_A, generalFeedback: null, defaultMark: 1, penalty: 0, stimulusId: null,
     });
-    // null ghi xuống phải là SQL NULL khi đọc qua oracle độc lập — không phải JSON `null` dạng object/chuỗi.
     const raw = await db.selectFrom('question_versions')
       .select('general_feedback as generalFeedback')
       .where('id', '=', version.id)
@@ -272,7 +241,6 @@ describe('QuestionsRepository trên Kysely (issue #642)', () => {
 
     await repo.updateVersion(version.id, { generalFeedback: DOC_B });
     expect((await repo.getVersion(version.id))!.generalFeedback).toEqual(DOC_B);
-    // Patch không nhắc tới questionText/generalFeedback thì cả hai giữ nguyên.
     await repo.updateVersion(version.id, { defaultMark: 5 });
     const after = await repo.getVersion(version.id);
     expect(after!.questionText).toEqual(DOC_A);
@@ -346,7 +314,6 @@ describe('QuestionsRepository trên Kysely (issue #642)', () => {
       const viaOracle = await oracleFilterIds(filter);
       expect(viaRepo, `bộ lọc ${JSON.stringify(filter)}`).toEqual(viaOracle);
     }
-    // Chốt cứng ba kỳ vọng nghiệp vụ của dữ kiện mẫu (không chỉ so hai phía với nhau):
     expect((await repo.filterQuestionsByCurriculumLinks({ subjectId: seed.subjectId })).map((q) => q.id).sort())
       .toEqual([seed.q1, seed.q3].sort());
     expect((await repo.filterQuestionsByCurriculumLinks({ nodeId: seed.nodeId })).map((q) => q.id).sort())

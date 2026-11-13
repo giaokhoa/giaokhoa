@@ -7,16 +7,6 @@ import {
   restoreProgramDumpSql,
 } from '../../../src/modules/curriculum/program-dump';
 
-/**
- * Spec tích hợp ĐÓNG THỬ NGHIỆM T-12 (issue #646, nhóm G6):
- * `sql.raw` thi hành một script SQL NHIỀU câu lệnh (artifact chương trình thật: 13.856 câu INSERT, không tham số, không BEGIN/COMMIT, không SET LOCAL) bên trong MỘT transaction của Kysely, với các câu builder (select trước, select + update neo sau) chạy cùng transaction đó.
- *
- * Cơ sở hành vi: script không có tham số nên driver `pg` dùng giao thức đơn giản (simple protocol) cho câu truy vấn — giao thức này chấp nhận nhiều câu lệnh trong một lần gửi và cả khối chạy trong transaction bao ngoài; một câu lỗi giữa script làm transaction abort và rollback TOÀN BỘ, kể cả các câu INSERT đã chạy trước nó. Hai ca dưới đây khoá cả hai phía trên database thật dựng từ rỗng bằng cầu nối migration của `@giaokhoa/db`:
- * - Ca đầy đủ: restore trọn artifact thật, đếm dòng từng bảng
- *   khớp số đếm của artifact và mọi môn học được neo về context đích (bước update bằng builder chạy SAU sql.raw trong cùng transaction — bằng chứng các câu sau raw vẫn thuộc cùng transaction và commit cùng nhau).
- * - Ca rollback: chèn một câu INSERT sai cú pháp vào giữa script
- *   — restore phải ném lỗi và cả năm bảng đích vẫn 0 dòng.
- */
 const adminUrl =
   process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
   withDatabase(
@@ -30,7 +20,6 @@ const FULL_DB = 'giaokhoa_db_g646_t12_full';
 const ROLLBACK_DB = 'giaokhoa_db_g646_t12_rollback';
 const ANCHOR_CONTEXT_ID = '01934f2a-7b6d-7c1e-9c4a-2f5d8e6a5001';
 
-/** Số dòng kỳ vọng của artifact chương trình (đếm tại artifact `program-dump.sql` đi kèm module). */
 const EXPECTED_COUNTS = {
   subjects: 19,
   curricula: 146,
@@ -56,7 +45,6 @@ afterAll(async () => {
   await dropTestDatabase(adminUrl, ROLLBACK_DB).catch(() => undefined);
 });
 
-/** Đếm dòng một bảng qua chính handle Kysely đang kiểm chứng. */
 async function countRows(db: CentreDb, table: keyof typeof EXPECTED_COUNTS): Promise<number> {
   const result = await sql<{ n: number }>`select count(*)::int as n from ${sql.table(table)}`.execute(db);
   return result.rows[0]?.n ?? -1;

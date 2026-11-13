@@ -11,22 +11,6 @@ import {
 } from '../../../../worker/src/outbox-event-routes';
 import { closeWorkerRelayDriver, flushWorkerRelay } from '../../support/worker-relay-driver';
 
-/**
- * Hồi quy điểm chặn BullMQ của PR #554 (issue #523, việc dọn cuối chuỗi #491): cầu dẫn relay của worker đẩy job BullMQ thật vào đúng hàng đợi production trên `REDIS_URL` hiện hành, nhưng trong e2e không có processor nào tiêu thụ — nếu đóng cầu dẫn mà không dọn, các job đó tích luỹ trên Redis dùng chung và một worker thường nối vào sau sẽ tiêu thụ chúng như sự kiện mới (phân xử 6513725570 đã đo 33 job/lượt, tích luỹ 0 → 33 → 66 qua hai lượt).
- *
- * Spec này ghim điều kiện sửa tối thiểu đã phán quyết (6513843023):
- * sau khi đóng cầu dẫn, không job nào của lượt chạy còn ở trạng thái worker thường tiêu thụ được, trên TOÀN BỘ bảng định tuyến
- * (cả 5 hàng đợi, kể cả `auth-mail` — job sót ở đó mà bị worker
- * thật tiêu thụ có thể gửi mail thật), và lặp 2 lượt không cộng thêm job sót của lượt trước. Việc dọn nằm trong `closeWorkerRelayDriver()` nên đường `afterAll` của các file e2e dùng cầu dẫn cũng được hưởng — kể cả khi test thất bại giữa chừng (Vitest vẫn gọi `afterAll`).
- *
- * Cách đo: spec chèn trực tiếp 5 dòng outbox phủ đủ 5 hàng đợi
- * (loại `message_sent` fan-out ra 2 đích nên một lượt sinh 6 job),
- * xả qua cầu dẫn thật rồi đóng, sau đó đối chiếu (a) số job chờ trên mỗi hàng đợi về đúng số đo trước lượt và (b) từng job của lượt không còn tra được theo id. Số đo so với baseline trước lượt — không so với 0 tuyệt đối — vì Redis e2e có thể là Redis dùng chung, đã chứa job của tiến trình khác từ trước.
- *
- * Vòng sửa 2 (phán quyết điều phối 6515103583, trên cơ sở phân xử 6515088158): relay production phát job TRƯỚC (`queue.add` cho từng đích), đóng dấu `publishedAt` SAU, và dừng cả lượt ngay tại dòng lỗi — nên một dòng có thể đã sinh job thật mà không bao giờ được đóng dấu (đóng dấu lỗi sau khi job đã vào Redis, hoặc fan-out chỉ tới được đích thứ nhất). Ghi vết theo hiệu hai tập dòng đã đóng dấu bỏ sót đúng các dòng đó. Spec bổ sung hai ca nhánh lỗi tương ứng: lỗi được tiêm THẬT trên đường production
- * (trigger Postgres làm chính lệnh UPDATE đóng dấu ném lỗi; ACL
- * Redis làm `queue.add` ở đích fan-out thứ hai bị từ chối NOPERM), khẳng định sau khi đóng cầu dẫn job phát một phần cũng biến mất và số job chờ về đúng baseline. Hai ca này đỏ trên cơ chế ghi vết cũ và xanh trên cơ chế ứng viên của vòng sửa 2.
- */
 describe('Worker relay driver: đóng cầu dẫn dọn đúng job của lượt chạy', () => {
   const queueNames = allQueueNamesOfRoutes(OUTBOX_EVENT_QUEUE_ROUTES);
   let pg: Client;
@@ -120,7 +104,6 @@ describe('Worker relay driver: đóng cầu dẫn dọn đúng job của lượt
   beforeAll(async () => {
     pg = new Client({ connectionString: process.env.DATABASE_URL });
     await pg.connect();
-    // Dọn tồn đọng outbox chưa phát của các spec chạy trước trên cùng DB (theo đúng tiền lệ của event-log-flow): relay ở app test chỉ chạy khi gọi tay, nên dòng chưa phát khi file trước đóng là dòng chết — không test nào còn tiêu thụ.
     await pg.query('DELETE FROM outbox_events WHERE published_at IS NULL');
     const connection = redisConnectionFromUrl(process.env.REDIS_URL ?? '');
     measureQueues = queueNames.map((name) => new Queue(name, { connection }));
@@ -128,8 +111,6 @@ describe('Worker relay driver: đóng cầu dẫn dọn đúng job của lượt
   });
 
   afterAll(async () => {
-    // Khôi phục hạ tầng dù một ca nhánh lỗi có chết giữa chừng:
-    // nới ACL Redis về toàn quyền và gỡ trigger tiêm lỗi.
     await adminRedis.acl('SETUSER', 'default', 'resetkeys', '~*').catch(() => undefined);
     await pg
       .query('DROP TRIGGER IF EXISTS fail_stamp_after_enqueue_trg ON outbox_events')
@@ -154,8 +135,6 @@ describe('Worker relay driver: đóng cầu dẫn dọn đúng job của lượt
   it('nhánh lỗi đóng dấu: job đã vào Redis nhưng lệnh đóng dấu publishedAt thất bại, đóng cầu dẫn vẫn dọn job của dòng lỗi', async () => {
     const baseline = await waitingCounts();
     const rowId = await insertRow('grades', 'grade_updated');
-    // Tiêm lỗi thật ở đúng lệnh UPDATE đóng dấu của relay production:
-    // trigger BEFORE UPDATE ném ngoại lệ khi published_at chuyển NULL -> NOT NULL, tức sau khi queue.add đã thành công.
     await pg.query(`
       CREATE OR REPLACE FUNCTION fail_stamp_after_enqueue() RETURNS trigger AS $fn$
       BEGIN
@@ -179,7 +158,6 @@ describe('Worker relay driver: đóng cầu dẫn dọn đúng job của lượt
     }
     expect(flushError).not.toBeNull();
     expect(errorText(flushError)).toContain('injected stamp failure after enqueue');
-    // Dòng lỗi không được đóng dấu, nhưng job của nó đã vào Redis.
     expect(await isUnpublished(rowId)).toBe(true);
     const notificationQueue = queueByName('notification-events');
     expect(await notificationQueue.getJob(outboxRelayJobId(null, rowId))).toBeDefined();
@@ -196,13 +174,8 @@ describe('Worker relay driver: đóng cầu dẫn dọn đúng job của lượt
 
   it('nhánh lỗi fan-out: message_sent lỗi ở đích thứ hai sau khi đích thứ nhất đã nhận job, đóng cầu dẫn vẫn dọn job ở đích thứ nhất', async () => {
     const baseline = await waitingCounts();
-    // Lượt xả khởi động: dựng cầu dẫn và các kết nối BullMQ khi ACL chưa siết (lúc này không còn dòng chưa phát nào).
     await flushWorkerRelay();
     const rowId = await insertRow('messaging', 'message_sent');
-    // Siết ACL của user mặc định: chỉ cho chạm khóa của hàng đợi đích thứ nhất. Lệnh queue.add ở đích thứ hai
-    // (notification-events) bị Redis từ chối NOPERM — lỗi thật trả
-    // về cho đúng lời gọi production, sau khi đích thứ nhất
-    // (messaging-realtime) đã nhận job.
     await adminRedis.acl('SETUSER', 'default', 'resetkeys', '~bull:messaging-realtime:*');
     let flushError: unknown = null;
     try {
@@ -214,7 +187,6 @@ describe('Worker relay driver: đóng cầu dẫn dọn đúng job của lượt
     }
     expect(flushError).not.toBeNull();
     expect(errorText(flushError)).toMatch(/NOPERM|no permissions/i);
-    // Phát một phần: dòng chưa đóng dấu, job chỉ có ở đích thứ nhất.
     expect(await isUnpublished(rowId)).toBe(true);
     const realtimeQueue = queueByName('messaging-realtime');
     const notificationQueue = queueByName('notification-events');

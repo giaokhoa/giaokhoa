@@ -13,25 +13,6 @@ import {
   type OrdinaryWorkerModuleHarness,
 } from '../../support/ordinary-worker-module';
 
-/**
- * Cơ chế chuyển tiếp một lần của consumer thông báo sự kiện (điểm sửa theo phân xử trên PR #542, issue con #520 của #491): khi consumer polling phía API bị gỡ, các dòng outbox thuộc mười loại sự kiện thông báo có `seq` lớn hơn watermark cuối của consumer cũ nhưng đã bị relay đóng dấu `publishedAt` (vì trước đây relay đóng dấu cả loại chưa định tuyến) sẽ không thành job và không còn ai đọc theo watermark — mất vĩnh viễn nếu không phát bù.
- *
- * Spec này dựng đúng trạng thái chuyển đổi đó và khẳng định:
- *  1. Dòng trên watermark cũ, đã đóng dấu `publishedAt`, được phát
- *     bù thành job và xử lý đúng một lần (đúng một thông báo).
- *  2. Dòng dưới watermark cũ không bị xử lý lại (không thông báo,
- *     không job).
- *  3. Dòng trên watermark đã có dấu đã xử lý theo `outboxId` thì
- *     job phát bù kết luận trùng ở processor và không sinh thông báo thứ hai.
- *  4. Sau khi rút cạn, khoá watermark cũ bị xoá và lần phát bù sau
- *     là no-op — cơ chế không thành consumer polling thường trực.
- *  5. Hệ mới tinh (không có khoá watermark cũ) thì không phát bù
- *     gì: dòng đã đóng dấu không thành job, không có thông báo.
- *  6. Đường khởi động thật: khoá watermark đã tồn tại TRƯỚC khi
- *     module worker khởi tạo thì hook `OnModuleInit` tự phát bù trong lúc khởi tạo — không cần lời gọi tay `drainLegacyBacklog()` (phân xử vòng 2 trên PR #542: bản spec trước chỉ gọi tay sau khi module đã boot xong nên không khoá được hành vi này).
- *  7. Lỗi thoáng qua giữa lượt phát bù (lần đẩy job đầu tiên ném
- *     lỗi) không làm kẹt tồn đọng: lượt phát bù tự thử lại có backoff trong cùng tiến trình tới khi rút cạn trọn vẹn, khoá cũ chỉ bị xoá sau khi thành công, và lần thử thất bại được ghi log mức error kèm số lần thử (phân xử vòng 2 trên PR #542: cơ chế cũ nuốt lỗi sau một lần thử duy nhất, tồn đọng kẹt tới lần khởi động worker kế tiếp).
- */
 describe('Worker notification events catch-up (phát bù tồn đọng theo watermark cũ ở #520)', () => {
   let context: INestApplicationContext;
   let harness: OrdinaryWorkerModuleHarness;
@@ -81,7 +62,6 @@ describe('Worker notification events catch-up (phát bù tồn đọng theo wate
     }).execute();
   }
 
-  /** Chèn một dòng outbox ĐÃ bị relay đóng dấu `publishedAt` — đúng hình dạng tồn đọng tại thời điểm chuyển đổi. */
   async function emitMarkedRow(userId: string, courseId: string): Promise<{ id: string; seq: number }> {
     const row = await db.insertInto('outbox_events').values({
       aggregate: 'enrol', type: 'enrol_expiry_warning', tenant_id: fixtureTenantId,
@@ -123,8 +103,6 @@ describe('Worker notification events catch-up (phát bù tồn đọng theo wate
     redis = new Redis({
       ...redisConnectionFromUrl(process.env.REDIS_URL ?? 'redis://localhost:6379'),
     });
-    // Khoá watermark của consumer polling cũ, dựng đúng cách consumer
-    // cũ dựng: tên database lấy từ path của DATABASE_URL.
     const databaseName = new URL(process.env.DATABASE_URL!).pathname.replace(/^\//, '') || 'default';
     legacyWatermarkKey = `giaokhoa:messaging:notifications:${databaseName}:seq`;
     await redis.del(legacyWatermarkKey);
@@ -151,15 +129,11 @@ describe('Worker notification events catch-up (phát bù tồn đọng theo wate
     const aboveStudent = aboveFixture.student;
     const markedStudent = markedFixture.student;
 
-    // Ba dòng đã đóng dấu, seq tăng dần: watermark cũ dừng đúng ở
-    // dòng đầu — hai dòng sau là tồn đọng chưa từng thành job.
     const below = await emitMarkedRow(belowStudent, belowFixture.courseId);
     const above = await emitMarkedRow(aboveStudent, aboveFixture.courseId);
     const marked = await emitMarkedRow(markedStudent, markedFixture.courseId);
     expect(above.seq).toBeGreaterThan(below.seq);
     expect(marked.seq).toBeGreaterThan(above.seq);
-    // Dòng thứ ba mô phỏng sự kiện đã được xử lý ở một đường khác:
-    // dấu đã xử lý theo outboxId đã có trước khi phát bù.
     await marker.markProcessed(marked.id);
     await redis.set(legacyWatermarkKey, String(below.seq));
 
@@ -169,15 +143,11 @@ describe('Worker notification events catch-up (phát bù tồn đọng theo wate
     await waitJobCompleted(above.id);
     await waitJobCompleted(marked.id);
 
-    // Dòng trên watermark: đúng một thông báo. Dòng đã có dấu: job
-    // kết luận trùng ở processor, không thông báo. Dòng dưới
-    // watermark: không job, không thông báo.
     expect(await notificationsOf(aboveStudent, 'enrol_expiry_warning')).toHaveLength(1);
     expect(await notificationsOf(markedStudent, 'enrol_expiry_warning')).toHaveLength(0);
     expect(await notificationsOf(belowStudent, 'enrol_expiry_warning')).toHaveLength(0);
     expect(await eventsQueue.getJob(outboxRelayJobId(null, below.id))).toBeFalsy();
 
-    // Rút cạn xong thì khoá cũ bị xoá; lượt phát bù sau là no-op.
     expect(await redis.get(legacyWatermarkKey)).toBeNull();
     expect(await catchup.drainLegacyBacklog()).toBe(0);
   }, 180000);
@@ -201,15 +171,8 @@ describe('Worker notification events catch-up (phát bù tồn đọng theo wate
     const below = await emitMarkedRow(belowFixture.student, belowFixture.courseId);
     const above = await emitMarkedRow(aboveFixture.student, aboveFixture.courseId);
     expect(above.seq).toBeGreaterThan(below.seq);
-    // Khoá watermark tồn tại TRƯỚC khi module worker mới khởi tạo —
-    // đúng trạng thái của lần triển khai chuyển đổi thật.
     await redis.set(legacyWatermarkKey, String(below.seq));
 
-    // Boot một module worker mới: hook OnModuleInit của service
-    // phát bù phải tự rút cạn trong lúc context.init() chạy. Ca
-    // này không hề gọi drainLegacyBacklog() — nếu sau khi boot
-    // xong mà khoá đã mất và job đã vào hàng đợi thì chỉ có thể
-    // do đường khởi động tự chạy.
     const bootHarness = await bootWorkerModuleAsOrdinaryRole();
     try {
       expect(await redis.get(legacyWatermarkKey)).toBeNull();
@@ -234,12 +197,6 @@ describe('Worker notification events catch-up (phát bù tồn đọng theo wate
     await marker.markProcessed(marked.id);
     await redis.set(legacyWatermarkKey, String(below.seq));
 
-    // Tiêm lỗi thoáng qua: lần queue.add đầu tiên cho đúng dòng
-    // tồn đọng này ném lỗi, mọi lần đẩy khác đi qua bình thường
-    // (relay thường trực đẩy các dòng khác không bị ảnh hưởng).
-    // Tại thời điểm lỗi nổ ra, ghi lại giá trị khoá để khẳng định
-    // khoá vẫn còn nguyên — khoá chỉ được xoá sau khi rút cạn
-    // thành công.
     const originalAdd = eventsQueue.add.bind(eventsQueue);
     let faultArmed = true;
     let keyValueAtFailure: string | null = null;
@@ -253,8 +210,6 @@ describe('Worker notification events catch-up (phát bù tồn đọng theo wate
       return (originalAdd as unknown as (...a: unknown[]) => Promise<unknown>)(...args);
     }) as unknown as typeof eventsQueue.add;
 
-    // Bắt log error của chính service phát bù để khẳng định lần
-    // thử thất bại được ghi kèm số lần thử, không nuốt lặng.
     const loggerRef = (catchup as unknown as {
       logger: { error: (...args: unknown[]) => void };
     }).logger;
@@ -273,9 +228,6 @@ describe('Worker notification events catch-up (phát bù tồn đọng theo wate
       loggerRef.error = originalError;
     }
 
-    // Lỗi đã thật sự nổ ở lần thử đầu, khoá còn nguyên tại thời
-    // điểm đó, và lượt phát bù tự hồi phục trong cùng tiến trình:
-    // rút cạn đủ hai dòng trên watermark ở lần thử sau.
     expect(faultArmed).toBe(false);
     expect(keyValueAtFailure).toBe(String(below.seq));
     expect(errorMessages.some((message) => message.includes('lần thử 1'))).toBe(true);

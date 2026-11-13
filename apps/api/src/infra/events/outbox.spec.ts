@@ -3,13 +3,6 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createCentreKysely, type CentreDb } from '@giaokhoa/db';
 import { OutboxService } from './outbox.service';
 
-/**
- * Hợp đồng giao dịch của writer outbox (real DB, giaokhoa_test_api).
- *
- * Spec này chỉ khẳng định phía ghi: sự kiện được đưa vào outbox trong cùng transaction với nghiệp vụ thì chỉ tồn tại sau khi transaction commit, và biến mất cùng transaction khi rollback. Phía phát (đóng dấu `publishedAt` sau khi phát) thuộc về relay duy nhất ở worker và được ghim bởi `apps/worker/src/outbox-relay.scheduler.spec.ts` — từ issue #523, tiến trình API không còn relay riêng nên spec này không còn gọi relay nữa; dòng chưa phát giữ `publishedAt` null cho tới khi relay của worker chạy.
- *
- * Service được dựng trực tiếp trên handle Kysely của chính nó; mọi khẳng định đọc lại qua cùng handle đó. Đường ghi duy nhất là `enqueueKysely` trong transaction của phía gọi, cộng đường `enqueueStandalone` tự mở transaction riêng (đường ghi bộ máy cũ chuyển tiếp đã xoá ở issue #663).
- */
 describe('Outbox giao dịch (DB thật, giaokhoa_test_api)', () => {
   let pool: Pool;
   let kysely: CentreDb;
@@ -26,7 +19,6 @@ describe('Outbox giao dịch (DB thật, giaokhoa_test_api)', () => {
   });
 
   afterAll(async () => {
-    // Instance Kysely sở hữu pool: destroy() đóng luôn pool, nên đây là thao tác dọn dẹp cuối cùng của spec.
     await kysely.destroy();
   });
 
@@ -94,7 +86,6 @@ describe('Outbox giao dịch (DB thật, giaokhoa_test_api)', () => {
   });
 
   it('enqueueStandalone ghi qua handle do hàm phân giải cấp khi tầng wiring có cấp hàm phân giải', async () => {
-    // Handle chính trỏ vào đầu mối chết (cổng 1): nếu đường standalone dùng handle chính thay vì handle của hàm phân giải, lượt ghi sẽ chết ở kết nối — ca này ghim đúng hợp đồng "phiên chưa chuẩn bị phía Kysely vẫn ghi được qua hàm phân giải" mà tầng wiring dựa vào.
     const deadKysely = createCentreKysely(
       new Pool({ connectionString: 'postgres://postgres:postgres@localhost:1/khong_ton_tai' }),
     );

@@ -3,18 +3,6 @@ import { createRecordingDb } from '../test-support/recording-db';
 import { AssignmentsRepository } from './assignments';
 import { GuardiansRepository } from './guardians';
 
-/**
- * Ca đơn vị của repository bài tập và repository liên kết giám hộ
- * (issue #649): khoá hình dạng SQL biên dịch — không cần database,
- * handle ghi lại câu SQL + tham số mà Kysely biên dịch. Ngữ nghĩa chạy thật trên database được khoá ở các spec tích hợp đi kèm.
- *
- * Bất biến được khoá ở đây:
- * - Cột jsonb `points` của dấu chấm được ghi bằng chuỗi JSON đã
- *   serialize tường minh (tham số là chuỗi JSON), không đưa mảng thô cho driver — driver `pg` hiểu mảng cấp cao nhất là mảng PostgreSQL và cột jsonb sẽ lỗi (khuôn đã đo ở pilot).
- * - Bộ lọc động của `listLinks` (khuôn T-13): không bộ lọc thì
- *   không có mệnh đề WHERE; có bộ lọc thì các điều kiện nối bằng AND trong WHERE và không điều kiện nào mang giá trị `undefined`
- *   (T-4: `undefined` trong WHERE gắn NULL và lặng lẽ trả 0 dòng).
- */
 const SUBMISSION_ID = '01a19887-6b35-7760-8e64-a5960bfd0875';
 const FILE_ID = '01a19887-6b35-7760-8e64-a5960bfd0876';
 const AUTHOR_ID = '01a19887-6b35-7760-8e64-a5960bfd0877';

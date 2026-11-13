@@ -26,6 +26,8 @@
     "fleet:migrate": "node dist/modules/fleet/fleet-migration-runner.js",
     "fleet:backup": "node dist/modules/fleet/fleet-backup.js",
     "fleet:restore-test": "node dist/modules/fleet/fleet-restore-test.js",
+    "fleet:restore": "node dist/modules/fleet/fleet-restore.js",
+    "fleet:close-centre": "node dist/modules/fleet/fleet-close-centre.js",
     "seed:review": "node dist/modules/seed/review-seed.js"
   },
   "dependencies": {

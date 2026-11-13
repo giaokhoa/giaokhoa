@@ -1,17 +1,3 @@
-/**
- * Ca đơn vị của khuôn ghép đoạn động `sql.join` (thử nghiệm T-11, chốt trong issue #648) tại `ReportsRepository.userHasAnyRole` — tầng BIÊN DỊCH, không cần database: một driver ghi lại truy vấn đã biên dịch (SQL + thứ tự tham số) thay cho kết nối thật.
- *
- * Khuôn T-11 cần trả lời ba ca cho mọi phía gọi sau (nhóm messaging sẽ cần cả ba):
- * - 0 đoạn: `IN ()` không phải SQL hợp lệ, nên repository KHÔNG
- *   phát truy vấn mà trả `false` ngay.
- * - 1 đoạn và nhiều đoạn vô hướng: tham số của mệnh đề ngoài
- *   (userId) đứng trước, tham số từng mảnh nối tiếp theo thứ tự
- *   mảng, dấu tách là `, `.
- * - Đoạn chứa biểu thức con mang tham số riêng: tham số của biểu
- *   thức con nằm đúng tại vị trí của mảnh trong danh sách (thứ tự tham số toàn cục không đổi).
- *
- * Kết quả chạy thật trên database (đối chiếu hai ORM và kết quả từng ca) nằm ở spec tích hợp đi kèm `reports.int-spec.ts`.
- */
 import {
   Kysely,
   PostgresAdapter,
@@ -27,7 +13,6 @@ import { describe, expect, it } from 'vitest';
 import type { CentreDb } from '../client';
 import { ReportsRepository } from './reports';
 
-/** Driver giả: ghi lại mọi truy vấn đã biên dịch và trả một dòng `{ ok: 1 }` cho mỗi lần chạy. */
 class RecordingDriver implements Driver {
   readonly queries: CompiledQuery[] = [];
 
@@ -51,7 +36,6 @@ class RecordingDriver implements Driver {
   async destroy(): Promise<void> {}
 }
 
-/** Dựng repository trên handle Kysely giả (driver ghi truy vấn) để soi SQL đã biên dịch. */
 function repoOnRecordingDriver(): { repo: ReportsRepository; driver: RecordingDriver } {
   const driver = new RecordingDriver();
   const db = new Kysely<Record<string, never>>({
@@ -91,8 +75,6 @@ describe('userHasAnyRole — khuôn sql.join của T-11 ở tầng biên dịch'
   });
 
   it('đoạn chứa biểu thức con có tham số riêng: tham số của biểu thức con nằm tại vị trí của đoạn trong danh sách', async () => {
-    // Ca này không đi qua chữ ký hiện hành của userHasAnyRole (mỗi tên vai trò là một tham số vô hướng) — nó chốt khuôn sql.join mà repository dùng, cho phía gọi cần đoạn giàu hơn (messaging):
-    // cùng cách ghép, đoạn đầu là biểu thức con mang tham số riêng.
     const driver = new RecordingDriver();
     const db = new Kysely<Record<string, never>>({
       dialect: {

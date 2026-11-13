@@ -16,12 +16,6 @@ import {
   STRONG_PASSWORD,
 } from "../../support/identity-access-helpers";
 
-/**
- * Issue #17 — luồng sản phẩm qua HTTP/Nest thực tế, không gọi trực tiếp
- * service cho các thao tác gửi/duyệt/cài. Cấp phát hai PostgreSQL riêng
- * và một control plane độc lập, kho nguồn chỉ được seed dữ kiện GDPT
- * tối thiểu. Các thay đổi / vết cài được đối chiếu bằng SQL trực tiếp.
- */
 const suffix = Math.random().toString(36).slice(2, 8);
 const cpName = `giaokhoa_test_17_cp_${suffix}`;
 const bankName = `giaokhoa_test_17_bank_${suffix}`;
@@ -93,7 +87,6 @@ async function centreSql<T>(
   return usingClient(
     clusterUrl(centre.databaseName, centre.connectionRole, pwd),
     async (db) => {
-      // Setup fixture chạy dưới chủ kho, có quyền nhìn dữ liệu toàn kho.
       await db.query("SELECT set_config('app.platform', 'on', false)");
       return fn(db);
     },
@@ -166,9 +159,6 @@ describe("Gói chương trình #17 — gửi, duyệt, cài qua HTTP và kho ri�
       migrationsDir,
       log: () => undefined,
     });
-    // Người gửi phải thật sự có tenant:manage ở context trung tâm.
-    // Site admin của kho riêng không tự vượt cổng tenant trong mô hình
-    // phân quyền; gán vai manager đúng chuẩn như hệ thống vận hành.
     for (const centre of [centreA, centreB]) {
       await centreSql(centre, async (db) => {
         const role = await db.query<{ id: string }>(
@@ -186,8 +176,6 @@ describe("Gói chương trình #17 — gửi, duyệt, cài qua HTTP và kho ri�
         );
       });
     }
-    // Giao đoạn cấp token cũ còn tra tài khoản / tenant ở kho chung.
-    // Mirror chỉ phục vụ khởi tạo phiên, không chứa chương trình hay vết cài.
     await usingClient(process.env.DATABASE_URL!, async (db) => {
       await db.query("SELECT set_config('app.platform', 'on', false)");
       for (const [centre, username, email] of [
@@ -244,8 +232,6 @@ describe("Gói chương trình #17 — gửi, duyệt, cài qua HTTP và kho ri�
     expect(loginB.status, JSON.stringify(loginB.body)).toBe(201);
     tokenA = loginA.body.accessToken;
     tokenB = loginB.body.accessToken;
-    // Chỉ dữ kiện chương trình nền được seed bằng SQL. Các hành vi
-    // sản phẩm gửi / duyệt / cài đều được gọi qua HTTP ở các ca test.
     await centreSql(centreA, async (db) => {
       const ctx = await db.query<{ id: string }>(
         "SELECT id FROM context WHERE context_level = 20 AND instance_id = $1",
@@ -347,7 +333,6 @@ describe("Gói chương trình #17 — gửi, duyệt, cài qua HTTP và kho ri�
       .set(auth(tokenB))
       .send({});
     expect(pendingInstall.status).toBe(404);
-    // Trung tâm nguồn không được tự duyệt trên hostname của chính mình.
     const selfApproved = await http(app!)
       .post(`${base}/${version1}/approve`)
       .set("Host", hostA)
@@ -389,8 +374,6 @@ describe("Gói chương trình #17 — gửi, duyệt, cài qua HTTP và kho ri�
     expect(retried.body.unchanged).toBe(true);
     expect(retried.body.install.id).toBe(installed.body.install.id);
 
-    // B đã dùng YCCĐ v1 trong câu; thử cài v2 có ID mới và mapping
-    // phải giữ nguyên cả nội dung cũ lẫn FK của câu hỏi.
     await centreSql(centreB!, async (db) => {
       const ctx = await db.query<{ id: string }>(
         "SELECT id FROM context WHERE context_level=20 AND instance_id=$1",

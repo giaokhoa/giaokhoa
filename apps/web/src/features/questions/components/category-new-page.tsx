@@ -1,6 +1,3 @@
-/**
- * Màn tạo danh mục câu hỏi RIÊNG (route /questions/categories/new): tách khỏi trang ngân hàng câu hỏi để mỗi module một màn; hành vi giữ nguyên như khi còn nằm trong trang — xem TSDoc của component bên dưới.
- */
 import { useMemo, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router';
@@ -27,11 +24,6 @@ import { clearQuestionBankListCache, useCreateQuestionCategory } from '../querie
 import { PageHeader, PageShell } from '#components/page-shell';
 import { withApiReason, type ContextOption } from '../utils/shared';
 
-/**
- * Màn tạo danh mục câu hỏi RIÊNG theo chuẩn §9 (route /questions/categories/new): trước đây form này nhồi ngay dưới danh sách ngân hàng trong cùng một trang (§9: tạo mới là màn riêng, không nhồi form vào danh sách). Ngữ cảnh vẫn là control Select của @giaokhoa/ui chỉ liệt kê ngữ cảnh người dùng thật sự có question:managecategory
- * (issue #55 mục 2), mặc định ngữ cảnh hệ thống. Tạo xong quay về danh
- * sách ngân hàng (trang danh sách tự nạp lại khi mở).
- */
 export function QuestionCategoryNewPage() {
   const { t } = useTranslation('app');
   const navigate = useNavigate();
@@ -42,7 +34,6 @@ export function QuestionCategoryNewPage() {
   const [contextId, setContextId] = useState('');
   const [message, setMessage] = useState<string | null>(null);
 
-  // Danh sách ngữ cảnh đọc qua useQuery (chỉ tải khi quyền đã sẵn sàng); lựa chọn suy thẳng bằng useMemo từ dữ kiện query + ảnh chụp quyền — lỗi tải thì dữ kiện vắng, select để rỗng như bản fetch-trong-effect trước đây.
   const contextsQuery = useQuery({
     ...accessContextsQueryOptions(),
     enabled: perms.ready && perms.canUseQuestionBank,
@@ -71,9 +62,6 @@ export function QuestionCategoryNewPage() {
       }));
   }, [contextsQuery.data, perms.access, perms.courses, t]);
 
-  // Ngữ cảnh hiệu lực: lựa chọn của người dùng nếu có, chưa chọn thì
-  // mặc định ngữ cảnh hệ thống (không có thì lựa chọn đầu tiên) —
-  // suy ngay khi render thay cho việc chép mặc định vào state.
   const effectiveContextId =
     contextId || contextOptions.find((o) => o.level === 10)?.id || contextOptions[0]?.id || '';
 

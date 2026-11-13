@@ -11,13 +11,6 @@ import { GroupsModule } from '../groups/groups.module';
 import { CalendarController } from './calendar.controller';
 import { CALENDAR_IMPORT_QUEUE, CALENDAR_REMINDER_QUEUE, CalendarService } from './calendar.service';
 
-/**
- * Facade của CalendarModule: CalendarService. Khả năng hiển thị chỉ được tính từ các facade Courses/Enrol/Groups.
- *
- * Từ issue #647, repository của module sống ở `@giaokhoa/db` trên Kysely (lớp thuần, không phụ thuộc Nest) nên module lắp nó bằng factory provider trên handle định tuyến theo không gian
- * (`SpaceDatabaseService.routedKysely`) — cùng khuôn lắp repository
- * của pilot control plane.
- */
 @Module({
   imports: [
     AccessModule, CoursesModule, EnrolModule, GroupsModule, EventsModule, SpaceRoutingModule,
@@ -35,5 +28,4 @@ import { CALENDAR_IMPORT_QUEUE, CALENDAR_REMINDER_QUEUE, CalendarService } from 
   ],
   exports: [CalendarService],
 })
-/** Module lịch. */
 export class CalendarModule {}

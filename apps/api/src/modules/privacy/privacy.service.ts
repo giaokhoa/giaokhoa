@@ -5,9 +5,6 @@ import { ContextsService } from '../access/contexts.service';
 import { FilesService } from '../files/files.service';
 import { UsersService } from '../users/users.service';
 
-/**
- * Danh sách cột tường minh có bí danh camelCase cho các bảng mà các provider tích hợp sẵn của module này đọc/xoá (chuyển Kysely, issue #648): bản xuất dữ liệu của chủ thể giữ nguyên hình dạng dòng camelCase như khi còn đọc qua bộ máy cũ. Việc xoá đếm số dòng bằng `returning('id')` — cùng khuôn đếm với `.returning()` của bản cũ.
- */
 const USER_PREFERENCES_COLUMNS = ['id', 'user_id as userId', 'name', 'value'] as const;
 const USER_ENROLMENTS_COLUMNS = [
   'id', 'enrol_id as enrolId', 'user_id as userId', 'status', 'time_start as timeStart',
@@ -97,28 +94,18 @@ const PAYMENTS_COLUMNS = [
   'review_handled_by as reviewHandledBy', 'review_handled_at as reviewHandledAt', 'data', 'created_at as createdAt', 'updated_at as updatedAt',
 ] as const;
 
-/**
- * Một PrivacyProvider đăng ký đảo ngược (§3.12/§2#28): khai báo metadata dữ liệu cá nhân của subsystem mình + export + delete cho một user. Kể cả subsystem tuyên bố không giữ dữ liệu cũng phải đăng ký.
- */
 export interface PrivacyProvider {
   subsystem: string;
-  /** Metadata: các bảng/trường giữ dữ liệu cá nhân của subsystem. */
   metadata: string[];
   export(userId: string): Promise<unknown>;
   delete(userId: string): Promise<{ deleted: number }>;
 }
 
-/** Danh sách subsystem nghiệp vụ BẮT BUỘC có provider — completeness test đối chiếu danh sách này với registry. */
 export const EXPECTED_PRIVACY_SUBSYSTEMS = [
   'users', 'enrol', 'grades', 'completion', 'files', 'messaging', 'calendar',
   'badges', 'competencies', 'social', 'search', 'contentbank', 'payments',
 ] as const;
 
-/**
- * PrivacyModule facade (Moodle core_privacy, §2#28) — GATE trước go-live. Yêu cầu export/delete có phê duyệt bởi admin có capability, chạy nền
- * (API twin đồng bộ ở đây; worker có processor tương đương), có trạng thái.
- * Delete phải lan đủ mọi subsystem đã khai — sót một provider là lỗi.
- */
 @Injectable()
 export class PrivacyService {
   private readonly providers = new Map<string, PrivacyProvider>();
@@ -133,12 +120,10 @@ export class PrivacyService {
     this.registerBuiltinProviders();
   }
 
-  /** Đăng ký provider — module nghiệp vụ đăng ký provider của mình qua đây. */
   registerProvider(p: PrivacyProvider): void { this.providers.set(p.subsystem, p); }
   listProviders(): { subsystem: string; metadata: string[] }[] {
     return [...this.providers.values()].map((p) => ({ subsystem: p.subsystem, metadata: p.metadata }));
   }
-  /** Completeness: subsystem kỳ vọng nào chưa có provider? */
   missingProviders(): string[] {
     return EXPECTED_PRIVACY_SUBSYSTEMS.filter((s) => !this.providers.has(s));
   }
@@ -166,7 +151,6 @@ export class PrivacyService {
       },
       async (userId) => {
         await db.deleteFrom('user_preferences').where('user_id', '=', userId).execute();
-        // Anonymize/soft-delete danh tính — provider khác vẫn chạy độc lập sau đó.
         await this.usersService.deleteUser(userId).catch(() => undefined);
         return 1;
       });
@@ -239,19 +223,15 @@ export class PrivacyService {
       async (userId) => db.selectFrom('search_documents').select(SEARCH_DOCUMENTS_COLUMNS).where('owner_id', '=', userId).execute(),
       async (userId) => (await db.deleteFrom('search_documents').where('owner_id', '=', userId).returning('id').execute()).length);
     simple('contentbank', ['content_bank_content.creator_id'],
-      // sizeBytes là cột int8: qua Kysely nó đọc về là chuỗi (luật int8 của package @giaokhoa/db) — chuyển lại thành số tại biên này để bản xuất giữ nguyên hình dạng dữ kiện như trước.
       async (userId) => (await db.selectFrom('content_bank_content').select(CONTENT_BANK_CONTENT_COLUMNS).where('creator_id', '=', userId).execute())
         .map((row) => ({ ...row, sizeBytes: row.sizeBytes === null ? null : Number(row.sizeBytes) })),
       async (userId) => (await db.deleteFrom('content_bank_content').where('creator_id', '=', userId).returning('id').execute()).length);
     simple('payments', ['payments.user_id/amount/currency'],
       async (userId) => db.selectFrom('payments').select(PAYMENTS_COLUMNS).where('user_id', '=', userId).execute(),
-      // Dữ liệu tài chính được ẩn danh hoá (userId → 0) thay vì xoá cứng để giữ vết đối soát; danh tính không còn truy được.
       async (userId) => (await db.updateTable('payments').set({ user_id: '00000000-0000-0000-0000-000000000000' }).where('user_id', '=', userId).returning('id').execute()).length);
   }
 
-  // --- vòng đời yêu cầu -------------------------------------------------------
 
-  /** Người dùng tự gửi yêu cầu cho chính mình; admin có manage có thể gửi hộ. */
   async createRequest(actorId: string, input: { type: 'export' | 'delete'; userId?: string }): Promise<PrivacyRequestRow> {
     const target = input.userId ?? actorId;
     if (target !== actorId) {
@@ -268,13 +248,6 @@ export class PrivacyService {
     if (!row) throw new NotFoundException({ message: `Privacy request ${id} not found`, code: 'privacy.request_not_found' });
     return row;
   }
-  /**
-   * Đọc một privacy request qua HTTP (H15, rà soát #134): chỉ chủ thể của
-   * request (userId), người đã gửi request hộ, hoặc người có
-   * `privacy:manage` tại system mới đọc được — người ngoài nhận đúng 404
-   * như request không tồn tại, không lộ metadata (userId, loại, trạng
-   * thái) của yêu cầu quyền riêng tư của người khác.
-   */
   async getRequestFor(actorId: string, id: string): Promise<PrivacyRequestRow> {
     const row = await this.getRequest(id);
     if (row.userId === actorId || row.requestedBy === actorId) return row;
@@ -288,7 +261,6 @@ export class PrivacyService {
     return this.repo.listRequestsForUser(actorId);
   }
 
-  /** Phê duyệt/từ chối bởi admin có capability privacy:manage; approve ⇒ xử lý ngay (API twin của worker job). */
   async decide(actorId: string, id: string, decision: 'approved' | 'rejected'): Promise<PrivacyRequestRow> {
     const sys = await this.contexts.ensureSystemContext();
     await this.evaluator.requireCapability(actorId, 'privacy:manage', sys.id);
@@ -302,11 +274,6 @@ export class PrivacyService {
     return this.processRequest(id);
   }
 
-  /**
-   * Xử lý một yêu cầu đã duyệt: export ⇒ gói JSON theo subsystem + manifest
-   * qua FilesModule; delete ⇒ gọi delete của MỌI provider đã đăng ký và ghi
-   * kết quả từng subsystem — thiếu provider nào (completeness) là FAIL.
-   */
   async processRequest(id: string): Promise<PrivacyRequestRow> {
     const req = await this.getRequest(id);
     if (req.status !== 'approved') throw new ForbiddenException({ message: 'Privacy request is not approved', code: 'privacy.not_approved' });
@@ -342,7 +309,6 @@ export class PrivacyService {
     return this.getRequest(id);
   }
   async listExportFiles(requestId: string) { return this.repo.listExportFiles(requestId); }
-  /** Danh sách file xuất qua HTTP: qua cùng cổng sở hữu như getRequestFor (H15). */
   async listExportFilesFor(actorId: string, requestId: string) {
     await this.getRequestFor(actorId, requestId);
     return this.repo.listExportFiles(requestId);

@@ -15,9 +15,6 @@ import {
 } from '../../support/course-enrolment-helpers';
 import { addExamSlot, createExamDraft, createReadyQuestion, pinExam } from '../../support/exam-pin-helpers';
 
-/**
- * Hồi quy DL-03 (issue #489, bổ sung theo phân xử review trên PR #537): trang kết quả của giáo viên phải nạp tổng maxMark của các usage đã kết thúc THEO LÔ — số lượt gọi `usageTotalMaxes` (mỗi lượt là một truy vấn `listAttemptsForUsages` xuống question_attempts) trong một lượt `getResults` không được tăng khi số học sinh có lượt đã kết thúc tăng. Test đếm bằng spy trên chính các instance service/repository của app, qua hai giai đoạn trên cùng một pin: 1 học sinh có lượt đã kết thúc, rồi 6 học sinh có lượt đã kết thúc cộng 1 học sinh chỉ có lượt đang làm dở.
- */
 describe('Quiz: số truy vấn của trang kết quả theo số học sinh (DL-03, issue #489)', () => {
   let app: INestApplication;
   let pg: Client;
@@ -102,7 +99,6 @@ describe('Quiz: số truy vấn của trang kết quả theo số học sinh (DL
   afterAll(async () => { await pg.end(); await app.close(); });
 
   it('số lượt gọi nạp tổng điểm và số truy vấn của một lượt xem trang kết quả không tăng khi số học sinh có lượt đã kết thúc tăng từ 1 lên 6', async () => {
-    // Giai đoạn 1: đúng 1 học sinh có 1 lượt đã kết thúc.
     await seedAttempt(finishedStudentIds[0]!, 1, 'finished', 5);
     totalsSpy.mockClear(); totalsQuerySpy.mockClear(); listAttemptsSpy.mockClear();
     const first = await quiz.getResults(teacherId, pinId);
@@ -113,8 +109,6 @@ describe('Quiz: số truy vấn của trang kết quả theo số học sinh (DL
     };
     expect(first.gradesByUser).toEqual([{ userId: finishedStudentIds[0], grade: 5 }]);
 
-    // Giai đoạn 2: thêm 5 học sinh có lượt đã kết thúc (tổng 6) và 1
-    // học sinh chỉ có lượt đang làm dở (chưa chốt điểm).
     for (const id of finishedStudentIds.slice(1)) await seedAttempt(id, 1, 'finished', 5);
     await seedAttempt(inprogressOnlyStudentId, 1, 'inprogress', null);
     totalsSpy.mockClear(); totalsQuerySpy.mockClear(); listAttemptsSpy.mockClear();
@@ -125,24 +119,15 @@ describe('Quiz: số truy vấn của trang kết quả theo số học sinh (DL
       listAttempts: listAttemptsSpy.mock.calls.length,
     };
 
-    // Điểm vẫn đúng cho từng học sinh: mỗi học sinh có lượt đã kết
-    // thúc được 5/10; học sinh chỉ có lượt đang làm dở chưa có điểm.
     expect(second.gradesByUser).toHaveLength(7);
     const gradeByUser = new Map(second.gradesByUser.map((g) => [g.userId, g.grade]));
     for (const id of finishedStudentIds) expect(gradeByUser.get(id)).toBe(5);
     expect(gradeByUser.get(inprogressOnlyStudentId)).toBeNull();
 
-    // Toàn bộ lượt của pin vẫn nạp bằng một lần listAttempts ở cả
-    // hai giai đoạn.
     expect(phase1.listAttempts).toBe(1);
     expect(phase2.listAttempts).toBe(1);
-    // Số lượt gọi nạp tổng điểm là hằng số theo lô (một lượt của tóm
-    // tắt lượt + một lượt của phép tính điểm cả bài), không tăng
-    // theo số học sinh có lượt đã kết thúc.
     expect(phase1.usageTotalMaxes).toBe(2);
     expect(phase2.usageTotalMaxes).toBe(phase1.usageTotalMaxes);
-    // Số truy vấn xuống question_attempts vì thế cũng hằng số (hai
-    // lượt theo lô trên cộng một lượt nạp usage của thống kê câu).
     expect(phase1.listAttemptsForUsages).toBe(3);
     expect(phase2.listAttemptsForUsages).toBe(phase1.listAttemptsForUsages);
   });

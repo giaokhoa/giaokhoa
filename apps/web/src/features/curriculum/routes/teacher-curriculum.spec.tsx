@@ -4,10 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TestProviders } from '#test/providers';
 import { TeacherCurriculumPage } from './teacher-curriculum';
 
-/**
- * Spec trang xem chương trình của GIÁO VIÊN (issue #161, lát T2):
- * bảng chương trình theo mẫu Bộ (Mạch nội dung | Nội dung | Yêu cầu cần đạt) đọc qua ngữ cảnh khoá giáo viên dạy (`forCourseId` trên mọi lời gọi curriculum), chế độ chỉ xem (không nút Sửa/Xoá/Thêm), YCCĐ nhiều dòng giữ cấu trúc dòng (điểm T3), và 403 hiện thông báo giải thích đúng trường hợp thay vì trang trắng.
- */
 
 const SUBJECT = { id: 'subj-toan', contextId: 'ctx-sys', name: 'Toán', slug: 'toan', position: 1 };
 const COURSE = {
@@ -30,7 +26,6 @@ const COURSE = {
   sortOrder: 0,
 };
 
-/** Cây có một YCCĐ NHIỀU DÒNG (ý cha + ý con đã tách dòng ở dataset) để chốt điểm T3. */
 const TREE = {
   curriculum: { id: 'curr-5', subjectId: 'subj-toan', grade: 5 },
   subject: SUBJECT,
@@ -77,14 +72,6 @@ interface RecordedCall {
   method: string;
 }
 
-/**
- * Stub fetch ghi lại lời gọi. `mode`:
- * - 'ok': giáo viên có khoá dạy, mọi lời đọc curriculum mang forCourseId đều qua.
- * - 'forbidden-with-course': có khoá nhưng API trả 403 (khoá không cấp quyền xem).
- * - 'no-course': không có khoá nào và đọc trực tiếp cũng 403.
- * - 'contexts-forbidden': danh sách context trả 403 nhưng các bước
- *   môn/chương trình/cây qua nhánh khoá vẫn qua — trang phải xem được chương trình thay vì báo cấm (điểm nghẽn D-3 của issue #233).
- */
 function stubFetch(calls: RecordedCall[], mode: 'ok' | 'forbidden-with-course' | 'no-course' | 'contexts-forbidden' = 'ok') {
   vi.stubGlobal(
     'fetch',
@@ -121,7 +108,6 @@ function renderPage() {
   const router = createMemoryRouter([{ path: '/curriculum', element: <TeacherCurriculumPage /> }], {
     initialEntries: ['/curriculum'],
   });
-  // Trang đọc dữ liệu qua TanStack Query (F-01 của #133) nên render trong TestProviders như mọi spec trang đã chuyển khuôn.
   render(
     <TestProviders>
       <RouterProvider router={router} />
@@ -141,24 +127,19 @@ describe('Trang chương trình của giáo viên', () => {
     stubFetch(calls);
     renderPage();
 
-    // Bảng mẫu Bộ: mạch làm tiêu đề nhóm, hai cột Nội dung | Yêu cầu cần đạt.
     expect(await screen.findByText('Số và phép tính')).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Nội dung' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Yêu cầu cần đạt' })).toBeInTheDocument();
     expect(screen.getByText('Đọc, viết được các số có nhiều chữ số')).toBeInTheDocument();
-    // Điểm T3: từng dòng của YCCĐ là một phần tử riêng (không dính thành một đoạn).
     expect(screen.getByText('Thực hiện được các phép tính với số có nhiều chữ số:')).toBeInTheDocument();
     expect(screen.getByText('– Cộng, trừ các số có nhiều chữ số.')).toBeInTheDocument();
     expect(screen.getByText('– Nhân, chia với số có hai chữ số.')).toBeInTheDocument();
-    // Truy vết nguồn vẫn hiện như bề mặt quản trị.
     expect(screen.getByText(/Nguồn: Thông tư 32\/2018\/TT-BGDĐT/)).toBeInTheDocument();
 
-    // Mọi lời đọc curriculum đều qua ngữ cảnh khoá giáo viên dạy.
     const curriculumCalls = calls.filter((c) => c.url.includes('/curriculum/'));
     expect(curriculumCalls.length).toBeGreaterThanOrEqual(3);
     expect(curriculumCalls.every((c) => c.url.includes('forCourseId=course-1'))).toBe(true);
 
-    // Chỉ xem: không nút Sửa/Xoá/Thêm nào của khu quản trị.
     expect(screen.queryByRole('button', { name: 'Sửa' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Xoá' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Thêm/ })).not.toBeInTheDocument();
@@ -191,7 +172,6 @@ describe('Trang chương trình của giáo viên', () => {
     expect(await screen.findByText('Số và phép tính')).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Nội dung' })).toBeInTheDocument();
     expect(screen.queryByText(/Khoá đã chọn không cấp quyền xem chương trình/)).not.toBeInTheDocument();
-    // Môn được gọi không kèm contextId (API mặc định về hệ thống) mà kèm khoá.
     const subjectCalls = calls.filter((c) => c.url.startsWith('/api/v1/curriculum/subjects?'));
     expect(subjectCalls.length).toBeGreaterThanOrEqual(1);
     expect(subjectCalls.every((c) => c.url.includes('forCourseId=course-1'))).toBe(true);

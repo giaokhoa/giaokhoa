@@ -19,7 +19,6 @@ interface ImportCardProps {
   selectClass: string;
 }
 
-/** Thẻ "Dùng lại từ khoá khác" của trang Xây dựng khoá. */
 export function ImportCard({
   otherCourses, importSourceId, setImportSourceId, importContent, importSections,
   setImportSections, importModules, setImportModules, onSubmitImport, selectClass,

@@ -4,19 +4,6 @@ import { adminToken, assignRole, createTestApp, createUserViaApi, http, login, r
 import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstSectionId } from '../../support/course-enrolment-helpers';
 import { getGradebook } from '../../support/assessment-helpers';
 
-/**
- * Hoạt động Bài tập nộp tệp/ảnh (issue #88, lát C2 của Đợt 3) — đối chiếu mod_assign của Moodle (submission type file/ảnh), đã hấp thụ hồ sơ "Chấm bài và phản hồi theo năng lực GDPT 2018" (mục 6.1):
- *  - học sinh tải 1–nhiều ảnh/tệp vào bài nộp nháp (Files: dedup theo
- *    content hash, xem qua signed URL), chốt nộp; nộp sau hạn vẫn nhận nhưng bị đánh dấu trễ;
- *  - giáo viên chấm trên bề mặt nộp: dấu VECTOR trên ảnh (đúng/sai/ghi
- *    chú), điểm/mức + lời phê cấu trúc 3 ô — tất cả ở trạng thái NHÁP:
- *    học sinh chưa thấy gì, sổ điểm chưa nhận điểm;
- *  - TRẢ BÀI là hành động công bố nguyên tử: gói chấm hiện với học
- *    sinh, điểm ghi vào grade item 'mod' tại thời điểm trả nên hiện ở sổ điểm; sửa sau khi trả ghi vết kiểm toán; bài đã trả thì khoá;
- *  - bảng chấm rubric neo YCCĐ công khai trước khi nộp; chế độ chỉ-mức
- *    (Đạt/Chưa đạt) cho nhóm môn chỉ nhận xét; ngân hàng lời phê cá
- *    nhân của giáo viên; hội thoại phản hồi mở sau khi trả bài.
- */
 describe('Nộp file bài tập (mod_assign)', () => {
   let app: INestApplication;
   let admin: string;
@@ -114,7 +101,6 @@ describe('Nộp file bài tập (mod_assign)', () => {
     const list = await http(app).get(`/api/v1/assignments/${assignment.id}/submissions`).set('Authorization', `Bearer ${ctx.teacher}`);
     expect(list.status).toBe(200);
     const row = (list.body as { userId: string; displayName: string; status: string; fileCount: number; gradeStatus: string }[]).find((r) => r.userId === ctx.student.id);
-    // Bề mặt chấm của giáo viên (issue #179) phải đọc được tên học sinh, không chỉ userId.
     expect(row?.displayName).toBe('Test User');
     expect(row?.status).toBe('submitted');
     expect(row?.fileCount).toBe(2);
@@ -127,7 +113,6 @@ describe('Nộp file bài tập (mod_assign)', () => {
     expect(detail.body.files).toHaveLength(2);
     expect(detail.body.files[0].signedUrl).toBeTruthy();
 
-    // Giáo viên thả dấu chấm VECTOR trên ảnh: 1 dấu đúng + 1 ghi chú tại vị trí.
     const ann1 = await http(app).post(`/api/v1/assignments/${assignment.id}/submissions/${ctx.student.id}/annotations`)
       .set('Authorization', `Bearer ${ctx.teacher}`)
       .send({ fileId: up1.body.fileId, page: 1, x: 12.5, y: 30, kind: 'correct' });
@@ -138,7 +123,6 @@ describe('Nộp file bài tập (mod_assign)', () => {
       .send({ fileId: up1.body.fileId, page: 1, x: 55, y: 61.25, kind: 'note', text: 'Chỗ này thiếu bước biến đổi.' });
     expect(ann2.status).toBe(201);
 
-    // Lưu gói chấm NHÁP: 8.5 + lời phê cấu trúc 3 ô theo TT 22.
     const graded = await http(app).post(`/api/v1/assignments/${assignment.id}/submissions/${ctx.student.id}/grade`)
       .set('Authorization', `Bearer ${ctx.teacher}`)
       .send({
@@ -154,14 +138,12 @@ describe('Nộp file bài tập (mod_assign)', () => {
     expect(graded.body.status).toBe('submitted');
     expect(graded.body.annotations).toHaveLength(2);
 
-    // Học sinh CHƯA thấy gì của gói nháp: không điểm, không annotation; sổ điểm chưa có điểm.
     const mineDraft = await http(app).get(`/api/v1/assignments/${assignment.id}`).set('Authorization', `Bearer ${ctx.studentToken}`);
     expect(mineDraft.body.mySubmission.status).toBe('submitted');
     expect(mineDraft.body.mySubmission.grade).toBeNull();
     expect(mineDraft.body.mySubmission.annotations).toHaveLength(0);
     expect(await gradebookGrade(ctx, 'Bài tập chụp vở', ctx.student.id)).toBeNull();
 
-    // TRẢ BÀI: công bố nguyên tử.
     const released = await http(app).post(`/api/v1/assignments/${assignment.id}/submissions/${ctx.student.id}/release`)
       .set('Authorization', `Bearer ${ctx.teacher}`);
     expect(released.status).toBe(201);
@@ -177,7 +159,6 @@ describe('Nộp file bài tập (mod_assign)', () => {
     expect(mine.body.mySubmission.annotations[0].kind).toBe('correct');
     expect(await gradebookGrade(ctx, 'Bài tập chụp vở', ctx.student.id)).toBe(8.5);
 
-    // Sửa điểm SAU khi trả: ghi vết kiểm toán + sổ điểm cập nhật.
     const edited = await http(app).post(`/api/v1/assignments/${assignment.id}/submissions/${ctx.student.id}/grade`)
       .set('Authorization', `Bearer ${ctx.teacher}`).send({ grade: 9 });
     expect(edited.status).toBe(201);
@@ -187,7 +168,6 @@ describe('Nộp file bài tập (mod_assign)', () => {
     expect(edited.body.revisions[0].newGrade).toBe(9);
     expect(await gradebookGrade(ctx, 'Bài tập chụp vở', ctx.student.id)).toBe(9);
 
-    // Giáo viên xoá bớt một dấu: học sinh xem lại còn 1.
     const del = await http(app).delete(`/api/v1/assignments/${assignment.id}/submissions/${ctx.student.id}/annotations/${ann2.body.id}`)
       .set('Authorization', `Bearer ${ctx.teacher}`);
     expect(del.status).toBe(200);
@@ -203,7 +183,6 @@ describe('Nộp file bài tập (mod_assign)', () => {
 
     await http(app).post(`/api/v1/assignments/${assignment.id}/submissions/${ctx.student.id}/grade`)
       .set('Authorization', `Bearer ${ctx.teacher}`).send({ grade: 6 });
-    // student2 mới có lời phê nháp, chưa có điểm → chưa đầy đủ để trả.
     await http(app).post(`/api/v1/assignments/${assignment.id}/submissions/${ctx.student2.id}/grade`)
       .set('Authorization', `Bearer ${ctx.teacher}`).send({ feedback: 'Cần bổ sung điểm.' });
 
@@ -213,7 +192,6 @@ describe('Nộp file bài tập (mod_assign)', () => {
     expect(batch.body.releasedCount).toBe(1);
     expect(batch.body.skippedUserIds).toEqual([ctx.student2.id]);
 
-    // Trả lẻ gói chưa đầy đủ → 400; bổ sung điểm xong thì trả được.
     const incomplete = await http(app).post(`/api/v1/assignments/${assignment.id}/submissions/${ctx.student2.id}/release`)
       .set('Authorization', `Bearer ${ctx.teacher}`);
     expect(incomplete.status).toBe(400);
@@ -223,7 +201,6 @@ describe('Nộp file bài tập (mod_assign)', () => {
       .set('Authorization', `Bearer ${ctx.teacher}`);
     expect(single.status).toBe(201);
     expect(await gradebookGrade(ctx, 'Bài tập chụp vở', ctx.student2.id)).toBe(7.5);
-    // Trả lại lần hai → 409.
     const again = await http(app).post(`/api/v1/assignments/${assignment.id}/submissions/${ctx.student2.id}/release`)
       .set('Authorization', `Bearer ${ctx.teacher}`);
     expect(again.status).toBe(409);
@@ -259,7 +236,6 @@ describe('Nộp file bài tập (mod_assign)', () => {
     const submitNoFiles = await http(app).post(`/api/v1/assignments/${assignment.id}/submission/submit`).set('Authorization', `Bearer ${ctx.studentToken}`);
     expect(submitNoFiles.status).toBe(400);
 
-    // Chấm bài chưa chốt nộp → 409; điểm vượt thang → 400 (sau khi đã nộp).
     await upload(ctx.studentToken, assignment.id, 'anh-2.png', 'anh-hop-le-2');
     const gradeDraft = await http(app).post(`/api/v1/assignments/${assignment.id}/submissions/${ctx.student.id}/grade`)
       .set('Authorization', `Bearer ${ctx.teacher}`).send({ grade: 5 });
@@ -269,8 +245,6 @@ describe('Nộp file bài tập (mod_assign)', () => {
       .set('Authorization', `Bearer ${ctx.teacher}`).send({ grade: 11 });
     expect(gradeTooHigh.status).toBe(400);
 
-    // Chấm NHÁP chưa khoá: học sinh vẫn mở lại được (lần nộp tăng) — gói nháp cũ thành stale,
-    // trả bài cho lần nộp cũ → 409 không có gì để trả.
     const draftSaved = await http(app).post(`/api/v1/assignments/${assignment.id}/submissions/${ctx.student.id}/grade`)
       .set('Authorization', `Bearer ${ctx.teacher}`).send({ grade: 7 });
     expect(draftSaved.status).toBe(201);
@@ -285,7 +259,6 @@ describe('Nộp file bài tập (mod_assign)', () => {
     expect(resubmitted.status).toBe(201);
     expect(resubmitted.body.mySubmission.attemptNumber).toBe(2);
 
-    // Chấm + trả bài xong thì khoá hẳn: mở lại 409, tải thêm tệp 409.
     await http(app).post(`/api/v1/assignments/${assignment.id}/submissions/${ctx.student.id}/grade`)
       .set('Authorization', `Bearer ${ctx.teacher}`).send({ grade: 7, feedback: 'Đạt yêu cầu.' });
     const rel = await http(app).post(`/api/v1/assignments/${assignment.id}/submissions/${ctx.student.id}/release`)
@@ -301,7 +274,6 @@ describe('Nộp file bài tập (mod_assign)', () => {
     const ctx = await setup();
     const assignment = await createAssignment(ctx, { name: 'Bài tập thể chất', resultMode: 'level' });
 
-    // Giáo viên dựng bảng chấm TRƯỚC khi có bài nộp: 1 tiêu chí chọn mức (neo YCCĐ) + 1 tiêu chí nhập điểm.
     const rubric = await http(app).put(`/api/v1/assignments/${assignment.id}/rubric`)
       .set('Authorization', `Bearer ${ctx.teacher}`)
       .send({
@@ -322,7 +294,6 @@ describe('Nộp file bài tập (mod_assign)', () => {
     const criterionLevels = rubric.body.criteria[0];
     const criterionScore = rubric.body.criteria[1];
 
-    // Học sinh thấy bảng chấm công khai trong trang bài TRƯỚC khi nộp; mô tả nội bộ của người chấm bị ẩn.
     const view = await http(app).get(`/api/v1/assignments/${assignment.id}`).set('Authorization', `Bearer ${ctx.studentToken}`);
     expect(view.status).toBe(200);
     expect(view.body.assignment.resultMode).toBe('level');
@@ -333,7 +304,6 @@ describe('Nộp file bài tập (mod_assign)', () => {
 
     await submitFile(ctx.studentToken, assignment.id, 'clip-bai-lam');
 
-    // Chấm chế độ chỉ-mức: mức 'dat' + kết quả theo tiêu chí; không cần điểm tổng.
     const graded = await http(app).post(`/api/v1/assignments/${assignment.id}/submissions/${ctx.student.id}/grade`)
       .set('Authorization', `Bearer ${ctx.teacher}`)
       .send({
@@ -348,7 +318,6 @@ describe('Nộp file bài tập (mod_assign)', () => {
     expect(graded.body.grade.level).toBe('dat');
     expect(graded.body.rubricEvaluations).toHaveLength(2);
 
-    // Chưa trả: học sinh chưa thấy mức; trả xong thì thấy mức + kết quả rubric, sổ điểm nhận 1 (Đạt trên thang 1).
     const before = await http(app).get(`/api/v1/assignments/${assignment.id}`).set('Authorization', `Bearer ${ctx.studentToken}`);
     expect(before.body.mySubmission.grade).toBeNull();
     const rel = await http(app).post(`/api/v1/assignments/${assignment.id}/submissions/${ctx.student.id}/release`)
@@ -359,7 +328,6 @@ describe('Nộp file bài tập (mod_assign)', () => {
     expect(after.body.mySubmission.rubricEvaluations).toHaveLength(2);
     expect(await gradebookGrade(ctx, 'Bài tập thể chất', ctx.student.id)).toBe(1);
 
-    // Bảng chấm bị khoá sau khi đã có bài được trả.
     const locked = await http(app).put(`/api/v1/assignments/${assignment.id}/rubric`)
       .set('Authorization', `Bearer ${ctx.teacher}`)
       .send({ criteria: [{ name: 'Tiêu chí khác', mode: 'score', maxScore: 5 }] });
@@ -370,7 +338,6 @@ describe('Nộp file bài tập (mod_assign)', () => {
     const ctx = await setup();
     const assignment = await createAssignment(ctx);
 
-    // Comment bank: giáo viên thêm 2 câu, thấy đúng kho của mình; học sinh có kho riêng (rỗng).
     const e1 = await http(app).post('/api/v1/assign-comment-bank').set('Authorization', `Bearer ${ctx.teacher}`)
       .send({ text: 'Trình bày sạch đẹp, tiếp tục phát huy.', category: 'strengths' });
     expect(e1.status).toBe(201);
@@ -386,7 +353,6 @@ describe('Nộp file bài tập (mod_assign)', () => {
     const bankAfter = await http(app).get('/api/v1/assign-comment-bank').set('Authorization', `Bearer ${ctx.teacher}`);
     expect(bankAfter.body).toHaveLength(1);
 
-    // Hội thoại phản hồi: chưa trả bài thì chưa mở.
     await submitFile(ctx.studentToken, assignment.id, 'bai-hoi-thoai');
     const tooEarly = await http(app).post(`/api/v1/assignments/${assignment.id}/submissions/${ctx.student.id}/messages`)
       .set('Authorization', `Bearer ${ctx.studentToken}`).send({ body: 'Thầy ơi em hỏi?' });
@@ -405,7 +371,6 @@ describe('Nộp file bài tập (mod_assign)', () => {
     const thread = await http(app).get(`/api/v1/assignments/${assignment.id}/submissions/${ctx.student.id}/messages`)
       .set('Authorization', `Bearer ${ctx.studentToken}`);
     expect(thread.body).toHaveLength(2);
-    // Học sinh khác không xem được hội thoại của bạn.
     const otherThread = await http(app).get(`/api/v1/assignments/${assignment.id}/submissions/${ctx.student.id}/messages`)
       .set('Authorization', `Bearer ${ctx.student2Token}`);
     expect(otherThread.status).toBe(403);
@@ -452,7 +417,6 @@ describe('Nộp file bài tập (mod_assign)', () => {
     const ctx = await setup();
     const assignment = await createAssignment(ctx);
 
-    // Bài còn NHÁP: xoá qua DELETE /files/:id thành công như trước, tệp rời khỏi bài nộp.
     const draftUp = await upload(ctx.studentToken, assignment.id, 'nhap.jpg', 'tep-ban-nhap');
     expect(draftUp.status).toBe(201);
     const delDraft = await http(app).delete(`/api/v1/files/${draftUp.body.fileId}`).set('Authorization', `Bearer ${ctx.studentToken}`);
@@ -461,24 +425,20 @@ describe('Nộp file bài tập (mod_assign)', () => {
     const afterDraftDelete = await http(app).get(`/api/v1/assignments/${assignment.id}`).set('Authorization', `Bearer ${ctx.studentToken}`);
     expect(afterDraftDelete.body.mySubmission.files).toHaveLength(0);
 
-    // Tệp chính của ca: tải lên rồi CHỐT NỘP.
     const up = await upload(ctx.studentToken, assignment.id, 'bai-lam.jpg', 'tep-da-nop');
     expect(up.status).toBe(201);
     const fileId = up.body.fileId as string;
     const submitted = await http(app).post(`/api/v1/assignments/${assignment.id}/submission/submit`).set('Authorization', `Bearer ${ctx.studentToken}`);
     expect(submitted.status).toBe(201);
 
-    // Đã chốt nộp: chủ sở hữu gọi đường xoá dùng chung cũng bị chặn 409 đúng mã của module Bài tập.
     const delFinalized = await http(app).delete(`/api/v1/files/${fileId}`).set('Authorization', `Bearer ${ctx.studentToken}`);
     expect(delFinalized.status).toBe(409);
     expect(delFinalized.body.code).toBe('assign.submission_finalized');
 
-    // Học sinh khác cùng khoá (không phải chủ sở hữu bài nộp) cũng bị chặn; tệp không thuộc bài nộp của họ.
     const delByOther = await http(app).delete(`/api/v1/files/${fileId}`).set('Authorization', `Bearer ${ctx.student2Token}`);
     expect(delByOther.status).toBe(404);
     expect(delByOther.body.code).toBe('assign.submission_file_not_found');
 
-    // Sau hai nỗ lực xoá bị chặn: tệp + liên kết nguyên vẹn, bề mặt chấm của giáo viên không vỡ.
     const detailAfterBlock = await http(app).get(`/api/v1/assignments/${assignment.id}/submissions/${ctx.student.id}`).set('Authorization', `Bearer ${ctx.teacher}`);
     expect(detailAfterBlock.status).toBe(200);
     expect(detailAfterBlock.body.files).toHaveLength(1);
@@ -487,7 +447,6 @@ describe('Nộp file bài tập (mod_assign)', () => {
     const metaAfterBlock = await http(app).get(`/api/v1/files/${fileId}`).set('Authorization', `Bearer ${ctx.studentToken}`);
     expect(metaAfterBlock.status).toBe(200);
 
-    // Giáo viên thả dấu chấm trên tệp rồi chấm + TRẢ BÀI: bài thành chứng cứ đã công bố.
     const ann = await http(app).post(`/api/v1/assignments/${assignment.id}/submissions/${ctx.student.id}/annotations`)
       .set('Authorization', `Bearer ${ctx.teacher}`).send({ fileId, page: 1, x: 10, y: 10, kind: 'correct' });
     expect(ann.status).toBe(201);
@@ -498,12 +457,10 @@ describe('Nộp file bài tập (mod_assign)', () => {
       .set('Authorization', `Bearer ${ctx.teacher}`);
     expect(released.status).toBe(201);
 
-    // Đã trả bài: xoá qua đường dùng chung bị chặn 409 assign.already_graded.
     const delGraded = await http(app).delete(`/api/v1/files/${fileId}`).set('Authorization', `Bearer ${ctx.studentToken}`);
     expect(delGraded.status).toBe(409);
     expect(delGraded.body.code).toBe('assign.already_graded');
 
-    // Tệp và dấu chấm còn nguyên ở cả hai phía sau nỗ lực xoá bị chặn.
     const mineAfter = await http(app).get(`/api/v1/assignments/${assignment.id}`).set('Authorization', `Bearer ${ctx.studentToken}`);
     expect(mineAfter.body.mySubmission.files).toHaveLength(1);
     expect(mineAfter.body.mySubmission.annotations).toHaveLength(1);

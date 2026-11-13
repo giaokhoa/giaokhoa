@@ -67,21 +67,9 @@ import { JwtAuthGuard } from './common/jwt-auth.guard';
 import { BetterAuthModule } from './modules/auth/better-auth/better-auth.module';
 import { SecurityHeadersMiddleware } from './common/security-headers.middleware';
 
-/**
- * Các route xác thực có kiểm chứng mật khẩu — nhận hạn mức chặt riêng
- * (`auth`) trong ThrottlerModule bên dưới. Đường đăng nhập platform
- * (`/auth/platform/login`) cũng kiểm chứng mật khẩu quản trị nên nằm
- * trong cùng danh sách này.
- */
 const CREDENTIAL_ROUTES = /^\/api\/v\d+\/auth\/(token|login|session\/login|change-password|platform\/login|support\/login)$/;
-/** Đăng ký tự do có chi phí băm mật khẩu và ghi DB; áp hạn mức riêng
- * thay vì default 3.000/phút hoặc auth 300/phút. IP lấy từ ThrottlerGuard
- * và proxy đáng tin cậy của ứng dụng, không lấy trực tiếp từ payload. */
 const REGISTRATION_ROUTES = /^\/api\/v\d+\/auth\/public\/register$/;
 
-/**
- * Token của provider gắn handle kho chung (xem khai báo trong `providers` của AppModule): giá trị của provider không được inject ở đâu — provider tồn tại vì hành động gắn lúc khởi tạo.
- */
 const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
 
 @Module({
@@ -92,10 +80,9 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        // API là producer, không chạy @Processor: Queue phải fail-fast
-        // khi Redis ngắt; Worker có kết nối chờ Redis phục hồi riêng.
+
+
         connection: redisConnectionFromUrl(config.getOrThrow<string>('REDIS_URL')),
-        // Chính sách job mặc định thống nhất toàn hệ (bản sao đúng cùng bộ giá trị ở BullModule.forRoot của apps/worker — hai app dùng chung một Redis và cùng các hàng đợi): thử lại tối đa 3 lần với giãn cách hàm mũ từ 1 giây thay vì dội lại tức thì khi dịch vụ ngoài/cơ sở dữ liệu lỗi tạm thời; job đã xong/lỗi chỉ giữ 1.000 bản gần nhất để Redis không tăng vô hạn (mặc định của BullMQ là giữ vô hạn). Producer vẫn khai riêng jobId dedupe và có thể ghi đè từng tuỳ chọn khi cần.
         defaultJobOptions: {
           attempts: 3,
           backoff: { type: 'exponential', delay: 1000 },
@@ -104,13 +91,6 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
         },
       }),
     }),
-    /**
-     * Giới hạn theo IP (gói chính thức @nestjs/throttler): hạn mức
-     * chung, hạn mức credential và hạn mức đăng ký tự do độc lập.
-     * Lưu trữ mặc định trong bộ nhớ của
-     * tiến trình — đủ cho mô hình modular monolith một instance; khi
-     * scale nhiều instance API phải chuyển sang storage dùng chung.
-     */
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -190,13 +170,6 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
     SeedModule,
   ],
   providers: [
-    /**
-     * Gắn handle Kysely kho chung vào khung định tuyến theo trung tâm (issue #581): dựng pool kho chung rồi gắn handle Kysely dựng trên chính pool đó (không mở thêm pool, không đổi ngân sách kết nối). Handle mà mọi điểm tiêu thụ dùng là handle ĐỊNH TUYẾN của khung (`routedKysely`) — uỷ thác về kho chung cho mọi ngữ cảnh chưa mang trung tâm ở kho riêng (toàn bộ đường mặc định), và về kho của trung tâm khi ngữ cảnh đã được chuẩn bị theo trung tâm đó. Instance này không được `destroy()` riêng — vòng đời của nó đi theo vòng đời pool chung.
-     * - Pool là `TenantAwarePool` (TENANT-1, #196): pool tự gắn
-     *   GUC tenant theo ngữ cảnh ALS ở mọi checkout.
-     * - Ngân sách kết nối (issue #586): trần `DATABASE_POOL_MAX`
-     *   khi được cấu hình; chưa cấu hình thì giữ nguyên cấu hình pool như trước.
-     */
     {
       provide: SHARED_CENTRE_KYSELY,
       inject: [ConfigService, SpaceDatabaseService],
@@ -212,33 +185,25 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
         return pool;
       },
     },
-    // ThrottlerGuard chạy đầu tiên: từ chối sớm request vượt hạn mức trước mọi guard tốn kém hơn (xác thực JWT, đánh giá capability).
     { provide: APP_GUARD, useClass: ThrottlerGuard },
-    // Guard mỏng của Better Auth chạy ngay trước JwtAuthGuard: chỉ dịch cookie phiên Better Auth (khi cờ bật và cookie có mặt) thành danh tính cho JwtAuthGuard bỏ qua; mọi request còn lại nó không chạm.
     { provide: APP_GUARD, useClass: BetterAuthSessionGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
-    // AudienceGuard chạy ngay sau JwtAuthGuard, trước TenantGuard
-    // (issue #584): tách bề mặt vận hành platform khỏi bề mặt nghiệp
-    // vụ bằng audience của token — chỉ cần principal đã xác thực và metadata của route, chưa cần ngữ cảnh tenant.
     { provide: APP_GUARD, useClass: AudienceGuard },
-    // TenantGuard chạy ngay sau xác thực: phân giải tenant hiệu lực từ claim `tid` (kiểm chứng với DB) và nạp ngữ cảnh tenant (ALS) cho mọi bề mặt đã phủ tenant (TENANT-0, #168).
     { provide: APP_GUARD, useClass: TenantGuard },
-    // SpaceContextGuard chạy ngay sau TenantGuard (issue #582): phân giải trung tâm từ địa chỉ request theo sổ đăng ký, đối chiếu phiên với trung tâm ở kho riêng, chặn traffic nghiệp vụ của trung tâm chưa active, và chuẩn bị + ghim ngữ cảnh kho của trung tâm trước khi CapabilityGuard và handler chạy.
     { provide: APP_GUARD, useClass: SpaceContextGuard },
     { provide: APP_GUARD, useClass: CapabilityGuard },
-    // Interceptor bọc ALS tenant quanh handler (guard chỉ ghim tenant và slug trung tâm lên request — enterWith không qua được biên guard→handler).
     { provide: APP_INTERCEPTOR, useClass: TenantContextInterceptor },
-    /**
-     * Pipe validation Standard Schema có dịch thông điệp theo catalog i18n
-     * (chương Validation của docs Nest + trang i18n chính thức): thay cho
-     * `StandardSchemaValidationPipe` thuần; KHÔNG dùng `I18nValidationPipe`
-     * (đường class-validator) vì dự án validate 100% bằng Zod.
-     */
+
+
+
+
+
+
     {
       provide: APP_PIPE,
       useValue: new I18nStandardSchemaValidationPipe({
-        // Giữ path từ Standard Schema sau dịch: dạng chuỗi mất định vị
-        // lỗi, khiến giao diện không biết trường nào cần sửa.
+
+
         exceptionFactory: (issues) => new BadRequestException({
           message: issues.map((issue) => ({
             ...(issue.path?.length
@@ -254,7 +219,6 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
   ],
 })
 export class AppModule implements NestModule {
-  /** Header bảo mật cho mọi phản hồi HTTP (xem SecurityHeadersMiddleware). */
   configure(consumer: MiddlewareConsumer): void {
     consumer.apply(SecurityHeadersMiddleware).forRoutes('*');
   }

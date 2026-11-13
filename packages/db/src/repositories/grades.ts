@@ -1,24 +1,6 @@
 import type { CentreDb, CentreTx } from '../client';
 
-/**
- * Kho dữ liệu điểm theo bài trên Kysely: quản lý mục điểm, điểm của người học, lịch sử chấm và trạng thái công bố cấp bài.
- *
- * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
- * - Cột đọc khai tường minh kèm bí danh camelCase
- *   (`'item_id as itemId'`) dùng chung cho select và returning —
- *   KHÔNG bật CamelCasePlugin (một nguồn sự thật là database thật).
- * - Ghi qua hàm ánh xạ Insert/Update loại `undefined` tường minh
- *   từng trường (thử nghiệm T-4): `undefined` = không ghi/không đổi, `null` = ghi NULL. Điểm sắc nhất của nhóm nằm ở `upsertGrade`: tập trường của nhánh xung đột (composite `(item_id, user_id)`) chỉ gồm các trường phía gọi THẬT SỰ truyền — trường `undefined` bị loại khỏi cả hai nhánh insert/update như bản cũ trước chuyển đổi bỏ qua — cộng `updated_at` luôn làm mới.
- * - Khoá chính `uuidv7()` do database sinh (phụ lục U của kế
- *   hoạch): insert bỏ qua `id` và lấy dòng qua `returning`.
- * - Điểm mở giao dịch của repository là `transaction(fn)`; các
- *   phương thức nhận handle tuỳ chọn (`GradesDb` = handle thường hoặc handle giao dịch) để phía gọi lồng thao tác vào giao dịch của mình.
- *
- * Ba luồng ghi điểm của GradesService (`setGrade`, `recordActivityGrade`, `updateGrade`) giữ nguyên tử trọn gói — dòng điểm + dòng lịch sử + dòng outbox `grade_updated` trong MỘT giao dịch — và chạy trên chính bề mặt này:
- * `transaction` + `upsertGrade`/`updateGrade`/`insertHistory` kèm `enqueueKysely` của OutboxService, để điểm, lịch sử và sự kiện commit/rollback cùng nhau.
- */
 
-/** Dòng `grade_items`. */
 export interface ItemRow {
   id: string;
   courseId: string;
@@ -41,7 +23,6 @@ export interface ItemRow {
   updatedAt: Date;
 }
 
-/** Dòng `grade_grades`. */
 export interface GradeRow {
   id: string;
   itemId: string;
@@ -64,7 +45,6 @@ export interface GradeRow {
   updatedAt: Date;
 }
 
-/** Dòng `grade_grades_history`. */
 export interface GradeHistoryRow {
   id: string;
   itemId: string;
@@ -81,7 +61,6 @@ export interface GradeHistoryRow {
   updatedAt: Date;
 }
 
-/** Dòng `grade_publications`. */
 export interface GradePublicationRow {
   id: string;
   courseId: string;
@@ -93,16 +72,10 @@ export interface GradePublicationRow {
   createdAt: Date;
 }
 
-/** Handle kho trung tâm mà repository chấp nhận: thường hoặc trong giao dịch. */
 export type GradesDb = CentreDb | CentreTx;
-/** Handle giao dịch kho trung tâm (tham số bắt buộc của các thao tác đa bước). */
 export type GradesTx = CentreTx;
 
-// ---------------------------------------------------------------------------
-// Giá trị ghi (hợp đồng công khai — khớp `$inferInsert` của repository cũ)
-// ---------------------------------------------------------------------------
 
-/** Giá trị chèn `grade_items`. */
 export interface NewGradeItem {
   id?: string;
   courseId: string;
@@ -125,7 +98,6 @@ export interface NewGradeItem {
   updatedAt?: Date;
 }
 
-/** Giá trị ghi `grade_grades` qua đường upsert theo (item, user). */
 export interface NewGrade {
   id?: string;
   itemId: string;
@@ -148,7 +120,6 @@ export interface NewGrade {
   updatedAt?: Date;
 }
 
-/** Giá trị chèn `grade_grades_history`. */
 export interface NewGradeHistory {
   id?: string;
   itemId: string;
@@ -165,7 +136,6 @@ export interface NewGradeHistory {
   updatedAt?: Date;
 }
 
-/** Giá trị chèn `grade_publications`. */
 export interface NewGradePublication {
   id?: string;
   courseId: string;
@@ -177,9 +147,6 @@ export interface NewGradePublication {
   createdAt?: Date;
 }
 
-// ---------------------------------------------------------------------------
-// Danh sách cột đọc: tên cột thật kèm bí danh camelCase, dùng chung cho select và returning của từng bảng (khuôn pilot — không CamelCasePlugin).
-// ---------------------------------------------------------------------------
 
 const ITEM_COLUMNS = [
   'id', 'course_id as courseId', 'item_type as itemType',
@@ -214,9 +181,6 @@ const PUBLICATION_COLUMNS = [
   'actor_id as actorId', 'note', 'created_at as createdAt',
 ] as const;
 
-// ---------------------------------------------------------------------------
-// Ánh xạ ghi: loại `undefined` tường minh từng trường (T-4).
-// ---------------------------------------------------------------------------
 
 function itemInsertValues(v: NewGradeItem) {
   return {
@@ -242,7 +206,6 @@ function itemInsertValues(v: NewGradeItem) {
   };
 }
 
-/** Ánh xạ patch của `grade_items`: trải patch như bản cũ, `updated_at` luôn làm mới ở cuối. */
 function itemUpdateSet(patch: Partial<ItemRow>) {
   return {
     ...(patch.id !== undefined ? { id: patch.id } : {}),
@@ -291,9 +254,6 @@ function gradeInsertValues(v: NewGrade) {
   };
 }
 
-/**
- * Tập trường của nhánh xung đột của `upsertGrade`: đúng mười một trường nghiệp vụ của bản cũ trước chuyển đổi — trường nào phía gọi không truyền (`undefined`) thì KHÔNG xuất hiện trong SET (giữ nguyên giá trị đang có của dòng), `null` thì ghi NULL tường minh; `updated_at` luôn làm mới (rủi ro R-G4-2 của hồ sơ chuẩn bị, chốt bằng thử nghiệm T-4).
- */
 function gradeConflictSet(v: NewGrade) {
   return {
     ...(v.rawGrade !== undefined ? { raw_grade: v.rawGrade } : {}),
@@ -311,7 +271,6 @@ function gradeConflictSet(v: NewGrade) {
   };
 }
 
-/** Ánh xạ patch của `grade_grades`: trải patch như bản cũ, `updated_at` luôn làm mới ở cuối. */
 function gradeUpdateSet(patch: Partial<GradeRow>) {
   return {
     ...(patch.id !== undefined ? { id: patch.id } : {}),
@@ -367,24 +326,17 @@ function publicationInsertValues(v: NewGradePublication) {
   };
 }
 
-/**
- * Kho dữ liệu điểm theo bài: grade item (một item = một bài/hoạt động), điểm theo user, lịch sử điểm và vết công bố cấp bài.
- */
 export class GradesRepository {
   constructor(private readonly handle: CentreDb) {}
 
-  /** Handle gốc của repository (điểm mở giao dịch + truy vấn ngoài giao dịch). */
   db(): CentreDb {
     return this.handle;
   }
 
-  /** Mở giao dịch trên handle gốc và chạy `fn` với handle giao dịch. */
   transaction<T>(fn: (tx: GradesTx) => Promise<T>): Promise<T> {
     return this.handle.transaction().execute(fn);
   }
 
-  // items
-  /** Chèn grade item. */
   async insertItem(v: NewGradeItem, tx?: GradesDb): Promise<ItemRow> {
     const db = tx ?? this.handle;
     return db
@@ -394,7 +346,6 @@ export class GradesRepository {
       .executeTakeFirstOrThrow();
   }
 
-  /** Lấy item theo id. */
   async getItem(id: string, tx?: GradesDb): Promise<ItemRow | undefined> {
     const db = tx ?? this.handle;
     return db
@@ -404,7 +355,6 @@ export class GradesRepository {
       .executeTakeFirst();
   }
 
-  /** Item của khoá học. */
   async listItems(courseId: string, tx?: GradesDb): Promise<ItemRow[]> {
     const db = tx ?? this.handle;
     return db
@@ -416,7 +366,6 @@ export class GradesRepository {
       .execute();
   }
 
-  /** Tìm item theo (itemType, itemInstance) — khoá liên kết với hoạt động nguồn. */
   async findItemByTypeInstance(courseId: string, itemType: string, itemInstance: string, tx?: GradesDb): Promise<ItemRow | undefined> {
     const db = tx ?? this.handle;
     return db
@@ -428,7 +377,6 @@ export class GradesRepository {
       .executeTakeFirst();
   }
 
-  /** Tìm item gắn với một course module. */
   async findItemForCm(courseId: string, cmId: string, tx?: GradesDb): Promise<ItemRow | undefined> {
     const db = tx ?? this.handle;
     return db
@@ -440,9 +388,6 @@ export class GradesRepository {
       .executeTakeFirst();
   }
 
-  /**
-   * Tìm grade item theo idNumber trong một khoá học (idNumber là định danh duy nhất của item trong khoá khi không null).
-   */
   async findItemByIdnumber(courseId: string, idNumber: string, tx?: GradesDb): Promise<ItemRow | undefined> {
     const db = tx ?? this.handle;
     return db
@@ -453,7 +398,6 @@ export class GradesRepository {
       .executeTakeFirst();
   }
 
-  /** Cập nhật item. */
   async updateItem(id: string, patch: Partial<ItemRow>, tx?: GradesDb): Promise<void> {
     const db = tx ?? this.handle;
     await db
@@ -463,7 +407,6 @@ export class GradesRepository {
       .execute();
   }
 
-  /** Xoá item. */
   async deleteItem(id: string, tx?: GradesDb): Promise<void> {
     const db = tx ?? this.handle;
     await db
@@ -472,8 +415,6 @@ export class GradesRepository {
       .execute();
   }
 
-  // grades
-  /** Điểm của user tại một item. */
   async getGrade(itemId: string, userId: string, tx?: GradesDb): Promise<GradeRow | undefined> {
     const db = tx ?? this.handle;
     return db
@@ -484,7 +425,6 @@ export class GradesRepository {
       .executeTakeFirst();
   }
 
-  /** Mọi điểm của khoá học. */
   async listGradesForCourse(courseId: string, userId?: string, tx?: GradesDb): Promise<GradeRow[]> {
     const db = tx ?? this.handle;
     const items = await this.listItems(courseId, tx);
@@ -497,7 +437,6 @@ export class GradesRepository {
     return query.execute();
   }
 
-  /** Lấy một bản ghi điểm theo id. */
   async getGradeById(id: string, tx?: GradesDb): Promise<GradeRow | undefined> {
     const db = tx ?? this.handle;
     return db
@@ -507,7 +446,6 @@ export class GradesRepository {
       .executeTakeFirst();
   }
 
-  /** Mọi điểm tại một item. */
   async listGradesForItem(itemId: string, tx?: GradesDb): Promise<GradeRow[]> {
     const db = tx ?? this.handle;
     return db
@@ -517,7 +455,6 @@ export class GradesRepository {
       .execute();
   }
 
-  /** Ghi/cập nhật điểm (kèm ghi lịch sử ở tầng service). */
   async upsertGrade(v: NewGrade, tx?: GradesDb): Promise<GradeRow> {
     const db = tx ?? this.handle;
     return db
@@ -530,7 +467,6 @@ export class GradesRepository {
       .executeTakeFirstOrThrow();
   }
 
-  /** Cập nhật một bản ghi điểm. */
   async updateGrade(id: string, patch: Partial<GradeRow>, tx?: GradesDb): Promise<void> {
     const db = tx ?? this.handle;
     await db
@@ -540,7 +476,6 @@ export class GradesRepository {
       .execute();
   }
 
-  /** Ghi một dòng lịch sử thay đổi điểm. */
   async insertHistory(v: NewGradeHistory, tx?: GradesDb): Promise<void> {
     const db = tx ?? this.handle;
     await db
@@ -549,7 +484,6 @@ export class GradesRepository {
       .execute();
   }
 
-  /** Lịch sử thay đổi điểm của một item/user. */
   async listHistory(itemId: string, userId: string, tx?: GradesDb): Promise<GradeHistoryRow[]> {
     const db = tx ?? this.handle;
     return db
@@ -561,8 +495,6 @@ export class GradesRepository {
       .execute();
   }
 
-  // publications (PH-0, issue #116)
-  /** Ghi một hành động công bố/rút công bố cho một item (bảng append-only grade_publications). */
   async insertPublication(v: NewGradePublication, tx?: GradesDb): Promise<GradePublicationRow> {
     const db = tx ?? this.handle;
     return db
@@ -572,7 +504,6 @@ export class GradesRepository {
       .executeTakeFirstOrThrow();
   }
 
-  /** Mọi vết công bố của một khoá theo thứ tự thời gian tăng dần — trạng thái hiệu lực suy từ vết mới nhất của từng item. */
   async listPublications(courseId: string, tx?: GradesDb): Promise<GradePublicationRow[]> {
     const db = tx ?? this.handle;
     return db

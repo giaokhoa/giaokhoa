@@ -23,31 +23,6 @@ import {
   uniqueName,
 } from '../../support/identity-access-helpers';
 
-/**
- * Ca đầu-cuối của HỒ SƠ THÀNH VIÊN THEO TRUNG TÂM + TÁCH SITE CHÍNH
- * (issue #584): ứng dụng thật (toàn bộ chuỗi guard) chạy với ba
- * không gian ở kho riêng dựng riêng cho đợt này trên cùng cụm test — hai trung tâm (kind `center`) và site chính (slug `trang-chinh`, kind `platform`, kho riêng của nó) — mỗi kho có role ứng dụng riêng, CONNECT của PUBLIC bị thu hồi, baseline nghiệp vụ áp bằng role chủ kho; sổ đăng ký nằm ở database control plane riêng mà ứng dụng đọc qua biến `CONTROL_PLANE_DATABASE_URL` đặt trước khi ứng dụng khởi động. Dòng tenant của mỗi không gian được sao từ kho chung vào đúng kho của nó (trạng thái sau di trú mà đợt #587 sẽ tạo); quản trị đầu tiên của mỗi không gian được tạo BẰNG CHÍNH service của ứng dụng bên trong `withSpaceKysely` của không gian đó (tài khoản + membership nội bộ + vai trò mang `tenant:manage` tại context của tenant) — không ghi tay dòng role/membership bằng SQL. Tài khoản kiểm chứng trong các ca sau đó được tạo qua ĐƯỜNG API tạo người dùng của tenant tại chính địa chỉ của không gian
- * (`POST /tenants/:tenantId/users`), đúng đường mà issue yêu cầu:
- * tài khoản mới chỉ tồn tại trong kho của trung tâm đó.
- *
- * Điểm khác biệt cốt lõi so với spec #582 (và là điều spec này phải bắt được): tài khoản kiểm chứng ở đây KHÔNG có bản sao nào ở kho chung — nếu code còn tra kho chung ở bất kỳ khâu nào (guard xác thực, guard tenant, cấp token, làm mới token), ca đó thất bại ngay thay vì âm thầm dùng bản sao kho chung như spec #582.
- *
- * Các ca khoá các tiêu chí nghiệm thu của issue:
- * (1) cùng email đăng ký ở hai trung tâm kho riêng thành hai tài
- *     khoản độc lập (id khác nhau, không có dòng nào ở kho chung), đình chỉ một bên không ảnh hưởng bên kia, đổi mật khẩu một bên không ảnh hưởng bên kia;
- * (2) phiên (token lẫn cookie) của trung tâm A bị từ chối ở trung
- *     tâm B và ở site chính;
- * (3) chuyển tenant không áp dụng ở trung tâm kho riêng;
- * (4) site chính hoạt động như một không gian độc lập trên kho
- *     riêng của nó (đăng ký, đăng nhập, dữ kiện ở kho của nó);
- * (5) token platform và token nghiệp vụ không dùng chéo bề mặt
- *     (platform không gọi được API nghiệp vụ, nghiệp vụ không gọi
- *     được control plane);
- * (6) challenge MFA gắn với không gian đã cấp nó (đổi địa chỉ thì
- *     bước hai thất bại);
- * (7) đăng nhập ở kho riêng chỉ tạo family refresh trong kho đó;
- * (8) đường kho chung giữ nguyên hành vi (hồi quy gọn).
- */
 const CP_DATABASE = 'giaokhoa_test_cp_584';
 const CP_ROLE = 'giaokhoa_cp_test_584';
 const CP_PASSWORD = 'cp-test-584';
@@ -60,8 +35,6 @@ const CENTRE_B_PASSWORD = 'centre-b-584';
 const MAIN_DATABASE = 'giaokhoa_test_main_584';
 const MAIN_ROLE = 'giaokhoa_main_584_app';
 const MAIN_PASSWORD = 'main-584';
-// Slug của hai trung tâm mang hậu tố ngẫu nhiên theo lượt chạy:
-// tenant tương ứng được tạo thật trong database nghiệp vụ test DÙNG CHUNG của tầng e2e, nên slug cố định sẽ va chạm khi chạy lại spec trên cùng một database; địa chỉ (tên miền con) và dòng đăng ký đều suy ra từ slug nên tính nhất quán không đổi. Site chính mang slug cố định `trang-chinh` vì tenant platform đã có sẵn đúng slug đó trong kho chung.
 const RUN_SUFFIX = Math.random().toString(36).slice(2, 8);
 const CENTRE_A_SLUG = `trung-tam-a-${RUN_SUFFIX}`;
 const CENTRE_B_SLUG = `trung-tam-b-${RUN_SUFFIX}`;
@@ -71,12 +44,10 @@ const HOST_B = `${CENTRE_B_SLUG}.test.local`;
 const HOST_MAIN = `${MAIN_SLUG}.test.local`;
 const SHARED_SLUG = 'truong-mac-dinh';
 const HOST_SHARED = `${SHARED_SLUG}.test.local`;
-/** Mật khẩu mới dùng cho ca đổi mật khẩu một bên không ảnh hưởng bên kia. */
 const DUAL_NEW_PASSWORD = 'NewStrong123!';
 
 const UUIDV7_SHIM = `CREATE OR REPLACE FUNCTION uuidv7() RETURNS uuid AS $$ DECLARE ts_ms bigint := (extract(epoch from clock_timestamp()) * 1000)::bigint; b bytea; BEGIN b := decode(lpad(to_hex(ts_ms), 12, '0'), 'hex') || gen_random_bytes(10); b := set_byte(b, 6, (get_byte(b, 6) & 15) | 112); b := set_byte(b, 8, (get_byte(b, 8) & 63) | 128); RETURN encode(b, 'hex')::uuid; END; $$ LANGUAGE plpgsql VOLATILE`;
 
-/** Dựng URL kết nối tới một database trên cùng cụm với database nghiệp vụ test. */
 function clusterUrl(database: string, username?: string, secret?: string): string {
   const base = new URL(process.env.DATABASE_URL!);
   base.pathname = `/${database}`;
@@ -85,7 +56,6 @@ function clusterUrl(database: string, username?: string, secret?: string): strin
   return base.toString();
 }
 
-/** Bọc một định danh Postgres trong dấu nháy kép cho các câu lệnh quản trị của ca test. */
 function quoted(identifier: string): string {
   return `"${identifier.replace(/"/g, '""')}"`;
 }
@@ -100,7 +70,6 @@ async function withClient<T>(connectionString: string, fn: (client: Client) => P
   }
 }
 
-/** Áp một file migration SQL (tách theo dấu phân đoạn của file) lên một database qua kết nối cho trước. */
 async function applySqlFile(connectionString: string, filePath: string, withUuidShim: boolean): Promise<void> {
   await withClient(connectionString, async (client) => {
     if (withUuidShim) {
@@ -118,7 +87,6 @@ async function applySqlFile(connectionString: string, filePath: string, withUuid
   });
 }
 
-/** Áp bộ migration riêng của control plane từ rỗng (đọc chính các file SQL đã sinh trong repo). */
 async function applyControlPlaneMigrations(connectionString: string): Promise<void> {
   const outDir = join(__dirname, '..', '..', '..', '..', '..', 'packages', 'db', 'migrations', 'control-plane');
   const folders = readdirSync(outDir, { withFileTypes: true })
@@ -130,22 +98,17 @@ async function applyControlPlaneMigrations(connectionString: string): Promise<vo
   }
 }
 
-/** Áp baseline nghiệp vụ vào một kho riêng bằng kết nối của chính role chủ kho đó. */
 async function applyBusinessBaseline(connectionString: string): Promise<void> {
   const baseline = join(__dirname, '..', '..', '..', '..', '..', 'packages', 'db', 'migrations', 'centre', '20261025163710_baseline', 'migration.sql');
   await applySqlFile(connectionString, baseline, true);
 }
 
-/** Giải mã phần payload của một access token JWT (không kiểm chứng chữ ký — chỉ đọc claim cho khẳng định). */
 function decodeJwtPayload(token: string): Record<string, unknown> {
   const segment = token.split('.')[1];
   if (!segment) throw new Error('access token không có phần payload');
   return JSON.parse(Buffer.from(segment, 'base64url').toString('utf8')) as Record<string, unknown>;
 }
 
-/**
- * Sao một dòng (đọc từ kho chung) vào cùng bảng ở kho đích với nguyên bộ cột — mô phỏng phần dữ kiện đã di trú của trung tâm.
- */
 async function copyRow(
   sourceUrl: string,
   targetUrl: string,
@@ -172,7 +135,6 @@ async function copyRow(
   });
 }
 
-/** Đếm family refresh của một user trong một kho bằng kết nối trực tiếp (nền platform tường minh). */
 async function countFamilies(connectionString: string, userId: string): Promise<number> {
   return withClient(connectionString, async (client) => {
     await client.query("SELECT set_config('app.platform', 'on', false)");
@@ -184,7 +146,6 @@ async function countFamilies(connectionString: string, userId: string): Promise<
   });
 }
 
-/** Đếm dòng trong một bảng của một kho theo điều kiện (nền platform tường minh). */
 async function countRows(connectionString: string, table: string, where: string, value: string): Promise<number> {
   return withClient(connectionString, async (client) => {
     await client.query("SELECT set_config('app.platform', 'on', false)");
@@ -229,9 +190,6 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
   };
 
   beforeAll(async () => {
-    // Cấp phát control plane + ba kho riêng trên cụm test, đúng
-    // khuôn ca tích hợp của khung (issue #581): role riêng cho
-    // từng kho, CONNECT của PUBLIC bị thu hồi.
     const databases = [CP_DATABASE, CENTRE_A_DATABASE, CENTRE_B_DATABASE, MAIN_DATABASE];
     const roleNames = [CP_ROLE, CENTRE_A_ROLE, CENTRE_B_ROLE, MAIN_ROLE];
     const passwords: Record<string, string> = {
@@ -259,8 +217,6 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
     await applyBusinessBaseline(clusterUrl(CENTRE_B_DATABASE, CENTRE_B_ROLE, CENTRE_B_PASSWORD));
     await applyBusinessBaseline(clusterUrl(MAIN_DATABASE, MAIN_ROLE, MAIN_PASSWORD));
 
-    // Ứng dụng phải thấy control plane và bí mật các kho riêng
-    // ngay từ lúc khởi động.
     process.env.CONTROL_PLANE_DATABASE_URL = clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD);
     process.env.SPACE_TEST_A_584_URL = clusterUrl('postgres', CENTRE_A_ROLE, CENTRE_A_PASSWORD);
     process.env.SPACE_TEST_B_584_URL = clusterUrl('postgres', CENTRE_B_ROLE, CENTRE_B_PASSWORD);
@@ -268,10 +224,6 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
 
     app = await createTestApp();
 
-    // Dòng đăng ký kho riêng cho hai trung tâm; site chính cập
-    // nhật lên dòng đã có (nếu seed lúc boot đã ghi dòng kho chung
-    // cho `trang-chinh`) hoặc chèn mới — hai trường hợp đều về
-    // cùng trạng thái: site chính ở kho riêng của nó.
     const cpPool = new Pool({ connectionString: clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD) });
     const cpDb = createControlPlaneKysely(cpPool);
     try {
@@ -309,9 +261,6 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
 
     adminToken = (await login(app, 'admin', 'Admin123!')).accessToken;
 
-    // Hai tenant của hai trung tâm tạo bằng API công khai ở kho
-    // chung (đường hiện tại), rồi dòng tenant được sao vào kho
-    // riêng tương ứng — trạng thái sau di trú.
     const createdA = (await must(
       await http(app).post('/api/v1/tenants').set(auth(adminToken)).send({
         name: 'Trung tâm A (spec 584)', slug: CENTRE_A_SLUG, kind: 'school',
@@ -329,7 +278,6 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
     await copyRow(process.env.DATABASE_URL!, clusterUrl(CENTRE_A_DATABASE, CENTRE_A_ROLE, CENTRE_A_PASSWORD), 'tenants', 'id', tenantAId);
     await copyRow(process.env.DATABASE_URL!, clusterUrl(CENTRE_B_DATABASE, CENTRE_B_ROLE, CENTRE_B_PASSWORD), 'tenants', 'id', tenantBId);
 
-    // Tenant platform của site chính sao vào kho riêng của nó.
     const tenantsList = (await must(
       await http(app).get('/api/v1/tenants').set(auth(adminToken)),
       'list tenants',
@@ -338,8 +286,6 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
     sharedTenantId = tenantsList.find((tenant) => tenant.slug === SHARED_SLUG)!.id;
     await copyRow(process.env.DATABASE_URL!, clusterUrl(MAIN_DATABASE, MAIN_ROLE, MAIN_PASSWORD), 'tenants', 'id', mainTenantId);
 
-    // Quản trị đầu tiên của mỗi không gian, tạo bằng chính service
-    // của ứng dụng bên trong kho của không gian đó.
     const spaceDb = app.get(SpaceDatabaseService, { strict: false });
     const users = app.get(UsersService, { strict: false });
     const tenants = app.get(TenantsService, { strict: false });
@@ -367,10 +313,6 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
     const adminMain = await createSpaceAdmin(MAIN_SLUG, mainTenantId, HOST_MAIN, 'adminmain');
     adminMainToken = adminMain.token;
 
-    // Cùng một email đăng ký qua đường API tạo người dùng của
-    // tenant tại chính địa chỉ của từng trung tâm — hai tài khoản
-    // độc lập, mỗi tài khoản chỉ tồn tại trong kho của trung tâm
-    // đã tạo nó.
     dualEmail = `${uniqueName('dual')}@example.com`;
     dualAUsername = uniqueName('dual-a');
     const createdDualA = (await must(
@@ -422,7 +364,6 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
 
   it('cùng email đăng ký ở hai trung tâm kho riêng thành hai tài khoản độc lập, không có dòng nào ở kho chung', async () => {
     expect(dualAId).not.toBe(dualBId);
-    // Không một dòng tài khoản hay membership nào mang email này ở kho chung.
     expect(await countRows(process.env.DATABASE_URL!, 'users', 'email', dualEmail)).toBe(0);
     const membershipsInShared = await withClient(process.env.DATABASE_URL!, async (client) => {
       await client.query("SELECT set_config('app.platform', 'on', false)");
@@ -433,7 +374,6 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
       return Number(result.rows[0]!.count);
     });
     expect(membershipsInShared).toBe(0);
-    // Mỗi tài khoản chỉ có đúng một dòng trong đúng kho của trung tâm đã tạo nó.
     expect(await countRows(clusterUrl(CENTRE_A_DATABASE, CENTRE_A_ROLE, CENTRE_A_PASSWORD), 'users', 'id', dualAId)).toBe(1);
     expect(await countRows(clusterUrl(CENTRE_B_DATABASE, CENTRE_B_ROLE, CENTRE_B_PASSWORD), 'users', 'id', dualAId)).toBe(0);
     expect(await countRows(clusterUrl(CENTRE_B_DATABASE, CENTRE_B_ROLE, CENTRE_B_PASSWORD), 'users', 'id', dualBId)).toBe(1);
@@ -469,11 +409,9 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
       .send({ currentPassword: STRONG_PASSWORD, newPassword: DUAL_NEW_PASSWORD });
     expect(changed.status).toBe(201);
 
-    // Mật khẩu mới chỉ có hiệu lực ở trung tâm B.
     expect((await loginAt(HOST_B, dualBUsername, DUAL_NEW_PASSWORD)).accessToken).toBeTruthy();
     const loginBWithOld = await http(app).post('/api/v1/auth/token').set('Host', HOST_B).send({ username: dualBUsername, password: STRONG_PASSWORD });
     expect(loginBWithOld.status).toBe(401);
-    // Trung tâm A không biết gì về lần đổi này: mật khẩu cũ vẫn dùng được, mật khẩu mới thì không.
     expect((await loginAt(HOST_A, dualAUsername, STRONG_PASSWORD)).accessToken).toBeTruthy();
     const loginAWithNew = await http(app).post('/api/v1/auth/token').set('Host', HOST_A).send({ username: dualAUsername, password: DUAL_NEW_PASSWORD });
     expect(loginAWithNew.status).toBe(401);
@@ -486,7 +424,6 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
     });
     const loginA = await http(app).post('/api/v1/auth/token').set('Host', HOST_A).send({ username: dualAUsername, password: STRONG_PASSWORD });
     expect(loginA.status).toBe(403);
-    // Bên B vẫn đăng nhập bình thường bằng mật khẩu mới đã đổi ở ca trước.
     expect((await loginAt(HOST_B, dualBUsername, DUAL_NEW_PASSWORD)).accessToken).toBeTruthy();
   });
 
@@ -500,8 +437,6 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
   });
 
   it('phiên cookie của trung tâm A bị từ chối ở trung tâm B và ở site chính', async () => {
-    // Tài khoản riêng cho ca cookie (không dùng quản trị A để khỏi
-    // làm lệch luồng đăng nhập của các ca khác).
     const cookieUsername = uniqueName('cookie-a');
     await must(
       await http(app).post(`/api/v1/tenants/${tenantAId}/users`).set('Host', HOST_A).set(auth(adminAToken)).send({
@@ -520,9 +455,7 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
     const meAtB = await http(app).get('/api/v1/auth/session/me').set('Host', HOST_B).set('Cookie', cookieForB);
     expect(meAtB.status).toBe(401);
     expect((meAtB.body as { code?: string }).code).toBe('auth.session_expired');
-    // Kho B không nhìn thấy phiên trong namespace Redis của A; không được huỷ nhầm phiên của A.
     expect((await http(app).get('/api/v1/auth/session/me').set('Host', HOST_A).set('Cookie', cookieForB)).status).toBe(200);
-    // Site chính cũng không thể tra hoặc huỷ phiên đã tạo trong kho A.
     const cookieForMain = await sessionLogin();
     const meAtMain = await http(app).get('/api/v1/auth/session/me').set('Host', HOST_MAIN).set('Cookie', cookieForMain);
     expect(meAtMain.status).toBe(401);
@@ -548,16 +481,12 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
       }),
       'create community user at main site',
     )) as { id: string };
-    // Đăng nhập tại địa chỉ site chính thành công, token mang
-    // centre_id của site chính và tid của tenant platform.
     const logged = await loginAt(HOST_MAIN, communityUsername, STRONG_PASSWORD);
     const payload = decodeJwtPayload(logged.accessToken);
     expect(payload['centre_id']).toBe(registryMainId);
     expect(payload['tid']).toBe(mainTenantId);
-    // Dữ kiện nằm trong kho của site chính, không ở kho chung.
     expect(await countRows(clusterUrl(MAIN_DATABASE, MAIN_ROLE, MAIN_PASSWORD), 'users', 'id', created.id)).toBe(1);
     expect(await countRows(process.env.DATABASE_URL!, 'users', 'email', communityEmail)).toBe(0);
-    // Token của site chính bị từ chối ở trung tâm A.
     const atA = await http(app).get('/api/v1/users/me').set('Host', HOST_A).set(auth(logged.accessToken));
     expect(atA.status).toBe(401);
     expect((atA.body as { code?: string }).code).toBe('auth.centre_mismatch');
@@ -570,22 +499,15 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
     expect(platformToken).toBeTruthy();
     expect((platformLogin.body as { refreshToken?: string }).refreshToken).toBeUndefined();
     expect(decodeJwtPayload(platformToken)['aud']).toBe('platform');
-    // Token platform không gọi được API nghiệp vụ.
     const businessCall = await http(app).get('/api/v1/users/me').set(auth(platformToken));
     expect(businessCall.status).toBe(403);
     expect((businessCall.body as { code?: string }).code).toBe('auth.audience_denied');
-    // Token nghiệp vụ không gọi được control plane.
     const controlCall = await http(app).get(`/api/v1/control-plane/spaces/by-slug/${CENTRE_A_SLUG}`).set(auth(adminToken));
     expect(controlCall.status).toBe(403);
     expect((controlCall.body as { code?: string }).code).toBe('auth.audience_denied');
-    // Token platform gọi được control plane.
     const platformCall = await http(app).get(`/api/v1/control-plane/spaces/by-slug/${CENTRE_A_SLUG}`).set(auth(platformToken));
     expect(platformCall.status).toBe(200);
     expect((platformCall.body as { slug?: string }).slug).toBe(CENTRE_A_SLUG);
-    // Tài khoản thường ở kho chung không qua được bề mặt đăng nhập
-    // platform (tài khoản chỉ ở kho riêng sẽ chết sớm hơn ở bước
-    // xác thực với 401, vì nó không tồn tại ở kho chung — ca đó
-    // thuộc về đường kho riêng, không phải cổng quản trị platform).
     const sharedUsername = uniqueName('shared-plain');
     await must(
       await http(app).post('/api/v1/users').set(auth(adminToken)).send({
@@ -601,8 +523,6 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
   it('challenge MFA gắn với không gian đã cấp nó: đổi địa chỉ thì bước hai thất bại', async () => {
     const totp = app.get(TotpService, { strict: false });
     const spaceDb = app.get(SpaceDatabaseService, { strict: false });
-    // Tài khoản riêng cho ca MFA (không dùng quản trị A để khỏi
-    // làm lệch luồng đăng nhập của các ca khác).
     const mfaUsername = uniqueName('mfa-a');
     const mfaUser = (await must(
       await http(app).post(`/api/v1/tenants/${tenantAId}/users`).set('Host', HOST_A).set(auth(adminAToken)).send({
@@ -616,11 +536,9 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
     expect(challenged.status).toBe(201);
     expect((challenged.body as { mfaRequired?: boolean }).mfaRequired).toBe(true);
     const challengeToken = (challenged.body as { challengeToken: string }).challengeToken;
-    // Hoàn tất ở địa chỉ trung tâm B bằng mã TOTP hợp lệ vẫn thất bại vì challenge thuộc không gian A.
     const atB = await http(app).post('/api/v1/auth/mfa/verify').set('Host', HOST_B).send({ challengeToken, code: await generate({ secret }) });
     expect(atB.status).toBe(401);
     expect((atB.body as { code?: string }).code).toBe('auth.mfa_challenge_invalid');
-    // Hoàn tất ở đúng địa chỉ A thì thành công.
     const atA = await http(app).post('/api/v1/auth/mfa/verify').set('Host', HOST_A).send({ challengeToken, code: await generate({ secret }) });
     expect(atA.status).toBe(201);
     expect((atA.body as { accessToken?: string }).accessToken).toBeTruthy();
@@ -656,14 +574,6 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
     expect((atApex.body as { id?: string }).id).toBe(member.id);
   });
 
-  // --- Hồi quy các chốt fail-closed của đường kho riêng ----------
-  //
-  // Các ca dưới đây khoá những chốt fail-closed mà các ca trên chưa
-  // chạm: phân giải kho gặp lỗi cấu hình khi tạo người dùng không
-  // được rơi về đường kho chung, và bước làm mới phiên ở kho riêng
-  // phải xét lại trạng thái của tenant cùng membership ngay trong
-  // kho đó trước khi cấp token mới — một phiên ở kho riêng không
-  // được sống lâu hơn trạng thái đã cấp ra nó.
 
   it('trung tâm kho riêng lệch cấu hình bí mật: tạo người dùng qua API thất bại và không sinh dòng nào ở kho chung', async () => {
     const badSlug = `trung-tam-lech-${RUN_SUFFIX}`;
@@ -673,11 +583,6 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
       }),
       'create misconfigured tenant',
     )) as { id: string };
-    // Dòng đăng ký ghi trung tâm này ở kho riêng (dedicated) nhưng
-    // secretRef trỏ vào một biến môi trường không tồn tại: bộ phân
-    // giải kho ném `space_routing.secret_missing` — lỗi cấu hình
-    // của một trung tâm kho riêng ĐÃ đăng ký, khác hẳn hai trường
-    // hợp "chưa đăng ký / chưa cấu hình" được phép đi đường chung.
     await withClient(clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD), async (client) => {
       await client.query(
         `INSERT INTO space_registry (slug, name, kind, status, database_name, storage_mode, connection_role_ref, secret_ref, schema_version)
@@ -694,11 +599,7 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
     const res = await http(app).post(`/api/v1/tenants/${createdBad.id}/users`).set(auth(adminToken)).send({
       username: badUsername, email: badEmail, password: STRONG_PASSWORD, firstName: 'Lech', lastName: 'CauHinh',
     });
-    // Thao tác phải THẤT BẠI tại tầng phân giải kho thay vì lặng lẽ
-    // tạo tài khoản ở kho chung...
     expect(res.status).toBe(500);
-    // ...và không một dòng tài khoản hay membership nào sinh ở kho
-    // chung cho email này.
     expect(await countRows(process.env.DATABASE_URL!, 'users', 'email', badEmail)).toBe(0);
     const membershipsInShared = await withClient(process.env.DATABASE_URL!, async (client) => {
       await client.query("SELECT set_config('app.platform', 'on', false)");
@@ -720,8 +621,6 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
       'create refresh member user at A',
     )) as { id: string };
     const logged = await loginAt(HOST_A, username, STRONG_PASSWORD);
-    // Kết thúc membership ngay trong kho của trung tâm A: tài khoản
-    // vẫn còn, phiên vẫn còn family, nhưng tư cách thành viên đã hết.
     await withClient(clusterUrl(CENTRE_A_DATABASE, CENTRE_A_ROLE, CENTRE_A_PASSWORD), async (client) => {
       await client.query("SELECT set_config('app.platform', 'on', false)");
       await client.query(
@@ -757,19 +656,12 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
     } finally {
       await setTenantStatusInA('active');
     }
-    // Lần từ chối không xoay và không thu hồi family: tenant được
-    // kích hoạt lại thì chính refresh token cũ làm mới lại được.
     const again = await http(app).post('/api/v1/auth/refresh').set('Host', HOST_A).send({ refreshToken: logged.refreshToken });
     expect(again.status).toBe(201);
     expect((again.body as { accessToken?: string }).accessToken).toBeTruthy();
   });
 
   it('làm mới phiên ở kho riêng bị từ chối space.tenant_missing khi kho đó chưa có dòng tenant của chính nó', async () => {
-    // Dựng không gian C: kho riêng thật (baseline đầy đủ) kèm dòng
-    // đăng ký dedicated; tenant được tạo ở kho chung nhưng dòng
-    // tenant KHÔNG được sao vào kho C — trạng thái "đã đăng ký
-    // kho riêng, chưa cấp phát xong phần dữ kiện" mà chốt
-    // fail-closed phải bắt như khi cấp phiên mới.
     const centreCDatabase = 'giaokhoa_test_centre_c_584';
     const centreCRole = 'giaokhoa_centre_c_584_app';
     const centreCPassword = 'centre-c-584';
@@ -803,10 +695,6 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
       });
       emitSpaceRegistryChanged(centreCSlug);
 
-      // Tài khoản và family refresh được tạo ngay trong kho C bằng
-      // chính service của ứng dụng (family ghi theo đúng khuôn bảng
-      // của hệ) — chỉ riêng dòng tenant của C là vắng mặt trong kho
-      // của nó.
       const spaceDb = app.get(SpaceDatabaseService, { strict: false });
       const users = app.get(UsersService, { strict: false });
       const username = uniqueName('refresh-missing');
@@ -828,12 +716,6 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
       expect(res.status).toBe(401);
       expect((res.body as { code?: string }).code).toBe('space.tenant_missing');
     } finally {
-      // Chỉ gỡ dòng đăng ký và biến bí mật: pool kết nối tới kho C
-      // còn sống trong ứng dụng tới khi cả file đóng app ở
-      // `afterAll`, nên database/role của C được thả ở đầu ca của
-      // lần chạy kế tiếp (khối dựng ở đầu ca đã DROP IF EXISTS) —
-      // thả database ngay tại đây sẽ cắt ngang kết nối của pool
-      // đang sống và sinh lỗi 57P01 ngoài ý muốn.
       delete process.env.SPACE_TEST_C_584_URL;
       await withClient(clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD), async (client) => {
         await client.query(`DELETE FROM space_registry WHERE slug = $1`, [centreCSlug]);

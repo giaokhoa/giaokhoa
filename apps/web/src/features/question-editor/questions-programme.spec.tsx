@@ -7,9 +7,6 @@ import { baSessionBody, isGetSessionUrl } from '#test/ba-session';
 import { QuestionsPage } from '#features/questions/components/questions';
 import { QuestionEditPage } from './routes/question-editor';
 
-/**
- * Spec khối "Chương trình" trong editor câu hỏi (issue #20 Chặng 2, mục A.6): chọn môn → cây → YCCĐ + mức, ghi qua các API gắn kết ở cấp danh tính câu hỏi (subjects/outcomes/curriculum-links).
- */
 const CATEGORY_ID = '01900000-0000-7000-8000-000000000001';
 const QUESTION_ID = '01900000-0000-7000-8000-000000000004';
 const VERSION_ID = '01900000-0000-7000-8000-000000000008';
@@ -108,7 +105,6 @@ function multichoiceView() {
   };
 }
 
-/** Stub fetch mô phỏng ngân hàng câu hỏi + curriculum có gắn kết trong bộ nhớ. */
 function stubFetch(calls: RecordedCall[]) {
   const state = {
     links: {
@@ -204,7 +200,6 @@ function renderBank() {
   );
 }
 
-/** Chọn một tuỳ chọn trong Select của @giaokhoa/ui: bấm trigger theo nhãn rồi bấm option theo chữ hiển thị. */
 async function pickSelectOption(scope: ReturnType<typeof within>, label: string, optionName: string) {
   await userEvent.click(scope.getByLabelText(label));
   await userEvent.click(await screen.findByRole('option', { name: optionName }, { timeout: 10000 }));
@@ -223,13 +218,11 @@ describe('Trình sửa câu hỏi — liên kết chương trình (issue #20 gia
     renderBank();
 
     const row = await screen.findByTestId(`question-${QUESTION_ID}`);
-    // §9: Sửa đi sang màn editor riêng; khối Chương trình nằm ở màn đó.
     await userEvent.click(within(row).getByText('Sửa (phiên bản mới)'));
 
     const card = within(await screen.findByTestId('question-programme'));
     expect(card.getByText('Chương trình')).toBeTruthy();
 
-    // Chọn môn → gắn môn.
     await pickSelectOption(card, 'Chọn môn học', 'Toán');
     await userEvent.click(card.getAllByRole('button', { name: 'Gắn' })[0]!);
     const subjectRow = await screen.findByTestId(`programme-subject-${SUBJECT_ID}`);
@@ -237,8 +230,6 @@ describe('Trình sửa câu hỏi — liên kết chương trình (issue #20 gia
     const subjectCall = calls.find((c) => c.url === `/api/v1/questions/${QUESTION_ID}/subjects` && c.method === 'POST');
     expect(subjectCall?.body).toEqual({ subjectId: SUBJECT_ID });
 
-    // YCCĐ của môn nạp bất đồng bộ qua cây chương trình sau khi chọn
-    // môn: chờ lời gọi cây hoàn tất rồi mới mở Select chọn YCCĐ.
     await waitFor(() =>
       expect(calls.some((c) => c.url === `/api/v1/curriculum/curricula/${CURRICULUM_ID}/tree`)).toBe(true),
     );
@@ -250,7 +241,6 @@ describe('Trình sửa câu hỏi — liên kết chương trình (issue #20 gia
     const outcomeCall = calls.find((c) => c.url === `/api/v1/questions/${QUESTION_ID}/outcomes` && c.method === 'POST');
     expect(outcomeCall?.body).toEqual({ outcomeId: OUTCOME_ID, cognitiveLevel: 'van_dung' });
 
-    // Đổi mức ngay tại dòng gắn → PATCH.
     await pickSelectOption(within(outcomeRow), 'Mức độ nhận thức', 'Hiểu');
     await waitFor(() =>
       expect(
@@ -262,7 +252,6 @@ describe('Trình sửa câu hỏi — liên kết chương trình (issue #20 gia
     );
     expect(patchCall?.body).toEqual({ cognitiveLevel: 'hieu' });
 
-    // Gỡ gắn YCCĐ → dòng biến mất.
     await userEvent.click(within(outcomeRow).getByRole('button', { name: 'Gỡ gắn' }));
     await waitFor(() => expect(screen.queryByTestId(`programme-outcome-${OUTCOME_ID}`)).toBeNull());
   });

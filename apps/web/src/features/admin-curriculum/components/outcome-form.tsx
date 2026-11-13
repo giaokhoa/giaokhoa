@@ -30,7 +30,6 @@ export function OutcomeForm({ nodeId, initial, backTo }: { nodeId: string; initi
   const [sourceRef, setSourceRef] = useState(initial?.sourceRef ?? '');
   const [derivedFromId, setDerivedFromId] = useState(initial?.derivedFromId ?? '');
   const [error, setError] = useState<string | null>(null);
-  // Ghi YCCĐ qua các đột biến của lib/curriculum (F-01 của rà soát #133) — cây chứa YCCĐ được làm mới sau khi ghi thành công.
   const createOutcome = useCreateCurriculumOutcome();
   const updateOutcome = useUpdateCurriculumOutcome();
 

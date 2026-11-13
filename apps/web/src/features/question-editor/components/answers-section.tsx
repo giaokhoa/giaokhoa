@@ -1,18 +1,3 @@
-/**
- * Khối đáp án theo loại câu hỏi của form soạn (tách cấu trúc từ
- * `pages/question-editor.tsx` theo đợt A của issue #223): bốn
- * fieldset theo loại (trắc nghiệm, đúng/sai, trả lời ngắn, tự
- * luận) và hai trường chung cuối form (hướng dẫn, phản hồi
- * chung). Khối chỉ trình bày và vá trạng thái form qua
- * `patchForm` được truyền xuống; mọi logic đóng gói payload nằm
- * ở `form-model.ts`.
- *
- * @param props.form - Trạng thái form hiện tại.
- * @param props.patchForm - Hàm vá một phần trạng thái form của trang.
- * @param props.contextId - Context của bank đích cho đường chèn ảnh.
- * @param props.itemId - Id câu hỏi đang sửa (định danh mục của file ảnh).
- * @param props.moveItem - Hàm đổi vị trí một phần tử trong mảng (trang giữ).
- */
 import { splitMultipleChoiceDocument } from '@giaokhoa/editor';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Checkbox } from '@giaokhoa/ui/components/checkbox';
@@ -34,7 +19,6 @@ interface AnswersSectionProps {
 
 export function AnswersSection({ form, patchForm, contextId, itemId, moveItem }: AnswersSectionProps) {
   const { t } = useTranslation('app');
-  // Các lựa chọn hiện tại của tài liệu thống nhất (theo thứ tự soạn) — chỉ để dựng hàng phản hồi theo lựa chọn ở dưới editor.
   const mcSplit = form.qtype === 'multichoice' ? splitMultipleChoiceDocument(form.mcDocument) : null;
 
   return (
@@ -42,11 +26,6 @@ export function AnswersSection({ form, patchForm, contextId, itemId, moveItem }:
       {form.qtype === 'multichoice' && (
         <fieldset className="space-y-3">
           <legend className="sr-only">{t('choices')}</legend>
-          {/* Soạn thống nhất kiểu giaokhoa: thân câu + 4
-                        lựa chọn trong một tài liệu; chọn đáp án
-                        đúng bằng radio tại từng lựa chọn trong
-                        chính editor; kéo-thả trong editor để đổi
-                        thứ tự lựa chọn. */}
           <McDocumentField
             label={t('questionText')}
             value={form.mcDocument}
@@ -57,10 +36,6 @@ export function AnswersSection({ form, patchForm, contextId, itemId, moveItem }:
             itemId={itemId}
           />
           <p className="text-sm text-muted-foreground">{t('mcAuthoringHint')}</p>
-          {/* Phản hồi theo lựa chọn là metadata của dòng
-                        đáp án nên soạn ở các trường riêng bám theo
-                        id choice (đi theo lựa chọn khi kéo-thả đổi
-                        thứ tự), không nằm trong tài liệu lựa chọn. */}
           {mcSplit?.choices.map((choice, index) => (
             <RichField
               key={choice.attrs.id}
@@ -146,10 +121,6 @@ export function AnswersSection({ form, patchForm, contextId, itemId, moveItem }:
       {form.qtype === 'truefalse' && (
         <fieldset className="space-y-3">
           <legend className="sr-only">{t('tfStatementsHeading')}</legend>
-          {/* Soạn thống nhất kiểu giaokhoa (TF-A): thân
-                        chung + đúng 4 mệnh đề trong một tài liệu; đáp
-                        án Đ/S của từng mệnh đề chọn bằng cặp radio
-                        gắn tại mệnh đề trong chính editor. */}
           <TfDocumentField
             label={t('questionText')}
             value={form.tfDocument}
@@ -348,10 +319,6 @@ export function AnswersSection({ form, patchForm, contextId, itemId, moveItem }:
             contextId={contextId}
             itemId={itemId}
           />
-          {/* Lời giải mẫu thuộc phía đáp án (answer_key)
-                        như guidance — học sinh chỉ thấy ở màn xem
-                        lại sau khi nộp; khác graderInfo ở trên là
-                        thông tin riêng cho người chấm. */}
           <RichField
             label={t('modelAnswer')}
             value={form.essaySolution}
@@ -363,11 +330,6 @@ export function AnswersSection({ form, patchForm, contextId, itemId, moveItem }:
         </fieldset>
       )}
 
-      {/* Hướng dẫn (guidance) có ở MỌI loại câu: gợi ý
-                    cách làm hiện kèm câu hỏi khi học sinh làm bài
-                    (điểm quyết D-4) — khác phản hồi chung/lời giải
-                    là phần chỉ hiện sau khi nộp. Khi lưu nó đi ở
-                    phía đáp án, không nằm trong thân câu. */}
       <div className="space-y-1">
         <RichField
           label={t('guidance')}

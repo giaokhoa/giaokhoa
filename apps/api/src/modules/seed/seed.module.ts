@@ -10,5 +10,4 @@ import { SeedService } from './seed.service';
   imports: [AccessModule, UsersModule, TenantsModule, SiteConfigModule, ControlPlaneModule],
   providers: [SeedService],
 })
-/** Module gieo dữ liệu nền khi khởi động. */
 export class SeedModule {}

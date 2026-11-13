@@ -1,45 +1,27 @@
-# Mặt tiền duy nhất cho Docker Compose; Caddy quản lý proxy, websocket, streaming, header và nén bằng tính năng chính thức, không dùng Node tự chế.
 {
 	admin off
 
 	servers {
-		# Mặc định KHÔNG tin dải Docker bridge: cổng host publish có thể
-		# SNAT mọi client thành IP gateway 172.x, cho phép giả mạo header
-		# CF-Connecting-IP/XFF nếu tin cả subnet. Chỉ loopback nội bộ
-		# container được tin khi chưa khai IP/CIDR proxy thật.
-		# Muốn giữ client IP/HTTPS qua Cloudflare Tunnel hoặc ingress,
-		# cấu hình GIAOKHOA_TRUSTED_PROXY_CIDRS bằng IP/CIDR peer
-		# ingress CHÍNH XÁC và chặn truy cập trực tiếp đến cổng 8080.
 		trusted_proxies static {$GIAOKHOA_TRUSTED_PROXY_CIDRS:127.0.0.1/32}
-		# Chỉ nhận header từ peer proxy tin cậy, không lấy IP tự
-		# khai của khách truy cập trực tiếp vào Caddy.
 		client_ip_headers CF-Connecting-IP X-Forwarded-For
 		trusted_proxies_strict
 	}
 }
 
 :8080 {
-	# Nén nội dung trả về; phản hồi SSE được Caddy stream trực tiếp.
 	encode zstd gzip
 
-	# So khớp exact và tiền tố có dấu /, không nuốt /apixyz hay /mcpfoo.
 	@api {
 		path /api /api/* /socket.io /socket.io/* /mcp /mcp/* /.well-known/oauth-protected-resource /.well-known/oauth-protected-resource/* /.well-known/oauth-authorization-server /.well-known/oauth-authorization-server/*
 	}
 	handle @api {
-		# Một upstream trên mỗi replica (vd: api:3100 api-two:3100).
-		# Không chỉ dùng một tên DNS chứa nhiều IP khi cần cookie affinity:
-		# Caddy phải phân biệt được từng backend bằng địa chỉ upstream.
 		reverse_proxy {$GIAOKHOA_API_UPSTREAM:api:3100} {
-			# Cookie affinity giữ polling Engine.IO trên cùng replica khi bổ sung upstream.
 			lb_policy cookie api_affinity
-			# API dùng Express trust proxy = 1: chỉ một địa chỉ khách đã chuẩn hóa từ Caddy, không truyền nguyên chuỗi XFF.
 			header_up X-Forwarded-For {client_ip}
 		}
 	}
 
 	handle {
-		# Chỉ HTML nhận CSP; không thay đổi response API hay file JS/CSS.
 		header {
 			Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-src 'self' blob: https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 			X-Content-Type-Options nosniff

@@ -16,9 +16,6 @@ interface LogItem {
 }
 interface LogPage { items: LogItem[]; total: number; page: number; pageSize: number }
 
-/**
- * Luồng Logstore (issue #22): các hành động nghiệp vụ thật qua HTTP đưa vào hàng đợi outbox các sự kiện; một lượt relay (lời gọi mà bộ lập lịch của worker thực hiện mỗi 5 giây) phản chiếu chúng vào event_log; API đọc sau đó phục vụ chúng kèm bộ lọc và kiểm tra quyền theo phạm vi context (tương đương report_log của Moodle).
- */
 describe('Nhật ký sự kiện: action outbox được nhân bản và truy vấn được bằng bộ lọc + quyền', () => {
   let app: INestApplication;
   let admin: string;
@@ -37,19 +34,7 @@ describe('Nhật ký sự kiện: action outbox được nhân bản và truy v�
     return { status: res.status, body: res.body as LogPage };
   }
 
-  // Trần hook 120s (không phải 30s mặc định): vòng xả relay ở cuối
-  // beforeAll phải duyệt TUẦN TỰ toàn bộ outbox tồn đọng của cả suite
-  // trên cùng DB (relay API không tự chạy theo lịch), nên dưới tải CI
-  // nó vượt 30s dù mọi assertion đều đúng — xem bàn giao fix CI PR #76.
   beforeAll(async () => {
-    // Dọn tồn đọng outbox của các spec đã chạy trước trên cùng DB:
-    // relay ở app test chỉ chạy khi gọi tay, nên row chưa publish khi
-    // app trước đóng là row chết — không test nào còn tiêu thụ.
-    // Không dọn thì vòng xả ở cuối beforeAll này phải duyệt toàn bộ
-    // tồn đọng của cả suite (O(backlog)) và vượt trần timeout dưới
-    // tải CI dù mọi assertion đều đúng (CI run 40097046131 trên commit
-    // chỉ nới trần 120s vẫn đỏ). Dọn xong, vòng xả chỉ còn duyệt
-    // event của chính spec này.
     const stale = new Client({ connectionString: process.env.DATABASE_URL });
     await stale.connect();
     await stale.query('DELETE FROM outbox_events WHERE published_at IS NULL');
@@ -59,7 +44,6 @@ describe('Nhật ký sự kiện: action outbox được nhân bản và truy v�
     admin = adminLogin.accessToken;
     adminId = adminLogin.userId;
 
-    // Các hành động nghiệp vụ (mỗi hành động đưa sự kiện outbox vào hàng đợi kèm người thực hiện).
     const category = await createCategory(app, admin);
     const course = await createCourse(app, admin, category.id);
     courseId = course.id;
@@ -79,7 +63,6 @@ describe('Nhật ký sự kiện: action outbox được nhân bản và truy v�
     const editingTeacher = await roleIdByShortname(app, admin, 'editingteacher');
     await assignRole(app, admin, teacherId, editingTeacher, courseContextId);
 
-    // Giáo viên chấm điểm học viên (grade_updated với giáo viên là người thực hiện).
     const teacherLogin = await login(app, teacher.username, STRONG_PASSWORD);
     teacherToken = teacherLogin.accessToken;
     const item = await createGradeItem(app, teacherToken, courseId);
@@ -88,21 +71,12 @@ describe('Nhật ký sự kiện: action outbox được nhân bản và truy v�
     const studentLogin = await login(app, student.username, STRONG_PASSWORD);
     studentToken = studentLogin.accessToken;
 
-    // Admin huỷ ghi danh học viên lần nữa (user_unenrolled).
     const del = await http(app).delete(`/api/v1/courses/${courseId}/enrol/instances/${instanceId}/users/${studentId}`)
       .set('Authorization', `Bearer ${admin}`);
     expect([200, 204]).toContain(del.status);
 
-    // Một lượt relay của worker phản chiếu mọi dòng outbox đang chờ
-    // vào event_log (issue #523: relay phía API đã gỡ).
     const published = await flushWorkerRelay();
     expect(published).toBeGreaterThan(0);
-    // Trần 120s thay vì 60s: beforeAll này dựng app + chạy một chuỗi
-    // dài gọi HTTP tạo user/khoá/ghi điểm + vòng relay; chạy riêng chỉ
-    // mất ~16s nhưng dưới tải full suite (máy 2 CPU, load ~9, các đội
-    // khác chạy suite song song) vẫn chạm trần 60s ở lượt chạy full
-    // suite ngày 24/10/2026, trong khi mọi test đều pass khi đủ thời
-    // gian — đây là trần tải, không phải lỗi logic.
   }, 120000);
   afterAll(async () => { await closeWorkerRelayDriver(); await app.close(); });
 
@@ -142,8 +116,6 @@ describe('Nhật ký sự kiện: action outbox được nhân bản và truy v�
     expect(types).toContain('grade_updated');
     expect(types).toContain('user_unenrolled');
     expect(types).not.toContain('course_created');
-    // grade_updated thủ công (rawGrade 8, do giáo viên đặt) ghi
-    // giáo viên là người thực hiện; các sự kiện chấm lại theo tầng (cascade) do hệ thống điều khiển (không có người thực hiện).
     const grade = body.items.find((i) => i.eventType === 'grade_updated' && i.payload?.rawGrade === 8);
     expect(grade).toBeDefined();
     expect(grade!.userId).toBe(teacherId);

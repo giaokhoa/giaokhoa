@@ -15,12 +15,12 @@ const ThemeContext = createContext<{ dark: boolean; toggle: () => void }>({
   dark: false, toggle: () => {},
 });
 
-/**
- * SSR khởi tạo light trên cả server/client để không lệch hydrate.
- * Sau hydrate đọc theme đã chọn (hoặc ưu tiên hệ điều hành) và cập
- * nhật class .dark + color-scheme. Listener system tự cập nhật khi
- * chưa có lựa chọn thủ công. Không truy cập window/storage lúc SSR.
- */
+
+
+
+
+
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [choice, setChoice] = useState<ThemeChoice>('system');
   const [prefersDark, setPrefersDark] = useState(false);
@@ -30,12 +30,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     try {
       const saved = window.localStorage.getItem(STORAGE_KEY);
       if (saved === 'dark' || saved === 'light') {
-        // Trì hoãn tới microtask sau hydrate: không cập nhật state đồng
-        // bộ ngay trong effect, tránh render nối tầng và cảnh báo React.
+
+
         queueMicrotask(() => { if (!disposed) setChoice(saved); });
       }
     } catch {
-      // Browser không có localStorage (private mode): vẫn dùng media query.
+
     }
     const media = window.matchMedia?.('(prefers-color-scheme: dark)');
     if (media) {
@@ -58,13 +58,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const toggle = () => {
     const next: ThemeChoice = dark ? 'light' : 'dark';
     setChoice(next);
-    try { window.localStorage.setItem(STORAGE_KEY, next); } catch { /* Không chặn UI. */ }
+    try { window.localStorage.setItem(STORAGE_KEY, next); } catch {   }
   };
 
   return <ThemeContext.Provider value={{ dark, toggle }}>{children}</ThemeContext.Provider>;
 }
 
-/** Nút chọn sáng/tối dùng được cả khi đăng nhập và ngoài trang công khai. */
+
 export function ThemeToggle() {
   const { dark, toggle } = useContext(ThemeContext);
   const { t } = useTranslation('app');

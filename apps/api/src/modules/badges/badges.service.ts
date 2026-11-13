@@ -23,32 +23,14 @@ export const BADGE_STATUS = { INACTIVE: 0, ACTIVE: 1, RETIRED: 2, ARCHIVED: 3, D
 export const CRITERIA_AGGREGATION = { ALL: 1, ANY: 2 } as const;
 export const LEAF_TYPES = ['coursecompletion', 'activitycompletion', 'competency', 'badge', 'manual', 'cohort', 'profile'] as const;
 
-/** Các trường hồ sơ chuẩn mà lá `profile` đọc trực tiếp từ bản ghi user (ngoài ra lá nhận custom field theo shortName). */
 const PROFILE_STANDARD_FIELDS = ['username', 'email', 'firstName', 'lastName'] as const;
 
 export interface CriteriaInput {
-  method: number; // 1=ALL, 2=ANY trên các lá
+  method: number;
   criteria: { criteriaType: string; params?: Record<string, unknown>; description?: string }[];
 }
 
-/**
- * Facade của BadgesModule (core_badges của Moodle):
- *  - Tiêu chí tạo thành cây hai cấp: MỘT dòng 'overall' mang tổng hợp ALL/ANY,
- *    cộng các dòng lá (hoàn thành khoá học — tuỳ chọn theo một ngày hạn, hoàn thành hoạt động, đạt competency, một badge khác, thủ công theo role, thành viên cohort, trường hồ sơ).
- *  - LUẬT ĐÓNG BĂNG: tiêu chí của một badge ACTIVE — hoặc của bất kỳ badge nào đã cấp
- *    award — không thể thay đổi. Nhân bản badge để sửa tiêu chí của nó.
- *  - Cấp phát tạo một assertion BẤT BIẾN (bản chụp badge + tiêu chí,
- *    bằng chứng, ngày cấp/hết hạn). Thu hồi đánh dấu assertion đã thu hồi; dòng không bao giờ bị xoá.
- *  - Tự cấp: module này đăng ký hook completion với
- *    CompletionService và lắng nghe sự kiện đạt competency; bộ đánh giá chỉ đọc các module KHÁC qua facade của chúng
- *    (CompletionService, CompetenciesService), không bao giờ đọc bảng của chúng. Worker
- *    chạy cùng đánh giá từ hàng đợi 'badge-award'.
- */
 @Injectable()
-/**
- * Nghiệp vụ huy hiệu (Open Badges). Đối chiếu Moodle: badges/classes (badge, criteria) và lib/badgeslib.php. Vòng đời: badge nháp (inactive) → đặt tiêu chí → kích hoạt (active); badge đã kích hoạt hoặc đã cấp thì bộ tiêu chí bị đóng băng — muốn sửa phải nhân bản (duplicate). Đánh giá tiêu chí chạy theo sự kiện
- * (hoàn thành khoá học/cm, năng lực đạt) và theo yêu cầu; mỗi lần cấp sinh assertion có uniqueHash kiểm chứng được.
- */
 export class BadgesService implements OnModuleInit {
   constructor(
     private readonly repo: BadgesRepository,
@@ -67,9 +49,6 @@ export class BadgesService implements OnModuleInit {
     @InjectQueue(BADGE_AWARD_QUEUE) private readonly awardQueue: Queue,
   ) {}
 
-  /**
-   * Khởi tạo: đăng ký hook hoàn thành để tự động đánh giá huy hiệu.
-   */
   onModuleInit(): void {
     this.completion.registerCourseCompletionHook(async ({ userId, courseId }) => {
       void courseId;
@@ -81,11 +60,7 @@ export class BadgesService implements OnModuleInit {
     });
   }
 
-  /** Năng lực đạt chuẩn đã thay đổi (sự kiện trong tiến trình từ CompetenciesService) ⇒ đánh giá lại. */
   @OnEvent('competency_proficiency_changed')
-  /**
-   * Sự kiện năng lực đạt chuẩn → đánh giá lại huy hiệu có tiêu chí năng lực.
-   */
   async onProficiencyChanged(payload: { userId: string; competencyId: string }): Promise<void> {
     await this.enqueueEvaluation(payload.userId, 'competency');
     await this.evaluateUserBadges(payload.userId);
@@ -93,8 +68,8 @@ export class BadgesService implements OnModuleInit {
 
   private async enqueueEvaluation(userId: string, trigger: string): Promise<void> {
     await this.awardQueue.add('evaluate', { userId, trigger, ...backgroundJobContext() }, {
-      // Sự kiện đánh giá huy hiệu mới không được đè mất job cũ
-      // chỉ vì hai nguồn phát cùng millisecond.
+
+
       jobId: backgroundJobId(`badge-award-${userId}-${trigger}-${randomUUID()}`),
       attempts: 3, removeOnComplete: true,
     }).catch(() => undefined);
@@ -109,11 +84,7 @@ export class BadgesService implements OnModuleInit {
       : this.systemCtx();
   }
 
-  // --- CRUD badge -----------------------------------------------------------------
 
-  /**
-   * Tạo badge ở trạng thái inactive.
-   */
   async createBadge(actorId: string, input: {
     name: string; description?: string; type?: number; courseId?: string;
     issuerName?: string; issuerUrl?: string; issuerContact?: string;
@@ -124,7 +95,6 @@ export class BadgesService implements OnModuleInit {
     const ctx = type === 2 ? await this.courses.courseContextId(input.courseId!) : await this.systemCtx();
     await this.evaluator.requireCapability(actorId, 'badges:createbadge', ctx);
     if (type === 1 && !(await this.evaluator.isSiteAdmin(actorId))) {
-      // Badge cấp site là artefact ở context hệ thống: chỉ đường manager/site-admin.
       const manager = await this.roles.getRoleByShortname('manager');
       const assignments = manager ? await this.evaluator.hasCapability(actorId, 'badges:createbadge', ctx) : false;
       if (!assignments) throw new ForbiddenException({ message: 'Site badges require a manager role at the system context', code: 'badges.site_badge_manager_only' });
@@ -139,22 +109,13 @@ export class BadgesService implements OnModuleInit {
     });
   }
 
-  /**
-   * Lấy badge; ném badges.not_found khi vắng.
-   */
   async getBadge(id: string): Promise<BadgeRow> {
     const row = await this.repo.getBadge(id);
     if (!row) throw new NotFoundException({ message: `Badge ${id} not found`, code: 'badges.not_found' });
     return row;
   }
-  /**
-   * Liệt kê badge.
-   */
   async listBadges(): Promise<BadgeRow[]> { return this.repo.listBadges(); }
 
-  /**
-   * Cập nhật thông tin badge (trước khi kích hoạt).
-   */
   async updateBadge(actorId: string, id: string, input: { name?: string; description?: string; issuerName?: string; expirePeriod?: number }): Promise<BadgeRow> {
     const badgeRow = await this.getBadge(id);
     await this.evaluator.requireCapability(actorId, 'badges:configurecriteria', await this.badgeContextId(badgeRow));
@@ -167,10 +128,6 @@ export class BadgesService implements OnModuleInit {
     return this.getBadge(id);
   }
 
-  /** Xoá kiểu Moodle = lưu trữ (badgeslib_test test_delete_badge): badge không bao giờ bị xoá cứng theo mặc định. */
-  /**
-   * Lưu trữ badge (không cấp thêm).
-   */
   async archiveBadge(actorId: string, id: string): Promise<BadgeRow> {
     const badgeRow = await this.getBadge(id);
     await this.evaluator.requireCapability(actorId, 'badges:configurecriteria', await this.badgeContextId(badgeRow));
@@ -178,9 +135,6 @@ export class BadgesService implements OnModuleInit {
     return this.getBadge(id);
   }
 
-  /**
-   * Đổi trạng thái vòng đời của badge; kích hoạt yêu cầu đã có tiêu chí.
-   */
   async setStatus(actorId: string, id: string, status: number): Promise<BadgeRow> {
     const badgeRow = await this.getBadge(id);
     await this.evaluator.requireCapability(actorId, 'badges:configurecriteria', await this.badgeContextId(badgeRow));
@@ -198,11 +152,7 @@ export class BadgesService implements OnModuleInit {
     return this.getBadge(id);
   }
 
-  // --- tiêu chí -----------------------------------------------------------------------
 
-  /**
-   * Bộ tiêu chí của badge.
-   */
   async getCriteria(badgeId: string): Promise<{ method: number; criteria: CriteriaRow[] }> {
     await this.getBadge(badgeId);
     const rows = await this.repo.listCriteria(badgeId);
@@ -210,10 +160,6 @@ export class BadgesService implements OnModuleInit {
     return { method: overall?.method ?? CRITERIA_AGGREGATION.ALL, criteria: rows.filter((r) => r.criteriaType !== 'overall') };
   }
 
-  /** Luật đóng băng (report §2#14): badge đang active và badge đã có award có tiêu chí bất biến. */
-  /**
-   * Chặn sửa tiêu chí khi badge đã kích hoạt/đã cấp (badges.criteria_frozen).
-   */
   async assertCriteriaEditable(badgeRow: BadgeRow): Promise<void> {
     if (badgeRow.status === BADGE_STATUS.ACTIVE || badgeRow.status === BADGE_STATUS.DISABLED) {
       throw new ForbiddenException({
@@ -229,9 +175,6 @@ export class BadgesService implements OnModuleInit {
     }
   }
 
-  /**
-   * Đặt bộ tiêu chí (ALL/ANY) cho badge chưa bị đóng băng.
-   */
   async setCriteria(actorId: string, badgeId: string, input: CriteriaInput): Promise<{ method: number; criteria: CriteriaRow[] }> {
     const badgeRow = await this.getBadge(badgeId);
     await this.evaluator.requireCapability(actorId, 'badges:configurecriteria', await this.badgeContextId(badgeRow));
@@ -261,10 +204,6 @@ export class BadgesService implements OnModuleInit {
     return this.getCriteria(badgeId);
   }
 
-  /** Nhân bản = cách được phép để sửa một badge đã đóng băng (badge INACTIVE mới với tiêu chí sao chép). */
-  /**
-   * Nhân bản badge (kèm tiêu chí) để chỉnh sửa mà không đụng bản đang chạy.
-   */
   async duplicateBadge(actorId: string, badgeId: string): Promise<BadgeRow> {
     const source = await this.getBadge(badgeId);
     await this.evaluator.requireCapability(actorId, 'badges:createbadge', await this.badgeContextId(source));
@@ -285,12 +224,6 @@ export class BadgesService implements OnModuleInit {
     return copy;
   }
 
-  /**
-   * Kiểm tra tham số bắt buộc của từng loại lá khi đặt tiêu chí: mỗi lá phải
-   * mang đủ tham chiếu mà evaluator cần (khoá học/cm/năng lực/huy hiệu/cohort/
-   * trường hồ sơ); `byDate` của lá hoàn thành khoá học phải là ngày hợp lệ.
-   * Trả về thông điệp lỗi hoặc null khi hợp lệ.
-   */
   private leafParamError(criteriaType: string, params: Record<string, unknown>): string | null {
     const hasId = (key: string) => typeof params[key] === 'string' && (params[key] as string).length > 0;
     switch (criteriaType) {
@@ -319,7 +252,6 @@ export class BadgesService implements OnModuleInit {
     }
   }
 
-  // --- đánh giá & cấp phát --------------------------------------------------------------
 
   private async leafSatisfied(leaf: CriteriaRow, userId: string): Promise<boolean> {
     const params = (leaf.params ?? {}) as Record<string, unknown>;
@@ -329,9 +261,6 @@ export class BadgesService implements OnModuleInit {
         if (!courseId) return false;
         const completion = await this.completion.getCourseCompletion(userId, courseId).catch(() => undefined);
         if (completion?.status !== 'complete') return false;
-        // By-date (Moodle award_badge "course completion by-date"): khi lá
-        // khai `byDate`, chỉ tính khi thời điểm hoàn thành ≤ ngày cắt đó —
-        // hoàn thành sau ngày cắt thì KHÔNG đạt dù trạng thái là complete.
         const byDate = typeof params.byDate === 'string' ? params.byDate : undefined;
         if (byDate !== undefined) {
           const cutoff = Date.parse(byDate);
@@ -341,8 +270,6 @@ export class BadgesService implements OnModuleInit {
         return true;
       }
       case 'cohort': {
-        // Lá cohort (Moodle criteria_cohort): user phải thuộc cohort chỉ
-        // định; dạng `cohortIds` yêu cầu thuộc TẤT CẢ cohort liệt kê.
         const ids = typeof params.cohortId === 'string'
           ? [params.cohortId]
           : Array.isArray(params.cohortIds) ? params.cohortIds.filter((i): i is string => typeof i === 'string') : [];
@@ -353,9 +280,6 @@ export class BadgesService implements OnModuleInit {
         return true;
       }
       case 'profile': {
-        // Lá profile (Moodle criteria_profile): trường hồ sơ chuẩn hoặc
-        // custom field (theo shortName, scope core_user/user) đạt điều kiện —
-        // có `value` thì phải bằng đúng, không có thì trường phải được điền.
         const field = typeof params.field === 'string' ? params.field : '';
         if (!field) return false;
         let actual: string | null | undefined;
@@ -395,10 +319,6 @@ export class BadgesService implements OnModuleInit {
     }
   }
 
-  /** Đánh giá cây tiêu chí của một badge cho một user. */
-  /**
-   * Đánh giá một badge cho một user: đủ tiêu chí thì cấp.
-   */
   async evaluateBadge(badgeId: string, userId: string): Promise<{ satisfied: boolean; method: number; leaves: { criteriaId: string; criteriaType: string; satisfied: boolean }[] }> {
     const { method, criteria } = await this.getCriteria(badgeId);
     const leaves = [];
@@ -410,30 +330,6 @@ export class BadgesService implements OnModuleInit {
     return { satisfied, method, leaves };
   }
 
-  /**
-   * Cấp một badge: tạo assertion bất biến. Idempotent — một user
-   * giữ một badge cho trước tối đa một lần (lời gọi thứ hai
-   * trả assertion hiện có).
-   */
-  /**
-   * Cấp huy hiệu: tạo assertion với uniqueHash và gửi notification đã dịch cho người nhận.
-   *
-   * Flow: kiểm tra chưa từng cấp (idempotent — một user giữ một huy hiệu
-   * tối đa một assertion) → trong MỘT transaction: ghi assertion (snapshot
-   * huy hiệu + tiêu chí) và enqueue outbox `badge_issued` → SAU khi commit
-   * mới phát thông báo `badge_awarded` qua `MessagingService.notify()` —
-   * lỗi phát không bao giờ chặn việc cấp (`.catch` nuốt lỗi) → đánh dấu
-   * `issuerNotified`.
-   *
-   * Ghi nhận #174-A (issue #174): call-site này truyền `courseId` của
-   * huy hiệu vào `notify()` để luật ghi đè tắt tiếng theo khoá (NB-4) áp
-   * được cho thông báo huy hiệu thuộc khoá — người nhận đã tắt tiếng khoá
-   * nguồn thì không sinh thông báo ở kênh nào, chỉ còn dispatch log
-   * `skipped-course-mute`. Huy hiệu cấp site (`courseId = null`) thì
-   * không gắn khoá: truyền `undefined`, ghi đè theo khoá không áp dụng.
-   * Assertion vẫn được cấp bất kể kết quả phát — mute chỉ tắt thông báo,
-   * không tước huy hiệu đã đạt.
-   */
   async issueBadge(badgeId: string, userId: string, evidence?: Record<string, unknown>): Promise<IssuedRow> {
     const badgeRow = await this.getBadge(badgeId);
     const existing = await this.repo.findIssued(badgeId, userId);
@@ -462,22 +358,12 @@ export class BadgesService implements OnModuleInit {
       subject: this.i18n.t('platform.badgeAwardedSubject', { args: { name: badgeRow.name } }),
       body: this.i18n.t('platform.badgeAwardedBody', { args: { name: badgeRow.name, issuer: badgeRow.issuerName } }),
       contextUrl: `/badges/${badgeId}`,
-      // #174-A: gắn khoá nguồn để notify() áp ghi đè tắt tiếng theo khoá
-      // (NB-4) — xem TSDoc của issueBadge. Huy hiệu cấp site không gắn
-      // khoá thì giữ undefined như hành vi trước NB-4.
       courseId: badgeRow.courseId ?? undefined,
     }).catch(() => undefined);
     await this.repo.updateIssued(issued.id, { issuerNotified: true });
     return issued;
   }
 
-  /**
-   * Đánh giá một badge cho một user qua HTTP (H13, rà soát #134): chỉ
-   * chính chủ, hoặc người có `badges:awardbadge` tại context của badge —
-   * cùng cổng với manualAward; trước đây mọi user ép đánh giá cho user
-   * bất kỳ và đọc được chi tiết tiêu chí đạt/chưa của người khác. Đường
-   * nội bộ (hook hoàn thành/sự kiện) gọi evaluateBadge trực tiếp.
-   */
   async evaluateBadgeFor(actorId: string, badgeId: string, userId: string) {
     if (userId !== actorId) {
       const badgeRow = await this.getBadge(badgeId);
@@ -486,11 +372,6 @@ export class BadgesService implements OnModuleInit {
     return this.evaluateBadge(badgeId, userId);
   }
 
-  /**
-   * Đánh giá mọi badge cho một user qua HTTP (H13): cấp thật huy hiệu khi
-   * tiêu chí đạt nên người gọi khác chủ thể phải có `badges:awardbadge`
-   * tại system; chính chủ tự kích hoạt đánh giá cho mình thì được phép.
-   */
   async evaluateUserBadgesFor(actorId: string, userId: string) {
     if (userId !== actorId) {
       await this.evaluator.requireCapability(actorId, 'badges:awardbadge', await this.systemCtx());
@@ -498,10 +379,6 @@ export class BadgesService implements OnModuleInit {
     return this.evaluateUserBadges(userId);
   }
 
-  /** Đánh giá mọi badge ACTIVE cho một user và cấp những badge mới thoả. */
-  /**
-   * Đánh giá mọi badge liên quan cho user (sau sự kiện hoàn thành).
-   */
   async evaluateUserBadges(userId: string): Promise<{ evaluated: number; issued: string[] }> {
     const user = await this.users.getByIdOrUndefined(userId);
     if (!user || user.suspended || user.deleted) return { evaluated: 0, issued: [] };
@@ -518,17 +395,7 @@ export class BadgesService implements OnModuleInit {
     return { evaluated: badges.length, issued };
   }
 
-  // --- cấp thủ công --------------------------------------------------------------------------
 
-  /**
-   * Cấp thủ công (oracle: badgeslib award_criteria_manual). Badge phải
-   * khai một tiêu chí thủ công; nếu nó nêu một role, người cấp phải giữ
-   * role đó tại context của badge. Việc cấp thoả lá thủ công;
-   * badge chỉ được cấp nếu tổng hợp toàn thể sau đó đạt.
-   */
-  /**
-   * Cấp thủ công cho user bởi người có capability award.
-   */
   async manualAward(actorId: string, badgeId: string, recipientId: string): Promise<{ award: unknown; issued: IssuedRow | null; evaluation: unknown }> {
     const badgeRow = await this.getBadge(badgeId);
     if (badgeRow.status !== BADGE_STATUS.ACTIVE) {
@@ -555,11 +422,7 @@ export class BadgesService implements OnModuleInit {
     return { award, issued, evaluation };
   }
 
-  // --- assertion --------------------------------------------------------------------------------
 
-  /**
-   * Huy hiệu đã cấp cho user hiện tại.
-   */
   async listMyBadges(userId: string): Promise<(IssuedRow & { badge: BadgeRow })[]> {
     const rows = await this.repo.listIssuedForUser(userId);
     const out: (IssuedRow & { badge: BadgeRow })[] = [];
@@ -569,27 +432,17 @@ export class BadgesService implements OnModuleInit {
     }
     return out;
   }
-  /**
-   * Danh sách cấp phát của badge.
-   */
   async listIssuedForBadge(actorId: string, badgeId: string): Promise<IssuedRow[]> {
     const badgeRow = await this.getBadge(badgeId);
     await this.evaluator.requireCapability(actorId, 'badges:awardbadge', await this.badgeContextId(badgeRow));
     return this.repo.listIssuedForBadge(badgeId);
   }
-  /**
-   * Một bản ghi cấp phát.
-   */
   async getIssued(id: string): Promise<IssuedRow> {
     const row = await this.repo.getIssued(id);
     if (!row) throw new NotFoundException({ message: `Badge assertion ${id} not found`, code: 'badges.assertion_not_found' });
     return row;
   }
 
-  /** Thu hồi: dòng assertion VẪN CÒN (đánh dấu đã thu hồi); chỉ hiển thị/hiệu lực của nó kết thúc. */
-  /**
-   * Thu hồi một huy hiệu đã cấp.
-   */
   async revokeIssued(actorId: string, issuedId: string): Promise<IssuedRow> {
     const issued = await this.getIssued(issuedId);
     const badgeRow = await this.getBadge(issued.badgeId);

@@ -4,9 +4,6 @@ import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import McpConsentPage from './mcp-consent';
 
-/**
- * Kiểm chứng biên uỷ quyền MCP khi React Router giữ nguyên component nhưng thay query OAuth: trạng thái, quyền tích và kết quả fetch đều phải thuộc cùng yêu cầu; phản hồi cũ không được cập nhật yêu cầu mới.
- */
 const AUTHORIZE_A =
   'client_id=client-a&scope=giaokhoa.questions.read%20giaokhoa.questions.write&state=nonce-a';
 const AUTHORIZE_B =

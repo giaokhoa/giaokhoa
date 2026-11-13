@@ -1,21 +1,14 @@
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
 import { Skeleton } from '@giaokhoa/ui/components/skeleton';
 
-/** Một thẻ thống kê: nhãn, giá trị lớn và dòng chú thích phụ — tất cả từ dữ liệu thật. */
 export interface StatCard {
   id: string;
   label: string;
   value: string;
   footer?: string;
-  /**
-   * Đang chờ dữ liệu: thẻ vẫn chiếm đúng ô của nó trong lưới với nhãn thật và khung xương ở phần giá trị/chú thích, để lưới không co giãn khi số liệu về (giữ hình học, tránh nhảy bố cục).
-   */
   loading?: boolean;
 }
 
-/**
- * Hàng thẻ thống kê theo đúng trình bày của block dashboard-01 (nền gradient, giá trị lớn dạng tabular-nums, chú thích hai lớp ở chân thẻ). Khác block mẫu ở dữ liệu: thẻ nào không có số liệu thật thì trang gọi không truyền vào — component không tự bịa số hay phần trăm xu hướng.
- */
 export function SectionCards({ cards }: { cards: StatCard[] }) {
   if (cards.length === 0) return null;
   return (

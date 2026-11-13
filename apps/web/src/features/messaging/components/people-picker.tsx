@@ -8,58 +8,22 @@ import { useTranslation } from 'react-i18next';
 import type { MessagingCourse, PeoplePickerContext, RosterMember } from '../types/types';
 import { initialsOf } from '../utils/utils';
 
-/**
- * Bộ CHỌN NGƯỜI theo ngữ cảnh — dùng chung cho sheet "Tin nhắn mới" và sheet "Tạo nhóm" của màn Tin nhắn (lát MSG-T3, issue #33).
- *
- * Flow tổng thể:
- *
- * 1. Người dùng chọn MỘT ngữ cảnh khám phá người: liên hệ đã kết
- *    bạn, một LỚP của mình, hoặc một KHOÁ của mình. Đây là ba nguồn người DUY NHẤT hệ cho phép (quyết đã chốt: bỏ hẳn tìm người theo tên; khám phá qua danh sách thành viên lớp/khoá + liên hệ). Đổi ngữ cảnh là sự kiện đi lên trang chứa — trang nạp roster tương ứng (phân trang con trỏ phía server) rồi đưa xuống qua `members`.
- * 2. Với ngữ cảnh lớp/khoá, component trình bày danh sách roster:
- *    mỗi dòng avatar + tên + vai, phần HÀNH ĐỘNG ở cuối dòng do sheet chứa quyết định qua `renderMemberAction` (chế độ nhắn tin: nút Nhắn tin/Kết bạn theo quan hệ) hoặc qua chế độ chọn nhiều người (chế độ tạo nhóm: `onToggleMember` + `selectedIds` — bấm cả dòng là đảo chọn, có hộp kiểm thể hiện trạng thái).
- * 3. Ngữ cảnh liên hệ không có roster: ở chế độ nhắn tin, phần
- *    danh sách do sheet chứa tự trình bày (liên hệ là danh sách phẳng đã nạp sẵn ở trang) và component này chỉ giữ phần chọn ngữ cảnh; ở chế độ tạo nhóm, sheet đưa danh sách liên hệ xuống qua `contactEntries` để chọn thành viên ngay trong bộ chọn.
- *
- * Bất biến: component KHÔNG tự gọi API và không tự quyết luật quan hệ — nó chỉ trình bày dữ kiện trang đưa xuống (cờ `canDirectMessage`, `relationship` do server tính) và phát sự kiện người dùng lên trên.
- */
 interface PeoplePickerProps {
-  /** Ngữ cảnh đang chọn. */
   context: PeoplePickerContext;
-  /** Đổi ngữ cảnh khám phá người. */
   onSelectContext: (context: PeoplePickerContext) => void;
-  /** Các lớp của tôi (từ cây nhóm) — nguồn của ngữ cảnh theo lớp. */
   classes: { classId: string; name: string }[];
-  /** Các khoá của tôi — nguồn của ngữ cảnh theo khoá. */
   courses: MessagingCourse[];
-  /** Một trang roster của ngữ cảnh lớp/khoá đang chọn (rỗng ở ngữ cảnh liên hệ). */
   members: RosterMember[];
-  /** Lỗi nạp roster gần nhất; null khi không có. */
   rosterError: string | null;
-  /** Con trỏ trang roster kế; null là đã hết trang. */
   rosterCursor: string | null;
-  /** Tải trang roster tiếp theo. */
   onLoadMore: () => void;
-  /** Hành động cuối mỗi dòng roster ở chế độ nhắn tin (sheet chứa quyết định). */
   renderMemberAction?: (member: RosterMember) => ReactNode;
-  /** Tập người đang được chọn — chỉ dùng ở chế độ tạo nhóm. */
   selectedIds?: ReadonlySet<string>;
-  /** Đảo chọn một người — chỉ truyền ở chế độ tạo nhóm; có nó thì bấm dòng là chọn/bỏ chọn. */
   onToggleMember?: (member: RosterMember) => void;
-  /**
-   * Danh sách LIÊN HỆ (id + tên hiển thị) — chỉ dùng ở chế độ tạo nhóm: ngữ cảnh liên hệ không có roster nên sheet tạo nhóm đưa danh sách này xuống để người tạo chọn thành viên từ liên hệ của mình ngay trong bộ chọn. Chế độ nhắn tin không truyền (sheet chứa tự trình bày mục liên hệ).
-   */
   contactEntries?: { userId: string; displayName: string }[];
-  /** Đảo chọn một liên hệ trong danh sách `contactEntries` — chỉ ở chế độ tạo nhóm. */
   onToggleContactEntry?: (userId: string) => void;
 }
 
-/**
- * Trình bày bộ chọn ngữ cảnh + danh sách roster của ngữ cảnh
- * lớp/khoá đang chọn.
- *
- * @param props - Dữ kiện và sự kiện do sheet chứa (trang Tin nhắn) đưa xuống.
- * @returns Khối chọn người hoàn chỉnh cho thân sheet.
- */
 export function PeoplePicker({
   context, onSelectContext, classes, courses, members, rosterError, rosterCursor,
   onLoadMore, renderMemberAction, selectedIds, onToggleMember,
@@ -68,7 +32,6 @@ export function PeoplePicker({
   const { t } = useTranslation('app');
   const picking = Boolean(onToggleMember);
 
-  /** Một nút chọn ngữ cảnh: đang chọn thì nổi bật, bấm là phát sự kiện đổi ngữ cảnh lên trên. */
   const contextButton = (target: PeoplePickerContext, label: string) => {
     const isActive = context.kind === target.kind
       && (target.kind === 'contacts' || (context.kind !== 'contacts' && context.id === (target as { id: string }).id));
@@ -163,10 +126,6 @@ export function PeoplePicker({
                       {m.role === 'teacher' ? t('rosterTeacher') : t('rosterStudent')}
                     </Badge>
                     {picking ? (
-                      // Dấu chọn TRÌNH BÀY THUẦN: cả dòng đã là một nút
-                      // bấm (aria-pressed) nên không lồng thêm nút hộp
-                      // kiểm thật vào trong — trạng thái chọn đọc qua
-                      // aria-pressed của dòng và qua dấu tích này.
                       <span
                         aria-hidden
                         className={cn(

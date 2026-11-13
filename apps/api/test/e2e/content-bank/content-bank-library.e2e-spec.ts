@@ -6,31 +6,6 @@ import {
 } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, getFirstSectionId } from '../../support/course-enrolment-helpers';
 
-/**
- * Issue #69 (CB-1) — Kho học liệu tổ/trường trên khung Content Bank.
- *
- * Vòng đời được kiểm chứng tận API:
- * - học liệu scope tổ (cohort) bắt đầu ở draft, đồng nghiệp trong tổ
- *   KHÔNG thấy khi draft lẫn khi chờ duyệt; chỉ tác giả + người duyệt
- *   (tổ trưởng: contentbank:reviewcontent + cohort:manage tại context
- *   của tổ) thấy;
- * - gửi duyệt bắt metadata chương trình đủ (môn–khối–node + file) +
- *   metadata sư phạm (mô tả–từ khoá–đối tượng–vị trí trong bài, CB1-B3); scope trường bắt thêm trường bản quyền/nguồn gốc (CB1-B1): chưa đủ bản quyền thì chưa mở được scope trường;
- * - loại học liệu là 5 nhóm Điều 7 TT 09/2021 (CB1-B2) + cấp học độc
- *   lập; duyệt theo checklist tiêu chí Bộ, từ chối bắt buộc có lý do
- *   (CB1-B3); học liệu dẫn xuất giữ derived_from về học liệu gốc;
- * - duyệt xong học liệu mới hiện với thành viên tổ và cắm được vào khoá
- *   của đồng nghiệp bằng BẢN SAO file (module mod_resource + file riêng trong context của module; sửa bản gốc sau đó không đổi bản đã cắm);
- * - sửa học liệu đã duyệt → quay về draft, biến mất khỏi danh sách của
- *   đồng nghiệp;
- * - scope trường tương tự (duyệt bởi người có reviewcontent ở hệ thống);
- * - học liệu kiểu bộ câu hỏi chỉ THAM CHIẾU category của ngân hàng câu
- *   hỏi — cắm vào khoá bị từ chối;
- * - người không có vai trò (học sinh) không tạo được học liệu, không
- *   xem được học liệu chưa duyệt.
- *
- * Bổ sung theo phân xử điểm mở probe v86 (issue #69 mở lại): giáo viên CHỈ có vai tại context khoá tạo được học liệu trong kho cá nhân của mình theo đường mặc định của UI (không contextId); học liệu trường approved+public mở cho mọi người dùng đã đăng nhập (kể cả học sinh chỉ có vai ở khoá) — trạng thái draft/pending vẫn gác chặt.
- */
 describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
   let app: INestApplication;
   let admin: string;
@@ -48,7 +23,6 @@ describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
   let colleagueId: string;
   let courseId: string;
   let sectionId: string;
-  // Chữ ký probe live v86 (điểm mở quyền CB-1): giáo viên/học sinh CHỈ có vai tại context khoá, không có gán vai nào ở hệ thống.
   let courseTeacherToken: string;
   let courseStudentToken: string;
 
@@ -71,7 +45,6 @@ describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
     admin = await adminToken(app);
     sysCtx = await systemContextId(app, admin);
 
-    // Metadata chương trình tối thiểu (admin dựng): môn → chương trình khối 10 → node.
     const subject = await http(app).post('/api/v1/curriculum/subjects').set(bearer(admin))
       .send({ contextId: sysCtx, name: 'Toán CB1', slug: uniqueName('toan-cb1') });
     expect(subject.status).toBe(201);
@@ -84,13 +57,11 @@ describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
     expect(node.status).toBe(201);
     nodeId = node.body.id as string;
 
-    // Tổ chuyên môn = cohort.
     const cohort = await http(app).post('/api/v1/cohorts').set(bearer(admin)).send({ name: uniqueName('To Toan CB1') });
     expect(cohort.status).toBe(201);
     cohortId = cohort.body.id as string;
     const cohortCtx = cohort.body.contextId as string;
 
-    // Category ngân hàng câu hỏi để tham chiếu (bộ câu hỏi không chứa câu hỏi).
     const category = await http(app).post('/api/v1/questions/categories').set(bearer(admin))
       .send({ contextId: sysCtx, name: uniqueName('CB1 category') });
     expect(category.status).toBe(201);
@@ -101,8 +72,6 @@ describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
     const colleague = await makeTeacher(true);
     colleagueToken = colleague.token;
     colleagueId = colleague.id;
-    // Tổ trưởng: thành viên tổ + vai manager tại CONTEXT CỦA TỔ (đó là
-    // dấu hiệu phân biệt người duyệt với giáo viên thường của tổ).
     const lead = await createUserViaApi(app, admin);
     await assignRole(app, admin, lead.id, await roleIdByShortname(app, admin, 'manager'), cohortCtx);
     const addLead = await http(app).post(`/api/v1/cohorts/${cohortId}/members`).set(bearer(admin)).send({ userId: lead.id });
@@ -114,7 +83,6 @@ describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
     await assignRole(app, admin, student.id, await roleIdByShortname(app, admin, 'student'), sysCtx);
     studentToken = (await login(app, student.username, STRONG_PASSWORD)).accessToken;
 
-    // Khoá của đồng nghiệp để cắm học liệu: gán editingteacher tại context khoá.
     const cat = await createCategory(app, admin);
     const course = await createCourse(app, admin, cat.id);
     courseId = course.id;
@@ -125,8 +93,6 @@ describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
     expect(courseCtx).toBeDefined();
     await assignRole(app, admin, colleagueId, await roleIdByShortname(app, admin, 'editingteacher'), courseCtx!.id);
 
-    // Giáo viên + học sinh chỉ có vai tại context khoá này (đúng mô
-    // hình gán vai của seed/đời thật khiến probe v86 lộ hai lỗi quyền).
     const courseTeacher = await createUserViaApi(app, admin);
     await assignRole(app, admin, courseTeacher.id, await roleIdByShortname(app, admin, 'editingteacher'), courseCtx!.id);
     courseTeacherToken = (await login(app, courseTeacher.username, STRONG_PASSWORD)).accessToken;
@@ -137,7 +103,6 @@ describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
   afterAll(async () => { await app.close(); });
 
   const fullChecklist = { contentAccurate: true, sourceClear: true, pedagogyAesthetics: true, mobileReady: true };
-  /** Metadata sư phạm bắt buộc khi gửi duyệt scope tổ/trường (CB1-B3). */
   const pedagogicalMeta = {
     description: 'Phiếu bài tập luyện tập hàm số bậc nhất',
     keywords: ['hàm số', 'luyện tập'],
@@ -173,11 +138,9 @@ describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
     const up = await http(app).post(`/api/v1/contentbank/${item.id}/file`).set(bearer(authorToken)).send(fileBody);
     expect(up.status).toBe(201);
     expect(up.body.fileId).toBeTruthy();
-    // Metadata kỹ thuật tự sinh từ file (CB1-B2).
     expect(up.body.techFormat).toBe('pdf');
     expect(up.body.sizeBytes).toBe(Buffer.byteLength('cb1-file-content'));
 
-    // Draft: đồng nghiệp cùng tổ không thấy, người ngoài tổ cũng không.
     expect(await listIds(colleagueToken, `scope=org&spaceId=${cohortId}`)).not.toContain(item.id);
     const deniedDraft = await http(app).get(`/api/v1/contentbank/${item.id}`).set(bearer(outsiderToken));
     expect(deniedDraft.status).toBe(403);
@@ -186,11 +149,9 @@ describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
     expect(submit.status).toBe(201);
     expect(submit.body.reviewStatus).toBe('pending');
 
-    // Chờ duyệt: đồng nghiệp vẫn không thấy; tổ trưởng (người duyệt) thấy.
     expect(await listIds(colleagueToken, `scope=org&spaceId=${cohortId}`)).not.toContain(item.id);
     expect(await listIds(leadToken, `scope=org&spaceId=${cohortId}`)).toContain(item.id);
 
-    // Đồng nghiệp thường không tự duyệt được.
     const selfReview = await http(app).post(`/api/v1/contentbank/${item.id}/review`).set(bearer(colleagueToken)).send({ decision: 'approved' });
     expect(selfReview.status).toBe(403);
 
@@ -200,12 +161,10 @@ describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
     expect(review.body.visibility).toBe('public');
     expect(review.body.reviewChecklist).toEqual(fullChecklist);
 
-    // Đã duyệt: đồng nghiệp thấy và xem được.
     expect(await listIds(colleagueToken, `scope=org&spaceId=${cohortId}`)).toContain(item.id);
     const view = await http(app).get(`/api/v1/contentbank/${item.id}`).set(bearer(colleagueToken));
     expect(view.status).toBe(200);
 
-    // "Thêm từ kho": cắm vào khoá của đồng nghiệp bằng bản sao file.
     const insert = await http(app).post(`/api/v1/contentbank/${item.id}/insert`).set(bearer(colleagueToken))
       .send({ courseId, sectionId });
     expect(insert.status).toBe(201);
@@ -223,7 +182,6 @@ describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
     const cm = modules.find((m) => m.id === insert.body.cmId);
     expect(cm?.component).toBe('mod_resource');
 
-    // Sửa bản gốc sau khi cắm: bản trong khoá giữ nguyên tên; bản gốc quay về draft và biến mất với đồng nghiệp.
     const rename = await http(app).patch(`/api/v1/contentbank/${item.id}`).set(bearer(authorToken)).send({ name: 'Tên mới sau duyệt' });
     expect(rename.status).toBe(200);
     expect(rename.body.reviewStatus).toBe('draft');
@@ -269,7 +227,6 @@ describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
     const denied = await http(app).get(`/api/v1/contentbank/${id}`).set(bearer(studentToken));
     expect(denied.status).toBe(403);
 
-    // Admin duyệt thay mặt cấp trường.
     const review = await http(app).post(`/api/v1/contentbank/${id}/review`).set(bearer(admin)).send({ decision: 'approved', checklist: fullChecklist });
     expect(review.status).toBe(201);
     expect(await listIds(studentToken, 'scope=school')).toContain(id);
@@ -279,8 +236,6 @@ describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
     const created = await http(app).post('/api/v1/contentbank').set(bearer(authorToken)).send({
       name: uniqueName('Tai lieu thieu ban quyen'), resourceType: 'multimedia_lecture', scope: 'school',
       subjectId, grade: 10, curriculumNodeId: nodeId, ...pedagogicalMeta,
-      // Có tác giả gốc nhưng thiếu nguồn gốc + giấy phép; nguồn trích dẫn
-      // mà không ghi nguồn cụ thể cũng bị chặn.
       originalAuthor: 'Sưu tầm', sourceKind: 'cited',
     });
     expect(created.status).toBe(201);
@@ -348,7 +303,6 @@ describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
     const aId = await mkPersonal();
     const bId = await mkPersonal();
 
-    // Tự tham chiếu qua update → bị chặn, bản ghi giữ derivedFromId null.
     const selfRef = await http(app).patch(`/api/v1/contentbank/${aId}`).set(bearer(authorToken))
       .send({ sourceKind: 'derived', derivedFromId: aId });
     expect(selfRef.status).toBe(400);
@@ -356,14 +310,11 @@ describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
     const afterSelf = await http(app).get(`/api/v1/contentbank/${aId}`).set(bearer(authorToken));
     expect(afterSelf.body.derivedFromId).toBeNull();
 
-    // Chuỗi hợp lệ A → B vẫn qua (derived hợp lệ không bị chặn oan).
     const linkA = await http(app).patch(`/api/v1/contentbank/${aId}`).set(bearer(authorToken))
       .send({ sourceKind: 'derived', derivedFromId: bId });
     expect(linkA.status).toBe(200);
     expect(linkA.body.derivedFromId).toBe(bId);
 
-    // Vòng 2 nút B → A (trong khi A → B) → bị chặn ở cả update lẫn create-kèm-chuỗi:
-    // update B trỏ về A tạo vòng A→B→A.
     const cycle = await http(app).patch(`/api/v1/contentbank/${bId}`).set(bearer(authorToken))
       .send({ sourceKind: 'derived', derivedFromId: aId });
     expect(cycle.status).toBe(400);
@@ -371,9 +322,6 @@ describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
     const afterCycle = await http(app).get(`/api/v1/contentbank/${bId}`).set(bearer(authorToken));
     expect(afterCycle.body.derivedFromId).toBeNull();
 
-    // Cổng submit B1 không bị phá: học liệu trường khai derived trỏ về
-    // chính mình bị chặn ngay ở update nên derivedFromId vẫn trống →
-    // gửi duyệt vẫn 400 metadata_incomplete (thiếu derivedFromId thật).
     const school = await http(app).post('/api/v1/contentbank').set(bearer(authorToken)).send({
       name: uniqueName('Tai lieu truong tu dan xuat'), resourceType: 'multimedia_lecture', scope: 'school',
       subjectId, grade: 10, level: 'upper_secondary', curriculumNodeId: nodeId, ...pedagogicalMeta,
@@ -411,8 +359,6 @@ describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
     });
     expect(created.status).toBe(201);
     expect(created.body.reviewStatus).toBe('approved');
-    // Người dùng thường (vai học sinh ở hệ thống, không có quyền sửa nội
-    // dung) không xem được học liệu cá nhân của người khác.
     const view = await http(app).get(`/api/v1/contentbank/${created.body.id}`).set(bearer(studentToken));
     expect(view.status).toBe(403);
 
@@ -423,8 +369,6 @@ describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
   });
 
   it('ngân hàng cá nhân: giáo viên chỉ có vai ở ngữ cảnh khoá học tạo được mà không cần contextId; học viên chỉ-ở-khoá vẫn không thể (probe v86)', async () => {
-    // Đường mặc định của UI: không contextId, scope personal. Giáo viên
-    // chỉ có editingteacher tại context khoá vẫn dùng được kho của mình.
     const created = await http(app).post('/api/v1/contentbank').set(bearer(courseTeacherToken)).send({
       name: uniqueName('Hoc lieu ca nhan GV khoa'), resourceType: 'reference', scope: 'personal',
     });
@@ -434,7 +378,6 @@ describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
     const own = await http(app).get(`/api/v1/contentbank/${created.body.id}`).set(bearer(courseTeacherToken));
     expect(own.status).toBe(200);
 
-    // Chiều giữ nguyên: học sinh (vai student chỉ ở context khoá) tạo → 403.
     const denied = await http(app).post('/api/v1/contentbank').set(bearer(courseStudentToken)).send({
       name: uniqueName('Hoc sinh tu tao'), resourceType: 'reference', scope: 'personal',
     });
@@ -452,7 +395,6 @@ describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
     const id = created.body.id as string;
     await http(app).post(`/api/v1/contentbank/${id}/file`).set(bearer(authorToken)).send(fileBody);
 
-    // Draft: học sinh chỉ có vai ở khoá không xem được, không thấy trong danh sách.
     const draftView = await http(app).get(`/api/v1/contentbank/${id}`).set(bearer(courseStudentToken));
     expect(draftView.status).toBe(403);
     expect(draftView.body.code).toBe('contentbank.view_denied');
@@ -460,7 +402,6 @@ describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
 
     const submit = await http(app).post(`/api/v1/contentbank/${id}/submit`).set(bearer(authorToken)).send({});
     expect(submit.status).toBe(201);
-    // Pending: vẫn chặn cả xem lẫn danh sách.
     const pendingView = await http(app).get(`/api/v1/contentbank/${id}`).set(bearer(courseStudentToken));
     expect(pendingView.status).toBe(403);
     expect(await listIds(courseStudentToken, 'scope=school')).not.toContain(id);
@@ -469,8 +410,6 @@ describe('Thư viện ngân hàng nội dung (CB-1, issue #69)', () => {
     expect(review.status).toBe(201);
     expect(review.body.visibility).toBe('public');
 
-    // Approved + public: học sinh lẫn giáo viên (chỉ có vai ở khoá) đều
-    // đọc được theo id và thấy trong danh sách scope trường.
     const studentView = await http(app).get(`/api/v1/contentbank/${id}`).set(bearer(courseStudentToken));
     expect(studentView.status).toBe(200);
     expect(await listIds(courseStudentToken, 'scope=school')).toContain(id);
