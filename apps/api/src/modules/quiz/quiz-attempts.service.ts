@@ -479,7 +479,7 @@ export class QuizAttemptsService {
         qtype: content.qtype,
         questionExcerpt: excerptText.length > 120 ? `${excerptText.slice(0, 120)}…` : excerptText,
         questionText,
-        guidance: revealAnswerKey ? (answerKey.guidance ?? null) as RichTextDocument | null : null,
+        guidance: !quiz.sharedSource || revealAnswerKey ? (answerKey.guidance ?? null) as RichTextDocument | null : null,
         solution,
         stimulus,
         answers,
@@ -918,9 +918,10 @@ export class QuizAttemptsService {
     const out: QuizAttemptSummary[] = [];
     for (const [index, r] of rows.entries()) {
       const summary = rawSummaries[index]!;
-      out.push(!isStaffViewer && !r.preview
+      const visible = !isStaffViewer && !r.preview
         ? await this.maskOwnerTotals(quiz, summary, await this.ownerMarksVisible(quiz, r, new Date()))
-        : summary);
+        : summary;
+      out.push(isStaffViewer ? visible : this.shared.maskSourceQuestionIds(quiz, visible));
     }
     return out;
   }

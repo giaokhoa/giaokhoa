@@ -281,6 +281,17 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
     expect(ownerReview.body.quiz).not.toHaveProperty('sharedSource');
     expect(ownerReview.body.questions[0].questionId).not.toBe(localQuestionId);
     expect(ownerReview.body.attempt.appliedSettings).not.toHaveProperty('questionOrder');
+    const learnerAttempts = await http(offlineApp).get(`/api/v1/exam-pins/${assignA.body.id}/attempts`)
+      .set(bearer(studentA));
+    expect(learnerAttempts.status, JSON.stringify(learnerAttempts.body)).toBe(200);
+    expect(learnerAttempts.body).toHaveLength(1);
+    expect(learnerAttempts.body[0].appliedSettings).not.toHaveProperty('questionOrder');
+    expect(JSON.stringify(learnerAttempts.body)).not.toContain(localQuestionId);
+    const managerAttempts = await http(offlineApp).get(`/api/v1/exam-pins/${assignA.body.id}/attempts`)
+      .set(bearer(managerA));
+    expect(managerAttempts.status, JSON.stringify(managerAttempts.body)).toBe(200);
+    expect(managerAttempts.body).toHaveLength(1);
+    expect(managerAttempts.body[0].appliedSettings.questionOrder).toContain(localQuestionId);
     const learnerDetails = await http(offlineApp).get(`/api/v1/exam-pins/${assignA.body.id}`).set(bearer(studentA));
     expect(learnerDetails.status).toBe(200);
     expect(learnerDetails.body.myAttempts[0].appliedSettings).not.toHaveProperty('questionOrder');
@@ -644,6 +655,14 @@ describe('Giao phiên bản đề chung cho nhiều trung tâm không sao chép 
           expect(begin.body.questions[0].questionId).toBe(begin.body.quiz.slots[0].id);
           expect(begin.body.questions[0].questionId).not.toBe(localQuestionId);
           expect(begin.body.attempt.appliedSettings).not.toHaveProperty('questionOrder');
+          const learnerList = await http(offline).get(`/api/v1/exam-pins/${pin.body.id}/attempts`)
+            .set('Host', hosts[index]!).set(bearer(u.student));
+          expect(learnerList.status, JSON.stringify(learnerList.body)).toBe(200);
+          expect(learnerList.body[0].appliedSettings).not.toHaveProperty('questionOrder');
+          const managerList = await http(offline).get(`/api/v1/exam-pins/${pin.body.id}/attempts`)
+            .set('Host', hosts[index]!).set(bearer(u.admin));
+          expect(managerList.status, JSON.stringify(managerList.body)).toBe(200);
+          expect(managerList.body[0].appliedSettings.questionOrder).toContain(localQuestionId);
           expect(begin.body.questions[0].answers[0].id).toMatch(/^[a-f0-9-]{36}$/);
           started.push(begin);
           const saved = await http(offline).post(`/api/v1/quiz-attempts/${begin.body.attempt.id}/responses`)
