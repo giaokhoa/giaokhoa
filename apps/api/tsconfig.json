@@ -1,27 +1,29 @@
 {
   "extends": "@giaokhoa/config/tsconfig/nest.json",
   "compilerOptions": {
+    // Typecheck cả test (Vitest/Vite transpile module theo bundler):
+    // không ép extension .js trên import tương đối TS test.
+    // Bản build production có tsconfig.build.json riêng và luôn dùng
+    // NodeNext, phát CommonJS đúng runtime Node 24 trong image.
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "outDir": "./dist",
     "paths": {
       "@/*": [
         "./src/*"
       ],
-      // Subpath control plane của @giaokhoa/db (issue #580): package giữ
-      // moduleResolution Node10 nên TS không đọc được `exports` của
-      // package — ánh xạ thẳng tới bản dist đã build (đúng kỷ luật
-      // "app tiêu thụ dùng bản dist" của @giaokhoa/db). Runtime Node đọc
-      // `exports` trong package.json của @giaokhoa/db như thường.
+      // Điểm vào control plane của @giaokhoa/db tiêu thụ bản dist
+      // đã build; giữ ánh xạ type vào dist để không kéo source DB
+      // vào rootDir của API dù moduleResolution đã hiểu exports.
       "@giaokhoa/db/control-plane": [
         "../../packages/db/dist/control-plane.d.ts"
       ],
-      // Subpath kho ngân hàng của @giaokhoa/db (issue #585) — cùng lý do như
-      // subpath control plane ở trên.
+      // Subpath ngân hàng hệ thống dùng bản declaration dist tương tự.
       "@giaokhoa/db/system-bank": [
         "../../packages/db/dist/system-bank.d.ts"
       ],
-      // Wildcard repository Kysely của @giaokhoa/db (chiến dịch chuyển
-      // ORM sang Kysely): khai MỘT dòng duy nhất cho mọi module
-      // repository về sau — cùng lý do Node10 như các subpath trên.
+      // Wildcard repository Kysely dùng bản declaration dist của DB
+      // (không import trực tiếp source package khác vào runtime app).
       "@giaokhoa/db/repositories/*": [
         "../../packages/db/dist/repositories/*.d.ts"
       ],

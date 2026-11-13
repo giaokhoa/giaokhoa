@@ -13,6 +13,12 @@
 | Hai dòng TypeScript tách riêng theo nền: dòng NestJS (apps/api, apps/worker) theo `nest.json` (TypeScript 6), dòng React (apps/web và các package giao diện) theo `react.json` (TypeScript 7). Không ép một dòng cho cả monorepo. | README gốc của repo (mục Version policy) |
 | Mọi package kế thừa từ các base này thay vì tự khai tsconfig rời — kỷ luật kiểu (strictness, module resolution) là dùng chung, đổi một chỗ áp cho toàn hệ.                                                                        | Cấu trúc monorepo hiện hành              |
 
+### Phân giải module và đường build
+
+- `tsconfig/nest.json` dùng `module: NodeNext` và `moduleResolution: NodeNext`. Với các package backend không có `"type": "module"` trong package.json, TypeScript biên dịch JavaScript thành CommonJS, không làm đổi hợp đồng Node 24 hiện hành. Không cần `ignoreDeprecations`.
+- `apps/api` và `apps/worker` chứa test TypeScript chạy bằng Vitest (Vite xử lý import tương đối không kèm phần mở rộng): hai app đặt `module: ESNext` + `moduleResolution: Bundler` **chỉ** trong `tsconfig.json` dùng cho `typecheck` bao gồm test. `tsconfig.build.json` ghi đè cặp đó về `NodeNext` khi Nest CLI phát JavaScript production. Cổng CI `build` và `typecheck` kiểm cả hai đường; không dùng Bundler để phát JavaScript Node production.
+- Package `db` và các package thuần backend dùng NodeNext trực tiếp. Khi không còn Node10, TypeScript tự đọc `exports` của `kysely/migration`, không dùng khai báo module giả trùm lên type gốc của thư viện.
+
 ## Ranh giới — package này KHÔNG làm gì
 
 - Không chứa code chạy (runtime), không chứa hằng số nghiệp vụ, không chứa cấu hình môi trường/secret: cấu hình nghiệp vụ cấp site thuộc site-config ở `apps/api` + hợp đồng ở `packages/contracts`; biến môi trường thuộc từng app.

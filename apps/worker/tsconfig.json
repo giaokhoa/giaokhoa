@@ -1,20 +1,21 @@
 {
   "extends": "@giaokhoa/config/tsconfig/nest.json",
   "compilerOptions": {
+    // Typecheck cả test (Vitest/Vite transpile module theo bundler):
+    // không ép extension .js trên import tương đối TS test.
+    // Bản build production có tsconfig.build.json riêng và luôn dùng
+    // NodeNext, phát CommonJS đúng runtime Node 24 trong image.
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "outDir": "./dist",
-    // Subpath control plane của @giaokhoa/db (issue #581 — khung định
-    // tuyến phía worker đọc sổ đăng ký qua entry point này):
-    // package giữ moduleResolution Node10 nên TS không đọc được
-    // `exports` của package — ánh xạ thẳng tới bản dist đã build,
-    // đúng cách apps/api đã làm cho cùng subpath ở issue #580.
-    // Runtime Node đọc `exports` trong package.json như thường.
+    // Subpath control plane trỏ type vào dist đã build của DB,
+    // không kéo source ngoài vào rootDir của worker. NodeNext đọc
+    // exports thật của @giaokhoa/db khi chạy production.
     "paths": {
       "@giaokhoa/db/control-plane": [
         "../../packages/db/dist/control-plane.d.ts"
       ],
-      // Wildcard repository Kysely của @giaokhoa/db (chiến dịch chuyển
-      // ORM sang Kysely): khai MỘT dòng duy nhất cho mọi module
-      // repository về sau — cùng lý do Node10 như subpath trên.
+      // Wildcard repository Kysely trỏ vào dist đã build của DB.
       "@giaokhoa/db/repositories/*": [
         "../../packages/db/dist/repositories/*.d.ts"
       ],
