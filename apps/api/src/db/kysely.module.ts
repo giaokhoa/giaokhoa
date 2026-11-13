@@ -10,6 +10,10 @@
  *   - Khi ứng dụng đóng, một provider dọn dẹp gọi `destroy()` trên
  *     mọi instance đã đăng ký — theo hành vi của `PostgresDialect`, `destroy()` đóng luôn pool đã truyền vào, nên pool truyền cho `forRoot` thuộc quyền sở hữu của module từ thời điểm đăng ký.
  *
+ * Chỉ dùng cho caller chủ động cấp pool và bàn giao quyền sở hữu.
+ * Không import forRoot vào AppModule khi SpaceDatabaseService đang
+ * quản lý cùng pool để tránh hai provider đóng kết nối trùng nhau.
+ *
  * Trạng thái hiện hành: module và decorator có spec tích hợp kiểm chứng (`kysely-foundation.int-spec.ts`) và sẵn sàng cho phía tiêu thụ cần inject handle theo kho; đường khởi động của ứng dụng chính nối handle kho trung tâm qua khung định tuyến
  * (`SpaceDatabaseService`) ở `AppModule`, không qua module này.
  */

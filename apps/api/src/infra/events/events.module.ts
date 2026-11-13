@@ -1,9 +1,9 @@
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import type { CentreDb } from '@giaokhoa/db';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
-import { tenantAls } from '../../modules/tenants/tenant-als';
+import { tenantAls } from '../../db/tenant-als';
 import { EventLogWriter } from './event-log-writer.service';
 import { OutboxService } from './outbox.service';
 
@@ -19,11 +19,11 @@ function spaceKyselyResolver(spaceDb: SpaceDatabaseService): () => Promise<Centr
 
 /**
  * Module hạ tầng sự kiện: outbox giao dịch và writer phản chiếu event log. Sau chuyển đổi Kysely (D1, issue #653) cả hai service nhận handle Kysely kho trung tâm qua factory trên facade định tuyến theo không gian (`SpaceDatabaseService.routedKysely`) — cùng khuôn lắp repository của các module đã chuyển — kèm hàm phân giải handle theo ngữ cảnh cho các đường ghi không mang transaction của phía gọi (xem `spaceKyselyResolver`). Cạnh
- * import SpaceRoutingModule dùng forwardRef vì module này nằm
- * trong vòng module tường minh AccessModule → EventsModule → SpaceRoutingModule → ControlPlaneModule → AccessModule (cùng khuôn các cạnh còn lại của vòng).
+ * import SpaceRoutingModule trực tiếp vì adapter kết nối control plane
+ * đã được tách khỏi facade quản trị, không còn vòng module này.
  */
 @Module({
-  imports: [EventEmitterModule.forRoot(), forwardRef(() => SpaceRoutingModule)],
+  imports: [EventEmitterModule.forRoot(), SpaceRoutingModule],
   providers: [
     {
       provide: OutboxService,

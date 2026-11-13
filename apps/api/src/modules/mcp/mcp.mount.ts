@@ -1,6 +1,7 @@
 import { createMcpHandler, type AuthInfo, type McpHttpHandler } from '@modelcontextprotocol/server';
 import { Logger } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { attachSecurityHeadersToRawRoutes } from '../../common/security-headers.middleware';
 import type { NextFunction, Request, Response } from 'express';
 import { McpBridgeAuth } from './mcp-bridge-auth';
 import type { McpActor } from './mcp.context';
@@ -118,9 +119,17 @@ export interface McpMountDeps {
 
 export function mountMcp(app: NestExpressApplication, deps: McpMountDeps): void {
   const server = app.getHttpAdapter().getInstance() as {
+    use: import('express').Express['use'];
     all: (path: string, handler: (req: Request, res: Response, next: NextFunction) => void) => void;
     get: (path: string, handler: (req: Request, res: Response) => void) => void;
   };
+
+  // Cả /mcp và PRM nằm ngoài chuỗi middleware/guard của Nest;
+  // giữ header bảo mật trên response 200 lẫn 401/403/429 do SDK trả.
+  attachSecurityHeadersToRawRoutes(server, [
+    '/mcp',
+    '/.well-known/oauth-protected-resource',
+  ]);
 
   const handler: McpHttpHandler = createMcpHandler(
     (ctx) => {

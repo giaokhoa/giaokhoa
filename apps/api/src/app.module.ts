@@ -25,6 +25,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { GroupsModule } from './modules/groups/groups.module';
 import { MessagingModule } from './modules/messaging/messaging.module';
 import { QuestionsModule } from './modules/questions/questions.module';
+import { AssessmentRoutesModule } from './modules/assessment-routes/assessment-routes.module';
 import { McpModule } from './modules/mcp/mcp.module';
 import { ExamsModule } from './modules/exams/exams.module';
 import { QuizModule } from './modules/quiz/quiz.module';
@@ -156,6 +157,7 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
     McpModule,
     ExamsModule,
     QuizModule,
+    AssessmentRoutesModule,
     PaperGradingModule,
     AssignmentsModule,
     ContentModule,

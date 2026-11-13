@@ -23,7 +23,7 @@ import {
 import { emitSpaceRegistryChanged } from '../../db/routing/space-routing-events';
 import { ContextsService } from '../access/contexts.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
-import { ControlPlaneConnection } from './control-plane.connection';
+import { ControlPlaneConnection } from '../../db/control-plane-connection.service';
 
 /**
  * Phiên bản schema hiện tại của KHO CHUNG (database nghiệp vụ) — tên thư mục migration baseline duy nhất của kho đó. Dòng đăng ký của các không gian đang ở chế độ `shared` mang phiên bản này cho tới khi chúng tách sang kho riêng (chương trình tenant, issue #587).

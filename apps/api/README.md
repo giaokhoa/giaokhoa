@@ -42,6 +42,17 @@
 - Không tự quyết định nghiệp vụ mới: quyết định chưa có trong sổ quyết định thì dừng và báo main chat để quyết, không tự chế theo tài liệu audit/research mới hơn.
 - Không giữ job nền dài hạn: processor/định kỳ thuộc `apps/worker` (API chỉ ghi outbox/job).
 
+
+## Ranh giới module NestJS và vòng đời kết nối (issue #38)
+
+- AppModule cấu hình DI, guard, interceptor và pipe; các feature module thực thi nghiệp vụ. AssessmentRoutesModule đăng ký hai controller liên miền QuestionBanksController và ExamMatricesController. Nhờ đó QuestionsModule, QuizModule và ExamsModule chỉ cần import facade theo một chiều, không import ngược để lắp controller.
+- db/control-plane-connection.module.ts sở hữu provider ControlPlaneConnection duy nhất. SpaceRoutingModule và ControlPlaneModule cùng import module hạ tầng này; bộ định tuyến không tự mở pool thứ hai và không kéo facade quản trị ngược vào DB.
+- db/tenant-als.ts là nguồn AsyncLocalStorage duy nhất của tiến trình API. modules/tenants/tenant-als.ts chỉ re-export cho mã cũ; mọi pool và service vẫn chia sẻ một ngữ cảnh. Worker có ALS riêng theo tiến trình.
+- Trong production, SpaceDatabaseService.routedKysely dùng TenantAwarePool. KyselyModule.forRoot là adapter Nest DI riêng cho caller chủ động cấp pool, không được đăng ký song song trên AppModule nếu cùng pool còn do SpaceDatabaseService quản lý.
+- Better Auth và MCP mount raw Express handler trước khi Nest đăng ký route/body parser. Chúng tự kiểm auth/scope/rate-limit và dùng attachSecurityHeadersToRawRoutes để luôn có header bảo mật; APP_GUARD/APP_PIPE không tự chạy ở đường raw.
+- QuestionsService điều phối quyền/giao dịch; application/question-content-normalizer.ts chỉ chuẩn hoá nội dung, không truy cập DB và kiểm lại bất biến cho REST/MCP/luồng nội bộ. Query ngày và loại ngân hàng được kiểm bằng Zod trước service.
+- Auth/Users/BetterAuth vẫn giữ các vòng provider forwardRef có chủ đích cho đồng bộ credential, lockout và phiên; không gỡ tùy tiện khi chưa có hồi quy bao phủ cutover.
+
 ## Kỹ thuật tối thiểu
 
 - NestJS 12, prefix `/api/v1`. Schema route chỉ dùng kiểu biểu diễn được trong JSON Schema (ngày giờ = `z.iso.datetime(...)`) — `z.date()` làm app chết lúc boot production qua Swagger (đã có test hồi quy `openapi-document`).

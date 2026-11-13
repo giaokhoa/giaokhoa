@@ -2,8 +2,8 @@ import { Injectable, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createCentreKysely, type CentreDb } from '@giaokhoa/db';
 import { databaseConnectionFromEnv } from '../../config/env';
-import { ControlPlaneConnection } from '../../modules/control-plane/control-plane.connection';
-import { tenantAls, type TenantAlsStore } from '../../modules/tenants/tenant-als';
+import { ControlPlaneConnection } from '../control-plane-connection.service';
+import { tenantAls, type TenantAlsStore } from '../tenant-als';
 import { TenantAwarePool } from '../tenant-pool';
 import {
   SpaceConnectionResolver,
