@@ -92,6 +92,9 @@ const SESSION_COOKIE_PATTERN = new RegExp(`(?:^|;\\s*)(?:__Secure-)?${BETTER_AUT
 @Injectable()
 export class MessagingSocketAuth {
   private readonly jwt: JwtService;
+  /** Host gốc đáng tin cậy lấy từ origin API cấu hình, KHÔNG từ request. */
+  private readonly publicRootHostname: string | null;
+  private readonly allowLocalRoot: boolean;
 
   constructor(
     @Inject(ConfigService) config: ConfigService,
@@ -102,6 +105,11 @@ export class MessagingSocketAuth {
     private readonly tenants: TenantsService,
   ) {
     this.jwt = new JwtService({ secret: config.getOrThrow<string>('JWT_SECRET') });
+    this.publicRootHostname = configuredApiHostname(config.get<string>('BETTER_AUTH_URL'));
+    const environment = config.get<string>('NODE_ENV');
+    // Chỉ test/dev mới nhận hostname loopback khi API không có public
+    // URL. Production thiếu BETTER_AUTH_URL thì ngoại lệ fail-closed.
+    this.allowLocalRoot = environment === 'test' || environment === 'development';
   }
 
   /**
@@ -127,11 +135,23 @@ export class MessagingSocketAuth {
     if (space) await this.spaceDb.getKyselyForSpace(space.slug);
     const viaCookie = await this.authenticateCookie(handshake.headers, space);
     if (viaCookie) return viaCookie;
-    // Chỉ hostname gốc có Host tường minh mới có thể dùng ngoại lệ
-    // phiên Trang chính. Host trung tâm shared tuy space=null nhưng
-    // tuyệt đối không được nhận JWT mang centre_id của kho khác.
-    const isRootHost = Boolean(host?.trim()) && !extractSpaceSlugFromHost(host);
+    // Host không có slug KHÔNG đủ chứng minh đây là hostname gốc.
+    // Chỉ so khớp chính xác với hostname API cấu hình từ env (hoặc
+    // loopback test/dev); tuyệt đối không tin Host bất kỳ hai nhãn.
+    const isRootHost = this.isTrustedRootHost(host);
     return this.authenticate(extractHandshakeToken(handshake), space, isRootHost);
+  }
+
+  /**
+   * Chỉ công nhận ngoại lệ Trang chính cho đúng hostname gốc được
+   * lấy từ cấu hình API, không từ dữ liệu do client tự cung cấp.
+   */
+  private isTrustedRootHost(host: string | undefined): boolean {
+    if (extractSpaceSlugFromHost(host)) return false;
+    const hostname = hostnameFromHostHeader(host);
+    if (!hostname) return false;
+    if (this.publicRootHostname && hostname === this.publicRootHostname) return true;
+    return this.allowLocalRoot && ['localhost', '127.0.0.1', '[::1]'].includes(hostname);
   }
 
   /**
@@ -286,6 +306,37 @@ export class MessagingSocketAuth {
       tenantId: tid ?? null,
       spaceSlug: resolvedInSpace ? space!.slug : null,
     };
+  }
+}
+
+/**
+ * Host của origin API do deployment cấu hình (không nhận từ header).
+ * URL thiếu/sai định dạng không cấp ngoại lệ cho phiên Trang chính.
+ */
+function configuredApiHostname(origin: string | undefined): string | null {
+  if (!origin) return null;
+  try {
+    const url = new URL(origin);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return null;
+    return url.hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Phân tích Host request mà không cho phép URL chứa userinfo/path/query
+ * đánh lừa bộ so khớp. Chỉ tên host (không phải cổng) phải khớp origin
+ * đáng tin cậy vì reverse proxy có thể chuyển tiếp cổng khác.
+ */
+function hostnameFromHostHeader(host: string | undefined): string | null {
+  if (!host || host !== host.trim() || /[\\/\s@?#]/.test(host)) return null;
+  try {
+    const url = new URL(`http://${host}`);
+    if (url.username || url.password || url.pathname !== '/' || url.search || url.hash) return null;
+    return url.hostname.toLowerCase();
+  } catch {
+    return null;
   }
 }
 

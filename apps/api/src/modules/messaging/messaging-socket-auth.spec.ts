@@ -41,6 +41,8 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
     spaceId?: string;
     platformTenantId?: string;
     platformRegisteredSpaceId?: string;
+    publicApiUrl?: string | null;
+    environment?: 'production' | 'development' | 'test';
   } = {}) {
     // Đầu dò phạm vi kho: `insideSpace` bật trong lúc callback của
     // `withSpaceKysely` chạy; mọi lượt đọc của các fake ghi lại
@@ -115,7 +117,14 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
     const tenants = {
       platformTenant: vi.fn(async () => ({ id: opts.platformTenantId ?? 'tenant-platform', slug: 'trang-chinh' })),
     };
-    const config = { getOrThrow: vi.fn(() => SECRET) };
+    const config = {
+      getOrThrow: vi.fn(() => SECRET),
+      get: vi.fn((key: string) => {
+        if (key === 'BETTER_AUTH_URL') return opts.publicApiUrl === null ? undefined : (opts.publicApiUrl ?? 'https://giaokhoa.example');
+        if (key === 'NODE_ENV') return opts.environment ?? 'test';
+        return undefined;
+      }),
+    };
     const auth = new MessagingSocketAuth(
       config as never,
       users as never,
@@ -268,6 +277,71 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
       expect(probe.reads).toEqual([{ kind: 'user', insideSpace: false }]);
       expect(tenants.platformTenant).toHaveBeenCalledOnce();
       expect(spaceDb.resolveTarget).toHaveBeenCalledWith('trang-chinh');
+    });
+
+    it('JWT Trang chính phải bị từ chối tại Host hai nhãn không thuộc origin tin cậy, dù tid và spaceId khớp', async () => {
+      const token = sign({ sub: 'platform-admin', username: 'platform-admin', sid: 's1', tid: 'tenant-platform', centre_id: 'space-platform' });
+      const { auth, users, probe } = build({
+        betterAuthEnabled: false, platformRegisteredSpaceId: 'space-platform',
+      });
+      const identity = await auth.authenticateHandshake({
+        headers: { host: 'unrelated.example' }, auth: { token },
+      });
+      expect(identity).toBeNull();
+      expect(users.getByIdOrUndefined).not.toHaveBeenCalled();
+      expect(probe.reads).toEqual([]);
+    });
+
+    it('JWT Trang chính không nhận ngoại lệ production khi BETTER_AUTH_URL chưa cấu hình', async () => {
+      const token = sign({ sub: 'platform-admin', username: 'platform-admin', sid: 's1', tid: 'tenant-platform', centre_id: 'space-platform' });
+      const { auth, users, probe, spaceDb } = build({
+        betterAuthEnabled: false, platformRegisteredSpaceId: 'space-platform',
+        publicApiUrl: null, environment: 'production',
+      });
+      const identity = await auth.authenticateHandshake({ headers: { host: 'giaokhoa.example' }, auth: { token } });
+      expect(identity).toBeNull();
+      expect(users.getByIdOrUndefined).not.toHaveBeenCalled();
+      expect(spaceDb.resolveTarget).not.toHaveBeenCalled();
+      expect(probe.reads).toEqual([]);
+    });
+
+    it('JWT Trang chính chỉ nhận Host gốc theo origin API dù cổng proxy khác', async () => {
+      const token = sign({ sub: 'platform-admin', username: 'platform-admin', sid: 's1', tid: 'tenant-platform', centre_id: 'space-platform' });
+      const { auth, probe } = build({
+        betterAuthEnabled: false, platformRegisteredSpaceId: 'space-platform',
+        publicApiUrl: 'https://giaokhoa.example',
+        environment: 'production',
+      });
+      const identity = await auth.authenticateHandshake({
+        headers: { host: 'GIAOKHOA.EXAMPLE:8443' }, auth: { token },
+      });
+      expect(identity?.userId).toBe('platform-admin');
+      expect(probe.reads).toEqual([{ kind: 'user', insideSpace: false }]);
+    });
+
+    it('JWT Trang chính không nhận Host gốc chứa userinfo giả mạo', async () => {
+      const token = sign({ sub: 'platform-admin', username: 'platform-admin', sid: 's1', tid: 'tenant-platform', centre_id: 'space-platform' });
+      const { auth, users } = build({
+        betterAuthEnabled: false, platformRegisteredSpaceId: 'space-platform',
+        publicApiUrl: 'https://giaokhoa.example', environment: 'production',
+      });
+      await expect(auth.authenticateHandshake({
+        headers: { host: 'unrelated.example@giaokhoa.example' }, auth: { token },
+      })).rejects.toMatchObject({ code: 'space_routing.space_not_found' });
+      expect(users.getByIdOrUndefined).not.toHaveBeenCalled();
+    });
+
+    it('JWT Trang chính dùng hostname loopback chỉ trong môi trường dev/test', async () => {
+      const token = sign({ sub: 'platform-admin', username: 'platform-admin', sid: 's1', tid: 'tenant-platform', centre_id: 'space-platform' });
+      const { auth, users } = build({
+        betterAuthEnabled: false, platformRegisteredSpaceId: 'space-platform',
+        publicApiUrl: null, environment: 'test',
+      });
+      const identity = await auth.authenticateHandshake({
+        headers: { host: '127.0.0.1:42942' }, auth: { token },
+      });
+      expect(identity?.userId).toBe('platform-admin');
+      expect(users.getByIdOrUndefined).toHaveBeenCalledOnce();
     });
 
     it('JWT tự xưng platform nhưng centre_id không đúng sổ đăng ký bị từ chối ở hostname gốc', async () => {
