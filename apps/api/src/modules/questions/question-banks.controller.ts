@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { QuestionBanksService } from './question-banks.service';
 import { BANK_KINDS, type BankKind } from '@giaokhoa/db/repositories/question-banks';
@@ -39,12 +40,13 @@ export class QuestionBanksController {
   @Get()
   /**
    * GET /question-banks?kind= — các bank actor vào được theo loại món
-   * (mặc định question; exam/matrix dùng cùng khuôn bank đa loại), kèm
+   * (mặc định question; exam/matrix dùng cùng khuôn bank đa loại).
+   * Giá trị kind khác registry bị chặn ở HTTP boundary thay vì âm thầm
+   * đổi thành question và trả dữ liệu một loại bank không được yêu cầu; kèm
    * capability của actor tại từng bank (bộ chuyển bank cho UI).
    */
-  async list(@Query('kind') kind: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
-    const k: BankKind = (BANK_KINDS as readonly string[]).includes(kind ?? '') ? (kind as BankKind) : 'question';
-    return this.banks.listBanks(actor.id, k);
+  async list(@Query('kind', { schema: z.enum(BANK_KINDS).optional() }) kind: BankKind | undefined, @CurrentUser() actor: AuthenticatedUser) {
+    return this.banks.listBanks(actor.id, kind ?? 'question');
   }
   @Get(':id')
   /**

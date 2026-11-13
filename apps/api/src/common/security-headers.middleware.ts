@@ -24,3 +24,25 @@ export class SecurityHeadersMiddleware implements NestMiddleware {
     next();
   }
 }
+
+
+/**
+ * Gắn cùng chính sách header vào các route thư viện mount thẳng trên
+ * Express TRƯỚC khi Nest khởi tạo middleware của AppModule.
+ *
+ * @param router - Express router của HTTP adapter, chỉ cần hàm use.
+ * @param paths - Các tiền tố route thuộc handler bên ngoài Nest.
+ * @remarks Không làm thay thế guard/pipe của Nest: các handler ngoài Nest
+ *   vẫn phải tự kiểm token, giới hạn request và kiểm soát quyền nghiệp vụ.
+ */
+export function attachSecurityHeadersToRawRoutes(
+  router: Pick<import('express').Express, 'use'>,
+  paths: readonly string[],
+): void {
+  const middleware = new SecurityHeadersMiddleware();
+  for (const path of paths) {
+    router.use(path, (req: Request, res: Response, next: NextFunction) =>
+      middleware.use(req, res, next),
+    );
+  }
+}

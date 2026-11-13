@@ -1,12 +1,24 @@
 import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Query, Res, UseInterceptors } from '@nestjs/common';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
 import type { Response } from 'express';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { DeprecatedRouteAliasInterceptor } from '../../common/deprecated-route-alias.interceptor';
 import { Public } from '../../common/public.decorator';
-import { CalendarService } from './calendar.service';
+import { CalendarService, EVENT_TYPES } from './calendar.service';
 import { calendarRemindSchema, createCalendarEventSchema, createCalendarExceptionSchema, createCalendarSubscriptionSchema, type CreateEventDto, type CreateExceptionDto, type CreateSubscriptionDto, type RemindDto } from './dto/calendar.dto';
+
+/**
+ * Ngày khoảng lọc dùng dạng ISO ngày hoặc ngày-giờ có timezone: trước
+ * đây controller đưa chuỗi bất kỳ xuống new Date(), tạo Invalid Date
+ * rồi chuyển tiếp vào truy vấn DB thành lỗi server. Cả ISO ngày thuần
+ * và datetime hợp lệ đã có ý nghĩa với service nên được giữ nguyên.
+ */
+const calendarDateQuerySchema = z.union([z.iso.date(), z.iso.datetime({ offset: true })]).optional();
+
+/** Giới hạn loại sự kiện theo cùng registry mà service dùng khi ghi. */
+const calendarEventTypeQuerySchema = z.enum(EVENT_TYPES).optional();
 
 @ApiTags('calendar')
 @Controller({ path: 'calendar', version: '1' })
@@ -34,8 +46,8 @@ export class CalendarController {
   /**
    * GET /calendar/events — sự kiện của tôi trong khoảng thời gian.
    */
-  async list(@Query('from') from: string | undefined, @Query('to') to: string | undefined,
-    @Query('eventType') eventType: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
+  async list(@Query('from', { schema: calendarDateQuerySchema }) from: string | undefined, @Query('to', { schema: calendarDateQuerySchema }) to: string | undefined,
+    @Query('eventType', { schema: calendarEventTypeQuerySchema }) eventType: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
     return this.calendar.listEventsForUser(actor.id, { from, to, eventType });
   }
   @Get('exports')
@@ -44,8 +56,8 @@ export class CalendarController {
    * (issue #345); path cũ `export.ics` giữ qua handler alias ngay dưới.
    * Định dạng khác `ics` bị từ chối 400 `calendar.export_format_unsupported`.
    */
-  async exportMine(@Query('from') from: string | undefined, @Query('to') to: string | undefined,
-    @Query('eventType') eventType: string | undefined, @Query('format') format: string | undefined,
+  async exportMine(@Query('from', { schema: calendarDateQuerySchema }) from: string | undefined, @Query('to', { schema: calendarDateQuerySchema }) to: string | undefined,
+    @Query('eventType', { schema: calendarEventTypeQuerySchema }) eventType: string | undefined, @Query('format') format: string | undefined,
     @CurrentUser() actor: AuthenticatedUser, @Res() res: Response) {
     if (format !== undefined && format !== 'ics') {
       throw new BadRequestException({ message: `Unsupported calendar export format: ${format}`, code: 'calendar.export_format_unsupported' });
@@ -61,8 +73,8 @@ export class CalendarController {
    * và lượt gọi được ghi log alias có cấu trúc (căn cứ điều kiện gỡ
    * alias: 0 lượt gọi trong 14 ngày).
    */
-  async exportMineAlias(@Query('from') from: string | undefined, @Query('to') to: string | undefined,
-    @Query('eventType') eventType: string | undefined, @CurrentUser() actor: AuthenticatedUser, @Res() res: Response) {
+  async exportMineAlias(@Query('from', { schema: calendarDateQuerySchema }) from: string | undefined, @Query('to', { schema: calendarDateQuerySchema }) to: string | undefined,
+    @Query('eventType', { schema: calendarEventTypeQuerySchema }) eventType: string | undefined, @CurrentUser() actor: AuthenticatedUser, @Res() res: Response) {
     return this.exportMine(from, to, eventType, 'ics', actor, res);
   }
   @Post('export-token')
@@ -96,8 +108,8 @@ export class CalendarController {
    * GET /calendar/export/:token.ics — tải .ics của chủ token mà không cần
    * đăng nhập; token sai/đã đổi/đã thu hồi trả 401.
    */
-  async exportByToken(@Param('filename') fileName: string, @Query('from') from: string | undefined,
-    @Query('to') to: string | undefined, @Query('eventType') eventType: string | undefined, @Res() res: Response) {
+  async exportByToken(@Param('filename') fileName: string, @Query('from', { schema: calendarDateQuerySchema }) from: string | undefined,
+    @Query('to', { schema: calendarDateQuerySchema }) to: string | undefined, @Query('eventType', { schema: calendarEventTypeQuerySchema }) eventType: string | undefined, @Res() res: Response) {
     const token = fileName.endsWith('.ics') ? fileName.slice(0, -'.ics'.length) : fileName;
     this.sendIcs(res, await this.calendar.exportIcsByToken(token, { from, to, eventType }));
   }

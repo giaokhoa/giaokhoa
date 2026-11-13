@@ -1,4 +1,4 @@
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { AccessRepository } from '@giaokhoa/db/repositories/access';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
@@ -21,8 +21,10 @@ import { RolesService } from './roles.service';
 @Module({
   imports: [
     CacheInfraModule, EventsModule,
-    // SpaceRoutingModule: PermissionEvaluator cần SpaceDatabaseService để lấy danh tính kho của ngữ cảnh hiện tại cho khoá cache `siteadmins` (issue #587, tiền điều kiện TĐ6), và AccessRepository cần handle `routedKysely` của nó (xem provider factory bên dưới). Cạnh này khép vòng module tường minh AccessModule → SpaceRoutingModule → ControlPlaneModule → AccessModule (ControlPlaneModule import module này cho chính PermissionEvaluator/ContextsService), nên forwardRef ở mọi cạnh của vòng như khuôn AuthModule ↔ UsersModule (xem space-routing.module.ts và control-plane.module.ts); chuỗi provider của SpaceDatabaseService kết thúc ở ConfigService + ControlPlaneConnection, không phụ thuộc ngược vào module này.
-    forwardRef(() => SpaceRoutingModule),
+    // PermissionEvaluator tra danh tính kho để tránh lẫn cache siteadmins;
+    // AccessRepository dùng facade routedKysely. Bộ định tuyến chỉ phụ
+    // thuộc adapter control plane, không kéo ControlPlaneModule quay lại.
+    SpaceRoutingModule,
   ],
   controllers: [AccessController],
   providers: [

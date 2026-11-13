@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { sql, type CentreDb, type CentreDB, type CentreTx } from '@giaokhoa/db';
-import { tenantAls } from '../../modules/tenants/tenant-als';
+import { tenantAls } from '../../db/tenant-als';
 
 export interface OutboxEventInput {
   aggregate: string;

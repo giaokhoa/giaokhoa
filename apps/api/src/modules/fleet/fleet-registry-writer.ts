@@ -11,7 +11,7 @@ import type { SchemaMigrationStep } from '@giaokhoa/db/control-plane';
 import type { SpaceRegistryRow } from '@giaokhoa/db/repositories/control-plane';
 import type { FleetSpace } from './fleet-common';
 import { ControlPlaneRepository } from '@giaokhoa/db/repositories/control-plane';
-import { ControlPlaneConnection } from '../control-plane/control-plane.connection';
+import { ControlPlaneConnection } from '../../db/control-plane-connection.service';
 
 /** Kết quả một lượt chạy migration mà runner báo về registry. */
 export type MigrationRunOutcome = {

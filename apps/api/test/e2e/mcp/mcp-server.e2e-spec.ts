@@ -180,6 +180,23 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
   });
   afterAll(async () => { await pg.end(); await app.close(); });
 
+  it('MCP và metadata công khai vẫn gắn header bảo mật khi chạy ngoài Nest', async () => {
+    const metadata = await http(app).get('/.well-known/oauth-protected-resource');
+    expect(metadata.status).toBe(200);
+    expect(metadata.headers['x-content-type-options']).toBe('nosniff');
+    expect(metadata.headers['x-frame-options']).toBe('DENY');
+    expect(metadata.headers['referrer-policy']).toBe('no-referrer');
+    expect(metadata.headers['strict-transport-security']).toContain('max-age=31536000');
+
+    const blocked = await http(app).post('/mcp').set('Content-Type', 'application/json')
+      .send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: { _meta: MODERN_META } });
+    expect(blocked.status).toBe(401);
+    expect(blocked.headers['x-content-type-options']).toBe('nosniff');
+    expect(blocked.headers['x-frame-options']).toBe('DENY');
+    expect(blocked.headers['referrer-policy']).toBe('no-referrer');
+    expect(blocked.headers['strict-transport-security']).toContain('max-age=31536000');
+  });
+
   it('PRM công khai đúng RFC 9728; thiếu/sai token → 401', async () => {
     const prm = await http(app).get('/.well-known/oauth-protected-resource');
     expect(prm.status).toBe(200);
@@ -692,7 +709,9 @@ describe('Máy chủ MCP (MCP-0, issue #110)', () => {
     const mkReady = async (n: number): Promise<string> => {
       const res = await callTool(app, teacherA.token, 'create_question', {
         bankId: bankA, categoryId: catA, qtype: 'essay',
-        questionText: `Câu đóng góp số ${n} của giáo viên A.`,
+        // Mỗi lượt test dùng nội dung mới: chống trùng đối chiếu trên toàn kho
+        // nên fixture cố định sẽ bị coi đã đóng góp ở lần chạy trước.
+        questionText: `Câu đóng góp số ${n} của giáo viên A — ${uniqueName('mcpcontrib')}.`,
         idempotencyKey: uniqueName('key'),
       });
       expect(res.isError).toBe(false);
