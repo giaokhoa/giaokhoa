@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Dockerfile production ở gốc repo — một giai đoạn build dùng chung cho cả ba ứng dụng (api, worker, web) và ba target runtime tương ứng, chọn bằng `--target` (docker compose đã khai sẵn theo từng service).
 #
 # Cách build giữ đúng cách build monorepo hiện hành: `pnpm install
@@ -5,8 +6,6 @@
 # từng app bằng `pnpm deploy --prod` (bản đóng gói tự chứa: dist/build đã biên dịch + node_modules chỉ còn dependency production, gồm cả các package workspace đã biên dịch) để các image runtime không mang theo mã nguồn monorepo và devDependency.
 #
 # Các image runtime dùng node:24-bookworm-slim cùng họ glibc với image build (bookworm đầy đủ) vì @giaokhoa/api có dependency native argon2 — bản binary biên dịch ở giai đoạn build phải nạp được ở giai đoạn runtime.
-
-# syntax=docker/dockerfile:1
 
 # ----- Giai đoạn build dùng chung -----
 FROM node:24-bookworm AS build

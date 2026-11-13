@@ -76,8 +76,8 @@ services:
   redis:
     image: redis:7
     restart: unless-stopped
-    # Bật AOF để hàng đợi BullMQ và cache còn giữ được qua lần khởi động lại.
-    command: ["redis-server", "--appendonly", "yes"]
+    # BullMQ không chấp nhận Redis eviction. Giới hạn bộ nhớ mặc định 0 (không giới hạn) để không làm mất job; production phải đặt REDIS_MAXMEMORY theo ngân sách máy và theo dõi OOM/used_memory.
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory-policy", "noeviction", "--maxmemory", "${REDIS_MAXMEMORY:-0}"]
     volumes:
       - redisdata:/data
     healthcheck:

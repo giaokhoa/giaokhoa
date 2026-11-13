@@ -20,6 +20,8 @@
 	}
 	handle @api {
 		reverse_proxy {$GIAOKHOA_API_UPSTREAM:api:3100} {
+			# Cookie affinity giữ polling Engine.IO trên cùng replica khi bổ sung upstream.
+			lb_policy cookie api_affinity
 			# API dùng Express trust proxy = 1: chỉ một địa chỉ khách đã chuẩn hóa từ Caddy, không truyền nguyên chuỗi XFF.
 			header_up X-Forwarded-For {client_ip}
 		}
