@@ -6,7 +6,7 @@ import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { BetterAuthService } from '../auth/better-auth/better-auth.service';
 import { BETTER_AUTH_SESSION_COOKIE } from '../auth/better-auth/better-auth.instance';
 import { tenantAls } from '../tenants/tenant-als';
-import { resolveDedicatedSpace, type DedicatedSpace } from '../tenants/space-resolution';
+import { extractSpaceSlugFromHost, resolveDedicatedSpace, type DedicatedSpace } from '../tenants/space-resolution';
 import { TenantsService } from '../tenants/tenants.service';
 import { UsersService } from '../users/users.service';
 import { MessagingRepository } from '@giaokhoa/db/repositories/messaging';
@@ -121,11 +121,17 @@ export class MessagingSocketAuth {
    * ngay trước khi đọc cookie hay token; không có lượt tra kho chung.
    */
   async authenticateHandshake(handshake: MessagingHandshake): Promise<MessagingSocketIdentity | null> {
-    const space = await resolveDedicatedSpace(this.spaceDb, handshake.headers['host']);
+    const hostHeader = handshake.headers['host'];
+    const host = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader;
+    const space = await resolveDedicatedSpace(this.spaceDb, hostHeader);
     if (space) await this.spaceDb.getKyselyForSpace(space.slug);
     const viaCookie = await this.authenticateCookie(handshake.headers, space);
     if (viaCookie) return viaCookie;
-    return this.authenticate(extractHandshakeToken(handshake), space);
+    // Chỉ hostname gốc có Host tường minh mới có thể dùng ngoại lệ
+    // phiên Trang chính. Host trung tâm shared tuy space=null nhưng
+    // tuyệt đối không được nhận JWT mang centre_id của kho khác.
+    const isRootHost = Boolean(host?.trim()) && !extractSpaceSlugFromHost(host);
+    return this.authenticate(extractHandshakeToken(handshake), space, isRootHost);
   }
 
   /**
@@ -215,6 +221,12 @@ export class MessagingSocketAuth {
    *   platform không có tài khoản trong kho riêng, và danh tính
    *   của đường này thuộc kho chung nên `spaceSlug` trả về null.
    *
+   * Khi không có không gian dedicated (Host gốc hoặc Host shared),
+   * token mang centre_id chỉ được chấp nhận cho Trang chính tại
+   * hostname gốc, khi cả tid lẫn spaceId khớp dòng platform đã
+   * đăng ký. Các token trung tâm khác phải bị chặn TRƯỚC khi đọc
+   * user tại database shared, kể cả user còn bản sao legacy.
+   *
    * Lỗi định tuyến Host (bao gồm mất cấu hình hoặc slug chưa đăng
    * ký) được xử lý fail-closed ở `authenticateHandshake`, trước
    * khi gọi tới phương thức xác thực token này.
@@ -222,6 +234,7 @@ export class MessagingSocketAuth {
   async authenticate(
     token: string | undefined,
     space?: DedicatedSpace | null,
+    isRootHost = false,
   ): Promise<MessagingSocketIdentity | null> {
     if (!token) return null;
     let payload: { sub?: string; username?: string; scope?: unknown; sid?: unknown; tid?: unknown; centre_id?: unknown };
@@ -248,6 +261,22 @@ export class MessagingSocketAuth {
         return null;
       }
     } else {
+      if (payload.centre_id !== undefined) {
+        // JWT của trung tâm A/B KHÔNG thể xác thực ở Host gốc hoặc
+        // Host shared chỉ vì user còn trong kho chung sau di trú.
+        // Ngoại lệ Trang chính phải được xác minh bằng cả tenant
+        // hiệu lực và ID không gian trong sổ, giống REST.
+        if (!isRootHost || tid === undefined) return null;
+        const platform = await this.tenants.platformTenant();
+        if (tid !== platform.id) return null;
+        try {
+          const registered = await this.spaceDb.resolveTarget(platform.slug);
+          if (registered.spaceId !== payload.centre_id) return null;
+        } catch {
+          // Không có sổ đăng ký thì không được suy đoán phiên platform.
+          return null;
+        }
+      }
       user = await this.users.getByIdOrUndefined(sub);
     }
     if (!user || user.suspended || user.deleted) return null;

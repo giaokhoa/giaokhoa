@@ -40,6 +40,7 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
     resolveError?: Error;
     spaceId?: string;
     platformTenantId?: string;
+    platformRegisteredSpaceId?: string;
   } = {}) {
     // Đầu dò phạm vi kho: `insideSpace` bật trong lúc callback của
     // `withSpaceKysely` chạy; mọi lượt đọc của các fake ghi lại
@@ -80,6 +81,12 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
     const spaceDb = {
       resolveTarget: vi.fn(async (slug: string) => {
         if (opts.resolveError) throw opts.resolveError;
+        if (slug === 'trang-chinh' && opts.platformRegisteredSpaceId) {
+          return {
+            mode: 'dedicated', spaceId: opts.platformRegisteredSpaceId, slug, status: 'active',
+            databaseName: 'giaokhoa_platform_test', schemaVersion: 'v1',
+          };
+        }
         if (opts.spaceMode === 'dedicated') {
           return {
             mode: 'dedicated', spaceId: opts.spaceId ?? 'space-1', slug, status: 'active',
@@ -106,7 +113,7 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
       }),
     };
     const tenants = {
-      platformTenant: vi.fn(async () => ({ id: opts.platformTenantId ?? 'tenant-platform' })),
+      platformTenant: vi.fn(async () => ({ id: opts.platformTenantId ?? 'tenant-platform', slug: 'trang-chinh' })),
     };
     const config = { getOrThrow: vi.fn(() => SECRET) };
     const auth = new MessagingSocketAuth(
@@ -217,6 +224,96 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
       // Lượt suy tenant mặc định giữ ngữ cảnh platform KÈM slug của
       // trung tâm trong store ALS — mất slug là rơi về kho chung.
       expect(probe.alsStores[0]).toMatchObject({ platform: true, spaceSlug: SLUG });
+    });
+
+    it('JWT của trung tâm A tại hostname gốc bị từ chối trước khi đọc user ở shared, dù có bản sao legacy', async () => {
+      const token = sign({ sub: 'user-a', username: 'user-a', sid: 'session-a', tid: 'tenant-a', centre_id: SPACE_ID });
+      const { auth, users, probe } = build({ betterAuthEnabled: false });
+      const identity = await auth.authenticateHandshake({
+        headers: { host: 'giaokhoa.example' }, auth: { token },
+      });
+      expect(identity).toBeNull();
+      expect(users.getByIdOrUndefined).not.toHaveBeenCalled();
+      expect(probe.reads).toEqual([]);
+    });
+
+    it('JWT của trung tâm A tại hostname chung đã đăng ký (shared) không được đọc user ở shared', async () => {
+      const token = sign({ sub: 'user-a', username: 'user-a', sid: 'session-a', tid: 'tenant-a', centre_id: SPACE_ID });
+      const { auth, users, probe } = build({ betterAuthEnabled: false, spaceMode: 'shared' });
+      const identity = await auth.authenticateHandshake({ headers: { host: HOST }, auth: { token } });
+      expect(identity).toBeNull();
+      expect(users.getByIdOrUndefined).not.toHaveBeenCalled();
+      expect(probe.reads).toEqual([]);
+    });
+
+    it('JWT của trung tâm A tại hostname trung tâm B bị từ chối trước khi đọc user', async () => {
+      const token = sign({ sub: 'user-a', username: 'user-a', sid: 'session-a', tid: 'tenant-a', centre_id: SPACE_ID });
+      const { auth, users, probe } = build({ betterAuthEnabled: false, spaceMode: 'dedicated', spaceId: 'space-b' });
+      const identity = await auth.authenticateHandshake({ headers: { host: HOST }, auth: { token } });
+      expect(identity).toBeNull();
+      expect(users.getByIdOrUndefined).not.toHaveBeenCalled();
+      expect(probe.reads).toEqual([]);
+    });
+
+    it('JWT Trang chính tại hostname gốc chỉ hợp lệ khi tid và spaceId đã đăng ký đều khớp', async () => {
+      const token = sign({ sub: 'platform-admin', username: 'platform-admin', sid: 's1', tid: 'tenant-platform', centre_id: 'space-platform' });
+      const { auth, users, probe, spaceDb, tenants } = build({
+        betterAuthEnabled: false, platformRegisteredSpaceId: 'space-platform',
+      });
+      const identity = await auth.authenticateHandshake({
+        headers: { host: 'giaokhoa.example' }, auth: { token },
+      });
+      expect(identity).toEqual({ userId: 'platform-admin', username: 'user-platform-admin', tenantId: 'tenant-platform', spaceSlug: null });
+      expect(users.getByIdOrUndefined).toHaveBeenCalledOnce();
+      expect(probe.reads).toEqual([{ kind: 'user', insideSpace: false }]);
+      expect(tenants.platformTenant).toHaveBeenCalledOnce();
+      expect(spaceDb.resolveTarget).toHaveBeenCalledWith('trang-chinh');
+    });
+
+    it('JWT tự xưng platform nhưng centre_id không đúng sổ đăng ký bị từ chối ở hostname gốc', async () => {
+      const token = sign({ sub: 'user-a', username: 'user-a', sid: 's1', tid: 'tenant-platform', centre_id: SPACE_ID });
+      const { auth, users, probe } = build({
+        betterAuthEnabled: false, platformRegisteredSpaceId: 'space-platform',
+      });
+      const identity = await auth.authenticateHandshake({
+        headers: { host: 'giaokhoa.example' }, auth: { token },
+      });
+      expect(identity).toBeNull();
+      expect(users.getByIdOrUndefined).not.toHaveBeenCalled();
+      expect(probe.reads).toEqual([]);
+    });
+
+    it('JWT Trang chính tại hostname gốc bị từ chối nếu chưa xác minh được spaceId platform', async () => {
+      const token = sign({ sub: 'platform-admin', username: 'platform-admin', sid: 's1', tid: 'tenant-platform', centre_id: 'space-platform' });
+      const { auth, users, probe } = build({ betterAuthEnabled: false });
+      const identity = await auth.authenticateHandshake({
+        headers: { host: 'giaokhoa.example' }, auth: { token },
+      });
+      expect(identity).toBeNull();
+      expect(users.getByIdOrUndefined).not.toHaveBeenCalled();
+      expect(probe.reads).toEqual([]);
+    });
+
+    it('JWT Trang chính thiếu Host không được nhận ngoại lệ hostname gốc', async () => {
+      const token = sign({ sub: 'platform-admin', username: 'platform-admin', sid: 's1', tid: 'tenant-platform', centre_id: 'space-platform' });
+      const { auth, users, probe } = build({
+        betterAuthEnabled: false, platformRegisteredSpaceId: 'space-platform',
+      });
+      const identity = await auth.authenticateHandshake({ headers: {}, auth: { token } });
+      expect(identity).toBeNull();
+      expect(users.getByIdOrUndefined).not.toHaveBeenCalled();
+      expect(probe.reads).toEqual([]);
+    });
+
+    it('JWT Trang chính không được dùng tại hostname shared dù centre_id và tid hợp lệ', async () => {
+      const token = sign({ sub: 'platform-admin', username: 'platform-admin', sid: 's1', tid: 'tenant-platform', centre_id: 'space-platform' });
+      const { auth, users, probe } = build({
+        betterAuthEnabled: false, platformRegisteredSpaceId: 'space-platform', spaceMode: 'shared',
+      });
+      const identity = await auth.authenticateHandshake({ headers: { host: HOST }, auth: { token } });
+      expect(identity).toBeNull();
+      expect(users.getByIdOrUndefined).not.toHaveBeenCalled();
+      expect(probe.reads).toEqual([]);
     });
 
     it('token mang centre_id khớp tại địa chỉ kho riêng: tài khoản tra trong kho của trung tâm', async () => {

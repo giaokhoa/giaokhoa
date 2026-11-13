@@ -264,12 +264,12 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
 
   const sockets: Socket[] = [];
 
-  /** Tạo một socket hướng tới địa chỉ của trung tâm kho riêng (Host + tuỳ chọn cookie/token). */
-  function centreSocket(opts: { cookieToken?: string; token?: string }): Socket {
+  /** Tạo socket trên Host bất kỳ để kiểm thử cùng JWT ở các ranh giới hostname. */
+  function socketAtHost(host: string, opts: { cookieToken?: string; token?: string }): Socket {
     const socket = io(`${base}/messaging`, {
       auth: opts.token ? { token: opts.token } : undefined,
       extraHeaders: {
-        Host: HOST,
+        Host: host,
         ...(opts.cookieToken ? { Cookie: signedBetterAuthCookie(opts.cookieToken) } : {}),
       },
       transports: ['websocket'],
@@ -278,6 +278,11 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
     });
     sockets.push(socket);
     return socket;
+  }
+
+  /** Tạo socket hướng tới hostname của trung tâm kho riêng. */
+  function centreSocket(opts: { cookieToken?: string; token?: string }): Socket {
+    return socketAtHost(HOST, opts);
   }
 
   /** Chờ socket nối thành công; lỗi xác thực phía server ngắt kết nối ngay. */
@@ -575,5 +580,25 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
     const socket = centreSocket({ token: tokenWithoutClaim });
     await awaitRejected(socket);
     socket.disconnect();
+  });
+
+  it('JWT trung tâm A tại hostname gốc bị ngắt dù user vẫn có bản sao legacy trong database chung (P1 PR #21)', async () => {
+    // Thêm lại tạm thời user đã chuyển kho để mô phỏng giai đoạn
+    // dữ kiện legacy vẫn còn ở shared: nếu auth socket không kiểm
+    // centre_id TRƯỚC khi tra user, handshake này sẽ được cho qua.
+    const centreUrl = clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD);
+    expect(await countRows(process.env.DATABASE_URL!, 'users', 'id', memberAId)).toBe(0);
+    await copyRowById(centreUrl, process.env.DATABASE_URL!, 'users', memberAId);
+    try {
+      expect(await countRows(process.env.DATABASE_URL!, 'users', 'id', memberAId)).toBe(1);
+      const socket = socketAtHost('giaokhoa.example', { token: tokenWithClaim });
+      await awaitRejected(socket);
+      socket.disconnect();
+    } finally {
+      await withClient(process.env.DATABASE_URL!, async (client) => {
+        await client.query("SELECT set_config('app.platform', 'on', false)");
+        await client.query('DELETE FROM users WHERE id = $1', [memberAId]);
+      });
+    }
   });
 });
