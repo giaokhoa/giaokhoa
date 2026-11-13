@@ -11,6 +11,7 @@ import {
   CoursePagesController, CourseResourcesController, PagesController, PlayerController, ResourcesController,
 } from './content.controller';
 import { ContentService } from './content.service';
+import { SystemBankModule } from '../system-bank/system-bank.module';
 
 /**
  * ContentModule facade: học liệu trong khoá (mod_page + mod_resource), trang học (player), tiến độ học và mốc lớp. Phụ thuộc Courses (course module + cổng truy cập), Completion (trạng thái hoàn thành), Files
@@ -21,7 +22,7 @@ import { ContentService } from './content.service';
  * (`SpaceDatabaseService.routedKysely`).
  */
 @Module({
-  imports: [AccessModule, CoursesModule, CompletionModule, FilesModule, EventsModule, SpaceRoutingModule],
+  imports: [AccessModule, CoursesModule, CompletionModule, FilesModule, EventsModule, SpaceRoutingModule, SystemBankModule],
   controllers: [CoursePagesController, PagesController, CourseResourcesController, ResourcesController, PlayerController],
   providers: [
     {

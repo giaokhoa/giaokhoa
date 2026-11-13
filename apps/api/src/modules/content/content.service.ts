@@ -1,10 +1,12 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+/** Học liệu trong khoá: nội dung riêng hoặc phiên bản công bố, mọi đường đọc giữ cổng audience của module. */
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { ContentRepository, type PageRow, type ResourceRow } from '@giaokhoa/db/repositories/content';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { CompletionService } from '../completion/completion.service';
 import { CoursesService } from '../courses/courses.service';
 import type { CmRow } from '@giaokhoa/db/repositories/courses';
+import { SystemMaterialsService } from '../system-bank/system-materials.service';
 import { FilesService } from '../files/files.service';
 import { isSafeExternalResourceUrl, sanitizePageContent } from './page-content-sanitizer';
 
@@ -94,6 +96,7 @@ export class ContentService {
     private readonly completion: CompletionService,
     private readonly files: FilesService,
     private readonly evaluator: PermissionEvaluator,
+    private readonly systemMaterials: SystemMaterialsService,
   ) {
     // Hồ sơ quá trình học (Điều 8 TT 09/2021): mọi lần một cm chuyển sang hoàn thành (bất kỳ đường nào — xem/thủ công/điểm/tiến độ) đều được chụp lại tên mục tại thời điểm đó vào learning_records.
     this.completion.registerCmCompletionHook(async ({ cmId, courseId, userId }) => {
@@ -252,14 +255,30 @@ export class ContentService {
    * sửa lại URL hợp lệ là hiển thị trở lại bình thường.
    */
   async getResourceForUser(userId: string, id: string): Promise<{
-    resource: ResourceRow & { completionMode: CompletionMode };
-    file: { id: string; fileName: string; mimeType: string | null; fileSize: number; signedUrl: string; signedUrlExpiresAt: number } | null;
+    resource: ResourceRow & { completionMode: CompletionMode; publication?: import('@giaokhoa/contracts').SystemMaterialVersion };
+    file: { id: string; fileName: string; mimeType: string | null; fileSize: number; signedUrl: string; signedUrlExpiresAt: number; contentUrl?: string } | null;
     embedUrl: string | null;
   }> {
     const resource = await this.getResource(id);
     await this.courses.assertCourseAccess(userId, resource.course);
     const cm = resource.cmId ? await this.courses.getCm(resource.cmId) : null;
-    let file: { id: string; fileName: string; mimeType: string | null; fileSize: number; signedUrl: string; signedUrlExpiresAt: number } | null = null;
+    if (cm && !(await this.courses.checkCmAccess(userId, cm)).available) {
+      throw new ForbiddenException({ message: 'Activity unavailable', code: 'availability.not_available' });
+    }
+    const reference = await this.systemMaterials.reference(id);
+    if (reference) {
+      const published = await this.systemMaterials.forCourse(userId, resource, reference);
+      const pkg = published.package;
+      const contentUrl = `/api/v1/resources/${id}/system-material/content`;
+      return {
+        resource: { ...resource, name: pkg.name, kind: pkg.file ? 'file' : 'url', url: pkg.externalUrl,
+          completionMode: cm ? modeOfCm(cm) : 'none', publication: published },
+        file: pkg.file ? { id, fileName: pkg.file.fileName, mimeType: pkg.file.mimeType, fileSize: pkg.file.fileSize,
+          signedUrl: contentUrl, signedUrlExpiresAt: 0, contentUrl } : null,
+        embedUrl: pkg.externalUrl ? embedUrlFor(pkg.externalUrl) : null,
+      };
+    }
+    let file: { id: string; fileName: string; mimeType: string | null; fileSize: number; signedUrl: string; signedUrlExpiresAt: number; contentUrl?: string } | null = null;
     if (resource.kind === 'file' && resource.fileId) {
       const row = await this.files.getFile(resource.fileId);
       const signed = await this.files.createSignedUrl(resource.fileId, userId);
@@ -277,6 +296,13 @@ export class ContentService {
     };
   }
 
+  /** Byte công bố dùng URL có phiên đăng nhập và kiểm audience lại mỗi lần; không phát URL kho vật lý. */
+  async readSystemMaterialFile(userId: string, id: string) {
+    const resource = await this.getResource(id);
+    const version = await this.systemMaterials.forCourse(userId, resource);
+    return this.systemMaterials.readFile(version.package);
+  }
+
   /**
    * Sửa tài nguyên (course:manageactivities tại khoá); tên/chế độ
    * hoàn thành đồng bộ sang cm. URL ngoài mới (khi không phải null gỡ
@@ -287,6 +313,9 @@ export class ContentService {
   }): Promise<ResourceRow> {
     const resource = await this.getResource(id);
     await this.evaluator.requireCapability(actorId, 'course:manageactivities', await this.courses.courseContextId(resource.course));
+    if (await this.systemMaterials.reference(id)) {
+      throw new ConflictException({ message: 'Published material is immutable', code: 'system_material.reference_immutable' });
+    }
     const patch: Partial<ResourceRow> = {};
     if (input.name !== undefined) patch.name = input.name;
     if (input.fileId !== undefined) {
@@ -673,7 +702,7 @@ export class ContentService {
     cm: CmRow;
     content:
       | { type: 'page'; page: PageRow }
-      | { type: 'resource'; resource: ResourceRow; file: { id: string; fileName: string; mimeType: string | null; fileSize: number; signedUrl: string; signedUrlExpiresAt: number } | null; embedUrl: string | null }
+      | { type: 'resource'; resource: ResourceRow; file: { id: string; fileName: string; mimeType: string | null; fileSize: number; signedUrl: string; signedUrlExpiresAt: number; contentUrl?: string } | null; embedUrl: string | null }
       | { type: 'other'; component: string };
     completion: { state: number; viewed: boolean; mode: CompletionMode };
     /** Tiến độ xem của chính học sinh ở mục này (video/trang): % cao nhất + vị trí dở để phát tiếp đúng chỗ. */
@@ -687,7 +716,7 @@ export class ContentService {
     const access = await this.courses.checkCmAccess(userId, cm);
     if (!access.available) throw new ForbiddenException({ message: 'This activity is not available to you yet', code: 'availability.not_available' });
     await this.repo.upsertLastAccess(userId, courseId, cmId);
-    let content: { type: 'page'; page: PageRow } | { type: 'resource'; resource: ResourceRow; file: { id: string; fileName: string; mimeType: string | null; fileSize: number; signedUrl: string; signedUrlExpiresAt: number } | null; embedUrl: string | null } | { type: 'other'; component: string };
+    let content: { type: 'page'; page: PageRow } | { type: 'resource'; resource: ResourceRow; file: { id: string; fileName: string; mimeType: string | null; fileSize: number; signedUrl: string; signedUrlExpiresAt: number; contentUrl?: string } | null; embedUrl: string | null } | { type: 'other'; component: string };
     if (cm.component === PAGE_COMPONENT && cm.instanceId) {
       content = { type: 'page', page: await this.getPage(cm.instanceId) };
     } else if (cm.component === RESOURCE_COMPONENT && cm.instanceId) {

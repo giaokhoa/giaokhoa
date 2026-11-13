@@ -648,6 +648,7 @@ export interface ContentBankContent {
   subject_id: string | null;
   target_audience: string | null;
   tech_format: string | null;
+  tenant_id: Generated<string>;
   updated_at: Generated<Timestamp>;
   visibility: Generated<string>;
 }
@@ -2271,6 +2272,9 @@ export interface Resources {
   id: Generated<string>;
   kind: Generated<string>;
   name: string;
+  system_material_checksum: string | null;
+  system_material_id: string | null;
+  system_material_version: number | null;
   transcript: string | null;
   updated_at: Generated<Timestamp>;
   url: string | null;

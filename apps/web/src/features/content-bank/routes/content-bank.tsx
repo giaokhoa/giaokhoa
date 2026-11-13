@@ -1,4 +1,6 @@
+/** Kho học liệu riêng cùng panel công bố hệ thống, dữ liệu và quyết định đều qua API theo vai. */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { SystemMaterialsPanel } from '../components/system-materials-panel';
 import { Link } from 'react-router';
 import type { Course, CourseContent } from '@giaokhoa/contracts';
 import { Badge } from '@giaokhoa/ui/components/badge';
@@ -224,6 +226,8 @@ export function ContentBankLibraryPage() {
       </div>
       {error ? <p role="alert">{error}</p> : null}
       {notice ? <p>{notice}</p> : null}
+
+      <SystemMaterialsPanel />
 
       <Card>
         <CardContent className="grid gap-3 pt-4 sm:grid-cols-2 lg:grid-cols-4">

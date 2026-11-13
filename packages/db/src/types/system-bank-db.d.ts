@@ -3,6 +3,7 @@
  * Please do not edit it manually.
  */
 
+import type { SystemMaterialPackage } from "../jsonb-types";
 import type { ColumnType } from "kysely";
 
 export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
@@ -29,6 +30,38 @@ export interface SystemBankEvents {
   payload: Generated<Json>;
   source_question_id: string;
   type: string;
+}
+
+export interface SystemMaterials {
+  centre_slug: string;
+  id: Generated<string>;
+  source_content_id: string;
+}
+
+export interface SystemMaterialSubmissions {
+  centre_slug: string;
+  checksum: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  package: SystemMaterialPackage;
+  published_material_id: string | null;
+  published_version: number | null;
+  rejection_reason: string | null;
+  reviewed_at: Timestamp | null;
+  reviewed_by: string | null;
+  source_content_id: string;
+  source_revision: string;
+  status: "pending" | "approved" | "rejected";
+  submitted_by: string;
+}
+
+export interface SystemMaterialVersions {
+  checksum: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  material_id: string;
+  package: SystemMaterialPackage;
+  version: number;
 }
 
 export interface SystemOutcomePackageCurricula {
@@ -139,6 +172,9 @@ export interface SystemQuestionVersions {
 
 export interface DB {
   system_bank_events: SystemBankEvents;
+  system_material_submissions: SystemMaterialSubmissions;
+  system_material_versions: SystemMaterialVersions;
+  system_materials: SystemMaterials;
   system_outcome_package_curricula: SystemOutcomePackageCurricula;
   system_outcome_package_mappings: SystemOutcomePackageMappings;
   system_outcome_package_nodes: SystemOutcomePackageNodes;

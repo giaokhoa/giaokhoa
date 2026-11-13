@@ -297,5 +297,10 @@
     "invalid_value": "Giá trị không hợp lệ cho cấu hình này",
     "override_not_found": "Cấu hình này chưa có giá trị ghi đè",
     "unknown_setting": "Khoá cấu hình chưa được đăng ký"
+  },
+  "system_material": {
+    "invalid_package": "Học liệu cần tác giả, nguồn, giấy phép và tệp hoặc liên kết hợp lệ thuộc trung tâm.",
+    "not_found": "Không tìm thấy học liệu công bố hoặc phiên bản này.",
+    "reference_immutable": "Học liệu đang dùng được ghim vào phiên bản bất biến; hãy chọn phiên bản khác để thêm mới."
   }
 }

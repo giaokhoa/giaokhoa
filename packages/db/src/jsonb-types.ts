@@ -47,3 +47,5 @@ export type SchemaMigrationStep = {
   status: string;
   detail?: string;
 };
+/** Package học liệu công bố dùng cùng hợp đồng Zod của API và web. */
+export type { SystemMaterialPackage } from '@giaokhoa/contracts';

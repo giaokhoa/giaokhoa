@@ -1,9 +1,11 @@
+/** API học liệu và player, kiểm phiên cùng quyền khoá/module trước khi trả nội dung hoặc byte. */
 import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, UseInterceptors } from '@nestjs/common';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { DeprecatedRouteAliasInterceptor } from '../../common/deprecated-route-alias.interceptor';
+import { sendMaterialFile } from '../system-bank/system-materials.controller';
 import { ContentService } from './content.service';
 import {
   createLessonTemplateSchema, createPageSchema, createResourceSchema, recordProgressSchema,
@@ -68,6 +70,13 @@ export class CourseResourcesController {
 /** API tài nguyên: đọc cho người xem (file kèm URL đã ký), sửa và xoá. */
 export class ResourcesController {
   constructor(private readonly content: ContentService) {}
+
+  /** Media của bản tiếp nhận, luôn gác lại audience khi học viên dùng URL trực tiếp. */
+  @Get(':id/system-material/content')
+  async systemMaterialContent(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() viewer: AuthenticatedUser, @Res() res: Response) {
+    sendMaterialFile(res, await this.content.readSystemMaterialFile(viewer.id, id));
+  }
+
 
   @Get(':id')
   /** GET /resources/:id — tài nguyên cho người xem (qua cổng khoá học). */

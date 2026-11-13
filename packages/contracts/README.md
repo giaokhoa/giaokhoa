@@ -32,3 +32,7 @@
 
 - Nguồn: `src/*.ts`, xuất qua `src/index.ts`; test hợp đồng ở `src/contracts.spec.ts`.
 - App tiêu thụ dùng bản `dist` đã build — sửa contracts xong phải build lại trước khi typecheck app (dist cũ là nguồn lỗi type giả kinh điển).
+
+## Học liệu hệ thống (issue #16)
+
+`system-material.ts` tách hợp đồng học liệu tệp/liên kết khỏi gói câu hỏi: bản chụp tự đủ bắt buộc tác giả/nguồn/giấy phép và đúng một nguồn (manifest byte hoặc URL http/https). Gói không mang `fileId` riêng, category câu hỏi, khoá hoặc người học. `useSystemMaterialSchema` bắt buộc số phiên bản dương cùng khoá/section; không tự chọn bản mới nhất. API kiểm chủ sở hữu file, sao byte độc lập, checksum và quyền thực tế; web dùng cùng kiểu để chọn bản, xem nguồn và đưa vào khoá.

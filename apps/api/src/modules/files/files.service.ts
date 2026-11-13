@@ -216,6 +216,11 @@ export class FilesService {
 
   /** Chặn metadata từ miền khác, kể cả các trung tâm dùng chung database. */
   private async canAccessDomain(file: FileRow): Promise<boolean> {
+    /** File học liệu riêng trên kho chung vẫn thuộc đúng tenant, kể cả khi byte cùng miền bank-system. */
+    if (file.component === 'core_contentbank') {
+      const owner = file.itemId ? await this.repo.contentBankTenant(file.itemId) : undefined;
+      if (!owner || owner !== tenantAls.getStore()?.tenantId) return false;
+    }
     if (file.storageDomain === LEGACY_FILE_DOMAIN) return this.canReadLegacy(file);
     return file.storageDomain === await this.currentStorageDomain();
   }

@@ -7,7 +7,7 @@
  * - Policy RLS: đếm trong schema `public`, cũng loại đối tượng
  *   thuộc hai bảng nhật ký; chỉ kiểm khi kho có kỳ vọng (kho trung tâm — hai kho còn lại nghiệm thu chỉ cần số bảng và số dòng nhật ký).
  * - Index: đếm trên CÙNG cơ số đo với mốc kỳ vọng của phương án —
- *   chỉ các index KHÔNG đỡ ràng buộc (không phải index sinh tự động cho PRIMARY KEY/UNIQUE): mốc 419 của kho trung tâm sau migration quyền hỗ trợ #19 (416 của baseline/nền cũ cộng 3 index native) đo trên cơ số này (tổng index trong `pg_indexes` là 737 vì cộng 318 index đỡ ràng buộc; các index đỡ ràng buộc sinh tất định theo bảng/ràng buộc nên được kiểm gián tiếp qua số bảng và đối chiếu schema, đếm tách ở đây chỉ làm nhiễu cổng).
+ *   chỉ các index KHÔNG đỡ ràng buộc (không phải index sinh tự động cho PRIMARY KEY/UNIQUE): mốc 420 của kho trung tâm sau migration học liệu #16 (416 của baseline/nền cũ cộng 4 index native) đo trên cơ số này (tổng index trong `pg_indexes` là 738 vì cộng 318 index đỡ ràng buộc; các index đỡ ràng buộc sinh tất định theo bảng/ràng buộc nên được kiểm gián tiếp qua số bảng và đối chiếu schema, đếm tách ở đây chỉ làm nhiễu cổng).
  * - Dòng nhật ký: số dòng trong `kysely_migration` — bằng TỔNG số
  *   migration của kho (carrier đóng băng + migration native) sau một lượt migrate trọn. Đây là khái niệm khác diện carrier mà hậu kiểm đối sánh: nhật ký chứa cả tên native đã áp, còn hậu kiểm carrier chỉ đòi các carrier thật phải có mặt.
  */
