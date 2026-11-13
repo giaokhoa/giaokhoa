@@ -29,6 +29,16 @@ healthcheck gọi cùng `redisConnectionFromUrl` với runtime; nếu dùng
 Redis TLS CA riêng phải mount chứng chỉ read-only trong worker/API và
 kiểm tra `rediss://` đúng hostname từ môi trường thực tế.
 
+Khi thay đổi identity của một kho, manager chỉ chờ `Pool.end()` của
+chính kho đó, không khóa các kho khác. Pool đang đóng vẫn chiếm slot
+trong `SPACE_DB_MAX_POOLS` cho tới khi đóng thành công; kho khác
+vẫn dùng được pool sẵn có và có thể mở pool mới nếu còn ngân sách.
+Nếu `Pool.end()` trả lỗi, manager ghi lỗi, giữ lại slot như pool
+**không an toàn**, thu hồi cache handle đã chuẩn bị và từ chối dùng
+lại pool đó. Người vận hành phải kiểm tra kết nối, log và khởi động
+lại tiến trình hoặc xử lý tài nguyên hỏng có kiểm soát; không tăng
+trần bừa để bỏ qua pool chưa được xác nhận đã giải phóng.
+
 **Không dùng subnet Docker bridge `172.16/12` làm CIDR proxy tin cậy.**
 Docker NAT có thể làm client ngoài xuất hiện với IP gateway; nếu Caddy
 tin toàn subnet, client có thể tự khai `CF-Connecting-IP` và
