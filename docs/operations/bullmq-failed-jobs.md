@@ -24,8 +24,16 @@ sự cố gốc đã được xử lý; job có tính idempotent; business key v
 thao tác có tác dụng ngoài. Cần lưu lịch sử và có phê duyệt vận hành
 với các job không thể khử trùng một cách chắc chắn.
 
+Payload sai schema tại biên worker (ID, kiểu dữ liệu hoặc phong bì
+outbox) ném `UnrecoverableError`: BullMQ đưa job vào failed **ngay
+lần đầu**, không tốn retry vì dữ liệu JSON không thể tự lành. Listener
+`failed` ghi một event metadata cho trường hợp này, ngay cả khi
+`attempts` lớn hơn 1. Lỗi hạ tầng/network dùng `Error` bình thường,
+giữ backoff và chỉ ghi terminal stream khi hết `attempts`.
+
 Khi Redis không nhận `XADD`, processor log cảnh báo nhưng BullMQ
-vẫn tự giữ trạng thái failed và retry theo chính sách hàng đợi.
+vẫn tự giữ trạng thái failed và retry theo chính sách hàng đợi với
+lỗi có thể phục hồi (không retry `UnrecoverableError`).
 Stream có giới hạn bộ nhớ nên để giám sát dài hạn phải xuất sang
 hệ thống log/metrics riêng. Tách Redis cache LRU khỏi queue/session
 không được đổi chính sách `noeviction` của Redis BullMQ.

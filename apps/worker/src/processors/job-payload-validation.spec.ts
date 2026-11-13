@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest';
+import { UnrecoverableError } from 'bullmq';
 import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
 
 describe('Biên kiểm chứng job từ Redis trước khi đọc kho dữ liệu', () => {
   const good = { spaceSlug: 'centre-a', spaceId: 'space-id-1' };
+
+  it('payload không đúng hợp đồng là lỗi vĩnh viễn, không đốt lượt retry BullMQ', () => {
+    expect(() => validateWorkerJobPayload(workerPayloadSchemas['calendar-import'], {
+      subscriptionId: 123,
+    }, 'calendar-import')).toThrow(UnrecoverableError);
+    expect(() => validateWorkerJobPayload(workerPayloadSchemas['outbox-event'], {
+      outboxId: null,
+    }, 'notification-events')).toThrow(UnrecoverableError);
+  });
 
   it('từ chối payload thiếu định danh của các tác vụ nền', () => {
     expect(() => validateWorkerJobPayload(workerPayloadSchemas['calendar-import'], {

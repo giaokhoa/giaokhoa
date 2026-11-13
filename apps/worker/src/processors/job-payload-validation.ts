@@ -5,6 +5,7 @@
  * cần có trước khi mở phiên database hoặc gọi dịch vụ bên ngoài.
  */
 import { z } from 'zod';
+import { UnrecoverableError } from 'bullmq';
 
 const spaceScope = {
   spaceSlug: z.string().min(1).nullable().optional(),
@@ -59,7 +60,10 @@ export function validateWorkerJobPayload<T extends z.ZodType>(
   const parsed = schema.safeParse(data);
   if (!parsed.success) {
     const fields = parsed.error.issues.map((issue) => issue.path.join('.') || '<root>');
-    throw new Error(`Payload job không hợp lệ (${queueName}); trường: ${[...new Set(fields)].join(', ')}`);
+    // Đây là lỗi hợp đồng đã lưu trong Redis, không phải lỗi
+    // thoáng qua của database/transport. BullMQ chuyển thẳng
+    // job sang failed, không thử lại cùng payload sai 3 lần.
+    throw new UnrecoverableError(`Payload job không hợp lệ (${queueName}); trường: ${[...new Set(fields)].join(', ')}`);
   }
   return parsed.data;
 }

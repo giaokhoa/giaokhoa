@@ -11,7 +11,7 @@
  */
 import { Logger } from '@nestjs/common';
 import { OnWorkerEvent, WorkerHost } from '@nestjs/bullmq';
-import type { Job } from 'bullmq';
+import { UnrecoverableError, type Job } from 'bullmq';
 
 export abstract class ObservedWorkerHost extends WorkerHost {
   private readonly eventLogger = new Logger(this.constructor.name);
@@ -24,9 +24,10 @@ export abstract class ObservedWorkerHost extends WorkerHost {
     );
     if (!job?.id) return;
     const attempts = job.opts?.attempts ?? 1;
-    // Đừng ghi 1 event mỗi lần retry tạm thời. Tới lần cuối mới
-    // đưa vào sổ lỗi để người vận hành triage và retry job gốc.
-    if ((job.attemptsMade ?? 1) < attempts) return;
+    // Lỗi vĩnh viễn không bao giờ retry: cần ghi sổ ngay ở lần
+    // failed đầu tiên. Các lỗi thoáng qua chỉ ghi sau khi hết
+    // attempts, tránh trùng một dòng terminal trên mỗi lượt thử.
+    if (!(error instanceof UnrecoverableError) && (job.attemptsMade ?? 1) < attempts) return;
     void this.recordTerminalFailure(job, error.name).catch((cause: unknown) =>
       this.eventLogger.warn(`Không ghi được sổ lỗi BullMQ: ${cause instanceof Error ? cause.message : 'unknown'}`));
   }

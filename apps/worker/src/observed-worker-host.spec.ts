@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { UnrecoverableError } from 'bullmq';
 import { MetadataScanner } from '@nestjs/core';
 import { describe, expect, it, vi } from 'vitest';
 import { ObservedWorkerHost } from './observed-worker-host';
@@ -34,6 +35,30 @@ describe('Giám sát lỗi của mọi BullMQ processor', () => {
     expect(args).toContain('job-verified');
     expect(args).not.toContain('secrets-here');
     logger.mockRestore();
+  });
+
+  it('ghi lỗi vĩnh viễn vào stream ngay ở lần đầu dù job được đặt attempts=5', async () => {
+    const xadd = vi.fn(async () => '2-0');
+    const instance = new ProbeWorker();
+    const spy = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+    Object.defineProperty(instance, '_worker', {
+      value: { name: 'audit-queue', getBackend: () => ({ client: Promise.resolve({ xadd }) }) },
+    });
+    try {
+      const job = {
+        id: 'job-invalid', data: { token: 'secret-987' },
+        attemptsMade: 1, opts: { attempts: 5 },
+      };
+      instance.onBullJobFailed(job as never, new UnrecoverableError('secret-987 invalid payload'));
+      await vi.waitFor(() => expect(xadd).toHaveBeenCalledOnce());
+      const fields = JSON.stringify(xadd.mock.calls);
+      expect(fields).toContain('UnrecoverableError');
+      expect(fields).toContain('job-invalid');
+      expect(fields).not.toContain('secret-987');
+      expect(JSON.stringify(spy.mock.calls)).not.toContain('secret-987');
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('job còn lượt retry chưa được đưa vào sổ terminal', async () => {
