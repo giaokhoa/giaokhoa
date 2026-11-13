@@ -284,6 +284,9 @@ test luôn chạy trên PostgreSQL/Redis của lượt hiện tại, kể cả k
 nguồn không đổi. Docker tải dependency bằng `pnpm fetch` trước khi chép
 nguồn, rồi `pnpm install --offline --frozen-lockfile`; sửa nguồn không
 làm mất layer tải gói khi lockfile và cấu hình pnpm không đổi.
+`deploy-check` xuất định nghĩa build bằng `docker compose build --print`,
+chạy `docker/bake-action` để lưu/khôi phục cache layer GitHub Actions rồi
+khởi động Compose bằng `--no-build` từ chính các image vừa dựng.
 
 ## Vận hành
 

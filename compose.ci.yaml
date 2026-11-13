@@ -16,8 +16,9 @@
 # khi gộp với compose.yaml, cấu hình chạy của stack giữ nguyên
 # như bản production.
 #
-# Cách workflow dùng (mọi lệnh compose đều gộp cả hai file):
-#   docker compose -f compose.yaml -f compose.ci.yaml up -d --build
+# Workflow gộp cả hai file, xuất định nghĩa bằng compose build --print,
+# rồi dùng docker/bake-action để cấp runtime token cho cache gha và nạp
+# image vào runner. compose up --no-build chỉ khởi động image đã có.
 
 services:
   api:
