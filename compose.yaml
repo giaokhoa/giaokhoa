@@ -83,7 +83,10 @@ services:
     image: redis:7.4.12
     restart: unless-stopped
     # BullMQ không chấp nhận Redis eviction. Giới hạn bộ nhớ mặc định 0 (không giới hạn) để không làm mất job; production phải đặt REDIS_MAXMEMORY theo ngân sách máy và theo dõi OOM/used_memory.
-    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory-policy", "noeviction", "--maxmemory", "${REDIS_MAXMEMORY:-0}"]
+    # AOF fsync mỗi giây và snapshot RDB bổ sung để phục hồi/backup.
+    # Khi truyền args CLI Redis có thể bỏ default save; khai tường
+    # minh cả ba mốc snapshot thay vì dựa vào redis.conf ẩn.
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--save", "900 1 300 10 60 10000", "--maxmemory-policy", "noeviction", "--maxmemory", "${REDIS_MAXMEMORY:-0}"]
     volumes:
       - redisdata:/data
     healthcheck:

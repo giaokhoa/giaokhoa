@@ -137,6 +137,15 @@ jobs:
           test "$policy" = noeviction
           printf '%s\n' "$budget" | grep -Eq '^[0-9]+$'
           echo "Redis: maxmemory-policy=$policy, maxmemory=$budget bytes"
+          # Redis CLI nhận đủ flags: xác minh AOF + fsync và RDB
+          # snapshot thật; không suy từ câu lệnh Docker Compose.
+          aof=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis redis-cli --raw CONFIG GET appendonly | tail -n 1)
+          fsync=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis redis-cli --raw CONFIG GET appendfsync | tail -n 1)
+          snapshots=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis redis-cli --raw CONFIG GET save | tail -n 1)
+          test "$aof" = yes
+          test "$fsync" = everysec
+          test "$snapshots" = '900 1 300 10 60 10000'
+          echo "Redis persistence: AOF=$aof fsync=$fsync RDB=$snapshots"
           # Redis cache riêng PHẢI dùng eviction (không phải Redis BullMQ).
           cache_policy=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis-cache redis-cli --raw CONFIG GET maxmemory-policy | tail -n 1)
           cache_budget=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis-cache redis-cli --raw CONFIG GET maxmemory | tail -n 1)
