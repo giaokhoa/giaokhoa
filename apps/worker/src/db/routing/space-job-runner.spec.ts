@@ -7,7 +7,7 @@ import { SpaceJobRunner } from './space-job-runner';
 /**
  * Ca đơn vị của bộ chạy job theo trung tâm (issue #582): khung định tuyến được thay bằng vật giả ghi lại cách phiên được mở — các ca khoá đúng quyết định phiên cho từng hình job: job của trung tâm ở kho riêng chạy trong phiên theo trung tâm mang cả tenant của job, và phiên kho riêng chuẩn bị cả handle Kysely
  * (bảng chuẩn bị tách riêng với phía bộ máy cũ); job ở kho chung
- * và job không mang slug chạy trong ngữ cảnh platform như hiện tại; job mà đích phân giải lỗi thì bị lỗi thay vì chạy trên platform (vòng sửa theo phán quyết điều phối PR #602).
+ * và job khai báo đủ hai trường null chạy trong ngữ cảnh platform; job thiếu một trường scope hoặc có đích phân giải lỗi thì bị từ chối trước handler (vòng sửa theo phán quyết điều phối PR #602).
  */
 
 const DEDICATED_TARGET: ResolvedSpaceConnection = {
@@ -75,7 +75,7 @@ describe('Bộ chạy job theo trung tâm', () => {
   it('job của trung tâm ở kho chung chạy trong ngữ cảnh platform như hiện tại, không mở phiên theo trung tâm', async () => {
     const { runner, spaceDb } = makeRunner({ target: SHARED_TARGET });
     const observed = await runner.runForJob(
-      { spaceSlug: 'truong-mac-dinh', tenantId: 'tenant-truong' },
+      { spaceSlug: 'truong-mac-dinh', spaceId: null, tenantId: 'tenant-truong' },
       async () => tenantAls.getStore(),
     );
     expect(spaceDb.withSpaceKysely).not.toHaveBeenCalled();
@@ -86,7 +86,7 @@ describe('Bộ chạy job theo trung tâm', () => {
 
   it('job không mang slug trung tâm chạy trong ngữ cảnh platform như hiện tại và không phân giải gì', async () => {
     const { runner, spaceDb } = makeRunner();
-    const observed = await runner.runForJob({ spaceSlug: null, tenantId: null }, async () =>
+    const observed = await runner.runForJob({ spaceSlug: null, spaceId: null, tenantId: null }, async () =>
       tenantAls.getStore(),
     );
     expect(spaceDb.resolveTarget).not.toHaveBeenCalled();
@@ -163,10 +163,18 @@ describe('Bộ chạy job theo trung tâm', () => {
       { spaceSlug: 'trung-tam-a', tenantId: 'tenant-a' },
       { spaceSlug: 'trung-tam-a', spaceId: 'id-dang-ky-b', tenantId: 'tenant-a' },
       { spaceSlug: null, tenantId: 'tenant-a', spaceId: 'id-dang-ky-a' },
+      {},
+      { tenantId: null },
+      { tenantId: 'tenant-a' },
+      { spaceSlug: null },
+      { spaceId: null },
+      { spaceSlug: null, spaceId: undefined, tenantId: null },
+      { spaceSlug: undefined, spaceId: null, tenantId: null },
     ]) {
       await expect(runner.runForJob(context, async () => { executed = true; })).rejects.toBeInstanceOf(SpaceRoutingError);
     }
     expect(executed).toBe(false);
+    expect(spaceDb.resolveTarget).toHaveBeenCalled();
     expect(spaceDb.withSpaceKysely).not.toHaveBeenCalled();
     const closed = makeRunner({ target: { ...DEDICATED_TARGET, status: 'closed' } });
     await expect(closed.runner.runForJob({ spaceSlug: 'trung-tam-a', spaceId: 'id-dang-ky-a' }, async () => {
@@ -195,13 +203,24 @@ describe('Bộ chạy job theo trung tâm', () => {
     expect(spaceDb.withSpaceKysely).toHaveBeenCalledTimes(1);
   });
 
+  it('registry đóng kho sau bước resolve nhưng trước handler: từ chối dù spaceId không đổi', async () => {
+    const { runner, spaceDb } = makeRunner();
+    spaceDb.resolveTarget.mockResolvedValueOnce(DEDICATED_TARGET)
+      .mockResolvedValueOnce({ ...DEDICATED_TARGET, status: 'suspended' });
+    const fn = vi.fn(async () => 'không được xử lý');
+    await expect(runner.runForJob({
+      spaceSlug: DEDICATED_TARGET.slug, spaceId: DEDICATED_TARGET.spaceId,
+    }, fn)).rejects.toMatchObject({ code: 'space_routing.job_identity_mismatch' });
+    expect(fn).not.toHaveBeenCalled();
+  });
+
   it('kết quả và lỗi của thân xử lý được truyền nguyên qua bộ chạy ở cả hai đường phiên', async () => {
     const { runner } = makeRunner();
     await expect(
       runner.runForJob({ spaceSlug: 'trung-tam-a', spaceId: 'id-dang-ky-a', tenantId: 'tenant-a' }, async () => 'kq-rieng'),
     ).resolves.toBe('kq-rieng');
     await expect(
-      runner.runForJob({ spaceSlug: null, tenantId: null }, async () => 'kq-chung'),
+      runner.runForJob({ spaceSlug: null, spaceId: null, tenantId: null }, async () => 'kq-chung'),
     ).resolves.toBe('kq-chung');
     const failure = new Error('thân xử lý lỗi');
     await expect(

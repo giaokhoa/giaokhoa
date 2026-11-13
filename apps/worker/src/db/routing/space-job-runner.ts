@@ -35,7 +35,7 @@ export class SpaceJobRunner {
       // Tenant của job legacy kho chung chỉ được phép dùng platform
       // khi producer đóng dấu tường minh cả hai trường scope là null.
       // Thiếu trường (undefined) không được xem là một xác nhận shared.
-      if (data.spaceId || (data.tenantId && (data.spaceSlug !== null || data.spaceId !== null))) {
+      if (data.spaceSlug !== null || data.spaceId !== null) {
         throw new SpaceRoutingError('space_routing.job_scope_missing', 'Scoped job is missing its space slug');
       }
       return tenantAls.run({ platform: true }, async () => fn());
@@ -56,7 +56,9 @@ export class SpaceJobRunner {
       return this.spaceDb.withSpaceKysely(slug, async () => {
         // Tránh đua trạng thái: lần chuẩn bị handle bên trong phiên
         // có thể phân giải phiên bản sổ mới hơn bước kiểm ở trên.
-        if (tenantAls.getStore()?.spaceId !== data.spaceId) {
+        const prepared = await this.spaceDb.resolveTarget(slug);
+        if (tenantAls.getStore()?.spaceId !== data.spaceId || prepared.spaceId !== data.spaceId
+          || prepared.mode !== 'dedicated' || prepared.status !== 'active') {
           throw new SpaceRoutingError('space_routing.job_identity_mismatch', `Space identity changed for ${slug}`);
         }
         return fn();

@@ -14,7 +14,7 @@ import type { Queue } from 'bullmq';
  *   mới đóng dấu và phản chiếu dòng đã phát vào `event_log`.
  * - "Phát cho phía tiêu thụ" với loại sự kiện đã có consumer trên
  *   hàng đợi ở worker là đẩy job BullMQ vào MỌI hàng đợi đích của
- *   loại đó: tên job là chính loại sự kiện, `jobId` là id của dòng
+ *   loại đó: tên job là chính loại sự kiện, `jobId` ghép định danh kho bất biến với id của dòng
  *   outbox, dữ liệu job là toàn bộ dòng outbox đã chuẩn hoá (xem
  *   {@link OutboxEventJobData}).
  *   `jobId` là khoá chống trùng của BullMQ NHƯNG chỉ trong cửa sổ
@@ -46,7 +46,7 @@ import type { Queue } from 'bullmq';
  *   issue chuyển consumer tương ứng.
  * - Chống trùng hai lớp, phân vai rõ ràng: cam kết của cơ chế này
  *   là at-least-once (`publishedAt` là dấu đã phát, không phải dấu
- *   hoàn thành xử lý). Lớp thứ nhất là `jobId` bằng id dòng outbox,
+ *   hoàn thành xử lý). Lớp thứ nhất là `jobId` ghép định danh kho bất biến với id dòng outbox,
  *   chỉ có hiệu lực trong cửa sổ lưu giữ của hàng đợi như mô tả ở
  *   trên. Lớp thứ hai — và là hàng rào chính ngoài cửa sổ đó — là
  *   processor của hàng đợi được định tuyến: processor PHẢI
@@ -67,7 +67,7 @@ import type { Queue } from 'bullmq';
  * sách và chỉ đóng dấu `publishedAt` sau khi MỌI đích đã nhận job
  * thành công — lỗi ở bất kỳ đích nào thì dòng chưa được đóng dấu
  * và được phát lại ở nhịp sau (đích đã nhận không sinh job trùng
- * trong cửa sổ lưu giữ nhờ `jobId` bằng id dòng outbox; ngoài cửa
+ * trong cửa sổ lưu giữ nhờ `jobId` ghép định danh kho bất biến với id dòng outbox; ngoài cửa
  * sổ đó, hàng rào chống tác dụng phụ lần hai là tính idempotent
  * theo `outboxId` của processor ở đích đó). Các consumer của cùng
  * một loại sự kiện vẫn độc lập hoàn toàn: relay không chờ consumer

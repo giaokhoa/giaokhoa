@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MessagingGateway } from './messaging.gateway';
+import { tenantAls } from '../tenants/tenant-als';
 
 /**
  * Gateway nhắn tin lúc socket nối (issue #33): danh sách chặn của user là MỘT dữ kiện duy nhất, không đổi theo hội thoại — một lần nối với nhiều hội thoại 1–1 chỉ được tải danh sách chặn tối đa một lần, và tập room socket vào được không đổi so với khi tải lại theo từng hội thoại:
@@ -34,7 +35,7 @@ describe('MessagingGateway.handleConnection — danh sách chặn tải một l�
       'conv-open-b': 'user-b',
     };
     // Đầu dò phạm vi kho của kết nối: bật trong lúc callback của `withSpaceKysely` chạy, các fake repository ghi lại trạng thái tại thời điểm được gọi.
-    const spaceProbe = { insideSpace: false, slugs: [] as string[], listInsideSpace: [] as boolean[] };
+    const spaceProbe = { insideSpace: false, currentSpaceId: 'space-a', slugs: [] as string[], listInsideSpace: [] as boolean[] };
     const repo = {
       listConversationsForUser: vi.fn(async () => {
         spaceProbe.listInsideSpace.push(spaceProbe.insideSpace);
@@ -47,23 +48,29 @@ describe('MessagingGateway.handleConnection — danh sách chặn tải một l�
       })),
       listMembers: vi.fn(async (id: string) => [USER_ID, peers[id]!]),
       listBlockedCounterpartIds: vi.fn(async () => [BLOCKED_PEER]),
+      isMember: vi.fn(async () => true),
+      listMessages: vi.fn(async () => [{ id: 'msg-from-current-store', seq: 1 }]),
+      attachQuotes: vi.fn(async (messages: unknown[]) => messages),
     };
     const auth = {
       authenticateHandshake: vi.fn(async () => ({
         userId: USER_ID, username: 'user1', tenantId: TENANT_ID, spaceSlug: opts.spaceSlug ?? null,
+        spaceId: opts.spaceSlug ? 'space-a' : null,
       })),
     };
     const realtime = {
       markConnected: vi.fn(async () => {}),
       markDisconnected: vi.fn(async () => {}),
+      noteTyping: vi.fn(async () => {}),
       listOnlineCoMemberIds: vi.fn(async () => ['user-a']),
     };
     const spaceDb = {
+      resolveTarget: vi.fn(async (slug: string) => ({ slug, mode: 'dedicated', status: 'active', spaceId: spaceProbe.currentSpaceId })),
       withSpaceKysely: vi.fn(async (slug: string, fn: () => Promise<unknown>) => {
         spaceProbe.slugs.push(slug);
         spaceProbe.insideSpace = true;
         try {
-          return await fn();
+          return await tenantAls.run({ platform: true, spaceSlug: slug, spaceId: spaceProbe.currentSpaceId }, fn);
         } finally {
           spaceProbe.insideSpace = false;
         }
@@ -78,6 +85,7 @@ describe('MessagingGateway.handleConnection — danh sách chặn tải một l�
       join: vi.fn(async (room: string) => {
         joinedRooms.push(room);
       }),
+      leave: vi.fn(async () => {}),
       emit: vi.fn(),
       disconnect: vi.fn(),
     };
@@ -131,6 +139,48 @@ describe('MessagingGateway.handleConnection — danh sách chặn tải một l�
     // Tập room không đổi so với đường kho chung.
     expect(joinedRooms).toHaveLength(4);
     expect(joinedRooms.some((room) => room.includes('conv-blocked'))).toBe(false);
+  });
+
+  it('socket A vẫn còn nối nhưng slug bị tái gán sang B: chặn join/sync/typing trước khi đọc kho B', async () => {
+    const { gateway, client, repo, spaceDb, spaceProbe, realtime, joinedRooms } = build({ spaceSlug: 'trung-tam-a' });
+    await gateway.handleConnection(client as never);
+    const before = joinedRooms.length;
+    const beforeReads = repo.isMember.mock.calls.length;
+    spaceProbe.currentSpaceId = 'space-b';
+    // Hai kho có cùng user/conversation ID — nếu chỉ kiểm membership
+    // theo ID mà không ghim identity lúc nối, socket A sẽ đọc nhầm B.
+    await expect(gateway.joinConversation(client as never, { conversationId: 'conv-open-a' }))
+      .rejects.toMatchObject({ code: 'space_routing.socket_identity_mismatch' });
+    await expect(gateway.sync(client as never, { 'conv-open-a': 0 }))
+      .rejects.toMatchObject({ code: 'space_routing.socket_identity_mismatch' });
+    await expect(gateway.typing(client as never, { conversationId: 'conv-open-a' }))
+      .rejects.toMatchObject({ code: 'space_routing.socket_identity_mismatch' });
+    expect(repo.isMember).toHaveBeenCalledTimes(beforeReads);
+    expect(realtime.noteTyping).not.toHaveBeenCalled();
+    expect(joinedRooms).toHaveLength(before);
+    expect(client.disconnect).toHaveBeenCalledWith(true);
+    expect(spaceDb.withSpaceKysely).toHaveBeenCalledTimes(1); // chỉ lúc handshake
+  });
+
+  it('registry trả A nhưng chuẩn bị pool đã sang B: từ chối ngay trong phiên, không chạy callback', async () => {
+    const { gateway, client, repo, spaceDb, spaceProbe } = build({ spaceSlug: 'trung-tam-a' });
+    await gateway.handleConnection(client as never);
+    spaceDb.resolveTarget.mockResolvedValue({ slug: 'trung-tam-a', mode: 'dedicated', status: 'active', spaceId: 'space-a' });
+    spaceProbe.currentSpaceId = 'space-b';
+    await expect(gateway.joinConversation(client as never, { conversationId: 'conv-open-a' }))
+      .rejects.toMatchObject({ code: 'space_routing.socket_identity_mismatch' });
+    expect(repo.isMember).not.toHaveBeenCalled();
+    expect(client.disconnect).toHaveBeenCalledWith(true);
+  });
+
+  it('socket đã xác thực nhưng registry đóng không gian: từ chối sự kiện và ngắt kết nối', async () => {
+    const { gateway, client, repo, spaceDb } = build({ spaceSlug: 'trung-tam-a' });
+    await gateway.handleConnection(client as never);
+    spaceDb.resolveTarget.mockResolvedValue({ slug: 'trung-tam-a', mode: 'dedicated', status: 'closed', spaceId: 'space-a' });
+    await expect(gateway.joinConversation(client as never, { conversationId: 'conv-open-a' }))
+      .rejects.toMatchObject({ code: 'space_routing.socket_identity_mismatch' });
+    expect(repo.isMember).not.toHaveBeenCalled();
+    expect(client.disconnect).toHaveBeenCalledWith(true);
   });
 
   it('kết nối thuộc đường kho chung (không slug): không qua lớp bọc kho nào', async () => {

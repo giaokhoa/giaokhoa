@@ -168,7 +168,7 @@ export class MessagingRealtimeService implements OnModuleDestroy {
   }
 
   /** Ghi nhận một socket vừa ngắt; là socket CUỐI CÙNG của user thì phát trạng thái offline. */
-  async markDisconnected(tenantId: string | null, userId: string, socketId: string): Promise<void> {
+  async markDisconnected(tenantId: string | null, userId: string, socketId: string, broadcast = true): Promise<void> {
     // Bỏ khỏi sổ local TRƯỚC: vòng gia hạn dừng ngay cho socket này,
     // kể cả khi thao tác Redis dưới đây lỗi.
     const subject = this.presenceSubject(tenantId, userId);
@@ -177,7 +177,7 @@ export class MessagingRealtimeService implements OnModuleDestroy {
       const redis = this.state();
       await redis.srem(`${PRESENCE_KEY_PREFIX}${subject}`, socketId);
       const remaining = await redis.scard(`${PRESENCE_KEY_PREFIX}${subject}`);
-      if (remaining === 0) await this.broadcastPresence(userId, false);
+      if (remaining === 0 && broadcast) await this.broadcastPresence(userId, false);
     } catch (error) {
       this.logger.warn(`Không ghi được presence khi ngắt: ${(error as Error).message}`);
     }

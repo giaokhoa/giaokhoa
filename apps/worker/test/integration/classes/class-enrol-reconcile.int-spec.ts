@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import type { INestApplicationContext } from '@nestjs/common';
 import { sql } from '@giaokhoa/db';
 import { ClassEnrolReconcileProcessor } from '../../../src/processors/class-enrol-reconcile.processor';
@@ -28,7 +29,10 @@ describe('Đối chiếu ghi danh lớp của worker (CLASS-0, #184)', () => {
   let harness: OrdinaryWorkerModuleHarness;
   let db: OrdinaryWorkerModuleHarness["adminDb"];
   const suffix = `${Date.now() % 100000000}`;
-  const uid = (n: number) => `01900000-0000-7000-8000-${String(700000 + n).padStart(12, '0')}`;
+  // Mỗi lần chạy lại trên cùng DB có UUID riêng, tránh đụng khoá
+  // của dữ kiện test cũ (trước đây phần đuôi cố định cho mọi lần).
+  const runTag = randomUUID().replaceAll('-', '').slice(0, 6);
+  const uid = (n: number) => `01900000-0000-7000-8000-${runTag}${String(700000 + n).padStart(6, '0')}`;
   const teacherId = uid(1);
   // A: trong roster, chưa có UE → phải được ghi danh.
   const memberA = uid(2);

@@ -10,6 +10,7 @@ import {
 import type { Server, Socket } from 'socket.io';
 import { Public } from '../../common/public.decorator';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
+import { SpaceRoutingError } from '../../db/routing/space-connection-resolver';
 import { tenantAls } from '../tenants/tenant-als';
 import { MessagingRepository } from '@giaokhoa/db/repositories/messaging';
 import { blankRecalledContent } from '@giaokhoa/messaging';
@@ -78,7 +79,35 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
    */
   private async withConnectionSpace<T>(client: Socket, fn: () => Promise<T>): Promise<T> {
     const slug = client.data.spaceSlug as string | null | undefined;
-    return slug ? this.spaceDb.withSpaceKysely(slug, fn) : fn();
+    const pinnedSpaceId = client.data.spaceId as string | null | undefined;
+    if (!slug) {
+      if (pinnedSpaceId) {
+        client.disconnect(true);
+        throw new SpaceRoutingError('space_routing.socket_identity_mismatch', 'Socket has an identity without a space slug');
+      }
+      return fn();
+    }
+    try {
+      // Mỗi sự kiện phải tái xác minh identity đã chốt lúc handshake:
+      // cùng slug có thể bị thu hồi hoặc chuyển sang một kho khác.
+      const target = await this.spaceDb.resolveTarget(slug);
+      if (!pinnedSpaceId || target.mode !== 'dedicated' || target.status !== 'active' || target.spaceId !== pinnedSpaceId) {
+        throw new SpaceRoutingError('space_routing.socket_identity_mismatch', `Space identity changed for socket ${slug}`);
+      }
+      return await this.spaceDb.withSpaceKysely(slug, async () => {
+        // Chặn race khi lần chuẩn bị kết nối thấy một phiên bản sổ mới
+        // hơn lượt resolve phía trên (kể cả đã thay database/role).
+        const prepared = await this.spaceDb.resolveTarget(slug);
+        if (tenantAls.getStore()?.spaceId !== pinnedSpaceId || prepared.spaceId !== pinnedSpaceId
+          || prepared.mode !== 'dedicated' || prepared.status !== 'active') {
+          throw new SpaceRoutingError('space_routing.socket_identity_mismatch', `Space preparation changed for socket ${slug}`);
+        }
+        return fn();
+      });
+    } catch (error) {
+      client.disconnect(true);
+      throw error;
+    }
   }
 
   afterInit(server: Server): void {
@@ -136,7 +165,15 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
     if (userId) {
       // Lượt ngắt cũng phải mang kho của socket: nếu không, tác động
       // offline sẽ dùng key/room của kho chung dù socket thuộc kho riêng.
-      await this.withConnectionSpace(client, () => this.realtime.markDisconnected(tenantId, userId, client.id));
+      try {
+        await this.withConnectionSpace(client, () => this.realtime.markDisconnected(tenantId, userId, client.id));
+      } catch (error) {
+        // Thu hồi/chuyển kho thì vẫn xoá socket khỏi presence thuộc ID
+        // kho cũ, nhưng KHÔNG truy vấn/broadcast dựa trên kho mới.
+        this.logger.warn(`Dọn presence kho cũ của socket ${client.id}: ${(error as Error).message}`);
+        await tenantAls.run({ platform: true, spaceId: (client.data.spaceId as string | null) ?? undefined }, () =>
+          this.realtime.markDisconnected(tenantId, userId, client.id, false));
+      }
     }
   }
 

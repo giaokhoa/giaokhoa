@@ -13,6 +13,7 @@ import {
   type SpaceRegistryEntry,
 } from './space-connection-resolver';
 import { SpacePoolManager } from './space-pool-manager';
+import { mapWithConcurrencyLimit } from './space-sweep';
 
 /**
  * Khung định tuyến kết nối theo trung tâm cho tác vụ nền (issue
@@ -55,6 +56,8 @@ import { SpacePoolManager } from './space-pool-manager';
 export class SpaceDatabaseService implements OnModuleDestroy {
   private readonly resolver: SpaceConnectionResolver;
   private readonly poolMax: number;
+  /** Trần kho chạy song song của lượt quét định kỳ (dùng chung cấu hình với outbox relay). */
+  private readonly sweepConcurrency: number;
   private readonly ssl: boolean;
   /** Pool đọc sổ đăng ký ở control plane; null khi worker chưa cấu hình biến kết nối control plane. */
   private readonly registryPool: Pool | null;
@@ -87,6 +90,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
 
   constructor(config: ConfigService) {
     this.poolMax = config.get<number>('SPACE_DB_POOL_MAX') ?? 5;
+    this.sweepConcurrency = config.get<number>('SPACE_SWEEP_CONCURRENCY') ?? 3;
     this.ssl = config.get<boolean>('DATABASE_SSL') ?? false;
     const idleTimeoutMs = config.get<number>('SPACE_DB_POOL_IDLE_TIMEOUT_MS') ?? 60_000;
     const registryUrl = config.get<string>('CONTROL_PLANE_DATABASE_URL');
@@ -264,6 +268,63 @@ export class SpaceDatabaseService implements OnModuleDestroy {
       ])
       .execute();
     return rows;
+  }
+
+  /**
+   * Quét dữ liệu định kỳ trong kho chung RỒI từng kho riêng đang active.
+   * Danh sách registry và identity được xác minh lại trước mỗi lượt;
+   * sau bước chuẩn bị pool còn kiểm tra `spaceId` trong ALS để chặn
+   * việc slug bị gán lại trong lúc tác vụ đang thực thi. Một kho lỗi
+   * không cản các kho khác; SAU khi quét hết mới ném lỗi tổng hợp để
+   * BullMQ retry (không được trả thành công giả khi còn kho bỏ sót).
+   * Mỗi lần retry đều quét lại: tác vụ nghiệp vụ tự chống trùng qua
+   * khóa/đánh dấu bền, cùng nguyên tắc at-least-once của relay.
+   */
+  async sweepSharedAndDedicated<T>(
+    sweep: () => Promise<T>,
+    merge: (result: T, next: T) => T,
+  ): Promise<T> {
+    const failed: string[] = [];
+    let shared: T | undefined;
+    try {
+      shared = await tenantAls.run({ platform: true }, sweep);
+    } catch (error) {
+      // Kho chung lỗi không được chặn kho riêng; vẫn chạy các kho
+      // còn lại rồi ném lỗi để retry TOÀN BỘ lượt quét.
+      failed.push(`shared: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    // Không được thay lỗi đọc sổ bằng danh sách rỗng: khi control
+    // plane mất, retry phải giữ trạng thái failed, không được thông
+    // báo đã xử lý hết kho riêng.
+    const registered = await this.listRegisteredSpaces();
+    const dedicated = registered.filter((space) => space.storageMode === 'dedicated' && space.status === 'active');
+    const results: Array<T | undefined> = Array.from({ length: dedicated.length });
+    await mapWithConcurrencyLimit(dedicated.map((space, index) => ({ space, index })), this.sweepConcurrency, async ({ space, index }) => {
+      try {
+        const target = await this.resolveTarget(space.slug);
+        if (target.mode !== 'dedicated' || target.status !== 'active' || target.spaceId !== space.id) {
+          throw new SpaceRoutingError('space_routing.sweep_identity_mismatch', `Space identity changed for ${space.slug}`);
+        }
+        results[index] = await tenantAls.run({ platform: true }, () =>
+          this.withSpaceKysely(space.slug, async () => {
+            const prepared = await this.resolveTarget(space.slug);
+            if (tenantAls.getStore()?.spaceId !== space.id || prepared.spaceId !== space.id
+              || prepared.mode !== 'dedicated' || prepared.status !== 'active') {
+              throw new SpaceRoutingError('space_routing.sweep_identity_mismatch', `Prepared identity changed for ${space.slug}`);
+            }
+            return sweep();
+          }),
+        );
+      } catch (error) {
+        failed.push(`${space.slug}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    });
+    if (failed.length > 0) {
+      throw new Error(`Periodic sweep failed in ${failed.length} storage scope(s): ${failed.join('; ')}`);
+    }
+    // Dùng reduce không bỏ qua kết quả rỗng/false/0; chỉ bỏ qua
+    // undefined do lỗi và lỗi đã ném ở trên.
+    return results.reduce<T>((all, value) => merge(all, value as T), shared as T);
   }
 
   /** Handle Kysely kho chung đã gắn; chưa gắn là lỗi lập trình ở đường khởi động. */

@@ -81,6 +81,9 @@ describe('Kênh email thông báo của worker + digest hàng ngày (NB-5, issue
   beforeAll(async () => {
     harness = await bootWorkerModuleAsOrdinaryRole();
     db = harness.adminDb;
+    // Các lượt test trước có thể thất bại giữa digest-queued và cleanup:
+    // xoá đúng fixture nb5 cũ để số đếm độc lập với lần chạy trước.
+    await db.deleteFrom('notification_dispatch_log').where('dedupe_key', 'like', 'nb5-%').execute();
     const rows: Array<[string, string, boolean]> = [
       [userActive, `nb5-a-${suffix}`, false],
       [userPrefOff, `nb5-p-${suffix}`, false],
@@ -114,6 +117,7 @@ describe('Kênh email thông báo của worker + digest hàng ngày (NB-5, issue
 
   const emailJob = (userId: string, dedupeKey: string, extra: Record<string, unknown> = {}) => ({
     data: {
+      spaceSlug: null, spaceId: null,
       userId, provider: 'calendar_reminder', channel: 'email',
       subject: 'Nhắc lịch: Buổi học thêm', body: 'Bản tóm tắt cho kênh ngoài.',
       dedupeKey, ...extra,

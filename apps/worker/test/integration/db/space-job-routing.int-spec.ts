@@ -4,7 +4,10 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Job, Queue } from 'bullmq';
 import { Client, Pool } from 'pg';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { NotificationDigestProcessor } from '../../../src/processors/notification-digest.processor';
+import { EnrolExpiryProcessor } from '../../../src/processors/enrol-expiry.processor';
+import { TaskLogService } from '../../../src/task-log.service';
 import { createCentreKysely, sql } from '@giaokhoa/db';
 import { createControlPlaneKysely } from '@giaokhoa/db/control-plane';
 import { tenantAls } from '../../../src/db/tenant-als';
@@ -14,7 +17,7 @@ import { TenantAwarePool } from '../../../src/db/tenant-pool';
 import { NotificationDeliveryService } from '../../../src/notification-delivery.service';
 import { NotificationEventsHandlerService } from '../../../src/notification-events-handler.service';
 import { NotificationEventsMarker } from '../../../src/notification-events-marker.service';
-import { OUTBOX_EVENT_QUEUE_ROUTES, type OutboxEventJobData } from '../../../src/outbox-event-routes';
+import { OUTBOX_EVENT_QUEUE_ROUTES, allQueueNamesOfRoutes, type OutboxEventJobData } from '../../../src/outbox-event-routes';
 import { OutboxRelayScheduler } from '../../../src/outbox-relay.scheduler';
 import { NotificationEventsProcessor } from '../../../src/processors/notification-events.processor';
 
@@ -41,6 +44,13 @@ const CENTRE_DATABASE = 'giaokhoa_test_centre_a_582w';
 const CENTRE_ROLE = 'giaokhoa_centre_a_582w_app';
 const CENTRE_PASSWORD = 'centre-a-582w';
 const CENTRE_SLUG = 'trung-tam-a-582w';
+const B_DATABASE = 'giaokhoa_test_centre_b_582w';
+const B_ROLE = 'giaokhoa_centre_b_582w_app';
+const B_PASSWORD = 'centre-b-582w';
+const B_SLUG = 'trung-tam-b-582w';
+const PERIODIC_ENROL_ID = '01958200-0000-7000-8000-0000000000c2';
+const PERIODIC_UE_ID = '01958200-0000-7000-8000-0000000000c3';
+const PERIODIC_LOG_ID = '01958200-0000-7000-8000-0000000000c4';
 const CENTRE_TENANT_ID = '01958200-0000-7000-8000-0000000000a1';
 const SHARED_TENANT_ID = '01958200-0000-7000-8000-0000000000b1';
 const SHARED_TENANT_SLUG = 'tt-chung-582w';
@@ -161,26 +171,32 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
     // khung: role riêng cho từng kho, kho thuộc role của nó,
     // CONNECT của PUBLIC bị thu hồi và chỉ cấp lại cho đúng role đó.
     await withClient(clusterUrl('postgres'), async (admin) => {
-      for (const database of [CP_DATABASE, CENTRE_DATABASE]) {
+      for (const database of [CP_DATABASE, CENTRE_DATABASE, B_DATABASE]) {
         await admin.query(`DROP DATABASE IF EXISTS ${quoted(database)} WITH (FORCE)`);
       }
-      for (const role of [CP_ROLE, CENTRE_ROLE]) {
+      for (const role of [CP_ROLE, CENTRE_ROLE, B_ROLE]) {
         await admin.query(`DROP ROLE IF EXISTS ${quoted(role)}`);
       }
       await admin.query(`CREATE ROLE ${CP_ROLE} LOGIN PASSWORD '${CP_PASSWORD}'`);
       await admin.query(`CREATE ROLE ${CENTRE_ROLE} LOGIN PASSWORD '${CENTRE_PASSWORD}'`);
+      await admin.query(`CREATE ROLE ${B_ROLE} LOGIN PASSWORD '${B_PASSWORD}'`);
       await admin.query(`CREATE DATABASE ${CP_DATABASE} OWNER ${CP_ROLE}`);
       await admin.query(`CREATE DATABASE ${CENTRE_DATABASE} OWNER ${CENTRE_ROLE}`);
+      await admin.query(`CREATE DATABASE ${B_DATABASE} OWNER ${B_ROLE}`);
       await admin.query(`REVOKE CONNECT ON DATABASE ${CP_DATABASE} FROM PUBLIC`);
       await admin.query(`GRANT CONNECT ON DATABASE ${CP_DATABASE} TO ${CP_ROLE}`);
       await admin.query(`REVOKE CONNECT ON DATABASE ${CENTRE_DATABASE} FROM PUBLIC`);
       await admin.query(`GRANT CONNECT ON DATABASE ${CENTRE_DATABASE} TO ${CENTRE_ROLE}`);
+      await admin.query(`REVOKE CONNECT ON DATABASE ${B_DATABASE} FROM PUBLIC`);
+      await admin.query(`GRANT CONNECT ON DATABASE ${B_DATABASE} TO ${B_ROLE}`);
     });
 
     await applyControlPlaneMigrations(clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD));
     await applyBusinessBaseline(clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD));
+    await applyBusinessBaseline(clusterUrl(B_DATABASE, B_ROLE, B_PASSWORD));
 
     process.env.SPACE_TEST_A_582W_URL = clusterUrl('postgres', CENTRE_ROLE, CENTRE_PASSWORD);
+    process.env.SPACE_TEST_B_582W_URL = clusterUrl('postgres', B_ROLE, B_PASSWORD);
 
     const config = fakeConfig({
       CONTROL_PLANE_DATABASE_URL: clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD),
@@ -211,6 +227,11 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
         connection_role_ref: CENTRE_ROLE,
         secret_ref: 'env:SPACE_TEST_A_582W_URL',
         schema_version: 'v1',
+      }).execute();
+      await cpDb.insertInto('space_registry').values({
+        slug: B_SLUG, name: 'Trung tâm B 582w', kind: 'center', status: 'active',
+        database_name: B_DATABASE, storage_mode: 'dedicated',
+        connection_role_ref: B_ROLE, secret_ref: 'env:SPACE_TEST_B_582W_URL', schema_version: 'v1',
       }).execute();
     } finally {
       await cpSeedPool.end();
@@ -298,6 +319,7 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
     await spaceDb?.onModuleDestroy().catch(() => undefined);
     await sharedPool?.end().catch(() => undefined);
     delete process.env.SPACE_TEST_A_582W_URL;
+    delete process.env.SPACE_TEST_B_582W_URL;
     // Dọn dữ kiện nền đã gieo vào kho chung để các ca khác dùng
     // chung database test của worker không thấy dữ kiện lạ.
     await withClient(process.env.DATABASE_URL!, async (client) => {
@@ -306,10 +328,10 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
       await client.query('DELETE FROM tenants WHERE id = $1', [SHARED_TENANT_ID]);
     }).catch(() => undefined);
     await withClient(clusterUrl('postgres'), async (admin) => {
-      for (const database of [CP_DATABASE, CENTRE_DATABASE]) {
+      for (const database of [CP_DATABASE, CENTRE_DATABASE, B_DATABASE]) {
         await admin.query(`DROP DATABASE IF EXISTS ${quoted(database)} WITH (FORCE)`);
       }
-      for (const role of [CP_ROLE, CENTRE_ROLE]) {
+      for (const role of [CP_ROLE, CENTRE_ROLE, B_ROLE]) {
         await admin.query(`DROP ROLE IF EXISTS ${quoted(role)}`);
       }
     });
@@ -317,7 +339,11 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
 
   function makeRelay(): { relay: OutboxRelayScheduler; queue: CaptureQueue } {
     const queue = new CaptureQueue();
-    const queues = new Map<string, Queue>([['notification-events', queue as unknown as Queue]]);
+    // Dẫn bằng toàn bộ bảng routes thật: outbox còn sót từ fixture
+    // khác trên DB test không được làm lỗi hàng đợi giả thiếu đích.
+    const queues = new Map<string, Queue>(allQueueNamesOfRoutes(OUTBOX_EVENT_QUEUE_ROUTES).map(
+      (name) => [name, (name === 'notification-events' ? queue : new CaptureQueue()) as unknown as Queue],
+    ));
     const relay = new OutboxRelayScheduler(
       { record: async () => undefined } as never,
       { recordRun: async () => undefined } as never,
@@ -449,4 +475,120 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
     );
     expect(centreNotifications).toHaveLength(1);
   });
+
+  it('quét digest và hạn ghi danh ở hai kho riêng trùng UUID; lỗi A không chặn B và retry không nhân đôi', async () => {
+    const aUrl = clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD);
+    const bUrl = clusterUrl(B_DATABASE, B_ROLE, B_PASSWORD);
+    // Hai kho có CÙNG tenant, user, course, enrolment, log ID nhưng
+    // email khác nhau. Một lượt quét sai kho sẽ gửi/ghi nhầm rõ ràng.
+    for (const [slug, isB] of [[CENTRE_SLUG, false], [B_SLUG, true]] as const) {
+      await tenantAls.run({ platform: true }, () => spaceDb.withSpaceKysely(slug, async () => {
+        const db = spaceDb.routedKysely;
+        if (isB) {
+          await db.insertInto('tenants').values({
+            id: CENTRE_TENANT_ID, slug: B_SLUG, name: 'Tenant B 582w', kind: 'center',
+          }).execute();
+          await db.insertInto('users').values({
+            id: STUDENT_ID, username: 'hoc-vien-b-582w', email: 'hoc-vien-b-582w@example.com',
+          }).execute();
+          await db.insertInto('course_categories').values({
+            id: CATEGORY_ID, name: 'Danh mục B', tenant_id: CENTRE_TENANT_ID,
+          }).execute();
+          await db.insertInto('course').values({
+            id: COURSE_ID, tenant_id: CENTRE_TENANT_ID, category: CATEGORY_ID,
+            full_name: 'Khoá học B', short_name: 'KH582B', is_template: true,
+          }).execute();
+        }
+        await db.insertInto('enrol').values({
+          id: PERIODIC_ENROL_ID, course_id: COURSE_ID, enrol: 'manual', status: 0,
+        }).execute();
+        await db.insertInto('user_enrolments').values({
+          id: PERIODIC_UE_ID, enrol_id: PERIODIC_ENROL_ID, user_id: STUDENT_ID,
+          status: 0, time_start: new Date(Date.now() - 86400000),
+          time_end: new Date(Date.now() + 3 * 86400000),
+        }).execute();
+        await db.insertInto('notification_dispatch_log').values({
+          id: PERIODIC_LOG_ID, user_id: STUDENT_ID, provider: 'grade_updated',
+          channel: 'email', status: 'digest-queued',
+          subject: isB ? 'B: kiểm chứng kho riêng' : 'A: kiểm chứng kho riêng',
+          dedupe_key: 'periodic-retry-same-internal-id',
+        }).execute();
+      }));
+    }
+
+    const sent: Array<{ to: string; text: string }> = [];
+    const digest = new NotificationDigestProcessor(spaceDb, {
+      send: async (mail: { to: string; text: string }) => {
+        sent.push({ to: mail.to, text: mail.text });
+        return { status: 'sent', providerId: 'fake-periodic-582' };
+      },
+    } as never, { t: (key: string) => key } as never);
+    const expiry = new EnrolExpiryProcessor(spaceDb, new TaskLogService(spaceDb));
+
+    const readStatus = (url: string) => withClient(url, async (db) => {
+      await db.query("SELECT set_config('app.platform', 'on', false)");
+      const rows = await db.query<{ status: string }>(
+        'SELECT status FROM notification_dispatch_log WHERE id = $1', [PERIODIC_LOG_ID],
+      );
+      return rows.rows[0]!.status;
+    });
+    const countWarnings = (url: string) => withClient(url, async (db) => {
+      await db.query("SELECT set_config('app.platform', 'on', false)");
+      const rows = await db.query<{ count: string }>(
+        "SELECT count(*) FROM outbox_events WHERE type = 'enrol_expiry_warning' AND payload ->> 'enrolmentId' = $1",
+        [PERIODIC_UE_ID],
+      );
+      return Number(rows.rows[0]!.count);
+    });
+
+    const original = spaceDb.withSpaceKysely.bind(spaceDb);
+    const failA = () => vi.spyOn(spaceDb, 'withSpaceKysely').mockImplementation((slug, fn, context) => {
+      if (slug === CENTRE_SLUG) throw new Error('Kho A tạm không kết nối');
+      return original(slug, fn, context);
+    });
+
+    let stub = failA();
+    try {
+      await expect(digest.process({ data: {} } as never)).rejects.toThrow('Kho A tạm không kết nối');
+      expect(await readStatus(aUrl)).toBe('digest-queued');
+      expect(await readStatus(bUrl)).toBe('digest-sent');
+      expect(sent.filter((x) => x.to === 'hoc-vien-b-582w@example.com')).toHaveLength(1);
+      expect(sent.filter((x) => x.to === 'hoc-vien-582w@example.com')).toHaveLength(0);
+    } finally {
+      stub.mockRestore();
+    }
+
+    await digest.process({ data: {} } as never);
+    await digest.process({ data: {} } as never);
+    expect(await readStatus(aUrl)).toBe('digest-sent');
+    expect(await readStatus(bUrl)).toBe('digest-sent');
+    expect(sent.filter((x) => x.to === 'hoc-vien-b-582w@example.com')).toHaveLength(1);
+    expect(sent.filter((x) => x.to === 'hoc-vien-582w@example.com')).toHaveLength(1);
+    expect(sent.find((x) => x.to === 'hoc-vien-b-582w@example.com')!.text).toContain('B: kiểm chứng kho riêng');
+    expect(sent.find((x) => x.to === 'hoc-vien-582w@example.com')!.text).toContain('A: kiểm chứng kho riêng');
+
+    stub = failA();
+    try {
+      await expect(expiry.process({ data: {} } as never)).rejects.toThrow('Kho A tạm không kết nối');
+      expect(await countWarnings(aUrl)).toBe(0);
+      expect(await countWarnings(bUrl)).toBe(1);
+    } finally {
+      stub.mockRestore();
+    }
+    await expiry.process({ data: {} } as never);
+    await expiry.process({ data: {} } as never);
+    expect(await countWarnings(aUrl)).toBe(1);
+    expect(await countWarnings(bUrl)).toBe(1);
+    // Cả nhật ký vận hành cũng phải ở kho của tác vụ, không dồn số
+    // liệu của A/B vào `task_log` shared.
+    for (const dbUrl of [aUrl, bUrl]) {
+      const logs = await withClient(dbUrl, async (client) => {
+        await client.query("SELECT set_config('app.platform', 'on', false)");
+        return client.query<{ count: string }>(
+          "SELECT count(*) FROM task_log WHERE task_name = 'enrol-expiry' AND status = 'success'",
+        );
+      });
+      expect(Number(logs.rows[0]!.count)).toBeGreaterThanOrEqual(1);
+    }
+  }, 180_000);
 });
