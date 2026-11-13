@@ -1,4 +1,5 @@
-import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
+import { InjectQueue, Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import type { Job, Queue } from 'bullmq';
 import { tenantAls } from '../db/tenant-als';
 import { SpaceDatabaseService } from '../db/routing/space-database.service';
@@ -15,7 +16,7 @@ const ENROL_WITHDRAWN = 2;
 /**
  * Xử lý job tính lại completion hàng loạt cho khoá học.
  */
-export class CompletionRecalculateProcessor extends WorkerHost {
+export class CompletionRecalculateProcessor extends ObservedWorkerHost {
   constructor(
     private readonly spaceDb: SpaceDatabaseService,
     @InjectQueue('completion-recalculate') private readonly recalcQueue: Queue,

@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import { DelayedError, type Job } from 'bullmq';
 import Redis from 'ioredis';
 import { authMailPayloadSchema, renderAuthMail } from '@giaokhoa/contracts';
@@ -265,7 +266,7 @@ export interface AuthMailProcessResult {
  * `outboxId` và hành vi theo từng kết quả.
  */
 @Processor('auth-mail')
-export class AuthMailProcessor extends WorkerHost {
+export class AuthMailProcessor extends ObservedWorkerHost {
   private readonly logger = new Logger(AuthMailProcessor.name);
 
   constructor(

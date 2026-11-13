@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import { DelayedError, type Job } from 'bullmq';
 import { SpaceJobRunner } from '../db/routing/space-job-runner';
 import type { OutboxEventJobData } from '../outbox-event-routes';
@@ -59,7 +60,7 @@ const PROCESSING_LEASE_RETRY_DELAY_MS = 5_000;
  * vốn là phạm vi chống trùng của issue này.
  */
 @Processor('notification-events')
-export class NotificationEventsProcessor extends WorkerHost {
+export class NotificationEventsProcessor extends ObservedWorkerHost {
   constructor(
     private readonly handler: NotificationEventsHandlerService,
     private readonly marker: NotificationEventsMarker,

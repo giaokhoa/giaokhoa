@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import type { Job } from 'bullmq';
 import { I18nService } from '@nestjs/i18n';
 import { sql, type CentreDB } from '@giaokhoa/db';
@@ -31,7 +32,7 @@ import { SpaceDatabaseService } from '../db/routing/space-database.service';
 /**
  * Xử lý job sao lưu khoá học nền.
  */
-export class BackupProcessor extends WorkerHost {
+export class BackupProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   /**
    * Xử lý một job của queue tương ứng.
@@ -135,7 +136,7 @@ export class BackupProcessor extends WorkerHost {
 /**
  * Xử lý job khôi phục khoá học nền.
  */
-export class RestoreProcessor extends WorkerHost {
+export class RestoreProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(job: Job<{ jobId: string }>): Promise<{ status: string; mapped?: number }> {
     // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
@@ -204,7 +205,7 @@ export class RestoreProcessor extends WorkerHost {
 /**
  * Xử lý job dựng lại chỉ mục tìm kiếm.
  */
-export class SearchReindexProcessor extends WorkerHost {
+export class SearchReindexProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(_job: Job<Record<string, never>>): Promise<{ indexed: number }> {
     // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
@@ -286,7 +287,7 @@ export class SearchReindexProcessor extends WorkerHost {
 /**
  * Xử lý job chạy mô hình phân tích (insights).
  */
-export class AnalyticsRunProcessor extends WorkerHost {
+export class AnalyticsRunProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(job: Job<{ courseId: string }>): Promise<{ predictions: number; insights: number }> {
     // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
@@ -382,7 +383,7 @@ export class AnalyticsRunProcessor extends WorkerHost {
  * không kiểm đình chỉ, không kiểm tuỳ chọn, không ghi dispatch log; nay áp
  * đúng luật như `notify()` phía API cho kênh trong-app.
  */
-export class ReportScheduleProcessor extends WorkerHost {
+export class ReportScheduleProcessor extends ObservedWorkerHost {
   constructor(
     private readonly i18n: I18nService,
     private readonly delivery: NotificationDeliveryService,
@@ -450,7 +451,7 @@ export class ReportScheduleProcessor extends WorkerHost {
 /**
  * Xử lý job quyền riêng tư (xuất/xoá dữ liệu cá nhân).
  */
-export class PrivacyProcessor extends WorkerHost {
+export class PrivacyProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(job: Job<{ requestId: string }>): Promise<{ status: string; subsystems: string[] }> {
     // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
@@ -537,7 +538,7 @@ export class PrivacyProcessor extends WorkerHost {
 /**
  * Xử lý job đối soát thanh toán.
  */
-export class PaymentReconciliationProcessor extends WorkerHost {
+export class PaymentReconciliationProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(job: Job<{ paymentId?: string; externalTransactionId?: string; status?: string }>): Promise<{ status: string; duplicate?: boolean; succeeded?: number }> {
     // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc

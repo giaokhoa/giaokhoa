@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { SpaceJobRunner } from '../db/routing/space-job-runner';
@@ -67,7 +68,7 @@ function isCohortMemberPayload(payload: unknown): payload is { cohortId: string;
  * chung, không thuộc phạm vi issue này.
  */
 @Processor('cohort-sync-events')
-export class CohortSyncEventsProcessor extends WorkerHost {
+export class CohortSyncEventsProcessor extends ObservedWorkerHost {
   private readonly logger = new Logger(CohortSyncEventsProcessor.name);
 
   constructor(

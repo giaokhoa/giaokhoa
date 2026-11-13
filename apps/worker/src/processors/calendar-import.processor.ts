@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import type { Job } from 'bullmq';
 import { parseIcs } from '../domain/ics';
 import { tenantAls } from '../db/tenant-als';
@@ -17,7 +18,7 @@ export interface CalendarImportResult { eventsimported: number; eventsskipped: n
  * Xử lý job nhập lịch subscription: tải .ics, phân tích bằng domain/ics và đồng bộ sự kiện (không trùng theo uuid). Concurrency 5: job thuần I/O (tải tệp .ics từ xa) — concurrency mặc định 1 để một nguồn lịch chậm chặn mọi subscription phía sau; việc nhập lại idempotent theo
  * (subscriptionId, UID) nên chạy song song an toàn.
  */
-export class CalendarImportProcessor extends WorkerHost {
+export class CalendarImportProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
 
   /**

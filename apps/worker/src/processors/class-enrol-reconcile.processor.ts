@@ -16,7 +16,8 @@
  * 0 lớp mà vẫn báo thành công — hồi quy #292, có test riêng chạy bằng
  * role không BYPASSRLS (`test/class-enrol-reconcile-rls.spec.ts`).
  */
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import type { Job } from 'bullmq';
 import { sql, type CentreDB } from '@giaokhoa/db';
 import { type EnrolInstanceRow } from '@giaokhoa/enrol';
@@ -110,7 +111,7 @@ interface PlannedFix {
  * chạy lại trên trạng thái đã khớp là không sửa gì.
  */
 @Processor('class-enrol-reconcile')
-export class ClassEnrolReconcileProcessor extends WorkerHost {
+export class ClassEnrolReconcileProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService, private readonly taskLog: TaskLogService) { super(); }
 
   /**

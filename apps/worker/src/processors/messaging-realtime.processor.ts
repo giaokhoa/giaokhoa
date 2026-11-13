@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import { Inject, Logger } from '@nestjs/common';
 import { DelayedError, type Job } from 'bullmq';
 import type Redis from 'ioredis';
@@ -100,7 +101,7 @@ const DISTRIBUTION_RETRY_DELAY_MS = 5_000;
  * phối realtime từ trước tới nay.
  */
 @Processor(MESSAGING_REALTIME_QUEUE)
-export class MessagingRealtimeProcessor extends WorkerHost {
+export class MessagingRealtimeProcessor extends ObservedWorkerHost {
   private readonly logger = new Logger(MessagingRealtimeProcessor.name);
 
   constructor(

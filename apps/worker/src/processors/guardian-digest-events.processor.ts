@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import { Logger } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { SpaceJobRunner } from '../db/routing/space-job-runner';
@@ -63,7 +64,7 @@ function isOverdueAlertPayload(payload: unknown): payload is GuardianOverdueAler
  * dispatch log, sự kiện audit).
  */
 @Processor('guardian-digest-events')
-export class GuardianDigestEventsProcessor extends WorkerHost {
+export class GuardianDigestEventsProcessor extends ObservedWorkerHost {
   private readonly logger = new Logger(GuardianDigestEventsProcessor.name);
 
   constructor(

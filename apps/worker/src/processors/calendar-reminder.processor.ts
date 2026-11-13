@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import { I18nService } from '@nestjs/i18n';
 import type { Job } from 'bullmq';
 import { NotificationDeliveryService } from '../notification-delivery.service';
@@ -23,7 +24,7 @@ export interface CalendarReminderResult { status: 'notified' | 'duplicate' | 'sk
 /**
  * Xử lý job nhắc lịch: gửi notification nhắc sự kiện; nội dung lấy từ catalog i18n (locale mặc định vi cho người nhận — xem recipientLocale).
  */
-export class CalendarReminderProcessor extends WorkerHost {
+export class CalendarReminderProcessor extends ObservedWorkerHost {
   constructor(
     private readonly i18n: I18nService,
     private readonly delivery: NotificationDeliveryService,

@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import type { Job } from 'bullmq';
 import { sql, type CentreDB } from '@giaokhoa/db';
 import { TaskLogService } from '../task-log.service';
@@ -32,7 +33,7 @@ const SUBMITTED_ATTEMPT_STATES = ['needsgrading', 'finished'];
 /**
  * Xử lý job nhắc hạn nộp: quét các quiz sắp đóng và phát sự kiện nhắc cho học sinh chưa nộp.
  */
-export class ActivityDueReminderProcessor extends WorkerHost {
+export class ActivityDueReminderProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService, private readonly taskLog: TaskLogService) { super(); }
 
   /**

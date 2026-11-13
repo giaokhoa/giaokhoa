@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import { I18nService } from '@nestjs/i18n';
 import type { Job } from 'bullmq';
 import { createHash, randomUUID } from 'node:crypto';
@@ -39,7 +40,7 @@ export interface BadgeAwardResult { evaluated: number; issued: string[] }
 /**
  * Xử lý job cấp huy hiệu nền: đánh giá tiêu chí cho user được chỉ định và cấp nếu đủ điều kiện.
  */
-export class BadgeAwardProcessor extends WorkerHost {
+export class BadgeAwardProcessor extends ObservedWorkerHost {
   constructor(
     private readonly i18n: I18nService,
     private readonly delivery: NotificationDeliveryService,

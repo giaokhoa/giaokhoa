@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import type { Job } from 'bullmq';
 import { tenantAls } from '../db/tenant-als';
 import { ResendMailService } from '../resend-mail.service';
@@ -55,7 +56,7 @@ const MANDATORY_PROVIDERS = new Set(['enrol_expiry_warning', 'admin_announcement
  * Concurrency 10: hàng đợi thuần I/O (gọi dịch vụ gửi thư qua HTTP) — concurrency mặc định 1 để một email chậm chặn toàn bộ hàng đợi phía sau. Job mang dedupeKey bền và khâu ghi log chống trùng nên chạy song song an toàn.
  */
 @Processor('notification-dispatch', { concurrency: 10 })
-export class NotificationDispatchProcessor extends WorkerHost {
+export class NotificationDispatchProcessor extends ObservedWorkerHost {
   constructor(
     private readonly spaceDb: SpaceDatabaseService,
     private readonly mail: ResendMailService,

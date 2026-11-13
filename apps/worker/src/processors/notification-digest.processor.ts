@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { ObservedWorkerHost } from '../observed-worker-host';
 import { Logger } from '@nestjs/common';
 import { I18nService } from '@nestjs/i18n';
 import type { Job } from 'bullmq';
@@ -63,7 +64,7 @@ export interface NotificationDigestSweepResult {
  * lượt quét không gửi trùng. Ngoại lệ cửa sổ hẹp đã biết: tiến trình chết giữa lúc Resend đã nhận mail và lúc cập nhật trạng thái → lượt sau gửi lại các mục đó (chấp nhận trùng thay vì mất — cùng đánh đổi với đường dispatch gửi ngay).
  */
 @Processor('notification-digests')
-export class NotificationDigestProcessor extends WorkerHost {
+export class NotificationDigestProcessor extends ObservedWorkerHost {
   private readonly logger = new Logger(NotificationDigestProcessor.name);
 
   constructor(
