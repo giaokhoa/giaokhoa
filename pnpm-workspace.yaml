@@ -1,5 +1,3 @@
-storeDir: node_modules/.pnpm-store
-
 packages:
   - apps/*
   - packages/*
@@ -15,6 +13,9 @@ catalog:
 catalogs:
   nest:
     typescript: 6.0.3
+# Giữ ngữ nghĩa mặc định của pnpm 12: soft age gate; không bật strict ngầm.
+minimumReleaseAge: 1440
+minimumReleaseAgeStrict: false
 minimumReleaseAgeExclude:
   - bullmq@6.4.0
 

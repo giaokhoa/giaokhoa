@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
@@ -17,7 +17,7 @@ export default defineConfig({
         test: {
           name: 'unit',
           include: ['src/**/*.spec.ts'],
-          exclude: ['src/**/*.int-spec.ts'],
+          exclude: [...configDefaults.exclude, 'src/**/*.int-spec.ts'],
         },
       },
       { test: { name: 'int', include: ['src/**/*.int-spec.ts'] } },

@@ -94,7 +94,7 @@
     "@types/compression": "^1.8.1",
     "@types/express": "^5.0.0",
     "@types/multer": "2.3.0",
-    "@types/node": "^26.6.5",
+    "@types/node": "^24.10.0",
     "@types/passport-jwt": "4.0.1",
     "@types/passport-local": "1.0.38",
     "@types/pg": "^8.23.1",
@@ -106,6 +106,10 @@
     "supertest": "^7.3.1",
     "typescript": "catalog:nest",
     "unplugin-swc": "^2.0.0",
-    "vitest": "catalog:"
-  }
+    "vitest": "catalog:",
+    "vite": "^8.3.5"
+  },
+  "files": [
+    "dist"
+  ]
 }
