@@ -65,6 +65,10 @@ describe("Hỗ trợ trung tâm: tách audience ở chuỗi guard thật", () =>
 
   it("nhân sự hỗ trợ thông thường có token riêng nhưng không thể vào login-as hay control plane", async () => {
     const created = await (await import("../../support/identity-access-helpers")).createUserViaApi(app, businessToken);
+    const { seedTenantMembershipFixture } = await import("../../support/identity-access-helpers");
+    const { TenantsService } = await import("../../../src/modules/tenants/tenants.service");
+    const platform = await app.get(TenantsService, { strict: false }).platformTenant();
+    await seedTenantMembershipFixture(app, platform.id, created.id);
     const login = await http(app)
       .post("/api/v1/auth/support/login")
       .send({ username: created.username, password: "Passw0rd!" });

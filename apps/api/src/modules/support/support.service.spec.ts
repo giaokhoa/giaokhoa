@@ -107,6 +107,7 @@ function harness() {
       kind: "center",
       status: "active",
     })),
+    isPlatformSupportMember: vi.fn(async () => true),
     assertTenantManager: vi.fn(async (actor: string) => {
       if (actor !== OWNER) throw new Error("access.capability_denied");
     }),

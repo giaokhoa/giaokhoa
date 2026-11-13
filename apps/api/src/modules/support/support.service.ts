@@ -125,9 +125,12 @@ export class SupportService {
       { platform: true },
       () => this.users.getByIdOrUndefined(dto.recipientId),
     );
-    if (!recipient || recipient.deleted || recipient.suspended) {
+    if (
+      !recipient || recipient.deleted || recipient.suspended ||
+      !(await this.tenants.isPlatformSupportMember(dto.recipientId))
+    ) {
       throw new BadRequestException({
-        message: "Recipient must be an active platform account",
+        message: "Recipient must be an active platform member",
         code: "support.invalid_recipient",
       });
     }
@@ -264,12 +267,12 @@ export class SupportService {
     return this.spaceDb.withSpaceKysely(
       slug,
       async (db) => {
-        const grant = await this.repo.findActiveGrant(
-          tenantId,
-          actorId,
-          scope,
-          db,
-        );
+        // Membership platform thu hồi → request kế tiếp bị chặn, kể
+        // cả support token và grant trong centre vẫn còn hiệu lực.
+        const staffActive = await this.tenants.isPlatformSupportMember(actorId);
+        const grant = staffActive
+          ? await this.repo.findActiveGrant(tenantId, actorId, scope, db)
+          : undefined;
         await this.repo.appendAudit(
           {
             tenantId,
@@ -298,6 +301,12 @@ export class SupportService {
    * dung nghiệp vụ hoặc grant của nhân sự khác qua bề mặt platform.
    */
   async myAccess(actorId: string, slug: string): Promise<SupportGrant[]> {
+    if (!(await this.tenants.isPlatformSupportMember(actorId))) {
+      throw new ForbiddenException({
+        message: "Active platform membership required for support",
+        code: "support.staff_required",
+      });
+    }
     const tenantId = await this.resolveCentre(slug);
     return this.spaceDb.withSpaceKysely(
       slug,

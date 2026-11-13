@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCentreKysely } from '@giaokhoa/db';
 import { applyStoreMigrations } from '@giaokhoa/db/migrate';
 import { checkFleetBackups, runFleetBackup } from '../../../src/modules/fleet/fleet-backup';
-import { backupFileName, dumpDatabaseToFile, readDatabaseSchemaVersion } from '../../../src/modules/fleet/fleet-common';
+import { backupFileName, dumpDatabaseToFile, listMigrationFolders, readDatabaseSchemaVersion } from '../../../src/modules/fleet/fleet-common';
 import { runFleetMigration } from '../../../src/modules/fleet/fleet-migration-runner';
 import { runFleetRestoreTest } from '../../../src/modules/fleet/fleet-restore-test';
 import { runRuntimeRolesSetup } from '../../../src/modules/fleet/runtime-roles-setup';
@@ -27,8 +27,14 @@ const RUNTIME_ROLE = 'giaokhoa_runtime_test_586';
 const RUNTIME_PASSWORD = 'runtime-test-586';
 const MIGRATOR_ROLE = 'giaokhoa_migrator_test_586';
 const MIGRATOR_PASSWORD = 'migrator-test-586';
-// Runner lấy phiên bản mới nhất đã áp (carrier + migration native).
-const LATEST_CENTRE_VERSION = '20261113050000_file_storage_domain';
+// Dùng chính danh sách thư mục migration mà runner xử lý, không đóng băng
+// version trong fixture (migration mới phải được suite fleet chấp nhận).
+const CENTRE_MIGRATIONS_DIR = join(__dirname, '..', '..', '..', '..', '..', 'packages', 'db', 'migrations', 'centre');
+function latestCentreVersion(): string {
+  const latest = listMigrationFolders(CENTRE_MIGRATIONS_DIR).at(-1);
+  if (!latest) throw new Error('Không có migration cho kho trung tâm');
+  return latest;
+}
 const BACKUP_DIR = join(__dirname, 'fleet-586-artifacts');
 
 const SPACES = [
@@ -343,7 +349,7 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
   describe('runner migration theo đợt', () => {
     const runnerOptions = () => ({
       env: process.env,
-      migrationsDir: join(__dirname, '..', '..', '..', '..', '..', 'packages', 'db', 'migrations', 'centre'),
+      migrationsDir: CENTRE_MIGRATIONS_DIR,
       backupDir: BACKUP_DIR,
       waveSize: 2,
       log: () => undefined,
@@ -360,7 +366,7 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
 
       const summary = await runFleetMigration(runnerOptions());
       const bySlug = new Map(summary.outcomes.map((outcome) => [outcome.slug, outcome.outcome]));
-      expect(summary.targetVersion).toBe(LATEST_CENTRE_VERSION);
+      expect(summary.targetVersion).toBe(latestCentreVersion());
       expect(bySlug.get('trang-chinh-586')).toBe('migrated');
       expect(bySlug.get('tt-a-canary-586')).toBe('migrated');
       expect(bySlug.get('tt-b-loi-586')).toBe('failed');
@@ -369,7 +375,7 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
 
       // Sổ khớp sự thật trong từng kho sau lượt chạy.
       for (const slug of ['trang-chinh-586', 'tt-a-canary-586', 'tt-c-586']) {
-        expect((await registryState(slug)).currentVersion).toBe(LATEST_CENTRE_VERSION);
+        expect((await registryState(slug)).currentVersion).toBe(latestCentreVersion());
       }
       expect((await registryState('tt-b-loi-586')).currentVersion).toBeNull();
       const brokenDbVersion = await withClient(
@@ -381,7 +387,7 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
         clusterUrl('giaokhoa_test_space_platform_586', MIGRATOR_ROLE, MIGRATOR_PASSWORD),
         (client) => readDatabaseSchemaVersion(client),
       );
-      expect(platformDbVersion).toBe(LATEST_CENTRE_VERSION);
+      expect(platformDbVersion).toBe(latestCentreVersion());
 
       // Nhật ký: mỗi kho đúng một lượt; lượt của kho hỏng ghi bước
       // áp migration thất bại, bản chốt trước migration của nó vẫn
@@ -421,8 +427,8 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       expect(bySlug.get('tt-c-586')).toBe('skipped');
       expect(summary.failedCount).toBe(0);
 
-      expect((await registryState('tt-a-canary-586')).currentVersion).toBe(LATEST_CENTRE_VERSION);
-      expect((await registryState('tt-b-loi-586')).currentVersion).toBe(LATEST_CENTRE_VERSION);
+      expect((await registryState('tt-a-canary-586')).currentVersion).toBe(latestCentreVersion());
+      expect((await registryState('tt-b-loi-586')).currentVersion).toBe(latestCentreVersion());
       // Chỉ kho tt-b có thêm lượt chạy thứ hai; các kho khác giữ
       // nguyên một lượt — đồng bộ sổ không bịa lượt chạy.
       expect(await migrationRuns('tt-b-loi-586')).toHaveLength(2);

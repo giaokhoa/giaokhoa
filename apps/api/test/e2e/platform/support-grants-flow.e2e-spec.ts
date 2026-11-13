@@ -11,7 +11,8 @@ import { join } from 'node:path';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runSpaceProvision, type SpaceProvisionResult } from '../../../src/modules/tenants/space-provision-runner';
-import { createTestApp, createUserViaApi, http, adminToken, STRONG_PASSWORD, grantTenantManagerFixture } from '../../support/identity-access-helpers';
+import { TenantsService } from '../../../src/modules/tenants/tenants.service';
+import { createTestApp, createUserViaApi, http, adminToken, STRONG_PASSWORD, grantTenantManagerFixture, seedTenantMembershipFixture } from '../../support/identity-access-helpers';
 
 const suffix = Math.random().toString(36).slice(2, 8);
 const cpDatabase = `giaokhoa_test_cp_support19_${suffix}`;
@@ -124,6 +125,9 @@ describe('Hỗ trợ hữu hạn: HTTP thật giữa trung tâm A, B và nhân s
     const staff = await createUserViaApi(app, platformAdmin);
     const other = await createUserViaApi(app, platformAdmin);
     staffId = staff.id;
+    const platformTenant = await app.get(TenantsService, { strict: false }).platformTenant();
+    await seedTenantMembershipFixture(app, platformTenant.id, staff.id);
+    await seedTenantMembershipFixture(app, platformTenant.id, other.id);
     const supportLogin = await http(app).post('/api/v1/auth/support/login')
       .send({ username: staff.username, password: STRONG_PASSWORD });
     const otherLogin = await http(app).post('/api/v1/auth/support/login')
@@ -176,6 +180,21 @@ describe('Hỗ trợ hữu hạn: HTTP thật giữa trung tâm A, B và nhân s
       .set(authed(supportToken)).send(draft(staffId, ['classes:read']));
     expect(denied.status).toBe(403);
     expect(denied.body.code).toBe('auth.audience_denied');
+  });
+
+  it('tài khoản nghiệp vụ legacy trong kho chung nhưng không có membership platform không được hỗ trợ', async () => {
+    const platformAdmin = await adminToken(app);
+    const legacy = await createUserViaApi(app, platformAdmin);
+    const login = await http(app).post('/api/v1/auth/support/login')
+      .send({ username: legacy.username, password: STRONG_PASSWORD });
+    expect(login.status).toBe(403);
+    expect(login.body.code).toBe('auth.support_staff_required');
+    // Dù quản trị A biết UUID thật trong kho chung, người không
+    // là nhân sự platform không thể nhận grant hỗ trợ.
+    const grant = await http(app).post('/api/v1/support-grants')
+      .set('Host', hostA).set(authed(adminA)).send(draft(legacy.id, ['classes:read']));
+    expect(grant.status).toBe(400);
+    expect(grant.body.code).toBe('support.invalid_recipient');
   });
 
   it('không thể cấp grant cho tài khoản chỉ tồn tại trong kho của trung tâm', async () => {
@@ -325,6 +344,39 @@ describe('Hỗ trợ hữu hạn: HTTP thật giữa trung tâm A, B và nhân s
         });
       }
     }
+  });
+
+
+  it('kết thúc membership platform chặn ngay support token cũ dù grant còn hạn', async () => {
+    const grant = await http(app).post('/api/v1/support-grants').set('Host', hostA)
+      .set(authed(adminA)).send(draft(staffId, ['classes:read']));
+    expect(grant.status, JSON.stringify(grant.body)).toBe(201);
+    const active = await http(app).get(`/api/v1/support-centres/${slugA}/classes`).set(authed(supportToken));
+    expect(active.status).toBe(200);
+    // Mô phỏng bộ phận vận hành kết thúc tư cách nhân sự platform
+    // trong kho chung. Bất biến kiểm trực tiếp mỗi request, không JWT.
+    await withClient(process.env.DATABASE_URL!, async (client) => {
+      await client.query("SELECT set_config('app.platform', 'on', false)");
+      const platform = await client.query<{ id: string }>("SELECT id FROM tenants WHERE slug = 'trang-chinh'");
+      await client.query(
+        "UPDATE tenant_memberships SET status = 'ended', ended_at = now() WHERE tenant_id = $1 AND user_id = $2",
+        [platform.rows[0]!.id, staffId],
+      );
+    });
+    const denied = await http(app).get(`/api/v1/support-centres/${slugA}/classes`).set(authed(supportToken));
+    expect(denied.status).toBe(403);
+    expect(denied.body.code).toBe('support.access_denied');
+    const audit = await http(app).get('/api/v1/support-grants/audit').set('Host', hostA).set(authed(adminA));
+    expect(audit.status).toBe(200);
+    expect((audit.body as Array<{ action: string }>).map((event) => event.action)).toContain('access_denied');
+    const relogin = await http(app).post('/api/v1/auth/support/login')
+      .send({ username: (await withClient(process.env.DATABASE_URL!, async (client) => {
+        await client.query("SELECT set_config('app.platform', 'on', false)");
+        const row = await client.query<{ username: string }>('SELECT username FROM users WHERE id = $1', [staffId]);
+        return row.rows[0]!.username;
+      })), password: STRONG_PASSWORD });
+    expect(relogin.status).toBe(403);
+    expect(relogin.body.code).toBe('auth.support_staff_required');
   });
 
 });

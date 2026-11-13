@@ -309,6 +309,11 @@ export class AuthService {
    */
   async supportLogin(username: string, password: string, ip?: string): Promise<PlatformLoginOutcome> {
     const user = await this.validateCredentials(username, password, ip);
+    // Không cho mọi tài khoản legacy của kho chung tự trở thành nhân sự
+    // platform chỉ vì dùng chung DB. Phải có membership vận hành ACTIVE.
+    if (!(await this.tenants.isPlatformSupportMember(user.id))) {
+      throw new ForbiddenException({ message: 'Active platform membership required for support', code: 'auth.support_staff_required' });
+    }
     if (await this.totp.isEnabled(user.id)) {
       return { mfaRequired: true, user, challengeToken: await this.signMfaChallenge(user, 'support') };
     }
@@ -321,6 +326,9 @@ export class AuthService {
   /** Bước hai giữ challenge MFA riêng không dùng được cho platform/admin. */
   async verifySupportMfa(challengeToken: string, code: string, ip?: string): Promise<{ user: UserRow; accessToken: string; expiresIn: number }> {
     const user = await this.passMfaChallenge(challengeToken, code, ip, 'support');
+    if (!(await this.tenants.isPlatformSupportMember(user.id))) {
+      throw new ForbiddenException({ message: 'Active platform membership required for support', code: 'auth.support_staff_required' });
+    }
     await this.users.recordLogin(user.id);
     const issued = await this.issueSupportToken(user);
     await this.recordAuthEvent('user_logged_in', { userId: user.id, actorId: user.id, method: 'support-totp', ip: ip ?? null });
