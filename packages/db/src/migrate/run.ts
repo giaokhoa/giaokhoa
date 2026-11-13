@@ -13,9 +13,10 @@
  *
  * Cờ `--verify-only`: chỉ làm việc 3 (đọc số đếm, không áp migration) — đường kiểm chứng sau deploy mà runbook dùng.
  *
- * URL kết nối theo kho (mỗi kho một biến, khớp cấu hình bộ máy cũ mà chuỗi migrate đang dùng): kho trung tâm ưu tiên `MIGRATION_DATABASE_URL` rồi `DATABASE_URL`; control plane dùng `CONTROL_PLANE_DATABASE_URL`; ngân hàng hệ thống dùng `SYSTEM_BANK_DATABASE_URL`. Khi `DATABASE_SSL=true`, kết nối đi qua TLS với `rejectUnauthorized: false` (đúng cách đường chạy của API xử lý URL khi nhà cung cấp bắt TLS) thay vì gắn `sslmode` vào chuỗi kết nối.
+ * URL kết nối theo kho (mỗi kho một biến, khớp cấu hình bộ máy cũ mà chuỗi migrate đang dùng): kho trung tâm ưu tiên `MIGRATION_DATABASE_URL` rồi `DATABASE_URL`; control plane dùng `CONTROL_PLANE_DATABASE_URL`; ngân hàng hệ thống dùng `SYSTEM_BANK_DATABASE_URL`. Khi `DATABASE_SSL=true`, kết nối TLS luôn xác minh CA hệ thống hoặc `DATABASE_TLS_CA_FILE` (như API/worker), không chấp nhận `sslmode=no-verify` ghi đè object SSL.
  */
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { Kysely } from 'kysely';
 import { Pool, type PoolConfig } from 'pg';
@@ -52,14 +53,11 @@ function poolConfigFor(store: MigrationStoreKey): PoolConfig {
     );
   }
   if (process.env.DATABASE_SSL === 'true') {
-    // Gỡ sslmode khỏi URL để parser kết nối của node-postgres không
-    // ghi đè tùy chọn ssl đã truyền trực tiếp vào Pool: khi URL có
-    // sslmode, driver tự dựng ssl config và ưu tiên phần URL.
-    // CA verification hiện chưa bật trong mô hình TLS cũ; không được
-    // kết luận đây là kết nối tin cậy trên mạng ngoài.
     const parsed = new URL(url);
-    parsed.searchParams.delete('sslmode');
-    return { connectionString: parsed.toString(), ssl: { rejectUnauthorized: false } };
+    for (const key of ['sslmode', 'sslrootcert', 'sslcert', 'sslkey']) parsed.searchParams.delete(key);
+    const caFile = process.env.DATABASE_TLS_CA_FILE;
+    const ca = caFile ? readFileSync(caFile, 'utf8') : undefined;
+    return { connectionString: parsed.toString(), ssl: { rejectUnauthorized: true, ...(ca ? { ca } : {}) } };
   }
   return { connectionString: url };
 }

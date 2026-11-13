@@ -9,6 +9,7 @@ import Redis from 'ioredis';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
 import { tenantAls } from './db/tenant-als';
 import { createMessagingRealtimeEmitter, type MessagingRealtimeEmitterHandle } from './messaging-realtime-emitter';
+import { redisTlsFromUrl } from './config/env';
 
 /**
  * Runtime của consumer phân phối realtime messaging ở worker
@@ -31,12 +32,8 @@ export class MessagingRealtimeRuntime implements OnModuleDestroy {
   ) {
     const logger = new Logger('MessagingDistribution');
     const redisUrl = config.getOrThrow<string>('REDIS_URL');
-    // Redis adapter và dấu phân phối dùng cùng lựa chọn TLS của BullMQ:
-    // ioredis nhận URL rediss://, nhưng truyền tùy chọn TLS tường minh
-    // giúp ca dùng certificate nội bộ đồng nhất với các producer khác.
-    const redisOptions = redisUrl.startsWith('rediss://')
-      ? { tls: { rejectUnauthorized: false } }
-      : {};
+    // Redis adapter và dấu phân phối cùng cấu hình xác minh CA.
+    const redisOptions = redisTlsFromUrl(redisUrl);
     this.emitterHandle = createMessagingRealtimeEmitter(redisUrl, redisOptions);
     this.redis = new Redis(redisUrl, { maxRetriesPerRequest: null, ...redisOptions });
     this.redis.on('error', (error: Error) => {

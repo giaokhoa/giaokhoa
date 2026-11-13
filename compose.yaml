@@ -33,6 +33,9 @@ x-api-env: &api-env
   # cho API lẫn worker để giao nhận bài/điểm không vào kho chung.
   SPACE_CONG_CONG_DATABASE_URL:
   PUBLIC_LEARNING_ENABLED: ${PUBLIC_LEARNING_ENABLED:-false}
+  DATABASE_SSL: ${DATABASE_SSL:-false}
+  DATABASE_TLS_CA_FILE:
+  REDIS_TLS_CA_FILE:
   REDIS_URL: redis://redis:6379
   JWT_SECRET: ${JWT_SECRET:?Can dat JWT_SECRET trong file .env}
   # Các biến tuỳ chọn có kiểm tra độ dài tối thiểu phía ứng dụng (MFA_ENCRYPTION_KEY, RESEND_API_KEY, MAIL_FROM) khai báo TRƠ — khoá không giá trị — như dưới đây: Compose chỉ truyền vào container khi biến thật sự được đặt ở môi trường triển khai. Khuôn ${BIEN:-} luôn tiêm chuỗi rỗng khi chưa cấu hình và làm ứng dụng lỗi kiểm tra biến môi trường (schema yêu cầu độ dài tối thiểu khi biến CÓ MẶT), nên không dùng khuôn đó cho các biến này.
@@ -132,6 +135,9 @@ services:
       DATABASE_POOL_MAX: ${WORKER_DATABASE_POOL_MAX:-10}
       SPACE_DB_POOL_MAX: ${SPACE_DB_POOL_MAX:-5}
       SPACE_DB_MAX_POOLS: ${SPACE_DB_MAX_POOLS:-3}
+      DATABASE_SSL: ${DATABASE_SSL:-false}
+      DATABASE_TLS_CA_FILE:
+      REDIS_TLS_CA_FILE:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:?Can dat JWT_SECRET trong file .env}
       FILE_STORAGE_DIR: /app/data/files

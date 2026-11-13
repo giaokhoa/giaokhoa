@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import type { PoolConfig } from 'pg';
 import { z } from 'zod';
 
@@ -37,6 +38,10 @@ export const envSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((value) => value === 'true'),
+  // Đường dẫn tới PEM CA được mount read-only; chứng chỉ máy chủ được
+  // xác thực theo CA hệ thống nếu không đặt. Không có chế độ bỏ xác minh.
+  DATABASE_TLS_CA_FILE: z.string().min(1).optional(),
+  REDIS_TLS_CA_FILE: z.string().min(1).optional(),
   REDIS_URL: z.string().min(1),
   // Presence của messaging realtime (issue #33): TTL của khoá presence trong Redis và nhịp gia hạn cho các kết nối còn sống. TTL là lưới an toàn để tiến trình chết đột ngột không để lại trạng thái "online" kẹt mãi; nhịp gia hạn phải nhỏ hơn TTL để một kết nối còn sống không bao giờ bị coi là offline giữa chừng (F2).
   MESSAGING_PRESENCE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
@@ -163,7 +168,7 @@ export type Env = z.infer<typeof envSchema>;
 export function validateEnv(config: Record<string, unknown>): Env {
   const parsed = envSchema.safeParse(config);
   if (!parsed.success) {
-    throw new Error(`Invalid environment variables: ${parsed.error.message}`);
+    throw new Error(`Invalid environment variables: ${z.prettifyError(parsed.error)}`);
   }
   if (parsed.data.PUBLIC_LEARNING_ENABLED) {
     for (const key of ['BETTER_AUTH_URL', 'CONTROL_PLANE_DATABASE_URL', 'SPACE_CONG_CONG_DATABASE_URL', 'BETTER_AUTH_SECRET'] as const) {
@@ -177,37 +182,35 @@ export function validateEnv(config: Record<string, unknown>): Env {
 }
 
 /**
- * Chuyển URL PostgreSQL thành cấu hình kết nối mà driver `pg` chấp nhận.
- *
- * Khi `ssl` bật, trả `PoolConfig` với TLS nhưng `rejectUnauthorized: false`: chứng chỉ máy chủ KHÔNG được xác thực, nên đường kết nối có nguy cơ bị giả mạo nếu mạng không đáng tin. Khi tắt TLS, giữ nguyên URL; không tự biến đổi thông tin truy cập.
+ * Kết nối DB an toàn khi DATABASE_SSL=true. Node-postgres có thể âm
+ * thầm ghi đè `PoolConfig.ssl` bằng sslmode/sslrootcert/sslcert/sslkey
+ * trong chuỗi URL; loại những tham số này trước khi đặt object SSL.
+ * Không hỗ trợ bỏ xác minh TLS trên mạng production.
  */
 export function databaseConnectionFromEnv(url: string, ssl: boolean): string | PoolConfig {
   if (!ssl) return url;
-  return { connectionString: url, ssl: { rejectUnauthorized: false } };
+  const parsed = new URL(url);
+  for (const key of ['sslmode', 'sslrootcert', 'sslcert', 'sslkey']) parsed.searchParams.delete(key);
+  const caFile = process.env.DATABASE_TLS_CA_FILE;
+  const ca = caFile ? readFileSync(caFile, 'utf8') : undefined;
+  return { connectionString: parsed.toString(), ssl: { rejectUnauthorized: true, ...(ca ? { ca } : {}) } };
 }
 
-/**
- * Bật TLS cho URL `rediss://`; URL `redis://` không cần tuỳ chọn thêm.
- *
- * `rejectUnauthorized: false` bỏ xác thực chứng chỉ máy chủ Redis. Đây là đánh đổi về an toàn kết nối, không phải cách xác thực CA riêng; chỉ chấp nhận với môi trường kiểm soát được mạng và chứng chỉ.
- */
-export function redisTlsFromUrl(url: string): { tls?: { rejectUnauthorized: boolean } } {
-  return new URL(url).protocol === 'rediss:' ? { tls: { rejectUnauthorized: false } } : {};
+/** Tuỳ chọn Redis TLS dùng chung ioredis và Socket.IO pub/sub. */
+export function redisTlsFromUrl(url: string): { tls?: { rejectUnauthorized: true; ca?: string } } {
+  if (new URL(url).protocol !== 'rediss:') return {};
+  const caFile = process.env.REDIS_TLS_CA_FILE;
+  const ca = caFile ? readFileSync(caFile, 'utf8') : undefined;
+  return { tls: { rejectUnauthorized: true, ...(ca ? { ca } : {}) } };
 }
 
-/**
- * Dựng cấu hình `@keyv/redis` từ `REDIS_URL`; với `rediss://` bật TLS tương ứng.
- *
- * Cấu hình hiện tại tắt xác thực chứng chỉ máy chủ (`rejectUnauthorized: false`) và không bảo vệ trước giả mạo endpoint trong mạng không tin cậy.
- */
+/** Kết nối Keyv Redis: xác thực chứng chỉ máy chủ qua CA hệ thống/PEM. */
 export function cacheRedisConfigFromUrl(url: string): {
   url: string;
-  socket?: { tls: true; rejectUnauthorized: false };
+  socket?: { tls: true; rejectUnauthorized: true; ca?: string };
 } {
-  if (new URL(url).protocol === 'rediss:') {
-    return { url, socket: { tls: true, rejectUnauthorized: false } };
-  }
-  return { url };
+  const tls = redisTlsFromUrl(url).tls;
+  return tls ? { url, socket: { tls: true, ...tls } } : { url };
 }
 
 export function redisConnectionFromUrl(url: string): {
@@ -215,7 +218,7 @@ export function redisConnectionFromUrl(url: string): {
   port: number;
   username?: string;
   password?: string;
-  tls?: { rejectUnauthorized: boolean };
+  tls?: { rejectUnauthorized: true; ca?: string };
   maxRetriesPerRequest: number;
   enableOfflineQueue: false;
 } {
@@ -225,8 +228,8 @@ export function redisConnectionFromUrl(url: string): {
     port: parsed.port ? Number(parsed.port) : 6379,
     username: parsed.username || undefined,
     password: parsed.password || undefined,
-    // URL dạng rediss:// bắt buộc TLS. Chứng chỉ phía dịch vụ không kiểm chứng theo CA hệ thống được nên tắt kiểm chứng cho ioredis.
-    ...(parsed.protocol === 'rediss:' ? { tls: { rejectUnauthorized: false } } : {}),
+    // Mặc định kiểm tra CA công khai, có thể mount CA nội bộ qua REDIS_TLS_CA_FILE.
+    ...redisTlsFromUrl(url),
     // API chỉ là producer BullMQ: từ chối enqueue sớm nếu Redis mất kết
     // nối, không treo request HTTP vô hạn hay giữ lệnh trong offline queue.
     // Worker ở apps/worker có cấu hình riêng để nhận job sau khi Redis hồi phục.
