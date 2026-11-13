@@ -359,6 +359,11 @@ export class QuizService {
   async getPinByRequest(courseId: string, actorId: string, requestId: string, sectionId?: string): Promise<QuizView | undefined> {
     const pin = await this.repo.getPinByRequest(courseId, actorId, requestId);
     if (!pin) return undefined;
+    // Cùng requestId phải giữ nguyên section dù pin đã ready;
+    // không trả kết quả của lần giao cũ cho payload section khác.
+    if (sectionId && pin.requestedSectionId && pin.requestedSectionId !== sectionId) {
+      throw new ConflictException({ code: 'exam.pin_request_conflict' });
+    }
     await this.evaluator.requireCapability(actorId, 'course:manageactivities', await this.courses.courseContextId(courseId));
     if (pin.preparationState !== 'ready') {
       if (!sectionId) throw new ConflictException({ code: 'exam.pin_preparing' });

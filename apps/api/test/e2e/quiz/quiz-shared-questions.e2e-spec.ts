@@ -502,6 +502,98 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
     expect((await centre.query('SELECT id FROM grade_items WHERE id = $1', [originalGrade])).rowCount).toBe(1);
   }, 90_000);
 
+  it('category local legacy không gắn bank phải giữ quyền đọc nguồn trước khi cho dùng trong đề', async () => {
+    const sourceCourse = await createCourse(app, manager, (await createCategory(app, manager)).id);
+    const sourceContext = (await centre.query(
+      'SELECT id FROM context WHERE context_level = 50 AND instance_id = $1', [sourceCourse.id])).rows[0].id as string;
+    const oldCategory = await http(app).post('/api/v1/questions/categories')
+      .set(bearer(manager)).send({ name: uniqueName('Câu cũ ngoài bank'), contextId: sourceContext });
+    expect(oldCategory.status, JSON.stringify(oldCategory.body)).toBe(201);
+    expect((await centre.query('SELECT bank_id FROM question_categories WHERE id = $1', [oldCategory.body.id])).rows[0].bank_id).toBeNull();
+
+    const created = await http(app).post('/api/v1/questions').set(bearer(manager)).send({
+      categoryId: oldCategory.body.id, qtype: 'multichoice',
+      questionText: 'Câu legacy của khoá khác không được lộ đáp án',
+      answers: [
+        { text: 'Bí mật', correct: true }, { text: 'Sai 1', correct: false },
+        { text: 'Sai 2', correct: false }, { text: 'Sai 3', correct: false },
+      ],
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const questionId = created.body.question.id as string;
+
+    // Giáo viên chỉ quản lý khoá đích, bị chặn quyền đọc câu nguồn
+    // ở context khoá khác, kể cả khi biết UUID câu đã ready.
+    const teacherRole = await roleIdByShortname(app, admin, 'teacher');
+    await tenantAls.run({ tenantId: tenantA }, () =>
+      app.get(RolesService).setCapabilityOverride(teacherRole, 'question:useall', sourceContext, -1000));
+    const deniedRead = await http(app).get(`/api/v1/questions/${questionId}`).set(bearer(teacher));
+    expect(deniedRead.status, JSON.stringify(deniedRead.body)).toBe(404);
+
+    const deniedExam = await http(app).post(`/api/v1/exams/banks/${examBankId}/exams`)
+      .set(bearer(teacher)).send({ name: 'Không được dùng câu legacy', slots: [{ questionId }] });
+    expect(deniedExam.status, JSON.stringify(deniedExam.body)).toBe(404);
+    expect(deniedExam.body.code).toBe('question.not_found');
+
+    const deniedPin = await http(app).post(`/api/v1/courses/${courseId}/exam-pins`)
+      .set(bearer(teacher)).send({ requestId: randomUUID(), sectionId,
+        newExam: { name: 'Không được ghim câu legacy', slots: [{ questionId }] } });
+    expect(deniedPin.status, JSON.stringify(deniedPin.body)).toBe(404);
+
+    const allowedRead = await http(app).get(`/api/v1/questions/${questionId}`).set(bearer(manager));
+    expect(allowedRead.status, JSON.stringify(allowedRead.body)).toBe(200);
+    const allowedExamBank = await personalExamBankId(app, manager);
+    const allowedExam = await http(app).post(`/api/v1/exams/banks/${allowedExamBank}/exams`)
+      .set(bearer(manager)).send({ name: 'Chủ nguồn dùng câu legacy đúng quyền', slots: [{ questionId }] });
+    expect(allowedExam.status, JSON.stringify(allowedExam.body)).toBe(201);
+  }, 90_000);
+
+  it('retry sai section trước khi có CM phải giữ intent ban đầu và phục hồi đúng section', async () => {
+    const published = await publish('multichoice', mcPackage());
+    const examId = await paper([published.question.id]);
+    const body = pinBody(examId);
+    const created = await http(app).post(`/api/v1/courses/${courseId}/exam-pins`)
+      .set(bearer(teacher)).send(body);
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const pinId = created.body.id as string;
+    const cmId = created.body.cmId as string;
+    const alternative = await http(app).post(`/api/v1/courses/${courseId}/sections`)
+      .set(bearer(teacher)).send({ name: uniqueName('Section retry crash sớm') });
+    expect(alternative.status, JSON.stringify(alternative.body)).toBe(201);
+
+    // Crash giả lập sau khi ghi intent nhưng trước CM và snapshot: cố
+    // tình giữ request_id/pin.id, không để CM làm dấu neo section.
+    await centre.query('DELETE FROM grade_items WHERE item_instance = $1', [cmId]);
+    await centre.query('UPDATE exam_pins SET cm_id = NULL, question_snapshots = NULL, preparation_state = \'preparing\' WHERE id = $1', [pinId]);
+    await centre.query('DELETE FROM course_modules WHERE id = $1', [cmId]);
+    const before = await centre.query('SELECT id, request_id, requested_section_id, question_snapshots FROM exam_pins WHERE id = $1', [pinId]);
+    expect(before.rowCount).toBe(1);
+    expect(before.rows[0].requested_section_id).toBe(sectionId);
+    expect((await centre.query('SELECT id FROM course_modules WHERE instance_id = $1', [pinId])).rowCount).toBe(0);
+
+    const wrong = await http(app).post(`/api/v1/courses/${courseId}/exam-pins`)
+      .set(bearer(teacher)).send({ ...body, sectionId: alternative.body.id });
+    expect(wrong.status, JSON.stringify(wrong.body)).toBe(409);
+    expect(wrong.body.code).toBe('exam.pin_request_conflict');
+    const intact = await centre.query('SELECT id, request_id, question_snapshots, preparation_state FROM exam_pins WHERE id = $1', [pinId]);
+    expect(intact.rowCount).toBe(1);
+    expect(intact.rows[0].request_id).toBe(before.rows[0].request_id);
+    expect(intact.rows[0].question_snapshots).toBeNull();
+    expect(intact.rows[0].preparation_state).toBe('preparing');
+    expect((await centre.query('SELECT id FROM course_modules WHERE instance_id = $1', [pinId])).rowCount).toBe(0);
+
+    const recovered = await http(app).post(`/api/v1/courses/${courseId}/exam-pins`)
+      .set(bearer(teacher)).send(body);
+    expect(recovered.status, JSON.stringify(recovered.body)).toBe(201);
+    expect(recovered.body.id).toBe(pinId);
+    expect((await centre.query('SELECT section FROM course_modules WHERE instance_id = $1', [pinId])).rows[0].section).toBe(sectionId);
+    expect((await centre.query('SELECT preparation_state FROM exam_pins WHERE id = $1', [pinId])).rows[0].preparation_state).toBe('ready');
+    const wrongAfterReady = await http(app).post(`/api/v1/courses/${courseId}/exam-pins`)
+      .set(bearer(teacher)).send({ ...body, sectionId: alternative.body.id });
+    expect(wrongAfterReady.status).toBe(409);
+    expect(wrongAfterReady.body.code).toBe('exam.pin_request_conflict');
+  }, 90_000);
+
   it('hai kho A/B riêng biệt giữ snapshot, media, lượt làm và điểm ở A khi bank không còn kết nối', async () => {
     const cpName = `giaokhoa_test_shared_cp_${suffix}`;
     const previousCp = process.env.CONTROL_PLANE_DATABASE_URL;

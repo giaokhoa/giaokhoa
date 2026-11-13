@@ -165,7 +165,8 @@ export class QuizPinsService {
     // Chèn intent trước khi copy media: file staging luôn truy ngược về pin
     // và có thể được dọn khi lỗi hoặc lần retry tiếp tục sau crash.
     const pin = await this.repo.insertPin({
-      questionSnapshots: null, requestId: input.requestId, preparationState: 'preparing',
+      questionSnapshots: null, requestId: input.requestId, requestedSectionId: input.sectionId,
+      preparationState: 'preparing',
       examId: input.examId, examVersionId: input.examVersionId, courseId, cmId: null,
       name: input.name ?? null, intro: input.intro ?? '',
       timeOpen, timeClose, timeLimit: input.timeLimitSeconds ?? null,
@@ -198,8 +199,9 @@ export class QuizPinsService {
    * Hoàn tất pin đang chuẩn bị. Chạy lại an toàn sau crash ở bất kỳ
    * ranh giới nào: snapshot đã ghi thì không đọc lại kho nguồn,
    * cm/grade item đã tạo thì tìm theo instance trước khi thêm mới.
-   * Kiểm tra section của CM cũ TRƯỚC mọi thao tác có thể xóa dữ liệu;
-   * retry chỉ giữ nguyên tài nguyên đã có nếu lỗi, không bù trừ chúng.
+   * Kiểm tra section của intent và CM cũ TRƯỚC mọi thao tác có thể xóa
+   * dữ liệu: kể cả crash trước CM, retry sai section trả conflict.
+   * Retry chỉ giữ nguyên tài nguyên đã có nếu lỗi, không bù trừ chúng.
    * Chỉ thao tác vừa tạo intent mới có quyền bù trừ phần tạo dở.
    *
    * @param newlyInserted Đúng khi pin mới được chèn trong chính lời gọi.
@@ -208,14 +210,15 @@ export class QuizPinsService {
     await this.evaluator.requireCapability(actorId, 'course:manageactivities', await this.courses.courseContextId(courseId));
     await this.evaluator.requireCapability(actorId, 'grade:manage', await this.courses.courseContextId(courseId));
     const section = await this.courses.getSection(sectionId);
-    if (section.course !== courseId || pin.courseId !== courseId || pin.createdBy !== actorId) {
+    if (section.course !== courseId || pin.courseId !== courseId || pin.createdBy !== actorId
+      || (pin.requestedSectionId !== null && pin.requestedSectionId !== sectionId)) {
       throw new ConflictException({ code: 'exam.pin_request_conflict' });
     }
     const version = await this.repo.getExamVersion(pin.examVersionId);
     if (!version) throw new NotFoundException({ code: 'exam.version_not_found' });
     const name = pin.name ?? version.name;
-    // RequestId đã chốt một section. Retry sai section không được
-    // bước vào nhánh bù trừ và không được dọn snapshot/CM/điểm cũ.
+    // Intent đã chốt section trước CM; CM còn được đối chiếu để nhận
+    // ra các bản ghi cũ. Mismatch không được dọn snapshot/CM/điểm cũ.
     let cm = (await this.courses.listCms(courseId))
       .find((item) => item.component === QUIZ_COMPONENT && item.instanceId === pin.id);
     if (cm && cm.section !== sectionId) throw new ConflictException({ code: 'exam.pin_request_conflict' });

@@ -51,6 +51,7 @@ function jsonbValue<T>(value: T): RawBuilder<T> {
 export interface ExamPinRow {
   questionSnapshots: ExamQuestionSnapshot[] | null;
   requestId: string | null;
+  requestedSectionId: string | null;
   preparationState: string;
   pendingSnapshotId: string | null;
   attemptsAllowed: number;
@@ -92,6 +93,7 @@ export interface ExamPinRow {
 export interface NewExamPin {
   questionSnapshots?: ExamQuestionSnapshot[] | null;
   requestId?: string | null;
+  requestedSectionId?: string | null;
   preparationState?: string;
   pendingSnapshotId?: string | null;
   attemptsAllowed?: number;
@@ -133,6 +135,7 @@ export interface NewExamPin {
 const EXAM_PIN_COLUMNS = [
   'question_snapshots as questionSnapshots',
   'request_id as requestId',
+  'requested_section_id as requestedSectionId',
   'preparation_state as preparationState',
   'pending_snapshot_id as pendingSnapshotId',
   'attempts_allowed as attemptsAllowed',
@@ -186,6 +189,7 @@ function examPinInsertValues(values: NewExamPin): InsertObject<CentreDB, 'exam_p
   };
   if (values.questionSnapshots !== undefined) row.question_snapshots = values.questionSnapshots === null ? null : jsonbValue(values.questionSnapshots);
   if (values.requestId !== undefined) row.request_id = values.requestId;
+  if (values.requestedSectionId !== undefined) row.requested_section_id = values.requestedSectionId;
   if (values.preparationState !== undefined) row.preparation_state = values.preparationState;
   if (values.pendingSnapshotId !== undefined) row.pending_snapshot_id = values.pendingSnapshotId;
   if (values.attemptsAllowed !== undefined) row.attempts_allowed = values.attemptsAllowed;
@@ -229,6 +233,7 @@ function examPinInsertValues(values: NewExamPin): InsertObject<CentreDB, 'exam_p
 function examPinUpdateSet(patch: Partial<ExamPinRow>): UpdateObject<CentreDB, 'exam_pins'> {
   const set: UpdateObject<CentreDB, 'exam_pins'> = {};
   if (patch.questionSnapshots !== undefined) set.question_snapshots = patch.questionSnapshots === null ? null : jsonbValue(patch.questionSnapshots);
+  if (patch.requestedSectionId !== undefined) set.requested_section_id = patch.requestedSectionId;
   if (patch.preparationState !== undefined) set.preparation_state = patch.preparationState;
   if (patch.pendingSnapshotId !== undefined) set.pending_snapshot_id = patch.pendingSnapshotId;
   if (patch.attemptsAllowed !== undefined) set.attempts_allowed = patch.attemptsAllowed;

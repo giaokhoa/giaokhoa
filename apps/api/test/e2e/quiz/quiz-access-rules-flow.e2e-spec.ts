@@ -67,9 +67,11 @@ describe('Quy tắc truy cập quiz + ghi đè (giai đoạn 2)', () => {
     };
     const s1 = await mkStudent();
     const s2 = await mkStudent();
-    const systemCtx = (contexts.body as { id: string; contextLevel: number }[]).find((c) => c.contextLevel === 10)!;
+    // Fixture câu nguồn thuộc context khoá, nơi giáo viên được gán
+    // editingteacher và có question:useall; không dùng câu hệ thống
+    // ngoài phạm vi quyền rồi để đường tạo đề bỏ qua cổng đọc.
     const bankRes = await http(app).post('/api/v1/questions/categories').set('Authorization', `Bearer ${admin}`)
-      .send({ name: 'Stage2 bank', contextId: systemCtx.id });
+      .send({ name: 'Stage2 bank', contextId: courseCtx.id });
     const bankCatId = bankRes.body.id as string;
     const qRes = await http(app).post('/api/v1/questions').set('Authorization', `Bearer ${admin}`).send({
       categoryId: bankCatId, qtype: 'multichoice', questionText: 'Capital of France?', defaultMark: 1,
@@ -77,6 +79,8 @@ describe('Quy tắc truy cập quiz + ghi đè (giai đoạn 2)', () => {
     });
     if (qRes.status !== 201 && qRes.status !== 200) throw new Error(`create question failed: ${qRes.status} ${JSON.stringify(qRes.body)}`);
     const qMc = qRes.body.question.id as string;
+    const readable = await http(app).get(`/api/v1/questions/${qMc}`).set('Authorization', `Bearer ${teacher}`);
+    expect(readable.status, JSON.stringify(readable.body)).toBe(200);
     const correctAnswerId = (qRes.body.answers as { id: string; isCorrect: boolean }[]).find((a) => a.isCorrect)!.id;
     return {
       courseId: course.id, sectionId, teacher,

@@ -1212,6 +1212,7 @@ export interface ExamPins {
   preset: string | null;
   question_snapshots: ExamQuestionSnapshot[] | null;
   request_id: string | null;
+  requested_section_id: string | null;
   results_published_at: Timestamp | null;
   review_attempt: Generated<number>;
   review_correctness: Generated<number>;

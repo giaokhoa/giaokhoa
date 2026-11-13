@@ -13,6 +13,8 @@ ALTER TABLE exam_slots ADD CONSTRAINT exam_slots_system_snapshot_check CHECK
 -- Bản chụp thi thuộc lần giao ở trung tâm, gồm cả byte ảnh đã được sao vào miền trung tâm.
 ALTER TABLE exam_pins ADD COLUMN question_snapshots jsonb;
 ALTER TABLE exam_pins ADD COLUMN request_id uuid;
+-- Chốt section vào intent trước khi tạo CM để retry không đổi đích sau crash.
+ALTER TABLE exam_pins ADD COLUMN requested_section_id uuid;
 ALTER TABLE exam_pins ADD COLUMN preparation_state text NOT NULL DEFAULT 'ready'
   CHECK (preparation_state IN ('preparing', 'ready'));
 CREATE UNIQUE INDEX exam_pins_request_idx ON exam_pins(course_id, created_by, request_id) WHERE request_id IS NOT NULL;
