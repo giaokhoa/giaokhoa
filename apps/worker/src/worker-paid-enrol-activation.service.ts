@@ -103,7 +103,7 @@ export class WorkerPaidEnrolActivationService implements PaidEnrolActivationPort
       outbox: enrolOutbox,
       // Phạm vi platform của bề mặt giữ nguyên `spaceSlug` của ngữ cảnh đang chạy (cùng khuôn `CohortSyncService`): phạm vi này chỉ đổi tầm nhìn RLS sang đường platform, không đổi kho đích — dựng store mới không mang slug thì handle định tuyến rơi về kho chung trong lúc thân kích hoạt đang chạy ở kho riêng của trung tâm.
       runInPlatformScope: (fn) =>
-        tenantAls.run({ platform: true, spaceSlug: tenantAls.getStore()?.spaceSlug, spaceId: tenantAls.getStore()?.spaceId }, fn),
+        tenantAls.run({ platform: true, spaceSlug: tenantAls.getStore()?.spaceSlug, spaceId: tenantAls.getStore()?.spaceId, spaceHandle: tenantAls.getStore()?.spaceHandle }, fn),
     });
   }
 
@@ -119,7 +119,7 @@ export class WorkerPaidEnrolActivationService implements PaidEnrolActivationPort
   async activatePaidEnrol(itemId: string, userId: string, tenantId: string): Promise<void> {
     await this.spaceScope.runForTenant(tenantId, async () => {
       await tenantAls.run(
-        { platform: true, spaceSlug: tenantAls.getStore()?.spaceSlug, spaceId: tenantAls.getStore()?.spaceId },
+        { platform: true, spaceSlug: tenantAls.getStore()?.spaceSlug, spaceId: tenantAls.getStore()?.spaceId, spaceHandle: tenantAls.getStore()?.spaceHandle },
         async () => {
           const instance: EnrolInstanceRow | undefined = await this.spaceScope.routedKysely
             .selectFrom('enrol')

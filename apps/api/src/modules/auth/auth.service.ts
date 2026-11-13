@@ -486,7 +486,7 @@ export class AuthService {
       // claim, rồi token đó bị từ chối ở chính địa chỉ của trung tâm.
       const spaceSlug = tenantAls.getStore()?.spaceSlug;
       const tenant = await tenantAls.run(
-        { platform: true, ...(spaceSlug ? { spaceSlug } : {}) },
+        { platform: true, ...(spaceSlug ? { spaceSlug, spaceId: tenantAls.getStore()?.spaceId, spaceHandle: tenantAls.getStore()?.spaceHandle } : {}) },
         () => this.tenants.getTenant(tenantId),
       );
       const target = await this.spaceDb.resolveTarget(tenant.slug);

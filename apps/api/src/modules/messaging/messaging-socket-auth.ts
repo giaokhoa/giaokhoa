@@ -201,7 +201,7 @@ export class MessagingSocketAuth {
     if (!user || user.suspended || user.deleted) return null;
     const tenantId = space
       ? await this.spaceDb.withSpaceKysely(space.slug, () =>
-          tenantAls.run({ platform: true, spaceSlug: space.slug, spaceId: space.spaceId }, () =>
+          tenantAls.run({ platform: true, spaceSlug: space.slug, spaceId: space.spaceId, spaceHandle: tenantAls.getStore()?.spaceHandle }, () =>
             this.repo.getUserDefaultTenantId(user.id),
           ),
         )

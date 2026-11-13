@@ -500,6 +500,17 @@ describe('Định tuyến theo trung tâm ở tầng API (đầu-cuối)', () =>
     expect(atApex.status).toBe(200);
     expect((atApex.body as { id?: string }).id).toBe(member.id);
   });
+  it('GET /centres/:slug/identity của trung tâm shared đã chuẩn bị trả 200 ở cả Host shared và platform', async () => {
+    // Shared không có spaceId/handle dedicated; identity công khai
+    // vẫn phải đọc được kho chung dù request không đăng nhập.
+    const atShared = await http(app).get(`/api/v1/centres/${SHARED_SLUG}/identity`).set('Host', HOST_SHARED);
+    expect(atShared.status).toBe(200);
+    expect(atShared.body).toMatchObject({ tenantId: sharedTenantId });
+    const atRoot = await http(app).get(`/api/v1/centres/${SHARED_SLUG}/identity`);
+    expect(atRoot.status).toBe(200);
+    expect(atRoot.body).toMatchObject({ tenantId: sharedTenantId });
+  });
+
   it('cùng userId ở A/B có chỉ mục tìm kiếm và cache quyền riêng; HTTP chỉ trả nội dung kho của Host', async () => {
     // Dựng một người có cùng UUID, username ở cả hai kho nhưng tên
     // khác nhau để tìm kiếm phải đọc đúng DB lẫn kiểm lại metadata.

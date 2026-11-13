@@ -8,7 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { AUTHENTICATED_VIA_BETTER_AUTH } from '../../common/better-auth-session.guard';
 import type { AuthenticatedUser } from '../../common/current-user.decorator';
-import type { ResolvedSpaceConnection } from '../../db/routing/space-connection-resolver';
+import { SpaceRoutingError, type ResolvedSpaceConnection } from '../../db/routing/space-connection-resolver';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SKIP_SPACE_CONTEXT_KEY } from './skip-space-context.decorator';
 import { spaceSlugForHost } from './space-resolution';
@@ -58,6 +58,7 @@ export class SpaceContextGuard implements CanActivate {
       tenantId?: string;
       spaceSlug?: string;
       spaceId?: string;
+      spaceHandle?: object;
       headers: Record<string, string | string[] | undefined>;
       [AUTHENTICATED_VIA_BETTER_AUTH]?: boolean;
     }>();
@@ -155,13 +156,21 @@ export class SpaceContextGuard implements CanActivate {
     // Bước chuẩn bị (PREPARE) của khung định tuyến: phân giải đích
     // + mở pool của kho đích phải xong trước khi handler chạy, vì
     // đường đồng bộ của handle định tuyến chỉ tra bảng đã-chuẩn-bị.
-    await this.spaceDb.getKyselyForSpace(slug);
+    const db = await this.spaceDb.getKyselyForSpace(slug);
+    // Không lấy binding mới của B nếu handle vừa chuẩn bị cho A đã
+    // bị thay giữa hai await. Khi dedicated, identity phải đúng với
+    // target đã dùng để xác minh phiên JWT/tenant bên trên.
+    const binding = this.spaceDb.preparedSpaceScope(slug, db);
+    if ((target.mode === 'dedicated' && binding.spaceId !== target.spaceId)
+      || (target.mode === 'shared' && !!binding.spaceId)) {
+      throw new SpaceRoutingError('space_routing.prepared_identity_mismatch', `Space ${slug} changed while preparing request`);
+    }
     request.spaceSlug = slug;
-    // Shared giữ miền tenant cũ, dedicated lấy id đăng ký bất biến.
-    request.spaceId = target.mode === 'dedicated' ? target.spaceId : undefined;
+    request.spaceId = binding.spaceId;
+    request.spaceHandle = binding.spaceHandle;
     const store = tenantAls.getStore();
     if (store && !store.spaceSlug) {
-      tenantAls.enterWith({ ...store, spaceSlug: slug, ...(request.spaceId ? { spaceId: request.spaceId } : {}) });
+      tenantAls.enterWith({ ...store, spaceSlug: slug, ...binding });
     }
     return true;
   }

@@ -20,6 +20,13 @@ export interface TenantAlsStore {
   /** Định danh bất biến của kho trung tâm trong sổ đăng ký; dùng để cô lập key và room xuyên database. */
   spaceId?: string;
   /**
+   * Kysely handle đã ghim tại lúc mở phiên dedicated (opaque, chỉ dùng
+   * trong process). Cùng spaceId vẫn có thể đổi database/role/secret:
+   * so sánh đúng object identity để không đọc kho mới giữa hai await.
+   * Không đưa handle này vào payload/job/Redis hoặc serialize ra ngoài.
+   */
+  spaceHandle?: object;
+  /**
    * Đường platform tường minh (vận hành xuyên tenant): kết nối được gắn cờ `app.platform = 'on'`. Chỉ mã vận hành hệ thống (relay outbox, scheduler quét xuyên tenant) mới được vào ngữ cảnh này.
    */
   platform?: boolean;

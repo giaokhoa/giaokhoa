@@ -221,7 +221,7 @@ export class PermissionEvaluator {
    */
   private platformScope<T>(fn: () => Promise<T>): Promise<T> {
     const spaceSlug = tenantAls.getStore()?.spaceSlug;
-    return tenantAls.run({ platform: true, ...(spaceSlug ? { spaceSlug, spaceId: tenantAls.getStore()?.spaceId } : {}) }, fn);
+    return tenantAls.run({ platform: true, ...(spaceSlug ? { spaceSlug, spaceId: tenantAls.getStore()?.spaceId, spaceHandle: tenantAls.getStore()?.spaceHandle } : {}) }, fn);
   }
 
   /**

@@ -296,8 +296,8 @@ describe('Khung định tuyến theo trung tâm phía worker (integration)', () 
         },
         { tenantId: SESSION_ROW_ID },
       );
-      const pinnedSpaceId = (await shortIdleService.resolveTarget(CENTRE_SLUG)).spaceId;
-      const probeBefore = await tenantAls.run({ spaceSlug: CENTRE_SLUG, spaceId: pinnedSpaceId, tenantId: SESSION_ROW_ID }, async () => {
+      const pinnedScope = shortIdleService.preparedSpaceScope(CENTRE_SLUG);
+      const probeBefore = await tenantAls.run({ spaceSlug: CENTRE_SLUG, ...pinnedScope, tenantId: SESSION_ROW_ID }, async () => {
         const result = await sql<{ db: string }>`SELECT current_database() AS db`.execute(shortIdleService.routedKysely);
         return result.rows[0]!.db;
       });
@@ -312,7 +312,7 @@ describe('Khung định tuyến theo trung tâm phía worker (integration)', () 
       // Ngữ cảnh vẫn mang slug, không chuẩn bị lại: truy vấn qua
       // handle định tuyến phải bị từ chối (fail-closed).
       let readError: unknown;
-      await tenantAls.run({ spaceSlug: CENTRE_SLUG, spaceId: pinnedSpaceId, tenantId: SESSION_ROW_ID }, async () => {
+      await tenantAls.run({ spaceSlug: CENTRE_SLUG, ...pinnedScope, tenantId: SESSION_ROW_ID }, async () => {
         try {
           await sql`SELECT 1`.execute(shortIdleService.routedKysely);
         } catch (err) {
@@ -325,7 +325,7 @@ describe('Khung định tuyến theo trung tâm phía worker (integration)', () 
       // Lệnh ghi trong cùng ngữ cảnh cũng bị từ chối và dòng ghi
       // không xuất hiện ở kho chung của worker.
       let writeError: unknown;
-      await tenantAls.run({ spaceSlug: CENTRE_SLUG, spaceId: pinnedSpaceId, tenantId: REVOKED_MARKER_ID }, async () => {
+      await tenantAls.run({ spaceSlug: CENTRE_SLUG, ...pinnedScope, tenantId: REVOKED_MARKER_ID }, async () => {
         try {
           await shortIdleService.routedKysely
             .insertInto('tenants')
@@ -346,7 +346,8 @@ describe('Khung định tuyến theo trung tâm phía worker (integration)', () 
       // Chuẩn bị lại thì đường định tuyến phục vụ đúng kho riêng
       // như trước.
       await shortIdleService.getKyselyForSpace(CENTRE_SLUG);
-      const probeAfter = await tenantAls.run({ spaceSlug: CENTRE_SLUG, spaceId: pinnedSpaceId, tenantId: SESSION_ROW_ID }, async () => {
+      const repinnedScope = shortIdleService.preparedSpaceScope(CENTRE_SLUG);
+      const probeAfter = await tenantAls.run({ spaceSlug: CENTRE_SLUG, ...repinnedScope, tenantId: SESSION_ROW_ID }, async () => {
         const result = await sql<{ db: string }>`SELECT current_database() AS db`.execute(shortIdleService.routedKysely);
         return result.rows[0]!.db;
       });

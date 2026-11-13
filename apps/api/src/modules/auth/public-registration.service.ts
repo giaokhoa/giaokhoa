@@ -57,7 +57,7 @@ export class PublicRegistrationService {
       if (!tenant || tenant.kind !== 'platform' || tenant.status !== 'active') {
         throw new ServiceUnavailableException({ message: 'Public learning tenant is not ready', code: 'public_learning.tenant_unavailable' });
       }
-      return tenantAls.run({ spaceSlug: PUBLIC_LEARNING_SLUG, spaceId: tenantAls.getStore()?.spaceId, tenantId: tenant.id, platform: true }, async () => {
+      return tenantAls.run({ spaceSlug: PUBLIC_LEARNING_SLUG, spaceId: tenantAls.getStore()?.spaceId, spaceHandle: tenantAls.getStore()?.spaceHandle, tenantId: tenant.id, platform: true }, async () => {
         // Kiểm tra đủ vai/context TRƯỚC khi tạo credential: không
         // để bản ghi tự đăng ký bị mắc kẹt nếu kho chưa gieo vai.
         const role = await this.roles.getRoleByShortname(input.role === 'teacher' ? 'coursecreator' : 'student');

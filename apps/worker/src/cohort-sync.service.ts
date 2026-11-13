@@ -74,7 +74,7 @@ export class CohortSyncService {
       // mà phạm vi platform dựng store mới không mang slug thì
       // handle định tuyến rơi về kho chung, ghi sai kho.
       runInPlatformScope: (fn) =>
-        tenantAls.run({ platform: true, spaceSlug: tenantAls.getStore()?.spaceSlug, spaceId: tenantAls.getStore()?.spaceId }, fn),
+        tenantAls.run({ platform: true, spaceSlug: tenantAls.getStore()?.spaceSlug, spaceId: tenantAls.getStore()?.spaceId, spaceHandle: tenantAls.getStore()?.spaceHandle }, fn),
     });
   }
 

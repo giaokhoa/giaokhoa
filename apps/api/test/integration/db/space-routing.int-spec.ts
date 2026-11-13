@@ -378,8 +378,8 @@ describe('Khung định tuyến kết nối theo trung tâm (integration)', () =
     // Chuẩn bị trung tâm A rồi đối chứng: trong ngữ cảnh mang
     // slug của A, handle định tuyến phục vụ từ kho riêng của A.
     await service.getKyselyForSpace(CENTRE_A_SLUG);
-    const pinnedSpaceId = (await service.resolveTarget(CENTRE_A_SLUG)).spaceId;
-    const probeBefore = await tenantAls.run({ spaceSlug: CENTRE_A_SLUG, spaceId: pinnedSpaceId, tenantId: TENANT_A_ID }, async () => {
+    const pinnedScope = service.preparedSpaceScope(CENTRE_A_SLUG);
+    const probeBefore = await tenantAls.run({ spaceSlug: CENTRE_A_SLUG, ...pinnedScope, tenantId: TENANT_A_ID }, async () => {
       const result = await sql<{ db: string }>`SELECT current_database() AS db`.execute(service.routedKysely);
       return result.rows[0]!.db;
     });
@@ -395,7 +395,7 @@ describe('Khung định tuyến kết nối theo trung tâm (integration)', () =
     // mới: truy vấn qua handle định tuyến phải bị TỪ CHỐI
     // (fail-closed), tuyệt đối không rơi về kho chung.
     let readError: unknown;
-    await tenantAls.run({ spaceSlug: CENTRE_A_SLUG, spaceId: pinnedSpaceId, tenantId: TENANT_A_ID }, async () => {
+    await tenantAls.run({ spaceSlug: CENTRE_A_SLUG, ...pinnedScope, tenantId: TENANT_A_ID }, async () => {
       try {
         await sql`SELECT 1`.execute(service.routedKysely);
       } catch (err) {
@@ -409,7 +409,7 @@ describe('Khung định tuyến kết nối theo trung tâm (integration)', () =
     // dòng ghi không xuất hiện ở kho chung (nơi nó sẽ rơi vào nếu
     // khung đổi đích im lặng).
     let writeError: unknown;
-    await tenantAls.run({ spaceSlug: CENTRE_A_SLUG, spaceId: pinnedSpaceId, tenantId: REVOKED_MARKER_ID }, async () => {
+    await tenantAls.run({ spaceSlug: CENTRE_A_SLUG, ...pinnedScope, tenantId: REVOKED_MARKER_ID }, async () => {
       try {
         await service.routedKysely
           .insertInto('tenants')
@@ -431,7 +431,8 @@ describe('Khung định tuyến kết nối theo trung tâm (integration)', () =
     // đúng kho riêng của A như trước — lỗi chỉ nằm ở khoảng giữa
     // thu hồi và chuẩn bị lại, và nó ồn ào chứ không im lặng.
     await service.getKyselyForSpace(CENTRE_A_SLUG);
-    const probeAfter = await tenantAls.run({ spaceSlug: CENTRE_A_SLUG, spaceId: pinnedSpaceId, tenantId: TENANT_A_ID }, async () => {
+    const repinnedScope = service.preparedSpaceScope(CENTRE_A_SLUG);
+    const probeAfter = await tenantAls.run({ spaceSlug: CENTRE_A_SLUG, ...repinnedScope, tenantId: TENANT_A_ID }, async () => {
       const result = await sql<{ db: string }>`SELECT current_database() AS db`.execute(service.routedKysely);
       return result.rows[0]!.db;
     });
@@ -492,8 +493,8 @@ describe('Khung định tuyến kết nối theo trung tâm (integration)', () =
     // nó): trong ngữ cảnh mang slug của A, điểm inject dùng chung
     // đọc thấy dòng của A trong kho riêng của A.
     await service.getKyselyForSpace(CENTRE_A_SLUG);
-    const pinnedSpaceId = (await service.resolveTarget(CENTRE_A_SLUG)).spaceId;
-    const routed = await tenantAls.run({ spaceSlug: CENTRE_A_SLUG, spaceId: pinnedSpaceId, tenantId: TENANT_A_ID }, async () => {
+    const pinnedScope = service.preparedSpaceScope(CENTRE_A_SLUG);
+    const routed = await tenantAls.run({ spaceSlug: CENTRE_A_SLUG, ...pinnedScope, tenantId: TENANT_A_ID }, async () => {
       const rows = await service.routedKysely.selectFrom('tenants').selectAll().execute();
       return rows.map((row) => row.id);
     });

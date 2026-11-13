@@ -44,6 +44,8 @@ interface FakeRequest {
   user?: AuthenticatedUser;
   tenantId?: string;
   spaceSlug?: string;
+  spaceId?: string;
+  spaceHandle?: object;
   headers: Record<string, string | undefined>;
   [AUTHENTICATED_VIA_BETTER_AUTH]?: boolean;
 }
@@ -61,6 +63,11 @@ function makeGuard(options?: {
       return options?.target ?? DEDICATED_TARGET;
     }),
     getKyselyForSpace: vi.fn(async () => ({})),
+    preparedSpaceScope: vi.fn((_slug: string, db: object) =>
+      (options?.target ?? DEDICATED_TARGET).mode === 'dedicated'
+        ? { spaceId: (options?.target ?? DEDICATED_TARGET).spaceId, spaceHandle: db }
+        : {},
+    ),
     // Nhánh cookie đọc tenant hiệu lực qua kho riêng (Phần A, issue #587): mock chạy thẳng callback như kho đích thật.
     withSpaceKysely: vi.fn(async (_slug: string, fn: () => Promise<unknown>) => fn()),
   };
@@ -247,6 +254,8 @@ describe('Guard gắn ngữ cảnh trung tâm theo địa chỉ', () => {
     await expect(guard.canActivate(httpContext(request))).resolves.toBe(true);
     expect(spaceDb.getKyselyForSpace).toHaveBeenCalledWith('trung-tam-a');
     expect(request.spaceSlug).toBe('trung-tam-a');
+    expect(request.spaceId).toBe('id-dang-ky-a');
+    expect(request.spaceHandle).toBeDefined();
   });
 
   it('phiên cookie không mang centre_id thì đối chiếu bằng slug của tenant hiệu lực: khớp thì cho qua và chuẩn bị kho', async () => {
