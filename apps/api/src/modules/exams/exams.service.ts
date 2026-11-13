@@ -255,7 +255,7 @@ export class ExamsService {
 
   async getPaperOrThrow(id: string): Promise<ExamRow> {
     const paper = await this.repo.getPaper(id);
-    if (!paper) throw new NotFoundException({ message: `Exam paper ${id} not found`, code: 'exam.not_found' });
+    if (!paper || paper.kind !== 'snapshot') throw new NotFoundException({ message: `Exam paper ${id} not found`, code: 'exam.not_found' });
     return paper;
   }
 

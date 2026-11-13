@@ -28,6 +28,22 @@ export interface SystemBankEvents {
   type: string;
 }
 
+export interface SystemExamVersions {
+  centre_slug: string;
+  checksum: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  package: Json;
+  rejection_reason: string | null;
+  reviewed_at: Timestamp | null;
+  reviewed_by: string | null;
+  source_exam_id: string;
+  source_version_id: string;
+  source_version_number: number;
+  status: Generated<string>;
+  submitted_by: string;
+}
+
 export interface SystemMaterials {
   centre_slug: string;
   id: Generated<string>;
@@ -175,6 +191,7 @@ export interface SystemQuestionVersions {
 
 export interface DB {
   system_bank_events: SystemBankEvents;
+  system_exam_versions: SystemExamVersions;
   system_material_submissions: SystemMaterialSubmissions;
   system_material_versions: SystemMaterialVersions;
   system_materials: SystemMaterials;

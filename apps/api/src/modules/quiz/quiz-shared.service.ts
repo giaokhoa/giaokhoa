@@ -78,6 +78,9 @@ export class QuizSharedService {
       examVersionNumber: version.version,
       examStatus: exam.status,
       examLatestVersion: exam.latestVersion,
+      sharedSource: exam.sharedExamVersionId && exam.sharedSourceExamId && exam.sharedSourceVersionNumber !== null
+        ? { examId: exam.sharedSourceExamId, versionId: exam.sharedExamVersionId, versionNumber: exam.sharedSourceVersionNumber }
+        : null,
     };
   }
 
@@ -187,6 +190,7 @@ export class QuizSharedService {
       examVersionId: quiz.examVersionId,
       examVersionNumber: quiz.examVersionNumber,
       latestExamVersionNumber: quiz.examLatestVersion,
+      sharedSource: quiz.sharedSource,
       hasNewerExamVersion: quiz.examStatus === 'ready' && quiz.examLatestVersion > quiz.examVersionNumber,
       versionMode: quiz.versionMode === 'float_latest_ready' ? 'float_latest_ready' as const : 'pinned' as const,
       tfScale: quiz.tfScale,

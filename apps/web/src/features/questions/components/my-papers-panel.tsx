@@ -5,6 +5,8 @@ import { useNavigate } from 'react-router';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Input } from '@giaokhoa/ui/components/input';
 import { Label } from '@giaokhoa/ui/components/label';
+import { usePermissions } from '#lib/permissions';
+import { submitSharedExam } from '../api/questions';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -37,6 +39,9 @@ export function MyPapersPanel({
   setMessage,
 }: MyPapersPanelProps) {
   const { t } = useTranslation('app');
+  const permissions = usePermissions();
+  const canSubmitShared = permissions.ready && (permissions.access?.contexts.some((context) =>
+    context.contextLevel === 20 && context.capabilities.includes('tenant:manage')) ?? false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const paperStatusMutation = useSetExamPaperStatus();
@@ -177,6 +182,13 @@ export function MyPapersPanel({
                 {paper.status === 'hidden' ? (
                   <Button type="button" variant="outline" onClick={() => void setPaperStatus(paper.id, 'ready')}>
                     {t('examPaperRestore')}
+                  </Button>
+                ) : null}
+                {paper.status === 'ready' && canSubmitShared ? (
+                  <Button type="button" variant="outline" onClick={() => void submitSharedExam(paper.id)
+                    .then(() => setMessage(t('sharedExamSubmitted')))
+                    .catch(() => setMessage(t('sharedExamSubmitFailed')))}>
+                    {t('sharedExamSubmit')}
                   </Button>
                 ) : null}
                 {paper.status === 'ready' && paper.capabilities.deploy ? (

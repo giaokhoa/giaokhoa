@@ -29,6 +29,59 @@ async function probe<T>(path: string): Promise<T | null> {
   }
 }
 
+export interface SystemSharedExamSummary {
+  id: string;
+  name: string;
+  sourceExamId: string;
+  sourceVersionNumber: number;
+  grade: number | null;
+  examKind: string | null;
+  totalScore: number;
+  durationMinutes: number | null;
+  slotCount: number;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+  rejectionReason: string | null;
+}
+
+export function fetchSharedExams(courseId: string) {
+  return apiJson<SystemSharedExamSummary[]>(`/api/v1/system-bank/exams?courseId=${encodeURIComponent(courseId)}`);
+}
+
+export function fetchSharedExamSubmissions(scope: 'mine' | 'pending') {
+  return apiJson<SystemSharedExamSummary[]>(`/api/v1/system-bank/exams/${scope}`);
+}
+
+export function submitSharedExam(examId: string) {
+  return apiJson<SystemSharedExamSummary>('/api/v1/system-bank/exams', {
+    method: 'POST', body: JSON.stringify({ examId }),
+  });
+}
+
+export function approveSharedExam(id: string) {
+  return apiJson<SystemSharedExamSummary>(`/api/v1/system-bank/exams/${id}/approve`, { method: 'POST' });
+}
+
+export function rejectSharedExam(id: string, reason: string) {
+  return apiJson<SystemSharedExamSummary>(`/api/v1/system-bank/exams/${id}/reject`, {
+    method: 'POST', body: JSON.stringify({ reason }),
+  });
+}
+
+export function fetchSharedExamForReview(id: string) {
+  return apiJson<{ package: import('@giaokhoa/contracts').SystemExamPackage }>(`/api/v1/system-bank/exams/${id}`);
+}
+
+export function assignSharedExam(courseId: string, body: {
+  sharedExamVersionId: string; requestId: string; sectionId: string;
+  targetGroupId?: string; timeOpen?: string | null; timeClose?: string | null;
+  name?: string; variantCount?: number;
+}) {
+  return apiJson<{ id: string }>(`/api/v1/courses/${courseId}/exam-pins`, {
+    method: 'POST', body: JSON.stringify(body),
+  });
+}
+
 export interface SystemQuestionSubmission {
   id: string;
   centreSlug: string;

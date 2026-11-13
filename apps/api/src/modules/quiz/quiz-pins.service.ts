@@ -189,8 +189,10 @@ export class QuizPinsService {
       const slots = await this.repo.listExamSlots(pin.examVersionId);
       if (!pin.questionSnapshots && slots.some((slot) => slot.sourceDomain === 'bank-system')) {
         await this.files.cleanupExamSnapshotFiles(pin.id);
+        const exam = await this.repo.getExam(pin.examId);
         const snapshots = await this.snapshots.prepare(actorId, slots,
-          await this.courses.courseContextId(courseId), pin.versionMode, pin.id);
+          await this.courses.courseContextId(courseId), pin.versionMode, pin.id,
+          exam?.kind === 'system_execution');
         if (!snapshots) throw new BadRequestException({ code: 'exam.snapshot_missing' });
         await this.repo.updatePin(pin.id, { questionSnapshots: snapshots });
       }
@@ -259,8 +261,10 @@ export class QuizPinsService {
     const stageId = randomUUID();
     await this.repo.updatePin(pin.id, { pendingSnapshotId: stageId });
     try {
+      const exam = await this.repo.getExam(pin.examId);
       const snapshots = await this.snapshots.prepare(actorId, slots,
-        await this.courses.courseContextId(pin.course), mode, stageId);
+        await this.courses.courseContextId(pin.course), mode, stageId,
+        exam?.kind === 'system_execution');
       await apply(snapshots);
     } catch (error) {
       try {

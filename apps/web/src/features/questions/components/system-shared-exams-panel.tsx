@@ -1,0 +1,259 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router';
+import { useTranslation } from 'react-i18next';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@giaokhoa/ui/components/button';
+import { Input } from '@giaokhoa/ui/components/input';
+import { Label } from '@giaokhoa/ui/components/label';
+import { usePermissions } from '#lib/permissions';
+import { courseContentQueryOptions } from '#lib/course-content';
+import { coursesListQueryOptions } from '#features/course-builder/queries/course-builder';
+import { courseGroupsQueryOptions } from '#features/progress-report/queries/progress-report';
+import {
+  approveSharedExam, assignSharedExam, fetchSharedExamForReview, fetchSharedExamSubmissions,
+  fetchSharedExams, rejectSharedExam,
+} from '../api/questions';
+import { systemBankPlainText } from '../utils/shared';
+
+export function SystemSharedExamsPanel() {
+  const { t } = useTranslation('app');
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const permissions = usePermissions();
+  const contexts = permissions.access?.contexts ?? [];
+  const canSubmit = permissions.ready && contexts.some((context) =>
+    context.contextLevel === 20 && context.capabilities.includes('tenant:manage'));
+  const canReview = permissions.ready && (contexts.some((context) =>
+    context.contextLevel === 10 && context.capabilities.includes('systembank:review')) ||
+    (permissions.access?.isSiteAdmin && !canSubmit) || false);
+
+  const courses = useQuery(coursesListQueryOptions()).data ?? [];
+  const [courseId, setCourseId] = useState('');
+  const [sectionId, setSectionId] = useState('');
+  const [groupId, setGroupId] = useState('');
+  const [versionId, setVersionId] = useState('');
+  const [name, setName] = useState('');
+  const [timeOpen, setTimeOpen] = useState('');
+  const [timeClose, setTimeClose] = useState('');
+  const [variants, setVariants] = useState('1');
+  const [requestId, setRequestId] = useState('');
+  const [selectedReview, setSelectedReview] = useState('');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const published = useQuery({
+    queryKey: ['system-shared-exams', 'published', courseId],
+    queryFn: () => fetchSharedExams(courseId),
+    enabled: !!courseId,
+  });
+  const mine = useQuery({
+    queryKey: ['system-shared-exams', 'mine'],
+    queryFn: () => fetchSharedExamSubmissions('mine'),
+    enabled: canSubmit,
+  });
+  const pending = useQuery({
+    queryKey: ['system-shared-exams', 'pending'],
+    queryFn: () => fetchSharedExamSubmissions('pending'),
+    enabled: canReview,
+  });
+  const review = useQuery({
+    queryKey: ['system-shared-exams', 'review', selectedReview],
+    queryFn: () => fetchSharedExamForReview(selectedReview),
+    enabled: canReview && !!selectedReview,
+  });
+  const content = useQuery({ ...courseContentQueryOptions(courseId), enabled: !!courseId }).data;
+  const groups = useQuery({ ...courseGroupsQueryOptions(courseId), enabled: !!courseId }).data ?? [];
+  const sections = content?.sections ?? [];
+
+  async function deploy() {
+    if (!versionId || !courseId || !sectionId || busy) return;
+    const key = requestId || crypto.randomUUID();
+    setRequestId(key);
+    setBusy(true);
+    setNotice(null);
+    try {
+      const result = await assignSharedExam(courseId, {
+        sharedExamVersionId: versionId, requestId: key, sectionId,
+        ...(groupId ? { targetGroupId: groupId } : {}),
+        ...(name.trim() ? { name: name.trim() } : {}),
+        ...(timeOpen ? { timeOpen: new Date(timeOpen).toISOString() } : {}),
+        ...(timeClose ? { timeClose: new Date(timeClose).toISOString() } : {}),
+        variantCount: Math.max(1, Math.min(50, Number(variants) || 1)),
+      });
+      setRequestId('');
+      navigate(`/courses/${courseId}/exams/${result.id}`);
+    } catch {
+      setNotice(t('sharedExamAssignFailed'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function decide(approved: boolean) {
+    if (!selectedReview || busy || (!approved && !reason.trim())) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      if (approved) await approveSharedExam(selectedReview);
+      else await rejectSharedExam(selectedReview, reason.trim());
+      setSelectedReview('');
+      setReason('');
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['system-shared-exams', 'pending'] }),
+        queryClient.invalidateQueries({ queryKey: ['system-shared-exams', 'published'] }),
+      ]);
+      setNotice(t(approved ? 'sharedExamApproved' : 'sharedExamRejected'));
+    } catch {
+      setNotice(t('sharedExamReviewFailed'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section id="shared-exam-discovery" className="space-y-4 rounded-md border p-4">
+      <h3 className="font-semibold">{t('sharedExamTitle')}</h3>
+      <p className="text-sm text-muted-foreground">{t('sharedExamHint')}</p>
+      {notice ? <p role="status">{notice}</p> : null}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="shared-exam-course">{t('deployPickCourse')}</Label>
+          <select id="shared-exam-course" className="h-9 w-full rounded-md border bg-transparent px-2 text-sm"
+            value={courseId} onChange={(event) => {
+              setCourseId(event.target.value); setSectionId(''); setGroupId('');
+              setVersionId(''); setRequestId('');
+            }}>
+            <option value="">—</option>
+            {courses.map((course) => <option key={course.id} value={course.id}>{course.fullName}</option>)}
+          </select>
+        </div>
+        <div>
+          <Label htmlFor="shared-exam-version">{t('sharedExamPickVersion')}</Label>
+          <select id="shared-exam-version" className="h-9 w-full rounded-md border bg-transparent px-2 text-sm"
+            value={versionId} disabled={!courseId || published.isLoading}
+            onChange={(event) => { setVersionId(event.target.value); setRequestId(''); }}>
+            <option value="">—</option>
+            {(published.data ?? []).map((exam) => (
+              <option key={exam.id} value={exam.id}>
+                {exam.name} · v{exam.sourceVersionNumber} · {t('examPaperSlotsCount', { count: exam.slotCount })}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      {published.isError ? <p role="alert">{t('sharedExamListFailed')}</p> : null}
+      {courseId && !published.isLoading && (published.data ?? []).length === 0
+        ? <p className="text-sm text-muted-foreground">{t('sharedExamEmpty')}</p> : null}
+      {versionId ? (
+        <div className="space-y-3 rounded-md border p-3">
+          <p className="text-sm">{t('sharedExamPinnedNotice')}</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="shared-exam-section">{t('pinPickSection')}</Label>
+              <select id="shared-exam-section" className="h-9 w-full rounded-md border bg-transparent px-2 text-sm"
+                value={sectionId} onChange={(event) => { setSectionId(event.target.value); setRequestId(''); }}>
+                <option value="">—</option>
+                {sections.map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="shared-exam-group">{t('pinPickGroup')}</Label>
+              <select id="shared-exam-group" className="h-9 w-full rounded-md border bg-transparent px-2 text-sm"
+                value={groupId} onChange={(event) => { setGroupId(event.target.value); setRequestId(''); }}>
+                <option value="">{t('sharedExamAllStudents')}</option>
+                {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="shared-exam-name">{t('sharedExamInstanceName')}</Label>
+              <Input id="shared-exam-name" value={name} onChange={(event) => { setName(event.target.value); setRequestId(''); }} />
+            </div>
+            <div>
+              <Label htmlFor="shared-exam-variants">{t('sharedExamVariants')}</Label>
+              <Input id="shared-exam-variants" type="number" min={1} max={50} value={variants}
+                onChange={(event) => { setVariants(event.target.value); setRequestId(''); }} />
+            </div>
+            <div>
+              <Label htmlFor="shared-exam-open">{t('sharedExamOpens')}</Label>
+              <Input id="shared-exam-open" type="datetime-local" value={timeOpen}
+                onChange={(event) => { setTimeOpen(event.target.value); setRequestId(''); }} />
+            </div>
+            <div>
+              <Label htmlFor="shared-exam-close">{t('sharedExamCloses')}</Label>
+              <Input id="shared-exam-close" type="datetime-local" value={timeClose}
+                onChange={(event) => { setTimeClose(event.target.value); setRequestId(''); }} />
+            </div>
+          </div>
+          <Button disabled={busy || !sectionId} onClick={() => void deploy()}>
+            {t('sharedExamAssign')}
+          </Button>
+        </div>
+      ) : null}
+
+      {canSubmit ? (
+        <div className="space-y-2">
+          <h4 className="font-medium">{t('sharedExamMySubmissions')}</h4>
+          {(mine.data ?? []).length ? (
+            <ul className="space-y-1 text-sm">
+              {mine.data?.map((exam) => (
+                <li key={exam.id}>{exam.name} · v{exam.sourceVersionNumber} ·
+                  {' '}{t(`systemSubmissionStatus_${exam.status}`)}
+                  {exam.rejectionReason ? ` · ${exam.rejectionReason}` : null}
+                </li>
+              ))}
+            </ul>
+          ) : <p className="text-sm text-muted-foreground">{t('sharedExamNoSubmissions')}</p>}
+        </div>
+      ) : null}
+      {canReview ? (
+        <div className="space-y-3">
+          <h4 className="font-medium">{t('sharedExamPending')}</h4>
+          {(pending.data ?? []).map((exam) => (
+            <div key={exam.id} className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="flex-1">{exam.name} · v{exam.sourceVersionNumber} ·
+                {' '}{t('examPaperSlotsCount', { count: exam.slotCount })}
+              </span>
+              <Button variant="outline" disabled={busy} onClick={() => {
+                setSelectedReview(exam.id); setReason('');
+              }}>{t('systemReviewOpen')}</Button>
+            </div>
+          ))}
+          {selectedReview && review.data ? (
+            <div className="space-y-2 rounded-md border p-3">
+              <p className="font-medium">{review.data.package.name}</p>
+              <ol className="list-inside list-decimal space-y-2 text-sm">
+                {review.data.package.slots.map((slot) => (
+                  <li key={slot.position}>
+                    {systemBankPlainText(slot.package.questionText)} · {slot.qtype} · {slot.maxMark}
+                    {slot.package.media?.length ? (
+                      <ul className="ml-5 text-xs text-muted-foreground">
+                        {slot.package.media.map((file) => (
+                          <li key={file.contentHash} className="space-y-1">
+                            <span>{file.fileName} · {file.contentHash}</span>
+                            <img
+                              src={`/api/v1/system-bank/exams/${selectedReview}/media/${file.contentHash}`}
+                              alt={file.fileName}
+                              className="max-h-64 max-w-full rounded border object-contain"
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </li>
+                ))}
+              </ol>
+              <Label htmlFor="shared-exam-reason">{t('systemRejectionReason')}</Label>
+              <Input id="shared-exam-reason" value={reason} onChange={(event) => setReason(event.target.value)} />
+              <div className="flex flex-wrap gap-2">
+                <Button disabled={busy} onClick={() => void decide(true)}>{t('systemReviewApprove')}</Button>
+                <Button variant="outline" disabled={busy || !reason.trim()}
+                  onClick={() => void decide(false)}>{t('systemReviewReject')}</Button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}

@@ -204,6 +204,7 @@ export type PinRow = ExamPinRow & {
   examVersionNumber: number;
   examStatus: string;
   examLatestVersion: number;
+  sharedSource: { examId: string; versionId: string; versionNumber: number } | null;
 };
 
 export interface EffectiveSlotRow {
@@ -262,6 +263,10 @@ export class QuizService {
 
   async withPinRequestLock<T>(courseId: string, actorId: string, requestId: string, action: () => Promise<T>): Promise<T> {
     return this.repo.withPinRequestLock(courseId, actorId, requestId, action);
+  }
+
+  async getPinRequestRecord(courseId: string, actorId: string, requestId: string): Promise<ExamPinRow | undefined> {
+    return this.repo.getPinByRequest(courseId, actorId, requestId);
   }
 
   async getPinByRequest(courseId: string, actorId: string, requestId: string, sectionId?: string): Promise<QuizView | undefined> {
