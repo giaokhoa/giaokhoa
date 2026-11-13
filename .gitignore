@@ -34,3 +34,6 @@ packages/*/src/**/*.js.map
 
 # Vitest 5 dùng chung thư mục artifact/reporter.
 .vitest/
+
+# Cache pnpm khi cửa hàng được tạo trong workspace do khác thiết bị.
+.pnpm-store/
