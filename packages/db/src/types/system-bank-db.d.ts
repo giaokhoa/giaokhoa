@@ -101,6 +101,25 @@ export interface SystemQuestions {
   withdrawn_reason: string | null;
 }
 
+export interface SystemQuestionSubmissions {
+  centre_slug: string;
+  checksum: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  package: Json;
+  published_question_id: string | null;
+  published_version: number | null;
+  qtype: string;
+  rejection_reason: string | null;
+  reviewed_at: Timestamp | null;
+  reviewed_by: string | null;
+  source_question_id: string;
+  source_version_id: string;
+  source_version_number: number;
+  status: Generated<string>;
+  submitted_by: string;
+}
+
 export interface SystemQuestionVersionOutcomes {
   cognitive_level: string;
   created_at: Generated<Timestamp>;
@@ -126,6 +145,7 @@ export interface DB {
   system_outcome_package_outcomes: SystemOutcomePackageOutcomes;
   system_outcome_packages: SystemOutcomePackages;
   system_question_importers: SystemQuestionImporters;
+  system_question_submissions: SystemQuestionSubmissions;
   system_question_version_outcomes: SystemQuestionVersionOutcomes;
   system_question_versions: SystemQuestionVersions;
   system_questions: SystemQuestions;

@@ -34,6 +34,25 @@ export const systemBankPackageOutcomeSchema = z.strictObject({
 });
 export type SystemBankPackageOutcome = z.infer<typeof systemBankPackageOutcomeSchema>;
 
+/** Dấu vết và giấy phép nguồn giữ trong từng phiên bản, không đọc lại từ trung tâm. */
+export const systemBankSourceSchema = z.strictObject({
+  centreSlug: z.string().min(1).max(150),
+  questionId: uuidIdSchema,
+  versionId: uuidIdSchema,
+  versionNumber: z.number().int().min(1),
+  authorId: uuidIdSchema.nullable(),
+  sourceKind: z.string().nullable(),
+  sourceRef: z.string().nullable(),
+  license: z.string().nullable(),
+});
+
+/** Manifest ảnh được sao byte vào miền bank-system, tách hẳn vòng đời file gốc. */
+export const systemBankMediaSchema = z.strictObject({
+  contentHash: z.string().regex(/^[0-9a-f]{64}$/),
+  fileName: z.string().min(1).max(255),
+  mimeType: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
+});
+
 /** Gói phiên bản tự đủ của một câu hỏi hệ thống. */
 export const systemBankPackageSchema = z.strictObject({
   questionText: z.unknown(),
@@ -48,8 +67,23 @@ export const systemBankPackageSchema = z.strictObject({
     .nullable(),
   options: z.record(z.string(), z.unknown()).nullable(),
   outcomes: z.array(systemBankPackageOutcomeSchema),
+  source: systemBankSourceSchema.optional(),
+  media: z.array(systemBankMediaSchema).optional(),
 });
 export type SystemBankPackage = z.infer<typeof systemBankPackageSchema>;
+
+/** Yêu cầu quản trị trung tâm chụp phiên bản mới nhất của câu để gửi duyệt. */
+export const submitSystemBankQuestionSchema = z.strictObject({
+  questionId: uuidIdSchema,
+  license: z.string().trim().min(1).max(200).optional(),
+});
+export type SubmitSystemBankQuestion = z.infer<typeof submitSystemBankQuestionSchema>;
+
+/** Từ chối bắt buộc ghi lý do; chấp thuận không cần payload riêng. */
+export const rejectSystemBankSubmissionSchema = z.strictObject({
+  reason: z.string().trim().min(1).max(500),
+});
+export type RejectSystemBankSubmission = z.infer<typeof rejectSystemBankSubmissionSchema>;
 
 /** Phát hành câu hỏi hệ thống mới kèm phiên bản đầu tiên (nguyên tử, cùng một transaction kho ngân hàng). */
 export const createSystemBankQuestionSchema = z.strictObject({

@@ -33,6 +33,100 @@ async function probe<T>(path: string): Promise<T | null> {
   }
 }
 
+/** Bản gửi lên ngân hàng hệ thống, thông tin bản chụp chỉ trả cho người có quyền. */
+export interface SystemQuestionSubmission {
+  id: string;
+  centreSlug: string;
+  sourceQuestionId: string;
+  sourceVersionId: string;
+  sourceVersionNumber: number;
+  qtype: string;
+  package: {
+    questionText: RichTextDocument;
+    answers: Array<{ answer: RichTextDocument; isCorrect: boolean }>;
+    source?: { centreSlug: string; authorId: string | null; sourceRef: string | null; license: string | null };
+    media?: Array<{ contentHash: string; fileName: string }>;
+  };
+  checksum: string;
+  status: 'pending' | 'approved' | 'rejected';
+  submittedBy: string;
+  reviewedBy: string | null;
+  rejectionReason: string | null;
+  publishedQuestionId: string | null;
+  publishedVersion: number | null;
+  createdAt: string;
+}
+
+/** Hàng chờ và lịch sử gửi ở kho ngân hàng; API gác actor tương ứng. */
+export function fetchSystemQuestionSubmissions(scope: 'mine' | 'pending') {
+  return apiJson<SystemQuestionSubmission[]>(`/api/v1/system-bank/submissions/${scope}`);
+}
+
+/** Chụp phiên bản câu riêng thành bản gửi duyệt, không phát hành ngay. */
+export function submitSystemQuestion(questionId: string, license?: string) {
+  return apiJson<SystemQuestionSubmission>('/api/v1/system-bank/submissions', {
+    method: 'POST', body: JSON.stringify({ questionId, ...(license?.trim() ? { license: license.trim() } : {}) }),
+  });
+}
+
+/** Biên tập viên duyệt, lần gọi lại trả nguyên bản đã duyệt. */
+export function approveSystemQuestionSubmission(id: string) {
+  return apiJson<SystemQuestionSubmission>(`/api/v1/system-bank/submissions/${id}/approve`, { method: 'POST' });
+}
+
+/** Biên tập viên từ chối và bắt buộc có lý do. */
+export function rejectSystemQuestionSubmission(id: string, reason: string) {
+  return apiJson<SystemQuestionSubmission>(`/api/v1/system-bank/submissions/${id}/reject`, {
+    method: 'POST', body: JSON.stringify({ reason }),
+  });
+}
+
+/** Câu đã công bố trong ngân hàng riêng platform, không gồm câu đang chờ duyệt. */
+export interface SystemPublishedQuestion {
+  id: string;
+  qtype: 'multichoice' | 'truefalse' | 'shortanswer' | 'essay';
+  status: 'published' | 'withdrawn';
+  createdAt: string;
+  versions: Array<{ version: number; checksum: string; createdAt: string }>;
+}
+
+/** Danh sách khám phá phân trang; API không trả đáp án vào danh sách. */
+export interface SystemPublishedDiscovery {
+  items: SystemPublishedQuestion[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface SystemPublishedVersion {
+  id: string;
+  version: number;
+  checksum: string;
+  package: SystemQuestionSubmission['package'];
+}
+
+/** Chỉ câu đã duyệt; có thể lọc theo dạng và phân trang. */
+export function fetchSystemPublishedQuestions(params: { qtype?: string; offset?: number; limit?: number }) {
+  const search = new URLSearchParams();
+  if (params.qtype) search.set('qtype', params.qtype);
+  search.set('offset', String(params.offset ?? 0));
+  search.set('limit', String(params.limit ?? 20));
+  return apiJson<SystemPublishedDiscovery>(`/api/v1/system-bank/discovery?${search.toString()}`);
+}
+
+/** Gói có đáp án chỉ xem qua capability question:useall tại hệ thống. */
+export function fetchSystemPublishedVersion(questionId: string, version: number) {
+  return apiJson<SystemPublishedVersion>(`/api/v1/system-bank/questions/${questionId}/versions/${version}`);
+}
+
+/** Giáo viên nhập một phiên bản đã duyệt vào kho riêng của trung tâm. */
+export function importSystemPublishedQuestion(questionId: string, version: number) {
+  return apiJson<unknown>('/api/v1/system-bank/import', {
+    method: 'POST',
+    body: JSON.stringify({ sourceQuestionId: questionId, sourceVersionNumber: version }),
+  });
+}
+
 // --- Danh mục + câu hỏi/ngữ liệu theo danh mục ----------------------
 
 /**

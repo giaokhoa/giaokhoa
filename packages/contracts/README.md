@@ -6,6 +6,11 @@
 
 `packages/contracts` là **hợp đồng dữ liệu dùng chung** giữa `apps/api`, `apps/web` và `apps/worker`: mọi schema Zod mô tả hình dạng request/response của các miền nghiệp vụ (identity, course, assessment, engagement, platform, site-config, tenants, curriculum, books, dashboard, guardian, mcp…) chỉ định nghĩa MỘT lần ở đây. Vì cả ba app cùng biên dịch trên cùng một hợp đồng, một thay đổi hình dạng nghiệp vụ ở đây là thay đổi đồng thời ở mọi bề mặt — đó là lý do package này mang nhiều quyết định "hình dạng nghiệp vụ" dù không chứa logic chạy.
 
+## Gói phiên bản công bố câu hỏi chung (issue #13)
+
+- `system-bank.ts` khai một gói tự đủ: toàn bộ nội dung/đáp án/options/YCCĐ, `source` (trung tâm, id câu/version nguồn, tác giả, loại nguồn, tham chiếu nguồn, giấy phép) và `media` (hash byte, tên, MIME ảnh). Nội dung/media thuộc bản công bố độc lập, không chứa fileId của trung tâm gửi.
+- Request gửi (`submitSystemBankQuestionSchema`) gồm `questionId` và `license` tùy chọn; request từ chối (`rejectSystemBankSubmissionSchema`) bắt buộc lý do 1–500 ký tự. Kiểu schema Zod được API/web dùng chung; cổng capability và transaction thuộc tầng API.
+
 ## Quyết định nghiệp vụ còn hiệu lực
 
 | Quyết định                                                                                                                                                                                                                                                                                                                                                                                                 | Nguồn                                         |

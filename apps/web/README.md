@@ -6,6 +6,12 @@
 
 `apps/web` là toàn bộ bề mặt người dùng nhìn thấy: trang public, app/dashboard cho giáo viên, học sinh, phụ huynh và admin trung tâm/nền tảng. Web **trình bày và dẫn luồng** theo đúng nghiệp vụ sư phạm Việt Nam (tạo khoá theo khung CT GDPT 2018, ngân hàng câu hỏi/đề/ma trận, làm bài, sổ điểm, tin nhắn, thông báo) — mọi gác quyền và quy tắc bất biến nằm ở `apps/api`; web không tự "gác" nghiệp vụ bằng cách giấu nút/mục.
 
+## Giao diện gửi duyệt và khám phá câu hệ thống (issue #13)
+
+- Trong tab **Hệ thống** của Ngân hàng câu hỏi, quản trị trung tâm có `tenant:manage` tại context tenant thấy vùng **Công bố câu hỏi**: nhập UUID câu riêng đã ready, giấy phép nguồn (tuỳ chọn), gửi và xem lịch sử pending/approved/rejected cùng lý do.
+- Biên tập viên có `systembank:review` ở context hệ thống thấy hàng chờ gửi, nội dung/đáp án, dấu vết tác giả/nguồn và manifest ảnh; có thể duyệt hoặc từ chối với lý do bắt buộc. Đây chỉ là điều kiện hiển thị; API gác quyền thật trước khi trả package hoặc ghi quyết định.
+- Giáo viên có quyền ngân hàng thấy **Kho câu đã công bố**, lọc dạng câu, chọn version, xem trước qua API đã gác đáp án và nhập bản chụp về bank cá nhân. Chỉ câu đã duyệt xuất hiện; bộ lọc/phiên bản lấy từ API kho hệ thống, không trộn với hàng chờ đóng góp bank chung nội bộ đang hiện hữu.
+
 ## Quyết định nghiệp vụ còn hiệu lực
 
 | Quyết định                                                                                                                                                                                                                                                                                                                                                  | Nguồn                                                             |
