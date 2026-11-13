@@ -98,6 +98,39 @@ export const importSystemBankQuestionSchema = z.strictObject({
 });
 export type ImportSystemBankQuestion = z.infer<typeof importSystemBankQuestionSchema>;
 
+
+export const systemExamSlotSchema = z.strictObject({
+  position: z.number().int().positive(),
+  section: z.string(),
+  questionId: uuidIdSchema,
+  versionId: uuidIdSchema,
+  versionNumber: z.number().int().positive(),
+  qtype: z.enum(SYSTEM_BANK_QUESTION_TYPES),
+  maxMark: z.number().positive(),
+  checksum: z.string().regex(/^[0-9a-f]{64}$/),
+  package: systemBankPackageSchema,
+});
+export const systemExamPackageSchema = z.strictObject({
+  name: z.string().min(1),
+  grade: z.number().int().nullable(),
+  examKind: z.enum(['regular', 'midterm', 'final', 'mock', 'practice']).nullable(),
+  totalScore: z.number().positive(),
+  durationMinutes: z.number().int().positive().nullable(),
+  tfScale: z.array(z.number()).nullable(),
+  source: z.strictObject({
+    centreSlug: z.string().min(1),
+    examId: uuidIdSchema,
+    versionId: uuidIdSchema,
+    versionNumber: z.number().int().positive(),
+  }),
+  slots: z.array(systemExamSlotSchema).min(1),
+});
+export type SystemExamPackage = z.infer<typeof systemExamPackageSchema>;
+export const submitSystemExamSchema = z.strictObject({ examId: uuidIdSchema });
+export type SubmitSystemExam = z.infer<typeof submitSystemExamSchema>;
+export const rejectSystemExamSchema = z.strictObject({ reason: z.string().trim().min(1).max(500) });
+export type RejectSystemExam = z.infer<typeof rejectSystemExamSchema>;
+
 export const createSystemOutcomePackageSchema = z.strictObject({
   version: z.string().min(1).max(50),
   scope: z.string().min(1).max(100),

@@ -78,6 +78,9 @@ export class QuizSharedService {
       examVersionNumber: version.version,
       examStatus: exam.status,
       examLatestVersion: exam.latestVersion,
+      sharedSource: exam.sharedExamVersionId && exam.sharedSourceExamId && exam.sharedSourceVersionNumber !== null
+        ? { examId: exam.sharedSourceExamId, versionId: exam.sharedExamVersionId, versionNumber: exam.sharedSourceVersionNumber }
+        : null,
     };
   }
 
@@ -121,13 +124,14 @@ export class QuizSharedService {
     return this.evaluator.hasCapability(actorId, capability, await this.cmContextId(quiz));
   }
 
-  async pinView(quiz: PinRow): Promise<QuizView> {
+  async pinView(quiz: PinRow, revealSource = false): Promise<QuizView> {
     const slots = await this.effectiveSlots(quiz);
     const slotViews: QuizView['slots'] = [];
     for (const s of slots) {
       const base = {
         id: s.id, pinId: s.pinId, slot: s.slot, page: s.page,
-        questionId: s.questionId, categoryId: s.categoryId, maxMark: s.maxMark,
+        questionId: !revealSource && quiz.sharedSource && s.sourceDomain === 'bank-system'
+          ? null : s.questionId, categoryId: s.categoryId, maxMark: s.maxMark,
         matrixCellId: s.matrixCellId,
         versionMode: null as 'pinned' | 'follow_latest' | null,
         pinnedVersion: null as number | null,
@@ -187,6 +191,7 @@ export class QuizSharedService {
       examVersionId: quiz.examVersionId,
       examVersionNumber: quiz.examVersionNumber,
       latestExamVersionNumber: quiz.examLatestVersion,
+      ...(revealSource ? { sharedSource: quiz.sharedSource } : {}),
       hasNewerExamVersion: quiz.examStatus === 'ready' && quiz.examLatestVersion > quiz.examVersionNumber,
       versionMode: quiz.versionMode === 'float_latest_ready' ? 'float_latest_ready' as const : 'pinned' as const,
       tfScale: quiz.tfScale,
@@ -197,6 +202,12 @@ export class QuizSharedService {
       sumGrades: slots.reduce((sum, s) => sum + s.maxMark, 0),
       variants: quiz.variants ?? [],
     };
+  }
+
+  public maskSourceQuestionIds(quiz: PinRow, summary: QuizAttemptSummary): QuizAttemptSummary {
+    if (!quiz.sharedSource || !summary.appliedSettings) return summary;
+    const { questionOrder: _questionOrder, ...appliedSettings } = summary.appliedSettings;
+    return { ...summary, appliedSettings };
   }
 
   public usageTotalMax(usage: UsageView): number {

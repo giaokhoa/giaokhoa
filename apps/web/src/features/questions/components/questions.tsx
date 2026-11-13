@@ -17,6 +17,7 @@ import { MyPapersPanel } from './my-papers-panel';
 import { MyQuestionsPanel } from './my-questions-panel';
 import { StimuliPanel } from './stimuli-panel';
 import { SystemPapersPanel } from './system-papers-panel';
+import { SystemSharedExamsPanel } from './system-shared-exams-panel';
 import { PageHeader, PageShell } from '#components/page-shell';
 import '#config/i18n';
 import { useQueryClient } from '@tanstack/react-query';
@@ -317,6 +318,7 @@ export function QuestionsPage({ area = 'my-questions' }: { area?: BankArea }) {
             ) : null}
             {area === 'system-exams' ? (
             <>
+            <SystemSharedExamsPanel />
             <section id="system-papers" className="space-y-3 scroll-mt-24">
               <SystemPapersPanel
                 systemExamBankId={systemExamBankId}

@@ -13,6 +13,11 @@ function jsonbValue<T>(value: T): RawBuilder<T> {
 export interface ExamRow {
   pinRequestId: string | null;
   pinRequestCourseId: string | null;
+  sharedExamVersionId: string | null;
+  sharedSourceExamId: string | null;
+  sharedSourceVersionNumber: number | null;
+  sharedRequestedSectionId: string | null;
+  sharedRequestChecksum: string | null;
   bankId: string;
   copyCount: number;
   createdAt: Date;
@@ -36,6 +41,11 @@ export interface ExamRow {
 export interface NewExam {
   pinRequestId?: string | null;
   pinRequestCourseId?: string | null;
+  sharedExamVersionId?: string | null;
+  sharedSourceExamId?: string | null;
+  sharedSourceVersionNumber?: number | null;
+  sharedRequestedSectionId?: string | null;
+  sharedRequestChecksum?: string | null;
   bankId: string;
   copyCount?: number;
   createdAt?: Date;
@@ -59,6 +69,11 @@ export interface NewExam {
 export const EXAM_COLUMNS = [
   'pin_request_id as pinRequestId',
   'pin_request_course_id as pinRequestCourseId',
+  'shared_exam_version_id as sharedExamVersionId',
+  'shared_source_exam_id as sharedSourceExamId',
+  'shared_source_version_number as sharedSourceVersionNumber',
+  'shared_requested_section_id as sharedRequestedSectionId',
+  'shared_request_checksum as sharedRequestChecksum',
   'bank_id as bankId',
   'copy_count as copyCount',
   'created_at as createdAt',
@@ -86,6 +101,11 @@ function examInsertValues(values: NewExam): Insertable<CentreDB['exams']> {
   };
   if (values.pinRequestId !== undefined) row.pin_request_id = values.pinRequestId;
   if (values.pinRequestCourseId !== undefined) row.pin_request_course_id = values.pinRequestCourseId;
+  if (values.sharedExamVersionId !== undefined) row.shared_exam_version_id = values.sharedExamVersionId;
+  if (values.sharedSourceExamId !== undefined) row.shared_source_exam_id = values.sharedSourceExamId;
+  if (values.sharedSourceVersionNumber !== undefined) row.shared_source_version_number = values.sharedSourceVersionNumber;
+  if (values.sharedRequestedSectionId !== undefined) row.shared_requested_section_id = values.sharedRequestedSectionId;
+  if (values.sharedRequestChecksum !== undefined) row.shared_request_checksum = values.sharedRequestChecksum;
   if (values.copyCount !== undefined) row.copy_count = values.copyCount;
   if (values.createdAt !== undefined) row.created_at = values.createdAt;
   if (values.derivedFromBankId !== undefined) row.derived_from_bank_id = values.derivedFromBankId;
@@ -109,6 +129,11 @@ function examUpdateSet(patch: Partial<ExamRow>): Updateable<CentreDB['exams']> {
   const set: Updateable<CentreDB['exams']> = {};
   if (patch.pinRequestId !== undefined) set.pin_request_id = patch.pinRequestId;
   if (patch.pinRequestCourseId !== undefined) set.pin_request_course_id = patch.pinRequestCourseId;
+  if (patch.sharedExamVersionId !== undefined) set.shared_exam_version_id = patch.sharedExamVersionId;
+  if (patch.sharedSourceExamId !== undefined) set.shared_source_exam_id = patch.sharedSourceExamId;
+  if (patch.sharedSourceVersionNumber !== undefined) set.shared_source_version_number = patch.sharedSourceVersionNumber;
+  if (patch.sharedRequestedSectionId !== undefined) set.shared_requested_section_id = patch.sharedRequestedSectionId;
+  if (patch.sharedRequestChecksum !== undefined) set.shared_request_checksum = patch.sharedRequestChecksum;
   if (patch.bankId !== undefined) set.bank_id = patch.bankId;
   if (patch.copyCount !== undefined) set.copy_count = patch.copyCount;
   if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
@@ -635,6 +660,7 @@ export class ExamsRepository {
       .selectFrom('exams')
       .select(EXAM_COLUMNS)
       .where('bank_id', '=', bankId)
+      .where('kind', '=', 'snapshot')
       .orderBy('updated_at', 'desc')
       .orderBy('id', 'asc')
       .execute();

@@ -180,11 +180,11 @@ describe('bộ máy migration của package cho ba kho', () => {
     expect(result.ok).toBe(true);
     expect(result.tables).toBe(204);
     expect(result.policies).toBe(25);
-    expect(result.indexes).toBe(425);
+    expect(result.indexes).toBe(426);
     expect(result.journalRows).toBe(MIGRATION_STORES.centre.expected.journalRows);
     expect(await countPublic(centreUrl, 'tables')).toBe(204);
     expect(await countPublic(centreUrl, 'policies')).toBe(25);
-    expect(await countPublic(centreUrl, 'indexes')).toBe(425);
+    expect(await countPublic(centreUrl, 'indexes')).toBe(426);
 
   });
 
@@ -424,7 +424,8 @@ const { Migrator } = require('kysely/migration');
     let createdRole = false;
     try {
       const dir = packageMigrationsDir('centre');
-      const priorNames = listMigrationNames(dir).filter((name) => name !== '20261113160000_system_material_references');
+      const priorNames = listMigrationNames(dir).filter((name) => name < '20261113160000_system_material_references');
+      const upgradeNames = listMigrationNames(dir).filter((name) => name <= '20261113160000_system_material_references');
       const before = await new Migrator({ db, provider: providerOnly(dir, priorNames) }).migrateToLatest();
       expect(before.error).toBeUndefined();
       await sql`insert into tenants (id, name, slug, kind) values
@@ -467,12 +468,12 @@ const { Migrator } = require('kysely/migration');
       await sql`select set_config('app.platform', 'off', false), set_config('app.tenant_id', '', false)`.execute(db);
       expect((await sql`select id from tenants`.execute(db)).rows).toEqual([]);
 
-      const ambiguous = await new Migrator({ db, provider: new FrozenSqlProvider(dir) }).migrateToLatest();
+      const ambiguous = await new Migrator({ db, provider: providerOnly(dir, upgradeNames) }).migrateToLatest();
       expect(String(ambiguous.error)).toContain('contentbank.legacy_owner_unresolved');
       expect((await sql<{ count: number }>`select count(*)::int as count from information_schema.columns
         where table_name = 'content_bank_content' and column_name = 'tenant_id'`.execute(db)).rows[0]?.count).toBe(0);
       await sql`delete from content_bank_content where name = 'Chưa xác định được chủ'`.execute(db);
-      const upgrade = await new Migrator({ db, provider: new FrozenSqlProvider(dir) }).migrateToLatest();
+      const upgrade = await new Migrator({ db, provider: providerOnly(dir, upgradeNames) }).migrateToLatest();
       expect(upgrade.error).toBeUndefined();
       expect((await sql<{ value: string }>`select current_setting('app.platform', true) as value`.execute(db)).rows[0]?.value).toBe('off');
       expect((await sql`select id from content_bank_content`.execute(db)).rows).toEqual([]);

@@ -2,6 +2,7 @@ import { Module, ServiceUnavailableException } from '@nestjs/common';
 import { SystemBankCentreRepository } from '@giaokhoa/db/repositories/system-bank-centre';
 import { SystemBankRepository } from '@giaokhoa/db/repositories/system-bank';
 import { SystemBankSubmissionsRepository } from '@giaokhoa/db/repositories/system-bank-submissions';
+import { SystemExamsRepository } from '@giaokhoa/db/repositories/system-exams';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingModule } from '../../db/routing/space-routing.module';
 import { FilesModule } from '../files/files.module';
@@ -64,11 +65,17 @@ import { SystemMaterialsController } from './system-materials.controller';
         ),
       inject: [SystemBankConnection],
     },
+    {
+      provide: SystemExamsRepository,
+      useFactory: (connection: SystemBankConnection) => new SystemExamsRepository(connection.kysely, () =>
+        new ServiceUnavailableException({ code: 'system_bank.not_configured' })),
+      inject: [SystemBankConnection],
+    },
     SystemBankMediaService,
     SystemBankSubmissionsService,
     SystemBankService,
   ],
-  exports: [SystemBankService, SystemBankConnection, SystemBankMediaService, SystemMaterialsService],
+  exports: [SystemBankService, SystemBankConnection, SystemBankMediaService, SystemMaterialsService, SystemExamsRepository, SystemBankCentreRepository],
 
 })
 export class SystemBankModule {}

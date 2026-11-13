@@ -59,3 +59,7 @@ Trang `/admin/support-grants` của trung tâm, có liên kết từ `/admin/ten
 Trang `/content-bank` giữ luồng soạn riêng/tải tệp hiện hữu và bổ sung panel **Học liệu hệ thống**. Quản trị trung tâm chọn học liệu của giáo viên từ danh sách rồi gửi; biên tập viên hệ thống xem tác giả/nguồn/giấy phép, tải bản chụp tệp hoặc mở liên kết và duyệt/từ chối kèm lý do. Lịch sử hiển thị trạng thái và phiên bản đã công bố.
 
 Giáo viên chọn rõ một phiên bản, khoá có quyền quản hoạt động và section để **Dùng phiên bản trong khoá**. UI mở đường tới player hiện hữu sau khi API ghi nhận. Không yêu cầu nhập thành học liệu riêng hoặc mở form sửa bản công bố. Player hiển thị attribution/giấy phép/phiên bản và đọc media qua URL kiểm audience của tài nguyên khoá; mọi quyền được API kiểm lại, kể cả khi truy cập URL trực tiếp. Học viên không tải hàng chờ/gói ngân hàng qua panel. Tài liệu liên kết ngoài tiếp tục dùng trình bày liên kết/nhúng sẵn có; đây là tham chiếu URL, không phải bản sao byte bất biến, nên khả dụng phụ thuộc website ngoài. Muốn giữ byte không phụ thuộc nguồn phải gửi học liệu bằng tệp.
+
+## Đề chung nhiều trung tâm (issue #15)
+
+Trang **Đề của tôi** cho quản trị trung tâm gửi đề sẵn sàng lên hệ thống. Trang **Đề thi hệ thống** hiển thị hàng chờ duyệt theo quyền và cho giáo viên chọn phiên bản đã duyệt, khoá học, mục, nhóm và lịch để giao trực tiếp. Các đợt giao và bài làm của từng trung tâm tách biệt. Xem [hướng dẫn đề chung](../../docs/system-shared-exam-assignments.md).
