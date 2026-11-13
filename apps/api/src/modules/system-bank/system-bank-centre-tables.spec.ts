@@ -5,9 +5,9 @@ import { describe, expect, it } from 'vitest';
 import { buildCentreSatelliteEnsureStatements } from './system-bank-centre-tables';
 
 describe('Đảm bảo bảng vệ tinh Ngân hàng hệ thống — dựng câu lệnh SQL', () => {
-  it('dựng đúng 7 câu theo thứ tự tạo bảng, tạo index, gắn khoá ngoại', () => {
+  it('dựng đúng 8 câu theo thứ tự tạo bảng, tạo index, gắn khoá ngoại', () => {
     const statements = buildCentreSatelliteEnsureStatements();
-    expect(statements).toHaveLength(7);
+    expect(statements).toHaveLength(8);
     expect(statements[0]).toContain('CREATE TABLE IF NOT EXISTS "outcome_package_installs"');
     expect(statements[1]).toContain('CREATE TABLE IF NOT EXISTS "system_bank_event_receipts"');
     expect(statements[2]).toContain('CREATE TABLE IF NOT EXISTS "system_question_imports"');
@@ -15,6 +15,8 @@ describe('Đảm bảo bảng vệ tinh Ngân hàng hệ thống — dựng câu
     expect(statements[4]).toContain('CREATE INDEX IF NOT EXISTS "system_bank_event_receipts_centre_slug_idx"');
     expect(statements[5]).toContain('CREATE INDEX IF NOT EXISTS "system_question_imports_source_question_id_idx"');
     expect(statements[6]).toContain('ALTER TABLE "system_question_imports" ADD CONSTRAINT "system_question_imports_question_id_question_id_fkey"');
+    expect(statements[0]).toContain('"package_checksum" text NOT NULL');
+    expect(statements[7]).toContain('ADD COLUMN IF NOT EXISTS "package_checksum"');
   });
 
   it('mọi câu tạo bảng và tạo index đều mang IF NOT EXISTS để chạy lặp không lỗi', () => {

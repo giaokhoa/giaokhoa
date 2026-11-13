@@ -18,11 +18,11 @@ import { SystemBankService } from '../../../src/modules/system-bank/system-bank.
  * (`giaokhoa_test_centre_585`) với role riêng, CONNECT của PUBLIC bị thu
  * hồi và chỉ cấp lại cho role của kho đó, migration kho ngân hàng áp vào kho ngân hàng và baseline nghiệp vụ (đã gồm 3 bảng vệ tinh trung tâm) áp vào kho trung tâm, đều bằng chính role chủ kho như đường triển khai thật. Shim `uuidv7()` chỉ áp khi server dưới PG18.
  *
- * Các ca khoá các tiêu chí nghiệm thu ở tầng service/repository:
- * (1) sửa câu hệ thống tạo version mới, version cũ đọc lại không
- * đổi, checksum tính lại khớp checksum lưu; (2) rút câu: khám phá không còn thấy câu, sự kiện rút được ghi, danh sách trung tâm đã nhập đọc được từ dòng importer; (3) gói YCCĐ: phát hành từ cây chương trình rồi cài lại — nội dung cập nhật tại chỗ theo id, vết cài ghi phiên bản trước; (4) cài gói khi môn chưa có ở trung tâm thì fail-closed; (5) cài gói khi trung tâm đã có chương trình
- * (môn, khối) khác id thì fail-closed; (6) đường giao thông báo
- * rút câu phía trung tâm: mỗi trung tâm liệt kê được sự kiện chưa ghi nhận của đúng câu mình đã nhập mà không cần biết trước id sự kiện, ghi nhận xong thì hết ở trung tâm mình và còn nguyên ở trung tâm khác. Đường nhập bản chụp (cần QuestionsService thật) và đường bank-off thuộc tầng e2e.
+ * Ca tích hợp bảo toàn cả nghiệp vụ ngân hàng câu hỏi (#585) và
+ * quy trình chương trình (#17): gói pending→review→published, checksum
+ * và ảnh chụp bất biến, cài lại không thay đổi dữ liệu, xung đột ID bị
+ * từ chối, rollback khi lỗi giữa chừng, hai kho A/B cài độc lập.
+ * Test dựng các database riêng và tự xoá sau khi chạy.
  */
 const BANK_DATABASE = 'giaokhoa_test_bank_585';
 const BANK_ROLE = 'giaokhoa_bank_test_585';
@@ -36,6 +36,7 @@ const SUBJECT_ID = '01958500-0000-7000-8000-000000000010';
 const CURRICULUM_ID = '01958500-0000-7000-8000-000000000011';
 const NODE_ID = '01958500-0000-7000-8000-000000000012';
 const OUTCOME_ID = '01958500-0000-7000-8000-000000000013';
+const REVISED_OUTCOME_ID = '01958500-0000-7000-8000-000000000014';
 const SUBJECT_SLUG = 'toan-585';
 
 const UUIDV7_SHIM = `CREATE OR REPLACE FUNCTION uuidv7() RETURNS uuid AS $$ DECLARE ts_ms bigint := (extract(epoch from clock_timestamp()) * 1000)::bigint; b bytea; BEGIN b := decode(lpad(to_hex(ts_ms), 12, '0'), 'hex') || gen_random_bytes(10); b := set_byte(b, 6, (get_byte(b, 6) & 15) | 112); b := set_byte(b, 8, (get_byte(b, 8) & 63) | 128); RETURN encode(b, 'hex')::uuid; END; $$ LANGUAGE plpgsql VOLATILE`;
@@ -120,6 +121,10 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
       clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD),
       join(__dirname, '../../../../../packages/db/migrations/centre/20261025163710_baseline/migration.sql'),
     );
+    await applySqlFile(
+      clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD),
+      join(__dirname, '../../../../../packages/db/migrations/centre/20261113160000_outcome_package_install_checksum/migration.sql'),
+    );
     bankPool = new Pool({ connectionString: clusterUrl(BANK_DATABASE, BANK_ROLE, BANK_PASSWORD) });
     centrePool = new Pool({ connectionString: clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD) });
     bankDb = createSystemBankKysely(bankPool);
@@ -145,11 +150,17 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
     );
     const centreRepo = new SystemBankCentreRepository(centreKysely);
     const evaluator = { requireCapability: async () => {}, hasCapability: async () => true };
-    const contexts = { ensureSystemContext: async () => ({ id: SYSTEM_ID }) };
+    const contexts = {
+      ensureSystemContext: async () => ({ id: SYSTEM_ID }),
+      getTenantContext: async () => ({ id: SYSTEM_ID }),
+    };
     const tenantDb = {
       withPlatform: async <T>(fn: (tx: never) => Promise<T>) =>
         centreKysely.transaction().execute(fn as never) as Promise<T>,
+      withCurrent: async <T>(fn: (tx: never) => Promise<T>) =>
+        centreKysely.transaction().execute(fn as never) as Promise<T>,
     };
+    const spaceDb = { resolveTarget: async () => ({ mode: 'dedicated' }) };
     service = new SystemBankService(
       repo,
       centreRepo,
@@ -159,6 +170,8 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
       tenantDb as never,
       undefined as never,
       undefined as never,
+      undefined as never,
+      spaceDb as never,
     );
     await centreDb.insertInto('subjects').values({ id: SUBJECT_ID, context_id: SYSTEM_ID, name: 'Toán 585', slug: SUBJECT_SLUG }).execute();
     await centreDb.insertInto('curricula').values({ id: CURRICULUM_ID, subject_id: SUBJECT_ID, grade: 12 }).execute();
@@ -283,42 +296,247 @@ describe('Kho ngân hàng hệ thống (issue #585)', () => {
     expect(pendingC.find((event) => event.sourceQuestionId === questionId)).toBeUndefined();
   });
 
-  it('gói YCCĐ: phát hành rồi cài lại — nội dung cập nhật tại chỗ theo id, vết cài ghi phiên bản trước', async () => {
-    const released = await service.createOutcomePackage(ADMIN_ID, { version: '2026.10.31.1', scope: SUBJECT_SLUG, mappings: [] });
-    expect(released.counts.outcomes).toBe(1);
-    expect(released.package.checksum).toBeTruthy();
-    const installed = await service.installOutcomePackage(ADMIN_ID, '2026.10.31.1');
+  /** Ngữ cảnh trung tâm giả lập kho vật lý riêng, dùng cho các ca gói. */
+  const asCentre = <T>(fn: () => Promise<T>) =>
+    tenantAls.run({
+      tenantId: '01958500-0000-7000-8000-000000000099',
+      spaceSlug: 'trung-tam-a',
+    }, fn);
+
+  /** Gửi → duyệt là hai thao tác riêng, chỉ bản duyệt mới cài được. */
+  const submitProgramme = (version: string) =>
+    asCentre(() => service.createOutcomePackage(ADMIN_ID, { version, scope: SUBJECT_SLUG, mappings: [] }));
+  const installProgramme = (version: string) =>
+    asCentre(() => service.installOutcomePackage(ADMIN_ID, version));
+  const approveProgramme = (version: string) =>
+    service.reviewOutcomePackage(ADMIN_ID, version, true);
+
+  it('gói chờ không công khai; duyệt rồi cài nguyên tử, retry giữ nguyên vết và checksum', async () => {
+    const submitted = await submitProgramme('2026.10.31.1');
+    expect(submitted.package.status).toBe('pending');
+    expect(submitted.package.checksum).toMatch(/^[0-9a-f]{64}$/);
+    expect((await service.listOutcomePackages()).find((p) => p.version === submitted.package.version)).toBeUndefined();
+    await expect(service.getOutcomePackage('2026.10.31.1')).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'system_bank.package_not_found' }),
+    });
+    await expect(installProgramme('2026.10.31.1')).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'system_bank.package_not_found' }),
+    });
+    expect((await service.listPendingOutcomePackages(ADMIN_ID)).map((p) => p.version)).toContain('2026.10.31.1');
+    expect((await asCentre(() => service.listMyOutcomePackages(ADMIN_ID))).map((p) => p.version)).toContain('2026.10.31.1');
+    const approved = await approveProgramme('2026.10.31.1');
+    expect(approved?.status).toBe('published');
+    expect((await service.getOutcomePackage('2026.10.31.1')).package.checksum).toBe(submitted.package.checksum);
+    const installed = await installProgramme('2026.10.31.1');
     expect(installed.install.packageVersion).toBe('2026.10.31.1');
     expect(installed.install.previousVersion).toBeNull();
-    await centreDb
-      .updateTable('learning_outcomes')
-      .set({ content: doc('YCCĐ v2') })
-      .where('id', '=', OUTCOME_ID)
-      .execute();
-    const released2 = await service.createOutcomePackage(ADMIN_ID, { version: '2026.10.31.2', scope: SUBJECT_SLUG, mappings: [] });
-    expect(released2.counts.outcomes).toBe(1);
-    const installed2 = await service.installOutcomePackage(ADMIN_ID, '2026.10.31.2');
-    expect(installed2.install.previousVersion).toBe('2026.10.31.1');
-    const outcome = await centreDb.selectFrom('learning_outcomes').selectAll().where('id', '=', OUTCOME_ID).execute();
-    expect(outcome).toHaveLength(1);
-    expect(outcome[0]!.content).toMatchObject(doc('YCCĐ v2'));
-    const packages = await service.listOutcomePackages();
-    expect(packages.map((row) => row.version)).toEqual(expect.arrayContaining(['2026.10.31.1', '2026.10.31.2']));
+    expect(installed.install.packageChecksum).toBe(submitted.package.checksum);
+    expect(installed.unchanged).toBe(false);
+    const retried = await installProgramme('2026.10.31.1');
+    expect(retried.unchanged).toBe(true);
+    expect(retried.install.id).toBe(installed.install.id);
+    expect(retried.install.installedAt).toEqual(installed.install.installedAt);
+    const trace = await asCentre(() => service.listInstalledOutcomePackages(ADMIN_ID));
+    expect(trace.filter((row) => row.packageVersion === '2026.10.31.1')).toHaveLength(1);
+    // Dòng lịch sử cũ nâng cấp thiếu checksum: chỉ bù checksum, không
+    // đụng nội dung chuẩn hoặc thời điểm cài.
+    await centreDb.updateTable('outcome_package_installs')
+      .set({ package_checksum: '' }).where('package_version', '=', '2026.10.31.1').execute();
+    const legacyRetry = await installProgramme('2026.10.31.1');
+    expect(legacyRetry.unchanged).toBe(true);
+    expect(legacyRetry.install.packageChecksum).toBe(submitted.package.checksum);
+    expect(legacyRetry.install.installedAt).toEqual(installed.install.installedAt);
   });
 
-  it('cài gói khi môn chưa có ở trung tâm thì fail-closed', async () => {
-    await service.createOutcomePackage(ADMIN_ID, { version: '2026.10.31.9', scope: SUBJECT_SLUG, mappings: [] });
-    await centreDb.deleteFrom('subjects').where('id', '=', SUBJECT_ID).execute();
-    await expect(service.installOutcomePackage(ADMIN_ID, '2026.10.31.9')).rejects.toMatchObject({
-      response: expect.objectContaining({ code: 'system_bank.subject_not_installed' }),
+  it('nội dung YCCĐ mới có ID mới và ánh xạ nguồn, bản v1 không sửa ngược', async () => {
+    // Không cập nhật văn bản cùng outcomeId. Bản sửa v2 được gắn ID mới
+    // và mapping từ bản gốc cho người dùng chủ động di chuyển liên kết.
+    await centreDb.insertInto('learning_outcomes').values({
+      id: REVISED_OUTCOME_ID, node_id: NODE_ID, position: 2,
+      content: doc('YCCĐ v2'), source_kind: 'program', source_ref: 'CT Toán 12 v2',
+    }).execute();
+    const submitted = await asCentre(() => service.createOutcomePackage(ADMIN_ID, {
+      version: '2026.10.31.2', scope: SUBJECT_SLUG,
+      mappings: [{ fromOutcomeId: OUTCOME_ID, toOutcomeId: REVISED_OUTCOME_ID, note: 'Thay văn bản YCCĐ' }],
+    }));
+    expect(submitted.package.checksum).not.toBe((await service.getOutcomePackage('2026.10.31.1')).package.checksum);
+    await approveProgramme('2026.10.31.2');
+    const installed = await installProgramme('2026.10.31.2');
+    expect(installed.install.previousVersion).toBe('2026.10.31.1');
+    const outcomes = await centreDb.selectFrom('learning_outcomes').select(['id', 'content'])
+      .where('id', 'in', [OUTCOME_ID, REVISED_OUTCOME_ID]).execute();
+    expect(outcomes).toHaveLength(2);
+    expect(outcomes.find((r) => r.id === OUTCOME_ID)!.content).toMatchObject(doc('YCCĐ v1'));
+    expect(outcomes.find((r) => r.id === REVISED_OUTCOME_ID)!.content).toMatchObject(doc('YCCĐ v2'));
+    const previous = await service.getOutcomePackage('2026.10.31.1');
+    const latest = await service.getOutcomePackage('2026.10.31.2');
+    expect(previous.outcomes).toHaveLength(1);
+    expect(previous.outcomes[0]!.content).toMatchObject(doc('YCCĐ v1'));
+    expect(latest.mappings).toEqual([expect.objectContaining({
+      fromOutcomeId: OUTCOME_ID, toOutcomeId: REVISED_OUTCOME_ID,
+    })]);
+  });
+
+  it('từ chối phải có lý do, trạng thái terminal không thể công khai hay cài', async () => {
+    await submitProgramme('2026.10.31.3');
+    await expect(service.reviewOutcomePackage(ADMIN_ID, '2026.10.31.3', false, ' '))
+      .rejects.toMatchObject({ response: expect.objectContaining({ code: 'system_bank.rejection_reason_required' }) });
+    const rejected = await service.reviewOutcomePackage(ADMIN_ID, '2026.10.31.3', false, 'Nội dung chưa phù hợp');
+    expect(rejected?.status).toBe('rejected');
+    expect(rejected?.rejectionReason).toBe('Nội dung chưa phù hợp');
+    await expect(approveProgramme('2026.10.31.3')).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'system_bank.package_already_reviewed' }),
+    });
+    await expect(installProgramme('2026.10.31.3')).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'system_bank.package_not_found' }),
     });
   });
 
-  it('cài gói khi trung tâm đã có chương trình (môn, khối) khác id thì fail-closed', async () => {
-    await centreDb.insertInto('subjects').values({ id: SUBJECT_ID, context_id: SYSTEM_ID, name: 'Toán 585', slug: SUBJECT_SLUG }).execute();
-    await centreDb.insertInto('curricula').values({ id: '01958500-0000-7000-8000-000000000021', subject_id: SUBJECT_ID, grade: 12 }).execute();
-    await expect(service.installOutcomePackage(ADMIN_ID, '2026.10.31.1')).rejects.toMatchObject({
+  it('gói bị thay đổi sau gửi trượt checksum trước duyệt và không được công bố', async () => {
+    const pending = await submitProgramme('2026.10.31.4');
+    await bankDb.updateTable('system_outcome_package_outcomes')
+      .set({ content: doc('Đã bị sửa ở kho hệ thống') })
+      .where('package_id', '=', pending.package.id).execute();
+    await expect(approveProgramme('2026.10.31.4')).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'system_bank.bad_package' }),
+    });
+    expect((await service.getOutcomePackageForReview(ADMIN_ID, '2026.10.31.4')).package.status).toBe('pending');
+  });
+
+  it('cài gói vào kho trống tạo đủ môn, khối, node, YCCĐ theo snapshot, không gộp ID', async () => {
+    await submitProgramme('2026.10.31.9');
+    await approveProgramme('2026.10.31.9');
+    await centreDb.deleteFrom('subjects').where('id', '=', SUBJECT_ID).execute();
+    expect(await centreDb.selectFrom('curricula').select('id').where('id', '=', CURRICULUM_ID).execute()).toHaveLength(0);
+    const installed = await installProgramme('2026.10.31.9');
+    expect(installed.unchanged).toBe(false);
+    const subject = await centreDb.selectFrom('subjects').selectAll().where('slug', '=', SUBJECT_SLUG).executeTakeFirst();
+    expect(subject?.name).toBe('Toán 585');
+    expect((await centreDb.selectFrom('curricula').select('id').where('id', '=', CURRICULUM_ID).execute())).toHaveLength(1);
+    expect((await centreDb.selectFrom('curriculum_nodes').select('id').where('id', '=', NODE_ID).execute())).toHaveLength(1);
+    expect((await centreDb.selectFrom('learning_outcomes').select('id').where('id', '=', OUTCOME_ID).execute())).toHaveLength(1);
+  });
+
+  it('lỗi ghi YCCĐ ở giữa transaction rollback toàn bộ node và vết cài; xung đột ID cũng không gộp', async () => {
+    await submitProgramme('2026.10.31.12');
+    await approveProgramme('2026.10.31.12');
+    // Xoá cây đích để thử ghi lại, sau đó cài trigger giả lập lỗi ở thao tác cuối.
+    await centreDb.deleteFrom('curriculum_nodes').where('id', '=', NODE_ID).execute();
+    await centrePool.query("CREATE FUNCTION fail_programme_install() RETURNS trigger LANGUAGE plpgsql AS $func$ BEGIN RAISE EXCEPTION 'forced install failure'; END $func$");
+    await centrePool.query('CREATE TRIGGER fail_programme_install BEFORE INSERT ON learning_outcomes FOR EACH ROW EXECUTE FUNCTION fail_programme_install()');
+    try {
+      await expect(installProgramme('2026.10.31.12')).rejects.toThrow('forced install failure');
+      expect(await centreDb.selectFrom('curriculum_nodes').select('id').where('id', '=', NODE_ID).execute()).toHaveLength(0);
+      expect(await centreDb.selectFrom('outcome_package_installs').select('id')
+        .where('package_version', '=', '2026.10.31.12').execute()).toHaveLength(0);
+    } finally {
+      await centrePool.query('DROP TRIGGER IF EXISTS fail_programme_install ON learning_outcomes');
+      await centrePool.query('DROP FUNCTION IF EXISTS fail_programme_install()');
+    }
+    // Chương trình cùng môn/khối nhưng id khác phải bị chặn, không tự gộp.
+    await centreDb.deleteFrom('curricula').where('id', '=', CURRICULUM_ID).execute();
+    await centreDb.insertInto('curricula').values({
+      id: '01958500-0000-7000-8000-000000000021',
+      subject_id: (await centreDb.selectFrom('subjects').select('id').where('slug', '=', SUBJECT_SLUG).executeTakeFirstOrThrow()).id,
+      grade: 12,
+    }).execute();
+    await expect(installProgramme('2026.10.31.12')).rejects.toMatchObject({
       response: expect.objectContaining({ code: 'system_bank.curriculum_conflict' }),
     });
+    expect(await centreDb.selectFrom('outcome_package_installs').select('id')
+      .where('package_version', '=', '2026.10.31.12').execute()).toHaveLength(0);
   });
+
+  it('trung tâm A/B có kho độc lập và cài hai phiên bản khác nhau mà không ghi chéo', async () => {
+    // Kho B được tạo riêng bằng baseline và migration thật; A đã có
+    // các lần cài v1/v2/v9 ở các ca trước. B chọn v1 vẫn giữ nguyên A.
+    const database = 'giaokhoa_test_centre_17_b';
+    const role = 'giaokhoa_centre_test_17_b';
+    const password = 'centre17testb';
+    const adminUrl = clusterUrl('postgres');
+    await withClient(adminUrl, async (client) => {
+      await client.query(`DROP DATABASE IF EXISTS ${quoted(database)} WITH (FORCE)`);
+      await client.query(`DROP ROLE IF EXISTS ${quoted(role)}`);
+      await client.query(`CREATE ROLE ${quoted(role)} LOGIN PASSWORD '${password}'`);
+      await client.query(`CREATE DATABASE ${quoted(database)} OWNER ${quoted(role)}`);
+      await client.query(`REVOKE CONNECT ON DATABASE ${quoted(database)} FROM PUBLIC`);
+      await client.query(`GRANT CONNECT ON DATABASE ${quoted(database)} TO ${quoted(role)}`);
+    });
+    const url = clusterUrl(database, role, password);
+    let otherDb: CentreDb | undefined;
+    try {
+      await applySqlFile(url, join(__dirname, '../../../../../packages/db/migrations/centre/20261025163710_baseline/migration.sql'));
+      await applySqlFile(url, join(__dirname, '../../../../../packages/db/migrations/centre/20261113160000_outcome_package_install_checksum/migration.sql'));
+      const otherPool = new Pool({ connectionString: url });
+      otherDb = createCentreKysely(otherPool);
+      const otherRepo = new SystemBankRepository(bankConnection.kysely, () => new ServiceUnavailableException('Bank unavailable'));
+      const otherCentreRepo = new SystemBankCentreRepository(otherDb);
+      const otherTenantDb = {
+        withCurrent: async <T>(fn: (tx: never) => Promise<T>) =>
+          otherDb!.transaction().execute(fn as never) as Promise<T>,
+      };
+      const otherService = new SystemBankService(
+        otherRepo, otherCentreRepo, bankConnection,
+        { requireCapability: async () => {} } as never,
+        { ensureSystemContext: async () => ({ id: SYSTEM_ID }), getTenantContext: async () => ({ id: SYSTEM_ID }) } as never,
+        otherTenantDb as never, undefined as never, undefined as never,
+        undefined as never, { resolveTarget: async () => ({ mode: 'dedicated' }) } as never,
+      );
+      const aBefore = await centreDb.selectFrom('outcome_package_installs').select('package_version').execute();
+      const versionA = (await asCentre(() => service.listInstalledOutcomePackages(ADMIN_ID)))[0]!.packageVersion;
+      expect(versionA).toBe('2026.10.31.9');
+      const resultB = await tenantAls.run({
+        tenantId: '01958500-0000-7000-8000-000000000098',
+        spaceSlug: 'trung-tam-b',
+      }, () => otherService.installOutcomePackage(ADMIN_ID, '2026.10.31.1'));
+      expect(resultB.unchanged).toBe(false);
+      expect(resultB.install.packageVersion).toBe('2026.10.31.1');
+      // Một câu hỏi ở kho B đang gắn YCCĐ v1 (FK RESTRICT).
+      // Cài v2 thêm YCCĐ mới nhưng không thay nội dung/ID câu đã dùng.
+      const categoryId = '01958500-0000-7000-8000-000000000031';
+      const questionId = '01958500-0000-7000-8000-000000000032';
+      await otherDb.insertInto('question_categories').values({
+        id: categoryId, context_id: SYSTEM_ID, name: 'Ngân hàng câu hỏi B',
+      }).execute();
+      await otherDb.insertInto('question').values({
+        id: questionId, category: categoryId, qtype: 'multichoice',
+      }).execute();
+      await otherDb.insertInto('question_learning_outcomes').values({
+        question_id: questionId, learning_outcome_id: OUTCOME_ID, cognitive_level: 'hieu',
+      }).execute();
+      const before = await otherDb.selectFrom('learning_outcomes').select('content')
+        .where('id', '=', OUTCOME_ID).executeTakeFirstOrThrow();
+      expect(before.content).toMatchObject(doc('YCCĐ v1'));
+      const resultB2 = await tenantAls.run({
+        tenantId: '01958500-0000-7000-8000-000000000098',
+        spaceSlug: 'trung-tam-b',
+      }, () => otherService.installOutcomePackage(ADMIN_ID, '2026.10.31.2'));
+      expect(resultB2.install.previousVersion).toBe('2026.10.31.1');
+      expect((await otherDb.selectFrom('learning_outcomes').select('content')
+        .where('id', '=', OUTCOME_ID).executeTakeFirstOrThrow()).content).toEqual(before.content);
+      expect((await otherDb.selectFrom('learning_outcomes').select('content')
+        .where('id', '=', REVISED_OUTCOME_ID).executeTakeFirstOrThrow()).content).toMatchObject(doc('YCCĐ v2'));
+      expect(await otherDb.selectFrom('question_learning_outcomes').select('learning_outcome_id')
+        .where('question_id', '=', questionId).execute()).toEqual([
+          { learning_outcome_id: OUTCOME_ID },
+        ]);
+      expect((await otherRepo.getPackageItems((await otherRepo.getPackageByVersion('2026.10.31.2'))!.id))
+        .mappings).toEqual([expect.objectContaining({
+          fromOutcomeId: OUTCOME_ID, toOutcomeId: REVISED_OUTCOME_ID,
+        })]);
+      expect((await otherDb.selectFrom('outcome_package_installs').select('package_version').execute())
+        .map((row) => row.package_version)).toEqual(['2026.10.31.1', '2026.10.31.2']);
+      // Không một hành động cài nào ở B được ghi sang vết của A.
+      expect(await centreDb.selectFrom('outcome_package_installs').select('package_version').execute()).toEqual(aBefore);
+
+      expect((await asCentre(() => service.listInstalledOutcomePackages(ADMIN_ID)))[0]!.packageVersion).toBe(versionA);
+    } finally {
+      await otherDb?.destroy();
+      await withClient(adminUrl, async (client) => {
+        await client.query(`DROP DATABASE IF EXISTS ${quoted(database)} WITH (FORCE)`);
+        await client.query(`DROP ROLE IF EXISTS ${quoted(role)}`);
+      });
+    }
+  });
+
 });
