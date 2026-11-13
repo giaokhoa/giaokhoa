@@ -143,4 +143,4 @@ Không grant nào cấp quyền `login-as`, quản lý user, xem bài làm/đi�
 
 ## Giao đề chung đa trung tâm (issue #15)
 
-API `/api/v1/system-bank/exams` tiếp nhận, duyệt và liệt kê phiên bản đề bất biến ở kho hệ thống; `POST /api/v1/courses/:courseId/exam-pins` với `sharedExamVersionId` giao một bản thực thi nội bộ cho từng khoá học và trung tâm. Câu hỏi, media, bài làm và điểm được chụp/lưu riêng tại trung tâm và không tạo câu chỉnh sửa trong ngân hàng riêng. Xem [hướng dẫn đề chung](../../../docs/system-shared-exam-assignments.md) về phân quyền, snapshot, retry, migration và kiểm thử.
+API `/api/v1/system-bank/exams` tiếp nhận, duyệt và liệt kê phiên bản đề bất biến ở kho hệ thống; `POST /api/v1/courses/:courseId/exam-pins` với `sharedExamVersionId` giao một bản thực thi nội bộ cho từng khoá học và trung tâm. Câu hỏi, media, bài làm và điểm được chụp/lưu riêng tại trung tâm và không tạo câu chỉnh sửa trong ngân hàng riêng. Xem [hướng dẫn đề chung](../../docs/system-shared-exam-assignments.md) về phân quyền, snapshot, retry, migration và kiểm thử.
