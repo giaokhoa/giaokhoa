@@ -1,3 +1,4 @@
+import { backgroundJobContext, backgroundJobId } from '../../db/routing/background-job-context';
 import { BadRequestException, ForbiddenException, Logger, NotFoundException, type MessageEvent } from '@nestjs/common';
 import { I18nService } from '@nestjs/i18n';
 import type { Queue } from 'bullmq';
@@ -520,6 +521,10 @@ export class MessagingNotificationsService {
         const dedupeKey = `${tenantKey}-dispatch-${providerName}-${userId}-${channel}-${notificationId ?? randomUUID()}`;
         await this.dispatchQueue.add('dispatch', {
           userId, provider: providerName, channel, tenantId,
+          // Kho đã xác thực của lần phát, tách biệt với tenantId
+          // nghiệp vụ vẫn được dùng trong dispatch_log.
+          spaceSlug: backgroundJobContext().spaceSlug,
+          spaceId: backgroundJobContext().spaceId,
           // Tần suất email đã phân giải (NB-5): worker dựa vào đây
           // để quyết gửi ngay hay gom digest — không phân giải lại.
           ...(channel === 'email' ? { emailFrequency: resolved.emailFrequency } : {}),
@@ -531,7 +536,7 @@ export class MessagingNotificationsService {
           // diện tối thiểu hoá.
           subject: externalContent.subject, body: externalContent.body,
           notificationId, dedupeKey,
-        }, { jobId: dedupeKey, attempts: 3 });
+        }, { jobId: backgroundJobId(dedupeKey), attempts: 3 });
         channels[channel] = 'queued';
       } else {
         channels[channel] = 'skipped-preference';

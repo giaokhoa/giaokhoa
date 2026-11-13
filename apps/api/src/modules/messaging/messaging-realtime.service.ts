@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MESSAGING_SOCKET_EVENTS } from '@giaokhoa/contracts';
 import { conversationRoom, tenantRealtimeSegment, userRoom } from '@giaokhoa/messaging';
+import { tenantAls } from '../tenants/tenant-als';
 import Redis from 'ioredis';
 import type { Namespace } from 'socket.io';
 import { redisTlsFromUrl } from '../../config/env';
@@ -102,9 +103,9 @@ export class MessagingRealtimeService implements OnModuleDestroy {
         if (c.type !== 1) continue;
         const members = await this.repo.listMembers(c.id);
         if (members.length === 2 && members.includes(userId) && members.includes(otherUserId)) {
-          const room = conversationRoom(c.tenantId, c.id);
-          await this.server.in(userRoom(c.tenantId, userId)).socketsJoin(room);
-          await this.server.in(userRoom(c.tenantId, otherUserId)).socketsJoin(room);
+          const room = conversationRoom(c.tenantId, c.id, tenantAls.getStore()?.spaceId);
+          await this.server.in(userRoom(c.tenantId, userId, tenantAls.getStore()?.spaceId)).socketsJoin(room);
+          await this.server.in(userRoom(c.tenantId, otherUserId, tenantAls.getStore()?.spaceId)).socketsJoin(room);
         }
       }
     } catch (error) {
@@ -124,7 +125,7 @@ export class MessagingRealtimeService implements OnModuleDestroy {
     if (!this.server) return;
     try {
       const tenantId = await this.tenantIdOfConversation(conversationId);
-      await this.server.in(userRoom(tenantId, userId)).socketsLeave(conversationRoom(tenantId, conversationId));
+      await this.server.in(userRoom(tenantId, userId, tenantAls.getStore()?.spaceId)).socketsLeave(conversationRoom(tenantId, conversationId, tenantAls.getStore()?.spaceId));
     } catch (error) {
       this.logger.warn(`Không đẩy được socket của user ${userId} khỏi conversation ${conversationId}: ${(error as Error).message}`);
     }
@@ -134,7 +135,7 @@ export class MessagingRealtimeService implements OnModuleDestroy {
 
   /** Chủ thể presence trong Redis + sổ local: `{tenant}:{userId}` (TENANT-1, #196). */
   private presenceSubject(tenantId: string | null | undefined, userId: string): string {
-    return `${tenantRealtimeSegment(tenantId)}:${userId}`;
+    return `${tenantRealtimeSegment(tenantId, tenantAls.getStore()?.spaceId)}:${userId}`;
   }
 
   /** Ghi nhận một socket vừa nối; là socket ĐẦU TIÊN của user thì phát trạng thái online. */
@@ -154,7 +155,7 @@ export class MessagingRealtimeService implements OnModuleDestroy {
   }
 
   /** Ghi nhận một socket vừa ngắt; là socket CUỐI CÙNG của user thì phát trạng thái offline. */
-  async markDisconnected(tenantId: string | null, userId: string, socketId: string): Promise<void> {
+  async markDisconnected(tenantId: string | null, userId: string, socketId: string, broadcast = true): Promise<void> {
     // Bỏ khỏi sổ local TRƯỚC: vòng gia hạn dừng ngay cho socket này,
     // kể cả khi thao tác Redis dưới đây lỗi.
     const subject = this.presenceSubject(tenantId, userId);
@@ -163,7 +164,7 @@ export class MessagingRealtimeService implements OnModuleDestroy {
       const redis = this.state();
       await redis.srem(`${PRESENCE_KEY_PREFIX}${subject}`, socketId);
       const remaining = await redis.scard(`${PRESENCE_KEY_PREFIX}${subject}`);
-      if (remaining === 0) await this.broadcastPresence(userId, false);
+      if (remaining === 0 && broadcast) await this.broadcastPresence(userId, false);
     } catch (error) {
       this.logger.warn(`Không ghi được presence khi ngắt: ${(error as Error).message}`);
     }
@@ -208,7 +209,7 @@ export class MessagingRealtimeService implements OnModuleDestroy {
           others = others.filter((id) => !blockedCounterparts.has(id));
         }
         if (!others.length) continue;
-        const segment = tenantRealtimeSegment(c.tenantId);
+        const segment = tenantRealtimeSegment(c.tenantId, tenantAls.getStore()?.spaceId);
         for (const id of others) {
           let segments = segmentsByUser.get(id);
           if (!segments) {
@@ -300,7 +301,7 @@ export class MessagingRealtimeService implements OnModuleDestroy {
           const other = members.find((id) => id !== userId);
           if (other && blockedCounterparts.has(other)) continue;
         }
-        rooms.push(conversationRoom(c.tenantId, c.id));
+        rooms.push(conversationRoom(c.tenantId, c.id, tenantAls.getStore()?.spaceId));
       }
       if (!rooms.length) return;
       this.server
@@ -322,9 +323,9 @@ export class MessagingRealtimeService implements OnModuleDestroy {
     if (!this.server) return;
     try {
       const tenantId = await this.tenantIdOfConversation(conversationId);
-      const set = await this.state().set(`${TYPING_KEY_PREFIX}${tenantRealtimeSegment(tenantId)}:${conversationId}:${userId}`, '1', 'EX', TYPING_TTL_SECONDS, 'NX');
+      const set = await this.state().set(`${TYPING_KEY_PREFIX}${tenantRealtimeSegment(tenantId, tenantAls.getStore()?.spaceId)}:${conversationId}:${userId}`, '1', 'EX', TYPING_TTL_SECONDS, 'NX');
       if (set !== 'OK') return;
-      this.server.to(conversationRoom(tenantId, conversationId)).emit(MESSAGING_SOCKET_EVENTS.typing, { conversationId, userId });
+      this.server.to(conversationRoom(tenantId, conversationId, tenantAls.getStore()?.spaceId)).emit(MESSAGING_SOCKET_EVENTS.typing, { conversationId, userId });
     } catch (error) {
       this.logger.warn(`Không phát được typing: ${(error as Error).message}`);
     }

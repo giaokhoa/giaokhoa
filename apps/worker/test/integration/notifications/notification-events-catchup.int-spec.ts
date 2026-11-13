@@ -7,6 +7,7 @@ import { sql, type RawBuilder } from '@giaokhoa/db';
 import { redisConnectionFromUrl } from '../../../src/config/env';
 import { NotificationEventsCatchupService } from '../../../src/notification-events-catchup.service';
 import { NotificationEventsMarker } from '../../../src/notification-events-marker.service';
+import { outboxRelayJobId } from '../../../src/outbox-relay.scheduler';
 import {
   bootWorkerModuleAsOrdinaryRole,
   type OrdinaryWorkerModuleHarness,
@@ -96,7 +97,7 @@ describe('Worker notification events catch-up (phát bù tồn đọng theo wate
   async function waitJobCompleted(outboxId: string, timeoutMs = 90000): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
-      const job = await eventsQueue.getJob(outboxId);
+      const job = await eventsQueue.getJob(outboxRelayJobId(null, outboxId));
       if (job && (await job.getState()) === 'completed') return;
       if (Date.now() > deadline) throw new Error(`job sự kiện ${outboxId} chưa completed sau ${timeoutMs}ms`);
       await new Promise((r) => setTimeout(r, 400));
@@ -174,7 +175,7 @@ describe('Worker notification events catch-up (phát bù tồn đọng theo wate
     expect(await notificationsOf(aboveStudent, 'enrol_expiry_warning')).toHaveLength(1);
     expect(await notificationsOf(markedStudent, 'enrol_expiry_warning')).toHaveLength(0);
     expect(await notificationsOf(belowStudent, 'enrol_expiry_warning')).toHaveLength(0);
-    expect(await eventsQueue.getJob(below.id)).toBeFalsy();
+    expect(await eventsQueue.getJob(outboxRelayJobId(null, below.id))).toBeFalsy();
 
     // Rút cạn xong thì khoá cũ bị xoá; lượt phát bù sau là no-op.
     expect(await redis.get(legacyWatermarkKey)).toBeNull();
@@ -190,7 +191,7 @@ describe('Worker notification events catch-up (phát bù tồn đọng theo wate
 
     expect(await redis.get(legacyWatermarkKey)).toBeNull();
     expect(await catchup.drainLegacyBacklog()).toBe(0);
-    expect(await eventsQueue.getJob(row.id)).toBeFalsy();
+    expect(await eventsQueue.getJob(outboxRelayJobId(null, row.id))).toBeFalsy();
     expect(await notificationsOf(student, 'enrol_expiry_warning')).toHaveLength(0);
   }, 180000);
 
@@ -215,7 +216,7 @@ describe('Worker notification events catch-up (phát bù tồn đọng theo wate
       await waitJobCompleted(above.id);
       expect(await notificationsOf(aboveFixture.student, 'enrol_expiry_warning')).toHaveLength(1);
       expect(await notificationsOf(belowFixture.student, 'enrol_expiry_warning')).toHaveLength(0);
-      expect(await eventsQueue.getJob(below.id)).toBeFalsy();
+      expect(await eventsQueue.getJob(outboxRelayJobId(null, below.id))).toBeFalsy();
     } finally {
       await bootHarness.close();
     }
@@ -285,7 +286,7 @@ describe('Worker notification events catch-up (phát bù tồn đọng theo wate
     expect(await notificationsOf(aboveFixture.student, 'enrol_expiry_warning')).toHaveLength(1);
     expect(await notificationsOf(markedFixture.student, 'enrol_expiry_warning')).toHaveLength(0);
     expect(await notificationsOf(belowFixture.student, 'enrol_expiry_warning')).toHaveLength(0);
-    expect(await eventsQueue.getJob(below.id)).toBeFalsy();
+    expect(await eventsQueue.getJob(outboxRelayJobId(null, below.id))).toBeFalsy();
     expect(await redis.get(legacyWatermarkKey)).toBeNull();
   }, 180000);
 });

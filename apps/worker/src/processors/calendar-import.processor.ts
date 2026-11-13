@@ -2,10 +2,11 @@ import { Processor } from '@nestjs/bullmq';
 import { ObservedWorkerHost } from '../observed-worker-host';
 import type { Job } from 'bullmq';
 import { parseIcs } from '../domain/ics';
-import { tenantAls } from '../db/tenant-als';
+import { SpaceJobRunner } from '../db/routing/space-job-runner';
 import { SpaceDatabaseService } from '../db/routing/space-database.service';
+import type { BackgroundJobScope } from '../db/routing/background-job-scope';
 
-export interface CalendarImportJobData { subscriptionId: string }
+export interface CalendarImportJobData extends BackgroundJobScope { subscriptionId: string }
 export interface CalendarImportResult { eventsimported: number; eventsskipped: number; eventsupdated: 0; eventsdeleted: 0 }
 
 /**
@@ -19,14 +20,14 @@ export interface CalendarImportResult { eventsimported: number; eventsskipped: n
  * (subscriptionId, UID) nên chạy song song an toàn.
  */
 export class CalendarImportProcessor extends ObservedWorkerHost {
-  constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
+  constructor(private readonly spaceDb: SpaceDatabaseService, private readonly jobRunner: SpaceJobRunner) { super(); }
 
   /**
    * Xử lý một job của queue tương ứng.
    */
   async process(job: Job<CalendarImportJobData>): Promise<CalendarImportResult> {
-    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc ngữ cảnh platform tường minh để RLS fail-closed không làm mù dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
-    return tenantAls.run({ platform: true }, () => this.processInContext(job));
+    // Issue #11: mọi lượt xử lý/retry phải kiểm sổ và giữ đúng kho đã đóng dấu khi enqueue; không chạy hộ trên platform.
+    return this.jobRunner.runForJob(job.data, () => this.processInContext(job));
   }
 
   private async processInContext(job: Job<CalendarImportJobData>): Promise<CalendarImportResult> {

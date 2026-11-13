@@ -46,7 +46,7 @@ export interface GuardianOverdueAlertPayload {
  * (`NotificationDeliveryService.notify` — dựng ở chính issue này cho
  * cả đợt chuyển consumer; issue #520 dùng lại): trọn luật notify() phía API gồm kênh trong-app + job email vào hàng đợi `notification-dispatch` + sự kiện `notification_created`.
  *
- * Idempotent theo vết lượt: lượt không còn `queued` (đã xử lý ở lần phát trước) thì bỏ qua — cùng chốt bền mà consumer phía API dựa vào; kết hợp khoá jobId = outboxId của relay, một sự kiện phát lại không bao giờ sinh thông báo thứ hai.
+ * Idempotent theo vết lượt: lượt không còn `queued` (đã xử lý ở lần phát trước) thì bỏ qua — cùng chốt bền mà consumer phía API dựa vào; kết hợp khoá jobId ghép định danh kho bất biến với outboxId của relay, một sự kiện phát lại không bao giờ sinh thông báo thứ hai.
  */
 @Injectable()
 export class GuardianDigestHandlerService {

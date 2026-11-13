@@ -51,7 +51,13 @@ export class EnrolExpiryProcessor extends ObservedWorkerHost {
 
   private async processInContext(_job: Job): Promise<EnrolExpiryResult> {
     void _job;
-    return this.taskLog.run('enrol-expiry', () => this.sweep(), (r) => `suspended ${r.suspendedIds.length} enrolment(s), warned ${r.warnedIds.length}`);
+    return this.spaceDb.sweepSharedAndDedicated(() =>
+      this.taskLog.run('enrol-expiry', () => this.sweep(),
+        (r) => `suspended ${r.suspendedIds.length} enrolment(s), warned ${r.warnedIds.length}`), (a, b) => ({
+          checkedAt: a.checkedAt,
+          suspendedIds: [...a.suspendedIds, ...b.suspendedIds],
+          warnedIds: [...a.warnedIds, ...b.warnedIds],
+        }));
   }
 
   /** Tenant của khoá học (TENANT-1, #196). */

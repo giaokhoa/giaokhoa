@@ -3,7 +3,7 @@ import type { INestApplicationContext } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { sql, type JsonValue, type RawBuilder } from '@giaokhoa/db';
-import { OutboxRelayScheduler } from '../../../src/outbox-relay.scheduler';
+import { OutboxRelayScheduler, outboxRelayJobId } from '../../../src/outbox-relay.scheduler';
 import {
   bootWorkerModuleAsOrdinaryRole,
   type OrdinaryWorkerModuleHarness,
@@ -134,7 +134,7 @@ describe('Worker notification events delivery (chuyển consumer ở #520)', () 
     await context.get(OutboxRelayScheduler).relayTick();
     const deadline = Date.now() + timeoutMs;
     for (;;) {
-      const job = await eventsQueue.getJob(outboxId);
+      const job = await eventsQueue.getJob(outboxRelayJobId(null, outboxId));
       if (job && (await job.getState()) === 'completed') return;
       if (Date.now() > deadline) throw new Error(`job sự kiện ${outboxId} chưa completed sau ${timeoutMs}ms`);
       await new Promise((r) => setTimeout(r, 400));

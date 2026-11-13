@@ -182,8 +182,8 @@ describe('Vật chất hoá cohort dùng chung — gọi được và đúng hà
     ]);
     // Worker không có seed vai trò: dựng hai vai trò archetype cần
     // cho các ca (học viên cho instance, giảng dạy cho ca xung đột).
-    await pg.query("INSERT INTO role (id, name, short_name, archetype) VALUES ($1, 'Student', 'student527', 'student')", [studentRoleId]);
-    await pg.query("INSERT INTO role (id, name, short_name, archetype) VALUES ($1, 'Teacher', 'teacher527', 'editingteacher')", [teacherRoleId]);
+    await pg.query("INSERT INTO role (id, name, short_name, archetype) VALUES ($1, 'Student', $2, 'student')", [studentRoleId, `student527-${tenantId.slice(0, 8)}`]);
+    await pg.query("INSERT INTO role (id, name, short_name, archetype) VALUES ($1, 'Teacher', $2, 'editingteacher')", [teacherRoleId, `teacher527-${tenantId.slice(0, 8)}`]);
   });
 
   afterAll(async () => {

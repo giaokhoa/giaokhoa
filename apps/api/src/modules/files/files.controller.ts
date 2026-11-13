@@ -88,8 +88,7 @@ export class FilesController {
    * GET /files/:id/download — tải nội dung (kiểm quyền hoặc chữ ký tạm thời).
    */
   async download(@Param('id', { schema: uuidIdSchema }) id: string, @Query('sig') sig: string | undefined, @Res() res: Response) {
-    await this.files.verifySignature(id, sig);
-    const { file, data } = await this.files.readContent(id);
+    const { file, data } = await this.files.readSignedContent(id, sig);
     res.setHeader('Content-Type', file.mimeType ?? 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${file.fileName.replace(/"/g, '')}"`);
     res.send(data);

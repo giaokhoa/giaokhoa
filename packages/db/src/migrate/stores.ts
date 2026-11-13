@@ -1,7 +1,7 @@
 /**
  * Định nghĩa ba kho và bước tiền-migration dùng chung cho bộ máy migration của `@giaokhoa/db` (runner `run.ts`, hậu kiểm `verify.ts`, harness test dựng database từ rỗng).
  *
- * Ba kho có bộ carrier riêng (danh sách đóng băng khai tại đây; file SQL nằm trong thư mục migration của kho ở `packages/db/migrations/`, cùng thư mục với các migration native), số đếm kỳ vọng riêng và biến môi trường kết nối riêng — bảng này là nơi duy nhất ghi các giá trị đó, để runner, hậu kiểm và harness không tự chế bản sao lệch nhau. Số đếm kỳ vọng đo lại tại thời điểm thi công PR-N2 từ database dựng bằng đường bộ máy cũ (mốc hiện hành: trung tâm 204 bảng + 23 policy RLS + 419 index, control plane 4 bảng sau migration issue #9, ngân hàng hệ thống 11 bảng và 3 migration sau lượt bổ sung chương trình chung ở main (#17)).
+ * Ba kho có bộ carrier riêng, số đếm kỳ vọng riêng và biến môi trường kết nối riêng. Sau khi đồng bộ main (#11 và system materials), trung tâm có 204 bảng + 25 policy RLS + 420 index; control plane 4 bảng; system-bank 14 bảng và 4 migration. Các kỳ vọng phải được đối chứng bằng migration từ DB rỗng trên CI.
  */
 import { sql, type Kysely } from 'kysely';
 
@@ -45,7 +45,7 @@ export const MIGRATION_STORES: Record<MigrationStoreKey, MigrationStore> = {
   centre: {
     migrationsDirName: 'centre',
     carrierNames: ['20261025163710_baseline'],
-    expected: { tables: 204, policies: 23, indexes: 419, journalRows: 4 },
+    expected: { tables: 204, policies: 25, indexes: 420, journalRows: 5 },
     connectionEnvVars: ['MIGRATION_DATABASE_URL', 'DATABASE_URL'],
   },
   'control-plane': {
@@ -57,7 +57,7 @@ export const MIGRATION_STORES: Record<MigrationStoreKey, MigrationStore> = {
   'system-bank': {
     migrationsDirName: 'system-bank',
     carrierNames: ['20261031025416_unique_scarecrow'],
-    expected: { tables: 11, journalRows: 3 },
+    expected: { tables: 14, journalRows: 4 },
     connectionEnvVars: ['SYSTEM_BANK_DATABASE_URL'],
   },
 };

@@ -10,6 +10,8 @@ import {
 import type { Namespace, Socket } from 'socket.io';
 import { Public } from '../../common/public.decorator';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
+import { SpaceRoutingError } from '../../db/routing/space-connection-resolver';
+import { tenantAls } from '../tenants/tenant-als';
 import { MessagingRepository } from '@giaokhoa/db/repositories/messaging';
 import { blankRecalledContent } from '@giaokhoa/messaging';
 import { MessagingSocketAuth, type MessagingSocketIdentity } from './messaging-socket-auth';
@@ -79,7 +81,44 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
    */
   private async withConnectionSpace<T>(client: Socket, fn: () => Promise<T>): Promise<T> {
     const slug = client.data.spaceSlug as string | null | undefined;
-    return slug ? this.spaceDb.withSpaceKysely(slug, fn) : fn();
+    const pinnedSpaceId = client.data.spaceId as string | null | undefined;
+    if (!slug) {
+      if (pinnedSpaceId) {
+        client.disconnect(true);
+        throw new SpaceRoutingError('space_routing.socket_identity_mismatch', 'Socket has an identity without a space slug');
+      }
+      return fn();
+    }
+    try {
+      // Mỗi sự kiện phải tái xác minh identity đã chốt lúc handshake:
+      // cùng slug có thể bị thu hồi hoặc chuyển sang một kho khác.
+      const target = await this.spaceDb.resolveTarget(slug);
+      if (!pinnedSpaceId || target.mode !== 'dedicated' || target.status !== 'active' || target.spaceId !== pinnedSpaceId) {
+        throw new SpaceRoutingError('space_routing.socket_identity_mismatch', `Space identity changed for socket ${slug}`);
+      }
+      return await this.spaceDb.withSpaceKysely(slug, async () => {
+        // Chặn race khi lần chuẩn bị kết nối thấy một phiên bản sổ mới
+        // hơn lượt resolve phía trên (kể cả đã thay database/role).
+        const prepared = await this.spaceDb.resolveTarget(slug);
+        if (tenantAls.getStore()?.spaceId !== pinnedSpaceId || prepared.spaceId !== pinnedSpaceId
+          || prepared.mode !== 'dedicated' || prepared.status !== 'active') {
+          throw new SpaceRoutingError('space_routing.socket_identity_mismatch', `Space preparation changed for socket ${slug}`);
+        }
+        const result = await fn();
+        // Registry còn có thể đổi giữa các await bên TRONG handler
+        // (membership → lấy tin / join room / typing). Đọc ở tầng DB
+        // đã kiểm từng lần truy vấn; kiểm thêm sau handler để không
+        // ACK một sự kiện của socket đã bị thu hồi giữa chừng.
+        const after = await this.spaceDb.resolveTarget(slug);
+        if (after.spaceId !== pinnedSpaceId || after.mode !== 'dedicated' || after.status !== 'active') {
+          throw new SpaceRoutingError('space_routing.socket_identity_mismatch', `Space changed during socket handler ${slug}`);
+        }
+        return result;
+      });
+    } catch (error) {
+      client.disconnect(true);
+      throw error;
+    }
   }
 
   /**
@@ -125,9 +164,10 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
       client.data.username = identity.username;
       client.data.tenantId = identity.tenantId;
       client.data.spaceSlug = identity.spaceSlug;
+      client.data.spaceId = identity.spaceId ?? null;
       // Toàn bộ phần đọc dữ kiện của lần nối (danh sách hội thoại, danh sách chặn, ảnh chụp presence) chạy trong kho của trung tâm mà danh tính đã phân giải — xem withConnectionSpace.
       await this.withConnectionSpace(client, async () => {
-        await client.join(userRoom(identity.tenantId, identity.userId));
+        await client.join(userRoom(identity.tenantId, identity.userId, identity.spaceId));
         const conversations = await this.repo.listConversationsForUser(identity.userId);
         // Danh sách chặn của user là MỘT dữ kiện duy nhất, không đổi theo hội thoại: tải lười một lần ở hội thoại 1–1 đầu tiên cần kiểm rồi dùng lại cho cả vòng lặp, thay vì tải lại theo từng hội thoại như trước.
         let blockedIds: string[] | undefined;
@@ -138,7 +178,7 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
         for (const conversation of conversations) {
           // Lớp phòng thủ thứ hai (việc nối tiếp #33, siết sau PR #94 vòng 1): socket mới nối KHÔNG vào room của hội thoại 1–1 đang chặn — cùng luật với isBlockedDirectConversation của join/sync/typing. Socket nối từ TRƯỚC khi chặn vẫn nằm trong room cũ, nhưng mọi điểm sinh sự kiện trong lúc chặn đã bị cổng (gửi 403, xoá/đọc 404) nên không còn sự kiện nào của hội thoại đó để lộ; tầng phân phối xoá tin còn chặn nốt trường hợp outbox tới muộn (xem distributeMessageDeleted).
           if (await this.isBlockedDirectConversation(conversation.id, identity.userId, blockedIdsOnce)) continue;
-          await client.join(conversationRoom(conversation.tenantId, conversation.id));
+          await client.join(conversationRoom(conversation.tenantId, conversation.id, identity.spaceId));
         }
         await this.realtime.markConnected(identity.tenantId, identity.userId, client.id);
         // Ảnh chụp presence lúc nối (sự kiện presence.snapshot): sự kiện presence.changed chỉ phát khi trạng thái THAY ĐỔI nên người đã trực tuyến từ trước lúc socket này nối không phát sinh sự kiện nào — không có ảnh chụp này, phía khách không bao giờ học được họ đang trực tuyến cho tới khi họ ngắt/nối lại. Ảnh chụp chỉ gửi cho CHÍNH socket vừa nối (không phát vào room) và phạm vi người được liệt kê do tầng realtime gác theo quan hệ hội thoại chung (xem listOnlineCoMemberIds). Phát SAU markConnected để presence của chính người nối đã được ghi trước khi đọc (dù chủ thể tự loại khỏi danh sách).
@@ -156,7 +196,19 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
   async handleDisconnect(client: Socket): Promise<void> {
     const userId = client.data.userId as string | undefined;
     const tenantId = (client.data.tenantId as string | null | undefined) ?? null;
-    if (userId) await this.realtime.markDisconnected(tenantId, userId, client.id);
+    if (userId) {
+      // Lượt ngắt cũng phải mang kho của socket: nếu không, tác động
+      // offline sẽ dùng key/room của kho chung dù socket thuộc kho riêng.
+      try {
+        await this.withConnectionSpace(client, () => this.realtime.markDisconnected(tenantId, userId, client.id));
+      } catch (error) {
+        // Thu hồi/chuyển kho thì vẫn xoá socket khỏi presence thuộc ID
+        // kho cũ, nhưng KHÔNG truy vấn/broadcast dựa trên kho mới.
+        this.logger.warn(`Dọn presence kho cũ của socket ${client.id}: ${(error as Error).message}`);
+        await tenantAls.run({ platform: true, spaceId: (client.data.spaceId as string | null) ?? undefined }, () =>
+          this.realtime.markDisconnected(tenantId, userId, client.id, false));
+      }
+    }
   }
 
   /**
@@ -215,7 +267,7 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
       if (!(await this.repo.isMember(conversationId, userId))) return { joined: false };
       if (await this.isBlockedDirectConversation(conversationId, userId)) return { joined: false };
       const conversation = await this.repo.getConversation(conversationId);
-      await client.join(conversationRoom(conversation?.tenantId ?? null, conversationId));
+      await client.join(conversationRoom(conversation?.tenantId ?? null, conversationId, tenantAls.getStore()?.spaceId));
       return { joined: true };
     });
   }
@@ -231,7 +283,7 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
     if (!conversationId) return { left: false };
     return this.withConnectionSpace(client, async () => {
       const conversation = await this.repo.getConversation(conversationId);
-      await client.leave(conversationRoom(conversation?.tenantId ?? null, conversationId));
+      await client.leave(conversationRoom(conversation?.tenantId ?? null, conversationId, tenantAls.getStore()?.spaceId));
       return { left: true };
     });
   }
@@ -263,7 +315,7 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
         // Nối vào room luôn thể: conversation tạo sau khi socket nối
         // (hoặc membership mới đồng bộ) thì từ nay nhận realtime trực tiếp.
         const conversation = await this.repo.getConversation(conversationId);
-        await client.join(conversationRoom(conversation?.tenantId ?? null, conversationId));
+        await client.join(conversationRoom(conversation?.tenantId ?? null, conversationId, tenantAls.getStore()?.spaceId));
         // Đồng bộ là đường đọc của CHÍNH người xin: lọc tin họ đã
         // xoá-phía-mình và vô hiệu nội dung tin đã thu hồi — cùng luật
         // với đường đọc REST, không để kênh này thành đường vòng lộ

@@ -143,8 +143,18 @@ export class ClassEnrolReconcileProcessor extends ObservedWorkerHost {
 
   /** Thân xử lý của một lượt đối soát, chạy trong ngữ cảnh platform do {@link process} bọc. */
   private async processInContext(): Promise<ClassEnrolReconcileResult> {
-    return this.taskLog.run('class-enrol-reconcile', () => this.sweep(), (r) =>
-      `classes ${r.classesChecked}, enrolled ${r.enrolled}, reactivated ${r.reactivated}, suspended ${r.suspended}, withdrawn ${r.withdrawn}, roles ${r.rolesRestored}, skipped ${r.skippedClassIds.length}`);
+    return this.spaceDb.sweepSharedAndDedicated(() =>
+      this.taskLog.run('class-enrol-reconcile', () => this.sweep(), (r) =>
+        `classes ${r.classesChecked}, enrolled ${r.enrolled}, reactivated ${r.reactivated}, suspended ${r.suspended}, withdrawn ${r.withdrawn}, roles ${r.rolesRestored}, skipped ${r.skippedClassIds.length}`), (a, b) => ({
+          checkedAt: a.checkedAt,
+          classesChecked: a.classesChecked + b.classesChecked,
+          enrolled: a.enrolled + b.enrolled,
+          reactivated: a.reactivated + b.reactivated,
+          suspended: a.suspended + b.suspended,
+          withdrawn: a.withdrawn + b.withdrawn,
+          rolesRestored: a.rolesRestored + b.rolesRestored,
+          skippedClassIds: [...a.skippedClassIds, ...b.skippedClassIds],
+        }));
   }
 
   /**
@@ -180,7 +190,7 @@ export class ClassEnrolReconcileProcessor extends ObservedWorkerHost {
       // planForClass/applyFix đều chạy dưới ngữ cảnh này — không để
       // sót đường nào chạy ngoài ngữ cảnh (RLS sẽ lặng lẽ cho 0 dòng
       // ở các bảng có tenant_id, hoặc ghi lệch phạm vi tenant).
-      await tenantAls.run({ tenantId: clazz.tenantId }, async () => {
+      await tenantAls.run({ ...tenantAls.getStore(), platform: false, tenantId: clazz.tenantId }, async () => {
         const fixes = await this.planForClass(clazz);
         if (fixes === null) return;
         const scale = fixes.scale;

@@ -13,6 +13,7 @@ import {
   type SpaceRegistryEntry,
 } from './space-connection-resolver';
 import { SpacePoolManager } from './space-pool-manager';
+import { mapWithConcurrencyLimit } from './space-sweep';
 
 /**
  * Khung định tuyến kết nối theo trung tâm cho tác vụ nền (issue
@@ -55,6 +56,8 @@ import { SpacePoolManager } from './space-pool-manager';
 export class SpaceDatabaseService implements OnModuleDestroy {
   private readonly resolver: SpaceConnectionResolver;
   private readonly poolMax: number;
+  /** Trần kho chạy song song của lượt quét định kỳ (dùng chung cấu hình với outbox relay). */
+  private readonly sweepConcurrency: number;
   private readonly ssl: boolean;
   /** Pool đọc sổ đăng ký ở control plane; null khi worker chưa cấu hình biến kết nối control plane. */
   private readonly registryPool: Pool | null;
@@ -76,7 +79,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   /**
    * Các trung tâm đã chuẩn bị xong: slug → handle + kho của handle. Đây là bảng tra ĐỒNG BỘ mà `routedKysely` dùng tại thời điểm mỗi lần gọi — phân giải (đọc sổ, mở pool) là thao tác bất đồng bộ nên phải xong từ bước chuẩn bị, không thể chen vào đường đồng bộ của một lần truy vấn.
    */
-  private readonly preparedKysely = new Map<string, { db: CentreDb; databaseName: string }>();
+  private readonly preparedKysely = new Map<string, { db: CentreDb; databaseName: string; spaceId: string }>();
   /**
    * Trình quản lý pool cho các handle Kysely của kho riêng (tạo lười, trần theo kho, đóng khi nhàn rỗi, thay pool khi danh tính kết nối đổi).
    */
@@ -89,6 +92,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
 
   constructor(config: ConfigService) {
     this.poolMax = config.get<number>('SPACE_DB_POOL_MAX') ?? 5;
+    this.sweepConcurrency = config.get<number>('SPACE_SWEEP_CONCURRENCY') ?? 3;
     this.ssl = config.get<boolean>('DATABASE_SSL') ?? false;
     const idleTimeoutMs = config.get<number>('SPACE_DB_POOL_IDLE_TIMEOUT_MS') ?? 60_000;
     const registryUrl = config.get<string>('CONTROL_PLANE_DATABASE_URL');
@@ -187,7 +191,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
     const target = await this.resolver.resolve(slug);
     if (target.mode === 'shared') {
       const db = this.requireSharedKysely();
-      this.preparedKysely.set(slug, { db, databaseName: target.databaseName });
+      this.preparedKysely.set(slug, { db, databaseName: target.databaseName, spaceId: target.spaceId });
       this.dedicatedSlugs.delete(slug);
       return db;
     }
@@ -207,9 +211,20 @@ export class SpaceDatabaseService implements OnModuleDestroy {
       );
       return { databaseName, pool, db: createCentreKysely(pool) };
     });
-    this.preparedKysely.set(slug, { db: handle.db, databaseName: target.databaseName });
+    this.preparedKysely.set(slug, { db: handle.db, databaseName: target.databaseName, spaceId: target.spaceId });
     this.dedicatedSlugs.add(slug);
     return handle.db;
+  }
+
+  /** Lấy binding bất biến của handle đã chuẩn bị, không đọc lại control plane. */
+  preparedSpaceScope(slug: string, expectedDb?: CentreDb): Pick<TenantAlsStore, 'spaceId' | 'spaceHandle'> {
+    const prepared = this.preparedKysely.get(slug);
+    if (!prepared || (expectedDb && prepared.db !== expectedDb)) {
+      throw new SpaceRoutingError('space_routing.prepared_revoked', `Space ${slug} was re-prepared or revoked`);
+    }
+    return this.dedicatedSlugs.has(slug)
+      ? { spaceId: prepared.spaceId, spaceHandle: prepared.db }
+      : {};
   }
 
   /**
@@ -228,8 +243,28 @@ export class SpaceDatabaseService implements OnModuleDestroy {
     context?: { tenantId?: string; userId?: string },
   ): Promise<T> {
     const db = await this.getKyselyForSpace(slug);
+    // Một request khác có thể chuẩn bị lại CÙNG slug giữa await
+    // trên và lúc ghim ALS: không lấy spaceId của handle B cho db A.
+    const prepared = this.preparedKysely.get(slug);
+    if (!prepared || prepared.db !== db) {
+      throw new SpaceRoutingError('space_routing.prepared_revoked', `Space ${slug} was re-prepared before its session started`);
+    }
     const parent = tenantAls.getStore();
-    const store: TenantAlsStore = { ...parent, ...context, spaceSlug: slug };
+    // Ghim danh tính bất biến của dòng sổ đã chuẩn bị vào cùng phiên;
+    // mọi Redis key và room bên dưới dùng chính giá trị này.
+    const spaceId = this.dedicatedSlugs.has(slug) ? prepared.spaceId : undefined;
+    if (this.dedicatedSlugs.has(slug) && !spaceId) throw new SpaceRoutingError('space_routing.not_prepared', `Space ${slug} has no prepared identity`);
+    // Một handler A có thể tự gọi withSpaceKysely(A) lần nữa sau
+    // khi registry đổi D1 -> D2. Không để wrapper lồng nhau biến
+    // lượt đọc của phiên A cũ thành một phiên B mới cùng slug.
+    if (parent?.spaceSlug === slug && (parent.spaceId || parent.spaceHandle)
+      && (parent.spaceId !== spaceId || parent.spaceHandle !== (this.dedicatedSlugs.has(slug) ? db : undefined))) {
+      throw new SpaceRoutingError('space_routing.prepared_identity_mismatch', `Space ${slug} changed while opening a nested session`);
+    }
+    const store: TenantAlsStore = {
+      ...parent, ...context, spaceSlug: slug, spaceId,
+      spaceHandle: this.dedicatedSlugs.has(slug) ? db : undefined,
+    };
     if (context?.tenantId) store.platform = false;
     // Bọc `fn` trong một hàm async ngay bên trong `run` — cùng lý
     // do với bản phía API: việc thực thi truy vấn chỉ bắt đầu tại
@@ -266,6 +301,63 @@ export class SpaceDatabaseService implements OnModuleDestroy {
     return rows;
   }
 
+  /**
+   * Quét dữ liệu định kỳ trong kho chung RỒI từng kho riêng đang active.
+   * Danh sách registry và identity được xác minh lại trước mỗi lượt;
+   * sau bước chuẩn bị pool còn kiểm tra `spaceId` trong ALS để chặn
+   * việc slug bị gán lại trong lúc tác vụ đang thực thi. Một kho lỗi
+   * không cản các kho khác; SAU khi quét hết mới ném lỗi tổng hợp để
+   * BullMQ retry (không được trả thành công giả khi còn kho bỏ sót).
+   * Mỗi lần retry đều quét lại: tác vụ nghiệp vụ tự chống trùng qua
+   * khóa/đánh dấu bền, cùng nguyên tắc at-least-once của relay.
+   */
+  async sweepSharedAndDedicated<T>(
+    sweep: () => Promise<T>,
+    merge: (result: T, next: T) => T,
+  ): Promise<T> {
+    const failed: string[] = [];
+    let shared: T | undefined;
+    try {
+      shared = await tenantAls.run({ platform: true }, sweep);
+    } catch (error) {
+      // Kho chung lỗi không được chặn kho riêng; vẫn chạy các kho
+      // còn lại rồi ném lỗi để retry TOÀN BỘ lượt quét.
+      failed.push(`shared: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    // Không được thay lỗi đọc sổ bằng danh sách rỗng: khi control
+    // plane mất, retry phải giữ trạng thái failed, không được thông
+    // báo đã xử lý hết kho riêng.
+    const registered = await this.listRegisteredSpaces();
+    const dedicated = registered.filter((space) => space.storageMode === 'dedicated' && space.status === 'active');
+    const results: Array<T | undefined> = Array.from({ length: dedicated.length });
+    await mapWithConcurrencyLimit(dedicated.map((space, index) => ({ space, index })), this.sweepConcurrency, async ({ space, index }) => {
+      try {
+        const target = await this.resolveTarget(space.slug);
+        if (target.mode !== 'dedicated' || target.status !== 'active' || target.spaceId !== space.id) {
+          throw new SpaceRoutingError('space_routing.sweep_identity_mismatch', `Space identity changed for ${space.slug}`);
+        }
+        results[index] = await tenantAls.run({ platform: true }, () =>
+          this.withSpaceKysely(space.slug, async () => {
+            const prepared = await this.resolveTarget(space.slug);
+            if (tenantAls.getStore()?.spaceId !== space.id || prepared.spaceId !== space.id
+              || prepared.mode !== 'dedicated' || prepared.status !== 'active') {
+              throw new SpaceRoutingError('space_routing.sweep_identity_mismatch', `Prepared identity changed for ${space.slug}`);
+            }
+            return sweep();
+          }),
+        );
+      } catch (error) {
+        failed.push(`${space.slug}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    });
+    if (failed.length > 0) {
+      throw new Error(`Periodic sweep failed in ${failed.length} storage scope(s): ${failed.join('; ')}`);
+    }
+    // Dùng reduce không bỏ qua kết quả rỗng/false/0; chỉ bỏ qua
+    // undefined do lỗi và lỗi đã ném ở trên.
+    return results.reduce<T>((all, value) => merge(all, value as T), shared as T);
+  }
+
   /** Handle Kysely kho chung đã gắn; chưa gắn là lỗi lập trình ở đường khởi động. */
   private requireSharedKysely(): CentreDb {
     if (!this.sharedKysely) {
@@ -288,11 +380,32 @@ export class SpaceDatabaseService implements OnModuleDestroy {
    * `getKyselyForSpace`/`withSpaceKysely` rồi thử lại.
    */
   private currentKysely(): CentreDb {
-    const slug = tenantAls.getStore()?.spaceSlug;
+    const scope = tenantAls.getStore();
+    const slug = scope?.spaceSlug;
     if (slug) {
       const preparedEntry = this.preparedKysely.get(slug);
-      if (preparedEntry) return preparedEntry.db;
-      if (this.dedicatedSlugs.has(slug)) {
+      if (preparedEntry) {
+        // Mỗi lần dựng query builder (kể cả sau một await dài) phải
+        // kiểm tra identity của handle so với phiên đã ghim. Slug
+        // có thể được chuẩn bị lại sang B bởi request khác khi phiên
+        // A vẫn sống; chỉ tra slug sẽ làm callback A đọc/ghi B.
+        // Nếu dedicated chuyển thành shared, cũng không được rơi về
+        // kho chung dù registry vẫn giữ nguyên ID. Phiên dedicated
+        // thiếu `spaceId` cũng phải từ chối, không được dùng handle
+        // hiện tại theo slug khi identity phiên chưa được xác thực.
+        // Cùng spaceId nhưng database/role/secret đổi cũng thay handle:
+        // tuyệt đối không nhận handle mới trong phiên đã ghim cái cũ.
+        if ((this.dedicatedSlugs.has(slug) && (!scope?.spaceId || preparedEntry.spaceId !== scope.spaceId
+          || scope.spaceHandle !== preparedEntry.db))
+          || (!this.dedicatedSlugs.has(slug) && (!!scope?.spaceId || !!scope?.spaceHandle))) {
+          throw new SpaceRoutingError(
+            'space_routing.prepared_identity_mismatch',
+            `Space ${slug} was re-prepared for a different identity while the current scope was active`,
+          );
+        }
+        return preparedEntry.db;
+      }
+      if (this.dedicatedSlugs.has(slug) || scope?.spaceId || scope?.spaceHandle) {
         throw new SpaceRoutingError(
           'space_routing.prepared_revoked',
           `Space ${slug} was prepared with a dedicated store but that preparation is no longer active; prepare the space again before routing queries to it`,

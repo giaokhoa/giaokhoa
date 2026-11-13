@@ -66,7 +66,7 @@ describe('Worker NB-7: chính sách site của admin làm cổng gửi nền', (
     await setPolicy('false');
 
     const eventId = await mkEvent(policyUser, `NB7 blocked exam ${suffix}`);
-    const blocked = await processor.process({ data: { eventId, userId: policyUser, minutesBefore: 30 } } as never);
+    const blocked = await processor.process({ data: { spaceSlug: null, spaceId: null, eventId, userId: policyUser, minutesBefore: 30 } } as never);
     expect(blocked.status).toBe('skipped-admin-disabled');
     const notes = await db.selectFrom('notifications').selectAll()
       .where('user_id_to', '=', policyUser).where('event_type', '=', 'calendar_reminder')
@@ -82,7 +82,7 @@ describe('Worker NB-7: chính sách site của admin làm cổng gửi nền', (
     // Bật lại → cùng đường nền phát bình thường.
     await setPolicy('true');
     const event2 = await mkEvent(policyUser, `NB7 allowed exam ${suffix}`);
-    const allowed = await processor.process({ data: { eventId: event2, userId: policyUser, minutesBefore: 30 } } as never);
+    const allowed = await processor.process({ data: { spaceSlug: null, spaceId: null, eventId: event2, userId: policyUser, minutesBefore: 30 } } as never);
     expect(allowed.status).toBe('notified');
     const notes2 = await db.selectFrom('notifications').selectAll()
       .where('user_id_to', '=', policyUser).where('event_type', '=', 'calendar_reminder')
@@ -92,7 +92,7 @@ describe('Worker NB-7: chính sách site của admin làm cổng gửi nền', (
     // Người dùng khác khi không còn ghi đè (xoá dòng) cũng phát bình thường.
     await setPolicy(null);
     const event3 = await mkEvent(freeUser, `NB7 default exam ${suffix}`);
-    const dflt = await processor.process({ data: { eventId: event3, userId: freeUser, minutesBefore: 30 } } as never);
+    const dflt = await processor.process({ data: { spaceSlug: null, spaceId: null, eventId: event3, userId: freeUser, minutesBefore: 30 } } as never);
     expect(dflt.status).toBe('notified');
   });
 });

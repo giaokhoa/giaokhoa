@@ -3,7 +3,6 @@ import { ObservedWorkerHost } from '../observed-worker-host';
 import { Logger } from '@nestjs/common';
 import { I18nService } from '@nestjs/i18n';
 import type { Job } from 'bullmq';
-import { tenantAls } from '../db/tenant-als';
 import { ResendMailService, type WorkerMailSendResult } from '../resend-mail.service';
 import { SpaceDatabaseService } from '../db/routing/space-database.service';
 
@@ -79,7 +78,15 @@ export class NotificationDigestProcessor extends ObservedWorkerHost {
   async process(job: Job): Promise<NotificationDigestSweepResult> {
     // Processor nền quét xuyên tenant — bọc ngữ cảnh platform tường minh để RLS fail-closed không làm mù dữ liệu (như các processor nền khác của worker).
     void job;
-    return tenantAls.run({ platform: true }, () => this.sweep());
+    return this.spaceDb.sweepSharedAndDedicated(() => this.sweep(), (a, b) => ({
+      usersSent: a.usersSent + b.usersSent,
+      usersDeferred: a.usersDeferred + b.usersDeferred,
+      usersSkipped: a.usersSkipped + b.usersSkipped,
+      usersFailed: a.usersFailed + b.usersFailed,
+      itemsSent: a.itemsSent + b.itemsSent,
+      itemsSuppressedAdmin: a.itemsSuppressedAdmin + b.itemsSuppressedAdmin,
+      itemsSuppressedPreference: a.itemsSuppressedPreference + b.itemsSuppressedPreference,
+    }));
   }
 
   /** Một lượt gom + gửi; tách khỏi `process` để giữ ngữ cảnh tenant ở một chỗ. */

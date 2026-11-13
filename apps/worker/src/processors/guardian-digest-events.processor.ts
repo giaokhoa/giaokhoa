@@ -42,7 +42,7 @@ function isOverdueAlertPayload(payload: unknown): payload is GuardianOverdueAler
  * (`guardian_digest_due`, `guardian_overdue_alert`) — thay consumer
  * polling `GuardianDigestConsumer` phía API ở issue con #518 của
  * #491: relay outbox duy nhất định tuyến hai loại này vào hàng đợi
- * `guardian-digest-events` với jobId = outboxId, processor này chỉ
+ * `guardian-digest-events` với jobId = (spaceId hoặc shared) + outboxId, processor này chỉ
  * kiểm tra hình dạng payload rồi uỷ cho
  * {@link GuardianDigestHandlerService}.
  *

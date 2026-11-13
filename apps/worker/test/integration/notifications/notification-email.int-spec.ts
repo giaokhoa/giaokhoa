@@ -7,6 +7,7 @@ import {
   type OrdinaryWorkerModuleHarness,
 } from '../../support/ordinary-worker-module';
 import { NotificationDispatchProcessor } from '../../../src/processors/notification-dispatch.processor';
+import { SpaceJobRunner } from '../../../src/db/routing/space-job-runner';
 import { NotificationDigestProcessor } from '../../../src/processors/notification-digest.processor';
 import type { WorkerMailMessage, WorkerMailSendResult } from '../../../src/resend-mail.service';
 
@@ -80,6 +81,9 @@ describe('Kênh email thông báo của worker + digest hàng ngày (NB-5, issue
   beforeAll(async () => {
     harness = await bootWorkerModuleAsOrdinaryRole();
     db = harness.adminDb;
+    // Các lượt test trước có thể thất bại giữa digest-queued và cleanup:
+    // xoá đúng fixture nb5 cũ để số đếm độc lập với lần chạy trước.
+    await db.deleteFrom('notification_dispatch_log').where('dedupe_key', 'like', 'nb5-%').execute();
     const rows: Array<[string, string, boolean]> = [
       [userActive, `nb5-a-${suffix}`, false],
       [userPrefOff, `nb5-p-${suffix}`, false],
@@ -106,13 +110,14 @@ describe('Kênh email thông báo của worker + digest hàng ngày (NB-5, issue
     // Hai processor tự dựng bằng tay phải chạy bằng kết nối role
     // thường của harness — dùng `db` quản trị ở đây sẽ đưa phần xử
     // lý cần kiểm chứng quay lại superuser và vô hiệu hoá lát #294.
-    dispatch = new NotificationDispatchProcessor(harness.spaceDb, mail as never);
+    dispatch = new NotificationDispatchProcessor(harness.spaceDb, mail as never, new SpaceJobRunner(harness.spaceDb));
     digest = new NotificationDigestProcessor(harness.spaceDb, mail as never, buildFakeI18n() as never);
   });
   afterAll(async () => { await harness.close(); });
 
   const emailJob = (userId: string, dedupeKey: string, extra: Record<string, unknown> = {}) => ({
     data: {
+      spaceSlug: null, spaceId: null,
       userId, provider: 'calendar_reminder', channel: 'email',
       subject: 'Nhắc lịch: Buổi học thêm', body: 'Bản tóm tắt cho kênh ngoài.',
       dedupeKey, ...extra,

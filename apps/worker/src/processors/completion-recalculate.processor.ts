@@ -1,10 +1,11 @@
 import { InjectQueue, Processor } from '@nestjs/bullmq';
 import { ObservedWorkerHost } from '../observed-worker-host';
 import type { Job, Queue } from 'bullmq';
-import { tenantAls } from '../db/tenant-als';
+import { SpaceJobRunner } from '../db/routing/space-job-runner';
 import { SpaceDatabaseService } from '../db/routing/space-database.service';
+import type { BackgroundJobScope } from '../db/routing/background-job-scope';
 
-export interface CompletionRecalculateJobData { courseId: string }
+export interface CompletionRecalculateJobData extends BackgroundJobScope { courseId: string }
 export interface CompletionRecalculateResult { courseId: string; users: number; completedUsers: string[] }
 
 const ENROL_WITHDRAWN = 2;
@@ -19,6 +20,7 @@ const ENROL_WITHDRAWN = 2;
 export class CompletionRecalculateProcessor extends ObservedWorkerHost {
   constructor(
     private readonly spaceDb: SpaceDatabaseService,
+    private readonly jobRunner: SpaceJobRunner,
     @InjectQueue('completion-recalculate') private readonly recalcQueue: Queue,
   ) { super(); }
 
@@ -26,8 +28,8 @@ export class CompletionRecalculateProcessor extends ObservedWorkerHost {
    * Xử lý một job của queue tương ứng.
    */
   async process(job: Job<CompletionRecalculateJobData>): Promise<CompletionRecalculateResult> {
-    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc ngữ cảnh platform tường minh để RLS fail-closed không làm mù dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
-    return tenantAls.run({ platform: true }, () => this.processInContext(job));
+    // Issue #11: mọi lượt xử lý/retry phải kiểm sổ và giữ đúng kho đã đóng dấu khi enqueue; không chạy hộ trên platform.
+    return this.jobRunner.runForJob(job.data, () => this.processInContext(job));
   }
 
   private async processInContext(job: Job<CompletionRecalculateJobData>): Promise<CompletionRecalculateResult> {
@@ -205,8 +207,9 @@ export class CompletionRecalculateProcessor extends ObservedWorkerHost {
         .execute();
       for (const dependentId of [...new Set(dependents.map((d) => d.course))]) {
         if (dependentId === courseId) continue;
-        await this.recalcQueue.add('recalculate', { courseId: dependentId },
-          { jobId: `completion-recalc-${dependentId}-${Date.now()}`, attempts: 3 }).catch(() => undefined);
+        await this.recalcQueue.add('recalculate', { courseId: dependentId,
+          spaceSlug: job.data.spaceSlug, spaceId: job.data.spaceId, tenantId: job.data.tenantId },
+          { jobId: `${job.data.spaceId ?? 'shared'}-completion-recalc-${dependentId}-${Date.now()}`, attempts: 3 }).catch(() => undefined);
       }
     }
     return { courseId, users: userIds.size, completedUsers };

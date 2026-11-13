@@ -3,6 +3,7 @@ import { Redis } from 'ioredis';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { redisConnectionFromUrl } from '../../../../worker/src/config/env';
+import { outboxRelayJobId } from '../../../../worker/src/outbox-relay.scheduler';
 import {
   OUTBOX_EVENT_QUEUE_ROUTES,
   allQueueNamesOfRoutes,
@@ -110,7 +111,7 @@ describe('Worker relay driver: đóng cầu dẫn dọn đúng job của lượt
       expect(route).toBeDefined();
       for (const queueName of queueNamesOfRoute(route!)) {
         const queue = measureQueues.find((q) => q.name === queueName)!;
-        expect(await queue.getJob(row.id)).toBeUndefined();
+        expect(await queue.getJob(outboxRelayJobId(null, row.id))).toBeUndefined();
       }
     }
     return rows;
@@ -181,11 +182,11 @@ describe('Worker relay driver: đóng cầu dẫn dọn đúng job của lượt
     // Dòng lỗi không được đóng dấu, nhưng job của nó đã vào Redis.
     expect(await isUnpublished(rowId)).toBe(true);
     const notificationQueue = queueByName('notification-events');
-    expect(await notificationQueue.getJob(rowId)).toBeDefined();
+    expect(await notificationQueue.getJob(outboxRelayJobId(null, rowId))).toBeDefined();
 
     await closeWorkerRelayDriver();
 
-    expect(await notificationQueue.getJob(rowId)).toBeUndefined();
+    expect(await notificationQueue.getJob(outboxRelayJobId(null, rowId))).toBeUndefined();
     const after = await waitingCounts();
     for (const name of queueNames) {
       expect(after[name]).toBe(baseline[name]);
@@ -217,12 +218,12 @@ describe('Worker relay driver: đóng cầu dẫn dọn đúng job của lượt
     expect(await isUnpublished(rowId)).toBe(true);
     const realtimeQueue = queueByName('messaging-realtime');
     const notificationQueue = queueByName('notification-events');
-    expect(await realtimeQueue.getJob(rowId)).toBeDefined();
-    expect(await notificationQueue.getJob(rowId)).toBeUndefined();
+    expect(await realtimeQueue.getJob(outboxRelayJobId(null, rowId))).toBeDefined();
+    expect(await notificationQueue.getJob(outboxRelayJobId(null, rowId))).toBeUndefined();
 
     await closeWorkerRelayDriver();
 
-    expect(await realtimeQueue.getJob(rowId)).toBeUndefined();
+    expect(await realtimeQueue.getJob(outboxRelayJobId(null, rowId))).toBeUndefined();
     const after = await waitingCounts();
     for (const name of queueNames) {
       expect(after[name]).toBe(baseline[name]);

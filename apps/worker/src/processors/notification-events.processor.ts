@@ -18,7 +18,7 @@ const PROCESSING_LEASE_RETRY_DELAY_MS = 5_000;
  *
  * @remarks
  * Flow: relay outbox duy nhất phát job vào hàng đợi
- * `notification-events` với `jobId` bằng `outboxId`; processor này
+ * `notification-events` với `jobId` ghép định danh kho bất biến với `outboxId`; processor này
  * chạy toàn bộ job trong ngữ cảnh platform (handler tự gắn tenant
  * tường minh cho từng thông báo), chống trùng theo `outboxId` bằng
  * {@link NotificationEventsMarker}, rồi uỷ xử lý nghiệp vụ cho

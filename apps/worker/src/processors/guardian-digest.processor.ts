@@ -104,7 +104,11 @@ export class GuardianDigestProcessor extends ObservedWorkerHost {
 
   private async processInContext(_job: Job): Promise<GuardianDigestSweepResult> {
     void _job;
-    return this.taskLog.run('guardian-digests', () => this.sweep(), (r) => `queued ${r.queued.length} guardian digest item(s)`);
+    return this.spaceDb.sweepSharedAndDedicated(() =>
+      this.taskLog.run('guardian-digests', () => this.sweep(),
+        (r) => `queued ${r.queued.length} guardian digest item(s)`), (a, b) => ({
+          checkedAt: a.checkedAt, queued: [...a.queued, ...b.queued],
+        }));
   }
 
   private async sweep(): Promise<GuardianDigestSweepResult> {
@@ -132,7 +136,7 @@ export class GuardianDigestProcessor extends ObservedWorkerHost {
       linksByTenant.set(link.tenantId, group);
     }
     for (const [tenantId, tenantLinks] of linksByTenant) {
-      await tenantAls.run({ tenantId }, async () => {
+      await tenantAls.run({ ...tenantAls.getStore(), platform: false, tenantId }, async () => {
         for (const link of tenantLinks) {
           const frequency = frequencyByPair.get(`${link.guardianUserId}:${link.studentUserId}`) ?? 'weekly';
           await this.sweepLink(link, frequency, now, queued);

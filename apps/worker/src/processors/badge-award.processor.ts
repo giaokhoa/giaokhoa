@@ -4,15 +4,16 @@ import { I18nService } from '@nestjs/i18n';
 import type { Job } from 'bullmq';
 import { createHash, randomUUID } from 'node:crypto';
 import { sql, type CentreDB } from '@giaokhoa/db';
-import { tenantAls } from '../db/tenant-als';
+import { SpaceJobRunner } from '../db/routing/space-job-runner';
 import { resolveDefaultTenantId } from '../db/default-tenant';
 import { SpaceDatabaseService } from '../db/routing/space-database.service';
+import type { BackgroundJobScope } from '../db/routing/background-job-scope';
 import { NotificationDeliveryService } from '../notification-delivery.service';
 
 /** Các trường hồ sơ chuẩn mà lá `profile` đọc từ bảng users (khớp phía API; ngoài ra lá nhận custom field theo shortName). */
 const PROFILE_STANDARD_FIELDS = ['username', 'email', 'firstName', 'lastName'] as const;
 
-export interface BadgeAwardJobData { userId: string; trigger?: string }
+export interface BadgeAwardJobData extends BackgroundJobScope { userId: string; trigger?: string }
 export interface BadgeAwardResult { evaluated: number; issued: string[] }
 
 /**
@@ -45,6 +46,7 @@ export class BadgeAwardProcessor extends ObservedWorkerHost {
     private readonly i18n: I18nService,
     private readonly delivery: NotificationDeliveryService,
     private readonly spaceDb: SpaceDatabaseService,
+    private readonly jobRunner: SpaceJobRunner,
   ) { super(); }
 
   private async leafSatisfied(leaf: { badgeId: string; criteriaType: string; params: unknown }, userId: string): Promise<boolean> {
@@ -171,8 +173,8 @@ export class BadgeAwardProcessor extends ObservedWorkerHost {
    * Xử lý một job của queue tương ứng.
    */
   async process(job: Job<BadgeAwardJobData>): Promise<BadgeAwardResult> {
-    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc ngữ cảnh platform tường minh để RLS fail-closed không làm mù dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
-    return tenantAls.run({ platform: true }, () => this.processInContext(job));
+    // Issue #11: mọi lượt xử lý/retry phải kiểm sổ và giữ đúng kho đã đóng dấu khi enqueue; không chạy hộ trên platform.
+    return this.jobRunner.runForJob(job.data, () => this.processInContext(job));
   }
 
   private async processInContext(job: Job<BadgeAwardJobData>): Promise<BadgeAwardResult> {

@@ -68,7 +68,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
    */
   private readonly dedicatedSlugs = new Set<string>();
   /**
-   * Tên database kho riêng đã phân giải gần nhất theo slug — trí nhớ tối thiểu đi cùng `dedicatedSlugs`: mục đã-chuẩn-bị bị thu hồi khi pool đóng, nhưng danh tính kho của một trung tâm đã phân giải kho riêng phải còn tra được (xem `currentContextDatabaseName`) để tầng phía trên gắn đúng danh tính kho cho dữ kiện chỉ có nghĩa trong một kho, thay vì rơi về danh tính kho chung trong cửa sổ đã-chuẩn-bị-bị-thu-hồi. Mục của một slug bị xoá khi lần chuẩn bị sau kết luận slug đó ở kho chung — cùng nhịp với `dedicatedSlugs`.
+   * Tên database kho riêng đã phân giải gần nhất theo slug, đi cùng `dedicatedSlugs`. Chỉ dùng cho cache key SAU khi xác minh handle đã ghim của phiên đang còn hợp lệ: nếu pool bị thu hồi hoặc thay vì đổi database/role, `currentContextDatabaseName` cũng fail-closed, không trả tên kho mutable hoặc tự rơi về shared. Mục bị xoá khi chuẩn bị shared.
    */
   private readonly dedicatedDatabaseNames = new Map<string, string>();
 
@@ -81,7 +81,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   /**
    * Các trung tâm đã chuẩn bị xong: slug → handle + kho của handle. Đây là bảng tra ĐỒNG BỘ mà `routedKysely` dùng tại thời điểm mỗi lần gọi — phân giải (đọc sổ, mở pool) là thao tác bất đồng bộ nên phải xong từ bước chuẩn bị, không thể chen vào đường đồng bộ của một lần truy vấn.
    */
-  private readonly preparedKysely = new Map<string, { db: CentreDb; databaseName: string }>();
+  private readonly preparedKysely = new Map<string, { db: CentreDb; databaseName: string; spaceId: string }>();
   /**
    * Trình quản lý pool cho các handle Kysely của kho riêng (tạo lười, trần theo kho, đóng khi nhàn rỗi, thay pool khi danh tính kết nối đổi): một kho riêng giữ một pool riêng trong khung này, và pool đóng thì chỉ thu hồi trạng thái đã-chuẩn-bị của chính kho đó.
    */
@@ -167,6 +167,23 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   }
 
   /**
+   * Chụp scope của handle ĐÃ chuẩn bị, không truy vấn lại control
+   * plane. Ghim object handle cho phiên dedicated, không chỉ ID của
+   * dòng registry: một dòng có thể đổi database/role mà ID giữ nguyên.
+   * Shared không có identity dedicated nên trả scope trống.
+   * `expectedDb` bảo vệ race sau `await getKyselyForSpace`.
+   */
+  preparedSpaceScope(slug: string, expectedDb?: CentreDb): Pick<TenantAlsStore, 'spaceId' | 'spaceHandle'> {
+    const prepared = this.preparedKysely.get(slug);
+    if (!prepared || (expectedDb && prepared.db !== expectedDb)) {
+      throw new SpaceRoutingError('space_routing.prepared_revoked', `Space ${slug} was re-prepared or revoked`);
+    }
+    return this.dedicatedSlugs.has(slug)
+      ? { spaceId: prepared.spaceId, spaceHandle: prepared.db }
+      : {};
+  }
+
+  /**
    * Tên database của kho mà handle định tuyến sẽ phục vụ cho
    * ngữ cảnh ALS hiện tại — bản tra ĐỒNG BỘ lấy cùng quyết định
    * đích với `currentKysely`, dành cho các tầng cần gắn danh
@@ -179,19 +196,28 @@ export class SpaceDatabaseService implements OnModuleDestroy {
    *   bị ở kho riêng: trả `undefined`. Riêng slug chưa chuẩn bị
    *   lần nào không có đích hợp lệ: truy vấn qua handle định tuyến
    *   sẽ ném lỗi thay vì truy cập kho chung.
-   * - Slug đã phân giải kho riêng: trả tên database trong sổ
-   *   đăng ký mà lần chuẩn bị gần nhất đã chốt cho slug đó —
-   *   kể cả khi mục đã-chuẩn-bị đã bị thu hồi vì pool đóng:
-   *   lượt đọc qua handle lúc đó fail-closed ở
-   *   `currentKysely`, nhưng danh tính kho của ngữ cảnh vẫn
-   *   là kho riêng đó, tuyệt đối không rơi về kho chung.
+   * - Slug đã phân giải kho riêng: chỉ trả tên database nếu
+   *   `spaceId` **và object handle Kysely** trong ALS vẫn khớp
+   *   với entry đã chuẩn bị. Cùng ID sổ nhưng đổi tên database,
+   *   role/secret hoặc pool đóng sẽ fail-closed trước cả cache hit:
+   *   không phân vùng nhầm khoá của phiên A dưới tên kho B.
    *
    * @returns Tên database kho riêng của ngữ cảnh, hoặc
    *   `undefined` khi ngữ cảnh đang được phục vụ bằng kho chung.
    */
   currentContextDatabaseName(): string | undefined {
-    const slug = tenantAls.getStore()?.spaceSlug;
-    if (!slug || !this.dedicatedSlugs.has(slug)) return undefined;
+    const scope = tenantAls.getStore();
+    const slug = scope?.spaceSlug;
+    if (!slug) return undefined;
+    // Cache key phải cùng identity với các query qua routedKysely:
+    // không được phân vùng cache A theo tên database B sau reprepare.
+    const prepared = this.preparedKysely.get(slug);
+    if ((this.dedicatedSlugs.has(slug) && (!scope?.spaceId || !prepared
+      || prepared.spaceId !== scope.spaceId || prepared.db !== scope.spaceHandle))
+      || (!this.dedicatedSlugs.has(slug) && (!!scope?.spaceId || !!scope?.spaceHandle))) {
+      throw new SpaceRoutingError('space_routing.prepared_identity_mismatch', `Space ${slug} changed identity while using its cache`);
+    }
+    if (!this.dedicatedSlugs.has(slug)) return undefined;
     return this.dedicatedDatabaseNames.get(slug);
   }
 
@@ -245,7 +271,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   ): CentreDb {
     if (target.mode === 'shared') {
       const shared = this.requireSharedKysely();
-      this.preparedKysely.set(slug, { db: shared, databaseName: target.databaseName });
+      this.preparedKysely.set(slug, { db: shared, databaseName: target.databaseName, spaceId: target.spaceId });
       return shared;
     }
     const connectionString = target.connectionString;
@@ -265,7 +291,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
       );
       return { databaseName, pool, db: createCentreKysely(pool) };
     });
-    this.preparedKysely.set(slug, { db: handle.db, databaseName: target.databaseName });
+    this.preparedKysely.set(slug, { db: handle.db, databaseName: target.databaseName, spaceId: target.spaceId });
     return handle.db;
   }
 
@@ -300,8 +326,28 @@ export class SpaceDatabaseService implements OnModuleDestroy {
     context?: { tenantId?: string; userId?: string },
   ): Promise<T> {
     const db = await this.getKyselyForSpace(slug);
+    // Một request khác có thể chuẩn bị lại CÙNG slug giữa await
+    // trên và lúc ghim ALS: không lấy spaceId của handle B cho db A.
+    const prepared = this.preparedKysely.get(slug);
+    if (!prepared || prepared.db !== db) {
+      throw new SpaceRoutingError('space_routing.prepared_revoked', `Space ${slug} was re-prepared before its session started`);
+    }
     const parent = tenantAls.getStore();
-    const store: TenantAlsStore = { ...parent, ...context, spaceSlug: slug };
+    // Ghim danh tính bất biến của dòng sổ đã chuẩn bị vào cùng phiên;
+    // mọi Redis key và room bên dưới dùng chính giá trị này.
+    const spaceId = this.dedicatedSlugs.has(slug) ? prepared.spaceId : undefined;
+    if (this.dedicatedSlugs.has(slug) && !spaceId) throw new SpaceRoutingError('space_routing.not_prepared', `Space ${slug} has no prepared identity`);
+    // Một handler A có thể tự gọi withSpaceKysely(A) lần nữa sau
+    // khi registry đổi D1 -> D2. Không để wrapper lồng nhau biến
+    // lượt đọc của phiên A cũ thành một phiên B mới cùng slug.
+    if (parent?.spaceSlug === slug && (parent.spaceId || parent.spaceHandle)
+      && (parent.spaceId !== spaceId || parent.spaceHandle !== (this.dedicatedSlugs.has(slug) ? db : undefined))) {
+      throw new SpaceRoutingError('space_routing.prepared_identity_mismatch', `Space ${slug} changed while opening a nested session`);
+    }
+    const store: TenantAlsStore = {
+      ...parent, ...context, spaceSlug: slug, spaceId,
+      spaceHandle: this.dedicatedSlugs.has(slug) ? db : undefined,
+    };
     if (context?.tenantId) store.platform = false;
     // Bọc `fn` trong một hàm async ngay bên trong `run`: việc thực
     // thi truy vấn chỉ bắt đầu tại điểm await, nên nếu `fn` trả
@@ -348,10 +394,31 @@ export class SpaceDatabaseService implements OnModuleDestroy {
    *   `withSpaceKysely` rồi thử lại.
    */
   private currentKysely(): CentreDb {
-    const slug = tenantAls.getStore()?.spaceSlug;
+    const scope = tenantAls.getStore();
+    const slug = scope?.spaceSlug;
     if (slug) {
       const preparedEntry = this.preparedKysely.get(slug);
-      if (preparedEntry) return preparedEntry.db;
+      if (preparedEntry) {
+        // Mỗi lần dựng query builder (kể cả sau một await dài) phải
+        // kiểm tra identity của handle so với phiên đã ghim. Slug
+        // có thể được chuẩn bị lại sang B bởi request khác khi phiên
+        // A vẫn sống; chỉ tra slug sẽ làm callback A đọc/ghi B.
+        // Nếu dedicated chuyển thành shared, cũng không được rơi về
+        // kho chung dù registry vẫn giữ nguyên ID. Phiên dedicated
+        // thiếu `spaceId` cũng phải từ chối, không được dùng handle
+        // hiện tại theo slug khi identity phiên chưa được xác thực.
+        // Cùng spaceId nhưng database/role/secret đổi cũng thay handle:
+        // tuyệt đối không nhận handle mới trong phiên đã ghim cái cũ.
+        if ((this.dedicatedSlugs.has(slug) && (!scope?.spaceId || preparedEntry.spaceId !== scope.spaceId
+          || scope.spaceHandle !== preparedEntry.db))
+          || (!this.dedicatedSlugs.has(slug) && (!!scope?.spaceId || !!scope?.spaceHandle))) {
+          throw new SpaceRoutingError(
+            'space_routing.prepared_identity_mismatch',
+            `Space ${slug} was re-prepared for a different identity while the current scope was active`,
+          );
+        }
+        return preparedEntry.db;
+      }
       if (this.dedicatedSlugs.has(slug)) {
         throw new SpaceRoutingError(
           'space_routing.prepared_revoked',

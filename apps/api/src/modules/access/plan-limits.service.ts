@@ -31,7 +31,7 @@ export class PlanLimitsService {
     // (cờ `platform: true` giữ nguyên).
     this.core = new PlanLimitsCore(spaceDb.routedKysely, (fn) => {
       const spaceSlug = tenantAls.getStore()?.spaceSlug;
-      return tenantAls.run({ platform: true, ...(spaceSlug ? { spaceSlug } : {}) }, fn);
+      return tenantAls.run({ platform: true, ...(spaceSlug ? { spaceSlug, spaceId: tenantAls.getStore()?.spaceId, spaceHandle: tenantAls.getStore()?.spaceHandle } : {}) }, fn);
     });
   }
 

@@ -1,4 +1,6 @@
+/** Kho học liệu trung tâm: CRUD riêng dưới tenant/RLS, duyệt nội bộ và dùng trong khoá. */
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { tenantAls } from '../tenants/tenant-als';
 import { ContextsService } from '../access/contexts.service';
 import { CONTEXT_LEVELS } from '../access/domain/capabilities';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
@@ -84,7 +86,7 @@ export class ContentBankService {
 
   async get(id: string): Promise<ContentRow> {
     const row = await this.repo.get(id);
-    if (!row) throw new NotFoundException({ message: `Content ${id} not found`, code: 'contentbank.not_found' });
+    if (!row || row.tenantId !== tenantAls.getStore()?.tenantId) throw new NotFoundException({ message: `Content ${id} not found`, code: 'contentbank.not_found' });
     return row;
   }
 
@@ -156,6 +158,10 @@ export class ContentBankService {
    *   nền cũ — public + viewcontent tại context neo thì xem được.
    */
   async canView(userId: string, row: ContentRow): Promise<boolean> {
+    /** Kiểm tenant trước mọi lối tắt tác giả/quản trị, kể cả khi pool test có quyền superuser. */
+    if (row.tenantId !== tenantAls.getStore()?.tenantId) return false;
+    const tenantContext = await this.contexts.getTenantContext(row.tenantId);
+    if (tenantContext && await this.evaluator.hasCapability(userId, 'tenant:manage', tenantContext.id)) return true;
     if (row.creatorId === userId) return true;
     if (row.scope === 'org' || row.scope === 'school') {
       // Kho chia sẻ KHÔNG dùng lối tắt editcontent tại context neo (neo ở
@@ -274,6 +280,8 @@ export class ContentBankService {
   }
 
   async create(actorId: string, input: LibraryItemInput): Promise<ContentRow> {
+    const tenantId = tenantAls.getStore()?.tenantId;
+    if (!tenantId) throw new ForbiddenException({ message: 'Centre context required', code: 'system_bank.centre_context_required' });
     const scope = input.scope ?? 'personal';
     if (!SCOPES.includes(scope as never)) throw new BadRequestException({ message: `Unknown scope ${scope}`, code: 'contentbank.bad_scope' });
     if (input.resourceType && !RESOURCE_TYPES.includes(input.resourceType as never)) {
@@ -293,7 +301,7 @@ export class ContentBankService {
       await this.evaluator.requireCapability(actorId, 'contentbank:upload', contextId);
     }
     const row = await this.repo.insert({
-      name: input.name, contextId, creatorId: actorId,
+      name: input.name, tenantId, contextId, creatorId: actorId,
       contentType: input.contentType ?? 'file-based',
       // Học liệu chia sẻ luôn bắt đầu ở draft (chỉ public sau khi duyệt).
       visibility: scope === 'personal' ? (input.visibility ?? 'draft') : 'draft',
@@ -397,9 +405,14 @@ export class ContentBankService {
     return updated;
   }
 
+  /** Xoá học liệu và các tệp riêng do nó sở hữu; byte công bố có khoá riêng nên không bị cleanup nguồn chạm tới. */
   async remove(actorId: string, id: string): Promise<void> {
     const row = await this.get(id);
     await this.assertCanEdit(actorId, row);
+    /** Dọn trước khi xoá cha để cổng tenant của FilesService còn xác minh được chủ sở hữu. */
+    for (const file of await this.files.listByContext(row.contextId)) {
+      if (file.component === 'core_contentbank' && file.itemId === row.id) await this.files.deleteFile(file.id, { id: actorId });
+    }
     await this.repo.remove(id);
     await this.search.removeDoc('contentbank', id);
   }

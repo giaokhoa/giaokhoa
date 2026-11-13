@@ -111,6 +111,7 @@ describe('Worker — job phân phối realtime lỗi bền không chết theo at
         type: 'message_sent',
         payload: { conversationId: 'conv-retry', messageId: 'msg-retry' },
         spaceSlug: null,
+        spaceId: null, // nguồn job đã xác nhận đây là kho chung
         tenantId: 'tenant-retry',
         occurredAt: '2026-10-29T00:00:00.000Z',
       };
@@ -240,6 +241,7 @@ describe('Worker — job phân phối realtime khi đọc dấu lỗi bền vẫ
         type: 'message_sent',
         payload: { conversationId: 'conv-exists-retry', messageId: 'msg-exists-retry' },
         spaceSlug: null,
+        spaceId: null, // nguồn job đã xác nhận đây là kho chung
         tenantId: 'tenant-exists-retry',
         occurredAt: '2026-10-29T00:00:00.000Z',
       };

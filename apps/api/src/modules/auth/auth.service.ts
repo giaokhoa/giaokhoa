@@ -537,7 +537,7 @@ export class AuthService {
       // claim, rồi token đó bị từ chối ở chính địa chỉ của trung tâm.
       const spaceSlug = tenantAls.getStore()?.spaceSlug;
       const tenant = await tenantAls.run(
-        { platform: true, ...(spaceSlug ? { spaceSlug } : {}) },
+        { platform: true, ...(spaceSlug ? { spaceSlug, spaceId: tenantAls.getStore()?.spaceId, spaceHandle: tenantAls.getStore()?.spaceHandle } : {}) },
         () => this.tenants.getTenant(tenantId),
       );
       const target = await this.spaceDb.resolveTarget(tenant.slug);
@@ -821,9 +821,11 @@ export class AuthService {
    * User của session hiện tại; null nếu session không hợp lệ.
    *
    * Gắn không gian (issue #584): phiên đã ghi slug kho riêng thì
-   * request phải đang ở đúng địa chỉ của kho đó — phiên của trung
-   * tâm A bị mang sang địa chỉ trung tâm B hoặc sang địa chỉ gốc
-   * thì bị huỷ ngay và trả 401 `auth.session_space_mismatch`.
+   * request phải đang ở đúng địa chỉ của kho đó. Redis phiên được
+   * cách ly theo spaceId: cookie của A tại B/site chính không thấy
+   * phiên A và trả 401 `auth.session_expired`, không huỷ phiên A.
+   * Với phiên đọc được nhưng metadata slug không khớp, huỷ phiên
+   * trong phạm vi hiện tại và trả `auth.session_space_mismatch`.
    * Phiên cũ không ghi slug (đăng nhập ở địa chỉ gốc, trước issue
    * này) giữ hành vi cũ: tra tài khoản trong kho của địa chỉ hiện
    * tại, vắng mặt thì chết ở bước tra tài khoản như trước.

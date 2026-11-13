@@ -21,8 +21,8 @@ export interface PlayerView {
     | { type: 'page'; page: { id: string; name: string; content: string } }
     | {
         type: 'resource';
-        resource: { id: string; name: string; kind: string; url: string | null; transcript: string | null };
-        file: { id: string; fileName: string; mimeType: string | null; fileSize: number; signedUrl: string } | null;
+        resource: { id: string; name: string; kind: string; url: string | null; transcript: string | null; publication?: import('@giaokhoa/contracts').SystemMaterialVersion };
+        file: { id: string; fileName: string; mimeType: string | null; fileSize: number; signedUrl: string; contentUrl?: string } | null;
         embedUrl: string | null;
       }
     | { type: 'other'; component: string };

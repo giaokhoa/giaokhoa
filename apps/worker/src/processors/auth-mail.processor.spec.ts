@@ -179,6 +179,7 @@ function makeJob(
       payload,
       tenantId: null,
       spaceSlug: null,
+      spaceId: null,
       occurredAt: '2026-10-29T00:00:00.000Z',
     },
   } as Job<OutboxEventJobData>;

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { INestApplicationContext } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
-import { OutboxRelayScheduler } from '../../../src/outbox-relay.scheduler';
+import { OutboxRelayScheduler, outboxRelayJobId } from '../../../src/outbox-relay.scheduler';
 import { GuardianDigestEventsProcessor } from '../../../src/processors/guardian-digest-events.processor';
 import type { OutboxEventJobData } from '../../../src/outbox-event-routes';
 import { sql, type RawBuilder } from '@giaokhoa/db';
@@ -183,7 +183,7 @@ describe('Worker guardian digest delivery (PH-2, issue #159; chuyển worker ở
   async function waitEventJobCompleted(outboxId: string, timeoutMs = 90000) {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
-      const job = await eventsQueue.getJob(outboxId);
+      const job = await eventsQueue.getJob(outboxRelayJobId(null, outboxId));
       if (job && (await job.getState()) === 'completed') return;
       if (Date.now() > deadline) throw new Error(`job sự kiện ${outboxId} chưa completed sau ${timeoutMs}ms`);
       await new Promise((r) => setTimeout(r, 400));
@@ -406,7 +406,7 @@ describe('Worker guardian digest delivery (PH-2, issue #159; chuyển worker ở
     const digestId = row.id;
     const jobData: OutboxEventJobData = {
       outboxId: '01900000-0000-7000-8000-0000000000d1', seq: 0, aggregate: 'guardian',
-      type: 'guardian_digest_due', tenantId: fixtureTenantId, spaceSlug: null, occurredAt: new Date().toISOString(),
+      type: 'guardian_digest_due', tenantId: fixtureTenantId, spaceSlug: null, spaceId: null, occurredAt: new Date().toISOString(),
       payload: {
         guardianUserId: guardian, studentUserId: student, digestId, tenantId: fixtureTenantId,
         kind: 'weekly', windowStart: windowStart.toISOString(), windowEnd: windowEnd.toISOString(),

@@ -8,6 +8,7 @@ import { tenantAls } from './db/tenant-als';
 import { NOTIFICATION_EVENT_TYPES } from './notification-events-handler.service';
 import type { OutboxEventJobData } from './outbox-event-routes';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
+import { outboxRelayJobId } from './outbox-relay.scheduler';
 
 /**
  * Tiền tố khoá watermark của consumer polling thông báo phía API trước đây: khoá đầy đủ là `${LEGACY_WATERMARK_KEY_PREFIX}<tên database>:seq`, giá trị là `seq` của dòng outbox cuối cùng consumer cũ đã xử lý xong. Tên khoá và ngữ nghĩa giá trị lấy đúng từ consumer cũ — cơ chế phát bù đọc lại chính khoá đó, không dựng khoá song song.
@@ -285,15 +286,8 @@ export class NotificationEventsCatchupService implements OnModuleInit, OnModuleD
           .limit(DRAIN_BATCH_SIZE)
           .execute();
         if (rows.length === 0) break;
-        const tenantIds = [...new Set(rows.map((row) => row.tenantId).filter((id) => id !== null))];
-        const slugRows = tenantIds.length
-          ? await this.spaceDb.routedKysely
-              .selectFrom('tenants')
-              .select(['id', 'slug'])
-              .where('id', 'in', tenantIds)
-              .execute()
-          : [];
-        const spaceSlugs = new Map(slugRows.map((row) => [row.id, row.slug] as const));
+        // Consumer polling cũ chỉ đọc kho chung; dữ liệu phát bù được xác nhận từ chính kho đó.
+        // Không suy một slug dedicated từ tên tenant của dòng đã được lưu trong kho shared.
         for (const row of rows) {
           cursor = Number(row.seq);
           const data: OutboxEventJobData = {
@@ -303,14 +297,11 @@ export class NotificationEventsCatchupService implements OnModuleInit, OnModuleD
             type: row.type,
             payload: row.payload as unknown as Record<string, unknown> | null,
             tenantId: row.tenantId,
-            // Định danh trung tâm suy từ tenant của dòng trong
-            // chính kho đang xả (một truy vấn theo lô, cùng cách
-            // của relay): consumer mở đúng kho của trung tâm khi
-            // xử lý job được xả bù này.
-            spaceSlug: row.tenantId ? (spaceSlugs.get(row.tenantId) ?? null) : null,
+            spaceSlug: null,
+            spaceId: null,
             occurredAt: row.occurredAt.toISOString(),
           };
-          await this.queue.add(row.type, data, { jobId: row.id });
+          await this.queue.add(row.type, data, { jobId: outboxRelayJobId(null, row.id) });
           enqueued += 1;
           onProgress(enqueued);
         }

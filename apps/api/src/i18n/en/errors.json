@@ -297,5 +297,10 @@
     "invalid_value": "Invalid value for this setting",
     "override_not_found": "This setting has no stored override",
     "unknown_setting": "This setting key is not registered"
+  },
+  "system_material": {
+    "invalid_package": "Material requires author, source, license and a valid owned file or external link.",
+    "not_found": "Published material or version not found.",
+    "reference_immutable": "This material references an immutable version; choose another version to add."
   }
 }
