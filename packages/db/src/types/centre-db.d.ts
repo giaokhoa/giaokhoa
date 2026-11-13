@@ -3,7 +3,7 @@
  * Please do not edit it manually.
  */
 
-import type { ExamVariant, LearningOutcomeDoc } from "../jsonb-types";
+import type { ExamQuestionSnapshot, ExamVariant, LearningOutcomeDoc } from "../jsonb-types";
 import type { PaperQuality, PaperReading, PaperRosterEntry, PaperSlotLayout } from "@giaokhoa/contracts";
 import type { ColumnType } from "kysely";
 
@@ -1208,7 +1208,12 @@ export interface ExamPins {
   monitor_events: Generated<boolean>;
   name: string | null;
   password_hash: string | null;
+  pending_snapshot_id: string | null;
+  preparation_state: Generated<string>;
   preset: string | null;
+  question_snapshots: ExamQuestionSnapshot[] | null;
+  request_id: string | null;
+  requested_section_id: string | null;
   results_published_at: Timestamp | null;
   review_attempt: Generated<number>;
   review_correctness: Generated<number>;
@@ -1251,6 +1256,8 @@ export interface Exams {
   kind: Generated<string>;
   latest_version: Generated<number>;
   original_author_id: string | null;
+  pin_request_course_id: string | null;
+  pin_request_id: string | null;
   status: Generated<string>;
   tenant_id: string | null;
   updated_at: Generated<Timestamp>;
@@ -1285,6 +1292,7 @@ export interface ExamSlots {
   created_at: Generated<Timestamp>;
   exam_version_id: string;
   id: Generated<string>;
+  local_question_id: Generated<string | null>;
   matrix_cell_id: string | null;
   max_mark: Generated<number>;
   pinned_version_id: string | null;
@@ -1292,6 +1300,8 @@ export interface ExamSlots {
   position: number;
   question_id: string;
   section: Generated<string>;
+  source_domain: Generated<string>;
+  source_snapshot: ExamQuestionSnapshot | null;
 }
 
 export interface ExamVersions {
@@ -2064,10 +2074,13 @@ export interface QuestionAnswers {
 
 export interface QuestionAttempts {
   behaviour: Generated<string>;
+  content_snapshot: ExamQuestionSnapshot | null;
   created_at: Generated<Timestamp>;
   flagged: Generated<boolean>;
   fraction: number | null;
   id: Generated<string>;
+  local_question_id: Generated<string | null>;
+  local_question_version_id: Generated<string | null>;
   max_fraction: Generated<number>;
   max_mark: Generated<number>;
   min_fraction: Generated<number>;

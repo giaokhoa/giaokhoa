@@ -493,6 +493,51 @@ export class QuestionBanksService {
   }
 
   /**
+   * Cổng dùng câu local khi soạn đề: với category thuộc bank thật,
+   * đồng bộ tư cách thành viên rồi đòi `question:useall` và quyền sở
+   * hữu bank personal (site admin là ngoại lệ). Không rò nội dung hay
+   * sự tồn tại của câu không được phép: trả cùng `question.not_found`
+   * như REST đọc câu. Category legacy không gắn bank vẫn phải có
+   * `question:useall` ngay tại context của câu (như GET /questions/:id);
+   * nếu suy được bank trường/khoá thì kiểm thêm quyền sử dụng bank đó.
+   *
+   * @param actorId Người dùng soạn đề.
+   * @param questionId Câu local cần thêm vào slot hoặc snapshot.
+   * @throws NotFoundException `question.not_found` nếu câu/category vắng
+   * hoặc nguồn thuộc bank mà người dùng không có quyền sử dụng.
+   */
+  async assertCanUseQuestionInExam(actorId: string, questionId: string): Promise<void> {
+    const notFound = () => new NotFoundException({ message: `Question ${questionId} not found`, code: 'question.not_found' });
+    const question = await this.questionsRepo.getQuestion(questionId);
+    const category = question ? await this.questionsRepo.getCategory(question.category) : undefined;
+    if (!category) throw notFound();
+
+    // Category bank_id=NULL có thể thuộc bank theo context trực tiếp
+    // hoặc suy theo course/school; không coi bank vắng là quyền đọc.
+    const bank = category.bankId
+      ? await this.repo.getBank(category.bankId)
+      : (await this.questionsRepo.getBankByContextId(category.contextId))
+        ?? await this.findBankForCategory(category);
+    if (category.bankId && !bank) throw notFound(); // Neo nguồn hỏng: fail-closed.
+
+    if (bank) {
+      try {
+        await this.assertCanUseBank(actorId, bank);
+      } catch (error) {
+        // Không tiết lộ bank personal của đồng nghiệp hoặc khả năng
+        // thiếu quyền bank qua các mã lỗi khác nhau (issue #123).
+        if (error instanceof NotFoundException || error instanceof ForbiddenException) throw notFound();
+        throw error;
+      }
+    }
+    // Với category legacy, đây là cổng bắt buộc ngay cả khi không suy
+    // ra bank: parity với GET /questions/:id, không lộ đáp án qua exam.
+    if (!(await this.evaluator.hasCapability(actorId, 'question:useall', category.contextId).catch(() => false))) {
+      throw notFound();
+    }
+  }
+
+  /**
    * Cổng "vào được bank" THEO LOẠI MÓN (MB-1): bank ma trận gác bằng
    * quyền bank-local (vai chuyên dụng tại context bank — xem
    * bankLocalMatrixCaps) thay cho question:useall — quyền của mỗi loại

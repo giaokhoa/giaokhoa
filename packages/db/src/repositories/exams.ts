@@ -18,6 +18,7 @@
  *   ứng dụng, không tự mở pool, không đọc biến môi trường: handle do tầng ứng dụng dựng bằng factory của package rồi truyền vào.
  */
 import { sql, type Insertable, type InsertObject, type RawBuilder, type Updateable, type UpdateObject } from 'kysely';
+import type { ExamQuestionSnapshot } from '../jsonb-types';
 import { extractRichTextPlainText, type RichTextDocument } from '@giaokhoa/contracts';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
 
@@ -42,6 +43,8 @@ function jsonbValue<T>(value: T): RawBuilder<T> {
 
 /** Một dòng của bảng `exams` (hình dạng camelCase phía tiêu thụ dùng). */
 export interface ExamRow {
+  pinRequestId: string | null;
+  pinRequestCourseId: string | null;
   bankId: string;
   copyCount: number;
   createdAt: Date;
@@ -64,6 +67,8 @@ export interface ExamRow {
 
 /** Dữ kiện ghi một dòng `exams` mới (trường có mặc định ở DB hoặc nullable thì tùy chọn). */
 export interface NewExam {
+  pinRequestId?: string | null;
+  pinRequestCourseId?: string | null;
   bankId: string;
   copyCount?: number;
   createdAt?: Date;
@@ -86,6 +91,8 @@ export interface NewExam {
 
 /** Danh sách cột tường minh có bí danh camelCase cho bảng `exams` (dùng cho cả select lẫn returning). */
 export const EXAM_COLUMNS = [
+  'pin_request_id as pinRequestId',
+  'pin_request_course_id as pinRequestCourseId',
   'bank_id as bankId',
   'copy_count as copyCount',
   'created_at as createdAt',
@@ -117,6 +124,8 @@ function examInsertValues(values: NewExam): Insertable<CentreDB['exams']> {
     bank_id: values.bankId,
     created_by: values.createdBy,
   };
+  if (values.pinRequestId !== undefined) row.pin_request_id = values.pinRequestId;
+  if (values.pinRequestCourseId !== undefined) row.pin_request_course_id = values.pinRequestCourseId;
   if (values.copyCount !== undefined) row.copy_count = values.copyCount;
   if (values.createdAt !== undefined) row.created_at = values.createdAt;
   if (values.derivedFromBankId !== undefined) row.derived_from_bank_id = values.derivedFromBankId;
@@ -145,6 +154,8 @@ function examInsertValues(values: NewExam): Insertable<CentreDB['exams']> {
  */
 function examUpdateSet(patch: Partial<ExamRow>): Updateable<CentreDB['exams']> {
   const set: Updateable<CentreDB['exams']> = {};
+  if (patch.pinRequestId !== undefined) set.pin_request_id = patch.pinRequestId;
+  if (patch.pinRequestCourseId !== undefined) set.pin_request_course_id = patch.pinRequestCourseId;
   if (patch.bankId !== undefined) set.bank_id = patch.bankId;
   if (patch.copyCount !== undefined) set.copy_count = patch.copyCount;
   if (patch.createdAt !== undefined) set.created_at = patch.createdAt;
@@ -252,6 +263,8 @@ function examVersionInsertValues(values: NewExamVersion): InsertObject<CentreDB,
 
 /** Một dòng của bảng `exam_slots` (hình dạng camelCase phía tiêu thụ dùng). */
 export interface ExamSlotRow {
+  sourceDomain: string;
+  sourceSnapshot: ExamQuestionSnapshot | null;
   clusterId: string | null;
   createdAt: Date;
   examVersionId: string;
@@ -267,6 +280,8 @@ export interface ExamSlotRow {
 
 /** Dữ kiện ghi một dòng `exam_slots` mới (trường có mặc định ở DB hoặc nullable thì tùy chọn). */
 export interface NewExamSlot {
+  sourceDomain?: string;
+  sourceSnapshot?: ExamQuestionSnapshot | null;
   clusterId?: string | null;
   createdAt?: Date;
   examVersionId: string;
@@ -282,6 +297,8 @@ export interface NewExamSlot {
 
 /** Danh sách cột tường minh có bí danh camelCase cho bảng `exam_slots` (dùng cho cả select lẫn returning). */
 export const EXAM_SLOT_COLUMNS = [
+  'source_domain as sourceDomain',
+  'source_snapshot as sourceSnapshot',
   'cluster_id as clusterId',
   'created_at as createdAt',
   'exam_version_id as examVersionId',
@@ -301,12 +318,14 @@ export const EXAM_SLOT_COLUMNS = [
  * phải để default của database quyết định (quy tắc T-4). Giá trị
  * jsonb đi qua `jsonbValue` (serialize + `::jsonb`).
  */
-function examSlotInsertValues(values: NewExamSlot): Insertable<CentreDB['exam_slots']> {
-  const row: Insertable<CentreDB['exam_slots']> = {
+function examSlotInsertValues(values: NewExamSlot): InsertObject<CentreDB, 'exam_slots'> {
+  const row: InsertObject<CentreDB, 'exam_slots'> = {
     exam_version_id: values.examVersionId,
     position: values.position,
     question_id: values.questionId,
   };
+  if (values.sourceDomain !== undefined) row.source_domain = values.sourceDomain;
+  if (values.sourceSnapshot !== undefined) row.source_snapshot = values.sourceSnapshot === null ? null : jsonbValue(values.sourceSnapshot);
   if (values.clusterId !== undefined) row.cluster_id = values.clusterId;
   if (values.createdAt !== undefined) row.created_at = values.createdAt;
   if (values.id !== undefined) row.id = values.id;
@@ -701,6 +720,13 @@ export class ExamsRepository {
   async insertPaper(v: NewExam, db: ExamsDb = this.db()): Promise<ExamRow> {
     const rows = await db.insertInto('exams').values(examInsertValues(v)).returning(EXAM_COLUMNS).execute();
     return rows[0]!;
+  }
+
+  /** Tra đề đã tạo từ course builder bằng khoá retry, tránh tạo thêm version sau lỗi giao. */
+  async findPaperByPinRequest(actorId: string, courseId: string, requestId: string): Promise<ExamRow | undefined> {
+    return this.db().selectFrom('exams').select(EXAM_COLUMNS)
+      .where('created_by', '=', actorId).where('pin_request_course_id', '=', courseId)
+      .where('pin_request_id', '=', requestId).executeTakeFirst();
   }
 
   /** Các lần ghim của một đề (kèm tên khoá + số version đã ghim) — bề mặt thay cho danh sách deployments cũ. */

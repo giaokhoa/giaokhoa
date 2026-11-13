@@ -78,7 +78,7 @@ export class QuizSharedService {
    */
   async getPin(id: string): Promise<PinRow> {
     const row = await this.repo.getPin(id);
-    if (!row) throw new NotFoundException({ message: `Exam pin ${id} not found`, code: 'exam.pin_not_found' });
+    if (!row || row.preparationState !== 'ready') throw new NotFoundException({ message: `Exam pin ${id} not found`, code: 'exam.pin_not_found' });
     return this.enrichPin(row);
   }
 
@@ -117,6 +117,7 @@ export class QuizSharedService {
       if (!pageBySection.has(sl.section)) pageBySection.set(sl.section, pageBySection.size + 1);
       return {
         id: sl.id, pinId: pin.id, slot: sl.position, page: pageBySection.get(sl.section)!,
+        sourceDomain: sl.sourceDomain,
         questionId: sl.questionId, categoryId: null, maxMark: sl.maxMark,
         matrixCellId: sl.matrixCellId,
         versionMode: 'pinned' as const,
@@ -173,7 +174,12 @@ export class QuizSharedService {
         bankScope: null as string | null,
         questionStatus: null as string | null,
       };
-      if (s.questionId) {
+      if (s.sourceDomain === 'bank-system') {
+        base.versionMode = 'pinned';
+        base.pinnedVersion = s.pinnedVersionNumber;
+        base.bankScope = 'system';
+        base.questionStatus = 'published';
+      } else if (s.questionId) {
         const info = await this.banks.getQuestionBankInfo(s.questionId);
         base.versionMode = s.versionMode === 'pinned' ? 'pinned' : 'follow_latest';
         base.pinnedVersion = s.versionMode === 'pinned' ? s.pinnedVersionNumber : null;

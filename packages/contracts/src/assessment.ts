@@ -1738,9 +1738,13 @@ export const EXAM_PAPER_STATUSES = ['draft', 'ready', 'hidden'] as const;
  */
 export const examSlotInputSchema = z.strictObject({
   questionId: uuidIdSchema,
+  /** Kho nguồn; câu local giữ mặc định để tương thích các bên gọi hiện hành. */
+  sourceDomain: z.enum(['centre', 'bank-system']).optional(),
+  /** Câu hệ thống bắt buộc chọn số phiên bản bất biến, server kiểm tra trước khi ghi. */
+  sourceVersionNumber: z.number().int().positive().optional(),
   maxMark: z.number().positive().optional(),
   section: z.string().max(200).optional(),
-});
+}).refine((slot) => slot.sourceDomain !== 'bank-system' || slot.sourceVersionNumber !== undefined, { path: ['sourceVersionNumber'], message: 'System question version is required' });
 export type ExamSlotInput = z.infer<typeof examSlotInputSchema>;
 
 /** Payload tạo đề snapshot trong một bank đề (bankKind='exam'): metadata + danh sách slot tuỳ chọn (rỗng = đề trắng). */
@@ -1849,6 +1853,8 @@ export type RejectExamContribution = z.infer<typeof rejectExamContributionSchema
  * thuộc về PIN — không thuộc đề.
  */
 export const createExamPinSchema = z.strictObject({
+  /** Khoá retry của một thao tác giao; dùng lại khoá khi gửi lại cùng yêu cầu. */
+  requestId: uuidIdSchema.optional(),
   sectionId: uuidIdSchema,
   examId: uuidIdSchema.optional(),
   examVersionId: uuidIdSchema.optional(),

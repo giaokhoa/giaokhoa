@@ -108,11 +108,34 @@ export class SystemBankMediaService {
    * tạo file logic ở kho đích trước khi giao nội dung cho QuestionsService.
    * Gói nguồn không bị sửa; mọi lần nhập có bản sao file độc lập.
    */
-  async materialize(pkg: SystemBankPackage, targetContextId: string, actorId: string): Promise<SystemBankPackage> {
+  async materialize(pkg: SystemBankPackage, targetContextId: string, actorId: string, localSource = false, immutable = false, preparationId?: string): Promise<SystemBankPackage> {
     const result = structuredClone(pkg);
     const manifest = new Map((result.media ?? []).map((file) => [file.contentHash, file]));
     const copied = new Map<string, string>();
+    const verified = new Map<string, Buffer>();
+    for (const item of manifest.values()) {
+      const bytes = await this.storage.get(SYSTEM_FILE_DOMAIN, publicationMediaStorageKey(item.contentHash))
+        .catch(() => { throw new BadRequestException({ code: 'system_bank.invalid_media' }); });
+      if (sha256Hex(bytes) !== item.contentHash || bytes.length > QUESTION_IMAGE_MAX_BYTES || sniffImageMimeType(bytes) !== item.mimeType) {
+        throw new BadRequestException({ code: 'system_bank.invalid_media' });
+      }
+      verified.set(item.contentHash, bytes);
+    }
     for (const attrs of imageAttrs(result)) {
+      if (localSource) {
+        const match = QUESTION_FILE_CONTENT_SRC_PATTERN.exec(attrs.src);
+        if (!match) throw new BadRequestException({ code: 'system_bank.invalid_media' });
+        const file = await this.files.getFile(match[1]!);
+        const bytes = await this.storage.get(file.storageDomain, file.contentHash);
+        if (file.component !== 'question' || sha256Hex(bytes) !== file.contentHash ||
+          bytes.length > QUESTION_IMAGE_MAX_BYTES || sniffImageMimeType(bytes) !== file.mimeType) {
+          throw new BadRequestException({ code: 'system_bank.invalid_media' });
+        }
+        const copy = await this.files.upload({ contextId: targetContextId, component: 'question',
+          fileArea: immutable ? 'exam_snapshot' : 'question', itemId: preparationId, fileName: file.fileName, mimeType: file.mimeType!, data: bytes, userId: actorId });
+        attrs.src = questionFileContentSrc(copy.id);
+        continue;
+      }
       if (!attrs.src.startsWith(BANK_IMAGE_PREFIX)) {
         throw new BadRequestException({ message: 'Published image has unsafe source', code: 'system_bank.invalid_media' });
       }
@@ -123,13 +146,13 @@ export class SystemBankMediaService {
       }
       let fileId = copied.get(hash);
       if (!fileId) {
-        const bytes = await this.storage.get(SYSTEM_FILE_DOMAIN, publicationMediaStorageKey(hash));
+        const bytes = verified.get(hash)!;
         if (sha256Hex(bytes) !== hash || bytes.length > QUESTION_IMAGE_MAX_BYTES ||
           sniffImageMimeType(bytes) !== item.mimeType) {
           throw new BadRequestException({ message: 'Published image checksum or format mismatch', code: 'system_bank.invalid_media' });
         }
         const file = await this.files.upload({
-          contextId: targetContextId, component: 'question', fileArea: 'question',
+          contextId: targetContextId, component: 'question', fileArea: immutable ? 'exam_snapshot' : 'question', itemId: preparationId,
           fileName: item.fileName, mimeType: item.mimeType, data: bytes, userId: actorId,
         });
         fileId = file.id;

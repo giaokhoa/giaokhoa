@@ -424,6 +424,7 @@ export class QuizAttemptsService {
       component: QUIZ_COMPONENT, instanceId: quiz.id, contextId: await this.shared.cmContextId(quiz),
       slots: resolvedSlots.map((e) => ({
         questionId: e.questionId, maxMark: e.quizSlot.maxMark,
+        snapshot: quiz.versionMode === 'float_latest_ready' ? undefined : quiz.questionSnapshots?.[e.quizSlot.slot - 1],
         // Chế độ tham chiếu version của pin (issue #254): pin `pinned`
         // truyền version đã ghim trong exam version xuống engine (mọi
         // lượt cùng một version); pin `float_latest_ready` KHÔNG truyền
@@ -567,39 +568,22 @@ export class QuizAttemptsService {
       windowBit = await this.reviewWindowBit(quiz, row, new Date());
       hideContent = (quiz.reviewAttempt & windowBit) === 0;
     }
+    /** Snapshot thi không được lộ điểm từng câu/fraction trước cổng công bố chung. */
+    const marksPublished = privileged || !quiz.questionSnapshots || await this.gradeTotalsPublished(quiz);
     const showAspects = submitted && (privileged || !hideContent);
     const aspectOn = (mask: number): boolean => privileged ? submitted : (showAspects && (mask & windowBit) !== 0);
     const questions: QuizAttemptQuestionView[] = [];
     for (const a of usage.attempts) {
       if (hideContent && !privileged) break;
-      const qv = await this.questions.getQuestion(a.questionId);
-      let questionText = qv.latestVersion.questionText as RichTextDocument;
-      let answers: { id: string; text: RichTextDocument }[] = qv.answers.map((x) => ({ id: x.id, text: x.answer as RichTextDocument }));
-      let options = qv.options;
-      let stimulus: QuizAttemptQuestionView['stimulus'] = qv.stimulus ? { id: qv.stimulus.id, content: qv.stimulus.content as RichTextDocument } : null;
-      let feedbackByAnswerId = new Map(qv.answers.map((x) => [x.id, (x.feedback ?? null) as RichTextDocument | null]));
-      let generalFeedback = (qv.latestVersion.generalFeedback ?? null) as RichTextDocument | null;
-      // Phía đáp án của version đang dùng cho câu này (guidance +
-      // solution lưu trữ): mặc định lấy của version mới nhất, có
-      // version đã pin thì lấy đúng của version đã pin.
-      let pinnedAnswers = qv.answers;
-      let answerKey = qv.answerKey;
-      if (a.questionVersionId) {
-        const pinned = await this.questions.getVersionContent(a.questionId, a.questionVersionId);
-        questionText = pinned.version.questionText as RichTextDocument;
-        answers = pinned.answers.map((x) => ({ id: x.id, text: x.answer as RichTextDocument }));
-        pinnedAnswers = pinned.answers;
-        answerKey = pinned.answerKey;
-        options = pinned.options;
-        feedbackByAnswerId = new Map(pinned.answers.map((x) => [x.id, (x.feedback ?? null) as RichTextDocument | null]));
-        generalFeedback = (pinned.version.generalFeedback ?? null) as RichTextDocument | null;
-        if (pinned.version.stimulusId) {
-          const st = await this.questions.getStimulus(pinned.version.stimulusId).catch(() => undefined);
-          stimulus = st ? { id: st.id, content: st.content as RichTextDocument } : null;
-        } else {
-          stimulus = null;
-        }
-      }
+      const content = await this.questions.getAttemptContent(a);
+      const questionText = content.questionText as RichTextDocument;
+      let answers = content.answers.map((x) => ({ id: x.id, text: x.answer as RichTextDocument }));
+      const options = content.options;
+      const stimulus = content.stimulus ? { id: content.stimulus.id, content: content.stimulus.content as RichTextDocument } : null;
+      const feedbackByAnswerId = new Map(content.answers.map((x) => [x.id, (x.feedback ?? null) as RichTextDocument | null]));
+      const generalFeedback = (content.generalFeedback ?? null) as RichTextDocument | null;
+      const pinnedAnswers = content.answers;
+      const answerKey = content.answerKey;
       // Chốt bảo mật cho câu shortanswer: các dòng đáp án của dạng câu
       // này CHÍNH LÀ tập đáp án được chấp nhận (chấm khớp chính xác
       // theo cờ đúng), nên trường `answers` — vốn dựng vô điều kiện ở
@@ -616,7 +600,7 @@ export class QuizAttemptsService {
       // multichoice là lựa chọn phải hiển thị, truefalse/essay không
       // mang đáp án trong trường này. Người có đặc quyền không qua
       // chốt này — vẫn thấy đủ như trước.
-      if (!privileged && qv.question.qtype === 'shortanswer' && !aspectOn(quiz.reviewRightAnswer)) {
+      if (!privileged && content.qtype === 'shortanswer' && !aspectOn(quiz.reviewRightAnswer)) {
         answers = [];
       }
       const lastResponse = [...a.steps].reverse().find((s) => s.data.answer !== undefined)?.data.answer ?? null;
@@ -636,14 +620,14 @@ export class QuizAttemptsService {
       // dữ liệu đáp án đúng không rời server.
       let solution: QuestionSolution | null = null;
       if (aspectOn(quiz.reviewRightAnswer)) {
-        if (qv.question.qtype === 'essay') {
+        if (content.qtype === 'essay') {
           solution = (answerKey.solution as QuestionSolution | null) ?? null;
-        } else if (qv.question.qtype === 'truefalse') {
+        } else if (content.qtype === 'truefalse') {
           const stored = answerKey.solution as { answers?: { statementId: string; value: boolean }[] } | null;
           solution = stored?.answers?.length
             ? { statements: stored.answers.map((a) => ({ statementId: a.statementId, value: a.value === true })) }
             : null;
-        } else if (qv.question.qtype === 'shortanswer') {
+        } else if (content.qtype === 'shortanswer') {
           const accepted = pinnedAnswers.filter((x) => x.isCorrect)
             .map((x) => extractRichTextPlainText(x.answer as RichTextDocument).trim())
             .filter((x) => x !== '');
@@ -659,7 +643,7 @@ export class QuizAttemptsService {
         page: pageBySlot.get(a.slot) ?? 1,
         questionAttemptId: a.id,
         questionId: a.questionId,
-        qtype: qv.question.qtype,
+        qtype: content.qtype,
         questionExcerpt: excerptText.length > 120 ? `${excerptText.slice(0, 120)}…` : excerptText,
         questionText,
         guidance: (answerKey.guidance ?? null) as RichTextDocument | null,
@@ -670,10 +654,10 @@ export class QuizAttemptsService {
         maxMark: a.maxMark,
         state: a.state,
         response: lastResponse,
-        fraction: submitted && aspectOn(quiz.reviewCorrectness) ? a.fraction : null,
+        fraction: submitted && marksPublished && aspectOn(quiz.reviewCorrectness) ? a.fraction : null,
         // Điểm của câu luôn là fraction × maxMark của chính câu (câu
         // TF-A đã mang fraction tra thang của lần ghim từ engine).
-        mark: (submitted && aspectOn(quiz.reviewMarks) && a.fraction !== null) ? a.fraction * a.maxMark : null,
+        mark: (submitted && marksPublished && aspectOn(quiz.reviewMarks) && a.fraction !== null) ? a.fraction * a.maxMark : null,
         rightAnswer: aspectOn(quiz.reviewRightAnswer) ? a.rightAnswer : null,
         feedback: aspectOn(quiz.reviewSpecificFeedback) && lastResponse !== null
           ? (feedbackByAnswerId.get(lastResponse) ?? null)
@@ -908,7 +892,7 @@ export class QuizAttemptsService {
         });
       }
     }
-    const questionStats = await this.questionStats(rows);
+    const questionStats = await this.questionStats(quiz, rows);
     return { quiz: await this.shared.pinView(quiz), attempts, gradesByUser, needsGrading, questionStats, summary };
   }
 
@@ -959,7 +943,7 @@ export class QuizAttemptsService {
    * MỌI lượt ở slot dùng cùng một câu (slot cố định). Xếp wrongCount
    * giảm dần để câu sai nhiều nhất lên đầu, hoà thì theo số slot.
    */
-  private async questionStats(rows: ExamAttemptRow[]): Promise<QuizQuestionStat[]> {
+  private async questionStats(quiz: PinRow, rows: ExamAttemptRow[]): Promise<QuizQuestionStat[]> {
     const submitted = rows.filter((r) => r.state === 'finished' || r.state === 'needsgrading');
     interface SlotAcc {
       questionIds: Set<string>;
@@ -1026,7 +1010,9 @@ export class QuizAttemptsService {
           const view = await this.questions.getQuestion(questionId).catch(() => undefined);
           // Câu hỏi không còn trường tên: nhãn của câu trong thống kê
           // là trích đoạn nội dung thân câu của version mới nhất.
-          const text = view ? extractRichTextPlainText(view.latestVersion.questionText as RichTextDocument).trim() : '';
+          const snapshot = quiz.questionSnapshots?.find((q) => q.questionId === questionId);
+          const questionText = snapshot?.package.questionText ?? view?.latestVersion.questionText;
+          const text = questionText ? extractRichTextPlainText(questionText as RichTextDocument).trim() : '';
           questionNameById.set(questionId, text.length > 120 ? `${text.slice(0, 120)}…` : text);
         }
         questionName = questionNameById.get(questionId) || null;

@@ -1,4 +1,5 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import type {
   PinRegradeLogEntry,
   PinRegradeResult,
@@ -12,6 +13,7 @@ import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { CoursesService } from '../courses/courses.service';
 import { GradesService } from '../grades/grades.service';
 import { GroupsService } from '../groups/groups.service';
+import { FilesService } from '../files/files.service';
 import { QuestionsService, type UsageView } from '../questions/questions.service';
 import { PasswordService } from '../users/password.service';
 import { UsersService } from '../users/users.service';
@@ -26,6 +28,7 @@ import {
   type ExamPinOverrideRow,
   type ExamPinRow,
 } from '@giaokhoa/db/repositories/quiz';
+import { ExamQuestionSnapshotsService } from './exam-question-snapshots.service';
 import { QuizSharedService } from './quiz-shared.service';
 import { QuizAttemptsService } from './quiz-attempts.service';
 import { QUIZ_COMPONENT } from './quiz-shared.service';
@@ -40,6 +43,8 @@ import type { PinRow } from './quiz.service';
 
 export class QuizPinsService {
   constructor(
+    private readonly snapshots: ExamQuestionSnapshotsService,
+    private readonly files: FilesService,
     private readonly repo: QuizRepository,
     private readonly courses: CoursesService,
     private readonly evaluator: PermissionEvaluator,
@@ -115,6 +120,7 @@ export class QuizPinsService {
   }
 
   async createPinRecord(actorId: string, courseId: string, input: {
+    requestId?: string;
     sectionId: string; examId: string; examVersionId: string;
     name?: string; intro?: string;
     timeOpen?: string | null; timeClose?: string | null; timeLimitSeconds?: number | null;
@@ -128,6 +134,11 @@ export class QuizPinsService {
     versionMode?: 'pinned' | 'float_latest_ready';
   }): Promise<QuizView> {
     await this.courses.getCourse(courseId);
+    const courseContextId = await this.courses.courseContextId(courseId);
+    await this.evaluator.requireCapability(actorId, 'course:manageactivities', courseContextId);
+    await this.evaluator.requireCapability(actorId, 'grade:manage', courseContextId);
+    const section = await this.courses.getSection(input.sectionId);
+    if (section.course !== courseId) throw new BadRequestException({ code: 'course.section_course_mismatch' });
     await this.assertTargetGroup(courseId, input.targetGroupId);
     const version = await this.repo.getExamVersion(input.examVersionId);
     if (!version || version.examId !== input.examId) {
@@ -143,9 +154,19 @@ export class QuizPinsService {
     // Preset theo hình thức thi: trường gửi kèm THẮNG preset, preset
     // chỉ điền các trường còn trống (bảng preset ở domain/matrix.ts).
     const preset = input.preset ? EXAM_KIND_PRESETS[input.preset] : null;
-    const name = input.name ?? version.name;
     const variantCount = input.variantCount ?? 1;
+    const slots = await this.repo.listExamSlots(version.id);
+    if (slots.some((s) => s.sourceDomain === 'bank-system') && !input.requestId) {
+      throw new BadRequestException({ code: 'exam.pin_request_id_required' });
+    }
+    if (slots.some((s) => s.sourceDomain === 'bank-system') && input.versionMode === 'float_latest_ready') {
+      throw new BadRequestException({ code: 'exam.shared_requires_pinned' });
+    }
+    // Chèn intent trước khi copy media: file staging luôn truy ngược về pin
+    // và có thể được dọn khi lỗi hoặc lần retry tiếp tục sau crash.
     const pin = await this.repo.insertPin({
+      questionSnapshots: null, requestId: input.requestId, requestedSectionId: input.sectionId,
+      preparationState: 'preparing',
       examId: input.examId, examVersionId: input.examVersionId, courseId, cmId: null,
       name: input.name ?? null, intro: input.intro ?? '',
       timeOpen, timeClose, timeLimit: input.timeLimitSeconds ?? null,
@@ -171,23 +192,85 @@ export class QuizPinsService {
       ...(input.reviewRightAnswer !== undefined ? { reviewRightAnswer: input.reviewRightAnswer } : (preset ? { reviewRightAnswer: preset.reviewRightAnswer } : {})),
       ...(input.reviewOverallFeedback !== undefined ? { reviewOverallFeedback: input.reviewOverallFeedback } : (preset ? { reviewOverallFeedback: preset.reviewOverallFeedback } : {})),
     });
+    return this.resumePinRecord(actorId, courseId, pin, input.sectionId, true);
+  }
+
+  /**
+   * Hoàn tất pin đang chuẩn bị. Chạy lại an toàn sau crash ở bất kỳ
+   * ranh giới nào: snapshot đã ghi thì không đọc lại kho nguồn,
+   * cm/grade item đã tạo thì tìm theo instance trước khi thêm mới.
+   * Kiểm tra section của intent và CM cũ TRƯỚC mọi thao tác có thể xóa
+   * dữ liệu: kể cả crash trước CM, retry sai section trả conflict.
+   * Retry chỉ giữ nguyên tài nguyên đã có nếu lỗi, không bù trừ chúng.
+   * Chỉ thao tác vừa tạo intent mới có quyền bù trừ phần tạo dở.
+   *
+   * @param newlyInserted Đúng khi pin mới được chèn trong chính lời gọi.
+   */
+  async resumePinRecord(actorId: string, courseId: string, pin: ExamPinRow, sectionId: string, newlyInserted = false): Promise<QuizView> {
+    await this.evaluator.requireCapability(actorId, 'course:manageactivities', await this.courses.courseContextId(courseId));
+    await this.evaluator.requireCapability(actorId, 'grade:manage', await this.courses.courseContextId(courseId));
+    const section = await this.courses.getSection(sectionId);
+    if (section.course !== courseId || pin.courseId !== courseId || pin.createdBy !== actorId
+      || (pin.requestedSectionId !== null && pin.requestedSectionId !== sectionId)) {
+      throw new ConflictException({ code: 'exam.pin_request_conflict' });
+    }
+    const version = await this.repo.getExamVersion(pin.examVersionId);
+    if (!version) throw new NotFoundException({ code: 'exam.version_not_found' });
+    const name = pin.name ?? version.name;
+    // Intent đã chốt section trước CM; CM còn được đối chiếu để nhận
+    // ra các bản ghi cũ. Mismatch không được dọn snapshot/CM/điểm cũ.
+    let cm = (await this.courses.listCms(courseId))
+      .find((item) => item.component === QUIZ_COMPONENT && item.instanceId === pin.id);
+    if (cm && cm.section !== sectionId) throw new ConflictException({ code: 'exam.pin_request_conflict' });
     try {
-      const cm = await this.courses.createCm(actorId, courseId, {
-        sectionId: input.sectionId, component: QUIZ_COMPONENT, instanceId: pin.id, name,
-        completion: 2, completionUseGrade: true,
-      });
-      await this.repo.updatePin(pin.id, { cmId: cm.id });
-      await this.grades.createItem(actorId, courseId, {
+      const slots = await this.repo.listExamSlots(pin.examVersionId);
+      if (!pin.questionSnapshots && slots.some((slot) => slot.sourceDomain === 'bank-system')) {
+        // Có thể lần trước bị tắt giữa lúc copy media: chỉ xóa file
+        // staging gắn với pin CHƯA ready rồi mới tạo snapshot mới.
+        await this.files.cleanupExamSnapshotFiles(pin.id);
+        const snapshots = await this.snapshots.prepare(actorId, slots,
+          await this.courses.courseContextId(courseId), pin.versionMode, pin.id);
+        if (!snapshots) throw new BadRequestException({ code: 'exam.snapshot_missing' });
+        await this.repo.updatePin(pin.id, { questionSnapshots: snapshots });
+      }
+
+      if (!cm) {
+        cm = await this.courses.createCm(actorId, courseId, {
+          sectionId, component: QUIZ_COMPONENT, instanceId: pin.id, name,
+          completion: 2, completionUseGrade: true,
+        });
+      }
+      if (pin.cmId !== cm.id) await this.repo.updatePin(pin.id, { cmId: cm.id });
+      const grade = await this.grades.getItemForCm(courseId, cm.id);
+      if (!grade) await this.grades.createItem(actorId, courseId, {
         itemName: name, itemType: 'mod', cmId: cm.id, gradeMax: version.totalScore,
       });
-    } catch (err) {
-      // Dọn dẹp best-effort để không để lại pin mồ côi không có cm.
-      await this.repo.deletePin(pin.id).catch(() => undefined);
-      throw err;
+      await this.repo.updatePin(pin.id, { preparationState: 'ready' });
+    } catch (error) {
+      // Chỉ lời gọi mới tạo intent được bù trừ: mọi CM/grade của pin
+      // mới đều do lời gọi đó tạo. Retry pin cũ không xóa bất kỳ tài
+      // nguyên nào nếu lỗi giữa chừng; lần sau tiếp tục cùng requestId.
+      if (newlyInserted) {
+        try {
+          const createdCm = (await this.courses.listCms(courseId))
+            .find((item) => item.component === QUIZ_COMPONENT && item.instanceId === pin.id);
+          if (createdCm) {
+            const createdGrade = await this.grades.getItemForCm(courseId, createdCm.id);
+            if (createdGrade) await this.grades.deleteItem(actorId, createdGrade.id);
+            await this.courses.deleteCm(actorId, createdCm.id);
+          }
+          await this.files.cleanupExamSnapshotFiles(pin.id);
+          await this.repo.deletePin(pin.id);
+        } catch {
+          // Bù trừ thất bại: giữ intent, CM và staging còn lại để
+          // retry tiếp tục bằng đúng requestId thay vì mất dấu vết.
+        }
+      }
+      throw error;
     }
     await this.outbox.enqueueStandalone({
       aggregate: 'exam_pin', type: 'exam_pinned',
-      payload: { examId: input.examId, examVersionId: input.examVersionId, pinId: pin.id, courseId, actorId },
+      payload: { examId: pin.examId, examVersionId: pin.examVersionId, pinId: pin.id, courseId, actorId },
     });
     return this.shared.pinView(await this.shared.getPin(pin.id));
   }
@@ -200,6 +283,48 @@ export class QuizPinsService {
       code: String(i + 1).padStart(3, '0'),
       seed: (h + i * 2654435761) % 2147483647,
     }));
+  }
+
+  /**
+   * Dọn media staging còn treo sau crash cập nhật version; chỉ dọn khi
+   * pin VẪN mang version cũ, vì commit version mới và xóa pending id
+   * luôn nằm trong cùng câu lệnh/transaction.
+   */
+  private async cleanupPendingSnapshot(pin: PinRow): Promise<void> {
+    if (!pin.pendingSnapshotId) return;
+    await this.files.cleanupExamSnapshotFiles(pin.pendingSnapshotId);
+    await this.repo.updatePin(pin.id, { pendingSnapshotId: null });
+  }
+
+  /**
+   * Lưu id staging TRƯỚC khi upload, giúp retry biết file nào chưa
+   * được sử dụng. Bước commit phải ghi cả version/snapshot và xóa id
+   * staging nguyên tử; lỗi có thể dọn file không làm hỏng pin cũ.
+   */
+  private async prepareVersionAndApply(
+    actorId: string, pin: PinRow, versionId: string, mode: string,
+    apply: (snapshots: Awaited<ReturnType<ExamQuestionSnapshotsService['prepare']>>) => Promise<void>,
+  ): Promise<void> {
+    await this.cleanupPendingSnapshot(pin);
+    const slots = await this.repo.listExamSlots(versionId);
+    if (!slots.some((slot) => slot.sourceDomain === 'bank-system')) {
+      await apply(null);
+      return;
+    }
+    const stageId = randomUUID();
+    await this.repo.updatePin(pin.id, { pendingSnapshotId: stageId });
+    try {
+      const snapshots = await this.snapshots.prepare(actorId, slots,
+        await this.courses.courseContextId(pin.course), mode, stageId);
+      await apply(snapshots);
+    } catch (error) {
+      // Nếu cleanup lỗi, giữ pending id bền để lần retry sau còn dọn.
+      try {
+        await this.files.cleanupExamSnapshotFiles(stageId);
+        await this.repo.updatePin(pin.id, { pendingSnapshotId: null });
+      } catch { /* Giữ bản ghi staging để phục hồi sau. */ }
+      throw error;
+    }
   }
 
   /**
@@ -222,8 +347,26 @@ export class QuizPinsService {
     examVersionId?: string; variantCount?: number; targetGroupId?: string | null;
     versionMode?: 'pinned' | 'float_latest_ready';
   }): Promise<QuizView> {
+    return this.repo.withPinRequestLock(pinId, 'version', 'mutation',
+      () => this.updatePinLocked(actorId, pinId, input));
+  }
+
+  /** Đọc pin sau khi có khóa để tránh hai lần thay version cùng lúc. */
+  private async updatePinLocked(actorId: string, pinId: string, input: {
+    name?: string; intro?: string;
+    timeOpen?: string | null; timeClose?: string | null; timeLimitSeconds?: number | null;
+    attemptsAllowed?: number; gradeMethod?: string; shuffleAnswers?: boolean;
+    password?: string | null; subnet?: string | null;
+    reviewAttempt?: number; reviewCorrectness?: number; reviewMarks?: number;
+    reviewSpecificFeedback?: number; reviewGeneralFeedback?: number;
+    reviewRightAnswer?: number; reviewOverallFeedback?: number;
+    preset?: ExamKind | null; lateEntryMinutes?: number | null; monitorEvents?: boolean;
+    examVersionId?: string; variantCount?: number; targetGroupId?: string | null;
+    versionMode?: 'pinned' | 'float_latest_ready';
+  }): Promise<QuizView> {
     const pin = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, pin, QUIZ_CAPABILITIES.manage);
+    await this.cleanupPendingSnapshot(pin);
     this.assertValidSubnet(input.subnet);
     // Cổng chế độ tham chiếu version (issue #254) xét trên cặp
     // (preset, versionMode) HIỆU LỰC SAU khi sửa: bật float cho pin
@@ -281,7 +424,17 @@ export class QuizPinsService {
     if (nextOpen && nextClose && nextClose <= nextOpen) {
       throw new BadRequestException({ message: 'timeClose must be after timeOpen', code: 'quiz.bad_window' });
     }
-    if (Object.keys(patch).length) await this.repo.updatePin(pin.id, patch);
+    const targetHasShared = newVersion
+      ? (await this.repo.listExamSlots(newVersion.id)).some((slot) => slot.sourceDomain === 'bank-system')
+      : (pin.questionSnapshots ?? []).some((snapshot) => snapshot.sourceDomain === 'bank-system');
+    if ((patch.versionMode ?? pin.versionMode) === 'float_latest_ready' && targetHasShared) {
+      throw new BadRequestException({ code: 'exam.shared_requires_pinned' });
+    }
+    if (newVersion) {
+      await this.prepareVersionAndApply(actorId, pin, newVersion.id, patch.versionMode ?? pin.versionMode, async (snapshots) => {
+        await this.repo.updatePin(pin.id, { ...patch, questionSnapshots: snapshots, pendingSnapshotId: null });
+      });
+    } else if (Object.keys(patch).length) await this.repo.updatePin(pin.id, patch);
     const updated = await this.shared.getPin(pin.id);
     if (updated.cmId && input.name !== undefined) {
       await this.courses.updateCm(actorId, updated.cmId, { name: updated.name });
@@ -409,6 +562,12 @@ export class QuizPinsService {
    *    `exam_pin_version_updated`.
    */
   async applyPinVersionUpdate(actorId: string, pinId: string, toExamVersionId: string): Promise<QuizView> {
+    return this.repo.withPinRequestLock(pinId, 'version', 'mutation',
+      () => this.applyPinVersionUpdateLocked(actorId, pinId, toExamVersionId));
+  }
+
+  /** Cập nhật version dưới cùng khóa thao tác và commit lịch sử cùng snapshot. */
+  private async applyPinVersionUpdateLocked(actorId: string, pinId: string, toExamVersionId: string): Promise<QuizView> {
     const pin = await this.shared.getPin(pinId);
     await this.shared.requireCap(actorId, pin, QUIZ_CAPABILITIES.manage);
     await this.assertPinUnlocked(pin);
@@ -431,9 +590,13 @@ export class QuizPinsService {
         code: 'exam.version_not_latest',
       });
     }
-    await this.repo.updatePin(pin.id, { examVersionId: target.id });
-    await this.repo.insertPinVersionUpdate({
-      pinId: pin.id, actorId, fromExamVersionId: pin.examVersionId, toExamVersionId: target.id,
+    await this.prepareVersionAndApply(actorId, pin, target.id, pin.versionMode, async (questionSnapshots) => {
+      await this.repo.transaction(async (tx) => {
+        await this.repo.updatePin(pin.id, { examVersionId: target.id, questionSnapshots, pendingSnapshotId: null }, tx);
+        await this.repo.insertPinVersionUpdate({
+          pinId: pin.id, actorId, fromExamVersionId: pin.examVersionId, toExamVersionId: target.id,
+        }, tx);
+      });
     });
     const updated = await this.shared.getPin(pin.id);
     if (updated.cmId) {

@@ -1,4 +1,4 @@
-import { useCallback, useState, type FormEvent } from 'react';
+import { useCallback, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { CurriculumFramePanel, BookFramePanel } from '../components/curriculum-frame-panel';
 import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
@@ -167,6 +167,8 @@ export function CourseBuilderPage() {
   const reorderSectionsMutation = useReorderBuilderSections(courseId);
   const reorderModulesMutation = useReorderBuilderModules(courseId);
   const createExamPinMutation = useCreateBuilderExamPin(courseId);
+  /** Giữ requestId theo nội dung form đến khi thành công; lỗi mạng bấm lại không tạo đề nháp dư. */
+  const pendingExamRequest = useRef<Record<string, string>>({});
   const createAssignmentMutation = useCreateBuilderAssignment(courseId);
   const createModuleMutation = useCreateBuilderModule(courseId);
   const saveModuleMutation = useSaveBuilderModule(courseId);
@@ -293,7 +295,11 @@ export function CourseBuilderPage() {
         // Sau gộp Đề (#226): "thêm bài kiểm tra" = tạo ĐỀ mới trong
         // bank cá nhân của GV + GHIM vào khoá trong một thao tác
         // (newExam); GV soạn câu hỏi tiếp ở trình soạn đề của pin.
-        const created = await createExamPinMutation.mutateAsync({ sectionId, name: draft.name.trim() });
+        const requestKey = `${sectionId}:${draft.name.trim()}`;
+        const requestId = pendingExamRequest.current[requestKey] ?? crypto.randomUUID();
+        pendingExamRequest.current[requestKey] = requestId;
+        const created = await createExamPinMutation.mutateAsync({ sectionId, name: draft.name.trim(), requestId });
+        delete pendingExamRequest.current[requestKey];
         await navigate(`/courses/${courseId}/exams/${created.id}`);
         return;
       }

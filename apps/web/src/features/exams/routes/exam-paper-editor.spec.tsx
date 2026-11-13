@@ -47,6 +47,8 @@ function stubFetch(calls: RecordedCall[]) {
         new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
       if (url === `/api/v1/exams/${PAPER_ID}` && method === 'GET') return respond(PAPER_VIEW);
       if (url === `/api/v1/exams/${PAPER_ID}/pins`) return respond([]);
+      if (url.startsWith('/api/v1/system-bank/discovery?')) return respond({ items: [{ id: Q2, qtype: 'shortanswer', versions: [{ version: 1 }, { version: 2 }] }], total: 1 });
+      if (url.startsWith(`/api/v1/system-bank/questions/${Q2}/versions/`)) return respond({ package: { questionText: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Câu hệ thống để xem trước' }] }] } } });
       if (url.startsWith('/api/v1/questions/discovery?'))
         return respond([{ questionId: Q2, name: 'Câu hai', qtype: 'multichoice', bankName: 'Ngân hàng A' }]);
       if (url === `/api/v1/exams/${PAPER_ID}/slots` && method === 'PUT')
@@ -77,6 +79,26 @@ describe('Exam paper editor (F-01 của #133)', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+  });
+
+  it('chọn phiên bản câu hệ thống, xem trước và lưu trộn với câu local mà không gọi nhập câu', async () => {
+    const calls: RecordedCall[] = [];
+    stubFetch(calls);
+    renderPage();
+    expect(await screen.findByDisplayValue('Đề giữa kỳ')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Chọn câu hệ thống' }));
+    await userEvent.selectOptions(await screen.findByLabelText('Phiên bản câu hệ thống'), '1');
+    await userEvent.click(screen.getByRole('button', { name: 'Xem trước phiên bản' }));
+    expect(await screen.findByText('Câu hệ thống để xem trước')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Thêm vào đề' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Lưu' }));
+    expect(await screen.findByText('DANH SÁCH ĐỀ')).toBeInTheDocument();
+    const put = calls.find((c) => c.method === 'PUT');
+    expect(put?.body).toEqual({ slots: [
+      { questionId: Q1, maxMark: 2, section: 'A' },
+      { questionId: Q2, maxMark: 1, sourceDomain: 'bank-system', sourceVersionNumber: 1 },
+    ] });
+    expect(calls.some((c) => c.url.includes('/import') || c.url.includes('/copy'))).toBe(false);
   });
 
   it('khởi tạo form từ view đề, thêm câu hỏi đã phát hiện và chỉ lưu slot qua PUT', async () => {
@@ -187,7 +209,7 @@ describe('Trình sửa đề — ghim vào khoá học từ trình sửa', () =>
 
     // Đúng thao tác exam-pins dùng chung với hộp ghim ở trang ngân hàng.
     const post = calls.find((c) => c.method === 'POST' && c.url === `/api/v1/courses/${COURSE_ID}/exam-pins`);
-    expect(post?.body).toEqual({ sectionId: SECTION_ID, examId: PAPER_ID, variantCount: 1 });
+    expect(post?.body).toEqual({ sectionId: SECTION_ID, examId: PAPER_ID, variantCount: 1, requestId: expect.any(String) });
     // Báo thành công kèm phiên bản đã ghim + lần ghim mới hiện tại chỗ.
     expect(await screen.findByText('Đã ghim đề vào khoá (phiên bản v3).')).toBeInTheDocument();
     await waitFor(() => expect(document.body.textContent).toContain('Khoá Toán 5 · v3'));
