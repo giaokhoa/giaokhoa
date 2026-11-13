@@ -87,6 +87,9 @@ export class TotpService {
    *   secret cũ hoặc cờ confirmed. Nếu người dùng bỏ dở, MFA vẫn bật.
    *   Khi confirm mã của thiết bị mới thành công, giao dịch sẽ hoán
    *   đổi secret đang hoạt động một lần duy nhất.
+   *   Pending gắn với ciphertext của factor được kiểm mã cũ.
+   *   Stage/confirm kiểm phiên bản active trong transaction; factor
+   *   đã đổi hoặc reset thì trả 409 thay vì chấp nhận mã cũ.
    *
    * @param currentCode Mã TOTP hiện tại — chỉ bắt buộc khi factor đang bật.
    */
@@ -103,7 +106,14 @@ export class TotpService {
     const secret = generateSecret();
     if (existing?.confirmed) {
       // Factor cũ vẫn bật trong suốt lúc người dùng quét và xác nhận thiết bị mới.
-      await this.repo.stageTotpReplacement(userId, this.encryptSecret(secret));
+      // Stage chỉ hợp lệ nếu bản active vẫn đúng secret đã kiểm mã cũ:
+      // một request setup đến muộn không được ghi pending sau khi đổi A -> C.
+      const staged = await this.repo.stageTotpReplacement(
+        userId, this.encryptSecret(secret), existing.secretEncrypted,
+      );
+      if (!staged) {
+        throw new ConflictException({ message: 'MFA factor changed during replacement setup', code: 'auth.mfa_state_changed' });
+      }
     } else {
       const staged = await this.repo.upsertPendingTotp(userId, this.encryptSecret(secret));
       if (!staged) {
@@ -118,7 +128,8 @@ export class TotpService {
 
   /**
    * Bước confirm: mã đúng với secret đang chờ ⇒ kích hoạt MFA cho user.
-   * Với factor đang bật, mã phải khớp pending replacement để hoán đổi atomically.
+   * Với factor đang bật, mã phải khớp pending replacement và active
+   * vẫn phải là phiên bản đã kiểm mã cũ; lệch thì trả 409.
    * Chưa setup thì báo `auth.mfa_not_setup`; mã sai thì `auth.mfa_invalid_code`.
    */
   async confirm(userId: string, code: string): Promise<void> {
@@ -128,11 +139,11 @@ export class TotpService {
       // Đổi factor: xác minh chính secret đang chờ, rồi hoán đổi atomically.
       const pending = await this.repo.getPendingTotpReplacement(userId);
       if (!pending) throw new BadRequestException({ message: 'TOTP replacement has expired or was not started', code: 'auth.mfa_not_setup' });
-      if (!(await this.verifyCode(this.decryptSecret(pending), code))) {
+      if (!(await this.verifyCode(this.decryptSecret(pending.secretEncrypted), code))) {
         throw new UnauthorizedException({ message: 'Invalid two-factor authentication code', code: 'auth.mfa_invalid_code' });
       }
       if (!(await this.repo.activateTotpReplacement(userId, pending))) {
-        throw new BadRequestException({ message: 'TOTP replacement has expired or changed', code: 'auth.mfa_not_setup' });
+        throw new ConflictException({ message: 'MFA factor changed during replacement confirmation', code: 'auth.mfa_state_changed' });
       }
       return;
     }
@@ -147,6 +158,8 @@ export class TotpService {
   /**
    * Tắt MFA: chỉ chủ tài khoản có authenticator hiện tại (mã đúng với
    * secret đang bật) mới tắt được; tắt xong bản ghi secret bị xoá hẳn.
+   * Lệnh tắt dùng CAS theo active version để không xoá thiết bị mới
+   * được kích hoạt trong khoảng giữa kiểm mã và ghi database.
    */
   async disable(userId: string, code: string): Promise<void> {
     const row = await this.repo.getTotpByUserId(userId);
@@ -154,8 +167,11 @@ export class TotpService {
     if (!(await this.verifyCode(this.decryptSecret(row.secretEncrypted), code))) {
       throw new UnauthorizedException({ message: 'Invalid two-factor authentication code', code: 'auth.mfa_invalid_code' });
     }
-    await this.repo.deleteTotp(userId);
-    await this.repo.clearPendingTotpReplacement(userId);
+    // Mã A chỉ được tắt chính A: nếu request khác đã kích hoạt C,
+    // yêu cầu tắt theo A cũ phải bị từ chối để không vô hiệu hoá C.
+    if (!(await this.repo.disableTotpIfMatches(userId, row.secretEncrypted))) {
+      throw new ConflictException({ message: 'MFA factor changed during disable', code: 'auth.mfa_state_changed' });
+    }
   }
 
   /**
@@ -170,7 +186,8 @@ export class TotpService {
 
   /** Quản trị gỡ MFA cho user (mất authenticator): xoá hẳn bản ghi TOTP. */
   async resetForUser(userId: string): Promise<void> {
+    // Admin reset huỷ active và pending atomically qua repository,
+    // không để setup/confirm đang chạy chen giữa hai lần DELETE.
     await this.repo.deleteTotp(userId);
-    await this.repo.clearPendingTotpReplacement(userId);
   }
 }

@@ -396,6 +396,214 @@ describe('Xác thực: đăng nhập, khoá tài khoản, xoay refresh, phiên, 
     }
   });
 
+  it('MFA TOTP: setup B đã xác thực bằng A không được ghi pending sau khi factor C thay A', async () => {
+    const user = await createUserViaApi(app, admin);
+    const access = await login(app, user.username, STRONG_PASSWORD);
+    const auth = { Authorization: `Bearer ${access.accessToken}` };
+    const initial = await http(app).post('/api/v1/auth/mfa/totp/setup').set(auth);
+    const secretA = initial.body.secret as string;
+    expect((await http(app).post('/api/v1/auth/mfa/totp/confirm')
+      .set(auth).send({ code: await currentTotpCode(secretA) })).status).toBe(201);
+
+    // Request B đã kiểm mã A nhưng tạm dừng TRƯỚC ghi pending.
+    // Request C dùng mã A và hoàn tất hoán đổi C trước khi B tiếp tục.
+    const repo = app.get(AuthRepository);
+    const realStage = repo.stageTotpReplacement.bind(repo);
+    let signal!: () => void;
+    let release!: () => void;
+    const reached = new Promise<void>((resolve) => { signal = resolve; });
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const stage = vi.spyOn(repo, 'stageTotpReplacement')
+      .mockImplementationOnce(async (...args) => {
+        signal();
+        await blocked;
+        return realStage(...args);
+      });
+    try {
+      const slowB = http(app).post('/api/v1/auth/mfa/totp/setup')
+        .set(auth).send({ currentCode: await currentTotpCode(secretA) }).then((res) => res);
+      await reached;
+      const fastC = await http(app).post('/api/v1/auth/mfa/totp/setup')
+        .set(auth).send({ currentCode: await currentTotpCode(secretA) });
+      expect(fastC.status).toBe(201);
+      const secretC = fastC.body.secret as string;
+      expect((await http(app).post('/api/v1/auth/mfa/totp/confirm')
+        .set(auth).send({ code: await currentTotpCode(secretC) })).status).toBe(201);
+
+      release();
+      const staleB = await slowB;
+      expect(staleB.status).toBe(409);
+      expect(staleB.body.code).toBe('auth.mfa_state_changed');
+      expect((await http(app).get('/api/v1/auth/mfa/status').set(auth)).body)
+        .toEqual({ enabled: true });
+
+      const attempt = await http(app).post('/api/v1/auth/token')
+        .send({ username: user.username, password: STRONG_PASSWORD });
+      expect(attempt.body.mfaRequired).toBe(true);
+      expect((await http(app).post('/api/v1/auth/mfa/verify')
+        .send({ challengeToken: attempt.body.challengeToken, code: await currentTotpCode(secretC) })).status)
+        .toBe(201);
+    } finally {
+      release();
+      stage.mockRestore();
+    }
+  });
+
+  it('MFA TOTP: setup bằng mã cũ đang chờ không thể thay factor sau khi admin reset rồi bật lại', async () => {
+    const user = await createUserViaApi(app, admin);
+    const access = await login(app, user.username, STRONG_PASSWORD);
+    const auth = { Authorization: `Bearer ${access.accessToken}` };
+    const secretA = await enableMfaViaApi(app, access.accessToken);
+
+    const repo = app.get(AuthRepository);
+    const realStage = repo.stageTotpReplacement.bind(repo);
+    let signal!: () => void;
+    let release!: () => void;
+    const reached = new Promise<void>((resolve) => { signal = resolve; });
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const stage = vi.spyOn(repo, 'stageTotpReplacement')
+      .mockImplementationOnce(async (...args) => {
+        signal();
+        await blocked;
+        return realStage(...args);
+      });
+    try {
+      const staleSetup = http(app).post('/api/v1/auth/mfa/totp/setup')
+        .set(auth).send({ currentCode: await currentTotpCode(secretA) }).then((response) => response);
+      await reached;
+      const reset = await http(app).post(`/api/v1/auth/mfa/users/${user.id}/reset`)
+        .set('Authorization', `Bearer ${admin}`);
+      expect(reset.status).toBe(201);
+      expect(reset.body.reset).toBe(true);
+
+      // Đăng ký authenticator mới như lần đầu, không có mã của A.
+      const fresh = await http(app).post('/api/v1/auth/mfa/totp/setup').set(auth);
+      expect(fresh.status).toBe(201);
+      const secretD = fresh.body.secret as string;
+      const confirmed = await http(app).post('/api/v1/auth/mfa/totp/confirm')
+        .set(auth).send({ code: await currentTotpCode(secretD) });
+      expect(confirmed.status).toBe(201);
+      expect(confirmed.body.mfaEnabled).toBe(true);
+
+      release();
+      const stale = await staleSetup;
+      expect(stale.status).toBe(409);
+      expect(stale.body.code).toBe('auth.mfa_state_changed');
+      expect((await http(app).get('/api/v1/auth/mfa/status').set(auth)).body)
+        .toEqual({ enabled: true });
+
+      const loginAttempt = await http(app).post('/api/v1/auth/token')
+        .send({ username: user.username, password: STRONG_PASSWORD });
+      expect(loginAttempt.body.mfaRequired).toBe(true);
+      const accepted = await http(app).post('/api/v1/auth/mfa/verify')
+        .send({ challengeToken: loginAttempt.body.challengeToken, code: await currentTotpCode(secretD) });
+      expect(accepted.status).toBe(201);
+    } finally {
+      release();
+      stage.mockRestore();
+    }
+  });
+
+  it('MFA TOTP: mã B đã kiểm không thể confirm nếu factor A đã được thay thành C', async () => {
+    const user = await createUserViaApi(app, admin);
+    const access = await login(app, user.username, STRONG_PASSWORD);
+    const auth = { Authorization: `Bearer ${access.accessToken}` };
+    const secretA = await enableMfaViaApi(app, access.accessToken);
+    const stagedB = await http(app).post('/api/v1/auth/mfa/totp/setup')
+      .set(auth).send({ currentCode: await currentTotpCode(secretA) });
+    expect(stagedB.status).toBe(201);
+    const secretB = stagedB.body.secret as string;
+
+    const repo = app.get(AuthRepository);
+    const realActivate = repo.activateTotpReplacement.bind(repo);
+    let signal!: () => void;
+    let release!: () => void;
+    const reached = new Promise<void>((resolve) => { signal = resolve; });
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const activate = vi.spyOn(repo, 'activateTotpReplacement')
+      .mockImplementationOnce(async (...args) => {
+        signal();
+        await blocked;
+        return realActivate(...args);
+      });
+    try {
+      const slowConfirmB = http(app).post('/api/v1/auth/mfa/totp/confirm')
+        .set(auth).send({ code: await currentTotpCode(secretB) }).then((res) => res);
+      await reached;
+      const stagedC = await http(app).post('/api/v1/auth/mfa/totp/setup')
+        .set(auth).send({ currentCode: await currentTotpCode(secretA) });
+      expect(stagedC.status).toBe(201);
+      const secretC = stagedC.body.secret as string;
+      const confirmC = await http(app).post('/api/v1/auth/mfa/totp/confirm')
+        .set(auth).send({ code: await currentTotpCode(secretC) });
+      expect(confirmC.status).toBe(201);
+
+      release();
+      const stale = await slowConfirmB;
+      expect(stale.status).toBe(409);
+      expect(stale.body.code).toBe('auth.mfa_state_changed');
+      expect((await http(app).get('/api/v1/auth/mfa/status').set(auth)).body)
+        .toEqual({ enabled: true });
+
+      const loginAttempt = await http(app).post('/api/v1/auth/token')
+        .send({ username: user.username, password: STRONG_PASSWORD });
+      expect(loginAttempt.body.mfaRequired).toBe(true);
+      expect((await http(app).post('/api/v1/auth/mfa/verify')
+        .send({ challengeToken: loginAttempt.body.challengeToken, code: await currentTotpCode(secretC) })).status)
+        .toBe(201);
+    } finally {
+      release();
+      activate.mockRestore();
+    }
+  });
+
+  it('MFA TOTP: lệnh tắt bằng mã A đang chờ không thể xóa factor C vừa thay', async () => {
+    const user = await createUserViaApi(app, admin);
+    const access = await login(app, user.username, STRONG_PASSWORD);
+    const auth = { Authorization: `Bearer ${access.accessToken}` };
+    const secretA = await enableMfaViaApi(app, access.accessToken);
+
+    const repo = app.get(AuthRepository);
+    const realDisable = repo.disableTotpIfMatches.bind(repo);
+    let signal!: () => void;
+    let release!: () => void;
+    const reached = new Promise<void>((resolve) => { signal = resolve; });
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const disable = vi.spyOn(repo, 'disableTotpIfMatches')
+      .mockImplementationOnce(async (...args) => {
+        signal();
+        await blocked;
+        return realDisable(...args);
+      });
+    try {
+      const slowDisable = http(app).post('/api/v1/auth/mfa/totp/disable')
+        .set(auth).send({ code: await currentTotpCode(secretA) }).then((res) => res);
+      await reached;
+      const stagedC = await http(app).post('/api/v1/auth/mfa/totp/setup')
+        .set(auth).send({ currentCode: await currentTotpCode(secretA) });
+      expect(stagedC.status).toBe(201);
+      const secretC = stagedC.body.secret as string;
+      expect((await http(app).post('/api/v1/auth/mfa/totp/confirm')
+        .set(auth).send({ code: await currentTotpCode(secretC) })).status).toBe(201);
+
+      release();
+      const stale = await slowDisable;
+      expect(stale.status).toBe(409);
+      expect(stale.body.code).toBe('auth.mfa_state_changed');
+      expect((await http(app).get('/api/v1/auth/mfa/status').set(auth)).body)
+        .toEqual({ enabled: true });
+      const loginAttempt = await http(app).post('/api/v1/auth/token')
+        .send({ username: user.username, password: STRONG_PASSWORD });
+      expect(loginAttempt.body.mfaRequired).toBe(true);
+      expect((await http(app).post('/api/v1/auth/mfa/verify')
+        .send({ challengeToken: loginAttempt.body.challengeToken, code: await currentTotpCode(secretC) })).status)
+        .toBe(201);
+    } finally {
+      release();
+      disable.mockRestore();
+    }
+  });
+
   it('MFA TOTP: admin reset (user:update capability) gỡ MFA cho user mất authenticator; user thường bị từ chối', async () => {
     const user = await createUserViaApi(app, admin);
     const plain = await login(app, user.username, STRONG_PASSWORD);

@@ -53,6 +53,17 @@ export interface RefreshFamilyRow {
   rotatedAt: Date;
 }
 
+/**
+ * Secret chờ thay thiết bị phải gắn với đúng secret đang hoạt động
+ * tại lúc xác thực mã TOTP cũ. Định danh bản active là ciphertext GCM:
+ * mỗi lần bật/thay mã hoá với IV ngẫu nhiên, nên reset + bật lại cũng
+ * tạo phiên bản khác dù secret thô giả sử trùng.
+ */
+export interface PendingTotpReplacement {
+  secretEncrypted: string;
+  activeSecretEncrypted: string;
+}
+
 /** Một dòng bản ghi TOTP của user (secret đã mã hoá). */
 export interface UserTotpRow {
   id: string;
@@ -418,41 +429,81 @@ export class AuthRepository {
   }
 
   /**
-   * Khi thay authenticator đã kích hoạt, lưu secret mới trong verification
-   * mà không chạm dòng user_totp đang hoạt động. Pending tự hết hạn sau
-   * 10 phút, nên bỏ dở setup không thể vô tình tắt MFA.
-   * @param userId Danh tính sở hữu factor.
-   * @param secretEncrypted Secret mới đã mã hoá theo cùng khoá MFA.
+   * Chờ thay thiết bị: chấp nhận secret mới chỉ nếu factor đang bật
+   * VẪN là factor đã xác thực mã TOTP cũ. Mọi thao tác stage/confirm
+   * giữ advisory lock theo pending identifier rồi khóa hàng active;
+   * không thể dùng mã A cũ để stage B sau khi A đã chuyển thành C.
+   *
+   * @param userId Chủ thể đang thay ứng dụng xác thực.
+   * @param secretEncrypted Secret mới đã mã hoá GCM.
+   * @param activeSecretEncrypted Ciphertext của factor được kiểm mã cũ.
+   * @returns false nếu trạng thái active đã đổi, bị tắt hoặc admin reset.
    */
-  async stageTotpReplacement(userId: string, secretEncrypted: string): Promise<void> {
+  async stageTotpReplacement(
+    userId: string,
+    secretEncrypted: string,
+    activeSecretEncrypted: string,
+  ): Promise<boolean> {
     const identifier = 'totp-replace-' + userId;
     const expiresAt = new Date(Date.now() + 600_000);
-    // verification.identifier không có UNIQUE; khoá theo định danh
-    // trước khi thay dòng pending để tránh hai request setup đè nhau.
-    await this.handle.transaction().execute(async (trx) => {
+    return this.handle.transaction().execute(async (trx) => {
+      // Khóa theo thứ tự chung: pending key -> active row.
+      // verification.identifier không UNIQUE, nên không dùng UPSERT.
       await sql`SELECT pg_advisory_xact_lock(hashtext(${identifier}))`.execute(trx);
+      const active = await trx.selectFrom('user_totp')
+        .select(['secret_encrypted', 'confirmed'])
+        .where('user_id', '=', userId)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!active?.confirmed || active.secret_encrypted !== activeSecretEncrypted) return false;
+
+      const payload: PendingTotpReplacement = { secretEncrypted, activeSecretEncrypted };
       await trx.deleteFrom('verification').where('identifier', '=', identifier).execute();
       await trx.insertInto('verification')
-        .values({ identifier, value: secretEncrypted, expires_at: expiresAt }).execute();
+        .values({ identifier, value: JSON.stringify(payload), expires_at: expiresAt }).execute();
+      return true;
     });
   }
 
-  /** Đọc replacement còn hạn, chỉ giải mã secret ở tầng TotpService. */
-  async getPendingTotpReplacement(userId: string): Promise<string | undefined> {
+  /**
+   * Đọc pending còn hạn và phiên bản active đã được kiểm mã cũ.
+   * Dòng cũ không có thông tin nguồn bị từ chối để fail-closed.
+   * @param userId Chủ thể của pending replacement.
+   * @returns Secret chờ cùng phiên bản active nguồn, hoặc undefined.
+   */
+  async getPendingTotpReplacement(userId: string): Promise<PendingTotpReplacement | undefined> {
     const row = await this.handle.selectFrom('verification')
       .select(['value', 'expires_at'])
       .where('identifier', '=', 'totp-replace-' + userId)
       .executeTakeFirst();
-    return row && row.expires_at > new Date() ? row.value : undefined;
+    if (!row || row.expires_at <= new Date()) return undefined;
+    try {
+      const payload: unknown = JSON.parse(row.value);
+      if (!payload || typeof payload !== 'object') return undefined;
+      const candidate = payload as Partial<PendingTotpReplacement>;
+      if (typeof candidate.secretEncrypted !== 'string' ||
+          typeof candidate.activeSecretEncrypted !== 'string' ||
+          !candidate.secretEncrypted || !candidate.activeSecretEncrypted) return undefined;
+      return {
+        secretEncrypted: candidate.secretEncrypted,
+        activeSecretEncrypted: candidate.activeSecretEncrypted,
+      };
+    } catch {
+      // Pending lưu bởi phiên bản cũ không ràng buộc active: buộc setup lại.
+      return undefined;
+    }
   }
 
   /**
-   * Kích hoạt secret mới atomically sau khi tầng service kiểm chứng mã mới.
-   * Khoá dòng pending bảo đảm chỉ một confirm thắng; factor cũ vẫn bật
-   * trong mọi lần kiểm mã trước commit của giao dịch.
-   * @returns true nếu secret pending đúng và factor đang bật được thay thế.
+   * Chỉ hoán đổi factor nếu pending chưa bị thay và active VẪN đúng
+   * phiên bản được xác thực lúc stage. Khoá và so sánh thực hiện chung
+   * trong transaction, cả khi có admin reset/re-enable hoặc setup khác.
+   *
+   * @param userId User đang xác nhận thiết bị mới.
+   * @param candidate Pending đã được service kiểm mã thiết bị mới.
+   * @returns true khi pending và phiên bản active đều khớp.
    */
-  async activateTotpReplacement(userId: string, encryptedSecret: string): Promise<boolean> {
+  async activateTotpReplacement(userId: string, candidate: PendingTotpReplacement): Promise<boolean> {
     return this.handle.transaction().execute(async (trx) => {
       const identifier = 'totp-replace-' + userId;
       await sql`SELECT pg_advisory_xact_lock(hashtext(${identifier}))`.execute(trx);
@@ -461,11 +512,16 @@ export class AuthRepository {
         .where('identifier', '=', identifier)
         .forUpdate()
         .executeTakeFirst();
-      if (!pending || pending.value !== encryptedSecret || pending.expires_at <= new Date()) return false;
+      if (!pending || pending.value !== JSON.stringify(candidate) || pending.expires_at <= new Date()) {
+        return false;
+      }
+      // CAS trên ciphertext active, không chỉ confirmed=true: mã A cũ
+      // không thể xác nhận B nếu A đã đổi thành C từ lúc stage.
       const active = await trx.updateTable('user_totp')
-        .set({ secret_encrypted: encryptedSecret, confirmed: true, confirmed_at: new Date() })
+        .set({ secret_encrypted: candidate.secretEncrypted, confirmed: true, confirmed_at: new Date() })
         .where('user_id', '=', userId)
         .where('confirmed', '=', true)
+        .where('secret_encrypted', '=', candidate.activeSecretEncrypted)
         .returning('user_id')
         .executeTakeFirst();
       if (!active) return false;
@@ -503,10 +559,45 @@ export class AuthRepository {
   }
 
   /**
-   * Xoá hẳn bản ghi TOTP của user (user tự tắt bằng mã đúng, hoặc quản trị reset).
+   * Người dùng tự tắt MFA chỉ khi factor hiện tại vẫn là bản đã được
+   * kiểm mã; reset/hoán đổi xảy ra trước đó phải làm yêu cầu thất bại.
+   * Xoá pending cùng transaction để không giữ secret chờ bị mồ côi.
+   *
+   * @param userId Tài khoản tự tắt MFA.
+   * @param activeSecretEncrypted Bản active được kiểm mã TOTP ở service.
+   * @returns false khi active đã đổi hoặc không còn tồn tại.
+   */
+  async disableTotpIfMatches(userId: string, activeSecretEncrypted: string): Promise<boolean> {
+    const identifier = 'totp-replace-' + userId;
+    return this.handle.transaction().execute(async (trx) => {
+      // Dùng cùng thứ tự khoá như stage/activate: pending -> active.
+      await sql`SELECT pg_advisory_xact_lock(hashtext(${identifier}))`.execute(trx);
+      const removed = await trx.deleteFrom('user_totp')
+        .where('user_id', '=', userId)
+        .where('confirmed', '=', true)
+        .where('secret_encrypted', '=', activeSecretEncrypted)
+        .returning('user_id')
+        .executeTakeFirst();
+      if (!removed) return false;
+      await trx.deleteFrom('verification').where('identifier', '=', identifier).execute();
+      return true;
+    });
+  }
+
+  /**
+   * Quản trị reset factor không đòi mã TOTP nhưng phải huỷ luôn mọi
+   * pending replacement trong cùng transaction. Lock cùng thứ tự
+   * stage/activate để request cũ không hồi sinh pending sau reset.
+   *
+   * @param userId User được quản trị viên reset.
    */
   async deleteTotp(userId: string): Promise<void> {
-    await this.handle.deleteFrom('user_totp').where('user_id', '=', userId).execute();
+    const identifier = 'totp-replace-' + userId;
+    await this.handle.transaction().execute(async (trx) => {
+      await sql`SELECT pg_advisory_xact_lock(hashtext(${identifier}))`.execute(trx);
+      await trx.deleteFrom('user_totp').where('user_id', '=', userId).execute();
+      await trx.deleteFrom('verification').where('identifier', '=', identifier).execute();
+    });
   }
 
   /**
