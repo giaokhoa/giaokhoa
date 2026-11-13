@@ -1,5 +1,6 @@
 import { Processor } from '@nestjs/bullmq';
 import { ObservedWorkerHost } from '../observed-worker-host';
+import { validateWorkerJobPayload, workerPayloadSchemas } from './job-payload-validation';
 import type { Job } from 'bullmq';
 import { I18nService } from '@nestjs/i18n';
 import { sql, type CentreDB } from '@giaokhoa/db';
@@ -38,6 +39,7 @@ export class BackupProcessor extends ObservedWorkerHost {
    * Xử lý một job của queue tương ứng.
    */
   async process(job: Job<{ jobId: string }>): Promise<{ status: string; sections?: number; cms?: number }> {
+    validateWorkerJobPayload(workerPayloadSchemas['backup'], job.data, 'backup');
     // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc ngữ cảnh platform tường minh để RLS fail-closed không làm mù dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
     return tenantAls.run({ platform: true }, () => this.processInContext(job));
   }
@@ -139,6 +141,7 @@ export class BackupProcessor extends ObservedWorkerHost {
 export class RestoreProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(job: Job<{ jobId: string }>): Promise<{ status: string; mapped?: number }> {
+    validateWorkerJobPayload(workerPayloadSchemas['restore'], job.data, 'restore');
     // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
     // ngữ cảnh platform tường minh để RLS fail-closed không làm mù
     // dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
@@ -290,6 +293,7 @@ export class SearchReindexProcessor extends ObservedWorkerHost {
 export class AnalyticsRunProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(job: Job<{ courseId: string }>): Promise<{ predictions: number; insights: number }> {
+    validateWorkerJobPayload(workerPayloadSchemas['analytics-run'], job.data, 'analytics-run');
     // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
     // ngữ cảnh platform tường minh để RLS fail-closed không làm mù
     // dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
@@ -390,6 +394,7 @@ export class ReportScheduleProcessor extends ObservedWorkerHost {
     private readonly spaceDb: SpaceDatabaseService,
   ) { super(); }
   async process(job: Job<{ scheduleId: string }>): Promise<{ rows: number; status: string }> {
+    validateWorkerJobPayload(workerPayloadSchemas['report-schedule'], job.data, 'report-schedule');
     // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
     // ngữ cảnh platform tường minh để RLS fail-closed không làm mù
     // dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
@@ -454,6 +459,7 @@ export class ReportScheduleProcessor extends ObservedWorkerHost {
 export class PrivacyProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(job: Job<{ requestId: string }>): Promise<{ status: string; subsystems: string[] }> {
+    validateWorkerJobPayload(workerPayloadSchemas['privacy'], job.data, 'privacy');
     // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
     // ngữ cảnh platform tường minh để RLS fail-closed không làm mù
     // dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
@@ -541,6 +547,7 @@ export class PrivacyProcessor extends ObservedWorkerHost {
 export class PaymentReconciliationProcessor extends ObservedWorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService) { super(); }
   async process(job: Job<{ paymentId?: string; externalTransactionId?: string; status?: string }>): Promise<{ status: string; duplicate?: boolean; succeeded?: number }> {
+    validateWorkerJobPayload(workerPayloadSchemas['payment-reconciliation'], job.data, 'payment-reconciliation');
     // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
     // ngữ cảnh platform tường minh để RLS fail-closed không làm mù
     // dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).

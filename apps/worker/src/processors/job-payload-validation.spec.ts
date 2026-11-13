@@ -98,3 +98,30 @@ describe('Phong bì job outbox: không tin dữ liệu JSON từ Redis', () => {
     expect(message).not.toContain('very-secret');
   });
 });
+
+
+describe('Hợp đồng runtime của job platform có thể thay đổi dữ liệu', () => {
+  it('backup, restore và privacy từ chối ID sai trước khi vào kho dữ liệu', () => {
+    for (const queue of ['backup', 'restore', 'privacy'] as const) {
+      expect(() => validateWorkerJobPayload(workerPayloadSchemas[queue], {
+        jobId: 42, requestId: null,
+      }, queue)).toThrow(UnrecoverableError);
+    }
+  });
+
+  it('analytics và lịch báo cáo yêu cầu ID chuỗi không rỗng', () => {
+    expect(() => validateWorkerJobPayload(workerPayloadSchemas['analytics-run'], {
+      courseId: '',
+    }, 'analytics-run')).toThrow('courseId');
+    expect(() => validateWorkerJobPayload(workerPayloadSchemas['report-schedule'], {
+      scheduleId: false,
+    }, 'report-schedule')).toThrow('scheduleId');
+  });
+
+  it('đối soát thanh toán chấp nhận sweep toàn bộ nhưng từ chối sai kiểu webhook', () => {
+    expect(validateWorkerJobPayload(workerPayloadSchemas['payment-reconciliation'], {}, 'payment-reconciliation')).toEqual({});
+    expect(() => validateWorkerJobPayload(workerPayloadSchemas['payment-reconciliation'], {
+      paymentId: 19, externalTransactionId: 'tx-1',
+    }, 'payment-reconciliation')).toThrow('paymentId');
+  });
+});
