@@ -152,7 +152,7 @@ describe('Điểm quét matching IPN SePay ở worker — nhịp thật của mo
     await pg.query('INSERT INTO context (id, context_level, instance_id, path, depth) VALUES ($1, 20, $2, $3, 2)', [
       tenantCtxId, tenantId, `/${systemCtxId}/${tenantCtxId}`,
     ]);
-    await pg.query("INSERT INTO role (id, name, short_name, archetype) VALUES ($1, 'Student', 'student539', 'student')", [studentRoleId]);
+    await pg.query("INSERT INTO role (id, name, short_name, archetype) VALUES ($1, 'Student', $2, 'student')", [studentRoleId, `student539-${tag}`]);
     await pg.query('INSERT INTO payment_accounts (id, tenant_id, name, gateway, enabled) VALUES ($1, $2, $3, $4, true)', [
       accountId, tenantId, 'SePay worker 539', 'sepay',
     ]);
@@ -219,7 +219,11 @@ describe('Điểm quét matching IPN SePay ở worker — nhịp thật của mo
       status: 'processing', receivedAt: new Date(Date.now() - 120_000),
     });
 
-    await waitFor(async () => (await paymentRow(paymentId))?.status === 'succeeded', 'payment treo được khớp lại');
+    // Trạng thái payment có thể được commit trước khi event được đóng dấu matched;
+    // chờ cả hai để tránh đua nhịp scheduler với assertion trên event.
+    await waitFor(async () =>
+      (await paymentRow(paymentId))?.status === 'succeeded'
+      && (await eventRow(eventId))?.match_status === 'matched', 'payment và event treo được khớp lại');
 
     expect((await eventRow(eventId))?.match_status).toBe('matched');
     expect((await ueRow(instanceId, buyer))?.status).toBe(0);

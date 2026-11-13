@@ -355,7 +355,7 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
     return { relay, queue };
   }
 
-  it('relay phát sự kiện ở kho chung theo đường hiện tại: job mang slug của tenant ở kho chung và dòng được đóng dấu ở kho chung', async () => {
+  it('relay phát sự kiện ở kho chung: job đóng dấu shared tường minh và dòng được đóng dấu ở kho chung', async () => {
     const { relay, queue } = makeRelay();
 
     // Relay chạy trong ngữ cảnh platform tường minh như nhịp
@@ -369,7 +369,8 @@ describe('Định tuyến job theo trung tâm phía worker (integration)', () =>
     expect(sharedJob).toBeDefined();
     expect(sharedJob!.data).toMatchObject({
       tenantId: SHARED_TENANT_ID,
-      spaceSlug: SHARED_TENANT_SLUG,
+      spaceSlug: null,
+      spaceId: null,
     });
     const stamped = await withClient(process.env.DATABASE_URL!, async (client) => {
       await client.query("SELECT set_config('app.platform', 'on', false)");

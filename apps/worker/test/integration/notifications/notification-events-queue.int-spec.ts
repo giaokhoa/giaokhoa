@@ -3,7 +3,7 @@ import type { INestApplicationContext } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { sql, type RawBuilder } from '@giaokhoa/db';
-import { OutboxRelayScheduler } from '../../../src/outbox-relay.scheduler';
+import { OutboxRelayScheduler, outboxRelayJobId } from '../../../src/outbox-relay.scheduler';
 import { NotificationEventsMarker } from '../../../src/notification-events-marker.service';
 import { NotificationEventsProcessor } from '../../../src/processors/notification-events.processor';
 import type { OutboxEventJobData } from '../../../src/outbox-event-routes';
@@ -94,7 +94,7 @@ describe('Worker notification events queue mechanism (viết lại reanchor ở 
     await context.get(OutboxRelayScheduler).relayTick();
     const deadline = Date.now() + timeoutMs;
     for (;;) {
-      const job = await eventsQueue.getJob(outboxId);
+      const job = await eventsQueue.getJob(outboxRelayJobId(null, outboxId));
       if (job && (await job.getState()) === 'completed') return;
       if (Date.now() > deadline) throw new Error(`job sự kiện ${outboxId} chưa completed sau ${timeoutMs}ms`);
       await new Promise((r) => setTimeout(r, 400));
@@ -136,7 +136,7 @@ describe('Worker notification events queue mechanism (viết lại reanchor ở 
     // Các nhịp relay sau không phát lại dòng đã đóng dấu: trên hàng
     // đợi vẫn đúng một job mang id của dòng, và số thông báo không đổi.
     const jobs = await eventsQueue.getJobs(['waiting', 'active', 'completed', 'delayed']);
-    expect(jobs.filter((j) => j.id === outboxId)).toHaveLength(1);
+    expect(jobs.filter((j) => j.id === outboxRelayJobId(null, outboxId))).toHaveLength(1);
     expect(await notificationsOf(student, 'enrol_expiry_warning')).toHaveLength(1);
   }, 180000);
 

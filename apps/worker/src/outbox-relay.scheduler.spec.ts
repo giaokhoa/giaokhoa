@@ -256,7 +256,7 @@ describe('Relay outbox duy nhất — ngữ nghĩa đóng dấu publishedAt', ()
       type: 'auth_mail_requested',
       payload: { n: row.seq },
       tenantId: 'tenant-1',
-      spaceSlug: 'trung-tam-a',
+      spaceSlug: null,
       spaceId: null,
       occurredAt: '2026-10-29T00:00:00.000Z',
     });

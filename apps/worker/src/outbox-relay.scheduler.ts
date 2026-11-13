@@ -325,7 +325,9 @@ export class OutboxRelayScheduler {
       }
       // Không suy kho từ tên tenant khi đã quét trong kho riêng:
       // job phải mang đúng id sổ của kho nơi dòng được đọc.
-      await this.dispatchRow(row, origin?.slug ?? tenantSlug, origin?.id ?? null);
+      // Kho phát là nguồn xác nhận miền: chỉ lượt quét dedicated mới mang slug/id sổ đăng ký.
+      // Lượt quét kho chung đóng dấu shared tường minh; slug tenant vẫn được dùng để kiểm tra chủ sở hữu ở trên.
+      await this.dispatchRow(row, origin?.slug ?? null, origin?.id ?? null);
       await db
         .updateTable('outbox_events')
         .set({ published_at: new Date() })

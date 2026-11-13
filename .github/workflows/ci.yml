@@ -73,7 +73,9 @@ jobs:
         run: pnpm exec turbo run typecheck
       # Các suite ngoài API chạy qua Turbo; unit/int API có job riêng, e2e API giữ bốn shard. Không dùng cache kết quả test.
       - name: Test
-        run: pnpm exec turbo run test --filter='!@giaokhoa/api'
+        # Tránh giữ PR ở trạng thái IN_PROGRESS vô hạn nếu một suite chờ job/Redis không kết thúc.
+        timeout-minutes: 20
+        run: pnpm exec turbo run test --filter='!@giaokhoa/api' --concurrency=1 --output-logs=full
       # Smoke production chạy trên toàn bộ topology Compose (Caddy + React Router SSR + NestJS) ở job deploy-check/verify-stack, thay cho tự quản lý hai tiến trình bằng setsid/kill/trap ở đây.
 
   test-api:

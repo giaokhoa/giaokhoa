@@ -53,7 +53,7 @@ describe('Engagement của worker: gửi thông báo, nhắc/lấy lịch, tự 
   it('gửi thông báo ghi skipped-not-configured cho email khi kênh Resend chưa cấu hình, lũy đẳng theo dedupeKey', async () => {
     // NB-5 (issue #174): kênh email gửi thật qua Resend ở worker. Môi trường test không có RESEND_API_KEY/MAIL_FROM nên transport ở chế độ fail-soft có khai báo: không gửi, dispatch log ghi 'skipped-not-configured' (trước NB-5 ca này kỳ vọng 'logged'). Đường gửi thật 'sent' + digest được khẳng định ở notification-email.spec.ts bằng transport giả.
     const processor = context.get(NotificationDispatchProcessor);
-    const job = { data: { userId: userA, provider: 'grade_updated', channel: 'email', subject: 'Grade posted', body: 'b', dedupeKey: `test-dispatch-${suffix}` } } as never;
+    const job = { data: { spaceSlug: null, spaceId: null, userId: userA, provider: 'grade_updated', channel: 'email', subject: 'Grade posted', body: 'b', dedupeKey: `test-dispatch-${suffix}` } } as never;
     const first = await processor.process(job);
     expect(first.status).toBe('skipped-not-configured');
     const second = await processor.process(job);
@@ -66,9 +66,9 @@ describe('Engagement của worker: gửi thông báo, nhắc/lấy lịch, tự 
 
   it('gửi thông báo không bao giờ gửi cho người dùng bị đình chỉ hoặc khi tuỳ chọn đang tắt ở cả hai trạng thái', async () => {
     const processor = context.get(NotificationDispatchProcessor);
-    const suspended = await processor.process({ data: { userId: userSuspended, provider: 'grade_updated', channel: 'email', subject: 's', body: 'b', dedupeKey: `test-susp-${suffix}` } } as never);
+    const suspended = await processor.process({ data: { spaceSlug: null, spaceId: null, userId: userSuspended, provider: 'grade_updated', channel: 'email', subject: 's', body: 'b', dedupeKey: `test-susp-${suffix}` } } as never);
     expect(suspended.status).toBe('skipped-suspended');
-    const prefOff = await processor.process({ data: { userId: userPrefOff, provider: 'grade_updated', channel: 'email', subject: 's', body: 'b', dedupeKey: `test-pref-${suffix}` } } as never);
+    const prefOff = await processor.process({ data: { spaceSlug: null, spaceId: null, userId: userPrefOff, provider: 'grade_updated', channel: 'email', subject: 's', body: 'b', dedupeKey: `test-pref-${suffix}` } } as never);
     expect(prefOff.status).toBe('skipped-preference');
     const rows = await db.selectFrom('notification_dispatch_log').selectAll()
       .where('user_id', '=', userPrefOff).execute();
@@ -80,7 +80,7 @@ describe('Engagement của worker: gửi thông báo, nhắc/lấy lịch, tự 
       name: `Reminder event ${suffix}`, event_type: 'user', user_id: userA, context_id: null, time_start: new Date(Date.now() + 3600_000),
     }).returningAll().executeTakeFirstOrThrow();
     const processor = context.get(CalendarReminderProcessor);
-    const job = { data: { eventId: event.id, userId: userA, minutesBefore: 15 } } as never;
+    const job = { data: { spaceSlug: null, spaceId: null, eventId: event.id, userId: userA, minutesBefore: 15 } } as never;
     const first = await processor.process(job);
     expect(first.status).toBe('notified');
     const second = await processor.process(job);
@@ -92,7 +92,7 @@ describe('Engagement của worker: gửi thông báo, nhắc/lấy lịch, tự 
       .execute();
     expect(rows).toHaveLength(1);
     // User bị đình chỉ: không có gì được tạo.
-    const susp = await processor.process({ data: { eventId: event.id, userId: userSuspended, minutesBefore: 15 } } as never);
+    const susp = await processor.process({ data: { spaceSlug: null, spaceId: null, eventId: event.id, userId: userSuspended, minutesBefore: 15 } } as never);
     expect(susp.status).toBe('skipped-suspended');
   });
 
@@ -107,9 +107,9 @@ describe('Engagement của worker: gửi thông báo, nhắc/lấy lịch, tự 
       name: `Feed ${suffix}`, event_type: 'site', user_id: userA, ics_data: ics,
     }).returningAll().executeTakeFirstOrThrow();
     const processor = context.get(CalendarImportProcessor);
-    const first = await processor.process({ data: { subscriptionId: sub.id } } as never);
+    const first = await processor.process({ data: { spaceSlug: null, spaceId: null, subscriptionId: sub.id } } as never);
     expect(first).toEqual({ eventsimported: 2, eventsskipped: 0, eventsupdated: 0, eventsdeleted: 0 });
-    const second = await processor.process({ data: { subscriptionId: sub.id } } as never);
+    const second = await processor.process({ data: { spaceSlug: null, spaceId: null, subscriptionId: sub.id } } as never);
     expect(second).toEqual({ eventsimported: 0, eventsskipped: 2, eventsupdated: 0, eventsdeleted: 0 });
     const rows = await db.selectFrom('calendar_events').selectAll().where('subscription_id', '=', sub.id).execute();
     expect(rows).toHaveLength(2);
@@ -133,9 +133,9 @@ describe('Engagement của worker: gửi thông báo, nhắc/lấy lịch, tự 
     await db.insertInto('badge_criteria').values({ badge_id: hardBadge.id, criteria_type: 'competency', method: 1, params: { competencyId: 999999 } }).execute();
 
     const processor = context.get(BadgeAwardProcessor);
-    const first = await processor.process({ data: { userId: userA, trigger: 'test' } } as never);
+    const first = await processor.process({ data: { spaceSlug: null, spaceId: null, userId: userA, trigger: 'test' } } as never);
     expect(first.issued).toHaveLength(1);
-    const second = await processor.process({ data: { userId: userA, trigger: 'test' } } as never);
+    const second = await processor.process({ data: { spaceSlug: null, spaceId: null, userId: userA, trigger: 'test' } } as never);
     expect(second.issued).toHaveLength(0);
     const issued = await db.selectFrom('badge_issued').selectAll().where('user_id', '=', userA).execute();
     const mine = (issued as { badge_id: string }[]).filter((r) => r.badge_id === badgeRow.id);
@@ -186,7 +186,7 @@ describe('Engagement của worker: gửi thông báo, nhắc/lấy lịch, tự 
     ]);
 
     const processor = context.get(BadgeAwardProcessor);
-    await processor.process({ data: { userId: userA, trigger: 'test-leaves' } } as never);
+    await processor.process({ data: { spaceSlug: null, spaceId: null, userId: userA, trigger: 'test-leaves' } } as never);
     const issuedA = (await db.selectFrom('badge_issued').selectAll().where('user_id', '=', userA).execute() as { badge_id: string }[])
       .map((r) => r.badge_id);
     expect(issuedA).toContain(cohortBadgeId);
@@ -194,7 +194,7 @@ describe('Engagement của worker: gửi thông báo, nhắc/lấy lịch, tự 
     expect(issuedA).toContain(inTimeBadgeId);
     expect(issuedA).not.toContain(tooLateBadgeId);
     // userPrefOff không thuộc cohort nào, không có giá trị hồ sơ và không có completion: không nhận huy hiệu mới nào.
-    await processor.process({ data: { userId: userPrefOff, trigger: 'test-leaves' } } as never);
+    await processor.process({ data: { spaceSlug: null, spaceId: null, userId: userPrefOff, trigger: 'test-leaves' } } as never);
     const issuedOther = (await db.selectFrom('badge_issued').selectAll().where('user_id', '=', userPrefOff).execute() as { badge_id: string }[])
       .map((r) => r.badge_id);
     for (const id of [cohortBadgeId, profileBadgeId, inTimeBadgeId, tooLateBadgeId]) {
