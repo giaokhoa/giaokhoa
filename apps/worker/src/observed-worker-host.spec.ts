@@ -20,6 +20,34 @@ describe('Giám sát lỗi của mọi BullMQ processor', () => {
     }
   });
 
+  it('job hết retries được ghi vào Redis stream chỉ gồm metadata, không rò dữ liệu mật', async () => {
+    const xadd = vi.fn(async () => '1-0');
+    const instance = new ProbeWorker();
+    const logger = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+    Object.defineProperty(instance, '_worker', {
+      value: { name: 'test-queue', getBackend: () => ({ client: Promise.resolve({ xadd }) }) },
+    });
+    const job = { id: 'job-verified', data: { otp: 'secrets-here' }, attemptsMade: 3, opts: { attempts: 3 } };
+    instance.onBullJobFailed(job as never, new Error('Validation failed for secrets-here'));
+    await vi.waitFor(() => expect(xadd).toHaveBeenCalledTimes(1));
+    const args = JSON.stringify(xadd.mock.calls);
+    expect(args).toContain('job-verified');
+    expect(args).not.toContain('secrets-here');
+    logger.mockRestore();
+  });
+
+  it('job còn lượt retry chưa được đưa vào sổ terminal', async () => {
+    const xadd = vi.fn();
+    const instance = new ProbeWorker();
+    const logger = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+    Object.defineProperty(instance, '_worker', {
+      value: { name: 'test-queue', getBackend: () => ({ client: Promise.resolve({ xadd }) }) },
+    });
+    instance.onBullJobFailed({ id: 'job-retrying', attemptsMade: 1, opts: { attempts: 3 } } as never, new Error('temporary'));
+    expect(xadd).not.toHaveBeenCalled();
+    logger.mockRestore();
+  });
+
   it('chỉ ghi ID và lỗi, tuyệt đối không lấy dữ liệu payload ra log', () => {
     const spy = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
     try {
