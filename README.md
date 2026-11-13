@@ -22,6 +22,14 @@ Luật phụ thuộc: `web` chỉ phụ thuộc vào `contracts`; `api`/`worker`
 - PostgreSQL 18.6 tại `localhost:5432` (người dùng `postgres`/`postgres`, DB `giaokhoa` và hai DB test riêng `giaokhoa_test_api`/`giaokhoa_test_worker`) — bắt buộc bản 18.x: khoá chính mặc định dùng hàm `uuidv7()` native
 - Redis tại `localhost:6379`
 
+### Triển khai khu học tập công cộng (issue #8)
+
+Khi triển khai **mới**, khu học tập công cộng sử dụng database và
+role riêng, độc lập với các trung tâm và kho ngân hàng hệ thống. Xem
+[quy trình cấp phát kho, đăng ký và cô lập phiên](docs/public-learning.md)
+trước khi bật `PUBLIC_LEARNING_ENABLED`; mặc định công tắc tắt để
+không thay đổi dữ liệu dùng chung hiện hữu.
+
 ## Phát triển trong Dev Container
 
 Chỉ cần Docker và VS Code với extension Dev Containers trên máy host. Cấu hình `.devcontainer/` dùng image Ubuntu dành cho Dev Container và Features để cài Node 24, pnpm 12.14.0 (theo `packageManager` trong `package.json`) cùng GitHub CLI. Service `app` chia sẻ network namespace với PostgreSQL 18.6 và Redis 7, vì vậy API, worker và test tiếp tục kết nối qua `localhost:5432` và `localhost:6379`.

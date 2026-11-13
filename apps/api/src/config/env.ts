@@ -23,6 +23,10 @@ export const envSchema = z.object({
   // Khung định tuyến kết nối theo trung tâm (issue #581): bộ phân giải đọc sổ đăng ký ở control plane và đệm kết quả trong tiến trình — TTL của đệm là lưới dự phòng ngoài kênh vô hiệu hoá theo sự kiện đổi sổ. Trần kết nối áp cho pool của MỖI kho riêng (pool tạo lười theo database), và ngưỡng nhàn rỗi mà quá đó pool của kho không còn traffic bị đóng để trả ngân sách kết nối về cụm.
   SPACE_ROUTING_CACHE_TTL_MS: z.coerce.number().int().positive().default(5_000),
   SPACE_DB_POOL_MAX: z.coerce.number().int().positive().default(5),
+  // #8: bật sau khi provision-public và cài SPACE_CONG_CONG_DATABASE_URL.
+  // Tắt = tương thích kho chung cũ; bật = host gốc bắt buộc kho riêng.
+  PUBLIC_LEARNING_ENABLED: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  SPACE_CONG_CONG_DATABASE_URL: z.string().min(1).optional(),
   SPACE_DB_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
   // Bật TLS cho kết nối PostgreSQL khi nhà cung cấp bắt buộc (một số nhà cung cấp PostgreSQL chỉ nhận kết nối có mã hoá). Mặc định tắt:
   // môi trường local và CI chạy PostgreSQL thường không có TLS.
@@ -75,6 +79,7 @@ export const envSchema = z.object({
   // Giới hạn tốc độ theo IP (chống dò mật khẩu/phá hoại ở biên HTTP):
   // hạn mức chung cho mọi route và hạn mức chặt riêng cho các route cấp token. Khoá tài khoản sau LOCKOUT_THRESHOLD lần sai vẫn là lớp bảo vệ theo tài khoản; hai lớp này bổ sung cho nhau. Mặc định phải đủ rộng cho cả lớp học cùng ra Internet qua một IP NAT của trường.
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(3000),
+  RATE_LIMIT_REGISTRATION_PER_MINUTE: z.coerce.number().int().positive().default(5),
   RATE_LIMIT_AUTH_PER_MINUTE: z.coerce.number().int().positive().default(300),
   // Danh sách origin được phép gọi API trực tiếp (phân tách bằng dấu phẩy). Frontend dev đi qua proxy của Vite nên mặc định chỉ cần origin của web; production khai đúng domain thật.
   CORS_ORIGINS: z.string().min(1).default('http://localhost:5173'),
@@ -152,6 +157,14 @@ export function validateEnv(config: Record<string, unknown>): Env {
   const parsed = envSchema.safeParse(config);
   if (!parsed.success) {
     throw new Error(`Invalid environment variables: ${parsed.error.message}`);
+  }
+  if (parsed.data.PUBLIC_LEARNING_ENABLED) {
+    for (const key of ['BETTER_AUTH_URL', 'CONTROL_PLANE_DATABASE_URL', 'SPACE_CONG_CONG_DATABASE_URL', 'BETTER_AUTH_SECRET'] as const) {
+      if (!parsed.data[key]) throw new Error(`PUBLIC_LEARNING_ENABLED=true requires ${key} (public requests must never fall back to the shared database)`);
+    }
+    if (!parsed.data.BETTER_AUTH_ENABLED) {
+      throw new Error('PUBLIC_LEARNING_ENABLED=true requires BETTER_AUTH_ENABLED=true');
+    }
   }
   return parsed.data;
 }

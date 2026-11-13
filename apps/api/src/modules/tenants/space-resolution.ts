@@ -1,3 +1,4 @@
+import { isPublicLearningHost, PUBLIC_LEARNING_SLUG } from './public-learning';
 import type { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import type { ResolvedSpaceConnection } from '../../db/routing/space-connection-resolver';
 
@@ -41,7 +42,18 @@ export function extractSpaceSlugFromHost(host: string | undefined | null): strin
 }
 
 /**
- * Kết quả phân giải một địa chỉ thuộc trung tâm ở kho riêng: slug của trung tâm và định danh đăng ký của nó trong sổ control plane
+ * Host chính thức của Trang học tập có đích cố định trong sổ, còn host
+ * của trung tâm có slug DNS. Hai đường cùng đi qua resolver; không
+ * có ngoại lệ đọc kho chung khi đích công cộng chưa được cấp phát.
+ */
+export function spaceSlugForHost(host: string | string[] | undefined): string | null {
+  if (isPublicLearningHost(host)) return PUBLIC_LEARNING_SLUG;
+  return extractSpaceSlugFromHost(Array.isArray(host) ? host[0] : host);
+}
+
+/**
+ * Kết quả phân giải một địa chỉ thuộc trung tâm ở kho riêng: slug
+ * của trung tâm và định danh đăng ký của nó trong sổ control plane
  * (giá trị claim `centre_id` của phiên thuộc trung tâm đó).
  */
 export interface DedicatedSpace {
@@ -66,11 +78,15 @@ export async function resolveDedicatedSpace(
   spaceDb: Pick<SpaceDatabaseService, 'resolveTarget'>,
   host: string | string[] | undefined,
 ): Promise<DedicatedSpace | null> {
-  const header = Array.isArray(host) ? host[0] : host;
-  const slug = extractSpaceSlugFromHost(header);
+  const slug = spaceSlugForHost(host);
   if (!slug) return null;
   // Slug đã có trong Host buộc phải phân giải qua sổ; mất sổ hoặc slug giả không được phép chuyển request sang kho chung.
   const target: ResolvedSpaceConnection = await spaceDb.resolveTarget(slug);
-  if (target.mode !== 'dedicated') return null;
+  if (target.mode !== 'dedicated') {
+    if (slug === PUBLIC_LEARNING_SLUG && isPublicLearningHost(host)) {
+      throw new Error('public_learning.dedicated_required: public host cannot use the shared database');
+    }
+    return null;
+  }
   return { slug, spaceId: target.spaceId };
 }

@@ -22,6 +22,7 @@ import { PlanLimitsService } from '../access/plan-limits.service';
 import { UsersService } from '../users/users.service';
 import { OutboxService } from '../../infra/events/outbox.service';
 import { tenantAls } from './tenant-als';
+import { PUBLIC_LEARNING_SLUG } from './public-learning';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { SpaceRoutingError } from '../../db/routing/space-connection-resolver';
 import type {
@@ -111,11 +112,21 @@ export class TenantsService {
    * HOTFIX #196: tra cứu này là đường HỆ THỐNG (đăng nhập/guard chạy trước khi có ngữ cảnh tenant) nên phải chạy trong ngữ cảnh platform tường minh — ngoài ngữ cảnh, RLS fail-closed giấu sạch bảng tenants và mọi request tiền-đăng-nhập chết `tenant.platform_missing` dù seed đã gieo (chỉ lộ khi app chạy bằng role thường, test superuser mù).
    */
   async platformTenant(): Promise<TenantRow> {
-    return tenantAls.run({ platform: true }, () => this.platformTenantInContext());
+    // Tenant nền của site học tập nằm tại kho công cộng, KHÔNG
+    // phải tenant-zero ở kho nhân sự vận hành. Giữ slug trong ALS
+    // khi vào ngữ cảnh platform để truy vấn không rơi về kho chung.
+    const publicStore = tenantAls.getStore()?.spaceSlug === PUBLIC_LEARNING_SLUG;
+    return tenantAls.run(
+      { platform: true, ...(publicStore ? { spaceSlug: PUBLIC_LEARNING_SLUG } : {}) },
+      () => this.platformTenantInContext(),
+    );
   }
 
   private async platformTenantInContext(): Promise<TenantRow> {
-    const zero = await this.repo.getTenantBySlug(PLATFORM_TENANT_SLUG);
+    const slug = tenantAls.getStore()?.spaceSlug === PUBLIC_LEARNING_SLUG
+      ? PUBLIC_LEARNING_SLUG
+      : PLATFORM_TENANT_SLUG;
+    const zero = await this.repo.getTenantBySlug(slug);
     if (!zero) throw new NotFoundException({ message: 'Platform tenant (tenant-zero) is not seeded', code: 'tenant.platform_missing' });
     return zero;
   }
@@ -835,7 +846,11 @@ export class TenantsService {
   async listMyTenants(userId: string, activeTenantId?: string): Promise<MyTenant[]> {
     // Đường hệ thống xuyên tenant (bộ chọn tenant phải thấy membership ở
     // MỌI tenant của user) — chạy trong ngữ cảnh platform như platformTenant.
-    return tenantAls.run({ platform: true }, () => this.listMyTenantsInContext(userId, activeTenantId));
+    const publicStore = tenantAls.getStore()?.spaceSlug === PUBLIC_LEARNING_SLUG;
+    return tenantAls.run(
+      { platform: true, ...(publicStore ? { spaceSlug: PUBLIC_LEARNING_SLUG } : {}) },
+      () => this.listMyTenantsInContext(userId, activeTenantId),
+    );
   }
 
   private async listMyTenantsInContext(userId: string, activeTenantId?: string): Promise<MyTenant[]> {
@@ -861,7 +876,7 @@ export class TenantsService {
     // và dữ kiện của từng trung tâm được đọc tại chính kho của
     // nó (xem myTenantFromDirectoryEntry). Slug đã có từ nguồn
     // kho chung thì không đọc lại từ thư mục.
-    if (this.directory.isConfigured()) {
+    if (tenantAls.getStore()?.spaceSlug !== PUBLIC_LEARNING_SLUG && this.directory.isConfigured()) {
       const seenSlugs = new Set(rows.map((r) => r.slug));
       const entries = await this.directory.listMembershipDirectoryForUser(userId);
       for (const entry of entries) {
@@ -923,7 +938,11 @@ export class TenantsService {
   async resolveDefaultTenant(userId: string): Promise<TenantRow> {
     // Đường tiền-đăng-nhập: phân giải tenant mặc định phải thấy membership
     // của user ở mọi tenant — chạy trong ngữ cảnh platform như platformTenant.
-    return tenantAls.run({ platform: true }, () => this.resolveDefaultTenantInContext(userId));
+    const publicStore = tenantAls.getStore()?.spaceSlug === PUBLIC_LEARNING_SLUG;
+    return tenantAls.run(
+      { platform: true, ...(publicStore ? { spaceSlug: PUBLIC_LEARNING_SLUG } : {}) },
+      () => this.resolveDefaultTenantInContext(userId),
+    );
   }
 
   private async resolveDefaultTenantInContext(userId: string): Promise<TenantRow> {
@@ -952,7 +971,11 @@ export class TenantsService {
   async resolveSwitchTarget(userId: string, tenantId: string): Promise<TenantRow> {
     // Kiểm chứng đích chuyển tenant là đường hệ thống xuyên tenant — chạy
     // trong ngữ cảnh platform như platformTenant.
-    return tenantAls.run({ platform: true }, () => this.resolveSwitchTargetInContext(userId, tenantId));
+    const publicStore = tenantAls.getStore()?.spaceSlug === PUBLIC_LEARNING_SLUG;
+    return tenantAls.run(
+      { platform: true, ...(publicStore ? { spaceSlug: PUBLIC_LEARNING_SLUG } : {}) },
+      () => this.resolveSwitchTargetInContext(userId, tenantId),
+    );
   }
 
   private async resolveSwitchTargetInContext(userId: string, tenantId: string): Promise<TenantRow> {

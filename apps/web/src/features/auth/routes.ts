@@ -7,6 +7,7 @@ const { route } = relative(import.meta.dirname);
  */
 export default [
   route('login', 'routes/login.tsx'),
+  route('register', 'routes/register.tsx'),
   route('oauth/callback', 'routes/oauth-callback.tsx'),
 ] satisfies RouteConfig;
 

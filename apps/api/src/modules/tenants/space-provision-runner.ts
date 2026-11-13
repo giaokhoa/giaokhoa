@@ -1,5 +1,7 @@
 /**
- * Pipeline cấp phát trung tâm mới (issue #583, chương trình tenant #579) — MỘT lệnh vận hành duy nhất dựng một trung tâm từ con số không thành một kho riêng hoạt động được trên cụm chung.
+ * Pipeline cấp phát kho trung tâm hoặc khu công cộng (#583, #8,
+ * chương trình tenant #579) — MỘT lệnh vận hành dựng một kho từ con số
+ * không thành một kho riêng hoạt động được trên cụm chung.
  *
  * Thứ tự 7 bước (mỗi bước kiểm tra trạng thái đã làm trước khi làm — chạy lại sau sự cố tiếp tục từ bước dở dang, không tạo trùng):
  * 1. Đăng ký: dòng `space_registry` (trạng thái `provisioning`) +
@@ -11,9 +13,21 @@
  * 3. Migration: toàn bộ migration nghiệp vụ hiện hành vào database
  *    mới bằng đúng bộ máy migration của `@giaokhoa/db`
  *    (`applyStoreMigrations`, như fleet runner), rồi ghi phiên bản
- *    schema vào registry của trung tâm. Database mới nên không cần sao lưu trước như fleet runner.
- * 4. Dữ kiện nền: context hệ thống + dòng tenant (kind `center`,
- *    trạng thái `active`) + context tenant + bản cài cục bộ gói chương trình (YCCĐ) — dump chương trình được restore nguyên văn bằng `restoreProgramDumpSql` (một transaction, neo lại context hệ thống của kho đích). Ghi nhận bản cài (phiên bản + checksum) để lần chạy lại biết kho này đã ở bản nào: bản cài khớp thì bỏ qua; chưa có bản cài mà dữ kiện đã có (chết giữa lúc restore và lúc ghi bản cài) thì chỉ ghi bản cài. Cùng bước này cài thêm BỘ VAI MẶC ĐỊNH hiện hành vào kho đích (bước ghi nhận `role-baseline`): cơ chế chuyển tiếp để trung tâm mới có vai mà gán ngay khi mở — xem `installCentreRoleBaseline`.
+ *    schema vào registry của trung tâm.
+ *    Database mới nên không cần sao lưu trước như fleet runner.
+ * 4. Dữ kiện nền: context hệ thống + dòng tenant (kind `center` hoặc
+ *    `platform` cho khu công cộng,
+ *    trạng thái `active`) + context tenant + bản cài cục bộ gói
+ *    chương trình (YCCĐ) — dump chương trình được restore nguyên
+ *    văn bằng `restoreProgramDumpSql` (một transaction, neo lại
+ *    context hệ thống của kho đích). Ghi nhận bản cài (phiên bản +
+ *    checksum) để lần chạy lại biết kho này đã ở bản nào: bản cài
+ *    khớp thì bỏ qua; chưa có bản cài mà dữ kiện đã có (chết giữa
+ *    lúc restore và lúc ghi bản cài) thì chỉ ghi bản cài. Cùng bước
+ *    này cài thêm BỘ VAI MẶC ĐỊNH hiện hành vào kho đích và danh mục
+ *    khoá học gốc nếu là khu công cộng (bước ghi
+ *    nhận `role-baseline`): cơ chế chuyển tiếp để trung tâm mới có
+ *    vai mà gán ngay khi mở — xem `installCentreRoleBaseline`.
  * 5. Nhận diện: dòng `centre_identity` (tên hiển thị = tên trung
  *    tâm, logo/chưa có, màu/chưa đặt) — dữ kiện này sống trong kho của trung tâm, không nằm ở sổ đăng ký control plane.
  * 6. Quản trị đầu tiên: tài khoản KHÔNG mật khẩu (không tồn tại mật
@@ -30,6 +44,7 @@
  * ranh giới), dùng đúng repository/writer của control plane và đúng bất biến ghi của tầng service.
  */
 import { createHash } from 'node:crypto';
+import { PUBLIC_LEARNING_SLUG } from './public-learning';
 import { Client, Pool } from 'pg';
 import type { SpaceRegistryRow } from '@giaokhoa/db/repositories/control-plane';
 import { applyStoreMigrations } from '@giaokhoa/db/migrate';
@@ -76,6 +91,8 @@ import {
 
 /** Đầu vào của một lượt cấp phát. */
 export type SpaceProvisionOptions = {
+  /** Chỉ khu công cộng được cấp phát kind platform; các slug khác luôn kind center. */
+  kind?: 'center' | 'platform';
   /** Slug của trung tâm (chuẩn hoá theo nhãn DNS trước khi dùng). */
   slug: string;
   /** Tên hiển thị của trung tâm. */
@@ -289,6 +306,13 @@ export async function runSpaceProvision(options: SpaceProvisionOptions): Promise
   const env = options.env ?? process.env;
   const log = options.log ?? ((message: string) => console.log(message));
   const slug = normalizeSpaceSlug(options.slug);
+  const kind = options.kind ?? 'center';
+  if (kind === 'platform' && slug !== PUBLIC_LEARNING_SLUG) {
+    throw new Error(`Only ${PUBLIC_LEARNING_SLUG} may be provisioned as a public platform store`);
+  }
+  if (kind === 'center' && slug === PUBLIC_LEARNING_SLUG) {
+    throw new Error(`Slug ${PUBLIC_LEARNING_SLUG} is reserved for the public learning store`);
+  }
   const name = options.name.trim();
   if (!name) throw new Error('Space name is required');
   const adminUsername = (options.adminUsername ?? 'admin').trim().toLowerCase();
@@ -327,6 +351,9 @@ export async function runSpaceProvision(options: SpaceProvisionOptions): Promise
     const existing = await writer.findSpaceBySlug(slug);
     let spaceId: string;
     if (existing) {
+      if (existing.kind !== kind) {
+        throw new Error(`Space ${slug} is registered as ${existing.kind}, expected ${kind}`);
+      }
       if (existing.storageMode !== 'dedicated') {
         throw new Error(`Slug ${slug} is already registered as a ${existing.storageMode} space (id ${existing.id}) — refusing to take it over`);
       }
@@ -359,7 +386,7 @@ export async function runSpaceProvision(options: SpaceProvisionOptions): Promise
       let row: SpaceRegistryRow | undefined;
       try {
         row = await writer.createSpaceRegistration(actorId, {
-          slug, name, kind: 'center', databaseName, connectionRoleRef: connectionRole, secretRef: `env:${secretEnvVar}`, plan: options.plan ?? null,
+          slug, name, kind, databaseName, connectionRoleRef: connectionRole, secretRef: `env:${secretEnvVar}`, plan: options.plan ?? null,
         });
       } catch (error) {
         if (isDedicatedDatabaseNameConflict(error)) {
@@ -529,19 +556,19 @@ export async function runSpaceProvision(options: SpaceProvisionOptions): Promise
         await db.updateTable('context').set({ path, depth: 1 }).where('id', '=', inserted.id).execute();
         systemContextId = inserted.id;
       }
-      // Dòng tenant của trung tâm (kind center, active — cổng guard
+      // Dòng tenant của trung tâm / khu công cộng (active — cổng guard
       // yêu cầu tenant active và membership active để đi qua).
       const existingTenant = await db.selectFrom('tenants').selectAll()
         .where('slug', '=', slug).limit(1).executeTakeFirst();
       let tenantId: string;
       if (existingTenant) {
         tenantId = existingTenant.id;
-        if (existingTenant.kind !== 'center' || existingTenant.status !== 'active') {
+        if (existingTenant.kind !== kind || existingTenant.status !== 'active') {
           throw new Error(`Tenant ${slug} already exists in the centre database with kind ${existingTenant.kind} / status ${existingTenant.status} — refusing to take it over`);
         }
       } else {
         const inserted = await db.insertInto('tenants')
-          .values({ slug, name, kind: 'center', status: 'active', plan: options.plan ?? null })
+          .values({ slug, name, kind, status: 'active', plan: options.plan ?? null })
           .returningAll().executeTakeFirstOrThrow();
         tenantId = inserted.id;
       }
@@ -554,6 +581,55 @@ export async function runSpaceProvision(options: SpaceProvisionOptions): Promise
           .values({ context_level: CONTEXT_LEVELS.TENANT, instance_id: tenantId, path: '', depth: 0 })
           .returningAll().executeTakeFirstOrThrow();
         await db.updateTable('context').set({ path: `${'/' + systemContextId}/${inserted.id}`, depth: 2 }).where('id', '=', inserted.id).execute();
+      }
+      // Khu công cộng phải có một danh mục gốc sẵn có: giáo viên tự
+      // đăng ký chỉ được role coursecreator tại tenant, có quyền
+      // course:create trong danh mục con nhưng không có quyền
+      // category:manage để tự lập danh mục gốc. Cài một lần khi
+      // provision để luồng self-service chạy được ngay từ kho mới.
+      if (kind === 'platform') {
+        const existing = await db.selectFrom('course_categories').selectAll()
+          .where('tenant_id', '=', tenantId)
+          .where('id_number', '=', 'public-root')
+          .limit(1).executeTakeFirst();
+        let categoryId: string;
+        if (existing) {
+          categoryId = existing.id;
+        } else {
+          const category = await db.insertInto('course_categories').values({
+            tenant_id: tenantId,
+            id_number: 'public-root',
+            name: 'Khoá học công cộng',
+            path: '',
+            depth: 1,
+          }).returning('id').executeTakeFirstOrThrow();
+          categoryId = category.id;
+          await db.updateTable('course_categories').set({ path: `/${categoryId}` })
+            .where('id', '=', categoryId).execute();
+        }
+
+        // Context 40 là con của context tenant 20 — không ghép vào
+        // context hệ thống của kho chung hay của bất kỳ trung tâm nào.
+        const parentCtx = await db.selectFrom('context').selectAll()
+          .where('context_level', '=', CONTEXT_LEVELS.TENANT)
+          .where('instance_id', '=', tenantId)
+          .limit(1).executeTakeFirstOrThrow();
+        const categoryCtx = await db.selectFrom('context').selectAll()
+          .where('context_level', '=', CONTEXT_LEVELS.COURSECAT)
+          .where('instance_id', '=', categoryId)
+          .limit(1).executeTakeFirst();
+        if (!categoryCtx) {
+          const created = await db.insertInto('context').values({
+            context_level: CONTEXT_LEVELS.COURSECAT,
+            instance_id: categoryId,
+            path: '',
+            depth: parentCtx.depth + 1,
+          }).returning('id').executeTakeFirstOrThrow();
+          await db.updateTable('context')
+            .set({ path: `${parentCtx.path}/${created.id}` })
+            .where('id', '=', created.id).execute();
+        }
+        step('public-category', existing && categoryCtx ? 'reused' : 'created');
       }
       // Bản cài gói chương trình: khớp phiên bản + checksum thì bỏ
       // qua; chưa có bản cài mà dữ kiện đã có thì chỉ ghi bản cài

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { uuidIdSchema } from '@giaokhoa/contracts';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags } from '@nestjs/swagger';
@@ -6,13 +6,17 @@ import type { Request, Response } from 'express';
 import { clientIpOf } from '../../common/client-ip';
 import { CurrentUser, type AuthenticatedUser } from '../../common/current-user.decorator';
 import { Public } from '../../common/public.decorator';
+import { SkipSpaceContext } from '../tenants/skip-space-context.decorator';
+import { PlatformRoute } from '../../common/platform-route.decorator';
+import { isPublicLearningHost } from '../tenants/public-learning';
+import { resolveDedicatedSpace } from '../tenants/space-resolution';
+import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { RequireCapability } from '../../common/require-capability.decorator';
 import { UsersService } from '../users/users.service';
 import { changePasswordSchema, loginAsSchema, loginSchema, mfaTotpCodeSchema, mfaTotpSetupSchema, mfaVerifySchema, refreshTokenSchema, type ChangePasswordDto, type LoginAsDto, type LoginDto, type MfaTotpCodeDto, type MfaTotpSetupDto, type MfaVerifyDto, type RefreshDto } from './dto/auth.dto';
-import { AuthService, type PasswordLoginOutcome } from './auth.service';
-import { BetterAuthService } from './better-auth/better-auth.service';
+import { AuthService, type PasswordLoginOutcome, type CurrentSessionRefs } from './auth.service';
 import { AUTHENTICATED_VIA_BETTER_AUTH } from '../../common/better-auth-session.guard';
-import type { CurrentSessionRefs } from './auth.service';
+import { BetterAuthService } from './better-auth/better-auth.service';
 
 
 export const SESSION_COOKIE = 'giaokhoa_session';
@@ -42,7 +46,12 @@ function loginResponse(outcome: PasswordLoginOutcome) {
  * API xác thực: /auth/login, refresh, logout, đổi mật khẩu, login-as, MFA TOTP và session.
  */
 export class AuthController {
-  constructor(private readonly auth: AuthService, private readonly users: UsersService, private readonly betterAuth: BetterAuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly users: UsersService,
+    private readonly betterAuth: BetterAuthService,
+    private readonly spaceDb: SpaceDatabaseService,
+  ) {}
 
   @Public()
   @UseGuards(AuthGuard('local'))
@@ -115,10 +124,38 @@ export class AuthController {
   /**
    * Bề mặt đăng nhập quản trị platform, TÁCH khỏi bề mặt đăng nhập nghiệp vụ: chỉ tài khoản quản trị platform mới qua được; token trả ra mang audience `platform`, CHỈ dùng được cho route vận hành mang `@PlatformRoute()` (hiện là control plane) và không gọi được API nghiệp vụ — ngược lại token nghiệp vụ cũng không gọi được route vận hành. Bề mặt này sống ở địa chỉ gốc; đăng nhập tại địa chỉ kho riêng tra tài khoản trong kho đó nên quản trị platform ở kho chung không đăng nhập được tại đó. User bật MFA thì dừng ở challenge của luồng platform.
    */
+  /**
+   * Khi bật #8: chỉ Host gốc được dùng cổng vận hành, mọi credential
+   * đều tra kho chung. Khi CHƯA bật #8: tương thích #587 — Host
+   * trung tâm vẫn tra credential của chính kho trung tâm trước khi
+   * isPlatformSiteAdmin kiểm danh sách admin ở kho CHUNG. Nhờ vậy
+   * mật khẩu đúng của quản trị trung tâm nhận 403
+   * auth.platform_admin_required, không bị đổi thành 401 vì lookup
+   * nhầm kho. Không cho phép quản trị trung tâm vượt quyền.
+   * Dùng chung cả hai bước password/MFA để giữ binding challenge.
+   */
+  private async inPlatformLoginContext<T>(req: Request, fn: () => Promise<T>): Promise<T> {
+    if (process.env.PUBLIC_LEARNING_ENABLED === 'true') {
+      if (!isPublicLearningHost(req.headers.host)) {
+        throw new ForbiddenException({
+          message: 'Platform login is only available on the root host',
+          code: 'auth.platform_root_only',
+        });
+      }
+      return fn();
+    }
+    const space = await resolveDedicatedSpace(this.spaceDb, req.headers.host);
+    return space ? this.spaceDb.withSpaceKysely(space.slug, fn) : fn();
+  }
+
   @Public()
+  @SkipSpaceContext()
+  @PlatformRoute()
   @Post('platform/login')
   async platformLogin(@Body({ schema: loginSchema }) dto: LoginDto, @Req() req: Request) {
-    const outcome = await this.auth.platformLogin(dto.username, dto.password, clientIpOf(req), req.headers['user-agent']);
+    const outcome = await this.inPlatformLoginContext(req, () =>
+      this.auth.platformLogin(dto.username, dto.password, clientIpOf(req), req.headers['user-agent']),
+    );
     if (outcome.mfaRequired) {
       return { mfaRequired: true as const, challengeToken: outcome.challengeToken, user: { id: outcome.user.id, username: outcome.user.username } };
     }
@@ -129,9 +166,13 @@ export class AuthController {
    * POST /auth/platform/mfa/verify — bước hai của đăng nhập platform: challenge token của luồng platform + mã TOTP ⇒ access token platform (không có refresh token).
    */
   @Public()
+  @SkipSpaceContext()
+  @PlatformRoute()
   @Post('platform/mfa/verify')
   async platformMfaVerify(@Body({ schema: mfaVerifySchema }) dto: MfaVerifyDto, @Req() req: Request) {
-    const { user, accessToken, expiresIn } = await this.auth.verifyPlatformMfa(dto.challengeToken, dto.code, clientIpOf(req), req.headers['user-agent']);
+    const { user, accessToken, expiresIn } = await this.inPlatformLoginContext(req, () =>
+      this.auth.verifyPlatformMfa(dto.challengeToken, dto.code, clientIpOf(req), req.headers['user-agent']),
+    );
     return { user: { id: user.id, username: user.username, forcePasswordChange: user.forcePasswordChange }, accessToken, expiresIn };
   }
 

@@ -262,8 +262,14 @@ export function createBetterAuth(deps: BetterAuthFactoryDeps) {
         enabled: true,
         // ĐÃ CHỐT trong kế hoạch GĐ2: Facebook KHÔNG vào trustedProviders — và theo source 1.7.12, Facebook luôn trả emailVerified=false (cả đường id_token lẫn userinfo) nên không bao giờ tự liên kết theo email; chỉ Google (có xác thực email của chính Google) mới liên kết ngầm.
         trustedProviders: [],
-        // Mặc định của Better Auth còn đòi email phía tài khoản local đã xác thực, trong khi MỌI tài khoản do cầu nối/admin tạo đều có email_verified=false — giữ mặc định thì luật liên kết theo email chết lặng lẽ. Cổng gác đúng theo kế hoạch là xác thực email PHÍA PROVIDER, nên tắt điều kiện local.
-        requireLocalEmailVerified: false,
+        // Issue #8: tài khoản công cộng tự đăng ký có emailVerified=false.
+        // Chỉ xác thực email của Google là CHƯA đủ: kẻ xấu có thể giữ
+        // trước địa chỉ của nạn nhân bằng mật khẩu riêng, rồi Google
+        // sẽ tự nối provider vào credential do kẻ xấu kiểm soát.
+        // 1.7.12 kiểm requireLocalEmailVerified TRƯỚC linkAccount;
+        // phải bật nó cho mọi kho, kể cả khi Google xác thực email.
+        // Tài khoản quản trị do cầu nối tạo mặc định verified=true.
+        requireLocalEmailVerified: true,
       },
     },
     verification: {

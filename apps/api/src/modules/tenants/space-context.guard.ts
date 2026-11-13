@@ -12,7 +12,7 @@ import type { ResolvedSpaceConnection } from '../../db/routing/space-connection-
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { SKIP_SPACE_CONTEXT_KEY } from './skip-space-context.decorator';
-import { extractSpaceSlugFromHost } from './space-resolution';
+import { spaceSlugForHost } from './space-resolution';
 import { tenantAls } from './tenant-als';
 import { TenantsRepository } from '@giaokhoa/db/repositories/tenants';
 
@@ -66,7 +66,7 @@ export class SpaceContextGuard implements CanActivate {
       [AUTHENTICATED_VIA_BETTER_AUTH]?: boolean;
     }>();
     const hostHeader = request.headers?.host;
-    const slug = extractSpaceSlugFromHost(Array.isArray(hostHeader) ? hostHeader[0] : hostHeader);
+    const slug = spaceSlugForHost(hostHeader);
     if (!slug) {
       if (request.user?.centreId !== undefined) {
         // Trang chính ở giai đoạn hiện tại vẫn phục vụ qua địa chỉ gốc dù dòng đăng ký của nó có thể mang kho riêng. Chỉ ngoại lệ đúng phiên tenant platform + định danh đăng ký của Trang chính; token trung tâm khác không được nhờ thiếu Host để đọc kho chung.

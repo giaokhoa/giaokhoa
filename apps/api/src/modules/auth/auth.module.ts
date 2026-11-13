@@ -11,6 +11,8 @@ import { AccessModule } from '../access/access.module';
 import { TenantsModule } from '../tenants/tenants.module';
 import { UsersModule } from '../users/users.module';
 import { AuthController } from './auth.controller';
+import { PublicRegistrationController } from './public-registration.controller';
+import { PublicRegistrationService } from './public-registration.service';
 import { BetterAuthModule } from './better-auth/better-auth.module';
 import { AuthService } from './auth.service';
 import { LoginLockoutService } from './login-lockout.service';
@@ -30,7 +32,7 @@ import { JwtAuthStrategy, LocalAuthStrategy } from './strategies';
       useFactory: (config: ConfigService) => ({ secret: config.getOrThrow<string>('JWT_SECRET') }),
     }),
   ],
-  controllers: [AuthController, OAuthController],
+  controllers: [AuthController, OAuthController, PublicRegistrationController],
   providers: [
     // AuthRepository sống ở `@giaokhoa/db` (lớp thuần trên Kysely, issue #641) nên module lắp nó bằng factory provider: handle là facade định tuyến theo không gian `routedKysely` — cùng khuôn lắp ráp với ControlPlaneRepository ở ControlPlaneModule.
     {
@@ -38,7 +40,7 @@ import { JwtAuthStrategy, LocalAuthStrategy } from './strategies';
       useFactory: (spaceDb: SpaceDatabaseService) => new AuthRepository(spaceDb.routedKysely),
       inject: [SpaceDatabaseService],
     },
-    AuthService, SessionService, TotpService, OAuthService, LoginLockoutService, LocalAuthStrategy, JwtAuthStrategy,
+    AuthService, PublicRegistrationService, SessionService, TotpService, OAuthService, LoginLockoutService, LocalAuthStrategy, JwtAuthStrategy,
   ],
   // AuthRepository được export để UsersService dùng cơ chế thu hồi family refresh mỗi lần đặt mật khẩu qua đường sửa hồ sơ — cạnh này làm UsersModule ↔ AuthModule thành vòng module tường minh, forwardRef ở cả hai phía (xem users.module.ts). TotpService được xuất cho BetterAuthModule: cổng MFA của instance Better Auth tra trạng thái MFA từ `user_totp` qua chính service này (nguồn trạng thái MFA duy nhất của hệ).
   exports: [AuthService, SessionService, LoginLockoutService, AuthRepository, TotpService],

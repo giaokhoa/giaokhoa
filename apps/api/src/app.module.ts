@@ -72,6 +72,10 @@ import { SecurityHeadersMiddleware } from './common/security-headers.middleware'
  * trong cùng danh sách này.
  */
 const CREDENTIAL_ROUTES = /^\/api\/v\d+\/auth\/(token|login|session\/login|change-password|platform\/login)$/;
+/** Đăng ký tự do có chi phí băm mật khẩu và ghi DB; áp hạn mức riêng
+ * thay vì default 3.000/phút hoặc auth 300/phút. IP lấy từ ThrottlerGuard
+ * và proxy đáng tin cậy của ứng dụng, không lấy trực tiếp từ payload. */
+const REGISTRATION_ROUTES = /^\/api\/v\d+\/auth\/public\/register$/;
 
 /**
  * Token của provider gắn handle kho chung (xem khai báo trong `providers` của AppModule): giá trị của provider không được inject ở đâu — provider tồn tại vì hành động gắn lúc khởi tạo.
@@ -97,8 +101,11 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
       }),
     }),
     /**
-     * Giới hạn tốc độ hai lớp theo IP (gói chính thức @nestjs/throttler):
-     * hạn mức chung cho mọi route và hạn mức chặt chỉ áp cho các route xác thực có kiểm chứng mật khẩu. Lưu trữ mặc định trong bộ nhớ của tiến trình — đủ cho mô hình modular monolith một instance; khi scale nhiều instance API phải chuyển sang storage dùng chung.
+     * Giới hạn theo IP (gói chính thức @nestjs/throttler): hạn mức
+     * chung, hạn mức credential và hạn mức đăng ký tự do độc lập.
+     * Lưu trữ mặc định trong bộ nhớ của
+     * tiến trình — đủ cho mô hình modular monolith một instance; khi
+     * scale nhiều instance API phải chuyển sang storage dùng chung.
      */
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
@@ -114,6 +121,15 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
               const req = context.switchToHttp().getRequest<{ method?: string; path?: string; url?: string }>();
               const path = req.path ?? req.url ?? '';
               return !(req.method === 'POST' && CREDENTIAL_ROUTES.test(path));
+            },
+          },
+          {
+            name: 'registration',
+            ttl: 60_000,
+            limit: config.get<number>('RATE_LIMIT_REGISTRATION_PER_MINUTE') ?? 5,
+            skipIf: (context: ExecutionContext) => {
+              const req = context.switchToHttp().getRequest<{ method?: string; path?: string; url?: string }>();
+              return !(req.method === 'POST' && REGISTRATION_ROUTES.test(req.path ?? req.url ?? ''));
             },
           },
         ],
