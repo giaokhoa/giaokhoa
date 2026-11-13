@@ -1,8 +1,3 @@
 {"compilerOptions":{"noUncheckedIndexedAccess":true,"outDir":"./dist","rootDir":"./src",
-  // Wildcard repository Kysely của @giaokhoa/db (chiến dịch chuyển ORM
-  // sang Kysely): trỏ type vào dist đã build của DB thay vì
-  // kéo source DB vào một package khác; NodeNext hiểu exports.
-  // Runtime Node đọc `exports` trong package.json như thường; import
-  // ở đây chỉ là `export type` nên bị xoá hoàn toàn lúc chạy.
   "paths":{"@giaokhoa/db/repositories/*":["../db/dist/repositories/*.d.ts"]}},
  "extends":"@giaokhoa/config/tsconfig/nest.json","include":["src"]}

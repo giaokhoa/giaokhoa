@@ -51,6 +51,28 @@ Mở repo trong VS Code, chọn "Dev Containers: Reopen in Container", sau đó 
 
 Container này CHỈ phục vụ phát triển. Đường triển khai production dùng `Dockerfile` đa target và `compose.yaml` ở gốc repo như mô tả ở mục [Triển khai production (tự host)](#triển-khai-production-tự-host) — hai bộ file phục vụ hai mục đích khác nhau: devcontainer cho phát triển local, compose ở gốc cho production tự host.
 
+## TypeScript: typecheck và build
+
+API và worker sử dụng `apps/api/tsconfig.json` và
+`apps/worker/tsconfig.json` với `module=ESNext` và
+`moduleResolution=Bundler` để typecheck cả source và test Vitest,
+không yêu cầu phần mở rộng `.js` trong import tương đối của file test.
+Build production đọc `tsconfig.build.json` riêng, ghi đè sang
+`module=NodeNext`, `moduleResolution=NodeNext` và giới hạn
+`rootDir=src`, giữ đúng module runtime Node 24.
+
+Các subpath khai kiểu từ `@giaokhoa/db` (control plane, system-bank,
+repository, migration và test-support) trỏ tới declaration trong
+`packages/db/dist` để không đưa source của package khác vào
+`rootDir` của app. Package `enrol` dùng bản declaration repository
+tương tự. Khi typecheck sau checkout sạch, build các workspace phụ
+thuộc trước bằng `pnpm exec turbo run typecheck`.
+
+Theo quy định không comment trong code/config, mọi `tsconfig*.json`
+được kiểm tra bằng `node scripts/verify-tsconfig-no-comments.mjs`.
+Workflow CI chạy phép kiểm này trước các tác vụ lint và build;
+directive kỹ thuật có hiệu lực trong các file khác vẫn giữ nguyên.
+
 ## Chạy ứng dụng
 
 Từ gốc monorepo, chạy `pnpm dev` để Turbo biên dịch các workspace package phụ thuộc trước khi mở API, worker và web ở chế độ watch. Các bản build của package trong `dist/` có thể tồn tại từ lần checkout trước, nên không khởi động trực tiếp các app trước khi Turbo hoàn tất bước `^build`.

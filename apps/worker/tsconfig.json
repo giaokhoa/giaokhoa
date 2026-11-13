@@ -1,26 +1,16 @@
 {
   "extends": "@giaokhoa/config/tsconfig/nest.json",
   "compilerOptions": {
-    // Typecheck cả test (Vitest/Vite transpile module theo bundler):
-    // không ép extension .js trên import tương đối TS test.
-    // Bản build production có tsconfig.build.json riêng và luôn dùng
-    // NodeNext, phát CommonJS đúng runtime Node 24 trong image.
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "outDir": "./dist",
-    // Subpath control plane trỏ type vào dist đã build của DB,
-    // không kéo source ngoài vào rootDir của worker. NodeNext đọc
-    // exports thật của @giaokhoa/db khi chạy production.
     "paths": {
       "@giaokhoa/db/control-plane": [
         "../../packages/db/dist/control-plane.d.ts"
       ],
-      // Wildcard repository Kysely trỏ vào dist đã build của DB.
       "@giaokhoa/db/repositories/*": [
         "../../packages/db/dist/repositories/*.d.ts"
       ],
-      // Điểm vào test-support của @giaokhoa/db (harness dựng DB test):
-      // chỉ test mới import, cùng cơ chế ánh xạ dist như trên.
       "@giaokhoa/db/test-support": [
         "../../packages/db/dist/test-support/index.d.ts"
       ]

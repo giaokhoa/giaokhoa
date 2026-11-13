@@ -1,10 +1,6 @@
 {
   "extends": "@giaokhoa/config/tsconfig/nest.json",
   "compilerOptions": {
-    // Typecheck cả test (Vitest/Vite transpile module theo bundler):
-    // không ép extension .js trên import tương đối TS test.
-    // Bản build production có tsconfig.build.json riêng và luôn dùng
-    // NodeNext, phát CommonJS đúng runtime Node 24 trong image.
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "outDir": "./dist",
@@ -12,39 +8,22 @@
       "@/*": [
         "./src/*"
       ],
-      // Điểm vào control plane của @giaokhoa/db tiêu thụ bản dist
-      // đã build; giữ ánh xạ type vào dist để không kéo source DB
-      // vào rootDir của API dù moduleResolution đã hiểu exports.
       "@giaokhoa/db/control-plane": [
         "../../packages/db/dist/control-plane.d.ts"
       ],
-      // Subpath ngân hàng hệ thống dùng bản declaration dist tương tự.
       "@giaokhoa/db/system-bank": [
         "../../packages/db/dist/system-bank.d.ts"
       ],
-      // Wildcard repository Kysely dùng bản declaration dist của DB
-      // (không import trực tiếp source package khác vào runtime app).
       "@giaokhoa/db/repositories/*": [
         "../../packages/db/dist/repositories/*.d.ts"
       ],
-      // Điểm vào test-support của @giaokhoa/db (harness dựng DB test):
-      // chỉ test mới import, cùng cơ chế ánh xạ dist như trên.
       "@giaokhoa/db/test-support": [
         "../../packages/db/dist/test-support/index.d.ts"
       ],
-      // Điểm vào bộ máy migration của @giaokhoa/db (issue #663): các
-      // runner phía API áp migration qua `applyStoreMigrations`
-      // của package — cùng cơ chế ánh xạ dist như trên.
       "@giaokhoa/db/migrate": [
         "../../packages/db/dist/migrate/apply.d.ts"
       ]
     },
-    // Chương trình typecheck (noEmit) bao gồm cả cầu dẫn test
-    // `test/support/sepay-sweep-driver.ts` vốn import code production
-    // của apps/worker (issue #539): rootDir phải chứa cả hai app thì
-    // tsc mới chấp nhận các file đó. Cấu hình build riêng
-    // (tsconfig.build.json) đã ghi đè rootDir về ./src nên đầu ra
-    // build không đổi.
     "rootDir": ".."
   },
   "include": [
