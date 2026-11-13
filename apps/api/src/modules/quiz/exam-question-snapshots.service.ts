@@ -8,6 +8,7 @@ import { extractRichTextPlainText, systemBankPackageSchema, type RichTextDocumen
 import type { ExamQuestionSnapshot } from '@giaokhoa/db';
 import type { ExamSlotRow } from '@giaokhoa/db/repositories/exams';
 import { QuestionsService } from '../questions/questions.service';
+import { QuestionBanksService } from '../questions/question-banks.service';
 import { SystemBankService } from '../system-bank/system-bank.service';
 import { SystemBankMediaService } from '../system-bank/system-bank-media.service';
 import { checksumPackage, packageValidationError } from '../system-bank/system-bank-package';
@@ -18,6 +19,7 @@ import { assertSupportedQtype, normaliseQuestionContent } from '../questions/app
 export class ExamQuestionSnapshotsService {
   constructor(
     private readonly questions: QuestionsService,
+    private readonly questionBanks: QuestionBanksService,
     private readonly systemBank: SystemBankService,
     private readonly media: SystemBankMediaService,
   ) {}
@@ -51,11 +53,14 @@ export class ExamQuestionSnapshotsService {
     };
   }
 
-  /** Chụp version local sau cổng đọc; giữ nguyên id đáp án để tương thích lượt làm hiện hành. */
+  /**
+   * Chụp version local đúng quyền bank nguồn: bank personal khác bị
+   * chặn dù câu đã ready; bank trường/tổ kiểm membership + useall.
+   * Category legacy chưa neo bank giữ luồng dùng câu ready hiện hành.
+   * Giữ id đáp án nguyên gốc để tương thích lượt làm cũ.
+   */
   async readLocal(actorId: string, questionId: string, versionId: string): Promise<ExamQuestionSnapshot> {
-    // Câu local đã qua cổng ready của ExamsService: giữ quyền dùng câu
-    // theo luật cũ (kể cả câu trong bank chung trung tâm), không áp cổng
-    // xem chi tiết bank riêng của getQuestionForViewer ở đây.
+    await this.questionBanks.assertCanUseQuestionInExam(actorId, questionId);
     const view = await this.questions.getQuestion(questionId);
     const content = await this.questions.getVersionContent(questionId, versionId);
     const stimulus = content.version.stimulusId ? await this.questions.getStimulus(content.version.stimulusId) : null;

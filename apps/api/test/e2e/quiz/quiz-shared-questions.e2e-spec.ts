@@ -410,6 +410,98 @@ describe('Giao đề trộn nguồn chung và riêng bằng snapshot trung tâm'
     expect((await centre.query("SELECT count(*)::int AS n FROM files WHERE file_area = 'exam_snapshot'")).rows[0].n).toBe(beforeFiles);
   }, 90_000);
 
+  it('không cho dùng câu ready ở bank personal của đồng nghiệp, vẫn dùng được bank chung có quyền', async () => {
+    // Giáo viên B cùng trung tâm, sở hữu bank personal B; giáo viên A
+    // có thể biết UUID nhưng không được đọc/copy đáp án từ bank B.
+    const colleague = await createUserViaApi(app, admin);
+    await seedTenantMembershipFixture(app, tenantA, colleague.id);
+    const systemId = await systemContextId(app, admin);
+    const editingteacher = await roleIdByShortname(app, admin, 'editingteacher');
+    await assignRole(app, admin, colleague.id, editingteacher, systemId);
+    const colleagueToken = await session(colleague, tenantA);
+    const privateId = await createReadyQuestion(app, colleagueToken, 'Bí mật của giáo viên B');
+
+    const forbiddenRead = await http(app).get(`/api/v1/questions/${privateId}`).set(bearer(teacher));
+    expect(forbiddenRead.status).toBe(404);
+    const deniedPaper = await http(app).post(`/api/v1/exams/banks/${examBankId}/exams`)
+      .set(bearer(teacher)).send({ name: 'Cố sử dụng câu riêng đồng nghiệp',
+        slots: [{ questionId: privateId }] });
+    expect(deniedPaper.status, JSON.stringify(deniedPaper.body)).toBe(404);
+    expect(deniedPaper.body.code).toBe('question.not_found');
+
+    const deniedNewPin = await http(app).post(`/api/v1/courses/${courseId}/exam-pins`)
+      .set(bearer(teacher)).send({ sectionId, requestId: randomUUID(),
+        newExam: { name: 'Ghim câu riêng bị cấm', slots: [{ questionId: privateId }] } });
+    expect(deniedNewPin.status, JSON.stringify(deniedNewPin.body)).toBe(404);
+
+    // Bank trường dùng chung: thành viên có quyền vẫn tạo đề trộn được.
+    const listed = await http(app).get('/api/v1/question-banks?kind=question').set(bearer(colleagueToken));
+    expect(listed.status).toBe(200);
+    const sharedBank = (listed.body as { scope: string; defaultCategoryId: string | null; contextId: string }[])
+      .find((item) => item.scope === 'school');
+    expect(sharedBank?.defaultCategoryId).toBeTruthy();
+    // Bank trường chỉ cho thành viên dùng/copy; cấp quyền lead tường
+    // minh cho giáo viên B để có thể soạn câu làm nguồn kiểm thử.
+    await assignRole(app, admin, colleague.id, await roleIdByShortname(app, admin, 'qbanklead'), sharedBank!.contextId);
+    const sharedQuestion = await http(app).post('/api/v1/questions').set(bearer(colleagueToken)).send({
+      categoryId: sharedBank!.defaultCategoryId, qtype: 'multichoice',
+      questionText: 'Câu dùng chung có quyền của trường',
+      answers: [
+        { text: 'A', correct: true }, { text: 'B', correct: false },
+        { text: 'C', correct: false }, { text: 'D', correct: false },
+      ],
+    });
+    expect(sharedQuestion.status, JSON.stringify(sharedQuestion.body)).toBe(201);
+    const allowedPaper = await http(app).post(`/api/v1/exams/banks/${examBankId}/exams`)
+      .set(bearer(teacher)).send({ name: 'Đề trộn câu bản thân và trường',
+        slots: [{ questionId: localId }, { questionId: sharedQuestion.body.question.id }] });
+    expect(allowedPaper.status, JSON.stringify(allowedPaper.body)).toBe(201);
+    expect(allowedPaper.body.slots).toHaveLength(2);
+  }, 90_000);
+
+  it('retry sai section trả 409 nhưng không xoá intent, CM, grade hay snapshot đang chuẩn bị', async () => {
+    const published = await publish('multichoice', mcPackage());
+    const examId = await paper([published.question.id]);
+    const body = pinBody(examId);
+    const created = await http(app).post(`/api/v1/courses/${courseId}/exam-pins`)
+      .set(bearer(teacher)).send(body);
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const pinId = created.body.id as string;
+    const cmId = created.body.cmId as string;
+    const originalGrade = (await centre.query(
+      'SELECT id FROM grade_items WHERE item_instance = $1', [cmId])).rows[0].id as string;
+
+    const otherSection = await http(app).post(`/api/v1/courses/${courseId}/sections`)
+      .set(bearer(teacher)).send({ name: uniqueName('Mục khác để retry') });
+    expect(otherSection.status, JSON.stringify(otherSection.body)).toBe(201);
+
+    // Mô phỏng crash sau bước tạo CM và grade, trước cập nhật trạng thái ready.
+    await centre.query("UPDATE exam_pins SET preparation_state = 'preparing' WHERE id = $1", [pinId]);
+    const before = await centre.query('SELECT question_snapshots, cm_id FROM exam_pins WHERE id = $1', [pinId]);
+
+    const conflict = await http(app).post(`/api/v1/courses/${courseId}/exam-pins`)
+      .set(bearer(teacher)).send({ ...body, sectionId: otherSection.body.id });
+    expect(conflict.status, JSON.stringify(conflict.body)).toBe(409);
+    expect(conflict.body.code).toBe('exam.pin_request_conflict');
+
+    const stillPinned = await centre.query(
+      'SELECT preparation_state, question_snapshots, cm_id FROM exam_pins WHERE id = $1', [pinId]);
+    expect(stillPinned.rowCount).toBe(1);
+    expect(stillPinned.rows[0].preparation_state).toBe('preparing');
+    expect(stillPinned.rows[0].cm_id).toBe(before.rows[0].cm_id);
+    expect(stillPinned.rows[0].question_snapshots).toEqual(before.rows[0].question_snapshots);
+    expect((await centre.query('SELECT section FROM course_modules WHERE id = $1', [cmId])).rows[0].section).toBe(sectionId);
+    expect((await centre.query('SELECT id FROM grade_items WHERE id = $1', [originalGrade])).rowCount).toBe(1);
+
+    const recovered = await http(app).post(`/api/v1/courses/${courseId}/exam-pins`)
+      .set(bearer(teacher)).send(body);
+    expect(recovered.status, JSON.stringify(recovered.body)).toBe(201);
+    expect(recovered.body.id).toBe(pinId);
+    expect(recovered.body.cmId).toBe(cmId);
+    expect((await centre.query('SELECT preparation_state FROM exam_pins WHERE id = $1', [pinId])).rows[0].preparation_state).toBe('ready');
+    expect((await centre.query('SELECT id FROM grade_items WHERE id = $1', [originalGrade])).rowCount).toBe(1);
+  }, 90_000);
+
   it('hai kho A/B riêng biệt giữ snapshot, media, lượt làm và điểm ở A khi bank không còn kết nối', async () => {
     const cpName = `giaokhoa_test_shared_cp_${suffix}`;
     const previousCp = process.env.CONTROL_PLANE_DATABASE_URL;

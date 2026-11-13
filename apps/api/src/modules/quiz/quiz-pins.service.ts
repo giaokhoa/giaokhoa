@@ -191,15 +191,20 @@ export class QuizPinsService {
       ...(input.reviewRightAnswer !== undefined ? { reviewRightAnswer: input.reviewRightAnswer } : (preset ? { reviewRightAnswer: preset.reviewRightAnswer } : {})),
       ...(input.reviewOverallFeedback !== undefined ? { reviewOverallFeedback: input.reviewOverallFeedback } : (preset ? { reviewOverallFeedback: preset.reviewOverallFeedback } : {})),
     });
-    return this.resumePinRecord(actorId, courseId, pin, input.sectionId);
+    return this.resumePinRecord(actorId, courseId, pin, input.sectionId, true);
   }
 
   /**
    * Hoàn tất pin đang chuẩn bị. Chạy lại an toàn sau crash ở bất kỳ
    * ranh giới nào: snapshot đã ghi thì không đọc lại kho nguồn,
    * cm/grade item đã tạo thì tìm theo instance trước khi thêm mới.
+   * Kiểm tra section của CM cũ TRƯỚC mọi thao tác có thể xóa dữ liệu;
+   * retry chỉ giữ nguyên tài nguyên đã có nếu lỗi, không bù trừ chúng.
+   * Chỉ thao tác vừa tạo intent mới có quyền bù trừ phần tạo dở.
+   *
+   * @param newlyInserted Đúng khi pin mới được chèn trong chính lời gọi.
    */
-  async resumePinRecord(actorId: string, courseId: string, pin: ExamPinRow, sectionId: string): Promise<QuizView> {
+  async resumePinRecord(actorId: string, courseId: string, pin: ExamPinRow, sectionId: string, newlyInserted = false): Promise<QuizView> {
     await this.evaluator.requireCapability(actorId, 'course:manageactivities', await this.courses.courseContextId(courseId));
     await this.evaluator.requireCapability(actorId, 'grade:manage', await this.courses.courseContextId(courseId));
     const section = await this.courses.getSection(sectionId);
@@ -209,6 +214,11 @@ export class QuizPinsService {
     const version = await this.repo.getExamVersion(pin.examVersionId);
     if (!version) throw new NotFoundException({ code: 'exam.version_not_found' });
     const name = pin.name ?? version.name;
+    // RequestId đã chốt một section. Retry sai section không được
+    // bước vào nhánh bù trừ và không được dọn snapshot/CM/điểm cũ.
+    let cm = (await this.courses.listCms(courseId))
+      .find((item) => item.component === QUIZ_COMPONENT && item.instanceId === pin.id);
+    if (cm && cm.section !== sectionId) throw new ConflictException({ code: 'exam.pin_request_conflict' });
     try {
       const slots = await this.repo.listExamSlots(pin.examVersionId);
       if (!pin.questionSnapshots && slots.some((slot) => slot.sourceDomain === 'bank-system')) {
@@ -221,9 +231,6 @@ export class QuizPinsService {
         await this.repo.updatePin(pin.id, { questionSnapshots: snapshots });
       }
 
-      const cms = await this.courses.listCms(courseId);
-      let cm = cms.find((item) => item.component === QUIZ_COMPONENT && item.instanceId === pin.id);
-      if (cm && cm.section !== sectionId) throw new ConflictException({ code: 'exam.pin_request_conflict' });
       if (!cm) {
         cm = await this.courses.createCm(actorId, courseId, {
           sectionId, component: QUIZ_COMPONENT, instanceId: pin.id, name,
@@ -237,21 +244,24 @@ export class QuizPinsService {
       });
       await this.repo.updatePin(pin.id, { preparationState: 'ready' });
     } catch (error) {
-      // Lỗi được bắt: bù trừ best-effort; crash không đi qua catch
-      // thì lần retry dưới advisory lock sẽ hoàn tất các bước còn thiếu.
-      try {
-        const cm = (await this.courses.listCms(courseId))
-          .find((item) => item.component === QUIZ_COMPONENT && item.instanceId === pin.id);
-        if (cm) {
-          const grade = await this.grades.getItemForCm(courseId, cm.id);
-          if (grade) await this.grades.deleteItem(actorId, grade.id);
-          await this.courses.deleteCm(actorId, cm.id);
+      // Chỉ lời gọi mới tạo intent được bù trừ: mọi CM/grade của pin
+      // mới đều do lời gọi đó tạo. Retry pin cũ không xóa bất kỳ tài
+      // nguyên nào nếu lỗi giữa chừng; lần sau tiếp tục cùng requestId.
+      if (newlyInserted) {
+        try {
+          const createdCm = (await this.courses.listCms(courseId))
+            .find((item) => item.component === QUIZ_COMPONENT && item.instanceId === pin.id);
+          if (createdCm) {
+            const createdGrade = await this.grades.getItemForCm(courseId, createdCm.id);
+            if (createdGrade) await this.grades.deleteItem(actorId, createdGrade.id);
+            await this.courses.deleteCm(actorId, createdCm.id);
+          }
+          await this.files.cleanupExamSnapshotFiles(pin.id);
+          await this.repo.deletePin(pin.id);
+        } catch {
+          // Bù trừ thất bại: giữ intent, CM và staging còn lại để
+          // retry tiếp tục bằng đúng requestId thay vì mất dấu vết.
         }
-        await this.files.cleanupExamSnapshotFiles(pin.id);
-        await this.repo.deletePin(pin.id);
-      } catch {
-        // Không xóa intent nếu bù trừ thất bại: lần retry còn dấu vết
-        // để tìm cm, grade item và file staging còn sót.
       }
       throw error;
     }

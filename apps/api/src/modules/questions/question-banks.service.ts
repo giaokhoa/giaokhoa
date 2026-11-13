@@ -493,6 +493,44 @@ export class QuestionBanksService {
   }
 
   /**
+   * Cổng dùng câu local khi soạn đề: với category thuộc bank thật,
+   * đồng bộ tư cách thành viên rồi đòi `question:useall` và quyền sở
+   * hữu bank personal (site admin là ngoại lệ). Không rò nội dung hay
+   * sự tồn tại của câu không được phép: trả cùng `question.not_found`
+   * như REST đọc câu. Với category legacy không gắn bank và không nằm
+   * trong context của bank nào, giữ khả năng gắn câu ready như luồng
+   * soạn đề cũ; cổng soạn đề vẫn kiểm exam:add/exam:edit riêng.
+   *
+   * @param actorId Người dùng soạn đề.
+   * @param questionId Câu local cần thêm vào slot hoặc snapshot.
+   * @throws NotFoundException `question.not_found` nếu câu/category vắng
+   * hoặc nguồn thuộc bank mà người dùng không có quyền sử dụng.
+   */
+  async assertCanUseQuestionInExam(actorId: string, questionId: string): Promise<void> {
+    const notFound = () => new NotFoundException({ message: `Question ${questionId} not found`, code: 'question.not_found' });
+    const question = await this.questionsRepo.getQuestion(questionId);
+    const category = question ? await this.questionsRepo.getCategory(question.category) : undefined;
+    if (!category) throw notFound();
+
+    // Category từ mô hình bank hiện hành có bank_id. Category đời cũ
+    // có thể không có bank_id nhưng vẫn sống tại context riêng của bank.
+    const bank = category.bankId
+      ? await this.repo.getBank(category.bankId)
+      : await this.questionsRepo.getBankByContextId(category.contextId);
+    if (category.bankId && !bank) throw notFound(); // Neo nguồn hỏng: fail-closed.
+    if (!bank) return; // Câu legacy chưa thuộc bank: không đổi luật dùng câu cũ.
+
+    try {
+      await this.assertCanUseBank(actorId, bank);
+    } catch (error) {
+      // Không tiết lộ bank personal của đồng nghiệp hoặc khả năng thiếu
+      // quyền bank qua mã lỗi khác nhau (chống oracle theo issue #123).
+      if (error instanceof NotFoundException || error instanceof ForbiddenException) throw notFound();
+      throw error;
+    }
+  }
+
+  /**
    * Cổng "vào được bank" THEO LOẠI MÓN (MB-1): bank ma trận gác bằng
    * quyền bank-local (vai chuyên dụng tại context bank — xem
    * bankLocalMatrixCaps) thay cho question:useall — quyền của mỗi loại
