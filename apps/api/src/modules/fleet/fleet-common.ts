@@ -91,7 +91,10 @@ export function newFleetRunId(at: Date): string {
 
 /** Mốc thời gian UTC nén cho tên tệp: `20261030T143005` — sắp xếp theo tên tệp trùng thứ tự thời gian. */
 export function formatBackupTimestamp(at: Date): string {
-  return at.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, '');
+  return at
+    .toISOString()
+    .replace(/[-:]/g, '')
+    .replace(/\.\d{3}Z$/, '');
 }
 
 /**
@@ -109,7 +112,11 @@ const BACKUP_FILE_PATTERN = /^(scheduled|pre-migration)-([a-z0-9-]+)-(\d{8}T\d{6
 export function parseBackupFileName(fileName: string): { kind: BackupKind; runId: string; encrypted: boolean } | null {
   const match = BACKUP_FILE_PATTERN.exec(fileName);
   if (!match) return null;
-  return { kind: match[1] as BackupKind, runId: match[2]!, encrypted: match[4] === '.enc' };
+  return {
+    kind: match[1] as BackupKind,
+    runId: match[2]!,
+    encrypted: match[4] === '.enc',
+  };
 }
 
 /** Băm SHA-256 dạng hex của nội dung tệp — ghi vào tệp `.sha256` đi kèm mọi bản sao lưu. */
@@ -214,7 +221,10 @@ export function resolveDumpConnectionUrl(space: FleetSpace, env: NodeJS.ProcessE
  * trình của máy) — caller truyền nó qua biến môi trường
  * `PGPASSWORD` của tiến trình con (xem `runPgTool`).
  */
-export function buildPgToolArgs(url: string): { args: string[]; password: string } {
+export function buildPgToolArgs(url: string): {
+  args: string[];
+  password: string;
+} {
   const parsed = new URL(url);
   return {
     args: [
@@ -372,6 +382,8 @@ export async function dumpDatabaseToFile(options: {
   runId: string;
   at: Date;
   encryptionKey?: string;
+  /** Snapshot đã xuất từ transaction đang mở, dùng chung với danh sách file. */
+  snapshot?: string;
   env?: NodeJS.ProcessEnv;
 }): Promise<StoredBackup> {
   const env = options.env ?? process.env;
@@ -383,7 +395,12 @@ export async function dumpDatabaseToFile(options: {
   mkdirSync(options.dir, { recursive: true });
   const plainPath = join(options.dir, backupFileName(options.kind, options.runId, options.at, false));
   try {
-    await runPgTool('pg_dump', options.url, ['-Fc', '-f', plainPath], env);
+    await runPgTool(
+      'pg_dump',
+      options.url,
+      ['-Fc', ...(options.snapshot ? ['--snapshot', options.snapshot] : []), '-f', plainPath],
+      env,
+    );
   } catch (error) {
     // Dump hỏng giữa chừng để lại một tệp dở trên đĩa: xoá ngay để
     // không lượt chọn bản sao lưu nào về sau nhầm nó là một bản

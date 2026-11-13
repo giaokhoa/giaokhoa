@@ -1,13 +1,28 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client, Pool } from 'pg';
+import { createHash } from 'node:crypto';
+import { fileContentKey, fileDomainForSpace, SYSTEM_FILE_DOMAIN } from '@giaokhoa/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createCentreKysely } from '@giaokhoa/db';
 import { applyStoreMigrations } from '@giaokhoa/db/migrate';
 import { checkFleetBackups, runFleetBackup } from '../../../src/modules/fleet/fleet-backup';
-import { backupFileName, dumpDatabaseToFile, listMigrationFolders, readDatabaseSchemaVersion } from '../../../src/modules/fleet/fleet-common';
+import {
+  backupFileName,
+  dumpDatabaseToFile,
+  listMigrationFolders,
+  readDatabaseSchemaVersion,
+} from '../../../src/modules/fleet/fleet-common';
 import { runFleetMigration } from '../../../src/modules/fleet/fleet-migration-runner';
 import { runFleetRestoreTest } from '../../../src/modules/fleet/fleet-restore-test';
+import { runFleetRestore } from '../../../src/modules/fleet/fleet-restore';
+import { runFleetCloseCentre } from '../../../src/modules/fleet/fleet-close-centre';
+import { FleetRegistryWriter } from '../../../src/modules/fleet/fleet-registry-writer';
+import {
+  archiveSidecarPaths,
+  dumpSpaceArchive,
+  readVerifiedSpaceArchive,
+} from '../../../src/modules/fleet/fleet-space-archive';
 import { runRuntimeRolesSetup } from '../../../src/modules/fleet/runtime-roles-setup';
 
 /**
@@ -38,9 +53,21 @@ function latestCentreVersion(): string {
 const BACKUP_DIR = join(__dirname, 'fleet-586-artifacts');
 
 const SPACES = [
-  { slug: 'trang-chinh-586', kind: 'platform', database: 'giaokhoa_test_space_platform_586' },
-  { slug: 'tt-a-canary-586', kind: 'center', database: 'giaokhoa_test_space_canary_586' },
-  { slug: 'tt-b-loi-586', kind: 'center', database: 'giaokhoa_test_space_loi_586' },
+  {
+    slug: 'trang-chinh-586',
+    kind: 'platform',
+    database: 'giaokhoa_test_space_platform_586',
+  },
+  {
+    slug: 'tt-a-canary-586',
+    kind: 'center',
+    database: 'giaokhoa_test_space_canary_586',
+  },
+  {
+    slug: 'tt-b-loi-586',
+    kind: 'center',
+    database: 'giaokhoa_test_space_loi_586',
+  },
   { slug: 'tt-c-586', kind: 'center', database: 'giaokhoa_test_space_c_586' },
 ] as const;
 
@@ -132,7 +159,10 @@ async function registryState(slug: string): Promise<{
 /** Các lượt chạy migration đã ghi vào nhật ký cho một kho, theo thứ tự thời gian. */
 async function migrationRuns(slug: string): Promise<{ status: string; steps: { name: string; status: string }[] }[]> {
   return withClient(clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD), async (client) => {
-    const result = await client.query<{ status: string; steps: { name: string; status: string }[] }>(
+    const result = await client.query<{
+      status: string;
+      steps: { name: string; status: string }[];
+    }>(
       `SELECT m.status, m.steps FROM space_schema_migration_runs m
          JOIN space_registry s ON s.id = m.space_id
         WHERE s.slug = $1 ORDER BY m.started_at, m.id`,
@@ -264,10 +294,14 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       expect(result.skipped).toBe(false);
 
       await withClient(clusterUrl('postgres'), async (admin) => {
-        const roles = await admin.query<{ rolname: string; rolsuper: boolean; rolcreatedb: boolean; rolcreaterole: boolean }>(
-          'SELECT rolname, rolsuper, rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname = ANY($1)',
-          [[RUNTIME_ROLE, MIGRATOR_ROLE]],
-        );
+        const roles = await admin.query<{
+          rolname: string;
+          rolsuper: boolean;
+          rolcreatedb: boolean;
+          rolcreaterole: boolean;
+        }>('SELECT rolname, rolsuper, rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname = ANY($1)', [
+          [RUNTIME_ROLE, MIGRATOR_ROLE],
+        ]);
         expect(roles.rows).toHaveLength(2);
         for (const role of roles.rows) {
           expect(role.rolsuper).toBe(false);
@@ -297,9 +331,7 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
         await runtime.query(`INSERT INTO legacy_probe (id, note) VALUES (2, 'runtime ghi duoc')`);
         await runtime.query(`UPDATE legacy_probe SET note = 'runtime sua duoc' WHERE id = 2`);
         await runtime.query('DELETE FROM legacy_probe WHERE id = 2');
-        await expect(runtime.query('CREATE TABLE runtime_khong_duoc_tao (id integer)')).rejects.toThrow(
-          /permission denied/,
-        );
+        await expect(runtime.query('CREATE TABLE runtime_khong_duoc_tao (id integer)')).rejects.toThrow(/permission denied/);
         const owned = await runtime.query<{ n: number }>(
           `SELECT count(*)::int AS n FROM pg_class WHERE relowner = (SELECT oid FROM pg_roles WHERE rolname = $1)`,
           [RUNTIME_ROLE],
@@ -445,13 +477,15 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       // gieo sẵn này trong bản khôi phục của mỗi kho.
       for (const space of SPACES) {
         await withClient(clusterUrl(space.database, MIGRATOR_ROLE, MIGRATOR_PASSWORD), async (client) => {
-          await client.query(`INSERT INTO users (username, email) VALUES ('admin', $1)`, [
-            `admin-${space.slug}@localhost`,
-          ]);
+          await client.query(`INSERT INTO users (username, email) VALUES ('admin', $1)`, [`admin-${space.slug}@localhost`]);
         });
       }
 
-      const summary = await runFleetBackup({ env: process.env, backupDir: BACKUP_DIR, log: () => undefined });
+      const summary = await runFleetBackup({
+        env: process.env,
+        backupDir: BACKUP_DIR,
+        log: () => undefined,
+      });
       expect(summary.failedCount).toBe(0);
       expect(summary.results.map((result) => result.slug).sort()).toEqual(
         ['control-plane', 'trang-chinh-586', 'tt-a-canary-586', 'tt-b-loi-586', 'tt-c-586'].sort(),
@@ -467,7 +501,10 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       }
       expect(readdirSync(join(BACKUP_DIR, 'control-plane')).some((name) => name.startsWith('scheduled-'))).toBe(true);
 
-      const healthy = await checkFleetBackups({ env: process.env, backupDir: BACKUP_DIR });
+      const healthy = await checkFleetBackups({
+        env: process.env,
+        backupDir: BACKUP_DIR,
+      });
       expect(healthy.overdue).toEqual([]);
       // Đẩy mốc sao lưu của tt-c về quá khứ: chế độ kiểm phải bắt
       // đúng kho đó là quá hạn (đây là điểm móc cảnh báo vận hành).
@@ -477,7 +514,10 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
             WHERE space_id = (SELECT id FROM space_registry WHERE slug = 'tt-c-586')`,
         );
       });
-      const overdue = await checkFleetBackups({ env: process.env, backupDir: BACKUP_DIR });
+      const overdue = await checkFleetBackups({
+        env: process.env,
+        backupDir: BACKUP_DIR,
+      });
       expect(overdue.overdue.map((item) => item.slug)).toEqual(['tt-c-586']);
       await withClient(clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD), async (client) => {
         await client.query(
@@ -533,7 +573,11 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
             WHERE space_id IN (SELECT id FROM space_registry WHERE slug IN ('tt-b-loi-586', 'tt-c-586'))`,
         );
       });
-      const result = await runFleetRestoreTest({ env: process.env, backupDir: BACKUP_DIR, log: () => undefined });
+      const result = await runFleetRestoreTest({
+        env: process.env,
+        backupDir: BACKUP_DIR,
+        log: () => undefined,
+      });
       expect(result.slug).toBe('tt-b-loi-586');
       expect(result.status).toBe('success');
     }, 300_000);
@@ -622,20 +666,60 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
     const FX_TARGET_VERSION = '20260202000000_fx_target';
     const FX_ENCRYPTION_KEY = 'fleet-test-fx595-passphrase';
     const FX_SPACES = [
-      { slug: 'fx595-nen-tang', kind: 'platform', database: 'giaokhoa_test_fx595_platform' },
-      { slug: 'fx595-a-canary', kind: 'center', database: 'giaokhoa_test_fx595_canary' },
-      { slug: 'fx595-b-chet', kind: 'center', database: 'giaokhoa_test_fx595_dead' },
-      { slug: 'fx595-c-tot', kind: 'center', database: 'giaokhoa_test_fx595_good' },
-      { slug: 'fx595-d-thieu-cu', kind: 'center', database: 'giaokhoa_test_fx595_stale' },
+      {
+        slug: 'fx595-nen-tang',
+        kind: 'platform',
+        database: 'giaokhoa_test_fx595_platform',
+      },
+      {
+        slug: 'fx595-a-canary',
+        kind: 'center',
+        database: 'giaokhoa_test_fx595_canary',
+      },
+      {
+        slug: 'fx595-b-chet',
+        kind: 'center',
+        database: 'giaokhoa_test_fx595_dead',
+      },
+      {
+        slug: 'fx595-c-tot',
+        kind: 'center',
+        database: 'giaokhoa_test_fx595_good',
+      },
+      {
+        slug: 'fx595-d-thieu-cu',
+        kind: 'center',
+        database: 'giaokhoa_test_fx595_stale',
+      },
     ] as const;
-    const FX_NOUSERS_SPACE = { slug: 'fx595-e-khong-users', kind: 'center', database: 'giaokhoa_test_fx595_nousers' } as const;
-    const FX_DEADCONNECT_SPACE = { slug: 'fx595-f-loi-ket-noi', kind: 'center', database: 'giaokhoa_test_fx595_deadconnect' } as const;
+    const FX_NOUSERS_SPACE = {
+      slug: 'fx595-e-khong-users',
+      kind: 'center',
+      database: 'giaokhoa_test_fx595_nousers',
+    } as const;
+    const FX_DEADCONNECT_SPACE = {
+      slug: 'fx595-f-loi-ket-noi',
+      kind: 'center',
+      database: 'giaokhoa_test_fx595_deadconnect',
+    } as const;
 
     const fxEnv = (): NodeJS.ProcessEnv => ({
       ...process.env,
       CONTROL_PLANE_DATABASE_URL: clusterUrl(FX_CP_DATABASE, CP_ROLE, CP_PASSWORD),
       FLEET_BACKUP_ENCRYPTION_KEY: FX_ENCRYPTION_KEY,
     });
+
+    /** Đọc định danh của chính sổ đăng ký để bản chụp có thể kiểm ràng buộc nguồn. */
+    async function fxFleetSpace(slug: string) {
+      const writer = new FleetRegistryWriter(fxEnv());
+      try {
+        const space = (await writer.listFleetSpaces()).find((candidate) => candidate.slug === slug);
+        if (!space) throw new Error(`Missing test space ${slug}`);
+        return space;
+      } finally {
+        await writer.close();
+      }
+    }
 
     async function fxRegistryState(slug: string): Promise<{
       currentVersion: string | null;
@@ -689,9 +773,15 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
     }
 
     beforeAll(async () => {
-      mkdirSync(join(FX_MIGRATIONS_FULL, FX_OLDER_VERSION), { recursive: true });
-      mkdirSync(join(FX_MIGRATIONS_FULL, FX_TARGET_VERSION), { recursive: true });
-      mkdirSync(join(FX_MIGRATIONS_TARGET_ONLY, FX_TARGET_VERSION), { recursive: true });
+      mkdirSync(join(FX_MIGRATIONS_FULL, FX_OLDER_VERSION), {
+        recursive: true,
+      });
+      mkdirSync(join(FX_MIGRATIONS_FULL, FX_TARGET_VERSION), {
+        recursive: true,
+      });
+      mkdirSync(join(FX_MIGRATIONS_TARGET_ONLY, FX_TARGET_VERSION), {
+        recursive: true,
+      });
       writeFileSync(
         join(FX_MIGRATIONS_FULL, FX_OLDER_VERSION, 'migration.sql'),
         'CREATE TABLE "fx_older_probe" ("id" integer PRIMARY KEY);\n',
@@ -828,7 +918,11 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
     }, 300_000);
 
     it('kho chỉ có các lượt sao lưu thất bại vẫn bị chế độ kiểm liệt kê quá hạn, vì mốc sao lưu thành công không bị lượt hỏng đẩy lên', async () => {
-      const backup = await runFleetBackup({ env: fxEnv(), backupDir: FX_BACKUP_DIR, log: () => undefined });
+      const backup = await runFleetBackup({
+        env: fxEnv(),
+        backupDir: FX_BACKUP_DIR,
+        log: () => undefined,
+      });
       const deadResult = backup.results.find((result) => result.slug === 'fx595-b-chet');
       expect(deadResult?.status).toBe('failed');
       expect(backup.results.find((result) => result.slug === 'fx595-c-tot')?.status).toBe('success');
@@ -839,7 +933,10 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       // thành công, lượt hỏng vừa rồi không được tự gia hạn cho nó.
       expect(deadState.lastBackupAt).toBeNull();
 
-      const check = await checkFleetBackups({ env: fxEnv(), backupDir: FX_BACKUP_DIR });
+      const check = await checkFleetBackups({
+        env: fxEnv(),
+        backupDir: FX_BACKUP_DIR,
+      });
       expect(check.overdue.map((item) => item.slug)).toEqual(['fx595-b-chet']);
     }, 300_000);
 
@@ -899,7 +996,8 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
         await client.query(`INSERT INTO fx_business_probe (id, note) VALUES (1, 'du kien that')`);
       });
       await fxRegisterSpace(FX_NOUSERS_SPACE);
-      await dumpDatabaseToFile({
+      await dumpSpaceArchive({
+        space: await fxFleetSpace(FX_NOUSERS_SPACE.slug),
         url: clusterUrl(FX_NOUSERS_SPACE.database),
         dir: join(FX_BACKUP_DIR, FX_NOUSERS_SPACE.slug),
         kind: 'scheduled',
@@ -946,7 +1044,8 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
         await client.query(`INSERT INTO users (id, username) VALUES (1, 'admin')`);
       });
       await fxRegisterSpace(FX_DEADCONNECT_SPACE);
-      await dumpDatabaseToFile({
+      await dumpSpaceArchive({
+        space: await fxFleetSpace(FX_DEADCONNECT_SPACE.slug),
         url: clusterUrl(FX_DEADCONNECT_SPACE.database),
         dir: join(FX_BACKUP_DIR, FX_DEADCONNECT_SPACE.slug),
         kind: 'scheduled',
@@ -979,6 +1078,255 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
       // đọc được, và tên của nó không khớp khuôn tệp sao lưu nên
       // không cơ chế dọn theo hạn nào nhìn thấy nó.
       expect(readdirSync(FX_BACKUP_DIR).filter((name) => name.startsWith('.restore-'))).toEqual([]);
+    }, 120_000);
+  });
+
+  describe('vòng đời độc lập của trung tâm qua CLI và PostgreSQL/file thật', () => {
+    const dbA = 'giaokhoa_test_12_centre_a';
+    const dbB = 'giaokhoa_test_12_centre_b';
+    const restoredDb = 'giaokhoa_test_12_isolated';
+    const roleA = 'giaokhoa_test_12_a';
+    const roleB = 'giaokhoa_test_12_b';
+    const slugA = 'tt-issue-12-a';
+    const slugB = 'tt-issue-12-b';
+    const dir = join(__dirname, 'fleet-12-artifacts');
+    const filesRoot = join(dir, 'source-files');
+    const restoredFiles = join(dir, 'isolated', 'files');
+    const bytes = Buffer.from('Nội dung file học tập giống nhau ở trung tâm A và B');
+    const hash = createHash('sha256').update(bytes).digest('hex');
+    const env = (): NodeJS.ProcessEnv => ({
+      ...process.env,
+      CONTROL_PLANE_DATABASE_URL: clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD),
+      DATABASE_ADMIN_URL: clusterUrl('postgres'),
+      FLEET_BACKUP_DIR: join(dir, 'backups'),
+      FLEET_BACKUP_ENCRYPTION_KEY: 'test-issue-12-passphrase',
+      FILE_STORAGE_DRIVER: 'local',
+      FILE_STORAGE_DIR: filesRoot,
+    });
+    let spaceA: Awaited<ReturnType<FleetRegistryWriter['listFleetSpaces']>>[number];
+    let spaceB: Awaited<ReturnType<FleetRegistryWriter['listFleetSpaces']>>[number];
+    let archivePath: string;
+
+    beforeAll(async () => {
+      mkdirSync(join(dir, 'isolated'), { recursive: true });
+      await withClient(clusterUrl('postgres'), async (admin) => {
+        for (const database of [restoredDb, dbA, dbB]) {
+          await admin.query('DROP DATABASE IF EXISTS ' + quoted(database) + ' WITH (FORCE)');
+        }
+        for (const role of [roleA, roleB]) {
+          await admin.query('DROP ROLE IF EXISTS ' + quoted(role));
+          await admin.query('CREATE ROLE ' + quoted(role) + ' LOGIN');
+        }
+        await admin.query('CREATE DATABASE ' + quoted(dbA) + ' OWNER ' + quoted(roleA));
+        await admin.query('CREATE DATABASE ' + quoted(dbB) + ' OWNER ' + quoted(roleB));
+      });
+      for (const db of [dbA, dbB]) {
+        await withClient(clusterUrl(db), async (client) => {
+          await client.query('CREATE TABLE users (id integer PRIMARY KEY, username text NOT NULL)');
+          await client.query(
+            'CREATE TABLE files (storage_domain text NOT NULL, content_hash text NOT NULL, file_size integer NOT NULL)',
+          );
+          await client.query('CREATE TABLE exam_grade_history (id integer PRIMARY KEY, grade integer NOT NULL)');
+          await client.query("INSERT INTO users VALUES (1, 'admin')");
+          await client.query('INSERT INTO exam_grade_history VALUES (1, 92)');
+        });
+      }
+      await withClient(clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD), async (client) => {
+        for (const [slug, db, role] of [
+          [slugA, dbA, roleA],
+          [slugB, dbB, roleB],
+        ]) {
+          const row = await client.query<{ id: string }>(
+            "INSERT INTO space_registry (slug, name, kind, status, database_name, storage_mode, connection_role_ref, secret_ref) VALUES ($1, $1, 'center', 'active', $2, 'dedicated', $3, $4) RETURNING id",
+            [slug, db, role, 'env:SPACE_' + slug.toUpperCase().replace(/-/g, '_') + '_DATABASE_URL'],
+          );
+          await client.query('INSERT INTO space_schema_registry (space_id) VALUES ($1)', [row.rows[0]!.id]);
+        }
+      });
+      const writer = new FleetRegistryWriter(env());
+      try {
+        const spaces = await writer.listFleetSpaces();
+        spaceA = spaces.find((space) => space.slug === slugA)!;
+        spaceB = spaces.find((space) => space.slug === slugB)!;
+      } finally {
+        await writer.close();
+      }
+      for (const [db, space] of [
+        [dbA, spaceA],
+        [dbB, spaceB],
+      ] as const) {
+        const domain = fileDomainForSpace(space.id);
+        const physical = join(filesRoot, fileContentKey(domain, hash));
+        mkdirSync(join(physical, '..'), { recursive: true });
+        writeFileSync(physical, bytes);
+        await withClient(clusterUrl(db), async (client) => {
+          await client.query('INSERT INTO files (storage_domain, content_hash, file_size) VALUES ($1, $2, $3)', [
+            domain,
+            hash,
+            bytes.length,
+          ]);
+        });
+      }
+      const bankPath = join(filesRoot, fileContentKey(SYSTEM_FILE_DOMAIN, hash));
+      mkdirSync(join(bankPath, '..'), { recursive: true });
+      writeFileSync(bankPath, bytes);
+    }, 90_000);
+
+    afterAll(async () => {
+      await withClient(clusterUrl('postgres'), async (admin) => {
+        for (const db of [restoredDb, dbA, dbB]) {
+          await admin.query('DROP DATABASE IF EXISTS ' + quoted(db) + ' WITH (FORCE)');
+        }
+        for (const role of [roleA, roleB]) {
+          await admin.query('DROP ROLE IF EXISTS ' + quoted(role));
+        }
+      }).catch(() => undefined);
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    it('sao lưu A với manifest toàn vẹn không chứa metadata hay miền file của B và ngân hàng', async () => {
+      const at = new Date();
+      const saved = await dumpSpaceArchive({
+        space: spaceA,
+        url: clusterUrl(dbA),
+        dir: join(env().FLEET_BACKUP_DIR!, slugA),
+        kind: 'scheduled',
+        runId: 'issue12-export-a',
+        at,
+        encryptionKey: env().FLEET_BACKUP_ENCRYPTION_KEY,
+        env: env(),
+      });
+      archivePath = saved.path;
+      // Chạy trùng cùng lượt phải bị từ chối, không được xoá gói
+      // thành công cũ khi khoá file hoặc tên sidecar va chạm.
+      await expect(
+        dumpSpaceArchive({
+          space: spaceA,
+          url: clusterUrl(dbA),
+          dir: join(env().FLEET_BACKUP_DIR!, slugA),
+          kind: 'scheduled',
+          runId: 'issue12-export-a',
+          at,
+          encryptionKey: env().FLEET_BACKUP_ENCRYPTION_KEY,
+          env: env(),
+        }),
+      ).rejects.toThrow(/already exists/);
+      const archive = readVerifiedSpaceArchive(archivePath, spaceA, env().FLEET_BACKUP_ENCRYPTION_KEY);
+      expect(archive.manifest.spaceId).toBe(spaceA.id);
+      expect(archive.files).toHaveLength(1);
+      expect(archive.files[0]).toMatchObject({
+        domain: fileDomainForSpace(spaceA.id),
+        hash,
+        data: bytes,
+      });
+      expect(archive.manifest.files.map((entry) => entry.domain)).not.toContain(fileDomainForSpace(spaceB.id));
+      expect(archive.manifest.files.map((entry) => entry.domain)).not.toContain(SYSTEM_FILE_DOMAIN);
+      expect(() => readVerifiedSpaceArchive(archivePath, spaceB, env().FLEET_BACKUP_ENCRYPTION_KEY)).toThrow(/manifest/);
+    }, 90_000);
+
+    it('phát hiện mất/hỏng manifest hoặc file; không cấp phép phục hồi sai nguồn', async () => {
+      const sidecar = archiveSidecarPaths(archivePath);
+      const original = readFileSync(sidecar.files);
+      writeFileSync(sidecar.files, Buffer.concat([original, Buffer.from('corrupt')]));
+      expect(() => readVerifiedSpaceArchive(archivePath, spaceA, env().FLEET_BACKUP_ENCRYPTION_KEY)).toThrow(/checksum/);
+      writeFileSync(sidecar.files, original);
+      const manifest = readFileSync(sidecar.manifest);
+      rmSync(sidecar.manifest);
+      expect(() => readVerifiedSpaceArchive(archivePath, spaceA, env().FLEET_BACKUP_ENCRYPTION_KEY)).toThrow();
+      writeFileSync(sidecar.manifest, manifest);
+      expect(existsSync(restoredFiles)).toBe(false);
+    });
+
+    it('phục hồi vào kho cô lập, giữ tài khoản, điểm/lịch sử và file, không đổi B', async () => {
+      const result = await runFleetRestore({
+        slug: slugA,
+        expectedSpaceId: spaceA.id,
+        targetDatabase: restoredDb,
+        targetFilesDir: restoredFiles,
+        env: env(),
+        log: () => undefined,
+      });
+      expect(result.fileCount).toBe(1);
+      await withClient(clusterUrl(restoredDb), async (client) => {
+        expect((await client.query<{ username: string }>('SELECT username FROM users')).rows[0]!.username).toBe('admin');
+        expect((await client.query<{ grade: number }>('SELECT grade FROM exam_grade_history')).rows[0]!.grade).toBe(92);
+        expect(
+          (await client.query<{ storage_domain: string }>('SELECT storage_domain FROM files')).rows[0]!.storage_domain,
+        ).toBe(fileDomainForSpace(spaceA.id));
+      });
+      expect(readFileSync(join(restoredFiles, fileContentKey(fileDomainForSpace(spaceA.id), hash)))).toEqual(bytes);
+      expect(readFileSync(join(filesRoot, fileContentKey(fileDomainForSpace(spaceB.id), hash)))).toEqual(bytes);
+      expect(
+        (await withClient(clusterUrl(dbB), (client) => client.query('SELECT count(*)::int AS n FROM exam_grade_history')))
+          .rows[0]!.n,
+      ).toBe(1);
+    }, 120_000);
+
+    it('đóng A và thu hồi role/database/file của A, không xoá dữ liệu B và ngân hàng; chạy lại không phá miền khác', async () => {
+      const actorId = '12345678-1234-7234-8234-123456789abc';
+      // Đang active phải bị từ chối; vận hành phải suspend để
+      // ngừng HTTP và job trước khi tiến hành huỷ vật lý.
+      await expect(
+        runFleetCloseCentre({
+          slug: slugA,
+          expectedSpaceId: spaceA.id,
+          actorId,
+          env: env(),
+          log: () => undefined,
+        }),
+      ).rejects.toThrow(/lifecycle state/);
+      const writer = new FleetRegistryWriter(env());
+      try {
+        await writer.changeSpaceStatus(spaceA.id, 'suspended', actorId);
+      } finally {
+        await writer.close();
+      }
+      const result = await runFleetCloseCentre({
+        slug: slugA,
+        expectedSpaceId: spaceA.id,
+        actorId,
+        env: env(),
+        log: () => undefined,
+      });
+      expect(result.status).toBe('closed');
+      const state = await withClient(clusterUrl(CP_DATABASE, CP_ROLE, CP_PASSWORD), async (client) =>
+        client.query<{ status: string }>('SELECT status FROM space_registry WHERE slug = $1', [slugA]),
+      );
+      expect(state.rows[0]!.status).toBe('closed');
+      const dbState = await withClient(clusterUrl('postgres'), async (client) =>
+        client.query<{ datname: string }>('SELECT datname FROM pg_database WHERE datname = $1', [dbA]),
+      );
+      expect(dbState.rows).toHaveLength(0);
+      const role = await withClient(clusterUrl('postgres'), async (client) =>
+        client.query<{ rolcanlogin: boolean }>('SELECT rolcanlogin FROM pg_roles WHERE rolname = $1', [roleA]),
+      );
+      expect(role.rows[0]!.rolcanlogin).toBe(false);
+      expect(existsSync(join(filesRoot, fileContentKey(fileDomainForSpace(spaceA.id), hash)))).toBe(false);
+      expect(readFileSync(join(filesRoot, fileContentKey(fileDomainForSpace(spaceB.id), hash)))).toEqual(bytes);
+      expect(readFileSync(join(filesRoot, fileContentKey(SYSTEM_FILE_DOMAIN, hash)))).toEqual(bytes);
+      await expect(
+        runFleetCloseCentre({
+          slug: slugA,
+          expectedSpaceId: spaceB.id,
+          actorId,
+          env: env(),
+          log: () => undefined,
+        }),
+      ).rejects.toThrow(/identity/);
+      expect(
+        (
+          await runFleetCloseCentre({
+            slug: slugA,
+            expectedSpaceId: spaceA.id,
+            actorId,
+            env: env(),
+            log: () => undefined,
+          })
+        ).status,
+      ).toBe('closed');
+      await withClient(clusterUrl(dbB), async (client) => {
+        expect((await client.query('SELECT * FROM users')).rowCount).toBe(1);
+      });
     }, 120_000);
   });
 });
