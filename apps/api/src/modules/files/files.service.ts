@@ -421,15 +421,17 @@ export class FilesService {
    * @throws NotFoundException nếu file không ở đúng miền/host/chủ sở hữu.
    */
   async readSignedContent(fileId: string, token: string | undefined): Promise<{ file: FileRow; data: Buffer }> {
-    const store = tenantAls.getStore();
-    const slug = store?.spaceSlug;
-    // Scope vận hành tạm phải giữ nguyên identity kho do guard đã ghim.
-    // Chỉ truyền slug sẽ làm routedKysely từ chối kho riêng sau khi
-    // main bật kiểm tra spaceId + object handle để chống đọc chéo kho.
-    const platformScope = { platform: true, ...(slug ? {
-      spaceSlug: slug, spaceId: store?.spaceId, spaceHandle: store?.spaceHandle,
-    } : {}) };
-    const file = await tenantAls.run(platformScope, () => this.repo.getById(fileId));
+    const requestScope = tenantAls.getStore();
+    const slug = requestScope?.spaceSlug;
+    // Scope vận hành tạm chỉ nâng quyền RLS: phải giữ cùng định danh
+    // spaceId + handle đã ghim từ guard, không được định tuyến sang kho khác.
+    const platformScope = {
+      platform: true,
+      ...(slug ? {
+        spaceSlug: slug, spaceId: requestScope?.spaceId, spaceHandle: requestScope?.spaceHandle,
+      } : {}),
+    };
+    const file = await tenantAls.run(platformScope, async () => this.repo.getById(fileId));
     if (!file) throw new NotFoundException({ message: `File ${fileId} not found`, code: 'file.not_found' });
 
     // Chỉ tra chủ của học liệu trong đúng kho dưới quyền vận hành tạm

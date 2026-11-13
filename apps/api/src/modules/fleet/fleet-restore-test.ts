@@ -13,7 +13,8 @@
  *
  * Một lượt kiểm thử thất bại là SỰ CỐ vận hành: script thoát mã 1 để lịch giám sát bắt được. Lỗi cấu hình của chính công cụ (chưa có URL quản trị, thư mục sao lưu trống cấu hình…) dừng bằng ngoại lệ TRƯỚC khi chọn kho và không ghi nhận thất bại cho bất kỳ kho nào — registry không được phép mang sự cố giả.
  */
-import { existsSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { Client } from 'pg';
 import { quoteIdentifier } from '../control-plane/control-plane-provision';
@@ -21,12 +22,17 @@ import {
   newFleetRunId,
   parseBackupFileName,
   pickRestoreCandidate,
-  readVerifiedBackupFile,
   retargetUrl,
   runPgTool,
   type FleetSpace,
 } from './fleet-common';
 import { FleetRegistryWriter } from './fleet-registry-writer';
+import {
+  readVerifiedSpaceArchive,
+  restoreArchiveFilesToLocalDir,
+  removeTemporaryRestoreFiles,
+  verifyRestoredFileMetadata,
+} from './fleet-space-archive';
 
 /** Tuỳ chọn của một lượt kiểm thử khôi phục; mặc định đọc từ biến môi trường của tiến trình. */
 export type FleetRestoreTestOptions = {
@@ -81,7 +87,8 @@ export async function runFleetRestoreTest(options: FleetRestoreTestOptions = {})
   const backupDir = options.backupDir ?? env.FLEET_BACKUP_DIR;
   if (!backupDir) throw new Error('FLEET_BACKUP_DIR is required');
   const adminUrl = env.DATABASE_ADMIN_URL ?? env.MIGRATION_DATABASE_URL;
-  if (!adminUrl) throw new Error('DATABASE_ADMIN_URL (or MIGRATION_DATABASE_URL) is required to create the temporary restore database');
+  if (!adminUrl)
+    throw new Error('DATABASE_ADMIN_URL (or MIGRATION_DATABASE_URL) is required to create the temporary restore database');
   const encryptionKey = env.FLEET_BACKUP_ENCRYPTION_KEY || undefined;
   const runId = newFleetRunId(new Date());
 
@@ -107,17 +114,19 @@ export async function runFleetRestoreTest(options: FleetRestoreTestOptions = {})
     if (!backupPath) return await fail('no backup file found for this space');
     log(`[${space.slug}] restore test on ${basename(backupPath)}`);
 
-    let plain: Buffer;
+    let archive: ReturnType<typeof readVerifiedSpaceArchive>;
     try {
-      plain = readVerifiedBackupFile(backupPath, encryptionKey);
+      archive = readVerifiedSpaceArchive(backupPath, space, encryptionKey);
     } catch (error) {
       return await fail(error instanceof Error ? error.message : String(error));
     }
 
     const plainPath = join(backupDir, `.restore-${runId}.dump`);
     const tempDatabase = `giaokhoa_restore_test_${space.slug.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}_${runId.replace(/\D/g, '').slice(0, 14)}`;
-    writeFileSync(plainPath, plain);
-    const admin = new Client({ connectionString: retargetUrl(adminUrl, 'postgres') });
+    const restoreFilesDir = mkdtempSync(join(tmpdir(), 'giaokhoa-restore-files-'));
+    const admin = new Client({
+      connectionString: retargetUrl(adminUrl, 'postgres'),
+    });
     // Cờ mở kết nối thật: các thao tác dọn trên client quản trị ở
     // khối finally chỉ được chạy khi kết nối đã mở thành công —
     // trên một client chưa từng kết nối, truy vấn của pg nằm mãi
@@ -132,6 +141,9 @@ export async function runFleetRestoreTest(options: FleetRestoreTestOptions = {})
     // và khối finally bảo đảm dọn client quản trị cùng tệp dump
     // thô trung gian ở mọi đường ra.
     try {
+      // Ghi plaintext bên trong vùng finally: lỗi ghi một phần vẫn
+      // phải dọn, không để bản dump đọc được trên đĩa.
+      writeFileSync(plainPath, archive.dump, { mode: 0o600 });
       await admin.connect();
       adminConnected = true;
       await admin.query(`CREATE DATABASE ${quoteIdentifier(tempDatabase)}`);
@@ -172,12 +184,17 @@ export async function runFleetRestoreTest(options: FleetRestoreTestOptions = {})
         // đang bật mà bản khôi phục không có bảng users thì THẤT
         // BẠI tường minh — không có bảng đó thì không đối chiếu
         // được gì, cho qua lặng lẽ là báo xanh giả.
+        await verifyRestoredFileMetadata(check, archive.manifest);
+        // Phục hồi toàn bộ byte vào vùng tạm cách ly, sau đó kiểm
+        // băm vật lý; tuyệt đối không ghi vào bucket/thư mục sống.
+        await restoreArchiveFilesToLocalDir(archive.files, space.id, restoreFilesDir);
         if (env.FLEET_SMOKE_CHECK !== 'off') {
           if (!tables.includes('users')) {
-            return await fail(
-              'restored backup has no users table; the smoke check cannot verify the seeded admin account',
-              { tempDatabase, tableCount: tables.length, totalRows },
-            );
+            return await fail('restored backup has no users table; the smoke check cannot verify the seeded admin account', {
+              tempDatabase,
+              tableCount: tables.length,
+              totalRows,
+            });
           }
           const columnsResult = await check.query<{ column_name: string }>(
             `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users'`,
@@ -201,7 +218,13 @@ export async function runFleetRestoreTest(options: FleetRestoreTestOptions = {})
         }
         await writer.recordRestoreOutcome(space.id, 'success', new Date());
         log(`[${space.slug}] restore test passed: ${tables.length} table(s), ${totalRows} row(s)`);
-        return { slug: space.slug, status: 'success', tempDatabase, tableCount: tables.length, totalRows };
+        return {
+          slug: space.slug,
+          status: 'success',
+          tempDatabase,
+          tableCount: tables.length,
+          totalRows,
+        };
       } finally {
         await check.end();
       }
@@ -239,6 +262,7 @@ export async function runFleetRestoreTest(options: FleetRestoreTestOptions = {})
         }
       }
       if (existsSync(plainPath)) unlinkSync(plainPath);
+      removeTemporaryRestoreFiles(restoreFilesDir);
     }
   } finally {
     await writer.close();

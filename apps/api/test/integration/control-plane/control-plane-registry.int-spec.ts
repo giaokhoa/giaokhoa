@@ -165,13 +165,19 @@ describe('Control plane: sổ đăng ký không gian và registry phiên bản s
     const businessUrl = new URL(process.env.DATABASE_URL!);
     const seeds: ExistingSpaceSeed[] = [
       {
-        slug: 'trang-chinh', name: 'Trang chính', kind: 'platform', plan: null,
+        slug: 'trang-chinh',
+        name: 'Trang chính',
+        kind: 'platform',
+        plan: null,
         databaseName: businessUrl.pathname.replace(/^\//, ''),
         connectionRoleRef: decodeURIComponent(businessUrl.username),
         secretRef: 'env:DATABASE_URL',
       },
       {
-        slug: 'truong-mac-dinh', name: 'Trường mặc định', kind: 'center', plan: null,
+        slug: 'truong-mac-dinh',
+        name: 'Trường mặc định',
+        kind: 'center',
+        plan: null,
         databaseName: businessUrl.pathname.replace(/^\//, ''),
         connectionRoleRef: decodeURIComponent(businessUrl.username),
         secretRef: 'env:DATABASE_URL',
@@ -225,7 +231,10 @@ describe('Control plane: sổ đăng ký không gian và registry phiên bản s
   });
 
   it('cập nhật dòng đăng ký ghi lịch sử update với giá trị trước và sau', async () => {
-    const updated = await registry.updateRegistration(adminId, createdSpaceId, { name: 'Trung tâm test 580 (đổi tên)', plan: 'premium' });
+    const updated = await registry.updateRegistration(adminId, createdSpaceId, {
+      name: 'Trung tâm test 580 (đổi tên)',
+      plan: 'premium',
+    });
     expect(updated.name).toBe('Trung tâm test 580 (đổi tên)');
     expect(updated.plan).toBe('premium');
 
@@ -261,7 +270,9 @@ describe('Control plane: sổ đăng ký không gian và registry phiên bản s
     await expect(
       registry.updateRegistration(adminId, createdSpaceId, { databaseName: 'giaokhoa_centre_test_611_other' }),
     ).rejects.toBeInstanceOf(ConflictException);
-    const unchanged = await registry.updateRegistration(adminId, createdSpaceId, { databaseName: 'giaokhoa_centre_test_580' });
+    const unchanged = await registry.updateRegistration(adminId, createdSpaceId, {
+      databaseName: 'giaokhoa_centre_test_580',
+    });
     expect(unchanged.databaseName).toBe('giaokhoa_centre_test_580');
     expect(other.databaseName).toBe('giaokhoa_centre_test_611_other');
   });
@@ -335,6 +346,14 @@ describe('Control plane: sổ đăng ký không gian và registry phiên bản s
     await registry.changeStatus(adminId, createdSpaceId, { status: 'active' });
     history = await registry.listHistory(adminId, createdSpaceId);
     expect(history).toHaveLength(countAfterChange);
+
+    // API không được ghi trạng thái closed giả khi chưa có archive
+    // và chưa dọn DB/file bằng công cụ fleet của issue #12.
+    await expect(registry.changeStatus(adminId, createdSpaceId, { status: 'closed' })).rejects.toMatchObject({
+      response: { code: 'control_plane.close_requires_fleet_cli' },
+    });
+    expect((await registry.getBySlug(adminId, 'trung-tam-test-580')).status).toBe('active');
+    expect(await registry.listHistory(adminId, createdSpaceId)).toHaveLength(countAfterChange);
   });
 
   it('tra cứu định tuyến theo slug trả đúng dòng đăng ký; slug lạ nhận lỗi không tìm thấy', async () => {
@@ -355,7 +374,9 @@ describe('Control plane: sổ đăng ký không gian và registry phiên bản s
         connectionRoleRef: 'guest_app',
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
-    await expect(registry.changeStatus(guestId, createdSpaceId, { status: 'suspended' })).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(registry.changeStatus(guestId, createdSpaceId, { status: 'suspended' })).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
     await expect(registry.getBySlug(guestId, 'trang-chinh')).rejects.toBeInstanceOf(ForbiddenException);
   });
 
@@ -535,14 +556,10 @@ describe('Control plane: sổ đăng ký không gian và registry phiên bản s
       // migration chạy thẳng qua và commit xong, không phiên thứ
       // hai nào xuất hiện trong hạn chờ.
       const phase2 = await waitForBlocked((rows) =>
-        rows.some(
-          (row) => row.pid !== backupPid && (row.blockers.includes(gatePid) || row.blockers.includes(backupPid)),
-        ),
+        rows.some((row) => row.pid !== backupPid && (row.blockers.includes(gatePid) || row.blockers.includes(backupPid))),
       );
       expect(
-        phase2.some(
-          (row) => row.pid !== backupPid && (row.blockers.includes(gatePid) || row.blockers.includes(backupPid)),
-        ),
+        phase2.some((row) => row.pid !== backupPid && (row.blockers.includes(gatePid) || row.blockers.includes(backupPid))),
       ).toBe(true);
       await gate.query('COMMIT');
       await Promise.all([runWrite, backupWrite]);

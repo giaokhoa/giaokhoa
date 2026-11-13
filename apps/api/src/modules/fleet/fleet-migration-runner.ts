@@ -23,7 +23,6 @@ import { createCentreKysely } from '@giaokhoa/db';
 import { applyStoreMigrations } from '@giaokhoa/db/migrate';
 import type { SchemaMigrationStep } from '@giaokhoa/db/control-plane';
 import {
-  dumpDatabaseToFile,
   listMigrationFolders,
   newFleetRunId,
   orderSpacesIntoWaves,
@@ -36,6 +35,7 @@ import {
   type FleetSpace,
 } from './fleet-common';
 import { FleetRegistryWriter } from './fleet-registry-writer';
+import { dumpSpaceArchive } from './fleet-space-archive';
 
 /** Tuỳ chọn của một lượt chạy runner; mặc định đọc từ biến môi trường của tiến trình. */
 export type FleetMigrationOptions = {
@@ -135,7 +135,8 @@ async function migrateSpace(
     // nghiệp vụ áp FORCE ROW LEVEL SECURITY cả với chủ sở hữu nên
     // role migration tự nó không xuất được bản sao đầy đủ.
     try {
-      const stored = await dumpDatabaseToFile({
+      const stored = await dumpSpaceArchive({
+        space,
         url: resolveDumpConnectionUrl(space, env),
         dir: join(context.backupDir, space.slug),
         kind: 'pre-migration',
@@ -144,7 +145,11 @@ async function migrateSpace(
         encryptionKey: env.FLEET_BACKUP_ENCRYPTION_KEY || undefined,
         env,
       });
-      steps.push({ name: 'pre-migration-backup', status: 'success', detail: basename(stored.path) });
+      steps.push({
+        name: 'pre-migration-backup',
+        status: 'success',
+        detail: basename(stored.path),
+      });
     } catch (error) {
       const detail = errorDetail(error);
       steps.push({ name: 'pre-migration-backup', status: 'failed', detail });
@@ -161,7 +166,9 @@ async function migrateSpace(
       // nhất mà thiếu migration cũ thì áp đúng phần thiếu, không
       // kẹt cả đợt vì một kho lệch nhịp.
       const db = createCentreKysely(pool);
-      await applyStoreMigrations(db, 'centre', context.migrationsDir, { allowUnorderedMigrations: true });
+      await applyStoreMigrations(db, 'centre', context.migrationsDir, {
+        allowUnorderedMigrations: true,
+      });
       steps.push({ name: 'apply-migrations', status: 'success' });
     } catch (error) {
       const detail = errorDetail(error);
@@ -223,8 +230,7 @@ export async function runFleetMigration(options: FleetMigrationOptions = {}): Pr
   // mặc định mới phân giải qua vị trí package `@giaokhoa/db` (đúng cả
   // khi chạy từ repo lẫn từ image production đóng gói); biến môi
   // trường và option tường minh vẫn thắng mặc định như trước.
-  const migrationsDir =
-    options.migrationsDir ?? env.FLEET_MIGRATIONS_DIR ?? resolveCentreMigrationsDir();
+  const migrationsDir = options.migrationsDir ?? env.FLEET_MIGRATIONS_DIR ?? resolveCentreMigrationsDir();
   const folders = listMigrationFolders(migrationsDir);
   const targetVersion = folders[folders.length - 1];
   if (!targetVersion) throw new Error(`no migration folders found under ${migrationsDir}`);
