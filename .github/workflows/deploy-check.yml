@@ -65,6 +65,21 @@ jobs:
             http://127.0.0.1:8080/api/v1/health -o smoke-health.json
           jq -e '.status == "ok" and .checks.database == "up" and .checks.redis == "up"' smoke-health.json
 
+      # Nghiệm thu Redis/BullMQ qua cấu hình đang chạy (không chỉ chuỗi
+      # trong Compose). Keycloak và kc-db phải biến mất khỏi toàn stack.
+      - name: Verify Redis policy and retired Keycloak services
+        run: |
+          services=$(docker compose -f compose.yaml -f compose.ci.yaml config --services)
+          if printf '%s\n' "$services" | grep -Eq '^(keycloak|kc-db)$'; then
+            echo "Cấu hình còn service Keycloak đã bị loại bỏ" >&2
+            exit 1
+          fi
+          policy=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis redis-cli --raw CONFIG GET maxmemory-policy | tail -n 1)
+          budget=$(docker compose -f compose.yaml -f compose.ci.yaml exec -T redis redis-cli --raw CONFIG GET maxmemory | tail -n 1)
+          test "$policy" = noeviction
+          printf '%s\n' "$budget" | grep -Eq '^[0-9]+$'
+          echo "Redis: maxmemory-policy=$policy, maxmemory=$budget bytes"
+
       # Cổng nghiệm thu SSR động: loader nhận JSON thực từ API nội bộ, và HTML chứa dữ liệu đã render trước khi hydrate.
       - name: Verify SSR, CSP and cache isolation
         run: |

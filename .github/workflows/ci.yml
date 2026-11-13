@@ -58,13 +58,22 @@ jobs:
         run: pnpm lint
       - name: Create the worker test database
         run: PGPASSWORD=postgres psql -h localhost -U postgres -c 'CREATE DATABASE giaokhoa_test_worker'
-      # Runner migration Kysely (issue #639) chạy từ dist đã build của @giaokhoa/db, nên phải build package này TRƯỚC bước migrate (bước Build toàn bộ chạy sau migrate).
-      - name: Build @giaokhoa/db for the migration runner
-        run: pnpm exec turbo run build --filter=@giaokhoa/db
-      - name: Migrate the test databases from empty
+      # Smoke nguyên nhân issue #48: checkout chưa có dist vẫn migrate được
+      # do Turbo task db:migrate khai ^build. Không build DB thủ công trước
+      # bước này, nếu thiếu dependency, chính cổng này phải thất bại.
+      - name: Migrate API database from empty via Turbo dependency build
+        run: pnpm exec turbo run db:migrate --filter=@giaokhoa/api --env-mode=loose
+      - name: Migrate worker database from empty
+        run: DATABASE_URL=postgres://postgres:postgres@localhost:5432/giaokhoa_test_worker pnpm --filter @giaokhoa/api db:migrate
+      # Sau khi main nhận migration chương trình học chung (#17), kho
+      # system-bank phải có 11 bảng nghiệp vụ và 3 dòng nhật ký. Runner
+      # tự fail khi hậu kiểm lệch, đồng thời kiểm tra mode --verify-only.
+      - name: Migrate system-bank from empty and verify exact counts
         run: |
-          DATABASE_URL=postgres://postgres:postgres@localhost:5432/giaokhoa_test_api pnpm --filter @giaokhoa/api db:migrate
-          DATABASE_URL=postgres://postgres:postgres@localhost:5432/giaokhoa_test_worker pnpm --filter @giaokhoa/api db:migrate
+          PGPASSWORD=postgres psql -h localhost -U postgres -c 'CREATE DATABASE giaokhoa_test_system_bank'
+          export SYSTEM_BANK_DATABASE_URL=postgres://postgres:postgres@localhost:5432/giaokhoa_test_system_bank
+          node packages/db/dist/migrate/run.js system-bank
+          node packages/db/dist/migrate/run.js system-bank --verify-only
       # Cổng chống lệch kiểu Kysely của @giaokhoa/db: sinh lại cả ba file kiểu trong packages/db/src/types từ database dựng từ rỗng trên chính service PostgreSQL 18.6 của job (lệnh db:types tự suy kết nối quản trị từ DATABASE_URL cấp job) rồi yêu cầu cây nguồn không đổi — file kiểu lệch khỏi hình dạng DB thật sinh từ bộ SQL mang dữ liệu hiện hành là job đỏ tại chỗ.
       - name: Check generated Kysely types are up to date
         run: |
