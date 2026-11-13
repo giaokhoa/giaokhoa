@@ -166,6 +166,7 @@ services:
       # Biến mail tuỳ chọn: khai báo trơ như x-api-env — chỉ truyền vào container khi đã đặt thật ở môi trường triển khai.
       RESEND_API_KEY:
       MAIL_FROM:
+      RESEND_RATE_LIMIT_PER_SECOND: ${RESEND_RATE_LIMIT_PER_SECOND:-1}
     volumes:
       # Worker đọc/ghi cùng kho tệp tải lên với api.
       - api-files:/app/data/files

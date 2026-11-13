@@ -47,6 +47,8 @@ export const envSchema = z.object({
   // Gửi mail thông báo qua Resend (NB-5, issue #174): cả hai đều tuỳ chọn — thiếu thì transport mail chạy chế độ ghi log có khai báo
   // (không gửi, không lỗi), trùng ngữ nghĩa với module mail phía API.
   RESEND_API_KEY: z.string().min(1).optional(),
+  // Hạn mức mặc định thận trọng 1 request/giây, áp chung toàn bộ worker replica.
+  RESEND_RATE_LIMIT_PER_SECOND: z.coerce.number().int().positive().max(20).default(1),
   MAIL_FROM: z.string().min(1).optional(),
 });
 
