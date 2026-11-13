@@ -12,45 +12,24 @@ import {
 } from '../../support/ordinary-worker-module';
 
 /**
- * PH-2 (issue #159) — nửa TIÊU THỤ của digest phụ huynh sau khi chuyển
- * sang worker (issue con #518 của #491): năm ca hành vi vốn ở e2e phía
- * API (`guardian-ph2-digest-flow.e2e-spec.ts`, nay file đó chỉ còn ca
- * endpoint tuỳ chọn tần suất) chuyển nguyên sang tầng này, đi qua
- * ĐƯỜNG THẬT của production: chèn vết lượt `guardian_digests` +
- * sự kiện outbox như lượt quét chốt → relay outbox duy nhất đóng dấu
- * và định tuyến vào hàng đợi `guardian-digest-events` →
- * `GuardianDigestEventsProcessor` → `GuardianDigestHandlerService`
- * tổng hợp + phát qua `NotificationDeliveryService.notify`.
+ * PH-2 (issue #159) — nửa TIÊU THỤ của digest phụ huynh sau khi chuyển sang worker (issue con #518 của #491): năm ca hành vi vốn ở e2e phía API (`guardian-ph2-digest-flow.e2e-spec.ts`, nay file đó chỉ còn ca endpoint tuỳ chọn tần suất) chuyển nguyên sang tầng này, đi qua ĐƯỜNG THẬT của production: chèn vết lượt `guardian_digests` + sự kiện outbox như lượt quét chốt → relay outbox duy nhất đóng dấu và định tuyến vào hàng đợi `guardian-digest-events` → `GuardianDigestEventsProcessor` → `GuardianDigestHandlerService` tổng hợp + phát qua `NotificationDeliveryService.notify`.
  *
- * Ánh xạ ca (e2e phía API cũ → spec này), giữ nguyên khẳng định
- * nghiệp vụ:
+ * Ánh xạ ca (e2e phía API cũ → spec này), giữ nguyên khẳng định nghiệp vụ:
  *  1. Kết quả mới ĐÃ CÔNG BỐ → đúng 1 thông báo đếm số mục + link
- *     sâu, không điểm số/tên item ở mọi kênh (kể cả job email chỉ
- *     mang bản tối thiểu hoá), vết lượt `sent` kèm số đếm +
- *     notification_id, audit `guardian_digest_sent` không điểm;
- *     phát lại sự kiện không gửi trùng. (Ở đây khẳng định luôn qua
- *     hàng đợi: chờ job của sự kiện phát lại hoàn thành rồi mới đếm.)
+ *     sâu, không điểm số/tên item ở mọi kênh (kể cả job email chỉ mang bản tối thiểu hoá), vết lượt `sent` kèm số đếm + notification_id, audit `guardian_digest_sent` không điểm; phát lại sự kiện không gửi trùng. (Ở đây khẳng định luôn qua hàng đợi: chờ job của sự kiện phát lại hoàn thành rồi mới đếm.)
  *  2. Item CHƯA công bố (posting_policy manual, không publish) →
- *     số kết quả mới = 0. Khác biệt bề mặt so với e2e cũ: ở tầng
- *     worker không có luồng API nào sinh thông báo lớp trong cửa sổ
- *     cho học sinh fixture, nên tổng cửa sổ = 0 và lượt khép
- *     `skipped_empty` với new_results_count = 0 — khẳng định cốt
- *     lõi (chưa công bố thì không tính, không rò) giữ nguyên.
+ *     số kết quả mới = 0. Khác biệt bề mặt so với e2e cũ: ở tầng worker không có luồng API nào sinh thông báo lớp trong cửa sổ cho học sinh fixture, nên tổng cửa sổ = 0 và lượt khép `skipped_empty` với new_results_count = 0 — khẳng định cốt lõi (chưa công bố thì không tính, không rò) giữ nguyên.
  *  3. Cửa sổ rỗng → `skipped_empty`, không thông báo.
  *  4. Liên kết đã thu hồi tại thời điểm gửi → `skipped_revoked`.
  *  5. Đẩy quá hạn ≥7 ngày → 1 thông báo `guardian_overdue_alert`
  *     (tên hoạt động chỉ ở kênh trong-app; kênh email chỉ mang bản
  *     tối thiểu hoá), phát lại không trùng.
  *  6. (Ca mới của #518) Cùng một job xử lý hai lần → lần hai no-op
- *     nhờ vết lượt đã rời `queued`: ghim kỷ luật idempotent theo
- *     outboxId của chuỗi issue #491 ở tầng processor.
+ *     nhờ vết lượt đã rời `queued`: ghim kỷ luật idempotent theo outboxId của chuỗi issue #491 ở tầng processor.
  *
  * Spec boot WorkerModule qua harness role thường như spec quét
  * (`guardian-digest.int-spec.ts`): module chạy bằng role
- * NOSUPERUSER/NOBYPASSRLS như production; fixture và đọc kiểm chứng
- * qua kết nối quản trị của harness. Relay/processor chạy nền trong
- * module đã boot nên các ca chờ theo trạng thái (vết lượt, trạng
- * thái job) thay vì mốc thời gian cố định.
+ * NOSUPERUSER/NOBYPASSRLS như production; fixture và đọc kiểm chứng qua kết nối quản trị của harness. Relay/processor chạy nền trong module đã boot nên các ca chờ theo trạng thái (vết lượt, trạng thái job) thay vì mốc thời gian cố định.
  */
 describe('Worker guardian digest delivery (PH-2, issue #159; chuyển worker ở #518)', () => {
   let context: INestApplicationContext;
@@ -78,20 +57,11 @@ describe('Worker guardian digest delivery (PH-2, issue #159; chuyển worker ở
   }
 
   /**
-   * Cách ly dữ kiện email giữa các spec tích hợp: phụ huynh fixture
-   * đặt tường minh tần suất email `immediate` cho hai provider digest
-   * phụ huynh. Nếu để tần suất mặc định theo nhóm (`daily`), mỗi
-   * dispatch email sinh ra từ các ca dưới đây sẽ nằm chờ ở trạng thái
-   * `digest-queued` trong database dùng chung của suite, và lượt quét
-   * tổng hợp ngày của spec email
+   * Cách ly dữ kiện email giữa các spec tích hợp: phụ huynh fixture đặt tường minh tần suất email `immediate` cho hai provider digest phụ huynh. Nếu để tần suất mặc định theo nhóm (`daily`), mỗi dispatch email sinh ra từ các ca dưới đây sẽ nằm chờ ở trạng thái `digest-queued` trong database dùng chung của suite, và lượt quét tổng hợp ngày của spec email
    * (notifications/notification-email.int-spec.ts) — vốn khẳng định
-   * tổng số trên TOÀN database — sẽ gom cả các mục chờ đó vào kết quả
-   * của nó. Với `immediate`, dispatch vẫn đi trọn đường thật
+   * tổng số trên TOÀN database — sẽ gom cả các mục chờ đó vào kết quả của nó. Với `immediate`, dispatch vẫn đi trọn đường thật
    * (notify → hàng đợi dispatch → processor phát) nhưng chốt ngay
-   * bằng một dòng dispatch log, không vào bể chờ digest; bằng chứng
-   * kênh email của các ca dưới đây (job trên hàng đợi hoặc dispatch
-   * log theo dedupeKey) không đổi. Luật gộp digest ngày tự nó được
-   * kiểm chứng ở chính spec email.
+   * bằng một dòng dispatch log, không vào bể chờ digest; bằng chứng kênh email của các ca dưới đây (job trên hàng đợi hoặc dispatch log theo dedupeKey) không đổi. Luật gộp digest ngày tự nó được kiểm chứng ở chính spec email.
    */
   async function setEmailImmediate(guardianId: string) {
     for (const provider of ['guardian_digest', 'guardian_overdue_alert']) {

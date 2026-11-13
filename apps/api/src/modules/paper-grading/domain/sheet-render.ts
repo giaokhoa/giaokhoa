@@ -1,10 +1,6 @@
 /**
  * Dựng ảnh phiếu dạng raster ở không gian template (CAM-0, issue #112):
- * dùng cho BỘ ẢNH KIỂM CHỨNG MÔ PHỎNG — in "ảo" một phiếu (fiducial, QR,
- * lưới mã, bong bóng đã tô theo kịch bản), rồi mô phỏng ảnh chụp (lệch
- * phối cảnh, xoay nhẹ, nhiễu, mờ, gradient sáng) và đưa qua đúng engine
- * OMR của hệ thống để đo các tiêu chí nghiệm thu Phần 4.2. Phía PDF sản
- * xuất dùng cùng hình học template (sheet-layout) nhưng vẽ vector.
+ * dùng cho BỘ ẢNH KIỂM CHỨNG MÔ PHỎNG — in "ảo" một phiếu (fiducial, QR, lưới mã, bong bóng đã tô theo kịch bản), rồi mô phỏng ảnh chụp (lệch phối cảnh, xoay nhẹ, nhiễu, mờ, gradient sáng) và đưa qua đúng engine OMR của hệ thống để đo các tiêu chí nghiệm thu Phần 4.2. Phía PDF sản xuất dùng cùng hình học template (sheet-layout) nhưng vẽ vector.
  */
 import QRCode from 'qrcode';
 import { PNG } from 'pngjs';
@@ -94,8 +90,7 @@ export function renderSheetRgba(input: RenderSheetInput): RgbaImage {
   for (const c of FIDUCIAL_CENTERS) {
     fillRect(img, c.x - FIDUCIAL_SIZE / 2, c.y - FIDUCIAL_SIZE / 2, FIDUCIAL_SIZE, FIDUCIAL_SIZE, 10);
   }
-  // Đầu phiếu: các thanh xám tượng trưng dòng chữ (OMR không đọc chữ; PDF thật có chữ tiếng Việt).
-  // Thanh trên bắt đầu ở x=150 để không chạm fiducial góc trái (chiếm x 48..88, y 48..88).
+  // Đầu phiếu: các thanh xám tượng trưng dòng chữ (OMR không đọc chữ; PDF thật có chữ tiếng Việt). Thanh trên bắt đầu ở x=150 để không chạm fiducial góc trái (chiếm x 48..88, y 48..88).
   fillRect(img, 150, 62, 520, 26, 90);
   fillRect(img, 150, 104, 420, 18, 120);
   fillRect(img, 64, 150, 460, 18, 120);
@@ -128,10 +123,7 @@ export function renderSheetRgba(input: RenderSheetInput): RgbaImage {
       fillCircle(img, cell.x, cell.y, CODE_BUBBLE_R - 2, 15);
     }
   }
-  // Lưới mã đề + hàng ô ghi chữ số phía trên (khung tượng trưng): vòng
-  // tròn cho mọi ô; tô theo variantCode (một cột có thể tô nhạt để
-  // dựng ca mơ hồ). Phiếu dựng không truyền variantCode → lưới để
-  // trống như phiếu cá nhân hoá.
+  // Lưới mã đề + hàng ô ghi chữ số phía trên (khung tượng trưng): vòng tròn cho mọi ô; tô theo variantCode (một cột có thể tô nhạt để dựng ca mơ hồ). Phiếu dựng không truyền variantCode → lưới để trống như phiếu cá nhân hoá.
   if (input.variantCode !== undefined) {
     const colXs = new Map<number, number>();
     for (const cell of geometry.variantCodeCells) colXs.set(cell.digitIndex, cell.x);
@@ -202,9 +194,7 @@ export function seededRandom(seed: number): () => number {
 }
 
 /**
- * Mô phỏng một ảnh chụp điện thoại: phiếu đặt trên nền bàn tối, 4 góc bị
- * lệch phối cảnh ngẫu nhiên, cộng gradient sáng + nhiễu + tuỳ chọn mờ.
- * Trả về PNG bytes để đưa thẳng vào engine như ảnh thật.
+ * Mô phỏng một ảnh chụp điện thoại: phiếu đặt trên nền bàn tối, 4 góc bị lệch phối cảnh ngẫu nhiên, cộng gradient sáng + nhiễu + tuỳ chọn mờ. Trả về PNG bytes để đưa thẳng vào engine như ảnh thật.
  */
 export function simulatePhoto(sheet: RgbaImage, opts: PhotoSimOptions = {}): Buffer {
   const rand = seededRandom(opts.seed ?? 42);

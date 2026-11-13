@@ -12,10 +12,7 @@ import type { CentreTx } from '@giaokhoa/db';
 const VALID_PERMISSIONS = [CAP_PROHIBIT, CAP_PREVENT, CAP_INHERIT, CAP_ALLOW];
 
 /**
- * Truy vết nguồn của một dòng gán vai (Moodle: cột `component`/`itemid`
- * của `role_assignments` — enrol plugin ghi component là tên plugin và
- * itemid là id của enrol instance). Gán tay qua API quản trị và các gán
- * hệ thống khác để component rỗng + itemId null.
+ * Truy vết nguồn của một dòng gán vai (Moodle: cột `component`/`itemid` của `role_assignments` — enrol plugin ghi component là tên plugin và itemid là id của enrol instance). Gán tay qua API quản trị và các gán hệ thống khác để component rỗng + itemId null.
  */
 export interface AssignmentSource {
   component: string;
@@ -26,12 +23,7 @@ export interface AssignmentSource {
 export const ENROL_ASSIGNMENT_COMPONENT = 'enrol';
 
 /**
- * Một dòng của danh sách role kèm dữ kiện tổng hợp phía server: số
- * người dùng phân biệt đang giữ role và tổng hợp năng lực tính từ tập
- * ghi đè đã lưu của role (tổng số ghi đè, số ghi đè theo capType
- * read/write, số resource phân biệt các ghi đè chạm tới). Đây là hình
- * dạng trả về của `GET /access/roles` — giao diện thẻ role đọc thẳng
- * các trường tổng hợp này, không gọi thêm theo từng role.
+ * Một dòng của danh sách role kèm dữ kiện tổng hợp phía server: số người dùng phân biệt đang giữ role và tổng hợp năng lực tính từ tập ghi đè đã lưu của role (tổng số ghi đè, số ghi đè theo capType read/write, số resource phân biệt các ghi đè chạm tới). Đây là hình dạng trả về của `GET /access/roles` — giao diện thẻ role đọc thẳng các trường tổng hợp này, không gọi thêm theo từng role.
  */
 export interface RoleListItem extends RoleRow {
   userCount: number;
@@ -42,13 +34,7 @@ export interface RoleListItem extends RoleRow {
 }
 
 /**
- * Một dòng vai trong ma trận quyền tại đúng một context: định danh
- * và tên vai, số người dùng phân biệt đang giữ vai (cùng phép đếm
- * với danh sách vai) và tập ghi đè ĐÃ LƯU của vai tại context đó —
- * mỗi phần tử chỉ gồm tên năng lực và giá trị quyền, sắp theo tên
- * năng lực. Vai không có ghi đè nào tại context mang `overrides`
- * rỗng. Đây là hình dạng một phần tử của đáp ứng
- * `GET /access/capability-matrix`.
+ * Một dòng vai trong ma trận quyền tại đúng một context: định danh và tên vai, số người dùng phân biệt đang giữ vai (cùng phép đếm với danh sách vai) và tập ghi đè ĐÃ LƯU của vai tại context đó — mỗi phần tử chỉ gồm tên năng lực và giá trị quyền, sắp theo tên năng lực. Vai không có ghi đè nào tại context mang `overrides` rỗng. Đây là hình dạng một phần tử của đáp ứng `GET /access/capability-matrix`.
  */
 export interface RoleCapabilityMatrixItem {
   id: string;
@@ -64,8 +50,7 @@ export function isEnrolManagedAssignment(assignment: { component?: string | null
 
 @Injectable()
 /**
- * Quản trị role và gán role: role là tập override capability tại các context.
- * Đối chiếu Moodle: lib/accesslib.php (create_role, assign_capability, role_assign).
+ * Quản trị role và gán role: role là tập override capability tại các context. Đối chiếu Moodle: lib/accesslib.php (create_role, assign_capability, role_assign).
  */
 export class RolesService {
   constructor(
@@ -78,8 +63,7 @@ export class RolesService {
 
   /** Seed có tính idempotent: đồng bộ các định nghĩa capability từ code (định nghĩa không còn trong registry sẽ bị cắt bỏ, cùng với các override role của chúng), tạo các role core chuẩn của Moodle và giá trị mặc định theo archetype của chúng tại context hệ thống. */
   /**
-   * Gieo các role archetype chuẩn của Moodle (manager, coursecreator, editingteacher, teacher, student, guest, user) cùng ma trận quyền mặc định tại context hệ thống; idempotent.
-   * Đồng bộ hai chiều: định nghĩa capability không còn trong sổ đăng ký ở code (vd tên cũ còn tiền tố, đã bỏ từ issue #35) bị xoá khỏi DB cùng mọi override trỏ tới chúng, để hai hệ tên không cùng tồn tại sau seed.
+   * Gieo các role archetype chuẩn của Moodle (manager, coursecreator, editingteacher, teacher, student, guest, user) cùng ma trận quyền mặc định tại context hệ thống; idempotent. Đồng bộ hai chiều: định nghĩa capability không còn trong sổ đăng ký ở code (vd tên cũ còn tiền tố, đã bỏ từ issue #35) bị xoá khỏi DB cùng mọi override trỏ tới chúng, để hai hệ tên không cùng tồn tại sau seed.
    */
   async seedDefaults(): Promise<void> {
     const system = await this.contexts.ensureSystemContext();

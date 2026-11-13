@@ -10,10 +10,7 @@ import { EnrolService } from './enrol.service';
 /**
  * API ghi danh: enrol instance, ghi danh thủ công/tự ghi danh, đình chỉ và rút.
  *
- * Lớp này khai tiền tố con đầy đủ của chính nó thay vì tiền tố trơ
- * `courses`: tiền tố trơ `courses` chỉ còn module courses sở hữu, mỗi
- * tiền tố đầy đủ khác chỉ có đúng một lớp khai báo. Bảng route giữ
- * nguyên từng ký tự so với trước khi đổi hình thức khai báo.
+ * Lớp này khai tiền tố con đầy đủ của chính nó thay vì tiền tố trơ `courses`: tiền tố trơ `courses` chỉ còn module courses sở hữu, mỗi tiền tố đầy đủ khác chỉ có đúng một lớp khai báo. Bảng route giữ nguyên từng ký tự so với trước khi đổi hình thức khai báo.
  */
 export class EnrolController {
   constructor(private readonly enrol: EnrolService) {}
@@ -97,19 +94,14 @@ export class EnrolController {
 /**
  * API đọc trạng thái ghi danh của khoá học.
  *
- * Lớp này tách khỏi `EnrolController` vì các route của nó không chung
- * tiền tố con với họ route `courses/:courseId/enrol/instances`: chúng
- * đọc trạng thái ghi danh của khoá học chứ không tác động lên một
- * instance ghi danh. Bảng route giữ nguyên từng ký tự so với trước
- * khi đổi hình thức khai báo.
+ * Lớp này tách khỏi `EnrolController` vì các route của nó không chung tiền tố con với họ route `courses/:courseId/enrol/instances`: chúng đọc trạng thái ghi danh của khoá học chứ không tác động lên một instance ghi danh. Bảng route giữ nguyên từng ký tự so với trước khi đổi hình thức khai báo.
  */
 export class CourseEnrolmentsController {
   constructor(private readonly enrol: EnrolService) {}
 
   @Get()
   /**
-   * GET /courses/:courseId/enrolments — ghi danh của khoá học (chỉ thành viên
-   * khoá hoặc người có quyền quản lý enrol mới xem được; người ngoài nhận 404).
+   * GET /courses/:courseId/enrolments — ghi danh của khoá học (chỉ thành viên khoá hoặc người có quyền quản lý enrol mới xem được; người ngoài nhận 404).
    */
   async listEnrolments(@Param('courseId', { schema: uuidIdSchema }) courseId: string, @CurrentUser() viewer: AuthenticatedUser) {
     return this.enrol.listEnrolmentsForCourse(courseId, viewer.id);

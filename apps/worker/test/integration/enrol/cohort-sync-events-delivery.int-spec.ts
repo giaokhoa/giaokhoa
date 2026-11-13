@@ -12,31 +12,11 @@ import {
 } from '../../support/ordinary-worker-module';
 
 /**
- * Consumer đồng bộ cohort ở worker (issue con #528 của #519) —
- * các ca hành vi của ca (6) trong e2e vòng đời lớp phía API chuyển
- * nguyên sang tầng này, đi qua ĐƯỜNG THẬT của production: chèn
- * dòng sự kiện outbox đúng hình dạng phía phát vẫn ghi (bỏ qua
- * đường in-process) → relay outbox duy nhất đóng dấu `publishedAt`
- * và định tuyến vào hàng đợi `cohort-sync-events` →
- * `CohortSyncEventsProcessor` → host `CohortSyncService` gọi bề mặt
- * vật chất hoá cohort dùng chung của issue con #527.
+ * Consumer đồng bộ cohort ở worker (issue con #528 của #519) — các ca hành vi của ca (6) trong e2e vòng đời lớp phía API chuyển nguyên sang tầng này, đi qua ĐƯỜNG THẬT của production: chèn dòng sự kiện outbox đúng hình dạng phía phát vẫn ghi (bỏ qua đường in-process) → relay outbox duy nhất đóng dấu `publishedAt` và định tuyến vào hàng đợi `cohort-sync-events` → `CohortSyncEventsProcessor` → host `CohortSyncService` gọi bề mặt vật chất hoá cohort dùng chung của issue con #527.
  *
- * Giữ nguyên khẳng định nghiệp vụ của ca e2e cũ (ghi danh được vật
- * chất hoá đúng như hành vi hiện tại ở cả hai chiều thêm/bớt thành
- * viên, sự kiện `user_enrolment_suspended` vẫn được phát tiếp khi
- * có trường hợp áp dụng), cộng các ca ghim tính idempotent hai
- * tầng đã chốt cho issue này: phát lại cùng một sự kiện (job mới
- * mang cùng `outboxId` + payload, mô phỏng phát lại ngoài cửa sổ
- * lưu giữ của `jobId`) không sinh ghi danh trùng, không phát lại
- * `user_enrolled`/`user_unenrolled`, không kích hoạt lại ghi danh
- * đã đình chỉ/rút.
+ * Giữ nguyên khẳng định nghiệp vụ của ca e2e cũ (ghi danh được vật chất hoá đúng như hành vi hiện tại ở cả hai chiều thêm/bớt thành viên, sự kiện `user_enrolment_suspended` vẫn được phát tiếp khi có trường hợp áp dụng), cộng các ca ghim tính idempotent hai tầng đã chốt cho issue này: phát lại cùng một sự kiện (job mới mang cùng `outboxId` + payload, mô phỏng phát lại ngoài cửa sổ lưu giữ của `jobId`) không sinh ghi danh trùng, không phát lại `user_enrolled`/`user_unenrolled`, không kích hoạt lại ghi danh đã đình chỉ/rút.
  *
- * Khác biệt bề mặt duy nhất so với e2e cũ: dữ kiện (tenant, cây
- * context, khoá, cohort, instance, vai trò) được dựng bằng SQL trực
- * tiếp theo khuôn spec đặc tả hoá bề mặt ở phía worker của #527,
- * và khẳng định đọc ở tầng DB thay vì qua endpoint — đúng tiền lệ
- * chuyển ca của issue #520. Mỗi ca dùng đồ thị riêng (id ngẫu
- * nhiên) nên các ca độc lập dữ kiện nghiệp vụ.
+ * Khác biệt bề mặt duy nhất so với e2e cũ: dữ kiện (tenant, cây context, khoá, cohort, instance, vai trò) được dựng bằng SQL trực tiếp theo khuôn spec đặc tả hoá bề mặt ở phía worker của #527, và khẳng định đọc ở tầng DB thay vì qua endpoint — đúng tiền lệ chuyển ca của issue #520. Mỗi ca dùng đồ thị riêng (id ngẫu nhiên) nên các ca độc lập dữ kiện nghiệp vụ.
  */
 describe('Worker cohort sync events delivery (chuyển consumer ở #528)', () => {
   let context: INestApplicationContext;

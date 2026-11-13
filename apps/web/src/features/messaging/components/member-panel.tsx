@@ -67,10 +67,7 @@ export interface MemberPanelBundle {
   /** Gỡ một thành viên khỏi nhóm tự do (chỉ trang/API mới thực thi cổng canManage). */
   onRemoveMember: (userId: string) => void;
   /**
-   * Tập user TÔI đã chặn — khung chat bổ sung từ props của trang
-   * khi đưa gói xuống panel (quyết 23:16 ngày 26/10/2026: chặn ở
-   * chat nhóm đi qua menu thành viên). Trang dựng gói không đặt
-   * trường này; thiếu thì menu không hiện mục bỏ chặn.
+   * Tập user TÔI đã chặn — khung chat bổ sung từ props của trang khi đưa gói xuống panel (quyết 23:16 ngày 26/10/2026: chặn ở chat nhóm đi qua menu thành viên). Trang dựng gói không đặt trường này; thiếu thì menu không hiện mục bỏ chặn.
    */
   blockedIds?: ReadonlySet<string>;
   /** Chặn một thành viên ngay từ menu hành động của họ (handler của trang, khung chat luồn vào gói). */

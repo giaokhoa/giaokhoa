@@ -44,17 +44,14 @@ export class CourseAssignmentsController {
 @ApiTags('assignments')
 @Controller({ path: 'assignments', version: '1' })
 /**
- * API hoạt động Bài tập nộp tệp/ảnh: cài đặt, bài nộp của học sinh (tải
- * tệp, chốt nộp, mở lại) và bề mặt chấm của giáo viên (danh sách bài nộp,
- * chi tiết kèm URL xem tệp, nhập điểm + lời phê).
+ * API hoạt động Bài tập nộp tệp/ảnh: cài đặt, bài nộp của học sinh (tải tệp, chốt nộp, mở lại) và bề mặt chấm của giáo viên (danh sách bài nộp, chi tiết kèm URL xem tệp, nhập điểm + lời phê).
  */
 export class AssignmentsController {
   constructor(private readonly assignments: AssignmentsService) {}
 
   @Get(':id')
   /**
-   * GET /assignments/:id — thông tin bài tập cho người xem (cấu hình,
-   * bài nộp của chính mình kèm điểm/lời phê, các cờ quyền).
+   * GET /assignments/:id — thông tin bài tập cho người xem (cấu hình, bài nộp của chính mình kèm điểm/lời phê, các cờ quyền).
    */
   async getForUser(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.assignments.getAssignmentForUser(actor.id, id);
@@ -78,8 +75,7 @@ export class AssignmentsController {
   @Post(':id/submission/files')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: ASSIGN_UPLOAD_MAX_BYTES } }))
   /**
-   * POST /assignments/:id/submission/files — tải một tệp/ảnh vào bài nộp
-   * nháp của chính mình (multipart; assign:submit).
+   * POST /assignments/:id/submission/files — tải một tệp/ảnh vào bài nộp nháp của chính mình (multipart; assign:submit).
    */
   async uploadFile(@Param('id', { schema: uuidIdSchema }) id: string, @UploadedFile() file: { originalname: string; buffer: Buffer; mimetype: string }, @CurrentUser() actor: AuthenticatedUser) {
     return this.assignments.uploadSubmissionFile(actor.id, id, {
@@ -111,8 +107,7 @@ export class AssignmentsController {
 
   @Get(':id/submissions')
   /**
-   * GET /assignments/:id/submissions — danh sách bài nộp cả lớp kèm
-   * trạng thái theo hạn (assign:viewallsubmissions hoặc assign:grade).
+   * GET /assignments/:id/submissions — danh sách bài nộp cả lớp kèm trạng thái theo hạn (assign:viewallsubmissions hoặc assign:grade).
    */
   async listSubmissions(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.assignments.listSubmissionsForTeacher(actor.id, id);
@@ -120,17 +115,14 @@ export class AssignmentsController {
 
   @Get(':id/results')
   /**
-   * GET /assignments/:id/results — kết quả của MỘT bài tập cho giáo
-   * viên (issue #224, bộ thống kê Azota): tham gia (đã nộp/chưa nộp),
-   * điểm trung bình + phổ điểm của bài, bảng điểm từng học sinh.
+   * GET /assignments/:id/results — kết quả của MỘT bài tập cho giáo viên (issue #224, bộ thống kê Azota): tham gia (đã nộp/chưa nộp), điểm trung bình + phổ điểm của bài, bảng điểm từng học sinh.
    */
   async results(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.assignments.getResults(actor.id, id);
   }
   @Get(':id/submissions/:userId')
   /**
-   * GET /assignments/:id/submissions/:userId — chi tiết một bài nộp để
-   * chấm: tệp kèm URL đã ký xem toàn màn + điểm/lời phê hiện tại.
+   * GET /assignments/:id/submissions/:userId — chi tiết một bài nộp để chấm: tệp kèm URL đã ký xem toàn màn + điểm/lời phê hiện tại.
    */
   async getSubmission(@Param('id', { schema: uuidIdSchema }) id: string, @Param('userId', { schema: uuidIdSchema }) userId: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.assignments.getSubmissionForTeacher(actor.id, id, userId);
@@ -139,26 +131,21 @@ export class AssignmentsController {
   /**
    * POST /assignments/:id/submissions/:userId/grade — LƯU gói chấm nháp
    * (điểm/mức + lời phê cấu trúc + kết quả rubric): học sinh chưa thấy,
-   * sổ điểm chưa nhận; sửa gói đã trả qua cùng endpoint này sẽ ghi vết
-   * kiểm toán (assign:grade).
+   * sổ điểm chưa nhận; sửa gói đã trả qua cùng endpoint này sẽ ghi vết kiểm toán (assign:grade).
    */
   async grade(@Param('id', { schema: uuidIdSchema }) id: string, @Param('userId', { schema: uuidIdSchema }) userId: string, @Body({ schema: gradeAssignmentSubmissionSchema }) dto: GradeAssignmentSubmissionDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.assignments.gradeSubmission(actor.id, id, userId, dto);
   }
   @Post(':id/submissions/:userId/release')
   /**
-   * POST /assignments/:id/submissions/:userId/release — TRẢ BÀI cho một
-   * học sinh: công bố nguyên tử gói chấm + ghi điểm vào sổ điểm tại thời
-   * điểm trả (assign:grade).
+   * POST /assignments/:id/submissions/:userId/release — TRẢ BÀI cho một học sinh: công bố nguyên tử gói chấm + ghi điểm vào sổ điểm tại thời điểm trả (assign:grade).
    */
   async release(@Param('id', { schema: uuidIdSchema }) id: string, @Param('userId', { schema: uuidIdSchema }) userId: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.assignments.releaseSubmission(actor.id, id, userId);
   }
   @Post(':id/release-batch')
   /**
-   * POST /assignments/:id/release-batch — TRẢ BÀI theo đợt: mọi gói chấm
-   * nháp đã đầy đủ (hoặc các học sinh liệt kê trong body); gói chưa đầy
-   * đủ được kê vào skippedUserIds (assign:grade).
+   * POST /assignments/:id/release-batch — TRẢ BÀI theo đợt: mọi gói chấm nháp đã đầy đủ (hoặc các học sinh liệt kê trong body); gói chưa đầy đủ được kê vào skippedUserIds (assign:grade).
    */
   async releaseBatch(@Param('id', { schema: uuidIdSchema }) id: string, @Body({ schema: releaseAssignmentGradesSchema }) dto: ReleaseAssignmentGradesDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.assignments.releaseBatch(actor.id, id, dto.userIds);
@@ -166,16 +153,14 @@ export class AssignmentsController {
 
   @Get(':id/rubric')
   /**
-   * GET /assignments/:id/rubric — bảng chấm của bài (bản công khai cho
-   * học sinh; mô tả dành cho người chấm chỉ hiện với vai chấm/quản lý).
+   * GET /assignments/:id/rubric — bảng chấm của bài (bản công khai cho học sinh; mô tả dành cho người chấm chỉ hiện với vai chấm/quản lý).
    */
   async getRubric(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     return { rubric: await this.assignments.getRubric(actor.id, id) };
   }
   @Put(':id/rubric')
   /**
-   * PUT /assignments/:id/rubric — dựng/cập nhật bảng chấm (thay toàn
-   * bộ; khoá sau khi đã có bài được trả) — assign:manage.
+   * PUT /assignments/:id/rubric — dựng/cập nhật bảng chấm (thay toàn bộ; khoá sau khi đã có bài được trả) — assign:manage.
    */
   async putRubric(@Param('id', { schema: uuidIdSchema }) id: string, @Body({ schema: upsertAssignRubricSchema }) dto: UpsertAssignRubricDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.assignments.upsertRubric(actor.id, id, dto);
@@ -183,16 +168,14 @@ export class AssignmentsController {
 
   @Get(':id/submissions/:userId/annotations')
   /**
-   * GET /assignments/:id/submissions/:userId/annotations — các dấu chấm
-   * vector trên bài nộp (bề mặt chấm của giáo viên).
+   * GET /assignments/:id/submissions/:userId/annotations — các dấu chấm vector trên bài nộp (bề mặt chấm của giáo viên).
    */
   async listAnnotations(@Param('id', { schema: uuidIdSchema }) id: string, @Param('userId', { schema: uuidIdSchema }) userId: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.assignments.listAnnotationsForTeacher(actor.id, id, userId);
   }
   @Post(':id/submissions/:userId/annotations')
   /**
-   * POST /assignments/:id/submissions/:userId/annotations — thả một dấu
-   * chấm vector (đúng/sai/vẽ tay/ghi chú...) lên tệp của bài nộp
+   * POST /assignments/:id/submissions/:userId/annotations — thả một dấu chấm vector (đúng/sai/vẽ tay/ghi chú...) lên tệp của bài nộp
    * (assign:grade).
    */
   async createAnnotation(@Param('id', { schema: uuidIdSchema }) id: string, @Param('userId', { schema: uuidIdSchema }) userId: string, @Body({ schema: createAssignAnnotationSchema }) dto: CreateAssignAnnotationDto, @CurrentUser() actor: AuthenticatedUser) {
@@ -216,16 +199,14 @@ export class AssignmentsController {
 
   @Get(':id/submissions/:userId/messages')
   /**
-   * GET /assignments/:id/submissions/:userId/messages — hội thoại phản
-   * hồi trên bài đã trả (của chính học sinh hoặc bề mặt chấm).
+   * GET /assignments/:id/submissions/:userId/messages — hội thoại phản hồi trên bài đã trả (của chính học sinh hoặc bề mặt chấm).
    */
   async listMessages(@Param('id', { schema: uuidIdSchema }) id: string, @Param('userId', { schema: uuidIdSchema }) userId: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.assignments.listFeedbackMessages(actor.id, id, userId);
   }
   @Post(':id/submissions/:userId/messages')
   /**
-   * POST /assignments/:id/submissions/:userId/messages — gửi một tin
-   * nhắn vào hội thoại phản hồi (chỉ mở sau khi trả bài).
+   * POST /assignments/:id/submissions/:userId/messages — gửi một tin nhắn vào hội thoại phản hồi (chỉ mở sau khi trả bài).
    */
   async postMessage(@Param('id', { schema: uuidIdSchema }) id: string, @Param('userId', { schema: uuidIdSchema }) userId: string, @Body({ schema: createAssignFeedbackMessageSchema }) dto: CreateAssignFeedbackMessageDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.assignments.postFeedbackMessage(actor.id, id, userId, dto.body);

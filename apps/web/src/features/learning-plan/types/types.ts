@@ -16,9 +16,7 @@ export interface PlanDetail {
 }
 
 /**
- * Framework như API trả về (bản ghi `competency_framework`): thang đánh giá
- * nằm trong `scaleConfiguration` dạng `{ values, proficient }` — cùng hình
- * dạng `competencyScaleSchema` mà DTO tạo framework nhận ở trường `scale`.
+ * Framework như API trả về (bản ghi `competency_framework`): thang đánh giá nằm trong `scaleConfiguration` dạng `{ values, proficient }` — cùng hình dạng `competencyScaleSchema` mà DTO tạo framework nhận ở trường `scale`.
  */
 export interface FrameworkView {
   id: string;

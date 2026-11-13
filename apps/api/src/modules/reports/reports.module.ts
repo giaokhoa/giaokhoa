@@ -13,8 +13,7 @@ import { ReportsService } from './reports.service';
   imports: [AccessModule, CoursesModule, MessagingModule, SpaceRoutingModule],
   controllers: [ReportsController],
   providers: [
-    // Repository của package @giaokhoa/db chạy trên handle Kysely đã định
-    // tuyến theo không gian (issue #648).
+    // Repository của package @giaokhoa/db chạy trên handle Kysely đã định tuyến theo không gian (issue #648).
     {
       provide: ReportsRepository,
       useFactory: (spaceDatabase: SpaceDatabaseService) => new ReportsRepository(spaceDatabase.routedKysely),

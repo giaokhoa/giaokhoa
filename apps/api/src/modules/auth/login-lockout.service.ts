@@ -15,12 +15,7 @@ export interface LoginIdentifier {
 }
 
 /**
- * Cổng hẹp mà tầng Better Auth dùng để áp chính sách lockout: factory
- * dựng instance (hàm thuần, ngoài vòng đời Nest) chỉ biết interface
- * này — cùng khuôn deps như `PasswordService`. Mọi hàm đều an toàn với
- * định danh không tồn tại: user không có thật thì không khoá và không
- * ghi (khớp hệ legacy, vốn ném `auth.invalid_credentials` trước khi
- * chạm tới bảng `login_attempts` khi username không tồn tại).
+ * Cổng hẹp mà tầng Better Auth dùng để áp chính sách lockout: factory dựng instance (hàm thuần, ngoài vòng đời Nest) chỉ biết interface này — cùng khuôn deps như `PasswordService`. Mọi hàm đều an toàn với định danh không tồn tại: user không có thật thì không khoá và không ghi (khớp hệ legacy, vốn ném `auth.invalid_credentials` trước khi chạm tới bảng `login_attempts` khi username không tồn tại).
  */
 export interface LockoutGuardPort {
   /** Tài khoản của định danh đăng nhập này có đang bị khoá tạm thời hay không. */
@@ -30,17 +25,9 @@ export interface LockoutGuardPort {
 }
 
 /**
- * Chính sách khoá tạm thời theo tài khoản (authlib_test::test_lockout
- * semantics) — MỘT nguồn semantics duy nhất cho cả hệ legacy lẫn
- * Better Auth (điểm 2.4 trong hồ sơ Giai đoạn 2 của issue #7): tách ra
- * khỏi `AuthService` để endpoint hooks của Better Auth dùng chung đúng
- * bộ đếm trên bảng `login_attempts`, không tồn tại hai hệ đếm song song.
+ * Chính sách khoá tạm thời theo tài khoản (authlib_test::test_lockout semantics) — MỘT nguồn semantics duy nhất cho cả hệ legacy lẫn Better Auth (điểm 2.4 trong hồ sơ Giai đoạn 2 của issue #7): tách ra khỏi `AuthService` để endpoint hooks của Better Auth dùng chung đúng bộ đếm trên bảng `login_attempts`, không tồn tại hai hệ đếm song song.
  *
- * Semantics giữ nguyên của hệ legacy: sau `LOCKOUT_THRESHOLD` lần thất
- * bại LIÊN TIẾP (chỉ tính các lần sau lần đăng nhập thành công gần
- * nhất) trong cửa sổ `LOCKOUT_WINDOW_MINUTES`, tài khoản bị khoá trong
- * `LOCKOUT_DURATION_MINUTES` kể từ lần thất bại chạm ngưỡng. Ngưỡng 0
- * tắt hẳn chính sách (hành vi Moodle).
+ * Semantics giữ nguyên của hệ legacy: sau `LOCKOUT_THRESHOLD` lần thất bại LIÊN TIẾP (chỉ tính các lần sau lần đăng nhập thành công gần nhất) trong cửa sổ `LOCKOUT_WINDOW_MINUTES`, tài khoản bị khoá trong `LOCKOUT_DURATION_MINUTES` kể từ lần thất bại chạm ngưỡng. Ngưỡng 0 tắt hẳn chính sách (hành vi Moodle).
  */
 @Injectable()
 export class LoginLockoutService implements LockoutGuardPort {

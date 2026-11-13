@@ -5,18 +5,14 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstS
 import { getGradebook } from '../../support/assessment-helpers';
 
 /**
- * Hoạt động Bài tập nộp tệp/ảnh (issue #88, lát C2 của Đợt 3) — đối
- * chiếu mod_assign của Moodle (submission type file/ảnh), đã hấp thụ hồ
- * sơ "Chấm bài và phản hồi theo năng lực GDPT 2018" (mục 6.1):
+ * Hoạt động Bài tập nộp tệp/ảnh (issue #88, lát C2 của Đợt 3) — đối chiếu mod_assign của Moodle (submission type file/ảnh), đã hấp thụ hồ sơ "Chấm bài và phản hồi theo năng lực GDPT 2018" (mục 6.1):
  *  - học sinh tải 1–nhiều ảnh/tệp vào bài nộp nháp (Files: dedup theo
- *    content hash, xem qua signed URL), chốt nộp; nộp sau hạn vẫn nhận
- *    nhưng bị đánh dấu trễ;
+ *    content hash, xem qua signed URL), chốt nộp; nộp sau hạn vẫn nhận nhưng bị đánh dấu trễ;
  *  - giáo viên chấm trên bề mặt nộp: dấu VECTOR trên ảnh (đúng/sai/ghi
  *    chú), điểm/mức + lời phê cấu trúc 3 ô — tất cả ở trạng thái NHÁP:
  *    học sinh chưa thấy gì, sổ điểm chưa nhận điểm;
  *  - TRẢ BÀI là hành động công bố nguyên tử: gói chấm hiện với học
- *    sinh, điểm ghi vào grade item 'mod' tại thời điểm trả nên hiện ở
- *    sổ điểm; sửa sau khi trả ghi vết kiểm toán; bài đã trả thì khoá;
+ *    sinh, điểm ghi vào grade item 'mod' tại thời điểm trả nên hiện ở sổ điểm; sửa sau khi trả ghi vết kiểm toán; bài đã trả thì khoá;
  *  - bảng chấm rubric neo YCCĐ công khai trước khi nộp; chế độ chỉ-mức
  *    (Đạt/Chưa đạt) cho nhóm môn chỉ nhận xét; ngân hàng lời phê cá
  *    nhân của giáo viên; hội thoại phản hồi mở sau khi trả bài.

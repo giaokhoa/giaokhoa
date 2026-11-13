@@ -19,74 +19,25 @@ import type {
 import { initialsOf, relativeTime } from '../utils/utils';
 
 /**
- * DANH SÁCH NHÓM của tab Nhóm — khung trái màn Tin nhắn (dữ kiện
- * cây do server dựng từ lát MSG-T1, issue #33; trình bày danh
- * sách phẳng từ issue #606).
+ * DANH SÁCH NHÓM của tab Nhóm — khung trái màn Tin nhắn (dữ kiện cây do server dựng từ lát MSG-T1, issue #33; trình bày danh sách phẳng từ issue #606).
  *
  * Flow tổng thể:
  *
  * 1. Dữ kiện vẫn là CÂY do SERVER dựng sẵn (GET
  *    /messages/group-tree, lát MSG-T1) theo đúng quan hệ thật:
- *    Lớp → Khoá trong lớp → Nhóm con trong khoá, cộng mục Khoá
- *    ngoài lớp và mục Nhóm tự do. Client không tự ghép quan hệ
- *    từ danh sách hội thoại phẳng và không đoán loại hội thoại
- *    theo tên — cây là nguồn quan hệ duy nhất.
+ *    Lớp → Khoá trong lớp → Nhóm con trong khoá, cộng mục Khoá ngoài lớp và mục Nhóm tự do. Client không tự ghép quan hệ từ danh sách hội thoại phẳng và không đoán loại hội thoại theo tên — cây là nguồn quan hệ duy nhất.
  * 2. TRÌNH BÀY là một danh sách phẳng đúng dạng danh sách của
- *    bản demo (issue #606): mọi nút của cây thành một hàng trong
- *    cùng một danh sách, theo đúng thứ tự của cây (lớp, rồi các
- *    khoá trong lớp và các nhóm con của từng khoá, rồi khoá
- *    ngoài lớp, rồi nhóm tự do), không còn cây thu/mở bằng
- *    chevron. Hàng con THỤT TRÁI theo cấp lồng (vòng sửa sau
- *    nghiệm thu PR #610): khoá trong lớp thụt một cấp dưới
- *    hàng lớp, nhóm con thụt thêm một cấp dưới hàng khoá —
- *    quan hệ cha–con của cây đọc được bằng mắt ngay trên danh
- *    sách phẳng, hình dạng còn lại của hàng giữ nguyên. Vai
- *    của chính người xem tại từng nút (`myRole`)
- *    quyết định nhãn vai trên hàng khi hàng chưa có xem trước
- *    tin cuối — cây của giáo viên và của học sinh khác nhau từ
- *    dữ kiện server, không phải hai giao diện riêng.
+ *    bản demo (issue #606): mọi nút của cây thành một hàng trong cùng một danh sách, theo đúng thứ tự của cây (lớp, rồi các khoá trong lớp và các nhóm con của từng khoá, rồi khoá ngoài lớp, rồi nhóm tự do), không còn cây thu/mở bằng chevron. Hàng con THỤT TRÁI theo cấp lồng (vòng sửa sau nghiệm thu PR #610): khoá trong lớp thụt một cấp dưới hàng lớp, nhóm con thụt thêm một cấp dưới hàng khoá — quan hệ cha–con của cây đọc được bằng mắt ngay trên danh sách phẳng, hình dạng còn lại của hàng giữ nguyên. Vai của chính người xem tại từng nút (`myRole`) quyết định nhãn vai trên hàng khi hàng chưa có xem trước tin cuối — cây của giáo viên và của học sinh khác nhau từ dữ kiện server, không phải hai giao diện riêng.
  * 3. Bấm một hàng là mở ngay chat của hàng đó ở khung phải:
- *    hàng lớp/khoá đi đường ensure của trang chứa (trang chứa
- *    lấy/tạo conversation qua endpoint lớp/khoá), hàng nhóm con
- *    và nhóm tự do mở đúng conversation của chúng (nhóm con chưa
- *    có conversation thì trang chứa tạo/lấy). Mọi đường đều tối
- *    đa 2 thao tác tính từ tab Nhóm, như cây trước đây.
+ *    hàng lớp/khoá đi đường ensure của trang chứa (trang chứa lấy/tạo conversation qua endpoint lớp/khoá), hàng nhóm con và nhóm tự do mở đúng conversation của chúng (nhóm con chưa có conversation thì trang chứa tạo/lấy). Mọi đường đều tối đa 2 thao tác tính từ tab Nhóm, như cây trước đây.
  * 4. Ô tìm phía trên thanh tab (ở khung trái) lọc danh sách
- *    theo tên lớp/khoá/nhóm: nút khớp thì hiện; nút cha khớp thì
- *    giữ nguyên các nút con của nó; nút khoá chỉ khớp qua nhóm
- *    con thì hiện kèm nhóm con đã lọc đó.
+ *    theo tên lớp/khoá/nhóm: nút khớp thì hiện; nút cha khớp thì giữ nguyên các nút con của nó; nút khoá chỉ khớp qua nhóm con thì hiện kèm nhóm con đã lọc đó.
  * 5. Số chưa đọc trên từng hàng là số server tính cho chính nút
- *    đó (nút lớp = tổng của chat lớp + mọi nút con trong lớp
- *    theo hợp đồng MSG-T1) — nhìn lướt là biết lớp/khoá nào
- *    đang có tin. Nút "+ Tạo nhóm" đứng ngay trước các hàng
- *    nhóm tự do và CHỈ hiện khi trang chứa truyền
- *    `canCreateFreeGroup` (cờ server tính theo cổng tạo nhóm
- *    của API — chỉ quản trị viên hệ thống/chủ trung tâm); cổng
- *    chặn tạo nhóm nằm ở server, đây chỉ là trình bày.
+ *    đó (nút lớp = tổng của chat lớp + mọi nút con trong lớp theo hợp đồng MSG-T1) — nhìn lướt là biết lớp/khoá nào đang có tin. Nút "+ Tạo nhóm" đứng ngay trước các hàng nhóm tự do và CHỈ hiện khi trang chứa truyền `canCreateFreeGroup` (cờ server tính theo cổng tạo nhóm của API — chỉ quản trị viên hệ thống/chủ trung tâm); cổng chặn tạo nhóm nằm ở server, đây chỉ là trình bày.
  * 6. Mục **Ghim** như bản demo (điểm quan sát của phán quyết
- *    nghiệm thu preview PR #607): trạng thái ghim là trạng thái
- *    cá nhân trên từng hội thoại và cây server mang nó theo
- *    từng nút (`pinnedAt` trên chính dữ kiện cây — server dựng
- *    từ dòng thành viên của người xem trên cả hai tập hội
- *    thoại chưa lưu trữ và đã lưu trữ). Hàng nhóm phân mục
- *    theo trường này, KHÔNG tra danh sách hội thoại của trang
- *    để phân mục: mốc ghim trên cây là dữ kiện server dựng
- *    sẵn cho đúng cấu trúc lớp/khoá/nhóm của tab này (gồm cả
- *    nút chưa có hội thoại), còn danh sách hội thoại của
- *    trang là góc nhìn phẳng của tab Tất cả / Chưa đọc. Xem
- *    trước tin cuối và biểu tượng tắt tiếng vẫn tra
- *    `conversationsById` như trước.
- *    Khi có ít nhất một hàng đã ghim, danh sách tách hai mục
- *    thu gọn **Ghim** (các hàng đã ghim, giữ thứ tự cây) và
- *    **Nhóm** (mọi hàng còn lại, giữ đúng thứ tự và vị trí nút
- *    Tạo nhóm như danh sách phẳng); khi chưa có hàng nào ghim,
- *    danh sách giữ nguyên dạng phẳng không tiêu đề mục như
- *    trước. Hàng chưa có hội thoại (chưa ensure) mang
- *    `pinnedAt` null nên luôn ở mục Nhóm.
+ *    nghiệm thu preview PR #607): trạng thái ghim là trạng thái cá nhân trên từng hội thoại và cây server mang nó theo từng nút (`pinnedAt` trên chính dữ kiện cây — server dựng từ dòng thành viên của người xem trên cả hai tập hội thoại chưa lưu trữ và đã lưu trữ). Hàng nhóm phân mục theo trường này, KHÔNG tra danh sách hội thoại của trang để phân mục: mốc ghim trên cây là dữ kiện server dựng sẵn cho đúng cấu trúc lớp/khoá/nhóm của tab này (gồm cả nút chưa có hội thoại), còn danh sách hội thoại của trang là góc nhìn phẳng của tab Tất cả / Chưa đọc. Xem trước tin cuối và biểu tượng tắt tiếng vẫn tra `conversationsById` như trước. Khi có ít nhất một hàng đã ghim, danh sách tách hai mục thu gọn **Ghim** (các hàng đã ghim, giữ thứ tự cây) và **Nhóm** (mọi hàng còn lại, giữ đúng thứ tự và vị trí nút Tạo nhóm như danh sách phẳng); khi chưa có hàng nào ghim, danh sách giữ nguyên dạng phẳng không tiêu đề mục như trước. Hàng chưa có hội thoại (chưa ensure) mang `pinnedAt` null nên luôn ở mục Nhóm.
  *
- * Bất biến: component không tự gọi API; mọi hành động mở chat đi
- * lên trang chứa qua các callback — trang là nơi duy nhất biết
- * cách ensure conversation và nạp khung chat.
+ * Bất biến: component không tự gọi API; mọi hành động mở chat đi lên trang chứa qua các callback — trang là nơi duy nhất biết cách ensure conversation và nạp khung chat.
  */
 interface GroupListNavProps {
   /** Cây nhóm của tôi do server dựng; null khi chưa nạp được. */
@@ -110,29 +61,22 @@ interface GroupListNavProps {
   /**
    * Bản đồ hội thoại theo id từ danh sách hội thoại của trang
    * (issue #591): hàng của nút nào có hội thoại tương ứng thì
-   * hiện xem trước tin cuối + ngày + biểu tượng tắt tiếng như
-   * các hàng hội thoại còn lại, thay cho phụ đề vai trò.
+   * hiện xem trước tin cuối + ngày + biểu tượng tắt tiếng như các hàng hội thoại còn lại, thay cho phụ đề vai trò.
    */
   conversationsById?: ReadonlyMap<string, ConversationView>;
   /** Id của chính người xem — căn cứ tiền tố "Bạn:" của xem trước tin cuối. */
   myId?: string;
   /**
-   * Tra tên hiển thị của một user (issue #591): xem trước tin
-   * cuối ở hàng nhóm mang tiền tố tên người gửi như bản demo
+   * Tra tên hiển thị của một user (issue #591): xem trước tin cuối ở hàng nhóm mang tiền tố tên người gửi như bản demo
    * (tin của chính người xem thì tiền tố là "Bạn:").
    */
   nameOf?: (userId: string) => string;
   /**
-   * Cây đang nạp lần đầu (issue #591): hiện khung đang tải thay
-   * cho câu "chưa thuộc lớp/khoá/nhóm nào" — trạng thái rỗng giả
-   * lúc tải bị cấm, rỗng thật chỉ hiện sau khi nạp xong.
+   * Cây đang nạp lần đầu (issue #591): hiện khung đang tải thay cho câu "chưa thuộc lớp/khoá/nhóm nào" — trạng thái rỗng giả lúc tải bị cấm, rỗng thật chỉ hiện sau khi nạp xong.
    */
   loading?: boolean;
   /**
-   * Lỗi nạp cây nhóm lần đầu (vòng sửa 2 PR #593): khi cây chưa
-   * có dữ kiện mà query đã lỗi thì hiện thông báo lỗi thay cho
-   * câu rỗng — câu rỗng trên đường lỗi là trạng thái rỗng giả
-   * mà issue #591 cấm. Null khi cây đã có dữ kiện hoặc chưa lỗi.
+   * Lỗi nạp cây nhóm lần đầu (vòng sửa 2 PR #593): khi cây chưa có dữ kiện mà query đã lỗi thì hiện thông báo lỗi thay cho câu rỗng — câu rỗng trên đường lỗi là trạng thái rỗng giả mà issue #591 cấm. Null khi cây đã có dữ kiện hoặc chưa lỗi.
    */
   treeError?: string | null;
 }
@@ -188,9 +132,7 @@ interface GroupListEntry {
   pinnedAt: string | null;
   /**
    * Cấp lồng của nút trong cây — căn cứ thụt trái của hàng:
-   * 0 cho nút gốc (lớp, khoá ngoài lớp, nhóm tự do), 1 cho
-   * khoá trong lớp và nhóm con của khoá ngoài lớp, 2 cho
-   * nhóm con của khoá trong lớp.
+   * 0 cho nút gốc (lớp, khoá ngoài lớp, nhóm tự do), 1 cho khoá trong lớp và nhóm con của khoá ngoài lớp, 2 cho nhóm con của khoá trong lớp.
    */
   depth: number;
   onOpen: () => void;
@@ -209,9 +151,7 @@ export function GroupListNav({
 }: GroupListNavProps) {
   const { t } = useTranslation('app');
   /**
-   * Trạng thái mở của hai mục thu gọn Ghim / Nhóm khi danh
-   * sách tách mục (mặc định mở cả hai, như các mục của tab
-   * Tất cả — hàng đã ghim không bị giấu sau một lần bấm thêm).
+   * Trạng thái mở của hai mục thu gọn Ghim / Nhóm khi danh sách tách mục (mặc định mở cả hai, như các mục của tab Tất cả — hàng đã ghim không bị giấu sau một lần bấm thêm).
    */
   const [pinnedSectionOpen, setPinnedSectionOpen] = useState(true);
   const [groupsSectionOpen, setGroupsSectionOpen] = useState(true);
@@ -219,15 +159,11 @@ export function GroupListNav({
   if (!tree) {
     // Lỗi tải lần đầu thì hiện thông báo lỗi thay cho câu rỗng
     // (vòng sửa 2 PR #593) — cây chưa có dữ kiện mà đã lỗi thì
-    // câu rỗng là trạng thái rỗng giả; banner lỗi ở đây thay cho
-    // banner lỗi của tab Tất cả vì danh sách không nhận prop lỗi
-    // nào trước vòng này.
+    // câu rỗng là trạng thái rỗng giả; banner lỗi ở đây thay cho banner lỗi của tab Tất cả vì danh sách không nhận prop lỗi nào trước vòng này.
     if (treeError) {
       return <p role="alert" className="px-2 text-sm">{treeError}</p>;
     }
-    // Đang nạp lần đầu thì hiện khung đang tải đúng hình dạng
-    // hàng danh sách (issue #591) — không hiện câu rỗng giả rồi
-    // mới đầy dữ kiện như trước.
+    // Đang nạp lần đầu thì hiện khung đang tải đúng hình dạng hàng danh sách (issue #591) — không hiện câu rỗng giả rồi mới đầy dữ kiện như trước.
     if (loading) {
       return (
         <div data-testid="group-list-loading" className="space-y-2 px-2" aria-label={t('conversationsLoading')}>
@@ -264,12 +200,7 @@ export function GroupListNav({
   const freeGroups = tree.freeGroups.filter((g) => matches(g.name));
 
   /**
-   * Duỗi một nút khoá và các nhóm con của nó thành các hàng liên
-   * tiếp: hàng khoá trước (mở qua ensure), rồi từng hàng nhóm
-   * con (đã có conversation thì mở theo id, chưa có thì trang
-   * chứa tạo/lấy qua đường nhóm con). `depth` là cấp lồng của
-   * chính hàng khoá trong cây; hàng nhóm con mang cấp sâu hơn
-   * một bậc.
+   * Duỗi một nút khoá và các nhóm con của nó thành các hàng liên tiếp: hàng khoá trước (mở qua ensure), rồi từng hàng nhóm con (đã có conversation thì mở theo id, chưa có thì trang chứa tạo/lấy qua đường nhóm con). `depth` là cấp lồng của chính hàng khoá trong cây; hàng nhóm con mang cấp sâu hơn một bậc.
    */
   const courseEntries = (course: ConversationTreeCourseView, depth: number): GroupListEntry[] => [
     {

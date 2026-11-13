@@ -13,36 +13,20 @@ import {
 } from '../../support/ordinary-worker-module';
 
 /**
- * Cơ chế hàng đợi của consumer thông báo sự kiện (issue con #520
- * của #491) — viết lại spec neo-lại-watermark phía API trước đây
+ * Cơ chế hàng đợi của consumer thông báo sự kiện (issue con #520 của #491) — viết lại spec neo-lại-watermark phía API trước đây
  * (`notification-events-reanchor.int-spec.ts`, đã xoá cùng consumer
- * polling) theo cơ chế mới, giữ nguyên Ý ĐỊNH nghiệp vụ của ba ca
- * gốc và cộng ca phát lại thật theo ràng buộc chống trùng của đợt
- * chuyển consumer:
+ * polling) theo cơ chế mới, giữ nguyên Ý ĐỊNH nghiệp vụ của ba ca gốc và cộng ca phát lại thật theo ràng buộc chống trùng của đợt chuyển consumer:
  *
  *  1. (Từ ca gốc 1 — sự kiện sau mốc neo được xử lý đúng một lần)
- *     Một dòng outbox chưa có `publishedAt` được relay phát vào
- *     hàng đợi, consumer xử lý và sinh đúng một thông báo; dòng
- *     được đóng dấu sau khi phát và không bị phát lại ở các nhịp
- *     relay sau (hàng đợi giữ đúng một job của dòng).
+ *     Một dòng outbox chưa có `publishedAt` được relay phát vào hàng đợi, consumer xử lý và sinh đúng một thông báo; dòng được đóng dấu sau khi phát và không bị phát lại ở các nhịp relay sau (hàng đợi giữ đúng một job của dòng).
  *  2. (Từ ca gốc 2+3 — DB dựng lại, seq thụt lùi) Consumer hàng
- *     đợi KHÔNG giữ watermark `seq` nào nên không tồn tại trạng
- *     thái "watermark kẹt trên seq của đời DB mới": một sự kiện
- *     mang `seq` NHỎ HƠN seq của các sự kiện đã xử lý (đúng hình
- *     dạng sau reset DB) vẫn được relay phát và xử lý bình thường,
- *     vì relay chỉ quét theo `publishedAt IS NULL` và consumer
- *     không so sánh seq. Đây là khẳng định tương đương của phép
- *     neo-lại: cơ chế cần neo đã bị loại bỏ tận gốc thay vì được
- *     vá.
+ *     đợi KHÔNG giữ watermark `seq` nào nên không tồn tại trạng thái "watermark kẹt trên seq của đời DB mới": một sự kiện mang `seq` NHỎ HƠN seq của các sự kiện đã xử lý (đúng hình dạng sau reset DB) vẫn được relay phát và xử lý bình thường, vì relay chỉ quét theo `publishedAt IS NULL` và consumer không so sánh seq. Đây là khẳng định tương đương của phép neo-lại: cơ chế cần neo đã bị loại bỏ tận gốc thay vì được vá.
  *  3. (Ca mới của #520 — phát lại thật) Cùng một job được processor
- *     gọi xử lý hai lần với cùng `outboxId`: lần hai kết luận
- *     trùng nhờ dấu đã xử lý ở Redis và không sinh thông báo thứ
- *     hai.
+ *     gọi xử lý hai lần với cùng `outboxId`: lần hai kết luận trùng nhờ dấu đã xử lý ở Redis và không sinh thông báo thứ hai.
  *  4. (Marker) Lease đang xử lý chỉ nhả được bởi đúng token của
  *     chủ: token lạ không mở được lease của lượt khác.
  *
- * Các ca hành vi nội dung/điều kiện phát của mười loại sự kiện nằm
- * ở spec `notification-events-delivery.int-spec.ts` cùng thư mục.
+ * Các ca hành vi nội dung/điều kiện phát của mười loại sự kiện nằm ở spec `notification-events-delivery.int-spec.ts` cùng thư mục.
  */
 describe('Worker notification events queue mechanism (viết lại reanchor ở #520)', () => {
   let context: INestApplicationContext;
@@ -64,9 +48,7 @@ describe('Worker notification events queue mechanism (viết lại reanchor ở 
 
   async function makeUser(id: string) {
     await sql`insert into users (id, username, email, first_name, last_name, suspended, deleted) values (${id}, ${`nq520-${id.slice(-6)}-${suffix}`}, ${`nq520-${id.slice(-6)}-${suffix}@x.io`}, 'An', 'Nguyễn Văn', false, false) on conflict (id) do nothing`.execute(db);
-    // Tần suất email immediate cho hai provider dùng ở spec này —
-    // tránh dispatch nằm chờ digest trong DB dùng chung (xem spec
-    // delivery cùng thư mục).
+    // Tần suất email immediate cho hai provider dùng ở spec này — tránh dispatch nằm chờ digest trong DB dùng chung (xem spec delivery cùng thư mục).
     for (const provider of ['grade_updated', 'enrol_expiry_warning']) {
       await db.insertInto('user_preferences').values({
         user_id: id, name: `message_provider_${provider}_email_v2`, value: 'immediate',

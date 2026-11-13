@@ -1,18 +1,15 @@
 /**
  * Repository của cụm BÀI TẬP (assignments) trên Kysely.
  *
- * Vai trò: mọi truy cập tới mười hai bảng của hoạt động Bài tập nộp
- * tệp/ảnh (mod_assign) tập trung ở đây:
+ * Vai trò: mọi truy cập tới mười hai bảng của hoạt động Bài tập nộp tệp/ảnh (mod_assign) tập trung ở đây:
  * - `assignments` — bản ghi bài tập (instance của course module):
- *   hạn nộp, số tệp tối đa, loại tệp nhận, thang điểm và chế độ kết
- *   quả.
+ *   hạn nộp, số tệp tối đa, loại tệp nhận, thang điểm và chế độ kết quả.
  * - `assign_submissions` — bài nộp hiện hành của học sinh cho bài
  *   tập (một dòng cho mỗi cặp bài tập + học sinh, theo lần nộp).
  * - `assign_submission_files` — quan hệ bài nộp ↔ tệp (nội dung vật
  *   lý ở module Files).
  * - `assign_grades` — gói chấm hiện hành của học sinh: điểm/mức, các
- *   trường phản hồi và trạng thái công bố (một dòng cho mỗi cặp bài
- *   tập + học sinh).
+ *   trường phản hồi và trạng thái công bố (một dòng cho mỗi cặp bài tập + học sinh).
  * - `assign_annotations` — các dấu chấm vector của giáo viên trên
  *   bài nộp; cột `points` là jsonb mang mảng điểm của nét vẽ.
  * - `assign_rubrics`, `assign_rubric_criteria`, `assign_rubric_levels`
@@ -25,33 +22,10 @@
  * - `teacher_comment_bank` — ngân hàng lời phê mẫu của từng giáo
  *   viên.
  *
- * Hai thao tác ghi dạng ghi/đè (gói chấm và kết quả theo tiêu chí)
- * khoá theo khoá duy nhất tự nhiên của bảng và dùng ĐÚNG tập cột
- * cập nhật của đường cũ trước đây — gồm cả quy ước ghi tường
- * minh `null` cho các trường phản hồi/điểm vắng mặt trong dữ kiện
- * ghi (gói chấm bị ghi đè là thay toàn bộ gói, không giữ trường cũ).
- * Mọi phương thức ghi còn lại nhận thêm handle giao dịch tuỳ chọn:
- * kiểm kê phía gọi hiện hành cho thấy không phía gọi nào truyền
- * handle vào (mọi giao dịch của module nằm ở các tầng khác), tham số
- * được giữ để hợp đồng không đổi và để phía gọi tương lai ghép thao
- * tác vào MỘT giao dịch Kysely duy nhất — không bao giờ lai với giao
- * dịch của ORM còn lại.
+ * Hai thao tác ghi dạng ghi/đè (gói chấm và kết quả theo tiêu chí) khoá theo khoá duy nhất tự nhiên của bảng và dùng ĐÚNG tập cột cập nhật của đường cũ trước đây — gồm cả quy ước ghi tường minh `null` cho các trường phản hồi/điểm vắng mặt trong dữ kiện ghi (gói chấm bị ghi đè là thay toàn bộ gói, không giữ trường cũ). Mọi phương thức ghi còn lại nhận thêm handle giao dịch tuỳ chọn:
+ * kiểm kê phía gọi hiện hành cho thấy không phía gọi nào truyền handle vào (mọi giao dịch của module nằm ở các tầng khác), tham số được giữ để hợp đồng không đổi và để phía gọi tương lai ghép thao tác vào MỘT giao dịch Kysely duy nhất — không bao giờ lai với giao dịch của ORM còn lại.
  *
- * Khuôn hình dạng dữ liệu ở biên repository (khuôn của pilot kho
- * control plane, xem sổ tay trong `AGENTS.md` của package): bên
- * trong dùng tên bảng/cột snake_case của interface schema sinh bằng
- * codegen; bên ngoài trả/nhận hình dạng camelCase như phía tiêu thụ
- * đang dùng qua danh sách cột tường minh có bí danh và các hàm ánh
- * xạ ghi `*InsertValues`/`*UpdateSet`. Giá trị `undefined` bị LOẠI
- * khỏi values/set trong các hàm ánh xạ (thử nghiệm T-4 đã đo ở
- * pilot). Giá trị ghi vào cột jsonb (`points` của dấu chấm) đi qua
- * helper serialize tường minh + ép kiểu `::jsonb` — driver `pg`
- * hiểu MẢNG ở cấp cao nhất là mảng PostgreSQL nên ghi thẳng sẽ lỗi,
- * đúng khuôn đã chốt ở pilot. Kiểu của `points` ở biên công khai giữ
- * là `unknown` như hợp đồng `$inferSelect` của cột jsonb không khai
- * `$type` trước đây; phía tiêu thụ tự ép kiểu khi đọc. Repository
- * không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng dụng, không
- * tự mở pool.
+ * Khuôn hình dạng dữ liệu ở biên repository (khuôn của pilot kho control plane, xem sổ tay trong `AGENTS.md` của package): bên trong dùng tên bảng/cột snake_case của interface schema sinh bằng codegen; bên ngoài trả/nhận hình dạng camelCase như phía tiêu thụ đang dùng qua danh sách cột tường minh có bí danh và các hàm ánh xạ ghi `*InsertValues`/`*UpdateSet`. Giá trị `undefined` bị LOẠI khỏi values/set trong các hàm ánh xạ (thử nghiệm T-4 đã đo ở pilot). Giá trị ghi vào cột jsonb (`points` của dấu chấm) đi qua helper serialize tường minh + ép kiểu `::jsonb` — driver `pg` hiểu MẢNG ở cấp cao nhất là mảng PostgreSQL nên ghi thẳng sẽ lỗi, đúng khuôn đã chốt ở pilot. Kiểu của `points` ở biên công khai giữ là `unknown` như hợp đồng `$inferSelect` của cột jsonb không khai `$type` trước đây; phía tiêu thụ tự ép kiểu khi đọc. Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng dụng, không tự mở pool.
  */
 import { sql, type Insertable, type InsertObject, type RawBuilder, type Updateable } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
@@ -256,11 +230,7 @@ export interface NewSubmissionFile {
 }
 
 /**
- * Dữ kiện ghi một gói chấm. `graderId` và `attemptNumber` là bắt
- * buộc theo schema; các trường điểm/phản hồi/công bố vắng mặt trong
- * nhánh cập nhật-khi-trùng được ghi thành `null` tường minh (gói
- * chấm bị ghi đè là thay toàn bộ), đúng hành vi của đường bộ máy cũ
- * trước đây.
+ * Dữ kiện ghi một gói chấm. `graderId` và `attemptNumber` là bắt buộc theo schema; các trường điểm/phản hồi/công bố vắng mặt trong nhánh cập nhật-khi-trùng được ghi thành `null` tường minh (gói chấm bị ghi đè là thay toàn bộ), đúng hành vi của đường bộ máy cũ trước đây.
  */
 export interface NewGrade {
   id?: string;
@@ -331,9 +301,7 @@ export interface NewRubricLevel {
 }
 
 /**
- * Dữ kiện ghi kết quả của một tiêu chí trong gói chấm; các trường
- * kết quả vắng mặt được ghi thành `null` tường minh ở nhánh cập
- * nhật-khi-trùng như đường cũ trước đây.
+ * Dữ kiện ghi kết quả của một tiêu chí trong gói chấm; các trường kết quả vắng mặt được ghi thành `null` tường minh ở nhánh cập nhật-khi-trùng như đường cũ trước đây.
  */
 export interface NewRubricEvaluation {
   id?: string;

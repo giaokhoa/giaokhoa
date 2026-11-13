@@ -20,15 +20,12 @@ export interface RatingAggregate {
  * RatingsModule (Moodle core_rating): các đánh giá đa hình trên
  * (component, ratingArea, itemId, contextId) đối chiếu với một SCALE. Việc tổng hợp
  * (average/count/sum/min/max) được tính trên các đánh giá CỦA CHÍNH MỤC NÀY
- * mà thôi (oracle: rating/tests/rating_test test_get_ratings_sql — các mục có
- * các đánh giá 1,3 tổng hợp thành 2; 1,4 thành 2.5; 3,5 thành 4). Các capability:
- * rating:rate để đánh giá, rating:view cho các giá trị tổng hợp, rating:viewall
- * cho danh sách đánh giá riêng lẻ — ba cổng riêng biệt, như trong Moodle.
+ * mà thôi (oracle: rating/tests/rating_test test_get_ratings_sql — các mục có các đánh giá 1,3 tổng hợp thành 2; 1,4 thành 2.5; 3,5 thành 4). Các capability:
+ * rating:rate để đánh giá, rating:view cho các giá trị tổng hợp, rating:viewall cho danh sách đánh giá riêng lẻ — ba cổng riêng biệt, như trong Moodle.
  */
 @Injectable()
 /**
- * Đánh giá sao (ratings) cho item: mỗi user một rating, tổng hợp trả average + count.
- * Đối chiếu Moodle: lib/rating (rating_manager).
+ * Đánh giá sao (ratings) cho item: mỗi user một rating, tổng hợp trả average + count. Đối chiếu Moodle: lib/rating (rating_manager).
  */
 export class RatingsService {
   constructor(
@@ -51,8 +48,7 @@ export class RatingsService {
   }
 
   /**
-   * Kích thước thang cho scaleId mã hoá signed kiểu Moodle: giá trị tuyệt đối
-   * là điểm tối đa (scaleId không phải khoá thực thể).
+   * Kích thước thang cho scaleId mã hoá signed kiểu Moodle: giá trị tuyệt đối là điểm tối đa (scaleId không phải khoá thực thể).
    */
   private async scaleMax(scaleId: number): Promise<number> {
     return Math.abs(scaleId);

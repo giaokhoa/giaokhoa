@@ -15,11 +15,7 @@ import { ClassesController } from './classes.controller';
 import { ClassesService } from './classes.service';
 
 /**
- * ClassesModule — LỚP HỌC HẠNG NHẤT (issue #184, CLASS-0): vòng đời lớp,
- * backing cohort (roster), context CLASS=45 + bộ quyền tại lớp, và móc
- * vật chất hoá ghi danh cấp lớp vào đường tạo khoá (đăng ký
- * CourseClassHook vào CoursesService — Courses không import Classes).
- * EnrolModule/GroupsModule cung cấp đúng máy móc cohort sync sẵn có.
+ * ClassesModule — LỚP HỌC HẠNG NHẤT (issue #184, CLASS-0): vòng đời lớp, backing cohort (roster), context CLASS=45 + bộ quyền tại lớp, và móc vật chất hoá ghi danh cấp lớp vào đường tạo khoá (đăng ký CourseClassHook vào CoursesService — Courses không import Classes). EnrolModule/GroupsModule cung cấp đúng máy móc cohort sync sẵn có.
  */
 @Module({
   imports: [AccessModule, CoursesModule, GroupsModule, EnrolModule, TenantsModule, UsersModule, EventsModule, SpaceRoutingModule, ControlPlaneModule],
@@ -32,11 +28,7 @@ import { ClassesService } from './classes.service';
       inject: [SpaceDatabaseService],
     },
     {
-      // GroupsRepository phục vụ giao dịch tạo lớp (cohort nền và
-      // nối context cho cohort — issue #651 hấp thụ điểm nối
-      // C-8/B): cùng factory `routedKysely` như ClassesRepository
-      // vì GroupsModule chỉ export GroupsService, không export
-      // repository.
+      // GroupsRepository phục vụ giao dịch tạo lớp (cohort nền và nối context cho cohort — issue #651 hấp thụ điểm nối C-8/B): cùng factory `routedKysely` như ClassesRepository vì GroupsModule chỉ export GroupsService, không export repository.
       provide: GroupsRepository,
       useFactory: (spaceDb: SpaceDatabaseService) => new GroupsRepository(spaceDb.routedKysely),
       inject: [SpaceDatabaseService],

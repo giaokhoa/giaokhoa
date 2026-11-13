@@ -7,9 +7,7 @@ import { createCategory, createCm, createCourse, createEnrolInstance, enrolUser,
 import { createGradeItem, getGradebook, setGrade } from '../../support/assessment-helpers';
 
 /**
- * Assessment flows — điểm theo TỪNG BÀI (issue #224: không còn tổng hợp
- * theo khoá/category, không còn letters/scales/outcomes/calculated).
- * Oracle: Moodle 5.3 PHPUnit:
+ * Assessment flows — điểm theo TỪNG BÀI (issue #224: không còn tổng hợp theo khoá/category, không còn letters/scales/outcomes/calculated). Oracle: Moodle 5.3 PHPUnit:
  *  - public/question/engine/tests/questionusagebyactivity_test.php
  *    (usage nhóm các lần thử, phản hồi trì hoãn, các bước) — ĐÃ KIỂM CHỨNG ở bản 5.3;
  *  - các trường hợp điểm của public/lib/tests/completionlib_test.php

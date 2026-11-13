@@ -11,12 +11,7 @@ import {
 } from './admin-roles';
 
 /**
- * Spec tầng đột biến vai trò (issue #597, vòng sửa theo phán quyết
- * điều phối, bổ sung vòng sửa 2): ba đột biến vai trò đều làm mới
- * gốc bảng người dùng kèm vai trò và gốc ma trận toàn trang (trang
- * Quyền độc lập bày danh sách vai). Kiểm chứng ở tầng hook vì tiền
- * tố ma trận không quan sát được từ trang vai trò: gieo sẵn hai truy
- * vấn rồi đếm lần gọi GET sau mỗi đột biến.
+ * Spec tầng đột biến vai trò (issue #597, vòng sửa theo phán quyết điều phối, bổ sung vòng sửa 2): ba đột biến vai trò đều làm mới gốc bảng người dùng kèm vai trò và gốc ma trận toàn trang (trang Quyền độc lập bày danh sách vai). Kiểm chứng ở tầng hook vì tiền tố ma trận không quan sát được từ trang vai trò: gieo sẵn hai truy vấn rồi đếm lần gọi GET sau mỗi đột biến.
  */
 const ROLE_ID = '01900000-0000-7000-8000-0000000000b1';
 const SYSTEM_CONTEXT_ID = '01900000-0000-7000-8000-000000000010';

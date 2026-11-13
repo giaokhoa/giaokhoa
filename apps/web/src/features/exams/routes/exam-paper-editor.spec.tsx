@@ -6,11 +6,7 @@ import { TestProviders } from '#test/providers';
 import { ExamPaperEditPage } from './exam-paper-editor';
 
 /**
- * Spec màn soạn đề sau khi chuyển khuôn TanStack Query (F-01 của
- * #133): mở màn sửa thì form khởi tạo đúng từ view đề (tên + slot đã
- * ghim kèm huy hiệu version), tìm câu trong ngân hàng rồi thêm vào đề
- * được, và lưu khi CHỈ slots đổi thì chỉ gọi PUT slots — không gọi
- * PATCH metadata (luật "chỉ gọi phần thật sự đổi" của màn soạn).
+ * Spec màn soạn đề sau khi chuyển khuôn TanStack Query (F-01 của #133): mở màn sửa thì form khởi tạo đúng từ view đề (tên + slot đã ghim kèm huy hiệu version), tìm câu trong ngân hàng rồi thêm vào đề được, và lưu khi CHỈ slots đổi thì chỉ gọi PUT slots — không gọi PATCH metadata (luật "chỉ gọi phần thật sự đổi" của màn soạn).
  */
 const PAPER_ID = '01900000-0000-7000-8000-0000000000e1';
 const Q1 = '01900000-0000-7000-8000-0000000000q1'.replace('q', 'a');

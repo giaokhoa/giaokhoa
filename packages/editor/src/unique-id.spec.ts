@@ -14,17 +14,9 @@ import {
 } from './true-false.js';
 
 /**
- * Bất biến định danh trong tài liệu soạn (ghi nhận từ ĐG P4, bổ sung
- * theo phán quyết ĐG cuối chuỗi 6419937157): mọi node choice (MC) và
- * statement (TF-A) trong tài liệu soạn phải mang `attrs.id` chuỗi —
- * đáp án đúng của MC và đáp án Đ/S từng mệnh đề của TF-A đều bám theo
- * id này qua kéo-thả/tách-gộp đoạn, nên tài liệu nạp vào mà thiếu id
- * là dữ liệu hỏng nếu không được gán bù.
+ * Bất biến định danh trong tài liệu soạn (ghi nhận từ ĐG P4, bổ sung theo phán quyết ĐG cuối chuỗi 6419937157): mọi node choice (MC) và statement (TF-A) trong tài liệu soạn phải mang `attrs.id` chuỗi — đáp án đúng của MC và đáp án Đ/S từng mệnh đề của TF-A đều bám theo id này qua kéo-thả/tách-gộp đoạn, nên tài liệu nạp vào mà thiếu id là dữ liệu hỏng nếu không được gán bù.
  *
- * Các ca dưới đây khẳng định bất biến ở mức hành vi tài liệu (nạp
- * tài liệu thiếu id, qua một transaction thì mọi node đều có id),
- * không soi chi tiết nội bộ plugin/transaction của TipTap: thứ tự
- * nội dung giữ nguyên, id phân biệt nhau, đều là chuỗi không rỗng.
+ * Các ca dưới đây khẳng định bất biến ở mức hành vi tài liệu (nạp tài liệu thiếu id, qua một transaction thì mọi node đều có id), không soi chi tiết nội bộ plugin/transaction của TipTap: thứ tự nội dung giữ nguyên, id phân biệt nhau, đều là chuỗi không rỗng.
  */
 describe('Bất biến id duy nhất trong tài liệu soạn thảo', () => {
   it('multipleChoice: lựa chọn thiếu attrs.id đều nhận id chuỗi riêng biệt, thứ tự nội dung không đổi', () => {
@@ -41,8 +33,7 @@ describe('Bất biến id duy nhất trong tài liệu soạn thảo', () => {
             type: CHOICE_LIST_NODE_TYPE,
             content: ['A', 'B', 'C', 'D'].map((label) => ({
               type: CHOICE_NODE_TYPE,
-              // Cố tình thiếu attrs.id: tài liệu nạp vào chưa có, hoặc
-              // choice vừa sinh ra khi người soạn tách/gộp đoạn.
+              // Cố tình thiếu attrs.id: tài liệu nạp vào chưa có, hoặc choice vừa sinh ra khi người soạn tách/gộp đoạn.
               content: [{ type: 'paragraph', content: [{ type: 'text', text: `Phương án ${label}` }] }],
             })),
           },

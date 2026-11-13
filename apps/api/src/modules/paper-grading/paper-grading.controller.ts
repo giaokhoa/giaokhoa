@@ -1,8 +1,5 @@
 /**
- * API chấm bài giấy (CAM-0, issue #112; neo pin theo #226): lô IN
- * phiếu + PDF phiếu dưới `exam-batches` (neo `pinId`), tải ảnh theo
- * BUỔI (lô chụp) và hàng chờ phiếu đã quét dưới `exam-scans`. Mọi
- * route đều qua cổng `quiz:gradepaper` trong PaperGradingService
+ * API chấm bài giấy (CAM-0, issue #112; neo pin theo #226): lô IN phiếu + PDF phiếu dưới `exam-batches` (neo `pinId`), tải ảnh theo BUỔI (lô chụp) và hàng chờ phiếu đã quét dưới `exam-scans`. Mọi route đều qua cổng `quiz:gradepaper` trong PaperGradingService
  * (controller không tự kiểm quyền).
  */
 import {

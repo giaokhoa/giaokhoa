@@ -1,30 +1,11 @@
 /**
  * Repository của cụm XÃ HỘI trên Kysely.
  *
- * Vai trò: mọi truy cập tới bảy bảng của kho trung tâm thuộc
- * module xã hội — `tag_collection`, `tag`, `tag_instance`,
- * `tag_correlation` (hệ thống thẻ), `comments` (bình luận),
- * `rating` (đánh giá) và `notes` (ghi chú khoá học) — tập trung ở
- * đây. Các bảng này đa hình theo bộ (component, item/area, itemId,
- * contextId) không có FK cứng; luật gác quyền và kiểm tra quyền
- * xem/ghi nằm ở các service con phía ứng dụng (tags / comments /
- * ratings / notes), repository chỉ thực thi truy cập dữ kiện.
+ * Vai trò: mọi truy cập tới bảy bảng của kho trung tâm thuộc module xã hội — `tag_collection`, `tag`, `tag_instance`, `tag_correlation` (hệ thống thẻ), `comments` (bình luận), `rating` (đánh giá) và `notes` (ghi chú khoá học) — tập trung ở đây. Các bảng này đa hình theo bộ (component, item/area, itemId, contextId) không có FK cứng; luật gác quyền và kiểm tra quyền xem/ghi nằm ở các service con phía ứng dụng (tags / comments / ratings / notes), repository chỉ thực thi truy cập dữ kiện.
  *
- * Khuôn hình dạng dữ liệu ở biên repository — cùng khuôn pilot kho
- * control plane (xem mục "Sổ tay chuyển đổi repository sang Kysely"
- * trong `AGENTS.md` của package): bên trong dùng tên cột
- * snake_case của interface schema codegen; bên ngoài trả/nhận hình
- * dạng camelCase qua danh sách cột tường minh có bí danh và các
- * hàm ánh xạ ghi loại `undefined` từng trường (thử nghiệm T-4);
- * mọi giá trị where là tham số bắt buộc. Repository không import
- * từ `apps/*`, không đọc ALS/ngữ cảnh ứng dụng, không tự mở pool,
- * không đọc biến môi trường.
+ * Khuôn hình dạng dữ liệu ở biên repository — cùng khuôn pilot kho control plane (xem mục "Sổ tay chuyển đổi repository sang Kysely" trong `AGENTS.md` của package): bên trong dùng tên cột snake_case của interface schema codegen; bên ngoài trả/nhận hình dạng camelCase qua danh sách cột tường minh có bí danh và các hàm ánh xạ ghi loại `undefined` từng trường (thử nghiệm T-4); mọi giá trị where là tham số bắt buộc. Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng dụng, không tự mở pool, không đọc biến môi trường.
  *
- * Lưu ý giao dịch: không service nào của cụm này mở giao dịch qua
- * repository (kiểm kê ở thân PR của issue #647) — phương thức
- * `transaction` vẫn có mặt theo khuôn chung để phía gọi tương lai
- * ghép thao tác khi cần, và mọi phương thức nhận handle tuỳ chọn
- * làm tham số cuối như các repository đã chuyển đổi khác.
+ * Lưu ý giao dịch: không service nào của cụm này mở giao dịch qua repository (kiểm kê ở thân PR của issue #647) — phương thức `transaction` vẫn có mặt theo khuôn chung để phía gọi tương lai ghép thao tác khi cần, và mọi phương thức nhận handle tuỳ chọn làm tham số cuối như các repository đã chuyển đổi khác.
  */
 import type { Insertable } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
@@ -160,9 +141,7 @@ export interface NewRating {
 }
 
 /**
- * Một dòng ghi chú về một user. `publishState` quyết định ai đọc
- * được: 'draft' = cá nhân (chỉ người tạo), 'public' = ghi chú của
- * khoá học, 'site' = ghi chú của site.
+ * Một dòng ghi chú về một user. `publishState` quyết định ai đọc được: 'draft' = cá nhân (chỉ người tạo), 'public' = ghi chú của khoá học, 'site' = ghi chú của site.
  */
 export interface NoteRow {
   id: string;
@@ -354,8 +333,7 @@ function noteInsertValues(values: NewNote): Insertable<CentreDB['notes']> {
 }
 
 /**
- * Repository xã hội trên Kysely: thẻ + gắn thẻ + tương quan, bình
- * luận, đánh giá và ghi chú khoá học của kho trung tâm.
+ * Repository xã hội trên Kysely: thẻ + gắn thẻ + tương quan, bình luận, đánh giá và ghi chú khoá học của kho trung tâm.
  */
 export class SocialRepository {
   constructor(private readonly handle: CentreDb) {}
@@ -443,12 +421,7 @@ export class SocialRepository {
   }
 
   /**
-   * Gắn thẻ vào item. Chỉ số duy nhất sáu cột của bảng khiến lần
-   * gắn trùng là no-op: insert bỏ qua khi trùng (`doNothing`
-   * không trả dòng nào) thì đọc lại dòng đã có theo đúng khoá tự
-   * nhiên — nhánh `ti_user_id` phân biệt tường minh: có user thì
-   * so bằng, không có thì `IS NULL`, giữ nguyên hai nhánh của
-   * đường cũ trước đây.
+   * Gắn thẻ vào item. Chỉ số duy nhất sáu cột của bảng khiến lần gắn trùng là no-op: insert bỏ qua khi trùng (`doNothing` không trả dòng nào) thì đọc lại dòng đã có theo đúng khoá tự nhiên — nhánh `ti_user_id` phân biệt tường minh: có user thì so bằng, không có thì `IS NULL`, giữ nguyên hai nhánh của đường cũ trước đây.
    */
   async insertInstance(values: NewTagInstance, db: RepoDb = this.db()): Promise<TagInstanceRow> {
     const rows = await db
@@ -554,9 +527,7 @@ export class SocialRepository {
   // --- đánh giá -------------------------------------------------------------------
 
   /**
-   * Ghi/cập nhật đánh giá của một user cho một item: trùng khoá tự
-   * nhiên năm cột thì cập nhật điểm, thang và mốc sửa thay vì tạo
-   * dòng thứ hai.
+   * Ghi/cập nhật đánh giá của một user cho một item: trùng khoá tự nhiên năm cột thì cập nhật điểm, thang và mốc sửa thay vì tạo dòng thứ hai.
    */
   async upsertRating(values: NewRating, db: RepoDb = this.db()): Promise<RatingRow> {
     const rows = await db

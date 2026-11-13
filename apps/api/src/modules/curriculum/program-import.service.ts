@@ -17,27 +17,17 @@ import {
 const IMPORT_CHANGES_CAP = 500;
 
 /**
- * Một lệnh ghi YCCĐ mà thuật toán diff của một bản ghi sinh ra; toàn
- * bộ lệnh của một bản ghi được áp trong MỘT transaction (xem
- * applyOutcomeWrites cho thứ tự áp an toàn với partial unique index).
- * `update` gộp ba ca dùng chung hình dạng patch: moved (chỉ position),
- * text-changed (chỉ content), revived (retiredAt về null + position).
+ * Một lệnh ghi YCCĐ mà thuật toán diff của một bản ghi sinh ra; toàn bộ lệnh của một bản ghi được áp trong MỘT transaction (xem applyOutcomeWrites cho thứ tự áp an toàn với partial unique index). `update` gộp ba ca dùng chung hình dạng patch: moved (chỉ position), text-changed (chỉ content), revived (retiredAt về null + position).
  */
 type OutcomeWrite =
-  // Chèn dòng mới KHÔNG mang id: DB cấp uuidv7 một lần (chốt 20:09
-  // ngày 26/10/2026 — id YCCĐ là mờ, không tính từ thuộc tính nào).
-  // `doc` là tài liệu Tiptap lưu trực tiếp vào cột jsonb; `text` là
-  // text canonical trích từ chính tài liệu đó, chỉ dùng cho phép
-  // ghép cặp của diff và báo cáo thay đổi, không phải dữ liệu lưu.
+  // Chèn dòng mới KHÔNG mang id: DB cấp uuidv7 một lần (chốt 20:09 ngày 26/10/2026 — id YCCĐ là mờ, không tính từ thuộc tính nào). `doc` là tài liệu Tiptap lưu trực tiếp vào cột jsonb; `text` là text canonical trích từ chính tài liệu đó, chỉ dùng cho phép ghép cặp của diff và báo cáo thay đổi, không phải dữ liệu lưu.
   | { kind: 'insert'; doc: ProgramOutcomeDoc; text: string; position: number }
   | { kind: 'update'; id: string; patch: { position?: number; content?: ProgramOutcomeDoc; retiredAt?: Date | null } }
   | { kind: 'retire'; id: string };
 
 /**
  * Chỉ mục cây trong bộ nhớ cho một chương trình trong một lượt nạp:
- * tìm node con theo (cha, kind, tựa) và cấp position tiếp theo cho từng
- * cha — nạp theo đúng thứ tự dataset nên cây dựng ra giữ nguyên thứ tự
- * của văn bản chương trình.
+ * tìm node con theo (cha, kind, tựa) và cấp position tiếp theo cho từng cha — nạp theo đúng thứ tự dataset nên cây dựng ra giữ nguyên thứ tự của văn bản chương trình.
  */
 interface TreeIndex {
   childByKey: Map<string, CurriculumNodeRow>;

@@ -1,12 +1,8 @@
 /**
- * Mô hình form của màn soạn câu hỏi (tách cấu trúc từ
- * `pages/question-editor.tsx` theo đợt A của issue #223): tiện ích
- * tài liệu rich text và mô hình trạng thái form của editor — lắp
- * form từ view của câu có sẵn (`editorFormFromView`), form rỗng
+ * Mô hình form của màn soạn câu hỏi (tách cấu trúc từ `pages/question-editor.tsx` theo đợt A của issue #223): tiện ích tài liệu rich text và mô hình trạng thái form của editor — lắp form từ view của câu có sẵn (`editorFormFromView`), form rỗng
  * (`emptyEditorForm`) và đóng gói payload tạo/sửa
  * (`editorFormContent`). Toàn bộ là logic thuần: không JSX, không
- * gọi API; trang soạn và các khối giao diện của nó dùng chung mô
- * hình này.
+ * gọi API; trang soạn và các khối giao diện của nó dùng chung mô hình này.
  */
 import type { QuestionView, RichTextDocument } from '@giaokhoa/contracts';
 import { extractRichTextPlainText } from '@giaokhoa/contracts';
@@ -70,21 +66,14 @@ export function entryStatus(view: QuestionView | null | undefined): string | und
 // ---------------------------------------------------------------------------
 
 /**
- * Trạng thái form của màn soạn. Ranh giới dữ liệu theo mô hình port
- * giaokhoa (quyết 12:04 + 12:12 ngày 26/10/2026):
+ * Trạng thái form của màn soạn. Ranh giới dữ liệu theo mô hình port giaokhoa (quyết 12:04 + 12:12 ngày 26/10/2026):
  * - multichoice: thân câu + lựa chọn sống trong MỘT tài liệu thống
- *   nhất (`mcDocument`); đáp án đúng là `mcCorrectChoiceId` (id của
- *   choice, nằm NGOÀI tài liệu); phản hồi theo lựa chọn là map theo
- *   id choice (`mcChoiceFeedbacks`) vì nó là metadata của dòng đáp
- *   án, không phải nội dung lựa chọn.
+ *   nhất (`mcDocument`); đáp án đúng là `mcCorrectChoiceId` (id của choice, nằm NGOÀI tài liệu); phản hồi theo lựa chọn là map theo id choice (`mcChoiceFeedbacks`) vì nó là metadata của dòng đáp án, không phải nội dung lựa chọn.
  * - truefalse (TF-A): thân câu + 4 mệnh đề sống trong MỘT tài liệu
  *   (`tfDocument` — cũng chính là tài liệu lưu trữ); đáp án Đ/S của
- *   từng mệnh đề là map theo id mệnh đề (`tfAnswers`, nằm NGOÀI tài
- *   liệu), khi lưu thành `solution.answers` ở phía đáp án.
+ *   từng mệnh đề là map theo id mệnh đề (`tfAnswers`, nằm NGOÀI tài liệu), khi lưu thành `solution.answers` ở phía đáp án.
  * - `guidance` (hướng dẫn) và `essaySolution` (lời giải mẫu của tự
- *   luận) là trường soạn riêng cho MỌI/loại tương ứng — khi lưu
- *   chúng đi ở cấp `guidance`/`solution` của payload (phía đáp án),
- *   không bao giờ nằm trong thân câu.
+ *   luận) là trường soạn riêng cho MỌI/loại tương ứng — khi lưu chúng đi ở cấp `guidance`/`solution` của payload (phía đáp án), không bao giờ nằm trong thân câu.
  */
 export interface QuestionEditorFormState {
   qtype: Qtype;
@@ -111,9 +100,7 @@ export interface QuestionEditorFormState {
   saNumericMaxLength: string;
   saNumericAllowSign: boolean;
   saNumericAllowDecimal: boolean;
-  // Mỗi đáp án mang `id` phía client ổn định cho key/id của dòng
-  // đáp án (danh sách có lên/xuống + xoá nên không dùng index làm
-  // key); payload gửi API chỉ gồm `text`, không mang trường này.
+  // Mỗi đáp án mang `id` phía client ổn định cho key/id của dòng đáp án (danh sách có lên/xuống + xoá nên không dùng index làm key); payload gửi API chỉ gồm `text`, không mang trường này.
   saAnswers: { id: string; text: string }[];
   // essay
   essayResponseFormat: string;
@@ -162,10 +149,7 @@ export function emptyEditorForm(qtype: Qtype = 'multichoice'): QuestionEditorFor
 }
 
 /**
- * Nạp form từ view của một câu có sẵn, GIỮ NGUYÊN tài liệu Tiptap của
- * thân câu/phương án/phản hồi (điều kiện để câu draft MCP mở ra sửa được
- * nguyên trạng). `fallbackOptions` lấy từ endpoint versions khi view
- * chưa mang đủ options của loại câu.
+ * Nạp form từ view của một câu có sẵn, GIỮ NGUYÊN tài liệu Tiptap của thân câu/phương án/phản hồi (điều kiện để câu draft MCP mở ra sửa được nguyên trạng). `fallbackOptions` lấy từ endpoint versions khi view chưa mang đủ options của loại câu.
  */
 export function editorFormFromView(
   view: QuestionView,
@@ -179,8 +163,7 @@ export function editorFormFromView(
   form.questionText = view.latestVersion.questionText ?? emptyDoc();
   form.generalFeedback = view.latestVersion.generalFeedback ?? undefined;
   form.stimulusId = view.latestVersion.stimulusId ?? view.stimulus?.id ?? '';
-  // Hướng dẫn nằm ở bản ghi phía đáp án của phiên bản (answerKey),
-  // không còn ở phiên bản — nạp thẳng từ đó.
+  // Hướng dẫn nằm ở bản ghi phía đáp án của phiên bản (answerKey), không còn ở phiên bản — nạp thẳng từ đó.
   form.guidance = view.answerKey?.guidance ?? undefined;
 
   if (qtype === 'multichoice') {
@@ -190,8 +173,7 @@ export function editorFormFromView(
     form.mcCorrectFeedback = asDoc(options.correctFeedback);
     form.mcIncorrectFeedback = asDoc(options.incorrectFeedback);
     // Lắp thân câu + các dòng answers thành tài liệu thống nhất:
-    // id của choice = id của dòng answers, đáp án đúng = dòng mang
-    // isCorrect, phản hồi theo lựa chọn vào map theo id choice.
+    // id của choice = id của dòng answers, đáp án đúng = dòng mang isCorrect, phản hồi theo lựa chọn vào map theo id choice.
     const answers = [...(view.answers ?? [])].sort((a, b) => a.sortOrder - b.sortOrder);
     form.mcDocument = composeMultipleChoiceDocument(view.latestVersion.questionText, answers);
     form.mcCorrectChoiceId = answers.find((a) => a.isCorrect)?.id;
@@ -201,9 +183,7 @@ export function editorFormFromView(
   }
 
   if (qtype === 'truefalse') {
-    // TF-A: thân câu đã lưu CHÍNH LÀ tài liệu soạn (thân + danh sách
-    // mệnh đề trong cùng một tài liệu); đáp án từng mệnh đề nạp từ
-    // phía đáp án của version (answerKey.solution dạng {answers}).
+    // TF-A: thân câu đã lưu CHÍNH LÀ tài liệu soạn (thân + danh sách mệnh đề trong cùng một tài liệu); đáp án từng mệnh đề nạp từ phía đáp án của version (answerKey.solution dạng {answers}).
     form.tfDocument = composeTrueFalseDocument(view.latestVersion.questionText);
     const solution = view.answerKey?.solution;
     form.tfAnswers =
@@ -240,8 +220,7 @@ export function editorFormFromView(
     form.essayMaxWords = typeof options.maxWordLimit === 'number' ? String(options.maxWordLimit) : '';
     form.essayGraderInfo = asDoc(options.graderInfo);
     form.essayResponseTemplate = asDoc(options.responseTemplate);
-    // Lời giải mẫu của tự luận nằm ở phía đáp án (answerKey.solution
-    // dạng {answer}) — khác graderInfo là thông tin cho người chấm.
+    // Lời giải mẫu của tự luận nằm ở phía đáp án (answerKey.solution dạng {answer}) — khác graderInfo là thông tin cho người chấm.
     const solution = view.answerKey?.solution;
     form.essaySolution = solution && 'answer' in solution ? (solution.answer as Doc) : undefined;
   }
@@ -256,22 +235,15 @@ function numberOrUndefined(value: string): number | undefined {
 }
 
 /**
- * Dựng phần thân payload tạo/sửa từ form (chưa gồm `categoryId`, `qtype`,
- * `stimulusId` — nơi gọi gắn tuỳ đường tạo/sửa) theo hợp đồng port
- * giaokhoa. Các bước tách theo loại:
+ * Dựng phần thân payload tạo/sửa từ form (chưa gồm `categoryId`, `qtype`, `stimulusId` — nơi gọi gắn tuỳ đường tạo/sửa) theo hợp đồng port giaokhoa. Các bước tách theo loại:
  * - Chung: KHÔNG còn trường tên; `guidance` (khi có nội dung) gắn ở
- *   cấp payload để tầng nghiệp vụ ghi vào phía đáp án — nó không bao
- *   giờ nằm trong `questionText`.
+ *   cấp payload để tầng nghiệp vụ ghi vào phía đáp án — nó không bao giờ nằm trong `questionText`.
  * - Multichoice: TÁCH tài liệu thống nhất bằng
  *   `splitMultipleChoiceDocument` — phần thân câu thành `questionText`
  *   (tài liệu hợp đồng thuần, không node lựa chọn), từng choice theo
- *   đúng thứ tự trong tài liệu thành một dòng `answers` (`correct`
- *   khi id của choice khớp đáp án đúng đã chọn; phản hồi lấy từ map
- *   theo id choice).
+ *   đúng thứ tự trong tài liệu thành một dòng `answers` (`correct` khi id của choice khớp đáp án đúng đã chọn; phản hồi lấy từ map theo id choice).
  * - Truefalse (TF-A): tài liệu thống nhất đi thẳng vào
- *   `questionText` (thân + 4 mệnh đề); đáp án Đ/S theo từng mệnh đề
- *   thành `solution: {answers}` ở phía đáp án theo đúng thứ tự mệnh
- *   đề trong tài liệu; KHÔNG có dòng answers.
+ *   `questionText` (thân + 4 mệnh đề); đáp án Đ/S theo từng mệnh đề thành `solution: {answers}` ở phía đáp án theo đúng thứ tự mệnh đề trong tài liệu; KHÔNG có dòng answers.
  * - Shortanswer: mọi mẫu liệt kê đều là đáp án được chấp nhận
  *   (`correct: true`) — chấm khớp chính xác, không tỉ trọng.
  * - Essay: không dòng answers; lời giải mẫu (khi có) đi qua
@@ -318,9 +290,7 @@ export function editorFormContent(form: QuestionEditorFormState): Record<string,
       ...(generalFeedback ? { generalFeedback } : {}),
       ...(guidance ? { guidance } : {}),
       solution: {
-        // Chỉ gửi các mệnh đề ĐÃ chọn Đ/S: mệnh đề chưa chọn làm
-        // payload thiếu phủ tập mệnh đề và bị API từ chối với lỗi rõ
-        // ràng — tuyệt đối không mặc định "Sai" cho mệnh đề chưa chọn.
+        // Chỉ gửi các mệnh đề ĐÃ chọn Đ/S: mệnh đề chưa chọn làm payload thiếu phủ tập mệnh đề và bị API từ chối với lỗi rõ ràng — tuyệt đối không mặc định "Sai" cho mệnh đề chưa chọn.
         answers: statements
           .filter((statement) => typeof form.tfAnswers[statement.attrs.id] === 'boolean')
           .map((statement) => ({

@@ -4,15 +4,7 @@ import { apiJson } from '#lib/api';
 import { queryKeys } from '#lib/query-keys';
 
 /**
- * Dữ kiện điểm theo khoá DÙNG CHUNG nhiều bề mặt (dashboard, trang
- * grades, loader của route trang chủ): fetcher và hook đa khoá nằm
- * ở tầng hooks dùng chung `src/hooks/` vì không thuộc riêng feature
- * nào — mọi bề mặt đọc qua đúng một khoá `courseAccess` nên
- * dedupe/cache dùng chung (F-02/F-03, rà soát #133). Trước đây nằm
- * trong module dữ liệu phẳng `src/lib/course-grade-data.ts`; tách
- * ra khi tổ chức lại apps/web theo mô hình features/ (issue #500).
- * Phần riêng của trang bảng điểm (lịch sử điểm, đột biến điểm) nằm
- * ở feature grades.
+ * Dữ kiện điểm theo khoá DÙNG CHUNG nhiều bề mặt (dashboard, trang grades, loader của route trang chủ): fetcher và hook đa khoá nằm ở tầng hooks dùng chung `src/hooks/` vì không thuộc riêng feature nào — mọi bề mặt đọc qua đúng một khoá `courseAccess` nên dedupe/cache dùng chung (F-02/F-03, rà soát #133). Trước đây nằm trong module dữ liệu phẳng `src/lib/course-grade-data.ts`; tách ra khi tổ chức lại apps/web theo mô hình features/ (issue #500). Phần riêng của trang bảng điểm (lịch sử điểm, đột biến điểm) nằm ở feature grades.
  */
 
 /**
@@ -38,9 +30,7 @@ async function probe<T>(path: string): Promise<T | null> {
 /**
  * Hai lượt dò dữ liệu điểm của một khoá, chạy song song trong một query
  * (khoá TanStack `courseAccess`). Mỗi endpoint lỗi độc lập thì phần đó
- * null, không sập cả query. Đây là fetcher DÙNG CHUNG của mọi bề mặt cần
- * dữ liệu điểm theo khoá (dashboard, trang grades) — các bề mặt đọc qua
- * đúng một khoá nên dedupe/cache dùng chung (F-02/F-03, rà soát #133).
+ * null, không sập cả query. Đây là fetcher DÙNG CHUNG của mọi bề mặt cần dữ liệu điểm theo khoá (dashboard, trang grades) — các bề mặt đọc qua đúng một khoá nên dedupe/cache dùng chung (F-02/F-03, rà soát #133).
  */
 export async function fetchCourseGradeData(courseId: string): Promise<CourseGradeData> {
   const [report, gradebook] = await Promise.all([

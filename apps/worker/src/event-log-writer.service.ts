@@ -21,9 +21,7 @@ export interface OutboxRowLike {
 const COURSE_CONTEXT_LEVEL = 50;
 
 /**
- * Các khoá payload ứng viên đặt tên cho đối tượng chính của một sự kiện, theo từng outbox
- * aggregate. Khoá đầu tiên hiện diện sẽ thắng; giá trị được đưa vào trường
- * `objectId` đã chuẩn hoá của payload log đã lưu.
+ * Các khoá payload ứng viên đặt tên cho đối tượng chính của một sự kiện, theo từng outbox aggregate. Khoá đầu tiên hiện diện sẽ thắng; giá trị được đưa vào trường `objectId` đã chuẩn hoá của payload log đã lưu.
  */
 const OBJECT_ID_KEYS: Record<string, string[]> = {
   course: ['courseId'],
@@ -78,9 +76,7 @@ export class EventLogWriter {
       const sourceComponent = str(source.component);
       const payload: Record<string, unknown> = {
         ...source,
-        // Một số payload đã mang sẵn trường `component` của riêng chúng (component
-        // hoạt động của một course module) — giữ nó dưới
-        // `sourceComponent`; `component` đã chuẩn hoá là phân hệ của sự kiện
+        // Một số payload đã mang sẵn trường `component` của riêng chúng (component hoạt động của một course module) — giữ nó dưới `sourceComponent`; `component` đã chuẩn hoá là phân hệ của sự kiện
         // (outbox aggregate).
         ...(sourceComponent ? { sourceComponent } : {}),
         component: row.aggregate,

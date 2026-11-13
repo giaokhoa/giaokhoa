@@ -1,21 +1,9 @@
 /**
  * Repository của cụm PRIVACY trên Kysely.
  *
- * Vai trò: mọi truy cập tới hai bảng privacy_requests và
- * privacy_export_files của kho trung tâm tập trung ở đây. Việc
- * xuất/xoá dữ liệu cá nhân theo từng subsystem nằm ở các provider
- * của tầng service phía ứng dụng, chạy trên chính handle mà
- * repository này phơi ra qua `dbHandle`. Repository không chứa
- * luật nghiệp vụ — phê duyệt, cổng sở hữu và xử lý yêu cầu nằm ở
- * service.
+ * Vai trò: mọi truy cập tới hai bảng privacy_requests và privacy_export_files của kho trung tâm tập trung ở đây. Việc xuất/xoá dữ liệu cá nhân theo từng subsystem nằm ở các provider của tầng service phía ứng dụng, chạy trên chính handle mà repository này phơi ra qua `dbHandle`. Repository không chứa luật nghiệp vụ — phê duyệt, cổng sở hữu và xử lý yêu cầu nằm ở service.
  *
- * Khuôn hình dạng dữ liệu ở biên repository (theo khuôn pilot kho
- * control plane): bên trong dùng tên bảng/cột snake_case của
- * schema codegen; bên ngoài nhận/trả hình dạng camelCase qua danh
- * sách cột có bí danh tường minh và các hàm ánh xạ
- * `*InsertValues`/`*UpdateSet` loại `undefined` từng trường (luật
- * T-4). Các cột jsonb (`result`, `manifest`) khi ghi đi qua
- * `jsonbValue` (serialize tường minh + `::jsonb`).
+ * Khuôn hình dạng dữ liệu ở biên repository (theo khuôn pilot kho control plane): bên trong dùng tên bảng/cột snake_case của schema codegen; bên ngoài nhận/trả hình dạng camelCase qua danh sách cột có bí danh tường minh và các hàm ánh xạ `*InsertValues`/`*UpdateSet` loại `undefined` từng trường (luật T-4). Các cột jsonb (`result`, `manifest`) khi ghi đi qua `jsonbValue` (serialize tường minh + `::jsonb`).
  */
 import { sql, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';

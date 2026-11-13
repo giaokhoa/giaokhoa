@@ -13,12 +13,7 @@ import { joinClassByCode, previewJoinClass } from '../api/classes';
 import type { ClassJoinPreview } from '../types/classes';
 
 /**
- * Trang tự báo danh (CLASS-1, issue #184): học sinh có tài khoản nhập mã
- * tham gia (hoặc mở link chứa ?code=) → xem trước lớp + chủ lớp → xin
- * vào. Kết quả theo luật API: lớp trống vào thẳng; lớp đã có HS vào hàng
- * chờ duyệt trừ khi chủ lớp bật tự duyệt; đã là thành viên thì báo rõ.
- * Lỗi mã được dịch thành một thông điệp duy nhất, không lộ lớp nào tồn
- * tại ngoài mã đúng.
+ * Trang tự báo danh (CLASS-1, issue #184): học sinh có tài khoản nhập mã tham gia (hoặc mở link chứa ?code=) → xem trước lớp + chủ lớp → xin vào. Kết quả theo luật API: lớp trống vào thẳng; lớp đã có HS vào hàng chờ duyệt trừ khi chủ lớp bật tự duyệt; đã là thành viên thì báo rõ. Lỗi mã được dịch thành một thông điệp duy nhất, không lộ lớp nào tồn tại ngoài mã đúng.
  */
 export function ClassJoinPage() {
   const { t } = useTranslation('app');
@@ -52,12 +47,7 @@ export function ClassJoinPage() {
     onError: () => setError(t('classJoinInvalid')),
   });
 
-  // Tự xem trước cho mã có sẵn trong link: chỉ chạy đúng một
-  // lần lúc mở trang (gác bằng ref). `initialCode` là giá trị
-  // khởi tạo lấy từ URL lúc trang mở — không tự xem trước lại
-  // khi URL đổi trong lúc trang đang mở, khớp cách `code` được
-  // khởi tạo một lần bằng useState ở trên. Mảng phụ thuộc liệt
-  // kê đủ giá trị hiệu ứng đọc; ref gác làm các lần chạy thêm
+  // Tự xem trước cho mã có sẵn trong link: chỉ chạy đúng một lần lúc mở trang (gác bằng ref). `initialCode` là giá trị khởi tạo lấy từ URL lúc trang mở — không tự xem trước lại khi URL đổi trong lúc trang đang mở, khớp cách `code` được khởi tạo một lần bằng useState ở trên. Mảng phụ thuộc liệt kê đủ giá trị hiệu ứng đọc; ref gác làm các lần chạy thêm
   // (khi phụ thuộc đổi danh tính) thoát ngay, hành vi không đổi.
   const autoPreviewedRef = useRef(false);
   useEffect(() => {

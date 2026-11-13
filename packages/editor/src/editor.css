@@ -1,18 +1,10 @@
 /*
  * Vỏ trình bày của @giaokhoa/editor (lát E1, issue #248).
  *
- * Trước lát này package editor không có một rule CSS nào: nút toolbar là
- * <button> trần không class, vùng soạn không khung/không chiều cao tối
- * thiểu, panel công thức là khối inline không style. File này lo đúng
- * phần ProseMirror/toolbar/panel không làm bằng Tailwind ở phía app
- * được — theo đúng cách editor giaokhoa tách `editor.css` riêng khỏi
- * Tailwind (115 dòng cho tay resize/selectedCell/bảng; ở đây chỉ gồm
- * các trục đã có: khung vùng soạn, trạng thái pressed của toolbar,
- * panel công thức dạng overlay nổi).
+ * Trước lát này package editor không có một rule CSS nào: nút toolbar là <button> trần không class, vùng soạn không khung/không chiều cao tối thiểu, panel công thức là khối inline không style. File này lo đúng phần ProseMirror/toolbar/panel không làm bằng Tailwind ở phía app được — theo đúng cách editor giaokhoa tách `editor.css` riêng khỏi Tailwind (115 dòng cho tay resize/selectedCell/bảng; ở đây chỉ gồm các trục đã có: khung vùng soạn, trạng thái pressed của toolbar, panel công thức dạng overlay nổi).
  *
  * Bề mặt chứa phải nạp file này một lần (apps/web nạp ở root:
- * `@giaokhoa/editor/editor.css`). Các biến màu (--background, --border,
- * --muted, --primary, --destructive...) lấy từ bộ token của @giaokhoa/ui.
+ * `@giaokhoa/editor/editor.css`). Các biến màu (--background, --border, --muted, --primary, --destructive...) lấy từ bộ token của @giaokhoa/ui.
  */
 
 /* --- Khung vùng soạn: vùng soạn như một trang giấy (giaokhoa:

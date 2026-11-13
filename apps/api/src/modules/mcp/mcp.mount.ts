@@ -11,33 +11,16 @@ import type { McpToolDeps } from './mcp.tools';
 import { tenantAls } from '../tenants/tenant-als';
 
 /**
- * Mount MCP server của Giáo khoa (MCP-0, issue #110) lên express instance của
- * Nest — cùng tiền lệ Better Auth (better-auth.mount.ts): đăng ký TRƯỚC
- * route + body parser của Nest để request tới /mcp đến tay handler ở
- * dạng thô. MCP có không gian URL riêng, KHÔNG nằm dưới /api/v1:
+ * Mount MCP server của Giáo khoa (MCP-0, issue #110) lên express instance của Nest — cùng tiền lệ Better Auth (better-auth.mount.ts): đăng ký TRƯỚC route + body parser của Nest để request tới /mcp đến tay handler ở dạng thô. MCP có không gian URL riêng, KHÔNG nằm dưới /api/v1:
  *
- *   POST /mcp — endpoint Streamable HTTP duy nhất, một endpoint hai kỷ
- *     nguyên (modern 2026-07-28 stateless + legacy 2025-11-25) qua
- *     createMcpHandler của SDK v2 (`legacy: 'stateless'`).
- *   GET /.well-known/oauth-protected-resource[/mcp] — Protected Resource
- *     Metadata (RFC 9728) trỏ tới issuer cấu hình (MCP_AUTH_ISSUER;
- *     mặc định = chính origin này — AS đầy đủ là lát MCP-1).
+ *   POST /mcp — endpoint Streamable HTTP duy nhất, một endpoint hai kỷ nguyên (modern 2026-07-28 stateless + legacy 2025-11-25) qua createMcpHandler của SDK v2 (`legacy: 'stateless'`). GET /.well-known/oauth-protected-resource[/mcp] — Protected Resource Metadata (RFC 9728) trỏ tới issuer cấu hình (MCP_AUTH_ISSUER; mặc định = chính origin này — AS đầy đủ là lát MCP-1).
  *
- * Lớp vận chuyển (validate lớp 0, hồ sơ research Phần 3.1) do mount
- * chịu trước khi request chạm handler: body ≤ 256 KB, JSON parse được,
- * header Mcp-Method/Mcp-Name (client modern gửi) phải khớp method/tên
- * tool trong body (lệch → lỗi -32020 HeaderMismatchError), token cầu
- * auth hợp lệ mới tới được bất kỳ tool nào (401 + WWW-Authenticate
- * trỏ PRM), tool có scope riêng mà trần scope không có → 403
- * `insufficient_scope` + challenge step-up (lát MCP-2), rate limit theo
+ * Lớp vận chuyển (validate lớp 0, hồ sơ research Phần 3.1) do mount chịu trước khi request chạm handler: body ≤ 256 KB, JSON parse được, header Mcp-Method/Mcp-Name (client modern gửi) phải khớp method/tên tool trong body (lệch → lỗi -32020 HeaderMismatchError), token cầu auth hợp lệ mới tới được bất kỳ tool nào (401 + WWW-Authenticate trỏ PRM), tool có scope riêng mà trần scope không có → 403 `insufficient_scope` + challenge step-up (lát MCP-2), rate limit theo
  * (giáo viên, nhóm tool) vượt hạn → 429.
  */
 
 /**
- * Logger của mount (code ngoài class nên khai cấp module với context
- * dạng chuỗi, cùng tiền lệ `new Logger('Worker')` ở apps/worker): mọi
- * lỗi vận hành của handler và của vòng mount đều ghi qua đây ở mức
- * error, không gọi thẳng console như trước.
+ * Logger của mount (code ngoài class nên khai cấp module với context dạng chuỗi, cùng tiền lệ `new Logger('Worker')` ở apps/worker): mọi lỗi vận hành của handler và của vòng mount đều ghi qua đây ở mức error, không gọi thẳng console như trước.
  */
 const logger = new Logger('McpMount');
 
@@ -46,21 +29,13 @@ const MCP_SCOPES = ['giaokhoa.questions.read', 'giaokhoa.questions.draft', 'giao
 
 /**
  * Tập scope kỷ nguyên CẦU AUTH cấp cho token hệ thống (authInfo.scopes):
- * chỉ các scope đã có tool thật sau lưng — read + draft của MCP-0 và
- * contribute của lát MCP-2 (issue #110 mở lại). `giaokhoa.questions.write`
- * KHÔNG nằm ở đây: publish là tool của MCP-1 và chỉ gọi được bằng
- * access token OAuth thật (cầu auth cấp trần đồng nhất không dựng
- * được ca thiếu scope — chính là động cơ của lát này). Khi AS bật,
- * scope lấy từ access token qua McpOAuthVerifier; `deps.grantedScopes`
- * vẫn là đường ghi đè cho test ở cả hai kỷ nguyên.
+ * chỉ các scope đã có tool thật sau lưng — read + draft của MCP-0 và contribute của lát MCP-2 (issue #110 mở lại). `giaokhoa.questions.write` KHÔNG nằm ở đây: publish là tool của MCP-1 và chỉ gọi được bằng access token OAuth thật (cầu auth cấp trần đồng nhất không dựng được ca thiếu scope — chính là động cơ của lát này). Khi AS bật, scope lấy từ access token qua McpOAuthVerifier; `deps.grantedScopes` vẫn là đường ghi đè cho test ở cả hai kỷ nguyên.
  */
 const BRIDGE_SCOPES: readonly string[] = ['giaokhoa.questions.read', 'giaokhoa.questions.draft', 'giaokhoa.banks.contribute'];
 
 /**
  * Scope riêng của TỪNG tool (lát MCP-1 hoàn thiện bản đồ của MCP-0):
- * thiếu scope → 403 `insufficient_scope` + challenge step-up (research
- * Phần 2.2). Scope chỉ là TRẦN của token — quyền nghiệp vụ thật vẫn do
- * capability tại context của bank quyết ở tầng tool như REST.
+ * thiếu scope → 403 `insufficient_scope` + challenge step-up (research Phần 2.2). Scope chỉ là TRẦN của token — quyền nghiệp vụ thật vẫn do capability tại context của bank quyết ở tầng tool như REST.
  */
 const TOOL_REQUIRED_SCOPES: Record<string, string> = {
   list_my_banks: 'giaokhoa.questions.read',
@@ -126,25 +101,15 @@ export interface McpMountDeps {
   publicBaseUrl: string | null;
   issuer: string | null;
   /**
-   * Bộ kiểm access token OAuth của AS (lát MCP-1). Có giá trị → mount
-   * đi đường RS THẬT: token được kiểm chữ ký JWKS + iss/aud bởi
-   * verifier của plugin và scope lấy từ chính token; cầu bridge KHÔNG
-   * được dùng nữa. Null/thiếu → đường lùi cầu auth của MCP-0 như cũ.
+   * Bộ kiểm access token OAuth của AS (lát MCP-1). Có giá trị → mount đi đường RS THẬT: token được kiểm chữ ký JWKS + iss/aud bởi verifier của plugin và scope lấy từ chính token; cầu bridge KHÔNG được dùng nữa. Null/thiếu → đường lùi cầu auth của MCP-0 như cũ.
    */
   oauthVerifier?: McpOAuthVerifier | null;
   /**
-   * Phân giải `sub` của access token thành actor còn hiệu lực (chỉ
-   * dùng ở đường OAuth): null = tài khoản đã xoá/treo → 401, cùng
-   * nghĩa với kiểm tra tài khoản trong cầu bridge. `tenantId` là
-   * tenant mặc định của user theo membership (TENANT-1, #196) —
-   * nguồn tenant của phiên khi token AS không mang claim `tid`.
+   * Phân giải `sub` của access token thành actor còn hiệu lực (chỉ dùng ở đường OAuth): null = tài khoản đã xoá/treo → 401, cùng nghĩa với kiểm tra tài khoản trong cầu bridge. `tenantId` là tenant mặc định của user theo membership (TENANT-1, #196) — nguồn tenant của phiên khi token AS không mang claim `tid`.
    */
   resolveActor?: (userId: string) => Promise<{ username: string; tenantId?: string | null } | null>;
   /**
-   * Trần scope hiệu lực cho mọi request qua mount này. Mặc định (khi
-   * không truyền) = BRIDGE_SCOPES của kỷ nguyên cầu auth; AS OAuth sẽ
-   * truyền scope của từng token. Test dùng trường này để dựng phiên
-   * thiếu scope.
+   * Trần scope hiệu lực cho mọi request qua mount này. Mặc định (khi không truyền) = BRIDGE_SCOPES của kỷ nguyên cầu auth; AS OAuth sẽ truyền scope của từng token. Test dùng trường này để dựng phiên thiếu scope.
    */
   grantedScopes?: readonly string[];
   /** Deps của tools (services dùng chung với REST — không có đường nghiệp vụ riêng cho MCP). */

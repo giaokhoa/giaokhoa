@@ -2,31 +2,18 @@ import { describe, expect, it, vi } from 'vitest';
 import { MessagingGateway } from './messaging.gateway';
 
 /**
- * Gateway nhắn tin lúc socket nối (issue #33): danh sách chặn của
- * user là MỘT dữ kiện duy nhất, không đổi theo hội thoại — một lần
- * nối với nhiều hội thoại 1–1 chỉ được tải danh sách chặn tối đa
- * một lần, và tập room socket vào được không đổi so với khi tải lại
- * theo từng hội thoại:
+ * Gateway nhắn tin lúc socket nối (issue #33): danh sách chặn của user là MỘT dữ kiện duy nhất, không đổi theo hội thoại — một lần nối với nhiều hội thoại 1–1 chỉ được tải danh sách chặn tối đa một lần, và tập room socket vào được không đổi so với khi tải lại theo từng hội thoại:
  *
  * - Hội thoại 1–1 đang chặn (bất kỳ chiều nào): socket KHÔNG vào
  *   room của hội thoại đó.
  * - Hội thoại 1–1 không chặn và hội thoại nhóm: socket vào room
  *   như cũ; socket luôn vào room riêng của user.
  *
- * Trả danh sách chặn về tải lại theo từng hội thoại thì ca này đỏ
- * ở khẳng định số lượt gọi repository.
+ * Trả danh sách chặn về tải lại theo từng hội thoại thì ca này đỏ ở khẳng định số lượt gọi repository.
  *
- * Cùng file: ảnh chụp presence lúc nối — sau khi ghi presence của
- * người nối, gateway xin tầng realtime danh sách người đang trực
- * tuyến trong quan hệ hội thoại chung và phát `presence.snapshot`
- * cho CHÍNH socket vừa nối, để người đã trực tuyến từ trước (không
- * phát sinh sự kiện thay đổi nào) vẫn được người nối học được.
+ * Cùng file: ảnh chụp presence lúc nối — sau khi ghi presence của người nối, gateway xin tầng realtime danh sách người đang trực tuyến trong quan hệ hội thoại chung và phát `presence.snapshot` cho CHÍNH socket vừa nối, để người đã trực tuyến từ trước (không phát sinh sự kiện thay đổi nào) vẫn được người nối học được.
  *
- * Và: phạm vi kho theo kết nối (tiền điều kiện Phần B, issue #587,
- * hạng mục 1) — danh tính mang slug của trung tâm ở kho riêng thì
- * toàn bộ lượt đọc lúc nối phải chạy qua `withSpaceKysely` của
- * slug đó; đầu dò trong fake ghi lại trạng thái phạm vi tại thời
- * điểm đọc nên bỏ lớp bọc là ca này đỏ.
+ * Và: phạm vi kho theo kết nối (tiền điều kiện Phần B, issue #587, hạng mục 1) — danh tính mang slug của trung tâm ở kho riêng thì toàn bộ lượt đọc lúc nối phải chạy qua `withSpaceKysely` của slug đó; đầu dò trong fake ghi lại trạng thái phạm vi tại thời điểm đọc nên bỏ lớp bọc là ca này đỏ.
  */
 describe('MessagingGateway.handleConnection — danh sách chặn tải một lần cho cả lần nối', () => {
   const USER_ID = 'user-1';
@@ -46,9 +33,7 @@ describe('MessagingGateway.handleConnection — danh sách chặn tải một l�
       'conv-open-a': 'user-a',
       'conv-open-b': 'user-b',
     };
-    // Đầu dò phạm vi kho của kết nối: bật trong lúc callback của
-    // `withSpaceKysely` chạy, các fake repository ghi lại trạng
-    // thái tại thời điểm được gọi.
+    // Đầu dò phạm vi kho của kết nối: bật trong lúc callback của `withSpaceKysely` chạy, các fake repository ghi lại trạng thái tại thời điểm được gọi.
     const spaceProbe = { insideSpace: false, slugs: [] as string[], listInsideSpace: [] as boolean[] };
     const repo = {
       listConversationsForUser: vi.fn(async () => {
@@ -107,8 +92,7 @@ describe('MessagingGateway.handleConnection — danh sách chặn tải một l�
     expect(client.disconnect).not.toHaveBeenCalled();
     expect(repo.listBlockedCounterpartIds).toHaveBeenCalledTimes(1);
     expect(repo.listBlockedCounterpartIds).toHaveBeenCalledWith(USER_ID);
-    // Room riêng của user + hai hội thoại 1–1 không chặn + hội thoại
-    // nhóm; tuyệt đối không có room của hội thoại đang chặn.
+    // Room riêng của user + hai hội thoại 1–1 không chặn + hội thoại nhóm; tuyệt đối không có room của hội thoại đang chặn.
     expect(joinedRooms).toHaveLength(4);
     expect(joinedRooms.some((room) => room.includes('conv-blocked'))).toBe(false);
     expect(joinedRooms.some((room) => room.includes('conv-open-a'))).toBe(true);

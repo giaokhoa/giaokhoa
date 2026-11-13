@@ -6,42 +6,15 @@ import { TestProviders } from '#test/providers';
 import { AdminPermissionsPage } from './admin-permissions';
 
 /**
- * Spec trang Quyền độc lập (issue #597, bề mặt 4): bảng ma trận toàn
- * trang dựng từ ĐÚNG MỘT lần gọi ma trận theo ngữ cảnh (không gọi ma
- * trận riêng cho từng vai), ba thẻ tổng quan đếm đúng tại ngữ cảnh
- * đang chọn (thẻ Cho phép đếm trực tiếp từ các ô đang hiển thị), sửa
- * từng ô áp dụng ngay qua đúng một lần gọi ghi từng ô, ghi lỗi thì ô
- * hoàn lại kèm thông báo, đổi ngữ cảnh thì tải lại ma trận của ngữ
- * cảnh mới, và ma trận chưa tải xong thì không có ô nào sửa được.
- * Nhãn của bộ chọn ngữ cảnh là tên cấp dạng chữ qua adapter (Hệ
- * thống / Trung tâm). Stub giữ kho ma trận theo ngữ cảnh để các lần
- * gọi POST đổi thật dữ kiện mà lần gọi GET sau đó trả về.
+ * Spec trang Quyền độc lập (issue #597, bề mặt 4): bảng ma trận toàn trang dựng từ ĐÚNG MỘT lần gọi ma trận theo ngữ cảnh (không gọi ma trận riêng cho từng vai), ba thẻ tổng quan đếm đúng tại ngữ cảnh đang chọn (thẻ Cho phép đếm trực tiếp từ các ô đang hiển thị), sửa từng ô áp dụng ngay qua đúng một lần gọi ghi từng ô, ghi lỗi thì ô hoàn lại kèm thông báo, đổi ngữ cảnh thì tải lại ma trận của ngữ cảnh mới, và ma trận chưa tải xong thì không có ô nào sửa được. Nhãn của bộ chọn ngữ cảnh là tên cấp dạng chữ qua adapter (Hệ thống / Trung tâm). Stub giữ kho ma trận theo ngữ cảnh để các lần gọi POST đổi thật dữ kiện mà lần gọi GET sau đó trả về.
  *
- * Vòng sửa theo phán quyết điều phối (PR #601): ghi ô thành công thì
- * nháp của lần ghi đó bị xoá để giá trị mới từ server hiện lên thay
- * vì bị nháp cũ che; nháp mang cả ngữ cảnh của lần ghi nên lỗi muộn
- * của ngữ cảnh cũ không xoá nháp mới ở ngữ cảnh mới dù trùng giá trị.
+ * Vòng sửa theo phán quyết điều phối (PR #601): ghi ô thành công thì nháp của lần ghi đó bị xoá để giá trị mới từ server hiện lên thay vì bị nháp cũ che; nháp mang cả ngữ cảnh của lần ghi nên lỗi muộn của ngữ cảnh cũ không xoá nháp mới ở ngữ cảnh mới dù trùng giá trị.
  *
- * Vòng sửa 3 theo phán quyết 6539398880 (hình dạng demo, dữ kiện
- * thật): ô select bốn trạng thái thay bằng nút toggle icon hai trạng
- * thái (bật = Cho phép, tắt = Kế thừa); ô đang mang Ngăn chặn/Cấm
- * hẳn đã lưu thì toggle bị khoá kèm huy hiệu trạng thái và không
- * thao tác nào ghi đè được — fixture mang sẵn một ô Cấm hẳn ở ngữ
- * cảnh hệ thống và một ô Ngăn chặn ở ngữ cảnh trung tâm để ghim
- * hành vi này.
+ * Vòng sửa 3 theo phán quyết 6539398880 (hình dạng demo, dữ kiện thật): ô select bốn trạng thái thay bằng nút toggle icon hai trạng thái (bật = Cho phép, tắt = Kế thừa); ô đang mang Ngăn chặn/Cấm hẳn đã lưu thì toggle bị khoá kèm huy hiệu trạng thái và không thao tác nào ghi đè được — fixture mang sẵn một ô Cấm hẳn ở ngữ cảnh hệ thống và một ô Ngăn chặn ở ngữ cảnh trung tâm để ghim hành vi này.
  *
- * Vòng sửa bố cục (PR #601): bảng gom mỗi resource thành đúng MỘT
- * hàng như bảng mẫu — ô của một (resource × vai trò) chứa các nút
- * toggle của mọi năng lực thuộc resource đó cạnh nhau, tên năng
- * lực truy được qua aria-label và title của nút thay vì một hàng
- * riêng cho từng năng lực. Mọi hành vi ghi từng ô, hoàn lại khi
- * lỗi và khoá ô chặn đã ghim ở các vòng trước giữ nguyên.
+ * Vòng sửa bố cục (PR #601): bảng gom mỗi resource thành đúng MỘT hàng như bảng mẫu — ô của một (resource × vai trò) chứa các nút toggle của mọi năng lực thuộc resource đó cạnh nhau, tên năng lực truy được qua aria-label và title của nút thay vì một hàng riêng cho từng năng lực. Mọi hành vi ghi từng ô, hoàn lại khi lỗi và khoá ô chặn đã ghim ở các vòng trước giữ nguyên.
  *
- * Vòng căn chỉnh khớp demo (issue #624): ô chọn ngữ cảnh chuyển
- * từ `<select>` native sang Select của `@giaokhoa/ui` — các ca đổi
- * ngữ cảnh chọn theo nhãn nhìn thấy của lựa chọn qua helper
- * `chooseOption`; toggle chưa cấp dùng variant outline, huy
- * hiệu khoá đặt cạnh nút toggle như hộp thoại ma trận.
+ * Vòng căn chỉnh khớp demo (issue #624): ô chọn ngữ cảnh chuyển từ `<select>` native sang Select của `@giaokhoa/ui` — các ca đổi ngữ cảnh chọn theo nhãn nhìn thấy của lựa chọn qua helper `chooseOption`; toggle chưa cấp dùng variant outline, huy hiệu khoá đặt cạnh nút toggle như hộp thoại ma trận.
  */
 const ROLE_A_ID = '01900000-0000-7000-8000-0000000000b1';
 const ROLE_B_ID = '01900000-0000-7000-8000-0000000000b2';
@@ -164,9 +137,7 @@ function renderPage() {
 }
 
 /**
- * Chọn một lựa chọn trong ô Select của `@giaokhoa/ui` theo nhãn nhìn
- * thấy: bấm nút mở rồi bấm lựa chọn trong danh sách xổ — danh sách
- * xổ render qua portal ở tầng document nên truy vấn bằng `screen`.
+ * Chọn một lựa chọn trong ô Select của `@giaokhoa/ui` theo nhãn nhìn thấy: bấm nút mở rồi bấm lựa chọn trong danh sách xổ — danh sách xổ render qua portal ở tầng document nên truy vấn bằng `screen`.
  */
 async function chooseOption(trigger: HTMLElement, optionLabel: string) {
   await userEvent.click(trigger);

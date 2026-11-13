@@ -65,8 +65,7 @@ export interface RoleAssignmentDialogProps {
   /** Cây context để chọn ngữ cảnh gán. */
   contexts: ContextRow[];
   /**
-   * Người dùng chọn sẵn: khi có, hộp thoại bỏ bước tìm/chọn người
-   * dùng và gán thẳng cho người này.
+   * Người dùng chọn sẵn: khi có, hộp thoại bỏ bước tìm/chọn người dùng và gán thẳng cho người này.
    */
   presetUser?: Pick<UserProfile, 'id' | 'username' | 'email'> | null;
   /** Đóng hộp thoại (sau khi gán thành công hoặc khi người dùng huỷ). */
@@ -74,8 +73,7 @@ export interface RoleAssignmentDialogProps {
 }
 
 /**
- * Dịch mã lỗi gán vai của backend thành thông báo cho người dùng; mã lạ
- * thì dùng thông báo chung, không hiện mã kỹ thuật ra giao diện.
+ * Dịch mã lỗi gán vai của backend thành thông báo cho người dùng; mã lạ thì dùng thông báo chung, không hiện mã kỹ thuật ra giao diện.
  */
 function assignErrorMessage(error: unknown, t: (key: string) => string): string {
   if (error instanceof ApiError) {
@@ -123,9 +121,7 @@ export function RoleAssignmentDialog({
   const effectiveUser = presetUser ?? selectedUser;
 
   /**
-   * Ngữ cảnh gán hiệu lực: lựa chọn của người dùng, hoặc ngữ cảnh hệ
-   * thống (level 10) khi chưa chọn — suy ra mỗi lần render nên cây
-   * context về muộn vẫn tự thành mặc định mà không cần effect đặt state.
+   * Ngữ cảnh gán hiệu lực: lựa chọn của người dùng, hoặc ngữ cảnh hệ thống (level 10) khi chưa chọn — suy ra mỗi lần render nên cây context về muộn vẫn tự thành mặc định mà không cần effect đặt state.
    */
   const effectiveContextId =
     contextId === '' ? (contexts.find((ctx) => ctx.contextLevel === 10)?.id ?? '') : contextId;

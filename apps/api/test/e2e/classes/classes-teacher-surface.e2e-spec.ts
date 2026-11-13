@@ -16,33 +16,25 @@ import { createCategory } from '../../support/course-enrolment-helpers';
 /**
  * CLASS-1 (issue #184) — bề mặt giáo viên trên nền CLASS-0:
  *  (1) GV tự tạo lớp (class:create qua vai editingteacher tại tenant) và
- *      tạo khoá trong lớp; nạp HS theo ĐỊNH DANH khớp email → outcome
- *      matched + ghi danh ACTIVE ở khoá của lớp;
+ *      tạo khoá trong lớp; nạp HS theo ĐỊNH DANH khớp email → outcome matched + ghi danh ACTIVE ở khoá của lớp;
  *  (2) định danh chưa có tài khoản → tạo mới kèm mật khẩu tạm ĐĂNG NHẬP
- *      ĐƯỢC; nạp lại cùng định danh → already_member; thiếu cả email lẫn
- *      SĐT → 400 class.roster_identity_missing;
+ *      ĐƯỢC; nạp lại cùng định danh → already_member; thiếu cả email lẫn SĐT → 400 class.roster_identity_missing;
  *  (3) import JSON rows: báo cáo từng dòng — dòng tốt vào lớp, dòng lỗi
  *      đứng riêng, dòng trùng tính already_member;
  *  (4) import-file multipart + tải file mẫu .xlsx;
  *  (5) phân quyền tại lớp theo EMAIL: gán classgrader → xem được lớp
- *      nhưng nạp roster 403; gán classrostermanager → nạp được; sửa vai
- *      của chủ lớp → 400 class.owner_roles_locked; email không có tài
- *      khoản → 404;
+ *      nhưng nạp roster 403; gán classrostermanager → nạp được; sửa vai của chủ lớp → 400 class.owner_roles_locked; email không có tài khoản → 404;
  *  (6) tự báo danh: lớp trống vào thẳng; lớp đã có HS → hàng chờ; duyệt
- *      → vào roster + ACTIVE ở khoá; từ chối → không vào và được xin
- *      lại; joinAutoApprove → vào thẳng; mã sai → 404;
+ *      → vào roster + ACTIVE ở khoá; từ chối → không vào và được xin lại; joinAutoApprove → vào thẳng; mã sai → 404;
  *  (7) đình chỉ qua roster → hiện ở danh sách đã đình chỉ; thêm lại →
  *      biến mất khỏi danh sách đó và ACTIVE lại ở khoá.
  *  (8) dashboard theo lớp (CLASS-2): gói overview theo quan hệ người
  *      gọi; học sinh chỉ thấy khoá đang ghi danh ACTIVE.
  *  (9) issue #381: đáp số GET /classes kèm bốn cờ quyền suy cho đúng
- *      người gọi (chủ lớp đủ cờ; học viên và đồng GV chấm bài không
- *      cờ quản trị nào) và học viên gọi thẳng POST/PATCH/archive/
+ *      người gọi (chủ lớp đủ cờ; học viên và đồng GV chấm bài không cờ quản trị nào) và học viên gọi thẳng POST/PATCH/archive/
  *      DELETE lớp đều 403 — cờ chỉ phục vụ hiển thị, gác thật ở API.
  *  (10) issue #381: roster thu hẹp trường liên hệ — chủ lớp và đồng
- *      GV quản roster nhận email/username đầy đủ; đồng GV chấm bài
- *      và học viên trong lớp chỉ nhận họ tên, hai trường liên hệ bị
- *      làm rỗng ở phía server.
+ *      GV quản roster nhận email/username đầy đủ; đồng GV chấm bài và học viên trong lớp chỉ nhận họ tên, hai trường liên hệ bị làm rỗng ở phía server.
  */
 describe('Bề mặt giáo viên lớp (CLASS-1, #184)', () => {
   let app: INestApplication;

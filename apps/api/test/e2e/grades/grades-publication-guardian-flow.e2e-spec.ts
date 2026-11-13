@@ -8,10 +8,8 @@ import { createGradeItem, getGradebook, setGrade } from '../../support/assessmen
 /**
  * PH-0 — nền công bố điểm theo BÀI + liên kết giám hộ PH–HS + audit
  * (issue #116). Oracle: research phụ huynh/HS mục 2.2/5.1/5.2 (Canvas
- * Grade Posting Policy; TT 22/2021 Đ.20.6 thông báo riêng cho cha mẹ;
- * chốt chặn ở CÔNG BỐ cấp bài). Mô hình điểm theo bài (issue #224):
- * không còn kết quả kỳ/năm của Sổ điểm VN, không còn điểm tổng khoá —
- * công bố chỉ còn một phạm vi duy nhất là từng grade item (từng bài).
+ * Grade Posting Policy; TT 22/2021 Đ.20.6 thông báo riêng cho cha mẹ; chốt chặn ở CÔNG BỐ cấp bài). Mô hình điểm theo bài (issue #224):
+ * không còn kết quả kỳ/năm của Sổ điểm VN, không còn điểm tổng khoá — công bố chỉ còn một phạm vi duy nhất là từng grade item (từng bài).
  */
 describe('PH-0: công bố điểm theo bài + liên kết giám hộ + audit (issue #116, #224)', () => {
   let app: INestApplication;

@@ -11,19 +11,14 @@ import { courseContextId } from '../../support/engagement-helpers';
  * Lát I-1 nhập ma trận từ file (issue #233): sinh workbook mẫu + parse
  * + xem trước, KHÔNG ghi DB. Luồng nghiệp vụ được kiểm:
  *  - giáo viên tải mẫu theo (môn, chương trình) → mẫu đã có sẵn hàng
- *    theo ĐƠN VỊ KIẾN THỨC với cột khoá "Mã ĐVK" (ma trận không gắn
- *    YCCĐ — YCCĐ chỉ để đối chiếu ở cột E);
+ *    theo ĐƠN VỊ KIẾN THỨC với cột khoá "Mã ĐVK" (ma trận không gắn YCCĐ — YCCĐ chỉ để đối chiếu ở cột E);
  *  - điền đúng khuôn → preview khớp từng ô (số câu × điểm mỗi câu),
  *    tổng hai chiều tự tính lại, khả dụng ngân hàng theo ô;
  *  - file sai khuôn → lỗi cứng định vị đúng sheet/dòng/cột (ô chữ,
- *    Mã ĐVK bịa, lệch tổng điểm, checkbox Vận dụng cao không khớp
- *    lưới, thiếu điểm mỗi câu, ma trận rỗng);
+ *    Mã ĐVK bịa, lệch tổng điểm, checkbox Vận dụng cao không khớp lưới, thiếu điểm mỗi câu, ma trận rỗng);
  *  - preview không tạo ma trận nào trong hệ;
  *  - giáo viên theo mô hình gán vai của dữ liệu mẫu (editingteacher
- *    tại context khoá, không vai nào tại context hệ thống) tải mẫu
- *    và xem trước được — hồi quy điểm chặn D-3 của issue #233, khi
- *    hai đầu này còn đòi quyền tại context của môn; học sinh bị
- *    chặn 403 tại cổng bank của luồng ở cả hai đầu.
+ *    tại context khoá, không vai nào tại context hệ thống) tải mẫu và xem trước được — hồi quy điểm chặn D-3 của issue #233, khi hai đầu này còn đòi quyền tại context của môn; học sinh bị chặn 403 tại cổng bank của luồng ở cả hai đầu.
  */
 describe('Nhập ma trận I-1 (mẫu + xem trước, không ghi DB)', () => {
   let app: INestApplication;

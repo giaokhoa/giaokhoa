@@ -20,33 +20,14 @@ import { withConversationMovedToSectionTop } from '../utils/page-helpers';
 import { queryKeys } from './keys';
 
 /**
- * Tầng dữ liệu nhắn tin (F-01 của rà soát #133; chuyển sang cache
- * TanStack ở CN-13, issue #493).
+ * Tầng dữ liệu nhắn tin (F-01 của rà soát #133; chuyển sang cache TanStack ở CN-13, issue #493).
  *
- * Luồng nghiệp vụ: trang Tin nhắn là một MÁY TRẠNG THÁI THỜI GIAN
- * THỰC — danh sách hội thoại, khung tin, cây nhóm và danh bạ đều bị
- * sự kiện WebSocket (outbox của server) và thao tác của người dùng
- * cập nhật liên tục. Nguồn sự thật duy nhất của dữ kiện máy chủ là
- * CACHE của TanStack Query: các options dưới đây khai khoá nhà máy
- * và thừa hưởng `staleTime` mặc định của app (30 giây — xem
- * lib/query-client) thay cho việc ghim mốc tươi bằng không đồng
- * loạt trước đây;
- * trang đọc qua useQuery/useQueries, đột biến thành công thì
- * invalidate đúng khoá liên quan hoặc vá cache bằng `setQueryData`
- * khi đáp ứng mang theo đúng dữ kiện mới (khuôn "updates from
- * mutation responses" của TanStack Query), và sự kiện realtime vá
- * cache bằng `setQueryData` tại tầng hook của trang. Kênh realtime
+ * Luồng nghiệp vụ: trang Tin nhắn là một MÁY TRẠNG THÁI THỜI GIAN THỰC — danh sách hội thoại, khung tin, cây nhóm và danh bạ đều bị sự kiện WebSocket (outbox của server) và thao tác của người dùng cập nhật liên tục. Nguồn sự thật duy nhất của dữ kiện máy chủ là CACHE của TanStack Query: các options dưới đây khai khoá nhà máy và thừa hưởng `staleTime` mặc định của app (30 giây — xem lib/query-client) thay cho việc ghim mốc tươi bằng không đồng loạt trước đây; trang đọc qua useQuery/useQueries, đột biến thành công thì invalidate đúng khoá liên quan hoặc vá cache bằng `setQueryData` khi đáp ứng mang theo đúng dữ kiện mới (khuôn "updates from mutation responses" của TanStack Query), và sự kiện realtime vá cache bằng `setQueryData` tại tầng hook của trang. Kênh realtime
  * (api/messaging-socket) không đổi.
  *
- * Bốn đột biến theo tin (xoá-phía-mình, thu hồi, xoá cứng, gỡ hàng
- * loạt) chỉ mang id của tin trong biến — không mang id hội thoại —
- * nên không khoá được invalidate đích danh ở tầng này; đáp ứng của
- * chúng được tầng hook kiểm duyệt của trang vá vào cache chi tiết
- * hội thoại bằng `setQueryData`.
+ * Bốn đột biến theo tin (xoá-phía-mình, thu hồi, xoá cứng, gỡ hàng loạt) chỉ mang id của tin trong biến — không mang id hội thoại — nên không khoá được invalidate đích danh ở tầng này; đáp ứng của chúng được tầng hook kiểm duyệt của trang vá vào cache chi tiết hội thoại bằng `setQueryData`.
  *
- * Tầng này bọc các hàm gọi API thuần ở `../api/messaging` (tách
- * khỏi module dữ liệu phẳng `src/lib/messaging-data.ts` khi tổ
- * chức lại apps/web theo mô hình features/, issue #500).
+ * Tầng này bọc các hàm gọi API thuần ở `../api/messaging` (tách khỏi module dữ liệu phẳng `src/lib/messaging-data.ts` khi tổ chức lại apps/web theo mô hình features/, issue #500).
  */
 
 /** Cây nhóm của tab Nhóm (GET /messages/group-tree). */
@@ -66,10 +47,7 @@ export function messagingConversationsQueryOptions() {
 }
 
 /**
- * Hồ sơ người phục vụ panel thông tin của chat 1–1 (issue #592,
- * GET /messages/users/:id/profile): tên + tên đăng nhập + email từ
- * dữ kiện thật của hệ. Nơi gọi tự bật/tắt query theo trạng thái mở
- * panel (panel chỉ render khi mở nên query lười theo panel).
+ * Hồ sơ người phục vụ panel thông tin của chat 1–1 (issue #592, GET /messages/users/:id/profile): tên + tên đăng nhập + email từ dữ kiện thật của hệ. Nơi gọi tự bật/tắt query theo trạng thái mở panel (panel chỉ render khi mở nên query lười theo panel).
  */
 export function messagingPersonProfileQueryOptions(userId: string) {
   return queryOptions({
@@ -79,11 +57,7 @@ export function messagingPersonProfileQueryOptions(userId: string) {
 }
 
 /**
- * Danh sách hội thoại đã lưu của server (GET /messages/conversations?archived=true).
- * Từ issue #623 tập này là dữ kiện của tab Lưu trữ ở cột danh
- * sách (tab thay cho tab Yêu thích): hook danh sách nạp nó
- * cùng nhịp với danh sách chính để số đếm trên tab luôn đúng;
- * hai tập không trộn nhau.
+ * Danh sách hội thoại đã lưu của server (GET /messages/conversations?archived=true). Từ issue #623 tập này là dữ kiện của tab Lưu trữ ở cột danh sách (tab thay cho tab Yêu thích): hook danh sách nạp nó cùng nhịp với danh sách chính để số đếm trên tab luôn đúng; hai tập không trộn nhau.
  */
 export function messagingArchivedConversationsQueryOptions() {
   return queryOptions({
@@ -173,8 +147,7 @@ export function courseConversationQueryOptions(courseId: string) {
 }
 
 /**
- * Đột biến đặt cờ trạng thái cá nhân (ghim/lưu/tắt tiếng) — server trả trạng thái đầy đủ (PATCH .../state).
- * Ghim đổi thứ tự và lưu đổi tư cách thành viên giữa hai danh sách nên làm mới cả hai danh sách và chi tiết.
+ * Đột biến đặt cờ trạng thái cá nhân (ghim/lưu/tắt tiếng) — server trả trạng thái đầy đủ (PATCH .../state). Ghim đổi thứ tự và lưu đổi tư cách thành viên giữa hai danh sách nên làm mới cả hai danh sách và chi tiết.
  */
 export function useSetConversationState() {
   const queryClient = useQueryClient();
@@ -190,13 +163,7 @@ export function useSetConversationState() {
 }
 
 /**
- * Đột biến đánh dấu đã đọc một hội thoại (POST .../read).
- * Đột biến này được gọi theo từng tin đến khi hội thoại đang mở nên
- * KHÔNG invalidate danh sách (mỗi lần invalidate là một lần nạp lại
- * danh sách tổng hợp, và ảnh chụp nạp lại có thể ghi đè vá realtime
- * mới hơn); thay vào đó vá tại chỗ mục hội thoại trong cache danh
- * sách bằng chính đáp ứng (chưa đọc về 0, mốc đọc mới) và invalidate
- * khoá số chưa đọc của huy hiệu sidebar.
+ * Đột biến đánh dấu đã đọc một hội thoại (POST .../read). Đột biến này được gọi theo từng tin đến khi hội thoại đang mở nên KHÔNG invalidate danh sách (mỗi lần invalidate là một lần nạp lại danh sách tổng hợp, và ảnh chụp nạp lại có thể ghi đè vá realtime mới hơn); thay vào đó vá tại chỗ mục hội thoại trong cache danh sách bằng chính đáp ứng (chưa đọc về 0, mốc đọc mới) và invalidate khoá số chưa đọc của huy hiệu sidebar.
  */
 export function useMarkConversationRead() {
   const queryClient = useQueryClient();
@@ -227,15 +194,7 @@ export function useSetContactBlocked() {
 }
 
 /**
- * Đột biến gửi một tin (POST .../messages) — thân mang clientMessageId chống trùng phía server.
- * Tin vừa gửi là hoạt động mới nhất của hội thoại: vá cache danh
- * sách (xem trước = tin vừa gửi, hội thoại lên đầu) bằng chính đáp
- * ứng; cửa sổ tin do tầng soạn tin vá vào cache chi tiết. Cache
- * tập đã lưu cũng được vá cùng luật khi hội thoại đang mở thuộc
- * tập đó (gửi tin trong một hội thoại đã lưu trữ không đổi trạng
- * thái lưu trữ của chính người gửi): xem trước cập nhật và hội
- * thoại dời lên đầu phân mục Ghim / Gần đây của nó, khớp thứ tự
- * server (vòng sửa issue #623).
+ * Đột biến gửi một tin (POST .../messages) — thân mang clientMessageId chống trùng phía server. Tin vừa gửi là hoạt động mới nhất của hội thoại: vá cache danh sách (xem trước = tin vừa gửi, hội thoại lên đầu) bằng chính đáp ứng; cửa sổ tin do tầng soạn tin vá vào cache chi tiết. Cache tập đã lưu cũng được vá cùng luật khi hội thoại đang mở thuộc tập đó (gửi tin trong một hội thoại đã lưu trữ không đổi trạng thái lưu trữ của chính người gửi): xem trước cập nhật và hội thoại dời lên đầu phân mục Ghim / Gần đây của nó, khớp thứ tự server (vòng sửa issue #623).
  */
 export function useSendMessage() {
   const queryClient = useQueryClient();

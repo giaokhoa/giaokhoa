@@ -10,32 +10,16 @@ export type { RoleConflictAuditEntry, RoleConflictAuditReport } from '@giaokhoa/
 /**
  * Facade Nest của định nghĩa kiểm tra TÁCH VAI GIÁO VIÊN/HỌC VIÊN.
  *
- * Định nghĩa và toàn bộ truy vấn của kiểm tách vai sống ở lõi dùng
- * chung `RoleSeparationCore` của package `@giaokhoa/enrol` (tầng dữ liệu,
- * trên schema dùng chung `@giaokhoa/db`) để mọi bề mặt vật chất hoá ghi
- * danh — API tại đây, worker khi nó dựng consumer đồng bộ cohort —
- * gọi về đúng MỘT định nghĩa duy nhất. Service này chỉ còn là lớp
- * bọc của API: dựng lõi bằng tay cầm Kysely đã định tuyến của API
+ * Định nghĩa và toàn bộ truy vấn của kiểm tách vai sống ở lõi dùng chung `RoleSeparationCore` của package `@giaokhoa/enrol` (tầng dữ liệu, trên schema dùng chung `@giaokhoa/db`) để mọi bề mặt vật chất hoá ghi danh — API tại đây, worker khi nó dựng consumer đồng bộ cohort — gọi về đúng MỘT định nghĩa duy nhất. Service này chỉ còn là lớp bọc của API: dựng lõi bằng tay cầm Kysely đã định tuyến của API
  * (`SpaceDatabaseService.routedKysely`) và cổng ngữ cảnh platform của API (bản sao `tenantAls` của tiến
  * trình này),
- * rồi dịch lỗi của lõi (mang mã kỹ thuật) về exception HTTP mang
- * cùng mã và thông điệp như trước khi trích xuất.
+ * rồi dịch lỗi của lõi (mang mã kỹ thuật) về exception HTTP mang cùng mã và thông điệp như trước khi trích xuất.
  *
- * Nguyên tắc nghiệp vụ mà lõi thực thi (quyết định đã chốt, viết
- * trọn vẹn): vai trò phải rõ ràng theo ngữ cảnh — trong khoá một
- * tài khoản ghi danh học thì tài khoản đó thuần là học viên của
- * khoá đó; trong khoá mình dạy thì thuần giáo viên. Một tài khoản
- * ĐƯỢC phép vừa dạy ở khoá này vừa học ở khoá khác (hai tập khoá
- * không giao nhau). Điều bị cấm tuyệt đối là LẪN VAI CÙNG MỘT
- * KHOÁ/LỚP: tài khoản đồng thời có cấp quyền giảng dạy bao phủ một
- * khoá VÀ ghi danh học viên đang hoạt động trong chính khoá đó
+ * Nguyên tắc nghiệp vụ mà lõi thực thi (quyết định đã chốt, viết trọn vẹn): vai trò phải rõ ràng theo ngữ cảnh — trong khoá một tài khoản ghi danh học thì tài khoản đó thuần là học viên của khoá đó; trong khoá mình dạy thì thuần giáo viên. Một tài khoản ĐƯỢC phép vừa dạy ở khoá này vừa học ở khoá khác (hai tập khoá không giao nhau). Điều bị cấm tuyệt đối là LẪN VAI CÙNG MỘT KHOÁ/LỚP: tài khoản đồng thời có cấp quyền giảng dạy bao phủ một khoá VÀ ghi danh học viên đang hoạt động trong chính khoá đó
  * (hoặc trong lớp chứa khoá đó). Hai kiểm nền của lõi: (a) cấp
- * quyền giảng dạy bao phủ khoá — gán vai archetype
- * `editingteacher`/`teacher` không do ghi danh cấp tại một context
- * bao phủ khoá theo cây context, loại trừ cấp ở context hệ thống;
+ * quyền giảng dạy bao phủ khoá — gán vai archetype `editingteacher`/`teacher` không do ghi danh cấp tại một context bao phủ khoá theo cây context, loại trừ cấp ở context hệ thống;
  * (b) ghi danh học viên đang hoạt động trong khoá — bản ghi
- * `user_enrolments` đang hoạt động qua instance cấp vai không thuộc
- * archetype giảng dạy (hoặc không cấp vai nào).
+ * `user_enrolments` đang hoạt động qua instance cấp vai không thuộc archetype giảng dạy (hoặc không cấp vai nào).
  */
 @Injectable()
 export class RoleSeparationService {
@@ -44,10 +28,7 @@ export class RoleSeparationService {
   constructor(spaceDb: SpaceDatabaseService) {
     // Cổng ngữ cảnh platform GIỮ `spaceSlug` của ngữ cảnh hiện tại
     // (Phần A, issue #587 — A4, đúng khuôn
-    // `permission-evaluator.service.ts`): khi lõi tách vai được gọi trong
-    // request của một trung tâm ở kho riêng, các lượt đọc xuyên
-    // tenant của nó phải chạy trên kho của trung tâm đó, không rơi
-    // về kho chung. Chỉ đổi đích dữ kiện, không đổi tầm nhìn RLS
+    // `permission-evaluator.service.ts`): khi lõi tách vai được gọi trong request của một trung tâm ở kho riêng, các lượt đọc xuyên tenant của nó phải chạy trên kho của trung tâm đó, không rơi về kho chung. Chỉ đổi đích dữ kiện, không đổi tầm nhìn RLS
     // (cờ `platform: true` giữ nguyên).
     this.core = new RoleSeparationCore(spaceDb.routedKysely, (fn) => {
       const spaceSlug = tenantAls.getStore()?.spaceSlug;

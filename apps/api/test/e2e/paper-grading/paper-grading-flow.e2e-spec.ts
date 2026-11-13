@@ -10,15 +10,7 @@ import { sheetQrPayload } from '../../../src/modules/paper-grading/domain/sheet-
 
 /**
  * CAM-0 — Chấm bài giấy bằng camera (issue #112), luồng đầu-cuối:
- * sinh lô IN phiếu (ghim layout + roster + mã đề 4 số) → tải PDF (mặc
- * định phiếu DÙNG CHUNG) → dựng ảnh chụp mô phỏng bằng chính template
- * hệ thống → tải ảnh theo lô hoặc theo BUỔI (lô chụp, định tuyến về
- * lô in theo mã đề/QR) qua cổng chất lượng → OMR + định danh (QR / ô
- * tô mã) → hai hàng chờ (ca mơ hồ, gán lô/gán định danh — ghi event
- * log) → ghi attempt "thi giấy" — điểm khớp chấm tay và attempt mang
- * dấu nguồn giấy trong DB. Nguyên tắc cứng được kiểm ở đây: ảnh hỏng
- * bị từ chối ở cổng, ca mơ hồ không bao giờ bị đoán, mã đề mơ hồ/kh lạ
- * không bao giờ bị đoán, học sinh không chạm được bề mặt chấm giấy.
+ * sinh lô IN phiếu (ghim layout + roster + mã đề 4 số) → tải PDF (mặc định phiếu DÙNG CHUNG) → dựng ảnh chụp mô phỏng bằng chính template hệ thống → tải ảnh theo lô hoặc theo BUỔI (lô chụp, định tuyến về lô in theo mã đề/QR) qua cổng chất lượng → OMR + định danh (QR / ô tô mã) → hai hàng chờ (ca mơ hồ, gán lô/gán định danh — ghi event log) → ghi attempt "thi giấy" — điểm khớp chấm tay và attempt mang dấu nguồn giấy trong DB. Nguyên tắc cứng được kiểm ở đây: ảnh hỏng bị từ chối ở cổng, ca mơ hồ không bao giờ bị đoán, mã đề mơ hồ/kh lạ không bao giờ bị đoán, học sinh không chạm được bề mặt chấm giấy.
  */
 describe('Luồng chấm bài giấy CAM-0', () => {
   let app: INestApplication;

@@ -17,15 +17,7 @@ import { queryKeys } from './keys';
 
 /**
  * Tầng dữ liệu của cụm quản trị người dùng (F-01 của rà soát #133):
- * danh sách do server phân trang/tìm kiếm (trang giữ trạng thái
- * search + pagination, dữ liệu qua truy vấn có keepPreviousData ở
- * phía trang), hồ sơ một người dùng cho màn sửa, và các thao tác ghi
- * — mọi đột biến đều làm mới gốc khoá danh sách để bảng nạp lại đúng
- * trang hiện tại, như bản trang tự vô hiệu hoá trước đây.
- * Lời gọi API thuần nằm ở tầng `api/` của feature; khoá truy vấn
- * riêng của admin nằm ở `keys.ts` cùng tầng này, riêng khoá danh
- * sách phân trang `adminUsers` dùng chung nên ở lại factory tập
- * trung `src/lib/query-keys.ts`.
+ * danh sách do server phân trang/tìm kiếm (trang giữ trạng thái search + pagination, dữ liệu qua truy vấn có keepPreviousData ở phía trang), hồ sơ một người dùng cho màn sửa, và các thao tác ghi — mọi đột biến đều làm mới gốc khoá danh sách để bảng nạp lại đúng trang hiện tại, như bản trang tự vô hiệu hoá trước đây. Lời gọi API thuần nằm ở tầng `api/` của feature; khoá truy vấn riêng của admin nằm ở `keys.ts` cùng tầng này, riêng khoá danh sách phân trang `adminUsers` dùng chung nên ở lại factory tập trung `src/lib/query-keys.ts`.
  */
 
 /** Tuỳ chọn truy vấn danh sách người dùng theo (trang, cỡ trang, từ khoá) — server cắt trang và lọc. */
@@ -37,10 +29,7 @@ export function adminUsersQueryOptions(page: number, pageSize: number, search: s
 }
 
 /**
- * Tuỳ chọn truy vấn một trang danh sách người dùng theo hợp đồng đầy
- * đủ của đợt 1 (lọc trạng thái + sắp xếp + trần cỡ trang) — trang
- * danh sách dùng tuỳ chọn này; các bề mặt khác vẫn dùng
- * `adminUsersQueryOptions` gọn ở trên.
+ * Tuỳ chọn truy vấn một trang danh sách người dùng theo hợp đồng đầy đủ của đợt 1 (lọc trạng thái + sắp xếp + trần cỡ trang) — trang danh sách dùng tuỳ chọn này; các bề mặt khác vẫn dùng `adminUsersQueryOptions` gọn ở trên.
  */
 export function adminUsersListQueryOptions(params: ListAdminUsersParams) {
   return queryOptions({
@@ -50,9 +39,7 @@ export function adminUsersListQueryOptions(params: ListAdminUsersParams) {
 }
 
 /**
- * Tuỳ chọn truy vấn toàn bộ tập người dùng khớp bộ lọc/sắp xếp —
- * chỉ bật ở đường lọc theo vai trò ở ngữ cảnh hệ thống, nơi trang
- * giao tập này với tập người giữ vai rồi tự cắt trang hiển thị.
+ * Tuỳ chọn truy vấn toàn bộ tập người dùng khớp bộ lọc/sắp xếp — chỉ bật ở đường lọc theo vai trò ở ngữ cảnh hệ thống, nơi trang giao tập này với tập người giữ vai rồi tự cắt trang hiển thị.
  */
 export function adminUsersAllQueryOptions(params: Omit<ListAdminUsersParams, 'page' | 'pageSize'>) {
   return queryOptions({
@@ -63,9 +50,7 @@ export function adminUsersAllQueryOptions(params: Omit<ListAdminUsersParams, 'pa
 
 /**
  * Tuỳ chọn truy vấn số đếm của một nhóm trạng thái cho thẻ thống kê:
- * đọc đúng một dòng (cỡ trang 1) và lấy tổng server công bố theo bộ
- * lọc trạng thái của đợt 1 — số đếm là số thật của server, không suy
- * từ trang đang hiển thị.
+ * đọc đúng một dòng (cỡ trang 1) và lấy tổng server công bố theo bộ lọc trạng thái của đợt 1 — số đếm là số thật của server, không suy từ trang đang hiển thị.
  */
 export function adminUserStatQueryOptions(status: 'active' | 'suspended' | 'deleted') {
   return queryOptions({
@@ -130,9 +115,7 @@ export function useUpdateAdminUser() {
 }
 
 /**
- * Nạp trước cho route danh sách người dùng: trang đầu ở trạng thái
- * đầu của trang (cỡ trang mặc định 10, không tìm kiếm, không lọc,
- * không sắp xếp) — đúng khoá truy vấn trang dùng ở lần render đầu.
+ * Nạp trước cho route danh sách người dùng: trang đầu ở trạng thái đầu của trang (cỡ trang mặc định 10, không tìm kiếm, không lọc, không sắp xếp) — đúng khoá truy vấn trang dùng ở lần render đầu.
  */
 export async function adminUsersPageClientLoader() {
   await queryClient

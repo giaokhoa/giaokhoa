@@ -6,12 +6,7 @@ import {
 } from '../../support/identity-access-helpers';
 
 /**
- * Ca e2e còn nợ của cụm lớp (ghi trên issue #184, comment 6410263474 —
- * đối chiếu ĐG MSG-T2): lớp ARCHIVED thì chat cấp lớp đóng băng —
- * ensure conversation và roster chat lớp trả 404 cho cả học sinh lẫn
- * giáo viên, tập thành viên của conversation không đổi bất chấp thao
- * tác sau đó. Hành vi đã thi công ở MSG-T2 (PR #271); file này là bằng
- * chứng e2e riêng còn thiếu, bổ sung ở CLASS-3. Đổi luật đóng băng
+ * Ca e2e còn nợ của cụm lớp (ghi trên issue #184, comment 6410263474 — đối chiếu ĐG MSG-T2): lớp ARCHIVED thì chat cấp lớp đóng băng — ensure conversation và roster chat lớp trả 404 cho cả học sinh lẫn giáo viên, tập thành viên của conversation không đổi bất chấp thao tác sau đó. Hành vi đã thi công ở MSG-T2 (PR #271); file này là bằng chứng e2e riêng còn thiếu, bổ sung ở CLASS-3. Đổi luật đóng băng
  * (archived vẫn mở được chat / thành viên vẫn trôi) thì ca phải đỏ.
  */
 interface Person { id: string; username: string; token: string }

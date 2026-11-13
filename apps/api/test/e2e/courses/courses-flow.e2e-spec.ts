@@ -5,8 +5,7 @@ import { createCategory, createCm, createCourse, createEnrolInstance, createSect
 
 /**
  * Luồng Courses.
- * Oracle: course/tests/category_test.php (test_create_coursecat,
- * test_hierarchy, test_delete) và course/tests/courselib_test.php
+ * Oracle: course/tests/category_test.php (test_create_coursecat, test_hierarchy, test_delete) và course/tests/courselib_test.php
  * (test_create_course, test_create_course_sections, test_create_module,
  * test_course_module_deleted_event_exceptions / sự kiện vòng đời cm).
  */

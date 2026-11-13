@@ -17,8 +17,7 @@ import { questionImageMetaServerSchema, uploadMetaServerSchema, type QuestionIma
 export class FilesController {
   constructor(private readonly files: FilesService) {}
 
-  // Không có @RequireCapability tại đây: các guard chạy trước khi interceptor multipart
-  // phân tích body, nên context đích được kiểm tra trong handler thay thế.
+  // Không có @RequireCapability tại đây: các guard chạy trước khi interceptor multipart phân tích body, nên context đích được kiểm tra trong handler thay thế.
   @Post()
   @UseInterceptors(FileInterceptor('file'))
   /**
@@ -34,14 +33,11 @@ export class FilesController {
     return { id: row.id, contentHash: row.contentHash, fileSize: row.fileSize, fileName: row.fileName, contextId: row.contextId };
   }
 
-  // Cùng dạng guard như upload ở gốc: capability được kiểm tra trong
-  // handler vì context đích chỉ tồn tại sau khi phân tích multipart.
+  // Cùng dạng guard như upload ở gốc: capability được kiểm tra trong handler vì context đích chỉ tồn tại sau khi phân tích multipart.
   @Post('question-image')
   @UseInterceptors(FileInterceptor('file'))
   /**
-   * POST /files/question-image — tải MỘT ảnh nhúng cho nội dung câu hỏi vào
-   * context của bank đích. Trả `src` là định danh bền để editor chèn vào tài
-   * liệu; URL ký chỉ được phát khi phục vụ người đọc (resolveQuestionImageUrls).
+   * POST /files/question-image — tải MỘT ảnh nhúng cho nội dung câu hỏi vào context của bank đích. Trả `src` là định danh bền để editor chèn vào tài liệu; URL ký chỉ được phát khi phục vụ người đọc (resolveQuestionImageUrls).
    */
   async uploadQuestionImage(@UploadedFile() file: { originalname: string; buffer: Buffer; mimetype: string }, @Body({ schema: questionImageMetaServerSchema }) meta: QuestionImageMetaDto, @CurrentUser() actor: AuthenticatedUser) {
     await this.files.assertCanUpload(meta.contextId, actor);
@@ -77,9 +73,7 @@ export class FilesController {
   @Delete(':id')
   /**
    * DELETE /files/:id — xoá file. Capability tại context của tệp kiểm
-   * tại đây; khoá bài nộp (sở hữu + trạng thái) do FilesService áp khi
-   * xoá vì actor được truyền xuống — tệp thuộc bài nộp đã chốt nộp/đã
-   * trả bài không bị xoá qua đường dùng chung này.
+   * tại đây; khoá bài nộp (sở hữu + trạng thái) do FilesService áp khi xoá vì actor được truyền xuống — tệp thuộc bài nộp đã chốt nộp/đã trả bài không bị xoá qua đường dùng chung này.
    */
   async remove(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     const f = await this.files.getFile(id);

@@ -17,25 +17,17 @@ import { assignmentQueryOptions, useAssignment } from '../queries/assignment';
 import { queryClient } from '#lib/query-client';
 
 /**
- * Trang hoạt động Bài tập nộp tệp/ảnh (mod_assign): một trang dùng
- * chung theo cờ quyền mà API đã phân giải — học sinh nộp bài và xem
- * kết quả sau khi trả bài; giáo viên xem danh sách bài nộp, chấm +
- * thả dấu vector + trả bài (từng em/theo đợt); người quản lý sửa cài
- * đặt và dựng bảng tiêu chí ngay tại trang.
+ * Trang hoạt động Bài tập nộp tệp/ảnh (mod_assign): một trang dùng chung theo cờ quyền mà API đã phân giải — học sinh nộp bài và xem kết quả sau khi trả bài; giáo viên xem danh sách bài nộp, chấm + thả dấu vector + trả bài (từng em/theo đợt); người quản lý sửa cài đặt và dựng bảng tiêu chí ngay tại trang.
  */
 export function AssignmentPage() {
   const { t } = useTranslation('app');
   const { id: courseId, assignmentId } = useParams();
-  // Dữ liệu trang qua TanStack (F-01 đợt 1): clientLoader của route đã
-  // prefetch cùng khoá nên lần tải đầu thường có sẵn dữ liệu khi mount;
-  // trạng thái chờ chuẩn hoá trên isPending với skeleton sẵn có (F-14).
+  // Dữ liệu trang qua TanStack (F-01 đợt 1): clientLoader của route đã prefetch cùng khoá nên lần tải đầu thường có sẵn dữ liệu khi mount; trạng thái chờ chuẩn hoá trên isPending với skeleton sẵn có (F-14).
   const assignmentQuery = useAssignment(assignmentId);
   const data: AssignmentForUserView | null = assignmentQuery.data ?? null;
   const queryClientInstance = useQueryClient();
 
-  // Các panel con gọi reload sau mỗi hành động ghi: fetchQuery làm mới
-  // cache (trang tự render lại dữ liệu mới) và VẪN ném lỗi như luồng
-  // fetch thủ công trước đây để panel tự bắt và báo tại chỗ.
+  // Các panel con gọi reload sau mỗi hành động ghi: fetchQuery làm mới cache (trang tự render lại dữ liệu mới) và VẪN ném lỗi như luồng fetch thủ công trước đây để panel tự bắt và báo tại chỗ.
   const reload = useCallback(async () => {
     await queryClientInstance.fetchQuery(assignmentQueryOptions(assignmentId ?? ''));
   }, [queryClientInstance, assignmentId]);

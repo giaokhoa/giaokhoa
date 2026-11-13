@@ -2,14 +2,9 @@ import { renderToString } from 'katex';
 import 'katex/contrib/mhchem';
 
 /**
- * Điểm nối KaTeX duy nhất của package: mọi lần render công thức (panel
- * soạn, trình xem tĩnh, node view của extension) đều phải cho ra cùng một
- * cấu hình an toàn — `trust: false` để LaTeX của người soạn không chèn
- * được HTML tùy ý vào trang người học.
+ * Điểm nối KaTeX duy nhất của package: mọi lần render công thức (panel soạn, trình xem tĩnh, node view của extension) đều phải cho ra cùng một cấu hình an toàn — `trust: false` để LaTeX của người soạn không chèn được HTML tùy ý vào trang người học.
  *
- * Gói `mhchem` (contrib của KaTeX, cùng giấy phép MIT) được nạp ở đây để
- * công thức hoá học dùng được cú pháp `\ce{...}` — nạp một lần khi module
- * này được import, trước mọi lần render.
+ * Gói `mhchem` (contrib của KaTeX, cùng giấy phép MIT) được nạp ở đây để công thức hoá học dùng được cú pháp `\ce{...}` — nạp một lần khi module này được import, trước mọi lần render.
  */
 
 /**

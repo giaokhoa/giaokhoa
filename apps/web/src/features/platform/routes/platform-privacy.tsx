@@ -10,12 +10,7 @@ import { PageHeader, PageShell } from '#components/page-shell';
 import { useCreatePrivacyRequest, useDecidePrivacyRequest, usePrivacyRequests } from '../queries/platform';
 
 /**
- * Privacy requests (platform services): user tự gửi yêu cầu export/delete cho chính mình;
- * admin thấy mọi yêu cầu và duyệt/từ chối. Dữ liệu đọc qua tầng TanStack
- * Query (`lib/platform-data.ts`, khoá `privacyRequests`; `clientLoader`
- * của route nạp trước đúng khoá này); gửi yêu cầu và duyệt/từ chối qua
- * đột biến, thành công thì làm mới danh sách như lần tải lại thủ công
- * trước đây.
+ * Privacy requests (platform services): user tự gửi yêu cầu export/delete cho chính mình; admin thấy mọi yêu cầu và duyệt/từ chối. Dữ liệu đọc qua tầng TanStack Query (`lib/platform-data.ts`, khoá `privacyRequests`; `clientLoader` của route nạp trước đúng khoá này); gửi yêu cầu và duyệt/từ chối qua đột biến, thành công thì làm mới danh sách như lần tải lại thủ công trước đây.
  */
 export function PrivacyPage() {
   const { t: t } = useTranslation();

@@ -15,42 +15,24 @@ import { CONTEXT_LEVELS } from './domain/capabilities';
 import { PermissionEvaluator } from './permission-evaluator.service';
 
 /**
- * Kiểm chứng cổng tenant của PermissionEvaluator trước trạng thái
- * "bản ghi cổng bị RLS che" — lỗ hổng fail-open của cổng:
+ * Kiểm chứng cổng tenant của PermissionEvaluator trước trạng thái "bản ghi cổng bị RLS che" — lỗ hổng fail-open của cổng:
  *
  * Bối cảnh cơ chế (baseline của packages/db + tenant-pool):
- * `tenants` và `tenant_memberships` bật FORCE ROW LEVEL SECURITY với
- * chính sách chỉ cho thấy dòng khi phiên ở chế độ platform
+ * `tenants` và `tenant_memberships` bật FORCE ROW LEVEL SECURITY với chính sách chỉ cho thấy dòng khi phiên ở chế độ platform
  * (`app.platform = 'on'`) hoặc dòng thuộc tenant của phiên
  * (`app.tenant_id`). TenantAwarePool gắn hai GUC theo tenant của
- * NGƯỜI GỌI, nên khi capability được kiểm neo trong cây của tenant
- * khác, bản ghi của tenant đích vô hình trong phiên thường. Trước sửa,
- * evaluator hiểu kết quả "không đọc được" (`undefined`) là "không cần
- * giới hạn": lối tắt site admin áp ngay trong cây tenant đích và gán
- * vai ngoài cây chảy vào.
+ * NGƯỜI GỌI, nên khi capability được kiểm neo trong cây của tenant khác, bản ghi của tenant đích vô hình trong phiên thường. Trước sửa, evaluator hiểu kết quả "không đọc được" (`undefined`) là "không cần giới hạn": lối tắt site admin áp ngay trong cây tenant đích và gán vai ngoài cây chảy vào.
  *
- * Spec này mô phỏng đúng cơ chế đó bằng một tầng cơ sở dữ liệu giả lập
- * áp chính sách RLS lên hai bảng cổng theo ngữ cảnh `tenantAls` tại
- * thời điểm truy vấn, và chốt cả hai nửa của bản sửa:
+ * Spec này mô phỏng đúng cơ chế đó bằng một tầng cơ sở dữ liệu giả lập áp chính sách RLS lên hai bảng cổng theo ngữ cảnh `tenantAls` tại thời điểm truy vấn, và chốt cả hai nửa của bản sửa:
  *   - Nửa đường đọc (evaluator lập ngữ cảnh platform tường minh qua
- *     `platformScope` trước khi repository đọc dữ kiện cổng — ranh
- *     giới mới từ issue #651: repository KHÔNG tự lập ngữ cảnh):
- *     các ca ở describe evaluator và ca thành viên ở describe
- *     evaluator — gỡ nửa này thì dữ kiện cổng lại vô hình và
- *     các ca đó đỏ (thành viên bị chặn oan bởi nửa fail-closed).
+ *     `platformScope` trước khi repository đọc dữ kiện cổng — ranh giới mới từ issue #651: repository KHÔNG tự lập ngữ cảnh):
+ *     các ca ở describe evaluator và ca thành viên ở describe evaluator — gỡ nửa này thì dữ kiện cổng lại vô hình và các ca đó đỏ (thành viên bị chặn oan bởi nửa fail-closed).
  *   - Nửa fail-closed (path có context tenant mà dữ kiện cổng không
- *     xác minh được thì từ chối): các ca ở describe "fail-closed" —
- *     gỡ nửa này thì site admin/gán ngoài cây lại được cho qua và các
- *     ca đó đỏ.
- * Giới hạn: đây là mô phỏng ở tầng service theo văn bản chính sách
- * RLS trong baseline và code gắn GUC, không phải E2E với Postgres/RLS
- * thật bằng role không phải superuser.
+ *     xác minh được thì từ chối): các ca ở describe "fail-closed" — gỡ nửa này thì site admin/gán ngoài cây lại được cho qua và các ca đó đỏ. Giới hạn: đây là mô phỏng ở tầng service theo văn bản chính sách RLS trong baseline và code gắn GUC, không phải E2E với Postgres/RLS thật bằng role không phải superuser.
  */
 
 // ---------------------------------------------------------------------------
-// Thế giới dữ kiện: cây context + gán vai + override (phần không thuộc
-// hai bảng cổng thì nạp từ fixture; riêng dữ kiện cổng đi qua
-// AccessRepository THẬT trên tầng dữ liệu mô phỏng RLS).
+// Thế giới dữ kiện: cây context + gán vai + override (phần không thuộc hai bảng cổng thì nạp từ fixture; riêng dữ kiện cổng đi qua AccessRepository THẬT trên tầng dữ liệu mô phỏng RLS).
 // ---------------------------------------------------------------------------
 
 const ctx = (id: string, contextLevel: number, path: string, instanceId: string | null = null): ContextRow =>
@@ -84,17 +66,10 @@ const ROLES: Record<string, { id: string; shortName: string }> = {
 };
 
 // ---------------------------------------------------------------------------
-// Tầng cơ sở dữ liệu giả lập hình Kysely áp chính sách FORCE RLS của
-// baseline lên đúng hai bảng cổng: một dòng chỉ "thấy được" khi ngữ
-// cảnh tenantAls tại thời điểm truy vấn là platform, hoặc dòng thuộc
-// tenant của ngữ cảnh đó. Fake bắt chước đúng chuỗi builder mà
-// AccessRepository gọi (`selectFrom` → `select` → `where` →
-// `execute` / `executeTakeFirst`), ghi lại các bộ ba where rồi áp RLS
+// Tầng cơ sở dữ liệu giả lập hình Kysely áp chính sách FORCE RLS của baseline lên đúng hai bảng cổng: một dòng chỉ "thấy được" khi ngữ cảnh tenantAls tại thời điểm truy vấn là platform, hoặc dòng thuộc tenant của ngữ cảnh đó. Fake bắt chước đúng chuỗi builder mà AccessRepository gọi (`selectFrom` → `select` → `where` → `execute` / `executeTakeFirst`), ghi lại các bộ ba where rồi áp RLS
 // + chiếu cột lúc thực thi — đúng thời điểm RLS thật có hiệu lực
 // (lúc truy vấn, không phải lúc dựng builder), nên ngữ cảnh platform
-// mà evaluator lập quanh điểm gọi mới làm dữ kiện hiện ra. Mọi bảng
-// khác không được AccessRepository chạm qua các phép đọc cổng, nên
-// tầng giả lập chỉ phục vụ hai bảng này.
+// mà evaluator lập quanh điểm gọi mới làm dữ kiện hiện ra. Mọi bảng khác không được AccessRepository chạm qua các phép đọc cổng, nên tầng giả lập chỉ phục vụ hai bảng này.
 // ---------------------------------------------------------------------------
 
 const TENANT_ROWS = [
@@ -129,8 +104,7 @@ function makeRlsDb(): CentreDb {
           return actual === value;
         });
       });
-      // Chiếu đúng các cột đã select, dịch bí danh `x as y` thành
-      // khoá y như Kysely làm với danh sách cột có bí danh.
+      // Chiếu đúng các cột đã select, dịch bí danh `x as y` thành khoá y như Kysely làm với danh sách cột có bí danh.
       return matched.map((row) => {
         const out: Record<string, unknown> = {};
         for (const column of columns) {
@@ -158,8 +132,7 @@ function makeRlsDb(): CentreDb {
 }
 
 // ---------------------------------------------------------------------------
-// Evaluator trên fixture: dữ kiện cổng do caller cấp (repository thật
-// hoặc bản không xác minh được), phần còn lại từ fixture trong bộ nhớ.
+// Evaluator trên fixture: dữ kiện cổng do caller cấp (repository thật hoặc bản không xác minh được), phần còn lại từ fixture trong bộ nhớ.
 // ---------------------------------------------------------------------------
 
 interface GateReads {

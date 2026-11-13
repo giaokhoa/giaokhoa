@@ -2,16 +2,9 @@ import { z } from 'zod';
 import { uuidIdSchema } from './ids.js';
 
 /**
- * Hợp đồng API của trung tâm đã cấp phát riêng (issue #583,
- * chương trình tenant #579): nhận diện riêng của trung tâm và
- * kích hoạt tài khoản quản trị đầu tiên bằng lời mời.
+ * Hợp đồng API của trung tâm đã cấp phát riêng (issue #583, chương trình tenant #579): nhận diện riêng của trung tâm và kích hoạt tài khoản quản trị đầu tiên bằng lời mời.
  *
- * Nhận diện sống trong database riêng của trung tâm (đọc từ kho
- * của trung tâm khi phục vụ địa chỉ của nó), không nằm ở sổ đăng
- * ký control plane — sổ chỉ giữ bản ghi định tuyến tối thiểu.
- * Kích hoạt là đường công khai duy nhất đặt mật khẩu cho tài khoản
- * chưa có mật khẩu: token lời mời dùng một lần, đốt trước rồi mới
- * đặt mật khẩu (fail-closed).
+ * Nhận diện sống trong database riêng của trung tâm (đọc từ kho của trung tâm khi phục vụ địa chỉ của nó), không nằm ở sổ đăng ký control plane — sổ chỉ giữ bản ghi định tuyến tối thiểu. Kích hoạt là đường công khai duy nhất đặt mật khẩu cho tài khoản chưa có mật khẩu: token lời mời dùng một lần, đốt trước rồi mới đặt mật khẩu (fail-closed).
  */
 
 /** Nhận diện riêng của một trung tâm, đọc từ kho của chính nó. */

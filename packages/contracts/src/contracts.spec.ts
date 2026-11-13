@@ -88,9 +88,7 @@ describe('Hợp đồng engagement', () => {
     });
     expect(pref.popupEnabled).toBe(true);
     expect(pref.group).toBe('people');
-    // NB-7: trường chính sách admin cấp site là một phần của hợp đồng
-    // dòng tuỳ chọn — thiếu nó thì parse phải hỏng, để web không âm
-    // thầm mất tín hiệu "admin đã tắt ở cấp site".
+    // NB-7: trường chính sách admin cấp site là một phần của hợp đồng dòng tuỳ chọn — thiếu nó thì parse phải hỏng, để web không âm thầm mất tín hiệu "admin đã tắt ở cấp site".
     expect(() =>
       notificationPreferenceSchema.parse({
         provider: 'badge_awarded', component: 'core_badges', group: 'people',
@@ -101,8 +99,7 @@ describe('Hợp đồng engagement', () => {
   });
 
   it('khoá hình dạng tìm tin trong conversation (M4): q bắt buộc có độ dài xác định, trần kết quả 50', () => {
-    // Tìm tin chỉ tồn tại trong bề mặt nhắn tin: q rỗng bị schema
-    // chặn ngay (tầng service còn chặn q toàn khoảng trắng bằng 400).
+    // Tìm tin chỉ tồn tại trong bề mặt nhắn tin: q rỗng bị schema chặn ngay (tầng service còn chặn q toàn khoảng trắng bằng 400).
     expect(searchMessagesQuerySchema.parse({ q: 'học bài' })).toEqual({ q: 'học bài' });
     expect(() => searchMessagesQuerySchema.parse({ q: '' })).toThrow();
     expect(() => searchMessagesQuerySchema.parse({ q: 'x'.repeat(201) })).toThrow();
@@ -115,8 +112,7 @@ describe('Hợp đồng engagement', () => {
   });
 
   it('khoá hình dạng trạng thái hội thoại (M5): ba cờ độc lập từng phần, lạ bị chặn', () => {
-    // PATCH state là TỪNG PHẦN: gửi một cờ thì chỉ cờ đó đổi — schema
-    // giữ nguyên đúng các trường đã gửi, không tự điền cờ còn lại
+    // PATCH state là TỪNG PHẦN: gửi một cờ thì chỉ cờ đó đổi — schema giữ nguyên đúng các trường đã gửi, không tự điền cờ còn lại
     // (điền mặc định sẽ ghi đè trạng thái phía server khi client chỉ
     // định đổi một cờ).
     expect(updateConversationStateSchema.parse({ muted: true })).toEqual({ muted: true });
@@ -161,10 +157,7 @@ describe('Hợp đồng engagement', () => {
   });
 
   it('khoá thân yêu cầu mark-read (R6-A2, #344): phạm vi chỉ nhận "all", thiếu hoặc lạ đều bị chặn', () => {
-    // Phạm vi đánh dấu đã đọc nằm trong thân yêu cầu thay cho hậu tố
-    // `-all` trong tên path cũ: chỉ `all` là phạm vi đã chốt — thiếu
-    // scope, scope lạ hay scope dạng nhóm đều bị từ chối ở biên hợp
-    // đồng, không suy diễn ngầm thành `all`.
+    // Phạm vi đánh dấu đã đọc nằm trong thân yêu cầu thay cho hậu tố `-all` trong tên path cũ: chỉ `all` là phạm vi đã chốt — thiếu scope, scope lạ hay scope dạng nhóm đều bị từ chối ở biên hợp đồng, không suy diễn ngầm thành `all`.
     expect(markNotificationsReadSchema.parse({ scope: 'all' })).toEqual({ scope: 'all' });
     expect(() => markNotificationsReadSchema.parse({})).toThrow();
     expect(() => markNotificationsReadSchema.parse({ scope: 'group' })).toThrow();
@@ -199,9 +192,7 @@ describe('Hợp đồng engagement', () => {
   });
 
   it('cây nhóm nhắn tin (MSG-T1): phân loại conversation bằng component/itemType/itemId và vai tại nút chỉ thuộc tập đã chốt', () => {
-    // Phân loại KHÔNG đoán theo tên: chat khoá mang đúng cặp
-    // core_course/course + itemId của khoá; hội thoại cá nhân thì cả
-    // ba trường null. itemId không phải UUID thì schema từ chối.
+    // Phân loại KHÔNG đoán theo tên: chat khoá mang đúng cặp core_course/course + itemId của khoá; hội thoại cá nhân thì cả ba trường null. itemId không phải UUID thì schema từ chối.
     const courseChat = conversationSchema.parse({
       id: '01900000-0000-7000-8000-000000000001', type: 2, name: null, members: [],
       component: 'core_course', itemType: 'course', itemId: '01900000-0000-7000-8000-000000000003',
@@ -224,17 +215,12 @@ describe('Hợp đồng engagement', () => {
       canCreateFreeGroup: true,
     });
     expect(tree.classes[0]!.courses[0]!.groups[0]!.conversationId).toBeNull();
-    // Cờ tạo nhóm tự do là trường BẮT BUỘC do server tính theo cổng
-    // tạo nhóm (chỉ quản trị viên hệ thống/chủ trung tâm mới true):
+    // Cờ tạo nhóm tự do là trường BẮT BUỘC do server tính theo cổng tạo nhóm (chỉ quản trị viên hệ thống/chủ trung tâm mới true):
     // thiếu cờ thì schema từ chối, tránh client tự suy quyền từ vai.
     expect(tree.canCreateFreeGroup).toBe(true);
     expect(() => conversationGroupTreeSchema.parse({ classes: [], coursesOutsideClasses: [], freeGroups: [] })).toThrow();
     // Mốc ghim cá nhân của nút là trường BẮT BUỘC (có thể null):
-    // server phải luôn gửi trạng thái ghim của người gọi cho mọi
-    // nút để client xếp mục Ghim của tab Nhóm — thiếu trường thì
-    // schema từ chối, tránh client tự suy trạng thái ghim từ danh
-    // sách hội thoại chưa lưu (hội thoại vừa ghim vừa lưu trữ
-    // không nằm trong danh sách đó).
+    // server phải luôn gửi trạng thái ghim của người gọi cho mọi nút để client xếp mục Ghim của tab Nhóm — thiếu trường thì schema từ chối, tránh client tự suy trạng thái ghim từ danh sách hội thoại chưa lưu (hội thoại vừa ghim vừa lưu trữ không nằm trong danh sách đó).
     expect(tree.classes[0]!.courses[0]!.pinnedAt).toBe('2026-01-02T00:00:00.000Z');
     expect(() => conversationGroupTreeSchema.parse({
       ...tree,
@@ -283,14 +269,12 @@ describe('Hợp đồng khoá học', () => {
   });
 
   it('chỉ cho phép URL tài nguyên ngoài dùng scheme http/https (gác XSS qua href của trang học)', () => {
-    // URL https/http hợp lệ (kể cả đích nhúng video) đi qua nguyên vẹn
-    // ở cả đường tạo lẫn đường sửa.
+    // URL https/http hợp lệ (kể cả đích nhúng video) đi qua nguyên vẹn ở cả đường tạo lẫn đường sửa.
     expect(createResourceSchema.parse({
       sectionId: '01900000-0000-7000-8000-000000000100', name: 'Video bài giảng', kind: 'url', url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', completionMode: 'none',
     }).url).toBe('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
     expect(updateResourceSchema.parse({ url: 'http://example.com/tai-lieu' }).url).toBe('http://example.com/tai-lieu');
-    // Scheme thực thi khi người xem bấm liên kết phải bị schema từ
-    // chối — kể cả biến thể bọc khoảng trắng ở đầu và khác chữ hoa.
+    // Scheme thực thi khi người xem bấm liên kết phải bị schema từ chối — kể cả biến thể bọc khoảng trắng ở đầu và khác chữ hoa.
     for (const bad of [
       'javascript:alert(document.domain)',
       'JaVaScRiPt:alert(1)',
@@ -303,8 +287,7 @@ describe('Hợp đồng khoá học', () => {
       expect(createResourceSchema.safeParse({ sectionId: '01900000-0000-7000-8000-000000000100', name: 'Liên kết', kind: 'url', url: bad, completionMode: 'none' }).success).toBe(false);
       expect(updateResourceSchema.safeParse({ url: bad }).success).toBe(false);
     }
-    // update cho phép url null (xoá nguồn URL khi chuyển loại) — hành
-    // vi cũ không đổi.
+    // update cho phép url null (xoá nguồn URL khi chuyển loại) — hành vi cũ không đổi.
     expect(updateResourceSchema.parse({ url: null }).url).toBeNull();
   });
 });
@@ -507,8 +490,7 @@ describe('Hợp đồng định danh', () => {
     expect(() => capabilityMatrixQuerySchema.parse({})).toThrow();
     expect(() => capabilityMatrixQuerySchema.parse({ contextId: 'khong-phai-uuid' })).toThrow();
     expect(() => capabilityMatrixQuerySchema.parse({ contextId, roleId })).toThrow();
-    // Đáp ứng: vai có ghi đè giữ nguyên cặp năng lực/quyền; vai không có
-    // ghi đè tại context mang tập rỗng; số người giữ không được âm.
+    // Đáp ứng: vai có ghi đè giữ nguyên cặp năng lực/quyền; vai không có ghi đè tại context mang tập rỗng; số người giữ không được âm.
     const parsed = capabilityMatrixResponseSchema.parse({
       contextId,
       roles: [
@@ -554,8 +536,7 @@ describe('Hợp đồng platform (dịch vụ platform)', () => {
     expect(() => paymentSchema.parse({ id: '01900000-0000-7000-8000-000000000001', accountId: '01900000-0000-7000-8000-000000000001', userId: '01900000-0000-7000-8000-000000000001', amount: 10.5, currency: 'VND', status: 'pending', gateway: 'manual' })).toThrow();
     expect(paymentSchema.parse({ id: '01900000-0000-7000-8000-000000000001', accountId: '01900000-0000-7000-8000-000000000001', userId: '01900000-0000-7000-8000-000000000001', amount: 50000, currency: 'VND', status: 'succeeded', gateway: 'manual' }).amount).toBe(50000);
     // Trạng thái chờ đối soát của pipeline VietQR/SePay (issue #189):
-    // tiền về thiếu một trong ba điều kiện khớp thì payment mang
-    // needs_review — schema phải parse được trạng thái này.
+    // tiền về thiếu một trong ba điều kiện khớp thì payment mang needs_review — schema phải parse được trạng thái này.
     expect(paymentSchema.parse({ id: '01900000-0000-7000-8000-000000000001', accountId: '01900000-0000-7000-8000-000000000001', userId: '01900000-0000-7000-8000-000000000001', amount: 50000, currency: 'VND', status: 'needs_review', gateway: 'sepay' }).status).toBe('needs_review');
   });
 

@@ -18,13 +18,7 @@ export interface GuardianStudentView {
 }
 
 /**
- * Nghiệp vụ giám hộ (PH-0, issue #116): liên kết PH–HS do trường xác lập
- * theo hồ sơ đã xác minh (TT 22 Đ.20.6; NĐ 13/2023 Đ.20 — quan hệ giám hộ
- * phải được xác minh, không tự khai báo) và bề mặt đọc chỉ-xem của phụ
- * huynh. Nguyên tắc cứng của research (mục 5.1): chỉ-xem; chỉ dữ liệu của
- * con mình; chỉ dữ liệu ĐÃ CÔNG BỐ; không xếp hạng/so sánh; không hành
- * động thay con. Mọi lần phụ huynh xem dữ liệu điểm của con đều ghi audit
- * vào event_log qua outbox (aggregate 'guardian').
+ * Nghiệp vụ giám hộ (PH-0, issue #116): liên kết PH–HS do trường xác lập theo hồ sơ đã xác minh (TT 22 Đ.20.6; NĐ 13/2023 Đ.20 — quan hệ giám hộ phải được xác minh, không tự khai báo) và bề mặt đọc chỉ-xem của phụ huynh. Nguyên tắc cứng của research (mục 5.1): chỉ-xem; chỉ dữ liệu của con mình; chỉ dữ liệu ĐÃ CÔNG BỐ; không xếp hạng/so sánh; không hành động thay con. Mọi lần phụ huynh xem dữ liệu điểm của con đều ghi audit vào event_log qua outbox (aggregate 'guardian').
  */
 @Injectable()
 export class GuardiansService {
@@ -45,10 +39,7 @@ export class GuardiansService {
   }
 
   /**
-   * Cả hai phía của liên kết phải là thành viên active của đúng tenant
-   * cấp liên kết (TENANT-0, #168 — hồ sơ mục 6.2). Tenant-zero là không
-   * gian công cộng của Trang chính: có tài khoản là đủ điều kiện như
-   * mọi bề mặt platform khác.
+   * Cả hai phía của liên kết phải là thành viên active của đúng tenant cấp liên kết (TENANT-0, #168 — hồ sơ mục 6.2). Tenant-zero là không gian công cộng của Trang chính: có tài khoản là đủ điều kiện như mọi bề mặt platform khác.
    */
   private async assertBothMembers(tenantId: string, guardianUserId: string, studentUserId: string): Promise<void> {
     const tenant = await this.tenantRepo.getTenant(tenantId);

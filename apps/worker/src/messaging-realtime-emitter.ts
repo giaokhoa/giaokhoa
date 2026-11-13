@@ -7,13 +7,7 @@ import { Server } from 'socket.io';
 export const MESSAGING_NAMESPACE = '/messaging';
 
 /**
- * Trần chờ xác nhận publish của một lượt phát (mili giây). Một lần
- * publish lên Redis cùng máy/cùng mạng nội bộ được xác nhận trong
- * vài mili giây; trần 10 giây đủ xa để không biến dao động tải
- * thành lỗi giả, và đủ gần để một connection publish đã chết (lệnh
- * bị xếp vào hàng đợi offline của ioredis và không bao giờ được trả
- * lời) bị biến thành lỗi phân phối trong cùng lượt thử của job,
- * thay vì treo job tới khi BullMQ hết hạn khoá.
+ * Trần chờ xác nhận publish của một lượt phát (mili giây). Một lần publish lên Redis cùng máy/cùng mạng nội bộ được xác nhận trong vài mili giây; trần 10 giây đủ xa để không biến dao động tải thành lỗi giả, và đủ gần để một connection publish đã chết (lệnh bị xếp vào hàng đợi offline của ioredis và không bao giờ được trả lời) bị biến thành lỗi phân phối trong cùng lượt thử của job, thay vì treo job tới khi BullMQ hết hạn khoá.
  */
 const PUBLISH_CONFIRM_TIMEOUT_MS = 10_000;
 

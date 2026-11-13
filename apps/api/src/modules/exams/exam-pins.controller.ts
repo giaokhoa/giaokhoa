@@ -17,9 +17,7 @@ import { ExamsService } from './exams.service';
 @Controller({ path: 'courses/:courseId/exam-pins', version: '1' })
 /**
  * Ghim đề vào khoá (thực thể hợp nhất #226 thay quiz + deployment):
- * tạo pin từ một đề ready trong bank — hoặc tạo đề mới trong bank cá
- * nhân rồi ghim trong cùng một thao tác (`newExam`) — và liệt kê các
- * pin của khoá. Cổng kép: exam:deploy tại bank của đề (ExamsService)
+ * tạo pin từ một đề ready trong bank — hoặc tạo đề mới trong bank cá nhân rồi ghim trong cùng một thao tác (`newExam`) — và liệt kê các pin của khoá. Cổng kép: exam:deploy tại bank của đề (ExamsService)
  * + quyền tạo hoạt động tại khoá (CoursesService).
  */
 export class CourseExamPinsController {
@@ -47,8 +45,7 @@ export class CourseExamPinsController {
 @ApiTags('exam-pins')
 @Controller({ path: 'exam-pins', version: '1' })
 /**
- * API một lần ghim (pin): cấu hình tổ chức, công bố kết quả, lượt
- * làm, kết quả lớp, ghi đè cài đặt thi và dải nhận xét. Nội dung đề
+ * API một lần ghim (pin): cấu hình tổ chức, công bố kết quả, lượt làm, kết quả lớp, ghi đè cài đặt thi và dải nhận xét. Nội dung đề
  * (câu hỏi/slots) KHÔNG sửa ở đây — sửa trên thực thể Đề ở `/exams`
  * rồi đổi version đã ghim (bị khoá khi đã có lượt làm thật).
  */
@@ -135,8 +132,7 @@ export class ExamPinsController {
   }
   @Post(':pinId/attempts')
   /**
-   * POST /exam-pins/:pinId/attempts — bắt đầu lượt làm mới (hoặc tiếp tục lượt đang dở); `preview: true` dành cho giáo viên xem trước đề.
-   * Mật khẩu vào thi (khi pin/override yêu cầu) đi trong body; cổng subnet xét theo IP khách thật sau proxy.
+   * POST /exam-pins/:pinId/attempts — bắt đầu lượt làm mới (hoặc tiếp tục lượt đang dở); `preview: true` dành cho giáo viên xem trước đề. Mật khẩu vào thi (khi pin/override yêu cầu) đi trong body; cổng subnet xét theo IP khách thật sau proxy.
    */
   async startAttempt(@Param('pinId', { schema: uuidIdSchema }) pinId: string, @Body({ schema: startQuizAttemptSchema }) dto: StartQuizAttemptDto, @CurrentUser() actor: AuthenticatedUser, @Req() req: Request) {
     return this.quiz.startAttempt(actor.id, pinId, { preview: dto.preview, password: dto.password, clientIp: clientIpOf(req) });

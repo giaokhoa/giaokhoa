@@ -5,21 +5,11 @@ import { describe, expect, it } from 'vitest';
 /**
  * Gác bất biến sở hữu tiền tố controller (issue #346 — R6-A4).
  *
- * Luật sở hữu áp dụng: đơn vị sở hữu là tiền tố đầy đủ mà một lớp
- * controller khai báo trong `@Controller({ path })`. Một tiền tố đầy
- * đủ chỉ có đúng một lớp khai báo; vi phạm là khi cùng một tiền tố
- * đầy đủ bị hai lớp trở lên cùng khai, kể cả khi các route con của
- * chúng không trùng tuyệt đối. Hai trường hợp đích danh của issue:
- * tiền tố trơ `courses` chỉ còn module courses sở hữu (lớp
- * `CoursesController`), và tiền tố `guardian` chỉ còn một lớp sở hữu
+ * Luật sở hữu áp dụng: đơn vị sở hữu là tiền tố đầy đủ mà một lớp controller khai báo trong `@Controller({ path })`. Một tiền tố đầy đủ chỉ có đúng một lớp khai báo; vi phạm là khi cùng một tiền tố đầy đủ bị hai lớp trở lên cùng khai, kể cả khi các route con của chúng không trùng tuyệt đối. Hai trường hợp đích danh của issue:
+ * tiền tố trơ `courses` chỉ còn module courses sở hữu (lớp `CoursesController`), và tiền tố `guardian` chỉ còn một lớp sở hữu
  * (lớp `GuardianController` sau khi hợp nhất hai lớp cũ).
  *
- * Spec quét trực tiếp các file `*.controller.ts` dưới `src/modules`
- * thay vì khởi động ứng dụng: bất biến này thuộc về hình thức khai
- * báo, và việc quét tĩnh bắt được vi phạm ngay tại bước test rẻ nhất
- * mà không cần DB hay HTTP. Nếu một thay đổi tương lai vô tình khai
- * trùng tiền tố, spec này đỏ và buộc phải tách lớp hoặc đổi tiền tố
- * trước khi merge.
+ * Spec quét trực tiếp các file `*.controller.ts` dưới `src/modules` thay vì khởi động ứng dụng: bất biến này thuộc về hình thức khai báo, và việc quét tĩnh bắt được vi phạm ngay tại bước test rẻ nhất mà không cần DB hay HTTP. Nếu một thay đổi tương lai vô tình khai trùng tiền tố, spec này đỏ và buộc phải tách lớp hoặc đổi tiền tố trước khi merge.
  */
 
 type Declaration = { prefix: string; className: string; file: string };

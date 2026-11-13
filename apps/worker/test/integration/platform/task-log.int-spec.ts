@@ -10,15 +10,9 @@ import {
 } from '../../support/ordinary-worker-module';
 
 /**
- * task_log + phản chiếu logstore (issue #22): các lượt chạy worker theo lịch để lại một
- * dòng task_log (success/failed), và relay của worker phản chiếu mọi dòng outbox
- * mà nó phát hành vào event_log với các trường payload đã chuẩn hoá.
+ * task_log + phản chiếu logstore (issue #22): các lượt chạy worker theo lịch để lại một dòng task_log (success/failed), và relay của worker phản chiếu mọi dòng outbox mà nó phát hành vào event_log với các trường payload đã chuẩn hoá.
  *
- * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness
- * role thường (`test/ordinary-worker-module.ts`): module (gồm
- * TaskLogService và relay) chạy bằng role NOSUPERUSER/NOBYPASSRLS
- * như production, fixture và đọc kiểm chứng đi qua kết nối quản
- * trị của harness — khẳng định nghiệp vụ của spec không đổi.
+ * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness role thường (`test/ordinary-worker-module.ts`): module (gồm TaskLogService và relay) chạy bằng role NOSUPERUSER/NOBYPASSRLS như production, fixture và đọc kiểm chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ của spec không đổi.
  */
 describe('Worker: ghi task_log và mirror outbox → event_log', () => {
   let context: INestApplicationContext;

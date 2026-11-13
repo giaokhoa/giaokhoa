@@ -11,14 +11,9 @@ import { ProfilePage } from '#features/profile/routes/profile';
 
 /**
  * Bộ test luồng đăng nhập sau cutover phiên cookie (issue #7, GĐ2):
- * mọi lời gọi đi qua fetch thật bị stub ở biên, theo ĐÚNG hợp đồng
- * REST của Better Auth — client BA dựng URL tuyệt đối từ origin
+ * mọi lời gọi đi qua fetch thật bị stub ở biên, theo ĐÚNG hợp đồng REST của Better Auth — client BA dựng URL tuyệt đối từ origin
  * (`http://localhost:3000` của jsdom) với basePath `/api/v1/auth`.
- * Phiên sống trong cookie do trình duyệt giữ — web KHÔNG còn token
- * nào ở localStorage, các assertion kiểm đúng điều đó. Stub
- * `get-session` là stateful: trước đăng nhập trả null, sau khi một
- * đường đăng nhập thành công thì trả phiên, mô phỏng cookie đã được
- * server đặt.
+ * Phiên sống trong cookie do trình duyệt giữ — web KHÔNG còn token nào ở localStorage, các assertion kiểm đúng điều đó. Stub `get-session` là stateful: trước đăng nhập trả null, sau khi một đường đăng nhập thành công thì trả phiên, mô phỏng cookie đã được server đặt.
  */
 
 const PROFILE = {
@@ -36,8 +31,7 @@ const PROFILE = {
   customFields: [{ shortName: 'department', name: 'Department', type: 'select', value: 'Sales' }],
 };
 
-// Thân phiên lấy từ fixture dùng chung `baSessionBody`: mốc hết hạn
-// tính tương đối theo thời điểm chạy nên không hết hạn theo lịch
+// Thân phiên lấy từ fixture dùng chung `baSessionBody`: mốc hết hạn tính tương đối theo thời điểm chạy nên không hết hạn theo lịch
 // (bản tự khai trước đây ghim ngày cứng và suýt nổ cả bộ spec).
 const SESSION_BODY = baSessionBody({
   id: PROFILE.id,
@@ -74,8 +68,7 @@ function renderApp(initialEntry = '/login') {
 
 describe('Luồng đăng nhập (hợp đồng cookie Better Auth, fetch mock tại biên)', () => {
   afterEach(() => {
-    // Dự án không bật auto-cleanup của Testing Library nên phải dọn
-    // DOM tường minh, tránh cây render của test trước sót sang test sau.
+    // Dự án không bật auto-cleanup của Testing Library nên phải dọn DOM tường minh, tránh cây render của test trước sót sang test sau.
     cleanup();
     vi.unstubAllGlobals();
     localStorage.clear();

@@ -4,31 +4,19 @@ import { ConfigService } from '@nestjs/config';
 /**
  * Transport gửi mail qua Resend ở phía worker (NB-5, issue #174).
  *
- * Vai trò: đây là bản phía worker của ĐÚNG transport đã chạy ở phía
- * API cho mail xác thực (module `apps/api/src/modules/mail`): cùng
- * endpoint HTTP của Resend, cùng hai biến cấu hình môi trường
+ * Vai trò: đây là bản phía worker của ĐÚNG transport đã chạy ở phía API cho mail xác thực (module `apps/api/src/modules/mail`): cùng endpoint HTTP của Resend, cùng hai biến cấu hình môi trường
  * (`RESEND_API_KEY`, `MAIL_FROM`), cùng ngữ nghĩa fail-soft có khai
- * báo. Hai app là hai project TypeScript riêng nên không import chéo
- * được — mỗi phía giữ bản transport của mình, hợp đồng hành vi phải
- * giữ khớp nhau (bất đẳng thức hành vi giữa hai bản là lỗi).
+ * báo. Hai app là hai project TypeScript riêng nên không import chéo được — mỗi phía giữ bản transport của mình, hợp đồng hành vi phải giữ khớp nhau (bất đẳng thức hành vi giữa hai bản là lỗi).
  *
  * Flow của `send`:
  *  1. Thiếu `RESEND_API_KEY` hoặc thiếu `MAIL_FROM` → KHÔNG gửi,
- *     KHÔNG ném lỗi: ghi log cảnh báo (chỉ người nhận + tiêu đề,
- *     không ghi nội dung) và trả `{ status: 'skipped' }` — môi
- *     trường chưa được cấp khoá là trạng thái vận hành hợp lệ (test,
- *     review), nơi gọi coi như đã xử lý xong và ghi nhận trạng thái
- *     riêng (`skipped-not-configured` ở dispatch log).
+ *     KHÔNG ném lỗi: ghi log cảnh báo (chỉ người nhận + tiêu đề, không ghi nội dung) và trả `{ status: 'skipped' }` — môi trường chưa được cấp khoá là trạng thái vận hành hợp lệ (test, review), nơi gọi coi như đã xử lý xong và ghi nhận trạng thái riêng (`skipped-not-configured` ở dispatch log).
  *  2. Đủ cấu hình → POST `https://api.resend.com/emails` với
- *     from/to/subject/text (+html nếu có). Resend trả 2xx → trả
- *     `{ status: 'sent', providerId }` (id của Resend để truy vết).
+ *     from/to/subject/text (+html nếu có). Resend trả 2xx → trả `{ status: 'sent', providerId }` (id của Resend để truy vết).
  *  3. Resend trả lỗi (mạng/4xx/5xx) → NÉM Error: lỗi gửi thật không
- *     được nuốt lặng — job BullMQ dựa vào đó để thử lại (job dispatch
- *     để attempts 3 phía API; lượt quét digest giữ mục ở trạng thái
- *     chờ để lượt sau gửi tiếp).
+ *     được nuốt lặng — job BullMQ dựa vào đó để thử lại (job dispatch để attempts 3 phía API; lượt quét digest giữ mục ở trạng thái chờ để lượt sau gửi tiếp).
  *
- * Bất biến an toàn: khoá API chỉ đọc từ cấu hình môi trường, không
- * bao giờ ghi vào log/code; nội dung mail không bao giờ ghi vào log.
+ * Bất biến an toàn: khoá API chỉ đọc từ cấu hình môi trường, không bao giờ ghi vào log/code; nội dung mail không bao giờ ghi vào log.
  */
 
 /** Một bức mail cần gửi (một người nhận cho mỗi bức). */

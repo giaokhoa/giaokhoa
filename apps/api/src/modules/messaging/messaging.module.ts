@@ -20,24 +20,14 @@ import { MessagingSocketAuth } from './messaging-socket-auth';
 import { NotificationUnreadStreamService } from './notification-unread-stream.service';
 
 /**
- * Facade của MessagingModule: MessagingService (conversations, messages,
- * notifications, tuỳ chọn provider, blocked contacts). Các module khác
- * thông báo cho người dùng CHỈ thông qua facade này (report §3.12).
- * Bên trong, MessagingService là facade uỷ quyền cho năm service cụm
- * theo ca sử dụng (tách cụm, issue #295) — wiring của module không đổi.
+ * Facade của MessagingModule: MessagingService (conversations, messages, notifications, tuỳ chọn provider, blocked contacts). Các module khác thông báo cho người dùng CHỈ thông qua facade này (report §3.12). Bên trong, MessagingService là facade uỷ quyền cho năm service cụm theo ca sử dụng (tách cụm, issue #295) — wiring của module không đổi.
  */
 @Module({
   imports: [
     AccessModule, UsersModule, EventsModule, SiteConfigModule,
-    // GĐ5 (issue #7): lớp auth của gateway nhận thêm phiên cookie
-    // Better Auth — cần BetterAuthService (instance tự tắt khi cờ off).
+    // GĐ5 (issue #7): lớp auth của gateway nhận thêm phiên cookie Better Auth — cần BetterAuthService (instance tự tắt khi cờ off).
     BetterAuthModule,
-    // Tiền điều kiện Phần B (issue #587, hạng mục 1): lớp auth của
-    // gateway và gateway phân giải không gian theo Host của
-    // handshake và đọc dữ kiện theo kết nối trong kho của trung
-    // tâm — cần SpaceDatabaseService (SpaceRoutingModule) và
-    // TenantsService cho ngoại lệ phiên vận hành platform của
-    // đường token (TenantsModule).
+    // Tiền điều kiện Phần B (issue #587, hạng mục 1): lớp auth của gateway và gateway phân giải không gian theo Host của handshake và đọc dữ kiện theo kết nối trong kho của trung tâm — cần SpaceDatabaseService (SpaceRoutingModule) và TenantsService cho ngoại lệ phiên vận hành platform của đường token (TenantsModule).
     SpaceRoutingModule, TenantsModule,
     BullModule.registerQueue({ name: NOTIFICATION_DISPATCH_QUEUE }),
   ],
@@ -55,16 +45,11 @@ import { NotificationUnreadStreamService } from './notification-unread-stream.se
     MessagingService, NotificationUnreadStreamService,
     // Throttle gửi tin theo người dùng bằng Redis (lát M2, issue #212).
     MessagingSendThrottleService,
-    // Realtime (issue #33): gateway Socket.IO + lớp auth mỏng + tầng
-    // realtime phía kết nối (Redis adapter, presence/typing).
+    // Realtime (issue #33): gateway Socket.IO + lớp auth mỏng + tầng realtime phía kết nối (Redis adapter, presence/typing).
     MessagingSocketAuth, MessagingRealtimeService, MessagingGateway,
-    // Cả hai consumer quét outbox đều đã chuyển sang worker: phân
-    // phối sự kiện messaging qua hàng đợi `messaging-realtime`
+    // Cả hai consumer quét outbox đều đã chuyển sang worker: phân phối sự kiện messaging qua hàng đợi `messaging-realtime`
     // (issue con #521 của #491; consumer hàng đợi ở worker, luật
-    // phân phối ở `@giaokhoa/messaging`) và thông báo sự kiện nghiệp vụ
-    // qua hàng đợi `notification-events` (issue con #520 của
-    // #491). Phía API không còn consumer polling nào đọc trực
-    // tiếp bảng outbox.
+    // phân phối ở `@giaokhoa/messaging`) và thông báo sự kiện nghiệp vụ qua hàng đợi `notification-events` (issue con #520 của #491). Phía API không còn consumer polling nào đọc trực tiếp bảng outbox.
   ],
   exports: [MessagingService],
 })

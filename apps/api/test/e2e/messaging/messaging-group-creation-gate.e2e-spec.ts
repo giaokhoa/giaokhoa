@@ -8,28 +8,16 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser } from '..
 import { addGroupMember, contextIdByLevelInstance, createGroupViaApi } from '../../support/engagement-helpers';
 
 /**
- * Cổng tạo NHÓM TỰ DO (issue #563): nhóm thủ công trong hệ thống chỉ
- * do ba nhóm người tạo —
+ * Cổng tạo NHÓM TỰ DO (issue #563): nhóm thủ công trong hệ thống chỉ do ba nhóm người tạo —
  *
  *  1. Quản trị viên hệ thống (site admin);
  *  2. Chủ trung tâm: thành viên của tenant giữ vai manager tại
- *     context của chính tenant đó (capability `tenant:manage` tại
- *     context tenant hiện hành);
+ *     context của chính tenant đó (capability `tenant:manage` tại context tenant hiện hành);
  *  3. Quản trị viên nền tảng: giữ vai manager tại context HỆ THỐNG
  *     (capability `tenant:manage` tại context hệ thống) nhưng không
- *     nằm trong danh sách site admin và không phải thành viên của
- *     tenant hiện hành — qua cổng nhờ nhánh dự phòng của cùng
- *     predicate chủ trung tâm, vì gán vai ở context hệ thống không
- *     chảy vào cây tenant nên phải kiểm riêng tại context hệ thống.
+ *     nằm trong danh sách site admin và không phải thành viên của tenant hiện hành — qua cổng nhờ nhánh dự phòng của cùng predicate chủ trung tâm, vì gán vai ở context hệ thống không chảy vào cây tenant nên phải kiểm riêng tại context hệ thống.
  *
- * Giáo viên (gán vai giảng dạy tại context khoá), nhân viên (gán vai
- * staff tại context hệ thống) và học viên (ghi danh khoá) đều bị từ
- * chối 403 `messaging.group_creation_forbidden` tại tầng service.
- * Nhóm sinh theo cấu trúc lớp/khoá (conversation của course group)
- * không qua cổng này: thành viên group vẫn tạo/mở được như cũ. Cờ
- * `canCreateFreeGroup` trên cây nhóm (GET /messages/group-tree) phải
- * khớp đúng cổng này cho từng vai, để nút tạo nhóm phía web hiện/ẩn
- * đúng người. Hội thoại 1-1 qua cổng liên lạc không đổi.
+ * Giáo viên (gán vai giảng dạy tại context khoá), nhân viên (gán vai staff tại context hệ thống) và học viên (ghi danh khoá) đều bị từ chối 403 `messaging.group_creation_forbidden` tại tầng service. Nhóm sinh theo cấu trúc lớp/khoá (conversation của course group) không qua cổng này: thành viên group vẫn tạo/mở được như cũ. Cờ `canCreateFreeGroup` trên cây nhóm (GET /messages/group-tree) phải khớp đúng cổng này cho từng vai, để nút tạo nhóm phía web hiện/ẩn đúng người. Hội thoại 1-1 qua cổng liên lạc không đổi.
  */
 
 interface Person { id: string; username: string; token: string }

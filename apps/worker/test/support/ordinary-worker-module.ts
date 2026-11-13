@@ -63,24 +63,15 @@ export interface OrdinaryWorkerModuleHarness {
   /** Testing context của `WorkerModule` đã boot bằng role thường. */
   context: INestApplicationContext;
   /**
-   * Kết nối quản trị (superuser) trên cùng DB test: spec dùng để nạp
-   * fixture và đọc kiểm chứng — tương đương khả năng quan sát của kết
-   * nối module duy nhất mà spec dùng trước khi chuyển sang harness.
+   * Kết nối quản trị (superuser) trên cùng DB test: spec dùng để nạp fixture và đọc kiểm chứng — tương đương khả năng quan sát của kết nối module duy nhất mà spec dùng trước khi chuyển sang harness.
    */
   adminDb: CentreDb;
   /**
-   * Handle Kysely trên pool role thường mà module đang chạy qua.
-   * Spec chỉ cần tới handle này khi tự dựng processor bằng tay
-   * ngoài DI (mẫu của `notification-email.spec.ts`) — khi đó
-   * processor tự dựng phải nhận đúng handle trên pool này mới là
-   * phần xử lý dưới RLS.
+   * Handle Kysely trên pool role thường mà module đang chạy qua. Spec chỉ cần tới handle này khi tự dựng processor bằng tay ngoài DI (mẫu của `notification-email.spec.ts`) — khi đó processor tự dựng phải nhận đúng handle trên pool này mới là phần xử lý dưới RLS.
    */
   ordinaryDb: CentreDb;
   /**
-   * Khung định tuyến của module sau khi harness đã gắn lại handle
-   * Kysely kho chung sang pool role thường (mục 4 của docblock
-   * đầu file). Spec tự dựng processor/service bằng tay phải truyền
-   * đúng service này mới là phần xử lý dưới RLS.
+   * Khung định tuyến của module sau khi harness đã gắn lại handle Kysely kho chung sang pool role thường (mục 4 của docblock đầu file). Spec tự dựng processor/service bằng tay phải truyền đúng service này mới là phần xử lý dưới RLS.
    */
   spaceDb: SpaceDatabaseService;
   /** Đóng testing context rồi đóng hai pool của harness. */

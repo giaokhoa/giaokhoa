@@ -4,15 +4,9 @@ import { queryKeys } from '#lib/query-keys';
 
 /**
  * Kiểu + lời gọi API dùng chung cho chương trình GDPT 2018 (K0a):
- * trang quản trị chương trình, khối chọn khung khi tạo khoá và panel
- * nạp khung trong quản trị khoá cùng đọc một hình dạng cây.
- * Chương trình quốc gia neo ở context hệ thống (contextLevel 10) —
- * cùng cách khối Chương trình trong editor câu hỏi đang đọc.
+ * trang quản trị chương trình, khối chọn khung khi tạo khoá và panel nạp khung trong quản trị khoá cùng đọc một hình dạng cây. Chương trình quốc gia neo ở context hệ thống (contextLevel 10) — cùng cách khối Chương trình trong editor câu hỏi đang đọc.
  *
- * Phần cuối module là tầng TanStack Query (F-01 của rà soát #133)
- * bọc đúng các lời gọi ở đây: các trang đọc chương trình qua hook với
- * khoá theo (context/khoá) — ngữ cảnh khoá là một phần của khoá vì
- * cùng một môn có thể đọc được hay bị 403 tuỳ khoá đang neo quyền.
+ * Phần cuối module là tầng TanStack Query (F-01 của rà soát #133) bọc đúng các lời gọi ở đây: các trang đọc chương trình qua hook với khoá theo (context/khoá) — ngữ cảnh khoá là một phần của khoá vì cùng một môn có thể đọc được hay bị 403 tuỳ khoá đang neo quyền.
  */
 
 export interface CurriculumSubject {
@@ -30,10 +24,7 @@ export interface Curriculum {
 }
 
 /**
- * Một node trong tài liệu Tiptap của một YCCĐ, đúng hình dạng tài
- * liệu mà API lưu trong cột jsonb: đoạn văn mang text, danh sách
- * gạch đầu dòng lồng mang các ý con. Marks trên node text được giữ
- * nguyên khi lưu nhưng bị bỏ qua khi trích text canonical.
+ * Một node trong tài liệu Tiptap của một YCCĐ, đúng hình dạng tài liệu mà API lưu trong cột jsonb: đoạn văn mang text, danh sách gạch đầu dòng lồng mang các ý con. Marks trên node text được giữ nguyên khi lưu nhưng bị bỏ qua khi trích text canonical.
  */
 export interface CurriculumOutcomeDocNode {
   type: string;
@@ -85,12 +76,7 @@ export async function fetchSystemContextId(): Promise<string | null> {
 }
 
 /**
- * Môn học trong context hệ thống. Kèm `forCourseId` (bề mặt chọn khung
- * trong quản trị khoá): API còn chấp nhận nhánh course:update tại chính
- * khoá đó cho giáo viên cấp khoá không có curriculum:view hệ thống.
- * `contextId` vắng thì không kèm tham số — API mặc định về context hệ
- * thống (điểm nghẽn D-3 của issue #233: trang /curriculum không còn
- * bắt buộc đọc được `/access/contexts` mới xem được chương trình).
+ * Môn học trong context hệ thống. Kèm `forCourseId` (bề mặt chọn khung trong quản trị khoá): API còn chấp nhận nhánh course:update tại chính khoá đó cho giáo viên cấp khoá không có curriculum:view hệ thống. `contextId` vắng thì không kèm tham số — API mặc định về context hệ thống (điểm nghẽn D-3 của issue #233: trang /curriculum không còn bắt buộc đọc được `/access/contexts` mới xem được chương trình).
  */
 export async function fetchSubjects(contextId?: string, forCourseId?: string): Promise<CurriculumSubject[]> {
   const params = new URLSearchParams();

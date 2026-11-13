@@ -1,53 +1,21 @@
 /**
- * Runner migration của ĐỘI KHO (issue #586) — script CLI chạy bằng
- * `pnpm --filter @giaokhoa/api fleet:migrate` trên máy triển khai (hoặc
- * được lịch vận hành gọi), áp bộ migration hiện hành của repo lên
- * MỌI kho trong sổ đăng ký của control plane theo đợt an toàn:
+ * Runner migration của ĐỘI KHO (issue #586) — script CLI chạy bằng `pnpm --filter @giaokhoa/api fleet:migrate` trên máy triển khai (hoặc được lịch vận hành gọi), áp bộ migration hiện hành của repo lên MỌI kho trong sổ đăng ký của control plane theo đợt an toàn:
  *
  * 1. Đọc sổ: danh sách kho + phiên bản theo sổ từ control plane
  *    (`FleetRegistryWriter`); phiên bản đích là tên thư mục
  *    migration cuối cùng của bộ migration nghiệp vụ.
  * 2. Chia đợt (xem `orderSpacesIntoWaves`): kho nền tảng trước, một
- *    trung tâm canary, rồi các đợt theo `FLEET_WAVE_SIZE` (mặc định
- *    2). Một kho hỏng KHÔNG chặn các kho khác trong cùng đợt, nhưng
- *    đợt có kho hỏng thì các đợt SAU không chạy — lỗi ở canary phải
- *    dừng đội kho lại cho người vận hành xem, không lan tiếp.
+ *    trung tâm canary, rồi các đợt theo `FLEET_WAVE_SIZE` (mặc định 2). Một kho hỏng KHÔNG chặn các kho khác trong cùng đợt, nhưng đợt có kho hỏng thì các đợt SAU không chạy — lỗi ở canary phải dừng đội kho lại cho người vận hành xem, không lan tiếp.
  * 3. Với mỗi kho: đối chiếu TOÀN TẬP tên migration đã áp trong
- *    database của kho (nhật ký `kysely_migration` là
- *    nguồn sự thật) với tập thư mục migration cục bộ. Tập còn
- *    thiếu RỖNG thì kho đã đạt đích: bỏ qua hẳn — không chụp sao
- *    lưu, không ghi lượt chạy; chỉ khi sổ lệch sự thật mới đồng bộ
- *    lại sổ (không bịa lượt chạy). Căn cứ là toàn tập chứ không
- *    phải migration mới nhất: một kho đã có migration mới nhất
- *    nhưng thiếu một migration cũ ở giữa vẫn còn thiếu và phải
- *    được áp đúng phần thiếu đó (bộ máy migration áp theo hiệu tập
- *    tên). Còn thiếu thì: chụp BẢN SAO LƯU CHỐT gắn mã lượt chạy
+ *    database của kho (nhật ký `kysely_migration` là nguồn sự thật) với tập thư mục migration cục bộ. Tập còn thiếu RỖNG thì kho đã đạt đích: bỏ qua hẳn — không chụp sao lưu, không ghi lượt chạy; chỉ khi sổ lệch sự thật mới đồng bộ lại sổ (không bịa lượt chạy). Căn cứ là toàn tập chứ không phải migration mới nhất: một kho đã có migration mới nhất nhưng thiếu một migration cũ ở giữa vẫn còn thiếu và phải được áp đúng phần thiếu đó (bộ máy migration áp theo hiệu tập tên). Còn thiếu thì: chụp BẢN SAO LƯU CHỐT gắn mã lượt chạy
  *    (điểm khôi phục của riêng kho đó — chụp hỏng thì kho bị đánh
- *    dấu hỏng và KHÔNG áp migration), áp migration bằng bộ máy
- *    migration của `@giaokhoa/db` (`applyStoreMigrations`), đọc lại
- *    toàn tập đã áp để đối chiếu, rồi ghi kết
- *    quả (phiên bản đầu/đích, từng bước, lỗi) vào registry.
- *    Migration hỏng KHÔNG tự khôi phục từ bản chốt: khôi phục là
- *    một hành động vận hành riêng có ghi nhận (xem
- *    `fleet-restore-test.ts` và quy trình vận hành) — tự động khôi
- *    phục có thể xoá mất dữ kiện vừa ghi hợp lệ sau điểm chụp.
+ *    dấu hỏng và KHÔNG áp migration), áp migration bằng bộ máy migration của `@giaokhoa/db` (`applyStoreMigrations`), đọc lại toàn tập đã áp để đối chiếu, rồi ghi kết quả (phiên bản đầu/đích, từng bước, lỗi) vào registry. Migration hỏng KHÔNG tự khôi phục từ bản chốt: khôi phục là một hành động vận hành riêng có ghi nhận (xem `fleet-restore-test.ts` và quy trình vận hành) — tự động khôi phục có thể xoá mất dữ kiện vừa ghi hợp lệ sau điểm chụp.
  * 4. Chạy lại một lượt chỉ xử lý các kho chưa đạt đích: kho đã đạt
  *    đích bị bỏ qua ở bước 3 nên không sinh lượt chạy trùng.
  *
- * Cô lập lỗi nằm ở ranh giới MỘT kho: mọi lỗi phát sinh trong lúc
- * xử lý một kho — mở kết nối, đọc phiên bản ở bước thăm dò, chụp
- * bản chốt, áp migration, và cả kết nối/đọc ở bước đối chiếu sau
- * khi áp — đều quy về kết quả `failed` của chính kho đó và được
- * ghi vào registry, không làm sập cả lượt chạy. Chỉ lỗi cấu hình
- * của chính công cụ (thiếu thư mục sao lưu, registry chưa cấu
- * hình, bộ migration rỗng) mới dừng cả lượt, và dừng TRƯỚC khi
- * bất kỳ kho nào bị chạm tới.
+ * Cô lập lỗi nằm ở ranh giới MỘT kho: mọi lỗi phát sinh trong lúc xử lý một kho — mở kết nối, đọc phiên bản ở bước thăm dò, chụp bản chốt, áp migration, và cả kết nối/đọc ở bước đối chiếu sau khi áp — đều quy về kết quả `failed` của chính kho đó và được ghi vào registry, không làm sập cả lượt chạy. Chỉ lỗi cấu hình của chính công cụ (thiếu thư mục sao lưu, registry chưa cấu hình, bộ migration rỗng) mới dừng cả lượt, và dừng TRƯỚC khi bất kỳ kho nào bị chạm tới.
  *
- * Mức tự động hoá là LỰA CHỌN KỸ THUẬT của đội thi công: runner là
- * CLI do người vận hành/lịch của hệ triển khai gọi tường minh và
- * thoát với mã 1 khi có kho hỏng, không phải tiến trình nền tự chạy
- * — quyết định "áp migration lên đội kho" luôn có một điểm kích
- * hoạt rõ ràng để đối chiếu với cửa sổ bảo trì.
+ * Mức tự động hoá là LỰA CHỌN KỸ THUẬT của đội thi công: runner là CLI do người vận hành/lịch của hệ triển khai gọi tường minh và thoát với mã 1 khi có kho hỏng, không phải tiến trình nền tự chạy — quyết định "áp migration lên đội kho" luôn có một điểm kích hoạt rõ ràng để đối chiếu với cửa sổ bảo trì.
  */
 import { basename, join } from 'node:path';
 import { Client, Pool } from 'pg';
@@ -103,13 +71,7 @@ function errorDetail(error: unknown): string {
 }
 
 /**
- * Áp migration cho MỘT kho theo đúng trình tự thăm dò → chốt sao
- * lưu → áp → đối chiếu → ghi registry. Toàn bộ phần xử lý của kho
- * nằm trong một khối bắt lỗi duy nhất (xem bất biến cô lập lỗi ở
- * đầu file): lỗi ở BẤT KỲ bước nào của kho này — kể cả suy ra URL,
- * mở kết nối hay đọc phiên bản ở bước thăm dò và bước đối chiếu —
- * đều kết thúc bằng ghi nhận `failed` cho chính kho đó qua `fail`,
- * không thoát ra làm sập lượt chạy.
+ * Áp migration cho MỘT kho theo đúng trình tự thăm dò → chốt sao lưu → áp → đối chiếu → ghi registry. Toàn bộ phần xử lý của kho nằm trong một khối bắt lỗi duy nhất (xem bất biến cô lập lỗi ở đầu file): lỗi ở BẤT KỲ bước nào của kho này — kể cả suy ra URL, mở kết nối hay đọc phiên bản ở bước thăm dò và bước đối chiếu — đều kết thúc bằng ghi nhận `failed` cho chính kho đó qua `fail`, không thoát ra làm sập lượt chạy.
  */
 async function migrateSpace(
   space: FleetSpace,

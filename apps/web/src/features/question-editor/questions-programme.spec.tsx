@@ -8,9 +8,7 @@ import { QuestionsPage } from '#features/questions/components/questions';
 import { QuestionEditPage } from './routes/question-editor';
 
 /**
- * Spec khối "Chương trình" trong editor câu hỏi (issue #20 Chặng 2, mục
- * A.6): chọn môn → cây → YCCĐ + mức, ghi qua các API gắn kết ở cấp danh
- * tính câu hỏi (subjects/outcomes/curriculum-links).
+ * Spec khối "Chương trình" trong editor câu hỏi (issue #20 Chặng 2, mục A.6): chọn môn → cây → YCCĐ + mức, ghi qua các API gắn kết ở cấp danh tính câu hỏi (subjects/outcomes/curriculum-links).
  */
 const CATEGORY_ID = '01900000-0000-7000-8000-000000000001';
 const QUESTION_ID = '01900000-0000-7000-8000-000000000004';

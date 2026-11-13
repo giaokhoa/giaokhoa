@@ -14,8 +14,7 @@ export const STRONG_PASSWORD = 'Passw0rd!';
 export async function createTestApp(): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
   const app = moduleRef.createNestApplication();
-  // Khớp main.ts: tin đúng một chặng proxy để req.ip là IP khách thật
-  // trong test như trên production — xem common/client-ip.ts.
+  // Khớp main.ts: tin đúng một chặng proxy để req.ip là IP khách thật trong test như trên production — xem common/client-ip.ts.
   enableTrustedProxy(app as NestExpressApplication);
   app.setGlobalPrefix('api');
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });

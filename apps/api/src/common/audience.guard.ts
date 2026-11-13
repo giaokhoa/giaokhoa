@@ -5,21 +5,13 @@ import { IS_PLATFORM_ROUTE_KEY } from './platform-route.decorator';
 import { IS_PUBLIC_KEY } from './public.decorator';
 
 /**
- * Guard tách audience token (issue #584) — chạy ngay sau
- * `JwtAuthGuard`, trước `TenantGuard`.
+ * Guard tách audience token (issue #584) — chạy ngay sau `JwtAuthGuard`, trước `TenantGuard`.
  *
  * Luật chỉ có hai chiều, không có ngoại lệ theo user hay capability:
  * - Token mang audience `platform` (cấp từ bề mặt đăng nhập quản
- *   trị platform riêng) CHỈ được gọi route mang `@PlatformRoute()`;
- *   gọi route nghiệp vụ thường → 403 `auth.audience_denied`.
+ *   trị platform riêng) CHỈ được gọi route mang `@PlatformRoute()`; gọi route nghiệp vụ thường → 403 `auth.audience_denied`.
  * - Token nghiệp vụ thường (không mang audience platform) CHỈ được
- *   gọi route nghiệp vụ; gọi route vận hành platform → 403
- *   `auth.audience_denied`.
- * Route `@Public()` không qua cổng này (chưa có danh tính để xét);
- * request chưa có danh tính thì `JwtAuthGuard` đã xử lý trước.
- * Phiên cookie Better Auth không mang audience nên được coi là
- * token nghiệp vụ — muốn vận hành platform thì đăng nhập lấy
- * token platform, không dùng phiên cookie.
+ *   gọi route nghiệp vụ; gọi route vận hành platform → 403 `auth.audience_denied`. Route `@Public()` không qua cổng này (chưa có danh tính để xét); request chưa có danh tính thì `JwtAuthGuard` đã xử lý trước. Phiên cookie Better Auth không mang audience nên được coi là token nghiệp vụ — muốn vận hành platform thì đăng nhập lấy token platform, không dùng phiên cookie.
  */
 @Injectable()
 export class AudienceGuard {

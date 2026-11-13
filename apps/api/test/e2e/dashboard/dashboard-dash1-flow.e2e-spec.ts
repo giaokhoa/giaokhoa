@@ -16,10 +16,7 @@ import { addExamSlot, createExamDraft, pinExam } from '../../support/exam-pin-he
 import { createGradeItem, setGrade } from '../../support/assessment-helpers';
 
 /**
- * DASH1 — Dashboard việc cần làm (issue #121, Đợt 6): một endpoint tổng
- * hợp cho khối đầu dashboard. Oracle: issue #121 (việc sắp đến hạn 7
- * ngày; điểm mới CHỈ đã công bố theo cổng PH-0; hàng đợi chấm theo khoá;
- * thẻ khoá màu/biệt danh chỉ chủ nhân thấy) + hồ sơ lộ trình dòng DASH1.
+ * DASH1 — Dashboard việc cần làm (issue #121, Đợt 6): một endpoint tổng hợp cho khối đầu dashboard. Oracle: issue #121 (việc sắp đến hạn 7 ngày; điểm mới CHỈ đã công bố theo cổng PH-0; hàng đợi chấm theo khoá; thẻ khoá màu/biệt danh chỉ chủ nhân thấy) + hồ sơ lộ trình dòng DASH1.
  */
 describe('DASH1: dashboard việc cần làm (issue #121)', () => {
   let app: INestApplication;

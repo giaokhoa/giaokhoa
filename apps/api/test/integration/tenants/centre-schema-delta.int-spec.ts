@@ -5,29 +5,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ensureCentreSchemaDelta } from '../../../src/modules/tenants/centre-schema-delta-ensure';
 
 /**
- * Ca tích hợp của BƯỚC ENSURE DELTA SCHEMA (issue #583, điểm 1
- * của phán quyết vòng sửa PR #611): trên một database đã áp
- * baseline CŨ (delta chưa có), ensure phải tạo đủ đối tượng còn
- * thiếu, endpoint mới dùng được trên database đó, và chạy lại
- * lần hai là no-op thật.
+ * Ca tích hợp của BƯỚC ENSURE DELTA SCHEMA (issue #583, điểm 1 của phán quyết vòng sửa PR #611): trên một database đã áp baseline CŨ (delta chưa có), ensure phải tạo đủ đối tượng còn thiếu, endpoint mới dùng được trên database đó, và chạy lại lần hai là no-op thật.
  *
- * Mô phỏng "baseline cũ" bằng cách áp baseline HIỆN HÀNH rồi xoá
- * đúng phần delta (3 bảng + chỉ mục control plane): phép mô phỏng
- * này trung thực với ensure vì ensure chỉ đọc trạng thái thật
- * của `pg_catalog`, không đọc bảng theo dõi migration — database
- * sau bước xoá có đúng trạng thái của một database đã áp baseline
- * cũ (theo dõi ghi baseline đã áp, đối tượng delta vắng mặt).
+ * Mô phỏng "baseline cũ" bằng cách áp baseline HIỆN HÀNH rồi xoá đúng phần delta (3 bảng + chỉ mục control plane): phép mô phỏng này trung thực với ensure vì ensure chỉ đọc trạng thái thật của `pg_catalog`, không đọc bảng theo dõi migration — database sau bước xoá có đúng trạng thái của một database đã áp baseline cũ (theo dõi ghi baseline đã áp, đối tượng delta vắng mặt).
  *
- * Kiểm chứng RLS ở mức cấu trúc (policy tồn tại + FORCE + điều
- * kiện đúng nguyên văn baseline) kèm một lần chèn dùng được ở
- * chế độ platform: ngữ nghĩa hành vi của chính chuỗi policy này
- * đã thuộc về bộ kiểm tra RLS của baseline, bước ensure chỉ sao
- * chép nguyên văn chuỗi đó nên không kiểm lại hành vi chặn ở đây.
+ * Kiểm chứng RLS ở mức cấu trúc (policy tồn tại + FORCE + điều kiện đúng nguyên văn baseline) kèm một lần chèn dùng được ở chế độ platform: ngữ nghĩa hành vi của chính chuỗi policy này đã thuộc về bộ kiểm tra RLS của baseline, bước ensure chỉ sao chép nguyên văn chuỗi đó nên không kiểm lại hành vi chặn ở đây.
  *
- * Mọi tên đều mang hậu tố ngẫu nhiên theo lượt chạy: chạy lại
- * spec trên cùng cụm không va chạm, và không tái dùng tên
- * database cũ (tránh khoá cache siteadmins cũ trong Redis theo
- * tên database).
+ * Mọi tên đều mang hậu tố ngẫu nhiên theo lượt chạy: chạy lại spec trên cùng cụm không va chạm, và không tái dùng tên database cũ (tránh khoá cache siteadmins cũ trong Redis theo tên database).
  */
 const RUN_SUFFIX = Math.random().toString(36).slice(2, 8);
 const BIZ_DATABASE = `giaokhoa_test_bizdelta_611_${RUN_SUFFIX}`;

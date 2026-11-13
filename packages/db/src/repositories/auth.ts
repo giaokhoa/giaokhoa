@@ -1,34 +1,20 @@
 /**
  * Repository của cụm XÁC THỰC trên Kysely.
  *
- * Vai trò: mọi truy cập tới bốn bảng của kho trung tâm thuộc cụm
- * auth (họ refresh token, nhật ký lần thử đăng nhập, liên kết đăng
- * nhập OAuth, bản ghi TOTP) tập trung ở đây. Repository không chứa
- * luật nghiệp vụ — chính sách khoá tài khoản, xoay token, cổng MFA
- * nằm ở tầng service phía ứng dụng; repository chỉ nhận handle
- * Kysely (instance gốc hoặc transaction đang mở) do tầng ứng dụng
- * truyền vào.
+ * Vai trò: mọi truy cập tới bốn bảng của kho trung tâm thuộc cụm auth (họ refresh token, nhật ký lần thử đăng nhập, liên kết đăng nhập OAuth, bản ghi TOTP) tập trung ở đây. Repository không chứa luật nghiệp vụ — chính sách khoá tài khoản, xoay token, cổng MFA nằm ở tầng service phía ứng dụng; repository chỉ nhận handle Kysely (instance gốc hoặc transaction đang mở) do tầng ứng dụng truyền vào.
  *
  * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong, truy vấn viết trên interface schema sinh bằng
  *   codegen: tên bảng/cột giữ nguyên snake_case của database.
  * - Bên ngoài, repository trả/nhận hình dạng dòng camelCase như
- *   phía tiêu thụ đang dùng: cột được chọn bằng danh sách tường
- *   minh có bí danh (`family_id as familyId`), giá trị ghi được
- *   ánh xạ từng trường từ camelCase sang snake_case ở các hàm
- *   `*InsertValues` trong file này. Phía tiêu thụ vì vậy chỉ đổi
- *   điểm import khi kho chuyển đổi.
+ *   phía tiêu thụ đang dùng: cột được chọn bằng danh sách tường minh có bí danh (`family_id as familyId`), giá trị ghi được ánh xạ từng trường từ camelCase sang snake_case ở các hàm `*InsertValues` trong file này. Phía tiêu thụ vì vậy chỉ đổi điểm import khi kho chuyển đổi.
  * - Giá trị `undefined` bị LOẠI khỏi values trước khi gọi builder
  *   (quy tắc T-4 của pilot): trường vắng mặt phải để default của
  *   database quyết định. Ngược lại, `undefined` lọt vào mệnh đề
  *   WHERE bị gắn thành NULL lúc thực thi và lặng lẽ trả 0 dòng —
- *   vì vậy mọi giá trị where trong repository đều là tham số bắt
- *   buộc.
+ *   vì vậy mọi giá trị where trong repository đều là tham số bắt buộc.
  * - Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh
- *   ứng dụng, không tự mở pool: handle do tầng ứng dụng dựng (điểm
- *   lắp ráp là facade định tuyến theo không gian `routedKysely`)
- *   rồi truyền vào; ngữ cảnh trung tâm đi theo chính kết nối của
- *   handle đó.
+ *   ứng dụng, không tự mở pool: handle do tầng ứng dụng dựng (điểm lắp ráp là facade định tuyến theo không gian `routedKysely`) rồi truyền vào; ngữ cảnh trung tâm đi theo chính kết nối của handle đó.
  */
 import { sql, type Insertable } from 'kysely';
 import type { CentreDb, CentreDB, CentreTx } from '../client';
@@ -54,10 +40,8 @@ export interface RefreshFamilyRow {
 }
 
 /**
- * Secret chờ thay thiết bị phải gắn với đúng secret đang hoạt động
- * tại lúc xác thực mã TOTP cũ. Định danh bản active là ciphertext GCM:
- * mỗi lần bật/thay mã hoá với IV ngẫu nhiên, nên reset + bật lại cũng
- * tạo phiên bản khác dù secret thô giả sử trùng.
+ * Secret chờ thay thiết bị phải gắn với đúng secret đang hoạt động tại lúc xác thực mã TOTP cũ. Định danh bản active là ciphertext GCM:
+ * mỗi lần bật/thay mã hoá với IV ngẫu nhiên, nên reset + bật lại cũng tạo phiên bản khác dù secret thô giả sử trùng.
  */
 export interface PendingTotpReplacement {
   secretEncrypted: string;
@@ -177,9 +161,7 @@ const LOGIN_ATTEMPT_COLUMNS = [
 ] as const;
 
 /**
- * Ánh xạ dữ kiện tạo họ refresh token (camelCase) sang values
- * insert (snake_case), LOẠI mọi trường mang `undefined` — trường
- * vắng mặt để default của database quyết định (quy tắc T-4).
+ * Ánh xạ dữ kiện tạo họ refresh token (camelCase) sang values insert (snake_case), LOẠI mọi trường mang `undefined` — trường vắng mặt để default của database quyết định (quy tắc T-4).
  */
 function refreshFamilyInsertValues(values: NewRefreshFamily): Insertable<CentreDB['refresh_token_family']> {
   const row: Insertable<CentreDB['refresh_token_family']> = {
@@ -226,8 +208,7 @@ function loginAttemptInsertValues(values: NewLoginAttempt): Insertable<CentreDB[
 }
 
 /**
- * Kho dữ liệu phiên xác thực: họ refresh token (token family) và nhật ký lần thử đăng nhập.
- * Mô hình family cho phép phát hiện tái sử dụng refresh token: khi một token đã xoay bị dùng lại, toàn bộ family bị thu hồi.
+ * Kho dữ liệu phiên xác thực: họ refresh token (token family) và nhật ký lần thử đăng nhập. Mô hình family cho phép phát hiện tái sử dụng refresh token: khi một token đã xoay bị dùng lại, toàn bộ family bị thu hồi.
  */
 export class AuthRepository {
   constructor(private readonly handle: AuthDb) {}
@@ -300,8 +281,7 @@ export class AuthRepository {
   }
 
   /**
-   * Các family đang hiệu lực của user (chưa thu hồi, chưa hết hạn) — nguồn
-   * cho danh sách "phiên API" ở trang quản lý phiên của chính user.
+   * Các family đang hiệu lực của user (chưa thu hồi, chưa hết hạn) — nguồn cho danh sách "phiên API" ở trang quản lý phiên của chính user.
    */
   async listActiveFamiliesByUser(userId: string): Promise<RefreshFamilyRow[]> {
     return this.handle
@@ -339,8 +319,7 @@ export class AuthRepository {
   // --- Liên kết đăng nhập OAuth (auth_oauth2) ------------------------------------
 
   /**
-   * Tạo liên kết đăng nhập ngoài cho user; ràng buộc duy nhất ở DB chặn
-   * một tài khoản provider nối hai user hoặc một user hai liên kết/issuer.
+   * Tạo liên kết đăng nhập ngoài cho user; ràng buộc duy nhất ở DB chặn một tài khoản provider nối hai user hoặc một user hai liên kết/issuer.
    */
   async createOauthLink(v: NewOauthLink): Promise<UserOauthLinkRow> {
     const rows = await this.handle
@@ -407,9 +386,7 @@ export class AuthRepository {
   }
 
   /**
-   * Ghi secret TOTP cho lần bật đầu tiên hoặc setup lại khi factor vẫn
-   * chưa xác nhận. Với factor đã bật, caller phải dùng
-   * stageTotpReplacement() để giữ trạng thái confirmed và secret cũ.
+   * Ghi secret TOTP cho lần bật đầu tiên hoặc setup lại khi factor vẫn chưa xác nhận. Với factor đã bật, caller phải dùng stageTotpReplacement() để giữ trạng thái confirmed và secret cũ.
    */
   async upsertPendingTotp(userId: string, secretEncrypted: string): Promise<UserTotpRow | undefined> {
     const rows = await this.handle
@@ -423,8 +400,7 @@ export class AuthRepository {
       }).where('user_totp.confirmed', '=', false))
       .returning(USER_TOTP_COLUMNS)
       .execute();
-    // Nếu confirm thắng cuộc đua, WHERE bảo vệ factor active và
-    // RETURNING rỗng để service báo 409, không lộ secret chưa lưu.
+    // Nếu confirm thắng cuộc đua, WHERE bảo vệ factor active và RETURNING rỗng để service báo 409, không lộ secret chưa lưu.
     return rows[0];
   }
 
@@ -447,8 +423,7 @@ export class AuthRepository {
     const identifier = 'totp-replace-' + userId;
     const expiresAt = new Date(Date.now() + 600_000);
     return this.handle.transaction().execute(async (trx) => {
-      // Khóa theo thứ tự chung: pending key -> active row.
-      // verification.identifier không UNIQUE, nên không dùng UPSERT.
+      // Khóa theo thứ tự chung: pending key -> active row. verification.identifier không UNIQUE, nên không dùng UPSERT.
       await sql`SELECT pg_advisory_xact_lock(hashtext(${identifier}))`.execute(trx);
       const active = await trx.selectFrom('user_totp')
         .select(['secret_encrypted', 'confirmed'])

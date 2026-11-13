@@ -7,11 +7,9 @@ import { PermissionsProvider } from '#lib/permissions';
 import { BadgesPage } from './routes/badges';
 
 /**
- * Test web cho trang huy hiệu (Testing Library): danh sách "huy
- * hiệu của tôi" hiển thị các assertion đã cấp của chính người gọi.
+ * Test web cho trang huy hiệu (Testing Library): danh sách "huy hiệu của tôi" hiển thị các assertion đã cấp của chính người gọi.
  *
- * File này là nửa badges của `pages/engagement.spec.tsx` cũ, tách
- * theo miền khi tổ chức lại apps/web theo mô hình features/
+ * File này là nửa badges của `pages/engagement.spec.tsx` cũ, tách theo miền khi tổ chức lại apps/web theo mô hình features/
  * (issue #500); nửa notifications nằm ở feature notifications.
  */
 const PROFILE = {

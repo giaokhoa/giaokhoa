@@ -67,26 +67,18 @@ export interface FrameworkExportDoc {
 /**
  * Facade của CompetenciesModule (core_competency / tool_lp của Moodle):
  *  - Framework sở hữu một CÂY competency (path/depth) và một SCALE; proficiency
- *    được đọc từ cấu hình scale — KHÔNG BAO GIỜ suy từ điểm. Một
- *    điểm chỉ có thể thành EVIDENCE khi ruleOutcome của một liên kết nói
- *    'attach-evidence' (và ngay cả khi đó nó không đặt proficiency).
+ *    được đọc từ cấu hình scale — KHÔNG BAO GIỜ suy từ điểm. Một điểm chỉ có thể thành EVIDENCE khi ruleOutcome của một liên kết nói 'attach-evidence' (và ngay cả khi đó nó không đặt proficiency).
  *  - Liên kết khoá học/cm mang ruleOutcome tường minh được module NÀY áp
- *    khi CompletionModule báo một completion (hook đã đăng ký — module
- *    này không bao giờ đọc bảng completion).
+ *    khi CompletionModule báo một completion (hook đã đăng ký — module này không bao giờ đọc bảng completion).
  *  - Learning plan: template → plan cho cohort; vòng đời
- *    draft → active → waitingforreview → inreview → (approve → active |
- *    complete). Mọi chuyển đổi đều ghi vào competency_plan_review.
+ *    draft → active → waitingforreview → inreview → (approve → active | complete). Mọi chuyển đổi đều ghi vào competency_plan_review.
  *  - User competency mang proficiency + một máy trạng thái review
  *    (none → waiting → inreview → approve/reject); dòng evidence là
  *    lịch sử bất biến của mọi việc đã xảy ra.
  */
 @Injectable()
 /**
- * Nghiệp vụ khung năng lực và kế hoạch học tập (learning plans).
- * Đối chiếu Moodle: competency/classes (framework, competency, plan, user_competency).
- * Quy tắc review: người học không được tự duyệt năng lực/kế hoạch của chính mình (assertNotSelfReview);
- * proficiency chỉ được đặt qua chấm (grade) hoặc duyệt evidence; hoàn thành khoá học/cm có thể tự động
- * cấp proficiency cho các competency đã liên kết khi framework cấu hình như vậy.
+ * Nghiệp vụ khung năng lực và kế hoạch học tập (learning plans). Đối chiếu Moodle: competency/classes (framework, competency, plan, user_competency). Quy tắc review: người học không được tự duyệt năng lực/kế hoạch của chính mình (assertNotSelfReview); proficiency chỉ được đặt qua chấm (grade) hoặc duyệt evidence; hoàn thành khoá học/cm có thể tự động cấp proficiency cho các competency đã liên kết khi framework cấu hình như vậy.
  */
 export class CompetenciesService implements OnModuleInit {
   constructor(

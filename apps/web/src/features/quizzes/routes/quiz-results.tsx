@@ -15,17 +15,12 @@ import type { NeedsGradingItem } from '../types/quiz-results';
 import { queryClient } from '#lib/query-client';
 
 /**
- * Trang kết quả quiz cho giáo viên: điểm bài hiện tại của từng học
- * sinh, mọi lượt làm, và hàng đợi chấm tay essay — chấm ngay tại trang,
- * điểm bài được API tính lại và ghi sổ sau mỗi lần chấm.
+ * Trang kết quả quiz cho giáo viên: điểm bài hiện tại của từng học sinh, mọi lượt làm, và hàng đợi chấm tay essay — chấm ngay tại trang, điểm bài được API tính lại và ghi sổ sau mỗi lần chấm.
  */
 export function QuizResultsPage() {
   const { t } = useTranslation('app');
   const { id: courseId, pinId: quizId } = useParams();
-  // Dữ liệu trang qua TanStack (F-01 đợt 1): clientLoader đã prefetch
-  // cùng khoá trước khi mount; chấm tay qua mutation — thành công tự
-  // invalidate query kết quả thay cho reload thủ công. Trạng thái chờ
-  // lần tải đầu trên isPending của query với skeleton sẵn có (F-14).
+  // Dữ liệu trang qua TanStack (F-01 đợt 1): clientLoader đã prefetch cùng khoá trước khi mount; chấm tay qua mutation — thành công tự invalidate query kết quả thay cho reload thủ công. Trạng thái chờ lần tải đầu trên isPending của query với skeleton sẵn có (F-14).
   const resultsQuery = useQuizResults(quizId);
   const data = resultsQuery.data ?? null;
   const gradeMutation = useGradeQuizQuestion();

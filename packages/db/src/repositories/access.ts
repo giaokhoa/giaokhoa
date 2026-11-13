@@ -17,35 +17,22 @@ import type { UserListStatus } from '@giaokhoa/contracts';
  * - Cột đọc khai tường minh kèm bí danh camelCase dùng chung cho
  *   select và returning — KHÔNG bật CamelCasePlugin.
  * - Kiểu dòng công khai khai tay trong file này, khớp hình dạng
- *   `$inferSelect` của repository cũ để phía tiêu thụ không đổi
- *   hợp đồng.
+ *   `$inferSelect` của repository cũ để phía tiêu thụ không đổi hợp đồng.
  * - Ghi qua hàm ánh xạ Insert/Update loại `undefined` tường minh
  *   từng trường (thử nghiệm T-4).
  * - Khoá chính `uuidv7()` do database sinh (phụ lục U): insert bỏ
  *   qua `id` và lấy id qua `returning`.
  * - `count(*)` ép `::int` tường minh để giữ kiểu `number` của hợp
- *   đồng cũ (T-7: `count(*)` là int8, qua pg sẽ là `string` nếu
- *   không ép).
+ *   đồng cũ (T-7: `count(*)` là int8, qua pg sẽ là `string` nếu không ép).
  * - Điều kiện động dựng theo mẫu T-13: mọi điều kiện đều là biểu
- *   thức có giá trị bắt buộc, hợp bằng `eb.and(conds)`; KHÔNG bao
- *   giờ truyền `undefined` vào `where` (nó bị gắn thành NULL và
- *   lặng lẽ trả 0 dòng).
+ *   thức có giá trị bắt buộc, hợp bằng `eb.and(conds)`; KHÔNG bao giờ truyền `undefined` vào `where` (nó bị gắn thành NULL và lặng lẽ trả 0 dòng).
  * - Giá trị ghi vào cột jsonb đi qua helper `jsonbValue` duy nhất
  *   (khuôn §4 của PLAYBOOK: mảng cấp cao nhất qua pg bị hiểu là
  *   mảng PostgreSQL nếu không serialize trước).
  *
- * RANH GIỚI NGỮ CẢNH: repository này KHÔNG đọc ALS hay bất kỳ ngữ
- * cảnh app nào, KHÔNG tự lập ngữ cảnh platform. Bốn phép đọc dữ
- * kiện cổng (`getTenantGateInfo(s)`, `getMembershipStatus(es)`)
- * là truy vấn thuần túy — ngữ cảnh platform tường minh do tầng
- * service lập (`PermissionEvaluator.platformScope` bọc đúng bốn
- * điểm gọi, giữ không gian của request; xem issue #651 bước nâng
- * lớp bọc). Hai bảng cổng bật FORCE RLS nên đọc ngoài ngữ cảnh
- * platform sẽ thấy thiếu dòng — đó là trách nhiệm của bên gọi,
- * không phải của repository.
+ * RANH GIỚI NGỮ CẢNH: repository này KHÔNG đọc ALS hay bất kỳ ngữ cảnh app nào, KHÔNG tự lập ngữ cảnh platform. Bốn phép đọc dữ kiện cổng (`getTenantGateInfo(s)`, `getMembershipStatus(es)`) là truy vấn thuần túy — ngữ cảnh platform tường minh do tầng service lập (`PermissionEvaluator.platformScope` bọc đúng bốn điểm gọi, giữ không gian của request; xem issue #651 bước nâng lớp bọc). Hai bảng cổng bật FORCE RLS nên đọc ngoài ngữ cảnh platform sẽ thấy thiếu dòng — đó là trách nhiệm của bên gọi, không phải của repository.
  *
- * Mọi truy vấn thuần dữ liệu; quy tắc nghiệp vụ nằm ở tầng
- * service/evaluator phía ứng dụng.
+ * Mọi truy vấn thuần dữ liệu; quy tắc nghiệp vụ nằm ở tầng service/evaluator phía ứng dụng.
  */
 
 /** Handle kho trung tâm mà repository chấp nhận: thường hoặc trong giao dịch. */
@@ -99,11 +86,7 @@ export interface AssignmentRow {
 }
 
 /**
- * Một dòng của bảng gán vai: dòng gán đã lưu kèm tên đầy đủ và email của
- * người dùng được gán, do phép ghép với bảng người dùng trả về. Tên và
- * email là `null` khi người dùng không còn tồn tại — cột `userId` của
- * bảng gán không có khoá ngoại tới bảng người dùng nên dòng gán mồ côi
- * vẫn phải liệt kê được thay vì bị phép ghép nuốt mất.
+ * Một dòng của bảng gán vai: dòng gán đã lưu kèm tên đầy đủ và email của người dùng được gán, do phép ghép với bảng người dùng trả về. Tên và email là `null` khi người dùng không còn tồn tại — cột `userId` của bảng gán không có khoá ngoại tới bảng người dùng nên dòng gán mồ côi vẫn phải liệt kê được thay vì bị phép ghép nuốt mất.
  */
 export type AssignmentListRow = AssignmentRow & {
   userName: string | null;
@@ -122,11 +105,7 @@ export interface RoleCapabilityRow {
 }
 
 /**
- * Một dòng gán nằm trong danh sách người dùng kèm gán: dòng gán đã lưu
- * kèm tên hiển thị của vai và số cấp của context, do hai phép ghép nội
- * với bảng vai và bảng context trả về. Cả hai phép ghép đều là ghép nội
- * vì `roleId`/`contextId` của dòng gán là khoá ngoại bắt buộc — dòng gán
- * không thể trỏ tới vai hay context không tồn tại.
+ * Một dòng gán nằm trong danh sách người dùng kèm gán: dòng gán đã lưu kèm tên hiển thị của vai và số cấp của context, do hai phép ghép nội với bảng vai và bảng context trả về. Cả hai phép ghép đều là ghép nội vì `roleId`/`contextId` của dòng gán là khoá ngoại bắt buộc — dòng gán không thể trỏ tới vai hay context không tồn tại.
  */
 export interface UserWithAssignmentsAssignmentRow {
   id: string;
@@ -138,10 +117,7 @@ export interface UserWithAssignmentsAssignmentRow {
 }
 
 /**
- * Một người dùng trong danh sách kèm gán vai: các trường tài khoản mà
- * bảng người dùng của trang vai trò cần (kèm `createdAt` cho cột ngày
- * tham gia và hai cờ trạng thái) cùng toàn bộ dòng gán của người đó.
- * `assignments` rỗng khi người dùng chưa giữ vai nào.
+ * Một người dùng trong danh sách kèm gán vai: các trường tài khoản mà bảng người dùng của trang vai trò cần (kèm `createdAt` cho cột ngày tham gia và hai cờ trạng thái) cùng toàn bộ dòng gán của người đó. `assignments` rỗng khi người dùng chưa giữ vai nào.
  */
 export interface UserWithAssignmentsRow {
   id: string;
@@ -307,9 +283,7 @@ function roleCapabilityInsertValues(v: NewRoleCapability): Insertable<CentreDB['
 
 /**
  * Serialize một giá trị ghi vào cột jsonb (khuôn §4 của PLAYBOOK):
- * `pg` tự `JSON.stringify` object thường khi gắn tham số, nhưng mảng
- * ở cấp cao nhất bị hiểu là mảng PostgreSQL → cột jsonb báo lỗi cú
- * pháp. Mọi giá trị jsonb đều đi qua helper này.
+ * `pg` tự `JSON.stringify` object thường khi gắn tham số, nhưng mảng ở cấp cao nhất bị hiểu là mảng PostgreSQL → cột jsonb báo lỗi cú pháp. Mọi giá trị jsonb đều đi qua helper này.
  */
 function jsonbValue(value: unknown): RawBuilder<JsonValue> {
   return sql<JsonValue>`${JSON.stringify(value)}::jsonb`;

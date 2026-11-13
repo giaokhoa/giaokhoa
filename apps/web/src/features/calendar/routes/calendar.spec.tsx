@@ -5,9 +5,7 @@ import { TestProviders } from '#test/providers';
 import { CalendarPage } from './calendar';
 
 /**
- * Spec lịch theo endpoint thật: tạo sự kiện qua POST /calendar/events với
- * đúng DTO, subscription qua POST /calendar/subscriptions và nhập ngay qua
- * POST /calendar/subscriptions/:id/import.
+ * Spec lịch theo endpoint thật: tạo sự kiện qua POST /calendar/events với đúng DTO, subscription qua POST /calendar/subscriptions và nhập ngay qua POST /calendar/subscriptions/:id/import.
  */
 const EVENT_ID = '01900000-0000-7000-8000-000000000031';
 const SUB_ID = '01900000-0000-7000-8000-000000000032';

@@ -4,17 +4,11 @@ import { GuardianViewRepository } from './guardian-view';
 
 /**
  * Ca đơn vị của repository bề mặt phụ huynh chỉ-xem (issue #649):
- * khoá HÌNH DẠNG SQL biên dịch của các truy vấn đọc — không cần
- * database, handle ghi lại câu SQL + tham số mà Kysely biên dịch.
+ * khoá HÌNH DẠNG SQL biên dịch của các truy vấn đọc — không cần database, handle ghi lại câu SQL + tham số mà Kysely biên dịch.
  *
- * Bất biến được khoá ở đây (hành vi chạy thật trên database được
- * khoá tiếp ở spec tích hợp đi kèm):
+ * Bất biến được khoá ở đây (hành vi chạy thật trên database được khoá tiếp ở spec tích hợp đi kèm):
  * - Điều kiện trên bảng được nối bằng LEFT JOIN nằm trong mệnh đề
- *   ON, không rơi xuống WHERE: `completion_state <> 0` của tiến độ
- *   theo khoá và `preview = false` của attempt quiz. Dời xuống WHERE
- *   sẽ đổi ngữ nghĩa phép nối ngoài (module/quiz bị lọc mất thay vì
- *   chỉ không đóng góp vào số đếm/trạng thái) — đây là điểm nóng đã
- *   được nêu đích danh của nhóm G9.
+ *   ON, không rơi xuống WHERE: `completion_state <> 0` của tiến độ theo khoá và `preview = false` của attempt quiz. Dời xuống WHERE sẽ đổi ngữ nghĩa phép nối ngoài (module/quiz bị lọc mất thay vì chỉ không đóng góp vào số đếm/trạng thái) — đây là điểm nóng đã được nêu đích danh của nhóm G9.
  * - Tập khoá rỗng được chặn ở đầu phương thức: không câu truy vấn
  *   nào được biên dịch hay thực thi.
  */

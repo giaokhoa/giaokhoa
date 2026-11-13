@@ -14,23 +14,11 @@ import {
 } from '@giaokhoa/contracts';
 
 /**
- * Kênh realtime của tin nhắn (issue #33, chặng A1): Socket.IO namespace
- * `/messaging`. Đây là điểm chạm duy nhất của web với socket — trang
- * tin nhắn chỉ biết interface handlers/handle dưới đây.
+ * Kênh realtime của tin nhắn (issue #33, chặng A1): Socket.IO namespace `/messaging`. Đây là điểm chạm duy nhất của web với socket — trang tin nhắn chỉ biết interface handlers/handle dưới đây.
  *
- * Xác thực hai đường (GĐ5 của issue #7): phía client gửi cookie
- * phiên Better Auth cùng nguồn nhờ `withCredentials` — server ưu
- * tiên phiên cookie như chuỗi guard HTTP. Đường dự phòng còn lại
- * là access token ở phía server (gateway vẫn chấp nhận token từ
- * handshake cho client chưa chạy cookie, cho tới cutover); phía web
- * từ GĐ2 (#257) không còn tokenStore/access token nên không gửi
- * token nữa — không dựng lại đường token ở client.
+ * Xác thực hai đường (GĐ5 của issue #7): phía client gửi cookie phiên Better Auth cùng nguồn nhờ `withCredentials` — server ưu tiên phiên cookie như chuỗi guard HTTP. Đường dự phòng còn lại là access token ở phía server (gateway vẫn chấp nhận token từ handshake cho client chưa chạy cookie, cho tới cutover); phía web từ GĐ2 (#257) không còn tokenStore/access token nên không gửi token nữa — không dựng lại đường token ở client.
  *
- * Sự kiện nghiệp vụ (tin mới/đã đọc) đến từ server qua đường outbox →
- * consumer phân phối — client chỉ việc áp vào state, chống trùng bằng
- * id/clientMessageId/seq. Mất nối: Socket.IO tự nối lại, và mỗi lần
- * nối lại (trừ lần đầu) `onReconnect` được gọi để trang đồng bộ phần
- * thiếu theo seq (xem `sync`).
+ * Sự kiện nghiệp vụ (tin mới/đã đọc) đến từ server qua đường outbox → consumer phân phối — client chỉ việc áp vào state, chống trùng bằng id/clientMessageId/seq. Mất nối: Socket.IO tự nối lại, và mỗi lần nối lại (trừ lần đầu) `onReconnect` được gọi để trang đồng bộ phần thiếu theo seq (xem `sync`).
  */
 export interface MessagingRealtimeHandlers {
   onNewMessage(payload: RealtimeNewMessagePayload): void;
@@ -48,10 +36,7 @@ export interface MessagingRealtimeHandlers {
   onTyping(payload: RealtimeTypingPayload): void;
   onPresence(payload: RealtimePresencePayload): void;
   /**
-   * Ảnh chụp presence lúc nối: server phát cho chính socket vừa nối
-   * danh sách người đang trực tuyến trong quan hệ hội thoại chung —
-   * lấp khoảng trống của onPresence (chỉ phát khi trạng thái thay
-   * đổi, nên người trực tuyến từ trước lúc mở trang không có sự kiện).
+   * Ảnh chụp presence lúc nối: server phát cho chính socket vừa nối danh sách người đang trực tuyến trong quan hệ hội thoại chung — lấp khoảng trống của onPresence (chỉ phát khi trạng thái thay đổi, nên người trực tuyến từ trước lúc mở trang không có sự kiện).
    */
   onPresenceSnapshot(payload: RealtimePresenceSnapshotPayload): void;
   /** Gọi mỗi lần nối lại thành công sau rớt mạng (không gọi ở lần nối đầu tiên). */

@@ -1,11 +1,6 @@
 /**
  * Hàm thuần cấp module của trang Tin nhắn (đợt C của issue #223):
- * lưu bền ngữ cảnh khung trái, áp số chưa đọc lên cây nhóm và suy
- * ngữ cảnh roster của panel thành viên. Đây là phần duy nhất của
- * file trang cũ không mang trạng thái React — di chuyển nguyên văn
- * từ `pages/messages.tsx` (dòng 92–239 trên main `85ef43e2`), không
- * đổi chữ ký hay hành vi, để các hook điều phối dùng chung mà
- * không phải phụ thuộc vào component trang.
+ * lưu bền ngữ cảnh khung trái, áp số chưa đọc lên cây nhóm và suy ngữ cảnh roster của panel thành viên. Đây là phần duy nhất của file trang cũ không mang trạng thái React — di chuyển nguyên văn từ `pages/messages.tsx` (dòng 92–239 trên main `85ef43e2`), không đổi chữ ký hay hành vi, để các hook điều phối dùng chung mà không phải phụ thuộc vào component trang.
  */
 import type {
   ConversationGroupTreeView,
@@ -21,16 +16,7 @@ const MESSAGES_TAB_STORAGE_KEY = 'giaokhoa.messages.tab';
 /** Khoá localStorage của hội thoại Tin nhắn đang mở gần nhất (lát MSG-T3). */
 const MESSAGES_CONVERSATION_STORAGE_KEY = 'giaokhoa.messages.conversationId';
 /**
- * Các tab khung trái hợp lệ — giá trị lưu hỏng thì lùi về tab
- * Tất cả. Từ issue #606, thanh tab là bốn tab lọc ngang hàng
- * thay cấu trúc hai tab cũ, nên giá trị lưu cũ "chats" rơi về
- * mặc định "all"; "groups" giữ nguyên nghĩa ở mọi cấu trúc.
- * Từ issue #623, tab Yêu thích bị bỏ và tab Lưu trữ quay lại
- * thành một tab của thanh tab (lưu trữ từng là tab riêng ở
- * cấu trúc cũ, rồi thành mục thu gọn trong tab danh sách
- * chính ở issue #564): giá trị "archived" là giá trị hợp lệ
- * hiện hành, còn giá trị lưu "favourites" của tab đã bỏ rơi
- * về mặc định "all" theo đúng luật này.
+ * Các tab khung trái hợp lệ — giá trị lưu hỏng thì lùi về tab Tất cả. Từ issue #606, thanh tab là bốn tab lọc ngang hàng thay cấu trúc hai tab cũ, nên giá trị lưu cũ "chats" rơi về mặc định "all"; "groups" giữ nguyên nghĩa ở mọi cấu trúc. Từ issue #623, tab Yêu thích bị bỏ và tab Lưu trữ quay lại thành một tab của thanh tab (lưu trữ từng là tab riêng ở cấu trúc cũ, rồi thành mục thu gọn trong tab danh sách chính ở issue #564): giá trị "archived" là giá trị hợp lệ hiện hành, còn giá trị lưu "favourites" của tab đã bỏ rơi về mặc định "all" theo đúng luật này.
  */
 const MESSAGES_TABS = ['all', 'unread', 'groups', 'archived'] as const;
 
@@ -123,8 +109,7 @@ export function withTreeUnread(
     classes: tree.classes.map(patchClass),
     coursesOutsideClasses: tree.coursesOutsideClasses.map(patchCourse),
     freeGroups: tree.freeGroups.map((g) => (g.conversationId === conversationId ? { ...g, unread: unreadCount } : g)),
-    // Cờ tạo nhóm tự do là quyền do server cấp, không đổi theo số
-    // chưa đọc — giữ nguyên khi vá cây.
+    // Cờ tạo nhóm tự do là quyền do server cấp, không đổi theo số chưa đọc — giữ nguyên khi vá cây.
     canCreateFreeGroup: tree.canCreateFreeGroup,
   };
 }

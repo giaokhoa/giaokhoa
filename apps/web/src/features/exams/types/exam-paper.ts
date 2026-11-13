@@ -1,9 +1,5 @@
 /**
- * Kiểu dữ liệu của màn soạn đề thuộc feature exams. Tách từ
- * module dữ liệu phẳng `src/lib/exam-paper-data.ts` khi tổ chức
- * lại apps/web theo mô hình features/ (issue #500): kiểu nằm ở
- * tầng types/, lời gọi API thuần ở tầng api/, tuỳ chọn truy vấn
- * và đột biến ở tầng queries/.
+ * Kiểu dữ liệu của màn soạn đề thuộc feature exams. Tách từ module dữ liệu phẳng `src/lib/exam-paper-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500): kiểu nằm ở tầng types/, lời gọi API thuần ở tầng api/, tuỳ chọn truy vấn và đột biến ở tầng queries/.
  */
 
 /** Một slot của đề như API exam-papers trả về (đã ghim version câu). */
@@ -60,10 +56,7 @@ export interface PaperView {
   };
   slots: PaperSlotView[];
   /**
-   * Cờ quyền của người xem tại bank của đề (API trả cùng bộ
-   * `ExamCapabilitiesView` với phía ngân hàng): `edit` — được sửa
-   * chính đề này; `deploy` — được ghim đề vào khoá (cổng
-   * `exam:deploy` tại bank), là căn cứ hiện form ghim trong màn sửa.
+   * Cờ quyền của người xem tại bank của đề (API trả cùng bộ `ExamCapabilitiesView` với phía ngân hàng): `edit` — được sửa chính đề này; `deploy` — được ghim đề vào khoá (cổng `exam:deploy` tại bank), là căn cứ hiện form ghim trong màn sửa.
    */
   capabilities: { edit: boolean; deploy: boolean };
 }

@@ -1,14 +1,9 @@
 /**
- * Handle Kysely "ghi lại" cho các ca đơn vị của các repository kho
- * trung tâm (issue #649): một driver tối thiểu chỉ ghi lại câu SQL
- * đã biên dịch + tham số của mọi truy vấn được thực thi và trả về
- * tập dòng rỗng, để spec khoá HÌNH DẠNG SQL (vị trí điều kiện trong
- * ON/WHERE, cột nào có mặt trong values/set) mà không cần database.
+ * Handle Kysely "ghi lại" cho các ca đơn vị của các repository kho trung tâm (issue #649): một driver tối thiểu chỉ ghi lại câu SQL đã biên dịch + tham số của mọi truy vấn được thực thi và trả về tập dòng rỗng, để spec khoá HÌNH DẠNG SQL (vị trí điều kiện trong ON/WHERE, cột nào có mặt trong values/set) mà không cần database.
  *
  * Đây không phải mô phỏng hành vi database: ngữ nghĩa chạy thật
  * (kết quả đúng trên dữ kiện mẫu) được khoá ở các spec tích hợp
- * `*.int-spec.ts` đi kèm trên PostgreSQL thật. Driver này chỉ trả
- * lời câu hỏi "repository biên dịch ra câu SQL nào".
+ * `*.int-spec.ts` đi kèm trên PostgreSQL thật. Driver này chỉ trả lời câu hỏi "repository biên dịch ra câu SQL nào".
  */
 import {
   Kysely,
@@ -37,8 +32,7 @@ class RecordingDriver implements Driver {
         return { rows: [] };
       },
       streamQuery: async function* <R>(): AsyncIterableIterator<QueryResult<R>> {
-        // Kết nối ghi lại không phát dòng nào: luồng truy vấn kết
-        // thúc ngay (vẫn giữ dạng generator cho đúng hợp đồng).
+        // Kết nối ghi lại không phát dòng nào: luồng truy vấn kết thúc ngay (vẫn giữ dạng generator cho đúng hợp đồng).
         yield* [];
       },
     };
@@ -56,8 +50,7 @@ class RecordingDriver implements Driver {
 }
 
 /**
- * Dựng một handle Kysely của kho trung tâm trên driver ghi lại,
- * cùng chính driver đó để spec đọc lại các câu đã biên dịch.
+ * Dựng một handle Kysely của kho trung tâm trên driver ghi lại, cùng chính driver đó để spec đọc lại các câu đã biên dịch.
  */
 export function createRecordingDb(): { db: CentreDb; driver: RecordingDriver } {
   const driver = new RecordingDriver();

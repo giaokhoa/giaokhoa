@@ -1,22 +1,9 @@
 /**
  * Repository của cụm BACKUP trên Kysely.
  *
- * Vai trò: mọi truy cập tới ba bảng backup_jobs, backup_job_steps
- * và backup_id_mappings của kho trung tâm tập trung ở đây. Phần dữ
- * liệu khoá học mà job sao lưu/khôi phục (contributor) nằm ở tầng
- * service phía ứng dụng, chạy trên chính handle mà repository này
- * phơi ra qua `dbHandle`. Repository không chứa luật nghiệp vụ —
- * cổng quyền, chế độ khôi phục và ánh xạ id nằm ở service.
+ * Vai trò: mọi truy cập tới ba bảng backup_jobs, backup_job_steps và backup_id_mappings của kho trung tâm tập trung ở đây. Phần dữ liệu khoá học mà job sao lưu/khôi phục (contributor) nằm ở tầng service phía ứng dụng, chạy trên chính handle mà repository này phơi ra qua `dbHandle`. Repository không chứa luật nghiệp vụ — cổng quyền, chế độ khôi phục và ánh xạ id nằm ở service.
  *
- * Khuôn hình dạng dữ liệu ở biên repository (theo khuôn pilot kho
- * control plane): bên trong dùng tên bảng/cột snake_case của
- * schema codegen; bên ngoài nhận/trả hình dạng camelCase qua danh
- * sách cột có bí danh tường minh và các hàm ánh xạ
- * `*InsertValues`/`*UpdateSet` loại `undefined` từng trường (luật
- * T-4). Các cột jsonb (`archive`, `detail`) khi ghi đi qua
- * `jsonbValue` (serialize tường minh + `::jsonb`) vì `archive` là
- * một OBJECT lớn và `detail` cũng là object — một khuôn duy nhất
- * cho mọi giá trị jsonb, không phụ thuộc nhánh xử lý của driver.
+ * Khuôn hình dạng dữ liệu ở biên repository (theo khuôn pilot kho control plane): bên trong dùng tên bảng/cột snake_case của schema codegen; bên ngoài nhận/trả hình dạng camelCase qua danh sách cột có bí danh tường minh và các hàm ánh xạ `*InsertValues`/`*UpdateSet` loại `undefined` từng trường (luật T-4). Các cột jsonb (`archive`, `detail`) khi ghi đi qua `jsonbValue` (serialize tường minh + `::jsonb`) vì `archive` là một OBJECT lớn và `detail` cũng là object — một khuôn duy nhất cho mọi giá trị jsonb, không phụ thuộc nhánh xử lý của driver.
  */
 import { sql, type Insertable, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';

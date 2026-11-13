@@ -1,34 +1,14 @@
 /**
  * Repository phía TRUNG TÂM của kho ngân hàng hệ thống trên Kysely.
  *
- * Vai trò: các bảng vệ tinh nằm trong kho nghiệp vụ của trung
- * tâm — bản ghi nhập bản chụp (`system_question_imports`), vết
- * nhận sự kiện (`system_bank_event_receipts`), bản cài gói YCCĐ
+ * Vai trò: các bảng vệ tinh nằm trong kho nghiệp vụ của trung tâm — bản ghi nhập bản chụp (`system_question_imports`), vết nhận sự kiện (`system_bank_event_receipts`), bản cài gói YCCĐ
  * (`outcome_package_installs`) — cộng các tra cứu và upsert cần
- * cho đường nhập bản chụp và đường cài gói (slug trung tâm, môn
- * học, chương trình, YCCĐ theo id giữ nguyên).
+ * cho đường nhập bản chụp và đường cài gói (slug trung tâm, môn học, chương trình, YCCĐ theo id giữ nguyên).
  *
- * Handle là handle Kysely ĐỊNH TUYẾN THEO KHÔNG GIAN của kho
- * trung tâm (`SpaceDatabaseService.routedKysely` phía ứng dụng):
- * trong ngữ cảnh request của trung tâm, handle trỏ đúng kho của
- * trung tâm đó (kho chung hoặc kho riêng sau di trú), nên service
- * nhập/cài không tự chọn kho. Handle này tách hẳn handle kho
- * ngân hàng riêng của `system-bank.ts` — hai kho không có
- * transaction chung, repository này không bao giờ chạm database
- * kho ngân hàng.
+ * Handle là handle Kysely ĐỊNH TUYẾN THEO KHÔNG GIAN của kho trung tâm (`SpaceDatabaseService.routedKysely` phía ứng dụng):
+ * trong ngữ cảnh request của trung tâm, handle trỏ đúng kho của trung tâm đó (kho chung hoặc kho riêng sau di trú), nên service nhập/cài không tự chọn kho. Handle này tách hẳn handle kho ngân hàng riêng của `system-bank.ts` — hai kho không có transaction chung, repository này không bao giờ chạm database kho ngân hàng.
  *
- * Khuôn hình dạng dữ liệu ở biên repository (như pilot): bên
- * trong dùng tên bảng/cột snake_case của interface schema sinh
- * bằng codegen; bên ngoài trả/nhận hình dạng dòng camelCase như
- * phía tiêu thụ đang dùng (danh sách cột tường minh có bí danh
- * cho cả select lẫn returning, kiểu dòng công khai khai ngay
- * trong file này — không import từ file schema bộ máy cũ vốn bị
- * xoá ở hạng mục gỡ bộ máy cũ); giá trị ghi vào cột jsonb đi qua
- * helper serialize tường minh + `::jsonb`; mọi giá trị where là
- * tham số bắt buộc. Các phương thức ghi bản chụp nhận handle
- * giao dịch tuỳ chọn do bên gọi truyền tường minh (khuôn
- * `tx ?? handle gốc`) — một transaction chỉ chứa một ORM, cấm
- * giao dịch lai.
+ * Khuôn hình dạng dữ liệu ở biên repository (như pilot): bên trong dùng tên bảng/cột snake_case của interface schema sinh bằng codegen; bên ngoài trả/nhận hình dạng dòng camelCase như phía tiêu thụ đang dùng (danh sách cột tường minh có bí danh cho cả select lẫn returning, kiểu dòng công khai khai ngay trong file này — không import từ file schema bộ máy cũ vốn bị xoá ở hạng mục gỡ bộ máy cũ); giá trị ghi vào cột jsonb đi qua helper serialize tường minh + `::jsonb`; mọi giá trị where là tham số bắt buộc. Các phương thức ghi bản chụp nhận handle giao dịch tuỳ chọn do bên gọi truyền tường minh (khuôn `tx ?? handle gốc`) — một transaction chỉ chứa một ORM, cấm giao dịch lai.
  */
 import { sql, type RawBuilder } from 'kysely';
 import type { CentreDb, CentreTx } from '../client';

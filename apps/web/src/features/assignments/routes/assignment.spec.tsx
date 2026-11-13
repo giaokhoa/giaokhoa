@@ -6,10 +6,7 @@ import { TestProviders } from '#test/providers';
 import { AssignmentPage } from './assignment';
 
 /**
- * Spec web của hoạt động Bài tập (mod_assign, issue #179) theo endpoint
- * thật: học sinh nộp tệp → chốt nộp → mở lại; giáo viên chấm nháp →
- * thả dấu → trả bài (từng em + theo đợt); học sinh sau khi được trả
- * thấy điểm/lời phê/dấu chấm trên bài của mình.
+ * Spec web của hoạt động Bài tập (mod_assign, issue #179) theo endpoint thật: học sinh nộp tệp → chốt nộp → mở lại; giáo viên chấm nháp → thả dấu → trả bài (từng em + theo đợt); học sinh sau khi được trả thấy điểm/lời phê/dấu chấm trên bài của mình.
  */
 const COURSE_ID = '01900000-0000-7000-8000-0000000000c1';
 const ASSIGNMENT_ID = '01900000-0000-7000-8000-0000000000d1';

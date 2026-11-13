@@ -12,30 +12,19 @@ import { SearchPage } from '#features/platform/routes/platform-search';
  * trang này):
  *
  * - Vào trang bằng link `/search?q=abc` (đúng link ô giữa header
- *   tạo ra) → ô của trang điền sẵn "abc" và API tìm kiếm được gọi
- *   NGAY bằng đúng từ khoá đó, kết quả hiện ra không cần thao tác.
+ *   tạo ra) → ô của trang điền sẵn "abc" và API tìm kiếm được gọi NGAY bằng đúng từ khoá đó, kết quả hiện ra không cần thao tác.
  * - Vào `/search` trần (không tham số) → không gọi API, ô trống —
  *   giữ nguyên trạng thái khởi đầu như trước.
  * - Form trong trang giữ hành vi cũ: gõ từ khoá khác + bấm "Tìm
  *   kiếm" thì chạy lại bằng từ khoá mới.
  * - Kết quả ĐIỀU HƯỚNG ĐƯỢC (chốt gộp tìm kiếm 27/10/2026): bấm
- *   một kết quả thì tới đúng trang của item đó theo loại — khoá
- *   học → /courses/:id, người dùng → /admin/users/:id/edit, học
- *   liệu → /content-bank/:id/edit (trước chốt này danh sách chỉ
- *   là chữ tĩnh không bấm được).
+ *   một kết quả thì tới đúng trang của item đó theo loại — khoá học → /courses/:id, người dùng → /admin/users/:id/edit, học liệu → /content-bank/:id/edit (trước chốt này danh sách chỉ là chữ tĩnh không bấm được).
  * - Riêng kết quả người dùng, đích màn quản trị chỉ gắn theo
  *   quyền của NGƯỜI TÌM (điều kiện review của PR gộp tìm kiếm):
- *   người tìm có quyền quản trị người dùng (`user:update` tại
- *   context hệ thống) thì bấm được tới màn quản trị; người tìm
- *   không có quyền đó (học viên — vẫn nhận kết quả `users` từ
- *   API) thì kết quả hiện dạng thông tin, không có liên kết nào
- *   tới màn quản trị.
+ *   người tìm có quyền quản trị người dùng (`user:update` tại context hệ thống) thì bấm được tới màn quản trị; người tìm không có quyền đó (học viên — vẫn nhận kết quả `users` từ API) thì kết quả hiện dạng thông tin, không có liên kết nào tới màn quản trị.
  */
 
-// Hình dạng kết quả khớp API thật: `area` là một trong ba area
-// phía API đăng ký (courses/users/contentbank), `itemId` là định
-// danh của chính item — bản cũ dùng area 'course' sai hợp đồng mà
-// không lộ vì trang cũ chỉ in chữ tĩnh, không ánh xạ đích.
+// Hình dạng kết quả khớp API thật: `area` là một trong ba area phía API đăng ký (courses/users/contentbank), `itemId` là định danh của chính item — bản cũ dùng area 'course' sai hợp đồng mà không lộ vì trang cũ chỉ in chữ tĩnh, không ánh xạ đích.
 const DOC = {
   id: 'doc-1',
   area: 'courses',
@@ -70,10 +59,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 /**
- * Hai người tìm mẫu cho các ca kết quả `users`: học viên (ảnh chụp
- * quyền không có `user:update`) và quản trị người dùng (có đúng
- * capability `user:update` tại context hệ thống — capability màn
- * đích `/admin/users/:id/edit` tự gác, không cần cờ site admin).
+ * Hai người tìm mẫu cho các ca kết quả `users`: học viên (ảnh chụp quyền không có `user:update`) và quản trị người dùng (có đúng capability `user:update` tại context hệ thống — capability màn đích `/admin/users/:id/edit` tự gác, không cần cờ site admin).
  */
 const SYSTEM_CONTEXT_ID = '01900000-0000-7000-8000-0000000000d4';
 const STUDENT_VIEWER = {
@@ -123,9 +109,7 @@ const USER_ADMIN_VIEWER = {
 };
 
 /**
- * Stub fetch cho trang: mặc định không phiên (các ca không phụ
- * thuộc quyền); truyền `viewer` thì có thêm phiên Better Auth +
- * hồ sơ + ảnh chụp quyền của người tìm đó.
+ * Stub fetch cho trang: mặc định không phiên (các ca không phụ thuộc quyền); truyền `viewer` thì có thêm phiên Better Auth + hồ sơ + ảnh chụp quyền của người tìm đó.
  */
 function stubFetch(docs: unknown[] = [DOC], viewer?: { profile: unknown; access: unknown }) {
   searchCalls = [];
@@ -151,8 +135,7 @@ function renderSearch(initialPath = '/search') {
   const router = createMemoryRouter(
     [
       { path: 'search', element: <SearchPage /> },
-      // Các route đích của kết quả: chỉ cần tồn tại để khẳng định
-      // pathname sau khi bấm kết quả.
+      // Các route đích của kết quả: chỉ cần tồn tại để khẳng định pathname sau khi bấm kết quả.
       { path: 'courses/:id', element: <div data-testid="probe-target" /> },
       { path: 'admin/users/:userId/edit', element: <div data-testid="probe-target" /> },
       { path: 'content-bank/:id/edit', element: <div data-testid="probe-target" /> },

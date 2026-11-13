@@ -7,25 +7,17 @@ import {
 import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstSectionId } from '../../support/course-enrolment-helpers';
 
 /**
- * Lát S5 của issue #228 — truy vết rút cho đề và ma trận (ngang
- * hàng QB-3 của câu hỏi) + ý nghĩa trạng thái theo quy tắc hoàn
- * thiện:
+ * Lát S5 của issue #228 — truy vết rút cho đề và ma trận (ngang hàng QB-3 của câu hỏi) + ý nghĩa trạng thái theo quy tắc hoàn thiện:
  *  - rút đề/ma trận: lý do BẮT BUỘC (schema chặn rỗng), trạng thái
- *    về hidden kèm bộ ba truy vết (lý do/người rút/thời điểm) hiện
- *    trong view; rút hai lần → 409 already_withdrawn.
+ *    về hidden kèm bộ ba truy vết (lý do/người rút/thời điểm) hiện trong view; rút hai lần → 409 already_withdrawn.
  *  - đề đã rút: đổi trạng thái qua đường status thường → 409
- *    exam.status_withdrawn (phải khôi phục đúng nghi thức); pin đã
- *    ghim vẫn phục vụ lượt làm bình thường; ghim mới bị chặn như
- *    mọi đề chưa ready.
+ *    exam.status_withdrawn (phải khôi phục đúng nghi thức); pin đã ghim vẫn phục vụ lượt làm bình thường; ghim mới bị chặn như mọi đề chưa ready.
  *  - ma trận đã rút: đổi trạng thái qua PATCH → 409
- *    quiz.matrix_status_withdrawn; sửa trường khác vẫn được; đóng
- *    góp ma trận đã rút bị chặn ở cổng ready như thường lệ.
+ *    quiz.matrix_status_withdrawn; sửa trường khác vẫn được; đóng góp ma trận đã rút bị chặn ở cổng ready như thường lệ.
  *  - khôi phục: về ready + truy vết xoá sạch; khôi phục khi chưa
  *    rút → 409 not_withdrawn.
  *  - mặc định tạo mới theo quy tắc hoàn thiện giữ nguyên hiện
- *    trạng: đề tạo từ rỗng vào draft, ma trận tạo từ rỗng vào
- *    draft (kênh máy AI/MCP vào draft và câu hỏi vào ready đã có
- *    spec riêng ở các lát trước).
+ *    trạng: đề tạo từ rỗng vào draft, ma trận tạo từ rỗng vào draft (kênh máy AI/MCP vào draft và câu hỏi vào ready đã có spec riêng ở các lát trước).
  */
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });

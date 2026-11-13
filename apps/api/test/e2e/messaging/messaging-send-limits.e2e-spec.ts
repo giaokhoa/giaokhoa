@@ -5,22 +5,13 @@ import {
 } from '../../support/identity-access-helpers';
 
 /**
- * Chặn lạm dụng đường gửi tin (lát M2, issue #212; chính sách P2 đã
- * chốt ở issue #33):
+ * Chặn lạm dụng đường gửi tin (lát M2, issue #212; chính sách P2 đã chốt ở issue #33):
  *   (1) trần độ dài một tin đọc qua site-config
- *       `core/messagingmaxmessagelength` (mặc định 10.000) — đếm theo
- *       ký tự người dùng thấy (grapheme), vượt trần → 400
- *       `messaging.message_too_long`;
+ *       `core/messagingmaxmessagelength` (mặc định 10.000) — đếm theo ký tự người dùng thấy (grapheme), vượt trần → 400 `messaging.message_too_long`;
  *   (2) throttle gửi theo từng người dùng bằng Redis — cửa sổ bùng
- *       phát (`messagingsendburstlimit` tin /
- *       `messagingsendburstwindowseconds` giây) + cửa sổ duy trì
+ *       phát (`messagingsendburstlimit` tin / `messagingsendburstwindowseconds` giây) + cửa sổ duy trì
  *       (`messagingsendperminutelimit` tin/phút), mọi mức qua
- *       site-config; vượt → 429 `messaging.rate_limited`, hết cửa sổ
- *       thì gửi lại được.
- * Mỗi ca dùng một CẶP người dùng mới (kết bạn + hội thoại 1–1 riêng)
- * nên bộ đếm throttle theo userId không rò giữa các ca; mọi ghi đè
- * site-config đều được xoá trong finally/afterAll để không rò sang
- * spec khác (suite chạy tuần tự theo file nhưng dùng chung DB/Redis).
+ *       site-config; vượt → 429 `messaging.rate_limited`, hết cửa sổ thì gửi lại được. Mỗi ca dùng một CẶP người dùng mới (kết bạn + hội thoại 1–1 riêng) nên bộ đếm throttle theo userId không rò giữa các ca; mọi ghi đè site-config đều được xoá trong finally/afterAll để không rò sang spec khác (suite chạy tuần tự theo file nhưng dùng chung DB/Redis).
  */
 
 interface Person { id: string; username: string; token: string }

@@ -23,16 +23,9 @@ export class OutboxService {
   ) {}
 
   /**
-   * Phân giải tenant hiệu lực và payload của một sự kiện — nhà duy
-   * nhất của luật này cho MỌI đường ghi outbox (trong transaction
-   * của phía gọi và standalone), để các đường không bao giờ lệch nhau.
+   * Phân giải tenant hiệu lực và payload của một sự kiện — nhà duy nhất của luật này cho MỌI đường ghi outbox (trong transaction của phía gọi và standalone), để các đường không bao giờ lệch nhau.
    *
-   * TENANT-1 (#196): tenant hiệu lực mặc định lấy từ ngữ cảnh ALS
-   * của luồng phát sinh (request tenant / job đã bọc) khi nơi gọi
-   * không chỉ định tường minh; tenant cũng được GƯƠNG vào payload
-   * để các consumer chạy ở ngữ cảnh platform (relay, consumer
-   * thông báo/digest) biết sự kiện thuộc tenant nào mà gắn đúng
-   * tenant cho dữ liệu chúng tạo ra.
+   * TENANT-1 (#196): tenant hiệu lực mặc định lấy từ ngữ cảnh ALS của luồng phát sinh (request tenant / job đã bọc) khi nơi gọi không chỉ định tường minh; tenant cũng được GƯƠNG vào payload để các consumer chạy ở ngữ cảnh platform (relay, consumer thông báo/digest) biết sự kiện thuộc tenant nào mà gắn đúng tenant cho dữ liệu chúng tạo ra.
    */
   private resolveTenantPayload(input: OutboxEventInput): { tenantId: string | null; payload: Record<string, unknown> } {
     const tenantId = input.tenantId ?? tenantAls.getStore()?.tenantId ?? null;

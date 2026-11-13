@@ -1,10 +1,5 @@
 /**
- * Cột xem trước như học sinh của màn soạn câu hỏi (tách cấu trúc
- * từ `pages/question-editor.tsx` theo đợt A của issue #223): dựng
- * bản xem trực tiếp từ trạng thái form đang soạn (`StudentPreview`)
- * và hàm trích đoạn nội dung (`formExcerpt`) mà trang dùng làm
- * nhãn hiển thị của câu hỏi. Chỉ trình bày từ dữ liệu được truyền
- * qua props, không gọi API.
+ * Cột xem trước như học sinh của màn soạn câu hỏi (tách cấu trúc từ `pages/question-editor.tsx` theo đợt A của issue #223): dựng bản xem trực tiếp từ trạng thái form đang soạn (`StudentPreview`) và hàm trích đoạn nội dung (`formExcerpt`) mà trang dùng làm nhãn hiển thị của câu hỏi. Chỉ trình bày từ dữ liệu được truyền qua props, không gọi API.
  */
 import type { StimulusView } from '@giaokhoa/contracts';
 import { RichTextView, splitMultipleChoiceDocument, splitTrueFalseDocument } from '@giaokhoa/editor';
@@ -20,16 +15,9 @@ import { numberingLabel } from './rich-fields';
 // ---------------------------------------------------------------------------
 
 /**
- * Cột xem trước TRỰC TIẾP như học sinh sẽ thấy câu hỏi: ngữ liệu (nếu
- * gắn), thân câu, khối Hướng dẫn (guidance hiện kèm câu hỏi trong lúc
- * làm — điểm quyết D-4) và vùng trả lời tĩnh theo loại câu. Với
- * multichoice, bản xem trước dựng từ tài liệu thống nhất ĐÃ TÁCH
+ * Cột xem trước TRỰC TIẾP như học sinh sẽ thấy câu hỏi: ngữ liệu (nếu gắn), thân câu, khối Hướng dẫn (guidance hiện kèm câu hỏi trong lúc làm — điểm quyết D-4) và vùng trả lời tĩnh theo loại câu. Với multichoice, bản xem trước dựng từ tài liệu thống nhất ĐÃ TÁCH
  * (cùng hàm split với đường lưu) nên thứ tự/đánh số lựa chọn khớp
- * đúng thứ tự đáp án khi lưu; đáp án đúng không lộ ở bề mặt này.
- * Riêng tự luận có thêm khối Lời giải mẫu ở cuối — đó là phần giáo
- * viên đối chiếu khi soạn (học sinh chỉ thấy ở màn xem lại sau khi
- * nộp, theo cổng xem lại của lần ghim). Phản hồi sau làm bài không
- * thuộc bề mặt này.
+ * đúng thứ tự đáp án khi lưu; đáp án đúng không lộ ở bề mặt này. Riêng tự luận có thêm khối Lời giải mẫu ở cuối — đó là phần giáo viên đối chiếu khi soạn (học sinh chỉ thấy ở màn xem lại sau khi nộp, theo cổng xem lại của lần ghim). Phản hồi sau làm bài không thuộc bề mặt này.
  */
 export function StudentPreview({ form, stimulus }: { form: QuestionEditorFormState; stimulus: StimulusView | null }) {
   const { t } = useTranslation('app');

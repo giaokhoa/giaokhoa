@@ -13,15 +13,7 @@ import { queryKeys } from './keys';
 
 /**
  * Tầng dữ liệu của trang danh sách khoá học (F-01 của rà soát #133):
- * cây danh mục và danh sách khoá dùng ĐÚNG các khoá dùng chung với
- * dashboard và PermissionsProvider (categoryTree, courses) để không
- * tải trùng; tiến độ học của chính người dùng theo khoá qua khoá
- * factory courseMyProgress — lỗi từng khoá thì percent null và trang
- * không hiện số nào, như bản thủ công. Thao tác ghi danh mục là đột
- * biến, làm mới cả cây danh mục lẫn danh sách khoá dùng chung.
- * Lời gọi API thuần nằm ở tầng `api/` của feature; khoá riêng của
- * courses nằm ở `keys.ts` cùng tầng này, hai khoá dùng chung ở lại
- * factory tập trung `src/lib/query-keys.ts`.
+ * cây danh mục và danh sách khoá dùng ĐÚNG các khoá dùng chung với dashboard và PermissionsProvider (categoryTree, courses) để không tải trùng; tiến độ học của chính người dùng theo khoá qua khoá factory courseMyProgress — lỗi từng khoá thì percent null và trang không hiện số nào, như bản thủ công. Thao tác ghi danh mục là đột biến, làm mới cả cây danh mục lẫn danh sách khoá dùng chung. Lời gọi API thuần nằm ở tầng `api/` của feature; khoá riêng của courses nằm ở `keys.ts` cùng tầng này, hai khoá dùng chung ở lại factory tập trung `src/lib/query-keys.ts`.
  */
 
 /** Tuỳ chọn truy vấn cây danh mục khoá (GET /courses/categories/tree) — khoá dùng chung với dashboard. */
@@ -61,9 +53,7 @@ function invalidateCatalog(client: ReturnType<typeof useQueryClient>) {
 }
 
 /**
- * Đột biến tạo danh mục (POST /courses/categories): `parent` chỉ gửi
- * khi chọn một danh mục cha thật — ở cấp cao nhất thì bỏ qua hẳn
- * trường này thay vì gửi giá trị không phải UUID.
+ * Đột biến tạo danh mục (POST /courses/categories): `parent` chỉ gửi khi chọn một danh mục cha thật — ở cấp cao nhất thì bỏ qua hẳn trường này thay vì gửi giá trị không phải UUID.
  */
 export function useCreateCourseCategory() {
   const client = useQueryClient();
@@ -92,8 +82,7 @@ export function useDeleteCourseCategory() {
 }
 
 /**
- * Nạp trước cho route danh sách khoá học: cây danh mục + danh sách
- * khoá (đúng hai khoá dùng chung trang sẽ đọc).
+ * Nạp trước cho route danh sách khoá học: cây danh mục + danh sách khoá (đúng hai khoá dùng chung trang sẽ đọc).
  */
 export async function coursesPageClientLoader() {
   await Promise.allSettled([

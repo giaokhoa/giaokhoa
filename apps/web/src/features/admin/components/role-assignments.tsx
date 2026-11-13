@@ -119,13 +119,7 @@ export function RoleAssignmentsSection({ roles, contexts }: RoleAssignmentsSecti
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   /**
-   * Kẹp trang hiện tại theo tổng mới nhất, thực hiện ngay trong lúc
-   * render theo mẫu "điều chỉnh state khi dữ liệu đổi" của React (không
-   * dùng effect): khi tổng giảm mà trang hiện tại vượt quá trang cuối
-   * thì đưa trang về trang cuối; lần render sau điều kiện đã sai nên
-   * dừng, và truy vấn với trang mới tự tải lại dữ liệu đúng trang. Đổi
-   * lọc/tìm/cỡ trang đã tự reset về trang 1 ở onChange nên đường kẹp
-   * này chủ yếu bao phủ đường gỡ và mọi thay đổi tổng từ bên ngoài.
+   * Kẹp trang hiện tại theo tổng mới nhất, thực hiện ngay trong lúc render theo mẫu "điều chỉnh state khi dữ liệu đổi" của React (không dùng effect): khi tổng giảm mà trang hiện tại vượt quá trang cuối thì đưa trang về trang cuối; lần render sau điều kiện đã sai nên dừng, và truy vấn với trang mới tự tải lại dữ liệu đúng trang. Đổi lọc/tìm/cỡ trang đã tự reset về trang 1 ở onChange nên đường kẹp này chủ yếu bao phủ đường gỡ và mọi thay đổi tổng từ bên ngoài.
    */
   if (data && page > pageCount) {
     setPage(pageCount);

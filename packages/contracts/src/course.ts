@@ -57,9 +57,7 @@ export const courseSchema = z.object({
 export type Course = z.infer<typeof courseSchema>;
 
 /**
- * Trạng thái mở của section/module (K1): suy từ `visible` + `openAt` phía
- * server — `draft` = đang ẩn (visible=false), `scheduled` = đã mở nhưng
- * chờ tới ngày mở (openAt ở tương lai), `open` = đang mở cho học viên.
+ * Trạng thái mở của section/module (K1): suy từ `visible` + `openAt` phía server — `draft` = đang ẩn (visible=false), `scheduled` = đã mở nhưng chờ tới ngày mở (openAt ở tương lai), `open` = đang mở cho học viên.
  */
 export const courseItemStatusSchema = z.enum(['draft', 'open', 'scheduled']);
 export type CourseItemStatus = z.infer<typeof courseItemStatusSchema>;
@@ -147,10 +145,7 @@ export const cohortSchema = z.object({
 export type Cohort = z.infer<typeof cohortSchema>;
 
 /**
- * Grouping (nhóm các nhóm) trong một khoá học như API trả về — hàng của
- * bảng `groupings` phía groups module. Mốc thời gian để tuỳ chọn vì tầng
- * API trả thẳng hàng cơ sở dữ liệu và các bản ghi cũ có thể thiếu chúng
- * khi serialize.
+ * Grouping (nhóm các nhóm) trong một khoá học như API trả về — hàng của bảng `groupings` phía groups module. Mốc thời gian để tuỳ chọn vì tầng API trả thẳng hàng cơ sở dữ liệu và các bản ghi cũ có thể thiếu chúng khi serialize.
  */
 export const courseGroupingSchema = z.object({
   id: uuidIdSchema,
@@ -319,10 +314,7 @@ export const updateCourseModuleSchema = z.strictObject({
 export type UpdateCourseModule = z.infer<typeof updateCourseModuleSchema>;
 
 /**
- * Các loại nội dung giáo viên chọn từ menu trong Builder Outline (K1) —
- * thay cho ô gõ chuỗi `component` tự do. `createsInstance` cho biết loại
- * có vòng đời instance riêng (hiện chỉ quiz) nên builder phải tạo qua API
- * của module sở hữu thay vì tạo course module trần.
+ * Các loại nội dung giáo viên chọn từ menu trong Builder Outline (K1) — thay cho ô gõ chuỗi `component` tự do. `createsInstance` cho biết loại có vòng đời instance riêng (hiện chỉ quiz) nên builder phải tạo qua API của module sở hữu thay vì tạo course module trần.
  */
 export const COURSE_CONTENT_TYPES = [
   { component: 'mod_page', createsInstance: false },
@@ -489,15 +481,7 @@ export const updatePageSchema = z.strictObject({
 export type UpdatePage = z.infer<typeof updatePageSchema>;
 
 /**
- * Kiểm scheme của URL tài nguyên ngoài ngay tại biên hợp đồng: phía
- * web đưa URL này thẳng vào `href` của trang học nên chỉ `http:`/
- * `https:` được phép — scheme `javascript:`/`data:` sẽ thực thi khi
- * người xem bấm liên kết. URL tương đối bị từ chối vì tài nguyên
- * ngoài theo định nghĩa là đích tuyệt đối. Package này không mang
- * kiểu Node/DOM nên phép kiểm ở đây là kiểm tiền tố sau khi gạt ký
- * tự điều khiển/khoảng trắng ở đầu chuỗi (đủ để chốt scheme đứng
- * đầu); tầng nghiệp vụ của `apps/api` kiểm lại độc lập bằng bộ phân
- * tích URL đầy đủ và ném mã lỗi `content.url_scheme_not_allowed`
+ * Kiểm scheme của URL tài nguyên ngoài ngay tại biên hợp đồng: phía web đưa URL này thẳng vào `href` của trang học nên chỉ `http:`/ `https:` được phép — scheme `javascript:`/`data:` sẽ thực thi khi người xem bấm liên kết. URL tương đối bị từ chối vì tài nguyên ngoài theo định nghĩa là đích tuyệt đối. Package này không mang kiểu Node/DOM nên phép kiểm ở đây là kiểm tiền tố sau khi gạt ký tự điều khiển/khoảng trắng ở đầu chuỗi (đủ để chốt scheme đứng đầu); tầng nghiệp vụ của `apps/api` kiểm lại độc lập bằng bộ phân tích URL đầy đủ và ném mã lỗi `content.url_scheme_not_allowed`
  * (HTTP 400) cho cùng ràng buộc.
  */
 function isSafeExternalResourceUrl(url: string): boolean {

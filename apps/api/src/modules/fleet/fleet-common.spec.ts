@@ -35,11 +35,7 @@ function space(partial: Partial<FleetSpace>): FleetSpace {
 
 /**
  * Khoá hành vi THUẦN của công cụ vận hành đội kho (issue #586):
- * thứ tự đợt an toàn (nền tảng → canary → các đợt sau), vòng xoay
- * kiểm thử khôi phục công bằng, cổng quá hạn sao lưu, khuôn tên tệp
- * và gói mã hoá sao lưu tự kiểm chứng được, và luật suy ra URL vận
- * hành (luôn bằng thông tin đăng nhập của role migration khi đã cấu
- * hình). Đổi các bất biến này thì test phải đỏ.
+ * thứ tự đợt an toàn (nền tảng → canary → các đợt sau), vòng xoay kiểm thử khôi phục công bằng, cổng quá hạn sao lưu, khuôn tên tệp và gói mã hoá sao lưu tự kiểm chứng được, và luật suy ra URL vận hành (luôn bằng thông tin đăng nhập của role migration khi đã cấu hình). Đổi các bất biến này thì test phải đỏ.
  */
 describe('Công cụ vận hành đội kho (helper thuần)', () => {
   it('sắp đợt: nền tảng đi đợt riêng trước, trung tâm slug nhỏ nhất là canary đi một mình, phần còn lại chia theo kích thước đợt', () => {

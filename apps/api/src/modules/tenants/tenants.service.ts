@@ -58,11 +58,7 @@ export function toMembershipDto(row: TenantMembershipRow): TenantMembershipDto {
 }
 
 /**
- * Hình chiếu hồ sơ người dùng cho bề mặt tenant (`GET
- * /tenants/:tenantId/users` và đáp ứng của `POST
- * /tenants/:tenantId/users`): đúng 7 trường mà phía tiêu thụ (giao
- * diện quản trị tenant) cần để ghép hồ sơ với membership — định danh,
- * tên hiển thị, email và hai cờ trạng thái tài khoản.
+ * Hình chiếu hồ sơ người dùng cho bề mặt tenant (`GET /tenants/:tenantId/users` và đáp ứng của `POST /tenants/:tenantId/users`): đúng 7 trường mà phía tiêu thụ (giao diện quản trị tenant) cần để ghép hồ sơ với membership — định danh, tên hiển thị, email và hai cờ trạng thái tài khoản.
  */
 export interface TenantUserView {
   id: string;
@@ -77,16 +73,7 @@ export interface TenantUserView {
 /**
  * Chiếu một dòng `users` đầy đủ thành `TenantUserView`.
  *
- * Lý do tồn tại của hàm chiếu này: dòng `users` (kiểu `UserRow`) chứa
- * `passwordHash` và nhiều trường nội bộ (`emailVerified`, `image`,
- * `forcePasswordChange`, `isGuest`, `lastLogin`, mốc thời gian) chỉ
- * được phép sống ở tầng nội bộ (xác thực, phân giải quyền). Mọi đáp
- * ứng HTTP của bề mặt tenant PHẢI đi qua hàm chiếu tường minh này —
- * trả nguyên dòng sẽ phơi bày băm mật khẩu của mọi thành viên tenant
- * cho bất kỳ ai có quyền xem tenant (vấn đề đã ghi tại issue của đợt
- * sửa này). Danh sách trường ở đây phải khớp đúng tập trường phía
- * tiêu thụ khai báo; cần thêm trường thì thêm tường minh tại đây kèm
- * cập nhật test e2e khẳng định hình dạng đáp ứng.
+ * Lý do tồn tại của hàm chiếu này: dòng `users` (kiểu `UserRow`) chứa `passwordHash` và nhiều trường nội bộ (`emailVerified`, `image`, `forcePasswordChange`, `isGuest`, `lastLogin`, mốc thời gian) chỉ được phép sống ở tầng nội bộ (xác thực, phân giải quyền). Mọi đáp ứng HTTP của bề mặt tenant PHẢI đi qua hàm chiếu tường minh này — trả nguyên dòng sẽ phơi bày băm mật khẩu của mọi thành viên tenant cho bất kỳ ai có quyền xem tenant (vấn đề đã ghi tại issue của đợt sửa này). Danh sách trường ở đây phải khớp đúng tập trường phía tiêu thụ khai báo; cần thêm trường thì thêm tường minh tại đây kèm cập nhật test e2e khẳng định hình dạng đáp ứng.
  */
 export function toTenantUserView(row: UserRow): TenantUserView {
   return {
@@ -101,13 +88,7 @@ export function toTenantUserView(row: UserRow): TenantUserView {
 }
 
 /**
- * TenantsService — vòng đời tenant + membership (TENANT-0, #168; hồ sơ
- * mục 2, 4, 6.2). Nguyên tắc cứng đã chốt: tenant CHỈ do
- * platform admin tạo khi khách đăng ký gói tổ chức — KHÔNG có đường tự
- * tạo tenant, KHÔNG tự đăng ký thành giáo viên ở platform; học sinh ở
- * Trang chính được tự đăng ký (luồng đăng ký hiện hữu cho ra học sinh ở
- * tenant-zero), giáo viên ở platform chỉ qua admin nâng hoặc tự nâng
- * khi thanh toán gói giáo viên tự do (TENANT-4 cưỡng chế gói).
+ * TenantsService — vòng đời tenant + membership (TENANT-0, #168; hồ sơ mục 2, 4, 6.2). Nguyên tắc cứng đã chốt: tenant CHỈ do platform admin tạo khi khách đăng ký gói tổ chức — KHÔNG có đường tự tạo tenant, KHÔNG tự đăng ký thành giáo viên ở platform; học sinh ở Trang chính được tự đăng ký (luồng đăng ký hiện hữu cho ra học sinh ở tenant-zero), giáo viên ở platform chỉ qua admin nâng hoặc tự nâng khi thanh toán gói giáo viên tự do (TENANT-4 cưỡng chế gói).
  */
 @Injectable()
 export class TenantsService {
@@ -127,11 +108,7 @@ export class TenantsService {
   /**
    * Tenant-zero (Trang chính); ném lỗi khi chưa được gieo — bootstrap seed luôn tạo trước mọi request.
    *
-   * HOTFIX #196: tra cứu này là đường HỆ THỐNG (đăng nhập/guard chạy
-   * trước khi có ngữ cảnh tenant) nên phải chạy trong ngữ cảnh platform
-   * tường minh — ngoài ngữ cảnh, RLS fail-closed giấu sạch bảng tenants
-   * và mọi request tiền-đăng-nhập chết `tenant.platform_missing` dù seed
-   * đã gieo (chỉ lộ khi app chạy bằng role thường, test superuser mù).
+   * HOTFIX #196: tra cứu này là đường HỆ THỐNG (đăng nhập/guard chạy trước khi có ngữ cảnh tenant) nên phải chạy trong ngữ cảnh platform tường minh — ngoài ngữ cảnh, RLS fail-closed giấu sạch bảng tenants và mọi request tiền-đăng-nhập chết `tenant.platform_missing` dù seed đã gieo (chỉ lộ khi app chạy bằng role thường, test superuser mù).
    */
   async platformTenant(): Promise<TenantRow> {
     return tenantAls.run({ platform: true }, () => this.platformTenantInContext());
@@ -146,13 +123,7 @@ export class TenantsService {
   /**
    * Tạo tenant-zero nếu chưa có (idempotent) kèm context tenant của nó.
    *
-   * HOTFIX #196 vòng 2: đây là helper HỆ THỐNG của đường seed/bootstrap —
-   * tự bọc ngữ cảnh platform thay vì trông vào ngữ cảnh của nơi gọi.
-   * Ngoài ngữ cảnh platform, dòng tenant mới (id chưa tồn tại trong
-   * `app.tenant_id` của bất kỳ kết nối nào) bị WITH CHECK của RLS chặn
-   * 42501 — method này theo thiết kế CHỈ chạy được trong ngữ cảnh
-   * platform hoặc bằng superuser, nên ngữ cảnh platform là một phần
-   * của chính method, không phải điều kiện tiền lệ ở call-site.
+   * HOTFIX #196 vòng 2: đây là helper HỆ THỐNG của đường seed/bootstrap — tự bọc ngữ cảnh platform thay vì trông vào ngữ cảnh của nơi gọi. Ngoài ngữ cảnh platform, dòng tenant mới (id chưa tồn tại trong `app.tenant_id` của bất kỳ kết nối nào) bị WITH CHECK của RLS chặn 42501 — method này theo thiết kế CHỈ chạy được trong ngữ cảnh platform hoặc bằng superuser, nên ngữ cảnh platform là một phần của chính method, không phải điều kiện tiền lệ ở call-site.
    */
   async ensurePlatformTenant(): Promise<TenantRow> {
     return tenantAls.run({ platform: true }, () => this.ensurePlatformTenantInContext());
@@ -174,9 +145,7 @@ export class TenantsService {
   }
 
   /**
-   * Tạo tenant trường mặc định nếu chưa có (idempotent) — đường
-   * seed/review dùng, KHÔNG phải API tự phục vụ. Cùng lý do với
-   * `ensurePlatformTenant`: helper hệ thống, tự bọc ngữ cảnh platform
+   * Tạo tenant trường mặc định nếu chưa có (idempotent) — đường seed/review dùng, KHÔNG phải API tự phục vụ. Cùng lý do với `ensurePlatformTenant`: helper hệ thống, tự bọc ngữ cảnh platform
    * (HOTFIX #196 vòng 2).
    */
   async ensureDefaultSchoolTenant(name: string): Promise<TenantRow> {
@@ -199,19 +168,9 @@ export class TenantsService {
   }
 
   /**
-   * Dòng tenant của một không gian trong CHÍNH kho của nó (đường kho
-   * riêng, issue #584): tra bằng slug của không gian — slug của
-   * tenant và slug đăng ký của trung tâm là một. Trả `undefined`
-   * khi kho riêng chưa có dòng tenant của chính nó (trung tâm đã
-   * đăng ký nhưng chưa được cấp phát xong); nơi gọi tự quyết
-   * fail-closed thay vì rơi về dòng tenant của kho chung.
+   * Dòng tenant của một không gian trong CHÍNH kho của nó (đường kho riêng, issue #584): tra bằng slug của không gian — slug của tenant và slug đăng ký của trung tâm là một. Trả `undefined` khi kho riêng chưa có dòng tenant của chính nó (trung tâm đã đăng ký nhưng chưa được cấp phát xong); nơi gọi tự quyết fail-closed thay vì rơi về dòng tenant của kho chung.
    *
-   * Tra cứu bọc ngữ cảnh platform tường minh: bảng `tenants` mang
-   * RLS theo `app.tenant_id`, mà ngữ cảnh của nơi gọi KHÔNG đáng
-   * tin cho việc này — tiêu biểu lúc đăng nhập, handler còn mang
-   * tenant-zero do `TenantGuard` gán cho request ẩn danh, nên tra
-   * không bọc sẽ bị RLS giấu mất dòng tenant của kho riêng và kết
-   * luận sai là "chưa cấp phát xong".
+   * Tra cứu bọc ngữ cảnh platform tường minh: bảng `tenants` mang RLS theo `app.tenant_id`, mà ngữ cảnh của nơi gọi KHÔNG đáng tin cho việc này — tiêu biểu lúc đăng nhập, handler còn mang tenant-zero do `TenantGuard` gán cho request ẩn danh, nên tra không bọc sẽ bị RLS giấu mất dòng tenant của kho riêng và kết luận sai là "chưa cấp phát xong".
    */
   async getTenantInSpace(slug: string): Promise<TenantRow | undefined> {
     return tenantAls.run({ platform: true }, () =>
@@ -222,15 +181,7 @@ export class TenantsService {
   /**
    * Dòng membership của một user trong CHÍNH kho của một không gian
    * (đường kho riêng, issue #584): cặp (tenant, user) được tra
-   * trong kho của không gian đó, tuyệt đối không tra kho chung —
-   * dùng cho các chốt fail-closed phải quyết ngay trong kho riêng,
-   * điển hình là bước làm mới phiên phải biết membership trong kho
-   * còn hiệu lực hay đã kết thúc trước khi cấp token mới. Trả
-   * `undefined` khi kho riêng không có dòng membership của cặp
-   * này. Tra cứu bọc ngữ cảnh platform và `withSpaceKysely` theo
-   * đúng khuôn của `getTenantInSpace`: bảng membership cũng mang
-   * RLS theo tenant và ngữ cảnh của nơi gọi không đáng tin cho
-   * việc tra cứu này.
+   * trong kho của không gian đó, tuyệt đối không tra kho chung — dùng cho các chốt fail-closed phải quyết ngay trong kho riêng, điển hình là bước làm mới phiên phải biết membership trong kho còn hiệu lực hay đã kết thúc trước khi cấp token mới. Trả `undefined` khi kho riêng không có dòng membership của cặp này. Tra cứu bọc ngữ cảnh platform và `withSpaceKysely` theo đúng khuôn của `getTenantInSpace`: bảng membership cũng mang RLS theo tenant và ngữ cảnh của nơi gọi không đáng tin cho việc tra cứu này.
    */
   async getMembershipInSpace(slug: string, tenantId: string, userId: string): Promise<TenantMembershipRow | undefined> {
     return tenantAls.run({ platform: true }, () =>
@@ -239,14 +190,7 @@ export class TenantsService {
   }
 
   /**
-   * Tra cứu một tenant theo id TRONG ngữ cảnh hiện tại — CỐ Ý không tự
-   * bọc platform (HOTFIX #196 vòng 2): đây là hàm dùng chung, call-site
-   * thuộc bề mặt dữ liệu của tenant hiệu lực (vd `GET /tenants/current`)
-   * phải tôn trọng tầm nhìn RLS của tenant đó; các call-site cấp
-   * platform/xuyên tenant (vòng đời, membership, resolveSwitchTarget)
-   * tự bọc ngữ cảnh platform ở tầng của chúng trước khi gọi xuống đây.
-   * Bọc platform ngay tại hàm này sẽ cho MỌI nơi gọi tầm nhìn xuyên
-   * tenant — sai seam.
+   * Tra cứu một tenant theo id TRONG ngữ cảnh hiện tại — CỐ Ý không tự bọc platform (HOTFIX #196 vòng 2): đây là hàm dùng chung, call-site thuộc bề mặt dữ liệu của tenant hiệu lực (vd `GET /tenants/current`) phải tôn trọng tầm nhìn RLS của tenant đó; các call-site cấp platform/xuyên tenant (vòng đời, membership, resolveSwitchTarget) tự bọc ngữ cảnh platform ở tầng của chúng trước khi gọi xuống đây. Bọc platform ngay tại hàm này sẽ cho MỌI nơi gọi tầm nhìn xuyên tenant — sai seam.
    */
   async getTenant(id: string): Promise<TenantRow> {
     const row = await this.repo.getTenant(id);

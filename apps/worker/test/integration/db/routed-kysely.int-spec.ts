@@ -1,17 +1,7 @@
 /**
- * Ca tích hợp của FACADE KYSELY ĐỊNH TUYẾN phía WORKER (issue #639)
- * — bản mirror của ca phía API trên khung định tuyến riêng của
- * worker (constructor chỉ nhận `ConfigService`, registry pool tự
- * giữ): cùng bộ kiểm — handle theo chế độ kho, định tuyến theo
- * `spaceSlug` trong ALS, transaction commit/rollback, getter
- * `schema`, builder lười, slug chưa chuẩn bị về kho chung, và
- * fail-closed khi pool kho riêng bị thu hồi vì nhàn rỗi.
+ * Ca tích hợp của FACADE KYSELY ĐỊNH TUYẾN phía WORKER (issue #639) — bản mirror của ca phía API trên khung định tuyến riêng của worker (constructor chỉ nhận `ConfigService`, registry pool tự giữ): cùng bộ kiểm — handle theo chế độ kho, định tuyến theo `spaceSlug` trong ALS, transaction commit/rollback, getter `schema`, builder lười, slug chưa chuẩn bị về kho chung, và fail-closed khi pool kho riêng bị thu hồi vì nhàn rỗi.
  *
- * Môi trường: tự cấp phát control plane + hai kho riêng + một kho
- * đóng vai kho chung bằng harness của `@giaokhoa/db` (database dựng từ
- * rỗng bằng Migrator của package). Chuỗi bí mật cố ý trỏ về
- * database `postgres` để bộ phân giải phải chốt đích theo
- * `databaseName` trong sổ.
+ * Môi trường: tự cấp phát control plane + hai kho riêng + một kho đóng vai kho chung bằng harness của `@giaokhoa/db` (database dựng từ rỗng bằng Migrator của package). Chuỗi bí mật cố ý trỏ về database `postgres` để bộ phân giải phải chốt đích theo `databaseName` trong sổ.
  */
 import type { ConfigService } from '@nestjs/config';
 import { Client, Pool } from 'pg';

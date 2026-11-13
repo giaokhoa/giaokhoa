@@ -28,14 +28,7 @@ import type { BuilderBody } from '../types/course-builder';
 
 /**
  * Tầng dữ liệu trang xây dựng khoá học (F-01 đợt 1, rà soát #133):
- * gói dữ liệu builder tải song song đúng nhịp reload() thủ công trước
- * đây — mỗi endpoint có bắt lỗi riêng (lỗi thì null/rỗng, không sập
- * cả trang). Options dùng chung cho hook của trang và clientLoader
- * của route module (prefetch cùng khoá).
- * Lời gọi API thuần nằm ở tầng `api/` của feature. Mọi khoá truy vấn
- * của trang này (courseBuilder, courseContent, courses,
- * courseDetail) đều là khoá dùng chung với các feature khác nên ở
- * lại factory tập trung `src/lib/query-keys.ts`.
+ * gói dữ liệu builder tải song song đúng nhịp reload() thủ công trước đây — mỗi endpoint có bắt lỗi riêng (lỗi thì null/rỗng, không sập cả trang). Options dùng chung cho hook của trang và clientLoader của route module (prefetch cùng khoá). Lời gọi API thuần nằm ở tầng `api/` của feature. Mọi khoá truy vấn của trang này (courseBuilder, courseContent, courses, courseDetail) đều là khoá dùng chung với các feature khác nên ở lại factory tập trung `src/lib/query-keys.ts`.
  */
 
 /**
@@ -96,10 +89,7 @@ export function useCourseContent(courseId: string) {
 
 // --- Đột biến xây dựng khoá (F-01 của rà soát #133) -----------------------------
 //
-// Mọi thao tác ghi của trang builder đều làm mới gói builder (và
-// outline riêng) sau khi thành công — đúng nhịp reload() thủ công
-// trước đây: gói mới về thì effect khởi tạo form của trang chạy lại
-// theo dữ liệu server.
+// Mọi thao tác ghi của trang builder đều làm mới gói builder (và outline riêng) sau khi thành công — đúng nhịp reload() thủ công trước đây: gói mới về thì effect khởi tạo form của trang chạy lại theo dữ liệu server.
 
 /** Dựng một đột biến builder dùng chung: thành công thì làm mới gói builder + outline của khoá. */
 function useBuilderMutation<TVars, TData>(courseId: string, mutationFn: (vars: TVars) => Promise<TData>) {
@@ -219,12 +209,7 @@ export function useRecalculateBuilderCompletion(courseId: string) {
 }
 
 /**
- * Panel "Thêm từ khung" của trình xây dựng khoá (F-01 của rà soát
- * #133 — phần còn lại): panel gắn môn × khối cho khoá rồi nạp các
- * đơn vị khung/SGK đã chọn thành section mới. Ba thao tác ghi dưới
- * đây là đột biến MỎNG (panel tự hiện thông báo và gọi onApplied để
- * trang chứa nạp lại cấu trúc như bản thủ công); phần đọc của panel
- * đã đi qua tầng TanStack của lib/curriculum.
+ * Panel "Thêm từ khung" của trình xây dựng khoá (F-01 của rà soát #133 — phần còn lại): panel gắn môn × khối cho khoá rồi nạp các đơn vị khung/SGK đã chọn thành section mới. Ba thao tác ghi dưới đây là đột biến MỎNG (panel tự hiện thông báo và gọi onApplied để trang chứa nạp lại cấu trúc như bản thủ công); phần đọc của panel đã đi qua tầng TanStack của lib/curriculum.
  */
 
 /** Đột biến lưu môn/khối của khoá (PATCH /courses/:id với subjectId + grade). */

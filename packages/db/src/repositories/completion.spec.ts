@@ -3,17 +3,11 @@ import { createRecordingDb } from '../test-support/recording-db';
 import { CompletionRepository } from './completion';
 
 /**
- * Ca đơn vị của repository hoàn thành (issue #649): khoá hình dạng
- * SQL biên dịch của các thao tác ghi/đè — không cần database, handle
- * ghi lại câu SQL + tham số mà Kysely biên dịch. Ngữ nghĩa chạy thật
- * trên database được khoá ở spec tích hợp đi kèm.
+ * Ca đơn vị của repository hoàn thành (issue #649): khoá hình dạng SQL biên dịch của các thao tác ghi/đè — không cần database, handle ghi lại câu SQL + tham số mà Kysely biên dịch. Ngữ nghĩa chạy thật trên database được khoá ở spec tích hợp đi kèm.
  *
  * Bất biến được khoá ở đây:
  * - Quy tắc T-4 (đã đo ở pilot): trường mang `undefined` trong dữ
- *   kiện ghi bị LOẠI khỏi cả values insert lẫn set của nhánh cập
- *   nhật-khi-trùng — không biên dịch thành tham số, để default của
- *   database (nhánh chèn) và giá trị đã có (nhánh cập nhật) quyết
- *   định.
+ *   kiện ghi bị LOẠI khỏi cả values insert lẫn set của nhánh cập nhật-khi-trùng — không biên dịch thành tham số, để default của database (nhánh chèn) và giá trị đã có (nhánh cập nhật) quyết định.
  * - Đọc cấu hình của khoá chưa từng cấu hình trả mặc định
  *   `{ method: 1 }` mà không ghi gì xuống database.
  */
@@ -32,8 +26,7 @@ describe('CompletionRepository — hình dạng SQL biên dịch', () => {
     const sqlText = driver.queries[0]!.sql;
     expect(sqlText).toContain('insert into "course_modules_completion"');
     expect(sqlText).toContain('on conflict ("course_module_id", "user_id") do update set');
-    // Khoanh vùng khẳng định âm tính ở phần values + set (trước
-    // RETURNING): danh sách cột trả về luôn chứa đủ mọi cột của dòng.
+    // Khoanh vùng khẳng định âm tính ở phần values + set (trước RETURNING): danh sách cột trả về luôn chứa đủ mọi cột của dòng.
     const writePart = sqlText.slice(0, sqlText.indexOf(' returning '));
     expect(writePart).not.toContain('"viewed"');
     expect(writePart).not.toContain('"override_by"');
@@ -59,8 +52,7 @@ describe('CompletionRepository — hình dạng SQL biên dịch', () => {
     const conflictAt = sqlText.indexOf('on conflict');
     expect(conflictAt).toBeGreaterThan(-1);
     const insertPart = sqlText.slice(0, conflictAt);
-    // Khoanh vùng ở đúng mệnh đề SET (từ "do update set" tới trước
-    // RETURNING): danh sách cột trả về luôn chứa đủ mọi cột của dòng.
+    // Khoanh vùng ở đúng mệnh đề SET (từ "do update set" tới trước RETURNING): danh sách cột trả về luôn chứa đủ mọi cột của dòng.
     const setPart = sqlText.slice(sqlText.indexOf('do update set'), sqlText.indexOf(' returning '));
     expect(insertPart).toContain('"time_enrolled"');
     expect(setPart).not.toContain('"time_enrolled"');

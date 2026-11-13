@@ -1,35 +1,15 @@
 /**
- * Helper THUẦN cho việc cấp phát ROLE RUNTIME và ROLE MIGRATION của
- * kho nghiệp vụ (issue #586): tách phần suy luận (đọc đích từ URL,
- * dựng câu SQL) khỏi phần thực thi (script `runtime-roles-setup.ts`)
- * để kiểm chứng bằng unit test không cần database thật — cùng khuôn
- * với `control-plane-provision.ts` của issue #580.
+ * Helper THUẦN cho việc cấp phát ROLE RUNTIME và ROLE MIGRATION của kho nghiệp vụ (issue #586): tách phần suy luận (đọc đích từ URL, dựng câu SQL) khỏi phần thực thi (script `runtime-roles-setup.ts`) để kiểm chứng bằng unit test không cần database thật — cùng khuôn với `control-plane-provision.ts` của issue #580.
  *
- * Mô hình role của một kho (áp cho kho nghiệp vụ hiện tại và là
- * khuôn cho mọi kho riêng của trung tâm về sau):
+ * Mô hình role của một kho (áp cho kho nghiệp vụ hiện tại và là khuôn cho mọi kho riêng của trung tâm về sau):
  * - Role MIGRATION: role duy nhất được sở hữu database và mọi đối
- *   tượng trong đó; chỉ các bước áp migration (bộ máy migration,
- *   runner migration của đội kho) dùng role này. Mọi thay đổi schema vì vậy
- *   đi qua đúng một danh tính có ghi nhận, không lẫn với đường đọc
- *   ghi thường ngày.
+ *   tượng trong đó; chỉ các bước áp migration (bộ máy migration, runner migration của đội kho) dùng role này. Mọi thay đổi schema vì vậy đi qua đúng một danh tính có ghi nhận, không lẫn với đường đọc ghi thường ngày.
  * - Role RUNTIME: role của tầng ứng dụng (api + worker) — KHÔNG
- *   phải superuser, không sở hữu bất kỳ đối tượng nào, chỉ giữ
- *   quyền dữ liệu tối thiểu (đọc/ghi dòng và dùng sequence trên
- *   schema nghiệp vụ). Cô lập kết nối giữa các database (control
- *   plane, kho trung tâm) chỉ đứng vững khi role kết nối không phải
- *   superuser: superuser bỏ qua mọi kiểm tra quyền CONNECT, nên
- *   runtime là superuser (trạng thái trước issue này, khi
- *   `DATABASE_URL` dùng chính tài khoản quản trị của image
- *   Postgres) thì thu hồi CONNECT không còn tác dụng.
+ *   phải superuser, không sở hữu bất kỳ đối tượng nào, chỉ giữ quyền dữ liệu tối thiểu (đọc/ghi dòng và dùng sequence trên schema nghiệp vụ). Cô lập kết nối giữa các database (control plane, kho trung tâm) chỉ đứng vững khi role kết nối không phải superuser: superuser bỏ qua mọi kiểm tra quyền CONNECT, nên runtime là superuser (trạng thái trước issue này, khi `DATABASE_URL` dùng chính tài khoản quản trị của image Postgres) thì thu hồi CONNECT không còn tác dụng.
  * - Role quản trị của cụm (tài khoản chính của image Postgres) chỉ
- *   còn vai trò bootstrap: tạo role/database ở bước cấp phát rồi
- *   rút khỏi mọi đường dữ kiện thường ngày.
+ *   còn vai trò bootstrap: tạo role/database ở bước cấp phát rồi rút khỏi mọi đường dữ kiện thường ngày.
  *
- * Hai URL `MIGRATION_DATABASE_URL` và `RUNTIME_DATABASE_URL` là
- * nguồn sự thật duy nhất về đích cấp phát: tên database = path,
- * role = username, mật khẩu = password của từng URL — script không
- * nhận tham số nào khác, nối tiếp đúng cách `control-plane-setup`
- * đọc `CONTROL_PLANE_DATABASE_URL`.
+ * Hai URL `MIGRATION_DATABASE_URL` và `RUNTIME_DATABASE_URL` là nguồn sự thật duy nhất về đích cấp phát: tên database = path, role = username, mật khẩu = password của từng URL — script không nhận tham số nào khác, nối tiếp đúng cách `control-plane-setup` đọc `CONTROL_PLANE_DATABASE_URL`.
  */
 import { quoteIdentifier, quoteLiteral } from '../control-plane/control-plane-provision';
 

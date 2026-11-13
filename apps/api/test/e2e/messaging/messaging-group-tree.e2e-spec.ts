@@ -9,17 +9,13 @@ import { createCategory, createClass, createCourse, createEnrolInstance, enrolUs
 import { addGroupMember, contextIdByLevelInstance, createGroupViaApi } from '../../support/engagement-helpers';
 
 /**
- * MSG-T1 (issue #33 — thiết kế cấu trúc nhắn tin chốt 11:36 ngày
- * 26/10/2026): cây nhóm theo VAI dựng ở server (GET
- * /messages/group-tree) + phân loại conversation trên danh sách.
+ * MSG-T1 (issue #33 — thiết kế cấu trúc nhắn tin chốt 11:36 ngày 26/10/2026): cây nhóm theo VAI dựng ở server (GET /messages/group-tree) + phân loại conversation trên danh sách.
  *
  * Luồng nghiệp vụ được kiểm:
  *  (1) GV là chủ 2 lớp, mỗi lớp có khoá: cây của GV có đúng 2 nút lớp
- *      vai "đang dạy" (teaching), khoá nằm TRONG lớp theo quan hệ
- *      lớp–khoá, chat chưa ensure thì conversationId null + unread 0.
+ *      vai "đang dạy" (teaching), khoá nằm TRONG lớp theo quan hệ lớp–khoá, chat chưa ensure thì conversationId null + unread 0.
  *  (2) Sau khi chat khoá được ensure và có tin chưa đọc, nút khoá
- *      mang đúng conversationId + unread; nút lớp mang tổng chưa đọc
- *      của các nút con.
+ *      mang đúng conversationId + unread; nút lớp mang tổng chưa đọc của các nút con.
  *  (3) HS thuộc roster của lớp 1: cây chỉ có lớp 1 vai "đang học"
  *      (learning); HS đồng thời ghi danh vào một khoá thuộc lớp khác
  *      (không thuộc roster lớp đó): khoá hiện ở mục ngoài-lớp-trực-
@@ -27,21 +23,12 @@ import { addGroupMember, contextIdByLevelInstance, createGroupViaApi } from '../
  *  (4) Người ngoài hoàn toàn: cây rỗng cả ba mục.
  *  (5) Nhóm con trong khoá: thành viên thấy nút nhóm con dưới khoá
  *      (chưa ensure → null), ensure xong thì mang conversationId;
- *      nhóm tự do do quản trị viên tạo hiện ở mục freeGroups, GV và
- *      HS đều là thành viên thường vai learning. Cờ
- *      `canCreateFreeGroup` trên cây khớp đúng cổng tạo nhóm tự do:
+ *      nhóm tự do do quản trị viên tạo hiện ở mục freeGroups, GV và HS đều là thành viên thường vai learning. Cờ `canCreateFreeGroup` trên cây khớp đúng cổng tạo nhóm tự do:
  *      quản trị viên true; GV, HS, nhân viên và người ngoài false.
  *  (6) Phân loại trên GET /messages/conversations: chat khoá mang
- *      itemType 'course' + itemId đúng; nhóm con 'groups'; nhóm tự
- *      do cả ba trường null.
+ *      itemType 'course' + itemId đúng; nhóm con 'groups'; nhóm tự do cả ba trường null.
  *  (7) Mốc ghim cá nhân trên cây (vòng bổ sung bằng chứng của PR
- *      #607): HS vừa ghim vừa lưu trữ một nhóm tự do và chat khoá —
- *      hai hội thoại lúc đó chỉ còn nằm ở tập đã lưu trữ của HS —
- *      cây của HS vẫn báo pinnedAt khác null cho cả nút nhóm tự do
- *      lẫn nút khoá, tức mốc ghim được dựng từ cả hai tập tóm tắt;
- *      một nhóm tự do khác chỉ lưu trữ, không ghim, mang pinnedAt
- *      null; ghim là trạng thái cá nhân nên cây của GV (không ghim)
- *      báo null cho cùng các hội thoại đó.
+ *      #607): HS vừa ghim vừa lưu trữ một nhóm tự do và chat khoá — hai hội thoại lúc đó chỉ còn nằm ở tập đã lưu trữ của HS — cây của HS vẫn báo pinnedAt khác null cho cả nút nhóm tự do lẫn nút khoá, tức mốc ghim được dựng từ cả hai tập tóm tắt; một nhóm tự do khác chỉ lưu trữ, không ghim, mang pinnedAt null; ghim là trạng thái cá nhân nên cây của GV (không ghim) báo null cho cùng các hội thoại đó.
  */
 
 interface Person { id: string; username: string; token: string }
@@ -58,27 +45,13 @@ interface TreeBody {
 }
 
 /**
- * Ghi thẳng một dòng gán vai vào DB cho fixture. Các fixture của bộ
- * spec nhắn tin dựng persona giáo viên vừa ghi danh trong khoá vừa
- * giữ vai giảng dạy tại context khoá (giáo viên hiện diện trong khoá
- * như một thành viên và giữ vai trò kiểm duyệt). Từ issue #425,
- * trạng thái lẫn vai cùng khoá này không còn tạo được qua API — cả
- * hai chiều ghi danh/gán vai đều bị chốt tách vai chặn — và chỉ còn
- * tồn tại như dữ kiện có sẵn; các ca của bộ spec này kiểm hành vi
- * nhắn tin trên đúng dữ kiện đó, nên dòng gán vai được ghi thẳng
- * vào DB trong lúc phần ghi danh vẫn đi qua API như cũ.
+ * Ghi thẳng một dòng gán vai vào DB cho fixture. Các fixture của bộ spec nhắn tin dựng persona giáo viên vừa ghi danh trong khoá vừa giữ vai giảng dạy tại context khoá (giáo viên hiện diện trong khoá như một thành viên và giữ vai trò kiểm duyệt). Từ issue #425, trạng thái lẫn vai cùng khoá này không còn tạo được qua API — cả hai chiều ghi danh/gán vai đều bị chốt tách vai chặn — và chỉ còn tồn tại như dữ kiện có sẵn; các ca của bộ spec này kiểm hành vi nhắn tin trên đúng dữ kiện đó, nên dòng gán vai được ghi thẳng vào DB trong lúc phần ghi danh vẫn đi qua API như cũ.
  */
 
 /**
- * Dựng thẳng vào DB một ghi danh học viên đang hoạt động cho
- * fixture: bản ghi user_enrolments + dòng gán vai do ghi danh cấp
+ * Dựng thẳng vào DB một ghi danh học viên đang hoạt động cho fixture: bản ghi user_enrolments + dòng gán vai do ghi danh cấp
  * (component 'enrol', item_id là instance) + tư cách thành viên
- * tenant của khoá — đúng các dòng EnrolService.enrolUserInternal
- * vẫn ghi. Chỉ dùng cho persona giáo viên chủ lớp ở khoá 1 của spec
- * này: từ issue #425, ghi danh một chủ lớp vào khoá thuộc lớp mình
- * chủ nhiệm bị chốt funnel 1 chặn qua API (chủ lớp đã có cấp quyền
- * giảng dạy bao phủ khoá qua context lớp), nên ghi danh "theo thông
- * lệ seed" của fixture chỉ còn dựng được như dữ kiện có sẵn.
+ * tenant của khoá — đúng các dòng EnrolService.enrolUserInternal vẫn ghi. Chỉ dùng cho persona giáo viên chủ lớp ở khoá 1 của spec này: từ issue #425, ghi danh một chủ lớp vào khoá thuộc lớp mình chủ nhiệm bị chốt funnel 1 chặn qua API (chủ lớp đã có cấp quyền giảng dạy bao phủ khoá qua context lớp), nên ghi danh "theo thông lệ seed" của fixture chỉ còn dựng được như dữ kiện có sẵn.
  */
 async function insertLegacyEnrolment(instanceId: string, userId: string, courseId: string, contextId: string): Promise<void> {
   const client = new Client({ connectionString: process.env.DATABASE_URL });

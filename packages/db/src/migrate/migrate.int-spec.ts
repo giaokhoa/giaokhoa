@@ -1,26 +1,11 @@
 /**
- * Spec tích hợp của bộ máy migration của `@giaokhoa/db` (issue #639,
- * hoàn thiện ở #663): chứng minh trên database thật rằng bộ máy áp
- * đủ carrier với đúng số đếm kỳ vọng, hàm đọc nhật ký chỉ đọc
- * `kysely_migration`, runner CLI dừng to tiếng trước database lạ,
- * trạng thái "đã áp carrier, native đang chờ" được áp tiếp đúng
- * phần native, và ngữ nghĩa transaction/khoá mà runner production
- * dựa vào được giữ đúng.
+ * Spec tích hợp của bộ máy migration của `@giaokhoa/db` (issue #639, hoàn thiện ở #663): chứng minh trên database thật rằng bộ máy áp đủ carrier với đúng số đếm kỳ vọng, hàm đọc nhật ký chỉ đọc `kysely_migration`, runner CLI dừng to tiếng trước database lạ, trạng thái "đã áp carrier, native đang chờ" được áp tiếp đúng phần native, và ngữ nghĩa transaction/khoá mà runner production dựa vào được giữ đúng.
  *
- * Lưu ý về "mô phỏng nhật ký cũ": một ca tự tạo schema `drizzle` +
- * bảng `__drizzle_migrations` rồi chèn tên carrier — đó là mô
- * phỏng nhật ký mà bộ máy cũ ghi, KHÔNG phải chạy bộ máy cũ thật.
- * Điều ca đó chứng minh là hàm đọc nhật ký BỎ QUA nhật ký cũ sau
- * khi gỡ Drizzle (issue #663): nguồn sự thật duy nhất là
- * `kysely_migration`. (Trước #663 package còn bước cấy nhật ký
- * chép tên từ nhật ký cũ sang; cửa sổ chuyển đổi đã đóng nên bước
- * cấy và các ca kiểm của nó đã gỡ cùng PR này.)
+ * Lưu ý về "mô phỏng nhật ký cũ": một ca tự tạo schema `drizzle` + bảng `__drizzle_migrations` rồi chèn tên carrier — đó là mô phỏng nhật ký mà bộ máy cũ ghi, KHÔNG phải chạy bộ máy cũ thật. Điều ca đó chứng minh là hàm đọc nhật ký BỎ QUA nhật ký cũ sau khi gỡ Drizzle (issue #663): nguồn sự thật duy nhất là `kysely_migration`. (Trước #663 package còn bước cấy nhật ký chép tên từ nhật ký cũ sang; cửa sổ chuyển đổi đã đóng nên bước cấy và các ca kiểm của nó đã gỡ cùng PR này.)
  *
  * Môi trường: cụm PostgreSQL quản trị từ `GIAOKHOA_DB_TEST_ADMIN_URL`
  * (hoặc suy từ `DATABASE_URL` như spec khói của harness). Các
- * database test bị xoá và dựng lại ở đầu suite, xoá hẳn khi xong.
- * Thử nghiệm T-3 chạy tiến trình con `node -e` dùng `kysely` từ
- * `node_modules` của package (không phụ thuộc dist đã build).
+ * database test bị xoá và dựng lại ở đầu suite, xoá hẳn khi xong. Thử nghiệm T-3 chạy tiến trình con `node -e` dùng `kysely` từ `node_modules` của package (không phụ thuộc dist đã build).
  */
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -46,11 +31,7 @@ const T2_DB = 'giaokhoa_db_migrate_n2_t2';
 const T3_DB = 'giaokhoa_db_migrate_n2_t3';
 
 /**
- * Diện carrier đóng băng của kho control plane (định nghĩa tại
- * `stores.ts`). Khác với `listMigrationNames` (mọi migration trong
- * thư mục, gồm cả migration native): diện này dùng để dựng trạng
- * thái "mới áp carrier, native chưa áp" và để hậu kiểm đòi đúng
- * các carrier thật phải có mặt trong nhật ký.
+ * Diện carrier đóng băng của kho control plane (định nghĩa tại `stores.ts`). Khác với `listMigrationNames` (mọi migration trong thư mục, gồm cả migration native): diện này dùng để dựng trạng thái "mới áp carrier, native chưa áp" và để hậu kiểm đòi đúng các carrier thật phải có mặt trong nhật ký.
  */
 const CP_CARRIERS: string[] = MIGRATION_STORES['control-plane'].carrierNames;
 
@@ -59,10 +40,7 @@ function packageMigrationsDir(store: 'centre' | 'control-plane' | 'system-bank')
 }
 
 /**
- * Provider chỉ chứa các migration có tên thuộc tập cho trước, dựng
- * trên `FrozenSqlProvider` đầy đủ — dùng để dựng trạng thái "mới áp
- * một phần" (ví dụ database production mới áp carrier, migration
- * native chưa áp) mà provider đầy đủ không dựng được.
+ * Provider chỉ chứa các migration có tên thuộc tập cho trước, dựng trên `FrozenSqlProvider` đầy đủ — dùng để dựng trạng thái "mới áp một phần" (ví dụ database production mới áp carrier, migration native chưa áp) mà provider đầy đủ không dựng được.
  */
 function providerOnly(migrationsDir: string, names: readonly string[]): MigrationProvider {
   const inner = new FrozenSqlProvider(migrationsDir);
@@ -422,8 +400,7 @@ const { Migrator } = require('kysely/migration');
       env: { ...process.env, MIGRATE_T3_URL: t3Url },
       cwd: process.cwd(),
     });
-    // Chờ backend của tiến trình con vào trạng thái pg_sleep (đang
-    // giữ khoá advisory của Migrator) rồi SIGKILL.
+    // Chờ backend của tiến trình con vào trạng thái pg_sleep (đang giữ khoá advisory của Migrator) rồi SIGKILL.
     const watcher = new Client({ connectionString: t3Url });
     await watcher.connect();
     try {
@@ -441,8 +418,7 @@ const { Migrator } = require('kysely/migration');
     }
     child.kill('SIGKILL');
     await new Promise<void>((resolve) => child.on('exit', () => resolve()));
-    // Chạy lại ngay với provider chỉ còn migration tạo bảng: nếu
-    // khoá advisory còn giữ, Migrator sẽ chờ tới hết timeout khoá
+    // Chạy lại ngay với provider chỉ còn migration tạo bảng: nếu khoá advisory còn giữ, Migrator sẽ chờ tới hết timeout khoá
     // (1 giờ) mới báo lỗi — hoàn tất nhanh chứng minh khoá cấp
     // session tự giải phóng khi tiến trình chết.
     const started = Date.now();

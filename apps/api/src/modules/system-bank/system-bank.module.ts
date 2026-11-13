@@ -13,27 +13,15 @@ import { SystemBankPackagesController } from './system-bank-packages.controller'
 import { SystemBankService } from './system-bank.service';
 
 /**
- * SystemBankModule (issue #585): kho ngân hàng hệ thống trên database
- * riêng phía platform — bản chính tập trung, phiên bản bất biến, giáo
- * viên tìm câu qua API và nhập bản chụp đúng phiên bản vào kho trung
- * tâm. Import AccessModule để dùng PermissionEvaluator/ContextsService
- * cho cổng quản trị platform; xuất SystemBankService để các lát sau
+ * SystemBankModule (issue #585): kho ngân hàng hệ thống trên database riêng phía platform — bản chính tập trung, phiên bản bất biến, giáo viên tìm câu qua API và nhập bản chụp đúng phiên bản vào kho trung tâm. Import AccessModule để dùng PermissionEvaluator/ContextsService cho cổng quản trị platform; xuất SystemBankService để các lát sau
  * (khám phá, nhập bản chụp, gói YCCĐ) và module khác dùng chung, và
- * xuất SystemBankConnection để các công cụ vận hành (di trú dữ kiện)
- * dùng đúng một kết nối kho ngân hàng của tiến trình.
+ * xuất SystemBankConnection để các công cụ vận hành (di trú dữ kiện) dùng đúng một kết nối kho ngân hàng của tiến trình.
  *
- * Từ hạng mục nhân rộng G10 (issue #650), cả hai repository sống ở
- * `@giaokhoa/db` (lớp thuần, không phụ thuộc Nest) nên module lắp chúng
- * bằng factory provider theo khuôn pilot kho control plane:
+ * Từ hạng mục nhân rộng G10 (issue #650), cả hai repository sống ở `@giaokhoa/db` (lớp thuần, không phụ thuộc Nest) nên module lắp chúng bằng factory provider theo khuôn pilot kho control plane:
  * - Repository kho ngân hàng nhận handle Kysely từ adapter
- *   `SystemBankConnection` (kết nối riêng chuyên dụng), kèm hàm dựng
- *   lỗi chưa-cấu-hình là `ServiceUnavailableException` mang mã
- *   `system_bank.not_configured` — đúng hình dạng lỗi 503 mà đường
- *   bộ máy cũ trước đây ném từ trong repository.
+ *   `SystemBankConnection` (kết nối riêng chuyên dụng), kèm hàm dựng lỗi chưa-cấu-hình là `ServiceUnavailableException` mang mã `system_bank.not_configured` — đúng hình dạng lỗi 503 mà đường bộ máy cũ trước đây ném từ trong repository.
  * - Repository phía trung tâm nhận handle Kysely ĐỊNH TUYẾN THEO
- *   KHÔNG GIAN (`SpaceDatabaseService.routedKysely` qua
- *   SpaceRoutingModule): hai handle giữ tách biệt tuyệt đối, không
- *   gộp và không fallback qua nhau.
+ *   KHÔNG GIAN (`SpaceDatabaseService.routedKysely` qua SpaceRoutingModule): hai handle giữ tách biệt tuyệt đối, không gộp và không fallback qua nhau.
  */
 @Module({
   imports: [AccessModule, QuestionsModule, TenantsModule, SpaceRoutingModule],

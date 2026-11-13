@@ -28,10 +28,7 @@ export const QUIZ_CAPABILITIES = {
   manage: 'quiz:manage',
   manageOverrides: 'quiz:manageoverrides',
   /**
-   * Quyền ma trận đã về area `matrix:*` ở đợt đồng bộ khuôn ngân
-   * hàng (issue #228, lát S3) — KHÔNG còn neo vào quiz:*: viewMatrix
-   * = matrix:use (xem/dùng), addMatrix = matrix:add (tạo mới: tạo
-   * tay, nhập file, copy vào bank đích), manageMatrix = matrix:edit
+   * Quyền ma trận đã về area `matrix:*` ở đợt đồng bộ khuôn ngân hàng (issue #228, lát S3) — KHÔNG còn neo vào quiz:*: viewMatrix = matrix:use (xem/dùng), addMatrix = matrix:add (tạo mới: tạo tay, nhập file, copy vào bank đích), manageMatrix = matrix:edit
    * (sửa ma trận và các ô đã có). Khoá nội bộ giữ nguyên tên để các
    * điểm gác không đổi hình dạng.
    */
@@ -46,22 +43,13 @@ export const QUIZ_CAPABILITIES = {
 
 /**
  * Tầng thấp dùng chung của QuizService (không phải một cụm ca sử dụng):
- * các primitive tải pin/ma trận, cổng quyền theo context, view pin, và
- * các phép tính điểm/chấm từ usage mà nhiều cụm cùng dùng. Tách riêng
- * tầng này giữ đồ thị phụ thuộc giữa các service cụm không có vòng:
- * cụm ghim, cụm ma trận, cụm sinh đề và cụm lượt làm đều chỉ trỏ xuống
- * tầng này (cụm lượt làm là trung gian cho hai phép gọi chéo còn lại:
- * cụm ghim gọi chấm lại qua `pushGrade`, cụm sinh đề gọi chốt lượt
- * qua `finalizeAttempt`).
+ * các primitive tải pin/ma trận, cổng quyền theo context, view pin, và các phép tính điểm/chấm từ usage mà nhiều cụm cùng dùng. Tách riêng tầng này giữ đồ thị phụ thuộc giữa các service cụm không có vòng:
+ * cụm ghim, cụm ma trận, cụm sinh đề và cụm lượt làm đều chỉ trỏ xuống tầng này (cụm lượt làm là trung gian cho hai phép gọi chéo còn lại:
+ * cụm ghim gọi chấm lại qua `pushGrade`, cụm sinh đề gọi chốt lượt qua `finalizeAttempt`).
  *
- * Các method vốn là `private` của QuizService cũ nhưng được cụm khác
- * gọi nay để public trong nội bộ module (không phải bề mặt API của
- * module): toàn bộ method của service này đều thuộc diện đó, trừ các
- * method vốn đã public. Bề mặt công khai ra ngoài module không đổi —
- * vẫn đi qua facade QuizService.
+ * Các method vốn là `private` của QuizService cũ nhưng được cụm khác gọi nay để public trong nội bộ module (không phải bề mặt API của module): toàn bộ method của service này đều thuộc diện đó, trừ các method vốn đã public. Bề mặt công khai ra ngoài module không đổi — vẫn đi qua facade QuizService.
  *
- * Hai hằng `QUIZ_COMPONENT`/`QUIZ_CAPABILITIES` chuyển về đây cùng
- * với nhóm cổng quyền (nơi dùng thật), facade re-export lại để bề mặt
+ * Hai hằng `QUIZ_COMPONENT`/`QUIZ_CAPABILITIES` chuyển về đây cùng với nhóm cổng quyền (nơi dùng thật), facade re-export lại để bề mặt
  * import cũ không đổi.
  */
 
@@ -84,8 +72,7 @@ export class QuizSharedService {
   // --- helpers ---------------------------------------------------------------
 
   /**
-   * Lấy pin đã LÀM GIÀU; ném exam.pin_not_found khi vắng. Hàng
-   * exam_pins được gộp với các trường suy từ exam version đã ghim
+   * Lấy pin đã LÀM GIÀU; ném exam.pin_not_found khi vắng. Hàng exam_pins được gộp với các trường suy từ exam version đã ghim
    * (thang điểm, tên hiển thị, ma trận, thang Đ–S) và exam (kind)
    * thành một "bài kiểm tra trong khoá" thống nhất cho các tầng trên.
    */

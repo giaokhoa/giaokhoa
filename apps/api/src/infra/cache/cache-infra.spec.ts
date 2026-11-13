@@ -51,8 +51,7 @@ describe('CacheInfraModule (2 chế độ MUC, Redis thật)', () => {
   });
 
   it('cache ứng dụng áp TTL mặc định khi set không kèm TTL, và tôn trọng TTL tường minh', async () => {
-    // Set không truyền TTL: khoá trong Redis phải mang hạn mặc định
-    // của module (300 giây) thay vì tồn tại vô hạn (pttl = -1).
+    // Set không truyền TTL: khoá trong Redis phải mang hạn mặc định của module (300 giây) thay vì tồn tại vô hạn (pttl = -1).
     await appCache.set('infra:default-ttl-key', 'defaulted');
     const [defaultedKey] = await redis.keys('*infra:default-ttl-key*');
     expect(defaultedKey).toBeTruthy();
@@ -60,8 +59,7 @@ describe('CacheInfraModule (2 chế độ MUC, Redis thật)', () => {
     expect(defaultedPttl).toBeGreaterThan(0);
     expect(defaultedPttl).toBeLessThanOrEqual(300_000);
 
-    // Set có TTL tường minh ngắn: hạn hiệu lực là TTL đã truyền,
-    // không bị TTL mặc định ghi đè.
+    // Set có TTL tường minh ngắn: hạn hiệu lực là TTL đã truyền, không bị TTL mặc định ghi đè.
     await appCache.set('infra:explicit-ttl-key', 'explicit', 5_000);
     const [explicitKey] = await redis.keys('*infra:explicit-ttl-key*');
     expect(explicitKey).toBeTruthy();

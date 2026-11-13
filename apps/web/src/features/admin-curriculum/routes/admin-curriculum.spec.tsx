@@ -6,12 +6,7 @@ import { AdminCurriculumPage, AdminCurriculumTreePage } from './admin-curriculum
 import { TestProviders } from '#test/providers';
 
 /**
- * Spec trang quản trị chương trình (K0a): danh sách môn thu/mở ra
- * chương trình theo khối, panel nạp dữ liệu chuẩn gọi đúng POST
- * /curriculum/program-import, màn cây trình bày bảng chương trình
- * bằng Data Table dùng chung (ba cột Mạch / chủ đề — Nội dung — Yêu
- * cầu cần đạt, mỗi YCCĐ một dòng riêng) kèm bộ chọn Môn/Lớp và ô tìm
- * kiếm, và 403 từ API hiện thông báo không có quyền thay vì sập trang.
+ * Spec trang quản trị chương trình (K0a): danh sách môn thu/mở ra chương trình theo khối, panel nạp dữ liệu chuẩn gọi đúng POST /curriculum/program-import, màn cây trình bày bảng chương trình bằng Data Table dùng chung (ba cột Mạch / chủ đề — Nội dung — Yêu cầu cần đạt, mỗi YCCĐ một dòng riêng) kèm bộ chọn Môn/Lớp và ô tìm kiếm, và 403 từ API hiện thông báo không có quyền thay vì sập trang.
  */
 
 const SUBJECT = { id: 'subj-toan', contextId: 'ctx-sys', name: 'Toán', slug: 'toan', position: 1 };

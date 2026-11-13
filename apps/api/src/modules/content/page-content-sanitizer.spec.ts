@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { isSafeExternalResourceUrl, sanitizePageContent } from './page-content-sanitizer';
 
 /**
- * Gác XSS lưu trữ của nội dung trang đọc (mod_page) và URL tài nguyên
- * ngoài ở mức đơn vị: hàm làm sạch phải loại mọi cấu trúc thực thi
+ * Gác XSS lưu trữ của nội dung trang đọc (mod_page) và URL tài nguyên ngoài ở mức đơn vị: hàm làm sạch phải loại mọi cấu trúc thực thi
  * (thẻ script, thuộc tính sự kiện, URL nguy hiểm) trong khi giữ
  * nguyên định dạng học liệu hợp lệ — đổi allowlist theo hướng nới
  * (cho lại thẻ/thuộc tính thực thi) hoặc hướng siết quá tay (làm mất
@@ -77,9 +76,7 @@ describe('Hàm sanitizePageContent', () => {
 });
 
 /**
- * Scheme của URL tài nguyên ngoài: chỉ http/https là đích an toàn để
- * phát vào href của trang học; parser URL của nền tảng phải bắt được
- * cả biến thể lách bằng ký tự điều khiển.
+ * Scheme của URL tài nguyên ngoài: chỉ http/https là đích an toàn để phát vào href của trang học; parser URL của nền tảng phải bắt được cả biến thể lách bằng ký tự điều khiển.
  */
 describe('Hàm isSafeExternalResourceUrl', () => {
   it('chấp nhận URL http/https tuyệt đối, gồm đường nhúng YouTube/Vimeo', () => {

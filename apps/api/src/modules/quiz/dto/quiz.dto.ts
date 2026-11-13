@@ -46,8 +46,7 @@ import {
 } from '@giaokhoa/contracts';
 
 /**
- * Validation của Quiz/Pin dùng Zod qua Standard Schema — schema nền ở
- * `@giaokhoa/contracts` là nguồn sự thật duy nhất (giống các module khác).
+ * Validation của Quiz/Pin dùng Zod qua Standard Schema — schema nền ở `@giaokhoa/contracts` là nguồn sự thật duy nhất (giống các module khác).
  */
 export {
   applyPinVersionUpdateSchema,

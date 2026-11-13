@@ -8,25 +8,12 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser } from '..
 import { contextIdByLevelInstance, suspendUser } from '../../support/engagement-helpers';
 
 /**
- * Mô hình khám phá bạn bè ĐÃ CHỐT LẠI của issue #33 (quyết định
- * 24/10/2026, thay toàn bộ cơ chế tìm người theo tên của PR #41):
+ * Mô hình khám phá bạn bè ĐÃ CHỐT LẠI của issue #33 (quyết định 24/10/2026, thay toàn bộ cơ chế tìm người theo tên của PR #41):
  *  - Endpoint `GET /messages/people/search` ĐÃ GỠ — gọi vào là 404.
  *  - Khám phá bạn bè qua ROSTER thành viên khoá: thành viên = ghi
- *    danh đang hiệu lực ∪ gán vai tại context khoá (giáo viên chỉ
- *    được gán vai, không ghi danh, vẫn hiện với dấu hiệu teacher).
- *    Chỉ thành viên mới xem được; người ngoài khoá nhận đúng 404
- *    như khoá không tồn tại. Roster phân trang CON TRỎ (displayName,
- *    username, id), mỗi dòng đúng whitelist trường đã kiểm chứng +
- *    vai trò + trạng thái quan hệ; tài khoản tạm ngưng bị loại;
- *    quan hệ chặn (cả hai chiều) bị giấu.
+ *    danh đang hiệu lực ∪ gán vai tại context khoá (giáo viên chỉ được gán vai, không ghi danh, vẫn hiện với dấu hiệu teacher). Chỉ thành viên mới xem được; người ngoài khoá nhận đúng 404 như khoá không tồn tại. Roster phân trang CON TRỎ (displayName, username, id), mỗi dòng đúng whitelist trường đã kiểm chứng + vai trò + trạng thái quan hệ; tài khoản tạm ngưng bị loại; quan hệ chặn (cả hai chiều) bị giấu.
  *  - Nhắn riêng 1-1 CHỈ giữa liên hệ đã kết bạn: cùng khoá không
- *    còn mở cổng, công tắc `core/messagingallusers` bật cũng không
- *    mở; hội thoại cũ với người đã gỡ liên hệ vẫn đọc được lịch
- *    sử nhưng gửi mới bị chặn. NGOẠI LỆ duy nhất (chốt bổ sung
- *    25/10/2026): giáo viên của khoá ↔ học sinh đang ghi danh chính
- *    khoá đó nhắn trực tiếp không cần kết bạn — spec riêng
- *    messaging-teacher-direct.e2e-spec.ts khoá hành vi đó; ở spec
- *    này actor là học sinh nên `canDirectMessage` luôn false.
+ *    còn mở cổng, công tắc `core/messagingallusers` bật cũng không mở; hội thoại cũ với người đã gỡ liên hệ vẫn đọc được lịch sử nhưng gửi mới bị chặn. NGOẠI LỆ duy nhất (chốt bổ sung 25/10/2026): giáo viên của khoá ↔ học sinh đang ghi danh chính khoá đó nhắn trực tiếp không cần kết bạn — spec riêng messaging-teacher-direct.e2e-spec.ts khoá hành vi đó; ở spec này actor là học sinh nên `canDirectMessage` luôn false.
  */
 
 interface Person { id: string; username: string; token: string; displayName: string }

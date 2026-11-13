@@ -26,8 +26,7 @@ export type CategoryDeleteMode = 'moveup' | 'recursive';
 export type CourseItemStatus = 'draft' | 'open' | 'scheduled';
 
 /**
- * Suy trạng thái mở (K1): ẩn = Nháp; hiện + có ngày mở ở tương lai =
- * Mở theo lịch; còn lại = Đã mở.
+ * Suy trạng thái mở (K1): ẩn = Nháp; hiện + có ngày mở ở tương lai = Mở theo lịch; còn lại = Đã mở.
  */
 export function courseItemStatus(visible: boolean, openAt: Date | null, now: Date = new Date()): CourseItemStatus {
   if (!visible) return 'draft';
@@ -47,21 +46,15 @@ export interface EnrolChecker {
 }
 
 /**
- * Neo lớp học cho đường tạo khoá (module classes cắm vào khi khởi tạo —
- * issue #184, CLASS-0; cùng mẫu đăng ký như EnrolChecker để Courses không
- * phụ thuộc Classes). Khi chưa có hook nào đăng ký (module classes chưa
- * nạp), đường tạo khoá kèm `classId` bị từ chối tường minh.
+ * Neo lớp học cho đường tạo khoá (module classes cắm vào khi khởi tạo — issue #184, CLASS-0; cùng mẫu đăng ký như EnrolChecker để Courses không phụ thuộc Classes). Khi chưa có hook nào đăng ký (module classes chưa nạp), đường tạo khoá kèm `classId` bị từ chối tường minh.
  */
 export interface CourseClassHook {
   /**
-   * Phân giải lớp đích cho một khoá sắp tạo: kiểm lớp tồn tại, cùng tenant
-   * với danh mục đích và chưa lưu trữ (ném lỗi nghiệp vụ khi không đạt);
-   * trả context của lớp để làm cha context khoá + cổng capability.
+   * Phân giải lớp đích cho một khoá sắp tạo: kiểm lớp tồn tại, cùng tenant với danh mục đích và chưa lưu trữ (ném lỗi nghiệp vụ khi không đạt); trả context của lớp để làm cha context khoá + cổng capability.
    */
   resolveClass(classId: string, tenantId: string): Promise<{ classId: string; contextId: string }>;
   /**
-   * Chạy sau khi khoá và context của nó đã tạo: vật chất hoá phía lớp —
-   * group "cả lớp" + enrol instance cohort trỏ vào backing cohort của lớp
+   * Chạy sau khi khoá và context của nó đã tạo: vật chất hoá phía lớp — group "cả lớp" + enrol instance cohort trỏ vào backing cohort của lớp
    * (backfill roster hiện có). Lỗi ở bước này KHÔNG được nuốt: khoá thuộc
    * lớp mà thiếu instance cohort là trạng thái hỏng phải lộ ra ngay.
    */
@@ -77,12 +70,7 @@ export interface CurriculumFrameUnit {
 }
 
 /**
- * Nguồn đơn vị khung chương trình — CurriculumModule đăng ký lúc khởi
- * tạo (dependency inversion như EnrolChecker/grade provider: Courses
- * không import ngược Curriculum). Cổng quyền của đường này là
- * `course:update` tại khoá đích do applyCurriculumFrame kiểm TRƯỚC khi
- * gọi provider — provider không đòi thêm `curriculum:view` tại context
- * hệ thống (giáo viên thật chỉ có vai tại context khoá, issue #66).
+ * Nguồn đơn vị khung chương trình — CurriculumModule đăng ký lúc khởi tạo (dependency inversion như EnrolChecker/grade provider: Courses không import ngược Curriculum). Cổng quyền của đường này là `course:update` tại khoá đích do applyCurriculumFrame kiểm TRƯỚC khi gọi provider — provider không đòi thêm `curriculum:view` tại context hệ thống (giáo viên thật chỉ có vai tại context khoá, issue #66).
  */
 export interface CurriculumFrameProvider {
   getFrameUnits(actorId: string, curriculumId: string): Promise<CurriculumFrameUnit[]>;
@@ -96,10 +84,7 @@ export interface BookFrameUnit {
 }
 
 /**
- * Nguồn đơn vị khung SGK — CurriculumModule đăng ký lúc khởi tạo (K0b,
- * cùng mẫu dependency inversion với CurriculumFrameProvider). Cổng
- * quyền là `course:update` tại khoá đích do applyBookFrame kiểm
- * TRƯỚC khi gọi provider — provider không đòi thêm quyền.
+ * Nguồn đơn vị khung SGK — CurriculumModule đăng ký lúc khởi tạo (K0b, cùng mẫu dependency inversion với CurriculumFrameProvider). Cổng quyền là `course:update` tại khoá đích do applyBookFrame kiểm TRƯỚC khi gọi provider — provider không đòi thêm quyền.
  */
 export interface BookFrameProvider {
   getBookFrameUnits(actorId: string, bookId: string): Promise<BookFrameUnit[]>;
@@ -137,17 +122,11 @@ export interface CourseContentView {
 }
 
 /**
- * Facade của CoursesModule (core_course của Moodle). Category và khoá học tạo
- * cây/context: mỗi category nhận một context coursecat (40), mỗi khoá học
- * một context khoá học (50) dưới category của nó, mỗi cm một context module (70)
- * dưới khoá học của nó — tạo chỉ qua facade AccessModule.
+ * Facade của CoursesModule (core_course của Moodle). Category và khoá học tạo cây/context: mỗi category nhận một context coursecat (40), mỗi khoá học một context khoá học (50) dưới category của nó, mỗi cm một context module (70) dưới khoá học của nó — tạo chỉ qua facade AccessModule.
  */
 @Injectable()
 /**
- * Nghiệp vụ khoá học: category, course, section và course module, kèm kiểm tra truy cập.
- * Quy tắc truy cập (đối chiếu Moodle lib/accesslib + course/lib.php): khoá học ẩn chỉ xem được khi có
- * capability xem khoá ẩn; học viên phải có enrolment đang hiệu lực mới xem được nội dung;
- * section/cm còn phải qua cây điều kiện availability mới được coi là khả dụng.
+ * Nghiệp vụ khoá học: category, course, section và course module, kèm kiểm tra truy cập. Quy tắc truy cập (đối chiếu Moodle lib/accesslib + course/lib.php): khoá học ẩn chỉ xem được khi có capability xem khoá ẩn; học viên phải có enrolment đang hiệu lực mới xem được nội dung; section/cm còn phải qua cây điều kiện availability mới được coi là khả dụng.
  */
 export class CoursesService {
   private enrolChecker?: EnrolChecker;
@@ -223,10 +202,7 @@ export class CoursesService {
   registerClassHook(hook: CourseClassHook): void { this.classHook = hook; }
 
   /**
-   * User có ghi danh ĐANG HIỆU LỰC trong khoá hay không (đã ghi danh, trạng
-   * thái active, trong cửa sổ thời gian) — qua đúng cổng EnrolChecker mà
-   * EnrolModule đăng ký, để các module khác (vd groups khi xếp thành viên)
-   * kiểm tra mà không import ngược Enrol. Chưa có checker nào đăng ký
+   * User có ghi danh ĐANG HIỆU LỰC trong khoá hay không (đã ghi danh, trạng thái active, trong cửa sổ thời gian) — qua đúng cổng EnrolChecker mà EnrolModule đăng ký, để các module khác (vd groups khi xếp thành viên) kiểm tra mà không import ngược Enrol. Chưa có checker nào đăng ký
    * (không xảy ra ở app đầy đủ) thì coi như chưa ghi danh: cổng fail-closed.
    */
   async isActivelyEnrolled(courseId: string, userId: string): Promise<boolean> {

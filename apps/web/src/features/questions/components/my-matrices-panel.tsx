@@ -1,13 +1,7 @@
 /**
  * Hai panel ma trận của trang ngân hàng câu hỏi: "Ma trận của tôi"
  * (bank ma trận cá nhân của giáo viên + form đề xuất đóng góp) và
- * section ma trận chung trong khu vực Ngân hàng hệ thống (chọn bank
- * chung + lọc theo môn → danh sách ma trận, sao chép về bank cá nhân,
- * hàng chờ đóng góp để duyệt tại dòng). Panel "của tôi" nhận dữ liệu
- * trang đã nạp; panel hệ thống tự nạp danh sách + hàng chờ của bank
- * đang chọn qua các hook của lib/questions-data vì state chọn bank là
- * cục bộ của section. Đột biến đều qua hook của lib/questions-data;
- * làm mới sau đột biến qua các hàm refresh của trang truyền xuống.
+ * section ma trận chung trong khu vực Ngân hàng hệ thống (chọn bank chung + lọc theo môn → danh sách ma trận, sao chép về bank cá nhân, hàng chờ đóng góp để duyệt tại dòng). Panel "của tôi" nhận dữ liệu trang đã nạp; panel hệ thống tự nạp danh sách + hàng chờ của bank đang chọn qua các hook của lib/questions-data vì state chọn bank là cục bộ của section. Đột biến đều qua hook của lib/questions-data; làm mới sau đột biến qua các hàm refresh của trang truyền xuống.
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

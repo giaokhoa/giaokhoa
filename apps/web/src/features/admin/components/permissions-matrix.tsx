@@ -50,8 +50,7 @@ export interface PermissionsMatrixProps {
   /** Đáp ứng ma trận toàn trang tại ngữ cảnh đang chọn. */
   matrix: CapabilityMatrixResponse;
   /**
-   * Giá trị hiển thị của một ô: sửa đổi lạc quan của người dùng (nếu
-   * có) rồi tới ghi đè đã lưu, vắng mặt thì kế thừa.
+   * Giá trị hiển thị của một ô: sửa đổi lạc quan của người dùng (nếu có) rồi tới ghi đè đã lưu, vắng mặt thì kế thừa.
    */
   valueOf: (roleId: string, capability: string) => number;
   /** Ngữ cảnh đang hiển thị của ma trận — cùng vai trò và năng lực tạo thành khoá ô đang lưu. */
@@ -89,8 +88,7 @@ export function PermissionsMatrix({
       </TableHeader>
       <TableBody>
         {groups.map((group) => {
-          // Thứ tự nút trong ô: loại read trước, loại write sau,
-          // trong cùng loại xếp theo tên năng lực.
+          // Thứ tự nút trong ô: loại read trước, loại write sau, trong cùng loại xếp theo tên năng lực.
           const orderedCapabilities = [...group.capabilities].sort((left, right) =>
             left.capType === right.capType
               ? left.name.localeCompare(right.name)

@@ -5,17 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giao
 import { ErrorAlert } from '#components/error-alert';
 
 /**
- * Trang đồng ý (consent) cho luồng uỷ quyền MCP (lát MCP-1, issue
- * #163) — `consentPage` của máy chủ OAuth Better Auth.
+ * Trang đồng ý (consent) cho luồng uỷ quyền MCP (lát MCP-1, issue #163) — `consentPage` của máy chủ OAuth Better Auth.
  *
- * AS chuyển trình duyệt tới đây kèm chuỗi query authorize ĐÃ KÝ.
- * Trang hiển thị tên client (lấy từ `/oauth2/public-client` bằng
- * chính phiên BA) + danh sách scope xin cấp dạng tích chọn. Scope
- * `giaokhoa.questions.write` (phát hành câu hỏi) KHÔNG tích sẵn — giáo
- * viên phải chủ động bật. Khi bấm đồng ý/từ chối, trang POST về
- * `/oauth2/consent` kèm `oauth_query` nguyên văn và đi tiếp theo
- * đúng `url` máy chủ trả về (không tự ghép redirect_uri — bài học
- * CVE-2026-67337 ghi trong addendum của issue).
+ * AS chuyển trình duyệt tới đây kèm chuỗi query authorize ĐÃ KÝ. Trang hiển thị tên client (lấy từ `/oauth2/public-client` bằng chính phiên BA) + danh sách scope xin cấp dạng tích chọn. Scope `giaokhoa.questions.write` (phát hành câu hỏi) KHÔNG tích sẵn — giáo viên phải chủ động bật. Khi bấm đồng ý/từ chối, trang POST về `/oauth2/consent` kèm `oauth_query` nguyên văn và đi tiếp theo đúng `url` máy chủ trả về (không tự ghép redirect_uri — bài học CVE-2026-67337 ghi trong addendum của issue).
  */
 
 /** Nhãn tiếng Việt + mức cảnh báo cho từng scope MCP. */
@@ -40,8 +32,7 @@ interface ConsentContext {
 function readConsentContext(rawQuery: string): ConsentContext | null {
   const search = rawQuery.replace(/^\?/, '');
   const params = new URLSearchParams(search);
-  // AS có thể gói chuỗi authorize vào một tham số oauth_query duy
-  // nhất, hoặc trải phẳng các tham số lên URL của trang này — đọc cả hai.
+  // AS có thể gói chuỗi authorize vào một tham số oauth_query duy nhất, hoặc trải phẳng các tham số lên URL của trang này — đọc cả hai.
   const packed = params.get('oauth_query');
   const inner = packed ? new URLSearchParams(packed) : params;
   const clientId = inner.get('client_id') ?? params.get('client_id');
@@ -56,8 +47,7 @@ function readConsentContext(rawQuery: string): ConsentContext | null {
 }
 
 /**
- * React Router giữ nguyên route component khi query string đổi. Khóa form
- * bằng query để mỗi yêu cầu OAuth có quyền chọn và oauth_query độc lập.
+ * React Router giữ nguyên route component khi query string đổi. Khóa form bằng query để mỗi yêu cầu OAuth có quyền chọn và oauth_query độc lập.
  */
 export default function McpConsentPage() {
   const location = useLocation();
@@ -76,8 +66,7 @@ function McpConsentRequest({ rawQuery }: { rawQuery: string }) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const submitControllerRef = useRef<AbortController | null>(null);
 
-  // Khi URL đổi, form bị tháo và mọi submit cũ bị hủy;
-  // phản hồi ứng dụng A không được điều hướng trang của B.
+  // Khi URL đổi, form bị tháo và mọi submit cũ bị hủy; phản hồi ứng dụng A không được điều hướng trang của B.
   useEffect(() => () => {
     submitControllerRef.current?.abort();
   }, []);

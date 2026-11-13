@@ -10,18 +10,7 @@ import { createCategory } from '../../support/course-enrolment-helpers';
 import { contextIdByLevelInstance } from '../../support/engagement-helpers';
 
 /**
- * K0a (issue #66) — nạp khung chương trình vào khoá (bản sao có neo).
- * Oracle độc lập: dataset Toán đã kiểm chứng vendor trong repo — YCCĐ
- * kỳ vọng của một đơn vị khung được tính thẳng từ dataset (các bản ghi
- * thuộc đường tổ tiên của đơn vị, theo thứ tự file), không qua code nạp.
- * Tiêu chí của issue: giáo viên tạo khoá Toán một khối từ khung, section
- * mang đúng YCCĐ của chủ đề; sửa cây chương trình sau đó KHÔNG đổi cấu
- * trúc khoá đã nạp — spec kiểm cả hai, và khôi phục nguyên trạng cây
- * sau khi sửa thử để không làm bẩn dữ liệu cho spec khác.
- * Mô hình gán vai của người dùng thử: `coursecreator` tại CONTEXT DANH
- * MỤC (đúng cách gán thật — không gán tại context hệ thống, vì gán ở hệ
- * thống còn kéo theo curriculum:view tại hệ thống và đã che điểm chặn
- * review #66: giáo viên cấp khoá bị 403 khi nạp khung).
+ * K0a (issue #66) — nạp khung chương trình vào khoá (bản sao có neo). Oracle độc lập: dataset Toán đã kiểm chứng vendor trong repo — YCCĐ kỳ vọng của một đơn vị khung được tính thẳng từ dataset (các bản ghi thuộc đường tổ tiên của đơn vị, theo thứ tự file), không qua code nạp. Tiêu chí của issue: giáo viên tạo khoá Toán một khối từ khung, section mang đúng YCCĐ của chủ đề; sửa cây chương trình sau đó KHÔNG đổi cấu trúc khoá đã nạp — spec kiểm cả hai, và khôi phục nguyên trạng cây sau khi sửa thử để không làm bẩn dữ liệu cho spec khác. Mô hình gán vai của người dùng thử: `coursecreator` tại CONTEXT DANH MỤC (đúng cách gán thật — không gán tại context hệ thống, vì gán ở hệ thống còn kéo theo curriculum:view tại hệ thống và đã che điểm chặn review #66: giáo viên cấp khoá bị 403 khi nạp khung).
  */
 
 /** Node của một YCCĐ dạng Tiptap doc trong dataset (doc/paragraph/text + bulletList/listItem cho ý con). */
@@ -44,13 +33,7 @@ const toan = JSON.parse(
 ) as { records: ProgramRecord[] };
 
 /**
- * Text của một YCCĐ dạng doc — ORACLE trích độc lập trong spec (không
- * dùng code nạp, giữ tính độc lập của oracle): mỗi paragraph là một
- * dòng, listItem cho dòng của paragraph của nó rồi tới các dòng của
- * bulletList lồng bên trong (đệ quy); các dòng nối bằng '\n', cắt
- * khoảng trắng hai đầu — đúng semantics text canonical mà hệ lưu vào
- * `learning_outcomes.content` nay là cột jsonb lưu trực tiếp tài liệu
- * này; text canonical trích từ tài liệu bằng đúng semantics này.
+ * Text của một YCCĐ dạng doc — ORACLE trích độc lập trong spec (không dùng code nạp, giữ tính độc lập của oracle): mỗi paragraph là một dòng, listItem cho dòng của paragraph của nó rồi tới các dòng của bulletList lồng bên trong (đệ quy); các dòng nối bằng '\n', cắt khoảng trắng hai đầu — đúng semantics text canonical mà hệ lưu vào `learning_outcomes.content` nay là cột jsonb lưu trực tiếp tài liệu này; text canonical trích từ tài liệu bằng đúng semantics này.
  */
 function docOutcomeText(doc: OutcomeDoc): string {
   const lines: string[] = [];

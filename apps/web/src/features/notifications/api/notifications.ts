@@ -9,12 +9,7 @@ import type {
 import { groupsUrl } from '../utils/notifications';
 
 /**
- * Tầng gọi API thuần của trung tâm thông báo thuộc feature
- * notifications: chỉ chứa các hàm gọi HTTP, không phụ thuộc React
- * hay React Query. Tầng `queries/` của feature bọc các hàm này
- * thành options/hook và thao tác cache. Tách từ module phẳng
- * `src/lib/notifications.ts` khi tổ chức lại apps/web theo mô
- * hình features/ (issue #500).
+ * Tầng gọi API thuần của trung tâm thông báo thuộc feature notifications: chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành options/hook và thao tác cache. Tách từ module phẳng `src/lib/notifications.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
 
 /**

@@ -11,8 +11,7 @@ import { calendarRemindSchema, createCalendarEventSchema, createCalendarExceptio
 @ApiTags('calendar')
 @Controller({ path: 'calendar', version: '1' })
 /**
- * API lịch: sự kiện, exception, nhắc, subscription và xuất lịch (tải .ics
- * khi đã đăng nhập, URL xuất bằng token bí mật khi chưa đăng nhập).
+ * API lịch: sự kiện, exception, nhắc, subscription và xuất lịch (tải .ics khi đã đăng nhập, URL xuất bằng token bí mật khi chưa đăng nhập).
  */
 export class CalendarController {
   constructor(private readonly calendar: CalendarService) {}
@@ -41,11 +40,7 @@ export class CalendarController {
   }
   @Get('exports')
   /**
-   * GET /calendar/exports — tải file xuất lịch chứa đúng các sự kiện tôi
-   * được thấy trong khoảng from/to (tuỳ chọn eventType), cùng luật hiển
-   * thị với GET /calendar/events. Định dạng là dữ liệu yêu cầu qua
-   * tham số truy vấn `format` (hiện chỉ hỗ trợ `ics`; vắng mặt thì mặc
-   * định `ics`), không còn nằm trong path theo chuẩn bỏ hậu tố file
+   * GET /calendar/exports — tải file xuất lịch chứa đúng các sự kiện tôi được thấy trong khoảng from/to (tuỳ chọn eventType), cùng luật hiển thị với GET /calendar/events. Định dạng là dữ liệu yêu cầu qua tham số truy vấn `format` (hiện chỉ hỗ trợ `ics`; vắng mặt thì mặc định `ics`), không còn nằm trong path theo chuẩn bỏ hậu tố file
    * (issue #345); path cũ `export.ics` giữ qua handler alias ngay dưới.
    * Định dạng khác `ics` bị từ chối 400 `calendar.export_format_unsupported`.
    */

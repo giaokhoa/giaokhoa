@@ -21,22 +21,13 @@ import { formatDate } from '#utils/date-format';
 import { queryKeys } from '../queries/keys';
 
 /**
- * Dashboard theo lớp (CLASS-2, issue #184 — dựng trên bề mặt quản trị
- * của CLASS-1): MỘT trang tổng quan của lớp, dựng theo ĐÚNG vai của
- * người gọi mà server suy trong gói `GET /classes/:id/overview`:
+ * Dashboard theo lớp (CLASS-2, issue #184 — dựng trên bề mặt quản trị của CLASS-1): MỘT trang tổng quan của lớp, dựng theo ĐÚNG vai của người gọi mà server suy trong gói `GET /classes/:id/overview`:
  *  - chủ lớp / đồng GV (staff): khối tổng quan (số học sinh, số khoá)
  *    + mọi khoá trong lớp + các khối quản trị của CLASS-1 ở dưới
  *    (roster, hàng chờ duyệt, đã đình chỉ, phân quyền — danh sách giáo
- *    viên nằm ở khối phân quyền) — từng khối hiện theo cờ khả năng của
- *    chính người gọi (canManageRoster / canShare), không hiện forms
- *    mà API sẽ từ chối;
+ *    viên nằm ở khối phân quyền) — từng khối hiện theo cờ khả năng của chính người gọi (canManageRoster / canShare), không hiện forms mà API sẽ từ chối;
  *  - học sinh (member): chỉ khối tổng quan + các khoá MÌNH đang ghi
- *    danh ACTIVE trong lớp (server đã lọc sẵn) + giáo viên của lớp +
- *    nút Chat lớp — không có bất kỳ khối quản trị nào.
- * Dashboard là bề mặt tổng quan/điều hướng thuần: trang này KHÔNG hiển
- * thị bất kỳ số điểm nào (mô hình điểm chỉ theo từng bài, không tổng
- * hợp theo lớp/khoá). Quyền thật nằm ở API (capability tại context
- * lớp); màn này chỉ dẫn luồng và hiển thị kết quả API trả về.
+ *    danh ACTIVE trong lớp (server đã lọc sẵn) + giáo viên của lớp + nút Chat lớp — không có bất kỳ khối quản trị nào. Dashboard là bề mặt tổng quan/điều hướng thuần: trang này KHÔNG hiển thị bất kỳ số điểm nào (mô hình điểm chỉ theo từng bài, không tổng hợp theo lớp/khoá). Quyền thật nằm ở API (capability tại context lớp); màn này chỉ dẫn luồng và hiển thị kết quả API trả về.
  */
 export function ClassDetailPage() {
   const { t } = useTranslation('app');
@@ -51,12 +42,7 @@ export function ClassDetailPage() {
   /**
    * Mở chat cấp lớp (lát MSG-T2).
    *
-   * Flow: bấm nút "Chat lớp" → GET ensure conversation của lớp phía
-   * messaging (cấp phát lười phía server) → điều hướng sang trang
-   * Tin nhắn mở đúng conversation qua deep-link `?conversation=` sẵn
-   * có — cùng khuôn nút chat ở trang khoá. Trang này KHÔNG tự gác
-   * quyền: người ngoài lớp bị API trả 404 và luồng rơi vào nhánh lỗi
-   * hiển thị thông báo.
+   * Flow: bấm nút "Chat lớp" → GET ensure conversation của lớp phía messaging (cấp phát lười phía server) → điều hướng sang trang Tin nhắn mở đúng conversation qua deep-link `?conversation=` sẵn có — cùng khuôn nút chat ở trang khoá. Trang này KHÔNG tự gác quyền: người ngoài lớp bị API trả 404 và luồng rơi vào nhánh lỗi hiển thị thông báo.
    *
    * Side-effect: lần mở đầu tiên của lớp tạo conversation ở server.
    */

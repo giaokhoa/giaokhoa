@@ -10,10 +10,7 @@ const CAP = 'course:update';
 const ALLOW = 1, PREVENT = -1, PROHIBIT = -1000;
 
 /**
- * Kiểm thử luồng capability CHUẨN VÀNG (GOLDEN).
- * Oracle: lib/tests/accesslib_test.php (MOODLE_503_STABLE) —
- * test_permission_evaluation, test_assign_capability, test_role_assign,
- * test_is_siteadmin, test_get_guest_role.
+ * Kiểm thử luồng capability CHUẨN VÀNG (GOLDEN). Oracle: lib/tests/accesslib_test.php (MOODLE_503_STABLE) — test_permission_evaluation, test_assign_capability, test_role_assign, test_is_siteadmin, test_get_guest_role.
  */
 describe('Quyền truy cập: đánh giá năng lực trên cây ngữ cảnh (golden)', () => {
   let app: INestApplication;

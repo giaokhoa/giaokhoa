@@ -1,12 +1,7 @@
 /**
- * Điểm vào dựng handle Kysely cho test: bọc ba factory production
- * trong `client.ts` để spec lấy cả ba handle của ba kho trên pool
- * được cấp, không lặp lại việc gắn dialect ở từng spec.
+ * Điểm vào dựng handle Kysely cho test: bọc ba factory production trong `client.ts` để spec lấy cả ba handle của ba kho trên pool được cấp, không lặp lại việc gắn dialect ở từng spec.
  *
- * Pool quyết định kho thật được chạm tới: spec dựng database test
- * của kho nào bằng `buildTestDatabase` thì tạo pool trỏ tới database
- * đó rồi dùng đúng handle của kho tương ứng trong bộ ba trả về (hai
- * handle còn lại chỉ là view kiểu trên cùng pool, spec không dùng).
+ * Pool quyết định kho thật được chạm tới: spec dựng database test của kho nào bằng `buildTestDatabase` thì tạo pool trỏ tới database đó rồi dùng đúng handle của kho tương ứng trong bộ ba trả về (hai handle còn lại chỉ là view kiểu trên cùng pool, spec không dùng).
  */
 import type { Pool } from 'pg';
 import {

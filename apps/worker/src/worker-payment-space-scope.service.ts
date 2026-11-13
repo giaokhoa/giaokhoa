@@ -64,12 +64,7 @@ export class WorkerPaymentSpaceScope {
   constructor(private readonly spaceDatabase: SpaceDatabaseService) {}
 
   /**
-   * Handle Kysely đã định tuyến của khung (cùng instance
-   * `SpaceDatabaseService` mà scope này giữ): các service kích hoạt
-   * ghi danh trả phí dùng nó làm tay cầm cho bề mặt vật chất hoá
-   * cohort dùng chung (D5 #657) mà không cần thêm tham số
-   * constructor — scope đã là điểm duy nhất nắm khung định tuyến
-   * của các service đó.
+   * Handle Kysely đã định tuyến của khung (cùng instance `SpaceDatabaseService` mà scope này giữ): các service kích hoạt ghi danh trả phí dùng nó làm tay cầm cho bề mặt vật chất hoá cohort dùng chung (D5 #657) mà không cần thêm tham số constructor — scope đã là điểm duy nhất nắm khung định tuyến của các service đó.
    */
   get routedKysely(): CentreDb {
     return this.spaceDatabase.routedKysely;
@@ -95,19 +90,14 @@ export class WorkerPaymentSpaceScope {
       target = await this.spaceDatabase.resolveTarget(slug);
     } catch (err) {
       // Chưa cấu hình control plane (xem bước 2 ở mô tả lớp):
-      // không có sổ đăng ký nào để đối chiếu nên chạy như trước
-      // đợt định tuyến. Mọi lỗi phân giải khác ném ra nguyên
-      // trạng, tuyệt đối không rơi về kho chung.
+      // không có sổ đăng ký nào để đối chiếu nên chạy như trước đợt định tuyến. Mọi lỗi phân giải khác ném ra nguyên trạng, tuyệt đối không rơi về kho chung.
       if (err instanceof SpaceRoutingError && err.code === 'space_routing.not_configured') {
         return tenantAls.run({ platform: true }, async () => fn());
       }
       throw err;
     }
     if (target.mode === 'dedicated') {
-      // Mở phiên theo trung tâm: bước chuẩn bị handle của kho đích
-      // chạy bên trong `withSpaceKysely` — các hiệu ứng theo
-      // payment chạy trên `routedKysely` nên phiên này là đủ để
-      // mọi lượt truy vấn của chúng vào đúng kho của trung tâm.
+      // Mở phiên theo trung tâm: bước chuẩn bị handle của kho đích chạy bên trong `withSpaceKysely` — các hiệu ứng theo payment chạy trên `routedKysely` nên phiên này là đủ để mọi lượt truy vấn của chúng vào đúng kho của trung tâm.
       return this.spaceDatabase.withSpaceKysely(slug, async () => fn());
     }
     return tenantAls.run({ platform: true }, async () => fn());

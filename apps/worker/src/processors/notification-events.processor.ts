@@ -103,9 +103,7 @@ export class NotificationEventsProcessor extends WorkerHost {
       }
 
       try {
-        // Đọc lại dấu bên trong lease: lượt chạy khác có thể đã
-        // hoàn thành sự kiện trong khoảng giữa lần đọc nhanh và
-        // lần chiếm lease của lượt này.
+        // Đọc lại dấu bên trong lease: lượt chạy khác có thể đã hoàn thành sự kiện trong khoảng giữa lần đọc nhanh và lần chiếm lease của lượt này.
         if (await this.marker.hasProcessed(outboxId)) {
           await this.marker.releaseProcessing(outboxId, leaseToken);
           return { handled: true, duplicate: true };

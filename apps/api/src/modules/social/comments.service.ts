@@ -7,14 +7,11 @@ import { SocialRepository, type CommentRow } from '@giaokhoa/db/repositories/soc
 /**
  * CommentsModule (Moodle core_comment): các bình luận đa hình trên
  * (component, commentArea, itemId, contextId). Capability được kiểm tra TẠI
- * CONTEXT CỦA CHÍNH MỤC ĐÓ: comment:view để đọc, comment:post để thêm,
- * comment:delete (hoặc quyền tác giả) để xoá (oracle: comment/tests/
- * externallib_test test_get_comments / test_add_comments_single).
+ * CONTEXT CỦA CHÍNH MỤC ĐÓ: comment:view để đọc, comment:post để thêm, comment:delete (hoặc quyền tác giả) để xoá (oracle: comment/tests/ externallib_test test_get_comments / test_add_comments_single).
  */
 @Injectable()
 /**
- * Bình luận theo (context, component, area, item).
- * Đối chiếu Moodle: lib/commentlib (comment). Xoá là xoá mềm; chỉ tác giả hoặc người có capability mới xoá được.
+ * Bình luận theo (context, component, area, item). Đối chiếu Moodle: lib/commentlib (comment). Xoá là xoá mềm; chỉ tác giả hoặc người có capability mới xoá được.
  */
 export class CommentsService {
   constructor(

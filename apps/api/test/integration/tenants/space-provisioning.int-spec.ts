@@ -8,20 +8,11 @@ import { buildCentreDatabaseUrl, deriveCentreRoleName } from '../../../src/modul
 import { FleetRegistryWriter } from '../../../src/modules/fleet/fleet-registry-writer';
 
 /**
- * Ca tích hợp của PIPELINE CẤP PHÁT TRUNG TÂM (issue #583): chạy
- * đúng lệnh cấp phát trên cụm Postgres thật — sổ đăng ký control
- * plane riêng, database + role riêng cho trung tâm, baseline nghiệp
- * vụ hiện hành, gói chương trình, tenant + membership + quản trị
- * đầu tiên + lời mời — rồi chạy lại và cấp phát dở dang để khoá
- * tính chạy-lại-an-toàn, và khoá yêu cầu từ chối databaseName
- * trùng (ghi chú điều phối trên issue #583, điểm P1-2b của review
- * PR #594) ở cả tầng ứng dụng lẫn tầng database.
+ * Ca tích hợp của PIPELINE CẤP PHÁT TRUNG TÂM (issue #583): chạy đúng lệnh cấp phát trên cụm Postgres thật — sổ đăng ký control plane riêng, database + role riêng cho trung tâm, baseline nghiệp vụ hiện hành, gói chương trình, tenant + membership + quản trị đầu tiên + lời mời — rồi chạy lại và cấp phát dở dang để khoá tính chạy-lại-an-toàn, và khoá yêu cầu từ chối databaseName trùng (ghi chú điều phối trên issue #583, điểm P1-2b của review PR #594) ở cả tầng ứng dụng lẫn tầng database.
  *
- * Mọi tên đều mang hậu tố ngẫu nhiên theo lượt chạy: chạy lại spec
- * trên cùng cụm không va chạm, và không tái dùng tên database cũ
+ * Mọi tên đều mang hậu tố ngẫu nhiên theo lượt chạy: chạy lại spec trên cùng cụm không va chạm, và không tái dùng tên database cũ
  * (tránh khoá cache siteadmins cũ trong Redis theo tên database).
- * Cụm test lấy từ `DATABASE_URL` đã được Vitest phân giải (biến
- * `GIAOKHOA_TEST_DATABASE_URL` ghi đè khi chạy ngoài CI).
+ * Cụm test lấy từ `DATABASE_URL` đã được Vitest phân giải (biến `GIAOKHOA_TEST_DATABASE_URL` ghi đè khi chạy ngoài CI).
  */
 const RUN_SUFFIX = Math.random().toString(36).slice(2, 8);
 const CP_DATABASE = `giaokhoa_test_cp_583_${RUN_SUFFIX}`;

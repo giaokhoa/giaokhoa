@@ -86,9 +86,7 @@ export class BadgeAwardProcessor extends WorkerHost {
         return true;
       }
       case 'profile': {
-        // Lá profile (khớp phía API): trường chuẩn trên users hoặc custom
-        // field (shortName, scope core_user/user); có `value` thì phải bằng
-        // đúng, không có thì trường phải được điền (khác rỗng).
+        // Lá profile (khớp phía API): trường chuẩn trên users hoặc custom field (shortName, scope core_user/user); có `value` thì phải bằng đúng, không có thì trường phải được điền (khác rỗng).
         const field = typeof params.field === 'string' ? params.field : '';
         if (!field) return false;
         let actual: string | null | undefined;
@@ -172,9 +170,7 @@ export class BadgeAwardProcessor extends WorkerHost {
    * Xử lý một job của queue tương ứng.
    */
   async process(job: Job<BadgeAwardJobData>): Promise<BadgeAwardResult> {
-    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
-    // ngữ cảnh platform tường minh để RLS fail-closed không làm mù
-    // dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
+    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc ngữ cảnh platform tường minh để RLS fail-closed không làm mù dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
     return tenantAls.run({ platform: true }, () => this.processInContext(job));
   }
 

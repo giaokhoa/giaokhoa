@@ -114,17 +114,12 @@ import type { Queue } from 'bullmq';
  * trên.
  */
 export const OUTBOX_EVENT_QUEUE_ROUTES: OutboxEventQueueRoutes = {
-  // Mail auth (issue #517): processor `AuthMailProcessor` trên hàng
-  // đợi `auth-mail` dựng nội dung bằng template dùng chung ở
-  // `@giaokhoa/contracts` và gửi qua transport Resend phía worker.
+  // Mail auth (issue #517): processor `AuthMailProcessor` trên hàng đợi `auth-mail` dựng nội dung bằng template dùng chung ở `@giaokhoa/contracts` và gửi qua transport Resend phía worker.
   auth_mail_requested: 'auth-mail',
-  // Digest phụ huynh (issue #518): processor
-  // `GuardianDigestEventsProcessor` trên hàng đợi
-  // `guardian-digest-events`.
+  // Digest phụ huynh (issue #518): processor `GuardianDigestEventsProcessor` trên hàng đợi `guardian-digest-events`.
   guardian_digest_due: 'guardian-digest-events',
   guardian_overdue_alert: 'guardian-digest-events',
-  // Thông báo sự kiện (issue con #520 của #491): processor
-  // `NotificationEventsProcessor` trên hàng đợi `notification-events`.
+  // Thông báo sự kiện (issue con #520 của #491): processor `NotificationEventsProcessor` trên hàng đợi `notification-events`.
   grade_updated: 'notification-events',
   course_completed: 'notification-events',
   enrol_expiry_warning: 'notification-events',
@@ -135,17 +130,11 @@ export const OUTBOX_EVENT_QUEUE_ROUTES: OutboxEventQueueRoutes = {
   exam_pinned: 'notification-events',
   quiz_attempt_finished: 'notification-events',
   // Đồng bộ cohort (issue con #528 của #519, đợt tách #491):
-  // processor `CohortSyncEventsProcessor` trên hàng đợi
-  // `cohort-sync-events`, gọi bề mặt vật chất hoá cohort dùng chung
-  // của issue con #527 qua host `CohortSyncService`.
+  // processor `CohortSyncEventsProcessor` trên hàng đợi `cohort-sync-events`, gọi bề mặt vật chất hoá cohort dùng chung của issue con #527 qua host `CohortSyncService`.
   cohort_member_added: 'cohort-sync-events',
   cohort_member_removed: 'cohort-sync-events',
   // Phân phối realtime messaging (issue con #521 của #491):
-  // processor `MessagingRealtimeProcessor` trên hàng đợi
-  // `messaging-realtime`, luật phân phối ở `@giaokhoa/messaging`.
-  // `message_sent` còn consumer thông báo ở khối trên nên là
-  // danh sách hai đích (fan-out) — không dựng dòng riêng cạnh
-  // tranh cho cùng một loại sự kiện.
+  // processor `MessagingRealtimeProcessor` trên hàng đợi `messaging-realtime`, luật phân phối ở `@giaokhoa/messaging`. `message_sent` còn consumer thông báo ở khối trên nên là danh sách hai đích (fan-out) — không dựng dòng riêng cạnh tranh cho cùng một loại sự kiện.
   message_sent: ['messaging-realtime', 'notification-events'],
   message_conversation_read: 'messaging-realtime',
   message_deleted: 'messaging-realtime',
@@ -210,9 +199,7 @@ export const OUTBOX_EVENT_QUEUES = 'OUTBOX_EVENT_QUEUES';
 export type OutboxEventQueues = ReadonlyMap<string, Queue>;
 
 /**
- * Dữ liệu của MỘT job phát từ MỘT dòng outbox: mang đủ định danh và
- * nội dung của dòng để consumer trên hàng đợi xử lý mà không phải
- * đọc lại bảng outbox, đồng thời truy vết được về đúng dòng gốc.
+ * Dữ liệu của MỘT job phát từ MỘT dòng outbox: mang đủ định danh và nội dung của dòng để consumer trên hàng đợi xử lý mà không phải đọc lại bảng outbox, đồng thời truy vết được về đúng dòng gốc.
  *
  * - `outboxId`: id của dòng outbox — đồng thời là `jobId` của job.
  * - `seq`: mốc thứ tự toàn cục của dòng trong bảng outbox.
@@ -221,13 +208,7 @@ export type OutboxEventQueues = ReadonlyMap<string, Queue>;
  *   không biến đổi payload).
  * - `tenantId`: tenant của ngữ cảnh phát sinh sự kiện (có thể null).
  * - `spaceSlug`: slug của trung tâm mà tenant của sự kiện thuộc
- *   về trong sổ đăng ký control plane (issue #582) — relay suy ra
- *   từ chính tenant của dòng lúc phát (slug của tenant và slug
- *   đăng ký của trung tâm là một); null khi sự kiện không gắn
- *   tenant hoặc tenant không còn dòng tương ứng. Consumer dùng
- *   trường này qua `SpaceJobRunner` để mở đúng kho của trung tâm;
- *   dòng được relay đọc từ kho riêng của một trung tâm mang slug
- *   của chính trung tâm đó theo cùng cơ chế suy ra này.
+ *   về trong sổ đăng ký control plane (issue #582) — relay suy ra từ chính tenant của dòng lúc phát (slug của tenant và slug đăng ký của trung tâm là một); null khi sự kiện không gắn tenant hoặc tenant không còn dòng tương ứng. Consumer dùng trường này qua `SpaceJobRunner` để mở đúng kho của trung tâm; dòng được relay đọc từ kho riêng của một trung tâm mang slug của chính trung tâm đó theo cùng cơ chế suy ra này.
  * - `occurredAt`: thời điểm phát sinh sự kiện, dạng chuỗi ISO 8601
  *   (dữ liệu job đi qua Redis nên chỉ giữ dạng JSON hoá được).
  */

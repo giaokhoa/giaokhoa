@@ -11,10 +11,7 @@ export interface TagAreaDefinition {
 }
 
 /**
- * Các AREA của tag được đăng ký trong code (như db/tag.php của Moodle): một area cho biết
- * những cặp (component, itemType) nào được gắn tag và ở collection nào.
- * Mọi thứ chưa đăng ký đều bị từ chối — API đa hình mở ở HÌNH DẠNG
- * nhưng đóng ở vốn từ.
+ * Các AREA của tag được đăng ký trong code (như db/tag.php của Moodle): một area cho biết những cặp (component, itemType) nào được gắn tag và ở collection nào. Mọi thứ chưa đăng ký đều bị từ chối — API đa hình mở ở HÌNH DẠNG nhưng đóng ở vốn từ.
  */
 export const TAG_AREAS: TagAreaDefinition[] = [
   { component: 'core', itemType: 'course', collection: 'default' },
@@ -29,17 +26,12 @@ export function normalizeTagName(raw: string): string {
 }
 
 /**
- * TagsModule (core_tag của Moodle): tags + tag instances + correlations,
- * đa hình trên (component, itemType, itemId, contextId) với KHÔNG khoá ngoại
- * nào tới thứ được gắn tag (report §2#16). Thứ tự tính theo từng item (oracle:
- * taglib_test test_add_tag_ordering_calculation). Correlations là tập
- * các tag đồng xuất hiện với một tag trên cùng các item, được tính lại khi ghi.
+ * TagsModule (core_tag của Moodle): tags + tag instances + correlations, đa hình trên (component, itemType, itemId, contextId) với KHÔNG khoá ngoại nào tới thứ được gắn tag (report §2#16). Thứ tự tính theo từng item (oracle:
+ * taglib_test test_add_tag_ordering_calculation). Correlations là tập các tag đồng xuất hiện với một tag trên cùng các item, được tính lại khi ghi.
  */
 @Injectable()
 /**
- * Thẻ (tags) và tương quan thẻ.
- * Đối chiếu Moodle: lib/classes/tag (core_tag). Tag thuộc collection theo area;
- * correlation được tính từ đồng xuất hiện trên cùng item.
+ * Thẻ (tags) và tương quan thẻ. Đối chiếu Moodle: lib/classes/tag (core_tag). Tag thuộc collection theo area; correlation được tính từ đồng xuất hiện trên cùng item.
  */
 export class TagsService {
   constructor(
@@ -50,10 +42,7 @@ export class TagsService {
   ) {}
 
   /**
-   * Chỉ capability thôi chưa phải toàn bộ luật cho các item thuộc phạm vi khoá học: role
-   * 'user' ảo mang tag:edit, nên với context khoá học/module thì
-   * actor còn PHẢI có quyền truy cập khoá học thật (đã ghi danh hoặc staff) — cùng
-   * cổng enrol mà CoursesService thi hành ở mọi nơi khác.
+   * Chỉ capability thôi chưa phải toàn bộ luật cho các item thuộc phạm vi khoá học: role 'user' ảo mang tag:edit, nên với context khoá học/module thì actor còn PHẢI có quyền truy cập khoá học thật (đã ghi danh hoặc staff) — cùng cổng enrol mà CoursesService thi hành ở mọi nơi khác.
    */
   private async assertItemAccess(actorId: string, contextId: string): Promise<void> {
     const ctx = await this.contexts.getContext(contextId).catch(() => undefined);

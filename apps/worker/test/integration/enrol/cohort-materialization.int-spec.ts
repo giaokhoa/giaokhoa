@@ -6,39 +6,22 @@ import { createCentreKysely, sql, type CentreDB, type CentreDb } from '@giaokhoa
 import { tenantAls } from '../../../src/db/tenant-als';
 
 /**
- * Spec đặc tả hoá cho bề mặt vật chất hoá cohort dùng chung
- * `@giaokhoa/enrol` ở phía WORKER (issue #527, tiêu chí nghiệm thu về
- * tính gọi được từ worker).
+ * Spec đặc tả hoá cho bề mặt vật chất hoá cohort dùng chung `@giaokhoa/enrol` ở phía WORKER (issue #527, tiêu chí nghiệm thu về tính gọi được từ worker).
  *
- * Bối cảnh: đường đồng bộ cohort trước đây chỉ chạy được trong
- * tiến trình API — funnel ghi danh sống trong `EnrolService` và phụ
- * thuộc các cơ chế đăng ký lúc khởi tạo của tiến trình API (probe
- * dữ liệu liên quan, hook tái tổng hợp). Spec này chứng minh bề mặt
- * đã trích xuất dựng và chạy trọn vẹn trong NGỮ CẢNH CỦA WORKER:
- * chính tiến trình test của worker import package, dựng bề mặt
- * bằng tay cầm Kysely trên cơ sở dữ liệu test của worker
+ * Bối cảnh: đường đồng bộ cohort trước đây chỉ chạy được trong tiến trình API — funnel ghi danh sống trong `EnrolService` và phụ thuộc các cơ chế đăng ký lúc khởi tạo của tiến trình API (probe dữ liệu liên quan, hook tái tổng hợp). Spec này chứng minh bề mặt đã trích xuất dựng và chạy trọn vẹn trong NGỮ CẢNH CỦA WORKER:
+ * chính tiến trình test của worker import package, dựng bề mặt bằng tay cầm Kysely trên cơ sở dữ liệu test của worker
  * (`giaokhoa_test_worker`), cổng outbox do phía gọi tự cấp (chèn thẳng
- * vào `outbox_events` trên schema dùng chung, gương `tenantId` vào
- * payload như dịch vụ outbox của API vẫn làm) và cổng ngữ cảnh
- * platform là `tenantAls` của worker — không qua bất kỳ service
- * nào của API. Kết quả trên cơ sở dữ liệu phải khớp từng khẳng
- * định với đường vật chất hoá ở phía API:
+ * vào `outbox_events` trên schema dùng chung, gương `tenantId` vào payload như dịch vụ outbox của API vẫn làm) và cổng ngữ cảnh platform là `tenantAls` của worker — không qua bất kỳ service nào của API. Kết quả trên cơ sở dữ liệu phải khớp từng khẳng định với đường vật chất hoá ở phía API:
  *
  * - thêm thành viên: ghi danh ACTIVE, gán vai của instance tại
- *   context khoá với truy vết nguồn của instance, sự kiện
- *   `user_enrolled`, membership active tại tenant của khoá;
+ *   context khoá với truy vết nguồn của instance, sự kiện `user_enrolled`, membership active tại tenant của khoá;
  * - thành viên vi phạm chốt tách vai bị bỏ qua riêng lẻ;
  * - rời cohort ở chế độ rút khi không còn dữ liệu liên quan: xoá
- *   cứng ghi danh, gỡ vai của instance, phát `user_unenrolled` và
- *   `course_completion_reaggregation_requested` trong cùng đường
- *   rút;
+ *   cứng ghi danh, gỡ vai của instance, phát `user_unenrolled` và `course_completion_reaggregation_requested` trong cùng đường rút;
  * - rời cohort ở chế độ đình chỉ: ghi danh SUSPENDED, vết người
  *   thao tác về null, sự kiện đình chỉ mang lý do `cohort_removed`.
  *
- * Việc DÂY consumer đồng bộ cohort của worker vào bề mặt này là
- * việc của issue con tiếp theo trong chuỗi; spec này chỉ ghim tính
- * gọi được và tính đúng hành vi của chính bề mặt từ phía worker.
- * Fixture dựng bằng SQL trực tiếp với id ngẫu nhiên theo từng ca.
+ * Việc DÂY consumer đồng bộ cohort của worker vào bề mặt này là việc của issue con tiếp theo trong chuỗi; spec này chỉ ghim tính gọi được và tính đúng hành vi của chính bề mặt từ phía worker. Fixture dựng bằng SQL trực tiếp với id ngẫu nhiên theo từng ca.
  */
 
 interface CourseGraph {

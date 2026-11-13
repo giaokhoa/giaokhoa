@@ -8,18 +8,9 @@ import {
 } from '../../support/ordinary-worker-module';
 
 /**
- * NB-7 phía worker (issue #174): hàm luật phân phối dùng chung của
- * worker (`NotificationDeliveryService.deliverInApp`) cũng phải tôn
- * trọng chính sách admin cấp site — cùng thứ tự luật với notify() phía
- * API: chính sách admin TRƯỚC tuỳ chọn người dùng. Admin tắt một loại
- * → đường nền không phát, dispatch log ghi `skipped-admin-disabled`;
- * bật lại (hoặc không có ghi đè) → phát bình thường.
+ * NB-7 phía worker (issue #174): hàm luật phân phối dùng chung của worker (`NotificationDeliveryService.deliverInApp`) cũng phải tôn trọng chính sách admin cấp site — cùng thứ tự luật với notify() phía API: chính sách admin TRƯỚC tuỳ chọn người dùng. Admin tắt một loại → đường nền không phát, dispatch log ghi `skipped-admin-disabled`; bật lại (hoặc không có ghi đè) → phát bình thường.
  *
- * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness
- * role thường (`test/ordinary-worker-module.ts`): module chạy bằng
- * role NOSUPERUSER/NOBYPASSRLS như production, fixture và đọc kiểm
- * chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ
- * của spec không đổi.
+ * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness role thường (`test/ordinary-worker-module.ts`): module chạy bằng role NOSUPERUSER/NOBYPASSRLS như production, fixture và đọc kiểm chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ của spec không đổi.
  */
 describe('Worker NB-7: chính sách site của admin làm cổng gửi nền', () => {
   let context: INestApplicationContext;

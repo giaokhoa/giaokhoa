@@ -34,8 +34,7 @@ export interface UseMessageModerationParams {
 }
 
 /**
- * Cửa sổ thu hồi mặc định (phút) theo site-config
- * `core/messagingrecallwindowminutes`: server là thẩm quyền cuối
+ * Cửa sổ thu hồi mặc định (phút) theo site-config `core/messagingrecallwindowminutes`: server là thẩm quyền cuối
  * (ngoài cửa sổ trả 403) — client chỉ dùng mốc này để ẨN nút thu
  * hồi khi tin đã cũ, không tự quyết cho phép thu hồi.
  */
@@ -53,9 +52,7 @@ export function useMessageModeration({ active, myId, patchMessages, setActionMes
 
   /**
    * Xoá-phía-mình một tin nhắn (vòng đời tin nhắn theo vai, issue #33):
-   * chỉ tác giả, mọi lúc — tin chỉ ẩn khỏi tầm nhìn của chính người
-   * xoá, phía kia không đổi. Server trả dòng tin kèm dấu vết — áp ngay
-   * vào khung; phía học sinh tin biến mất ở bước render.
+   * chỉ tác giả, mọi lúc — tin chỉ ẩn khỏi tầm nhìn của chính người xoá, phía kia không đổi. Server trả dòng tin kèm dấu vết — áp ngay vào khung; phía học sinh tin biến mất ở bước render.
    */
   async function deleteMessage(message: MessageView) {
     setActionMessage(null);

@@ -1,35 +1,22 @@
 /**
  * Ca tích hợp của FACADE KYSELY ĐỊNH TUYẾN phía API (issue #639):
- * chứng minh `routedKysely` của `SpaceDatabaseService` giữ đúng
- * hợp đồng định tuyến — và giữ đúng ngữ nghĩa Kysely —
- * qua Proxy uỷ thác theo ngữ cảnh ALS:
+ * chứng minh `routedKysely` của `SpaceDatabaseService` giữ đúng hợp đồng định tuyến — và giữ đúng ngữ nghĩa Kysely — qua Proxy uỷ thác theo ngữ cảnh ALS:
  *
  *   - `getKyselyForSpace` trả handle kho chung cho slug kho chung,
- *     handle kho riêng khác instance cho slug kho riêng, và cùng
- *     instance khi gọi lại (chuẩn bị có nhớ);
+ *     handle kho riêng khác instance cho slug kho riêng, và cùng instance khi gọi lại (chuẩn bị có nhớ);
  *   - `routedKysely` đọc/ghi đúng kho theo `spaceSlug` trong ALS,
- *     ngoài ALS thì về kho chung; slug chưa chuẩn bị phải ném
- *     lỗi fail-closed, không được đọc hay ghi vào kho chung;
+ *     ngoài ALS thì về kho chung; slug chưa chuẩn bị phải ném lỗi fail-closed, không được đọc hay ghi vào kho chung;
  *   - `transaction()` qua facade commit và rollback đúng;
  *   - getter `schema` qua facade tạo/xoá bảng thăm dò được thật
- *     trên kho hiệu lực (không bị đóng băng vào handle lúc tạo
- *     facade);
+ *     trên kho hiệu lực (không bị đóng băng vào handle lúc tạo facade);
  *   - builder lười qua facade chỉ thực thi khi `execute()`/await,
  *     nên dòng insert sau khi tạo builder vẫn được builder thấy;
  *   - slug đã chuẩn bị ở kho riêng mà pool bị thu hồi vì nhàn rỗi
- *     thì truy vấn qua facade trong ngữ cảnh cũ ném
- *     `space_routing.prepared_revoked` (fail-closed, không rơi im
- *     lặng về kho chung).
+ *     thì truy vấn qua facade trong ngữ cảnh cũ ném `space_routing.prepared_revoked` (fail-closed, không rơi im lặng về kho chung).
  *
- * Nếu bất kỳ điểm nào gãy, facade CHƯA được chứng minh và pilot
- * không được xây trên nó (issue #639 yêu cầu dừng và trình phương
- * án provider `current()` thay vì tự tuyên bố ngoại lệ).
+ * Nếu bất kỳ điểm nào gãy, facade CHƯA được chứng minh và pilot không được xây trên nó (issue #639 yêu cầu dừng và trình phương án provider `current()` thay vì tự tuyên bố ngoại lệ).
  *
- * Môi trường: tự cấp phát control plane + hai kho riêng + một kho
- * đóng vai kho chung bằng harness của `@giaokhoa/db` (database dựng từ
- * rỗng bằng Migrator của package, không phụ thuộc database test
- * của CI). Chuỗi bí mật cố ý trỏ về database `postgres` để bộ
- * phân giải phải chốt đích theo `databaseName` trong sổ.
+ * Môi trường: tự cấp phát control plane + hai kho riêng + một kho đóng vai kho chung bằng harness của `@giaokhoa/db` (database dựng từ rỗng bằng Migrator của package, không phụ thuộc database test của CI). Chuỗi bí mật cố ý trỏ về database `postgres` để bộ phân giải phải chốt đích theo `databaseName` trong sổ.
  */
 import type { ConfigService } from '@nestjs/config';
 import { Client } from 'pg';
@@ -55,10 +42,7 @@ const TENANT_SHARED_ID = '01963900-0000-7000-8000-0000000000c3';
 const TENANT_TX_COMMIT_ID = '01963900-0000-7000-8000-0000000000d4';
 const TENANT_TX_ROLLBACK_ID = '01963900-0000-7000-8000-0000000000e5';
 /**
- * Timeout nhàn rỗi của service chính — dài để sweeper không đóng
- * pool giữa các ca (mỗi ca tự chuẩn bị lại slug của mình trước
- * khi dùng facade, nhưng pool không được đóng giữa chừng). Ca
- * fail-closed dùng service riêng với timeout ngắn (xem cuối file).
+ * Timeout nhàn rỗi của service chính — dài để sweeper không đóng pool giữa các ca (mỗi ca tự chuẩn bị lại slug của mình trước khi dùng facade, nhưng pool không được đóng giữa chừng). Ca fail-closed dùng service riêng với timeout ngắn (xem cuối file).
  */
 const POOL_IDLE_TIMEOUT_MS = 300_000;
 /** Timeout nhàn rỗi của service riêng cho ca fail-closed (mẫu của ca #581). */

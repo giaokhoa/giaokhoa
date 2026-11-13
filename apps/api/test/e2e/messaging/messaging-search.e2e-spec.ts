@@ -8,23 +8,18 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser } from '..
 import { addGroupMember, contextIdByLevelInstance, createGroupViaApi } from '../../support/engagement-helpers';
 
 /**
- * Lát M4 — TÌM KIẾM trong bề mặt nhắn tin (issue #237): lọc nội dung
- * tin CHỈ tồn tại trong từng conversation, qua đúng cổng của đường
- * đọc tin. Các ca kiểm chứng đúng luồng nghiệp vụ:
+ * Lát M4 — TÌM KIẾM trong bề mặt nhắn tin (issue #237): lọc nội dung tin CHỈ tồn tại trong từng conversation, qua đúng cổng của đường đọc tin. Các ca kiểm chứng đúng luồng nghiệp vụ:
  *  - thành viên tìm trong conversation của mình: chỉ tin khớp, mới
- *    nhất trước, excerpt quanh chỗ khớp, khớp không phân biệt hoa
- *    thường; không khớp → rỗng;
+ *    nhất trước, excerpt quanh chỗ khớp, khớp không phân biệt hoa thường; không khớp → rỗng;
  *  - truy vấn rỗng/toàn khoảng trắng → 400 xác định; thiếu q → 400;
  *  - người ngoài conversation bị chặn như đường đọc tin; conversation
  *    không tồn tại → 404;
  *  - tin đã THU HỒI không bao giờ khớp (kể cả qua excerpt của tin trả
- *    lời trích dẫn nó) với người thường, nhưng người có thẩm quyền
- *    kiểm duyệt vẫn tìm thấy theo tầm nhìn truy vết;
+ *    lời trích dẫn nó) với người thường, nhưng người có thẩm quyền kiểm duyệt vẫn tìm thấy theo tầm nhìn truy vết;
  *  - tin tác giả đã ẩn-phía-mình: chính tác giả tìm không ra, phía
  *    kia tìm vẫn ra;
  *  - CHẶN thắng mọi bề mặt: trong nhóm, kết quả của cả hai phía đều
- *    loại tin của phía có quan hệ chặn; hội thoại 1–1 đang bị chặn
- *    thì tìm cũng 404 như không tồn tại.
+ *    loại tin của phía có quan hệ chặn; hội thoại 1–1 đang bị chặn thì tìm cũng 404 như không tồn tại.
  */
 
 interface Person { id: string; username: string; token: string }

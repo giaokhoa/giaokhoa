@@ -1,12 +1,7 @@
 /**
  * GradeFormula — bộ đánh giá công thức điểm AN TOÀN (parser đệ quy, KHÔNG dùng eval).
  *
- * Nguồn oracle: MoodleDocs "Grade calculations" (docs.moodle.org/en/Grade_calculations,
- * tra cứu trực tuyến 2026-10-23): công thức bắt đầu bằng dấu `=`, tham chiếu một grade item
- * bằng idNumber của nó đặt trong ngoặc vuông kép — ví dụ `[[Quiz1]]` — các phép toán số học
- * `+ - * /`, dấu ngoặc, và các hàm `sum`, `average`, `min`, `max` với đối số tách bằng dấu phẩy.
- * Ví dụ trong tài liệu: `=average([[item1]], [[item2]])`,
- * `=sum([[item1]]*0.3, [[item2]]*0.6, [[item3]]*0.1)`, `=max([[A]], [[B]], 100)`.
+ * Nguồn oracle: MoodleDocs "Grade calculations" (docs.moodle.org/en/Grade_calculations, tra cứu trực tuyến 2026-10-23): công thức bắt đầu bằng dấu `=`, tham chiếu một grade item bằng idNumber của nó đặt trong ngoặc vuông kép — ví dụ `[[Quiz1]]` — các phép toán số học `+ - * /`, dấu ngoặc, và các hàm `sum`, `average`, `min`, `max` với đối số tách bằng dấu phẩy. Ví dụ trong tài liệu: `=average([[item1]], [[item2]])`, `=sum([[item1]]*0.3, [[item2]]*0.6, [[item3]]*0.1)`, `=max([[A]], [[B]], 100)`.
  *
  * Ngữ nghĩa đã chốt cho hệ này (ghi rõ vì Moodle không định nghĩa hết trong một trang):
  *  - Chia cho 0 cho kết quả null (không có điểm) thay vì lỗi/Infinity — khớp yêu cầu nghiệp vụ.
@@ -21,11 +16,9 @@
  *  - if(điều kiện, đúng, sai) đánh giá LƯỜI: điều kiện trống → null; điều kiện khác 0 → nhánh
  *    thứ hai, bằng 0 → nhánh thứ ba; nhánh không được chọn không được đánh giá.
  *  - Toán tử so sánh (>, <, >=, <=, ==, !=) cho 1/0, là tầng ưu tiên thấp nhất và không
- *    chuỗi được (a > b > c là lỗi cú pháp); một vế trống → null. Đây là cách viết điều kiện
- *    chuẩn cho if theo ví dụ của MoodleDocs: `=if([[midtermexam]]>=5, [[midtermexam]]+[[lab]], 0)`.
+ *    chuỗi được (a > b > c là lỗi cú pháp); một vế trống → null. Đây là cách viết điều kiện chuẩn cho if theo ví dụ của MoodleDocs: `=if([[midtermexam]]>=5, [[midtermexam]]+[[lab]], 0)`.
  *  - Các hàm Moodle ngoài tập lõi của sổ điểm (sin/cos/sqrt/ceil/floor/ln/log/exp… theo
- *    MoodleDocs là "many other mathematical functions" của engine tính toán dùng chung)
- *    vẫn bị từ chối ngay lúc phân tích cú pháp bằng lỗi rõ ràng — không âm thầm tính sai.
+ *    MoodleDocs là "many other mathematical functions" của engine tính toán dùng chung) vẫn bị từ chối ngay lúc phân tích cú pháp bằng lỗi rõ ràng — không âm thầm tính sai.
  */
 
 /** Lỗi công thức: `reason` phân biệt cú pháp sai, hàm lạ và tham chiếu vòng để tầng service ánh xạ sang mã lỗi i18n. */
@@ -76,8 +69,7 @@ type Token =
   | { type: 'op'; value: string };
 
 /**
- * Token hoá công thức: số, tham chiếu `[[idNumber]]`, tên hàm và toán tử/ngoặc/dấu phẩy.
- * Ném GradeFormulaError('syntax') khi gặp ký tự lạ hoặc tham chiếu không đóng ngoặc.
+ * Token hoá công thức: số, tham chiếu `[[idNumber]]`, tên hàm và toán tử/ngoặc/dấu phẩy. Ném GradeFormulaError('syntax') khi gặp ký tự lạ hoặc tham chiếu không đóng ngoặc.
  */
 function tokenize(input: string): Token[] {
   const tokens: Token[] = [];
@@ -135,10 +127,7 @@ function tokenize(input: string): Token[] {
 
 /**
  * Phân tích công thức (có hoặc không có dấu `=` ở đầu) thành cây cú pháp bằng parser đệ quy:
- * comparison → additive (comparisonOp additive)? → term ((+|-) term)* → factor ((*|/) factor)*
- * → unary → primary. So sánh không chuỗi được: sau một phép so sánh, token so sánh thứ hai
- * sẽ thành token thừa và bị từ chối.
- * Hàm lạ ném GradeFormulaError('unknown_function'); cú pháp sai ném ('syntax').
+ * comparison → additive (comparisonOp additive)? → term ((+|-) term)* → factor ((*|/) factor)* → unary → primary. So sánh không chuỗi được: sau một phép so sánh, token so sánh thứ hai sẽ thành token thừa và bị từ chối. Hàm lạ ném GradeFormulaError('unknown_function'); cú pháp sai ném ('syntax').
  */
 export function parseGradeFormula(formula: string): FormulaNode {
   const body = formula.trim().startsWith('=') ? formula.trim().slice(1) : formula;

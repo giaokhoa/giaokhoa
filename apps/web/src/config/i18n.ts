@@ -2,23 +2,11 @@ import i18n, { type BackendModule } from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
 /**
- * i18n phía frontend (i18next + react-i18next): catalog tiếng Việt tập trung
- * tại file này và được đóng gói sẵn trong bundle khởi tạo (locale mặc định),
- * kèm tiếng Anh NẠP LƯỜI — cùng quy ước với catalog của backend
+ * i18n phía frontend (i18next + react-i18next): catalog tiếng Việt tập trung tại file này và được đóng gói sẵn trong bundle khởi tạo (locale mặc định), kèm tiếng Anh NẠP LƯỜI — cùng quy ước với catalog của backend
  * (@nestjs/i18n). Mọi chuỗi hiển thị trên các màn hình phải tra qua
  * `t('...')`, không nhúng chuỗi cứng trong component.
  *
- * Luồng nạp tiếng Anh (issue #503, bước gọn i18n ở root; pattern lazy
- * loading chính thức của i18next — backend plugin +
- * `partialBundledLanguages`): catalog en nằm ở module riêng `i18n-en.ts`,
- * KHÔNG nằm trong bundle khởi tạo vì giao diện mặc định chỉ dùng tiếng
- * Việt (trước khi tách, en chiếm ~47% số byte catalog nạp ở root). Khi
- * ngôn ngữ được chuyển sang `en`, i18next gọi `read` của backend dưới
- * đây cho từng namespace; backend dynamic import `i18n-en.ts` (Vite cắt
- * thành chunk riêng, chỉ tải ở đúng lượt chuyển ngôn ngữ đó) rồi trả
- * object chuỗi của namespace — i18next chờ nạp xong mới phát sự kiện đổi
- * ngôn ngữ nên giao diện không bao giờ hiện khoá thô. Tiếng Việt đã đóng
- * gói sẵn nên backend không bao giờ được gọi cho `vi`.
+ * Luồng nạp tiếng Anh (issue #503, bước gọn i18n ở root; pattern lazy loading chính thức của i18next — backend plugin + `partialBundledLanguages`): catalog en nằm ở module riêng `i18n-en.ts`, KHÔNG nằm trong bundle khởi tạo vì giao diện mặc định chỉ dùng tiếng Việt (trước khi tách, en chiếm ~47% số byte catalog nạp ở root). Khi ngôn ngữ được chuyển sang `en`, i18next gọi `read` của backend dưới đây cho từng namespace; backend dynamic import `i18n-en.ts` (Vite cắt thành chunk riêng, chỉ tải ở đúng lượt chuyển ngôn ngữ đó) rồi trả object chuỗi của namespace — i18next chờ nạp xong mới phát sự kiện đổi ngôn ngữ nên giao diện không bao giờ hiện khoá thô. Tiếng Việt đã đóng gói sẵn nên backend không bao giờ được gọi cho `vi`.
  */
 export const platformResources = {
   vi: {
@@ -189,9 +177,7 @@ export const platformResources = {
 } as const;
 
 /**
- * Resources cho các màn hình lõi (đăng nhập, hồ sơ, khoá học, điểm, câu hỏi,
- * tin nhắn, lịch, huy hiệu, kế hoạch học tập, quản trị): namespace `app`,
- * cùng quy ước tập trung một chỗ — component chỉ gọi `t('...')`.
+ * Resources cho các màn hình lõi (đăng nhập, hồ sơ, khoá học, điểm, câu hỏi, tin nhắn, lịch, huy hiệu, kế hoạch học tập, quản trị): namespace `app`, cùng quy ước tập trung một chỗ — component chỉ gọi `t('...')`.
  */
 export const appResources = {
   vi: {
@@ -2677,9 +2663,7 @@ export const appResources = {
 } as const;
 
 /**
- * Resources cho trang tổng quan (dashboard) và khung sidebar/header của khu
- * vực đã đăng nhập: namespace `dashboard`. Mọi nhãn của khung dashboard-01
- * đều tra tại đây — không nhúng chuỗi tiếng Anh của block mẫu vào UI.
+ * Resources cho trang tổng quan (dashboard) và khung sidebar/header của khu vực đã đăng nhập: namespace `dashboard`. Mọi nhãn của khung dashboard-01 đều tra tại đây — không nhúng chuỗi tiếng Anh của block mẫu vào UI.
  */
 export const dashboardResources = {
   vi: {
@@ -2774,9 +2758,7 @@ export const dashboardResources = {
 } as const;
 
 /**
- * Resources cho bề mặt phụ huynh chỉ-xem (PH-1, issue #130): namespace
- * `guardian`. Mọi nhãn của trang /guardian tra tại đây; bề mặt này
- * chỉ-xem tuyệt đối — không khoá nào gợi hành động thay con.
+ * Resources cho bề mặt phụ huynh chỉ-xem (PH-1, issue #130): namespace `guardian`. Mọi nhãn của trang /guardian tra tại đây; bề mặt này chỉ-xem tuyệt đối — không khoá nào gợi hành động thay con.
  */
 export const guardianResources = {
   vi: {
@@ -2835,10 +2817,7 @@ export const guardianResources = {
 let englishCatalogModule: Promise<typeof import('#config/i18n-en')> | undefined;
 
 /**
- * Backend nạp lười của i18next cho DUY NHẤT locale `en`: `read` được
- * i18next gọi theo từng namespace khi locale đó được yêu cầu (đổi ngôn
- * ngữ hoặc `loadLanguages('en')`); các locale đã đóng gói sẵn (vi) không
- * đi qua backend này nhờ `partialBundledLanguages: true` ở init dưới.
+ * Backend nạp lười của i18next cho DUY NHẤT locale `en`: `read` được i18next gọi theo từng namespace khi locale đó được yêu cầu (đổi ngôn ngữ hoặc `loadLanguages('en')`); các locale đã đóng gói sẵn (vi) không đi qua backend này nhờ `partialBundledLanguages: true` ở init dưới.
  */
 const englishCatalogBackend: BackendModule = {
   type: 'backend',

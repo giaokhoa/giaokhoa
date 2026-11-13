@@ -17,8 +17,7 @@ export function AdminSubjectNewPage() {
 export function AdminSubjectEditPage() {
   const { t } = useTranslation('app');
   const { subjectId } = useParams();
-  // Đọc môn qua TanStack Query (F-01 của rà soát #133); chưa có dữ
-  // liệu (đang tải hoặc lỗi tải) thì màn giữ trạng thái đang tải như trước.
+  // Đọc môn qua TanStack Query (F-01 của rà soát #133); chưa có dữ liệu (đang tải hoặc lỗi tải) thì màn giữ trạng thái đang tải như trước.
   const subjectQuery = useCurriculumSubjectRow(subjectId);
   const subject = subjectQuery.data;
   if (!subject) {

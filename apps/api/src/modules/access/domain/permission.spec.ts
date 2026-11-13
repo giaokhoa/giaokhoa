@@ -2,10 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { aggregateRoleResults, CAP_ALLOW, CAP_INHERIT, CAP_PREVENT, CAP_PROHIBIT, evaluateSingleRole } from './permission';
 
 /**
- * Bảng chân trị thuần cho thuật toán capability của Moodle.
- * Oracle: lib/tests/accesslib_test.php::test_permission_evaluation (MOODLE_503_STABLE)
- * cùng các hằng số/ngữ nghĩa của lib/accesslib.php — lá→gốc theo từng role,
- * PROHIBIT là tuyệt đối, tổng hợp trên nhiều role.
+ * Bảng chân trị thuần cho thuật toán capability của Moodle. Oracle: lib/tests/accesslib_test.php::test_permission_evaluation (MOODLE_503_STABLE) cùng các hằng số/ngữ nghĩa của lib/accesslib.php — lá→gốc theo từng role, PROHIBIT là tuyệt đối, tổng hợp trên nhiều role.
  */
 describe('Miền PermissionEvaluator (ngữ nghĩa accesslib của Moodle)', () => {
   const pts = (...permissions: number[]) => permissions.map((permission, i) => ({ contextId: `ctx-${i + 1}`, permission }));

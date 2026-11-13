@@ -47,9 +47,7 @@ export const NOTIFICATION_DISPATCH_QUEUE = 'notification-dispatch';
 const NOTIFICATION_PAGE_DEFAULT_LIMIT = 20;
 
 /**
- * Con trỏ keyset của trung tâm v2: chuỗi mờ base64url của
- * `{ t, id }` — mốc (thời điểm, id) của dòng cuối trang trước. Client
- * chỉ truyền lại nguyên vẹn, không tự dựng.
+ * Con trỏ keyset của trung tâm v2: chuỗi mờ base64url của `{ t, id }` — mốc (thời điểm, id) của dòng cuối trang trước. Client chỉ truyền lại nguyên vẹn, không tự dựng.
  */
 function encodeNotificationCursor(at: Date, id: string): string {
   return Buffer.from(JSON.stringify({ t: at.toISOString(), id }), 'utf8').toString('base64url');
@@ -95,47 +93,22 @@ export interface NotificationChannelPort {
 }
 
 /**
- * TUỲ CHỌN + PHÁT THÔNG BÁO của MessagingModule (cụm ca sử dụng
- * "tuỳ chọn và phát thông báo").
+ * TUỲ CHỌN + PHÁT THÔNG BÁO của MessagingModule (cụm ca sử dụng "tuỳ chọn và phát thông báo").
  *
- * Luồng nghiệp vụ: NOTIFICATION là thông báo hệ thống do các provider
- * đã đăng ký (notification-providers.ts) tạo qua `notify()` và được
- * phân phối theo tuỳ chọn của người nhận (provider × kênh): kênh
- * trong app (popup) là kênh thật duy nhất — dòng notification CHÍNH LÀ
- * lần phân phối; kênh ngoài (email qua Resend từ NB-5/issue #174,
- * push) đi qua hàng đợi BullMQ 'notification-dispatch' do worker tiêu
- * thụ. Thứ tự cổng khi phát: người nhận suspended/đã xoá không nhận
- * gì → chính sách admin cấp site (NB-7) → ghi đè tắt tiếng theo khoá
+ * Luồng nghiệp vụ: NOTIFICATION là thông báo hệ thống do các provider đã đăng ký (notification-providers.ts) tạo qua `notify()` và được phân phối theo tuỳ chọn của người nhận (provider × kênh): kênh trong app (popup) là kênh thật duy nhất — dòng notification CHÍNH LÀ lần phân phối; kênh ngoài (email qua Resend từ NB-5/issue #174, push) đi qua hàng đợi BullMQ 'notification-dispatch' do worker tiêu thụ. Thứ tự cổng khi phát: người nhận suspended/đã xoá không nhận gì → chính sách admin cấp site (NB-7) → ghi đè tắt tiếng theo khoá
  * (NB-4) → tuỳ chọn v2 của người nhận; mọi lần phân phối/bỏ qua đều
- * ghi dispatch log để truy vết. Tuỳ chọn v2 (popup bật/tắt + tần suất
- * email) quyết ngay tại lần phát — đổi tuỳ chọn hiệu lực ở lần phát
- * kế tiếp. Trung tâm thông báo v2 (issue #51) gộp danh sách theo
+ * ghi dispatch log để truy vết. Tuỳ chọn v2 (popup bật/tắt + tần suất email) quyết ngay tại lần phát — đổi tuỳ chọn hiệu lực ở lần phát kế tiếp. Trung tâm thông báo v2 (issue #51) gộp danh sách theo
  * (loại × nguồn × ngày) với phân trang keyset; số chưa đọc đẩy qua
  * SSE (NotificationUnreadStreamService) thay cho polling.
  *
- * Cách lắp ráp (issue #295): service này là một CỤM của MessagingModule,
- * tách từ MessagingService cũ theo cụm ca sử dụng — tách cấu trúc thuần,
- * không đổi hành vi. MessagingService nay là facade giữ nguyên bề mặt
- * công khai và chữ ký constructor (khớp main hiện tại, gồm tham số
- * I18nService thứ 11 cho luật C-5), tự lắp ráp các service cụm trong
- * constructor của nó (các test đơn vị hiện hữu khởi tạo trực tiếp
- * `new MessagingService(...)` với đúng các phụ thuộc hạ tầng nên
- * facade là điểm lắp ráp để giữ nguyên hợp đồng khởi tạo đó) và
- * chuyển tiếp I18nService cho riêng cụm này, vì chỉ `notify()` của
- * cụm này dùng nó (phân giải nội dung kênh ngoài theo luật C-5);
- * các service cụm không đăng ký provider riêng trong module và module
- * wiring giữ nguyên như trước khi tách.
+ * Cách lắp ráp (issue #295): service này là một CỤM của MessagingModule, tách từ MessagingService cũ theo cụm ca sử dụng — tách cấu trúc thuần, không đổi hành vi. MessagingService nay là facade giữ nguyên bề mặt công khai và chữ ký constructor (khớp main hiện tại, gồm tham số I18nService thứ 11 cho luật C-5), tự lắp ráp các service cụm trong constructor của nó (các test đơn vị hiện hữu khởi tạo trực tiếp `new MessagingService(...)` với đúng các phụ thuộc hạ tầng nên facade là điểm lắp ráp để giữ nguyên hợp đồng khởi tạo đó) và chuyển tiếp I18nService cho riêng cụm này, vì chỉ `notify()` của cụm này dùng nó (phân giải nội dung kênh ngoài theo luật C-5); các service cụm không đăng ký provider riêng trong module và module wiring giữ nguyên như trước khi tách.
  */
 export class MessagingNotificationsService {
   private readonly logger = new Logger(MessagingNotificationsService.name);
 
   /**
    * Phạm vi tenant hiệu lực cho các đường notification phía user:
-   * đọc từ ngữ cảnh tenant của request hiện hành và truyền TƯỜNG
-   * MINH xuống repository (repository tại `@giaokhoa/db` không đọc
-   * ALS — issue #658). Ngữ cảnh platform hoặc đường nền (không
-   * có store ALS) cho `undefined` = không lọc thêm ở tầng ứng
-   * dụng, đúng ngữ nghĩa của bản cũ khi repository tự đọc ALS.
+   * đọc từ ngữ cảnh tenant của request hiện hành và truyền TƯỜNG MINH xuống repository (repository tại `@giaokhoa/db` không đọc ALS — issue #658). Ngữ cảnh platform hoặc đường nền (không có store ALS) cho `undefined` = không lọc thêm ở tầng ứng dụng, đúng ngữ nghĩa của bản cũ khi repository tự đọc ALS.
    */
   private tenantScope(): string | undefined {
     return tenantAls.getStore()?.tenantId;
@@ -150,21 +123,14 @@ export class MessagingNotificationsService {
     private readonly dispatchQueue: Queue,
     private readonly siteConfig: SiteConfigService,
     private readonly groupTree: MessagingGroupTreeService,
-    // I18n: notify() dùng để dựng BẢN TÓM TẮT MẶC ĐỊNH cho kênh ngoài
-    // theo luật C-5 (issue #219) khi provider thuộc diện tối thiểu hoá
-    // mà nơi gọi không truyền bản tối thiểu hoá. Facade chuyển tiếp
-    // tham số này từ constructor của chính nó (tham số thứ 11).
+    // I18n: notify() dùng để dựng BẢN TÓM TẮT MẶC ĐỊNH cho kênh ngoài theo luật C-5 (issue #219) khi provider thuộc diện tối thiểu hoá mà nơi gọi không truyền bản tối thiểu hoá. Facade chuyển tiếp tham số này từ constructor của chính nó (tham số thứ 11).
     private readonly i18n: I18nService,
   ) {}
 
   // --- tuỳ chọn -----------------------------------------------------------
 
   /**
-   * Chính sách phát của ADMIN ở cấp site cho một provider (NB-7,
-   * issue #174): đọc khoá `notifications/provider_<tên>_enabled` trong
-   * site-config; chưa ghi đè = mặc định bật (hành vi trước NB-7). Loại
-   * bắt buộc P2 luôn bật ở tầng này — SiteConfigService đã chặn không
-   * cho admin đặt false, ở đây ép bật thêm một lớp cho chắc.
+   * Chính sách phát của ADMIN ở cấp site cho một provider (NB-7, issue #174): đọc khoá `notifications/provider_<tên>_enabled` trong site-config; chưa ghi đè = mặc định bật (hành vi trước NB-7). Loại bắt buộc P2 luôn bật ở tầng này — SiteConfigService đã chặn không cho admin đặt false, ở đây ép bật thêm một lớp cho chắc.
    */
   async isProviderEnabledBySitePolicy(provider: MessageProviderDefinition): Promise<boolean> {
     if (provider.mandatoryInApp) return true;
@@ -176,13 +142,8 @@ export class MessagingNotificationsService {
   }
 
   /**
-   * User có được toàn bộ bề mặt tuỳ chọn theo loại (v2) hay chỉ bề
-   * mặt tối thiểu của học sinh (NB-7, issue #174 — quy định:
-   * học sinh chỉ tuỳ chọn TỐI THIỂU). Đầy đủ = site admin, hoặc có bất
-   * kỳ gán vai nhân sự (archetype manager/coursecreator/
-   * editingteacher/teacher) tại bất kỳ context nào. Còn lại — học
-   * sinh thuần, phụ huynh, tài khoản chưa gán vai — là tối thiểu: bề
-   * mặt duy nhất còn lại là ngoại lệ tắt tiếng theo khoá (NB-4).
+   * User có được toàn bộ bề mặt tuỳ chọn theo loại (v2) hay chỉ bề mặt tối thiểu của học sinh (NB-7, issue #174 — quy định:
+   * học sinh chỉ tuỳ chọn TỐI THIỂU). Đầy đủ = site admin, hoặc có bất kỳ gán vai nhân sự (archetype manager/coursecreator/ editingteacher/teacher) tại bất kỳ context nào. Còn lại — học sinh thuần, phụ huynh, tài khoản chưa gán vai — là tối thiểu: bề mặt duy nhất còn lại là ngoại lệ tắt tiếng theo khoá (NB-4).
    */
   async hasFullNotificationPreferences(userId: string): Promise<boolean> {
     if (await this.evaluator.isSiteAdmin(userId)) return true;
@@ -225,9 +186,7 @@ export class MessagingNotificationsService {
   }
 
   /**
-   * Kênh có đang bật cho provider này theo tuỳ chọn của user (phân biệt logged-in/logged-off) hay không.
-   * CHỈ còn dùng cho kênh push (chưa có mô hình v2 — push ẩn khỏi trang
-   * cài đặt cho tới khi có app native) và làm nền suy giá trị cũ.
+   * Kênh có đang bật cho provider này theo tuỳ chọn của user (phân biệt logged-in/logged-off) hay không. CHỈ còn dùng cho kênh push (chưa có mô hình v2 — push ẩn khỏi trang cài đặt cho tới khi có app native) và làm nền suy giá trị cũ.
    */
   async isChannelEnabled(userId: string, provider: string, channel: MessageChannel, state: LoginState): Promise<boolean> {
     const value = await this.users.getPreference(userId, preferenceName(provider, channel, state));
@@ -235,10 +194,7 @@ export class MessagingNotificationsService {
   }
 
   /**
-   * Giá trị bật/tắt của mô hình CŨ cho một (provider × kênh): hàng
-   * loggedin là hàng notify() vẫn dùng trên thực tế (mọi nơi phát đều
-   * để loggedIn mặc định true), nên suy tương đương lấy loggedin
-   * trước, loggedoff sau; cả hai chưa đặt → undefined (dùng mặc định).
+   * Giá trị bật/tắt của mô hình CŨ cho một (provider × kênh): hàng loggedin là hàng notify() vẫn dùng trên thực tế (mọi nơi phát đều để loggedIn mặc định true), nên suy tương đương lấy loggedin trước, loggedoff sau; cả hai chưa đặt → undefined (dùng mặc định).
    */
   private async legacyChannelValue(userId: string, provider: string, channel: MessageChannel): Promise<boolean | undefined> {
     for (const state of ['loggedin', 'loggedoff'] as LoginState[]) {
@@ -249,10 +205,7 @@ export class MessagingNotificationsService {
   }
 
   /**
-   * Giá trị tuỳ chọn v2 HIỆU LỰC của một provider cho một user: khoá
-   * v2 đã đặt thì dùng thẳng; chưa có thì suy từ dữ liệu cũ (không phá
-   * user_preferences hiện có — khoá cũ giữ nguyên, chỉ đọc). Loại bắt
-   * buộc (P2) luôn bật ở kênh trong-app bất kể giá trị đã lưu.
+   * Giá trị tuỳ chọn v2 HIỆU LỰC của một provider cho một user: khoá v2 đã đặt thì dùng thẳng; chưa có thì suy từ dữ liệu cũ (không phá user_preferences hiện có — khoá cũ giữ nguyên, chỉ đọc). Loại bắt buộc (P2) luôn bật ở kênh trong-app bất kể giá trị đã lưu.
    */
   async resolveNotificationPreference(userId: string, provider: MessageProviderDefinition): Promise<{ popupEnabled: boolean; emailFrequency: EmailFrequency | null }> {
     let popupEnabled: boolean;
@@ -274,21 +227,14 @@ export class MessagingNotificationsService {
   }
 
   /**
-   * Một dòng tuỳ chọn v2 đầy đủ (nhãn/mô tả từ registry + giá trị hiệu
-   * lực của user). Kèm `siteEnabled` — chính sách phát của admin ở cấp
-   * site (NB-7) qua đúng hàm `isProviderEnabledBySitePolicy` mà
-   * `notify()` tôn trọng khi phát — để trang Cài đặt thông báo hiển
-   * thị "Admin đã tắt ở cấp site" và khoá điều khiển: chỉ là BỀ MẶT
-   * HIỂN THỊ của chính sách đã thi hành ở server, không đổi mô hình
-   * dữ liệu hay luật phát nào.
+   * Một dòng tuỳ chọn v2 đầy đủ (nhãn/mô tả từ registry + giá trị hiệu lực của user). Kèm `siteEnabled` — chính sách phát của admin ở cấp site (NB-7) qua đúng hàm `isProviderEnabledBySitePolicy` mà `notify()` tôn trọng khi phát — để trang Cài đặt thông báo hiển thị "Admin đã tắt ở cấp site" và khoá điều khiển: chỉ là BỀ MẶT HIỂN THỊ của chính sách đã thi hành ở server, không đổi mô hình dữ liệu hay luật phát nào.
    */
   private async preferenceView(userId: string, provider: MessageProviderDefinition): Promise<NotificationPreferenceView> {
     const resolved = await this.resolveNotificationPreference(userId, provider);
     return {
       provider: provider.name, component: provider.component, group: provider.group,
       label: provider.label, description: provider.description,
-      // teacherOnly là giá trị SUY RA từ audience của registry (hàm
-      // isTeacherOnlyProvider) — registry không còn cờ khai riêng.
+      // teacherOnly là giá trị SUY RA từ audience của registry (hàm isTeacherOnlyProvider) — registry không còn cờ khai riêng.
       teacherOnly: isTeacherOnlyProvider(provider), mandatoryInApp: provider.mandatoryInApp ?? false,
       popupEnabled: resolved.popupEnabled, emailFrequency: resolved.emailFrequency,
       emailAvailable: EMAIL_CHANNEL_AVAILABLE,
@@ -297,16 +243,7 @@ export class MessagingNotificationsService {
   }
 
   /**
-   * Tuỳ chọn notification v2 của user: một dòng cho mỗi provider đã
-   * đăng ký (NB-2 — không còn ma trận provider × kênh × trạng thái),
-   * LỌC theo audience của registry giao với context vai thật của
-   * user (lát phân chia theo vai, issue #288): giáo viên thuần không
-   * còn thấy loại chỉ học sinh nhận (báo điểm, bài mới giao…) hay
-   * loại của phụ huynh; người nhiều vai thấy hợp nhất các phía của
-   * mình. Học sinh thuần (NB-7) giữ nguyên hành vi cũ: danh sách
-   * theo loại rỗng — bề mặt tuỳ chọn duy nhất của họ là ngoại lệ
-   * theo khoá (NB-4) ở endpoint riêng; cổng NB-7 chạy TRƯỚC tầng
-   * audience và không đổi.
+   * Tuỳ chọn notification v2 của user: một dòng cho mỗi provider đã đăng ký (NB-2 — không còn ma trận provider × kênh × trạng thái), LỌC theo audience của registry giao với context vai thật của user (lát phân chia theo vai, issue #288): giáo viên thuần không còn thấy loại chỉ học sinh nhận (báo điểm, bài mới giao…) hay loại của phụ huynh; người nhiều vai thấy hợp nhất các phía của mình. Học sinh thuần (NB-7) giữ nguyên hành vi cũ: danh sách theo loại rỗng — bề mặt tuỳ chọn duy nhất của họ là ngoại lệ theo khoá (NB-4) ở endpoint riêng; cổng NB-7 chạy TRƯỚC tầng audience và không đổi.
    */
   async getPreferences(userId: string): Promise<NotificationPreferenceView[]> {
     if (!(await this.hasFullNotificationPreferences(userId))) return [];
@@ -319,19 +256,10 @@ export class MessagingNotificationsService {
   }
 
   /**
-   * Đặt tuỳ chọn v2 cho MỘT provider (popup và/hoặc tần suất email).
-   * Ghi khoá v2 mới; khoá cũ không bị xoá hay ghi đè. Tắt popup của
-   * loại bắt buộc (P2) bị từ chối — kênh ngoài của loại bắt buộc vẫn
-   * tắt được tuyệt đối qua emailFrequency='off'. Hai cổng chặn ở
-   * server chạy trước khi ghi: cổng bề mặt NB-7 (chỉ nhân sự/admin —
-   * 403 `messaging.preference_staff_only`) và cổng audience theo
-   * vai + context (issue #288 — 403 `messaging.preference_audience`).
+   * Đặt tuỳ chọn v2 cho MỘT provider (popup và/hoặc tần suất email). Ghi khoá v2 mới; khoá cũ không bị xoá hay ghi đè. Tắt popup của loại bắt buộc (P2) bị từ chối — kênh ngoài của loại bắt buộc vẫn tắt được tuyệt đối qua emailFrequency='off'. Hai cổng chặn ở server chạy trước khi ghi: cổng bề mặt NB-7 (chỉ nhân sự/admin — 403 `messaging.preference_staff_only`) và cổng audience theo vai + context (issue #288 — 403 `messaging.preference_audience`).
    */
   async setPreference(userId: string, input: { provider: string; popupEnabled?: boolean; emailFrequency?: EmailFrequency }): Promise<NotificationPreferenceView> {
-    // Phân tầng bề mặt (NB-7): tuỳ chọn theo loại chỉ dành cho giáo
-    // viên/nhân sự — học sinh bị chặn ngay ở server (403), không chỉ
-    // giấu giao diện. Chặn trước mọi kiểm chứng khác để học sinh gọi
-    // với bất kỳ payload nào cũng nhận cùng một 403 rõ ràng.
+    // Phân tầng bề mặt (NB-7): tuỳ chọn theo loại chỉ dành cho giáo viên/nhân sự — học sinh bị chặn ngay ở server (403), không chỉ giấu giao diện. Chặn trước mọi kiểm chứng khác để học sinh gọi với bất kỳ payload nào cũng nhận cùng một 403 rõ ràng.
     if (!(await this.hasFullNotificationPreferences(userId))) {
       throw new ForbiddenException({
         message: 'Per-type notification preferences are only available to teaching and administrative staff',

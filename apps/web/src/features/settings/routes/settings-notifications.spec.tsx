@@ -7,16 +7,13 @@ import { createQueryClient } from '#lib/query-client';
 import { SettingsNotificationsPage } from './settings-notifications';
 
 /**
- * Mục Thông báo của khu Cài đặt (issue #288) — mô hình HAI LỚP trên
- * API preferences v2 giữ nguyên:
+ * Mục Thông báo của khu Cài đặt (issue #288) — mô hình HAI LỚP trên API preferences v2 giữ nguyên:
  * - Lớp 1 theo NHÓM: trạng thái nhóm SUY RA từ các dòng thật; đổi ở
- *   nhóm = PUT từng provider trong nhóm (bỏ qua loại bắt buộc khi
- *   tắt popup, bỏ qua loại admin đã tắt ở cấp site).
+ *   nhóm = PUT từng provider trong nhóm (bỏ qua loại bắt buộc khi tắt popup, bỏ qua loại admin đã tắt ở cấp site).
  * - Lớp 2 "Tuỳ chỉnh từng loại": PUT đúng một provider và THẮNG cài
  *   đặt nhóm — sau khi chỉnh, hàng nhóm hiện "Đã tuỳ chỉnh".
  * - Luật cứng chỉ hiển thị: P2 khoá "Bắt buộc"; NB-7 hiện "Admin đã
- *   tắt ở cấp site" và khoá điều khiển; ngoại lệ theo khoá (NB-4/P3)
- *   nguyên vẹn; học sinh chỉ có bề mặt tối thiểu.
+ *   tắt ở cấp site" và khoá điều khiển; ngoại lệ theo khoá (NB-4/P3) nguyên vẹn; học sinh chỉ có bề mặt tối thiểu.
  */
 interface PrefRow {
   provider: string;
@@ -141,9 +138,7 @@ describe('Cài đặt — tuỳ chọn thông báo, mô hình hai lớp (#288)',
 
   it('nhóm bị bộ lọc audience của API làm rỗng thì không render mục nào ở cả hai lớp (issue #288)', async () => {
     const calls: RecordedCall[] = [];
-    // API đã lọc theo vai + context: chỉ còn nhóm Lớp & mọi người.
-    // Hai nhóm rỗng không được dựng section nào — cả ở lớp tổng hợp
-    // theo nhóm lẫn ở lớp "Tuỳ chỉnh từng loại".
+    // API đã lọc theo vai + context: chỉ còn nhóm Lớp & mọi người. Hai nhóm rỗng không được dựng section nào — cả ở lớp tổng hợp theo nhóm lẫn ở lớp "Tuỳ chỉnh từng loại".
     stubFetch(calls, {
       rows: [
         row({ provider: 'message_new', group: 'people', label: { vi: 'Tin nhắn mới', en: 'New message' }, emailFrequency: 'immediate' }),
@@ -212,8 +207,7 @@ describe('Cài đặt — tuỳ chọn thông báo, mô hình hai lớp (#288)',
 
     await waitFor(() => expect(prefPuts(calls)).toHaveLength(1));
     expect(prefPuts(calls)[0]!.body).toEqual({ provider: 'grade_updated', popupEnabled: false });
-    // Nhóm không còn đồng nhất: hàng nhóm báo "Đã tuỳ chỉnh" và
-    // checkbox nhóm ở trạng thái indeterminate — giá trị từng loại
+    // Nhóm không còn đồng nhất: hàng nhóm báo "Đã tuỳ chỉnh" và checkbox nhóm ở trạng thái indeterminate — giá trị từng loại
     // (đang tắt) là giá trị hiệu lực được hiển thị ở lớp 2.
     await waitFor(() => expect((screen.getByLabelText('Học tập — Trong ứng dụng') as HTMLInputElement).indeterminate).toBe(true));
     expect(screen.getByLabelText('Điểm số thay đổi — Trong ứng dụng')).not.toBeChecked();
@@ -298,8 +292,7 @@ describe('Cài đặt — tuỳ chọn thông báo, mô hình hai lớp (#288)',
     expect(screen.getByLabelText('Tắt tiếng khoá này: Khoá Toán 10')).toBeInTheDocument();
   });
 
-  // Hai ca dưới đây giữ các hành vi của trang vốn được ghim ở
-  // engagement.spec.tsx (describe tuỳ chọn thông báo đặt sai file):
+  // Hai ca dưới đây giữ các hành vi của trang vốn được ghim ở engagement.spec.tsx (describe tuỳ chọn thông báo đặt sai file):
   // đổi tần suất email của một loại và hoàn trạng thái khi PUT lỗi.
   it('đổi tần suất email của một loại ở lớp tuỳ chỉnh: chỉ PUT đúng provider đó, hiện ghi chú kênh chưa khả dụng', async () => {
     const calls: RecordedCall[] = [];
@@ -315,15 +308,13 @@ describe('Cài đặt — tuỳ chọn thông báo, mô hình hai lớp (#288)',
 
     await screen.findByLabelText('Lớp & mọi người — Trong ứng dụng');
     await userEvent.click(screen.getByText('Tuỳ chỉnh từng loại'));
-    // Nhãn hiển thị là nhãn registry (vi), không lộ khoá thô của
-    // provider và không còn trục loggedin/loggedoff của mô hình cũ.
+    // Nhãn hiển thị là nhãn registry (vi), không lộ khoá thô của provider và không còn trục loggedin/loggedoff của mô hình cũ.
     expect(await screen.findByText('Huy hiệu mới')).toBeInTheDocument();
     expect(screen.queryByText('badge_awarded')).not.toBeInTheDocument();
     expect(screen.queryByText(/loggedin|loggedoff/)).not.toBeInTheDocument();
     const select = await screen.findByLabelText('Huy hiệu mới — Email');
     expect(select).toHaveValue('immediate');
-    // Trung thực kênh: email chưa gửi thật thì phải có ghi chú, và
-    // không có bất kỳ bề mặt push nào trên trang.
+    // Trung thực kênh: email chưa gửi thật thì phải có ghi chú, và không có bất kỳ bề mặt push nào trên trang.
     expect(screen.getByText('Chưa khả dụng — cài đặt sẽ áp dụng khi kênh mở')).toBeInTheDocument();
     expect(screen.queryByText(/push/i)).not.toBeInTheDocument();
 
@@ -347,8 +338,7 @@ describe('Cài đặt — tuỳ chọn thông báo, mô hình hai lớp (#288)',
           );
         if (url === '/api/v1/messages/preferences')
           return new Response(JSON.stringify([badgeRow]), { status: 200, headers: { 'Content-Type': 'application/json' } });
-        // Ghi đè theo khoá (NB-4): danh sách khoá tải tốt — lỗi duy nhất
-        // của ca này là PUT tuỳ chọn, để role=alert chỉ có một nguồn.
+        // Ghi đè theo khoá (NB-4): danh sách khoá tải tốt — lỗi duy nhất của ca này là PUT tuỳ chọn, để role=alert chỉ có một nguồn.
         if (url === '/api/v1/messages/preferences/courses')
           return new Response(JSON.stringify({ courses: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
         return new Response('{}', { status: 404, headers: { 'Content-Type': 'application/json' } });

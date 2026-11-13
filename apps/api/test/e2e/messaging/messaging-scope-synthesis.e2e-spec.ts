@@ -7,51 +7,16 @@ import {
 import { createCategory, createCourse, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
 
 /**
- * Người có phạm vi quản trị nhưng CHƯA TỪNG MỞ vẫn thấy hàng
- * lớp/khoá tổng hợp với số chưa đọc 0, và liệt kê không được ghi
- * dòng thành viên cho họ (issue #592, điểm B1 của vòng sửa).
+ * Người có phạm vi quản trị nhưng CHƯA TỪNG MỞ vẫn thấy hàng lớp/khoá tổng hợp với số chưa đọc 0, và liệt kê không được ghi dòng thành viên cho họ (issue #592, điểm B1 của vòng sửa).
  *
- * Vì sao ca này ở file riêng, không chung file liệt kê của quản trị
- * viên: vòng lặp liệt kê đồng bộ lại toàn bộ tập thành viên đích
- * của từng conversation đã liệt kê (syncCourse/ClassConversation
- * Members trên mỗi hàng tóm tắt), nên một staff được gán SAU khi
- * conversation đã ensure sẽ bị vật chất hoá membership ngay ở lần
- * liệt kê đầu tiên của bất kỳ thành viên nào sau đó. Vì vậy người
- * xem chưa-từng-mở chỉ giữ đúng trạng thái "có phạm vi, chưa có
- * dòng thành viên" khi không có thành viên nào liệt kê các
- * conversation đã dàn dựng trong khoảng giữa lúc gán và lúc khẳng
- * định — file này không liệt kê dưới vai trò nào khác ngoài người
- * xem, và bản thân đường liệt kê của người xem cũng không kích
- * hoạt đồng bộ cho họ (họ không thuộc định nghĩa thành viên theo
- * khoá/lớp: không ghi danh, không gán tại context khoá/lớp).
+ * Vì sao ca này ở file riêng, không chung file liệt kê của quản trị viên: vòng lặp liệt kê đồng bộ lại toàn bộ tập thành viên đích của từng conversation đã liệt kê (syncCourse/ClassConversation Members trên mỗi hàng tóm tắt), nên một staff được gán SAU khi conversation đã ensure sẽ bị vật chất hoá membership ngay ở lần liệt kê đầu tiên của bất kỳ thành viên nào sau đó. Vì vậy người xem chưa-từng-mở chỉ giữ đúng trạng thái "có phạm vi, chưa có dòng thành viên" khi không có thành viên nào liệt kê các conversation đã dàn dựng trong khoảng giữa lúc gán và lúc khẳng định — file này không liệt kê dưới vai trò nào khác ngoài người xem, và bản thân đường liệt kê của người xem cũng không kích hoạt đồng bộ cho họ (họ không thuộc định nghĩa thành viên theo khoá/lớp: không ghi danh, không gán tại context khoá/lớp).
  *
- * Vì sao người xem KHÔNG phải tài khoản quản trị hệ thống dùng
- * chung: quản trị hệ thống mang vai Manager tại context hệ thống
- * nên đã nằm trong tập staff của mọi khoá/lớp và luôn được vật
- * chất hoá membership ngay khi conversation được tạo/đồng bộ.
- * Người xem đúng là user được gán Manager tại context hệ thống
- * SAU khi conversation đã ensure: có phạm vi qua kế thừa
- * capability (`course:managegroups`, `class` staff theo đường dẫn
- * context) nhưng chưa có dòng thành viên.
+ * Vì sao người xem KHÔNG phải tài khoản quản trị hệ thống dùng chung: quản trị hệ thống mang vai Manager tại context hệ thống nên đã nằm trong tập staff của mọi khoá/lớp và luôn được vật chất hoá membership ngay khi conversation được tạo/đồng bộ. Người xem đúng là user được gán Manager tại context hệ thống SAU khi conversation đã ensure: có phạm vi qua kế thừa capability (`course:managegroups`, `class` staff theo đường dẫn context) nhưng chưa có dòng thành viên.
  *
- * Dàn dựng: một khoá (giáo viên + học viên ghi danh, chỉ giáo viên
- * ensure) và một lớp (giáo viên là chủ lớp, học viên vào roster,
- * chỉ giáo viên ensure); giáo viên gửi một tin vào mỗi conversation
- * TRƯỚC khi gán phạm vi cho người xem — để lần liệt kê đầu tiên
- * của người xem chứng minh được liệt kê không ghi membership (nếu
- * liệt kê vật chất hoá người xem thì hàng đã đếm tin có sẵn).
- * Không ensure/liệt kê dưới vai trò nào khác sau khi gán.
- * Kỳ vọng: danh sách của người xem có cả hai hàng tổng hợp với số
- * chưa đọc 0 và huy hiệu 0 (chứng tỏ liệt kê không ghi dòng thành
- * viên); người xem mở khoá lần đầu (ensure) thì hàng khoá chuyển
- * thành hàng thật và bắt đầu đếm (1), hàng lớp vẫn tổng hợp 0.
+ * Dàn dựng: một khoá (giáo viên + học viên ghi danh, chỉ giáo viên ensure) và một lớp (giáo viên là chủ lớp, học viên vào roster, chỉ giáo viên ensure); giáo viên gửi một tin vào mỗi conversation TRƯỚC khi gán phạm vi cho người xem — để lần liệt kê đầu tiên của người xem chứng minh được liệt kê không ghi membership (nếu liệt kê vật chất hoá người xem thì hàng đã đếm tin có sẵn). Không ensure/liệt kê dưới vai trò nào khác sau khi gán. Kỳ vọng: danh sách của người xem có cả hai hàng tổng hợp với số chưa đọc 0 và huy hiệu 0 (chứng tỏ liệt kê không ghi dòng thành viên); người xem mở khoá lần đầu (ensure) thì hàng khoá chuyển thành hàng thật và bắt đầu đếm (1), hàng lớp vẫn tổng hợp 0.
  *
  * Lưu ý về cơ chế đồng bộ lười (không thuộc phạm vi vòng sửa):
- * gửi tin vào conversation cũng đối chiếu lại toàn bộ tập thành
- * viên đích, nên người có phạm vi được gán TRƯỚC một lần gửi tin
- * sẽ bị vật chất hoá bởi chính lần gửi đó — ca này vì vậy dàn
- * dựng tin trước khi gán, để phần chứng minh "liệt kê không ghi"
- * không bị lần gửi tin làm nhiễu.
+ * gửi tin vào conversation cũng đối chiếu lại toàn bộ tập thành viên đích, nên người có phạm vi được gán TRƯỚC một lần gửi tin sẽ bị vật chất hoá bởi chính lần gửi đó — ca này vì vậy dàn dựng tin trước khi gán, để phần chứng minh "liệt kê không ghi" không bị lần gửi tin làm nhiễu.
  */
 interface Person { id: string; username: string; token: string }
 interface ListRow { id: string; unread: number; component: string | null; itemType: string | null }

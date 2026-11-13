@@ -5,15 +5,7 @@ import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-suppo
 import { ContentBankRepository } from './content-bank';
 
 /**
- * Spec tích hợp của ContentBankRepository phía Kysely (issue
- * #646, nhóm G6). Database kho trung tâm dựng từ rỗng bằng cầu
- * nối migration của package trên cụm PostgreSQL thật; mọi ca chạy
- * qua repository production. Các ca khoá: chuyển đổi tường minh
- * `size_bytes` int8 (đọc là string theo luật T-7) về `number` ở
- * biên repository; ghi các cột jsonb dạng mảng/object qua
- * serialize + `::jsonb`; bộ lọc động của `listFiltered`; và hình
- * dạng CohortRow của `listCohortsForUser` qua join
- * cohort_members → cohort.
+ * Spec tích hợp của ContentBankRepository phía Kysely (issue #646, nhóm G6). Database kho trung tâm dựng từ rỗng bằng cầu nối migration của package trên cụm PostgreSQL thật; mọi ca chạy qua repository production. Các ca khoá: chuyển đổi tường minh `size_bytes` int8 (đọc là string theo luật T-7) về `number` ở biên repository; ghi các cột jsonb dạng mảng/object qua serialize + `::jsonb`; bộ lọc động của `listFiltered`; và hình dạng CohortRow của `listCohortsForUser` qua join cohort_members → cohort.
  */
 const adminUrl =
   process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??

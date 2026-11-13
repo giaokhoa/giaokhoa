@@ -3,14 +3,7 @@ import * as React from 'react';
 import { cn } from '@giaokhoa/ui/lib/utils';
 
 /**
- * Bậc bề rộng nội dung chuẩn của khung trang (hồ sơ UI/UX §3.1): màn ít
- * thông tin (đọc, form một cột, cài đặt) đứng ở cột 768px; màn nhiều
- * thông tin hơn nới dần; bảng dày/workspace/chat dùng toàn bề rộng.
- * Bậc `app` là khung của template quản trị mẫu: cột trần 1440px và đệm
- * nằm BÊN TRONG trần (đệm ngang 16px, từ bề rộng 640px là 24px; đệm
- * dọc 24px) nên bề mặt hiệu dụng tối đa là 1392px — đệm phải đi cùng
- * trần ở lớp trong, vì đệm đặt ở lớp ngoài sẽ làm bề mặt phình thêm
- * đúng phần đệm so với khung mẫu.
+ * Bậc bề rộng nội dung chuẩn của khung trang (hồ sơ UI/UX §3.1): màn ít thông tin (đọc, form một cột, cài đặt) đứng ở cột 768px; màn nhiều thông tin hơn nới dần; bảng dày/workspace/chat dùng toàn bề rộng. Bậc `app` là khung của template quản trị mẫu: cột trần 1440px và đệm nằm BÊN TRONG trần (đệm ngang 16px, từ bề rộng 640px là 24px; đệm dọc 24px) nên bề mặt hiệu dụng tối đa là 1392px — đệm phải đi cùng trần ở lớp trong, vì đệm đặt ở lớp ngoài sẽ làm bề mặt phình thêm đúng phần đệm so với khung mẫu.
  */
 export type PageWidth = 'narrow' | 'medium' | 'wide' | 'app' | 'full';
 
@@ -23,14 +16,9 @@ const WIDTH_CLASSES: Record<PageWidth, string> = {
 };
 
 /**
- * Khung trang dùng chung cho mọi màn đã đăng nhập (hồ sơ UI/UX §5.1),
- * thay chuỗi wrapper full-width sao chép tay trước đây
+ * Khung trang dùng chung cho mọi màn đã đăng nhập (hồ sơ UI/UX §5.1), thay chuỗi wrapper full-width sao chép tay trước đây
  * (`<main className="@container/main flex flex-1 flex-col gap-4 px-4 …">`).
- * Lớp ngoài giữ nhịp padding/khoảng cách hiện tại và `@container/main`
- * cho các truy vấn container trong trang; lớp trong áp cap bề rộng theo
- * bậc. Riêng bậc `app`, lớp ngoài không mang đệm — đệm đã nằm trong
- * trần ở lớp trong (xem WIDTH_CLASSES) nên cộng cả hai lớp sẽ thừa.
- * Biến thể `fillHeight` dành cho màn ứng dụng đầy chiều cao (chat):
+ * Lớp ngoài giữ nhịp padding/khoảng cách hiện tại và `@container/main` cho các truy vấn container trong trang; lớp trong áp cap bề rộng theo bậc. Riêng bậc `app`, lớp ngoài không mang đệm — đệm đã nằm trong trần ở lớp trong (xem WIDTH_CLASSES) nên cộng cả hai lớp sẽ thừa. Biến thể `fillHeight` dành cho màn ứng dụng đầy chiều cao (chat):
  * trang không cuộn, các cột con tự cuộn riêng.
  */
 export function PageShell({
@@ -72,10 +60,7 @@ export function PageShell({
 }
 
 /**
- * Mẫu tiêu đề đầu trang (hồ sơ UI/UX §5.1): tiêu đề + mô tả một dòng +
- * cụm hành động bên phải (một nút chính, tối đa một nút phụ — caller
- * truyền vào qua `actions`); trên mobile cụm hành động xuống dòng dưới
- * tiêu đề. `SiteHeader` vẫn giữ vai trò tên trang rút gọn ở header chung.
+ * Mẫu tiêu đề đầu trang (hồ sơ UI/UX §5.1): tiêu đề + mô tả một dòng + cụm hành động bên phải (một nút chính, tối đa một nút phụ — caller truyền vào qua `actions`); trên mobile cụm hành động xuống dòng dưới tiêu đề. `SiteHeader` vẫn giữ vai trò tên trang rút gọn ở header chung.
  */
 export function PageHeader({
   title,

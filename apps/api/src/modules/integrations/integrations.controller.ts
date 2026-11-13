@@ -40,8 +40,7 @@ export class IntegrationsController {
   @Public()
   @Post('call')
   async call(@Body({ schema: callExternalFunctionSchema }) dto: CallFunctionDto, @Req() req: Request) {
-    // IP khách thật qua cơ chế chung (common/client-ip) để đối chiếu
-    // allowlist của dịch vụ — không đọc tay X-Forwarded-For ở đây.
+    // IP khách thật qua cơ chế chung (common/client-ip) để đối chiếu allowlist của dịch vụ — không đọc tay X-Forwarded-For ở đây.
     const ip = clientIpOf(req) ?? '';
     const result = await this.integrations.callFunction({ token: dto.token, functionName: dto.functionName, args: dto.args, ip });
     return { result };

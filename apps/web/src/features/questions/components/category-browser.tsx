@@ -1,13 +1,5 @@
 /**
- * Panel duyệt câu hỏi theo danh mục của trang ngân hàng câu hỏi: mỗi
- * danh mục là một mục thu/mở (mục đang mở là danh mục đang chọn), bên
- * trong là bảng câu hỏi dùng chung (DataTable) với cột chọn câu để
- * bắt đầu lượt dùng, trích đoạn, loại, phiên bản, nội dung + ngữ liệu
- * và các thao tác tại dòng (sửa qua màn editor riêng, lịch sử phiên
- * bản, xoá, sao chép về bank cá nhân, rút/hoàn rút). Dữ liệu danh
- * mục/câu hỏi/ngữ liệu/ghi công do trang nạp rồi truyền xuống; panel
- * giữ state chọn câu + lịch sử phiên bản đang xem và tự gọi các đột
- * biến của lib/questions-data; làm mới qua các hàm refresh của trang.
+ * Panel duyệt câu hỏi theo danh mục của trang ngân hàng câu hỏi: mỗi danh mục là một mục thu/mở (mục đang mở là danh mục đang chọn), bên trong là bảng câu hỏi dùng chung (DataTable) với cột chọn câu để bắt đầu lượt dùng, trích đoạn, loại, phiên bản, nội dung + ngữ liệu và các thao tác tại dòng (sửa qua màn editor riêng, lịch sử phiên bản, xoá, sao chép về bank cá nhân, rút/hoàn rút). Dữ liệu danh mục/câu hỏi/ngữ liệu/ghi công do trang nạp rồi truyền xuống; panel giữ state chọn câu + lịch sử phiên bản đang xem và tự gọi các đột biến của lib/questions-data; làm mới qua các hàm refresh của trang.
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -93,13 +85,9 @@ export function CategoryBrowser({
   }
 
   /**
-   * Cột của bảng ngân hàng câu hỏi trên DataTable dùng chung (TanStack
-   * Table): chọn câu hỏi để làm bài vẫn là state của trang (checkbox ở
-   * cột đầu ghi vào `selected`), trích đoạn nội dung/phiên bản sắp xếp
-   * được, ô lọc toàn bảng quét theo trích đoạn và nội dung câu hỏi
+   * Cột của bảng ngân hàng câu hỏi trên DataTable dùng chung (TanStack Table): chọn câu hỏi để làm bài vẫn là state của trang (checkbox ở cột đầu ghi vào `selected`), trích đoạn nội dung/phiên bản sắp xếp được, ô lọc toàn bảng quét theo trích đoạn và nội dung câu hỏi
    * (câu hỏi không còn trường tên — nhãn là trích đoạn, xem
-   * `questionExcerpt`). Trước đây danh sách này là một <ul> tự chế
-   * không sắp xếp/lọc/phân trang.
+   * `questionExcerpt`). Trước đây danh sách này là một <ul> tự chế không sắp xếp/lọc/phân trang.
    */
   const questionColumns: DataColumn<QuestionView>[] = [
     {
@@ -121,8 +109,7 @@ export function CategoryBrowser({
       id: 'excerpt',
       header: t('questionText'),
       cell: (view) => {
-        // Dòng ghi công KHÔNG tắt được cho câu copy (QB-2): hiện ngay
-        // dưới trích đoạn câu khi đã nạp được attribution; câu đã rút có nhãn.
+        // Dòng ghi công KHÔNG tắt được cho câu copy (QB-2): hiện ngay dưới trích đoạn câu khi đã nạp được attribution; câu đã rút có nhãn.
         const a = attributions[view.question.id];
         const isCopy = Boolean((view.question as { derivedFromQuestionId?: string | null }).derivedFromQuestionId);
         return (

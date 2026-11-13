@@ -12,10 +12,7 @@ import {
 } from './types';
 
 /**
- * Truy vết nguồn của một dòng gán vai (Moodle: cột `component`/`itemid`
- * của `role_assignments` — enrol plugin ghi component là tên plugin và
- * itemid là id của enrol instance). Gán tay qua API quản trị và các gán
- * hệ thống khác để component rỗng + itemId null.
+ * Truy vết nguồn của một dòng gán vai (Moodle: cột `component`/`itemid` của `role_assignments` — enrol plugin ghi component là tên plugin và itemid là id của enrol instance). Gán tay qua API quản trị và các gán hệ thống khác để component rỗng + itemId null.
  */
 export interface AssignmentSource {
   component: string;

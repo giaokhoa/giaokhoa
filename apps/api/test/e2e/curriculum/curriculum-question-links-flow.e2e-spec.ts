@@ -7,11 +7,7 @@ import {
 
 /**
  * Curriculum Chặng 2 của issue #20 (theo hồ sơ thiết kế tổng hợp, mục A):
- * hai bảng nối ở cấp DANH TÍNH câu hỏi (question_subjects,
- * question_learning_outcomes), mức độ nhận thức nằm trên dòng nối
- * câu × YCCĐ (biet/hieu/van_dung + van_dung_cao dự phòng), truy vết
- * nguồn nguyên văn chương trình cho learning_outcomes (A.3), và sửa lỗi
- * updateNode chưa chặn vòng cha–con gián tiếp (A.7).
+ * hai bảng nối ở cấp DANH TÍNH câu hỏi (question_subjects, question_learning_outcomes), mức độ nhận thức nằm trên dòng nối câu × YCCĐ (biet/hieu/van_dung + van_dung_cao dự phòng), truy vết nguồn nguyên văn chương trình cho learning_outcomes (A.3), và sửa lỗi updateNode chưa chặn vòng cha–con gián tiếp (A.7).
  */
 
 const RANDOM_UUID = '018e0000-0000-7000-8000-000000000000';

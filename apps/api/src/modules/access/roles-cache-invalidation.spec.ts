@@ -11,31 +11,17 @@ import type { RoleSeparationService } from './role-separation.service';
 import { RolesService } from './roles.service';
 
 /**
- * Kiểm chứng nguyên tắc vô hiệu hoá cache quyền ở đường GỠ: thao tác
- * thu hồi quyền (gỡ gán vai, xoá role) phải có hiệu lực TỨC THÌ ở lần
- * kiểm tra capability tiếp theo, không chờ mục cache hết hạn.
+ * Kiểm chứng nguyên tắc vô hiệu hoá cache quyền ở đường GỠ: thao tác thu hồi quyền (gỡ gán vai, xoá role) phải có hiệu lực TỨC THÌ ở lần kiểm tra capability tiếp theo, không chờ mục cache hết hạn.
  *
- * Bối cảnh cơ chế: `PermissionEvaluator.hasCapability` cache kết quả
- * theo khoá nhúng dấu version của các context trên path (TTL một
- * giờ). Version chỉ đổi khi `ContextsService.markContextDirty` bump
- * context liên quan. Đường gán (`assignRole`) và đường đặt override
- * đã bump từ trước; spec này chốt hai đường từng bị sót:
+ * Bối cảnh cơ chế: `PermissionEvaluator.hasCapability` cache kết quả theo khoá nhúng dấu version của các context trên path (TTL một giờ). Version chỉ đổi khi `ContextsService.markContextDirty` bump context liên quan. Đường gán (`assignRole`) và đường đặt override đã bump từ trước; spec này chốt hai đường từng bị sót:
  *   - `RolesService.unassignRole` — mọi đường gỡ gán trong sản phẩm
  *     (API quản trị, rút ghi danh, đồng bộ danh sách lớp, thu hồi
  *     chia sẻ ngân hàng câu hỏi) đều chảy qua hàm này;
  *   - `RolesService.deleteRole` — xoá role phải bump mọi context
- *     từng có gán vai hoặc override của role đó. Từ issue #545, đường
- *     xoá có chốt chặn: role dựng sẵn (có archetype) và role đang còn
- *     người giữ đều bị từ chối, nên ca xoá trong spec này kiểm cả hai
- *     mặt — lần xoá khi còn gán bị chặn, và sau khi gỡ hết gán, lần
- *     xoá hợp lệ vẫn bump context nơi override của role từng nằm.
+ *     từng có gán vai hoặc override của role đó. Từ issue #545, đường xoá có chốt chặn: role dựng sẵn (có archetype) và role đang còn người giữ đều bị từ chối, nên ca xoá trong spec này kiểm cả hai mặt — lần xoá khi còn gán bị chặn, và sau khi gỡ hết gán, lần xoá hợp lệ vẫn bump context nơi override của role từng nằm.
  *
- * Thế giới kiểm chứng dựng trong bộ nhớ (tầng dữ liệu giả lập đếm số
- * lần bị hỏi) nhưng cả ba service đều là service THẬT:
- * `RolesService` + `ContextsService` + `PermissionEvaluator` — nên
- * chuỗi gán → cache → gỡ → kiểm lại chạy đúng ngữ nghĩa production,
- * và khẳng định "tầng dữ liệu được hỏi lại" đo được bằng bộ đếm.
- * Capability dùng trong spec là capability thật `grade:edit`.
+ * Thế giới kiểm chứng dựng trong bộ nhớ (tầng dữ liệu giả lập đếm số lần bị hỏi) nhưng cả ba service đều là service THẬT:
+ * `RolesService` + `ContextsService` + `PermissionEvaluator` — nên chuỗi gán → cache → gỡ → kiểm lại chạy đúng ngữ nghĩa production, và khẳng định "tầng dữ liệu được hỏi lại" đo được bằng bộ đếm. Capability dùng trong spec là capability thật `grade:edit`.
  */
 
 const SYSTEM_ID = '00000000-0000-4000-8000-000000000010';

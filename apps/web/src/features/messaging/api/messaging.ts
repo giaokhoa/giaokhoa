@@ -15,11 +15,7 @@ import type {
 
 /**
  * Tầng gọi API thuần của trang Tin nhắn thuộc feature messaging:
- * chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React
- * Query. Tầng `queries/` của feature bọc các hàm này thành
- * queryOptions và đột biến. Tách từ module dữ liệu phẳng
- * `src/lib/messaging-data.ts` khi tổ chức lại apps/web theo mô
- * hình features/ (issue #500).
+ * chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành queryOptions và đột biến. Tách từ module dữ liệu phẳng `src/lib/messaging-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
 
 /**
@@ -41,11 +37,7 @@ export function fetchMessagingConversations() {
 }
 
 /**
- * Hồ sơ người phục vụ panel thông tin của chat 1–1 (issue #592,
- * GET /messages/users/:id/profile): chỉ các trường hệ có dữ kiện
- * nguồn — định danh, tên hiển thị, tên đăng nhập và email. Các
- * trường panel còn lại không có nguồn nên không nằm trong
- * response này (xem `person-profile-adapter.ts`).
+ * Hồ sơ người phục vụ panel thông tin của chat 1–1 (issue #592, GET /messages/users/:id/profile): chỉ các trường hệ có dữ kiện nguồn — định danh, tên hiển thị, tên đăng nhập và email. Các trường panel còn lại không có nguồn nên không nằm trong response này (xem `person-profile-adapter.ts`).
  */
 export interface PersonProfileServer {
   userId: string;

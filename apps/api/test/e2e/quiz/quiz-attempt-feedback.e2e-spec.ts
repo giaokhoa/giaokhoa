@@ -6,23 +6,11 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstS
 import { addExamSlot, createExamDraft, pinExam } from '../../support/exam-pin-helpers';
 
 /**
- * ĐX-3 (issue #181): phản hồi quiz phải TỚI được học sinh ở trang xem lại.
- * API attempt view đã mang feedback theo đáp án + generalFeedback +
- * overallFeedback theo cổng review; lát này bổ sung manualComment (nhận
- * xét chấm tay) vào cùng view theo cổng review_specific_feedback.
- * Spec khoá hai phía của cổng:
+ * ĐX-3 (issue #181): phản hồi quiz phải TỚI được học sinh ở trang xem lại. API attempt view đã mang feedback theo đáp án + generalFeedback + overallFeedback theo cổng review; lát này bổ sung manualComment (nhận xét chấm tay) vào cùng view theo cổng review_specific_feedback. Spec khoá hai phía của cổng:
  *  - cổng mở (mặc định): HS thấy đủ 4 tầng — feedback của ĐÁP ÁN ĐÃ CHỌN,
  *    lời giải chung, nhận xét chấm tay sau khi GV chấm, nhận xét tổng quát.
  *  - cổng đóng (masks = 0): cả 4 tầng đều null ở phía HS (không lộ qua
- *    API), trong khi GV (privileged) vẫn thấy — dữ liệu có thật, chính
- *    cổng review là thứ che phía học sinh.
- * Bổ sung — chốt đáp án shortanswer: trường `answers` của câu
- * shortanswer chính là tập đáp án được chấp nhận (chấm khớp chính
- * xác), nên nó phải qua cùng cổng reviewRightAnswer như `solution`.
- * Các ca shortanswer ở cuối spec khoá ba phía: đang làm và sau nộp
- * khi cổng đóng thì `answers` rỗng và toàn bộ payload không chứa
- * nguyên văn đáp án được chấp nhận; cổng mở thì `solution` hiện như
- * cũ; phía GV (privileged) không bị che.
+ *    API), trong khi GV (privileged) vẫn thấy — dữ liệu có thật, chính cổng review là thứ che phía học sinh. Bổ sung — chốt đáp án shortanswer: trường `answers` của câu shortanswer chính là tập đáp án được chấp nhận (chấm khớp chính xác), nên nó phải qua cùng cổng reviewRightAnswer như `solution`. Các ca shortanswer ở cuối spec khoá ba phía: đang làm và sau nộp khi cổng đóng thì `answers` rỗng và toàn bộ payload không chứa nguyên văn đáp án được chấp nhận; cổng mở thì `solution` hiện như cũ; phía GV (privileged) không bị che.
  */
 describe('Quiz attempt feedback tới học sinh (ĐX-3, #181)', () => {
   let app: INestApplication;
@@ -57,11 +45,7 @@ describe('Quiz attempt feedback tới học sinh (ĐX-3, #181)', () => {
 
   const MANUAL_COMMENT = 'Bài viết mạch lạc, dẫn chứng tốt.';
   const BAND_TEXT = 'Nhận xét tổng quát: đã hoàn thành bài.';
-  // Câu shortanswer của fixture: API chuẩn hoá MỌI đáp án liệt kê của
-  // shortanswer đều là đáp án được chấp nhận (các biến thể chính tả
-  // của cùng một đáp án, không có dòng mồi như trắc nghiệm) — cả hai
-  // chuỗi đều không được xuất hiện trong bất kỳ đáp ứng nào phía học
-  // viên khi cổng đáp án đúng đang đóng.
+  // Câu shortanswer của fixture: API chuẩn hoá MỌI đáp án liệt kê của shortanswer đều là đáp án được chấp nhận (các biến thể chính tả của cùng một đáp án, không có dòng mồi như trắc nghiệm) — cả hai chuỗi đều không được xuất hiện trong bất kỳ đáp ứng nào phía học viên khi cổng đáp án đúng đang đóng.
   const SA_ACCEPTED = 'Hà Nội';
   const SA_VARIANT = 'hà nội';
 

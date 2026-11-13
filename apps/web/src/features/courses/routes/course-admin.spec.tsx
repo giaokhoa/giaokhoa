@@ -8,15 +8,9 @@ import { PermissionsProvider } from '#lib/permissions';
 import { CourseAdminPage } from './course-admin';
 
 /**
- * Spec khu xây dựng khoá học (course builder) theo endpoint thật của
- * controller Courses: section qua POST/PATCH/DELETE
- * /courses/:id/sections[/:sectionId], module qua POST
- * /courses/:id/modules và PATCH/DELETE /courses/:id/modules/:cmId, nội
- * dung hiện có qua GET /courses/:id/content. Khu này chỉ render khi người
- * dùng thuộc teaching của khoá — stub dưới đây khai ảnh chụp quyền
+ * Spec khu xây dựng khoá học (course builder) theo endpoint thật của controller Courses: section qua POST/PATCH/DELETE /courses/:id/sections[/:sectionId], module qua POST /courses/:id/modules và PATCH/DELETE /courses/:id/modules/:cmId, nội dung hiện có qua GET /courses/:id/content. Khu này chỉ render khi người dùng thuộc teaching của khoá — stub dưới đây khai ảnh chụp quyền
  * (GET /users/me/capabilities) của giáo viên có gán editingteacher tại
- * context khoá kèm grade:viewall và course:update, đúng
- * nguồn PermissionsProvider dùng để phân loại teaching.
+ * context khoá kèm grade:viewall và course:update, đúng nguồn PermissionsProvider dùng để phân loại teaching.
  */
 const TEACHER_ID = '01900000-0000-7000-8000-0000000000a2';
 const COURSE_ID = '01900000-0000-7000-8000-000000000010';

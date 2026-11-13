@@ -112,11 +112,7 @@ function stubFetch(handler: (url: string) => unknown) {
 }
 
 /**
- * Render trang trong đúng khung provider của ứng dụng thật: trang danh
- * mục nay đọc `usePermissions()` để chỉ hiện khu quản trị cho
- * `canAdminister`, nên test phải bọc AuthProvider + PermissionsProvider
- * như main.tsx. Khi không có token đăng nhập, PermissionsProvider kết
- * luận không có quyền quản trị mà không gọi thêm endpoint nào.
+ * Render trang trong đúng khung provider của ứng dụng thật: trang danh mục nay đọc `usePermissions()` để chỉ hiện khu quản trị cho `canAdminister`, nên test phải bọc AuthProvider + PermissionsProvider như main.tsx. Khi không có token đăng nhập, PermissionsProvider kết luận không có quyền quản trị mà không gọi thêm endpoint nào.
  */
 function renderWithProviders(router: ReturnType<typeof createMemoryRouter>) {
   render(
@@ -205,10 +201,7 @@ describe('Trang khoá học — quản trị danh mục (admin)', () => {
   });
 
   /**
-   * Tạo danh mục từ trang khoá học khi là admin: khu quản trị chỉ hiện vì
-   * điểm dò quyền cấp hệ thống (GET /users) gọi được — stub dưới đây mô
-   * phỏng đúng bề mặt API đó, và lời gọi tạo phải là POST
-   * /api/v1/courses/categories với body đúng `createCourseCategorySchema`
+   * Tạo danh mục từ trang khoá học khi là admin: khu quản trị chỉ hiện vì điểm dò quyền cấp hệ thống (GET /users) gọi được — stub dưới đây mô phỏng đúng bề mặt API đó, và lời gọi tạo phải là POST /api/v1/courses/categories với body đúng `createCourseCategorySchema`
    * (chỉ `name` khi tạo ở cấp cao nhất, không gửi `parent`).
    */
   it('tạo danh mục qua POST /courses/categories với body contracts khi là admin', async () => {

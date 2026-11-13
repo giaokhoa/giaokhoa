@@ -8,8 +8,7 @@ import { PermissionsProvider } from '#lib/permissions';
 import { BadgesPage } from './badges';
 
 /**
- * Spec huy hiệu theo endpoint thật: "của tôi" qua GET /badges/mine (không
- * còn đường ghép theo userId), kích hoạt qua POST /badges/:id/status với
+ * Spec huy hiệu theo endpoint thật: "của tôi" qua GET /badges/mine (không còn đường ghép theo userId), kích hoạt qua POST /badges/:id/status với
  * { status: 1 } (không còn /activate), và danh sách đã cấp của một badge
  * qua GET /badges/:id/issued trong panel quản trị (canAdminister).
  */

@@ -59,9 +59,7 @@ export class CompetenciesController {
   }
   @Post('frameworks/:id/copy')
   /**
-   * POST /competencies/frameworks/:id/copy — nhân bản framework (cây + rule, id mới).
-   * Động từ chuẩn là `copy` theo danh sách hành động đóng (issue #345);
-   * path cũ `frameworks/:id/duplicate` giữ qua handler alias ngay dưới.
+   * POST /competencies/frameworks/:id/copy — nhân bản framework (cây + rule, id mới). Động từ chuẩn là `copy` theo danh sách hành động đóng (issue #345); path cũ `frameworks/:id/duplicate` giữ qua handler alias ngay dưới.
    */
   async copyFramework(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.competencies.duplicateFramework(actor.id, id);
@@ -69,11 +67,7 @@ export class CompetenciesController {
   @Post('frameworks/:id/duplicate')
   @UseInterceptors(DeprecatedRouteAliasInterceptor)
   /**
-   * POST /competencies/frameworks/:id/duplicate — alias cũ của POST
-   * /competencies/frameworks/:id/copy: uỷ quyền nguyên vẹn cho handler
-   * canonical; response mang header Deprecation/Sunset và lượt gọi
-   * được ghi log alias có cấu trúc (căn cứ điều kiện gỡ alias: 0 lượt
-   * gọi trong 14 ngày).
+   * POST /competencies/frameworks/:id/duplicate — alias cũ của POST /competencies/frameworks/:id/copy: uỷ quyền nguyên vẹn cho handler canonical; response mang header Deprecation/Sunset và lượt gọi được ghi log alias có cấu trúc (căn cứ điều kiện gỡ alias: 0 lượt gọi trong 14 ngày).
    */
   async duplicateFramework(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.copyFramework(id, actor);

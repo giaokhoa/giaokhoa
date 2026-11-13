@@ -8,24 +8,16 @@ import { AccessRepository } from './access';
 /**
  * Spec tích hợp của repository phân quyền trên Kysely (issue #651).
  *
- * Database trung tâm dựng từ rỗng bằng chính cầu nối migration
- * của package trên cụm PostgreSQL thật của môi trường test. Mọi
- * ca chạy qua repository production ở `access.ts` — không mô
- * phỏng handle. Kho test không cần GUC platform (như spec của
- * repository lớp học): các phép đọc cổng tenant ở đây là truy
- * vấn thuần, ngữ cảnh platform là trách nhiệm của tầng service.
+ * Database trung tâm dựng từ rỗng bằng chính cầu nối migration của package trên cụm PostgreSQL thật của môi trường test. Mọi ca chạy qua repository production ở `access.ts` — không mô phỏng handle. Kho test không cần GUC platform (như spec của repository lớp học): các phép đọc cổng tenant ở đây là truy vấn thuần, ngữ cảnh platform là trách nhiệm của tầng service.
  *
  * Các tính chất chốt tại đây:
  * - Mọi phương thức của repository cũ đều có mặt với cùng hợp
- *   đồng (tên, tham số, hình dạng dòng) — spec này đi hết bề
- *   mặt: context, capability, role, gán vai, override, config
- *   và bốn phép đọc cổng tenant.
+ *   đồng (tên, tham số, hình dạng dòng) — spec này đi hết bề mặt: context, capability, role, gán vai, override, config và bốn phép đọc cổng tenant.
  * - Insert bỏ khoá chính, id trả về khớp regex uuidv7 (phụ lục U).
  * - `count(*)` trả `number` thật (ép `::int`, T-7) và timestamp
  *   đọc thành `Date`.
  * - Ghi đè theo khoá phức hợp, doNothing + đọc lại khớp đúng
- *   nguồn, và các bảo vệ danh sách rỗng đều giữ nguyên ngữ nghĩa
- *   của bản cũ trước chuyển đổi.
+ *   nguồn, và các bảo vệ danh sách rỗng đều giữ nguyên ngữ nghĩa của bản cũ trước chuyển đổi.
  * - Transaction của repository rollback trọn vẹn khi hàm ném lỗi.
  */
 

@@ -21,11 +21,7 @@ export const MESSAGING_DISTRIBUTED_EVENT_TYPES = [
 ] as const;
 
 /**
- * Một socket ở xa nhìn từ phía phát (qua backplane Redis): chỉ hai
- * khả năng tầng phân phối cần — đọc `data.userId` đã gắn lúc bắt tay
- * và đẩy socket rời room. Phía API cài đặt bằng Socket.IO server tại
- * chỗ; phía worker cài đặt bằng Redis emitter (xem
- * `apps/worker/src/messaging-realtime-emitter.ts`).
+ * Một socket ở xa nhìn từ phía phát (qua backplane Redis): chỉ hai khả năng tầng phân phối cần — đọc `data.userId` đã gắn lúc bắt tay và đẩy socket rời room. Phía API cài đặt bằng Socket.IO server tại chỗ; phía worker cài đặt bằng Redis emitter (xem `apps/worker/src/messaging-realtime-emitter.ts`).
  */
 export interface RealtimeRemoteSocket {
   data: { userId?: unknown };
@@ -33,10 +29,7 @@ export interface RealtimeRemoteSocket {
 }
 
 /**
- * Cổng phát realtime của tầng phân phối: phát một sự kiện vào một
- * room, và liệt kê các socket đang ở trong một room. Mọi phát xạ đều
- * thuộc namespace của gateway nhắn tin (`/messaging`) — phía cài đặt
- * cổng chịu trách nhiệm gắn đúng namespace đó.
+ * Cổng phát realtime của tầng phân phối: phát một sự kiện vào một room, và liệt kê các socket đang ở trong một room. Mọi phát xạ đều thuộc namespace của gateway nhắn tin (`/messaging`) — phía cài đặt cổng chịu trách nhiệm gắn đúng namespace đó.
  */
 export interface RealtimeEmitter {
   emitToRoom(room: string, event: string, payload: unknown): Promise<void> | void;
@@ -50,21 +43,11 @@ export interface MessagingDistributionLogger {
 }
 
 /**
- * Tầng phân phối realtime của messaging (issue #33, chặng A1/A2;
- * chuyển sang worker ở issue #521).
+ * Tầng phân phối realtime của messaging (issue #33, chặng A1/A2; chuyển sang worker ở issue #521).
  *
- * Đây là NHÀ DUY NHẤT của luật phân phối: sự kiện nghiệp vụ đã nằm
- * trong outbox được consumer phía worker tiêu thụ qua hàng đợi và
- * gọi các hàm distribute* ở đây để phát qua Socket.IO (backplane
- * Redis nối tới tiến trình API đang giữ kết nối của client).
- * Gateway phía API chỉ lo xác thực + room theo kết nối; presence và
- * typing vẫn sống phía API (trạng thái tạm trong Redis, KHÔNG xuống
- * Postgres — DB vẫn là nguồn sự thật duy nhất cho tin nhắn và mốc
- * đã đọc).
+ * Đây là NHÀ DUY NHẤT của luật phân phối: sự kiện nghiệp vụ đã nằm trong outbox được consumer phía worker tiêu thụ qua hàng đợi và gọi các hàm distribute* ở đây để phát qua Socket.IO (backplane Redis nối tới tiến trình API đang giữ kết nối của client). Gateway phía API chỉ lo xác thực + room theo kết nối; presence và typing vẫn sống phía API (trạng thái tạm trong Redis, KHÔNG xuống Postgres — DB vẫn là nguồn sự thật duy nhất cho tin nhắn và mốc đã đọc).
  *
- * Mọi đường phát vào room của một conversation đều qua CỔNG CHẶN
- * cặp 1–1 (fail-closed) và RÀ SOÁT MEMBERSHIP tại thời điểm phân
- * phối trong các hàm dưới đây — cấm phát realtime vòng qua tầng này.
+ * Mọi đường phát vào room của một conversation đều qua CỔNG CHẶN cặp 1–1 (fail-closed) và RÀ SOÁT MEMBERSHIP tại thời điểm phân phối trong các hàm dưới đây — cấm phát realtime vòng qua tầng này.
  */
 export interface MessagingDistributionService {
   /** Phân phối một sự kiện outbox đã commit theo loại của nó. Payload hỏng/thiếu thì bỏ qua. */
@@ -96,13 +79,7 @@ export function createMessagingDistributionService(deps: {
   }
 
   /**
-   * Tra danh sách user mà `userId` đã chặn, theo kỷ luật FAIL-CLOSED
-   * của cổng chặn cặp 1–1: tra cứu thành công trả danh sách (có thể
-   * rỗng); tra cứu LỖI trả `null` và ghi log lỗi — phía gọi phải coi
-   * `null` là "không xác minh được quan hệ chặn" và NÉN toàn bộ lượt
-   * phân phối. Nuốt lỗi thành danh sách rỗng (khuôn cũ) làm cổng chặn
-   * fail-open: lỗi cơ sở dữ liệu đúng lúc phân phối là tin/biên sự
-   * kiện vẫn lộ sang phía đang bị chặn.
+   * Tra danh sách user mà `userId` đã chặn, theo kỷ luật FAIL-CLOSED của cổng chặn cặp 1–1: tra cứu thành công trả danh sách (có thể rỗng); tra cứu LỖI trả `null` và ghi log lỗi — phía gọi phải coi `null` là "không xác minh được quan hệ chặn" và NÉN toàn bộ lượt phân phối. Nuốt lỗi thành danh sách rỗng (khuôn cũ) làm cổng chặn fail-open: lỗi cơ sở dữ liệu đúng lúc phân phối là tin/biên sự kiện vẫn lộ sang phía đang bị chặn.
    */
   async function blockedCounterpartIdsFailClosed(userId: string): Promise<string[] | null> {
     try {

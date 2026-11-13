@@ -8,10 +8,7 @@ import {
 } from '../../support/ordinary-worker-module';
 
 /**
- * CLASS-0 (issue #184) — job đối soát ghi danh cấp lớp
- * `class-enrol-reconcile`: nguồn sự thật là cohort_members của backing
- * cohort; user_enrolments trên instance cohort của khoá là bản vật
- * chất hoá. Các ca bắt buộc của hồ sơ:
+ * CLASS-0 (issue #184) — job đối soát ghi danh cấp lớp `class-enrol-reconcile`: nguồn sự thật là cohort_members của backing cohort; user_enrolments trên instance cohort của khoá là bản vật chất hoá. Các ca bắt buộc của hồ sơ:
  *  - thành viên roster thiếu ghi danh → ghi danh + gán vai + group;
  *  - ghi danh ACTIVE thừa (không còn trong roster) → đình chỉ theo
  *    chế độ rời lớp;
@@ -22,15 +19,9 @@ import {
  *    (đình chỉ thủ công theo khoá) → job KHÔNG đụng vào, kể cả khi
  *    user vẫn ở trong roster;
  *  - chạy lại lần hai trên trạng thái đã khớp → không sửa gì.
- * Hàng được chèn trực tiếp vì API là phía sở hữu đường tạo; processor
- * chỉ đọc/ghi trên cùng các bảng qua schema dùng chung.
+ * Hàng được chèn trực tiếp vì API là phía sở hữu đường tạo; processor chỉ đọc/ghi trên cùng các bảng qua schema dùng chung.
  *
- * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness
- * role thường (`test/ordinary-worker-module.ts`): module chạy bằng
- * role NOSUPERUSER/NOBYPASSRLS như production — cùng lớp lỗi RLS mà
- * ca mẫu `class-enrol-reconcile-rls.spec.ts` khoá ở mức processor —
- * fixture và đọc kiểm chứng đi qua kết nối quản trị của harness;
- * khẳng định nghiệp vụ của spec không đổi.
+ * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness role thường (`test/ordinary-worker-module.ts`): module chạy bằng role NOSUPERUSER/NOBYPASSRLS như production — cùng lớp lỗi RLS mà ca mẫu `class-enrol-reconcile-rls.spec.ts` khoá ở mức processor — fixture và đọc kiểm chứng đi qua kết nối quản trị của harness; khẳng định nghiệp vụ của spec không đổi.
  */
 describe('Đối chiếu ghi danh lớp của worker (CLASS-0, #184)', () => {
   let context_: INestApplicationContext;

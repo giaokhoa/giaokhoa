@@ -16,18 +16,11 @@ import { OutlineCard } from '../components/outline-card';
 import { statusChoiceOf, type ItemStatusChoice } from '../utils/utils';
 
 /**
- * Builder Outline (K1 — issue #68): trang xây dựng khoá học RIÊNG,
- * tách khỏi trang quản trị khoá gộp theo chuẩn §9. Gồm: thông tin khoá
+ * Builder Outline (K1 — issue #68): trang xây dựng khoá học RIÊNG, tách khỏi trang quản trị khoá gộp theo chuẩn §9. Gồm: thông tin khoá
  * (+ cờ khoá mẫu tổ/trường), panel "Thêm từ khung" (K0a), outline
- * section/module với kéo–thả đổi thứ tự (kèm nút lên/xuống), nhân
- * bản/xoá ngay tại dòng, thêm nội dung bằng MENU chọn loại (không gõ
- * chuỗi component), khối "Thêm từ kho" trong từng section (CB-1 —
- * issue #107: cắm học liệu của Kho học liệu vào section qua endpoint
- * insert sẵn có của CB-1), trạng thái Nháp/Đã mở/Mở theo lịch qua
- * trường ngày mở `openAt` riêng, điều kiện truy cập nâng cao
+ * section/module với kéo–thả đổi thứ tự (kèm nút lên/xuống), nhân bản/xoá ngay tại dòng, thêm nội dung bằng MENU chọn loại (không gõ chuỗi component), khối "Thêm từ kho" trong từng section (CB-1 — issue #107: cắm học liệu của Kho học liệu vào section qua endpoint insert sẵn có của CB-1), trạng thái Nháp/Đã mở/Mở theo lịch qua trường ngày mở `openAt` riêng, điều kiện truy cập nâng cao
  * (availability) giữ nguyên từ bản cũ, panel "Dùng lại từ khoá khác"
- * và tiêu chí hoàn thành khoá. Quyền: teaching của khoá hoặc quản trị
- * hệ thống — API vẫn thực thi capability thật cho từng thao tác ghi.
+ * và tiêu chí hoàn thành khoá. Quyền: teaching của khoá hoặc quản trị hệ thống — API vẫn thực thi capability thật cho từng thao tác ghi.
  */
 export function CourseBuilderPage() {
   const { t } = useTranslation('app');

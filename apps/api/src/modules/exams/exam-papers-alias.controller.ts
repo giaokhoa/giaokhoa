@@ -56,8 +56,7 @@ import {
 @Controller({ path: 'exam-papers', version: '1' })
 @UseInterceptors(DeprecatedRouteAliasInterceptor)
 /**
- * Alias `/exam-papers` của toàn bộ bề mặt `/exams` (đề + đóng góp +
- * bộ hồ sơ đề). Handler canonical tương ứng nằm ở `ExamsController`.
+ * Alias `/exam-papers` của toàn bộ bề mặt `/exams` (đề + đóng góp + bộ hồ sơ đề). Handler canonical tương ứng nằm ở `ExamsController`.
  */
 export class ExamPapersAliasController {
   constructor(

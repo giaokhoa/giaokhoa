@@ -9,29 +9,18 @@ import type { CredentialBridgeService } from '../../../src/modules/auth/better-a
 import type { MailMessage } from '../../../src/modules/mail/mail.types';
 
 /**
- * Flow test của chặng chuẩn bị cutover (issue #7, chặng 2.6 + phần
- * 2.7-prep): app chạy ở cửa sổ bake — `BETTER_AUTH_ENABLED=true` và
- * `AUTH_CUTOVER_STAGE=bake`. Các cổng nghiệp vụ được chứng minh:
+ * Flow test của chặng chuẩn bị cutover (issue #7, chặng 2.6 + phần 2.7-prep): app chạy ở cửa sổ bake — `BETTER_AUTH_ENABLED=true` và `AUTH_CUTOVER_STAGE=bake`. Các cổng nghiệp vụ được chứng minh:
  *
  * - login-as phát PHIÊN Better Auth qua cookie đã ký thay cho cặp
- *   token (đáp ứng không mang token nào; cookie trần bị từ chối;
- *   phiên thuộc về user đích; actor thiếu capability bị 403 và
- *   KHÔNG có phiên nào được tạo — cổng capability + lý do + audit là
- *   của đường login-as hiện hành, dùng chung cả hai chặng).
+ *   token (đáp ứng không mang token nào; cookie trần bị từ chối; phiên thuộc về user đích; actor thiếu capability bị 403 và KHÔNG có phiên nào được tạo — cổng capability + lý do + audit là của đường login-as hiện hành, dùng chung cả hai chặng).
  * - Mọi điểm ghi mật khẩu phía hệ cũ đều có credential đi kèm: tạo
- *   user qua API admin → đăng nhập Better Auth được ngay không cần
- *   nối tay; admin đặt lại mật khẩu → mật khẩu mới đăng nhập được ở
- *   cả hai hệ, mật khẩu cũ chết ở cả hai hệ.
+ *   user qua API admin → đăng nhập Better Auth được ngay không cần nối tay; admin đặt lại mật khẩu → mật khẩu mới đăng nhập được ở cả hai hệ, mật khẩu cũ chết ở cả hai hệ.
  * - Điểm nối của seed (`syncCredentialPassword` — cùng lời gọi mà
- *   review-seed chạy cho tài khoản mẫu đã tồn tại): nối lần đầu có
- *   tác dụng, chạy lại là no-op, và một credential lệch (hash phía
- *   hệ cũ đã đổi) được cập nhật theo.
+ *   review-seed chạy cho tài khoản mẫu đã tồn tại): nối lần đầu có tác dụng, chạy lại là no-op, và một credential lệch (hash phía hệ cũ đã đổi) được cập nhật theo.
  * - DIỄN TẬP ROLLBACK (cổng bắt buộc trước bước B theo §3.2 của kế
  *   hoạch GĐ2): trong cửa sổ bake, đổi mật khẩu qua Better Auth
  *   (change-password) và đặt lại qua link reset trong mail đều đồng
- *   bộ ngược hash về `users.password_hash` — bằng chứng là đăng nhập
- *   HỆ CŨ bằng mật khẩu mới thành công ngay sau đó (tắt cờ về 'off'
- *   là quay lại hệ cũ trọn vẹn). Hash ở hai kho phải TRÙNG NHAU
+ *   bộ ngược hash về `users.password_hash` — bằng chứng là đăng nhập HỆ CŨ bằng mật khẩu mới thành công ngay sau đó (tắt cờ về 'off' là quay lại hệ cũ trọn vẹn). Hash ở hai kho phải TRÙNG NHAU
  *   (chép nguyên hash, không băm lại).
  *
  * Biến môi trường phải tồn tại TRƯỚC khi AppModule được nạp nên các

@@ -10,19 +10,13 @@ import { COHORT_SYNC_EVENT_TYPES } from './processors/cohort-sync-events.process
 import type { OutboxEventJobData } from './outbox-event-routes';
 
 /**
- * Tiền tố khoá watermark của consumer polling đồng bộ cohort phía
- * API trước đây: khoá đầy đủ là `${LEGACY_WATERMARK_KEY_PREFIX}<tên
- * database>:seq`, giá trị là `seq` của dòng outbox cuối cùng
- * consumer cũ đã xử lý xong. Tên khoá và ngữ nghĩa giá trị lấy
- * đúng từ consumer cũ — cơ chế phát bù đọc lại chính khoá đó,
- * không dựng khoá song song.
+ * Tiền tố khoá watermark của consumer polling đồng bộ cohort phía API trước đây: khoá đầy đủ là `${LEGACY_WATERMARK_KEY_PREFIX}<tên database>:seq`, giá trị là `seq` của dòng outbox cuối cùng consumer cũ đã xử lý xong. Tên khoá và ngữ nghĩa giá trị lấy đúng từ consumer cũ — cơ chế phát bù đọc lại chính khoá đó, không dựng khoá song song.
  */
 const LEGACY_WATERMARK_KEY_PREFIX = 'giaokhoa:cohort-sync:';
 /** Số dòng tồn đọng tối đa đọc trong một lô phát bù — cùng cỡ lô quét của consumer cũ. */
 const DRAIN_BATCH_SIZE = 200;
 /**
- * Nhịp chờ đầu tiên trước lần thử phát bù kế tiếp khi một lần
- * thử bị lỗi — cùng quy ước backoff mũ của hàng đợi trong hệ
+ * Nhịp chờ đầu tiên trước lần thử phát bù kế tiếp khi một lần thử bị lỗi — cùng quy ước backoff mũ của hàng đợi trong hệ
  * (`defaultJobOptions` ở `worker.module.ts`: backoff
  * exponential, delay 1000 ms).
  */
@@ -130,10 +124,7 @@ export class CohortSyncCatchupService implements OnModuleInit, OnModuleDestroy {
     this.redis = new Redis({
       ...redisConnectionFromUrl(config.getOrThrow<string>('REDIS_URL')),
     });
-    // Dựng khoá đúng cách consumer polling cũ dựng: tên database
-    // là path của DATABASE_URL bỏ dấu gạch đầu; không parse được
-    // thì dùng tên mặc định — cả hai phía cùng một luật nên khoá
-    // luôn gặp nhau.
+    // Dựng khoá đúng cách consumer polling cũ dựng: tên database là path của DATABASE_URL bỏ dấu gạch đầu; không parse được thì dùng tên mặc định — cả hai phía cùng một luật nên khoá luôn gặp nhau.
     let databaseName = 'default';
     try {
       databaseName = new URL(config.getOrThrow<string>('DATABASE_URL')).pathname.replace(/^\//, '') || 'default';

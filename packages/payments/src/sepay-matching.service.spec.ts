@@ -12,32 +12,20 @@ import type {
 /**
  * Test đặc trưng hoá luồng matching IPN SePay (issue #538).
  *
- * Các ca này ghim HÀNH VI HIỆN TẠI của `SepayMatchingService` tại
- * thời điểm trích xuất service từ apps/api sang package dùng chung
- * `@giaokhoa/payments` — chúng là mốc đối chiếu để việc trích xuất chứng
- * minh bảo toàn hành vi, và là đặc tả thực thi của các luật đã ghi
- * trong docblock của service:
+ * Các ca này ghim HÀNH VI HIỆN TẠI của `SepayMatchingService` tại thời điểm trích xuất service từ apps/api sang package dùng chung `@giaokhoa/payments` — chúng là mốc đối chiếu để việc trích xuất chứng minh bảo toàn hành vi, và là đặc tả thực thi của các luật đã ghi trong docblock của service:
  *
  * - Luật khớp 3 điều kiện (mã thanh toán, số tiền, tài khoản nhận)
- *   cộng payment còn `pending` và chưa hết hạn, cộng phép đối chiếu
- *   đích phía server (issue #419) TRƯỚC khi kích hoạt bất cứ quyền
- *   lợi nào.
+ *   cộng payment còn `pending` và chưa hết hạn, cộng phép đối chiếu đích phía server (issue #419) TRƯỚC khi kích hoạt bất cứ quyền lợi nào.
  * - Bất biến đồng bộ của nhịp chốt: kích hoạt MỌI quyền lợi TRƯỚC
- *   nhịp lật payment sang `succeeded`, rồi mới phát đúng outbox
- *   `payment_succeeded` và chốt sự kiện `matched` — thứ tự này được
- *   ghim bằng nhật ký thứ tự gọi chung của các bản giả.
+ *   nhịp lật payment sang `succeeded`, rồi mới phát đúng outbox `payment_succeeded` và chốt sự kiện `matched` — thứ tự này được ghim bằng nhật ký thứ tự gọi chung của các bản giả.
  * - Thiếu bất kỳ điều kiện nào: payment còn `pending` chuyển
- *   `needs_review`, sự kiện chuyển `needs_review`, KHÔNG kích hoạt
- *   gì và KHÔNG phát outbox.
+ *   `needs_review`, sự kiện chuyển `needs_review`, KHÔNG kích hoạt gì và KHÔNG phát outbox.
  * - Sự kiện `debit` uỷ thác trọn cho cổng xác nhận chi hoàn, không
  *   đi đường khớp tiền về.
  * - Hoàn tất idempotent: payment đã `succeeded` bởi chính giao dịch
  *   này thì chỉ chốt sự kiện, không kích hoạt lại.
  *
- * Tầng dữ liệu và các cổng được thay bằng bản giả ghi lại lời gọi —
- * hành vi đầu-cuối trên DB thật do các suite e2e payments của
- * apps/api ghim (vietqr, class-fee, coupons-slots, entitlement-gate,
- * plans, refund-lifecycle, webhook-verify).
+ * Tầng dữ liệu và các cổng được thay bằng bản giả ghi lại lời gọi — hành vi đầu-cuối trên DB thật do các suite e2e payments của apps/api ghim (vietqr, class-fee, coupons-slots, entitlement-gate, plans, refund-lifecycle, webhook-verify).
  */
 
 const PAYMENT_ID = '0f8fad5b-d9cb-469f-a165-70867728950e';
@@ -113,10 +101,7 @@ interface Harness {
 
 /**
  * Dựng service với tầng dữ liệu và ba cổng là bản giả trong bộ nhớ:
- * repository giữ payment/sự kiện trong Map (ghi cập nhật hợp nhất vào
- * Map để bước đọc lại sau khi lật trạng thái thấy đúng trạng thái
- * mới, như DB thật), mọi khâu kích hoạt và phát outbox ghi vào cùng
- * một nhật ký `calls` để khẳng định thứ tự.
+ * repository giữ payment/sự kiện trong Map (ghi cập nhật hợp nhất vào Map để bước đọc lại sau khi lật trạng thái thấy đúng trạng thái mới, như DB thật), mọi khâu kích hoạt và phát outbox ghi vào cùng một nhật ký `calls` để khẳng định thứ tự.
  */
 function createHarness(): Harness {
   const calls: string[] = [];

@@ -3,38 +3,19 @@
  *
  * Vai trò: mọi truy cập tới sáu bảng của database control plane
  * (sổ đăng ký không gian, lịch sử quản trị sổ, registry phiên bản
- * schema, nhật ký migration, thư mục thành viên và thư mục mã tham
- * gia của các không gian kho riêng) tập trung ở đây. Repository
- * không chứa luật nghiệp vụ — gác quyền, ghi lịch sử và giao dịch
- * nằm ở tầng service phía ứng dụng; repository chỉ nhận handle
+ * schema, nhật ký migration, thư mục thành viên và thư mục mã tham gia của các không gian kho riêng) tập trung ở đây. Repository không chứa luật nghiệp vụ — gác quyền, ghi lịch sử và giao dịch nằm ở tầng service phía ứng dụng; repository chỉ nhận handle
  * (instance gốc hoặc transaction đang mở) để phía gọi ghép nhiều
- * thao tác vào một transaction khi cần bất biến "sổ + lịch sử cùng
- * thành/bại".
+ * thao tác vào một transaction khi cần bất biến "sổ + lịch sử cùng thành/bại".
  *
  * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong repository, truy vấn viết trên interface schema sinh
- *   bằng codegen: tên bảng/cột giữ nguyên snake_case của database,
- *   kiểu dòng nội bộ qua `Selectable`/`Insertable`/`Updateable`.
+ *   bằng codegen: tên bảng/cột giữ nguyên snake_case của database, kiểu dòng nội bộ qua `Selectable`/`Insertable`/`Updateable`.
  * - Bên ngoài, repository trả NHẬN các hình dạng dòng camelCase như
- *   phía tiêu thụ đang dùng: cột được chọn bằng danh sách tường
- *   minh có bí danh (`database_name as databaseName`), giá trị ghi
- *   được ánh xạ từng trường từ camelCase sang snake_case ở các hàm
- *   `*InsertValues`/`*UpdateSet` trong file này. Phía tiêu thụ vì
- *   vậy chỉ đổi điểm import khi một kho chuyển đổi.
+ *   phía tiêu thụ đang dùng: cột được chọn bằng danh sách tường minh có bí danh (`database_name as databaseName`), giá trị ghi được ánh xạ từng trường từ camelCase sang snake_case ở các hàm `*InsertValues`/`*UpdateSet` trong file này. Phía tiêu thụ vì vậy chỉ đổi điểm import khi một kho chuyển đổi.
  * - Giá trị `undefined` bị LOẠI khỏi values/set trước khi gọi
- *   builder. Thử nghiệm T-4 của pilot đo được: Kysely tự loại
- *   `undefined` khỏi values/set khi biên dịch (khớp hành vi
- *   bộ máy cũ), nhưng repository vẫn loại tường minh để hành vi
- *   không phụ thuộc mặc định của thư viện. Ngược lại, `undefined`
- *   lọt vào mệnh đề WHERE được biên dịch thành một placeholder
- *   mà tham số giữ nguyên giá trị `undefined`; lúc thực thi
- *   driver gắn NULL nên phép so sánh không khớp dòng nào và
- *   lặng lẽ trả 0 dòng — vì vậy mọi giá trị where trong
- *   repository đều là tham số bắt buộc, không bao giờ
- *   `undefined`.
+ *   builder. Thử nghiệm T-4 của pilot đo được: Kysely tự loại `undefined` khỏi values/set khi biên dịch (khớp hành vi bộ máy cũ), nhưng repository vẫn loại tường minh để hành vi không phụ thuộc mặc định của thư viện. Ngược lại, `undefined` lọt vào mệnh đề WHERE được biên dịch thành một placeholder mà tham số giữ nguyên giá trị `undefined`; lúc thực thi driver gắn NULL nên phép so sánh không khớp dòng nào và lặng lẽ trả 0 dòng — vì vậy mọi giá trị where trong repository đều là tham số bắt buộc, không bao giờ `undefined`.
  * - Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh
- *   ứng dụng, không tự mở pool, không đọc biến môi trường: handle
- *   do tầng ứng dụng dựng bằng factory của package rồi truyền vào.
+ *   ứng dụng, không tự mở pool, không đọc biến môi trường: handle do tầng ứng dụng dựng bằng factory của package rồi truyền vào.
  */
 import { sql, type Insertable, type InsertObject, type RawBuilder, type Updateable } from 'kysely';
 import type { ControlPlaneDb, ControlPlaneTx, ControlPlaneDB } from '../client';
@@ -165,12 +146,7 @@ export interface NewSchemaMigrationRun {
 }
 
 /**
- * Lỗi ném ra khi repository bị gọi mà chưa có handle (control plane
- * chưa được cấu hình). Package không phụ thuộc tầng ứng dụng nên
- * lỗi mang mã ổn định `control_plane.not_configured` dạng thuần;
- * tầng ứng dụng cấp hàm dựng lỗi riêng qua tham số khởi tạo của
- * repository để giữ đúng hình dạng lỗi HTTP của nó (xem điểm lắp
- * ráp ở module control plane phía ứng dụng).
+ * Lỗi ném ra khi repository bị gọi mà chưa có handle (control plane chưa được cấu hình). Package không phụ thuộc tầng ứng dụng nên lỗi mang mã ổn định `control_plane.not_configured` dạng thuần; tầng ứng dụng cấp hàm dựng lỗi riêng qua tham số khởi tạo của repository để giữ đúng hình dạng lỗi HTTP của nó (xem điểm lắp ráp ở module control plane phía ứng dụng).
  */
 export class ControlPlaneNotConfiguredError extends Error {
   /** Mã lỗi ổn định mà phía tiêu thụ dùng để nhận diện trạng thái chưa cấu hình. */

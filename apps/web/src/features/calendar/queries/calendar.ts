@@ -8,10 +8,7 @@ import {
 import { queryKeys } from './keys';
 
 /**
- * Tầng dữ liệu TanStack Query của trang lịch thuộc feature
- * calendar: các hook đọc/ghi bọc tầng `../api/calendar` (tách
- * khỏi module phẳng `src/lib/calendar.ts` khi tổ chức lại
- * apps/web theo mô hình features/, issue #500).
+ * Tầng dữ liệu TanStack Query của trang lịch thuộc feature calendar: các hook đọc/ghi bọc tầng `../api/calendar` (tách khỏi module phẳng `src/lib/calendar.ts` khi tổ chức lại apps/web theo mô hình features/, issue #500).
  */
 
 /** Sự kiện trong một khoảng ngày — khoá factory calendarEvents(from, to) đã có sẵn. */
@@ -23,9 +20,7 @@ export function useCalendarEvents(fromIso: string, toIso: string) {
 }
 
 /**
- * Đăng ký lịch ngoài. Lỗi tải lại giữ dữ liệu cũ (keepPreviousData + không
- * phơi lỗi ra trang) — đúng hành vi cũ: subscription lỗi thì danh sách cũ
- * đứng yên, trang không sập.
+ * Đăng ký lịch ngoài. Lỗi tải lại giữ dữ liệu cũ (keepPreviousData + không phơi lỗi ra trang) — đúng hành vi cũ: subscription lỗi thì danh sách cũ đứng yên, trang không sập.
  */
 export function useCalendarSubscriptions() {
   return useQuery({
@@ -94,9 +89,7 @@ export function useImportCalendarSubscription() {
 }
 
 /**
- * Tạo/tạo lại đường dẫn xuất lịch (POST /calendar/export-token): kết quả
- * ghi thẳng vào cache (đúng hành vi cũ là đặt ngay giá trị vừa tạo), token
- * cũ hết hiệu lực phía server.
+ * Tạo/tạo lại đường dẫn xuất lịch (POST /calendar/export-token): kết quả ghi thẳng vào cache (đúng hành vi cũ là đặt ngay giá trị vừa tạo), token cũ hết hiệu lực phía server.
  */
 export function useCreateCalendarExportToken() {
   const queryClient = useQueryClient();

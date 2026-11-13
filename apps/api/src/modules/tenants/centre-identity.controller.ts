@@ -9,16 +9,9 @@ import { SkipSpaceContext } from './skip-space-context.decorator';
 @ApiTags('centres')
 @Controller({ path: 'centres', version: '1' })
 /**
- * Bề mặt trung tâm đã cấp phát riêng (issue #583): nhận diện công
- * khai của trung tâm và kích hoạt lời mời quản trị đầu tiên.
+ * Bề mặt trung tâm đã cấp phát riêng (issue #583): nhận diện công khai của trung tâm và kích hoạt lời mời quản trị đầu tiên.
  *
- * Hai route công khai mang `@SkipSpaceContext` vì chúng phải chạy
- * được trước khi phiên thuộc về trung tâm (trang đăng nhập đọc
- * tên/logo trước khi đăng nhập; lời mời kích hoạt trước khi tài
- * khoản có phiên): service tự gắn trung tâm trước mọi truy vấn nên
- * việc bỏ qua guard không phải là bỏ qua gắn trung tâm. Route PATCH
- * là đường nghiệp vụ có xác thực — chỉ quản trị của chính trung tâm
- * đó mới sửa được nhận diện của nó.
+ * Hai route công khai mang `@SkipSpaceContext` vì chúng phải chạy được trước khi phiên thuộc về trung tâm (trang đăng nhập đọc tên/logo trước khi đăng nhập; lời mời kích hoạt trước khi tài khoản có phiên): service tự gắn trung tâm trước mọi truy vấn nên việc bỏ qua guard không phải là bỏ qua gắn trung tâm. Route PATCH là đường nghiệp vụ có xác thực — chỉ quản trị của chính trung tâm đó mới sửa được nhận diện của nó.
  */
 export class CentreIdentityController {
   constructor(private readonly centres: CentreIdentityService) {}

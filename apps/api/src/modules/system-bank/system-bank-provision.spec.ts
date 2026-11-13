@@ -1,7 +1,6 @@
 /**
  * Unit test cho helper cấp phát kho ngân hàng hệ thống (issue #585):
- * kiểm chứng phần suy luận thuần (đọc đích từ URL, dựng câu SQL)
- * không cần database thật.
+ * kiểm chứng phần suy luận thuần (đọc đích từ URL, dựng câu SQL) không cần database thật.
  */
 import { describe, expect, it } from 'vitest';
 import {

@@ -8,13 +8,11 @@ import { gradePublicationActionSchema, setGradePostingPolicySchema, setGradeSche
 @ApiTags('grades')
 @Controller({ path: 'grade-items', version: '1' })
 /**
- * API gắn với một grade item ở path canonical theo chuẩn đường dẫn
- * module điểm (issue #342): item được định danh thẳng ở gốc
+ * API gắn với một grade item ở path canonical theo chuẩn đường dẫn module điểm (issue #342): item được định danh thẳng ở gốc
  * (`grade-items/:itemId`) thay vì lồng dưới `courses/grades/items`
  * như path cũ. Logic nghiệp vụ giữ nguyên của module điểm theo bài
  * (issue #224): cập nhật/xoá item, nhập điểm, chính sách công bố,
- * công bố/rút công bố và lịch sử thay đổi điểm. Các path cũ vẫn tới
- * được qua các controller alias trong `legacy-grades.controller.ts`.
+ * công bố/rút công bố và lịch sử thay đổi điểm. Các path cũ vẫn tới được qua các controller alias trong `legacy-grades.controller.ts`.
  */
 export class GradeItemsController {
   constructor(private readonly grades: GradesService) {}
@@ -82,11 +80,9 @@ export class GradeItemsController {
 @ApiTags('grades')
 @Controller({ path: 'grades', version: '1' })
 /**
- * API gắn với một bản ghi điểm ở path canonical theo chuẩn đường dẫn
- * module điểm (issue #342): bản ghi điểm được định danh thẳng ở gốc
+ * API gắn với một bản ghi điểm ở path canonical theo chuẩn đường dẫn module điểm (issue #342): bản ghi điểm được định danh thẳng ở gốc
  * (`grades/:gradeId`) thay vì lồng dưới `courses/grades/grades` như
- * path cũ. Path cũ vẫn tới được qua controller alias trong
- * `legacy-grades.controller.ts`.
+ * path cũ. Path cũ vẫn tới được qua controller alias trong `legacy-grades.controller.ts`.
  */
 export class GradeRecordsController {
   constructor(private readonly grades: GradesService) {}

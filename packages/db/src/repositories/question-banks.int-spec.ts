@@ -10,28 +10,18 @@ import { QuestionBanksRepository, type QuestionBankRow } from './question-banks'
  * Spec tích hợp của repository ngân hàng câu hỏi trên Kysely
  * (issue #644).
  *
- * Database trung tâm dựng từ rỗng bằng chính cầu nối migration
- * của package trên cụm PostgreSQL thật của môi trường test (biến
- * `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ
- * `DATABASE_URL`). Mọi ca chạy qua repository production ở
- * `question-banks.ts` — không mô phỏng handle.
+ * Database trung tâm dựng từ rỗng bằng chính cầu nối migration của package trên cụm PostgreSQL thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ `DATABASE_URL`). Mọi ca chạy qua repository production ở `question-banks.ts` — không mô phỏng handle.
  *
  * Các tính chất chốt tại đây:
  * - Insert bank không truyền id nhận id UUIDv7 do database sinh
  *   (phụ lục U); insert có id tường minh (hình dạng `buildBank`
  *   cấp id trước để dựng context) giữ đúng id đó.
  * - Mọi đường đọc bank/category/câu hỏi-kèm-entry khớp oracle
- *   độc lập (cùng truy vấn dựng bằng Kysely thô ngoài repository)
- *   trên CÙNG dữ kiện mẫu, gồm hình dạng lồng `{ q, entry }` của
- *   phép nối.
+ *   độc lập (cùng truy vấn dựng bằng Kysely thô ngoài repository) trên CÙNG dữ kiện mẫu, gồm hình dạng lồng `{ q, entry }` của phép nối.
  * - CTE đệ quy gom YCCĐ theo node cho cùng tập id với chính thân
- *   SQL cũ chạy qua đường execute thô (điểm nóng của nhóm: bản
- *   Kysely bỏ lớp ép kiểu `as unknown as { rows }` nhờ
- *   `QueryResult.rows` đã có kiểu — kết quả phải không đổi).
+ *   SQL cũ chạy qua đường execute thô (điểm nóng của nhóm: bản Kysely bỏ lớp ép kiểu `as unknown as { rows }` nhờ `QueryResult.rows` đã có kiểu — kết quả phải không đổi).
  * - Tín hiệu sử dụng (đếm slot theo `count(*)::int`, đề chứa câu,
- *   pin dùng câu có distinct) và tra cứu người (tên hiển thị có
- *   đường lui về username, danh sách theo archetype có distinct)
- *   khớp oracle.
+ *   pin dùng câu có distinct) và tra cứu người (tên hiển thị có đường lui về username, danh sách theo archetype có distinct) khớp oracle.
  * - Patch đóng góp/entry theo T-4: trường `undefined` không đổi,
  *   trường được truyền đổi đúng, `updated_at` luôn làm mới.
  * - Giao dịch của repository nguyên tử: lỗi giữa chừng rollback
@@ -128,9 +118,7 @@ async function seedData(): Promise<Seed> {
     })
     .execute();
 
-  // Chỉ số unique (scope, bank_kind) với scope 'platform' chỉ cho một bank
-  // platform mỗi kind: ba lần insert platform trong spec này (bank hệ thống,
-  // bank id tường minh, bank rollback) dùng ba bankKind khác nhau.
+  // Chỉ số unique (scope, bank_kind) với scope 'platform' chỉ cho một bank platform mỗi kind: ba lần insert platform trong spec này (bank hệ thống, bank id tường minh, bank rollback) dùng ba bankKind khác nhau.
   const platformBank = await repo.insertBank({
     name: 'Ngân hàng hệ thống', scope: 'platform', tenantId: null, ownerId: null,
     scopeRefId: null, contextId: CONTEXT_ID, createdBy: u1.id, bankKind: 'question',

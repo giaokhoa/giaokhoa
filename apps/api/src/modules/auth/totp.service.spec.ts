@@ -7,11 +7,7 @@ import { TotpService } from './totp.service';
 /**
  * Cổng tái xác thực khi setup lại TOTP trên một factor ĐANG BẬT.
  *
- * Luật nghiệp vụ: khi factor đã bật, setup mới đòi mã hiện tại
- * và chỉ dựng pending replacement; chưa confirm thì giữ MFA đang bật.
- * Khi factor chưa bật, setup nhiều lần được phép thay pending secret;
- * xác nhận chỉ kích hoạt đúng secret đã được kiểm mã.
- * Kiểm chứng HTTP được đặt tại e2e Authentication.
+ * Luật nghiệp vụ: khi factor đã bật, setup mới đòi mã hiện tại và chỉ dựng pending replacement; chưa confirm thì giữ MFA đang bật. Khi factor chưa bật, setup nhiều lần được phép thay pending secret; xác nhận chỉ kích hoạt đúng secret đã được kiểm mã. Kiểm chứng HTTP được đặt tại e2e Authentication.
  */
 
 const USER_ID = '01900000-0000-7000-8000-0000000000aa';
@@ -137,8 +133,7 @@ describe('Cổng tái xác thực khi thiết lập TotpService', () => {
     const code = await thrownErrorCode(() => service.setup(USER_ID, USERNAME));
 
     expect(code).toBe('auth.mfa_reauth_required');
-    // Factor cũ nguyên vẹn: cùng bản ghi đã mã hoá, vẫn đang bật, mã của
-    // authenticator hiện tại vẫn kiểm chứng được.
+    // Factor cũ nguyên vẹn: cùng bản ghi đã mã hoá, vẫn đang bật, mã của authenticator hiện tại vẫn kiểm chứng được.
     expect(storedRow()).toEqual(before);
     expect(await service.isEnabled(USER_ID)).toBe(true);
     expect(await service.verifyForUser(USER_ID, await currentCode(activeSecret))).toBe(true);

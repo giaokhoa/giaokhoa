@@ -1,12 +1,5 @@
 /**
- * Các trường soạn rich text của form câu hỏi (tách cấu trúc từ
- * `pages/question-editor.tsx` theo đợt A của issue #223): đường
- * chèn ảnh dùng chung (`useQuestionImageHandler`), trường rich
- * text thường (`RichField`), trường tài liệu thống nhất trắc
- * nghiệm (`McDocumentField`) và đúng/sai (`TfDocumentField`), kèm
- * hàm nhãn đánh số phương án (`numberingLabel`) mà cột xem trước
- * dùng. Các trường chỉ nhận dữ liệu và callback qua props, không
- * tự gọi API ngoài đường tải ảnh của lát files.
+ * Các trường soạn rich text của form câu hỏi (tách cấu trúc từ `pages/question-editor.tsx` theo đợt A của issue #223): đường chèn ảnh dùng chung (`useQuestionImageHandler`), trường rich text thường (`RichField`), trường tài liệu thống nhất trắc nghiệm (`McDocumentField`) và đúng/sai (`TfDocumentField`), kèm hàm nhãn đánh số phương án (`numberingLabel`) mà cột xem trước dùng. Các trường chỉ nhận dữ liệu và callback qua props, không tự gọi API ngoài đường tải ảnh của lát files.
  */
 import { useCallback, useState } from 'react';
 import {
@@ -29,10 +22,7 @@ import { emptyDoc, type Doc } from '../types/form-model';
 // ---------------------------------------------------------------------------
 
 /**
- * Mở trình chọn tệp để xin MỘT tệp ảnh cho callback `onRequestImage` khi
- * người soạn bấm nút ảnh trong toolbar của editor (trường hợp callback
- * được gọi KHÔNG kèm tệp). Input được tạo tạm, gắn vào cuối body trong
- * lúc chọn rồi tự gỡ bỏ; người soạn huỷ chọn thì trả `null`.
+ * Mở trình chọn tệp để xin MỘT tệp ảnh cho callback `onRequestImage` khi người soạn bấm nút ảnh trong toolbar của editor (trường hợp callback được gọi KHÔNG kèm tệp). Input được tạo tạm, gắn vào cuối body trong lúc chọn rồi tự gỡ bỏ; người soạn huỷ chọn thì trả `null`.
  */
 function pickImageFile(): Promise<File | null> {
   return new Promise((resolve) => {
@@ -101,14 +91,7 @@ function useQuestionImageHandler(
 }
 
 /**
- * Một trường nội dung rich text của form câu hỏi. Chèn ảnh chỉ còn MỘT
- * đường qua chính editor (lát E3 #248, theo mô hình một-toolbar của
- * giaokhoa): nút ảnh trên toolbar của editor đang active, dán và
- * kéo-thả vào vùng soạn — cả ba đều gọi callback `onRequestImage`,
- * tải qua `uploadQuestionImage` của lát files và editor tự chèn
- * node `image` tại con trỏ bằng định danh bền mà callback trả về. Hàng
- * chọn ảnh riêng bọc ngoài từng trường (QuestionImagePicker) đã bỏ —
- * trước lát này mỗi trường mang một hàng như vậy, lặp 10 lần trên form.
+ * Một trường nội dung rich text của form câu hỏi. Chèn ảnh chỉ còn MỘT đường qua chính editor (lát E3 #248, theo mô hình một-toolbar của giaokhoa): nút ảnh trên toolbar của editor đang active, dán và kéo-thả vào vùng soạn — cả ba đều gọi callback `onRequestImage`, tải qua `uploadQuestionImage` của lát files và editor tự chèn node `image` tại con trỏ bằng định danh bền mà callback trả về. Hàng chọn ảnh riêng bọc ngoài từng trường (QuestionImagePicker) đã bỏ — trước lát này mỗi trường mang một hàng như vậy, lặp 10 lần trên form.
  */
 export function RichField({
   label,
@@ -147,14 +130,7 @@ export function RichField({
 }
 
 /**
- * Trường soạn trắc nghiệm trên tài liệu thống nhất: thân câu + bốn
- * lựa chọn trong MỘT editor (`MultipleChoiceEditor` của @giaokhoa/editor),
- * radio đáp án đúng gắn tại từng lựa chọn. Đường chèn ảnh dùng chung
- * một handler cho cả tài liệu — khu vực file ghi là `questiontext`
- * vì vị trí con trỏ (thân câu hay trong lựa chọn) không lộ ra qua
- * callback ảnh của editor; khu vực chỉ là metadata phân loại của bản
- * ghi file, ảnh vẫn tải/hiển thị theo định danh bền như mọi trường
- * khác.
+ * Trường soạn trắc nghiệm trên tài liệu thống nhất: thân câu + bốn lựa chọn trong MỘT editor (`MultipleChoiceEditor` của @giaokhoa/editor), radio đáp án đúng gắn tại từng lựa chọn. Đường chèn ảnh dùng chung một handler cho cả tài liệu — khu vực file ghi là `questiontext` vì vị trí con trỏ (thân câu hay trong lựa chọn) không lộ ra qua callback ảnh của editor; khu vực chỉ là metadata phân loại của bản ghi file, ảnh vẫn tải/hiển thị theo định danh bền như mọi trường khác.
  */
 export function McDocumentField({
   label,
@@ -192,9 +168,7 @@ export function McDocumentField({
 }
 
 /**
- * Trường soạn Đúng/Sai trên tài liệu thống nhất TF-A: thân chung +
- * đúng 4 mệnh đề trong MỘT editor (`TrueFalseEditor` của @giaokhoa/editor),
- * cặp radio Đ/S gắn tại từng mệnh đề để chọn đáp án của mệnh đề đó
+ * Trường soạn Đúng/Sai trên tài liệu thống nhất TF-A: thân chung + đúng 4 mệnh đề trong MỘT editor (`TrueFalseEditor` của @giaokhoa/editor), cặp radio Đ/S gắn tại từng mệnh đề để chọn đáp án của mệnh đề đó
  * (đáp án sống ngoài tài liệu qua `answers`/`onAnswerChange`). Đường
  * chèn ảnh dùng chung một handler cho cả tài liệu như trường MC.
  */

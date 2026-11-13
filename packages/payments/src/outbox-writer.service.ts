@@ -2,9 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { sql, type CentreDB, type CentreDb, type CentreTx } from '@giaokhoa/db';
 
 /**
- * Kiểu JSON của cột jsonb theo codegen (xem chú thích tương ứng
- * trong `payments.repository.ts`); helper này cũng giữ private
- * trong file vì cùng lý do TS2883.
+ * Kiểu JSON của cột jsonb theo codegen (xem chú thích tương ứng trong `payments.repository.ts`); helper này cũng giữ private trong file vì cùng lý do TS2883.
  */
 type CentreJson = NonNullable<CentreDB['payments']['data']>;
 

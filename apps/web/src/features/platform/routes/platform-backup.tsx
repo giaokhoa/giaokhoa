@@ -12,12 +12,9 @@ import { PageHeader, PageShell } from '#components/page-shell';
 import { useBackupJobs, useBackupSteps, useCreateBackupJob, useRestoreBackup } from '../queries/platform';
 
 /**
- * Backup/restore (platform services): tạo job, xem bước, restore sang
- * course mới. Dữ liệu đọc qua tầng TanStack Query
+ * Backup/restore (platform services): tạo job, xem bước, restore sang course mới. Dữ liệu đọc qua tầng TanStack Query
  * (`lib/platform-data.ts`, khoá `backupJobs`/`backupSteps`;
- * `clientLoader` của route nạp trước danh sách việc); các bước chỉ tải
- * khi người dùng chọn xem một việc, tạo job và restore qua đột biến làm
- * mới danh sách như lần tải lại thủ công trước đây.
+ * `clientLoader` của route nạp trước danh sách việc); các bước chỉ tải khi người dùng chọn xem một việc, tạo job và restore qua đột biến làm mới danh sách như lần tải lại thủ công trước đây.
  */
 export function BackupPage() {
   const { t: t } = useTranslation();

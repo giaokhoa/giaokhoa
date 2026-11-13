@@ -1,10 +1,5 @@
 /**
- * Kiểu dữ liệu hiển thị của cụm trang nền tảng thuộc feature
- * platform (giữ nguyên hình dạng các trang vẫn tiêu thụ). Tách
- * từ module phẳng `src/lib/platform-data.ts` khi tổ chức lại
- * apps/web theo mô hình features/ (issue #500): kiểu nằm ở tầng
- * types/, lời gọi API thuần ở tầng api/, options/hook và
- * clientLoader ở tầng queries/.
+ * Kiểu dữ liệu hiển thị của cụm trang nền tảng thuộc feature platform (giữ nguyên hình dạng các trang vẫn tiêu thụ). Tách từ module phẳng `src/lib/platform-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500): kiểu nằm ở tầng types/, lời gọi API thuần ở tầng api/, options/hook và clientLoader ở tầng queries/.
  */
 
 /** Một insight phân tích (trang insights): chỉ insight server đã lọc theo capability mới tới client. */

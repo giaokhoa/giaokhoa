@@ -17,12 +17,7 @@ import {
 @Controller({ path: 'curriculum', version: '1' })
 /**
  * API chương trình GDPT 2018:
- * subjects → curricula → cây nodes → learning outcomes.
- * Đọc cần curriculum:view, ghi cần curriculum:manage tại
- * context của môn học (qua PermissionEvaluator, trong service).
- * Riêng các GET phục vụ chọn khung (subjects/curricula/tree) nhận thêm
- * `forCourseId`: người có course:update tại khoá đó cũng đọc được —
- * nhánh cho giáo viên cấp khoá nạp khung vào khoá mình dạy (issue #66).
+ * subjects → curricula → cây nodes → learning outcomes. Đọc cần curriculum:view, ghi cần curriculum:manage tại context của môn học (qua PermissionEvaluator, trong service). Riêng các GET phục vụ chọn khung (subjects/curricula/tree) nhận thêm `forCourseId`: người có course:update tại khoá đó cũng đọc được — nhánh cho giáo viên cấp khoá nạp khung vào khoá mình dạy (issue #66).
  */
 export class CurriculumController {
   constructor(
@@ -52,8 +47,7 @@ export class CurriculumController {
   }
   @Get('subjects')
   /**
-   * GET /curriculum/subjects?contextId=&forCourseId= — môn học trong một context (forCourseId: nhánh chọn khung cho khoá).
-   * `contextId` là tùy chọn: vắng thì service mặc định về context hệ thống qua `contextOrSystem`
+   * GET /curriculum/subjects?contextId=&forCourseId= — môn học trong một context (forCourseId: nhánh chọn khung cho khoá). `contextId` là tùy chọn: vắng thì service mặc định về context hệ thống qua `contextOrSystem`
    * (lược đồ tùy chọn vẫn bắt giá trị đã kèm phải là UUID, nên id sai định dạng vẫn 400 như cũ).
    * Cổng đọc không đổi: vẫn `assertCanRead` trong service, không nới quyền.
    */

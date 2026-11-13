@@ -14,13 +14,7 @@ import {
 import { queryKeys } from './keys';
 
 /**
- * Tầng dữ liệu TanStack Query cho wizard tạo khoá học (F-01 của rà
- * soát #133): các danh sách nền của wizard (cây danh mục, khoá hiện
- * có, khoá mẫu, lớp của giáo viên) đọc qua khoá của nhà máy
- * `queryKeys`; thao tác tạo/nhân bản khoá và nạp khung qua
- * `useMutation`. `clientLoader` của route nạp trước các danh sách nền.
- * Lời gọi API thuần nằm ở tầng `api/` của feature; danh sách lớp đọc
- * qua tầng api của feature classes.
+ * Tầng dữ liệu TanStack Query cho wizard tạo khoá học (F-01 của rà soát #133): các danh sách nền của wizard (cây danh mục, khoá hiện có, khoá mẫu, lớp của giáo viên) đọc qua khoá của nhà máy `queryKeys`; thao tác tạo/nhân bản khoá và nạp khung qua `useMutation`. `clientLoader` của route nạp trước các danh sách nền. Lời gọi API thuần nằm ở tầng `api/` của feature; danh sách lớp đọc qua tầng api của feature classes.
  */
 
 /** Tuỳ chọn truy vấn cây danh mục khoá (GET /courses/categories/tree). */
@@ -82,9 +76,7 @@ export function useWizardClasses() {
 }
 
 /**
- * Đột biến tạo khoá học mới (POST /courses) cho đường khoá trắng và
- * đường khung chương trình — thành công thì làm mới danh sách khoá
- * để các bề mặt danh sách thấy ngay khoá vừa tạo.
+ * Đột biến tạo khoá học mới (POST /courses) cho đường khoá trắng và đường khung chương trình — thành công thì làm mới danh sách khoá để các bề mặt danh sách thấy ngay khoá vừa tạo.
  */
 export function useCreateCourse() {
   const client = useQueryClient();
@@ -95,9 +87,7 @@ export function useCreateCourse() {
 }
 
 /**
- * Đột biến nhân bản khoá (POST /courses/:id/copy) cho đường nhân
- * bản và đường khoá mẫu — bản sao là nháp, không chứa người học/bài
- * làm; thành công thì làm mới danh sách khoá như tạo mới.
+ * Đột biến nhân bản khoá (POST /courses/:id/copy) cho đường nhân bản và đường khoá mẫu — bản sao là nháp, không chứa người học/bài làm; thành công thì làm mới danh sách khoá như tạo mới.
  */
 export function useDuplicateCourse() {
   const client = useQueryClient();
@@ -108,10 +98,7 @@ export function useDuplicateCourse() {
 }
 
 /**
- * Đột biến nạp khung chương trình vào khoá vừa tạo (POST
- * /courses/:id/curriculum-frame): khoá đã tồn tại trước khi nạp khung
- * nên lỗi nạp khung không huỷ khoá — trang báo rõ và vẫn vào builder
- * như bản thủ công.
+ * Đột biến nạp khung chương trình vào khoá vừa tạo (POST /courses/:id/curriculum-frame): khoá đã tồn tại trước khi nạp khung nên lỗi nạp khung không huỷ khoá — trang báo rõ và vẫn vào builder như bản thủ công.
  */
 export function useApplyCurriculumFrame() {
   return useMutation({
@@ -121,9 +108,7 @@ export function useApplyCurriculumFrame() {
 }
 
 /**
- * Đột biến tạo lớp nội tuyến ở bước lớp (qua tầng api của feature
- * classes) khi giáo viên chưa có lớp nào — thành công thì làm mới
- * danh sách lớp để bước lớp thấy ngay lớp vừa tạo.
+ * Đột biến tạo lớp nội tuyến ở bước lớp (qua tầng api của feature classes) khi giáo viên chưa có lớp nào — thành công thì làm mới danh sách lớp để bước lớp thấy ngay lớp vừa tạo.
  */
 export function useCreateClassForWizard() {
   const client = useQueryClient();

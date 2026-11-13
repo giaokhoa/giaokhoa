@@ -16,30 +16,13 @@ import { GuardiansRepository } from './guardians';
  * Spec tích hợp của hai repository giám hộ trên Kysely (issue #649):
  * repository liên kết giám hộ và repository bề mặt phụ huynh chỉ-xem.
  *
- * Database trung tâm được dựng từ rỗng bằng chính cầu nối migration
- * của package trên cụm PostgreSQL thật của môi trường test (biến
- * `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ
- * `DATABASE_URL` của package). Mọi ca chạy qua repository production
- * — không mô phỏng handle — trong ngữ cảnh tenant qua pool gắn GUC
- * như đường production.
+ * Database trung tâm được dựng từ rỗng bằng chính cầu nối migration của package trên cụm PostgreSQL thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ `DATABASE_URL` của package). Mọi ca chạy qua repository production — không mô phỏng handle — trong ngữ cảnh tenant qua pool gắn GUC như đường production.
  *
- * Ngoài hành vi của từng phương thức, spec này là bằng chứng nghiệm
- * thu "phạm vi dữ kiện chỉ-đọc giữ nguyên trước/sau" của bề mặt phụ
- * huynh: hai truy vấn khó nhất (quiz có hạn nộp và đếm tiến độ theo
- * khoá) được chạy SONG SONG bằng hai bản thực thi — bản cũ (sao
- * nguyên văn logic từ repository phía ứng dụng trước chuyển đổi,
- * giữ lại trong file này chỉ để đối chiếu; từ #663 bản sao này
- * dựng bằng Kysely thô vì ORM cũ đã rời khỏi cây) và bản
- * repository hiện hành — trên CÙNG một bộ dữ kiện mẫu, và kết
- * quả phải khớp nhau từng dòng.
- * Dữ kiện mẫu được dựng có chủ đích để bắt đúng điểm nóng của nhóm:
+ * Ngoài hành vi của từng phương thức, spec này là bằng chứng nghiệm thu "phạm vi dữ kiện chỉ-đọc giữ nguyên trước/sau" của bề mặt phụ huynh: hai truy vấn khó nhất (quiz có hạn nộp và đếm tiến độ theo khoá) được chạy SONG SONG bằng hai bản thực thi — bản cũ (sao nguyên văn logic từ repository phía ứng dụng trước chuyển đổi, giữ lại trong file này chỉ để đối chiếu; từ #663 bản sao này dựng bằng Kysely thô vì ORM cũ đã rời khỏi cây) và bản repository hiện hành — trên CÙNG một bộ dữ kiện mẫu, và kết quả phải khớp nhau từng dòng. Dữ kiện mẫu được dựng có chủ đích để bắt đúng điểm nóng của nhóm:
  * - Một attempt xem trước (preview = true) cạnh một attempt thật:
- *   điều kiện preview nằm trong ON của left join nên quiz chỉ có
- *   đúng một dòng với trạng thái của attempt thật.
+ *   điều kiện preview nằm trong ON của left join nên quiz chỉ có đúng một dòng với trạng thái của attempt thật.
  * - Một module có dòng hoàn thành ở trạng thái 0: điều kiện
- *   completion_state <> 0 nằm trong ON của left join nên module vẫn
- *   tính vào tổng số, chỉ không tính vào số đã hoàn thành; dòng hoàn
- *   thành của HỌC SINH KHÁC trên cùng module không được rò vào đếm.
+ *   completion_state <> 0 nằm trong ON của left join nên module vẫn tính vào tổng số, chỉ không tính vào số đã hoàn thành; dòng hoàn thành của HỌC SINH KHÁC trên cùng module không được rò vào đếm.
  */
 const TEST_DATABASE = 'giaokhoa_db_g649_guardians';
 const TEST_ROLE = 'giaokhoa_db_g649_guardians';

@@ -4,20 +4,15 @@ import { MessagingService } from './messaging.service';
 import { notificationPolicySettingName } from './notification-providers';
 
 /**
- * NB-7 (issue #174): chính sách thông báo của ADMIN ở cấp site +
- * phân tầng bề mặt tuỳ chọn theo vai.
+ * NB-7 (issue #174): chính sách thông báo của ADMIN ở cấp site + phân tầng bề mặt tuỳ chọn theo vai.
  *
  * - notify() kiểm chính sách admin (site-config
  *   `notifications/provider_<tên>_enabled`) TRƯỚC tuỳ chọn người dùng:
- *   loại bị tắt thì không phát ở kênh nào, kể cả khi tuỳ chọn cá nhân
- *   đang bật, và ghi dispatch log 'skipped-admin-disabled'.
+ *   loại bị tắt thì không phát ở kênh nào, kể cả khi tuỳ chọn cá nhân đang bật, và ghi dispatch log 'skipped-admin-disabled'.
  * - Hai loại bắt buộc P2 không bị chính sách admin chặn (tầng luật ép
  *   bật; API site-config cũng từ chối đặt false cho chúng).
  * - Học sinh (không gán vai nhân sự, không phải site admin): PUT tuỳ
- *   chọn theo loại → 403 ở server; GET preferences chỉ trả phần tối
- *   thiểu (rỗng). Giáo viên/nhân sự giữ hành vi v2 ở phía vai của
- *   mình; tầng audience theo vai + context (issue #288) lọc tiếp bên
- *   trong bề mặt đó — các ca audience nằm ở cuối file này.
+ *   chọn theo loại → 403 ở server; GET preferences chỉ trả phần tối thiểu (rỗng). Giáo viên/nhân sự giữ hành vi v2 ở phía vai của mình; tầng audience theo vai + context (issue #288) lọc tiếp bên trong bề mặt đó — các ca audience nằm ở cuối file này.
  */
 describe('MessagingService — chính sách site của admin + tuỳ chọn tối thiểu của học viên (NB-7)', () => {
   function buildService(opts: {
@@ -59,8 +54,7 @@ describe('MessagingService — chính sách site của admin + tuỳ chọn tố
       }),
     };
     const sendThrottle = { consume: vi.fn(async () => undefined) };
-    // I18n (tham số thứ 11, luật C-5 của issue #219): spec này không
-    // đi đường bản tóm tắt mặc định cho kênh ngoài nên stub rỗng đủ.
+    // I18n (tham số thứ 11, luật C-5 của issue #219): spec này không đi đường bản tóm tắt mặc định cho kênh ngoài nên stub rỗng đủ.
     const service = new MessagingService(
       repo as never, users as never, evaluator as never, {} as never, outbox as never,
       {} as never, unreadStream as never, dispatchQueue as never, siteConfig as never,
@@ -91,16 +85,12 @@ describe('MessagingService — chính sách site của admin + tuỳ chọn tố
   });
 
   it('loại bắt buộc P2 không bao giờ bị lớp chính sách site chặn', async () => {
-    // Kể cả khi kho dữ liệu có giá trị false (không thể xảy ra qua API
-    // vì SiteConfigService chặn, nhưng luật ở notify vẫn phải tự đứng).
+    // Kể cả khi kho dữ liệu có giá trị false (không thể xảy ra qua API vì SiteConfigService chặn, nhưng luật ở notify vẫn phải tự đứng).
     const { service, inserted } = buildService({ disabledProviders: ['enrol_expiry_warning', 'admin_announcement'] });
     for (const provider of ['enrol_expiry_warning', 'admin_announcement']) {
       const result = await service.notify('user-1', provider, {
         subject: 'Bắt buộc', body: 'Nội dung',
-        // Luật C-5 (issue #219): admin_announcement thuộc diện tối
-        // thiểu hoá kênh ngoài nên lời gọi truyền bản tối thiểu hoá
-        // tường minh cho hợp lệ (với enrol_expiry_warning —
-        // 'original-ok' — cặp trường này vô hại).
+        // Luật C-5 (issue #219): admin_announcement thuộc diện tối thiểu hoá kênh ngoài nên lời gọi truyền bản tối thiểu hoá tường minh cho hợp lệ (với enrol_expiry_warning — 'original-ok' — cặp trường này vô hại).
         externalSubject: 'Bắt buộc', externalBody: 'Nội dung',
       });
       expect(result.skipped).toBeUndefined();
@@ -124,8 +114,7 @@ describe('MessagingService — chính sách site của admin + tuỳ chọn tố
   it('nhân viên giảng dạy giữ bề mặt v2 cho phía của họ (dòng GET + PUT chạy trên loại staff)', async () => {
     const { service, storedPrefs } = buildService({ staffAssignment: true });
     const rows = await service.getPreferences('teacher-1');
-    // Giáo viên thuần: chỉ phía nhân sự + mọi-vai (10 loại) — phần
-    // còn lại của ca này nằm ở các ca audience ngay dưới đây.
+    // Giáo viên thuần: chỉ phía nhân sự + mọi-vai (10 loại) — phần còn lại của ca này nằm ở các ca audience ngay dưới đây.
     expect(rows.map((r) => r.provider).sort()).toEqual([
       'admin_announcement', 'assignment_submitted', 'badge_awarded', 'calendar_reminder',
       'competency_review_requested', 'contact_request', 'conversation_reported',
@@ -139,8 +128,7 @@ describe('MessagingService — chính sách site của admin + tuỳ chọn tố
   it('tách audience (issue #288): giáo viên thuần không thấy và không đặt được loại chỉ-dành-cho-học-viên hay loại phụ huynh', async () => {
     const { service } = buildService({ staffAssignment: true });
     const names = (await service.getPreferences('teacher-1')).map((r) => r.provider);
-    // Loại chỉ học sinh nhận (báo điểm là ca đã bị bắt lỗi tại trận) và
-    // loại của phụ huynh đều vắng khỏi bề mặt của giáo viên thuần.
+    // Loại chỉ học sinh nhận (báo điểm là ca đã bị bắt lỗi tại trận) và loại của phụ huynh đều vắng khỏi bề mặt của giáo viên thuần.
     for (const hidden of ['grade_updated', 'assignment_assigned', 'assignment_returned', 'quiz_available', 'enrol_welcome', 'guardian_digest', 'guardian_overdue_alert']) {
       expect(names).not.toContain(hidden);
     }
@@ -170,18 +158,13 @@ describe('MessagingService — chính sách site của admin + tuỳ chọn tố
   });
 
   it('dòng tuỳ chọn lộ chính sách site dưới dạng siteEnabled để trang cài đặt khoá được loại admin đã tắt (#288)', async () => {
-    // Trang Cài đặt thông báo chỉ HIỂN THỊ được "Admin đã tắt ở cấp
-    // site" khi dòng tuỳ chọn mang đúng trạng thái chính sách mà
-    // notify() tôn trọng — cùng một hàm đọc chính sách, không suy diễn.
-    // Fixture hai vai (dạy + học) để cả hai loại phía học sinh đều
-    // nằm trong bề mặt — ca này kiểm siteEnabled, không kiểm audience.
+    // Trang Cài đặt thông báo chỉ HIỂN THỊ được "Admin đã tắt ở cấp site" khi dòng tuỳ chọn mang đúng trạng thái chính sách mà notify() tôn trọng — cùng một hàm đọc chính sách, không suy diễn. Fixture hai vai (dạy + học) để cả hai loại phía học sinh đều nằm trong bề mặt — ca này kiểm siteEnabled, không kiểm audience.
     const { service } = buildService({ staffAssignment: true, studentContext: true, disabledProviders: ['grade_updated', 'enrol_expiry_warning'] });
     const rows = await service.getPreferences('teacher-1');
     const byProvider = new Map(rows.map((r) => [r.provider, r]));
     expect(byProvider.get('grade_updated')?.siteEnabled).toBe(false);
     expect(byProvider.get('enrol_welcome')?.siteEnabled).toBe(true);
-    // Loại bắt buộc P2: admin không tắt được nên siteEnabled luôn true
-    // kể cả khi kho dữ liệu có false (luật ép bật ở tầng chính sách).
+    // Loại bắt buộc P2: admin không tắt được nên siteEnabled luôn true kể cả khi kho dữ liệu có false (luật ép bật ở tầng chính sách).
     expect(byProvider.get('enrol_expiry_warning')?.siteEnabled).toBe(true);
   });
 

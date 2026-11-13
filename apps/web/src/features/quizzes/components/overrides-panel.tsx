@@ -67,9 +67,7 @@ export function OverridesPanel({
   const [ovReason, setOvReason] = useState('');
   const [ovError, setOvError] = useState<string | null>(null);
 
-  // Lỗi tải danh sách suy ngay khi render từ cờ lỗi của query —
-  // không chép qua effect vào state như bản cũ: banner hiện lỗi
-  // của thao tác (ovError) nếu có, không thì lỗi tải.
+  // Lỗi tải danh sách suy ngay khi render từ cờ lỗi của query — không chép qua effect vào state như bản cũ: banner hiện lỗi của thao tác (ovError) nếu có, không thì lỗi tải.
   const loadError = overridesIsError ? t('quizOverridesLoadFailed') : null;
   const displayOvError = ovError ?? loadError;
 

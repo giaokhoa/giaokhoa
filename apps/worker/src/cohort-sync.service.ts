@@ -9,24 +9,14 @@ import { tenantAls } from './db/tenant-als';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
 
 /**
- * Cổng ghi outbox của tiến trình worker cho bề mặt vật chất hoá
- * cohort dùng chung (`@giaokhoa/enrol`) — bản sao đúng hợp đồng cổng mà
- * dịch vụ outbox của API vẫn giữ, viết lại cho hạ tầng của worker:
+ * Cổng ghi outbox của tiến trình worker cho bề mặt vật chất hoá cohort dùng chung (`@giaokhoa/enrol`) — bản sao đúng hợp đồng cổng mà dịch vụ outbox của API vẫn giữ, viết lại cho hạ tầng của worker:
  *
  * - `enqueue` ghi dòng sự kiện trong transaction Kysely được truyền
- *   vào, để dòng sự kiện commit hoặc rollback cùng thay đổi nghiệp
- *   vụ của lõi (transaction rollback thì không tồn tại dòng sự kiện
- *   nào).
+ *   vào, để dòng sự kiện commit hoặc rollback cùng thay đổi nghiệp vụ của lõi (transaction rollback thì không tồn tại dòng sự kiện nào).
  * - Tenant hiệu lực mặc định lấy từ ngữ cảnh ALS của luồng phát sinh
- *   khi nơi gọi không chỉ định tường minh; tenant cũng được gương
- *   vào payload để các consumer chạy ở ngữ cảnh platform biết sự
- *   kiện thuộc tenant nào. Processor đồng bộ cohort chạy trong ngữ
- *   cảnh platform nên các dòng do bề mặt phát ở đây mang
- *   `tenantId` null — đúng hành vi của consumer polling phía API
- *   trước đây (nhịp quét của nó cũng không mang ngữ cảnh tenant).
+ *   khi nơi gọi không chỉ định tường minh; tenant cũng được gương vào payload để các consumer chạy ở ngữ cảnh platform biết sự kiện thuộc tenant nào. Processor đồng bộ cohort chạy trong ngữ cảnh platform nên các dòng do bề mặt phát ở đây mang `tenantId` null — đúng hành vi của consumer polling phía API trước đây (nhịp quét của nó cũng không mang ngữ cảnh tenant).
  * - `enqueueStandalone` ghi trong một transaction Kysely ngắn riêng,
- *   dùng cho đường đình chỉ do đồng bộ hệ thống của bề mặt (phát
- *   `user_enrolment_suspended` sau khi đã cập nhật trạng thái).
+ *   dùng cho đường đình chỉ do đồng bộ hệ thống của bề mặt (phát `user_enrolment_suspended` sau khi đã cập nhật trạng thái).
  */
 class WorkerOutboxPort implements SharedOutboxPort {
   constructor(private readonly spaceDb: SpaceDatabaseService) {}
@@ -41,10 +31,7 @@ class WorkerOutboxPort implements SharedOutboxPort {
       .values({
         aggregate: input.aggregate,
         type: input.type,
-        // Cột `payload` jsonb đi qua serialize tường minh kèm
-        // `::jsonb` theo khuôn ghi jsonb của `@giaokhoa/db`: driver `pg`
-        // tự stringify object thường nhưng hiểu MẢNG cấp cao nhất
-        // là mảng PostgreSQL.
+        // Cột `payload` jsonb đi qua serialize tường minh kèm `::jsonb` theo khuôn ghi jsonb của `@giaokhoa/db`: driver `pg` tự stringify object thường nhưng hiểu MẢNG cấp cao nhất là mảng PostgreSQL.
         payload: sql<CentreDB['outbox_events']['payload']>`${JSON.stringify(payload)}::jsonb`,
         tenant_id: tenantId,
       })

@@ -6,13 +6,10 @@ import type { TenantsRepository } from '@giaokhoa/db/repositories/tenants';
 import type { UsersService } from '../users/users.service';
 
 /**
- * Ca đơn vị của service nhận diện trung tâm (issue #583): khung định
- * tuyến, sổ tenant, kho nhận diện và service người dùng được thay
- * bằng vật giả — các ca khoá đúng luật gắn trung tâm của service:
+ * Ca đơn vị của service nhận diện trung tâm (issue #583): khung định tuyến, sổ tenant, kho nhận diện và service người dùng được thay bằng vật giả — các ca khoá đúng luật gắn trung tâm của service:
  * đọc nhận diện KHÔNG chạm control plane khi trung tâm đã chuẩn bị
  * (đường sống sau khi control plane ngừng hoạt động), và vẫn phân
- * giải + chuẩn bị trước khi đọc khi trung tâm chưa chuẩn bị (đọc
- * thẳng khi chưa chuẩn bị sẽ rơi về kho chung — sai kho).
+ * giải + chuẩn bị trước khi đọc khi trung tâm chưa chuẩn bị (đọc thẳng khi chưa chuẩn bị sẽ rơi về kho chung — sai kho).
  */
 function makeService(options?: { prepared?: boolean }) {
   const spaceDb = {

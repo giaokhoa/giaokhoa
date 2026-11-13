@@ -11,9 +11,7 @@ import { AuthService, type SessionClientInfo } from './auth.service';
 import { SessionService } from './session.service';
 
 /**
- * Lỗi nghiệp vụ của luồng OAuth được mang theo `code` ổn định để callback
- * chuyển hướng về trang login kèm mã lỗi (`/login?oauthError=<code>`) thay
- * vì trả JSON giữa chừng — trình duyệt đang ở ngoài SPA tại thời điểm đó.
+ * Lỗi nghiệp vụ của luồng OAuth được mang theo `code` ổn định để callback chuyển hướng về trang login kèm mã lỗi (`/login?oauthError=<code>`) thay vì trả JSON giữa chừng — trình duyệt đang ở ngoài SPA tại thời điểm đó.
  */
 export class OAuthFlowException extends Error {
   constructor(readonly code: string) {
@@ -51,8 +49,7 @@ const PROVIDER_DEFINITIONS: Record<OAuthIssuer, ProviderDefinition> = {
     envPrefix: 'OAUTH_GOOGLE',
   },
   facebook: {
-    // Graph API bắt buộc gắn phiên bản vào đường dẫn; v21.0 là phiên bản
-    // ổn định đang được Meta hỗ trợ cho dialog/oauth và /me.
+    // Graph API bắt buộc gắn phiên bản vào đường dẫn; v21.0 là phiên bản ổn định đang được Meta hỗ trợ cho dialog/oauth và /me.
     authorizeUrl: 'https://www.facebook.com/v21.0/dialog/oauth',
     tokenUrl: 'https://graph.facebook.com/v21.0/oauth/access_token',
     userinfoUrl: 'https://graph.facebook.com/v21.0/me?fields=id,email,first_name,last_name',
@@ -71,10 +68,7 @@ interface OAuthState {
 }
 
 /**
- * Giá trị lưu cho một mã bàn giao: định danh user + dấu MFA đã qua.
- * Dấu chỉ do `finishSignIn` đặt (sau cổng MFA hoặc khi tài khoản
- * không bật MFA). Giá trị lưu DẠNG CŨ là chuỗi định danh user thuần —
- * `exchangeHandoff` hiểu dạng cũ là chưa qua MFA.
+ * Giá trị lưu cho một mã bàn giao: định danh user + dấu MFA đã qua. Dấu chỉ do `finishSignIn` đặt (sau cổng MFA hoặc khi tài khoản không bật MFA). Giá trị lưu DẠNG CŨ là chuỗi định danh user thuần — `exchangeHandoff` hiểu dạng cũ là chưa qua MFA.
  */
 interface OAuthHandoffRecord {
   userId: string;
@@ -82,8 +76,7 @@ interface OAuthHandoffRecord {
 }
 
 /**
- * Kết quả callback OAuth: hoặc đăng nhập hoàn tất (phiên + mã bàn
- * giao), hoặc bị chặn ở bước MFA kèm challenge token đích `oauth`
+ * Kết quả callback OAuth: hoặc đăng nhập hoàn tất (phiên + mã bàn giao), hoặc bị chặn ở bước MFA kèm challenge token đích `oauth`
  * (chưa tồn tại phiên/mã bàn giao nào).
  */
 export type OAuthCallbackOutcome =
@@ -91,24 +84,11 @@ export type OAuthCallbackOutcome =
   | { mfaRequired: true; user: UserRow; challengeToken: string };
 
 /**
- * Đăng nhập xã hội theo mẫu plugin lõi `auth_oauth2` của Moodle: issuer
- * dựng sẵn Google/Facebook chạy luồng authorization code; callback khớp
- * tài khoản theo thứ tự (1) liên kết đã có theo tài khoản provider,
+ * Đăng nhập xã hội theo mẫu plugin lõi `auth_oauth2` của Moodle: issuer dựng sẵn Google/Facebook chạy luồng authorization code; callback khớp tài khoản theo thứ tự (1) liên kết đã có theo tài khoản provider,
  * (2) liên kết đích danh khi user đang đăng nhập xin liên kết, (3) email
- * đã xác thực trùng một tài khoản sẵn có ⇒ tạo liên kết, (4) chưa có ⇒
- * tạo tài khoản mới đã xác nhận (`create_new_confirmed_account`).
- * Hoàn tất đăng nhập dùng ĐÚNG cơ chế sẵn có: phiên web cookie được tạo
- * như đăng nhập thường và SPA nhận cặp token qua mã bàn giao một lần —
- * không tồn tại cơ chế phiên thứ hai.
+ * đã xác thực trùng một tài khoản sẵn có ⇒ tạo liên kết, (4) chưa có ⇒ tạo tài khoản mới đã xác nhận (`create_new_confirmed_account`). Hoàn tất đăng nhập dùng ĐÚNG cơ chế sẵn có: phiên web cookie được tạo như đăng nhập thường và SPA nhận cặp token qua mã bàn giao một lần — không tồn tại cơ chế phiên thứ hai.
  *
- * Cổng MFA: tài khoản đã bật MFA (trạng thái ở `user_totp` — nguồn duy
- * nhất của hệ, qua `AuthService.isMfaEnabled`) thì callback KHÔNG tạo
- * phiên và KHÔNG phát mã bàn giao; luồng dừng ở challenge MFA đích
- * `oauth` và chỉ hoàn tất sau khi qua bước verify (xem
- * `completeOAuthMfa`). Lớp gác thứ hai nằm ở `exchangeHandoff`: mã bàn
- * giao mang dấu đã-qua-MFA tại thời điểm phát hành, tài khoản đang bật
- * MFA mà mã không có dấu thì bị từ chối — chặn cả mã phát hành từ
- * trước khi có cổng.
+ * Cổng MFA: tài khoản đã bật MFA (trạng thái ở `user_totp` — nguồn duy nhất của hệ, qua `AuthService.isMfaEnabled`) thì callback KHÔNG tạo phiên và KHÔNG phát mã bàn giao; luồng dừng ở challenge MFA đích `oauth` và chỉ hoàn tất sau khi qua bước verify (xem `completeOAuthMfa`). Lớp gác thứ hai nằm ở `exchangeHandoff`: mã bàn giao mang dấu đã-qua-MFA tại thời điểm phát hành, tài khoản đang bật MFA mà mã không có dấu thì bị từ chối — chặn cả mã phát hành từ trước khi có cổng.
  */
 @Injectable()
 export class OAuthService {

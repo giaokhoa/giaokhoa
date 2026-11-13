@@ -9,30 +9,20 @@ import {
 
 /**
  * Lát #174-A (issue #174, khép ghi nhận `badge_awarded` phía worker):
- * đường cấp huy hiệu nền trước đây GHI THẲNG vào bảng `notifications`
- * ngoài hàm luật phân phối chung (lớp G10) — không áp chính sách admin
+ * đường cấp huy hiệu nền trước đây GHI THẲNG vào bảng `notifications` ngoài hàm luật phân phối chung (lớp G10) — không áp chính sách admin
  * (NB-7), không áp tuỳ chọn người dùng, không ghi dispatch log, và
- * không thể áp ghi đè tắt tiếng theo khoá (NB-4). Sau lát này
- * `BadgeAwardProcessor` phát qua `NotificationDeliveryService` như hai
- * đường NB-6. Oracle hành vi = luật `notify()` phía API sau NB-4:
+ * không thể áp ghi đè tắt tiếng theo khoá (NB-4). Sau lát này `BadgeAwardProcessor` phát qua `NotificationDeliveryService` như hai đường NB-6. Oracle hành vi = luật `notify()` phía API sau NB-4:
  *
  * - Huy hiệu thuộc khoá bị người nhận tắt tiếng: assertion VẪN được
- *   cấp, nhưng không sinh thông báo; dispatch log có đúng trạng thái
- *   `skipped-course-mute` cho provider `badge_awarded`.
+ *   cấp, nhưng không sinh thông báo; dispatch log có đúng trạng thái `skipped-course-mute` cho provider `badge_awarded`.
  * - Huy hiệu thuộc khoá khác / huy hiệu cấp site: thông báo tới bình
  *   thường, dispatch log `delivered`.
  * - Chạy lại job: không cấp trùng, không phát trùng (idempotent như
  *   trước — đường phát mới không phá bất biến này).
  *
- * Fixture theo đúng khuôn `engagement-jobs.spec.ts`: user/khoá/lớp tự
- * tạo với hậu tố duy nhất trên tenant `worker-fixture`, khoá dạy thật
- * phải có class_id (CHECK course_class_required_check, CLASS-0).
+ * Fixture theo đúng khuôn `engagement-jobs.spec.ts`: user/khoá/lớp tự tạo với hậu tố duy nhất trên tenant `worker-fixture`, khoá dạy thật phải có class_id (CHECK course_class_required_check, CLASS-0).
  *
- * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness
- * role thường (`test/ordinary-worker-module.ts`): module chạy bằng
- * role NOSUPERUSER/NOBYPASSRLS như production, fixture và đọc kiểm
- * chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ
- * của spec không đổi.
+ * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness role thường (`test/ordinary-worker-module.ts`): module chạy bằng role NOSUPERUSER/NOBYPASSRLS như production, fixture và đọc kiểm chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ của spec không đổi.
  */
 describe('Worker #174-A: tự trao huy hiệu gửi qua luật gửi chung (tắt tiếng theo khoá NB-4)', () => {
   let context: INestApplicationContext;

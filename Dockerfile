@@ -1,17 +1,10 @@
-# Dockerfile production ở gốc repo — một giai đoạn build dùng chung cho cả
-# ba ứng dụng (api, worker, web) và ba target runtime tương ứng, chọn bằng
-# `--target` (docker compose đã khai sẵn theo từng service).
+# Dockerfile production ở gốc repo — một giai đoạn build dùng chung cho cả ba ứng dụng (api, worker, web) và ba target runtime tương ứng, chọn bằng `--target` (docker compose đã khai sẵn theo từng service).
 #
 # Cách build giữ đúng cách build monorepo hiện hành: `pnpm install
 # --frozen-lockfile` rồi `turbo run build` cho ba app, sau đó đóng gói
-# từng app bằng `pnpm deploy --prod` (bản đóng gói tự chứa: dist/build đã
-# biên dịch + node_modules chỉ còn dependency production, gồm cả các
-# package workspace đã biên dịch) để các image runtime không mang theo
-# mã nguồn monorepo và devDependency.
+# từng app bằng `pnpm deploy --prod` (bản đóng gói tự chứa: dist/build đã biên dịch + node_modules chỉ còn dependency production, gồm cả các package workspace đã biên dịch) để các image runtime không mang theo mã nguồn monorepo và devDependency.
 #
-# Các image runtime dùng node:24-bookworm-slim cùng họ glibc với image
-# build (bookworm đầy đủ) vì @giaokhoa/api có dependency native argon2 — bản
-# binary biên dịch ở giai đoạn build phải nạp được ở giai đoạn runtime.
+# Các image runtime dùng node:24-bookworm-slim cùng họ glibc với image build (bookworm đầy đủ) vì @giaokhoa/api có dependency native argon2 — bản binary biên dịch ở giai đoạn build phải nạp được ở giai đoạn runtime.
 
 # syntax=docker/dockerfile:1
 
@@ -21,8 +14,7 @@ ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
 WORKDIR /repo
-# Tải dependency theo lockfile trước khi chép nguồn: sửa code không làm
-# mất layer tải gói; bước install sau chỉ liên kết workspace và chạy build native.
+# Tải dependency theo lockfile trước khi chép nguồn: sửa code không làm mất layer tải gói; bước install sau chỉ liên kết workspace và chạy build native.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm fetch
 COPY . .
@@ -33,18 +25,12 @@ RUN pnpm --filter @giaokhoa/api deploy --prod /out/api \
   && pnpm --filter @giaokhoa/web deploy --prod /out/web
 
 # ----- Runtime API -----
-# Tiến trình API NestJS đã biên dịch (dist/main.js). Dữ liệu tệp tải lên
-# nằm ở FILE_STORAGE_DIR (mặc định ./data/files theo cấu hình app) —
-# compose.yaml gắn volume bền vào đúng thư mục này.
+# Tiến trình API NestJS đã biên dịch (dist/main.js). Dữ liệu tệp tải lên nằm ở FILE_STORAGE_DIR (mặc định ./data/files theo cấu hình app) — compose.yaml gắn volume bền vào đúng thư mục này.
 FROM node:24-bookworm-slim AS api
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build --chown=node:node /out/api ./
-# Bộ công cụ PostgreSQL 18 (pg_dump/pg_restore) cho các công cụ vận
-# hành đội kho (issue #586): service migrate và các lệnh fleet:* khi
-# vận hành gọi đều chạy trong chính image này. Bản công cụ phải khớp
-# major với server Postgres của stack (18) — pg_dump cũ hơn server
-# từ chối dump. Cài từ kho PGDG chính thức của PostgreSQL.
+# Bộ công cụ PostgreSQL 18 (pg_dump/pg_restore) cho các công cụ vận hành đội kho (issue #586): service migrate và các lệnh fleet:* khi vận hành gọi đều chạy trong chính image này. Bản công cụ phải khớp major với server Postgres của stack (18) — pg_dump cũ hơn server từ chối dump. Cài từ kho PGDG chính thức của PostgreSQL.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl \
   && install -d /usr/share/postgresql-common/pgdg \
@@ -58,8 +44,7 @@ EXPOSE 3100
 CMD ["node", "dist/main.js"]
 
 # ----- Runtime worker -----
-# Tiến trình worker (BullMQ + outbox relay) đã biên dịch (dist/main.js);
-# worker không mở cổng HTTP.
+# Tiến trình worker (BullMQ + outbox relay) đã biên dịch (dist/main.js); worker không mở cổng HTTP.
 FROM node:24-bookworm-slim AS worker
 ENV NODE_ENV=production
 WORKDIR /app
@@ -68,9 +53,7 @@ USER node
 CMD ["node", "dist/main.js"]
 
 # ----- Runtime web -----
-# Server SSR chính thức của React Router chỉ phục vụ trang và asset.
-# Caddy (service gateway) chịu trách nhiệm proxy API/Socket.IO/MCP,
-# CSP và cổng HTTP công khai; tiến trình web không tự proxy nữa.
+# Server SSR chính thức của React Router chỉ phục vụ trang và asset. Caddy (service gateway) chịu trách nhiệm proxy API/Socket.IO/MCP, CSP và cổng HTTP công khai; tiến trình web không tự proxy nữa.
 FROM node:24-bookworm-slim AS web
 ENV NODE_ENV=production
 WORKDIR /app

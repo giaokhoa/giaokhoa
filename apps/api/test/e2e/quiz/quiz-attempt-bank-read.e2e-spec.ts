@@ -8,19 +8,9 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstS
 import { addExamSlot, createExamDraft, pinExam } from '../../support/exam-pin-helpers';
 
 /**
- * Issue #141 — kiểm chứng yêu cầu nghiệp vụ: phân quyền đọc câu hỏi phải
- * theo cây CONTEXT của hoạt động (kiểu Moodle), KHÔNG theo nhãn scope
- * của bank. Nếu đường attempt lỡ gác theo bank/scope thì học sinh không
- * đọc được câu khi làm bài.
+ * Issue #141 — kiểm chứng yêu cầu nghiệp vụ: phân quyền đọc câu hỏi phải theo cây CONTEXT của hoạt động (kiểu Moodle), KHÔNG theo nhãn scope của bank. Nếu đường attempt lỡ gác theo bank/scope thì học sinh không đọc được câu khi làm bài.
  *
- * Oracle: với TỪNG nguồn bank — bank trường (school), bank tổ (team),
- * bank cá nhân của giáo viên (personal) — giáo viên đưa câu (gồm câu kèm
- * ngữ liệu/stimulus) vào slot quiz của một khoá; học sinh đã ghi danh
- * bắt đầu attempt thì phải ĐỌC được trọn vẹn thân câu + đáp án + ngữ
- * liệu, trả lời và nộp được, điểm chốt đúng. Học sinh ngoài khoá bị
- * chặn ở cổng hoạt động. Và bề mặt duyệt ngân hàng (*ForViewer của #55,
- * siết thêm ở #123) VẪN 404 với học sinh đối với chính các câu đó —
- * đọc được trong attempt không được rò sang duyệt bank.
+ * Oracle: với TỪNG nguồn bank — bank trường (school), bank tổ (team), bank cá nhân của giáo viên (personal) — giáo viên đưa câu (gồm câu kèm ngữ liệu/stimulus) vào slot quiz của một khoá; học sinh đã ghi danh bắt đầu attempt thì phải ĐỌC được trọn vẹn thân câu + đáp án + ngữ liệu, trả lời và nộp được, điểm chốt đúng. Học sinh ngoài khoá bị chặn ở cổng hoạt động. Và bề mặt duyệt ngân hàng (*ForViewer của #55, siết thêm ở #123) VẪN 404 với học sinh đối với chính các câu đó — đọc được trong attempt không được rò sang duyệt bank.
  */
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });

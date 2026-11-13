@@ -15,14 +15,11 @@ import { DashboardRepository } from '@giaokhoa/db/repositories/dashboard';
 const DUE_ITEMS_LIMIT = 100;
 
 /**
- * Dashboard việc cần làm (DASH1, issue #121): tổng hợp MỘT lần cho cả khối
- * đầu dashboard. Ba nguyên tắc cứng:
+ * Dashboard việc cần làm (DASH1, issue #121): tổng hợp MỘT lần cho cả khối đầu dashboard. Ba nguyên tắc cứng:
  * - Chỉ tính khoá người dùng thuộc về: ghi danh hiệu lực (học sinh) và khoá
- *   có `grade:viewall` tại context khoá (đội giảng dạy — cùng định nghĩa
- *   `teaching` mà web dùng ở MyAccessView).
+ *   có `grade:viewall` tại context khoá (đội giảng dạy — cùng định nghĩa `teaching` mà web dùng ở MyAccessView).
  * - Điểm/phản hồi mới CHỈ từ dữ liệu đã công bố: trạng thái công bố lấy từ
- *   GradesService.publicationStatesForCourse (PH-0) — item manual chưa
- *   công bố bị loại khỏi payload hoàn toàn, không để lại dấu hiệu tồn tại.
+ *   GradesService.publicationStatesForCourse (PH-0) — item manual chưa công bố bị loại khỏi payload hoàn toàn, không để lại dấu hiệu tồn tại.
  * - Mốc xem trước lưu phía server (user_dashboard_state), không suy từ
  *   trạng thái đã đọc của thông báo.
  */
@@ -48,9 +45,7 @@ export class DashboardService {
   }
 
   /**
-   * Khoá một người dùng đang ghi danh hiệu lực kèm tên hiển thị — điểm vào
-   * dùng chung cho dashboard của chính chủ và bề mặt phụ huynh (PH-1 đọc
-   * dữ liệu của CON qua đúng tập khoá ghi danh này).
+   * Khoá một người dùng đang ghi danh hiệu lực kèm tên hiển thị — điểm vào dùng chung cho dashboard của chính chủ và bề mặt phụ huynh (PH-1 đọc dữ liệu của CON qua đúng tập khoá ghi danh này).
    */
   async enrolledCoursesFor(userId: string): Promise<{ courseIds: string[]; names: Map<string, string> }> {
     const courseIds = await this.repo.enrolledCourseIds(userId, new Date());
@@ -59,11 +54,7 @@ export class DashboardService {
   }
 
   /**
-   * Kết quả ĐÃ CÔNG BỐ mới của một học sinh kể từ mốc `since` — cùng cổng
-   * công bố PH-0 và cùng quy tắc thời điểm hiệu lực (max của lần sửa điểm
-   * và lần công bố) như khối "mới" của dashboard học sinh. Bề mặt phụ
-   * huynh (PH-1) dùng lại nguyên hàm này với mốc xem của phụ huynh để hai
-   * bề mặt không bao giờ lệch nhau về điều kiện hiển thị.
+   * Kết quả ĐÃ CÔNG BỐ mới của một học sinh kể từ mốc `since` — cùng cổng công bố PH-0 và cùng quy tắc thời điểm hiệu lực (max của lần sửa điểm và lần công bố) như khối "mới" của dashboard học sinh. Bề mặt phụ huynh (PH-1) dùng lại nguyên hàm này với mốc xem của phụ huynh để hai bề mặt không bao giờ lệch nhau về điều kiện hiển thị.
    */
   async publishedNewResultsFor(userId: string, since: Date): Promise<DashboardNewResultView[]> {
     const { courseIds, names } = await this.enrolledCoursesFor(userId);
@@ -75,8 +66,7 @@ export class DashboardService {
     const now = new Date();
     const state = await this.repo.getState(userId);
     const previousSeenAt = state?.lastSeenAt ?? null;
-    // Lần đầu chưa có mốc: không có gì tính là "mới" (since = now), tránh
-    // dội toàn bộ điểm cũ thành điểm mới ở lần mở dashboard đầu tiên.
+    // Lần đầu chưa có mốc: không có gì tính là "mới" (since = now), tránh dội toàn bộ điểm cũ thành điểm mới ở lần mở dashboard đầu tiên.
     const since = previousSeenAt ?? now;
 
     const enrolled = await this.repo.enrolledCourseIds(userId, now);
@@ -170,8 +160,7 @@ export class DashboardService {
   ): Promise<DashboardNewResultView[]> {
     const results: DashboardNewResultView[] = [];
 
-    // Vết công bố theo item: vết mới nhất quyết định hiệu lực hiện tại và,
-    // với item manual, thời điểm điểm TRỞ NÊN hiển thị.
+    // Vết công bố theo item: vết mới nhất quyết định hiệu lực hiện tại và, với item manual, thời điểm điểm TRỞ NÊN hiển thị.
     const itemPubs = await this.repo.itemPublications(enrolled);
     const latestPubByItem = new Map<string, (typeof itemPubs)[number]>();
     for (const p of itemPubs) {
@@ -204,9 +193,7 @@ export class DashboardService {
       for (const row of rows) {
         // Cổng công bố PH-0: chưa công bố thì loại hoàn toàn khỏi payload.
         if (!(states.get(row.itemId)?.published ?? true)) continue;
-        // Thời điểm hiệu lực: item manual lấy mốc công bố nếu công bố
-        // muộn hơn lần sửa điểm (điểm chấm trước, công bố sau vẫn là mới
-        // tại thời điểm công bố).
+        // Thời điểm hiệu lực: item manual lấy mốc công bố nếu công bố muộn hơn lần sửa điểm (điểm chấm trước, công bố sau vẫn là mới tại thời điểm công bố).
         const pub = latestPubByItem.get(row.itemId);
         const effectiveAt = pub && pub.action === 'publish' && pub.createdAt > row.updatedAt
           ? pub.createdAt
@@ -231,10 +218,7 @@ export class DashboardService {
   }
 
   /**
-   * Hàng đợi chấm gộp theo khoá cho giáo viên: bài C2 chưa trả bài cho
-   * attempt hiện tại + lượt quiz chờ chấm tay + phiếu giấy CAM-0 chờ xử
-   * lý (needs_review/needs_identity, issue #187). Ba loại đếm TÁCH BẠCH
-   * ở ba trường *Pending; pendingCount là tổng cả ba.
+   * Hàng đợi chấm gộp theo khoá cho giáo viên: bài C2 chưa trả bài cho attempt hiện tại + lượt quiz chờ chấm tay + phiếu giấy CAM-0 chờ xử lý (needs_review/needs_identity, issue #187). Ba loại đếm TÁCH BẠCH ở ba trường *Pending; pendingCount là tổng cả ba.
    */
   private async buildGradingQueue(
     teaching: string[],

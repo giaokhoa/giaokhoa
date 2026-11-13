@@ -19,21 +19,12 @@ import { apiFetch, apiJson } from '#lib/api';
 import type { ClassFeePaymentView } from '../types/classes';
 
 /**
- * Đường gọi API lớp học (CLASS-1, issue #184) — web chỉ trình bày +
- * dẫn luồng; mọi gác quyền và luật vòng đời nằm ở API module classes.
- * Kiểu dữ liệu lấy thẳng từ @giaokhoa/contracts để không lệch hợp đồng.
- * Đây là tầng api/ của feature classes sau khi tổ chức lại apps/web
- * theo mô hình features/ (issue #500): file này giữ toàn bộ hàm gọi
- * API; phần tái xuất kiểu và hằng đã tách sang `../types/classes`.
+ * Đường gọi API lớp học (CLASS-1, issue #184) — web chỉ trình bày + dẫn luồng; mọi gác quyền và luật vòng đời nằm ở API module classes. Kiểu dữ liệu lấy thẳng từ @giaokhoa/contracts để không lệch hợp đồng. Đây là tầng api/ của feature classes sau khi tổ chức lại apps/web theo mô hình features/ (issue #500): file này giữ toàn bộ hàm gọi API; phần tái xuất kiểu và hằng đã tách sang `../types/classes`.
  */
 
 
 /**
- * Danh sách lớp của người gọi (GET /classes): mỗi dòng kèm bốn cờ
- * khả năng do server suy cho đúng người gọi (`canCreate` /
- * `canUpdate` / `canDelete` / `canManageRoster`) — trang danh sách
- * lớp vẽ nút "Tạo lớp" và các hành động của từng dòng thuần theo
- * các cờ này; quyền thật vẫn gác ở API.
+ * Danh sách lớp của người gọi (GET /classes): mỗi dòng kèm bốn cờ khả năng do server suy cho đúng người gọi (`canCreate` / `canUpdate` / `canDelete` / `canManageRoster`) — trang danh sách lớp vẽ nút "Tạo lớp" và các hành động của từng dòng thuần theo các cờ này; quyền thật vẫn gác ở API.
  */
 export function fetchClasses(): Promise<ClassListItem[]> {
   return apiJson<ClassListItem[]>('/api/v1/classes');

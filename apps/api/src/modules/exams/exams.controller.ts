@@ -20,18 +20,7 @@ import {
 @ApiTags('exams')
 @Controller({ path: 'exams', version: '1' })
 /**
- * API lớp Ngân hàng đề (feat issue #113, EB-1; hợp nhất #226): thực
- * thể ĐỀ trong các bank `bank_kind='exam'` — soạn đề tự do, version
- * hoá, copy deep copy truy vết, đóng góp/duyệt khuôn QB-4 — cộng bề
- * mặt duyệt BỘ HỒ SƠ đề (EB-3, issue #165) ở nửa sau của lớp. Đây là
- * controller sở hữu duy nhất của tiền tố `/exams`: bề mặt hồ sơ đề
- * trước đây nằm ở một controller riêng cùng khai tiền tố này, đã gộp
- * về đây để mỗi tiền tố có đúng một chủ sở hữu (issue #343). Đường
- * `/exams` là canonical; alias `/exam-papers` của toàn bộ bề mặt này
- * nằm ở `ExamPapersAliasController` kèm interceptor deprecation.
- * Ghim đề vào khoá đi qua `/exam-pins` (xem ExamPinsController) —
- * không còn endpoint deploy riêng. Mọi cổng quyền neo tại context
- * của bank đề (capability exam:*).
+ * API lớp Ngân hàng đề (feat issue #113, EB-1; hợp nhất #226): thực thể ĐỀ trong các bank `bank_kind='exam'` — soạn đề tự do, version hoá, copy deep copy truy vết, đóng góp/duyệt khuôn QB-4 — cộng bề mặt duyệt BỘ HỒ SƠ đề (EB-3, issue #165) ở nửa sau của lớp. Đây là controller sở hữu duy nhất của tiền tố `/exams`: bề mặt hồ sơ đề trước đây nằm ở một controller riêng cùng khai tiền tố này, đã gộp về đây để mỗi tiền tố có đúng một chủ sở hữu (issue #343). Đường `/exams` là canonical; alias `/exam-papers` của toàn bộ bề mặt này nằm ở `ExamPapersAliasController` kèm interceptor deprecation. Ghim đề vào khoá đi qua `/exam-pins` (xem ExamPinsController) — không còn endpoint deploy riêng. Mọi cổng quyền neo tại context của bank đề (capability exam:*).
  */
 export class ExamsController {
   constructor(
@@ -227,10 +216,7 @@ export class ExamsController {
   }
 
   // --- Bề mặt duyệt BỘ HỒ SƠ đề (EB-3, issue #165) -------------------------
-  // Các handler dưới đây trước đây nằm ở ExamDossiersController riêng
-  // cùng khai tiền tố `exams`; đã gộp về lớp này để tiền tố `exams`
-  // có đúng một controller sở hữu (issue #343). Mọi cổng quyền nằm ở
-  // service: cấp 1 = exam:moderate tại context bank đích, cấp 2
+  // Các handler dưới đây trước đây nằm ở ExamDossiersController riêng cùng khai tiền tố `exams`; đã gộp về lớp này để tiền tố `exams` có đúng một controller sở hữu (issue #343). Mọi cổng quyền nằm ở service: cấp 1 = exam:moderate tại context bank đích, cấp 2
   // (BGH) = exam:moderate tại context hệ thống.
 
   @Get('dossiers/mine')

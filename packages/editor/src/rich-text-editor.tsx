@@ -27,8 +27,7 @@ import { MathEditorPanel, type MathNodeKind } from './math-editor-panel.js';
 import { validateMathLatex } from './math.js';
 
 /**
- * Tài liệu rỗng dùng khi chưa có nội dung: một `doc` chứa đúng một
- * paragraph rỗng — khớp `emptyRichTextDocument` của `@giaokhoa/contracts`.
+ * Tài liệu rỗng dùng khi chưa có nội dung: một `doc` chứa đúng một paragraph rỗng — khớp `emptyRichTextDocument` của `@giaokhoa/contracts`.
  */
 const EMPTY_DOCUMENT: RichTextDocument = {
   type: 'doc',
@@ -41,8 +40,7 @@ type ToolbarMark = 'bold' | 'italic' | 'strike' | 'code' | 'underline';
 /**
  * Mô tả một nút mark trên thanh công cụ: mark nó điều khiển, tiêu đề
  * (dùng cho cả `title` lẫn `aria-label`) và icon lucide hiển thị —
- * từ lát E1 toolbar dùng nút ICON như editor giaokhoa, thay cho các
- * nút chữ trần `B`/`I`/`S`/`<>`/`U` trước đây.
+ * từ lát E1 toolbar dùng nút ICON như editor giaokhoa, thay cho các nút chữ trần `B`/`I`/`S`/`<>`/`U` trước đây.
  */
 const TOOLBAR_MARKS: readonly { mark: ToolbarMark; title: string; Icon: LucideIcon }[] = [
   { mark: 'bold', title: 'Chữ đậm', Icon: Bold },
@@ -53,12 +51,7 @@ const TOOLBAR_MARKS: readonly { mark: ToolbarMark; title: string; Icon: LucideIc
 ];
 
 /**
- * Kết quả bề mặt chứa trả về cho editor khi người soạn chọn một ảnh: chỉ
- * gồm những gì node `image` của hợp đồng cần — `src` là định danh bền mà
- * bề mặt chứa đã phân giải qua module files (ví dụ kết quả của
- * `uploadQuestionImage` phía web), `alt` là chữ thay thế. Editor không tự
- * gọi API files và không tự mở trình chọn tệp: toàn bộ đường tải lên nằm
- * ở bề mặt chứa.
+ * Kết quả bề mặt chứa trả về cho editor khi người soạn chọn một ảnh: chỉ gồm những gì node `image` của hợp đồng cần — `src` là định danh bền mà bề mặt chứa đã phân giải qua module files (ví dụ kết quả của `uploadQuestionImage` phía web), `alt` là chữ thay thế. Editor không tự gọi API files và không tự mở trình chọn tệp: toàn bộ đường tải lên nằm ở bề mặt chứa.
  */
 export interface RichTextImagePick {
   /** Định danh bền của ảnh để lưu vào `attrs.src` của node `image`. */
@@ -68,10 +61,7 @@ export interface RichTextImagePick {
 }
 
 /**
- * Trạng thái của panel soạn công thức đang mở: nội dung đang soạn, lỗi
- * cú pháp của lần xác nhận bị chặn gần nhất, và node đích khi panel đang
- * sửa một công thức có sẵn (`targetPos`/`targetKind`); panel chèn mới
- * thì hai trường đích đều `null`.
+ * Trạng thái của panel soạn công thức đang mở: nội dung đang soạn, lỗi cú pháp của lần xác nhận bị chặn gần nhất, và node đích khi panel đang sửa một công thức có sẵn (`targetPos`/`targetKind`); panel chèn mới thì hai trường đích đều `null`.
  */
 interface MathPanelState {
   latex: string;
@@ -91,9 +81,7 @@ function isImageFile(file: File): boolean {
  */
 export interface RichTextEditorProps {
   /**
-   * Tài liệu hiện tại do component cha quản lý. Bỏ trống (`undefined`) thì
-   * trình soạn thảo tự quản nội dung, bắt đầu từ một tài liệu rỗng; truyền
-   * `null` thì nội dung được hiểu là tài liệu rỗng.
+   * Tài liệu hiện tại do component cha quản lý. Bỏ trống (`undefined`) thì trình soạn thảo tự quản nội dung, bắt đầu từ một tài liệu rỗng; truyền `null` thì nội dung được hiểu là tài liệu rỗng.
    */
   value?: RichTextDocument | null;
   /**
@@ -106,17 +94,11 @@ export interface RichTextEditorProps {
   /** Nhãn truy cập (aria-label) đặt trên vùng nhập liệu. */
   ariaLabel?: string;
   /**
-   * Cỡ vùng soạn: `default` là trường chính (chiều cao tối thiểu
-   * ~20rem như editor giaokhoa), `compact` là trường phụ (phương án,
-   * feedback... — chiều cao tối thiểu ~6rem như GuidanceEditor của
-   * giaokhoa). Mặc định `default`.
+   * Cỡ vùng soạn: `default` là trường chính (chiều cao tối thiểu ~20rem như editor giaokhoa), `compact` là trường phụ (phương án, feedback... — chiều cao tối thiểu ~6rem như GuidanceEditor của giaokhoa). Mặc định `default`.
    */
   size?: 'default' | 'compact';
   /**
-   * Id của phần tử slot ở header trang mà toolbar của editor đang
-   * active được portal vào (mặc định `editor-toolbar-slot`, theo đúng
-   * cơ chế của editor giaokhoa). Trang không có slot này thì toolbar
-   * neo sticky ngay trên editor đang active.
+   * Id của phần tử slot ở header trang mà toolbar của editor đang active được portal vào (mặc định `editor-toolbar-slot`, theo đúng cơ chế của editor giaokhoa). Trang không có slot này thì toolbar neo sticky ngay trên editor đang active.
    */
   toolbarSlotId?: string;
   /**
@@ -319,9 +301,7 @@ export function RichTextEditor({
       return;
     }
     const nextDocument = value ?? EMPTY_DOCUMENT;
-    // So ở dạng đem-lưu: editor có thể đang giữ paragraph tiếp nối kỹ
-    // thuật mà `value` (đã qua contentForSave) không có — hai dạng đó
-    // là MỘT nội dung, không được setContent lại (sẽ cướp con trỏ).
+    // So ở dạng đem-lưu: editor có thể đang giữ paragraph tiếp nối kỹ thuật mà `value` (đã qua contentForSave) không có — hai dạng đó là MỘT nội dung, không được setContent lại (sẽ cướp con trỏ).
     const currentSaved = contentForSave(editor.getJSON() as unknown as RichTextDocument);
     if (JSON.stringify(currentSaved) !== JSON.stringify(contentForSave(nextDocument))) {
       editor.commands.setContent(ensureTerminalContinuation(nextDocument), {
@@ -330,11 +310,7 @@ export function RichTextEditor({
     }
   }, [editor, value]);
 
-  // Một toolbar cho editor đang active (lát E3, theo giaokhoa): khi
-  // editor active, tìm slot ở header trang để portal toolbar vào;
-  // tương tác (pointerdown/focusin) ra ngoài mọi phần tử mang
-  // data-editor-owner của CHÍNH editor này (vùng soạn, toolbar, panel
-  // công thức) thì tắt active + đóng panel.
+  // Một toolbar cho editor đang active (lát E3, theo giaokhoa): khi editor active, tìm slot ở header trang để portal toolbar vào; tương tác (pointerdown/focusin) ra ngoài mọi phần tử mang data-editor-owner của CHÍNH editor này (vùng soạn, toolbar, panel công thức) thì tắt active + đóng panel.
   useEffect(() => {
     if (!active) return undefined;
     const belongsToEditor = (target: EventTarget | null) =>
@@ -423,8 +399,7 @@ export function RichTextEditor({
   }
 
   /**
-   * Mở panel công thức: đang chọn đúng một node công thức thì sửa node
-   * đó, còn lại là chèn công thức mới tại con trỏ.
+   * Mở panel công thức: đang chọn đúng một node công thức thì sửa node đó, còn lại là chèn công thức mới tại con trỏ.
    */
   function openMathPanel(): void {
     const { selection } = editor.state;
@@ -439,12 +414,7 @@ export function RichTextEditor({
   }
 
   /**
-   * Xác nhận panel công thức: LaTeX sai cú pháp thì CHẶN, giữ panel mở
-   * và hiện lỗi tại panel — tài liệu không đổi. Hợp lệ thì áp vào tài
-   * liệu theo đúng trường hợp: chèn mới, sửa tại chỗ cùng dạng, hoặc đổi
-   * dạng trong dòng ↔ tách dòng (xoá node cũ, chèn node mới ở vị trí
-   * tương đương: công thức tách dòng nằm ngay sau đoạn chứa công thức
-   * cũ; công thức trong dòng nằm trong một đoạn mới tại chỗ block cũ).
+   * Xác nhận panel công thức: LaTeX sai cú pháp thì CHẶN, giữ panel mở và hiện lỗi tại panel — tài liệu không đổi. Hợp lệ thì áp vào tài liệu theo đúng trường hợp: chèn mới, sửa tại chỗ cùng dạng, hoặc đổi dạng trong dòng ↔ tách dòng (xoá node cũ, chèn node mới ở vị trí tương đương: công thức tách dòng nằm ngay sau đoạn chứa công thức cũ; công thức trong dòng nằm trong một đoạn mới tại chỗ block cũ).
    */
   function confirmMathPanel(): void {
     if (!mathPanel) {

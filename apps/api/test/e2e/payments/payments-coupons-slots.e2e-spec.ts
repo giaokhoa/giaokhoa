@@ -5,33 +5,19 @@ import {
   adminToken, createTestApp, createUserViaApi, http, login, roleIdByShortname, STRONG_PASSWORD, uniqueName,
 } from '../../support/identity-access-helpers';
 import { createCategory, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
-// Từ issue #539, nhịp quét matching chạy ở worker nên tiến trình API trong test
-// không còn tự quét: mỗi vòng chờ dẫn một nhịp qua cầu dẫn này rồi mới đọc trạng thái.
+// Từ issue #539, nhịp quét matching chạy ở worker nên tiến trình API trong test không còn tự quét: mỗi vòng chờ dẫn một nhịp qua cầu dẫn này rồi mới đọc trạng thái.
 import { closeSepaySweepDriver, driveSepaySweep } from '../../support/sepay-sweep-driver';
 
 /**
- * Phần còn lại của lát 2, issue #189 — COUPON giảm giá mua gói và
- * THỰC THI GIỚI HẠN SLOT theo đặc tả slot đã duyệt (comment
- * 6434192125 của issue; ánh xạ vận hành ghi ở comment bổ sung đặc tả
- * đăng cùng đợt thi công):
+ * Phần còn lại của lát 2, issue #189 — COUPON giảm giá mua gói và THỰC THI GIỚI HẠN SLOT theo đặc tả slot đã duyệt (comment 6434192125 của issue; ánh xạ vận hành ghi ở comment bổ sung đặc tả đăng cùng đợt thi công):
  *
  * - Coupon: quản trị platform tạo/sửa coupon (mọi mức giảm là dữ
- *   liệu, không ghim trong code); mua gói kèm mã thì `amount` của
- *   payment là giá cấu hình sau giảm và ảnh chụp `data.plan` ghi mã
+ *   liệu, không ghim trong code); mua gói kèm mã thì `amount` của payment là giá cấu hình sau giảm và ảnh chụp `data.plan` ghi mã
  *   + mức giảm; từng trường hợp coupon không áp được có mã lỗi riêng.
  * - Slot gói trung tâm: mức nền 3 tài khoản giảng dạy cho tenant
- *   không gói (học viên không tính); chạm mức nền thì hành động tăng
- *   slot (gán vai trò giảng dạy, kích hoạt lại membership, bỏ đình
- *   chỉ tài khoản) bị chặn và thực thể đang có nguyên vẹn; nâng mức
- *   nền qua Cài đặt hệ thống thì tạo thêm được; gói đang hoạt động
- *   hoặc còn trong ân hạn 7 ngày thì áp hạn mức gói (30), hết ân hạn
- *   rơi về mức nền. Ân hạn chỉ tính từ quyền lợi đã thật sự hết hạn;
- *   quyền lợi tương lai chưa bắt đầu không tự mở hạn mức gói khi
- *   quyền lợi hiện hành đã bị đình chỉ.
+ *   không gói (học viên không tính); chạm mức nền thì hành động tăng slot (gán vai trò giảng dạy, kích hoạt lại membership, bỏ đình chỉ tài khoản) bị chặn và thực thể đang có nguyên vẹn; nâng mức nền qua Cài đặt hệ thống thì tạo thêm được; gói đang hoạt động hoặc còn trong ân hạn 7 ngày thì áp hạn mức gói (30), hết ân hạn rơi về mức nền. Ân hạn chỉ tính từ quyền lợi đã thật sự hết hạn; quyền lợi tương lai chưa bắt đầu không tự mở hạn mức gói khi quyền lợi hiện hành đã bị đình chỉ.
  * - Slot gói giáo viên: mức nền 1 khoá học làm chủ tại tenant
- *   platform; tạo khoá thứ hai bị chặn; mua gói giáo viên thành công
- *   thì tạo tiếp được; vai trò giảng dạy nhận qua ghi danh (dạy
- *   chung) không tính slot.
+ *   platform; tạo khoá thứ hai bị chặn; mua gói giáo viên thành công thì tạo tiếp được; vai trò giảng dạy nhận qua ghi danh (dạy chung) không tính slot.
  */
 const SEPAY_KEY = 'sk-test-coupon-slot-001';
 const SEPAY_XID = 'xid-test-coupon-slot-001';

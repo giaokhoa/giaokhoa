@@ -1,28 +1,15 @@
 /**
- * Hình học template phiếu trả lời CAM-0 (issue #112): MỘT nguồn sự thật
- * duy nhất cho cả ba phía — sinh PDF (vector), dựng ảnh mô phỏng (raster)
- * và engine OMR (đọc lại đúng các toạ độ này sau khi nắn phẳng). Mọi toạ
- * độ tính trong "không gian template" 1240×1754 px (A4 ở 150 dpi); phía
- * PDF đổi sang point bằng PX_PER_PT.
+ * Hình học template phiếu trả lời CAM-0 (issue #112): MỘT nguồn sự thật duy nhất cho cả ba phía — sinh PDF (vector), dựng ảnh mô phỏng (raster) và engine OMR (đọc lại đúng các toạ độ này sau khi nắn phẳng). Mọi toạ độ tính trong "không gian template" 1240×1754 px (A4 ở 150 dpi); phía PDF đổi sang point bằng PX_PER_PT.
  *
  * Bố cục (trục y từ trên xuống):
  *  - 4 fiducial vuông đen 40×40 ở 4 góc, tâm cách biên 68px — mốc nắn
  *    phối cảnh; thiếu 1 mốc là ảnh bị cổng chất lượng từ chối.
  *  - Đầu phiếu (y 48..300): tiêu đề + tên bài bên trái; QR 240×240 ở
- *    góc phải (phiếu cá nhân hoá mang userId; phiếu dùng chung chỉ
- *    mang mã lô + mã đề).
+ *    góc phải (phiếu cá nhân hoá mang userId; phiếu dùng chung chỉ mang mã lô + mã đề).
  *  - Vùng mã (y 300..664): bên trái là lưới MÃ ĐỀ 4 cột × 10 hàng kèm
- *    hàng ô ghi chữ số phía trên (cặp ghi+tô như mẫu Bộ — học sinh ghi
- *    mã đề trên đề thi được phát rồi tô vào lưới dưới); bên phải là
- *    lưới MÃ HỌC SINH cấu hình được: 4 cột (tại lớp: 3 số thứ tự + 1
- *    số kiểm tra) hoặc 8 cột (thi thử theo phòng: 7 số thứ tự + 1 số
- *    kiểm tra, đúng độ dài SBD của Bộ). Cả hai loại phiếu giữ nguyên
- *    các vùng này để OMR dùng một template duy nhất.
+ *    hàng ô ghi chữ số phía trên (cặp ghi+tô như mẫu Bộ — học sinh ghi mã đề trên đề thi được phát rồi tô vào lưới dưới); bên phải là lưới MÃ HỌC SINH cấu hình được: 4 cột (tại lớp: 3 số thứ tự + 1 số kiểm tra) hoặc 8 cột (thi thử theo phòng: 7 số thứ tự + 1 số kiểm tra, đúng độ dài SBD của Bộ). Cả hai loại phiếu giữ nguyên các vùng này để OMR dùng một template duy nhất.
  *  - Lưới đáp án (y từ 672): mỗi câu 1 hàng cao 36px, tối đa 30 hàng/cột;
- *    ≤30 câu 1 cột, 31–60 câu 2 cột, tối đa 60 câu. Bong bóng r=13,
- *    bước ngang 42px, tối đa 5 lựa chọn (A–E) cho câu trắc nghiệm; câu
- *    đúng/sai chùm TF-A in 8 bong bóng trên cùng một hàng slot: 4 ý,
- *    mỗi ý một cặp ô Đ/S theo thứ tự mệnh đề của câu.
+ *    ≤30 câu 1 cột, 31–60 câu 2 cột, tối đa 60 câu. Bong bóng r=13, bước ngang 42px, tối đa 5 lựa chọn (A–E) cho câu trắc nghiệm; câu đúng/sai chùm TF-A in 8 bong bóng trên cùng một hàng slot: 4 ý, mỗi ý một cặp ô Đ/S theo thứ tự mệnh đề của câu.
  */
 export const TEMPLATE_WIDTH = 1240;
 export const TEMPLATE_HEIGHT = 1754;
@@ -38,13 +25,7 @@ export const FIDUCIAL_CENTERS: readonly { x: number; y: number }[] = [
 ];
 
 /**
- * Vùng QR ở đầu phiếu: nằm dưới dải fiducial trên (fiducial chiếm y
- * 48..88), x từ lề phải vào. Cỡ 240px là yêu cầu đọc tin cậy: payload
- * sản xuất ~81 ký tự (hai uuid) tạo QR version 6 (41×41 module) — ở
- * 176px module chỉ ~4,3px, giải mã sau nắn phối cảnh + nhiễu rớt ngẫu
- * nhiên theo nội dung (đo thực tế 9/12); ở 240px module ~5,9px đọc ổn
- * định. Phiếu trắng giữ nguyên vùng này (khung trống) để một template
- * hình học dùng cho cả hai loại phiếu.
+ * Vùng QR ở đầu phiếu: nằm dưới dải fiducial trên (fiducial chiếm y 48..88), x từ lề phải vào. Cỡ 240px là yêu cầu đọc tin cậy: payload sản xuất ~81 ký tự (hai uuid) tạo QR version 6 (41×41 module) — ở 176px module chỉ ~4,3px, giải mã sau nắn phối cảnh + nhiễu rớt ngẫu nhiên theo nội dung (đo thực tế 9/12); ở 240px module ~5,9px đọc ổn định. Phiếu trắng giữ nguyên vùng này (khung trống) để một template hình học dùng cho cả hai loại phiếu.
  */
 export const QR_RECT = { x: TEMPLATE_WIDTH - 64 - 240, y: 100, size: 240 };
 
@@ -58,24 +39,16 @@ export const CODE_ROW_STEP = 31;
 export const CODE_BUBBLE_R = 12;
 
 /**
- * Vùng MÃ ĐỀ trên phiếu dùng chung (giống Bộ): học sinh nhận đề mã nào
- * thì GHI chữ số vào hàng ô ghi rồi TÔ vào lưới 4 cột × 10 hàng bên
- * dưới. Lưới dịch xuống so với lưới mã học sinh để chừa hàng ô ghi
+ * Vùng MÃ ĐỀ trên phiếu dùng chung (giống Bộ): học sinh nhận đề mã nào thì GHI chữ số vào hàng ô ghi rồi TÔ vào lưới 4 cột × 10 hàng bên dưới. Lưới dịch xuống so với lưới mã học sinh để chừa hàng ô ghi
  * (y 330..358); hàng bong bóng cuối ở y 651, đáy 663 — vẫn trên lưới
- * đáp án (ANSWER_TOP 672). OMR chỉ đọc lưới tô; ô ghi là chứng cứ
- * bằng mắt cho giáo viên khi phiếu vào hàng chờ.
+ * đáp án (ANSWER_TOP 672). OMR chỉ đọc lưới tô; ô ghi là chứng cứ bằng mắt cho giáo viên khi phiếu vào hàng chờ.
  */
 export const VARIANT_DIGITS = 4;
 export const VARIANT_ORIGIN = { x: 150, y: 372 };
 export const VARIANT_WRITE_BOX = { top: 330, width: 38, height: 28 };
 
 /**
- * Mã học sinh: 3 số thứ tự (001–999) + 1 số kiểm tra = (d0*3 + d1*9 +
- * d2*7) mod 10. Trọng số (3, 9, 7) đều nguyên tố cùng nhau với 10 nên
- * sai đúng một chữ số LUÔN làm tổng kiểm tra đổi (delta × trọng số
- * không bao giờ ≡ 0 mod 10 với delta ∈ ±1..±9) → bị bắt 100%. Bộ trọng
- * số cũ (3, 5, 7) có trọng số 5 với gcd(5, 10) = 5: delta CHẴN ở vị
- * trí giữa làm tổng không đổi → mã sai lọt thành mã của học sinh khác
+ * Mã học sinh: 3 số thứ tự (001–999) + 1 số kiểm tra = (d0*3 + d1*9 + d2*7) mod 10. Trọng số (3, 9, 7) đều nguyên tố cùng nhau với 10 nên sai đúng một chữ số LUÔN làm tổng kiểm tra đổi (delta × trọng số không bao giờ ≡ 0 mod 10 với delta ∈ ±1..±9) → bị bắt 100%. Bộ trọng số cũ (3, 5, 7) có trọng số 5 với gcd(5, 10) = 5: delta CHẴN ở vị trí giữa làm tổng không đổi → mã sai lọt thành mã của học sinh khác
  * (đội đánh giá độc lập đã chứng minh bằng probe exhaustive trên PR
  * #120, phán quyết 6393776449) — đã bỏ.
  */

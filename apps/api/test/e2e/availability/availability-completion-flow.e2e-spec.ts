@@ -4,10 +4,7 @@ import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWO
 import { createCategory, createCm, createCourse, createEnrolInstance, enrolUser, getFirstSectionId } from '../../support/course-enrolment-helpers';
 
 /**
- * Luồng Availability + Completion.
- * Oracle: availability/tests/tree_test.php::test_check_available và
- * availability/tests/info_test.php (hạn chế áp dụng tại lớp info/access
- * , không chỉ ở hiển thị); lib/tests/completionlib_test.php
+ * Luồng Availability + Completion. Oracle: availability/tests/tree_test.php::test_check_available và availability/tests/info_test.php (hạn chế áp dụng tại lớp info/access , không chỉ ở hiển thị); lib/tests/completionlib_test.php
  * (test_update_state, test_set_module_viewed, test_aggregate_completions trong
  * completion/tests + các kiểm thử tiêu chí trong completion/tests/api_test.php).
  */

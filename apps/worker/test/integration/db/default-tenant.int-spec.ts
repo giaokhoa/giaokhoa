@@ -1,15 +1,9 @@
 /**
  * Spec tích hợp của helper tenant mặc định phía worker
  * (`resolveDefaultTenantId`, issue #659) sau khi chuyển sang
- * Kysely: khoá luật TENANT-1 trên database trung tâm thật dựng từ
- * rỗng bằng cầu nối migration của `@giaokhoa/db`.
+ * Kysely: khoá luật TENANT-1 trên database trung tâm thật dựng từ rỗng bằng cầu nối migration của `@giaokhoa/db`.
  *
- * Bối cảnh gọi thật: các processor nền (cấp huy hiệu, nhắc lịch,
- * báo cáo theo lịch) chạy helper này trong ngữ cảnh platform tường
- * minh để lấy tenant gắn cho notification phát sinh khi đối tượng
- * nguồn không thuộc tenant nào. Spec chạy mọi lượt gọi trong đúng
- * ngữ cảnh platform đó, qua pool gắn GUC như production và một role
- * không-siêu-quyền để RLS áp thật:
+ * Bối cảnh gọi thật: các processor nền (cấp huy hiệu, nhắc lịch, báo cáo theo lịch) chạy helper này trong ngữ cảnh platform tường minh để lấy tenant gắn cho notification phát sinh khi đối tượng nguồn không thuộc tenant nào. Spec chạy mọi lượt gọi trong đúng ngữ cảnh platform đó, qua pool gắn GUC như production và một role không-siêu-quyền để RLS áp thật:
  * - membership active duy nhất → tenant của membership đó;
  * - thuộc cả tenant platform lẫn một trung tâm → trung tâm thắng
  *   (tenant platform chỉ là đích rơi cuối);
@@ -17,8 +11,7 @@
  * - membership đã đình chỉ và tenant đã đình chỉ đều bị bỏ qua →
  *   rơi về tenant platform.
  *
- * Dữ kiện hạt giống ghi bằng client quản trị (bỏ qua RLS) để spec
- * chỉ đo hành vi ĐỌC của helper, không đo đường ghi.
+ * Dữ kiện hạt giống ghi bằng client quản trị (bỏ qua RLS) để spec chỉ đo hành vi ĐỌC của helper, không đo đường ghi.
  */
 import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';

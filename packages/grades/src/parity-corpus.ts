@@ -2,15 +2,10 @@ import { calculateCategory } from './grade-calculator.js';
 import { GradeFormulaError, calculateFromFormula } from './grade-formula.js';
 
 /**
- * Corpus parity của bộ máy công thức điểm — MỘT danh sách ca dùng chung, chạy y hệt ở
- * package @giaokhoa/grades, apps/api và apps/worker (spec parity ở cả ba nơi). Mục đích:
- * khoá hành vi "cùng công thức → cùng kết quả ở mọi phía chạy" sau vụ phân kỳ 11.1
- * của #134 (worker từng chạy bản rút gọn 4 hàm trong lúc api chạy bản 9 hàm).
+ * Corpus parity của bộ máy công thức điểm — MỘT danh sách ca dùng chung, chạy y hệt ở package @giaokhoa/grades, apps/api và apps/worker (spec parity ở cả ba nơi). Mục đích:
+ * khoá hành vi "cùng công thức → cùng kết quả ở mọi phía chạy" sau vụ phân kỳ 11.1 của #134 (worker từng chạy bản rút gọn 4 hàm trong lúc api chạy bản 9 hàm).
  *
- * Kết quả số được chuẩn hoá làm tròn 9 chữ số thập phân trước khi so sánh để nhiễu
- * nhị phân không làm spec parity đỏ giả; lỗi được chuẩn hoá thành `error:<reason>`
- * của GradeFormulaError. Mọi giá trị `expected` dưới đây tính tay theo ngữ nghĩa đã
- * ghi trong grade-formula.ts (oracle MoodleDocs "Grade calculations").
+ * Kết quả số được chuẩn hoá làm tròn 9 chữ số thập phân trước khi so sánh để nhiễu nhị phân không làm spec parity đỏ giả; lỗi được chuẩn hoá thành `error:<reason>` của GradeFormulaError. Mọi giá trị `expected` dưới đây tính tay theo ngữ nghĩa đã ghi trong grade-formula.ts (oracle MoodleDocs "Grade calculations").
  */
 export type GradeFormulaCorpusOutcome = number | null | `error:${string}`;
 

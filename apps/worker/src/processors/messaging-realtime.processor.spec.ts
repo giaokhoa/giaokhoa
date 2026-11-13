@@ -9,26 +9,18 @@ import { SpaceJobRunner } from '../db/routing/space-job-runner';
 import type { SpaceDatabaseService } from '../db/routing/space-database.service';
 
 /**
- * Consumer phân phối realtime phía worker — ghim các tính chất
- * của cơ chế chống trùng theo `outboxId` và cơ chế thử lại khi
- * lỗi (issue #521):
+ * Consumer phân phối realtime phía worker — ghim các tính chất của cơ chế chống trùng theo `outboxId` và cơ chế thử lại khi lỗi (issue #521):
  * (i) sự kiện chưa có dấu thì được phân phối đúng một lần và dấu
  *     chỉ ghi SAU khi phân phối xong;
  * (ii) job phát lại của sự kiện đã có dấu thì bị bỏ qua hoàn toàn
  *     (không phân phối lần hai);
  * (iii) phân phối lỗi thì job được hoãn bằng `moveToDelayed` và
- *     `DelayedError` được ném ra — lượt hoãn không đốt số lần
- *     thử của job và dấu không được ghi, nên job lỗi bền không
- *     chết theo attempts mặc định mà thử lại tới khi phân phối
- *     được (hành vi đầu-cuối trên hàng đợi thật do spec
- *     integration `messaging-realtime-retry` ghim).
+ *     `DelayedError` được ném ra — lượt hoãn không đốt số lần thử của job và dấu không được ghi, nên job lỗi bền không chết theo attempts mặc định mà thử lại tới khi phân phối được (hành vi đầu-cuối trên hàng đợi thật do spec integration `messaging-realtime-retry` ghim).
  */
 /**
  * Bộ chạy job THẬT với khung định tuyến không có sổ phía sau
  * (issue #582): các job của spec này không mang slug trung tâm
- * nên bộ chạy luôn mở ngữ cảnh platform như đường xử lý trước
- * đợt này — spec khoá hành vi của processor, không khoá định
- * tuyến kho (định tuyến có spec riêng của bộ chạy và của relay).
+ * nên bộ chạy luôn mở ngữ cảnh platform như đường xử lý trước đợt này — spec khoá hành vi của processor, không khoá định tuyến kho (định tuyến có spec riêng của bộ chạy và của relay).
  */
 function makeJobRunner(): SpaceJobRunner {
   return new SpaceJobRunner({

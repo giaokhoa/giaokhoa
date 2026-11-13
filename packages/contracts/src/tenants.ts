@@ -2,12 +2,7 @@ import { z } from 'zod';
 import { uuidIdSchema } from './ids.js';
 
 /**
- * Hợp đồng API của nền multi-tenant (TENANT-0, issue #168): tenant =
- * một trường (`school`) hoặc trung tâm (`center`) do PLATFORM ADMIN tạo
- * khi khách đăng ký gói tổ chức — người dùng KHÔNG tự tạo tenant, KHÔNG
- * tự đăng ký thành giáo viên. Học sinh ở Trang chính (tenant-zero) được
- * tự đăng ký; giáo viên ở platform chỉ qua admin nâng hoặc tự nâng khi
- * thanh toán gói giáo viên tự do (cưỡng chế gói thuộc TENANT-4).
+ * Hợp đồng API của nền multi-tenant (TENANT-0, issue #168): tenant = một trường (`school`) hoặc trung tâm (`center`) do PLATFORM ADMIN tạo khi khách đăng ký gói tổ chức — người dùng KHÔNG tự tạo tenant, KHÔNG tự đăng ký thành giáo viên. Học sinh ở Trang chính (tenant-zero) được tự đăng ký; giáo viên ở platform chỉ qua admin nâng hoặc tự nâng khi thanh toán gói giáo viên tự do (cưỡng chế gói thuộc TENANT-4).
  */
 export const TENANT_KINDS = ['school', 'center', 'platform'] as const;
 export const TENANT_STATUSES = ['active', 'suspended', 'archived'] as const;

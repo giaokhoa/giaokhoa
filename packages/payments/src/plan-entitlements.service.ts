@@ -3,11 +3,7 @@ import { PaymentsRepository, type EntitlementRow, type PaymentRow } from './paym
 import type { DbTx } from './database';
 
 /**
- * Ảnh chụp cấu hình gói ghi vào `payments.data` (khoá `plan`) tại thời
- * điểm tạo payment gói: giá đang cấu hình + độ dài chu kỳ đã áp + bên
- * hưởng. Khâu kích hoạt chỉ tin ảnh chụp này — KHÔNG đọc lại cấu hình
- * hiện hành — để một lần đổi giá của quản trị trong lúc khoản thu
- * đang chờ tiền về không làm sai lệch quyền lợi của khoản thu đó.
+ * Ảnh chụp cấu hình gói ghi vào `payments.data` (khoá `plan`) tại thời điểm tạo payment gói: giá đang cấu hình + độ dài chu kỳ đã áp + bên hưởng. Khâu kích hoạt chỉ tin ảnh chụp này — KHÔNG đọc lại cấu hình hiện hành — để một lần đổi giá của quản trị trong lúc khoản thu đang chờ tiền về không làm sai lệch quyền lợi của khoản thu đó.
  */
 export interface PlanSnapshot {
   component: 'tenant_plan' | 'teacher_plan';
@@ -20,11 +16,7 @@ export interface PlanSnapshot {
   /** Giáo viên hưởng gói — chỉ có ở `teacher_plan`, còn lại null. */
   beneficiaryUserId: string | null;
   /**
-   * Coupon đã áp cho khoản thu này (phần còn lại của lát 2): id và mã
-   * của coupon cùng số tiền đã giảm so với `configuredPrice`. Chỉ có
-   * khi người mua dùng coupon hợp lệ; `payments.amount` khi đó bằng
-   * `configuredPrice - discountAmount`. Coupon không đổi chu kỳ hay
-   * bên hưởng — khâu kích hoạt không đọc các trường này.
+   * Coupon đã áp cho khoản thu này (phần còn lại của lát 2): id và mã của coupon cùng số tiền đã giảm so với `configuredPrice`. Chỉ có khi người mua dùng coupon hợp lệ; `payments.amount` khi đó bằng `configuredPrice - discountAmount`. Coupon không đổi chu kỳ hay bên hưởng — khâu kích hoạt không đọc các trường này.
    */
   couponId?: string;
   couponCode?: string;
@@ -32,9 +24,7 @@ export interface PlanSnapshot {
 }
 
 /**
- * Đọc ảnh chụp gói từ `payments.data`; trả null khi payment không mang
- * ảnh chụp hợp lệ (ví dụ payment tạo qua đường tạo payment chung với
- * component tự do) — các payment như vậy KHÔNG sinh quyền lợi gói:
+ * Đọc ảnh chụp gói từ `payments.data`; trả null khi payment không mang ảnh chụp hợp lệ (ví dụ payment tạo qua đường tạo payment chung với component tự do) — các payment như vậy KHÔNG sinh quyền lợi gói:
  * quyền lợi chỉ sinh từ đường mua gói chính thức
  * (`PaymentsService.createPlanPayment`).
  */
@@ -53,9 +43,7 @@ export function planSnapshotOf(payment: PaymentRow): PlanSnapshot | null {
     periodDays: plan.periodDays,
     beneficiaryTenantId: plan.beneficiaryTenantId,
     beneficiaryUserId: typeof plan.beneficiaryUserId === 'string' ? plan.beneficiaryUserId : null,
-    // Trường coupon là tuỳ chọn và tương thích ngược: ảnh chụp cũ
-    // không có thì giữ undefined; có mà sai kiểu thì bỏ qua từng
-    // trường thay vì vô hiệu hoá toàn bộ ảnh chụp.
+    // Trường coupon là tuỳ chọn và tương thích ngược: ảnh chụp cũ không có thì giữ undefined; có mà sai kiểu thì bỏ qua từng trường thay vì vô hiệu hoá toàn bộ ảnh chụp.
     couponId: typeof plan.couponId === 'string' ? plan.couponId : undefined,
     couponCode: typeof plan.couponCode === 'string' ? plan.couponCode : undefined,
     discountAmount:
@@ -66,17 +54,9 @@ export function planSnapshotOf(payment: PaymentRow): PlanSnapshot | null {
 }
 
 /**
- * Số tiền ĐÃ THU của một payment gói theo ảnh chụp do server ghi lúc
- * tạo (giá cấu hình trừ mức giảm coupon, cả hai nằm trong chính ảnh
- * chụp) — căn cứ cho khâu đối chiếu tại điểm kích hoạt quyền lợi gói
+ * Số tiền ĐÃ THU của một payment gói theo ảnh chụp do server ghi lúc tạo (giá cấu hình trừ mức giảm coupon, cả hai nằm trong chính ảnh chụp) — căn cứ cho khâu đối chiếu tại điểm kích hoạt quyền lợi gói
  * (issue #419): giá và bên hưởng của một giao dịch gói chỉ lấy từ đối
- * tượng phía server, không lấy từ dữ kiện client gửi lên. Ảnh chụp
- * thiếu hoặc sai hình dạng (payment không do đường mua gói chính
- * thức sinh ra) → trả null, tức không xác minh được và điểm kích
- * hoạt phải từ chối kích hoạt. Khác `planSnapshotOf` ở chỗ KHÔNG rơi
- * về `payment.amount` khi `configuredPrice` vắng/sai — rơi về như
- * vậy sẽ biến phép đối chiếu thành payment tự đối chiếu với chính
- * nó, mất tác dụng phòng thủ.
+ * tượng phía server, không lấy từ dữ kiện client gửi lên. Ảnh chụp thiếu hoặc sai hình dạng (payment không do đường mua gói chính thức sinh ra) → trả null, tức không xác minh được và điểm kích hoạt phải từ chối kích hoạt. Khác `planSnapshotOf` ở chỗ KHÔNG rơi về `payment.amount` khi `configuredPrice` vắng/sai — rơi về như vậy sẽ biến phép đối chiếu thành payment tự đối chiếu với chính nó, mất tác dụng phòng thủ.
  */
 export function planChargedAmountOf(payment: PaymentRow): number | null {
   const data = payment.data as { plan?: Partial<PlanSnapshot> } | null;
@@ -117,9 +97,7 @@ export class PlanEntitlementsService {
   constructor(private readonly repo: PaymentsRepository) {}
 
   /**
-   * Sinh quyền lợi gói cho một payment gói vừa succeeded; trả bản ghi
-   * quyền lợi (bản ghi đã có nếu nhịp này chạy lại), hoặc null khi
-   * payment không phải payment gói chính thức.
+   * Sinh quyền lợi gói cho một payment gói vừa succeeded; trả bản ghi quyền lợi (bản ghi đã có nếu nhịp này chạy lại), hoặc null khi payment không phải payment gói chính thức.
    */
   async activateForPayment(payment: PaymentRow): Promise<EntitlementRow | null> {
     if (payment.component !== 'tenant_plan' && payment.component !== 'teacher_plan') return null;
@@ -146,10 +124,7 @@ export class PlanEntitlementsService {
         status: 'active',
       });
     } catch (error) {
-      // Đua hai nhịp kích hoạt đồng thời: cả hai cùng qua cổng kiểm
-      // tra ở trên, ràng buộc UNIQUE trên payment_id chặn bản ghi thứ
-      // hai ở tầng DB — nhịp thua đọc lại bản ghi đã thắng; không đọc
-      // lại được thì lỗi là thật, ném tiếp.
+      // Đua hai nhịp kích hoạt đồng thời: cả hai cùng qua cổng kiểm tra ở trên, ràng buộc UNIQUE trên payment_id chặn bản ghi thứ hai ở tầng DB — nhịp thua đọc lại bản ghi đã thắng; không đọc lại được thì lỗi là thật, ném tiếp.
       const winner = await this.repo.getEntitlementByPayment(payment.id);
       if (winner) return winner;
       throw error;
@@ -157,8 +132,7 @@ export class PlanEntitlementsService {
   }
 
   /**
-   * Đình chỉ quyền lợi của một payment gói (đường hoàn đủ tiền gọi);
-   * payment không phải gói thì không làm gì.
+   * Đình chỉ quyền lợi của một payment gói (đường hoàn đủ tiền gọi); payment không phải gói thì không làm gì.
    */
   async suspendForPayment(payment: PaymentRow, tx?: DbTx): Promise<void> {
     if (payment.component !== 'tenant_plan' && payment.component !== 'teacher_plan') return;

@@ -24,9 +24,7 @@ import {
 import { TrueFalseEditor } from './true-false-editor.js';
 
 /**
- * Đưa editor vào trạng thái active bằng cách focus vùng soạn — từ lát
- * E3 toolbar chỉ hiện cho editor đang active, nên các ca bấm nút
- * toolbar phải focus trước như người dùng thật.
+ * Đưa editor vào trạng thái active bằng cách focus vùng soạn — từ lát E3 toolbar chỉ hiện cho editor đang active, nên các ca bấm nút toolbar phải focus trước như người dùng thật.
  */
 async function focusEditor(container: HTMLElement): Promise<void> {
   const editable = container.querySelector('.ProseMirror');
@@ -40,11 +38,9 @@ afterEach(() => {
 });
 
 /**
- * Spec của package editor: trình hiển thị chỉ-đọc phải dựng đúng HTML của
- * lát văn bản thuần (paragraph + mark đậm), tài liệu rỗng không gây lỗi.
+ * Spec của package editor: trình hiển thị chỉ-đọc phải dựng đúng HTML của lát văn bản thuần (paragraph + mark đậm), tài liệu rỗng không gây lỗi.
  * (Rà soát #219: ca liệt kê danh sách extension nội bộ đã bỏ — đó là chi
- * tiết triển khai; luật "chỉ lát văn bản thuần" được khẳng định ở tầng
- * nghiệp vụ bởi e2e question-types-stimulus: tài liệu ngoài lát bị từ chối.)
+ * tiết triển khai; luật "chỉ lát văn bản thuần" được khẳng định ở tầng nghiệp vụ bởi e2e question-types-stimulus: tài liệu ngoài lát bị từ chối.)
  */
 describe('Khối RichTextView', () => {
   it('kết xuất một đoạn có chữ đậm ra HTML', () => {
@@ -331,8 +327,7 @@ describe('Khối RichTextEditor', () => {
         attrs: { src: '/api/v1/files/abc-123/content', alt: 'Đồ thị hàm số', title: null },
       });
     });
-    // Node ảnh không được mang thuộc tính ngoài hợp đồng (width/height
-    // của extension gốc) — schema strictObject sẽ từ chối ở biên API.
+    // Node ảnh không được mang thuộc tính ngoài hợp đồng (width/height của extension gốc) — schema strictObject sẽ từ chối ở biên API.
     expect(richTextDocumentSchema.parse(lastChange())).toEqual(lastChange());
     expect(onRequestImage).toHaveBeenCalledTimes(1);
   });
@@ -347,8 +342,7 @@ describe('Khối RichTextEditor', () => {
   it('chỉ hiện thanh công cụ khi editor đang hoạt động (được focus)', async () => {
     const { container } = render(<RichTextEditor />);
 
-    // Chưa focus: không toolbar nào — trước lát E3 toolbar luôn hiện
-    // trên mọi editor của form.
+    // Chưa focus: không toolbar nào — trước lát E3 toolbar luôn hiện trên mọi editor của form.
     expect(screen.queryByRole('toolbar')).toBeNull();
 
     await focusEditor(container);
@@ -422,10 +416,7 @@ describe('Khối RichTextEditor', () => {
 });
 
 /**
- * Vệ sinh tài liệu (lát E3, theo `contentForSave`/`ensureTerminal
- * Continuations` của giaokhoa): paragraph tiếp nối sau block nguyên tử
- * là hạ tầng soạn thảo, không phải nội dung — dạng đem lưu phải dọn nó,
- * dạng nạp vào phải có nó để người soạn viết tiếp được.
+ * Vệ sinh tài liệu (lát E3, theo `contentForSave`/`ensureTerminal Continuations` của giaokhoa): paragraph tiếp nối sau block nguyên tử là hạ tầng soạn thảo, không phải nội dung — dạng đem lưu phải dọn nó, dạng nạp vào phải có nó để người soạn viết tiếp được.
  */
 describe('Hàm hỗ trợ nối tiếp tài liệu', () => {
   it('chỉ lược đoạn nối tiếp trống sau khối nguyên tử cuối', () => {
@@ -479,13 +470,9 @@ describe('Hàm hỗ trợ nối tiếp tài liệu', () => {
 });
 
 /**
- * Spec của editor trắc nghiệm thống nhất (lát P4 #248): các ca kiểm
- * LUỒNG SOẠN–TÁCH–LẮP của mô hình giaokhoa — soạn trên một tài liệu
+ * Spec của editor trắc nghiệm thống nhất (lát P4 #248): các ca kiểm LUỒNG SOẠN–TÁCH–LẮP của mô hình giaokhoa — soạn trên một tài liệu
  * (thân câu + lựa chọn), đáp án đúng là id nằm ngoài tài liệu, khi
- * tách để lưu thì thân câu không còn node lựa chọn và thứ tự lựa
- * chọn trong tài liệu là thứ tự đáp án. Đổi ngược mô hình (đáp án
- * đúng nằm trong nội dung lựa chọn, thân câu còn choiceList khi lưu)
- * thì các ca này phải đỏ.
+ * tách để lưu thì thân câu không còn node lựa chọn và thứ tự lựa chọn trong tài liệu là thứ tự đáp án. Đổi ngược mô hình (đáp án đúng nằm trong nội dung lựa chọn, thân câu còn choiceList khi lưu) thì các ca này phải đỏ.
  */
 describe('Tài liệu soạn thảo MultipleChoice', () => {
   const textDoc = (text: string): RichTextDocument => ({
@@ -513,8 +500,7 @@ describe('Tài liệu soạn thảo MultipleChoice', () => {
     const document = composeMultipleChoiceDocument(textDoc('Thủ đô của Việt Nam?'), answers);
     const { question, choices } = splitMultipleChoiceDocument(document);
 
-    // Thân câu sau khi tách là tài liệu hợp đồng thuần: không còn
-    // node choice/choiceList nào (bất biến của quyết 12:12).
+    // Thân câu sau khi tách là tài liệu hợp đồng thuần: không còn node choice/choiceList nào (bất biến của quyết 12:12).
     expect(JSON.stringify(question)).not.toContain('choice');
     expect(question.content?.[0]?.content?.[0]?.text).toBe('Thủ đô của Việt Nam?');
     // Thứ tự đáp án khi tách = thứ tự sortOrder đã lắp vào.

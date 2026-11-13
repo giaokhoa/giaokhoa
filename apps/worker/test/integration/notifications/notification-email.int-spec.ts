@@ -13,41 +13,22 @@ import type { WorkerMailMessage, WorkerMailSendResult } from '../../../src/resen
 /**
  * Kênh email thật qua Resend + tổng hợp theo ngày (NB-5, issue #174).
  *
- * Spec chạy trên database test thật của worker, dựng hai processor
- * bằng tay với TRANSPORT GIẢ ghi lại mọi bức mail được yêu cầu gửi —
- * hành vi phải quan sát được ở đây là LUẬT PHÂN PHỐI EMAIL, không
- * phải kết nối Resend thật (transport thật có spec hành vi riêng ở
- * tầng fail-soft: môi trường test không cấu hình khoá thì bỏ qua có
- * khai báo — ca đó khẳng định ở engagement-jobs.spec.ts):
+ * Spec chạy trên database test thật của worker, dựng hai processor bằng tay với TRANSPORT GIẢ ghi lại mọi bức mail được yêu cầu gửi — hành vi phải quan sát được ở đây là LUẬT PHÂN PHỐI EMAIL, không phải kết nối Resend thật (transport thật có spec hành vi riêng ở tầng fail-soft: môi trường test không cấu hình khoá thì bỏ qua có khai báo — ca đó khẳng định ở engagement-jobs.spec.ts):
  *
  * - Tần suất `immediate` → gửi ngay đúng một mail tới địa chỉ của
- *   người nhận, mang đúng tiêu đề/thân TỐI THIỂU HOÁ mà job mang
- *   theo (P4), dispatch log chốt `sent`.
+ *   người nhận, mang đúng tiêu đề/thân TỐI THIỂU HOÁ mà job mang theo (P4), dispatch log chốt `sent`.
  * - Tần suất `daily` → KHÔNG gửi; dispatch log chốt `digest-queued`.
  * - Người dùng tắt email theo loại (tuỳ chọn v2 = off) SAU khi job
  *   đã xếp hàng → lúc phát vẫn bị chặn `skipped-preference` (P2:
  *   kênh ngoài là quyền cá nhân tuyệt đối).
  * - Lượt quét digest gom các mục chờ của một người thành ĐÚNG MỘT
- *   email tổng hợp (thân chỉ gồm các tiêu đề sự kiện), chốt các mục
- *   thành `digest-sent`; người nhận đã bị đình chỉ thì các mục chốt
- *   `skipped-suspended` và không có mail nào; chạy lại lượt quét
- *   không gửi trùng; transport chưa cấu hình thì các mục GIỮ trạng
- *   thái chờ (không mất, không ghi nhận giả).
+ *   email tổng hợp (thân chỉ gồm các tiêu đề sự kiện), chốt các mục thành `digest-sent`; người nhận đã bị đình chỉ thì các mục chốt `skipped-suspended` và không có mail nào; chạy lại lượt quét không gửi trùng; transport chưa cấu hình thì các mục GIỮ trạng thái chờ (không mất, không ghi nhận giả).
  * - Luật tại lúc tổng hợp (sửa theo phán quyết review vòng 2 của PR
- *   này): digest kiểm LẠI tuỳ chọn và chính sách site tại lúc gửi —
- *   người dùng tắt email theo loại sau khi xếp hàng thì mục chốt
- *   `skipped-preference`; admin tắt loại ở cấp site (NB-7) thì mục
- *   chốt `skipped-admin-disabled`; loại bắt buộc P2 được miễn trừ
- *   NB-7 như mọi đường phát; transport ném lỗi thì mục giữ trạng
- *   thái chờ và lượt quét không sập.
+ *   này): digest kiểm LẠI tuỳ chọn và chính sách site tại lúc gửi — người dùng tắt email theo loại sau khi xếp hàng thì mục chốt `skipped-preference`; admin tắt loại ở cấp site (NB-7) thì mục chốt `skipped-admin-disabled`; loại bắt buộc P2 được miễn trừ NB-7 như mọi đường phát; transport ném lỗi thì mục giữ trạng thái chờ và lượt quét không sập.
  *
- * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness
- * role thường (`test/ordinary-worker-module.ts`): module chạy bằng
- * role NOSUPERUSER/NOBYPASSRLS như production. Hai processor tự
- * dựng bằng tay ở đây nhận đúng kết nối role thường của harness
+ * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness role thường (`test/ordinary-worker-module.ts`): module chạy bằng role NOSUPERUSER/NOBYPASSRLS như production. Hai processor tự dựng bằng tay ở đây nhận đúng kết nối role thường của harness
  * (`harness.ordinaryDb`) — đó là phần xử lý cần kiểm chứng dưới
- * RLS; fixture và đọc kiểm chứng đi qua kết nối quản trị của
- * harness — khẳng định nghiệp vụ của spec không đổi.
+ * RLS; fixture và đọc kiểm chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ của spec không đổi.
  */
 
 /** Transport giả: 'sent' ghi lại mail; 'skipped' giả lập chưa cấu hình Resend; 'throw' giả lập Resend trả lỗi thật. */
@@ -63,8 +44,7 @@ class FakeMail {
 }
 
 /**
- * I18n giả đọc ĐÚNG catalog thật `src/i18n/vi/platform.json`: khoá
- * digest thiếu trong catalog thì spec đỏ tại đây thay vì lặng lẽ qua.
+ * I18n giả đọc ĐÚNG catalog thật `src/i18n/vi/platform.json`: khoá digest thiếu trong catalog thì spec đỏ tại đây thay vì lặng lẽ qua.
  */
 function buildFakeI18n() {
   const catalog = JSON.parse(

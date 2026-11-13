@@ -8,26 +8,14 @@ import type { CentreDb, CentreTx } from '../client';
  *   (`'item_id as itemId'`) dùng chung cho select và returning —
  *   KHÔNG bật CamelCasePlugin (một nguồn sự thật là database thật).
  * - Ghi qua hàm ánh xạ Insert/Update loại `undefined` tường minh
- *   từng trường (thử nghiệm T-4): `undefined` = không ghi/không
- *   đổi, `null` = ghi NULL. Điểm sắc nhất của nhóm nằm ở
- *   `upsertGrade`: tập trường của nhánh xung đột (composite
- *   `(item_id, user_id)`) chỉ gồm các trường phía gọi THẬT SỰ
- *   truyền — trường `undefined` bị loại khỏi cả hai nhánh
- *   insert/update như bản cũ trước chuyển đổi bỏ qua — cộng `updated_at`
- *   luôn làm mới.
+ *   từng trường (thử nghiệm T-4): `undefined` = không ghi/không đổi, `null` = ghi NULL. Điểm sắc nhất của nhóm nằm ở `upsertGrade`: tập trường của nhánh xung đột (composite `(item_id, user_id)`) chỉ gồm các trường phía gọi THẬT SỰ truyền — trường `undefined` bị loại khỏi cả hai nhánh insert/update như bản cũ trước chuyển đổi bỏ qua — cộng `updated_at` luôn làm mới.
  * - Khoá chính `uuidv7()` do database sinh (phụ lục U của kế
  *   hoạch): insert bỏ qua `id` và lấy dòng qua `returning`.
  * - Điểm mở giao dịch của repository là `transaction(fn)`; các
- *   phương thức nhận handle tuỳ chọn (`GradesDb` = handle thường
- *   hoặc handle giao dịch) để phía gọi lồng thao tác vào giao
- *   dịch của mình.
+ *   phương thức nhận handle tuỳ chọn (`GradesDb` = handle thường hoặc handle giao dịch) để phía gọi lồng thao tác vào giao dịch của mình.
  *
- * Ba luồng ghi điểm của GradesService (`setGrade`,
- * `recordActivityGrade`, `updateGrade`) giữ nguyên tử trọn gói —
- * dòng điểm + dòng lịch sử + dòng outbox `grade_updated` trong
- * MỘT giao dịch — và chạy trên chính bề mặt này:
- * `transaction` + `upsertGrade`/`updateGrade`/`insertHistory`
- * kèm `enqueueKysely` của OutboxService, để điểm, lịch sử và sự kiện commit/rollback cùng nhau.
+ * Ba luồng ghi điểm của GradesService (`setGrade`, `recordActivityGrade`, `updateGrade`) giữ nguyên tử trọn gói — dòng điểm + dòng lịch sử + dòng outbox `grade_updated` trong MỘT giao dịch — và chạy trên chính bề mặt này:
+ * `transaction` + `upsertGrade`/`updateGrade`/`insertHistory` kèm `enqueueKysely` của OutboxService, để điểm, lịch sử và sự kiện commit/rollback cùng nhau.
  */
 
 /** Dòng `grade_items`. */
@@ -190,8 +178,7 @@ export interface NewGradePublication {
 }
 
 // ---------------------------------------------------------------------------
-// Danh sách cột đọc: tên cột thật kèm bí danh camelCase, dùng chung cho
-// select và returning của từng bảng (khuôn pilot — không CamelCasePlugin).
+// Danh sách cột đọc: tên cột thật kèm bí danh camelCase, dùng chung cho select và returning của từng bảng (khuôn pilot — không CamelCasePlugin).
 // ---------------------------------------------------------------------------
 
 const ITEM_COLUMNS = [
@@ -305,12 +292,7 @@ function gradeInsertValues(v: NewGrade) {
 }
 
 /**
- * Tập trường của nhánh xung đột của `upsertGrade`: đúng mười một
- * trường nghiệp vụ của bản cũ trước chuyển đổi — trường nào phía gọi không
- * truyền (`undefined`) thì KHÔNG xuất hiện trong SET (giữ nguyên
- * giá trị đang có của dòng), `null` thì ghi NULL tường minh;
- * `updated_at` luôn làm mới (rủi ro R-G4-2 của hồ sơ chuẩn bị,
- * chốt bằng thử nghiệm T-4).
+ * Tập trường của nhánh xung đột của `upsertGrade`: đúng mười một trường nghiệp vụ của bản cũ trước chuyển đổi — trường nào phía gọi không truyền (`undefined`) thì KHÔNG xuất hiện trong SET (giữ nguyên giá trị đang có của dòng), `null` thì ghi NULL tường minh; `updated_at` luôn làm mới (rủi ro R-G4-2 của hồ sơ chuẩn bị, chốt bằng thử nghiệm T-4).
  */
 function gradeConflictSet(v: NewGrade) {
   return {
@@ -386,8 +368,7 @@ function publicationInsertValues(v: NewGradePublication) {
 }
 
 /**
- * Kho dữ liệu điểm theo bài: grade item (một item = một bài/hoạt
- * động), điểm theo user, lịch sử điểm và vết công bố cấp bài.
+ * Kho dữ liệu điểm theo bài: grade item (một item = một bài/hoạt động), điểm theo user, lịch sử điểm và vết công bố cấp bài.
  */
 export class GradesRepository {
   constructor(private readonly handle: CentreDb) {}
@@ -460,8 +441,7 @@ export class GradesRepository {
   }
 
   /**
-   * Tìm grade item theo idNumber trong một khoá học (idNumber là định
-   * danh duy nhất của item trong khoá khi không null).
+   * Tìm grade item theo idNumber trong một khoá học (idNumber là định danh duy nhất của item trong khoá khi không null).
    */
   async findItemByIdnumber(courseId: string, idNumber: string, tx?: GradesDb): Promise<ItemRow | undefined> {
     const db = tx ?? this.handle;

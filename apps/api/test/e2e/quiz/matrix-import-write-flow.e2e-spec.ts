@@ -11,33 +11,21 @@ import { createCategory, createCourse } from '../../support/course-enrolment-hel
 import { courseContextId } from '../../support/engagement-helpers';
 
 /**
- * Luồng nghiệp vụ của lát I-2 (issue #233) — GHI NGUYÊN TỬ khi nhập
- * ma trận, nối tiếp lát I-1 (mẫu + xem trước):
+ * Luồng nghiệp vụ của lát I-2 (issue #233) — GHI NGUYÊN TỬ khi nhập ma trận, nối tiếp lát I-1 (mẫu + xem trước):
  *
  * - Giáo viên tải lại CHÍNH file đã xem trước → POST
- *   /exam-matrices/import ghi ma trận mới + toàn bộ ô trong một lần,
- *   đọc lại được bằng các endpoint hiện hữu (chi tiết, availability,
- *   bản đặc tả) với ô/điểm/tổng khớp đúng kết quả xem trước.
+ *   /exam-matrices/import ghi ma trận mới + toàn bộ ô trong một lần, đọc lại được bằng các endpoint hiện hữu (chi tiết, availability, bản đặc tả) với ô/điểm/tổng khớp đúng kết quả xem trước.
  * - Gửi lại cùng một nội dung (double submit/retry) KHÔNG nhân đôi
  *   ma trận: trả chính ma trận đã ghi.
  * - File bị sửa tay sau xem trước mà vi phạm luật hợp lệ → ghi bị từ
- *   chối 422 kèm lỗi cứng ĐỊNH VỊ (extension member
- *   `matrixImportIssues`) và DB không còn dấu vết nào của lần ghi đó.
+ *   chối 422 kèm lỗi cứng ĐỊNH VỊ (extension member `matrixImportIssues`) và DB không còn dấu vết nào của lần ghi đó.
  * - Người không đủ tư cách dùng luồng nhập (không thuộc nhóm staff,
- *   không phụ trách được bank ma trận cá nhân) → bị chặn 403 tại cổng
- *   bank của luồng, không ghi.
+ *   không phụ trách được bank ma trận cá nhân) → bị chặn 403 tại cổng bank của luồng, không ghi.
  * - Giáo viên theo đúng mô hình gán vai của dữ liệu mẫu
  *   (editingteacher tại context khoá, KHÔNG vai nào tại context hệ
- *   thống) nhập trọn luồng được và tạo tay gắn bank được — hồi quy
- *   điểm chặn D-3 của chính issue này: trước đây đường nhập và
- *   đường tạo tay đòi thêm quyền tại context của môn (môn GDPT neo
- *   context hệ thống) nên giáo viên thật bị chặn dù thao tác ghi
- *   vốn đã chốt quyền tại bank đích.
+ *   thống) nhập trọn luồng được và tạo tay gắn bank được — hồi quy điểm chặn D-3 của chính issue này: trước đây đường nhập và đường tạo tay đòi thêm quyền tại context của môn (môn GDPT neo context hệ thống) nên giáo viên thật bị chặn dù thao tác ghi vốn đã chốt quyền tại bank đích.
  *
- * Dữ kiện tự dựng bằng API như spec của I-1: môn + chương trình khối
- * 10 + chủ đề có hai ĐVK, mỗi ĐVK có YCCĐ, 3 câu ready ở outcome đầu
- * của ĐVK 1 (availability của ô Biết/trắc nghiệm ở ĐVK 1 thiếu 1 câu —
- * số đếm khả dụng phải khớp trước và sau khi ghi).
+ * Dữ kiện tự dựng bằng API như spec của I-1: môn + chương trình khối 10 + chủ đề có hai ĐVK, mỗi ĐVK có YCCĐ, 3 câu ready ở outcome đầu của ĐVK 1 (availability của ô Biết/trắc nghiệm ở ĐVK 1 thiếu 1 câu — số đếm khả dụng phải khớp trước và sau khi ghi).
  */
 
 const http = (app: INestApplication) => request(app.getHttpServer());

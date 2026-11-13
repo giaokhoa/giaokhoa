@@ -14,10 +14,7 @@ import { EnrolService } from './enrol.service';
 /**
  * Facade của EnrolModule: EnrolService. Phụ thuộc Courses, Groups, Access
  * (report §3.12). Completion đăng ký đầu dò dữ liệu liên quan của nó vào
- * EnrolService; Enrol đăng ký bộ kiểm tra isEnrolled của nó vào CoursesService —
- * cả hai đều qua đăng ký, không qua import vòng. MessagingModule được import
- * trực tiếp cho tin nhắn chào mừng: Messaging chỉ phụ thuộc Access/Users/
- * Events, nên không có chu trình module (cùng mẫu với Badges/Reports).
+ * EnrolService; Enrol đăng ký bộ kiểm tra isEnrolled của nó vào CoursesService — cả hai đều qua đăng ký, không qua import vòng. MessagingModule được import trực tiếp cho tin nhắn chào mừng: Messaging chỉ phụ thuộc Access/Users/ Events, nên không có chu trình module (cùng mẫu với Badges/Reports).
  */
 @Module({
   imports: [AccessModule, CoursesModule, GroupsModule, EventsModule, MessagingModule, TenantsModule, SpaceRoutingModule],

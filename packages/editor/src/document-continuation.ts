@@ -1,9 +1,7 @@
 import type { RichTextBlockNode, RichTextDocument } from '@giaokhoa/contracts';
 
 /**
- * Các node block nguyên tử mà sau chúng người soạn không gõ tiếp được
- * nếu không có một paragraph tiếp nối: công thức tách dòng và ảnh.
- * Khớp tập block mà phím Enter của `extensions.ts` đã xử lý
+ * Các node block nguyên tử mà sau chúng người soạn không gõ tiếp được nếu không có một paragraph tiếp nối: công thức tách dòng và ảnh. Khớp tập block mà phím Enter của `extensions.ts` đã xử lý
  * (`blockMath`/`image`); bảng thuộc lát E5 nên chưa nằm trong tập này.
  */
 const CONTINUATION_BLOCK_TYPES: ReadonlySet<string> = new Set(['blockMath', 'image']);

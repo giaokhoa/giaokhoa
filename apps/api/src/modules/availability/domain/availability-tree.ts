@@ -1,31 +1,24 @@
 /**
  * AvailabilityTree — miền thuần (không Nest, không DB), report §2#10.
  *
- * Hình dạng JSON của Moodle: một nút cây là `{ op, c: [...] }` với
- * op ∈ '&' (AND), '|' (OR), '!&' (NOT-AND), '!|' (NOT-OR); nút ROOT còn có thể
- * mang `show` (boolean) và các nút không phải root/root mang `showc`
+ * Hình dạng JSON của Moodle: một nút cây là `{ op, c: [...] }` với op ∈ '&' (AND), '|' (OR), '!&' (NOT-AND), '!|' (NOT-OR); nút ROOT còn có thể mang `show` (boolean) và các nút không phải root/root mang `showc`
  * (boolean theo từng con). Lá là các đối tượng điều kiện `{ type: string, ... }`.
  *
- * Ngữ nghĩa (dịch từ availability/tests/tree_test.php
- * ::test_check_available):
+ * Ngữ nghĩa (dịch từ availability/tests/tree_test.php ::test_check_available):
  *  - Cây AND/OR rỗng thì khả dụng; cây NOT rỗng thì KHÔNG khả dụng
  *    (NOT của phần tử trung hoà sẽ đảo nó — Moodle xử lý `!&`/`!|` không có
  *    con bằng cùng quy tắc gộp-rồi-phủ-định dùng ở đây).
  *  - `!&` = NOT(AND(children)) và `!|` = NOT(OR(children)) — De Morgan vì vậy
  *    là cấu trúc, không phải phép viết lại: ta gộp rồi phủ định.
  *  - `showc[i] === false` cho một con không đạt sẽ ẩn MỌI thông tin
- *    hạn chế của toàn cây ("nếu bạn không có điều kiện đó thì
- *    bạn không được thấy gì cả") — mô hình hoá ở đây thành
- *    `informationHidden = true`, và chính item bị ẩn.
+ *    hạn chế của toàn cây ("nếu bạn không có điều kiện đó thì bạn không được thấy gì cả") — mô hình hoá ở đây thành `informationHidden = true`, và chính item bị ẩn.
  *  - Root `show === false` cũng ẩn thông tin tương tự khi không khả dụng.
  *  - Tính hiển thị của một item không khả dụng: hiện (làm mờ, kèm thông tin)
- *    chỉ khi thông tin không bị ẩn; ngược lại ẩn hẳn.
- *    Dù trường hợp nào item cũng KHÔNG truy cập được — show/showc không bao giờ cấp quyền truy cập.
+ *    chỉ khi thông tin không bị ẩn; ngược lại ẩn hẳn. Dù trường hợp nào item cũng KHÔNG truy cập được — show/showc không bao giờ cấp quyền truy cập.
  */
 
 /**
- * Toán tử của một nút cây availability: & (AND), | (OR), !& (NAND — phủ định toàn nút), !| (NOR).
- * Khớp định dạng JSON cây điều kiện của Moodle (availability/classes).
+ * Toán tử của một nút cây availability: & (AND), | (OR), !& (NAND — phủ định toàn nút), !| (NOR). Khớp định dạng JSON cây điều kiện của Moodle (availability/classes).
  */
 export type AvailabilityOp = '&' | '|' | '!&' | '!|';
 
@@ -81,8 +74,7 @@ export interface TreeEvaluation {
 const OPS: AvailabilityOp[] = ['&', '|', '!&', '!|'];
 
 /**
- * Phân tích JSON cây availability từ chuỗi/object thô; trả null khi rỗng hoặc không hợp lệ để tầng trên coi như không có điều kiện.
- * Đối chiếu Moodle: availability/classes/tree.php và condition classes tương ứng.
+ * Phân tích JSON cây availability từ chuỗi/object thô; trả null khi rỗng hoặc không hợp lệ để tầng trên coi như không có điều kiện. Đối chiếu Moodle: availability/classes/tree.php và condition classes tương ứng.
  */
 export function parseAvailabilityTree(raw: unknown): AvailabilityNode | null {
   if (raw === null || raw === undefined) return null;

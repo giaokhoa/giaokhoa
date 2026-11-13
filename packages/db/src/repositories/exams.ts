@@ -1,43 +1,21 @@
 /**
  * Repository của cụm NGÂN HÀNG ĐỀ trên Kysely.
  *
- * Vai trò: mọi truy cập tới danh tính đề (exams), version nội dung
- * bất biến (exam_versions), slots ghim version câu (exam_slots),
- * đề xuất đóng góp (exam_contributions + exam_contribution_reviews)
- * và bộ hồ sơ duyệt đề (exam_dossiers + exam_dossier_reviews) tập
- * trung ở đây, cộng các đường đọc tham chiếu phục vụ các truy vấn
- * trên: lần ghim của đề (exam_pins — bề mặt sở hữu ở repository
- * quiz cùng package), thông tin câu của slots (question,
- * question_bank_entries, question_versions), tên/số version ma trận
+ * Vai trò: mọi truy cập tới danh tính đề (exams), version nội dung bất biến (exam_versions), slots ghim version câu (exam_slots), đề xuất đóng góp (exam_contributions + exam_contribution_reviews) và bộ hồ sơ duyệt đề (exam_dossiers + exam_dossier_reviews) tập trung ở đây, cộng các đường đọc tham chiếu phục vụ các truy vấn trên: lần ghim của đề (exam_pins — bề mặt sở hữu ở repository quiz cùng package), thông tin câu của slots (question, question_bank_entries, question_versions), tên/số version ma trận
  * (exam_matrices, exam_matrix_versions — bề mặt sở hữu ở repository
- * quiz) và kiểm tra giáo viên dạy khối (role_assignments, role,
- * context, course). Repository không chứa luật nghiệp vụ — cổng
- * quyền và vòng đời nằm ở tầng service phía ứng dụng; repository
- * chỉ nhận handle (instance gốc hoặc transaction đang mở) để phía
- * gọi ghép nhiều thao tác vào một transaction khi cần.
+ * quiz) và kiểm tra giáo viên dạy khối (role_assignments, role, context, course). Repository không chứa luật nghiệp vụ — cổng quyền và vòng đời nằm ở tầng service phía ứng dụng; repository chỉ nhận handle (instance gốc hoặc transaction đang mở) để phía gọi ghép nhiều thao tác vào một transaction khi cần.
  *
  * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong repository, truy vấn viết trên interface schema sinh
- *   bằng codegen: tên bảng/cột giữ nguyên snake_case của database,
- *   kiểu dòng nội bộ qua `Selectable`/`Insertable`/`Updateable`.
+ *   bằng codegen: tên bảng/cột giữ nguyên snake_case của database, kiểu dòng nội bộ qua `Selectable`/`Insertable`/`Updateable`.
  * - Bên ngoài, repository trả NHẬN các hình dạng dòng camelCase như
- *   phía tiêu thụ đang dùng: cột được chọn bằng danh sách tường
- *   minh có bí danh (`bank_id as bankId`), giá trị ghi được ánh xạ
- *   từng trường từ camelCase sang snake_case ở các hàm
- *   `*InsertValues`/`*UpdateSet` trong file này. Phía tiêu thụ vì
- *   vậy chỉ đổi điểm import khi kho này chuyển đổi.
+ *   phía tiêu thụ đang dùng: cột được chọn bằng danh sách tường minh có bí danh (`bank_id as bankId`), giá trị ghi được ánh xạ từng trường từ camelCase sang snake_case ở các hàm `*InsertValues`/`*UpdateSet` trong file này. Phía tiêu thụ vì vậy chỉ đổi điểm import khi kho này chuyển đổi.
  * - Giá trị `undefined` bị LOẠI khỏi values/set trước khi gọi
- *   builder (thử nghiệm T-4 của pilot): trường vắng mặt phải để
- *   default của database quyết định; ngược lại `undefined` lọt vào
- *   mệnh đề WHERE sẽ bị driver gắn NULL và lặng lẽ không khớp dòng
- *   nào — vì vậy mọi giá trị where trong repository đều là tham số
- *   bắt buộc, không bao giờ `undefined`.
+ *   builder (thử nghiệm T-4 của pilot): trường vắng mặt phải để default của database quyết định; ngược lại `undefined` lọt vào mệnh đề WHERE sẽ bị driver gắn NULL và lặng lẽ không khớp dòng nào — vì vậy mọi giá trị where trong repository đều là tham số bắt buộc, không bao giờ `undefined`.
  * - Mọi giá trị jsonb khi ghi đều qua `jsonbValue` (serialize tường
- *   minh + `::jsonb`): driver `pg` hiểu nhầm một MẢNG ở cấp cao
- *   nhất là mảng PostgreSQL thay vì JSON (đo tại pilot).
+ *   minh + `::jsonb`): driver `pg` hiểu nhầm một MẢNG ở cấp cao nhất là mảng PostgreSQL thay vì JSON (đo tại pilot).
  * - Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh
- *   ứng dụng, không tự mở pool, không đọc biến môi trường: handle
- *   do tầng ứng dụng dựng bằng factory của package rồi truyền vào.
+ *   ứng dụng, không tự mở pool, không đọc biến môi trường: handle do tầng ứng dụng dựng bằng factory của package rồi truyền vào.
  */
 import { sql, type Insertable, type InsertObject, type RawBuilder, type Updateable, type UpdateObject } from 'kysely';
 import { extractRichTextPlainText, type RichTextDocument } from '@giaokhoa/contracts';

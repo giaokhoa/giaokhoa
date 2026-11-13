@@ -8,10 +8,7 @@ import { apiJson } from '#lib/api';
 import { queryKeys } from '#lib/query-keys';
 
 /**
- * Thẻ khoá cá nhân (DASH1, issue #121): màu + biệt danh người dùng tự đặt
- * cho khoá của mình. Pref chỉ thuộc về chủ nhân — tên gốc của khoá không
- * bao giờ bị ghi đè; nơi hiển thị dùng biệt danh thay tên gốc (giữ tên gốc
- * ở title) và chấm/viền màu theo token đã chọn.
+ * Thẻ khoá cá nhân (DASH1, issue #121): màu + biệt danh người dùng tự đặt cho khoá của mình. Pref chỉ thuộc về chủ nhân — tên gốc của khoá không bao giờ bị ghi đè; nơi hiển thị dùng biệt danh thay tên gốc (giữ tên gốc ở title) và chấm/viền màu theo token đã chọn.
  */
 export const COURSE_CARD_COLOR_HEX: Record<CourseCardColor, string> = {
   red: '#dc2626',

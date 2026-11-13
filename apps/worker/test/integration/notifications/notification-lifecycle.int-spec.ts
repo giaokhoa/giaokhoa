@@ -21,23 +21,9 @@ import {
 const DAY_MS = 24 * 3600_000;
 
 /**
- * NB-6 (issue #174, G9 + G10): vòng đời dữ liệu thông báo + hai đường
- * phát nền (calendar reminder, report schedule) quy về hàm luật phân
- * phối dùng chung của worker. Oracle: mô hình đích D.6 (đã đọc 90 ngày /
- * chưa đọc 180 ngày / dispatch log 90 ngày) + luật `notify()` phía API
- * sau NB-2 (v2 → suy dữ liệu cũ loggedin → loggedoff → mặc định bật;
- * loại bắt buộc P2 ép bật; người bị đình chỉ không nhận gì).
+ * NB-6 (issue #174, G9 + G10): vòng đời dữ liệu thông báo + hai đường phát nền (calendar reminder, report schedule) quy về hàm luật phân phối dùng chung của worker. Oracle: mô hình đích D.6 (đã đọc 90 ngày / chưa đọc 180 ngày / dispatch log 90 ngày) + luật `notify()` phía API sau NB-2 (v2 → suy dữ liệu cũ loggedin → loggedoff → mặc định bật; loại bắt buộc P2 ép bật; người bị đình chỉ không nhận gì).
  *
- * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness
- * role thường (`test/ordinary-worker-module.ts`): module chạy bằng
- * role NOSUPERUSER/NOBYPASSRLS như production, fixture và đọc kiểm
- * chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ
- * của spec không đổi. Hệ quả của việc chạy bằng role thường: ca nào
- * gọi trực tiếp service phân phối (không qua processor) phải tự đặt
- * ngữ cảnh platform bằng `tenantAls.run({ platform: true }, ...)`
- * như mọi processor vẫn làm trước khi gọi service trong production —
- * ngoài ngữ cảnh, RLS fail-closed chặn cả dòng thông báo không gắn
- * tenant, vốn chỉ được phép ở ngữ cảnh platform.
+ * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness role thường (`test/ordinary-worker-module.ts`): module chạy bằng role NOSUPERUSER/NOBYPASSRLS như production, fixture và đọc kiểm chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ của spec không đổi. Hệ quả của việc chạy bằng role thường: ca nào gọi trực tiếp service phân phối (không qua processor) phải tự đặt ngữ cảnh platform bằng `tenantAls.run({ platform: true }, ...)` như mọi processor vẫn làm trước khi gọi service trong production — ngoài ngữ cảnh, RLS fail-closed chặn cả dòng thông báo không gắn tenant, vốn chỉ được phép ở ngữ cảnh platform.
  */
 describe('Worker NB-6: lưu giữ thông báo + luật gửi chung', () => {
   let context: INestApplicationContext;

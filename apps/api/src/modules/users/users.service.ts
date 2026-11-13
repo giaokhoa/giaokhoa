@@ -30,10 +30,7 @@ export function normalizeIdentity(value: string): string { return value.trim().t
 /** Facade của UsersModule. Xác thực ≠ ghi danh ≠ gán role: service này chỉ sở hữu dữ liệu danh tính/hồ sơ. */
 @Injectable()
 /**
- * Quản lý tài khoản người dùng: tạo, hồ sơ, đình chỉ, xoá mềm và tuỳ chọn cá nhân.
- * Đối chiếu Moodle: lib/moodlelib.php (user_create_user, user_update_user) và user/lib.php.
- * Bất biến: user bị xoá là xoá mềm (deleted=1) để giữ toàn vẹn tham chiếu lịch sử;
- * username/email là duy nhất trong số user chưa xoá.
+ * Quản lý tài khoản người dùng: tạo, hồ sơ, đình chỉ, xoá mềm và tuỳ chọn cá nhân. Đối chiếu Moodle: lib/moodlelib.php (user_create_user, user_update_user) và user/lib.php. Bất biến: user bị xoá là xoá mềm (deleted=1) để giữ toàn vẹn tham chiếu lịch sử; username/email là duy nhất trong số user chưa xoá.
  */
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
@@ -47,15 +44,10 @@ export class UsersService {
     private readonly customFields: CustomFieldsService,
     private readonly outbox: OutboxService,
     private readonly planLimits: PlanLimitsService,
-    // forwardRef: một cạnh của vòng provider với cầu nối/BetterAuth/
-    // lockout (xem ghi chú tại CredentialBridgeService).
+    // forwardRef: một cạnh của vòng provider với cầu nối/BetterAuth/ lockout (xem ghi chú tại CredentialBridgeService).
     @Inject(forwardRef(() => CredentialBridgeService))
     private readonly credentialBridge: CredentialBridgeService,
-    // forwardRef: một cạnh nữa của vòng module UsersModule ↔
-    // AuthModule (AuthModule cần UsersService; service này cần
-    // AuthRepository để thu hồi family refresh mỗi lần đặt mật
-    // khẩu qua updateUser). AuthRepository chỉ phụ thuộc tầng dữ
-    // liệu nên chuỗi provider kết thúc ở đó.
+    // forwardRef: một cạnh nữa của vòng module UsersModule ↔ AuthModule (AuthModule cần UsersService; service này cần AuthRepository để thu hồi family refresh mỗi lần đặt mật khẩu qua updateUser). AuthRepository chỉ phụ thuộc tầng dữ liệu nên chuỗi provider kết thúc ở đó.
     @Inject(forwardRef(() => AuthRepository))
     private readonly authRepository: AuthRepository,
     @Inject(forwardRef(() => SessionService))
@@ -63,12 +55,7 @@ export class UsersService {
   ) {}
 
   /**
-   * Đồng bộ dòng credential của Better Auth sau một lần ghi mật khẩu
-   * phía hệ cũ (GĐ2 chặng 2.6): cầu nối tự no-op khi Better Auth tắt
-   * nên đường cũ không đổi hành vi. Lỗi đồng bộ KHÔNG được làm hỏng
-   * thao tác nghiệp vụ vừa ghi thành công (hệ cũ vẫn là nguồn sự thật
-   * trong thời gian cùng tồn tại) — nhưng phải kêu to trong log thay
-   * vì âm thầm lệch credential.
+   * Đồng bộ dòng credential của Better Auth sau một lần ghi mật khẩu phía hệ cũ (GĐ2 chặng 2.6): cầu nối tự no-op khi Better Auth tắt nên đường cũ không đổi hành vi. Lỗi đồng bộ KHÔNG được làm hỏng thao tác nghiệp vụ vừa ghi thành công (hệ cũ vẫn là nguồn sự thật trong thời gian cùng tồn tại) — nhưng phải kêu to trong log thay vì âm thầm lệch credential.
    */
   private async syncCredential(userId: string): Promise<void> {
     try {

@@ -26,10 +26,7 @@ export class QuestionsController {
   }
   @Get('categories')
   /**
-   * GET /questions/categories — liệt kê category theo context. Đọc ngân
-   * hàng có cổng `question:useall` theo context (issue #55): không có
-   * quyền thì category ngoài tầm không xuất hiện / 404 khi chỉ định
-   * context.
+   * GET /questions/categories — liệt kê category theo context. Đọc ngân hàng có cổng `question:useall` theo context (issue #55): không có quyền thì category ngoài tầm không xuất hiện / 404 khi chỉ định context.
    */
   async listCategories(@Query('contextId') contextId: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
     return this.questions.listCategoriesForViewer(actor.id, contextId || undefined);
@@ -51,8 +48,7 @@ export class QuestionsController {
   }
   @Get()
   /**
-   * GET /questions?subjectId=&outcomeId=&cognitiveLevel=&qtype=&status= — lọc ngân hàng
-   * theo gắn kết chương trình (issue #20 Chặng 2, mục A.6).
+   * GET /questions?subjectId=&outcomeId=&cognitiveLevel=&qtype=&status= — lọc ngân hàng theo gắn kết chương trình (issue #20 Chặng 2, mục A.6).
    */
   async listByCurriculumFilter(
     @CurrentUser() actor: AuthenticatedUser,
@@ -72,9 +68,7 @@ export class QuestionsController {
   }
   @Get('discovery')
   /**
-   * GET /questions/discovery?bankId=&subjectId=&nodeId=&outcomeId=&cognitiveLevel=&qtype=&keyword=&authorId= —
-   * trang khám phá ngân hàng câu hỏi chung (QB-4): lọc trên các bank actor vào được.
-   * Khai báo TRƯỚC route `:id` để 'discovery' không bị nuốt thành id.
+   * GET /questions/discovery?bankId=&subjectId=&nodeId=&outcomeId=&cognitiveLevel=&qtype=&keyword=&authorId= — trang khám phá ngân hàng câu hỏi chung (QB-4): lọc trên các bank actor vào được. Khai báo TRƯỚC route `:id` để 'discovery' không bị nuốt thành id.
    */
   async discover(
     @CurrentUser() actor: AuthenticatedUser,
@@ -151,9 +145,7 @@ export class QuestionsController {
   }
   @Get(':id')
   /**
-   * GET /questions/:id — chi tiết câu hỏi kèm đáp án (cổng đọc
-   * `question:useall` tại context của category chứa câu, issue #55;
-   * QuestionUsagesController: GET /question-usages/:id — chi tiết usage).
+   * GET /questions/:id — chi tiết câu hỏi kèm đáp án (cổng đọc `question:useall` tại context của category chứa câu, issue #55; QuestionUsagesController: GET /question-usages/:id — chi tiết usage).
    */
   async get(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.questions.getQuestionForViewer(actor.id, id);
@@ -174,10 +166,7 @@ export class QuestionsController {
   }
   @Get(':id/attribution')
   /**
-   * GET /questions/:id/attribution — dòng ghi công: câu gốc, version gốc, tác giả gốc, bank nguồn, copy_count/use_count (QB-2).
-   * Cùng cổng đọc với chi tiết câu hỏi (issue #55): học viên không có
-   * `question:useall` tại context của category chứa câu thì nhận 404,
-   * không đọc được truy vết (điểm chặn 2 phán quyết PR #83).
+   * GET /questions/:id/attribution — dòng ghi công: câu gốc, version gốc, tác giả gốc, bank nguồn, copy_count/use_count (QB-2). Cùng cổng đọc với chi tiết câu hỏi (issue #55): học viên không có `question:useall` tại context của category chứa câu thì nhận 404, không đọc được truy vết (điểm chặn 2 phán quyết PR #83).
    */
   async attribution(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.banks.getAttributionForViewer(actor.id, id);
@@ -185,8 +174,7 @@ export class QuestionsController {
   @Get(':id/containing-exams')
   /**
    * GET /questions/:id/containing-exams — truy nguồn chiều ngược:
-   * các version đề đang chứa câu hỏi này. Cùng cổng đọc với
-   * attribution (không qua cổng thì 404 đồng nhất).
+   * các version đề đang chứa câu hỏi này. Cùng cổng đọc với attribution (không qua cổng thì 404 đồng nhất).
    */
   async containingExams(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.banks.listContainingExams(actor.id, id);
@@ -207,10 +195,7 @@ export class QuestionsController {
   }
   @Post(':id/status')
   /**
-   * POST /questions/:id/status — chuyển trạng thái phát hành draft ↔
-   * ready (màn soạn/duyệt câu hỏi trên web, issue #248; cùng nghiệp vụ
-   * mà đường MCP dùng để duyệt draft, gác bằng cổng govern như
-   * withdraw/restore). Không tạo phiên bản mới.
+   * POST /questions/:id/status — chuyển trạng thái phát hành draft ↔ ready (màn soạn/duyệt câu hỏi trên web, issue #248; cùng nghiệp vụ mà đường MCP dùng để duyệt draft, gác bằng cổng govern như withdraw/restore). Không tạo phiên bản mới.
    */
   async setStatus(@Param('id', { schema: uuidIdSchema }) id: string, @Body({ schema: setQuestionStatusSchema }) dto: SetQuestionStatusDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.banks.setQuestionStatusForActor(actor.id, id, dto.status);
@@ -224,8 +209,7 @@ export class QuestionsController {
   }
   @Get(':id/versions')
   /**
-   * GET /questions/:id/versions — lịch sử version (cổng đọc như chi
-   * tiết câu hỏi, issue #55).
+   * GET /questions/:id/versions — lịch sử version (cổng đọc như chi tiết câu hỏi, issue #55).
    */
   async versions(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.questions.listVersionsForViewer(actor.id, id);
@@ -235,8 +219,7 @@ export class QuestionsController {
 @ApiTags('stimuli')
 @Controller({ path: 'stimuli', version: '1' })
 /**
- * API ngữ liệu dùng chung (stimulus): tạo/đọc/sửa/xoá theo category.
- * Stimulus đã có version câu hỏi tham chiếu thì bất biến (stimulus_in_use).
+ * API ngữ liệu dùng chung (stimulus): tạo/đọc/sửa/xoá theo category. Stimulus đã có version câu hỏi tham chiếu thì bất biến (stimulus_in_use).
  */
 export class StimuliController {
   constructor(private readonly questions: QuestionsService) {}
@@ -250,16 +233,14 @@ export class StimuliController {
   }
   @Get()
   /**
-   * GET /stimuli?categoryId= — ngữ liệu của một category (cổng đọc theo
-   * context của category, issue #55).
+   * GET /stimuli?categoryId= — ngữ liệu của một category (cổng đọc theo context của category, issue #55).
    */
   async list(@Query('categoryId', { schema: uuidIdSchema }) categoryId: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.questions.listStimuliForViewer(actor.id, categoryId);
   }
   @Get(':id')
   /**
-   * GET /stimuli/:id — chi tiết ngữ liệu (cổng đọc theo context của
-   * category chứa ngữ liệu, issue #55).
+   * GET /stimuli/:id — chi tiết ngữ liệu (cổng đọc theo context của category chứa ngữ liệu, issue #55).
    */
   async get(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.questions.getStimulusForViewer(actor.id, id);
@@ -291,8 +272,7 @@ export class QuestionUsagesController {
 
   @Post()
   /**
-   * POST /question-usages — tạo usage thô trên câu ngân hàng: phải có
-   * `question:useall` tại context của category của mọi câu trong slot
+   * POST /question-usages — tạo usage thô trên câu ngân hàng: phải có `question:useall` tại context của category của mọi câu trong slot
    * (issue #55 — usage thô là đường đọc nội dung câu kèm đáp án).
    */
   async create(@Body({ schema: createQuestionUsageSchema }) dto: CreateUsageDto, @CurrentUser() actor: AuthenticatedUser) {
@@ -301,16 +281,14 @@ export class QuestionUsagesController {
   }
   @Get(':id')
   /**
-   * GET /question-usages/:id — chi tiết usage: chỉ chủ sở hữu hoặc
-   * người có `question:useall` cấp hệ thống (issue #55).
+   * GET /question-usages/:id — chi tiết usage: chỉ chủ sở hữu hoặc người có `question:useall` cấp hệ thống (issue #55).
    */
   async get(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.questions.getUsageForViewer(actor.id, id);
   }
   @Post(':id/start')
   /**
-   * POST /question-usages/:id/start — bắt đầu usage (chỉ chủ sở hữu;
-   * usage gắn lượt quiz đang làm bị khoá kênh thô — issue #60).
+   * POST /question-usages/:id/start — bắt đầu usage (chỉ chủ sở hữu; usage gắn lượt quiz đang làm bị khoá kênh thô — issue #60).
    */
   async start(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     await this.questions.assertUsageManipulableViaHttp(actor.id, id);
@@ -318,8 +296,7 @@ export class QuestionUsagesController {
   }
   @Post(':id/finish')
   /**
-   * POST /question-usages/:id/finish — kết thúc usage (chỉ chủ sở hữu;
-   * usage gắn lượt quiz đang làm bị khoá kênh thô — issue #60).
+   * POST /question-usages/:id/finish — kết thúc usage (chỉ chủ sở hữu; usage gắn lượt quiz đang làm bị khoá kênh thô — issue #60).
    */
   async finish(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     await this.questions.assertUsageManipulableViaHttp(actor.id, id);

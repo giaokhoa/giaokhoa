@@ -43,16 +43,12 @@ export const CHOICE_LIST_NODE_TYPE = 'choiceList';
 export const CHOICE_NODE_TYPE = 'choice';
 
 /**
- * Số lựa chọn của một câu trắc nghiệm soạn mới: khoá đúng 4 như
- * giaokhoa và như luật hợp đồng phía API (điểm quyết D-3 ngày
- * 26/10/2026 — đề thi chuẩn Việt Nam có 4 lựa chọn).
+ * Số lựa chọn của một câu trắc nghiệm soạn mới: khoá đúng 4 như giaokhoa và như luật hợp đồng phía API (điểm quyết D-3 ngày 26/10/2026 — đề thi chuẩn Việt Nam có 4 lựa chọn).
  */
 export const MULTIPLE_CHOICE_COUNT = 4;
 
 /**
- * Một lựa chọn trong tài liệu thống nhất: node `choice` với `attrs.id`
- * là định danh ổn định trong vòng soạn và `content` là các block rich
- * text của nội dung lựa chọn (cùng lát block với hợp đồng).
+ * Một lựa chọn trong tài liệu thống nhất: node `choice` với `attrs.id` là định danh ổn định trong vòng soạn và `content` là các block rich text của nội dung lựa chọn (cùng lát block với hợp đồng).
  */
 export interface MultipleChoiceChoiceJson {
   type: typeof CHOICE_NODE_TYPE;

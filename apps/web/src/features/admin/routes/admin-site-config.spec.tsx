@@ -9,9 +9,7 @@ import { AdminSiteConfigPage } from './admin-site-config';
 /**
  * Spec trang cấu hình site: render setting từ GET /api/v1/site-config
  * (shape `SiteSetting` của contracts site-config ở branch backend), lưu
- * boolean phải PUT `{ value: true }` tới đúng URL
- * /api/v1/site-config/:component/:name, và Đặt lại phải gửi DELETE tới
- * cùng URL đó.
+ * boolean phải PUT `{ value: true }` tới đúng URL /api/v1/site-config/:component/:name, và Đặt lại phải gửi DELETE tới cùng URL đó.
  */
 const SETTINGS: SiteSetting[] = [
   {
@@ -97,8 +95,7 @@ describe('Trang cấu hình site của admin', () => {
 
     const checkbox = await screen.findByRole('checkbox', { name: 'Giá trị của core/messagingallusers' });
     await userEvent.click(checkbox);
-    // Nút Lưu của chính dòng messagingallusers (checkbox radix cũng là
-    // button nên chọn theo đúng nhãn "Lưu" trong cùng <li>).
+    // Nút Lưu của chính dòng messagingallusers (checkbox radix cũng là button nên chọn theo đúng nhãn "Lưu" trong cùng <li>).
     const row = checkbox.closest('li');
     expect(row).not.toBeNull();
     const saveByText = [...row!.querySelectorAll('button')].find((b) => b.textContent === 'Lưu');

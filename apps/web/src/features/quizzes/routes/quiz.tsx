@@ -21,10 +21,7 @@ import { queryClient } from '#lib/query-client';
 
 /**
  * Trang LẦN GHIM đề (sau gộp Đề #226, route /courses/:id/exams/:pinId):
- * thông tin lần tổ chức cho mọi người xem được; học sinh bắt đầu/tiếp
- * tục lượt làm và xem điểm của mình; giáo viên có quyền manage thì sửa
- * CẤU HÌNH TỔ CHỨC của lần ghim tại trang — nội dung đề (slots) thuộc
- * về ĐỀ ở ngân hàng, tại đây chỉ xem bản đã ghim + nâng version đề.
+ * thông tin lần tổ chức cho mọi người xem được; học sinh bắt đầu/tiếp tục lượt làm và xem điểm của mình; giáo viên có quyền manage thì sửa CẤU HÌNH TỔ CHỨC của lần ghim tại trang — nội dung đề (slots) thuộc về ĐỀ ở ngân hàng, tại đây chỉ xem bản đã ghim + nâng version đề.
  */
 export function QuizPage() {
   const { t } = useTranslation('app');
@@ -37,9 +34,7 @@ export function QuizPage() {
   const data = pinQuery.data?.view ?? null;
   const slotNames = pinQuery.data?.slotNames ?? {};
   const { refetch } = pinQuery;
-  // Lỗi tải suy ngay khi render từ trạng thái query — không chép
-  // qua effect vào state như bản cũ; nút thử lại chỉ refetch,
-  // refetch thành công thì màn hình lỗi tự rời.
+  // Lỗi tải suy ngay khi render từ trạng thái query — không chép qua effect vào state như bản cũ; nút thử lại chỉ refetch, refetch thành công thì màn hình lỗi tự rời.
   const error = pinQuery.isError ? t('quizLoadFailed') : null;
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -56,13 +51,11 @@ export function QuizPage() {
   const [shuffleAnswers, setShuffleAnswers] = useState(false);
   const [versionMode, setVersionMode] = useState<'pinned' | 'float_latest_ready'>('pinned');
 
-  // Cập nhật version của pin (issue #254): xem trước diff rồi mới áp —
-  // preview là dữ kiện của API, áp dùng đúng exam version đã xem trước.
+  // Cập nhật version của pin (issue #254): xem trước diff rồi mới áp — preview là dữ kiện của API, áp dùng đúng exam version đã xem trước.
   const [updatePreview, setUpdatePreview] = useState<PinVersionUpdatePreview | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
 
-  // Chấm lại theo đáp án (issue #254): chọn câu + version đúng →
-  // dry-run xem điểm đổi → áp → nhật ký các lần đã áp.
+  // Chấm lại theo đáp án (issue #254): chọn câu + version đúng → dry-run xem điểm đổi → áp → nhật ký các lần đã áp.
   const [regradeQuestionId, setRegradeQuestionId] = useState('');
   const [regradeVersions, setRegradeVersions] = useState<{ id: string; version: number; status: string }[]>([]);
   const [regradeVersionId, setRegradeVersionId] = useState('');
@@ -83,9 +76,7 @@ export function QuizPage() {
   // Thông tin ĐỀ nguồn của lần ghim (tên + version hiện hành ở bank) — chỉ tải khi có quyền manage.
   const examInfo = useExamSource(data?.quiz.examId, !!data?.permissions.manage).data ?? null;
 
-  // Ghi đè (chỉ người có quiz:manageoverrides dùng): danh sách + dữ liệu chọn đích + form tạo/sửa dùng chung.
-  // Ghi đè + danh sách thành viên đích: chỉ tải khi có quyền quản ghi
-  // đè. Nhóm của khoá dùng chung khoá factory courseGroups (F-03).
+  // Ghi đè (chỉ người có quiz:manageoverrides dùng): danh sách + dữ liệu chọn đích + form tạo/sửa dùng chung. Ghi đè + danh sách thành viên đích: chỉ tải khi có quyền quản ghi đè. Nhóm của khoá dùng chung khoá factory courseGroups (F-03).
   const overridesQuery = useExamPinOverrides(quizId ?? '', !!data?.permissions.manageOverrides);
   const overrides = overridesQuery.data ?? [];
   const overridesLoaded = overridesQuery.isSuccess || overridesQuery.isError;
@@ -97,8 +88,7 @@ export function QuizPage() {
       enabled: !!courseId && !!(data?.permissions.manage || data?.permissions.manageOverrides),
     }).data ?? [];
 
-  // Khởi tạo form cài đặt từ dữ liệu lần ghim mỗi khi dữ liệu (lại)
-  // tải về — đúng phần khởi tạo của reload() thủ công trước đây.
+  // Khởi tạo form cài đặt từ dữ liệu lần ghim mỗi khi dữ liệu (lại) tải về — đúng phần khởi tạo của reload() thủ công trước đây.
   const [previousQuizData, setPreviousQuizData] = useState<typeof data | undefined>(undefined);
   if (previousQuizData !== data) {
     setPreviousQuizData(data);
@@ -116,17 +106,13 @@ export function QuizPage() {
     }
   }
 
-  // Nạp lại view lần ghim sau các thao tác ghi không qua đột biến
-  // tự làm mới (chấm lại áp thật): refetch của query; lỗi refetch vẫn
-  // ném ra để các nhánh bắt lỗi cũ chạy nguyên trạng.
+  // Nạp lại view lần ghim sau các thao tác ghi không qua đột biến tự làm mới (chấm lại áp thật): refetch của query; lỗi refetch vẫn ném ra để các nhánh bắt lỗi cũ chạy nguyên trạng.
   const reload = useCallback(async () => {
     const result = await refetch();
     if (result.error) throw result.error;
   }, [refetch]);
 
-  // Các đột biến của trang lần ghim (F-01 của rà soát #133): cài
-  // đặt, cập nhật version, chấm lại, bắt đầu lượt làm. (Đột biến
-  // ghi đè nằm ở OverridesPanel cùng trạng thái form của khối đó.)
+  // Các đột biến của trang lần ghim (F-01 của rà soát #133): cài đặt, cập nhật version, chấm lại, bắt đầu lượt làm. (Đột biến ghi đè nằm ở OverridesPanel cùng trạng thái form của khối đó.)
   const settingsMutation = useUpdateExamPinSettings(quizId ?? '');
   const versionUpdateMutation = useApplyExamPinVersionUpdate(quizId ?? '');
   const regradeMutation = useRunExamPinRegrade(quizId ?? '');
@@ -134,9 +120,7 @@ export function QuizPage() {
 
   async function saveSettings(event: FormEvent) {
     event.preventDefault();
-    // Lỗi chế độ version phải hiện đúng lý do nghiệp vụ (chỉ luyện tập
-    // mới được trôi) thay vì thông báo lỗi chung — API là nơi gác, ở
-    // đây chỉ dịch mã lỗi của nó.
+    // Lỗi chế độ version phải hiện đúng lý do nghiệp vụ (chỉ luyện tập mới được trôi) thay vì thông báo lỗi chung — API là nơi gác, ở đây chỉ dịch mã lỗi của nó.
     setActionError(null);
     setBusy(true);
     try {

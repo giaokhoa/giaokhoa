@@ -1,7 +1,6 @@
 # Nhãn triage
 
-Dùng nguyên tên nhãn mặc định của skill `triage`.
-Tên nhãn là định danh kỹ thuật tiếng Anh; mô tả và trao đổi dùng tiếng Việt.
+Dùng nguyên tên nhãn mặc định của skill `triage`. Tên nhãn là định danh kỹ thuật tiếng Anh; mô tả và trao đổi dùng tiếng Việt.
 
 ## Nhãn loại
 
@@ -23,11 +22,7 @@ Tên nhãn là định danh kỹ thuật tiếng Anh; mô tả và trao đổi d
 ## Cách áp dụng
 
 - Issue mới nhận một nhãn loại và trạng thái `needs-triage`.
-- Mỗi issue đã phân loại có đúng một nhãn loại và một nhãn trạng thái
-  trong các bảng trên. Khi đổi trạng thái, gỡ nhãn trạng thái cũ.
-- Từ `needs-triage`, chuyển sang `needs-info`, `ready-for-agent`,
-  `ready-for-human` hoặc `wontfix` sau khi người duy trì xác nhận.
-  Khi người báo trả lời, đưa `needs-info` về `needs-triage` để đánh giá lại.
+- Mỗi issue đã phân loại có đúng một nhãn loại và một nhãn trạng thái trong các bảng trên. Khi đổi trạng thái, gỡ nhãn trạng thái cũ.
+- Từ `needs-triage`, chuyển sang `needs-info`, `ready-for-agent`, `ready-for-human` hoặc `wontfix` sau khi người duy trì xác nhận. Khi người báo trả lời, đưa `needs-info` về `needs-triage` để đánh giá lại.
 - `wontfix` phải kèm lý do và được đóng theo mục “Đóng issue” trong `AGENTS.md`.
-- Nhãn triage biểu thị kết quả phân loại và khả năng giao việc.
-  Theo dõi tiến độ thi công, review và merge trong issue hoặc PR.
+- Nhãn triage biểu thị kết quả phân loại và khả năng giao việc. Theo dõi tiến độ thi công, review và merge trong issue hoặc PR.

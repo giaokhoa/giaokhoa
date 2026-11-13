@@ -14,12 +14,7 @@ import { apiJson } from '#lib/api';
 
 /**
  * Tầng gọi API thuần của bề mặt quản trị vai trò thuộc feature admin:
- * chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query.
- * Tầng `queries/` của feature bọc các hàm này thành đột biến. Các
- * thao tác đọc (danh sách vai kèm tổng hợp, danh mục capability, cây
- * context, ma trận đã lưu) nằm ở tầng dùng chung `src/lib/access.ts`
- * vì nhiều feature cùng dùng; riêng bốn thao tác ghi của đợt 2 đặt ở
- * đây để hộp thoại ma trận không gọi thẳng client dùng chung.
+ * chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành đột biến. Các thao tác đọc (danh sách vai kèm tổng hợp, danh mục capability, cây context, ma trận đã lưu) nằm ở tầng dùng chung `src/lib/access.ts` vì nhiều feature cùng dùng; riêng bốn thao tác ghi của đợt 2 đặt ở đây để hộp thoại ma trận không gọi thẳng client dùng chung.
  */
 
 /**

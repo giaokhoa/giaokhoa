@@ -14,10 +14,7 @@ import {
 /**
  * API hoàn thành: tiến độ của tôi, tiến độ theo học viên, tiêu chí và tính lại.
  *
- * Lớp này khai tiền tố con đầy đủ của chính nó thay vì tiền tố trơ
- * `courses`: tiền tố trơ `courses` chỉ còn module courses sở hữu, mỗi
- * tiền tố đầy đủ khác chỉ có đúng một lớp khai báo. Bảng route giữ
- * nguyên từng ký tự so với trước khi đổi hình thức khai báo.
+ * Lớp này khai tiền tố con đầy đủ của chính nó thay vì tiền tố trơ `courses`: tiền tố trơ `courses` chỉ còn module courses sở hữu, mỗi tiền tố đầy đủ khác chỉ có đúng một lớp khai báo. Bảng route giữ nguyên từng ký tự so với trước khi đổi hình thức khai báo.
  */
 export class CompletionController {
   constructor(
@@ -81,8 +78,7 @@ export class CompletionController {
 
   @Post('self')
   /**
-   * POST /courses/:courseId/completion/self — học viên tự đánh dấu/bỏ đánh
-   * dấu hoàn thành khoá học (tiêu chí self của Moodle).
+   * POST /courses/:courseId/completion/self — học viên tự đánh dấu/bỏ đánh dấu hoàn thành khoá học (tiêu chí self của Moodle).
    */
   async markSelf(@Param('courseId', { schema: uuidIdSchema }) courseId: string, @Body({ schema: markCourseSelfCompletionSchema }) dto: MarkSelfDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.completion.markSelfCompletion(actor.id, courseId, dto.complete);
@@ -90,9 +86,7 @@ export class CompletionController {
 
   @Post('criteria/:criteriaId/mark')
   /**
-   * POST /courses/:courseId/completion/criteria/:criteriaId/mark — người
-   * giữ vai trò của tiêu chí role đánh dấu/bỏ đánh dấu hoàn thành cho một
-   * học viên (manual completion by others của Moodle).
+   * POST /courses/:courseId/completion/criteria/:criteriaId/mark — người giữ vai trò của tiêu chí role đánh dấu/bỏ đánh dấu hoàn thành cho một học viên (manual completion by others của Moodle).
    */
   async markCriterion(@Param('courseId', { schema: uuidIdSchema }) courseId: string, @Param('criteriaId', { schema: uuidIdSchema }) criteriaId: string, @Body({ schema: markCourseCriteriaCompletionSchema }) dto: MarkCriteriaDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.completion.markCriterionByRole(actor.id, courseId, criteriaId, dto.userId, dto.complete);
@@ -104,10 +98,7 @@ export class CompletionController {
 /**
  * API đánh dấu hoàn thành thủ công theo từng hoạt động của khoá học.
  *
- * Lớp này tách khỏi `CompletionController` vì route của nó không chung
- * tiền tố con với họ route `courses/:courseId/completion`: nó lồng dưới
- * một hoạt động (`modules/:cmId`) của khoá học. Bảng route giữ nguyên
- * từng ký tự so với trước khi đổi hình thức khai báo.
+ * Lớp này tách khỏi `CompletionController` vì route của nó không chung tiền tố con với họ route `courses/:courseId/completion`: nó lồng dưới một hoạt động (`modules/:cmId`) của khoá học. Bảng route giữ nguyên từng ký tự so với trước khi đổi hình thức khai báo.
  */
 export class CourseModuleCompletionController {
   constructor(private readonly completion: CompletionService) {}

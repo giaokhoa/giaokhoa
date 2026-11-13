@@ -22,25 +22,14 @@ import { DEFAULT_ROLES } from '../../../src/modules/access/domain/capabilities';
 /**
  * Ca tích hợp của BƯỚC CÀI BỘ VAI MẶC ĐỊNH CHO TRUNG TÂM KHO RIÊNG
  * (cơ chế chuyển tiếp của chương trình tenant, issue #587): cấp
- * phát một trung tâm mới trên cụm Postgres thật thì kho đích phải
- * có đủ bộ vai mặc định hiện hành kèm đúng ma trận năng lực tại
- * context hệ thống như kho chung được gieo; lệnh cài riêng cho
- * trung tâm đã cấp phát phải lấp được một kho đang trống vai và
- * chạy lại phải là no-op tuyệt đối (không tạo trùng, không ghi đè
- * thay đổi cục bộ của trung tâm).
+ * phát một trung tâm mới trên cụm Postgres thật thì kho đích phải có đủ bộ vai mặc định hiện hành kèm đúng ma trận năng lực tại context hệ thống như kho chung được gieo; lệnh cài riêng cho trung tâm đã cấp phát phải lấp được một kho đang trống vai và chạy lại phải là no-op tuyệt đối (không tạo trùng, không ghi đè thay đổi cục bộ của trung tâm).
  *
  * Phía "kho chung được gieo" được dựng bằng ĐÚNG closure sản xuất:
- * một database trắng chạy migration nghiệp vụ hiện hành rồi gọi
- * `RolesService.seedDefaults` — cùng hàm mà `SeedService` của ứng
- * dụng gọi khi khởi động — trên handle của chính database đó. Mọi
- * đối chiếu là trực tiếp hai phía (cùng câu đọc trên kho tham
- * chiếu và kho trung tâm), không chép kỳ vọng cứng vào ca test.
+ * một database trắng chạy migration nghiệp vụ hiện hành rồi gọi `RolesService.seedDefaults` — cùng hàm mà `SeedService` của ứng dụng gọi khi khởi động — trên handle của chính database đó. Mọi đối chiếu là trực tiếp hai phía (cùng câu đọc trên kho tham chiếu và kho trung tâm), không chép kỳ vọng cứng vào ca test.
  *
- * Mọi tên đều mang hậu tố ngẫu nhiên theo lượt chạy: chạy lại spec
- * trên cùng cụm không va chạm, và không tái dùng tên database cũ
+ * Mọi tên đều mang hậu tố ngẫu nhiên theo lượt chạy: chạy lại spec trên cùng cụm không va chạm, và không tái dùng tên database cũ
  * (tránh khoá cache siteadmins cũ trong Redis theo tên database).
- * Cụm test lấy từ `DATABASE_URL` đã được Vitest phân giải (biến
- * `GIAOKHOA_TEST_DATABASE_URL` ghi đè khi chạy ngoài CI).
+ * Cụm test lấy từ `DATABASE_URL` đã được Vitest phân giải (biến `GIAOKHOA_TEST_DATABASE_URL` ghi đè khi chạy ngoài CI).
  */
 const RUN_SUFFIX = Math.random().toString(36).slice(2, 8);
 const CP_DATABASE = `giaokhoa_test_cp_td7_${RUN_SUFFIX}`;
@@ -165,21 +154,13 @@ async function countRoleBaselineRows(connectionString: string): Promise<{ roles:
 
 /**
  * Gieo kho tham chiếu bằng đúng closure sản xuất của kho chung:
- * dựng bộ service của module access trên handle của kho rồi gọi
- * `RolesService.seedDefaults` — cùng hàm `SeedService` gọi lúc
- * khởi động ứng dụng.
+ * dựng bộ service của module access trên handle của kho rồi gọi `RolesService.seedDefaults` — cùng hàm `SeedService` gọi lúc khởi động ứng dụng.
  */
 async function seedSharedStoreDefaults(connectionString: string): Promise<void> {
   await withClient(connectionString, async (client) => {
     await client.query(`SELECT set_config('app.platform', 'on', false)`);
-    // AccessRepository nay nhận handle Kysely (issue #651): pool
-    // riêng trần 1 kết nối trên cùng connection string, GUC
-    // platform ở mức phiên như kết nối pg bên cạnh. Cùng
-    // handle dựng `OutboxService` (đã chuyển sang Kysely ở D1,
-    // issue #653) và hai facade access qua stub `routedKysely`:
-    // `seedDefaults` không phát sự kiện qua outbox và không
-    // truy vấn qua hai lõi access nên các handle đó chỉ để
-    // dựng service đúng hợp đồng.
+    // AccessRepository nay nhận handle Kysely (issue #651): pool riêng trần 1 kết nối trên cùng connection string, GUC platform ở mức phiên như kết nối pg bên cạnh. Cùng handle dựng `OutboxService` (đã chuyển sang Kysely ở D1, issue #653) và hai facade access qua stub `routedKysely`:
+    // `seedDefaults` không phát sự kiện qua outbox và không truy vấn qua hai lõi access nên các handle đó chỉ để dựng service đúng hợp đồng.
     const accessPool = new Pool({ connectionString, max: 1 });
     const accessDb = createCentreKysely(accessPool);
     const accessRepository = new AccessRepository(accessDb);

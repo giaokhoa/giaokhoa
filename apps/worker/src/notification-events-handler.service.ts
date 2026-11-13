@@ -5,9 +5,7 @@ import { NotificationDeliveryService } from './notification-delivery.service';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
 
 /**
- * Mười loại sự kiện outbox mà consumer thông báo sự kiện xử lý.
- * Bảng định tuyến của relay ánh xạ cả mười loại này vào hàng đợi
- * `notification-events`; processor chỉ nhận diện đúng tập này.
+ * Mười loại sự kiện outbox mà consumer thông báo sự kiện xử lý. Bảng định tuyến của relay ánh xạ cả mười loại này vào hàng đợi `notification-events`; processor chỉ nhận diện đúng tập này.
  */
 export const NOTIFICATION_EVENT_TYPES = [
   'grade_updated',

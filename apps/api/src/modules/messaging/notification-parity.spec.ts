@@ -7,53 +7,21 @@ import { MESSAGE_PROVIDERS, providerByName } from './notification-providers';
  * Parity luật thông báo API ↔ worker — nửa ĐỐI CHIẾU TRƯỜNG LUẬT
  * (issue #293).
  *
- * Bối cảnh: registry `MESSAGE_PROVIDERS` trong file
- * `notification-providers.ts` cùng thư mục này là nguồn sự thật DUY
- * NHẤT của luật phân phối thông báo phía API. Phía worker là một
- * project TypeScript riêng (app riêng trong monorepo), giữ một BẢN
- * CHIẾU viết tay tối thiểu của registry trong hằng số
- * `WORKER_PROVIDERS` (file `apps/worker/src/notification-delivery.service.ts`):
- * mỗi provider mà worker là nơi phát được chiếu đúng 3 trường luật —
- * `name`, `component`, `mandatoryInApp`. Trước spec này không có
- * kiểm tra tự động nào đối chiếu hai phía: registry đổi một trường
- * luật mà bản chiếu không cập nhật theo thì hai phía phân kỳ âm thầm.
+ * Bối cảnh: registry `MESSAGE_PROVIDERS` trong file `notification-providers.ts` cùng thư mục này là nguồn sự thật DUY NHẤT của luật phân phối thông báo phía API. Phía worker là một project TypeScript riêng (app riêng trong monorepo), giữ một BẢN CHIẾU viết tay tối thiểu của registry trong hằng số `WORKER_PROVIDERS` (file `apps/worker/src/notification-delivery.service.ts`):
+ * mỗi provider mà worker là nơi phát được chiếu đúng 3 trường luật — `name`, `component`, `mandatoryInApp`. Trước spec này không có kiểm tra tự động nào đối chiếu hai phía: registry đổi một trường luật mà bản chiếu không cập nhật theo thì hai phía phân kỳ âm thầm.
  *
- * Vì sao spec này đọc bản chiếu phía worker DẠNG VĂN BẢN NGUỒN (fs)
- * thay vì import: hai app là hai project tsc riêng — import chéo app
- * làm file nguồn của app này lọt vào program của app kia và vỡ
- * typecheck (lỗi rootDir; đã vấp thật ở lượt CI đầu của issue này).
- * Đọc văn bản nguồn giữ nguyên tác dụng gác: spec này import registry
- * THẬT của chính app mình, trích bản chiếu thật từ source worker tại
- * thời điểm chạy, và khẳng định từng trường. Tuyệt đối không chép
- * cứng một bản sao thứ hai của registry vào test — chép snapshot thì
- * spec thành tự đối chiếu chính nó. Nếu định dạng khai báo
- * `WORKER_PROVIDERS` thay đổi (xuống dòng khác, thêm trường), phép
- * trích ở đây không khớp nữa và spec đỏ — đó là chủ ý: đổi hình dạng
- * bản chiếu thì phải cập nhật spec parity cùng lượt.
+ * Vì sao spec này đọc bản chiếu phía worker DẠNG VĂN BẢN NGUỒN (fs) thay vì import: hai app là hai project tsc riêng — import chéo app làm file nguồn của app này lọt vào program của app kia và vỡ typecheck (lỗi rootDir; đã vấp thật ở lượt CI đầu của issue này). Đọc văn bản nguồn giữ nguyên tác dụng gác: spec này import registry THẬT của chính app mình, trích bản chiếu thật từ source worker tại thời điểm chạy, và khẳng định từng trường. Tuyệt đối không chép cứng một bản sao thứ hai của registry vào test — chép snapshot thì spec thành tự đối chiếu chính nó. Nếu định dạng khai báo `WORKER_PROVIDERS` thay đổi (xuống dòng khác, thêm trường), phép trích ở đây không khớp nữa và spec đỏ — đó là chủ ý: đổi hình dạng bản chiếu thì phải cập nhật spec parity cùng lượt.
  *
- * Phạm vi parity — các trường THUỘC đối chiếu: `name`, `component`,
- * `mandatoryInApp` của mọi provider trong bản chiếu; cộng bề mặt
- * phát: mọi tên provider được phát qua `deliverInApp(` trong các
- * file nguồn production của apps/worker/src phải có mặt trong bản
- * chiếu (file test `*.spec.ts` đặt cạnh nguồn không phải đường
- * phát production — xem ghi chú tại vòng quét bên dưới).
+ * Phạm vi parity — các trường THUỘC đối chiếu: `name`, `component`, `mandatoryInApp` của mọi provider trong bản chiếu; cộng bề mặt phát: mọi tên provider được phát qua `deliverInApp(` trong các file nguồn production của apps/worker/src phải có mặt trong bản chiếu (file test `*.spec.ts` đặt cạnh nguồn không phải đường phát production — xem ghi chú tại vòng quét bên dưới).
  *
  * NGOÀI parity (kèm lý do, đã ghi tường minh trong issue #293):
  * - `audience`: chỉ gác ở tầng tuỳ chọn phía API (lọc danh sách loại
- *   trong trang cài đặt theo vai + context thật, chặn PUT ngoài phía
- *   người nhận bằng lỗi 403 mã `messaging.preference_audience`);
- *   luật PHÁT của worker không đọc trường này — nơi phát phía worker
- *   đã biết đích danh người nhận. Bản chiếu vì vậy không mang
- *   `audience` (ca hình dạng bên dưới gác điều này: mỗi mục của bản
- *   chiếu phải có đúng 3 trường thuộc parity).
+ *   trong trang cài đặt theo vai + context thật, chặn PUT ngoài phía người nhận bằng lỗi 403 mã `messaging.preference_audience`); luật PHÁT của worker không đọc trường này — nơi phát phía worker đã biết đích danh người nhận. Bản chiếu vì vậy không mang `audience` (ca hình dạng bên dưới gác điều này: mỗi mục của bản chiếu phải có đúng 3 trường thuộc parity).
  * - `channels`: worker chỉ phát kênh trong-app; kênh ngoài là cổng
- *   xếp job phía API. `group`/`label`/`description`: thuần trình bày
- *   phía API/web.
+ *   xếp job phía API. `group`/`label`/`description`: thuần trình bày phía API/web.
  *
  * Nửa HÀNH VI của parity (luật cứng hai phía cho cùng kết quả:
- * đình chỉ / chính sách admin NB-7 / loại bắt buộc P2) nằm ở phía
- * worker — `apps/worker/src/notification-parity.spec.ts` — vì nó
- * phải chạy `NotificationDeliveryService` thật của worker.
+ * đình chỉ / chính sách admin NB-7 / loại bắt buộc P2) nằm ở phía worker — `apps/worker/src/notification-parity.spec.ts` — vì nó phải chạy `NotificationDeliveryService` thật của worker.
  */
 
 const WORKER_SRC_ROOT = join(__dirname, '../../../../worker/src');

@@ -2,13 +2,8 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import type { QuestionCategory, QuestionView, StimulusView } from '@giaokhoa/contracts';
 import { composeMultipleChoiceDocument, splitMultipleChoiceDocument } from '@giaokhoa/editor';
-// CSS của editor và KaTeX nạp tại route module này (issue #503): trang
-// soạn câu hỏi là bề mặt duy nhất dựng các editor của @giaokhoa/editor (kèm
-// panel công thức) và xem trước bằng RichTextView có công thức KaTeX —
-// nạp tại đây để CSS chỉ đi theo hai route tạo/sửa câu hỏi thay vì mọi
-// route như khi nạp ở root. Vỏ trình bày của @giaokhoa/editor (lát E1 #248):
-// khung vùng soạn, trạng thái pressed của toolbar icon, panel công thức
-// dạng overlay; editor không tự nạp CSS nên app nạp tại bề mặt dùng nó.
+// CSS của editor và KaTeX nạp tại route module này (issue #503): trang soạn câu hỏi là bề mặt duy nhất dựng các editor của @giaokhoa/editor (kèm panel công thức) và xem trước bằng RichTextView có công thức KaTeX — nạp tại đây để CSS chỉ đi theo hai route tạo/sửa câu hỏi thay vì mọi route như khi nạp ở root. Vỏ trình bày của @giaokhoa/editor (lát E1 #248):
+// khung vùng soạn, trạng thái pressed của toolbar icon, panel công thức dạng overlay; editor không tự nạp CSS nên app nạp tại bề mặt dùng nó.
 import '@giaokhoa/editor/editor.css';
 import 'katex/dist/katex.min.css';
 import { Button } from '@giaokhoa/ui/components/button';
@@ -50,41 +45,22 @@ export { editorFormContent, editorFormFromView, emptyEditorForm, type QuestionEd
  * Màn soạn câu hỏi (issue #248) — flow tổng thể:
  *
  * 1. Nạp: danh mục (kèm context cho đường tải ảnh) + ngữ liệu của danh
- *    mục; khi sửa, nạp view câu hỏi rồi `editorFormFromView` lắp thành
- *    trạng thái form (options thiếu thì tìm thêm ở endpoint versions).
+ *    mục; khi sửa, nạp view câu hỏi rồi `editorFormFromView` lắp thành trạng thái form (options thiếu thì tìm thêm ở endpoint versions).
  * 2. Soạn: form riêng cho từng loại trong 4 loại — multichoice,
- *    truefalse (TF-A: MỘT câu chùm gồm thân chung + 4 mệnh đề soạn
- *    trong một tài liệu thống nhất với đáp án Đ/S theo từng mệnh đề),
- *    shortanswer (kèm cờ đáp án số, mặc định TẮT) và essay. Câu hỏi
- *    KHÔNG có trường tên (quyết 11:28 ngày 26/10/2026): nhãn hiển thị
- *    ở mọi bề mặt là trích đoạn nội dung câu hỏi.
+ *    truefalse (TF-A: MỘT câu chùm gồm thân chung + 4 mệnh đề soạn trong một tài liệu thống nhất với đáp án Đ/S theo từng mệnh đề), shortanswer (kèm cờ đáp án số, mặc định TẮT) và essay. Câu hỏi KHÔNG có trường tên (quyết 11:28 ngày 26/10/2026): nhãn hiển thị ở mọi bề mặt là trích đoạn nội dung câu hỏi.
  * 3. Lưu: `editorFormContent` đóng gói payload theo hợp đồng mới (port
- *    giaokhoa, quyết 12:04 + 12:12 ngày 26/10/2026) rồi tạo câu/phiên
- *    bản mới, sau đó chốt trạng thái đích bằng
- *    `POST /questions/:id/status` (chuyển trạng thái không tạo phiên
- *    bản mới): "Lưu nháp" = `draft`, "Lưu & sẵn sàng" = `ready` (câu
- *    mới tạo qua API mặc định ở `ready`).
+ *    giaokhoa, quyết 12:04 + 12:12 ngày 26/10/2026) rồi tạo câu/phiên bản mới, sau đó chốt trạng thái đích bằng `POST /questions/:id/status` (chuyển trạng thái không tạo phiên bản mới): "Lưu nháp" = `draft`, "Lưu & sẵn sàng" = `ready` (câu mới tạo qua API mặc định ở `ready`).
  *
- * Mô hình soạn theo loại (chi tiết ở các hàm compose/split của
- * `@giaokhoa/editor` và ở `editorFormContent`):
+ * Mô hình soạn theo loại (chi tiết ở các hàm compose/split của `@giaokhoa/editor` và ở `editorFormContent`):
  * - Multichoice soạn trên MỘT tài liệu thống nhất (thân câu + 4 lựa
- *   chọn trong cùng tài liệu, radio đáp án đúng là metadata ngoài tài
- *   liệu); khi lưu tài liệu được TÁCH thành thân câu / các dòng
- *   answers / phản hồi theo lựa chọn.
+ *   chọn trong cùng tài liệu, radio đáp án đúng là metadata ngoài tài liệu); khi lưu tài liệu được TÁCH thành thân câu / các dòng answers / phản hồi theo lựa chọn.
  * - Mọi loại câu đều có trường HƯỚNG DẪN (guidance) rich text riêng và
- *   essay có thêm LỜI GIẢI MẪU (solution): cả hai KHÔNG nằm trong nội
- *   dung câu hỏi gửi đi — payload gắn chúng ở cấp `guidance` /
- *   `solution` để tầng nghiệp vụ ghi vào bản ghi phía đáp án
+ *   essay có thêm LỜI GIẢI MẪU (solution): cả hai KHÔNG nằm trong nội dung câu hỏi gửi đi — payload gắn chúng ở cấp `guidance` / `solution` để tầng nghiệp vụ ghi vào bản ghi phía đáp án
  *   (`question_answer_keys`) theo quyết 12:12.
  * - Đáp án của shortanswer là MẪU khớp đáp án của học sinh nên giữ ô
  *   nhập thuần; mọi mẫu liệt kê đều được chấp nhận (không tỉ trọng).
  *
- * Mọi trường nội dung trình bày đều là tài liệu rich text qua trình
- * soạn của @giaokhoa/editor — công thức toán và danh sách đến từ chính
- * editor đó; ảnh chèn qua bộ chọn ảnh của lát files (định danh bền
- * `/api/v1/files/<id>/content` nằm trong `attrs.src` của node image).
- * Mô hình form GIỮ NGUYÊN tài liệu Tiptap khi mở câu có sẵn nên câu
- * draft do MCP tạo mở ra sửa được nguyên trạng.
+ * Mọi trường nội dung trình bày đều là tài liệu rich text qua trình soạn của @giaokhoa/editor — công thức toán và danh sách đến từ chính editor đó; ảnh chèn qua bộ chọn ảnh của lát files (định danh bền `/api/v1/files/<id>/content` nằm trong `attrs.src` của node image). Mô hình form GIỮ NGUYÊN tài liệu Tiptap khi mở câu có sẵn nên câu draft do MCP tạo mở ra sửa được nguyên trạng.
  */
 
 // ---------------------------------------------------------------------------
@@ -135,10 +111,7 @@ export function QuestionEditorPage({ mode }: { mode: 'new' | 'edit' }) {
   /** Context của bank đích — bộ chọn ảnh tải lên đúng context này. */
   const contextId = categories.find((c) => c.id === categoryId)?.contextId;
 
-  // Các lượt đọc của màn soạn đi qua fetchQuery với tuỳ chọn của
-  // lib/questions-data và các module miền liên quan (F-01 của rà
-  // soát #133): vẫn qua bộ nhớ đệm + dedupe của TanStack, nhịp
-  // trạng thái tại chỗ của màn giữ nguyên như bản fetch thủ công.
+  // Các lượt đọc của màn soạn đi qua fetchQuery với tuỳ chọn của lib/questions-data và các module miền liên quan (F-01 của rà soát #133): vẫn qua bộ nhớ đệm + dedupe của TanStack, nhịp trạng thái tại chỗ của màn giữ nguyên như bản fetch thủ công.
   const loadStimuli = useCallback(
     async (catId: string) => {
       const rows = await queryClient.fetchQuery(categoryStimuliQueryOptions(catId));
@@ -153,9 +126,7 @@ export function QuestionEditorPage({ mode }: { mode: 'new' | 'edit' }) {
       try {
         const view = await queryClient.fetchQuery(questionCurriculumLinksQueryOptions(qid));
         setLinks(view);
-        // Nhãn của từng YCCĐ độc lập nhau: nạp SONG SONG (bản cũ
-        // lặp await từng YCCĐ một); YCCĐ nào lỗi thì thiếu nhãn,
-        // dòng gắn vẫn hiện bằng id của nó như trước.
+        // Nhãn của từng YCCĐ độc lập nhau: nạp SONG SONG (bản cũ lặp await từng YCCĐ một); YCCĐ nào lỗi thì thiếu nhãn, dòng gắn vẫn hiện bằng id của nó như trước.
         const labelEntries = await Promise.all(
           view.outcomes.map(async (o) => {
             try {
@@ -222,13 +193,7 @@ export function QuestionEditorPage({ mode }: { mode: 'new' | 'edit' }) {
     [loadCurriculumLinks, loadLinkSubjects, queryClient],
   );
 
-  // Gác khởi tạo một lần của màn soạn: mảng phụ thuộc của hiệu
-  // ứng khởi tạo dưới đây liệt kê đủ các giá trị nó đọc (tham số
-  // route, các hàm nạp đã bọc useCallback, queryClient, `t`),
-  // nhưng thân hiệu ứng — nhất là startEdit nạp lại form — chỉ
-  // được chạy đúng lần mở màn đầu tiên; các lần chạy thêm do
-  // phụ thuộc đổi (đổi tham số route, đổi ngôn ngữ) thoát ngay
-  // nhờ ref này, đúng như khi mảng phụ thuộc còn để trống.
+  // Gác khởi tạo một lần của màn soạn: mảng phụ thuộc của hiệu ứng khởi tạo dưới đây liệt kê đủ các giá trị nó đọc (tham số route, các hàm nạp đã bọc useCallback, queryClient, `t`), nhưng thân hiệu ứng — nhất là startEdit nạp lại form — chỉ được chạy đúng lần mở màn đầu tiên; các lần chạy thêm do phụ thuộc đổi (đổi tham số route, đổi ngôn ngữ) thoát ngay nhờ ref này, đúng như khi mảng phụ thuộc còn để trống.
   const initStartedRef = useRef(false);
 
   /** Khởi tạo màn: nạp danh mục (cần contextId cho bộ chọn ảnh), chốt danh mục đích, nạp ngữ liệu, và (khi sửa) tìm câu hỏi. */
@@ -248,8 +213,7 @@ export function QuestionEditorPage({ mode }: { mode: 'new' | 'edit' }) {
           catId = String(cats[0]!.id);
           setCategoryId(catId);
         }
-        // Ngữ liệu và danh sách câu của danh mục đều chỉ phụ thuộc
-        // catId nên nạp SONG SONG (bản cũ await nối tiếp hai lượt).
+        // Ngữ liệu và danh sách câu của danh mục đều chỉ phụ thuộc catId nên nạp SONG SONG (bản cũ await nối tiếp hai lượt).
         const [, rows] = await Promise.all([
           loadStimuli(catId).catch(() => setMessage(t('stimulusLoadFailed'))),
           mode === 'edit' && questionId
@@ -348,11 +312,7 @@ export function QuestionEditorPage({ mode }: { mode: 'new' | 'edit' }) {
         guidance: prev.guidance,
         stimulusId: prev.stimulusId,
       };
-      // Thân câu đi theo khi đổi loại: rời trắc
-      // nghiệm thì tách phần thân câu khỏi tài
-      // liệu thống nhất; vào trắc nghiệm thì lắp
-      // thân câu hiện có vào tài liệu thống nhất
-      // mới (lựa chọn bắt đầu rỗng).
+      // Thân câu đi theo khi đổi loại: rời trắc nghiệm thì tách phần thân câu khỏi tài liệu thống nhất; vào trắc nghiệm thì lắp thân câu hiện có vào tài liệu thống nhất mới (lựa chọn bắt đầu rỗng).
       if (prev.qtype === 'multichoice' && qtype !== 'multichoice') {
         next.questionText = splitMultipleChoiceDocument(prev.mcDocument).question as Doc;
       }

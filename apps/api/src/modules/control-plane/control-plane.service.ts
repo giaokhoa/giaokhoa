@@ -26,10 +26,7 @@ import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { ControlPlaneConnection } from './control-plane.connection';
 
 /**
- * Phiên bản schema hiện tại của KHO CHUNG (database nghiệp vụ) — tên
- * thư mục migration baseline duy nhất của kho đó. Dòng đăng ký của
- * các không gian đang ở chế độ `shared` mang phiên bản này cho tới
- * khi chúng tách sang kho riêng (chương trình tenant, issue #587).
+ * Phiên bản schema hiện tại của KHO CHUNG (database nghiệp vụ) — tên thư mục migration baseline duy nhất của kho đó. Dòng đăng ký của các không gian đang ở chế độ `shared` mang phiên bản này cho tới khi chúng tách sang kho riêng (chương trình tenant, issue #587).
  */
 export const SHARED_DATABASE_SCHEMA_VERSION = '20261025163710_baseline';
 
@@ -45,23 +42,15 @@ export type ExistingSpaceSeed = {
 };
 
 /**
- * Service của control plane (issue #580): sổ đăng ký không gian và
- * registry phiên bản schema.
+ * Service của control plane (issue #580): sổ đăng ký không gian và registry phiên bản schema.
  *
  * Luồng nghiệp vụ chính:
  * - Ghi sổ (tạo / cập nhật / đổi trạng thái): gác bằng capability
- *   `tenant:manage` tại context HỆ THỐNG — cơ chế quản trị platform
- *   hiện hữu, tầng này không dựng mô hình tài khoản quản trị riêng.
- *   Mỗi thao tác ghi chạy trong MỘT transaction của database control
- *   plane: đổi dòng đăng ký + ghi đúng một dòng lịch sử (người thực
- *   hiện, thời gian, ảnh chụp trước/sau) — hai ghi cùng thành hoặc
- *   cùng huỷ, sổ và lịch sử không bao giờ lệch nhau.
+ *   `tenant:manage` tại context HỆ THỐNG — cơ chế quản trị platform hiện hữu, tầng này không dựng mô hình tài khoản quản trị riêng. Mỗi thao tác ghi chạy trong MỘT transaction của database control plane: đổi dòng đăng ký + ghi đúng một dòng lịch sử (người thực hiện, thời gian, ảnh chụp trước/sau) — hai ghi cùng thành hoặc cùng huỷ, sổ và lịch sử không bao giờ lệch nhau.
  * - Đọc định tuyến theo slug: trả nguyên dòng đăng ký để tầng ứng
- *   dụng (và các issue định tuyến #581/#582 sau này) biết không gian
- *   đang ở kho nào, bằng role nào, ở phiên bản schema nào.
+ *   dụng (và các issue định tuyến #581/#582 sau này) biết không gian đang ở kho nào, bằng role nào, ở phiên bản schema nào.
  * - Registry phiên bản schema: khung ghi/đọc trạng thái schema của
- *   từng kho (phiên bản hiện tại, lượt migration, trạng thái sao
- *   lưu/khôi phục gần nhất). Cơ chế tự động ghi thuộc issue #586.
+ *   từng kho (phiên bản hiện tại, lượt migration, trạng thái sao lưu/khôi phục gần nhất). Cơ chế tự động ghi thuộc issue #586.
  *
  * Mọi thao tác đều cần control plane đã cấu hình
  * (`CONTROL_PLANE_DATABASE_URL`); chưa cấu hình thì repository ném
@@ -84,9 +73,7 @@ export class ControlPlaneRegistryService {
   }
 
   /**
-   * Gác quản trị platform: chỉ người giữ `tenant:manage` tại context
-   * hệ thống mới được đọc/ghi sổ — cùng helper với bề mặt quản trị
-   * tenant hiện hữu.
+   * Gác quản trị platform: chỉ người giữ `tenant:manage` tại context hệ thống mới được đọc/ghi sổ — cùng helper với bề mặt quản trị tenant hiện hữu.
    */
   private async assertPlatformManager(actorId: string): Promise<void> {
     const systemId = (await this.contexts.ensureSystemContext()).id;
@@ -120,12 +107,7 @@ export class ControlPlaneRegistryService {
   }
 
   /**
-   * Tạo dòng đăng ký không gian mới + dòng lịch sử `create` trong
-   * cùng transaction. Kiểm tra trùng slug có hai lớp: kiểm tra nhanh
-   * ngoài transaction cho đường thường, và insert-bỏ-qua-khi-trùng
-   * ngay trong transaction để hai lượt tạo đồng thời cùng slug chỉ
-   * một lượt thành công — lượt còn lại nhận lỗi xung đột (409),
-   * không vấp ràng buộc unique thành lỗi 500.
+   * Tạo dòng đăng ký không gian mới + dòng lịch sử `create` trong cùng transaction. Kiểm tra trùng slug có hai lớp: kiểm tra nhanh ngoài transaction cho đường thường, và insert-bỏ-qua-khi-trùng ngay trong transaction để hai lượt tạo đồng thời cùng slug chỉ một lượt thành công — lượt còn lại nhận lỗi xung đột (409), không vấp ràng buộc unique thành lỗi 500.
    */
   async createRegistration(actorId: string, dto: CreateSpaceRegistration): Promise<SpaceRegistration> {
     await this.assertPlatformManager(actorId);

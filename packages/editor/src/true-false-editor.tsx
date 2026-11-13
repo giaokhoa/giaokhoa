@@ -32,8 +32,7 @@ import {
 
 /**
  * Điều khiển radio đáp án mà decoration đọc tại thời điểm vẽ widget:
- * giữ trong một ref để widget luôn thấy giá trị mới nhất mà không
- * phải dựng lại extension khi prop đổi.
+ * giữ trong một ref để widget luôn thấy giá trị mới nhất mà không phải dựng lại extension khi prop đổi.
  */
 interface StatementAnswerControl {
   /** Tiền tố tên nhóm radio (duy nhất cho mỗi instance editor trên trang); tên nhóm đầy đủ gắn thêm id của từng mệnh đề. */

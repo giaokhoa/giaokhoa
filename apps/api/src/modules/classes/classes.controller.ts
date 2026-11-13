@@ -28,13 +28,7 @@ const ROSTER_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 @ApiTags('classes')
 @Controller({ path: 'classes', version: '1' })
 /**
- * API lớp học (issue #184): CLASS-0 chốt vòng đời lớp + roster + hợp
- * đồng quyền tại context lớp; CLASS-1 bổ sung bề mặt giáo viên — nạp
- * roster theo định danh/import Excel, phân quyền đồng GV, tự báo danh
- * bằng mã tham gia, thành viên đã đình chỉ; CLASS-2 bổ sung gói tổng
- * quan cho dashboard theo lớp (`:id/overview`); CLASS-3 bổ sung gói
- * công khai của lớp cho người chưa ghi danh (`:id/public`) — bề mặt
- * xem và mua gói học phí theo lớp. Các route đặc thù
+ * API lớp học (issue #184): CLASS-0 chốt vòng đời lớp + roster + hợp đồng quyền tại context lớp; CLASS-1 bổ sung bề mặt giáo viên — nạp roster theo định danh/import Excel, phân quyền đồng GV, tự báo danh bằng mã tham gia, thành viên đã đình chỉ; CLASS-2 bổ sung gói tổng quan cho dashboard theo lớp (`:id/overview`); CLASS-3 bổ sung gói công khai của lớp cho người chưa ghi danh (`:id/public`) — bề mặt xem và mua gói học phí theo lớp. Các route đặc thù
  * (join/join-preview/roster-template) khai TRƯỚC route `:id` để không
  * bị nuốt bởi tham số đường dẫn.
  */

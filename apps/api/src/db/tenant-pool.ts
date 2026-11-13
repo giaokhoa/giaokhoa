@@ -30,8 +30,7 @@ export class TenantAwarePool extends Pool {
     const holder = client as PoolClient & { [TAG_STATE]?: TenantTagState };
     const existing = holder[TAG_STATE];
     if (existing) {
-      // Client tái sử dụng từ pool: cập nhật đích GUC + buộc gắn lại ở
-      // câu truy vấn đầu tiên của lượt checkout này.
+      // Client tái sử dụng từ pool: cập nhật đích GUC + buộc gắn lại ở câu truy vấn đầu tiên của lượt checkout này.
       existing.tenantId = tenantId;
       existing.platform = platform;
       existing.tagged = false;
@@ -65,8 +64,7 @@ export class TenantAwarePool extends Pool {
     callback?: (err: Error, client: PoolClient, done: (release?: unknown) => void) => void,
   ): Promise<PoolClient> | void {
     if (callback) {
-      // Dạng callback (pg dùng nội bộ cho pool.query): giữ nguyên hợp
-      // đồng — client trao tay đã sẵn sàng gắn GUC ở câu query đầu.
+      // Dạng callback (pg dùng nội bộ cho pool.query): giữ nguyên hợp đồng — client trao tay đã sẵn sàng gắn GUC ở câu query đầu.
       super.connect((err, client, done) => {
         if (err || !client)
           return callback(

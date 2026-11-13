@@ -1,7 +1,5 @@
 /**
- * Dữ liệu + quy tắc thuần của ma trận đề (Chặng 3, mục C.1/C.4 của hồ
- * sơ thiết kế). Preset là DỮ LIỆU CẤU HÌNH chụp vào ma trận lúc tạo —
- * không hard-code tỉ lệ vào logic kiểm tra: lệch tỉ lệ chỉ cảnh báo.
+ * Dữ liệu + quy tắc thuần của ma trận đề (Chặng 3, mục C.1/C.4 của hồ sơ thiết kế). Preset là DỮ LIỆU CẤU HÌNH chụp vào ma trận lúc tạo — không hard-code tỉ lệ vào logic kiểm tra: lệch tỉ lệ chỉ cảnh báo.
  */
 
 /** Thang Đ–S mặc định theo QĐ 764: 0/1/2/3/4 ý đúng → 0/10/25/50/100% điểm chùm. */
@@ -18,10 +16,7 @@ export interface MatrixPreset {
 /**
  * Tỉ lệ % ĐIỂM tham chiếu của khuôn ma trận DUY NHẤT — CV 7991
  * (kiểm tra định kỳ, mẫu THPT): dạng trắc nghiệm 30 / Đ–S 20 /
- * trả lời ngắn 20 / tự luận 30; mức Biết 40 / Hiểu 30 / Vận dụng 30.
- * Đây là HẰNG CẤU HÌNH chụp vào ma trận lúc tạo (chốt 26/10: bỏ hẳn
- * cơ chế chọn preset), không phải một lựa chọn của giáo viên; tỉ lệ
- * từng ô do giáo viên quyết theo đối tượng, lệch tỉ lệ chỉ cảnh báo.
+ * trả lời ngắn 20 / tự luận 30; mức Biết 40 / Hiểu 30 / Vận dụng 30. Đây là HẰNG CẤU HÌNH chụp vào ma trận lúc tạo (chốt 26/10: bỏ hẳn cơ chế chọn preset), không phải một lựa chọn của giáo viên; tỉ lệ từng ô do giáo viên quyết theo đối tượng, lệch tỉ lệ chỉ cảnh báo.
  */
 export const MATRIX_PRESETS: Record<'cv7991_periodic', MatrixPreset> = {
   cv7991_periodic: {
@@ -55,11 +50,7 @@ export interface MatrixCellLike {
 }
 
 /**
- * Tính % điểm thực tế theo dạng và theo mức từ các ô, so với mục tiêu
- * đã chụp; trả danh sách cảnh báo (rỗng = khớp). Ngưỡng cảnh báo 0,5
- * điểm % để tránh nhiễu làm tròn. Tổng điểm các ô khác totalScore của
- * ma trận cũng là một cảnh báo (đề sinh ra sẽ quy điểm về thang của
- * quiz, nhưng ma trận lệch tổng là dấu hiệu soạn sai).
+ * Tính % điểm thực tế theo dạng và theo mức từ các ô, so với mục tiêu đã chụp; trả danh sách cảnh báo (rỗng = khớp). Ngưỡng cảnh báo 0,5 điểm % để tránh nhiễu làm tròn. Tổng điểm các ô khác totalScore của ma trận cũng là một cảnh báo (đề sinh ra sẽ quy điểm về thang của quiz, nhưng ma trận lệch tổng là dấu hiệu soạn sai).
  */
 export function matrixWarnings(input: {
   cells: MatrixCellLike[];

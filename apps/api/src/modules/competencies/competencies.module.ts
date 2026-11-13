@@ -13,13 +13,9 @@ import { CompetenciesController } from './competencies.controller';
 import { CompetenciesService } from './competencies.service';
 
 /**
- * Facade của CompetenciesModule: CompetenciesService. Các kết quả completion được
- * tiêu thụ qua các hook đã đăng ký vào CompletionService; các yêu cầu review đi
- * ra ngoài thông qua facade của MessagingService (không dùng repository xuyên module).
+ * Facade của CompetenciesModule: CompetenciesService. Các kết quả completion được tiêu thụ qua các hook đã đăng ký vào CompletionService; các yêu cầu review đi ra ngoài thông qua facade của MessagingService (không dùng repository xuyên module).
  *
- * Từ issue #646, CompetenciesRepository sống ở `@giaokhoa/db` (lớp
- * thuần, không phụ thuộc Nest) nên module lắp nó bằng factory
- * provider với handle Kysely định tuyến của kho trung tâm
+ * Từ issue #646, CompetenciesRepository sống ở `@giaokhoa/db` (lớp thuần, không phụ thuộc Nest) nên module lắp nó bằng factory provider với handle Kysely định tuyến của kho trung tâm
  * (`SpaceDatabaseService.routedKysely`).
  */
 @Module({

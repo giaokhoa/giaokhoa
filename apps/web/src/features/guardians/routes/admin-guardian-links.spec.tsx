@@ -9,15 +9,7 @@ import { AdminGuardianLinksPage } from './admin-guardian-links';
 import { GuardianLinkView } from '../types/guardians';
 
 /**
- * Spec trang quản lý liên kết giám hộ (gói kích hoạt phụ huynh): bề
- * mặt chỉ dành cho người có capability `guardian:manage` — danh sách
- * liên kết đọc từ GET /guardian-links và tra họ tên qua GET
- * /users/:id; tạo liên kết phải gửi đúng thân (hai id đã chọn + quan
- * hệ) tới POST /guardian-links; thu hồi phải gọi DELETE
- * /guardian-links/:linkId sau xác nhận và hàng chuyển trạng thái đã
- * thu hồi. Người không có `guardian:manage`: trang không dựng bề mặt
- * quản lý nào và không gọi GET /guardian-links (quyền thật vẫn do API
- * thực thi — trang chỉ là lớp trình bày theo ảnh chụp quyền).
+ * Spec trang quản lý liên kết giám hộ (gói kích hoạt phụ huynh): bề mặt chỉ dành cho người có capability `guardian:manage` — danh sách liên kết đọc từ GET /guardian-links và tra họ tên qua GET /users/:id; tạo liên kết phải gửi đúng thân (hai id đã chọn + quan hệ) tới POST /guardian-links; thu hồi phải gọi DELETE /guardian-links/:linkId sau xác nhận và hàng chuyển trạng thái đã thu hồi. Người không có `guardian:manage`: trang không dựng bề mặt quản lý nào và không gọi GET /guardian-links (quyền thật vẫn do API thực thi — trang chỉ là lớp trình bày theo ảnh chụp quyền).
  */
 
 const MANAGER_ID = '01900000-0000-7000-8000-0000000000a1';

@@ -49,9 +49,7 @@ export class ProgramDumpService {
   }
 
   /**
-   * Toàn văn dump của DB hiện tại (đường sản xuất ở trung tâm xuất
-   * toàn bộ; kiểm chứng trong suite dùng chung DB truyền `datasetKey`
-   * để giới hạn phạm vi theo một dataset).
+   * Toàn văn dump của DB hiện tại (đường sản xuất ở trung tâm xuất toàn bộ; kiểm chứng trong suite dùng chung DB truyền `datasetKey` để giới hạn phạm vi theo một dataset).
    */
   async buildDumpSql(opts?: { datasetKey?: string }): Promise<string> {
     return buildProgramDumpSql(this.repo.dbHandle, opts);

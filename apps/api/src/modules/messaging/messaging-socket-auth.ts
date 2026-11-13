@@ -16,23 +16,11 @@ export interface MessagingSocketIdentity {
   username: string;
   /**
    * Tenant hiệu lực của phiên (claim `tid` của token, TENANT-1 #196):
-   * room + khoá presence của socket được namespace theo tenant này.
-   * Token cũ không mang `tid` → null (room rơi về đoạn 'platform').
-   * Phiên cookie Better Auth không mang claim: tenant được phân giải
-   * là tenant mặc định của user (xem authenticateCookie).
+   * room + khoá presence của socket được namespace theo tenant này. Token cũ không mang `tid` → null (room rơi về đoạn 'platform'). Phiên cookie Better Auth không mang claim: tenant được phân giải là tenant mặc định của user (xem authenticateCookie).
    */
   tenantId: string | null;
   /**
-   * Slug của trung tâm ở kho riêng mà danh tính này đã được phân
-   * giải TRONG kho của trung tâm đó; `null` khi danh tính thuộc
-   * đường kho chung (địa chỉ thường, trung tâm kho chung, hoặc
-   * phiên vận hành platform được tra ở kho chung ngay tại địa chỉ
-   * kho riêng). Gateway gắn slug này lên kết nối để mọi lượt đọc
-   * dữ kiện theo kết nối (vào room lúc nối, join/sync/typing)
-   * chạy trong đúng kho của trung tâm qua `withSpaceKysely` —
-   * danh tính đã phân giải ở kho riêng mà các lượt đọc đó rơi về
-   * kho chung thì hội thoại/membership của trung tâm vô hình với
-   * socket dù xác thực đã qua.
+   * Slug của trung tâm ở kho riêng mà danh tính này đã được phân giải TRONG kho của trung tâm đó; `null` khi danh tính thuộc đường kho chung (địa chỉ thường, trung tâm kho chung, hoặc phiên vận hành platform được tra ở kho chung ngay tại địa chỉ kho riêng). Gateway gắn slug này lên kết nối để mọi lượt đọc dữ kiện theo kết nối (vào room lúc nối, join/sync/typing) chạy trong đúng kho của trung tâm qua `withSpaceKysely` — danh tính đã phân giải ở kho riêng mà các lượt đọc đó rơi về kho chung thì hội thoại/membership của trung tâm vô hình với socket dù xác thực đã qua.
    */
   spaceSlug: string | null;
 }

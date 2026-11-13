@@ -8,8 +8,7 @@ import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 
 /**
  * Các kiểm tra runtime có cấu trúc theo tinh thần Check API của Moodle:
- * mỗi phụ thuộc báo up/down độc lập; payload được kiểm chứng
- * đối chiếu với contract dùng chung trước khi rời khỏi tiến trình.
+ * mỗi phụ thuộc báo up/down độc lập; payload được kiểm chứng đối chiếu với contract dùng chung trước khi rời khỏi tiến trình.
  */
 @Injectable()
 /**

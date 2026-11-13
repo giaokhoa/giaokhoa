@@ -14,21 +14,17 @@ import {
 /**
  * TENANT-0 (issue #168) — spec phủ 6 tiêu chí xong của issue:
  *  (1) đọc chéo tenant bằng id đoán → 404 đồng nhất trên các bề mặt đã
- *      phủ (khoá học, danh mục, cohort, bank, liên kết giám hộ, danh
- *      sách user của tenant);
+ *      phủ (khoá học, danh mục, cohort, bank, liên kết giám hộ, danh sách user của tenant);
  *  (2) cấu hình ghi ở tenant A không chạm tenant B / platform;
  *  (3) mỗi tenant đúng một bank trường theo kind, hai tenant cùng có;
  *  (4) giáo viên thuộc cả A+B chuyển tenant trong phiên, vai ở mỗi
  *      tenant độc lập (manager ở A không cho quyền quản trị ở B);
  *  (5) RLS: phiên SQL thô đã đặt GUC app.tenant_id (kể cả khi truy vấn
- *      KHÔNG lọc tenant_id) chỉ thấy dữ liệu của tenant đó — chạy dưới
- *      một role phụ không-superuser để RLS thật sự có hiệu lực;
+ *      KHÔNG lọc tenant_id) chỉ thấy dữ liệu của tenant đó — chạy dưới một role phụ không-superuser để RLS thật sự có hiệu lực;
  *  (6) seed: tenant-zero + tenant trường mặc định tồn tại, admin khởi
  *      tạo là thành viên của cả hai.
  *
- * Hai tenant A/B dựng bằng chính API công khai với token admin khởi
- * tạo (platform manager); mọi thao tác trong tenant đi qua chuyển
- * phiên (switch-tenant) như người dùng thật.
+ * Hai tenant A/B dựng bằng chính API công khai với token admin khởi tạo (platform manager); mọi thao tác trong tenant đi qua chuyển phiên (switch-tenant) như người dùng thật.
  */
 describe('Cô lập tenant (TENANT-0, #168)', () => {
   let app: INestApplication;

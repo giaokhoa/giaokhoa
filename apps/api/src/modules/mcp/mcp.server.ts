@@ -4,15 +4,9 @@ import type { McpActor } from './mcp.context';
 import { registerMcpTools, type McpToolDeps } from './mcp.tools';
 
 /**
- * Factory dựng McpServer cho MỘT request (SDK v2 stateless: mỗi request
- * một instance — xem createMcpHandler). Tools đăng ký ở mcp.tools.ts,
- * phục vụ cả hai kỷ nguyên (modern 2026-07-28 + legacy 2025-11-25) qua
- * cùng factory này.
+ * Factory dựng McpServer cho MỘT request (SDK v2 stateless: mỗi request một instance — xem createMcpHandler). Tools đăng ký ở mcp.tools.ts, phục vụ cả hai kỷ nguyên (modern 2026-07-28 + legacy 2025-11-25) qua cùng factory này.
  *
- * Ngoài tools, lát MCP-1 (issue #163) thêm một resource hướng dẫn +
- * một prompt mẫu để client AI đi đúng quy trình nghiệp vụ (bám YCCĐ
- * thật, soi trùng trước khi tạo, câu mới luôn vào draft chờ giáo viên
- * duyệt) thay vì bịa quy trình riêng.
+ * Ngoài tools, lát MCP-1 (issue #163) thêm một resource hướng dẫn + một prompt mẫu để client AI đi đúng quy trình nghiệp vụ (bám YCCĐ thật, soi trùng trước khi tạo, câu mới luôn vào draft chờ giáo viên duyệt) thay vì bịa quy trình riêng.
  */
 export function createGiaoKhoaMcpServer(actor: McpActor, deps: McpToolDeps): McpServer {
   const server = new McpServer(

@@ -6,24 +6,17 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWORD, uniqueName } from '../../support/identity-access-helpers';
 
 /**
- * Đợt Auth: đăng nhập xã hội (auth_oauth2), MFA trên luồng session-cookie,
- * và quản lý phiên của tôi (report_usersessions).
+ * Đợt Auth: đăng nhập xã hội (auth_oauth2), MFA trên luồng session-cookie, và quản lý phiên của tôi (report_usersessions).
  *
  * Oracle:
  * - Moodle `auth/oauth2/tests/auth_test.php::test_oauth2_complete_login`
- *   và `auth/oauth2/classes/api.php` (bản ghi linked_login,
- *   create_new_confirmed_account, khớp theo subject của issuer rồi tới email).
+ *   và `auth/oauth2/classes/api.php` (bản ghi linked_login, create_new_confirmed_account, khớp theo subject của issuer rồi tới email).
  * - Ngữ nghĩa factor_totp của Moodle `tool_mfa` — một nhân tố TOTP đã xác nhận
- *   phải được thoả mãn trước khi BẤT KỲ lần đăng nhập nào hoàn tất, kể cả
- *   luồng session-cookie (khoảng trống mà đợt này khép lại).
+ *   phải được thoả mãn trước khi BẤT KỲ lần đăng nhập nào hoàn tất, kể cả luồng session-cookie (khoảng trống mà đợt này khép lại).
  * - Moodle `report/usersessions` (locallib.php + tests/lib_test.php):
  *   người dùng thấy các phiên của chính mình và có thể chấm dứt các phiên khác.
  *
- * Provider chỉ được giả lập tại biên HTTP của nó: một máy chủ HTTP cục bộ
- * đóng vai các endpoint token + userinfo của Google/Facebook (nối qua
- * các ghi đè env OAUTH_*_URL); mọi bước bên trong hệ thống này —
- * trạng thái authorize, callback, khớp/tạo tài khoản, đăng nhập liên kết,
- * bàn giao (handoff), phiên — đều chạy thật.
+ * Provider chỉ được giả lập tại biên HTTP của nó: một máy chủ HTTP cục bộ đóng vai các endpoint token + userinfo của Google/Facebook (nối qua các ghi đè env OAUTH_*_URL); mọi bước bên trong hệ thống này — trạng thái authorize, callback, khớp/tạo tài khoản, đăng nhập liên kết, bàn giao (handoff), phiên — đều chạy thật.
  */
 
 /** Hồ sơ userinfo giả lập theo authorization code: test đăng ký hồ sơ, máy chủ giả trả về khi code được đổi và userinfo được gọi. */

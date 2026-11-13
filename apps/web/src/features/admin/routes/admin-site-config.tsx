@@ -47,8 +47,7 @@ export async function loader({ request }: { request: Request }): Promise<SsrLoad
 /**
  * Các miền giá trị enum đã biết, đối chiếu registry phía backend
  * (`apps/api/src/modules/site-config/settings-registry.ts` ở branch
- * backend): hiện chỉ `core/lang` là enum, với options `['vi', 'en']`.
- * Setting enum nào không có trong bảng này thì sửa bằng ô nhập văn bản.
+ * backend): hiện chỉ `core/lang` là enum, với options `['vi', 'en']`. Setting enum nào không có trong bảng này thì sửa bằng ô nhập văn bản.
  */
 const KNOWN_ENUM_OPTIONS: Record<string, readonly string[]> = {
   'core/lang': ['vi', 'en'],

@@ -25,32 +25,17 @@ export const AGGREGATION_ANY = 2;
 /**
  * Facade của CompletionModule (core_completion của Moodle), phần hoạt động:
  *  - Trạng thái hoàn thành là dữ liệu ĐÃ LƯU (course_modules_completion) dẫn động bởi
- *    các tiêu chí khai báo trước trên cm: completionView, completionManual,
- *    completionExpected, completionUseGrade (đã khai báo; đánh giá điểm là
- *    hook của Grades — một cm yêu cầu điểm thì không thể hoàn thành khi thiếu điểm).
+ *    các tiêu chí khai báo trước trên cm: completionView, completionManual, completionExpected, completionUseGrade (đã khai báo; đánh giá điểm là hook của Grades — một cm yêu cầu điểm thì không thể hoàn thành khi thiếu điểm).
  *  - Sự kiện `cm_viewed` (từ CoursesService) dẫn động completionView.
  *  - Hoàn thành khoá học tổng hợp các tiêu chí — đủ 8 loại của Moodle: module,
- *    date, grade, self, course (tiên quyết), duration, role, unenrol —
- *    với phương thức của khoá ALL(AND)/ANY(OR) vào course_completions.
- *    Các loại thủ công (self, role) được chứng bằng dòng course_completion_crit_compl;
- *    các loại còn lại đánh giá từ dữ liệu sống. Kích hoạt đánh giá lại:
- *    sự kiện cm, làm mới điểm, đánh dấu self/role, unenrol (sự kiện
- *    outbox `course_completion_reaggregation_requested` phát trong
- *    cùng transaction với thao tác gỡ ghi danh — consumer riêng của
- *    module này tiêu thụ qua mốc seq của nó), một
- *    khoá tiên quyết chuyển sang hoàn thành (tổng hợp lại khoá phụ thuộc),
- *    thay đổi tiêu chí và tính lại tường minh/hàng loạt (date/duration là
- *    theo thời gian và có hiệu lực ở lần tổng hợp lại tiếp theo, như tổng hợp
- *    do cron dẫn động của Moodle).
+ *    date, grade, self, course (tiên quyết), duration, role, unenrol — với phương thức của khoá ALL(AND)/ANY(OR) vào course_completions. Các loại thủ công (self, role) được chứng bằng dòng course_completion_crit_compl; các loại còn lại đánh giá từ dữ liệu sống. Kích hoạt đánh giá lại:
+ *    sự kiện cm, làm mới điểm, đánh dấu self/role, unenrol (sự kiện outbox `course_completion_reaggregation_requested` phát trong cùng transaction với thao tác gỡ ghi danh — consumer riêng của module này tiêu thụ qua mốc seq của nó), một khoá tiên quyết chuyển sang hoàn thành (tổng hợp lại khoá phụ thuộc), thay đổi tiêu chí và tính lại tường minh/hàng loạt (date/duration là theo thời gian và có hiệu lực ở lần tổng hợp lại tiếp theo, như tổng hợp do cron dẫn động của Moodle).
  *  - Đổi tiêu chí sau khi đã có dữ liệu sẽ gắn cờ tổng hợp lại và xếp hàng
- *    job completion-recalculate của worker (tính lại có kiểm soát,
- *    report §2#9) — không bao giờ viết lại lặng lẽ tại chỗ.
+ *    job completion-recalculate của worker (tính lại có kiểm soát, report §2#9) — không bao giờ viết lại lặng lẽ tại chỗ.
  */
 @Injectable()
 /**
- * Nghiệp vụ hoàn thành (completion tracking).
- * Đối chiếu Moodle: lib/completionlib.php (completion_info).
- * Trạng thái cm: incomplete / complete / complete-pass / complete-fail, suy từ điều kiện đã cấu hình
+ * Nghiệp vụ hoàn thành (completion tracking). Đối chiếu Moodle: lib/completionlib.php (completion_info). Trạng thái cm: incomplete / complete / complete-pass / complete-fail, suy từ điều kiện đã cấu hình
  * (xem, đạt điểm, hoàn thành thủ công, ngày…). Hoàn thành khoá học được tổng hợp từ bộ tiêu chí (criteria)
  * và trạng thái được tính lại qua hàng đợi khi có sự kiện điểm/lượt xem.
  */
@@ -69,8 +54,7 @@ export class CompletionService implements OnModuleInit {
   }
 
   /**
-   * Các hook phía sau: các module (Badges, Competencies) đăng ký quan tâm tới
-   * THAY ĐỔI completion thay vì thăm dò hoặc đọc bảng của module này
+   * Các hook phía sau: các module (Badges, Competencies) đăng ký quan tâm tới THAY ĐỔI completion thay vì thăm dò hoặc đọc bảng của module này
    * (report §2#9: completion là ĐẦU VÀO của badges/competency — phía tiêu thụ
    * đăng ký nhận, chúng không bao giờ tự suy lại completion).
    */

@@ -9,10 +9,7 @@ import {
 import { queryKeys } from './keys';
 
 /**
- * Tầng dữ liệu trang khoá học (F-01 đợt 1, rà soát #133): options dùng
- * chung cho hook của trang và clientLoader của route module.
- * Lời gọi API thuần nằm ở tầng `api/` của feature; khoá truy vấn
- * riêng của courses nằm ở `keys.ts` cùng tầng này.
+ * Tầng dữ liệu trang khoá học (F-01 đợt 1, rà soát #133): options dùng chung cho hook của trang và clientLoader của route module. Lời gọi API thuần nằm ở tầng `api/` của feature; khoá truy vấn riêng của courses nằm ở `keys.ts` cùng tầng này.
  */
 
 /**
@@ -61,9 +58,7 @@ export function useSelfEnrol(courseId: string | undefined) {
 }
 
 /**
- * Tạo payment cho instance fee. Tuyệt đối không tự ghi danh ở đây: ghi
- * danh chỉ kích hoạt sau khi webhook xác nhận payment thành công. Thành
- * công thì invalidate query thanh toán của tôi để hiển thị trạng thái thật.
+ * Tạo payment cho instance fee. Tuyệt đối không tự ghi danh ở đây: ghi danh chỉ kích hoạt sau khi webhook xác nhận payment thành công. Thành công thì invalidate query thanh toán của tôi để hiển thị trạng thái thật.
  */
 export function usePayFee() {
   const queryClient = useQueryClient();

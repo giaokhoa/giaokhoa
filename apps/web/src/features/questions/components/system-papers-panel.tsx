@@ -1,12 +1,5 @@
 /**
- * Panel đề chung trong khu vực Ngân hàng hệ thống: chọn một bank đề
- * chung → danh sách đề ready của bank đó (sao chép về bank đề cá
- * nhân tại dòng) + hàng chờ đóng góp đề của bank, nơi người duyệt xử
- * lý từng mốc duyệt hai cấp và mở bản đặc tả đã chụp của đóng góp
- * kèm hồ sơ ngay tại dòng. State chọn bank do TRANG giữ (hàng chờ bộ
- * hồ sơ bên dưới dùng chung bank đang chọn) nên panel nhận qua props;
- * danh sách đề của bank panel tự nạp qua hook của lib/questions-data.
- * Đột biến qua hook của lib; làm mới qua các hàm refresh của trang.
+ * Panel đề chung trong khu vực Ngân hàng hệ thống: chọn một bank đề chung → danh sách đề ready của bank đó (sao chép về bank đề cá nhân tại dòng) + hàng chờ đóng góp đề của bank, nơi người duyệt xử lý từng mốc duyệt hai cấp và mở bản đặc tả đã chụp của đóng góp kèm hồ sơ ngay tại dòng. State chọn bank do TRANG giữ (hàng chờ bộ hồ sơ bên dưới dùng chung bank đang chọn) nên panel nhận qua props; danh sách đề của bank panel tự nạp qua hook của lib/questions-data. Đột biến qua hook của lib; làm mới qua các hàm refresh của trang.
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -57,9 +50,7 @@ export function SystemPapersPanel({
   const copyPaperMutation = useCopyExamPaper();
   const reviewPaperContributionMutation = useReviewExamPaperContribution();
   const systemPapers = useBankExams(systemExamBankId || undefined).data ?? [];
-  // Bản đặc tả đang mở của một ĐÓNG GÓP kèm hồ sơ: đặc tả đã chụp nằm
-  // ngay trong payload đóng góp (dossierSpecSnapshot) nên mở tại chỗ,
-  // không gọi thêm endpoint như bề mặt hồ sơ lịch sử.
+  // Bản đặc tả đang mở của một ĐÓNG GÓP kèm hồ sơ: đặc tả đã chụp nằm ngay trong payload đóng góp (dossierSpecSnapshot) nên mở tại chỗ, không gọi thêm endpoint như bề mặt hồ sơ lịch sử.
   const [openContributionSpec, setOpenContributionSpec] = useState<{ contributionId: string; spec: DossierSpecLite } | null>(null);
 
   /** Copy một đề từ ngân hàng hệ thống về ngân hàng đề cá nhân (cầu nối hai khu vực cho ĐỀ). */
@@ -74,12 +65,7 @@ export function SystemPapersPanel({
   }
 
   /**
-   * Một mốc duyệt của một đề xuất đóng góp đề tại bank đích: chỉ còn
-   * một động từ `approve`/`reject` (issue #345, giai đoạn 2) — cấp 1
-   * khi đóng góp `pending`, cấp 2 ban giám hiệu khi đóng góp
-   * `pending_board` (chỉ đóng góp kèm bộ hồ sơ mới lên được trạng
-   * thái này), do phía server phân biệt bằng trạng thái và quyền;
-   * từ chối ở cả hai cấp đều bắt buộc lý do.
+   * Một mốc duyệt của một đề xuất đóng góp đề tại bank đích: chỉ còn một động từ `approve`/`reject` (issue #345, giai đoạn 2) — cấp 1 khi đóng góp `pending`, cấp 2 ban giám hiệu khi đóng góp `pending_board` (chỉ đóng góp kèm bộ hồ sơ mới lên được trạng thái này), do phía server phân biệt bằng trạng thái và quyền; từ chối ở cả hai cấp đều bắt buộc lý do.
    */
   async function reviewPaperContribution(
     bankId: string,

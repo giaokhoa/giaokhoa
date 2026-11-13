@@ -11,9 +11,7 @@ import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWO
  *  - đánh dấu đã đọc / đọc tất cả → server đẩy số giảm;
  *  - stream của user khác không nhận sự kiện của user này;
  *  - xác thực: Bearer header như mọi route khác, hoặc cookie phiên
- *    Better Auth qua chuỗi guard (GĐ5, issue #7). Ngoại lệ token qua
- *    query `access_token` cho route stream ĐÃ GỠ ở GĐ5 — token trong
- *    URL bị từ chối 401 ở mọi route; thiếu token thì 401.
+ *    Better Auth qua chuỗi guard (GĐ5, issue #7). Ngoại lệ token qua query `access_token` cho route stream ĐÃ GỠ ở GĐ5 — token trong URL bị từ chối 401 ở mọi route; thiếu token thì 401.
  */
 
 interface StreamEvent { type: string; data: unknown }

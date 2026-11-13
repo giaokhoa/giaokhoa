@@ -75,11 +75,8 @@ function stubFetch(handler: (url: string, init?: RequestInit) => unknown) {
 }
 
 /**
- * Render trang điểm theo bài trong đúng khung provider của ứng dụng
- * thật: trang đọc `usePermissions()` để chỉ hiện khu quản trị cho
- * staff của khoá. Test học viên không đặt token đăng nhập:
- * PermissionsProvider kết luận không phải staff mà không gọi thêm
- * endpoint nào — khu quản trị không xuất hiện.
+ * Render trang điểm theo bài trong đúng khung provider của ứng dụng thật: trang đọc `usePermissions()` để chỉ hiện khu quản trị cho staff của khoá. Test học viên không đặt token đăng nhập:
+ * PermissionsProvider kết luận không phải staff mà không gọi thêm endpoint nào — khu quản trị không xuất hiện.
  */
 function renderGradebook() {
   const router = createMemoryRouter([{ path: '/courses/:id/grades', element: <GradebookPage /> }], {

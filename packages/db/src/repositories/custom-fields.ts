@@ -1,24 +1,13 @@
 /**
  * Repository của cụm CUSTOM FIELDS trên Kysely.
  *
- * Vai trò: mọi truy cập tới ba bảng custom_field_category,
- * custom_field_field và custom_field_data của kho trung tâm tập
- * trung ở đây. Repository không chứa luật nghiệp vụ — hình dạng
- * field theo component/area và lắp giá trị cho instance nằm ở tầng
- * service phía ứng dụng.
+ * Vai trò: mọi truy cập tới ba bảng custom_field_category, custom_field_field và custom_field_data của kho trung tâm tập trung ở đây. Repository không chứa luật nghiệp vụ — hình dạng field theo component/area và lắp giá trị cho instance nằm ở tầng service phía ứng dụng.
  *
  * Lưu ý giữ nguyên hành vi: hai đường xoá nhiều bảng
  * (`deleteCategory`, `deleteField`) chạy TUẦN TỰ từng lệnh xoá
- * như bản bộ máy cũ — repository gốc không bọc transaction, và bản
- * chuyển đổi cũng KHÔNG tự ý bọc transaction mới (đổi tính nguyên
- * tử là đổi nghiệp vụ, ngoài phạm vi chuyển ORM). Thứ tự xoá giữ
- * đúng: dữ liệu của từng field → các field → category.
+ * như bản bộ máy cũ — repository gốc không bọc transaction, và bản chuyển đổi cũng KHÔNG tự ý bọc transaction mới (đổi tính nguyên tử là đổi nghiệp vụ, ngoài phạm vi chuyển ORM). Thứ tự xoá giữ đúng: dữ liệu của từng field → các field → category.
  *
- * Khuôn hình dạng ở biên: tên cột snake_case của schema codegen ở
- * bên trong, hình dạng camelCase ở bên ngoài qua danh sách cột có
- * bí danh tường minh và các hàm ánh xạ `*InsertValues` loại
- * `undefined` từng trường (luật T-4). Cột jsonb `config_data` khi
- * ghi đi qua `jsonbValue` (serialize tường minh + `::jsonb`).
+ * Khuôn hình dạng ở biên: tên cột snake_case của schema codegen ở bên trong, hình dạng camelCase ở bên ngoài qua danh sách cột có bí danh tường minh và các hàm ánh xạ `*InsertValues` loại `undefined` từng trường (luật T-4). Cột jsonb `config_data` khi ghi đi qua `jsonbValue` (serialize tường minh + `::jsonb`).
  */
 import { sql, type Insertable, type InsertObject, type RawBuilder } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';

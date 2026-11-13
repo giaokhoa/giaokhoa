@@ -12,11 +12,7 @@ import { courseContextId } from '../../support/engagement-helpers';
  * Vá H2+H5 (sổ rà soát gác quyền #134): 4 route ghi của search
  * (POST /search/index, POST /search/index-raw, POST /search/reindex,
  * DELETE /search/:area/:itemId) phải đòi capability search:manage tại
- * system context. Trước vá, mọi user đăng nhập đều chèn được tài liệu giả
- * vào chỉ mục (index-raw) và xoá/reindex tuỳ ý.
- * Luồng nạp index hợp lệ trong hệ thống (content-bank) gọi thẳng
- * SearchService ở tầng service, không qua các route này — spec
- * platform-search-webservice-flow (ca content bank) là bằng chứng giữ nguyên.
+ * system context. Trước vá, mọi user đăng nhập đều chèn được tài liệu giả vào chỉ mục (index-raw) và xoá/reindex tuỳ ý. Luồng nạp index hợp lệ trong hệ thống (content-bank) gọi thẳng SearchService ở tầng service, không qua các route này — spec platform-search-webservice-flow (ca content bank) là bằng chứng giữ nguyên.
  */
 describe('Cổng route ghi tìm kiếm (H2+H5, #134)', () => {
   let app: INestApplication;

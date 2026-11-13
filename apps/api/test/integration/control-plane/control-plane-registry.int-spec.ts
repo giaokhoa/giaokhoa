@@ -14,36 +14,13 @@ import { UsersService } from '../../../src/modules/users/users.service';
 import { createTestApp } from '../../support/identity-access-helpers';
 
 /**
- * Ca tích hợp của CONTROL PLANE (issue #580): sổ đăng ký không gian,
- * registry phiên bản schema và tách quyền kết nối giữa hai database.
+ * Ca tích hợp của CONTROL PLANE (issue #580): sổ đăng ký không gian, registry phiên bản schema và tách quyền kết nối giữa hai database.
  *
- * Môi trường của ca tự cấp phát như đường triển khai thật: một
- * database control plane MỚI (`giaokhoa_test_cp_580`) trên cùng cụm với
- * database nghiệp vụ test, một role kết nối riêng chỉ có quyền trên
- * database đó, bộ migration riêng của control plane áp từ rỗng bằng
- * chính file SQL đã sinh, rồi mới khởi động ứng dụng với
- * `CONTROL_PLANE_DATABASE_URL` trỏ vào đó — để cả đường gieo dữ kiện
- * lúc bootstrap cũng được kiểm chứng trên cùng một lượt chạy.
+ * Môi trường của ca tự cấp phát như đường triển khai thật: một database control plane MỚI (`giaokhoa_test_cp_580`) trên cùng cụm với database nghiệp vụ test, một role kết nối riêng chỉ có quyền trên database đó, bộ migration riêng của control plane áp từ rỗng bằng chính file SQL đã sinh, rồi mới khởi động ứng dụng với `CONTROL_PLANE_DATABASE_URL` trỏ vào đó — để cả đường gieo dữ kiện lúc bootstrap cũng được kiểm chứng trên cùng một lượt chạy.
  *
- * Cô lập kết nối được kiểm ở ĐÚNG bước mở kết nối, hai chiều: ca
- * cũng khoá CONNECT trên chính database nghiệp vụ test (thu hồi
- * PUBLIC, cấp lại cho role của đường dữ kiện và một role nghiệp vụ
- * thường `giaokhoa_biz_test_580`) như script cấp phát làm ở môi trường
- * triển khai, rồi khẳng định role control plane chết ngay tại
- * `connect()`. ACL của database nghiệp vụ được trả về mặc định ở
- * afterAll để không ảnh hưởng các ca khác dùng chung cụm test.
- * Giới hạn phạm vi của các ca kết nối: chúng chứng minh cô lập với
- * role KHÔNG phải superuser — tại thời điểm của issue này, role
- * runtime của ứng dụng trong compose vẫn là superuser của cụm, mà
- * superuser thì bỏ qua mọi kiểm tra quyền kết nối. Việc tách role
- * runtime thành role thường riêng và role migration riêng thuộc
- * issue #586; từ đó cô lập ở bước mở kết nối được kiểm chứng bằng
- * chính các role thật của mô hình mới trong ca tích hợp của đội
- * kho (test/integration/fleet).
+ * Cô lập kết nối được kiểm ở ĐÚNG bước mở kết nối, hai chiều: ca cũng khoá CONNECT trên chính database nghiệp vụ test (thu hồi PUBLIC, cấp lại cho role của đường dữ kiện và một role nghiệp vụ thường `giaokhoa_biz_test_580`) như script cấp phát làm ở môi trường triển khai, rồi khẳng định role control plane chết ngay tại `connect()`. ACL của database nghiệp vụ được trả về mặc định ở afterAll để không ảnh hưởng các ca khác dùng chung cụm test. Giới hạn phạm vi của các ca kết nối: chúng chứng minh cô lập với role KHÔNG phải superuser — tại thời điểm của issue này, role runtime của ứng dụng trong compose vẫn là superuser của cụm, mà superuser thì bỏ qua mọi kiểm tra quyền kết nối. Việc tách role runtime thành role thường riêng và role migration riêng thuộc issue #586; từ đó cô lập ở bước mở kết nối được kiểm chứng bằng chính các role thật của mô hình mới trong ca tích hợp của đội kho (test/integration/fleet).
  *
- * Shim `uuidv7()` chỉ áp khi server PostgreSQL dưới 18 (môi trường
- * chạy local bằng PG16): PG18 — bản ở CI và production — có sẵn hàm
- * này, shim sẽ che mất hàm gốc nên tuyệt đối không áp ở đó.
+ * Shim `uuidv7()` chỉ áp khi server PostgreSQL dưới 18 (môi trường chạy local bằng PG16): PG18 — bản ở CI và production — có sẵn hàm này, shim sẽ che mất hàm gốc nên tuyệt đối không áp ở đó.
  */
 const CP_DATABASE = 'giaokhoa_test_cp_580';
 const CP_ROLE = 'giaokhoa_cp_test_580';
@@ -105,9 +82,7 @@ describe('Control plane: sổ đăng ký không gian và registry phiên bản s
   let adminId: string;
   let guestId: string;
   let createdSpaceId: string;
-  // Database nghiệp vụ test và role kết nối của đường dữ kiện, suy
-  // từ chính DATABASE_URL của môi trường test (không gán cứng tên,
-  // để ca chạy đúng trên mọi môi trường trỏ DB riêng).
+  // Database nghiệp vụ test và role kết nối của đường dữ kiện, suy từ chính DATABASE_URL của môi trường test (không gán cứng tên, để ca chạy đúng trên mọi môi trường trỏ DB riêng).
   let businessDatabase: string;
   let businessRole: string;
 
@@ -115,12 +90,10 @@ describe('Control plane: sổ đăng ký không gian và registry phiên bản s
     const businessUrl = new URL(process.env.DATABASE_URL!);
     businessDatabase = decodeURIComponent(businessUrl.pathname.replace(/^\//, ''));
     businessRole = decodeURIComponent(businessUrl.username);
-    // Cấp phát database + role của control plane trên cụm test, đúng
-    // các bước script control-plane-setup làm ở môi trường triển khai.
+    // Cấp phát database + role của control plane trên cụm test, đúng các bước script control-plane-setup làm ở môi trường triển khai.
     await withClient(clusterUrl('postgres'), async (admin) => {
       // Dọn grant còn sót của một lượt chạy trước bị ngắt giữa chừng:
-      // role nghiệp vụ mẫu còn giữ quyền CONNECT trên database
-      // nghiệp vụ thì DROP ROLE ở dưới sẽ vấp phụ thuộc.
+      // role nghiệp vụ mẫu còn giữ quyền CONNECT trên database nghiệp vụ thì DROP ROLE ở dưới sẽ vấp phụ thuộc.
       const staleBizRole = await admin.query(`SELECT 1 FROM pg_roles WHERE rolname = '${BIZ_ROLE}'`);
       if ((staleBizRole.rowCount ?? 0) > 0) {
         await admin.query(`REVOKE CONNECT ON DATABASE ${quoted(businessDatabase)} FROM ${BIZ_ROLE}`);

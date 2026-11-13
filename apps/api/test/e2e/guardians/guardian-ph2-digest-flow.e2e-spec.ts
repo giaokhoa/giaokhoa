@@ -5,18 +5,9 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser } from '..
 
 /**
  * PH-2 (issue #159) — phần còn ở phía API của digest phụ huynh:
- * endpoint tuỳ chọn tần suất theo từng con qua cổng liên kết (mặc
- * định weekly, đặt daily/off có hiệu lực, tần suất lạ bị 400, không
- * liên kết thì 404 đồng nhất cho cả đọc lẫn ghi).
+ * endpoint tuỳ chọn tần suất theo từng con qua cổng liên kết (mặc định weekly, đặt daily/off có hiệu lực, tần suất lạ bị 400, không liên kết thì 404 đồng nhất cho cả đọc lẫn ghi).
  *
- * Nửa TIÊU THỤ của digest (tổng hợp cửa sổ đã công bố + gửi thông
- * báo + đẩy riêng quá hạn ≥7 ngày) không còn chạy ở phía API: từ
- * issue con #518 của #491 các sự kiện `guardian_digest_due` /
- * `guardian_overdue_alert` đi qua relay outbox vào hàng đợi phía
- * worker. Năm ca hành vi của nửa đó (kết quả đã công bố gửi đúng
- * một lần, item chưa công bố không lọt, cửa sổ rỗng, liên kết đã
- * thu hồi, đẩy quá hạn đúng một lần) đã chuyển nguyên sang tầng
- * tích hợp phía worker:
+ * Nửa TIÊU THỤ của digest (tổng hợp cửa sổ đã công bố + gửi thông báo + đẩy riêng quá hạn ≥7 ngày) không còn chạy ở phía API: từ issue con #518 của #491 các sự kiện `guardian_digest_due` / `guardian_overdue_alert` đi qua relay outbox vào hàng đợi phía worker. Năm ca hành vi của nửa đó (kết quả đã công bố gửi đúng một lần, item chưa công bố không lọt, cửa sổ rỗng, liên kết đã thu hồi, đẩy quá hạn đúng một lần) đã chuyển nguyên sang tầng tích hợp phía worker:
  * `apps/worker/test/integration/guardians/guardian-digest-delivery.int-spec.ts`.
  */
 describe('PH-2: digest phụ huynh — tuỳ chọn tần suất phía API (issue #159)', () => {

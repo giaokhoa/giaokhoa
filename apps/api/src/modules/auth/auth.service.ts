@@ -25,55 +25,35 @@ import { TenantsService } from '../tenants/tenants.service';
 export interface TokenPair { accessToken: string; refreshToken: string; expiresIn: number }
 
 /**
- * Thông tin máy khách của request đang cấp phiên/token: địa chỉ IP và
- * chuỗi User-Agent lấy từ request ở controller (`clientIpOf(req)` —
- * điểm lấy IP khách duy nhất ở common/client-ip, đã gồm cấu hình
- * proxy tin cậy và chuẩn hoá địa chỉ; `req.headers['user-agent']`).
- * Được ghi một lần lên họ refresh token lúc tạo họ để danh sách
- * phiên hiển thị đúng máy khách của phiên.
+ * Thông tin máy khách của request đang cấp phiên/token: địa chỉ IP và chuỗi User-Agent lấy từ request ở controller (`clientIpOf(req)` — điểm lấy IP khách duy nhất ở common/client-ip, đã gồm cấu hình proxy tin cậy và chuẩn hoá địa chỉ; `req.headers['user-agent']`). Được ghi một lần lên họ refresh token lúc tạo họ để danh sách phiên hiển thị đúng máy khách của phiên.
  */
 export interface SessionClientInfo { ip?: string; userAgent?: string }
 
 /**
- * Kết quả sau bước mật khẩu: hoặc đã đủ điều kiện cấp token, hoặc bị chặn
- * ở bước MFA với một challenge token ngắn hạn (scope `mfa_challenge` — chỉ
- * dùng được cho POST /auth/mfa/verify, JwtAuthStrategy từ chối nó ở mọi
- * route thường).
+ * Kết quả sau bước mật khẩu: hoặc đã đủ điều kiện cấp token, hoặc bị chặn ở bước MFA với một challenge token ngắn hạn (scope `mfa_challenge` — chỉ dùng được cho POST /auth/mfa/verify, JwtAuthStrategy từ chối nó ở mọi route thường).
  */
 export type PasswordLoginOutcome =
   | { mfaRequired: false; user: UserRow; tokens: TokenPair }
   | { mfaRequired: true; user: UserRow; challengeToken: string };
 
 /**
- * Kết quả đăng nhập phiên cookie: hoặc phiên đã tạo xong, hoặc bị chặn ở
- * bước MFA với challenge của luồng session (chưa tạo phiên nào).
+ * Kết quả đăng nhập phiên cookie: hoặc phiên đã tạo xong, hoặc bị chặn ở bước MFA với challenge của luồng session (chưa tạo phiên nào).
  */
 export type SessionLoginOutcome =
   | { mfaRequired: false; user: UserRow; sessionId: string }
   | { mfaRequired: true; user: UserRow; challengeToken: string };
 
 /**
- * Đích hoàn tất của một challenge MFA: mỗi luồng đăng nhập có đích
- * riêng và challenge của luồng này KHÔNG dùng chéo sang luồng khác
- * được (kiểm ở `passMfaChallenge`): `token` → POST /auth/mfa/verify
+ * Đích hoàn tất của một challenge MFA: mỗi luồng đăng nhập có đích riêng và challenge của luồng này KHÔNG dùng chéo sang luồng khác được (kiểm ở `passMfaChallenge`): `token` → POST /auth/mfa/verify
  * (cấp cặp token), `session` → POST /auth/session/mfa/verify (tạo
  * phiên cookie), `oauth` → POST /auth/oauth/mfa/verify (tạo phiên web
  * + mã bàn giao của luồng OAuth), `platform` → POST
- * /auth/platform/mfa/verify (cấp access token platform).
- * Challenge còn mang không gian kho riêng của lần đăng nhập đã cấp
- * nó (claim `space`, issue #584): bước hai chỉ hoàn tất khi request
- * đang ở đúng địa chỉ của không gian đó — challenge của trung tâm
- * này không đổi được thành phiên của trung tâm khác.
+ * /auth/platform/mfa/verify (cấp access token platform). Challenge còn mang không gian kho riêng của lần đăng nhập đã cấp nó (claim `space`, issue #584): bước hai chỉ hoàn tất khi request đang ở đúng địa chỉ của không gian đó — challenge của trung tâm này không đổi được thành phiên của trung tâm khác.
  */
 export type MfaChallengeFlow = 'token' | 'session' | 'oauth' | 'platform';
 
 /**
- * Kết quả đăng nhập quản trị platform: hoặc đã đủ điều kiện cấp
- * access token platform, hoặc bị chặn ở bước MFA với một challenge
- * token ngắn hạn của luồng platform. Token platform CHỈ có access
- * token (không có refresh family): hết hạn thì đăng nhập lại —
- * bề mặt vận hành không dùng cơ chế xoay refresh của đường
- * nghiệp vụ.
+ * Kết quả đăng nhập quản trị platform: hoặc đã đủ điều kiện cấp access token platform, hoặc bị chặn ở bước MFA với một challenge token ngắn hạn của luồng platform. Token platform CHỈ có access token (không có refresh family): hết hạn thì đăng nhập lại — bề mặt vận hành không dùng cơ chế xoay refresh của đường nghiệp vụ.
  */
 export type PlatformLoginOutcome =
   | { mfaRequired: false; user: UserRow; accessToken: string; expiresIn: number }
@@ -81,12 +61,9 @@ export type PlatformLoginOutcome =
 
 /**
  * Kết quả login-as theo chặng cutover (GĐ2 chặng 2.6/2.7, issue #7):
- * `legacy` = cặp token JWT của hệ cũ (chặng `AUTH_CUTOVER_STAGE=off`,
- * hiện trạng); `better-auth` = phiên lập trình của Better Auth
+ * `legacy` = cặp token JWT của hệ cũ (chặng `AUTH_CUTOVER_STAGE=off`, hiện trạng); `better-auth` = phiên lập trình của Better Auth
  * (`AUTH_CUTOVER_STAGE=bake`) — controller đặt cookie phiên đã ký,
- * đáp ứng KHÔNG mang token JWT nào. Cổng kiểm tra (capability, lý do
- * bắt buộc, chặn đích không hoạt động/admin) và audit `user_loginas`
- * là CHUNG cho cả hai chặng.
+ * đáp ứng KHÔNG mang token JWT nào. Cổng kiểm tra (capability, lý do bắt buộc, chặn đích không hoạt động/admin) và audit `user_loginas` là CHUNG cho cả hai chặng.
  */
 export type LoginAsOutcome =
   | { mode: 'legacy'; user: UserRow; tokens: TokenPair; tenantId: string }
@@ -109,18 +86,11 @@ export interface MySessionView {
 function hashToken(token: string): string { return createHash('sha256').update(token).digest('hex'); }
 
 /**
- * Facade của AuthModule (report §3.7). Xác thực KHÔNG phải ghi danh và KHÔNG phải
- * gán role: một lần đăng nhập thành công chỉ chứng minh danh tính; người dùng được
- * làm gì do PermissionEvaluator quyết định, còn quyền vào khoá học do Enrol quyết định.
- * Refresh token là opaque, được lưu dưới dạng đã băm, nhóm theo family, được xoay vòng ở
- * mỗi lần dùng; phát lại một token đã bị xoay vòng sẽ thu hồi toàn bộ family.
+ * Facade của AuthModule (report §3.7). Xác thực KHÔNG phải ghi danh và KHÔNG phải gán role: một lần đăng nhập thành công chỉ chứng minh danh tính; người dùng được làm gì do PermissionEvaluator quyết định, còn quyền vào khoá học do Enrol quyết định. Refresh token là opaque, được lưu dưới dạng đã băm, nhóm theo family, được xoay vòng ở mỗi lần dùng; phát lại một token đã bị xoay vòng sẽ thu hồi toàn bộ family.
  */
 @Injectable()
 /**
- * Xác thực và vòng đời token: đăng nhập, refresh xoay vòng, đăng xuất, đổi mật khẩu, login-as.
- * Đối chiếu Moodle: lib/moodlelib.php (authenticate_user_login, login_attempt_failed) và cơ chế session.
- * Chính sách: khoá tạm thời sau nhiều lần thất bại liên tiếp (auth.locked_out); suspended/deleted không đăng nhập được;
- * refresh token xoay theo family — tái sử dụng token cũ sẽ thu hồi cả family.
+ * Xác thực và vòng đời token: đăng nhập, refresh xoay vòng, đăng xuất, đổi mật khẩu, login-as. Đối chiếu Moodle: lib/moodlelib.php (authenticate_user_login, login_attempt_failed) và cơ chế session. Chính sách: khoá tạm thời sau nhiều lần thất bại liên tiếp (auth.locked_out); suspended/deleted không đăng nhập được; refresh token xoay theo family — tái sử dụng token cũ sẽ thu hồi cả family.
  */
 export class AuthService {
   constructor(
@@ -144,9 +114,7 @@ export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
   /**
-   * Phát sự kiện vòng đời phiên (user_logged_in / user_logged_out) vào
-   * outbox: relay sẽ phản chiếu sang event_log (logstore). Ghi sự kiện
-   * không bao giờ được làm hỏng luồng đăng nhập — lỗi chỉ ghi cảnh báo.
+   * Phát sự kiện vòng đời phiên (user_logged_in / user_logged_out) vào outbox: relay sẽ phản chiếu sang event_log (logstore). Ghi sự kiện không bao giờ được làm hỏng luồng đăng nhập — lỗi chỉ ghi cảnh báo.
    */
   private async recordAuthEvent(type: 'user_logged_in' | 'user_logged_out', payload: Record<string, unknown>): Promise<void> {
     await this.outbox

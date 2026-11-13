@@ -1,15 +1,11 @@
-# Mặt tiền duy nhất cho Docker Compose; Caddy quản lý proxy, websocket,
-# streaming, header và nén bằng tính năng chính thức, không dùng Node tự chế.
+# Mặt tiền duy nhất cho Docker Compose; Caddy quản lý proxy, websocket, streaming, header và nén bằng tính năng chính thức, không dùng Node tự chế.
 {
 	admin off
 
 	servers {
-		# Caddy chạy sau Cloudflare Tunnel/Docker gateway: giữ nguyên
-		# X-Forwarded-Proto của chặng nội bộ đáng tin, tránh đưa HTTPS
-		# công khai thành HTTP khi API dựng URL đăng nhập/OAuth.
+		# Caddy chạy sau Cloudflare Tunnel/Docker gateway: giữ nguyên X-Forwarded-Proto của chặng nội bộ đáng tin, tránh đưa HTTPS công khai thành HTTP khi API dựng URL đăng nhập/OAuth.
 		trusted_proxies static private_ranges
-		# Các proxy phía trước thêm IP ở bên phải; không tin IP
-		# giả ở đầu chuỗi do client tự khai.
+		# Các proxy phía trước thêm IP ở bên phải; không tin IP giả ở đầu chuỗi do client tự khai.
 		trusted_proxies_strict
 	}
 }
@@ -24,8 +20,7 @@
 	}
 	handle @api {
 		reverse_proxy {$GIAOKHOA_API_UPSTREAM:api:3100} {
-			# API dùng Express trust proxy = 1: chỉ một địa chỉ khách
-			# đã chuẩn hóa từ Caddy, không truyền nguyên chuỗi XFF.
+			# API dùng Express trust proxy = 1: chỉ một địa chỉ khách đã chuẩn hóa từ Caddy, không truyền nguyên chuỗi XFF.
 			header_up X-Forwarded-For {client_ip}
 		}
 	}

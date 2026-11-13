@@ -7,22 +7,14 @@ import {
 import { createCategory, createCourse, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
 
 /**
- * Toàn vẹn gán vai theo ghi danh (issue #157, phát sinh từ phán quyết
- * CHƯA ĐẠT của PR #152).
+ * Toàn vẹn gán vai theo ghi danh (issue #157, phát sinh từ phán quyết CHƯA ĐẠT của PR #152).
  *
- * Trạng thái cấm: một ghi danh còn hiệu lực mà không còn gán vai tại
- * context khoá (định nghĩa "thuộc khoá" của #33 = ghi danh ∪ gán vai).
- * Trước fix, trạng thái này chạm tới được qua API hai đường:
+ * Trạng thái cấm: một ghi danh còn hiệu lực mà không còn gán vai tại context khoá (định nghĩa "thuộc khoá" của #33 = ghi danh ∪ gán vai). Trước fix, trạng thái này chạm tới được qua API hai đường:
  *  1. ghi danh qua 2 instance cùng vai chỉ có MỘT dòng gán vai dùng
- *     chung (assignRole/insertAssignment không set component/itemId),
- *     mà unenrolInternal xoá mọi dòng khớp roleId của instance bị rút —
- *     rút 1 instance là mất vai dù ghi danh instance kia vẫn ACTIVE;
+ *     chung (assignRole/insertAssignment không set component/itemId), mà unenrolInternal xoá mọi dòng khớp roleId của instance bị rút — rút 1 instance là mất vai dù ghi danh instance kia vẫn ACTIVE;
  *  2. DELETE /access/assignments/:id xoá cả dòng do enrol cấp.
  *
- * Sau fix: dòng gán của enrol mang component='enrol' + itemId=instance;
- * unenrol/đổi vai chỉ gỡ dòng của chính instance; unassignRole qua API
- * quản trị chặn xoá dòng nguồn enrol (`access.assignment_enrol_managed`);
- * dòng cũ không component/itemId được coi là gán tay.
+ * Sau fix: dòng gán của enrol mang component='enrol' + itemId=instance; unenrol/đổi vai chỉ gỡ dòng của chính instance; unassignRole qua API quản trị chặn xoá dòng nguồn enrol (`access.assignment_enrol_managed`); dòng cũ không component/itemId được coi là gán tay.
  */
 describe('Toàn vẹn gán vai trò ghi danh (#157)', () => {
   let app: INestApplication;

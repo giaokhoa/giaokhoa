@@ -11,12 +11,7 @@ import type {
 } from '../types/matrix';
 
 /**
- * Tầng gọi API thuần của màn ma trận thuộc feature matrices: chỉ
- * chứa các hàm gọi HTTP và các luồng tải file qua API, không phụ
- * thuộc React hay React Query. Tầng `queries/` của feature bọc
- * các hàm này thành queryOptions, hook và đột biến. Tách từ
- * module dữ liệu phẳng `src/lib/matrix-data.ts` khi tổ chức lại
- * apps/web theo mô hình features/ (issue #500).
+ * Tầng gọi API thuần của màn ma trận thuộc feature matrices: chỉ chứa các hàm gọi HTTP và các luồng tải file qua API, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành queryOptions, hook và đột biến. Tách từ module dữ liệu phẳng `src/lib/matrix-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
 
 /** Tải một endpoint độc lập: lỗi thì trả null (giữ nhịp probe thủ công trước đây). */

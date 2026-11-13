@@ -14,13 +14,7 @@ import { MessagingMembershipSyncService } from './messaging-membership-sync.serv
 import { MessagingNotificationsService } from './messaging-notifications.service';
 
 /**
- * Đếm ký tự NGƯỜI DÙNG THẤY (grapheme cluster) của một đoạn văn bản —
- * cách đếm của trần độ dài tin (lát M2, issue #212): một emoji đơn,
- * một emoji ghép ZWJ (vd biểu tượng gia đình) hay một chữ cái kèm dấu
- * tổ hợp đều tính là MỘT ký tự, tuyệt đối không đếm byte UTF-8 hay đơn
- * vị UTF-16 (hai cách đếm đó phạt oan tiếng Việt và emoji nhiều lần).
- * `Intl.Segmenter` là API chuẩn của Node ≥ 16; môi trường thiếu nó thì
- * lùi về đếm theo code point Unicode ([...text]) — vẫn đúng hơn byte.
+ * Đếm ký tự NGƯỜI DÙNG THẤY (grapheme cluster) của một đoạn văn bản — cách đếm của trần độ dài tin (lát M2, issue #212): một emoji đơn, một emoji ghép ZWJ (vd biểu tượng gia đình) hay một chữ cái kèm dấu tổ hợp đều tính là MỘT ký tự, tuyệt đối không đếm byte UTF-8 hay đơn vị UTF-16 (hai cách đếm đó phạt oan tiếng Việt và emoji nhiều lần). `Intl.Segmenter` là API chuẩn của Node ≥ 16; môi trường thiếu nó thì lùi về đếm theo code point Unicode ([...text]) — vẫn đúng hơn byte.
  */
 export function countUserVisibleCharacters(text: string): number {
   const SegmenterCtor = (Intl as unknown as {
@@ -49,11 +43,7 @@ function isUniqueViolation(err: unknown): boolean {
 }
 
 /**
- * Tin có còn nằm trong CỬA SỔ THU HỒI hay không (vòng đời tin nhắn
- * theo vai, issue #33): thuần hàm thời gian để kiểm chứng đơn vị
- * tách khỏi DB — `windowMinutes <= 0` nghĩa là thu hồi đã TẮT (không
- * tin nào thu hồi được, kể cả tin vừa gửi); mốc biên ĐÚNG bằng cửa
- * sổ vẫn được tính là trong cửa sổ.
+ * Tin có còn nằm trong CỬA SỔ THU HỒI hay không (vòng đời tin nhắn theo vai, issue #33): thuần hàm thời gian để kiểm chứng đơn vị tách khỏi DB — `windowMinutes <= 0` nghĩa là thu hồi đã TẮT (không tin nào thu hồi được, kể cả tin vừa gửi); mốc biên ĐÚNG bằng cửa sổ vẫn được tính là trong cửa sổ.
  */
 export function isWithinRecallWindow(createdAt: Date, now: Date, windowMinutes: number): boolean {
   if (windowMinutes <= 0) return false;
@@ -61,37 +51,15 @@ export function isWithinRecallWindow(createdAt: Date, now: Date, windowMinutes: 
 }
 
 /**
- * TIN NHẮN + KIỂM DUYỆT của MessagingModule (cụm ca sử dụng
- * "tin nhắn/kiểm duyệt").
+ * TIN NHẮN + KIỂM DUYỆT của MessagingModule (cụm ca sử dụng "tin nhắn/kiểm duyệt").
  *
- * Luồng nghiệp vụ: sau khi gửi, quyền sở hữu của một MESSAGE chuyển
- * cho hệ thống — không endpoint nào sửa nội dung tin; vòng đời tin
- * theo vai (issue #33) gồm ba lớp tách bạch: xoá-phía-mình (chỉ tác
- * giả, mọi lúc, chỉ ẩn khỏi tầm nhìn của chính người xoá), thu hồi
+ * Luồng nghiệp vụ: sau khi gửi, quyền sở hữu của một MESSAGE chuyển cho hệ thống — không endpoint nào sửa nội dung tin; vòng đời tin theo vai (issue #33) gồm ba lớp tách bạch: xoá-phía-mình (chỉ tác giả, mọi lúc, chỉ ẩn khỏi tầm nhìn của chính người xoá), thu hồi
  * (chỉ tác giả, trong cửa sổ site-config, nội dung bị vô hiệu với
- * mọi thành viên thường nhưng còn truy vết kiểm duyệt) và xoá cứng/gỡ
- * hàng loạt (chỉ người có thẩm quyền kiểm duyệt trong phạm vi
- * conversation, lý do bắt buộc, luôn ghi moderator_action trước khi
- * xoá vật lý). Gửi tin qua cổng thành viên + cổng liên lạc (với hội
- * thoại 1-1) + trần độ dài đếm theo ký tự người dùng thấy + chống
- * spam theo người gửi (MessagingSendThrottleService); gửi trùng theo
- * clientMessageId là an toàn (idempotent). Báo cáo conversation vào
- * hàng đợi của giáo viên phụ trách khoá liên quan và quản trị viên,
- * kèm thông báo trong app ngay khi tạo.
+ * mọi thành viên thường nhưng còn truy vết kiểm duyệt) và xoá cứng/gỡ hàng loạt (chỉ người có thẩm quyền kiểm duyệt trong phạm vi conversation, lý do bắt buộc, luôn ghi moderator_action trước khi xoá vật lý). Gửi tin qua cổng thành viên + cổng liên lạc (với hội thoại 1-1) + trần độ dài đếm theo ký tự người dùng thấy + chống spam theo người gửi (MessagingSendThrottleService); gửi trùng theo clientMessageId là an toàn (idempotent). Báo cáo conversation vào hàng đợi của giáo viên phụ trách khoá liên quan và quản trị viên, kèm thông báo trong app ngay khi tạo.
  *
- * Các cổng thẩm quyền theo conversation (thành viên, kiểm duyệt,
- * quản lý, khoá/lớp liên quan) dùng lại của MessagingConversationsService
- * — cụm này không định nghĩa lại.
+ * Các cổng thẩm quyền theo conversation (thành viên, kiểm duyệt, quản lý, khoá/lớp liên quan) dùng lại của MessagingConversationsService — cụm này không định nghĩa lại.
  *
- * Cách lắp ráp (issue #295): service này là một CỤM của MessagingModule,
- * tách từ MessagingService cũ theo cụm ca sử dụng — tách cấu trúc thuần,
- * không đổi hành vi. MessagingService nay là facade giữ nguyên bề mặt
- * công khai và chữ ký constructor, tự lắp ráp các service cụm trong
- * constructor của nó (các test đơn vị hiện hữu khởi tạo trực tiếp
- * `new MessagingService(...)` với đúng các phụ thuộc hạ tầng cũ nên
- * facade là điểm lắp ráp để giữ nguyên hợp đồng khởi tạo đó); các
- * service cụm không đăng ký provider riêng trong module và module
- * wiring giữ nguyên như trước khi tách.
+ * Cách lắp ráp (issue #295): service này là một CỤM của MessagingModule, tách từ MessagingService cũ theo cụm ca sử dụng — tách cấu trúc thuần, không đổi hành vi. MessagingService nay là facade giữ nguyên bề mặt công khai và chữ ký constructor, tự lắp ráp các service cụm trong constructor của nó (các test đơn vị hiện hữu khởi tạo trực tiếp `new MessagingService(...)` với đúng các phụ thuộc hạ tầng cũ nên facade là điểm lắp ráp để giữ nguyên hợp đồng khởi tạo đó); các service cụm không đăng ký provider riêng trong module và module wiring giữ nguyên như trước khi tách.
  */
 export class MessagingMessagesService {
   constructor(
@@ -109,9 +77,7 @@ export class MessagingMessagesService {
   ) {}
 
   /**
-   * Một cửa sổ tin theo cursor seq của conversation (tải lịch sử cũ
-   * bằng beforeSeq, đồng bộ phần thiếu bằng afterSeq) — đầu REST cho
-   * phân trang/đồng bộ, cùng ngữ nghĩa cursor với kênh realtime.
+   * Một cửa sổ tin theo cursor seq của conversation (tải lịch sử cũ bằng beforeSeq, đồng bộ phần thiếu bằng afterSeq) — đầu REST cho phân trang/đồng bộ, cùng ngữ nghĩa cursor với kênh realtime.
    */
   async listConversationMessages(userId: string, conversationId: string, query: {
     beforeSeq?: number; afterSeq?: number; limit?: number;

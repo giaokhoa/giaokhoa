@@ -73,8 +73,7 @@ export const richTextInlineNodeSchema = z.union([
 export type RichTextInlineNode = z.infer<typeof richTextInlineNodeSchema>;
 
 /**
- * Một node paragraph của Tiptap: chứa các node inline; paragraph rỗng có
- * thể không mang `content` (đúng dạng Tiptap sinh ra) hoặc mang mảng rỗng.
+ * Một node paragraph của Tiptap: chứa các node inline; paragraph rỗng có thể không mang `content` (đúng dạng Tiptap sinh ra) hoặc mang mảng rỗng.
  */
 export const richTextParagraphNodeSchema = z.strictObject({
   type: z.literal('paragraph'),
@@ -84,9 +83,7 @@ export const richTextParagraphNodeSchema = z.strictObject({
 export type RichTextParagraphNode = z.infer<typeof richTextParagraphNodeSchema>;
 
 /**
- * Một node ảnh của Tiptap: `src` là URL/định danh mà bề mặt chứa đã phân
- * giải qua module files của hệ (editor không tự gọi API files); `alt` và
- * `title` có thể `null` đúng như Tiptap sinh ra.
+ * Một node ảnh của Tiptap: `src` là URL/định danh mà bề mặt chứa đã phân giải qua module files của hệ (editor không tự gọi API files); `alt` và `title` có thể `null` đúng như Tiptap sinh ra.
  */
 export const richTextImageNodeSchema = z.strictObject({
   type: z.literal('image'),
@@ -114,12 +111,7 @@ export interface RichTextBulletListNode {
 }
 
 /**
- * Một mệnh đề của câu đúng/sai chùm (TF-A): node `statement` mang
- * `attrs.id` là định danh ổn định của mệnh đề trong vòng đời của
- * version (đáp án đúng/sai của mệnh đề và đáp án học sinh chọn đều bám
- * theo id này, KHÔNG theo vị trí — sửa/thêm mệnh đề không làm lệch đáp
- * án của các mệnh đề còn lại) và `content` là các block rich text của
- * nội dung mệnh đề.
+ * Một mệnh đề của câu đúng/sai chùm (TF-A): node `statement` mang `attrs.id` là định danh ổn định của mệnh đề trong vòng đời của version (đáp án đúng/sai của mệnh đề và đáp án học sinh chọn đều bám theo id này, KHÔNG theo vị trí — sửa/thêm mệnh đề không làm lệch đáp án của các mệnh đề còn lại) và `content` là các block rich text của nội dung mệnh đề.
  */
 export interface RichTextStatementNode {
   type: 'statement';
@@ -200,8 +192,7 @@ export const richTextDocumentSchema = z.strictObject({
 export type RichTextDocument = z.infer<typeof richTextDocumentSchema>;
 
 /**
- * Đầu vào rich text ở biên tạo/sửa: nhận chuỗi thuần (tầng nghiệp vụ chuẩn
- * hoá thành tài liệu một paragraph) hoặc một tài liệu Tiptap đã đúng lát.
+ * Đầu vào rich text ở biên tạo/sửa: nhận chuỗi thuần (tầng nghiệp vụ chuẩn hoá thành tài liệu một paragraph) hoặc một tài liệu Tiptap đã đúng lát.
  */
 export const richTextInputSchema = z.union([z.string(), richTextDocumentSchema]);
 /** Đầu vào rich text: chuỗi thuần hoặc tài liệu Tiptap. */
@@ -216,9 +207,7 @@ export const emptyRichTextDocument: RichTextDocument = {
 /**
  * Chuẩn hoá đầu vào rich text thành tài liệu Tiptap.
  *
- * Chuỗi rỗng cho ra tài liệu rỗng chuẩn (một paragraph rỗng); chuỗi thường
- * cho ra một paragraph chứa một text node; tài liệu truyền vào được parse
- * lại qua schema để đảm bảo an toàn ở biên (node ngoài lát bị từ chối).
+ * Chuỗi rỗng cho ra tài liệu rỗng chuẩn (một paragraph rỗng); chuỗi thường cho ra một paragraph chứa một text node; tài liệu truyền vào được parse lại qua schema để đảm bảo an toàn ở biên (node ngoài lát bị từ chối).
  */
 export function toRichTextDocument(input: string | RichTextDocument): RichTextDocument {
   if (typeof input === 'string') {
@@ -234,11 +223,7 @@ export function toRichTextDocument(input: string | RichTextDocument): RichTextDo
 }
 
 /**
- * Trích phần chữ của một block cho bản text thuần: paragraph cho chữ của
- * các node inline (công thức trong dòng đóng góp mã LaTeX của nó, đúng vị
- * trí trong câu); blockMath cho mã LaTeX; ảnh cho chữ thay thế `alt` (rỗng
- * khi không có); danh sách cho chữ của từng mục, các mục cách nhau bằng
- * xuống dòng.
+ * Trích phần chữ của một block cho bản text thuần: paragraph cho chữ của các node inline (công thức trong dòng đóng góp mã LaTeX của nó, đúng vị trí trong câu); blockMath cho mã LaTeX; ảnh cho chữ thay thế `alt` (rỗng khi không có); danh sách cho chữ của từng mục, các mục cách nhau bằng xuống dòng.
  */
 function extractBlockPlainText(block: RichTextBlockNode): string {
   switch (block.type) {
@@ -361,11 +346,7 @@ export function getTrueFalseStatements(doc: RichTextDocument): TrueFalseStatemen
 }
 
 /**
- * Trích văn bản thuần từ một tài liệu rich text: nối chữ của từng block,
- * các block cách nhau bằng ký tự xuống dòng; paragraph rỗng cho ra một
- * dòng rỗng. Đây là bản text canonical dùng cho tìm kiếm, kiểm tra rỗng
- * và neo danh tính nội dung — công thức đóng góp mã LaTeX của nó nên nội
- * dung có công thức không bao giờ trích ra rỗng hay mất phần công thức.
+ * Trích văn bản thuần từ một tài liệu rich text: nối chữ của từng block, các block cách nhau bằng ký tự xuống dòng; paragraph rỗng cho ra một dòng rỗng. Đây là bản text canonical dùng cho tìm kiếm, kiểm tra rỗng và neo danh tính nội dung — công thức đóng góp mã LaTeX của nó nên nội dung có công thức không bao giờ trích ra rỗng hay mất phần công thức.
  */
 export function extractRichTextPlainText(doc: RichTextDocument): string {
   return doc.content.map(extractBlockPlainText).join('\n');

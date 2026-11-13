@@ -60,8 +60,7 @@ export interface RoleUserDialogProps {
 }
 
 /**
- * Tên hiển thị của người dùng: họ tên đầy đủ khi có, lùi về tên đăng
- * nhập khi hồ sơ trống cả họ lẫn tên.
+ * Tên hiển thị của người dùng: họ tên đầy đủ khi có, lùi về tên đăng nhập khi hồ sơ trống cả họ lẫn tên.
  */
 export function userDisplayName(user: UserWithAssignmentsListItem): string {
   const fullName = `${user.firstName} ${user.lastName}`.trim();

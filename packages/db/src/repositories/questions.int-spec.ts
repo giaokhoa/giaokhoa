@@ -9,32 +9,21 @@ import { QuestionsRepository, type EntryRow } from './questions';
 /**
  * Spec tích hợp của repository câu hỏi trên Kysely (issue #642).
  *
- * Database trung tâm dựng từ rỗng bằng chính cầu nối migration
- * của package trên cụm PostgreSQL thật của môi trường test (biến
- * `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ
- * `DATABASE_URL`). Mọi ca chạy qua repository production ở
- * `questions.ts` — không mô phỏng handle.
+ * Database trung tâm dựng từ rỗng bằng chính cầu nối migration của package trên cụm PostgreSQL thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ `DATABASE_URL`). Mọi ca chạy qua repository production ở `questions.ts` — không mô phỏng handle.
  *
  * Các tính chất chốt tại đây:
  * - Insert không truyền id nhận id UUIDv7 do database sinh
  *   (phụ lục U) và đọc lại nguyên vẹn qua chính repository.
  * - Ghi/đọc jsonb nội dung khớp hai chiều repository ↔ oracle
- *   độc lập (Kysely thô ngoài repository) trên cùng dữ kiện mẫu,
- *   gồm điểm sắc nhất của T-4: cột jsonb nullable phân biệt `null`
+ *   độc lập (Kysely thô ngoài repository) trên cùng dữ kiện mẫu, gồm điểm sắc nhất của T-4: cột jsonb nullable phân biệt `null`
  *   (SQL NULL) với giá trị và với `undefined` (không đổi) ở cả
  *   insert lẫn update patch.
  * - Giao dịch của repository nguyên tử: lỗi giữa chừng rollback
- *   sạch mọi bảng đã ghi; `markSystemImportDerived` đổi cờ trong
- *   giao dịch và rollback cùng giao dịch khi giao dịch huỷ.
+ *   sạch mọi bảng đã ghi; `markSystemImportDerived` đổi cờ trong giao dịch và rollback cùng giao dịch khi giao dịch huỷ.
  * - `countQuestionsByCurriculumFilterPerCategory` trả `number`
- *   thật (ép `::int` — rủi ro R-G2-1: `count(*)` là int8, qua pg
- *   sẽ là `string` nếu không ép).
+ *   thật (ép `::int` — rủi ro R-G2-1: `count(*)` là int8, qua pg sẽ là `string` nếu không ép).
  * - Bộ lọc chương trình tương đương hành vi với bản cũ: oracle
- *   trong spec này là chính các truy vấn của repository cũ (trước
- *   #642) dựng lại bằng Kysely thô trên CÙNG dữ kiện mẫu (gồm
- *   YCCĐ đã rút, YCCĐ phái sinh từ gốc đã rút, và điều kiện khớp
- *   cùng dòng nối outcomeId + cognitiveLevel) — hai phía phải cho
- *   cùng tập id.
+ *   trong spec này là chính các truy vấn của repository cũ (trước #642) dựng lại bằng Kysely thô trên CÙNG dữ kiện mẫu (gồm YCCĐ đã rút, YCCĐ phái sinh từ gốc đã rút, và điều kiện khớp cùng dòng nối outcomeId + cognitiveLevel) — hai phía phải cho cùng tập id.
  */
 
 const adminUrl =

@@ -18,9 +18,7 @@ import { MatrixEditPage } from './question-matrix';
  *  - màn sửa ma trận: checkbox Vận dụng cao gửi levelSet 'four' khi
  *    lưu (thay cho mọi select levelSet — web không còn select nào);
  *  - người dùng thiếu capability quản trị ma trận (chỉ xem được ma
- *    trận, không phải site admin): trang hiện thẻ chặn thay cho
- *    wizard và không gọi các endpoint của wizard (lát D-2, issue
- *    #233).
+ *    trận, không phải site admin): trang hiện thẻ chặn thay cho wizard và không gọi các endpoint của wizard (lát D-2, issue #233).
  */
 
 const PROFILE = {

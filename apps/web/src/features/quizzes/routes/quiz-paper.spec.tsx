@@ -8,10 +8,7 @@ import QuizPaperPage from './quiz-paper';
 
 /**
  * Spec trang chấm bài giấy (CAM-0, issue #112) theo endpoint thật:
- * lô phiếu qua GET /exam-batches?pinId=, hàng chờ qua
- * GET /exam-scans?pinId=, gán định danh qua POST .../assign-identity,
- * xác nhận câu mơ hồ qua POST .../resolve-readings, ghi điểm qua
- * POST .../record. Ảnh phiếu qua GET /exam-scans/:id/image/warped.
+ * lô phiếu qua GET /exam-batches?pinId=, hàng chờ qua GET /exam-scans?pinId=, gán định danh qua POST .../assign-identity, xác nhận câu mơ hồ qua POST .../resolve-readings, ghi điểm qua POST .../record. Ảnh phiếu qua GET /exam-scans/:id/image/warped.
  */
 const COURSE_ID = '01900000-0000-7000-8000-0000000000c1';
 const QUIZ_ID = '01900000-0000-7000-8000-0000000000c2';

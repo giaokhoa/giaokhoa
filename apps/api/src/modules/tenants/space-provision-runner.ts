@@ -1,71 +1,33 @@
 /**
- * Pipeline cấp phát trung tâm mới (issue #583, chương trình tenant
- * #579) — MỘT lệnh vận hành duy nhất dựng một trung tâm từ con số
- * không thành một kho riêng hoạt động được trên cụm chung.
+ * Pipeline cấp phát trung tâm mới (issue #583, chương trình tenant #579) — MỘT lệnh vận hành duy nhất dựng một trung tâm từ con số không thành một kho riêng hoạt động được trên cụm chung.
  *
- * Thứ tự 7 bước (mỗi bước kiểm tra trạng thái đã làm trước khi làm
- * — chạy lại sau sự cố tiếp tục từ bước dở dang, không tạo trùng):
+ * Thứ tự 7 bước (mỗi bước kiểm tra trạng thái đã làm trước khi làm — chạy lại sau sự cố tiếp tục từ bước dở dang, không tạo trùng):
  * 1. Đăng ký: dòng `space_registry` (trạng thái `provisioning`) +
- *    lịch sử `create`. Từ chối slug đã có (trừ khi chạy lại đúng
- *    trung tâm đó) và từ chối tên database đã có ở BẤT KỲ dòng nào
+ *    lịch sử `create`. Từ chối slug đã có (trừ khi chạy lại đúng trung tâm đó) và từ chối tên database đã có ở BẤT KỲ dòng nào
  *    (kể cả hàng shared — kho dedicated mang tên trùng kho chung
- *    sẽ khiến trung tâm trỏ thẳng vào kho chung). Chạy lại chỉ
- *    được khi dòng đang ở trạng thái `provisioning`; trung tâm đã
- *    đình chỉ/đóng bị từ chối, chỉ mở lại qua thao tác vòng đời
- *    tường minh (đổi trạng thái), không mở lại lặng lẽ bằng lệnh
- *    cấp phát.
+ *    sẽ khiến trung tâm trỏ thẳng vào kho chung). Chạy lại chỉ được khi dòng đang ở trạng thái `provisioning`; trung tâm đã đình chỉ/đóng bị từ chối, chỉ mở lại qua thao tác vòng đời tường minh (đổi trạng thái), không mở lại lặng lẽ bằng lệnh cấp phát.
  * 2. Database + role: role kết nối riêng + database riêng thuộc sở
- *    hữu role đó trên cụm chung, thu hồi CONNECT của PUBLIC, chỉ
- *    cấp cho role của trung tâm. Role đã có sẵn mà mang quyền vượt
- *    ranh giới tenant (SUPERUSER, BYPASSRLS, CREATEDB, CREATEROLE,
- *    REPLICATION, hoặc là thành viên của một role đặc quyền) thì bị
- *    từ chối ngay, không nhận nuôi làm role kết nối — nhận nuôi
- *    role đặc quyền sẽ cho trung tâm quyền truy cập chéo database
- *    hoặc bỏ qua RLS. Mật khẩu role: ưu tiên biến môi
- *    trường `SPACE_PROVISION_DB_PASSWORD` (vận hành cấp tường minh,
- *    cũng là cách xoay mật khẩu khi đã mất); chưa cấp mà role chưa
- *    có thì sinh mật khẩu chữ-số và in đúng một lần; role đã có mà
- *    không cấp mật khẩu thì GIỮ NGUYÊN mật khẩu cũ (không xoay lén
- *    dưới chân môi trường triển khai đã lưu mật khẩu trước đó).
+ *    hữu role đó trên cụm chung, thu hồi CONNECT của PUBLIC, chỉ cấp cho role của trung tâm. Role đã có sẵn mà mang quyền vượt ranh giới tenant (SUPERUSER, BYPASSRLS, CREATEDB, CREATEROLE, REPLICATION, hoặc là thành viên của một role đặc quyền) thì bị từ chối ngay, không nhận nuôi làm role kết nối — nhận nuôi role đặc quyền sẽ cho trung tâm quyền truy cập chéo database hoặc bỏ qua RLS. Mật khẩu role: ưu tiên biến môi trường `SPACE_PROVISION_DB_PASSWORD` (vận hành cấp tường minh, cũng là cách xoay mật khẩu khi đã mất); chưa cấp mà role chưa có thì sinh mật khẩu chữ-số và in đúng một lần; role đã có mà không cấp mật khẩu thì GIỮ NGUYÊN mật khẩu cũ (không xoay lén dưới chân môi trường triển khai đã lưu mật khẩu trước đó).
  * 3. Migration: toàn bộ migration nghiệp vụ hiện hành vào database
  *    mới bằng đúng bộ máy migration của `@giaokhoa/db`
  *    (`applyStoreMigrations`, như fleet runner), rồi ghi phiên bản
- *    schema vào registry của trung tâm.
- *    Database mới nên không cần sao lưu trước như fleet runner.
+ *    schema vào registry của trung tâm. Database mới nên không cần sao lưu trước như fleet runner.
  * 4. Dữ kiện nền: context hệ thống + dòng tenant (kind `center`,
- *    trạng thái `active`) + context tenant + bản cài cục bộ gói
- *    chương trình (YCCĐ) — dump chương trình được restore nguyên
- *    văn bằng `restoreProgramDumpSql` (một transaction, neo lại
- *    context hệ thống của kho đích). Ghi nhận bản cài (phiên bản +
- *    checksum) để lần chạy lại biết kho này đã ở bản nào: bản cài
- *    khớp thì bỏ qua; chưa có bản cài mà dữ kiện đã có (chết giữa
- *    lúc restore và lúc ghi bản cài) thì chỉ ghi bản cài. Cùng bước
- *    này cài thêm BỘ VAI MẶC ĐỊNH hiện hành vào kho đích (bước ghi
- *    nhận `role-baseline`): cơ chế chuyển tiếp để trung tâm mới có
- *    vai mà gán ngay khi mở — xem `installCentreRoleBaseline`.
+ *    trạng thái `active`) + context tenant + bản cài cục bộ gói chương trình (YCCĐ) — dump chương trình được restore nguyên văn bằng `restoreProgramDumpSql` (một transaction, neo lại context hệ thống của kho đích). Ghi nhận bản cài (phiên bản + checksum) để lần chạy lại biết kho này đã ở bản nào: bản cài khớp thì bỏ qua; chưa có bản cài mà dữ kiện đã có (chết giữa lúc restore và lúc ghi bản cài) thì chỉ ghi bản cài. Cùng bước này cài thêm BỘ VAI MẶC ĐỊNH hiện hành vào kho đích (bước ghi nhận `role-baseline`): cơ chế chuyển tiếp để trung tâm mới có vai mà gán ngay khi mở — xem `installCentreRoleBaseline`.
  * 5. Nhận diện: dòng `centre_identity` (tên hiển thị = tên trung
- *    tâm, logo/chưa có, màu/chưa đặt) — dữ kiện này sống trong kho
- *    của trung tâm, không nằm ở sổ đăng ký control plane.
+ *    tâm, logo/chưa có, màu/chưa đặt) — dữ kiện này sống trong kho của trung tâm, không nằm ở sổ đăng ký control plane.
  * 6. Quản trị đầu tiên: tài khoản KHÔNG mật khẩu (không tồn tại mật
- *    khẩu mặc định dùng chung) + membership active vào tenant +
- *    id vào `config.siteadmins` của kho trung tâm + lời mời kích
- *    hoạt (token chỉ lưu dạng băm, hạn 7 ngày). Lời mời đang chờ
- *    sẵn thì tái dùng (không cấp chồng); token gốc chỉ in ra khi
- *    tạo mới — mất link thì dùng lệnh cấp lại lời mời.
+ *    khẩu mặc định dùng chung) + membership active vào tenant + id vào `config.siteadmins` của kho trung tâm + lời mời kích hoạt (token chỉ lưu dạng băm, hạn 7 ngày). Lời mời đang chờ sẵn thì tái dùng (không cấp chồng); token gốc chỉ in ra khi tạo mới — mất link thì dùng lệnh cấp lại lời mời.
  * 7. Kích hoạt định tuyến: trạng thái sổ → `active` + lịch sử
  *    `status_change`. Từ đây khung định tuyến phục vụ trung tâm
  *    (đệm phân giải hết hạn theo TTL, không cần khởi động lại).
  *
  * Sau bước 7, vận hành còn MỘT việc ngoài pipeline (in rõ ở đầu ra):
- * thêm biến môi trường `SPACE_<SLUG>_DATABASE_URL` (URL kết nối của
- * trung tâm) vào môi trường triển khai — sổ đăng ký chỉ giữ tham
- * chiếu, tầng ứng dụng chỉ phân giải được trung tâm khi biến này
- * đã có trong môi trường của nó.
+ * thêm biến môi trường `SPACE_<SLUG>_DATABASE_URL` (URL kết nối của trung tâm) vào môi trường triển khai — sổ đăng ký chỉ giữ tham chiếu, tầng ứng dụng chỉ phân giải được trung tâm khi biến này đã có trong môi trường của nó.
  *
  * Ranh giới tin cậy: runner chạy ngoài NestJS như các công cụ fleet
  * (không gác capability — quyền chạy script của đội vận hành là
- * ranh giới), dùng đúng repository/writer của control plane và đúng
- * bất biến ghi của tầng service.
+ * ranh giới), dùng đúng repository/writer của control plane và đúng bất biến ghi của tầng service.
  */
 import { createHash } from 'node:crypto';
 import { Client, Pool } from 'pg';

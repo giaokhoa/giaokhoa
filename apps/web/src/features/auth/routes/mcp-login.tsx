@@ -8,20 +8,9 @@ import { ErrorAlert } from '#components/error-alert';
 /**
  * Trang đăng nhập cho luồng uỷ quyền MCP (lát MCP-1, issue #163).
  *
- * Đây KHÔNG phải trang đăng nhập chính của Giáo khoa: nó là `loginPage` mà
- * máy chủ OAuth (plugin mcp() của Better Auth) chuyển tới khi client
- * AI mở luồng authorize mà trình duyệt chưa có phiên Better Auth.
- * Trang chỉ làm hai việc: đăng nhập bằng username/mật khẩu qua
- * endpoint của Better Auth (cookie phiên do BA đặt), rồi quay lại
- * `/oauth2/authorize` với NGUYÊN VĂN chuỗi query ban đầu để AS nối
- * tiếp luồng (chuỗi đó đã được AS ký — không tự sửa hay ghép thêm).
+ * Đây KHÔNG phải trang đăng nhập chính của Giáo khoa: nó là `loginPage` mà máy chủ OAuth (plugin mcp() của Better Auth) chuyển tới khi client AI mở luồng authorize mà trình duyệt chưa có phiên Better Auth. Trang chỉ làm hai việc: đăng nhập bằng username/mật khẩu qua endpoint của Better Auth (cookie phiên do BA đặt), rồi quay lại `/oauth2/authorize` với NGUYÊN VĂN chuỗi query ban đầu để AS nối tiếp luồng (chuỗi đó đã được AS ký — không tự sửa hay ghép thêm).
  *
- * Tài khoản đã bật xác thực hai lớp: đáp ứng đăng nhập mang
- * `twoFactorRedirect` và CHƯA có phiên nào (chỉ có cookie chờ bước
- * hai) — trang chuyển sang form nhập mã TOTP, gọi endpoint hoàn tất
- * bước hai để lấy cookie phiên rồi mới quay lại authorize. Bỏ qua
- * bước này (coi mọi đáp ứng 200 là đã đăng nhập) sẽ khiến authorize
- * đẩy về lại trang này vô hạn.
+ * Tài khoản đã bật xác thực hai lớp: đáp ứng đăng nhập mang `twoFactorRedirect` và CHƯA có phiên nào (chỉ có cookie chờ bước hai) — trang chuyển sang form nhập mã TOTP, gọi endpoint hoàn tất bước hai để lấy cookie phiên rồi mới quay lại authorize. Bỏ qua bước này (coi mọi đáp ứng 200 là đã đăng nhập) sẽ khiến authorize đẩy về lại trang này vô hạn.
  */
 export default function McpLoginPage() {
   const [username, setUsername] = useState('');

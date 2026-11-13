@@ -5,15 +5,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@giaokhoa/u
 import { cn } from '@giaokhoa/ui/lib/utils';
 
 /**
- * UI-1: MỘT khuôn collapse/section dùng chung cho toàn web — Card +
- * Collapsible của @giaokhoa/ui, trigger full-width có chevron xoay theo
- * trạng thái mở, hover/focus rõ, tiêu đề CardTitle + mô tả
- * CardDescription nhất quán, nội dung trong CollapsibleContent.
+ * UI-1: MỘT khuôn collapse/section dùng chung cho toàn web — Card + Collapsible của @giaokhoa/ui, trigger full-width có chevron xoay theo trạng thái mở, hover/focus rõ, tiêu đề CardTitle + mô tả CardDescription nhất quán, nội dung trong CollapsibleContent.
  *
- * Trước component này, trang /questions có ba kiểu collapse tự chế
- * khác nhau (nút button trơn trong CardHeader cho các thẻ ngân hàng;
- * CollapsibleTrigger với span font-semibold trơn cho danh mục; lẫn
- * lộn trạng thái mở/đóng) — mọi collapse mới phải dùng khuôn này.
+ * Trước component này, trang /questions có ba kiểu collapse tự chế khác nhau (nút button trơn trong CardHeader cho các thẻ ngân hàng; CollapsibleTrigger với span font-semibold trơn cho danh mục; lẫn lộn trạng thái mở/đóng) — mọi collapse mới phải dùng khuôn này.
  *
  * Hành vi giữ nguyên theo nơi dùng: component là controlled
  * (open/onOpenChange do trang giữ), nội dung chỉ render khi mở
@@ -41,9 +35,7 @@ export function CollapsibleSection({
   /** Class cho CardContent khi paddedContent=true (mặc định 'space-y-4'). */
   contentClassName?: string;
   /**
-   * true (mặc định): nội dung bọc trong CardContent có padding của
-   * Card. false: nội dung tự quản padding (vd DataTable đã có px
-   * riêng) — chỉ dùng khi nội dung thật sự cần full-width trong thẻ.
+   * true (mặc định): nội dung bọc trong CardContent có padding của Card. false: nội dung tự quản padding (vd DataTable đã có px riêng) — chỉ dùng khi nội dung thật sự cần full-width trong thẻ.
    */
   paddedContent?: boolean;
   children: ReactNode;

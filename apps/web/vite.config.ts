@@ -3,10 +3,7 @@ import { reactRouter } from "@react-router/dev/vite";
 import { defineConfig } from "vite";
 
 /**
- * Cấu hình Vite cho React Router framework mode: plugin `reactRouter()`
- * thay cho plugin React thường (nó tự lo chia chunk theo route và dựng
- * vỏ trang SPA lúc build). Cấu hình test nằm ở vitest.config.ts riêng —
- * Vitest KHÔNG dùng plugin framework này.
+ * Cấu hình Vite cho React Router framework mode: plugin `reactRouter()` thay cho plugin React thường (nó tự lo chia chunk theo route và dựng vỏ trang SPA lúc build). Cấu hình test nằm ở vitest.config.ts riêng — Vitest KHÔNG dùng plugin framework này.
  */
 export default defineConfig({
   plugins: [reactRouter(), tailwindcss()],
@@ -22,9 +19,7 @@ export default defineConfig({
       ".pinggy.net",
       ".pinggy-free.link",
     ],
-    // Vite chỉ proxy trong dev; production giao việc này cho Caddyfile.
-    // Dùng regex có ranh giới path để /apixyz và /mcpfoo không bị proxy.
-    // Bốn nhóm HTTP theo cùng danh sách endpoint trong Caddyfile.
+    // Vite chỉ proxy trong dev; production giao việc này cho Caddyfile. Dùng regex có ranh giới path để /apixyz và /mcpfoo không bị proxy. Bốn nhóm HTTP theo cùng danh sách endpoint trong Caddyfile.
     proxy: {
       "^/api(?:/|\\?|$)": "http://localhost:3000",
       "^/mcp(?:/|\\?|$)": "http://localhost:3000",

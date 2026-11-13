@@ -3,13 +3,7 @@ import { apiJson } from '#lib/api';
 import type { BuilderBody, BuilderCriteriaView, CourseBuilderData } from '../types/course-builder';
 
 /**
- * Tầng gọi API thuần của trang xây dựng khoá học thuộc feature
- * course-builder: chỉ chứa các hàm gọi HTTP và gói tải tổng hợp
- * của trang, không phụ thuộc React hay React Query. Tầng
- * `queries/` của feature bọc các hàm này thành queryOptions, hook
- * và đột biến. Tách từ module dữ liệu phẳng
- * `src/lib/course-builder-data.ts` khi tổ chức lại apps/web theo
- * mô hình features/ (issue #500).
+ * Tầng gọi API thuần của trang xây dựng khoá học thuộc feature course-builder: chỉ chứa các hàm gọi HTTP và gói tải tổng hợp của trang, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành queryOptions, hook và đột biến. Tách từ module dữ liệu phẳng `src/lib/course-builder-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
 
 /** Tải một endpoint độc lập: lỗi thì trả null (giữ nhịp probe thủ công trước đây). */

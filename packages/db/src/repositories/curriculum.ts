@@ -916,8 +916,7 @@ export class CurriculumRepository {
   }
 
   /**
-   * Đếm câu hỏi sẵn sàng đã gắn vào một YCCĐ, nhóm theo (mức × dạng câu).
-   * "Sẵn sàng" = trạng thái ready ở cấp danh tính câu hỏi
+   * Đếm câu hỏi sẵn sàng đã gắn vào một YCCĐ, nhóm theo (mức × dạng câu). "Sẵn sàng" = trạng thái ready ở cấp danh tính câu hỏi
    * (question_bank_entries.status) — nền cho đếm ứng viên ma trận (A.6).
    */
   async countReadyQuestionsForOutcome(

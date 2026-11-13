@@ -7,12 +7,7 @@ import {
 } from '../../support/identity-access-helpers';
 
 /**
- * Kiểm thử luồng File (trường hợp file chuẩn vàng của báo cáo §3.11).
- * Oracle: public/lib/filestorage/tests/file_storage_test.php (MOODLE_503_STABLE) —
- * test_create_file_from_string, test_get_file_by_hash, test_delete_area_files;
- * ngữ nghĩa dedup/refcount từ tài liệu nội bộ File API (báo cáo §3.8).
- * Lưu ý: contentHash của chúng ta là SHA-256 (quyết định của dự án, không tương thích cũ) trong khi Moodle dùng SHA-1.
- * File này chỉ giữ bề mặt HTTP; các bất biến tầng lưu trữ đọc qua FilesService
+ * Kiểm thử luồng File (trường hợp file chuẩn vàng của báo cáo §3.11). Oracle: public/lib/filestorage/tests/file_storage_test.php (MOODLE_503_STABLE) — test_create_file_from_string, test_get_file_by_hash, test_delete_area_files; ngữ nghĩa dedup/refcount từ tài liệu nội bộ File API (báo cáo §3.8). Lưu ý: contentHash của chúng ta là SHA-256 (quyết định của dự án, không tương thích cũ) trong khi Moodle dùng SHA-1. File này chỉ giữ bề mặt HTTP; các bất biến tầng lưu trữ đọc qua FilesService
  * (refcount ở kho, file vật lý tại khoá nội dung, cleanupOrphan của đường worker)
  * nằm ở test/integration/files/files-storage-invariants.int-spec.ts (issue #483).
  */

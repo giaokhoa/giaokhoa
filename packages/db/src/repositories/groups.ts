@@ -11,16 +11,11 @@ import type { CentreDb, CentreTx } from '../client';
  * - Khoá chính `uuidv7()` do database sinh (phụ lục U): insert bỏ
  *   qua `id` và lấy id qua `returning`.
  * - Ba điểm `onConflictDoNothing` của bản cũ trước chuyển đổi (thêm thành
- *   viên nhóm, đưa nhóm vào grouping, thêm thành viên cohort)
- *   dùng `onConflict … doNothing()` tương đương; riêng
- *   `addCohortMember` suy luận "đã chèn thật hay chưa" từ độ dài
- *   của `returning` như bản cũ.
+ *   viên nhóm, đưa nhóm vào grouping, thêm thành viên cohort) dùng `onConflict … doNothing()` tương đương; riêng `addCohortMember` suy luận "đã chèn thật hay chưa" từ độ dài của `returning` như bản cũ.
  *
- * `removeCohortMember` nhận handle tuỳ chọn (mặc định handle
- * thường): đường gỡ thành viên TRONG transaction của bên gọi
+ * `removeCohortMember` nhận handle tuỳ chọn (mặc định handle thường): đường gỡ thành viên TRONG transaction của bên gọi
  * (settle hoàn tiền — điểm nối C-8/C, đã đóng ở #656) truyền
- * transaction của bên gọi vào để việc gỡ và ghi sổ hoàn commit
- * cùng nhau.
+ * transaction của bên gọi vào để việc gỡ và ghi sổ hoàn commit cùng nhau.
  *
  * Kiểu dòng công khai dùng camelCase, được ánh xạ tường minh từ các cột snake_case.
  */

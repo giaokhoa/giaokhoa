@@ -3,10 +3,7 @@ import type { CentreDb, CentreTx } from '../client';
 /**
  * Kho dữ liệu ghi danh trên Kysely: quản lý phương thức ghi danh của khoá học và trạng thái ghi danh của từng người dùng.
  *
- * Hai bảng này DÙNG CHUNG với package `@giaokhoa/enrol` (bề mặt vật
- * chất hoá cohort) — thứ tự chuyển đổi G5 trước, D5 (#657) sau
- * giữ nguyên như kế hoạch; repository này không đổi hình dạng
- * bảng hay ngữ nghĩa ghi nào của bề mặt đó.
+ * Hai bảng này DÙNG CHUNG với package `@giaokhoa/enrol` (bề mặt vật chất hoá cohort) — thứ tự chuyển đổi G5 trước, D5 (#657) sau giữ nguyên như kế hoạch; repository này không đổi hình dạng bảng hay ngữ nghĩa ghi nào của bề mặt đó.
  *
  * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Cột đọc khai tường minh kèm bí danh camelCase dùng chung cho
@@ -16,14 +13,9 @@ import type { CentreDb, CentreTx } from '../client';
  * - Khoá chính `uuidv7()` do database sinh (phụ lục U): insert bỏ
  *   qua `id` và lấy id qua `returning`.
  * - Điểm mở giao dịch của repository là `transaction(fn)`; các
- *   phương thức nhận handle tuỳ chọn (`EnrolDb` = handle thường
- *   hoặc handle giao dịch) để phía gọi lồng thao tác vào giao
- *   dịch của mình (luồng hết hạn ghi danh, đường tự mở giao dịch
- *   của `setSuspended`).
+ *   phương thức nhận handle tuỳ chọn (`EnrolDb` = handle thường hoặc handle giao dịch) để phía gọi lồng thao tác vào giao dịch của mình (luồng hết hạn ghi danh, đường tự mở giao dịch của `setSuspended`).
  *
- * Hai ca lọc tại bộ nhớ của repository cũ (`listCohortInstances`,
- * `listExpiredActive`) giữ nguyên cách làm: chúng là một phần của
- * hợp đồng hành vi đã chốt, không đổi sang lọc tại SQL.
+ * Hai ca lọc tại bộ nhớ của repository cũ (`listCohortInstances`, `listExpiredActive`) giữ nguyên cách làm: chúng là một phần của hợp đồng hành vi đã chốt, không đổi sang lọc tại SQL.
  *
  * Kiểu dòng công khai dùng camelCase, được ánh xạ từ tên cột snake_case của database.
  */
@@ -221,8 +213,7 @@ function userEnrolmentUpdateValues(v: Partial<NewUserEnrolment>) {
 }
 
 /**
- * Kho dữ liệu ghi danh: enrol instance (phương thức ghi danh của
- * khoá học) và user enrolment (ghi danh của từng user).
+ * Kho dữ liệu ghi danh: enrol instance (phương thức ghi danh của khoá học) và user enrolment (ghi danh của từng user).
  */
 export class EnrolRepository {
   constructor(private readonly handle: CentreDb) {}

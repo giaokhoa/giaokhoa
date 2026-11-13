@@ -1,16 +1,10 @@
 # @giaokhoa/editor — README nghiệp vụ
 
-> File này ghi các **quyết định nghiệp vụ quan trọng và còn đang hiệu lực** của package.
-> Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub.
+> File này ghi các **quyết định nghiệp vụ quan trọng và còn đang hiệu lực** của package. Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub.
 
 ## Package phụ trách nghiệp vụ gì
 
-`packages/editor` là **trình soạn thảo rich-text dùng chung** của sản phẩm: nơi giáo
-viên soạn nội dung học tập — đề bài/câu hỏi, phản hồi chấm bài, nội dung bài học — và
-nơi học sinh xem lại nội dung đó. Package gồm trình soạn (`RichTextEditor`) và trình
-xem (`RichTextView`). Mọi bề mặt soạn thảo trong `apps/web` phải dùng package này,
-không tự chế editor riêng theo trang — nội dung soạn ở đâu cũng phải mở/xem được ở
-mọi bề mặt khác.
+`packages/editor` là **trình soạn thảo rich-text dùng chung** của sản phẩm: nơi giáo viên soạn nội dung học tập — đề bài/câu hỏi, phản hồi chấm bài, nội dung bài học — và nơi học sinh xem lại nội dung đó. Package gồm trình soạn (`RichTextEditor`) và trình xem (`RichTextView`). Mọi bề mặt soạn thảo trong `apps/web` phải dùng package này, không tự chế editor riêng theo trang — nội dung soạn ở đâu cũng phải mở/xem được ở mọi bề mặt khác.
 
 ## Quyết định nghiệp vụ còn hiệu lực
 
@@ -25,17 +19,11 @@ mọi bề mặt khác.
 
 ## Ranh giới — package này KHÔNG làm gì
 
-- Không chứa logic nghiệp vụ của câu hỏi/bài tập/chấm bài: editor chỉ soạn và hiển
-  thị nội dung; lưu, gác quyền, vòng đời thuộc `apps/api` + `apps/web`.
-- Không chứa component giao diện chung ngoài soạn/xem rich-text (đó là
-  `packages/ui`).
-- Không tự định nghĩa định dạng tài liệu riêng: định dạng theo hợp đồng
-  `packages/contracts`.
+- Không chứa logic nghiệp vụ của câu hỏi/bài tập/chấm bài: editor chỉ soạn và hiển thị nội dung; lưu, gác quyền, vòng đời thuộc `apps/api` + `apps/web`.
+- Không chứa component giao diện chung ngoài soạn/xem rich-text (đó là `packages/ui`).
+- Không tự định nghĩa định dạng tài liệu riêng: định dạng theo hợp đồng `packages/contracts`.
 
 ## Kỹ thuật tối thiểu
 
-- Xây trên TipTap 3 (`@tiptap/*`); tập extension chốt ở `src/extensions.ts` — thêm
-  extension mới là thay đổi hợp đồng nội dung, phải cân nhắc phía xem tĩnh render
-  được hay không.
-- Nguồn: `rich-text-editor.tsx`, `rich-text-view.tsx`, `extensions.ts`; test ở
-  `editor.spec.tsx`.
+- Xây trên TipTap 3 (`@tiptap/*`); tập extension chốt ở `src/extensions.ts` — thêm extension mới là thay đổi hợp đồng nội dung, phải cân nhắc phía xem tĩnh render được hay không.
+- Nguồn: `rich-text-editor.tsx`, `rich-text-view.tsx`, `extensions.ts`; test ở `editor.spec.tsx`.

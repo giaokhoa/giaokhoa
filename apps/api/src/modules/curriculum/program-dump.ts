@@ -41,10 +41,7 @@ import type {
  */
 
 /**
- * Version của artifact dump hiện hành trong repo. Tăng theo định
- * dạng `<ngày>.<số đợt trong ngày>` mỗi lần sản xuất lại dump từ DB
- * chuẩn đã patch; version được ghi vào đầu file SQL và vào log seed
- * để mọi môi trường đối chiếu được mình đang chạy bản dump nào.
+ * Version của artifact dump hiện hành trong repo. Tăng theo định dạng `<ngày>.<số đợt trong ngày>` mỗi lần sản xuất lại dump từ DB chuẩn đã patch; version được ghi vào đầu file SQL và vào log seed để mọi môi trường đối chiếu được mình đang chạy bản dump nào.
  */
 export const PROGRAM_DUMP_VERSION = '2026-10-29.3';
 
@@ -53,9 +50,7 @@ export const PROGRAM_DUMP_FILE_NAME = 'program-dump.sql';
 
 /**
  * Render một giá trị dòng thành literal SQL an toàn cho artifact:
- * chuỗi thoát bằng gấp đôi dấu nháy đơn (standard_conforming_strings),
- * JSONB ép kiểu tường minh, thời gian về ISO 8601. Mọi giá trị đi qua
- * hàm này — artifact không chứa tham số, restore là chạy nguyên văn.
+ * chuỗi thoát bằng gấp đôi dấu nháy đơn (standard_conforming_strings), JSONB ép kiểu tường minh, thời gian về ISO 8601. Mọi giá trị đi qua hàm này — artifact không chứa tham số, restore là chạy nguyên văn.
  */
 function sqlLiteral(value: unknown): string {
   if (value === null || value === undefined) return 'NULL';
@@ -72,10 +67,7 @@ function insertStatement(table: string, columns: string[], values: unknown[]): s
 }
 
 /**
- * Sắp các node cây theo độ sâu tăng dần (cha trước con) để restore
- * không vi phạm FK parent khi chèn tuần tự; cùng độ sâu giữ thứ tự
- * position. Node có parent không nằm trong tập (không xảy ra với DB
- * chuẩn nguyên vẹn) được coi như gốc.
+ * Sắp các node cây theo độ sâu tăng dần (cha trước con) để restore không vi phạm FK parent khi chèn tuần tự; cùng độ sâu giữ thứ tự position. Node có parent không nằm trong tập (không xảy ra với DB chuẩn nguyên vẹn) được coi như gốc.
  */
 function orderNodesTopologically<T extends { id: string; parentId: string | null; position: number }>(rows: T[]): T[] {
   const byId = new Map(rows.map((r) => [r.id, r]));

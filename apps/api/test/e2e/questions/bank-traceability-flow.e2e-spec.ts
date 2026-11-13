@@ -10,17 +10,13 @@ import { createCategory, createCourse, getFirstSectionId } from '../../support/c
 /**
  * Truy vết copy + truy nguồn hai chiều cho cả ba thực thể ngân hàng
  * (issue #228, lát S2) — đối chiếu tiêu chí nghiệm thu của issue:
- * "ma trận và đề có đủ truy vết copy như câu hỏi; truy vấn được hai
- * chiều câu hỏi ↔ đề ↔ ma trận ↔ sách".
+ * "ma trận và đề có đủ truy vết copy như câu hỏi; truy vấn được hai chiều câu hỏi ↔ đề ↔ ma trận ↔ sách".
  *
  * Luật được khoá ở đây:
  *  - Copy ma trận ghi bank nguồn + tác giả gốc tại lúc copy và tăng
- *    copy_count của ma trận nguồn; endpoint attribution của ma trận
- *    trả đúng các giá trị đã ghi + use_count = số version đề đã sinh.
+ *    copy_count của ma trận nguồn; endpoint attribution của ma trận trả đúng các giá trị đã ghi + use_count = số version đề đã sinh.
  *  - Copy đề ghi bank nguồn + SỐ VERSION của đề nguồn TẠI LÚC COPY:
- *    copy trước khi nguồn lên version 2 giữ derived_from_version=1,
- *    copy sau ghi 2 — truy vết không bị viết lại theo trạng thái
- *    nguồn về sau.
+ *    copy trước khi nguồn lên version 2 giữ derived_from_version=1, copy sau ghi 2 — truy vết không bị viết lại theo trạng thái nguồn về sau.
  *  - Truy nguồn chiều ngược: ma trận → các đề đã sinh
  *    (generated-exams), câu → các version đề đang chứa câu
  *    (containing-exams, cùng cổng đọc 404 với attribution), sách →

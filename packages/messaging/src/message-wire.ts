@@ -7,22 +7,12 @@ import type {
 } from '@giaokhoa/db/repositories/messaging';
 
 /**
- * Hình dạng dòng của tầng dữ liệu messaging được khai một nguồn duy
- * nhất tại `@giaokhoa/db/repositories/messaging` (nơi repository Kysely
- * sống) và re-export tại đây cho mọi phía tiêu thụ hiện hữu của
- * package — chỉ là import type-only, không tạo phụ thuộc runtime
- * ngược về `@giaokhoa/db` (issue #658: gỡ vòng phụ thuộc hai package).
+ * Hình dạng dòng của tầng dữ liệu messaging được khai một nguồn duy nhất tại `@giaokhoa/db/repositories/messaging` (nơi repository Kysely sống) và re-export tại đây cho mọi phía tiêu thụ hiện hữu của package — chỉ là import type-only, không tạo phụ thuộc runtime ngược về `@giaokhoa/db` (issue #658: gỡ vòng phụ thuộc hai package).
  */
 export type { ConversationRow, MessageQuoteView, MessageRow, MessageWithQuoteRow };
 
 /**
- * Vô hiệu hoá NỘI DUNG của một tin đã thu hồi cho các đường đọc/phân
- * phối thường (vòng đời tin nhắn theo vai): giữ nguyên mọi trường
- * định danh và dấu vết (id, seq, recalledAt, recalledBy...) để phía
- * nhận hiện dòng "tin nhắn đã được thu hồi", chỉ làm rỗng hai trường
- * nội dung. Đường truy vết có thẩm quyền KHÔNG đi qua hàm này. Đặt ở
- * package dùng chung để repository phía API, tầng realtime phía API
- * và consumer phân phối phía worker dùng chung một luật.
+ * Vô hiệu hoá NỘI DUNG của một tin đã thu hồi cho các đường đọc/phân phối thường (vòng đời tin nhắn theo vai): giữ nguyên mọi trường định danh và dấu vết (id, seq, recalledAt, recalledBy...) để phía nhận hiện dòng "tin nhắn đã được thu hồi", chỉ làm rỗng hai trường nội dung. Đường truy vết có thẩm quyền KHÔNG đi qua hàm này. Đặt ở package dùng chung để repository phía API, tầng realtime phía API và consumer phân phối phía worker dùng chung một luật.
  */
 export function blankRecalledContent(row: MessageRow): MessageRow {
   if (!row.recalledAt) return row;
@@ -33,8 +23,7 @@ export function blankRecalledContent(row: MessageRow): MessageRow {
 export const QUOTE_EXCERPT_MAX_CHARS = 120;
 
 /**
- * Rút gọn nội dung làm excerpt trích dẫn: cắt theo CODE POINT (không
- * cắt giữa cặp surrogate của emoji) và thêm dấu … khi bị cắt.
+ * Rút gọn nội dung làm excerpt trích dẫn: cắt theo CODE POINT (không cắt giữa cặp surrogate của emoji) và thêm dấu … khi bị cắt.
  */
 export function quoteExcerptOf(text: string): string {
   const chars = Array.from(text);
