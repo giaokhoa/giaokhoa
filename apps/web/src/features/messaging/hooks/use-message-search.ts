@@ -42,12 +42,7 @@ const EMPTY_SEARCH: {
 export function useMessageSearch({ active, messages, ensurePageLoaded }: UseMessageSearchParams) {
   const queryClient = useQueryClient();
   /**
-   * Tìm nội dung tin trong conversation đang mở (lát M4, issue
-   * #237): state chỉ giữ (conversation, từ khoá) của lượt tìm đã
-   * gửi — kết quả server trả (chỉ tin còn hiển thị được với mình),
-   * cờ đang tải và cờ lỗi đọc từ query trong cache. Đổi
-   * conversation là xoá trắng (xử lý ở `open`); kết quả của
-   * conversation khác với conversation đang mở không bao giờ hiện
+   * Tìm nội dung tin trong conversation đang mở (lát M4, issue #237): state chỉ giữ (conversation, từ khoá) của lượt tìm đã gửi — kết quả server trả (chỉ tin còn hiển thị được với mình), cờ đang tải và cờ lỗi đọc từ query trong cache. Đổi conversation là xoá trắng (xử lý ở `open`); kết quả của conversation khác với conversation đang mở không bao giờ hiện
    * (điều kiện suy ra ở dưới).
    */
   const [submitted, setSubmitted] = useState<{ conversationId: string; q: string } | null>(null);
@@ -71,20 +66,13 @@ export function useMessageSearch({ active, messages, ensurePageLoaded }: UseMess
   const scrollerRef = useRef<ScrollerHandle | null>(null);
 
   /**
-   * Nhảy tới MỘT tin theo (id, seq) — cơ chế chung của lát M3 (khối
-   * trích dẫn) và lát M4 (kết quả tìm): tin đang có trong danh sách
-   * thì cuộn ngay + tô sáng tạm; chưa tải thì xin cửa sổ quanh vị trí
-   * của nó bằng ĐÚNG cơ chế phân trang hiện có (beforeSeq = seq + 1
-   * → cửa sổ kết thúc tại tin đích), nạp vào cache rồi mới cuộn.
-   * Tin đích không còn hiển thị được với mình (đã xoá-phía-mình...)
-   * thì cửa sổ tải về không chứa nó — dừng êm, không báo lỗi.
+   * Nhảy tới MỘT tin theo (id, seq) — cơ chế chung của lát M3 (khối trích dẫn) và lát M4 (kết quả tìm): tin đang có trong danh sách thì cuộn ngay + tô sáng tạm; chưa tải thì xin cửa sổ quanh vị trí của nó bằng ĐÚNG cơ chế phân trang hiện có (beforeSeq = seq + 1 → cửa sổ kết thúc tại tin đích), nạp vào cache rồi mới cuộn. Tin đích không còn hiển thị được với mình (đã xoá-phía-mình...) thì cửa sổ tải về không chứa nó — dừng êm, không báo lỗi.
    */
   async function jumpToMessage(messageId: string, seq: number) {
     if (!active) return;
     const scrollAndHighlight = () => {
       setHighlightedMessageId(messageId);
-      // Phần tử có thể chưa kịp dựng sau lần gộp cửa sổ mới — thử
-      // vài nhịp ngắn trước khi bỏ cuộc.
+      // Phần tử có thể chưa kịp dựng sau lần gộp cửa sổ mới — thử vài nhịp ngắn trước khi bỏ cuộc.
       let attempts = 0;
       const tryScroll = () => {
         attempts += 1;
@@ -115,10 +103,7 @@ export function useMessageSearch({ active, messages, ensurePageLoaded }: UseMess
 
   /**
    * Chạy một lượt tìm nội dung trong conversation đang mở (lát M4):
-   * server là nơi thực thi luật tầm nhìn — client chỉ mang từ khoá
-   * và hiển thị kết quả. Từ khoá toàn khoảng trắng thì xoá kết quả
-   * êm (không bắn request chắc chắn bị 400). Gửi lại đúng từ khoá
-   * đang có thì nạp lại query trong cache để kết quả luôn tươi.
+   * server là nơi thực thi luật tầm nhìn — client chỉ mang từ khoá và hiển thị kết quả. Từ khoá toàn khoảng trắng thì xoá kết quả êm (không bắn request chắc chắn bị 400). Gửi lại đúng từ khoá đang có thì nạp lại query trong cache để kết quả luôn tươi.
    */
   async function runMessageSearch(rawQuery: string) {
     if (!active) return;

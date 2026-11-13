@@ -16,15 +16,7 @@ import {
 import { addExamSlot, createExamDraft, createReadyQuestion, pinExam } from '../../support/exam-pin-helpers';
 
 /**
- * Hồi quy DL-03 (issue #489, bổ sung theo phân xử review trên PR
- * #537): trang kết quả của giáo viên phải nạp tổng maxMark của các
- * usage đã kết thúc THEO LÔ — số lượt gọi `usageTotalMaxes` (mỗi
- * lượt là một truy vấn `listAttemptsForUsages` xuống
- * question_attempts) trong một lượt `getResults` không được tăng
- * khi số học sinh có lượt đã kết thúc tăng. Test đếm bằng spy trên
- * chính các instance service/repository của app, qua hai giai đoạn
- * trên cùng một pin: 1 học sinh có lượt đã kết thúc, rồi 6 học sinh
- * có lượt đã kết thúc cộng 1 học sinh chỉ có lượt đang làm dở.
+ * Hồi quy DL-03 (issue #489, bổ sung theo phân xử review trên PR #537): trang kết quả của giáo viên phải nạp tổng maxMark của các usage đã kết thúc THEO LÔ — số lượt gọi `usageTotalMaxes` (mỗi lượt là một truy vấn `listAttemptsForUsages` xuống question_attempts) trong một lượt `getResults` không được tăng khi số học sinh có lượt đã kết thúc tăng. Test đếm bằng spy trên chính các instance service/repository của app, qua hai giai đoạn trên cùng một pin: 1 học sinh có lượt đã kết thúc, rồi 6 học sinh có lượt đã kết thúc cộng 1 học sinh chỉ có lượt đang làm dở.
  */
 describe('Quiz: số truy vấn của trang kết quả theo số học sinh (DL-03, issue #489)', () => {
   let app: INestApplication;

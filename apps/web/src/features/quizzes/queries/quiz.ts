@@ -27,13 +27,7 @@ import { queryKeys } from './keys';
 /**
  * Tầng dữ liệu trang lần ghim đề (F-01 đợt 1, rà soát #133): lần ghim
  * + nhãn câu của các slot là một query gộp (clientLoader prefetch
- * cùng khoá); ghi đè, thông tin đề nguồn và danh sách thành viên là
- * các query riêng bật theo quyền của người xem như các effect thủ
- * công trước đây. Nhãn câu là TRÍCH ĐOẠN nội dung thân câu — câu hỏi
- * không còn trường tên (quyết 11:28 ngày 26/10/2026).
- * Lời gọi API thuần nằm ở tầng `api/` của feature; khoá truy vấn
- * riêng của quizzes nằm ở `keys.ts` cùng tầng này, riêng khoá
- * `questionVersions` là khoá dùng chung ở factory tập trung.
+ * cùng khoá); ghi đè, thông tin đề nguồn và danh sách thành viên là các query riêng bật theo quyền của người xem như các effect thủ công trước đây. Nhãn câu là TRÍCH ĐOẠN nội dung thân câu — câu hỏi không còn trường tên (quyết 11:28 ngày 26/10/2026). Lời gọi API thuần nằm ở tầng `api/` của feature; khoá truy vấn riêng của quizzes nằm ở `keys.ts` cùng tầng này, riêng khoá `questionVersions` là khoá dùng chung ở factory tập trung.
  */
 
 /** Tuỳ chọn truy vấn lần ghim + nhãn slot. */
@@ -95,10 +89,7 @@ export function useCourseRoster(courseId: string, enabled: boolean) {
 }
 
 // ---------------------------------------------------------------------
-// Lượt làm quiz (trang làm bài + xem lại): view lượt làm là query
-// chính; lưu từng câu và nộp bài là đột biến làm mới đúng view đó —
-// thay cho vòng reload thủ công sau mỗi thao tác trước đây (F-01 của
-// rà soát #133).
+// Lượt làm quiz (trang làm bài + xem lại): view lượt làm là query chính; lưu từng câu và nộp bài là đột biến làm mới đúng view đó — thay cho vòng reload thủ công sau mỗi thao tác trước đây (F-01 của rà soát #133).
 // ---------------------------------------------------------------------
 
 /** Tuỳ chọn truy vấn view lượt làm (GET /quiz-attempts/:id). */
@@ -118,10 +109,7 @@ export function useQuizAttempt(attemptId: string | undefined) {
 }
 
 /**
- * Đột biến lưu đáp án một câu qua question engine (POST
- * /quiz-attempts/:id/responses) — thành công thì làm mới view lượt
- * làm để trạng thái câu (đã lưu/điểm tạm) hiện ngay như lần reload
- * thủ công sau mỗi lần lưu trước đây.
+ * Đột biến lưu đáp án một câu qua question engine (POST /quiz-attempts/:id/responses) — thành công thì làm mới view lượt làm để trạng thái câu (đã lưu/điểm tạm) hiện ngay như lần reload thủ công sau mỗi lần lưu trước đây.
  */
 export function useSaveQuizResponse() {
   const client = useQueryClient();
@@ -134,9 +122,7 @@ export function useSaveQuizResponse() {
 }
 
 /**
- * Đột biến nộp bài (POST /quiz-attempts/:id/submit) để chốt điểm —
- * thành công thì làm mới view lượt làm, trang chuyển sang màn xem lại
- * theo trạng thái mới của lượt.
+ * Đột biến nộp bài (POST /quiz-attempts/:id/submit) để chốt điểm — thành công thì làm mới view lượt làm, trang chuyển sang màn xem lại theo trạng thái mới của lượt.
  */
 export function useSubmitQuizAttempt() {
   const client = useQueryClient();
@@ -155,11 +141,7 @@ export async function quizAttemptPageClientLoader(attemptId: string) {
 
 // --- Nhật ký chấm lại, ghi đè, cài đặt và lượt làm của trang lần ghim ----------
 //
-// Phần còn lại của trang lần ghim (F-01 của rà soát #133): nhật ký
-// chấm lại là hai query bật theo quyền; xem trước cập nhật version và
-// danh sách version của câu chấm lại là đọc theo yêu cầu (trang gọi
-// fetchQuery, giữ nhịp trạng thái tại chỗ); mọi thao tác ghi là đột
-// biến làm mới đúng cụm khoá của bề mặt bị ảnh hưởng.
+// Phần còn lại của trang lần ghim (F-01 của rà soát #133): nhật ký chấm lại là hai query bật theo quyền; xem trước cập nhật version và danh sách version của câu chấm lại là đọc theo yêu cầu (trang gọi fetchQuery, giữ nhịp trạng thái tại chỗ); mọi thao tác ghi là đột biến làm mới đúng cụm khoá của bề mặt bị ảnh hưởng.
 
 /** Tuỳ chọn truy vấn nhật ký chấm lại của lần ghim (GET /exam-pins/:id/regrades). */
 export function examPinRegradesQueryOptions(pinId: string) {
@@ -196,9 +178,7 @@ export function examPinVersionUpdateQueryOptions(pinId: string) {
 }
 
 /**
- * Tuỳ chọn truy vấn các version của một câu cho panel chấm lại: dùng
- * chung khoá factory `questionVersions` với trang ngân hàng câu hỏi —
- * hai bề mặt chỉ đọc các trường khác nhau của cùng một đáp ứng.
+ * Tuỳ chọn truy vấn các version của một câu cho panel chấm lại: dùng chung khoá factory `questionVersions` với trang ngân hàng câu hỏi — hai bề mặt chỉ đọc các trường khác nhau của cùng một đáp ứng.
  */
 export function regradeQuestionVersionsQueryOptions(questionId: string) {
   return queryOptions({
@@ -256,8 +236,7 @@ export function useDeleteExamPinOverride(pinId: string) {
 
 /**
  * Đột biến chạy chấm lại theo đáp án (POST /exam-pins/:id/regrades):
- * dryRun=true chỉ xem trước điểm đổi; áp thật thì trang tự nạp lại
- * nhật ký + view lần ghim sau khi đột biến xong.
+ * dryRun=true chỉ xem trước điểm đổi; áp thật thì trang tự nạp lại nhật ký + view lần ghim sau khi đột biến xong.
  */
 export function useRunExamPinRegrade(pinId: string) {
   return useMutation({

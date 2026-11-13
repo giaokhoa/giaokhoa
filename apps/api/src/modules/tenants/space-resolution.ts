@@ -5,20 +5,9 @@ import type { ResolvedSpaceConnection } from '../../db/routing/space-connection-
 /**
  * Phân giải địa chỉ request thành slug của trung tâm (issue #582).
  *
- * Quy ước địa chỉ của hệ: mỗi trung tâm có một tên miền con riêng
- * mang slug của chính trung tâm đó trong sổ đăng ký control plane —
- * nhãn đầu tiên của host (ví dụ `trung-tam-a.he-thong.example` →
- * `trung-tam-a`). Địa chỉ được thiết kế hướng tên miền ngay từ mô
- * hình kiến trúc đích (tên miền con trước, tên miền riêng sau), nên
- * tầng ứng dụng chỉ cần đọc host của request là biết request thuộc
- * trung tâm nào, không cần một bảng ánh xạ địa chỉ riêng.
+ * Quy ước địa chỉ của hệ: mỗi trung tâm có một tên miền con riêng mang slug của chính trung tâm đó trong sổ đăng ký control plane — nhãn đầu tiên của host (ví dụ `trung-tam-a.he-thong.example` → `trung-tam-a`). Địa chỉ được thiết kế hướng tên miền ngay từ mô hình kiến trúc đích (tên miền con trước, tên miền riêng sau), nên tầng ứng dụng chỉ cần đọc host của request là biết request thuộc trung tâm nào, không cần một bảng ánh xạ địa chỉ riêng.
  *
- * File này chỉ chứa hàm thuần trích nhãn ứng viên: host không mang
- * địa chỉ trung tâm (host gốc, localhost, địa chỉ IP) trả `null` và
- * request đi đúng đường hiện tại; nhãn ứng viên có thật sự là một
- * trung tâm đã đăng ký hay không do bộ phân giải của khung định
- * tuyến quyết từ sổ đăng ký (nguồn sự thật duy nhất) — hàm này
- * không tự đoán.
+ * File này chỉ chứa hàm thuần trích nhãn ứng viên: host không mang địa chỉ trung tâm (host gốc, localhost, địa chỉ IP) trả `null` và request đi đúng đường hiện tại; nhãn ứng viên có thật sự là một trung tâm đã đăng ký hay không do bộ phân giải của khung định tuyến quyết từ sổ đăng ký (nguồn sự thật duy nhất) — hàm này không tự đoán.
  */
 
 /** Hình dạng hợp lệ của một nhãn tên miền con mang slug: chữ thường, số và dấu gạch ngang, tối đa 63 ký tự như một nhãn DNS. */
@@ -47,8 +36,7 @@ export function extractSpaceSlugFromHost(host: string | undefined | null): strin
   if (labels.length < 3) return null;
   const candidate = labels[0] ?? '';
   if (!SPACE_LABEL_PATTERN.test(candidate)) return null;
-  // Địa chỉ IP dạng bốn nhãn số không phải tên miền con của trung
-  // tâm nào: nhãn đầu toàn số thì không coi là slug ứng viên.
+  // Địa chỉ IP dạng bốn nhãn số không phải tên miền con của trung tâm nào: nhãn đầu toàn số thì không coi là slug ứng viên.
   if (/^\d+$/.test(candidate) && labels.every((label) => /^\d+$/.test(label))) return null;
   return candidate;
 }
@@ -92,8 +80,7 @@ export async function resolveDedicatedSpace(
 ): Promise<DedicatedSpace | null> {
   const slug = spaceSlugForHost(host);
   if (!slug) return null;
-  // Slug đã có trong Host buộc phải phân giải qua sổ; mất sổ
-  // hoặc slug giả không được phép chuyển request sang kho chung.
+  // Slug đã có trong Host buộc phải phân giải qua sổ; mất sổ hoặc slug giả không được phép chuyển request sang kho chung.
   const target: ResolvedSpaceConnection = await spaceDb.resolveTarget(slug);
   if (target.mode !== 'dedicated') {
     if (slug === PUBLIC_LEARNING_SLUG && isPublicLearningHost(host)) {

@@ -190,8 +190,7 @@ describe('Trang phụ huynh chỉ-xem (PH-1, issue #130)', () => {
     expect(screen.getByText('Kiểm tra giữa kỳ')).toBeTruthy();
     expect(screen.getByText('7,9 / 10')).toBeTruthy();
     expect(screen.getByText(/Tiến bộ rõ rệt/)).toBeTruthy();
-    // Chỉ-xem về dữ liệu của con: các nút duy nhất là chọn con + tần
-    // suất digest của CHÍNH phụ huynh (PH-2) — không nút hành động thay con.
+    // Chỉ-xem về dữ liệu của con: các nút duy nhất là chọn con + tần suất digest của CHÍNH phụ huynh (PH-2) — không nút hành động thay con.
     expect(await screen.findByRole('button', { name: 'Hàng tuần' })).toBeTruthy();
     const buttons = screen.getAllByRole('button');
     expect(buttons.map((b) => b.textContent)).toEqual(['Trần An', 'Trần Bình', 'Hàng tuần', 'Hàng ngày', 'Tắt']);
@@ -204,8 +203,7 @@ describe('Trang phụ huynh chỉ-xem (PH-1, issue #130)', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Trần Bình' }));
 
-    // Chọn con là điều hướng theo path (chuẩn #221, lát R2): URL
-    // cuối là path của con thứ hai, dữ liệu hiện của đúng con đó.
+    // Chọn con là điều hướng theo path (chuẩn #221, lát R2): URL cuối là path của con thứ hai, dữ liệu hiện của đúng con đó.
     await waitFor(() => expect(router.state.location.pathname).toBe(`/guardian/students/${CHILD_B}`));
     expect(await screen.findByText('Tuần này con không có việc nào đến hạn.')).toBeTruthy();
     expect(screen.getByText('Chưa có kết quả mới kể từ lần xem trước.')).toBeTruthy();

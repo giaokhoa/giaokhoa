@@ -1,17 +1,11 @@
 import { Skeleton } from '@giaokhoa/ui/components/skeleton';
 
 /**
- * Vỏ giữ chỗ của khung đã đăng nhập, dùng ở hai thời điểm: HydrateFallback
- * của root route (HTML dựng sẵn lúc build — paint đầu tiên của mọi lần F5)
- * và cổng chờ phiên trong Shell (trong lúc GET /users/me chưa về).
+ * Vỏ giữ chỗ của khung đã đăng nhập, dùng ở hai thời điểm: HydrateFallback của root route (HTML dựng sẵn lúc build — paint đầu tiên của mọi lần F5) và cổng chờ phiên trong Shell (trong lúc GET /users/me chưa về).
  *
- * Hình học bám ĐÚNG khung thật của block dashboard-01 (ui/sidebar
- * variant inset): nền --sidebar bao quanh, khe sidebar rộng 72 đơn vị
- * spacing (18rem) với panel nổi đệm p-2, vùng nội dung là thẻ inset
+ * Hình học bám ĐÚNG khung thật của block dashboard-01 (ui/sidebar variant inset): nền --sidebar bao quanh, khe sidebar rộng 72 đơn vị spacing (18rem) với panel nổi đệm p-2, vùng nội dung là thẻ inset
  * (m-2, ml-0, bo góc xl, đổ bóng) chứa header cao 12 đơn vị (3rem) và
- * phần thân theo nhịp của trang tổng quan (tiêu đề, lưới 4 thẻ cao
- * 158px, thẻ biểu đồ ~388px) — để khi khung thật thế vào, bố cục không
- * xê dịch.
+ * phần thân theo nhịp của trang tổng quan (tiêu đề, lưới 4 thẻ cao 158px, thẻ biểu đồ ~388px) — để khi khung thật thế vào, bố cục không xê dịch.
  */
 export function AppShellSkeleton() {
   return (

@@ -109,11 +109,7 @@ interface ConversationSidebarProps {
   /** Tên đăng nhập của người xem (dòng định danh phụ `@username` trong sheet hồ sơ của chính mình); null khi không có. */
   myUsername: string | null;
   /**
-   * Mức hiện diện người xem đang chọn (giai đoạn 2 của vòng sửa
-   * PR #610): online = socket realtime đang nối (presence thật
-   * bật), offline = socket đã ngắt theo lựa chọn (presence thật
-   * tắt). Chấm trên avatar của người xem và bộ chọn trong sheet
-   * hồ sơ của chính mình cùng đọc giá trị này.
+   * Mức hiện diện người xem đang chọn (giai đoạn 2 của vòng sửa PR #610): online = socket realtime đang nối (presence thật bật), offline = socket đã ngắt theo lựa chọn (presence thật tắt). Chấm trên avatar của người xem và bộ chọn trong sheet hồ sơ của chính mình cùng đọc giá trị này.
    */
   selfPresence: SelfPresenceChoice;
   /** Đổi mức hiện diện của chính người xem (trang chứa đổi nối socket tương ứng). */
@@ -169,39 +165,23 @@ interface ConversationSidebarProps {
   /** Tải trang roster tiếp theo cho bộ chọn. */
   onLoadMorePicker: () => void;
   /**
-   * Danh sách hội thoại đang nạp lần đầu (issue #591): khung
-   * trái hiện khung đang tải (skeleton) đúng hình dạng trang
-   * thay cho trạng thái rỗng giả; rỗng thật chỉ hiện sau khi
-   * nạp xong và xác nhận không có dữ kiện.
+   * Danh sách hội thoại đang nạp lần đầu (issue #591): khung trái hiện khung đang tải (skeleton) đúng hình dạng trang thay cho trạng thái rỗng giả; rỗng thật chỉ hiện sau khi nạp xong và xác nhận không có dữ kiện.
    */
   loading?: boolean;
   /**
-   * Cây nhóm đang nạp (vòng sửa PR #593): trạng thái tải của
-   * cây lấy từ chính query cây nhóm của trang — khung trái
-   * truyền thẳng xuống danh sách nhóm để nó hiện khung đang
-   * tải theo nhịp của nó, không mượn cờ đang tải của danh sách
-   * hội thoại (hai query về lệch nhịp nhau).
+   * Cây nhóm đang nạp (vòng sửa PR #593): trạng thái tải của cây lấy từ chính query cây nhóm của trang — khung trái truyền thẳng xuống danh sách nhóm để nó hiện khung đang tải theo nhịp của nó, không mượn cờ đang tải của danh sách hội thoại (hai query về lệch nhịp nhau).
    */
   groupTreeLoading?: boolean;
   /**
-   * Lỗi nạp cây nhóm lần đầu (vòng sửa 2 PR #593): khung trái
-   * truyền thẳng xuống danh sách nhóm để nó hiện thông báo lỗi
-   * thay cho câu rỗng giả; null khi cây đã có dữ kiện hoặc
-   * chưa lỗi.
+   * Lỗi nạp cây nhóm lần đầu (vòng sửa 2 PR #593): khung trái truyền thẳng xuống danh sách nhóm để nó hiện thông báo lỗi thay cho câu rỗng giả; null khi cây đã có dữ kiện hoặc chưa lỗi.
    */
   groupTreeError?: string | null;
   /**
-   * Tập đã lưu đang nạp lần đầu (vòng sửa issue #623): trạng
-   * thái tải của panel Lưu trữ lấy từ chính query tập đã lưu
-   * của trang — panel không mượn cờ của danh sách chính, vì
-   * hai query về lệch nhịp và mượn cờ nhau làm tab Lưu trữ
-   * khẳng định rỗng giả trong lúc tập của nó còn đang nạp.
+   * Tập đã lưu đang nạp lần đầu (vòng sửa issue #623): trạng thái tải của panel Lưu trữ lấy từ chính query tập đã lưu của trang — panel không mượn cờ của danh sách chính, vì hai query về lệch nhịp và mượn cờ nhau làm tab Lưu trữ khẳng định rỗng giả trong lúc tập của nó còn đang nạp.
    */
   archivedLoading?: boolean;
   /**
-   * Lỗi nạp tập đã lưu lần đầu (vòng sửa issue #623): panel
-   * Lưu trữ hiện thông báo lỗi kèm nút thử lại thay cho câu
-   * rỗng giả; null khi tập đã có dữ kiện hoặc chưa lỗi.
+   * Lỗi nạp tập đã lưu lần đầu (vòng sửa issue #623): panel Lưu trữ hiện thông báo lỗi kèm nút thử lại thay cho câu rỗng giả; null khi tập đã có dữ kiện hoặc chưa lỗi.
    */
   archivedError?: string | null;
   /** Nạp lại riêng truy vấn tập đã lưu (nút thử lại của panel Lưu trữ). */
@@ -239,8 +219,7 @@ export function ConversationSidebar({
   /**
    * Trạng thái mở của hai mục thu gọn trong các tab danh sách
    * (issue #564; mỗi tab còn đúng hai mục Ghim / Gần đây từ
-   * issue #623): cả hai mở mặc định để hội thoại không bị
-   * giấu sau một lần bấm thêm.
+   * issue #623): cả hai mở mặc định để hội thoại không bị giấu sau một lần bấm thêm.
    */
   const [pinnedOpen, setPinnedOpen] = useState(true);
   const [recentOpen, setRecentOpen] = useState(true);
@@ -259,8 +238,7 @@ export function ConversationSidebar({
    */
   const [searchText, setSearchText] = useState('');
   /**
-   * Nhắn tin từ sheet Tin nhắn mới thì đóng sheet, khung trái về
-   * tab Tất cả để thấy hội thoại 1–1 vừa mở ở khung phải.
+   * Nhắn tin từ sheet Tin nhắn mới thì đóng sheet, khung trái về tab Tất cả để thấy hội thoại 1–1 vừa mở ở khung phải.
    */
   const messageContact = (userId: string) => {
     setNewMessageOpen(false);
@@ -276,12 +254,7 @@ export function ConversationSidebar({
     }
   };
   /**
-   * Tên hiển thị của hội thoại: hội thoại có tên (nhóm) dùng tên
-   * đó. Hội thoại 1–1 không có tên — backend không đặt tên cho
-   * 1–1 — thì hiện tên ĐỐI TÁC suy từ danh sách thành viên; chỉ
-   * khi không xác định được đối tác mới rơi về nhãn dự phòng liệt
-   * kê mọi thành viên. Ô lọc danh sách khớp trên chính nhãn này
-   * nên tìm theo tên đối tác vẫn trúng sau thay đổi.
+   * Tên hiển thị của hội thoại: hội thoại có tên (nhóm) dùng tên đó. Hội thoại 1–1 không có tên — backend không đặt tên cho 1–1 — thì hiện tên ĐỐI TÁC suy từ danh sách thành viên; chỉ khi không xác định được đối tác mới rơi về nhãn dự phòng liệt kê mọi thành viên. Ô lọc danh sách khớp trên chính nhãn này nên tìm theo tên đối tác vẫn trúng sau thay đổi.
    */
   const labelOf = (c: ConversationView) => {
     if (c.name !== null) return c.name;
@@ -295,27 +268,9 @@ export function ConversationSidebar({
     !filterNeedle
     || labelOf(c).toLocaleLowerCase('vi').includes(filterNeedle)
     || (c.lastMessage?.fullMessage.toLocaleLowerCase('vi').includes(filterNeedle) ?? false);
-  // Tab Tất cả và tab Chưa đọc chứa MỌI hội thoại CHƯA LƯU
-  // TRỮ (mọi loại — 1–1 lẫn nhóm), đúng ngữ nghĩa hợp của bản
-  // demo: hội thoại nhóm xuất hiện ở cả hai tab này với đúng
-  // nhận diện nhóm, và tab Nhóm chỉ là một góc nhìn riêng
-  // theo cấu trúc lớp/khoá/nhóm, không còn là nơi duy nhất
-  // chứa hội thoại nhóm. Tab Chưa đọc thêm đúng một điều
-  // kiện so với tab Tất cả: hội thoại có tin chưa đọc. Tập
-  // đã lưu trữ đứng ngoài cả hai tab này — nó là danh sách
-  // riêng của tab Lưu trữ, dựng qua cùng hàm dựng panel ở
-  // dưới với nguồn là `archivedConversations`.
+  // Tab Tất cả và tab Chưa đọc chứa MỌI hội thoại CHƯA LƯU TRỮ (mọi loại — 1–1 lẫn nhóm), đúng ngữ nghĩa hợp của bản demo: hội thoại nhóm xuất hiện ở cả hai tab này với đúng nhận diện nhóm, và tab Nhóm chỉ là một góc nhìn riêng theo cấu trúc lớp/khoá/nhóm, không còn là nơi duy nhất chứa hội thoại nhóm. Tab Chưa đọc thêm đúng một điều kiện so với tab Tất cả: hội thoại có tin chưa đọc. Tập đã lưu trữ đứng ngoài cả hai tab này — nó là danh sách riêng của tab Lưu trữ, dựng qua cùng hàm dựng panel ở dưới với nguồn là `archivedConversations`.
   /**
-   * Số đếm trong ngoặc đơn trên thanh tab: tính trên TOÀN BỘ
-   * tập của từng tab (không chịu ô tìm hay tab đang chọn) để
-   * tab luôn cho biết quy mô thật của tập đó — như số đếm trên
-   * chip lọc trước đây; danh sách bên dưới vẫn lọc theo ô tìm
-   * như trước. Số chưa đọc của tab Chưa đọc tính trên mọi loại
-   * hội thoại chưa lưu trữ nên luôn khớp tổng chưa đọc ở tiêu
-   * đề trang (trang chứa tính tổng đó từ chính danh sách này).
-   * Số của tab Nhóm là số hàng của danh sách nhóm phẳng trên
-   * cây chưa lọc; số của tab Lưu trữ là số hội thoại trong
-   * tập đã lưu của server (issue #623).
+   * Số đếm trong ngoặc đơn trên thanh tab: tính trên TOÀN BỘ tập của từng tab (không chịu ô tìm hay tab đang chọn) để tab luôn cho biết quy mô thật của tập đó — như số đếm trên chip lọc trước đây; danh sách bên dưới vẫn lọc theo ô tìm như trước. Số chưa đọc của tab Chưa đọc tính trên mọi loại hội thoại chưa lưu trữ nên luôn khớp tổng chưa đọc ở tiêu đề trang (trang chứa tính tổng đó từ chính danh sách này). Số của tab Nhóm là số hàng của danh sách nhóm phẳng trên cây chưa lọc; số của tab Lưu trữ là số hội thoại trong tập đã lưu của server (issue #623).
    */
   const allCount = conversations.length;
   const unreadCountTotal = conversations.filter((c) => (c.unread ?? 0) > 0).length;
@@ -327,11 +282,7 @@ export function ConversationSidebar({
     const isActive = active?.id === c.id;
     const otherId = c.type === 1 ? c.members.find((id) => id !== myId) : undefined;
     /**
-     * Hiện diện của đối tác trên hàng hội thoại giữ BA trạng
-     * thái như ở đầu khung (vòng sửa PR #593): đã xác nhận
-     * trực tuyến thì chấm xanh lá, đã xác nhận ngoại tuyến thì
-     * chấm xám, chưa biết (chưa có sự kiện nào) thì không chấm
-     * — không gộp chưa biết thành ngoại tuyến.
+     * Hiện diện của đối tác trên hàng hội thoại giữ BA trạng thái như ở đầu khung (vòng sửa PR #593): đã xác nhận trực tuyến thì chấm xanh lá, đã xác nhận ngoại tuyến thì chấm xám, chưa biết (chưa có sự kiện nào) thì không chấm — không gộp chưa biết thành ngoại tuyến.
      */
     const otherPresence = otherId ? onlineUsers[otherId] : undefined;
     const otherStatus = presenceStatusOf(otherPresence);

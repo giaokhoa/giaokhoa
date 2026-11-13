@@ -6,11 +6,7 @@ import { FilesService } from '../files/files.service';
 import { UsersService } from '../users/users.service';
 
 /**
- * Danh sách cột tường minh có bí danh camelCase cho các bảng mà các
- * provider tích hợp sẵn của module này đọc/xoá (chuyển Kysely, issue
- * #648): bản xuất dữ liệu của chủ thể giữ nguyên hình dạng dòng
- * camelCase như khi còn đọc qua bộ máy cũ. Việc xoá đếm số dòng bằng
- * `returning('id')` — cùng khuôn đếm với `.returning()` của bản cũ.
+ * Danh sách cột tường minh có bí danh camelCase cho các bảng mà các provider tích hợp sẵn của module này đọc/xoá (chuyển Kysely, issue #648): bản xuất dữ liệu của chủ thể giữ nguyên hình dạng dòng camelCase như khi còn đọc qua bộ máy cũ. Việc xoá đếm số dòng bằng `returning('id')` — cùng khuôn đếm với `.returning()` của bản cũ.
  */
 const USER_PREFERENCES_COLUMNS = ['id', 'user_id as userId', 'name', 'value'] as const;
 const USER_ENROLMENTS_COLUMNS = [
@@ -102,9 +98,7 @@ const PAYMENTS_COLUMNS = [
 ] as const;
 
 /**
- * Một PrivacyProvider đăng ký đảo ngược (§3.12/§2#28): khai báo metadata
- * dữ liệu cá nhân của subsystem mình + export + delete cho một user.
- * Kể cả subsystem tuyên bố không giữ dữ liệu cũng phải đăng ký.
+ * Một PrivacyProvider đăng ký đảo ngược (§3.12/§2#28): khai báo metadata dữ liệu cá nhân của subsystem mình + export + delete cho một user. Kể cả subsystem tuyên bố không giữ dữ liệu cũng phải đăng ký.
  */
 export interface PrivacyProvider {
   subsystem: string;
@@ -121,8 +115,7 @@ export const EXPECTED_PRIVACY_SUBSYSTEMS = [
 ] as const;
 
 /**
- * PrivacyModule facade (Moodle core_privacy, §2#28) — GATE trước go-live.
- * Yêu cầu export/delete có phê duyệt bởi admin có capability, chạy nền
+ * PrivacyModule facade (Moodle core_privacy, §2#28) — GATE trước go-live. Yêu cầu export/delete có phê duyệt bởi admin có capability, chạy nền
  * (API twin đồng bộ ở đây; worker có processor tương đương), có trạng thái.
  * Delete phải lan đủ mọi subsystem đã khai — sót một provider là lỗi.
  */
@@ -246,9 +239,7 @@ export class PrivacyService {
       async (userId) => db.selectFrom('search_documents').select(SEARCH_DOCUMENTS_COLUMNS).where('owner_id', '=', userId).execute(),
       async (userId) => (await db.deleteFrom('search_documents').where('owner_id', '=', userId).returning('id').execute()).length);
     simple('contentbank', ['content_bank_content.creator_id'],
-      // sizeBytes là cột int8: qua Kysely nó đọc về là chuỗi (luật
-      // int8 của package @giaokhoa/db) — chuyển lại thành số tại biên này
-      // để bản xuất giữ nguyên hình dạng dữ kiện như trước.
+      // sizeBytes là cột int8: qua Kysely nó đọc về là chuỗi (luật int8 của package @giaokhoa/db) — chuyển lại thành số tại biên này để bản xuất giữ nguyên hình dạng dữ kiện như trước.
       async (userId) => (await db.selectFrom('content_bank_content').select(CONTENT_BANK_CONTENT_COLUMNS).where('creator_id', '=', userId).execute())
         .map((row) => ({ ...row, sizeBytes: row.sizeBytes === null ? null : Number(row.sizeBytes) })),
       async (userId) => (await db.deleteFrom('content_bank_content').where('creator_id', '=', userId).returning('id').execute()).length);

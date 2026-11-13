@@ -1,35 +1,19 @@
 /**
- * Kiểm chứng luồng nghiệp vụ của lát SL-1 (#7) — server loader +
- * dehydrate cho 5 route đã có TanStack:
+ * Kiểm chứng luồng nghiệp vụ của lát SL-1 (#7) — server loader + dehydrate cho 5 route đã có TanStack:
  *
  *   (a) Người dùng CÓ phiên: loader của từng route trả dehydrated
- *       state chứa ĐÚNG các query key hiện hữu của trang đó, trạng
- *       thái success, dữ liệu đúng như API trả — để trang mở ra là
- *       hiện dữ liệu ngay. Riêng dashboard: dữ liệu điểm theo khoá
- *       chỉ prefetch cho khoá người dùng thuộc về, và khối quản trị
- *       chỉ prefetch khi có quyền quản trị — loader không rò dữ liệu
- *       ngoài vai của phiên, cũng không thiếu dữ liệu của vai đó.
+ *       state chứa ĐÚNG các query key hiện hữu của trang đó, trạng thái success, dữ liệu đúng như API trả — để trang mở ra là hiện dữ liệu ngay. Riêng dashboard: dữ liệu điểm theo khoá chỉ prefetch cho khoá người dùng thuộc về, và khối quản trị chỉ prefetch khi có quyền quản trị — loader không rò dữ liệu ngoài vai của phiên, cũng không thiếu dữ liệu của vai đó.
  *   (b) Hydrate state vào cache phía client rồi render hook thật của
- *       trang: dữ liệu của server hiện ngay và KHÔNG phát sinh fetch
- *       trùng cho cùng query (đây là giá trị nghiệp vụ của lát —
- *       trang hết vòng chờ + tải hai lần).
+ *       trang: dữ liệu của server hiện ngay và KHÔNG phát sinh fetch trùng cho cùng query (đây là giá trị nghiệp vụ của lát — trang hết vòng chờ + tải hai lần).
  *   (c) CHƯA đăng nhập: loader không gọi bất kỳ API dữ liệu nghiệp
- *       vụ nào và trả state rỗng — mặt công khai (SSR không cookie)
- *       không dính dữ liệu cá nhân.
+ *       vụ nào và trả state rỗng — mặt công khai (SSR không cookie) không dính dữ liệu cá nhân.
  *   (d) HTTP status sống sót qua đường prefetch: đáp ứng 403 thì
- *       `serverQueryFn` ném `ApiError` đúng status và QueryClient
- *       KHÔNG thử lại (đúng 1 lượt gọi); đáp ứng 500 vẫn thử lại đủ
- *       3 lượt theo chính sách retry chung.
+ *       `serverQueryFn` ném `ApiError` đúng status và QueryClient KHÔNG thử lại (đúng 1 lượt gọi); đáp ứng 500 vẫn thử lại đủ 3 lượt theo chính sách retry chung.
  *
- * Cộng kiểm chứng tính tất định của hai helper khoảng ngày theo
- * múi giờ ứng dụng: mốc biên tháng/tuần phải ra cùng một khoảng ở
- * mọi múi giờ của tiến trình chạy test, vì server (UTC) và client
+ * Cộng kiểm chứng tính tất định của hai helper khoảng ngày theo múi giờ ứng dụng: mốc biên tháng/tuần phải ra cùng một khoảng ở mọi múi giờ của tiến trình chạy test, vì server (UTC) và client
  * (VN) phải tính ra cùng một query key.
  *
- * Cách kiểm: stub `fetch` ở biên mạng (loader gọi API nội bộ qua
- * URL tuyệt đối như `lib/server-api.ts`), so dữ liệu dehydrate với
- * payload stub theo từng query key — không soi chi tiết triển khai
- * trong của loader ngoài các key/dữ liệu mà trang thật tiêu thụ.
+ * Cách kiểm: stub `fetch` ở biên mạng (loader gọi API nội bộ qua URL tuyệt đối như `lib/server-api.ts`), so dữ liệu dehydrate với payload stub theo từng query key — không soi chi tiết triển khai trong của loader ngoài các key/dữ liệu mà trang thật tiêu thụ.
  */
 import { render, screen } from '@testing-library/react';
 import { QueryClientProvider, hashKey, hydrate, type DehydratedState } from '@tanstack/react-query';
@@ -68,10 +52,7 @@ interface StubRoute {
 }
 
 /**
- * Stub fetch theo pathname: loader gọi URL tuyệt đối tới API nội bộ,
- * phía client gọi đường dẫn tương đối — cả hai đều quy về pathname.
- * Trả spy để đếm lượt gọi (khẳng định "không fetch trùng/không gọi
- * khi ẩn danh" là khẳng định về số lượt gọi này).
+ * Stub fetch theo pathname: loader gọi URL tuyệt đối tới API nội bộ, phía client gọi đường dẫn tương đối — cả hai đều quy về pathname. Trả spy để đếm lượt gọi (khẳng định "không fetch trùng/không gọi khi ẩn danh" là khẳng định về số lượt gọi này).
  */
 function stubApi(routes: Record<string, StubRoute>) {
   const spy = vi.fn(async (input: unknown) => {
@@ -170,8 +151,7 @@ describe('SL-1 — bộ nạp /calendar', () => {
     const { dehydratedState } = await calendarLoader({ request: sessionRequest('/calendar') });
     serverSpy.mockClear();
 
-    // Phía client sau điều hướng: fetch stub trả dữ liệu KHÁC hẳn —
-    // nếu trang fetch lại thì tên sự kiện mới sẽ thắng và test đỏ.
+    // Phía client sau điều hướng: fetch stub trả dữ liệu KHÁC hẳn — nếu trang fetch lại thì tên sự kiện mới sẽ thắng và test đỏ.
     const clientSpy = stubApi({
       '/api/v1/calendar/events': {
         body: [{ id: 'ev-2', name: 'Sự kiện chỉ có khi fetch lại phía client' }],
@@ -322,8 +302,7 @@ describe('SL-1 — bộ nạp /notifications', () => {
     expect(findQuery(dehydratedState, notificationsQueryKeys.messagePreferences)?.state.data).toEqual([
       { id: 'pref-1' },
     ]);
-    // Trang kỳ vọng MẢNG ghi đè (queryFn phía client bóc .courses) —
-    // dehydrate phải mang đúng hình mảng đó, không phải nguyên thân đáp ứng.
+    // Trang kỳ vọng MẢNG ghi đè (queryFn phía client bóc .courses) — dehydrate phải mang đúng hình mảng đó, không phải nguyên thân đáp ứng.
     expect(findQuery(dehydratedState, notificationsQueryKeys.messageCourseOverrides)?.state.data).toEqual([
       { courseId: 'course-1', muted: true },
     ]);

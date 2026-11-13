@@ -8,35 +8,15 @@ import {
 /**
  * Parity luật thông báo API ↔ worker — nửa HÀNH VI (issue #293).
  *
- * File này khẳng định phía worker cho cùng kết quả ở các luật cứng
- * mà `notify()` phía API áp: người nhận bị đình chỉ/đã xoá thì
- * không nhận gì (`skipped-suspended`); loại bị chính sách admin cấp
- * site tắt (NB-7) thì bị chặn trước tuỳ chọn người dùng
+ * File này khẳng định phía worker cho cùng kết quả ở các luật cứng mà `notify()` phía API áp: người nhận bị đình chỉ/đã xoá thì không nhận gì (`skipped-suspended`); loại bị chính sách admin cấp site tắt (NB-7) thì bị chặn trước tuỳ chọn người dùng
  * (`skipped-admin-disabled`); tuỳ chọn trong-app của người nhận
- * được tôn trọng (`skipped-preference`); loại bắt buộc (P2,
- * `mandatoryInApp`) ép bật kênh trong-app bất kể tuỳ chọn đã lưu
- * VÀ bất kể chính sách admin cấp site — vế admin được khẳng định
- * qua `deliverInApp` bằng một provider bắt buộc tổng hợp đăng ký
- * tạm vào bản chiếu ngay trong ca test (bản chiếu hiện chưa có
- * provider bắt buộc thật nào — hai provider phía worker hiện tại
- * đều không bắt buộc — nên ca qua đường phát thật bằng provider
- * thật chưa dựng được; probe tổng hợp đi qua đúng đường luật
- * production, không qua lối tắt nào khác).
- * Phía API đã có spec riêng cho các ca này
+ * được tôn trọng (`skipped-preference`); loại bắt buộc (P2, `mandatoryInApp`) ép bật kênh trong-app bất kể tuỳ chọn đã lưu VÀ bất kể chính sách admin cấp site — vế admin được khẳng định qua `deliverInApp` bằng một provider bắt buộc tổng hợp đăng ký tạm vào bản chiếu ngay trong ca test (bản chiếu hiện chưa có provider bắt buộc thật nào — hai provider phía worker hiện tại đều không bắt buộc — nên ca qua đường phát thật bằng provider thật chưa dựng được; probe tổng hợp đi qua đúng đường luật production, không qua lối tắt nào khác). Phía API đã có spec riêng cho các ca này
  * (messaging-admin-policy.spec.ts, notifications-admin-policy.e2e-spec.ts);
- * ở đây chạy `NotificationDeliveryService` THẬT của worker với DB
- * giả theo khuôn unit spec phía API.
+ * ở đây chạy `NotificationDeliveryService` THẬT của worker với DB giả theo khuôn unit spec phía API.
  *
- * Nửa ĐỐI CHIẾU TRƯỜNG LUẬT của parity (bản chiếu `WORKER_PROVIDERS`
- * ở file `./notification-delivery.service.ts` so với registry
- * phía API) nằm ở phía API —
- * `apps/api/src/modules/messaging/notification-parity.spec.ts` —
- * vì hai app là hai project TypeScript riêng: import chéo app vỡ
- * typecheck (lỗi rootDir), nên phía API đọc bản chiếu worker dạng
- * văn bản nguồn để đối chiếu với registry thật của chính app đó.
+ * Nửa ĐỐI CHIẾU TRƯỜNG LUẬT của parity (bản chiếu `WORKER_PROVIDERS` ở file `./notification-delivery.service.ts` so với registry phía API) nằm ở phía API — `apps/api/src/modules/messaging/notification-parity.spec.ts` — vì hai app là hai project TypeScript riêng: import chéo app vỡ typecheck (lỗi rootDir), nên phía API đọc bản chiếu worker dạng văn bản nguồn để đối chiếu với registry thật của chính app đó.
  *
- * Luật ghi đè tắt tiếng theo khoá (NB-4) của đường huy hiệu được
- * khẳng định ở spec của lát #174-A ở cả hai phía
+ * Luật ghi đè tắt tiếng theo khoá (NB-4) của đường huy hiệu được khẳng định ở spec của lát #174-A ở cả hai phía
  * (badges-issue-notify.spec.ts phía API,
  * notification-badge-award.spec.ts phía worker) nên không lặp ở đây.
  */
@@ -52,13 +32,8 @@ describe('Đối chiếu thông báo: worker mirror kiểm tra tỉnh táo cục
 });
 
 /**
- * Dựng NotificationDeliveryService với handle Kysely giả theo từng
- * bảng (mỗi kịch bản tối đa một dòng có nghĩa cho mỗi bảng — đủ cho
- * các ca luật cứng ở đây; chuỗi builder mô phỏng đúng chuỗi mà
- * service dùng, điều kiện where được bỏ qua như khuôn notify.spec).
- * Tín hiệu badge qua Redis được stub để spec không phụ thuộc Redis:
- * hành vi cần khẳng định là luật phân phối, không phải đường tín
- * hiệu thời gian thực.
+ * Dựng NotificationDeliveryService với handle Kysely giả theo từng bảng (mỗi kịch bản tối đa một dòng có nghĩa cho mỗi bảng — đủ cho các ca luật cứng ở đây; chuỗi builder mô phỏng đúng chuỗi mà service dùng, điều kiện where được bỏ qua như khuôn notify.spec). Tín hiệu badge qua Redis được stub để spec không phụ thuộc Redis:
+ * hành vi cần khẳng định là luật phân phối, không phải đường tín hiệu thời gian thực.
  */
 function buildDelivery(scenario: {
   user?: { id: string; suspended: boolean; deleted: boolean };
@@ -167,23 +142,13 @@ describe('Đối chiếu thông báo: luật gửi của worker khớp luật c�
     const mandatory: WorkerProviderLaw = { name: 'parity_mandatory_probe', component: 'core_probe', mandatoryInApp: true };
     const optional: WorkerProviderLaw = { name: 'parity_optional_probe', component: 'core_probe', mandatoryInApp: false };
     const { delivery } = buildDelivery({ user: ACTIVE_USER, preferenceValue: '0' });
-    // Cùng một giá trị tuỳ chọn đã lưu ('0' ở khoá v2): loại bắt buộc
-    // bị ép bật, loại thường tôn trọng tuỳ chọn — đúng luật
-    // resolveNotificationPreference phía API.
+    // Cùng một giá trị tuỳ chọn đã lưu ('0' ở khoá v2): loại bắt buộc bị ép bật, loại thường tôn trọng tuỳ chọn — đúng luật resolveNotificationPreference phía API.
     expect(await delivery.resolvePopupEnabled('user-parity', mandatory)).toBe(true);
     expect(await delivery.resolvePopupEnabled('user-parity', optional)).toBe(false);
   });
 
   it('provider bắt buộc (P2) vẫn gửi đầu-cuối ngay cả khi chính sách site admin tắt nó và tuỳ chọn đã lưu đang tắt', async () => {
-    // Bản chiếu hiện chưa có provider bắt buộc thật (cả hai provider
-    // phía worker đều `mandatoryInApp: false`), nên ca này đăng ký
-    // tạm hai provider tổng hợp vào bản chiếu và gỡ ngay trong
-    // `finally`: một bắt buộc, một thường — cùng điều kiện khắc
-    // nghiệt nhất (admin cấp site tắt + tuỳ chọn đã lưu tắt). Loại
-    // bắt buộc phải đi qua CẢ HAI cổng tới `delivered` (đúng mục
-    // 4(c) của issue #293: tuỳ chọn tắt và chính sách admin đều
-    // không chặn được loại bắt buộc); loại thường bị cổng admin
-    // chặn trước, làm đối chứng ngay trong cùng ca.
+    // Bản chiếu hiện chưa có provider bắt buộc thật (cả hai provider phía worker đều `mandatoryInApp: false`), nên ca này đăng ký tạm hai provider tổng hợp vào bản chiếu và gỡ ngay trong `finally`: một bắt buộc, một thường — cùng điều kiện khắc nghiệt nhất (admin cấp site tắt + tuỳ chọn đã lưu tắt). Loại bắt buộc phải đi qua CẢ HAI cổng tới `delivered` (đúng mục 4(c) của issue #293: tuỳ chọn tắt và chính sách admin đều không chặn được loại bắt buộc); loại thường bị cổng admin chặn trước, làm đối chứng ngay trong cùng ca.
     WORKER_PROVIDERS['parity_mandatory_probe'] = { name: 'parity_mandatory_probe', component: 'core_probe', mandatoryInApp: true };
     WORKER_PROVIDERS['parity_optional_probe'] = { name: 'parity_optional_probe', component: 'core_probe', mandatoryInApp: false };
     try {

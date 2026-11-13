@@ -11,53 +11,32 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser } from '..
 /**
  * Tách vai giáo viên/học viên theo ngữ cảnh (issue #425).
  *
- * Quyết định áp dụng (viết trọn vẹn): vai trò phải rõ ràng theo ngữ
- * cảnh — trong khoá một tài khoản ghi danh học thì tài khoản đó thuần
- * là học viên của khoá đó; trong khoá mình dạy thì thuần giáo viên.
- * Đường giáo viên tham gia khoá/lớp KHÁC được giữ (hai tập khoá không
- * giao nhau). Điều bị cấm tuyệt đối là LẪN VAI CÙNG MỘT KHOÁ/LỚP: một
- * tài khoản đồng thời có cấp quyền giảng dạy bao phủ một khoá và ghi
- * danh học viên đang hoạt động trong chính khoá đó (hoặc lớp chứa
- * khoá đó).
+ * Quyết định áp dụng (viết trọn vẹn): vai trò phải rõ ràng theo ngữ cảnh — trong khoá một tài khoản ghi danh học thì tài khoản đó thuần là học viên của khoá đó; trong khoá mình dạy thì thuần giáo viên. Đường giáo viên tham gia khoá/lớp KHÁC được giữ (hai tập khoá không giao nhau). Điều bị cấm tuyệt đối là LẪN VAI CÙNG MỘT KHOÁ/LỚP: một tài khoản đồng thời có cấp quyền giảng dạy bao phủ một khoá và ghi danh học viên đang hoạt động trong chính khoá đó (hoặc lớp chứa khoá đó).
  *
- * Định nghĩa dùng chung duy nhất ở RoleSeparationService (tầng
- * Access):
+ * Định nghĩa dùng chung duy nhất ở RoleSeparationService (tầng Access):
  * - Kiểm (a): tồn tại gán vai archetype editingteacher/teacher KHÔNG
- *   do ghi danh cấp (component <> 'enrol') tại một context trên
- *   đường tổ tiên của context khoá (trừ context hệ thống).
+ *   do ghi danh cấp (component <> 'enrol') tại một context trên đường tổ tiên của context khoá (trừ context hệ thống).
  * - Kiểm (b): tồn tại user_enrolments status = 0 qua một enrol
  *   instance của khoá mà vai cấp kèm không thuộc archetype giảng dạy.
  *
- * Các ca dưới đây khoá hành vi ở BA funnel ghi danh và chốt chiều
- * ngược:
+ * Các ca dưới đây khoá hành vi ở BA funnel ghi danh và chốt chiều ngược:
  *  1. Funnel 1 — ghi danh tay giáo viên vào chính khoá mình dạy qua
- *     EnrolService.enrolUserInternal: bị từ chối
- *     `access.role_context_conflict`, không tạo ghi danh, không gán
- *     vai học viên.
+ *     EnrolService.enrolUserInternal: bị từ chối `access.role_context_conflict`, không tạo ghi danh, không gán vai học viên.
  *  2. Funnel 2 — thêm roster lớp bằng EMAIL của chính chủ lớp qua
- *     GroupsService.addCohortMember: bị từ chối cùng mã; chủ lớp
- *     không vào cohort, không có ghi danh ở khoá của lớp; học sinh
- *     thường vẫn nạp được (đối chứng dương).
+ *     GroupsService.addCohortMember: bị từ chối cùng mã; chủ lớp không vào cohort, không có ghi danh ở khoá của lớp; học sinh thường vẫn nạp được (đối chứng dương).
  *  3. Đối chứng giữ đường tham gia: giáo viên ghi danh vào khoá
  *     KHÔNG liên quan vẫn thành công và ở khoá đó chỉ là học viên
  *     (không có grade:viewall).
  *  4. Chiều ngược — gán vai giảng dạy tại context khoá và context
- *     lớp cho học viên đang học đang hoạt động trong khoá bị bao
- *     phủ: bị từ chối cùng mã; gán cho người không có ghi danh như
- *     vậy vẫn thành công (đối chứng dương).
+ *     lớp cho học viên đang học đang hoạt động trong khoá bị bao phủ: bị từ chối cùng mã; gán cho người không có ghi danh như vậy vẫn thành công (đối chứng dương).
  *  5. Funnel 3 — restore backup chứa ghi danh của người đang dạy
- *     khoá đích: restore hoàn tất, ghi danh vi phạm bị bỏ qua và
- *     được đếm vào chi tiết bước restore
+ *     khoá đích: restore hoàn tất, ghi danh vi phạm bị bỏ qua và được đếm vào chi tiết bước restore
  *     (skippedRoleConflictEnrolments = 1), ghi danh hợp lệ trong
  *     cùng backup vẫn được khôi phục.
  *  6. Đường kích hoạt lại ghi danh đã đình chỉ: gán vai giảng dạy
- *     trong lúc ghi danh đang đình chỉ là hợp lệ (ghi danh chưa hoạt
- *     động), nhưng kích hoạt lại sau đó bị từ chối cùng mã và ghi
- *     danh giữ nguyên trạng thái đình chỉ.
+ *     trong lúc ghi danh đang đình chỉ là hợp lệ (ghi danh chưa hoạt động), nhưng kích hoạt lại sau đó bị từ chối cùng mã và ghi danh giữ nguyên trạng thái đình chỉ.
  *  7. Kiểm toán chỉ đọc: dữ kiện lẫn vai dựng thẳng vào DB (mô
- *     phỏng dữ kiện có sẵn trước khi có chốt) được phân loại vào
- *     NHÓM CÙNG KHOÁ; tài khoản dạy khoá này học khoá khác vào
- *     NHÓM KHÁC KHOÁ; lượt kiểm toán không ghi bất kỳ dữ kiện nào.
+ *     phỏng dữ kiện có sẵn trước khi có chốt) được phân loại vào NHÓM CÙNG KHOÁ; tài khoản dạy khoá này học khoá khác vào NHÓM KHÁC KHOÁ; lượt kiểm toán không ghi bất kỳ dữ kiện nào.
  */
 describe('Tách vai trò theo ngữ cảnh (#425)', () => {
   let app: INestApplication;
@@ -68,8 +47,7 @@ describe('Tách vai trò theo ngữ cảnh (#425)', () => {
   let editingTeacherRoleId: string;
   let teacherRoleId: string;
 
-  // Định danh dùng chung giữa các ca (ca kiểm toán ở cuối đọc lại
-  // trạng thái của các ca trước).
+  // Định danh dùng chung giữa các ca (ca kiểm toán ở cuối đọc lại trạng thái của các ca trước).
   let ownCourseTeacherId: string;
   let crossCourseTeacherId: string;
   let classOwnerId: string;

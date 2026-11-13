@@ -11,12 +11,9 @@ import { queryKeys } from '../queries/keys';
 import { GradingPanel } from './grading-panel';
 
 /**
- * Phía giáo viên: danh sách bài nộp cả lớp + trả bài theo đợt + mở
- * bề mặt chấm từng em. Danh sách bài nộp là dữ kiện máy chủ nên đọc
- * trực tiếp từ cache TanStack qua `assignmentSubmissionsQueryOptions`
+ * Phía giáo viên: danh sách bài nộp cả lớp + trả bài theo đợt + mở bề mặt chấm từng em. Danh sách bài nộp là dữ kiện máy chủ nên đọc trực tiếp từ cache TanStack qua `assignmentSubmissionsQueryOptions`
  * (CN-13, issue #493) — các đột biến chấm/trả bài tự invalidate
- * khoá này ở tầng dữ kiện; `loadSummaries` chỉ còn là lần nạp lại
- * tường minh cho bề mặt chấm gọi sau mỗi hành động.
+ * khoá này ở tầng dữ kiện; `loadSummaries` chỉ còn là lần nạp lại tường minh cho bề mặt chấm gọi sau mỗi hành động.
  */
 export function TeacherPanel({ data }: { data: AssignmentForUserView }) {
   const { t } = useTranslation('app');

@@ -19,24 +19,19 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstS
 import { createExamDraft } from '../../support/exam-pin-helpers';
 
 /**
- * Lát MCP-0 (issue #110) — nền MCP server + nhập câu hỏi nháp bằng AI.
- * Bao phủ tiêu chí nghiệm thu Phần 4.3 của hồ sơ research:
+ * Lát MCP-0 (issue #110) — nền MCP server + nhập câu hỏi nháp bằng AI. Bao phủ tiêu chí nghiệm thu Phần 4.3 của hồ sơ research:
  *  - một endpoint POST /mcp phục vụ cả hai kỷ nguyên (modern
- *    2026-07-28 + legacy 2025-11-25): tools/list + tools/call chạy ở
- *    cả hai; PRM chạy; không token → 401.
+ *    2026-07-28 + legacy 2025-11-25): tools/list + tools/call chạy ở cả hai; PRM chạy; không token → 401.
  *  - create_question đủ 4 qtype vào bank personal của chính chủ token,
  *    trạng thái draft, source_kind='ai' + source_ref='client:<id>'
  *    (kiểm bằng SQL); draft KHÔNG rút được vào usage/slot ngẫu
- *    nhiên/slot quiz/startAttempt; phát hành ready thì dùng được và
- *    chấm đúng (gồm truefalse chùm TF-A 4 mệnh đề qua dạng answers
- *    chuẩn của MCP: thân câu + 4 mệnh đề kèm giá trị Đúng/Sai).
+ *    nhiên/slot quiz/startAttempt; phát hành ready thì dùng được và chấm đúng (gồm truefalse chùm TF-A 4 mệnh đề qua dạng answers chuẩn của MCP: thân câu + 4 mệnh đề kèm giá trị Đúng/Sai).
  *  - validate: lỗi nghiệp vụ kèm fieldPath; trường lạ bị schema chặn;
  *    nội dung HTML lưu thành text thuần; ký tự điều khiển bị từ chối.
  *  - phân quyền: học viên / giáo viên khác bị từ chối (bank của người
  *    khác coi như không tồn tại), 0 bản ghi sinh ra.
  *  - idempotency: phát lại cùng key → kết quả cũ không nhân đôi; cùng
- *    key khác payload → question.idempotency_conflict; trùng hoàn toàn
- *    → verdict duplicate_exact không tạo bản sao.
+ *    key khác payload → question.idempotency_conflict; trùng hoàn toàn → verdict duplicate_exact không tạo bản sao.
  *  - mọi tools/call ghi outbox aggregate 'mcp' (worker relay mirror
  *    sang event_log — cùng cơ chế mọi aggregate khác).
  *  - rate limit tạo câu: vượt hạn → 429 + mã -32029 (app riêng, hạn 2).

@@ -1,9 +1,5 @@
 /**
- * BỘ ẢNH KIỂM CHỨNG MÔ PHỎNG của CAM-0 (issue #112, tiêu chí nghiệm thu
- * Phần 4.2 của hồ sơ research): phiếu dựng từ chính template hệ thống,
- * tô theo kịch bản, "chụp" mô phỏng (lệch phối cảnh + nhiễu + gradient
- * sáng + mờ nhẹ) rồi đọc bằng đúng engine sản xuất. Các ngưỡng khẳng
- * định trong file này là tiêu chí nghiệm thu cứng của issue:
+ * BỘ ẢNH KIỂM CHỨNG MÔ PHỎNG của CAM-0 (issue #112, tiêu chí nghiệm thu Phần 4.2 của hồ sơ research): phiếu dựng từ chính template hệ thống, tô theo kịch bản, "chụp" mô phỏng (lệch phối cảnh + nhiễu + gradient sáng + mờ nhẹ) rồi đọc bằng đúng engine sản xuất. Các ngưỡng khẳng định trong file này là tiêu chí nghiệm thu cứng của issue:
  *  - độ chính xác đọc ô ≥ 99,5% trên ảnh đạt cổng chất lượng;
  *  - 100% ca mơ hồ (tô mờ, dấu ✓, tô hai ô, tẩy xoá) vào hàng chờ —
  *    không ca nào bị đoán;

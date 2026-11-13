@@ -69,8 +69,7 @@ function SidebarProvider({
   const isMobile = useIsMobile()
   const [openMobile, setOpenMobile] = React.useState(false)
 
-  // Đây là trạng thái nội bộ của sidebar.
-  // Dùng openProp và setOpenProp để điều khiển từ bên ngoài component.
+  // Đây là trạng thái nội bộ của sidebar. Dùng openProp và setOpenProp để điều khiển từ bên ngoài component.
   const [_open, _setOpen] = React.useState(defaultOpen)
   const open = openProp ?? _open
   const setOpen = React.useCallback(

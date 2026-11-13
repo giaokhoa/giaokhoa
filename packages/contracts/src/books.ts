@@ -2,11 +2,7 @@ import { z } from 'zod';
 import { uuidIdSchema } from './ids.js';
 
 /**
- * Hợp đồng API Books (K0b tái cấu trúc, issue #67): sách là thực thể độc
- * lập — không nằm dưới chương trình; chương trình GDPT 2018 chỉ liên
- * quan qua lớp ánh xạ `book_mappings`. `BOOK_KINDS` là danh sách loại
- * sách đã biết ở tầng app (mở rộng được bằng cách thêm giá trị ở đây;
- * DB không khoá cứng). `attributionPublic` là cờ bản quyền theo sách
+ * Hợp đồng API Books (K0b tái cấu trúc, issue #67): sách là thực thể độc lập — không nằm dưới chương trình; chương trình GDPT 2018 chỉ liên quan qua lớp ánh xạ `book_mappings`. `BOOK_KINDS` là danh sách loại sách đã biết ở tầng app (mở rộng được bằng cách thêm giá trị ở đây; DB không khoá cứng). `attributionPublic` là cờ bản quyền theo sách
  * (mặc định false): chỉ sách bật cờ mới được ghi công khai nguồn ở bề
  * mặt dùng chung.
  */
@@ -14,11 +10,7 @@ export const BOOK_KINDS = ['textbook', 'reference', 'workbook', 'other'] as cons
 export type BookKind = (typeof BOOK_KINDS)[number];
 
 /**
- * Nạp dữ liệu SGK (K0b): dataset là một file bản ghi đã kiểm chứng
- * nguyên văn với mục lục in trong cuốn SGK (ví dụ Toán 1). `datasetKey`
- * là khoá ổn định của dataset trong manifest phía máy chủ — sách nào có
- * dataset đã kiểm chứng mới nạp được sách đó. Hình dạng đối ứng của
- * `importProgramDatasetSchema` ở tầng chương trình.
+ * Nạp dữ liệu SGK (K0b): dataset là một file bản ghi đã kiểm chứng nguyên văn với mục lục in trong cuốn SGK (ví dụ Toán 1). `datasetKey` là khoá ổn định của dataset trong manifest phía máy chủ — sách nào có dataset đã kiểm chứng mới nạp được sách đó. Hình dạng đối ứng của `importProgramDatasetSchema` ở tầng chương trình.
  */
 export const importBookDatasetSchema = z.strictObject({
   datasetKey: z.string().min(1),
@@ -72,11 +64,7 @@ export const bookSchema = z.object({
 export type Book = z.infer<typeof bookSchema>;
 
 /**
- * Một đích ánh xạ của một bài SGK: đúng một trong hai trường đích có
- * giá trị — node nội dung của cây chương trình hoặc một YCCĐ cụ thể.
- * `programRecordId` là mã bản ghi chương trình (ví dụ TOAN-0001) khi
- * đích thuộc dataset chương trình đã nạp — định danh truy vết ổn định
- * cho người đọc, không phải khoá kỹ thuật.
+ * Một đích ánh xạ của một bài SGK: đúng một trong hai trường đích có giá trị — node nội dung của cây chương trình hoặc một YCCĐ cụ thể. `programRecordId` là mã bản ghi chương trình (ví dụ TOAN-0001) khi đích thuộc dataset chương trình đã nạp — định danh truy vết ổn định cho người đọc, không phải khoá kỹ thuật.
  */
 export const bookMappingViewSchema = z.object({
   curriculumNodeId: uuidIdSchema.nullable(),
@@ -118,10 +106,7 @@ export const bookTreeViewSchema = z.object({
 export type BookTreeView = z.infer<typeof bookTreeViewSchema>;
 
 /**
- * Payload nạp khung SGK vào khoá: mỗi chủ đề được chọn thành một
- * section, các bài trong chủ đề thành mục của section (neo kép: mục
- * truy về bài SGK và về YCCĐ chương trình qua bản chụp lúc nạp).
- * `insertAtSection` như ở khung chương trình.
+ * Payload nạp khung SGK vào khoá: mỗi chủ đề được chọn thành một section, các bài trong chủ đề thành mục của section (neo kép: mục truy về bài SGK và về YCCĐ chương trình qua bản chụp lúc nạp). `insertAtSection` như ở khung chương trình.
  */
 export const applyBookFrameSchema = z.strictObject({
   bookId: uuidIdSchema,
@@ -146,10 +131,7 @@ export const courseSectionBookItemSchema = z.object({
 export type CourseSectionBookItem = z.infer<typeof courseSectionBookItemSchema>;
 
 /**
- * Neo khung SGK của một section (K0b): section là bản sao độc lập, neo
- * ghi node chủ đề nguồn + cuốn sách + tựa chụp; các mục bài nằm trong
- * `items` theo đúng thứ tự sách. Sửa cây sách sau đó không đổi section
- * đã nạp.
+ * Neo khung SGK của một section (K0b): section là bản sao độc lập, neo ghi node chủ đề nguồn + cuốn sách + tựa chụp; các mục bài nằm trong `items` theo đúng thứ tự sách. Sửa cây sách sau đó không đổi section đã nạp.
  */
 export const courseSectionBookFrameSchema = z.object({
   nodeId: uuidIdSchema.nullable(),

@@ -2,14 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SpacePoolManager, type ManagedPool, type SpacePoolHandle } from './space-pool-manager';
 
 /**
- * Ca đơn vị của trình quản lý pool theo database (issue #581): pool
- * được thay bằng vật giả có bộ đếm kết nối điều khiển được và đồng
- * hồ điều khiển bằng tay — các ca khoá ba kỷ luật ngân sách: tạo
- * lười theo kho, đóng pool khi nhàn rỗi quá ngưỡng (nhưng không
- * đóng pool còn kết nối đang được mượn), và tổng kết nối cộng đúng
- * trên các pool đang sống; cộng bất biến danh tính: pool bị buộc
- * theo danh tính kết nối đã phân giải mà nó được tạo bằng, sổ đổi
- * danh tính thì pool bị thay.
+ * Ca đơn vị của trình quản lý pool theo database (issue #581): pool được thay bằng vật giả có bộ đếm kết nối điều khiển được và đồng hồ điều khiển bằng tay — các ca khoá ba kỷ luật ngân sách: tạo lười theo kho, đóng pool khi nhàn rỗi quá ngưỡng (nhưng không đóng pool còn kết nối đang được mượn), và tổng kết nối cộng đúng trên các pool đang sống; cộng bất biến danh tính: pool bị buộc theo danh tính kết nối đã phân giải mà nó được tạo bằng, sổ đổi danh tính thì pool bị thay.
  */
 
 class FakePool implements ManagedPool {

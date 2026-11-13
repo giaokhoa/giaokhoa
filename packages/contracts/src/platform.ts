@@ -165,11 +165,9 @@ export const paymentSchema = z.object({
   amount: z.number().int().positive(),
   currency: z.string().length(3),
   /**
-   * Vòng đời payment: `needs_review` là trạng thái chờ người xử lý khi
-   * tiền về nhưng không khớp đủ 3 điều kiện đối soát của issue #189
+   * Vòng đời payment: `needs_review` là trạng thái chờ người xử lý khi tiền về nhưng không khớp đủ 3 điều kiện đối soát của issue #189
    * (đúng mã thanh toán + đúng số tiền + đúng tài khoản nhận) — thiếu
-   * trạng thái này, mọi bề mặt parse qua schema sẽ từ chối payment
-   * đang chờ đối soát dù DB và API đều mang trạng thái đó hợp lệ.
+   * trạng thái này, mọi bề mặt parse qua schema sẽ từ chối payment đang chờ đối soát dù DB và API đều mang trạng thái đó hợp lệ.
    */
   status: z.enum(['pending', 'succeeded', 'failed', 'refunded', 'needs_review']),
   gateway: z.string(),
@@ -227,10 +225,7 @@ export const callExternalFunctionSchema = z.strictObject({
 export type CallExternalFunction = z.infer<typeof callExternalFunctionSchema>;
 
 /**
- * Payload tạo backup job. Phạm vi mặc định là `course` và bắt buộc có
- * `courseId`; phạm vi `site` (sao lưu mức hệ thống: category câu hỏi mức
- * site, ngân hàng câu hỏi mức site, badge mức site, sự kiện/subscription
- * mức site) thì KHÔNG được gắn khoá học.
+ * Payload tạo backup job. Phạm vi mặc định là `course` và bắt buộc có `courseId`; phạm vi `site` (sao lưu mức hệ thống: category câu hỏi mức site, ngân hàng câu hỏi mức site, badge mức site, sự kiện/subscription mức site) thì KHÔNG được gắn khoá học.
  */
 export const createBackupSchema = z.strictObject({
   courseId: uuidIdSchema.optional(),
@@ -277,9 +272,7 @@ export type CreateReportSchedule = z.infer<typeof createReportScheduleSchema>;
 /* ---- Nhật ký sự kiện (logstore) ---- */
 
 /**
- * Bộ lọc truy vấn nhật ký sự kiện (báo cáo "ai đã làm gì"): `userId` là
- * người thực hiện (actor), `relatedUserId` là người bị tác động; `from`/`to`
- * là mốc thời gian ISO của sự kiện. Phân trang theo chuẩn chung của repo.
+ * Bộ lọc truy vấn nhật ký sự kiện (báo cáo "ai đã làm gì"): `userId` là người thực hiện (actor), `relatedUserId` là người bị tác động; `from`/`to` là mốc thời gian ISO của sự kiện. Phân trang theo chuẩn chung của repo.
  */
 export const listEventLogsQuerySchema = z.strictObject({
   userId: uuidIdSchema.optional(),
@@ -297,10 +290,7 @@ export type ListEventLogsQuery = z.infer<typeof listEventLogsQuerySchema>;
 
 /**
  * Payload tạo học liệu Kho học liệu (CB-1). `contextId` không còn bắt buộc:
- * server tự suy theo `scope` (personal → context của tác giả, org/school →
- * context hệ thống); chỉ truyền khi cần bám hành vi cũ. Metadata chương
- * trình (môn/khối/node/YCCĐ) bắt buộc khi gửi duyệt scope org/school —
- * server kiểm ở bước submit.
+ * server tự suy theo `scope` (personal → context của tác giả, org/school → context hệ thống); chỉ truyền khi cần bám hành vi cũ. Metadata chương trình (môn/khối/node/YCCĐ) bắt buộc khi gửi duyệt scope org/school — server kiểm ở bước submit.
  */
 export const createContentBankContentSchema = z.strictObject({
   name: z.string().min(1),
@@ -342,9 +332,7 @@ export const updateContentBankContentSchema = createContentBankContentSchema
 export type UpdateContentBankContent = z.infer<typeof updateContentBankContentSchema>;
 
 /**
- * Payload duyệt học liệu (tổ trưởng/quản trị): quyết định + ghi chú +
- * checklist tiêu chí Bộ (CB1-B3). Service ép: từ chối thì ghi chú (lý do)
- * là BẮT BUỘC; phê duyệt thì checklist phải đủ 4 tiêu chí đạt.
+ * Payload duyệt học liệu (tổ trưởng/quản trị): quyết định + ghi chú + checklist tiêu chí Bộ (CB1-B3). Service ép: từ chối thì ghi chú (lý do) là BẮT BUỘC; phê duyệt thì checklist phải đủ 4 tiêu chí đạt.
  */
 export const reviewContentBankContentSchema = z.strictObject({
   decision: z.enum(['approved', 'rejected']),

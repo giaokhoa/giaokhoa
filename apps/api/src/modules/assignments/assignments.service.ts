@@ -30,32 +30,15 @@ export const ASSIGN_CAPABILITIES = {
 export const ASSIGN_FILE_AREA = 'submission_files';
 
 /**
- * Hoạt động Bài tập nộp tệp/ảnh (Moodle mod_assign, submission type
- * file/ảnh) — lát C2 của Đợt 3, đã hấp thụ hồ sơ "Chấm bài và phản hồi
- * theo năng lực GDPT 2018" (mục 6.1: C2-a..C2-e).
+ * Hoạt động Bài tập nộp tệp/ảnh (Moodle mod_assign, submission type file/ảnh) — lát C2 của Đợt 3, đã hấp thụ hồ sơ "Chấm bài và phản hồi theo năng lực GDPT 2018" (mục 6.1: C2-a..C2-e).
  *
- * Luồng nghiệp vụ: giáo viên tạo bài tập trong một section (kèm course
- * module + grade item 'mod' như mọi hoạt động); học sinh tải 1–nhiều
- * ảnh/tệp vào bài nộp nháp của mình (nội dung qua module Files: dedup
- * theo content hash, tải xuống bằng signed URL), chốt nộp trước/sau hạn
+ * Luồng nghiệp vụ: giáo viên tạo bài tập trong một section (kèm course module + grade item 'mod' như mọi hoạt động); học sinh tải 1–nhiều ảnh/tệp vào bài nộp nháp của mình (nội dung qua module Files: dedup theo content hash, tải xuống bằng signed URL), chốt nộp trước/sau hạn
  * (sau hạn vẫn nhận, đánh dấu trễ).
  *
  * Chấm theo vòng đời TRẢ BÀI (Google Return / Canvas posting policy):
- * giáo viên chấm trên bề mặt bài nộp — dấu vector trên ảnh (đúng/sai/vẽ
- * tay/ghi chú), điểm hoặc mức Đạt/Chưa đạt theo chế độ kết quả của bài,
- * lời phê cấu trúc 3 ô TT 22 (tiến bộ / ưu điểm / hạn chế), kết quả
- * rubric neo YCCĐ — tất cả ở trạng thái NHÁP, học sinh chưa thấy và sổ
- * điểm chưa nhận. Bấm TRẢ BÀI (từng em hoặc theo đợt) mới công bố
- * nguyên tử: gói chấm hiện với học sinh, điểm ghi vào sổ điểm qua grade
- * item của course module (GradesService.recordActivityGrade, source
- * 'mod/assign') tại đúng thời điểm trả nên chảy vào gradebook +
- * completion (theo điểm như mod_quiz), kèm sự kiện thông báo. Sửa gói
- * chấm sau khi đã trả ghi vết kiểm toán (assign_grade_revisions).
+ * giáo viên chấm trên bề mặt bài nộp — dấu vector trên ảnh (đúng/sai/vẽ tay/ghi chú), điểm hoặc mức Đạt/Chưa đạt theo chế độ kết quả của bài, lời phê cấu trúc 3 ô TT 22 (tiến bộ / ưu điểm / hạn chế), kết quả rubric neo YCCĐ — tất cả ở trạng thái NHÁP, học sinh chưa thấy và sổ điểm chưa nhận. Bấm TRẢ BÀI (từng em hoặc theo đợt) mới công bố nguyên tử: gói chấm hiện với học sinh, điểm ghi vào sổ điểm qua grade item của course module (GradesService.recordActivityGrade, source 'mod/assign') tại đúng thời điểm trả nên chảy vào gradebook + completion (theo điểm như mod_quiz), kèm sự kiện thông báo. Sửa gói chấm sau khi đã trả ghi vết kiểm toán (assign_grade_revisions).
  *
- * Máy trạng thái bài nộp: (chưa có) → draft → submitted → graded (khi
- * gói chấm khớp attempt_number hiện hành VÀ đã trả bài). Gói chấm còn
- * nháp thì học sinh mở lại được về draft để sửa (nộp lại tăng
- * attempt_number); đã trả bài thì khoá hẳn.
+ * Máy trạng thái bài nộp: (chưa có) → draft → submitted → graded (khi gói chấm khớp attempt_number hiện hành VÀ đã trả bài). Gói chấm còn nháp thì học sinh mở lại được về draft để sửa (nộp lại tăng attempt_number); đã trả bài thì khoá hẳn.
  */
 @Injectable()
 export class AssignmentsService {
@@ -678,12 +661,7 @@ export class AssignmentsService {
   }
 
   /**
-   * LƯU gói chấm (assign:grade) — bản NHÁP theo vòng đời trả bài: điểm/
-   * mức + lời phê cấu trúc + kết quả rubric được lưu vào assign_grades
-   * nhưng CHƯA công bố (học sinh không thấy, sổ điểm chưa nhận). Chỉ
-   * chấm được bài đã chốt nộp. Nếu gói chấm của lần nộp hiện hành ĐÃ TRẢ
-   * thì lần lưu này là SỬA SAU TRẢ: ghi vết kiểm toán (giá trị trước →
-   * sau), ghi lại sổ điểm ngay và phát sự kiện điểm thay đổi.
+   * LƯU gói chấm (assign:grade) — bản NHÁP theo vòng đời trả bài: điểm/ mức + lời phê cấu trúc + kết quả rubric được lưu vào assign_grades nhưng CHƯA công bố (học sinh không thấy, sổ điểm chưa nhận). Chỉ chấm được bài đã chốt nộp. Nếu gói chấm của lần nộp hiện hành ĐÃ TRẢ thì lần lưu này là SỬA SAU TRẢ: ghi vết kiểm toán (giá trị trước → sau), ghi lại sổ điểm ngay và phát sự kiện điểm thay đổi.
    */
   async gradeSubmission(actorId: string, assignmentId: string, userId: string, input: {
     grade?: number; level?: string | null; feedback?: string;

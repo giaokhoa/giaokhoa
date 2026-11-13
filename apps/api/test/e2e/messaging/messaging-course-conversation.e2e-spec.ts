@@ -8,11 +8,7 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser } from '..
 import { addGroupMember, contextIdByLevelInstance, createGroupViaApi } from '../../support/engagement-helpers';
 
 /**
- * Chat lớp CẤP KHOÁ (việc nối tiếp của issue #33, mở lại 25/10/2026
- * theo comment 6394860125): mỗi khoá có đúng một conversation toàn
- * lớp (type 2, component core_course, itemType 'course'), cấp phát
- * lười idempotent khi thành viên/staff mở; thành viên = ghi danh đang
- * hiệu lực ∪ staff khoá, đồng bộ lười; GV tắt được qua cờ `enabled`
+ * Chat lớp CẤP KHOÁ (việc nối tiếp của issue #33, mở lại 25/10/2026 theo comment 6394860125): mỗi khoá có đúng một conversation toàn lớp (type 2, component core_course, itemType 'course'), cấp phát lười idempotent khi thành viên/staff mở; thành viên = ghi danh đang hiệu lực ∪ staff khoá, đồng bộ lười; GV tắt được qua cờ `enabled`
  * (học viên dừng gửi, GV vẫn gửi); người ngoài khoá nhận 404 ở mọi
  * đường — không rò tồn tại của khoá/conversation.
  */
@@ -25,15 +21,7 @@ interface CourseConversationBody {
 }
 
 /**
- * Ghi thẳng một dòng gán vai vào DB cho fixture. Các fixture của bộ
- * spec nhắn tin dựng persona giáo viên vừa ghi danh trong khoá vừa
- * giữ vai giảng dạy tại context khoá (giáo viên hiện diện trong khoá
- * như một thành viên và giữ vai trò kiểm duyệt). Từ issue #425,
- * trạng thái lẫn vai cùng khoá này không còn tạo được qua API — cả
- * hai chiều ghi danh/gán vai đều bị chốt tách vai chặn — và chỉ còn
- * tồn tại như dữ kiện có sẵn; các ca của bộ spec này kiểm hành vi
- * nhắn tin trên đúng dữ kiện đó, nên dòng gán vai được ghi thẳng
- * vào DB trong lúc phần ghi danh vẫn đi qua API như cũ.
+ * Ghi thẳng một dòng gán vai vào DB cho fixture. Các fixture của bộ spec nhắn tin dựng persona giáo viên vừa ghi danh trong khoá vừa giữ vai giảng dạy tại context khoá (giáo viên hiện diện trong khoá như một thành viên và giữ vai trò kiểm duyệt). Từ issue #425, trạng thái lẫn vai cùng khoá này không còn tạo được qua API — cả hai chiều ghi danh/gán vai đều bị chốt tách vai chặn — và chỉ còn tồn tại như dữ kiện có sẵn; các ca của bộ spec này kiểm hành vi nhắn tin trên đúng dữ kiện đó, nên dòng gán vai được ghi thẳng vào DB trong lúc phần ghi danh vẫn đi qua API như cũ.
  */
 async function insertAssignmentRow(roleId: string, userId: string, contextId: string): Promise<void> {
   const client = new Client({ connectionString: process.env.DATABASE_URL });

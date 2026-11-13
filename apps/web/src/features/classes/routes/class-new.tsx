@@ -13,10 +13,7 @@ import '#config/i18n';
 import { createClass } from '../api/classes';
 
 /**
- * Màn tạo lớp riêng (CLASS-1, issue #184) — chuẩn giao diện: tạo mới là
- * màn riêng, không phải hộp thoại. Chỉ TÊN lớp là bắt buộc (quyết định
- * lớp tạo trước tối giản); mã/năm học/mô tả đều tuỳ chọn. Tạo xong đi
- * thẳng tới chi tiết lớp để nạp roster ngay.
+ * Màn tạo lớp riêng (CLASS-1, issue #184) — chuẩn giao diện: tạo mới là màn riêng, không phải hộp thoại. Chỉ TÊN lớp là bắt buộc (quyết định lớp tạo trước tối giản); mã/năm học/mô tả đều tuỳ chọn. Tạo xong đi thẳng tới chi tiết lớp để nạp roster ngay.
  */
 export function ClassNewPage() {
   const { t } = useTranslation('app');

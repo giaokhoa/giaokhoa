@@ -14,16 +14,7 @@ import { UsersService } from './users.service';
 /** Facade của UsersModule: UsersService + PasswordService. Import Access (evaluator/contexts) và EventsModule (outbox toàn cục) theo đồ thị phụ thuộc. */
 /**
  * Vòng phụ thuộc tường minh với BetterAuthModule (GĐ2 chặng 2.6):
- * BetterAuthModule cần PasswordService của module này, UsersService
- * cần CredentialBridgeService của BetterAuthModule để đồng bộ dòng
- * credential sau mỗi lần ghi mật khẩu — forwardRef ở CẢ hai phía là
- * cách NestJS chốt cho vòng module kiểu này; chuỗi provider kết thúc
- * ở PasswordService (không phụ thuộc ngược) nên khởi tạo xác định.
- * Vòng thứ hai với AuthModule: AuthModule cần UsersService,
- * UsersService cần AuthRepository của AuthModule để thu hồi family
- * refresh mỗi lần đặt mật khẩu qua đường sửa hồ sơ — cũng forwardRef
- * ở cả hai phía; chuỗi provider kết thúc ở AuthRepository (chỉ phụ
- * thuộc tầng dữ liệu).
+ * BetterAuthModule cần PasswordService của module này, UsersService cần CredentialBridgeService của BetterAuthModule để đồng bộ dòng credential sau mỗi lần ghi mật khẩu — forwardRef ở CẢ hai phía là cách NestJS chốt cho vòng module kiểu này; chuỗi provider kết thúc ở PasswordService (không phụ thuộc ngược) nên khởi tạo xác định. Vòng thứ hai với AuthModule: AuthModule cần UsersService, UsersService cần AuthRepository của AuthModule để thu hồi family refresh mỗi lần đặt mật khẩu qua đường sửa hồ sơ — cũng forwardRef ở cả hai phía; chuỗi provider kết thúc ở AuthRepository (chỉ phụ thuộc tầng dữ liệu).
  */
 @Module({
   // SpaceRoutingModule cấp `routedKysely` cho UsersRepository; handle phải phân giải kho theo ngữ cảnh của từng request.

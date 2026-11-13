@@ -1,7 +1,5 @@
 /**
- * Màn lượt dùng của một câu hỏi (route /questions/:questionId/usage): tách
- * khỏi trang ngân hàng câu hỏi để mỗi module một màn; hành vi giữ nguyên
- * như khi còn nằm trong trang — xem TSDoc của component bên dưới.
+ * Màn lượt dùng của một câu hỏi (route /questions/:questionId/usage): tách khỏi trang ngân hàng câu hỏi để mỗi module một màn; hành vi giữ nguyên như khi còn nằm trong trang — xem TSDoc của component bên dưới.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -31,18 +29,14 @@ interface PinnedContent {
 /**
  * Lượt làm bài câu hỏi: thao tác theo trạng thái của usage và từng attempt
  * (bắt đầu usage/attempt, nộp câu trả lời, kết thúc attempt/usage). Sau mỗi
- * thao tác trang nạp lại usage từ API để hiển thị state/fraction mới nhất.
- * Behaviour mặc định là deferredfeedback: nộp chỉ ghi đáp án thành step,
- * điểm (fraction) chỉ chốt khi kết thúc attempt hoặc toàn bộ usage.
+ * thao tác trang nạp lại usage từ API để hiển thị state/fraction mới nhất. Behaviour mặc định là deferredfeedback: nộp chỉ ghi đáp án thành step, điểm (fraction) chỉ chốt khi kết thúc attempt hoặc toàn bộ usage.
  */
 export function QuestionUsagePage() {
   const { t } = useTranslation('app');
   const { id } = useParams();
   const perms = usePermissions();
   const queryClient = useQueryClient();
-  // Usage đọc qua TanStack Query (F-01 của rà soát #133): cổng vai
-  // của trang là điều kiện bật query; lỗi tải hiện qua trạng thái
-  // lỗi của query, thao tác làm bài là đột biến tự làm mới usage.
+  // Usage đọc qua TanStack Query (F-01 của rà soát #133): cổng vai của trang là điều kiện bật query; lỗi tải hiện qua trạng thái lỗi của query, thao tác làm bài là đột biến tự làm mới usage.
   const usageQuery = useQuestionUsage(id ?? '', perms.ready && perms.canUseQuestionBank);
   const usage = usageQuery.data ?? null;
   const [actionError, setActionError] = useState<string | null>(null);
@@ -55,10 +49,7 @@ export function QuestionUsagePage() {
   const finishAttemptMutation = useFinishUsageAttempt();
 
   /**
-   * Nạp nội dung của phiên bản ĐÃ PIN cho từng attempt đã bắt đầu: usage chỉ
-   * mang questionId/questionVersionId, nên đề và ngữ liệu phải tra qua
-   * endpoint versions (đúng phiên bản đã pin, không phải bản mới nhất) rồi
-   * endpoint stimuli. Lỗi ở bước phụ này không chặn thao tác làm bài.
+   * Nạp nội dung của phiên bản ĐÃ PIN cho từng attempt đã bắt đầu: usage chỉ mang questionId/questionVersionId, nên đề và ngữ liệu phải tra qua endpoint versions (đúng phiên bản đã pin, không phải bản mới nhất) rồi endpoint stimuli. Lỗi ở bước phụ này không chặn thao tác làm bài.
    */
   const loadPinned = useCallback(async (fresh: QuestionUsage) => {
     const entries = await Promise.all(
@@ -83,9 +74,7 @@ export function QuestionUsagePage() {
     return entries;
   }, [queryClient]);
 
-  // Mỗi khi usage (lại) tải về thì nạp nội dung đã ghim cho các
-  // attempt đã bắt đầu — đúng nhịp loadPinned sau mỗi reload() thủ
-  // công trước đây (mở trang và sau mỗi thao tác).
+  // Mỗi khi usage (lại) tải về thì nạp nội dung đã ghim cho các attempt đã bắt đầu — đúng nhịp loadPinned sau mỗi reload() thủ công trước đây (mở trang và sau mỗi thao tác).
   useEffect(() => {
     if (!usageQuery.data) return;
     let active = true;

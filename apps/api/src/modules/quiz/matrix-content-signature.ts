@@ -1,22 +1,9 @@
 /**
- * Chữ ký nội dung chuẩn hoá của ma trận đề và nhận diện va chạm của
- * ràng buộc duy nhất theo chữ ký (lát schema chống trùng, issue #233).
+ * Chữ ký nội dung chuẩn hoá của ma trận đề và nhận diện va chạm của ràng buộc duy nhất theo chữ ký (lát schema chống trùng, issue #233).
  *
- * Vai trò của module: giữ MỘT định nghĩa duy nhất cho thuật toán chữ
- * ký nội dung — trước đây thuật toán chỉ sống dạng method riêng của
- * `QuizService` phục vụ đối chiếu chống trùng của đường nhập file.
- * Từ lát này, chữ ký còn được GHI XUỐNG DB (cột
- * `exam_matrices.content_signature`) tại mọi đường tạo/sửa ma trận,
- * nên thuật toán phải là một hàm thuần dùng chung: đổi thuật toán ở
- * đây là đổi đồng thời ở tầng đối chiếu trong code và ở cột đã ghi —
- * hai nơi lệch nhau là chống trùng hỏng lặng lẽ.
+ * Vai trò của module: giữ MỘT định nghĩa duy nhất cho thuật toán chữ ký nội dung — trước đây thuật toán chỉ sống dạng method riêng của `QuizService` phục vụ đối chiếu chống trùng của đường nhập file. Từ lát này, chữ ký còn được GHI XUỐNG DB (cột `exam_matrices.content_signature`) tại mọi đường tạo/sửa ma trận, nên thuật toán phải là một hàm thuần dùng chung: đổi thuật toán ở đây là đổi đồng thời ở tầng đối chiếu trong code và ở cột đã ghi — hai nơi lệch nhau là chống trùng hỏng lặng lẽ.
  *
- * Bất biến của thuật toán (giữ nguyên từ đường nhập file): hai nội
- * dung cho cùng một chữ ký là TRÙNG TOÀN BỘ theo nghĩa nghiệp vụ —
- * cùng tên, môn, chương trình, bộ mức, tổng điểm, ghi chú phạm vi,
- * tập đơn vị kiến thức phạm vi và toàn bộ ô; thứ tự của tập phạm vi
- * và của các ô không tham gia chữ ký; các giá trị điểm làm tròn 4
- * chữ số thập phân như đường phân tích file.
+ * Bất biến của thuật toán (giữ nguyên từ đường nhập file): hai nội dung cho cùng một chữ ký là TRÙNG TOÀN BỘ theo nghĩa nghiệp vụ — cùng tên, môn, chương trình, bộ mức, tổng điểm, ghi chú phạm vi, tập đơn vị kiến thức phạm vi và toàn bộ ô; thứ tự của tập phạm vi và của các ô không tham gia chữ ký; các giá trị điểm làm tròn 4 chữ số thập phân như đường phân tích file.
  */
 
 /** Tên ràng buộc duy nhất theo cặp (bank đích, chữ ký nội dung) trên `exam_matrices` — khai trong schema của package db. */

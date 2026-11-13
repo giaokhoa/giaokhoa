@@ -24,13 +24,7 @@ function errorText(err: unknown, fallback: string): string {
 
 
 /**
- * Màn tạo/sửa học liệu RIÊNG của Kho học liệu (CB-1, chuẩn §9 — không
- * nhồi form vào danh sách). Metadata chương trình lấy từ cây GDPT 2018
- * thật (môn → chương trình theo khối → node → YCCĐ trong subtree của
- * node). Loại "bộ câu hỏi" chỉ chọn category để THAM CHIẾU ngân hàng
- * câu hỏi. File chọn từ máy được tải lên sau khi lưu bản ghi (API
- * upload base64 sẵn có); học liệu chia sẻ đã/chờ duyệt bị sửa sẽ quay
- * về nháp ở phía server.
+ * Màn tạo/sửa học liệu RIÊNG của Kho học liệu (CB-1, chuẩn §9 — không nhồi form vào danh sách). Metadata chương trình lấy từ cây GDPT 2018 thật (môn → chương trình theo khối → node → YCCĐ trong subtree của node). Loại "bộ câu hỏi" chỉ chọn category để THAM CHIẾU ngân hàng câu hỏi. File chọn từ máy được tải lên sau khi lưu bản ghi (API upload base64 sẵn có); học liệu chia sẻ đã/chờ duyệt bị sửa sẽ quay về nháp ở phía server.
  */
 export function ContentBankEditPage() {
   const { t } = useTranslation();
@@ -74,15 +68,7 @@ export function ContentBankEditPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Nạp nền (không gian, môn, danh mục câu hỏi) và nạp chính học
-  // liệu khi sửa: mọi lần đọc qua tầng TanStack Query (fetchQuery
-  // với options của lib/content-bank-data.ts — F-01 của rà soát
-  // #133); các chuỗi lỗi-được-nuốt của bản thủ công đã nằm trong
-  // chính queryFn của options (môn/danh mục lỗi thì rỗng), lỗi đọc
-  // học liệu vẫn nổi lên để hiện thông báo như trước. Bốn lượt đọc
-  // độc lập nhau nên chạy SONG SONG (bản cũ await nối tiếp từng
-  // lượt); kết quả học liệu được bọc ngay từ đầu để lỗi của nó
-  // không thành rejection chưa ai bắt trong lúc chờ ba lượt nền.
+  // Nạp nền (không gian, môn, danh mục câu hỏi) và nạp chính học liệu khi sửa: mọi lần đọc qua tầng TanStack Query (fetchQuery với options của lib/content-bank-data.ts — F-01 của rà soát #133); các chuỗi lỗi-được-nuốt của bản thủ công đã nằm trong chính queryFn của options (môn/danh mục lỗi thì rỗng), lỗi đọc học liệu vẫn nổi lên để hiện thông báo như trước. Bốn lượt đọc độc lập nhau nên chạy SONG SONG (bản cũ await nối tiếp từng lượt); kết quả học liệu được bọc ngay từ đầu để lỗi của nó không thành rejection chưa ai bắt trong lúc chờ ba lượt nền.
   useEffect(() => {
     void (async () => {
       const itemResult = id
@@ -134,8 +120,7 @@ export function ContentBankEditPage() {
     })();
   }, [id, t, queryClient]);
 
-  // Nạp cây chương trình khi đã có môn + khối (chuỗi curricula → cây
-  // đã phẳng hoá nằm trong queryFn của options, lỗi thì rỗng).
+  // Nạp cây chương trình khi đã có môn + khối (chuỗi curricula → cây đã phẳng hoá nằm trong queryFn của options, lỗi thì rỗng).
   useEffect(() => {
     void (async () => {
       if (!subjectId || !grade) {

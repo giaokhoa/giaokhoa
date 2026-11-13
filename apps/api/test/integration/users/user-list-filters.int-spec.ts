@@ -4,15 +4,7 @@ import { adminToken, createTestApp, createUserViaApi, http, uniqueName } from '.
 import { UsersRepository } from '@giaokhoa/db/repositories/users';
 
 /**
- * Issue #560 (đợt 1 backend của đợt danh sách thành viên, cha #559): hợp đồng
- * truy vấn của `GET /users` — lọc theo trạng thái suy ra từ hai cờ
- * suspended/deleted (mặc định ẩn tài khoản đã xoá, tài khoản đã xoá chỉ hiện
- * khi lọc đích danh), sắp xếp theo tập trường đóng (name/createdAt/lastLogin)
- * ở cả hai chiều với thứ tự mặc định theo id được giữ nguyên khi không truyền
- * tham số, và trần pageSize 100 bị chặn ở validation. Mọi ca lái qua HTTP
- * thật; trạng thái và mốc thời gian của dữ kiện được đặt thẳng qua repository
- * để kết quả tất định, và mỗi ca tự cô lập bằng tiền tố username duy nhất
- * truyền qua `search`.
+ * Issue #560 (đợt 1 backend của đợt danh sách thành viên, cha #559): hợp đồng truy vấn của `GET /users` — lọc theo trạng thái suy ra từ hai cờ suspended/deleted (mặc định ẩn tài khoản đã xoá, tài khoản đã xoá chỉ hiện khi lọc đích danh), sắp xếp theo tập trường đóng (name/createdAt/lastLogin) ở cả hai chiều với thứ tự mặc định theo id được giữ nguyên khi không truyền tham số, và trần pageSize 100 bị chặn ở validation. Mọi ca lái qua HTTP thật; trạng thái và mốc thời gian của dữ kiện được đặt thẳng qua repository để kết quả tất định, và mỗi ca tự cô lập bằng tiền tố username duy nhất truyền qua `search`.
  */
 describe('Danh sách người dùng: lọc trạng thái, sắp xếp và trần pageSize (issue #560)', () => {
   let app: INestApplication;

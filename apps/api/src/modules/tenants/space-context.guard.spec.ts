@@ -17,14 +17,7 @@ import type { TenantsRepository } from '@giaokhoa/db/repositories/tenants';
 class SkipSpaceContextHandler {}
 
 /**
- * Ca đơn vị của guard gắn ngữ cảnh trung tâm (issue #582): khung
- * định tuyến, sổ tenant và bộ đánh giá quyền được thay bằng vật
- * giả — các ca khoá đúng các quyết của guard: địa chỉ không mang
- * trung tâm thì không chạm; trung tâm chưa `active` bị chặn ở
- * traffic nghiệp vụ nhưng đường vận hành platform đi qua; token
- * lệch trung tâm bị từ chối TRƯỚC bước chuẩn bị (không mở kết nối
- * nào tới kho của trung tâm tại địa chỉ); và bước chuẩn bị + ghim
- * slug chỉ chạy cho phiên hợp lệ.
+ * Ca đơn vị của guard gắn ngữ cảnh trung tâm (issue #582): khung định tuyến, sổ tenant và bộ đánh giá quyền được thay bằng vật giả — các ca khoá đúng các quyết của guard: địa chỉ không mang trung tâm thì không chạm; trung tâm chưa `active` bị chặn ở traffic nghiệp vụ nhưng đường vận hành platform đi qua; token lệch trung tâm bị từ chối TRƯỚC bước chuẩn bị (không mở kết nối nào tới kho của trung tâm tại địa chỉ); và bước chuẩn bị + ghim slug chỉ chạy cho phiên hợp lệ.
  */
 
 const DEDICATED_TARGET: ResolvedSpaceConnection = {
@@ -69,8 +62,7 @@ function makeGuard(options?: {
       return options?.target ?? DEDICATED_TARGET;
     }),
     getKyselyForSpace: vi.fn(async () => ({})),
-    // Nhánh cookie đọc tenant hiệu lực qua kho riêng (Phần A,
-    // issue #587): mock chạy thẳng callback như kho đích thật.
+    // Nhánh cookie đọc tenant hiệu lực qua kho riêng (Phần A, issue #587): mock chạy thẳng callback như kho đích thật.
     withSpaceKysely: vi.fn(async (_slug: string, fn: () => Promise<unknown>) => fn()),
   };
   const repo = {
@@ -254,8 +246,7 @@ describe('Guard gắn ngữ cảnh trung tâm theo địa chỉ', () => {
     };
     await expect(guard.canActivate(httpContext(request))).resolves.toBe(true);
     // Lượt đọc tenant phải mang tenantId làm ngữ cảnh kho đích:
-    // thiếu nó, RLS của bảng `tenants` giấu dòng và nhánh này
-    // từ chối oan mọi phiên cookie hợp lệ (lỗi A2).
+    // thiếu nó, RLS của bảng `tenants` giấu dòng và nhánh này từ chối oan mọi phiên cookie hợp lệ (lỗi A2).
     expect(spaceDb.withSpaceKysely).toHaveBeenCalledWith(
       'trung-tam-a',
       expect.any(Function),

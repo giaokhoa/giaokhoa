@@ -9,12 +9,7 @@ import { PageHeader, PageShell } from '#components/page-shell';
 import { useMyInsights } from '../queries/platform';
 
 /**
- * Insights cho teacher (platform services): chỉ insight mà server đã
- * lọc theo capability mới tới client. Dữ liệu đọc qua tầng TanStack
- * Query (`lib/platform-data.ts`, khoá `myInsights`; `clientLoader` của
- * route nạp trước đúng khoá này). Trạng thái đang tải/báo lỗi giữ như
- * bản fetch thủ công: lần tải đầu hoặc lần thử lại đang chạy thì hiện
- * khung xương, lỗi chỉ hiện sau khi lần tải đã kết thúc.
+ * Insights cho teacher (platform services): chỉ insight mà server đã lọc theo capability mới tới client. Dữ liệu đọc qua tầng TanStack Query (`lib/platform-data.ts`, khoá `myInsights`; `clientLoader` của route nạp trước đúng khoá này). Trạng thái đang tải/báo lỗi giữ như bản fetch thủ công: lần tải đầu hoặc lần thử lại đang chạy thì hiện khung xương, lỗi chỉ hiện sau khi lần tải đã kết thúc.
  */
 export function InsightsPage() {
   const { t: t } = useTranslation();

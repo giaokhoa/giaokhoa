@@ -19,11 +19,7 @@ export interface ChartRange {
 }
 
 /**
- * Biểu đồ vùng tương tác theo block dashboard-01 (Recharts AreaChart trong
- * ChartContainer, có chuyển khoảng hiển thị ở góc phải header). Chuỗi số
- * được truyền từ trang gọi — là dữ liệu thật của API (người dùng mới theo
- * tuần, phân bố điểm, sự kiện theo ngày); khi chuỗi rỗng component hiện
- * dòng trạng thái trống đã dịch thay vì vẽ biểu đồ giả.
+ * Biểu đồ vùng tương tác theo block dashboard-01 (Recharts AreaChart trong ChartContainer, có chuyển khoảng hiển thị ở góc phải header). Chuỗi số được truyền từ trang gọi — là dữ liệu thật của API (người dùng mới theo tuần, phân bố điểm, sự kiện theo ngày); khi chuỗi rỗng component hiện dòng trạng thái trống đã dịch thay vì vẽ biểu đồ giả.
  */
 export function ChartAreaInteractive({
   title,

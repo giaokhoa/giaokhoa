@@ -19,22 +19,14 @@ export const MESSAGING_DISTRIBUTED_REDIS = 'MESSAGING_DISTRIBUTED_REDIS';
 export const MESSAGING_DISTRIBUTED_KEY_PREFIX = 'giaokhoa:messaging:distributed:';
 
 /**
- * TTL của dấu đã-phân-phối: 7 ngày — cùng khuôn với dấu đã-gửi của
- * consumer thư xác thực. Dấu chỉ cần sống lâu hơn cửa sổ phát lại
- * thực tế của hàng đợi (job còn trong hàng đợi thì `jobId` đã chống
- * trùng); 7 ngày thừa sức cho mọi lượt phát lại quanh sự cố.
+ * TTL của dấu đã-phân-phối: 7 ngày — cùng khuôn với dấu đã-gửi của consumer thư xác thực. Dấu chỉ cần sống lâu hơn cửa sổ phát lại thực tế của hàng đợi (job còn trong hàng đợi thì `jobId` đã chống trùng); 7 ngày thừa sức cho mọi lượt phát lại quanh sự cố.
  */
 const DISTRIBUTED_MARK_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 /**
- * Thời gian hoãn một job phân phối khi lượt phân phối gặp lỗi
- * thật: job được đưa vào hàng đợi delayed của BullMQ và phát lại
- * sau khoảng này, lặp lại cho tới khi phân phối thành công —
- * cùng độ dài hoãn với các processor tiền lệ của đợt chuyển đổi
+ * Thời gian hoãn một job phân phối khi lượt phân phối gặp lỗi thật: job được đưa vào hàng đợi delayed của BullMQ và phát lại sau khoảng này, lặp lại cho tới khi phân phối thành công — cùng độ dài hoãn với các processor tiền lệ của đợt chuyển đổi
  * (`PROCESSING_RETRY_DELAY_MS` của consumer thư xác thực,
- * `PROCESSING_LEASE_RETRY_DELAY_MS` của consumer thông báo sự
- * kiện). 5 giây khớp nhịp quét của relay và giữ độ trễ của kênh
- * realtime ở mức giây khi lỗi chỉ thoáng qua.
+ * `PROCESSING_LEASE_RETRY_DELAY_MS` của consumer thông báo sự kiện). 5 giây khớp nhịp quét của relay và giữ độ trễ của kênh realtime ở mức giây khi lỗi chỉ thoáng qua.
  */
 const DISTRIBUTION_RETRY_DELAY_MS = 5_000;
 

@@ -1,7 +1,6 @@
 import { QuestionsPage } from '../components/questions';
 
-// Route Ngân hàng ma trận — tab Hệ thống (/system-bank/matrices —
-// chuẩn đường dẫn #221, lát R1).
+// Route Ngân hàng ma trận — tab Hệ thống (/system-bank/matrices — chuẩn đường dẫn #221, lát R1).
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { appKeyMeta } from '#lib/route-meta';
 export function meta() {

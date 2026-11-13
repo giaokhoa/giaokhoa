@@ -11,21 +11,9 @@ import {
 } from '../../support/ordinary-worker-module';
 
 /**
- * Các job tương tác (engagement) của worker. Oracles: report §2#12 (luật phân phối theo preference + suspended,
- * được kiểm tra lại tại thời điểm phân phối), §2#13/#14 (các nhắc trở thành
- * thông báo; badge auto-award có tính idempotent — bao gồm các lá cohort /
- * profile và tham số by-date của coursecompletion, Behat
- * badges/tests/behat criteria_cohort.feature, criteria_profile.feature,
- * award_badge.feature), calendar/tests/lib_test
- * test_add_subscription (hình dạng counts của kết quả nhập ICS).
- * User được chèn thô (raw-insert) với id cao duy nhất để giữ độc lập với
- * dữ liệu còn sót lại từ các lần chạy trước của suite này trong giaokhoa_test_worker.
+ * Các job tương tác (engagement) của worker. Oracles: report §2#12 (luật phân phối theo preference + suspended, được kiểm tra lại tại thời điểm phân phối), §2#13/#14 (các nhắc trở thành thông báo; badge auto-award có tính idempotent — bao gồm các lá cohort / profile và tham số by-date của coursecompletion, Behat badges/tests/behat criteria_cohort.feature, criteria_profile.feature, award_badge.feature), calendar/tests/lib_test test_add_subscription (hình dạng counts của kết quả nhập ICS). User được chèn thô (raw-insert) với id cao duy nhất để giữ độc lập với dữ liệu còn sót lại từ các lần chạy trước của suite này trong giaokhoa_test_worker.
  *
- * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness
- * role thường (`test/ordinary-worker-module.ts`): module chạy bằng
- * role NOSUPERUSER/NOBYPASSRLS như production, fixture và đọc kiểm
- * chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ
- * của spec không đổi.
+ * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness role thường (`test/ordinary-worker-module.ts`): module chạy bằng role NOSUPERUSER/NOBYPASSRLS như production, fixture và đọc kiểm chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ của spec không đổi.
  */
 describe('Engagement của worker: gửi thông báo, nhắc/lấy lịch, tự trao huy hiệu', () => {
   let context: INestApplicationContext;
@@ -63,12 +51,7 @@ describe('Engagement của worker: gửi thông báo, nhắc/lấy lịch, tự 
   afterAll(async () => { await harness.close(); });
 
   it('gửi thông báo ghi skipped-not-configured cho email khi kênh Resend chưa cấu hình, lũy đẳng theo dedupeKey', async () => {
-    // NB-5 (issue #174): kênh email gửi thật qua Resend ở worker.
-    // Môi trường test không có RESEND_API_KEY/MAIL_FROM nên transport
-    // ở chế độ fail-soft có khai báo: không gửi, dispatch log ghi
-    // 'skipped-not-configured' (trước NB-5 ca này kỳ vọng 'logged').
-    // Đường gửi thật 'sent' + digest được khẳng định ở
-    // notification-email.spec.ts bằng transport giả.
+    // NB-5 (issue #174): kênh email gửi thật qua Resend ở worker. Môi trường test không có RESEND_API_KEY/MAIL_FROM nên transport ở chế độ fail-soft có khai báo: không gửi, dispatch log ghi 'skipped-not-configured' (trước NB-5 ca này kỳ vọng 'logged'). Đường gửi thật 'sent' + digest được khẳng định ở notification-email.spec.ts bằng transport giả.
     const processor = context.get(NotificationDispatchProcessor);
     const job = { data: { userId: userA, provider: 'grade_updated', channel: 'email', subject: 'Grade posted', body: 'b', dedupeKey: `test-dispatch-${suffix}` } } as never;
     const first = await processor.process(job);

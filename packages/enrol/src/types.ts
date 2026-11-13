@@ -7,11 +7,7 @@ import type { CentreDb, CentreTx } from '@giaokhoa/db';
  */
 
 /**
- * Tay cầm Kysely mà các lõi trong package thao tác: handle thường
- * của kho trung tâm hoặc handle giao dịch của nó. Mọi hàm nhận
- * handle đều chấp nhận cả hai để phía gọi lồng thao tác vào giao
- * dịch của mình khi cần (luồng ghi danh mở transaction rồi ghi
- * outbox trong cùng transaction đó).
+ * Tay cầm Kysely mà các lõi trong package thao tác: handle thường của kho trung tâm hoặc handle giao dịch của nó. Mọi hàm nhận handle đều chấp nhận cả hai để phía gọi lồng thao tác vào giao dịch của mình khi cần (luồng ghi danh mở transaction rồi ghi outbox trong cùng transaction đó).
  */
 export type EnrolDatabase = CentreDb | CentreTx;
 
@@ -28,21 +24,12 @@ export interface SharedOutboxEventInput {
 }
 
 /**
- * Bề mặt transaction tối thiểu mà cổng outbox cần: transaction
- * Kysely của nơi gọi. Hợp đồng của cổng — host chỉ được dùng
- * transaction này để CHÈN dòng sự kiện (xem `SharedOutboxPort`),
- * không đọc/ghi thêm gì khác trong transaction nghiệp vụ của lõi.
+ * Bề mặt transaction tối thiểu mà cổng outbox cần: transaction Kysely của nơi gọi. Hợp đồng của cổng — host chỉ được dùng transaction này để CHÈN dòng sự kiện (xem `SharedOutboxPort`), không đọc/ghi thêm gì khác trong transaction nghiệp vụ của lõi.
  */
 export type SharedOutboxTx = CentreTx;
 
 /**
- * Cổng ghi outbox do host cấp. Hợp đồng của cổng — host phải giữ
- * đúng khi hiện thực: `enqueue` ghi dòng sự kiện trong transaction
- * được truyền vào, áp tenant hiệu lực của ngữ cảnh host khi nơi gọi
- * không chỉ định tường minh và gương `tenantId` vào payload (các
- * consumer chạy ở ngữ cảnh platform dựa vào đó để biết sự kiện thuộc
- * tenant nào); `enqueueStandalone` ghi trong một transaction ngắn
- * riêng.
+ * Cổng ghi outbox do host cấp. Hợp đồng của cổng — host phải giữ đúng khi hiện thực: `enqueue` ghi dòng sự kiện trong transaction được truyền vào, áp tenant hiệu lực của ngữ cảnh host khi nơi gọi không chỉ định tường minh và gương `tenantId` vào payload (các consumer chạy ở ngữ cảnh platform dựa vào đó để biết sự kiện thuộc tenant nào); `enqueueStandalone` ghi trong một transaction ngắn riêng.
  */
 export interface SharedOutboxPort {
   /** Ghi sự kiện trong transaction nghiệp vụ đang mở. */
@@ -52,12 +39,7 @@ export interface SharedOutboxPort {
 }
 
 /**
- * Cổng chạy một lượt thao tác trong ngữ cảnh platform của host (bỏ
- * qua RLS theo tenant của phiên hiện tại). Các phép đọc chính sách
- * xuyên tenant của package (đếm slot, kiểm tách vai, cổng membership)
- * phải chạy qua cổng này: ở ngữ cảnh của một tenant, RLS sẽ che dữ
- * kiện của tenant khác và một kết quả "không thấy" do bị che sẽ làm
- * các chốt chặn lọt đúng ca cần chặn.
+ * Cổng chạy một lượt thao tác trong ngữ cảnh platform của host (bỏ qua RLS theo tenant của phiên hiện tại). Các phép đọc chính sách xuyên tenant của package (đếm slot, kiểm tách vai, cổng membership) phải chạy qua cổng này: ở ngữ cảnh của một tenant, RLS sẽ che dữ kiện của tenant khác và một kết quả "không thấy" do bị che sẽ làm các chốt chặn lọt đúng ca cần chặn.
  */
 export type PlatformScopeRunner = <T>(fn: () => Promise<T>) => Promise<T>;
 
@@ -119,10 +101,8 @@ export interface TenantMembershipRow {
 }
 
 /**
- * Dòng của bảng `enrol` (một phương thức ghi danh của khoá học) và
- * dòng của bảng `user_enrolments` (ghi danh của một người dùng):
- * dùng chung một định nghĩa với repository Kysely của G5 ở
- * `@giaokhoa/db` — hai bảng này là cùng một dữ kiện ở cả hai phía.
+ * Dòng của bảng `enrol` (một phương thức ghi danh của khoá học) và dòng của bảng `user_enrolments` (ghi danh của một người dùng):
+ * dùng chung một định nghĩa với repository Kysely của G5 ở `@giaokhoa/db` — hai bảng này là cùng một dữ kiện ở cả hai phía.
  */
 export type { EnrolRow as EnrolInstanceRow, UserEnrolmentRow } from '@giaokhoa/db/repositories/enrol';
 

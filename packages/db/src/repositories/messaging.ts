@@ -180,10 +180,7 @@ export interface CourseGroupRow {
 }
 
 /**
- * Một dòng của danh sách conversation cho một user: conversation + mốc
- * đã đọc của CHÍNH user đó + số chưa đọc tính từ mốc + tin cuối. Lấy
- * bằng MỘT truy vấn (join + lateral) — thay mô hình cũ tải toàn bộ tin
- * của mọi conversation về đếm ở tầng JS.
+ * Một dòng của danh sách conversation cho một user: conversation + mốc đã đọc của CHÍNH user đó + số chưa đọc tính từ mốc + tin cuối. Lấy bằng MỘT truy vấn (join + lateral) — thay mô hình cũ tải toàn bộ tin của mọi conversation về đếm ở tầng JS.
  */
 export interface ConversationSummaryRow {
   conversation: ConversationRow;
@@ -206,28 +203,19 @@ export interface MessageSearchOptions {
   /** Số kết quả tối đa (mặc định 20, trần 50) — kết quả mới nhất trước. */
   limit?: number;
   /**
-   * Tầm nhìn truy vết của người có thẩm quyền kiểm duyệt: tìm cả
-   * trên tin đã xoá mềm/đã thu hồi và bỏ qua cờ xoá-phía-mình —
-   * đúng tầm nhìn của cửa sổ tin truy vết.
+   * Tầm nhìn truy vết của người có thẩm quyền kiểm duyệt: tìm cả trên tin đã xoá mềm/đã thu hồi và bỏ qua cờ xoá-phía-mình — đúng tầm nhìn của cửa sổ tin truy vết.
    */
   privileged?: boolean;
   /** Người đang tìm (chỉ áp khi không privileged): loại tin người này đã xoá-phía-mình. */
   viewerId?: string;
   /**
-   * Tác giả bị loại khỏi kết quả của người thường: các phía có quan
-   * hệ chặn hai chiều với người tìm — luật "liên hệ đã chặn thì ẩn
-   * khỏi mọi bề mặt" áp cho cả kết quả tìm (hội thoại 1–1 đã bị cổng
-   * chặn chặn ở tầng service trước khi tới đây).
+   * Tác giả bị loại khỏi kết quả của người thường: các phía có quan hệ chặn hai chiều với người tìm — luật "liên hệ đã chặn thì ẩn khỏi mọi bề mặt" áp cho cả kết quả tìm (hội thoại 1–1 đã bị cổng chặn chặn ở tầng service trước khi tới đây).
    */
   excludedAuthorIds?: string[];
 }
 
 /**
- * Một dòng GỘP thô của trung tâm thông báo v2 (issue #51) từ truy vấn
- * tổng hợp: khoá gộp (loại × nguồn × ngày) + đếm + mốc của mục mới
- * nhất làm neo phân trang keyset. `sourceKey` là `contextUrl` đã
- * chuẩn hoá ('' khi thông báo không có ngữ cảnh đích); `day` là ngày
- * lịch Asia/Saigon dạng YYYY-MM-DD.
+ * Một dòng GỘP thô của trung tâm thông báo v2 (issue #51) từ truy vấn tổng hợp: khoá gộp (loại × nguồn × ngày) + đếm + mốc của mục mới nhất làm neo phân trang keyset. `sourceKey` là `contextUrl` đã chuẩn hoá ('' khi thông báo không có ngữ cảnh đích); `day` là ngày lịch Asia/Saigon dạng YYYY-MM-DD.
  */
 export interface NotificationGroupAggregateRow {
   eventType: string;
@@ -265,26 +253,17 @@ export interface MessageWindowOptions {
   /** Số tin tối đa trong cửa sổ (mặc định 50, trần 100). */
   limit?: number;
   /**
-   * Kèm cả tin đã xoá mềm (mặc định KHÔNG): chỉ các cửa sổ truy vết của
-   * người có thẩm quyền (giáo viên phụ trách/quản trị) mới bật — mọi
-   * đường đọc thường của thành viên luôn lọc bỏ tin đã xoá.
+   * Kèm cả tin đã xoá mềm (mặc định KHÔNG): chỉ các cửa sổ truy vết của người có thẩm quyền (giáo viên phụ trách/quản trị) mới bật — mọi đường đọc thường của thành viên luôn lọc bỏ tin đã xoá.
    */
   includeDeleted?: boolean;
   /**
-   * Người đang xem (vòng đời tin nhắn theo vai): khi có mặt và KHÔNG
-   * ở chế độ truy vết (includeDeleted), cửa sổ lọc bỏ thêm các tin
-   * người này đã XOÁ-PHÍA-MÌNH (bảng `message_user_deletions`) — cờ
-   * cá nhân chỉ áp cho đúng chủ nhân của nó, không ai khác bị ảnh
-   * hưởng. Chế độ truy vết bỏ qua cờ này: dấu vết phải đầy đủ.
+   * Người đang xem (vòng đời tin nhắn theo vai): khi có mặt và KHÔNG ở chế độ truy vết (includeDeleted), cửa sổ lọc bỏ thêm các tin người này đã XOÁ-PHÍA-MÌNH (bảng `message_user_deletions`) — cờ cá nhân chỉ áp cho đúng chủ nhân của nó, không ai khác bị ảnh hưởng. Chế độ truy vết bỏ qua cờ này: dấu vết phải đầy đủ.
    */
   viewerId?: string;
 }
 
 /**
- * Khối tóm tắt TRÍCH DẪN của một tin gốc (lát M3, issue #229) — hình
- * dạng khớp `messageQuoteSchema` của @giaokhoa/contracts (khai báo ở đây
- * để tầng dữ liệu là nguồn định nghĩa duy nhất của hình dạng dòng;
- * `@giaokhoa/messaging` re-export cho các phía tiêu thụ hiện hữu).
+ * Khối tóm tắt TRÍCH DẪN của một tin gốc (lát M3, issue #229) — hình dạng khớp `messageQuoteSchema` của @giaokhoa/contracts (khai báo ở đây để tầng dữ liệu là nguồn định nghĩa duy nhất của hình dạng dòng; `@giaokhoa/messaging` re-export cho các phía tiêu thụ hiện hữu).
  */
 export interface MessageQuoteView {
   id: string;
@@ -298,10 +277,7 @@ export interface MessageQuoteView {
 export type MessageWithQuoteRow = MessageRow & { replyTo: MessageQuoteView | null };
 
 /**
- * Các archetype vai trò được coi là "staff" cho các cổng nghiệp vụ của
- * Lớp B (tạo nhóm tự do, quản lý conversation): quản lý, người tạo
- * khoá, giáo viên có/không quyền sửa. Học sinh (archetype student) và
- * các vai trò mặc định (user/guest) KHÔNG nằm trong tập này.
+ * Các archetype vai trò được coi là "staff" cho các cổng nghiệp vụ của Lớp B (tạo nhóm tự do, quản lý conversation): quản lý, người tạo khoá, giáo viên có/không quyền sửa. Học sinh (archetype student) và các vai trò mặc định (user/guest) KHÔNG nằm trong tập này.
  */
 export const STAFF_ARCHETYPES = ['manager', 'coursecreator', 'editingteacher', 'teacher'] as const;
 
@@ -310,13 +286,7 @@ export const STAFF_ARCHETYPES = ['manager', 'coursecreator', 'editingteacher', '
 // ---------------------------------------------------------------------------
 
 /**
- * Cổng của tầng store đọc dùng chung: đúng 13 phép đọc mà repository
- * uỷ quyền sang cài đặt tại `@giaokhoa/messaging` (hàm thuần nhận handle
- * Kysely, xem `distribution-store.ts` của package đó). Phía app gắn
- * cài đặt qua `createMessagingStore(handle)` khi dựng repository;
- * phía worker tiêu thụ cùng các hàm thuần qua bề mặt phân phối hẹp
- * hơn của nó. Repository KHÔNG tự import cài đặt — chiều phụ thuộc
- * duy nhất là `@giaokhoa/messaging` → (type-only) file này.
+ * Cổng của tầng store đọc dùng chung: đúng 13 phép đọc mà repository uỷ quyền sang cài đặt tại `@giaokhoa/messaging` (hàm thuần nhận handle Kysely, xem `distribution-store.ts` của package đó). Phía app gắn cài đặt qua `createMessagingStore(handle)` khi dựng repository; phía worker tiêu thụ cùng các hàm thuần qua bề mặt phân phối hẹp hơn của nó. Repository KHÔNG tự import cài đặt — chiều phụ thuộc duy nhất là `@giaokhoa/messaging` → (type-only) file này.
  */
 export interface MessagingStorePort {
   /** Lấy conversation theo id. */
@@ -712,8 +682,7 @@ export class MessagingRepository {
       .execute();
   }
   /**
-   * Thành viên của conversation. Cài đặt truy vấn ở bề mặt đọc dùng
-   * chung `@giaokhoa/messaging` — repository chỉ uỷ quyền (issue #521).
+   * Thành viên của conversation. Cài đặt truy vấn ở bề mặt đọc dùng chung `@giaokhoa/messaging` — repository chỉ uỷ quyền (issue #521).
    */
   async listMembers(conversationId: string): Promise<string[]> {
     return this.store.listConversationMemberIds(conversationId);
@@ -743,24 +712,11 @@ export class MessagingRepository {
       .execute() as Promise<ConversationRow[]>;
   }
   /**
-   * Danh sách conversation kèm số chưa đọc + tin cuối cho một user —
-   * MỘT truy vấn duy nhất: unread đếm bằng count(*) theo mốc last-read
-   * của chính user, tin cuối lấy bằng lateral theo seq.
+   * Danh sách conversation kèm số chưa đọc + tin cuối cho một user — MỘT truy vấn duy nhất: unread đếm bằng count(*) theo mốc last-read của chính user, tin cuối lấy bằng lateral theo seq.
    *
-   * Lát M5 (issue #240): kèm ba trạng thái cá nhân của chính user;
-   * mặc định CHỈ các conversation chưa lưu trữ, `archivedOnly` thì
-   * chỉ các conversation ĐÃ lưu — hai mục không bao giờ trộn nhau.
-   * Thứ tự: conversation ĐÃ GHIM lên đầu (trong nhóm ghim vẫn theo
-   * hoạt động gần nhất), còn lại theo hoạt động gần nhất.
+   * Lát M5 (issue #240): kèm ba trạng thái cá nhân của chính user; mặc định CHỈ các conversation chưa lưu trữ, `archivedOnly` thì chỉ các conversation ĐÃ lưu — hai mục không bao giờ trộn nhau. Thứ tự: conversation ĐÃ GHIM lên đầu (trong nhóm ghim vẫn theo hoạt động gần nhất), còn lại theo hoạt động gần nhất.
    *
-   * Vũ trụ đếm chuẩn (issue #592): `unread` ở đây là số chưa đọc
-   * THEO VŨ TRỤ CHUẨN — hội thoại đã tắt tiếng trả 0 dù tin chưa
-   * đọc vẫn còn, để mọi bề mặt suy từ danh sách này (huy hiệu đầu
-   * trang, huy hiệu hàng, chip lọc, cây nhóm) khớp với huy hiệu
-   * thanh bên mà không cần lọc lại ở client. Hội thoại 1–1 bị ẩn
-   * do chặn không xuất hiện trong danh sách nên cũng không đóng
-   * góp số. Mốc đã đọc và tin cuối không bị ảnh hưởng: bật tiếng
-   * lại thì số thật hiện lại ngay.
+   * Vũ trụ đếm chuẩn (issue #592): `unread` ở đây là số chưa đọc THEO VŨ TRỤ CHUẨN — hội thoại đã tắt tiếng trả 0 dù tin chưa đọc vẫn còn, để mọi bề mặt suy từ danh sách này (huy hiệu đầu trang, huy hiệu hàng, chip lọc, cây nhóm) khớp với huy hiệu thanh bên mà không cần lọc lại ở client. Hội thoại 1–1 bị ẩn do chặn không xuất hiện trong danh sách nên cũng không đóng góp số. Mốc đã đọc và tin cuối không bị ảnh hưởng: bật tiếng lại thì số thật hiện lại ngay.
    */
   async listConversationSummaries(userId: string, opts: { archivedOnly?: boolean } = {}): Promise<ConversationSummaryRow[]> {
     const archivedClause = opts.archivedOnly
@@ -2717,9 +2673,7 @@ export class MessagingRepository {
     if (opts.eventTypes && opts.eventTypes.length > 0) {
       where.push(sql`event_type in (${sql.join(opts.eventTypes.map((t) => sql`${t}`), sql`, `)})`);
     }
-    // Postgres không có max(uuid): id của mục mới nhất lấy bằng
-    // array_agg sắp xếp theo (created_at, id) giảm dần — cùng thứ tự
-    // với neo keyset (max(created_at), id mới nhất).
+    // Postgres không có max(uuid): id của mục mới nhất lấy bằng array_agg sắp xếp theo (created_at, id) giảm dần — cùng thứ tự với neo keyset (max(created_at), id mới nhất).
     const latestIdExpr = sql`(array_agg(id order by created_at desc, id desc))[1]`;
     const having: RawBuilder<unknown>[] = [];
     if (opts.unreadOnly) having.push(sql`count(*) filter (where time_read is null) > 0`);

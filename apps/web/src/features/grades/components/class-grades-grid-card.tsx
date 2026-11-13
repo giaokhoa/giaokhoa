@@ -1,10 +1,7 @@
 /**
  * Card lưới điểm của lớp trên trang Điểm theo bài
  * (`features/grades/routes/grades.tsx`):
- * lưới CHỈ-ĐỌC học sinh × các bài dành cho staff của khoá, kèm trạng
- * thái công bố dưới tên từng bài. Dữ liệu lưới do file trang nạp qua
- * hook dùng chung `src/hooks/use-courses-grade-data.ts` rồi truyền xuống nguyên khối; card
- * chỉ trình bày, không có thao tác ghi nào.
+ * lưới CHỈ-ĐỌC học sinh × các bài dành cho staff của khoá, kèm trạng thái công bố dưới tên từng bài. Dữ liệu lưới do file trang nạp qua hook dùng chung `src/hooks/use-courses-grade-data.ts` rồi truyền xuống nguyên khối; card chỉ trình bày, không có thao tác ghi nào.
  */
 import { useTranslation } from 'react-i18next';
 

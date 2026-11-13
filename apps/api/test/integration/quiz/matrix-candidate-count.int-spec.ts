@@ -12,25 +12,15 @@ import { QuizService } from '../../../src/modules/quiz/quiz.service';
 /**
  * Đặc trưng hoá số đếm ứng viên của ô ma trận (issue #488, điểm DL-02).
  *
- * Tại thời điểm viết đặc trưng hoá, `cellAvailableCount` đếm bằng cách
- * nạp toàn bộ ứng viên của ô qua `cellCandidatesForUser` rồi lấy độ dài
- * mảng. Test này ghim số đếm ĐÚNG theo từng kịch bản ô × người dùng
- * trên dữ kiện mẫu cố định — gồm ca người dùng bị chặn bởi quyền
- * `question:useall` tại context của category chứa câu — và đối chiếu
- * hai cách đếm trên cùng dữ kiện: cách đếm THAM CHIẾU bằng nạp view
+ * Tại thời điểm viết đặc trưng hoá, `cellAvailableCount` đếm bằng cách nạp toàn bộ ứng viên của ô qua `cellCandidatesForUser` rồi lấy độ dài mảng. Test này ghim số đếm ĐÚNG theo từng kịch bản ô × người dùng trên dữ kiện mẫu cố định — gồm ca người dùng bị chặn bởi quyền `question:useall` tại context của category chứa câu — và đối chiếu hai cách đếm trên cùng dữ kiện: cách đếm THAM CHIẾU bằng nạp view
  * (liệt kê ứng viên qua `listQuestionsByCurriculumFilter` rồi lọc
- * theo cổng `question:useall` tại context của category của từng câu —
- * đúng định nghĩa đếm trước refactor) với bề mặt đếm công khai
+ * theo cổng `question:useall` tại context của category của từng câu — đúng định nghĩa đếm trước refactor) với bề mặt đếm công khai
  * (`importAvailability` và `matrixAvailability` của QuizService, hai
- * đường dùng chung `cellAvailableCount`). Sau refactor đếm bằng
- * `count()` ở SQL, mọi con số ở đây phải giữ nguyên.
+ * đường dùng chung `cellAvailableCount`). Sau refactor đếm bằng `count()` ở SQL, mọi con số ở đây phải giữ nguyên.
  *
- * Dữ kiện mẫu (mọi câu đều gắn YCCĐ của ĐVK, trạng thái ready trừ câu
- * nháp): ô (ĐVK, biết, multichoice) có 5 ứng viên thô — 3 câu ở
- * category context hệ thống + 2 câu ở category context khoá học; ô
+ * Dữ kiện mẫu (mọi câu đều gắn YCCĐ của ĐVK, trạng thái ready trừ câu nháp): ô (ĐVK, biết, multichoice) có 5 ứng viên thô — 3 câu ở category context hệ thống + 2 câu ở category context khoá học; ô
  * (ĐVK, hiểu, multichoice) có 1; ô (ĐVK, biết, truefalse) có 1. Quản
- * trị viên dùng được cả hai context; giáo viên chỉ dùng được context
- * khoá học; người lạ không dùng được context nào.
+ * trị viên dùng được cả hai context; giáo viên chỉ dùng được context khoá học; người lạ không dùng được context nào.
  */
 describe('Đặc trưng hoá số đếm ứng viên ô ma trận theo người dùng (issue #488)', () => {
   let app: INestApplication;

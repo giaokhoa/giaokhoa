@@ -4,10 +4,7 @@ const { prefix, route } = relative(import.meta.dirname);
 
 /**
  * Khu route của feature classes — Lớp học (CLASS-1, issue #184):
- * danh sách/tạo màn riêng, tự báo danh, chi tiết lớp (roster) và
- * sửa lớp — 'new'/'join' khai trước ':id' để không bị nuốt; trang
- * công khai mua gói học phí của lớp (CLASS-3, issue #184) là route
- * ':id/public'.
+ * danh sách/tạo màn riêng, tự báo danh, chi tiết lớp (roster) và sửa lớp — 'new'/'join' khai trước ':id' để không bị nuốt; trang công khai mua gói học phí của lớp (CLASS-3, issue #184) là route ':id/public'.
  */
 export default prefix('classes', [
   route('', 'routes/classes.tsx'),

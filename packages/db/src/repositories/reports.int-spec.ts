@@ -1,28 +1,15 @@
 /**
- * Spec tích hợp CHỐT thử nghiệm T-11 (issue #648, hoàn thiện ở
- * #663): khuôn ghép đoạn động `sql.join` của
- * `ReportsRepository.userHasAnyRole` đặt cạnh NGUYÊN VĂN câu SQL
- * của đường cũ (`ReportsService.isInAudience` trước chuyển đổi —
- * câu SQL giữ nguyên văn, chạy thẳng qua driver `pg` làm oracle
- * độc lập) trên cùng một database trung tâm dựng từ rỗng bằng
- * carrier đóng băng (cụm PostgreSQL thật của môi trường test).
+ * Spec tích hợp CHỐT thử nghiệm T-11 (issue #648, hoàn thiện ở #663): khuôn ghép đoạn động `sql.join` của `ReportsRepository.userHasAnyRole` đặt cạnh NGUYÊN VĂN câu SQL của đường cũ (`ReportsService.isInAudience` trước chuyển đổi — câu SQL giữ nguyên văn, chạy thẳng qua driver `pg` làm oracle độc lập) trên cùng một database trung tâm dựng từ rỗng bằng carrier đóng băng (cụm PostgreSQL thật của môi trường test).
  *
  * Ba ca T-11 phải trả lời, mỗi ca chạy CẢ hai phía và đối chiếu:
  * - 1 đoạn / nhiều đoạn vô hướng: kết quả hai phía bằng nhau và
- *   bằng kỳ vọng; thứ tự tham số đã biên dịch của phía repository
- *   đúng khuôn (tham số ngoài đứng trước, rồi từng đoạn theo mảng).
+ *   bằng kỳ vọng; thứ tự tham số đã biên dịch của phía repository đúng khuôn (tham số ngoài đứng trước, rồi từng đoạn theo mảng).
  * - Đoạn chứa biểu thức con mang tham số riêng (`lower(${...})`):
- *   tham số của biểu thức con giữ đúng vị trí của đoạn trong thứ
- *   tự tham số toàn cục, kết quả chạy thật của hai phía bằng nhau.
+ *   tham số của biểu thức con giữ đúng vị trí của đoạn trong thứ tự tham số toàn cục, kết quả chạy thật của hai phía bằng nhau.
  * - 0 đoạn: câu không chốt chặn biên dịch thành `IN ()` và
- *   PostgreSQL từ chối khi chạy — đây là lý do khuôn chốt yêu cầu
- *   chốt chặn: repository trả `false` ngay, không phát truy vấn.
+ *   PostgreSQL từ chối khi chạy — đây là lý do khuôn chốt yêu cầu chốt chặn: repository trả `false` ngay, không phát truy vấn.
  *
- * Ghi chú #663: trước khi gỡ bộ máy cũ, phía oracle là nguyên văn
- * truy vấn qua ORM cũ (kèm đối chiếu biên dịch qua `PgDialect`).
- * ORM cũ đã rời khỏi cây nên oracle nay là chính câu SQL nguyên
- * văn chạy qua driver — bất biến được chốt (hình dạng SQL + thứ
- * tự tham số + kết quả thật) không đổi.
+ * Ghi chú #663: trước khi gỡ bộ máy cũ, phía oracle là nguyên văn truy vấn qua ORM cũ (kèm đối chiếu biên dịch qua `PgDialect`). ORM cũ đã rời khỏi cây nên oracle nay là chính câu SQL nguyên văn chạy qua driver — bất biến được chốt (hình dạng SQL + thứ tự tham số + kết quả thật) không đổi.
  */
 import { sql as kyselySql } from 'kysely';
 import { Pool } from 'pg';
@@ -50,12 +37,7 @@ let db: CentreDb;
 let repo: ReportsRepository;
 
 /**
- * Nguyên văn câu SQL của đường cũ (`ReportsService.isInAudience`
- * trước chuyển đổi), chạy thẳng qua driver làm oracle: cùng mẫu
- * ghép đoạn trên các mảnh vô hướng, KHÔNG có chốt chặn danh sách
- * rỗng ở tầng này (chốt chặn cũ nằm ở service, trước khi gọi).
- * Ghép `IN (...)` bằng tay theo đúng số đoạn — tương đương hình
- * dạng mà mẫu `sql.join` của đường cũ sinh ra.
+ * Nguyên văn câu SQL của đường cũ (`ReportsService.isInAudience` trước chuyển đổi), chạy thẳng qua driver làm oracle: cùng mẫu ghép đoạn trên các mảnh vô hướng, KHÔNG có chốt chặn danh sách rỗng ở tầng này (chốt chặn cũ nằm ở service, trước khi gọi). Ghép `IN (...)` bằng tay theo đúng số đoạn — tương đương hình dạng mà mẫu `sql.join` của đường cũ sinh ra.
  */
 async function oracleUserHasAnyRole(userId: string, roleNames: string[]): Promise<boolean> {
   const placeholders = roleNames.map((_, i) => `$${i + 2}`).join(', ');

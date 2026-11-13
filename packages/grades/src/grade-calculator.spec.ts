@@ -4,24 +4,18 @@ import { calculateCategory, letterForGrade, type CalcItemInput } from './grade-c
 /**
  * GOLDEN GRADEBOOK (§3.11b) — số học domain thuần.
  *
- * Các ví dụ nguyên văn của MoodleDocs "Grade aggregation" (docs.moodle.org,
- * Grade_aggregation; đọc qua bản mirror của MoodleDocs được lập chỉ mục ngày 2026-10-22):
+ * Các ví dụ nguyên văn của MoodleDocs "Grade aggregation" (docs.moodle.org, Grade_aggregation; đọc qua bản mirror của MoodleDocs được lập chỉ mục ngày 2026-10-22):
  *  - Natural: "A1 70/100, A2 20/80, A3 10/10, without forcing weights:
  *    A: (70 + 20 + 10)/(100 + 80 + 10) --> 100/190"
  *  - Extra credit: Item 1 (0-100, extra credit) + Item 2 (0-75); grades 20
- *    and 70 ⇒ "Category 1's total will be graded 0-75 … 75/75 (20+70 = 90
- *    but … it brings the total to its maximum)".
+ *    and 70 ⇒ "Category 1's total will be graded 0-75 … 75/75 (20+70 = 90 but … it brings the total to its maximum)".
  *  - Lowest: "A1 70/100, A2 20/80, A3 10/10, category max 100:
  *    min(0.7, 0.25, 1.0) = 0.25 --> 25/100"
  *  - Highest: same set ⇒ "max(0.7, 0.25, 1.0) = 1.0 --> 100/100"
  *  - Mode: "A1 70/100, A2 35/50, A3 20/80, A4 10/10, A5 7/10 …
  *    mode(0.7, 0.7, 0.25, 1.0, 0.7) = 0.7 --> 70/100"
  *  - Ví dụ tính sẵn của Weighted mean (tài liệu giảng dạy suy ra từ MoodleDocs):
- *    các điểm 90%, 70%, 85%, 89% với các trọng số 1,2,1,2 ⇒ 493/6 = 82.167%.
- * Các ca weight-redistribution, drop-lowest, exclude-empty và freeze
- * cài đặt các quy tắc nêu trong report §2.1 (phân phối lại đủ 100%, điểm trống
- * ≠ 0 làm thay đổi mẫu số, freeze sau penalty/multiplicator) với
- * số học được tính từ chính các quy tắc đó.
+ *    các điểm 90%, 70%, 85%, 89% với các trọng số 1,2,1,2 ⇒ 493/6 = 82.167%. Các ca weight-redistribution, drop-lowest, exclude-empty và freeze cài đặt các quy tắc nêu trong report §2.1 (phân phối lại đủ 100%, điểm trống ≠ 0 làm thay đổi mẫu số, freeze sau penalty/multiplicator) với số học được tính từ chính các quy tắc đó.
  */
 
 let nextId = 1;

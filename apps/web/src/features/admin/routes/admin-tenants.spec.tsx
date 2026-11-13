@@ -7,21 +7,7 @@ import { baSessionResponse, isGetSessionUrl } from '#test/ba-session';
 import { AdminTenantsPage } from './admin-tenants';
 
 /**
- * Spec trang quản trị tenant theo đúng các tiêu chí nghiệm thu của bề
- * mặt này: người quản trị nền tảng thấy danh sách mọi tenant, tạo
- * trường học kho chung (không tạo trung tâm kho riêng qua form)
- * và đọc membership của tenant đang chọn; người chỉ có
- * capability xem phía platform không thấy điều khiển ghi; chủ trung
- * tâm chỉ làm việc với tenant hiệu lực của mình (trang không nạp danh
- * sách platform) và quản lý được membership trong tenant đó; vai trò
- * xem phía tenant không có điều khiển ghi; người không có capability
- * tenant không thấy dữ liệu quản trị và trang không gọi endpoint
- * tenant nào; lỗi 403 ở thao tác ghi hiện thông báo và không đổi
- * trạng thái hiển thị thành công giả. Huy hiệu trạng thái của thẻ
- * tenant hiệu lực đi theo trường `status` của DTO tenant đầy đủ mà
- * endpoint current trả về; người chỉ có capability tại một tenant
- * khác với tenant hiệu lực thấy trạng thái cấm ở khu thành viên
- * thay vì khung chờ treo.
+ * Spec trang quản trị tenant theo đúng các tiêu chí nghiệm thu của bề mặt này: người quản trị nền tảng thấy danh sách mọi tenant, tạo trường học kho chung (không tạo trung tâm kho riêng qua form) và đọc membership của tenant đang chọn; người chỉ có capability xem phía platform không thấy điều khiển ghi; chủ trung tâm chỉ làm việc với tenant hiệu lực của mình (trang không nạp danh sách platform) và quản lý được membership trong tenant đó; vai trò xem phía tenant không có điều khiển ghi; người không có capability tenant không thấy dữ liệu quản trị và trang không gọi endpoint tenant nào; lỗi 403 ở thao tác ghi hiện thông báo và không đổi trạng thái hiển thị thành công giả. Huy hiệu trạng thái của thẻ tenant hiệu lực đi theo trường `status` của DTO tenant đầy đủ mà endpoint current trả về; người chỉ có capability tại một tenant khác với tenant hiệu lực thấy trạng thái cấm ở khu thành viên thay vì khung chờ treo.
  */
 
 const ME_ID = '01900000-0000-7000-8000-0000000000d1';
@@ -112,10 +98,7 @@ interface StubOptions extends AccessOptions {
 }
 
 /**
- * Stub toàn bộ bề mặt API mà trang và hai provider nền chạm tới.
- * Membership của Alpha là trạng thái có thể đổi trong bộ nhớ stub để
- * PATCH đổi trạng thái có hiệu lực quan sát được sau khi trang làm mới
- * truy vấn, đúng như server thật xác nhận rồi trang mới hiển thị.
+ * Stub toàn bộ bề mặt API mà trang và hai provider nền chạm tới. Membership của Alpha là trạng thái có thể đổi trong bộ nhớ stub để PATCH đổi trạng thái có hiệu lực quan sát được sau khi trang làm mới truy vấn, đúng như server thật xác nhận rồi trang mới hiển thị.
  */
 function stubFetch(calls: RecordedCall[], options: StubOptions) {
   const tenants = [TENANT_A, TENANT_B];

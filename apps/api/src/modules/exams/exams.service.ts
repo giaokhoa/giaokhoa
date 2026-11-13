@@ -25,13 +25,7 @@ import {
 } from '@giaokhoa/db/repositories/exams';
 
 /**
- * Bộ capability của lớp ngân hàng đề — mọi cổng đều đánh giá TẠI
- * context của bank đề (một nguồn quyền duy nhất là bank). Tên đã
- * chuẩn hoá về khuôn use/add/edit/copy/share/moderate ở đợt đồng bộ
- * khuôn ngân hàng (issue #228, lát S3): `view` giữ làm khoá nội bộ
- * nhưng capability thật là `exam:use` (bản đồ tên cũ exam:view đã bỏ
- * hẳn khỏi registry); `add` gác mọi đường TẠO đề mới (tạo tay, sinh
- * từ ma trận, copy vào bank đích), `edit` chỉ còn gác sửa đề đã có.
+ * Bộ capability của lớp ngân hàng đề — mọi cổng đều đánh giá TẠI context của bank đề (một nguồn quyền duy nhất là bank). Tên đã chuẩn hoá về khuôn use/add/edit/copy/share/moderate ở đợt đồng bộ khuôn ngân hàng (issue #228, lát S3): `view` giữ làm khoá nội bộ nhưng capability thật là `exam:use` (bản đồ tên cũ exam:view đã bỏ hẳn khỏi registry); `add` gác mọi đường TẠO đề mới (tạo tay, sinh từ ma trận, copy vào bank đích), `edit` chỉ còn gác sửa đề đã có.
  */
 export const EXAM_CAPABILITIES = {
   view: 'exam:use',
@@ -49,10 +43,7 @@ export const PERIODIC_EXAM_KINDS = ['midterm', 'final', 'mock'] as const;
 /**
  * Hash cấu trúc của một version đề (chống trùng đóng góp/copy): tên
  * + danh sách question@pinnedVersion:điểm theo vị trí. Hàm DÙNG
- * CHUNG của module exams: ExamsService tính khi đề xuất đóng góp,
- * ExamDossiersService tính lại cho đóng góp sinh ra từ chuyển đổi
- * hồ sơ treo — hai đường phải ra cùng một hash cho cùng một version
- * thì vết chống trùng trong bank đích mới nhất quán.
+ * CHUNG của module exams: ExamsService tính khi đề xuất đóng góp, ExamDossiersService tính lại cho đóng góp sinh ra từ chuyển đổi hồ sơ treo — hai đường phải ra cùng một hash cho cùng một version thì vết chống trùng trong bank đích mới nhất quán.
  */
 export function examPaperContentHash(version: ExamVersionRow, slots: ExamSlotRow[]): string {
   const body = slots

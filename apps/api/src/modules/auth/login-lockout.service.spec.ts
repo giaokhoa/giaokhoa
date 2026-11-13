@@ -5,12 +5,7 @@ import type { AuthRepository } from '@giaokhoa/db/repositories/auth';
 import { LoginLockoutService } from './login-lockout.service';
 
 /**
- * Chính sách khoá tạm thời theo tài khoản (điểm 2.4, issue #7): một
- * nguồn semantics cho legacy + Better Auth trên bảng `login_attempts`.
- * Các ca ở đây ghim đúng semantics Moodle mà hệ legacy đã chạy: đủ
- * ngưỡng thất bại LIÊN TIẾP (sau lần thành công gần nhất) trong cửa
- * sổ thì khoá tới hết thời lượng khoá; ngưỡng 0 tắt hẳn. Luồng thật
- * qua hai đường đăng nhập được kiểm ở e2e.
+ * Chính sách khoá tạm thời theo tài khoản (điểm 2.4, issue #7): một nguồn semantics cho legacy + Better Auth trên bảng `login_attempts`. Các ca ở đây ghim đúng semantics Moodle mà hệ legacy đã chạy: đủ ngưỡng thất bại LIÊN TIẾP (sau lần thành công gần nhất) trong cửa sổ thì khoá tới hết thời lượng khoá; ngưỡng 0 tắt hẳn. Luồng thật qua hai đường đăng nhập được kiểm ở e2e.
  */
 const MIN = 60_000;
 

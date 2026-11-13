@@ -10,12 +10,7 @@ import { GroupsService } from './groups.service';
 /**
  * API nhóm trong khoá học: group và thành viên.
  *
- * Lớp này khai tiền tố con đầy đủ của chính nó thay vì tiền tố trơ
- * `courses`: tiền tố trơ `courses` chỉ còn module courses sở hữu, mỗi
- * tiền tố đầy đủ khác chỉ có đúng một lớp khai báo. Bảng route giữ
- * nguyên từng ký tự so với trước khi đổi hình thức khai báo. Các route
- * grouping tách sang `CourseGroupingsController` vì không chung tiền tố
- * con với họ route groups.
+ * Lớp này khai tiền tố con đầy đủ của chính nó thay vì tiền tố trơ `courses`: tiền tố trơ `courses` chỉ còn module courses sở hữu, mỗi tiền tố đầy đủ khác chỉ có đúng một lớp khai báo. Bảng route giữ nguyên từng ký tự so với trước khi đổi hình thức khai báo. Các route grouping tách sang `CourseGroupingsController` vì không chung tiền tố con với họ route groups.
  */
 export class CourseGroupsController {
   constructor(private readonly groups: GroupsService) {}
@@ -86,9 +81,7 @@ export class CourseGroupsController {
 /**
  * API grouping trong khoá học: tạo/liệt kê grouping và đưa nhóm vào grouping.
  *
- * Lớp này tách khỏi `CourseGroupsController` vì các route của nó không
- * chung tiền tố con với họ route `courses/:courseId/groups`. Bảng route
- * giữ nguyên từng ký tự so với trước khi đổi hình thức khai báo.
+ * Lớp này tách khỏi `CourseGroupsController` vì các route của nó không chung tiền tố con với họ route `courses/:courseId/groups`. Bảng route giữ nguyên từng ký tự so với trước khi đổi hình thức khai báo.
  */
 export class CourseGroupingsController {
   constructor(private readonly groups: GroupsService) {}

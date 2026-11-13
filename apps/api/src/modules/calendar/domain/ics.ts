@@ -1,9 +1,5 @@
 /**
- * Serializer iCalendar (RFC 5545) cho calendar export — phía đối tác của
- * parser ICS phía worker (`apps/worker/src/domain/ics.ts`): cùng dùng dạng
- * ngày UTC `YYYYMMDDTHHMMSSZ`, cùng quy ước escape (\n cho xuống dòng, \,
- * cho dấu phẩy) để file export nhập lại được bằng chính parser đó.
- * Sự kiện lặp KHÔNG xuất RRULE: listing đã materialise từng occurrence
+ * Serializer iCalendar (RFC 5545) cho calendar export — phía đối tác của parser ICS phía worker (`apps/worker/src/domain/ics.ts`): cùng dùng dạng ngày UTC `YYYYMMDDTHHMMSSZ`, cùng quy ước escape (\n cho xuống dòng, \, cho dấu phẩy) để file export nhập lại được bằng chính parser đó. Sự kiện lặp KHÔNG xuất RRULE: listing đã materialise từng occurrence
  * (và exception đã thay occurrence tương ứng) nên mỗi dòng sự kiện thành
  * một VEVENT độc lập, đúng nội dung người dùng đang thấy.
  */
@@ -20,8 +16,7 @@ export interface IcsExportEvent {
 }
 
 /**
- * Định dạng một mốc thời gian thành dạng UTC của ICS (`YYYYMMDDTHHMMSSZ`) —
- * dạng worker parser đọc lại được.
+ * Định dạng một mốc thời gian thành dạng UTC của ICS (`YYYYMMDDTHHMMSSZ`) — dạng worker parser đọc lại được.
  */
 export function formatIcsDate(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');

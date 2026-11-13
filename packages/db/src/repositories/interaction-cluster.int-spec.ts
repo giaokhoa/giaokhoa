@@ -12,22 +12,9 @@ import { SocialRepository } from './social';
  * Spec tích hợp của cụm tương tác G7 trên Kysely (issue #647):
  * calendar, social, badges, books, files.
  *
- * Database kho trung tâm được dựng từ rỗng bằng chính cầu nối
- * migration của package (carrier đóng băng) trên cụm PostgreSQL
- * thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè
- * cụm khi cần, mặc định suy từ `DATABASE_URL` của package). Mọi ca
- * chạy qua các repository production trong `repositories/` —
- * không mô phỏng handle.
+ * Database kho trung tâm được dựng từ rỗng bằng chính cầu nối migration của package (carrier đóng băng) trên cụm PostgreSQL thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ `DATABASE_URL` của package). Mọi ca chạy qua các repository production trong `repositories/` — không mô phỏng handle.
  *
- * Các hành vi được khoá ở đây là các điểm rủi ro của lượt chuyển
- * đổi bộ máy cũ → Kysely: id sinh bởi `DEFAULT uuidv7()` qua
- * returning (phụ lục U của phương án chiến dịch); ngữ nghĩa loại
- * `undefined` khi ghi (T-4) — patch chỉ đổi trường được truyền;
- * jsonb ghi qua helper serialize `::jsonb` đọc lại đúng hình dạng
- * kể cả MẢNG cấp cao nhất; các nhánh onConflict kèm đọc lại qua
- * handle gốc của insert-if-absent; phép đếm `count(*)::int` giữ
- * kiểu runtime `number`; thứ tự sắp xếp ở tầng ứng dụng của danh
- * sách sách; và tính nguyên tử của transaction mở qua repository
+ * Các hành vi được khoá ở đây là các điểm rủi ro của lượt chuyển đổi bộ máy cũ → Kysely: id sinh bởi `DEFAULT uuidv7()` qua returning (phụ lục U của phương án chiến dịch); ngữ nghĩa loại `undefined` khi ghi (T-4) — patch chỉ đổi trường được truyền; jsonb ghi qua helper serialize `::jsonb` đọc lại đúng hình dạng kể cả MẢNG cấp cao nhất; các nhánh onConflict kèm đọc lại qua handle gốc của insert-if-absent; phép đếm `count(*)::int` giữ kiểu runtime `number`; thứ tự sắp xếp ở tầng ứng dụng của danh sách sách; và tính nguyên tử của transaction mở qua repository
  * (commit đủ / rollback sạch).
  */
 const adminUrl =
@@ -170,18 +157,12 @@ describe('repository xã hội trên Kysely', () => {
 
     const itemId = '01a19887-6b35-7760-8e64-a5960bfd0820';
     const base = { tagId: tag.id, component: 'core', itemType: 'post', itemId, contextId: CONTEXT_ID };
-    // Nhánh có user: chỉ số duy nhất sáu cột bắt được trùng vì
-    // ti_user_id có giá trị — insert bỏ qua (doNothing không trả
-    // dòng) và repository đọc lại đúng dòng đã có.
+    // Nhánh có user: chỉ số duy nhất sáu cột bắt được trùng vì ti_user_id có giá trị — insert bỏ qua (doNothing không trả dòng) và repository đọc lại đúng dòng đã có.
     const personal1 = await social.insertInstance({ ...base, tiUserId: USER_A });
     const personal2 = await social.insertInstance({ ...base, tiUserId: USER_A });
     expect(personal2.id).toBe(personal1.id);
     expect(personal1.tiUserId).toBe(USER_A);
-    // Nhánh không user: ti_user_id NULL được PostgreSQL coi là
-    // phân biệt trong chỉ số duy nhất (chỉ số không khai NULLS NOT
-    // DISTINCT) nên lần gắn không user là một dòng độc lập — đúng
-    // hành vi của đường cũ trước chuyển đổi với cùng câu ON CONFLICT, giữ
-    // nguyên ở lượt chuyển đổi này.
+    // Nhánh không user: ti_user_id NULL được PostgreSQL coi là phân biệt trong chỉ số duy nhất (chỉ số không khai NULLS NOT DISTINCT) nên lần gắn không user là một dòng độc lập — đúng hành vi của đường cũ trước chuyển đổi với cùng câu ON CONFLICT, giữ nguyên ở lượt chuyển đổi này.
     const shared = await social.insertInstance({ ...base });
     expect(shared.id).not.toBe(personal1.id);
     expect(shared.tiUserId).toBeNull();
@@ -339,9 +320,7 @@ describe('repository sách trên Kysely', () => {
   it('lượt ghi một bản ghi dataset trong transaction: node, ánh xạ và dòng sổ nhất quán, source jsonb đọc lại đúng', async () => {
     const book = await books.insertBook({ kind: 'textbook', title: 'Sách G7 nạp', grade: 3, position: 1 });
     const chapter = await books.insertBookNode({ bookId: book.id, parentId: null, title: 'Chủ đề 1', kind: 'chapter', position: 1 });
-    // Đích ánh xạ phải có đúng một phía (check XOR của bảng): dựng
-    // một node chương trình tối thiểu qua chuỗi môn → chương trình
-    // → node để ánh xạ trỏ vào.
+    // Đích ánh xạ phải có đúng một phía (check XOR của bảng): dựng một node chương trình tối thiểu qua chuỗi môn → chương trình → node để ánh xạ trỏ vào.
     const subject = await db
       .insertInto('subjects')
       .values({ name: 'Môn G7 ánh xạ', slug: 'mon-g7-anh-xa', context_id: CONTEXT_ID })
@@ -436,10 +415,7 @@ describe('repository tệp trên Kysely', () => {
   });
 
   it('hình chiếu chốt xoá tệp: liên kết bài nộp, bài nộp theo id và gói chấm hiện hành', async () => {
-    // Giàn dữ kiện tối thiểu cho chuỗi FK: tenant → danh mục →
-    // khoá → bài tập → bài nộp; các bảng này thuộc module khác,
-    // spec chỉ dựng qua handle để kiểm hình chiếu của repository
-    // tệp trên chúng.
+    // Giàn dữ kiện tối thiểu cho chuỗi FK: tenant → danh mục → khoá → bài tập → bài nộp; các bảng này thuộc module khác, spec chỉ dựng qua handle để kiểm hình chiếu của repository tệp trên chúng.
     const tenant = await db
       .insertInto('tenants')
       .values({ slug: 'g7-files', name: 'Trung tâm G7 tệp', kind: 'centre' })

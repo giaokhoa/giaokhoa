@@ -9,11 +9,7 @@ import { SearchPage } from '#features/platform/routes/platform-search';
 import { QuizAttemptPage } from '#features/quizzes/routes/quiz-attempt';
 
 /**
- * Spec Lát 2 (UI/UX, issue #42): các màn narrow phải đứng trong cột
- * 768px của PageShell (data-width="narrow", lớp trong có max-w-3xl +
- * mx-auto), tiêu đề qua PageHeader (h1), và các luồng chính vẫn chạy.
- * Kiểm trên cây DOM thật (jsdom) theo đúng cách đội review đóng vai
- * người dùng.
+ * Spec Lát 2 (UI/UX, issue #42): các màn narrow phải đứng trong cột 768px của PageShell (data-width="narrow", lớp trong có max-w-3xl + mx-auto), tiêu đề qua PageHeader (h1), và các luồng chính vẫn chạy. Kiểm trên cây DOM thật (jsdom) theo đúng cách đội review đóng vai người dùng.
  */
 function expectNarrowShell(container: HTMLElement) {
   const shell = container.querySelector('[data-slot="page-shell"]');
@@ -87,8 +83,7 @@ describe('UI Lát 2 — màn narrow trong PageShell 768px', () => {
       }
       return undefined;
     });
-    // SearchPage đọc ảnh chụp quyền (đích của kết quả `users` phụ
-    // thuộc quyền người tìm) — bọc TestProviders như cây root thật.
+    // SearchPage đọc ảnh chụp quyền (đích của kết quả `users` phụ thuộc quyền người tìm) — bọc TestProviders như cây root thật.
     const { container } = render(
       <TestProviders>
         <MemoryRouter>
@@ -137,8 +132,7 @@ describe('UI Lát 2 — màn narrow trong PageShell 768px', () => {
     const router = createMemoryRouter([{ path: '/quiz-attempts/:attemptId', element: <QuizAttemptPage /> }], {
       initialEntries: ['/quiz-attempts/att-1'],
     });
-    // Trang làm bài đã chuyển sang khuôn TanStack Query (F-01 của
-    // #133) nên render phải có QueryClientProvider như mọi spec khác.
+    // Trang làm bài đã chuyển sang khuôn TanStack Query (F-01 của #133) nên render phải có QueryClientProvider như mọi spec khác.
     const { container } = render(
       <TestProviders>
         <RouterProvider router={router} />

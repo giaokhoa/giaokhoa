@@ -1,46 +1,23 @@
 /**
  * Repository của cụm HOÀN THÀNH (completion) trên Kysely.
  *
- * Vai trò: mọi truy cập tới bốn bảng của miền hoàn thành tập trung
- * ở đây:
+ * Vai trò: mọi truy cập tới bốn bảng của miền hoàn thành tập trung ở đây:
  * - `course_modules_completion` — trạng thái hoàn thành đã lưu của
- *   từng course module theo từng học viên (nguồn sự thật mà bề mặt
- *   tiến độ, tổng hợp khoá học và bề mặt phụ huynh đọc).
+ *   từng course module theo từng học viên (nguồn sự thật mà bề mặt tiến độ, tổng hợp khoá học và bề mặt phụ huynh đọc).
  * - `course_completion_criteria` — bộ tiêu chí hoàn thành của một
- *   khoá học (tám loại tiêu chí; mỗi khoá một bộ, thay thế toàn bộ
- *   khi cấu hình lại).
+ *   khoá học (tám loại tiêu chí; mỗi khoá một bộ, thay thế toàn bộ khi cấu hình lại).
  * - `course_completion_crit_compl` — dấu hoàn thành thủ công cho các
  *   tiêu chí loại self/role (có dòng = tiêu chí đã đạt).
  * - `course_completion_settings` — cấu hình tổng hợp của khoá
  *   (phương thức ALL/ANY), một dòng cho mỗi khoá.
  * - `course_completions` — bản ghi hoàn thành khoá học của học viên,
- *   được tổng hợp lại từ bộ tiêu chí; cột `re_aggregate` là mốc gắn
- *   cờ "cần tổng hợp lại".
+ *   được tổng hợp lại từ bộ tiêu chí; cột `re_aggregate` là mốc gắn cờ "cần tổng hợp lại".
  *
- * Ba thao tác ghi dạng ghi/đè (upsert) khoá theo khoá duy nhất tự
- * nhiên của bảng và CHỈ cập nhật đúng các cột mà đường bộ máy cũ trước
- * đây cập nhật khi trùng khoá — các cột còn lại của dòng đã có (ví
- * dụ `time_enrolled` của bản ghi hoàn thành khoá học) giữ nguyên khi
- * ghi đè. Repository không chứa luật nghiệp vụ: tính trạng thái, gác
- * capability và phát sự kiện nằm ở tầng service phía ứng dụng.
- * Service sở hữu hai giao dịch ghép "ghi trạng thái hoàn thành + ghi
- * sự kiện outbox" — chúng mở qua phương thức `transaction` của
- * repository này để cả hai ghi cùng nằm trong MỘT giao dịch Kysely,
- * không bao giờ lai với giao dịch của ORM còn lại.
+ * Ba thao tác ghi dạng ghi/đè (upsert) khoá theo khoá duy nhất tự nhiên của bảng và CHỈ cập nhật đúng các cột mà đường bộ máy cũ trước đây cập nhật khi trùng khoá — các cột còn lại của dòng đã có (ví dụ `time_enrolled` của bản ghi hoàn thành khoá học) giữ nguyên khi ghi đè. Repository không chứa luật nghiệp vụ: tính trạng thái, gác capability và phát sự kiện nằm ở tầng service phía ứng dụng. Service sở hữu hai giao dịch ghép "ghi trạng thái hoàn thành + ghi sự kiện outbox" — chúng mở qua phương thức `transaction` của repository này để cả hai ghi cùng nằm trong MỘT giao dịch Kysely, không bao giờ lai với giao dịch của ORM còn lại.
  *
- * Khuôn hình dạng dữ liệu ở biên repository (khuôn của pilot kho
- * control plane, xem sổ tay trong `AGENTS.md` của package): bên
- * trong dùng tên bảng/cột snake_case của interface schema sinh bằng
- * codegen; bên ngoài trả/nhận hình dạng camelCase như phía tiêu thụ
- * đang dùng qua danh sách cột tường minh có bí danh và các hàm ánh
- * xạ ghi `*InsertValues`/`*UpdateSet`. Giá trị `undefined` bị LOẠI
- * khỏi values/set trong các hàm ánh xạ và trong các set của nhánh
- * cập nhật-khi-trùng (thử nghiệm T-4 đã đo ở pilot) — trường vắng
- * mặt phải để default của database quyết định ở nhánh chèn, và giữ
- * nguyên giá trị đã có ở nhánh cập nhật; mọi giá trị trong mệnh đề
+ * Khuôn hình dạng dữ liệu ở biên repository (khuôn của pilot kho control plane, xem sổ tay trong `AGENTS.md` của package): bên trong dùng tên bảng/cột snake_case của interface schema sinh bằng codegen; bên ngoài trả/nhận hình dạng camelCase như phía tiêu thụ đang dùng qua danh sách cột tường minh có bí danh và các hàm ánh xạ ghi `*InsertValues`/`*UpdateSet`. Giá trị `undefined` bị LOẠI khỏi values/set trong các hàm ánh xạ và trong các set của nhánh cập nhật-khi-trùng (thử nghiệm T-4 đã đo ở pilot) — trường vắng mặt phải để default của database quyết định ở nhánh chèn, và giữ nguyên giá trị đã có ở nhánh cập nhật; mọi giá trị trong mệnh đề
  * WHERE đều là tham số bắt buộc, không bao giờ `undefined`.
- * Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng
- * dụng, không tự mở pool.
+ * Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng dụng, không tự mở pool.
  */
 import type { Insertable, Updateable } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
@@ -201,9 +178,7 @@ const COURSE_COMPLETION_COLUMNS = [
 ] as const;
 
 /**
- * Ánh xạ dữ kiện ghi trạng thái hoàn thành cm (camelCase) sang
- * values insert (snake_case), LOẠI mọi trường `undefined` (quy tắc
- * T-4 trong sổ tay của package).
+ * Ánh xạ dữ kiện ghi trạng thái hoàn thành cm (camelCase) sang values insert (snake_case), LOẠI mọi trường `undefined` (quy tắc T-4 trong sổ tay của package).
  */
 function cmCompletionInsertValues(values: NewCmCompletion): Insertable<CentreDB['course_modules_completion']> {
   const row: Insertable<CentreDB['course_modules_completion']> = {
@@ -239,8 +214,7 @@ function criteriaInsertValues(values: NewCriteria): Insertable<CentreDB['course_
 }
 
 /**
- * Ánh xạ dữ kiện ghi dấu hoàn thành thủ công (camelCase) sang values
- * insert (snake_case), LOẠI mọi trường `undefined` (quy tắc T-4).
+ * Ánh xạ dữ kiện ghi dấu hoàn thành thủ công (camelCase) sang values insert (snake_case), LOẠI mọi trường `undefined` (quy tắc T-4).
  */
 function critComplInsertValues(values: NewCritCompl): Insertable<CentreDB['course_completion_crit_compl']> {
   const row: Insertable<CentreDB['course_completion_crit_compl']> = {
@@ -254,9 +228,7 @@ function critComplInsertValues(values: NewCritCompl): Insertable<CentreDB['cours
 }
 
 /**
- * Ánh xạ dữ kiện ghi bản ghi hoàn thành khoá học (camelCase) sang
- * values insert (snake_case), LOẠI mọi trường `undefined` (quy tắc
- * T-4).
+ * Ánh xạ dữ kiện ghi bản ghi hoàn thành khoá học (camelCase) sang values insert (snake_case), LOẠI mọi trường `undefined` (quy tắc T-4).
  */
 function courseCompletionInsertValues(values: NewCourseCompletion): Insertable<CentreDB['course_completions']> {
   const row: Insertable<CentreDB['course_completions']> = {
@@ -273,15 +245,9 @@ function courseCompletionInsertValues(values: NewCourseCompletion): Insertable<C
 }
 
 /**
- * Kho dữ liệu hoàn thành trên Kysely: trạng thái completion của cm
- * theo user, tiêu chí hoàn thành khoá học, cấu hình và bản ghi hoàn
- * thành khoá học.
+ * Kho dữ liệu hoàn thành trên Kysely: trạng thái completion của cm theo user, tiêu chí hoàn thành khoá học, cấu hình và bản ghi hoàn thành khoá học.
  *
- * Handle gốc được truyền lúc khởi tạo (facade định tuyến của kho
- * trung tâm do tầng ứng dụng cấp); mọi phương thức nhận thêm handle
- * tuỳ chọn để phía gọi ghép thao tác vào transaction đang mở của
- * chúng — repository không tự mở transaction ngoài phương thức
- * `transaction` tường minh.
+ * Handle gốc được truyền lúc khởi tạo (facade định tuyến của kho trung tâm do tầng ứng dụng cấp); mọi phương thức nhận thêm handle tuỳ chọn để phía gọi ghép thao tác vào transaction đang mở của chúng — repository không tự mở transaction ngoài phương thức `transaction` tường minh.
  */
 export class CompletionRepository {
   constructor(private readonly handle: CompletionDb) {}
@@ -308,11 +274,7 @@ export class CompletionRepository {
   }
 
   /**
-   * Ghi/cập nhật trạng thái hoàn thành cm. Khi dòng đã có (trùng
-   * khoá duy nhất cặp cm + user), chỉ các cột trạng thái đổi: trạng
-   * thái, cờ đã xem và người ghi đè (trường nào vắng mặt trong dữ
-   * kiện ghi thì giữ nguyên giá trị đã có), kèm mốc cập nhật hiện
-   * tại — đúng tập cột của nhánh cập nhật ở đường cũ trước đây.
+   * Ghi/cập nhật trạng thái hoàn thành cm. Khi dòng đã có (trùng khoá duy nhất cặp cm + user), chỉ các cột trạng thái đổi: trạng thái, cờ đã xem và người ghi đè (trường nào vắng mặt trong dữ kiện ghi thì giữ nguyên giá trị đã có), kèm mốc cập nhật hiện tại — đúng tập cột của nhánh cập nhật ở đường cũ trước đây.
    */
   async upsertCmCompletion(v: NewCmCompletion, db: CompletionDb = this.db()): Promise<CmCompletionRow> {
     const set: Updateable<CentreDB['course_modules_completion']> = { updated_at: new Date() };
@@ -405,10 +367,7 @@ export class CompletionRepository {
   }
 
   /**
-   * Các khoá học có tiêu chí 'course' trỏ vào khoá học này (khoá phụ
-   * thuộc vào khoá tiên quyết) — dùng để đánh giá lại khi khoá tiên
-   * quyết hoàn thành. Một khoá phụ thuộc xuất hiện đúng một lần dù
-   * có nhiều tiêu chí cùng trỏ vào cùng khoá tiên quyết.
+   * Các khoá học có tiêu chí 'course' trỏ vào khoá học này (khoá phụ thuộc vào khoá tiên quyết) — dùng để đánh giá lại khi khoá tiên quyết hoàn thành. Một khoá phụ thuộc xuất hiện đúng một lần dù có nhiều tiêu chí cùng trỏ vào cùng khoá tiên quyết.
    */
   async listDependentCourseIds(prerequisiteCourseId: string, db: CompletionDb = this.db()): Promise<string[]> {
     const rows = await db
@@ -421,8 +380,7 @@ export class CompletionRepository {
   }
 
   /**
-   * Dấu hoàn thành thủ công (crit_compl) của một tiêu chí cho một
-   * user: có dòng = tiêu chí thủ công (self/role) đã đạt.
+   * Dấu hoàn thành thủ công (crit_compl) của một tiêu chí cho một user: có dòng = tiêu chí thủ công (self/role) đã đạt.
    */
   async getCritCompl(criteriaId: string, userId: string, db: CompletionDb = this.db()): Promise<CritComplRow | undefined> {
     return db
@@ -435,8 +393,7 @@ export class CompletionRepository {
   }
 
   /**
-   * Mọi dấu hoàn thành thủ công của user trong tập tiêu chí cho
-   * trước (nạp một lần cho tầng đánh giá).
+   * Mọi dấu hoàn thành thủ công của user trong tập tiêu chí cho trước (nạp một lần cho tầng đánh giá).
    */
   async listCritComplForUser(criteriaIds: string[], userId: string, db: CompletionDb = this.db()): Promise<CritComplRow[]> {
     if (!criteriaIds.length) return [];
@@ -449,8 +406,7 @@ export class CompletionRepository {
   }
 
   /**
-   * Ghi dấu hoàn thành thủ công cho một tiêu chí (ghi lại thì cập
-   * nhật người đánh dấu và thời điểm).
+   * Ghi dấu hoàn thành thủ công cho một tiêu chí (ghi lại thì cập nhật người đánh dấu và thời điểm).
    */
   async upsertCritCompl(v: NewCritCompl, db: CompletionDb = this.db()): Promise<CritComplRow> {
     const set: Updateable<CentreDB['course_completion_crit_compl']> = { time_completed: new Date() };
@@ -474,9 +430,7 @@ export class CompletionRepository {
   }
 
   /**
-   * Cấu hình completion của khoá học; khoá chưa từng cấu hình thì
-   * trả cấu hình mặc định `{ method: 1 }` (tổng hợp ALL) như đường
-   * cũ — không tự ghi dòng cấu hình khi đọc.
+   * Cấu hình completion của khoá học; khoá chưa từng cấu hình thì trả cấu hình mặc định `{ method: 1 }` (tổng hợp ALL) như đường cũ — không tự ghi dòng cấu hình khi đọc.
    */
   async getSettings(courseId: string, db: CompletionDb = this.db()): Promise<{ method: number }> {
     const row = await db
@@ -513,12 +467,7 @@ export class CompletionRepository {
   }
 
   /**
-   * Ghi/cập nhật bản ghi hoàn thành khoá học. Khi dòng đã có (trùng
-   * khoá duy nhất cặp user + khoá), chỉ trạng thái và các mốc bắt
-   * đầu/hoàn thành đổi theo dữ kiện ghi (trường vắng mặt thì giữ
-   * nguyên), mốc gắn cờ tổng hợp lại luôn lấy thời điểm ghi — cột
-   * `time_enrolled` không nằm trong nhánh cập nhật nên giữ nguyên
-   * như đường cũ trước đây.
+   * Ghi/cập nhật bản ghi hoàn thành khoá học. Khi dòng đã có (trùng khoá duy nhất cặp user + khoá), chỉ trạng thái và các mốc bắt đầu/hoàn thành đổi theo dữ kiện ghi (trường vắng mặt thì giữ nguyên), mốc gắn cờ tổng hợp lại luôn lấy thời điểm ghi — cột `time_enrolled` không nằm trong nhánh cập nhật nên giữ nguyên như đường cũ trước đây.
    */
   async upsertCourseCompletion(v: NewCourseCompletion, db: CompletionDb = this.db()): Promise<CourseCompletionRow> {
     const set: Updateable<CentreDB['course_completions']> = { re_aggregate: new Date() };

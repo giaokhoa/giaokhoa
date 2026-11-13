@@ -16,14 +16,9 @@ import { BadgesController } from './badges.controller';
 import { BADGE_AWARD_QUEUE, BadgesService } from './badges.service';
 
 /**
- * Facade của BadgesModule: BadgesService. Việc đánh giá tiêu chí tiêu thụ
- * Completion/Competencies/Groups (lá cohort)/CustomFields (lá profile)
- * CHỈ thông qua facade của chúng và các hook/event đã đăng ký; thông báo
- * trao huy hiệu đi qua MessagingService.
+ * Facade của BadgesModule: BadgesService. Việc đánh giá tiêu chí tiêu thụ Completion/Competencies/Groups (lá cohort)/CustomFields (lá profile) CHỈ thông qua facade của chúng và các hook/event đã đăng ký; thông báo trao huy hiệu đi qua MessagingService.
  *
- * Từ issue #647, repository của module sống ở `@giaokhoa/db` trên
- * Kysely (lớp thuần, không phụ thuộc Nest) nên module lắp nó bằng
- * factory provider trên handle định tuyến theo không gian
+ * Từ issue #647, repository của module sống ở `@giaokhoa/db` trên Kysely (lớp thuần, không phụ thuộc Nest) nên module lắp nó bằng factory provider trên handle định tuyến theo không gian
  * (`SpaceDatabaseService.routedKysely`) — cùng khuôn lắp repository
  * của pilot control plane.
  */

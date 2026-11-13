@@ -13,10 +13,7 @@ export interface WebSession extends WebSessionClientInfo {
   lastActivityAt: string;
   loginAs?: { byUserId: string };
   /**
-   * Slug kho riêng của địa chỉ đã tạo phiên (issue #584); vắng mặt
-   * với phiên tạo ở địa chỉ gốc hoặc phiên tạo trước khi có trường
-   * này. `AuthService.sessionUser` đối chiếu với địa chỉ của
-   * request hiện tại để từ chối phiên bị mang sang không gian khác.
+   * Slug kho riêng của địa chỉ đã tạo phiên (issue #584); vắng mặt với phiên tạo ở địa chỉ gốc hoặc phiên tạo trước khi có trường này. `AuthService.sessionUser` đối chiếu với địa chỉ của request hiện tại để từ chối phiên bị mang sang không gian khác.
    */
   spaceSlug?: string;
 }
@@ -28,23 +25,16 @@ export interface ListedWebSession { id: string; session: WebSession }
 const TOUCH_INTERVAL_MS = 60_000;
 
 /**
- * SessionModule (nằm trong AuthModule theo report §3.7): phiên web phía server
- * trong namespace cache *session* của Redis. Cookie chỉ mang id;
- * đăng nhập sẽ xoay vòng id (chống fixation) và phiên của người dùng bị đình chỉ/đã xoá
- * sẽ ngừng hợp lệ vì AuthService kiểm tra lại trạng thái tài khoản ở
- * mỗi lần đọc phiên.
+ * SessionModule (nằm trong AuthModule theo report §3.7): phiên web phía server trong namespace cache *session* của Redis. Cookie chỉ mang id; đăng nhập sẽ xoay vòng id (chống fixation) và phiên của người dùng bị đình chỉ/đã xoá sẽ ngừng hợp lệ vì AuthService kiểm tra lại trạng thái tài khoản ở mỗi lần đọc phiên.
  *
  * Ngoài bản ghi phiên, service duy trì một chỉ mục nhẹ theo user
  * (`webindex:<userId>` → danh sách session id) để trang "Phiên đăng nhập"
  * (mẫu report_usersessions của Moodle) liệt kê và thu hồi được các phiên
- * web của chính user; chỉ mục được dọn lười khi liệt kê (id nào không còn
- * bản ghi thì bị loại).
+ * web của chính user; chỉ mục được dọn lười khi liệt kê (id nào không còn bản ghi thì bị loại).
  */
 @Injectable()
 /**
- * Phiên đăng nhập phía server (kho phiên trong Redis): tạo, đọc, huỷ, xoay
- * id phiên và liệt kê/thu hồi theo user phục vụ quản lý phiên cá nhân.
- * Session id là giá trị ngẫu nhiên khó đoán, chỉ lưu phía server.
+ * Phiên đăng nhập phía server (kho phiên trong Redis): tạo, đọc, huỷ, xoay id phiên và liệt kê/thu hồi theo user phục vụ quản lý phiên cá nhân. Session id là giá trị ngẫu nhiên khó đoán, chỉ lưu phía server.
  */
 export class SessionService {
   constructor(private readonly store: SessionCacheService) {}
@@ -125,6 +115,11 @@ export class SessionService {
    * Huỷ mọi phiên web của user ngoại trừ `keepId` (phiên hiện tại khi
    * người dùng bấm "huỷ mọi phiên khác"); trả số phiên đã huỷ.
    */
+  /** Password reset/change: revoke all Redis web sessions, including current. */
+  async destroyAllForUser(userId: string): Promise<number> {
+    return this.destroyOthersForUser(userId);
+  }
+
   async destroyOthersForUser(userId: string, keepId?: string): Promise<number> {
     const listed = await this.listForUser(userId);
     let destroyed = 0;

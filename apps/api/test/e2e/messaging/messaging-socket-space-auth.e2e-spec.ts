@@ -11,9 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createControlPlaneKysely } from '@giaokhoa/db/control-plane';
 
 /**
- * Better Auth phải bật ngay từ lúc AppModule được import (khuôn của
- * spec các cổng tiền di trú Phần A): đặt biến môi trường ở đầu file,
- * rồi import helpers ĐỘNG trong beforeAll.
+ * Better Auth phải bật ngay từ lúc AppModule được import (khuôn của spec các cổng tiền di trú Phần A): đặt biến môi trường ở đầu file, rồi import helpers ĐỘNG trong beforeAll.
  */
 const BETTER_AUTH_SECRET = 'test-better-auth-secret-at-least-32-chars';
 process.env.BETTER_AUTH_ENABLED = 'true';
@@ -50,9 +48,7 @@ async function createMountedTestApp(): Promise<INestApplication> {
 }
 
 /**
- * Ký giá trị cookie phiên Better Auth đúng định dạng handler kiểm
- * chứng khi đọc (xem spec các cổng tiền di trú Phần A): cookie
- * không ký bị `getSession` bỏ qua trước khi tra bảng phiên.
+ * Ký giá trị cookie phiên Better Auth đúng định dạng handler kiểm chứng khi đọc (xem spec các cổng tiền di trú Phần A): cookie không ký bị `getSession` bỏ qua trước khi tra bảng phiên.
  */
 function signedBetterAuthCookie(token: string): string {
   const signature = createHmac('sha256', BETTER_AUTH_SECRET).update(token).digest('base64');
@@ -61,33 +57,21 @@ function signedBetterAuthCookie(token: string): string {
 
 /**
  * Ca đầu-cuối của HẠNG MỤC 1 tiền điều kiện Phần B (issue #587):
- * socket realtime của messaging tại địa chỉ của một trung tâm ở
- * kho riêng. Hạ tầng dựng đúng khuôn spec các cổng Phần A: trung
- * tâm kiểm chứng có database riêng trên cùng cụm test
+ * socket realtime của messaging tại địa chỉ của một trung tâm ở kho riêng. Hạ tầng dựng đúng khuôn spec các cổng Phần A: trung tâm kiểm chứng có database riêng trên cùng cụm test
  * (`giaokhoa_test_centre_sock587`), sổ đăng ký ở database control plane
- * riêng (`giaokhoa_test_cp_sock587`) mà ứng dụng đọc qua
- * `CONTROL_PLANE_DATABASE_URL`. Hai thành viên A/B, hội thoại nhóm
- * của họ và một tin nhắn được tạo bằng API công khai ở kho chung
- * rồi sao sang kho riêng và XOÁ khỏi kho chung — đúng trạng thái
- * sau di trú: phiên Better Auth (gieo thẳng vào bảng `session` ở
- * kho riêng), tài khoản, membership và dữ kiện hội thoại chỉ tồn
- * tại ở kho riêng, đường đọc kho chung không còn gì để phục vụ.
+ * riêng (`giaokhoa_test_cp_sock587`) mà ứng dụng đọc qua `CONTROL_PLANE_DATABASE_URL`. Hai thành viên A/B, hội thoại nhóm của họ và một tin nhắn được tạo bằng API công khai ở kho chung rồi sao sang kho riêng và XOÁ khỏi kho chung — đúng trạng thái sau di trú: phiên Better Auth (gieo thẳng vào bảng `session` ở kho riêng), tài khoản, membership và dữ kiện hội thoại chỉ tồn tại ở kho riêng, đường đọc kho chung không còn gì để phục vụ.
  *
  * Các ca khoá đúng nghiệm thu của hạng mục 1 ở bề mặt socket:
  * - thành viên chỉ ở kho riêng nối socket bằng cookie tại địa chỉ
- *   của trung tâm và nhận ảnh chụp presence (gỡ phân giải không
- *   gian ở lớp auth là phiên không thấy ở kho chung → bị ngắt);
+ *   của trung tâm và nhận ảnh chụp presence (gỡ phân giải không gian ở lớp auth là phiên không thấy ở kho chung → bị ngắt);
  * - hai thành viên trao đổi qua socket: `sync` trả tin chỉ có ở
- *   kho riêng, join/typing được chấp nhận và tín hiệu typing tới
- *   được phía bên kia (gỡ phạm vi kho ở gateway là membership vô
- *   hình → sync rỗng, join/typing bị từ chối);
+ *   kho riêng, join/typing được chấp nhận và tín hiệu typing tới được phía bên kia (gỡ phạm vi kho ở gateway là membership vô hình → sync rỗng, join/typing bị từ chối);
  * - phiên chỉ tồn tại ở kho chung mang tới địa chỉ kho riêng bị
  *   ngắt, không được phục vụ lặng lẽ từ kho chung;
  * - token mang claim `centre_id` nối được tại địa chỉ trung tâm,
  *   token cũ không mang claim bị ngắt (cổng 1a/1b phía socket).
  *
- * Khẳng định về PHÂN PHỐI sự kiện qua hàng đợi phía worker nằm
- * ngoài spec này, cùng ranh giới với spec realtime-flow hiện hữu.
+ * Khẳng định về PHÂN PHỐI sự kiện qua hàng đợi phía worker nằm ngoài spec này, cùng ranh giới với spec realtime-flow hiện hữu.
  */
 const CP_DATABASE = 'giaokhoa_test_cp_sock587';
 const CP_ROLE = 'giaokhoa_cp_sock587';
@@ -386,8 +370,7 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
 
     const adminToken = (await helpers.login(app, 'admin', 'Admin123!')).accessToken;
 
-    // Tenant của trung tâm tạo bằng API công khai ở kho chung, rồi
-    // sao dòng tenant vào kho riêng — trạng thái sau di trú.
+    // Tenant của trung tâm tạo bằng API công khai ở kho chung, rồi sao dòng tenant vào kho riêng — trạng thái sau di trú.
     const created = (await must(
       await helpers.http(app).post('/api/v1/tenants').set(auth(adminToken)).send({
         name: 'Trung tâm socket (spec 587)',
@@ -400,8 +383,7 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
     const centreUrl = clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD);
     await copyRowById(process.env.DATABASE_URL!, centreUrl, 'tenants', tenantId);
 
-    // Hai thành viên của trung tâm: tạo ở kho chung, thêm
-    // membership bằng API, sao user + membership vào kho riêng.
+    // Hai thành viên của trung tâm: tạo ở kho chung, thêm membership bằng API, sao user + membership vào kho riêng.
     const memberA = await helpers.createUserViaApi(app, adminToken);
     const memberB = await helpers.createUserViaApi(app, adminToken);
     memberAId = memberA.id;

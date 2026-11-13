@@ -8,31 +8,19 @@ import { queryClient } from '#lib/query-client';
 import { baSessionResponse, isGetSessionUrl } from '#test/ba-session';
 
 /**
- * Test cho cây điều hướng sidebar sau Lát 1 của hồ sơ UI/UX (sidebar
- * collapse theo cơ chế sidebar-07): 5 mục trực tiếp + các mục cha
- * thu/mở (Học tập / Người dùng & quyền / Vai trò & Quyền / Cài đặt hệ
- * thống) thay cho 3 nhóm phẳng cũ — nhóm Vai trò & Quyền tách riêng
- * mang hai mục Vai trò và Quyền. Mục "Tìm kiếm" không còn ở sidebar từ chốt 23:52
- * ngày 26/10/2026 (issue #303 — ô tìm kiếm chuyển ra giữa header).
- * Dựng đúng cây thật (App → Shell → AppSidebar) như
- * sidebar-notification-count.spec, stub fetch theo vai trò:
+ * Test cho cây điều hướng sidebar sau Lát 1 của hồ sơ UI/UX (sidebar collapse theo cơ chế sidebar-07): 5 mục trực tiếp + các mục cha thu/mở (Học tập / Người dùng & quyền / Vai trò & Quyền / Cài đặt hệ thống) thay cho 3 nhóm phẳng cũ — nhóm Vai trò & Quyền tách riêng mang hai mục Vai trò và Quyền. Mục "Tìm kiếm" không còn ở sidebar từ chốt 23:52 ngày 26/10/2026 (issue #303 — ô tìm kiếm chuyển ra giữa header). Dựng đúng cây thật (App → Shell → AppSidebar) như sidebar-notification-count.spec, stub fetch theo vai trò:
  *
  * - Admin thấy đủ cây (3 mục cha); nhóm cha đóng mặc định, bấm mới mở
  *   mục con; các nhóm mở độc lập (không accordion).
  * - Trạng thái mở của nhóm lưu ở localStorage `giaokhoa:sidebar:open-groups`
- *   — "F5" (gỡ cây, dựng lại) vẫn giữ; nhóm chứa route đang xem thì
- *   luôn tự mở và mục con + nút cha cùng mang trạng thái active.
+ *   — "F5" (gỡ cây, dựng lại) vẫn giữ; nhóm chứa route đang xem thì luôn tự mở và mục con + nút cha cùng mang trạng thái active.
  * - Ba mục ngân hàng CẤP CAO NHẤT ngay sau Học tập (chốt lại của Lão
- *   gia 11:40 ngày 26/10/2026, issue #228 — BỎ hẳn mục "Ngân hàng hệ
- *   thống" ở sidebar), gác canUseQuestionBank: "Ngân hàng câu hỏi"
+ *   gia 11:40 ngày 26/10/2026, issue #228 — BỎ hẳn mục "Ngân hàng hệ thống" ở sidebar), gác canUseQuestionBank: "Ngân hàng câu hỏi"
  *   (link /questions, thu/mở ra mục con "Ngữ liệu" ở
  *   /questions/stimuli), "Ngân hàng đề" (/exams), "Ngân hàng ma trận"
  *   (/matrices) — mỗi khu vực một PATH RIÊNG theo chuẩn đường dẫn
  *   (issue #221, lát R1); khu hệ thống đi qua thanh tab Cá nhân | Hệ
- *   thống trong chính màn danh sách, không qua sidebar. Đang ở path
- *   của khu vực thì mục/nhóm tương ứng tự mở và active. Học viên
- *   không thấy mục ngân hàng nào; giáo viên có capability câu hỏi
- *   thì thấy đủ ba.
+ *   thống trong chính màn danh sách, không qua sidebar. Đang ở path của khu vực thì mục/nhóm tương ứng tự mở và active. Học viên không thấy mục ngân hàng nào; giáo viên có capability câu hỏi thì thấy đủ ba.
  * - Cookie `sidebar_state=false` → sidebar ở chế độ rail icon
  *   (data-collapsible="icon", có SidebarRail); bấm mục cha ở chế độ
  *   này bung sidebar ra và mở nhóm.

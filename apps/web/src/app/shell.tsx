@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { Link, Outlet } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@giaokhoa/ui/components/button';
@@ -13,25 +13,14 @@ import { SidebarInset, SidebarProvider } from '@giaokhoa/ui/components/sidebar';
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 
 /**
- * Khung của khu vực ĐÃ đăng nhập, theo block dashboard-01: sidebar điều
- * hướng (đã lọc theo quyền trong AppSidebar) + header trên cùng + vùng
- * nội dung. Khung này CHỈ lo trình bày: PermissionsProvider đã bọc ở
- * root (root.tsx) cho toàn bộ cây route nên sidebar và mọi trang con
- * dùng chung một ảnh chụp quyền mà không cần bọc lại tại đây — và
- * trang nào cũng ở trong provider kể cả khi khung thay đổi.
+ * Khung của khu vực ĐÃ đăng nhập, theo block dashboard-01: sidebar điều hướng (đã lọc theo quyền trong AppSidebar) + header trên cùng + vùng nội dung. Khung này CHỈ lo trình bày: PermissionsProvider đã bọc ở root (root.tsx) cho toàn bộ cây route nên sidebar và mọi trang con dùng chung một ảnh chụp quyền mà không cần bọc lại tại đây — và trang nào cũng ở trong provider kể cả khi khung thay đổi.
  */
 function AuthenticatedShell() {
-  // Trạng thái thu/mở khởi tạo lấy từ root loader qua context (F-11
-  // của #133, việc #146): loader đã đọc cookie `sidebar_state` từ
-  // request phía server nên giá trị này khớp giữa HTML SSR và lần
-  // render hydrate đầu — không còn lệch hydrate khi cookie là false.
-  // Chỉ là giá trị khởi tạo (defaultOpen); các lần bật/tắt sau do
-  // ui/sidebar tự ghi lại cookie.
+  // Trạng thái thu/mở khởi tạo lấy từ root loader qua context (F-11 của #133, việc #146): loader đã đọc cookie `sidebar_state` từ request phía server nên giá trị này khớp giữa HTML SSR và lần render hydrate đầu — không còn lệch hydrate khi cookie là false. Chỉ là giá trị khởi tạo (defaultOpen); các lần bật/tắt sau do ui/sidebar tự ghi lại cookie.
   const sidebarDefaultOpen = useSidebarDefaultOpen();
   // Chỉ báo chờ điều hướng toàn cục (F-14): router đang tải trang đích
   // (clientLoader của trang đích đang nạp dữ liệu) thì thanh tiến
-  // trình mảnh hiện ở đỉnh và vùng nội dung mờ nhẹ — người dùng thấy
-  // ngay hệ đang chuyển trang thay vì tưởng bấm mà không ăn.
+  // trình mảnh hiện ở đỉnh và vùng nội dung mờ nhẹ — người dùng thấy ngay hệ đang chuyển trang thay vì tưởng bấm mà không ăn.
   const navigationPending = useNavigationPending();
   return (
     <SidebarProvider
@@ -64,6 +53,7 @@ function AuthenticatedShell() {
 function PublicShell() {
   const { user, logout } = useAuth();
   const { t } = useTranslation('app');
+  const [logoutFailed, setLogoutFailed] = useState(false);
   return (
     <div>
       <header className="flex items-center gap-4 border-b px-8 py-3">
@@ -76,9 +66,13 @@ function PublicShell() {
           {user ? (
             <>
               <span>{user.username}</span>
-              <Button type="button" variant="outline" onClick={() => void logout()}>
+              <Button type="button" variant="outline" onClick={() => {
+                setLogoutFailed(false);
+                void logout().catch(() => setLogoutFailed(true));
+              }}>
                 {t('logout')}
               </Button>
+              {logoutFailed && <span role="alert" className="text-destructive">{t('logoutFailed')}</span>}
             </>
           ) : (
             <Link to="/login">{t('signIn')}</Link>

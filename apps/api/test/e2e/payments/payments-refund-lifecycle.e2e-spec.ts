@@ -7,54 +7,28 @@ import {
 } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, createEnrolInstance } from '../../support/course-enrolment-helpers';
 import { TenantConfigService } from '../../../src/modules/tenants/tenant-config.service';
-// Từ issue #539, nhịp quét matching chạy ở worker nên tiến trình API trong test
-// không còn tự quét: mỗi vòng chờ dẫn một nhịp qua cầu dẫn này rồi mới đọc trạng thái.
+// Từ issue #539, nhịp quét matching chạy ở worker nên tiến trình API trong test không còn tự quét: mỗi vòng chờ dẫn một nhịp qua cầu dẫn này rồi mới đọc trạng thái.
 import { closeSepaySweepDriver, driveSepaySweep } from '../../support/sepay-sweep-driver';
 
 /**
- * Lát 3 (cuối) của issue #189 — vòng đời duyệt hoàn + hàng đợi
- * `needs_review` theo chủ tiền. Bộ ca bám hai quyết định vận hành đã
- * ghi trong issue và ba yêu cầu kỹ thuật đi kèm:
+ * Lát 3 (cuối) của issue #189 — vòng đời duyệt hoàn + hàng đợi `needs_review` theo chủ tiền. Bộ ca bám hai quyết định vận hành đã ghi trong issue và ba yêu cầu kỹ thuật đi kèm:
  *  1. Tạo yêu cầu hoàn: lý do BẮT BUỘC; một cấp (tự duyệt ngay) khi
- *     hoàn một phần dưới ngưỡng; HAI CẤP khi lần hoàn từ ngưỡng trở
- *     lên hoặc làm cộng dồn đạt 100% — ngưỡng là khoá cấu hình
- *     `refunddualapprovalthreshold` (mặc định 1.000.000, ghi đè được).
+ *     hoàn một phần dưới ngưỡng; HAI CẤP khi lần hoàn từ ngưỡng trở lên hoặc làm cộng dồn đạt 100% — ngưỡng là khoá cấu hình `refunddualapprovalthreshold` (mặc định 1.000.000, ghi đè được).
  *  2. Duyệt cấp 2 phải KHÁC người tạo (chặn ở service, mã
- *     `payment.refund_approver_must_differ`); từ chối bắt buộc lý do
- *     và giải phóng ngân sách cộng dồn.
+ *     `payment.refund_approver_must_differ`); từ chối bắt buộc lý do và giải phóng ngân sách cộng dồn.
  *  3. Cổng cộng dồn NGUYÊN TỬ: hai yêu cầu song song vượt tổng thì
- *     đúng một yêu cầu qua, một yêu cầu nhận
- *     `payment.refund_exceeds_total`.
+ *     đúng một yêu cầu qua, một yêu cầu nhận `payment.refund_exceeds_total`.
  *  4. Đảo quyền lợi CHỈ tại mốc `settled` khi cộng dồn đã chi đạt
- *     100%, theo thứ tự đình chỉ-trước-ghi-sau: khâu đình chỉ lỗi ⇒
- *     chưa ghi gì, khoản thu còn `succeeded`, gọi lại được. Quyết
- *     định đình chỉ phải dựa trên tổng đã khoá dòng khoản thu: hai
- *     dòng hoàn bù nhau cùng xác nhận chi ĐỒNG THỜI thì lượt làm
- *     cộng dồn đạt 100% phải đình chỉ thật — không được lật
- *     `refunded` trong khi quyền lợi chưa hề bị đình chỉ (ca 10).
+ *     100%, theo thứ tự đình chỉ-trước-ghi-sau: khâu đình chỉ lỗi ⇒ chưa ghi gì, khoản thu còn `succeeded`, gọi lại được. Quyết định đình chỉ phải dựa trên tổng đã khoá dòng khoản thu: hai dòng hoàn bù nhau cùng xác nhận chi ĐỒNG THỜI thì lượt làm cộng dồn đạt 100% phải đình chỉ thật — không được lật `refunded` trong khi quyền lợi chưa hề bị đình chỉ (ca 10).
  *  5. Sự kiện `debit` SePay khớp dòng hoàn đang chờ theo (mã lệnh
- *     chi, tài khoản, số tiền) → tự xác nhận chi; debit không khớp →
- *     `needs_review` của chủ tài khoản, hiện trong hàng đợi.
+ *     chi, tài khoản, số tiền) → tự xác nhận chi; debit không khớp → `needs_review` của chủ tài khoản, hiện trong hàng đợi.
  *  6. Hàng đợi chia theo chủ tiền: trung tâm chỉ thấy/xử lý khoản chờ
- *     của mình (gồm tự hoàn học phí bằng cổng neo tại context tenant),
- *     platform không thấy khoản của trung tâm; vết xử lý bắt buộc;
- *     quá hạn theo `payments/reviewtargethours` chỉ là cảnh báo.
+ *     của mình (gồm tự hoàn học phí bằng cổng neo tại context tenant), platform không thấy khoản của trung tâm; vết xử lý bắt buộc; quá hạn theo `payments/reviewtargethours` chỉ là cảnh báo.
  *  7. Ba chốt kỹ thuật của lượt dọn antipattern backend (ca 11–13):
- *     duyệt/từ chối hoàn chuyển trạng thái bằng cập nhật CÓ ĐIỀU KIỆN
- *     nên hai lượt đua trên cùng một dòng chỉ một lượt thắng, lượt
- *     thua nhận mã lỗi trạng thái của chính đường gọi đó; đối soát
- *     `reconcile` đếm ở SQL và khớp phép đếm độc lập; hàng đợi duyệt
- *     tra cấu hình ngưỡng quá hạn tối đa một lần cho mỗi tenant
- *     trong một lần dựng.
- * Đổi luật (bỏ bắt buộc lý do, cho tự duyệt hai cấp, đảo quyền lợi
- * sớm hơn mốc settled, rò khoản chờ chéo tenant…) thì ca tương ứng
- * phải đỏ.
+ *     duyệt/từ chối hoàn chuyển trạng thái bằng cập nhật CÓ ĐIỀU KIỆN nên hai lượt đua trên cùng một dòng chỉ một lượt thắng, lượt thua nhận mã lỗi trạng thái của chính đường gọi đó; đối soát `reconcile` đếm ở SQL và khớp phép đếm độc lập; hàng đợi duyệt tra cấu hình ngưỡng quá hạn tối đa một lần cho mỗi tenant trong một lần dựng. Đổi luật (bỏ bắt buộc lý do, cho tự duyệt hai cấp, đảo quyền lợi sớm hơn mốc settled, rò khoản chờ chéo tenant…) thì ca tương ứng phải đỏ.
  */
 const WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET ?? '';
-// Định danh SePay RIÊNG của spec này — tuyệt đối không trùng xid/số
-// tài khoản với các spec payments khác (DB test dùng chung cho cả
-// suite; hai tài khoản cùng xid sẽ làm định tuyến IPN lệch tài khoản
-// và khoản thu của spec khác rơi vào needs_review oan).
+// Định danh SePay RIÊNG của spec này — tuyệt đối không trùng xid/số tài khoản với các spec payments khác (DB test dùng chung cho cả suite; hai tài khoản cùng xid sẽ làm định tuyến IPN lệch tài khoản và khoản thu của spec khác rơi vào needs_review oan).
 const SEPAY_KEY = 'sk-test-sepay-slice3-3e7a';
 const SEPAY_XID = 'xid-test-slice3-001';
 const BANK_ACCOUNT = '113366667777';

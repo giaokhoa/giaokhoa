@@ -1,12 +1,5 @@
 /**
- * Sinh PDF phiếu trả lời CAM-0 (issue #112) bằng pdf-lib: vẽ vector đúng
- * hình học template của `sheet-layout.ts` (MỘT nguồn sự thật cho PDF +
- * ảnh mô phỏng + engine OMR). Mỗi trang là một phiếu A4: 4 fiducial,
- * QR (phiếu cá nhân hoá mang userId; phiếu dùng chung chỉ mang mã lô +
- * mã đề), vùng mã (phiếu dùng chung in lưới ô tô mã học sinh + vùng
- * ghi/tô mã đề; phiếu cá nhân hoá in sẵn tên + mã), lưới đáp án theo
- * layout đã ghim của lô. Font DejaVu đã vendor trong `assets/` để chữ
- * tiếng Việt in đúng dấu trên máy in trường học thông thường.
+ * Sinh PDF phiếu trả lời CAM-0 (issue #112) bằng pdf-lib: vẽ vector đúng hình học template của `sheet-layout.ts` (MỘT nguồn sự thật cho PDF + ảnh mô phỏng + engine OMR). Mỗi trang là một phiếu A4: 4 fiducial, QR (phiếu cá nhân hoá mang userId; phiếu dùng chung chỉ mang mã lô + mã đề), vùng mã (phiếu dùng chung in lưới ô tô mã học sinh + vùng ghi/tô mã đề; phiếu cá nhân hoá in sẵn tên + mã), lưới đáp án theo layout đã ghim của lô. Font DejaVu đã vendor trong `assets/` để chữ tiếng Việt in đúng dấu trên máy in trường học thông thường.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -21,12 +14,7 @@ import {
 } from './sheet-layout';
 
 /**
- * Tiền tố payload QR trên phiếu: `GKHQ1|<batchId>|<lotCode>|<userId|''>`.
- * lotCode là mã định danh của lô in: mã đề 4 số (examCode) với lô có
- * mã đề số, ngược lại là variantCode. Phiếu DÙNG CHUNG không bao giờ
- * mang userId — QR của phiếu chung chỉ định danh buổi/variant (lớp dự
- * phòng định tuyến khi lưới tô mã đề không đọc được), định danh học
- * sinh luôn đi qua lưới ô tô mã + roster.
+ * Tiền tố payload QR trên phiếu: `GKHQ1|<batchId>|<lotCode>|<userId|''>`. lotCode là mã định danh của lô in: mã đề 4 số (examCode) với lô có mã đề số, ngược lại là variantCode. Phiếu DÙNG CHUNG không bao giờ mang userId — QR của phiếu chung chỉ định danh buổi/variant (lớp dự phòng định tuyến khi lưới tô mã đề không đọc được), định danh học sinh luôn đi qua lưới ô tô mã + roster.
  */
 export const SHEET_QR_PREFIX = 'GKHQ1';
 

@@ -39,12 +39,7 @@ import { QuizSharedService } from './quiz-shared.service';
 import { QUIZ_CAPABILITIES } from './quiz-shared.service';
 
 /**
- * Cụm ma trận đề của QuizService (cụm 2 của issue #295): CRUD ma trận
- * và ô ma trận, nhập ma trận từ file, phiên bản ma trận (fork version
- * của issue #228), độ phủ/availability, và cổng bank cá nhân
- * `requirePersonalMatrixBankManage` (neo bank đích của issue #233).
- * Cụm này chỉ gọi xuống tầng thấp dùng chung (`QuizSharedService`),
- * không phụ thuộc cụm ca sử dụng nào khác.
+ * Cụm ma trận đề của QuizService (cụm 2 của issue #295): CRUD ma trận và ô ma trận, nhập ma trận từ file, phiên bản ma trận (fork version của issue #228), độ phủ/availability, và cổng bank cá nhân `requirePersonalMatrixBankManage` (neo bank đích của issue #233). Cụm này chỉ gọi xuống tầng thấp dùng chung (`QuizSharedService`), không phụ thuộc cụm ca sử dụng nào khác.
  */
 
 export class QuizMatricesService {
@@ -66,12 +61,7 @@ export class QuizMatricesService {
   }
 
   /**
-   * Tạo một lần GHIM đề vào khoá (thực thể duy nhất thay quiz +
-   * deployment): bản ghi exam_pins neo (exam, exam version) + course
-   * module (component mod_quiz, completion tự động theo điểm) + grade
-   * item 'mod' mang thang điểm của exam version. Cổng exam:deploy tại
-   * bank của đề + trạng thái ready của đề do ExamsService kiểm trước
-   * khi gọi; quyền tạo hoạt động do CoursesService kiểm
+   * Tạo một lần GHIM đề vào khoá (thực thể duy nhất thay quiz + deployment): bản ghi exam_pins neo (exam, exam version) + course module (component mod_quiz, completion tự động theo điểm) + grade item 'mod' mang thang điểm của exam version. Cổng exam:deploy tại bank của đề + trạng thái ready của đề do ExamsService kiểm trước khi gọi; quyền tạo hoạt động do CoursesService kiểm
    * (course:manageactivities); các thao tác về sau kiểm quiz:manage
    * tại context của module.
    */

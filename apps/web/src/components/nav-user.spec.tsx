@@ -8,13 +8,8 @@ import { queryClient } from '#lib/query-client';
 import { baSessionResponse, isGetSessionUrl } from '#test/ba-session';
 
 /**
- * Test hồi quy cho menu tài khoản ở chân sidebar (NavUser): trên bản
- * live sau đợt chuyển Radix → Base UI, bấm nút ba chấm cạnh hồ sơ làm
- * sập toàn màn hình sang trang lỗi dự phòng ở cả phiên admin lẫn học
- * viên. Test dựng đúng cây thật (App của root → Shell → sidebar thật),
- * phiên đăng nhập resolve ngay, rồi bấm mở menu như người dùng:
- * menu phải hiện đủ mục "Hồ sơ" và "Đăng xuất" và không được ném lỗi
- * render nào (không có trang lỗi dự phòng nào thay thế màn hình).
+ * Test hồi quy cho menu tài khoản ở chân sidebar (NavUser): trên bản live sau đợt chuyển Radix → Base UI, bấm nút ba chấm cạnh hồ sơ làm sập toàn màn hình sang trang lỗi dự phòng ở cả phiên admin lẫn học viên. Test dựng đúng cây thật (App của root → Shell → sidebar thật), phiên đăng nhập resolve ngay, rồi bấm mở menu như người dùng:
+ * menu phải hiện đủ mục "Hồ sơ" và "Đăng xuất" và không được ném lỗi render nào (không có trang lỗi dự phòng nào thay thế màn hình).
  */
 
 const ADMIN_ID = '01900000-0000-7000-8000-0000000000a1';
@@ -86,8 +81,7 @@ beforeAll(() => {
     removeEventListener: vi.fn(),
     dispatchEvent: vi.fn(),
   }));
-  // jsdom không có ResizeObserver; lớp định vị của menu (Floating UI
-  // qua Base UI) quan sát kích thước phần tử neo khi menu mở.
+  // jsdom không có ResizeObserver; lớp định vị của menu (Floating UI qua Base UI) quan sát kích thước phần tử neo khi menu mở.
   vi.stubGlobal(
     'ResizeObserver',
     class {

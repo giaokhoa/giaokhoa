@@ -11,12 +11,7 @@ import { apiJson } from '#lib/api';
 import type { CourseConversationView, MemberRow } from '../types/course-admin';
 
 /**
- * Tầng gọi API thuần của trang quản trị khoá học thuộc feature
- * courses: chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay
- * React Query. Tầng `queries/` của feature bọc các hàm này thành
- * queryOptions, hook và đột biến. Tách từ module dữ liệu phẳng
- * `src/lib/course-admin-data.ts` khi tổ chức lại apps/web theo mô
- * hình features/ (issue #500).
+ * Tầng gọi API thuần của trang quản trị khoá học thuộc feature courses: chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành queryOptions, hook và đột biến. Tách từ module dữ liệu phẳng `src/lib/course-admin-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
 
 /**

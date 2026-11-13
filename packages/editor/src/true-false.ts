@@ -49,9 +49,7 @@ export const STATEMENT_LIST_NODE_TYPE = 'statementList';
 export const STATEMENT_NODE_TYPE = 'statement';
 
 /**
- * Một mệnh đề trong tài liệu soạn: node `statement` với `attrs.id` là
- * định danh ổn định và `content` là các block rich text của nội dung
- * mệnh đề (cùng lát block với hợp đồng).
+ * Một mệnh đề trong tài liệu soạn: node `statement` với `attrs.id` là định danh ổn định và `content` là các block rich text của nội dung mệnh đề (cùng lát block với hợp đồng).
  */
 export interface TrueFalseStatementJson {
   type: typeof STATEMENT_NODE_TYPE;

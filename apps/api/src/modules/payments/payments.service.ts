@@ -32,20 +32,13 @@ export const PAYMENT_GATEWAY = Symbol('PAYMENT_GATEWAY');
 export interface PaymentGateway {
   name: string;
   /**
-   * Xác thực một webhook đúng là của gateway. Đây là cổng BẮT BUỘC của
-   * đường webhook (vá H1, issue #134): `handleWebhook` gọi verify TRƯỚC
-   * mọi xử lý — false ⇒ từ chối, không đổi trạng thái payment, không phát
-   * sự kiện, không kích hoạt nghiệp vụ hưởng lợi (enrol có phí).
+   * Xác thực một webhook đúng là của gateway. Đây là cổng BẮT BUỘC của đường webhook (vá H1, issue #134): `handleWebhook` gọi verify TRƯỚC mọi xử lý — false ⇒ từ chối, không đổi trạng thái payment, không phát sự kiện, không kích hoạt nghiệp vụ hưởng lợi (enrol có phí).
    */
   verify(input: PaymentWebhookVerificationInput): Promise<boolean>;
 }
 
 /**
- * Adapter manual: không gọi mạng; xác thực bằng shared secret cấu hình qua
- * biến môi trường `PAYMENT_WEBHOOK_SECRET`, mang trong header
- * `x-payment-webhook-secret`, so sánh hằng-thời-gian. Chưa cấu hình secret
- * ⇒ verify LUÔN false (fail-closed): tuyệt đối không có chế độ "chưa có
- * gateway thật thì bỏ qua verify".
+ * Adapter manual: không gọi mạng; xác thực bằng shared secret cấu hình qua biến môi trường `PAYMENT_WEBHOOK_SECRET`, mang trong header `x-payment-webhook-secret`, so sánh hằng-thời-gian. Chưa cấu hình secret ⇒ verify LUÔN false (fail-closed): tuyệt đối không có chế độ "chưa có gateway thật thì bỏ qua verify".
  */
 @Injectable()
 export class ManualPaymentGateway implements PaymentGateway {
@@ -78,75 +71,32 @@ export interface SepayIpnInput {
 
 /**
  * Các component CẤP QUYỀN LỢI của pipeline thanh toán (issue #419):
- * payment mang một trong bốn component này, khi chốt thành công, sẽ
- * sinh ghi danh khoá (`enrol_fee`), ghi danh lớp + membership tenant
- * của lớp (`class_fee`) hoặc quyền lợi gói (`tenant_plan` /
- * `teacher_plan`). Vì hệ quả đó, chúng chỉ được sinh từ các đường
- * tạo chuyên trách đã chốt giá phía server; đường tạo chung và phép
- * đối chiếu tại điểm kích hoạt đều neo vào danh sách này.
+ * payment mang một trong bốn component này, khi chốt thành công, sẽ sinh ghi danh khoá (`enrol_fee`), ghi danh lớp + membership tenant của lớp (`class_fee`) hoặc quyền lợi gói (`tenant_plan` / `teacher_plan`). Vì hệ quả đó, chúng chỉ được sinh từ các đường tạo chuyên trách đã chốt giá phía server; đường tạo chung và phép đối chiếu tại điểm kích hoạt đều neo vào danh sách này.
  */
 export const ENTITLEMENT_COMPONENTS = ['enrol_fee', 'class_fee', 'tenant_plan', 'teacher_plan'] as const;
 
 /**
- * Facade của PaymentsModule (Moodle core_payment, §2#27).
- * Bất biến: amount là số nguyên đơn vị nhỏ nhất + currency (không float);
- * payment thành công là bất biến — hoàn tiền là giao dịch bù trừ riêng;
- * webhook idempotent theo external transaction id (replay không xử lý 2 lần);
- * nghiệp vụ hưởng lợi (enrol có phí) chỉ kích hoạt qua PaymentSucceeded
- * của một webhook ĐÃ QUA gateway.verify (H1, #134).
+ * Facade của PaymentsModule (Moodle core_payment, §2#27). Bất biến: amount là số nguyên đơn vị nhỏ nhất + currency (không float); payment thành công là bất biến — hoàn tiền là giao dịch bù trừ riêng; webhook idempotent theo external transaction id (replay không xử lý 2 lần); nghiệp vụ hưởng lợi (enrol có phí) chỉ kích hoạt qua PaymentSucceeded của một webhook ĐÃ QUA gateway.verify (H1, #134).
  *
- * Lát 1 VietQR (#189, hồ sơ payment-vietqr §4.3/§6): payment_accounts và
- * payments gắn tenant sở hữu; payment trên account SePay đã liên kết được
- * sinh mã thanh toán + QR động; tiền về qua IPN SePay chỉ kích hoạt khi
- * khớp đủ 3 điều kiện ở khâu matching bất đồng bộ (SepayMatchingService).
+ * Lát 1 VietQR (#189, hồ sơ payment-vietqr §4.3/§6): payment_accounts và payments gắn tenant sở hữu; payment trên account SePay đã liên kết được sinh mã thanh toán + QR động; tiền về qua IPN SePay chỉ kích hoạt khi khớp đủ 3 điều kiện ở khâu matching bất đồng bộ (SepayMatchingService).
  *
- * CLASS-3 (#184): component `class_fee` (item_id = classes.id) chạy trên
- * đúng pipeline này — tạo payment qua cấu hình học phí trên lớp
+ * CLASS-3 (#184): component `class_fee` (item_id = classes.id) chạy trên đúng pipeline này — tạo payment qua cấu hình học phí trên lớp
  * (`createClassFeePayment`), kích hoạt ghi danh cấp lớp khi succeeded,
  * đình chỉ khỏi lớp khi hoàn đủ; không có pipeline thanh toán riêng.
  *
- * Lát 2 (#189): component `tenant_plan`/`teacher_plan` (gói trung tâm /
- * gói giáo viên) cũng chạy trên đúng pipeline này — tạo payment qua
- * `createPlanPayment` với GIÁ LẤY TỪ CẤU HÌNH HỆ THỐNG (component
- * `payments` của site-config; giá không ghim trong code), ghi vết giá +
- * chu kỳ đã áp vào `payments.data`; kích hoạt quyền lợi gói khi
- * succeeded và đình chỉ quyền lợi khi hoàn đủ qua
- * `PlanEntitlementsService`; không có pipeline thanh toán riêng.
+ * Lát 2 (#189): component `tenant_plan`/`teacher_plan` (gói trung tâm / gói giáo viên) cũng chạy trên đúng pipeline này — tạo payment qua `createPlanPayment` với GIÁ LẤY TỪ CẤU HÌNH HỆ THỐNG (component `payments` của site-config; giá không ghim trong code), ghi vết giá + chu kỳ đã áp vào `payments.data`; kích hoạt quyền lợi gói khi succeeded và đình chỉ quyền lợi khi hoàn đủ qua `PlanEntitlementsService`; không có pipeline thanh toán riêng.
  *
- * Lát 3 (#189): hoàn tiền chuyển từ một bước sang VÒNG ĐỜI duyệt
- * `requested → approved → settled` (hoặc `rejected`) trên bảng
- * `payment_refunds` — tạo yêu cầu (cổng cộng dồn nguyên tử có khoá
- * dòng), duyệt (một cấp tự duyệt / hai cấp khác người tạo), xác nhận
- * chi (đảo quyền lợi tại đây khi cộng dồn đã chi đạt 100%, thứ tự đình
- * chỉ-trước-ghi-sau); sự kiện `debit` của SePay tự xác nhận chi khi
- * khớp dòng hoàn đang chờ, không khớp thì vào hàng đợi `needs_review`
- * của chủ tiền. Hàng đợi `needs_review` và cổng `payment:manageaccounts`
- * đều NEO THEO CHỦ TIỀN: tiền platform gác tại context hệ thống, tiền
- * của trung tâm gác tại context tenant của chính trung tâm đó.
+ * Lát 3 (#189): hoàn tiền chuyển từ một bước sang VÒNG ĐỜI duyệt `requested → approved → settled` (hoặc `rejected`) trên bảng `payment_refunds` — tạo yêu cầu (cổng cộng dồn nguyên tử có khoá dòng), duyệt (một cấp tự duyệt / hai cấp khác người tạo), xác nhận chi (đảo quyền lợi tại đây khi cộng dồn đã chi đạt 100%, thứ tự đình chỉ-trước-ghi-sau); sự kiện `debit` của SePay tự xác nhận chi khi khớp dòng hoàn đang chờ, không khớp thì vào hàng đợi `needs_review` của chủ tiền. Hàng đợi `needs_review` và cổng `payment:manageaccounts` đều NEO THEO CHỦ TIỀN: tiền platform gác tại context hệ thống, tiền của trung tâm gác tại context tenant của chính trung tâm đó.
  *
- * Chốt chặn component cấp quyền (issue #419): bốn component sinh
- * quyền lợi (`enrol_fee`, `class_fee`, `tenant_plan`, `teacher_plan`)
- * CHỈ được sinh từ các đường tạo chuyên trách đã chốt giá phía
- * server (`createFeePayment`, `createClassFeePayment`,
- * `createPlanPayment`) — đường tạo chung `createPayment` từ chối
- * chúng, vì giá và bên hưởng của một giao dịch cấp quyền chỉ lấy từ
- * đối tượng phía server (instance/lớp/cấu hình gói), không bao giờ
- * lấy từ `amount`/`itemId` do client gửi lên. Phòng thủ chiều sâu:
- * cả ba điểm kích hoạt quyền lợi (matching SePay, webhook,
- * `resolvePaymentReview`) đều đối chiếu lại payment với giá + tenant
- * phía server của đối tượng đích qua
- * `verifyPaymentAgainstServerTarget` trước khi kích hoạt; lệch thì
- * rơi vào hàng đợi `needs_review`, không kích hoạt.
+ * Chốt chặn component cấp quyền (issue #419): bốn component sinh quyền lợi (`enrol_fee`, `class_fee`, `tenant_plan`, `teacher_plan`) CHỈ được sinh từ các đường tạo chuyên trách đã chốt giá phía server (`createFeePayment`, `createClassFeePayment`, `createPlanPayment`) — đường tạo chung `createPayment` từ chối chúng, vì giá và bên hưởng của một giao dịch cấp quyền chỉ lấy từ đối tượng phía server (instance/lớp/cấu hình gói), không bao giờ lấy từ `amount`/`itemId` do client gửi lên. Phòng thủ chiều sâu:
+ * cả ba điểm kích hoạt quyền lợi (matching SePay, webhook, `resolvePaymentReview`) đều đối chiếu lại payment với giá + tenant phía server của đối tượng đích qua `verifyPaymentAgainstServerTarget` trước khi kích hoạt; lệch thì rơi vào hàng đợi `needs_review`, không kích hoạt.
  */
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
 
   constructor(
-    // Các transaction của facade (tạo yêu cầu hoàn, xác nhận chi) mở
-    // từ `repo.transaction` — handle Kysely định tuyến mà module tiêm
-    // cho repository — để `tx` truyền đồng thời cho repository của
-    // package dùng chung `@giaokhoa/payments` và cho các service của API
+    // Các transaction của facade (tạo yêu cầu hoàn, xác nhận chi) mở từ `repo.transaction` — handle Kysely định tuyến mà module tiêm cho repository — để `tx` truyền đồng thời cho repository của package dùng chung `@giaokhoa/payments` và cho các service của API
     // (enrol, classes) trong CÙNG một transaction mà vẫn khớp kiểu ở
     // cả hai phía (issue #538, điểm nối C-8/C đã đóng ở #656).
     private readonly repo: PaymentsRepository,
@@ -170,17 +120,7 @@ export class PaymentsService {
   }
 
   /**
-   * Cổng `payment:manageaccounts` NEO THEO CHỦ TIỀN (lát 3, issue #189 —
-   * sửa nền vận hành thanh toán của trung tâm): tiền của tenant
-   * platform được gác tại CONTEXT HỆ THỐNG như trước; tiền của một
-   * trung tâm được gác tại CONTEXT TENANT của chính trung tâm đó —
-   * quản trị trung tâm (archetype `manager`) có quyền hoàn/khớp tay học
-   * phí của trung tâm mình bằng tài khoản của trung tâm mình, và trung
-   * tâm cấp thêm được quyền này cho vai tuỳ biến (ví dụ kế toán) qua cơ
-   * chế gán vai sẵn có. Đường context tenant của PermissionEvaluator
-   * vốn đã áp cổng tenant (chỉ thành viên đang hoạt động của tenant mới
-   * qua, không có lối tắt quản trị toàn site) nên vai trò của tenant
-   * khác không chạm được tiền của tenant này.
+   * Cổng `payment:manageaccounts` NEO THEO CHỦ TIỀN (lát 3, issue #189 — sửa nền vận hành thanh toán của trung tâm): tiền của tenant platform được gác tại CONTEXT HỆ THỐNG như trước; tiền của một trung tâm được gác tại CONTEXT TENANT của chính trung tâm đó — quản trị trung tâm (archetype `manager`) có quyền hoàn/khớp tay học phí của trung tâm mình bằng tài khoản của trung tâm mình, và trung tâm cấp thêm được quyền này cho vai tuỳ biến (ví dụ kế toán) qua cơ chế gán vai sẵn có. Đường context tenant của PermissionEvaluator vốn đã áp cổng tenant (chỉ thành viên đang hoạt động của tenant mới qua, không có lối tắt quản trị toàn site) nên vai trò của tenant khác không chạm được tiền của tenant này.
    */
   private async requireManageAccountsForTenant(actorId: string, tenantId: string): Promise<void> {
     if (tenantId === (await this.platformTenantId())) {
@@ -193,9 +133,7 @@ export class PaymentsService {
   }
 
   /**
-   * Cổng quản trị tài khoản nhận tiền theo PHIÊN hiện tại: neo tại
-   * tenant hiệu lực của phiên (platform → context hệ thống; trung tâm
-   * đã chuyển ngữ cảnh → context tenant của trung tâm đó).
+   * Cổng quản trị tài khoản nhận tiền theo PHIÊN hiện tại: neo tại tenant hiệu lực của phiên (platform → context hệ thống; trung tâm đã chuyển ngữ cảnh → context tenant của trung tâm đó).
    */
   private async requireManageAccounts(actorId: string): Promise<void> {
     await this.requireManageAccountsForTenant(actorId, await this.effectiveTenantId());

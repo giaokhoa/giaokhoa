@@ -10,8 +10,7 @@ import { MatrixEditPage, MatrixNewPage } from './routes/question-matrix';
 /**
  * Ngân hàng ma trận (MB-1, issue #111) ở tầng UI:
  *  - trang /matrices liệt kê ma trận cá nhân hiện thẳng (không bọc
- *    thẻ thu/mở — chốt 23:43 ngày 26/10/2026) + nút Ma trận mới ở
- *    PageHeader;
+ *    thẻ thu/mở — chốt 23:43 ngày 26/10/2026) + nút Ma trận mới ở PageHeader;
  *  - section "Ngân hàng ma trận chung" trong Ngân hàng hệ thống: chọn
  *    bank → thấy mẫu → nút "Lấy về" gọi đúng endpoint;
  *  - màn tạo ma trận riêng (§9) gửi bankId = bank ma trận cá nhân;

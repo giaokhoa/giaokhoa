@@ -7,15 +7,13 @@ import { SearchController } from './search.controller';
 import { PostgresSearchEngine, SEARCH_ENGINE, SearchService } from './search.service';
 
 /**
- * SearchModule facade: SearchService. Engine là PORT (SEARCH_ENGINE) với
- * adapter Postgres thật; area là registry đảo ngược.
+ * SearchModule facade: SearchService. Engine là PORT (SEARCH_ENGINE) với adapter Postgres thật; area là registry đảo ngược.
  */
 @Module({
   imports: [AccessModule, SpaceRoutingModule],
   controllers: [SearchController],
   providers: [
-    // Repository của package @giaokhoa/db chạy trên handle Kysely đã định
-    // tuyến theo không gian (issue #648).
+    // Repository của package @giaokhoa/db chạy trên handle Kysely đã định tuyến theo không gian (issue #648).
     {
       provide: SearchRepository,
       useFactory: (spaceDatabase: SpaceDatabaseService) => new SearchRepository(spaceDatabase.routedKysely),

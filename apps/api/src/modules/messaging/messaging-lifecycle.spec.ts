@@ -3,11 +3,7 @@ import { blankRecalledContent, type MessageRow } from '@giaokhoa/messaging';
 import { isWithinRecallWindow } from './messaging.service';
 
 /**
- * Kiểm chứng đơn vị cho hai luật thuần của vòng đời tin nhắn theo
- * vai (issue #33): biên cửa sổ THU HỒI và vô hiệu nội dung khi trình
- * bày một tin đã thu hồi. Phần nghiệp vụ đầy đủ (quyền theo vai, dấu
- * vết moderator_action, realtime) nằm ở spec e2e
- * messaging-message-lifecycle.
+ * Kiểm chứng đơn vị cho hai luật thuần của vòng đời tin nhắn theo vai (issue #33): biên cửa sổ THU HỒI và vô hiệu nội dung khi trình bày một tin đã thu hồi. Phần nghiệp vụ đầy đủ (quyền theo vai, dấu vết moderator_action, realtime) nằm ở spec e2e messaging-message-lifecycle.
  */
 describe('isWithinRecallWindow (cửa sổ thu hồi)', () => {
   const sentAt = new Date('2026-10-25T00:00:00.000Z');

@@ -8,8 +8,7 @@ import { OutcomeForm } from './outcome-form';
 export function AdminOutcomeNewPage() {
   const { t } = useTranslation('app');
   const { nodeId } = useParams();
-  // Node cha chỉ để suy đường quay lại cây của đúng chương trình
-  // chứa node — đọc qua TanStack Query (F-01 của rà soát #133).
+  // Node cha chỉ để suy đường quay lại cây của đúng chương trình chứa node — đọc qua TanStack Query (F-01 của rà soát #133).
   const nodeQuery = useCurriculumNode(nodeId);
   const node = nodeQuery.data;
   if (!nodeId) return null;

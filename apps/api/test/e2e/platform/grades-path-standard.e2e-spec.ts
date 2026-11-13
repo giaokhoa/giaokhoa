@@ -9,15 +9,10 @@ import { createGradeItem, setGrade } from '../../support/assessment-helpers';
  *
  * Khẳng định chính còn lại ở spec này (hành vi qua HTTP):
  * - Bảng route tĩnh của bề mặt điểm (25 cặp method + path: 13 route
- *   canonical mới cộng 12 route alias cũ) nay được ghim ở spec hợp
- *   đồng bảng route tại tầng integration:
+ *   canonical mới cộng 12 route alias cũ) nay được ghim ở spec hợp đồng bảng route tại tầng integration:
  *   `test/integration/platform/route-table-contract.int-spec.ts`.
  * - Hành vi alias: path cũ vẫn tới được đúng handler (trả kết quả như
- *   canonical), response qua alias mang header Deprecation/Sunset và
- *   mỗi lượt gọi alias sinh log có cấu trúc `deprecated_route_alias`;
- *   path canonical không mang header đó. Log alias là căn cứ của điều
- *   kiện gỡ alias (0 lượt gọi trong 14 ngày), nên spec kiểm cả nội
- *   dung bản ghi log, không chỉ kiểm header.
+ *   canonical), response qua alias mang header Deprecation/Sunset và mỗi lượt gọi alias sinh log có cấu trúc `deprecated_route_alias`; path canonical không mang header đó. Log alias là căn cứ của điều kiện gỡ alias (0 lượt gọi trong 14 ngày), nên spec kiểm cả nội dung bản ghi log, không chỉ kiểm header.
  */
 describe('Chuẩn đường dẫn điểm (issue #342)', () => {
   let app: INestApplication;
@@ -45,8 +40,7 @@ describe('Chuẩn đường dẫn điểm (issue #342)', () => {
     const item = await createGradeItem(app, admin, course.id, { itemName: 'Path standard item', gradeMax: 10 });
     await setGrade(app, admin, item.id, student.id, 8);
 
-    // Bắt đầu theo dõi log cảnh báo sau khi dựng xong bằng canonical,
-    // để các bản ghi bắt được chỉ đến từ các lượt gọi alias dưới đây.
+    // Bắt đầu theo dõi log cảnh báo sau khi dựng xong bằng canonical, để các bản ghi bắt được chỉ đến từ các lượt gọi alias dưới đây.
     const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
 
     // GET alias danh sách item: vẫn trả 200 như canonical, kèm header sắp bỏ.

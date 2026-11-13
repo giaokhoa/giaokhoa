@@ -54,8 +54,7 @@ describe('Cài đặt — trang tài khoản liên kết (thẻ chuyển từ H�
     localStorage.clear();
   });
   afterEach(() => {
-    // Dự án không bật auto-cleanup của Testing Library nên phải dọn
-    // DOM tường minh, tránh cây render của test trước sót sang test sau.
+    // Dự án không bật auto-cleanup của Testing Library nên phải dọn DOM tường minh, tránh cây render của test trước sót sang test sau.
     cleanup();
     vi.unstubAllGlobals();
   });

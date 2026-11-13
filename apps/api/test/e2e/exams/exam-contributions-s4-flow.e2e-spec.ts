@@ -9,30 +9,16 @@ import { ExamDossiersService } from '../../../src/modules/exams/exam-dossiers.se
 import { tenantAls } from '../../../src/modules/tenants/tenant-als';
 
 /**
- * Lát S4 của issue #228 — đường đóng góp DUY NHẤT của đề nâng lên
- * khuôn QB-4 đầy đủ, đối chiếu các tiêu chí đã chốt trong issue:
+ * Lát S4 của issue #228 — đường đóng góp DUY NHẤT của đề nâng lên khuôn QB-4 đầy đủ, đối chiếu các tiêu chí đã chốt trong issue:
  *  - mode 'update': đề xuất bản mới cho một đề đã có trong bank
- *    đích — thiếu targetExamId → 400 exam.contribution_target_required;
- *    đích không nằm trong bank đích → 400
- *    exam.contribution_target_not_in_bank; nguồn không phải bản sao
- *    suy từ đích → 400 exam.contribution_not_derived; hợp lệ →
- *    duyệt tạo VERSION MỚI trên chính danh tính đề đích
+ *    đích — thiếu targetExamId → 400 exam.contribution_target_required; đích không nằm trong bank đích → 400 exam.contribution_target_not_in_bank; nguồn không phải bản sao suy từ đích → 400 exam.contribution_not_derived; hợp lệ → duyệt tạo VERSION MỚI trên chính danh tính đề đích
  *    (result_exam_id = đề đích), mốc duyệt ghi vào sổ mốc duyệt.
  *  - bộ hồ sơ đính kèm (withDossier): đề không gắn ma trận → 400
- *    exam.contribution_dossier_requires_matrix; có bộ hồ sơ +
- *    tenant/bank đích bật cấu hình cấp duyệt 2 → duyệt cấp 1 chỉ
- *    sang pending_board (đề chưa vào bank), cổng cấp 2 chặn người
- *    không có exam:moderate tại context hệ thống (403
- *    exam.contribution_board_forbidden), ban giám hiệu duyệt mới
- *    chốt — bản vào bank là PHIÊN BẢN ĐÃ GHIM ở trạng thái ready;
- *    từ chối cấp 2 giữ vết cả hai cấp; cấu hình tắt → một cấp chốt.
+ *    exam.contribution_dossier_requires_matrix; có bộ hồ sơ + tenant/bank đích bật cấu hình cấp duyệt 2 → duyệt cấp 1 chỉ sang pending_board (đề chưa vào bank), cổng cấp 2 chặn người không có exam:moderate tại context hệ thống (403 exam.contribution_board_forbidden), ban giám hiệu duyệt mới chốt — bản vào bank là PHIÊN BẢN ĐÃ GHIM ở trạng thái ready; từ chối cấp 2 giữ vết cả hai cấp; cấu hình tắt → một cấp chốt.
  *  - chống trùng cho ma trận: đề xuất ghi content_hash và
- *    near_duplicate_of khi bank đích có ma trận trùng nội dung;
- *    duyệt đóng góp mà bank đích đã có bản copy suy từ chính ma
- *    trận nguồn → 409 quiz.matrix_duplicate_in_bank.
+ *    near_duplicate_of khi bank đích có ma trận trùng nội dung; duyệt đóng góp mà bank đích đã có bản copy suy từ chính ma trận nguồn → 409 quiz.matrix_duplicate_in_bank.
  *  - chuyển đổi hồ sơ treo (ExamDossiersService.convertLegacyDossiers):
- *    pending/pending_board → đóng góp mang bộ hồ sơ + lịch sử mốc
- *    duyệt (idempotent theo source_dossier_id); draft → đóng băng
+ *    pending/pending_board → đóng góp mang bộ hồ sơ + lịch sử mốc duyệt (idempotent theo source_dossier_id); draft → đóng băng
  *    (không sinh đóng góp); approved/rejected → giữ lịch sử.
  */
 

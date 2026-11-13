@@ -2,12 +2,7 @@ import { apiJson } from '#lib/api';
 import type { CourseGroup, ProgressReport } from '../types/progress-report';
 
 /**
- * Tầng gọi API thuần của trang báo cáo tiến độ thuộc feature
- * progress-report: chỉ chứa các hàm gọi HTTP, không phụ thuộc
- * React hay React Query. Tầng `queries/` của feature bọc các hàm
- * này thành queryOptions và hook. Tách từ module dữ liệu phẳng
- * `src/lib/progress-report-data.ts` khi tổ chức lại apps/web theo
- * mô hình features/ (issue #500).
+ * Tầng gọi API thuần của trang báo cáo tiến độ thuộc feature progress-report: chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành queryOptions và hook. Tách từ module dữ liệu phẳng `src/lib/progress-report-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
 
 /** Tải một endpoint phụ độc lập: lỗi thì trả null (giữ nguyên ngữ nghĩa probe của trang). */

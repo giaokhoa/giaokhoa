@@ -3,19 +3,15 @@ import { uuidIdSchema } from './ids.js';
 
 /**
  * Hợp đồng API của CONTROL PLANE (issue #580, chương trình tenant #579):
- * sổ đăng ký không gian (trung tâm / Trang chính) mà platform dùng để
- * biết mỗi không gian đang sống ở kho dữ liệu nào, cộng registry phiên
- * bản schema của từng kho đã đăng ký.
+ * sổ đăng ký không gian (trung tâm / Trang chính) mà platform dùng để biết mỗi không gian đang sống ở kho dữ liệu nào, cộng registry phiên bản schema của từng kho đã đăng ký.
  *
  * Ranh giới nghiệp vụ của tầng này:
  * - Sổ chỉ giữ bản ghi định tuyến tối thiểu (định danh địa chỉ, kho
- *   đích, vòng đời, gói dịch vụ) — nhận diện riêng của trung tâm (logo,
- *   thương hiệu) thuộc về dữ liệu của chính trung tâm, không ở đây.
+ *   đích, vòng đời, gói dịch vụ) — nhận diện riêng của trung tâm (logo, thương hiệu) thuộc về dữ liệu của chính trung tâm, không ở đây.
  * - `plan` chỉ là MÃ GÓI DỊCH VỤ được lưu lại; nghiệp vụ billing
  *   (hoá đơn, thu tiền) không thuộc hợp đồng này.
  * - Mọi trường bí mật chỉ là THAM CHIẾU (`secretRef`, ví dụ
- *   `env:CONTROL_PLANE_DATABASE_URL`) — giá trị bí mật không bao giờ
- *   đi qua API hay nằm trong database.
+ *   `env:CONTROL_PLANE_DATABASE_URL`) — giá trị bí mật không bao giờ đi qua API hay nằm trong database.
  * - Mọi thao tác ghi yêu cầu capability quản trị platform hiện hữu
  *   (`tenant:manage` tại context hệ thống) — tầng này không dựng mô
  *   hình tài khoản quản trị riêng.
@@ -103,10 +99,7 @@ export const spaceSchemaRegistrySchema = z.object({
 export type SpaceSchemaRegistry = z.infer<typeof spaceSchemaRegistrySchema>;
 
 /**
- * Ghi trạng thái schema của một kho (khung trường): phiên bản hiện tại
- * và trạng thái sao lưu/khôi phục. Cơ chế tự động ghi bởi công cụ
- * fleet thuộc issue #586; ở đây dữ kiện được ghi qua API quản trị.
- * Mốc thời gian dùng `z.iso.datetime` theo chuẩn hợp đồng của repo.
+ * Ghi trạng thái schema của một kho (khung trường): phiên bản hiện tại và trạng thái sao lưu/khôi phục. Cơ chế tự động ghi bởi công cụ fleet thuộc issue #586; ở đây dữ kiện được ghi qua API quản trị. Mốc thời gian dùng `z.iso.datetime` theo chuẩn hợp đồng của repo.
  */
 export const updateSpaceSchemaRegistrySchema = z.strictObject({
   currentVersion: z.string().max(120).nullable().optional(),

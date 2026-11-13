@@ -11,12 +11,7 @@ import { createCategory } from '../../support/course-enrolment-helpers';
  * Issue #44 (việc nối tiếp) — cổng xem thành viên cohort
  * (GET /cohorts/:id/members).
  *
- * Trước đợt này handler không nhận actor: bất kỳ tài khoản đăng nhập nào
- * cũng lấy được `userId` của mọi thành viên của mọi cohort. Nay người xem
- * phải có capability `cohort:view` hoặc `cohort:manage` tại chính context
- * của cohort — cùng chuẩn capability/context với các thao tác cohort còn
- * lại; người ngoài nhận 404 `cohort.not_found`, giống hệt cohort không
- * tồn tại, để không lộ sự tồn tại của cohort. Các đường nội bộ
+ * Trước đợt này handler không nhận actor: bất kỳ tài khoản đăng nhập nào cũng lấy được `userId` của mọi thành viên của mọi cohort. Nay người xem phải có capability `cohort:view` hoặc `cohort:manage` tại chính context của cohort — cùng chuẩn capability/context với các thao tác cohort còn lại; người ngoài nhận 404 `cohort.not_found`, giống hệt cohort không tồn tại, để không lộ sự tồn tại của cohort. Các đường nội bộ
  * (đồng bộ ghi danh theo cohort của Enrol, sinh learning plan của
  * Competencies) gọi service không kèm actor nên giữ nguyên hành vi.
  */

@@ -6,12 +6,9 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstS
 import { addExamSlot, createExamDraft, pinExam } from '../../support/exam-pin-helpers';
 
 /**
- * Quiz Chặng 3 (issue #30) — ma trận đề + sinh slots + chấm Đ–S chùm +
- * bản đặc tả, đối chiếu hồ sơ thiết kế mục C:
+ * Quiz Chặng 3 (issue #30) — ma trận đề + sinh slots + chấm Đ–S chùm + bản đặc tả, đối chiếu hồ sơ thiết kế mục C:
  *  - ma trận neo Chương trình GDPT 2018 (môn → chương trình → ĐVK);
- *    ô = ĐVK × mức × dạng (issue #249 — ma trận KHÔNG gắn YCCĐ, YCCĐ
- *    chỉ hiện ở cột suy ra của bản đặc tả), preset chụp lúc tạo, lệch
- *    tỉ lệ chỉ cảnh báo;
+ *    ô = ĐVK × mức × dạng (issue #249 — ma trận KHÔNG gắn YCCĐ, YCCĐ chỉ hiện ở cột suy ra của bản đặc tả), preset chụp lúc tạo, lệch tỉ lệ chỉ cảnh báo;
  *  - generate khoá cứng 422 khi thiếu câu ở bất kỳ ô nào; generate
  *    rút MỘT bộ câu cố định ghim cứng vào slots của exam version
  *    (bỏ hẳn drawMode/per_student theo chốt #226) — hai học sinh làm

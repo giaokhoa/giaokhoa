@@ -7,35 +7,18 @@ import {
 } from '../../support/ordinary-worker-module';
 
 /**
- * Đặc tả đường quét matching IPN SePay ở worker QUA NHỊP THẬT của
- * module (issue con #539 của #522): boot `WorkerModule` bằng
- * harness role thường (đúng hình dạng kết nối production — scheduler
- * chạy bằng role không BYPASSRLS, ngữ cảnh platform tường minh),
- * gieo payment + sự kiện provider bằng SQL, rồi chờ nhịp 1 giây của
- * `SepayMatchingScheduler` quét và khớp. Không gọi tay tick, không
- * dựng service bằng tay: nhịp, bề mặt matching dùng chung và ba
- * adapter cổng đều là code production thật.
+ * Đặc tả đường quét matching IPN SePay ở worker QUA NHỊP THẬT của module (issue con #539 của #522): boot `WorkerModule` bằng harness role thường (đúng hình dạng kết nối production — scheduler chạy bằng role không BYPASSRLS, ngữ cảnh platform tường minh), gieo payment + sự kiện provider bằng SQL, rồi chờ nhịp 1 giây của `SepayMatchingScheduler` quét và khớp. Không gọi tay tick, không dựng service bằng tay: nhịp, bề mặt matching dùng chung và ba adapter cổng đều là code production thật.
  *
  * Các ca ghim đúng hợp đồng nhịp quét + adapter mới:
  *
  * 1. Khớp đủ 3 điều kiện + đối chiếu đích → succeeded, ghi danh
- *    ACTIVE đúng một lần, outbox `payment_succeeded` đúng một dòng;
- *    các nhịp sau không nhân đôi (phát lại ở tầng nhịp).
+ *    ACTIVE đúng một lần, outbox `payment_succeeded` đúng một dòng; các nhịp sau không nhân đôi (phát lại ở tầng nhịp).
  * 2. Sai số tiền → payment + sự kiện vào `needs_review`, không kích
  *    hoạt, không ghi danh.
  * 3. Sự kiện `processing` treo quá 60 giây được nhịp sau nhận lại
  *    và khớp (cửa sổ stale của claim).
  * 4. Sự kiện `debit` khớp dòng hoàn `approved` đủ 100% → refund
- *    settled, payment refunded, ghi danh SUSPENDED; phát lại cùng
- *    sự kiện debit (đưa dòng sự kiện về `received` như một lần
- *    redelivery của provider) không settle hai lần — nhận diện qua
- *    `settled_event_id` đã ghi. Ghi chú phân kỳ: người tạo yêu cầu
- *    hoàn trong ca này là người mua, không giữ capability
- *    `enrol:manage` — đường API sẽ chặn ở cổng capability của
- *    `setSuspended` và đẩy sự kiện về `needs_review`, còn adapter
- *    worker (tiến trình hệ thống tin cậy thực thi quyết định đã
- *    chốt) settle thẳng như đã ghi trong TSDoc của service và thân
- *    PR; ca này ghim hành vi worker đó, không ghim hành vi API.
+ *    settled, payment refunded, ghi danh SUSPENDED; phát lại cùng sự kiện debit (đưa dòng sự kiện về `received` như một lần redelivery của provider) không settle hai lần — nhận diện qua `settled_event_id` đã ghi. Ghi chú phân kỳ: người tạo yêu cầu hoàn trong ca này là người mua, không giữ capability `enrol:manage` — đường API sẽ chặn ở cổng capability của `setSuspended` và đẩy sự kiện về `needs_review`, còn adapter worker (tiến trình hệ thống tin cậy thực thi quyết định đã chốt) settle thẳng như đã ghi trong TSDoc của service và thân PR; ca này ghim hành vi worker đó, không ghim hành vi API.
  */
 describe('Điểm quét matching IPN SePay ở worker — nhịp thật của module', () => {
   let harness: OrdinaryWorkerModuleHarness;

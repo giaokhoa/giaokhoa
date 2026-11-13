@@ -3,10 +3,7 @@ import type { BadgeView, IssuedView, MyBadgeView } from '../types/badges';
 
 /**
  * Tầng gọi API thuần của trang huy hiệu thuộc feature badges:
- * chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React
- * Query. Tầng `queries/` của feature bọc các hàm này thành hook.
- * Tách từ module phẳng `src/lib/badges.ts` khi tổ chức lại
- * apps/web theo mô hình features/ (issue #500).
+ * chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành hook. Tách từ module phẳng `src/lib/badges.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
 
 /**

@@ -1,15 +1,7 @@
 /**
- * Khối chọn lớp dùng chung ở tầng ứng dụng: một phần tử select cho người
- * dùng chọn một lớp làm bối cảnh (hiện tại dùng ở bước lớp của wizard
- * tạo khoá học).
+ * Khối chọn lớp dùng chung ở tầng ứng dụng: một phần tử select cho người dùng chọn một lớp làm bối cảnh (hiện tại dùng ở bước lớp của wizard tạo khoá học).
  *
- * Khuôn của khối (đo trên toàn bộ giao diện): trang gọi tải danh sách lớp
- * rồi tự dựng select với một tuỳ chọn rỗng ở đầu và chỉ các lớp đang
- * hoạt động (`status === 'active'`) mới là lựa chọn hợp lệ. Component
- * này là nơi duy nhất dựng khuôn đó; trang gọi truyền danh sách lớp,
- * giá trị đang chọn và handler thay đổi — tập lựa chọn, giá trị mặc
- * định do trang giữ và hiệu ứng khi đổi lựa chọn giữ nguyên như khi tự
- * dựng tại chỗ.
+ * Khuôn của khối (đo trên toàn bộ giao diện): trang gọi tải danh sách lớp rồi tự dựng select với một tuỳ chọn rỗng ở đầu và chỉ các lớp đang hoạt động (`status === 'active'`) mới là lựa chọn hợp lệ. Component này là nơi duy nhất dựng khuôn đó; trang gọi truyền danh sách lớp, giá trị đang chọn và handler thay đổi — tập lựa chọn, giá trị mặc định do trang giữ và hiệu ứng khi đổi lựa chọn giữ nguyên như khi tự dựng tại chỗ.
  */
 
 /** Một lớp trong danh sách chọn: chỉ cần định danh, tên và trạng thái vòng đời. */

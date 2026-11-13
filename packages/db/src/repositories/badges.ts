@@ -1,41 +1,21 @@
 /**
  * Repository của cụm HUY HIỆU trên Kysely.
  *
- * Vai trò: mọi truy cập tới bốn bảng của kho trung tâm thuộc
- * module huy hiệu — `badge` (định nghĩa huy hiệu), `badge_criteria`
+ * Vai trò: mọi truy cập tới bốn bảng của kho trung tâm thuộc module huy hiệu — `badge` (định nghĩa huy hiệu), `badge_criteria`
  * (bộ tiêu chí), `badge_issued` (bản ghi cấp phát, bằng chứng bất
- * biến kèm bản chụp jsonb) và `badge_manual_award` (lượt trao thủ
- * công) — tập trung ở đây. Luật nghiệp vụ (đánh giá tiêu chí, gác
- * quyền, thông báo trao huy hiệu) nằm ở tầng service phía ứng
- * dụng; repository chỉ nhận handle để service ghép các thao tác
- * ghi vào một transaction khi cần bất biến nguyên tử (đặt lại bộ
- * tiêu chí, cấp huy hiệu + ghi outbox).
+ * biến kèm bản chụp jsonb) và `badge_manual_award` (lượt trao thủ công) — tập trung ở đây. Luật nghiệp vụ (đánh giá tiêu chí, gác quyền, thông báo trao huy hiệu) nằm ở tầng service phía ứng dụng; repository chỉ nhận handle để service ghép các thao tác ghi vào một transaction khi cần bất biến nguyên tử (đặt lại bộ tiêu chí, cấp huy hiệu + ghi outbox).
  *
- * Khuôn hình dạng dữ liệu ở biên repository — cùng khuôn pilot kho
- * control plane (xem mục "Sổ tay chuyển đổi repository sang Kysely"
- * trong `AGENTS.md` của package): bên trong dùng tên cột
- * snake_case của interface schema codegen; bên ngoài trả/nhận hình
- * dạng camelCase qua danh sách cột tường minh có bí danh và các
- * hàm ánh xạ ghi loại `undefined` từng trường (thử nghiệm T-4);
- * mọi giá trị where là tham số bắt buộc. Ba cột jsonb của cụm
+ * Khuôn hình dạng dữ liệu ở biên repository — cùng khuôn pilot kho control plane (xem mục "Sổ tay chuyển đổi repository sang Kysely" trong `AGENTS.md` của package): bên trong dùng tên cột snake_case của interface schema codegen; bên ngoài trả/nhận hình dạng camelCase qua danh sách cột tường minh có bí danh và các hàm ánh xạ ghi loại `undefined` từng trường (thử nghiệm T-4); mọi giá trị where là tham số bắt buộc. Ba cột jsonb của cụm
  * (`badge_criteria.params`, `badge_issued.snapshot`,
- * `badge_issued.evidence`) không mang hình dạng `$type` ở phía
- * bộ máy cũ nên kiểu công khai ở biên là `unknown` như trước, và
- * mọi lần ghi đều đi qua helper serialize `::jsonb` duy nhất trong
- * file này (driver `pg` hiểu MẢNG cấp cao nhất là mảng PostgreSQL
- * thay vì JSON — xem sổ tay).
+ * `badge_issued.evidence`) không mang hình dạng `$type` ở phía bộ máy cũ nên kiểu công khai ở biên là `unknown` như trước, và mọi lần ghi đều đi qua helper serialize `::jsonb` duy nhất trong file này (driver `pg` hiểu MẢNG cấp cao nhất là mảng PostgreSQL thay vì JSON — xem sổ tay).
  *
  * Hai điểm giữ nguyên hành vi của đường cũ trước chuyển đổi, có chủ đích:
  * - `insertIssued`/`insertManualAward`: khi insert bỏ qua vì
- *   trùng khoá tự nhiên không trả dòng nào, dòng đã có được đọc
- *   lại qua HANDLE GỐC của repository — không qua handle giao dịch
- *   được truyền vào — đúng như code cũ đọc qua `this.db` thay vì
- *   `tx`.
+ *   trùng khoá tự nhiên không trả dòng nào, dòng đã có được đọc lại qua HANDLE GỐC của repository — không qua handle giao dịch được truyền vào — đúng như code cũ đọc qua `this.db` thay vì `tx`.
  * - `countIssued` đếm bằng cách đọc các dòng rồi lấy độ dài ở
  *   tầng ứng dụng, không đổi thành truy vấn `count(*)` ở database.
  *
- * Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng
- * dụng, không tự mở pool, không đọc biến môi trường.
+ * Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng dụng, không tự mở pool, không đọc biến môi trường.
  */
 import { sql, type Insertable, type InsertObject, type RawBuilder, type Updateable, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
@@ -108,10 +88,7 @@ export interface NewCriteria {
 }
 
 /**
- * Một dòng bản ghi cấp phát huy hiệu: bằng chứng bất biến rằng một
- * user đã đạt huy hiệu, kèm bản chụp (`snapshot`) của huy hiệu +
- * tiêu chí tại thời điểm cấp và `evidence` của lần cấp. Thu hồi
- * không xoá dòng, chỉ lật cờ `revoked`.
+ * Một dòng bản ghi cấp phát huy hiệu: bằng chứng bất biến rằng một user đã đạt huy hiệu, kèm bản chụp (`snapshot`) của huy hiệu + tiêu chí tại thời điểm cấp và `evidence` của lần cấp. Thu hồi không xoá dòng, chỉ lật cờ `revoked`.
  */
 export interface IssuedRow {
   id: string;
@@ -222,15 +199,10 @@ const BADGE_MANUAL_AWARD_COLUMNS = [
 ] as const;
 
 /**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh —
- * helper serialize duy nhất của file này cho mọi lần ghi jsonb
+ * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh — helper serialize duy nhất của file này cho mọi lần ghi jsonb
  * (khuôn của pilot: driver `pg` tự stringify object thường nhưng
- * hiểu MẢNG cấp cao nhất là mảng PostgreSQL, khiến cột jsonb lỗi
- * `invalid input syntax for type json`). Khác pilot ở một điểm:
- * ba cột jsonb của cụm này không mang hình dạng `$type` ở phía
- * bộ máy cũ nên giá trị ở biên là `unknown` — helper ghim kiểu
- * biểu thức về `JsonValue` của codegen để khớp kiểu cột khi biên
- * dịch, thay vì suy kiểu từ giá trị như khuôn generic của pilot.
+ * hiểu MẢNG cấp cao nhất là mảng PostgreSQL, khiến cột jsonb lỗi `invalid input syntax for type json`). Khác pilot ở một điểm:
+ * ba cột jsonb của cụm này không mang hình dạng `$type` ở phía bộ máy cũ nên giá trị ở biên là `unknown` — helper ghim kiểu biểu thức về `JsonValue` của codegen để khớp kiểu cột khi biên dịch, thay vì suy kiểu từ giá trị như khuôn generic của pilot.
  */
 function jsonbValue(value: unknown): RawBuilder<JsonValue> {
   return sql<JsonValue>`${JSON.stringify(value)}::jsonb`;

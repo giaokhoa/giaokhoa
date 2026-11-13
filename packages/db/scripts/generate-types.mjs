@@ -1,28 +1,18 @@
 /**
  * Lệnh `db:types` của `@giaokhoa/db`: sinh lại cả ba file kiểu Kysely
  * (`src/types/centre-db.d.ts`, `src/types/control-plane-db.d.ts`,
- * `src/types/system-bank-db.d.ts`) từ cơ sở dữ liệu THẬT dựng từ rỗng
- * bằng đúng bộ SQL đang mang dữ liệu hiện hành (carrier), rồi chạy
- * kysely-codegen cho từng kho.
+ * `src/types/system-bank-db.d.ts`) từ cơ sở dữ liệu THẬT dựng từ rỗng bằng đúng bộ SQL đang mang dữ liệu hiện hành (carrier), rồi chạy kysely-codegen cho từng kho.
  *
  * Luồng cho mỗi kho:
  *   1. Tạo database tạm riêng cho từng lượt sinh kiểu, dùng hậu tố
  *      ngẫu nhiên để nhiều worktree không ghi đè nhau; xoá khi xong.
  *   2. Dùng lại `buildTestDatabase` (đã biên dịch trong `dist/`) để
- *      áp CHÍNH pipeline `applyStoreMigrations` của Kysely, gồm cả
- *      shim PostgreSQL cũ và nhật ký migration. Không tự replay SQL.
+ *      áp CHÍNH pipeline `applyStoreMigrations` của Kysely, gồm cả shim PostgreSQL cũ và nhật ký migration. Không tự replay SQL.
  *   3. Chạy CLI kysely-codegen với file cấu hình riêng của kho
  *      (`scripts/codegen/<kho>.json`: override từng cột jsonb có
- *      khai báo kiểu tường minh + customImports trỏ về nơi định
- *      nghĩa kiểu thật) và ghi ra `src/types/<kho>-db.d.ts`.
+ *      khai báo kiểu tường minh + customImports trỏ về nơi định nghĩa kiểu thật) và ghi ra `src/types/<kho>-db.d.ts`.
  *
- * Kết nối quản trị lấy từ biến môi trường `DB_TYPES_ADMIN_URL`; thiếu
- * biến này thì suy từ `DATABASE_URL` bằng cách thay tên database
- * thành `postgres`. Cả hai đều vắng thì lệnh dừng với lỗi rõ ràng —
- * cổng chống lệch (drift) trong CI chạy lệnh này rồi kiểm
- * `git diff --exit-code` trên `src/types/`, nên đầu ra phải tái lập
- * y hệt trên mọi máy cùng phiên bản PostgreSQL 18. Chạy build `@giaokhoa/db`
- * trước lệnh này để test-support đã được biên dịch mới nhất.
+ * Kết nối quản trị lấy từ biến môi trường `DB_TYPES_ADMIN_URL`; thiếu biến này thì suy từ `DATABASE_URL` bằng cách thay tên database thành `postgres`. Cả hai đều vắng thì lệnh dừng với lỗi rõ ràng — cổng chống lệch (drift) trong CI chạy lệnh này rồi kiểm `git diff --exit-code` trên `src/types/`, nên đầu ra phải tái lập y hệt trên mọi máy cùng phiên bản PostgreSQL 18. Chạy build `@giaokhoa/db` trước lệnh này để test-support đã được biên dịch mới nhất.
  */
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';

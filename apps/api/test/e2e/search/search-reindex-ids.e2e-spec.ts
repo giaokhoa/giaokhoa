@@ -8,23 +8,13 @@ import { createCategory, createCourse } from '../../support/course-enrolment-hel
 import { courseContextId } from '../../support/engagement-helpers';
 
 /**
- * Dựng lại chỉ mục tìm kiếm qua HTTP — phần bề mặt endpoint của
- * spec integration `test/integration/search/search-reindex-ids.int-spec.ts`
+ * Dựng lại chỉ mục tìm kiếm qua HTTP — phần bề mặt endpoint của spec integration `test/integration/search/search-reindex-ids.int-spec.ts`
  * (issue #483).
  *
- * Endpoint `POST /api/v1/search/reindex` được gác bằng capability
- * `search:manage` ở chế độ bảo trì: vai không có quyền bị chặn, admin
- * gọi được và nhận `{ indexed }` — số tài liệu khâu dựng lại vừa nạp.
- * Bộ đếm này phải dịch đúng theo điều kiện hợp lệ của từng area:
- * thêm một nội dung contentbank `public` thì tăng đúng 1; thêm một
- * nội dung `draft` thì không đổi; đình chỉ một user đang hoạt động
- * thì giảm đúng 1.
+ * Endpoint `POST /api/v1/search/reindex` được gác bằng capability `search:manage` ở chế độ bảo trì: vai không có quyền bị chặn, admin gọi được và nhận `{ indexed }` — số tài liệu khâu dựng lại vừa nạp. Bộ đếm này phải dịch đúng theo điều kiện hợp lệ của từng area:
+ * thêm một nội dung contentbank `public` thì tăng đúng 1; thêm một nội dung `draft` thì không đổi; đình chỉ một user đang hoạt động thì giảm đúng 1.
  *
- * Các khẳng định theo từng id trong kho tài liệu (tập id đủ điều
- * kiện của từng area, `countDocs` so với số dòng thật của bảng
- * `search_documents`) không có bề mặt HTTP — route tìm kiếm không
- * phơi bày tập tài liệu của chỉ mục — nên nằm ở spec integration
- * đi kèm, nơi act gọi thẳng `SearchService.reindexAll()`.
+ * Các khẳng định theo từng id trong kho tài liệu (tập id đủ điều kiện của từng area, `countDocs` so với số dòng thật của bảng `search_documents`) không có bề mặt HTTP — route tìm kiếm không phơi bày tập tài liệu của chỉ mục — nên nằm ở spec integration đi kèm, nơi act gọi thẳng `SearchService.reindexAll()`.
  */
 describe('Search reindex — dựng lại toàn bộ chỉ mục qua HTTP', () => {
   let app: INestApplication;

@@ -7,30 +7,21 @@ import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWO
 import type { SessionCacheService } from '../../../src/infra/cache/session-cache.service';
 
 /**
- * Cổng MFA trên luồng OAuth hệ cũ (đăng nhập Google/Facebook qua
- * `/auth/oauth/*` + đổi mã bàn giao `/auth/oauth/handoff`) — cùng
- * nguồn trạng thái MFA duy nhất `user_totp` với mọi đường đăng nhập
- * khác:
+ * Cổng MFA trên luồng OAuth hệ cũ (đăng nhập Google/Facebook qua `/auth/oauth/*` + đổi mã bàn giao `/auth/oauth/handoff`) — cùng nguồn trạng thái MFA duy nhất `user_totp` với mọi đường đăng nhập khác:
  *
  * - (d) Tài khoản có factor TOTP đã xác nhận: callback khớp tài
- *   khoản xong vẫn KHÔNG tạo phiên, KHÔNG sinh mã bàn giao — trình
- *   duyệt bị đưa về trang đăng nhập mang challenge MFA
+ *   khoản xong vẫn KHÔNG tạo phiên, KHÔNG sinh mã bàn giao — trình duyệt bị đưa về trang đăng nhập mang challenge MFA
  *   (`/login?mfaChallenge=`). Mã sai bị từ chối
  *   (`auth.mfa_invalid_code`); mã đúng qua
- *   `POST /auth/oauth/mfa/verify` mới sinh phiên (cookie
- *   `giaokhoa_session`) và mã bàn giao; mã bàn giao đổi được cặp token
- *   dùng thật và chỉ dùng được một lần.
+ *   `POST /auth/oauth/mfa/verify` mới sinh phiên (cookie `giaokhoa_session`) và mã bàn giao; mã bàn giao đổi được cặp token dùng thật và chỉ dùng được một lần.
  * - (d2) Lớp gác thứ hai tại điểm đổi bàn giao: một mã bàn giao ở
- *   định dạng cũ (giá trị là userId thuần, không có dấu đã-qua-MFA)
- *   của tài khoản đang bật MFA bị từ chối
+ *   định dạng cũ (giá trị là userId thuần, không có dấu đã-qua-MFA) của tài khoản đang bật MFA bị từ chối
  *   (`auth.oauth_mfa_required`) — điểm đổi là cổng cuối, không
  *   đường vòng nào qua được.
  * - (e) Hồi quy: tài khoản chưa bật MFA đi trọn luồng như cũ
  *   (callback → bàn giao → token).
  *
- * Provider được giả lập tại biên HTTP như spec OAuth hệ cũ; mọi
- * bước bên trong (authorize, callback, khớp tài khoản, challenge,
- * bàn giao, phiên) đều chạy thật.
+ * Provider được giả lập tại biên HTTP như spec OAuth hệ cũ; mọi bước bên trong (authorize, callback, khớp tài khoản, challenge, bàn giao, phiên) đều chạy thật.
  */
 
 /** Hồ sơ userinfo giả lập theo authorization code. */

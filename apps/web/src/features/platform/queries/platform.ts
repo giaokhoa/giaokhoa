@@ -15,27 +15,15 @@ import {
 import { queryKeys } from './keys';
 
 /**
- * Tầng dữ liệu TanStack Query cho cụm trang nền tảng (F-01 của rà soát
- * #133): insights, privacy, backup, tokens (webservice) và reports.
- * Năm trang này trước đây tự fetch bằng `useEffect` + `apiJson` thủ công;
- * nay mọi lần đọc đi qua khoá của nhà máy `queryKeys` ở module này, đột
- * biến qua `useMutation` và làm mới đúng cụm khoá của trang mình, để
- * `clientLoader` của từng route prefetch đúng khoá component sẽ đọc —
- * dữ liệu tải một lần, dùng chung cache, không còn vòng chờ tải lại.
+ * Tầng dữ liệu TanStack Query cho cụm trang nền tảng (F-01 của rà soát #133): insights, privacy, backup, tokens (webservice) và reports. Năm trang này trước đây tự fetch bằng `useEffect` + `apiJson` thủ công; nay mọi lần đọc đi qua khoá của nhà máy `queryKeys` ở module này, đột biến qua `useMutation` và làm mới đúng cụm khoá của trang mình, để `clientLoader` của từng route prefetch đúng khoá component sẽ đọc — dữ liệu tải một lần, dùng chung cache, không còn vòng chờ tải lại.
  *
  * Hai hành vi hiển thị được giữ nguyên từ bản thủ công:
  *   - Nút "Thử lại" của từng trang: khi bấm, trang quay về trạng thái
- *     đang tải (khung xương) và ẩn thông báo lỗi cho tới khi lần tải lại
- *     kết thúc — component suy ra từ `isPending`/`isError`/`isFetching`
- *     thay vì hai biến trạng thái tự quản như trước.
+ *     đang tải (khung xương) và ẩn thông báo lỗi cho tới khi lần tải lại kết thúc — component suy ra từ `isPending`/`isError`/`isFetching` thay vì hai biến trạng thái tự quản như trước.
  *   - Danh sách bước của một việc sao lưu và kết quả chạy một báo cáo là
- *     dữ liệu theo lựa chọn hiện tại của người dùng: query giữ lại dữ
- *     liệu lần chọn trước trong lúc tải lần chọn mới (`keepPreviousData`)
- *     đúng như bản thủ công chỉ thay dữ liệu khi lần tải mới xong.
+ *     dữ liệu theo lựa chọn hiện tại của người dùng: query giữ lại dữ liệu lần chọn trước trong lúc tải lần chọn mới (`keepPreviousData`) đúng như bản thủ công chỉ thay dữ liệu khi lần tải mới xong.
  *
- * Tầng này bọc các hàm gọi API thuần ở `../api/platform` (tách khỏi
- * module phẳng `src/lib/platform-data.ts` khi tổ chức lại apps/web
- * theo mô hình features/, issue #500).
+ * Tầng này bọc các hàm gọi API thuần ở `../api/platform` (tách khỏi module phẳng `src/lib/platform-data.ts` khi tổ chức lại apps/web theo mô hình features/, issue #500).
  */
 
 // ---------------------------------------------------------------------
@@ -62,8 +50,7 @@ export async function insightsPageClientLoader() {
 }
 
 // ---------------------------------------------------------------------
-// Privacy: người dùng tự gửi yêu cầu export/delete cho chính mình;
-// phía quản trị thấy mọi yêu cầu và duyệt/từ chối.
+// Privacy: người dùng tự gửi yêu cầu export/delete cho chính mình; phía quản trị thấy mọi yêu cầu và duyệt/từ chối.
 // ---------------------------------------------------------------------
 
 /** Tuỳ chọn truy vấn danh sách yêu cầu riêng tư (GET /privacy/requests). */
@@ -80,10 +67,7 @@ export function usePrivacyRequests() {
 }
 
 /**
- * Đột biến gửi yêu cầu riêng tư mới (POST /privacy/requests) — thành
- * công thì làm mới danh sách để yêu cầu vừa gửi hiện ngay ở trạng thái
- * chờ duyệt, đúng hành vi tải lại của bản thủ công. Đáp ứng tạo mới được
- * trả về để trang hiện dòng xác nhận kèm id/loại/trạng thái như trước.
+ * Đột biến gửi yêu cầu riêng tư mới (POST /privacy/requests) — thành công thì làm mới danh sách để yêu cầu vừa gửi hiện ngay ở trạng thái chờ duyệt, đúng hành vi tải lại của bản thủ công. Đáp ứng tạo mới được trả về để trang hiện dòng xác nhận kèm id/loại/trạng thái như trước.
  */
 export function useCreatePrivacyRequest() {
   const client = useQueryClient();
@@ -94,8 +78,7 @@ export function useCreatePrivacyRequest() {
 }
 
 /**
- * Đột biến duyệt/từ chối một yêu cầu (POST /privacy/requests/:id/decide)
- * — thành công thì làm mới danh sách để trạng thái mới hiện ngay.
+ * Đột biến duyệt/từ chối một yêu cầu (POST /privacy/requests/:id/decide) — thành công thì làm mới danh sách để trạng thái mới hiện ngay.
  */
 export function useDecidePrivacyRequest() {
   const client = useQueryClient();
@@ -138,9 +121,7 @@ export function backupStepsQueryOptions(jobId: string) {
 }
 
 /**
- * Hook đọc các bước của việc đang được chọn xem: chưa chọn việc nào thì
- * không gọi API (trang chỉ hiện bước sau khi người dùng bấm xem); đổi
- * việc thì giữ bước của việc trước trong lúc tải, như bản thủ công.
+ * Hook đọc các bước của việc đang được chọn xem: chưa chọn việc nào thì không gọi API (trang chỉ hiện bước sau khi người dùng bấm xem); đổi việc thì giữ bước của việc trước trong lúc tải, như bản thủ công.
  */
 export function useBackupSteps(selectedJobId: string | null) {
   return useQuery({
@@ -151,8 +132,7 @@ export function useBackupSteps(selectedJobId: string | null) {
 }
 
 /**
- * Đột biến tạo việc sao lưu cho một khoá (POST /backup/jobs) — thành
- * công thì làm mới danh sách việc để việc vừa tạo hiện ngay.
+ * Đột biến tạo việc sao lưu cho một khoá (POST /backup/jobs) — thành công thì làm mới danh sách việc để việc vừa tạo hiện ngay.
  */
 export function useCreateBackupJob() {
   const client = useQueryClient();
@@ -163,9 +143,7 @@ export function useCreateBackupJob() {
 }
 
 /**
- * Đột biến khôi phục một việc sao lưu thành khoá mới (POST
- * /backup/restore, mode 'new') — thành công thì làm mới danh sách việc
- * để việc khôi phục hiện ngay.
+ * Đột biến khôi phục một việc sao lưu thành khoá mới (POST /backup/restore, mode 'new') — thành công thì làm mới danh sách việc để việc khôi phục hiện ngay.
  */
 export function useRestoreBackup() {
   const client = useQueryClient();
@@ -182,8 +160,7 @@ export async function backupPageClientLoader() {
 }
 
 // ---------------------------------------------------------------------
-// Tokens: dịch vụ webservice và token tích hợp; token thô chỉ hiện
-// một lần ngay khi tạo.
+// Tokens: dịch vụ webservice và token tích hợp; token thô chỉ hiện một lần ngay khi tạo.
 // ---------------------------------------------------------------------
 
 /** Tuỳ chọn truy vấn danh sách dịch vụ webservice (GET /webservice/services). */
@@ -208,18 +185,14 @@ export function webserviceTokensQueryOptions() {
 }
 
 /**
- * Hook đọc danh sách token cho trang tokens. Bản thủ công nuốt lỗi của
- * riêng danh sách token (coi như danh sách rỗng) trong khi lỗi danh sách
- * dịch vụ mới làm cả trang báo lỗi; trang giữ đúng phân biệt đó bằng
- * cách chỉ đọc `data` của query này (lỗi thì hiển thị rỗng).
+ * Hook đọc danh sách token cho trang tokens. Bản thủ công nuốt lỗi của riêng danh sách token (coi như danh sách rỗng) trong khi lỗi danh sách dịch vụ mới làm cả trang báo lỗi; trang giữ đúng phân biệt đó bằng cách chỉ đọc `data` của query này (lỗi thì hiển thị rỗng).
  */
 export function useWebserviceTokens() {
   return useQuery(webserviceTokensQueryOptions());
 }
 
 /**
- * Đột biến tạo dịch vụ webservice (POST /webservice/services) — thành
- * công thì làm mới cả hai danh sách của trang như lần tải lại thủ công.
+ * Đột biến tạo dịch vụ webservice (POST /webservice/services) — thành công thì làm mới cả hai danh sách của trang như lần tải lại thủ công.
  */
 export function useCreateWebserviceService() {
   const client = useQueryClient();
@@ -235,9 +208,7 @@ export function useCreateWebserviceService() {
 
 /**
  * Đột biến tạo token cho chính người dùng (POST /webservice/tokens):
- * trước hết lấy hồ sơ của tôi (GET /users/me) để gắn token đúng chủ,
- * giữ nguyên hai bước như bản thủ công. Đáp ứng mang token thô — trang
- * hiện nó đúng một lần ngay sau khi tạo.
+ * trước hết lấy hồ sơ của tôi (GET /users/me) để gắn token đúng chủ, giữ nguyên hai bước như bản thủ công. Đáp ứng mang token thô — trang hiện nó đúng một lần ngay sau khi tạo.
  */
 export function useCreateWebserviceToken() {
   const client = useQueryClient();
@@ -251,8 +222,7 @@ export function useCreateWebserviceToken() {
 }
 
 /**
- * Đột biến thu hồi một token (POST /webservice/tokens/:id/revoke) —
- * thành công thì làm mới cả hai danh sách của trang như lần tải lại thủ công.
+ * Đột biến thu hồi một token (POST /webservice/tokens/:id/revoke) — thành công thì làm mới cả hai danh sách của trang như lần tải lại thủ công.
  */
 export function useRevokeWebserviceToken() {
   const client = useQueryClient();
@@ -275,8 +245,7 @@ export async function tokensPageClientLoader() {
 }
 
 // ---------------------------------------------------------------------
-// Reports: dựng báo cáo tối thiểu — chọn nguồn/cột, xem kết quả chạy,
-// đặt lịch chạy hằng ngày.
+// Reports: dựng báo cáo tối thiểu — chọn nguồn/cột, xem kết quả chạy, đặt lịch chạy hằng ngày.
 // ---------------------------------------------------------------------
 
 /** Tuỳ chọn truy vấn danh sách báo cáo (GET /reports). */
@@ -301,9 +270,7 @@ export function reportRunQueryOptions(reportId: string) {
 }
 
 /**
- * Hook đọc kết quả chạy của báo cáo đang được chọn chạy: chưa chọn thì
- * không gọi API; đổi báo cáo thì giữ kết quả lần chạy trước trong lúc
- * tải, đúng như bản thủ công chỉ thay hàng khi lần chạy mới xong.
+ * Hook đọc kết quả chạy của báo cáo đang được chọn chạy: chưa chọn thì không gọi API; đổi báo cáo thì giữ kết quả lần chạy trước trong lúc tải, đúng như bản thủ công chỉ thay hàng khi lần chạy mới xong.
  */
 export function useReportRun(selectedReportId: string | null) {
   return useQuery({
@@ -314,8 +281,7 @@ export function useReportRun(selectedReportId: string | null) {
 }
 
 /**
- * Đột biến tạo báo cáo (POST /reports) với bộ cột mặc định của trang —
- * thành công thì làm mới danh sách báo cáo để báo cáo vừa tạo hiện ngay.
+ * Đột biến tạo báo cáo (POST /reports) với bộ cột mặc định của trang — thành công thì làm mới danh sách báo cáo để báo cáo vừa tạo hiện ngay.
  */
 export function useCreateReport() {
   const client = useQueryClient();
@@ -326,9 +292,7 @@ export function useCreateReport() {
 }
 
 /**
- * Đột biến đặt lịch chạy hằng ngày cho một báo cáo (POST
- * /reports/:id/schedules). Bản thủ công không tải lại danh sách sau khi
- * đặt lịch nên đột biến này cố ý không làm mới khoá nào.
+ * Đột biến đặt lịch chạy hằng ngày cho một báo cáo (POST /reports/:id/schedules). Bản thủ công không tải lại danh sách sau khi đặt lịch nên đột biến này cố ý không làm mới khoá nào.
  */
 export function useScheduleReport() {
   return useMutation({

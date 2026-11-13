@@ -4,9 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminToken, assignRole, createRoleViaApi, createTestApp, createUserViaApi, http, login, roleIdByShortname, STRONG_PASSWORD, systemContextId, uniqueName } from '../../support/identity-access-helpers';
 
 /**
- * Kiểm thử luồng Users & profile.
- * Oracle: lib/tests/user_test.php (MOODLE_503_STABLE) — test_search_no_identity_fields,
- * test_search_deleted_users, test_validate; báo cáo §2#2 (xoá mềm, guest, định danh theo capability).
+ * Kiểm thử luồng Users & profile. Oracle: lib/tests/user_test.php (MOODLE_503_STABLE) — test_search_no_identity_fields, test_search_deleted_users, test_validate; báo cáo §2#2 (xoá mềm, guest, định danh theo capability).
  */
 describe('Người dùng: quy tắc định danh, xoá mềm, tuỳ chọn, sự kiện outbox', () => {
   let app: INestApplication;

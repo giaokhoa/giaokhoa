@@ -7,14 +7,10 @@ import { McpRateLimiter } from './mcp-rate-limit';
  *   một giờ phải giữ nguyên tuyệt đối trước và sau khi sửa rò bộ nhớ
  *   (cùng cửa sổ, cùng ngưỡng, cùng cách tính phần chờ còn lại).
  * - Entry của khoá đã hết hạn cửa sổ phải bị xoá khỏi Map lưu cửa sổ
- *   ngay trong phép kiểm tra, để kích thước Map bị chặn bởi số khoá
- *   đang còn trong cửa sổ hiệu lực — trước khi sửa, Map giữ vĩnh viễn
- *   mọi khoá từng gọi tới và phình không giới hạn theo số client.
+ *   ngay trong phép kiểm tra, để kích thước Map bị chặn bởi số khoá đang còn trong cửa sổ hiệu lực — trước khi sửa, Map giữ vĩnh viễn mọi khoá từng gọi tới và phình không giới hạn theo số client.
  *
- * Mọi ca đều lái thời gian qua tham số `now` của `check` nên không phụ
- * thuộc đồng hồ thật. Kích thước Map được đọc qua ép kiểu có chủ đích:
- * quyết định cho/chặn cố ý giữ giống hệt hành vi cũ, nên độ phình của
- * Map là bề mặt quan sát duy nhất của chính lỗi rò bộ nhớ này.
+ * Mọi ca đều lái thời gian qua tham số `now` của `check` nên không phụ thuộc đồng hồ thật. Kích thước Map được đọc qua ép kiểu có chủ đích:
+ * quyết định cho/chặn cố ý giữ giống hệt hành vi cũ, nên độ phình của Map là bề mặt quan sát duy nhất của chính lỗi rò bộ nhớ này.
  */
 const HOUR_MS = 60 * 60 * 1000;
 const T0 = 1_700_000_000_000;
@@ -92,8 +88,7 @@ describe('McpRateLimiter — dọn entry hết hạn khỏi Map cửa sổ', () 
     const limiter = new McpRateLimiter({ read: 300, create: 120, publish: 10 });
     limiter.check('u1', 'read', T0);
     expect(windowsOf(limiter).size).toBe(1);
-    // Sau khi cửa sổ của u1 đã hết hạn, một lượt gọi của khoá khác phải
-    // dọn entry của u1: Map chỉ còn entry của khoá đang hoạt động.
+    // Sau khi cửa sổ của u1 đã hết hạn, một lượt gọi của khoá khác phải dọn entry của u1: Map chỉ còn entry của khoá đang hoạt động.
     limiter.check('u2', 'read', T0 + HOUR_MS + 1000);
     expect(windowsOf(limiter).size).toBe(1);
     expect(windowsOf(limiter).has('u1:read')).toBe(false);

@@ -12,8 +12,7 @@ import { IntegrationsService } from './integrations.service';
   imports: [AccessModule, CoursesModule, SpaceRoutingModule],
   controllers: [IntegrationsController],
   providers: [
-    // Repository của package @giaokhoa/db chạy trên handle Kysely đã định
-    // tuyến theo không gian (issue #648).
+    // Repository của package @giaokhoa/db chạy trên handle Kysely đã định tuyến theo không gian (issue #648).
     {
       provide: IntegrationsRepository,
       useFactory: (spaceDatabase: SpaceDatabaseService) => new IntegrationsRepository(spaceDatabase.routedKysely),

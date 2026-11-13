@@ -1,28 +1,17 @@
 import type { PaymentRow, ProviderEventRow } from './payments.repository';
 
 /**
- * Các cổng (port) cho ba hiệu ứng xuyên module của luồng matching IPN
- * SePay (issue #538, issue cha #522).
+ * Các cổng (port) cho ba hiệu ứng xuyên module của luồng matching IPN SePay (issue #538, issue cha #522).
  *
- * Bề mặt matching dùng chung (`SepayMatchingService` trong package
- * này) chỉ ĐỊNH NGHĨA các cổng và gọi qua cổng — nó không import
- * trực tiếp service của bất kỳ module nghiệp vụ nào khác, để cùng
- * một bản logic matching chạy được ở mọi tiến trình. Cài đặt cổng
- * là phần thuộc về tiến trình chủ:
+ * Bề mặt matching dùng chung (`SepayMatchingService` trong package này) chỉ ĐỊNH NGHĨA các cổng và gọi qua cổng — nó không import trực tiếp service của bất kỳ module nghiệp vụ nào khác, để cùng một bản logic matching chạy được ở mọi tiến trình. Cài đặt cổng là phần thuộc về tiến trình chủ:
  *
  * - Phía apps/api (hiện hành): cài đặt là chính các service hiện
- *   hành — `EnrolService` cho cổng ghi danh, `ClassesService` cho
- *   cổng ghi danh cấp lớp, `PaymentsService` cho cổng đối chiếu
- *   đích và xác nhận chi — nối bằng `useExisting` trong
- *   `PaymentsModule`. Luật nghiệp vụ của ba hiệu ứng vì vậy chỉ tồn
- *   tại đúng một bản, ở chính các service đó.
+ *   hành — `EnrolService` cho cổng ghi danh, `ClassesService` cho cổng ghi danh cấp lớp, `PaymentsService` cho cổng đối chiếu đích và xác nhận chi — nối bằng `useExisting` trong `PaymentsModule`. Luật nghiệp vụ của ba hiệu ứng vì vậy chỉ tồn tại đúng một bản, ở chính các service đó.
  * - Phía apps/worker (issue con tiếp theo của #522): cài đặt dựa
- *   trên bề mặt phễu ghi danh/cohort dùng chung mà issue #527 trích
- *   xuất — không thuộc phạm vi của issue này.
+ *   trên bề mặt phễu ghi danh/cohort dùng chung mà issue #527 trích xuất — không thuộc phạm vi của issue này.
  *
  * Mọi cổng đều idempotent theo cùng nghĩa với cài đặt hiện hành:
- * nhịp matching chết giữa chừng được nhận lại theo cửa sổ stale của
- * claim sự kiện và các khâu kích hoạt chạy lại an toàn.
+ * nhịp matching chết giữa chừng được nhận lại theo cửa sổ stale của claim sự kiện và các khâu kích hoạt chạy lại an toàn.
  */
 
 /** Token tiêm cho cổng kích hoạt ghi danh có phí ({@link PaidEnrolActivationPort}). */
@@ -35,8 +24,7 @@ export const PAID_CLASS_ENROL_ACTIVATION_PORT = Symbol('PAID_CLASS_ENROL_ACTIVAT
 export const PAYMENT_SETTLEMENT_PORT = Symbol('PAYMENT_SETTLEMENT_PORT');
 
 /**
- * Cổng kích hoạt ghi danh có phí: payment `enrol_fee` khớp đủ điều
- * kiện thì ghi danh của người dùng vào instance đích được kích hoạt
+ * Cổng kích hoạt ghi danh có phí: payment `enrol_fee` khớp đủ điều kiện thì ghi danh của người dùng vào instance đích được kích hoạt
  * (cài đặt hiện hành: `EnrolService.activatePaidEnrol` phía apps/api,
  * đi vào phễu ghi danh dùng chung của tiến trình đó).
  */
@@ -56,11 +44,8 @@ export interface PaidEnrolActivationPort {
 }
 
 /**
- * Cổng kích hoạt ghi danh cấp lớp: payment `class_fee` khớp đủ điều
- * kiện thì người dùng được vào lớp đích (cài đặt hiện hành:
- * `ClassesService.activatePaidClassEnrol` phía apps/api — vào
- * backing cohort của lớp, cohort sync vật chất hoá xuống mọi khoá
- * của lớp).
+ * Cổng kích hoạt ghi danh cấp lớp: payment `class_fee` khớp đủ điều kiện thì người dùng được vào lớp đích (cài đặt hiện hành:
+ * `ClassesService.activatePaidClassEnrol` phía apps/api — vào backing cohort của lớp, cohort sync vật chất hoá xuống mọi khoá của lớp).
  */
 export interface PaidClassEnrolActivationPort {
   /**
@@ -77,16 +62,12 @@ export interface PaidClassEnrolActivationPort {
 }
 
 /**
- * Cổng đối chiếu đích phía server và xác nhận chi hoàn — hai hiệu
- * ứng còn nằm trong facade thanh toán của tiến trình chủ (cài đặt
- * hiện hành: `PaymentsService` phía apps/api):
+ * Cổng đối chiếu đích phía server và xác nhận chi hoàn — hai hiệu ứng còn nằm trong facade thanh toán của tiến trình chủ (cài đặt hiện hành: `PaymentsService` phía apps/api):
  *
  * - `verifyPaymentAgainstServerTarget` là phép đối chiếu phòng thủ
- *   chiều sâu của matching: payment phải khớp giá + tenant phía
- *   server của đối tượng đích thì mới được kích hoạt quyền lợi.
+ *   chiều sâu của matching: payment phải khớp giá + tenant phía server của đối tượng đích thì mới được kích hoạt quyền lợi.
  * - `settleRefundFromDebitEvent` đối khớp một sự kiện `debit` (bằng
- *   chứng lệnh chi hoàn) với dòng hoàn đang `approved` và xác nhận
- *   chi trong một transaction có khoá dòng.
+ *   chứng lệnh chi hoàn) với dòng hoàn đang `approved` và xác nhận chi trong một transaction có khoá dòng.
  */
 export interface PaymentSettlementPort {
   /**

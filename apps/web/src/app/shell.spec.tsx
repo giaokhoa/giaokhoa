@@ -12,25 +12,18 @@ import { queryKeys } from '#lib/query-keys';
 import { baNoSessionResponse, baSessionResponse, isGetSessionUrl } from '#test/ba-session';
 
 /**
- * Test kiểm soát state cho khung route (bước kiểm soát state của đợt
- * gộp frontend): dựng ĐÚNG cây thật của ứng dụng — App của root route
+ * Test kiểm soát state cho khung route (bước kiểm soát state của đợt gộp frontend): dựng ĐÚNG cây thật của ứng dụng — App của root route
  * (QueryClientProvider → AuthProvider → PermissionsProvider) làm gốc,
- * Shell làm layout, và một trang thăm dò (probe) thay cho trang thật ở
- * TỪNG route khai trong routes.ts. Phiên được cho resolve CHẬM bằng
- * một promise treo ở GET /users/me để tái hiện đúng cửa sổ đua khi
- * vào thẳng/F5:
+ * Shell làm layout, và một trang thăm dò (probe) thay cho trang thật ở TỪNG route khai trong routes.ts. Phiên được cho resolve CHẬM bằng một promise treo ở GET /users/me để tái hiện đúng cửa sổ đua khi vào thẳng/F5:
  *
  * - Trong lúc phiên chưa resolve: trang con KHÔNG được mount, khung
  *   giữ chỗ đúng hình học hiện thay, và không lóe khung công khai.
  * - Sau khi resolve có người dùng: trang con mount bên trong provider
  *   quyền (usePermissions đọc được dữ liệu thật, không ném lỗi).
  * - Sau khi resolve KHÔNG có người dùng: trang con vẫn mount trong
- *   provider (nay bọc ở root) — usePermissions trả ảnh chụp rỗng sẵn
- *   sàng thay vì ném "must be used inside PermissionsProvider" như lỗi
- *   sập trang /courses trên bản live.
+ *   provider (nay bọc ở root) — usePermissions trả ảnh chụp rỗng sẵn sàng thay vì ném "must be used inside PermissionsProvider" như lỗi sập trang /courses trên bản live.
  * - Đăng xuất: phiên cookie bị huỷ phía server và toàn bộ Query
- *   cache (gồm ảnh chụp quyền của phiên trước) bị dọn sạch; web
- *   không còn giữ token nào ở localStorage (cutover GĐ2, issue #7).
+ *   cache (gồm ảnh chụp quyền của phiên trước) bị dọn sạch; web không còn giữ token nào ở localStorage (cutover GĐ2, issue #7).
  */
 
 const ADMIN_ID = '01900000-0000-7000-8000-0000000000a1';

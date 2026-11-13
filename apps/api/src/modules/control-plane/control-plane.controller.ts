@@ -17,8 +17,7 @@ import {
 } from './dto/control-plane.dto';
 
 /**
- * Bề mặt HTTP của control plane (issue #580) — tiền tố riêng
- * `control-plane`, tách khỏi mọi tiền tố nghiệp vụ:
+ * Bề mặt HTTP của control plane (issue #580) — tiền tố riêng `control-plane`, tách khỏi mọi tiền tố nghiệp vụ:
  * - `POST /control-plane/spaces` — tạo dòng đăng ký không gian.
  * - `PATCH /control-plane/spaces/:id` — cập nhật dòng đăng ký.
  * - `POST /control-plane/spaces/:id/status` — đổi trạng thái vòng đời.
@@ -33,11 +32,7 @@ import {
  * (`tenant:manage` tại context hệ thống); controller chỉ là lớp vận
  * chuyển mỏng theo khuôn các controller hiện hữu.
  *
- * Tách bề mặt (issue #584): toàn bộ controller mang
- * `@PlatformRoute()` — chỉ token mang audience `platform` (cấp từ
- * bề mặt đăng nhập quản trị platform riêng) mới được gọi; token
- * nghiệp vụ thường bị `AudienceGuard` từ chối trước cả cổng
- * capability của service.
+ * Tách bề mặt (issue #584): toàn bộ controller mang `@PlatformRoute()` — chỉ token mang audience `platform` (cấp từ bề mặt đăng nhập quản trị platform riêng) mới được gọi; token nghiệp vụ thường bị `AudienceGuard` từ chối trước cả cổng capability của service.
  */
 @PlatformRoute()
 @Controller({ path: 'control-plane/spaces', version: '1' })

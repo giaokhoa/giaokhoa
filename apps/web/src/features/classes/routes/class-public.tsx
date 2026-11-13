@@ -16,14 +16,7 @@ import { queryKeys } from '../queries/keys';
 import { fetchApiJsonForRequest } from '#lib/server-api';
 
 /**
- * Bản chiếu CÔNG KHAI của gói lớp mà loader phía server được phép đưa
- * vào HTML đầu: đúng các trường mọi người xem đều thấy như nhau của
- * `ClassPublicView` (tên, mã, năm học, mô tả, chủ lớp, trạng thái,
- * học phí công khai). Hai trường do server suy THEO NGƯỜI GỌI —
- * `isMember` và `canPurchase` — TUYỆT ĐỐI không nằm trong bản chiếu
- * này: chúng là dữ kiện cá nhân hoá, chỉ phía client nạp bằng
- * `useQuery` sau khi trang đã mở, và đáp ứng của route này không
- * được bật cache công khai.
+ * Bản chiếu CÔNG KHAI của gói lớp mà loader phía server được phép đưa vào HTML đầu: đúng các trường mọi người xem đều thấy như nhau của `ClassPublicView` (tên, mã, năm học, mô tả, chủ lớp, trạng thái, học phí công khai). Hai trường do server suy THEO NGƯỜI GỌI — `isMember` và `canPurchase` — TUYỆT ĐỐI không nằm trong bản chiếu này: chúng là dữ kiện cá nhân hoá, chỉ phía client nạp bằng `useQuery` sau khi trang đã mở, và đáp ứng của route này không được bật cache công khai.
  */
 export type ClassPublicSummary = Pick<
   ClassPublicView,

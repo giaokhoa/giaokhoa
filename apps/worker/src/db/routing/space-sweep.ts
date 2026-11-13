@@ -1,16 +1,7 @@
 /**
- * Bộ giới hạn đồng thời cho các vòng quét nhiều trung tâm (issue
- * #582).
+ * Bộ giới hạn đồng thời cho các vòng quét nhiều trung tâm (issue #582).
  *
- * Khi relay outbox quét lần lượt outbox của từng trung tâm ở kho
- * riêng, mỗi trung tâm đang quét giữ pool kết nối của kho đó mở.
- * Quét không giới hạn sẽ mở đồng thời pool của MỌI trung tâm —
- * tổng kết nối tới cụm Postgres phình theo số trung tâm, phá kỷ
- * luật ngân sách kết nối của khung định tuyến. Hàm trong file này
- * chạy một danh sách việc bất đồng bộ với trần việc chạy đồng thời
- * cấu hình được (`SPACE_SWEEP_CONCURRENCY` phía worker): tại mọi
- * thời điểm có tối đa `limit` việc đang chạy; việc kết thúc thì
- * việc kế tiếp trong danh sách được bắt đầu ngay.
+ * Khi relay outbox quét lần lượt outbox của từng trung tâm ở kho riêng, mỗi trung tâm đang quét giữ pool kết nối của kho đó mở. Quét không giới hạn sẽ mở đồng thời pool của MỌI trung tâm — tổng kết nối tới cụm Postgres phình theo số trung tâm, phá kỷ luật ngân sách kết nối của khung định tuyến. Hàm trong file này chạy một danh sách việc bất đồng bộ với trần việc chạy đồng thời cấu hình được (`SPACE_SWEEP_CONCURRENCY` phía worker): tại mọi thời điểm có tối đa `limit` việc đang chạy; việc kết thúc thì việc kế tiếp trong danh sách được bắt đầu ngay.
  */
 
 /**

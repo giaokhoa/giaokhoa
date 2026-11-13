@@ -5,24 +5,17 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser } from '..
 import { addGroupMember, createGroupViaApi, suspendUser } from '../../support/engagement-helpers';
 
 /**
- * Kiểm thử luồng Messaging + Calendar.
- * Oracle (Moodle MOODLE_503_STABLE, đọc ngày 2026-10-22):
+ * Kiểm thử luồng Messaging + Calendar. Oracle (Moodle MOODLE_503_STABLE, đọc ngày 2026-10-22):
  *  - public/message/tests/api_test.php: test_count_blocked_users,
- *    test_mark_all_read_for_user_touser(_with_fromuser), create_conversation
- *    với các loại individual/group.
+ *    test_mark_all_read_for_user_touser(_with_fromuser), create_conversation với các loại individual/group.
  *  - Các bất biến của báo cáo §2#12: message ≠ notification; tin nhắn đã gửi
- *    KHÔNG được SỬA; người dùng bị đình chỉ hoặc đang chặn thì không nhận
- *    được gì; tuỳ chọn gác việc phát theo (provider × channel × loggedin/
- *    loggedoff). Việc XOÁ tuân theo chính sách Lớp B sau này của issue #33
+ *    KHÔNG được SỬA; người dùng bị đình chỉ hoặc đang chặn thì không nhận được gì; tuỳ chọn gác việc phát theo (provider × channel × loggedin/ loggedoff). Việc XOÁ tuân theo chính sách Lớp B sau này của issue #33
  *    (xoá mềm có để lại vết), chính sách này thay thế tính bất biến tuyệt
  *    đối của §2#12 — xem kiểm thử sửa/xoá bên dưới.
  *  - public/calendar/tests/lib_test.php: test_add_subscription (số lượng
- *    khi nhập ICS), test_get_legacy_events_with_overrides (khả năng hiển thị
- *    theo phạm vi nhóm), test_update_subscription; luật hiển thị của báo cáo §2#13.
+ *    khi nhập ICS), test_get_legacy_events_with_overrides (khả năng hiển thị theo phạm vi nhóm), test_update_subscription; luật hiển thị của báo cáo §2#13.
  *  - public/calendar/tests/behat/export.feature: người dùng xuất lịch của
- *    mình thành file ICS và qua URL xuất bí mật (calendar key); file/URL
- *    chỉ chứa các sự kiện mà người dùng đó được phép thấy, và việc đặt lại
- *    khoá sẽ vô hiệu hoá URL cũ.
+ *    mình thành file ICS và qua URL xuất bí mật (calendar key); file/URL chỉ chứa các sự kiện mà người dùng đó được phép thấy, và việc đặt lại khoá sẽ vô hiệu hoá URL cũ.
  */
 describe('Nhắn tin và lịch', () => {
   let app: INestApplication;
@@ -43,10 +36,7 @@ describe('Nhắn tin và lịch', () => {
   }
 
   /**
-   * Hai user thành liên hệ ĐÃ ĐƯỢC DUYỆT của nhau qua luồng yêu cầu–chấp
-   * nhận (Lớp B của issue #33 thay danh bạ một chiều): requester gửi yêu
-   * cầu, accepter chấp nhận — chỉ khi đó quan hệ mới tồn tại và cổng
-   * liên lạc mới mở.
+   * Hai user thành liên hệ ĐÃ ĐƯỢC DUYỆT của nhau qua luồng yêu cầu–chấp nhận (Lớp B của issue #33 thay danh bạ một chiều): requester gửi yêu cầu, accepter chấp nhận — chỉ khi đó quan hệ mới tồn tại và cổng liên lạc mới mở.
    */
   async function befriend(requester: { id: string; token: string }, accepter: { id: string; token: string }) {
     const req = await http(app).post(`/api/v1/messages/contacts/${accepter.id}`).set('Authorization', `Bearer ${requester.token}`).send({});

@@ -20,30 +20,13 @@ import { ClassesService } from './classes.service';
 import type { GroupsRepository } from '@giaokhoa/db/repositories/groups';
 
 /**
- * Bộ spec phân quyền cho danh sách lớp (DL-06): khi `listClasses`
- * chuyển từ đánh giá quyền xem lớp theo từng lớp sang đánh giá THEO
- * LÔ cho cả tập lớp, đáp ứng phải giữ nguyên tuyệt đối.
+ * Bộ spec phân quyền cho danh sách lớp (DL-06): khi `listClasses` chuyển từ đánh giá quyền xem lớp theo từng lớp sang đánh giá THEO LÔ cho cả tập lớp, đáp ứng phải giữ nguyên tuyệt đối.
  *
- * Cách khẳng định: mỗi kịch bản tính đáp ứng kỳ vọng bằng THUẬT TOÁN
- * CŨ được viết lại độc lập ngay trong spec (chủ lớp → capability
- * `class:view` qua `PermissionEvaluator.hasCapability` từng lớp →
- * thành viên roster; bốn cờ khả năng theo đúng công thức hiện hành)
- * rồi đối chiếu toàn bộ hình chiếu đáp ứng (id, bốn cờ, mã tham gia)
- * của `listClasses` với kỳ vọng đó. Spec đạt trên code hiện tại (nơi
- * `listClasses` chính là thuật toán cũ) và phải đạt y hệt sau khi
- * batch hoá — lệch một trường hợp là batch sai.
+ * Cách khẳng định: mỗi kịch bản tính đáp ứng kỳ vọng bằng THUẬT TOÁN CŨ được viết lại độc lập ngay trong spec (chủ lớp → capability `class:view` qua `PermissionEvaluator.hasCapability` từng lớp → thành viên roster; bốn cờ khả năng theo đúng công thức hiện hành) rồi đối chiếu toàn bộ hình chiếu đáp ứng (id, bốn cờ, mã tham gia) của `listClasses` với kỳ vọng đó. Spec đạt trên code hiện tại (nơi `listClasses` chính là thuật toán cũ) và phải đạt y hệt sau khi batch hoá — lệch một trường hợp là batch sai.
  *
- * Kèm hai khẳng định về cách làm mới: khi không ở chế độ thấy toàn bộ,
- * phép phân giải theo lô của evaluator được gọi ĐÚNG MỘT lượt cho cả
- * tập lớp và không còn lượt `hasCapability('class:view')` theo từng
- * lớp; khi ở chế độ thấy toàn bộ (site admin / tenant:manage) đường
- * theo lô không được chạm tới — lối tắt hiện hành giữ nguyên.
+ * Kèm hai khẳng định về cách làm mới: khi không ở chế độ thấy toàn bộ, phép phân giải theo lô của evaluator được gọi ĐÚNG MỘT lượt cho cả tập lớp và không còn lượt `hasCapability('class:view')` theo từng lớp; khi ở chế độ thấy toàn bộ (site admin / tenant:manage) đường theo lô không được chạm tới — lối tắt hiện hành giữ nguyên.
  *
- * Thế giới kiểm chứng: tenant có 5 lớp ở các trạng thái quyền khác
- * nhau (lớp của mình, lớp có capability, lớp là thành viên roster,
- * lớp không liên hệ, lớp của người khác) trên cây context thật
- * system → tenant → class; `ContextsService` + `PermissionEvaluator`
- * là service THẬT trên tầng dữ liệu giả lập trong bộ nhớ.
+ * Thế giới kiểm chứng: tenant có 5 lớp ở các trạng thái quyền khác nhau (lớp của mình, lớp có capability, lớp là thành viên roster, lớp không liên hệ, lớp của người khác) trên cây context thật system → tenant → class; `ContextsService` + `PermissionEvaluator` là service THẬT trên tầng dữ liệu giả lập trong bộ nhớ.
  */
 
 const SYS_ID = '00000000-0000-4000-8000-000000000010';

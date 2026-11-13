@@ -11,12 +11,9 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser } from '..
  * Issue #44 — cổng xem danh sách ghi danh của khoá học
  * (GET /courses/:courseId/enrolments).
  *
- * Trước đợt này handler không nhận actor: bất kỳ tài khoản đăng nhập nào
- * cũng lấy được toàn bộ bản ghi ghi danh của mọi khoá. Nay chỉ (a) người
- * thuộc khoá — ghi danh đang hiệu lực hoặc gán vai tại context khoá — hoặc
+ * Trước đợt này handler không nhận actor: bất kỳ tài khoản đăng nhập nào cũng lấy được toàn bộ bản ghi ghi danh của mọi khoá. Nay chỉ (a) người thuộc khoá — ghi danh đang hiệu lực hoặc gán vai tại context khoá — hoặc
  * (b) người có capability `enrol:manage` tại context khoá mới xem được;
- * người ngoài nhận 404 `course.not_found`, giống hệt khoá không tồn tại,
- * để không lộ sự tồn tại của khoá.
+ * người ngoài nhận 404 `course.not_found`, giống hệt khoá không tồn tại, để không lộ sự tồn tại của khoá.
  */
 describe('Cổng danh sách ghi danh (issue #44)', () => {
   let app: INestApplication;

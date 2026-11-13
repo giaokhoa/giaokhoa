@@ -7,15 +7,9 @@ import {
 } from '../../support/identity-access-helpers';
 
 /**
- * Issue #545 (đợt 1 của chuỗi vai trò & phân quyền): bốn bổ sung backend
- * cho module access — (1) `GET /access/roles` kèm số người giữ phân
- * biệt và tổng hợp năng lực phía server; (2) `PUT
- * /access/roles/:id/capabilities` lưu ma trận thay toàn bộ, nguyên tử;
+ * Issue #545 (đợt 1 của chuỗi vai trò & phân quyền): bốn bổ sung backend cho module access — (1) `GET /access/roles` kèm số người giữ phân biệt và tổng hợp năng lực phía server; (2) `PUT /access/roles/:id/capabilities` lưu ma trận thay toàn bộ, nguyên tử;
  * (3) `GET /access/assignments` lọc theo role, tìm theo người dùng,
- * phân trang phía server, mỗi dòng kèm tên/email; (4) chốt chặn xoá
- * role dựng sẵn và role đang còn người giữ. Mọi ca lái qua HTTP thật
- * và đối chiếu chéo với dữ kiện gốc trong hai bảng `role_assignments`
- * / `role_capabilities` bằng truy vấn SQL độc lập.
+ * phân trang phía server, mỗi dòng kèm tên/email; (4) chốt chặn xoá role dựng sẵn và role đang còn người giữ. Mọi ca lái qua HTTP thật và đối chiếu chéo với dữ kiện gốc trong hai bảng `role_assignments` / `role_capabilities` bằng truy vấn SQL độc lập.
  */
 describe('Access: tổng hợp vai trò, ma trận thay toàn bộ, bảng gán vai và chốt xoá (issue #545)', () => {
   let app: INestApplication;

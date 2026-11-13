@@ -13,12 +13,7 @@ import {
 import { addExamSlot, createExamDraft, createReadyQuestion, pinExam } from '../../support/exam-pin-helpers';
 
 /**
- * Đặc trưng hoá DL-03 (issue #489): đường đọc kết quả quiz — tóm tắt
- * lượt làm, điểm bài hiện tại theo grade_method và trang kết quả của
- * giáo viên — trên dữ kiện nhiều học sinh × nhiều lượt. Hình dạng đáp
- * ứng, thứ tự và các số điểm kỳ vọng dưới đây được tính độc lập từ dữ
- * kiện gieo (điểm lượt = sumGrades / tổng maxMark của usage × điểm
- * bài) và phải giữ nguyên khi đường đọc chuyển sang nạp theo lô.
+ * Đặc trưng hoá DL-03 (issue #489): đường đọc kết quả quiz — tóm tắt lượt làm, điểm bài hiện tại theo grade_method và trang kết quả của giáo viên — trên dữ kiện nhiều học sinh × nhiều lượt. Hình dạng đáp ứng, thứ tự và các số điểm kỳ vọng dưới đây được tính độc lập từ dữ kiện gieo (điểm lượt = sumGrades / tổng maxMark của usage × điểm bài) và phải giữ nguyên khi đường đọc chuyển sang nạp theo lô.
  */
 describe('Quiz: đặc trưng hoá đường đọc kết quả lượt làm (DL-03, issue #489)', () => {
   let app: INestApplication;

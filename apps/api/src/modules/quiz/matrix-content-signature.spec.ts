@@ -6,14 +6,8 @@ import {
 } from './matrix-content-signature';
 
 /**
- * Kiểm đơn vị cho chữ ký nội dung ma trận (lát schema chống trùng,
- * issue #233): thuật toán là MỘT định nghĩa dùng chung cho tầng đối
- * chiếu trong code, cột `content_signature` ở DB và script lấp dữ
- * liệu — các ca ở đây khoá các bất biến mà chống trùng dựa vào:
- * không phụ thuộc thứ tự của tập phạm vi/ô, làm tròn điểm 4 chữ số
- * thập phân, và đổi bất kỳ thành phần nào cũng đổi chữ ký. Thêm ca
- * nhận diện va chạm: chỉ lỗi 23505 của ĐÚNG ràng buộc (bank, chữ ký)
- * mới được tính là trùng nội dung.
+ * Kiểm đơn vị cho chữ ký nội dung ma trận (lát schema chống trùng, issue #233): thuật toán là MỘT định nghĩa dùng chung cho tầng đối chiếu trong code, cột `content_signature` ở DB và script lấp dữ liệu — các ca ở đây khoá các bất biến mà chống trùng dựa vào:
+ * không phụ thuộc thứ tự của tập phạm vi/ô, làm tròn điểm 4 chữ số thập phân, và đổi bất kỳ thành phần nào cũng đổi chữ ký. Thêm ca nhận diện va chạm: chỉ lỗi 23505 của ĐÚNG ràng buộc (bank, chữ ký) mới được tính là trùng nội dung.
  */
 
 const BASE: MatrixContentSignatureInput = {

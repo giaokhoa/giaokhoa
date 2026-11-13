@@ -4,11 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AvailabilityEditor, type AvailabilityNodeModel } from './availability-editor';
 
 /**
- * Spec trình sửa cây availability: mô hình phát ra qua `onChange` phải
- * khớp đúng hình dạng cây JSON phía API (nút `{ op, c, show?, showc? }`,
- * lá date/grade/completion/group/grouping/profile với đúng khoá tham số
- * mà evaluator của backend đọc — đối chiếu availability.service và các
- * evaluator đăng ký ở completion/groups service).
+ * Spec trình sửa cây availability: mô hình phát ra qua `onChange` phải khớp đúng hình dạng cây JSON phía API (nút `{ op, c, show?, showc? }`, lá date/grade/completion/group/grouping/profile với đúng khoá tham số mà evaluator của backend đọc — đối chiếu availability.service và các evaluator đăng ký ở completion/groups service).
  */
 const GROUP_ID = '01900000-0000-7000-8000-000000002001';
 const GROUPING_ID = '01900000-0000-7000-8000-000000002002';

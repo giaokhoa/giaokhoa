@@ -3,26 +3,16 @@
  *
  * Một phiên bản của câu hỏi hệ thống được lưu kèm một gói tự đủ
  * (self-contained): toàn bộ nội dung cần thiết để một trung tâm nhập
- * bản chụp mà không phải đọc thêm từ kho ngân hàng — nội dung câu,
- * đáp án + quy tắc chấm, phản hồi, ngữ liệu kèm, tài nguyên, và các
- * liên kết YCCĐ của câu (mã chuẩn + mức độ nhận thức từng liên kết).
- * Tài nguyên (media) không có bảng riêng: tài liệu Tiptap mang tham
- * chiếu `contentHash` tới kho đối tượng dùng chung (module files) nên
- * tài liệu trong gói đã mang tham chiếu nguyên vẹn, không sao chép tệp.
+ * bản chụp mà không phải đọc thêm từ kho ngân hàng — nội dung câu, đáp án + quy tắc chấm, phản hồi, ngữ liệu kèm, tài nguyên, và các liên kết YCCĐ của câu (mã chuẩn + mức độ nhận thức từng liên kết). Tài nguyên (media) không có bảng riêng: tài liệu Tiptap mang tham chiếu `contentHash` tới kho đối tượng dùng chung (module files) nên tài liệu trong gói đã mang tham chiếu nguyên vẹn, không sao chép tệp.
  *
- * Tính bất biến: nội dung đã phát hành không bao giờ bị ghi đè — mỗi
- * lần sửa tạo một phiên bản mới với gói + checksum mới; phiên bản cũ
- * đọc lại vẫn nguyên vẹn. Checksum là SHA-256 của dạng chuẩn hoá
+ * Tính bất biến: nội dung đã phát hành không bao giờ bị ghi đè — mỗi lần sửa tạo một phiên bản mới với gói + checksum mới; phiên bản cũ đọc lại vẫn nguyên vẹn. Checksum là SHA-256 của dạng chuẩn hoá
  * (canonical JSON: khoá sắp xếp đệ quy) của gói, để phía trung tâm
- * kiểm chứng lại trước khi ghi bản chụp: checksum lệch thì từ chối
- * nhập, không ghi nửa vời.
+ * kiểm chứng lại trước khi ghi bản chụp: checksum lệch thì từ chối nhập, không ghi nửa vời.
  */
 import { createHash } from 'node:crypto';
 
 /**
- * Nội dung gói của một phiên bản câu hỏi hệ thống. Các trường tài liệu
- * dùng kiểu `unknown` có chủ đích: chúng là tài liệu Tiptap đã lưu
- * trong kho nghiệp vụ, gói chỉ mang nguyên vẹn, không diễn giải lại.
+ * Nội dung gói của một phiên bản câu hỏi hệ thống. Các trường tài liệu dùng kiểu `unknown` có chủ đích: chúng là tài liệu Tiptap đã lưu trong kho nghiệp vụ, gói chỉ mang nguyên vẹn, không diễn giải lại.
  */
 export type SystemQuestionPackage = {
   /** Nội dung câu hỏi (tài liệu Tiptap của `question_versions`). */
@@ -50,15 +40,11 @@ export type SystemQuestionPackage = {
     solution: unknown | null;
   } | null;
   /**
-   * Hàng tuỳ chọn riêng theo dạng câu hỏi (multichoice/truefalse/
-   * shortanswer/essay), đã lược bỏ id và id phiên bản — chỉ giữ nội
-   * dung nghiệp vụ để gói tự đủ.
+   * Hàng tuỳ chọn riêng theo dạng câu hỏi (multichoice/truefalse/ shortanswer/essay), đã lược bỏ id và id phiên bản — chỉ giữ nội dung nghiệp vụ để gói tự đủ.
    */
   options: Record<string, unknown> | null;
   /**
-   * Các liên kết YCCĐ của câu tại thời điểm đóng gói: mỗi liên kết
-   * mang id chuẩn gốc của platform (`outcomeId`) và mức độ nhận thức
-   * riêng của liên kết đó (`cognitiveLevel`).
+   * Các liên kết YCCĐ của câu tại thời điểm đóng gói: mỗi liên kết mang id chuẩn gốc của platform (`outcomeId`) và mức độ nhận thức riêng của liên kết đó (`cognitiveLevel`).
    */
   outcomes: Array<{
     /** Id chuẩn gốc phía platform (uuid của `learning_outcomes`). */

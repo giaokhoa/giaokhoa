@@ -17,9 +17,7 @@ export function SubjectForm({ initial, subjectId }: { initial?: CurriculumSubjec
   const [slug, setSlug] = useState(initial?.slug ?? '');
   const [position, setPosition] = useState(String(initial?.position ?? 1));
   const [error, setError] = useState<string | null>(null);
-  // Ghi môn qua các đột biến của lib/curriculum (F-01 của rà soát
-  // #133): tạo mới tự neo context hệ thống trong đột biến, sửa đi
-  // thẳng PATCH; thành công thì danh sách môn được làm mới.
+  // Ghi môn qua các đột biến của lib/curriculum (F-01 của rà soát #133): tạo mới tự neo context hệ thống trong đột biến, sửa đi thẳng PATCH; thành công thì danh sách môn được làm mới.
   const createSubject = useCreateCurriculumSubject();
   const updateSubject = useUpdateCurriculumSubject();
 

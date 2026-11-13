@@ -13,8 +13,7 @@ import { BackupService } from './backup.service';
   imports: [AccessModule, CoursesModule, FilesModule, SpaceRoutingModule],
   controllers: [BackupController],
   providers: [
-    // Repository của package @giaokhoa/db chạy trên handle Kysely đã định
-    // tuyến theo không gian (issue #648).
+    // Repository của package @giaokhoa/db chạy trên handle Kysely đã định tuyến theo không gian (issue #648).
     {
       provide: BackupRepository,
       useFactory: (spaceDatabase: SpaceDatabaseService) => new BackupRepository(spaceDatabase.routedKysely),

@@ -1,37 +1,19 @@
 /**
  * Repository của cụm NGƯỜI DÙNG trên Kysely.
  *
- * Vai trò: mọi truy cập tới hai bảng `users` và `user_preferences`
- * của kho trung tâm tập trung ở đây. Repository không chứa luật
- * nghiệp vụ — chính sách mật khẩu, đồng bộ credential và sự kiện
- * outbox nằm ở tầng service phía ứng dụng; repository chỉ nhận
- * handle Kysely (instance gốc hoặc transaction đang mở) do tầng
- * ứng dụng truyền vào, và phơi đúng hai điểm ghép transaction mà
- * tầng service cần: `transaction(fn)` để mở transaction trên
- * handle gốc, và tham số `tx` tuỳ chọn ở các thao tác ghi để chạy
- * trong transaction do nơi gọi mở.
+ * Vai trò: mọi truy cập tới hai bảng `users` và `user_preferences` của kho trung tâm tập trung ở đây. Repository không chứa luật nghiệp vụ — chính sách mật khẩu, đồng bộ credential và sự kiện outbox nằm ở tầng service phía ứng dụng; repository chỉ nhận handle Kysely (instance gốc hoặc transaction đang mở) do tầng ứng dụng truyền vào, và phơi đúng hai điểm ghép transaction mà tầng service cần: `transaction(fn)` để mở transaction trên handle gốc, và tham số `tx` tuỳ chọn ở các thao tác ghi để chạy trong transaction do nơi gọi mở.
  *
  * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong, truy vấn viết trên interface schema sinh bằng
  *   codegen: tên bảng/cột giữ nguyên snake_case của database.
  * - Bên ngoài, repository trả/nhận hình dạng dòng camelCase như
- *   phía tiêu thụ đang dùng: cột được chọn bằng danh sách tường
- *   minh có bí danh (`first_name as firstName`), giá trị ghi được
- *   ánh xạ từng trường từ camelCase sang snake_case ở các hàm
- *   `*InsertValues`/`*UpdateSet` trong file này.
+ *   phía tiêu thụ đang dùng: cột được chọn bằng danh sách tường minh có bí danh (`first_name as firstName`), giá trị ghi được ánh xạ từng trường từ camelCase sang snake_case ở các hàm `*InsertValues`/`*UpdateSet` trong file này.
  * - Giá trị `undefined` bị LOẠI khỏi values/set trước khi gọi
- *   builder (quy tắc T-4 của pilot): trường vắng mặt phải để
- *   default của database quyết định. Ngược lại, `undefined` lọt
- *   vào mệnh đề WHERE bị gắn thành NULL lúc thực thi và lặng lẽ
- *   trả 0 dòng — vì vậy điều kiện động của `search()` dựng bằng
- *   `eb.and(conds)` trên các biểu thức luôn có giá trị bắt buộc
+ *   builder (quy tắc T-4 của pilot): trường vắng mặt phải để default của database quyết định. Ngược lại, `undefined` lọt vào mệnh đề WHERE bị gắn thành NULL lúc thực thi và lặng lẽ trả 0 dòng — vì vậy điều kiện động của `search()` dựng bằng `eb.and(conds)` trên các biểu thức luôn có giá trị bắt buộc
  *   (mẫu an toàn của thử nghiệm T-13), không bao giờ truyền
  *   `where(undefined)`.
  * - Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh
- *   ứng dụng, không tự mở pool: handle do tầng ứng dụng dựng (điểm
- *   lắp ráp là facade định tuyến theo không gian `routedKysely`)
- *   rồi truyền vào; ngữ cảnh trung tâm đi theo chính kết nối của
- *   handle đó.
+ *   ứng dụng, không tự mở pool: handle do tầng ứng dụng dựng (điểm lắp ráp là facade định tuyến theo không gian `routedKysely`) rồi truyền vào; ngữ cảnh trung tâm đi theo chính kết nối của handle đó.
  */
 import { sql, type ExpressionBuilder, type Insertable, type Updateable } from 'kysely';
 import type { UserListSortBy, UserListStatus } from '@giaokhoa/contracts';
@@ -79,24 +61,14 @@ export interface NewUser {
 export type UserPatch = Partial<NewUser>;
 
 /**
- * Bộ lọc danh sách người dùng cho `search()` — nhóm trạng thái và hợp đồng
- * sắp xếp, nhận giá trị theo hợp đồng truy vấn ở `@giaokhoa/contracts`. Mọi
- * trường đều tuỳ chọn; bỏ trống trường nào thì `search()` áp dụng hành vi
- * mặc định của trường đó như mô tả từng trường dưới đây.
+ * Bộ lọc danh sách người dùng cho `search()` — nhóm trạng thái và hợp đồng sắp xếp, nhận giá trị theo hợp đồng truy vấn ở `@giaokhoa/contracts`. Mọi trường đều tuỳ chọn; bỏ trống trường nào thì `search()` áp dụng hành vi mặc định của trường đó như mô tả từng trường dưới đây.
  *
  * - `status`: nhóm trạng thái tài khoản cần lấy, suy ra từ hai cờ `deleted`
- *   và `suspended` của bản ghi người dùng. Không truyền thì chỉ lấy tài
- *   khoản chưa xoá (gồm cả tài khoản đang bị đình chỉ); `active` lấy tài
- *   khoản chưa xoá và không bị đình chỉ; `suspended` lấy tài khoản chưa xoá
- *   đang bị đình chỉ; `deleted` chỉ lấy tài khoản đã xoá mềm.
+ *   và `suspended` của bản ghi người dùng. Không truyền thì chỉ lấy tài khoản chưa xoá (gồm cả tài khoản đang bị đình chỉ); `active` lấy tài khoản chưa xoá và không bị đình chỉ; `suspended` lấy tài khoản chưa xoá đang bị đình chỉ; `deleted` chỉ lấy tài khoản đã xoá mềm.
  * - `sortBy`: trường sắp xếp chính — `name` sắp theo `firstName` rồi
- *   `lastName`, `createdAt` theo thời điểm tạo tài khoản, `lastLogin` theo
- *   lần đăng nhập gần nhất. Không truyền thì giữ thứ tự mặc định theo `id`
- *   tăng dần; khi có truyền, `search()` luôn neo thêm `id` tăng dần ở cuối
- *   để thứ tự ổn định giữa các trang.
+ *   `lastName`, `createdAt` theo thời điểm tạo tài khoản, `lastLogin` theo lần đăng nhập gần nhất. Không truyền thì giữ thứ tự mặc định theo `id` tăng dần; khi có truyền, `search()` luôn neo thêm `id` tăng dần ở cuối để thứ tự ổn định giữa các trang.
  * - `sortDirection`: chiều áp cho trường `sortBy` — `desc` là giảm dần, các
- *   trường hợp còn lại (kể cả không truyền) là tăng dần. Chỉ có tác dụng khi
- *   có `sortBy`; neo `id` ở cuối luôn tăng dần bất kể chiều này.
+ *   trường hợp còn lại (kể cả không truyền) là tăng dần. Chỉ có tác dụng khi có `sortBy`; neo `id` ở cuối luôn tăng dần bất kể chiều này.
  */
 export interface UserListFilter {
   status?: UserListStatus;
@@ -150,11 +122,7 @@ function userInsertValues(values: NewUser): Insertable<CentreDB['users']> {
 }
 
 /**
- * Ánh xạ một patch hồ sơ (camelCase) sang set update (snake_case),
- * LOẠI mọi trường `undefined` — patch chỉ chứa trường nào thì chỉ
- * trường đó đổi, đúng ngữ nghĩa bỏ qua `undefined` của đường
- * bộ máy cũ trước đây (quy tắc T-4). Mốc `updated_at` do repository
- * tự đóng dấu ở điểm gọi, không nằm trong hàm ánh xạ này.
+ * Ánh xạ một patch hồ sơ (camelCase) sang set update (snake_case), LOẠI mọi trường `undefined` — patch chỉ chứa trường nào thì chỉ trường đó đổi, đúng ngữ nghĩa bỏ qua `undefined` của đường bộ máy cũ trước đây (quy tắc T-4). Mốc `updated_at` do repository tự đóng dấu ở điểm gọi, không nằm trong hàm ánh xạ này.
  */
 function userUpdateSet(patch: UserPatch): Updateable<CentreDB['users']> {
   const set: Updateable<CentreDB['users']> = {};
@@ -201,8 +169,7 @@ export class UsersRepository {
   }
 
   /**
-   * Cập nhật các trường hồ sơ của user; mốc `updated_at` luôn được
-   * đóng dấu tại thời điểm ghi, kể cả khi patch mang sẵn mốc riêng.
+   * Cập nhật các trường hồ sơ của user; mốc `updated_at` luôn được đóng dấu tại thời điểm ghi, kể cả khi patch mang sẵn mốc riêng.
    */
   async updateUser(id: string, v: UserPatch, tx?: CentreTx): Promise<void> {
     await (tx ?? this.handle)
@@ -258,20 +225,9 @@ export class UsersRepository {
   }
 
   /**
-   * Tìm user theo từ khoá (username/email/họ tên) có phân trang — phục vụ trang quản trị.
-   * Lọc trạng thái suy ra từ hai cờ của tài khoản: không truyền `status` thì chỉ lấy
-   * tài khoản chưa xoá (hành vi vốn có); `active` thêm điều kiện không bị đình chỉ;
-   * `suspended` lấy tài khoản chưa xoá đang bị đình chỉ; `deleted` lấy tài khoản đã
-   * xoá mềm. Sắp xếp theo hợp đồng đóng ở tầng contracts: không có `sortBy` thì giữ
-   * thứ tự theo id; có `sortBy` thì sắp theo trường đó (`name` là firstName rồi
-   * lastName) với chiều `sortDirection` (mặc định tăng dần) và luôn neo id tăng
-   * dần ở cuối để thứ tự ổn định giữa các trang.
+   * Tìm user theo từ khoá (username/email/họ tên) có phân trang — phục vụ trang quản trị. Lọc trạng thái suy ra từ hai cờ của tài khoản: không truyền `status` thì chỉ lấy tài khoản chưa xoá (hành vi vốn có); `active` thêm điều kiện không bị đình chỉ; `suspended` lấy tài khoản chưa xoá đang bị đình chỉ; `deleted` lấy tài khoản đã xoá mềm. Sắp xếp theo hợp đồng đóng ở tầng contracts: không có `sortBy` thì giữ thứ tự theo id; có `sortBy` thì sắp theo trường đó (`name` là firstName rồi lastName) với chiều `sortDirection` (mặc định tăng dần) và luôn neo id tăng dần ở cuối để thứ tự ổn định giữa các trang.
    *
-   * Điều kiện động dựng theo mẫu T-13: mọi điều kiện đều là biểu
-   * thức có giá trị bắt buộc, hợp bằng `eb.and(conds)`; nhóm OR của
-   * từ khoá là một biểu thức con trong cùng danh sách. Không bao
-   * giờ truyền `undefined` vào `where` (nó bị gắn thành NULL và
-   * lặng lẽ trả 0 dòng).
+   * Điều kiện động dựng theo mẫu T-13: mọi điều kiện đều là biểu thức có giá trị bắt buộc, hợp bằng `eb.and(conds)`; nhóm OR của từ khoá là một biểu thức con trong cùng danh sách. Không bao giờ truyền `undefined` vào `where` (nó bị gắn thành NULL và lặng lẽ trả 0 dòng).
    */
   async search(search: string | undefined, page: number, pageSize: number, filter: UserListFilter = {}): Promise<{ rows: UserRow[]; total: number }> {
     const direction = filter.sortDirection === 'desc' ? 'desc' : 'asc';

@@ -43,40 +43,25 @@ const TITLE_KEYS: { prefix: string; key: string; ns: 'app' | 'dashboard' }[] = [
 ];
 
 /**
- * Ô tìm kiếm nội dung ở GIỮA header (chốt 23:52 ngày
- * 26/10/2026, issue #303 — khuôn Facebook/YouTube: header ba vùng,
- * ô tìm kiếm nằm giữa). Đây là đường vào trang kết quả tìm kiếm
- * toàn cục đầy đủ. Bề mặt mở bằng Ctrl/Cmd+K (xem
- * command-palette.tsx) là bề mặt hợp nhất theo chốt gộp tìm kiếm
- * ngày 27/10/2026 — nhóm "Nội dung" của nó dùng chung cùng API
- * /search với trang kết quả — nhưng ô giữa GIỮ NGUYÊN vai trò và
- * hành vi: gõ tại chỗ không gọi API, Enter mới sang trang kết quả.
+ * Ô tìm kiếm nội dung ở GIỮA header (chốt 23:52 ngày 26/10/2026, issue #303 — khuôn Facebook/YouTube: header ba vùng, ô tìm kiếm nằm giữa). Đây là đường vào trang kết quả tìm kiếm toàn cục đầy đủ. Bề mặt mở bằng Ctrl/Cmd+K (xem command-palette.tsx) là bề mặt hợp nhất theo chốt gộp tìm kiếm ngày 27/10/2026 — nhóm "Nội dung" của nó dùng chung cùng API /search với trang kết quả — nhưng ô giữa GIỮ NGUYÊN vai trò và hành vi: gõ tại chỗ không gọi API, Enter mới sang trang kết quả.
  *
  * Flow:
  * 1. Người dùng gõ vào ô (trạng thái chữ sống cục bộ trong component
  *    này, gõ không làm điều hướng hay gọi API).
  * 2. Enter / submit form: từ khoá sau khi cắt khoảng trắng mà RỖNG
- *    thì KHÔNG điều hướng (ở yên trang hiện tại — tránh đẩy người
- *    dùng tới một trang kết quả trống vô nghĩa); có chữ thì điều
- *    hướng tới `/search?q=<từ khoá đã mã hoá URL>` và trang kết quả
- *    tự đọc `q` chạy tìm ngay (xem pages/platform-search.tsx).
+ *    thì KHÔNG điều hướng (ở yên trang hiện tại — tránh đẩy người dùng tới một trang kết quả trống vô nghĩa); có chữ thì điều hướng tới `/search?q=<từ khoá đã mã hoá URL>` và trang kết quả tự đọc `q` chạy tìm ngay (xem pages/platform-search.tsx).
  * 3. Đồng bộ ngược từ URL: khi đang ở `/search`, ô luôn hiển thị
- *    đúng từ khoá của tham số `q` hiện tại (kể cả khi `q` đổi do
- *    điều hướng từ nơi khác); rời khỏi `/search` thì giữ nguyên chữ
- *    người dùng đã gõ để quay lại trang kết quả là thấy đúng ngữ
- *    cảnh tìm trước đó.
+ *    đúng từ khoá của tham số `q` hiện tại (kể cả khi `q` đổi do điều hướng từ nơi khác); rời khỏi `/search` thì giữ nguyên chữ người dùng đã gõ để quay lại trang kết quả là thấy đúng ngữ cảnh tìm trước đó.
  */
 function HeaderSearch() {
   const { t } = useTranslation(['platform']);
   const navigate = useNavigate();
   const { pathname, search } = useLocation();
-  // Từ khoá chuẩn theo URL khi đang ở trang kết quả; null = không ở
-  // /search (không đồng bộ gì, giữ chữ người dùng đang gõ dở).
+  // Từ khoá chuẩn theo URL khi đang ở trang kết quả; null = không ở /search (không đồng bộ gì, giữ chữ người dùng đang gõ dở).
   const urlKeyword = pathname === '/search' ? (new URLSearchParams(search).get('q') ?? '') : null;
   const [keyword, setKeyword] = useState(urlKeyword ?? '');
 
-  // URL là nguồn sự thật khi ở /search: q đổi (gửi lại từ chính ô
-  // này, đi từ bảng lệnh, hay dán link) thì ô phải khớp theo.
+  // URL là nguồn sự thật khi ở /search: q đổi (gửi lại từ chính ô này, đi từ bảng lệnh, hay dán link) thì ô phải khớp theo.
   const [previousUrlKeyword, setPreviousUrlKeyword] = useState(urlKeyword);
   if (urlKeyword !== previousUrlKeyword) {
     setPreviousUrlKeyword(urlKeyword);

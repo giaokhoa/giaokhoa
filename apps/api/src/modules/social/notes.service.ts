@@ -7,15 +7,12 @@ import { SocialRepository, type NoteRow } from '@giaokhoa/db/repositories/social
 /**
  * NotesModule (Moodle core_notes): ghi chú VỀ một người dùng, ở ba trạng thái
  * (report §2#16): 'draft' = ghi chú cá nhân (chỉ người tạo mới thấy),
- * 'public' = ghi chú khoá học (courseId được đặt; chỉ đọc được với
- * notes:view tại context của KHOÁ HỌC — trong thực tế là các giáo viên
- * của khoá học, KHÔNG phải học viên khác và KHÔNG phải chủ thể), 'site' = ghi chú site
+ * 'public' = ghi chú khoá học (courseId được đặt; chỉ đọc được với notes:view tại context của KHOÁ HỌC — trong thực tế là các giáo viên của khoá học, KHÔNG phải học viên khác và KHÔNG phải chủ thể), 'site' = ghi chú site
  * (notes:view tại context hệ thống).
  */
 @Injectable()
 /**
- * Ghi chú khoá học về học viên (course notes): site/course/personal/draft theo mức hiển thị.
- * Đối chiếu Moodle: notes/classes (note). Note nháp chỉ tác giả thấy.
+ * Ghi chú khoá học về học viên (course notes): site/course/personal/draft theo mức hiển thị. Đối chiếu Moodle: notes/classes (note). Note nháp chỉ tác giả thấy.
  */
 export class NotesService {
   constructor(

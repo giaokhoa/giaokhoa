@@ -3,41 +3,22 @@
  *
  * Vai trò: mọi truy cập tới mười bảng của database kho ngân hàng
  * (câu hỏi hệ thống + phiên bản bất biến + liên kết YCCĐ của phiên
- * bản, sổ trung tâm đã nhập, nhật ký sự kiện append-only, và các
- * bảng của gói YCCĐ hệ thống) tập trung ở đây. Kho ngân hàng là kho
- * RIÊNG của platform — tách hẳn kho trung tâm: repository này chỉ
- * giữ handle của kho ngân hàng do tầng ứng dụng cấp qua
- * `SystemBankConnection` (adapter mỏng cấp pool), không bao giờ
- * chạm handle định tuyến theo không gian của kho trung tâm, và
- * phía trung tâm của module (bản chụp, vết sự kiện, bản cài gói)
- * nằm ở repository riêng `system-bank-centre.ts` trên handle kho
- * trung tâm. Hai kho không có transaction chung: các luồng nghiệp
- * vụ dùng cả hai kho (nhập bản chụp, cài gói) bảo đảm thứ tự ghi
- * lành tính ở tầng service, không gộp hai handle thành một.
+ * bản, sổ trung tâm đã nhập, nhật ký sự kiện append-only, và các bảng của gói YCCĐ hệ thống) tập trung ở đây. Kho ngân hàng là kho RIÊNG của platform — tách hẳn kho trung tâm: repository này chỉ giữ handle của kho ngân hàng do tầng ứng dụng cấp qua `SystemBankConnection` (adapter mỏng cấp pool), không bao giờ chạm handle định tuyến theo không gian của kho trung tâm, và phía trung tâm của module (bản chụp, vết sự kiện, bản cài gói) nằm ở repository riêng `system-bank-centre.ts` trên handle kho trung tâm. Hai kho không có transaction chung: các luồng nghiệp vụ dùng cả hai kho (nhập bản chụp, cài gói) bảo đảm thứ tự ghi lành tính ở tầng service, không gộp hai handle thành một.
  *
  * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong, truy vấn viết trên interface schema sinh bằng
  *   codegen: tên bảng/cột giữ nguyên snake_case của database.
  * - Bên ngoài, repository trả/nhận hình dạng dòng camelCase như
- *   phía tiêu thụ đang dùng: cột được chọn bằng danh sách tường
- *   minh có bí danh (`source_question_id as sourceQuestionId`),
- *   giá trị ghi ánh xạ từng trường camelCase → snake_case. Kiểu
- *   dòng công khai khai ngay trong file này, KHÔNG import từ file
- *   schema bộ máy cũ (file đó bị xoá ở hạng mục gỡ bộ máy cũ).
+ *   phía tiêu thụ đang dùng: cột được chọn bằng danh sách tường minh có bí danh (`source_question_id as sourceQuestionId`), giá trị ghi ánh xạ từng trường camelCase → snake_case. Kiểu dòng công khai khai ngay trong file này, KHÔNG import từ file schema bộ máy cũ (file đó bị xoá ở hạng mục gỡ bộ máy cũ).
  * - Giá trị `undefined` bị LOẠI khỏi values trước khi gọi builder
  *   (quy tắc T-4 đã đo ở pilot: dựa vào mặc định thư viện là đủ
- *   chạy nhưng repository loại tường minh để hành vi không phụ
- *   thuộc mặc định); mọi giá trị where là tham số bắt buộc.
+ *   chạy nhưng repository loại tường minh để hành vi không phụ thuộc mặc định); mọi giá trị where là tham số bắt buộc.
  * - Mọi giá trị ghi vào cột jsonb đi qua helper `jsonbColumn`
  *   (serialize tường minh + `::jsonb`): driver `pg` hiểu MẢNG ở
  *   cấp cao nhất là mảng PostgreSQL chứ không phải tài liệu JSON
  *   (phát hiện của pilot).
  * - Chưa cấu hình (tầng ứng dụng chưa đặt
- *   `SYSTEM_BANK_DATABASE_URL`) thì handle là `null` và mọi thao
- *   tác ném lỗi chưa-cấu-hình mang mã `system_bank.not_configured`
- *   — ứng dụng vẫn khởi động, chỉ các đường kho ngân hàng báo 503.
- *   Package không phụ thuộc tầng ứng dụng nên hình dạng lỗi HTTP
- *   do tầng ứng dụng cấp qua hàm dựng lỗi lúc lắp ráp repository.
+ *   `SYSTEM_BANK_DATABASE_URL`) thì handle là `null` và mọi thao tác ném lỗi chưa-cấu-hình mang mã `system_bank.not_configured` — ứng dụng vẫn khởi động, chỉ các đường kho ngân hàng báo 503. Package không phụ thuộc tầng ứng dụng nên hình dạng lỗi HTTP do tầng ứng dụng cấp qua hàm dựng lỗi lúc lắp ráp repository.
  */
 import { sql, type InsertObject, type RawBuilder } from 'kysely';
 import type { SystemBankPackage } from '@giaokhoa/contracts';
@@ -168,11 +149,7 @@ export interface SystemOutcomePackageMappingRow {
 }
 
 /**
- * Lỗi ném ra khi repository bị gọi mà chưa có handle (kho ngân
- * hàng chưa được cấu hình). Package không phụ thuộc tầng ứng dụng
- * nên lỗi mang mã ổn định `system_bank.not_configured` dạng thuần;
- * tầng ứng dụng cấp hàm dựng lỗi riêng qua tham số khởi tạo của
- * repository để giữ đúng hình dạng lỗi HTTP 503 của nó.
+ * Lỗi ném ra khi repository bị gọi mà chưa có handle (kho ngân hàng chưa được cấu hình). Package không phụ thuộc tầng ứng dụng nên lỗi mang mã ổn định `system_bank.not_configured` dạng thuần; tầng ứng dụng cấp hàm dựng lỗi riêng qua tham số khởi tạo của repository để giữ đúng hình dạng lỗi HTTP 503 của nó.
  */
 export class SystemBankNotConfiguredError extends Error {
   /** Mã lỗi ổn định mà phía tiêu thụ dùng để nhận diện trạng thái chưa cấu hình. */

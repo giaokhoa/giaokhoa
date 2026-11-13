@@ -26,20 +26,13 @@ import { usePermissions } from '#lib/permissions';
 import { courseAdminPageClientLoader, useAddCohortMember, useAddCourseGroupMember, useAddGroupToGrouping, useCohortMembers, useCohorts, useCourseCompletions, useCourseConversation, useCourseDetail, useCourseEnrolInstances, useCourseEnrolments, useCourseGroupingGroups, useCourseGroupings, useCourseGroupMembers, useCourseGroups, useCreateCourseGroup, useCreateCourseGrouping, useDeleteCourseGroup, useDeleteCourseGrouping, useEnrolUserManually, useOpenGroupConversation, useRemoveCohortMember, useRemoveCourseGroupMember, useRenameCourseGroup, useSaveCourseGroupMode, useToggleCourseConversation, useToggleEnrolSuspend } from '../queries/course-admin';
 
 /**
- * Quản trị khoá học: nhóm, cohort, ghi danh thủ công kèm tạm khoá/kích
- * hoạt lại và tiến độ hoàn thành của học viên. Khu XÂY DỰNG khoá học
+ * Quản trị khoá học: nhóm, cohort, ghi danh thủ công kèm tạm khoá/kích hoạt lại và tiến độ hoàn thành của học viên. Khu XÂY DỰNG khoá học
  * (thông tin khoá, section, module, khung chương trình, tiêu chí hoàn
  * thành) đã tách sang trang Builder Outline riêng `/courses/:id/builder`
  * (K1 — chuẩn §9: mỗi mảng một màn riêng); trang này chỉ còn thẻ liên
- * kết sang builder cho người có quyền xây dựng khoá. Quyền suy từ
- * `usePermissions()`; API vẫn là nơi thực thi quyền thật.
+ * kết sang builder cho người có quyền xây dựng khoá. Quyền suy từ `usePermissions()`; API vẫn là nơi thực thi quyền thật.
  *
- * Luồng dữ liệu (F-01 của rà soát #133): mọi mảng của trang đọc qua
- * TanStack Query từ lib/course-admin-data — danh sách nền tải lỗi thì
- * rỗng như bản thủ công; thành viên của nhóm/cohort và nhóm của
- * grouping chỉ tải khi dòng được mở (component con gắn truy vấn theo
- * dòng) và lỗi tải báo đúng thông điệp của mảng đó; ghi thao tác đi
- * qua đột biến, làm mới đúng cụm khoá bị ảnh hưởng.
+ * Luồng dữ liệu (F-01 của rà soát #133): mọi mảng của trang đọc qua TanStack Query từ lib/course-admin-data — danh sách nền tải lỗi thì rỗng như bản thủ công; thành viên của nhóm/cohort và nhóm của grouping chỉ tải khi dòng được mở (component con gắn truy vấn theo dòng) và lỗi tải báo đúng thông điệp của mảng đó; ghi thao tác đi qua đột biến, làm mới đúng cụm khoá bị ảnh hưởng.
  */
 
 // --- Các mảng lười tải theo dòng mở rộng ---------------------------------------

@@ -1,17 +1,10 @@
 # @giaokhoa/api — README nghiệp vụ
 
-> File này ghi các **quyết định nghiệp vụ quan trọng và còn đang hiệu lực** của package.
-> Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub.
-> Quyết định nào đã bị đánh dấu "ĐÃ THAY THẾ" thì không được ghi ở đây như còn hiệu lực.
+> File này ghi các **quyết định nghiệp vụ quan trọng và còn đang hiệu lực** của package. Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub. Quyết định nào đã bị đánh dấu "ĐÃ THAY THẾ" thì không được ghi ở đây như còn hiệu lực.
 
 ## Package phụ trách nghiệp vụ gì
 
-`apps/api` là backend duy nhất của sản phẩm: toàn bộ nghiệp vụ của một Giáo khoa cho **lớp học
-online** tương thích nghiệp vụ sư phạm Việt Nam (Moodle là sàn tối thiểu) chạy qua API này —
-khoá học, lớp học, ghi danh, ngân hàng câu hỏi/đề/ma trận, quiz, bài tập, điểm theo bài, nhắn tin,
-thông báo, thanh toán học phí, chấm bài giấy bằng camera, MCP cho AI nhập câu hỏi, quản trị
-tenant (trung tâm) và nền tảng. Mọi quy tắc nghiệp vụ bất biến phải được thực thi **ở đây,
-phía server** — client không bao giờ là nơi gác nghiệp vụ duy nhất.
+`apps/api` là backend duy nhất của sản phẩm: toàn bộ nghiệp vụ của một Giáo khoa cho **lớp học online** tương thích nghiệp vụ sư phạm Việt Nam (Moodle là sàn tối thiểu) chạy qua API này — khoá học, lớp học, ghi danh, ngân hàng câu hỏi/đề/ma trận, quiz, bài tập, điểm theo bài, nhắn tin, thông báo, thanh toán học phí, chấm bài giấy bằng camera, MCP cho AI nhập câu hỏi, quản trị tenant (trung tâm) và nền tảng. Mọi quy tắc nghiệp vụ bất biến phải được thực thi **ở đây, phía server** — client không bao giờ là nơi gác nghiệp vụ duy nhất.
 
 ## Quyết định nghiệp vụ còn hiệu lực
 
@@ -36,18 +29,12 @@ phía server** — client không bao giờ là nơi gác nghiệp vụ duy nhấ
 
 ## Ranh giới — package này KHÔNG làm gì
 
-- Không làm nghiệp vụ hành chính trường học (xem quyết định ở trên) — kể cả khi có sẵn dữ
-  liệu gần giống (chuyên cần học tập không phải điểm danh hành chính, cũng không phải
-  điểm của bất kỳ bài kiểm tra/bài tập nào).
+- Không làm nghiệp vụ hành chính trường học (xem quyết định ở trên) — kể cả khi có sẵn dữ liệu gần giống (chuyên cần học tập không phải điểm danh hành chính, cũng không phải điểm của bất kỳ bài kiểm tra/bài tập nào).
 - Không chứa giao diện: API chỉ trả dữ liệu + gác quyền; trình bày thuộc `apps/web`.
-- Không tự quyết định nghiệp vụ mới: quyết định chưa có trong sổ quyết định thì dừng và
-  báo main chat để quyết, không tự chế theo tài liệu audit/research mới hơn.
+- Không tự quyết định nghiệp vụ mới: quyết định chưa có trong sổ quyết định thì dừng và báo main chat để quyết, không tự chế theo tài liệu audit/research mới hơn.
 - Không giữ job nền dài hạn: processor/định kỳ thuộc `apps/worker` (API chỉ ghi outbox/job).
 
 ## Kỹ thuật tối thiểu
 
-- NestJS 12, prefix `/api/v1`. Schema route chỉ dùng kiểu biểu diễn được trong JSON
-  Schema (ngày giờ = `z.iso.datetime(...)`) — `z.date()` làm app chết lúc boot
-  production qua Swagger (đã có test hồi quy `openapi-document`).
-- Boot local, migrate, seed: xem `package.json` (`db:migrate`, `seed:review`) và
-  README gốc của repo. Tài khoản demo ghi công khai trong README gốc của repo.
+- NestJS 12, prefix `/api/v1`. Schema route chỉ dùng kiểu biểu diễn được trong JSON Schema (ngày giờ = `z.iso.datetime(...)`) — `z.date()` làm app chết lúc boot production qua Swagger (đã có test hồi quy `openapi-document`).
+- Boot local, migrate, seed: xem `package.json` (`db:migrate`, `seed:review`) và README gốc của repo. Tài khoản demo ghi công khai trong README gốc của repo.

@@ -14,42 +14,17 @@ import { tenantAls } from '../tenants/tenant-als';
  * lớp hệ quả phải giữ tuyệt đối khi thứ tự tra cứu đổi:
  *
  *  1. Kết quả cho/chặn của từng trường hợp KHÔNG đổi so với hành vi
- *     hiện tại — ma trận kết quả trong spec này đạt trên code hiện tại
- *     và phải đạt y hệt sau refactor (đây là lưới an toàn của việc đổi
- *     thứ tự).
+ *     hiện tại — ma trận kết quả trong spec này đạt trên code hiện tại và phải đạt y hệt sau refactor (đây là lưới an toàn của việc đổi thứ tự).
  *  2. Chi phí truy vấn đổi đúng theo thiết kế cache-trước: ở lượt kiểm
- *     lặp lại cùng đầu vào (cache ấm), tầng dữ liệu đánh giá (gán vai,
- *     override), dữ kiện cổng tenant (thông tin tenant + membership) và
- *     cấu hình site admin KHÔNG bị hỏi lại — mọi tầng cache đều được
- *     tra trước truy vấn DB mà chúng thay thế. Hai truy vấn nạp
- *     context/path là ngoại lệ có chủ đích: chúng dựng dấu version —
- *     chính khoá vô hiệu hoá của mọi tầng cache — nên luôn đọc từ DB;
- *     spec ghim bất biến này bằng bộ đếm contextReads vẫn tăng ở lượt
- *     lặp lại.
+ *     lặp lại cùng đầu vào (cache ấm), tầng dữ liệu đánh giá (gán vai, override), dữ kiện cổng tenant (thông tin tenant + membership) và cấu hình site admin KHÔNG bị hỏi lại — mọi tầng cache đều được tra trước truy vấn DB mà chúng thay thế. Hai truy vấn nạp context/path là ngoại lệ có chủ đích: chúng dựng dấu version — chính khoá vô hiệu hoá của mọi tầng cache — nên luôn đọc từ DB; spec ghim bất biến này bằng bộ đếm contextReads vẫn tăng ở lượt lặp lại.
  *
  *  3. Vô hiệu hoá giữ nguyên điều kiện và tính tức thì hiện hành: mọi
- *     thay đổi dữ kiện quyền trong sản phẩm đều bump version của
- *     context liên quan qua `markContextDirty` (gỡ gán vai bump context
- *     của gán, đổi trạng thái membership/tenant bump context tenant,
- *     đặt override bump context của override). Spec mô phỏng đúng các
- *     bump đó và khẳng định kết quả lật ngay ở lượt kiểm sau. Danh sách
- *     site admin đổi qua `setSiteAdmins` — điểm ghi duy nhất của cấu
- *     hình này — cũng phải hiệu lực ngay.
+ *     thay đổi dữ kiện quyền trong sản phẩm đều bump version của context liên quan qua `markContextDirty` (gỡ gán vai bump context của gán, đổi trạng thái membership/tenant bump context tenant, đặt override bump context của override). Spec mô phỏng đúng các bump đó và khẳng định kết quả lật ngay ở lượt kiểm sau. Danh sách site admin đổi qua `setSiteAdmins` — điểm ghi duy nhất của cấu hình này — cũng phải hiệu lực ngay.
  *
  *  4. Mục cache của cấu hình site admin được cô lập theo cơ sở dữ
- *     liệu: giá trị của nó là id người dùng, chỉ có nghĩa trong đúng
- *     một DB, trong khi nhiều tiến trình trỏ vào các DB khác nhau có
- *     thể dùng chung một Redis (CI chạy nhiều DB test trên một
- *     Redis). Hai tiến trình khác DB không bao giờ được đọc/ghi lẫn
- *     mục của nhau — nếu không, một tiến trình sẽ thấy admin của DB
- *     lạ và quyết định sai (điển hình: seed của app con trên DB
- *     trống tưởng admin đầu tiên đã tồn tại nên bỏ qua việc tạo).
- *     Ngược lại, hai tiến trình cùng một DB vẫn dùng chung mục như
- *     thiết kế cache-trước vốn có.
+ *     liệu: giá trị của nó là id người dùng, chỉ có nghĩa trong đúng một DB, trong khi nhiều tiến trình trỏ vào các DB khác nhau có thể dùng chung một Redis (CI chạy nhiều DB test trên một Redis). Hai tiến trình khác DB không bao giờ được đọc/ghi lẫn mục của nhau — nếu không, một tiến trình sẽ thấy admin của DB lạ và quyết định sai (điển hình: seed của app con trên DB trống tưởng admin đầu tiên đã tồn tại nên bỏ qua việc tạo). Ngược lại, hai tiến trình cùng một DB vẫn dùng chung mục như thiết kế cache-trước vốn có.
  *
- * Thế giới kiểm chứng dựng trong bộ nhớ với tầng dữ liệu giả lập đếm
- * số lần bị hỏi theo từng loại đọc; `ContextsService` và
- * `PermissionEvaluator` đều là service THẬT.
+ * Thế giới kiểm chứng dựng trong bộ nhớ với tầng dữ liệu giả lập đếm số lần bị hỏi theo từng loại đọc; `ContextsService` và `PermissionEvaluator` đều là service THẬT.
  */
 
 const SYS_ID = '00000000-0000-4000-8000-000000000010';

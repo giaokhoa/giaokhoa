@@ -17,10 +17,7 @@ export interface UploadInput {
 export const QUESTION_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
 
 /**
- * Định danh bền của một file trong nội dung rich text: đường content có gác
- * quyền của chính module files. Nội dung câu hỏi lưu dạng này (không lưu URL
- * ký — URL ký hết hạn sau 300 giây); khi phục vụ người đọc, tầng phục vụ gọi
- * `resolveQuestionImageUrls` để thay bằng URL ký còn hạn.
+ * Định danh bền của một file trong nội dung rich text: đường content có gác quyền của chính module files. Nội dung câu hỏi lưu dạng này (không lưu URL ký — URL ký hết hạn sau 300 giây); khi phục vụ người đọc, tầng phục vụ gọi `resolveQuestionImageUrls` để thay bằng URL ký còn hạn.
  */
 export function questionFileContentSrc(fileId: string): string {
   return `/api/v1/files/${fileId}/content`;

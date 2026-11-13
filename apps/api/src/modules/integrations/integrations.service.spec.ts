@@ -9,18 +9,8 @@ import { hashToken, IntegrationsService } from './integrations.service';
 /**
  * Kiểm tra trạng thái chủ token tại lúc dùng (read-time) trong `callFunction`.
  *
- * Luật nghiệp vụ: external token của webservice là thông tin xác thực duy
- * nhất của đường gọi `@Public()`, và token không bao giờ vượt capability của
- * chủ token. Nhưng capability chỉ là nửa sau của luật: khi chủ token bị đình
- * chỉ hoặc xoá, quyền của chủ đáng lẽ vô hiệu ngay — trong khi thao tác đình
- * chỉ/xoá chỉ lật cờ trên dòng user, không thu hồi token. Mọi bề mặt xác thực
- * khác (JWT, refresh, phiên web, MCP) đều nạp lại trạng thái tài khoản ở mỗi
- * request nên đình chỉ có hiệu lực tức thì; đường webservice phải cùng khuôn:
- * `callFunction` nạp trạng thái chủ token ở mỗi lời gọi và từ chối khi chủ đã
- * xoá hoặc đang bị đình chỉ. Đình chỉ là trạng thái khôi phục được nên KHÔNG
- * thu hồi cứng token: gỡ đình chỉ là token cũ gọi lại được, không cần cấp mới.
- * Ca HTTP trọn đường (đình chỉ/gỡ đình chỉ qua API quản trị user) nằm ở e2e
- * `platform-search-webservice-flow`.
+ * Luật nghiệp vụ: external token của webservice là thông tin xác thực duy nhất của đường gọi `@Public()`, và token không bao giờ vượt capability của chủ token. Nhưng capability chỉ là nửa sau của luật: khi chủ token bị đình chỉ hoặc xoá, quyền của chủ đáng lẽ vô hiệu ngay — trong khi thao tác đình chỉ/xoá chỉ lật cờ trên dòng user, không thu hồi token. Mọi bề mặt xác thực khác (JWT, refresh, phiên web, MCP) đều nạp lại trạng thái tài khoản ở mỗi request nên đình chỉ có hiệu lực tức thì; đường webservice phải cùng khuôn:
+ * `callFunction` nạp trạng thái chủ token ở mỗi lời gọi và từ chối khi chủ đã xoá hoặc đang bị đình chỉ. Đình chỉ là trạng thái khôi phục được nên KHÔNG thu hồi cứng token: gỡ đình chỉ là token cũ gọi lại được, không cần cấp mới. Ca HTTP trọn đường (đình chỉ/gỡ đình chỉ qua API quản trị user) nằm ở e2e `platform-search-webservice-flow`.
  */
 
 const RAW_TOKEN = 'unit-test-raw-token';
@@ -113,8 +103,7 @@ describe('IntegrationsService.callFunction — trạng thái tài khoản chủ 
     await expect(call(service)).rejects.toBeInstanceOf(UnauthorizedException);
     setOwnerState({ suspended: false, deleted: false });
     await expect(call(service)).resolves.toEqual([{ id: 'course-1' }]);
-    // Trong suốt quá trình đình chỉ → gỡ đình chỉ, dòng token không hề bị
-    // đánh dấu thu hồi: điểm kiểm chỉ đọc trạng thái chủ, không ghi lên token.
+    // Trong suốt quá trình đình chỉ → gỡ đình chỉ, dòng token không hề bị đánh dấu thu hồi: điểm kiểm chỉ đọc trạng thái chủ, không ghi lên token.
     expect(tokenRow.revoked).toBe(false);
     for (const [, patch] of updateToken.mock.calls) {
       expect(patch).not.toMatchObject({ revoked: true });

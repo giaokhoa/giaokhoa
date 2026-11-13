@@ -5,21 +5,9 @@ import {
 } from '../../support/identity-access-helpers';
 
 /**
- * Một vũ trụ đếm chưa đọc chuẩn duy nhất (issue #592): vũ trụ của
- * badge sidebar — mọi conversation có tin chưa đọc của chính tôi,
- * trừ conversation đã tắt thông báo và trừ hội thoại 1–1 đang bị
- * ẩn vì chặn. Huy hiệu sidebar, hàng trong danh sách, thẻ lọc
- * "Chưa đọc" và huy hiệu tab Nhóm đều phải dẫn từ cùng vũ trụ
- * này, nên sau khi đọc, mọi bề mặt về cùng một con số trong cùng
- * một chu kỳ cập nhật.
+ * Một vũ trụ đếm chưa đọc chuẩn duy nhất (issue #592): vũ trụ của badge sidebar — mọi conversation có tin chưa đọc của chính tôi, trừ conversation đã tắt thông báo và trừ hội thoại 1–1 đang bị ẩn vì chặn. Huy hiệu sidebar, hàng trong danh sách, thẻ lọc "Chưa đọc" và huy hiệu tab Nhóm đều phải dẫn từ cùng vũ trụ này, nên sau khi đọc, mọi bề mặt về cùng một con số trong cùng một chu kỳ cập nhật.
  *
- * Dàn dựng cho người xem B: một hội thoại 1–1 bình thường có tin
- * chưa đọc, một nhóm tự do đã tắt thông báo có tin chưa đọc, và
- * một hội thoại 1–1 đang chặn có tin chưa đọc (tin gửi trước khi
- * chặn). Kỳ vọng: badge = 1, chỉ hàng 1–1 bình thường mang số
- * chưa đọc > 0, hàng nhóm tắt mang 0, cây nhóm của nhóm tắt mang
- * 0; sau khi B đọc hội thoại bình thường, badge và danh sách
- * cùng về 0 ngay ở các lần đọc liên tiếp.
+ * Dàn dựng cho người xem B: một hội thoại 1–1 bình thường có tin chưa đọc, một nhóm tự do đã tắt thông báo có tin chưa đọc, và một hội thoại 1–1 đang chặn có tin chưa đọc (tin gửi trước khi chặn). Kỳ vọng: badge = 1, chỉ hàng 1–1 bình thường mang số chưa đọc > 0, hàng nhóm tắt mang 0, cây nhóm của nhóm tắt mang 0; sau khi B đọc hội thoại bình thường, badge và danh sách cùng về 0 ngay ở các lần đọc liên tiếp.
  */
 interface Person { id: string; username: string; token: string }
 interface SummaryRow { id: string; unread: number; type: number; muted?: boolean }

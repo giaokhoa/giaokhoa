@@ -61,9 +61,7 @@ export class BadgesController {
   }
   @Post(':id/copy')
   /**
-   * POST /badges/:id/copy — nhân bản badge. Động từ chuẩn là `copy`
-   * theo danh sách hành động đóng (issue #345); path cũ
-   * `:id/duplicate` giữ qua handler alias ngay dưới.
+   * POST /badges/:id/copy — nhân bản badge. Động từ chuẩn là `copy` theo danh sách hành động đóng (issue #345); path cũ `:id/duplicate` giữ qua handler alias ngay dưới.
    */
   async copy(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.badges.duplicateBadge(actor.id, id);
@@ -72,8 +70,7 @@ export class BadgesController {
   @UseInterceptors(DeprecatedRouteAliasInterceptor)
   /**
    * POST /badges/:id/duplicate — alias cũ của POST /badges/:id/copy:
-   * uỷ quyền nguyên vẹn cho handler canonical; response mang header
-   * Deprecation/Sunset và lượt gọi được ghi log alias có cấu trúc
+   * uỷ quyền nguyên vẹn cho handler canonical; response mang header Deprecation/Sunset và lượt gọi được ghi log alias có cấu trúc
    * (căn cứ điều kiện gỡ alias: 0 lượt gọi trong 14 ngày).
    */
   async duplicate(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {

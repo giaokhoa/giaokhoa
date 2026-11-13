@@ -40,8 +40,7 @@ export interface RoleDeleteDialogProps {
 }
 
 /**
- * Dịch mã lỗi xoá vai trò của backend thành thông báo cho người dùng;
- * mã lạ thì dùng thông báo chung, không hiện mã kỹ thuật ra giao diện.
+ * Dịch mã lỗi xoá vai trò của backend thành thông báo cho người dùng; mã lạ thì dùng thông báo chung, không hiện mã kỹ thuật ra giao diện.
  */
 function deleteErrorMessage(error: unknown, t: (key: string) => string): string {
   if (error instanceof ApiError) {

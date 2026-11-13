@@ -18,11 +18,7 @@ import type {
 } from './backup-archive.types';
 
 /**
- * Danh sách cột tường minh có bí danh camelCase cho các bảng mà các
- * contributor tích hợp sẵn đọc/ghi (chuyển Kysely, issue #648): dòng
- * đọc ra giữ đúng hình dạng camelCase của archive như khi còn đọc
- * qua bộ máy cũ; insert/update viết bằng tên cột snake_case của
- * database. Kiểu dòng tương ứng nằm ở `backup-archive.types.ts`.
+ * Danh sách cột tường minh có bí danh camelCase cho các bảng mà các contributor tích hợp sẵn đọc/ghi (chuyển Kysely, issue #648): dòng đọc ra giữ đúng hình dạng camelCase của archive như khi còn đọc qua bộ máy cũ; insert/update viết bằng tên cột snake_case của database. Kiểu dòng tương ứng nằm ở `backup-archive.types.ts`.
  */
 const COURSE_COLUMNS = [
   'id', 'tenant_id as tenantId', 'category', 'full_name as fullName', 'short_name as shortName', 'id_number as idNumber',
@@ -163,10 +159,7 @@ const CALENDAR_SUBSCRIPTIONS_COLUMNS = [
 type BadgeCriteriaParams = Selectable<CentreDB['badge_criteria']>['params'];
 
 /**
- * Bọc `params` của một tiêu chí badge thành biểu thức jsonb tường
- * minh (serialize + `::jsonb`) — cùng khuôn jsonbValue của các
- * repository ở package: giá trị là một object ở cấp cao nhất nên
- * không gắn tham số trực tiếp qua driver.
+ * Bọc `params` của một tiêu chí badge thành biểu thức jsonb tường minh (serialize + `::jsonb`) — cùng khuôn jsonbValue của các repository ở package: giá trị là một object ở cấp cao nhất nên không gắn tham số trực tiếp qua driver.
  */
 function badgeCriteriaParamsJsonb(value: Record<string, unknown>): RawBuilder<BadgeCriteriaParams> {
   return sql<BadgeCriteriaParams>`${JSON.stringify(value)}::jsonb`;

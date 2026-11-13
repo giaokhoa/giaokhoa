@@ -12,10 +12,7 @@ import { baSessionResponse, isGetSessionUrl } from '#test/ba-session';
  * Spec nghiệm thu cụm khung SSR (issue #146, từ rà soát #133):
  *
  * - F-11: root loader đọc cookie `sidebar_state` của chính request và
- *   trả `sidebarDefaultOpen` tương ứng; không có cookie phiên Better
- *   Auth thì KHÔNG gọi API (giữ nguyên tắc cách ly GĐ4). Shell dựng từ
- *   giá trị loader cho data-state khớp (false → collapsed, true →
- *   expanded) ngay từ lần render đầu.
+ *   trả `sidebarDefaultOpen` tương ứng; không có cookie phiên Better Auth thì KHÔNG gọi API (giữ nguyên tắc cách ly GĐ4). Shell dựng từ giá trị loader cho data-state khớp (false → collapsed, true → expanded) ngay từ lần render đầu.
  * - F-07: một route lá lỗi (loader ném lỗi route) thì biên lỗi của
  *   route đó hiện trong vùng nội dung, khung vẫn nguyên; bấm Thử lại
  *   (revalidate) sau khi hết lỗi thì trang hiện lại.
@@ -52,9 +49,7 @@ function requestWithCookie(cookie: string): Request {
 }
 
 beforeAll(() => {
-  // jsdom không có matchMedia; hook useIsMobile của @giaokhoa/ui cần nó khi
-  // sidebar mount — stub tối thiểu trả "không phải mobile" (như
-  // shell.spec.tsx).
+  // jsdom không có matchMedia; hook useIsMobile của @giaokhoa/ui cần nó khi sidebar mount — stub tối thiểu trả "không phải mobile" (như shell.spec.tsx).
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
     matches: false,
     media: query,
@@ -190,12 +185,9 @@ describe('F-07 — ErrorBoundary theo route chứa lỗi trong vùng nội dung'
                 return null;
               },
               element: <div>Nội dung trang đã tải</div>,
-              // Framework mode truyền { error, params, loaderData,
-              // actionData } vào export ErrorBoundary của route module
+              // Framework mode truyền { error, params, loaderData, actionData } vào export ErrorBoundary của route module
               // (lớp bọc withErrorBoundaryProps của createClientRoutes).
-              // Data router trần không truyền props, nên spec bọc tay
-              // đúng ngữ nghĩa đó: lấy lỗi route bằng useRouteError rồi
-              // đưa vào biên dùng chung qua prop error.
+              // Data router trần không truyền props, nên spec bọc tay đúng ngữ nghĩa đó: lấy lỗi route bằng useRouteError rồi đưa vào biên dùng chung qua prop error.
               ErrorBoundary: function BoomErrorBoundary() {
                 const error = useRouteError();
                 return <RouteErrorBoundary error={error} />;

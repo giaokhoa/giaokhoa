@@ -39,9 +39,7 @@ export function flattenSpecification(spec: MatrixSpecification): {
   let index = 0;
   for (const topic of spec.topics) {
     for (const node of topic.nodes) {
-      // Dòng văn của outcome program được tiền tố bằng mã YCCĐ vị
-      // trí (P2, sổ mục B) khi có mã; derived trình bày nguyên văn
-      // gốc (tiền tố mã của gốc) kèm bản tách mức như trước.
+      // Dòng văn của outcome program được tiền tố bằng mã YCCĐ vị trí (P2, sổ mục B) khi có mã; derived trình bày nguyên văn gốc (tiền tố mã của gốc) kèm bản tách mức như trước.
       const outcomeText = node.outcomes.map((outcome) => {
         const prefix = outcome.code ? `${outcome.code} ` : '';
         return outcome.derivedContent

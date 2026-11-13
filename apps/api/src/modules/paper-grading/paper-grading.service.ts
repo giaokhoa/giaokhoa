@@ -1,24 +1,7 @@
 /**
- * Dịch vụ chấm bài giấy bằng camera (CAM-0, issue #112): sinh lô IN
- * phiếu (ghim layout qua QuizService.resolvePaperLayout + chụp roster
- * lớp + mã đề 4 số), sinh PDF phiếu (mặc định phiếu DÙNG CHUNG in
- * hàng loạt; cá nhân hoá là tuỳ chọn hẹp), tiếp nhận ảnh chụp theo lô
- * in hoặc theo BUỔI (lô chụp — định tuyến từng phiếu về lô in theo mã
- * đề đọc từ lưới tô, QR làm lớp dự phòng) qua CỔNG CHẤT LƯỢNG (ảnh
- * hỏng bị từ chối ngay, không vào hàng chờ), đọc OMR xác định, hai
- * hàng chờ của giáo viên (gán lô/gán định danh + xác nhận ca mơ hồ)
- * và ghi attempt "thi giấy" qua QuizService.recordPaperAttempt.
+ * Dịch vụ chấm bài giấy bằng camera (CAM-0, issue #112): sinh lô IN phiếu (ghim layout qua QuizService.resolvePaperLayout + chụp roster lớp + mã đề 4 số), sinh PDF phiếu (mặc định phiếu DÙNG CHUNG in hàng loạt; cá nhân hoá là tuỳ chọn hẹp), tiếp nhận ảnh chụp theo lô in hoặc theo BUỔI (lô chụp — định tuyến từng phiếu về lô in theo mã đề đọc từ lưới tô, QR làm lớp dự phòng) qua CỔNG CHẤT LƯỢNG (ảnh hỏng bị từ chối ngay, không vào hàng chờ), đọc OMR xác định, hai hàng chờ của giáo viên (gán lô/gán định danh + xác nhận ca mơ hồ) và ghi attempt "thi giấy" qua QuizService.recordPaperAttempt.
  *
- * Nguyên tắc cứng của lát: điểm KHÔNG BAO GIỜ tự chảy — phiếu chỉ
- * được ghi khi định danh chắc chắn (QR thuộc lô + có trong roster,
- * hoặc mã tô đúng số kiểm tra và khớp roster, hoặc giáo viên gán tay)
- * và mọi câu mơ hồ đã được giáo viên xác nhận. Mã đề cũng vậy: đọc
- * không chắc chắn thì phiếu vào hàng chờ, hệ thống KHÔNG đoán mã đề
- * và không chấm theo layout của mã đề khác. Mọi thao tác gán/sửa của
- * giáo viên trong hàng chờ đều ghi event log qua outbox (biên bản sửa
- * lỗi của lớp học). Mọi thao tác đều gác bằng capability
- * `quiz:gradepaper` tại context của hoạt động quiz, giống hệt các
- * đường chấm khác của Quiz.
+ * Nguyên tắc cứng của lát: điểm KHÔNG BAO GIỜ tự chảy — phiếu chỉ được ghi khi định danh chắc chắn (QR thuộc lô + có trong roster, hoặc mã tô đúng số kiểm tra và khớp roster, hoặc giáo viên gán tay) và mọi câu mơ hồ đã được giáo viên xác nhận. Mã đề cũng vậy: đọc không chắc chắn thì phiếu vào hàng chờ, hệ thống KHÔNG đoán mã đề và không chấm theo layout của mã đề khác. Mọi thao tác gán/sửa của giáo viên trong hàng chờ đều ghi event log qua outbox (biên bản sửa lỗi của lớp học). Mọi thao tác đều gác bằng capability `quiz:gradepaper` tại context của hoạt động quiz, giống hệt các đường chấm khác của Quiz.
  */
 import { randomUUID } from 'node:crypto';
 import {

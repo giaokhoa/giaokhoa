@@ -1,45 +1,19 @@
 /**
  * Trình quản lý pool kết nối theo database (issue #581).
  *
- * BẢN SAO của `apps/api/src/db/routing/space-pool-manager.ts` theo
- * tiền lệ repo (mỗi app giữ bản sao hạ tầng riêng — cùng khuôn với
- * `tenant-als`/`tenant-pool`): mỗi tiến trình giữ ngân sách pool của
- * riêng mình trên cùng cụm; sửa file này PHẢI sửa đồng bộ bản gốc
- * phía API và ngược lại.
+ * BẢN SAO của `apps/api/src/db/routing/space-pool-manager.ts` theo tiền lệ repo (mỗi app giữ bản sao hạ tầng riêng — cùng khuôn với `tenant-als`/`tenant-pool`): mỗi tiến trình giữ ngân sách pool của riêng mình trên cùng cụm; sửa file này PHẢI sửa đồng bộ bản gốc phía API và ngược lại.
  *
- * Vì sao phải có tầng này: kiến trúc đích là mỗi trung tâm một
- * database trên MỘT cụm Postgres chung, mà giới hạn kết nối là ngân
- * sách của cả cụm — không nhân theo số database. Nếu mỗi kho riêng
- * giữ một pool thường trực, tổng kết nối tăng tuyến tính theo số
- * trung tâm kể cả khi đa số trung tâm không có traffic. Trình quản
- * lý này giữ ba kỷ luật ngân sách:
+ * Vì sao phải có tầng này: kiến trúc đích là mỗi trung tâm một database trên MỘT cụm Postgres chung, mà giới hạn kết nối là ngân sách của cả cụm — không nhân theo số database. Nếu mỗi kho riêng giữ một pool thường trực, tổng kết nối tăng tuyến tính theo số trung tâm kể cả khi đa số trung tâm không có traffic. Trình quản lý này giữ ba kỷ luật ngân sách:
  *
  * - **Tạo lười:** pool của một kho chỉ được tạo ở lần lấy handle đầu
- *   tiên cho kho đó (tức lần traffic đầu tiên), không tạo lúc khởi
- *   động cho mọi kho đã đăng ký.
+ *   tiên cho kho đó (tức lần traffic đầu tiên), không tạo lúc khởi động cho mọi kho đã đăng ký.
  * - **Trần theo kho:** trần kết nối của từng pool do nơi tạo pool
- *   chốt qua cấu hình của `pg` Pool (`max`) khi dựng handle; trình
- *   quản lý phơi tổng số kết nối đang mở của mọi pool
+ *   chốt qua cấu hình của `pg` Pool (`max`) khi dựng handle; trình quản lý phơi tổng số kết nối đang mở của mọi pool
  *   (`totalConnections`) để tầng vận hành kiểm chứng ngân sách.
  * - **Đóng khi nhàn rỗi:** một vòng quét định kỳ đóng hẳn pool của
- *   kho không còn traffic quá ngưỡng nhàn rỗi cấu hình được (mốc
- *   "traffic" cập nhật mỗi lần lấy handle và mỗi lần pool cho mượn
- *   một kết nối — sự kiện `acquire` của `pg`). Pool còn kết nối
- *   đang được mượn (chưa trả) thì KHÔNG đóng ở vòng quét này, chờ
- *   vòng sau. Pool đã đóng bị gỡ khỏi sổ của trình quản lý: lần lấy
- *   handle kế tiếp tạo pool mới — đóng pool vì vậy không phải trạng
- *   thái cuối, chỉ là trả ngân sách về cụm.
+ *   kho không còn traffic quá ngưỡng nhàn rỗi cấu hình được (mốc "traffic" cập nhật mỗi lần lấy handle và mỗi lần pool cho mượn một kết nối — sự kiện `acquire` của `pg`). Pool còn kết nối đang được mượn (chưa trả) thì KHÔNG đóng ở vòng quét này, chờ vòng sau. Pool đã đóng bị gỡ khỏi sổ của trình quản lý: lần lấy handle kế tiếp tạo pool mới — đóng pool vì vậy không phải trạng thái cuối, chỉ là trả ngân sách về cụm.
  *
- * Ngoài ba kỷ luật ngân sách, trình quản lý còn giữ một bất biến
- * đúng/sai của định tuyến: pool của một kho bị BUỘC theo danh tính
- * kết nối đã phân giải mà nó được tạo bằng (xem
- * `getHandleForIdentity`). Sổ đăng ký là nguồn sự thật duy nhất
- * cho đích kết nối, nên khi sổ đổi role/bí mật của một kho thì
- * pool đang sống bằng danh tính cũ không còn được dùng: lần lấy
- * handle kế tiếp theo danh tính mới đóng pool cũ và tạo pool mới
- * — việc xoay role/mật khẩu qua sổ có hiệu lực ngay, không phải
- * chờ pool tình cờ bị đóng vì nhàn rỗi hay tiến trình khởi động
- * lại.
+ * Ngoài ba kỷ luật ngân sách, trình quản lý còn giữ một bất biến đúng/sai của định tuyến: pool của một kho bị BUỘC theo danh tính kết nối đã phân giải mà nó được tạo bằng (xem `getHandleForIdentity`). Sổ đăng ký là nguồn sự thật duy nhất cho đích kết nối, nên khi sổ đổi role/bí mật của một kho thì pool đang sống bằng danh tính cũ không còn được dùng: lần lấy handle kế tiếp theo danh tính mới đóng pool cũ và tạo pool mới — việc xoay role/mật khẩu qua sổ có hiệu lực ngay, không phải chờ pool tình cờ bị đóng vì nhàn rỗi hay tiến trình khởi động lại.
  */
 
 /** Hình tối thiểu của một pool mà trình quản lý cần — `pg` Pool thoả mãn trực tiếp. */
@@ -65,9 +39,7 @@ interface PoolEntry<TDatabase> {
   handle: SpacePoolHandle<TDatabase>;
   lastUsedAt: number;
   /**
-   * Danh tính kết nối đã phân giải mà pool được tạo bằng (do nơi
-   * gọi chốt qua `getHandleForIdentity`); undefined khi pool được
-   * tạo qua đường lấy handle không kèm danh tính.
+   * Danh tính kết nối đã phân giải mà pool được tạo bằng (do nơi gọi chốt qua `getHandleForIdentity`); undefined khi pool được tạo qua đường lấy handle không kèm danh tính.
    */
   identity?: string;
 }
@@ -144,18 +116,12 @@ export class SpacePoolManager<TDatabase> {
         return existing.handle;
       }
       if (existing.identity === undefined) {
-        // Pool tạo qua đường không kèm danh tính: nhận danh tính
-        // của lần lấy này làm danh tính gốc của pool thay vì thay
-        // pool — chưa có căn cứ kết luận pool đang chạy sai role.
+        // Pool tạo qua đường không kèm danh tính: nhận danh tính của lần lấy này làm danh tính gốc của pool thay vì thay pool — chưa có căn cứ kết luận pool đang chạy sai role.
         existing.identity = identity;
         existing.lastUsedAt = this.now();
         return existing.handle;
       }
-      // Danh tính đã đổi: gỡ pool cũ khỏi sổ TRƯỚC khi đóng (như
-      // vòng quét nhàn rỗi) để một lần lấy handle đến trong lúc
-      // đóng tạo pool mới thay vì nhận phải pool đang chết; việc
-      // đóng là phụ trợ nền — lỗi đóng pool cũ không chặn việc
-      // cấp pool mới đúng danh tính.
+      // Danh tính đã đổi: gỡ pool cũ khỏi sổ TRƯỚC khi đóng (như vòng quét nhàn rỗi) để một lần lấy handle đến trong lúc đóng tạo pool mới thay vì nhận phải pool đang chết; việc đóng là phụ trợ nền — lỗi đóng pool cũ không chặn việc cấp pool mới đúng danh tính.
       this.entries.delete(databaseName);
       void existing.handle.pool.end().catch(() => undefined);
       this.deps.onPoolClosed?.(databaseName);
@@ -165,8 +131,7 @@ export class SpacePoolManager<TDatabase> {
     this.entries.set(databaseName, entry);
     // Mốc traffic tính cả hoạt động mượn kết nối trực tiếp từ pool
     // (mọi truy vấn qua handle Kysely đều mượn kết nối ở đây), để
-    // một kho đang được dùng liên tục không bị vòng quét coi là
-    // nhàn rỗi chỉ vì không có lần lấy handle mới.
+    // một kho đang được dùng liên tục không bị vòng quét coi là nhàn rỗi chỉ vì không có lần lấy handle mới.
     handle.pool.on?.('acquire', () => {
       entry.lastUsedAt = this.now();
     });
@@ -202,19 +167,10 @@ export class SpacePoolManager<TDatabase> {
     for (const [databaseName, entry] of [...this.entries]) {
       if (at - entry.lastUsedAt < this.deps.idleTimeoutMs) continue;
       const { pool } = entry.handle;
-      // Còn kết nối đang được mượn là còn traffic đang chạy: không
-      // đóng giữa chừng, để vòng quét sau xét lại khi đã trả hết.
+      // Còn kết nối đang được mượn là còn traffic đang chạy: không đóng giữa chừng, để vòng quét sau xét lại khi đã trả hết.
       if (pool.totalCount !== pool.idleCount) continue;
       this.entries.delete(databaseName);
-      // Đóng một pool có thể ném lỗi (ví dụ kết nối tới kho đang
-      // hỏng): lỗi đóng của MỘT pool không được làm hỏng cả vòng
-      // quét. Pool đã bị gỡ khỏi sổ ở trên nên chủ sở hữu vẫn phải
-      // nhận thông báo `onPoolClosed` để gỡ trạng thái
-      // đã-chuẩn-bị đang trỏ vào handle của pool này; pool đó chỉ
-      // không được tính là đã đóng thành công (không vào danh
-      // sách trả về), và vòng quét đi tiếp các pool còn lại thay
-      // vì dừng giữa chừng (điểm O1 của kiểm toán hậu merge PR
-      // #594, chuyển sang issue #582).
+      // Đóng một pool có thể ném lỗi (ví dụ kết nối tới kho đang hỏng): lỗi đóng của MỘT pool không được làm hỏng cả vòng quét. Pool đã bị gỡ khỏi sổ ở trên nên chủ sở hữu vẫn phải nhận thông báo `onPoolClosed` để gỡ trạng thái đã-chuẩn-bị đang trỏ vào handle của pool này; pool đó chỉ không được tính là đã đóng thành công (không vào danh sách trả về), và vòng quét đi tiếp các pool còn lại thay vì dừng giữa chừng (điểm O1 của kiểm toán hậu merge PR #594, chuyển sang issue #582).
       let closedCleanly = false;
       try {
         await pool.end();
@@ -238,8 +194,7 @@ export class SpacePoolManager<TDatabase> {
   startIdleSweeper(intervalMs: number): void {
     if (this.sweepTimer) return;
     this.sweepTimer = setInterval(() => {
-      // Lỗi của một vòng quét (ví dụ một pool lỗi khi đóng) không
-      // được làm sập tiến trình: bỏ qua vòng này, vòng sau quét lại.
+      // Lỗi của một vòng quét (ví dụ một pool lỗi khi đóng) không được làm sập tiến trình: bỏ qua vòng này, vòng sau quét lại.
       void this.closeIdlePools().catch(() => undefined);
     }, intervalMs);
     this.sweepTimer.unref?.();

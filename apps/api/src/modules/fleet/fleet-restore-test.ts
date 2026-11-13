@@ -1,47 +1,17 @@
 /**
- * Kiểm thử khôi phục định kỳ của đội kho (issue #586) — script CLI
- * chạy bằng `pnpm --filter @giaokhoa/api fleet:restore-test [--space <slug>]`:
+ * Kiểm thử khôi phục định kỳ của đội kho (issue #586) — script CLI chạy bằng `pnpm --filter @giaokhoa/api fleet:restore-test [--space <slug>]`:
  *
  * 1. Chọn kho: theo slug được chỉ định, hoặc theo vòng xoay công
- *    bằng (kho đang hoạt động có lượt kiểm thử cũ nhất — xem
- *    `pickRestoreCandidate`) khi lịch định kỳ gọi không kèm slug.
+ *    bằng (kho đang hoạt động có lượt kiểm thử cũ nhất — xem `pickRestoreCandidate`) khi lịch định kỳ gọi không kèm slug.
  * 2. Lấy bản sao lưu MỚI NHẤT của kho và kiểm toàn vẹn theo tệp băm
- *    đi kèm TRƯỚC khi làm bất cứ việc gì khác: bản sao bị hỏng/bị
- *    sửa (hoặc thiếu tệp băm) khiến lượt kiểm thử ghi nhận THẤT
- *    BẠI ngay — đây là cách một bản sao lưu hỏng được phát hiện
- *    trong vận hành thường ngày thay vì lúc cần khôi phục thật.
+ *    đi kèm TRƯỚC khi làm bất cứ việc gì khác: bản sao bị hỏng/bị sửa (hoặc thiếu tệp băm) khiến lượt kiểm thử ghi nhận THẤT BẠI ngay — đây là cách một bản sao lưu hỏng được phát hiện trong vận hành thường ngày thay vì lúc cần khôi phục thật.
  * 3. Khôi phục vào một DATABASE TẠM bằng kết nối quản trị
  *    (`DATABASE_ADMIN_URL`, dự phòng `MIGRATION_DATABASE_URL`), rồi
- *    kiểm: (a) số bảng khôi phục được bằng đúng số bảng trong mục
- *    lục của tệp dump; (b) kiểm tra khói ở mức dữ kiện — tài khoản
- *    quản trị gieo sẵn của kho (`FLEET_SMOKE_ADMIN_USERNAME`, mặc
- *    định `admin`; tắt bằng `FLEET_SMOKE_CHECK=off`) tồn tại và
- *    chưa bị xoá trong bản khôi phục. Kiểm tra khói đang BẬT mà
- *    bản khôi phục THIẾU bảng `users` thì không có gì để đối
- *    chiếu: lượt kiểm thử bị tính THẤT BẠI tường minh thay vì
- *    lặng lẽ bỏ qua bước này — số bảng khớp mục lục không cứu
- *    được một bản sao thiếu đúng bảng mà kiểm tra khói cần. Đường
- *    tắt hợp lệ duy nhất là `FLEET_SMOKE_CHECK=off`. Kiểm tra
- *    khói ở mức HTTP (đăng nhập thật qua ứng dụng) là việc của
- *    nghiệm thu ứng dụng, không nằm trong công cụ vận hành này.
+ *    kiểm: (a) số bảng khôi phục được bằng đúng số bảng trong mục lục của tệp dump; (b) kiểm tra khói ở mức dữ kiện — tài khoản quản trị gieo sẵn của kho (`FLEET_SMOKE_ADMIN_USERNAME`, mặc định `admin`; tắt bằng `FLEET_SMOKE_CHECK=off`) tồn tại và chưa bị xoá trong bản khôi phục. Kiểm tra khói đang BẬT mà bản khôi phục THIẾU bảng `users` thì không có gì để đối chiếu: lượt kiểm thử bị tính THẤT BẠI tường minh thay vì lặng lẽ bỏ qua bước này — số bảng khớp mục lục không cứu được một bản sao thiếu đúng bảng mà kiểm tra khói cần. Đường tắt hợp lệ duy nhất là `FLEET_SMOKE_CHECK=off`. Kiểm tra khói ở mức HTTP (đăng nhập thật qua ứng dụng) là việc của nghiệm thu ứng dụng, không nằm trong công cụ vận hành này.
  * 4. Ghi kết quả vào registry của kho (trạng thái + thời điểm) và
- *    LUÔN xoá database tạm cùng tệp dump thô trung gian, kể cả
- *    khi khôi phục hay kiểm tra hỏng giữa chừng — database tạm
- *    còn sót là rò rỉ tài nguyên của cụm, còn tệp thô còn sót là
- *    toàn bộ dữ kiện của kho ở dạng đọc được nằm vô thời hạn
- *    trong thư mục sao lưu (tên của nó không khớp khuôn tệp sao
- *    lưu nên không cơ chế dọn theo hạn nào nhìn thấy). Bất biến
- *    xoá tệp thô phải giữ ở MỌI đường ra của đoạn khôi phục, kể
- *    cả khi kết nối quản trị hỏng ngay từ đầu, và một lượt hỏng
- *    như vậy vẫn được ghi nhận THẤT BẠI vào registry như mọi lỗi
- *    vận hành sau khi đã chọn kho — ngoại lệ không được phép
- *    thoát thẳng qua cơ chế ghi nhận.
+ *    LUÔN xoá database tạm cùng tệp dump thô trung gian, kể cả khi khôi phục hay kiểm tra hỏng giữa chừng — database tạm còn sót là rò rỉ tài nguyên của cụm, còn tệp thô còn sót là toàn bộ dữ kiện của kho ở dạng đọc được nằm vô thời hạn trong thư mục sao lưu (tên của nó không khớp khuôn tệp sao lưu nên không cơ chế dọn theo hạn nào nhìn thấy). Bất biến xoá tệp thô phải giữ ở MỌI đường ra của đoạn khôi phục, kể cả khi kết nối quản trị hỏng ngay từ đầu, và một lượt hỏng như vậy vẫn được ghi nhận THẤT BẠI vào registry như mọi lỗi vận hành sau khi đã chọn kho — ngoại lệ không được phép thoát thẳng qua cơ chế ghi nhận.
  *
- * Một lượt kiểm thử thất bại là SỰ CỐ vận hành: script thoát mã 1
- * để lịch giám sát bắt được. Lỗi cấu hình của chính công cụ (chưa
- * có URL quản trị, thư mục sao lưu trống cấu hình…) dừng bằng ngoại
- * lệ TRƯỚC khi chọn kho và không ghi nhận thất bại cho bất kỳ kho
- * nào — registry không được phép mang sự cố giả.
+ * Một lượt kiểm thử thất bại là SỰ CỐ vận hành: script thoát mã 1 để lịch giám sát bắt được. Lỗi cấu hình của chính công cụ (chưa có URL quản trị, thư mục sao lưu trống cấu hình…) dừng bằng ngoại lệ TRƯỚC khi chọn kho và không ghi nhận thất bại cho bất kỳ kho nào — registry không được phép mang sự cố giả.
  */
 import { existsSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
@@ -90,9 +60,7 @@ function newestBackupFile(dir: string): string | null {
 /**
  * Đếm số bảng THUỘC SCHEMA PUBLIC mà mục lục của tệp dump khai
  * (dòng TOC dạng TABLE của schema public, không tính TABLE DATA và
- * không tính các schema hệ thống như schema nhật ký của bộ máy cũ chứa bảng
- * nhật ký migration) — cùng phạm vi với số bảng đọc từ `pg_tables`
- * sau khôi phục để hai con số đối chiếu được với nhau.
+ * không tính các schema hệ thống như schema nhật ký của bộ máy cũ chứa bảng nhật ký migration) — cùng phạm vi với số bảng đọc từ `pg_tables` sau khôi phục để hai con số đối chiếu được với nhau.
  */
 function countDumpTables(listOutput: Buffer): number {
   return listOutput

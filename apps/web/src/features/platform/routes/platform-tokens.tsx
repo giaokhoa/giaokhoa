@@ -12,13 +12,7 @@ import { PageHeader, PageShell } from '#components/page-shell';
 import { useCreateWebserviceService, useCreateWebserviceToken, useRevokeWebserviceToken, useWebserviceServices, useWebserviceTokens } from '../queries/platform';
 
 /**
- * Quản trị integration tokens (platform services): service + token,
- * token thô chỉ hiện một lần khi tạo. Dữ liệu đọc qua tầng TanStack
- * Query (`lib/platform-data.ts`, khoá `webserviceServices`/
- * `webserviceTokens`; `clientLoader` của route nạp trước cả hai danh
- * sách). Như bản thủ công: lỗi của riêng danh sách token bị nuốt thành
- * danh sách rỗng — chỉ lỗi danh sách dịch vụ mới làm trang báo lỗi; tạo
- * service/token và thu hồi qua đột biến làm mới cả hai danh sách.
+ * Quản trị integration tokens (platform services): service + token, token thô chỉ hiện một lần khi tạo. Dữ liệu đọc qua tầng TanStack Query (`lib/platform-data.ts`, khoá `webserviceServices`/ `webserviceTokens`; `clientLoader` của route nạp trước cả hai danh sách). Như bản thủ công: lỗi của riêng danh sách token bị nuốt thành danh sách rỗng — chỉ lỗi danh sách dịch vụ mới làm trang báo lỗi; tạo service/token và thu hồi qua đột biến làm mới cả hai danh sách.
  */
 export function TokensPage() {
   const { t: tr } = useTranslation();

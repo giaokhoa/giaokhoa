@@ -9,30 +9,11 @@ import { WorkerPaidClassEnrolActivationService } from '../../../src/worker-paid-
 import { WorkerEnrolOutboxService } from '../../../src/worker-enrol-outbox.service';
 
 /**
- * Đặc tả tính nguyên tử của adapter kích hoạt ghi danh cấp lớp ở
- * worker (điểm chặn của phân xử 6509434733 trên PR #552): chèn
- * thành viên cohort + cả hai dòng outbox (`cohort_member_added`,
- * `class_member_joined`) phải nằm trong CÙNG một transaction. Lỗi ở
- * bất kỳ bước nào cũng rollback toàn bộ, nên lần chạy lại sau đó
- * thấy chưa thuộc roster và chạy đủ cả ba bước ghi — không còn cửa
- * sổ payment chốt `succeeded` mà `cohort_member_added` đã mất.
+ * Đặc tả tính nguyên tử của adapter kích hoạt ghi danh cấp lớp ở worker (điểm chặn của phân xử 6509434733 trên PR #552): chèn thành viên cohort + cả hai dòng outbox (`cohort_member_added`, `class_member_joined`) phải nằm trong CÙNG một transaction. Lỗi ở bất kỳ bước nào cũng rollback toàn bộ, nên lần chạy lại sau đó thấy chưa thuộc roster và chạy đủ cả ba bước ghi — không còn cửa sổ payment chốt `succeeded` mà `cohort_member_added` đã mất.
  *
- * Cách tiêm lỗi: bọc mọi cổng ghi outbox của adapter bằng cùng
- * một bộ đếm — ném lỗi ở lần gọi thứ N. Các cổng hiện hữu của
- * `WorkerEnrolOutboxService`: `enqueue` (đường adapter dùng —
- * cả hai dòng outbox ghi trong transaction Kysely của adapter
- * qua cổng này) và `enqueueStandalone` (cổng ghi trong
- * transaction ngắn riêng của bề mặt enrol).
- * Nhờ đó cùng một ca kiểm chứng được cả hai phía: trên code cũ,
- * lỗi ở lần ghi thứ hai để lại thành viên + dòng outbox đầu đã
- * commit, và lần chạy lại gặp roster đã có nên return sớm, vĩnh
- * viễn thiếu `class_member_joined` (ca ĐỎ); trên code mới, mọi
- * bước rollback và lần chạy lại cho đủ cả ba bước ghi đúng một
- * lần (ca XANH).
+ * Cách tiêm lỗi: bọc mọi cổng ghi outbox của adapter bằng cùng một bộ đếm — ném lỗi ở lần gọi thứ N. Các cổng hiện hữu của `WorkerEnrolOutboxService`: `enqueue` (đường adapter dùng — cả hai dòng outbox ghi trong transaction Kysely của adapter qua cổng này) và `enqueueStandalone` (cổng ghi trong transaction ngắn riêng của bề mặt enrol). Nhờ đó cùng một ca kiểm chứng được cả hai phía: trên code cũ, lỗi ở lần ghi thứ hai để lại thành viên + dòng outbox đầu đã commit, và lần chạy lại gặp roster đã có nên return sớm, vĩnh viễn thiếu `class_member_joined` (ca ĐỎ); trên code mới, mọi bước rollback và lần chạy lại cho đủ cả ba bước ghi đúng một lần (ca XANH).
  *
- * Spec gọi trực tiếp adapter (không qua nhịp quét) để tiêm lỗi đúng
- * điểm giữa các bước ghi — nhịp quét không có điểm tiêm nào ở đó.
- * Module boot bằng harness role thường như spec nhịp quét.
+ * Spec gọi trực tiếp adapter (không qua nhịp quét) để tiêm lỗi đúng điểm giữa các bước ghi — nhịp quét không có điểm tiêm nào ở đó. Module boot bằng harness role thường như spec nhịp quét.
  */
 describe('Kích hoạt ghi danh cấp lớp ở worker — chèn thành viên và hai dòng outbox cùng một transaction', () => {
   let harness: OrdinaryWorkerModuleHarness;

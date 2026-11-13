@@ -5,23 +5,13 @@ import {
   adminToken, assignRole, createTestApp, createUserViaApi, http, login,
   roleIdByShortname, STRONG_PASSWORD, systemContextId,
 } from '../../support/identity-access-helpers';
-// Từ issue #539, nhịp quét matching chạy ở worker nên tiến trình API trong test
-// không còn tự quét: mỗi vòng chờ dẫn một nhịp qua cầu dẫn này rồi mới đọc trạng thái.
+// Từ issue #539, nhịp quét matching chạy ở worker nên tiến trình API trong test không còn tự quét: mỗi vòng chờ dẫn một nhịp qua cầu dẫn này rồi mới đọc trạng thái.
 import { closeSepaySweepDriver, driveSepaySweep } from '../../support/sepay-sweep-driver';
 
 /**
- * Lát 2 của issue #189 — mô hình gói `tenant_plan`/`teacher_plan` với
- * GIÁ TỪ CẤU HÌNH HỆ THỐNG: mua gói chạy trọn pipeline VietQR → IPN
- * SePay → khớp 3 điều kiện → kích hoạt quyền lợi đúng bên hưởng + đúng
- * cửa sổ chu kỳ; đổi giá trong Cài đặt hệ thống thì khoản thu tạo sau
- * dùng giá mới (không cần triển khai lại); lệch đối soát →
- * `needs_review` và không sinh quyền lợi; hoàn đủ → đình chỉ quyền
- * lợi của chính payment đó.
+ * Lát 2 của issue #189 — mô hình gói `tenant_plan`/`teacher_plan` với GIÁ TỪ CẤU HÌNH HỆ THỐNG: mua gói chạy trọn pipeline VietQR → IPN SePay → khớp 3 điều kiện → kích hoạt quyền lợi đúng bên hưởng + đúng cửa sổ chu kỳ; đổi giá trong Cài đặt hệ thống thì khoản thu tạo sau dùng giá mới (không cần triển khai lại); lệch đối soát → `needs_review` và không sinh quyền lợi; hoàn đủ → đình chỉ quyền lợi của chính payment đó.
  *
- * Giá trị khởi tạo trong registry (component `payments`): gói trung
- * tâm 6.000.000đ / 365 ngày, gói giáo viên 990.000đ / 365 ngày — spec
- * đọc các số này qua hành vi (số tiền của payment tạo ra), không qua
- * hằng số riêng nào khác ngoài chính kỳ vọng nghiệm thu dưới đây.
+ * Giá trị khởi tạo trong registry (component `payments`): gói trung tâm 6.000.000đ / 365 ngày, gói giáo viên 990.000đ / 365 ngày — spec đọc các số này qua hành vi (số tiền của payment tạo ra), không qua hằng số riêng nào khác ngoài chính kỳ vọng nghiệm thu dưới đây.
  */
 const SEPAY_KEY = 'sk-test-sepay-plan-001';
 const SEPAY_XID = 'xid-test-plan-001';

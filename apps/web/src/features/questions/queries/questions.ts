@@ -65,16 +65,7 @@ import type { BankKindParam, BankLite, ContributionReviewVars } from '../types/q
 import { queryKeys } from './keys';
 
 /**
- * Tầng dữ liệu trang ngân hàng câu hỏi/đề/ma trận (F-01 đợt 1, rà
- * soát #133): mỗi cụm tải trước đây (danh mục + câu hỏi/ngữ liệu
- * theo danh mục, bank theo loại + nội dung bank cá nhân, hàng chờ
- * đóng góp, bộ hồ sơ, khám phá) là một query theo khoá factory;
- * options dùng chung cho hook của trang và clientLoader của các
- * route module bọc trang.
- * Lời gọi API thuần nằm ở tầng `api/` của feature; khoá truy vấn
- * riêng của questions nằm ở `keys.ts` cùng tầng này, riêng các
- * khoá `questionBanks`, `bankMatrices`, `questionVersions`,
- * `questionDiscovery` là khoá dùng chung ở factory tập trung.
+ * Tầng dữ liệu trang ngân hàng câu hỏi/đề/ma trận (F-01 đợt 1, rà soát #133): mỗi cụm tải trước đây (danh mục + câu hỏi/ngữ liệu theo danh mục, bank theo loại + nội dung bank cá nhân, hàng chờ đóng góp, bộ hồ sơ, khám phá) là một query theo khoá factory; options dùng chung cho hook của trang và clientLoader của các route module bọc trang. Lời gọi API thuần nằm ở tầng `api/` của feature; khoá truy vấn riêng của questions nằm ở `keys.ts` cùng tầng này, riêng các khoá `questionBanks`, `bankMatrices`, `questionVersions`, `questionDiscovery` là khoá dùng chung ở factory tập trung.
  */
 
 // --- Danh mục + câu hỏi/ngữ liệu theo danh mục ----------------------
@@ -255,12 +246,7 @@ export function questionDiscoveryQueryOptions(params: string) {
 }
 
 /**
- * Xoá cache các danh sách ngân hàng (danh mục + câu hỏi theo danh
- * mục + bank ba loại) — dùng ở điểm LƯU của màn soạn riêng/tạo
- * danh mục ngay trước khi quay về trang danh sách: danh sách mở
- * lại là nạp tươi (đúng hành vi trước khi hợp nhất TanStack, khi
- * trang danh sách luôn tải lại lúc mở), tránh hiện bản cũ trong
- * lúc refetch nền chạy.
+ * Xoá cache các danh sách ngân hàng (danh mục + câu hỏi theo danh mục + bank ba loại) — dùng ở điểm LƯU của màn soạn riêng/tạo danh mục ngay trước khi quay về trang danh sách: danh sách mở lại là nạp tươi (đúng hành vi trước khi hợp nhất TanStack, khi trang danh sách luôn tải lại lúc mở), tránh hiện bản cũ trong lúc refetch nền chạy.
  */
 export function clearQuestionBankListCache(client: QueryClient) {
   client.removeQueries({ queryKey: queryKeys.questionCategories });
@@ -268,10 +254,7 @@ export function clearQuestionBankListCache(client: QueryClient) {
 }
 
 /**
- * clientLoader dùng chung cho các route module bọc trang ngân
- * hàng (F-01 đợt 1 + bổ sung clientLoader, rà soát #133): prefetch
- * cụm tải lúc mở trang (danh mục + bank ba loại) vào QueryClient
- * singleton. prefetchQuery không ném lỗi.
+ * clientLoader dùng chung cho các route module bọc trang ngân hàng (F-01 đợt 1 + bổ sung clientLoader, rà soát #133): prefetch cụm tải lúc mở trang (danh mục + bank ba loại) vào QueryClient singleton. prefetchQuery không ném lỗi.
  */
 export async function questionsPageClientLoader() {
   await Promise.all([
@@ -285,12 +268,7 @@ export async function questionsPageClientLoader() {
 
 // --- Trình soạn câu hỏi: gắn kết chương trình + lưu nội dung (F-01) ------------
 //
-// Trình soạn là màn điều phối nhiều bước (chọn danh mục → ngữ liệu →
-// câu đang sửa → options đầy đủ → gắn kết chương trình): các lượt đọc
-// của nó đi qua fetchQuery với các tuỳ chọn dưới đây (vẫn qua bộ nhớ
-// đệm + dedupe của TanStack, giữ nguyên nhịp trạng thái tại chỗ của
-// màn); thao tác ghi là đột biến, kết quả gắn kết trả thẳng về cho
-// màn giữ trong state như bản thủ công.
+// Trình soạn là màn điều phối nhiều bước (chọn danh mục → ngữ liệu → câu đang sửa → options đầy đủ → gắn kết chương trình): các lượt đọc của nó đi qua fetchQuery với các tuỳ chọn dưới đây (vẫn qua bộ nhớ đệm + dedupe của TanStack, giữ nguyên nhịp trạng thái tại chỗ của màn); thao tác ghi là đột biến, kết quả gắn kết trả thẳng về cho màn giữ trong state như bản thủ công.
 
 /** Tuỳ chọn truy vấn gắn kết chương trình của một câu hỏi. */
 export function questionCurriculumLinksQueryOptions(questionId: string) {
@@ -301,9 +279,7 @@ export function questionCurriculumLinksQueryOptions(questionId: string) {
 }
 
 /**
- * Tuỳ chọn truy vấn các version của một câu cho trình soạn: dùng
- * chung khoá factory `questionVersions` với trang ngân hàng — hai bề
- * mặt chỉ đọc các trường khác nhau của cùng một đáp ứng.
+ * Tuỳ chọn truy vấn các version của một câu cho trình soạn: dùng chung khoá factory `questionVersions` với trang ngân hàng — hai bề mặt chỉ đọc các trường khác nhau của cùng một đáp ứng.
  */
 export function editorQuestionVersionsQueryOptions(questionId: string) {
   return queryOptions({
@@ -391,10 +367,7 @@ export function useDetachQuestionOutcome() {
 
 // --- Thao tác ghi của trang ngân hàng + trang làm thử (F-01) --------------------
 //
-// Các đột biến dưới đây KHÔNG tự làm mới danh sách: trang ngân hàng
-// có sẵn các hàm refresh* theo cụm (đích làm mới phụ thuộc bank đang
-// chọn của trang) và giữ nguyên quyền quyết định đó sau mỗi thao
-// tác, đúng như bản thủ công. Riêng các thao tác của trang làm thử
+// Các đột biến dưới đây KHÔNG tự làm mới danh sách: trang ngân hàng có sẵn các hàm refresh* theo cụm (đích làm mới phụ thuộc bank đang chọn của trang) và giữ nguyên quyền quyết định đó sau mỗi thao tác, đúng như bản thủ công. Riêng các thao tác của trang làm thử
 // (usage) thì làm mới đúng khoá usage — trang nạp lại usage sau mỗi
 // thao tác như reload() thủ công của nó.
 
@@ -429,13 +402,10 @@ export function useReviewMatrixContribution() {
 }
 
 /**
- * Đột biến nộp BỘ HỒ SƠ của một đề lên bank đích: từ S4/Q4 (issue
- * #228) bộ hồ sơ không còn đường ghi riêng (mọi thao tác ghi trên bề
- * mặt hồ sơ đã đóng) — đây là ĐỀ XUẤT ĐÓNG GÓP kèm bộ hồ sơ đính kèm
+ * Đột biến nộp BỘ HỒ SƠ của một đề lên bank đích: từ S4/Q4 (issue #228) bộ hồ sơ không còn đường ghi riêng (mọi thao tác ghi trên bề mặt hồ sơ đã đóng) — đây là ĐỀ XUẤT ĐÓNG GÓP kèm bộ hồ sơ đính kèm
  * (`withDossier: true`) trên ĐƯỜNG ĐÓNG GÓP DUY NHẤT của đề
  * (POST /exams/banks/:bankId/contributions, trường định danh theo
- * hợp đồng là `examId`); phía API ghim bộ ba (version đề + version ma
- * trận + bản đặc tả) tại đúng lúc đề xuất.
+ * hợp đồng là `examId`); phía API ghim bộ ba (version đề + version ma trận + bản đặc tả) tại đúng lúc đề xuất.
  */
 export function useProposeExamDossierContribution() {
   return useMutation({
@@ -485,12 +455,7 @@ export function useProposeExamPaperContribution() {
 /**
  * Đột biến một mốc duyệt của đóng góp đề tại bank đích
  * (POST /exams/banks/:bankId/contributions/:id/<action>): chỉ còn
- * hai động từ `approve`/`reject` (issue #345, giai đoạn 2) — cấp
- * duyệt do phía server phân biệt bằng trạng thái đóng góp và quyền
- * của người gọi (đóng góp `pending` → cấp 1, đóng góp
- * `pending_board` do ban giám hiệu gọi → cấp 2; trạng thái này chỉ
- * đóng góp kèm bộ hồ sơ mới lên được, theo Q4 của issue #228);
- * từ chối ở cả hai cấp đều kèm lý do.
+ * hai động từ `approve`/`reject` (issue #345, giai đoạn 2) — cấp duyệt do phía server phân biệt bằng trạng thái đóng góp và quyền của người gọi (đóng góp `pending` → cấp 1, đóng góp `pending_board` do ban giám hiệu gọi → cấp 2; trạng thái này chỉ đóng góp kèm bộ hồ sơ mới lên được, theo Q4 của issue #228); từ chối ở cả hai cấp đều kèm lý do.
  */
 export function useReviewExamPaperContribution() {
   return useMutation({
@@ -609,9 +574,7 @@ export function useQuestionUsage(usageId: string, enabled: boolean) {
 }
 
 /**
- * Tuỳ chọn truy vấn các version của một câu cho trang làm thử: dùng
- * chung khoá factory `questionVersions` — bề mặt này đọc thêm id và
- * stimulusId của cùng một đáp ứng.
+ * Tuỳ chọn truy vấn các version của một câu cho trang làm thử: dùng chung khoá factory `questionVersions` — bề mặt này đọc thêm id và stimulusId của cùng một đáp ứng.
  */
 export function pinnedQuestionVersionsQueryOptions(questionId: string) {
   return queryOptions({

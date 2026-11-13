@@ -6,11 +6,9 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstS
 import { addExamSlot, createExamDraft, createReadyQuestion, pinExam } from '../../support/exam-pin-helpers';
 
 /**
- * Issue #254 — mô hình lai tham chiếu version câu hỏi, đối chiếu 8 tiêu
- * chí của mục Nghiệm thu trong issue:
+ * Issue #254 — mô hình lai tham chiếu version câu hỏi, đối chiếu 8 tiêu chí của mục Nghiệm thu trong issue:
  *  1) huy hiệu "có bản ready mới" hiện đúng ở bề mặt soạn đề (dữ kiện
- *     slot của đề: hasNewerVersion/latestReadyVersionNumber) và ở cấp
- *     pin (hasNewerExamVersion trên QuizView);
+ *     slot của đề: hasNewerVersion/latestReadyVersionNumber) và ở cấp pin (hasNewerExamVersion trên QuizView);
  *  2) cập nhật tường minh: xem diff từng slot trước khi áp, áp xong có
  *     vết ghi ai/khi nào/từ exam version nào lên version nào;
  *  3) lần ghim đã có attempt → API chặn cập nhật (exam.pin_locked);
@@ -24,12 +22,9 @@ import { addExamSlot, createExamDraft, createReadyQuestion, pinExam } from '../.
  *  8) CI verify xanh — cổng ngoài test này (log CI của PR).
  *
  * Bổ sung ở lát S4/S5 của issue #228 (đồng bộ cơ chế ngân hàng):
- *  3b) định nghĩa "đã có attempt" của quyết định Q2 — lượt đang làm
- *      dở khoá pin như lượt đã nộp; lượt xem trước của giáo viên
- *      không khoá;
+ *  3b) định nghĩa "đã có attempt" của quyết định Q2 — lượt đang làm dở khoá pin như lượt đã nộp; lượt xem trước của giáo viên không khoá;
  *  9) quyết định Q3 — sao chép khoá mang theo cờ version_mode của
- *     lần ghim: bản sao của pin float vẫn float, pin pinned vẫn
- *     pinned.
+ *     lần ghim: bản sao của pin float vẫn float, pin pinned vẫn pinned.
  */
 describe('Cập nhật phiên bản ghim + chấm lại theo đáp án (issue #254)', () => {
   let app: INestApplication;

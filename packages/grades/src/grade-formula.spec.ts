@@ -7,20 +7,7 @@ import {
 /**
  * GOLDEN calculated grade items — bộ đánh giá công thức an toàn (không eval).
  *
- * Nguồn oracle: MoodleDocs "Grade calculations" (docs.moodle.org/en/Grade_calculations,
- * tra cứu trực tuyến 2026-10-23): công thức bắt đầu bằng `=`, tham chiếu idNumber trong
- * ngoặc vuông kép, hàm sum/average/min/max, ví dụ của tài liệu gồm
- * `=average([[1]], [[2]], [[3]])` (trung bình đều) và
- * `=sum([[1]]*0.3, [[2]]*0.6, [[3]]*0.1)` (trọng số 30/60/10),
- * `=max([[A]], [[B]], 100)`. Các số kỳ vọng dưới đây tính tay từ chính các ví dụ đó.
- * Ngữ nghĩa riêng đã chốt và ghi trong grade-formula.ts: chia 0 → null,
- * hàm bỏ qua đối số trống, phép toán hai ngôi có toán hạng trống → null,
- * tham chiếu vòng và idNumber lạ bị từ chối lúc lưu (kiểm ở service, vòng kiểm ở đây bằng findFormulaCycle).
- * Năm hàm bổ sung theo issue #24 (power/round/mod/pi/if) đối chiếu chính trang
- * MoodleDocs trên: power(base, exponent) = base^exponent; round(number, count)
- * làm tròn tới count chữ số thập phân; mod(dividend, divisor) là phần dư;
- * pi() = 3.14159265…; if(cond, then, else) trả nhánh thứ hai khi điều kiện
- * khác 0, nhánh thứ ba khi điều kiện bằng 0 — ví dụ 4 của tài liệu:
+ * Nguồn oracle: MoodleDocs "Grade calculations" (docs.moodle.org/en/Grade_calculations, tra cứu trực tuyến 2026-10-23): công thức bắt đầu bằng `=`, tham chiếu idNumber trong ngoặc vuông kép, hàm sum/average/min/max, ví dụ của tài liệu gồm `=average([[1]], [[2]], [[3]])` (trung bình đều) và `=sum([[1]]*0.3, [[2]]*0.6, [[3]]*0.1)` (trọng số 30/60/10), `=max([[A]], [[B]], 100)`. Các số kỳ vọng dưới đây tính tay từ chính các ví dụ đó. Ngữ nghĩa riêng đã chốt và ghi trong grade-formula.ts: chia 0 → null, hàm bỏ qua đối số trống, phép toán hai ngôi có toán hạng trống → null, tham chiếu vòng và idNumber lạ bị từ chối lúc lưu (kiểm ở service, vòng kiểm ở đây bằng findFormulaCycle). Năm hàm bổ sung theo issue #24 (power/round/mod/pi/if) đối chiếu chính trang MoodleDocs trên: power(base, exponent) = base^exponent; round(number, count) làm tròn tới count chữ số thập phân; mod(dividend, divisor) là phần dư; pi() = 3.14159265…; if(cond, then, else) trả nhánh thứ hai khi điều kiện khác 0, nhánh thứ ba khi điều kiện bằng 0 — ví dụ 4 của tài liệu:
  * `=if([[midtermexam]]>=5, [[midtermexam]]+[[lab]], 0)`.
  */
 describe('GradeFormula — bộ phân tích/đánh giá chuẩn (tính toán điểm MoodleDocs)', () => {

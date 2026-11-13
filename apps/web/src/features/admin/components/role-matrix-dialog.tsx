@@ -171,10 +171,7 @@ export function RoleMatrixDialog({
   }
 
   /**
-   * Một cụm checkbox cùng loại (Đọc hoặc Ghi) trên hàng của một
-   * resource: mỗi năng lực là một checkbox kèm nhãn hành động của
-   * nó; cụm rỗng (resource không có năng lực thuộc loại đó) hiện
-   * dấu gạch ngang mờ thay vì để ô trống khó hiểu.
+   * Một cụm checkbox cùng loại (Đọc hoặc Ghi) trên hàng của một resource: mỗi năng lực là một checkbox kèm nhãn hành động của nó; cụm rỗng (resource không có năng lực thuộc loại đó) hiện dấu gạch ngang mờ thay vì để ô trống khó hiểu.
    */
   function renderCluster(cluster: Capability[]) {
     if (cluster.length === 0) return <span className="text-muted-foreground">—</span>;
@@ -205,9 +202,7 @@ export function RoleMatrixDialog({
   const groups = groupCapabilitiesByResource(capabilities);
 
   /**
-   * Trạng thái của checkbox chọn theo cấp (toàn cục hoặc một nhóm
-   * resource): chỉ tính các ô SỬA ĐƯỢC — ô khoá Ngăn chặn/Cấm hẳn
-   * không thuộc phạm vi chọn và không làm checkbox cấp thành mixed.
+   * Trạng thái của checkbox chọn theo cấp (toàn cục hoặc một nhóm resource): chỉ tính các ô SỬA ĐƯỢC — ô khoá Ngăn chặn/Cấm hẳn không thuộc phạm vi chọn và không làm checkbox cấp thành mixed.
    */
   function scopeState(scope: Capability[]): { checked: boolean; indeterminate: boolean } {
     const editable = scope.filter((capability) => !isLockedPermission(valueOf(capability.name)));
@@ -219,10 +214,7 @@ export function RoleMatrixDialog({
   }
 
   /**
-   * Đặt Cho phép (allowed = true) hoặc Kế thừa (false) cho mọi ô
-   * sửa được trong một phạm vi; ô khoá giữ nguyên giá trị đã lưu
-   * trong bản nháp — chọn theo cấp không bao giờ ghi đè Ngăn
-   * chặn/Cấm hẳn.
+   * Đặt Cho phép (allowed = true) hoặc Kế thừa (false) cho mọi ô sửa được trong một phạm vi; ô khoá giữ nguyên giá trị đã lưu trong bản nháp — chọn theo cấp không bao giờ ghi đè Ngăn chặn/Cấm hẳn.
    */
   function applyScope(scope: Capability[], allowed: boolean) {
     setEdits((prev) => {
@@ -237,9 +229,7 @@ export function RoleMatrixDialog({
   }
 
   /**
-   * Lưu hộp thoại: tạo/cập nhật vai trò rồi lưu ma trận thay toàn bộ
-   * đúng một lần cho ngữ cảnh đang chọn. Lỗi ở bước nào thì dừng ở
-   * bước đó, giữ hộp thoại mở kèm thông báo — không đóng như đã xong.
+   * Lưu hộp thoại: tạo/cập nhật vai trò rồi lưu ma trận thay toàn bộ đúng một lần cho ngữ cảnh đang chọn. Lỗi ở bước nào thì dừng ở bước đó, giữ hộp thoại mở kèm thông báo — không đóng như đã xong.
    */
   async function save() {
     setSaveError(null);
@@ -266,16 +256,13 @@ export function RoleMatrixDialog({
       const overrides = capabilities
         .map((capability) => ({ capability: capability.name, permission: valueOf(capability.name) }))
         .filter((entry) => entry.permission !== CAP.INHERIT);
-      // Chế độ tạo mà ma trận toàn kế thừa thì vai mới vốn đã có 0 ghi
-      // đè nên bỏ qua lần gọi thay toàn bộ; chế độ sửa luôn gọi một lần
-      // để việc xoá hết ghi đè tại ngữ cảnh cũng được lưu.
+      // Chế độ tạo mà ma trận toàn kế thừa thì vai mới vốn đã có 0 ghi đè nên bỏ qua lần gọi thay toàn bộ; chế độ sửa luôn gọi một lần để việc xoá hết ghi đè tại ngữ cảnh cũng được lưu.
       if (mode === 'edit' || overrides.length > 0) {
         await replaceMutation.mutateAsync({ roleId: id, payload: { contextId, overrides } });
       }
       onClose();
     } catch {
-      // Vai đã tạo nhưng ma trận chưa lưu: thông báo riêng để người dùng
-      // bấm Lưu lại thay vì tưởng đã xong hoặc tạo trùng vai trò.
+      // Vai đã tạo nhưng ma trận chưa lưu: thông báo riêng để người dùng bấm Lưu lại thay vì tưởng đã xong hoặc tạo trùng vai trò.
       setSaveError(
         step === 'matrix' && (mode === 'create' || createdRoleId) ? t('roleCreatedMatrixFailed') : t('roleSaveFailed'),
       );
@@ -286,16 +273,11 @@ export function RoleMatrixDialog({
   /** Dòng mô tả phụ dưới tiêu đề, đổi theo chế độ tạo/sửa như mẫu hộp thoại quản trị chuẩn. */
   const subtitle = mode === 'create' ? t('roleDialogCreateDescription') : t('roleDialogEditDescription');
   /**
-   * Chế độ sửa chỉ lưu được khi ma trận đã tải thành công: đang tải
-   * hoặc tải lỗi mà vẫn cho lưu thì PUT thay toàn bộ mang tập gần
-   * rỗng (mọi ô tính là kế thừa) và xoá lặng ghi đè đã lưu tại ngữ
-   * cảnh đó. Chế độ tạo không có ma trận đã lưu nên không cần cổng.
+   * Chế độ sửa chỉ lưu được khi ma trận đã tải thành công: đang tải hoặc tải lỗi mà vẫn cho lưu thì PUT thay toàn bộ mang tập gần rỗng (mọi ô tính là kế thừa) và xoá lặng ghi đè đã lưu tại ngữ cảnh đó. Chế độ tạo không có ma trận đã lưu nên không cần cổng.
    */
   const matrixReady = mode === 'create' || (!matrixPending && !matrixError);
   /**
-   * Lỗi tên tại trường: tên đã nhập (khác rỗng) mà ngắn hơn 2 ký tự
-   * thì báo ngay dưới ô nhập như form mẫu; tên còn trống thì chưa
-   * báo lỗi nhưng nút Lưu vẫn khoá theo điều kiện `canSave`.
+   * Lỗi tên tại trường: tên đã nhập (khác rỗng) mà ngắn hơn 2 ký tự thì báo ngay dưới ô nhập như form mẫu; tên còn trống thì chưa báo lỗi nhưng nút Lưu vẫn khoá theo điều kiện `canSave`.
    */
   const nameError = name.trim() !== '' && name.trim().length < 2;
   const canSave =
@@ -307,8 +289,7 @@ export function RoleMatrixDialog({
     <Dialog
       open
       onOpenChange={(nextOpen) => {
-        // Đang lưu thì giữ hộp thoại mở: đóng giữa chừng sẽ mất dấu
-        // lần ghi đang chạy và trạng thái lỗi của nó.
+        // Đang lưu thì giữ hộp thoại mở: đóng giữa chừng sẽ mất dấu lần ghi đang chạy và trạng thái lỗi của nó.
         if (!nextOpen && !saving) onClose();
       }}
     >
@@ -359,8 +340,7 @@ export function RoleMatrixDialog({
                 id="role-dialog-context"
                 value={contextId}
                 onValueChange={(next) => {
-                  // Đổi ngữ cảnh là đổi tập ghi đè đang sửa: xoá sạch sửa
-                  // đổi của ngữ cảnh trước để không lẫn sang ngữ cảnh mới.
+                  // Đổi ngữ cảnh là đổi tập ghi đè đang sửa: xoá sạch sửa đổi của ngữ cảnh trước để không lẫn sang ngữ cảnh mới.
                   setContextOverride(next);
                   setEdits({});
                 }}

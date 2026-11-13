@@ -6,19 +6,9 @@ import {
 import { createCategory, createCourse, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
 
 /**
- * Hội thoại lớp/khoá của quản trị hệ thống được LIỆT KÊ, không
- * chỉ đếm (issue #592, điểm D11): quản trị viên mở chat lớp/khoá
- * từ bề mặt của chính lớp/khoá (ensure) thì trở thành thành viên;
- * từ đó danh sách chat của họ giữ hàng lớp/khoá (không bị đồng bộ
- * lười gỡ ra dù không nằm trong tập roster/staff đích), số chưa
- * đọc khớp vũ trụ chuẩn, và mở/đọc được như mọi vai trò khác.
+ * Hội thoại lớp/khoá của quản trị hệ thống được LIỆT KÊ, không chỉ đếm (issue #592, điểm D11): quản trị viên mở chat lớp/khoá từ bề mặt của chính lớp/khoá (ensure) thì trở thành thành viên; từ đó danh sách chat của họ giữ hàng lớp/khoá (không bị đồng bộ lười gỡ ra dù không nằm trong tập roster/staff đích), số chưa đọc khớp vũ trụ chuẩn, và mở/đọc được như mọi vai trò khác.
  *
- * Dàn dựng: một khoá và một lớp, mỗi nơi có giáo viên + học viên;
- * giáo viên ensure trước (tạo conversation), quản trị viên ensure
- * sau (được cấp membership theo phạm vi quản trị), giáo viên gửi
- * tin. Kỳ vọng: danh sách của quản trị viên có cả hai hàng với
- * đúng số chưa đọc; chi tiết mở được; đọc xong thì badge và hàng
- * cùng về 0 cho hội thoại đó, hàng còn lại vẫn ở nguyên.
+ * Dàn dựng: một khoá và một lớp, mỗi nơi có giáo viên + học viên; giáo viên ensure trước (tạo conversation), quản trị viên ensure sau (được cấp membership theo phạm vi quản trị), giáo viên gửi tin. Kỳ vọng: danh sách của quản trị viên có cả hai hàng với đúng số chưa đọc; chi tiết mở được; đọc xong thì badge và hàng cùng về 0 cho hội thoại đó, hàng còn lại vẫn ở nguyên.
  */
 interface Person { id: string; username: string; token: string }
 interface ListRow { id: string; unread: number; component: string | null; itemType: string | null }
@@ -31,12 +21,9 @@ describe('Messaging — danh sách chat của quản trị viên có hàng lớp
   let courseConvId: string;
   let classConvId: string;
   /**
-   * Mốc huy hiệu của quản trị viên TRƯỚC khi dàn dựng: các spec
-   * khác trong cùng shard e2e dùng chung một DB nên quản trị viên
+   * Mốc huy hiệu của quản trị viên TRƯỚC khi dàn dựng: các spec khác trong cùng shard e2e dùng chung một DB nên quản trị viên
    * (tài khoản dùng chung) có thể đã mang tin chưa đọc từ dữ kiện
-   * của spec khác — khẳng định huy hiệu phải tính theo PHẦN TĂNG
-   * do chính spec này dàn dựng, không khẳng định tổng tuyệt đối
-   * phụ thuộc thứ tự chạy trong shard.
+   * của spec khác — khẳng định huy hiệu phải tính theo PHẦN TĂNG do chính spec này dàn dựng, không khẳng định tổng tuyệt đối phụ thuộc thứ tự chạy trong shard.
    */
   let baselineBadge = 0;
 

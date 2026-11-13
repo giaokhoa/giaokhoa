@@ -6,11 +6,7 @@ import type { CreateGuardianLinkDraft, GuardianLinkView, GuardianMyStudentEntry 
 
 /**
  * Tầng gọi API thuần của bề mặt phụ huynh thuộc feature guardians:
- * chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React
- * Query. Tầng `queries/` của feature bọc các hàm này thành
- * queryOptions, đột biến và clientLoader. Tách từ module phẳng
- * `src/lib/guardian-data.ts` khi tổ chức lại apps/web theo mô
- * hình features/ (issue #500).
+ * chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành queryOptions, đột biến và clientLoader. Tách từ module phẳng `src/lib/guardian-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
 
 /**

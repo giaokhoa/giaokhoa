@@ -20,40 +20,17 @@ import { useMemberPanelData } from '../hooks/use-member-panel-data';
 import type { ContactRelationship, ConversationView } from '../types/types';
 
 /**
- * Tin nhắn: danh sách cuộc trò chuyện với số chưa đọc, luồng tin nhắn và
- * việc gửi. Tin nhắn hiển thị/gửi theo mô hình mới (issue #33): seq
- * đơn điệu theo conversation là mốc phân trang/đồng bộ; gửi LẠC QUAN
- * với clientMessageId (server chống trùng — thử lại không nhân đôi);
- * tin mới/đã đọc đến qua WebSocket (sự kiện được server phân phối từ
- * outbox), huy hiệu chưa đọc cập nhật theo sự kiện thay vì tải lại
- * toàn bộ; mất nối thì khi nối lại trang xin phần thiếu theo seq.
- * Trang còn quản lý chặn liên lạc: chặn/bỏ chặn người đối thoại trong
- * cuộc trò chuyện đang mở và xem danh sách đã chặn
+ * Tin nhắn: danh sách cuộc trò chuyện với số chưa đọc, luồng tin nhắn và việc gửi. Tin nhắn hiển thị/gửi theo mô hình mới (issue #33): seq đơn điệu theo conversation là mốc phân trang/đồng bộ; gửi LẠC QUAN với clientMessageId (server chống trùng — thử lại không nhân đôi); tin mới/đã đọc đến qua WebSocket (sự kiện được server phân phối từ outbox), huy hiệu chưa đọc cập nhật theo sự kiện thay vì tải lại toàn bộ; mất nối thì khi nối lại trang xin phần thiếu theo seq. Trang còn quản lý chặn liên lạc: chặn/bỏ chặn người đối thoại trong cuộc trò chuyện đang mở và xem danh sách đã chặn
  * (GET/POST/DELETE /messages/contacts...). Deep-link
- * ?conversation=<id> (contextUrl của thông báo message_new, #49) mở
- * đúng cuộc trò chuyện khi trang nạp — việc nối tiếp của #33.
+ * ?conversation=<id> (contextUrl của thông báo message_new, #49) mở đúng cuộc trò chuyện khi trang nạp — việc nối tiếp của #33.
  *
  * Cấu trúc khung trái: thanh tab bốn tab lọc ngang hàng
  * (Tất cả / Chưa đọc / Nhóm / Lưu trữ — ba tab đầu theo hình
- * dạng của issue #606; tab Lưu trữ thay tab Yêu thích theo
- * phán quyết của issue #623: yêu thích không có dữ kiện ở
- * bất kỳ tầng nào, còn lưu trữ là chức năng thật cần bề mặt
- * riêng) — tab Tất cả gồm MỌI hội thoại chưa lưu trữ (1–1
- * lẫn nhóm), tab Chưa đọc gồm mọi hội thoại chưa lưu trữ
- * còn tin chưa đọc ở cả hai loại, tab Lưu trữ chứa riêng
- * tập hội thoại đã lưu trữ; tab Nhóm là danh sách phẳng các
- * mục nhóm dựng từ API cây của MSG-T1, Danh bạ hạ thành
- * sheet "Tin nhắn mới". Tab
- * đang chọn + hội thoại đang mở được LƯU BỀN ở localStorage
+ * dạng của issue #606; tab Lưu trữ thay tab Yêu thích theo phán quyết của issue #623: yêu thích không có dữ kiện ở bất kỳ tầng nào, còn lưu trữ là chức năng thật cần bề mặt riêng) — tab Tất cả gồm MỌI hội thoại chưa lưu trữ (1–1 lẫn nhóm), tab Chưa đọc gồm mọi hội thoại chưa lưu trữ còn tin chưa đọc ở cả hai loại, tab Lưu trữ chứa riêng tập hội thoại đã lưu trữ; tab Nhóm là danh sách phẳng các mục nhóm dựng từ API cây của MSG-T1, Danh bạ hạ thành sheet "Tin nhắn mới". Tab đang chọn + hội thoại đang mở được LƯU BỀN ở localStorage
  * (hai khoá trong `page-helpers.ts`) để quay lại màn Tin nhắn
- * là gặp đúng ngữ cảnh gần nhất; deep-link có mặt thì thắng
- * ngữ cảnh đã lưu.
+ * là gặp đúng ngữ cảnh gần nhất; deep-link có mặt thì thắng ngữ cảnh đã lưu.
  *
- * Cấu trúc sau đợt C (issue #363): file này chỉ còn lắp ghép — mọi
- * trạng thái, hiệu ứng và handler điều phối nằm trong các hook ở
- * `components/messages/` (danh sách, khôi phục ngữ cảnh, hội thoại
- * đang mở, soạn/gửi, tìm kiếm, realtime, danh bạ, panel thành viên,
- * nhóm, kiểm duyệt) và các hàm thuần ở `page-helpers.ts`.
+ * Cấu trúc sau đợt C (issue #363): file này chỉ còn lắp ghép — mọi trạng thái, hiệu ứng và handler điều phối nằm trong các hook ở `components/messages/` (danh sách, khôi phục ngữ cảnh, hội thoại đang mở, soạn/gửi, tìm kiếm, realtime, danh bạ, panel thành viên, nhóm, kiểm duyệt) và các hàm thuần ở `page-helpers.ts`.
  */
 
 /**
@@ -85,13 +62,7 @@ export function MessagesPage() {
   const [searchParams] = useSearchParams();
   const myId = user?.id;
   /**
-   * Mức hiện diện người xem tự chọn cho chính mình (giai đoạn 2
-   * của vòng sửa PR #610): mặc định online. Chọn offline thì
-   * trang KHÔNG nối socket realtime — server gỡ presence nên
-   * trạng thái ngoại tuyến là THẬT ở mọi bề mặt; chọn lại online
-   * thì nối lại và nạp lại danh sách để lấp phần đã lỡ trong lúc
-   * ngoại tuyến. Lựa chọn chỉ sống trong phiên trang (chưa có dữ
-   * kiện backend cho tuỳ chọn này).
+   * Mức hiện diện người xem tự chọn cho chính mình (giai đoạn 2 của vòng sửa PR #610): mặc định online. Chọn offline thì trang KHÔNG nối socket realtime — server gỡ presence nên trạng thái ngoại tuyến là THẬT ở mọi bề mặt; chọn lại online thì nối lại và nạp lại danh sách để lấp phần đã lỡ trong lúc ngoại tuyến. Lựa chọn chỉ sống trong phiên trang (chưa có dữ kiện backend cho tuỳ chọn này).
    */
   const [selfPresence, setSelfPresence] = useState<SelfPresenceChoice>('online');
   /** Handle socket realtime — hook realtime gán vào, hook soạn tin đọc ra. */
@@ -99,9 +70,7 @@ export function MessagesPage() {
   /** Seq cao nhất đã thấy của từng conversation — mốc xin đồng bộ khi nối lại, bốn hook cùng dùng. */
   const lastSeqRef = useRef<Map<string, number>>(new Map());
 
-  // Các callback dùng-chung (xem `useLateCallback` ở trên): hàm ổn
-  // định truyền xuống hook cần dùng, triển khai thật gán ngay sau khi
-  // hook sở hữu được tạo trong thân component này.
+  // Các callback dùng-chung (xem `useLateCallback` ở trên): hàm ổn định truyền xuống hook cần dùng, triển khai thật gán ngay sau khi hook sở hữu được tạo trong thân component này.
   const [openCall, assignOpen] = useLateCallback<(conv: ConversationView) => Promise<void>>();
   const [applyReadMarkerCall, assignApplyReadMarker] =
     useLateCallback<(conversationId: string, userId: string, lastReadSeq: number) => void>();
@@ -109,8 +78,7 @@ export function MessagesPage() {
     useLateCallback<(userId: string, relationship: ContactRelationship) => void>();
   const [removeMemberCall, assignRemoveMember] = useLateCallback<(userId: string) => Promise<void>>();
 
-  // Lát 1: danh sách + khôi phục ngữ cảnh (khôi phục cần `open` nên
-  // gọi sau khi trình bao `open` đã gán ở cuối thân component).
+  // Lát 1: danh sách + khôi phục ngữ cảnh (khôi phục cần `open` nên gọi sau khi trình bao `open` đã gán ở cuối thân component).
   const list = useConversationList({
     myId,
     applyReadMarker: applyReadMarkerCall,
@@ -212,8 +180,7 @@ export function MessagesPage() {
     setActionMessage: groupActions.setActionMessage,
   });
 
-  // Trình bao `open` dùng chung: trước khi mở conversation mới thì
-  // đặt lại các trạng thái theo-conversation của các hook khác
+  // Trình bao `open` dùng chung: trước khi mở conversation mới thì đặt lại các trạng thái theo-conversation của các hook khác
   // (lỗi gửi, lượt tìm, thông báo báo cáo/hành động) đúng như `open`
   // cũ trong file trang từng làm, rồi mới mở qua hook hội thoại.
   assignOpen(async (conv: ConversationView) => {
@@ -233,13 +200,9 @@ export function MessagesPage() {
   });
 
   /**
-   * Đổi tab khung trái (issue #608, điểm A-BS5): vào tab Nhóm
-   * thì khung phải về trạng thái CHƯA CHỌN nếu hội thoại đang
-   * mở không phải hội thoại nhóm — đúng hành vi của bản demo
+   * Đổi tab khung trái (issue #608, điểm A-BS5): vào tab Nhóm thì khung phải về trạng thái CHƯA CHỌN nếu hội thoại đang mở không phải hội thoại nhóm — đúng hành vi của bản demo
    * (mở tab Nhóm lần đầu là thấy trạng thái rỗng, hội thoại chỉ
-   * mở khi người dùng chọn trong cây). Đóng hội thoại ở đây
-   * cũng xoá ngữ cảnh đã lưu bền như nút quay lại, nên quay lại
-   * tab Trò chuyện không tự mở lại hội thoại cũ.
+   * mở khi người dùng chọn trong cây). Đóng hội thoại ở đây cũng xoá ngữ cảnh đã lưu bền như nút quay lại, nên quay lại tab Trò chuyện không tự mở lại hội thoại cũ.
    */
   const handleSidebarTabChange = (tab: string) => {
     list.setSidebarTab(tab);
@@ -249,10 +212,7 @@ export function MessagesPage() {
   };
 
   /**
-   * Đổi mức hiện diện của chính người xem: về online thì nạp lại
-   * danh sách hội thoại ngay (phần thay đổi trong lúc ngoại tuyến
-   * không có kênh realtime nào mang tới); về offline chỉ cần đổi
-   * trạng thái — hook realtime tự ngắt socket ở lượt hiệu ứng kế.
+   * Đổi mức hiện diện của chính người xem: về online thì nạp lại danh sách hội thoại ngay (phần thay đổi trong lúc ngoại tuyến không có kênh realtime nào mang tới); về offline chỉ cần đổi trạng thái — hook realtime tự ngắt socket ở lượt hiệu ứng kế.
    */
   const handleSelfPresenceChange = (presence: SelfPresenceChoice) => {
     setSelfPresence(presence);

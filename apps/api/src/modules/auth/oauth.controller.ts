@@ -13,9 +13,7 @@ import { OAuthFlowException, OAuthService } from './oauth.service';
 @ApiTags('auth')
 @Controller({ path: 'auth/oauth', version: '1' })
 /**
- * API đăng nhập xã hội (plugin lõi auth_oauth2 của Moodle): cấu hình
- * issuer công khai, khởi tạo luồng authorize, callback của nhà cung cấp,
- * đổi mã bàn giao, và quản lý liên kết của chính user (Linked logins).
+ * API đăng nhập xã hội (plugin lõi auth_oauth2 của Moodle): cấu hình issuer công khai, khởi tạo luồng authorize, callback của nhà cung cấp, đổi mã bàn giao, và quản lý liên kết của chính user (Linked logins).
  */
 export class OAuthController {
   constructor(private readonly oauth: OAuthService, private readonly config: ConfigService) {}

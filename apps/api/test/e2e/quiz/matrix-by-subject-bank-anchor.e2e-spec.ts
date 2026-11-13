@@ -11,23 +11,9 @@ import { courseContextId } from '../../support/engagement-helpers';
 /**
  * Danh sách ma trận theo môn — phân quyền NEO TẠI BANK (issue #376).
  *
- * Luồng nghiệp vụ được kiểm: `GET /exam-matrices/by-subject/:subjectId`
- * từng gác hai cổng liên tiếp tại context của MÔN (đọc môn qua
- * `curriculum:view`, rồi đòi `matrix:use` tại context môn) nên giáo
- * viên làm việc với môn hệ thống — môn neo tại context hệ thống, nơi
- * giáo viên không giữ vai trò nào — luôn nhận 403 dù có đầy đủ quyền
- * tại bank chứa ma trận. Học thuyết neo bank (điểm neo quyền duy nhất
- * của ma trận là bank chứa nó; context môn chỉ là phạm vi dữ liệu)
- * đòi bề mặt này: đọc môn dạng tham chiếu thuần tuý, bỏ cổng tại
- * context môn, và lọc từng ma trận theo quyền của chính nó —
- * bank-local (`bankLocalMatrixCaps.view`) với ma trận có bank, quy
- * tắc legacy (`PermissionEvaluator` với `matrix:use` tại context của
- * chính ma trận) với ma trận chưa thuộc bank nào/bank đã xoá.
+ * Luồng nghiệp vụ được kiểm: `GET /exam-matrices/by-subject/:subjectId` từng gác hai cổng liên tiếp tại context của MÔN (đọc môn qua `curriculum:view`, rồi đòi `matrix:use` tại context môn) nên giáo viên làm việc với môn hệ thống — môn neo tại context hệ thống, nơi giáo viên không giữ vai trò nào — luôn nhận 403 dù có đầy đủ quyền tại bank chứa ma trận. Học thuyết neo bank (điểm neo quyền duy nhất của ma trận là bank chứa nó; context môn chỉ là phạm vi dữ liệu) đòi bề mặt này: đọc môn dạng tham chiếu thuần tuý, bỏ cổng tại context môn, và lọc từng ma trận theo quyền của chính nó — bank-local (`bankLocalMatrixCaps.view`) với ma trận có bank, quy tắc legacy (`PermissionEvaluator` với `matrix:use` tại context của chính ma trận) với ma trận chưa thuộc bank nào/bank đã xoá.
  *
- * Diễn viên dựng theo ĐÚNG mô hình dữ liệu mẫu (hồi quy D-3 của issue
- * #233): giáo viên giữ vai `editingteacher` tại context KHOÁ mình
- * dạy, KHÔNG có vai nào tại context hệ thống. Các khẳng định đối
- * chiếu cả danh sách id lẫn bankId của từng ma trận trả về.
+ * Diễn viên dựng theo ĐÚNG mô hình dữ liệu mẫu (hồi quy D-3 của issue #233): giáo viên giữ vai `editingteacher` tại context KHOÁ mình dạy, KHÔNG có vai nào tại context hệ thống. Các khẳng định đối chiếu cả danh sách id lẫn bankId của từng ma trận trả về.
  */
 const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 

@@ -78,16 +78,11 @@ export interface MatrixSpecification {
         /** Bản tách mức của tổ chuyên môn khi YCCĐ là bản 'derived'. */
         derivedContent: string | null;
         /**
-         * Vị trí của dòng trong bản ghi chương trình (đợt neo lại
-         * định danh theo vị trí, issue #161): với derived là vị trí
-         * của dòng GỐC; null khi dòng không mang vị trí chương trình.
+         * Vị trí của dòng trong bản ghi chương trình (đợt neo lại định danh theo vị trí, issue #161): với derived là vị trí của dòng GỐC; null khi dòng không mang vị trí chương trình.
          */
         position: number | null;
         /**
-         * Mã YCCĐ vị trí `<recordId>.<position 2 số>` do BACKEND tính
-         * từ sổ đăng ký + position (một nguồn sự thật cho vị trí —
-         * web không tự suy); với derived là mã của dòng gốc; null khi
-         * node không thuộc bản ghi dataset nào.
+         * Mã YCCĐ vị trí `<recordId>.<position 2 số>` do BACKEND tính từ sổ đăng ký + position (một nguồn sự thật cho vị trí — web không tự suy); với derived là mã của dòng gốc; null khi node không thuộc bản ghi dataset nào.
          */
         code: string | null;
       }[];
@@ -149,22 +144,13 @@ export interface QuizAttemptQuestionView {
   questionExcerpt: string;
   questionText: RichTextDocument;
   /**
-   * Hướng dẫn (guidance) của version đã pin — hiện KÈM câu hỏi ngay
-   * trong lúc làm bài như khối "Hướng dẫn" của loigiaihay (điểm quyết
-   * D-4): KHÔNG qua cổng xem lại; chỉ vắng khi version không có hướng
-   * dẫn. Hướng dẫn ≠ lời giải: nó gợi ý cách làm, không chứa đáp án.
+   * Hướng dẫn (guidance) của version đã pin — hiện KÈM câu hỏi ngay trong lúc làm bài như khối "Hướng dẫn" của loigiaihay (điểm quyết D-4): KHÔNG qua cổng xem lại; chỉ vắng khi version không có hướng dẫn. Hướng dẫn ≠ lời giải: nó gợi ý cách làm, không chứa đáp án.
    */
   guidance: RichTextDocument | null;
   /**
-   * Lời giải/đáp án đúng dạng cấu trúc của version đã pin, suy từ phía
-   * đáp án: multichoice = `{correctAnswerId}` của dòng đáp án đúng;
-   * truefalse TF-A = `{statements}` đáp án Đúng/Sai của TỪNG mệnh đề
+   * Lời giải/đáp án đúng dạng cấu trúc của version đã pin, suy từ phía đáp án: multichoice = `{correctAnswerId}` của dòng đáp án đúng; truefalse TF-A = `{statements}` đáp án Đúng/Sai của TỪNG mệnh đề
    * (lưu ở bản ghi phía đáp án); shortanswer = `{acceptedAnswers}` các
-   * đáp án được chấp nhận; essay = lời giải mẫu `{answer}` lưu ở bản
-   * ghi phía đáp án. Chỉ lộ khi cổng `reviewRightAnswer` của lần ghim
-   * cho phép tại cửa sổ hiện tại — cùng cổng với `rightAnswer` dạng
-   * chữ. Đúng/sai TỪNG Ý của câu TF-A ở phía học sinh suy từ trường
-   * này + response của chính học sinh + fraction của câu.
+   * đáp án được chấp nhận; essay = lời giải mẫu `{answer}` lưu ở bản ghi phía đáp án. Chỉ lộ khi cổng `reviewRightAnswer` của lần ghim cho phép tại cửa sổ hiện tại — cùng cổng với `rightAnswer` dạng chữ. Đúng/sai TỪNG Ý của câu TF-A ở phía học sinh suy từ trường này + response của chính học sinh + fraction của câu.
    */
   solution: QuestionSolution | null;
   stimulus: { id: string; content: RichTextDocument } | null;
@@ -181,11 +167,7 @@ export interface QuizAttemptQuestionView {
   /** Nhận xét chung của câu (cổng review_general_feedback). */
   generalFeedback: RichTextDocument | null;
   /**
-   * Nhận xét của giáo viên khi chấm tay câu này (step chấm tay của
-   * engine mang data.comment — xem manualGradeAttempt). Nó là phản hồi
-   * gắn với chính đáp án của học sinh nên đi cùng cổng
-   * review_specific_feedback như feedback theo đáp án; null khi câu
-   * chưa được chấm tay kèm nhận xét hoặc cửa sổ hiện tại không cho xem.
+   * Nhận xét của giáo viên khi chấm tay câu này (step chấm tay của engine mang data.comment — xem manualGradeAttempt). Nó là phản hồi gắn với chính đáp án của học sinh nên đi cùng cổng review_specific_feedback như feedback theo đáp án; null khi câu chưa được chấm tay kèm nhận xét hoặc cửa sổ hiện tại không cho xem.
    */
   manualComment: string | null;
 }
@@ -216,14 +198,7 @@ export interface QuizQuestionWrongStudent {
 }
 
 /**
- * Thống kê một vị trí câu (slot) trong kết quả quiz cho giáo viên: bao
- * nhiêu học sinh làm chưa trọn vẹn câu này và đó là những ai. Đơn vị
- * gộp là SLOT (vị trí trong đề) — với slot cố định questionId/questionName
- * là của câu đã ghim; với slot ngẫu nhiên mỗi lượt rút một câu khác nhau
- * nên hai trường đó là null và thống kê hiểu theo vị trí. "Sai" nghĩa là
- * ĐÃ CHẤM mà fraction < 1 (sai hẳn hoặc đúng một phần); câu đang chờ
- * chấm tay chỉ đếm vào pendingCount, chưa kết luận sai/đúng. Chỉ tính
- * các lượt ĐÃ NỘP (finished/needsgrading), bỏ lượt preview của giáo viên.
+ * Thống kê một vị trí câu (slot) trong kết quả quiz cho giáo viên: bao nhiêu học sinh làm chưa trọn vẹn câu này và đó là những ai. Đơn vị gộp là SLOT (vị trí trong đề) — với slot cố định questionId/questionName là của câu đã ghim; với slot ngẫu nhiên mỗi lượt rút một câu khác nhau nên hai trường đó là null và thống kê hiểu theo vị trí. "Sai" nghĩa là ĐÃ CHẤM mà fraction < 1 (sai hẳn hoặc đúng một phần); câu đang chờ chấm tay chỉ đếm vào pendingCount, chưa kết luận sai/đúng. Chỉ tính các lượt ĐÃ NỘP (finished/needsgrading), bỏ lượt preview của giáo viên.
  */
 export interface QuizQuestionStat {
   slot: number;
@@ -248,11 +223,7 @@ export interface QuizQuestionStat {
 }
 
 /**
- * Tổng quan kết quả MỘT bài kiểm tra cho giáo viên (bộ thống kê Azota —
- * issue #224): tham gia (bao nhiêu HS ghi danh, bao nhiêu đã nộp, ai
- * chưa nộp), điểm trung bình của bài và phổ điểm theo 10 dải phần trăm
- * của thang điểm bài. Điểm từng HS nằm ở gradesByUser/attempts của
- * getResults; thống kê theo câu nằm ở questionStats.
+ * Tổng quan kết quả MỘT bài kiểm tra cho giáo viên (bộ thống kê Azota — issue #224): tham gia (bao nhiêu HS ghi danh, bao nhiêu đã nộp, ai chưa nộp), điểm trung bình của bài và phổ điểm theo 10 dải phần trăm của thang điểm bài. Điểm từng HS nằm ở gradesByUser/attempts của getResults; thống kê theo câu nằm ở questionStats.
  */
 export interface QuizResultsSummary {
   enrolledCount: number;
@@ -283,22 +254,13 @@ export interface QuizNeedsGradingView {
 /**
  * Hoạt động Quiz (Moodle mod_quiz) dựng trên question engine sẵn có.
  *
- * Nguyên tắc điểm (đúng Moodle): câu hỏi đứng độc lập trong ngân hàng —
- * `question_versions.default_mark` chỉ là gợi ý khi thêm slot; điểm thật
- * nằm ở `quiz_slots.max_mark` của từng đề. Bắt đầu lượt làm: engine tạo
- * question attempt với maxMark lấy từ slot; điểm câu = fraction × maxMark;
- * điểm lượt = tổng điểm các câu đã chấm; điểm BÀI = điểm lượt quy về thang
- * `quizzes.grade`, chọn theo grade_method khi có nhiều lượt, ghi vào sổ
- * điểm qua grade item 'mod' của course module (GradesService).
+ * Nguyên tắc điểm (đúng Moodle): câu hỏi đứng độc lập trong ngân hàng — `question_versions.default_mark` chỉ là gợi ý khi thêm slot; điểm thật nằm ở `quiz_slots.max_mark` của từng đề. Bắt đầu lượt làm: engine tạo question attempt với maxMark lấy từ slot; điểm câu = fraction × maxMark; điểm lượt = tổng điểm các câu đã chấm; điểm BÀI = điểm lượt quy về thang `quizzes.grade`, chọn theo grade_method khi có nhiều lượt, ghi vào sổ điểm qua grade item 'mod' của course module (GradesService).
  *
- * Trạng thái lượt: inprogress → (nộp bài) → finished, hoặc needsgrading
- * khi còn essay chờ chấm tay; chấm tay xong câu cuối cùng thì lượt về
- * finished và điểm bài được ghi lại.
+ * Trạng thái lượt: inprogress → (nộp bài) → finished, hoặc needsgrading khi còn essay chờ chấm tay; chấm tay xong câu cuối cùng thì lượt về finished và điểm bài được ghi lại.
  */
 
 /**
- * Hàng pin đã LÀM GIÀU: exam_pins + các trường suy từ exam version
- * đã ghim (thang điểm/tên/mặc định/ma trận/thang Đ–S) và exam
+ * Hàng pin đã LÀM GIÀU: exam_pins + các trường suy từ exam version đã ghim (thang điểm/tên/mặc định/ma trận/thang Đ–S) và exam
  * (kind + công thức recipe qua version). `course`/`grade`/`name`
  * giữ tên quen thuộc của mô hình quiz cũ cho các tầng trên.
  */
@@ -336,25 +298,17 @@ export { REVIEW_WINDOW, REVIEW_IMMEDIATELY_AFTER_MS } from './quiz-attempts.serv
 export { QTYPE_LABELS, LEVEL_LABELS, flattenSpecification } from './quiz-generation.service';
 
 /**
- * Facade của QuizService: giữ nguyên bề mặt công khai và chữ ký
- * constructor như trước khi tách, uỷ quyền mọi method cho service cụm
- * sở hữu. Bốn cụm ca sử dụng của issue #295 (ghim đề / ma trận /
- * sinh đề-đặc tả / lượt làm-chấm-kết quả) cộng tầng thấp dùng chung
+ * Facade của QuizService: giữ nguyên bề mặt công khai và chữ ký constructor như trước khi tách, uỷ quyền mọi method cho service cụm sở hữu. Bốn cụm ca sử dụng của issue #295 (ghim đề / ma trận / sinh đề-đặc tả / lượt làm-chấm-kết quả) cộng tầng thấp dùng chung
  * (`QuizSharedService`: primitive tải pin/ma trận, cổng quyền,
  * tính điểm từ usage) — xem docblock của từng service cụm.
  *
- * Đồ thị phụ thuộc giữa các cụm không có vòng: cụm lượt làm chỉ trỏ
- * xuống tầng thấp; cụm ghim gọi sang cụm lượt làm đúng phép `pushGrade`
+ * Đồ thị phụ thuộc giữa các cụm không có vòng: cụm lượt làm chỉ trỏ xuống tầng thấp; cụm ghim gọi sang cụm lượt làm đúng phép `pushGrade`
  * (chấm lại); cụm sinh đề gọi sang cụm lượt làm đúng phép
- * `finalizeAttempt` (lượt giấy); cụm ma trận chỉ trỏ xuống tầng thấp.
- * Các service cụm không đăng ký provider riêng, module wiring không
- * đổi — đúng khuôn facade của phần messaging trong cùng PR này.
+ * `finalizeAttempt` (lượt giấy); cụm ma trận chỉ trỏ xuống tầng thấp. Các service cụm không đăng ký provider riêng, module wiring không đổi — đúng khuôn facade của phần messaging trong cùng PR này.
  *
  * Hai điểm khác biệt duy nhất so với file gốc ngoài tổ chức file:
  * (1) các method vốn `private` nhưng cụm khác gọi nay public trong nội
- * bộ module (ghi rõ ở docblock từng service cụm), không phải bề mặt
- * API của module; (2) hai cảnh báo ghi điểm của `pushGrade` mang tên
- * logger `QuizAttemptsService` thay cho `QuizService`.
+ * bộ module (ghi rõ ở docblock từng service cụm), không phải bề mặt API của module; (2) hai cảnh báo ghi điểm của `pushGrade` mang tên logger `QuizAttemptsService` thay cho `QuizService`.
  */
 
 @Injectable()
@@ -391,8 +345,7 @@ export class QuizService {
   }
 
   /**
-   * Lấy pin đã LÀM GIÀU; ném exam.pin_not_found khi vắng. Hàng
-   * exam_pins được gộp với các trường suy từ exam version đã ghim
+   * Lấy pin đã LÀM GIÀU; ném exam.pin_not_found khi vắng. Hàng exam_pins được gộp với các trường suy từ exam version đã ghim
    * (thang điểm, tên hiển thị, ma trận, thang Đ–S) và exam (kind)
    * thành một "bài kiểm tra trong khoá" thống nhất cho các tầng trên.
    */
@@ -420,10 +373,7 @@ export class QuizService {
   }
 
   /**
-   * View của quiz kèm slots và tổng điểm slot. Slot cố định mang thêm
-   * thông tin bank nguồn + kỷ luật version (QB-3): chế độ ghim, version
-   * đang ghim, version ready mới nhất và cờ có bản mới để UI hiển thị
-   * "Câu thuộc Ngân hàng [tên] · đang ghim v[n] · đã có v[m]".
+   * View của quiz kèm slots và tổng điểm slot. Slot cố định mang thêm thông tin bank nguồn + kỷ luật version (QB-3): chế độ ghim, version đang ghim, version ready mới nhất và cờ có bản mới để UI hiển thị "Câu thuộc Ngân hàng [tên] · đang ghim v[n] · đã có v[m]".
    */
   async pinView(quiz: PinRow): Promise<QuizView> {
     return this.shared.pinView(quiz);
@@ -446,12 +396,7 @@ export class QuizService {
   }
 
   /**
-   * Sửa CẤU HÌNH TỔ CHỨC của một pin (quiz:manage): giờ mở/đóng, thời
-   * lượng, số lượt, mật khẩu, luật xem lại, preset (chỉ nhãn — không
-   * áp lại preset), số mã đề. Tên và thang điểm được đồng bộ sang
-   * course module và grade item; thang điểm suy từ exam version nên
-   * chỉ đổi khi đổi version đã ghim — và đổi version bị khoá khi pin
-   * đã có lượt làm thật (exam.pin_locked), số mã đề cũng vậy.
+   * Sửa CẤU HÌNH TỔ CHỨC của một pin (quiz:manage): giờ mở/đóng, thời lượng, số lượt, mật khẩu, luật xem lại, preset (chỉ nhãn — không áp lại preset), số mã đề. Tên và thang điểm được đồng bộ sang course module và grade item; thang điểm suy từ exam version nên chỉ đổi khi đổi version đã ghim — và đổi version bị khoá khi pin đã có lượt làm thật (exam.pin_locked), số mã đề cũng vậy.
    */
   async updatePin(actorId: string, pinId: string, input: {
     name?: string; intro?: string;
@@ -469,9 +414,7 @@ export class QuizService {
   }
 
   /**
-   * Xoá pin cùng attempts, usages của engine, course module và
-   * grade item của hoạt động (quiz:manage). Đề trong bank không bị
-   * ảnh hưởng — xoá pin chỉ gỡ lần tổ chức trong khoá này.
+   * Xoá pin cùng attempts, usages của engine, course module và grade item của hoạt động (quiz:manage). Đề trong bank không bị ảnh hưởng — xoá pin chỉ gỡ lần tổ chức trong khoá này.
    */
   async deletePin(actorId: string, pinId: string): Promise<void> {
     return this.pins.deletePin(actorId, pinId);
@@ -480,84 +423,54 @@ export class QuizService {
   /**
    * Xem trước thao tác cập nhật pin lên bản ready mới nhất của đề
    * (quiz:manage; issue #254): đích là exam version có số lớn nhất của
-   * đề — chỉ tồn tại khi đề đang `ready` và bản đó mới hơn bản đang
-   * ghim. Kèm diff từng slot và cờ `blockedByAttempts` để giáo viên
-   * biết trước rằng thao tác áp sẽ bị chặn khi pin đã có lượt làm thật.
+   * đề — chỉ tồn tại khi đề đang `ready` và bản đó mới hơn bản đang ghim. Kèm diff từng slot và cờ `blockedByAttempts` để giáo viên biết trước rằng thao tác áp sẽ bị chặn khi pin đã có lượt làm thật.
    */
   async getPinVersionUpdatePreview(actorId: string, pinId: string): Promise<PinVersionUpdatePreview> {
     return this.pins.getPinVersionUpdatePreview(actorId, pinId);
   }
 
   /**
-   * Áp cập nhật pin lên exam version mới nhất của đề (quiz:manage;
-   * issue #254) — thao tác TƯỜNG MINH sau bước xem diff:
+   * Áp cập nhật pin lên exam version mới nhất của đề (quiz:manage; issue #254) — thao tác TƯỜNG MINH sau bước xem diff:
    * 1. Luật khoá dùng chung với updatePin: pin đã có lượt làm thật thì
-   *    bị chặn `exam.pin_locked` (cập nhật chỉ áp cho người chưa làm;
-   *    lượt đã có giữ nguyên version và điểm — sửa hệ quả điểm của
-   *    chúng chỉ qua đường chấm lại theo đáp án).
+   *    bị chặn `exam.pin_locked` (cập nhật chỉ áp cho người chưa làm; lượt đã có giữ nguyên version và điểm — sửa hệ quả điểm của chúng chỉ qua đường chấm lại theo đáp án).
    * 2. Đích phải thuộc đúng đề của pin, là version MỚI NHẤT của đề và
-   *    đề phải đang `ready` (`exam.version_not_ready` /
-   *    `exam.version_not_latest`).
+   *    đề phải đang `ready` (`exam.version_not_ready` / `exam.version_not_latest`).
    * 3. Đổi examVersionId của pin, đồng bộ gradeMax của grade item như
-   *    updatePin, ghi vết vào exam_pin_version_updates (ai/khi nào/từ
-   *    version nào lên version nào) và phát sự kiện
-   *    `exam_pin_version_updated`.
+   *    updatePin, ghi vết vào exam_pin_version_updates (ai/khi nào/từ version nào lên version nào) và phát sự kiện `exam_pin_version_updated`.
    */
   async applyPinVersionUpdate(actorId: string, pinId: string, toExamVersionId: string): Promise<QuizView> {
     return this.pins.applyPinVersionUpdate(actorId, pinId, toExamVersionId);
   }
 
   /**
-   * Chấm lại theo đáp án cho một câu của pin (quiz:grade; issue #254) —
-   * đường DUY NHẤT để sửa hệ quả điểm khi đáp án của một câu đã được
-   * dùng chấm các lượt đã nộp bị sai: giáo viên tạo version mới của câu
-   * với đáp án đúng rồi chấm lại theo version đó.
+   * Chấm lại theo đáp án cho một câu của pin (quiz:grade; issue #254) — đường DUY NHẤT để sửa hệ quả điểm khi đáp án của một câu đã được dùng chấm các lượt đã nộp bị sai: giáo viên tạo version mới của câu với đáp án đúng rồi chấm lại theo version đó.
    *
-   * Ứng viên: lượt làm THẬT đã nộp (finished/needsgrading) có question
-   * attempt của câu này đã được chấm tự động và đang ghim version khác
-   * version đích. Lượt đang làm dở không bị đụng (chưa có điểm để sửa;
-   * chúng vẫn chấm theo version đã ghim khi bắt đầu, đúng kỷ luật
-   * ghim). Essay nằm ngoài đường này (chấm tay có đường riêng).
+   * Ứng viên: lượt làm THẬT đã nộp (finished/needsgrading) có question attempt của câu này đã được chấm tự động và đang ghim version khác version đích. Lượt đang làm dở không bị đụng (chưa có điểm để sửa; chúng vẫn chấm theo version đã ghim khi bắt đầu, đúng kỷ luật ghim). Essay nằm ngoài đường này (chấm tay có đường riêng).
    *
-   * `dryRun` chỉ tính và trả điểm đổi của từng học sinh; áp thật chạy
-   * đúng cùng phép tính ở engine nên kết quả khớp tuyệt đối. Khi áp:
-   * chấm lại qua engine (attempt chuyển ghim sang version đích + step
-   * hiệu chỉnh) → đồng bộ tổng điểm/trạng thái của lượt → ghi điểm vào
-   * sổ nếu lượt đã finished → ghi log exam_attempt_regrades +
-   * exam_attempt_regrade_items (chỉ các lượt điểm thật sự đổi mới có
-   * mục) → phát sự kiện `exam_attempt_answer_key_regraded` (tên riêng,
-   * không dùng lại sự kiện chấm tay `exam_attempt_regraded`).
+   * `dryRun` chỉ tính và trả điểm đổi của từng học sinh; áp thật chạy đúng cùng phép tính ở engine nên kết quả khớp tuyệt đối. Khi áp:
+   * chấm lại qua engine (attempt chuyển ghim sang version đích + step hiệu chỉnh) → đồng bộ tổng điểm/trạng thái của lượt → ghi điểm vào sổ nếu lượt đã finished → ghi log exam_attempt_regrades + exam_attempt_regrade_items (chỉ các lượt điểm thật sự đổi mới có mục) → phát sự kiện `exam_attempt_answer_key_regraded` (tên riêng, không dùng lại sự kiện chấm tay `exam_attempt_regraded`).
    */
   async regradePinQuestion(actorId: string, pinId: string, input: { questionId: string; toVersionId: string; dryRun: boolean }): Promise<PinRegradeResult> {
     return this.pins.regradePinQuestion(actorId, pinId, input);
   }
 
   /**
-   * Nhật ký chấm lại theo đáp án của pin cho giáo viên (quiz:viewreports;
-   * issue #254): mỗi lần áp thật một dòng kèm điểm đổi của từng lượt —
-   * căn cứ truy vết khi học sinh/phụ huynh hỏi vì sao điểm thay đổi.
+   * Nhật ký chấm lại theo đáp án của pin cho giáo viên (quiz:viewreports; issue #254): mỗi lần áp thật một dòng kèm điểm đổi của từng lượt — căn cứ truy vết khi học sinh/phụ huynh hỏi vì sao điểm thay đổi.
    */
   async listPinRegrades(actorId: string, pinId: string): Promise<PinRegradeLogEntry[]> {
     return this.pins.listPinRegrades(actorId, pinId);
   }
 
   /**
-   * Lịch sử sửa điểm của CHÍNH học sinh trong một pin (issue #254): các
-   * lần chấm lại theo đáp án đã đổi điểm của mình — câu nào, khi nào,
-   * điểm trước/sau. Đi qua CÙNG cổng công bố như mọi đường đọc điểm:
-   * pin chưa công bố kết quả thì trả danh sách rỗng (không lộ điểm qua
-   * kênh phụ), trừ người có quyền xem báo cáo của pin.
+   * Lịch sử sửa điểm của CHÍNH học sinh trong một pin (issue #254): các lần chấm lại theo đáp án đã đổi điểm của mình — câu nào, khi nào, điểm trước/sau. Đi qua CÙNG cổng công bố như mọi đường đọc điểm:
+   * pin chưa công bố kết quả thì trả danh sách rỗng (không lộ điểm qua kênh phụ), trừ người có quyền xem báo cáo của pin.
    */
   async listMyPinRegrades(actorId: string, pinId: string): Promise<PinRegradeLogEntry[]> {
     return this.pins.listMyPinRegrades(actorId, pinId);
   }
 
   /**
-   * Các pin trong khoá học (cho trang khoá học/danh sách hoạt động).
-   * H9 (rà soát #134): QuizView kèm slots (questionId, pinnedVersion,
-   * bank) là cấu trúc đề — chỉ người qua cổng truy cập khoá mới liệt kê
-   * được; trước đây handler không nhận actor nên người ngoài khoá cũng
-   * khảo sát được thành phần đề của bất kỳ khoá nào.
+   * Các pin trong khoá học (cho trang khoá học/danh sách hoạt động). H9 (rà soát #134): QuizView kèm slots (questionId, pinnedVersion, bank) là cấu trúc đề — chỉ người qua cổng truy cập khoá mới liệt kê được; trước đây handler không nhận actor nên người ngoài khoá cũng khảo sát được thành phần đề của bất kỳ khoá nào.
    */
   async listPins(actorId: string, courseId: string): Promise<QuizView[]> {
     return this.pins.listPins(actorId, courseId);
@@ -594,10 +507,7 @@ export class QuizService {
   }
 
   /**
-   * Tạo ghi đè (quiz:manageoverrides): đích phải là đúng MỘT nhóm của
-   * khoá chứa quiz hoặc đúng MỘT người dùng có quyền vào khoá; mỗi đích
-   * tối đa một ghi đè cho một quiz (trùng đích bị từ chối thay vì đè
-   * lặng lẽ như Moodle upsert).
+   * Tạo ghi đè (quiz:manageoverrides): đích phải là đúng MỘT nhóm của khoá chứa quiz hoặc đúng MỘT người dùng có quyền vào khoá; mỗi đích tối đa một ghi đè cho một quiz (trùng đích bị từ chối thay vì đè lặng lẽ như Moodle upsert).
    */
   async createOverride(actorId: string, pinId: string, input: CreateExamPinOverrideDto): Promise<ExamPinOverrideView> {
     return this.pins.createOverride(actorId, pinId, input);
@@ -649,23 +559,15 @@ export class QuizService {
   }
 
   /**
-   * Tạo ma trận: quyền ghi MỘT nguồn duy nhất (E-8) — khi gắn vào một
-   * Tạo ma trận: quyền ghi MỘT nguồn duy nhất (E-8) — khi gắn vào một
-   * bank ma trận (MB-1) thì gác matrix:add tại CONTEXT CỦA BANK
+   * Tạo ma trận: quyền ghi MỘT nguồn duy nhất (E-8) — khi gắn vào một Tạo ma trận: quyền ghi MỘT nguồn duy nhất (E-8) — khi gắn vào một bank ma trận (MB-1) thì gác matrix:add tại CONTEXT CỦA BANK
    * (bank phải tồn tại và đúng bank_kind='matrix'); không gắn bank thì
    * gác matrix:add tại context của môn. Tạo mới dùng cổng ADD
    * (khuôn S3 của #228) — matrix:edit chỉ gác sửa ma trận đã có. Tỉ
-   * lệ mục tiêu không được cho thì CHỤP từ preset tại lúc tạo — về
-   * sau preset có đổi thì ma trận đã tạo không đổi theo.
+   * lệ mục tiêu không được cho thì CHỤP từ preset tại lúc tạo — về sau preset có đổi thì ma trận đã tạo không đổi theo.
    *
    * Môn/chương trình ở đây chỉ là dữ liệu THAM CHIẾU của thao tác ghi
    * (đối chiếu cặp + lấy context môn cho nhánh không gắn bank) nên
-   * đọc bằng đường tham chiếu nội bộ của CurriculumService, không qua
-   * đường đọc công khai vốn đòi `curriculum:view` tại context của
-   * môn — lớp đọc đó từng chặn nhầm giáo viên tạo ma trận GẮN BANK
-   * theo môn thuộc chương trình hệ thống (cùng điểm chặn D-3 của
-   * issue #233 ở đường nhập file), trong khi cổng ghi thật của nhánh
-   * gắn bank là bộ quyền bank-local tại bank đích.
+   * đọc bằng đường tham chiếu nội bộ của CurriculumService, không qua đường đọc công khai vốn đòi `curriculum:view` tại context của môn — lớp đọc đó từng chặn nhầm giáo viên tạo ma trận GẮN BANK theo môn thuộc chương trình hệ thống (cùng điểm chặn D-3 của issue #233 ở đường nhập file), trong khi cổng ghi thật của nhánh gắn bank là bộ quyền bank-local tại bank đích.
    */
   async createMatrix(actorId: string, input: CreateExamMatrixDto): Promise<ExamMatrixView> {
     return this.matrices.createMatrix(actorId, input);
@@ -734,21 +636,14 @@ export class QuizService {
   }
 
   /**
-   * Đọc nội dung của ĐÚNG một version bất biến của ma trận: cấu
-   * hình lấy từ hàng version, ô lấy theo version đó — dùng để đối
-   * chiếu bản đặc tả đã nộp/đề đã sinh với nội dung ma trận tại
-   * thời điểm của chúng. Cổng quyền như đọc ma trận hiện hành.
-   * Version không tồn tại → 404 quiz.matrix_version_not_found.
+   * Đọc nội dung của ĐÚNG một version bất biến của ma trận: cấu hình lấy từ hàng version, ô lấy theo version đó — dùng để đối chiếu bản đặc tả đã nộp/đề đã sinh với nội dung ma trận tại thời điểm của chúng. Cổng quyền như đọc ma trận hiện hành. Version không tồn tại → 404 quiz.matrix_version_not_found.
    */
   async getMatrixVersion(actorId: string, matrixId: string, version: number): Promise<ExamMatrixView> {
     return this.matrices.getMatrixVersion(actorId, matrixId, version);
   }
 
   /**
-   * Truy nguồn chiều ngược của ma trận: mọi version đề đã sinh từ
-   * ma trận này (exam_versions.matrix_id) kèm số version ma trận đã
-   * neo lúc sinh đề — để người soạn truy từ ma trận ra các đề nó đã
-   * đẻ ra. Cổng quyền và cổng tenant như đọc chi tiết ma trận.
+   * Truy nguồn chiều ngược của ma trận: mọi version đề đã sinh từ ma trận này (exam_versions.matrix_id) kèm số version ma trận đã neo lúc sinh đề — để người soạn truy từ ma trận ra các đề nó đã đẻ ra. Cổng quyền và cổng tenant như đọc chi tiết ma trận.
    */
   async listGeneratedExams(actorId: string, matrixId: string) {
     return this.matrices.listGeneratedExams(actorId, matrixId);
@@ -764,25 +659,14 @@ export class QuizService {
   }
 
   /**
-   * Rút một ma trận khỏi ngân hàng (matrix:edit — ngang hàng
-   * `withdrawPaper` của đề và `withdrawQuestion` của QB-3, issue
-   * #228 lát S5): trạng thái về `hidden` KÈM truy vết bắt buộc —
-   * lý do (DTO chặn rỗng), người rút, thời điểm. Hệ quả của
-   * `hidden`: ma trận biến mất khỏi khám phá, không sinh đề mới /
-   * đóng góp mới được; các version đề đã sinh từ ma trận và các
-   * version ma trận đã ghim trong hồ sơ/đóng góp vẫn đọc lại
-   * nguyên vẹn vì chúng là bản chụp bất biến. Ma trận đang `hidden`
-   * rồi thì 409 — rút hai lần không có nghĩa.
+   * Rút một ma trận khỏi ngân hàng (matrix:edit — ngang hàng `withdrawPaper` của đề và `withdrawQuestion` của QB-3, issue #228 lát S5): trạng thái về `hidden` KÈM truy vết bắt buộc — lý do (DTO chặn rỗng), người rút, thời điểm. Hệ quả của `hidden`: ma trận biến mất khỏi khám phá, không sinh đề mới / đóng góp mới được; các version đề đã sinh từ ma trận và các version ma trận đã ghim trong hồ sơ/đóng góp vẫn đọc lại nguyên vẹn vì chúng là bản chụp bất biến. Ma trận đang `hidden` rồi thì 409 — rút hai lần không có nghĩa.
    */
   async withdrawMatrix(actorId: string, matrixId: string, input: WithdrawExamMatrixDto): Promise<{ matrixId: string; status: string }> {
     return this.matrices.withdrawMatrix(actorId, matrixId, input);
   }
 
   /**
-   * Khôi phục một ma trận đã rút về `ready` và XOÁ truy vết lần
-   * rút (ngang hàng khôi phục của đề/câu hỏi): ma trận hiện lại
-   * trong khám phá và sinh đề/đóng góp được như trước. Ma trận
-   * không ở trạng thái `hidden` thì 409.
+   * Khôi phục một ma trận đã rút về `ready` và XOÁ truy vết lần rút (ngang hàng khôi phục của đề/câu hỏi): ma trận hiện lại trong khám phá và sinh đề/đóng góp được như trước. Ma trận không ở trạng thái `hidden` thì 409.
    */
   async restoreMatrix(actorId: string, matrixId: string): Promise<{ matrixId: string; status: string }> {
     return this.matrices.restoreMatrix(actorId, matrixId);
@@ -794,11 +678,7 @@ export class QuizService {
   }
 
   /**
-   * Thêm ô vào ma trận (matrix:edit): ĐƠN VỊ KIẾN THỨC phải
-   * thuộc chương trình của ma trận (ô neo ĐVK — issue #249, ma trận
-   * không gắn YCCĐ), mức phải thuộc bộ mức của ma trận, và khi ma
-   * trận có phạm vi đã dạy (scope_node_ids) thì ĐVK phải nằm trong
-   * phạm vi.
+   * Thêm ô vào ma trận (matrix:edit): ĐƠN VỊ KIẾN THỨC phải thuộc chương trình của ma trận (ô neo ĐVK — issue #249, ma trận không gắn YCCĐ), mức phải thuộc bộ mức của ma trận, và khi ma trận có phạm vi đã dạy (scope_node_ids) thì ĐVK phải nằm trong phạm vi.
    */
   async createMatrixCell(actorId: string, matrixId: string, input: CreateExamMatrixCellDto): Promise<ExamMatrixView> {
     return this.matrices.createMatrixCell(actorId, matrixId, input);
@@ -835,24 +715,14 @@ export class QuizService {
   }
 
   /**
-   * Đọc ma trận cho generate (cổng matrix:edit tại context của
-   * bank — E-8 qua requireMatrixCap) + các ô. EB-2: ExamsService
-   * là phía điều phối generate; QuizService chỉ còn là nguồn dữ liệu
-   * ma trận/pool và phía ghi slots vào quiz.
+   * Đọc ma trận cho generate (cổng matrix:edit tại context của bank — E-8 qua requireMatrixCap) + các ô. EB-2: ExamsService là phía điều phối generate; QuizService chỉ còn là nguồn dữ liệu ma trận/pool và phía ghi slots vào quiz.
    */
   async matrixForGeneration(actorId: string, matrixId: string): Promise<{ matrix: ExamMatrixRow; cells: ExamMatrixCellRow[] }> {
     return this.generation.matrixForGeneration(actorId, matrixId);
   }
 
   /**
-   * Rút MỘT bộ câu cố định cho các ô (cơ chế fixed của Chặng 3, tách
-   * ra dùng chung cho generate snapshot + materialize recipe ở
-   * EB-2): thiếu câu ở BẤT KỲ ô nào → 422
-   * `quiz.matrix_insufficient_questions` kèm chi tiết từng ô, không
-   * rút một phần. Không lặp câu trong toàn bộ; mọi ô — kể cả ô
-   * truefalse — rút theo CÂU (một câu TF-A là một slot nguyên vẹn
-   * mang trọn điểm của một đơn vị ô, không chia phần cho từng ý).
-   * page = thứ tự của ô trong ma trận.
+   * Rút MỘT bộ câu cố định cho các ô (cơ chế fixed của Chặng 3, tách ra dùng chung cho generate snapshot + materialize recipe ở EB-2): thiếu câu ở BẤT KỲ ô nào → 422 `quiz.matrix_insufficient_questions` kèm chi tiết từng ô, không rút một phần. Không lặp câu trong toàn bộ; mọi ô — kể cả ô truefalse — rút theo CÂU (một câu TF-A là một slot nguyên vẹn mang trọn điểm của một đơn vị ô, không chia phần cho từng ý). page = thứ tự của ô trong ma trận.
    */
   async drawFixedSlots(actorId: string, cells: ExamMatrixCellRow[]): Promise<{
     questionId: string; matrixCellId: string; maxMark: number; page: number;
@@ -866,16 +736,10 @@ export class QuizService {
   }
 
   /**
-   * Dựng view model bản đặc tả theo Mẫu 2 của phụ lục CV 7991: hàng
-   * Chủ đề → Nội dung/đơn vị kiến thức → YCCĐ (cột YCCĐ = mọi YCCĐ
-   * thuộc ĐVK của ô: nguyên văn chương trình `source_kind='program'`
+   * Dựng view model bản đặc tả theo Mẫu 2 của phụ lục CV 7991: hàng Chủ đề → Nội dung/đơn vị kiến thức → YCCĐ (cột YCCĐ = mọi YCCĐ thuộc ĐVK của ô: nguyên văn chương trình `source_kind='program'`
    * + bản tách mức của tổ chuyên môn `derived`), cột số câu/điểm
    * theo dạng × mức từ các ô;
-   * khi đã sinh đề (pinId của đề sinh từ chính ma trận này) thì thêm
-   * vị trí slot thật — đề per_student ghi rõ rút ngẫu nhiên theo ô.
-   * Chân bảng: tổng theo dạng (điểm + %). Trường nhãn năng lực để dành
-   * trong view model (competencyRefs) — chặng này chưa có cơ chế gắn
-   * mã năng lực vào outcome nên luôn rỗng.
+   * khi đã sinh đề (pinId của đề sinh từ chính ma trận này) thì thêm vị trí slot thật — đề per_student ghi rõ rút ngẫu nhiên theo ô. Chân bảng: tổng theo dạng (điểm + %). Trường nhãn năng lực để dành trong view model (competencyRefs) — chặng này chưa có cơ chế gắn mã năng lực vào outcome nên luôn rỗng.
    */
   async getMatrixSpecification(actorId: string, matrixId: string, pinId?: string): Promise<MatrixSpecification> {
     return this.generation.getMatrixSpecification(actorId, matrixId, pinId);
@@ -883,11 +747,7 @@ export class QuizService {
 
   /**
    * Bản đặc tả neo theo ĐỀ (EB-3, điểm E-6 của hồ sơ ngân hàng đề):
-   * cùng một builder với đặc tả theo ma trận, nhưng vị trí câu lấy từ
-   * SLOTS CỦA PAPER VERSION đã ghim (đề là neo chính; quiz chỉ là một
-   * lần triển khai của đề). Hàm này KHÔNG tự gác capability của ma
-   * trận — cổng quyền nằm ở phía gọi (ExamPapersService gác theo đề,
-   * gồm lớp bảo mật đề định kỳ A.3.4).
+   * cùng một builder với đặc tả theo ma trận, nhưng vị trí câu lấy từ SLOTS CỦA PAPER VERSION đã ghim (đề là neo chính; quiz chỉ là một lần triển khai của đề). Hàm này KHÔNG tự gác capability của ma trận — cổng quyền nằm ở phía gọi (ExamPapersService gác theo đề, gồm lớp bảo mật đề định kỳ A.3.4).
    */
   async buildSpecificationForPaper(actorId: string, matrixId: string, paperSlots: { matrixCellId: string | null; position: number; questionId: string | null }[]): Promise<MatrixSpecification> {
     return this.generation.buildSpecificationForPaper(actorId, matrixId, paperSlots);
@@ -899,18 +759,14 @@ export class QuizService {
   }
 
   /**
-   * Xuất bản đặc tả ra file (xlsx qua exceljs — cùng hạ tầng với xuất
-   * điểm vnEdu; docx qua gói docx): cùng một view model, hai định dạng
-   * nộp/lưu hồ sơ. Định dạng khác → 400 quiz.spec_export_format.
+   * Xuất bản đặc tả ra file (xlsx qua exceljs — cùng hạ tầng với xuất điểm vnEdu; docx qua gói docx): cùng một view model, hai định dạng nộp/lưu hồ sơ. Định dạng khác → 400 quiz.spec_export_format.
    */
   async exportMatrixSpecification(actorId: string, matrixId: string, format: string, pinId?: string): Promise<{ filename: string; contentType: string; buffer: Buffer }> {
     return this.generation.exportMatrixSpecification(actorId, matrixId, format, pinId);
   }
 
   /**
-   * Render một view model đặc tả ra file (xlsx qua exceljs — cùng hạ
-   * tầng với xuất điểm vnEdu; docx qua gói docx): dùng chung cho đặc
-   * tả theo ma trận (C.6), đặc tả theo đề và bản chụp trong bộ hồ sơ
+   * Render một view model đặc tả ra file (xlsx qua exceljs — cùng hạ tầng với xuất điểm vnEdu; docx qua gói docx): dùng chung cho đặc tả theo ma trận (C.6), đặc tả theo đề và bản chụp trong bộ hồ sơ
    * (EB-3) — cùng một view model, hai định dạng nộp/lưu hồ sơ.
    */
   async renderSpecification(spec: MatrixSpecification, format: string): Promise<{ filename: string; contentType: string; buffer: Buffer }> {
@@ -918,35 +774,21 @@ export class QuizService {
   }
 
   /**
-   * Bộ phân giải cài đặt hiệu lực (Chặng 2, mục B.3 của hồ sơ thiết kế —
-   * đối chiếu cơ chế hợp nhất override của Moodle): hợp nhất THEO TỪNG
-   * TRƯỜNG theo thứ tự override người dùng > override nhóm > cài đặt
-   * của quiz. Nhiều override nhóm: lấy giá trị RỘNG NHẤT cho từng
-   * trường — time_open sớm nhất, time_close muộn nhất, time_limit dài
-   * nhất, attempts lớn nhất; một trường để null trong override nhóm
-   * nghĩa là nhóm đó không giới hạn ở trường đó nên thắng (không giới
-   * hạn là giá trị rộng nhất), 0 ở attempts cũng là không giới hạn.
-   * Mật khẩu KHÔNG hợp nhất từng trường: override người dùng có mật
-   * khẩu thì chỉ mật khẩu đó có hiệu lực; không thì TẬP mật khẩu của
-   * các nhóm áp dụng (nhập đúng một trong các mật khẩu là được); không
-   * nữa thì mật khẩu của quiz.
+   * Bộ phân giải cài đặt hiệu lực (Chặng 2, mục B.3 của hồ sơ thiết kế — đối chiếu cơ chế hợp nhất override của Moodle): hợp nhất THEO TỪNG TRƯỜNG theo thứ tự override người dùng > override nhóm > cài đặt của quiz. Nhiều override nhóm: lấy giá trị RỘNG NHẤT cho từng trường — time_open sớm nhất, time_close muộn nhất, time_limit dài nhất, attempts lớn nhất; một trường để null trong override nhóm nghĩa là nhóm đó không giới hạn ở trường đó nên thắng (không giới hạn là giá trị rộng nhất), 0 ở attempts cũng là không giới hạn. Mật khẩu KHÔNG hợp nhất từng trường: override người dùng có mật khẩu thì chỉ mật khẩu đó có hiệu lực; không thì TẬP mật khẩu của các nhóm áp dụng (nhập đúng một trong các mật khẩu là được); không nữa thì mật khẩu của quiz.
    */
   async resolveEffectiveSettings(quiz: PinRow, userId: string): Promise<EffectiveQuizSettings> {
     return this.attempts.resolveEffectiveSettings(quiz, userId);
   }
 
   /**
-   * Điểm bài hiện tại của một học sinh theo grade_method của quiz (null
-   * khi chưa có lượt nào chốt điểm).
+   * Điểm bài hiện tại của một học sinh theo grade_method của quiz (null khi chưa có lượt nào chốt điểm).
    */
   async currentGradeForUser(quiz: PinRow, userId: string): Promise<number | null> {
     return this.attempts.currentGradeForUser(quiz, userId);
   }
 
   /**
-   * Trang thông tin quiz cho người xem: cấu hình + slots, các lượt của
-   * chính người xem, điểm bài hiện tại và các cờ quyền để client hiển thị
-   * đúng thao tác.
+   * Trang thông tin quiz cho người xem: cấu hình + slots, các lượt của chính người xem, điểm bài hiện tại và các cờ quyền để client hiển thị đúng thao tác.
    */
   async getQuizForUser(actorId: string, pinId: string): Promise<{
     quiz: QuizView;
@@ -967,41 +809,28 @@ export class QuizService {
   }
 
   /**
-   * Bắt đầu lượt làm mới (hoặc trả về lượt đang dở để tiếp tục): kiểm cửa
-   * sổ mở–đóng và số lần cho phép phía server, rút câu cho slot ngẫu
-   * nhiên, tạo usage của engine với maxMark lấy từ TỪNG SLOT, pin phiên
-   * bản câu ngay lúc bắt đầu. Preview của giáo viên (quiz:preview)
-   * bỏ qua cửa sổ/giới hạn và không ghi điểm về sau.
+   * Bắt đầu lượt làm mới (hoặc trả về lượt đang dở để tiếp tục): kiểm cửa sổ mở–đóng và số lần cho phép phía server, rút câu cho slot ngẫu nhiên, tạo usage của engine với maxMark lấy từ TỪNG SLOT, pin phiên bản câu ngay lúc bắt đầu. Preview của giáo viên (quiz:preview) bỏ qua cửa sổ/giới hạn và không ghi điểm về sau.
    */
   async startAttempt(actorId: string, pinId: string, opts: { preview?: boolean; password?: string; clientIp?: string } = {}): Promise<QuizAttemptView> {
     return this.attempts.startAttempt(actorId, pinId, opts);
   }
 
   /**
-   * Dựng view đầy đủ của một lượt: từng câu lấy nội dung của version ĐÃ
-   * PIN trong engine. Với CHỦ LƯỢT (không có quyền chấm/báo cáo), các
-   * khía cạnh sau nộp (đúng/sai, điểm câu, đáp án đúng, nhận xét) chỉ lộ
-   * khi bitmask review_* của quiz cho phép tại cửa sổ hiện tại — cổng
-   * nằm ở tầng server, client không nhận được dữ liệu bị tắt. Người có
-   * quiz:grade/viewreports/manage và lượt preview không bị giới hạn.
+   * Dựng view đầy đủ của một lượt: từng câu lấy nội dung của version ĐÃ PIN trong engine. Với CHỦ LƯỢT (không có quyền chấm/báo cáo), các khía cạnh sau nộp (đúng/sai, điểm câu, đáp án đúng, nhận xét) chỉ lộ khi bitmask review_* của quiz cho phép tại cửa sổ hiện tại — cổng nằm ở tầng server, client không nhận được dữ liệu bị tắt. Người có quiz:grade/viewreports/manage và lượt preview không bị giới hạn.
    */
   async buildAttemptView(quiz: PinRow, row: ExamAttemptRow, closedDueToTimeLimit: boolean, viewerId?: string): Promise<QuizAttemptView> {
     return this.attempts.buildAttemptView(quiz, row, closedDueToTimeLimit, viewerId);
   }
 
   /**
-   * Đọc một lượt làm (chủ lượt hoặc giáo viên). Nếu lượt đang dở mà đã
-   * quá hạn làm bài, lần tương tác này chốt lượt phía server trước khi
-   * trả kết quả.
+   * Đọc một lượt làm (chủ lượt hoặc giáo viên). Nếu lượt đang dở mà đã quá hạn làm bài, lần tương tác này chốt lượt phía server trước khi trả kết quả.
    */
   async getAttemptView(actorId: string, attemptId: string): Promise<QuizAttemptView> {
     return this.attempts.getAttemptView(actorId, attemptId);
   }
 
   /**
-   * Lưu câu trả lời của một câu trong lượt đang làm (ủy quyền engine ghi
-   * step). Quá hạn làm bài: lượt bị chốt phía server ngay tại tương tác
-   * này và view đã nộp được trả về thay vì ghi thêm đáp án.
+   * Lưu câu trả lời của một câu trong lượt đang làm (ủy quyền engine ghi step). Quá hạn làm bài: lượt bị chốt phía server ngay tại tương tác này và view đã nộp được trả về thay vì ghi thêm đáp án.
    */
   async submitResponse(actorId: string, attemptId: string, input: { questionAttemptId: string; response?: string | null }, clientIp?: string): Promise<QuizAttemptView> {
     return this.attempts.submitResponse(actorId, attemptId, input, clientIp);
@@ -1015,31 +844,16 @@ export class QuizService {
   }
 
   /**
-   * Phân giải layout phiếu in cho một quiz (cổng quiz:gradepaper): mọi
-   * slot phải là câu CỐ ĐỊNH thuộc loại trắc nghiệm/đúng-sai — phiếu
-   * giấy là một đề cố định, slot ngẫu nhiên theo category/ma trận
-   * không in được. Mỗi slot được GHIM vào đúng version sẽ in (slot
-   * pinned dùng version đã ghim; slot follow_latest ghim version mới
-   * nhất tại thời điểm sinh phiếu) kèm đáp án của version đó theo thứ
-   * tự in, để lúc ghi điểm chấm đúng bản đã phát cho học sinh.
+   * Phân giải layout phiếu in cho một quiz (cổng quiz:gradepaper): mọi slot phải là câu CỐ ĐỊNH thuộc loại trắc nghiệm/đúng-sai — phiếu giấy là một đề cố định, slot ngẫu nhiên theo category/ma trận không in được. Mỗi slot được GHIM vào đúng version sẽ in (slot pinned dùng version đã ghim; slot follow_latest ghim version mới nhất tại thời điểm sinh phiếu) kèm đáp án của version đó theo thứ tự in, để lúc ghi điểm chấm đúng bản đã phát cho học sinh.
    */
   async resolvePaperLayout(actorId: string, pinId: string): Promise<{ quiz: PinRow; layout: PaperSlotLayout[] }> {
     return this.generation.resolvePaperLayout(actorId, pinId);
   }
 
   /**
-   * Ghi một phiếu giấy đã được giáo viên xác nhận thành attempt của
-   * học sinh (cổng quiz:gradepaper, kiểm tại resolvePaperLayout của lô
-   * — hàm này tin layout do module paper-grading truyền vào sau khi đã
-   * kiểm quyền). Attempt là attempt THẬT của học sinh: usage dựng từ
-   * đúng các version đã ghim trên phiếu, đáp án nộp qua engine như
-   * attempt online, chốt bằng đúng đường finalizeAttempt (điểm chảy
-   * vào sổ điểm như thường). appliedSettings mang dấu nguồn giấy
+   * Ghi một phiếu giấy đã được giáo viên xác nhận thành attempt của học sinh (cổng quiz:gradepaper, kiểm tại resolvePaperLayout của lô — hàm này tin layout do module paper-grading truyền vào sau khi đã kiểm quyền). Attempt là attempt THẬT của học sinh: usage dựng từ đúng các version đã ghim trên phiếu, đáp án nộp qua engine như attempt online, chốt bằng đúng đường finalizeAttempt (điểm chảy vào sổ điểm như thường). appliedSettings mang dấu nguồn giấy
    * {source: 'paper-scan', scanId, batchId, variantCode} để báo cáo
-   * phân biệt được lượt thi giấy. responses[i] là chuỗi đáp án theo
-   * ngữ nghĩa engine cho slot i (multichoice: answerId đã chọn;
-   * truefalse TF-A: JSON bản đồ statementId → boolean quy từ 4 cặp ô
-   * Đ/S của slot; null: để trống).
+   * phân biệt được lượt thi giấy. responses[i] là chuỗi đáp án theo ngữ nghĩa engine cho slot i (multichoice: answerId đã chọn; truefalse TF-A: JSON bản đồ statementId → boolean quy từ 4 cặp ô Đ/S của slot; null: để trống).
    */
   async recordPaperAttempt(actorId: string, pinId: string, input: {
     studentId: string;
@@ -1053,9 +867,7 @@ export class QuizService {
   }
 
   /**
-   * Trang kết quả của giáo viên (quiz:viewreports): mọi lượt làm,
-   * điểm bài hiện tại theo từng học sinh, hàng đợi essay chờ chấm tay,
-   * và thống kê câu sai theo từng slot (câu sai nhiều nhất xếp trước).
+   * Trang kết quả của giáo viên (quiz:viewreports): mọi lượt làm, điểm bài hiện tại theo từng học sinh, hàng đợi essay chờ chấm tay, và thống kê câu sai theo từng slot (câu sai nhiều nhất xếp trước).
    */
   async getResults(actorId: string, pinId: string): Promise<{
     quiz: QuizView;
@@ -1069,10 +881,7 @@ export class QuizService {
   }
 
   /**
-   * Chấm tay một câu essay đang chờ (quiz:grade): điểm đi qua bước
-   * chấm của question engine (ghi step + fraction), tổng điểm của lượt
-   * được đồng bộ lại; khi câu cuối cùng được chấm, lượt về finished và
-   * điểm bài được ghi lại vào sổ điểm.
+   * Chấm tay một câu essay đang chờ (quiz:grade): điểm đi qua bước chấm của question engine (ghi step + fraction), tổng điểm của lượt được đồng bộ lại; khi câu cuối cùng được chấm, lượt về finished và điểm bài được ghi lại vào sổ điểm.
    */
   async manualGrade(actorId: string, attemptId: string, input: { questionAttemptId: string; mark: number; comment?: string }): Promise<QuizAttemptView> {
     return this.attempts.manualGrade(actorId, attemptId, input);
@@ -1094,10 +903,7 @@ export class QuizService {
   }
 
   /**
-   * Ghi một sự kiện giám sát do client báo (thoát fullscreen, mất
-   * focus, ngắt kết nối dài). Điều kiện: lượt của chính người báo, còn
-   * đang làm, quiz bật monitor_events. CHỈ GHI NHẬN — không có bất kỳ
-   * hệ quả tự động nào lên lượt làm.
+   * Ghi một sự kiện giám sát do client báo (thoát fullscreen, mất focus, ngắt kết nối dài). Điều kiện: lượt của chính người báo, còn đang làm, quiz bật monitor_events. CHỈ GHI NHẬN — không có bất kỳ hệ quả tự động nào lên lượt làm.
    */
   async recordAttemptEvent(actorId: string, attemptId: string, input: { type: string; data?: Record<string, unknown> }): Promise<ExamAttemptEventRow> {
     return this.attempts.recordAttemptEvent(actorId, attemptId, input);
@@ -1109,9 +915,7 @@ export class QuizService {
   }
 
   /**
-   * Hàng đợi chấm THEO CÂU (Q-b): mọi lượt đã nộp chứa câu này, kèm
-   * đáp án hiện tại và điểm đã có — giáo viên chấm một câu cho cả lớp
-   * trong một màn hình thay vì mở từng học sinh.
+   * Hàng đợi chấm THEO CÂU (Q-b): mọi lượt đã nộp chứa câu này, kèm đáp án hiện tại và điểm đã có — giáo viên chấm một câu cho cả lớp trong một màn hình thay vì mở từng học sinh.
    */
   async listQuestionGradingQueue(actorId: string, pinId: string, questionId: string): Promise<{
     attemptId: string; userId: string; displayName: string; attemptNumber: number;
@@ -1122,9 +926,7 @@ export class QuizService {
   }
 
   /**
-   * Chấm tay THEO CÂU cho nhiều lượt (Q-b): mỗi mục đi qua đúng đường
-   * chấm tay theo lượt hiện có (engine ghi step, tổng điểm đồng bộ,
-   * lượt cuối cùng hết câu chờ thì chốt + ghi sổ điểm).
+   * Chấm tay THEO CÂU cho nhiều lượt (Q-b): mỗi mục đi qua đúng đường chấm tay theo lượt hiện có (engine ghi step, tổng điểm đồng bộ, lượt cuối cùng hết câu chờ thì chốt + ghi sổ điểm).
    */
   async gradeQuestionForAttempts(actorId: string, pinId: string, input: {
     questionId: string;
@@ -1134,8 +936,7 @@ export class QuizService {
   }
 
   /**
-   * Các lượt làm của một quiz cho chủ nhân hoặc giáo viên — dùng cho
-   * trang thông tin (lượt của tôi) và báo cáo.
+   * Các lượt làm của một quiz cho chủ nhân hoặc giáo viên — dùng cho trang thông tin (lượt của tôi) và báo cáo.
    */
   async listAttemptSummaries(actorId: string, pinId: string): Promise<QuizAttemptSummary[]> {
     return this.attempts.listAttemptSummaries(actorId, pinId);

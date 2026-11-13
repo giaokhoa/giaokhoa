@@ -16,32 +16,17 @@ import type { PresenceStatus } from '../types/types';
 export type SelfPresenceChoice = 'online' | 'offline';
 
 /**
- * Sheet hồ sơ của CHÍNH người xem, mở từ nút avatar ở đầu cột danh
- * sách (giai đoạn 2 của vòng sửa PR #610 — mục T-18/T-19/T-20 của
- * đợt rà soát hành vi bản demo):
+ * Sheet hồ sơ của CHÍNH người xem, mở từ nút avatar ở đầu cột danh sách (giai đoạn 2 của vòng sửa PR #610 — mục T-18/T-19/T-20 của đợt rà soát hành vi bản demo):
  *
  * - Hình dạng bám bản demo: sheet phải bề rộng w-80, đầu sheet dính
- *   gồm avatar lớn kèm chấm trạng thái, tên là ô nhập không viền
- *   ngay trong đầu sheet và dòng định danh phụ dưới tên; thân là
- *   các trường có nhãn theo đúng thứ tự của demo (Avatar URL,
- *   About, Email, Phone, Company, Country, Website, Location,
- *   Timezone, Availability), rồi mục Status với lưới 2 cột bốn nút
- *   trạng thái (online/away/busy/offline) mang đúng màu chấm của
- *   bản đồ hiện diện, và nút Save changes ở đáy.
+ *   gồm avatar lớn kèm chấm trạng thái, tên là ô nhập không viền ngay trong đầu sheet và dòng định danh phụ dưới tên; thân là các trường có nhãn theo đúng thứ tự của demo (Avatar URL, About, Email, Phone, Company, Country, Website, Location, Timezone, Availability), rồi mục Status với lưới 2 cột bốn nút trạng thái (online/away/busy/offline) mang đúng màu chấm của bản đồ hiện diện, và nút Save changes ở đáy.
  * - Giá trị khởi tạo chỉ lấy từ dữ kiện THẬT trang đã có (tên hiển
- *   thị và email của phiên đăng nhập); các trường hệ chưa có nguồn
- *   dữ kiện thì để trống — không bịa giá trị.
+ *   thị và email của phiên đăng nhập); các trường hệ chưa có nguồn dữ kiện thì để trống — không bịa giá trị.
  * - Nút Save changes để ở trạng thái VÔ HIỆU có chủ đích: đường sửa
- *   hồ sơ thuộc khu vực tài khoản, ngoài phạm vi PR này — đây là
- *   ngoại lệ có tên ghi trong thân PR, cùng tiền lệ khối liên kết
- *   mời ở sheet Tin nhắn mới.
+ *   hồ sơ thuộc khu vực tài khoản, ngoài phạm vi PR này — đây là ngoại lệ có tên ghi trong thân PR, cùng tiền lệ khối liên kết mời ở sheet Tin nhắn mới.
  * - Bộ chọn trạng thái hiện diện: hai mức online/offline NỐI THẬT
  *   (trang chứa đổi nối socket realtime tương ứng — chọn offline là
- *   ngắt socket nên presence thật của người xem tắt ở mọi bề mặt,
- *   chọn online là nối lại); hai mức away/busy CHƯA có dữ kiện
- *   presence tương ứng ở backend (presence hiện hành chỉ có
- *   online/offline) nên dựng đúng hình dạng nhưng VÔ HIỆU — ngoại
- *   lệ có tên thứ hai ghi trong thân PR.
+ *   ngắt socket nên presence thật của người xem tắt ở mọi bề mặt, chọn online là nối lại); hai mức away/busy CHƯA có dữ kiện presence tương ứng ở backend (presence hiện hành chỉ có online/offline) nên dựng đúng hình dạng nhưng VÔ HIỆU — ngoại lệ có tên thứ hai ghi trong thân PR.
  */
 
 interface OwnProfileSheetProps {
@@ -75,12 +60,7 @@ export function OwnProfileSheet({
   open, onOpenChange, name, usernameLine, email, selfPresence, onSelfPresenceChange,
 }: OwnProfileSheetProps) {
   const { t } = useTranslation('app');
-  // Giá trị các trường là trạng thái soạn THUẦN TRÌNH BÀY của
-  // sheet. Tên và Email có dữ kiện thật từ phiên nên giữ nháp
-  // dạng null-khi-chưa-đụng: chưa đụng thì hiện giá trị thật,
-  // người dùng gõ thì nháp thắng — không cần hiệu ứng đồng bộ
-  // nào. Các trường chưa có nguồn dữ kiện thì để trống. Nút lưu
-  // đang vô hiệu nên không giá trị nào rời khỏi sheet này.
+  // Giá trị các trường là trạng thái soạn THUẦN TRÌNH BÀY của sheet. Tên và Email có dữ kiện thật từ phiên nên giữ nháp dạng null-khi-chưa-đụng: chưa đụng thì hiện giá trị thật, người dùng gõ thì nháp thắng — không cần hiệu ứng đồng bộ nào. Các trường chưa có nguồn dữ kiện thì để trống. Nút lưu đang vô hiệu nên không giá trị nào rời khỏi sheet này.
   const [nameDraft, setNameDraft] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState('');
   const [about, setAbout] = useState('');

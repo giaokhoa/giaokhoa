@@ -12,12 +12,9 @@ import type { CredentialBridgeService } from '../../../src/modules/auth/better-a
 import type { TotpService } from '../../../src/modules/auth/totp.service';
 
 /**
- * E2E đăng nhập xã hội Google + Facebook cho Better Auth (issue #7,
- * chặng 2.3) — provider THẬT của Better Auth nhưng biên HTTP ra ngoài
+ * E2E đăng nhập xã hội Google + Facebook cho Better Auth (issue #7, chặng 2.3) — provider THẬT của Better Auth nhưng biên HTTP ra ngoài
  * (token endpoint, JWKS, debug_token, /me) được giả lập bằng cách thay
- * `globalThis.fetch`: không cần bí mật thật, vẫn đi trọn đường callback
- * → verify id_token (RS256 qua JWKS tự ký) → liên kết tài khoản → cổng
- * MFA sau callback.
+ * `globalThis.fetch`: không cần bí mật thật, vẫn đi trọn đường callback → verify id_token (RS256 qua JWKS tự ký) → liên kết tài khoản → cổng MFA sau callback.
  *
  * Quy tắc nghiệp vụ thể hiện ở đây (chốt trong hồ sơ chương trình GĐ2):
  *  - email đã có tài khoản + email do provider xác thực (Google) →
@@ -28,8 +25,7 @@ import type { TotpService } from '../../../src/modules/auth/totp.service';
  *    được Better Auth coi là đã xác thực → KHÔNG liên kết ngầm;
  *  - tài khoản đã bật MFA (factor TOTP đã xác nhận trong `user_totp`
  *    — nguồn trạng thái MFA duy nhất) → callback OAuth bị cổng chặn:
- *    KHÔNG tồn tại session dùng được trong lúc chờ bước hai, redirect
- *    mang `twoFactorRedirect=true` + cookie chờ bước hai.
+ *    KHÔNG tồn tại session dùng được trong lúc chờ bước hai, redirect mang `twoFactorRedirect=true` + cookie chờ bước hai.
  *
  * Biến môi trường phải tồn tại TRƯỚC khi AppModule được nạp
  * (ConfigModule validate ngay lúc import) nên các import của AppModule

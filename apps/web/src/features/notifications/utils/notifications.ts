@@ -1,9 +1,7 @@
 import type { NotificationGroupView, NotificationPreferenceView } from '../types/notifications';
 
 /**
- * Hàm thuần của trung tâm thông báo thuộc feature notifications.
- * Tách từ module phẳng `src/lib/notifications.ts` khi tổ chức lại
- * apps/web theo mô hình features/ (issue #500).
+ * Hàm thuần của trung tâm thông báo thuộc feature notifications. Tách từ module phẳng `src/lib/notifications.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
 
 /** Khoá định danh một dòng gộp trong cache/trạng thái hiển thị. */

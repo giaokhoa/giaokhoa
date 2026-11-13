@@ -3,29 +3,14 @@
  * (issue #521; điểm sửa của PR #543 theo kết luận đối chiếu độc
  * lập: ghi dấu đã-phân-phối trước khi publish được xác nhận).
  *
- * Dựng đường THẬT của worker: processor thật + tầng phân phối dùng
- * chung `@giaokhoa/messaging` + cổng phát thật
- * `createMessagingRealtimeEmitter`, và một Socket.IO server độc lập
- * đóng vai phía API (cùng Redis adapter, client socket.io thật đã
- * vào room theo đúng luật gateway). Bề mặt đọc dữ kiện được giả lập
- * ở biên store vì điểm kiểm nằm ở tầng phát/ghi dấu, không nằm ở
- * luật đọc. Hai hành vi chốt:
+ * Dựng đường THẬT của worker: processor thật + tầng phân phối dùng chung `@giaokhoa/messaging` + cổng phát thật `createMessagingRealtimeEmitter`, và một Socket.IO server độc lập đóng vai phía API (cùng Redis adapter, client socket.io thật đã vào room theo đúng luật gateway). Bề mặt đọc dữ kiện được giả lập ở biên store vì điểm kiểm nằm ở tầng phát/ghi dấu, không nằm ở luật đọc. Hai hành vi chốt:
  *
  * - Publish lành mạnh: `process()` hoàn thành, client phía API
- *   nhận đủ `message.new` + `conversation.updated`, và dấu
- *   đã-phân-phối theo `outboxId` được ghi.
+ *   nhận đủ `message.new` + `conversation.updated`, và dấu đã-phân-phối theo `outboxId` được ghi.
  * - Chỉ đường publish bị hỏng (connection publish của cổng phát
- *   dùng một user Redis riêng bị từ chối đúng lệnh `PUBLISH` bằng
- *   ACL, trong khi connection ghi dấu dùng user mặc định, lành
- *   mạnh): lỗi publish nổi lên thành lỗi phân phối, processor
- *   biến nó thành tín hiệu hoãn thử lại (`DelayedError`), dấu
- *   KHÔNG được ghi, phía API không nhận sự kiện nào của tin đó —
- *   để lượt phát lại của BullMQ còn đất phân phối tiếp; và lượt
- *   xử lý lại cùng job bằng cổng phát lành mạnh phân phối được
- *   thật và ghi dấu.
+ *   dùng một user Redis riêng bị từ chối đúng lệnh `PUBLISH` bằng ACL, trong khi connection ghi dấu dùng user mặc định, lành mạnh): lỗi publish nổi lên thành lỗi phân phối, processor biến nó thành tín hiệu hoãn thử lại (`DelayedError`), dấu KHÔNG được ghi, phía API không nhận sự kiện nào của tin đó — để lượt phát lại của BullMQ còn đất phân phối tiếp; và lượt xử lý lại cùng job bằng cổng phát lành mạnh phân phối được thật và ghi dấu.
  *
- * User ACL của test được xoá trong `afterAll`; mọi dấu ghi trong
- * test được dọn cùng lúc.
+ * User ACL của test được xoá trong `afterAll`; mọi dấu ghi trong test được dọn cùng lúc.
  */
 import { randomUUID } from 'node:crypto';
 import { createServer, type Server as HttpServer } from 'node:http';

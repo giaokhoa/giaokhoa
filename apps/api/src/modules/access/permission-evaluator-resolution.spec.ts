@@ -11,16 +11,9 @@ import { PermissionEvaluator } from './permission-evaluator.service';
  * (`resolveCapabilitiesForContexts`) so với đường phân giải hiện hành
  * (`hasCapability`) trên cùng một thế giới dữ kiện dựng trong bộ nhớ:
  *   - tương đương: với mọi người dùng × mọi context đích × mọi
- *     capability đã đăng ký, kết quả theo lô bằng đúng kết quả gọi
- *     `hasCapability` từng cặp;
+ *     capability đã đăng ký, kết quả theo lô bằng đúng kết quả gọi `hasCapability` từng cặp;
  *   - chi phí: phép theo lô chỉ chạm tầng dữ liệu một số lần có chặn
- *     trên nhỏ, trong khi đường từng cặp tốn hàng trăm lần cho cùng
- *     một ảnh chụp.
- * Thế giới dữ kiện phủ các nhánh ngữ nghĩa nhạy cảm: PROHIBIT ở tổ
- * tiên thắng ALLOW ở lá, PREVENT ở tổ tiên gần hơn thắng ALLOW ở gốc,
- * vai mặc định `user`/`guest`, cổng tenant (thu hẹp gán vai, chặn khi
- * không phải thành viên, chặn khi tenant bị đình chỉ) và lối tắt site
- * admin (áp dụng ngoài cây tenant, KHÔNG áp dụng trong cây tenant).
+ *     trên nhỏ, trong khi đường từng cặp tốn hàng trăm lần cho cùng một ảnh chụp. Thế giới dữ kiện phủ các nhánh ngữ nghĩa nhạy cảm: PROHIBIT ở tổ tiên thắng ALLOW ở lá, PREVENT ở tổ tiên gần hơn thắng ALLOW ở gốc, vai mặc định `user`/`guest`, cổng tenant (thu hẹp gán vai, chặn khi không phải thành viên, chặn khi tenant bị đình chỉ) và lối tắt site admin (áp dụng ngoài cây tenant, KHÔNG áp dụng trong cây tenant).
  */
 
 type Ctx = ContextRow;

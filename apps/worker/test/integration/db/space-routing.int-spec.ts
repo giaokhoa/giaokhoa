@@ -14,33 +14,15 @@ import { TenantAwarePool } from '../../../src/db/tenant-pool';
 /**
  * Ca tích hợp của KHUNG ĐỊNH TUYẾN THEO TRUNG TÂM PHÍA WORKER
  * (issue #581): bản sao của khung ở tiến trình worker phải mở được
- * phiên theo trung tâm cho tác vụ nền trên CÙNG một sổ đăng ký và
- * cùng một luật phân giải với phía API.
+ * phiên theo trung tâm cho tác vụ nền trên CÙNG một sổ đăng ký và cùng một luật phân giải với phía API.
  *
- * Môi trường của ca tự cấp phát trên cùng cụm với database test
- * của worker, toàn bộ bằng TÊN MỚI của riêng đợt này: một database
- * control plane (`giaokhoa_test_cp_581w`) với role riêng và một kho
- * riêng (`giaokhoa_test_centre_w_581`) có đúng một role ứng dụng riêng
+ * Môi trường của ca tự cấp phát trên cùng cụm với database test của worker, toàn bộ bằng TÊN MỚI của riêng đợt này: một database control plane (`giaokhoa_test_cp_581w`) với role riêng và một kho riêng (`giaokhoa_test_centre_w_581`) có đúng một role ứng dụng riêng
  * (CONNECT của PUBLIC bị thu hồi, baseline nghiệp vụ áp bằng
- * chính role chủ kho). Worker chưa có kết nối control plane dùng
- * chung nên service của worker tự giữ pool đọc sổ từ biến
- * `CONTROL_PLANE_DATABASE_URL` — ca này dựng service trực tiếp
- * trên biến đó, không khởi động toàn bộ module worker.
+ * chính role chủ kho). Worker chưa có kết nối control plane dùng chung nên service của worker tự giữ pool đọc sổ từ biến `CONTROL_PLANE_DATABASE_URL` — ca này dựng service trực tiếp trên biến đó, không khởi động toàn bộ module worker.
  *
- * Vòng sửa của PR (theo phán quyết điều phối trên PR) thêm hai ca
- * hồi quy cho bản sao phía worker, dựng đúng hình hai ca phía
- * API: (1) sổ đổi role/bí mật của kho sau khi pool đã tạo thì lần
- * lấy handle kế tiếp kết nối bằng role mới — cần một role thứ hai
- * của kho (`giaokhoa_centre_w2_581_app`, có CONNECT vào kho) làm đích
- * đổi sổ; (2) trung tâm kho riêng đã chuẩn bị mà pool bị đóng vì
- * nhàn rỗi thì truy vấn qua handle định tuyến trong ngữ cảnh còn
- * mang slug bị từ chối (fail-closed) — ca này dựng một service
- * thứ hai với ngưỡng nhàn rỗi 600 mili giây để không phải chờ
- * ngưỡng mặc định.
+ * Vòng sửa của PR (theo phán quyết điều phối trên PR) thêm hai ca hồi quy cho bản sao phía worker, dựng đúng hình hai ca phía API: (1) sổ đổi role/bí mật của kho sau khi pool đã tạo thì lần lấy handle kế tiếp kết nối bằng role mới — cần một role thứ hai của kho (`giaokhoa_centre_w2_581_app`, có CONNECT vào kho) làm đích đổi sổ; (2) trung tâm kho riêng đã chuẩn bị mà pool bị đóng vì nhàn rỗi thì truy vấn qua handle định tuyến trong ngữ cảnh còn mang slug bị từ chối (fail-closed) — ca này dựng một service thứ hai với ngưỡng nhàn rỗi 600 mili giây để không phải chờ ngưỡng mặc định.
  *
- * Shim `uuidv7()` chỉ áp khi server PostgreSQL dưới 18 (môi trường
- * chạy local bằng PG16): PG18 — bản ở CI và production — có sẵn
- * hàm này, shim sẽ che mất hàm gốc nên tuyệt đối không áp ở đó.
+ * Shim `uuidv7()` chỉ áp khi server PostgreSQL dưới 18 (môi trường chạy local bằng PG16): PG18 — bản ở CI và production — có sẵn hàm này, shim sẽ che mất hàm gốc nên tuyệt đối không áp ở đó.
  */
 const CP_DATABASE = 'giaokhoa_test_cp_581w';
 const CP_ROLE = 'giaokhoa_cp_test_581w';
@@ -111,9 +93,7 @@ describe('Khung định tuyến theo trung tâm phía worker (integration)', () 
     const businessDatabase = decodeURIComponent(businessUrl.pathname.replace(/^\//, ''));
     const businessRole = decodeURIComponent(businessUrl.username);
 
-    // Cấp phát control plane + kho riêng trên cụm test bằng tên
-    // mới, đúng khuôn phía API: role riêng từng kho, CONNECT của
-    // PUBLIC bị thu hồi và chỉ cấp lại cho đúng role đó.
+    // Cấp phát control plane + kho riêng trên cụm test bằng tên mới, đúng khuôn phía API: role riêng từng kho, CONNECT của PUBLIC bị thu hồi và chỉ cấp lại cho đúng role đó.
     await withClient(clusterUrl('postgres'), async (admin) => {
       for (const database of [CP_DATABASE, CENTRE_DATABASE]) {
         await admin.query(`DROP DATABASE IF EXISTS ${quoted(database)} WITH (FORCE)`);

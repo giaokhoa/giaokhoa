@@ -17,11 +17,7 @@ export interface AnalyticsModelProvider {
 }
 
 /**
- * Facade của AnalyticsModule (Moodle core_analytics, §2#23).
- * Model/indicator là provider đăng ký trong code. Insight là SUY LUẬN —
- * chỉ hiển thị cho user có capability ở context liên quan, và dự đoán
- * KHÔNG BAO GIỜ tự thay đổi điểm/ghi danh.
- * Model thật tối giản: "students at risk" = không truy cập gần đây + điểm thấp.
+ * Facade của AnalyticsModule (Moodle core_analytics, §2#23). Model/indicator là provider đăng ký trong code. Insight là SUY LUẬN — chỉ hiển thị cho user có capability ở context liên quan, và dự đoán KHÔNG BAO GIỜ tự thay đổi điểm/ghi danh. Model thật tối giản: "students at risk" = không truy cập gần đây + điểm thấp.
  */
 @Injectable()
 export class AnalyticsService {

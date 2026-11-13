@@ -1,10 +1,7 @@
 import { Navigate } from 'react-router';
 
 /**
- * Route gốc của khu Cài đặt (`/settings`, issue #288): không có nội
- * dung riêng — chuyển hướng THAY THẾ (replace, không để lại mục lịch
- * sử thừa) tới mục đầu tiên của khu là Bảo mật, đúng cách các site
- * lớn mở thẳng mục đầu khi người dùng vào gốc khu cài đặt.
+ * Route gốc của khu Cài đặt (`/settings`, issue #288): không có nội dung riêng — chuyển hướng THAY THẾ (replace, không để lại mục lịch sử thừa) tới mục đầu tiên của khu là Bảo mật, đúng cách các site lớn mở thẳng mục đầu khi người dùng vào gốc khu cài đặt.
  */
 export function SettingsIndexPage() {
   return <Navigate to="/settings/security" replace />;

@@ -1,21 +1,9 @@
 import type { EnrolDatabase } from './types';
 
 /**
- * Truy vấn DỮ LIỆU LIÊN QUAN của một người dùng trong một khoá học ở
- * tầng dữ liệu dùng chung — căn cứ quyết định việc gỡ ghi danh giữ
- * dòng `user_enrolments` dạng WITHDRAWN (giữ dữ liệu đóng góp) hay
- * xoá cứng dòng (không còn dữ liệu nào để giữ), đúng sự phân chia
- * của Moodle giữa dữ liệu tham gia hiển thị (được giữ) và tham gia
- * vô hình (bị dọn).
+ * Truy vấn DỮ LIỆU LIÊN QUAN của một người dùng trong một khoá học ở tầng dữ liệu dùng chung — căn cứ quyết định việc gỡ ghi danh giữ dòng `user_enrolments` dạng WITHDRAWN (giữ dữ liệu đóng góp) hay xoá cứng dòng (không còn dữ liệu nào để giữ), đúng sự phân chia của Moodle giữa dữ liệu tham gia hiển thị (được giữ) và tham gia vô hình (bị dọn).
  *
- * Trước đây dữ kiện này tới từ các probe do module nghiệp vụ của
- * API đăng ký vào lúc khởi tạo (CompletionModule báo dữ liệu hoàn
- * thành, GradesModule báo dữ liệu điểm) — cơ chế đăng ký lúc chạy
- * đó chỉ tồn tại trong tiến trình API nên bề mặt vật chất hoá dùng
- * chung không mang theo được. Hai kiểm ở đây là đúng hai truy vấn
- * tồn tại thuần dữ liệu mà hai probe đó thực hiện, viết lại trên
- * schema dùng chung: còn BẤT KỲ dòng dữ liệu nào thuộc hai họ này
- * thì coi là còn dữ liệu liên quan.
+ * Trước đây dữ kiện này tới từ các probe do module nghiệp vụ của API đăng ký vào lúc khởi tạo (CompletionModule báo dữ liệu hoàn thành, GradesModule báo dữ liệu điểm) — cơ chế đăng ký lúc chạy đó chỉ tồn tại trong tiến trình API nên bề mặt vật chất hoá dùng chung không mang theo được. Hai kiểm ở đây là đúng hai truy vấn tồn tại thuần dữ liệu mà hai probe đó thực hiện, viết lại trên schema dùng chung: còn BẤT KỲ dòng dữ liệu nào thuộc hai họ này thì coi là còn dữ liệu liên quan.
  */
 
 /**

@@ -8,23 +8,7 @@ import type { BetterAuthService } from '../../../src/modules/auth/better-auth/be
 import type { CredentialBridgeService } from '../../../src/modules/auth/better-auth/credential-bridge.service';
 
 /**
- * Flow test của nền Better Auth (issue #7, Giai đoạn 1) — chạy với cờ
- * BETTER_AUTH_ENABLED bật. Đường auth cũ vẫn là đường chính của hệ; spec
- * này chứng minh các cổng đạt của giai đoạn trên code thật: đăng nhập
- * username qua Better Auth, phiên ghi IP/User-Agent, guard mỏng nhận
- * cookie trên route nghiệp vụ, suspended bị chặn dù phiên còn hạn, huỷ
- * phiên hiệu lực ngay, endpoint đổi trạng thái thiếu Origin bị 403 (kèm
- * cookie — kiểm tra Origin của 1.7.12 chỉ kích hoạt khi request mang
- * cookie, xem Giai đoạn 0), phiên tạo theo chương trình cho login-as,
- * cầu nối hash từ hệ cũ, và route auth cũ vẫn chạy khi cờ bật. Hai cổng
- * của điểm nối tiếp 2.1 (issue #7): gọi linkExistingPasswordHash đồng
- * thời hai lần chỉ sinh đúng một dòng credential, và lỗi ép tại bước
- * tạo account thì rollback cả dòng user (không để user mồ côi).
- * Vòng fix sau review của 2.1: internalAdapter dựng trong transaction
- * không mang database hook của plugin username nên cầu nối tự gác
- * luật username của plugin — spec có ca username sai định dạng/độ dài
- * bị từ chối không sinh user, và ca username chữ hoa hợp lệ được lưu
- * hạ thường, đăng nhập được, trùng thì bị chặn.
+ * Flow test của nền Better Auth (issue #7, Giai đoạn 1) — chạy với cờ BETTER_AUTH_ENABLED bật. Đường auth cũ vẫn là đường chính của hệ; spec này chứng minh các cổng đạt của giai đoạn trên code thật: đăng nhập username qua Better Auth, phiên ghi IP/User-Agent, guard mỏng nhận cookie trên route nghiệp vụ, suspended bị chặn dù phiên còn hạn, huỷ phiên hiệu lực ngay, endpoint đổi trạng thái thiếu Origin bị 403 (kèm cookie — kiểm tra Origin của 1.7.12 chỉ kích hoạt khi request mang cookie, xem Giai đoạn 0), phiên tạo theo chương trình cho login-as, cầu nối hash từ hệ cũ, và route auth cũ vẫn chạy khi cờ bật. Hai cổng của điểm nối tiếp 2.1 (issue #7): gọi linkExistingPasswordHash đồng thời hai lần chỉ sinh đúng một dòng credential, và lỗi ép tại bước tạo account thì rollback cả dòng user (không để user mồ côi). Vòng fix sau review của 2.1: internalAdapter dựng trong transaction không mang database hook của plugin username nên cầu nối tự gác luật username của plugin — spec có ca username sai định dạng/độ dài bị từ chối không sinh user, và ca username chữ hoa hợp lệ được lưu hạ thường, đăng nhập được, trùng thì bị chặn.
  *
  * Biến môi trường phải tồn tại TRƯỚC khi AppModule được nạp
  * (ConfigModule validate cấu hình ngay khi module được import), nên các

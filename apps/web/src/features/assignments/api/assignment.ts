@@ -9,11 +9,7 @@ import type { AssignmentWriteBody } from '../types/assignment';
 
 /**
  * Tầng gọi API thuần của trang Bài tập thuộc feature assignments:
- * chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React
- * Query. Tầng `queries/` của feature bọc các hàm này thành
- * queryOptions, hook và đột biến. Tách từ module dữ liệu phẳng
- * `src/lib/assignment-data.ts` khi tổ chức lại apps/web theo mô
- * hình features/ (issue #500).
+ * chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành queryOptions, hook và đột biến. Tách từ module dữ liệu phẳng `src/lib/assignment-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
 
 /**

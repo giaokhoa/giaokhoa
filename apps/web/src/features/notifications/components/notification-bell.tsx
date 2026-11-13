@@ -37,31 +37,16 @@ function relativeTime(iso: string, t: (key: string, opts?: Record<string, unknow
 }
 
 /**
- * Chuông thông báo ở header + dropdown xem nhanh (lát NB-3, issue
- * #174 — xử khoảng trống G6 của hồ sơ audit thông báo). Số chưa đọc
- * dùng CHUNG khoá `notificationUnreadCount` với huy hiệu ở mục Thông
- * báo trên sidebar: REST cho số ngay khi mở trang, stream SSE (gắn ở
- * app-sidebar) giữ số đó luôn mới trong cache — đọc ở đây hay ở trang
- * thông báo thì số ở mọi bề mặt đều khớp, không cần tải lại trang.
+ * Chuông thông báo ở header + dropdown xem nhanh (lát NB-3, issue #174 — xử khoảng trống G6 của hồ sơ audit thông báo). Số chưa đọc dùng CHUNG khoá `notificationUnreadCount` với huy hiệu ở mục Thông báo trên sidebar: REST cho số ngay khi mở trang, stream SSE (gắn ở app-sidebar) giữ số đó luôn mới trong cache — đọc ở đây hay ở trang thông báo thì số ở mọi bề mặt đều khớp, không cần tải lại trang.
  *
- * Dropdown liệt kê tối đa 8 dòng GỘP mới nhất lấy từ cùng API list
- * nhóm của trung tâm (dùng chung cache `notificationGroups`) — không
- * có endpoint riêng. Bấm một dòng xử đúng như bấm ở trung tâm: dòng
- * đơn thì đánh dấu đã đọc mục đó rồi đi tới ngữ cảnh; dòng gộp có
- * ngữ cảnh thì đánh dấu đã đọc cả nhóm rồi đi; dòng gộp không có ngữ
- * cảnh (trung tâm sẽ mở rộng tại chỗ — dropdown không mở rộng được)
- * thì đi thẳng tới /notifications. Chân dropdown mở trang thông báo
- * đầy đủ. Huy hiệu Tin nhắn ở sidebar thuộc lát M1 (#204), không
- * thuộc bề mặt này.
+ * Dropdown liệt kê tối đa 8 dòng GỘP mới nhất lấy từ cùng API list nhóm của trung tâm (dùng chung cache `notificationGroups`) — không có endpoint riêng. Bấm một dòng xử đúng như bấm ở trung tâm: dòng đơn thì đánh dấu đã đọc mục đó rồi đi tới ngữ cảnh; dòng gộp có ngữ cảnh thì đánh dấu đã đọc cả nhóm rồi đi; dòng gộp không có ngữ cảnh (trung tâm sẽ mở rộng tại chỗ — dropdown không mở rộng được) thì đi thẳng tới /notifications. Chân dropdown mở trang thông báo đầy đủ. Huy hiệu Tin nhắn ở sidebar thuộc lát M1 (#204), không thuộc bề mặt này.
  */
 export function NotificationBell() {
   const { t } = useTranslation('app');
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // Cùng truy vấn hệt sidebar (options dùng chung của
-  // lib/notifications, cùng khoá nhà máy): TanStack gộp thành một
-  // lần gọi và một mục cache cho cả hai bề mặt.
+  // Cùng truy vấn hệt sidebar (options dùng chung của lib/notifications, cùng khoá nhà máy): TanStack gộp thành một lần gọi và một mục cache cho cả hai bề mặt.
   const unreadQuery = useNotificationUnreadCount();
   const unread = unreadQuery.data?.unread ?? 0;
 

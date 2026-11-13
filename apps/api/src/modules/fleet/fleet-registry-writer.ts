@@ -1,25 +1,10 @@
 /**
  * Cầu ghi registry cho các công cụ vận hành đội kho (issue #586):
- * các script CLI (`fleet-migration-runner.ts`, `fleet-backup.ts`,
- * `fleet-restore-test.ts`) chạy NGOÀI vòng đời NestJS của ứng dụng,
- * nên file này tự lắp `ControlPlaneConnection` +
- * `ControlPlaneRepository` của module control plane với một
- * `ConfigService` tối giản đọc thẳng `process.env` — dùng lại đúng
- * repository và đúng bất biến ghi của tầng service, không dựng
- * đường ghi song song.
+ * các script CLI (`fleet-migration-runner.ts`, `fleet-backup.ts`, `fleet-restore-test.ts`) chạy NGOÀI vòng đời NestJS của ứng dụng, nên file này tự lắp `ControlPlaneConnection` + `ControlPlaneRepository` của module control plane với một `ConfigService` tối giản đọc thẳng `process.env` — dùng lại đúng repository và đúng bất biến ghi của tầng service, không dựng đường ghi song song.
  *
- * Mọi thao tác ghi ở đây tuân theo cùng một khuôn khoá như
- * `ControlPlaneRegistryService` (sau bản sửa của issue này): mở
- * transaction → khoá dòng đăng ký của không gian (`FOR UPDATE`) →
- * đọc registry hiện tại → hợp nhất các trường mình phụ trách, giữ
- * nguyên các trường của tác vụ khác → ghi. Nhờ vậy runner
- * migration, tác vụ sao lưu và tác vụ kiểm thử khôi phục chạy đồng
- * thời trên cùng một kho không ghi đè mất trạng thái của nhau.
+ * Mọi thao tác ghi ở đây tuân theo cùng một khuôn khoá như `ControlPlaneRegistryService` (sau bản sửa của issue này): mở transaction → khoá dòng đăng ký của không gian (`FOR UPDATE`) → đọc registry hiện tại → hợp nhất các trường mình phụ trách, giữ nguyên các trường của tác vụ khác → ghi. Nhờ vậy runner migration, tác vụ sao lưu và tác vụ kiểm thử khôi phục chạy đồng thời trên cùng một kho không ghi đè mất trạng thái của nhau.
  *
- * Khác với service: không có gác capability ở đây — các script là
- * công cụ vận hành chạy bằng thông tin đăng nhập của chính đội vận
- * hành trên máy triển khai; quyền truy cập script và biến môi
- * trường của chúng là ranh giới tin cậy của tầng vận hành.
+ * Khác với service: không có gác capability ở đây — các script là công cụ vận hành chạy bằng thông tin đăng nhập của chính đội vận hành trên máy triển khai; quyền truy cập script và biến môi trường của chúng là ranh giới tin cậy của tầng vận hành.
  */
 import type { ConfigService } from '@nestjs/config';
 import type { SchemaMigrationStep } from '@giaokhoa/db/control-plane';
@@ -55,8 +40,7 @@ export class FleetRegistryWriter {
     if (!this.connection.isConfigured) {
       throw new Error('CONTROL_PLANE_DATABASE_URL is required for fleet operations tooling');
     }
-    // Adapter đã xác nhận có handle (isConfigured): repository của
-    // package nhận thẳng handle Kysely của adapter.
+    // Adapter đã xác nhận có handle (isConfigured): repository của package nhận thẳng handle Kysely của adapter.
     this.repo = new ControlPlaneRepository(this.connection.kysely);
   }
 
@@ -92,14 +76,7 @@ export class FleetRegistryWriter {
   }
 
   /**
-   * Tạo dòng đăng ký cho một trung tâm mới (bước 1 của pipeline cấp
-   * phát, issue #583) + dòng lịch sử `create` trong cùng transaction
-   * — cùng bất biến "sổ + lịch sử cùng thành/bại" với
-   * `ControlPlaneRegistryService.createRegistration` nhưng không qua
-   * gác capability của tầng HTTP (ranh giới tin cậy là quyền chạy
-   * script của đội vận hành). Trả về dòng vừa tạo, hoặc undefined
-   * khi slug đã tồn tại — người gọi quyết định tiếp tục (chạy lại)
-   * hay báo xung đột, writer không tự đoán.
+   * Tạo dòng đăng ký cho một trung tâm mới (bước 1 của pipeline cấp phát, issue #583) + dòng lịch sử `create` trong cùng transaction — cùng bất biến "sổ + lịch sử cùng thành/bại" với `ControlPlaneRegistryService.createRegistration` nhưng không qua gác capability của tầng HTTP (ranh giới tin cậy là quyền chạy script của đội vận hành). Trả về dòng vừa tạo, hoặc undefined khi slug đã tồn tại — người gọi quyết định tiếp tục (chạy lại) hay báo xung đột, writer không tự đoán.
    */
   async createSpaceRegistration(
     actorId: string,
@@ -136,13 +113,7 @@ export class FleetRegistryWriter {
   }
 
   /**
-   * Đổi trạng thái vòng đời của một dòng đăng ký (bước kích hoạt của
-   * pipeline cấp phát và thao tác tạm ngưng/mở lại, issue #583) +
-   * dòng lịch sử `status_change` trong cùng transaction, khoá dòng
-   * trước khi đọc ảnh `before` — cùng khuôn với
-   * `ControlPlaneRegistryService.changeStatus`. Trạng thái đích
-   * trùng trạng thái hiện tại thì không ghi gì (không tạo lịch sử
-   * rỗng), trả về dòng hiện tại.
+   * Đổi trạng thái vòng đời của một dòng đăng ký (bước kích hoạt của pipeline cấp phát và thao tác tạm ngưng/mở lại, issue #583) + dòng lịch sử `status_change` trong cùng transaction, khoá dòng trước khi đọc ảnh `before` — cùng khuôn với `ControlPlaneRegistryService.changeStatus`. Trạng thái đích trùng trạng thái hiện tại thì không ghi gì (không tạo lịch sử rỗng), trả về dòng hiện tại.
    */
   async changeSpaceStatus(
     spaceId: string,

@@ -60,8 +60,7 @@ function makeGuard(options?: {
 
 /**
  * Ca đơn vị của nhánh cũ trong TenantGuard (Phần A, issue #587):
- * `tid` đã khai trong phiên mà không tra được dòng tenant nào
- * phải fail-closed rõ ràng, không rơi lặng về tenant platform.
+ * `tid` đã khai trong phiên mà không tra được dòng tenant nào phải fail-closed rõ ràng, không rơi lặng về tenant platform.
  */
 describe('Guard phân giải tenant hiệu lực', () => {
   it('tid đã khai mà không tra được tenant thì bị từ chối 401 mã tenant.unknown, không ghim tenant platform', async () => {

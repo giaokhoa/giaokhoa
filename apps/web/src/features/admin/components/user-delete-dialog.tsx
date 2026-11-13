@@ -41,9 +41,7 @@ export interface UserDeleteDialogProps {
 }
 
 /**
- * Tên hiển thị của người dùng trong câu xác nhận: họ tên đầy đủ khi
- * có, lùi về tên đăng nhập khi hồ sơ trống cả họ lẫn tên — luôn nêu
- * đúng một định danh người dùng đọc được, không hiện id kỹ thuật.
+ * Tên hiển thị của người dùng trong câu xác nhận: họ tên đầy đủ khi có, lùi về tên đăng nhập khi hồ sơ trống cả họ lẫn tên — luôn nêu đúng một định danh người dùng đọc được, không hiện id kỹ thuật.
  */
 function displayNameOf(user: UserProfile): string {
   const fullName = `${user.firstName} ${user.lastName}`.trim();

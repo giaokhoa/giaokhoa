@@ -17,11 +17,7 @@ import {
 } from './outbox-event-routes';
 
 /**
- * Hình dáng dòng outbox mà relay xử lý — khai tay đúng các cột relay
- * đọc. `seq` đã chuyển về số từ giá trị int8 thô của kho (Kysely đọc
- * int8 thành chuỗi; job và payload phản chiếu giữ hợp đồng số như
- * trước), `payload` thu hẹp về record vì relay chỉ chuyển tiếp
- * payload dạng object vào job và writer phản chiếu.
+ * Hình dáng dòng outbox mà relay xử lý — khai tay đúng các cột relay đọc. `seq` đã chuyển về số từ giá trị int8 thô của kho (Kysely đọc int8 thành chuỗi; job và payload phản chiếu giữ hợp đồng số như trước), `payload` thu hẹp về record vì relay chỉ chuyển tiếp payload dạng object vào job và writer phản chiếu.
  */
 interface OutboxRow {
   id: string;
@@ -172,11 +168,7 @@ export class OutboxRelayScheduler {
       const centrePass = await this.publishPendingForCentres();
       const published = publishedShared + centrePass.published;
       if (centrePass.registryError !== undefined) {
-        // Không đọc được sổ đăng ký: toàn bộ lượt theo trung tâm
-        // bị bỏ qua ở nhịp này — ghi failed với thông điệp phân
-        // biệt để vận hành thấy sự cố control plane, thay vì để
-        // nhịp trôi qua như nhịp không có trung tâm nào (hoặc
-        // `success` giả nhờ lượt kho chung).
+        // Không đọc được sổ đăng ký: toàn bộ lượt theo trung tâm bị bỏ qua ở nhịp này — ghi failed với thông điệp phân biệt để vận hành thấy sự cố control plane, thay vì để nhịp trôi qua như nhịp không có trung tâm nào (hoặc `success` giả nhờ lượt kho chung).
         await this.taskLog.recordRun(
           'outbox-relay',
           startedAt,

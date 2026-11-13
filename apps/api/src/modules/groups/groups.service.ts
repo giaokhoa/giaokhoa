@@ -16,13 +16,7 @@ import { GroupsRepository, type CohortRow, type GroupRow, type GroupingRow } fro
 /**
  * Facade của GroupsModule (core_group + cohort của Moodle).
  *
- * Nhóm tách biệt là luật DỮ LIỆU, không phải bộ lọc UI (report §2#6): khi một
- * khoá học (hoặc cm) ở chế độ SEPARATEGROUPS, một user không có
- * `group:accessallgroups` (hoặc `course:managegroups`, hoặc site
- * admin) chỉ có thể thấy nhóm của chính mình và thành viên của chúng — thi hành
- * tại đây trong service cho mọi đường đọc. VISIBLEGROUPS không áp hạn chế đọc
- * nào (đường ghi vẫn gác capability). Một khoá học có
- * `groupModeForce` ép chế độ của nó lên mọi bề mặt cm.
+ * Nhóm tách biệt là luật DỮ LIỆU, không phải bộ lọc UI (report §2#6): khi một khoá học (hoặc cm) ở chế độ SEPARATEGROUPS, một user không có `group:accessallgroups` (hoặc `course:managegroups`, hoặc site admin) chỉ có thể thấy nhóm của chính mình và thành viên của chúng — thi hành tại đây trong service cho mọi đường đọc. VISIBLEGROUPS không áp hạn chế đọc nào (đường ghi vẫn gác capability). Một khoá học có `groupModeForce` ép chế độ của nó lên mọi bề mặt cm.
  *
  * Thay đổi thành viên cohort được công bố thành sự kiện outbox
  * (cohort_member_added / cohort_member_removed); EnrolModule lắng nghe và
@@ -31,9 +25,7 @@ import { GroupsRepository, type CohortRow, type GroupRow, type GroupingRow } fro
 @Injectable()
 /**
  * Nghiệp vụ nhóm và cohort.
- * Quy tắc hiển thị (đối chiếu Moodle group/lib.php): ở chế độ nhóm tách biệt (separate groups),
- * người không có capability accessallgroups chỉ thấy nhóm mình thuộc về và thành viên của chúng.
- * Thay đổi thành viên cohort phát sự kiện để enrol cohort-sync đồng bộ ghi danh.
+ * Quy tắc hiển thị (đối chiếu Moodle group/lib.php): ở chế độ nhóm tách biệt (separate groups), người không có capability accessallgroups chỉ thấy nhóm mình thuộc về và thành viên của chúng. Thay đổi thành viên cohort phát sự kiện để enrol cohort-sync đồng bộ ghi danh.
  */
 export class GroupsService implements OnModuleInit {
   constructor(
@@ -83,8 +75,7 @@ export class GroupsService implements OnModuleInit {
   }
 
   /**
-   * Người xem có capability quản lý nhóm tại khoá học hay không (site admin
-   * được tính là có — xem PermissionEvaluator.hasCapability).
+   * Người xem có capability quản lý nhóm tại khoá học hay không (site admin được tính là có — xem PermissionEvaluator.hasCapability).
    */
   async canManageGroups(actorId: string, courseId: string): Promise<boolean> {
     return this.evaluator.hasCapability(actorId, 'course:managegroups', await this.courses.courseContextId(courseId));
@@ -92,8 +83,7 @@ export class GroupsService implements OnModuleInit {
 
   /**
    * Che khoá ghi danh của nhóm đối với người không có quyền quản lý nhóm:
-   * khoá là bí mật, response chỉ mang `enrolmentKey: null` (vẫn giữ nguyên
-   * hình dạng bản ghi để client không phải đoán trường có tồn tại hay không).
+   * khoá là bí mật, response chỉ mang `enrolmentKey: null` (vẫn giữ nguyên hình dạng bản ghi để client không phải đoán trường có tồn tại hay không).
    */
   private hideGroupKey(group: GroupRow): GroupRow {
     return group.enrolmentKey ? { ...group, enrolmentKey: null } : group;

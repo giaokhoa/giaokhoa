@@ -1,10 +1,5 @@
 /**
- * Unit test cho helper đảm bảo 3 bảng vệ tinh của Ngân hàng hệ
- * thống trong kho nghiệp vụ (issue #585): kiểm chứng phần dựng câu
- * SQL thuần — đủ 3 bảng, mọi câu đều idempotent, nội dung DDL khớp
- * khối tạo bảng ở cuối file baseline — không cần database thật.
- * Tính idempotent khi chạy trên database thật (kể cả database đã áp
- * baseline cũ) được khoá ở bước kiểm chứng triển khai của vòng sửa.
+ * Unit test cho helper đảm bảo 3 bảng vệ tinh của Ngân hàng hệ thống trong kho nghiệp vụ (issue #585): kiểm chứng phần dựng câu SQL thuần — đủ 3 bảng, mọi câu đều idempotent, nội dung DDL khớp khối tạo bảng ở cuối file baseline — không cần database thật. Tính idempotent khi chạy trên database thật (kể cả database đã áp baseline cũ) được khoá ở bước kiểm chứng triển khai của vòng sửa.
  */
 import { describe, expect, it } from 'vitest';
 import { buildCentreSatelliteEnsureStatements } from './system-bank-centre-tables';

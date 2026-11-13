@@ -6,25 +6,17 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser } from '..
 import { MANDATORY_NOTIFICATION_PROVIDERS, MESSAGE_PROVIDERS, notificationPolicySettingName } from '../../../src/modules/messaging/notification-providers';
 
 /**
- * NB-7 (issue #174): chính sách thông báo cấp admin + bề mặt tuỳ chọn
- * tối thiểu cho học sinh.
+ * NB-7 (issue #174): chính sách thông báo cấp admin + bề mặt tuỳ chọn tối thiểu cho học sinh.
  *
  * Tiêu chí kiểm chứng:
  *  - Registry chính sách: GET /site-config có đúng một khoá
- *    `notifications/provider_<loại>_enabled` cho mỗi loại trong
- *    registry MESSAGE_PROVIDERS — tập khoá kỳ vọng suy ra từ chính
- *    registry (đủ mọi khoá, không thừa khoá lạ), không đếm cứng tổng
- *    số vì NB-7 chỉ chốt cơ chế khoá theo từng loại, không chốt
- *    tổng số loại; các khoá boolean, mặc định bật.
+ *    `notifications/provider_<loại>_enabled` cho mỗi loại trong registry MESSAGE_PROVIDERS — tập khoá kỳ vọng suy ra từ chính registry (đủ mọi khoá, không thừa khoá lạ), không đếm cứng tổng số vì NB-7 chỉ chốt cơ chế khoá theo từng loại, không chốt tổng số loại; các khoá boolean, mặc định bật.
  *  - Admin tắt một loại → notify() không phát cho BẤT KỲ ai (kể cả
- *    người có tuỳ chọn cá nhân đang bật), kết quả skipped =
- *    'admin-disabled' + dispatch log `skipped-admin-disabled`; admin
- *    bật lại → phát bình thường. Loại khác không bị ảnh hưởng.
+ *    người có tuỳ chọn cá nhân đang bật), kết quả skipped = 'admin-disabled' + dispatch log `skipped-admin-disabled`; admin bật lại → phát bình thường. Loại khác không bị ảnh hưởng.
  *  - Hai loại bắt buộc P2 (enrol_expiry_warning, admin_announcement):
  *    admin đặt tắt → API từ chối 400; thông báo vẫn phát.
  *  - Học sinh thuần (chỉ ghi danh, không vai nhân sự): PUT tuỳ chọn
- *    theo loại → 403 kèm code rõ ràng; GET tuỳ chọn theo loại → [];
- *    ngoại lệ tắt tiếng theo khoá (NB-4) vẫn dùng được.
+ *    theo loại → 403 kèm code rõ ràng; GET tuỳ chọn theo loại → []; ngoại lệ tắt tiếng theo khoá (NB-4) vẫn dùng được.
  *  - Giáo viên (vai nhân sự) giữ nguyên bề mặt v2 đầy đủ.
  */
 describe('Chính sách thông báo admin NB-7 + tuỳ chọn tối thiểu của học viên', () => {
@@ -56,10 +48,7 @@ describe('Chính sách thông báo admin NB-7 + tuỳ chọn tối thiểu của
   }
 
   /**
-   * Nhân sự HAI VAI (teacher + student ở context hệ thống): từ lát
-   * audience (issue #288), loại phía học sinh như grade_updated chỉ
-   * nằm trong bề mặt của người có context học sinh thật — ca nào cần
-   * nhân sự đặt tuỳ chọn cho loại phía học sinh thì dùng fixture này.
+   * Nhân sự HAI VAI (teacher + student ở context hệ thống): từ lát audience (issue #288), loại phía học sinh như grade_updated chỉ nằm trong bề mặt của người có context học sinh thật — ca nào cần nhân sự đặt tuỳ chọn cho loại phía học sinh thì dùng fixture này.
    */
   async function staffDualUser(): Promise<{ id: string; token: string }> {
     const user = await createUserViaApi(app, admin);

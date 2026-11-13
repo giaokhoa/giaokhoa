@@ -11,9 +11,7 @@ import {
 } from './control-plane-provision';
 
 /**
- * Khoá hành vi của helper cấp phát control plane (issue #580): đích
- * cấp phát chỉ suy ra từ URL, câu lệnh idempotent và khoá chặt quyền
- * kết nối — đổi các bất biến này thì test phải đỏ.
+ * Khoá hành vi của helper cấp phát control plane (issue #580): đích cấp phát chỉ suy ra từ URL, câu lệnh idempotent và khoá chặt quyền kết nối — đổi các bất biến này thì test phải đỏ.
  */
 describe('Cấp phát database control plane (helper thuần)', () => {
   it('đọc tên database từ path và role từ username của URL', () => {

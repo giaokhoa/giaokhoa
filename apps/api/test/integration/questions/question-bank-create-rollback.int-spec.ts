@@ -12,19 +12,9 @@ const TEST_DB_URL = process.env.GIAOKHOA_TEST_DATABASE_URL ?? 'postgres://postgr
 /**
  * Hồi quy nguyên tử cho luồng TẠO BANK câu hỏi (issue #490, DL-09).
  *
- * Bất biến nghiệp vụ: dựng một bank là một biên nguyên tử — context
- * của bank, dòng bank, category mặc định, override capability của
- * hai vai chuyên dụng (qbankmember/qbanklead) tại context bank, gán
- * vai lead cho chủ bank và sự kiện outbox `question_bank_created`
- * hoặc CÙNG thành công, hoặc không bước nào được ghi. Trước bản sửa,
- * chuỗi ghi chạy rời nhau: lỗi ở bước gán vai lead (bước cuối) để
- * lại bank dở dang — bank + category + quyền đã tồn tại mà bank chưa
- * có người phụ trách.
+ * Bất biến nghiệp vụ: dựng một bank là một biên nguyên tử — context của bank, dòng bank, category mặc định, override capability của hai vai chuyên dụng (qbankmember/qbanklead) tại context bank, gán vai lead cho chủ bank và sự kiện outbox `question_bank_created` hoặc CÙNG thành công, hoặc không bước nào được ghi. Trước bản sửa, chuỗi ghi chạy rời nhau: lỗi ở bước gán vai lead (bước cuối) để lại bank dở dang — bank + category + quyền đã tồn tại mà bank chưa có người phụ trách.
  *
- * Cách gây lỗi: spy `RolesService.assignRole` ném lỗi — bước ghi
- * cuối của luồng. Ca đối chứng gọi lại ngay sau đó phải tạo được
- * bank trọn vẹn, khẳng định lần tạo hỏng không để lại dấu vết nào
- * chặn lần tạo lại và trạng thái cuối khi thành công không đổi.
+ * Cách gây lỗi: spy `RolesService.assignRole` ném lỗi — bước ghi cuối của luồng. Ca đối chứng gọi lại ngay sau đó phải tạo được bank trọn vẹn, khẳng định lần tạo hỏng không để lại dấu vết nào chặn lần tạo lại và trạng thái cuối khi thành công không đổi.
  */
 describe('Tạo bank câu hỏi — rollback nguyên tử khi bước gán vai cuối luồng lỗi (issue #490)', () => {
   let app: INestApplication;
@@ -44,8 +34,7 @@ describe('Tạo bank câu hỏi — rollback nguyên tử khi bước gán vai c
     await pg.connect();
     banks = app.get(QuestionBanksService);
     roles = app.get(RolesService);
-    // Người dùng staff mới (vai editingteacher tại context hệ thống)
-    // — đủ tư cách giữ bank cá nhân, và chưa từng có bank nào.
+    // Người dùng staff mới (vai editingteacher tại context hệ thống) — đủ tư cách giữ bank cá nhân, và chưa từng có bank nào.
     const admin = await adminToken(app);
     const staff = await createUserViaApi(app, admin);
     staffId = staff.id;
@@ -68,10 +57,7 @@ describe('Tạo bank câu hỏi — rollback nguyên tử khi bước gán vai c
 
     const spy = vi.spyOn(roles, 'assignRole').mockRejectedValue(new Error('rollback probe'));
     try {
-      // Đường vào có lưới bắt lỗi riêng (đọc lại bank sau lỗi để hồi
-      // phục đua tạo đồng thời) nên bằng chứng lỗi không nằm ở việc
-      // promise có reject hay không, mà ở TRẠNG THÁI còn lại trong DB
-      // sau khi luồng kết thúc — các khẳng định ngay dưới đây.
+      // Đường vào có lưới bắt lỗi riêng (đọc lại bank sau lỗi để hồi phục đua tạo đồng thời) nên bằng chứng lỗi không nằm ở việc promise có reject hay không, mà ở TRẠNG THÁI còn lại trong DB sau khi luồng kết thúc — các khẳng định ngay dưới đây.
       await banks.ensurePersonalBank(staffId).catch(() => undefined);
     } finally {
       spy.mockRestore();

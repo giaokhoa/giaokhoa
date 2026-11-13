@@ -1,11 +1,7 @@
 /**
- * Phân tích ICS (RFC 5545) cơ bản cho việc nhập lịch đăng ký (calendar subscription) — ở
- * mức "parse cơ bản": mở các dòng tiếp nối (unfold), đọc các khối VEVENT,
- * trích xuất UID/SUMMARY/DESCRIPTION/DTSTART/DTEND. Ngày tháng hỗ trợ
- * dạng UTC (…Z) và các dạng floating/date mà chính test fixtures của Moodle dùng
+ * Phân tích ICS (RFC 5545) cơ bản cho việc nhập lịch đăng ký (calendar subscription) — ở mức "parse cơ bản": mở các dòng tiếp nối (unfold), đọc các khối VEVENT, trích xuất UID/SUMMARY/DESCRIPTION/DTSTART/DTEND. Ngày tháng hỗ trợ dạng UTC (…Z) và các dạng floating/date mà chính test fixtures của Moodle dùng
  * (oracle: calendar/tests/lib_test test_add_subscription, trong đó các fixture —
- * Outlook 2010, OSX Yosemite, Google Gmail, repeated events — mỗi fixture nhập
- * đúng các VEVENT của nó).
+ * Outlook 2010, OSX Yosemite, Google Gmail, repeated events — mỗi fixture nhập đúng các VEVENT của nó).
  */
 /**
  * Một sự kiện đọc từ file iCalendar (.ics) khi nhập lịch đăng ký (subscription import).

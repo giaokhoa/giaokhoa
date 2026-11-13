@@ -3,28 +3,16 @@ import { sql, type CentreDB, type CentreDb, type CentreTx } from '@giaokhoa/db';
 import type { DbTx } from './database';
 
 /**
- * Kiểu JSON của cột jsonb theo codegen của kho trung tâm — đồng cấu
- * trúc với `JsonValue` của Kysely nên biểu thức SQL mang kiểu này
- * gán được cho mọi cột jsonb. Lấy qua chỉ mục bảng thay vì import
- * trực tiếp từ `kysely` (barrel `@giaokhoa/db` không re-export kiểu đó).
- * Helper này cố tình KHÔNG export khỏi package: kiểu trả về của
- * `sql` tham chiếu tới kiểu của `kysely` mà `package.json` của
- * package không khai phụ thuộc, nên đưa nó vào `.d.ts` công khai
- * sẽ làm build lỗi TS2883 — mỗi file cần ghi jsonb giữ một bản
- * private giống hệt nhau thay vì một helper export chung.
+ * Kiểu JSON của cột jsonb theo codegen của kho trung tâm — đồng cấu trúc với `JsonValue` của Kysely nên biểu thức SQL mang kiểu này gán được cho mọi cột jsonb. Lấy qua chỉ mục bảng thay vì import trực tiếp từ `kysely` (barrel `@giaokhoa/db` không re-export kiểu đó). Helper này cố tình KHÔNG export khỏi package: kiểu trả về của `sql` tham chiếu tới kiểu của `kysely` mà `package.json` của package không khai phụ thuộc, nên đưa nó vào `.d.ts` công khai sẽ làm build lỗi TS2883 — mỗi file cần ghi jsonb giữ một bản private giống hệt nhau thay vì một helper export chung.
  */
 type CentreJson = NonNullable<CentreDB['payments']['data']>;
 
 /**
- * Xâu hoá một giá trị jsonb để ghi qua Kysely, đúng khuôn sổ tay
- * chuyển đổi của `@giaokhoa/db`.
+ * Xâu hoá một giá trị jsonb để ghi qua Kysely, đúng khuôn sổ tay chuyển đổi của `@giaokhoa/db`.
  *
- * Driver `pg` tự stringify object thường nhưng hiểu MẢNG cấp cao
- * nhất là mảng PostgreSQL, nên mọi lần ghi jsonb đều xâu hoá trước
- * rồi ép kiểu `::jsonb` trong SQL — kể cả khi giá trị là object
+ * Driver `pg` tự stringify object thường nhưng hiểu MẢNG cấp cao nhất là mảng PostgreSQL, nên mọi lần ghi jsonb đều xâu hoá trước rồi ép kiểu `::jsonb` trong SQL — kể cả khi giá trị là object
  * (để mọi đường ghi jsonb dùng chung một cơ chế, không tuỳ từng
- * hình dạng). `null` không đi qua đây: cột jsonb nullable nhận
- * `null` thẳng để ghi SQL NULL, không ghi JSON `null`.
+ * hình dạng). `null` không đi qua đây: cột jsonb nullable nhận `null` thẳng để ghi SQL NULL, không ghi JSON `null`.
  */
 function jsonbValue(value: unknown) {
   return sql<CentreJson>`${JSON.stringify(value)}::jsonb`;

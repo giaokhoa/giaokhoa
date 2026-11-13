@@ -36,24 +36,16 @@ export interface CreateEventInput {
 /**
  * Facade của CalendarModule (core_calendar của Moodle):
  *  - LOẠI sự kiện quyết định ai thấy được nó, qua cây context:
- *    site → mọi người; category → user của các khoá học trong category;
- *    course → ghi danh đang hiệu lực (+ staff có đường course:view thật);
- *    group → người xem khoá học là thành viên nhóm (hoặc accessallgroups);
- *    user → chỉ chủ sở hữu.
+ *    site → mọi người; category → user của các khoá học trong category; course → ghi danh đang hiệu lực (+ staff có đường course:view thật); group → người xem khoá học là thành viên nhóm (hoặc accessallgroups); user → chỉ chủ sở hữu.
  *  - Một sự kiện lặp là một SERIES: các dòng occurrence dùng chung repeatId với
- *    gốc, gốc mang RRULE, và một dòng exception thay thế occurrence
- *    của nó trong danh sách.
+ *    gốc, gốc mang RRULE, và một dòng exception thay thế occurrence của nó trong danh sách.
  *  - Subscription giữ dữ liệu ICS ngoài; việc import là job của worker.
  *  - Reminder là job DELAYED của BullMQ trên 'calendar-reminders'; worker
- *    biến chúng thành notification của MessagingModule (provider calendar_reminder)
- *    khi tới giờ phát.
+ *    biến chúng thành notification của MessagingModule (provider calendar_reminder) khi tới giờ phát.
  */
 @Injectable()
 /**
- * Nghiệp vụ lịch: sự kiện theo phạm vi (site/category/course/group/user), chuỗi lặp RRULE và exception từng occurrence.
- * Đối chiếu Moodle: calendar/classes (calendar_event) và lib.php của calendar.
- * Nguyên tắc hiển thị: user chỉ thấy sự kiện thuộc các phạm vi mình liên quan (khoá học đã enrol, nhóm của mình, sự kiện cá nhân/site);
- * exception thay thế occurrence tương ứng của chuỗi thay vì tạo sự kiện độc lập.
+ * Nghiệp vụ lịch: sự kiện theo phạm vi (site/category/course/group/user), chuỗi lặp RRULE và exception từng occurrence. Đối chiếu Moodle: calendar/classes (calendar_event) và lib.php của calendar. Nguyên tắc hiển thị: user chỉ thấy sự kiện thuộc các phạm vi mình liên quan (khoá học đã enrol, nhóm của mình, sự kiện cá nhân/site); exception thay thế occurrence tương ứng của chuỗi thay vì tạo sự kiện độc lập.
  */
 export class CalendarService {
   constructor(

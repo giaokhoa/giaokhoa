@@ -13,29 +13,20 @@ import { addGroupMember, contextIdByLevelInstance, createGroupViaApi } from '../
  * (comment 6367872889 + 6368023587 trên issue):
  *  1. Nhắn riêng CHỈ giữa liên hệ đã duyệt kết bạn (yêu cầu–chấp
  *     nhận thay danh bạ một chiều) — mô hình chốt lại 24/10/2026:
- *     cùng khoá không còn mở cổng nhắn riêng, công tắc site
- *     `core/messagingallusers` mất hiệu lực với tin nhắn (kiểm chứng
- *     đầy đủ ở messaging-roster-flow + messaging-calendar-flow);
- *     khám phá bạn bè đi qua roster thành viên khoá.
+ *     cùng khoá không còn mở cổng nhắn riêng, công tắc site `core/messagingallusers` mất hiệu lực với tin nhắn (kiểm chứng đầy đủ ở messaging-roster-flow + messaging-calendar-flow); khám phá bạn bè đi qua roster thành viên khoá.
  *  2. Nhóm tự do CHỈ do quản trị viên hệ thống hoặc chủ trung tâm
  *     (manager tại context của tenant hiện hành) tạo thủ công —
- *     giáo viên, nhân viên và học sinh đều bị chặn tại tầng service;
- *     nhóm còn lại chỉ sinh theo cấu trúc lớp/khoá.
+ *     giáo viên, nhân viên và học sinh đều bị chặn tại tầng service; nhóm còn lại chỉ sinh theo cấu trúc lớp/khoá.
  *  3. Nhóm lớp chat hai chiều mặc định; giáo viên tắt được qua cột
- *     `enabled` (đường gửi phải tôn trọng); tắt thì học sinh dừng gửi,
- *     giáo viên vẫn gửi được.
+ *     `enabled` (đường gửi phải tôn trọng); tắt thì học sinh dừng gửi, giáo viên vẫn gửi được.
  *  4. Vòng đời tin nhắn theo vai (bổ sung PR #94): XOÁ-PHÍA-MÌNH chỉ
- *     ẩn tin với chính tác giả (phía kia thấy nguyên vẹn); moderator
- *     gỡ cho mọi người bằng XOÁ CỨNG có lý do qua capability
- *     `moderation:manage` — dòng tin biến mất khỏi mọi đường đọc.
+ *     ẩn tin với chính tác giả (phía kia thấy nguyên vẹn); moderator gỡ cho mọi người bằng XOÁ CỨNG có lý do qua capability `moderation:manage` — dòng tin biến mất khỏi mọi đường đọc.
  *     (Thu hồi trong cửa sổ và gỡ hàng loạt kiểm chứng đầy đủ ở
  *     messaging-message-lifecycle.)
  *  5. Báo cáo trong conversation → giáo viên phụ trách + admin; chỉ
- *     người có thẩm quyền theo phạm vi mới xem lại được nội dung của
- *     đúng conversation bị báo cáo; mọi lần xem ghi event_log.
+ *     người có thẩm quyền theo phạm vi mới xem lại được nội dung của đúng conversation bị báo cáo; mọi lần xem ghi event_log.
  *  6. Gỡ thành viên trong chat (bổ sung MSG-T4): CHỈ nhóm tự do và
- *     CHỈ người có thẩm quyền quản lý mới gỡ được; nhóm cấu trúc bị
- *     từ chối để quản qua roster; người bị gỡ mất quyền ngay.
+ *     CHỈ người có thẩm quyền quản lý mới gỡ được; nhóm cấu trúc bị từ chối để quản qua roster; người bị gỡ mất quyền ngay.
  */
 
 interface Person { id: string; username: string; token: string }
@@ -47,15 +38,7 @@ interface MessageBody {
 }
 
 /**
- * Ghi thẳng một dòng gán vai vào DB cho fixture. Các fixture của bộ
- * spec nhắn tin dựng persona giáo viên vừa ghi danh trong khoá vừa
- * giữ vai giảng dạy tại context khoá (giáo viên hiện diện trong khoá
- * như một thành viên và giữ vai trò kiểm duyệt). Từ issue #425,
- * trạng thái lẫn vai cùng khoá này không còn tạo được qua API — cả
- * hai chiều ghi danh/gán vai đều bị chốt tách vai chặn — và chỉ còn
- * tồn tại như dữ kiện có sẵn; các ca của bộ spec này kiểm hành vi
- * nhắn tin trên đúng dữ kiện đó, nên dòng gán vai được ghi thẳng
- * vào DB trong lúc phần ghi danh vẫn đi qua API như cũ.
+ * Ghi thẳng một dòng gán vai vào DB cho fixture. Các fixture của bộ spec nhắn tin dựng persona giáo viên vừa ghi danh trong khoá vừa giữ vai giảng dạy tại context khoá (giáo viên hiện diện trong khoá như một thành viên và giữ vai trò kiểm duyệt). Từ issue #425, trạng thái lẫn vai cùng khoá này không còn tạo được qua API — cả hai chiều ghi danh/gán vai đều bị chốt tách vai chặn — và chỉ còn tồn tại như dữ kiện có sẵn; các ca của bộ spec này kiểm hành vi nhắn tin trên đúng dữ kiện đó, nên dòng gán vai được ghi thẳng vào DB trong lúc phần ghi danh vẫn đi qua API như cũ.
  */
 async function insertAssignmentRow(roleId: string, userId: string, contextId: string): Promise<void> {
   const client = new Client({ connectionString: process.env.DATABASE_URL });

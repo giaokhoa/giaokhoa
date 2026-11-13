@@ -1,16 +1,7 @@
 /**
- * Đáp ứng kỳ vọng của `GET /users/me/capabilities` cho các vai mẫu của
- * spec `users-my-access-equivalence.e2e-spec.ts`.
+ * Đáp ứng kỳ vọng của `GET /users/me/capabilities` cho các vai mẫu của spec `users-my-access-equivalence.e2e-spec.ts`.
  *
- * Nguồn gốc: chụp từ CHÍNH đáp ứng của cài đặt TRƯỚC khi phân giải theo
- * lô (đường gọi `hasCapability` tuần tự từng cặp context × capability)
- * trên cùng một bộ dữ kiện dựng giống hệt (cùng cây context, cùng
- * override trên vai tuỳ chỉnh, cùng các gán vai) — đây là mốc tương
- * đương mà cài đặt theo lô phải khớp TỪNG TRƯỜNG. Vai tuỳ chỉnh được
- * chuẩn hoá thành `customrole` (shortname thật là ngẫu nhiên theo lượt
- * chạy), context được chuẩn hoá theo nhãn vị trí trong cây dựng sẵn.
- * Khi sổ đăng ký capability hoặc mặc định archetype thay đổi có chủ
- * đích, mốc này phải được chụp lại và rà soát như một thay đổi hành vi.
+ * Nguồn gốc: chụp từ CHÍNH đáp ứng của cài đặt TRƯỚC khi phân giải theo lô (đường gọi `hasCapability` tuần tự từng cặp context × capability) trên cùng một bộ dữ kiện dựng giống hệt (cùng cây context, cùng override trên vai tuỳ chỉnh, cùng các gán vai) — đây là mốc tương đương mà cài đặt theo lô phải khớp TỪNG TRƯỜNG. Vai tuỳ chỉnh được chuẩn hoá thành `customrole` (shortname thật là ngẫu nhiên theo lượt chạy), context được chuẩn hoá theo nhãn vị trí trong cây dựng sẵn. Khi sổ đăng ký capability hoặc mặc định archetype thay đổi có chủ đích, mốc này phải được chụp lại và rà soát như một thay đổi hành vi.
  */
 export interface ExpectedContextSnapshot { context: string; level: number; capabilities: string[] }
 export interface ExpectedUserSnapshot {

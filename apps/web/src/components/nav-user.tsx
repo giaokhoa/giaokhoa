@@ -1,4 +1,5 @@
 import { IconDotsVertical, IconLogout, IconSettings, IconUserCircle } from '@tabler/icons-react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
@@ -28,19 +29,14 @@ function initialsOf(name: string): string {
 }
 
 /**
- * Khối người dùng ở chân sidebar (khung từ block dashboard-01): hiển thị
- * người đang đăng nhập thật từ AuthContext, menu gồm hồ sơ, cài đặt và
- * đăng xuất — chỉ những thao tác người dùng nào cũng thực hiện được với
- * chính mình. Từ issue #288 "Hồ sơ" và "Cài đặt" là HAI lối vào tách
- * bạch như các site lớn: Hồ sơ (`/profile`) chỉ còn thông tin user,
- * Cài đặt (`/settings`) là khu riêng có menu trái (bảo mật, liên kết,
- * thông báo).
+ * Khối người dùng ở chân sidebar (khung từ block dashboard-01): hiển thị người đang đăng nhập thật từ AuthContext, menu gồm hồ sơ, cài đặt và đăng xuất — chỉ những thao tác người dùng nào cũng thực hiện được với chính mình. Từ issue #288 "Hồ sơ" và "Cài đặt" là HAI lối vào tách bạch như các site lớn: Hồ sơ (`/profile`) chỉ còn thông tin user, Cài đặt (`/settings`) là khu riêng có menu trái (bảo mật, liên kết, thông báo).
  */
 export function NavUser() {
   const { user, logout } = useAuth();
   const { t } = useTranslation('app');
   const { isMobile } = useSidebar();
   const navigate = useNavigate();
+  const [logoutFailed, setLogoutFailed] = useState(false);
   if (!user) return null;
   const name = `${user.firstName} ${user.lastName}`.trim() || user.username;
   return (
@@ -98,7 +94,8 @@ export function NavUser() {
             <TenantSwitcherMenu />
             <DropdownMenuItem
               onClick={() => {
-                void logout().then(() => navigate('/login'));
+                setLogoutFailed(false);
+                void logout().then(() => navigate('/login')).catch(() => setLogoutFailed(true));
               }}
             >
               <IconLogout />
@@ -106,6 +103,8 @@ export function NavUser() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        {/* Menu đóng sau khi bấm logout, nên lỗi phải hiện BÊN NGOÀI menu để người dùng thấy và thử lại. */}
+        {logoutFailed && <span role="alert" className="text-destructive px-2 text-sm">{t('logoutFailed')}</span>}
       </SidebarMenuItem>
     </SidebarMenu>
   );

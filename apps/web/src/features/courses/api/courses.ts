@@ -3,11 +3,7 @@ import { apiJson } from '#lib/api';
 
 /**
  * Tầng gọi API thuần của danh sách khoá học thuộc feature courses:
- * chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query.
- * Tầng `queries/` của feature bọc các hàm này thành queryOptions,
- * đột biến và clientLoader. Tách từ module dữ liệu phẳng
- * `src/lib/courses-data.ts` khi tổ chức lại apps/web theo mô hình
- * features/ (issue #500).
+ * chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành queryOptions, đột biến và clientLoader. Tách từ module dữ liệu phẳng `src/lib/courses-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
 
 /**

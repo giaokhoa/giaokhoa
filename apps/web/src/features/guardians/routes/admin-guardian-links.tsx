@@ -19,45 +19,22 @@ import type { GuardianLinkView } from '../types/guardians';
 import { usePermissions } from '#lib/permissions';
 
 /**
- * Trang quản lý liên kết giám hộ phụ huynh–học viên (gói kích hoạt phụ
- * huynh, route `admin/guardian-links`).
+ * Trang quản lý liên kết giám hộ phụ huynh–học viên (gói kích hoạt phụ huynh, route `admin/guardian-links`).
  *
- * Vai trò: đây là bề mặt QUẢN LÝ duy nhất của miền giám hộ — nơi người
- * phụ trách (giữ capability `guardian:manage`) xác lập và thu hồi
- * liên kết, thay cho việc phải gọi thẳng API như trước. Bề mặt xem của
- * chính phụ huynh (`/guardian`) là trang riêng và chỉ đọc; trang này
- * không hiển thị dữ liệu học tập của học viên, chỉ quản lý chính các
- * liên kết.
+ * Vai trò: đây là bề mặt QUẢN LÝ duy nhất của miền giám hộ — nơi người phụ trách (giữ capability `guardian:manage`) xác lập và thu hồi liên kết, thay cho việc phải gọi thẳng API như trước. Bề mặt xem của chính phụ huynh (`/guardian`) là trang riêng và chỉ đọc; trang này không hiển thị dữ liệu học tập của học viên, chỉ quản lý chính các liên kết.
  *
  * Flow tổng thể:
  *  1. Cờ quyền: trang đọc `canManageGuardians` từ ảnh chụp quyền
  *     (PermissionsProvider). Ảnh chụp quyền chưa tải xong thì trang
- *     hiện khung chờ — KHÔNG kết luận thiếu quyền sớm, vì trong lúc
- *     phiên/capability đang tải, provider tạm trả ảnh chụp rỗng và
- *     kết luận vội sẽ chớp thông báo thiếu quyền oan cho chính người
- *     có quyền. Tải ảnh chụp quyền lỗi thì coi như không có quyền.
- *     Đã có ảnh chụp mà không có cờ thì trang không dựng bề mặt quản
- *     lý nào (không danh sách, không form) và hiện thông báo thiếu
- *     quyền — mục điều hướng trong sidebar cũng chỉ hiện với đúng cờ
- *     này. Đây chỉ là lớp trình bày: API tự gác `guardian:manage` ở
- *     mọi endpoint quản lý (403 `guardian.manage_denied`), trang có
- *     bị mở thẳng bằng URL cũng không lộ dữ liệu.
+ *     hiện khung chờ — KHÔNG kết luận thiếu quyền sớm, vì trong lúc phiên/capability đang tải, provider tạm trả ảnh chụp rỗng và kết luận vội sẽ chớp thông báo thiếu quyền oan cho chính người có quyền. Tải ảnh chụp quyền lỗi thì coi như không có quyền. Đã có ảnh chụp mà không có cờ thì trang không dựng bề mặt quản lý nào (không danh sách, không form) và hiện thông báo thiếu quyền — mục điều hướng trong sidebar cũng chỉ hiện với đúng cờ này. Đây chỉ là lớp trình bày: API tự gác `guardian:manage` ở mọi endpoint quản lý (403 `guardian.manage_denied`), trang có bị mở thẳng bằng URL cũng không lộ dữ liệu.
  *  2. Danh sách: GET /guardian-links (API chỉ trả liên kết của tenant
- *     hiệu lực, gồm cả liên kết đã thu hồi). Hàng liên kết chỉ mang id
- *     người dùng, nên trang tra họ tên từng người qua GET /users/:id
+ *     hiệu lực, gồm cả liên kết đã thu hồi). Hàng liên kết chỉ mang id người dùng, nên trang tra họ tên từng người qua GET /users/:id
  *     (dùng chung tuỳ chọn truy vấn của khu quản trị người dùng) và
  *     hiển thị kèm tên đăng nhập; tra không được thì rơi về chính id.
  *  3. Tạo liên kết: hai ô chọn người dùng tìm qua GET
- *     /users?search= (phụ huynh và học viên là hai tài khoản có sẵn —
- *     trang này KHÔNG tạo tài khoản), quan hệ là chuỗi tự do theo hồ
- *     sơ giám hộ (cha/mẹ/người giám hộ…), ghi chú tuỳ chọn. Gửi POST
- *     /guardian-links; lỗi nghiệp vụ của API (409 cặp đã có liên kết
- *     đang hiệu lực, 400 một phía chưa là thành viên của tenant) hiển
- *     thị nguyên thông điệp lỗi cho người dùng.
+ *     /users?search= (phụ huynh và học viên là hai tài khoản có sẵn — trang này KHÔNG tạo tài khoản), quan hệ là chuỗi tự do theo hồ sơ giám hộ (cha/mẹ/người giám hộ…), ghi chú tuỳ chọn. Gửi POST /guardian-links; lỗi nghiệp vụ của API (409 cặp đã có liên kết đang hiệu lực, 400 một phía chưa là thành viên của tenant) hiển thị nguyên thông điệp lỗi cho người dùng.
  *  4. Thu hồi: xác nhận rồi DELETE /guardian-links/:linkId — thu hồi
- *     mềm phía API, hàng ở lại danh sách với trạng thái đã thu hồi;
- *     phụ huynh tương ứng mất quyền xem học viên đó ngay ở lần đọc bề
- *     mặt phụ huynh kế tiếp.
+ *     mềm phía API, hàng ở lại danh sách với trạng thái đã thu hồi; phụ huynh tương ứng mất quyền xem học viên đó ngay ở lần đọc bề mặt phụ huynh kế tiếp.
  */
 
 interface UserPickerProps {
@@ -75,11 +52,7 @@ function personLabel(user: UserProfile): string {
 }
 
 /**
- * Ô chọn một người dùng bằng tìm kiếm: gõ từ khoá (tên, tên đăng nhập
- * hoặc email) → GET /users?search= qua tuỳ chọn truy vấn dùng chung
- * của khu quản trị người dùng → danh sách kết quả để bấm chọn. Đã chọn
- * thì ô thu về một dòng xác nhận kèm nút bỏ chọn. Truy vấn chỉ bật khi
- * có từ khoá và chưa có lựa chọn, để không gọi API thừa.
+ * Ô chọn một người dùng bằng tìm kiếm: gõ từ khoá (tên, tên đăng nhập hoặc email) → GET /users?search= qua tuỳ chọn truy vấn dùng chung của khu quản trị người dùng → danh sách kết quả để bấm chọn. Đã chọn thì ô thu về một dòng xác nhận kèm nút bỏ chọn. Truy vấn chỉ bật khi có từ khoá và chưa có lựa chọn, để không gọi API thừa.
  */
 function UserPicker({ label, value, onChange }: UserPickerProps) {
   const { t } = useTranslation('app');

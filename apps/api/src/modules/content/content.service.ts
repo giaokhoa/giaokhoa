@@ -20,11 +20,7 @@ type CompletionMode = 'view' | 'manual' | 'progress' | 'none';
 function completionFields(mode: CompletionMode): { completion: number; completionView: boolean; completionManual: boolean; completionUseGrade: boolean } {
   if (mode === 'view') return { completion: 2, completionView: true, completionManual: false, completionUseGrade: false };
   if (mode === 'manual') return { completion: 1, completionView: false, completionManual: true, completionUseGrade: false };
-  // progress: completion tự động nhưng không tiêu chí sẵn nào của engine
-  // áp được — trạng thái lưu trong bản ghi completion là nguồn quyết
-  // định (computeCmState trả về trạng thái đã lưu khi không có tiêu chí
-  // view/expected/grade), ContentService ghi state=1 khi % xem đạt
-  // ngưỡng, cùng khuôn với refreshGradeCompletion của Grades.
+  // progress: completion tự động nhưng không tiêu chí sẵn nào của engine áp được — trạng thái lưu trong bản ghi completion là nguồn quyết định (computeCmState trả về trạng thái đã lưu khi không có tiêu chí view/expected/grade), ContentService ghi state=1 khi % xem đạt ngưỡng, cùng khuôn với refreshGradeCompletion của Grades.
   if (mode === 'progress') return { completion: 2, completionView: false, completionManual: false, completionUseGrade: false };
   return { completion: 0, completionView: false, completionManual: false, completionUseGrade: false };
 }
@@ -38,11 +34,7 @@ function modeOfCm(cm: CmRow): CompletionMode {
 }
 
 /**
- * Mặc định hoàn thành theo LOẠI nội dung (bảng 2.1 của nghiên cứu học
- * liệu số VN): video → progress (xem ≥ ngưỡng); tài liệu đọc (PDF/văn
- * bản/trình chiếu) → manual (mở xem + tự xác nhận); tệp còn lại (tải
- * về/mô phỏng) và liên kết ngoài → none (chỉ ghi truy cập, ngoài %
- * hoàn thành). Giáo viên đổi được theo từng mục khi tạo/sửa.
+ * Mặc định hoàn thành theo LOẠI nội dung (bảng 2.1 của nghiên cứu học liệu số VN): video → progress (xem ≥ ngưỡng); tài liệu đọc (PDF/văn bản/trình chiếu) → manual (mở xem + tự xác nhận); tệp còn lại (tải về/mô phỏng) và liên kết ngoài → none (chỉ ghi truy cập, ngoài % hoàn thành). Giáo viên đổi được theo từng mục khi tạo/sửa.
  */
 function defaultModeForFile(mimeType: string | null): CompletionMode {
   if (mimeType?.startsWith('video/')) return 'progress';
@@ -103,9 +95,7 @@ export class ContentService {
     private readonly files: FilesService,
     private readonly evaluator: PermissionEvaluator,
   ) {
-    // Hồ sơ quá trình học (Điều 8 TT 09/2021): mọi lần một cm chuyển
-    // sang hoàn thành (bất kỳ đường nào — xem/thủ công/điểm/tiến độ)
-    // đều được chụp lại tên mục tại thời điểm đó vào learning_records.
+    // Hồ sơ quá trình học (Điều 8 TT 09/2021): mọi lần một cm chuyển sang hoàn thành (bất kỳ đường nào — xem/thủ công/điểm/tiến độ) đều được chụp lại tên mục tại thời điểm đó vào learning_records.
     this.completion.registerCmCompletionHook(async ({ cmId, courseId, userId }) => {
       const cm = await this.courses.getCm(cmId).catch(() => undefined);
       await this.repo.insertLearningRecord({
@@ -118,15 +108,7 @@ export class ContentService {
   // --- mod_page ---------------------------------------------------------------
 
   /**
-   * Tạo trang đọc: bản ghi page + course module (component mod_page).
-   * Quyền tạo hoạt động do CoursesService kiểm (course:manageactivities).
-   * Mặc định hoàn thành kiểu manual (mở xem + học sinh tự xác nhận "Đã
-   * học") — nội dung đọc không đo được "đã đọc thật" (bảng 2.1 nghiên
-   * cứu học liệu số VN); giáo viên đặt 'view' nếu chỉ cần xem là đủ.
-   * Nội dung HTML được LÀM SẠCH THEO ALLOWLIST trước khi ghi DB (xem
-   * page-content-sanitizer): nội dung trang được phía web render bằng
-   * `dangerouslySetInnerHTML`, nên mã thực thi (thẻ script, thuộc tính
-   * sự kiện) không được phép tới DB qua đường ghi này.
+   * Tạo trang đọc: bản ghi page + course module (component mod_page). Quyền tạo hoạt động do CoursesService kiểm (course:manageactivities). Mặc định hoàn thành kiểu manual (mở xem + học sinh tự xác nhận "Đã học") — nội dung đọc không đo được "đã đọc thật" (bảng 2.1 nghiên cứu học liệu số VN); giáo viên đặt 'view' nếu chỉ cần xem là đủ. Nội dung HTML được LÀM SẠCH THEO ALLOWLIST trước khi ghi DB (xem page-content-sanitizer): nội dung trang được phía web render bằng `dangerouslySetInnerHTML`, nên mã thực thi (thẻ script, thuộc tính sự kiện) không được phép tới DB qua đường ghi này.
    */
   async createPage(actorId: string, courseId: string, input: {
     sectionId: string; name: string; content?: string; completionMode?: CompletionMode;
@@ -149,14 +131,9 @@ export class ContentService {
   }
 
   /**
-   * Lấy trang đọc (kèm chế độ hoàn thành suy từ cm của nó).
-   * Nội dung được làm sạch LẠI ở đường đọc: bản ghi đã lưu từ trước
-   * khi đường ghi có cổng làm sạch (hoặc được ghi qua đường vòng như
+   * Lấy trang đọc (kèm chế độ hoàn thành suy từ cm của nó). Nội dung được làm sạch LẠI ở đường đọc: bản ghi đã lưu từ trước khi đường ghi có cổng làm sạch (hoặc được ghi qua đường vòng như
    * import backup bằng repository trực tiếp) có thể còn mang mã thực
-   * thi — điểm này là điểm nghẽn đọc mà cả `getPageForUser` lẫn
-   * `getPlayer` đều đi qua, nên làm sạch tại đây phủ mọi bề mặt hiển
-   * thị nội dung trang. Hàm làm sạch idempotent nên dữ kiện đã qua
-   * cổng ghi không bị biến dạng khi làm sạch lần hai.
+   * thi — điểm này là điểm nghẽn đọc mà cả `getPageForUser` lẫn `getPlayer` đều đi qua, nên làm sạch tại đây phủ mọi bề mặt hiển thị nội dung trang. Hàm làm sạch idempotent nên dữ kiện đã qua cổng ghi không bị biến dạng khi làm sạch lần hai.
    */
   async getPage(id: string): Promise<PageRow> {
     const row = await this.repo.getPage(id);
@@ -663,12 +640,7 @@ export class ContentService {
   // --- mẫu cấu trúc bài học theo khung 5512 (K2-B5) -------------------------------
 
   /**
-   * Tạo bộ section mẫu "bài học" theo khung kế hoạch bài dạy (CV
-   * 5512): Mở đầu → Hình thành kiến thức mới → Luyện tập → Vận dụng →
-   * Kiểm tra nhanh & tổng kết. Đây là KHUNG GỢI Ý ở mức cấu trúc
-   * section — giáo viên thêm nội dung thật vào từng phần và sửa/xoá
-   * tự do, hệ thống không ép cứng luồng soạn. Phần kiến thức mới mang
-   * sẵn dòng nhắc ghi mục tiêu neo YCCĐ trong tóm tắt section.
+   * Tạo bộ section mẫu "bài học" theo khung kế hoạch bài dạy (CV 5512): Mở đầu → Hình thành kiến thức mới → Luyện tập → Vận dụng → Kiểm tra nhanh & tổng kết. Đây là KHUNG GỢI Ý ở mức cấu trúc section — giáo viên thêm nội dung thật vào từng phần và sửa/xoá tự do, hệ thống không ép cứng luồng soạn. Phần kiến thức mới mang sẵn dòng nhắc ghi mục tiêu neo YCCĐ trong tóm tắt section.
    */
   async createLessonTemplate(actorId: string, courseId: string, input: { title?: string }): Promise<{ id: string; name: string | null; section: number }[]> {
     await this.courses.getCourse(courseId);

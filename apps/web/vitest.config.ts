@@ -3,28 +3,16 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
 /**
- * Cấu hình Vitest tách khỏi vite.config.ts: test render component bằng
- * plugin React thường trong jsdom, không qua plugin framework của React
- * Router (plugin đó dành cho dev/build và tự quản vòng đời route).
+ * Cấu hình Vitest tách khỏi vite.config.ts: test render component bằng plugin React thường trong jsdom, không qua plugin framework của React Router (plugin đó dành cho dev/build và tự quản vòng đời route).
  */
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   test: {
     environment: "jsdom",
-    // Pool vmThreads: môi trường jsdom chỉ tạo MỘT lần cho mỗi worker
-    // thay vì tạo lại theo từng file test (trước đây jsdom được tạo lại
-    // đúng số file, chiếm khoảng một phần tư tổng thời gian chạy test).
-    // Khác với `isolate: false`, mỗi file vẫn chạy trong VM context
-    // riêng nên độ cô lập giữa các file được giữ nguyên; đánh đổi duy
-    // nhất là các file trong cùng worker dùng chung một tiến trình.
+    // Pool vmThreads: môi trường jsdom chỉ tạo MỘT lần cho mỗi worker thay vì tạo lại theo từng file test (trước đây jsdom được tạo lại đúng số file, chiếm khoảng một phần tư tổng thời gian chạy test). Khác với `isolate: false`, mỗi file vẫn chạy trong VM context riêng nên độ cô lập giữa các file được giữ nguyên; đánh đổi duy nhất là các file trong cùng worker dùng chung một tiến trình.
     pool: "vmThreads",
     setupFiles: ["./src/test/setup.ts"],
-    // apps/web chỉ có MỘT tầng test: unit — mọi spec là test đơn
-    // vị/component đặt cạnh file nguồn trong src/, render bằng
-    // jsdom với API được mock. Web không có tầng integration/e2e như backend nên chỉ
-    // khai đúng một project unit này; chạy riêng bằng script
-    // test:unit. Các tuỳ chọn dùng chung ở cấu hình gốc (environment,
-    // pool, setupFiles, testTimeout) được project kế thừa.
+    // apps/web chỉ có MỘT tầng test: unit — mọi spec là test đơn vị/component đặt cạnh file nguồn trong src/, render bằng jsdom với API được mock. Web không có tầng integration/e2e như backend nên chỉ khai đúng một project unit này; chạy riêng bằng script test:unit. Các tuỳ chọn dùng chung ở cấu hình gốc (environment, pool, setupFiles, testTimeout) được project kế thừa.
     projects: [
       {
         test: {

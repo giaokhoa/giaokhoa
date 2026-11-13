@@ -12,10 +12,7 @@ import {
 import { tenantAls } from './tenant-als';
 
 /**
- * Danh sách cột tường minh có bí danh camelCase của bảng sổ cài
- * đặt gói (`program_package_installs`) — dùng chung cho mọi câu
- * đọc dòng sổ trong service này để giữ đúng hình dạng
- * `ProgramPackageInstallRecord` mà phía tiêu thụ đang dùng.
+ * Danh sách cột tường minh có bí danh camelCase của bảng sổ cài đặt gói (`program_package_installs`) — dùng chung cho mọi câu đọc dòng sổ trong service này để giữ đúng hình dạng `ProgramPackageInstallRecord` mà phía tiêu thụ đang dùng.
  */
 const INSTALL_RECORD_COLUMNS = [
   'package_key as packageKey',
@@ -27,10 +24,7 @@ const INSTALL_RECORD_COLUMNS = [
 /**
  * Một dòng trong sổ ghi nhận cài đặt gói chương trình
  * (`program_package_installs`): phiên bản gói nào đã cài, băm của
- * artifact đã cài và thời điểm ghi nhận. Bảng này KHÔNG có cột
- * người cài — danh tính người vận hành thuộc về nhật ký của lượt
- * di trú gọi bước này, không nằm trong sổ (xem ghi chú ở
- * `installIntoSpace`).
+ * artifact đã cài và thời điểm ghi nhận. Bảng này KHÔNG có cột người cài — danh tính người vận hành thuộc về nhật ký của lượt di trú gọi bước này, không nằm trong sổ (xem ghi chú ở `installIntoSpace`).
  */
 export interface ProgramPackageInstallRecord {
   packageKey: string;

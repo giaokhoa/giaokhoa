@@ -34,9 +34,7 @@ import {
  */
 
 /**
- * Điều khiển radio đáp án đúng mà decoration đọc tại thời điểm vẽ
- * widget: giữ trong một ref để widget luôn thấy giá trị mới nhất mà
- * không phải dựng lại extension khi prop đổi.
+ * Điều khiển radio đáp án đúng mà decoration đọc tại thời điểm vẽ widget: giữ trong một ref để widget luôn thấy giá trị mới nhất mà không phải dựng lại extension khi prop đổi.
  */
 interface CorrectChoiceControl {
   /** Tên nhóm radio (duy nhất cho mỗi instance editor trên trang). */

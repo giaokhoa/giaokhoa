@@ -8,22 +8,9 @@ import {
 } from '../../support/ordinary-worker-module';
 
 /**
- * PH-2 (issue #159) — phía phát hiện ở worker: lượt quét guardian-digests
- * chốt lượt digest định kỳ (cửa sổ tuần/ngày đã đóng, theo tần suất của
- * phụ huynh cho từng con, mặc định weekly) và lượt đẩy riêng quá hạn ≥7
- * ngày, mỗi lượt đúng MỘT lần nhờ dedupe_key unique của guardian_digests;
- * chỉ lượt thật sự mới chốt mới sinh sự kiện outbox cho nửa tiêu thụ.
- * Nửa tiêu thụ (sự kiện → tổng hợp đã công bố → thông báo) nằm cùng
- * phía worker từ issue con #518 của #491 (trước đó là consumer polling
- * phía API) và được kiểm chứng ở
- * test/integration/guardians/guardian-digest-delivery.int-spec.ts
- * bằng đúng hình dạng sự kiện phát ở đây.
+ * PH-2 (issue #159) — phía phát hiện ở worker: lượt quét guardian-digests chốt lượt digest định kỳ (cửa sổ tuần/ngày đã đóng, theo tần suất của phụ huynh cho từng con, mặc định weekly) và lượt đẩy riêng quá hạn ≥7 ngày, mỗi lượt đúng MỘT lần nhờ dedupe_key unique của guardian_digests; chỉ lượt thật sự mới chốt mới sinh sự kiện outbox cho nửa tiêu thụ. Nửa tiêu thụ (sự kiện → tổng hợp đã công bố → thông báo) nằm cùng phía worker từ issue con #518 của #491 (trước đó là consumer polling phía API) và được kiểm chứng ở test/integration/guardians/guardian-digest-delivery.int-spec.ts bằng đúng hình dạng sự kiện phát ở đây.
  *
- * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness
- * role thường (`test/ordinary-worker-module.ts`): module chạy bằng
- * role NOSUPERUSER/NOBYPASSRLS như production, fixture và đọc kiểm
- * chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ
- * của spec không đổi.
+ * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness role thường (`test/ordinary-worker-module.ts`): module chạy bằng role NOSUPERUSER/NOBYPASSRLS như production, fixture và đọc kiểm chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ của spec không đổi.
  */
 describe('Lượt quét digest phụ huynh của worker (PH-2, issue #159)', () => {
   let context: INestApplicationContext;
@@ -41,18 +28,11 @@ describe('Lượt quét digest phụ huynh của worker (PH-2, issue #159)', () 
   }
 
   /**
-   * Cách ly dữ kiện email giữa các spec tích hợp: phụ huynh fixture
-   * đặt tường minh tần suất email `immediate` cho hai provider digest
-   * phụ huynh. Nếu để tần suất mặc định theo nhóm (`daily`), mỗi
-   * dispatch email sinh ra từ các ca dưới đây sẽ nằm chờ ở trạng thái
-   * `digest-queued` trong database dùng chung của suite, và lượt quét
-   * tổng hợp ngày của spec email
+   * Cách ly dữ kiện email giữa các spec tích hợp: phụ huynh fixture đặt tường minh tần suất email `immediate` cho hai provider digest phụ huynh. Nếu để tần suất mặc định theo nhóm (`daily`), mỗi dispatch email sinh ra từ các ca dưới đây sẽ nằm chờ ở trạng thái `digest-queued` trong database dùng chung của suite, và lượt quét tổng hợp ngày của spec email
    * (notifications/notification-email.int-spec.ts) — vốn khẳng định
-   * tổng số trên TOÀN database — sẽ gom cả các mục chờ đó vào kết quả
-   * của nó. Với `immediate`, dispatch vẫn đi trọn đường thật
+   * tổng số trên TOÀN database — sẽ gom cả các mục chờ đó vào kết quả của nó. Với `immediate`, dispatch vẫn đi trọn đường thật
    * (notify → hàng đợi dispatch → processor phát) nhưng chốt ngay
-   * bằng một dòng dispatch log, không vào bể chờ digest; luật gộp
-   * digest ngày tự nó được kiểm chứng ở chính spec email.
+   * bằng một dòng dispatch log, không vào bể chờ digest; luật gộp digest ngày tự nó được kiểm chứng ở chính spec email.
    */
   async function setEmailImmediate(guardianId: string) {
     for (const provider of ['guardian_digest', 'guardian_overdue_alert']) {

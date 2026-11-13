@@ -9,11 +9,7 @@ import { createQueryClient } from '#lib/query-client';
 import { ProfilePage } from './profile';
 
 /**
- * Trang Hồ sơ sau issue #288: CHỈ còn form thông tin user. Ba thẻ cài
- * đặt từng xếp chồng ở đây (liên kết OAuth, 2FA, phiên) đã chuyển sang
- * khu Cài đặt — spec này gác hai phía của quyết định: form vẫn lưu
- * được như cũ, và trang không còn dựng (cũng không còn GỌI API cho)
- * bất kỳ khối cài đặt nào.
+ * Trang Hồ sơ sau issue #288: CHỈ còn form thông tin user. Ba thẻ cài đặt từng xếp chồng ở đây (liên kết OAuth, 2FA, phiên) đã chuyển sang khu Cài đặt — spec này gác hai phía của quyết định: form vẫn lưu được như cũ, và trang không còn dựng (cũng không còn GỌI API cho) bất kỳ khối cài đặt nào.
  */
 const PROFILE = {
   id: '01900000-0000-7000-8000-000000000007',

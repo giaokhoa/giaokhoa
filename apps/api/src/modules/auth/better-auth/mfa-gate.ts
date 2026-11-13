@@ -1,75 +1,31 @@
 /**
- * Cổng MFA cho MỌI đường đăng nhập của Better Auth (mật khẩu, email
- * OTP, callback social) — nguồn trạng thái MFA duy nhất là bảng
- * `user_totp` của hệ xác thực tự viết, nơi giao diện bật/tắt MFA ghi
- * vào. Bất biến của cổng: tài khoản có factor TOTP đã xác nhận trong
- * `user_totp` thì không đường đăng nhập nào của Better Auth được để
- * lại một phiên sống trước khi qua bước hai.
+ * Cổng MFA cho MỌI đường đăng nhập của Better Auth (mật khẩu, email OTP, callback social) — nguồn trạng thái MFA duy nhất là bảng `user_totp` của hệ xác thực tự viết, nơi giao diện bật/tắt MFA ghi vào. Bất biến của cổng: tài khoản có factor TOTP đã xác nhận trong `user_totp` thì không đường đăng nhập nào của Better Auth được để lại một phiên sống trước khi qua bước hai.
  *
  * Vì sao cổng này tồn tại thay vì chỉ dựa vào plugin twoFactor:
  *
  * - Plugin twoFactor tự gác các endpoint credential qua cờ
- *   `twoFactorEnabled` trên user — cờ đó ánh xạ tới cột
- *   `two_factor_enabled` chưa tồn tại trong cơ sở dữ liệu, và trạng
- *   thái MFA của sản phẩm sống ở `user_totp`, không ở kho của
- *   plugin. Cổng của plugin vì vậy không bao giờ kích hoạt với tài
- *   khoản bật MFA qua giao diện; đăng ký plugin một mình là vô
- *   hiệu. Cổng ở đây tra `user_totp` qua phụ thuộc do
- *   `BetterAuthService` truyền vào.
+ *   `twoFactorEnabled` trên user — cờ đó ánh xạ tới cột `two_factor_enabled` chưa tồn tại trong cơ sở dữ liệu, và trạng thái MFA của sản phẩm sống ở `user_totp`, không ở kho của plugin. Cổng của plugin vì vậy không bao giờ kích hoạt với tài khoản bật MFA qua giao diện; đăng ký plugin một mình là vô hiệu. Cổng ở đây tra `user_totp` qua phụ thuộc do `BetterAuthService` truyền vào.
  * - Plugin cũng KHÔNG được đăng ký để làm cơ chế hoàn tất bước
- *   hai: schema của plugin khai trường user `twoFactorEnabled` kèm
- *   giá trị mặc định, tầng core chèn trường đó vào mọi payload tạo
- *   user, và adapter bộ máy cũ từ chối trường không có trong ánh xạ
- *   user của hệ (đã kiểm chứng: bật plugin là mọi đường tạo user
- *   qua cầu nối đều ném `The field "twoFactorEnabled" does not
- *   exist in the "user" bộ máy cũ schema`). Thêm cột thật cho plugin
- *   sẽ dựng nguồn trạng thái MFA thứ hai phải đồng bộ với
- *   `user_totp` — đúng điều thiết kế này cấm. Bước hoàn tất vì vậy
- *   nằm ở tầng Nest (`two-factor-completion.*` cùng thư mục, route
- *   `/auth/two-factor/*` được mount chừa cho Nest): nó kiểm mã
- *   TOTP thẳng vào `user_totp` qua `TotpService` và cấp phiên qua
- *   cầu nối phiên lập trình sẵn có — một nguồn trạng thái duy
- *   nhất, không kho plugin nào tham gia.
+ *   hai: schema của plugin khai trường user `twoFactorEnabled` kèm giá trị mặc định, tầng core chèn trường đó vào mọi payload tạo user, và adapter bộ máy cũ từ chối trường không có trong ánh xạ user của hệ (đã kiểm chứng: bật plugin là mọi đường tạo user qua cầu nối đều ném `The field "twoFactorEnabled" does not exist in the "user" bộ máy cũ schema`). Thêm cột thật cho plugin sẽ dựng nguồn trạng thái MFA thứ hai phải đồng bộ với `user_totp` — đúng điều thiết kế này cấm. Bước hoàn tất vì vậy nằm ở tầng Nest (`two-factor-completion.*` cùng thư mục, route `/auth/two-factor/*` được mount chừa cho Nest): nó kiểm mã TOTP thẳng vào `user_totp` qua `TotpService` và cấp phiên qua cầu nối phiên lập trình sẵn có — một nguồn trạng thái duy nhất, không kho plugin nào tham gia.
  * - Đường email OTP (`/sign-in/email-otp`, plugin emailOTP của
- *   module mail) và callback social (`/callback/:provider`) vốn
- *   không nằm trong matcher của cổng plugin — cổng này phủ cả hai.
+ *   module mail) và callback social (`/callback/:provider`) vốn không nằm trong matcher của cổng plugin — cổng này phủ cả hai.
  *
  * Cơ chế (đối chiếu source của better-auth@1.7.12 đã ghim):
  *
  * - Mọi endpoint đăng nhập đều tạo phiên qua `setSessionCookie` (→
- *   `setNewSession`) trước khi trả đáp ứng, và tầng dispatch vẫn
- *   chạy after-hooks trên đáp ứng đó, nên tại hook này
- *   `ctx.context.newSession` mang đủ {session, user} của phiên vừa
- *   tạo.
+ *   `setNewSession`) trước khi trả đáp ứng, và tầng dispatch vẫn chạy after-hooks trên đáp ứng đó, nên tại hook này `ctx.context.newSession` mang đủ {session, user} của phiên vừa tạo.
  * - Khi user đã bật MFA: xoá cookie phiên khỏi response
  *   (`deleteSessionCookie` — scrub cả hai scope header, token
- *   phiên không rò qua header thô), xoá dòng session,
- *   `setNewSession(null)`, rồi phát dấu chờ bước hai đúng định
- *   dạng plugin twoFactor tự tạo (verification `2fa-<id>` →
- *   userId, `2fa-attempts-<id>` = "0", cookie ký
- *   `better-auth.two_factor` chứa id, hạn 600 giây) — endpoint
- *   hoàn tất ở tầng Nest đọc lại đúng các dấu này (cùng bảng
- *   verification, cùng cơ chế cookie ký) và áp cùng semantics:
+ *   phiên không rò qua header thô), xoá dòng session, `setNewSession(null)`, rồi phát dấu chờ bước hai đúng định dạng plugin twoFactor tự tạo (verification `2fa-<id>` → userId, `2fa-attempts-<id>` = "0", cookie ký `better-auth.two_factor` chứa id, hạn 600 giây) — endpoint hoàn tất ở tầng Nest đọc lại đúng các dấu này (cùng bảng verification, cùng cơ chế cookie ký) và áp cùng semantics:
  *   tối đa 5 lần thử cho một challenge, hết thì challenge chết.
  * - Đáp ứng theo họ đường: đường credential/OTP trả JSON
- *   `{ twoFactorRedirect: true, twoFactorMethods: ['totp'] }` —
- *   đúng hình plugin tự trả ở luồng credential, client web dịch
- *   thành bước nhập mã; đường callback thay redirect gốc bằng
- *   redirect về callbackURL của client kèm
- *   `twoFactorRedirect=true` để phía web mở bước hai (cùng họ quy
- *   ước `?oauthError=` của luồng OAuth cũ).
+ *   `{ twoFactorRedirect: true, twoFactorMethods: ['totp'] }` — đúng hình plugin tự trả ở luồng credential, client web dịch thành bước nhập mã; đường callback thay redirect gốc bằng redirect về callbackURL của client kèm `twoFactorRedirect=true` để phía web mở bước hai (cùng họ quy ước `?oauthError=` của luồng OAuth cũ).
  * - Cookie `trust_device` hợp lệ được tôn trọng như plugin (kiểm
- *   HMAC + bản ghi verification còn hạn, có xoay vòng) thì bỏ qua
- *   cổng.
+ *   HMAC + bản ghi verification còn hạn, có xoay vòng) thì bỏ qua cổng.
  * - Cổng FAIL-CLOSED khi không xác minh được: tra cứu trạng thái
- *   MFA mà lỗi thì KHÔNG được hiểu là "chưa bật MFA" — cổng ghi
- *   log lỗi, huỷ phiên vừa tạo ở cả hai tầng như khi cổng kích
- *   hoạt, rồi ném lỗi dừng đăng nhập. Lỗi tra cứu không bao giờ
- *   được để lại một phiên sống.
+ *   MFA mà lỗi thì KHÔNG được hiểu là "chưa bật MFA" — cổng ghi log lỗi, huỷ phiên vừa tạo ở cả hai tầng như khi cổng kích hoạt, rồi ném lỗi dừng đăng nhập. Lỗi tra cứu không bao giờ được để lại một phiên sống.
  * - Factory không có phụ thuộc MFA (các điểm dựng instance kiểm
- *   chứng tối thiểu) thì cổng không gắn — đúng khuôn phụ thuộc
- *   lockout của instance; đường chạy thật của app luôn truyền
- *   phụ thuộc qua `BetterAuthService`.
+ *   chứng tối thiểu) thì cổng không gắn — đúng khuôn phụ thuộc lockout của instance; đường chạy thật của app luôn truyền phụ thuộc qua `BetterAuthService`.
  */
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { APIError, createAuthMiddleware } from 'better-auth/api';
@@ -85,10 +41,7 @@ const TWO_FACTOR_CHALLENGE_MAX_AGE_SECONDS = 600;
 const TRUST_DEVICE_MAX_AGE_SECONDS = 720 * 60 * 60;
 
 /**
- * Các đường sign-in cấp phiên mà cổng phủ, ngoài callback: đăng nhập
- * mật khẩu bằng username/email và đăng nhập bằng email OTP. (Đường
- * `/sign-in/phone-number` không có mặt — hệ không đăng ký plugin số
- * điện thoại nào.)
+ * Các đường sign-in cấp phiên mà cổng phủ, ngoài callback: đăng nhập mật khẩu bằng username/email và đăng nhập bằng email OTP. (Đường `/sign-in/phone-number` không có mặt — hệ không đăng ký plugin số điện thoại nào.)
  */
 const SIGN_IN_GATE_PATHS: ReadonlySet<string> = new Set(['/sign-in/username', '/sign-in/email', '/sign-in/email-otp']);
 
@@ -125,10 +78,7 @@ function locationOf(returned: unknown): string | null {
 type GateContext = Parameters<Parameters<typeof createAuthMiddleware>[0]>[0];
 
 /**
- * Kiểm cookie trust device theo đúng semantics của plugin: cookie ký
- * chứa `<hmac>!<trustIdentifier>`, hmac trên `<userId>!<trustIdentifier>`,
- * và phải còn bản ghi verification tương ứng chưa hết hạn. Hợp lệ thì
- * XOAY VÒNG (huỷ dấu cũ, phát dấu mới) như plugin làm ở luồng credential.
+ * Kiểm cookie trust device theo đúng semantics của plugin: cookie ký chứa `<hmac>!<trustIdentifier>`, hmac trên `<userId>!<trustIdentifier>`, và phải còn bản ghi verification tương ứng chưa hết hạn. Hợp lệ thì XOAY VÒNG (huỷ dấu cũ, phát dấu mới) như plugin làm ở luồng credential.
  */
 async function consumeTrustDevice(ctx: GateContext, userId: string): Promise<boolean> {
   const cookieAttrs = ctx.context.createAuthCookie(TRUST_DEVICE_COOKIE_NAME, {

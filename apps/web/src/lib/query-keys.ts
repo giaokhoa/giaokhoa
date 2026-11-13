@@ -1,9 +1,5 @@
 /**
- * Khoá truy vấn tập trung (query key factory theo khuyến nghị của tài
- * liệu TanStack Query): mọi useQuery/useQueries trong app lấy khoá từ
- * đây để việc vô hiệu hoá cache sau đột biến (invalidateQueries) khớp
- * đúng khoá đã đọc, tránh lệch chuỗi khoá viết tay từng nơi. Cấu trúc
- * phân cấp: thực thể → định danh → tham số.
+ * Khoá truy vấn tập trung (query key factory theo khuyến nghị của tài liệu TanStack Query): mọi useQuery/useQueries trong app lấy khoá từ đây để việc vô hiệu hoá cache sau đột biến (invalidateQueries) khớp đúng khoá đã đọc, tránh lệch chuỗi khoá viết tay từng nơi. Cấu trúc phân cấp: thực thể → định danh → tham số.
  */
 export const queryKeys = {
   /** Ảnh chụp quyền của người đang đăng nhập (GET /users/me/capabilities). */
@@ -49,10 +45,7 @@ export const queryKeys = {
   /** Số thông báo chưa đọc của chính người dùng (huy hiệu trên chuông ở header). */
   notificationUnreadCount: ['notifications', 'unread-count'] as const,
   /**
-   * Số conversation tin nhắn chưa đọc của chính người dùng (GET
-   * /messages/unread-count) — nguồn của huy hiệu trên mục Tin nhắn ở
-   * sidebar (lát M1, issue #204). Trang tin nhắn làm mới khoá này mỗi
-   * lần tự đếm lại số chưa đọc từ kênh realtime của chính trang.
+   * Số conversation tin nhắn chưa đọc của chính người dùng (GET /messages/unread-count) — nguồn của huy hiệu trên mục Tin nhắn ở sidebar (lát M1, issue #204). Trang tin nhắn làm mới khoá này mỗi lần tự đếm lại số chưa đọc từ kênh realtime của chính trang.
    */
   messageUnreadCount: ['messages', 'unread-count'] as const,
   /** Sự kiện lịch trong một khoảng ngày (ISO string đầu/cuối khoảng). */
@@ -86,9 +79,7 @@ export const queryKeys = {
   /** Cây chương trình của một chương trình (GET /curriculum/curricula/:id/tree). */
   curriculumTree: (curriculumId: string) => ['curriculum', 'tree', curriculumId] as const,
   /**
-   * Môn chương trình trong một context, kèm ngữ cảnh khoá mở quyền
-   * đọc cho giáo viên (GET /curriculum/subjects?contextId=&forCourseId=)
-   * — khác khoá `curriculumSubjects` của màn ma trận (không tham số).
+   * Môn chương trình trong một context, kèm ngữ cảnh khoá mở quyền đọc cho giáo viên (GET /curriculum/subjects?contextId=&forCourseId=) — khác khoá `curriculumSubjects` của màn ma trận (không tham số).
    */
   curriculumSubjectsScoped: (contextId: string, forCourseId: string | null) =>
     ['curriculum', 'subjects', 'scoped', contextId, forCourseId] as const,

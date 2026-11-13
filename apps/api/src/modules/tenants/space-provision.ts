@@ -1,7 +1,5 @@
 /**
- * Điểm vào CLI của pipeline cấp phát trung tâm mới (issue #583) —
- * chạy ngoài NestJS như các công cụ fleet (`node
- * dist/modules/tenants/space-provision.js <lệnh> [--khóa giá-trị]`).
+ * Điểm vào CLI của pipeline cấp phát trung tâm mới (issue #583) — chạy ngoài NestJS như các công cụ fleet (`node dist/modules/tenants/space-provision.js <lệnh> [--khóa giá-trị]`).
  *
  * Bốn lệnh:
  * - `provision`: chạy toàn bộ pipeline 7 bước (xem
@@ -13,13 +11,9 @@
  *   khu học tập công cộng ở hostname gốc; bắt buộc `--admin-email`,
  *   `--actor-id`. Không tạo nhân sự vận hành platform trong kho này.
  * - `invite`: cấp lại lời mời kích hoạt cho một tài khoản của trung
- *   tâm (huỷ lời mời đang chờ rồi tạo mới); bắt buộc `--slug`,
- *   `--email`; `--revoke` thì chỉ huỷ, không tạo mới.
+ *   tâm (huỷ lời mời đang chờ rồi tạo mới); bắt buộc `--slug`, `--email`; `--revoke` thì chỉ huỷ, không tạo mới.
  * - `install-roles`: cài riêng bộ vai mặc định vào kho của một
- *   trung tâm đã cấp phát (áp cơ chế chuyển tiếp cho các trung tâm
- *   cấp phát trước khi pipeline có bước này, không cấp phát lại);
- *   bắt buộc `--slug`. Idempotent: kho đã có đủ bộ vai thì không
- *   đổi gì.
+ *   trung tâm đã cấp phát (áp cơ chế chuyển tiếp cho các trung tâm cấp phát trước khi pipeline có bước này, không cấp phát lại); bắt buộc `--slug`. Idempotent: kho đã có đủ bộ vai thì không đổi gì.
  *
  * Đầu ra: các dòng tiến trình + một dòng JSON cuối cùng
  * (`PROVISION_RESULT` / `INVITE_RESULT` / `ROLE_BASELINE_RESULT`)

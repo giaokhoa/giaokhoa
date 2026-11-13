@@ -1,8 +1,5 @@
 /**
- * Tiện ích thuần của trang lần ghim đề (tách cấu trúc từ
- * `pages/quiz.tsx` theo đợt A của issue #223): trích text thuần
- * từ tài liệu rich text và chuyển mốc thời gian ISO sang giá trị
- * cho input `datetime-local`. Không phụ thuộc React hay API.
+ * Tiện ích thuần của trang lần ghim đề (tách cấu trúc từ `pages/quiz.tsx` theo đợt A của issue #223): trích text thuần từ tài liệu rich text và chuyển mốc thời gian ISO sang giá trị cho input `datetime-local`. Không phụ thuộc React hay API.
  */
 import { extractRichTextPlainText, type RichTextDocument } from '@giaokhoa/contracts';
 

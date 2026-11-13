@@ -4,28 +4,16 @@ import { adminToken, createTestApp, createUserViaApi, http, uniqueName } from '.
 import { createCategory, createCm, createCourse, createSection } from '../../support/course-enrolment-helpers';
 
 /**
- * Lưới an toàn cho việc áp danh sách hành động đóng toàn hệ (issue
- * #345: giai đoạn 1 các bề mặt ngoài module exams + giai đoạn 2 phần
- * `board-*` của module exams).
+ * Lưới an toàn cho việc áp danh sách hành động đóng toàn hệ (issue #345: giai đoạn 1 các bề mặt ngoài module exams + giai đoạn 2 phần `board-*` của module exams).
  *
  * Các khẳng định chính còn lại ở spec này (hành vi qua HTTP):
  * - Hai bảng route tĩnh của các bề mặt đổi tên (16 cặp của giai đoạn 1
- *   và 16 cặp của giai đoạn 2) nay được ghim ở spec hợp đồng bảng
- *   route tại tầng integration:
- *   `test/integration/platform/route-table-contract.int-spec.ts`.
- *   Hành vi alias của giai đoạn 2 (đường cũ vẫn duyệt cấp 2, kèm
- *   header sắp bỏ) do flow S4 của đóng góp khoá riêng, không dựng lại
- *   ở spec này.
+ *   và 16 cặp của giai đoạn 2) nay được ghim ở spec hợp đồng bảng route tại tầng integration:
+ *   `test/integration/platform/route-table-contract.int-spec.ts`. Hành vi alias của giai đoạn 2 (đường cũ vẫn duyệt cấp 2, kèm header sắp bỏ) do flow S4 của đóng góp khoá riêng, không dựng lại ở spec này.
  * - Hành vi alias: path cũ vẫn tới được đúng handler (kết quả như
- *   canonical), response qua alias mang header Deprecation/Sunset và
- *   mỗi lượt gọi alias sinh log có cấu trúc `deprecated_route_alias`;
- *   path canonical không mang header đó. Log alias là căn cứ của điều
- *   kiện gỡ alias (0 lượt gọi trong 14 ngày), nên spec kiểm cả nội
- *   dung bản ghi log, không chỉ kiểm header.
+ *   canonical), response qua alias mang header Deprecation/Sunset và mỗi lượt gọi alias sinh log có cấu trúc `deprecated_route_alias`; path canonical không mang header đó. Log alias là căn cứ của điều kiện gỡ alias (0 lượt gọi trong 14 ngày), nên spec kiểm cả nội dung bản ghi log, không chỉ kiểm header.
  * - Hai đích xuất file: định dạng là dữ liệu yêu cầu (`format` qua
- *   tham số truy vấn) tại path đích không còn hậu tố file; định dạng
- *   không hỗ trợ bị từ chối 400 với mã lỗi ổn định; nội dung file xuất
- *   qua canonical và qua alias là một.
+ *   tham số truy vấn) tại path đích không còn hậu tố file; định dạng không hỗ trợ bị từ chối 400 với mã lỗi ổn định; nội dung file xuất qua canonical và qua alias là một.
  */
 describe('Chuẩn đường dẫn action (issue #345)', () => {
   let app: INestApplication;

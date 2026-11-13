@@ -34,23 +34,15 @@ function isForbidden(error: unknown): boolean {
 /**
  * Trang quản trị tenant tối thiểu.
  *
- * Luồng hiển thị được quyết định từ ảnh chụp quyền trước, sau đó mọi dữ
- * liệu đều lấy từ API tenant:
+ * Luồng hiển thị được quyết định từ ảnh chụp quyền trước, sau đó mọi dữ liệu đều lấy từ API tenant:
  * 1. Người có `tenant:viewall`/`tenant:manage` ở context hệ thống (hoặc
- *    site admin) dùng chế độ platform: danh sách `GET /tenants`, chọn
- *    một tenant, rồi đọc membership/người dùng của đúng tenant đã chọn.
+ *    site admin) dùng chế độ platform: danh sách `GET /tenants`, chọn một tenant, rồi đọc membership/người dùng của đúng tenant đã chọn.
  * 2. Người không có quyền platform nhưng có quyền tại tenant hiệu lực
- *    dùng chế độ tenant: `GET /tenants/current` là nguồn tenant duy
- *    nhất; trang không nạp danh sách platform và không có điều khiển
- *    chọn tenant khác.
+ *    dùng chế độ tenant: `GET /tenants/current` là nguồn tenant duy nhất; trang không nạp danh sách platform và không có điều khiển chọn tenant khác.
  * 3. Người không có cả hai phạm vi quyền chỉ nhận trạng thái cấm và
  *    trang không bật bất kỳ truy vấn quản trị tenant nào.
  *
- * Các điều khiển ghi chỉ xuất hiện khi capability tương ứng có hiệu lực
- * tại phạm vi đang quản lý (`tenant:manage` phía platform hoặc tại
- * chính tenant đó). Đây chỉ là điều kiện trình bày: API kiểm tra lại
- * quyền ở mọi endpoint và trang không cập nhật lạc quan khi thao tác ghi
- * chưa được server xác nhận.
+ * Các điều khiển ghi chỉ xuất hiện khi capability tương ứng có hiệu lực tại phạm vi đang quản lý (`tenant:manage` phía platform hoặc tại chính tenant đó). Đây chỉ là điều kiện trình bày: API kiểm tra lại quyền ở mọi endpoint và trang không cập nhật lạc quan khi thao tác ghi chưa được server xác nhận.
  */
 export function AdminTenantsPage() {
   const { t } = useTranslation('app');
@@ -73,18 +65,13 @@ export function AdminTenantsPage() {
 
   const platformTenants = useMemo(() => tenantsQuery.data ?? [], [tenantsQuery.data]);
 
-  // Tenant đầu tiên là lựa chọn mặc định ở chế độ platform để khu thành
-  // viên có một đích xác định ngay khi danh sách tải xong; người dùng
-  // đổi lựa chọn thì mọi truy vấn thành viên đi theo lựa chọn mới.
+  // Tenant đầu tiên là lựa chọn mặc định ở chế độ platform để khu thành viên có một đích xác định ngay khi danh sách tải xong; người dùng đổi lựa chọn thì mọi truy vấn thành viên đi theo lựa chọn mới.
   const firstPlatformTenantId = platformMode ? platformTenants[0]?.id : undefined;
   if (firstPlatformTenantId && !platformTenants.some((tenant) => tenant.id === selectedTenantId)) {
     setSelectedTenantId(firstPlatformTenantId);
   }
 
-  // Cả hai chế độ đều giữ bản ghi tenant đầy đủ `Tenant`: endpoint
-  // current trả cùng DTO với danh sách platform, nên thẻ hiển thị ở
-  // chế độ tenant đọc trạng thái vòng đời từ trường `status` như chế
-  // độ platform.
+  // Cả hai chế độ đều giữ bản ghi tenant đầy đủ `Tenant`: endpoint current trả cùng DTO với danh sách platform, nên thẻ hiển thị ở chế độ tenant đọc trạng thái vòng đời từ trường `status` như chế độ platform.
   const selectedTenant: Tenant | null = platformMode
     ? (platformTenants.find((tenant) => tenant.id === selectedTenantId) ?? null)
     : (currentTenantQuery.data ?? null);
@@ -392,12 +379,7 @@ export function AdminTenantsPage() {
               </ErrorAlert>
             ) : null}
             {!canViewSelected ? (
-              // Ảnh chụp quyền đã sẵn sàng nhưng người dùng không có
-              // quyền tại tenant đang chọn/hiệu lực (quyền tenant chỉ
-              // nằm ở một tenant khác): hai truy vấn thành viên bị tắt
-              // theo `canViewSelected` nên rơi xuống nhánh chờ sẽ treo
-              // khung chờ vô hạn — hiện trạng thái cấm như các khu vực
-              // khác của trang.
+              // Ảnh chụp quyền đã sẵn sàng nhưng người dùng không có quyền tại tenant đang chọn/hiệu lực (quyền tenant chỉ nằm ở một tenant khác): hai truy vấn thành viên bị tắt theo `canViewSelected` nên rơi xuống nhánh chờ sẽ treo khung chờ vô hạn — hiện trạng thái cấm như các khu vực khác của trang.
               <ErrorAlert variant="destructive">{t('tenantsForbidden')}</ErrorAlert>
             ) : membersQuery.isPending || usersQuery.isPending ? (
               <PageSkeleton rows={['h-12 w-full', 'h-12 w-full', 'h-12 w-full']} label={t('loading')} />

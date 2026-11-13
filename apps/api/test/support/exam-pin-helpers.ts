@@ -3,9 +3,7 @@ import { http } from './identity-access-helpers';
 
 /**
  * Helper soạn đề + ghim dùng chung cho các spec hậu gộp Đề (#226):
- * hành trình người dùng thật — tạo ĐỀ trong bank đề cá nhân của giáo
- * viên → thêm slots (mỗi lần thêm tạo version mới của đề) → đề ready
- * → GHIM vào khoá qua exam-pins (pin mang vai trò của quiz cũ).
+ * hành trình người dùng thật — tạo ĐỀ trong bank đề cá nhân của giáo viên → thêm slots (mỗi lần thêm tạo version mới của đề) → đề ready → GHIM vào khoá qua exam-pins (pin mang vai trò của quiz cũ).
  */
 export interface ExamDraft {
   examId: string;

@@ -32,11 +32,7 @@ export interface UseConversationRestoreParams {
   /** Mở conversation (trang nối qua callback dùng-chung). */
   open: (conv: ConversationView) => Promise<void> | void;
   /**
-   * Tab khung trái hiện hành (trang đưa xuống): khi tab đang
-   * là Nhóm thì KHÔNG khôi phục hội thoại đã lưu (issue #608,
-   * điểm A-BS5 — tab Nhóm của bản demo mở vào là trạng thái
-   * chưa chọn; hội thoại đã lưu bền thuộc ngữ cảnh tab Trò
-   * chuyện). Deep-link không chịu cổng này.
+   * Tab khung trái hiện hành (trang đưa xuống): khi tab đang là Nhóm thì KHÔNG khôi phục hội thoại đã lưu (issue #608, điểm A-BS5 — tab Nhóm của bản demo mở vào là trạng thái chưa chọn; hội thoại đã lưu bền thuộc ngữ cảnh tab Trò chuyện). Deep-link không chịu cổng này.
    */
   sidebarTab: string;
 }
@@ -55,14 +51,7 @@ export function useConversationRestore({
   /** Ngữ cảnh gần nhất chỉ khôi phục một lần cho mỗi lần nạp trang (gác bằng ref như deep-link). */
   const contextRestoredRef = useRef(false);
 
-  // Deep-link từ thông báo (việc nối tiếp của #33): thông báo
-  // message_new của #49 trỏ contextUrl = /messages?conversation=<id>.
-  // Danh sách nạp xong thì mở đúng conversation đó — có sẵn trong
-  // danh sách thì mở như cú bấm của người dùng; chưa có (danh sách
-  // nạp thiếu/trễ) thì lấy chi tiết thẳng theo id bằng đúng endpoint
-  // trang vẫn dùng để mở, chèn vào danh sách rồi mở. Server là nơi
-  // thực thi quyền thành viên: không phải thành viên/không tồn tại
-  // thì bỏ qua deep-link, trang giữ nguyên như không có tham số.
+  // Deep-link từ thông báo (việc nối tiếp của #33): thông báo message_new của #49 trỏ contextUrl = /messages?conversation=<id>. Danh sách nạp xong thì mở đúng conversation đó — có sẵn trong danh sách thì mở như cú bấm của người dùng; chưa có (danh sách nạp thiếu/trễ) thì lấy chi tiết thẳng theo id bằng đúng endpoint trang vẫn dùng để mở, chèn vào danh sách rồi mở. Server là nơi thực thi quyền thành viên: không phải thành viên/không tồn tại thì bỏ qua deep-link, trang giữ nguyên như không có tham số.
   useEffect(() => {
     if (!deepLinkId || !listLoaded || deepLinkHandledRef.current) return;
     deepLinkHandledRef.current = true;
@@ -90,23 +79,13 @@ export function useConversationRestore({
         // Không phải thành viên hoặc conversation không tồn tại: bỏ qua deep-link.
       }
     })();
-    // Mảng phụ thuộc liệt kê đủ mọi giá trị hiệu ứng đọc; mốc
-    // chạy một lần do deepLinkHandledRef gác nên các lần chạy
-    // thêm (khi `open`/danh sách đổi danh tính) thoát ngay ở đầu
-    // hiệu ứng, hành vi không đổi.
+    // Mảng phụ thuộc liệt kê đủ mọi giá trị hiệu ứng đọc; mốc chạy một lần do deepLinkHandledRef gác nên các lần chạy thêm (khi `open`/danh sách đổi danh tính) thoát ngay ở đầu hiệu ứng, hành vi không đổi.
   }, [deepLinkId, listLoaded, conversations, open, queryClient, setConversations]);
 
-  // Khôi phục NGỮ CẢNH GẦN NHẤT (lát MSG-T3): không có deep-link
-  // thì mở lại hội thoại đã lưu bền khi danh sách nạp xong — đúng
-  // một lần cho mỗi lần nạp trang (gác bằng ref như deep-link).
-  // Hội thoại không còn mở được (hết tư cách thành viên...) thì bỏ
-  // qua êm, trang giữ trạng thái chưa chọn như không có gì đã lưu.
+  // Khôi phục NGỮ CẢNH GẦN NHẤT (lát MSG-T3): không có deep-link thì mở lại hội thoại đã lưu bền khi danh sách nạp xong — đúng một lần cho mỗi lần nạp trang (gác bằng ref như deep-link). Hội thoại không còn mở được (hết tư cách thành viên...) thì bỏ qua êm, trang giữ trạng thái chưa chọn như không có gì đã lưu.
   useEffect(() => {
     if (deepLinkId || !listLoaded || contextRestoredRef.current) return;
-    // Tab Nhóm không khôi phục hội thoại đã lưu (issue #608,
-    // điểm A-BS5): mở trang ở tab Nhóm là gặp trạng thái chưa
-    // chọn như bản demo — đánh dấu đã xử lý để các lần chạy
-    // sau không mở muộn khi dữ kiện đổi.
+    // Tab Nhóm không khôi phục hội thoại đã lưu (issue #608, điểm A-BS5): mở trang ở tab Nhóm là gặp trạng thái chưa chọn như bản demo — đánh dấu đã xử lý để các lần chạy sau không mở muộn khi dữ kiện đổi.
     if (sidebarTab === 'groups') {
       contextRestoredRef.current = true;
       return;
@@ -129,9 +108,6 @@ export function useConversationRestore({
         // Không còn mở được hội thoại đã lưu: bỏ qua êm.
       }
     })();
-    // Mảng phụ thuộc liệt kê đủ mọi giá trị hiệu ứng đọc; mốc
-    // chạy một lần do contextRestoredRef gác (cùng kỷ luật với
-    // deep-link ở trên) nên các lần chạy thêm thoát ngay ở đầu
-    // hiệu ứng, hành vi không đổi.
+    // Mảng phụ thuộc liệt kê đủ mọi giá trị hiệu ứng đọc; mốc chạy một lần do contextRestoredRef gác (cùng kỷ luật với deep-link ở trên) nên các lần chạy thêm thoát ngay ở đầu hiệu ứng, hành vi không đổi.
   }, [deepLinkId, listLoaded, conversations, open, queryClient, setConversations, sidebarTab]);
 }

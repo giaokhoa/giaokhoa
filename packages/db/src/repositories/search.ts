@@ -1,20 +1,9 @@
 /**
  * Repository của cụm SEARCH trên Kysely.
  *
- * Vai trò: mọi truy cập tới bảng search_documents của kho trung
- * tâm tập trung ở đây (ghi/gỡ tài liệu chỉ mục + engine truy vấn
- * tsvector). Repository không chứa luật nghiệp vụ — phân quyền lúc
- * truy vấn và registry area nằm ở tầng service phía ứng dụng.
+ * Vai trò: mọi truy cập tới bảng search_documents của kho trung tâm tập trung ở đây (ghi/gỡ tài liệu chỉ mục + engine truy vấn tsvector). Repository không chứa luật nghiệp vụ — phân quyền lúc truy vấn và registry area nằm ở tầng service phía ứng dụng.
  *
- * Hai điểm SQL thô giữ NGUYÊN VĂN như bản bộ máy cũ (Recipes "Raw
- * SQL" của Kysely): `queryEngine` (biểu thức tsvector + bí danh
- * camelCase trong nháy kép đặt ngay trong văn bản SQL — bí danh là
- * một phần của văn bản SQL, không phải CamelCasePlugin, nên khoá
- * dòng kết quả giữ nguyên camelCase) và `matchesContent` (một biểu
- * thức boolean duy nhất, ba tham số). Phía Kysely `.execute()` trả
- * `QueryResult` trực tiếp nên các cast `as unknown as { rows }`
- * của bản bộ máy cũ biến mất. Đếm tổng bằng `count(*)::int` trong
- * biểu thức `sql`: ép int4 ngay ở SQL nên giá trị về là số thật.
+ * Hai điểm SQL thô giữ NGUYÊN VĂN như bản bộ máy cũ (Recipes "Raw SQL" của Kysely): `queryEngine` (biểu thức tsvector + bí danh camelCase trong nháy kép đặt ngay trong văn bản SQL — bí danh là một phần của văn bản SQL, không phải CamelCasePlugin, nên khoá dòng kết quả giữ nguyên camelCase) và `matchesContent` (một biểu thức boolean duy nhất, ba tham số). Phía Kysely `.execute()` trả `QueryResult` trực tiếp nên các cast `as unknown as { rows }` của bản bộ máy cũ biến mất. Đếm tổng bằng `count(*)::int` trong biểu thức `sql`: ép int4 ngay ở SQL nên giá trị về là số thật.
  */
 import { sql, type Insertable, type Updateable } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
@@ -87,9 +76,7 @@ export class SearchRepository {
 
   /** Upsert một tài liệu theo (area, itemId). */
   async upsert(v: NewSearchDoc, db: SearchDb = this.handle): Promise<SearchDocRow> {
-    // Nhánh cập nhật khi trùng (area, itemId): ownerId vắng mặt nghĩa
-    // là gỡ chủ sở hữu (gán null tường minh như bản bộ máy cũ), còn
-    // title/content chỉ ghi khi dữ kiện có mang (luật T-4).
+    // Nhánh cập nhật khi trùng (area, itemId): ownerId vắng mặt nghĩa là gỡ chủ sở hữu (gán null tường minh như bản bộ máy cũ), còn title/content chỉ ghi khi dữ kiện có mang (luật T-4).
     const conflictSet: Updateable<CentreDB['search_documents']> = {
       context_id: v.contextId,
       owner_id: v.ownerId ?? null,

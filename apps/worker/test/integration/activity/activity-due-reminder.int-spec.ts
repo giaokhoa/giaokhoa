@@ -12,28 +12,14 @@ import {
 /**
  * Lát N5 (issue #50): nhắc hạn nộp tự động trước 24 giờ.
  *
- * Phía phát (worker): lượt quét activity-due-reminders tìm pin có
- * time_close thuộc (hiện tại, hiện tại + 24h] và phát ĐÚNG MỘT sự
- * kiện outbox `activity_due_reminder` cho từng (học sinh, pin) chưa
- * nộp — học sinh đã có attempt hoàn tất (needsgrading/finished) thì
- * không nhắc, attempt inprogress (chưa nộp) vẫn nhắc; chạy lại không
- * phát trùng (dedupe theo (userId, pinId, timeClose) trên outbox);
- * giáo viên dời hạn thì mốc hạn mới được nhắc lại.
+ * Phía phát (worker): lượt quét activity-due-reminders tìm pin có time_close thuộc (hiện tại, hiện tại + 24h] và phát ĐÚNG MỘT sự kiện outbox `activity_due_reminder` cho từng (học sinh, pin) chưa nộp — học sinh đã có attempt hoàn tất (needsgrading/finished) thì không nhắc, attempt inprogress (chưa nộp) vẫn nhắc; chạy lại không phát trùng (dedupe theo (userId, pinId, timeClose) trên outbox); giáo viên dời hạn thì mốc hạn mới được nhắc lại.
  *
- * NB-1 (issue #174): cùng lượt quét phủ thêm BÀI TẬP theo
- * assignments.due_date — sự kiện mang activityType 'assign' +
- * assignmentId; "chưa nộp" = chưa có bản nộp ở trạng thái submitted
+ * NB-1 (issue #174): cùng lượt quét phủ thêm BÀI TẬP theo assignments.due_date — sự kiện mang activityType 'assign' + assignmentId; "chưa nộp" = chưa có bản nộp ở trạng thái submitted
  * (bản nháp vẫn nhắc); dedupe theo (userId, assignmentId, dueDate).
  *
- * Nửa API (sự kiện → thông báo activity_due_soon) được kiểm chứng ở
- * apps/api/test/notifications-providers-flow.e2e-spec.ts bằng đúng
- * hình dạng sự kiện phát ở đây.
+ * Nửa API (sự kiện → thông báo activity_due_soon) được kiểm chứng ở apps/api/test/notifications-providers-flow.e2e-spec.ts bằng đúng hình dạng sự kiện phát ở đây.
  *
- * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness
- * role thường (`test/ordinary-worker-module.ts`): module chạy bằng
- * role NOSUPERUSER/NOBYPASSRLS như production, fixture và đọc kiểm
- * chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ
- * của spec không đổi.
+ * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness role thường (`test/ordinary-worker-module.ts`): module chạy bằng role NOSUPERUSER/NOBYPASSRLS như production, fixture và đọc kiểm chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ của spec không đổi.
  */
 describe('Nhắc sắp đến hạn hoạt động của worker (N5, issue #50)', () => {
   let context: INestApplicationContext;

@@ -26,22 +26,14 @@ import { describeUserAgent } from '../utils/user-agent';
 import { queryKeys } from '#lib/query-keys';
 
 /**
- * Ba thẻ CÀI ĐẶT tài khoản tự chứa, tách khỏi trang Hồ sơ (issue #288 —
- * quyết định 21:29 ngày 26/10/2026 theo research chuẩn site lớn: Hồ
- * sơ chỉ còn thông tin user, mọi cài đặt nằm ở khu Cài đặt riêng):
+ * Ba thẻ CÀI ĐẶT tài khoản tự chứa, tách khỏi trang Hồ sơ (issue #288 — quyết định 21:29 ngày 26/10/2026 theo research chuẩn site lớn: Hồ sơ chỉ còn thông tin user, mọi cài đặt nằm ở khu Cài đặt riêng):
  *
  * - `LinkedAccountsCard` — tài khoản liên kết OAuth, đặt ở
  *   `/settings/linked-accounts`.
  * - `TwoFactorCard` — xác thực hai lớp TOTP, đặt ở `/settings/security`.
  * - `SessionsCard` — phiên đăng nhập, đặt ở `/settings/security`.
  *
- * Flow chung: mỗi thẻ tự nạp dữ liệu bằng TanStack Query (khoá ở
- * `#lib/query-keys`), tự giữ trạng thái luồng con (setup/tắt 2FA, lỗi
- * thao tác) và tự vô hiệu hoá đúng khoá truy vấn sau mỗi đột biến —
- * trang chứa chỉ cần đặt thẻ vào khung, không truyền props. Lát #288
- * chỉ DI CHUYỂN nguyên trạng các thẻ này từ `pages/profile.tsx` sang
- * đây; nghiệp vụ bên trong (endpoint, mã lỗi được dịch, ràng buộc gỡ
- * liên kết cuối cùng, luật huỷ phiên) không đổi một dòng.
+ * Flow chung: mỗi thẻ tự nạp dữ liệu bằng TanStack Query (khoá ở `#lib/query-keys`), tự giữ trạng thái luồng con (setup/tắt 2FA, lỗi thao tác) và tự vô hiệu hoá đúng khoá truy vấn sau mỗi đột biến — trang chứa chỉ cần đặt thẻ vào khung, không truyền props. Lát #288 chỉ DI CHUYỂN nguyên trạng các thẻ này từ `pages/profile.tsx` sang đây; nghiệp vụ bên trong (endpoint, mã lỗi được dịch, ràng buộc gỡ liên kết cuối cùng, luật huỷ phiên) không đổi một dòng.
  */
 
 /** Nhãn hiển thị của issuer lấy từ catalog i18n theo khoá riêng từng nhà cung cấp. */
@@ -50,14 +42,7 @@ function issuerLabel(t: (key: string) => string, issuer: OAuthIssuer): string {
 }
 
 /**
- * Thẻ "Tài khoản liên kết" (trang Linked logins của Moodle): liệt kê
- * các liên kết đăng nhập ngoài của chính người dùng, cho gỡ từng liên
- * kết và cho liên kết thêm issuer đang bật mà chưa có liên kết (đi qua
- * endpoint link của backend rồi chuyển hướng toàn trang tới nhà cung
- * cấp). Ràng buộc nghiệp vụ phía API — tài khoản không mật khẩu không
- * được gỡ liên kết cuối cùng — trả về mã `auth.last_login_method` và
- * được dịch sang thông báo i18n riêng thay vì hiện chi tiết kỹ thuật;
- * khi `hasPassword=false` thẻ cũng hiện sẵn gợi ý đặt mật khẩu trước.
+ * Thẻ "Tài khoản liên kết" (trang Linked logins của Moodle): liệt kê các liên kết đăng nhập ngoài của chính người dùng, cho gỡ từng liên kết và cho liên kết thêm issuer đang bật mà chưa có liên kết (đi qua endpoint link của backend rồi chuyển hướng toàn trang tới nhà cung cấp). Ràng buộc nghiệp vụ phía API — tài khoản không mật khẩu không được gỡ liên kết cuối cùng — trả về mã `auth.last_login_method` và được dịch sang thông báo i18n riêng thay vì hiện chi tiết kỹ thuật; khi `hasPassword=false` thẻ cũng hiện sẵn gợi ý đặt mật khẩu trước.
  */
 export function LinkedAccountsCard() {
   const { t, i18n } = useTranslation('app');
@@ -164,17 +149,17 @@ export function LinkedAccountsCard() {
 /**
  * Thẻ "Xác thực hai lớp" (factor TOTP của tool_mfa trong Moodle): MFA
  * mặc định TẮT và chỉ bật khi chính người dùng đi hết luồng tại đây —
- * gọi setup lấy secret + otpauth URL (chỉ lộ ở bước này), vẽ QR cho
- * ứng dụng xác thực quét (hoặc nhập tay khoá bí mật), rồi confirm bằng
- * mã 6 số hiện tại. Trạng thái hiển thị đọc từ GET /auth/mfa/status
- * nên setup chưa confirm vẫn hiện là chưa bật. Tắt cũng phải có mã
- * hiện tại; mã sai trả `auth.mfa_invalid_code` và được dịch sang
- * thông báo riêng, giữ nguyên bước để người dùng nhập lại.
+ * gọi setup lấy secret + otpauth URL rồi confirm bằng mã 6 số mới.
+ * Nếu thay thiết bị đang bật, UI yêu cầu mã TOTP CŨ trước khi setup;
+ * server giữ factor cũ hoạt động tới khi xác nhận mã trên thiết bị mới.
+ * Trạng thái hiển thị đọc từ GET /auth/mfa/status. Tắt cũng phải có
+ * mã hiện tại; mã sai trả `auth.mfa_invalid_code` và hiển thị lỗi rõ ràng.
  */
 export function TwoFactorCard() {
   const { t } = useTranslation('app');
   const queryClient = useQueryClient();
-  const [step, setStep] = useState<'idle' | 'setup' | 'disable'>('idle');
+  const [step, setStep] = useState<'idle' | 'setup' | 'disable' | 'replace'>('idle');
+  const [isReplacing, setIsReplacing] = useState(false);
   const [setupData, setSetupData] = useState<MfaTotpSetupResponse | null>(null);
   const [code, setCode] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -190,6 +175,7 @@ export function TwoFactorCard() {
   /** Kết thúc một luồng con (bật hoặc tắt): dọn mã đã nhập và nạp lại trạng thái thật từ API. */
   function finishFlow(successMessage: string) {
     setStep('idle');
+    setIsReplacing(false);
     setSetupData(null);
     setCode('');
     setActionError(null);
@@ -207,9 +193,13 @@ export function TwoFactorCard() {
   }
 
   const setupMutation = useMutation({
-    mutationFn: async () =>
-      mfaTotpSetupResponseSchema.parse(await apiJson('/api/v1/auth/mfa/totp/setup', { method: 'POST' })),
-    onSuccess: (data) => {
+    mutationFn: async (currentCode?: string) =>
+      mfaTotpSetupResponseSchema.parse(await apiJson('/api/v1/auth/mfa/totp/setup', {
+        method: 'POST',
+        ...(currentCode ? { body: JSON.stringify({ currentCode }) } : {}),
+      })),
+    onSuccess: (data, currentCode) => {
+      setIsReplacing(Boolean(currentCode));
       setSetupData(data);
       setStep('setup');
       setCode('');
@@ -217,12 +207,12 @@ export function TwoFactorCard() {
       setActionError(null);
       setFeedback(null);
     },
-    onError: () => setActionError(t('twoFactorSetupFailed')),
+    onError: showActionError,
   });
   const confirmMutation = useMutation({
     mutationFn: (value: string) =>
       apiJson('/api/v1/auth/mfa/totp/confirm', { method: 'POST', body: JSON.stringify({ code: value }) }),
-    onSuccess: () => finishFlow(t('twoFactorEnabledSuccess')),
+    onSuccess: () => finishFlow(t(isReplacing ? 'twoFactorReplacedSuccess' : 'twoFactorEnabledSuccess')),
     onError: showActionError,
   });
   const disableMutation = useMutation({
@@ -276,23 +266,59 @@ export function TwoFactorCard() {
         {step === 'idle' &&
           statusQuery.data &&
           (enabled ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setStep('disable');
-                setCode('');
-                setActionError(null);
-                setFeedback(null);
-              }}
-            >
-              {t('disableTwoFactor')}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setStep('replace');
+                  setCode('');
+                  setActionError(null);
+                  setFeedback(null);
+                }}
+              >
+                {t('replaceTwoFactor')}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setStep('disable');
+                  setCode('');
+                  setActionError(null);
+                  setFeedback(null);
+                }}
+              >
+                {t('disableTwoFactor')}
+              </Button>
+            </div>
           ) : (
-            <Button type="button" disabled={setupMutation.isPending} onClick={() => setupMutation.mutate()}>
+            <Button type="button" disabled={setupMutation.isPending} onClick={() => setupMutation.mutate(undefined)}>
               {t('enableTwoFactor')}
             </Button>
           ))}
+        {step === 'replace' && (
+          <div className="space-y-3">
+            <p className="text-sm">{t('replaceTwoFactorInstruction')}</p>
+            <Label htmlFor="mfa-replace-current-code">{t('twoFactorCodeLabel')}</Label>
+            <Input
+              id="mfa-replace-current-code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <Button type="button" disabled={code.length !== 6 || setupMutation.isPending} onClick={() => setupMutation.mutate(code)}>
+                {t('replaceTwoFactorNext')}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => { setStep('idle'); setCode(''); setActionError(null); }}>
+                {t('cancelTwoFactorSetup')}
+              </Button>
+            </div>
+          </div>
+        )}
         {step === 'setup' && setupData && (
           <div className="space-y-4">
             <p className="text-sm">{t('twoFactorSetupInstruction')}</p>
@@ -392,7 +418,7 @@ export function TwoFactorCard() {
 /**
  * Thẻ "Phiên đăng nhập" (trang quản lý phiên của chính người dùng,
  * report_usersessions của Moodle): bảng mọi phiên đang hoạt động —
- * phiên web (cookie) và phiên API (họ refresh token) — kèm IP và
+ * phiên Better Auth cookie, Redis web và JWT API — kèm IP và
  * thiết bị; phiên hiện tại mang huy hiệu riêng và không có nút huỷ
  * (huỷ chính mình thì dùng đăng xuất), các phiên khác huỷ được từng
  * phiên hoặc huỷ tất cả trong một thao tác. Sau mỗi đột biến, danh

@@ -1,43 +1,19 @@
 /**
  * Repository CẤU HÌNH SITE trên Kysely.
  *
- * Vai trò: mọi truy cập tới ba bảng của tầng hạ tầng — `config`
- * cho setting của core (giá trị jsonb), `plugin_config` cho
- * setting theo component/plugin (giá trị text chứa JSON) và
- * `admin_setting_audit` ghi vết mọi thay đổi do quản trị thực
- * hiện — tập trung ở đây. Repository không chứa luật nghiệp vụ —
- * hợp đồng setting, giá trị mặc định trong code và cổng quyền nằm
- * ở tầng service phía ứng dụng.
+ * Vai trò: mọi truy cập tới ba bảng của tầng hạ tầng — `config` cho setting của core (giá trị jsonb), `plugin_config` cho setting theo component/plugin (giá trị text chứa JSON) và `admin_setting_audit` ghi vết mọi thay đổi do quản trị thực hiện — tập trung ở đây. Repository không chứa luật nghiệp vụ — hợp đồng setting, giá trị mặc định trong code và cổng quyền nằm ở tầng service phía ứng dụng.
  *
- * Điểm nóng của nhóm: upsert setting plugin ở tầng platform. Dòng
- * platform của `plugin_config` mang `tenant_id` NULL và tính duy
- * nhất của nó được bảo đảm bằng CHỈ SỐ DUY NHẤT RIÊNG PHẦN
- * `plugin_config_platform_plugin_name_unique` trên `(plugin, name)
+ * Điểm nóng của nhóm: upsert setting plugin ở tầng platform. Dòng platform của `plugin_config` mang `tenant_id` NULL và tính duy nhất của nó được bảo đảm bằng CHỈ SỐ DUY NHẤT RIÊNG PHẦN `plugin_config_platform_plugin_name_unique` trên `(plugin, name)
  * WHERE tenant_id is null` — vì vậy mệnh đề xung đột của upsert
- * PHẢI mang vị từ của chỉ số đó để PostgreSQL suy ra đúng chỉ số
- * đích (đường cũ trước đây khai bằng `targetWhere`). Phía
- * Kysely, vị từ này là `.where(...)` gọi trên builder xung đột
- * TRƯỚC `doUpdateSet` (nó biên dịch thành `indexWhere` của nút
- * ON CONFLICT, đặt ngay sau đích xung đột) — khác hẳn `.where`
- * gọi SAU `doUpdateSet`, vốn là điều kiện của chính nhánh cập
- * nhật. Tương đương này được kiểm chứng ở mã nguồn kysely 0.29.7
+ * PHẢI mang vị từ của chỉ số đó để PostgreSQL suy ra đúng chỉ số đích (đường cũ trước đây khai bằng `targetWhere`). Phía Kysely, vị từ này là `.where(...)` gọi trên builder xung đột TRƯỚC `doUpdateSet` (nó biên dịch thành `indexWhere` của nút ON CONFLICT, đặt ngay sau đích xung đột) — khác hẳn `.where` gọi SAU `doUpdateSet`, vốn là điều kiện của chính nhánh cập nhật. Tương đương này được kiểm chứng ở mã nguồn kysely 0.29.7
  * (`OnConflictBuilder` thực thi `WhereInterface`, nút xung đột
- * mang hai trường `indexWhere`/`updateWhere` riêng) và được chốt
- * bằng spec tương đương ở `user-centre-cluster.int-spec.ts`: cập nhật
- * đúng khi điều kiện đích khớp, không cập nhật dòng tenant khi
- * ghi đè ở tầng platform.
+ * mang hai trường `indexWhere`/`updateWhere` riêng) và được chốt bằng spec tương đương ở `user-centre-cluster.int-spec.ts`: cập nhật đúng khi điều kiện đích khớp, không cập nhật dòng tenant khi ghi đè ở tầng platform.
  *
  * Khuôn hình dạng dữ liệu — cùng khuôn pilot kho control plane
  * (xem `control-plane.ts` và playbook trong `AGENTS.md` của
  * package): truy vấn viết trên interface schema sinh bằng codegen
  * (tên bảng/cột snake_case), cột được chọn bằng danh sách tường
- * minh có bí danh camelCase, giá trị jsonb ghi qua helper
- * serialize + ép kiểu `::jsonb` (mẫu `jsonbValue` của pilot; giá
- * trị `null` giữ nguyên là SQL NULL như đường bộ máy cũ), điều
- * kiện động của `listAudit` dựng bằng `.where` xâu chuỗi trên
- * builder giữ lại (mẫu an toàn của thử nghiệm T-13 — không bao
- * giờ truyền `where(undefined)`). Repository không import từ
- * `apps/*`, không đọc ALS/ngữ cảnh ứng dụng, không tự mở pool.
+ * minh có bí danh camelCase, giá trị jsonb ghi qua helper serialize + ép kiểu `::jsonb` (mẫu `jsonbValue` của pilot; giá trị `null` giữ nguyên là SQL NULL như đường bộ máy cũ), điều kiện động của `listAudit` dựng bằng `.where` xâu chuỗi trên builder giữ lại (mẫu an toàn của thử nghiệm T-13 — không bao giờ truyền `where(undefined)`). Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng dụng, không tự mở pool.
  */
 import { sql, type RawBuilder } from 'kysely';
 import type { CentreDb } from '../client';
@@ -56,13 +32,9 @@ export interface AuditRow {
 }
 
 /**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh —
- * cùng mẫu `jsonbValue` của pilot kho control plane: serialize
- * tường minh + ép kiểu `::jsonb` cho MỌI giá trị jsonb khi ghi
+ * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh — cùng mẫu `jsonbValue` của pilot kho control plane: serialize tường minh + ép kiểu `::jsonb` cho MỌI giá trị jsonb khi ghi
  * (object lẫn mảng) để một khuôn duy nhất, không phụ thuộc nhánh
- * xử lý riêng của driver theo hình dạng giá trị. Kiểu trả về gắn
- * theo kiểu `Json` của cột đích để builder chấp nhận biểu thức ở
- * vị trí giá trị của cột jsonb.
+ * xử lý riêng của driver theo hình dạng giá trị. Kiểu trả về gắn theo kiểu `Json` của cột đích để builder chấp nhận biểu thức ở vị trí giá trị của cột jsonb.
  */
 function jsonbValue(value: unknown): RawBuilder<Json> {
   return sql<Json>`${JSON.stringify(value as Json)}::jsonb`;

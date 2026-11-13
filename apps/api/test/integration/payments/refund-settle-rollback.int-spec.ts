@@ -15,23 +15,11 @@ const TEST_DB_URL = process.env.GIAOKHOA_TEST_DATABASE_URL ?? 'postgres://postgr
 /**
  * Hồi quy nguyên tử cho khâu SETTLE HOÀN TIỀN (issue #490, DL-10).
  *
- * Bất biến nghiệp vụ: khi cộng dồn hoàn đạt 100%, việc ĐÌNH CHỈ
- * quyền lợi (ghi danh học phí khoá / tư cách roster của lớp / quyền
- * lợi gói) và việc GHI SỔ hoàn (`settled` + khoản thu `refunded`)
- * nằm trên CÙNG một biên nguyên tử. Trước bản sửa, khâu đình chỉ tự
- * commit bằng transaction riêng ngay giữa transaction settle: settle
- * rollback vì lỗi ghi sổ thì đình chỉ đã ghi không quay lại được —
- * học viên mất quyền lợi dù khoản hoàn chưa hề được ghi nhận.
+ * Bất biến nghiệp vụ: khi cộng dồn hoàn đạt 100%, việc ĐÌNH CHỈ quyền lợi (ghi danh học phí khoá / tư cách roster của lớp / quyền lợi gói) và việc GHI SỔ hoàn (`settled` + khoản thu `refunded`) nằm trên CÙNG một biên nguyên tử. Trước bản sửa, khâu đình chỉ tự commit bằng transaction riêng ngay giữa transaction settle: settle rollback vì lỗi ghi sổ thì đình chỉ đã ghi không quay lại được — học viên mất quyền lợi dù khoản hoàn chưa hề được ghi nhận.
  *
- * Cách gây lỗi: spy `PaymentsRepository.updateRefund` ném lỗi — đây
- * là bước ghi sổ NGAY SAU điểm đình chỉ trong khâu settle, nên nó
- * phân biệt rõ hai thế giới cho cả ba component có quyền lợi
+ * Cách gây lỗi: spy `PaymentsRepository.updateRefund` ném lỗi — đây là bước ghi sổ NGAY SAU điểm đình chỉ trong khâu settle, nên nó phân biệt rõ hai thế giới cho cả ba component có quyền lợi
  * (enrol_fee, class_fee, tenant_plan): đình chỉ tự commit thì trạng
- * thái đình chỉ còn nguyên sau rollback (spec ĐỎ); đình chỉ cùng
- * transaction thì quyền lợi nguyên vẹn (spec XANH). Nửa sau mỗi ca
- * settle lại không spy để khẳng định trạng thái cuối khi thành công
- * không đổi: quyền lợi bị đình chỉ, dòng hoàn `settled`, khoản thu
- * `refunded`.
+ * thái đình chỉ còn nguyên sau rollback (spec ĐỎ); đình chỉ cùng transaction thì quyền lợi nguyên vẹn (spec XANH). Nửa sau mỗi ca settle lại không spy để khẳng định trạng thái cuối khi thành công không đổi: quyền lợi bị đình chỉ, dòng hoàn `settled`, khoản thu `refunded`.
  */
 describe('Settle hoàn tiền — rollback settle thì quyền lợi không bị đình chỉ (issue #490)', () => {
   let app: INestApplication;
@@ -92,13 +80,8 @@ describe('Settle hoàn tiền — rollback settle thì quyền lợi không bị
   });
 
   it('enrol_fee: settle rollback thì ghi danh vẫn đang hoạt động, gọi lại thành công thì ghi danh bị đình chỉ', async () => {
-    // Dựng trạng thái SAU thanh toán học phí thành công: khoản thu
-    // enrol_fee đã `succeeded` (ghi thẳng như các fixture thanh toán
-    // khác của suite) và ghi danh của buyer đã được kích hoạt qua
-    // đúng móc hậu-thanh-toán `EnrolService.activatePaidEnrol` mà
-    // webhook gọi tới. Khuôn ca hoàn enrol_fee của suite thanh toán:
-    // khoá do admin dựng, người mua là người dùng thường — khâu
-    // settle TAY đình chỉ ghi danh với danh tính người xác nhận chi
+    // Dựng trạng thái SAU thanh toán học phí thành công: khoản thu enrol_fee đã `succeeded` (ghi thẳng như các fixture thanh toán khác của suite) và ghi danh của buyer đã được kích hoạt qua đúng móc hậu-thanh-toán `EnrolService.activatePaidEnrol` mà webhook gọi tới. Khuôn ca hoàn enrol_fee của suite thanh toán:
+    // khoá do admin dựng, người mua là người dùng thường — khâu settle TAY đình chỉ ghi danh với danh tính người xác nhận chi
     // (admin) nên cổng `enrol:manage` của EnrolService thoả.
     const account = await http(app).post('/api/v1/payments/accounts').set('Authorization', `Bearer ${admin}`)
       .send({ name: uniqueName('manual'), gateway: 'manual' });

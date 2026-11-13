@@ -2,26 +2,18 @@ import { Pool, type PoolClient, type PoolConfig } from 'pg';
 import { tenantAls } from './tenant-als';
 
 /**
- * Pool PostgreSQL gắn ngữ cảnh tenant vào mọi kết nối (TENANT-1, #196)
- * — bản sao của `apps/api/src/db/tenant-pool.ts` theo tiền lệ repo
+ * Pool PostgreSQL gắn ngữ cảnh tenant vào mọi kết nối (TENANT-1, #196) — bản sao của `apps/api/src/db/tenant-pool.ts` theo tiền lệ repo
  * (mỗi app giữ bản sao hạ tầng riêng).
  *
- * RLS fail-closed đòi hỏi MỌI truy vấn trên các bảng mang `tenant_id`
- * phải chạy với GUC đã đặt; đặt GUC ở tầng pool — một điểm duy nhất:
- * khi một kết nối được checkout trong lúc ALS `tenantAls` mang ngữ
- * cảnh (scheduler/processor tự bọc), câu truy vấn đầu tiên trên kết
- * nối đó được chèn trước một `set_config` mức phiên:
+ * RLS fail-closed đòi hỏi MỌI truy vấn trên các bảng mang `tenant_id` phải chạy với GUC đã đặt; đặt GUC ở tầng pool — một điểm duy nhất:
+ * khi một kết nối được checkout trong lúc ALS `tenantAls` mang ngữ cảnh (scheduler/processor tự bọc), câu truy vấn đầu tiên trên kết nối đó được chèn trước một `set_config` mức phiên:
  *
  *   - ngữ cảnh tenant: `app.tenant_id = <tenant>`, `app.platform='off'`
  *   - ngữ cảnh platform tường minh: `app.platform = 'on'`
  *   - ngoài ngữ cảnh: `app.tenant_id = ''`, `app.platform = 'off'`
  *     (fail-closed: chỉ thấy dòng platform ở các bảng cho phép)
  *
- * GUC mức phiên (tham số thứ ba = false) vì một checkout không đồng
- * nghĩa một transaction. Client trả về pool rồi được checkout lại chỉ
- * CẬP NHẬT state gắn GUC (không bọc chồng hàm query) và gắn lại trước
- * câu truy vấn đầu tiên, nên GUC của ngữ cảnh trước không bao giờ rò
- * sang ngữ cảnh sau.
+ * GUC mức phiên (tham số thứ ba = false) vì một checkout không đồng nghĩa một transaction. Client trả về pool rồi được checkout lại chỉ CẬP NHẬT state gắn GUC (không bọc chồng hàm query) và gắn lại trước câu truy vấn đầu tiên, nên GUC của ngữ cảnh trước không bao giờ rò sang ngữ cảnh sau.
  */
 interface TenantTagState {
   tagged: boolean;
@@ -45,8 +37,7 @@ export class TenantAwarePool extends Pool {
     const holder = client as PoolClient & { [TAG_STATE]?: TenantTagState };
     const existing = holder[TAG_STATE];
     if (existing) {
-      // Client tái sử dụng từ pool: cập nhật đích GUC + buộc gắn lại ở
-      // câu truy vấn đầu tiên của lượt checkout này.
+      // Client tái sử dụng từ pool: cập nhật đích GUC + buộc gắn lại ở câu truy vấn đầu tiên của lượt checkout này.
       existing.tenantId = tenantId;
       existing.platform = platform;
       existing.tagged = false;
@@ -80,8 +71,7 @@ export class TenantAwarePool extends Pool {
     callback?: (err: Error, client: PoolClient, done: (release?: unknown) => void) => void,
   ): Promise<PoolClient> | void {
     if (callback) {
-      // Dạng callback (pg dùng nội bộ cho pool.query): giữ nguyên hợp
-      // đồng — client trao tay đã sẵn sàng gắn GUC ở câu query đầu.
+      // Dạng callback (pg dùng nội bộ cho pool.query): giữ nguyên hợp đồng — client trao tay đã sẵn sàng gắn GUC ở câu query đầu.
       super.connect((err, client, done) => {
         if (err || !client)
           return callback(

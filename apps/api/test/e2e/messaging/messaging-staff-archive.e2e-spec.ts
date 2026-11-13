@@ -6,23 +6,11 @@ import {
 import { createCategory, createCourse, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
 
 /**
- * Người có phạm vi quản trị trên khoá (giáo viên của khoá, ĐÃ có
- * dòng thành viên trong hội thoại khoá) lưu trữ hội thoại khoá
- * thì hội thoại phải rời danh sách chính của chính họ và chỉ còn
- * ở tập đã lưu (vòng sửa issue #623).
+ * Người có phạm vi quản trị trên khoá (giáo viên của khoá, ĐÃ có dòng thành viên trong hội thoại khoá) lưu trữ hội thoại khoá thì hội thoại phải rời danh sách chính của chính họ và chỉ còn ở tập đã lưu (vòng sửa issue #623).
  *
- * Gốc rễ của khuyết tật đã sửa: truy vấn summaries mặc định lọc
- * đúng dòng đã lưu trữ ra, nhưng khối "hàng tổng hợp cho quản trị
- * có phạm vi" ở tầng service lại nối hội thoại trở lại danh sách
- * chính với trạng thái cá nhân rỗng vì chỉ đối chiếu tập id của
- * summaries. Ca này dàn dựng đúng hình thái đã tái hiện trên bản
- * xem trước: giáo viên (staff của khoá, thành viên thật của hội
- * thoại) đặt cờ lưu trữ qua API rồi đọc lại cả hai tập.
+ * Gốc rễ của khuyết tật đã sửa: truy vấn summaries mặc định lọc đúng dòng đã lưu trữ ra, nhưng khối "hàng tổng hợp cho quản trị có phạm vi" ở tầng service lại nối hội thoại trở lại danh sách chính với trạng thái cá nhân rỗng vì chỉ đối chiếu tập id của summaries. Ca này dàn dựng đúng hình thái đã tái hiện trên bản xem trước: giáo viên (staff của khoá, thành viên thật của hội thoại) đặt cờ lưu trữ qua API rồi đọc lại cả hai tập.
  *
- * Kèm theo: chi tiết hội thoại phải mang trạng thái lưu trữ cá
- * nhân của chính người xem — căn cứ để menu đầu khung của hội
- * thoại đã mở hiện đúng "Bỏ lưu trữ" và thao tác bỏ lưu có hiệu
- * lực ngay, kể cả khi mở hội thoại từ tab Lưu trữ.
+ * Kèm theo: chi tiết hội thoại phải mang trạng thái lưu trữ cá nhân của chính người xem — căn cứ để menu đầu khung của hội thoại đã mở hiện đúng "Bỏ lưu trữ" và thao tác bỏ lưu có hiệu lực ngay, kể cả khi mở hội thoại từ tab Lưu trữ.
  */
 interface Person { id: string; username: string; token: string }
 interface ListRow { id: string; archivedAt: string | null }

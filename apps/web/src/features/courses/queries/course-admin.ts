@@ -41,21 +41,9 @@ import { queryKeys } from './keys';
 
 /**
  * Tầng dữ liệu của trang quản trị khoá học (F-01 của rà soát #133):
- * nhóm, grouping, cohort, instance ghi danh, ghi danh, tiến độ hoàn
- * thành, chi tiết khoá (chế độ nhóm) và hội thoại chat toàn lớp.
+ * nhóm, grouping, cohort, instance ghi danh, ghi danh, tiến độ hoàn thành, chi tiết khoá (chế độ nhóm) và hội thoại chat toàn lớp.
  *
- * Quy ước giữ nguyên từ bản thủ công: các danh sách nền của trang tải
- * lỗi thì coi như rỗng (hàm truy vấn tự nuốt lỗi về giá trị dự phòng)
- * để một mảng hỏng không sập cả trang; các danh sách lười tải theo
- * dòng mở rộng (thành viên nhóm/cohort, nhóm của grouping) thì lỗi
- * nổi lên truy vấn để trang báo đúng thông điệp của mảng đó. Đột biến
- * làm mới đúng cụm khoá bị ảnh hưởng; riêng thêm/gỡ thành viên, bản
- * thủ công tải lại danh sách sau ghi (tải lại lỗi thì sửa tại chỗ) —
- * ở khuôn Query, làm mới khoá sẽ tải lại và khi tải lại lỗi thì dữ
- * liệu cũ được giữ nguyên trong bộ nhớ đệm.
- * Lời gọi API thuần nằm ở tầng `api/` của feature; khoá riêng của
- * courses nằm ở `keys.ts` cùng tầng này, riêng khoá chi tiết khoá và
- * hội thoại dùng chung nên ở lại factory tập trung.
+ * Quy ước giữ nguyên từ bản thủ công: các danh sách nền của trang tải lỗi thì coi như rỗng (hàm truy vấn tự nuốt lỗi về giá trị dự phòng) để một mảng hỏng không sập cả trang; các danh sách lười tải theo dòng mở rộng (thành viên nhóm/cohort, nhóm của grouping) thì lỗi nổi lên truy vấn để trang báo đúng thông điệp của mảng đó. Đột biến làm mới đúng cụm khoá bị ảnh hưởng; riêng thêm/gỡ thành viên, bản thủ công tải lại danh sách sau ghi (tải lại lỗi thì sửa tại chỗ) — ở khuôn Query, làm mới khoá sẽ tải lại và khi tải lại lỗi thì dữ liệu cũ được giữ nguyên trong bộ nhớ đệm. Lời gọi API thuần nằm ở tầng `api/` của feature; khoá riêng của courses nằm ở `keys.ts` cùng tầng này, riêng khoá chi tiết khoá và hội thoại dùng chung nên ở lại factory tập trung.
  */
 
 // --- Truy vấn nền của trang ---------------------------------------------------
@@ -371,9 +359,7 @@ export function useToggleEnrolSuspend(courseId: string) {
 }
 
 /**
- * Nạp trước cho route quản trị khoá: tám nguồn nền của trang (cùng
- * các tuỳ chọn truy vấn trang dùng) để điều hướng tới trang không
- * phải chờ waterfalls phía client.
+ * Nạp trước cho route quản trị khoá: tám nguồn nền của trang (cùng các tuỳ chọn truy vấn trang dùng) để điều hướng tới trang không phải chờ waterfalls phía client.
  */
 export async function courseAdminPageClientLoader(courseId: string) {
   await Promise.allSettled([

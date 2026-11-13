@@ -19,92 +19,33 @@ import {
 } from '../../support/identity-access-helpers';
 
 /**
- * Ca đầu-cuối của TIỀN ĐIỀU KIỆN TĐ6 (issue #587): trung tâm CẤP
- * PHÁT MỚI chỉ có dòng tenant trong kho của chính nó — pipeline
- * cấp phát không ghi dòng thư mục nào vào kho chung — nên mọi
- * đường quản trị theo `:tenantId` phải phân giải được đích kho
- * từ ngữ cảnh không gian của request (địa chỉ riêng của trung
- * tâm) thay vì chỉ tra dòng thư mục ở kho chung.
+ * Ca đầu-cuối của TIỀN ĐIỀU KIỆN TĐ6 (issue #587): trung tâm CẤP PHÁT MỚI chỉ có dòng tenant trong kho của chính nó — pipeline cấp phát không ghi dòng thư mục nào vào kho chung — nên mọi đường quản trị theo `:tenantId` phải phân giải được đích kho từ ngữ cảnh không gian của request (địa chỉ riêng của trung tâm) thay vì chỉ tra dòng thư mục ở kho chung.
  *
- * Trạng thái trước TĐ6 (bằng chứng sống của thí điểm nhantin
- * ngày 01/11/2026): quản trị trung tâm đăng nhập thành công tại
- * địa chỉ của trung tâm, nhưng lời gọi tạo người dùng đầu tiên
- * `POST /api/v1/tenants/<tenantId>/users` trả 404
- * `tenant.not_found` vì bước kiểm tra tenant đọc ở kho chung;
- * ba lượt đọc quản trị (chi tiết tenant, danh sách thành viên,
- * danh sách người dùng) cùng vấp một gốc ở bước suy slug từ
- * dòng thư mục kho chung.
+ * Trạng thái trước TĐ6 (bằng chứng sống của thí điểm nhantin ngày 01/11/2026): quản trị trung tâm đăng nhập thành công tại địa chỉ của trung tâm, nhưng lời gọi tạo người dùng đầu tiên `POST /api/v1/tenants/<tenantId>/users` trả 404 `tenant.not_found` vì bước kiểm tra tenant đọc ở kho chung; ba lượt đọc quản trị (chi tiết tenant, danh sách thành viên, danh sách người dùng) cùng vấp một gốc ở bước suy slug từ dòng thư mục kho chung.
  *
- * Sửa xong gốc 404, ca (a) vẫn đỏ ở cổng quyền — 403
- * `access.capability_denied` — vì một khuyết tật liên đới thứ
- * hai: cache của cấu hình `siteadmins` trong PermissionEvaluator
- * chốt khoá theo `DATABASE_URL` của tiến trình, mù kho, nên
- * danh sách site admin của kho nào được đọc trước sẽ thắng cả
- * TTL cho mọi ngữ cảnh; quản trị của trung tâm kho riêng (là
- * site admin của chính kho của mình theo pipeline cấp phát)
- * không bao giờ được nhận diện khi cache đã chứa danh sách của
- * kho chung. TĐ6 sửa cả hai trong cùng một luồng: khoá cache
- * mang danh tính của kho mà ngữ cảnh hiện tại đang đọc (kho
- * chung là tên database chính của tiến trình; kho riêng là
- * tên database trong sổ đăng ký mà tầng phân giải kho đã chốt
- * cho ngữ cảnh).
+ * Sửa xong gốc 404, ca (a) vẫn đỏ ở cổng quyền — 403 `access.capability_denied` — vì một khuyết tật liên đới thứ hai: cache của cấu hình `siteadmins` trong PermissionEvaluator chốt khoá theo `DATABASE_URL` của tiến trình, mù kho, nên danh sách site admin của kho nào được đọc trước sẽ thắng cả TTL cho mọi ngữ cảnh; quản trị của trung tâm kho riêng (là site admin của chính kho của mình theo pipeline cấp phát) không bao giờ được nhận diện khi cache đã chứa danh sách của kho chung. TĐ6 sửa cả hai trong cùng một luồng: khoá cache mang danh tính của kho mà ngữ cảnh hiện tại đang đọc (kho chung là tên database chính của tiến trình; kho riêng là tên database trong sổ đăng ký mà tầng phân giải kho đã chốt cho ngữ cảnh).
  *
- * Cô lập của chính bài test: mọi kho bài test dựng (kho riêng
- * của trung tâm và kho control plane) mang tên duy nhất theo
- * lượt chạy, nên khoá cache suy từ tên kho cũng duy nhất theo
- * lượt — lượt chạy lại trên cùng một Redis giữ nguyên không
- * bao giờ đọc trúng danh sách quản trị của lượt trước (danh
- * sách đó mang id quản trị của một thế hệ dữ kiện đã bị xoá–
- * tạo lại cùng tên kho), và không lượt chạy nào phải xoá khoá
- * cache bằng tay để xanh. Nhờ đó kết quả xanh của bài test
- * này phân biệt được "code đã đúng" với "cache đã được dọn
- * tay" — đúng bản chất bằng chứng hồi quy của khuyết tật
- * cache ở trên.
+ * Cô lập của chính bài test: mọi kho bài test dựng (kho riêng của trung tâm và kho control plane) mang tên duy nhất theo lượt chạy, nên khoá cache suy từ tên kho cũng duy nhất theo lượt — lượt chạy lại trên cùng một Redis giữ nguyên không bao giờ đọc trúng danh sách quản trị của lượt trước (danh sách đó mang id quản trị của một thế hệ dữ kiện đã bị xoá– tạo lại cùng tên kho), và không lượt chạy nào phải xoá khoá cache bằng tay để xanh. Nhờ đó kết quả xanh của bài test này phân biệt được "code đã đúng" với "cache đã được dọn tay" — đúng bản chất bằng chứng hồi quy của khuyết tật cache ở trên.
  *
- * Bối cảnh dựng đúng trạng thái sau cấp phát: database riêng +
- * role riêng trên cụm test, baseline áp bằng role chủ kho, sổ
- * đăng ký ở database control plane riêng; dữ kiện nền ghi
- * THẲNG vào kho riêng theo đúng các bước của pipeline cấp phát
+ * Bối cảnh dựng đúng trạng thái sau cấp phát: database riêng + role riêng trên cụm test, baseline áp bằng role chủ kho, sổ đăng ký ở database control plane riêng; dữ kiện nền ghi THẲNG vào kho riêng theo đúng các bước của pipeline cấp phát
  * (context hệ thống, dòng tenant sinh id tại kho đích, context
- * tenant, tài khoản quản trị đầu tiên + membership, cấu hình
- * `siteadmins` của chính kho đó) — kho chung KHÔNG có dòng
- * tenant của trung tâm này ở bất kỳ thời điểm nào.
+ * tenant, tài khoản quản trị đầu tiên + membership, cấu hình `siteadmins` của chính kho đó) — kho chung KHÔNG có dòng tenant của trung tâm này ở bất kỳ thời điểm nào.
  *
  * Các ca khoá:
  * (a) quản trị của trung tâm chỉ-có-ở-kho-riêng tạo được người
- *     dùng qua endpoint thật tại địa chỉ của trung tâm (201),
- *     người dùng nằm trong kho đích (không ở kho chung), ba
- *     lượt đọc quản trị tại địa chỉ của trung tâm thấy đúng dữ
- *     kiện ở kho đích, và mục thư mục thành viên ở control
- *     plane được ghi trong cùng thao tác như trước;
+ *     dùng qua endpoint thật tại địa chỉ của trung tâm (201), người dùng nằm trong kho đích (không ở kho chung), ba lượt đọc quản trị tại địa chỉ của trung tâm thấy đúng dữ kiện ở kho đích, và mục thư mục thành viên ở control plane được ghi trong cùng thao tác như trước;
  * (a2) `siteadmins` hợp nhất một chiều trên cùng một Redis
- *     dùng chung: nạp cache từ kho chung trước rồi chấm trong
- *     ngữ cảnh kho riêng vẫn nhận diện đúng quản trị của kho
- *     riêng VÀ quản trị platform (lớp phủ một chiều giữ lượt
- *     đọc A1 của bề mặt platform, spec TĐ3), và sau khi cache
- *     của kho riêng đã nạp, ngữ cảnh kho chung vẫn chỉ thấy
- *     danh sách của kho chung — danh sách kho riêng không bao
- *     giờ rò sang;
+ *     dùng chung: nạp cache từ kho chung trước rồi chấm trong ngữ cảnh kho riêng vẫn nhận diện đúng quản trị của kho riêng VÀ quản trị platform (lớp phủ một chiều giữ lượt đọc A1 của bề mặt platform, spec TĐ3), và sau khi cache của kho riêng đã nạp, ngữ cảnh kho chung vẫn chỉ thấy danh sách của kho chung — danh sách kho riêng không bao giờ rò sang;
  * (a3) cổng đăng nhập platform ghim kho chung: quản trị trung
- *     tâm gọi cổng platform tại địa chỉ trung tâm mình vẫn bị
- *     403 `auth.platform_admin_required` dù phép hợp nhất một
- *     chiều nhận diện quản trị đó trong ngữ cảnh kho riêng;
+ *     tâm gọi cổng platform tại địa chỉ trung tâm mình vẫn bị 403 `auth.platform_admin_required` dù phép hợp nhất một chiều nhận diện quản trị đó trong ngữ cảnh kho riêng;
  * (b) tenant ở kho chung giữ nguyên hành vi: tạo người dùng
- *     qua endpoint thật sinh tài khoản toàn cục ở kho chung
- *     kèm membership ở kho chung;
+ *     qua endpoint thật sinh tài khoản toàn cục ở kho chung kèm membership ở kho chung;
  * (c) id tenant không tồn tại ở bất kỳ kho nào, gọi tại địa
- *     chỉ của trung tâm kho riêng (và tại địa chỉ platform),
- *     vẫn trả 404 `tenant.not_found` — fail-closed không đổi.
+ *     chỉ của trung tâm kho riêng (và tại địa chỉ platform), vẫn trả 404 `tenant.not_found` — fail-closed không đổi.
  */
-// Cô lập cache giữa các lượt chạy: khoá cache `siteadmins` của
-// evaluator mang tên database của kho đang được đọc, nên mọi kho
-// bài test này dựng đều mang tên duy nhất theo lượt chạy
+// Cô lập cache giữa các lượt chạy: khoá cache `siteadmins` của evaluator mang tên database của kho đang được đọc, nên mọi kho bài test này dựng đều mang tên duy nhất theo lượt chạy
 // (RUN_SUFFIX) — khoá cache của lượt chạy này vì thế cũng duy
-// nhất, lượt chạy sau không bao giờ trúng mục cache của lượt
-// trước dù Redis được giữ nguyên, và bài test không cần (cũng
-// không được) xoá khoá cache bằng tay để xanh. (Kho của lượt
-// trước còn sót trên cụm được dọn ở beforeAll — chỉ database,
-// không đụng tới Redis.)
+// nhất, lượt chạy sau không bao giờ trúng mục cache của lượt trước dù Redis được giữ nguyên, và bài test không cần (cũng không được) xoá khoá cache bằng tay để xanh. (Kho của lượt trước còn sót trên cụm được dọn ở beforeAll — chỉ database, không đụng tới Redis.)
 const RUN_SUFFIX = Math.random().toString(36).slice(2, 8);
 const CP_DATABASE = `giaokhoa_test_cp_td6_${RUN_SUFFIX}`;
 const CP_ROLE = 'giaokhoa_cp_test_td6';

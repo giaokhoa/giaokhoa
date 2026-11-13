@@ -126,14 +126,7 @@ export const hasCapabilityQuerySchema = z.strictObject({
 export type HasCapabilityQuery = z.infer<typeof hasCapabilityQuerySchema>;
 
 /**
- * Một dòng vai trong danh sách vai kèm dữ kiện tổng hợp phía server: số
- * người dùng phân biệt đang giữ vai (một người giữ cùng vai ở nhiều
- * context sinh nhiều dòng gán — đếm theo người, không đếm dòng) và tổng
- * hợp năng lực tính từ tập ghi đè đã lưu của vai (tổng số ghi đè, số ghi
- * đè theo `capType` read/write của năng lực, số resource phân biệt mà
- * các ghi đè chạm tới — resource là tiền tố trước dấu `:` của tên năng
- * lực). Nhờ các trường này, thẻ vai dựng được từ đúng một lần gọi danh
- * sách, không gọi thêm theo từng vai.
+ * Một dòng vai trong danh sách vai kèm dữ kiện tổng hợp phía server: số người dùng phân biệt đang giữ vai (một người giữ cùng vai ở nhiều context sinh nhiều dòng gán — đếm theo người, không đếm dòng) và tổng hợp năng lực tính từ tập ghi đè đã lưu của vai (tổng số ghi đè, số ghi đè theo `capType` read/write của năng lực, số resource phân biệt mà các ghi đè chạm tới — resource là tiền tố trước dấu `:` của tên năng lực). Nhờ các trường này, thẻ vai dựng được từ đúng một lần gọi danh sách, không gọi thêm theo từng vai.
  */
 export const roleListItemSchema = roleSchema.extend({
   userCount: z.number().int().min(0),
@@ -145,15 +138,7 @@ export const roleListItemSchema = roleSchema.extend({
 export type RoleListItem = z.infer<typeof roleListItemSchema>;
 
 /**
- * Payload lưu ma trận quyền thay toàn bộ cho một vai tại đúng một
- * context: sau khi áp dụng thành công, tập ghi đè của vai tại context đó
- * bằng đúng tập gửi lên — phần tử vắng mặt trong tập trở về kế thừa, và
- * phần tử mang giá trị INHERIT (0) tường minh cũng tương đương không có
- * ghi đè. Giá trị quyền thuộc bốn trạng thái đã chốt (ALLOW = 1,
- * INHERIT = 0, PREVENT = −1, PROHIBIT = −1000); việc từ chối giá trị
- * ngoài bốn trạng thái và tên năng lực ngoài danh mục nằm ở tầng service
- * của API với mã lỗi riêng, cùng khuôn với thao tác đặt một ghi đè hiện
- * hành. Thao tác là nguyên tử: lỗi kiểm chứng thì không thay đổi gì.
+ * Payload lưu ma trận quyền thay toàn bộ cho một vai tại đúng một context: sau khi áp dụng thành công, tập ghi đè của vai tại context đó bằng đúng tập gửi lên — phần tử vắng mặt trong tập trở về kế thừa, và phần tử mang giá trị INHERIT (0) tường minh cũng tương đương không có ghi đè. Giá trị quyền thuộc bốn trạng thái đã chốt (ALLOW = 1, INHERIT = 0, PREVENT = −1, PROHIBIT = −1000); việc từ chối giá trị ngoài bốn trạng thái và tên năng lực ngoài danh mục nằm ở tầng service của API với mã lỗi riêng, cùng khuôn với thao tác đặt một ghi đè hiện hành. Thao tác là nguyên tử: lỗi kiểm chứng thì không thay đổi gì.
  */
 export const replaceRoleCapabilitiesSchema = z.strictObject({
   contextId: uuidIdSchema,
@@ -165,16 +150,7 @@ export const replaceRoleCapabilitiesSchema = z.strictObject({
 export type ReplaceRoleCapabilities = z.infer<typeof replaceRoleCapabilitiesSchema>;
 
 /**
- * Query đọc ma trận quyền của mọi vai tại đúng một context (bề mặt
- * trang Permissions toàn trang dựng bảng chuyển vị resource × vai từ
- * một lần gọi này, thay vì gọi ma trận riêng cho từng vai): đầu vào
- * chỉ gồm `contextId` của context cần đọc. `contextId` phải là UUID —
- * giá trị sai khuôn bị tầng kiểm chứng hợp đồng chặn ở đầu vào bằng
- * lỗi 400 ProblemDetails mang mã `http.validation_failed` (mã thật
- * của cơ chế kiểm chứng dùng chung của hệ, không có mã riêng theo
- * schema). `contextId` đúng khuôn nhưng không tồn tại được tầng API
- * xử lý như các đường đọc hiện hành của module phân quyền: 404
- * `access.context_not_found`.
+ * Query đọc ma trận quyền của mọi vai tại đúng một context (bề mặt trang Permissions toàn trang dựng bảng chuyển vị resource × vai từ một lần gọi này, thay vì gọi ma trận riêng cho từng vai): đầu vào chỉ gồm `contextId` của context cần đọc. `contextId` phải là UUID — giá trị sai khuôn bị tầng kiểm chứng hợp đồng chặn ở đầu vào bằng lỗi 400 ProblemDetails mang mã `http.validation_failed` (mã thật của cơ chế kiểm chứng dùng chung của hệ, không có mã riêng theo schema). `contextId` đúng khuôn nhưng không tồn tại được tầng API xử lý như các đường đọc hiện hành của module phân quyền: 404 `access.context_not_found`.
  */
 export const capabilityMatrixQuerySchema = z.strictObject({
   contextId: uuidIdSchema,
@@ -182,17 +158,9 @@ export const capabilityMatrixQuerySchema = z.strictObject({
 export type CapabilityMatrixQuery = z.infer<typeof capabilityMatrixQuerySchema>;
 
 /**
- * Một dòng vai trong ma trận quyền theo context: định danh và tên
- * vai, số người dùng PHÂN BIỆT đang giữ vai (cùng phép đếm với danh
- * sách vai — một người giữ cùng vai ở nhiều context vẫn đếm một), và
- * tập ghi đè ĐÃ LƯU của vai tại đúng context được hỏi. Vai không có
- * ghi đè nào tại context đó mang tập rỗng và vẫn xuất hiện trong ma
- * trận. Mỗi phần tử ghi đè gồm tên năng lực và giá trị quyền thuộc
- * đúng bốn trạng thái đã chốt: Cho phép (ALLOW = 1), Kế thừa
+ * Một dòng vai trong ma trận quyền theo context: định danh và tên vai, số người dùng PHÂN BIỆT đang giữ vai (cùng phép đếm với danh sách vai — một người giữ cùng vai ở nhiều context vẫn đếm một), và tập ghi đè ĐÃ LƯU của vai tại đúng context được hỏi. Vai không có ghi đè nào tại context đó mang tập rỗng và vẫn xuất hiện trong ma trận. Mỗi phần tử ghi đè gồm tên năng lực và giá trị quyền thuộc đúng bốn trạng thái đã chốt: Cho phép (ALLOW = 1), Kế thừa
  * (INHERIT = 0), Ngăn (PREVENT = −1), Cấm (PROHIBIT = −1000); các
- * đường ghi hiện hành không lưu dòng mang giá trị Kế thừa (đặt một
- * ô về Kế thừa là xoá dòng ghi đè của ô đó), nên tập đã lưu trên
- * thực tế chỉ mang ba giá trị còn lại.
+ * đường ghi hiện hành không lưu dòng mang giá trị Kế thừa (đặt một ô về Kế thừa là xoá dòng ghi đè của ô đó), nên tập đã lưu trên thực tế chỉ mang ba giá trị còn lại.
  */
 export const capabilityMatrixRoleSchema = z.object({
   id: uuidIdSchema,
@@ -206,12 +174,7 @@ export const capabilityMatrixRoleSchema = z.object({
 export type CapabilityMatrixRole = z.infer<typeof capabilityMatrixRoleSchema>;
 
 /**
- * Đáp ứng đọc ma trận quyền theo context: `contextId` đã đọc kèm một
- * dòng cho MỌI vai trong hệ tại context đó. Chỉ ghi đè thuộc đúng
- * context được hỏi mới xuất hiện — ghi đè của context khác không rò
- * sang, vì việc phân giải quyền hiệu lực theo cây context thuộc
- * tầng phân giải quyền, còn bề mặt này chỉ trình bày tập đã lưu tại
- * một context.
+ * Đáp ứng đọc ma trận quyền theo context: `contextId` đã đọc kèm một dòng cho MỌI vai trong hệ tại context đó. Chỉ ghi đè thuộc đúng context được hỏi mới xuất hiện — ghi đè của context khác không rò sang, vì việc phân giải quyền hiệu lực theo cây context thuộc tầng phân giải quyền, còn bề mặt này chỉ trình bày tập đã lưu tại một context.
  */
 export const capabilityMatrixResponseSchema = z.object({
   contextId: uuidIdSchema,
@@ -220,9 +183,7 @@ export const capabilityMatrixResponseSchema = z.object({
 export type CapabilityMatrixResponse = z.infer<typeof capabilityMatrixResponseSchema>;
 
 /**
- * Query liệt kê gán vai (dạng nền — phía server ép kiểu `page`/`pageSize`
- * từ query string): lọc tuỳ chọn theo người dùng, context và vai; tìm
- * kiếm theo người dùng khớp trên tên và email; phân trang phía server.
+ * Query liệt kê gán vai (dạng nền — phía server ép kiểu `page`/`pageSize` từ query string): lọc tuỳ chọn theo người dùng, context và vai; tìm kiếm theo người dùng khớp trên tên và email; phân trang phía server.
  */
 export const listAssignmentsQuerySchema = z.strictObject({
   userId: uuidIdSchema.optional(),
@@ -235,12 +196,7 @@ export const listAssignmentsQuerySchema = z.strictObject({
 export type ListAssignmentsQuery = z.infer<typeof listAssignmentsQuerySchema>;
 
 /**
- * Một dòng gán vai trong bảng gán vai: giữ nguyên các trường của dòng
- * gán đã lưu (gồm `component` — nguồn gán, phân biệt dòng do ghi danh
- * quản lý — và `updatedAt`), kèm tên đầy đủ và email của người dùng được
- * gán do server ghép sẵn. Tên/email là `null` khi dòng gán trỏ tới người
- * dùng không còn tồn tại (dòng gán không có khoá ngoại tới bảng người
- * dùng nên vẫn phải liệt kê được).
+ * Một dòng gán vai trong bảng gán vai: giữ nguyên các trường của dòng gán đã lưu (gồm `component` — nguồn gán, phân biệt dòng do ghi danh quản lý — và `updatedAt`), kèm tên đầy đủ và email của người dùng được gán do server ghép sẵn. Tên/email là `null` khi dòng gán trỏ tới người dùng không còn tồn tại (dòng gán không có khoá ngoại tới bảng người dùng nên vẫn phải liệt kê được).
  */
 export const assignmentListItemSchema = z.object({
   id: uuidIdSchema,
@@ -288,31 +244,19 @@ export const updateUserSchema = z.strictObject({
 export type UpdateUser = z.infer<typeof updateUserSchema>;
 
 /**
- * Nhóm trạng thái tài khoản mà danh sách người dùng lọc theo — suy ra từ hai
- * cờ `suspended`/`deleted` của tài khoản: `active` là chưa xoá và không bị
- * đình chỉ; `suspended` là chưa xoá và đang bị đình chỉ; `deleted` là đã xoá
- * mềm. Không truyền `status` thì danh sách ẩn tài khoản đã xoá như hành vi
- * vốn có — tài khoản đã xoá chỉ xuất hiện khi lọc đích danh `deleted`.
+ * Nhóm trạng thái tài khoản mà danh sách người dùng lọc theo — suy ra từ hai cờ `suspended`/`deleted` của tài khoản: `active` là chưa xoá và không bị đình chỉ; `suspended` là chưa xoá và đang bị đình chỉ; `deleted` là đã xoá mềm. Không truyền `status` thì danh sách ẩn tài khoản đã xoá như hành vi vốn có — tài khoản đã xoá chỉ xuất hiện khi lọc đích danh `deleted`.
  */
 export const userListStatusSchema = z.enum(['active', 'suspended', 'deleted']);
 export type UserListStatus = z.infer<typeof userListStatusSchema>;
 
 /**
- * Trường sắp xếp của danh sách người dùng — tập đóng: `name` sắp theo cột
- * `firstName` rồi `lastName`, `createdAt` theo thời điểm tạo tài khoản,
- * `lastLogin` theo lần đăng nhập gần nhất. Giá trị ngoài tập bị validation
- * chặn. Không truyền `sortBy` thì danh sách giữ thứ tự mặc định theo id như
- * hành vi vốn có.
+ * Trường sắp xếp của danh sách người dùng — tập đóng: `name` sắp theo cột `firstName` rồi `lastName`, `createdAt` theo thời điểm tạo tài khoản, `lastLogin` theo lần đăng nhập gần nhất. Giá trị ngoài tập bị validation chặn. Không truyền `sortBy` thì danh sách giữ thứ tự mặc định theo id như hành vi vốn có.
  */
 export const userListSortBySchema = z.enum(['name', 'createdAt', 'lastLogin']);
 export type UserListSortBy = z.infer<typeof userListSortBySchema>;
 
 /**
- * Query danh sách người dùng (dạng nền — phía server ép kiểu phân trang từ
- * query string). `sortDirection` chỉ có hiệu lực khi có `sortBy`, mặc định
- * `asc`. Trần `pageSize` là 100, khớp trần của danh sách gán vai quản trị —
- * mọi danh sách quản trị phân trang phía server đều có trần cứng để chặn
- * truy vấn quá lớn.
+ * Query danh sách người dùng (dạng nền — phía server ép kiểu phân trang từ query string). `sortDirection` chỉ có hiệu lực khi có `sortBy`, mặc định `asc`. Trần `pageSize` là 100, khớp trần của danh sách gán vai quản trị — mọi danh sách quản trị phân trang phía server đều có trần cứng để chặn truy vấn quá lớn.
  */
 export const listUsersQuerySchema = z.strictObject({
   search: z.string().optional(),
@@ -325,34 +269,15 @@ export const listUsersQuerySchema = z.strictObject({
 export type ListUsersQuery = z.infer<typeof listUsersQuerySchema>;
 
 /**
- * Truy vấn danh sách người dùng kèm gán vai (`GET /access/users-with-assignments`)
- * — nguồn dữ kiện cho bảng người dùng của trang vai trò, nơi mỗi người dùng
- * chiếm đúng MỘT dòng kèm toàn bộ dòng gán của họ.
+ * Truy vấn danh sách người dùng kèm gán vai (`GET /access/users-with-assignments`) — nguồn dữ kiện cho bảng người dùng của trang vai trò, nơi mỗi người dùng chiếm đúng MỘT dòng kèm toàn bộ dòng gán của họ.
  *
- * Đơn vị phân trang ở đây là NGƯỜI DÙNG, khác `GET /access/assignments` phân
- * trang theo từng dòng gán: một người giữ nhiều vai ở nhiều context vẫn chỉ
- * chiếm một dòng, nên `page`/`pageSize` cắt trên tập người dùng đã lọc và
- * `total` ở schema phản hồi đếm người dùng khớp lọc, không đếm dòng gán.
- * Ba bộ lọc áp đồng thời phía server:
+ * Đơn vị phân trang ở đây là NGƯỜI DÙNG, khác `GET /access/assignments` phân trang theo từng dòng gán: một người giữ nhiều vai ở nhiều context vẫn chỉ chiếm một dòng, nên `page`/`pageSize` cắt trên tập người dùng đã lọc và `total` ở schema phản hồi đếm người dùng khớp lọc, không đếm dòng gán. Ba bộ lọc áp đồng thời phía server:
  * - `search`: khớp một phần, không phân biệt hoa thường, trên firstName,
- *   lastName, email, username và họ tên đầy đủ — cùng tập trường với tìm
- *   kiếm của danh sách người dùng và của bảng gán vai hiện hành.
+ *   lastName, email, username và họ tên đầy đủ — cùng tập trường với tìm kiếm của danh sách người dùng và của bảng gán vai hiện hành.
  * - `roleId`: chỉ giữ người dùng có ÍT NHẤT MỘT dòng gán với vai này ở bất
- *   kỳ context nào. Đây thuần là điều kiện lọc người; mảng `assignments`
- *   trong kết quả vẫn mang TOÀN BỘ dòng gán của người đó, không bị cắt theo
- *   vai đang lọc, để giao diện thấy đủ vai trò thật của từng người.
+ *   kỳ context nào. Đây thuần là điều kiện lọc người; mảng `assignments` trong kết quả vẫn mang TOÀN BỘ dòng gán của người đó, không bị cắt theo vai đang lọc, để giao diện thấy đủ vai trò thật của từng người.
  * - `status`: dùng chung tập đóng và ngữ nghĩa với
- *   `listUsersQuerySchema.status` — không truyền thì chỉ lấy tài khoản chưa
- *   xoá (gồm cả tài khoản đang bị đình chỉ); `active` là chưa xoá và không
- *   bị đình chỉ; `suspended` là chưa xoá đang bị đình chỉ; `deleted` chỉ
- *   lấy tài khoản đã xoá mềm.
- * `pageSize` trần 100 như các danh sách quản trị khác của module. Thứ tự
- * kết quả ổn định theo id người dùng tăng dần (không có tham số sắp xếp
- * riêng) để các trang không chồng lấp hay bỏ sót người.
- * Khi client phá ràng buộc đóng ở đây (status ngoài tập, pageSize vượt
- * trần…), tầng api chặn bằng lỗi `http.validation_failed` — mã lỗi thật
- * của cơ chế validation ProblemDetails toàn cục, không có mã riêng cho
- * endpoint này.
+ *   `listUsersQuerySchema.status` — không truyền thì chỉ lấy tài khoản chưa xoá (gồm cả tài khoản đang bị đình chỉ); `active` là chưa xoá và không bị đình chỉ; `suspended` là chưa xoá đang bị đình chỉ; `deleted` chỉ lấy tài khoản đã xoá mềm. `pageSize` trần 100 như các danh sách quản trị khác của module. Thứ tự kết quả ổn định theo id người dùng tăng dần (không có tham số sắp xếp riêng) để các trang không chồng lấp hay bỏ sót người. Khi client phá ràng buộc đóng ở đây (status ngoài tập, pageSize vượt trần…), tầng api chặn bằng lỗi `http.validation_failed` — mã lỗi thật của cơ chế validation ProblemDetails toàn cục, không có mã riêng cho endpoint này.
  */
 export const listUsersWithAssignmentsQuerySchema = z.strictObject({
   search: z.string().optional(),
@@ -364,15 +289,7 @@ export const listUsersWithAssignmentsQuerySchema = z.strictObject({
 export type ListUsersWithAssignmentsQuery = z.infer<typeof listUsersWithAssignmentsQuerySchema>;
 
 /**
- * Một dòng gán vai nằm trong danh sách người dùng kèm gán: đủ để giao diện
- * bày vai trò của người dùng theo từng context mà không cần gọi thêm.
- * `roleName` là tên hiển thị của vai (bảng gán vai hiện hành chỉ trả
- * `roleId`, giao diện phải tự tra tên). `contextLevel` là SỐ cấp của
- * context (10 hệ thống, 20 trung tâm, 50 khoá học…) — việc giải quyết TÊN
- * thực thể của context nằm ngoài hợp đồng này. `component` giữ nguyên cơ
- * chế truy vết nguồn gán của bảng gán vai: rỗng là gán tay qua quản trị,
- * `enrol` là gán do một ghi danh cấp — giao diện dựa vào đây để biết dòng
- * gán nào gỡ trực tiếp được, dòng nào phải gỡ qua ghi danh.
+ * Một dòng gán vai nằm trong danh sách người dùng kèm gán: đủ để giao diện bày vai trò của người dùng theo từng context mà không cần gọi thêm. `roleName` là tên hiển thị của vai (bảng gán vai hiện hành chỉ trả `roleId`, giao diện phải tự tra tên). `contextLevel` là SỐ cấp của context (10 hệ thống, 20 trung tâm, 50 khoá học…) — việc giải quyết TÊN thực thể của context nằm ngoài hợp đồng này. `component` giữ nguyên cơ chế truy vết nguồn gán của bảng gán vai: rỗng là gán tay qua quản trị, `enrol` là gán do một ghi danh cấp — giao diện dựa vào đây để biết dòng gán nào gỡ trực tiếp được, dòng nào phải gỡ qua ghi danh.
  */
 export const userAssignmentEntrySchema = z.object({
   id: uuidIdSchema,
@@ -385,11 +302,7 @@ export const userAssignmentEntrySchema = z.object({
 export type UserAssignmentEntry = z.infer<typeof userAssignmentEntrySchema>;
 
 /**
- * Một người dùng trong danh sách kèm gán vai: thông tin tài khoản tối thiểu
- * cho một dòng của bảng (định danh, họ tên, email, hai cờ trạng thái) kèm
- * `createdAt` — thời điểm tạo tài khoản cho cột ngày tham gia; hợp đồng
- * danh sách gán hiện hành không mang trường này nên bảng không dựng được
- * cột đó nếu thiếu. `assignments` chứa toàn bộ dòng gán của người dùng
+ * Một người dùng trong danh sách kèm gán vai: thông tin tài khoản tối thiểu cho một dòng của bảng (định danh, họ tên, email, hai cờ trạng thái) kèm `createdAt` — thời điểm tạo tài khoản cho cột ngày tham gia; hợp đồng danh sách gán hiện hành không mang trường này nên bảng không dựng được cột đó nếu thiếu. `assignments` chứa toàn bộ dòng gán của người dùng
  * (mảng rỗng khi người chưa giữ vai nào), thứ tự theo id dòng gán tăng dần.
  */
 export const userWithAssignmentsListItemSchema = z.object({
@@ -406,10 +319,7 @@ export const userWithAssignmentsListItemSchema = z.object({
 export type UserWithAssignmentsListItem = z.infer<typeof userWithAssignmentsListItemSchema>;
 
 /**
- * Phản hồi danh sách người dùng kèm gán vai: `users` là các người dùng của
- * trang hiện tại (mỗi người đúng một phần tử), `total` là tổng số NGƯỜI
- * DÙNG khớp bộ lọc trên toàn bộ kết quả — không phải tổng số dòng gán —
- * kèm `page`/`pageSize` đã áp để giao diện dựng phân trang.
+ * Phản hồi danh sách người dùng kèm gán vai: `users` là các người dùng của trang hiện tại (mỗi người đúng một phần tử), `total` là tổng số NGƯỜI DÙNG khớp bộ lọc trên toàn bộ kết quả — không phải tổng số dòng gán — kèm `page`/`pageSize` đã áp để giao diện dựng phân trang.
  */
 export const userWithAssignmentsListResponseSchema = z.object({
   users: z.array(userWithAssignmentsListItemSchema),
@@ -463,12 +373,7 @@ export const mfaTotpCodeSchema = z.strictObject({
 export type MfaTotpCode = z.infer<typeof mfaTotpCodeSchema>;
 
 /**
- * Payload khởi tạo MFA TOTP. Toàn bộ thân là KHÔNG bắt buộc (client hiện
- * tại gọi setup không kèm thân vẫn hợp lệ). Trường `currentCode` — mã
- * authenticator hiện tại — chỉ bắt buộc về mặt nghiệp vụ ở phía server khi
- * tài khoản ĐÃ có một factor đang bật: setup lại lúc đó là thao tác thay
- * factor đang hoạt động nên phải tái xác thực trước khi ghi đè (cùng khuôn
- * với payload tắt MFA ở trên); chưa có factor đang bật thì không cần mã.
+ * Payload khởi tạo MFA TOTP. Toàn bộ thân là KHÔNG bắt buộc (client hiện tại gọi setup không kèm thân vẫn hợp lệ). Trường `currentCode` — mã authenticator hiện tại — chỉ bắt buộc về mặt nghiệp vụ ở phía server khi tài khoản ĐÃ có một factor đang bật: setup lại lúc đó là thao tác thay factor đang hoạt động nên phải tái xác thực trước khi ghi đè (cùng khuôn với payload tắt MFA ở trên); chưa có factor đang bật thì không cần mã.
  */
 export const mfaTotpSetupSchema = z
   .strictObject({
@@ -556,7 +461,7 @@ export type SessionLoginResponse = z.infer<typeof sessionLoginResponseSchema>;
 /** Một phiên đang hoạt động của chính user trong trang quản lý phiên (report_usersessions của Moodle): `web` là phiên cookie phía server, `api` là một họ refresh token. */
 export const mySessionSchema = z.object({
   id: uuidIdSchema,
-  kind: z.enum(['web', 'api']),
+  kind: z.enum(['web', 'api', 'better-auth']),
   createdAt: z.string(),
   lastActivityAt: z.string(),
   ip: z.string().nullable(),
@@ -614,10 +519,7 @@ export const myAccessViewSchema = z.object({
   assignments: z.array(myRoleAssignmentSchema),
   contexts: z.array(myContextCapabilitiesSchema),
   /**
-   * Cờ hiện vật học tập (issue #176): true khi người gọi có ít nhất một
-   * huy hiệu đã cấp chưa thu hồi hoặc một kế hoạch học tập của chính
-   * mình — cùng với `learning` suy từ gán vai, cờ này quyết định nhóm
-   * "Học tập" ở sidebar có hiện hay không (dấu chân học tập M+A).
+   * Cờ hiện vật học tập (issue #176): true khi người gọi có ít nhất một huy hiệu đã cấp chưa thu hồi hoặc một kế hoạch học tập của chính mình — cùng với `learning` suy từ gán vai, cờ này quyết định nhóm "Học tập" ở sidebar có hiện hay không (dấu chân học tập M+A).
    */
   hasLearnerArtifacts: z.boolean(),
 });

@@ -1,35 +1,20 @@
 /**
  * Repository của cụm TENANT trên Kysely.
  *
- * Vai trò: mọi truy cập tới ba bảng `tenants`, `tenant_memberships`
- * và `tenant_config` của kho trung tâm tập trung ở đây. Thuần dữ
- * liệu — mọi quyết định quyền nằm ở TenantsService /
- * PermissionEvaluator phía ứng dụng; repository chỉ nhận handle
- * Kysely do tầng ứng dụng truyền vào.
+ * Vai trò: mọi truy cập tới ba bảng `tenants`, `tenant_memberships` và `tenant_config` của kho trung tâm tập trung ở đây. Thuần dữ liệu — mọi quyết định quyền nằm ở TenantsService / PermissionEvaluator phía ứng dụng; repository chỉ nhận handle Kysely do tầng ứng dụng truyền vào.
  *
  * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong, truy vấn viết trên interface schema sinh bằng
  *   codegen: tên bảng/cột giữ nguyên snake_case của database.
  * - Bên ngoài, repository trả/nhận hình dạng dòng camelCase như
- *   phía tiêu thụ đang dùng: cột được chọn bằng danh sách tường
- *   minh có bí danh (`tenant_id as tenantId`), giá trị ghi được
- *   ánh xạ từng trường từ camelCase sang snake_case ở các hàm
- *   `*InsertValues`/`*UpdateSet` trong file này.
+ *   phía tiêu thụ đang dùng: cột được chọn bằng danh sách tường minh có bí danh (`tenant_id as tenantId`), giá trị ghi được ánh xạ từng trường từ camelCase sang snake_case ở các hàm `*InsertValues`/`*UpdateSet` trong file này.
  * - Giá trị `undefined` bị LOẠI khỏi values/set trước khi gọi
- *   builder (quy tắc T-4 của pilot): trường vắng mặt phải để
- *   default của database quyết định; mọi giá trị where đều là
- *   tham số bắt buộc.
+ *   builder (quy tắc T-4 của pilot): trường vắng mặt phải để default của database quyết định; mọi giá trị where đều là tham số bắt buộc.
  * - Giá trị jsonb (`tenant_config.value`) ghi qua helper
  *   serialize + ép kiểu `::jsonb` (mẫu `jsonbValue` của pilot):
- *   driver `pg` hiểu một MẢNG ở cấp cao nhất là mảng PostgreSQL
- *   chứ không phải JSON, nên serialize tường minh cho mọi hình
- *   dạng giá trị; giá trị `null` giữ nguyên là SQL NULL như đường
- *   bộ máy cũ trước đây.
+ *   driver `pg` hiểu một MẢNG ở cấp cao nhất là mảng PostgreSQL chứ không phải JSON, nên serialize tường minh cho mọi hình dạng giá trị; giá trị `null` giữ nguyên là SQL NULL như đường bộ máy cũ trước đây.
  * - Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh
- *   ứng dụng, không tự mở pool: handle do tầng ứng dụng dựng (điểm
- *   lắp ráp là facade định tuyến theo không gian `routedKysely`)
- *   rồi truyền vào; ngữ cảnh trung tâm đi theo chính kết nối của
- *   handle đó.
+ *   ứng dụng, không tự mở pool: handle do tầng ứng dụng dựng (điểm lắp ráp là facade định tuyến theo không gian `routedKysely`) rồi truyền vào; ngữ cảnh trung tâm đi theo chính kết nối của handle đó.
  */
 import { sql, type Insertable, type RawBuilder, type Updateable } from 'kysely';
 import type { CentreDb, CentreDB } from '../client';
@@ -94,13 +79,9 @@ export const PLATFORM_TENANT_SLUG = 'trang-chinh';
 export const DEFAULT_SCHOOL_TENANT_SLUG = 'truong-mac-dinh';
 
 /**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh —
- * cùng mẫu `jsonbValue` của pilot kho control plane: serialize
- * tường minh + ép kiểu `::jsonb` cho MỌI giá trị jsonb khi ghi
+ * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh — cùng mẫu `jsonbValue` của pilot kho control plane: serialize tường minh + ép kiểu `::jsonb` cho MỌI giá trị jsonb khi ghi
  * (object lẫn mảng) để một khuôn duy nhất, không phụ thuộc nhánh
- * xử lý riêng của driver theo hình dạng giá trị. Kiểu trả về gắn
- * theo kiểu `Json` của cột đích để builder chấp nhận biểu thức ở
- * vị trí giá trị của cột jsonb.
+ * xử lý riêng của driver theo hình dạng giá trị. Kiểu trả về gắn theo kiểu `Json` của cột đích để builder chấp nhận biểu thức ở vị trí giá trị của cột jsonb.
  */
 function jsonbValue(value: unknown): RawBuilder<Json> {
   return sql<Json>`${JSON.stringify(value as Json)}::jsonb`;

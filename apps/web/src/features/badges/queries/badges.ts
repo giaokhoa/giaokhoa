@@ -6,10 +6,7 @@ import {
 import { queryKeys } from './keys';
 
 /**
- * Tầng dữ liệu TanStack Query của trang huy hiệu thuộc feature
- * badges: các hook đọc/ghi bọc tầng `../api/badges` (tách khỏi
- * module phẳng `src/lib/badges.ts` khi tổ chức lại apps/web
- * theo mô hình features/, issue #500).
+ * Tầng dữ liệu TanStack Query của trang huy hiệu thuộc feature badges: các hook đọc/ghi bọc tầng `../api/badges` (tách khỏi module phẳng `src/lib/badges.ts` khi tổ chức lại apps/web theo mô hình features/, issue #500).
  */
 
 /** Toàn bộ huy hiệu (GET /badges). */

@@ -5,12 +5,7 @@ import { queryKeys } from './keys';
 
 /**
  * Tầng dữ liệu trang báo cáo tiến độ (F-01 đợt 1, rà soát #133):
- * options dùng chung cho hook của trang và clientLoader của route
- * module. Báo cáo lỗi tải → null (trang hiểu là không có quyền), giữ
- * nguyên ngữ nghĩa probe thủ công trước đây.
- * Lời gọi API thuần nằm ở tầng `api/` của feature; khoá báo cáo
- * riêng của feature nằm ở `keys.ts` cùng tầng này, riêng khoá danh
- * sách nhóm `courseGroups` là khoá dùng chung ở factory tập trung.
+ * options dùng chung cho hook của trang và clientLoader của route module. Báo cáo lỗi tải → null (trang hiểu là không có quyền), giữ nguyên ngữ nghĩa probe thủ công trước đây. Lời gọi API thuần nằm ở tầng `api/` của feature; khoá báo cáo riêng của feature nằm ở `keys.ts` cùng tầng này, riêng khoá danh sách nhóm `courseGroups` là khoá dùng chung ở factory tập trung.
  */
 
 /**

@@ -33,26 +33,19 @@ export interface CriteriaInput {
 /**
  * Facade của BadgesModule (core_badges của Moodle):
  *  - Tiêu chí tạo thành cây hai cấp: MỘT dòng 'overall' mang tổng hợp ALL/ANY,
- *    cộng các dòng lá (hoàn thành khoá học — tuỳ chọn theo một
- *    ngày hạn, hoàn thành hoạt động, đạt competency, một
- *    badge khác, thủ công theo role, thành viên cohort, trường hồ sơ).
+ *    cộng các dòng lá (hoàn thành khoá học — tuỳ chọn theo một ngày hạn, hoàn thành hoạt động, đạt competency, một badge khác, thủ công theo role, thành viên cohort, trường hồ sơ).
  *  - LUẬT ĐÓNG BĂNG: tiêu chí của một badge ACTIVE — hoặc của bất kỳ badge nào đã cấp
  *    award — không thể thay đổi. Nhân bản badge để sửa tiêu chí của nó.
  *  - Cấp phát tạo một assertion BẤT BIẾN (bản chụp badge + tiêu chí,
- *    bằng chứng, ngày cấp/hết hạn). Thu hồi đánh dấu assertion đã thu hồi;
- *    dòng không bao giờ bị xoá.
+ *    bằng chứng, ngày cấp/hết hạn). Thu hồi đánh dấu assertion đã thu hồi; dòng không bao giờ bị xoá.
  *  - Tự cấp: module này đăng ký hook completion với
- *    CompletionService và lắng nghe sự kiện đạt competency; bộ
- *    đánh giá chỉ đọc các module KHÁC qua facade của chúng
+ *    CompletionService và lắng nghe sự kiện đạt competency; bộ đánh giá chỉ đọc các module KHÁC qua facade của chúng
  *    (CompletionService, CompetenciesService), không bao giờ đọc bảng của chúng. Worker
  *    chạy cùng đánh giá từ hàng đợi 'badge-award'.
  */
 @Injectable()
 /**
- * Nghiệp vụ huy hiệu (Open Badges).
- * Đối chiếu Moodle: badges/classes (badge, criteria) và lib/badgeslib.php.
- * Vòng đời: badge nháp (inactive) → đặt tiêu chí → kích hoạt (active); badge đã kích hoạt hoặc đã cấp
- * thì bộ tiêu chí bị đóng băng — muốn sửa phải nhân bản (duplicate). Đánh giá tiêu chí chạy theo sự kiện
+ * Nghiệp vụ huy hiệu (Open Badges). Đối chiếu Moodle: badges/classes (badge, criteria) và lib/badgeslib.php. Vòng đời: badge nháp (inactive) → đặt tiêu chí → kích hoạt (active); badge đã kích hoạt hoặc đã cấp thì bộ tiêu chí bị đóng băng — muốn sửa phải nhân bản (duplicate). Đánh giá tiêu chí chạy theo sự kiện
  * (hoàn thành khoá học/cm, năng lực đạt) và theo yêu cầu; mỗi lần cấp sinh assertion có uniqueHash kiểm chứng được.
  */
 export class BadgesService implements OnModuleInit {

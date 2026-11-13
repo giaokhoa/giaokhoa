@@ -2,10 +2,7 @@ import type { CurriculumTreeNode } from '#lib/curriculum';
 import type { FlatNode } from '../types/content-bank';
 
 /**
- * Hàm thuần của Kho học liệu thuộc feature content-bank. Tách
- * từ các module phẳng `src/lib/content-bank.ts` và
- * `src/lib/content-bank-data.ts` khi tổ chức lại apps/web theo
- * mô hình features/ (issue #500).
+ * Hàm thuần của Kho học liệu thuộc feature content-bank. Tách từ các module phẳng `src/lib/content-bank.ts` và `src/lib/content-bank-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
 
 /** Phẳng hoá cây chương trình theo chiều sâu, gom YCCĐ của từng cây con vào chính node tổ tiên của nó. */

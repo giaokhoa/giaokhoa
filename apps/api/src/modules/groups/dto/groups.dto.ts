@@ -16,8 +16,7 @@ import {
 } from '@giaokhoa/contracts';
 
 /**
- * Validation của Groups & Cohorts dùng Zod qua Standard Schema — schema nền ở
- * `@giaokhoa/contracts` là nguồn sự thật duy nhất.
+ * Validation của Groups & Cohorts dùng Zod qua Standard Schema — schema nền ở `@giaokhoa/contracts` là nguồn sự thật duy nhất.
  */
 export {
   createCohortSchema,

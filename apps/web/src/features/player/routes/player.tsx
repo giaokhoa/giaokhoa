@@ -17,10 +17,7 @@ function isHls(fileName: string, mime: string | null): boolean {
 }
 
 /**
- * Hàng đợi gửi bù sự kiện học (K2-B2): view/progress là hồ sơ quá
- * trình học — khi mạng rớt, sự kiện được giữ trong localStorage và
- * gửi lại khi có mạng hoặc lần mở player sau, học sinh mạng yếu
- * không bị mất tiến độ đã học thật.
+ * Hàng đợi gửi bù sự kiện học (K2-B2): view/progress là hồ sơ quá trình học — khi mạng rớt, sự kiện được giữ trong localStorage và gửi lại khi có mạng hoặc lần mở player sau, học sinh mạng yếu không bị mất tiến độ đã học thật.
  */
 const QUEUE_KEY = 'giaokhoa-learn-event-queue';
 interface QueuedEvent { path: string; body: string }
@@ -73,25 +70,18 @@ async function postLearningEvent(path: string, body: unknown): Promise<boolean> 
 const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 2];
 
 /**
- * Trang học (player) của K2: nội dung của một mục khoá học kèm outline
- * kề bên (dấu ✓ theo completion của chính học sinh), nút Trước/Tiếp, tự
- * ghi nhận đã xem qua endpoint /view sẵn có, báo tiến độ xem cho video
+ * Trang học (player) của K2: nội dung của một mục khoá học kèm outline kề bên (dấu ✓ theo completion của chính học sinh), nút Trước/Tiếp, tự ghi nhận đã xem qua endpoint /view sẵn có, báo tiến độ xem cho video
  * (lưu bền + gửi bù khi rớt mạng, phát tiếp đúng vị trí dở, đổi tốc độ
  * phát), và nút "Đánh dấu đã học" cho mục hoàn thành thủ công.
  */
 export function PlayerPage() {
   const { t } = useTranslation('app');
   const { id, cmId } = useParams();
-  // Dữ liệu trang qua TanStack (F-01 đợt 1): clientLoader của route đã
-  // prefetch cùng khoá trước khi mount; chờ tải đầu trên isPending của
-  // query (F-14). queryFn giữ semantics probe: lỗi tải → data null,
-  // trang báo lỗi tải như trước.
+  // Dữ liệu trang qua TanStack (F-01 đợt 1): clientLoader của route đã prefetch cùng khoá trước khi mount; chờ tải đầu trên isPending của query (F-14). queryFn giữ semantics probe: lỗi tải → data null, trang báo lỗi tải như trước.
   const viewQuery = usePlayerView(id, cmId);
   const data = viewQuery.data ?? null;
   const { refetch } = viewQuery;
-  // "Đánh dấu đã học" qua đột biến của lib/player-data (F-01): hai
-  // bước probe + POST nằm trong đột biến, thành công thì view tự làm
-  // mới qua làm-mới-khoá (thay refetch tay trước đây).
+  // "Đánh dấu đã học" qua đột biến của lib/player-data (F-01): hai bước probe + POST nằm trong đột biến, thành công thì view tự làm mới qua làm-mới-khoá (thay refetch tay trước đây).
   const markLearnedMutation = useMarkPlayerModuleLearned(id, cmId);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -101,15 +91,12 @@ export function PlayerPage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const lastProgressSentAt = useRef(0);
 
-  // Gửi bù hàng đợi sự kiện học mỗi khi mở một mục (nhịp flush mà
-  // load() thủ công trước đây chạy trước khi tải dữ liệu).
+  // Gửi bù hàng đợi sự kiện học mỗi khi mở một mục (nhịp flush mà load() thủ công trước đây chạy trước khi tải dữ liệu).
   useEffect(() => {
     void flushEventQueue();
   }, [cmId]);
 
-  // Tự ghi nhận đã xem qua endpoint /view sẵn có — một lần cho mỗi
-  // mục: dữ liệu về mà completion kiểu view và chưa xem thì gửi sự
-  // kiện, gửi thành công thì refetch để nhận trạng thái viewed mới.
+  // Tự ghi nhận đã xem qua endpoint /view sẵn có — một lần cho mỗi mục: dữ liệu về mà completion kiểu view và chưa xem thì gửi sự kiện, gửi thành công thì refetch để nhận trạng thái viewed mới.
   useEffect(() => {
     if (!data || !id || !cmId) return;
     if (data.completion.mode !== 'view' || data.completion.viewed || viewedPostedFor.current === cmId) return;

@@ -4,16 +4,14 @@ import { QuestionsService } from '../../../src/modules/questions/questions.servi
 import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWORD } from '../../support/identity-access-helpers';
 
 /**
- * Dạng câu hỏi chuẩn + ngữ liệu (stimulus) — flow nghiệp vụ theo MÔ
- * HÌNH GIAOKHOA (quyết 12:04 + 12:12 ngày 26/10/2026, đợt port #248):
+ * Dạng câu hỏi chuẩn + ngữ liệu (stimulus) — flow nghiệp vụ theo MÔ HÌNH GIAOKHOA (quyết 12:04 + 12:12 ngày 26/10/2026, đợt port #248):
  *  - Câu hỏi KHÔNG có tên; đáp án chỉ mang cờ đúng/sai nhị phân
  *    (`correct` ở payload, `isCorrect` ở view) — KHÔNG còn tỉ trọng
  *    fraction của đáp án; chấm tự động là nhị phân 1/0.
  *  - multichoice: đúng 4 lựa chọn, đúng MỘT đáp án đúng, chọn một đáp
  *    án; chọn nhiều đáp án bị chấm 0.
  *  - truefalse (TF-A): MỘT câu gồm thân chung + đúng 4 mệnh đề trong
- *    thân câu; đáp án Đ/S của từng mệnh đề ở `solution.answers` phía
- *    đáp án; chấm theo thang Đ–S của lần dùng.
+ *    thân câu; đáp án Đ/S của từng mệnh đề ở `solution.answers` phía đáp án; chấm theo thang Đ–S của lần dùng.
  *  - shortanswer: khớp CHÍNH XÁC sau chuẩn hoá (hoa/thường theo
  *    useCase) — ký tự đại diện `*` đã bỏ hẳn (điểm quyết D-2).
  *  - essay: không tự chấm → needsgrading; guidance nằm ở bản ghi phía

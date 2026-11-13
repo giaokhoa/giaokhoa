@@ -75,8 +75,7 @@ describe('Cài đặt — trang bảo mật, thẻ phiên (chuyển từ Hồ s�
     localStorage.clear();
   });
   afterEach(() => {
-    // Dự án không bật auto-cleanup của Testing Library nên phải dọn
-    // DOM tường minh, tránh cây render của test trước sót sang test sau.
+    // Dự án không bật auto-cleanup của Testing Library nên phải dọn DOM tường minh, tránh cây render của test trước sót sang test sau.
     cleanup();
     vi.unstubAllGlobals();
   });
@@ -261,6 +260,28 @@ describe('Cài đặt — trang bảo mật, thẻ hai yếu tố (chuyển từ
     expect(screen.getByText(TOTP_SECRET)).toBeInTheDocument();
     expect(screen.getByText('Chưa bật')).toBeInTheDocument();
     expect(state.enabled).toBe(false);
+  });
+
+  it('thay authenticator yêu cầu mã hiện tại và giữ MFA bật suốt bước quét thiết bị mới', async () => {
+    const state = { enabled: true };
+    stubFetch(state);
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Đang bật')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: 'Đổi ứng dụng xác thực' }));
+    await userEvent.type(screen.getByLabelText('Mã xác thực 6 số'), '123456');
+    await userEvent.click(screen.getByRole('button', { name: 'Tiếp tục đổi thiết bị' }));
+    await waitFor(() => expect(screen.getByText(TOTP_SECRET)).toBeInTheDocument());
+    expect(state.enabled).toBe(true);
+    expect(screen.getByText('Đang bật')).toBeInTheDocument();
+    const requests = vi.mocked(globalThis.fetch).mock.calls;
+    const setupCall = requests.find(([url, init]) =>
+      url === '/api/v1/auth/mfa/totp/setup' && init?.method === 'POST');
+    expect(JSON.parse(String(setupCall?.[1]?.body))).toEqual({ currentCode: '123456' });
+
+    await userEvent.type(screen.getByLabelText('Mã xác thực 6 số'), '123456');
+    await userEvent.click(screen.getByRole('button', { name: 'Xác nhận và bật' }));
+    await waitFor(() => expect(screen.getByText('Đã thay ứng dụng xác thực. MFA vẫn được bật.')).toBeInTheDocument());
+    expect(state.enabled).toBe(true);
   });
 
   it('tắt MFA bằng mã hiện tại và về trạng thái tắt', async () => {

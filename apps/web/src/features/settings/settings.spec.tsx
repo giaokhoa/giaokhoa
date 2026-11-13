@@ -10,10 +10,7 @@ import { SettingsNotificationsPage } from './routes/settings-notifications';
 import { SettingsSecurityPage } from './routes/settings-security';
 
 /**
- * Khu Cài đặt (issue #288): khung dùng chung có MENU TRÁI theo mục,
- * `/settings` redirect về mục đầu (Bảo mật), bấm mục nào thì nội dung
- * mục đó hiện ở cột phải và dấu chọn (aria-current) đi theo. Spec này
- * dựng đúng bốn route module của khu và đi lại như người dùng.
+ * Khu Cài đặt (issue #288): khung dùng chung có MENU TRÁI theo mục, `/settings` redirect về mục đầu (Bảo mật), bấm mục nào thì nội dung mục đó hiện ở cột phải và dấu chọn (aria-current) đi theo. Spec này dựng đúng bốn route module của khu và đi lại như người dùng.
  */
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });

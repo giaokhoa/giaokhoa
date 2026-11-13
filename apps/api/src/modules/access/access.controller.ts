@@ -11,8 +11,7 @@ import { RolesService } from './roles.service';
 @ApiTags('access')
 @Controller({ path: 'access', version: '1' })
 /**
- * API quản trị phân quyền: context, role, capability, gán role và kiểm tra quyền.
- * Mọi endpoint đều qua PermissionEvaluator với capability role:* tại context hệ thống.
+ * API quản trị phân quyền: context, role, capability, gán role và kiểm tra quyền. Mọi endpoint đều qua PermissionEvaluator với capability role:* tại context hệ thống.
  */
 export class AccessController {
   constructor(
@@ -51,9 +50,7 @@ export class AccessController {
   @Get('roles')
   @RequireCapability('role:manage')
   /**
-   * GET /access/roles — liệt kê role kèm tổng hợp phía server (số người
-   * dùng phân biệt đang giữ từng role và tổng hợp năng lực từ tập ghi
-   * đè đã lưu của role), đủ để dựng thẻ role từ một lần gọi.
+   * GET /access/roles — liệt kê role kèm tổng hợp phía server (số người dùng phân biệt đang giữ từng role và tổng hợp năng lực từ tập ghi đè đã lưu của role), đủ để dựng thẻ role từ một lần gọi.
    */
   async listRoles() { return this.roles.listRoles(); }
   @Get('roles/:id')
@@ -72,8 +69,7 @@ export class AccessController {
   @RequireCapability('role:manage')
   /**
    * DELETE /access/roles/:id — xoá role; bị chặn khi role là role dựng
-   * sẵn (archetype) hoặc đang còn người giữ, hai trường hợp phân biệt
-   * bằng mã lỗi riêng.
+   * sẵn (archetype) hoặc đang còn người giữ, hai trường hợp phân biệt bằng mã lỗi riêng.
    */
   async deleteRole(@Param('id', { schema: uuidIdSchema }) id: string) { await this.roles.deleteRole(id); return { deleted: true }; }
 
@@ -92,14 +88,7 @@ export class AccessController {
   @Get('capability-matrix')
   @RequireCapability('role:manage')
   /**
-   * GET /access/capability-matrix?contextId=… — ma trận ghi đè đã lưu
-   * của MỌI role tại đúng một context trong một lần gọi (trang
-   * Permissions toàn trang dựng bảng chuyển vị từ đáp ứng này thay vì
-   * gọi ma trận riêng cho từng role): mỗi role kèm số người giữ phân
-   * biệt và tập ghi đè tại context được hỏi; role không có ghi đè tại
-   * context đó mang tập rỗng, ghi đè của context khác không xuất
-   * hiện. Context không tồn tại trả 404 `access.context_not_found`
-   * như các đường đọc hiện hành của module.
+   * GET /access/capability-matrix?contextId=… — ma trận ghi đè đã lưu của MỌI role tại đúng một context trong một lần gọi (trang Permissions toàn trang dựng bảng chuyển vị từ đáp ứng này thay vì gọi ma trận riêng cho từng role): mỗi role kèm số người giữ phân biệt và tập ghi đè tại context được hỏi; role không có ghi đè tại context đó mang tập rỗng, ghi đè của context khác không xuất hiện. Context không tồn tại trả 404 `access.context_not_found` như các đường đọc hiện hành của module.
    */
   async getCapabilityMatrix(@Query({ schema: capabilityMatrixQuerySchema }) query: CapabilityMatrixQueryDto) {
     return this.roles.getCapabilityMatrix(query.contextId);
@@ -107,9 +96,7 @@ export class AccessController {
   @Put('roles/:id/capabilities')
   @RequireCapability('role:override', 'body:contextId')
   /**
-   * PUT /access/roles/:id/capabilities — lưu ma trận override thay toàn
-   * bộ của role tại một context trong một lần gọi nguyên tử: sau khi áp
-   * dụng, tập ghi đè của role tại context đó bằng đúng tập gửi lên.
+   * PUT /access/roles/:id/capabilities — lưu ma trận override thay toàn bộ của role tại một context trong một lần gọi nguyên tử: sau khi áp dụng, tập ghi đè của role tại context đó bằng đúng tập gửi lên.
    */
   async replaceRoleCapabilities(@Param('id', { schema: uuidIdSchema }) id: string, @Body({ schema: replaceRoleCapabilitiesSchema }) dto: ReplaceRoleCapabilitiesDto, @CurrentUser() actor: AuthenticatedUser) {
     const overrides = await this.roles.replaceRoleCapabilities(id, dto.contextId, dto.overrides, actor.id);
@@ -127,10 +114,7 @@ export class AccessController {
   @Get('assignments')
   @RequireCapability('role:assign')
   /**
-   * GET /access/assignments — liệt kê gán role cho bảng quản trị: lọc
-   * theo user/context/role, tìm kiếm theo người dùng (tên và email),
-   * phân trang phía server kèm tổng số dòng khớp, mỗi dòng kèm tên và
-   * email của người dùng được gán.
+   * GET /access/assignments — liệt kê gán role cho bảng quản trị: lọc theo user/context/role, tìm kiếm theo người dùng (tên và email), phân trang phía server kèm tổng số dòng khớp, mỗi dòng kèm tên và email của người dùng được gán.
    */
   async listAssignments(@Query({ schema: listAssignmentsQueryServerSchema }) query: ListAssignmentsQueryDto) {
     return this.roles.listAssignmentsPage(
@@ -142,16 +126,7 @@ export class AccessController {
   @Get('users-with-assignments')
   @RequireCapability('role:assign')
   /**
-   * GET /access/users-with-assignments — liệt kê người dùng kèm toàn
-   * bộ gán vai của họ cho bảng người dùng của trang vai trò: phân
-   * trang theo NGƯỜI DÙNG (mỗi người đúng một dòng, `total` đếm
-   * người), lọc đồng thời phía server theo tìm kiếm (họ tên, email,
-   * tên đăng nhập), vai trò (người có ít nhất một gán với vai đó,
-   * mảng gán trả về không bị cắt theo vai lọc) và trạng thái tài
-   * khoản; mỗi dòng gán kèm tên vai, số cấp context và `component`
-   * để nhận biết gán do ghi danh. Cổng `role:assign` tại context hệ
-   * thống như đường đọc bảng gán vai; truy vấn phá hợp đồng bị
-   * validation chặn bằng lỗi `http.validation_failed`.
+   * GET /access/users-with-assignments — liệt kê người dùng kèm toàn bộ gán vai của họ cho bảng người dùng của trang vai trò: phân trang theo NGƯỜI DÙNG (mỗi người đúng một dòng, `total` đếm người), lọc đồng thời phía server theo tìm kiếm (họ tên, email, tên đăng nhập), vai trò (người có ít nhất một gán với vai đó, mảng gán trả về không bị cắt theo vai lọc) và trạng thái tài khoản; mỗi dòng gán kèm tên vai, số cấp context và `component` để nhận biết gán do ghi danh. Cổng `role:assign` tại context hệ thống như đường đọc bảng gán vai; truy vấn phá hợp đồng bị validation chặn bằng lỗi `http.validation_failed`.
    */
   async listUsersWithAssignments(@Query({ schema: listUsersWithAssignmentsQueryServerSchema }) query: ListUsersWithAssignmentsQueryDto) {
     return this.roles.listUsersWithAssignmentsPage(

@@ -3,45 +3,30 @@
  *
  * Port từ ngữ nghĩa engine của core_question của Moodle
  * (question/engine/tests/questionusagebyactivity_test.php: usage nhóm các
- * attempt; attempt bắt đầu ở `notstarted`, một attempt deferred-feedback được
- * bắt đầu → trả lời → kết thúc/chấm, và MỌI chuyển đổi đều là một step).
+ * attempt; attempt bắt đầu ở `notstarted`, một attempt deferred-feedback được bắt đầu → trả lời → kết thúc/chấm, và MỌI chuyển đổi đều là một step).
  *
  * Trạng thái theo tên `question_state` của Moodle:
  *   notstarted → todo → complete | incomplete → gradedright | gradedpartial
  *   | gradedwrong | needsgrading; kết thúc một attempt chưa trả lời ⇒ gaveup.
  *   needsgrading là nơi các qtype chấm tay (essay) rơi vào khi kết thúc.
  *
- * Behaviour là một ĐIỂM MỞ RỘNG nội bộ (interface + registry trong
- * service). `deferredfeedback` là behaviour duy nhất đi kèm lõi:
- * response được lưu thành step và chỉ chấm khi usage kết thúc,
- * theo dòng answer/options của version câu hỏi ĐÃ PIN.
+ * Behaviour là một ĐIỂM MỞ RỘNG nội bộ (interface + registry trong service). `deferredfeedback` là behaviour duy nhất đi kèm lõi:
+ * response được lưu thành step và chỉ chấm khi usage kết thúc, theo dòng answer/options của version câu hỏi ĐÃ PIN.
  *
- * Chấm điểm theo MÔ HÌNH GIAOKHOA (quyết 12:04 ngày 26/10/2026, đợt
- * port #248): đáp án KHÔNG còn tỉ trọng (fraction) — mỗi dòng đáp án chỉ
- * mang cờ đúng/sai nhị phân `isCorrect`, và việc chấm tự động là NHỊ
- * PHÂN 1/0 cho multichoice và shortanswer:
+ * Chấm điểm theo MÔ HÌNH GIAOKHOA (quyết 12:04 ngày 26/10/2026, đợt port #248): đáp án KHÔNG còn tỉ trọng (fraction) — mỗi dòng đáp án chỉ mang cờ đúng/sai nhị phân `isCorrect`, và việc chấm tự động là NHỊ PHÂN 1/0 cho multichoice và shortanswer:
  *   - multichoice: 1 khi học sinh chọn ĐÚNG MỘT đáp án và đó là đáp án
- *     đúng duy nhất của câu (mô hình giaokhoa khoá một đáp án đúng);
- *     chọn khác, chọn nhiều hoặc không chọn đều 0.
+ *     đúng duy nhất của câu (mô hình giaokhoa khoá một đáp án đúng); chọn khác, chọn nhiều hoặc không chọn đều 0.
  *   - shortanswer: 1 khi đáp án khớp CHÍNH XÁC một đáp án được chấp
- *     nhận sau chuẩn hoá (cắt khoảng trắng hai đầu; hoa/thường theo
- *     tuỳ chọn useCase) — ký tự đại diện `*` đã BỎ HẲN (điểm quyết
- *     D-2). Chế độ đáp án số (điểm 6.3.3 issue #30) giữ nguyên: đáp án
- *     vi phạm ràng buộc số bị 0 điểm ngay, không rơi xuống so khớp.
+ *     nhận sau chuẩn hoá (cắt khoảng trắng hai đầu; hoa/thường theo tuỳ chọn useCase) — ký tự đại diện `*` đã BỎ HẲN (điểm quyết D-2). Chế độ đáp án số (điểm 6.3.3 issue #30) giữ nguyên: đáp án vi phạm ràng buộc số bị 0 điểm ngay, không rơi xuống so khớp.
  *   - essay: không bao giờ tự chấm — attempt đi vào needsgrading.
- * `rightAnswer` (đáp án đúng để hiển thị xem lại) luôn suy từ dòng đáp
- * án `isCorrect` của version đã pin, không còn suy từ fraction cao nhất.
- * Trạng thái graded* vẫn suy từ fraction bằng ngưỡng của Moodle
+ * `rightAnswer` (đáp án đúng để hiển thị xem lại) luôn suy từ dòng đáp án `isCorrect` của version đã pin, không còn suy từ fraction cao nhất. Trạng thái graded* vẫn suy từ fraction bằng ngưỡng của Moodle
  * (question/engine/states.php graded_state_for_fraction).
  *
- * Câu truefalse là trường hợp riêng (TF-A nguyên bản giaokhoa, điểm
- * quyết D-1, lát P5): MỘT câu gồm thân chung + 4 mệnh đề, mỗi mệnh đề
- * chấm 0/1 và fraction của CÂU tra thang Đ–S theo SỐ Ý ĐÚNG
+ * Câu truefalse là trường hợp riêng (TF-A nguyên bản giaokhoa, điểm quyết D-1, lát P5): MỘT câu gồm thân chung + 4 mệnh đề, mỗi mệnh đề chấm 0/1 và fraction của CÂU tra thang Đ–S theo SỐ Ý ĐÚNG
  * (`thang[số ý đúng] / 100`). Thang là CẤU HÌNH của lần ghim, đi vào
  * qua `GradingData.tfScale`; không có thang thì mặc định QĐ 764
  * [0, 10, 25, 50, 100] — thang KHÔNG nằm trong câu hỏi. Đây là nguồn
- * gradedpartial duy nhất còn lại của chấm tự động (đúng một phần số ý
- * của câu Đ–S), bên cạnh chấm tay essay.
+ * gradedpartial duy nhất còn lại của chấm tự động (đúng một phần số ý của câu Đ–S), bên cạnh chấm tay essay.
  */
 
 export const QUESTION_STATES = [
@@ -61,9 +46,7 @@ const TRANSITIONS: Record<string, QuestionState[]> = {
   incomplete: ['complete', 'incomplete', 'gaveup', 'gradedright', 'gradedpartial', 'gradedwrong', 'needsgrading'],
   complete: ['complete', 'incomplete', 'gradedright', 'gradedpartial', 'gradedwrong', 'needsgrading'],
   gradedright: [], gradedpartial: [], gradedwrong: [], gaveup: [], finished: [],
-  // Chấm tay (manual grading của Moodle): người chấm cho điểm một attempt
-  // đang chờ ở needsgrading — attempt rời needsgrading sang trạng thái
-  // graded* suy từ fraction được cho, kèm một step ghi lại việc chấm.
+  // Chấm tay (manual grading của Moodle): người chấm cho điểm một attempt đang chờ ở needsgrading — attempt rời needsgrading sang trạng thái graded* suy từ fraction được cho, kèm một step ghi lại việc chấm.
   needsgrading: ['gradedright', 'gradedpartial', 'gradedwrong'],
 };
 
@@ -74,9 +57,7 @@ export function canTransition(from: string, to: QuestionState): boolean {
   return (TRANSITIONS[from] ?? []).includes(to);
 }
 /**
- * Trạng thái đã kết thúc (không nhận thêm thao tác) hay chưa. needsgrading
- * được tính là đã kết thúc ở tầng usage như Moodle: lượt làm đã chốt, chỉ
- * còn chờ người chấm cho điểm.
+ * Trạng thái đã kết thúc (không nhận thêm thao tác) hay chưa. needsgrading được tính là đã kết thúc ở tầng usage như Moodle: lượt làm đã chốt, chỉ còn chờ người chấm cho điểm.
  */
 export function isFinishedState(state: string): boolean {
   return GRADED_STATES.includes(state as QuestionState) || state === 'gaveup' || state === 'finished' || state === 'needsgrading';
@@ -91,16 +72,13 @@ export interface GradableAnswer {
 }
 
 /**
- * Dữ liệu chấm của một version đã pin, do service dựng từ question_answers +
- * bảng options của qtype tương ứng. Đáp án đúng của multichoice/truefalse/
- * shortanswer nằm ở cờ `isCorrect` của chính các dòng đáp án; lời giải
+ * Dữ liệu chấm của một version đã pin, do service dựng từ question_answers + bảng options của qtype tương ứng. Đáp án đúng của multichoice/truefalse/ shortanswer nằm ở cờ `isCorrect` của chính các dòng đáp án; lời giải
  * (solution) KHÔNG tham gia chấm — nó chỉ là nội dung hiển thị xem lại.
  */
 export interface GradingData {
   answers: GradableAnswer[];
   /**
-   * Các mệnh đề của câu truefalse TF-A kèm đáp án đúng của từng mệnh
-   * đề — dựng từ `question_answer_keys.solution` của version đã pin
+   * Các mệnh đề của câu truefalse TF-A kèm đáp án đúng của từng mệnh đề — dựng từ `question_answer_keys.solution` của version đã pin
    * (mệnh đề và đáp án bám theo `statementId`, không theo vị trí).
    */
   truefalseStatements?: { statementId: string; value: boolean }[];
@@ -140,10 +118,7 @@ export function gradedStateForFraction(fraction: number): QuestionState {
 }
 
 /**
- * Thang Đ–S mặc định theo QĐ 764 (tỉ lệ % cho 0..4 ý đúng của một câu
- * truefalse chùm). Dùng khi lần ghim không cấu hình thang riêng —
- * thang là cấu hình của lần ghim, engine chỉ giữ bản mặc định này làm
- * giá trị rơi về, KHÔNG đọc từ câu hỏi.
+ * Thang Đ–S mặc định theo QĐ 764 (tỉ lệ % cho 0..4 ý đúng của một câu truefalse chùm). Dùng khi lần ghim không cấu hình thang riêng — thang là cấu hình của lần ghim, engine chỉ giữ bản mặc định này làm giá trị rơi về, KHÔNG đọc từ câu hỏi.
  */
 export const DEFAULT_TF_SCALE: readonly number[] = [0, 10, 25, 50, 100];
 
@@ -187,23 +162,9 @@ export function decodeTrueFalseResponse(response: string | null): Record<string,
 }
 
 /**
- * Dữ kiện băm chống trùng của một câu truefalse TF-A (issue #316): đáp
- * án của TF-A không nằm ở các dòng đáp án thông thường mà là giá trị
- * Đúng/Sai của TỪNG mệnh đề, lưu ở bản ghi phía đáp án (solution dạng
- * `{ answers: [{ statementId, value }] }`). Hàm này ghép nội dung text
- * của từng mệnh đề trong tài liệu thân câu (nút statementList chốt
- * đuôi tài liệu) với giá trị Đ/S của đúng mệnh đề đó theo statementId,
- * cho ra danh sách (text, isCorrect) cùng hình với dữ kiện băm của các
- * loại câu có dòng đáp án — để công thức hash chống trùng duy nhất
- * phủ được giá trị Đ/S: hai câu TF-A cùng chữ nhưng khác Đ/S ở một
- * mệnh đề cho hash khác nhau, không còn bị kết luận trùng hoàn toàn.
+ * Dữ kiện băm chống trùng của một câu truefalse TF-A (issue #316): đáp án của TF-A không nằm ở các dòng đáp án thông thường mà là giá trị Đúng/Sai của TỪNG mệnh đề, lưu ở bản ghi phía đáp án (solution dạng `{ answers: [{ statementId, value }] }`). Hàm này ghép nội dung text của từng mệnh đề trong tài liệu thân câu (nút statementList chốt đuôi tài liệu) với giá trị Đ/S của đúng mệnh đề đó theo statementId, cho ra danh sách (text, isCorrect) cùng hình với dữ kiện băm của các loại câu có dòng đáp án — để công thức hash chống trùng duy nhất phủ được giá trị Đ/S: hai câu TF-A cùng chữ nhưng khác Đ/S ở một mệnh đề cho hash khác nhau, không còn bị kết luận trùng hoàn toàn.
  *
- * Đây là điểm ghép DUY NHẤT dùng chung cho cả hai đường băm (version
- * đã lưu trong ngân hàng và payload chưa lưu qua MCP) để hai đường
- * không bao giờ lệch nhau. Tài liệu không đúng hình TF-A hoặc solution
- * thiếu/không đúng hình thì trả danh sách rỗng — khi đó hash rơi về
- * chỉ gồm thân câu như trước (dữ kiện lỗi hình vốn đã bị chặn ở cổng
- * tạo câu, nhánh này chỉ là phòng thủ cho dữ liệu cũ).
+ * Đây là điểm ghép DUY NHẤT dùng chung cho cả hai đường băm (version đã lưu trong ngân hàng và payload chưa lưu qua MCP) để hai đường không bao giờ lệch nhau. Tài liệu không đúng hình TF-A hoặc solution thiếu/không đúng hình thì trả danh sách rỗng — khi đó hash rơi về chỉ gồm thân câu như trước (dữ kiện lỗi hình vốn đã bị chặn ở cổng tạo câu, nhánh này chỉ là phòng thủ cho dữ liệu cũ).
  */
 export function truefalseHashAnswers(
   questionText: unknown,
@@ -236,12 +197,7 @@ export function truefalseHashAnswers(
 }
 
 /**
- * Chấm truefalse TF-A (một câu chùm 4 mệnh đề): từng mệnh đề chấm 0/1
- * bằng cách so đáp án học sinh chọn (theo `statementId`) với đáp án
- * đúng của mệnh đề đó; fraction của câu = `thang[số ý đúng] / 100` với
- * thang lấy từ `data.tfScale` của lần ghim (sai hình dạng → mặc định
- * QĐ 764). Mệnh đề học sinh không trả lời tính là ý sai. `rightAnswer`
- * hiển thị là dãy Đúng/Sai của các mệnh đề theo đúng thứ tự của câu
+ * Chấm truefalse TF-A (một câu chùm 4 mệnh đề): từng mệnh đề chấm 0/1 bằng cách so đáp án học sinh chọn (theo `statementId`) với đáp án đúng của mệnh đề đó; fraction của câu = `thang[số ý đúng] / 100` với thang lấy từ `data.tfScale` của lần ghim (sai hình dạng → mặc định QĐ 764). Mệnh đề học sinh không trả lời tính là ý sai. `rightAnswer` hiển thị là dãy Đúng/Sai của các mệnh đề theo đúng thứ tự của câu
  * (vd "Đúng, Sai, Đúng, Đúng").
  */
 function gradeTruefalse(data: GradingData, response: string | null): GradeOutcome {
@@ -264,10 +220,7 @@ function gradeTruefalse(data: GradingData, response: string | null): GradeOutcom
 export const NUMERIC_ANSWER_DEFAULT_MAX_LENGTH = 4;
 
 /**
- * Kiểm tra một đáp án theo chế độ đáp án số: sau khi cắt khoảng trắng
- * hai đầu, đáp án phải là MỘT số — dấu (nếu cho phép) + phần nguyên +
- * phần thập phân tuỳ chọn (nếu cho phép) — và tổng số ký tự không vượt
- * độ dài tối đa. Vi phạm bất kỳ ràng buộc nào → đáp án không hợp lệ.
+ * Kiểm tra một đáp án theo chế độ đáp án số: sau khi cắt khoảng trắng hai đầu, đáp án phải là MỘT số — dấu (nếu cho phép) + phần nguyên + phần thập phân tuỳ chọn (nếu cho phép) — và tổng số ký tự không vượt độ dài tối đa. Vi phạm bất kỳ ràng buộc nào → đáp án không hợp lệ.
  */
 export function isValidNumericAnswer(response: string, opts: { maxLength?: number | null; allowSign?: boolean; allowDecimal?: boolean }): boolean {
   const value = response.trim();

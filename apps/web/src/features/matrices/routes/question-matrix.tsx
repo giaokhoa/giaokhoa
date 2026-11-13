@@ -20,24 +20,12 @@ import { COGNITIVE_LEVELS, LEVEL_LABEL_KEYS, QTYPES, QTYPE_LABEL_KEYS, withApiRe
 import type { CurriculumTreeNode } from '#features/questions/utils/shared';
 
 /**
- * Màn tạo/sửa MA TRẬN trong ngân hàng ma trận (MB-1, issue #111) —
- * chuẩn §9: tạo mới và sửa là MÀN RIÊNG, danh sách (collapse "Ma trận
- * của tôi" ở trang ngân hàng) chỉ có nút Thêm mới và Sửa/Xoá tại dòng.
- * Ma trận tạo từ đây luôn thuộc bank ma trận CÁ NHÂN của giáo viên
+ * Màn tạo/sửa MA TRẬN trong ngân hàng ma trận (MB-1, issue #111) — chuẩn §9: tạo mới và sửa là MÀN RIÊNG, danh sách (collapse "Ma trận của tôi" ở trang ngân hàng) chỉ có nút Thêm mới và Sửa/Xoá tại dòng. Ma trận tạo từ đây luôn thuộc bank ma trận CÁ NHÂN của giáo viên
  * (bank_id gửi kèm; API gác quyền phụ trách tại chính bank đó).
  *
- * Flow tổng thể của file: route module prefetch dữ liệu nền qua các
- * queryOptions của `lib/matrix-data.ts` → trang đọc lại bằng cùng
- * khoá qua hooks (chi tiết ma trận là query chính; cây chương trình +
- * khả dụng kho câu là query phụ) → form sửa gửi qua các mutation của
- * cùng module dữ liệu, mutation thành công thì invalidate để trang
- * nạp lại trạng thái mới.
+ * Flow tổng thể của file: route module prefetch dữ liệu nền qua các queryOptions của `lib/matrix-data.ts` → trang đọc lại bằng cùng khoá qua hooks (chi tiết ma trận là query chính; cây chương trình + khả dụng kho câu là query phụ) → form sửa gửi qua các mutation của cùng module dữ liệu, mutation thành công thì invalidate để trang nạp lại trạng thái mới.
  *
- * Mục BẢN ĐẶC TẢ (SPEC-1, issue #233) ở cuối trang sửa: dữ liệu vào là
- * view model đặc tả do API SUY RA từ các ô của ma trận → trang chỉ
- * trình bày (bảng phẳng một dòng = một ô, cột YCCĐ lấy từ ĐVK của ô)
- * và xuất file qua endpoint export sẵn có; trang KHÔNG có thao tác
- * nhập/sửa đặc tả vì đặc tả không phải dữ liệu nhập riêng.
+ * Mục BẢN ĐẶC TẢ (SPEC-1, issue #233) ở cuối trang sửa: dữ liệu vào là view model đặc tả do API SUY RA từ các ô của ma trận → trang chỉ trình bày (bảng phẳng một dòng = một ô, cột YCCĐ lấy từ ĐVK của ô) và xuất file qua endpoint export sẵn có; trang KHÔNG có thao tác nhập/sửa đặc tả vì đặc tả không phải dữ liệu nhập riêng.
  */
 
 const SELECT_CLASS = 'h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs';

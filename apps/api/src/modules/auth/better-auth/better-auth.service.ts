@@ -1,6 +1,8 @@
 import { forwardRef, Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SpaceDatabaseService } from '../../../db/routing/space-database.service';
+import { AuthRepository } from '@giaokhoa/db/repositories/auth';
+import { SessionService } from '../session.service';
 import { PasswordService } from '../../users/password.service';
 import { AuthMailService } from '../../mail/auth-mail.service';
 import { LoginLockoutService } from '../login-lockout.service';
@@ -20,23 +22,13 @@ export type AuthCutoverStage = 'off' | 'bake';
  *
  * Instance tồn tại khi MỘT trong hai cờ bật:
  * - `BETTER_AUTH_ENABLED` (Giai đoạn 1 của issue #7): phiên BA song
- *   song với hệ auth tự viết — `enabled` giữ nguyên nghĩa này, guard
- *   nhận diện cookie và bridge chỉ chạy theo nó.
+ *   song với hệ auth tự viết — `enabled` giữ nguyên nghĩa này, guard nhận diện cookie và bridge chỉ chạy theo nó.
  * - `MCP_AS_ENABLED` (lát MCP-1, issue #163): instance kiêm máy chủ
- *   OAuth cho MCP — factory compose thêm jwt()/mcp()/cimd() (xem
- *   better-auth.instance.ts). Cờ này KHÔNG chờ cutover GĐ2: AS chỉ cần
- *   phiên BA + bảng users chung mà GĐ1 đã có.
+ *   OAuth cho MCP — factory compose thêm jwt()/mcp()/cimd() (xem better-auth.instance.ts). Cờ này KHÔNG chờ cutover GĐ2: AS chỉ cần phiên BA + bảng users chung mà GĐ1 đã có.
  *
- * Cả hai cờ đều tắt thì service không dựng instance, handler không
- * được mount (main.ts dựa vào `auth !== null`), hành vi của hệ auth
- * hiện tại không đổi. Cờ bật mà thiếu `BETTER_AUTH_SECRET` thì
- * constructor ném lỗi: app từ chối boot thay vì âm thầm chạy một hệ
- * auth thiếu secret.
+ * Cả hai cờ đều tắt thì service không dựng instance, handler không được mount (main.ts dựa vào `auth !== null`), hành vi của hệ auth hiện tại không đổi. Cờ bật mà thiếu `BETTER_AUTH_SECRET` thì constructor ném lỗi: app từ chối boot thay vì âm thầm chạy một hệ auth thiếu secret.
  *
- * Cờ thứ ba — `AUTH_CUTOVER_STAGE` (chặng 2.7): KHÔNG dựng instance,
- * nó chỉ chọn LUỒNG CHÍNH từng phần trong cửa sổ bake ('bake' đòi hỏi
- * `BETTER_AUTH_ENABLED`, xem constructor) và bật hook đồng bộ ngược
- * mật khẩu. Mặc định 'off' — hành vi hiện tại.
+ * Cờ thứ ba — `AUTH_CUTOVER_STAGE` (chặng 2.7): KHÔNG dựng instance, nó chỉ chọn LUỒNG CHÍNH từng phần trong cửa sổ bake ('bake' đòi hỏi `BETTER_AUTH_ENABLED`, xem constructor) và bật hook đồng bộ ngược mật khẩu. Mặc định 'off' — hành vi hiện tại.
  */
 @Injectable()
 export class BetterAuthService {
@@ -51,17 +43,11 @@ export class BetterAuthService {
   /** Provider xã hội đã đăng ký vào instance (chặng 2.3) — rỗng khi chưa cấu hình env nào. */
   readonly socialProvidersEnabled: readonly ('google' | 'facebook')[];
   /**
-   * Chặng cutover của GĐ2 (env `AUTH_CUTOVER_STAGE`): 'off' = luồng
-   * cũ là chính như hiện tại; 'bake' = cửa sổ bake của bước A chặng
-   * 2.7 (login-as phát phiên BA; đổi mật khẩu qua BA đồng bộ ngược
-   * hash về users.password_hash — xem createBetterAuth bên dưới).
+   * Chặng cutover của GĐ2 (env `AUTH_CUTOVER_STAGE`): 'off' = luồng cũ là chính như hiện tại; 'bake' = cửa sổ bake của bước A chặng 2.7 (login-as phát phiên BA; đổi mật khẩu qua BA đồng bộ ngược hash về users.password_hash — xem createBetterAuth bên dưới).
    */
   readonly cutoverStage: AuthCutoverStage;
   /**
-   * Tên cookie phiên như chính Better Auth đặt (thêm tiền tố
-   * `__Secure-` khi baseURL là https) — các điểm tự đặt cookie phiên
-   * BA ngoài handler của nó (login-as, chặng 2.6) phải dùng đúng tên
-   * này, và guard nhận cả hai dạng.
+   * Tên cookie phiên như chính Better Auth đặt (thêm tiền tố `__Secure-` khi baseURL là https) — các điểm tự đặt cookie phiên BA ngoài handler của nó (login-as, chặng 2.6) phải dùng đúng tên này, và guard nhận cả hai dạng.
    */
   readonly sessionCookieName: string;
   /** Cookie phiên có thuộc tính Secure hay không (khớp quy tắc của Better Auth theo baseURL). */
@@ -69,39 +55,29 @@ export class BetterAuthService {
 
   constructor(
     config: ConfigService,
-    // Handle Kysely định tuyến theo trung tâm (issue #654, D2): instance
-    // Better Auth và closure đồng bộ ngược đều chạy trên facade
-    // `routedKysely` — facade tự phân giải kho đích theo ngữ cảnh ALS
-    // của request (kho chung mặc định, kho riêng khi Host đã chuẩn bị),
-    // giữ đúng ngữ nghĩa của handle bộ máy cũ định tuyến trước đây.
+    // Handle Kysely định tuyến theo trung tâm (issue #654, D2): instance Better Auth và closure đồng bộ ngược đều chạy trên facade `routedKysely` — facade tự phân giải kho đích theo ngữ cảnh ALS của request (kho chung mặc định, kho riêng khi Host đã chuẩn bị), giữ đúng ngữ nghĩa của handle bộ máy cũ định tuyến trước đây.
     spaceDb: SpaceDatabaseService,
     passwordService: PasswordService,
     // Cổng mail auth (chặng 2.5): Nest chích từ MailModule. Phải là
     // @Optional tường minh và KHÔNG khai union `| null` ở chữ ký —
-    // union làm metadata phản chiếu thành Object khiến Nest không
-    // phân giải được tham số. Các nơi dựng service tay (unit spec,
-    // script) không truyền thì instance chạy không có đường mail —
-    // đúng nghĩa "chưa nối mail" của factory, không phải lỗi.
+    // union làm metadata phản chiếu thành Object khiến Nest không phân giải được tham số. Các nơi dựng service tay (unit spec, script) không truyền thì instance chạy không có đường mail — đúng nghĩa "chưa nối mail" của factory, không phải lỗi.
     @Optional() authMail?: AuthMailService,
-    // Cổng lockout theo tài khoản (điểm 2.4): cùng khuôn @Optional
-    // như authMail — nơi dựng tay không truyền thì instance chạy
-    // không gắn hooks lockout (đúng nghĩa "thiếu = không gắn" của
-    // factory); app thật luôn có LoginLockoutService từ AuthModule.
-    // forwardRef: một cạnh của vòng provider với cầu nối/UsersService
+    // Cổng lockout theo tài khoản (điểm 2.4): cùng khuôn @Optional như authMail — nơi dựng tay không truyền thì instance chạy không gắn hooks lockout (đúng nghĩa "thiếu = không gắn" của factory); app thật luôn có LoginLockoutService từ AuthModule. forwardRef: một cạnh của vòng provider với cầu nối/UsersService
     // (xem ghi chú tại CredentialBridgeService).
     @Optional()
     @Inject(forwardRef(() => LoginLockoutService))
     lockout?: LoginLockoutService,
-    // Cổng MFA thống nhất: `TotpService` của module auth là nơi duy
-    // nhất đọc được trạng thái + secret của `user_totp` (nguồn trạng
-    // thái MFA duy nhất). Cùng khuôn @Optional như lockout — nơi dựng
-    // service tay (unit spec) không truyền thì instance chạy không
-    // có cổng MFA; app thật luôn có qua AuthModule (module đó xuất
-    // TotpService cho module này, vòng module đã có forwardRef ở cả
-    // hai phía).
+    // Cổng MFA thống nhất: `TotpService` của module auth là nơi duy nhất đọc được trạng thái + secret của `user_totp` (nguồn trạng thái MFA duy nhất). Cùng khuôn @Optional như lockout — nơi dựng service tay (unit spec) không truyền thì instance chạy không có cổng MFA; app thật luôn có qua AuthModule (module đó xuất TotpService cho module này, vòng module đã có forwardRef ở cả hai phía).
     @Optional()
     @Inject(forwardRef(() => TotpService))
     totp?: TotpService,
+    // AuthModule xuất cả hai cổng thu hồi phiên legacy. DI tuỳ chọn giữ tương thích với các unit factory kiểm tra cấu hình BA bằng service dựng tay.
+    @Optional()
+    @Inject(forwardRef(() => AuthRepository))
+    authRepository?: AuthRepository,
+    @Optional()
+    @Inject(forwardRef(() => SessionService))
+    sessionService?: SessionService,
   ) {
     this.enabled = config.get<boolean>('BETTER_AUTH_ENABLED') ?? false;
     this.mcpAsEnabled = config.get<boolean>('MCP_AS_ENABLED') ?? false;
@@ -111,9 +87,7 @@ export class BetterAuthService {
       ...(socialProviders.facebook ? (['facebook'] as const) : []),
     ];
     this.cutoverStage = config.get<AuthCutoverStage>('AUTH_CUTOVER_STAGE') ?? 'off';
-    // Cửa sổ bake phát phiên Better Auth làm luồng chính từng phần —
-    // nó vô nghĩa khi chính Better Auth không bật: fail-fast như
-    // thiếu secret, thay vì chạy một cấu hình nửa vời.
+    // Cửa sổ bake phát phiên Better Auth làm luồng chính từng phần — nó vô nghĩa khi chính Better Auth không bật: fail-fast như thiếu secret, thay vì chạy một cấu hình nửa vời.
     if (this.cutoverStage === 'bake' && !this.enabled) {
       throw new Error(
         'AUTH_CUTOVER_STAGE=bake requires BETTER_AUTH_ENABLED=true (the bake window runs on Better Auth sessions)',
@@ -181,6 +155,17 @@ export class BetterAuthService {
       // nhất. Chưa có TotpService (nơi dựng tay) thì cổng không
       // gắn — app thật luôn có.
       mfa: totp ? { isMfaEnabled: (userId: string) => totp.isEnabled(userId) } : null,
+      // Reset/đổi mật khẩu phía BA phải vô hiệu hoá cả JWT refresh family và Redis.
+      sessionRevocation: authRepository && sessionService
+        ? {
+            revokeLegacySessions: async (userId: string): Promise<void> => {
+              await Promise.all([
+                authRepository.revokeAllForUser(userId),
+                sessionService.destroyAllForUser(userId),
+              ]);
+            },
+          }
+        : null,
       // Cửa sổ bake (chặng 2.7 bước A): mọi lần Better Auth ghi mật
       // khẩu credential mới (đổi mật khẩu, đặt lại qua reset, tạo
       // credential) đều đồng bộ ngược hash hiện hành về

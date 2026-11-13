@@ -41,12 +41,7 @@ export const ORDINARY_ROLE = 'giaokhoa_worker_ordinary';
 export const ORDINARY_ROLE_PASSWORD = 'giaokhoa-worker-ordinary-test-password';
 
 /**
- * Khoá advisory cấp phiên để tuần tự hoá việc dựng role giữa các
- * spec chạy song song trên cùng cụm Postgres: không có khoá này,
- * CREATE ROLE đồng thời làm phiên thua văng `unique_violation` trên
- * `pg_authid_rolname_index`, còn ALTER ROLE đồng thời văng
- * `tuple concurrently updated` — cả hai đều là lỗi tranh chấp của
- * chính khâu dựng role, không phải lỗi của spec.
+ * Khoá advisory cấp phiên để tuần tự hoá việc dựng role giữa các spec chạy song song trên cùng cụm Postgres: không có khoá này, CREATE ROLE đồng thời làm phiên thua văng `unique_violation` trên `pg_authid_rolname_index`, còn ALTER ROLE đồng thời văng `tuple concurrently updated` — cả hai đều là lỗi tranh chấp của chính khâu dựng role, không phải lỗi của spec.
  */
 const ORDINARY_ROLE_SETUP_LOCK = 294001;
 

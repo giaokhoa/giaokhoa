@@ -6,11 +6,9 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstS
 import { addExamSlot, createExamDraft, pinExam } from '../../support/exam-pin-helpers';
 
 /**
- * Quiz Chặng 2 (issue #30) — quy tắc thi + ghi đè, đối chiếu hồ sơ thiết
- * kế mục B và ngữ nghĩa mod_quiz của Moodle:
+ * Quiz Chặng 2 (issue #30) — quy tắc thi + ghi đè, đối chiếu hồ sơ thiết kế mục B và ngữ nghĩa mod_quiz của Moodle:
  *  - mật khẩu vào thi lưu BĂM (không lộ qua API), sai/thiếu mật khẩu bị
- *    chặn ở server với mã lỗi riêng; subnet kiểm theo IP khách thật cả
- *    khi bắt đầu lượt lẫn khi nộp từng đáp án;
+ *    chặn ở server với mã lỗi riêng; subnet kiểm theo IP khách thật cả khi bắt đầu lượt lẫn khi nộp từng đáp án;
  *  - delay1/delay2: độ trễ bắt buộc giữa các lượt chốt;
  *  - quiz_overrides: hợp nhất theo từng trường user > nhóm (rộng nhất)
  *    > quiz, áp cho cửa sổ mở–đóng, số lượt, giới hạn giờ và cả mốc quá

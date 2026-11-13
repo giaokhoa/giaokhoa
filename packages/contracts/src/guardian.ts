@@ -2,11 +2,9 @@ import { z } from 'zod';
 import type { DashboardNewResultView } from './dashboard.js';
 
 /**
- * Contracts của bề mặt phụ huynh chỉ-xem (PH-1, issue #130 — Đợt 6, xây
- * trên PH-0 #116 và DASH1 #121). Oracle: research phụ huynh/HS mục 4.3
+ * Contracts của bề mặt phụ huynh chỉ-xem (PH-1, issue #130 — Đợt 6, xây trên PH-0 #116 và DASH1 #121). Oracle: research phụ huynh/HS mục 4.3
  * (bốn khối rút gọn có chủ đích) + 5.1 (nguyên tắc cứng: chỉ-xem, chỉ con
- * mình, chỉ dữ liệu ĐÃ CÔNG BỐ, không xếp hạng/so sánh/trung bình lớp,
- * không hiện 0 thay cho chưa chấm, không hành động thay con).
+ * mình, chỉ dữ liệu ĐÃ CÔNG BỐ, không xếp hạng/so sánh/trung bình lớp, không hiện 0 thay cho chưa chấm, không hành động thay con).
  */
 
 /** Một việc của con trong tóm tắt tuần (chỉ hiển thị — không có hành động thay con). */
@@ -41,9 +39,7 @@ export interface GuardianWeeklySummaryView {
 }
 
 /**
- * Khối (c): một thông báo lớp liên quan tới khoá của con (bản thông báo đã
- * gửi cho chính học sinh). Thông báo điểm (grade_updated) bị loại ở server
- * để cổng công bố là tuyệt đối — nội dung thông báo vốn không chứa điểm số.
+ * Khối (c): một thông báo lớp liên quan tới khoá của con (bản thông báo đã gửi cho chính học sinh). Thông báo điểm (grade_updated) bị loại ở server để cổng công bố là tuyệt đối — nội dung thông báo vốn không chứa điểm số.
  */
 export interface GuardianAnnouncementView {
   id: string;
@@ -107,12 +103,9 @@ export interface GuardianStudentResultsView {
 }
 
 /**
- * PH-2 (issue #159): digest phụ huynh — tần suất tổng hợp đẩy ra cho
- * từng cặp (phụ huynh, con). Mặc định `weekly` theo research mục 1.4
+ * PH-2 (issue #159): digest phụ huynh — tần suất tổng hợp đẩy ra cho từng cặp (phụ huynh, con). Mặc định `weekly` theo research mục 1.4
  * (không push từng điểm lẻ); `daily` là tuỳ chọn của phụ huynh; `off`
- * chỉ tắt digest ĐỊNH KỲ. Đẩy riêng quá hạn ≥7 ngày là ngoại lệ tách
- * khỏi digest (research điểm chính sách 6) nên vẫn chạy bất kể tần
- * suất — kể cả khi phụ huynh chọn `off`.
+ * chỉ tắt digest ĐỊNH KỲ. Đẩy riêng quá hạn ≥7 ngày là ngoại lệ tách khỏi digest (research điểm chính sách 6) nên vẫn chạy bất kể tần suất — kể cả khi phụ huynh chọn `off`.
  */
 export type GuardianDigestFrequency = 'weekly' | 'daily' | 'off';
 

@@ -6,9 +6,7 @@ import { OBJECT_STORAGE, supportsPresignedDownloads, type ObjectStorage } from '
 /** Token tải xuống ngắn hạn được ký bằng HMAC cho lưu trữ cục bộ; khi adapter lưu trữ hỗ trợ URL presigned (S3), đích tải xuống thay vào đó là URL presigned trỏ thẳng tới kho lưu trữ. */
 @Injectable()
 /**
- * Ký URL tải file có thời hạn: HMAC qua API cho kho local; adapter có năng lực presigned (S3)
- * thì phát URL presigned trỏ thẳng tới kho. Chữ ký không thay thế kiểm quyền — chỉ dùng cho
- * các area được phép chia sẻ liên kết tạm thời; kiểm quyền vẫn diễn ra ở server trước khi phát.
+ * Ký URL tải file có thời hạn: HMAC qua API cho kho local; adapter có năng lực presigned (S3) thì phát URL presigned trỏ thẳng tới kho. Chữ ký không thay thế kiểm quyền — chỉ dùng cho các area được phép chia sẻ liên kết tạm thời; kiểm quyền vẫn diễn ra ở server trước khi phát.
  */
 export class FileSigningService {
   private readonly secret: string;

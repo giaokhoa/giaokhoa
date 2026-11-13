@@ -15,25 +15,14 @@ import { GuardianViewService } from './guardian-view.service';
 import { GuardiansService } from './guardians.service';
 
 /**
- * GuardiansModule (PH-0, issue #116 + PH-1, issue #130 + PH-2, issue
- * #159): liên kết giám hộ PH–HS + bề mặt đọc chỉ-xem của phụ huynh
- * trên dữ liệu đã công bố + tuỳ chọn tần suất digest. Phụ thuộc
- * Grades facade (sổ điểm + kết quả VN đã qua cổng công bố), Access
+ * GuardiansModule (PH-0, issue #116 + PH-1, issue #130 + PH-2, issue #159): liên kết giám hộ PH–HS + bề mặt đọc chỉ-xem của phụ huynh trên dữ liệu đã công bố + tuỳ chọn tần suất digest. Phụ thuộc Grades facade (sổ điểm + kết quả VN đã qua cổng công bố), Access
  * (PermissionEvaluator), Users, Events (outbox cho audit), Dashboard
  * (tập khoá ghi danh + hàm kết quả mới đã công bố dùng chung với
  * DASH1) và Tenants.
  *
- * Nửa tổng hợp + gửi của digest phụ huynh nằm ở phía WORKER (relay
- * outbox → hàng đợi `guardian-digest-events` →
- * `GuardianDigestHandlerService`, từ issue con #518 của #491): phía
- * API không còn consumer polling cho hai loại sự kiện digest và
- * không còn phụ thuộc MessagingModule — đường phát thông báo của
- * digest là `NotificationDeliveryService.notify` phía worker, dùng
- * chung hàng đợi phát kênh ngoài với phía API.
+ * Nửa tổng hợp + gửi của digest phụ huynh nằm ở phía WORKER (relay outbox → hàng đợi `guardian-digest-events` → `GuardianDigestHandlerService`, từ issue con #518 của #491): phía API không còn consumer polling cho hai loại sự kiện digest và không còn phụ thuộc MessagingModule — đường phát thông báo của digest là `NotificationDeliveryService.notify` phía worker, dùng chung hàng đợi phát kênh ngoài với phía API.
  *
- * Hai repository của module (liên kết giám hộ và bề mặt chỉ-xem) nằm
- * ở `@giaokhoa/db/repositories/*` trên Kysely và được dựng ở đây bằng
- * factory trên facade định tuyến kho trung tâm
+ * Hai repository của module (liên kết giám hộ và bề mặt chỉ-xem) nằm ở `@giaokhoa/db/repositories/*` trên Kysely và được dựng ở đây bằng factory trên facade định tuyến kho trung tâm
  * (`SpaceDatabaseService.routedKysely`) — cùng khuôn lắp ráp của các
  * module đã chuyển đổi.
  */

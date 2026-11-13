@@ -1,23 +1,11 @@
 /**
  * Repository của cụm INTEGRATIONS trên Kysely.
  *
- * Vai trò: mọi truy cập tới hai bảng external_services và
- * external_tokens của kho trung tâm tập trung ở đây, cộng một truy
- * vấn đọc trạng thái tài khoản tối thiểu trên bảng users (bảng của
- * module users — repository này chỉ ĐỌC hai cờ của nó cho đường
- * kiểm tra chủ token, không sở hữu bảng). Repository không chứa
- * luật nghiệp vụ — vòng đời token và kiểm tra tại lúc dùng nằm ở
- * tầng service phía ứng dụng.
+ * Vai trò: mọi truy cập tới hai bảng external_services và external_tokens của kho trung tâm tập trung ở đây, cộng một truy vấn đọc trạng thái tài khoản tối thiểu trên bảng users (bảng của module users — repository này chỉ ĐỌC hai cờ của nó cho đường kiểm tra chủ token, không sở hữu bảng). Repository không chứa luật nghiệp vụ — vòng đời token và kiểm tra tại lúc dùng nằm ở tầng service phía ứng dụng.
  *
- * Khuôn hình dạng dữ liệu ở biên repository (theo khuôn pilot kho
- * control plane): bên trong dùng tên bảng/cột snake_case của
- * schema codegen; bên ngoài nhận/trả hình dạng camelCase qua danh
- * sách cột có bí danh tường minh và các hàm ánh xạ
- * `*InsertValues`/`*UpdateSet` loại `undefined` từng trường (luật
- * T-4). Cột jsonb `functions` khi ghi đi qua `jsonbValue`
+ * Khuôn hình dạng dữ liệu ở biên repository (theo khuôn pilot kho control plane): bên trong dùng tên bảng/cột snake_case của schema codegen; bên ngoài nhận/trả hình dạng camelCase qua danh sách cột có bí danh tường minh và các hàm ánh xạ `*InsertValues`/`*UpdateSet` loại `undefined` từng trường (luật T-4). Cột jsonb `functions` khi ghi đi qua `jsonbValue`
  * (serialize tường minh + `::jsonb`) vì giá trị của nó là một MẢNG
- * ở cấp cao nhất — hình dạng bị driver `pg` hiểu nhầm là mảng
- * PostgreSQL nếu gắn tham số trực tiếp.
+ * ở cấp cao nhất — hình dạng bị driver `pg` hiểu nhầm là mảng PostgreSQL nếu gắn tham số trực tiếp.
  */
 import { sql, type Insertable, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';

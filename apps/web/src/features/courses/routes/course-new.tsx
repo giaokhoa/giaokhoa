@@ -14,21 +14,16 @@ import { useCurriculumFrameUnits, useCurriculumSubjectsScoped } from '#lib/curri
 import { courseNewPageClientLoader, useApplyCurriculumFrame, useCourseCategoryTree, useCourseList, useCourseTemplates, useCreateClassForWizard, useCreateCourse, useDuplicateCourse, useWizardClasses } from '../queries/course-new';
 
 /**
- * Wizard tạo khoá học (K1 — issue #68): màn riêng theo chuẩn §9 với
- * NĂM đường tạo khoá cho giáo viên:
+ * Wizard tạo khoá học (K1 — issue #68): màn riêng theo chuẩn §9 với NĂM đường tạo khoá cho giáo viên:
  *  1. Từ khung chương trình GDPT 2018 (K0a): tạo khoá trắng gắn môn ×
  *     khối rồi nạp ngay các đơn vị khung đã tích chọn.
  *  2. Từ khung SGK (K0b — feat #67 đang thi công song song): đường này
- *     dựng theo cùng interface khung của K0a; khi K0b merge, panel này
- *     nối vào tầng SGK — hiện hiển thị trạng thái chờ nối, không giả
- *     vờ có dữ liệu.
+ *     dựng theo cùng interface khung của K0a; khi K0b merge, panel này nối vào tầng SGK — hiện hiển thị trạng thái chờ nối, không giả vờ có dữ liệu.
  *  3. Nhân bản khoá có sẵn (Re-run): chọn nguồn → tên/mã được điền sẵn
- *     → ngày bắt đầu mới (tuỳ chọn, làm mốc lùi hạn) → tạo; tối đa 4
- *     thao tác. Bản sao là nháp, không chứa người học/bài làm.
+ *     → ngày bắt đầu mới (tuỳ chọn, làm mốc lùi hạn) → tạo; tối đa 4 thao tác. Bản sao là nháp, không chứa người học/bài làm.
  *  4. Khoá trắng: chỉ thông tin cơ bản.
  *  5. Từ khoá mẫu tổ/trường: danh sách mẫu từ GET /courses/templates,
- *     tạo qua cùng endpoint nhân bản.
- * Tạo xong chuyển thẳng tới Builder Outline của khoá mới.
+ *     tạo qua cùng endpoint nhân bản. Tạo xong chuyển thẳng tới Builder Outline của khoá mới.
  */
 type WizardPath = 'frame' | 'book' | 'duplicate' | 'blank' | 'template';
 
@@ -45,12 +40,7 @@ export function CourseNewPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [path, setPath] = useState<WizardPath>('blank');
-  // Dữ liệu nền của wizard qua TanStack Query (F-01 của #133,
-  // `lib/course-new-data.ts` + hook chương trình của
-  // `lib/curriculum.ts`): clientLoader của route nạp trước các danh
-  // sách nền; tải hỏng từng danh sách thì coi như rỗng như bản thủ
-  // công. Các lựa chọn suy từ dữ liệu (danh mục đầu, lớp chọn sẵn)
-  // giữ nguyên quy tắc chọn của bản thủ công.
+  // Dữ liệu nền của wizard qua TanStack Query (F-01 của #133, `lib/course-new-data.ts` + hook chương trình của `lib/curriculum.ts`): clientLoader của route nạp trước các danh sách nền; tải hỏng từng danh sách thì coi như rỗng như bản thủ công. Các lựa chọn suy từ dữ liệu (danh mục đầu, lớp chọn sẵn) giữ nguyên quy tắc chọn của bản thủ công.
   const treeQuery = useCourseCategoryTree();
   const categories = useMemo(() => {
     const flat: CourseCategory[] = [];
@@ -83,14 +73,9 @@ export function CourseNewPage() {
   const [templateId, setTemplateId] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // Bước lớp (CLASS-1, issue #184): khoá PHẢI thuộc một lớp (API bắt
-  // classId từ CLASS-0). GV chưa có lớp nào thì wizard chèn bước tạo lớp
-  // nội tuyến 1 trường tên — KHÔNG sinh lớp mặc định ẩn.
+  // Bước lớp (CLASS-1, issue #184): khoá PHẢI thuộc một lớp (API bắt classId từ CLASS-0). GV chưa có lớp nào thì wizard chèn bước tạo lớp nội tuyến 1 trường tên — KHÔNG sinh lớp mặc định ẩn.
   const [classChoice, setClassChoice] = useState<string | null>(null);
-  // Chọn sẵn lớp từ ?classId= (nút "Tạo khoá trong lớp" ở chi tiết
-  // lớp) nếu lớp đó có trong danh sách, không thì lớp đang hoạt động
-  // đầu tiên — như nhịp chọn sẵn sau khi nạp của bản thủ công; người
-  // dùng đổi lựa chọn thì lựa chọn của họ thắng.
+  // Chọn sẵn lớp từ ?classId= (nút "Tạo khoá trong lớp" ở chi tiết lớp) nếu lớp đó có trong danh sách, không thì lớp đang hoạt động đầu tiên — như nhịp chọn sẵn sau khi nạp của bản thủ công; người dùng đổi lựa chọn thì lựa chọn của họ thắng.
   const classPreselect = (() => {
     const wanted = new URLSearchParams(location.search).get('classId');
     if (wanted && classes.some((c) => c.id === wanted)) return wanted;

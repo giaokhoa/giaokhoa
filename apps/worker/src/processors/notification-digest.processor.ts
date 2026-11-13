@@ -7,10 +7,8 @@ import { ResendMailService, type WorkerMailSendResult } from '../resend-mail.ser
 import { SpaceDatabaseService } from '../db/routing/space-database.service';
 
 /**
- * Hai loại bắt buộc (P2) — bản chiếu tối thiểu của `mandatoryInApp`
- * trong registry phía API, cùng bản chiếu ở processor dispatch:
- * chính sách admin cấp site không bao giờ chặn chúng, kể cả ở khâu
- * tổng hợp này.
+ * Hai loại bắt buộc (P2) — bản chiếu tối thiểu của `mandatoryInApp` trong registry phía API, cùng bản chiếu ở processor dispatch:
+ * chính sách admin cấp site không bao giờ chặn chúng, kể cả ở khâu tổng hợp này.
  */
 const MANDATORY_PROVIDERS = new Set(['enrol_expiry_warning', 'admin_announcement']);
 
@@ -33,15 +31,9 @@ export interface NotificationDigestSweepResult {
 }
 
 /**
- * Tổng hợp email theo ngày cho thông báo (NB-5, issue #174 — chính
- * sách P1: nhóm học tập dùng tần suất email `daily`).
+ * Tổng hợp email theo ngày cho thông báo (NB-5, issue #174 — chính sách P1: nhóm học tập dùng tần suất email `daily`).
  *
- * Điểm vào: job `sweep` trên queue `notification-digests`, do
- * NotificationDigestScheduler đăng ký lặp mỗi ngày (07:15 giờ Việt
- * Nam). Processor `notification-dispatch` KHÔNG gửi các job email có
- * tần suất `daily` — nó chỉ ghi một dòng dispatch log trạng thái
- * `digest-queued` cho mỗi sự kiện. Lượt quét này là nơi duy nhất biến
- * các dòng chờ đó thành email thật.
+ * Điểm vào: job `sweep` trên queue `notification-digests`, do NotificationDigestScheduler đăng ký lặp mỗi ngày (07:15 giờ Việt Nam). Processor `notification-dispatch` KHÔNG gửi các job email có tần suất `daily` — nó chỉ ghi một dòng dispatch log trạng thái `digest-queued` cho mỗi sự kiện. Lượt quét này là nơi duy nhất biến các dòng chờ đó thành email thật.
  *
  * Flow một lượt quét:
  *  1. Đọc mọi dòng dispatch log kênh email đang ở `digest-queued`
@@ -50,35 +42,25 @@ export interface NotificationDigestSweepResult {
  *  2. Mỗi người nhận: nếu không còn tồn tại/bị đình chỉ/đã xoá →
  *     chốt các dòng của họ thành `skipped-suspended`, không gửi.
  *  3. Kiểm LUẬT TẠI LÚC GỬI cho từng dòng theo đúng thứ tự của đường
- *     dispatch (luật sống tại thời điểm tổng hợp thắng trạng thái lúc
- *     xếp hàng — người dùng tắt email hoặc admin tắt loại SAU khi sự
- *     kiện xếp hàng thì email tổng hợp vẫn phải tôn trọng):
+ *     dispatch (luật sống tại thời điểm tổng hợp thắng trạng thái lúc xếp hàng — người dùng tắt email hoặc admin tắt loại SAU khi sự kiện xếp hàng thì email tổng hợp vẫn phải tôn trọng):
  *     - Chính sách admin cấp site (NB-7) đã tắt loại của dòng →
- *       chốt dòng `skipped-admin-disabled` (hai loại bắt buộc P2
- *       miễn trừ, như mọi đường phát khác).
+ *       chốt dòng `skipped-admin-disabled` (hai loại bắt buộc P2 miễn trừ, như mọi đường phát khác).
  *     - Tuỳ chọn email của người nhận cho loại của dòng ở trạng
- *       thái tắt (khoá v2 `off`, hoặc mô hình cũ tắt ở cả hai trạng
- *       thái đăng nhập) → chốt dòng `skipped-preference`.
+ *       thái tắt (khoá v2 `off`, hoặc mô hình cũ tắt ở cả hai trạng thái đăng nhập) → chốt dòng `skipped-preference`.
  *  4. Các dòng còn lại dựng thành MỘT email tổng hợp: tiêu đề đếm số
- *     sự kiện, thân là danh sách tiêu đề của từng sự kiện. Các tiêu
- *     đề này là bản tối thiểu hoá cho kênh ngoài ngay từ nơi phát
+ *     sự kiện, thân là danh sách tiêu đề của từng sự kiện. Các tiêu đề này là bản tối thiểu hoá cho kênh ngoài ngay từ nơi phát
  *     (P4) — email tổng hợp vì vậy không chứa điểm số hay nội dung
  *     tin nhắn, và KHÔNG kèm thân chi tiết của từng sự kiện.
  *  5. Gửi qua Resend:
  *     - Thành công → cập nhật các dòng thành `digest-sent`.
  *     - Transport chưa cấu hình (fail-soft có khai báo) → GIỮ
- *       NGUYÊN trạng thái chờ: cấu hình xong thì lượt sau gửi, không
- *       mất sự kiện, không ghi nhận giả.
+ *       NGUYÊN trạng thái chờ: cấu hình xong thì lượt sau gửi, không mất sự kiện, không ghi nhận giả.
  *     - Resend trả lỗi thật → giữ nguyên trạng thái chờ, ghi log
- *       lỗi, tiếp tục với người nhận khác (một người lỗi không chặn
- *       cả lượt); lượt quét sau thử lại.
+ *       lỗi, tiếp tục với người nhận khác (một người lỗi không chặn cả lượt); lượt quét sau thử lại.
  *
  * Idempotent: một dòng rời `digest-queued` ngay khi đã chốt kết quả
  * (gửi thành công hoặc người nhận không còn hợp lệ) nên chạy lại
- * lượt quét không gửi trùng. Ngoại lệ cửa sổ hẹp đã biết: tiến trình
- * chết giữa lúc Resend đã nhận mail và lúc cập nhật trạng thái →
- * lượt sau gửi lại các mục đó (chấp nhận trùng thay vì mất — cùng
- * đánh đổi với đường dispatch gửi ngay).
+ * lượt quét không gửi trùng. Ngoại lệ cửa sổ hẹp đã biết: tiến trình chết giữa lúc Resend đã nhận mail và lúc cập nhật trạng thái → lượt sau gửi lại các mục đó (chấp nhận trùng thay vì mất — cùng đánh đổi với đường dispatch gửi ngay).
  */
 @Processor('notification-digests')
 export class NotificationDigestProcessor extends WorkerHost {
@@ -94,9 +76,7 @@ export class NotificationDigestProcessor extends WorkerHost {
    * Xử lý một job của queue tương ứng.
    */
   async process(job: Job): Promise<NotificationDigestSweepResult> {
-    // Processor nền quét xuyên tenant — bọc ngữ cảnh platform tường
-    // minh để RLS fail-closed không làm mù dữ liệu (như các
-    // processor nền khác của worker).
+    // Processor nền quét xuyên tenant — bọc ngữ cảnh platform tường minh để RLS fail-closed không làm mù dữ liệu (như các processor nền khác của worker).
     void job;
     return tenantAls.run({ platform: true }, () => this.sweep());
   }
@@ -131,9 +111,7 @@ export class NotificationDigestProcessor extends WorkerHost {
         .where('id', '=', userId)
         .executeTakeFirst();
       if (!user || user.suspended || user.deleted) {
-        // Người nhận không còn hợp lệ tại thời điểm tổng hợp: chốt
-        // các dòng chờ thành skipped-suspended như luật ở mọi đường
-        // phát khác, không gửi gì.
+        // Người nhận không còn hợp lệ tại thời điểm tổng hợp: chốt các dòng chờ thành skipped-suspended như luật ở mọi đường phát khác, không gửi gì.
         await this.spaceDb.routedKysely
           .updateTable('notification_dispatch_log')
           .set({ status: 'skipped-suspended' })
@@ -143,10 +121,7 @@ export class NotificationDigestProcessor extends WorkerHost {
         result.usersSkipped += 1;
         continue;
       }
-      // Kiểm luật tại lúc gửi cho từng dòng (bước 3 của flow ở đầu
-      // file): nạp tuỳ chọn của người nhận + chính sách site cho các
-      // loại có mặt trong nhóm, rồi phân nhóm dòng thành bị chặn bởi
-      // admin / bị chặn bởi tuỳ chọn / được gửi.
+      // Kiểm luật tại lúc gửi cho từng dòng (bước 3 của flow ở đầu file): nạp tuỳ chọn của người nhận + chính sách site cho các loại có mặt trong nhóm, rồi phân nhóm dòng thành bị chặn bởi admin / bị chặn bởi tuỳ chọn / được gửi.
       const prefs = await this.spaceDb.routedKysely
         .selectFrom('user_preferences')
         .select(['name', 'value'])

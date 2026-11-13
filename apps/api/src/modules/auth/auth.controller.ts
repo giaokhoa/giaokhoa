@@ -14,9 +14,8 @@ import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { RequireCapability } from '../../common/require-capability.decorator';
 import { UsersService } from '../users/users.service';
 import { changePasswordSchema, loginAsSchema, loginSchema, mfaTotpCodeSchema, mfaTotpSetupSchema, mfaVerifySchema, refreshTokenSchema, type ChangePasswordDto, type LoginAsDto, type LoginDto, type MfaTotpCodeDto, type MfaTotpSetupDto, type MfaVerifyDto, type RefreshDto } from './dto/auth.dto';
-import { AuthService, type PasswordLoginOutcome } from './auth.service';
+import { AuthService, type PasswordLoginOutcome, type CurrentSessionRefs } from './auth.service';
 import { AUTHENTICATED_VIA_BETTER_AUTH } from '../../common/better-auth-session.guard';
-import type { CurrentSessionRefs } from './auth.service';
 import { BetterAuthService } from './better-auth/better-auth.service';
 
 
@@ -62,8 +61,7 @@ export class AuthController {
    */
   async login(@Req() req: Request & { user: { id: string; username: string } }, @Body({ schema: loginSchema }) _dto: LoginDto) {
     const user = await this.users.getUser(req.user.id);
-    // validateCredentials đã chạy bên trong local strategy; bước hoàn tất
-    // dùng chung sẽ cấp một family token mới — hoặc một thử thách MFA.
+    // validateCredentials đã chạy bên trong local strategy; bước hoàn tất dùng chung sẽ cấp một family token mới — hoặc một thử thách MFA.
     return loginResponse(await this.auth.completePasswordLogin(user, { ip: clientIpOf(req), userAgent: req.headers['user-agent'] }));
   }
 
@@ -87,11 +85,7 @@ export class AuthController {
 
   @Post('mfa/totp/setup')
   /**
-   * POST /auth/mfa/totp/setup — khởi tạo secret TOTP chờ xác nhận; secret + otpauth URL chỉ trả ở bước này.
-   * Thân là không bắt buộc; khi tài khoản đã có factor đang bật, thân
-   * phải kèm `currentCode` (mã TOTP hiện tại) để tái xác thực trước
-   * khi thay factor — thiếu/sai mã thì bị từ chối và factor cũ giữ
-   * nguyên (cổng thực thi ở `TotpService.setup`).
+   * POST /auth/mfa/totp/setup — khởi tạo secret TOTP chờ xác nhận; secret + otpauth URL chỉ trả ở bước này. Thân là không bắt buộc; khi tài khoản đã có factor đang bật, thân phải kèm `currentCode` (mã TOTP hiện tại) để tái xác thực trước khi thay factor — thiếu/sai mã thì bị từ chối và factor cũ giữ nguyên (cổng thực thi ở `TotpService.setup`).
    */
   async mfaTotpSetup(@Body({ schema: mfaTotpSetupSchema }) dto: MfaTotpSetupDto, @CurrentUser() actor: AuthenticatedUser) {
     const user = await this.users.getUser(actor.id);
@@ -128,15 +122,7 @@ export class AuthController {
 
   // --- đăng nhập quản trị platform (issue #584) ---------------------------
   /**
-   * Bề mặt đăng nhập quản trị platform, TÁCH khỏi bề mặt đăng nhập
-   * nghiệp vụ: chỉ tài khoản quản trị platform mới qua được; token
-   * trả ra mang audience `platform`, CHỈ dùng được cho route vận
-   * hành mang `@PlatformRoute()` (hiện là control plane) và không
-   * gọi được API nghiệp vụ — ngược lại token nghiệp vụ cũng không
-   * gọi được route vận hành. Bề mặt này sống ở địa chỉ gốc; đăng
-   * nhập tại địa chỉ kho riêng tra tài khoản trong kho đó nên
-   * quản trị platform ở kho chung không đăng nhập được tại đó.
-   * User bật MFA thì dừng ở challenge của luồng platform.
+   * Bề mặt đăng nhập quản trị platform, TÁCH khỏi bề mặt đăng nhập nghiệp vụ: chỉ tài khoản quản trị platform mới qua được; token trả ra mang audience `platform`, CHỈ dùng được cho route vận hành mang `@PlatformRoute()` (hiện là control plane) và không gọi được API nghiệp vụ — ngược lại token nghiệp vụ cũng không gọi được route vận hành. Bề mặt này sống ở địa chỉ gốc; đăng nhập tại địa chỉ kho riêng tra tài khoản trong kho đó nên quản trị platform ở kho chung không đăng nhập được tại đó. User bật MFA thì dừng ở challenge của luồng platform.
    */
   /**
    * Khi bật #8: chỉ Host gốc được dùng cổng vận hành, mọi credential
@@ -177,9 +163,7 @@ export class AuthController {
   }
 
   /**
-   * POST /auth/platform/mfa/verify — bước hai của đăng nhập
-   * platform: challenge token của luồng platform + mã TOTP ⇒
-   * access token platform (không có refresh token).
+   * POST /auth/platform/mfa/verify — bước hai của đăng nhập platform: challenge token của luồng platform + mã TOTP ⇒ access token platform (không có refresh token).
    */
   @Public()
   @SkipSpaceContext()
@@ -251,10 +235,7 @@ export class AuthController {
   /**
    * POST /auth/login-as/:id — đăng nhập thay user khác (cần capability).
    *
-   * Theo chặng cutover (GĐ2 chặng 2.6/2.7, issue #7): chặng off trả cặp
-   * token JWT như cũ; chặng bake (AUTH_CUTOVER_STAGE=bake) đặt COOKIE
-   * phiên Better Auth đã ký cho danh tính đích và đáp ứng không mang
-   * token — client chuyển sang danh tính đích bằng chính cookie đó.
+   * Theo chặng cutover (GĐ2 chặng 2.6/2.7, issue #7): chặng off trả cặp token JWT như cũ; chặng bake (AUTH_CUTOVER_STAGE=bake) đặt COOKIE phiên Better Auth đã ký cho danh tính đích và đáp ứng không mang token — client chuyển sang danh tính đích bằng chính cookie đó.
    */
   async loginAs(@Body({ schema: loginAsSchema }) dto: LoginAsDto, @CurrentUser() actor: AuthenticatedUser, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const outcome = await this.auth.loginAs(actor.id, dto.userId, dto.reason, { ip: clientIpOf(req), userAgent: req.headers['user-agent'] });
@@ -280,10 +261,7 @@ export class AuthController {
   @Public()
   @Post('session/login')
   /**
-   * POST /auth/session/login — đăng nhập đặt cookie phiên. User đã bật
-   * MFA thì KHÔNG đặt cookie nào: đáp ứng là challenge của luồng session,
-   * phiên chỉ sinh sau POST /auth/session/mfa/verify (đúng nghĩa chặn của
-   * tool_mfa — trước đây route này đi thẳng, bỏ qua MFA).
+   * POST /auth/session/login — đăng nhập đặt cookie phiên. User đã bật MFA thì KHÔNG đặt cookie nào: đáp ứng là challenge của luồng session, phiên chỉ sinh sau POST /auth/session/mfa/verify (đúng nghĩa chặn của tool_mfa — trước đây route này đi thẳng, bỏ qua MFA).
    */
   async sessionLogin(@Body({ schema: loginSchema }) dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const outcome = await this.auth.sessionLogin(dto.username, dto.password, sessionCookieOf(req), clientIpOf(req), req.headers['user-agent']);
@@ -354,8 +332,7 @@ export class AuthController {
   @Delete('sessions/:sessionId')
   /**
    * DELETE /auth/sessions/:sessionId — thu hồi một phiên khác của chính
-   * người gọi (`sessionId` là id trong danh sách GET /auth/sessions: id
-   * phiên web hoặc family id của phiên API).
+   * người gọi (`sessionId` là id trong danh sách GET /auth/sessions: id phiên web hoặc family id của phiên API).
    */
   async revokeMySession(@Param('sessionId', { schema: uuidIdSchema }) sessionId: string, @CurrentUser() actor: AuthenticatedUser, @Req() req: Request) {
     return this.auth.revokeMySession(actor.id, sessionId, this.currentSessionRefs(actor, req));

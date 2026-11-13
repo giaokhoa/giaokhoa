@@ -3,37 +3,22 @@
  *
  * Vai trò: mọi truy cập tới các bảng học liệu của kho trung tâm
  * (pages — trang đọc mod_page, resources — tài nguyên mod_resource,
- * course_last_access — dấu vết mở học gần nhất,
- * course_module_progress — tiến độ xem theo mục, learning_records
- * — hồ sơ hoàn thành) tập trung ở đây. Repository không chứa luật
- * nghiệp vụ — tính "percent chỉ tăng", cổng truy cập và tổng hợp
- * tiến độ nằm ở tầng service phía ứng dụng. Repository này không
- * mở transaction nào (mọi phương thức chạy trên handle gốc), đúng
- * bề mặt của repository cũ.
+ * course_last_access — dấu vết mở học gần nhất, course_module_progress — tiến độ xem theo mục, learning_records — hồ sơ hoàn thành) tập trung ở đây. Repository không chứa luật nghiệp vụ — tính "percent chỉ tăng", cổng truy cập và tổng hợp tiến độ nằm ở tầng service phía ứng dụng. Repository này không mở transaction nào (mọi phương thức chạy trên handle gốc), đúng bề mặt của repository cũ.
  *
  * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong repository, truy vấn viết trên interface schema sinh
  *   bằng codegen: tên bảng/cột giữ nguyên snake_case của database
  *   (riêng bảng pages/resources, cột khoá ngoại tên là `course`
- *   trong database nên hình dạng camelCase phía tiêu thụ cũng giữ
- *   nguyên tên `course`).
+ *   trong database nên hình dạng camelCase phía tiêu thụ cũng giữ nguyên tên `course`).
  * - Bên ngoài, repository trả/nhận các hình dạng dòng camelCase như
- *   phía tiêu thụ đang dùng (khớp `$inferSelect`/`$inferInsert` của
- *   repository cũ trước chuyển đổi): cột được chọn bằng danh sách tường minh
- *   có bí danh, giá trị ghi được ánh xạ từng trường ở các hàm
- *   `*InsertValues`/`*UpdateSet` trong file này.
+ *   phía tiêu thụ đang dùng (khớp `$inferSelect`/`$inferInsert` của repository cũ trước chuyển đổi): cột được chọn bằng danh sách tường minh có bí danh, giá trị ghi được ánh xạ từng trường ở các hàm `*InsertValues`/`*UpdateSet` trong file này.
  * - Giá trị `undefined` bị LOẠI khỏi values/set trước khi gọi
- *   builder (quy tắc T-4 đã chốt ở pilot); mọi giá trị where là
- *   tham số bắt buộc.
+ *   builder (quy tắc T-4 đã chốt ở pilot); mọi giá trị where là tham số bắt buộc.
  * - `onConflict` theo khoá phức hợp: last-access neo cặp
  *   (user, course), module-progress neo cặp (user, cm),
- *   learning-records `doNothing()` trên cặp (user, cm) — lần hoàn
- *   thành đầu tiên là bản ghi duy nhất.
+ *   learning-records `doNothing()` trên cặp (user, cm) — lần hoàn thành đầu tiên là bản ghi duy nhất.
  * - Hai đường đọc giữ nguyên hành vi lọc tại tầng JS của repository
- *   cũ: `getLastAccess` đọc theo user rồi khớp course trong bộ nhớ,
- *   `getModuleProgress` đọc theo cm rồi đối chiếu user trong bộ
- *   nhớ — không đổi thành điều kiện SQL để hành vi (và thứ tự dòng
- *   đầu tiên) giữ nguyên.
+ *   cũ: `getLastAccess` đọc theo user rồi khớp course trong bộ nhớ, `getModuleProgress` đọc theo cm rồi đối chiếu user trong bộ nhớ — không đổi thành điều kiện SQL để hành vi (và thứ tự dòng đầu tiên) giữ nguyên.
  */
 import type { InsertObject, UpdateObject } from 'kysely';
 import type { CentreDb, CentreDB } from '../client';
@@ -402,9 +387,7 @@ export class ContentRepository {
   }
 
   /**
-   * Ghi tiến độ xem một mục: percent chỉ TĂNG (giữ giá trị cao nhất đã
-   * đạt — ôn lại không bị phạt), vị trí dở dang lấy theo lần báo mới
-   * nhất.
+   * Ghi tiến độ xem một mục: percent chỉ TĂNG (giữ giá trị cao nhất đã đạt — ôn lại không bị phạt), vị trí dở dang lấy theo lần báo mới nhất.
    */
   async upsertModuleProgress(
     userId: string,
@@ -451,9 +434,7 @@ export class ContentRepository {
   }
 
   /**
-   * Ghi bản ghi hồ sơ hoàn thành (chụp tên mục tại thời điểm hoàn
-   * thành). Idempotent: lần hoàn thành đầu tiên của mỗi (HS, mục) là
-   * bản ghi duy nhất — các lần hoàn thành sau không ghi đè.
+   * Ghi bản ghi hồ sơ hoàn thành (chụp tên mục tại thời điểm hoàn thành). Idempotent: lần hoàn thành đầu tiên của mỗi (HS, mục) là bản ghi duy nhất — các lần hoàn thành sau không ghi đè.
    */
   async insertLearningRecord(v: NewLearningRecord): Promise<void> {
     await this.db()

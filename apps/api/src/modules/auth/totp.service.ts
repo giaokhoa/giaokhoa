@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { generateSecret, generateURI, verify } from 'otplib';
@@ -12,15 +12,9 @@ const TOTP_EPOCH_TOLERANCE_SECONDS = 30;
 @Injectable()
 /**
  * MFA theo factor TOTP (đối chiếu Moodle tool_mfa factor_totp, RFC 6238):
- * sinh secret, dựng otpauth URL, kiểm chứng mã 6 số bước 30 giây với cửa sổ
- * ±1 bước — qua thư viện `otplib` (bản 13.5.0, API hàm `generateSecret` /
- * `generateURI` / `verify({ epochTolerance })` đã kiểm chứng với docs hiện hành).
+ * sinh secret, dựng otpauth URL, kiểm chứng mã 6 số bước 30 giây với cửa sổ ±1 bước — qua thư viện `otplib` (bản 13.5.0, API hàm `generateSecret` / `generateURI` / `verify({ epochTolerance })` đã kiểm chứng với docs hiện hành).
  *
- * Bảo mật lưu trữ: secret KHÔNG lưu thô và KHÔNG bao giờ được ghi log.
- * Secret được mã hoá AES-256-GCM bằng khoá 32 byte suy ra SHA-256 từ biến
- * môi trường `MFA_ENCRYPTION_KEY`; biến này không bắt buộc — khi vắng mặt,
- * khoá được suy ra từ `JWT_SECRET` (đủ an toàn cho môi trường test/dev,
- * môi trường thật nên đặt khoá riêng để xoay vòng độc lập).
+ * Bảo mật lưu trữ: secret KHÔNG lưu thô và KHÔNG bao giờ được ghi log. Secret được mã hoá AES-256-GCM bằng khoá 32 byte suy ra SHA-256 từ biến môi trường `MFA_ENCRYPTION_KEY`; biến này không bắt buộc — khi vắng mặt, khoá được suy ra từ `JWT_SECRET` (đủ an toàn cho môi trường test/dev, môi trường thật nên đặt khoá riêng để xoay vòng độc lập).
  */
 export class TotpService {
   constructor(
@@ -35,8 +29,7 @@ export class TotpService {
   }
 
   /**
-   * Mã hoá secret TOTP trước khi lưu: AES-256-GCM, IV ngẫu nhiên mỗi lần;
-   * định dạng lưu là base64url của `iv | authTag | ciphertext`.
+   * Mã hoá secret TOTP trước khi lưu: AES-256-GCM, IV ngẫu nhiên mỗi lần; định dạng lưu là base64url của `iv | authTag | ciphertext`.
    */
   private encryptSecret(secret: string): string {
     const iv = randomBytes(12);
@@ -54,9 +47,7 @@ export class TotpService {
   }
 
   /**
-   * Kiểm chứng một mã TOTP so với secret thô: đúng khi mã thuộc bước hiện
-   * tại hoặc ±1 bước (otplib `epochTolerance: 30` giây). Mã sai định dạng
-   * được coi là không hợp lệ thay vì ném lỗi ra ngoài.
+   * Kiểm chứng một mã TOTP so với secret thô: đúng khi mã thuộc bước hiện tại hoặc ±1 bước (otplib `epochTolerance: 30` giây). Mã sai định dạng được coi là không hợp lệ thay vì ném lỗi ra ngoài.
    */
   async verifyCode(secret: string, code: string): Promise<boolean> {
     try {
@@ -82,19 +73,14 @@ export class TotpService {
    * - Chưa có bản ghi, hoặc bản ghi đang chờ xác nhận (chưa từng kích
    *   hoạt): setup/setup lại tự do, secret chờ bị thay — chưa có factor
    *   đang hoạt động nào bị hạ cấp.
-   * - Bản ghi ĐÃ xác nhận (MFA đang bật): setup lại là thao tác THAY một
-   *   factor đang hoạt động. Vì `upsertPendingTotp` đặt `confirmed`
-   *   về false mà cổng đăng nhập chỉ nhìn cờ đó, một lần ghi đè vô điều
-   *   kiện sẽ tắt MFA ngay lập tức và làm authenticator hiện tại thành
-   *   vô dụng — phiên bị lộ là đủ để gỡ im lặng lớp bảo vệ đang bật.
-   *   Do đó bước này áp CỔNG TÁI XÁC THỰC cùng khuôn với luồng tắt MFA:
-   *   người gọi phải trình mã TOTP hiện tại (đúng với secret đang hoạt
-   *   động) TRƯỚC khi ghi đè. Thiếu mã ⇒ `auth.mfa_reauth_required`;
-   *   mã sai ⇒ `auth.mfa_invalid_code`; cả hai trường hợp đều từ chối
-   *   khi CHƯA chạm vào bản ghi nên factor cũ giữ nguyên vẹn (secret
-   *   cũ, `confirmed` vẫn true, MFA vẫn bật). Mã đúng ⇒ ghi đè như
-   *   luồng setup thường: secret mới ở trạng thái chờ xác nhận, chờ
-   *   bước confirm kích hoạt lại.
+   * - Bản ghi ĐÃ xác nhận: setup lại đòi mã TOTP cũ để tái xác thực.
+   *   Secret mới chỉ lưu vào verification với TTL 10 phút, không thay
+   *   secret cũ hoặc cờ confirmed. Nếu người dùng bỏ dở, MFA vẫn bật.
+   *   Khi confirm mã của thiết bị mới thành công, giao dịch sẽ hoán
+   *   đổi secret đang hoạt động một lần duy nhất.
+   *   Pending gắn với ciphertext của factor được kiểm mã cũ.
+   *   Stage/confirm kiểm phiên bản active trong transaction; factor
+   *   đã đổi hoặc reset thì trả 409 thay vì chấp nhận mã cũ.
    *
    * @param currentCode Mã TOTP hiện tại — chỉ bắt buộc khi factor đang bật.
    */
@@ -109,27 +95,55 @@ export class TotpService {
       }
     }
     const secret = generateSecret();
-    await this.repo.upsertPendingTotp(userId, this.encryptSecret(secret));
+    if (existing?.confirmed) {
+      // Factor cũ vẫn bật trong suốt lúc người dùng quét và xác nhận thiết bị mới. Stage chỉ hợp lệ nếu bản active vẫn đúng secret đã kiểm mã cũ:
+      // một request setup đến muộn không được ghi pending sau khi đổi A -> C.
+      const staged = await this.repo.stageTotpReplacement(
+        userId, this.encryptSecret(secret), existing.secretEncrypted,
+      );
+      if (!staged) {
+        throw new ConflictException({ message: 'MFA factor changed during replacement setup', code: 'auth.mfa_state_changed' });
+      }
+    } else {
+      const staged = await this.repo.upsertPendingTotp(userId, this.encryptSecret(secret));
+      if (!staged) {
+        // Confirm khác đã bật factor giữa lúc đọc trạng thái và setup:
+        // từ chối thay vì vô tình tắt MFA hoặc trả QR chưa được lưu.
+        throw new ConflictException({ message: 'MFA status changed during setup', code: 'auth.mfa_state_changed' });
+      }
+    }
     const otpauthUrl = generateURI({ issuer: TOTP_ISSUER, label: username, secret });
     return { secret, otpauthUrl };
   }
 
   /**
-   * Bước confirm: mã đúng với secret đang chờ ⇒ kích hoạt MFA cho user.
-   * Chưa setup thì báo `auth.mfa_not_setup`; mã sai thì `auth.mfa_invalid_code`.
+   * Bước confirm: mã đúng với secret đang chờ ⇒ kích hoạt MFA cho user. Với factor đang bật, mã phải khớp pending replacement và active vẫn phải là phiên bản đã kiểm mã cũ; lệch thì trả 409. Chưa setup thì báo `auth.mfa_not_setup`; mã sai thì `auth.mfa_invalid_code`.
    */
   async confirm(userId: string, code: string): Promise<void> {
     const row = await this.repo.getTotpByUserId(userId);
     if (!row) throw new BadRequestException({ message: 'TOTP has not been set up for this account', code: 'auth.mfa_not_setup' });
+    if (row.confirmed) {
+      // Đổi factor: xác minh chính secret đang chờ, rồi hoán đổi atomically.
+      const pending = await this.repo.getPendingTotpReplacement(userId);
+      if (!pending) throw new BadRequestException({ message: 'TOTP replacement has expired or was not started', code: 'auth.mfa_not_setup' });
+      if (!(await this.verifyCode(this.decryptSecret(pending.secretEncrypted), code))) {
+        throw new UnauthorizedException({ message: 'Invalid two-factor authentication code', code: 'auth.mfa_invalid_code' });
+      }
+      if (!(await this.repo.activateTotpReplacement(userId, pending))) {
+        throw new ConflictException({ message: 'MFA factor changed during replacement confirmation', code: 'auth.mfa_state_changed' });
+      }
+      return;
+    }
     if (!(await this.verifyCode(this.decryptSecret(row.secretEncrypted), code))) {
       throw new UnauthorizedException({ message: 'Invalid two-factor authentication code', code: 'auth.mfa_invalid_code' });
     }
-    await this.repo.confirmTotp(userId);
+    if (!(await this.repo.confirmTotp(userId, row.secretEncrypted))) {
+      throw new ConflictException({ message: 'MFA factor changed during confirmation', code: 'auth.mfa_state_changed' });
+    }
   }
 
   /**
-   * Tắt MFA: chỉ chủ tài khoản có authenticator hiện tại (mã đúng với
-   * secret đang bật) mới tắt được; tắt xong bản ghi secret bị xoá hẳn.
+   * Tắt MFA: chỉ chủ tài khoản có authenticator hiện tại (mã đúng với secret đang bật) mới tắt được; tắt xong bản ghi secret bị xoá hẳn. Lệnh tắt dùng CAS theo active version để không xoá thiết bị mới được kích hoạt trong khoảng giữa kiểm mã và ghi database.
    */
   async disable(userId: string, code: string): Promise<void> {
     const row = await this.repo.getTotpByUserId(userId);
@@ -137,12 +151,14 @@ export class TotpService {
     if (!(await this.verifyCode(this.decryptSecret(row.secretEncrypted), code))) {
       throw new UnauthorizedException({ message: 'Invalid two-factor authentication code', code: 'auth.mfa_invalid_code' });
     }
-    await this.repo.deleteTotp(userId);
+    // Mã A chỉ được tắt chính A: nếu request khác đã kích hoạt C, yêu cầu tắt theo A cũ phải bị từ chối để không vô hiệu hoá C.
+    if (!(await this.repo.disableTotpIfMatches(userId, row.secretEncrypted))) {
+      throw new ConflictException({ message: 'MFA factor changed during disable', code: 'auth.mfa_state_changed' });
+    }
   }
 
   /**
-   * Kiểm chứng mã ở bước đăng nhập hai lớp: false khi user chưa bật MFA
-   * hoặc mã sai.
+   * Kiểm chứng mã ở bước đăng nhập hai lớp: false khi user chưa bật MFA hoặc mã sai.
    */
   async verifyForUser(userId: string, code: string): Promise<boolean> {
     const row = await this.repo.getTotpByUserId(userId);
@@ -152,6 +168,7 @@ export class TotpService {
 
   /** Quản trị gỡ MFA cho user (mất authenticator): xoá hẳn bản ghi TOTP. */
   async resetForUser(userId: string): Promise<void> {
+    // Admin reset huỷ active và pending atomically qua repository, không để setup/confirm đang chạy chen giữa hai lần DELETE.
     await this.repo.deleteTotp(userId);
   }
 }

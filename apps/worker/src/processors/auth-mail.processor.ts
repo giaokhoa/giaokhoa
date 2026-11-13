@@ -125,31 +125,20 @@ import { ResendMailService } from '../resend-mail.service';
  */
 export interface AuthMailSentMarker {
   /**
-   * Sự kiện có `outboxId` này đã có dấu ĐÃ GỬI hay chưa. Dấu chỉ
-   * được ghi sau khi transport đã nhận mail, nên `true` ở đây là
-   * bằng chứng mail đã thật sự được gửi ở một lần xử lý trước.
+   * Sự kiện có `outboxId` này đã có dấu ĐÃ GỬI hay chưa. Dấu chỉ được ghi sau khi transport đã nhận mail, nên `true` ở đây là bằng chứng mail đã thật sự được gửi ở một lần xử lý trước.
    */
   hasSent(outboxId: string): Promise<boolean>;
   /**
    * Chiếm lease ĐANG XỬ LÝ theo `outboxId` một cách NGUYÊN TỬ:
-   * trả token chủ sở hữu (chuỗi duy nhất của lượt chiếm) cho đúng
-   * một lượt gọi khi chưa có lease còn hạn, trả `null` cho mọi
-   * lượt gọi khác trong khi lease còn đứng. Lease có hạn ngắn —
-   * tiến trình giữ lease chết trước khi gửi xong thì lease tự hết
-   * hạn để lượt xử lý sau chiếm lại được và gửi được mail.
+   * trả token chủ sở hữu (chuỗi duy nhất của lượt chiếm) cho đúng một lượt gọi khi chưa có lease còn hạn, trả `null` cho mọi lượt gọi khác trong khi lease còn đứng. Lease có hạn ngắn — tiến trình giữ lease chết trước khi gửi xong thì lease tự hết hạn để lượt xử lý sau chiếm lại được và gửi được mail.
    */
   claimProcessing(outboxId: string): Promise<string | null>;
   /**
-   * Ghi dấu ĐÃ GỬI theo `outboxId`: CHỈ gọi sau khi transport đã
-   * nhận mail (hoặc khai báo bỏ qua vì chưa cấu hình). Đây là dấu
-   * duy nhất khiến các lần phát lại sau đó kết thúc `duplicate`.
+   * Ghi dấu ĐÃ GỬI theo `outboxId`: CHỈ gọi sau khi transport đã nhận mail (hoặc khai báo bỏ qua vì chưa cấu hình). Đây là dấu duy nhất khiến các lần phát lại sau đó kết thúc `duplicate`.
    */
   markSent(outboxId: string): Promise<void>;
   /**
-   * Nhả lease ĐANG XỬ LÝ theo `outboxId` CÓ KIỂM TRA CHỦ: chỉ xoá
-   * khoá khi `ownerToken` khớp token đã ghi lúc chiếm — một lượt
-   * kết thúc muộn không xoá nhầm lease mà lượt khác vừa chiếm lại
-   * sau khi lease của nó hết hạn.
+   * Nhả lease ĐANG XỬ LÝ theo `outboxId` CÓ KIỂM TRA CHỦ: chỉ xoá khoá khi `ownerToken` khớp token đã ghi lúc chiếm — một lượt kết thúc muộn không xoá nhầm lease mà lượt khác vừa chiếm lại sau khi lease của nó hết hạn.
    */
   releaseProcessing(outboxId: string, ownerToken: string): Promise<void>;
 }
@@ -164,41 +153,24 @@ const SENT_MARKER_KEY_PREFIX = 'giaokhoa:auth-mail:sent:';
 const PROCESSING_LEASE_KEY_PREFIX = 'giaokhoa:auth-mail:processing:';
 
 /**
- * Thời gian sống của dấu ĐÃ GỬI: 7 ngày. Mọi cửa sổ phát lại thực
- * tế (thử lại của BullMQ, phát lại của relay sau sự cố) đều tính
- * bằng phút tới giờ, còn bí mật trong mail chỉ sống tối đa 1 giờ
+ * Thời gian sống của dấu ĐÃ GỬI: 7 ngày. Mọi cửa sổ phát lại thực tế (thử lại của BullMQ, phát lại của relay sau sự cố) đều tính bằng phút tới giờ, còn bí mật trong mail chỉ sống tối đa 1 giờ
  * (liên kết reset) và 5 phút (mã OTP) — dấu sống lâu hơn hẳn mọi
- * cửa sổ đó nhưng vẫn tự dọn để Redis không tích lũy vô hạn theo
- * số sự kiện.
+ * cửa sổ đó nhưng vẫn tự dọn để Redis không tích lũy vô hạn theo số sự kiện.
  */
 const SENT_MARKER_TTL_SECONDS = 7 * 24 * 3600;
 
 /**
- * Thời gian sống của lease ĐANG XỬ LÝ: 60 giây. Một lần gửi qua
- * Resend bình thường hoàn tất trong vài giây, nên 60 giây cho biên
- * rộng nhiều lần so với một lần gửi mà vẫn đủ ngắn để khôi phục
- * sau sập kịp tuổi thọ ngắn nhất của bí mật trong mail (mã OTP 5
- * phút): BullMQ phát hiện job của worker đã chết qua khoá job hết
- * hạn (mặc định 30 giây) rồi phát lại, và cơ chế hoãn thử lại 5
- * giây bắc qua phần hạn lease còn lại nếu lượt phát lại tới sớm
- * hơn lúc lease hết hạn.
+ * Thời gian sống của lease ĐANG XỬ LÝ: 60 giây. Một lần gửi qua Resend bình thường hoàn tất trong vài giây, nên 60 giây cho biên rộng nhiều lần so với một lần gửi mà vẫn đủ ngắn để khôi phục sau sập kịp tuổi thọ ngắn nhất của bí mật trong mail (mã OTP 5 phút): BullMQ phát hiện job của worker đã chết qua khoá job hết hạn (mặc định 30 giây) rồi phát lại, và cơ chế hoãn thử lại 5 giây bắc qua phần hạn lease còn lại nếu lượt phát lại tới sớm hơn lúc lease hết hạn.
  */
 const PROCESSING_LEASE_TTL_SECONDS = 60;
 
 /**
- * Khoảng hoãn khi hẹn hàng đợi phát lại một job gặp lease đang bị
- * lượt khác giữ: 5 giây — đủ ngắn để mail không trễ đáng kể khi
- * lượt giữ lease gửi xong ngay sau đó, đủ dài để không quay vòng
- * vô ích trong lúc chờ lease hết hạn (tối đa 60 giây).
+ * Khoảng hoãn khi hẹn hàng đợi phát lại một job gặp lease đang bị lượt khác giữ: 5 giây — đủ ngắn để mail không trễ đáng kể khi lượt giữ lease gửi xong ngay sau đó, đủ dài để không quay vòng vô ích trong lúc chờ lease hết hạn (tối đa 60 giây).
  */
 const PROCESSING_RETRY_DELAY_MS = 5000;
 
 /**
- * Script Lua nhả lease có kiểm tra chủ: chỉ `DEL` khi giá trị đang
- * lưu đúng token của lượt nhả. Kiểm-tra-và-xoá phải là MỘT thao
- * tác nguyên tử phía Redis — làm bằng `GET` rồi `DEL` ở hai lệnh
- * rời nhau thì lease của lượt mới (chiếm lại sau khi lease cũ hết
- * hạn) có thể bị xoá nhầm trong khe giữa hai lệnh.
+ * Script Lua nhả lease có kiểm tra chủ: chỉ `DEL` khi giá trị đang lưu đúng token của lượt nhả. Kiểm-tra-và-xoá phải là MỘT thao tác nguyên tử phía Redis — làm bằng `GET` rồi `DEL` ở hai lệnh rời nhau thì lease của lượt mới (chiếm lại sau khi lease cũ hết hạn) có thể bị xoá nhầm trong khe giữa hai lệnh.
  */
 const RELEASE_PROCESSING_IF_OWNER_SCRIPT =
   "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";

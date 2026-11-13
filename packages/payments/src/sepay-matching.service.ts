@@ -12,60 +12,25 @@ import {
 } from './sepay-matching-ports';
 
 /**
- * Matching bất đồng bộ cho IPN SePay (lát 1 VietQR, issue #189 — hồ sơ
- * payment-vietqr §6.2/§2.4): sự kiện đã ghi ở `payment_provider_events`
+ * Matching bất đồng bộ cho IPN SePay (lát 1 VietQR, issue #189 — hồ sơ payment-vietqr §6.2/§2.4): sự kiện đã ghi ở `payment_provider_events`
  * (match_status `received`) được khớ theo luật 3 điều kiện — (1) mã thanh
  * toán trích từ nội dung chuẩn hoá tìm thấy payment, (2) số tiền bằng đúng,
  * (3) tài khoản nhận trùng account của payment — cộng payment còn `pending`
- * và chưa hết hạn. Cộng thêm phép đối chiếu phòng thủ chiều sâu (issue
- * #419): payment phải khớp giá + tenant phía server của đối tượng đích
+ * và chưa hết hạn. Cộng thêm phép đối chiếu phòng thủ chiều sâu (issue #419): payment phải khớp giá + tenant phía server của đối tượng đích
  * (cổng đối chiếu đích `PaymentSettlementPort.verifyPaymentAgainstServerTarget`
- * — cài đặt hiện hành là `PaymentsService` phía apps/api) — ba điều kiện
- * khớp chỉ đối chiếu payment với sự kiện tiền về, một payment tự đặt
- * số tiền thấp vẫn tự khớp với chính nó nên chưa đủ để kích hoạt. Đủ:
- * kích hoạt MỌI quyền lợi (enrol có phí / ghi danh
- * lớp / quyền lợi gói) TRƯỚC, rồi mới lật payment → `succeeded` và phát
- * ĐÚNG outbox `payment_succeeded` sẵn có (cùng khuôn với webhook
- * manual). Thứ tự này giữ BẤT BIẾN ĐỒNG BỘ của nhịp chốt: trạng thái
- * `succeeded` không bao giờ quan sát được khi quyền lợi chưa kích
- * hoạt — nhịp chết giữa chừng thì payment còn `pending`, sự kiện được
- * nhận lại theo cửa sổ stale và các khâu kích hoạt (đều idempotent)
- * chạy lại cho tới khi chốt xong. Thiếu bất kỳ điều
- * kiện nào: sự kiện (và payment nếu xác định được mà còn pending) →
- * `needs_review`, KHÔNG kích hoạt gì (§5.7).
+ * — cài đặt hiện hành là `PaymentsService` phía apps/api) — ba điều kiện khớp chỉ đối chiếu payment với sự kiện tiền về, một payment tự đặt số tiền thấp vẫn tự khớp với chính nó nên chưa đủ để kích hoạt. Đủ:
+ * kích hoạt MỌI quyền lợi (enrol có phí / ghi danh lớp / quyền lợi gói) TRƯỚC, rồi mới lật payment → `succeeded` và phát ĐÚNG outbox `payment_succeeded` sẵn có (cùng khuôn với webhook manual). Thứ tự này giữ BẤT BIẾN ĐỒNG BỘ của nhịp chốt: trạng thái `succeeded` không bao giờ quan sát được khi quyền lợi chưa kích hoạt — nhịp chết giữa chừng thì payment còn `pending`, sự kiện được nhận lại theo cửa sổ stale và các khâu kích hoạt (đều idempotent) chạy lại cho tới khi chốt xong. Thiếu bất kỳ điều kiện nào: sự kiện (và payment nếu xác định được mà còn pending) → `needs_review`, KHÔNG kích hoạt gì (§5.7).
  *
- * Lát 3 (#189): biến động `debit` (tiền RA khỏi tài khoản) không còn bị
- * `ignored` — nó là bằng chứng lệnh chi của một khoản hoàn và được uỷ
- * thác cho cổng xác nhận chi `PaymentSettlementPort.settleRefundFromDebitEvent`
+ * Lát 3 (#189): biến động `debit` (tiền RA khỏi tài khoản) không còn bị `ignored` — nó là bằng chứng lệnh chi của một khoản hoàn và được uỷ thác cho cổng xác nhận chi `PaymentSettlementPort.settleRefundFromDebitEvent`
  * (cài đặt hiện hành là `PaymentsService` phía apps/api) đối khớp theo
  * (mã lệnh chi, tài khoản, số tiền) với dòng hoàn đang `approved`:
- * khớp ⇒ dòng hoàn `settled` (đảo quyền lợi nếu cộng dồn đạt 100%) và
- * sự kiện `matched`; không khớp ⇒ sự kiện vào `needs_review` của tenant
- * sở hữu tài khoản nhận để vận hành xử lý, không im lặng bỏ qua.
+ * khớp ⇒ dòng hoàn `settled` (đảo quyền lợi nếu cộng dồn đạt 100%) và sự kiện `matched`; không khớp ⇒ sự kiện vào `needs_review` của tenant sở hữu tài khoản nhận để vận hành xử lý, không im lặng bỏ qua.
  *
- * CLASS-3 (#184): payment `class_fee` khớp đủ 3 điều kiện cũng đi đúng
- * đường này — kích hoạt ghi danh CẤP LỚP qua cổng
- * `PaidClassEnrolActivationPort.activatePaidClassEnrol` (cài đặt hiện
- * hành là `ClassesService` phía apps/api: vào backing cohort, cohort
- * sync vật chất hoá xuống mọi khoá của lớp) trước nhịp lật `succeeded`;
- * thiếu điều kiện → `needs_review` và KHÔNG vào lớp, như enrol_fee.
+ * CLASS-3 (#184): payment `class_fee` khớp đủ 3 điều kiện cũng đi đúng đường này — kích hoạt ghi danh CẤP LỚP qua cổng `PaidClassEnrolActivationPort.activatePaidClassEnrol` (cài đặt hiện hành là `ClassesService` phía apps/api: vào backing cohort, cohort sync vật chất hoá xuống mọi khoá của lớp) trước nhịp lật `succeeded`; thiếu điều kiện → `needs_review` và KHÔNG vào lớp, như enrol_fee.
  *
- * Lát 2 (#189): payment gói `tenant_plan`/`teacher_plan` khớp đủ 3
- * điều kiện cũng đi đúng đường này — kích hoạt quyền lợi gói qua
- * `PlanEntitlementsService.activateForPayment` trước nhịp lật
- * `succeeded`; thiếu điều kiện → `needs_review` và KHÔNG sinh quyền
- * lợi, như các component khác.
+ * Lát 2 (#189): payment gói `tenant_plan`/`teacher_plan` khớp đủ 3 điều kiện cũng đi đúng đường này — kích hoạt quyền lợi gói qua `PlanEntitlementsService.activateForPayment` trước nhịp lật `succeeded`; thiếu điều kiện → `needs_review` và KHÔNG sinh quyền lợi, như các component khác.
  *
- * Issue #538 (issue con của #522): service này thuộc bề mặt matching
- * dùng chung của package `@giaokhoa/payments` — cùng package với
- * `PaymentsRepository`, `PlanEntitlementsService` và bề mặt phát
- * outbox `OutboxWriterService`. Ba hiệu ứng xuyên module (kích hoạt
- * ghi danh, kích hoạt ghi danh cấp lớp, đối chiếu đích và xác nhận
- * chi) nằm sau các cổng được tiêm ở `sepay-matching-ports.ts`; cài
- * đặt cổng phía apps/api là chính các service hiện hành, nối trong
- * `PaymentsModule` — luật matching chỉ tồn tại đúng một bản ở đây.
- * Việc trích xuất bảo toàn hành vi: luồng dưới đây không đổi so với
- * bản phía apps/api trước khi chuyển.
+ * Issue #538 (issue con của #522): service này thuộc bề mặt matching dùng chung của package `@giaokhoa/payments` — cùng package với `PaymentsRepository`, `PlanEntitlementsService` và bề mặt phát outbox `OutboxWriterService`. Ba hiệu ứng xuyên module (kích hoạt ghi danh, kích hoạt ghi danh cấp lớp, đối chiếu đích và xác nhận chi) nằm sau các cổng được tiêm ở `sepay-matching-ports.ts`; cài đặt cổng phía apps/api là chính các service hiện hành, nối trong `PaymentsModule` — luật matching chỉ tồn tại đúng một bản ở đây. Việc trích xuất bảo toàn hành vi: luồng dưới đây không đổi so với bản phía apps/api trước khi chuyển.
  */
 @Injectable()
 export class SepayMatchingService {
@@ -90,8 +55,7 @@ export class SepayMatchingService {
         await this.processEvent(event.id);
         processed += 1;
       } catch (error) {
-        // Sự kiện lỗi ở trạng thái processing treo sẽ được nhịp sau nhận lại
-        // theo cửa sổ stale — không để một sự kiện hỏng chặn cả hàng đợi.
+        // Sự kiện lỗi ở trạng thái processing treo sẽ được nhịp sau nhận lại theo cửa sổ stale — không để một sự kiện hỏng chặn cả hàng đợi.
         this.logger.warn(`Matching sự kiện SePay ${event.id} lỗi: ${(error as Error).message}`);
       }
     }

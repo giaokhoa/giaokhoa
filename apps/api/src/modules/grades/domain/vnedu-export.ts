@@ -1,7 +1,5 @@
 /**
- * VneduExport — dựng bảng điểm Excel theo cấu trúc vnEdu trên nền Thông tư
- * 22/2021/TT-BGDĐT (issue #53; kết quả kiểm chứng mẫu ở comment Bước 0 của
- * issue). Thuần dữ liệu + một hàm render ExcelJS:
+ * VneduExport — dựng bảng điểm Excel theo cấu trúc vnEdu trên nền Thông tư 22/2021/TT-BGDĐT (issue #53; kết quả kiểm chứng mẫu ở comment Bước 0 của issue). Thuần dữ liệu + một hàm render ExcelJS:
  *
  * - Điểm thành phần: ĐĐGtx hệ số 1 (mỗi mục điểm thường xuyên là một cột),
  *   ĐĐGgk hệ số 2, ĐĐGck hệ số 3 (Điều 6, Điều 7).
@@ -9,8 +7,7 @@
  *   gradeMin/gradeMax của mục điểm, làm tròn đến chữ số thập phân thứ nhất
  *   (Điều 5 khoản 3 điểm b).
  * - ĐTBmhk = (TĐĐGtx + 2×ĐĐGgk + 3×ĐĐGck) / (số ĐĐGtx + 5) (Điều 9 khoản 1
- *   điểm b); chỉ tính khi học sinh có đủ mọi điểm thành phần — thiếu bất kỳ
- *   điểm nào thì ô ĐTBmhk để trống, đúng cách vnEdu chỉ tổng kết khi đủ điểm.
+ *   điểm b); chỉ tính khi học sinh có đủ mọi điểm thành phần — thiếu bất kỳ điểm nào thì ô ĐTBmhk để trống, đúng cách vnEdu chỉ tổng kết khi đủ điểm.
  */
 import ExcelJS from 'exceljs';
 
@@ -66,17 +63,14 @@ export function roundToOneDecimal(value: number): number {
 }
 
 /**
- * Quy đổi một finalGrade về thang 10 theo khoảng [gradeMin, gradeMax] của
- * mục điểm rồi làm tròn 1 chữ số thập phân. Người gọi phải bảo đảm
- * gradeMax > gradeMin (service kiểm tra khi validate ánh xạ).
+ * Quy đổi một finalGrade về thang 10 theo khoảng [gradeMin, gradeMax] của mục điểm rồi làm tròn 1 chữ số thập phân. Người gọi phải bảo đảm gradeMax > gradeMin (service kiểm tra khi validate ánh xạ).
  */
 export function toTenScale(finalGrade: number, gradeMin: number, gradeMax: number): number {
   return roundToOneDecimal(((finalGrade - gradeMin) / (gradeMax - gradeMin)) * 10);
 }
 
 /**
- * ĐTBmhk theo Điều 9 TT22 từ các điểm thành phần ĐÃ quy đổi thang 10.
- * Trả null khi thiếu bất kỳ điểm thành phần nào (chưa đủ điều kiện tổng kết).
+ * ĐTBmhk theo Điều 9 TT22 từ các điểm thành phần ĐÃ quy đổi thang 10. Trả null khi thiếu bất kỳ điểm thành phần nào (chưa đủ điều kiện tổng kết).
  */
 export function semesterAverage(
   regularValues: readonly (number | null)[],
@@ -98,9 +92,7 @@ function studentValue(student: VneduExportStudent, item: VneduExportItem): numbe
 
 /**
  * Dựng lưới ô của sheet bảng điểm:
- * dòng 1 tựa đề, dòng 2 thông tin lớp/môn/kỳ/năm, dòng 3 trống, dòng 4–5 đầu
- * bảng hai tầng (nhóm Thường xuyên / Định kỳ), từ dòng 6 là dữ liệu học sinh.
- * Cột: STT | Mã học sinh | Họ và tên | các cột ĐĐGtx | ĐĐGgk | ĐĐGck | ĐTBmhk.
+ * dòng 1 tựa đề, dòng 2 thông tin lớp/môn/kỳ/năm, dòng 3 trống, dòng 4–5 đầu bảng hai tầng (nhóm Thường xuyên / Định kỳ), từ dòng 6 là dữ liệu học sinh. Cột: STT | Mã học sinh | Họ và tên | các cột ĐĐGtx | ĐĐGgk | ĐĐGck | ĐTBmhk.
  */
 export function buildVneduGrid(model: VneduExportModel): VneduGrid {
   const regularCount = model.regular.length;

@@ -1,21 +1,13 @@
 import type { ConfigService } from '@nestjs/config';
 import { generate } from 'otplib';
 import { describe, expect, it } from 'vitest';
-import type { AuthRepository, UserTotpRow } from '@giaokhoa/db/repositories/auth';
+import type { AuthRepository, PendingTotpReplacement, UserTotpRow } from '@giaokhoa/db/repositories/auth';
 import { TotpService } from './totp.service';
 
 /**
  * Cổng tái xác thực khi setup lại TOTP trên một factor ĐANG BẬT.
  *
- * Luật nghiệp vụ: `setup` ghi đè secret và đưa bản ghi về chưa xác nhận,
- * mà cổng đăng nhập chỉ nhìn cờ `confirmed` — nên ghi đè vô điều kiện
- * trên factor đang bật đồng nghĩa tắt MFA ngay lập tức và làm
- * authenticator hiện tại thành vô dụng, chỉ với một phiên đăng nhập sẵn
- * có. Các ca ở đây ghim luật: factor đang bật thì setup lại bắt buộc mã
- * TOTP hiện tại đúng (cùng khuôn với luồng tắt MFA); thiếu/sai mã thì bị
- * từ chối và factor cũ nguyên vẹn; chưa có factor đang bật (lần đầu,
- * hoặc đang chờ xác nhận) thì setup vẫn tự do như luồng thường. Luồng
- * HTTP trọn đường được kiểm ở e2e của luồng auth.
+ * Luật nghiệp vụ: khi factor đã bật, setup mới đòi mã hiện tại và chỉ dựng pending replacement; chưa confirm thì giữ MFA đang bật. Khi factor chưa bật, setup nhiều lần được phép thay pending secret; xác nhận chỉ kích hoạt đúng secret đã được kiểm mã. Kiểm chứng HTTP được đặt tại e2e Authentication.
  */
 
 const USER_ID = '01900000-0000-7000-8000-0000000000aa';
@@ -24,9 +16,26 @@ const USERNAME = 'teacher1';
 /** Kho lưu bản ghi TOTP trong bộ nhớ, mô phỏng đúng các thao tác repository mà service dùng. */
 function buildService() {
   let row: UserTotpRow | undefined;
+  let pending: PendingTotpReplacement | undefined;
   const repo = {
+    stageTotpReplacement: async (_userId: string, encryptedSecret: string, activeSecretEncrypted: string) => {
+      if (!row?.confirmed || row.secretEncrypted !== activeSecretEncrypted) return false;
+      pending = { secretEncrypted: encryptedSecret, activeSecretEncrypted };
+      return true;
+    },
+    getPendingTotpReplacement: async () => pending,
+    activateTotpReplacement: async (_userId: string, candidate: PendingTotpReplacement) => {
+      if (!row?.confirmed || row.secretEncrypted !== candidate.activeSecretEncrypted ||
+          pending?.secretEncrypted !== candidate.secretEncrypted ||
+          pending?.activeSecretEncrypted !== candidate.activeSecretEncrypted) return false;
+      row = { ...row, secretEncrypted: candidate.secretEncrypted };
+      pending = undefined;
+      return true;
+    },
+    clearPendingTotpReplacement: async () => { pending = undefined; },
     getTotpByUserId: async () => row,
     upsertPendingTotp: async (userId: string, secretEncrypted: string) => {
+      if (row?.confirmed) return undefined;
       row = {
         id: '01900000-0000-7000-8000-0000000000bb',
         userId,
@@ -37,18 +46,27 @@ function buildService() {
       } as UserTotpRow;
       return row;
     },
-    confirmTotp: async () => {
-      if (row) row = { ...row, confirmed: true, confirmedAt: new Date() };
+    confirmTotp: async (_userId: string, encryptedSecret: string) => {
+      if (!row || row.confirmed || row.secretEncrypted !== encryptedSecret) return false;
+      row = { ...row, confirmed: true, confirmedAt: new Date() };
+      return true;
+    },
+    disableTotpIfMatches: async (_userId: string, activeSecretEncrypted: string) => {
+      if (!row?.confirmed || row.secretEncrypted !== activeSecretEncrypted) return false;
+      row = undefined;
+      pending = undefined;
+      return true;
     },
     deleteTotp: async () => {
       row = undefined;
+      pending = undefined;
     },
   } as unknown as AuthRepository;
   const config = {
     get: () => undefined,
     getOrThrow: () => 'unit-test-encryption-material',
   } as unknown as ConfigService;
-  return { service: new TotpService(repo, config), storedRow: () => row };
+  return { service: new TotpService(repo, config), repo, storedRow: () => row };
 }
 
 /** Mã TOTP hiện tại cho secret, sinh bằng chính thư viện otplib đã cài. */
@@ -115,8 +133,7 @@ describe('Cổng tái xác thực khi thiết lập TotpService', () => {
     const code = await thrownErrorCode(() => service.setup(USER_ID, USERNAME));
 
     expect(code).toBe('auth.mfa_reauth_required');
-    // Factor cũ nguyên vẹn: cùng bản ghi đã mã hoá, vẫn đang bật, mã của
-    // authenticator hiện tại vẫn kiểm chứng được.
+    // Factor cũ nguyên vẹn: cùng bản ghi đã mã hoá, vẫn đang bật, mã của authenticator hiện tại vẫn kiểm chứng được.
     expect(storedRow()).toEqual(before);
     expect(await service.isEnabled(USER_ID)).toBe(true);
     expect(await service.verifyForUser(USER_ID, await currentCode(activeSecret))).toBe(true);
@@ -143,14 +160,53 @@ describe('Cổng tái xác thực khi thiết lập TotpService', () => {
     const replacement = await service.setup(USER_ID, USERNAME, await currentCode(activeSecret));
 
     expect(replacement.secret).not.toBe(activeSecret);
-    // Secret mới ở trạng thái chờ xác nhận: MFA tạm chưa bật cho tới khi
-    // confirm bằng mã của secret mới, đúng luồng setup thường.
-    expect(storedRow()?.confirmed).toBe(false);
-    expect(await service.isEnabled(USER_ID)).toBe(false);
-    // Authenticator cũ không còn giá trị; confirm bằng secret mới bật lại MFA.
-    expect(await service.verifyForUser(USER_ID, await currentCode(activeSecret))).toBe(false);
+    // Thiết bị mới đang chờ, nhưng factor cũ và cổng đăng nhập phải còn bật.
+    expect(storedRow()?.confirmed).toBe(true);
+    expect(await service.isEnabled(USER_ID)).toBe(true);
+    expect(await service.verifyForUser(USER_ID, await currentCode(activeSecret))).toBe(true);
+    expect(await service.verifyForUser(USER_ID, await currentCode(replacement.secret))).toBe(false);
     await service.confirm(USER_ID, await currentCode(replacement.secret));
     expect(await service.isEnabled(USER_ID)).toBe(true);
     expect(await service.verifyForUser(USER_ID, await currentCode(replacement.secret))).toBe(true);
+    expect(await service.verifyForUser(USER_ID, await currentCode(activeSecret))).toBe(false);
+  });
+
+  it('bản tái xác thực cũ không thể stage hay kích hoạt factor sau khi active đã đổi', async () => {
+    const { service, repo, storedRow } = buildService();
+    const secretA = await enableFactor(service);
+    const encryptedA = storedRow()!.secretEncrypted;
+    const candidateB = await service.setup(USER_ID, USERNAME, await currentCode(secretA));
+    const originalPending = await repo.getPendingTotpReplacement(USER_ID);
+    expect(originalPending?.activeSecretEncrypted).toBe(encryptedA);
+
+    // Một request khác thay A thành B trước khi request cũ tiếp tục.
+    await service.confirm(USER_ID, await currentCode(candidateB.secret));
+    const encryptedB = storedRow()!.secretEncrypted;
+    expect(encryptedB).not.toBe(encryptedA);
+    expect(await repo.stageTotpReplacement(USER_ID, 'encrypted-stale', encryptedA)).toBe(false);
+    expect(await repo.activateTotpReplacement(USER_ID, originalPending!)).toBe(false);
+    expect(storedRow()?.secretEncrypted).toBe(encryptedB);
+    expect(await service.verifyForUser(USER_ID, await currentCode(candidateB.secret))).toBe(true);
+  });
+
+  it('mã TOTP cũ không thể tắt factor mới đã thay trong khi request đang xử lý', async () => {
+    const { service, repo, storedRow } = buildService();
+    const secretA = await enableFactor(service);
+    const encryptedA = storedRow()!.secretEncrypted;
+    const replacement = await service.setup(USER_ID, USERNAME, await currentCode(secretA));
+    await service.confirm(USER_ID, await currentCode(replacement.secret));
+    expect(await repo.disableTotpIfMatches(USER_ID, encryptedA)).toBe(false);
+    expect(await service.isEnabled(USER_ID)).toBe(true);
+    expect(await service.verifyForUser(USER_ID, await currentCode(replacement.secret))).toBe(true);
+  });
+
+  it('bỏ dở việc thay thiết bị không hạ MFA và vẫn đăng nhập được bằng authenticator cũ', async () => {
+    const { service, storedRow } = buildService();
+    const activeSecret = await enableFactor(service);
+    const before = storedRow();
+    await service.setup(USER_ID, USERNAME, await currentCode(activeSecret));
+    expect(storedRow()).toEqual(before);
+    expect(await service.isEnabled(USER_ID)).toBe(true);
+    expect(await service.verifyForUser(USER_ID, await currentCode(activeSecret))).toBe(true);
   });
 });

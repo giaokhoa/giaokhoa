@@ -6,27 +6,11 @@ import type { CurriculumTreeNode } from '#lib/curriculum';
 
 /**
  * Trình bày cây chương trình theo MẪU CỦA BỘ (GDPT-SEED, issue #161):
- * mỗi mạch nội dung (node strand ở gốc cây) là một bảng hai cột
- * "Nội dung | Yêu cầu cần đạt". Các bậc ở giữa (section/topic) không
- * thành dòng riêng nếu không mang YCCĐ — tựa của chúng flatten vào
- * đường đi ở cột Nội dung; node mang YCCĐ ở bất kỳ bậc nào cũng thành
- * dòng. Hành vi quản trị giữ nguyên §9: thêm node con / thêm YCCĐ /
- * Sửa mở màn riêng, Xoá tại dòng.
+ * mỗi mạch nội dung (node strand ở gốc cây) là một bảng hai cột "Nội dung | Yêu cầu cần đạt". Các bậc ở giữa (section/topic) không thành dòng riêng nếu không mang YCCĐ — tựa của chúng flatten vào đường đi ở cột Nội dung; node mang YCCĐ ở bất kỳ bậc nào cũng thành dòng. Hành vi quản trị giữ nguyên §9: thêm node con / thêm YCCĐ / Sửa mở màn riêng, Xoá tại dòng.
  *
- * Chế độ `readOnly` (trang xem chương trình của GIÁO VIÊN, issue #161
- * lát T2): cùng một cách trình bày mẫu Bộ nhưng KHÔNG nút thao tác —
- * giáo viên chỉ xem, sửa chương trình thuộc khu quản trị.
+ * Chế độ `readOnly` (trang xem chương trình của GIÁO VIÊN, issue #161 lát T2): cùng một cách trình bày mẫu Bộ nhưng KHÔNG nút thao tác — giáo viên chỉ xem, sửa chương trình thuộc khu quản trị.
  *
- * Nội dung YCCĐ được trình bày GIỮ CẤU TRÚC DÒNG (điểm T3 của issue
- * #161): text canonical của một YCCĐ có thể gồm nhiều dòng (các ý đã
- * tách ở dataset, gồm danh sách ý cha–con) — mỗi dòng render thành
- * một khối riêng thay vì một đoạn chạy liền mất phân cấp dòng.
- * Từ khi cột lưu trữ chuyển sang tài liệu Tiptap (jsonb), YCCĐ có ý
- * con được render PHÂN CẤP CHA–CON nhìn thấy được: ý cha là một khối,
- * ý con thụt lề dưới ý cha với dấu gạch đầu dòng, danh sách lồng
- * sâu hơn thụt lề thêm một mức — đúng cấu trúc tài liệu, áp dụng
- * nhất quán cho cả bề mặt quản trị lẫn bề mặt giáo viên (cùng dùng
- * component này, chế độ chỉ đọc chỉ ẩn nút thao tác).
+ * Nội dung YCCĐ được trình bày GIỮ CẤU TRÚC DÒNG (điểm T3 của issue #161): text canonical của một YCCĐ có thể gồm nhiều dòng (các ý đã tách ở dataset, gồm danh sách ý cha–con) — mỗi dòng render thành một khối riêng thay vì một đoạn chạy liền mất phân cấp dòng. Từ khi cột lưu trữ chuyển sang tài liệu Tiptap (jsonb), YCCĐ có ý con được render PHÂN CẤP CHA–CON nhìn thấy được: ý cha là một khối, ý con thụt lề dưới ý cha với dấu gạch đầu dòng, danh sách lồng sâu hơn thụt lề thêm một mức — đúng cấu trúc tài liệu, áp dụng nhất quán cho cả bề mặt quản trị lẫn bề mặt giáo viên (cùng dùng component này, chế độ chỉ đọc chỉ ẩn nút thao tác).
  */
 export interface ProgramRow {
   node: CurriculumTreeNode;

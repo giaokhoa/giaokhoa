@@ -26,34 +26,15 @@ import {
 /**
  * Ca đầu-cuối của HỒ SƠ THÀNH VIÊN THEO TRUNG TÂM + TÁCH SITE CHÍNH
  * (issue #584): ứng dụng thật (toàn bộ chuỗi guard) chạy với ba
- * không gian ở kho riêng dựng riêng cho đợt này trên cùng cụm test
- * — hai trung tâm (kind `center`) và site chính (slug `trang-chinh`,
- * kind `platform`, kho riêng của nó) — mỗi kho có role ứng dụng
- * riêng, CONNECT của PUBLIC bị thu hồi, baseline nghiệp vụ áp bằng
- * role chủ kho; sổ đăng ký nằm ở database control plane riêng mà
- * ứng dụng đọc qua biến `CONTROL_PLANE_DATABASE_URL` đặt trước khi
- * ứng dụng khởi động. Dòng tenant của mỗi không gian được sao từ kho
- * chung vào đúng kho của nó (trạng thái sau di trú mà đợt #587 sẽ
- * tạo); quản trị đầu tiên của mỗi không gian được tạo BẰNG CHÍNH
- * service của ứng dụng bên trong `withSpaceKysely` của không gian
- * đó (tài khoản + membership nội bộ + vai trò mang `tenant:manage`
- * tại context của tenant) — không ghi tay dòng role/membership bằng
- * SQL. Tài khoản kiểm chứng trong các ca sau đó được tạo qua ĐƯỜNG
- * API tạo người dùng của tenant tại chính địa chỉ của không gian
+ * không gian ở kho riêng dựng riêng cho đợt này trên cùng cụm test — hai trung tâm (kind `center`) và site chính (slug `trang-chinh`, kind `platform`, kho riêng của nó) — mỗi kho có role ứng dụng riêng, CONNECT của PUBLIC bị thu hồi, baseline nghiệp vụ áp bằng role chủ kho; sổ đăng ký nằm ở database control plane riêng mà ứng dụng đọc qua biến `CONTROL_PLANE_DATABASE_URL` đặt trước khi ứng dụng khởi động. Dòng tenant của mỗi không gian được sao từ kho chung vào đúng kho của nó (trạng thái sau di trú mà đợt #587 sẽ tạo); quản trị đầu tiên của mỗi không gian được tạo BẰNG CHÍNH service của ứng dụng bên trong `withSpaceKysely` của không gian đó (tài khoản + membership nội bộ + vai trò mang `tenant:manage` tại context của tenant) — không ghi tay dòng role/membership bằng SQL. Tài khoản kiểm chứng trong các ca sau đó được tạo qua ĐƯỜNG API tạo người dùng của tenant tại chính địa chỉ của không gian
  * (`POST /tenants/:tenantId/users`), đúng đường mà issue yêu cầu:
  * tài khoản mới chỉ tồn tại trong kho của trung tâm đó.
  *
- * Điểm khác biệt cốt lõi so với spec #582 (và là điều spec này phải
- * bắt được): tài khoản kiểm chứng ở đây KHÔNG có bản sao nào ở kho
- * chung — nếu code còn tra kho chung ở bất kỳ khâu nào (guard xác
- * thực, guard tenant, cấp token, làm mới token), ca đó thất bại
- * ngay thay vì âm thầm dùng bản sao kho chung như spec #582.
+ * Điểm khác biệt cốt lõi so với spec #582 (và là điều spec này phải bắt được): tài khoản kiểm chứng ở đây KHÔNG có bản sao nào ở kho chung — nếu code còn tra kho chung ở bất kỳ khâu nào (guard xác thực, guard tenant, cấp token, làm mới token), ca đó thất bại ngay thay vì âm thầm dùng bản sao kho chung như spec #582.
  *
  * Các ca khoá các tiêu chí nghiệm thu của issue:
  * (1) cùng email đăng ký ở hai trung tâm kho riêng thành hai tài
- *     khoản độc lập (id khác nhau, không có dòng nào ở kho chung),
- *     đình chỉ một bên không ảnh hưởng bên kia, đổi mật khẩu một
- *     bên không ảnh hưởng bên kia;
+ *     khoản độc lập (id khác nhau, không có dòng nào ở kho chung), đình chỉ một bên không ảnh hưởng bên kia, đổi mật khẩu một bên không ảnh hưởng bên kia;
  * (2) phiên (token lẫn cookie) của trung tâm A bị từ chối ở trung
  *     tâm B và ở site chính;
  * (3) chuyển tenant không áp dụng ở trung tâm kho riêng;
@@ -80,12 +61,7 @@ const MAIN_DATABASE = 'giaokhoa_test_main_584';
 const MAIN_ROLE = 'giaokhoa_main_584_app';
 const MAIN_PASSWORD = 'main-584';
 // Slug của hai trung tâm mang hậu tố ngẫu nhiên theo lượt chạy:
-// tenant tương ứng được tạo thật trong database nghiệp vụ test
-// DÙNG CHUNG của tầng e2e, nên slug cố định sẽ va chạm khi chạy
-// lại spec trên cùng một database; địa chỉ (tên miền con) và dòng
-// đăng ký đều suy ra từ slug nên tính nhất quán không đổi. Site
-// chính mang slug cố định `trang-chinh` vì tenant platform đã có
-// sẵn đúng slug đó trong kho chung.
+// tenant tương ứng được tạo thật trong database nghiệp vụ test DÙNG CHUNG của tầng e2e, nên slug cố định sẽ va chạm khi chạy lại spec trên cùng một database; địa chỉ (tên miền con) và dòng đăng ký đều suy ra từ slug nên tính nhất quán không đổi. Site chính mang slug cố định `trang-chinh` vì tenant platform đã có sẵn đúng slug đó trong kho chung.
 const RUN_SUFFIX = Math.random().toString(36).slice(2, 8);
 const CENTRE_A_SLUG = `trung-tam-a-${RUN_SUFFIX}`;
 const CENTRE_B_SLUG = `trung-tam-b-${RUN_SUFFIX}`;
@@ -168,8 +144,7 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
 }
 
 /**
- * Sao một dòng (đọc từ kho chung) vào cùng bảng ở kho đích với
- * nguyên bộ cột — mô phỏng phần dữ kiện đã di trú của trung tâm.
+ * Sao một dòng (đọc từ kho chung) vào cùng bảng ở kho đích với nguyên bộ cột — mô phỏng phần dữ kiện đã di trú của trung tâm.
  */
 async function copyRow(
   sourceUrl: string,

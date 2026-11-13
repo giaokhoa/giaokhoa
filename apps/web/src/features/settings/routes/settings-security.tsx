@@ -2,16 +2,11 @@ import { SessionsCard, TwoFactorCard } from '../components/profile-cards';
 import { SettingsShell } from '../components/settings-shell';
 
 /**
- * Mục BẢO MẬT & ĐĂNG NHẬP của khu Cài đặt (`/settings/security`,
- * issue #288): chứa hai thẻ tự chứa chuyển nguyên trạng từ trang Hồ
- * sơ cũ — xác thực hai lớp TOTP (`TwoFactorCard`) và phiên đăng nhập
+ * Mục BẢO MẬT & ĐĂNG NHẬP của khu Cài đặt (`/settings/security`, issue #288): chứa hai thẻ tự chứa chuyển nguyên trạng từ trang Hồ sơ cũ — xác thực hai lớp TOTP (`TwoFactorCard`) và phiên đăng nhập
  * (`SessionsCard`). Đây là mục đầu của khu Cài đặt và là đích
- * redirect của `/settings`, đúng mẫu các site lớn vào thẳng mục bảo
- * mật đầu tiên.
+ * redirect của `/settings`, đúng mẫu các site lớn vào thẳng mục bảo mật đầu tiên.
  *
- * Trang này không có luồng dữ liệu riêng: mỗi thẻ tự nạp dữ liệu và
- * tự xử lý đột biến (xem `components/profile-cards.tsx`). Khối đổi
- * mật khẩu KHÔNG nằm ở lát này — quyết định để lát riêng.
+ * Trang này không có luồng dữ liệu riêng: mỗi thẻ tự nạp dữ liệu và tự xử lý đột biến (xem `components/profile-cards.tsx`). Khối đổi mật khẩu KHÔNG nằm ở lát này — quyết định để lát riêng.
  */
 export function SettingsSecurityPage() {
   return (

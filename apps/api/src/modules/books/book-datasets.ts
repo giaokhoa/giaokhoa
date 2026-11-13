@@ -3,22 +3,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * Manifest + logic thuần của cơ chế nạp dữ liệu SGK (K0b, issue #67) —
- * đối ứng của `program-datasets.ts` ở tầng chương trình. Dataset là
- * file bản ghi **đã kiểm chứng nguyên văn** với mục lục in trong cuốn
- * SGK của bộ "Kết nối tri thức với cuộc sống" (NXB Giáo dục Việt Nam),
- * đối chiếu với mục lục Sách giáo viên cùng bộ, và được vendor nguyên
- * văn tại thư mục `book-data/` cạnh file này. Bước 0 của lát (ghi
- * trên issue #67) khai nguồn chính chủ cho từng môn × khối trước khi
- * số hoá; dataset mới chỉ được thêm vào manifest khi đã qua bước đó.
+ * Manifest + logic thuần của cơ chế nạp dữ liệu SGK (K0b, issue #67) — đối ứng của `program-datasets.ts` ở tầng chương trình. Dataset là file bản ghi **đã kiểm chứng nguyên văn** với mục lục in trong cuốn SGK của bộ "Kết nối tri thức với cuộc sống" (NXB Giáo dục Việt Nam), đối chiếu với mục lục Sách giáo viên cùng bộ, và được vendor nguyên văn tại thư mục `book-data/` cạnh file này. Bước 0 của lát (ghi trên issue #67) khai nguồn chính chủ cho từng môn × khối trước khi số hoá; dataset mới chỉ được thêm vào manifest khi đã qua bước đó.
  *
- * Mỗi bản ghi là một BÀI học; chương (chủ đề) là tổ tiên suy từ trường
- * của bản ghi, đúng như bản ghi chương trình suy mạch/chủ đề tổ tiên.
- * `programRecords` là danh sách **mã bản ghi chương trình** (định danh
- * ổn định trong dataset chương trình của K0a, ví dụ TOAN-0001) mà bài
- * ánh xạ tới — lượt nạp phân giải mã sang node chương trình thật qua
- * sổ đăng ký chương trình và báo lỗi cứng nếu mã không tồn tại, nên
- * ánh xạ trong dataset luôn truy vết được và không bao giờ treo.
+ * Mỗi bản ghi là một BÀI học; chương (chủ đề) là tổ tiên suy từ trường của bản ghi, đúng như bản ghi chương trình suy mạch/chủ đề tổ tiên. `programRecords` là danh sách **mã bản ghi chương trình** (định danh ổn định trong dataset chương trình của K0a, ví dụ TOAN-0001) mà bài ánh xạ tới — lượt nạp phân giải mã sang node chương trình thật qua sổ đăng ký chương trình và báo lỗi cứng nếu mã không tồn tại, nên ánh xạ trong dataset luôn truy vết được và không bao giờ treo.
  */
 
 /** Truy vết nguồn của một bản ghi SGK, nguyên văn theo dataset. */
@@ -81,8 +68,7 @@ export interface BookDatasetDef {
 }
 
 /**
- * Các dataset SGK đã kiểm chứng hiện có. Thêm môn × khối mới = có
- * dataset đã kiểm chứng của sách đó (kèm Bước 0 khai nguồn trên issue)
+ * Các dataset SGK đã kiểm chứng hiện có. Thêm môn × khối mới = có dataset đã kiểm chứng của sách đó (kèm Bước 0 khai nguồn trên issue)
  * + thêm một mục vào manifest; cơ chế nạp không đổi.
  */
 export const BOOK_DATASETS: readonly BookDatasetDef[] = [
@@ -120,11 +106,7 @@ export function loadBookDataset(def: BookDatasetDef): BookDatasetFile {
 }
 
 /**
- * Hash nội dung của một bản ghi SGK (sha256 trên JSON chuẩn hoá theo
- * đúng thứ tự trường của dataset, gồm cả danh sách mã ánh xạ). Căn cứ
- * idempotent của sổ đăng ký SGK: hash khớp → bản ghi trong hệ thống đã
- * đúng nguyên văn + đúng ánh xạ, bỏ qua; lệch → dataset đã đính chính
- * tại nguồn, cập nhật node bài + thay toàn bộ ánh xạ của nó.
+ * Hash nội dung của một bản ghi SGK (sha256 trên JSON chuẩn hoá theo đúng thứ tự trường của dataset, gồm cả danh sách mã ánh xạ). Căn cứ idempotent của sổ đăng ký SGK: hash khớp → bản ghi trong hệ thống đã đúng nguyên văn + đúng ánh xạ, bỏ qua; lệch → dataset đã đính chính tại nguồn, cập nhật node bài + thay toàn bộ ánh xạ của nó.
  */
 export function bookRecordHash(record: BookRecord): string {
   const canonical = JSON.stringify([
@@ -136,9 +118,7 @@ export function bookRecordHash(record: BookRecord): string {
 }
 
 /**
- * Trích dẫn nguồn hiển thị cho một bản ghi SGK đã nạp: tên văn bản +
- * tập + hiện vật đối chiếu + mã bản ghi — đủ để truy về đúng vị trí
- * trong mục lục của cuốn sách chính chủ.
+ * Trích dẫn nguồn hiển thị cho một bản ghi SGK đã nạp: tên văn bản + tập + hiện vật đối chiếu + mã bản ghi — đủ để truy về đúng vị trí trong mục lục của cuốn sách chính chủ.
  */
 export function bookRecordSourceRef(record: BookRecord): string {
   return `${record.source.document} — ${record.source.volume} — bản ghi ${record.id}`;

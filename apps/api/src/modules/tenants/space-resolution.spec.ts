@@ -3,10 +3,7 @@ import { SpaceRoutingError, type ResolvedSpaceConnection } from '../../db/routin
 import { extractSpaceSlugFromHost, resolveDedicatedSpace } from './space-resolution';
 
 /**
- * Ca đơn vị của hàm trích slug trung tâm từ địa chỉ request (issue
- * #582): khoá quy ước địa chỉ — nhãn đầu tiên của tên miền con là
- * slug ứng viên; địa chỉ gốc, localhost, IP và nhãn sai hình dạng
- * đều không mang trung tâm.
+ * Ca đơn vị của hàm trích slug trung tâm từ địa chỉ request (issue #582): khoá quy ước địa chỉ — nhãn đầu tiên của tên miền con là slug ứng viên; địa chỉ gốc, localhost, IP và nhãn sai hình dạng đều không mang trung tâm.
  */
 describe('Trích slug trung tâm từ địa chỉ request', () => {
   it('tên miền con ba nhãn trả nhãn đầu tiên làm slug ứng viên', () => {
@@ -55,11 +52,7 @@ describe('Trích slug trung tâm từ địa chỉ request', () => {
 });
 
 /**
- * Ca đơn vị của `resolveDedicatedSpace` (issue #584): từ địa chỉ
- * request suy ra không gian kho riêng, hoặc `null` khi request
- * không thuộc trung tâm kho riêng nào — các trường hợp `null`
- * giữ nguyên hành vi đường kho chung, còn lỗi cấu hình vận hành
- * thì ném ra fail-closed thay vì im lặng coi là kho chung.
+ * Ca đơn vị của `resolveDedicatedSpace` (issue #584): từ địa chỉ request suy ra không gian kho riêng, hoặc `null` khi request không thuộc trung tâm kho riêng nào — các trường hợp `null` giữ nguyên hành vi đường kho chung, còn lỗi cấu hình vận hành thì ném ra fail-closed thay vì im lặng coi là kho chung.
  */
 describe('resolveDedicatedSpace phân giải địa chỉ thành không gian kho riêng', () => {
   /** Bộ phân giải giả: đọc sổ từ một bảng cho trước thay vì control plane thật. */

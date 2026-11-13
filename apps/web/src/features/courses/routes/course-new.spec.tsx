@@ -6,11 +6,8 @@ import { TestProviders } from '#test/providers';
 import { CourseNewPage } from './course-new';
 
 /**
- * Spec wizard tạo khoá (K1 — issue #68): năm đường tạo khoá trên màn
- * riêng `/courses/new`. Kiểm hai đường chính bằng endpoint thật:
- * nhân bản khoá có sẵn (chọn nguồn → tên/mã điền sẵn → tạo, chuyển
- * thẳng tới builder của bản sao) và khoá trắng; đường khung SGK phải
- * hiển thị trạng thái chờ nối K0b một cách trung thực.
+ * Spec wizard tạo khoá (K1 — issue #68): năm đường tạo khoá trên màn riêng `/courses/new`. Kiểm hai đường chính bằng endpoint thật:
+ * nhân bản khoá có sẵn (chọn nguồn → tên/mã điền sẵn → tạo, chuyển thẳng tới builder của bản sao) và khoá trắng; đường khung SGK phải hiển thị trạng thái chờ nối K0b một cách trung thực.
  */
 const CATEGORY_ID = '01900000-0000-7000-8000-000000000001';
 const SOURCE_ID = '01900000-0000-7000-8000-000000000010';

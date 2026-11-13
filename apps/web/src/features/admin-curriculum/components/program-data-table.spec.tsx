@@ -3,11 +3,7 @@ import { buildProgramOutcomeRows } from './program-data-table';
 import type { CurriculumTree, CurriculumTreeNode } from '#lib/curriculum';
 
 /**
- * Spec hàm làm phẳng cây chương trình thành các dòng YCCĐ cho bảng
- * Data Table của trang cây quản trị: mỗi YCCĐ là đúng một dòng, thứ
- * tự cây được giữ nguyên, dòng biết mạch chứa nó và đường đi tổ
- * tiên, node chưa có YCCĐ vẫn có một dòng giữ chỗ, và mạch rỗng vẫn
- * có dòng giữ chỗ cho node mạch để thao tác quản trị không mất.
+ * Spec hàm làm phẳng cây chương trình thành các dòng YCCĐ cho bảng Data Table của trang cây quản trị: mỗi YCCĐ là đúng một dòng, thứ tự cây được giữ nguyên, dòng biết mạch chứa nó và đường đi tổ tiên, node chưa có YCCĐ vẫn có một dòng giữ chỗ, và mạch rỗng vẫn có dòng giữ chỗ cho node mạch để thao tác quản trị không mất.
  */
 
 function node(partial: Partial<CurriculumTreeNode> & { id: string; title: string }): CurriculumTreeNode {

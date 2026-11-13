@@ -11,37 +11,13 @@ import { runFleetRestoreTest } from '../../../src/modules/fleet/fleet-restore-te
 import { runRuntimeRolesSetup } from '../../../src/modules/fleet/runtime-roles-setup';
 
 /**
- * Ca tích hợp của CÔNG CỤ VẬN HÀNH ĐỘI KHO (issue #586): tách role
- * runtime/migration, runner migration theo đợt, sao lưu định kỳ,
- * kiểm thử khôi phục và ngân sách kết nối — kiểm chứng đầu cuối
- * trên một cụm test thật với các database và role TÊN MỚI của
- * riêng ca này.
+ * Ca tích hợp của CÔNG CỤ VẬN HÀNH ĐỘI KHO (issue #586): tách role runtime/migration, runner migration theo đợt, sao lưu định kỳ, kiểm thử khôi phục và ngân sách kết nối — kiểm chứng đầu cuối trên một cụm test thật với các database và role TÊN MỚI của riêng ca này.
  *
- * Bố cục: một database control plane riêng (`giaokhoa_test_cp_586`, áp
- * bộ migration của control plane từ rỗng như ca của issue #580),
- * một kho nghiệp vụ trầy (`giaokhoa_test_biz_586`) cho phần tách role,
- * và BỐN kho đã đăng ký trong sổ — kho nền tảng `trang-chinh-586`,
- * trung tâm canary `tt-a-canary-586`, trung tâm `tt-b-loi-586` bị
- * phá hoại có chủ đích ở lượt migration đầu (một bảng trùng tên với
- * bảng của baseline được tạo trước để bước áp migration của riêng
- * kho đó phải hỏng và dừng ở trạng thái có ghi nhận, trong khi các
- * kho cùng đợt vẫn hoàn tất), và trung tâm `tt-c-586` cùng đợt với
- * kho bị phá. Các kho được đăng ký với `secretRef` trỏ tới URL của
- * role RUNTIME: runner chỉ áp được migration khi nó thay thông tin
- * đăng nhập bằng của role migration theo đúng luật suy ra URL vận
- * hành — role runtime tự nó không có quyền tạo bảng trong các kho.
+ * Bố cục: một database control plane riêng (`giaokhoa_test_cp_586`, áp bộ migration của control plane từ rỗng như ca của issue #580), một kho nghiệp vụ trầy (`giaokhoa_test_biz_586`) cho phần tách role, và BỐN kho đã đăng ký trong sổ — kho nền tảng `trang-chinh-586`, trung tâm canary `tt-a-canary-586`, trung tâm `tt-b-loi-586` bị phá hoại có chủ đích ở lượt migration đầu (một bảng trùng tên với bảng của baseline được tạo trước để bước áp migration của riêng kho đó phải hỏng và dừng ở trạng thái có ghi nhận, trong khi các kho cùng đợt vẫn hoàn tất), và trung tâm `tt-c-586` cùng đợt với kho bị phá. Các kho được đăng ký với `secretRef` trỏ tới URL của role RUNTIME: runner chỉ áp được migration khi nó thay thông tin đăng nhập bằng của role migration theo đúng luật suy ra URL vận hành — role runtime tự nó không có quyền tạo bảng trong các kho.
  *
- * Cô lập hai chiều được kiểm ở ĐÚNG bước mở kết nối bằng đúng các
- * role thật của mô hình mới: role runtime không mở được kết nối
- * vào database control plane, role của control plane không mở
- * được kết nối vào kho nghiệp vụ — sau khi role runtime đã bị hạ
- * khỏi superuser bởi chính script cấp phát của issue này.
+ * Cô lập hai chiều được kiểm ở ĐÚNG bước mở kết nối bằng đúng các role thật của mô hình mới: role runtime không mở được kết nối vào database control plane, role của control plane không mở được kết nối vào kho nghiệp vụ — sau khi role runtime đã bị hạ khỏi superuser bởi chính script cấp phát của issue này.
  *
- * Shim `uuidv7()` chỉ áp khi server PostgreSQL dưới 18 (môi trường
- * chạy local bằng PG16): PG18 — bản ở CI và production — có sẵn
- * hàm này, shim sẽ che mất hàm gốc nên tuyệt đối không áp ở đó.
- * Tệp sao lưu của ca ghi vào thư mục riêng trong cây làm việc và
- * được dọn ở afterAll, cùng toàn bộ database/role trầy của ca.
+ * Shim `uuidv7()` chỉ áp khi server PostgreSQL dưới 18 (môi trường chạy local bằng PG16): PG18 — bản ở CI và production — có sẵn hàm này, shim sẽ che mất hàm gốc nên tuyệt đối không áp ở đó. Tệp sao lưu của ca ghi vào thư mục riêng trong cây làm việc và được dọn ở afterAll, cùng toàn bộ database/role trầy của ca.
  */
 const CP_DATABASE = 'giaokhoa_test_cp_586';
 const CP_ROLE = 'giaokhoa_cp_test_586';
@@ -179,15 +155,13 @@ describe('Đội kho: tách role, migration theo đợt, sao lưu, khôi phục 
     process.env.DATABASE_ADMIN_URL = clusterUrl('postgres');
     process.env.FLEET_BACKUP_DIR = BACKUP_DIR;
     process.env.FLEET_TEST_SPACE_URL = clusterUrl('postgres', RUNTIME_ROLE, RUNTIME_PASSWORD);
-    // Mã hoá sao lưu là bắt buộc (fail-closed): mọi đường chụp
-    // trong ca này phải có khoá, và tệp lưu trên đĩa là `.dump.enc`.
+    // Mã hoá sao lưu là bắt buộc (fail-closed): mọi đường chụp trong ca này phải có khoá, và tệp lưu trên đĩa là `.dump.enc`.
     process.env.FLEET_BACKUP_ENCRYPTION_KEY = 'fleet-test-586-passphrase';
     mkdirSync(BACKUP_DIR, { recursive: true });
 
     const adminUrl = clusterUrl('postgres');
     await withClient(adminUrl, async (admin) => {
-      // Dọn tàn dư của một lượt chạy dở trước đó để ca tự cấp phát
-      // lại từ sạch trên cùng tên (tên là của riêng ca này).
+      // Dọn tàn dư của một lượt chạy dở trước đó để ca tự cấp phát lại từ sạch trên cùng tên (tên là của riêng ca này).
       for (const database of [CP_DATABASE, BIZ_DATABASE, ...SPACES.map((space) => space.database)]) {
         await admin.query(
           `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`,

@@ -21,29 +21,18 @@ import { NotificationEventsProcessor } from '../../../src/processors/notificatio
 /**
  * Ca tích hợp của ĐỊNH TUYẾN JOB THEO TRUNG TÂM phía worker
  * (issue #582): relay outbox thật và consumer thông báo thật chạy
- * trên hai kho kiểm chứng dựng riêng cho đợt này — kho chung là
- * chính database test của worker, kho riêng là một database mới
+ * trên hai kho kiểm chứng dựng riêng cho đợt này — kho chung là chính database test của worker, kho riêng là một database mới
  * (`giaokhoa_test_centre_a_582w`) có role ứng dụng riêng, CONNECT của
- * PUBLIC bị thu hồi, baseline nghiệp vụ áp bằng role chủ kho, và
- * một database control plane riêng (`giaokhoa_test_cp_582w`) giữ dòng
- * đăng ký của trung tâm. Chuỗi bí mật của kho riêng cố ý trỏ về
- * database mặc định `postgres` — đích cuối do sổ chốt như ca của
- * khung ở issue #581.
+ * PUBLIC bị thu hồi, baseline nghiệp vụ áp bằng role chủ kho, và một database control plane riêng (`giaokhoa_test_cp_582w`) giữ dòng đăng ký của trung tâm. Chuỗi bí mật của kho riêng cố ý trỏ về database mặc định `postgres` — đích cuối do sổ chốt như ca của khung ở issue #581.
  *
  * Các ca khoá hai tiêu chí nghiệm thu của issue ở phía worker:
  * (1) relay đọc dòng outbox nằm TRONG kho riêng của trung tâm
  *     (lượt quét theo trung tâm), phát job mang slug của trung
- *     tâm, và đóng dấu `publishedAt` ở chính kho đó — kiểm chứng
- *     trực tiếp trong từng kho; sự kiện ở kho chung giữ đúng
- *     đường hiện tại (job mang slug của tenant ở kho chung).
+ *     tâm, và đóng dấu `publishedAt` ở chính kho đó — kiểm chứng trực tiếp trong từng kho; sự kiện ở kho chung giữ đúng đường hiện tại (job mang slug của tenant ở kho chung).
  * (2) consumer thật (`NotificationEventsProcessor` + handler +
- *     đường phát thông báo thật) xử lý job của trung tâm thì
- *     thông báo được ghi vào kho riêng của trung tâm — kiểm
- *     chứng trực tiếp tại database của kho riêng, và kho chung
- *     không có thông báo đó.
+ *     đường phát thông báo thật) xử lý job của trung tâm thì thông báo được ghi vào kho riêng của trung tâm — kiểm chứng trực tiếp tại database của kho riêng, và kho chung không có thông báo đó.
  *
- * Shim `uuidv7()` chỉ áp khi server PostgreSQL dưới 18 như ca
- * tích hợp của khung (PG18 có sẵn hàm này).
+ * Shim `uuidv7()` chỉ áp khi server PostgreSQL dưới 18 như ca tích hợp của khung (PG18 có sẵn hàm này).
  */
 const CP_DATABASE = 'giaokhoa_test_cp_582w';
 const CP_ROLE = 'giaokhoa_cp_test_582w';

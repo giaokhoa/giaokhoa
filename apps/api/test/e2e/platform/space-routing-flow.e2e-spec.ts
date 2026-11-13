@@ -14,40 +14,20 @@ import {
 } from '../../support/identity-access-helpers';
 
 /**
- * Ca đầu-cuối của ĐỊNH TUYẾN THEO TRUNG TÂM Ở TẦNG API (issue
- * #582): ứng dụng thật (toàn bộ chuỗi guard) chạy với hai trung
- * tâm kiểm chứng ở kho riêng dựng riêng cho đợt này — hai
- * database mới trên cùng cụm test (`giaokhoa_test_centre_a_582`,
- * `giaokhoa_test_centre_b_582`), mỗi kho có role ứng dụng riêng,
- * CONNECT của PUBLIC bị thu hồi, baseline nghiệp vụ áp bằng role
- * chủ kho; sổ đăng ký nằm ở database control plane riêng
+ * Ca đầu-cuối của ĐỊNH TUYẾN THEO TRUNG TÂM Ở TẦNG API (issue #582): ứng dụng thật (toàn bộ chuỗi guard) chạy với hai trung tâm kiểm chứng ở kho riêng dựng riêng cho đợt này — hai database mới trên cùng cụm test (`giaokhoa_test_centre_a_582`, `giaokhoa_test_centre_b_582`), mỗi kho có role ứng dụng riêng, CONNECT của PUBLIC bị thu hồi, baseline nghiệp vụ áp bằng role chủ kho; sổ đăng ký nằm ở database control plane riêng
  * (`giaokhoa_test_cp_582`) mà ứng dụng đọc qua biến
- * `CONTROL_PLANE_DATABASE_URL` đặt trước khi ứng dụng khởi động.
- * Hai tenant tương ứng được tạo bằng chính API công khai ở kho
- * chung, rồi dòng tenant (và với trung tâm A: dòng user + dòng
- * membership của giáo viên) được sao vào kho riêng tương ứng —
- * đúng trạng thái sau di trú mà đợt di trú dữ kiện (#587) sẽ tạo:
- * dữ kiện của trung tâm nằm ở kho của nó. Địa chỉ của trung tâm
- * là tên miền con mang slug (`<slug>.test.local`) theo quy ước
- * địa chỉ của hệ.
+ * `CONTROL_PLANE_DATABASE_URL` đặt trước khi ứng dụng khởi động. Hai tenant tương ứng được tạo bằng chính API công khai ở kho chung, rồi dòng tenant (và với trung tâm A: dòng user + dòng membership của giáo viên) được sao vào kho riêng tương ứng — đúng trạng thái sau di trú mà đợt di trú dữ kiện (#587) sẽ tạo:
+ * dữ kiện của trung tâm nằm ở kho của nó. Địa chỉ của trung tâm là tên miền con mang slug (`<slug>.test.local`) theo quy ước địa chỉ của hệ.
  *
  * Các ca khoá các tiêu chí nghiệm thu của issue ở phía API:
  * (1) access token của phiên thuộc trung tâm kho riêng mang
- *     claim `centre_id` bằng định danh đăng ký của trung tâm;
- *     token của phiên ở kho chung không mang claim;
+ *     claim `centre_id` bằng định danh đăng ký của trung tâm; token của phiên ở kho chung không mang claim;
  * (2) token của trung tâm A mang tới địa chỉ của trung tâm B bị
- *     từ chối 401 `auth.centre_mismatch` TRƯỚC tầng dữ kiện —
- *     kiểm chứng bằng số kết nối thật vào kho B (không một kết
- *     nối nào của role kho B được mở bởi request bị từ chối);
+ *     từ chối 401 `auth.centre_mismatch` TRƯỚC tầng dữ kiện — kiểm chứng bằng số kết nối thật vào kho B (không một kết nối nào của role kho B được mở bởi request bị từ chối);
  * (3) đăng nhập tại địa chỉ của trung tâm A đọc/ghi ở kho A:
- *     family refresh được tạo trong kho A (không tạo ở kho
- *     chung), tài khoản chỉ có ở kho chung thì đăng nhập tại địa
- *     chỉ A thất bại, và hồ sơ đọc tại địa chỉ A mang dữ kiện
- *     của kho A trong khi cùng token đọc ở địa chỉ gốc cho dữ
- *     kiện của kho chung;
+ *     family refresh được tạo trong kho A (không tạo ở kho chung), tài khoản chỉ có ở kho chung thì đăng nhập tại địa chỉ A thất bại, và hồ sơ đọc tại địa chỉ A mang dữ kiện của kho A trong khi cùng token đọc ở địa chỉ gốc cho dữ kiện của kho chung;
  * (4) trung tâm bị đình chỉ trên sổ thì traffic nghiệp vụ tại
- *     địa chỉ của nó bị từ chối 403 `space.not_active`, dữ kiện
- *     trong kho của nó còn nguyên, và đường vận hành platform
+ *     địa chỉ của nó bị từ chối 403 `space.not_active`, dữ kiện trong kho của nó còn nguyên, và đường vận hành platform
  *     (quản trị viên site chính ở tenant platform) vẫn vào được;
  * (5) trung tâm ở kho chung giữ nguyên hành vi hiện tại ở cả địa
  *     chỉ gốc lẫn tên miền con của nó.
@@ -62,10 +42,7 @@ const CENTRE_B_DATABASE = 'giaokhoa_test_centre_b_582';
 const CENTRE_B_ROLE = 'giaokhoa_centre_b_582_app';
 const CENTRE_B_PASSWORD = 'centre-b-582';
 // Slug của hai trung tâm mang hậu tố ngẫu nhiên theo lượt chạy:
-// tenant tương ứng được tạo thật trong database nghiệp vụ test
-// DÙNG CHUNG của tầng e2e, nên slug cố định sẽ va chạm khi chạy
-// lại spec trên cùng một database; địa chỉ (tên miền con) và dòng
-// đăng ký đều suy ra từ slug nên tính nhất quán không đổi.
+// tenant tương ứng được tạo thật trong database nghiệp vụ test DÙNG CHUNG của tầng e2e, nên slug cố định sẽ va chạm khi chạy lại spec trên cùng một database; địa chỉ (tên miền con) và dòng đăng ký đều suy ra từ slug nên tính nhất quán không đổi.
 const RUN_SUFFIX = Math.random().toString(36).slice(2, 8);
 const CENTRE_A_SLUG = `trung-tam-a-${RUN_SUFFIX}`;
 const CENTRE_B_SLUG = `trung-tam-b-${RUN_SUFFIX}`;
@@ -146,8 +123,7 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
 }
 
 /**
- * Sao một dòng (đọc từ kho chung) vào cùng bảng ở kho đích với
- * nguyên bộ cột — mô phỏng phần dữ kiện đã di trú của trung tâm.
+ * Sao một dòng (đọc từ kho chung) vào cùng bảng ở kho đích với nguyên bộ cột — mô phỏng phần dữ kiện đã di trú của trung tâm.
  */
 async function copyRow(
   sourceUrl: string,

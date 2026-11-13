@@ -1,54 +1,24 @@
 /**
  * Repository của module DASHBOARD trên Kysely.
  *
- * Vai trò: mọi truy cập dữ liệu của dashboard việc cần làm (DASH1,
- * issue #121) — tập khoá người dùng thuộc về (ghi danh hiệu lực, gán
- * vai tại context khoá), các nguồn việc đến hạn (quiz, bài tập), điểm
- * và vết công bố, hàng đợi chấm (bài nộp chờ chấm, lượt quiz chờ chấm
- * tay, phiếu giấy chờ xử lý), mốc xem dashboard và tuỳ chọn thẻ khoá
- * cá nhân. Mọi truy vấn đều GOM theo tập khoá của người dùng trong
- * một câu SQL cho mỗi nguồn — không vòng lặp truy vấn theo từng khoá.
- * Luật nghiệp vụ (lọc công bố điểm qua facade Grades, xác định đội
- * giảng dạy qua evaluator) nằm ở tầng service phía ứng dụng;
- * repository này chỉ là lớp truy cập dữ liệu thuần.
+ * Vai trò: mọi truy cập dữ liệu của dashboard việc cần làm (DASH1, issue #121) — tập khoá người dùng thuộc về (ghi danh hiệu lực, gán vai tại context khoá), các nguồn việc đến hạn (quiz, bài tập), điểm và vết công bố, hàng đợi chấm (bài nộp chờ chấm, lượt quiz chờ chấm tay, phiếu giấy chờ xử lý), mốc xem dashboard và tuỳ chọn thẻ khoá cá nhân. Mọi truy vấn đều GOM theo tập khoá của người dùng trong một câu SQL cho mỗi nguồn — không vòng lặp truy vấn theo từng khoá. Luật nghiệp vụ (lọc công bố điểm qua facade Grades, xác định đội giảng dạy qua evaluator) nằm ở tầng service phía ứng dụng; repository này chỉ là lớp truy cập dữ liệu thuần.
  *
  * Cổng phụ thuộc registry ngữ cảnh: định nghĩa các mức ngữ cảnh
  * (`CONTEXT_LEVELS`) là registry sống phía ứng dụng (module access)
- * và là NGUỒN ĐỊNH NGHĨA DUY NHẤT của hệ — package này cấm giữ bản
- * sao của registry (hai nguồn định nghĩa là lỗi thiết kế). Vì vậy
- * file này chỉ khai HÌNH DẠNG của registry: danh sách khoá
+ * và là NGUỒN ĐỊNH NGHĨA DUY NHẤT của hệ — package này cấm giữ bản sao của registry (hai nguồn định nghĩa là lỗi thiết kế). Vì vậy file này chỉ khai HÌNH DẠNG của registry: danh sách khoá
  * (`CONTEXT_LEVEL_KEYS`) và kiểu ánh xạ khoá → số mức
  * (`ContextLevels`). Giá trị số thật của từng mức do phía ứng dụng
- * cấp qua tham số constructor (điểm tiêm là DI token trong module
- * dashboard phía `apps/api`, implementation trỏ thẳng tới registry
- * hiện hành). Tại thời điểm chuyển đổi, repository chỉ tiêu thụ đúng
- * một khoá qua cổng: `COURSE` (lọc gán vai tại context khoá).
+ * cấp qua tham số constructor (điểm tiêm là DI token trong module dashboard phía `apps/api`, implementation trỏ thẳng tới registry hiện hành). Tại thời điểm chuyển đổi, repository chỉ tiêu thụ đúng một khoá qua cổng: `COURSE` (lọc gán vai tại context khoá).
  *
- * Khuôn hình dạng dữ liệu ở biên repository — cùng khuôn pilot kho
- * control plane (xem mục "Sổ tay chuyển đổi repository sang Kysely"
- * trong `AGENTS.md` của package): bên trong dùng tên cột snake_case
- * của interface schema codegen; bên ngoài giữ nguyên hợp đồng dòng
- * camelCase của repository cũ trước chuyển đổi qua danh sách cột tường minh
- * có bí danh; các hàm ánh xạ ghi loại `undefined` từng trường (thử
- * nghiệm T-4); mọi giá trị where là tham số bắt buộc. Module này
- * không tham gia transaction nào (kiểm kê tại file cũ: 0 điểm mở
- * transaction, phía service gọi từng method độc lập) nên repository
- * không nhận handle giao dịch — cấm giao dịch lai vì vậy không có
- * bề mặt để vi phạm.
+ * Khuôn hình dạng dữ liệu ở biên repository — cùng khuôn pilot kho control plane (xem mục "Sổ tay chuyển đổi repository sang Kysely" trong `AGENTS.md` của package): bên trong dùng tên cột snake_case của interface schema codegen; bên ngoài giữ nguyên hợp đồng dòng camelCase của repository cũ trước chuyển đổi qua danh sách cột tường minh có bí danh; các hàm ánh xạ ghi loại `undefined` từng trường (thử nghiệm T-4); mọi giá trị where là tham số bắt buộc. Module này không tham gia transaction nào (kiểm kê tại file cũ: 0 điểm mở transaction, phía service gọi từng method độc lập) nên repository không nhận handle giao dịch — cấm giao dịch lai vì vậy không có bề mặt để vi phạm.
  *
- * Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng
- * dụng, không tự mở pool, không đọc biến môi trường.
+ * Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng dụng, không tự mở pool, không đọc biến môi trường.
  */
 import { sql } from 'kysely';
 import type { CentreDb } from '../client';
 
 /**
- * Danh sách khoá của registry mức ngữ cảnh — HÌNH DẠNG của registry,
- * không phải giá trị của nó: hằng này chỉ nêu các khoá tồn tại trong
- * registry phía ứng dụng, tuyệt đối không mang số mức của bất kỳ
- * khoá nào. Đổi hình dạng registry (thêm/bớt khoá) thì sửa hằng này
- * cùng interface `ContextLevels` ở lượt chạm tương ứng; đổi GIÁ TRỊ
- * số mức chỉ sửa ở registry phía ứng dụng, package không phải chạm.
+ * Danh sách khoá của registry mức ngữ cảnh — HÌNH DẠNG của registry, không phải giá trị của nó: hằng này chỉ nêu các khoá tồn tại trong registry phía ứng dụng, tuyệt đối không mang số mức của bất kỳ khoá nào. Đổi hình dạng registry (thêm/bớt khoá) thì sửa hằng này cùng interface `ContextLevels` ở lượt chạm tương ứng; đổi GIÁ TRỊ số mức chỉ sửa ở registry phía ứng dụng, package không phải chạm.
  */
 export const CONTEXT_LEVEL_KEYS = [
   'SYSTEM',
@@ -65,9 +35,7 @@ export const CONTEXT_LEVEL_KEYS = [
 export type ContextLevelKey = (typeof CONTEXT_LEVEL_KEYS)[number];
 
 /**
- * Cổng phụ thuộc tới registry mức ngữ cảnh: ánh xạ mỗi khoá của
- * registry sang số mức của nó. Đây là interface cổng duy nhất mà
- * package cần từ registry — phía ứng dụng cấp object registry thật
+ * Cổng phụ thuộc tới registry mức ngữ cảnh: ánh xạ mỗi khoá của registry sang số mức của nó. Đây là interface cổng duy nhất mà package cần từ registry — phía ứng dụng cấp object registry thật
  * (đúng hình dạng này) qua điểm tiêm; package không biết và không
  * giữ giá trị cụ thể nào.
  */
@@ -235,29 +203,21 @@ const GRADE_COLUMNS = [
 ] as const;
 
 /**
- * Ánh xạ ghi cho `user_dashboard_state` (khuôn T-4): từng trường
- * camelCase → snake_case tường minh. Cả hai trường đều bắt buộc ở
- * điểm gọi nên không có `undefined` nào cần loại; hàm này là điểm
- * duy nhất dựng values của bảng để hình dạng ghi không rải rác.
+ * Ánh xạ ghi cho `user_dashboard_state` (khuôn T-4): từng trường camelCase → snake_case tường minh. Cả hai trường đều bắt buộc ở điểm gọi nên không có `undefined` nào cần loại; hàm này là điểm duy nhất dựng values của bảng để hình dạng ghi không rải rác.
  */
 function stateInsertValues(userId: string, at: Date) {
   return { user_id: userId, last_seen_at: at };
 }
 
 /**
- * Ánh xạ ghi cho `user_course_card_prefs` (khuôn T-4): `color` và
- * `nickname` mang kiểu `string | null` tường minh ở chữ ký — null là
- * giá trị nghiệp vụ (xoá màu/biệt danh) nên được ghi thẳng thành
- * NULL, không bao giờ là `undefined`.
+ * Ánh xạ ghi cho `user_course_card_prefs` (khuôn T-4): `color` và `nickname` mang kiểu `string | null` tường minh ở chữ ký — null là giá trị nghiệp vụ (xoá màu/biệt danh) nên được ghi thẳng thành NULL, không bao giờ là `undefined`.
  */
 function prefInsertValues(userId: string, courseId: string, color: string | null, nickname: string | null) {
   return { user_id: userId, course_id: courseId, color, nickname };
 }
 
 /**
- * Kho dữ liệu Dashboard việc cần làm (DASH1, issue #121): mọi truy
- * vấn đều GOM theo tập khoá của người dùng trong một câu SQL cho mỗi
- * nguồn — không vòng lặp truy vấn theo từng khoá.
+ * Kho dữ liệu Dashboard việc cần làm (DASH1, issue #121): mọi truy vấn đều GOM theo tập khoá của người dùng trong một câu SQL cho mỗi nguồn — không vòng lặp truy vấn theo từng khoá.
  */
 export class DashboardRepository {
   /**
@@ -381,11 +341,7 @@ export class DashboardRepository {
   }
 
   /**
-   * Phép nối điểm ↔ item dùng chung cho hai method đọc điểm: điểm
-   * của chính user, item thuộc khoá, và chỉ dòng CÓ nội dung hiển
-   * thị (điểm đã nhập hoặc phản hồi khác rỗng) — điều kiện boolean
-   * ghép bằng expression builder, cùng cây điều kiện với mảnh SQL
-   * của đường cũ.
+   * Phép nối điểm ↔ item dùng chung cho hai method đọc điểm: điểm của chính user, item thuộc khoá, và chỉ dòng CÓ nội dung hiển thị (điểm đã nhập hoặc phản hồi khác rỗng) — điều kiện boolean ghép bằng expression builder, cùng cây điều kiện với mảnh SQL của đường cũ.
    */
   private gradeRowsQuery() {
     return this.db()
@@ -415,10 +371,7 @@ export class DashboardRepository {
   }
 
   /**
-   * Mọi vết công bố scope item trong tập khoá — service suy ra: (a) hiệu
-   * lực công bố hiện tại theo vết mới nhất, (b) ứng viên "mới": điểm chấm
-   * TRƯỚC mốc nhưng chỉ được CÔNG BỐ sau mốc thì thời điểm trở nên hiển
-   * thị là thời điểm công bố, không phải thời điểm chấm.
+   * Mọi vết công bố scope item trong tập khoá — service suy ra: (a) hiệu lực công bố hiện tại theo vết mới nhất, (b) ứng viên "mới": điểm chấm TRƯỚC mốc nhưng chỉ được CÔNG BỐ sau mốc thì thời điểm trở nên hiển thị là thời điểm công bố, không phải thời điểm chấm.
    */
   async itemPublications(courseIds: string[]): Promise<DashboardGradePublicationRow[]> {
     if (!courseIds.length) return [];
@@ -480,10 +433,7 @@ export class DashboardRepository {
   }
 
   /**
-   * Phiếu giấy CAM-0 đang chờ xử lý trong tập khoá (chỉ hai trạng thái chờ
-   * giáo viên: needs_identity + needs_review; ready/recorded KHÔNG tính —
-   * ready là đã đủ điều kiện ghi, recorded là đã xong). Trả từng phiếu để
-   * service gom số đếm + mốc chờ lâu nhất + quiz đích deep-link.
+   * Phiếu giấy CAM-0 đang chờ xử lý trong tập khoá (chỉ hai trạng thái chờ giáo viên: needs_identity + needs_review; ready/recorded KHÔNG tính — ready là đã đủ điều kiện ghi, recorded là đã xong). Trả từng phiếu để service gom số đếm + mốc chờ lâu nhất + quiz đích deep-link.
    */
   async paperPendingRows(courseIds: string[]): Promise<DashboardPaperPendingRow[]> {
     if (!courseIds.length) return [];

@@ -10,16 +10,7 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser } from '..
 import { courseContextId } from '../../support/engagement-helpers';
 
 /**
- * K0b (issue #67) — nạp khung SGK vào khoá bằng chính cơ chế nạp khung
- * của K0a: giáo viên có course:update TẠI CONTEXT KHOÁ (mô hình seed
- * teacher1, không vai hệ thống) đọc được bề mặt chọn khung SGK qua
- * forCourseId, nạp các chủ đề thành section — mỗi mục bài truy về được
- * YCCĐ chương trình qua bản chụp neo kép. Học sinh đã ghi danh thấy
- * cấu trúc khoá bình thường (section + mục bài + YCCĐ) nhưng bị chặn ở
- * mọi bề mặt quản trị ánh xạ/SGK; giáo viên khoá khác bị chặn với khoá
- * không phải của mình. Oracle YCCĐ: dataset chương trình + dataset SGK
- * đã kiểm chứng (hợp YCCĐ của các node được ánh xạ, khử trùng theo thứ
- * tự ánh xạ) — cùng quy tắc với spec nạp SGK.
+ * K0b (issue #67) — nạp khung SGK vào khoá bằng chính cơ chế nạp khung của K0a: giáo viên có course:update TẠI CONTEXT KHOÁ (mô hình seed teacher1, không vai hệ thống) đọc được bề mặt chọn khung SGK qua forCourseId, nạp các chủ đề thành section — mỗi mục bài truy về được YCCĐ chương trình qua bản chụp neo kép. Học sinh đã ghi danh thấy cấu trúc khoá bình thường (section + mục bài + YCCĐ) nhưng bị chặn ở mọi bề mặt quản trị ánh xạ/SGK; giáo viên khoá khác bị chặn với khoá không phải của mình. Oracle YCCĐ: dataset chương trình + dataset SGK đã kiểm chứng (hợp YCCĐ của các node được ánh xạ, khử trùng theo thứ tự ánh xạ) — cùng quy tắc với spec nạp SGK.
  */
 
 interface BookRecord {
@@ -47,13 +38,7 @@ const programFile = JSON.parse(
 ) as { records: ProgramRecord[] };
 
 /**
- * Text của một YCCĐ dạng doc — ORACLE trích độc lập trong spec (không
- * dùng code nạp, giữ tính độc lập của oracle): mỗi paragraph là một
- * dòng, listItem cho dòng của paragraph của nó rồi tới các dòng của
- * bulletList lồng bên trong (đệ quy); các dòng nối bằng '\n', cắt
- * khoảng trắng hai đầu — đúng semantics text canonical mà hệ lưu vào
- * `learning_outcomes.content` nay là cột jsonb lưu trực tiếp tài liệu
- * này; text canonical trích từ tài liệu bằng đúng semantics này.
+ * Text của một YCCĐ dạng doc — ORACLE trích độc lập trong spec (không dùng code nạp, giữ tính độc lập của oracle): mỗi paragraph là một dòng, listItem cho dòng của paragraph của nó rồi tới các dòng của bulletList lồng bên trong (đệ quy); các dòng nối bằng '\n', cắt khoảng trắng hai đầu — đúng semantics text canonical mà hệ lưu vào `learning_outcomes.content` nay là cột jsonb lưu trực tiếp tài liệu này; text canonical trích từ tài liệu bằng đúng semantics này.
  */
 function docOutcomeText(doc: OutcomeDoc): string {
   const lines: string[] = [];

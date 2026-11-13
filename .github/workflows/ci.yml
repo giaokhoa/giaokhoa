@@ -3,10 +3,7 @@ name: CI
 on:
   pull_request:
 
-# Huỷ lượt kiểm của head cũ ngay khi PR có head mới: group tách riêng
-# theo từng PR (dự phòng bằng ref khi sự kiện không gắn với PR), nên các
-# lượt của head đã lỗi thời không chạy hết vô ích; cổng merge vẫn xét
-# lượt completed/success của head cuối như cũ.
+# Huỷ lượt kiểm của head cũ ngay khi PR có head mới: group tách riêng theo từng PR (dự phòng bằng ref khi sự kiện không gắn với PR), nên các lượt của head đã lỗi thời không chạy hết vô ích; cổng merge vẫn xét lượt completed/success của head cuối như cũ.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -32,9 +29,7 @@ jobs:
           --health-cmd "redis-cli ping"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      # Worker dùng giaokhoa_test_worker; DB giaokhoa_test_api ở job
-      # này chỉ phục vụ migrate và kiểm tra kiểu. Test API chạy trên
-      # runner riêng để không phải chờ test worker hoàn tất.
+      # Worker dùng giaokhoa_test_worker; DB giaokhoa_test_api ở job này chỉ phục vụ migrate và kiểm tra kiểu. Test API chạy trên runner riêng để không phải chờ test worker hoàn tất.
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/giaokhoa_test_api
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: ci-secret-at-least-16-chars
@@ -47,8 +42,7 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      # Chỉ lưu kết quả build/lint/typecheck; task test luôn chạy thật
-      # vì còn phụ thuộc trạng thái PostgreSQL/Redis ngoài input nguồn.
+      # Chỉ lưu kết quả build/lint/typecheck; task test luôn chạy thật vì còn phụ thuộc trạng thái PostgreSQL/Redis ngoài input nguồn.
       - name: Cache Turbo tasks
         uses: actions/cache@v6
         with:
@@ -61,21 +55,14 @@ jobs:
         run: pnpm lint
       - name: Create the worker test database
         run: PGPASSWORD=postgres psql -h localhost -U postgres -c 'CREATE DATABASE giaokhoa_test_worker'
-      # Runner migration Kysely (issue #639) chạy từ dist đã build
-      # của @giaokhoa/db, nên phải build package này TRƯỚC bước migrate
-      # (bước Build toàn bộ chạy sau migrate).
+      # Runner migration Kysely (issue #639) chạy từ dist đã build của @giaokhoa/db, nên phải build package này TRƯỚC bước migrate (bước Build toàn bộ chạy sau migrate).
       - name: Build @giaokhoa/db for the migration runner
         run: pnpm exec turbo run build --filter=@giaokhoa/db
       - name: Migrate the test databases from empty
         run: |
           DATABASE_URL=postgres://postgres:postgres@localhost:5432/giaokhoa_test_api pnpm --filter @giaokhoa/api db:migrate
           DATABASE_URL=postgres://postgres:postgres@localhost:5432/giaokhoa_test_worker pnpm --filter @giaokhoa/api db:migrate
-      # Cổng chống lệch kiểu Kysely của @giaokhoa/db: sinh lại cả ba file
-      # kiểu trong packages/db/src/types từ database dựng từ rỗng
-      # trên chính service PostgreSQL 18.6 của job (lệnh db:types
-      # tự suy kết nối quản trị từ DATABASE_URL cấp job) rồi yêu cầu
-      # cây nguồn không đổi — file kiểu lệch khỏi hình dạng DB thật
-      # sinh từ bộ SQL mang dữ liệu hiện hành là job đỏ tại chỗ.
+      # Cổng chống lệch kiểu Kysely của @giaokhoa/db: sinh lại cả ba file kiểu trong packages/db/src/types từ database dựng từ rỗng trên chính service PostgreSQL 18.6 của job (lệnh db:types tự suy kết nối quản trị từ DATABASE_URL cấp job) rồi yêu cầu cây nguồn không đổi — file kiểu lệch khỏi hình dạng DB thật sinh từ bộ SQL mang dữ liệu hiện hành là job đỏ tại chỗ.
       - name: Check generated Kysely types are up to date
         run: |
           pnpm --filter @giaokhoa/db run db:types
@@ -84,13 +71,10 @@ jobs:
         run: pnpm exec turbo run build
       - name: Typecheck
         run: pnpm exec turbo run typecheck
-      # Các suite ngoài API chạy qua Turbo; unit/int API có job riêng,
-      # e2e API giữ bốn shard. Không dùng cache kết quả test.
+      # Các suite ngoài API chạy qua Turbo; unit/int API có job riêng, e2e API giữ bốn shard. Không dùng cache kết quả test.
       - name: Test
         run: pnpm exec turbo run test --filter='!@giaokhoa/api'
-      # Smoke production chạy trên toàn bộ topology Compose (Caddy +
-      # React Router SSR + NestJS) ở job deploy-check/verify-stack,
-      # thay cho tự quản lý hai tiến trình bằng setsid/kill/trap ở đây.
+      # Smoke production chạy trên toàn bộ topology Compose (Caddy + React Router SSR + NestJS) ở job deploy-check/verify-stack, thay cho tự quản lý hai tiến trình bằng setsid/kill/trap ở đây.
 
   test-api:
     runs-on: ubuntu-latest
@@ -150,24 +134,9 @@ jobs:
       - name: Test API integration
         run: pnpm --filter @giaokhoa/api run test:int
 
-  # E2e của API chia thành 4 shard chạy song song bằng matrix, theo
-  # khuôn chính thức của Vitest (mục Sharding trong tài liệu
-  # Improving Performance): mỗi shard chạy vitest với cờ --shard kèm
+  # E2e của API chia thành 4 shard chạy song song bằng matrix, theo khuôn chính thức của Vitest (mục Sharding trong tài liệu Improving Performance): mỗi shard chạy vitest với cờ --shard kèm
   # --reporter=blob, một job gộp riêng (merge-e2e-reports) tải các
-  # blob report xuống và chạy --merge-reports để tổng hợp kết quả.
-  # Mỗi shard có service PostgreSQL/Redis riêng của job (mỗi job
-  # chạy trên một runner riêng) và dùng DB riêng
-  # giaokhoa_test_api_<số shard>: các file e2e dùng chung dữ liệu toàn
-  # cục (outbox, event_log) nên shard dùng chung tài nguyên sẽ giẫm
-  # dữ liệu của nhau. Redis tách bằng service riêng cho từng shard,
-  # không tách bằng DB logic trong URL: kết nối hàng đợi BullMQ của
-  # ứng dụng dựng từ host/cổng của URL (không mang chỉ số DB), trong
-  # khi các client Redis đọc trực tiếp trong spec lại mang chỉ số DB
-  # theo URL — trộn hai cách sẽ làm phía ghi và phía đọc lệch DB.
-  # Trong một shard, fileParallelism vẫn tắt như cấu hình Vitest
-  # hiện hành.
-  # fail-fast tắt để một shard đỏ không huỷ các shard còn lại — job
-  # gộp vẫn nhận đủ blob report và chỉ đúng shard lỗi.
+  # blob report xuống và chạy --merge-reports để tổng hợp kết quả. Mỗi shard có service PostgreSQL/Redis riêng của job (mỗi job chạy trên một runner riêng) và dùng DB riêng giaokhoa_test_api_<số shard>: các file e2e dùng chung dữ liệu toàn cục (outbox, event_log) nên shard dùng chung tài nguyên sẽ giẫm dữ liệu của nhau. Redis tách bằng service riêng cho từng shard, không tách bằng DB logic trong URL: kết nối hàng đợi BullMQ của ứng dụng dựng từ host/cổng của URL (không mang chỉ số DB), trong khi các client Redis đọc trực tiếp trong spec lại mang chỉ số DB theo URL — trộn hai cách sẽ làm phía ghi và phía đọc lệch DB. Trong một shard, fileParallelism vẫn tắt như cấu hình Vitest hiện hành. fail-fast tắt để một shard đỏ không huỷ các shard còn lại — job gộp vẫn nhận đủ blob report và chỉ đúng shard lỗi.
   test-api-e2e:
     name: test-api-e2e (shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
     runs-on: ubuntu-latest
@@ -212,9 +181,7 @@ jobs:
             ${{ runner.os }}-node24-turbo-
       - name: Create the test database of this shard
         run: PGPASSWORD=postgres psql -h localhost -U postgres -c 'CREATE DATABASE giaokhoa_test_api_${{ matrix.shardIndex }}'
-      # Runner migration Kysely (issue #639) chạy từ dist đã build
-      # của @giaokhoa/db, nên phải build package này TRƯỚC bước migrate
-      # (bước Build API chạy sau migrate).
+      # Runner migration Kysely (issue #639) chạy từ dist đã build của @giaokhoa/db, nên phải build package này TRƯỚC bước migrate (bước Build API chạy sau migrate).
       - name: Build @giaokhoa/db for the migration runner
         run: pnpm exec turbo run build --filter=@giaokhoa/db
       - name: Migrate the test database of this shard from empty
@@ -226,8 +193,7 @@ jobs:
         env:
           GIAOKHOA_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/giaokhoa_test_api_${{ matrix.shardIndex }}
         run: pnpm exec vitest run --project e2e --reporter=blob --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
-      # Blob report tải lên kể cả khi shard đỏ (chỉ trừ lúc lượt bị
-      # huỷ) để job gộp luôn có đủ kết quả của cả 4 shard.
+      # Blob report tải lên kể cả khi shard đỏ (chỉ trừ lúc lượt bị huỷ) để job gộp luôn có đủ kết quả của cả 4 shard.
       - name: Upload the blob report of this shard
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
@@ -237,11 +203,7 @@ jobs:
           include-hidden-files: true
           retention-days: 1
 
-      # In tổng số file/ca của riêng shard này thành annotation, đọc
-      # lại từ chính blob report vừa ghi bằng --merge-reports: cộng
-      # tổng của 4 shard phải bằng tổng của job gộp và bằng số ca của
-      # suite trước khi chia shard — đó là bằng chứng không shard nào
-      # mất ca hay chạy trùng ca của shard khác.
+      # In tổng số file/ca của riêng shard này thành annotation, đọc lại từ chính blob report vừa ghi bằng --merge-reports: cộng tổng của 4 shard phải bằng tổng của job gộp và bằng số ca của suite trước khi chia shard — đó là bằng chứng không shard nào mất ca hay chạy trùng ca của shard khác.
       - name: Print the totals of this shard
         working-directory: apps/api
         run: |
@@ -250,11 +212,7 @@ jobs:
           summary=$(grep -E '^[[:space:]]*(Test Files|Tests)[[:space:]]' "$RUNNER_TEMP/shard-summary-clean.txt" | sed 's/^ *//' | paste -sd '; ') || true
           echo "Tổng số của shard ${{ matrix.shardIndex }}/${{ matrix.shardTotal }}: $summary"
 
-  # Job gộp blob report của 4 shard: chỉ tổng hợp kết quả đã chạy,
-  # không chạy lại test. Job vẫn chạy khi một shard đỏ (miễn lượt
-  # chưa bị huỷ) và kết quả gộp phản ánh đúng shard lỗi; tổng số ca
-  # trong đầu ra của bước gộp là bằng chứng không shard nào mất ca
-  # hay chạy trùng ca của shard khác.
+  # Job gộp blob report của 4 shard: chỉ tổng hợp kết quả đã chạy, không chạy lại test. Job vẫn chạy khi một shard đỏ (miễn lượt chưa bị huỷ) và kết quả gộp phản ánh đúng shard lỗi; tổng số ca trong đầu ra của bước gộp là bằng chứng không shard nào mất ca hay chạy trùng ca của shard khác.
   merge-e2e-reports:
     name: merge-e2e-reports
     if: ${{ !cancelled() }}
@@ -283,8 +241,7 @@ jobs:
           summary=$(grep -E '^[[:space:]]*(Test Files|Tests)[[:space:]]' "$RUNNER_TEMP/merge-reports-clean.txt" | sed 's/^ *//' | paste -sd '; ') || true
           echo "Kết quả gộp blob report e2e: $summary"
 
-  # Giữ status check verify làm cổng chung: một suite lỗi, bị huỷ hoặc
-  # bị bỏ qua đều không được biến thành kết quả xanh của cổng merge.
+  # Giữ status check verify làm cổng chung: một suite lỗi, bị huỷ hoặc bị bỏ qua đều không được biến thành kết quả xanh của cổng merge.
   verify:
     if: ${{ always() }}
     needs: [verify-workspace, test-api, test-api-e2e, merge-e2e-reports]

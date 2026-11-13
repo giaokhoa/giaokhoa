@@ -8,14 +8,7 @@ import {
 import { programOutcomeDocText, programOutcomeTextToDoc, type ProgramOutcomeDoc } from './program-datasets';
 
 /**
- * Hình dạng YCCĐ trả ra ngoài tầng service: cột `content` trong DB
- * nay là tài liệu Tiptap (jsonb) nên mọi bề mặt đọc KHÔNG được phơi
- * tài liệu thô ở trường `content` — `content` ở đây luôn là text
- * canonical trích từ tài liệu bằng đúng hàm chuẩn của tầng nạp, giữ
- * nguyên hợp đồng cũ cho mọi bề mặt tiêu thụ (bản đặc tả, khung
- * khoá, tìm kiếm, liên kết câu hỏi). Riêng bề mặt bảng chương trình
- * cần render phân cấp cha–con nên nhận thêm `contentDoc` là tài
- * liệu gốc; các bề mặt khác bỏ qua trường này.
+ * Hình dạng YCCĐ trả ra ngoài tầng service: cột `content` trong DB nay là tài liệu Tiptap (jsonb) nên mọi bề mặt đọc KHÔNG được phơi tài liệu thô ở trường `content` — `content` ở đây luôn là text canonical trích từ tài liệu bằng đúng hàm chuẩn của tầng nạp, giữ nguyên hợp đồng cũ cho mọi bề mặt tiêu thụ (bản đặc tả, khung khoá, tìm kiếm, liên kết câu hỏi). Riêng bề mặt bảng chương trình cần render phân cấp cha–con nên nhận thêm `contentDoc` là tài liệu gốc; các bề mặt khác bỏ qua trường này.
  */
 export type CurriculumOutcomeView = Omit<LearningOutcomeRow, 'content'> & {
   content: string;
@@ -23,10 +16,7 @@ export type CurriculumOutcomeView = Omit<LearningOutcomeRow, 'content'> & {
 };
 
 /**
- * Chuyển một dòng YCCĐ từ DB thành hình dạng trả ra: text canonical
- * trích từ tài liệu lưu trực tiếp, kèm tài liệu gốc cho bề mặt bảng.
- * Dòng nào thiếu tài liệu (không xảy ra với dữ liệu đã chuyển đổi)
- * được coi là tài liệu rỗng thay vì ném lỗi ồn ào ở đường đọc.
+ * Chuyển một dòng YCCĐ từ DB thành hình dạng trả ra: text canonical trích từ tài liệu lưu trực tiếp, kèm tài liệu gốc cho bề mặt bảng. Dòng nào thiếu tài liệu (không xảy ra với dữ liệu đã chuyển đổi) được coi là tài liệu rỗng thay vì ném lỗi ồn ào ở đường đọc.
  */
 export function toCurriculumOutcomeView(row: LearningOutcomeRow): CurriculumOutcomeView {
   const contentDoc = (row.content ?? { type: 'doc' }) as ProgramOutcomeDoc;
@@ -104,8 +94,7 @@ export class CurriculumService implements OnModuleInit {
   ) {}
 
   /**
-   * Khởi tạo: đăng ký nguồn đơn vị khung cho cơ chế nạp khung vào khoá
-   * của Courses (dependency inversion — Courses không import Curriculum).
+   * Khởi tạo: đăng ký nguồn đơn vị khung cho cơ chế nạp khung vào khoá của Courses (dependency inversion — Courses không import Curriculum).
    */
   onModuleInit(): void {
     this.courses.registerCurriculumFrameProvider({

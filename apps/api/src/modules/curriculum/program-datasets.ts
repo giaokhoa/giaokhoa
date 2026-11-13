@@ -6,14 +6,9 @@ import { v5 as uuidv5 } from 'uuid';
 /**
  * Manifest + logic thuần của cơ chế nạp dữ liệu chương trình chuẩn
  * (K0a). Dataset là file bản ghi đã kiểm chứng nguyên văn với văn bản
- * ban hành kèm Thông tư 32/2018/TT-BGDĐT (xem hồ sơ kiểm chứng của dự
- * án: 22 môn có dữ liệu, 2.171 bản ghi, 0 chênh lệch chữ) và được vendor
- * nguyên văn tại thư mục `program-data/` cạnh file này — nạp dữ liệu là
- * chuyển các bản ghi đó vào cây chương trình, TUYỆT ĐỐI không sửa chữ,
- * kể cả lỗi in có thật trong PDF của Bộ.
+ * ban hành kèm Thông tư 32/2018/TT-BGDĐT (xem hồ sơ kiểm chứng của dự án: 22 môn có dữ liệu, 2.171 bản ghi, 0 chênh lệch chữ) và được vendor nguyên văn tại thư mục `program-data/` cạnh file này — nạp dữ liệu là chuyển các bản ghi đó vào cây chương trình, TUYỆT ĐỐI không sửa chữ, kể cả lỗi in có thật trong PDF của Bộ.
  *
- * Thêm môn mới về sau = có dataset đã kiểm chứng của môn đó + thêm một
- * mục vào PROGRAM_DATASETS; cơ chế nạp không đổi.
+ * Thêm môn mới về sau = có dataset đã kiểm chứng của môn đó + thêm một mục vào PROGRAM_DATASETS; cơ chế nạp không đổi.
  */
 
 /** Truy vết nguồn của một bản ghi, nguyên văn theo dataset. */
@@ -25,10 +20,7 @@ export interface ProgramRecordSource {
 }
 
 /**
- * Một node trong doc Tiptap của một YCCĐ (hình dạng thu gọn đúng các
- * node hệ dùng cho YCCĐ: doc/paragraph/text + bulletList/listItem cho
- * ý con; marks trên node text được giữ nguyên khi lưu nhưng bị bỏ qua
- * khi trích text canonical).
+ * Một node trong doc Tiptap của một YCCĐ (hình dạng thu gọn đúng các node hệ dùng cho YCCĐ: doc/paragraph/text + bulletList/listItem cho ý con; marks trên node text được giữ nguyên khi lưu nhưng bị bỏ qua khi trích text canonical).
  */
 export interface ProgramOutcomeDocNode {
   type: string;
@@ -44,14 +36,8 @@ export interface ProgramOutcomeDoc {
 }
 
 /**
- * Một bản ghi chương trình trong dataset đã kiểm chứng. Hình dạng
- * không đồng nhất giữa các đợt trích xuất (ghi nhận ở issue #161):
- * các dataset trích sau đợt Toán/Ngữ văn để `stream` trống/null (cấu
- * trúc nằm ở `section`/`topic`), bản ghi dạng `requirement` để
- * `content` rỗng, và 12 bản ghi chủ điểm của Tiếng Anh mang
- * `grade = null` (phần "Nội dung khái quát" theo CẤP, không theo lớp).
- * Các hàm thuần bên dưới là nơi duy nhất thích ứng hình dạng đó; bản
- * ghi trong dataset giữ nguyên văn tuyệt đối.
+ * Một bản ghi chương trình trong dataset đã kiểm chứng. Hình dạng không đồng nhất giữa các đợt trích xuất (ghi nhận ở issue #161):
+ * các dataset trích sau đợt Toán/Ngữ văn để `stream` trống/null (cấu trúc nằm ở `section`/`topic`), bản ghi dạng `requirement` để `content` rỗng, và 12 bản ghi chủ điểm của Tiếng Anh mang `grade = null` (phần "Nội dung khái quát" theo CẤP, không theo lớp). Các hàm thuần bên dưới là nơi duy nhất thích ứng hình dạng đó; bản ghi trong dataset giữ nguyên văn tuyệt đối.
  */
 export interface ProgramRecord {
   id: string;
@@ -64,10 +50,7 @@ export interface ProgramRecord {
   content: string;
   kind: string;
   /**
-   * Các YCCĐ của bản ghi: dạng đích là Tiptap doc (xem
-   * ProgramOutcomeDoc). Trong đợt chuyển đổi của issue #161 các
-   * dataset chưa chuyển vẫn giữ phần tử dạng chuỗi thuần; importer
-   * chấp nhận cả hai cho tới commit chốt hạ cổng lỗi.
+   * Các YCCĐ của bản ghi: dạng đích là Tiptap doc (xem ProgramOutcomeDoc). Trong đợt chuyển đổi của issue #161 các dataset chưa chuyển vẫn giữ phần tử dạng chuỗi thuần; importer chấp nhận cả hai cho tới commit chốt hạ cổng lỗi.
    */
   outcomes: (string | ProgramOutcomeDoc)[];
   outcome_text: string;
@@ -90,34 +73,13 @@ export interface ProgramDatasetDef {
 }
 
 /**
- * Toàn bộ dataset đã kiểm chứng (22 môn có dữ liệu, 24 file, 2.171
- * bản ghi — GDPT-SEED, issue #161; GDQP&AN chưa có dataset). Tổng
- * tại thời điểm vendor là 2.126; 11 bản ghi bị công cụ trích xuất
- * cắt đôi một ô qua ranh trang đã được gộp về bản ghi đầu trong đợt
- * tách YCCĐ của PR #245 (có log từng cặp gộp) nên tổng sau đợt đó
- * là 2.115; đợt khôi phục YCCĐ đợt 1 (issue #480) dựng thêm 49 bản
- * ghi cho các khối mất hẳn, và các đợt đính chính sau đó đưa tổng
- * hiện tại lên 2.171 — spec gác
- * `program-datasets.inventory.spec.ts` khoá các con số này, dataset
- * đổi là spec đỏ để buộc cập nhật cùng lượt.
+ * Toàn bộ dataset đã kiểm chứng (22 môn có dữ liệu, 24 file, 2.171 bản ghi — GDPT-SEED, issue #161; GDQP&AN chưa có dataset). Tổng tại thời điểm vendor là 2.126; 11 bản ghi bị công cụ trích xuất cắt đôi một ô qua ranh trang đã được gộp về bản ghi đầu trong đợt tách YCCĐ của PR #245 (có log từng cặp gộp) nên tổng sau đợt đó là 2.115; đợt khôi phục YCCĐ đợt 1 (issue #480) dựng thêm 49 bản ghi cho các khối mất hẳn, và các đợt đính chính sau đó đưa tổng hiện tại lên 2.171 — spec gác `program-datasets.inventory.spec.ts` khoá các con số này, dataset đổi là spec đỏ để buộc cập nhật cùng lượt.
  *
- * Mỗi dataset ứng đúng MỘT môn đích và `subjectName` của mục
- * manifest bằng nguyên văn trường `subject` cấp file của dataset
- * đó. Hai file từng chứa nhiều môn theo cấp đã được tách theo
- * đúng trường `subject` của từng bản ghi (issue #695):
- * `program-gdcd.json` tách thành Đạo đức (lớp 1–5), Giáo dục công
- * dân (lớp 6–9) và Giáo dục kinh tế và pháp luật (lớp 10–12);
- * `program-hdtn.json` tách thành Hoạt động trải nghiệm (lớp 1–5)
- * và Hoạt động trải nghiệm, hướng nghiệp (lớp 6–12). Đợt tách chỉ
- * đổi tổ chức file, không đổi một bản ghi nào (hash của mọi bản
- * ghi giữ nguyên). Hai cặp file dùng CHUNG một môn đích (slug
- * giống nhau = resolve về đúng một môn ở tầng nạp):
+ * Mỗi dataset ứng đúng MỘT môn đích và `subjectName` của mục manifest bằng nguyên văn trường `subject` cấp file của dataset đó. Hai file từng chứa nhiều môn theo cấp đã được tách theo đúng trường `subject` của từng bản ghi (issue #695):
+ * `program-gdcd.json` tách thành Đạo đức (lớp 1–5), Giáo dục công dân (lớp 6–9) và Giáo dục kinh tế và pháp luật (lớp 10–12); `program-hdtn.json` tách thành Hoạt động trải nghiệm (lớp 1–5) và Hoạt động trải nghiệm, hướng nghiệp (lớp 6–12). Đợt tách chỉ đổi tổ chức file, không đổi một bản ghi nào (hash của mọi bản ghi giữ nguyên). Hai cặp file dùng CHUNG một môn đích (slug giống nhau = resolve về đúng một môn ở tầng nạp):
  * - Tiếng Anh: văn bản "Làm quen lớp 1–2" + văn bản lớp 3–12;
  * - Lịch sử và Địa lí: văn bản Tiểu học + văn bản THCS (Lịch sử/Địa lí
- *   THPT là hai môn riêng, hai dataset riêng bên dưới).
- * Ngữ văn bao gồm phần Tiếng Việt cấp tiểu học (cùng một văn bản
- * chương trình theo nguyên văn trang 3 của văn bản Ngữ văn).
- * Ngoài phạm vi theo chốt của dự án: Tiếng dân tộc thiểu số, Ngoại ngữ 2
+ *   THPT là hai môn riêng, hai dataset riêng bên dưới). Ngữ văn bao gồm phần Tiếng Việt cấp tiểu học (cùng một văn bản chương trình theo nguyên văn trang 3 của văn bản Ngữ văn). Ngoài phạm vi theo chốt của dự án: Tiếng dân tộc thiểu số, Ngoại ngữ 2
  * (không có dataset) và GDQP&AN (chưa có PDF chính chủ — issue #74).
  */
 export const PROGRAM_DATASETS: readonly ProgramDatasetDef[] = [
@@ -153,10 +115,7 @@ export function programDatasetByKey(key: string): ProgramDatasetDef | undefined 
 }
 
 /**
- * Đọc + parse một file dataset đã vendor (đường dẫn theo vị trí
- * module, chạy được cả ở src lẫn dist). Mọi bản ghi ở dạng doc đều
- * qua kiểm chứng toàn vẹn với `outcome_text` ngay tại đây — dataset
- * lệch là lỗi nạp ở mọi đường đọc, không chờ tới lúc ghi DB.
+ * Đọc + parse một file dataset đã vendor (đường dẫn theo vị trí module, chạy được cả ở src lẫn dist). Mọi bản ghi ở dạng doc đều qua kiểm chứng toàn vẹn với `outcome_text` ngay tại đây — dataset lệch là lỗi nạp ở mọi đường đọc, không chờ tới lúc ghi DB.
  */
 export function loadProgramDataset(def: ProgramDatasetDef): ProgramDatasetFile {
   const raw = readFileSync(join(__dirname, 'program-data', def.fileName), 'utf8');
@@ -166,10 +125,8 @@ export function loadProgramDataset(def: ProgramDatasetDef): ProgramDatasetFile {
 }
 
 /**
- * Hash nội dung của một bản ghi (sha256 trên JSON chuẩn hoá theo đúng
- * thứ tự trường của dataset). Đây là căn cứ idempotent của sổ đăng ký:
- * hash khớp → bản ghi trong hệ thống đã đúng nguyên văn, bỏ qua; lệch →
- * dataset đã được đính chính tại nguồn, cập nhật node + YCCĐ.
+ * Hash nội dung của một bản ghi (sha256 trên JSON chuẩn hoá theo đúng thứ tự trường của dataset). Đây là căn cứ idempotent của sổ đăng ký:
+ * hash khớp → bản ghi trong hệ thống đã đúng nguyên văn, bỏ qua; lệch → dataset đã được đính chính tại nguồn, cập nhật node + YCCĐ.
  */
 export function programRecordHash(record: ProgramRecord): string {
   const canonical = JSON.stringify([
@@ -182,10 +139,7 @@ export function programRecordHash(record: ProgramRecord): string {
 
 /**
  * Các dòng text của một doc YCCĐ, theo đúng thứ tự duyệt tài liệu:
- * mỗi `paragraph` cho một dòng (nối các node `text` con, bỏ qua
- * marks); `listItem` cho dòng của paragraph của nó rồi tới các dòng
- * của `bulletList` lồng bên trong (đệ quy). Đây là MỘT NỬA của hàm
- * trích canonical duy nhất của hệ — xem programOutcomeDocText.
+ * mỗi `paragraph` cho một dòng (nối các node `text` con, bỏ qua marks); `listItem` cho dòng của paragraph của nó rồi tới các dòng của `bulletList` lồng bên trong (đệ quy). Đây là MỘT NỬA của hàm trích canonical duy nhất của hệ — xem programOutcomeDocText.
  */
 export function programOutcomeDocLines(doc: ProgramOutcomeDoc): string[] {
   const lines: string[] = [];
@@ -205,34 +159,14 @@ export function programOutcomeDocLines(doc: ProgramOutcomeDoc): string[] {
 }
 
 /**
- * Text canonical của một YCCĐ: các dòng của doc nối bằng `\n`, cắt
- * khoảng trắng hai đầu. ĐÂY LÀ HÀM TRÍCH DUY NHẤT của hệ cho YCCĐ dạng
- * doc: kiểm chứng toàn vẹn với `outcome_text` so trên text này, và
- * thuật toán diff của importer (ghép cặp theo vị trí + nội dung) cũng
- * so trên text này. Text này KHÔNG phải định danh của dòng: id của
- * dòng là uuidv7 mờ do DB cấp một lần khi tạo dòng, không suy từ bất
- * kỳ thuộc tính nào — không từ text này, không từ vị trí (xem
- * programRecordOutcomeEntries) — nên đổi định dạng lưu hay sửa chữ
- * đều không đổi id của dòng.
+ * Text canonical của một YCCĐ: các dòng của doc nối bằng `\n`, cắt khoảng trắng hai đầu. ĐÂY LÀ HÀM TRÍCH DUY NHẤT của hệ cho YCCĐ dạng doc: kiểm chứng toàn vẹn với `outcome_text` so trên text này, và thuật toán diff của importer (ghép cặp theo vị trí + nội dung) cũng so trên text này. Text này KHÔNG phải định danh của dòng: id của dòng là uuidv7 mờ do DB cấp một lần khi tạo dòng, không suy từ bất kỳ thuộc tính nào — không từ text này, không từ vị trí (xem programRecordOutcomeEntries) — nên đổi định dạng lưu hay sửa chữ đều không đổi id của dòng.
  */
 export function programOutcomeDocText(doc: ProgramOutcomeDoc): string {
   return programOutcomeDocLines(doc).join('\n').trim();
 }
 
 /**
- * Khoá so sánh toàn vẹn giữa các dòng YCCĐ đã trích và `outcome_text`
- * nguyên văn: tách theo khoảng trắng; bỏ các token CHỈ gồm ký tự gạch
- * đầu dòng/dấu phân đoạn (`–`, `−`, `-`, `+`, `•` đứng một mình) và
- * tước một ký tự đánh dấu dính ở đầu token có chữ (extraction có chỗ
- * viết `–Trình bày` thiếu khoảng trắng) — các ký tự này là dấu trình
- * bày của văn bản gốc, không phải nội dung; gạch nằm giữa một token
- * có chữ, vd `cao – thấp` ở hai phía đều bị xử lý như nhau nên phép
- * so vẫn chặt về mặt chữ. Dấu phảy/chấm phảy ở CUỐI một token cũng là
- * dấu phân đoạn của các danh sách liệt kê (vd danh sách kiến thức
- * ngôn ngữ của Tiếng Anh ngăn bằng `, `) nên bị tước ở cả hai phía —
- * phép so vẫn chặt về mặt chữ vì dấu này không bao giờ nằm giữa một
- * từ tiếng Việt. Nối lại bằng một khoảng trắng. Hai phía áp cùng một
- * hàm nên phép so chỉ lệch khi chữ thật lệch.
+ * Khoá so sánh toàn vẹn giữa các dòng YCCĐ đã trích và `outcome_text` nguyên văn: tách theo khoảng trắng; bỏ các token CHỈ gồm ký tự gạch đầu dòng/dấu phân đoạn (`–`, `−`, `-`, `+`, `•` đứng một mình) và tước một ký tự đánh dấu dính ở đầu token có chữ (extraction có chỗ viết `–Trình bày` thiếu khoảng trắng) — các ký tự này là dấu trình bày của văn bản gốc, không phải nội dung; gạch nằm giữa một token có chữ, vd `cao – thấp` ở hai phía đều bị xử lý như nhau nên phép so vẫn chặt về mặt chữ. Dấu phảy/chấm phảy ở CUỐI một token cũng là dấu phân đoạn của các danh sách liệt kê (vd danh sách kiến thức ngôn ngữ của Tiếng Anh ngăn bằng `, `) nên bị tước ở cả hai phía — phép so vẫn chặt về mặt chữ vì dấu này không bao giờ nằm giữa một từ tiếng Việt. Nối lại bằng một khoảng trắng. Hai phía áp cùng một hàm nên phép so chỉ lệch khi chữ thật lệch.
  */
 export function programOutcomeComparisonKey(text: string): string {
   return text
@@ -244,13 +178,7 @@ export function programOutcomeComparisonKey(text: string): string {
 }
 
 /**
- * Kiểm chứng toàn vẹn của một bản ghi: khi `outcomes[]` đã ở dạng doc,
- * text canonical trích từ các doc (theo đúng thứ tự) PHẢI khớp
- * `outcome_text` nguyên văn theo khoá so sánh — lệch là dataset đã bị
- * sửa tay sai hoặc tách ý làm rơi/thêm chữ: ném lỗi, không nạp thầm.
- * Bản ghi còn ở dạng chuỗi (chưa chuyển đổi trong đợt #161) được bỏ
- * qua ở cổng này; bản ghi không có doc nào cũng vậy (cổng lỗi cứng
- * cho trường hợp đó nằm ở commit chốt hạ của đợt chuyển đổi).
+ * Kiểm chứng toàn vẹn của một bản ghi: khi `outcomes[]` đã ở dạng doc, text canonical trích từ các doc (theo đúng thứ tự) PHẢI khớp `outcome_text` nguyên văn theo khoá so sánh — lệch là dataset đã bị sửa tay sai hoặc tách ý làm rơi/thêm chữ: ném lỗi, không nạp thầm. Bản ghi còn ở dạng chuỗi (chưa chuyển đổi trong đợt #161) được bỏ qua ở cổng này; bản ghi không có doc nào cũng vậy (cổng lỗi cứng cho trường hợp đó nằm ở commit chốt hạ của đợt chuyển đổi).
  */
 export function assertProgramRecordOutcomeIntegrity(datasetKey: string, record: ProgramRecord): void {
   if (!record.outcomes.some((outcome) => typeof outcome !== 'string')) return;

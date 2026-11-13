@@ -22,33 +22,22 @@ export interface NavItem {
   url: string;
   icon?: Icon;
   /**
-   * Số đếm hiện thành huy hiệu đỏ cạnh nhãn (vd số thông báo chưa đọc
-   * của mục Thông báo). Chỉ trình bày số được truyền vào — việc truy
-   * vấn số liệu thuộc về AppSidebar; bằng 0 hoặc không đặt thì không
-   * hiện huy hiệu.
+   * Số đếm hiện thành huy hiệu đỏ cạnh nhãn (vd số thông báo chưa đọc của mục Thông báo). Chỉ trình bày số được truyền vào — việc truy vấn số liệu thuộc về AppSidebar; bằng 0 hoặc không đặt thì không hiện huy hiệu.
    */
   badgeCount?: number;
 }
 
 /**
- * Một mục cha thu/mở được trong sidebar (cơ chế collapse lấy từ block
- * sidebar-07). Hai biến thể:
+ * Một mục cha thu/mở được trong sidebar (cơ chế collapse lấy từ block sidebar-07). Hai biến thể:
  *
  * - KHÔNG có `url`: cha là nút thu/mở thuần — bấm chỉ mở/đóng danh sách
  *   mục con (vd "Học tập", "Cài đặt hệ thống").
  * - CÓ `url`: thân mục cha là LINK điều hướng tới trang danh sách của
- *   chính nó (vd "Ngân hàng câu hỏi" → /questions); khi nhóm có mục
- *   con, chevron thu/mở GẮN Ở CUỐI CÙNG MỘT bề mặt nút với nhãn
+ *   chính nó (vd "Ngân hàng câu hỏi" → /questions); khi nhóm có mục con, chevron thu/mở GẮN Ở CUỐI CÙNG MỘT bề mặt nút với nhãn
  *   (trigger định vị tuyệt đối bên trong SidebarMenuItem, `toggleLabel`
- *   là nhãn aria của trigger đó) — KHÔNG tách thành một nút chevron
- *   riêng đứng cạnh nhãn, để hai biến thể trình bày giống nhau (chốt
- *   sổ quyết định [26/10 23:16], việc nối tiếp issue #70). Nhóm có
- *   `url` mà chưa có mục con vẫn render thành mục cấp cao nhất điều
- *   hướng được, không chevron — chờ bổ sung mục con sau (đính chính
- *   sidebar ngân hàng, issue #70).
+ *   là nhãn aria của trigger đó) — KHÔNG tách thành một nút chevron riêng đứng cạnh nhãn, để hai biến thể trình bày giống nhau (chốt sổ quyết định [26/10 23:16], việc nối tiếp issue #70). Nhóm có `url` mà chưa có mục con vẫn render thành mục cấp cao nhất điều hướng được, không chevron — chờ bổ sung mục con sau (đính chính sidebar ngân hàng, issue #70).
  *
- * `groupId` là định danh ổn định để lưu trạng thái mở của nhóm (xem
- * AppSidebar).
+ * `groupId` là định danh ổn định để lưu trạng thái mở của nhóm (xem AppSidebar).
  */
 export interface NavGroupItem {
   groupId: string;
@@ -60,8 +49,7 @@ export interface NavGroupItem {
 }
 
 /**
- * className cho NavLink của các mục điều hướng chính (F-14, rà soát
- * #133): trong lúc router đang tải trang đích của chính mục này
+ * className cho NavLink của các mục điều hướng chính (F-14, rà soát #133): trong lúc router đang tải trang đích của chính mục này
  * (`isPending`), mục mờ nhẹ ngay từ cú bấm — phản hồi tức thì tại
  * link, bổ sung cho chỉ báo toàn cục ở khung.
  */
@@ -77,15 +65,7 @@ function isNavGroup(entry: NavEntry): entry is NavGroupItem {
 }
 
 /**
- * Mục đang chọn: khớp chính xác, hoặc route con của nó (riêng trang
- * chủ chỉ khớp chính xác) — nhờ vậy các khu vực ngân hàng theo path
- * riêng (chuẩn đường dẫn #221: /questions, /exams, /matrices)
- * active đúng trang của chúng và nhóm cha tự mở đúng
- * khi đang ở trang đích hay route con của nó (vd /questions/stimuli
- * làm sáng cả mục cha "Ngân hàng câu hỏi" lẫn mục con "Ngữ liệu"). URL
- * có query (trạng thái nội bộ của một trang, kiểu ?conversation=...)
- * thì chỉ active khi pathname khớp VÀ mọi tham số trong query của
- * URL đều có mặt với đúng giá trị trong query hiện tại.
+ * Mục đang chọn: khớp chính xác, hoặc route con của nó (riêng trang chủ chỉ khớp chính xác) — nhờ vậy các khu vực ngân hàng theo path riêng (chuẩn đường dẫn #221: /questions, /exams, /matrices) active đúng trang của chúng và nhóm cha tự mở đúng khi đang ở trang đích hay route con của nó (vd /questions/stimuli làm sáng cả mục cha "Ngân hàng câu hỏi" lẫn mục con "Ngữ liệu"). URL có query (trạng thái nội bộ của một trang, kiểu ?conversation=...) thì chỉ active khi pathname khớp VÀ mọi tham số trong query của URL đều có mặt với đúng giá trị trong query hiện tại.
  */
 function isPathActive(url: string, pathname: string, search: string): boolean {
   const queryIndex = url.indexOf('?');

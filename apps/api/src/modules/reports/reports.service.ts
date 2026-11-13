@@ -15,11 +15,7 @@ export interface ReportDatasource {
 export const REPORT_DATASOURCES = ['enrolments', 'grades', 'completion'] as const;
 
 /**
- * Facade của ReportsModule (Moodle core_reportbuilder, §2#24).
- * Bất biến: quyền xem = audience ∩ quyền trên TỪNG DÒNG theo context của
- * dòng đó. Filter do user cấu hình KHÔNG BAO GIỜ nới quyền — filter chỉ
- * thu hẹp tập dòng đã được phép. Báo cáo theo lịch chạy dưới danh tính
- * người tạo với quyền TẠI THỜI ĐIỂM CHẠY.
+ * Facade của ReportsModule (Moodle core_reportbuilder, §2#24). Bất biến: quyền xem = audience ∩ quyền trên TỪNG DÒNG theo context của dòng đó. Filter do user cấu hình KHÔNG BAO GIỜ nới quyền — filter chỉ thu hẹp tập dòng đã được phép. Báo cáo theo lịch chạy dưới danh tính người tạo với quyền TẠI THỜI ĐIỂM CHẠY.
  */
 @Injectable()
 export class ReportsService {
@@ -37,12 +33,7 @@ export class ReportsService {
   }
 
   /**
-   * Cổng metadata báo cáo (H15, rà soát #134 + §7.3): định nghĩa báo cáo,
-   * datasource và lịch chạy là thông tin vận hành nội bộ — mọi đường đọc
-   * metadata và đường kích hoạt chạy theo lịch đều đòi
-   * `reportbuilder:manage` tại system, cùng cổng với createReport/
-   * createSchedule. Dữ liệu báo cáo vẫn gác riêng theo audience + từng
-   * dòng ở runReport, không đổi.
+   * Cổng metadata báo cáo (H15, rà soát #134 + §7.3): định nghĩa báo cáo, datasource và lịch chạy là thông tin vận hành nội bộ — mọi đường đọc metadata và đường kích hoạt chạy theo lịch đều đòi `reportbuilder:manage` tại system, cùng cổng với createReport/ createSchedule. Dữ liệu báo cáo vẫn gác riêng theo audience + từng dòng ở runReport, không đổi.
    */
   private async requireManage(actorId: string): Promise<void> {
     const sys = await this.contexts.ensureSystemContext();

@@ -26,19 +26,12 @@ import type {
 import { queryKeys } from './keys';
 
 /**
- * Tầng dữ liệu TanStack Query của trung tâm thông báo thuộc
- * feature notifications: options/hook, phân trang vô hạn và các
- * thao tác vá cache. Tầng này bọc các hàm gọi API thuần ở
- * `../api/notifications` (tách khỏi module phẳng
- * `src/lib/notifications.ts` khi tổ chức lại apps/web theo mô
- * hình features/, issue #500).
+ * Tầng dữ liệu TanStack Query của trung tâm thông báo thuộc feature notifications: options/hook, phân trang vô hạn và các thao tác vá cache. Tầng này bọc các hàm gọi API thuần ở `../api/notifications` (tách khỏi module phẳng `src/lib/notifications.ts` khi tổ chức lại apps/web theo mô hình features/, issue #500).
  */
 
 /**
  * Số thông báo chưa đọc cho huy hiệu (GET /notifications/unread-count):
- * options dùng chung cho chuông thông báo và sidebar — cùng khoá nhà
- * máy nên TanStack gộp thành một lần gọi và một mục cache cho cả hai
- * bề mặt (F-01 của rà soát #133).
+ * options dùng chung cho chuông thông báo và sidebar — cùng khoá nhà máy nên TanStack gộp thành một lần gọi và một mục cache cho cả hai bề mặt (F-01 của rà soát #133).
  */
 export function notificationUnreadCountQueryOptions() {
   return queryOptions({
@@ -53,9 +46,7 @@ export function useNotificationUnreadCount() {
 }
 
 /**
- * Danh sách nhóm thông báo v2 theo bộ lọc — phân trang con trỏ bằng
- * useInfiniteQuery (F-01): các trang nằm trong cache theo khoá factory,
- * đổi bộ lọc là một khoá mới, "tải thêm" nối trang vào cùng cache.
+ * Danh sách nhóm thông báo v2 theo bộ lọc — phân trang con trỏ bằng useInfiniteQuery (F-01): các trang nằm trong cache theo khoá factory, đổi bộ lọc là một khoá mới, "tải thêm" nối trang vào cùng cache.
  */
 export function useNotificationGroups(group: string, unreadOnly: boolean) {
   return useInfiniteQuery({
@@ -74,10 +65,7 @@ export function flattenNotificationGroups(
 }
 
 /**
- * Áp một phép biến đổi lên MỌI danh sách nhóm đang có trong cache (mọi
- * biến thể lọc): trang thông báo cập nhật đếm/đã-đọc tại chỗ qua đây thay
- * cho state cục bộ như trước — hiển thị đổi ngay, dữ liệu vẫn là của
- * cache dùng chung.
+ * Áp một phép biến đổi lên MỌI danh sách nhóm đang có trong cache (mọi biến thể lọc): trang thông báo cập nhật đếm/đã-đọc tại chỗ qua đây thay cho state cục bộ như trước — hiển thị đổi ngay, dữ liệu vẫn là của cache dùng chung.
  */
 export function updateNotificationGroupsCache(
   queryClient: QueryClient,
@@ -113,9 +101,7 @@ function useInvalidateUnreadCount() {
 }
 
 /**
- * Đánh dấu một mục đã đọc (POST /notifications/:id/read). Lỗi mạng bị
- * nuốt như hành vi cũ (UI vẫn cập nhật tại chỗ); thành công hay không,
- * số chưa đọc của huy hiệu đều được làm mới để khớp server.
+ * Đánh dấu một mục đã đọc (POST /notifications/:id/read). Lỗi mạng bị nuốt như hành vi cũ (UI vẫn cập nhật tại chỗ); thành công hay không, số chưa đọc của huy hiệu đều được làm mới để khớp server.
  */
 export function useMarkNotificationRead() {
   const invalidateUnread = useInvalidateUnreadCount();
@@ -182,9 +168,7 @@ export function useNotificationCourseOverrides() {
 }
 
 /**
- * Đặt ghi đè cho đúng một khoá (PUT /messages/preferences/courses)
- * với cập nhật lạc quan trên cache như tuỳ chọn theo provider: áp
- * ngay chế độ mới lên dòng khoá đó, lỗi thì hoàn lại.
+ * Đặt ghi đè cho đúng một khoá (PUT /messages/preferences/courses) với cập nhật lạc quan trên cache như tuỳ chọn theo provider: áp ngay chế độ mới lên dòng khoá đó, lỗi thì hoàn lại.
  */
 export function useSetNotificationCourseOverride() {
   const queryClient = useQueryClient();
@@ -213,10 +197,7 @@ export function useSetNotificationCourseOverride() {
 }
 
 /**
- * Đặt tuỳ chọn v2 cho đúng một provider (PUT /messages/preferences)
- * với cập nhật lạc quan trên cache: áp patch ngay lên dòng đó, server
- * trả về dòng đầy đủ thì chốt theo bản server, lỗi thì hoàn lại toàn
- * bộ danh sách trước đó — cùng hành vi trang cũ, nay theo mô hình v2.
+ * Đặt tuỳ chọn v2 cho đúng một provider (PUT /messages/preferences) với cập nhật lạc quan trên cache: áp patch ngay lên dòng đó, server trả về dòng đầy đủ thì chốt theo bản server, lỗi thì hoàn lại toàn bộ danh sách trước đó — cùng hành vi trang cũ, nay theo mô hình v2.
  */
 export function useSetMessagePreference() {
   const queryClient = useQueryClient();

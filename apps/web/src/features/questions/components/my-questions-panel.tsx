@@ -1,14 +1,5 @@
 /**
- * Panel "Câu hỏi của tôi" của trang ngân hàng câu hỏi: danh sách câu
- * trong bank cá nhân của giáo viên (kèm huy hiệu phiên bản, huy hiệu
- * đã rút và dòng ghi công khi câu là bản sao) + form đề xuất đóng góp
- * một câu lên bank chung. Dữ liệu danh sách do trang nạp qua các hook
- * của lib/questions-data rồi truyền xuống; panel giữ state cục bộ của
- * form đề xuất, tự gọi các đột biến của lib/questions-data cho thao
- * tác tại dòng (sửa qua điều hướng sang màn sửa riêng, rút/hoàn rút,
- * xoá) và báo kết quả qua prop setMessage của trang; việc làm mới
- * danh sách sau đột biến đi qua hai hàm refresh của trang truyền
- * xuống (đúng cụm khoá như khi panel còn nằm trong trang).
+ * Panel "Câu hỏi của tôi" của trang ngân hàng câu hỏi: danh sách câu trong bank cá nhân của giáo viên (kèm huy hiệu phiên bản, huy hiệu đã rút và dòng ghi công khi câu là bản sao) + form đề xuất đóng góp một câu lên bank chung. Dữ liệu danh sách do trang nạp qua các hook của lib/questions-data rồi truyền xuống; panel giữ state cục bộ của form đề xuất, tự gọi các đột biến của lib/questions-data cho thao tác tại dòng (sửa qua điều hướng sang màn sửa riêng, rút/hoàn rút, xoá) và báo kết quả qua prop setMessage của trang; việc làm mới danh sách sau đột biến đi qua hai hàm refresh của trang truyền xuống (đúng cụm khoá như khi panel còn nằm trong trang).
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -11,10 +11,7 @@ import {
 } from './outbox-event-routes';
 
 /**
- * Test đặc trưng hoá cho relay outbox duy nhất: ghim các tính chất của
- * ngữ nghĩa đóng dấu `publishedAt` và định tuyến phát job theo loại
- * sự kiện, làm căn cứ cho mọi issue chuyển consumer sang hàng đợi ở
- * worker sau này:
+ * Test đặc trưng hoá cho relay outbox duy nhất: ghim các tính chất của ngữ nghĩa đóng dấu `publishedAt` và định tuyến phát job theo loại sự kiện, làm căn cứ cho mọi issue chuyển consumer sang hàng đợi ở worker sau này:
  * (i) `publishedAt` chỉ xuất hiện sau khi relay phát thành công,
  *     không bao giờ trước;
  * (ii) phát thất bại thì sự kiện không có `publishedAt` và được phát
@@ -25,21 +22,11 @@ import {
  * (iv) `publishedAt` không phải dấu hoàn thành xử lý — relay đóng
  *     dấu ngay khi phát xong, dù job chưa được consumer nào xử lý;
  * (v) với sự kiện nhiều đích, dấu chỉ xuất hiện khi MỌI đích đã nhận
- *     job — lỗi ở một đích thì dòng chưa có dấu, và lượt phát lại
- *     không tạo job trùng ở các đích đã nhận (chống trùng `jobId`).
+ *     job — lỗi ở một đích thì dòng chưa có dấu, và lượt phát lại không tạo job trùng ở các đích đã nhận (chống trùng `jobId`).
  * (vi) định tuyến theo trung tâm (issue #582): job mang slug của
- *     trung tâm mà tenant của dòng thuộc về, suy ra từ chính kho
- *     chứa dòng; và mỗi nhịp relay còn quét outbox của từng trung
- *     tâm ở kho riêng trong phiên theo trung tâm của khung — lỗi
- *     của một trung tâm không chặn các trung tâm khác.
+ *     trung tâm mà tenant của dòng thuộc về, suy ra từ chính kho chứa dòng; và mỗi nhịp relay còn quét outbox của từng trung tâm ở kho riêng trong phiên theo trung tâm của khung — lỗi của một trung tâm không chặn các trung tâm khác.
  *
- * Toàn bộ test chạy trên DB/hàng đợi giả lập trong bộ nhớ theo đúng
- * bề mặt relay dùng (chuỗi truy vấn Kysely, `Queue.add` của BullMQ,
- * `EventLogWriter.record`, `TaskLogService.recordRun`); hàng đợi giả
- * mô phỏng đúng luật chống trùng của BullMQ theo `jobId`. Các khẳng
- * định đều là hệ quả quan sát được (dòng có dấu hay chưa, job nằm ở
- * hàng đợi nào với dữ liệu gì, dòng có được phản chiếu hay không),
- * không phải chi tiết gọi nội bộ.
+ * Toàn bộ test chạy trên DB/hàng đợi giả lập trong bộ nhớ theo đúng bề mặt relay dùng (chuỗi truy vấn Kysely, `Queue.add` của BullMQ, `EventLogWriter.record`, `TaskLogService.recordRun`); hàng đợi giả mô phỏng đúng luật chống trùng của BullMQ theo `jobId`. Các khẳng định đều là hệ quả quan sát được (dòng có dấu hay chưa, job nằm ở hàng đợi nào với dữ liệu gì, dòng có được phản chiếu hay không), không phải chi tiết gọi nội bộ.
  */
 
 interface FakeRow {

@@ -1,34 +1,18 @@
 /**
  * Repository của cụm LỊCH trên Kysely.
  *
- * Vai trò: mọi truy cập tới ba bảng của kho trung tâm thuộc module
- * lịch — `calendar_events` (sự kiện, kèm chuỗi lặp và exception),
- * `calendar_subscriptions` (đăng ký lịch ngoài) và
- * `calendar_export_tokens` (token xuất lịch công khai, chỉ lưu
- * hash) — tập trung ở đây. Repository không chứa luật nghiệp vụ:
- * gác quyền, mở rộng chuỗi lặp và ghi outbox nằm ở tầng service
- * phía ứng dụng; repository chỉ nhận handle (instance gốc hoặc
- * transaction đang mở) để phía gọi ghép nhiều thao tác vào một
- * transaction khi cần.
+ * Vai trò: mọi truy cập tới ba bảng của kho trung tâm thuộc module lịch — `calendar_events` (sự kiện, kèm chuỗi lặp và exception), `calendar_subscriptions` (đăng ký lịch ngoài) và `calendar_export_tokens` (token xuất lịch công khai, chỉ lưu hash) — tập trung ở đây. Repository không chứa luật nghiệp vụ:
+ * gác quyền, mở rộng chuỗi lặp và ghi outbox nằm ở tầng service phía ứng dụng; repository chỉ nhận handle (instance gốc hoặc transaction đang mở) để phía gọi ghép nhiều thao tác vào một transaction khi cần.
  *
  * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong, truy vấn viết trên interface schema sinh bằng
  *   codegen: tên bảng/cột giữ nguyên snake_case của database.
  * - Bên ngoài, repository trả/nhận các hình dạng dòng camelCase như
- *   phía tiêu thụ đang dùng: cột được chọn bằng danh sách tường
- *   minh có bí danh, giá trị ghi được ánh xạ từng trường
- *   camelCase → snake_case ở các hàm ánh xạ trong file này. Kiểu
- *   dòng công khai khai ngay trong file này, không import từ file
- *   schema bộ máy cũ (file schema bị xoá ở hạng mục gỡ bộ máy cũ).
+ *   phía tiêu thụ đang dùng: cột được chọn bằng danh sách tường minh có bí danh, giá trị ghi được ánh xạ từng trường camelCase → snake_case ở các hàm ánh xạ trong file này. Kiểu dòng công khai khai ngay trong file này, không import từ file schema bộ máy cũ (file schema bị xoá ở hạng mục gỡ bộ máy cũ).
  * - Giá trị `undefined` bị LOẠI khỏi values/set trước khi gọi
- *   builder (thử nghiệm T-4 đã đo ở pilot: `undefined` lọt vào
- *   mệnh đề WHERE biên dịch thành placeholder gắn NULL và lặng lẽ
- *   trả 0 dòng — vì vậy mọi giá trị where ở đây đều là tham số bắt
- *   buộc). Giá trị `null` tường minh (ví dụ `last_access` khi thay
- *   token xuất lịch) KHÔNG bị loại: nó là dữ kiện ghi thật.
+ *   builder (thử nghiệm T-4 đã đo ở pilot: `undefined` lọt vào mệnh đề WHERE biên dịch thành placeholder gắn NULL và lặng lẽ trả 0 dòng — vì vậy mọi giá trị where ở đây đều là tham số bắt buộc). Giá trị `null` tường minh (ví dụ `last_access` khi thay token xuất lịch) KHÔNG bị loại: nó là dữ kiện ghi thật.
  * - Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh
- *   ứng dụng, không tự mở pool, không đọc biến môi trường: handle
- *   do tầng ứng dụng dựng bằng factory của package rồi truyền vào.
+ *   ứng dụng, không tự mở pool, không đọc biến môi trường: handle do tầng ứng dụng dựng bằng factory của package rồi truyền vào.
  */
 import type { Insertable, Updateable } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
@@ -189,8 +173,7 @@ const CALENDAR_EXPORT_TOKEN_COLUMNS = [
 /**
  * Ánh xạ dữ kiện ghi sự kiện (camelCase) sang values insert
  * (snake_case), LOẠI mọi trường mang `undefined`: trường vắng mặt
- * phải để default của database quyết định, không được biên dịch
- * thành tham số `null` (quy tắc T-4 trong sổ tay của package).
+ * phải để default của database quyết định, không được biên dịch thành tham số `null` (quy tắc T-4 trong sổ tay của package).
  */
 function calendarEventInsertValues(values: NewCalendarEvent): Insertable<CentreDB['calendar_events']> {
   const row: Insertable<CentreDB['calendar_events']> = {
@@ -250,8 +233,7 @@ function calendarEventUpdateSet(patch: Partial<CalendarEventRow>): Updateable<Ce
 }
 
 /**
- * Ánh xạ dữ kiện ghi đăng ký lịch ngoài (camelCase) sang values
- * insert (snake_case), LOẠI mọi trường mang `undefined` (T-4).
+ * Ánh xạ dữ kiện ghi đăng ký lịch ngoài (camelCase) sang values insert (snake_case), LOẠI mọi trường mang `undefined` (T-4).
  */
 function calendarSubscriptionInsertValues(
   values: NewCalendarSubscription,
@@ -271,13 +253,9 @@ function calendarSubscriptionInsertValues(
 }
 
 /**
- * Repository lịch trên Kysely: mọi truy cập tới ba bảng lịch của
- * kho trung tâm tập trung ở đây.
+ * Repository lịch trên Kysely: mọi truy cập tới ba bảng lịch của kho trung tâm tập trung ở đây.
  *
- * Handle gốc được truyền lúc khởi tạo (facade định tuyến theo
- * không gian của tầng ứng dụng); mọi phương thức nhận thêm handle
- * tuỳ chọn làm tham số cuối — tầng service truyền handle giao dịch
- * khi thao tác phải nằm trong cùng transaction với thao tác khác
+ * Handle gốc được truyền lúc khởi tạo (facade định tuyến theo không gian của tầng ứng dụng); mọi phương thức nhận thêm handle tuỳ chọn làm tham số cuối — tầng service truyền handle giao dịch khi thao tác phải nằm trong cùng transaction với thao tác khác
  * (ví dụ tạo chuỗi sự kiện + ghi outbox trong `CalendarService`).
  */
 export class CalendarRepository {
@@ -421,8 +399,7 @@ export class CalendarRepository {
   }
 
   /**
-   * Tìm token xuất lịch theo hash của token thô — đường tra cứu duy
-   * nhất của URL xuất công khai; không bao giờ tra theo token thô.
+   * Tìm token xuất lịch theo hash của token thô — đường tra cứu duy nhất của URL xuất công khai; không bao giờ tra theo token thô.
    */
   async getExportTokenByHash(tokenHash: string, db: RepoDb = this.db()): Promise<CalendarExportTokenRow | undefined> {
     return db
@@ -434,10 +411,7 @@ export class CalendarRepository {
   }
 
   /**
-   * Tạo mới hoặc thay thế token xuất lịch của user (một user một
-   * token): ghi đè hash cũ khiến URL xuất cũ chết ngay khi đổi
-   * token, và đặt lại `last_access` về null tường minh vì token
-   * mới chưa từng được dùng.
+   * Tạo mới hoặc thay thế token xuất lịch của user (một user một token): ghi đè hash cũ khiến URL xuất cũ chết ngay khi đổi token, và đặt lại `last_access` về null tường minh vì token mới chưa từng được dùng.
    */
   async upsertExportToken(userId: string, tokenHash: string, db: RepoDb = this.db()): Promise<CalendarExportTokenRow> {
     const rows = await db
@@ -452,8 +426,7 @@ export class CalendarRepository {
   }
 
   /**
-   * Thu hồi token xuất lịch của user: xoá hẳn bản ghi hash để URL
-   * cũ chết; trả về true khi thật sự có token đã bị thu hồi.
+   * Thu hồi token xuất lịch của user: xoá hẳn bản ghi hash để URL cũ chết; trả về true khi thật sự có token đã bị thu hồi.
    */
   async deleteExportToken(userId: string, db: RepoDb = this.db()): Promise<boolean> {
     const deleted = await db

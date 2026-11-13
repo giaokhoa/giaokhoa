@@ -17,12 +17,7 @@ import {
 } from '../../support/identity-access-helpers';
 
 /**
- * Issue #567 (con A của đợt trang Permissions #571): endpoint đọc ma
- * trận quyền mọi vai tại một context `GET /access/capability-matrix`
- * và test ghim ngữ nghĩa Kế thừa của `POST /access/overrides`. Mọi ca
- * lái qua HTTP thật; kết quả của endpoint mới được đối chiếu chéo với
- * đường đọc ma trận từng vai hiện hành và với bảng gốc
- * `role_capabilities` bằng SQL độc lập.
+ * Issue #567 (con A của đợt trang Permissions #571): endpoint đọc ma trận quyền mọi vai tại một context `GET /access/capability-matrix` và test ghim ngữ nghĩa Kế thừa của `POST /access/overrides`. Mọi ca lái qua HTTP thật; kết quả của endpoint mới được đối chiếu chéo với đường đọc ma trận từng vai hiện hành và với bảng gốc `role_capabilities` bằng SQL độc lập.
  */
 describe('Access: ma trận quyền mọi vai theo context và ngữ nghĩa Kế thừa của đặt một ô (issue #567)', () => {
   let app: INestApplication;

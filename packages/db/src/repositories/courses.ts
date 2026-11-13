@@ -10,18 +10,13 @@ import type { Json } from '../types/centre-db';
  *   (`'tenant_id as tenantId'`) dùng chung cho select và returning —
  *   KHÔNG bật CamelCasePlugin (một nguồn sự thật là database thật).
  * - Ghi qua hàm ánh xạ Insert/Update loại `undefined` tường minh
- *   từng trường (thử nghiệm T-4): `undefined` = không ghi/không
- *   đổi, `null` = ghi NULL — hai nghĩa không được lẫn.
+ *   từng trường (thử nghiệm T-4): `undefined` = không ghi/không đổi, `null` = ghi NULL — hai nghĩa không được lẫn.
  * - Mọi ghi jsonb (`availability` của section/cm) đi qua
- *   `jsonbValue` (xâu hoá tường minh + `::jsonb`); `null` của cột
- *   jsonb nullable giữ nguyên là SQL NULL.
+ *   `jsonbValue` (xâu hoá tường minh + `::jsonb`); `null` của cột jsonb nullable giữ nguyên là SQL NULL.
  * - Khoá chính `uuidv7()` do database sinh (phụ lục U của kế
- *   hoạch): insert bỏ qua `id` (trừ khi phía gọi truyền tường
- *   minh) và lấy id qua `returning`.
+ *   hoạch): insert bỏ qua `id` (trừ khi phía gọi truyền tường minh) và lấy id qua `returning`.
  * - Điểm mở giao dịch của repository là `transaction(fn)`; các
- *   phương thức nhận handle tuỳ chọn (`CoursesDb` = handle thường
- *   hoặc handle giao dịch) để phía gọi lồng thao tác vào giao dịch
- *   của mình.
+ *   phương thức nhận handle tuỳ chọn (`CoursesDb` = handle thường hoặc handle giao dịch) để phía gọi lồng thao tác vào giao dịch của mình.
  *
  * Các kiểu dòng `*Row` ở biên repository dùng camelCase; trường jsonb `availability` giữ kiểu `unknown` vì nội dung không có lược đồ xác định.
  */
@@ -415,15 +410,11 @@ const FORMAT_OPTION_COLUMNS = [
 ] as const;
 
 // ---------------------------------------------------------------------------
-// Ánh xạ ghi: loại `undefined` tường minh từng trường (T-4); cột jsonb
-// nullable phân biệt ba trạng thái — `undefined` bỏ qua, `null` ghi SQL
-// NULL, giá trị thì xâu hoá qua `jsonbValue`.
+// Ánh xạ ghi: loại `undefined` tường minh từng trường (T-4); cột jsonb nullable phân biệt ba trạng thái — `undefined` bỏ qua, `null` ghi SQL NULL, giá trị thì xâu hoá qua `jsonbValue`.
 // ---------------------------------------------------------------------------
 
 /**
- * Biểu thức tham số jsonb cho một giá trị ghi: xâu hoá tường minh
- * rồi ép `::jsonb` — pg không suy được kiểu tham số khi ghi jsonb,
- * ghi thẳng object sẽ lỗi.
+ * Biểu thức tham số jsonb cho một giá trị ghi: xâu hoá tường minh rồi ép `::jsonb` — pg không suy được kiểu tham số khi ghi jsonb, ghi thẳng object sẽ lỗi.
  */
 function jsonbValue<T>(value: T): RawBuilder<T> {
   return sql<T>`${JSON.stringify(value)}::jsonb`;

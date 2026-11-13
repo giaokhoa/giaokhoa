@@ -1,10 +1,5 @@
 /**
- * Panel ngữ liệu của trang ngân hàng câu hỏi (thẻ #stimuli ở khu vực
- * ngữ liệu): danh sách ngữ liệu của danh mục đang chọn + form tạo/sửa
- * ngay trong thẻ. Dữ liệu danh sách do trang nạp rồi truyền xuống;
- * panel giữ state nội dung đang soạn + ngữ liệu đang sửa và tự gọi
- * các đột biến của lib/questions-data; làm mới danh sách qua invalidate
- * đúng khoá factory của danh mục đang chọn như khi còn trong trang.
+ * Panel ngữ liệu của trang ngân hàng câu hỏi (thẻ #stimuli ở khu vực ngữ liệu): danh sách ngữ liệu của danh mục đang chọn + form tạo/sửa ngay trong thẻ. Dữ liệu danh sách do trang nạp rồi truyền xuống; panel giữ state nội dung đang soạn + ngữ liệu đang sửa và tự gọi các đột biến của lib/questions-data; làm mới danh sách qua invalidate đúng khoá factory của danh mục đang chọn như khi còn trong trang.
  */
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';

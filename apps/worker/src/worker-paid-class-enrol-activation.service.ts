@@ -93,12 +93,7 @@ export class WorkerPaidClassEnrolActivationService implements PaidClassEnrolActi
     this.materialization = new CohortMaterializationSurface({
       db: this.spaceScope.routedKysely,
       outbox: enrolOutbox,
-      // Phạm vi platform của bề mặt giữ nguyên `spaceSlug` của
-      // ngữ cảnh đang chạy (cùng khuôn `CohortSyncService`): phạm
-      // vi này chỉ đổi tầm nhìn RLS sang đường platform, không
-      // đổi kho đích — dựng store mới không mang slug thì handle
-      // định tuyến rơi về kho chung trong lúc thân kích hoạt
-      // đang chạy ở kho riêng của trung tâm.
+      // Phạm vi platform của bề mặt giữ nguyên `spaceSlug` của ngữ cảnh đang chạy (cùng khuôn `CohortSyncService`): phạm vi này chỉ đổi tầm nhìn RLS sang đường platform, không đổi kho đích — dựng store mới không mang slug thì handle định tuyến rơi về kho chung trong lúc thân kích hoạt đang chạy ở kho riêng của trung tâm.
       runInPlatformScope: (fn) =>
         tenantAls.run({ platform: true, spaceSlug: tenantAls.getStore()?.spaceSlug }, fn),
     });

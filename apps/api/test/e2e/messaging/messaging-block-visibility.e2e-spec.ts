@@ -12,25 +12,16 @@ import {
  * Chuẩn app nhắn tin phổ biến, chốt bổ sung trên issue #33
  * (24/10/2026): LIÊN HỆ ĐÃ CHẶN THÌ KHÔNG HIỆN Ở PHẦN TIN NHẮN.
  *  - Có quan hệ chặn ở bất kỳ chiều nào: conversation 1–1 và liên hệ
- *    của nhau biến mất khỏi danh sách của CẢ HAI phía (lọc ở tầng
- *    truy vấn, không xoá dữ liệu); huy hiệu chưa đọc không đếm
- *    conversation đang ẩn.
+ *    của nhau biến mất khỏi danh sách của CẢ HAI phía (lọc ở tầng truy vấn, không xoá dữ liệu); huy hiệu chưa đọc không đếm conversation đang ẩn.
  *  - Gửi tin trong lúc chặn bị từ chối ở cả hai chiều
  *    (`messaging.contact_blocked`).
  *  - Mở thẳng theo id (việc nối tiếp của #33, siết sau PR #89): chi
- *    tiết, cửa sổ lịch sử tin và đánh dấu đã đọc của conversation
- *    1–1 đang chặn đều 404 như không tồn tại ở CẢ HAI phía; `sync`
- *    realtime cũng không trả lịch sử của conversation đang chặn.
- *    Hội thoại nhóm chứa cả hai người không bị cổng này chạm.
+ *    tiết, cửa sổ lịch sử tin và đánh dấu đã đọc của conversation 1–1 đang chặn đều 404 như không tồn tại ở CẢ HAI phía; `sync` realtime cũng không trả lịch sử của conversation đang chặn. Hội thoại nhóm chứa cả hai người không bị cổng này chạm.
  *  - Xoá tin theo id (siết sau PR #94 vòng 1): xoá tin của hội thoại
- *    1–1 đang chặn cũng 404 ở cả hai phía và KHÔNG ghi outbox (khẳng
- *    định ở ca xoá của spec này); socket mới nối không vào room của
- *    hội thoại 1–1 đang chặn.
+ *    1–1 đang chặn cũng 404 ở cả hai phía và KHÔNG ghi outbox (khẳng định ở ca xoá của spec này); socket mới nối không vào room của hội thoại 1–1 đang chặn.
  *  - Presence (online) không phát tới phía bị chặn.
  *  - Phần PHÂN PHỐI của luật chặn (sự kiện gửi/xoá/đọc ghi TRƯỚC lúc
- *    chặn bị consumer nén lại, không phát sang phía bị chặn — cổng
- *    chặn ở tầng phân phối, siết sau PR #94) thuộc về consumer phía
- *    worker từ issue #521 và được kiểm ở spec tích hợp của worker:
+ *    chặn bị consumer nén lại, không phát sang phía bị chặn — cổng chặn ở tầng phân phối, siết sau PR #94) thuộc về consumer phía worker từ issue #521 và được kiểm ở spec tích hợp của worker:
  *    apps/worker/test/integration/messaging/messaging-realtime-queue.int-spec.ts.
  *  - Bỏ chặn thì mọi bề mặt hiện lại nguyên trạng.
  */

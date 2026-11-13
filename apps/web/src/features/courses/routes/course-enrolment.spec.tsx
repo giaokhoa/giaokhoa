@@ -6,10 +6,7 @@ import { TestProviders } from '#test/providers';
 import { CoursePage } from './course';
 
 /**
- * Spec ghi danh tự phục vụ trên trang khoá học: panel tự ghi danh cho
- * người chưa ghi danh, đường thanh toán phí (chỉ tạo payment, không tự
- * ghi danh) và nút tự đánh dấu hoàn thành thủ công. Stub fetch ghi lại
- * mọi lời gọi để khẳng định đúng endpoint/phương thức/body thật.
+ * Spec ghi danh tự phục vụ trên trang khoá học: panel tự ghi danh cho người chưa ghi danh, đường thanh toán phí (chỉ tạo payment, không tự ghi danh) và nút tự đánh dấu hoàn thành thủ công. Stub fetch ghi lại mọi lời gọi để khẳng định đúng endpoint/phương thức/body thật.
  */
 const COURSE_ID = '01900000-0000-7000-8000-000000000010';
 const USER_ID = '01900000-0000-7000-8000-0000000000a3';

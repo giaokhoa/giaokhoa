@@ -11,17 +11,9 @@ import {
 } from '../../support/ordinary-worker-module';
 
 /**
- * Các job nền tảng (platform) của worker. Oracles: report §4 platform-services DoD (các bước backup, search reindex,
- * analytics không side-effect, report schedule, privacy lan đủ, payment
- * webhook replay) + các file PHPUnit tương ứng của platform services.
- * User/course được raw-insert với id cao độc nhất như các worker spec trước.
+ * Các job nền tảng (platform) của worker. Oracles: report §4 platform-services DoD (các bước backup, search reindex, analytics không side-effect, report schedule, privacy lan đủ, payment webhook replay) + các file PHPUnit tương ứng của platform services. User/course được raw-insert với id cao độc nhất như các worker spec trước.
  *
- * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness
- * role thường (`test/ordinary-worker-module.ts`): module chạy bằng
- * role NOSUPERUSER/NOBYPASSRLS như production (các job nền tảng bọc
- * ngữ cảnh platform tường minh, vai trò này vẫn chịu RLS ở các bảng
- * tenant), fixture và đọc kiểm chứng đi qua kết nối quản trị của
- * harness — khẳng định nghiệp vụ của spec không đổi.
+ * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness role thường (`test/ordinary-worker-module.ts`): module chạy bằng role NOSUPERUSER/NOBYPASSRLS như production (các job nền tảng bọc ngữ cảnh platform tường minh, vai trò này vẫn chịu RLS ở các bảng tenant), fixture và đọc kiểm chứng đi qua kết nối quản trị của harness — khẳng định nghiệp vụ của spec không đổi.
  */
 type BackupArchiveView = {
   format: string;

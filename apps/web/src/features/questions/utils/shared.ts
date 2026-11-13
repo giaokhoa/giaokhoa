@@ -1,20 +1,15 @@
 /**
  * Hằng số, kiểu dữ liệu và hàm thuần DÙNG CHUNG của cụm ngân hàng câu hỏi:
- * nhãn loại câu hỏi/mức nhận thức, hàm bóc văn bản thuần từ tài liệu rich
- * text, trích đoạn câu hỏi, kiểm tra đủ lựa chọn theo loại câu và khoá i18n
- * cho trạng thái ma trận/hồ sơ. Các panel của trang ngân hàng câu hỏi
+ * nhãn loại câu hỏi/mức nhận thức, hàm bóc văn bản thuần từ tài liệu rich text, trích đoạn câu hỏi, kiểm tra đủ lựa chọn theo loại câu và khoá i18n cho trạng thái ma trận/hồ sơ. Các panel của trang ngân hàng câu hỏi
  * (components/questions/*) và hai màn riêng (tạo danh mục, lượt dùng) cùng
- * nhập từ đây để giữ đúng một hành vi; bề mặt xuất khẩu của trang cũ được
- * giữ nguyên bằng cách trang questions.tsx xuất khẩu lại từ module này.
+ * nhập từ đây để giữ đúng một hành vi; bề mặt xuất khẩu của trang cũ được giữ nguyên bằng cách trang questions.tsx xuất khẩu lại từ module này.
  */
 import { extractRichTextPlainText, type QuestionView, type RichTextDocument } from '@giaokhoa/contracts';
 
 import { ApiError } from '#lib/api';
 
 /**
- * Thông báo lỗi kèm lý do thật từ API (ProblemDetails.detail) — trước
- * đây các catch nuốt lỗi gốc và chỉ hiện câu chung chung, giáo viên
- * không biết sai ở đâu (issue #55 mục 3). Export để màn editor riêng
+ * Thông báo lỗi kèm lý do thật từ API (ProblemDetails.detail) — trước đây các catch nuốt lỗi gốc và chỉ hiện câu chung chung, giáo viên không biết sai ở đâu (issue #55 mục 3). Export để màn editor riêng
  * (question-editor.tsx) dùng chung đúng hành vi này.
  */
 export function withApiReason(fallback: string, err: unknown): string {

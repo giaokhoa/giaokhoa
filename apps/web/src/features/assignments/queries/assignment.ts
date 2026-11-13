@@ -25,12 +25,7 @@ import type { AssignmentWriteBody } from '../types/assignment';
 import { queryKeys } from './keys';
 
 /**
- * Tầng dữ liệu trang Bài tập (F-01 đợt 1, rà soát #133): chi tiết bài
- * tập theo đúng quyền người xem (API đã phân giải cờ canSubmit/
- * canGrade/canManage trong cùng đáp ứng). Options dùng chung cho hook
- * của trang và clientLoader của route module (prefetch cùng khoá).
- * Lời gọi API thuần nằm ở tầng `api/` của feature; khoá truy vấn
- * riêng của assignments nằm ở `keys.ts` cùng tầng này.
+ * Tầng dữ liệu trang Bài tập (F-01 đợt 1, rà soát #133): chi tiết bài tập theo đúng quyền người xem (API đã phân giải cờ canSubmit/ canGrade/canManage trong cùng đáp ứng). Options dùng chung cho hook của trang và clientLoader của route module (prefetch cùng khoá). Lời gọi API thuần nằm ở tầng `api/` của feature; khoá truy vấn riêng của assignments nằm ở `keys.ts` cùng tầng này.
  */
 
 /**
@@ -55,22 +50,9 @@ export function useAssignment(assignmentId: string | undefined) {
 }
 
 /**
- * Các panel của trang Bài tập (F-01 của rà soát #133 — phần còn lại;
- * chuyển sang cache TanStack ở CN-13, issue #493).
+ * Các panel của trang Bài tập (F-01 của rà soát #133 — phần còn lại; chuyển sang cache TanStack ở CN-13, issue #493).
  *
- * Luồng nghiệp vụ: trang cha (pages/assignment) sở hữu dữ liệu bài
- * tập qua useAssignment; mỗi panel con đọc phần của nó (danh sách
- * bài nộp, chi tiết một bài nộp, ngân hàng nhận xét) TRỰC TIẾP từ
- * cache TanStack Query qua các options dưới đây — cache là nguồn sự
- * thật duy nhất, panel không giữ bản chép dữ kiện máy chủ trong
- * state. Mọi đột biến, khi thành công, tự làm mới đúng phần cache bị
- * ảnh hưởng: invalidateQueries theo khoá nhà máy cho các thay đổi mà
- * đáp ứng không chứa trọn trạng thái mới (chấm điểm, trả bài, thả/xoá
- * dấu chấm, nộp/mở lại bài, sửa cài đặt/rubric, xoá bài), và
- * setQueryData khi đáp ứng mang theo đúng dữ kiện mới (thêm câu vào
- * ngân hàng nhận xét — đáp ứng là mục vừa tạo, danh sách mới là danh
- * sách cũ cộng mục đó). Panel chỉ còn giữ state biểu mẫu và gọi các
- * prop báo UI (không phải nạp lại dữ kiện) khi cần.
+ * Luồng nghiệp vụ: trang cha (pages/assignment) sở hữu dữ liệu bài tập qua useAssignment; mỗi panel con đọc phần của nó (danh sách bài nộp, chi tiết một bài nộp, ngân hàng nhận xét) TRỰC TIẾP từ cache TanStack Query qua các options dưới đây — cache là nguồn sự thật duy nhất, panel không giữ bản chép dữ kiện máy chủ trong state. Mọi đột biến, khi thành công, tự làm mới đúng phần cache bị ảnh hưởng: invalidateQueries theo khoá nhà máy cho các thay đổi mà đáp ứng không chứa trọn trạng thái mới (chấm điểm, trả bài, thả/xoá dấu chấm, nộp/mở lại bài, sửa cài đặt/rubric, xoá bài), và setQueryData khi đáp ứng mang theo đúng dữ kiện mới (thêm câu vào ngân hàng nhận xét — đáp ứng là mục vừa tạo, danh sách mới là danh sách cũ cộng mục đó). Panel chỉ còn giữ state biểu mẫu và gọi các prop báo UI (không phải nạp lại dữ kiện) khi cần.
  */
 
 /** Danh sách bài nộp của lớp cho một bài tập (GET /assignments/:id/submissions). */
@@ -180,8 +162,7 @@ export function useCreateCommentBankEntry() {
 }
 
 /**
- * Đột biến gửi một tin trong hội thoại phản hồi của bài đã trả (POST .../submissions/:userId/messages) —
- * làm mới cả hai bề mặt chứa hội thoại: chi tiết bài nộp phía giáo viên và chi tiết bài tập phía học sinh
+ * Đột biến gửi một tin trong hội thoại phản hồi của bài đã trả (POST .../submissions/:userId/messages) — làm mới cả hai bề mặt chứa hội thoại: chi tiết bài nộp phía giáo viên và chi tiết bài tập phía học sinh
  * (hội thoại của học sinh nằm trong mySubmission của đáp ứng chi tiết bài tập).
  */
 export function usePostFeedbackMessage() {

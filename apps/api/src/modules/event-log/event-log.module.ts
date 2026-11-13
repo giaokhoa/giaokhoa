@@ -11,8 +11,7 @@ import { EventLogService } from './event-log.service';
   imports: [AccessModule, SpaceRoutingModule],
   controllers: [EventLogController],
   providers: [
-    // Repository của package @giaokhoa/db chạy trên handle Kysely đã định
-    // tuyến theo không gian (issue #648).
+    // Repository của package @giaokhoa/db chạy trên handle Kysely đã định tuyến theo không gian (issue #648).
     {
       provide: EventLogRepository,
       useFactory: (spaceDatabase: SpaceDatabaseService) => new EventLogRepository(spaceDatabase.routedKysely),

@@ -1,6 +1,5 @@
 /**
- * Các preset ESLint dùng chung, không phụ thuộc đường dẫn workspace.
- * Mỗi package tự chọn preset và khai tsconfigRootDir tại config của mình.
+ * Các preset ESLint dùng chung, không phụ thuộc đường dẫn workspace. Mỗi package tự chọn preset và khai tsconfigRootDir tại config của mình.
  */
 import js from "@eslint/js";
 import vitest from "@vitest/eslint-plugin";
@@ -30,8 +29,7 @@ export const typescript = (tsconfigRootDir) => ({
     parserOptions: { tsconfigRootDir },
   },
   rules: {
-    // Giữ quy ước TypeScript: tên bắt đầu bằng _ biểu thị biến/đối số
-    // được cố ý bỏ qua, thay vì tắt rule hay suppression cả file.
+    // Giữ quy ước TypeScript: tên bắt đầu bằng _ biểu thị biến/đối số được cố ý bỏ qua, thay vì tắt rule hay suppression cả file.
     "@typescript-eslint/no-unused-vars": [
       "error",
       {

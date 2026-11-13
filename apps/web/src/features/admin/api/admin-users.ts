@@ -3,12 +3,7 @@ import { apiJson } from '#lib/api';
 import type { NewUserDraft, UpdateUserDraft } from '../types/admin-users';
 
 /**
- * Tầng gọi API thuần của cụm quản trị người dùng thuộc feature
- * admin: chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React
- * Query. Tầng `queries/` của feature bọc các hàm này thành
- * queryOptions, hook và đột biến. Tách từ module dữ liệu phẳng
- * `src/lib/admin-users-data.ts` khi tổ chức lại apps/web theo mô
- * hình features/ (issue #500).
+ * Tầng gọi API thuần của cụm quản trị người dùng thuộc feature admin: chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành queryOptions, hook và đột biến. Tách từ module dữ liệu phẳng `src/lib/admin-users-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
 
 /**
@@ -26,9 +21,7 @@ export function fetchAdminUsers(page: number, pageSize: number, search: string) 
 
 /**
  * Tham số liệt kê người dùng đầy đủ theo hợp đồng truy vấn của đợt 1:
- * lọc trạng thái, sắp xếp và phân trang đều chạy phía server; tham số
- * tuỳ chọn vắng mặt được bỏ khỏi chuỗi truy vấn để server giữ hành vi
- * mặc định vốn có của nó (ẩn tài khoản đã xoá, thứ tự theo id).
+ * lọc trạng thái, sắp xếp và phân trang đều chạy phía server; tham số tuỳ chọn vắng mặt được bỏ khỏi chuỗi truy vấn để server giữ hành vi mặc định vốn có của nó (ẩn tài khoản đã xoá, thứ tự theo id).
  */
 export interface ListAdminUsersParams {
   /** Số trang (bắt đầu từ 1). */
