@@ -55,8 +55,11 @@ describe('Khoá chính UUIDv7 (kiểm chứng platform PostgreSQL 18)', () => {
     const migrations = readdirSync(migrationsDir, { withFileTypes: true })
       .filter((d) => d.isDirectory())
       .map((d) => join(migrationsDir, d.name, 'migration.sql'));
-    expect(migrations).toHaveLength(1);
-    const sqlText = readFileSync(migrations[0]!, 'utf8');
+    // Chỉ một carrier baseline; các migration native được thêm sau
+    // không được tham gia phép đếm PK uuidv7 của carrier đóng băng.
+    const baselines = migrations.filter((file) => file.includes('20261025163710_baseline'));
+    expect(baselines).toHaveLength(1);
+    const sqlText = readFileSync(baselines[0]!, 'utf8');
     // 160 bảng nghiệp vụ có PK uuidv7: 109 trước đây + session, account, verification,
     // two_factor (đợt Better Auth giai đoạn 1, issue #7) + subjects,
     // curricula, curriculum_nodes, learning_outcomes (đợt GDPT 2018, issue #20)

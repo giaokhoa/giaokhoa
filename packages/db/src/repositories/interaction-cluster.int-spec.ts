@@ -396,21 +396,21 @@ describe('repository sách trên Kysely', () => {
 describe('repository tệp trên Kysely', () => {
   it('refcount đếm theo contentHash trả số nguyên kiểu number và giảm đúng khi xoá bản ghi', async () => {
     const input = {
-      contentHash: 'hash-g7-files', contextId: CONTEXT_ID, component: 'question',
+      contentHash: 'hash-g7-files', storageDomain: 'bank-system', contextId: CONTEXT_ID, component: 'question',
       fileArea: 'content', fileName: 'a.png', fileSize: 10, mimeType: 'image/png', userId: USER_A,
     };
     const first = await files.insert({ ...input, itemId: null, filePath: '/' });
     expect(first.id).toMatch(UUIDV7_PATTERN);
-    expect(await files.countByHash('hash-g7-files')).toBe(1);
+    expect(await files.countByHash('hash-g7-files', 'bank-system')).toBe(1);
     const second = await files.insert({ ...input });
-    const count = await files.countByHash('hash-g7-files');
+    const count = await files.countByHash('hash-g7-files', 'bank-system');
     expect(count).toBe(2);
     expect(typeof count).toBe('number');
     expect((await files.listByContext(CONTEXT_ID)).map((f) => f.id)).toEqual(
       expect.arrayContaining([first.id, second.id]),
     );
     await files.deleteById(second.id);
-    expect(await files.countByHash('hash-g7-files')).toBe(1);
+    expect(await files.countByHash('hash-g7-files', 'bank-system')).toBe(1);
     expect(await files.getById(second.id)).toBeUndefined();
   });
 
@@ -445,7 +445,7 @@ describe('repository tệp trên Kysely', () => {
       .returning('id')
       .executeTakeFirstOrThrow();
     const file = await files.insert({
-      contentHash: 'hash-g7-submission', contextId: CONTEXT_ID, component: 'mod_assign',
+      contentHash: 'hash-g7-submission', storageDomain: 'bank-system', contextId: CONTEXT_ID, component: 'mod_assign',
       fileArea: 'submission_files', itemId: submission.id, fileName: 'bai-lam.pdf', fileSize: 20, userId: USER_A,
     });
     await db

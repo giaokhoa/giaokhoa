@@ -1346,6 +1346,7 @@ export interface Files {
   mime_type: string | null;
   source: string | null;
   status: Generated<number>;
+  storage_domain: Generated<string>;
   updated_at: Generated<Timestamp>;
   user_id: string | null;
 }

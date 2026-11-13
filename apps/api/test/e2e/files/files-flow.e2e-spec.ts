@@ -1,4 +1,12 @@
 import { INestApplication } from '@nestjs/common';
+import { getQueueToken } from '@nestjs/bullmq';
+import type { Queue } from 'bullmq';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
+import { fileDomainForSpace, LEGACY_FILE_DOMAIN, SYSTEM_FILE_DOMAIN } from '@giaokhoa/db';
+import { FilesRepository } from '@giaokhoa/db/repositories/files';
+import { FilesService } from '../../../src/modules/files/files.service';
+import { OBJECT_STORAGE, sha256Hex, type ObjectStorage } from '../../../src/modules/files/storage';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { v7 as uuidv7 } from 'uuid';
 import {
@@ -58,6 +66,55 @@ describe('File: khử trùng theo địa chỉ nội dung, dọn refcount, phụ
     expect(delB.body.refcount).toBe(0);
   });
 
+  it('hai đợt upload/xóa cùng hash sinh hai job cleanup độc lập, không bị BullMQ nuốt vì completed retention', async () => {
+    const content = 'hai-vong-xoa-10-' + Date.now();
+    const queue = app.get<Queue>(getQueueToken('file-cleanup'));
+    const first = await upload(uploaderToken, 'lap-mot.txt', content);
+    expect((await http(app).delete('/api/v1/files/' + first.id)
+      .set('Authorization', 'Bearer ' + uploaderToken)).status).toBe(200);
+    const firstId = ['orphan', SYSTEM_FILE_DOMAIN, first.contentHash, first.id].join('-');
+    expect(await queue.getJob(firstId)).toBeDefined();
+
+    const second = await upload(uploaderToken, 'lap-hai.txt', content);
+    expect(second.contentHash).toBe(first.contentHash);
+    expect(second.id).not.toBe(first.id);
+    expect((await http(app).delete('/api/v1/files/' + second.id)
+      .set('Authorization', 'Bearer ' + uploaderToken)).status).toBe(200);
+    const secondId = ['orphan', SYSTEM_FILE_DOMAIN, second.contentHash, second.id].join('-');
+    expect(secondId).not.toBe(firstId);
+    expect(await queue.getJob(secondId)).toBeDefined();
+  });
+
+  it('HTTP Trang chính đọc file legacy theo metadata/context hợp lệ, vẫn không dọn byte legacy', async () => {
+    const payload = Buffer.from('legacy-trang-chinh-10-' + Date.now());
+    const hash = sha256Hex(payload);
+    const storage = app.get<ObjectStorage>(OBJECT_STORAGE);
+    const repo = app.get(FilesRepository);
+    const path = storage.keyFor(LEGACY_FILE_DOMAIN, hash);
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, payload);
+    const legacy = await repo.insert({
+      contentHash: hash, storageDomain: LEGACY_FILE_DOMAIN,
+      contextId: courseCtx, component: 'core_user', fileArea: 'profile',
+      fileName: 'legacy.txt', fileSize: payload.length, mimeType: 'text/plain', userId: uploaderId,
+    });
+    const auth = { Authorization: 'Bearer ' + uploaderToken };
+    try {
+      const meta = await http(app).get('/api/v1/files/' + legacy.id).set(auth);
+      expect(meta.status).toBe(200);
+      const signed = await http(app).post('/api/v1/files/' + legacy.id + '/signed-url').set(auth);
+      expect(signed.status).toBe(201);
+      const download = await http(app).get(signed.body.url);
+      expect(download.status).toBe(200);
+      expect(download.text).toBe(payload.toString());
+      expect((await http(app).delete('/api/v1/files/' + legacy.id).set(auth)).status).toBe(200);
+      expect(await storage.exists(LEGACY_FILE_DOMAIN, hash)).toBe(true);
+    } finally {
+      await repo.deleteById(legacy.id);
+      await rm(path, { force: true });
+    }
+  });
+
   it('phục vụ nội dung cho người có năng lực ngữ cảnh file qua URL đã ký và luồng có rào', async () => {
     const file = await upload(uploaderToken, 'serve.txt', 'serve-me');
     const signed = await http(app).post(`/api/v1/files/${file.id}/signed-url`).set('Authorization', `Bearer ${uploaderToken}`);
@@ -68,6 +125,50 @@ describe('File: khử trùng theo địa chỉ nội dung, dọn refcount, phụ
     const stream = await http(app).get(`/api/v1/files/${file.id}/content`).set('Authorization', `Bearer ${uploaderToken}`);
     expect(stream.status).toBe(200);
     expect(stream.text).toBe('serve-me');
+  });
+
+  it('HTTP không cho thay id/chữ ký để đọc file cùng hash của miền B; cleanup miền hệ thống giữ byte B', async () => {
+    const text = 'noi-dung-trung-mien-10-' + Date.now();
+    const payload = Buffer.from(text);
+    const hash = sha256Hex(payload);
+    const spaceB = fileDomainForSpace('22222222-2222-7222-8222-222222222222');
+    const fileA = await upload(uploaderToken, 'bank-a.txt', text);
+    const repo = app.get(FilesRepository);
+    const storage = app.get<ObjectStorage>(OBJECT_STORAGE);
+    const service = app.get(FilesService);
+    await storage.put(spaceB, hash, payload);
+    const fileB = await repo.insert({
+      contentHash: hash, storageDomain: spaceB,
+      contextId: courseCtx, component: 'core_user', fileArea: 'profile',
+      fileName: 'space-b.txt', fileSize: payload.length, mimeType: 'text/plain',
+      userId: uploaderId,
+    });
+    const auth = { Authorization: 'Bearer ' + uploaderToken };
+    try {
+      const aSigned = await http(app).post('/api/v1/files/' + fileA.id + '/signed-url').set(auth);
+      expect(aSigned.status).toBe(201);
+      const signedAUrl = aSigned.body.url as string;
+      expect((await http(app).get(signedAUrl)).text).toBe(text);
+
+      const bMeta = await http(app).get('/api/v1/files/' + fileB.id).set(auth);
+      expect(bMeta.status).toBe(404);
+      const bSigned = await http(app).post('/api/v1/files/' + fileB.id + '/signed-url').set(auth);
+      expect(bSigned.status).toBe(404);
+      const bStream = await http(app).get('/api/v1/files/' + fileB.id + '/content').set(auth);
+      expect(bStream.status).toBe(404);
+      // Thay ID trên URL hợp lệ của A sang B vẫn bị chặn ở lớp miền metadata.
+      const forgedUrl = signedAUrl.replace(fileA.id, fileB.id);
+      expect((await http(app).get(forgedUrl)).status).toBe(404);
+
+      expect((await http(app).delete('/api/v1/files/' + fileA.id).set(auth)).status).toBe(200);
+      expect(await service.cleanupOrphan(hash, SYSTEM_FILE_DOMAIN)).toBe(true);
+      expect(await storage.exists(SYSTEM_FILE_DOMAIN, hash)).toBe(false);
+      expect(await storage.exists(spaceB, hash)).toBe(true);
+      expect((await storage.get(spaceB, hash)).equals(payload)).toBe(true);
+    } finally {
+      await repo.deleteById(fileB.id);
+      await storage.delete(spaceB, hash);
+    }
   });
 
   it('từ chối người lạ: request URL đã ký và luồng có rào trả 403 Problem Details; tải không ký trả 401', async () => {

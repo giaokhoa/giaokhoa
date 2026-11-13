@@ -1,11 +1,14 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import type { Queue } from 'bullmq';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { FilesRepository, type FileRow } from '@giaokhoa/db/repositories/files';
 import { FileSigningService } from './file-signing.service';
 import { OBJECT_STORAGE, sha256Hex, type ObjectStorage } from './storage';
 import { Inject } from '@nestjs/common';
+import { fileDomainForSpace, LEGACY_FILE_DOMAIN, SYSTEM_FILE_DOMAIN } from '@giaokhoa/db';
+import { SpaceDatabaseService } from '../../db/routing/space-database.service';
+import { tenantAls } from '../tenants/tenant-als';
 
 export const FILE_CLEANUP_QUEUE = 'file-cleanup';
 export interface UploadInput {
@@ -42,8 +45,7 @@ export function sniffImageMimeType(data: Buffer): string | null {
 
 /**
  * Facade của FilesModule (Moodle core_files). Các bản ghi logic trong `files` trỏ tới
- * các byte vật lý được định địa chỉ theo nội dung; nội dung giống hệt chỉ được lưu MỘT lần bất kể
- * có bao nhiêu bản ghi tham chiếu tới nó. File không bao giờ public theo đường dẫn: một lần
+ * các byte vật lý được định địa chỉ theo nội dung; nội dung giống hệt chỉ được lưu một lần TRONG CÙNG MIỀN, không gộp giữa các kho. File không bao giờ public theo đường dẫn: một lần
  * tải xuống yêu cầu kiểm tra capability của context file trước, rồi hoặc dùng một
  * URL đã ký ngắn hạn hoặc một luồng stream có guard.
  */
@@ -60,6 +62,7 @@ export class FilesService {
     private readonly evaluator: PermissionEvaluator,
     private readonly signing: FileSigningService,
     @InjectQueue(FILE_CLEANUP_QUEUE) private readonly cleanupQueue: Queue,
+    @Optional() private readonly spaceDb?: SpaceDatabaseService,
   ) {}
 
   /**
@@ -70,9 +73,10 @@ export class FilesService {
       throw new BadRequestException({ message: 'Invalid filename', code: 'file.invalid_filename' });
     }
     const contentHash = sha256Hex(input.data);
-    await this.storage.put(contentHash, input.data); // put() là no-op khi hash đã tồn tại (dedup)
+    const storageDomain = await this.currentStorageDomain();
+    await this.storage.put(storageDomain, contentHash, input.data); // put() chỉ dedupe trong cùng miền
     return this.repo.insert({
-      contentHash, contextId: input.contextId, component: input.component, fileArea: input.fileArea,
+      contentHash, storageDomain, contextId: input.contextId, component: input.component, fileArea: input.fileArea,
       itemId: input.itemId ?? null, filePath: input.filePath ?? '/', fileName: input.fileName,
       userId: input.userId, fileSize: input.data.length, mimeType: input.mimeType,
     });
@@ -135,8 +139,8 @@ export class FilesService {
       const match = QUESTION_FILE_CONTENT_SRC_PATTERN.exec(attrs.src as string);
       if (!match) return;
       const file = await this.repo.getById(match[1]);
-      if (!file || file.component !== 'question') return;
-      const target = await this.signing.createDownloadTarget(file);
+      if (!file || file.component !== 'question' || !(await this.canAccessDomain(file))) return;
+      const target = await this.signing.createDownloadTarget(await this.fileForSigning(file));
       attrs.src = target.url;
     }));
     return clone;
@@ -147,31 +151,96 @@ export class FilesService {
    */
   async getFile(id: string): Promise<FileRow> {
     const row = await this.repo.getById(id);
-    if (!row) throw new NotFoundException({ message: `File ${id} not found`, code: 'file.not_found' });
+    if (!row || !(await this.canAccessDomain(row))) throw new NotFoundException({ message: `File ${id} not found`, code: 'file.not_found' });
     return row;
   }
   /**
-   * Số bản ghi đang tham chiếu cùng nội dung vật lý.
+   * Miền vật lý lấy từ ID bất biến của sổ trung tâm (khu công cộng có ID riêng).
+   * Không dùng hostname/slug trong khoá; mất sổ khi đã có slug thì fail-closed.
    */
-  async refcount(contentHash: string): Promise<number> { return this.repo.countByHash(contentHash); }
+  private async currentStorageDomain(): Promise<string> {
+    const slug = tenantAls.getStore()?.spaceSlug;
+    if (!slug) return SYSTEM_FILE_DOMAIN;
+    if (!this.spaceDb) throw new Error('file.space_resolver_missing');
+    const target = await this.spaceDb.resolveTarget(slug);
+    return fileDomainForSpace(target.spaceId);
+  }
+
   /**
-   * Khoá lưu trữ vật lý suy từ contentHash.
+   * Hàng legacy trước migration không có miền vật lý: byte vẫn nằm tại
+   * bố cục hash cũ. Chỉ khôi phục quyền đọc của context gốc nếu đúng
+   * tenant sở hữu; không coi mọi file legacy là của Trang chính.
+   *
+   * Request ở host trung tâm phải khớp tenant mang slug đã xác nhận
+   * trong sổ; đọc tenant qua đúng handle định tuyến trong scope
+   * platform TẠM THỜI (không cấp scope này cho caller).
+   * Chữ ký URL và capability vẫn được kiểm tra ở lớp gọi.
    */
-  physicalKey(contentHash: string): string { return this.storage.keyFor(contentHash); }
+  private async canReadLegacy(file: FileRow): Promise<boolean> {
+    if (typeof this.repo.getContextTenantId !== 'function') return false;
+    const ownerId = await this.repo.getContextTenantId(file.contextId);
+    if (ownerId === undefined) return false; // context không tồn tại
+    const store = tenantAls.getStore();
+    const slug = store?.spaceSlug;
+    if (!slug) {
+      // Trên host gốc, chỉ cấp cho context toàn cục hoặc đúng tenant
+      // hiệu lực đã được TenantGuard xác minh; không có phiên thì không
+      // được đoán chủ sở hữu của một context trung tâm.
+      return ownerId === null || (!!store?.tenantId && ownerId === store.tenantId);
+    }
+    if (!this.spaceDb) return false;
+    const target = await this.spaceDb.resolveTarget(slug);
+    // Đối chiếu chủ thật trong database đích, không dựa vào tên miền
+    // tự khai hoặc tenantId của khách ẩn danh tải qua URL có chữ ký.
+    const tenant = await tenantAls.run({ platform: true, spaceSlug: slug }, async () =>
+      this.spaceDb!.routedKysely.selectFrom('tenants')
+        .select(['id', 'kind']).where('slug', '=', slug).executeTakeFirst(),
+    );
+    if (!tenant) return false;
+    if (ownerId === tenant.id) return true;
+    // Kho riêng chỉ có thể chứa context toàn cục của chính kho đó.
+    // Kho chung tuyệt đối không dùng context toàn cục để vượt miền.
+    return ownerId === null && target.mode === 'dedicated';
+  }
+
+  /**
+   * Legacy giữ key vật lý cũ để tương thích, nhưng chữ ký HMAC phải
+   * mang miền sở hữu ĐANG PHỤC VỤ. Không tái sử dụng chữ ký legacy ở
+   * một host khác, kể cả khi hai database có cùng file id.
+   */
+  private async fileForSigning(file: FileRow): Promise<FileRow & { signingDomain?: string }> {
+    return file.storageDomain === LEGACY_FILE_DOMAIN
+      ? { ...file, signingDomain: await this.currentStorageDomain() }
+      : file;
+  }
+
+  /** Chặn metadata từ miền khác, kể cả các trung tâm dùng chung database. */
+  private async canAccessDomain(file: FileRow): Promise<boolean> {
+    if (file.storageDomain === LEGACY_FILE_DOMAIN) return this.canReadLegacy(file);
+    return file.storageDomain === await this.currentStorageDomain();
+  }
+
+  /** Số tham chiếu đúng miền sở hữu, không gộp file khác kho có cùng hash. */
+  async refcount(contentHash: string): Promise<number> {
+    return this.repo.countByHash(contentHash, await this.currentStorageDomain());
+  }
+  /**
+   * Khoá lưu trữ vật lý suy từ miền sở hữu và contentHash.
+   */
+  physicalKey(contentHash: string, storageDomain = SYSTEM_FILE_DOMAIN): string { return this.storage.keyFor(storageDomain, contentHash); }
   /**
    * Nội dung vật lý còn trên kho lưu trữ hay không.
    */
-  async physicalExists(contentHash: string): Promise<boolean> { return this.storage.exists(contentHash); }
+  async physicalExists(contentHash: string, storageDomain = SYSTEM_FILE_DOMAIN): Promise<boolean> { return this.storage.exists(storageDomain, contentHash); }
 
   /**
-   * Xoá bản ghi file; xoá nội dung vật lý khi refcount về 0.
+   * Xoá bản ghi file; enqueue job chỉ khi refcount của cùng miền về 0.
    *
    * Luồng: lấy bản ghi → (khi có `actor`) áp chốt khoá bài nộp → xoá bản
-   * ghi → đếm lại số bản ghi còn tham chiếu cùng contentHash: còn tham
-   * chiếu thì byte vật lý giữ nguyên; refcount về 0 thì enqueue job dọn
-   * file mồ côi cho worker (jobId khử trùng các lần enqueue lặp lại cho
-   * cùng một hash). Bản ghi KHÔNG BAO GIỜ xoá byte khi các bản ghi khác
-   * còn tham chiếu tới cùng hash đó.
+   * ghi → đếm lại tham chiếu cùng miền và contentHash: còn tham chiếu
+   * thì byte vật lý giữ nguyên; refcount về 0 thì enqueue job cho worker.
+   * JobId gắn với ID bản ghi vừa xoá: khử trùng cùng sự kiện nhưng cho
+   * phép dọn lại khi nội dung trùng được tải lên rồi xoá ở vòng sau.
    *
    * Hai chế độ xoá, phân biệt bằng tham số `actor`:
    * - **Người dùng khởi tạo** (handler `DELETE /files/:id` truyền
@@ -199,9 +268,16 @@ export class FilesService {
     const row = await this.getFile(id);
     if (actor) await this.assertSubmissionLockForDelete(row, actor);
     await this.repo.deleteById(id);
-    const refcount = await this.repo.countByHash(row.contentHash);
-    if (refcount === 0) {
-      await this.cleanupQueue.add('cleanup-orphan', { contentHash: row.contentHash }, { jobId: `orphan-${row.contentHash}`, attempts: 3 });
+    const refcount = await this.repo.countByHash(row.contentHash, row.storageDomain);
+    if (refcount === 0 && row.storageDomain !== LEGACY_FILE_DOMAIN) {
+      const spaceSlug = tenantAls.getStore()?.spaceSlug;
+      await this.cleanupQueue.add(
+        'cleanup-orphan',
+        { contentHash: row.contentHash, storageDomain: row.storageDomain, ...(spaceSlug ? { spaceSlug } : {}) },
+        // ID của lần xóa (file record) khử trùng job cùng sự kiện,
+        // nhưng không chặn cleanup của lần upload/xóa mới có cùng hash.
+        { jobId: ['orphan', row.storageDomain, row.contentHash, row.id].join('-'), attempts: 3 },
+      );
     }
     return { deleted: true, contentHash: row.contentHash, refcount };
   }
@@ -258,9 +334,11 @@ export class FilesService {
   /**
    * Dọn một nội dung vật lý mồ côi theo hash (worker file-cleanup gọi).
    */
-  async cleanupOrphan(contentHash: string): Promise<boolean> {
-    if ((await this.repo.countByHash(contentHash)) > 0) return false;
-    await this.storage.delete(contentHash);
+  async cleanupOrphan(contentHash: string, storageDomain?: string): Promise<boolean> {
+    const domain = storageDomain ?? await this.currentStorageDomain();
+    if (domain === LEGACY_FILE_DOMAIN) throw new Error('file.legacy_cleanup_forbidden');
+    if ((await this.repo.countByHash(contentHash, domain)) > 0) return false;
+    await this.storage.delete(domain, contentHash);
     return true;
   }
 
@@ -286,22 +364,27 @@ export class FilesService {
   async createSignedUrl(fileId: string, userId: string, isGuest = false): Promise<{ url: string; expiresAt: number }> {
     const file = await this.getFile(fileId);
     await this.evaluator.requireCapability(userId, 'files:view', file.contextId, { isGuest });
-    return this.signing.createDownloadTarget(file);
+    return this.signing.createDownloadTarget(await this.fileForSigning(file));
   }
   /**
    * Kiểm chữ ký URL (ủy quyền cho FileSigningService).
    */
-  verifySignature(fileId: string, token: string | undefined): void { this.signing.verify(fileId, token); }
+  async verifySignature(fileId: string, token: string | undefined): Promise<void> {
+    const file = await this.getFile(fileId);
+    const domain = file.storageDomain === LEGACY_FILE_DOMAIN
+      ? await this.currentStorageDomain() : file.storageDomain;
+    this.signing.verify(fileId, domain, token);
+  }
   /**
    * Đọc nội dung file (sau kiểm quyền) để trả về/tải xuống.
    */
   async readContent(fileId: string): Promise<{ file: FileRow; data: Buffer }> {
     const file = await this.getFile(fileId);
-    const data = await this.storage.get(file.contentHash);
+    const data = await this.storage.get(file.storageDomain, file.contentHash);
     return { file, data };
   }
   /**
    * Liệt kê file trong context.
    */
-  async listByContext(contextId: string): Promise<FileRow[]> { return this.repo.listByContext(contextId); }
+  async listByContext(contextId: string): Promise<FileRow[]> { const rows = await this.repo.listByContext(contextId); const matches = await Promise.all(rows.map(async (file) => (await this.canAccessDomain(file)) ? file : null)); return matches.filter((row): row is FileRow => row !== null); }
 }

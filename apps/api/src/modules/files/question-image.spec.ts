@@ -99,7 +99,7 @@ describe('Hàm FilesService.resolveQuestionImageUrls', () => {
 
   it('thay src định danh bền của file câu hỏi bằng URL ký, không sửa tài liệu gốc', async () => {
     const { service, rows } = makeService();
-    rows.set(FILE_ID, { id: FILE_ID, component: 'question' } as FileRow);
+    rows.set(FILE_ID, { id: FILE_ID, storageDomain: 'bank-system', component: 'question' } as FileRow);
     const doc = docWith(questionFileContentSrc(FILE_ID));
     const resolved = await service.resolveQuestionImageUrls(doc);
     const node = (resolved.content[0].content as { attrs: { src: string } }[])[0];
@@ -110,7 +110,7 @@ describe('Hàm FilesService.resolveQuestionImageUrls', () => {
 
   it('giữ nguyên src khi file không thuộc component question (không rò file ngoài phạm vi câu hỏi)', async () => {
     const { service, rows, signing } = makeService();
-    rows.set(FILE_ID, { id: FILE_ID, component: 'submission' } as FileRow);
+    rows.set(FILE_ID, { id: FILE_ID, storageDomain: 'bank-system', component: 'submission' } as FileRow);
     const doc = docWith(questionFileContentSrc(FILE_ID));
     const resolved = await service.resolveQuestionImageUrls(doc);
     const node = (resolved.content[0].content as { attrs: { src: string } }[])[0];

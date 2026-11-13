@@ -333,7 +333,7 @@ describe('PermissionEvaluator — fail-closed khi dữ kiện cổng không xác
 describe('FilesService.createSignedUrl — chuỗi khai thác đầu-cuối qua cổng tenant', () => {
   const evaluator = makeEvaluator(gateReadsOf(new AccessRepository(makeRlsDb())));
   const createDownloadTarget = vi.fn((_file: FileRow) => ({ url: 'https://example.invalid/signed', expiresAt: 1 }));
-  const fileRow = { id: 'file-b', contextId: CB.id, contentHash: 'hash-b' } as unknown as FileRow;
+  const fileRow = { id: 'file-b', contextId: CB.id, storageDomain: 'bank-system', contentHash: 'hash-b' } as unknown as FileRow;
   const service = new FilesService(
     {
       async getById(id: string) {

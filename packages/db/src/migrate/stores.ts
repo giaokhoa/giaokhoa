@@ -45,7 +45,7 @@ export const MIGRATION_STORES: Record<MigrationStoreKey, MigrationStore> = {
   centre: {
     migrationsDirName: 'centre',
     carrierNames: ['20261025163710_baseline'],
-    expected: { tables: 202, policies: 21, indexes: 416, journalRows: 1 },
+    expected: { tables: 202, policies: 21, indexes: 416, journalRows: 2 },
     connectionEnvVars: ['MIGRATION_DATABASE_URL', 'DATABASE_URL'],
   },
   'control-plane': {

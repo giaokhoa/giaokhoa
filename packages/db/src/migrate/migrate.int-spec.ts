@@ -202,7 +202,7 @@ describe('bộ máy migration của package cho ba kho', () => {
     expect(result.tables).toBe(202);
     expect(result.policies).toBe(21);
     expect(result.indexes).toBe(416);
-    expect(result.journalRows).toBe(1);
+    expect(result.journalRows).toBe(MIGRATION_STORES.centre.expected.journalRows);
     expect(await countPublic(centreUrl, 'tables')).toBe(202);
     expect(await countPublic(centreUrl, 'policies')).toBe(21);
     expect(await countPublic(centreUrl, 'indexes')).toBe(416);
@@ -233,7 +233,7 @@ describe('bộ máy migration của package cho ba kho', () => {
       const migrated = new Client({ connectionString: centreUrl });
       await migrated.connect();
       try {
-        expect(await getAppliedMigrations(migrated)).toEqual(['20261025163710_baseline']);
+        expect(await getAppliedMigrations(migrated)).toEqual(listMigrationNames(packageMigrationsDir('centre')));
       } finally {
         await migrated.end();
       }
