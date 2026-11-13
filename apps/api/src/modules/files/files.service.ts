@@ -408,9 +408,17 @@ export class FilesService {
    * @throws NotFoundException nếu file không ở đúng miền/host/chủ sở hữu.
    */
   async readSignedContent(fileId: string, token: string | undefined): Promise<{ file: FileRow; data: Buffer }> {
-    const slug = tenantAls.getStore()?.spaceSlug;
-    const platformScope = { platform: true, ...(slug ? { spaceSlug: slug } : {}) };
-    const file = await tenantAls.run(platformScope, () => this.repo.getById(fileId));
+    const requestScope = tenantAls.getStore();
+    const slug = requestScope?.spaceSlug;
+    // Chỉ nâng quyền RLS tạm thời; không được làm mất binding bất biến
+    // của kho dedicated mà SpaceContextGuard đã ghim vào request.
+    // Giữ slug nhưng bỏ spaceId/spaceHandle khiến routedKysely từ chối
+    // đúng phiên tải URL ký bằng prepared_identity_mismatch (HTTP 500).
+    const platformScope = {
+      platform: true,
+      ...(slug ? { spaceSlug: slug, spaceId: requestScope?.spaceId, spaceHandle: requestScope?.spaceHandle } : {}),
+    };
+    const file = await tenantAls.run(platformScope, async () => this.repo.getById(fileId));
     if (!file) throw new NotFoundException({ message: `File ${fileId} not found`, code: 'file.not_found' });
 
     // Chỉ tra chủ của học liệu trong đúng kho dưới quyền vận hành tạm
