@@ -42,6 +42,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { BackupModule } from './modules/backup/backup.module';
 import { ContentBankModule } from './modules/content-bank/content-bank.module';
 import { ControlPlaneModule } from './modules/control-plane/control-plane.module';
+import { SupportModule } from './modules/support/support.module';
 import { SystemBankModule } from './modules/system-bank/system-bank.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { PaymentsModule } from './modules/payments/payments.module';
@@ -175,6 +176,7 @@ const SHARED_CENTRE_KYSELY = 'SHARED_CENTRE_KYSELY';
     EventLogModule,
     ContentBankModule,
     ControlPlaneModule,
+    SupportModule,
     SystemBankModule,
     SpaceRoutingModule,
     PrivacyModule,

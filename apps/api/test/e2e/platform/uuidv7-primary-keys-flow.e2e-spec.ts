@@ -230,7 +230,8 @@ describe('Khoá chính UUIDv7 (kiểm chứng platform PostgreSQL 18)', () => {
     // của bộ máy migration chứ không phải bảng thực thể — riêng
     // `kysely_migration_lock` còn có cột `id` không mặc định, để lọt
     // vào sẽ làm lệch cả số đếm lẫn vòng kiểm mặc định dưới đây.
-    // 189 bảng có cột `id`: 187 bảng PK uuidv7 như khuôn chung (gồm 2
+    // 191 bảng có cột `id`: 189 bảng PK uuidv7 (cộng hai bảng hỗ trợ
+    // support_grants và support_access_events của issue #19; gồm 2
     // bảng giấy của CAM-0, issue #112, 3 bảng tenant của TENANT-0,
     // issue #168, bảng payment_provider_events của VietQR lát 1,
     // issue #189, và bảng classes của CLASS-0 cùng class_join_requests
@@ -252,9 +253,9 @@ describe('Khoá chính UUIDv7 (kiểm chứng platform PostgreSQL 18)', () => {
     // + 2 bảng vệ tinh ngân hàng hệ thống của issue #585 có cột id
     // (system_bank_event_receipts, outcome_package_installs; bảng
     // system_question_imports cùng đợt không có cột id nên không
-    // tính) → 189 dòng (187 uuidv7 + 2 ngoại lệ text).
+    // tính) → 191 dòng (189 uuidv7 + 2 ngoại lệ text).
     const TEXT_ID_ALLOWLIST = ['oauth_client', 'oauth_client_assertion'];
-    expect(defaults.rows.length).toBe(189);
+    expect(defaults.rows.length).toBe(191);
     for (const row of defaults.rows) {
       if (TEXT_ID_ALLOWLIST.includes(row.table_name)) {
         if (row.table_name === 'oauth_client') {

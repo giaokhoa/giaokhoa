@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
+import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import type { Tenant, TenantMembership } from '@giaokhoa/contracts';
 import { Badge } from '@giaokhoa/ui/components/badge';
@@ -230,7 +231,10 @@ export function AdminTenantsPage() {
 
   return (
     <PageShell width="wide">
-      <PageHeader title={t('tenantsTitle')} description={t('tenantsDescription')} />
+      <PageHeader title={t('tenantsTitle')} description={t('tenantsDescription')}
+        actions={!platformMode && canManageSelected && selectedTenant?.kind === 'center'
+          ? <Link className="inline-flex items-center rounded-md border px-3 py-2 text-sm font-medium" to="/admin/support-grants">Quyền hỗ trợ có thời hạn</Link>
+          : undefined} />
       {message ? <ErrorAlert>{message}</ErrorAlert> : null}
       {rootForbidden ? <ErrorAlert variant="destructive">{t('tenantsForbidden')}</ErrorAlert> : null}
       {rootError ? (

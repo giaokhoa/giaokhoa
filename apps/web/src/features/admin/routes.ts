@@ -11,6 +11,7 @@ export default [
     route('users/new', 'routes/admin-user-new.tsx'),
     route('users/:userId/edit', 'routes/admin-user-edit.tsx'),
     route('tenants', 'routes/admin-tenants.tsx'),
+    route('support-grants', 'routes/admin-support-grants.tsx'),
     route('roles', 'routes/admin-roles.tsx'),
     route('permissions', 'routes/admin-permissions.tsx'),
   ]),
