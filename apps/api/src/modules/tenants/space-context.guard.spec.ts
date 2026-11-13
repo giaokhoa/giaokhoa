@@ -119,7 +119,7 @@ describe('Guard gắn ngữ cảnh trung tâm theo địa chỉ', () => {
     expect(spaceDb.getKyselyForSpace).not.toHaveBeenCalled();
   });
 
-  it('địa chỉ không mang tên miền con của trung tâm thì cho qua và không phân giải gì', async () => {
+  it('địa chỉ gốc của platform không mang trung tâm được phép tiếp tục khi không có phiên trung tâm', async () => {
     const { guard, spaceDb } = makeGuard();
     const request: FakeRequest = { headers: { host: 'he-thong.example' } };
     await expect(guard.canActivate(httpContext(request))).resolves.toBe(true);
@@ -127,21 +127,47 @@ describe('Guard gắn ngữ cảnh trung tâm theo địa chỉ', () => {
     expect(request.spaceSlug).toBeUndefined();
   });
 
-  it('slug ở địa chỉ chưa có dòng đăng ký thì cho qua như địa chỉ thường, không chuẩn bị kho', async () => {
-    const { guard, spaceDb } = makeGuard({
-      resolveError: new SpaceRoutingError('space_routing.space_not_found', 'not registered'),
+  it('phiên trung tâm tại địa chỉ gốc bị từ chối trước khi truy vấn', async () => {
+    const { guard, spaceDb } = makeGuard();
+    const request: FakeRequest = {
+      headers: { host: 'he-thong.example' },
+      user: { id: 'u1', username: 'gv1', centreId: 'id-dang-ky-a' },
+    };
+    await expect(guard.canActivate(httpContext(request))).rejects.toMatchObject({
+      response: { code: 'auth.centre_mismatch' },
     });
-    const request: FakeRequest = { headers: { host: 'slug-la.he-thong.example' } };
+    expect(spaceDb.resolveTarget).not.toHaveBeenCalled();
+  });
+
+  it('địa chỉ gốc chỉ chấp nhận phiên của chính tenant platform có định danh đăng ký khớp', async () => {
+    const { guard, spaceDb } = makeGuard({ platformTenantId: 'tenant-zero' });
+    const request: FakeRequest = {
+      headers: { host: 'he-thong.example' },
+      tenantId: 'tenant-zero',
+      user: { id: 'u1', username: 'nguoi-dung', centreId: 'id-dang-ky-a' },
+    };
     await expect(guard.canActivate(httpContext(request))).resolves.toBe(true);
+    expect(spaceDb.resolveTarget).toHaveBeenCalledTimes(1);
+    expect(spaceDb.getKyselyForSpace).not.toHaveBeenCalled();
+    request.user = { id: 'u1', username: 'nguoi-dung', centreId: 'id-dang-ky-b' };
+    await expect(guard.canActivate(httpContext(request))).rejects.toMatchObject({
+      response: { code: 'auth.centre_mismatch' },
+    });
+  });
+
+  it('hostname chưa đăng ký bị từ chối và không chuẩn bị bất kỳ kho nào', async () => {
+    const failure = new SpaceRoutingError('space_routing.space_not_found', 'not registered');
+    const { guard, spaceDb } = makeGuard({ resolveError: failure });
+    const request: FakeRequest = { headers: { host: 'slug-la.he-thong.example' } };
+    await expect(guard.canActivate(httpContext(request))).rejects.toBe(failure);
     expect(spaceDb.getKyselyForSpace).not.toHaveBeenCalled();
   });
 
-  it('tầng định tuyến chưa cấu hình control plane thì cho qua như địa chỉ thường', async () => {
-    const { guard, spaceDb } = makeGuard({
-      resolveError: new SpaceRoutingError('space_routing.not_configured', 'not configured'),
-    });
+  it('địa chỉ trung tâm bị từ chối khi chưa cấu hình control plane dù không có phiên', async () => {
+    const failure = new SpaceRoutingError('space_routing.not_configured', 'not configured');
+    const { guard, spaceDb } = makeGuard({ resolveError: failure });
     const request: FakeRequest = { headers: { host: HOST_A } };
-    await expect(guard.canActivate(httpContext(request))).resolves.toBe(true);
+    await expect(guard.canActivate(httpContext(request))).rejects.toBe(failure);
     expect(spaceDb.getKyselyForSpace).not.toHaveBeenCalled();
   });
 

@@ -163,7 +163,10 @@ export const envSchema = z.object({
   // JWT_SECRET để hai hệ xoay vòng độc lập. Chỉ bắt buộc khi cờ bật.
   BETTER_AUTH_SECRET: z.string().min(32).optional(),
   // URL công khai của chính API theo góc nhìn trình duyệt, làm baseURL +
-  // origin tin cậy mặc định cho Better Auth. Trống = suy từ PORT local.
+  // origin tin cậy mặc định cho Better Auth. Trống = suy từ PORT local
+  // ở Better Auth; RIÊNG Socket.IO dùng hostname của URL đã cấu hình
+  // làm allowlist ngoại lệ JWT Trang chính. Thiếu URL ở production
+  // thì ngoại lệ Socket.IO từ chối (fail-closed), không suy từ PORT.
   BETTER_AUTH_URL: z.string().min(1).optional(),
   // Danh sách origin tin cậy bổ sung (phân tách bằng dấu phẩy) cho các
   // endpoint đổi trạng thái của Better Auth (kiểm tra Origin của nó).

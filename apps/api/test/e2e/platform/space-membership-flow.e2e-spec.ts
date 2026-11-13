@@ -431,6 +431,20 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
     }).catch(() => undefined);
   });
 
+  it('API tạo tenant cũ không được cấp trung tâm mới vào kho chung', async () => {
+    const slug = uniqueName('centre-khong-chung');
+    const response = await http(app).post('/api/v1/tenants').set(auth(adminToken))
+      .send({ name: 'Trung tâm yêu cầu kho riêng', slug, kind: 'center' });
+    expect(response.status).toBe(400);
+    expect((response.body as { code?: string }).code).toBe('centre.provision_required');
+    const count = await withClient(process.env.DATABASE_URL!, async (client) => {
+      await client.query("SELECT set_config('app.platform', 'on', false)");
+      const rows = await client.query<{ count: string }>('SELECT count(*) FROM tenants WHERE slug = $1', [slug]);
+      return Number(rows.rows[0]!.count);
+    });
+    expect(count).toBe(0);
+  });
+
   it('cùng email đăng ký ở hai trung tâm kho riêng thành hai tài khoản độc lập, không có dòng nào ở kho chung', async () => {
     expect(dualAId).not.toBe(dualBId);
     // Không một dòng tài khoản hay membership nào mang email này ở kho chung.
@@ -449,6 +463,26 @@ describe('Hồ sơ thành viên theo trung tâm và tách site chính (đầu-cu
     expect(await countRows(clusterUrl(CENTRE_B_DATABASE, CENTRE_B_ROLE, CENTRE_B_PASSWORD), 'users', 'id', dualAId)).toBe(0);
     expect(await countRows(clusterUrl(CENTRE_B_DATABASE, CENTRE_B_ROLE, CENTRE_B_PASSWORD), 'users', 'id', dualBId)).toBe(1);
     expect(await countRows(clusterUrl(CENTRE_A_DATABASE, CENTRE_A_ROLE, CENTRE_A_PASSWORD), 'users', 'id', dualBId)).toBe(0);
+  });
+
+  it('giả tenantId của trung tâm B ở hostname A không tạo tài khoản tại B, A hay kho chung', async () => {
+    const username = uniqueName('tenant-gia');
+    const email = `${username}@example.com`;
+    const response = await http(app)
+      .post(`/api/v1/tenants/${tenantBId}/users`)
+      .set('Host', HOST_A)
+      .set('x-tenant-id', tenantBId)
+      .set(auth(adminAToken))
+      .send({ username, email, password: STRONG_PASSWORD, firstName: 'Thu', lastName: 'Gia' });
+    expect(response.status).toBe(404);
+    expect((response.body as { code?: string }).code).toBe('tenant.not_found');
+    for (const url of [
+      process.env.DATABASE_URL!,
+      clusterUrl(CENTRE_A_DATABASE, CENTRE_A_ROLE, CENTRE_A_PASSWORD),
+      clusterUrl(CENTRE_B_DATABASE, CENTRE_B_ROLE, CENTRE_B_PASSWORD),
+    ]) {
+      expect(await countRows(url, 'users', 'email', email)).toBe(0);
+    }
   });
 
   it('đổi mật khẩu ở một trung tâm không ảnh hưởng tài khoản cùng email ở trung tâm kia', async () => {

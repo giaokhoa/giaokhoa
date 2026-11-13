@@ -35,13 +35,10 @@ import { SpacePoolManager } from './space-pool-manager';
  *      dùng sẽ uỷ thác sang handle của trung tâm mà ngữ cảnh ALS
  *      hiện tại mang (`spaceSlug`) nếu trung tâm đó đã được chuẩn
  *      bị và đang ở kho riêng. Hai trường hợp còn lại PHẢI phân
- *      biệt: ngữ cảnh mang một slug CHƯA từng được chuẩn bị thì uỷ
- *      thác về handle kho chung — đúng hợp đồng "phiên chỉ định
- *      tuyến được khi bước chuẩn bị đã chạy trước"; nhưng slug ĐÃ
- *      được chuẩn bị ở kho riêng mà trạng thái chuẩn bị bị khung
- *      thu hồi giữa phiên (pool bị đóng vì nhàn rỗi) thì lần dùng
- *      ném `SpaceRoutingError` (fail-closed) thay vì rơi về kho
- *      chung — bên gọi đã làm đúng nghĩa vụ chuẩn bị, khung không
+ *      biệt: slug chưa chuẩn bị ném `space_routing.not_prepared`;
+ *      slug đã chuẩn bị ở kho riêng nhưng bị thu hồi ném
+ *      `space_routing.prepared_revoked` — tuyệt đối không rơi về
+ *      kho chung khi request đã mang định danh trung tâm — bên gọi đã làm đúng nghĩa vụ chuẩn bị, khung không
  *      được im lặng đổi đích dữ kiện của nó sang kho khác. Nhờ cơ
  *      chế này các điểm tiêu thụ không phải sửa từng điểm gọi, và
  *      ngữ cảnh nào không do tầng gắn ngữ cảnh của issue #582 nạp
@@ -120,8 +117,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   /**
    * Handle định tuyến Kysely theo ngữ cảnh (issue #639): hợp đồng
    * chuẩn bị-trước và fail-closed như mô tả lớp (ngữ cảnh mang
-   * slug chưa từng chuẩn bị thì về kho chung; slug đã chuẩn bị ở
-   * kho riêng mà mục đã-chuẩn-bị đã bị thu hồi thì ném
+   * slug nhưng chưa chuẩn bị hoặc đã bị thu hồi đều ném
    * `SpaceRoutingError`, không rơi im lặng về kho chung). Ngữ
    * nghĩa uỷ thác qua Proxy của facade này được chứng minh bằng
    * spec `routed-kysely` (transaction, getter `schema`, builder
@@ -191,8 +187,8 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   /**
    * Gắn handle Kysely kho chung — nhà cung cấp kết nối của API gọi
    * đúng một lần lúc khởi động, bằng handle dựng trên pool kho
-   * chung. Mọi đích `shared` và mọi ngữ cảnh chưa chuẩn bị trung
-   * tâm riêng đều uỷ thác về handle này qua `routedKysely`.
+   * chung. Chỉ ngữ cảnh KHÔNG mang slug hoặc đích được đăng ký
+   * `shared` đã chuẩn bị mới được dùng handle này.
    */
   bindSharedKysely(db: CentreDb): void {
     this.sharedKysely = db;
@@ -217,7 +213,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
    * khi control plane ngừng hoạt động sau khi định tuyến đã xong.
    * Khi chưa chuẩn bị (hoặc mục đã-chuẩn-bị đã bị thu hồi), bên
    * gọi phải chuẩn bị qua `getKyselyForSpace` trước — đọc thẳng
-   * qua `routedKysely` khi chưa chuẩn bị sẽ rơi về kho chung.
+   * qua `routedKysely` khi chưa chuẩn bị sẽ bị từ chối.
    */
   isSpacePrepared(slug: string): boolean {
     return this.preparedKysely.has(slug);
@@ -233,10 +229,9 @@ export class SpaceDatabaseService implements OnModuleDestroy {
    * dùng của một kho, đọc nhầm danh tính kho là áp danh sách
    * admin của kho này cho ngữ cảnh của kho khác):
    * - Ngữ cảnh không mang slug, hoặc slug chưa từng được chuẩn
-   *   bị ở kho riêng (kể cả slug chưa chuẩn bị lần nào): trả
-   *   `undefined` — handle định tuyến đang phục vụ bằng kho
-   *   chung theo hợp đồng chuẩn bị-trước, bên gọi dùng danh
-   *   tính kho chung của chính nó.
+   *   bị ở kho riêng: trả `undefined`. Riêng slug chưa chuẩn bị
+   *   lần nào không có đích hợp lệ: truy vấn qua handle định tuyến
+   *   sẽ ném lỗi thay vì truy cập kho chung.
    * - Slug đã phân giải kho riêng: trả tên database trong sổ
    *   đăng ký mà lần chuẩn bị gần nhất đã chốt cho slug đó —
    *   kể cả khi mục đã-chuẩn-bị đã bị thu hồi vì pool đóng:
@@ -390,12 +385,11 @@ export class SpaceDatabaseService implements OnModuleDestroy {
 
   /**
    * Handle hiệu lực cho ngữ cảnh hiện tại:
-   * - Ngữ cảnh không mang slug, hoặc slug CHƯA từng được chuẩn bị
-   *   ở kho riêng (kể cả slug chưa chuẩn bị lần nào): handle kho
-   *   chung — hợp đồng "phiên chỉ định tuyến được khi bước chuẩn
-   *   bị đã chạy trước cho slug đó".
-   * - Slug đã chuẩn bị và mục đã-chuẩn-bị còn: handle của kho
-   *   riêng.
+   * - Không mang slug: handle kho chung cho bề mặt platform.
+   * - Có slug và mục đã-chuẩn-bị còn: handle đã xác định từ sổ
+   *   (kho riêng hoặc kho chung đã được đăng ký).
+   * - Có slug mà chưa từng chuẩn bị: ném `space_routing.not_prepared`
+   *   trước mọi truy vấn, không tự chọn kho chung.
    * - Slug ĐÃ được chuẩn bị ở kho riêng nhưng mục đã-chuẩn-bị đã
    *   bị thu hồi (pool bị đóng vì nhàn rỗi hoặc bị thay vì đổi
    *   danh tính): ném `SpaceRoutingError`
@@ -418,6 +412,10 @@ export class SpaceDatabaseService implements OnModuleDestroy {
           `Space ${slug} was prepared with a dedicated store but that preparation is no longer active; prepare the space again before routing queries to it`,
         );
       }
+      throw new SpaceRoutingError(
+        'space_routing.not_prepared',
+        `Space ${slug} has no prepared database handle; prepare the space before routing queries`,
+      );
     }
     return this.requireSharedKysely();
   }

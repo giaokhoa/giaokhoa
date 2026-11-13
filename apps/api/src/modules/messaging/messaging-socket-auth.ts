@@ -3,15 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { fromNodeHeaders } from 'better-auth/node';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
-import { SpaceRoutingError } from '../../db/routing/space-connection-resolver';
 import { BetterAuthService } from '../auth/better-auth/better-auth.service';
 import { BETTER_AUTH_SESSION_COOKIE } from '../auth/better-auth/better-auth.instance';
 import { tenantAls } from '../tenants/tenant-als';
-import {
-  extractSpaceSlugFromHost,
-  resolveDedicatedSpace,
-  type DedicatedSpace,
-} from '../tenants/space-resolution';
+import { extractSpaceSlugFromHost, resolveDedicatedSpace, type DedicatedSpace } from '../tenants/space-resolution';
 import { TenantsService } from '../tenants/tenants.service';
 import { UsersService } from '../users/users.service';
 import { MessagingRepository } from '@giaokhoa/db/repositories/messaging';
@@ -86,20 +81,10 @@ const SESSION_COOKIE_PATTERN = new RegExp(`(?:^|;\\s*)(?:__Secure-)?${BETTER_AUT
  * kho chung; đây là điểm khác guard HTTP, vì guard còn lớp JWT phía
  * sau quyết định lại còn kênh socket thì không có lớp thứ hai.
  *
- * Một tổ hợp mà hàm phân giải dùng chung cố ý trả `null` cần chốt
- * riêng ở lớp này: tầng định tuyến CHƯA CẤU HÌNH
- * (`space_routing.not_configured`) được `resolveDedicatedSpace` xếp
- * vào đường kho chung cùng slug chưa đăng ký và trung tâm kho
- * chung, theo hợp đồng "chưa cấu hình thì app chạy như trước" của
- * tầng chiến lược xác thực. Phía HTTP, `SpaceContextGuard` là lớp
- * thứ hai phân biệt tổ hợp đó bằng `resolveTarget` trực tiếp:
- * phiên mang claim `centre_id` mà định tuyến chưa cấu hình thì
- * fail-closed, phiên không mang claim thì cho qua. Kênh socket
- * không có lớp thứ hai đó, nên `authenticateHandshake` tự phân
- * biệt lại bằng `resolveTarget` trên slug ứng viên và mang cờ
- * "chưa cấu hình" vào đường token: token mang claim `centre_id`
- * bị từ chối TRƯỚC mọi lượt đọc tài khoản ở kho chung; token
- * không claim và đường cookie giữ nguyên hành vi cho qua như cũ.
+ * Host mang slug nhưng sổ đăng ký không cấu hình hoặc không có slug
+ * đó phải bị chặn trước cả xác thực cookie/token. Chỉ Host gốc
+ * (không có slug) hoặc slug được xác nhận là kho shared mới được
+ * đi theo đường kho chung; tuyệt đối không fallback khi mất sổ.
  *
  * Gateway, consumer và tầng phân phối không biết gì về cơ chế bên
  * dưới — chúng chỉ nhận `MessagingSocketIdentity | null`.
@@ -107,6 +92,9 @@ const SESSION_COOKIE_PATTERN = new RegExp(`(?:^|;\\s*)(?:__Secure-)?${BETTER_AUT
 @Injectable()
 export class MessagingSocketAuth {
   private readonly jwt: JwtService;
+  /** Host gốc đáng tin cậy lấy từ origin API cấu hình, KHÔNG từ request. */
+  private readonly publicRootHostname: string | null;
+  private readonly allowLocalRoot: boolean;
 
   constructor(
     @Inject(ConfigService) config: ConfigService,
@@ -117,6 +105,11 @@ export class MessagingSocketAuth {
     private readonly tenants: TenantsService,
   ) {
     this.jwt = new JwtService({ secret: config.getOrThrow<string>('JWT_SECRET') });
+    this.publicRootHostname = configuredApiHostname(config.get<string>('BETTER_AUTH_URL'));
+    const environment = config.get<string>('NODE_ENV');
+    // Chỉ test/dev mới nhận hostname loopback khi API không có public
+    // URL. Production thiếu BETTER_AUTH_URL thì ngoại lệ fail-closed.
+    this.allowLocalRoot = environment === 'test' || environment === 'development';
   }
 
   /**
@@ -132,55 +125,33 @@ export class MessagingSocketAuth {
    * log) thay vì được nuốt thành null — một handshake thuộc trung
    * tâm kho riêng không bao giờ được phục vụ lặng lẽ từ kho chung.
    *
-   * Khi phân giải trả `null` nhưng địa chỉ vẫn mang slug ứng
-   * viên, bước này phân biệt lại lý do qua `resolveTarget` (xem
-   * `isRoutingNotConfiguredForHost`): chỉ tổ hợp "tầng định tuyến
-   * chưa cấu hình" mới sinh cờ truyền xuống đường token; slug
-   * chưa đăng ký và trung tâm kho chung giữ nguyên đường kho
-   * chung như cũ.
+   * Khi Host có slug mà chưa thể phân giải hợp lệ, helper ném lỗi
+   * ngay trước khi đọc cookie hay token; không có lượt tra kho chung.
    */
   async authenticateHandshake(handshake: MessagingHandshake): Promise<MessagingSocketIdentity | null> {
-    const space = await resolveDedicatedSpace(this.spaceDb, handshake.headers['host']);
+    const hostHeader = handshake.headers['host'];
+    const host = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader;
+    const space = await resolveDedicatedSpace(this.spaceDb, hostHeader);
     if (space) await this.spaceDb.getKyselyForSpace(space.slug);
-    const routingNotConfigured = space ? false : await this.isRoutingNotConfiguredForHost(handshake.headers['host']);
     const viaCookie = await this.authenticateCookie(handshake.headers, space);
     if (viaCookie) return viaCookie;
-    return this.authenticate(extractHandshakeToken(handshake), space, routingNotConfigured);
+    // Host không có slug KHÔNG đủ chứng minh đây là hostname gốc.
+    // Chỉ so khớp chính xác với hostname API cấu hình từ env (hoặc
+    // loopback test/dev); tuyệt đối không tin Host bất kỳ hai nhãn.
+    const isRootHost = this.isTrustedRootHost(host);
+    return this.authenticate(extractHandshakeToken(handshake), space, isRootHost);
   }
 
   /**
-   * Phân biệt lý do phân giải không gian trả `null` cho một địa
-   * chỉ mang slug ứng viên: tầng định tuyến chưa cấu hình
-   * (`space_routing.not_configured`) hay các trường hợp đường kho
-   * chung thông thường (slug chưa đăng ký, trung tâm ở chế độ kho
-   * chung).
-   *
-   * `resolveDedicatedSpace` cố ý gộp cả ba trường hợp thành
-   * `null` cho tầng chiến lược xác thực dùng chung với HTTP, nên
-   * lớp này gọi lại `resolveTarget` trực tiếp trên slug ứng viên
-   * — đúng cách `SpaceContextGuard` phía HTTP phân biệt — thay vì
-   * đổi hành vi của helper dùng chung (đổi helper sẽ phá hợp đồng
-   * "chưa cấu hình thì app chạy như trước" của mọi đường HTTP
-   * trên deployment chưa cấu hình control plane). Lỗi phân giải
-   * ngoài hai mã đã biết ném ra nguyên trạng, fail-closed như
-   * mọi lỗi phân giải khác của lớp này.
-   *
-   * @param host - Giá trị header `Host` của handshake.
-   * @returns `true` chỉ khi bộ phân giải báo tầng định tuyến chưa
-   *   cấu hình cho slug ứng viên của địa chỉ này.
+   * Chỉ công nhận ngoại lệ Trang chính cho đúng hostname gốc được
+   * lấy từ cấu hình API, không từ dữ liệu do client tự cung cấp.
    */
-  private async isRoutingNotConfiguredForHost(host: string | string[] | undefined): Promise<boolean> {
-    const header = Array.isArray(host) ? host[0] : host;
-    const slug = extractSpaceSlugFromHost(header);
-    if (!slug) return false;
-    try {
-      await this.spaceDb.resolveTarget(slug);
-      return false;
-    } catch (err) {
-      if (err instanceof SpaceRoutingError && err.code === 'space_routing.not_configured') return true;
-      if (err instanceof SpaceRoutingError && err.code === 'space_routing.space_not_found') return false;
-      throw err;
-    }
+  private isTrustedRootHost(host: string | undefined): boolean {
+    if (extractSpaceSlugFromHost(host)) return false;
+    const hostname = hostnameFromHostHeader(host);
+    if (!hostname) return false;
+    if (this.publicRootHostname && hostname === this.publicRootHostname) return true;
+    return this.allowLocalRoot && ['localhost', '127.0.0.1', '[::1]'].includes(hostname);
   }
 
   /**
@@ -270,19 +241,20 @@ export class MessagingSocketAuth {
    *   platform không có tài khoản trong kho riêng, và danh tính
    *   của đường này thuộc kho chung nên `spaceSlug` trả về null.
    *
-   * Khi `routingNotConfigured` bật (địa chỉ mang slug ứng viên
-   * nhưng tầng định tuyến chưa cấu hình — xem
-   * `isRoutingNotConfiguredForHost`), token mang claim
-   * `centre_id` là bằng chứng phiên thuộc trung tâm kho riêng:
-   * deployment đang phục vụ mà không tra được sổ đăng ký là lỗi
-   * vận hành, nên từ chối TRƯỚC mọi lượt đọc tài khoản ở kho
-   * chung, đúng chốt của `SpaceContextGuard` phía HTTP. Token
-   * không mang claim giữ nguyên đường kho chung như cũ.
+   * Khi không có không gian dedicated (Host gốc hoặc Host shared),
+   * token mang centre_id chỉ được chấp nhận cho Trang chính tại
+   * hostname gốc, khi cả tid lẫn spaceId khớp dòng platform đã
+   * đăng ký. Các token trung tâm khác phải bị chặn TRƯỚC khi đọc
+   * user tại database shared, kể cả user còn bản sao legacy.
+   *
+   * Lỗi định tuyến Host (bao gồm mất cấu hình hoặc slug chưa đăng
+   * ký) được xử lý fail-closed ở `authenticateHandshake`, trước
+   * khi gọi tới phương thức xác thực token này.
    */
   async authenticate(
     token: string | undefined,
     space?: DedicatedSpace | null,
-    routingNotConfigured = false,
+    isRootHost = false,
   ): Promise<MessagingSocketIdentity | null> {
     if (!token) return null;
     let payload: { sub?: string; username?: string; scope?: unknown; sid?: unknown; tid?: unknown; centre_id?: unknown };
@@ -294,11 +266,6 @@ export class MessagingSocketAuth {
     // Cùng luật với JwtAuthStrategy phía REST: chỉ access token đăng
     // nhập (không scope) gắn với một phiên (sid) mới được chấp nhận.
     if (!payload.sub || payload.scope !== undefined || typeof payload.sid !== 'string') return null;
-    // Chốt fail-closed cho tổ hợp "định tuyến chưa cấu hình +
-    // claim centre_id" (khớp SpaceContextGuard): claim là bằng
-    // chứng phiên thuộc trung tâm kho riêng, không được rơi
-    // xuống lượt tra tài khoản ở kho chung ngay dưới đây.
-    if (routingNotConfigured && payload.centre_id !== undefined) return null;
     const sub = payload.sub;
     const tid = typeof payload.tid === 'string' ? payload.tid : undefined;
     let user: Awaited<ReturnType<typeof this.users.getByIdOrUndefined>>;
@@ -314,6 +281,22 @@ export class MessagingSocketAuth {
         return null;
       }
     } else {
+      if (payload.centre_id !== undefined) {
+        // JWT của trung tâm A/B KHÔNG thể xác thực ở Host gốc hoặc
+        // Host shared chỉ vì user còn trong kho chung sau di trú.
+        // Ngoại lệ Trang chính phải được xác minh bằng cả tenant
+        // hiệu lực và ID không gian trong sổ, giống REST.
+        if (!isRootHost || tid === undefined) return null;
+        const platform = await this.tenants.platformTenant();
+        if (tid !== platform.id) return null;
+        try {
+          const registered = await this.spaceDb.resolveTarget(platform.slug);
+          if (registered.spaceId !== payload.centre_id) return null;
+        } catch {
+          // Không có sổ đăng ký thì không được suy đoán phiên platform.
+          return null;
+        }
+      }
       user = await this.users.getByIdOrUndefined(sub);
     }
     if (!user || user.suspended || user.deleted) return null;
@@ -323,6 +306,37 @@ export class MessagingSocketAuth {
       tenantId: tid ?? null,
       spaceSlug: resolvedInSpace ? space!.slug : null,
     };
+  }
+}
+
+/**
+ * Host của origin API do deployment cấu hình (không nhận từ header).
+ * URL thiếu/sai định dạng không cấp ngoại lệ cho phiên Trang chính.
+ */
+function configuredApiHostname(origin: string | undefined): string | null {
+  if (!origin) return null;
+  try {
+    const url = new URL(origin);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return null;
+    return url.hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Phân tích Host request mà không cho phép URL chứa userinfo/path/query
+ * đánh lừa bộ so khớp. Chỉ tên host (không phải cổng) phải khớp origin
+ * đáng tin cậy vì reverse proxy có thể chuyển tiếp cổng khác.
+ */
+function hostnameFromHostHeader(host: string | undefined): string | null {
+  if (!host || host !== host.trim() || /[\\/\s@?#]/.test(host)) return null;
+  try {
+    const url = new URL(`http://${host}`);
+    if (url.username || url.password || url.pathname !== '/' || url.search || url.hash) return null;
+    return url.hostname.toLowerCase();
+  } catch {
+    return null;
   }
 }
 

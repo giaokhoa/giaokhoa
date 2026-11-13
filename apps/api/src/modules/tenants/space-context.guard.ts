@@ -8,7 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { AUTHENTICATED_VIA_BETTER_AUTH } from '../../common/better-auth-session.guard';
 import type { AuthenticatedUser } from '../../common/current-user.decorator';
-import { SpaceRoutingError, type ResolvedSpaceConnection } from '../../db/routing/space-connection-resolver';
+import type { ResolvedSpaceConnection } from '../../db/routing/space-connection-resolver';
 import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { PermissionEvaluator } from '../access/permission-evaluator.service';
 import { SKIP_SPACE_CONTEXT_KEY } from './skip-space-context.decorator';
@@ -26,20 +26,10 @@ import { TenantsRepository } from '@giaokhoa/db/repositories/tenants';
  *    ước tên miền con (xem `space-resolution.ts`). Địa chỉ không
  *    mang trung tâm → request đi đúng đường hiện tại, guard không
  *    chạm gì thêm.
- * 2. Phân giải ứng viên qua khung định tuyến (bộ đệm của khung đọc
- *    sổ đăng ký control plane). Slug chưa đăng ký → địa chỉ không
- *    thuộc trung tâm nào trong sổ: request vẫn đi đường hiện tại.
- *    Tầng định tuyến chưa được cấu hình (không có control plane)
- *    thì cho qua như địa chỉ thường KHI phiên không mang claim
- *    `centre_id` — giữ hợp đồng "chưa cấu hình thì app chạy như
- *    trước" của đợt khung; NHƯNG phiên mang claim `centre_id` là
- *    bằng chứng traffic thuộc trung tâm kho riêng, nên ở trường
- *    hợp đó tầng chưa cấu hình là lỗi vận hành ở deployment đang
- *    phục vụ kho riêng và guard fail-closed (ném lỗi ra) thay vì
- *    cho qua lặng lẽ. Mọi lỗi phân giải còn lại (bí mật/role của
- *    kho riêng lệch sổ) là lỗi cấu hình vận hành: ném ra nguyên
- *    trạng, fail-closed, thay vì im lặng phục vụ request bằng kho
- *    chung.
+ * 2. Phân giải ứng viên qua sổ đăng ký control plane. Host mang
+ *    slug chưa đăng ký hoặc tầng định tuyến chưa cấu hình đều là
+ *    lỗi bắt buộc từ chối; không có đường về kho chung. Host
+ *    không mang slug chỉ dành cho request bề mặt platform.
  * 3. Đường vận hành platform tường minh được miễn toàn bộ các bước
  *    sau: request mà tenant hiệu lực là tenant platform
  *    (tenant-zero) và người dùng là quản trị viên của site chính
@@ -115,29 +105,36 @@ export class SpaceContextGuard implements CanActivate {
     }>();
     const hostHeader = request.headers?.host;
     const slug = extractSpaceSlugFromHost(Array.isArray(hostHeader) ? hostHeader[0] : hostHeader);
-    if (!slug) return true;
-
-    let target: ResolvedSpaceConnection;
-    try {
-      target = await this.spaceDb.resolveTarget(slug);
-    } catch (err) {
-      if (err instanceof SpaceRoutingError && err.code === 'space_routing.space_not_found') {
-        return true;
-      }
-      if (err instanceof SpaceRoutingError && err.code === 'space_routing.not_configured') {
-        // Phiên mang claim `centre_id` là bằng chứng traffic thuộc
-        // trung tâm kho riêng: tầng định tuyến chưa cấu hình ở
-        // deployment đang phục vụ kho riêng là lỗi vận hành, phải
-        // fail-closed thay vì cho qua lặng lẽ sang kho chung.
-        // Phiên không mang claim giữ hợp đồng "chưa cấu hình thì
-        // app chạy như trước" của đợt khung.
-        if (request.user?.centreId !== undefined) {
-          throw err;
+    if (!slug) {
+      if (request.user?.centreId !== undefined) {
+        // Trang chính ở giai đoạn hiện tại vẫn phục vụ qua địa chỉ
+        // gốc dù dòng đăng ký của nó có thể mang kho riêng. Chỉ
+        // ngoại lệ đúng phiên tenant platform + định danh đăng ký
+        // của Trang chính; token trung tâm khác không được nhờ
+        // thiếu Host để đọc kho chung.
+        const platformTenant = await tenantAls.run({ platform: true }, () => this.repo.getPlatformTenant());
+        let platformRoot = false;
+        if (platformTenant && request.tenantId === platformTenant.id) {
+          try {
+            const target = await this.spaceDb.resolveTarget(platformTenant.slug);
+            platformRoot = target.spaceId === request.user.centreId;
+          } catch {
+            // Không xác minh được đích thì không cấp ngoại lệ.
+          }
         }
-        return true;
+        if (!platformRoot) {
+          throw new UnauthorizedException({
+            message: 'Centre session requires its registered centre address',
+            code: 'auth.centre_mismatch',
+          });
+        }
       }
-      throw err;
+      return true;
     }
+
+    // Host chỉ định một trung tâm phải có dòng đăng ký hợp lệ:
+    // slug giả hay sổ không khả dụng không được đổi đích sang kho chung.
+    const target: ResolvedSpaceConnection = await this.spaceDb.resolveTarget(slug);
 
     // Các tra cứu phục vụ quyết định miễn trừ chạy trong ngữ cảnh
     // platform tường minh như chính TenantGuard: ngoài ngữ cảnh

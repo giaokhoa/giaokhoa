@@ -219,6 +219,40 @@ describe('Cấp phát trung tâm + nhận diện (đầu-cuối)', () => {
     });
   });
 
+  it('role runtime của mỗi trung tâm không CONNECT được database của trung tâm kia', async () => {
+    const permissions = await withClient(clusterUrl('postgres'), async (admin) => {
+      const result = await admin.query<{
+        a_to_a: boolean; a_to_b: boolean; b_to_a: boolean; b_to_b: boolean;
+        a_super: boolean; a_bypass: boolean; b_super: boolean; b_bypass: boolean;
+      }>(
+        `SELECT has_database_privilege($1, $3, 'CONNECT') AS a_to_a,
+                has_database_privilege($1, $4, 'CONNECT') AS a_to_b,
+                has_database_privilege($2, $3, 'CONNECT') AS b_to_a,
+                has_database_privilege($2, $4, 'CONNECT') AS b_to_b,
+                (SELECT rolsuper FROM pg_roles WHERE rolname = $1) AS a_super,
+                (SELECT rolbypassrls FROM pg_roles WHERE rolname = $1) AS a_bypass,
+                (SELECT rolsuper FROM pg_roles WHERE rolname = $2) AS b_super,
+                (SELECT rolbypassrls FROM pg_roles WHERE rolname = $2) AS b_bypass`,
+        [centreA.connectionRole, centreB.connectionRole, centreA.databaseName, centreB.databaseName],
+      );
+      return result.rows[0]!;
+    });
+    expect(permissions).toMatchObject({
+      a_to_a: true, a_to_b: false, b_to_a: false, b_to_b: true,
+      a_super: false, a_bypass: false, b_super: false, b_bypass: false,
+    });
+    // Mật khẩu trong fixture này giống nhau: kết nối thất bại vì
+    // quyền PostgreSQL chứ không phải do đoán sai mật khẩu.
+    await expect(withClient(
+      clusterUrl(centreB.databaseName, centreA.connectionRole, DB_PASSWORD),
+      async (client) => client.query('SELECT 1'),
+    )).rejects.toThrow(/permission denied/);
+    await expect(withClient(
+      clusterUrl(centreA.databaseName, centreB.connectionRole, DB_PASSWORD),
+      async (client) => client.query('SELECT 1'),
+    )).rejects.toThrow(/permission denied/);
+  });
+
   it('token lời mời của trung tâm này không kích hoạt được ở trung tâm khác', async () => {
     const res = await http(app)
       .post('/api/v1/centres/activate-invite')

@@ -264,12 +264,12 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
 
   const sockets: Socket[] = [];
 
-  /** Tạo một socket hướng tới địa chỉ của trung tâm kho riêng (Host + tuỳ chọn cookie/token). */
-  function centreSocket(opts: { cookieToken?: string; token?: string }): Socket {
+  /** Tạo socket trên Host bất kỳ để kiểm thử cùng JWT ở các ranh giới hostname. */
+  function socketAtHost(host: string, opts: { cookieToken?: string; token?: string }): Socket {
     const socket = io(`${base}/messaging`, {
       auth: opts.token ? { token: opts.token } : undefined,
       extraHeaders: {
-        Host: HOST,
+        Host: host,
         ...(opts.cookieToken ? { Cookie: signedBetterAuthCookie(opts.cookieToken) } : {}),
       },
       transports: ['websocket'],
@@ -278,6 +278,11 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
     });
     sockets.push(socket);
     return socket;
+  }
+
+  /** Tạo socket hướng tới hostname của trung tâm kho riêng. */
+  function centreSocket(opts: { cookieToken?: string; token?: string }): Socket {
+    return socketAtHost(HOST, opts);
   }
 
   /** Chờ socket nối thành công; lỗi xác thực phía server ngắt kết nối ngay. */
@@ -409,16 +414,16 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
       await copyMemberToCentre(member.id, tenantId);
     }
 
-    // Token của A cho tenant của trung tâm qua đường chuyển tenant
-    // như người dùng thật — token này mang claim centre_id. Token
-    // cũ không claim được ký tay cùng hình dạng phiên cấp trước khi
-    // trung tâm tách kho.
-    const apexA = await helpers.login(app, memberA.username, helpers.STRONG_PASSWORD);
-    const switched = (await must(
-      await helpers.http(app).post(`/api/v1/auth/switch-tenant/${tenantId}`).set(auth(apexA.accessToken)),
-      'switch A to tenant',
+    // Phiên của A được cấp từ kho A qua hostname thật, không
+    // chuyển tenant ở site chính rồi tiếp tục dùng token trung tâm
+    // tại host khác. Token cũ không claim vẫn được ký thủ công
+    // để kiểm chứng hành vi từ chối phiên tiền di trú.
+    const centreLoginA = (await must(
+      await helpers.http(app).post('/api/v1/auth/token').set('Host', HOST)
+        .send({ username: memberA.username, password: helpers.STRONG_PASSWORD }),
+      'login member A at centre',
     )) as { accessToken: string };
-    tokenWithClaim = switched.accessToken;
+    tokenWithClaim = centreLoginA.accessToken;
     const jwtService = app.get(JwtService);
     tokenWithoutClaim = await jwtService.signAsync({
       sub: memberAId,
@@ -436,8 +441,11 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
       .send({ type: 2, memberIds: [memberAId, memberBId], name: 'Nhóm kho riêng 587' });
     expect(conv.status).toBe(201);
     convId = (conv.body as { id: string }).id;
+    // Dữ kiện đang được tạo ở shared TRƯỚC khi sao sang kho A:
+    // dùng phiên legacy không centre_id tại site chính, tránh
+    // chuyển token kho A sang host shared chỉ để chuẩn bị fixture.
     const sent = await helpers.http(app).post(`/api/v1/messages/conversations/${convId}/messages`)
-      .set(auth(tokenWithClaim))
+      .set(auth(tokenWithoutClaim))
       .send({ text: MESSAGE_TEXT });
     expect(sent.status).toBe(201);
     // Hội thoại do quản trị tạo nên mang tenant của trang chính;
@@ -572,5 +580,25 @@ describe('Socket realtime tại địa chỉ trung tâm ở kho riêng (đầu-c
     const socket = centreSocket({ token: tokenWithoutClaim });
     await awaitRejected(socket);
     socket.disconnect();
+  });
+
+  it('JWT trung tâm A tại hostname gốc bị ngắt dù user vẫn có bản sao legacy trong database chung (P1 PR #21)', async () => {
+    // Thêm lại tạm thời user đã chuyển kho để mô phỏng giai đoạn
+    // dữ kiện legacy vẫn còn ở shared: nếu auth socket không kiểm
+    // centre_id TRƯỚC khi tra user, handshake này sẽ được cho qua.
+    const centreUrl = clusterUrl(CENTRE_DATABASE, CENTRE_ROLE, CENTRE_PASSWORD);
+    expect(await countRows(process.env.DATABASE_URL!, 'users', 'id', memberAId)).toBe(0);
+    await copyRowById(centreUrl, process.env.DATABASE_URL!, 'users', memberAId);
+    try {
+      expect(await countRows(process.env.DATABASE_URL!, 'users', 'id', memberAId)).toBe(1);
+      const socket = socketAtHost('giaokhoa.example', { token: tokenWithClaim });
+      await awaitRejected(socket);
+      socket.disconnect();
+    } finally {
+      await withClient(process.env.DATABASE_URL!, async (client) => {
+        await client.query("SELECT set_config('app.platform', 'on', false)");
+        await client.query('DELETE FROM users WHERE id = $1', [memberAId]);
+      });
+    }
   });
 });

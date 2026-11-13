@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@giaokhoa/ui/component
 import { Empty, EmptyHeader, EmptyTitle } from '@giaokhoa/ui/components/empty';
 import { Field, FieldGroup, FieldLabel } from '@giaokhoa/ui/components/field';
 import { Input } from '@giaokhoa/ui/components/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@giaokhoa/ui/components/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@giaokhoa/ui/components/table';
 import { useTranslation } from 'react-i18next';
 import { ErrorAlert } from '#components/error-alert';
@@ -59,7 +58,7 @@ export function AdminTenantsPage() {
   const platformMode = perms.canViewPlatformTenants;
   const [selectedTenantId, setSelectedTenantId] = useState('');
   const [message, setMessage] = useState<string | null>(null);
-  const [tenantDraft, setTenantDraft] = useState({ name: '', slug: '', kind: 'center' as 'school' | 'center', plan: '' });
+  const [tenantDraft, setTenantDraft] = useState({ name: '', slug: '', kind: 'school' as const, plan: '' });
   const [existingUserId, setExistingUserId] = useState('');
   const [newUserDraft, setNewUserDraft] = useState({ username: '', email: '', password: '', firstName: '', lastName: '' });
 
@@ -132,7 +131,7 @@ export function AdminTenantsPage() {
       {
         onSuccess: (tenant) => {
           setSelectedTenantId(tenant.id);
-          setTenantDraft({ name: '', slug: '', kind: 'center', plan: '' });
+          setTenantDraft({ name: '', slug: '', kind: 'school', plan: '' });
           setMessage(t('tenantCreated'));
         },
         onError: () => setMessage(t('tenantCreateFailed')),
@@ -323,6 +322,7 @@ export function AdminTenantsPage() {
               <CardTitle>{t('tenantCreateTitle')}</CardTitle>
             </CardHeader>
             <CardContent>
+              <p className="mb-4 text-sm text-muted-foreground">{t('tenantProvisioningHint')}</p>
               <form onSubmit={(event) => void createTenant(event)}>
                 <FieldGroup>
                   <Field>
@@ -345,21 +345,7 @@ export function AdminTenantsPage() {
                   </Field>
                   <Field>
                     <FieldLabel id="tenant-kind-label">{t('tenantKind')}</FieldLabel>
-                    <Select
-                      items={{ center: t('tenantKindCenter'), school: t('tenantKindSchool') }}
-                      value={tenantDraft.kind}
-                      onValueChange={(value) => {
-                        if (value === 'school' || value === 'center') setTenantDraft({ ...tenantDraft, kind: value });
-                      }}
-                    >
-                      <SelectTrigger aria-labelledby="tenant-kind-label" className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="center">{t('tenantKindCenter')}</SelectItem>
-                        <SelectItem value="school">{t('tenantKindSchool')}</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <p className="text-sm" aria-labelledby="tenant-kind-label">{t('tenantKindSchool')}</p>
                   </Field>
                   <Field>
                     <FieldLabel htmlFor="tenant-plan">{t('tenantPlanOptional')}</FieldLabel>

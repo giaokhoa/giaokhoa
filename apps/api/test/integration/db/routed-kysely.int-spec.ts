@@ -8,8 +8,8 @@
  *     handle kho riêng khác instance cho slug kho riêng, và cùng
  *     instance khi gọi lại (chuẩn bị có nhớ);
  *   - `routedKysely` đọc/ghi đúng kho theo `spaceSlug` trong ALS,
- *     ngoài ALS thì về kho chung, slug chưa chuẩn bị thì về kho
- *     chung (không ném);
+ *     ngoài ALS thì về kho chung; slug chưa chuẩn bị phải ném
+ *     lỗi fail-closed, không được đọc hay ghi vào kho chung;
  *   - `transaction()` qua facade commit và rollback đúng;
  *   - getter `schema` qua facade tạo/xoá bảng thăm dò được thật
  *     trên kho hiệu lực (không bị đóng băng vào handle lúc tạo
@@ -192,15 +192,18 @@ describe('Facade Kysely định tuyến phía API (integration)', () => {
     expect(await rowsIn(centreAUrl, TENANT_SHARED_ID)).toBe(0);
   });
 
-  it('slug chưa chuẩn bị thì routedKysely rơi về kho chung chứ không ném', async () => {
-    await tenantAls.run({ spaceSlug: 'slug-chua-chuan-bi-639' }, async () => {
-      const rows = await service.routedKysely
-        .selectFrom('tenants')
-        .selectAll()
-        .where('id', '=', TENANT_SHARED_ID)
+  it('slug chưa chuẩn bị không được đọc hay ghi vào kho chung', async () => {
+    const foreignTenantId = '01963900-0000-7000-8000-0000000000f6';
+    await expect(tenantAls.run({ spaceSlug: 'slug-chua-chuan-bi-639' }, async () => {
+      await service.routedKysely
+        .insertInto('tenants')
+        .values({ id: foreignTenantId, slug: 'tenant-gia-639', name: 'Tenant gia', kind: 'center' })
         .execute();
-      expect(rows).toHaveLength(1);
-    });
+    })).rejects.toMatchObject({ code: 'space_routing.not_prepared' });
+    expect(await rowsIn(sharedUrl, foreignTenantId)).toBe(0);
+    await expect(tenantAls.run({ spaceSlug: 'slug-chua-chuan-bi-639' }, async () =>
+      service.routedKysely.selectFrom('tenants').selectAll().where('id', '=', TENANT_SHARED_ID).execute(),
+    )).rejects.toMatchObject({ code: 'space_routing.not_prepared' });
   });
 
   it('transaction qua facade commit và rollback đúng trên kho hiệu lực', async () => {
