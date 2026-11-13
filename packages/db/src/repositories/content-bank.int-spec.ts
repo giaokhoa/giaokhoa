@@ -26,6 +26,9 @@ beforeAll(async () => {
   pool = new Pool({ connectionString: url });
   db = createCentreKysely(pool);
   repo = new ContentBankRepository(db);
+  await db.insertInto('tenants').values({
+    id: TENANT_ID, slug: 'g6-content-bank', name: 'Tenant G6', kind: 'center',
+  }).execute();
 }, 300_000);
 
 afterAll(async () => {
@@ -36,7 +39,7 @@ afterAll(async () => {
 describe('ContentBankRepository (Kysely)', () => {
   it('chèn học liệu rồi đọc lại: sizeBytes là number (chuyển từ int8 string ở biên), các cột jsonb nguyên vẹn kể cả mảng', async () => {
     const created = await repo.insert({
-      name: 'Học liệu G6', contextId: CONTEXT_ID, creatorId: CREATOR_ID,
+      name: 'Học liệu G6', tenantId: TENANT_ID, contextId: CONTEXT_ID, creatorId: CREATOR_ID,
       sizeBytes: 1234567, outcomeIds: ['o-1', 'o-2'], keywords: ['toán', 'lớp 3'],
       configData: { pages: 12 }, reviewChecklist: [{ key: 'copyright', ok: true }],
     });
@@ -51,7 +54,7 @@ describe('ContentBankRepository (Kysely)', () => {
   });
 
   it('học liệu không có sizeBytes đọc lại sizeBytes là null chứ không phải NaN hay 0', async () => {
-    const created = await repo.insert({ name: 'Không dung lượng', contextId: CONTEXT_ID, creatorId: CREATOR_ID });
+    const created = await repo.insert({ name: 'Không dung lượng', tenantId: TENANT_ID, contextId: CONTEXT_ID, creatorId: CREATOR_ID });
     expect(created.sizeBytes).toBeNull();
   });
 
@@ -64,11 +67,11 @@ describe('ContentBankRepository (Kysely)', () => {
       context_id: CONTEXT_ID, name: 'Môn lọc B', slug: 'loc-b-g6',
     }).returning(['id']).execute();
     await repo.insert({
-      name: 'Lọc A', contextId: CONTEXT_ID, creatorId: CREATOR_ID,
+      name: 'Lọc A', tenantId: TENANT_ID, contextId: CONTEXT_ID, creatorId: CREATOR_ID,
       subjectId: subjectA!.id, grade: 3, reviewStatus: 'approved',
     });
     await repo.insert({
-      name: 'Lọc B', contextId: CONTEXT_ID, creatorId: CREATOR_ID,
+      name: 'Lọc B', tenantId: TENANT_ID, contextId: CONTEXT_ID, creatorId: CREATOR_ID,
       subjectId: subjectB!.id, grade: 4, reviewStatus: 'pending',
     });
     const byGrade = await repo.listFiltered({ grade: 3 });
@@ -81,7 +84,7 @@ describe('ContentBankRepository (Kysely)', () => {
 
   it('update áp một phần: trường truyền vào đổi, trường vắng mặt giữ nguyên, jsonb ghi lại đúng', async () => {
     const created = await repo.insert({
-      name: 'Sửa một phần', contextId: CONTEXT_ID, creatorId: CREATOR_ID, keywords: ['cũ'],
+      name: 'Sửa một phần', tenantId: TENANT_ID, contextId: CONTEXT_ID, creatorId: CREATOR_ID, keywords: ['cũ'],
     });
     await repo.update(created.id, { name: 'Đã sửa', keywords: ['mới', 'bổ sung'] });
     const read = await repo.get(created.id);
@@ -91,10 +94,7 @@ describe('ContentBankRepository (Kysely)', () => {
   });
 
   it('listCohortsForUser trả đúng CohortRow của các cohort user là thành viên, isCohortMember khớp theo từng phía', async () => {
-    // cohort.tenant_id là FK thật tới tenants: dựng tenant trước.
-    await db.insertInto('tenants').values({
-      id: TENANT_ID, slug: 'g6-content-bank', name: 'Tenant G6', kind: 'center',
-    }).execute();
+    /** Tenant fixture đã tồn tại; cohort và học liệu cùng thuộc trung tâm này. */
     const [cohort] = await db.insertInto('cohort').values({
       tenant_id: TENANT_ID, name: 'Tổ Toán', context_id: CONTEXT_ID,
     }).returning(['id']).execute();

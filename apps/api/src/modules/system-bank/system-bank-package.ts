@@ -89,7 +89,7 @@ export function canonicalizeJson(value: unknown): string {
  * @param pkg - Gói phiên bản cần băm.
  * @returns Checksum hex 64 ký tự.
  */
-export function checksumPackage(pkg: SystemQuestionPackage): string {
+export function checksumPackage(pkg: unknown): string {
   return createHash('sha256').update(canonicalizeJson(pkg), 'utf8').digest('hex');
 }
 

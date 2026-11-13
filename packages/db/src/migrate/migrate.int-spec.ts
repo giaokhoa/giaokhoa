@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client, Pool } from 'pg';
 import { Migrator, type MigrationProvider } from 'kysely/migration';
-import { Kysely, PostgresDialect } from 'kysely';
+import { Kysely, PostgresDialect, sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-support/build-test-database';
 import { FrozenSqlProvider, listMigrationNames } from './frozen-sql-provider';
@@ -200,12 +200,12 @@ describe('bộ máy migration của package cho ba kho', () => {
     await verifyDb.destroy().catch(() => undefined);
     expect(result.ok).toBe(true);
     expect(result.tables).toBe(204);
-    expect(result.policies).toBe(23);
-    expect(result.indexes).toBe(419);
+    expect(result.policies).toBe(25);
+    expect(result.indexes).toBe(420);
     expect(result.journalRows).toBe(MIGRATION_STORES.centre.expected.journalRows);
     expect(await countPublic(centreUrl, 'tables')).toBe(204);
-    expect(await countPublic(centreUrl, 'policies')).toBe(23);
-    expect(await countPublic(centreUrl, 'indexes')).toBe(419);
+    expect(await countPublic(centreUrl, 'policies')).toBe(25);
+    expect(await countPublic(centreUrl, 'indexes')).toBe(420);
   });
 
   it('hàm đọc nhật ký chỉ đọc kysely_migration: database trống trả tập rỗng, nhật ký cũ bị bỏ qua, nhật ký Kysely trả đúng tập tên', async () => {
@@ -453,4 +453,100 @@ const { Migrator } = require('kysely/migration');
       await db.destroy().catch(() => undefined);
     }
   }, 300_000);
+
+  it('nâng cấp context cá nhân/trường/tổ bằng chứng cứ tenant, từ chối bản mơ hồ và áp RLS với role không BYPASSRLS', async () => {
+    const database = 'giaokhoa_db_material_upgrade_16';
+    const url = await freshDatabase(database);
+    const pool = new Pool({ connectionString: url, max: 1 });
+    const db = new Kysely({ dialect: new PostgresDialect({ pool }) });
+    const role = `g16_migration_${process.pid}`;
+    const tenantA = '01961300-0000-7000-8000-000000000001';
+    const platform = '01961300-0000-7000-8000-000000000002';
+    const contextA = '01961300-0000-7000-8000-000000000003';
+    const contextPersonal = '01961300-0000-7000-8000-000000000004';
+    const tenantB = '01961300-0000-7000-8000-000000000005';
+    const root = '01961300-0000-7000-8000-000000000006';
+    const cohortId = '01961300-0000-7000-8000-000000000007';
+    const creatorA = '01961300-0000-7000-8000-000000000008';
+    const creatorB = '01961300-0000-7000-8000-000000000009';
+    const creatorAmbiguous = '01961300-0000-7000-8000-00000000000a';
+    const creatorPlatform = '01961300-0000-7000-8000-00000000000b';
+    let createdRole = false;
+    try {
+      const dir = packageMigrationsDir('centre');
+      const priorNames = listMigrationNames(dir).filter((name) => name !== '20261113160000_system_material_references');
+      const before = await new Migrator({ db, provider: providerOnly(dir, priorNames) }).migrateToLatest();
+      expect(before.error).toBeUndefined();
+      await sql`insert into tenants (id, name, slug, kind) values
+        (${tenantA}, 'Trung tâm A', 'upgrade-a', 'school'),
+        (${tenantB}, 'Trung tâm B', 'upgrade-b', 'school'),
+        (${platform}, 'Trang chính', 'upgrade-platform', 'platform')`.execute(db);
+      await sql`insert into users (id, username, email) values
+        (${creatorA}, 'upgrade-a', 'upgrade-a@school.test'),
+        (${creatorB}, 'upgrade-b', 'upgrade-b@school.test'),
+        (${creatorAmbiguous}, 'upgrade-ambiguous', 'upgrade-ambiguous@school.test'),
+        (${creatorPlatform}, 'upgrade-platform', 'upgrade-platform@school.test')`.execute(db);
+      await sql`insert into tenant_memberships (tenant_id, user_id) values
+        (${tenantA}, ${creatorA}), (${tenantB}, ${creatorB}),
+        (${tenantA}, ${creatorAmbiguous}), (${tenantB}, ${creatorAmbiguous}),
+        (${platform}, ${creatorPlatform})`.execute(db);
+      await sql`insert into context (id, context_level, instance_id, path, depth) values
+        (${root}, 10, null, ${'/' + root}, 1),
+        (${contextA}, 20, ${tenantA}, ${'/' + root + '/' + contextA}, 2),
+        (${contextPersonal}, 30, ${creatorA}, ${'/' + root + '/' + contextPersonal}, 2)`.execute(db);
+      await sql`insert into cohort (id, tenant_id, name, context_id) values
+        (${cohortId}, ${tenantA}, 'Tổ A', ${root})`.execute(db);
+      const personal = await sql<{ id: string }>`insert into content_bank_content (name, context_id, creator_id)
+        values ('Cá nhân A trước nâng cấp', ${contextPersonal}, ${creatorA}) returning id`.execute(db);
+      await sql`insert into content_bank_content (name, context_id, creator_id, scope, space_id) values
+        ('Neo tenant A', ${contextA}, ${creatorA}, 'personal', null),
+        ('Trường A cũ', ${root}, ${creatorA}, 'school', null),
+        ('Trường B cũ', ${root}, ${creatorB}, 'school', null),
+        ('Tổ A cũ', ${root}, ${creatorAmbiguous}, 'org', ${cohortId}),
+        ('Trang chính có chủ', ${root}, ${creatorPlatform}, 'personal', null),
+        ('Chưa xác định được chủ', ${root}, ${creatorAmbiguous}, 'school', null)`.execute(db);
+      // File cũ neo ở USER nằm dưới hệ thống phải kế thừa sở hữu của học liệu, không suy từ context.
+      await sql`insert into files (content_hash, context_id, component, file_area, item_id, file_name, file_size)
+        values (${'a'.repeat(64)}, ${contextPersonal}, 'core_contentbank', 'content', ${personal.rows[0]!.id}, 'old.pdf', 4)`.execute(db);
+      await sql.raw(`CREATE ROLE "${role}" NOLOGIN NOBYPASSRLS`).execute(db);
+      createdRole = true;
+      await sql.raw(`GRANT USAGE, CREATE ON SCHEMA public TO "${role}"`).execute(db);
+      await sql.raw(`GRANT ALL ON ALL TABLES IN SCHEMA public TO "${role}"`).execute(db);
+      await sql.raw(`ALTER TABLE content_bank_content OWNER TO "${role}"`).execute(db);
+      await sql.raw(`ALTER TABLE resources OWNER TO "${role}"`).execute(db);
+      await sql.raw(`SET ROLE "${role}"`).execute(db);
+      await sql`select set_config('app.platform', 'off', false), set_config('app.tenant_id', '', false)`.execute(db);
+      expect((await sql`select id from tenants`.execute(db)).rows).toEqual([]);
+
+      const ambiguous = await new Migrator({ db, provider: new FrozenSqlProvider(dir) }).migrateToLatest();
+      expect(String(ambiguous.error)).toContain('contentbank.legacy_owner_unresolved');
+      // Thất bại rollback cả thay đổi schema: không được gán nhầm về Trang chính.
+      expect((await sql<{ count: number }>`select count(*)::int as count from information_schema.columns
+        where table_name = 'content_bank_content' and column_name = 'tenant_id'`.execute(db)).rows[0]?.count).toBe(0);
+      await sql`delete from content_bank_content where name = 'Chưa xác định được chủ'`.execute(db);
+      const upgrade = await new Migrator({ db, provider: new FrozenSqlProvider(dir) }).migrateToLatest();
+      expect(upgrade.error).toBeUndefined();
+      expect((await sql<{ value: string }>`select current_setting('app.platform', true) as value`.execute(db)).rows[0]?.value).toBe('off');
+      expect((await sql`select id from content_bank_content`.execute(db)).rows).toEqual([]);
+      await sql`select set_config('app.tenant_id', ${tenantA}, false)`.execute(db);
+      expect((await sql<{ name: string }>`select name from content_bank_content order by name`.execute(db)).rows.map((x) => x.name)).toEqual([
+        'Cá nhân A trước nâng cấp', 'Neo tenant A', 'Tổ A cũ', 'Trường A cũ',
+      ]);
+      expect((await sql<{ item_id: string }>`select item_id from files where item_id = ${personal.rows[0]!.id}`.execute(db)).rows).toEqual([{ item_id: personal.rows[0]!.id }]);
+      await sql`select set_config('app.tenant_id', ${tenantB}, false)`.execute(db);
+      expect((await sql<{ name: string }>`select name from content_bank_content`.execute(db)).rows).toEqual([{ name: 'Trường B cũ' }]);
+      await sql`select set_config('app.tenant_id', ${platform}, false)`.execute(db);
+      expect((await sql<{ name: string }>`select name from content_bank_content`.execute(db)).rows).toEqual([{ name: 'Trang chính có chủ' }]);
+    } finally {
+      await sql`RESET ROLE`.execute(db);
+      await db.destroy();
+      await dropTestDatabase(adminUrl, database);
+      if (createdRole) {
+        const admin = new Client({ connectionString: adminUrl });
+        await admin.connect();
+        try { await admin.query(`DROP ROLE "${role}"`); } finally { await admin.end(); }
+      }
+    }
+  });
+
 });

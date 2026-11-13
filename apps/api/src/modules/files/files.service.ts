@@ -204,18 +204,45 @@ export class FilesService {
   }
 
   /**
-   * Legacy giữ key vật lý cũ để tương thích, nhưng chữ ký HMAC phải
-   * mang miền sở hữu ĐANG PHỤC VỤ. Không tái sử dụng chữ ký legacy ở
-   * một host khác, kể cả khi hai database có cùng file id.
+   * Scope của chữ ký HMAC: file thường dùng miền vật lý, file legacy dùng
+   * miền hiệu lực của host. Riêng học liệu có thêm tenant sở hữu và slug host,
+   * kể cả khi hai trung tâm dùng chung kho vật lý `bank-system`. Nhờ đó
+   * chữ ký phát ở host A không thể chuyển sang B hoặc host gốc.
+   *
+   * @param file Bản ghi tệp đã đọc từ đúng kho định tuyến.
+   * @param ownerTenantId Tenant học liệu, chỉ có với `core_contentbank`.
+   * @returns Khoá scope ký (không dùng làm khoá lưu trữ byte).
+   */
+  private async signatureScope(file: FileRow, ownerTenantId?: string): Promise<string> {
+    const domain = file.storageDomain === LEGACY_FILE_DOMAIN
+      ? await this.currentStorageDomain() : file.storageDomain;
+    return ownerTenantId
+      ? `${domain}.contentbank.${ownerTenantId}.${tenantAls.getStore()?.spaceSlug ?? 'root'}`
+      : domain;
+  }
+
+  /**
+   * Chuẩn bị metadata phát URL ký: `createSignedUrl` đã kiểm tenant/capability,
+   * đường ảnh câu hỏi đã qua cổng hiển thị câu hỏi. Tệp học liệu được ký
+   * thêm tenant/host; file không thuộc kho học liệu giữ chữ ký cũ.
    */
   private async fileForSigning(file: FileRow): Promise<FileRow & { signingDomain?: string }> {
-    return file.storageDomain === LEGACY_FILE_DOMAIN
-      ? { ...file, signingDomain: await this.currentStorageDomain() }
-      : file;
+    if (file.storageDomain !== LEGACY_FILE_DOMAIN && file.component !== 'core_contentbank') return file;
+    const owner = file.component === 'core_contentbank' ? tenantAls.getStore()?.tenantId : undefined;
+    return { ...file, signingDomain: await this.signatureScope(file, owner) };
   }
 
   /** Chặn metadata từ miền khác, kể cả các trung tâm dùng chung database. */
   private async canAccessDomain(file: FileRow): Promise<boolean> {
+    /** File học liệu riêng trên kho chung vẫn thuộc đúng tenant, kể cả khi byte cùng miền bank-system. */
+    if (file.component === 'core_contentbank') {
+      const owner = file.itemId ? await this.repo.contentBankTenant(file.itemId) : undefined;
+      if (!owner || owner !== tenantAls.getStore()?.tenantId) return false;
+      // File học liệu cũ neo tại USER/SYSTEM không có tenant trên context.
+      // Chỉ file gắn vào bản ghi học liệu cùng tenant mới được qua cổng legacy;
+      // các component khác vẫn phải xác nhận tenant từ cây context gốc.
+      if (file.storageDomain === LEGACY_FILE_DOMAIN) return true;
+    }
     if (file.storageDomain === LEGACY_FILE_DOMAIN) return this.canReadLegacy(file);
     return file.storageDomain === await this.currentStorageDomain();
   }
@@ -367,13 +394,56 @@ export class FilesService {
     return this.signing.createDownloadTarget(await this.fileForSigning(file));
   }
   /**
-   * Kiểm chữ ký URL (ủy quyền cho FileSigningService).
+   * Đường tải URL ký công khai: trước hết chỉ đọc metadata trong scope
+   * vận hành *tạm thời* của kho định tuyến, sau đó xác minh HMAC/hạn dùng
+   * gắn file ID, miền, tenant học liệu và host; chỉ đọc byte khi đủ chốt.
+   * Không gọi `getFile` theo tenant mặc định của khách ẩn danh (platform),
+   * vì route public không có phiên của chủ học liệu. Scope vận hành không
+   * truyền ra ngoài, các route metadata/stream/xoá vẫn dùng `getFile`.
+   *
+   * @param fileId ID file trong chính kho được SpaceContextGuard chuẩn bị.
+   * @param token Chữ ký HMAC được cấp sau cổng capability của API.
+   * @returns Metadata và byte chỉ sau khi chữ ký, miền và host đều khớp.
+   * @throws UnauthorizedException nếu thiếu, sai hoặc hết hạn chữ ký.
+   * @throws NotFoundException nếu file không ở đúng miền/host/chủ sở hữu.
    */
-  async verifySignature(fileId: string, token: string | undefined): Promise<void> {
-    const file = await this.getFile(fileId);
-    const domain = file.storageDomain === LEGACY_FILE_DOMAIN
-      ? await this.currentStorageDomain() : file.storageDomain;
-    this.signing.verify(fileId, domain, token);
+  async readSignedContent(fileId: string, token: string | undefined): Promise<{ file: FileRow; data: Buffer }> {
+    const slug = tenantAls.getStore()?.spaceSlug;
+    const platformScope = { platform: true, ...(slug ? { spaceSlug: slug } : {}) };
+    const file = await tenantAls.run(platformScope, () => this.repo.getById(fileId));
+    if (!file) throw new NotFoundException({ message: `File ${fileId} not found`, code: 'file.not_found' });
+
+    // Chỉ tra chủ của học liệu trong đúng kho dưới quyền vận hành tạm
+    // thời; ID nguồn không có bản ghi sở hữu thì fail-closed.
+    const owner = file.component === 'core_contentbank' && file.itemId
+      ? await tenantAls.run(platformScope, () => this.repo.contentBankTenant(file.itemId!))
+      : undefined;
+    if (file.component === 'core_contentbank' && !owner) {
+      throw new NotFoundException({ message: `File ${fileId} not found`, code: 'file.not_found' });
+    }
+    // Miền vật lý không khớp phải 404 trước khi kiểm HMAC, giữ bất biến
+    // các đường ID sai miền không xác nhận sự tồn tại của file bên kia.
+    // File legacy được ký bằng miền host hiệu lực thay vì chuỗi 'legacy'.
+    if (file.storageDomain !== LEGACY_FILE_DOMAIN && file.storageDomain !== await this.currentStorageDomain()) {
+      throw new NotFoundException({ message: `File ${fileId} not found`, code: 'file.not_found' });
+    }
+    this.signing.verify(fileId, await this.signatureScope(file, owner), token);
+
+    if (file.component === 'core_contentbank') {
+      if (slug) {
+        if (!this.spaceDb) throw new NotFoundException({ message: `File ${fileId} not found`, code: 'file.not_found' });
+        const tenant = await tenantAls.run(platformScope, () =>
+          this.spaceDb!.routedKysely.selectFrom('tenants').select('id').where('slug', '=', slug).executeTakeFirst());
+        if (!tenant || tenant.id !== owner) {
+          throw new NotFoundException({ message: `File ${fileId} not found`, code: 'file.not_found' });
+        }
+      }
+    } else if (!(await this.canAccessDomain(file))) {
+      // Giữ nguyên cổng context/miền của file không phải học liệu;
+      // thay đổi này không làm mọi loại file trở thành file public.
+      throw new NotFoundException({ message: `File ${fileId} not found`, code: 'file.not_found' });
+    }
+    return { file, data: await this.storage.get(file.storageDomain, file.contentHash) };
   }
   /**
    * Đọc nội dung file (sau kiểm quyền) để trả về/tải xuống.

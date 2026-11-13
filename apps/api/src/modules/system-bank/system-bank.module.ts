@@ -16,6 +16,12 @@ import { SystemBankService } from './system-bank.service';
 import { SystemBankSubmissionsService } from './system-bank-submissions.service';
 import { SystemBankSubmissionsController } from './system-bank-submissions.controller';
 import { SystemBankMediaService } from './system-bank-media.service';
+import { SystemMaterialsRepository } from '@giaokhoa/db/repositories/system-materials';
+import { SystemMaterialReferencesRepository } from '@giaokhoa/db/repositories/system-material-references';
+import { ContentBankModule } from '../content-bank/content-bank.module';
+import { CoursesModule } from '../courses/courses.module';
+import { SystemMaterialsService } from './system-materials.service';
+import { SystemMaterialsController } from './system-materials.controller';
 
 /**
  * SystemBankModule (issue #585): kho ngân hàng hệ thống trên database riêng phía platform — bản chính tập trung, phiên bản bất biến, giáo viên tìm câu qua API và nhập bản chụp đúng phiên bản vào kho trung tâm. Import AccessModule để dùng PermissionEvaluator/ContextsService cho cổng quản trị platform; xuất SystemBankService để các lát sau
@@ -29,10 +35,22 @@ import { SystemBankMediaService } from './system-bank-media.service';
  *   KHÔNG GIAN (`SpaceDatabaseService.routedKysely` qua SpaceRoutingModule): hai handle giữ tách biệt tuyệt đối, không gộp và không fallback qua nhau.
  */
 @Module({
-  imports: [AccessModule, QuestionsModule, TenantsModule, SpaceRoutingModule, FilesModule],
-  controllers: [SystemBankController, SystemBankDiscoveryController, SystemBankPackagesController, SystemBankSubmissionsController],
+  imports: [AccessModule, QuestionsModule, TenantsModule, SpaceRoutingModule, FilesModule, ContentBankModule, CoursesModule],
+  controllers: [SystemBankController, SystemBankDiscoveryController, SystemBankPackagesController, SystemBankSubmissionsController, SystemMaterialsController],
   providers: [
     SystemBankConnection,
+    {
+      provide: SystemMaterialsRepository,
+      useFactory: (connection: SystemBankConnection) => new SystemMaterialsRepository(connection.kysely, () =>
+        new ServiceUnavailableException({ message: 'System bank is not configured', code: 'system_bank.not_configured' })),
+      inject: [SystemBankConnection],
+    },
+    {
+      provide: SystemMaterialReferencesRepository,
+      useFactory: (spaceDb: SpaceDatabaseService) => new SystemMaterialReferencesRepository(spaceDb.routedKysely),
+      inject: [SpaceDatabaseService],
+    },
+    SystemMaterialsService,
     {
       provide: SystemBankRepository,
       useFactory: (connection: SystemBankConnection) =>
@@ -61,6 +79,6 @@ import { SystemBankMediaService } from './system-bank-media.service';
     SystemBankSubmissionsService,
     SystemBankService,
   ],
-  exports: [SystemBankService, SystemBankConnection],
+  exports: [SystemBankService, SystemBankConnection, SystemMaterialsService],
 })
 export class SystemBankModule {}

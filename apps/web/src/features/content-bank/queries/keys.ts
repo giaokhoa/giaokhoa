@@ -2,6 +2,9 @@
  * Khoá truy vấn của feature content-bank (query key factory theo khuyến nghị của tài liệu TanStack Query), tách khỏi factory tập trung khi tổ chức lại apps/web theo mô hình features/ (issue #500): mỗi feature giữ khoá của mình ở tầng queries/; khoá dùng chung nhiều feature ở lại src/lib/query-keys.ts. Cấu trúc phân cấp: thực thể → định danh → tham số.
  */
 export const queryKeys = {
+  systemMaterials: ['content-bank', 'system-materials'] as const,
+  materialSources: ['content-bank', 'material-sources'] as const,
+  materialSubmissions: (scope: 'mine' | 'pending') => ['content-bank', 'material-submissions', scope] as const,
   contentBankSpaces: ['content-bank', 'spaces'] as const,
   contentBankItems: ['content-bank', 'items'] as const,
   contentBankItem: (itemId: string) => ['content-bank', 'items', itemId] as const,

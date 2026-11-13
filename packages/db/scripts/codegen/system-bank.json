@@ -1,1 +1,13 @@
-{"camelCase":false,"overrides":{"columns":{}}}
+{
+  "camelCase": false,
+  "overrides": {
+    "columns": {
+      "system_material_versions.package": "SystemMaterialPackage",
+      "system_material_submissions.package": "SystemMaterialPackage",
+      "system_material_submissions.status": "'pending' | 'approved' | 'rejected'"
+    }
+  },
+  "customImports": {
+    "SystemMaterialPackage": "../jsonb-types"
+  }
+}

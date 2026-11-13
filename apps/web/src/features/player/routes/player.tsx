@@ -1,3 +1,4 @@
+/** Player đọc nội dung và media qua cổng khoá; học liệu công bố giữ URL kiểm audience cùng attribution của phiên bản. */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Button } from '@giaokhoa/ui/components/button';
@@ -132,7 +133,7 @@ export function PlayerPage() {
     let objectUrl: string | null = null;
     void (async () => {
       try {
-        const res = await apiFetch(`/api/v1/files/${file.id}/content`);
+        const res = await apiFetch(file.contentUrl ?? `/api/v1/files/${file.id}/content`);
         if (!res.ok) return;
         const blob = await res.blob();
         objectUrl = URL.createObjectURL(blob);
@@ -227,6 +228,11 @@ export function PlayerPage() {
           <CardContent className="space-y-4">
             {content.type === 'page' ? (
               <div dangerouslySetInnerHTML={{ __html: content.page.content }} />
+            ) : null}
+            {content.type === 'resource' && content.resource.publication ? (
+              <p className="text-sm text-muted-foreground">
+                {t('platform:materialVersion', { version: content.resource.publication.version })} · {t('platform:libraryAttributionAuthor', { author: content.resource.publication.package.source.originalAuthor })} · {t('platform:libraryAttributionSource', { source: content.resource.publication.package.source.sourceCitation ?? content.resource.publication.package.source.centreSlug })} · {t('platform:libraryAttributionLicense', { license: content.resource.publication.package.source.license })}
+              </p>
             ) : null}
             {content.type === 'resource' && content.file ? (
               <div className="space-y-3">
