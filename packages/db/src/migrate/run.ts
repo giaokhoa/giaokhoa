@@ -52,8 +52,11 @@ function poolConfigFor(store: MigrationStoreKey): PoolConfig {
     );
   }
   if (process.env.DATABASE_SSL === 'true') {
-    // Bỏ tham số sslmode trong URL (pg không hiểu `no-verify`) rồi
-    // bật TLS ở cấp Pool — khớp cách API xử lý khi DATABASE_SSL=true.
+    // Gỡ sslmode khỏi URL để parser kết nối của node-postgres không
+    // ghi đè tùy chọn ssl đã truyền trực tiếp vào Pool: khi URL có
+    // sslmode, driver tự dựng ssl config và ưu tiên phần URL.
+    // CA verification hiện chưa bật trong mô hình TLS cũ; không được
+    // kết luận đây là kết nối tin cậy trên mạng ngoài.
     const parsed = new URL(url);
     parsed.searchParams.delete('sslmode');
     return { connectionString: parsed.toString(), ssl: { rejectUnauthorized: false } };
