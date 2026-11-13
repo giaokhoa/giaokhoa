@@ -57,7 +57,7 @@ export const MIGRATION_STORES: Record<MigrationStoreKey, MigrationStore> = {
   'system-bank': {
     migrationsDirName: 'system-bank',
     carrierNames: ['20261031025416_unique_scarecrow'],
-    expected: { tables: 10, journalRows: 1 },
+    expected: { tables: 11, journalRows: 2 },
     connectionEnvVars: ['SYSTEM_BANK_DATABASE_URL'],
   },
 };
