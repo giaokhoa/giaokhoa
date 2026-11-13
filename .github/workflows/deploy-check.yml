@@ -69,6 +69,36 @@ jobs:
             http://127.0.0.1:8080/api/v1/health -o smoke-health.json
           jq -e '.status == "ok" and .checks.database == "up" and .checks.redis == "up"' smoke-health.json
 
+      # Chạy với USER node trong hai image thật, trên named volume bền
+      # `api-files` Compose vừa tạo. Ghi/đọc hai chiều sẽ bắt lỗi
+      # ownership/perms khi mount volume che quyền thư mục image.
+      - name: Verify non-root API and worker share writable file volume
+        run: |
+          docker compose -f compose.yaml -f compose.ci.yaml exec -T api node - "$GITHUB_RUN_ID" <<'NODE'
+          const fs = require('node:fs');
+          const path = `/app/data/files/.audit-api-${process.argv[2]}`;
+          if (process.getuid() === 0) throw new Error('API đang chạy root');
+          fs.writeFileSync(path, 'api-written', { flag: 'wx', mode: 0o600 });
+          if (fs.readFileSync(path, 'utf8') !== 'api-written') process.exit(1);
+          NODE
+          docker compose -f compose.yaml -f compose.ci.yaml exec -T worker node - "$GITHUB_RUN_ID" <<'NODE'
+          const fs = require('node:fs');
+          const api = `/app/data/files/.audit-api-${process.argv[2]}`;
+          const worker = `/app/data/files/.audit-worker-${process.argv[2]}`;
+          if (process.getuid() === 0) throw new Error('Worker đang chạy root');
+          if (fs.readFileSync(api, 'utf8') !== 'api-written') process.exit(1);
+          fs.writeFileSync(worker, 'worker-written', { flag: 'wx', mode: 0o600 });
+          NODE
+          docker compose -f compose.yaml -f compose.ci.yaml exec -T api node - "$GITHUB_RUN_ID" <<'NODE'
+          const fs = require('node:fs');
+          const root = '/app/data/files/';
+          const api = root + '.audit-api-' + process.argv[2];
+          const worker = root + '.audit-worker-' + process.argv[2];
+          if (fs.readFileSync(worker, 'utf8') !== 'worker-written') process.exit(1);
+          fs.unlinkSync(worker);
+          fs.unlinkSync(api);
+          NODE
+
       # Better Auth và MCP được mount thẳng lên Express, bên ngoài
       # guard Nest: preflight phải qua CORS middleware trước khi auth
       # đọc body, cả khi origin không đáng tin.
