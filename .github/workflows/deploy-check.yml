@@ -78,6 +78,19 @@ jobs:
           grep -qi '^cache-control: private, no-cache' smoke-login.headers
           curl -fsS -o /dev/null http://127.0.0.1:8080/
 
+      # Lưu chứng cứ trước khi dọn stack, kể cả khi một container chưa
+      # qua healthcheck và Compose trả lỗi ngay ở bước khởi động.
+      - name: Diagnose failed stack before cleanup
+        if: failure()
+        run: |
+          docker compose -f compose.yaml -f compose.ci.yaml ps -a || true
+          docker compose -f compose.yaml -f compose.ci.yaml logs --no-color --tail 250 api worker migrate redis postgres web gateway || true
+          api_id=$(docker compose -f compose.yaml -f compose.ci.yaml ps -a -q api)
+          if [ -n "$api_id" ]; then
+            docker inspect --format '{{json .State.Health}}' "$api_id" || true
+            docker inspect --format '{{json .State}}' "$api_id" || true
+          fi
+
       - name: Tear down the stack
         if: always()
         run: docker compose -f compose.yaml -f compose.ci.yaml down -v
