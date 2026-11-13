@@ -47,6 +47,14 @@ x-api-env: &api-env
   RESEND_API_KEY:
   MAIL_FROM:
   FILE_STORAGE_DIR: /app/data/files
+  # API và worker phải dùng cùng driver S3 để cleanup xoá đúng object.
+  FILE_STORAGE_DRIVER: ${FILE_STORAGE_DRIVER:-local}
+  FILE_STORAGE_S3_ENDPOINT:
+  FILE_STORAGE_S3_REGION: ${FILE_STORAGE_S3_REGION:-us-east-1}
+  FILE_STORAGE_S3_BUCKET:
+  FILE_STORAGE_S3_ACCESS_KEY_ID:
+  FILE_STORAGE_S3_SECRET_ACCESS_KEY:
+  FILE_STORAGE_S3_FORCE_PATH_STYLE: ${FILE_STORAGE_S3_FORCE_PATH_STYLE:-false}
 
 services:
   postgres:
@@ -123,6 +131,13 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:?Can dat JWT_SECRET trong file .env}
       FILE_STORAGE_DIR: /app/data/files
+      FILE_STORAGE_DRIVER: ${FILE_STORAGE_DRIVER:-local}
+      FILE_STORAGE_S3_ENDPOINT:
+      FILE_STORAGE_S3_REGION: ${FILE_STORAGE_S3_REGION:-us-east-1}
+      FILE_STORAGE_S3_BUCKET:
+      FILE_STORAGE_S3_ACCESS_KEY_ID:
+      FILE_STORAGE_S3_SECRET_ACCESS_KEY:
+      FILE_STORAGE_S3_FORCE_PATH_STYLE: ${FILE_STORAGE_S3_FORCE_PATH_STYLE:-false}
       # Biến mail tuỳ chọn: khai báo trơ như x-api-env — chỉ truyền vào container khi đã đặt thật ở môi trường triển khai.
       RESEND_API_KEY:
       MAIL_FROM:

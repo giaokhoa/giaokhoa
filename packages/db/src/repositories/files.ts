@@ -21,6 +21,7 @@ type RepoDb = CentreDb | CentreTx;
 export interface FileRow {
   id: string;
   contentHash: string;
+  storageDomain: string;
   contextId: string;
   component: string;
   fileArea: string;
@@ -40,6 +41,7 @@ export interface FileRow {
 export interface NewFile {
   id?: string;
   contentHash: string;
+  storageDomain: string;
   contextId: string;
   component: string;
   fileArea: string;
@@ -70,6 +72,7 @@ export interface LinkedSubmissionRow {
 const FILE_COLUMNS = [
   'id',
   'content_hash as contentHash',
+  'storage_domain as storageDomain',
   'context_id as contextId',
   'component',
   'file_area as fileArea',
@@ -98,6 +101,7 @@ const LINKED_SUBMISSION_COLUMNS = [
 function fileInsertValues(values: NewFile): Insertable<CentreDB['files']> {
   const row: Insertable<CentreDB['files']> = {
     content_hash: values.contentHash,
+    storage_domain: values.storageDomain,
     context_id: values.contextId,
     component: values.component,
     file_area: values.fileArea,
@@ -153,11 +157,12 @@ export class FilesRepository {
    * (ngữ nghĩa Moodle: dữ liệu vật lý còn sống khi refcount > 0).
    * Ép `::int` giữ kiểu runtime là `number` như đường cũ trước chuyển đổi.
    */
-  async countByHash(contentHash: string, db: RepoDb = this.db()): Promise<number> {
+  async countByHash(contentHash: string, storageDomain: string, db: RepoDb = this.db()): Promise<number> {
     const row = await db
       .selectFrom('files')
       .select(sql<number>`count(*)::int`.as('n'))
       .where('content_hash', '=', contentHash)
+      .where('storage_domain', '=', storageDomain)
       .executeTakeFirst();
     return row?.n ?? 0;
   }

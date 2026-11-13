@@ -2,6 +2,12 @@
 
 > File này ghi các **quyết định nghiệp vụ quan trọng và còn đang hiệu lực** của package. Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub.
 
+## Dọn dẹp file theo miền (issue #10)
+
+Queue file-cleanup chỉ chấp nhận job chứa storageDomain hợp lệ và contentHash SHA-256. Với trung tâm, spaceSlug phải đối chiếu được với space_registry.id, trước khi mở phiên withSpaceKysely. Worker đếm lại tham chiếu theo (storage_domain, content_hash) trong đúng database rồi xóa đường dẫn local hoặc gửi DeleteObject tới key S3 của đúng miền. Không tự đoán miền khi thiếu payload; không dọn dữ liệu legacy.
+
+Worker phải có cùng FILE_STORAGE_DRIVER, FILE_STORAGE_DIR hoặc FILE_STORAGE_S3_* (endpoint, region, bucket, credentials, path-style) với API. Lỗi xóa S3 truyền lên BullMQ để retry. Spec worker integration kiểm database role thường, queue BullMQ và byte trên disk; spec processor S3 kiểm HTTP thực qua AWS SDK và nội dung còn lại tại máy chủ thử nghiệm.
+
 ## Kiểm thử đường phân phối sự kiện
 
 Các integration test kiểm tra nội dung/phân phối thông báo, digest, cohort và messaging kích hoạt `OutboxRelayScheduler.relayTick()` sau khi ghi fixture outbox, rồi chờ kết quả của hàng đợi thật. Điểm vào này tự gắn ngữ cảnh platform, nên vẫn chạy qua role DB thường và RLS như nhịp production; không phải chờ lịch 5 giây trong từng ca. Lịch production và các khẳng định chống trùng, cách ly tenant, chặn nội dung giữ nguyên.

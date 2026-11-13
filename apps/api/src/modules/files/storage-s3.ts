@@ -3,15 +3,16 @@ import { ConfigService } from '@nestjs/config';
 import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { contentKey, type ObjectStorage, type PresignedDownloadStorage } from './storage';
+import { assertFileStorageDomain } from '@giaokhoa/db';
 
 /**
- * Adapter vật lý tương thích S3 cho port ObjectStorage: cùng bố cục khoá định địa chỉ theo nội dung như adapter cục bộ
+ * Adapter vật lý tương thích S3 cho port ObjectStorage: cùng bố cục khoá theo miền và nội dung như adapter cục bộ
  * (`<2 chars>/<next 2 chars>/<sha256>`), để bucket có thể được kiểm tra và
  * đối soát với đúng cùng dạng như filedir cục bộ. Hoạt động với AWS S3 và các endpoint tương thích S3 (Cloudflare R2, Backblaze B2, MinIO) qua FILE_STORAGE_S3_ENDPOINT. Mọi cấu hình đều đến từ env duy nhất; constructor fail fast (nêu tên các biến còn thiếu, không bao giờ nêu giá trị của chúng) khi thiếu các thiết lập bắt buộc của driver.
  */
 @Injectable()
 /**
- * Kho lưu trữ nội dung file trên S3 / endpoint tương thích S3, khoá theo contentHash — cùng bố cục key với adapter local để hai kho đối chiếu được với nhau. Cấu hình (bucket/endpoint/khoá) chỉ đọc từ env; thiếu biến bắt buộc thì fail-fast khi khởi tạo.
+ * Kho lưu trữ nội dung file trên S3 / endpoint tương thích S3, khoá theo miền sở hữu và contentHash — cùng bố cục key với adapter local để hai kho đối chiếu được với nhau. Cấu hình (bucket/endpoint/khoá) chỉ đọc từ env; thiếu biến bắt buộc thì fail-fast khi khởi tạo.
  */
 export class S3ObjectStorage implements ObjectStorage, PresignedDownloadStorage {
   private readonly client: S3Client;
@@ -47,14 +48,14 @@ export class S3ObjectStorage implements ObjectStorage, PresignedDownloadStorage 
   /**
    * Suy key S3 từ contentHash — cùng bố cục với adapter local.
    */
-  keyFor(contentHash: string): string { return contentKey(contentHash); }
+  keyFor(domain: string, contentHash: string): string { return contentKey(domain, contentHash); }
 
   /**
    * Kiểm key đã có nội dung chưa (HeadObject; 404 → false, lỗi khác ném ra).
    */
-  async exists(contentHash: string): Promise<boolean> {
+  async exists(domain: string, contentHash: string): Promise<boolean> {
     try {
-      await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: this.keyFor(contentHash) }));
+      await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: this.keyFor(domain, contentHash) }));
       return true;
     } catch (err) {
       if (isS3NotFound(err)) return false;
@@ -63,20 +64,21 @@ export class S3ObjectStorage implements ObjectStorage, PresignedDownloadStorage 
   }
 
   /**
-   * Ghi nội dung theo key; bỏ qua khi key đã tồn tại (dedup theo content hash —
+   * Ghi nội dung theo key; bỏ qua khi key đã tồn tại (dedup chỉ trong cùng miền và content hash —
    * cùng hash là cùng nội dung, không bao giờ ghi đè).
    */
-  async put(contentHash: string, data: Buffer): Promise<void> {
-    if (await this.exists(contentHash)) return; // dedup: nội dung giống hệt đã được lưu vật lý một lần
-    await this.client.send(new PutObjectCommand({ Bucket: this.bucket, Key: this.keyFor(contentHash), Body: data }));
+  async put(domain: string, contentHash: string, data: Buffer): Promise<void> {
+    assertFileStorageDomain(domain);
+    if (await this.exists(domain, contentHash)) return; // dedup: nội dung giống hệt đã được lưu vật lý một lần
+    await this.client.send(new PutObjectCommand({ Bucket: this.bucket, Key: this.keyFor(domain, contentHash), Body: data }));
   }
 
   /**
    * Đọc nội dung theo key; key vắng thì lỗi của S3 (NoSuchKey/404) truyền thẳng ra như ENOENT ở local.
    */
-  async get(contentHash: string): Promise<Buffer> {
-    const res = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: this.keyFor(contentHash) }));
-    if (!res.Body) throw new Error(`S3 object body missing for key ${this.keyFor(contentHash)}`);
+  async get(domain: string, contentHash: string): Promise<Buffer> {
+    const res = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: this.keyFor(domain, contentHash) }));
+    if (!res.Body) throw new Error(`S3 object body missing for key ${this.keyFor(domain, contentHash)}`);
     const chunks: Buffer[] = [];
     for await (const chunk of res.Body as AsyncIterable<Uint8Array>) chunks.push(Buffer.from(chunk));
     return Buffer.concat(chunks);
@@ -85,18 +87,19 @@ export class S3ObjectStorage implements ObjectStorage, PresignedDownloadStorage 
   /**
    * Xoá nội dung theo key (DeleteObject vốn idempotent ở S3).
    */
-  async delete(contentHash: string): Promise<void> {
-    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: this.keyFor(contentHash) }));
+  async delete(domain: string, contentHash: string): Promise<void> {
+    assertFileStorageDomain(domain);
+    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: this.keyFor(domain, contentHash) }));
   }
 
   /**
    * Phát URL tải presigned trỏ thẳng tới S3, kèm tên file/loại nội dung khi tải về
    * để hành vi tải xuống ngang với đường local (attachment + đúng mime).
    */
-  async presignGetUrl(contentHash: string, expiresInSeconds: number, opts?: { fileName?: string; mimeType?: string }): Promise<string> {
+  async presignGetUrl(domain: string, contentHash: string, expiresInSeconds: number, opts?: { fileName?: string; mimeType?: string }): Promise<string> {
     const command = new GetObjectCommand({
       Bucket: this.bucket,
-      Key: this.keyFor(contentHash),
+      Key: this.keyFor(domain, contentHash),
       ...(opts?.fileName ? { ResponseContentDisposition: `attachment; filename="${opts.fileName.replace(/"/g, '')}"` } : {}),
       ...(opts?.mimeType ? { ResponseContentType: opts.mimeType } : {}),
     });

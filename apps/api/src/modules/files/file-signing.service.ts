@@ -21,9 +21,9 @@ export class FileSigningService {
   /**
    * Tạo chữ ký cho một file id với thời hạn cho trước.
    */
-  sign(fileId: string): { token: string; expiresAt: number } {
+  sign(fileId: string, domain: string): { token: string; expiresAt: number } {
     const expiresAt = Math.floor(Date.now() / 1000) + this.ttlSeconds;
-    const mac = createHmac('sha256', this.secret).update(`${fileId}.${expiresAt}`).digest('base64url');
+    const mac = createHmac('sha256', this.secret).update(`${domain}.${fileId}.${expiresAt}`).digest('base64url');
     return { token: `${expiresAt}.${mac}`, expiresAt };
   }
   /**
@@ -31,27 +31,27 @@ export class FileSigningService {
    * trỏ thẳng tới kho kèm hạn dùng; còn lại → URL tải qua API kèm chữ ký HMAC như hành vi cũ.
    * Kiểm quyền tại context do FilesService thực hiện TRƯỚC khi gọi hàm này.
    */
-  async createDownloadTarget(file: { id: string; contentHash: string; fileName: string; mimeType?: string | null }): Promise<{ url: string; expiresAt: number }> {
+  async createDownloadTarget(file: { id: string; storageDomain: string; contentHash: string; fileName: string; mimeType?: string | null }): Promise<{ url: string; expiresAt: number }> {
     if (this.storage && supportsPresignedDownloads(this.storage)) {
-      const url = await this.storage.presignGetUrl(file.contentHash, this.ttlSeconds, {
+      const url = await this.storage.presignGetUrl(file.storageDomain, file.contentHash, this.ttlSeconds, {
         fileName: file.fileName, mimeType: file.mimeType ?? undefined,
       });
       return { url, expiresAt: Math.floor(Date.now() / 1000) + this.ttlSeconds };
     }
-    const { token, expiresAt } = this.sign(file.id);
+    const { token, expiresAt } = this.sign(file.id, file.storageDomain);
     return { url: `/api/v1/files/${file.id}/download?sig=${encodeURIComponent(token)}`, expiresAt };
   }
   /**
    * Kiểm chữ ký và hạn dùng của URL đã ký.
    */
-  verify(fileId: string, token: string | undefined): void {
+  verify(fileId: string, domain: string, token: string | undefined): void {
     if (!token) throw new UnauthorizedException({ message: 'Missing file signature', code: 'file.signature_missing' });
     const [expRaw, mac] = token.split('.');
     const expiresAt = Number(expRaw);
     if (!mac || Number.isNaN(expiresAt) || expiresAt < Math.floor(Date.now() / 1000)) {
       throw new UnauthorizedException({ message: 'File signature expired or invalid', code: 'file.signature_invalid' });
     }
-    const expected = createHmac('sha256', this.secret).update(`${fileId}.${expiresAt}`).digest('base64url');
+    const expected = createHmac('sha256', this.secret).update(`${domain}.${fileId}.${expiresAt}`).digest('base64url');
     const a = Buffer.from(mac); const b = Buffer.from(expected);
     if (a.length !== b.length || !timingSafeEqual(a, b)) {
       throw new UnauthorizedException({ message: 'File signature expired or invalid', code: 'file.signature_invalid' });
