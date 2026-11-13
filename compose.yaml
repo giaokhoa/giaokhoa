@@ -212,6 +212,10 @@ services:
     restart: unless-stopped
     environment:
       GIAOKHOA_TRUSTED_PROXY_CIDRS: ${GIAOKHOA_TRUSTED_PROXY_CIDRS:-172.16.0.0/12}
+      # Nhiều upstream phân tách bằng khoảng trắng, mỗi tên DNS tương
+      # ứng với MỘT replica riêng. Caddy gắn api_affinity cookie cho
+      # polling Engine.IO. Mặc định giữ một API như trước.
+      GIAOKHOA_API_UPSTREAM: ${GIAOKHOA_API_UPSTREAM:-api:3100}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # Giữ cấu hình và dữ liệu Caddy nếu sau này cấp TLS tại gateway.

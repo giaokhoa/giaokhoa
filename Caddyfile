@@ -24,6 +24,9 @@
 		path /api /api/* /socket.io /socket.io/* /mcp /mcp/* /.well-known/oauth-protected-resource /.well-known/oauth-protected-resource/* /.well-known/oauth-authorization-server /.well-known/oauth-authorization-server/*
 	}
 	handle @api {
+		# Một upstream trên mỗi replica (vd: api:3100 api-two:3100).
+		# Không chỉ dùng một tên DNS chứa nhiều IP khi cần cookie affinity:
+		# Caddy phải phân biệt được từng backend bằng địa chỉ upstream.
 		reverse_proxy {$GIAOKHOA_API_UPSTREAM:api:3100} {
 			# Cookie affinity giữ polling Engine.IO trên cùng replica khi bổ sung upstream.
 			lb_policy cookie api_affinity
