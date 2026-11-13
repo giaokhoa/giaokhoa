@@ -93,12 +93,12 @@ export type LoginAsOutcome =
   | { mode: 'better-auth'; user: UserRow; tenantId: string; baSession: { signedCookieValue: string; expiresAt: Date } };
 
 /** Định danh các phiên "hiện tại" theo ngữ cảnh của người gọi: `familyId` là `sid` trong access token, `webSessionId` là id phiên trong cookie. */
-export interface CurrentSessionRefs { familyId?: string; webSessionId?: string }
+export interface CurrentSessionRefs { familyId?: string; webSessionId?: string; betterAuthSessionId?: string }
 
 /** Một phiên đang hoạt động trong danh sách quản lý phiên của chính user (report_usersessions). */
 export interface MySessionView {
   id: string;
-  kind: 'web' | 'api';
+  kind: 'web' | 'api' | 'better-auth';
   createdAt: string;
   lastActivityAt: string;
   ip: string | null;
@@ -840,8 +840,8 @@ export class AuthService {
 
   // --- phiên của tôi (report_usersessions) --------------------------------------
   /**
-   * Mọi phiên đang hoạt động của chính user: phiên web (bản ghi trong kho
-   * phiên) gộp với phiên API (họ refresh token đang hiệu lực), đánh dấu
+   * Mọi phiên đang hoạt động của chính user: Better Auth cookie session,
+   * phiên Redis web và họ refresh JWT, đánh dấu
    * phiên hiện tại theo ngữ cảnh của người gọi — `currentFamilyId` là
    * `sid` trong access token, `currentWebSessionId` là id trong cookie.
    * Sắp xếp theo hoạt động gần nhất lên đầu như bảng của Moodle.
@@ -849,7 +849,20 @@ export class AuthService {
   async listMySessions(userId: string, current: CurrentSessionRefs = {}): Promise<MySessionView[]> {
     const web = await this.sessions.listForUser(userId);
     const families = await this.repo.listActiveFamiliesByUser(userId);
+    const betterAuthSessions = this.betterAuth.auth
+      ? await this.spaceDb.routedKysely.selectFrom('session')
+        .select(['id', 'created_at', 'updated_at', 'ip_address', 'user_agent'])
+        .where('user_id', '=', userId)
+        .where('expires_at', '>', new Date())
+        .execute()
+      : [];
     const views: MySessionView[] = [
+      ...betterAuthSessions.map((session): MySessionView => ({
+        id: session.id, kind: 'better-auth',
+        createdAt: session.created_at.toISOString(), lastActivityAt: session.updated_at.toISOString(),
+        ip: session.ip_address ?? null, userAgent: session.user_agent ?? null,
+        current: current.betterAuthSessionId === session.id,
+      })),
       ...web.map(({ id, session }): MySessionView => ({
         id, kind: 'web',
         createdAt: session.createdAt, lastActivityAt: session.lastActivityAt,
@@ -873,8 +886,22 @@ export class AuthService {
    * thông tin phiên của người khác.
    */
   async revokeMySession(userId: string, sessionId: string, current: CurrentSessionRefs = {}): Promise<{ revoked: number }> {
-    if (sessionId === current.webSessionId || sessionId === current.familyId) {
+    if (sessionId === current.webSessionId || sessionId === current.familyId || sessionId === current.betterAuthSessionId) {
       throw new BadRequestException({ message: 'The current session cannot be revoked here; use logout instead', code: 'auth.cannot_revoke_current_session' });
+    }
+    if (this.betterAuth.auth) {
+      const betterAuthSession = await this.spaceDb.routedKysely.selectFrom('session')
+        .select(['id', 'user_id'])
+        .where('id', '=', sessionId)
+        .executeTakeFirst();
+      if (betterAuthSession) {
+        if (betterAuthSession.user_id !== userId) {
+          throw new NotFoundException({ message: 'Session not found', code: 'auth.session_not_found' });
+        }
+        await this.spaceDb.routedKysely.deleteFrom('session')
+          .where('id', '=', sessionId).where('user_id', '=', userId).execute();
+        return { revoked: 1 };
+      }
     }
     const web = await this.sessions.get(sessionId);
     if (web) {
@@ -890,12 +917,19 @@ export class AuthService {
     return { revoked: 1 };
   }
   /**
-   * Thu hồi MỌI phiên khác, giữ lại phiên hiện tại của người gọi (cả hai
-   * loại phiên); trả tổng số phiên đã thu hồi.
+   * Thu hồi MỌI phiên khác thuộc ba loại, giữ lại phiên hiện tại theo
+   * loại danh tính được guard xác minh; trả tổng số phiên đã thu hồi.
    */
   async revokeMyOtherSessions(userId: string, current: CurrentSessionRefs = {}): Promise<{ revoked: number }> {
     const webRevoked = await this.sessions.destroyOthersForUser(userId, current.webSessionId);
     const apiRevoked = await this.repo.revokeOthersForUser(userId, current.familyId);
-    return { revoked: webRevoked + apiRevoked };
+    const baDeleted = this.betterAuth.auth
+      ? await this.spaceDb.routedKysely.deleteFrom('session')
+        .where('user_id', '=', userId)
+        .$if(Boolean(current.betterAuthSessionId), (qb) => qb.where('id', '!=', current.betterAuthSessionId!))
+        .returning('id')
+        .execute()
+      : [];
+    return { revoked: webRevoked + apiRevoked + baDeleted.length };
   }
 }

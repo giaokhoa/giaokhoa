@@ -9,10 +9,14 @@ import { Public } from '../../common/public.decorator';
 import { SkipSpaceContext } from '../tenants/skip-space-context.decorator';
 import { PlatformRoute } from '../../common/platform-route.decorator';
 import { isPublicLearningHost } from '../tenants/public-learning';
+import { resolveDedicatedSpace } from '../tenants/space-resolution';
+import { SpaceDatabaseService } from '../../db/routing/space-database.service';
 import { RequireCapability } from '../../common/require-capability.decorator';
 import { UsersService } from '../users/users.service';
 import { changePasswordSchema, loginAsSchema, loginSchema, mfaTotpCodeSchema, mfaTotpSetupSchema, mfaVerifySchema, refreshTokenSchema, type ChangePasswordDto, type LoginAsDto, type LoginDto, type MfaTotpCodeDto, type MfaTotpSetupDto, type MfaVerifyDto, type RefreshDto } from './dto/auth.dto';
 import { AuthService, type PasswordLoginOutcome } from './auth.service';
+import { AUTHENTICATED_VIA_BETTER_AUTH } from '../../common/better-auth-session.guard';
+import type { CurrentSessionRefs } from './auth.service';
 import { BetterAuthService } from './better-auth/better-auth.service';
 
 
@@ -43,7 +47,12 @@ function loginResponse(outcome: PasswordLoginOutcome) {
  * API xác thực: /auth/login, refresh, logout, đổi mật khẩu, login-as, MFA TOTP và session.
  */
 export class AuthController {
-  constructor(private readonly auth: AuthService, private readonly users: UsersService, private readonly betterAuth: BetterAuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly users: UsersService,
+    private readonly betterAuth: BetterAuthService,
+    private readonly spaceDb: SpaceDatabaseService,
+  ) {}
 
   @Public()
   @UseGuards(AuthGuard('local'))
@@ -129,15 +138,38 @@ export class AuthController {
    * quản trị platform ở kho chung không đăng nhập được tại đó.
    * User bật MFA thì dừng ở challenge của luồng platform.
    */
+  /**
+   * Khi bật #8: chỉ Host gốc được dùng cổng vận hành, mọi credential
+   * đều tra kho chung. Khi CHƯA bật #8: tương thích #587 — Host
+   * trung tâm vẫn tra credential của chính kho trung tâm trước khi
+   * isPlatformSiteAdmin kiểm danh sách admin ở kho CHUNG. Nhờ vậy
+   * mật khẩu đúng của quản trị trung tâm nhận 403
+   * auth.platform_admin_required, không bị đổi thành 401 vì lookup
+   * nhầm kho. Không cho phép quản trị trung tâm vượt quyền.
+   * Dùng chung cả hai bước password/MFA để giữ binding challenge.
+   */
+  private async inPlatformLoginContext<T>(req: Request, fn: () => Promise<T>): Promise<T> {
+    if (process.env.PUBLIC_LEARNING_ENABLED === 'true') {
+      if (!isPublicLearningHost(req.headers.host)) {
+        throw new ForbiddenException({
+          message: 'Platform login is only available on the root host',
+          code: 'auth.platform_root_only',
+        });
+      }
+      return fn();
+    }
+    const space = await resolveDedicatedSpace(this.spaceDb, req.headers.host);
+    return space ? this.spaceDb.withSpaceKysely(space.slug, fn) : fn();
+  }
+
   @Public()
   @SkipSpaceContext()
   @PlatformRoute()
   @Post('platform/login')
   async platformLogin(@Body({ schema: loginSchema }) dto: LoginDto, @Req() req: Request) {
-    if (process.env.PUBLIC_LEARNING_ENABLED === 'true' && !isPublicLearningHost(req.headers.host)) {
-      throw new ForbiddenException({ message: 'Platform login is only available on the root host', code: 'auth.platform_root_only' });
-    }
-    const outcome = await this.auth.platformLogin(dto.username, dto.password, clientIpOf(req), req.headers['user-agent']);
+    const outcome = await this.inPlatformLoginContext(req, () =>
+      this.auth.platformLogin(dto.username, dto.password, clientIpOf(req), req.headers['user-agent']),
+    );
     if (outcome.mfaRequired) {
       return { mfaRequired: true as const, challengeToken: outcome.challengeToken, user: { id: outcome.user.id, username: outcome.user.username } };
     }
@@ -154,10 +186,9 @@ export class AuthController {
   @PlatformRoute()
   @Post('platform/mfa/verify')
   async platformMfaVerify(@Body({ schema: mfaVerifySchema }) dto: MfaVerifyDto, @Req() req: Request) {
-    if (process.env.PUBLIC_LEARNING_ENABLED === 'true' && !isPublicLearningHost(req.headers.host)) {
-      throw new ForbiddenException({ message: 'Platform login is only available on the root host', code: 'auth.platform_root_only' });
-    }
-    const { user, accessToken, expiresIn } = await this.auth.verifyPlatformMfa(dto.challengeToken, dto.code, clientIpOf(req), req.headers['user-agent']);
+    const { user, accessToken, expiresIn } = await this.inPlatformLoginContext(req, () =>
+      this.auth.verifyPlatformMfa(dto.challengeToken, dto.code, clientIpOf(req), req.headers['user-agent']),
+    );
     return { user: { id: user.id, username: user.username, forcePasswordChange: user.forcePasswordChange }, accessToken, expiresIn };
   }
 
@@ -293,6 +324,15 @@ export class AuthController {
     return { loggedOut: true };
   }
 
+  /** Better Auth uses session.id for current identity; legacy JWT uses refresh family id. */
+  private currentSessionRefs(actor: AuthenticatedUser, req: Request): CurrentSessionRefs {
+    const viaBA = Boolean((req as Request & { [AUTHENTICATED_VIA_BETTER_AUTH]?: boolean })[AUTHENTICATED_VIA_BETTER_AUTH]);
+    return {
+      ...(viaBA ? { betterAuthSessionId: actor.sessionId } : { familyId: actor.sessionId }),
+      webSessionId: sessionCookieOf(req),
+    };
+  }
+
   // --- Phiên của tôi (report_usersessions: điều hướng hồ sơ của tôi) -------------
   @Get('sessions')
   /**
@@ -301,7 +341,7 @@ export class AuthController {
    * theo `sid` của access token và theo cookie phiên nếu request có mang.
    */
   async mySessions(@CurrentUser() actor: AuthenticatedUser, @Req() req: Request) {
-    const sessions = await this.auth.listMySessions(actor.id, { familyId: actor.sessionId, webSessionId: sessionCookieOf(req) });
+    const sessions = await this.auth.listMySessions(actor.id, this.currentSessionRefs(actor, req));
     return { sessions };
   }
   @Delete('sessions/others')
@@ -309,7 +349,7 @@ export class AuthController {
    * DELETE /auth/sessions/others — thu hồi mọi phiên khác, giữ phiên hiện tại của người gọi.
    */
   async revokeMyOtherSessions(@CurrentUser() actor: AuthenticatedUser, @Req() req: Request) {
-    return this.auth.revokeMyOtherSessions(actor.id, { familyId: actor.sessionId, webSessionId: sessionCookieOf(req) });
+    return this.auth.revokeMyOtherSessions(actor.id, this.currentSessionRefs(actor, req));
   }
   @Delete('sessions/:sessionId')
   /**
@@ -318,6 +358,6 @@ export class AuthController {
    * phiên web hoặc family id của phiên API).
    */
   async revokeMySession(@Param('sessionId', { schema: uuidIdSchema }) sessionId: string, @CurrentUser() actor: AuthenticatedUser, @Req() req: Request) {
-    return this.auth.revokeMySession(actor.id, sessionId, { familyId: actor.sessionId, webSessionId: sessionCookieOf(req) });
+    return this.auth.revokeMySession(actor.id, sessionId, this.currentSessionRefs(actor, req));
   }
 }

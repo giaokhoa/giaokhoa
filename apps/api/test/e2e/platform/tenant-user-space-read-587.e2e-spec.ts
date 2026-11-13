@@ -468,6 +468,15 @@ describe('Tạo người dùng cho trung tâm cấp phát mới chỉ có ở kh
     expect(res.status).toBe(403);
     expect((res.body as { code?: string }).code).toBe('auth.platform_admin_required');
     expect((res.body as { accessToken?: string }).accessToken).toBeUndefined();
+
+    // Vẫn kiểm chứng mật khẩu thực sự ở kho trung tâm trước cổng
+    // platform: sai mật khẩu phải 401, không trả 403 cho mọi payload.
+    const wrongPassword = await http(app)
+      .post('/api/v1/auth/platform/login')
+      .set('Host', HOST)
+      .send({ username: centreAdminUsername, password: 'WrongPassword!1234' });
+    expect(wrongPassword.status).toBe(401);
+    expect((wrongPassword.body as { code?: string }).code).toBe('auth.invalid_credentials');
   });
 
   it('tenant ở kho chung: tạo người dùng giữ nguyên hành vi — tài khoản toàn cục ở kho chung kèm membership ở kho chung', async () => {

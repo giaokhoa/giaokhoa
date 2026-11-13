@@ -330,6 +330,79 @@ describe('Khu công cộng #8 — E2E kho riêng, phiên và ranh giới quyền
     expect(retry.status, JSON.stringify(retry.body)).toBe(201);
   });
 
+  it('phiên Better Auth ở 2 thiết bị được liệt kê, bảo vệ phiên hiện tại và thu hồi riêng/toàn bộ', async () => {
+    const web = app.getHttpServer();
+    const signIn = async (agent: string) => {
+      const result = await http(web).post('/api/v1/auth/sign-in/username')
+        .set('Host', ROOT_HOST).set('Origin', ROOT_ORIGIN).set('User-Agent', agent)
+        .send({ username: LEARNER_USERNAME, password: PASSWORD });
+      expect(result.status, JSON.stringify(result.body)).toBe(200);
+      return cookieOf(result);
+    };
+    const cookie1 = await signIn('issue-8-device-one');
+    const cookie2 = await signIn('issue-8-device-two');
+    const list = await http(web).get('/api/v1/auth/sessions')
+      .set('Host', ROOT_HOST).set('Cookie', cookie1);
+    expect(list.status, JSON.stringify(list.body)).toBe(200);
+    const sessions = (list.body.sessions as Array<{
+      id: string; kind: string; current: boolean; userAgent: string | null;
+    }>).filter((s) => s.kind === 'better-auth');
+    const current = sessions.find((s) => s.current);
+    const other = sessions.find((s) => s.userAgent === 'issue-8-device-two');
+    expect(current?.userAgent).toBe('issue-8-device-one');
+    expect(other).toBeDefined();
+    expect(other?.current).toBe(false);
+
+    // Chỉ logout được phiên hiện tại; endpoint revoke từ chối xoá nó.
+    const cannotRevokeCurrent = await http(web).delete('/api/v1/auth/sessions/' + current!.id)
+      .set('Host', ROOT_HOST).set('Cookie', cookie1);
+    expect(cannotRevokeCurrent.status).toBe(400);
+    expect(cannotRevokeCurrent.body.code).toBe('auth.cannot_revoke_current_session');
+
+    const revoked = await http(web).delete('/api/v1/auth/sessions/' + other!.id)
+      .set('Host', ROOT_HOST).set('Cookie', cookie1);
+    expect(revoked.status, JSON.stringify(revoked.body)).toBe(200);
+    expect(revoked.body.revoked).toBe(1);
+    const device2Denied = await http(web).get('/api/v1/users/me')
+      .set('Host', ROOT_HOST).set('Cookie', cookie2);
+    expect(device2Denied.status).toBe(401);
+    const device1Ok = await http(web).get('/api/v1/users/me')
+      .set('Host', ROOT_HOST).set('Cookie', cookie1);
+    expect(device1Ok.status).toBe(200);
+
+    // Không lộ hoặc thu hồi phiên của user khác trong cùng kho.
+    const teacherSignIn = await http(web).post('/api/v1/auth/sign-in/username')
+      .set('Host', ROOT_HOST).set('Origin', ROOT_ORIGIN)
+      .send({ username: TEACHER_USERNAME, password: PASSWORD });
+    expect(teacherSignIn.status).toBe(200);
+    const teacherList = await http(web).get('/api/v1/auth/sessions')
+      .set('Host', ROOT_HOST).set('Cookie', cookieOf(teacherSignIn));
+    expect(teacherList.status).toBe(200);
+    const teacherSession = (teacherList.body.sessions as Array<{ id: string; kind: string }>)
+      .find((session) => session.kind === 'better-auth');
+    expect(teacherSession).toBeDefined();
+    const foreign = await http(web).delete('/api/v1/auth/sessions/' + teacherSession!.id)
+      .set('Host', ROOT_HOST).set('Cookie', cookie1);
+    expect(foreign.status).toBe(404);
+
+    const cookie3 = await signIn('issue-8-device-three');
+    const bulk = await http(web).delete('/api/v1/auth/sessions/others')
+      .set('Host', ROOT_HOST).set('Cookie', cookie1);
+    expect(bulk.status, JSON.stringify(bulk.body)).toBe(200);
+    expect(bulk.body.revoked).toBeGreaterThanOrEqual(1);
+    const device3Denied = await http(web).get('/api/v1/users/me')
+      .set('Host', ROOT_HOST).set('Cookie', cookie3);
+    expect(device3Denied.status).toBe(401);
+    const device1StillValid = await http(web).get('/api/v1/users/me')
+      .set('Host', ROOT_HOST).set('Cookie', cookie1);
+    expect(device1StillValid.status).toBe(200);
+    const finalList = await http(web).get('/api/v1/auth/sessions')
+      .set('Host', ROOT_HOST).set('Cookie', cookie1);
+    const remaining = (finalList.body.sessions as Array<{ id: string; kind: string; current: boolean }>)
+      .filter((session) => session.kind === 'better-auth');
+    expect(remaining).toEqual([expect.objectContaining({ id: current!.id, current: true })]);
+  });
+
   it('cookie và JWT học viên công cộng dùng ở công cộng, không dùng ở A; và ngược lại', async () => {
     const login = await http(app.getHttpServer()).post('/api/v1/auth/sign-in/username')
       .set('Host', ROOT_HOST).set('Origin', ROOT_ORIGIN)

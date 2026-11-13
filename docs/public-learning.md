@@ -87,6 +87,12 @@ với URL/role chính kho đó.
   throttler chung để hạn mức có hiệu lực trên toàn cụm.
 - Sau đăng ký, trang `/register` đăng nhập bằng
   `/api/v1/auth/sign-in/username` và điều hướng `/profile`.
+  Tab Bảo mật → Phiên đăng nhập đọc được **các phiên Better Auth**
+  trong kho riêng qua `GET /api/v1/auth/sessions`; phiên hiện tại
+  được xác định qua guard cookie, có thể thu hồi từng phiên khác
+  hoặc mọi phiên khác qua `DELETE /api/v1/auth/sessions/:id`
+  và `DELETE /api/v1/auth/sessions/others`. Không được làm mất
+  hỗ trợ phiên BA đã có từ trước issue #8.
   Truy vấn học tập/đăng nhập sau đó tự đi cùng cookie + hostname
   đến database của khu công cộng, không truyền slug/tenant tuỳ
   ý do trình duyệt tạo.
