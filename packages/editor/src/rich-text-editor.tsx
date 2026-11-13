@@ -209,7 +209,9 @@ export function RichTextEditor({
     return true;
   }
 
+  // SSR chỉ dựng vỏ React; ProseMirror cần DOM nên tạo editor sau hydrate.
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: extensions ?? plainTextExtensions,
     content: ensureTerminalContinuation(value ?? EMPTY_DOCUMENT),
     editable,
@@ -255,7 +257,7 @@ export function RichTextEditor({
         const coords = view.posAtCoords({ left: event.clientX, top: event.clientY });
         if (coords) {
           try {
-            editor.commands.setTextSelection(coords.pos);
+            editor?.commands.setTextSelection(coords.pos);
           } catch {
             // Vị trí thả không đặt được con trỏ: chèn tại vị trí hiện tại.
           }
@@ -293,11 +295,12 @@ export function RichTextEditor({
   };
 
   useEffect(() => {
+    if (!editor) return;
     editor.setEditable(editable);
   }, [editor, editable]);
 
   useEffect(() => {
-    if (value === undefined) {
+    if (!editor || value === undefined) {
       return;
     }
     const nextDocument = value ?? EMPTY_DOCUMENT;
@@ -331,12 +334,16 @@ export function RichTextEditor({
     };
   }, [active, ownerId, toolbarSlotId]);
 
+  // Mọi hook đã đăng ký; chặn các handler/editor UI khi chưa hydrate SSR.
+  if (!editor) return null;
+
   /**
    * Bật/tắt một mark trên vùng chọn hiện tại rồi trả focus về vùng nhập.
    *
    * @param mark - Mark cần bật/tắt.
    */
   function toggleMark(mark: ToolbarMark): void {
+    if (!editor) return;
     const chain = editor.chain().focus();
     switch (mark) {
       case 'bold':
@@ -359,6 +366,7 @@ export function RichTextEditor({
 
   /** Bật/tắt danh sách không thứ tự cho đoạn hiện tại. */
   function toggleBulletList(): void {
+    if (!editor) return;
     editor.chain().focus().toggleBulletList().run();
   }
 
@@ -370,6 +378,7 @@ export function RichTextEditor({
    * @param files - Các tệp ảnh từ dán/kéo-thả; mảng rỗng nghĩa là bấm nút.
    */
   async function insertImagesFromHost(files: readonly File[]): Promise<void> {
+    if (!editor) return;
     const requestImage = onRequestImageRef.current;
     if (!requestImage) {
       return;
@@ -402,6 +411,7 @@ export function RichTextEditor({
    * Mở panel công thức: đang chọn đúng một node công thức thì sửa node đó, còn lại là chèn công thức mới tại con trỏ.
    */
   function openMathPanel(): void {
+    if (!editor) return;
     const { selection } = editor.state;
     if (
       selection instanceof NodeSelection &&
@@ -417,6 +427,7 @@ export function RichTextEditor({
    * Xác nhận panel công thức: LaTeX sai cú pháp thì CHẶN, giữ panel mở và hiện lỗi tại panel — tài liệu không đổi. Hợp lệ thì áp vào tài liệu theo đúng trường hợp: chèn mới, sửa tại chỗ cùng dạng, hoặc đổi dạng trong dòng ↔ tách dòng (xoá node cũ, chèn node mới ở vị trí tương đương: công thức tách dòng nằm ngay sau đoạn chứa công thức cũ; công thức trong dòng nằm trong một đoạn mới tại chỗ block cũ).
    */
   function confirmMathPanel(): void {
+    if (!editor) return;
     if (!mathPanel) {
       return;
     }
@@ -459,6 +470,7 @@ export function RichTextEditor({
 
   /** Xoá công thức đang sửa tại panel và đóng panel. */
   function deleteMathTarget(): void {
+    if (!editor) return;
     if (!mathPanel || mathPanel.targetPos === null || !mathPanel.targetKind) {
       return;
     }
