@@ -11,7 +11,8 @@ import { Label } from '@giaokhoa/ui/components/label';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { courseContentQueryOptions, coursesListQueryOptions } from '#features/course-builder/queries/course-builder';
+import { courseContentQueryOptions } from '#lib/course-content';
+import { coursesListQueryOptions } from '#features/course-builder/queries/course-builder';
 import { courseGroupsQueryOptions } from '#features/progress-report/queries/progress-report';
 import { queryKeys } from '#lib/query-keys';
 import { queryKeys as questionsQueryKeys } from '../queries/keys';

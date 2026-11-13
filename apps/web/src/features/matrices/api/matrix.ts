@@ -7,7 +7,6 @@ import type {
   MatrixLite,
   MatrixSpecificationLite,
   MatrixTreeNode,
-  SubjectLite,
 } from '../types/matrix';
 
 /**
@@ -30,20 +29,6 @@ async function probe<T>(path: string): Promise<T | null> {
  */
 export function fetchMatrixBanks() {
   return apiJson<BankLite[]>('/api/v1/question-banks?kind=matrix');
-}
-
-/**
- * Đọc danh sách môn học chương trình (GET /curriculum/subjects).
- * Kèm `forCourseId` thì API mở nhánh `course:update` tại chính
- * khoá đó cho giáo viên không có `curriculum:view` tại context hệ
- * thống (điểm nghẽn D-3 của issue #233).
- *
- * @param forCourseId - Định danh khoá mở nhánh quyền (khi có).
- * @returns Danh sách môn.
- */
-export function fetchCurriculumSubjects(forCourseId?: string) {
-  const frame = forCourseId ? `?forCourseId=${forCourseId}` : '';
-  return apiJson<SubjectLite[]>(`/api/v1/curriculum/subjects${frame}`);
 }
 
 /**

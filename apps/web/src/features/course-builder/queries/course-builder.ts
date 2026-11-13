@@ -1,5 +1,6 @@
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '#lib/query-keys';
+import { courseContentQueryOptions } from '#lib/course-content';
 import {
   applyBookFrame,
   applyCurriculumFrame,
@@ -13,7 +14,6 @@ import {
   duplicateBuilderSection,
   fetchBuilderCourseList,
   fetchCourseBuilder,
-  fetchCourseContent,
   importBuilderContent,
   recalculateBuilderCompletion,
   reorderBuilderModules,
@@ -64,19 +64,6 @@ export function coursesListQueryOptions() {
 /** Danh sách toàn bộ khoá học (khoá nguồn dùng lại nội dung ở trang builder); lỗi tải → rỗng như trước. */
 export function useCoursesList() {
   return useQuery(coursesListQueryOptions());
-}
-
-/**
- * Tuỳ chọn truy vấn nội dung của khoá nguồn đang chọn để dùng lại.
- *
- * @param courseId - Định danh khoá nguồn.
- * @returns Tuỳ chọn truy vấn nội dung khoá.
- */
-export function courseContentQueryOptions(courseId: string) {
-  return queryOptions({
-    queryKey: queryKeys.courseContent(courseId),
-    queryFn: () => fetchCourseContent(courseId),
-  });
 }
 
 /** Nội dung của khoá nguồn đang chọn để dùng lại; chưa chọn thì query tắt. */

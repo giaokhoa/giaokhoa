@@ -47,8 +47,8 @@ Code (định danh, tên hàm/biến/lớp, chuỗi kỹ thuật) viết bằng 
 
 Mọi code TypeScript viết mới hoặc sửa trong `packages/db` phải có comment **tiếng Việt theo chuẩn TSDoc**, chi tiết nhất có thể — luồng nghiệp vụ của dữ liệu phải nằm ngay trong code, để lần sửa sau dựa vào nội dung code đang có chứ không dựa vào trí nhớ của trợ lý. Chuẩn ngôn ngữ chung của repo: code bằng tiếng Anh (định danh, tên bảng/cột/hàm, chuỗi kỹ thuật); **comment — gồm cả comment luồng nghiệp vụ — bằng tiếng Việt**; mọi tài liệu bằng tiếng Việt:
 
-- Đầu mỗi file schema: khối TSDoc mô tả vai trò của nhóm bảng + luồng nghiệp vụ dữ liệu tổng thể (bảng phục vụ nghiệp vụ gì, quan hệ với các bảng khác, tầng nào ghi/đọc dữ liệu).
-- Mỗi bảng/cột/hàm trọng yếu: TSDoc `/** ... */` tiếng Việt gồm mục đích, các bất biến và ràng buộc (khoá chính UUIDv7, `tenant_id` + RLS fail-closed, FK `restrict` đối với dữ liệu chuẩn GDPT…), giá trị mặc định và lý do chọn chúng.
+- Đầu mỗi file repository/runner Kysely: khối TSDoc mô tả miền dữ liệu, hình dạng đọc/ghi, bất biến giao dịch và nơi cấp handle. File `src/types/*.d.ts` là kết quả codegen từ DB thật, **không sửa tay để thêm TSDoc**; luật bảng/cột được kiểm chứng ở migration SQL và test invariant.
+- Mỗi repository, hàm truy cập dữ liệu hoặc hàm migration trọng yếu: TSDoc `/** ... */` tiếng Việt nêu mục đích, bất biến và ràng buộc (UUIDv7, `tenant_id` + RLS fail-closed, FK `restrict` với dữ liệu chuẩn GDPT), bên cấp transaction và lý do thiết kế. Không khai schema bảng bằng TypeScript viết tay.
 - Logic phức tạp (cột jsonb mang cấu hình, cột suy biến phục vụ truy vấn, khoá tự nhiên của dữ liệu chuẩn): comment nội tuyến tiếng Việt nói bước xử lý và **lý do** — không lặp lại điều code đã hiển nhiên.
 - Cú pháp/tag theo TSDoc (`@remarks`/`@example` khi cần); định danh và tên tag giữ tiếng Anh.
 - Sửa code thì căn cứ vào comment đang có trong code; thấy comment lệch code thật thì sửa comment **trong cùng lượt** với sửa code.

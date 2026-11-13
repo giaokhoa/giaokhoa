@@ -11,6 +11,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "test:architecture": "node --test tests/architecture-boundaries.test.mjs",
     "dev": "turbo run dev",
     "seed": "pnpm --filter @giaokhoa/api build && pnpm --filter @giaokhoa/api seed:review",
     "format": "prettier --write .",

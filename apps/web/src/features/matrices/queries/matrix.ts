@@ -5,7 +5,6 @@ import {
   createMatrix,
   deleteMatrixCell,
   fetchCurriculaBySubject,
-  fetchCurriculumSubjects,
   fetchCurriculumTree,
   fetchMatrixAvailability,
   fetchMatrixBanks,
@@ -33,21 +32,6 @@ export function matrixBanksQueryOptions() {
 /** Danh sách bank ma trận của người dùng; chỉ tải khi `enabled` (đã rõ quyền). */
 export function useMatrixBanks(enabled: boolean) {
   return useQuery({ ...matrixBanksQueryOptions(), enabled });
-}
-
-/**
- * Tuỳ chọn truy vấn danh sách môn học chương trình. Kèm `forCourseId` thì API mở nhánh `course:update` tại chính khoá đó cho giáo viên không có `curriculum:view` tại context hệ thống (điểm nghẽn D-3 của issue #233: giáo viên chỉ có quyền tại khoá mình dạy). Khoá truy vấn mang theo `forCourseId` để kết quả theo khoá không lẫn với kết quả không kèm khoá; vắng khoá thì giữ nguyên khoá cũ để các lời gọi không kèm khoá (prefetch của route, trang danh sách câu hỏi) dùng chung cache như trước.
- */
-export function curriculumSubjectsQueryOptions(forCourseId?: string) {
-  return queryOptions({
-    queryKey: forCourseId ? [...sharedQueryKeys.curriculumSubjects, forCourseId] : sharedQueryKeys.curriculumSubjects,
-    queryFn: () => fetchCurriculumSubjects(forCourseId),
-  });
-}
-
-/** Danh sách môn học chương trình; chỉ tải khi `enabled`. Lỗi tải nổi lên query để trang hiện trạng thái lỗi thay vì danh sách rỗng im lặng. */
-export function useCurriculumSubjects(enabled: boolean, forCourseId?: string) {
-  return useQuery({ ...curriculumSubjectsQueryOptions(forCourseId), enabled });
 }
 
 /** Tuỳ chọn truy vấn các chương trình của một môn, kèm `forCourseId` như danh sách môn (cùng nhánh quyền theo khoá). */

@@ -6,15 +6,24 @@ Giáo khoa là nền tảng quản lý học tập viết bằng TypeScript (Nes
 
 ```
 apps/
-  api/      REST API NestJS 12 (TypeScript 6), Kysely, BullMQ, cache Redis
-  worker/   Tiến trình nền NestJS 12: các processor BullMQ, outbox relay, các job chạy theo lịch
-  web/      SPA React + Vite + React Router (TypeScript 7), shadcn/ui + Tailwind
+  api/             NestJS 12, HTTP, luật nghiệp vụ và phân quyền (TypeScript 6)
+  worker/          NestJS 12, processor BullMQ, outbox, scheduler (TypeScript 6)
+  web/             React Router framework mode + SSR động (TypeScript 7)
 packages/
-  contracts/  Các schema zod dùng chung (Problem Details, health, …) — hợp đồng duy nhất giữa api và web
-  config/     Các tsconfig cơ sở dùng chung
+  config/          Preset tsconfig chung
+  contracts/       Schema Zod, kiểu hợp đồng API và sự kiện
+  db/              Kiểu Kysely sinh từ DB, migration, repository thuần
+  editor/          Soạn và hiển thị rich-text
+  enrol/           Lõi dữ liệu ghi danh, cohort, phân vai và slot
+  eslint-config/   Preset ESLint cho dòng TypeScript 6
+  grades/          Lõi tính điểm và parity corpus
+  messaging/       Lõi đọc và phân phối realtime dùng chung
+  oxlint-config/   Preset Oxlint cho dòng TypeScript 7
+  payments/        Repository, đối soát và các cổng thanh toán
+  ui/              Component nền shadcn/ui, hooks và stylesheet
 ```
 
-Luật phụ thuộc: `web` chỉ phụ thuộc vào `contracts`; `api`/`worker` dùng chung cơ sở dữ liệu và Redis nhưng chạy ở các tiến trình riêng. Frontend không bao giờ import code backend hay schema cơ sở dữ liệu.
+Luật phụ thuộc: `web` dùng `@giaokhoa/contracts`, `@giaokhoa/editor` và `@giaokhoa/ui` ở runtime; các preset `config`/`oxlint-config` phục vụ tooling. `api`/`worker` dùng chung tầng dữ liệu `@giaokhoa/db` và các lõi nghiệp vụ qua dependency đã khai, nhưng chạy ở các tiến trình riêng. Frontend không import mã backend hay kiểu schema cơ sở dữ liệu. Mọi package chỉ import qua public `exports` và dependency đã khai trong `package.json`, không phụ thuộc ngược vào `apps/*`. Các ngoại lệ import ngang feature của web được kiểm tra bằng `pnpm test:architecture`; nguồn gốc và quy tắc nằm trong `apps/web/AGENTS.md`. Các driver E2E dưới `apps/api/test/` hiện import 19 đường source worker để kiểm chứng processor thật; đây là ngoại lệ **chỉ dành cho test**, đã đóng băng theo từng cặp file trong test kiến trúc, không phải quyền import chéo của code runtime.
 
 ## Điều kiện tiên quyết
 
