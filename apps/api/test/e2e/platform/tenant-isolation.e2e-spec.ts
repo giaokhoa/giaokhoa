@@ -1,5 +1,8 @@
 import { INestApplication } from '@nestjs/common';
 import { Client } from 'pg';
+import { TenantsService } from '../../../src/modules/tenants/tenants.service';
+import { RolesService } from '../../../src/modules/access/roles.service';
+import { tenantAls } from '../../../src/modules/tenants/tenant-als';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   STRONG_PASSWORD,
@@ -24,7 +27,7 @@ import {
  *  (6) seed: tenant-zero + tenant trường mặc định tồn tại, admin khởi
  *      tạo là thành viên của cả hai.
  *
- * Hai tenant A/B dựng bằng chính API công khai với token admin khởi tạo (platform manager); mọi thao tác trong tenant đi qua chuyển phiên (switch-tenant) như người dùng thật.
+ * Hai tenant A/B tạo qua API công khai; fixture gán riêng vai manager của tenant trước khi thực hiện thao tác nghiệp vụ qua HTTP. Chuyển phiên giữa hai tenant chỉ trong kho chung.
  */
 describe('Cô lập tenant (TENANT-0, #168)', () => {
   let app: INestApplication;
@@ -78,29 +81,29 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
     const guardianBUser = await createUserViaApi(app, adminZero);
     const studentBUser = await createUserViaApi(app, adminZero);
 
-    const addMember = async (tenantId: string, userId: string) => {
-      await must(await http(app).post(`/api/v1/tenants/${tenantId}/members`).set(auth(adminZero)).send({ userId }), 'add member');
-    };
-    // Admin tự thêm mình vào cả hai tenant để chuyển phiên làm việc.
-    for (const uid of [teacherId, memberAOnlyId, guardianAUser.id, studentAUser.id, adminId]) await addMember(tenantA, uid);
-    for (const uid of [teacherId, guardianBUser.id, studentBUser.id, adminId]) await addMember(tenantB, uid);
-
-    // TENANT-1 (#196, điểm N2): trong cây tenant KHÔNG còn lối tắt
-    // site admin — admin muốn làm việc trong tenant A/B phải có vai
-    // thật neo tại context tenant như mọi người. Phía platform gán
-    // vai manager cho admin tại context của cả hai tenant TRƯỚC khi
-    // gieo nội dung (đúng mô hình vận hành: tenant admin giữ vai
-    // manager tại context tenant).
+    // Gieo quyền của người quản trị TRONG tenant bằng fixture nền:
+    // quản trị platform không được tự thêm thành viên tenant chỉ nhờ
+    // quyền manager ở hệ thống. Mọi thao tác nghiệp vụ sau đó vẫn qua
+    // HTTP với vai manager tường minh gán tại context A/B.
     const allContexts = await must(await http(app).get('/api/v1/access/contexts').set(auth(adminZero)), 'list contexts') as { id: string; contextLevel: number; instanceId: string }[];
     const tenantCtxA = allContexts.find((c) => c.contextLevel === 20 && c.instanceId === tenantA);
     const tenantCtxB = allContexts.find((c) => c.contextLevel === 20 && c.instanceId === tenantB);
     if (!tenantCtxA || !tenantCtxB) throw new Error('tenant contexts missing');
     const managerRole = await roleIdByShortname(app, adminZero, 'manager');
-    for (const ctx of [tenantCtxA, tenantCtxB]) {
-      await must(await http(app).post('/api/v1/access/assignments').set(auth(adminZero)).send({
-        userId: adminId, roleId: managerRole, contextId: ctx.id,
-      }), 'assign admin manager in tenant');
-    }
+    const tenantsService = app.get(TenantsService, { strict: false });
+    const rolesService = app.get(RolesService, { strict: false });
+    await tenantAls.run({ platform: true }, async () => {
+      for (const tid of [tenantA, tenantB]) await tenantsService.ensureActiveMembership(tid, adminId);
+      for (const ctx of [tenantCtxA, tenantCtxB]) {
+        await rolesService.assignRole(adminId, managerRole, ctx.id);
+      }
+    });
+
+    const addMember = async (tenantId: string, userId: string) => {
+      await must(await http(app).post(`/api/v1/tenants/${tenantId}/members`).set(auth(adminZero)).send({ userId }), 'add member');
+    };
+    for (const uid of [teacherId, memberAOnlyId, guardianAUser.id, studentAUser.id]) await addMember(tenantA, uid);
+    for (const uid of [teacherId, guardianBUser.id, studentBUser.id]) await addMember(tenantB, uid);
 
     const switchTo = async (token: string, tenantId: string): Promise<string> => {
       const pair = await must(await http(app).post(`/api/v1/auth/switch-tenant/${tenantId}`).set(auth(token)), 'switch tenant') as { accessToken: string };
@@ -164,8 +167,7 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
     expect(slugs).toContain('truong-mac-dinh');
     const mine = await must(await http(app).get('/api/v1/auth/tenants').set(auth(adminZero)), 'my tenants') as { slug: string }[];
     const mineSlugs = mine.map((t) => t.slug);
-    expect(mineSlugs).toContain('trang-chinh');
-    expect(mineSlugs).toContain('truong-mac-dinh');
+    expect(mineSlugs).toEqual(['trang-chinh']); // Bộ chọn chỉ trả tenant của phiên hiện hành.
   });
 
   it('(1) đọc chéo tenant bằng id đoán → 404 đồng nhất', async () => {
@@ -296,13 +298,12 @@ describe('Cô lập tenant (TENANT-0, #168)', () => {
     expect(createCat.status).toBe(403);
     const patchCat = await http(app).patch(`/api/v1/courses/categories/${categoryA}`).set(auth(pair.accessToken)).send({ name: 'Đổi tên trái phép' });
     expect(patchCat.status).toBe(403);
-    // Ngoài cây tenant, cùng tài khoản vẫn là site admin nguyên vẹn:
-    // quản trị tenant từ phía platform (nhánh platform của
-    // assertTenantViewer, thiết kế TENANT-0) vẫn mở như cũ.
+    // Ngoài cây tenant, tài khoản vẫn có quyền xem registry từ platform,
+    // nhưng không xem được membership nếu không có vai trong tenant A.
     const tenants = await http(app).get('/api/v1/tenants').set(auth(supportLogin.accessToken));
     expect(tenants.status).toBe(200);
     const membersFromPlatform = await http(app).get(`/api/v1/tenants/${tenantA}/members`).set(auth(supportLogin.accessToken));
-    expect(membersFromPlatform.status).toBe(200);
+    expect(membersFromPlatform.status).toBe(403);
   });
 
   it('(8) fail-closed + N3 (TENANT-1): SQL thô không GUC hoặc GUC rỗng → 0 dòng, không lỗi; notifications cách ly theo GUC', async () => {
