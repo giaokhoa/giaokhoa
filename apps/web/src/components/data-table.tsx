@@ -42,12 +42,7 @@ import {
 import { Input } from '@giaokhoa/ui/components/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@giaokhoa/ui/components/table';
 
-// Bộ tính năng của bảng (TanStack Table v9 khai báo tường minh để
-// tree-shake), giữ đúng bộ khung của block dashboard-01 và hướng dẫn
-// data-table chính thức của shadcn: sắp xếp, lọc theo cột, lọc toàn
-// bảng, ẩn/hiện cột, phân trang, chọn hàng — kèm các hàm lọc/sắp xếp
-// tích hợp mà cột dựa vào (includesString cho lọc, text/alphanumeric
-// cho sắp xếp chuỗi).
+// Bộ tính năng của bảng (TanStack Table v9 khai báo tường minh để tree-shake), giữ đúng bộ khung của block dashboard-01 và hướng dẫn data-table chính thức của shadcn: sắp xếp, lọc theo cột, lọc toàn bảng, ẩn/hiện cột, phân trang, chọn hàng — kèm các hàm lọc/sắp xếp tích hợp mà cột dựa vào (includesString cho lọc, text/alphanumeric cho sắp xếp chuỗi).
 const features = tableFeatures({
   columnFilteringFeature,
   columnVisibilityFeature,
@@ -91,8 +86,7 @@ export interface DataColumn<T extends object> {
   /** Giá trị để sắp xếp; bỏ qua thì cột không sắp xếp được. */
   sortValue?: (row: T) => string | number;
   /**
-   * Chuỗi đại diện của hàng cho bộ lọc toàn bảng (ô lọc ở thanh công
-   * cụ quét qua giá trị này của mọi cột); bỏ qua thì dùng sortValue.
+   * Chuỗi đại diện của hàng cho bộ lọc toàn bảng (ô lọc ở thanh công cụ quét qua giá trị này của mọi cột); bỏ qua thì dùng sortValue.
    */
   filterValue?: (row: T) => string;
 }
@@ -107,21 +101,14 @@ export interface DataTableLabels {
   /** Placeholder của ô lọc toàn bảng; bỏ qua thì không hiện ô lọc (ví dụ bảng lọc phía server). */
   filterPlaceholder?: string;
   /**
-   * Dòng chữ khoảng dòng đang hiển thị ở chân bảng (ví dụ "Hiển thị
-   * 1–20 trong 57 dòng"). Khi được truyền, chân bảng chuyển sang biến
-   * thể khoảng dòng: dòng chữ này thay cho pageInfo và cụm nút chuyển
-   * trang LUÔN hiển thị (kể cả khi chỉ có một trang) kèm các nút số
-   * trang. Bỏ qua thì chân bảng giữ biến thể mặc định (pageInfo + cụm
-   * nút chỉ hiện khi có từ hai trang).
+   * Dòng chữ khoảng dòng đang hiển thị ở chân bảng (ví dụ "Hiển thị 1–20 trong 57 dòng"). Khi được truyền, chân bảng chuyển sang biến thể khoảng dòng: dòng chữ này thay cho pageInfo và cụm nút chuyển trang LUÔN hiển thị (kể cả khi chỉ có một trang) kèm các nút số trang. Bỏ qua thì chân bảng giữ biến thể mặc định (pageInfo + cụm nút chỉ hiện khi có từ hai trang).
    */
   rangeInfo?: (from: number, to: number, total: number) => string;
 }
 
 /**
  * Danh sách nút số trang của cụm phân trang biến thể khoảng dòng:
- * tối đa 7 trang thì liệt kê hết; nhiều hơn thì giữ trang đầu, trang
- * cuối và ba trang quanh trang hiện tại, các khoảng nhảy thay bằng
- * dấu 'ellipsis' để cụm nút không tràn khi số trang lớn.
+ * tối đa 7 trang thì liệt kê hết; nhiều hơn thì giữ trang đầu, trang cuối và ba trang quanh trang hiện tại, các khoảng nhảy thay bằng dấu 'ellipsis' để cụm nút không tràn khi số trang lớn.
  */
 function pageNumberList(pageCount: number, current: number): (number | 'ellipsis')[] {
   if (pageCount <= 7) return Array.from({ length: pageCount }, (_, i) => i);
@@ -137,30 +124,9 @@ function pageNumberList(pageCount: number, current: number): (number | 'ellipsis
 }
 
 /**
- * Bảng dữ liệu dùng chung của toàn app (trang tổng quan, quản trị người
- * dùng, ngân hàng câu hỏi, sổ điểm, ma trận vai trò…), khung theo block
- * dashboard-01 và hướng dẫn data-table chính thức của shadcn: thanh công
- * cụ có ô lọc toàn bảng + nút tuỳ biến cột, bảng viền bo góc, chân phân
- * trang. Mọi cơ chế bảng (sắp xếp, lọc, ẩn/hiện cột, phân trang, chọn
- * hàng) do TanStack Table đảm nhiệm — không trang nào tự chế lại. Hai
- * chế độ dữ liệu: mặc định trang gọi đưa toàn bộ hàng và bảng tự sắp
- * xếp/lọc/phân trang phía client; khi dữ liệu đã phân trang phía server
- * thì bật manualPagination và giữ trạng thái trang ở trang gọi (bảng
- * không tự cắt trang). Tương tự, khi thứ tự dòng do server quyết định
- * theo hợp đồng sắp xếp thì bật manualSorting và giữ trạng thái sắp xếp
- * ở trang gọi (bảng không tự sắp xếp lại trang đơn lẻ — sắp xếp một
- * trang sẽ gây hiểu nhầm là sắp xếp toàn cục). Dữ liệu và cột do trang gọi cung cấp — luôn là
- * dữ liệu thật của vai trò tương ứng; component không biết nghiệp vụ.
- * Chân bảng có hai biến thể do nhãn của trang gọi chọn: mặc định hiện
- * "Trang X / Y" và chỉ bày cụm nút khi có từ hai trang; khi trang gọi
- * truyền nhãn rangeInfo thì hiện khoảng dòng đang hiển thị kèm cụm nút
- * luôn bày (có thêm nút số trang) như các bảng quản trị mẫu.
+ * Bảng dữ liệu dùng chung của toàn app (trang tổng quan, quản trị người dùng, ngân hàng câu hỏi, sổ điểm, ma trận vai trò…), khung theo block dashboard-01 và hướng dẫn data-table chính thức của shadcn: thanh công cụ có ô lọc toàn bảng + nút tuỳ biến cột, bảng viền bo góc, chân phân trang. Mọi cơ chế bảng (sắp xếp, lọc, ẩn/hiện cột, phân trang, chọn hàng) do TanStack Table đảm nhiệm — không trang nào tự chế lại. Hai chế độ dữ liệu: mặc định trang gọi đưa toàn bộ hàng và bảng tự sắp xếp/lọc/phân trang phía client; khi dữ liệu đã phân trang phía server thì bật manualPagination và giữ trạng thái trang ở trang gọi (bảng không tự cắt trang). Tương tự, khi thứ tự dòng do server quyết định theo hợp đồng sắp xếp thì bật manualSorting và giữ trạng thái sắp xếp ở trang gọi (bảng không tự sắp xếp lại trang đơn lẻ — sắp xếp một trang sẽ gây hiểu nhầm là sắp xếp toàn cục). Dữ liệu và cột do trang gọi cung cấp — luôn là dữ liệu thật của vai trò tương ứng; component không biết nghiệp vụ. Chân bảng có hai biến thể do nhãn của trang gọi chọn: mặc định hiện "Trang X / Y" và chỉ bày cụm nút khi có từ hai trang; khi trang gọi truyền nhãn rangeInfo thì hiện khoảng dòng đang hiển thị kèm cụm nút luôn bày (có thêm nút số trang) như các bảng quản trị mẫu.
  *
- * Chi tiết kiểu: TanStack v9 chỉ suy luận chặt khi mảng cột được bọc qua
- * `columnHelper.columns(...)` với kiểu hàng cụ thể, nên phần nội bộ làm
- * việc trên Record<string, any> và ép ngược về T tại đúng các điểm chạm
- * dữ liệu của trang gọi (accessor, cell, getRowId) — bề mặt props vẫn
- * được kiểm kiểu đầy đủ theo T.
+ * Chi tiết kiểu: TanStack v9 chỉ suy luận chặt khi mảng cột được bọc qua `columnHelper.columns(...)` với kiểu hàng cụ thể, nên phần nội bộ làm việc trên Record<string, any> và ép ngược về T tại đúng các điểm chạm dữ liệu của trang gọi (accessor, cell, getRowId) — bề mặt props vẫn được kiểm kiểu đầy đủ theo T.
  */
 export function DataTable<T extends object>({
   title,
@@ -188,14 +154,11 @@ export function DataTable<T extends object>({
   /**
    * Tổng số dòng khớp toàn cục cho dòng chữ khoảng dòng ở chân bảng
    * (chỉ dùng khi labels.rangeInfo được truyền): bắt buộc truyền ở chế
-   * độ manualPagination vì bảng chỉ thấy đúng một trang; ở chế độ client
-   * mà bỏ qua thì bảng tự lấy tổng sau lọc từ row model.
+   * độ manualPagination vì bảng chỉ thấy đúng một trang; ở chế độ client mà bỏ qua thì bảng tự lấy tổng sau lọc từ row model.
    */
   totalRows?: number;
   /**
-   * Phân trang phía server: dữ liệu truyền vào đã là đúng một trang,
-   * bảng chỉ giữ trạng thái trang và báo lên trang gọi qua
-   * onPaginationChange; tổng số trang lấy từ pageCount.
+   * Phân trang phía server: dữ liệu truyền vào đã là đúng một trang, bảng chỉ giữ trạng thái trang và báo lên trang gọi qua onPaginationChange; tổng số trang lấy từ pageCount.
    */
   manualPagination?: boolean;
   /** Tổng số trang khi manualPagination (suy từ tổng bản ghi phía server). */
@@ -204,10 +167,7 @@ export function DataTable<T extends object>({
   pagination?: PaginationState;
   onPaginationChange?: OnChangeFn<PaginationState>;
   /**
-   * Sắp xếp phía server: dữ liệu truyền vào đã được server sắp xếp
-   * theo hợp đồng, bảng chỉ giữ trạng thái sắp xếp và báo lên trang
-   * gọi qua onSortingChange; id của trạng thái sắp xếp là id cột của
-   * trang gọi, trang gọi tự ánh xạ sang tham số hợp đồng của API.
+   * Sắp xếp phía server: dữ liệu truyền vào đã được server sắp xếp theo hợp đồng, bảng chỉ giữ trạng thái sắp xếp và báo lên trang gọi qua onSortingChange; id của trạng thái sắp xếp là id cột của trang gọi, trang gọi tự ánh xạ sang tham số hợp đồng của API.
    */
   manualSorting?: boolean;
   /** Trạng thái sắp xếp do trang gọi giữ (bắt buộc khi manualSorting). */
@@ -232,21 +192,12 @@ export function DataTable<T extends object>({
   const handlePaginationChange: OnChangeFn<PaginationState> = onPaginationChange ?? setInternalPagination;
 
   /**
-   * Định nghĩa cột phải ỔN ĐỊNH danh tính giữa các lần render. Trang
-   * gọi thường khai cột ngay trong thân component nên mảng cột là một
-   * object mới sau mỗi lần render; nếu dựng lại cột theo nó, TanStack
-   * dựng lại toàn bộ ô và phần tử tương tác trong ô (checkbox chọn câu
-   * hỏi, nút thao tác) bị thay node giữa chừng — sự kiện click/change
-   * rơi vào node đã rời cây khiến handler của trang không bao giờ chạy
+   * Định nghĩa cột phải ỔN ĐỊNH danh tính giữa các lần render. Trang gọi thường khai cột ngay trong thân component nên mảng cột là một object mới sau mỗi lần render; nếu dựng lại cột theo nó, TanStack dựng lại toàn bộ ô và phần tử tương tác trong ô (checkbox chọn câu hỏi, nút thao tác) bị thay node giữa chừng — sự kiện click/change rơi vào node đã rời cây khiến handler của trang không bao giờ chạy
    * (đã gặp thật ở ngân hàng câu hỏi). Vì vậy bảng chỉ dựng lại cột khi
-   * tập (id, tiêu đề, khả năng sắp xếp) thay đổi; nội dung ô và hàm tính
-   * giá trị luôn đọc bản cột mới nhất qua store theo commit. Chữ ký JSON chứa đủ
-   * cấu hình cần dựng cột để useMemo không phụ thuộc mảng columns
-   * mới được tạo sau mỗi lần render.
+   * tập (id, tiêu đề, khả năng sắp xếp) thay đổi; nội dung ô và hàm tính giá trị luôn đọc bản cột mới nhất qua store theo commit. Chữ ký JSON chứa đủ cấu hình cần dựng cột để useMemo không phụ thuộc mảng columns mới được tạo sau mỗi lần render.
    */
   const [columnsStore] = React.useState(() => createLatestColumnsStore(columns));
-  // Cột TanStack giữ nguyên id nhưng callback thay đổi khi props cập nhật.
-  // Store thông báo lần commit mới để cell render lại mà không remount input.
+  // Cột TanStack giữ nguyên id nhưng callback thay đổi khi props cập nhật. Store thông báo lần commit mới để cell render lại mà không remount input.
   React.useSyncExternalStore(columnsStore.subscribe, columnsStore.getVersion, columnsStore.getVersion);
   React.useLayoutEffect(() => { columnsStore.update(columns); }, [columnsStore, columns]);
   const columnSignature = JSON.stringify(
@@ -299,11 +250,7 @@ export function DataTable<T extends object>({
   });
 
   /**
-   * Số liệu khoảng dòng cho biến thể chân bảng rangeInfo: tổng toàn
-   * cục do trang gọi truyền (phân trang phía server) hoặc lấy từ row
-   * model sau lọc (phân trang phía client); khoảng đang hiển thị suy
-   * từ vị trí trang và số hàng thật trên trang hiện tại, tổng bằng 0
-   * thì khoảng bắt đầu cũng là 0.
+   * Số liệu khoảng dòng cho biến thể chân bảng rangeInfo: tổng toàn cục do trang gọi truyền (phân trang phía server) hoặc lấy từ row model sau lọc (phân trang phía client); khoảng đang hiển thị suy từ vị trí trang và số hàng thật trên trang hiện tại, tổng bằng 0 thì khoảng bắt đầu cũng là 0.
    */
   const currentPageIndex = table.state.pagination.pageIndex;
   const totalForRange = totalRows ?? table.getFilteredRowModel().rows.length;

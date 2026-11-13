@@ -11,8 +11,7 @@ export interface ActivityDueReminderResult { checkedAt: string; reminded: Activi
 /**
  * Cửa sổ nhắc hạn nộp (giờ): hoạt động có hạn nộp rơi vào
  * (hiện tại, hiện tại + cửa sổ] được nhắc MỘT lần cho từng học sinh
- * chưa nộp — lát N5 (issue #50), mô hình nhắc hạn tự động của Google
- * Classroom/Canvas (hồ sơ chuẩn thông báo 2026-10-24, mục B.9/D.3).
+ * chưa nộp — lát N5 (issue #50), mô hình nhắc hạn tự động của Google Classroom/Canvas (hồ sơ chuẩn thông báo 2026-10-24, mục B.9/D.3).
  */
 export const ACTIVITY_DUE_REMINDER_WINDOW_HOURS = 24;
 
@@ -20,30 +19,14 @@ export const ACTIVITY_DUE_REMINDER_WINDOW_HOURS = 24;
 const SUBMITTED_ATTEMPT_STATES = ['needsgrading', 'finished'];
 
 /**
- * Activity due-soon reminders: mỗi lượt quét (định kỳ 5 phút) tìm các
- * hoạt động sắp đến hạn trong cửa sổ 24 giờ và phát MỘT sự kiện
- * outbox `activity_due_reminder` cho từng (học sinh, hoạt động) chưa
- * nộp — consumer thông báo sự kiện ở worker (issue con #520 của
- * #491) biến sự kiện thành thông báo `activity_due_soon`. Chống
- * trùng bền ngay tại phía
- * phát, cùng kỷ luật warnExpiring của enrol-expiry: đã có sự kiện
- * cho (userId, hoạt động, mốc hạn) thì không phát lại; giáo viên DỜI
- * HẠN thì mốc hạn mới được nhắc lại như một hạn mới.
+ * Activity due-soon reminders: mỗi lượt quét (định kỳ 5 phút) tìm các hoạt động sắp đến hạn trong cửa sổ 24 giờ và phát MỘT sự kiện outbox `activity_due_reminder` cho từng (học sinh, hoạt động) chưa nộp — consumer thông báo sự kiện ở worker (issue con #520 của #491) biến sự kiện thành thông báo `activity_due_soon`. Chống trùng bền ngay tại phía phát, cùng kỷ luật warnExpiring của enrol-expiry: đã có sự kiện cho (userId, hoạt động, mốc hạn) thì không phát lại; giáo viên DỜI HẠN thì mốc hạn mới được nhắc lại như một hạn mới.
  *
- * Hai loại hoạt động có hạn nộp (NB-1, issue #174 — trước đây chỉ có
- * Quiz, docblock cũ giữ tiền đề "mod_assign chưa tồn tại" đã sai từ
- * khi lát Bài tập landing): hoạt động đề theo `exam_pins.time_close`
+ * Hai loại hoạt động có hạn nộp (NB-1, issue #174 — trước đây chỉ có Quiz, docblock cũ giữ tiền đề "mod_assign chưa tồn tại" đã sai từ khi lát Bài tập landing): hoạt động đề theo `exam_pins.time_close`
  * (sau gộp Đề #226, pin mang vai trò của quiz), bài tập theo
- * `assignments.due_date`. Sự kiện mang `activityType` ('quiz' |
- * 'assign') + id của đúng loại đó (pinId | assignmentId) để consumer
- * rẽ nhánh contextUrl theo loại.
+ * `assignments.due_date`. Sự kiện mang `activityType` ('quiz' | 'assign') + id của đúng loại đó (pinId | assignmentId) để consumer rẽ nhánh contextUrl theo loại.
  *
- * "Chưa nộp": quiz = chưa có attempt hoàn tất (needsgrading/finished,
- * không tính attempt preview của giáo viên; attempt inprogress vẫn
- * được nhắc); bài tập = chưa có bản nộp ở trạng thái submitted (bản
- * nháp hoặc đã mở lại về nháp đều tính là chưa nộp). Đối tượng nhắc:
- * ghi danh ACTIVE còn hiệu lực của khoá chứa hoạt động; bỏ qua khoá
- * đang ẩn và course module bị ẩn/đang xoá.
+ * "Chưa nộp": quiz = chưa có attempt hoàn tất (needsgrading/finished, không tính attempt preview của giáo viên; attempt inprogress vẫn được nhắc); bài tập = chưa có bản nộp ở trạng thái submitted (bản nháp hoặc đã mở lại về nháp đều tính là chưa nộp). Đối tượng nhắc:
+ * ghi danh ACTIVE còn hiệu lực của khoá chứa hoạt động; bỏ qua khoá đang ẩn và course module bị ẩn/đang xoá.
  */
 @Processor('activity-due-reminders')
 /**
@@ -53,14 +36,10 @@ export class ActivityDueReminderProcessor extends WorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService, private readonly taskLog: TaskLogService) { super(); }
 
   /**
-   * Xử lý một job của queue tương ứng: quét các quiz sắp đóng + bài
-   * tập sắp đến hạn và phát sự kiện nhắc cho học sinh chưa nộp. Mỗi
-   * lượt quét được ghi vào task_log qua TaskLogService.
+   * Xử lý một job của queue tương ứng: quét các quiz sắp đóng + bài tập sắp đến hạn và phát sự kiện nhắc cho học sinh chưa nộp. Mỗi lượt quét được ghi vào task_log qua TaskLogService.
    */
   async process(_job: Job): Promise<ActivityDueReminderResult> {
-    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
-    // ngữ cảnh platform tường minh để RLS fail-closed không làm mù
-    // dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
+    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc ngữ cảnh platform tường minh để RLS fail-closed không làm mù dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
     return tenantAls.run({ platform: true }, () => this.processInContext(_job));
   }
 

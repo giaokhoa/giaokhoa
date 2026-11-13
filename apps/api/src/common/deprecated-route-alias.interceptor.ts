@@ -85,9 +85,7 @@ import type { Observable } from 'rxjs';
 const SUNSET_HEADER_VALUE = 'Sun, 01 Feb 2027 00:00:00 GMT';
 
 /**
- * Một mục của bảng alias: `pattern` là regex khớp path đầy đủ của
- * lượt gọi (đã bỏ query string); `alias` và `canonical` là cặp mẫu
- * path ghi vào bản ghi log.
+ * Một mục của bảng alias: `pattern` là regex khớp path đầy đủ của lượt gọi (đã bỏ query string); `alias` và `canonical` là cặp mẫu path ghi vào bản ghi log.
  */
 interface DeprecatedRouteAliasEntry {
   pattern: RegExp;
@@ -96,9 +94,7 @@ interface DeprecatedRouteAliasEntry {
 }
 
 /**
- * Bảng bề mặt 1 — hành động đổi tên + làm phẳng path (13 mục, thứ tự
- * cụ thể trước tổng quát). Hai mục đích xuất file mang canonical kèm
- * tham số `format` như mô tả ở đầu file.
+ * Bảng bề mặt 1 — hành động đổi tên + làm phẳng path (13 mục, thứ tự cụ thể trước tổng quát). Hai mục đích xuất file mang canonical kèm tham số `format` như mô tả ở đầu file.
  */
 const actionRenameAliasTable: DeprecatedRouteAliasEntry[] = [
   { pattern: /^\/api\/v1\/courses\/[^/]+\/sections\/[^/]+\/duplicate$/, alias: 'courses/:id/sections/:sectionId/duplicate', canonical: 'courses/:id/sections/:sectionId/copy' },
@@ -114,17 +110,12 @@ const actionRenameAliasTable: DeprecatedRouteAliasEntry[] = [
   { pattern: /^\/api\/v1\/exams\/banks\/[^/]+\/contributions\/[^/]+\/board-reject$/, alias: 'exams/banks/:bankId/contributions/:contributionId/board-reject', canonical: 'exams/banks/:bankId/contributions/:contributionId/reject' },
   { pattern: /^\/api\/v1\/exams\/dossiers\/[^/]+\/board-approve$/, alias: 'exams/dossiers/:dossierId/board-approve', canonical: 'exams/dossiers/:dossierId/approve' },
   { pattern: /^\/api\/v1\/exams\/dossiers\/[^/]+\/board-reject$/, alias: 'exams/dossiers/:dossierId/board-reject', canonical: 'exams/dossiers/:dossierId/reject' },
-  // Issue #346 (làm phẳng path phụ huynh): path gradebook cũ có 3 cấp
-  // tài nguyên nên làm phẳng về 2 cấp.
+  // Issue #346 (làm phẳng path phụ huynh): path gradebook cũ có 3 cấp tài nguyên nên làm phẳng về 2 cấp.
   { pattern: /^\/api\/v1\/guardian\/students\/[^/]+\/courses\/[^/]+\/gradebook$/, alias: 'guardian/students/:studentId/courses/:courseId/gradebook', canonical: 'guardian/students/:studentId/gradebooks/:courseId' },
 ];
 
 /**
- * Bảng bề mặt 2 — các path cũ của module điểm (10 mục, thứ tự cụ thể
- * trước tổng quát sau để path dài/đặc thù như xuất vnEdu hay lịch sử
- * điểm khớp đúng cặp của nó thay vì bị cặp tổng quát theo id nuốt
- * trước). `alias` và `canonical` giữ nguyên tên tham số
- * `:courseId`/`:itemId`/`:gradeId`/`:userId`.
+ * Bảng bề mặt 2 — các path cũ của module điểm (10 mục, thứ tự cụ thể trước tổng quát sau để path dài/đặc thù như xuất vnEdu hay lịch sử điểm khớp đúng cặp của nó thay vì bị cặp tổng quát theo id nuốt trước). `alias` và `canonical` giữ nguyên tên tham số `:courseId`/`:itemId`/`:gradeId`/`:userId`.
  */
 const gradePathsAliasTable: DeprecatedRouteAliasEntry[] = [
   { pattern: /^\/api\/v1\/courses\/[^/]+\/grades\/export\/vnedu$/, alias: 'courses/:courseId/grades/export/vnedu', canonical: 'courses/:courseId/grade-exports' },
@@ -140,12 +131,7 @@ const gradePathsAliasTable: DeprecatedRouteAliasEntry[] = [
 ];
 
 /**
- * Bảng hậu tố của bề mặt 3 (`exam-papers`): `suffix` là phần path
- * sau tiền tố đầy đủ (`exam-papers` cho alias, `exams` cho
- * canonical), dùng chung cho cả hai phía vì hai bề mặt chỉ khác
- * nhau ở tiền tố — trừ bốn hậu tố `board-*` mà bảng ghi đè dưới đây
- * ánh xạ sang `approve`/`reject`. Thứ tự: segment chữ trước tham số,
- * mẫu dài trước mẫu ngắn.
+ * Bảng hậu tố của bề mặt 3 (`exam-papers`): `suffix` là phần path sau tiền tố đầy đủ (`exam-papers` cho alias, `exams` cho canonical), dùng chung cho cả hai phía vì hai bề mặt chỉ khác nhau ở tiền tố — trừ bốn hậu tố `board-*` mà bảng ghi đè dưới đây ánh xạ sang `approve`/`reject`. Thứ tự: segment chữ trước tham số, mẫu dài trước mẫu ngắn.
  */
 const examPapersSuffixTable: string[] = [
   'banks/:bankId/contributions/:contributionId/board-approve',
@@ -179,10 +165,7 @@ const examPapersSuffixTable: string[] = [
 ];
 
 /**
- * Ngoại lệ đổi tên của bề mặt 3 (issue #345, giai đoạn 2): bốn hậu
- * tố `board-*` đã hợp nhất vào `approve`/`reject` ở phía canonical
- * `/exams`, nên canonical trong log của alias `/exam-papers` tương
- * ứng cũng là `approve`/`reject` — không còn là hậu tố `board-*`
+ * Ngoại lệ đổi tên của bề mặt 3 (issue #345, giai đoạn 2): bốn hậu tố `board-*` đã hợp nhất vào `approve`/`reject` ở phía canonical `/exams`, nên canonical trong log của alias `/exam-papers` tương ứng cũng là `approve`/`reject` — không còn là hậu tố `board-*`
  * (phía `/exams` nay chỉ giữ `board-*` làm alias đã deprecated của
  * chính nó, thuộc bề mặt 1). Mọi hậu tố còn lại giữ quy tắc chung:
  * canonical là cùng hậu tố dưới tiền tố `/exams`.

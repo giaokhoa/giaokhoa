@@ -22,29 +22,13 @@ import type { ExamMatrixView, MatrixImportIssue, MatrixImportPreview } from '@gi
 import { COGNITIVE_LEVELS, LEVEL_LABEL_KEYS, QTYPES, QTYPE_LABEL_KEYS, withApiReason } from '#features/questions/utils/shared';
 
 /**
- * Wizard NHẬP MA TRẬN TỪ FILE (lát I-3, issue #233) — bề mặt web của
- * chuỗi I-1 (xem trước) → I-2 (ghi nguyên tử). Trang KHÔNG tự tính
- * lại luật nào: mọi luật hợp lệ, tính tổng và khả dụng đều do server
- * trả trong kết quả xem trước; web chỉ trình bày và chuyển file.
+ * Wizard NHẬP MA TRẬN TỪ FILE (lát I-3, issue #233) — bề mặt web của chuỗi I-1 (xem trước) → I-2 (ghi nguyên tử). Trang KHÔNG tự tính lại luật nào: mọi luật hợp lệ, tính tổng và khả dụng đều do server trả trong kết quả xem trước; web chỉ trình bày và chuyển file.
  *
  * Flow tổng thể 5 bước, file là nguồn sự thật duy nhất xuyên suốt:
  * (1) chọn môn + chương trình + checkbox Vận dụng cao → tải workbook
- * mẫu do server sinh cho đúng bộ mức đó; (2) tải file .xlsx đã điền
- * lên; (3) xem trước: lưới ô dự thảo + cảnh báo + khả dụng, kèm bảng
- * lỗi định vị (sheet/dòng/cột/mã) khi `valid=false` — nút xác nhận
- * bị khoá khi còn lỗi; (4) xác nhận: gửi lại CHÍNH file đó lên bước
- * ghi (server parse lại từ đầu, không tin kết quả xem trước phía
- * client) — 422 kèm `matrixImportIssues` thì hiện lại bảng lỗi và
- * KHÔNG có ma trận nào được tạo, gửi lại cùng nội dung thì server
- * trả ma trận đã có thay vì tạo trùng; (5) kết quả: mở trang sửa
- * của ma trận vừa ghi (hoặc bản đã có khi trùng).
+ * mẫu do server sinh cho đúng bộ mức đó; (2) tải file .xlsx đã điền lên; (3) xem trước: lưới ô dự thảo + cảnh báo + khả dụng, kèm bảng lỗi định vị (sheet/dòng/cột/mã) khi `valid=false` — nút xác nhận bị khoá khi còn lỗi; (4) xác nhận: gửi lại CHÍNH file đó lên bước ghi (server parse lại từ đầu, không tin kết quả xem trước phía client) — 422 kèm `matrixImportIssues` thì hiện lại bảng lỗi và KHÔNG có ma trận nào được tạo, gửi lại cùng nội dung thì server trả ma trận đã có thay vì tạo trùng; (5) kết quả: mở trang sửa của ma trận vừa ghi (hoặc bản đã có khi trùng).
  *
- * Bất biến giữ ở mọi bước: ô neo ĐƠN VỊ KIẾN THỨC × mức × dạng (ma
- * trận KHÔNG gắn YCCĐ — YCCĐ trong xem trước chỉ để đối chiếu, ô
- * không dùng YCCĐ làm khoá); số câu Đúng–Sai là số CHÙM (1 chùm = 4 ý
- * theo chú thích 2 CV 7991); bộ mức mặc định 3 mức CV 7991, cột Vận
- * dụng cao chỉ tồn tại khi giáo viên tick checkbox ở bước 1 (và file
- * khai khớp) — không có select chọn levelSet nào trên luồng này.
+ * Bất biến giữ ở mọi bước: ô neo ĐƠN VỊ KIẾN THỨC × mức × dạng (ma trận KHÔNG gắn YCCĐ — YCCĐ trong xem trước chỉ để đối chiếu, ô không dùng YCCĐ làm khoá); số câu Đúng–Sai là số CHÙM (1 chùm = 4 ý theo chú thích 2 CV 7991); bộ mức mặc định 3 mức CV 7991, cột Vận dụng cao chỉ tồn tại khi giáo viên tick checkbox ở bước 1 (và file khai khớp) — không có select chọn levelSet nào trên luồng này.
  */
 
 const SELECT_CLASS = 'h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs';
@@ -68,8 +52,7 @@ const STEP_KEYS = [
 function IssueTable({ issues }: { issues: MatrixImportIssue[] }) {
   const { t } = useTranslation('app');
   if (issues.length === 0) return null;
-  // Khoá hàng giữ đúng công thức của bảng tự vẽ trước đây (mã + dòng +
-  // cột + số thứ tự) để định danh hàng ổn định trong bảng dùng chung.
+  // Khoá hàng giữ đúng công thức của bảng tự vẽ trước đây (mã + dòng + cột + số thứ tự) để định danh hàng ổn định trong bảng dùng chung.
   const rows = issues.map((issue, index) => ({
     ...issue,
     rowKey: `${issue.code}-${issue.row ?? ''}-${issue.column ?? ''}-${index}`,

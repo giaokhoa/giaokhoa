@@ -1,14 +1,7 @@
 import type { RichTextDocument } from '@giaokhoa/contracts';
 
 /**
- * Kiểu dữ liệu của shell ngân hàng câu hỏi/đề/ma trận thuộc
- * feature questions. Tách từ module dữ liệu phẳng
- * `src/lib/questions-data.ts` khi tổ chức lại apps/web theo mô
- * hình features/ (issue #500): kiểu nằm ở tầng types/, lời gọi
- * API thuần ở tầng api/, tuỳ chọn truy vấn và đột biến ở tầng
- * queries/. Nhóm kiểu về đề/hồ sơ đề và đóng góp ma trận ở lại
- * trong feature này theo đúng đặc tả issue #500 (shell ngân hàng
- * là một đơn vị gắn kết, render cả ba khu vực).
+ * Kiểu dữ liệu của shell ngân hàng câu hỏi/đề/ma trận thuộc feature questions. Tách từ module dữ liệu phẳng `src/lib/questions-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500): kiểu nằm ở tầng types/, lời gọi API thuần ở tầng api/, tuỳ chọn truy vấn và đột biến ở tầng queries/. Nhóm kiểu về đề/hồ sơ đề và đóng góp ma trận ở lại trong feature này theo đúng đặc tả issue #500 (shell ngân hàng là một đơn vị gắn kết, render cả ba khu vực).
  */
 
 /** Bank như API lớp bank trả về (feat Ngân hàng câu hỏi chung, issue #70; bankKind + capabilities.matrix* là của MB-1, issue #111). */
@@ -73,14 +66,7 @@ export interface PaperSummaryLite {
 }
 
 /**
- * Một đề xuất đóng góp ĐỀ trong hàng chờ của một bank đề — ĐƯỜNG
- * ĐÓNG GÓP DUY NHẤT của đề (EB-1, nâng lên khuôn QB-4 đầy đủ ở
- * S4/Q4 của issue #228): `mode` phân biệt đóng góp mới/cập nhật đề
- * đích; bộ cột `dossier*` là BỘ HỒ SƠ đính kèm đã ghim tại lúc đề
- * xuất (chỉ có ở đóng góp chính thức có đính kèm); `sourceDossierId`
- * neo về bộ hồ sơ gốc với các đóng góp được chuyển đổi từ hồ sơ treo
- * khi cắt đường hồ sơ — hàng chờ hồ sơ dùng neo này để đi thao tác
- * duyệt trên chính đóng góp. Hình dạng khớp view API trả về
+ * Một đề xuất đóng góp ĐỀ trong hàng chờ của một bank đề — ĐƯỜNG ĐÓNG GÓP DUY NHẤT của đề (EB-1, nâng lên khuôn QB-4 đầy đủ ở S4/Q4 của issue #228): `mode` phân biệt đóng góp mới/cập nhật đề đích; bộ cột `dossier*` là BỘ HỒ SƠ đính kèm đã ghim tại lúc đề xuất (chỉ có ở đóng góp chính thức có đính kèm); `sourceDossierId` neo về bộ hồ sơ gốc với các đóng góp được chuyển đổi từ hồ sơ treo khi cắt đường hồ sơ — hàng chờ hồ sơ dùng neo này để đi thao tác duyệt trên chính đóng góp. Hình dạng khớp view API trả về
  * (ExamContributionView: hàng đóng góp + paperName + reviews).
  */
 export interface ExamContributionLite {
@@ -135,9 +121,7 @@ export interface DossierSpecLite {
 }
 
 /**
- * Một dòng của trang khám phá ngân hàng chung (GET /questions/discovery).
- * Nhãn của câu là `excerpt` — trích đoạn nội dung do API tính sẵn (câu
- * hỏi không còn trường tên, quyết 11:28 ngày 26/10/2026).
+ * Một dòng của trang khám phá ngân hàng chung (GET /questions/discovery). Nhãn của câu là `excerpt` — trích đoạn nội dung do API tính sẵn (câu hỏi không còn trường tên, quyết 11:28 ngày 26/10/2026).
  */
 export interface DiscoveryItemLite {
   questionId: string;

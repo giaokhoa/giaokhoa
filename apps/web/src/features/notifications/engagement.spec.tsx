@@ -6,14 +6,9 @@ import { TestProviders } from '#test/providers';
 import { NotificationsPage } from './routes/notifications';
 
 /**
- * Test web cho trung tâm thông báo (Testing Library): nhóm theo ngữ
- * cảnh, lọc theo nhóm học, mở một thông báo thì đánh dấu đã đọc và
- * đi sâu vào ngữ cảnh. Tuỳ chọn thông báo của khu Cài đặt được kiểm
- * ở settings-notifications.spec.tsx.
+ * Test web cho trung tâm thông báo (Testing Library): nhóm theo ngữ cảnh, lọc theo nhóm học, mở một thông báo thì đánh dấu đã đọc và đi sâu vào ngữ cảnh. Tuỳ chọn thông báo của khu Cài đặt được kiểm ở settings-notifications.spec.tsx.
  *
- * File này là nửa notifications của `pages/engagement.spec.tsx`
- * cũ, tách theo miền khi tổ chức lại apps/web theo mô hình
- * features/ (issue #500); nửa badges nằm ở feature badges.
+ * File này là nửa notifications của `pages/engagement.spec.tsx` cũ, tách theo miền khi tổ chức lại apps/web theo mô hình features/ (issue #500); nửa badges nằm ở feature badges.
  */
 function stubFetch(handler: (url: string, init?: RequestInit) => unknown) {
   vi.stubGlobal(

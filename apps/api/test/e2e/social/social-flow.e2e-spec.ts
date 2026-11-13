@@ -6,11 +6,7 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser } from '..
 import { contextIdByLevelInstance, courseContextId } from '../../support/engagement-helpers';
 
 /**
- * Kiểm thử luồng Social (Tag / Comment / Rating / Notes) — mọi
- * hệ con đều ĐA HÌNH (POLYMORPHIC) (component + itemType/area + itemId +
- * contextId, không có FK cứng), được chứng minh bằng cách chạy CÙNG MỘT API trên hai
- * loại item khác nhau, với kiểm tra capability tại context của item.
- * Oracle (Moodle MOODLE_503_STABLE, đọc ngày 2026-10-22):
+ * Kiểm thử luồng Social (Tag / Comment / Rating / Notes) — mọi hệ con đều ĐA HÌNH (POLYMORPHIC) (component + itemType/area + itemId + contextId, không có FK cứng), được chứng minh bằng cách chạy CÙNG MỘT API trên hai loại item khác nhau, với kiểm tra capability tại context của item. Oracle (Moodle MOODLE_503_STABLE, đọc ngày 2026-10-22):
  *  - tag/tests/taglib_test.php: test_add_remove_item_tag,
  *    test_add_tag_ordering_calculation.
  *  - comment/tests/externallib_test.php: test_get_comments,
@@ -18,8 +14,7 @@ import { contextIdByLevelInstance, courseContextId } from '../../support/engagem
  *  - rating/tests/rating_test.php: test_get_ratings_sql — bản tổng hợp theo từng item
  *    : (1,3)→2, (1,4)→2.5, (3,5)→4, mỗi cái count=2.
  *  - notes/tests/lib_test.php chỉ bao phủ điều hướng hồ sơ ở bản 5.3; luật
- *    hiển thị ghi chú tuân theo báo cáo §2#16 + đặc tả social (ghi chú khoá học
- *    dành cho giáo viên của khoá).
+ *    hiển thị ghi chú tuân theo báo cáo §2#16 + đặc tả social (ghi chú khoá học dành cho giáo viên của khoá).
  */
 describe('Xã hội: thẻ, bình luận, đánh giá, ghi chú', () => {
   let app: INestApplication;

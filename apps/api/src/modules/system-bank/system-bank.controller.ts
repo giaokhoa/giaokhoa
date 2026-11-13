@@ -12,8 +12,7 @@ import {
 } from './dto/system-bank.dto';
 
 /**
- * Bề mặt HTTP của kho ngân hàng hệ thống (issue #585) — tiền tố riêng
- * `system-bank`, tách khỏi mọi tiền tố nghiệp vụ:
+ * Bề mặt HTTP của kho ngân hàng hệ thống (issue #585) — tiền tố riêng `system-bank`, tách khỏi mọi tiền tố nghiệp vụ:
  * - `POST /system-bank/questions` — phát hành câu mới kèm phiên bản đầu tiên (quản trị platform).
  * - `POST /system-bank/questions/:id/versions` — phát hành phiên bản mới cho câu đã có (quản trị platform).
  * - `POST /system-bank/questions/:id/withdraw` — rút câu: ngừng khám phá + ngừng nhập mới, ghi sự kiện (quản trị platform).
@@ -21,11 +20,7 @@ import {
  * - `GET /system-bank/questions/:id/versions` — liệt kê mọi phiên bản của câu (cùng cổng người xem).
  * - `GET /system-bank/questions/:id/versions/:version` — đọc một phiên bản kèm checksum (cùng cổng người xem).
  *
- * Khám phá có lọc (theo vị trí chương trình/YCCĐ/dạng/mức độ), nhập
- * bản chụp, ghi nhận sự kiện rút câu ở trung tâm và gói YCCĐ là các
- * route của các lát tiếp theo trong cùng issue, chung tiền tố này.
- * Controller chỉ là lớp vận chuyển mỏng; gác quyền và luật nghiệp vụ
- * nằm ở service.
+ * Khám phá có lọc (theo vị trí chương trình/YCCĐ/dạng/mức độ), nhập bản chụp, ghi nhận sự kiện rút câu ở trung tâm và gói YCCĐ là các route của các lát tiếp theo trong cùng issue, chung tiền tố này. Controller chỉ là lớp vận chuyển mỏng; gác quyền và luật nghiệp vụ nằm ở service.
  */
 @Controller({ path: 'system-bank/questions', version: '1' })
 export class SystemBankController {

@@ -1,9 +1,5 @@
 /**
- * Kiểu dữ liệu của cụm quản trị người dùng thuộc feature admin.
- * Tách từ module dữ liệu phẳng `src/lib/admin-users-data.ts` khi tổ
- * chức lại apps/web theo mô hình features/ (issue #500): định danh và
- * thân dữ liệu nằm ở tầng types/, lời gọi API thuần ở tầng api/, tuỳ
- * chọn truy vấn và hook ở tầng queries/.
+ * Kiểu dữ liệu của cụm quản trị người dùng thuộc feature admin. Tách từ module dữ liệu phẳng `src/lib/admin-users-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500): định danh và thân dữ liệu nằm ở tầng types/, lời gọi API thuần ở tầng api/, tuỳ chọn truy vấn và hook ở tầng queries/.
  */
 
 /** Thân tạo người dùng mới (POST /users). */

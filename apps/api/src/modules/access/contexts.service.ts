@@ -6,10 +6,7 @@ import { CONTEXT_LEVELS } from './domain/capabilities';
 
 @Injectable()
 /**
- * Quản lý cây context (hệ thống → danh mục → khoá học → module → block → user).
- * Bất biến: path là danh sách id tổ tiên vật chất hoá, luôn kết thúc bằng id của chính context;
- * mọi thay đổi cấu trúc cây đều bump version để PermissionEvaluator không dùng cache cũ.
- * Đối chiếu Moodle: lib/accesslib.php (context::instance_by_id, build path).
+ * Quản lý cây context (hệ thống → danh mục → khoá học → module → block → user). Bất biến: path là danh sách id tổ tiên vật chất hoá, luôn kết thúc bằng id của chính context; mọi thay đổi cấu trúc cây đều bump version để PermissionEvaluator không dùng cache cũ. Đối chiếu Moodle: lib/accesslib.php (context::instance_by_id, build path).
  */
 export class ContextsService {
   constructor(private readonly repo: AccessRepository) {}

@@ -16,10 +16,7 @@ import SystemBankExamsRoute from '../routes/system-bank-exams';
 import SystemBankMatricesRoute from '../routes/system-bank-matrices';
 
 /**
- * Spec flow làm bài theo endpoint thật của question engine: tạo usage từ
- * các câu hỏi đã chọn (POST /question-usages, component mod_quiz, slots chỉ
- * gồm questionId), rồi trên trang usage nộp bài qua POST .../submit và chốt
- * điểm qua POST /question-usages/:id/finish (deferredfeedback).
+ * Spec flow làm bài theo endpoint thật của question engine: tạo usage từ các câu hỏi đã chọn (POST /question-usages, component mod_quiz, slots chỉ gồm questionId), rồi trên trang usage nộp bài qua POST .../submit và chốt điểm qua POST /question-usages/:id/finish (deferredfeedback).
  */
 const USAGE_ID = '01900000-0000-7000-8000-000000000009';
 const ATTEMPT_ID = '01900000-0000-7000-8000-000000000011';

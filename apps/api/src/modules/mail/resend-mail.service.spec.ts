@@ -14,10 +14,7 @@ const MESSAGE = {
 };
 
 /**
- * Transport Resend (issue #7 chặng 2.5): có cấu hình thì gửi qua HTTP
- * API của Resend đúng hình đã khai; Resend lỗi thì ném để consumer
- * outbox thử lại; thiếu cấu hình thì fail-soft ghi log (không gọi
- * Resend, không ném) để app vẫn chạy ở môi trường chưa cấp khoá.
+ * Transport Resend (issue #7 chặng 2.5): có cấu hình thì gửi qua HTTP API của Resend đúng hình đã khai; Resend lỗi thì ném để consumer outbox thử lại; thiếu cấu hình thì fail-soft ghi log (không gọi Resend, không ném) để app vẫn chạy ở môi trường chưa cấp khoá.
  */
 describe('Khối ResendMailService', () => {
   afterEach(() => {

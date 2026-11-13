@@ -7,10 +7,7 @@ import { join } from 'node:path';
 export const OBJECT_STORAGE = Symbol('OBJECT_STORAGE');
 
 /**
- * Port ObjectStorage (report §3.8): tầng vật lý được định địa chỉ theo nội dung —
- * khoá = `<2 chars>/<next 2 chars>/<sha256>` đúng như filedir của Moodle,
- * ngoại trừ hash là SHA-256 (quyết định của dự án: không tương thích legacy).
- * Adapter cục bộ được giao ngay bây giờ; một adapter S3 có thể cài đặt cùng port này.
+ * Port ObjectStorage (report §3.8): tầng vật lý được định địa chỉ theo nội dung — khoá = `<2 chars>/<next 2 chars>/<sha256>` đúng như filedir của Moodle, ngoại trừ hash là SHA-256 (quyết định của dự án: không tương thích legacy). Adapter cục bộ được giao ngay bây giờ; một adapter S3 có thể cài đặt cùng port này.
  */
 /** Hợp đồng kho lưu trữ nội dung file: ghi/đọc/xoá theo key suy từ contentHash. */
 export interface ObjectStorage {

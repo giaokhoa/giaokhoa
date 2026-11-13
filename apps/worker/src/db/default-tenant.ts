@@ -1,25 +1,15 @@
 import type { CentreDb } from '@giaokhoa/db';
 
 /**
- * Tenant mặc định của một user phía worker (TENANT-1, #196) — cùng
- * luật với `TenantsService.resolveDefaultTenant` phía API (TENANT-0):
- * membership active duy nhất → tenant đó; nhiều tenant → tenant
- * trường đầu tiên; không có → tenant platform (Trang chính). (Nhánh
- * site-admin → platform của luật gốc không áp ở đây: helper này chỉ
- * là nguồn tenant CUỐI CÙNG cho notification phát sinh ở worker khi
- * đối tượng nguồn không thuộc tenant nào — huy hiệu cấp platform,
- * sự kiện lịch cá nhân, báo cáo theo lịch.)
+ * Tenant mặc định của một user phía worker (TENANT-1, #196) — cùng luật với `TenantsService.resolveDefaultTenant` phía API (TENANT-0):
+ * membership active duy nhất → tenant đó; nhiều tenant → tenant trường đầu tiên; không có → tenant platform (Trang chính). (Nhánh site-admin → platform của luật gốc không áp ở đây: helper này chỉ là nguồn tenant CUỐI CÙNG cho notification phát sinh ở worker khi đối tượng nguồn không thuộc tenant nào — huy hiệu cấp platform, sự kiện lịch cá nhân, báo cáo theo lịch.)
  *
  * Bảng users KHÔNG có cột tenant — tư cách thành viên
  * (tenant_memberships) mới là nguồn sự thật.
  *
  * Handle là handle Kysely của kho trung tâm do phía gọi truyền vào
  * (issue #659): các processor truyền `routedKysely` của khung định
- * tuyến phía worker — cùng đích kho với handle bộ máy cũ định tuyến
- * trước đây (ngữ cảnh platform thì về kho chung; phiên theo trung
- * tâm đã chuẩn bị phía Kysely thì vào kho của trung tâm đó; xem
- * `db/routing/space-database.service.ts`). Kiểu handle lấy từ
- * `@giaokhoa/db` để các cụm worker sau không định nghĩa lại kiểu cục bộ.
+ * tuyến phía worker — cùng đích kho với handle bộ máy cũ định tuyến trước đây (ngữ cảnh platform thì về kho chung; phiên theo trung tâm đã chuẩn bị phía Kysely thì vào kho của trung tâm đó; xem `db/routing/space-database.service.ts`). Kiểu handle lấy từ `@giaokhoa/db` để các cụm worker sau không định nghĩa lại kiểu cục bộ.
  */
 export async function resolveDefaultTenantId(db: CentreDb, userId: string): Promise<string | null> {
   const rows = await db

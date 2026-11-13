@@ -16,9 +16,7 @@ import { ApiError } from '#lib/api';
 import { useDeleteRoleAssignment } from '../queries/admin-roles';
 
 /**
- * Dòng gán sắp gỡ kèm nhãn hiển thị đã phân giải ở bảng (tên người
- * dùng, tên vai trò, nhãn ngữ cảnh) — hộp thoại chỉ xác nhận và gọi
- * API, không tự phân giải định danh.
+ * Dòng gán sắp gỡ kèm nhãn hiển thị đã phân giải ở bảng (tên người dùng, tên vai trò, nhãn ngữ cảnh) — hộp thoại chỉ xác nhận và gọi API, không tự phân giải định danh.
  */
 export interface UnassignTarget {
   /** Dòng gán cần gỡ (chỉ cần định danh để gọi API gỡ). */
@@ -59,8 +57,7 @@ export interface RoleUnassignDialogProps {
 }
 
 /**
- * Dịch mã lỗi gỡ gán của backend thành thông báo cho người dùng; mã lạ
- * thì dùng thông báo chung, không hiện mã kỹ thuật ra giao diện.
+ * Dịch mã lỗi gỡ gán của backend thành thông báo cho người dùng; mã lạ thì dùng thông báo chung, không hiện mã kỹ thuật ra giao diện.
  */
 function unassignErrorMessage(error: unknown, t: (key: string) => string): string {
   if (error instanceof ApiError && error.problem.code === 'access.assignment_enrol_managed') {

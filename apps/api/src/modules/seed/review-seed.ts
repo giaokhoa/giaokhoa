@@ -12,19 +12,11 @@ import { tenantAls } from '../tenants/tenant-als';
  *
  * Script khởi động API trên một cổng tạm, đăng nhập bằng tài khoản admin
  * (gieo lúc bootstrap từ biến môi trường ADMIN_*) rồi tạo dữ liệu mẫu qua
- * chính HTTP API công khai — cùng đường mà giao diện dùng. Mọi bước đều
- * find-or-create nên chạy lại nhiều lần không tạo trùng (idempotent).
+ * chính HTTP API công khai — cùng đường mà giao diện dùng. Mọi bước đều find-or-create nên chạy lại nhiều lần không tạo trùng (idempotent).
  *
- * Dữ liệu tạo ra: teacher1, student1, student2, parent1 (phụ huynh của
- * student1, kèm một liên kết giám hộ đang hiệu lực parent1 → student1
- * để đăng nhập nghiệm thu được bề mặt phụ huynh); một khoá học mẫu có
- * sections + module, ghi danh, điểm mẫu, một huy hiệu đã cấp cho student1
- * và một sự kiện lịch của khoá học. Mật khẩu xem tại README, mục Review —
- * CHỈ dùng cho môi trường dev/review.
+ * Dữ liệu tạo ra: teacher1, student1, student2, parent1 (phụ huynh của student1, kèm một liên kết giám hộ đang hiệu lực parent1 → student1 để đăng nhập nghiệm thu được bề mặt phụ huynh); một khoá học mẫu có sections + module, ghi danh, điểm mẫu, một huy hiệu đã cấp cho student1 và một sự kiện lịch của khoá học. Mật khẩu xem tại README, mục Review — CHỈ dùng cho môi trường dev/review.
  *
- * Riêng chương trình GDPT 2018 không đi qua HTTP: seed RESTORE dump
- * đông cứng trong repo qua ProgramDumpService (không chạy importer) —
- * xem khối "[seed] program dump ..." trong main().
+ * Riêng chương trình GDPT 2018 không đi qua HTTP: seed RESTORE dump đông cứng trong repo qua ProgramDumpService (không chạy importer) — xem khối "[seed] program dump ..." trong main().
  */
 const ADMIN = { username: process.env['ADMIN_USERNAME'] ?? 'admin', password: process.env['ADMIN_PASSWORD'] ?? 'Admin123!' };
 const TEACHER_PASSWORD = ['Teacher', '123', '!'].join('');

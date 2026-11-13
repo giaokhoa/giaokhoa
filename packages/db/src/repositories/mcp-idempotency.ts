@@ -1,18 +1,9 @@
 /**
  * Repository của bảng MCP IDEMPOTENCY trên Kysely.
  *
- * Vai trò: truy cập bảng `mcp_idempotency_keys` của kho trung tâm
- * — tra cứu có xét hạn: dòng hết hạn bị xoá ngay khi chạm tới và
- * coi như không tồn tại, để client dùng lại key sau 24 giờ không
- * va phải response cũ. Repository không chứa luật nghiệp vụ MCP;
- * hạn 24 giờ là hằng số của chính bảng này nên giữ tại đây như
- * trước.
+ * Vai trò: truy cập bảng `mcp_idempotency_keys` của kho trung tâm — tra cứu có xét hạn: dòng hết hạn bị xoá ngay khi chạm tới và coi như không tồn tại, để client dùng lại key sau 24 giờ không va phải response cũ. Repository không chứa luật nghiệp vụ MCP; hạn 24 giờ là hằng số của chính bảng này nên giữ tại đây như trước.
  *
- * Khuôn theo pilot kho control plane: tên cột snake_case của
- * schema codegen ở bên trong, hình dạng dòng camelCase ở biên qua
- * danh sách cột có bí danh tường minh; cột jsonb `response_json`
- * khi ghi đi qua `jsonbValue` (serialize tường minh + `::jsonb`)
- * để một khuôn duy nhất cho mọi giá trị jsonb.
+ * Khuôn theo pilot kho control plane: tên cột snake_case của schema codegen ở bên trong, hình dạng dòng camelCase ở biên qua danh sách cột có bí danh tường minh; cột jsonb `response_json` khi ghi đi qua `jsonbValue` (serialize tường minh + `::jsonb`) để một khuôn duy nhất cho mọi giá trị jsonb.
  */
 import { sql, type RawBuilder } from 'kysely';
 import type { CentreDb, CentreTx } from '../client';

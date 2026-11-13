@@ -5,20 +5,13 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { contentKey, type ObjectStorage, type PresignedDownloadStorage } from './storage';
 
 /**
- * Adapter vật lý tương thích S3 cho port ObjectStorage: cùng
- * bố cục khoá định địa chỉ theo nội dung như adapter cục bộ
+ * Adapter vật lý tương thích S3 cho port ObjectStorage: cùng bố cục khoá định địa chỉ theo nội dung như adapter cục bộ
  * (`<2 chars>/<next 2 chars>/<sha256>`), để bucket có thể được kiểm tra và
- * đối soát với đúng cùng dạng như filedir cục bộ. Hoạt động
- * với AWS S3 và các endpoint tương thích S3 (Cloudflare R2, Backblaze
- * B2, MinIO) qua FILE_STORAGE_S3_ENDPOINT. Mọi cấu hình đều đến từ
- * env duy nhất; constructor fail fast (nêu tên các biến còn thiếu,
- * không bao giờ nêu giá trị của chúng) khi thiếu các thiết lập bắt buộc của driver.
+ * đối soát với đúng cùng dạng như filedir cục bộ. Hoạt động với AWS S3 và các endpoint tương thích S3 (Cloudflare R2, Backblaze B2, MinIO) qua FILE_STORAGE_S3_ENDPOINT. Mọi cấu hình đều đến từ env duy nhất; constructor fail fast (nêu tên các biến còn thiếu, không bao giờ nêu giá trị của chúng) khi thiếu các thiết lập bắt buộc của driver.
  */
 @Injectable()
 /**
- * Kho lưu trữ nội dung file trên S3 / endpoint tương thích S3, khoá theo contentHash —
- * cùng bố cục key với adapter local để hai kho đối chiếu được với nhau.
- * Cấu hình (bucket/endpoint/khoá) chỉ đọc từ env; thiếu biến bắt buộc thì fail-fast khi khởi tạo.
+ * Kho lưu trữ nội dung file trên S3 / endpoint tương thích S3, khoá theo contentHash — cùng bố cục key với adapter local để hai kho đối chiếu được với nhau. Cấu hình (bucket/endpoint/khoá) chỉ đọc từ env; thiếu biến bắt buộc thì fail-fast khi khởi tạo.
  */
 export class S3ObjectStorage implements ObjectStorage, PresignedDownloadStorage {
   private readonly client: S3Client;

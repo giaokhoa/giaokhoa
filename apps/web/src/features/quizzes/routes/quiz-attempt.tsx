@@ -3,30 +3,14 @@
  *
  * Flow tổng thể của module:
  * 1. Nạp view lượt làm từ `GET /quiz-attempts/:id` — view mang nội
- *    dung của các version câu hỏi ĐÃ PIN trong lần ghim (câu hỏi,
- *    stimulus, các lựa chọn) kèm hai trường phía đáp án theo mô hình
- *    giaokhoa (đợt port #248, lát P3 cấp dữ liệu, lát P7 hiển thị):
- *    `guidance` (hướng dẫn — hiện kèm câu hỏi ngay trong lúc làm,
- *    điểm quyết D-4) và `solution` (đáp án đúng dạng cấu trúc — API
- *    chỉ trả khi cổng xem lại `reviewRightAnswer` của lần ghim mở;
- *    cổng đóng thì trường là `null` và web không tự suy diễn đáp án
- *    từ bất kỳ nguồn nào khác).
+ *    dung của các version câu hỏi ĐÃ PIN trong lần ghim (câu hỏi, stimulus, các lựa chọn) kèm hai trường phía đáp án theo mô hình giaokhoa (đợt port #248, lát P3 cấp dữ liệu, lát P7 hiển thị):
+ *    `guidance` (hướng dẫn — hiện kèm câu hỏi ngay trong lúc làm, điểm quyết D-4) và `solution` (đáp án đúng dạng cấu trúc — API chỉ trả khi cổng xem lại `reviewRightAnswer` của lần ghim mở; cổng đóng thì trường là `null` và web không tự suy diễn đáp án từ bất kỳ nguồn nào khác).
  * 2. Khi lượt đang chạy: học sinh trả lời theo từng qtype, lưu từng
- *    câu qua engine (`POST /responses`), nộp bài (`POST /submit`) để
- *    chốt điểm; hết giờ thì server tự chốt ở tương tác kế tiếp.
+ *    câu qua engine (`POST /responses`), nộp bài (`POST /submit`) để chốt điểm; hết giờ thì server tự chốt ở tương tác kế tiếp.
  * 3. Khi lượt đã nộp, trang chuyển thành màn XEM LẠI: điểm từng câu,
- *    đáp án đúng được đánh dấu ngay trên lựa chọn/mệnh đề, khối "Lời
- *    giải" gồm đáp án đúng dạng chữ (`rightAnswer`, cùng cổng với
- *    `solution`) + feedback của đáp án đã chọn (cổng
- *    reviewSpecificFeedback) + generalFeedback (cổng
- *    reviewGeneralFeedback) + đáp án được chấp nhận của shortanswer /
- *    lời giải mẫu của essay (từ `solution`). Guidance vẫn hiện ở màn
- *    xem lại, cùng vị trí như lúc làm.
+ *    đáp án đúng được đánh dấu ngay trên lựa chọn/mệnh đề, khối "Lời giải" gồm đáp án đúng dạng chữ (`rightAnswer`, cùng cổng với `solution`) + feedback của đáp án đã chọn (cổng reviewSpecificFeedback) + generalFeedback (cổng reviewGeneralFeedback) + đáp án được chấp nhận của shortanswer / lời giải mẫu của essay (từ `solution`). Guidance vẫn hiện ở màn xem lại, cùng vị trí như lúc làm.
  *
- * Bất biến hiển thị: câu hỏi không có trường tên — nhãn của câu là
- * TRÍCH ĐOẠN nội dung (`questionExcerpt`); multichoice luôn là radio
- * chọn một (mô hình giaokhoa khoá đúng một đáp án đúng — quyết
- * 12:04 ngày 26/10/2026), không còn nhánh checkbox chọn-nhiều.
+ * Bất biến hiển thị: câu hỏi không có trường tên — nhãn của câu là TRÍCH ĐOẠN nội dung (`questionExcerpt`); multichoice luôn là radio chọn một (mô hình giaokhoa khoá đúng một đáp án đúng — quyết 12:04 ngày 26/10/2026), không còn nhánh checkbox chọn-nhiều.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
@@ -36,10 +20,7 @@ import {
   type RichTextDocument,
 } from '@giaokhoa/contracts';
 import { RichTextView } from '@giaokhoa/editor';
-// CSS của KaTeX nạp tại route module này (issue #503): trang làm bài
-// hiển thị nội dung câu hỏi qua RichTextView — HTML công thức do KaTeX
-// sinh cần bộ CSS này mới dựng đúng; nạp tại đây để CSS chỉ đi theo
-// route làm bài thay vì mọi route như khi nạp ở root.
+// CSS của KaTeX nạp tại route module này (issue #503): trang làm bài hiển thị nội dung câu hỏi qua RichTextView — HTML công thức do KaTeX sinh cần bộ CSS này mới dựng đúng; nạp tại đây để CSS chỉ đi theo route làm bài thay vì mọi route như khi nạp ở root.
 import 'katex/dist/katex.min.css';
 import { Button } from '@giaokhoa/ui/components/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@giaokhoa/ui/components/card';
@@ -167,21 +148,12 @@ function shuffled<T>(items: T[], seedText: string): T[] {
 /**
  * Trang làm bài quiz: câu hỏi theo trang của đề kèm khối "Hướng dẫn"
  * (guidance của version đã pin — hiện ngay trong lúc làm theo D-4),
- * trả lời theo từng qtype (multichoice luôn chọn một, truefalse,
- * shortanswer, essay), lưu từng câu qua question engine, nộp bài để
- * chốt điểm. Khi lượt đã nộp, trang chuyển thành màn xem lại: điểm
- * từng câu, đáp án đúng được đánh dấu trên lựa chọn, khối "Lời giải"
- * theo các cổng xem lại của lần ghim và trạng thái chờ chấm tay của
- * essay. Hết giờ làm bài thì server tự chốt ở tương tác kế tiếp —
- * đồng hồ trên trang chỉ để học sinh theo dõi.
+ * trả lời theo từng qtype (multichoice luôn chọn một, truefalse, shortanswer, essay), lưu từng câu qua question engine, nộp bài để chốt điểm. Khi lượt đã nộp, trang chuyển thành màn xem lại: điểm từng câu, đáp án đúng được đánh dấu trên lựa chọn, khối "Lời giải" theo các cổng xem lại của lần ghim và trạng thái chờ chấm tay của essay. Hết giờ làm bài thì server tự chốt ở tương tác kế tiếp — đồng hồ trên trang chỉ để học sinh theo dõi.
  */
 export function QuizAttemptPage() {
   const { t } = useTranslation('app');
   const { attemptId } = useParams();
-  // View lượt làm qua TanStack Query (F-01 của #133,
-  // `lib/quiz-data.ts`): clientLoader của route nạp trước đúng khoá;
-  // tải hỏng khi chưa có dữ liệu thì trang báo lỗi tải như bản thủ
-  // công, lỗi ở lần nạp lại sau đó giữ nguyên view đang hiện.
+  // View lượt làm qua TanStack Query (F-01 của #133, `lib/quiz-data.ts`): clientLoader của route nạp trước đúng khoá; tải hỏng khi chưa có dữ liệu thì trang báo lỗi tải như bản thủ công, lỗi ở lần nạp lại sau đó giữ nguyên view đang hiện.
   const attemptQuery = useQuizAttempt(attemptId);
   const view = attemptQuery.data ?? null;
   const error = attemptQuery.isError && !attemptQuery.data ? t('quizAttemptLoadFailed') : null;
@@ -193,10 +165,7 @@ export function QuizAttemptPage() {
   const [busy, setBusy] = useState(false);
   const [nowTick, setNowTick] = useState(() => Date.now());
 
-  // Mỗi khi view mới về (tải đầu, nạp lại sau lưu/nộp, hết giờ tự
-  // chốt): lấp các ô trả lời cục bộ còn trống bằng response phía
-  // server — đúng nhịp gộp của reload thủ công trước đây, không bao
-  // giờ đè lên chữ người dùng đang gõ.
+  // Mỗi khi view mới về (tải đầu, nạp lại sau lưu/nộp, hết giờ tự chốt): lấp các ô trả lời cục bộ còn trống bằng response phía server — đúng nhịp gộp của reload thủ công trước đây, không bao giờ đè lên chữ người dùng đang gõ.
   const [previousAttemptData, setPreviousAttemptData] = useState<typeof attemptQuery.data>(undefined);
   if (previousAttemptData !== attemptQuery.data) {
     setPreviousAttemptData(attemptQuery.data);
@@ -225,9 +194,7 @@ export function QuizAttemptPage() {
   }, [deadline]);
 
   const remainingSeconds = deadline ? Math.max(0, Math.floor((deadline - nowTick) / 1000)) : null;
-  // Hết giờ: nạp lại view đúng một lần ở nhịp đồng hồ chạm 0 (server
-  // tự chốt lượt ở tương tác này) — ref giữ hàm refetch mới nhất để
-  // effect chỉ chạy theo hai điều kiện dưới đây như bản thủ công.
+  // Hết giờ: nạp lại view đúng một lần ở nhịp đồng hồ chạm 0 (server tự chốt lượt ở tương tác này) — ref giữ hàm refetch mới nhất để effect chỉ chạy theo hai điều kiện dưới đây như bản thủ công.
   const refetchRef = useRef(attemptQuery.refetch);
   useEffect(() => { refetchRef.current = attemptQuery.refetch; }, [attemptQuery.refetch]);
   useEffect(() => {

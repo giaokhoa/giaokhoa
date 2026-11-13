@@ -21,19 +21,7 @@ import { RolesService } from './roles.service';
 @Module({
   imports: [
     CacheInfraModule, EventsModule,
-    // SpaceRoutingModule: PermissionEvaluator cần SpaceDatabaseService
-    // để lấy danh tính kho của ngữ cảnh hiện tại cho khoá cache
-    // `siteadmins` (issue #587, tiền điều kiện TĐ6), và
-    // AccessRepository cần handle `routedKysely` của nó (xem
-    // provider factory bên dưới). Cạnh này khép
-    // vòng module tường minh AccessModule → SpaceRoutingModule →
-    // ControlPlaneModule → AccessModule (ControlPlaneModule import
-    // module này cho chính PermissionEvaluator/ContextsService), nên
-    // forwardRef ở mọi cạnh của vòng như khuôn AuthModule ↔
-    // UsersModule (xem space-routing.module.ts và
-    // control-plane.module.ts); chuỗi provider của
-    // SpaceDatabaseService kết thúc ở ConfigService +
-    // ControlPlaneConnection, không phụ thuộc ngược vào module này.
+    // SpaceRoutingModule: PermissionEvaluator cần SpaceDatabaseService để lấy danh tính kho của ngữ cảnh hiện tại cho khoá cache `siteadmins` (issue #587, tiền điều kiện TĐ6), và AccessRepository cần handle `routedKysely` của nó (xem provider factory bên dưới). Cạnh này khép vòng module tường minh AccessModule → SpaceRoutingModule → ControlPlaneModule → AccessModule (ControlPlaneModule import module này cho chính PermissionEvaluator/ContextsService), nên forwardRef ở mọi cạnh của vòng như khuôn AuthModule ↔ UsersModule (xem space-routing.module.ts và control-plane.module.ts); chuỗi provider của SpaceDatabaseService kết thúc ở ConfigService + ControlPlaneConnection, không phụ thuộc ngược vào module này.
     forwardRef(() => SpaceRoutingModule),
   ],
   controllers: [AccessController],

@@ -5,8 +5,7 @@ import {
 } from '@giaokhoa/contracts';
 
 /**
- * Validation của học liệu (mod_page/mod_resource) dùng Zod qua Standard
- * Schema — schema nền ở `@giaokhoa/contracts` là nguồn sự thật duy nhất.
+ * Validation của học liệu (mod_page/mod_resource) dùng Zod qua Standard Schema — schema nền ở `@giaokhoa/contracts` là nguồn sự thật duy nhất.
  */
 export { createLessonTemplateSchema, createPageSchema, createResourceSchema, recordProgressSchema, updatePageSchema, updateResourceSchema };
 export type CreatePageDto = CreatePage;

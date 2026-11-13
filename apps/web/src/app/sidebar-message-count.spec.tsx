@@ -7,15 +7,9 @@ import { queryClient } from '#lib/query-client';
 import { baSessionResponse, isGetSessionUrl } from '#test/ba-session';
 
 /**
- * Test cho huy hiệu số conversation chưa đọc ở mục Tin nhắn trên
- * sidebar (lát M1, issue #204): số lấy từ GET /messages/unread-count,
- * trường `conversations` (KHÔNG phải tổng số tin và KHÔNG lẫn trường
- * `notifications` của cùng đáp ứng) — lớn hơn 0 thì hiện huy hiệu cạnh
- * nhãn mục Tin nhắn, bằng 0 thì không hiện. Chiến lược làm tươi của
- * lát này là refetchInterval 30 giây + refetch khi focus cửa sổ
+ * Test cho huy hiệu số conversation chưa đọc ở mục Tin nhắn trên sidebar (lát M1, issue #204): số lấy từ GET /messages/unread-count, trường `conversations` (KHÔNG phải tổng số tin và KHÔNG lẫn trường `notifications` của cùng đáp ứng) — lớn hơn 0 thì hiện huy hiệu cạnh nhãn mục Tin nhắn, bằng 0 thì không hiện. Chiến lược làm tươi của lát này là refetchInterval 30 giây + refetch khi focus cửa sổ
  * (không mở socket ở vỏ app — đánh đổi đã chốt trong hồ sơ audit):
- * test khoá cả hai đầu — số đổi sau một chu kỳ refetch và endpoint
- * được gọi lại đúng chu kỳ, không gọi dày hơn. Dựng đúng cây thật
+ * test khoá cả hai đầu — số đổi sau một chu kỳ refetch và endpoint được gọi lại đúng chu kỳ, không gọi dày hơn. Dựng đúng cây thật
  * (App → Shell → AppSidebar) như sidebar-notification-count.spec.
  */
 
@@ -46,9 +40,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 /**
- * Stub fetch cho vỏ app; `counts` là dãy số conversation chưa đọc mà
- * endpoint trả theo từng lần gọi (lần cuối lặp lại), counter ghi số
- * lần endpoint được gọi để khoá chu kỳ làm tươi.
+ * Stub fetch cho vỏ app; `counts` là dãy số conversation chưa đọc mà endpoint trả theo từng lần gọi (lần cuối lặp lại), counter ghi số lần endpoint được gọi để khoá chu kỳ làm tươi.
  */
 function stubFetch(counts: number[], counter?: { messageUnreadCalls: number }) {
   let served = 0;
@@ -65,8 +57,7 @@ function stubFetch(counts: number[], counter?: { messageUnreadCalls: number }) {
         if (counter) counter.messageUnreadCalls += 1;
         const conversations = counts[Math.min(served, counts.length - 1)]!;
         served += 1;
-        // Trường notifications cố ý khác hẳn để khoá việc badge chỉ
-        // được lấy trường conversations.
+        // Trường notifications cố ý khác hẳn để khoá việc badge chỉ được lấy trường conversations.
         return jsonResponse({ conversations, notifications: 99 });
       }
       if (url === '/api/v1/auth/refresh') return jsonResponse({}, 401);
@@ -123,8 +114,7 @@ describe('số conversation chưa đọc trên sidebar (M1)', () => {
     renderShell();
 
     const item = await screen.findByRole('link', { name: /Tin nhắn/ });
-    // Huy hiệu nằm trong chính mục Tin nhắn và mang số của trường
-    // conversations (4), không phải trường notifications (99).
+    // Huy hiệu nằm trong chính mục Tin nhắn và mang số của trường conversations (4), không phải trường notifications (99).
     expect(await within(item).findByText('4')).toBeInTheDocument();
   });
 
@@ -144,11 +134,7 @@ describe('số conversation chưa đọc trên sidebar (M1)', () => {
       stubFetch([2, 5], counter);
       renderShell();
 
-      // Nhích thời gian giả từng bước nhỏ tới khi huy hiệu đầu tiên
-      // hiện (mọi chờ đợi đều qua advanceTimersByTimeAsync — findBy/
-      // waitFor của Testing Library treo dưới fake timers). Tổng
-      // thời gian chờ bị chặn ở 10 giây giả, xa dưới chu kỳ 30 giây
-      // nên chưa thể chạm lần refetch nào.
+      // Nhích thời gian giả từng bước nhỏ tới khi huy hiệu đầu tiên hiện (mọi chờ đợi đều qua advanceTimersByTimeAsync — findBy/ waitFor của Testing Library treo dưới fake timers). Tổng thời gian chờ bị chặn ở 10 giây giả, xa dưới chu kỳ 30 giây nên chưa thể chạm lần refetch nào.
       const messageItem = () => screen.queryByRole('link', { name: /Tin nhắn/ });
       const badgeText = (text: string) => {
         const item = messageItem();

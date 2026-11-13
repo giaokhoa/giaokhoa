@@ -8,30 +8,15 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser } from '..
 import { addGroupMember, contextIdByLevelInstance, createGroupViaApi } from '../../support/engagement-helpers';
 
 /**
- * Lát M3 — TRẢ LỜI TRÍCH DẪN (issue #229): người dùng trả lời MỘT tin
- * cụ thể trong cùng hội thoại; tin mới mang tham chiếu reply-to và
- * khối tóm tắt (quote) do server dựng theo quyền của người đọc.
- * Các ca kiểm chứng đúng luồng nghiệp vụ:
+ * Lát M3 — TRẢ LỜI TRÍCH DẪN (issue #229): người dùng trả lời MỘT tin cụ thể trong cùng hội thoại; tin mới mang tham chiếu reply-to và khối tóm tắt (quote) do server dựng theo quyền của người đọc. Các ca kiểm chứng đúng luồng nghiệp vụ:
  *  - gửi kèm trích dẫn → response + đường đọc của cả hai phía mang
  *    quote đầy đủ (người gửi gốc, seq, excerpt rút gọn 120 ký tự);
  *  - gác service: trích dẫn tin của hội thoại KHÁC hoặc id không tồn
- *    tại → cùng một 400 `messaging.reply_target_not_found`, không
- *    tin nào được tạo (không lộ sự tồn tại của tin ở nơi khác);
+ *    tại → cùng một 400 `messaging.reply_target_not_found`, không tin nào được tạo (không lộ sự tồn tại của tin ở nơi khác);
  *  - trần ký tự của M2 tính trên nội dung tin MỚI, không tính trích
  *    dẫn;
  *  - tin gốc bị thu hồi / bị tác giả ẩn phía mình → quote chuyển
- *    `unavailable`, excerpt rỗng, nội dung gốc KHÔNG xuất hiện ở bất
- *    kỳ trường nào của payload người thường; tin gốc bị moderator
- *    xoá cứng → tham chiếu mất hẳn (replyTo null qua FK SET NULL).
- * Khẳng định realtime "`message.new` mang đủ dữ kiện trích dẫn" không
- * còn ở file này: từ issue #521, phân phối realtime chạy ở hàng đợi
- * phía worker (không còn consumer trong tiến trình API để phát tới
- * socket gắn ở đây) — khẳng định đó cư trú ở spec tích hợp
- * `apps/worker/test/integration/messaging/messaging-realtime-queue.int-spec.ts`.
- * Trạng thái xoá mềm toàn cục (deletedAt) hiện không còn đường API
- * nào đặt (luật quote vẫn xử lý cho dữ liệu cũ + moderator) — hai
- * trạng thái "không còn hiển thị" kiểm chứng sống ở đây là thu hồi
- * và ẩn-phía-người-đọc.
+ *    `unavailable`, excerpt rỗng, nội dung gốc KHÔNG xuất hiện ở bất kỳ trường nào của payload người thường; tin gốc bị moderator xoá cứng → tham chiếu mất hẳn (replyTo null qua FK SET NULL). Khẳng định realtime "`message.new` mang đủ dữ kiện trích dẫn" không còn ở file này: từ issue #521, phân phối realtime chạy ở hàng đợi phía worker (không còn consumer trong tiến trình API để phát tới socket gắn ở đây) — khẳng định đó cư trú ở spec tích hợp `apps/worker/test/integration/messaging/messaging-realtime-queue.int-spec.ts`. Trạng thái xoá mềm toàn cục (deletedAt) hiện không còn đường API nào đặt (luật quote vẫn xử lý cho dữ liệu cũ + moderator) — hai trạng thái "không còn hiển thị" kiểm chứng sống ở đây là thu hồi và ẩn-phía-người-đọc.
  */
 
 interface Person { id: string; username: string; token: string }

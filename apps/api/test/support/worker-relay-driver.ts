@@ -94,13 +94,7 @@ function getSharedKysely(): CentreDb {
 }
 
 /**
- * Khung định tuyến tối thiểu cho ngăn xếp relay của worker trong
- * cầu dẫn: `routedKysely` là handle Kysely dựng trên đúng
- * `TenantAwarePool` dùng chung ở trên (cùng cách dựng handle của
- * khung production), nên GUC theo ALS áp y hệt đường thật. Cầu dẫn
- * chỉ dẫn lượt quét kho chung nên sổ đăng ký trả rỗng và đường
- * theo trung tâm không được trang bị (ném lỗi nếu bị gọi — lượt
- * theo trung tâm được kiểm chứng ở chính các suite của worker).
+ * Khung định tuyến tối thiểu cho ngăn xếp relay của worker trong cầu dẫn: `routedKysely` là handle Kysely dựng trên đúng `TenantAwarePool` dùng chung ở trên (cùng cách dựng handle của khung production), nên GUC theo ALS áp y hệt đường thật. Cầu dẫn chỉ dẫn lượt quét kho chung nên sổ đăng ký trả rỗng và đường theo trung tâm không được trang bị (ném lỗi nếu bị gọi — lượt theo trung tâm được kiểm chứng ở chính các suite của worker).
  */
 function getWorkerSpaceDb(): SpaceDatabaseService {
   const kysely = getSharedKysely();
@@ -132,14 +126,9 @@ function getRelay(): OutboxRelayScheduler {
     const queueMap: OutboxEventQueues = new Map(
       queueNames.map((name, index) => [name, queues[index]!] as const),
     );
-    // Từ issue #582 relay còn hai phụ thuộc: khung định tuyến
-    // theo trung tâm (cho lượt quét các kho riêng) và cấu hình
+    // Từ issue #582 relay còn hai phụ thuộc: khung định tuyến theo trung tâm (cho lượt quét các kho riêng) và cấu hình
     // (giới hạn đồng thời của lượt quét). Cầu dẫn này chỉ dẫn
-    // lượt quét kho chung `publishPending` — lượt quét theo
-    // trung tâm được kiểm chứng ở chính các suite của worker —
-    // nên khung định tuyến ở đây là bản tối thiểu trên đúng pool
-    // dùng chung (xem {@link getWorkerSpaceDb}), và cấu hình của
-    // relay trả mặc định cho mọi khoá.
+    // lượt quét kho chung `publishPending` — lượt quét theo trung tâm được kiểm chứng ở chính các suite của worker — nên khung định tuyến ở đây là bản tối thiểu trên đúng pool dùng chung (xem {@link getWorkerSpaceDb}), và cấu hình của relay trả mặc định cho mọi khoá.
     const unconfigured = {
       get: (_key: string, fallback?: unknown) => fallback,
     } as unknown as ConfigService;
@@ -251,32 +240,12 @@ export async function flushWorkerRelay(): Promise<number> {
 }
 
 /**
- * Dọn job của lượt chạy, rồi đóng các hàng đợi BullMQ và pool DB
- * mà cầu dẫn đã dựng — gọi ở `afterAll` của file spec dùng nó,
- * nên việc dọn chạy cả khi test trong file thất bại giữa chừng.
+ * Dọn job của lượt chạy, rồi đóng các hàng đợi BullMQ và pool DB mà cầu dẫn đã dựng — gọi ở `afterAll` của file spec dùng nó, nên việc dọn chạy cả khi test trong file thất bại giữa chừng.
  *
  * Cách xoá (theo tài liệu chính thức của BullMQ, mục xoá job):
- * trước khi đóng kết nối, gọi `queue.remove(jobId)` cho từng id
- * trong tập ứng viên đã ghi vết trên TỪNG hàng đợi mà cầu dẫn
- * dựng (một dòng có thể fan-out ra nhiều hàng đợi nên phải thử
- * xoá ở mọi hàng đợi).
- * `queue.remove` chỉ xoá đúng job mang id đó — trả 1 khi xoá
- * được, 0 khi job không còn ở hàng đợi đó hoặc đang bị khoá —
- * nên job của tiến trình khác trên cùng Redis dùng chung không
- * bị ảnh hưởng, và việc tập ứng viên có chứa id chưa từng sinh
- * job (dòng chưa được phát) cũng vô hại vì lần xoá đó là thao
- * tác rỗng; vì lý do đó cấm dùng các thao tác xoá hàng loạt
- * toàn hàng đợi (`drain`/`obliterate`/`clean`) ở đây.
- * `queue.close()` chỉ đóng kết nối và không xoá job nào, còn
- * `removeOnComplete`/`removeOnFail` chỉ tác động sau khi một job
- * đã được tiêu thụ xong — cả hai đều không thay được bước xoá
- * này đối với job chưa từng được tiêu thụ.
+ * trước khi đóng kết nối, gọi `queue.remove(jobId)` cho từng id trong tập ứng viên đã ghi vết trên TỪNG hàng đợi mà cầu dẫn dựng (một dòng có thể fan-out ra nhiều hàng đợi nên phải thử xoá ở mọi hàng đợi). `queue.remove` chỉ xoá đúng job mang id đó — trả 1 khi xoá được, 0 khi job không còn ở hàng đợi đó hoặc đang bị khoá — nên job của tiến trình khác trên cùng Redis dùng chung không bị ảnh hưởng, và việc tập ứng viên có chứa id chưa từng sinh job (dòng chưa được phát) cũng vô hại vì lần xoá đó là thao tác rỗng; vì lý do đó cấm dùng các thao tác xoá hàng loạt toàn hàng đợi (`drain`/`obliterate`/`clean`) ở đây. `queue.close()` chỉ đóng kết nối và không xoá job nào, còn `removeOnComplete`/`removeOnFail` chỉ tác động sau khi một job đã được tiêu thụ xong — cả hai đều không thay được bước xoá này đối với job chưa từng được tiêu thụ.
  *
- * Hành vi khi lỗi: lỗi xoá của một job không chặn việc dọn các
- * job còn lại và không chặn việc đóng kết nối/pool, nhưng được
- * gom lại và ném ra sau khi đã đóng xong, để lượt chạy đỏ lên
- * thay vì rò rỉ job lặng lẽ. Trong e2e không có processor nào
- * chạy nên job của lượt luôn ở trạng thái chờ và xoá được.
+ * Hành vi khi lỗi: lỗi xoá của một job không chặn việc dọn các job còn lại và không chặn việc đóng kết nối/pool, nhưng được gom lại và ném ra sau khi đã đóng xong, để lượt chạy đỏ lên thay vì rò rỉ job lặng lẽ. Trong e2e không có processor nào chạy nên job của lượt luôn ở trạng thái chờ và xoá được.
  */
 export async function closeWorkerRelayDriver(): Promise<void> {
   const toClose = queues;

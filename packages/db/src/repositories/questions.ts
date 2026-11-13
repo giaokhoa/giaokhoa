@@ -11,18 +11,13 @@ import type { Json } from '../types/centre-db';
  *   (`'bank_id as bankId'`) dùng chung cho select và returning —
  *   KHÔNG bật CamelCasePlugin (một nguồn sự thật là database thật).
  * - Ghi qua hàm ánh xạ Insert/Update loại `undefined` tường minh
- *   từng trường (thử nghiệm T-4): `undefined` = không ghi/không
- *   đổi, `null` = ghi NULL — hai nghĩa không được lẫn.
+ *   từng trường (thử nghiệm T-4): `undefined` = không ghi/không đổi, `null` = ghi NULL — hai nghĩa không được lẫn.
  * - Mọi ghi jsonb đi qua `jsonbValue` (xâu hoá tường minh +
- *   `::jsonb`); `null` của cột jsonb nullable giữ nguyên là SQL
- *   NULL, không bị xâu hoá thành JSON `null`.
+ *   `::jsonb`); `null` của cột jsonb nullable giữ nguyên là SQL NULL, không bị xâu hoá thành JSON `null`.
  * - Khoá chính `uuidv7()` do database sinh (phụ lục U của kế
- *   hoạch): insert bỏ qua `id` (trừ khi phía gọi truyền tường
- *   minh) và lấy id qua `returning`.
+ *   hoạch): insert bỏ qua `id` (trừ khi phía gọi truyền tường minh) và lấy id qua `returning`.
  * - Điểm mở giao dịch của repository là `transaction(fn)`; các
- *   phương thức nhận handle tuỳ chọn (`QuestionsDb` = handle
- *   thường hoặc handle giao dịch) để phía gọi lồng thao tác vào
- *   giao dịch của mình.
+ *   phương thức nhận handle tuỳ chọn (`QuestionsDb` = handle thường hoặc handle giao dịch) để phía gọi lồng thao tác vào giao dịch của mình.
  *
  * Các kiểu dòng `*Row` là hợp đồng camelCase ở biên API. Các cột jsonb nội dung không có lược đồ chặt giữ kiểu `unknown`; riêng `content` của YCCĐ giữ kiểu `LearningOutcomeDoc`.
  *
@@ -542,8 +537,7 @@ export interface NewQuestionOutcomeLink {
 }
 
 // ---------------------------------------------------------------------------
-// Danh sách cột đọc: tên cột thật kèm bí danh camelCase, dùng chung cho
-// select và returning của từng bảng (khuôn pilot — không CamelCasePlugin).
+// Danh sách cột đọc: tên cột thật kèm bí danh camelCase, dùng chung cho select và returning của từng bảng (khuôn pilot — không CamelCasePlugin).
 // ---------------------------------------------------------------------------
 
 const Q_CATEGORY_COLUMNS = [
@@ -729,16 +723,11 @@ const CURRICULUM_COLUMNS = [
 ] as const;
 
 // ---------------------------------------------------------------------------
-// Ánh xạ ghi: loại `undefined` tường minh từng trường (T-4); cột jsonb
-// nullable phân biệt ba trạng thái — `undefined` bỏ qua, `null` ghi SQL
-// NULL, giá trị thì xâu hoá qua `jsonbValue`.
+// Ánh xạ ghi: loại `undefined` tường minh từng trường (T-4); cột jsonb nullable phân biệt ba trạng thái — `undefined` bỏ qua, `null` ghi SQL NULL, giá trị thì xâu hoá qua `jsonbValue`.
 // ---------------------------------------------------------------------------
 
 /**
- * Biểu thức tham số jsonb cho một giá trị ghi: xâu hoá tường minh
- * rồi ép `::jsonb`, theo khuôn của tài liệu Kysely (mục
- * `JSONColumnType` ở Getting Started) và của pilot — pg không suy
- * được kiểu tham số khi ghi jsonb, ghi thẳng object sẽ lỗi.
+ * Biểu thức tham số jsonb cho một giá trị ghi: xâu hoá tường minh rồi ép `::jsonb`, theo khuôn của tài liệu Kysely (mục `JSONColumnType` ở Getting Started) và của pilot — pg không suy được kiểu tham số khi ghi jsonb, ghi thẳng object sẽ lỗi.
  */
 function jsonbValue<T>(value: T): RawBuilder<T> {
   return sql<T>`${JSON.stringify(value)}::jsonb`;

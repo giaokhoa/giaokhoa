@@ -8,16 +8,7 @@ import { createCategory } from '../../support/course-enrolment-helpers';
 import { contextIdByLevelInstance } from '../../support/engagement-helpers';
 
 /**
- * Chat CẤP LỚP (lát MSG-T2, issue #184 — phần chat của CLASS-2; thiết
- * kế cấu trúc nhắn tin chốt 11:36 ngày 26/10/2026): mỗi lớp có đúng
- * một conversation riêng của lớp (type 2, component core_class,
- * itemType 'class' — KHÔNG dùng lại nhóm con "Cả lớp" của khoá),
- * cấp phát lười idempotent khi người thuộc lớp mở; thành viên =
- * roster lớp hiệu lực (backing cohort) ∪ chủ lớp ∪ đồng GV, đồng bộ
- * lười theo roster — nguồn sự thật duy nhất; GV lớp tắt được qua cờ
- * `enabled`; người ngoài lớp nhận 404 ở mọi đường. Roster lớp phía
- * messages mang cờ canDirectMessage khớp cổng nhắn riêng GV↔HS theo
- * quan hệ lớp (sổ quyết định mục D).
+ * Chat CẤP LỚP (lát MSG-T2, issue #184 — phần chat của CLASS-2; thiết kế cấu trúc nhắn tin chốt 11:36 ngày 26/10/2026): mỗi lớp có đúng một conversation riêng của lớp (type 2, component core_class, itemType 'class' — KHÔNG dùng lại nhóm con "Cả lớp" của khoá), cấp phát lười idempotent khi người thuộc lớp mở; thành viên = roster lớp hiệu lực (backing cohort) ∪ chủ lớp ∪ đồng GV, đồng bộ lười theo roster — nguồn sự thật duy nhất; GV lớp tắt được qua cờ `enabled`; người ngoài lớp nhận 404 ở mọi đường. Roster lớp phía messages mang cờ canDirectMessage khớp cổng nhắn riêng GV↔HS theo quan hệ lớp (sổ quyết định mục D).
  */
 
 interface Person { id: string; username: string; token: string }

@@ -21,20 +21,15 @@ const ANNOUNCEMENTS_LIMIT = 20;
 const ANNOUNCEMENTS_SCAN = 100;
 
 /**
- * Bề mặt phụ huynh chỉ-xem (PH-1, issue #130): bốn khối rút gọn của
- * research mục 4.3 + kết quả học tập đã công bố theo môn. Nguyên tắc cứng
+ * Bề mặt phụ huynh chỉ-xem (PH-1, issue #130): bốn khối rút gọn của research mục 4.3 + kết quả học tập đã công bố theo môn. Nguyên tắc cứng
  * (mục 5.1) áp ở MỌI đường của service này:
  * - Chỉ-xem: service không có một đường ghi nào ngoài mốc xem của chính
- *   phụ huynh và audit xem (cả hai đều là dữ liệu của phụ huynh, không
- *   phải dữ liệu của con).
+ *   phụ huynh và audit xem (cả hai đều là dữ liệu của phụ huynh, không phải dữ liệu của con).
  * - Chỉ con mình: cổng đầu tiên của mọi hàm là liên kết giám hộ đang hiệu
- *   lực, kiểm tra TRƯỚC mọi truy vấn dữ liệu; thiếu liên kết → 404 đồng
- *   nhất qua GuardiansService.requireActiveLinkOr404.
+ *   lực, kiểm tra TRƯỚC mọi truy vấn dữ liệu; thiếu liên kết → 404 đồng nhất qua GuardiansService.requireActiveLinkOr404.
  * - Chỉ dữ liệu đã công bố: khối kết quả mới dùng chung hàm của DASH1
  *   (cổng PH-0); kết quả VN chỉ qua isTermResultPublished /
- *   computeTermResultForGuardian; điểm tổng khoá qua
- *   getGradebookForGuardian (đã che phần chưa công bố). Không xếp hạng,
- *   không trung bình lớp, không hiện 0 thay cho chưa chấm/chưa tính.
+ *   computeTermResultForGuardian; điểm tổng khoá qua getGradebookForGuardian (đã che phần chưa công bố). Không xếp hạng, không trung bình lớp, không hiện 0 thay cho chưa chấm/chưa tính.
  */
 @Injectable()
 export class GuardianViewService {
@@ -168,9 +163,7 @@ export class GuardianViewService {
     const enrolled = new Set(courseIds);
     const out: GuardianAnnouncementView[] = [];
     for (const row of rows) {
-      // Thông báo điểm bị loại: dù nội dung không chứa điểm số, sự tồn tại
-      // của nó ám chỉ một điểm (có thể chưa công bố) — cổng công bố của
-      // PH-0 phải tuyệt đối trên bề mặt phụ huynh.
+      // Thông báo điểm bị loại: dù nội dung không chứa điểm số, sự tồn tại của nó ám chỉ một điểm (có thể chưa công bố) — cổng công bố của PH-0 phải tuyệt đối trên bề mặt phụ huynh.
       if (row.eventType === 'grade_updated') continue;
       const match = row.contextUrl?.match(/^\/courses\/([0-9a-fA-F-]{36})(?:\/|$)/);
       if (!match) continue;
@@ -219,9 +212,7 @@ export class GuardianViewService {
 
     const courses: GuardianCourseResultsView[] = [];
     for (const courseId of courseIds) {
-      // Điểm theo từng bài ĐÃ CÔNG BỐ (cổng PH-0 như học sinh tự xem) —
-      // mô hình điểm theo bài (issue #224): không còn kết quả kỳ/năm
-      // của Sổ điểm VN và không còn điểm tổng khoá.
+      // Điểm theo từng bài ĐÃ CÔNG BỐ (cổng PH-0 như học sinh tự xem) — mô hình điểm theo bài (issue #224): không còn kết quả kỳ/năm của Sổ điểm VN và không còn điểm tổng khoá.
       const views = await this.grades.listPublishedActivityGrades(courseId, studentId);
       const activities = views
         .filter((v) => v.grade !== null)

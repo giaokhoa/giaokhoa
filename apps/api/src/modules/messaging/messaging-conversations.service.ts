@@ -11,30 +11,9 @@ import { MessagingMembershipSyncService } from './messaging-membership-sync.serv
 /**
  * HỘI THOẠI của MessagingModule (cụm ca sử dụng "hội thoại").
  *
- * Luồng nghiệp vụ: CONVERSATION là user-tới-user — hội thoại 1-1 chỉ
- * mở qua cổng liên lạc đã duyệt (MessagingContactsService.assertCanContact),
- * hội thoại nhóm tự do do người dùng tạo, và các hội thoại gắn cấu
- * trúc (nhóm con của khoá / chat toàn khoá / chat toàn lớp) được cấp
- * phát lười khi thành viên hoặc staff mở, thành viên đồng bộ lười
- * theo cấu trúc nguồn mỗi lần liệt kê/mở (MessagingMembershipSyncService).
- * Cụm này sở hữu các câu hỏi THẨM QUYỀN theo phạm vi trên một
- * conversation — thành viên hay không, phụ trách khoá (kiểm duyệt)
- * hay quản lý conversation, hội thoại thuộc khoá/lớp nào — và cụm
- * tin nhắn (MessagingMessagesService) dùng lại đúng các cổng này cho
- * vòng đời tin, nên chúng để public trong nội bộ module; đây không
- * phải bề mặt API của MessagingModule. Hội thoại 1-1 bị một phía
- * chặn thì ẩn khỏi phía bị chặn (assertDirectConversationVisible) trừ
- * các đường kiểm duyệt có thẩm quyền riêng.
+ * Luồng nghiệp vụ: CONVERSATION là user-tới-user — hội thoại 1-1 chỉ mở qua cổng liên lạc đã duyệt (MessagingContactsService.assertCanContact), hội thoại nhóm tự do do người dùng tạo, và các hội thoại gắn cấu trúc (nhóm con của khoá / chat toàn khoá / chat toàn lớp) được cấp phát lười khi thành viên hoặc staff mở, thành viên đồng bộ lười theo cấu trúc nguồn mỗi lần liệt kê/mở (MessagingMembershipSyncService). Cụm này sở hữu các câu hỏi THẨM QUYỀN theo phạm vi trên một conversation — thành viên hay không, phụ trách khoá (kiểm duyệt) hay quản lý conversation, hội thoại thuộc khoá/lớp nào — và cụm tin nhắn (MessagingMessagesService) dùng lại đúng các cổng này cho vòng đời tin, nên chúng để public trong nội bộ module; đây không phải bề mặt API của MessagingModule. Hội thoại 1-1 bị một phía chặn thì ẩn khỏi phía bị chặn (assertDirectConversationVisible) trừ các đường kiểm duyệt có thẩm quyền riêng.
  *
- * Cách lắp ráp (issue #295): service này là một CỤM của MessagingModule,
- * tách từ MessagingService cũ theo cụm ca sử dụng — tách cấu trúc thuần,
- * không đổi hành vi. MessagingService nay là facade giữ nguyên bề mặt
- * công khai và chữ ký constructor, tự lắp ráp các service cụm trong
- * constructor của nó (các test đơn vị hiện hữu khởi tạo trực tiếp
- * `new MessagingService(...)` với đúng các phụ thuộc hạ tầng cũ nên
- * facade là điểm lắp ráp để giữ nguyên hợp đồng khởi tạo đó); các
- * service cụm không đăng ký provider riêng trong module và module
- * wiring giữ nguyên như trước khi tách.
+ * Cách lắp ráp (issue #295): service này là một CỤM của MessagingModule, tách từ MessagingService cũ theo cụm ca sử dụng — tách cấu trúc thuần, không đổi hành vi. MessagingService nay là facade giữ nguyên bề mặt công khai và chữ ký constructor, tự lắp ráp các service cụm trong constructor của nó (các test đơn vị hiện hữu khởi tạo trực tiếp `new MessagingService(...)` với đúng các phụ thuộc hạ tầng cũ nên facade là điểm lắp ráp để giữ nguyên hợp đồng khởi tạo đó); các service cụm không đăng ký provider riêng trong module và module wiring giữ nguyên như trước khi tách.
  */
 export class MessagingConversationsService {
   constructor(
@@ -90,12 +69,7 @@ export class MessagingConversationsService {
     const tenantCtx = await this.contexts.getByLevelInstance(20, tenantId);
     if (!tenantCtx) return false;
     if (await this.evaluator.hasCapability(actorId, 'tenant:manage', tenantCtx.id)) return true;
-    // Nhánh dự phòng quản trị nền tảng (assertPlatformManager của
-    // TenantsService): gán vai ở context hệ thống không chảy vào cây
-    // tenant nên phải kiểm `tenant:manage` ngay tại context hệ
-    // thống — người giữ quyền quản trị tenant ở tầng nền tảng qua
-    // được cổng của tenant hiện hành mà không cần gán vai trong cây
-    // tenant đó.
+    // Nhánh dự phòng quản trị nền tảng (assertPlatformManager của TenantsService): gán vai ở context hệ thống không chảy vào cây tenant nên phải kiểm `tenant:manage` ngay tại context hệ thống — người giữ quyền quản trị tenant ở tầng nền tảng qua được cổng của tenant hiện hành mà không cần gán vai trong cây tenant đó.
     const systemCtx = await this.contexts.ensureSystemContext();
     return this.evaluator.hasCapability(actorId, 'tenant:manage', systemCtx.id);
   }
@@ -126,11 +100,7 @@ export class MessagingConversationsService {
       await this.contacts.assertCanContact(actorId, other);
     }
     if (type === 2) {
-      // Cổng lập nhóm tự do: nhóm thủ công chỉ do quản trị viên hệ
-      // thống, chủ trung tâm của tenant hiện hành hoặc quản trị
-      // viên nền tảng tạo (xem {@link canCreateFreeGroup}); giáo
-      // viên, nhân viên và học viên đều bị từ chối — nhóm của
-      // lớp/khoá sinh theo cấu trúc qua đường riêng
+      // Cổng lập nhóm tự do: nhóm thủ công chỉ do quản trị viên hệ thống, chủ trung tâm của tenant hiện hành hoặc quản trị viên nền tảng tạo (xem {@link canCreateFreeGroup}); giáo viên, nhân viên và học viên đều bị từ chối — nhóm của lớp/khoá sinh theo cấu trúc qua đường riêng
       // (createGroupConversation). Chặn TẠI TẦNG SERVICE này để mọi
       // client đều bị chặn như nhau, không chỉ ẩn ở giao diện.
       if (!(await this.canCreateFreeGroup(actorId))) {
@@ -149,13 +119,7 @@ export class MessagingConversationsService {
   }
 
   /**
-   * Cổng thành viên cho các đường theo id (đọc/gửi/báo cáo): người
-   * không phải thành viên bị từ chối — riêng conversation CẤP KHOÁ
-   * và CẤP LỚP hành xử như KHÔNG TỒN TẠI (404, cùng mã
-   * `conversation_not_found`) để bề mặt chat cấu trúc không rò sự
-   * tồn tại của khoá/lớp/conversation cho người ngoài, đồng nhất với
-   * cổng ensure; các loại conversation khác giữ 403 `not_member`
-   * như hiện hành.
+   * Cổng thành viên cho các đường theo id (đọc/gửi/báo cáo): người không phải thành viên bị từ chối — riêng conversation CẤP KHOÁ và CẤP LỚP hành xử như KHÔNG TỒN TẠI (404, cùng mã `conversation_not_found`) để bề mặt chat cấu trúc không rò sự tồn tại của khoá/lớp/conversation cho người ngoài, đồng nhất với cổng ensure; các loại conversation khác giữ 403 `not_member` như hiện hành.
    */
   async assertConversationMember(userId: string, conversation: ConversationRow): Promise<void> {
     if (await this.repo.isMember(conversation.id, userId)) return;

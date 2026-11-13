@@ -1,25 +1,14 @@
 # @giaokhoa/worker — README nghiệp vụ
 
-> File này ghi các **quyết định nghiệp vụ quan trọng và còn đang hiệu lực** của package.
-> Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub.
+> File này ghi các **quyết định nghiệp vụ quan trọng và còn đang hiệu lực** của package. Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub.
 
 ## Kiểm thử đường phân phối sự kiện
 
-Các integration test kiểm tra nội dung/phân phối thông báo, digest,
-cohort và messaging kích hoạt `OutboxRelayScheduler.relayTick()` sau khi
-ghi fixture outbox, rồi chờ kết quả của hàng đợi thật. Điểm vào này tự
-gắn ngữ cảnh platform, nên vẫn chạy qua role DB thường và RLS như nhịp
-production; không phải chờ lịch 5 giây trong từng ca. Lịch production và
-các khẳng định chống trùng, cách ly tenant, chặn nội dung giữ nguyên.
+Các integration test kiểm tra nội dung/phân phối thông báo, digest, cohort và messaging kích hoạt `OutboxRelayScheduler.relayTick()` sau khi ghi fixture outbox, rồi chờ kết quả của hàng đợi thật. Điểm vào này tự gắn ngữ cảnh platform, nên vẫn chạy qua role DB thường và RLS như nhịp production; không phải chờ lịch 5 giây trong từng ca. Lịch production và các khẳng định chống trùng, cách ly tenant, chặn nội dung giữ nguyên.
 
 ## Package phụ trách nghiệp vụ gì
 
-`apps/worker` là tiến trình nền (không HTTP): chạy mọi việc **không đồng bộ và theo
-lịch** của sản phẩm — chuyển tiếp outbox sang realtime, phát thông báo qua kênh ngoài,
-nhắc hạn hoạt động/ghi danh, digest cho phụ huynh, dọn dẹp theo retention, đối soát
-ghi danh lớp, cấp huy hiệu, tính lại completion. Worker **không tự định nghĩa nghiệp
-vụ**: nó thực thi các luật nghiệp vụ đã chốt ở `apps/api`/sổ quyết định, qua cùng một
-hàm luật dùng chung khi luật đó áp cho cả hai phía.
+`apps/worker` là tiến trình nền (không HTTP): chạy mọi việc **không đồng bộ và theo lịch** của sản phẩm — chuyển tiếp outbox sang realtime, phát thông báo qua kênh ngoài, nhắc hạn hoạt động/ghi danh, digest cho phụ huynh, dọn dẹp theo retention, đối soát ghi danh lớp, cấp huy hiệu, tính lại completion. Worker **không tự định nghĩa nghiệp vụ**: nó thực thi các luật nghiệp vụ đã chốt ở `apps/api`/sổ quyết định, qua cùng một hàm luật dùng chung khi luật đó áp cho cả hai phía.
 
 ## Quyết định nghiệp vụ còn hiệu lực
 
@@ -37,12 +26,9 @@ hàm luật dùng chung khi luật đó áp cho cả hai phía.
 ## Ranh giới — package này KHÔNG làm gì
 
 - Không có HTTP, không phục vụ request người dùng, không tự mở bề mặt API mới.
-- Không chứa bản sao riêng của luật nghiệp vụ: luật đã có ở API thì worker dùng
-  chung/seam đã chốt, không viết bản song song thứ hai (hai bản luật lệch nhau là
-  lỗi đã gặp — "bản chiếu tay" phải được ghi nhận và tiến tới dùng chung).
+- Không chứa bản sao riêng của luật nghiệp vụ: luật đã có ở API thì worker dùng chung/seam đã chốt, không viết bản song song thứ hai (hai bản luật lệch nhau là lỗi đã gặp — "bản chiếu tay" phải được ghi nhận và tiến tới dùng chung).
 - Schema DB không định nghĩa ở worker: dùng chung `packages/db`.
 
 ## Kỹ thuật tối thiểu
 
-- NestJS 12, BullMQ + Redis, dùng chung DB với API. Build/start: `pnpm build && pnpm start`. Sau reset DB production phải khởi động lại các tiến trình worker/web rồi mới probe
-  realtime (watermark — xem quyết định tự neo ở trên).
+- NestJS 12, BullMQ + Redis, dùng chung DB với API. Build/start: `pnpm build && pnpm start`. Sau reset DB production phải khởi động lại các tiến trình worker/web rồi mới probe realtime (watermark — xem quyết định tự neo ở trên).

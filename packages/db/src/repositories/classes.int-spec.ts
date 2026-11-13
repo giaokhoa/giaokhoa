@@ -8,23 +8,16 @@ import { ClassesRepository } from './classes';
 /**
  * Spec tích hợp của repository lớp học trên Kysely (issue #645).
  *
- * Database trung tâm dựng từ rỗng bằng chính cầu nối migration
- * của package trên cụm PostgreSQL thật của môi trường test. Mọi
- * ca chạy qua repository production ở `classes.ts` — không mô
- * phỏng handle. (Ba lệnh ghi của giao dịch tạo lớp không thuộc
- * repository này — chúng ở repository chuyển tiếp phía api theo
- * điểm dừng của điểm nối C-8/B.)
+ * Database trung tâm dựng từ rỗng bằng chính cầu nối migration của package trên cụm PostgreSQL thật của môi trường test. Mọi ca chạy qua repository production ở `classes.ts` — không mô phỏng handle. (Ba lệnh ghi của giao dịch tạo lớp không thuộc repository này — chúng ở repository chuyển tiếp phía api theo điểm dừng của điểm nối C-8/B.)
  *
  * Các tính chất chốt tại đây:
  * - Tra lớp theo mã tham gia giữ đúng hành vi của bản bộ máy cũ:
  *   mã là unique toàn hệ khi có đặt nên tra KHÔNG kèm tenant
  *   (lớp thuộc tenant khác vẫn phân giải được — đường tự báo
- *   danh xuyên tenant), trong khi tra theo mã lớp thì bó trong
- *   đúng tenant.
+ *   danh xuyên tenant), trong khi tra theo mã lớp thì bó trong đúng tenant.
  * - `countCoursesInClass` trả `number` thật (ép `::int`, T-7).
  * - Hai truy vấn `distinct` (khoá đang ghi danh ACTIVE của một
- *   học sinh; học sinh đã đình chỉ của một cohort) khử trùng
- *   đúng khi dữ kiện có nhiều dòng ghi danh cho cùng một đích.
+ *   học sinh; học sinh đã đình chỉ của một cohort) khử trùng đúng khi dữ kiện có nhiều dòng ghi danh cho cùng một đích.
  * - Hàng chờ tự báo danh: chèn, tra đang chờ, quyết định.
  */
 

@@ -14,27 +14,11 @@ import type { CreateExamPaperBody, UpdateExamPaperMetaBody } from '../types/exam
 import { queryKeys } from './keys';
 
 /**
- * Tầng dữ liệu TanStack Query cho màn soạn đề (F-01 của rà soát
- * #133): chi tiết đề + các lần ghim của đề đọc qua khoá riêng của
- * feature, `clientLoader` của hai route (tạo mới không có gì để
- * nạp trước; sửa nạp trước chi tiết + lần ghim) prefetch đúng khoá.
- * Các thao tác ghi — tạo đề, sửa metadata, thay slots, đổi câu cùng
- * ô — qua `useMutation`; tạo/sửa/thay slots làm mới cache chi tiết +
- * lần ghim khi thành công; riêng đổi câu cùng ô: đáp ứng là view đề mới
- * được đặt thẳng vào cache chi tiết để form khởi tạo lại từ view mới
- * như nhịp thủ công trước đây. Việc xoá cache danh sách ngân hàng ở
- * điểm lưu trước khi quay về danh sách do trang tự làm qua
- * `clearQuestionBankListCache` (cùng tiền lệ màn soạn câu hỏi).
- * Lời gọi API thuần nằm ở tầng `api/` của feature; khoá khám phá
- * câu hỏi `questionDiscovery` là khoá dùng chung ở factory tập
- * trung (cùng endpoint, cùng chuỗi tham số thì cùng một cache với
- * trang ngân hàng).
+ * Tầng dữ liệu TanStack Query cho màn soạn đề (F-01 của rà soát #133): chi tiết đề + các lần ghim của đề đọc qua khoá riêng của feature, `clientLoader` của hai route (tạo mới không có gì để nạp trước; sửa nạp trước chi tiết + lần ghim) prefetch đúng khoá. Các thao tác ghi — tạo đề, sửa metadata, thay slots, đổi câu cùng ô — qua `useMutation`; tạo/sửa/thay slots làm mới cache chi tiết + lần ghim khi thành công; riêng đổi câu cùng ô: đáp ứng là view đề mới được đặt thẳng vào cache chi tiết để form khởi tạo lại từ view mới như nhịp thủ công trước đây. Việc xoá cache danh sách ngân hàng ở điểm lưu trước khi quay về danh sách do trang tự làm qua `clearQuestionBankListCache` (cùng tiền lệ màn soạn câu hỏi). Lời gọi API thuần nằm ở tầng `api/` của feature; khoá khám phá câu hỏi `questionDiscovery` là khoá dùng chung ở factory tập trung (cùng endpoint, cùng chuỗi tham số thì cùng một cache với trang ngân hàng).
  */
 
 /**
- * Tuỳ chọn truy vấn khám phá câu hỏi theo tham số đã chốt khi bấm
- * tìm — dùng chung khoá nhà máy `questionDiscovery` với trang ngân
- * hàng (cùng endpoint, cùng chuỗi tham số thì cùng một cache).
+ * Tuỳ chọn truy vấn khám phá câu hỏi theo tham số đã chốt khi bấm tìm — dùng chung khoá nhà máy `questionDiscovery` với trang ngân hàng (cùng endpoint, cùng chuỗi tham số thì cùng một cache).
  */
 export function examQuestionDiscoveryQueryOptions(params: string) {
   return queryOptions({
@@ -76,9 +60,7 @@ export function useExamPaperPins(paperId: string | undefined, enabled: boolean) 
 }
 
 /**
- * Làm mới cache chi tiết + các lần ghim của một đề sau một thao tác
- * ghi thành công: các bề mặt khác đọc cùng hai khoá (và lần quay lại
- * màn soạn trong cửa sổ staleTime) không thấy bản cũ sau khi lưu.
+ * Làm mới cache chi tiết + các lần ghim của một đề sau một thao tác ghi thành công: các bề mặt khác đọc cùng hai khoá (và lần quay lại màn soạn trong cửa sổ staleTime) không thấy bản cũ sau khi lưu.
  */
 function invalidateExamPaper(client: QueryClient, paperId: string) {
   void client.invalidateQueries({ queryKey: queryKeys.examPaperDetail(paperId) });
@@ -121,10 +103,7 @@ export function useReplaceExamPaperSlots() {
 }
 
 /**
- * Đột biến đổi câu của một slot sang câu khác CÙNG Ô ma trận (POST
- * /exams/:id/swap; server gác pool của ô nguồn): đáp ứng là view đề
- * mới — đặt thẳng vào cache chi tiết để form soạn khởi tạo lại từ
- * view mới (vị trí đổi câu được trang tự gỡ sau khi gọi).
+ * Đột biến đổi câu của một slot sang câu khác CÙNG Ô ma trận (POST /exams/:id/swap; server gác pool của ô nguồn): đáp ứng là view đề mới — đặt thẳng vào cache chi tiết để form soạn khởi tạo lại từ view mới (vị trí đổi câu được trang tự gỡ sau khi gọi).
  */
 export function useSwapExamPaperSlot() {
   const client = useQueryClient();

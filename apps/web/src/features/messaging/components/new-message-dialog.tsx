@@ -114,11 +114,8 @@ export function NewMessageDialog({
   const { t } = useTranslation('app');
 
   /**
-   * Hành động cuối dòng roster theo ĐÚNG luật quan hệ đã chốt —
-   * giữ nguyên bộ nút của tab Danh bạ cũ, chỉ đổi nơi trình bày:
-   * nhắn thẳng khi có cờ `canDirectMessage` (không ép qua kết bạn),
-   * đã là liên hệ thì nhắn được; chưa quan hệ thì chỉ Kết bạn; đang
-   * chờ đến thì Chấp nhận/Từ chối ngay tại dòng.
+   * Hành động cuối dòng roster theo ĐÚNG luật quan hệ đã chốt — giữ nguyên bộ nút của tab Danh bạ cũ, chỉ đổi nơi trình bày:
+   * nhắn thẳng khi có cờ `canDirectMessage` (không ép qua kết bạn), đã là liên hệ thì nhắn được; chưa quan hệ thì chỉ Kết bạn; đang chờ đến thì Chấp nhận/Từ chối ngay tại dòng.
    */
   const renderMemberAction = (m: RosterMember) => (
     <>
@@ -155,8 +152,7 @@ export function NewMessageDialog({
 
   /**
    * Nhãn ngữ cảnh nhận đang chọn cho hàng "Tới:" (issue #608):
-   * ngữ cảnh liên hệ dùng nhãn cố định, ngữ cảnh lớp/khoá dùng
-   * tên của chính lớp/khoá đang chọn trong bộ chọn người.
+   * ngữ cảnh liên hệ dùng nhãn cố định, ngữ cảnh lớp/khoá dùng tên của chính lớp/khoá đang chọn trong bộ chọn người.
    */
   const recipientContextLabel = pickerContext.kind === 'contacts'
     ? t('newMessageContactsContext')

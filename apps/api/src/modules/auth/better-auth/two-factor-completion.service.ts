@@ -1,51 +1,22 @@
 /**
- * Hoàn tất bước hai của đăng nhập Better Auth (endpoint
- * `/auth/two-factor/verify-totp` và `/auth/two-factor/verify-backup-code`
- * ở tầng Nest — mount chừa segment `two-factor` cho Nest, xem
- * `better-auth.mount.ts`).
+ * Hoàn tất bước hai của đăng nhập Better Auth (endpoint `/auth/two-factor/verify-totp` và `/auth/two-factor/verify-backup-code` ở tầng Nest — mount chừa segment `two-factor` cho Nest, xem `better-auth.mount.ts`).
  *
- * Vì sao bước hoàn tất nằm ở đây thay vì plugin twoFactor của Better
- * Auth: xem khối plugins trong `better-auth.instance.ts` (plugin đòi
- * trường user `twoFactorEnabled` không có trong ánh xạ của hệ và sẽ
- * dựng nguồn trạng thái MFA thứ hai). Ở đây trạng thái MFA và việc
- * kiểm mã đều đi qua MỘT nguồn duy nhất là `user_totp` qua
- * `TotpService` của module auth — cùng cơ chế verify mà các luồng
- * đăng nhập tự viết dùng.
+ * Vì sao bước hoàn tất nằm ở đây thay vì plugin twoFactor của Better Auth: xem khối plugins trong `better-auth.instance.ts` (plugin đòi trường user `twoFactorEnabled` không có trong ánh xạ của hệ và sẽ dựng nguồn trạng thái MFA thứ hai). Ở đây trạng thái MFA và việc kiểm mã đều đi qua MỘT nguồn duy nhất là `user_totp` qua `TotpService` của module auth — cùng cơ chế verify mà các luồng đăng nhập tự viết dùng.
  *
- * Giao thức với cổng MFA (`mfa-gate.ts`) — cổng phát, nơi này tiêu
- * thụ, đúng định dạng plugin twoFactor của better-auth@1.7.12 tự
- * dùng nên semantics hai phía khớp nhau:
+ * Giao thức với cổng MFA (`mfa-gate.ts`) — cổng phát, nơi này tiêu thụ, đúng định dạng plugin twoFactor của better-auth@1.7.12 tự dùng nên semantics hai phía khớp nhau:
  *
  * - Cookie ký `better-auth.two_factor` (tên lấy từ createAuthCookie
- *   của chính instance) chứa identifier của challenge; chữ ký HMAC
- *   kiểm bằng secret của instance (`makeSignature` +
- *   `constantTimeEqual` của `better-auth/crypto`).
+ *   của chính instance) chứa identifier của challenge; chữ ký HMAC kiểm bằng secret của instance (`makeSignature` + `constantTimeEqual` của `better-auth/crypto`).
  * - Dòng verification `2fa-<id>` → userId, hạn 600 giây; dòng
- *   `2fa-attempts-<id>` đếm số lần thử SAI của challenge đó, ngân
- *   sách 5 lần: mỗi lần verify đều TIÊU THỤ cả hai dòng trước;
- *   sai mã thì dựng lại dòng attempts với đếm +1 (cùng hạn của
- *   challenge), hết ngân sách thì challenge bị huỷ và bị từ chối
- *   bằng `TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE` — người dùng phải
- *   đăng nhập lại để có challenge mới.
+ *   `2fa-attempts-<id>` đếm số lần thử SAI của challenge đó, ngân sách 5 lần: mỗi lần verify đều TIÊU THỤ cả hai dòng trước; sai mã thì dựng lại dòng attempts với đếm +1 (cùng hạn của challenge), hết ngân sách thì challenge bị huỷ và bị từ chối bằng `TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE` — người dùng phải đăng nhập lại để có challenge mới.
  * - Mã đúng: challenge đã tiêu thụ (không chơi lại được), phiên
- *   được tạo qua cầu nối phiên lập trình (cùng cơ chế login-as tạo
- *   phiên Better Auth ngoài handler) và cookie phiên được đặt theo
- *   đúng thuộc tính cookie của instance; cookie chờ bước hai bị
- *   xoá. Người dùng bị đình chỉ vẫn nhận phiên ở bước này như
- *   semantics của Better Auth — guard phiên chặn mọi route nghiệp
- *   vụ của tài khoản đình chỉ ngay sau đó.
+ *   được tạo qua cầu nối phiên lập trình (cùng cơ chế login-as tạo phiên Better Auth ngoài handler) và cookie phiên được đặt theo đúng thuộc tính cookie của instance; cookie chờ bước hai bị xoá. Người dùng bị đình chỉ vẫn nhận phiên ở bước này như semantics của Better Auth — guard phiên chặn mọi route nghiệp vụ của tài khoản đình chỉ ngay sau đó.
  * - Kiểm Origin như handler Better Auth làm với POST mang cookie:
- *   Origin có mặt mà không thuộc origins tin cậy của instance thì
- *   403 trước mọi xử lý.
+ *   Origin có mặt mà không thuộc origins tin cậy của instance thì 403 trước mọi xử lý.
  * - Mã dự phòng: sản phẩm không có khái niệm mã dự phòng (factor
- *   TOTP của hệ tự viết không phát mã dự phòng) nên endpoint
- *   verify-backup-code luôn từ chối bằng `INVALID_BACKUP_CODE` —
- *   nhưng vẫn qua cùng cửa challenge + đếm lần thử để không thành
- *   một lối dò riêng.
+ *   TOTP của hệ tự viết không phát mã dự phòng) nên endpoint verify-backup-code luôn từ chối bằng `INVALID_BACKUP_CODE` — nhưng vẫn qua cùng cửa challenge + đếm lần thử để không thành một lối dò riêng.
  * - Thiết bị tin cậy (trust device): cổng có tôn trọng cookie tin
- *   cậy nếu tồn tại, nhưng bước hoàn tất này KHÔNG phát cookie tin
- *   cậy mới — giao diện không có tuỳ chọn "tin cậy thiết bị này",
- *   phát dấu mà người dùng không hề chọn sẽ là nới lỏng âm thầm.
+ *   cậy nếu tồn tại, nhưng bước hoàn tất này KHÔNG phát cookie tin cậy mới — giao diện không có tuỳ chọn "tin cậy thiết bị này", phát dấu mà người dùng không hề chọn sẽ là nới lỏng âm thầm.
  */
 import { forwardRef, Inject, Injectable, Optional } from '@nestjs/common';
 import { constantTimeEqual, makeSignature } from 'better-auth/crypto';
@@ -107,12 +78,7 @@ interface ResolvedChallenge {
 @Injectable()
 export class TwoFactorCompletionService {
   /**
-   * Facade Kysely định tuyến theo trung tâm (issue #654, D2): giữ tham
-   * chiếu tới facade là an toàn — facade tự phân giải kho đích theo
-   * ngữ cảnh ALS tại mỗi lần gọi, không phải ảnh chụp kho tại thời
-   * điểm dựng service. Bảng `verification` của codegen CentreDB thay
-   * cho bảng bóng bộ máy cũ đã xoá (cùng cột: identifier, value,
-   * expires_at; id do DB sinh — các lần chèn ở đây không khai id).
+   * Facade Kysely định tuyến theo trung tâm (issue #654, D2): giữ tham chiếu tới facade là an toàn — facade tự phân giải kho đích theo ngữ cảnh ALS tại mỗi lần gọi, không phải ảnh chụp kho tại thời điểm dựng service. Bảng `verification` của codegen CentreDB thay cho bảng bóng bộ máy cũ đã xoá (cùng cột: identifier, value, expires_at; id do DB sinh — các lần chèn ở đây không khai id).
    */
   private readonly db: CentreDb;
 
@@ -120,10 +86,7 @@ export class TwoFactorCompletionService {
     spaceDb: SpaceDatabaseService,
     private readonly betterAuth: BetterAuthService,
     private readonly bridge: CredentialBridgeService,
-    // Cùng khuôn phụ thuộc với BetterAuthService: AuthModule xuất
-    // TotpService qua vòng forwardRef; thiếu phụ thuộc (chỉ xảy ra
-    // khi module bị dựng dở) thì mọi verify bị từ chối fail-closed
-    // ở completeTotp thay vì cho qua.
+    // Cùng khuôn phụ thuộc với BetterAuthService: AuthModule xuất TotpService qua vòng forwardRef; thiếu phụ thuộc (chỉ xảy ra khi module bị dựng dở) thì mọi verify bị từ chối fail-closed ở completeTotp thay vì cho qua.
     @Optional()
     @Inject(forwardRef(() => TotpService))
     private readonly totp?: TotpService,
@@ -190,11 +153,7 @@ export class TwoFactorCompletionService {
   }
 
   /**
-   * Giải challenge từ cookie chờ: kiểm Origin, chữ ký cookie, hạn
-   * dùng và sự tồn tại của dòng verification. Mọi bất thường đều là
-   * `INVALID_TWO_FACTOR_COOKIE` (401) như plugin — không phân biệt
-   * "không có cookie" với "chữ ký sai" với "đã hết hạn" để không lộ
-   * trạng thái challenge.
+   * Giải challenge từ cookie chờ: kiểm Origin, chữ ký cookie, hạn dùng và sự tồn tại của dòng verification. Mọi bất thường đều là `INVALID_TWO_FACTOR_COOKIE` (401) như plugin — không phân biệt "không có cookie" với "chữ ký sai" với "đã hết hạn" để không lộ trạng thái challenge.
    */
   private async resolveChallenge(req: Request): Promise<ResolvedChallenge> {
     let auth: ReturnType<BetterAuthService['requireAuth']>;
@@ -205,9 +164,7 @@ export class TwoFactorCompletionService {
     }
     const ctx = await auth.$context;
     const cookieAttrs = ctx.createAuthCookie(TWO_FACTOR_COOKIE_NAME, { maxAge: 600 });
-    // Kiểm Origin như handler Better Auth: Origin có mặt phải thuộc
-    // origins tin cậy (gồm origin của baseURL) — chặn POST chéo
-    // origin mang cookie chờ.
+    // Kiểm Origin như handler Better Auth: Origin có mặt phải thuộc origins tin cậy (gồm origin của baseURL) — chặn POST chéo origin mang cookie chờ.
     const origin = req.headers.origin;
     if (origin) {
       const trustedOrigins = ctx.options.trustedOrigins ?? [];

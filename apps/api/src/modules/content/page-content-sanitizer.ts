@@ -38,9 +38,7 @@ import sanitizeHtml from 'sanitize-html';
  */
 
 /**
- * Các thẻ được giữ trong nội dung trang đọc: đủ cho định dạng học
- * liệu thực tế (đoạn văn, tiêu đề, danh sách, bảng, trích dẫn, code,
- * ảnh, liên kết) — KHÔNG gồm thẻ nhúng/kịch bản/biểu mẫu
+ * Các thẻ được giữ trong nội dung trang đọc: đủ cho định dạng học liệu thực tế (đoạn văn, tiêu đề, danh sách, bảng, trích dẫn, code, ảnh, liên kết) — KHÔNG gồm thẻ nhúng/kịch bản/biểu mẫu
  * (`script`, `iframe`, `form`, `video`…): video/liên kết nhúng có
  * kênh riêng là mod_resource, không đi qua nội dung trang.
  */

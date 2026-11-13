@@ -5,11 +5,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWORD } from '../../support/identity-access-helpers';
 
 /**
- * Flow test cho nền dữ liệu + realtime của messaging (issue #33,
- * Lớp A chặng 0 + 1):
+ * Flow test cho nền dữ liệu + realtime của messaging (issue #33, Lớp A chặng 0 + 1):
  *  - trạng thái đã đọc theo TỪNG thành viên trong nhóm 3 người: một
- *    người đọc không làm người khác mất số chưa đọc (mô hình cũ để
- *    mốc đọc chung trên tin nhắn);
+ *    người đọc không làm người khác mất số chưa đọc (mô hình cũ để mốc đọc chung trên tin nhắn);
  *  - gửi trùng `clientMessageId` không nhân đôi tin (idempotent);
  *  - phân trang cursor theo `seq` không trùng/sót, đồng bộ thiếu hụt
  *    bằng afterSeq;
@@ -17,13 +15,7 @@ import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWO
  *    thiếu; socket không có token hợp lệ bị ngắt; presence/typing
  *    (A2) đi qua Redis, không xuống DB.
  *
- * Các khẳng định về PHÂN PHỐI sự kiện (tin mới tới socket qua
- * outbox → hàng đợi, biên đã-đọc tới thành viên còn lại, thành viên
- * bị gỡ không nhận tin nữa) thuộc về consumer phía worker từ issue
- * #521 và được kiểm ở
- * `apps/worker/test/integration/messaging/messaging-realtime-queue.int-spec.ts`
- * — spec này chỉ giữ phần hành vi mà tiến trình API tự chịu trách
- * nhiệm (ghi dữ kiện + sự kiện outbox, đọc/sync, presence/typing).
+ * Các khẳng định về PHÂN PHỐI sự kiện (tin mới tới socket qua outbox → hàng đợi, biên đã-đọc tới thành viên còn lại, thành viên bị gỡ không nhận tin nữa) thuộc về consumer phía worker từ issue #521 và được kiểm ở `apps/worker/test/integration/messaging/messaging-realtime-queue.int-spec.ts` — spec này chỉ giữ phần hành vi mà tiến trình API tự chịu trách nhiệm (ghi dữ kiện + sự kiện outbox, đọc/sync, presence/typing).
  */
 
 interface WireMessage {
@@ -121,12 +113,8 @@ describe('Messaging foundation + realtime (issue #33, Lớp A)', () => {
     tokenA = (await login(app, userA.username, STRONG_PASSWORD)).accessToken;
     tokenB = (await login(app, userB.username, STRONG_PASSWORD)).accessToken;
     tokenC = (await login(app, userC.username, STRONG_PASSWORD)).accessToken;
-    // Conversation nhóm 3 người — cổng liên lạc chỉ áp cho conversation
-    // 1-1 nên nhóm gửi tự do, đúng luật hiện hữu. Nhóm do ADMIN tạo:
-    // theo chính sách Lớp B của #33, nhóm tự do chỉ do quản trị viên
-    // hệ thống hoặc chủ trung tâm tạo thủ công (admin ở đây) hoặc
-    // sinh từ cấu trúc lớp/khoá — giáo viên, nhân viên và học sinh
-    // không tự lập nhóm. Ba user A/B/C là thành viên thường của nhóm.
+    // Conversation nhóm 3 người — cổng liên lạc chỉ áp cho conversation 1-1 nên nhóm gửi tự do, đúng luật hiện hữu. Nhóm do ADMIN tạo:
+    // theo chính sách Lớp B của #33, nhóm tự do chỉ do quản trị viên hệ thống hoặc chủ trung tâm tạo thủ công (admin ở đây) hoặc sinh từ cấu trúc lớp/khoá — giáo viên, nhân viên và học sinh không tự lập nhóm. Ba user A/B/C là thành viên thường của nhóm.
     const conv = await http(app).post('/api/v1/messages/conversations')
       .set('Authorization', `Bearer ${admin}`)
       .send({ type: 2, memberIds: [userA.id, userB.id, userC.id], name: 'Nhóm kiểm thử #33' });

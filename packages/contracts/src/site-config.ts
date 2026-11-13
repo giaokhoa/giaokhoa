@@ -2,9 +2,7 @@ import { z } from 'zod';
 
 /**
  * Hợp đồng API của Site Config (cấu hình site + cấu hình theo plugin):
- * giá trị ghi đè do quản trị lưu xuống cơ sở dữ liệu; kiểu và miền giá trị
- * của từng setting do registry phía máy chủ quyết định, ở đây chỉ chốt
- * hình dạng vận chuyển (giá trị là JSON bất kỳ, máy chủ kiểm chứng sau).
+ * giá trị ghi đè do quản trị lưu xuống cơ sở dữ liệu; kiểu và miền giá trị của từng setting do registry phía máy chủ quyết định, ở đây chỉ chốt hình dạng vận chuyển (giá trị là JSON bất kỳ, máy chủ kiểm chứng sau).
  */
 export const setSiteSettingSchema = z.strictObject({
   value: z.unknown(),

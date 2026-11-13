@@ -5,28 +5,13 @@ import { CONTEXT_COLUMNS, type ContextRow, type EnrolDatabase } from './types';
 /**
  * Thao tác trên cây context phân quyền ở tầng dữ liệu dùng chung.
  *
- * Cây context (hệ thống → tenant → danh mục/lớp → khoá học → module
- * → block → user) là nền của mọi phép kiểm quyền: gán vai nằm trên
- * context và được kế thừa xuống dưới theo `path` vật chất hoá. Các
- * hàm ở đây là phần THUẦN DỮ LIỆU của quản lý context mà các lõi
- * dùng chung cần (tra context, đảm bảo context hệ thống/tenant, đánh
- * dấu dirty để vô hiệu hoá cache quyền) — trích từ tầng Access của
- * API để cả API lẫn worker cùng thao tác trên một định nghĩa duy
- * nhất. Phần quản trị context còn lại (tạo cây cho nghiệp vụ, di
- * chuyển cây, xoá context) vẫn thuộc bề mặt của API.
+ * Cây context (hệ thống → tenant → danh mục/lớp → khoá học → module → block → user) là nền của mọi phép kiểm quyền: gán vai nằm trên context và được kế thừa xuống dưới theo `path` vật chất hoá. Các hàm ở đây là phần THUẦN DỮ LIỆU của quản lý context mà các lõi dùng chung cần (tra context, đảm bảo context hệ thống/tenant, đánh dấu dirty để vô hiệu hoá cache quyền) — trích từ tầng Access của API để cả API lẫn worker cùng thao tác trên một định nghĩa duy nhất. Phần quản trị context còn lại (tạo cây cho nghiệp vụ, di chuyển cây, xoá context) vẫn thuộc bề mặt của API.
  *
- * Bất biến của cây: `path` là danh sách id tổ tiên vật chất hoá, luôn
- * kết thúc bằng id của chính context; mọi thay đổi về gán vai tại
- * một context đều phải bump `version` của context đó và mọi context
- * con cháu (đánh dấu dirty) để các cache đánh giá quyền không dùng
- * kết quả cũ.
+ * Bất biến của cây: `path` là danh sách id tổ tiên vật chất hoá, luôn kết thúc bằng id của chính context; mọi thay đổi về gán vai tại một context đều phải bump `version` của context đó và mọi context con cháu (đánh dấu dirty) để các cache đánh giá quyền không dùng kết quả cũ.
  */
 
 /**
- * Cấp của các loại context (giá trị lưu trong cột `context_level`
- * của bảng `context`, bám thang cấp context của Moodle). Giá trị là
- * dữ kiện đã lưu trong cơ sở dữ liệu nên mọi phía thao tác cây
- * context phải dùng đúng các số này.
+ * Cấp của các loại context (giá trị lưu trong cột `context_level` của bảng `context`, bám thang cấp context của Moodle). Giá trị là dữ kiện đã lưu trong cơ sở dữ liệu nên mọi phía thao tác cây context phải dùng đúng các số này.
  */
 export const CONTEXT_LEVELS = { SYSTEM: 10, TENANT: 20, USER: 30, COURSECAT: 40, CLASS: 45, COURSE: 50, MODULE: 70, BLOCK: 80 } as const;
 

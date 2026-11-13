@@ -1,40 +1,19 @@
 /**
  * Repository của cụm SÁCH GIÁO KHOA trên Kysely.
  *
- * Vai trò: mọi truy cập tới bốn bảng của kho trung tâm thuộc tầng
- * SGK — `books` (cuốn sách), `book_nodes` (cây chủ đề → bài),
- * `book_mappings` (ánh xạ bài sang node chương trình hoặc YCCĐ) và
- * `book_records` (sổ đăng ký nạp dataset, khoá idempotent của
- * lượt nạp) — tập trung ở đây, kèm một hình chiếu đọc truy nguồn
- * trên bảng `question` (cặp truy vết nguồn sách). Luật nạp dataset
+ * Vai trò: mọi truy cập tới bốn bảng của kho trung tâm thuộc tầng SGK — `books` (cuốn sách), `book_nodes` (cây chủ đề → bài), `book_mappings` (ánh xạ bài sang node chương trình hoặc YCCĐ) và `book_records` (sổ đăng ký nạp dataset, khoá idempotent của lượt nạp) — tập trung ở đây, kèm một hình chiếu đọc truy nguồn trên bảng `question` (cặp truy vết nguồn sách). Luật nạp dataset
  * (phân giải ánh xạ trước khi ghi, idempotent theo sổ) nằm ở tầng
- * service phía ứng dụng; repository chỉ nhận handle để service
- * ghép các thao tác ghi của một bản ghi vào một transaction.
+ * service phía ứng dụng; repository chỉ nhận handle để service ghép các thao tác ghi của một bản ghi vào một transaction.
  *
- * Khuôn hình dạng dữ liệu ở biên repository — cùng khuôn pilot kho
- * control plane (xem mục "Sổ tay chuyển đổi repository sang Kysely"
- * trong `AGENTS.md` của package): bên trong dùng tên cột
- * snake_case của interface schema codegen; bên ngoài trả/nhận hình
- * dạng camelCase qua danh sách cột tường minh có bí danh và các
- * hàm ánh xạ ghi loại `undefined` từng trường (thử nghiệm T-4);
- * mọi giá trị where là tham số bắt buộc. Điều kiện lọc động của
- * `listBooks` (môn/kind tuỳ chọn) được xâu chuỗi bằng các mệnh đề
- * `.where` nối tiếp — khuôn T-13 đã chốt ở hạng mục nền, không
- * chép dạng `where(undefined)` của bộ máy cũ. Cột jsonb
- * `book_records.source` không mang hình dạng `$type` ở phía
- * bộ máy cũ nên kiểu công khai ở biên là `unknown` như trước, và
- * mọi lần ghi đều đi qua helper serialize `::jsonb` duy nhất trong
- * file này.
+ * Khuôn hình dạng dữ liệu ở biên repository — cùng khuôn pilot kho control plane (xem mục "Sổ tay chuyển đổi repository sang Kysely" trong `AGENTS.md` của package): bên trong dùng tên cột snake_case của interface schema codegen; bên ngoài trả/nhận hình dạng camelCase qua danh sách cột tường minh có bí danh và các hàm ánh xạ ghi loại `undefined` từng trường (thử nghiệm T-4); mọi giá trị where là tham số bắt buộc. Điều kiện lọc động của `listBooks` (môn/kind tuỳ chọn) được xâu chuỗi bằng các mệnh đề `.where` nối tiếp — khuôn T-13 đã chốt ở hạng mục nền, không chép dạng `where(undefined)` của bộ máy cũ. Cột jsonb `book_records.source` không mang hình dạng `$type` ở phía bộ máy cũ nên kiểu công khai ở biên là `unknown` như trước, và mọi lần ghi đều đi qua helper serialize `::jsonb` duy nhất trong file này.
  *
  * Hai hành vi giữ nguyên có chủ đích từ đường cũ trước chuyển đổi:
  * - `listBooks` sắp xếp ở tầng ứng dụng (khối lớp, rồi position,
- *   rồi thời gian tạo) sau khi đọc, không đẩy `ORDER BY` xuống
- *   truy vấn.
+ *   rồi thời gian tạo) sau khi đọc, không đẩy `ORDER BY` xuống truy vấn.
  * - Thứ tự hiển thị của cây sách luôn là position tăng dần rồi
  *   thời gian tạo — cùng quy ước của CurriculumRepository.
  *
- * Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng
- * dụng, không tự mở pool, không đọc biến môi trường.
+ * Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng dụng, không tự mở pool, không đọc biến môi trường.
  */
 import { sql, type Insertable, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
@@ -129,9 +108,7 @@ export interface NewBookMapping {
 }
 
 /**
- * Một dòng sổ đăng ký nạp: cặp (dataset, mã bản ghi) đã được nạp
- * vào node nào, kèm hash nội dung để lượt nạp sau nhận biết bản
- * ghi không đổi và `source` là bản ghi nguồn nguyên văn (jsonb).
+ * Một dòng sổ đăng ký nạp: cặp (dataset, mã bản ghi) đã được nạp vào node nào, kèm hash nội dung để lượt nạp sau nhận biết bản ghi không đổi và `source` là bản ghi nguồn nguyên văn (jsonb).
  */
 export interface BookRecordRow {
   id: string;
@@ -223,15 +200,9 @@ const BOOK_RECORD_COLUMNS = [
 ] as const;
 
 /**
- * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh —
- * helper serialize duy nhất của file này cho mọi lần ghi jsonb
+ * Bọc một giá trị jsonb thành biểu thức tham số JSON tường minh — helper serialize duy nhất của file này cho mọi lần ghi jsonb
  * (khuôn của pilot: driver `pg` tự stringify object thường nhưng
- * hiểu MẢNG cấp cao nhất là mảng PostgreSQL, khiến cột jsonb lỗi
- * `invalid input syntax for type json`). Cột `source` không mang
- * hình dạng `$type` ở phía bộ máy cũ nên giá trị ở biên là
- * `unknown` — helper ghim kiểu biểu thức về `JsonValue` của
- * codegen để khớp kiểu cột khi biên dịch, thay vì suy kiểu từ
- * giá trị như khuôn generic của pilot.
+ * hiểu MẢNG cấp cao nhất là mảng PostgreSQL, khiến cột jsonb lỗi `invalid input syntax for type json`). Cột `source` không mang hình dạng `$type` ở phía bộ máy cũ nên giá trị ở biên là `unknown` — helper ghim kiểu biểu thức về `JsonValue` của codegen để khớp kiểu cột khi biên dịch, thay vì suy kiểu từ giá trị như khuôn generic của pilot.
  */
 function jsonbValue(value: unknown): RawBuilder<JsonValue> {
   return sql<JsonValue>`${JSON.stringify(value)}::jsonb`;

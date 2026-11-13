@@ -9,11 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createControlPlaneKysely } from '@giaokhoa/db/control-plane';
 
 /**
- * Better Auth phải bật ngay từ lúc AppModule được import (ConfigModule
- * kiểm chứng cấu hình khi import module, như khuôn của spec
- * better-auth-flow): đặt biến môi trường ở đầu file, rồi import
- * helpers ĐỘNG trong beforeAll — import tĩnh helpers sẽ kéo AppModule
- * vào trước khi các biến này được gán.
+ * Better Auth phải bật ngay từ lúc AppModule được import (ConfigModule kiểm chứng cấu hình khi import module, như khuôn của spec better-auth-flow): đặt biến môi trường ở đầu file, rồi import helpers ĐỘNG trong beforeAll — import tĩnh helpers sẽ kéo AppModule vào trước khi các biến này được gán.
  */
 const BETTER_AUTH_SECRET = 'test-better-auth-secret-at-least-32-chars';
 process.env.BETTER_AUTH_ENABLED = 'true';
@@ -24,13 +20,9 @@ type Helpers = typeof import('../../support/identity-access-helpers');
 let helpers: Helpers;
 
 /**
- * Dựng app test đúng khuôn bootstrap thật (main.ts): mount handler
- * Better Auth TRƯỚC khi init, kèm khung định tuyến kho để đường
- * ghi đăng nhập đi đúng kho đích tại địa chỉ trung tâm ở kho
- * riêng — `helpers.createTestApp` không mount Better Auth nên ca
+ * Dựng app test đúng khuôn bootstrap thật (main.ts): mount handler Better Auth TRƯỚC khi init, kèm khung định tuyến kho để đường ghi đăng nhập đi đúng kho đích tại địa chỉ trung tâm ở kho riêng — `helpers.createTestApp` không mount Better Auth nên ca
  * (e) không dùng được nó. Mọi import của AppModule đều động bên
- * trong hàm này (gọi từ beforeAll, sau khi biến môi trường Better
- * Auth đã gán ở đầu file).
+ * trong hàm này (gọi từ beforeAll, sau khi biến môi trường Better Auth đã gán ở đầu file).
  */
 async function createMountedTestApp(): Promise<INestApplication> {
   const { Test } = await import('@nestjs/testing');
@@ -78,55 +70,28 @@ function signedBetterAuthCookie(token: string): string {
 
 /**
  * Ca đầu-cuối của CÁC CỔNG TIỀN DI TRÚ (Phần A, issue #587):
- * ứng dụng thật (toàn bộ chuỗi guard) chạy với một trung tâm kiểm
- * chứng ở kho riêng dựng riêng cho đợt này — database mới trên
- * cùng cụm test (`giaokhoa_test_centre_a_587`), role ứng dụng riêng,
- * CONNECT của PUBLIC bị thu hồi, baseline nghiệp vụ áp bằng role
- * chủ kho; sổ đăng ký nằm ở database control plane riêng
+ * ứng dụng thật (toàn bộ chuỗi guard) chạy với một trung tâm kiểm chứng ở kho riêng dựng riêng cho đợt này — database mới trên cùng cụm test (`giaokhoa_test_centre_a_587`), role ứng dụng riêng, CONNECT của PUBLIC bị thu hồi, baseline nghiệp vụ áp bằng role chủ kho; sổ đăng ký nằm ở database control plane riêng
  * (`giaokhoa_test_cp_587`) mà ứng dụng đọc qua biến
- * `CONTROL_PLANE_DATABASE_URL` đặt trước khi ứng dụng khởi động.
- * Tenant tương ứng được tạo bằng chính API công khai ở kho chung,
- * rồi dòng tenant (và dòng user + dòng membership của từng tài
- * khoản kiểm chứng) được sao vào kho riêng — đúng trạng thái sau
- * di trú mà đợt di trú dữ kiện (#587) sẽ tạo: dữ kiện của trung
- * tâm nằm ở kho của nó. Địa chỉ của trung tâm là tên miền con
- * mang slug (`<slug>.test.local`) theo quy ước địa chỉ của hệ.
+ * `CONTROL_PLANE_DATABASE_URL` đặt trước khi ứng dụng khởi động. Tenant tương ứng được tạo bằng chính API công khai ở kho chung, rồi dòng tenant (và dòng user + dòng membership của từng tài khoản kiểm chứng) được sao vào kho riêng — đúng trạng thái sau di trú mà đợt di trú dữ kiện (#587) sẽ tạo: dữ kiện của trung tâm nằm ở kho của nó. Địa chỉ của trung tâm là tên miền con mang slug (`<slug>.test.local`) theo quy ước địa chỉ của hệ.
  *
  * Các ca khoá đúng các cổng tiền di trú của Phần A:
  * (a) đối chứng dương — token mang claim của trung tâm kho riêng
  *     đọc được hồ sơ từ kho đích (dấu phân biệt ghi ở kho đích);
  * (b) cổng 1b — token JWT cũ không mang claim `centre_id` của tài
- *     khoản chỉ còn ở kho riêng bị từ chối 401
- *     `auth.centre_mismatch`, KHÔNG cho qua theo slug khớp;
+ *     khoản chỉ còn ở kho riêng bị từ chối 401 `auth.centre_mismatch`, KHÔNG cho qua theo slug khớp;
  * (c) cổng 1a — thành viên đã bị thu hồi ở kho đích (membership
- *     đã kết thúc sau khi token được cấp) bị từ chối 401
- *     `tenant.membership_inactive`;
+ *     đã kết thúc sau khi token được cấp) bị từ chối 401 `tenant.membership_inactive`;
  * (d) cổng 1c/A2 — phiên cookie Better Auth của tài khoản ở kho
  *     riêng đọc được hồ sơ qua địa chỉ của chính trung tâm đó
  *     (phiên và tài khoản đều đọc qua kho đích, không đọc kho
- *     chung). Phiên được gieo thẳng vào bảng `session` ở kho đích
- *     — ca này khoá đường ĐỌC theo địa chỉ của guard.
+ *     chung). Phiên được gieo thẳng vào bảng `session` ở kho đích — ca này khoá đường ĐỌC theo địa chỉ của guard.
  * (e) đường GHI đăng nhập Better Auth (B1, vòng sửa sau phán quyết
- *     CHƯA ĐẠT của PR #627) — tài khoản chỉ ở kho riêng đăng nhập
- *     bằng luồng web Better Auth (`POST /api/v1/auth/sign-in/
- *     username`) tại địa chỉ của chính trung tâm đó phải thành
- *     công, phiên phải được GHI vào bảng `session` ở kho đích (không
- *     phải kho chung), và cookie phiên đó đọc được hồ sơ mang dấu
- *     kho đích. Ca này khoá đúng khâu ghi mà ca (d) bỏ qua (gieo
- *     phiên thẳng) và ca đối chứng dương bỏ qua (giáo viên có ở cả
- *     hai kho).
+ *     CHƯA ĐẠT của PR #627) — tài khoản chỉ ở kho riêng đăng nhập bằng luồng web Better Auth (`POST /api/v1/auth/sign-in/ username`) tại địa chỉ của chính trung tâm đó phải thành công, phiên phải được GHI vào bảng `session` ở kho đích (không phải kho chung), và cookie phiên đó đọc được hồ sơ mang dấu kho đích. Ca này khoá đúng khâu ghi mà ca (d) bỏ qua (gieo phiên thẳng) và ca đối chứng dương bỏ qua (giáo viên có ở cả hai kho).
  * (f) đối chứng âm của (e) — tài khoản chỉ ở kho chung (có
- *     credential Better Auth hẳn hoi, đăng nhập được ở địa chỉ
- *     platform) phải bị TỪ CHỐI khi đăng nhập tại địa chỉ của
- *     trung tâm kho riêng: kiểm chứng credential tại địa chỉ đó
- *     chỉ được chạm kho đích. Đây là chiều xuyên thủng đã gặp ở
- *     production trong thí điểm nhantin (tiền điều kiện TĐ5):
- *     khi Host không tới được API nguyên vẹn, ca này ở production
- *     trả 200 cho tài khoản kho chung.
+ *     credential Better Auth hẳn hoi, đăng nhập được ở địa chỉ platform) phải bị TỪ CHỐI khi đăng nhập tại địa chỉ của trung tâm kho riêng: kiểm chứng credential tại địa chỉ đó chỉ được chạm kho đích. Đây là chiều xuyên thủng đã gặp ở production trong thí điểm nhantin (tiền điều kiện TĐ5):
+ *     khi Host không tới được API nguyên vẹn, ca này ở production trả 200 cho tài khoản kho chung.
  * (g) địa chỉ platform giữ nguyên hành vi hiện tại sau khi đường
- *     địa chỉ trung tâm được nối đúng: tài khoản kho chung đăng
- *     nhập được tại địa chỉ platform và phiên ghi ở kho chung;
- *     tài khoản chỉ ở kho riêng bị từ chối tại địa chỉ platform.
+ *     địa chỉ trung tâm được nối đúng: tài khoản kho chung đăng nhập được tại địa chỉ platform và phiên ghi ở kho chung; tài khoản chỉ ở kho riêng bị từ chối tại địa chỉ platform.
  */
 const CP_DATABASE = 'giaokhoa_test_cp_587';
 const CP_ROLE = 'giaokhoa_cp_test_587';
@@ -135,9 +100,7 @@ const CENTRE_A_DATABASE = 'giaokhoa_test_centre_a_587';
 const CENTRE_A_ROLE = 'giaokhoa_centre_a_587_app';
 const CENTRE_A_PASSWORD = 'centre-a-test-587';
 // Slug của trung tâm mang hậu tố ngẫu nhiên theo lượt chạy:
-// tenant tương ứng được tạo thật trong database nghiệp vụ test
-// DÙNG CHUNG của tầng e2e, nên slug cố định sẽ va chạm khi chạy
-// lại spec trên cùng một database.
+// tenant tương ứng được tạo thật trong database nghiệp vụ test DÙNG CHUNG của tầng e2e, nên slug cố định sẽ va chạm khi chạy lại spec trên cùng một database.
 const RUN_SUFFIX = Math.random().toString(36).slice(2, 8);
 const CENTRE_A_SLUG = `trung-tam-a-587-${RUN_SUFFIX}`;
 const HOST_A = `${CENTRE_A_SLUG}.test.local`;
@@ -207,8 +170,7 @@ async function applyBusinessBaseline(connectionString: string): Promise<void> {
 }
 
 /**
- * Sao một dòng (đọc từ kho chung) vào cùng bảng ở kho đích với
- * nguyên bộ cột — mô phỏng phần dữ kiện đã di trú của trung tâm.
+ * Sao một dòng (đọc từ kho chung) vào cùng bảng ở kho đích với nguyên bộ cột — mô phỏng phần dữ kiện đã di trú của trung tâm.
  */
 async function copyRow(
   sourceUrl: string,

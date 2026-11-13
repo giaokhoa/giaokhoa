@@ -11,9 +11,7 @@ import { queryClient } from '#lib/query-client';
 
 /**
  * Báo cáo tiến độ học cho giáo viên (K2-B4) — ba bề mặt trên một trang:
- * tổng theo mục (mục nào cả lớp kẹt), ma trận lớp × mục (ô = trạng
- * thái hoàn thành), và tổng theo học sinh kèm lần học gần nhất. Lọc
- * được theo lớp/nhóm và tải xuống CSV. Quyền do API thực thi
+ * tổng theo mục (mục nào cả lớp kẹt), ma trận lớp × mục (ô = trạng thái hoàn thành), và tổng theo học sinh kèm lần học gần nhất. Lọc được theo lớp/nhóm và tải xuống CSV. Quyền do API thực thi
  * (completion:view/manage của khoá) — học sinh vào trang chỉ thấy
  * thông báo không có quyền.
  */
@@ -21,10 +19,7 @@ export function ProgressReportPage() {
   const { t } = useTranslation('app');
   const { id } = useParams();
   const [groupId, setGroupId] = useState('');
-  // Dữ liệu trang qua TanStack (F-01 đợt 1): báo cáo theo khoá + nhóm
-  // lọc là một query (đổi nhóm = đổi khoá, keepPreviousData giữ bản cũ
-  // trong lúc tải bản mới như luồng thủ công); danh sách nhóm là query
-  // riêng. Lỗi tải báo cáo → data null → trạng thái không có quyền.
+  // Dữ liệu trang qua TanStack (F-01 đợt 1): báo cáo theo khoá + nhóm lọc là một query (đổi nhóm = đổi khoá, keepPreviousData giữ bản cũ trong lúc tải bản mới như luồng thủ công); danh sách nhóm là query riêng. Lỗi tải báo cáo → data null → trạng thái không có quyền.
   const reportQuery = useProgressReport(id, groupId);
   const report = reportQuery.data ?? null;
   const denied = reportQuery.data === null;

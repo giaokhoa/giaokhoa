@@ -6,34 +6,25 @@
  *    [gradeMin, gradeMax] của item của nó TRƯỚC khi tổng hợp; kết quả của category là
  *    phân số đó được chiếu lên khoảng của chính category.
  *  - Natural (mặc định): trọng số tỉ lệ theo max của item. Max của category
- *    là TỔNG của (max-min) của các item con không phải extra-credit của nó. Khi
- *    giáo viên ghi đè một trọng số, phần trăm còn lại được phân phối lại
- *    cho các item không bị ghi đè theo tỉ lệ (max-min) của chúng, để
- *    trọng số hiệu lực luôn cộng đủ 100%.
+ *    là TỔNG của (max-min) của các item con không phải extra-credit của nó. Khi giáo viên ghi đè một trọng số, phần trăm còn lại được phân phối lại cho các item không bị ghi đè theo tỉ lệ (max-min) của chúng, để trọng số hiệu lực luôn cộng đủ 100%.
  *  - Extra credit (chỉ Natural): điểm của item được tính vào tử số
- *    nhưng max của nó KHÔNG được tính vào mẫu số; kết quả bị chặn trên tại
- *    max của category.
+ *    nhưng max của nó KHÔNG được tính vào mẫu số; kết quả bị chặn trên tại max của category.
  *  - Điểm trống ≠ 0: với aggregateOnlyGraded ("exclude empty grades") một
- *    item chưa có điểm rời khỏi CẢ tử số và mẫu số; không có nó, một
- *    điểm trống được tính là gradeMin ở tử số và giữ max của nó ở
- *    mẫu số.
+ *    item chưa có điểm rời khỏi CẢ tử số và mẫu số; không có nó, một điểm trống được tính là gradeMin ở tử số và giữ max của nó ở mẫu số.
  *  - drop-the-lowest / keep-the-highest áp dụng cho các điểm đã chuẩn hoá của
  *    các item không phải extra-credit.
  *  - multiplicator/offset điều chỉnh một điểm thô TRƯỚC khi chuẩn hoá
  *    (adjusted = raw * multiplicator + offset, được clamp vào khoảng của item).
  *  - FREEZE (đóng băng): một điểm đã bị đóng băng mang frozenFinalGrade của nó; bộ
- *    tính dùng nguyên văn giá trị đó và bỏ qua multiplicator/offset — một thay đổi
- *    công thức về sau không bao giờ viết lại được lịch sử (nhóm lỗi MDL-89497).
+ *    tính dùng nguyên văn giá trị đó và bỏ qua multiplicator/offset — một thay đổi công thức về sau không bao giờ viết lại được lịch sử (nhóm lỗi MDL-89497).
  *  - điểm excluded không bao giờ tham gia; điểm hidden VẪN tham gia
  *    (ẩn là một quy tắc hiển thị trong Moodle, không phải quy tắc tổng hợp).
  *  - xử lý overridden/locked nằm ở tầng service: một finalGrade đã bị ghi đè
- *    không bao giờ được tính lại, nên service đơn giản là không đưa
- *    điểm category/course đã bị ghi đè trở lại qua đây.
+ *    không bao giờ được tính lại, nên service đơn giản là không đưa điểm category/course đã bị ghi đè trở lại qua đây.
  */
 
 /**
- * Chiến lược tổng hợp điểm của category: trung bình có trọng số (weightedmean), trung bình đơn giản, tự nhiên (natural — theo gradeMax), trung vị, điểm cao nhất/thấp nhất, mode, tổng.
- * Khớp aggregation của Moodle grade category (grade/classes).
+ * Chiến lược tổng hợp điểm của category: trung bình có trọng số (weightedmean), trung bình đơn giản, tự nhiên (natural — theo gradeMax), trung vị, điểm cao nhất/thấp nhất, mode, tổng. Khớp aggregation của Moodle grade category (grade/classes).
  */
 export type AggregationStrategy =
   | 'natural' | 'mean' | 'weightedmean' | 'simpleweightedmean'
@@ -173,8 +164,7 @@ function mode(values: number[]): number {
 }
 
 /**
- * Tính điểm category theo chiến lược tổng hợp: chuẩn hoá từng item, áp trọng số/hệ số, xử lý extra credit (chỉ cộng tử số), drop-lowest nếu cấu hình, rồi chiếu về thang điểm của category.
- * Đối chiếu Moodle: grade/lib.php grade_category::compute và bộ test PHPUnit của gradebook.
+ * Tính điểm category theo chiến lược tổng hợp: chuẩn hoá từng item, áp trọng số/hệ số, xử lý extra credit (chỉ cộng tử số), drop-lowest nếu cấu hình, rồi chiếu về thang điểm của category. Đối chiếu Moodle: grade/lib.php grade_category::compute và bộ test PHPUnit của gradebook.
  */
 export function calculateCategory(input: CategoryCalcInput): CategoryCalcResult {
   const dropLow = Math.max(0, input.dropLow ?? 0);
@@ -234,8 +224,7 @@ export function calculateCategory(input: CategoryCalcInput): CategoryCalcResult 
         const numer = main.reduce((s, p) => s + (p.adjusted - p.item.gradeMin), 0)
           + extras.reduce((s, p) => s + (p.adjusted - p.item.gradeMin), 0);
         fraction = denom > 0 ? numer / denom : (extras.length ? 1 : null);
-        // Với exclude-empty, main chỉ chứa các item đã có điểm: numer/denom là
-        // phân số của phần đã có điểm, sau đó được chiếu lên structural max ở dưới.
+        // Với exclude-empty, main chỉ chứa các item đã có điểm: numer/denom là phân số của phần đã có điểm, sau đó được chiếu lên structural max ở dưới.
         if (fraction === null) break;
       } else {
         const w = naturalWeights([...main, ...extras].map((p) => p.item));
@@ -283,8 +272,7 @@ export function calculateCategory(input: CategoryCalcInput): CategoryCalcResult 
   }
 
   if (fraction === null) return { finalGrade: null, gradeMin, gradeMax, weights, fraction: null };
-  // Extra credit có thể đẩy vượt quá 1 — max của category là giới hạn cứng (trừ việc nó
-  // không bao giờ có thể hạ một điểm đạt được hợp lệ xuống dưới khoảng).
+  // Extra credit có thể đẩy vượt quá 1 — max của category là giới hạn cứng (trừ việc nó không bao giờ có thể hạ một điểm đạt được hợp lệ xuống dưới khoảng).
   const capped = clamp(fraction, 0, 1);
   const finalGrade = gradeMin + capped * (gradeMax - gradeMin);
   void EPS;

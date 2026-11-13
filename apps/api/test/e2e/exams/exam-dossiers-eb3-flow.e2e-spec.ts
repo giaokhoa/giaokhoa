@@ -8,23 +8,15 @@ import {
 import { createCategory, createCourse, getFirstSectionId } from '../../support/course-enrolment-helpers';
 
 /**
- * EB-3 (issue #165) + lát S4 của issue #228 — đường hồ sơ duyệt đề
- * và bề mặt lịch sử của nó sau khi cơ chế đóng góp được đồng bộ:
+ * EB-3 (issue #165) + lát S4 của issue #228 — đường hồ sơ duyệt đề và bề mặt lịch sử của nó sau khi cơ chế đóng góp được đồng bộ:
  *  - đường hồ sơ (EB-3 gốc) đã bị HẤP THỤ vào đường đóng góp duy
- *    nhất của đề: bộ hồ sơ thành phần đính kèm của một đóng góp,
- *    cấp duyệt 2 thành trạng thái pending_board của đóng góp (cơ
- *    chế mới kiểm ở spec exam-contributions-s4-flow). Mọi thao tác
- *    GHI của bề mặt hồ sơ trả 410 `exam.dossier_path_closed`.
+ *    nhất của đề: bộ hồ sơ thành phần đính kèm của một đóng góp, cấp duyệt 2 thành trạng thái pending_board của đóng góp (cơ chế mới kiểm ở spec exam-contributions-s4-flow). Mọi thao tác GHI của bề mặt hồ sơ trả 410 `exam.dossier_path_closed`.
  *  - bề mặt ĐỌC hồ sơ giữ nguyên để xem lại LỊCH SỬ: hàng chờ theo
- *    bank, chi tiết kèm vết duyệt, bản đặc tả đã chụp + xuất bản,
- *    danh sách hồ sơ của tôi — kiểm ở đây trên fixture hồ sơ gieo
- *    thẳng vào DB (đúng hình thái dữ liệu còn lại sau khi đóng
- *    đường), gồm cả cờ cấp duyệt 2 đọc qua điểm seam dùng chung.
+ *    bank, chi tiết kèm vết duyệt, bản đặc tả đã chụp + xuất bản, danh sách hồ sơ của tôi — kiểm ở đây trên fixture hồ sơ gieo thẳng vào DB (đúng hình thái dữ liệu còn lại sau khi đóng đường), gồm cả cờ cấp duyệt 2 đọc qua điểm seam dùng chung.
  *  - đặc tả sinh từ examId khớp cấu trúc ma trận (pinId chỉ là
  *    tham số phụ), xuất xlsx/docx mở được;
  *  - đề định kỳ ready ở bank trường: GV khác khối bị chặn 403 ở mọi
- *    bề mặt nội dung, GV dạy đúng khối xem được, mọi lần xem thành
- *    công thuộc diện đều có audit trong outbox.
+ *    bề mặt nội dung, GV dạy đúng khối xem được, mọi lần xem thành công thuộc diện đều có audit trong outbox.
  */
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });

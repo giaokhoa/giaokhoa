@@ -11,19 +11,11 @@ import { ExamsRepository, type ExamRow } from './exams';
 /**
  * Spec tích hợp của repository exams trên Kysely (issue #643, nhóm G3).
  *
- * Database trung tâm được dựng từ rỗng bằng chính bộ máy migration
- * của package (carrier đóng băng) trên cụm PostgreSQL thật của môi
- * trường test; mọi ca chạy qua repository production ở `exams.ts` —
- * không mô phỏng handle. Vì superuser bỏ qua RLS, suite tạo một
- * role thường riêng và chạy mọi truy vấn qua role đó trong ngữ
- * cảnh platform tường minh (hợp đồng GUC/RLS tự nó đã được spec
- * khói của harness chốt; suite này chốt HÀNH VI của repository).
+ * Database trung tâm được dựng từ rỗng bằng chính bộ máy migration của package (carrier đóng băng) trên cụm PostgreSQL thật của môi trường test; mọi ca chạy qua repository production ở `exams.ts` — không mô phỏng handle. Vì superuser bỏ qua RLS, suite tạo một role thường riêng và chạy mọi truy vấn qua role đó trong ngữ cảnh platform tường minh (hợp đồng GUC/RLS tự nó đã được spec khói của harness chốt; suite này chốt HÀNH VI của repository).
  *
  * Các chốt bằng chứng của nhóm theo hồ sơ chuẩn bị:
  * - Đọc/ghi jsonb của bộ hồ sơ (`spec_snapshot`,
- *   `dossier_spec_snapshot`) khớp oracle độc lập (T-7): cùng một
- *   dòng đọc qua repository và qua Kysely thô ngoài repository
- *   deep-equal từng trường.
+ *   `dossier_spec_snapshot`) khớp oracle độc lập (T-7): cùng một dòng đọc qua repository và qua Kysely thô ngoài repository deep-equal từng trường.
  * - Patch cập nhật loại `undefined` tường minh (T-4).
  * - Tăng bộ đếm copy của đề giữ dạng biểu thức SQL nguyên tử
  *   (điểm nóng R-G3-1): SQL thực thi chứa đúng biểu thức
@@ -91,8 +83,7 @@ async function seedParents(): Promise<void> {
     .values({ tenant_id: tenant.id, name: 'Danh mục khoá G3 Exams' })
     .returning('id')
     .executeTakeFirstOrThrow();
-  // Khoá thường (không phải mẫu) bắt buộc thuộc một lớp theo check
-  // constraint `course_class_required_check` — gieo chuỗi lớp tối thiểu.
+  // Khoá thường (không phải mẫu) bắt buộc thuộc một lớp theo check constraint `course_class_required_check` — gieo chuỗi lớp tối thiểu.
   const owner = await db
     .insertInto('users')
     .values({ email: 'g3-exams-owner@example.com', username: 'g3-exams-owner' })

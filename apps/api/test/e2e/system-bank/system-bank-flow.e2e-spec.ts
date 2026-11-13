@@ -19,40 +19,21 @@ import {
 import { addExamSlot, createExamDraft } from '../../support/exam-pin-helpers';
 
 /**
- * Ca đầu-cuối của KHO NGÂN HÀNG HỆ THỐNG (issue #585): ứng dụng thật
- * chạy với một database kho ngân hàng riêng dựng riêng cho đợt này
+ * Ca đầu-cuối của KHO NGÂN HÀNG HỆ THỐNG (issue #585): ứng dụng thật chạy với một database kho ngân hàng riêng dựng riêng cho đợt này
  * (`giaokhoa_test_bank_585`, role riêng, CONNECT của PUBLIC bị thu hồi,
- * migration kho ngân hàng áp bằng chính role chủ kho như đường triển
- * khai thật), đọc qua biến `SYSTEM_BANK_DATABASE_URL` đặt trước khi
- * ứng dụng khởi động. Shim `uuidv7()` chỉ áp khi server dưới PG18.
+ * migration kho ngân hàng áp bằng chính role chủ kho như đường triển khai thật), đọc qua biến `SYSTEM_BANK_DATABASE_URL` đặt trước khi ứng dụng khởi động. Shim `uuidv7()` chỉ áp khi server dưới PG18.
  *
  * Các ca khoá các tiêu chí nghiệm thu ở phía HTTP: (1) phát hành câu
  * + phiên bản mới, phiên bản cũ đọc lại không đổi; (2) giáo viên khám
- * phá theo dạng câu và nhập bản chụp — đủ nội dung + truy vết,
- * checksum khớp gói nguồn; (3) checksum lệch thì nhập bị từ chối;
+ * phá theo dạng câu và nhập bản chụp — đủ nội dung + truy vết, checksum khớp gói nguồn; (3) checksum lệch thì nhập bị từ chối;
  * (4) rút câu: khám phá + nhập mới không còn thấy, sự kiện rút được
- * ghi và trung tâm ghi nhận; (5) sửa câu đã nhập ở trung tâm thành
- * bản phái sinh, phiên bản nguyên trạng còn nguyên; (6) bank-off:
- * ứng dụng không cấu hình kho ngân hàng vẫn đọc câu đã nhập và tạo
- * đề từ câu đó (đường thi chỉ đọc kho trung tâm). Chạy bài thi và
- * chấm điểm đầy đủ thuộc các suite quiz hiện hữu (chúng chỉ vận hành
- * trên slot trong kho trung tâm); ca này khoá phần delta của PR:
+ * ghi và trung tâm ghi nhận; (5) sửa câu đã nhập ở trung tâm thành bản phái sinh, phiên bản nguyên trạng còn nguyên; (6) bank-off:
+ * ứng dụng không cấu hình kho ngân hàng vẫn đọc câu đã nhập và tạo đề từ câu đó (đường thi chỉ đọc kho trung tâm). Chạy bài thi và chấm điểm đầy đủ thuộc các suite quiz hiện hữu (chúng chỉ vận hành trên slot trong kho trung tâm); ca này khoá phần delta của PR:
  * đường trung tâm không gọi kho ngân hàng.
  *
- * Vòng sửa theo phán quyết trên PR #612 bổ sung: (7) đường đọc nội
- * dung gói đi qua cổng người xem `question:useall` — học sinh bị từ
- * chối ở cả 3 route đọc, giáo viên đọc được; (8) trung tâm liệt kê
- * được sự kiện rút chưa ghi nhận qua API mà không cần biết trước id
- * sự kiện, ghi nhận xong thì hết; (9) nhập bị từ chối ở cổng quyền
- * `question:add` thì không để lại dòng importer ở kho ngân hàng và
- * không có dòng nhập ở kho trung tâm.
+ * Vòng sửa theo phán quyết trên PR #612 bổ sung: (7) đường đọc nội dung gói đi qua cổng người xem `question:useall` — học sinh bị từ chối ở cả 3 route đọc, giáo viên đọc được; (8) trung tâm liệt kê được sự kiện rút chưa ghi nhận qua API mà không cần biết trước id sự kiện, ghi nhận xong thì hết; (9) nhập bị từ chối ở cổng quyền `question:add` thì không để lại dòng importer ở kho ngân hàng và không có dòng nhập ở kho trung tâm.
  *
- * Vòng sửa 2 theo phán quyết trên PR #612 bổ sung: (10) hai route
- * sự kiện phía trung tâm (liệt kê + ghi nhận) cũng đi qua cổng
- * `question:useall` tại context hệ thống — học sinh bị từ chối ở
- * cả hai route, lần ghi nhận bị từ chối không để lại vết ghi nhận
- * nào và sự kiện vẫn còn nguyên trong danh sách chờ của giáo viên,
- * giáo viên ghi nhận xong thì sự kiện hết như hành vi hiện hành.
+ * Vòng sửa 2 theo phán quyết trên PR #612 bổ sung: (10) hai route sự kiện phía trung tâm (liệt kê + ghi nhận) cũng đi qua cổng `question:useall` tại context hệ thống — học sinh bị từ chối ở cả hai route, lần ghi nhận bị từ chối không để lại vết ghi nhận nào và sự kiện vẫn còn nguyên trong danh sách chờ của giáo viên, giáo viên ghi nhận xong thì sự kiện hết như hành vi hiện hành.
  */
 const BANK_DATABASE = 'giaokhoa_test_bank_585';
 const BANK_ROLE = 'giaokhoa_bank_test_585';

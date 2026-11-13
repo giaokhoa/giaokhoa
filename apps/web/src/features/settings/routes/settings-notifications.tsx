@@ -15,12 +15,9 @@ const GROUP_ORDER: NotificationGroupFilter[] = ['learning', 'people', 'system'];
 /**
  * Trạng thái gộp của một NHÓM provider cho lớp 1 (theo nhóm):
  * - `popupState`: true/false khi mọi dòng còn chỉnh được đồng nhất,
- *   'mixed' khi lệch nhau (đã có tuỳ chỉnh từng loại), null khi nhóm
- *   không còn dòng nào chỉnh được (mọi loại đều bị admin tắt ở site).
+ *   'mixed' khi lệch nhau (đã có tuỳ chỉnh từng loại), null khi nhóm không còn dòng nào chỉnh được (mọi loại đều bị admin tắt ở site).
  * - `emailState`: cùng quy ước, chỉ tính trên các dòng có kênh email.
- * Dòng bị admin tắt ở cấp site (NB-7, `siteEnabled=false`) bị LOẠI
- * khỏi phép gộp: giá trị tuỳ chọn cá nhân của chúng không còn hiệu
- * lực phát nào để trình bày thành trạng thái nhóm.
+ * Dòng bị admin tắt ở cấp site (NB-7, `siteEnabled=false`) bị LOẠI khỏi phép gộp: giá trị tuỳ chọn cá nhân của chúng không còn hiệu lực phát nào để trình bày thành trạng thái nhóm.
  */
 interface GroupSummary {
   group: NotificationGroupFilter;
@@ -55,33 +52,18 @@ function summarizeGroup(group: NotificationGroupFilter, rows: NotificationPrefer
 }
 
 /**
- * Mục THÔNG BÁO của khu Cài đặt (`/settings/notifications`, issue
- * #288) — bề mặt tuỳ chọn thông báo phía người dùng, chuyển từ trang
- * `/notifications` (nay chỉ còn trung tâm thông báo) sang đây.
+ * Mục THÔNG BÁO của khu Cài đặt (`/settings/notifications`, issue #288) — bề mặt tuỳ chọn thông báo phía người dùng, chuyển từ trang `/notifications` (nay chỉ còn trung tâm thông báo) sang đây.
  *
- * Mô hình HAI LỚP trên đúng dữ liệu registry v2 sẵn có (20 provider /
- * 3 nhóm; API `/messages/preferences` giữ nguyên, không có trạng thái
- * "theo nhóm" lưu ở server):
+ * Mô hình HAI LỚP trên đúng dữ liệu registry v2 sẵn có (20 provider / 3 nhóm; API `/messages/preferences` giữ nguyên, không có trạng thái "theo nhóm" lưu ở server):
  *
  * - Lớp 1 (bề mặt chính): một hàng cho mỗi nhóm — công tắc popup +
- *   tần suất email THEO NHÓM. Trạng thái nhóm là giá trị SUY RA phía
- *   client từ các dòng thật: đồng nhất thì hiện giá trị đó, lệch nhau
+ *   tần suất email THEO NHÓM. Trạng thái nhóm là giá trị SUY RA phía client từ các dòng thật: đồng nhất thì hiện giá trị đó, lệch nhau
  *   (đã tuỳ chỉnh từng loại) thì hiện "Đã tuỳ chỉnh". Đổi ở lớp 1 =
- *   ghi đồng loạt qua API hiện có (PUT từng provider trong nhóm, bỏ
- *   qua loại bắt buộc khi tắt popup và loại admin đã tắt) — đúng
- *   khuyến nghị research #288 mục 4.3.
+ *   ghi đồng loạt qua API hiện có (PUT từng provider trong nhóm, bỏ qua loại bắt buộc khi tắt popup và loại admin đã tắt) — đúng khuyến nghị research #288 mục 4.3.
  * - Lớp 2 (mục thu/mở "Tuỳ chỉnh từng loại"): nguyên bảng theo loại
- *   như v2 — tuỳ chỉnh ở đây là PUT cho đúng một provider nên THẮNG
- *   cài đặt nhóm: sau khi chỉnh, hàng nhóm ở lớp 1 chuyển sang trạng
- *   thái "Đã tuỳ chỉnh" thay vì một giá trị giả.
+ *   như v2 — tuỳ chỉnh ở đây là PUT cho đúng một provider nên THẮNG cài đặt nhóm: sau khi chỉnh, hàng nhóm ở lớp 1 chuyển sang trạng thái "Đã tuỳ chỉnh" thay vì một giá trị giả.
  *
- * Các luật cứng chỉ HIỂN THỊ, không đổi: loại bắt buộc P2 khoá popup
- * kèm nhãn "Bắt buộc"; loại bị admin tắt ở cấp site (NB-7, trường
- * `siteEnabled` API trả về từ đúng chính sách `notify()` tôn trọng)
- * hiện nhãn "Admin đã tắt ở cấp site" và vô hiệu hoá điều khiển.
- * Dưới hai lớp là mục riêng "Ngoại lệ theo khoá học" (NB-4/P3) giữ
- * nguyên hành vi. Học sinh: API trả danh sách theo loại rỗng nên
- * trang chỉ hiện ghi chú tối thiểu + mục ngoại lệ theo khoá (NB-7).
+ * Các luật cứng chỉ HIỂN THỊ, không đổi: loại bắt buộc P2 khoá popup kèm nhãn "Bắt buộc"; loại bị admin tắt ở cấp site (NB-7, trường `siteEnabled` API trả về từ đúng chính sách `notify()` tôn trọng) hiện nhãn "Admin đã tắt ở cấp site" và vô hiệu hoá điều khiển. Dưới hai lớp là mục riêng "Ngoại lệ theo khoá học" (NB-4/P3) giữ nguyên hành vi. Học sinh: API trả danh sách theo loại rỗng nên trang chỉ hiện ghi chú tối thiểu + mục ngoại lệ theo khoá (NB-7).
  */
 export function SettingsNotificationsPage() {
   const { t, i18n } = useTranslation('app');

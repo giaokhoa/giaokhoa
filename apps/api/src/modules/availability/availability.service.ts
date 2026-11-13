@@ -17,25 +17,13 @@ export interface AvailabilityContext {
 export type LeafEvaluator = (leaf: AvailabilityLeaf, ctx: AvailabilityContext) => Promise<LeafResult>;
 
 /**
- * Facade của AvailabilityModule (core_availability của Moodle). Sở hữu ngữ nghĩa
- * cây và REGISTRY evaluator của lá: các module sở hữu đăng ký
- * loại lá của chúng (CompletionModule → 'completion', GroupsModule → 'group' và
- * 'grouping') để Availability không bao giờ import repository của chúng —
- * chiều phụ thuộc giữ nguyên Availability ← owners (report §3.12 đảo ngược
- * qua đăng ký, như các plugin điều kiện availability của Moodle).
+ * Facade của AvailabilityModule (core_availability của Moodle). Sở hữu ngữ nghĩa cây và REGISTRY evaluator của lá: các module sở hữu đăng ký loại lá của chúng (CompletionModule → 'completion', GroupsModule → 'group' và 'grouping') để Availability không bao giờ import repository của chúng — chiều phụ thuộc giữ nguyên Availability ← owners (report §3.12 đảo ngược qua đăng ký, như các plugin điều kiện availability của Moodle).
  *
- * Các lá tích hợp sẵn: date, grade (hook cho Grades), profile (trường user).
- * Loại lá lạ được đánh giá là KHÔNG khả dụng (Moodle bỏ qua plugin thiếu
- * lúc dựng nhưng một điều kiện không kiểm tra được thì
- * không bao giờ được lặng lẽ cấp quyền truy cập).
+ * Các lá tích hợp sẵn: date, grade (hook cho Grades), profile (trường user). Loại lá lạ được đánh giá là KHÔNG khả dụng (Moodle bỏ qua plugin thiếu lúc dựng nhưng một điều kiện không kiểm tra được thì không bao giờ được lặng lẽ cấp quyền truy cập).
  */
 @Injectable()
 /**
- * Đánh giá cây điều kiện availability cho section/course module.
- * Đối chiếu Moodle: availability/classes (tree + từng condition plugin).
- * Dịch vụ là registry mở: mỗi loại điều kiện lá (date, grade, profile, completion, group, grouping)
- * đăng ký một evaluator; mô tả hiển thị của lá lấy từ catalog i18n (namespace availability)
- * theo locale của request, còn error code giữ nguyên tiếng Anh.
+ * Đánh giá cây điều kiện availability cho section/course module. Đối chiếu Moodle: availability/classes (tree + từng condition plugin). Dịch vụ là registry mở: mỗi loại điều kiện lá (date, grade, profile, completion, group, grouping) đăng ký một evaluator; mô tả hiển thị của lá lấy từ catalog i18n (namespace availability) theo locale của request, còn error code giữ nguyên tiếng Anh.
  */
 export class AvailabilityService {
   private readonly evaluators = new Map<string, LeafEvaluator>();
@@ -106,10 +94,7 @@ export class AvailabilityService {
   }
 
   /**
-   * Lá grade: {type:'grade', id, min, max} — min/max là PHẦN TRĂM của
-   * grade item được tham chiếu (availability_grade của Moodle). Điểm: ctx.grades mang
-   * phần trăm thật từ GradesModule; khi id không có điểm,
-   * điều kiện coi như chưa đạt (không bao giờ tự qua).
+   * Lá grade: {type:'grade', id, min, max} — min/max là PHẦN TRĂM của grade item được tham chiếu (availability_grade của Moodle). Điểm: ctx.grades mang phần trăm thật từ GradesModule; khi id không có điểm, điều kiện coi như chưa đạt (không bao giờ tự qua).
    */
   private async evalGrade(leaf: AvailabilityLeaf, ctx: AvailabilityContext): Promise<LeafResult> {
     const id = String(leaf.id ?? '');

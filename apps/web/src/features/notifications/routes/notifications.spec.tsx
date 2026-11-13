@@ -9,12 +9,7 @@ import { queryKeys } from '#lib/query-keys';
 import { NotificationsPage } from './notifications';
 
 /**
- * Spec F-01 cho trang thông báo: điểm hợp nhất cốt lõi là các thao tác
- * đọc ở trang này phải LÀM MỚI khoá `notificationUnreadCount` dùng chung
- * với huy hiệu chuông ở sidebar/header (trước đây trang fetch thủ công
- * không hề invalidate nên huy hiệu giữ số cũ). Probe dưới đây đóng vai
- * huy hiệu: một useQuery độc lập cùng khoá factory + cùng endpoint như
- * app-sidebar.
+ * Spec F-01 cho trang thông báo: điểm hợp nhất cốt lõi là các thao tác đọc ở trang này phải LÀM MỚI khoá `notificationUnreadCount` dùng chung với huy hiệu chuông ở sidebar/header (trước đây trang fetch thủ công không hề invalidate nên huy hiệu giữ số cũ). Probe dưới đây đóng vai huy hiệu: một useQuery độc lập cùng khoá factory + cùng endpoint như app-sidebar.
  */
 const ITEM_ID = '01900000-0000-7000-8000-0000000000n1'.replace('n', 'a');
 

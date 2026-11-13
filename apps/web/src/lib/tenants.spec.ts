@@ -1,19 +1,13 @@
 /**
- * Kiểm chứng luồng nghiệp vụ của tầng gọi API tenant (lib/tenants.ts)
- * ở biên mạng — nơi lỗi thiếu tiền tố `/api/v1` từng làm tính năng
- * chuyển tenant chết lặng:
+ * Kiểm chứng luồng nghiệp vụ của tầng gọi API tenant (lib/tenants.ts) ở biên mạng — nơi lỗi thiếu tiền tố `/api/v1` từng làm tính năng chuyển tenant chết lặng:
  *
  *   - `fetchMyTenants` phải gọi đúng `GET /api/v1/auth/tenants`
  *     (path đầy đủ theo quy ước chung của mọi call site trong
- *     apps/web; thiếu tiền tố là request không qua được proxy và
- *     không bao giờ tới API) và trả nguyên danh sách API trả về.
+ *     apps/web; thiếu tiền tố là request không qua được proxy và không bao giờ tới API) và trả nguyên danh sách API trả về.
  *   - `switchTenant` phải gọi đúng `POST
- *     /api/v1/auth/switch-tenant/:tenantId` rồi mới nạp lại trang để
- *     áp dụng ngữ cảnh tenant mới.
+ *     /api/v1/auth/switch-tenant/:tenantId` rồi mới nạp lại trang để áp dụng ngữ cảnh tenant mới.
  *
- * Cách kiểm: stub `fetch` ở biên mạng và khẳng định trên URL +
- * phương thức của request thật sự phát ra — không soi chi tiết
- * triển khai trong của hai hàm.
+ * Cách kiểm: stub `fetch` ở biên mạng và khẳng định trên URL + phương thức của request thật sự phát ra — không soi chi tiết triển khai trong của hai hàm.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchMyTenants, switchTenant } from '#lib/tenants';
@@ -58,10 +52,7 @@ describe('lib/tenants — đường gọi API ở biên mạng', () => {
   it('switchTenant gọi POST /api/v1/auth/switch-tenant/:tenantId', async () => {
     const spy = stubFetchOk({});
 
-    // Bước nạp lại trang sau lời gọi dùng `window.location.reload`
-    // — jsdom khoá cứng thuộc tính này (không mock được) và chỉ ghi
-    // nhận "not implemented" thay vì điều hướng thật, nên ca này
-    // khẳng định ở biên mạng: đúng URL + đúng phương thức POST.
+    // Bước nạp lại trang sau lời gọi dùng `window.location.reload` — jsdom khoá cứng thuộc tính này (không mock được) và chỉ ghi nhận "not implemented" thay vì điều hướng thật, nên ca này khẳng định ở biên mạng: đúng URL + đúng phương thức POST.
     await switchTenant('tenant-2');
 
     expect(spy).toHaveBeenCalledTimes(1);

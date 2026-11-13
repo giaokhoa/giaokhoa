@@ -3,12 +3,7 @@ import type { GradeHistoryView } from '../types/course-grade';
 
 /**
  * Tầng gọi API thuần của trang bảng điểm thuộc feature grades:
- * chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React
- * Query. Tầng `queries/` của feature bọc các hàm này thành
- * queryOptions và đột biến. Tách từ module dữ liệu phẳng
- * `src/lib/course-grade-data.ts` khi tổ chức lại apps/web theo mô
- * hình features/ (issue #500). Fetcher điểm dùng chung nhiều bề
- * mặt nằm ở `src/hooks/use-courses-grade-data.ts`.
+ * chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành queryOptions và đột biến. Tách từ module dữ liệu phẳng `src/lib/course-grade-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500). Fetcher điểm dùng chung nhiều bề mặt nằm ở `src/hooks/use-courses-grade-data.ts`.
  */
 
 /**

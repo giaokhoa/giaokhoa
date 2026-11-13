@@ -7,15 +7,8 @@ import { adminToken, createTestApp, http } from '../../support/identity-access-h
  * (GET /messages/preferences) chỉ liệt kê các provider đã nối dây
  * thật, mỗi provider mang phân loại 3 nhóm — không công tắc giả.
  *
- * Các ca kiểm chứng đường phát sự kiện → thông báo của mười loại sự
- * kiện nghiệp vụ (điểm mới, hoàn thành khoá, sắp hết hạn ghi danh,
- * tin nhắn mới, nhắc hạn, vòng đời bài tập/đề) từng nằm ở file này
- * đã chuyển sang tầng integration của worker cùng consumer thông
- * báo sự kiện (issue con #520 của #491):
- * `apps/worker/test/integration/notifications/notification-events-delivery.int-spec.ts`
- * giữ nguyên các khẳng định nghiệp vụ (nội dung không chứa điểm số,
- * gộp theo ngữ cảnh, số lượng chờ chấm cập nhật tại chỗ) trên đường
- * relay → hàng đợi → consumer ở worker.
+ * Các ca kiểm chứng đường phát sự kiện → thông báo của mười loại sự kiện nghiệp vụ (điểm mới, hoàn thành khoá, sắp hết hạn ghi danh, tin nhắn mới, nhắc hạn, vòng đời bài tập/đề) từng nằm ở file này đã chuyển sang tầng integration của worker cùng consumer thông báo sự kiện (issue con #520 của #491):
+ * `apps/worker/test/integration/notifications/notification-events-delivery.int-spec.ts` giữ nguyên các khẳng định nghiệp vụ (nội dung không chứa điểm số, gộp theo ngữ cảnh, số lượng chờ chấm cập nhật tại chỗ) trên đường relay → hàng đợi → consumer ở worker.
  */
 describe('Provider thông báo đã nối dây (N1, issue #49)', () => {
   let app: INestApplication;
@@ -28,13 +21,7 @@ describe('Provider thông báo đã nối dây (N1, issue #49)', () => {
   afterAll(async () => { await app.close(); });
 
   it('tuỳ chọn: mọi provider liệt kê đều đã nối dây và mang phân loại 3 nhóm — không còn toggle giả', async () => {
-    // NB-7: danh sách tuỳ chọn theo loại là bề mặt của nhân sự — học
-    // sinh chỉ nhận phần tối thiểu (spec riêng notifications-admin-policy).
-    // Audience theo vai (issue #288): danh sách ĐẦY ĐỦ cả registry chỉ
-    // còn ở bề mặt của site admin (context admin phủ mọi phía người
-    // nhận); nhân sự thuần chỉ thấy phía của mình — phần lọc theo vai
-    // có spec riêng (notifications-preferences-v2). Ca này kiểm tính
-    // "không công tắc giả" trên toàn registry nên đọc bằng admin.
+    // NB-7: danh sách tuỳ chọn theo loại là bề mặt của nhân sự — học sinh chỉ nhận phần tối thiểu (spec riêng notifications-admin-policy). Audience theo vai (issue #288): danh sách ĐẦY ĐỦ cả registry chỉ còn ở bề mặt của site admin (context admin phủ mọi phía người nhận); nhân sự thuần chỉ thấy phía của mình — phần lọc theo vai có spec riêng (notifications-preferences-v2). Ca này kiểm tính "không công tắc giả" trên toàn registry nên đọc bằng admin.
     const res = await http(app).get('/api/v1/messages/preferences').set('Authorization', `Bearer ${admin}`);
     expect(res.status).toBe(200);
     // Mô hình v2 (NB-2, issue #174): một dòng cho mỗi provider kèm

@@ -1,42 +1,20 @@
 /**
  * Helper dùng chung của các công cụ vận hành ĐỘI KHO (issue #586):
- * runner migration theo đợt (`fleet-migration-runner.ts`), tác vụ
- * sao lưu (`fleet-backup.ts`) và tác vụ kiểm thử khôi phục
+ * runner migration theo đợt (`fleet-migration-runner.ts`), tác vụ sao lưu (`fleet-backup.ts`) và tác vụ kiểm thử khôi phục
  * (`fleet-restore-test.ts`). File này giữ phần THUẦN (sắp đợt, chọn
- * ứng viên, đặt tên tệp sao lưu, mã hoá, băm) tách khỏi phần chạm hệ
- * thống (chạy `pg_dump`/`pg_restore`, đọc phiên bản thật trong
- * database) để kiểm chứng bằng unit test không cần database.
+ * ứng viên, đặt tên tệp sao lưu, mã hoá, băm) tách khỏi phần chạm hệ thống (chạy `pg_dump`/`pg_restore`, đọc phiên bản thật trong database) để kiểm chứng bằng unit test không cần database.
  *
  * Ba bất biến nghiệp vụ vận hành mà file này khoá:
  * - Thứ tự duyệt đội kho là XÁC ĐỊNH: kho nền tảng (platform) chạy
- *   đợt riêng trước, đúng MỘT trung tâm làm canary ở đợt kế, rồi các
- *   trung tâm còn lại theo từng đợt có kích thước cấu hình được —
- *   cùng một sổ đăng ký thì mọi lượt chạy duyệt đúng một thứ tự.
+ *   đợt riêng trước, đúng MỘT trung tâm làm canary ở đợt kế, rồi các trung tâm còn lại theo từng đợt có kích thước cấu hình được — cùng một sổ đăng ký thì mọi lượt chạy duyệt đúng một thứ tự.
  * - URL kết nối tới một kho suy ra từ sổ đăng ký: cơ sở là URL mà
- *   `secretRef` trỏ tới (biến môi trường mang URL của tầng ứng
- *   dụng), nhưng khi `MIGRATION_DATABASE_URL` được cấu hình thì
- *   THÔNG TIN ĐĂNG NHẬP bị thay bằng của role migration và tên
- *   database bị thay bằng `databaseName` của kho — công cụ vận hành
- *   luôn chạm kho bằng role migration (chủ sở hữu đối tượng), không
- *   bao giờ bằng role runtime chỉ có quyền dữ liệu, kể cả khi URL
- *   gốc trong sổ là URL runtime.
+ *   `secretRef` trỏ tới (biến môi trường mang URL của tầng ứng dụng), nhưng khi `MIGRATION_DATABASE_URL` được cấu hình thì THÔNG TIN ĐĂNG NHẬP bị thay bằng của role migration và tên database bị thay bằng `databaseName` của kho — công cụ vận hành luôn chạm kho bằng role migration (chủ sở hữu đối tượng), không bao giờ bằng role runtime chỉ có quyền dữ liệu, kể cả khi URL gốc trong sổ là URL runtime.
  * - Tệp sao lưu LUÔN được mã hoá AES-256-GCM và luôn đi kèm tệp
  *   băm SHA-256 của chính tệp đã lưu: mã hoá là bắt buộc
  *   (fail-closed) — thiếu khoá mã hoá thì mọi đường chụp sao lưu
- *   từ chối chạy trước khi dump, không tồn tại chế độ lưu bản thô,
- *   và mọi đường lỗi sau khi dump xong đều xoá tệp thô khỏi đĩa.
- *   Kiểm thử khôi phục đối chiếu băm TRƯỚC khi giải mã/khôi phục,
- *   nên một bản sao bị hỏng hay bị sửa đều bị phát hiện ở cổng đó
- *   thay vì âm thầm khôi phục ra dữ kiện sai.
+ *   từ chối chạy trước khi dump, không tồn tại chế độ lưu bản thô, và mọi đường lỗi sau khi dump xong đều xoá tệp thô khỏi đĩa. Kiểm thử khôi phục đối chiếu băm TRƯỚC khi giải mã/khôi phục, nên một bản sao bị hỏng hay bị sửa đều bị phát hiện ở cổng đó thay vì âm thầm khôi phục ra dữ kiện sai.
  * - Bản sao lưu logic chạy qua KẾT NỐI QUẢN TRỊ của cụm khi kết nối
- *   đó được cấu hình (xem `resolveDumpConnectionUrl`): schema
- *   nghiệp vụ áp `FORCE ROW LEVEL SECURITY` lên cả chủ sở hữu
- *   bảng, và `pg_dump` chạy bằng chủ sở hữu sẽ bị chặn ở các bảng
- *   có policy — nó thà dừng còn hơn xuất ra một bản sao thiếu dữ
- *   kiện mà không báo. Thiếu kết nối quản trị thì dump dùng kết nối
- *   migration và chính lỗi của `pg_dump` được ghi nhận thành lượt
- *   sao lưu thất bại; tuyệt đối không có đường nào cho ra một bản
- *   sao thiếu mà mang trạng thái thành công.
+ *   đó được cấu hình (xem `resolveDumpConnectionUrl`): schema nghiệp vụ áp `FORCE ROW LEVEL SECURITY` lên cả chủ sở hữu bảng, và `pg_dump` chạy bằng chủ sở hữu sẽ bị chặn ở các bảng có policy — nó thà dừng còn hơn xuất ra một bản sao thiếu dữ kiện mà không báo. Thiếu kết nối quản trị thì dump dùng kết nối migration và chính lỗi của `pg_dump` được ghi nhận thành lượt sao lưu thất bại; tuyệt đối không có đường nào cho ra một bản sao thiếu mà mang trạng thái thành công.
  */
 import { execFile } from 'node:child_process';
 import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync } from 'node:crypto';
@@ -64,13 +42,7 @@ export type FleetSpace = {
 export type BackupKind = 'scheduled' | 'pre-migration';
 
 /**
- * Sắp các kho ĐANG HOẠT ĐỘNG thành các đợt migration theo thứ tự an
- * toàn: đợt 0 là (các) kho nền tảng — không gian thí điểm của nền
- * tảng tự vận hành; đợt 1 là đúng một trung tâm canary (slug nhỏ
- * nhất); các trung tâm còn lại chia theo `waveSize`. Kho không ở
- * trạng thái `active` (đang cấp phát, tạm ngưng, đã đóng) không vào
- * bất kỳ đợt nào: migration không chạm kho chưa sẵn sàng hay đã
- * ngừng vòng đời.
+ * Sắp các kho ĐANG HOẠT ĐỘNG thành các đợt migration theo thứ tự an toàn: đợt 0 là (các) kho nền tảng — không gian thí điểm của nền tảng tự vận hành; đợt 1 là đúng một trung tâm canary (slug nhỏ nhất); các trung tâm còn lại chia theo `waveSize`. Kho không ở trạng thái `active` (đang cấp phát, tạm ngưng, đã đóng) không vào bất kỳ đợt nào: migration không chạm kho chưa sẵn sàng hay đã ngừng vòng đời.
  */
 export function orderSpacesIntoWaves(spaces: FleetSpace[], waveSize: number): FleetSpace[][] {
   const bySlug = (a: FleetSpace, b: FleetSpace) => a.slug.localeCompare(b.slug);
@@ -90,11 +62,7 @@ export function orderSpacesIntoWaves(spaces: FleetSpace[], waveSize: number): Fl
 }
 
 /**
- * Chọn kho cho lượt kiểm thử khôi phục tiếp theo theo vòng xoay
- * công bằng: kho đang hoạt động có `lastRestoreAt` CŨ NHẤT được
- * chọn trước (chưa từng kiểm thử = cũ nhất), hoà thì slug nhỏ hơn
- * thắng để kết quả lặp lại được. Không còn kho đang hoạt động nào
- * thì trả về null.
+ * Chọn kho cho lượt kiểm thử khôi phục tiếp theo theo vòng xoay công bằng: kho đang hoạt động có `lastRestoreAt` CŨ NHẤT được chọn trước (chưa từng kiểm thử = cũ nhất), hoà thì slug nhỏ hơn thắng để kết quả lặp lại được. Không còn kho đang hoạt động nào thì trả về null.
  */
 export function pickRestoreCandidate(spaces: FleetSpace[]): FleetSpace | null {
   const candidates = spaces
@@ -109,10 +77,7 @@ export function pickRestoreCandidate(spaces: FleetSpace[]): FleetSpace | null {
 }
 
 /**
- * Một kho bị coi là QUÁ HẠN sao lưu khi chưa từng có bản sao lưu
- * thành công nào, hoặc bản gần nhất đã cũ hơn `maxAgeHours` — cổng
- * cảnh báo của tác vụ sao lưu (`fleet-backup --check`): quá một chu
- * kỳ sao lưu mà không có bản mới là sự cố vận hành phải xử lý.
+ * Một kho bị coi là QUÁ HẠN sao lưu khi chưa từng có bản sao lưu thành công nào, hoặc bản gần nhất đã cũ hơn `maxAgeHours` — cổng cảnh báo của tác vụ sao lưu (`fleet-backup --check`): quá một chu kỳ sao lưu mà không có bản mới là sự cố vận hành phải xử lý.
  */
 export function isBackupOverdue(lastBackupAt: Date | null, now: Date, maxAgeHours: number): boolean {
   if (!lastBackupAt) return true;

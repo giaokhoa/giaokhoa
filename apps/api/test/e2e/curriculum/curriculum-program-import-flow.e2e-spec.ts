@@ -8,14 +8,8 @@ import {
 } from '../../support/identity-access-helpers';
 
 /**
- * K0a (issue #66) — cơ chế nạp dữ liệu chương trình chuẩn GDPT 2018.
- * Oracle: chính các file dataset đã kiểm chứng nguyên văn với văn bản
- * ban hành kèm Thông tư 32/2018/TT-BGDĐT (hồ sơ kiểm chứng của dự án:
- * Toán 314/314, Ngữ văn 238/238, 0 chênh lệch chữ) — bản sao vendor tại
- * `src/modules/curriculum/program-data/`. Spec này đối chiếu TỪNG bản
- * ghi qua API cây: vị trí trong cây (mạch → section → topic → nội dung),
- * toàn bộ YCCĐ theo thứ tự, và truy vết nguồn (source_ref chứa mã bản
- * ghi + trang) — khớp 100% mới đạt, theo đúng tiêu chí xong của issue.
+ * K0a (issue #66) — cơ chế nạp dữ liệu chương trình chuẩn GDPT 2018. Oracle: chính các file dataset đã kiểm chứng nguyên văn với văn bản ban hành kèm Thông tư 32/2018/TT-BGDĐT (hồ sơ kiểm chứng của dự án:
+ * Toán 314/314, Ngữ văn 238/238, 0 chênh lệch chữ) — bản sao vendor tại `src/modules/curriculum/program-data/`. Spec này đối chiếu TỪNG bản ghi qua API cây: vị trí trong cây (mạch → section → topic → nội dung), toàn bộ YCCĐ theo thứ tự, và truy vết nguồn (source_ref chứa mã bản ghi + trang) — khớp 100% mới đạt, theo đúng tiêu chí xong của issue.
  */
 
 /** Node của một YCCĐ dạng Tiptap doc trong dataset (doc/paragraph/text + bulletList/listItem cho ý con). */
@@ -42,13 +36,7 @@ function loadDataset(fileName: string): ProgramDataset {
 }
 
 /**
- * Text của một YCCĐ dạng doc — ORACLE trích độc lập trong spec (không
- * dùng code nạp, giữ tính độc lập của oracle): mỗi paragraph là một
- * dòng, listItem cho dòng của paragraph của nó rồi tới các dòng của
- * bulletList lồng bên trong (đệ quy); các dòng nối bằng '\n', cắt
- * khoảng trắng hai đầu — đúng semantics text canonical mà hệ lưu vào
- * `learning_outcomes.content` nay là cột jsonb lưu trực tiếp tài liệu
- * này; text canonical trích từ tài liệu bằng đúng semantics này.
+ * Text của một YCCĐ dạng doc — ORACLE trích độc lập trong spec (không dùng code nạp, giữ tính độc lập của oracle): mỗi paragraph là một dòng, listItem cho dòng của paragraph của nó rồi tới các dòng của bulletList lồng bên trong (đệ quy); các dòng nối bằng '\n', cắt khoảng trắng hai đầu — đúng semantics text canonical mà hệ lưu vào `learning_outcomes.content` nay là cột jsonb lưu trực tiếp tài liệu này; text canonical trích từ tài liệu bằng đúng semantics này.
  */
 function docOutcomeText(doc: OutcomeDoc): string {
   const lines: string[] = [];

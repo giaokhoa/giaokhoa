@@ -17,20 +17,9 @@ import { ClassesService } from './classes.service';
 import type { GroupsRepository } from '@giaokhoa/db/repositories/groups';
 
 /**
- * Bộ spec cho điểm chặn 4 của hạng mục 3 (issue #587): ràng buộc
- * duy nhất toàn hệ của mã tham gia lớp phải giữ cả với lớp ở kho
- * chung, không chỉ với lớp ở kho riêng.
+ * Bộ spec cho điểm chặn 4 của hạng mục 3 (issue #587): ràng buộc duy nhất toàn hệ của mã tham gia lớp phải giữ cả với lớp ở kho chung, không chỉ với lớp ở kho riêng.
  *
- * Vì mã tham gia do hệ sinh ngẫu nhiên bằng crypto (không có đường
- * API nào cho phép gọi đặt trước một mã cụ thể), va chạm xác định
- * không dựng được qua API — spec kiểm chứng trực tiếp tại điểm
- * chốt duy nhất thi hành ràng buộc này (`claimJoinCodeForClass`,
- * chạy trước khi dòng lớp đổi trong `updateClass`): lớp ở kho
- * chung mang mã đã đăng ký cho một không gian khác trong thư mục
- * thì bị từ chối `class.join_code_taken`; mã chưa có trong thư
- * mục thì đi tiếp mà không đăng ký mã kho chung vào thư mục (đăng
- * ký sẽ phá đường phân giải ưu tiên thư mục); đường kho riêng giữ
- * nguyên hành vi đăng ký như cũ.
+ * Vì mã tham gia do hệ sinh ngẫu nhiên bằng crypto (không có đường API nào cho phép gọi đặt trước một mã cụ thể), va chạm xác định không dựng được qua API — spec kiểm chứng trực tiếp tại điểm chốt duy nhất thi hành ràng buộc này (`claimJoinCodeForClass`, chạy trước khi dòng lớp đổi trong `updateClass`): lớp ở kho chung mang mã đã đăng ký cho một không gian khác trong thư mục thì bị từ chối `class.join_code_taken`; mã chưa có trong thư mục thì đi tiếp mà không đăng ký mã kho chung vào thư mục (đăng ký sẽ phá đường phân giải ưu tiên thư mục); đường kho riêng giữ nguyên hành vi đăng ký như cũ.
  */
 
 const TENANT_ID = '00000000-0000-4000-8000-0000000000aa';

@@ -8,10 +8,7 @@ import { tenantAls } from '../db/tenant-als';
 export interface EnrolExpiryResult { checkedAt: string; suspendedIds: string[]; warnedIds: string[] }
 
 /**
- * Danh sách cột đọc của một dòng `user_enrolments` mà processor
- * này nạp — dùng chung cho lượt quét quá hạn và lượt quét cảnh
- * báo: bí danh camelCase tường minh theo khuôn danh sách cột của
- * `@giaokhoa/db`.
+ * Danh sách cột đọc của một dòng `user_enrolments` mà processor này nạp — dùng chung cho lượt quét quá hạn và lượt quét cảnh báo: bí danh camelCase tường minh theo khuôn danh sách cột của `@giaokhoa/db`.
  */
 const USER_ENROLMENT_COLUMNS = [
   'id',
@@ -26,11 +23,7 @@ const USER_ENROLMENT_COLUMNS = [
 ] as const;
 
 /**
- * Cửa sổ cảnh báo sắp hết hạn ghi danh (ngày): ghi danh ACTIVE có
- * timeEnd rơi vào (hiện tại, hiện tại + cửa sổ] được phát MỘT sự kiện
- * outbox `enrol_expiry_warning` duy nhất — phía API (NotificationEvents
- * Consumer, lát N1 issue #49) biến sự kiện thành thông báo
- * `enrol_expiry_warning` cho học sinh. Chống trùng ngay tại phía phát:
+ * Cửa sổ cảnh báo sắp hết hạn ghi danh (ngày): ghi danh ACTIVE có timeEnd rơi vào (hiện tại, hiện tại + cửa sổ] được phát MỘT sự kiện outbox `enrol_expiry_warning` duy nhất — phía API (NotificationEvents Consumer, lát N1 issue #49) biến sự kiện thành thông báo `enrol_expiry_warning` cho học sinh. Chống trùng ngay tại phía phát:
  * đã có sự kiện cảnh báo cho đúng enrolment đó thì không phát lại
  * (quét lại mỗi 5 phút không được spam). Moodle cũng cảnh báo TRƯỚC
  * khi hết hạn theo ngưỡng cấu hình; ở đây ngưỡng là hằng số sản phẩm.
@@ -38,13 +31,7 @@ const USER_ENROLMENT_COLUMNS = [
 export const ENROL_EXPIRY_WARNING_WINDOW_DAYS = 7;
 
 /**
- * Hết hạn ghi danh: các `user_enrolments` ACTIVE mà `timeEnd` của
- * chúng đã qua được chuyển sang SUSPENDED và một sự kiện outbox
- * `user_enrolment_suspended` được ghi trong cùng transaction cho
- * từng dòng. Quyền truy cập CŨNG bị từ chối tại thời điểm đọc bởi
- * kiểm tra cửa sổ thời gian `isEnrolled(onlyActive)` phía API, nên
- * một lượt quét bị trễ không bao giờ mở ra cửa sổ truy cập — lượt
- * quét chỉ chuẩn hoá trạng thái.
+ * Hết hạn ghi danh: các `user_enrolments` ACTIVE mà `timeEnd` của chúng đã qua được chuyển sang SUSPENDED và một sự kiện outbox `user_enrolment_suspended` được ghi trong cùng transaction cho từng dòng. Quyền truy cập CŨNG bị từ chối tại thời điểm đọc bởi kiểm tra cửa sổ thời gian `isEnrolled(onlyActive)` phía API, nên một lượt quét bị trễ không bao giờ mở ra cửa sổ truy cập — lượt quét chỉ chuẩn hoá trạng thái.
  */
 @Processor('enrol-expiry')
 /**
@@ -54,13 +41,10 @@ export class EnrolExpiryProcessor extends WorkerHost {
   constructor(private readonly spaceDb: SpaceDatabaseService, private readonly taskLog: TaskLogService) { super(); }
 
   /**
-   * Xử lý một job của queue tương ứng. Mỗi lượt quét (tác vụ định kỳ 5 phút)
-   * được ghi vào task_log qua TaskLogService.
+   * Xử lý một job của queue tương ứng. Mỗi lượt quét (tác vụ định kỳ 5 phút) được ghi vào task_log qua TaskLogService.
    */
   async process(_job: Job): Promise<EnrolExpiryResult> {
-    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
-    // ngữ cảnh platform tường minh để RLS fail-closed không làm mù
-    // dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
+    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc ngữ cảnh platform tường minh để RLS fail-closed không làm mù dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
     return tenantAls.run({ platform: true }, () => this.processInContext(_job));
   }
 

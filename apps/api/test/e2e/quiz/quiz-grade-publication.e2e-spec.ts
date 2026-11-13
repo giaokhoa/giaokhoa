@@ -8,28 +8,20 @@ import { addExamSlot, createExamDraft, pinExam } from '../../support/exam-pin-he
 /**
  * Cổng công bố điểm cho điểm TỔNG của bài kiểm tra (issue #411).
  *
- * Quy tắc nghiệp vụ: học viên chỉ thấy điểm ĐÃ CÔNG BỐ. Điểm từng câu
- * vốn đã được gác bằng mặt nạ xem lại (reviewMarks theo cửa sổ), nhưng
- * điểm tổng (grade/sumGrades trong tóm tắt lượt và myGrade ở trang bài
- * kiểm tra) từng bị trả thẳng vô điều kiện ở mọi đường đọc phía chủ
- * lượt. Spec này khoá cả HAI điều kiện độc lập của cổng che điểm tổng:
+ * Quy tắc nghiệp vụ: học viên chỉ thấy điểm ĐÃ CÔNG BỐ. Điểm từng câu vốn đã được gác bằng mặt nạ xem lại (reviewMarks theo cửa sổ), nhưng điểm tổng (grade/sumGrades trong tóm tắt lượt và myGrade ở trang bài kiểm tra) từng bị trả thẳng vô điều kiện ở mọi đường đọc phía chủ lượt. Spec này khoá cả HAI điều kiện độc lập của cổng che điểm tổng:
  *
  *  - (a) mặt nạ điểm ĐÓNG + hạng mục điểm đã công bố (chính sách auto)
  *    → phía học viên vẫn null: điều kiện mặt nạ một mình đã đủ che.
  *  - (b) mặt nạ điểm MỞ + hạng mục điểm manual CHƯA công bố → phía học
- *    viên vẫn null; sau khi giáo viên công bố hạng mục, cùng dữ kiện
- *    đó hiện số thật: điều kiện công bố một mình đã đủ che.
+ *    viên vẫn null; sau khi giáo viên công bố hạng mục, cùng dữ kiện đó hiện số thật: điều kiện công bố một mình đã đủ che.
  *  - (c) mặt nạ MỞ + đã công bố → học viên thấy đúng số thật ở mọi bề
  *    mặt (view lượt, danh sách lượt của mình, myGrade).
  *  - (d) lượt đang chờ chấm tay (needsgrading) + chưa công bố → tổng
  *    BÁN PHẦN cũng bị che (null), không lộ qua tóm tắt lượt.
  *  - (e) giáo viên/người có đặc quyền xem CÙNG dữ kiện của ca (b) khi
- *    chưa công bố vẫn thấy đủ số thật ở view lượt, danh sách lượt và
- *    trang kết quả lớp — cổng che chỉ áp phía chủ lượt.
+ *    chưa công bố vẫn thấy đủ số thật ở view lượt, danh sách lượt và trang kết quả lớp — cổng che chỉ áp phía chủ lượt.
  *
- * Mặt nạ mở trong spec này = reviewMarks 4368 (đủ bốn cửa sổ xem lại)
- * và reviewAttempt 4368 để nội dung lượt luôn xem được; các lượt đều
- * được đọc ngay sau khi nộp, tức trong cửa sổ "ngay sau nộp".
+ * Mặt nạ mở trong spec này = reviewMarks 4368 (đủ bốn cửa sổ xem lại) và reviewAttempt 4368 để nội dung lượt luôn xem được; các lượt đều được đọc ngay sau khi nộp, tức trong cửa sổ "ngay sau nộp".
  */
 describe('Cổng công bố điểm cho điểm tổng của quiz (#411)', () => {
   let app: INestApplication;

@@ -11,8 +11,7 @@ import {
 
 /**
  * Validation của Web Services dùng Zod qua Standard Schema:
- * schema nền ở `@giaokhoa/contracts` là nguồn sự thật duy nhất, dùng chung với form
- * phía React; server không định nghĩa hệ validation thứ hai.
+ * schema nền ở `@giaokhoa/contracts` là nguồn sự thật duy nhất, dùng chung với form phía React; server không định nghĩa hệ validation thứ hai.
  */
 export { callExternalFunctionSchema, createExternalServiceSchema, createExternalTokenSchema, setExternalServiceEnabledSchema };
 export type CreateServiceDto = CreateExternalService;

@@ -13,15 +13,9 @@ import {
 const STORAGE = '/tmp/giaokhoa-worker-test-files';
 
 /**
- * Luồng dọn file mồ côi (report §3.11 golden file case, nửa phía worker).
- * Oracle: file_storage_test.php::test_cron — các file vật lý chỉ bị xoá khi
- * không còn gì tham chiếu tới contentHash của chúng.
+ * Luồng dọn file mồ côi (report §3.11 golden file case, nửa phía worker). Oracle: file_storage_test.php::test_cron — các file vật lý chỉ bị xoá khi không còn gì tham chiếu tới contentHash của chúng.
  *
- * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness
- * role thường (`test/ordinary-worker-module.ts`): module chạy bằng
- * role NOSUPERUSER/NOBYPASSRLS như production, fixture (ghi/xoá dòng
- * `files` đổi điều kiện giữa hai ca) đi qua kết nối quản trị của
- * harness — khẳng định nghiệp vụ của spec không đổi.
+ * Từ lát 2 của issue #294, spec này boot WorkerModule qua harness role thường (`test/ordinary-worker-module.ts`): module chạy bằng role NOSUPERUSER/NOBYPASSRLS như production, fixture (ghi/xoá dòng `files` đổi điều kiện giữa hai ca) đi qua kết nối quản trị của harness — khẳng định nghiệp vụ của spec không đổi.
  */
 describe('Worker: bộ xử lý file-cleanup chỉ xoá file vật lý không còn tham chiếu', () => {
   let context: INestApplicationContext;

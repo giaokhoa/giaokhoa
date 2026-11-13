@@ -11,12 +11,9 @@ import {
 @ApiTags('books')
 @Controller({ path: 'books', version: '1' })
 /**
- * API Sách (K0b tái cấu trúc, issue #67): sách là thực thể độc lập —
- * không nằm dưới chương trình; chương trình chỉ liên quan qua lớp ánh
- * xạ trong cây sách. Đọc cần curriculum:view tại context của môn mô tả
+ * API Sách (K0b tái cấu trúc, issue #67): sách là thực thể độc lập — không nằm dưới chương trình; chương trình chỉ liên quan qua lớp ánh xạ trong cây sách. Đọc cần curriculum:view tại context của môn mô tả
  * (hoặc context hệ thống khi sách không gắn môn), ghi/nạp cần
- * curriculum:manage tại context hệ thống (trong service). Các GET phục
- * vụ chọn khung nhận thêm `forCourseId` như bề mặt chương trình.
+ * curriculum:manage tại context hệ thống (trong service). Các GET phục vụ chọn khung nhận thêm `forCourseId` như bề mặt chương trình.
  */
 export class BooksController {
   constructor(private readonly booksService: BookService) {}
@@ -43,9 +40,7 @@ export class BooksController {
   }
   @Get(':id/questions')
   /**
-   * GET /books/:id/questions — truy nguồn chiều ngược: các câu hỏi
-   * ghi nguồn gốc từ cuốn sách này (source_kind='book'). Bề mặt nội
-   * bộ phía giáo viên/quản trị, cùng cổng đọc với cây sách.
+   * GET /books/:id/questions — truy nguồn chiều ngược: các câu hỏi ghi nguồn gốc từ cuốn sách này (source_kind='book'). Bề mặt nội bộ phía giáo viên/quản trị, cùng cổng đọc với cây sách.
    */
   async getBookQuestions(@Param('id', { schema: uuidIdSchema }) id: string, @CurrentUser() actor: AuthenticatedUser) {
     return this.booksService.listBookQuestions(actor.id, id);

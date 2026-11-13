@@ -1,11 +1,5 @@
 /**
- * Card nhập điểm trên trang Điểm theo bài (pages/grades.tsx), chỉ
- * render cho staff của khoá: form chọn bài, học sinh, điểm và phản
- * hồi để nhập/sửa điểm một bài cho một học sinh; khối lịch sử điểm
- * nằm ngay bên dưới trong cùng card — chọn bài + học sinh rồi xem
- * các lần ghi điểm của học viên đó trên mục điểm. State form, state
- * lịch sử và kết quả lịch sử do file trang giữ; thao tác ghi và tải
- * lịch sử đi qua handler của trang truyền xuống qua props.
+ * Card nhập điểm trên trang Điểm theo bài (pages/grades.tsx), chỉ render cho staff của khoá: form chọn bài, học sinh, điểm và phản hồi để nhập/sửa điểm một bài cho một học sinh; khối lịch sử điểm nằm ngay bên dưới trong cùng card — chọn bài + học sinh rồi xem các lần ghi điểm của học viên đó trên mục điểm. State form, state lịch sử và kết quả lịch sử do file trang giữ; thao tác ghi và tải lịch sử đi qua handler của trang truyền xuống qua props.
  */
 import type { FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';

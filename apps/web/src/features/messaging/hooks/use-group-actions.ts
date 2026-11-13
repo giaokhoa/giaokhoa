@@ -77,12 +77,7 @@ export function useGroupActions({
   const conversationEnabledMutation = useSetConversationEnabled();
 
   /**
-   * Mở một conversation ĐÃ có id (lát MSG-T3 — nút nhóm con/nhóm tự
-   * do/chat đã ensure của cây Nhóm): có sẵn trong một trong hai
-   * tập danh sách của trang (chính hoặc đã lưu) thì mở như cú bấm
-   * thường; chưa có thì lấy chi tiết theo id bằng đúng cơ chế
-   * deep-link rồi mở — server là nơi thực thi quyền thành viên,
-   * không phải thành viên thì bỏ qua êm.
+   * Mở một conversation ĐÃ có id (lát MSG-T3 — nút nhóm con/nhóm tự do/chat đã ensure của cây Nhóm): có sẵn trong một trong hai tập danh sách của trang (chính hoặc đã lưu) thì mở như cú bấm thường; chưa có thì lấy chi tiết theo id bằng đúng cơ chế deep-link rồi mở — server là nơi thực thi quyền thành viên, không phải thành viên thì bỏ qua êm.
    */
   async function openConversationById(conversationId: string) {
     const found =
@@ -102,10 +97,7 @@ export function useGroupActions({
   }
 
   /**
-   * Mở CHAT CẤP LỚP từ nút lớp của cây Nhóm (lát MSG-T3): ensure
-   * qua endpoint lớp của MSG-T2 rồi mở ngay ở khung phải — bấm dòng
-   * lớp là vào chat lớp, tối đa 2 thao tác tính từ màn Tin nhắn.
-   * Người ngoài lớp nhận 404 ở server thì giữ nguyên màn hiện tại.
+   * Mở CHAT CẤP LỚP từ nút lớp của cây Nhóm (lát MSG-T3): ensure qua endpoint lớp của MSG-T2 rồi mở ngay ở khung phải — bấm dòng lớp là vào chat lớp, tối đa 2 thao tác tính từ màn Tin nhắn. Người ngoài lớp nhận 404 ở server thì giữ nguyên màn hiện tại.
    */
   async function openClassChat(classId: string) {
     try {
@@ -118,9 +110,7 @@ export function useGroupActions({
   }
 
   /**
-   * Mở CHAT CẤP KHOÁ từ nút khoá của cây Nhóm (lát MSG-T3): ensure
-   * qua endpoint khoá (đường đã có từ chat cấp khoá) rồi mở ngay ở
-   * khung phải, cùng kỷ luật 2 thao tác như chat lớp.
+   * Mở CHAT CẤP KHOÁ từ nút khoá của cây Nhóm (lát MSG-T3): ensure qua endpoint khoá (đường đã có từ chat cấp khoá) rồi mở ngay ở khung phải, cùng kỷ luật 2 thao tác như chat lớp.
    */
   async function openCourseChat(courseId: string) {
     try {
@@ -134,8 +124,7 @@ export function useGroupActions({
 
   /**
    * Mở chat của một NHÓM CON chưa có conversation (lát MSG-T3):
-   * tạo/lấy conversation gắn course group qua đường sẵn có rồi mở —
-   * cùng đường trang quản trị khoá dùng để mở chat nhóm con.
+   * tạo/lấy conversation gắn course group qua đường sẵn có rồi mở — cùng đường trang quản trị khoá dùng để mở chat nhóm con.
    */
   async function openGroupConversation(groupId: string) {
     try {
@@ -186,12 +175,7 @@ export function useGroupActions({
   }
 
   /**
-   * Gỡ một thành viên khỏi NHÓM TỰ DO đang mở (lát MSG-T4): xác
-   * nhận trước khi gọi DELETE — server là cổng cuối (chỉ nhóm tự
-   * do, chỉ người có thẩm quyền quản lý, không gỡ người tạo). Thành
-   * công thì đột biến tự vá danh sách thành viên mới vào cache
-   * danh sách + chi tiết ở tầng dữ kiện; hook chỉ làm mới panel và
-   * báo kết quả; lỗi hiện ở dải thông báo hành động của khung chat.
+   * Gỡ một thành viên khỏi NHÓM TỰ DO đang mở (lát MSG-T4): xác nhận trước khi gọi DELETE — server là cổng cuối (chỉ nhóm tự do, chỉ người có thẩm quyền quản lý, không gỡ người tạo). Thành công thì đột biến tự vá danh sách thành viên mới vào cache danh sách + chi tiết ở tầng dữ kiện; hook chỉ làm mới panel và báo kết quả; lỗi hiện ở dải thông báo hành động của khung chat.
    */
   async function removeGroupMember(userId: string) {
     if (!active) return;
@@ -222,12 +206,7 @@ export function useGroupActions({
   }
 
   /**
-   * Có hiện nút tạo nhóm tự do hay không (lát MSG-T3): đọc thẳng cờ
-   * `canCreateFreeGroup` do SERVER tính trong cây nhóm theo đúng
-   * cổng tạo nhóm của API cho tenant hiện hành — chỉ quản trị viên
-   * hệ thống hoặc chủ trung tâm mới thấy nút; giáo viên, nhân viên
-   * và học viên không thấy. Đây chỉ là trình bày — cổng thật chặn
-   * tạo nhóm nằm ở server.
+   * Có hiện nút tạo nhóm tự do hay không (lát MSG-T3): đọc thẳng cờ `canCreateFreeGroup` do SERVER tính trong cây nhóm theo đúng cổng tạo nhóm của API cho tenant hiện hành — chỉ quản trị viên hệ thống hoặc chủ trung tâm mới thấy nút; giáo viên, nhân viên và học viên không thấy. Đây chỉ là trình bày — cổng thật chặn tạo nhóm nằm ở server.
    */
   const canCreateFreeGroup = groupTree?.canCreateFreeGroup ?? false;
 

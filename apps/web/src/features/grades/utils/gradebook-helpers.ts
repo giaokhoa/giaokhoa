@@ -1,8 +1,6 @@
 /**
  * Hàm thuần cấp module của trang Điểm theo bài (pages/grades.tsx):
- * phân loại cột vnEdu và định dạng số điểm hiển thị. Không mang trạng
- * thái React, không gọi API — các card trong thư mục này và file trang
- * dùng chung khi dựng bề mặt điểm và bề mặt xuất vnEdu.
+ * phân loại cột vnEdu và định dạng số điểm hiển thị. Không mang trạng thái React, không gọi API — các card trong thư mục này và file trang dùng chung khi dựng bề mặt điểm và bề mặt xuất vnEdu.
  */
 import type { GradeItem } from '@giaokhoa/contracts';
 
@@ -19,9 +17,7 @@ export function isVneduExportableItem(item: GradeItem): boolean {
 }
 
 /**
- * Gợi ý loại cột vnEdu từ tên mục điểm. Đây CHỈ là mặc định trên giao diện
- * để giáo viên đỡ phải chọn lại từ đầu — giáo viên xác nhận trước khi xuất
- * và phía API không hề đoán theo tên.
+ * Gợi ý loại cột vnEdu từ tên mục điểm. Đây CHỈ là mặc định trên giao diện để giáo viên đỡ phải chọn lại từ đầu — giáo viên xác nhận trước khi xuất và phía API không hề đoán theo tên.
  */
 export function guessVneduColumnKind(item: GradeItem): VneduColumnKind {
   const name = item.itemName.toLowerCase();

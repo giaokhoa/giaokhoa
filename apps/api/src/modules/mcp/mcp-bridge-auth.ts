@@ -2,15 +2,9 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { UsersService } from '../users/users.service';
 
 /**
- * CẦU AUTH TẠM của MCP-0 (issue #110) — KHÔNG phải OAuth 2.1 của đặc tả
- * MCP: chấp nhận access token JWT hiện hữu của hệ (cùng định dạng
- * JwtAuthStrategy đang gác REST: HS256 bằng JWT_SECRET, payload
+ * CẦU AUTH TẠM của MCP-0 (issue #110) — KHÔNG phải OAuth 2.1 của đặc tả MCP: chấp nhận access token JWT hiện hữu của hệ (cùng định dạng JwtAuthStrategy đang gác REST: HS256 bằng JWT_SECRET, payload
  * { sub, username, sid }, không có `scope`, tài khoản còn hoạt động).
- * Chỉ phục vụ nghiệm thu nội bộ bằng MCP Inspector + client hỗ trợ gắn
- * header Bearer tuỳ chỉnh. AS OAuth 2.1 đầy đủ (authorize/consent/CIMD)
- * là lát MCP-1; khi đó lớp này bị thay, resource server + tools không
- * đổi vì chỉ phụ thuộc danh tính đã xác thực (actor) — xem hồ sơ
- * research MCP Phần 2.2/4.1.
+ * Chỉ phục vụ nghiệm thu nội bộ bằng MCP Inspector + client hỗ trợ gắn header Bearer tuỳ chỉnh. AS OAuth 2.1 đầy đủ (authorize/consent/CIMD) là lát MCP-1; khi đó lớp này bị thay, resource server + tools không đổi vì chỉ phụ thuộc danh tính đã xác thực (actor) — xem hồ sơ research MCP Phần 2.2/4.1.
  */
 export interface BridgeIdentity {
   userId: string;

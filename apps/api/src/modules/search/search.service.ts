@@ -24,9 +24,7 @@ export interface SearchArea {
   /** Liệt kê mọi itemId hiện có của area (dùng cho reindex toàn bộ). */
   listIds(): Promise<string[]>;
   /**
-   * Cổng audience theo TỪNG NGƯỜI TÌM (tuỳ chọn): capability tại context
-   * của tài liệu không diễn đạt được audience riêng của item — area nào
-   * có audience riêng phải khai hàm này để search re-check theo viewer
+   * Cổng audience theo TỪNG NGƯỜI TÌM (tuỳ chọn): capability tại context của tài liệu không diễn đạt được audience riêng của item — area nào có audience riêng phải khai hàm này để search re-check theo viewer
    * (issue #48).
    */
   audienceCheck?(itemId: string, userId: string): Promise<boolean>;

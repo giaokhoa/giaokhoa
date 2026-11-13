@@ -1,13 +1,5 @@
 /**
- * Panel khám phá ngân hàng câu hỏi chung (section "system-questions"
- * của khu vực Ngân hàng hệ thống): tìm câu theo bank/từ khoá/loại,
- * xem trước nội dung, sao chép một câu về bank cá nhân và hàng chờ
- * đóng góp câu của bank đang chọn để duyệt tại dòng. Toàn bộ state
- * của section là cục bộ (bank đang chọn, từ khoá, loại, kết quả tìm,
- * câu đang xem trước) nên panel tự giữ và tự nạp hàng chờ qua hook
- * của lib/questions-data; việc tìm chạy qua queryClient.fetchQuery
- * với query options của lib (đúng nhịp tải theo thao tác như khi còn
- * trong trang). Sao chép xong làm mới qua hàm refresh của trang.
+ * Panel khám phá ngân hàng câu hỏi chung (section "system-questions" của khu vực Ngân hàng hệ thống): tìm câu theo bank/từ khoá/loại, xem trước nội dung, sao chép một câu về bank cá nhân và hàng chờ đóng góp câu của bank đang chọn để duyệt tại dòng. Toàn bộ state của section là cục bộ (bank đang chọn, từ khoá, loại, kết quả tìm, câu đang xem trước) nên panel tự giữ và tự nạp hàng chờ qua hook của lib/questions-data; việc tìm chạy qua queryClient.fetchQuery với query options của lib (đúng nhịp tải theo thao tác như khi còn trong trang). Sao chép xong làm mới qua hàm refresh của trang.
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

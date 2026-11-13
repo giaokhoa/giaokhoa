@@ -8,18 +8,7 @@ import {
 import { UsersRepository } from '@giaokhoa/db/repositories/users';
 
 /**
- * Issue #568 (con C-backend của đợt #571): endpoint đọc gộp
- * `GET /access/users-with-assignments` cho bảng người dùng của trang vai
- * trò — phân trang theo NGƯỜI DÙNG (không theo dòng gán), `total` đếm
- * người dùng khớp lọc, ba bộ lọc tìm kiếm + vai trò + trạng thái áp đồng
- * thời phía server, và mảng gán của mỗi người mang tên vai, số cấp
- * context cùng `component` để nhận biết gán do ghi danh. Các endpoint
- * hiện hành không dựng được bảng này: `GET /users` không trả dữ kiện
- * vai và không lọc theo vai, còn `GET /access/assignments` phân trang
- * theo dòng gán và không mang cờ trạng thái người dùng. Mọi ca lái qua
- * HTTP thật; cờ trạng thái đặt thẳng qua repository và dòng gán ghi
- * danh chèn thẳng qua SQL để kết quả tất định; mỗi ca tự cô lập bằng
- * tiền tố duy nhất truyền qua `search`.
+ * Issue #568 (con C-backend của đợt #571): endpoint đọc gộp `GET /access/users-with-assignments` cho bảng người dùng của trang vai trò — phân trang theo NGƯỜI DÙNG (không theo dòng gán), `total` đếm người dùng khớp lọc, ba bộ lọc tìm kiếm + vai trò + trạng thái áp đồng thời phía server, và mảng gán của mỗi người mang tên vai, số cấp context cùng `component` để nhận biết gán do ghi danh. Các endpoint hiện hành không dựng được bảng này: `GET /users` không trả dữ kiện vai và không lọc theo vai, còn `GET /access/assignments` phân trang theo dòng gán và không mang cờ trạng thái người dùng. Mọi ca lái qua HTTP thật; cờ trạng thái đặt thẳng qua repository và dòng gán ghi danh chèn thẳng qua SQL để kết quả tất định; mỗi ca tự cô lập bằng tiền tố duy nhất truyền qua `search`.
  */
 describe('Access: danh sách người dùng kèm gán vai cho trang vai trò (issue #568)', () => {
   let app: INestApplication;

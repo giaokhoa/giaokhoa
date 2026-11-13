@@ -22,54 +22,23 @@ import { RoleMatrixDialog } from '../components/role-matrix-dialog';
 import { UsersWithRolesSection } from '../components/users-with-roles';
 
 /**
- * Trang quản trị vai trò: lưới thẻ vai trò + hộp thoại ma trận, bảng
- * gán vai và bảng người dùng kèm vai trò — các hộp thoại gán từ hai
- * bảng bao phủ đủ các trường của form gán rời rạc cũ (người dùng, vai
- * trò, ngữ cảnh mặc định hệ thống) kèm hiển thị đúng lý do của các
- * chốt chặn gán mà form cũ không có, nên form cũ đã bị thay thế hoàn
- * toàn.
+ * Trang quản trị vai trò: lưới thẻ vai trò + hộp thoại ma trận, bảng gán vai và bảng người dùng kèm vai trò — các hộp thoại gán từ hai bảng bao phủ đủ các trường của form gán rời rạc cũ (người dùng, vai trò, ngữ cảnh mặc định hệ thống) kèm hiển thị đúng lý do của các chốt chặn gán mà form cũ không có, nên form cũ đã bị thay thế hoàn toàn.
  *
  * Luồng hiển thị:
  *
  * 1. Ba query TanStack dùng chung (lib/access.ts): danh sách vai kèm
- *    tổng hợp, danh mục capability, cây context. Trang vào thẳng lưới
- *    thẻ, không có khối tiêu đề riêng phía trên lưới. Lưới thẻ dựng từ
- *    ĐÚNG MỘT lần gọi danh sách theo số đo của lưới thẻ mẫu: khe 20px,
- *    1/2/3 cột theo bề rộng; mỗi thẻ hiện tên vai 16px medium, dòng số
- *    người giữ 12px màu phụ ngay dưới tên, và một dải số nền xám nhạt
+ *    tổng hợp, danh mục capability, cây context. Trang vào thẳng lưới thẻ, không có khối tiêu đề riêng phía trên lưới. Lưới thẻ dựng từ ĐÚNG MỘT lần gọi danh sách theo số đo của lưới thẻ mẫu: khe 20px, 1/2/3 cột theo bề rộng; mỗi thẻ hiện tên vai 16px medium, dòng số người giữ 12px màu phụ ngay dưới tên, và một dải số nền xám nhạt
  *    (bo 8px, đệm 12×8) gồm đúng ba con số thật của hệ (ghi đè Đọc /
- *    ghi đè Ghi / Tổng số resource vai chạm tới — số 14px semibold,
- *    nhãn 10px màu phụ, vạch ngăn đứng trước con số Tổng; hệ không có
- *    khái niệm quyền Create/Delete tách riêng nên không bày thêm con
- *    số như các mẫu quản trị chung). Thẻ cuối của lưới là thẻ thêm vai
- *    cùng kích thước với nội dung căn giữa: tiêu đề 18px medium, dòng
- *    phụ 14px và nút outline kèm dấu cộng mở hộp thoại tạo vai trò —
- *    lối vào tạo vai trò duy nhất của trang.
+ *    ghi đè Ghi / Tổng số resource vai chạm tới — số 14px semibold, nhãn 10px màu phụ, vạch ngăn đứng trước con số Tổng; hệ không có khái niệm quyền Create/Delete tách riêng nên không bày thêm con số như các mẫu quản trị chung). Thẻ cuối của lưới là thẻ thêm vai cùng kích thước với nội dung căn giữa: tiêu đề 18px medium, dòng phụ 14px và nút outline kèm dấu cộng mở hộp thoại tạo vai trò — lối vào tạo vai trò duy nhất của trang.
  * 2. Menu ba chấm trên mỗi thẻ chỉ có hai mục: Sửa vai trò (mở hộp
- *    thoại ma trận ở chế độ sửa) và Xoá vai trò (mở hộp thoại xác nhận
- *    xoá, mục destructive). Hộp thoại thêm/sửa dùng chung cho tạo và
- *    sửa, lưu qua endpoint thay toàn bộ.
+ *    thoại ma trận ở chế độ sửa) và Xoá vai trò (mở hộp thoại xác nhận xoá, mục destructive). Hộp thoại thêm/sửa dùng chung cho tạo và sửa, lưu qua endpoint thay toàn bộ.
  * 3. Ma trận của vai đang sửa là query theo vai được chọn, lọc theo
- *    ngữ cảnh trong hộp thoại — đổi ngữ cảnh không gọi lại API, chỉ
- *    đổi tập ghi đè đang sửa.
+ *    ngữ cảnh trong hộp thoại — đổi ngữ cảnh không gọi lại API, chỉ đổi tập ghi đè đang sửa.
  * 4. Hai khu vực bảng dưới lưới (component riêng) nhận danh sách vai
- *    và cây context đã tải ở đây: bảng gán vai (lọc theo vai trò/ngữ
- *    cảnh, tìm kiếm, phân trang phía server, hộp thoại gán/gỡ) và
- *    bảng người dùng kèm vai trò (một người một dòng kèm mọi gán của
- *    họ, đọc từ endpoint gộp) — mỗi bảng tự giữ trạng thái lọc/tìm/
- *    trang và gọi API theo đúng tham số đó.
+ *    và cây context đã tải ở đây: bảng gán vai (lọc theo vai trò/ngữ cảnh, tìm kiếm, phân trang phía server, hộp thoại gán/gỡ) và bảng người dùng kèm vai trò (một người một dòng kèm mọi gán của họ, đọc từ endpoint gộp) — mỗi bảng tự giữ trạng thái lọc/tìm/ trang và gọi API theo đúng tham số đó.
  * 5. Trang đứng trong khung `app` của PageShell (trần 1440px, đệm
- *    trong trần, khoảng cách khối 24px) như trang quản trị của bản
- *    demo mẫu. Báo lỗi tải dữ kiện đi theo độ hạt của từng query:
- *    danh sách vai là dữ kiện chính — chỉ khi query này lỗi VÀ chưa
- *    có dữ kiện nào thì trang mới hiện banner lỗi toàn trang kèm nút
- *    thử lại; hai query phụ (danh mục capability, cây context) lỗi
- *    khi chưa có dữ kiện thì báo tại chỗ ở đầu trang, giữ nguyên dữ
- *    kiện đang hiển thị; đã có dữ kiện mà một lần làm mới nền lỗi
- *    thì không dựng banner phủ lên dữ kiện còn tốt. Trước đây cả ba
- *    query gộp thành một cờ lỗi duy nhất nên một lỗi tạm thời của
- *    endpoint phụ cũng bật banner "Không tải được vai trò" chập
- *    chờn theo nhịp làm mới nền.
+ *    trong trần, khoảng cách khối 24px) như trang quản trị của bản demo mẫu. Báo lỗi tải dữ kiện đi theo độ hạt của từng query:
+ *    danh sách vai là dữ kiện chính — chỉ khi query này lỗi VÀ chưa có dữ kiện nào thì trang mới hiện banner lỗi toàn trang kèm nút thử lại; hai query phụ (danh mục capability, cây context) lỗi khi chưa có dữ kiện thì báo tại chỗ ở đầu trang, giữ nguyên dữ kiện đang hiển thị; đã có dữ kiện mà một lần làm mới nền lỗi thì không dựng banner phủ lên dữ kiện còn tốt. Trước đây cả ba query gộp thành một cờ lỗi duy nhất nên một lỗi tạm thời của endpoint phụ cũng bật banner "Không tải được vai trò" chập chờn theo nhịp làm mới nền.
  */
 export function AdminRolesPage() {
   const { t } = useTranslation('app');
@@ -94,9 +63,7 @@ export function AdminRolesPage() {
   const loading = rolesQuery.isPending || capabilitiesQuery.isPending || contextsQuery.isPending;
   /**
    * Lỗi tải theo độ hạt của từng query (điểm 5 ở comment đầu file):
-   * banner toàn trang chỉ khi danh sách vai lỗi và chưa có dữ kiện;
-   * hai query phụ lỗi khi chưa có dữ kiện thì báo tại chỗ; lỗi làm
-   * mới nền khi đã có dữ kiện không sinh thông báo nào.
+   * banner toàn trang chỉ khi danh sách vai lỗi và chưa có dữ kiện; hai query phụ lỗi khi chưa có dữ kiện thì báo tại chỗ; lỗi làm mới nền khi đã có dữ kiện không sinh thông báo nào.
    */
   const rolesLoadFailed = rolesQuery.isError && rolesQuery.data === undefined;
   const supportLoadFailed =
@@ -242,11 +209,9 @@ export function AdminRolesPage() {
           role={matrixDialog.role}
           capabilities={capabilities}
           matrixRows={matrix}
-          // Query ma trận chỉ bật khi sửa một vai; ở chế độ tạo, query bị
-          // tắt vẫn mang trạng thái pending nên không được truyền thẳng.
+          // Query ma trận chỉ bật khi sửa một vai; ở chế độ tạo, query bị tắt vẫn mang trạng thái pending nên không được truyền thẳng.
           matrixPending={matrixRole !== null && matrixQuery.isPending}
-          // Lỗi tải ma trận cũng phải vào hộp thoại: ma trận trống do lỗi
-          // mà vẫn cho lưu thì PUT thay toàn bộ sẽ xoá lặng ghi đè đã lưu.
+          // Lỗi tải ma trận cũng phải vào hộp thoại: ma trận trống do lỗi mà vẫn cho lưu thì PUT thay toàn bộ sẽ xoá lặng ghi đè đã lưu.
           matrixError={matrixRole !== null && matrixQuery.isError}
           onMatrixRetry={() => void matrixQuery.refetch()}
           contexts={contexts}

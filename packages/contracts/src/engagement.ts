@@ -6,15 +6,9 @@ import { uuidIdSchema } from './ids.js';
 /* ---- Messaging ---- */
 
 /**
- * Tóm tắt TRÍCH DẪN của một tin gốc (lát M3, issue #229): server dựng
- * sẵn theo quyền của TỪNG người nhận để client hiện khối trích dẫn
- * trong bong bóng mà không phải gọi thêm. `excerpt` là nội dung rút
- * gọn của tin gốc; khi tin gốc không còn hiển thị được với người nhận
+ * Tóm tắt TRÍCH DẪN của một tin gốc (lát M3, issue #229): server dựng sẵn theo quyền của TỪNG người nhận để client hiện khối trích dẫn trong bong bóng mà không phải gọi thêm. `excerpt` là nội dung rút gọn của tin gốc; khi tin gốc không còn hiển thị được với người nhận
  * (đã xoá mềm / đã thu hồi / đã xoá cứng / chính người nhận đã
- * xoá-phía-mình) thì `unavailable = true` và `excerpt` rỗng — client
- * hiện "tin gốc đã bị xoá", TUYỆT ĐỐI không lộ nội dung qua khối này.
- * `seq` của tin gốc là neo để client tải cửa sổ quanh vị trí tin gốc
- * khi nó chưa nằm trong danh sách đang hiện.
+ * xoá-phía-mình) thì `unavailable = true` và `excerpt` rỗng — client hiện "tin gốc đã bị xoá", TUYỆT ĐỐI không lộ nội dung qua khối này. `seq` của tin gốc là neo để client tải cửa sổ quanh vị trí tin gốc khi nó chưa nằm trong danh sách đang hiện.
  */
 export const messageQuoteSchema = z.object({
   id: uuidIdSchema,
@@ -37,27 +31,17 @@ export const messageSchema = z.object({
   /** Khoá chống trùng do client sinh khi gửi lạc quan; null với tin gửi không kèm khoá. */
   clientMessageId: z.string().nullable(),
   /**
-   * Dấu vết xoá mềm (Lớp B, issue #33): null khi tin còn nguyên. Tin đã
-   * xoá chỉ xuất hiện trong các cửa sổ truy vết có thẩm quyền — phía
-   * học sinh không bao giờ nhận được tin có hai trường này khác null
-   * qua các đường đọc thường.
+   * Dấu vết xoá mềm (Lớp B, issue #33): null khi tin còn nguyên. Tin đã xoá chỉ xuất hiện trong các cửa sổ truy vết có thẩm quyền — phía học sinh không bao giờ nhận được tin có hai trường này khác null qua các đường đọc thường.
    */
   deletedAt: z.string().nullable(),
   deletedBy: uuidIdSchema.nullable(),
   /**
-   * Dấu vết THU HỒI (vòng đời tin nhắn theo vai, issue #33): tác giả
-   * thu hồi tin cho mọi người trong cửa sổ cấu hình site — từ thời
-   * điểm này nội dung bị vô hiệu với mọi thành viên thường (đường đọc
-   * thường trả nội dung rỗng kèm hai trường này để client hiện dòng
-   * "tin nhắn đã được thu hồi"); chỉ đường truy vết có thẩm quyền
-   * mới còn thấy nội dung gốc. null khi tin chưa từng bị thu hồi.
+   * Dấu vết THU HỒI (vòng đời tin nhắn theo vai, issue #33): tác giả thu hồi tin cho mọi người trong cửa sổ cấu hình site — từ thời điểm này nội dung bị vô hiệu với mọi thành viên thường (đường đọc thường trả nội dung rỗng kèm hai trường này để client hiện dòng "tin nhắn đã được thu hồi"); chỉ đường truy vết có thẩm quyền mới còn thấy nội dung gốc. null khi tin chưa từng bị thu hồi.
    */
   recalledAt: z.string().nullable(),
   recalledBy: uuidIdSchema.nullable(),
   /**
-   * Trả lời trích dẫn (lát M3, issue #229): id của tin gốc được trích
-   * dẫn; null khi tin không trả lời tin nào (hoặc tin gốc đã bị xoá
-   * cứng — khoá ngoại set null). Khối tóm tắt trích dẫn ở `replyTo`.
+   * Trả lời trích dẫn (lát M3, issue #229): id của tin gốc được trích dẫn; null khi tin không trả lời tin nào (hoặc tin gốc đã bị xoá cứng — khoá ngoại set null). Khối tóm tắt trích dẫn ở `replyTo`.
    */
   replyToMessageId: uuidIdSchema.nullable(),
   /** Tóm tắt trích dẫn dựng ở server theo quyền của người nhận; null khi tin không trích dẫn tin nào. */
@@ -71,15 +55,7 @@ export const conversationSchema = z.object({
   name: z.string().nullable(),
   members: z.array(uuidIdSchema),
   /**
-   * Phân loại cấu trúc của conversation (lát MSG-T1, issue #33 —
-   * thiết kế cấu trúc nhắn tin chốt 11:36 ngày 26/10/2026): cặp
-   * `component` + `itemType` cho biết conversation gắn với thực thể
-   * nào — `core_course`/`course` = chat cấp khoá, `core_group`/
-   * `groups` = chat nhóm con trong khoá, `core_class`/`class` = chat
-   * cấp lớp (có từ MSG-T2); cả ba đều null với hội thoại cá nhân 1–1
-   * và nhóm tự do. `itemId` là id của thực thể gắn (khoá/nhóm/lớp).
-   * Client phân loại hội thoại bằng ba trường này, TUYỆT ĐỐI không
-   * đoán theo tên hiển thị.
+   * Phân loại cấu trúc của conversation (lát MSG-T1, issue #33 — thiết kế cấu trúc nhắn tin chốt 11:36 ngày 26/10/2026): cặp `component` + `itemType` cho biết conversation gắn với thực thể nào — `core_course`/`course` = chat cấp khoá, `core_group`/ `groups` = chat nhóm con trong khoá, `core_class`/`class` = chat cấp lớp (có từ MSG-T2); cả ba đều null với hội thoại cá nhân 1–1 và nhóm tự do. `itemId` là id của thực thể gắn (khoá/nhóm/lớp). Client phân loại hội thoại bằng ba trường này, TUYỆT ĐỐI không đoán theo tên hiển thị.
    */
   component: z.string().nullable(),
   itemType: z.string().nullable(),
@@ -89,29 +65,13 @@ export type Conversation = z.infer<typeof conversationSchema>;
 
 /**
  * Vai của CHÍNH người gọi tại một nút của cây nhóm (lát MSG-T1):
- * `teaching` = chủ lớp hoặc staff phụ trách dạy của lớp/khoá;
- * `learning` = đang học (thành viên roster lớp / ghi danh hiệu lực);
- * `staff` = có quan hệ công tác khác (đồng GV không thuộc diện phụ
- * trách dạy, thành viên nhóm có vai quản trị). Nhóm tự do chỉ dùng
- * `staff` (người tạo/quản trị) và `learning` (thành viên thường).
+ * `teaching` = chủ lớp hoặc staff phụ trách dạy của lớp/khoá; `learning` = đang học (thành viên roster lớp / ghi danh hiệu lực); `staff` = có quan hệ công tác khác (đồng GV không thuộc diện phụ trách dạy, thành viên nhóm có vai quản trị). Nhóm tự do chỉ dùng `staff` (người tạo/quản trị) và `learning` (thành viên thường).
  */
 export const conversationTreeRoleSchema = z.enum(['teaching', 'learning', 'staff']);
 export type ConversationTreeRole = z.infer<typeof conversationTreeRoleSchema>;
 
 /**
- * Một nút lá của cây nhóm: phần DÙNG CHUNG cho nút nhóm con và nút
- * nhóm tự do (lát MSG-T1). `conversationId` null = chat của nút CHƯA
- * được ensure (bấm vào nút mới ensure ở các lát sau) và khi đó
- * `unread` luôn 0; đã ensure thì `unread` là số chưa đọc của chính
- * người gọi trên conversation đó (tôn trọng luật ẩn bề mặt khi chặn
- * như mọi đường đọc — đếm tại server). `pinnedAt` là trạng thái
- * ghim CÁ NHÂN của chính người gọi trên conversation của nút (mốc
- * ghim ISO, null = chưa ghim), server lấy từ dòng thành viên của
- * người gọi trên CẢ HAI tập hội thoại chưa lưu trữ và đã lưu trữ —
- * ghim và lưu trữ là hai trạng thái độc lập nên một hội thoại vừa
- * ghim vừa lưu trữ vẫn phải mang mốc ghim ở cây để client xếp đúng
- * mục Ghim của tab Nhóm; nút chưa có conversation, hoặc người gọi
- * chưa là thành viên conversation đó, thì `pinnedAt` là null.
+ * Một nút lá của cây nhóm: phần DÙNG CHUNG cho nút nhóm con và nút nhóm tự do (lát MSG-T1). `conversationId` null = chat của nút CHƯA được ensure (bấm vào nút mới ensure ở các lát sau) và khi đó `unread` luôn 0; đã ensure thì `unread` là số chưa đọc của chính người gọi trên conversation đó (tôn trọng luật ẩn bề mặt khi chặn như mọi đường đọc — đếm tại server). `pinnedAt` là trạng thái ghim CÁ NHÂN của chính người gọi trên conversation của nút (mốc ghim ISO, null = chưa ghim), server lấy từ dòng thành viên của người gọi trên CẢ HAI tập hội thoại chưa lưu trữ và đã lưu trữ — ghim và lưu trữ là hai trạng thái độc lập nên một hội thoại vừa ghim vừa lưu trữ vẫn phải mang mốc ghim ở cây để client xếp đúng mục Ghim của tab Nhóm; nút chưa có conversation, hoặc người gọi chưa là thành viên conversation đó, thì `pinnedAt` là null.
  */
 export const conversationTreeLeafSchema = z.object({
   name: z.string(),
@@ -135,9 +95,7 @@ export const conversationTreeFreeGroupSchema = conversationTreeLeafSchema.extend
 export type ConversationTreeFreeGroup = z.infer<typeof conversationTreeFreeGroupSchema>;
 
 /**
- * Nút KHOÁ HỌC của cây nhóm (lát MSG-T1): nút tự thân là chat cấp
- * khoá (`conversationId`/`unread` của conversation itemType
- * 'course'); `groups` là các nhóm con của khoá mà người gọi thuộc về.
+ * Nút KHOÁ HỌC của cây nhóm (lát MSG-T1): nút tự thân là chat cấp khoá (`conversationId`/`unread` của conversation itemType 'course'); `groups` là các nhóm con của khoá mà người gọi thuộc về.
  */
 export const conversationTreeCourseSchema = conversationTreeLeafSchema.extend({
   courseId: uuidIdSchema,
@@ -148,11 +106,7 @@ export type ConversationTreeCourse = z.infer<typeof conversationTreeCourseSchema
 /**
  * Nút LỚP của cây nhóm (lát MSG-T1): nút tự thân là chat cấp lớp
  * (`conversationId`/`unread` của conversation itemType 'class' —
- * chat lớp có từ MSG-T2 nên ở lát này conversationId luôn null và
- * `unread` của nút lớp là TỔNG chưa đọc của chính nút lớp cộng các
- * nút con (khoá + nhóm con trong lớp), để nhìn lướt là biết lớp nào
- * đang có tin); `courses` là các khoá NẰM TRONG lớp mà người gọi
- * thuộc về theo đúng quan hệ lớp–khoá (lớp là cha của khoá).
+ * chat lớp có từ MSG-T2 nên ở lát này conversationId luôn null và `unread` của nút lớp là TỔNG chưa đọc của chính nút lớp cộng các nút con (khoá + nhóm con trong lớp), để nhìn lướt là biết lớp nào đang có tin); `courses` là các khoá NẰM TRONG lớp mà người gọi thuộc về theo đúng quan hệ lớp–khoá (lớp là cha của khoá).
  */
 export const conversationTreeClassSchema = conversationTreeLeafSchema.extend({
   classId: uuidIdSchema,
@@ -162,29 +116,13 @@ export type ConversationTreeClass = z.infer<typeof conversationTreeClassSchema>;
 
 /**
  * CÂY NHÓM của chính người gọi (lát MSG-T1, GET /messages/group-tree):
- * dựng hoàn toàn ở server từ classes + enrol + conversations — client
- * KHÔNG tự ghép từ danh sách hội thoại phẳng. `classes` là các lớp
- * tôi có quan hệ (chủ lớp / staff / roster), mỗi lớp kèm các khoá
- * trong lớp mà tôi thuộc về; `coursesOutsideClasses` là các khoá tôi
- * thuộc về mà lớp chứa chúng tôi KHÔNG có quan hệ trực tiếp (vẫn neo
- * theo quan hệ lớp–khoá ở course ngoài — không nhân bản thành nút
- * "khoá ngoài lớp" tách rời khỏi lớp của nó khi tôi có lớp đó ở
- * `classes`); `freeGroups` là các nhóm tự do tôi là thành viên.
- * `canCreateFreeGroup` là cờ server tính theo ĐÚNG cổng tạo nhóm tự
- * do của API cho tenant hiện hành (chỉ quản trị viên hệ thống hoặc
- * chủ trung tâm — người giữ capability `tenant:manage` tại context
- * của tenant hiện hành — mới `true`); web hiện nút tạo nhóm theo cờ
- * này thay vì tự suy từ vai trên cây.
+ * dựng hoàn toàn ở server từ classes + enrol + conversations — client KHÔNG tự ghép từ danh sách hội thoại phẳng. `classes` là các lớp tôi có quan hệ (chủ lớp / staff / roster), mỗi lớp kèm các khoá trong lớp mà tôi thuộc về; `coursesOutsideClasses` là các khoá tôi thuộc về mà lớp chứa chúng tôi KHÔNG có quan hệ trực tiếp (vẫn neo theo quan hệ lớp–khoá ở course ngoài — không nhân bản thành nút "khoá ngoài lớp" tách rời khỏi lớp của nó khi tôi có lớp đó ở `classes`); `freeGroups` là các nhóm tự do tôi là thành viên. `canCreateFreeGroup` là cờ server tính theo ĐÚNG cổng tạo nhóm tự do của API cho tenant hiện hành (chỉ quản trị viên hệ thống hoặc chủ trung tâm — người giữ capability `tenant:manage` tại context của tenant hiện hành — mới `true`); web hiện nút tạo nhóm theo cờ này thay vì tự suy từ vai trên cây.
  */
 export const conversationGroupTreeSchema = z.object({
   classes: z.array(conversationTreeClassSchema),
   coursesOutsideClasses: z.array(conversationTreeCourseSchema),
   freeGroups: z.array(conversationTreeFreeGroupSchema),
-  // Cờ server tính theo ĐÚNG cổng tạo nhóm tự do của API cho tenant
-  // hiện hành: chỉ quản trị viên hệ thống hoặc chủ trung tâm (giữ
-  // capability `tenant:manage` tại context của tenant hiện hành)
-  // mới `true`; web hiện nút tạo nhóm theo cờ này thay vì tự suy từ
-  // vai trên cây.
+  // Cờ server tính theo ĐÚNG cổng tạo nhóm tự do của API cho tenant hiện hành: chỉ quản trị viên hệ thống hoặc chủ trung tâm (giữ capability `tenant:manage` tại context của tenant hiện hành) mới `true`; web hiện nút tạo nhóm theo cờ này thay vì tự suy từ vai trên cây.
   canCreateFreeGroup: z.boolean(),
 });
 export type ConversationGroupTree = z.infer<typeof conversationGroupTreeSchema>;
@@ -207,18 +145,7 @@ export type EmailFrequency = z.infer<typeof emailFrequencySchema>;
 /**
  * Một dòng tuỳ chọn notification v2 mà API trả về
  * (MessagingService.getPreferences): MỘT dòng cho mỗi provider — trục
- * loggedin/loggedoff của mô hình cũ đã bỏ. Nhãn + mô tả vi/en lấy từ
- * registry ở API (nguồn sự thật duy nhất; web không tự chế bảng nhãn).
- * `emailFrequency` là null khi provider không có kênh email;
- * `emailAvailable` cho biết kênh email đã gửi thật hay chưa (false cho
- * tới khi SMTP nối ở NB-5 — cài đặt vẫn lưu và áp dụng khi kênh mở).
- * `siteEnabled` là chính sách phát của ADMIN ở cấp site (NB-7): false
- * nghĩa là admin đã tắt loại này cho toàn site — `notify()` không phát
- * bất kể tuỳ chọn cá nhân, nên web hiển thị khoá "Admin đã tắt ở cấp
- * site" và không cho người dùng bật lên; loại bắt buộc P2 luôn true ở
- * trường này vì admin cũng không tắt được chúng.
- * Kênh push không xuất hiện ở đây: chưa có app native nên ẩn hẳn khỏi
- * trang cài đặt, chỉ còn trong registry provider.
+ * loggedin/loggedoff của mô hình cũ đã bỏ. Nhãn + mô tả vi/en lấy từ registry ở API (nguồn sự thật duy nhất; web không tự chế bảng nhãn). `emailFrequency` là null khi provider không có kênh email; `emailAvailable` cho biết kênh email đã gửi thật hay chưa (false cho tới khi SMTP nối ở NB-5 — cài đặt vẫn lưu và áp dụng khi kênh mở). `siteEnabled` là chính sách phát của ADMIN ở cấp site (NB-7): false nghĩa là admin đã tắt loại này cho toàn site — `notify()` không phát bất kể tuỳ chọn cá nhân, nên web hiển thị khoá "Admin đã tắt ở cấp site" và không cho người dùng bật lên; loại bắt buộc P2 luôn true ở trường này vì admin cũng không tắt được chúng. Kênh push không xuất hiện ở đây: chưa có app native nên ẩn hẳn khỏi trang cài đặt, chỉ còn trong registry provider.
  */
 export const notificationPreferenceSchema = z.object({
   provider: z.string(),
@@ -263,11 +190,7 @@ export const notificationItemSchema = z.object({
 export type NotificationItem = z.infer<typeof notificationItemSchema>;
 
 /**
- * Một dòng GỘP của trung tâm thông báo: khoá gộp là (loại × nguồn ×
- * ngày) — loại = `eventType`, nguồn = `contextUrl` (null khi thông báo
- * không có ngữ cảnh đích, khi đó gộp theo component), ngày = ngày lịch
- * Asia/Saigon dạng `YYYY-MM-DD`. `latest` là mục mới nhất đại diện cho
- * cả dòng; `count`/`unreadCount` đếm trên toàn bộ các mục trong dòng.
+ * Một dòng GỘP của trung tâm thông báo: khoá gộp là (loại × nguồn × ngày) — loại = `eventType`, nguồn = `contextUrl` (null khi thông báo không có ngữ cảnh đích, khi đó gộp theo component), ngày = ngày lịch Asia/Saigon dạng `YYYY-MM-DD`. `latest` là mục mới nhất đại diện cho cả dòng; `count`/`unreadCount` đếm trên toàn bộ các mục trong dòng.
  */
 export const notificationGroupSchema = z.object({
   eventType: z.string(),
@@ -311,9 +234,7 @@ export const listNotificationGroupsQuerySchema = z.object({
 export type ListNotificationGroupsQuery = z.infer<typeof listNotificationGroupsQuerySchema>;
 
 /**
- * Query danh sách PHẲNG: bộ lọc (eventType + contextUrl + day) mở chi
- * tiết đúng một dòng gộp; `contextUrl` là chuỗi rỗng '' nghĩa là nguồn
- * KHÔNG có contextUrl (phân biệt với việc không truyền = không lọc).
+ * Query danh sách PHẲNG: bộ lọc (eventType + contextUrl + day) mở chi tiết đúng một dòng gộp; `contextUrl` là chuỗi rỗng '' nghĩa là nguồn KHÔNG có contextUrl (phân biệt với việc không truyền = không lọc).
  */
 export const listNotificationItemsQuerySchema = z.object({
   eventType: z.string().min(1).optional(),
@@ -328,11 +249,7 @@ export type ListNotificationItemsQuery = z.infer<typeof listNotificationItemsQue
 
 /**
  * Thân yêu cầu đánh dấu đã đọc của `POST /notifications/mark-read`:
- * phạm vi đánh dấu nằm trong thân yêu cầu, thay cho hậu tố `-all`
- * trong path cũ `POST /notifications/read-all` (hậu tố `-all` bị cấm
- * theo chuẩn đường dẫn). Hiện chỉ hỗ trợ phạm vi `all` — toàn bộ
- * thông báo của người gọi; phạm vi khác bị từ chối bằng lỗi kiểm
- * chứng, không suy diễn ngầm thành `all`.
+ * phạm vi đánh dấu nằm trong thân yêu cầu, thay cho hậu tố `-all` trong path cũ `POST /notifications/read-all` (hậu tố `-all` bị cấm theo chuẩn đường dẫn). Hiện chỉ hỗ trợ phạm vi `all` — toàn bộ thông báo của người gọi; phạm vi khác bị từ chối bằng lỗi kiểm chứng, không suy diễn ngầm thành `all`.
  */
 export const markNotificationsReadSchema = z.strictObject({
   scope: z.literal('all'),
@@ -459,12 +376,9 @@ export const createGroupConversationSchema = z.strictObject({
 export type CreateGroupConversation = z.infer<typeof createGroupConversationSchema>;
 
 /**
- * Trần độ dài một tin nhắn theo MẶC ĐỊNH của chính sách đã chốt (issue
- * #33, điểm P2; lát M2 issue #212): 10.000 ký tự người dùng thấy. Giá
- * trị hiệu lực thật nằm ở site-config `core/messagingmaxmessagelength`
+ * Trần độ dài một tin nhắn theo MẶC ĐỊNH của chính sách đã chốt (issue #33, điểm P2; lát M2 issue #212): 10.000 ký tự người dùng thấy. Giá trị hiệu lực thật nằm ở site-config `core/messagingmaxmessagelength`
  * (quản trị đổi được, server là nguồn sự thật duy nhất khi gửi); hằng
- * này chỉ là mặc định dùng chung để registry site-config và bộ soạn
- * tin trên web không lệch nhau ở giá trị gốc.
+ * này chỉ là mặc định dùng chung để registry site-config và bộ soạn tin trên web không lệch nhau ở giá trị gốc.
  */
 export const MESSAGING_MAX_MESSAGE_LENGTH_DEFAULT = 10000;
 
@@ -473,15 +387,11 @@ export const sendMessageSchema = z.strictObject({
   text: z.string().min(1),
   subject: z.string().optional(),
   /**
-   * Khoá chống trùng do client sinh cho mỗi lần soạn một tin (gửi lạc
-   * quan + thử lại khi mạng chập): server gặp lại cùng khoá trong cùng
-   * conversation của cùng người gửi thì trả chính tin đã lưu, không tạo
-   * tin thứ hai.
+   * Khoá chống trùng do client sinh cho mỗi lần soạn một tin (gửi lạc quan + thử lại khi mạng chập): server gặp lại cùng khoá trong cùng conversation của cùng người gửi thì trả chính tin đã lưu, không tạo tin thứ hai.
    */
   clientMessageId: z.string().min(1).max(128).optional(),
   /**
-   * Trả lời trích dẫn một tin cụ thể (lát M3, issue #229): id của tin
-   * GỐC trong ĐÚNG conversation đang gửi — server kiểm ở tầng service
+   * Trả lời trích dẫn một tin cụ thể (lát M3, issue #229): id của tin GỐC trong ĐÚNG conversation đang gửi — server kiểm ở tầng service
    * (tin không thuộc conversation này → 400, không lộ tồn tại). Phần
    * trích dẫn KHÔNG tính vào trần độ dài của nội dung tin.
    */
@@ -490,11 +400,7 @@ export const sendMessageSchema = z.strictObject({
 export type SendMessage = z.infer<typeof sendMessageSchema>;
 
 /**
- * Query phân trang cursor cho danh sách tin của một conversation: lấy
- * các tin TRƯỚC `beforeSeq` (tải lịch sử cũ) hoặc SAU `afterSeq` (đồng
- * bộ phần thiếu sau khi nối lại). Tầng server ép kiểu từ query string
- * bằng schema server riêng (xem dto phía api) — ở contracts chỉ khai
- * hình dạng số học.
+ * Query phân trang cursor cho danh sách tin của một conversation: lấy các tin TRƯỚC `beforeSeq` (tải lịch sử cũ) hoặc SAU `afterSeq` (đồng bộ phần thiếu sau khi nối lại). Tầng server ép kiểu từ query string bằng schema server riêng (xem dto phía api) — ở contracts chỉ khai hình dạng số học.
  */
 export const listMessagesQuerySchema = z.strictObject({
   beforeSeq: z.number().int().positive().optional(),
@@ -504,11 +410,7 @@ export const listMessagesQuerySchema = z.strictObject({
 export type ListMessagesQuery = z.infer<typeof listMessagesQuerySchema>;
 
 /**
- * Tìm nội dung tin TRONG MỘT conversation (lát M4, issue #237): chỉ
- * tồn tại bên trong bề mặt nhắn tin — nội dung tin KHÔNG được index
- * vào search toàn cục của hệ (chốt ở hồ sơ rà soát hoàn thiện nhắn
- * tin). `q` là chuỗi con khớp không phân biệt hoa thường; tầng service
- * cắt khoảng trắng hai đầu và từ chối truy vấn rỗng bằng 400 xác định.
+ * Tìm nội dung tin TRONG MỘT conversation (lát M4, issue #237): chỉ tồn tại bên trong bề mặt nhắn tin — nội dung tin KHÔNG được index vào search toàn cục của hệ (chốt ở hồ sơ rà soát hoàn thiện nhắn tin). `q` là chuỗi con khớp không phân biệt hoa thường; tầng service cắt khoảng trắng hai đầu và từ chối truy vấn rỗng bằng 400 xác định.
  */
 export const searchMessagesQuerySchema = z.strictObject({
   q: z.string().min(1).max(200),
@@ -517,12 +419,7 @@ export const searchMessagesQuerySchema = z.strictObject({
 export type SearchMessagesQuery = z.infer<typeof searchMessagesQuerySchema>;
 
 /**
- * Một kết quả tìm tin trong conversation (lát M4): `excerpt` là đoạn
- * nội dung quanh chỗ khớp do server rút gọn — kết quả CHỈ chứa tin
- * còn hiển thị được với chính người tìm theo luật bề mặt đọc (đã xoá
- * mềm/thu hồi/ẩn-phía-mình/phía bị chặn không bao giờ xuất hiện, kể
- * cả qua excerpt). `seq` + `id` là neo để client nhảy tới đúng tin
- * bằng cơ chế cửa sổ quanh seq của lát M3.
+ * Một kết quả tìm tin trong conversation (lát M4): `excerpt` là đoạn nội dung quanh chỗ khớp do server rút gọn — kết quả CHỈ chứa tin còn hiển thị được với chính người tìm theo luật bề mặt đọc (đã xoá mềm/thu hồi/ẩn-phía-mình/phía bị chặn không bao giờ xuất hiện, kể cả qua excerpt). `seq` + `id` là neo để client nhảy tới đúng tin bằng cơ chế cửa sổ quanh seq của lát M3.
  */
 export const messageSearchResultSchema = z.object({
   id: uuidIdSchema,
@@ -535,10 +432,7 @@ export const messageSearchResultSchema = z.object({
 export type MessageSearchResult = z.infer<typeof messageSearchResultSchema>;
 
 /**
- * Bật/tắt chat của một conversation (Lớp B, issue #33): nhóm lớp mặc
- * định chat hai chiều; giáo viên phụ trách (hoặc người tạo nhóm tự do,
- * hoặc quản trị viên) tắt được — học sinh dừng gửi, người có thẩm quyền
- * quản lý vẫn gửi được đường thông báo.
+ * Bật/tắt chat của một conversation (Lớp B, issue #33): nhóm lớp mặc định chat hai chiều; giáo viên phụ trách (hoặc người tạo nhóm tự do, hoặc quản trị viên) tắt được — học sinh dừng gửi, người có thẩm quyền quản lý vẫn gửi được đường thông báo.
  */
 export const updateConversationSchema = z.strictObject({
   enabled: z.boolean(),
@@ -546,9 +440,7 @@ export const updateConversationSchema = z.strictObject({
 export type UpdateConversation = z.infer<typeof updateConversationSchema>;
 
 /**
- * Query danh sách conversation của tôi (lát M5, issue #240): mặc định
- * chỉ các conversation CHƯA lưu trữ; `archived: true` = xem riêng mục
- * đã lưu trữ.
+ * Query danh sách conversation của tôi (lát M5, issue #240): mặc định chỉ các conversation CHƯA lưu trữ; `archived: true` = xem riêng mục đã lưu trữ.
  */
 export const listConversationsQuerySchema = z.strictObject({
   archived: z.boolean().optional(),
@@ -558,8 +450,7 @@ export type ListConversationsQuery = z.infer<typeof listConversationsQuerySchema
 /**
  * Đặt trạng thái cá nhân của CHÍNH THÀNH VIÊN trên một conversation
  * (lát M5, issue #240): ba cờ độc lập — ghim, lưu trữ, tắt tiếng. Chỉ
- * các trường có mặt mới bị đổi; trường vắng giữ nguyên trạng thái cũ.
- * Trạng thái là của từng thành viên, không ảnh hưởng phía còn lại.
+ * các trường có mặt mới bị đổi; trường vắng giữ nguyên trạng thái cũ. Trạng thái là của từng thành viên, không ảnh hưởng phía còn lại.
  */
 export const updateConversationStateSchema = z.strictObject({
   pinned: z.boolean().optional(),
@@ -592,11 +483,7 @@ export const updateReportStatusSchema = z.strictObject({
 export type UpdateReportStatus = z.infer<typeof updateReportStatusSchema>;
 
 /**
- * Xoá CỨNG một tin bởi người kiểm duyệt (vòng đời tin nhắn theo vai,
- * issue #33): chỉ người có capability `moderation:manage` trong phạm
- * vi của conversation, không giới hạn thời gian, và LÝ DO LÀ BẮT
- * BUỘC — mọi lần xoá cứng đều ghi một dòng moderator_action kèm lý
- * do này trước khi dòng tin bị xoá vật lý.
+ * Xoá CỨNG một tin bởi người kiểm duyệt (vòng đời tin nhắn theo vai, issue #33): chỉ người có capability `moderation:manage` trong phạm vi của conversation, không giới hạn thời gian, và LÝ DO LÀ BẮT BUỘC — mọi lần xoá cứng đều ghi một dòng moderator_action kèm lý do này trước khi dòng tin bị xoá vật lý.
  */
 export const hardDeleteMessageSchema = z.strictObject({
   reason: z.string().trim().min(1).max(500),
@@ -604,11 +491,7 @@ export const hardDeleteMessageSchema = z.strictObject({
 export type HardDeleteMessage = z.infer<typeof hardDeleteMessageSchema>;
 
 /**
- * Gỡ HÀNG LOẠT nhiều tin bởi người kiểm duyệt: cùng luật thẩm quyền
- * và lý do bắt buộc như xoá cứng một tin; trần 100 tin mỗi lượt để
- * một yêu cầu không khoá bảng quá lâu — cần gỡ nhiều hơn thì chia
- * lượt. Toàn bộ danh sách được kiểm tra thẩm quyền TRƯỚC: một tin
- * ngoài phạm vi là cả yêu cầu bị từ chối, không gỡ một phần.
+ * Gỡ HÀNG LOẠT nhiều tin bởi người kiểm duyệt: cùng luật thẩm quyền và lý do bắt buộc như xoá cứng một tin; trần 100 tin mỗi lượt để một yêu cầu không khoá bảng quá lâu — cần gỡ nhiều hơn thì chia lượt. Toàn bộ danh sách được kiểm tra thẩm quyền TRƯỚC: một tin ngoài phạm vi là cả yêu cầu bị từ chối, không gỡ một phần.
  */
 export const bulkRemoveMessagesSchema = z.strictObject({
   messageIds: z.array(uuidIdSchema).min(1).max(100),
@@ -617,8 +500,7 @@ export const bulkRemoveMessagesSchema = z.strictObject({
 export type BulkRemoveMessages = z.infer<typeof bulkRemoveMessagesSchema>;
 
 /**
- * Tóm tắt hiển thị của một user, trả kèm trong các response danh sách
- * của messaging để client hiện TÊN thay cho UUID thô.
+ * Tóm tắt hiển thị của một user, trả kèm trong các response danh sách của messaging để client hiện TÊN thay cho UUID thô.
  */
 export const personSummarySchema = z.strictObject({
   userId: uuidIdSchema,
@@ -629,13 +511,7 @@ export type PersonSummary = z.infer<typeof personSummarySchema>;
 
 /**
  * Hồ sơ người phục vụ panel thông tin của chat 1–1 (issue #592):
- * chỉ gồm các trường hệ thật sự có dữ kiện nguồn — định danh, tên
- * hiển thị, tên đăng nhập và email từ bảng người dùng. Các trường
- * panel khác (giới thiệu, điện thoại, website, công ty, quốc gia,
- * múi giờ, địa điểm, trạng thái sẵn sàng, các thẻ, dòng vai trò)
- * KHÔNG có cột/bảng nguồn trong hệ nên không xuất hiện ở đây —
- * client giữ chúng qua lớp adapter với giá trị rỗng, không bịa dữ
- * kiện. Email chỉ trả cho người xem có chung hội thoại với đối tác
+ * chỉ gồm các trường hệ thật sự có dữ kiện nguồn — định danh, tên hiển thị, tên đăng nhập và email từ bảng người dùng. Các trường panel khác (giới thiệu, điện thoại, website, công ty, quốc gia, múi giờ, địa điểm, trạng thái sẵn sàng, các thẻ, dòng vai trò) KHÔNG có cột/bảng nguồn trong hệ nên không xuất hiện ở đây — client giữ chúng qua lớp adapter với giá trị rỗng, không bịa dữ kiện. Email chỉ trả cho người xem có chung hội thoại với đối tác
  * (cổng ở tầng API), không phải cho mọi người xem như tóm tắt hiển
  * thị dùng chung ở trên.
  */
@@ -658,23 +534,14 @@ export const contactRelationshipSchema = z.enum([
 export type ContactRelationship = z.infer<typeof contactRelationshipSchema>;
 
 /**
- * Vai trò của một thành viên trong danh sách khoá (roster): `teacher`
- * khi có gán vai trò staff (theo archetype) tại context khoá, còn lại
- * là `student` (ghi danh hoặc gán vai trò học viên).
+ * Vai trò của một thành viên trong danh sách khoá (roster): `teacher` khi có gán vai trò staff (theo archetype) tại context khoá, còn lại là `student` (ghi danh hoặc gán vai trò học viên).
  */
 export const courseRosterRoleSchema = z.enum(['teacher', 'student']);
 export type CourseRosterRole = z.infer<typeof courseRosterRoleSchema>;
 
 /**
- * Một dòng của danh sách thành viên khoá (mô hình khám phá bạn bè đã
- * chốt lại của issue #33: bỏ hẳn tìm người theo tên — vào khoá mình
- * thuộc về, xem thành viên, bấm kết bạn tại dòng). Người có quan hệ
- * chặn với người xem (cả hai chiều) bị giấu khỏi danh sách nên trạng
- * thái `blocked` không xuất hiện trong thực tế. `canDirectMessage`:
- * người xem là giáo viên của khoá và thành viên đang ghi danh hiệu
- * lực → nhắn riêng trực tiếp không cần kết bạn (ngoại lệ chốt bổ
- * sung 25/10/2026 trên issue #33); web hiện nút "Nhắn tin" tại dòng
- * theo cờ này, cổng API vẫn tự kiểm lại quan hệ ở mỗi lần mở/gửi.
+ * Một dòng của danh sách thành viên khoá (mô hình khám phá bạn bè đã chốt lại của issue #33: bỏ hẳn tìm người theo tên — vào khoá mình thuộc về, xem thành viên, bấm kết bạn tại dòng). Người có quan hệ chặn với người xem (cả hai chiều) bị giấu khỏi danh sách nên trạng thái `blocked` không xuất hiện trong thực tế. `canDirectMessage`:
+ * người xem là giáo viên của khoá và thành viên đang ghi danh hiệu lực → nhắn riêng trực tiếp không cần kết bạn (ngoại lệ chốt bổ sung 25/10/2026 trên issue #33); web hiện nút "Nhắn tin" tại dòng theo cờ này, cổng API vẫn tự kiểm lại quan hệ ở mỗi lần mở/gửi.
  */
 export const courseRosterMemberSchema = personSummarySchema.extend({
   role: courseRosterRoleSchema,
@@ -692,13 +559,7 @@ export const messagingCourseSchema = z.strictObject({
 export type MessagingCourse = z.infer<typeof messagingCourseSchema>;
 
 /**
- * Query phân trang cho danh sách thành viên khoá: roster có thể rất
- * đông (khoá 50.000 thành viên trả hết là ~6,3 MB JSON — số đo của đội
- * kiểm tra độc lập trên issue #33) nên PHÂN TRANG CON TRỎ là bắt buộc,
- * không có chế độ lấy hết. Con trỏ là chuỗi mờ (opaque) do server phát
- * hành, neo theo khoá sắp xếp (displayName, username, id) của dòng
- * cuối trang trước; trần mỗi trang 100 (phân trang OFFSET sâu đã đo
- * là chậm hơn hẳn nên không dùng).
+ * Query phân trang cho danh sách thành viên khoá: roster có thể rất đông (khoá 50.000 thành viên trả hết là ~6,3 MB JSON — số đo của đội kiểm tra độc lập trên issue #33) nên PHÂN TRANG CON TRỎ là bắt buộc, không có chế độ lấy hết. Con trỏ là chuỗi mờ (opaque) do server phát hành, neo theo khoá sắp xếp (displayName, username, id) của dòng cuối trang trước; trần mỗi trang 100 (phân trang OFFSET sâu đã đo là chậm hơn hẳn nên không dùng).
  */
 export const listCourseRosterQuerySchema = z.strictObject({
   limit: z.number().int().min(1).max(100).optional(),
@@ -719,10 +580,7 @@ export const MESSAGING_SOCKET_EVENTS = {
   /** Server → client: một tin đã bị xoá mềm — client gỡ tin khỏi khung (payload không kèm nội dung). */
   messageDeleted: 'message.deleted',
   /**
-   * Server → client: cache DANH SÁCH conversation của người nhận đã
-   * cũ — client PHẢI tải lại danh sách (tin cuối/số chưa đọc không
-   * còn tin được sau một lần xoá/thu hồi/xoá cứng). Phát kèm mọi sự
-   * kiện xoá của vòng đời tin nhắn theo vai (issue #33).
+   * Server → client: cache DANH SÁCH conversation của người nhận đã cũ — client PHẢI tải lại danh sách (tin cuối/số chưa đọc không còn tin được sau một lần xoá/thu hồi/xoá cứng). Phát kèm mọi sự kiện xoá của vòng đời tin nhắn theo vai (issue #33).
    */
   conversationInvalidate: 'conversation.invalidate',
   /** Hai chiều: một thành viên đang nhập trong conversation. */
@@ -758,10 +616,7 @@ export interface RealtimeMessageReadPayload {
 }
 
 /**
- * Một tin bị xoá mềm (Lớp B, issue #33), phân phối qua consumer của
- * outbox `message_deleted`. Payload CHỈ mang định danh + người xoá —
- * không kèm nội dung: phía học sinh phải gỡ tin và không được nhận lại
- * nội dung qua kênh realtime.
+ * Một tin bị xoá mềm (Lớp B, issue #33), phân phối qua consumer của outbox `message_deleted`. Payload CHỈ mang định danh + người xoá — không kèm nội dung: phía học sinh phải gỡ tin và không được nhận lại nội dung qua kênh realtime.
  */
 export interface RealtimeMessageDeletedPayload {
   conversationId: string;
@@ -771,11 +626,7 @@ export interface RealtimeMessageDeletedPayload {
 }
 
 /**
- * Danh sách conversation của người nhận sự kiện này phải được tải
- * lại từ đầu (vô hiệu cache): phát sau các thao tác xoá/thu hồi/xoá
- * cứng làm tin cuối hoặc số chưa đọc thay đổi theo cách mà một bản
- * `conversation.updated` đơn lẻ không diễn tả hết được (ví dụ tin
- * cuối bị xoá cứng — không còn "tin cuối mới" để gửi kèm).
+ * Danh sách conversation của người nhận sự kiện này phải được tải lại từ đầu (vô hiệu cache): phát sau các thao tác xoá/thu hồi/xoá cứng làm tin cuối hoặc số chưa đọc thay đổi theo cách mà một bản `conversation.updated` đơn lẻ không diễn tả hết được (ví dụ tin cuối bị xoá cứng — không còn "tin cuối mới" để gửi kèm).
  */
 export interface RealtimeConversationInvalidatePayload {
   conversationId: string;
@@ -792,15 +643,7 @@ export interface RealtimePresencePayload {
 }
 
 /**
- * Tải sự kiện presence.snapshot: ảnh chụp trạng thái trực tuyến tại
- * thời điểm NGƯỜI XEM nối socket — liệt kê các userId ĐANG trực tuyến
- * trong số những người có quan hệ hội thoại chung với người xem. Sự
- * kiện presence.changed chỉ phát khi trạng thái THAY ĐỔI nên người đã
- * trực tuyến từ trước lúc người xem mở trang không bao giờ phát sinh
- * sự kiện; ảnh chụp này lấp đúng khoảng trống đó. Danh sách chỉ chứa
- * người đang trực tuyến — vắng mặt trong danh sách nghĩa là ngoại
- * tuyến hoặc chưa biết, và phía khách không được dùng ảnh chụp để
- * ghi đè một trạng thái đã học được từ sự kiện trực tiếp.
+ * Tải sự kiện presence.snapshot: ảnh chụp trạng thái trực tuyến tại thời điểm NGƯỜI XEM nối socket — liệt kê các userId ĐANG trực tuyến trong số những người có quan hệ hội thoại chung với người xem. Sự kiện presence.changed chỉ phát khi trạng thái THAY ĐỔI nên người đã trực tuyến từ trước lúc người xem mở trang không bao giờ phát sinh sự kiện; ảnh chụp này lấp đúng khoảng trống đó. Danh sách chỉ chứa người đang trực tuyến — vắng mặt trong danh sách nghĩa là ngoại tuyến hoặc chưa biết, và phía khách không được dùng ảnh chụp để ghi đè một trạng thái đã học được từ sự kiện trực tiếp.
  */
 export interface RealtimePresenceSnapshotPayload {
   onlineUserIds: string[];
@@ -814,10 +657,7 @@ export type MessagingSyncResult = Record<string, GiaoKhoaMessage[]>;
 
 /** Payload đặt tuỳ chọn kênh nhận cho một message provider. */
 /**
- * Đặt tuỳ chọn v2 cho MỘT provider: ít nhất một trong hai trường phải
- * có mặt (API kiểm tra thêm và trả 400 `messaging.preference_empty`).
- * Tắt popup của loại bắt buộc bị API từ chối 400
- * `messaging.preference_mandatory`.
+ * Đặt tuỳ chọn v2 cho MỘT provider: ít nhất một trong hai trường phải có mặt (API kiểm tra thêm và trả 400 `messaging.preference_empty`). Tắt popup của loại bắt buộc bị API từ chối 400 `messaging.preference_mandatory`.
  */
 export const setNotificationPreferenceSchema = z.strictObject({
   provider: z.string().min(1),
@@ -827,19 +667,13 @@ export const setNotificationPreferenceSchema = z.strictObject({
 export type SetNotificationPreference = z.infer<typeof setNotificationPreferenceSchema>;
 
 /**
- * Chế độ ghi đè thông báo theo khoá học (NB-4, issue #174): 'all' =
- * nhận như mặc định toàn cục; 'mute' = tắt tiếng khoá — các thông báo
- * thường của khoá đó không được sinh ở bất kỳ kênh nào. Chính sách P3
- * đã chốt: điểm mới và sắp hết hạn ghi danh của khoá bị mute VẪN tới;
- * hai loại bắt buộc P2 cũng không bị ghi đè theo khoá chặn.
+ * Chế độ ghi đè thông báo theo khoá học (NB-4, issue #174): 'all' = nhận như mặc định toàn cục; 'mute' = tắt tiếng khoá — các thông báo thường của khoá đó không được sinh ở bất kỳ kênh nào. Chính sách P3 đã chốt: điểm mới và sắp hết hạn ghi danh của khoá bị mute VẪN tới; hai loại bắt buộc P2 cũng không bị ghi đè theo khoá chặn.
  */
 export const notificationCourseOverrideModeSchema = z.enum(['all', 'mute']);
 export type NotificationCourseOverrideMode = z.infer<typeof notificationCourseOverrideModeSchema>;
 
 /**
- * Một dòng ghi đè theo khoá mà API trả về (GET
- * /messages/preferences/courses): mọi khoá người dùng thuộc về, kèm
- * chế độ hiệu lực — 'all' khi chưa từng đặt ghi đè cho khoá đó.
+ * Một dòng ghi đè theo khoá mà API trả về (GET /messages/preferences/courses): mọi khoá người dùng thuộc về, kèm chế độ hiệu lực — 'all' khi chưa từng đặt ghi đè cho khoá đó.
  */
 export const notificationCourseOverrideSchema = z.object({
   courseId: uuidIdSchema,
@@ -945,8 +779,7 @@ export const setBadgeStatusSchema = z.strictObject({
 export type SetBadgeStatus = z.infer<typeof setBadgeStatusSchema>;
 
 /**
- * Tham số của từng loại lá tiêu chí cấp huy hiệu (discriminated theo
- * `criteriaType` ở schema lá bên dưới):
+ * Tham số của từng loại lá tiêu chí cấp huy hiệu (discriminated theo `criteriaType` ở schema lá bên dưới):
  * - `coursecompletion`: `{ courseId, byDate? }` — hoàn thành khoá học; khi có
  *   `byDate` (ISO datetime) thì thời điểm hoàn thành phải ≤ ngày đó mới tính
  *   (Moodle: tham số by-date của tiêu chí hoàn thành khoá học).
@@ -957,9 +790,7 @@ export type SetBadgeStatus = z.infer<typeof setBadgeStatusSchema>;
  * - `cohort`: `{ cohortId }` hoặc `{ cohortIds }` — thuộc cohort chỉ định
  *   (dạng mảng: phải thuộc TẤT CẢ cohort liệt kê).
  * - `profile`: `{ field, value? }` — trường hồ sơ chuẩn (firstName, lastName,
- *   email, username…) hoặc custom field theo shortName đạt điều kiện: có
- *   `value` thì giá trị phải bằng đúng; không có `value` thì trường phải
- *   được điền (khác rỗng).
+ *   email, username…) hoặc custom field theo shortName đạt điều kiện: có `value` thì giá trị phải bằng đúng; không có `value` thì trường phải được điền (khác rỗng).
  */
 export const badgeCriteriaParamsSchema = z.union([
   z.strictObject({ courseId: uuidIdSchema, byDate: z.iso.datetime({ offset: true }).optional() }),
@@ -1122,9 +953,7 @@ export type CompetencyRulePointsEntry = z.infer<typeof competencyRulePointsEntry
 
 /**
  * Payload đặt rule points cho một competency cha (Moodle `competency_rule_points`):
- * cha thỏa rule khi mọi con `required` đều đạt proficiency VÀ tổng điểm các con đã đạt
- * >= `pointsRequired`. Tính hợp lệ sâu (con phải là con trực tiếp, không trùng, tổng điểm
- * phải với tới ngưỡng) do tầng nghiệp vụ kiểm tra.
+ * cha thỏa rule khi mọi con `required` đều đạt proficiency VÀ tổng điểm các con đã đạt >= `pointsRequired`. Tính hợp lệ sâu (con phải là con trực tiếp, không trùng, tổng điểm phải với tới ngưỡng) do tầng nghiệp vụ kiểm tra.
  */
 export const setCompetencyRuleSchema = z.strictObject({
   outcome: competencyRuleOutcomeSchema,
@@ -1163,8 +992,7 @@ export type FrameworkExportCompetency = z.infer<typeof frameworkExportCompetency
 
 /**
  * Tài liệu export/import của một competency framework (định dạng của chính hệ thống):
- * cây competency + scale + taxonomies. Import luôn tạo framework MỚI với id mới toàn bộ;
- * `key`/`parentKey`/`competencyKey` chỉ để nối cấu trúc bên trong file.
+ * cây competency + scale + taxonomies. Import luôn tạo framework MỚI với id mới toàn bộ; `key`/`parentKey`/`competencyKey` chỉ để nối cấu trúc bên trong file.
  */
 export const frameworkExportSchema = z.strictObject({
   format: z.literal('giaokhoa-competency-framework'),

@@ -4,16 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { DataTable, type DataColumn } from '#components/data-table';
 
 /**
- * Spec của bảng dữ liệu dùng chung: ghim bốn cơ chế mà TanStack Table
- * phải gánh cho mọi bảng của app — sắp xếp theo cột, lọc toàn bảng qua
- * ô lọc ở thanh công cụ, phân trang, và ẩn/hiện cột qua menu Cột —
- * để không trang nào phải tự chế lại logic bảng. Kèm hai biến thể chân
- * bảng: mặc định hiện "Trang X / Y" và ẩn cụm nút khi chỉ có một
- * trang; biến thể khoảng dòng (trang gọi truyền rangeInfo) hiện
- * khoảng dòng đang hiển thị và luôn bày cụm nút kèm nút số trang.
- * Kèm ca hồi quy chống tràn ở màn hẹp: với 7 trang, hàng chân bảng
- * và cụm nút phải mang class cho phép xuống dòng để không nút nào
- * bị cắt khuất khỏi bề rộng khả dụng.
+ * Spec của bảng dữ liệu dùng chung: ghim bốn cơ chế mà TanStack Table phải gánh cho mọi bảng của app — sắp xếp theo cột, lọc toàn bảng qua ô lọc ở thanh công cụ, phân trang, và ẩn/hiện cột qua menu Cột — để không trang nào phải tự chế lại logic bảng. Kèm hai biến thể chân bảng: mặc định hiện "Trang X / Y" và ẩn cụm nút khi chỉ có một trang; biến thể khoảng dòng (trang gọi truyền rangeInfo) hiện khoảng dòng đang hiển thị và luôn bày cụm nút kèm nút số trang. Kèm ca hồi quy chống tràn ở màn hẹp: với 7 trang, hàng chân bảng và cụm nút phải mang class cho phép xuống dòng để không nút nào bị cắt khuất khỏi bề rộng khả dụng.
  */
 
 interface Row {

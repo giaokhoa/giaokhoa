@@ -2,11 +2,7 @@ import type { SiteSetting, SiteSettingAuditEntry } from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 
 /**
- * Tầng gọi API thuần của cụm cấu hình site thuộc feature admin: chỉ
- * chứa các hàm gọi HTTP, không phụ thuộc React hay React Query.
- * Tầng `queries/` của feature bọc các hàm này thành hook và đột
- * biến. Tách từ module phẳng `src/lib/site-config.ts` khi tổ chức
- * lại apps/web theo mô hình features/ (issue #500).
+ * Tầng gọi API thuần của cụm cấu hình site thuộc feature admin: chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành hook và đột biến. Tách từ module phẳng `src/lib/site-config.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
 
 /**

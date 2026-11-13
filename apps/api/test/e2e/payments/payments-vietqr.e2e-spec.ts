@@ -7,16 +7,11 @@ import {
   roleIdByShortname, STRONG_PASSWORD, systemContextId,
 } from '../../support/identity-access-helpers';
 import { createCategory, createCourse, createEnrolInstance } from '../../support/course-enrolment-helpers';
-// Từ issue #539, nhịp quét matching chạy ở worker nên tiến trình API trong test
-// không còn tự quét: mỗi vòng chờ dẫn một nhịp qua cầu dẫn này rồi mới đọc trạng thái.
+// Từ issue #539, nhịp quét matching chạy ở worker nên tiến trình API trong test không còn tự quét: mỗi vòng chờ dẫn một nhịp qua cầu dẫn này rồi mới đọc trạng thái.
 import { closeSepaySweepDriver, driveSepaySweep } from '../../support/sepay-sweep-driver';
 
 /**
- * Lát 1 VietQR (issue #189, hồ sơ payment-vietqr §6.4) — bộ nghiệm thu
- * 6.4.1–6.4.7: IPN SePay (verify hai lớp, idempotency, matching 3 điều
- * kiện), QR động, che config 6.4.5, cách ly tenant 6.4.6, cổng cộng dồn
- * hoàn + đảo quyền lợi 6.4.7. Riêng vector vàng 6.4.4 nằm ở spec unit
- * `src/modules/payments/vietqr.spec.ts`.
+ * Lát 1 VietQR (issue #189, hồ sơ payment-vietqr §6.4) — bộ nghiệm thu 6.4.1–6.4.7: IPN SePay (verify hai lớp, idempotency, matching 3 điều kiện), QR động, che config 6.4.5, cách ly tenant 6.4.6, cổng cộng dồn hoàn + đảo quyền lợi 6.4.7. Riêng vector vàng 6.4.4 nằm ở spec unit `src/modules/payments/vietqr.spec.ts`.
  */
 /** Secret webhook gateway 'manual' (cổng verify fail-closed của H1, PR #191): vitest config cấp qua env, spec đọc cùng giá trị để gắn header. */
 const WEBHOOK_SECRET = process.env.PAYMENT_WEBHOOK_SECRET ?? '';

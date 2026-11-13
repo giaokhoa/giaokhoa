@@ -7,8 +7,7 @@ import { CurriculumService, toCurriculumOutcomeView } from './curriculum.service
  * - Vắng `contextId` thì service mặc định về context hệ thống qua
  *   `contextOrSystem`, thay vì để controller chặn 400 như trước.
  * - Cổng đọc giữ nguyên: vẫn phải có `curriculum:view` tại context đã
- *   phân giải, hoặc `course:update` tại khoá `forCourseId` — không nới
- *   quyền cho bất kỳ nhánh nào.
+ *   phân giải, hoặc `course:update` tại khoá `forCourseId` — không nới quyền cho bất kỳ nhánh nào.
  * - Kèm `contextId` tường minh thì vẫn liệt kê đúng context đó, không
  *   bị mặc định hệ thống đè lên.
  */
@@ -72,12 +71,9 @@ describe('CurriculumService.listSubjects — contextId tùy chọn', () => {
 });
 
 /**
- * Lưu trữ YCCĐ dạng tài liệu Tiptap (jsonb) — hình dạng trả ra của
- * tầng service: `content` luôn là text canonical trích từ tài liệu
+ * Lưu trữ YCCĐ dạng tài liệu Tiptap (jsonb) — hình dạng trả ra của tầng service: `content` luôn là text canonical trích từ tài liệu
  * (hợp đồng cũ cho mọi bề mặt), `contentDoc` là tài liệu gốc cho
- * bảng chương trình render phân cấp cha–con. Đường ghi tay qua API
- * nhận text thuần phải gói thành tài liệu trước khi ghi — DB không
- * bao giờ nhận text trần ở cột jsonb.
+ * bảng chương trình render phân cấp cha–con. Đường ghi tay qua API nhận text thuần phải gói thành tài liệu trước khi ghi — DB không bao giờ nhận text trần ở cột jsonb.
  */
 describe('toCurriculumOutcomeView — text canonical + tài liệu gốc', () => {
   const docRow = {

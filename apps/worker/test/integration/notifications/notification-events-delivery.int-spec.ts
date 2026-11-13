@@ -10,50 +10,20 @@ import {
 } from '../../support/ordinary-worker-module';
 
 /**
- * Consumer thông báo sự kiện ở worker (issue con #520 của #491) —
- * mười bốn ca hành vi vốn ở e2e phía API chuyển nguyên sang tầng
- * này, đi qua ĐƯỜNG THẬT của production: chèn dòng sự kiện outbox
- * đúng hình dạng phía phát vẫn ghi → relay outbox duy nhất đóng dấu
- * `publishedAt` và định tuyến vào hàng đợi `notification-events` →
- * `NotificationEventsProcessor` (chống trùng theo outboxId) →
- * `NotificationEventsHandlerService` tra DB và phát qua bề mặt
- * dùng chung `NotificationDeliveryService.notify`.
+ * Consumer thông báo sự kiện ở worker (issue con #520 của #491) — mười bốn ca hành vi vốn ở e2e phía API chuyển nguyên sang tầng này, đi qua ĐƯỜNG THẬT của production: chèn dòng sự kiện outbox đúng hình dạng phía phát vẫn ghi → relay outbox duy nhất đóng dấu `publishedAt` và định tuyến vào hàng đợi `notification-events` → `NotificationEventsProcessor` (chống trùng theo outboxId) → `NotificationEventsHandlerService` tra DB và phát qua bề mặt dùng chung `NotificationDeliveryService.notify`.
  *
  * Ánh xạ ca (nguồn cũ → spec này), giữ nguyên khẳng định nghiệp vụ:
  *  - `notifications-providers-flow.e2e-spec.ts` (API): grade_updated
  *    (nội dung không chứa điểm số; item tổng không sinh bản thứ hai),
- *    course_completed, enrol_expiry_warning, activity_due_soon dạng
- *    đề, message_new (gộp theo conversation khi còn chưa đọc, nội
- *    dung không chứa text tin), assignment_created (+ người tắt tuỳ
- *    chọn thì không nhận), assignment_submitted (bản gộp P5 cập
- *    nhật số chờ chấm tại chỗ), assignment_returned (không điểm),
- *    exam_pinned, exam_pinned ghim lại (gộp khi chưa đọc, sinh bản
- *    mới sau khi đã đọc), quiz_attempt_finished (chỉ needsGrading,
- *    không preview, gộp), activity_due_soon dạng bài tập.
+ *    course_completed, enrol_expiry_warning, activity_due_soon dạng đề, message_new (gộp theo conversation khi còn chưa đọc, nội dung không chứa text tin), assignment_created (+ người tắt tuỳ chọn thì không nhận), assignment_submitted (bản gộp P5 cập nhật số chờ chấm tại chỗ), assignment_returned (không điểm), exam_pinned, exam_pinned ghim lại (gộp khi chưa đọc, sinh bản mới sau khi đã đọc), quiz_attempt_finished (chỉ needsGrading, không preview, gộp), activity_due_soon dạng bài tập.
  *  - `notifications-course-overrides.e2e-spec.ts` (API): ca tắt
- *    tiếng theo khoá — thông báo thường bị chặn + dispatch log
- *    'skipped-course-mute', khoá khác vẫn tới, hai loại P3 (điểm
- *    mới, sắp hết hạn ghi danh) của chính khoá bị mute vẫn tới, gỡ
- *    mute khôi phục.
+ *    tiếng theo khoá — thông báo thường bị chặn + dispatch log 'skipped-course-mute', khoá khác vẫn tới, hai loại P3 (điểm mới, sắp hết hạn ghi danh) của chính khoá bị mute vẫn tới, gỡ mute khôi phục.
  *  - `messaging-conversation-state.e2e-spec.ts` (API): cổng tắt
- *    tiếng conversation của `message_new` — thành viên đã tắt
- *    tiếng không nhận, thành viên đã chặn người gửi không nhận,
- *    bỏ tắt tiếng thì thông báo trở lại.
+ *    tiếng conversation của `message_new` — thành viên đã tắt tiếng không nhận, thành viên đã chặn người gửi không nhận, bỏ tắt tiếng thì thông báo trở lại.
  *
- * Khác biệt bề mặt duy nhất so với e2e cũ: dữ kiện (khoá, ghi danh,
- * item điểm, bài tập, lần ghim, conversation) được dựng bằng SQL
- * qua kết nối quản trị của harness thay vì qua API, và khẳng định
- * đọc ở tầng DB thay vì qua endpoint danh sách thông báo — đúng
- * tiền lệ chuyển ca của issue #518. Sự kiện được chèn đúng hình
- * dạng payload mà phía phát thật ghi (đã đối chiếu tại mã nguồn
- * của từng phía phát).
+ * Khác biệt bề mặt duy nhất so với e2e cũ: dữ kiện (khoá, ghi danh, item điểm, bài tập, lần ghim, conversation) được dựng bằng SQL qua kết nối quản trị của harness thay vì qua API, và khẳng định đọc ở tầng DB thay vì qua endpoint danh sách thông báo — đúng tiền lệ chuyển ca của issue #518. Sự kiện được chèn đúng hình dạng payload mà phía phát thật ghi (đã đối chiếu tại mã nguồn của từng phía phát).
  *
- * Cách ly bể digest email dùng chung: mọi người nhận fixture đặt
- * tần suất email `immediate` cho cả chín provider có kênh email —
- * nếu để mặc định theo nhóm ('daily'), dispatch email của các ca
- * này sẽ nằm chờ `digest-queued` trong DB dùng chung và làm lệch
- * khẳng định toàn cục của spec email; với `immediate`, dispatch vẫn
- * đi trọn đường thật và chốt bằng dispatch log.
+ * Cách ly bể digest email dùng chung: mọi người nhận fixture đặt tần suất email `immediate` cho cả chín provider có kênh email — nếu để mặc định theo nhóm ('daily'), dispatch email của các ca này sẽ nằm chờ `digest-queued` trong DB dùng chung và làm lệch khẳng định toàn cục của spec email; với `immediate`, dispatch vẫn đi trọn đường thật và chốt bằng dispatch log.
  */
 describe('Worker notification events delivery (chuyển consumer ở #520)', () => {
   let context: INestApplicationContext;

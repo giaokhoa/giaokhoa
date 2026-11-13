@@ -5,24 +5,16 @@ import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-suppo
 import { GradesRepository, type GradeRow, type ItemRow, type NewGrade } from './grades';
 
 /**
- * Spec tích hợp của repository điểm theo bài trên Kysely (issue
- * #644).
+ * Spec tích hợp của repository điểm theo bài trên Kysely (issue #644).
  *
- * Database trung tâm dựng từ rỗng bằng chính cầu nối migration
- * của package trên cụm PostgreSQL thật của môi trường test (biến
- * `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ
- * `DATABASE_URL`). Mọi ca chạy qua repository production ở
- * `grades.ts` — không mô phỏng handle.
+ * Database trung tâm dựng từ rỗng bằng chính cầu nối migration của package trên cụm PostgreSQL thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ `DATABASE_URL`). Mọi ca chạy qua repository production ở `grades.ts` — không mô phỏng handle.
  *
  * Các tính chất chốt tại đây:
  * - CRUD item và các đường tìm item khớp oracle độc lập (cùng truy
  *   vấn dựng bằng Kysely thô ngoài repository) trên CÙNG dữ kiện mẫu.
  * - `upsertGrade` hai nhánh insert/xung đột theo khoá composite
  *   (item, user) cho kết quả TỪNG TRƯỜNG bằng oracle độc lập —
- *   gồm điểm sắc nhất của nhóm theo T-4 (rủi ro R-G4-2): trường
- *   phía gọi không truyền (`undefined`) phải được GIỮ NGUYÊN ở
- *   nhánh xung đột ở cả hai phía, còn `null` tường minh thì ghi
- *   NULL ở cả hai phía; `updated_at` luôn làm mới.
+ *   gồm điểm sắc nhất của nhóm theo T-4 (rủi ro R-G4-2): trường phía gọi không truyền (`undefined`) phải được GIỮ NGUYÊN ở nhánh xung đột ở cả hai phía, còn `null` tường minh thì ghi NULL ở cả hai phía; `updated_at` luôn làm mới.
  * - Patch item/grade theo T-4: trường không truyền không đổi.
  * - Lịch sử điểm và vết công bố giữ đúng thứ tự của bản cũ.
  * - Giao dịch của repository nguyên tử: lỗi giữa chừng rollback
@@ -79,8 +71,7 @@ async function seedData(): Promise<Seed> {
   const itemB = await repo.insertItem({
     courseId: courseRow.id, itemType: 'manual', itemName: 'Bài tay 2', sortOrder: 1,
   });
-  // Item sinh đôi cho oracle upsert: cùng hình dạng với itemA để hai phía
-  // chạy độc lập; itemInstance phải khác itemA vì ràng buộc unique
+  // Item sinh đôi cho oracle upsert: cùng hình dạng với itemA để hai phía chạy độc lập; itemInstance phải khác itemA vì ràng buộc unique
   // (course_id, item_type, item_instance, item_module) của bảng grade_items.
   const itemTwin = await repo.insertItem({
     courseId: courseRow.id, itemType: 'mod', itemModule: 'quiz', itemInstance: CM_TWIN_ID,
@@ -107,12 +98,7 @@ afterAll(async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Oracle độc lập: nguyên văn ngữ nghĩa `upsertGrade` của repository
-// cũ (trước #644) dựng lại bằng Kysely thô ngoài repository, để đối
-// chiếu tương đương trên cùng chuỗi lệnh ghi. Tập trường SET ở
-// nhánh xung đột chép đúng danh sách của bản cũ (11 trường nghiệp
-// vụ + `updated_at`); trường `undefined` bị bỏ khỏi cả INSERT lẫn
-// SET như hành vi của bản cũ.
+// Oracle độc lập: nguyên văn ngữ nghĩa `upsertGrade` của repository cũ (trước #644) dựng lại bằng Kysely thô ngoài repository, để đối chiếu tương đương trên cùng chuỗi lệnh ghi. Tập trường SET ở nhánh xung đột chép đúng danh sách của bản cũ (11 trường nghiệp vụ + `updated_at`); trường `undefined` bị bỏ khỏi cả INSERT lẫn SET như hành vi của bản cũ.
 // ---------------------------------------------------------------------------
 
 /** Bí danh đọc dòng `grade_grades` về đúng hình dạng `GradeRow` của repository. */
@@ -246,8 +232,7 @@ describe('GradesRepository trên Kysely (issue #644)', () => {
     await repo.upsertGrade({ itemId: seed.itemA.id, userId: U2, ...first });
     await oracleUpsertGrade({ itemId: seed.itemTwin.id, userId: U2, ...first });
 
-    // Lần hai: feedback/hidden/aggregationWeight KHÔNG truyền (undefined);
-    // lockTime truyền null tường minh; finalGrade đổi.
+    // Lần hai: feedback/hidden/aggregationWeight KHÔNG truyền (undefined); lockTime truyền null tường minh; finalGrade đổi.
     const second = {
       rawGrade: 9, rawGradeMin: 0, rawGradeMax: 10, finalGrade: 9,
       locked: false, overridden: true, excluded: false, frozen: false,

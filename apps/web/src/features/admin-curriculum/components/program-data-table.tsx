@@ -9,32 +9,15 @@ import type {
 import { flattenProgramRows, NodeRowActions, OutcomeContent, type ProgramRow } from './program-group-table';
 
 /**
- * Bảng chương trình GDPT của trang cây quản trị, dựng trên Data Table
- * dùng chung của app (`#components/data-table`, TanStack Table +
- * shadcn Table) thay cho bảng `<table>` tự chế trước đây.
+ * Bảng chương trình GDPT của trang cây quản trị, dựng trên Data Table dùng chung của app (`#components/data-table`, TanStack Table + shadcn Table) thay cho bảng `<table>` tự chế trước đây.
  *
- * Hình dạng dòng: cây được làm phẳng thành các DÒNG YCCĐ — mỗi YCCĐ
- * của cây là đúng một dòng bảng, theo cấu trúc bảng chương trình
- * chính thức: cột "Mạch / chủ đề" (mạch gốc chứa node), cột "Nội
- * dung" (đường đi tổ tiên + tên node) và cột "Yêu cầu cần đạt" (một
- * YCCĐ). Node không có YCCĐ vẫn có một dòng với ô YCCĐ trống để nút
- * thao tác của node còn chỗ đứng. Quy tắc nhóm theo mạch giữ đúng
- * `buildProgramGroups` của bề mặt giáo viên (mạch gốc là một nhóm
- * mang tên mạch; gốc không phải mạch thì nhóm không tên) — hai bề
- * mặt trình bày cùng một cây theo cùng thứ tự, chỉ khác cơ chế bảng.
+ * Hình dạng dòng: cây được làm phẳng thành các DÒNG YCCĐ — mỗi YCCĐ của cây là đúng một dòng bảng, theo cấu trúc bảng chương trình chính thức: cột "Mạch / chủ đề" (mạch gốc chứa node), cột "Nội dung" (đường đi tổ tiên + tên node) và cột "Yêu cầu cần đạt" (một YCCĐ). Node không có YCCĐ vẫn có một dòng với ô YCCĐ trống để nút thao tác của node còn chỗ đứng. Quy tắc nhóm theo mạch giữ đúng `buildProgramGroups` của bề mặt giáo viên (mạch gốc là một nhóm mang tên mạch; gốc không phải mạch thì nhóm không tên) — hai bề mặt trình bày cùng một cây theo cùng thứ tự, chỉ khác cơ chế bảng.
  *
  * Thao tác tại dòng giữ nguyên hành vi quản trị: nút của một node
  * (thêm node con, thêm YCCĐ, sửa, xoá) nằm ở dòng đầu của node đó
- * trong cột Nội dung; nút của mạch nằm ở dòng đầu của nhóm trong cột
- * Mạch / chủ đề (đúng vị trí tiêu đề nhóm của cách trình bày cũ);
- * nút sửa/xoá của một YCCĐ nằm ngay tại dòng của YCCĐ đó. Riêng mạch
- * chưa có dòng nội dung nào vẫn được một dòng giữ chỗ để nút thao
- * tác của mạch không biến mất khỏi trang.
+ * trong cột Nội dung; nút của mạch nằm ở dòng đầu của nhóm trong cột Mạch / chủ đề (đúng vị trí tiêu đề nhóm của cách trình bày cũ); nút sửa/xoá của một YCCĐ nằm ngay tại dòng của YCCĐ đó. Riêng mạch chưa có dòng nội dung nào vẫn được một dòng giữ chỗ để nút thao tác của mạch không biến mất khỏi trang.
  *
- * Sắp xếp, lọc toàn cục (ô tìm kiếm quét qua mạch, Nội dung và văn
- * bản YCCĐ qua `filterValue` của từng cột) và phân trang đều do Data
- * Table đảm nhiệm phía client trên cây đã tải một lần — trang gọi
- * không tự chế lại cơ chế nào trong số này.
+ * Sắp xếp, lọc toàn cục (ô tìm kiếm quét qua mạch, Nội dung và văn bản YCCĐ qua `filterValue` của từng cột) và phân trang đều do Data Table đảm nhiệm phía client trên cây đã tải một lần — trang gọi không tự chế lại cơ chế nào trong số này.
  */
 
 /** Một dòng của bảng chương trình: một YCCĐ (hoặc dòng giữ chỗ của node chưa có YCCĐ). */
@@ -57,9 +40,7 @@ export type ProgramOutcomeRow = {
 
 /**
  * Làm phẳng cây chương trình thành các dòng YCCĐ theo thứ tự cây:
- * nhóm theo mạch gốc như `buildProgramGroups`, trong mỗi nhóm các
- * dòng nội dung theo `flattenProgramRows`, mỗi dòng nội dung nở
- * thành một dòng cho từng YCCĐ của node đó.
+ * nhóm theo mạch gốc như `buildProgramGroups`, trong mỗi nhóm các dòng nội dung theo `flattenProgramRows`, mỗi dòng nội dung nở thành một dòng cho từng YCCĐ của node đó.
  */
 export function buildProgramOutcomeRows(tree: CurriculumTree): ProgramOutcomeRow[] {
   const rows: ProgramOutcomeRow[] = [];

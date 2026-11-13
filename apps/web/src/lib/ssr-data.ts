@@ -1,32 +1,19 @@
 /**
- * Khuôn SSR-data dùng chung cho các route tầng SL (server loader +
- * dehydrate) — lát SL-1 của chương trình #7, theo bảng phân tầng route
+ * Khuôn SSR-data dùng chung cho các route tầng SL (server loader + dehydrate) — lát SL-1 của chương trình #7, theo bảng phân tầng route
  * (hồ sơ `route-tiering-table-2026-10-26.md` mục 2/3/6).
  *
  * Flow tổng thể của một route SL:
  *   1. Loader của route chạy PHÍA SERVER với request thật; nếu request
- *      không mang cookie phiên Better Auth thì KHÔNG gọi API nghiệp vụ
- *      nào — trả dehydrated state rỗng (mặt công khai/khách ẩn danh giữ
- *      nguyên hành vi, trang tự tải phía client như trước SL).
+ *      không mang cookie phiên Better Auth thì KHÔNG gọi API nghiệp vụ nào — trả dehydrated state rỗng (mặt công khai/khách ẩn danh giữ nguyên hành vi, trang tự tải phía client như trước SL).
  *   2. Có cookie phiên → loader tạo MỘT QueryClient riêng của lượt
  *      (không dùng chung giữa các request — cache dùng chung trên tiến
- *      trình SSR sẽ rò dữ liệu giữa người dùng), prefetch đúng các
- *      query key hiện hữu của trang bằng cookie CỦA CHÍNH request đó
+ *      trình SSR sẽ rò dữ liệu giữa người dùng), prefetch đúng các query key hiện hữu của trang bằng cookie CỦA CHÍNH request đó
  *      (qua `fetchApiJsonForRequest` ở `lib/server-api.ts`: API vẫn là
  *      nơi quyết quyền bằng capability, loader không tự suy quyền).
  *   3. Loader trả `{ dehydratedState }`; root.tsx gom state này từ dữ
- *      liệu loader của route con và bọc cây bằng `HydrationBoundary`
- *      → các `useQuery` của trang đọc ngay dữ liệu đã hydrate, không
- *      fetch trùng trong cửa sổ tươi (staleTime) khi vào trang. Đột
- *      biến phía client vẫn invalidate/refetch như trước SL — loader
- *      chỉ thay lượt tải ĐẦU TIÊN.
+ *      liệu loader của route con và bọc cây bằng `HydrationBoundary` → các `useQuery` của trang đọc ngay dữ liệu đã hydrate, không fetch trùng trong cửa sổ tươi (staleTime) khi vào trang. Đột biến phía client vẫn invalidate/refetch như trước SL — loader chỉ thay lượt tải ĐẦU TIÊN.
  *
- * Bất biến an toàn: query nào prefetch THẤT BẠI phía server (API lỗi,
- * 403 do quyền vừa đổi…) thì KHÔNG được dehydrate ở trạng thái thành
- * công — `serverQueryFn` ném lỗi để trạng thái query là lỗi, mà
- * `dehydrate` mặc định chỉ mang query thành công; phía client khi đó
- * fetch lại theo đúng hành vi cũ. Nhờ vậy một lượt SSR lỗi không bao
- * giờ "đóng băng" dữ liệu rỗng/null giả vào cache của trang.
+ * Bất biến an toàn: query nào prefetch THẤT BẠI phía server (API lỗi, 403 do quyền vừa đổi…) thì KHÔNG được dehydrate ở trạng thái thành công — `serverQueryFn` ném lỗi để trạng thái query là lỗi, mà `dehydrate` mặc định chỉ mang query thành công; phía client khi đó fetch lại theo đúng hành vi cũ. Nhờ vậy một lượt SSR lỗi không bao giờ "đóng băng" dữ liệu rỗng/null giả vào cache của trang.
  */
 import { dehydrate, type DehydratedState, type QueryClient } from '@tanstack/react-query';
 import { createQueryClient } from '#lib/query-client';

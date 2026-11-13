@@ -10,13 +10,7 @@ import { addExamSlot, createExamDraft, pinExam } from '../../support/exam-pin-he
 
 /**
  * Issue #248 (lát QE-2) — luồng ảnh nhúng trong câu hỏi, đầu-cuối:
- * giáo viên tải ảnh vào bank CÁ NHÂN của mình (endpoint chỉ nhận ảnh
- * thật theo magic bytes), ảnh nằm trong thân câu bằng định danh bền;
- * học sinh ghi danh trong khoá làm bài thì THẤY ảnh (server phát URL
- * ký ở bề mặt attempt) và tải được byte ảnh từ URL ký đó mà không cần
- * đăng nhập — nhưng học sinh KHÔNG tự mint được URL ký cũng như
- * không đọc thẳng được file qua các đường có gác, vì em không có
- * quyền tại context bank cá nhân của giáo viên.
+ * giáo viên tải ảnh vào bank CÁ NHÂN của mình (endpoint chỉ nhận ảnh thật theo magic bytes), ảnh nằm trong thân câu bằng định danh bền; học sinh ghi danh trong khoá làm bài thì THẤY ảnh (server phát URL ký ở bề mặt attempt) và tải được byte ảnh từ URL ký đó mà không cần đăng nhập — nhưng học sinh KHÔNG tự mint được URL ký cũng như không đọc thẳng được file qua các đường có gác, vì em không có quyền tại context bank cá nhân của giáo viên.
  */
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });

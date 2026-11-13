@@ -9,34 +9,18 @@ import type { MessagingCourse, PeoplePickerContext, RosterMember } from '../type
 import { initialsOf } from '../utils/utils';
 
 /**
- * Bộ CHỌN NGƯỜI theo ngữ cảnh — dùng chung cho sheet "Tin nhắn mới"
- * và sheet "Tạo nhóm" của màn Tin nhắn (lát MSG-T3, issue #33).
+ * Bộ CHỌN NGƯỜI theo ngữ cảnh — dùng chung cho sheet "Tin nhắn mới" và sheet "Tạo nhóm" của màn Tin nhắn (lát MSG-T3, issue #33).
  *
  * Flow tổng thể:
  *
  * 1. Người dùng chọn MỘT ngữ cảnh khám phá người: liên hệ đã kết
- *    bạn, một LỚP của mình, hoặc một KHOÁ của mình. Đây là ba nguồn
- *    người DUY NHẤT hệ cho phép (quyết đã chốt: bỏ hẳn tìm người
- *    theo tên; khám phá qua danh sách thành viên lớp/khoá + liên
- *    hệ). Đổi ngữ cảnh là sự kiện đi lên trang chứa — trang nạp
- *    roster tương ứng (phân trang con trỏ phía server) rồi đưa
- *    xuống qua `members`.
+ *    bạn, một LỚP của mình, hoặc một KHOÁ của mình. Đây là ba nguồn người DUY NHẤT hệ cho phép (quyết đã chốt: bỏ hẳn tìm người theo tên; khám phá qua danh sách thành viên lớp/khoá + liên hệ). Đổi ngữ cảnh là sự kiện đi lên trang chứa — trang nạp roster tương ứng (phân trang con trỏ phía server) rồi đưa xuống qua `members`.
  * 2. Với ngữ cảnh lớp/khoá, component trình bày danh sách roster:
- *    mỗi dòng avatar + tên + vai, phần HÀNH ĐỘNG ở cuối dòng do
- *    sheet chứa quyết định qua `renderMemberAction` (chế độ nhắn
- *    tin: nút Nhắn tin/Kết bạn theo quan hệ) hoặc qua chế độ chọn
- *    nhiều người (chế độ tạo nhóm: `onToggleMember` + `selectedIds`
- *    — bấm cả dòng là đảo chọn, có hộp kiểm thể hiện trạng thái).
+ *    mỗi dòng avatar + tên + vai, phần HÀNH ĐỘNG ở cuối dòng do sheet chứa quyết định qua `renderMemberAction` (chế độ nhắn tin: nút Nhắn tin/Kết bạn theo quan hệ) hoặc qua chế độ chọn nhiều người (chế độ tạo nhóm: `onToggleMember` + `selectedIds` — bấm cả dòng là đảo chọn, có hộp kiểm thể hiện trạng thái).
  * 3. Ngữ cảnh liên hệ không có roster: ở chế độ nhắn tin, phần
- *    danh sách do sheet chứa tự trình bày (liên hệ là danh sách
- *    phẳng đã nạp sẵn ở trang) và component này chỉ giữ phần chọn
- *    ngữ cảnh; ở chế độ tạo nhóm, sheet đưa danh sách liên hệ xuống
- *    qua `contactEntries` để chọn thành viên ngay trong bộ chọn.
+ *    danh sách do sheet chứa tự trình bày (liên hệ là danh sách phẳng đã nạp sẵn ở trang) và component này chỉ giữ phần chọn ngữ cảnh; ở chế độ tạo nhóm, sheet đưa danh sách liên hệ xuống qua `contactEntries` để chọn thành viên ngay trong bộ chọn.
  *
- * Bất biến: component KHÔNG tự gọi API và không tự quyết luật quan
- * hệ — nó chỉ trình bày dữ kiện trang đưa xuống (cờ
- * `canDirectMessage`, `relationship` do server tính) và phát sự
- * kiện người dùng lên trên.
+ * Bất biến: component KHÔNG tự gọi API và không tự quyết luật quan hệ — nó chỉ trình bày dữ kiện trang đưa xuống (cờ `canDirectMessage`, `relationship` do server tính) và phát sự kiện người dùng lên trên.
  */
 interface PeoplePickerProps {
   /** Ngữ cảnh đang chọn. */
@@ -62,11 +46,7 @@ interface PeoplePickerProps {
   /** Đảo chọn một người — chỉ truyền ở chế độ tạo nhóm; có nó thì bấm dòng là chọn/bỏ chọn. */
   onToggleMember?: (member: RosterMember) => void;
   /**
-   * Danh sách LIÊN HỆ (id + tên hiển thị) — chỉ dùng ở chế độ tạo
-   * nhóm: ngữ cảnh liên hệ không có roster nên sheet tạo nhóm đưa
-   * danh sách này xuống để người tạo chọn thành viên từ liên hệ của
-   * mình ngay trong bộ chọn. Chế độ nhắn tin không truyền (sheet
-   * chứa tự trình bày mục liên hệ).
+   * Danh sách LIÊN HỆ (id + tên hiển thị) — chỉ dùng ở chế độ tạo nhóm: ngữ cảnh liên hệ không có roster nên sheet tạo nhóm đưa danh sách này xuống để người tạo chọn thành viên từ liên hệ của mình ngay trong bộ chọn. Chế độ nhắn tin không truyền (sheet chứa tự trình bày mục liên hệ).
    */
   contactEntries?: { userId: string; displayName: string }[];
   /** Đảo chọn một liên hệ trong danh sách `contactEntries` — chỉ ở chế độ tạo nhóm. */

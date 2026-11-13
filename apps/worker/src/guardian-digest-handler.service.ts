@@ -29,49 +29,24 @@ export interface GuardianOverdueAlertPayload {
 }
 
 /**
- * Nửa TIÊU THỤ của digest phụ huynh (PH-2, issue #159) — đã chuyển từ
- * phía API sang worker ở issue con #518 của #491: trước đây
- * `GuardianDigestService.processDigestDue/processOverdueAlert` phía
- * API được nuôi bởi consumer polling `GuardianDigestConsumer` đọc
- * `outbox_events` mỗi 500 ms bằng watermark riêng; nay relay outbox
- * duy nhất của worker định tuyến hai loại sự kiện này vào hàng đợi
- * `guardian-digest-events` (bảng `OUTBOX_EVENT_QUEUE_ROUTES`) và
- * `GuardianDigestEventsProcessor` gọi thẳng hai hàm xử lý ở đây. Mọi
- * luật nghiệp vụ giữ nguyên văn như bản phía API; các truy vấn vốn đi
- * qua service/repository phía API (dashboard/grades/guardians/users)
- * được viết lại bằng bộ máy cũ trực tiếp trên cùng các bảng — khuôn
- * mẫu đã có của phía worker (processor quét digest đọc thẳng DB).
+ * Nửa TIÊU THỤ của digest phụ huynh (PH-2, issue #159) — đã chuyển từ phía API sang worker ở issue con #518 của #491: trước đây `GuardianDigestService.processDigestDue/processOverdueAlert` phía API được nuôi bởi consumer polling `GuardianDigestConsumer` đọc `outbox_events` mỗi 500 ms bằng watermark riêng; nay relay outbox duy nhất của worker định tuyến hai loại sự kiện này vào hàng đợi `guardian-digest-events` (bảng `OUTBOX_EVENT_QUEUE_ROUTES`) và `GuardianDigestEventsProcessor` gọi thẳng hai hàm xử lý ở đây. Mọi luật nghiệp vụ giữ nguyên văn như bản phía API; các truy vấn vốn đi qua service/repository phía API (dashboard/grades/guardians/users) được viết lại bằng bộ máy cũ trực tiếp trên cùng các bảng — khuôn mẫu đã có của phía worker (processor quét digest đọc thẳng DB).
  *
  * Nguyên tắc cứng của research phụ huynh áp ở mọi đường:
  * - Chỉ dữ liệu ĐÃ CÔNG BỐ: kết quả mới qua đúng cổng PH-0/DASH1
  *   (đếm kết quả đã công bố trong cửa sổ — bản đếm của
- *   `publishedNewResultsFor` phía API), thông báo lớp lọc loại
- *   `grade_updated` như bề mặt PH-1 — item chưa công bố vắng tuyệt
- *   đối khỏi digest, kể cả ở dạng số đếm suy ra được.
+ *   `publishedNewResultsFor` phía API), thông báo lớp lọc loại `grade_updated` như bề mặt PH-1 — item chưa công bố vắng tuyệt đối khỏi digest, kể cả ở dạng số đếm suy ra được.
  * - Nội dung thông báo CHỈ là số lượng mục + link sâu tới màn PH-1
- *   của con: không điểm số, không tên việc chi tiết (trừ tên hoạt
- *   động ở đẩy quá hạn — dữ kiện học sinh tự thấy trong khoá, tiền lệ
- *   activity_due_soon), kênh ngoài nhận bản tối thiểu hoá riêng qua
- *   `externalSubject`/`externalBody` của notify().
+ *   của con: không điểm số, không tên việc chi tiết (trừ tên hoạt động ở đẩy quá hạn — dữ kiện học sinh tự thấy trong khoá, tiền lệ activity_due_soon), kênh ngoài nhận bản tối thiểu hoá riêng qua `externalSubject`/`externalBody` của notify().
  * - Cổng liên kết kiểm LẠI tại thời điểm gửi: liên kết đã thu hồi sau
- *   khi lượt quét chốt lượt → lượt bị huỷ (skipped_revoked), không
- *   gửi.
+ *   khi lượt quét chốt lượt → lượt bị huỷ (skipped_revoked), không gửi.
  * - Mỗi lượt gửi/huỷ đều để lại vết ở guardian_digests + audit
- *   event_log qua outbox aggregate `guardian` (chỉ số đếm, không
- *   điểm): sự kiện audit ghi vào `outbox_events` như
- *   `OutboxService.enqueueStandalone` phía API vẫn làm, relay duy
- *   nhất đóng dấu và phản chiếu sang event_log ở nhịp kế tiếp.
+ *   event_log qua outbox aggregate `guardian` (chỉ số đếm, không điểm): sự kiện audit ghi vào `outbox_events` như `OutboxService.enqueueStandalone` phía API vẫn làm, relay duy nhất đóng dấu và phản chiếu sang event_log ở nhịp kế tiếp.
  *
  * Đường phát thông báo đi qua bề mặt dùng chung của worker
  * (`NotificationDeliveryService.notify` — dựng ở chính issue này cho
- * cả đợt chuyển consumer; issue #520 dùng lại): trọn luật notify()
- * phía API gồm kênh trong-app + job email vào hàng đợi
- * `notification-dispatch` + sự kiện `notification_created`.
+ * cả đợt chuyển consumer; issue #520 dùng lại): trọn luật notify() phía API gồm kênh trong-app + job email vào hàng đợi `notification-dispatch` + sự kiện `notification_created`.
  *
- * Idempotent theo vết lượt: lượt không còn `queued` (đã xử lý ở lần
- * phát trước) thì bỏ qua — cùng chốt bền mà consumer phía API dựa
- * vào; kết hợp khoá jobId = outboxId của relay, một sự kiện phát lại
- * không bao giờ sinh thông báo thứ hai.
+ * Idempotent theo vết lượt: lượt không còn `queued` (đã xử lý ở lần phát trước) thì bỏ qua — cùng chốt bền mà consumer phía API dựa vào; kết hợp khoá jobId = outboxId của relay, một sự kiện phát lại không bao giờ sinh thông báo thứ hai.
  */
 @Injectable()
 export class GuardianDigestHandlerService {
@@ -84,9 +59,7 @@ export class GuardianDigestHandlerService {
   ) {}
 
   /**
-   * Xử lý một sự kiện guardian_digest_due: tổng hợp cửa sổ và gửi.
-   * Idempotent theo vết lượt: lượt không còn `queued` (đã xử lý ở lần
-   * phát lại trước) thì bỏ qua — đường phát có tính ít-nhất-một-lần.
+   * Xử lý một sự kiện guardian_digest_due: tổng hợp cửa sổ và gửi. Idempotent theo vết lượt: lượt không còn `queued` (đã xử lý ở lần phát lại trước) thì bỏ qua — đường phát có tính ít-nhất-một-lần.
    */
   async processDigestDue(payload: GuardianDigestDuePayload): Promise<void> {
     const row = await this.getDigest(payload.digestId);
@@ -118,9 +91,7 @@ export class GuardianDigestHandlerService {
     }
 
     const studentName = await this.studentDisplayName(studentId);
-    // Link sâu trỏ thẳng path theo con của khu vực phụ huynh (chuẩn
-    // đường dẫn #221, lát R2); thông báo đã phát trước đây mang dạng
-    // cũ /guardian?student= vẫn tới được nhờ lớp redirect phía web.
+    // Link sâu trỏ thẳng path theo con của khu vực phụ huynh (chuẩn đường dẫn #221, lát R2); thông báo đã phát trước đây mang dạng cũ /guardian?student= vẫn tới được nhờ lớp redirect phía web.
     const deepLink = `/guardian/students/${studentId}`;
     const subject = this.t(payload.kind === 'weekly' ? 'platform.guardianDigestWeeklySubject' : 'platform.guardianDigestDailySubject', { name: studentName });
     const body = this.t('platform.guardianDigestBody', {

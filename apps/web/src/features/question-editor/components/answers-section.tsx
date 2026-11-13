@@ -34,8 +34,7 @@ interface AnswersSectionProps {
 
 export function AnswersSection({ form, patchForm, contextId, itemId, moveItem }: AnswersSectionProps) {
   const { t } = useTranslation('app');
-  // Các lựa chọn hiện tại của tài liệu thống nhất (theo thứ tự soạn)
-  // — chỉ để dựng hàng phản hồi theo lựa chọn ở dưới editor.
+  // Các lựa chọn hiện tại của tài liệu thống nhất (theo thứ tự soạn) — chỉ để dựng hàng phản hồi theo lựa chọn ở dưới editor.
   const mcSplit = form.qtype === 'multichoice' ? splitMultipleChoiceDocument(form.mcDocument) : null;
 
   return (

@@ -1,28 +1,13 @@
 /**
- * Kết nối tới database kho ngân hàng hệ thống (issue #585) — theo mẫu
- * `ControlPlaneConnection` của issue #580.
+ * Kết nối tới database kho ngân hàng hệ thống (issue #585) — theo mẫu `ControlPlaneConnection` của issue #580.
  *
- * Từ hạng mục nhân rộng G10 (issue #650), lớp này là ADAPTER mỏng
- * như adapter của pilot kho control plane: nó chỉ còn làm hai việc
- * của tầng ứng dụng — đọc cấu hình môi trường và sở hữu vòng đời
- * của `pg.Pool` — rồi cấp pool cho factory
- * `createSystemBankKysely` của `@giaokhoa/db`; mọi truy cập dữ liệu đi
- * qua handle Kysely (`kysely`) và repository của package. Pool
- * KHÔNG bị đóng qua `destroy()` của instance Kysely (hàm đó cũng
- * đóng pool): điểm đóng duy nhất là `onModuleDestroy` của adapter
- * này, như đường kết nối trước đây.
+ * Từ hạng mục nhân rộng G10 (issue #650), lớp này là ADAPTER mỏng như adapter của pilot kho control plane: nó chỉ còn làm hai việc của tầng ứng dụng — đọc cấu hình môi trường và sở hữu vòng đời của `pg.Pool` — rồi cấp pool cho factory `createSystemBankKysely` của `@giaokhoa/db`; mọi truy cập dữ liệu đi qua handle Kysely (`kysely`) và repository của package. Pool KHÔNG bị đóng qua `destroy()` của instance Kysely (hàm đó cũng đóng pool): điểm đóng duy nhất là `onModuleDestroy` của adapter này, như đường kết nối trước đây.
  *
  * Khác hẳn kết nối nghiệp vụ ở hai điểm có chủ đích:
  * - Pool THƯỜNG của `pg`, không qua `TenantAwarePool`: dữ liệu kho
- *   ngân hàng là dữ liệu của platform, không thuộc tenant nào, không
- *   có RLS theo tenant để áp; gác quyền nằm ở tầng service.
+ *   ngân hàng là dữ liệu của platform, không thuộc tenant nào, không có RLS theo tenant để áp; gác quyền nằm ở tầng service.
  * - Kết nối có thể VẮNG: hệ chưa cấu hình `SYSTEM_BANK_DATABASE_URL`
- *   thì `kysely` bằng null và ứng dụng vẫn khởi động như cũ (chuỗi
- *   migrate trong compose.yaml cũng bỏ qua bước cấp phát + migration
- *   kho ngân hàng khi biến chưa đặt). Mọi điểm dùng phải hỏi
- *   `isConfigured` trước — service của module ném lỗi
- *   `system_bank.not_configured` khi bị gọi trong trạng thái chưa cấu
- *   hình.
+ *   thì `kysely` bằng null và ứng dụng vẫn khởi động như cũ (chuỗi migrate trong compose.yaml cũng bỏ qua bước cấp phát + migration kho ngân hàng khi biến chưa đặt). Mọi điểm dùng phải hỏi `isConfigured` trước — service của module ném lỗi `system_bank.not_configured` khi bị gọi trong trạng thái chưa cấu hình.
  */
 import { Injectable, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';

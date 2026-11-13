@@ -1,19 +1,12 @@
 /**
  * Lỗi miền dùng chung của package `@giaokhoa/enrol`.
  *
- * Package này là code thuần tầng dữ liệu (không phụ thuộc Nest hay
- * HTTP), nên mọi lỗi nghiệp vụ nó ném ra đều mang một `code` kỹ thuật
- * ổn định (đúng mã ProblemDetails mà bề mặt API đã và đang trả cho
- * client) kèm thông điệp tiếng Anh như hiện hành. Tầng host (hôm nay
- * là `apps/api`) dịch các lỗi này về exception HTTP tương ứng — mã và
- * thông điệp giữ nguyên nên hành vi quan sát được từ ngoài không đổi:
- * cùng một chốt chặn bị vi phạm thì client nhận đúng mã lỗi và thông
- * điệp như trước khi trích xuất.
+ * Package này là code thuần tầng dữ liệu (không phụ thuộc Nest hay HTTP), nên mọi lỗi nghiệp vụ nó ném ra đều mang một `code` kỹ thuật ổn định (đúng mã ProblemDetails mà bề mặt API đã và đang trả cho client) kèm thông điệp tiếng Anh như hiện hành. Tầng host (hôm nay là `apps/api`) dịch các lỗi này về exception HTTP tương ứng — mã và thông điệp giữ nguyên nên hành vi quan sát được từ ngoài không đổi:
+ * cùng một chốt chặn bị vi phạm thì client nhận đúng mã lỗi và thông điệp như trước khi trích xuất.
  */
 
 /**
- * Lỗi nghiệp vụ mang mã kỹ thuật: nền của mọi lỗi mà các lõi trong
- * package này ném ra.
+ * Lỗi nghiệp vụ mang mã kỹ thuật: nền của mọi lỗi mà các lõi trong package này ném ra.
  */
 export class SharedDomainError extends Error {
   /** Mã lỗi kỹ thuật (mã ProblemDetails ở bề mặt API). */
@@ -33,16 +26,12 @@ export class SharedDomainError extends Error {
 }
 
 /**
- * Mã lỗi ProblemDetails dùng chung cho MỌI chốt chặn tách vai giáo
- * viên/học viên: cả ba funnel ghi danh và chốt chiều ngược ở đường
- * gán vai đều ném đúng một mã, để client và test nhận diện vi phạm
- * lẫn vai bằng một hằng số duy nhất.
+ * Mã lỗi ProblemDetails dùng chung cho MỌI chốt chặn tách vai giáo viên/học viên: cả ba funnel ghi danh và chốt chiều ngược ở đường gán vai đều ném đúng một mã, để client và test nhận diện vi phạm lẫn vai bằng một hằng số duy nhất.
  */
 export const ROLE_CONTEXT_CONFLICT_CODE = 'access.role_context_conflict';
 
 /**
- * Lỗi xung đột vai theo ngữ cảnh (một tài khoản vừa dạy vừa học cùng
- * một khoá/lớp) — xem định nghĩa kiểm (a)/(b) tại `RoleSeparationCore`.
+ * Lỗi xung đột vai theo ngữ cảnh (một tài khoản vừa dạy vừa học cùng một khoá/lớp) — xem định nghĩa kiểm (a)/(b) tại `RoleSeparationCore`.
  */
 export class RoleContextConflictError extends SharedDomainError {
   /**

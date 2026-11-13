@@ -6,8 +6,7 @@ import {
 } from '@giaokhoa/contracts';
 
 /**
- * Validation của Custom Fields dùng Zod qua Standard Schema — schema nền ở
- * `@giaokhoa/contracts` là nguồn sự thật duy nhất.
+ * Validation của Custom Fields dùng Zod qua Standard Schema — schema nền ở `@giaokhoa/contracts` là nguồn sự thật duy nhất.
  */
 export { createCustomFieldCategorySchema, createCustomFieldSchema };
 export type CreateCategoryDto = CreateCustomFieldCategory;

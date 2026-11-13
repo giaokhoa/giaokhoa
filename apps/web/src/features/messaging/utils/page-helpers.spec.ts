@@ -6,10 +6,7 @@ import type { ConversationView } from '../types/types';
 const TAB_KEY = 'giaokhoa.messages.tab';
 
 /**
- * Lưu bền tab khung trái của trang Tin nhắn (issue #606): thanh
- * tab hiện hành có bốn giá trị hợp lệ; giá trị đã lưu theo các
- * cấu trúc tab cũ phải rơi về tab Tất cả mặc định thay vì làm
- * khung trái mở vào một tab không còn tồn tại.
+ * Lưu bền tab khung trái của trang Tin nhắn (issue #606): thanh tab hiện hành có bốn giá trị hợp lệ; giá trị đã lưu theo các cấu trúc tab cũ phải rơi về tab Tất cả mặc định thay vì làm khung trái mở vào một tab không còn tồn tại.
  */
 describe('Lưu bền tab khung trái Tin nhắn', () => {
   beforeEach(() => {
@@ -55,11 +52,7 @@ function conv(id: string, pinnedAt: string | null, lastMessageSeq: number): Conv
 }
 
 /**
- * Dời hội thoại lên đầu phân mục sau hoạt động mới (vòng sửa
- * issue #623): thứ tự server là Ghim trước rồi tới Gần đây theo
- * hoạt động gần nhất — phép dời dùng cho cache tập đã lưu khi
- * chính người xem gửi tin / có sự kiện của chính mình, để thứ tự
- * của tab Lưu trữ khớp thứ tự server mà không chờ tải lại.
+ * Dời hội thoại lên đầu phân mục sau hoạt động mới (vòng sửa issue #623): thứ tự server là Ghim trước rồi tới Gần đây theo hoạt động gần nhất — phép dời dùng cho cache tập đã lưu khi chính người xem gửi tin / có sự kiện của chính mình, để thứ tự của tab Lưu trữ khớp thứ tự server mà không chờ tải lại.
  */
 describe('Dời hội thoại lên đầu phân mục của nó', () => {
   it('hội thoại chưa ghim có hoạt động mới thì lên đầu mục Gần đây, đứng sau mọi hội thoại đã ghim', () => {

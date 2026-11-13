@@ -2,12 +2,7 @@ import type { DashboardOverviewView } from '@giaokhoa/contracts';
 import { apiJson } from '#lib/api';
 
 /**
- * Tầng gọi API thuần của feature dashboard: chỉ chứa các hàm đọc dữ
- * liệu qua HTTP, không phụ thuộc React hay React Query. Tầng
- * `queries/` của feature bọc các hàm này thành queryOptions và hook.
- * Trước đây các lời gọi này nằm inline trong queryFn của module dữ
- * liệu phẳng `src/lib/dashboard-data.ts`; việc tổ chức lại theo mô
- * hình features/ (issue #500) tách chúng thành hàm có tên ở tầng api/.
+ * Tầng gọi API thuần của feature dashboard: chỉ chứa các hàm đọc dữ liệu qua HTTP, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành queryOptions và hook. Trước đây các lời gọi này nằm inline trong queryFn của module dữ liệu phẳng `src/lib/dashboard-data.ts`; việc tổ chức lại theo mô hình features/ (issue #500) tách chúng thành hàm có tên ở tầng api/.
  */
 
 /**

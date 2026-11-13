@@ -16,11 +16,9 @@ import { addExamSlot, createExamDraft } from '../../support/exam-pin-helpers';
  *  - QB-2: copy = deep copy độc lập + derived_from + ghi công tác giả
  *    gốc; copy_count tăng; người ngoài copy câu ở bank kín → 403.
  *  - QB-3: slot từ bank tổ mặc định pinned; attempt giữ version đã ghim
- *    kể cả khi câu đã lên bản mới và cả khi câu bị rút; nâng version ghi
- *    nhật ký; xoá vật lý bị chặn khi còn slot tham chiếu.
+ *    kể cả khi câu đã lên bản mới và cả khi câu bị rút; nâng version ghi nhật ký; xoá vật lý bị chặn khi còn slot tham chiếu.
  *  - QB-4: đóng góp → duyệt (copy vào bank đích / version mới qua
- *    derived_from) → từ chối có lý do → đề xuất lại; chống trùng hoàn
- *    toàn; khám phá theo bank/từ khoá kèm use_count.
+ *    derived_from) → từ chối có lý do → đề xuất lại; chống trùng hoàn toàn; khám phá theo bank/từ khoá kèm use_count.
  */
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });

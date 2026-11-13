@@ -57,22 +57,11 @@ interface TreeIndex {
 
 @Injectable()
 /**
- * Tầng SGK "Kết nối tri thức với cuộc sống" (K0b): nạp dataset sách đã
- * kiểm chứng vào cây sách + ánh xạ sang chương trình, đọc cây sách, và
- * cung cấp đơn vị khung SGK cho cơ chế nạp khung vào khoá của Courses.
+ * Tầng SGK "Kết nối tri thức với cuộc sống" (K0b): nạp dataset sách đã kiểm chứng vào cây sách + ánh xạ sang chương trình, đọc cây sách, và cung cấp đơn vị khung SGK cho cơ chế nạp khung vào khoá của Courses.
  *
- * Nạp idempotent theo sổ đăng ký `book_records` (khoá
- * dataset + mã bản ghi, hash nội dung gồm cả danh sách ánh xạ) — cùng
- * kỷ luật với nạp chương trình của K0a. Khác biệt cốt lõi: trước khi
- * ghi bất cứ dòng nào, lượt nạp **phân giải toàn bộ mã ánh xạ** sang
- * node chương trình thật qua sổ đăng ký chương trình; mã nào không
- * phân giải được → lỗi cứng, không ghi dở (ánh xạ treo là lỗi dữ liệu,
- * không phải trạng thái chấp nhận được).
+ * Nạp idempotent theo sổ đăng ký `book_records` (khoá dataset + mã bản ghi, hash nội dung gồm cả danh sách ánh xạ) — cùng kỷ luật với nạp chương trình của K0a. Khác biệt cốt lõi: trước khi ghi bất cứ dòng nào, lượt nạp **phân giải toàn bộ mã ánh xạ** sang node chương trình thật qua sổ đăng ký chương trình; mã nào không phân giải được → lỗi cứng, không ghi dở (ánh xạ treo là lỗi dữ liệu, không phải trạng thái chấp nhận được).
  *
- * Cổng quyền như K0a: quản trị dataset/cây sách cần `curriculum:view` /
- * `curriculum:manage` tại context hệ thống; đường đọc phục vụ chọn
- * khung cho một khoá (`forCourseId`) mở thêm nhánh `course:update` tại
- * khoá đích.
+ * Cổng quyền như K0a: quản trị dataset/cây sách cần `curriculum:view` / `curriculum:manage` tại context hệ thống; đường đọc phục vụ chọn khung cho một khoá (`forCourseId`) mở thêm nhánh `course:update` tại khoá đích.
  */
 export class BookService implements OnModuleInit {
   private readonly running = new Set<string>();

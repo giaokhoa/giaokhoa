@@ -16,13 +16,7 @@ import { paperPageClientLoader, useAssignScanBatch, useAssignScanIdentity, useCr
 
 /**
  * CAM-0 (issue #112) — Chấm bài giấy bằng camera, phía giáo viên:
- * sinh lô IN + tải PDF (phiếu DÙNG CHUNG là mặc định; in theo danh
- * sách là tuỳ chọn hẹp), chụp/tải ảnh cả buổi một lượt (hệ thống tự
- * khớp mã đề về đúng lô in), xử lý hai hàng chờ (gán lô/gán định danh
- * với ảnh cắt vùng mã + vùng tên và ứng viên chưa khớp, xác nhận câu
- * mơ hồ trên ảnh đã nắn phẳng) rồi ghi điểm thành attempt thi giấy.
- * Hệ thống không bao giờ chấm đoán: phiếu chưa chắc chắn nằm ở hàng
- * chờ cho tới khi giáo viên quyết.
+ * sinh lô IN + tải PDF (phiếu DÙNG CHUNG là mặc định; in theo danh sách là tuỳ chọn hẹp), chụp/tải ảnh cả buổi một lượt (hệ thống tự khớp mã đề về đúng lô in), xử lý hai hàng chờ (gán lô/gán định danh với ảnh cắt vùng mã + vùng tên và ứng viên chưa khớp, xác nhận câu mơ hồ trên ảnh đã nắn phẳng) rồi ghi điểm thành attempt thi giấy. Hệ thống không bao giờ chấm đoán: phiếu chưa chắc chắn nằm ở hàng chờ cho tới khi giáo viên quyết.
  */
 
 const TEMPLATE_WIDTH = 1240;
@@ -36,11 +30,7 @@ interface UploadOutcome {
 }
 
 /**
- * Cache promise tải blob ảnh phiếu theo scanId ở tầng module: một
- * scan hiện ở nhiều vùng cắt trên cùng màn chấm (RegionCrop ×2 +
- * RowCrop từng dòng) nhưng chỉ tải xuống MỘT lần; lượt tải lỗi bị
- * xoá khỏi cache để lần gắn sau thử lại. Object URL vẫn do từng
- * instance tự tạo từ blob dùng chung và tự thu hồi khi unmount.
+ * Cache promise tải blob ảnh phiếu theo scanId ở tầng module: một scan hiện ở nhiều vùng cắt trên cùng màn chấm (RegionCrop ×2 + RowCrop từng dòng) nhưng chỉ tải xuống MỘT lần; lượt tải lỗi bị xoá khỏi cache để lần gắn sau thử lại. Object URL vẫn do từng instance tự tạo từ blob dùng chung và tự thu hồi khi unmount.
  */
 const warpedBlobPromises = new Map<string, Promise<Blob>>();
 

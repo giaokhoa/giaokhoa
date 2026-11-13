@@ -8,22 +8,12 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser } from '..
 import { addGroupMember, contextIdByLevelInstance, createGroupViaApi } from '../../support/engagement-helpers';
 
 /**
- * Vòng đời tin nhắn THEO VAI (issue #33, bổ sung cho PR #94) — ba lớp
- * thao tác tách bạch:
+ * Vòng đời tin nhắn THEO VAI (issue #33, bổ sung cho PR #94) — ba lớp thao tác tách bạch:
  *   (a) tác giả XOÁ-PHÍA-MÌNH mọi lúc (cờ cá nhân, phía kia không đổi);
  *   (b) tác giả THU HỒI cho mọi người chỉ trong cửa sổ site-config
- *       `core/messagingrecallwindowminutes` (mặc định 15 phút) — nội
- *       dung bị vô hiệu với thành viên thường, moderator_action
- *       'recall' được ghi, đường truy vết còn thấy nội dung gốc;
+ *       `core/messagingrecallwindowminutes` (mặc định 15 phút) — nội dung bị vô hiệu với thành viên thường, moderator_action 'recall' được ghi, đường truy vết còn thấy nội dung gốc;
  *   (c) moderator có capability `moderation:manage` XOÁ CỨNG / GỠ
- *       HÀNG LOẠT không giới hạn thời gian, lý do bắt buộc, mọi lần
- *       ghi moderator_action — dòng tin biến mất khỏi mọi đường đọc.
- * Kèm: cổng chặn 1–1 vẫn nuốt cả thu hồi lẫn xoá-phía-mình như mọi
- * đường theo id khác. Phần SỰ KIỆN realtime của vòng đời (thu hồi
- * phát `message.deleted` + BẮT BUỘC `conversation.invalidate` ở phía
- * kia; xoá-phía-mình không phát tín hiệu nào sang phía kia) thuộc
- * về consumer phân phối phía worker từ issue #521 và được kiểm ở
- * spec tích hợp của worker:
+ *       HÀNG LOẠT không giới hạn thời gian, lý do bắt buộc, mọi lần ghi moderator_action — dòng tin biến mất khỏi mọi đường đọc. Kèm: cổng chặn 1–1 vẫn nuốt cả thu hồi lẫn xoá-phía-mình như mọi đường theo id khác. Phần SỰ KIỆN realtime của vòng đời (thu hồi phát `message.deleted` + BẮT BUỘC `conversation.invalidate` ở phía kia; xoá-phía-mình không phát tín hiệu nào sang phía kia) thuộc về consumer phân phối phía worker từ issue #521 và được kiểm ở spec tích hợp của worker:
  * apps/worker/test/integration/messaging/messaging-realtime-queue.int-spec.ts.
  */
 

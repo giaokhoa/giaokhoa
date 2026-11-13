@@ -10,33 +10,19 @@ import { TenantsRepository } from './tenants';
 import { UsersRepository } from './users';
 
 /**
- * Spec tích hợp của nhóm G1 chiến dịch Kysely (issue #641): năm
- * repository của cụm người dùng và trung tâm (auth, users, tenants,
- * centre-identity, site-config) chạy trên database kho trung tâm
- * dựng từ rỗng bằng chính cầu nối migration của package, qua
- * repository production — không mô phỏng handle.
+ * Spec tích hợp của nhóm G1 chiến dịch Kysely (issue #641): năm repository của cụm người dùng và trung tâm (auth, users, tenants, centre-identity, site-config) chạy trên database kho trung tâm dựng từ rỗng bằng chính cầu nối migration của package, qua repository production — không mô phỏng handle.
  *
- * Ngoài đối chiếu hành vi từng repository, spec này chốt các điểm
- * đo mà thân issue #641 phân bổ cho nhóm:
+ * Ngoài đối chiếu hành vi từng repository, spec này chốt các điểm đo mà thân issue #641 phân bổ cho nhóm:
  * - Điểm nóng site-config: tương đương của upsert từng phần ở tầng
- *   platform (vị từ chỉ số duy nhất riêng phần trên `plugin_config`)
- *   — cập nhật đúng khi điều kiện đích khớp, dòng tenant trùng
- *   `(plugin, name)` không bị đường ghi platform chạm tới.
+ *   platform (vị từ chỉ số duy nhất riêng phần trên `plugin_config`) — cập nhật đúng khi điều kiện đích khớp, dòng tenant trùng `(plugin, name)` không bị đường ghi platform chạm tới.
  * - T-13 (hai ca điều kiện động của nhóm): `users.search` (nhóm OR
- *   của từ khoá + lọc trạng thái + đếm khớp trang) và
- *   `site-config.listAudit` (có/không có khoá lọc).
+ *   của từ khoá + lọc trạng thái + đếm khớp trang) và `site-config.listAudit` (có/không có khoá lọc).
  * - T-4: patch cập nhật mang trường `undefined` tường minh không
  *   được ghi đè giá trị đang có.
  * - U5: insert không truyền id nhận id UUIDv7 qua `returning`;
  *   insert có id tường minh giữ nguyên id.
  * - T-7 (mở rộng cho kho trung tâm): cùng một dòng đọc qua
- *   oracle độc lập (Kysely thô ngoài repository) và qua
- *   repository cho kiểu runtime khớp nhau ở các cột đại diện
- *   của cụm (timestamptz, jsonb — object lẫn mảng ở cấp trên
- *   cùng, boolean, uuid, text) và khẳng định bề mặt int8 của
- *   cụm: mười bốn bảng của cụm không có cột bigint nào (đo tại
- *   information_schema), nên luật int8-đọc-là-string không có
- *   bề mặt trong cụm này.
+ *   oracle độc lập (Kysely thô ngoài repository) và qua repository cho kiểu runtime khớp nhau ở các cột đại diện của cụm (timestamptz, jsonb — object lẫn mảng ở cấp trên cùng, boolean, uuid, text) và khẳng định bề mặt int8 của cụm: mười bốn bảng của cụm không có cột bigint nào (đo tại information_schema), nên luật int8-đọc-là-string không có bề mặt trong cụm này.
  */
 const adminUrl =
   process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??

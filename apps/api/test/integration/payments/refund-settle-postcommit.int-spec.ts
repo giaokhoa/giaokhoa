@@ -13,31 +13,12 @@ import { PaymentsService } from '../../../src/modules/payments/payments.service'
 const TEST_DB_URL = process.env.GIAOKHOA_TEST_DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5432/giaokhoa_test_api';
 
 /**
- * Hồi quy kết quả đáp ứng của khâu SETTLE HOÀN TIỀN khi bước phát
- * sự kiện SAU commit lỗi (issue #490 — điều kiện đối chiếu của vòng
- * sửa hẹp PR #535).
+ * Hồi quy kết quả đáp ứng của khâu SETTLE HOÀN TIỀN khi bước phát sự kiện SAU commit lỗi (issue #490 — điều kiện đối chiếu của vòng sửa hẹp PR #535).
  *
- * Bất biến nghiệp vụ: một xác nhận chi đã ghi sổ xong (dòng hoàn
- * `settled`, khoản thu `refunded`, roster đã gỡ trong cùng
- * transaction) KHÔNG BAO GIỜ được báo ngược thành lỗi chỉ vì bước
- * phát sự kiện trong-tiến-trình `cohort_member_removed` sau commit
- * ném lỗi. Đặc tả #490 yêu cầu ba luồng giữ nguyên hành vi đáp ứng:
- * trả lỗi sau một commit thành công là khác biệt quan sát được —
- * đường tay khiến người vận hành hiểu nhầm xác nhận chi chưa thành
- * công (và gọi lại bị chặn ở cổng `payment.refund_not_approved`),
- * đường tự động đánh dấu sự kiện `needs_review` dù giao dịch đã xác
- * nhận. Hàng outbox `cohort_member_removed` đã ghi bền trong chính
- * transaction settle là đường đồng bộ bù: consumer outbox sẵn có
- * quét hàng đó và gọi handler đình chỉ ghi danh, nên bước phát
- * nhanh chỉ là đường tắt, không phải điều kiện của kết quả settle.
+ * Bất biến nghiệp vụ: một xác nhận chi đã ghi sổ xong (dòng hoàn `settled`, khoản thu `refunded`, roster đã gỡ trong cùng transaction) KHÔNG BAO GIỜ được báo ngược thành lỗi chỉ vì bước phát sự kiện trong-tiến-trình `cohort_member_removed` sau commit ném lỗi. Đặc tả #490 yêu cầu ba luồng giữ nguyên hành vi đáp ứng:
+ * trả lỗi sau một commit thành công là khác biệt quan sát được — đường tay khiến người vận hành hiểu nhầm xác nhận chi chưa thành công (và gọi lại bị chặn ở cổng `payment.refund_not_approved`), đường tự động đánh dấu sự kiện `needs_review` dù giao dịch đã xác nhận. Hàng outbox `cohort_member_removed` đã ghi bền trong chính transaction settle là đường đồng bộ bù: consumer outbox sẵn có quét hàng đó và gọi handler đình chỉ ghi danh, nên bước phát nhanh chỉ là đường tắt, không phải điều kiện của kết quả settle.
  *
- * Cách ép lỗi: spy `ClassesService.notifyPaidClassMemberRemoved`
- * ném lỗi. Trên cơ chế cũ (chưa bọc bắt lỗi ở bước phát sau commit)
- * cả hai ca đều ĐỎ: ca đường tay bị `settleRefund` ném ngược lỗi
- * ép; ca đường tự động rơi vào khối catch của
- * `settleRefundFromDebitEvent` và sự kiện bị đánh dấu
- * `needs_review`. Sau khi bọc, cả hai ca XANH và trạng thái đã
- * commit giữ nguyên.
+ * Cách ép lỗi: spy `ClassesService.notifyPaidClassMemberRemoved` ném lỗi. Trên cơ chế cũ (chưa bọc bắt lỗi ở bước phát sau commit) cả hai ca đều ĐỎ: ca đường tay bị `settleRefund` ném ngược lỗi ép; ca đường tự động rơi vào khối catch của `settleRefundFromDebitEvent` và sự kiện bị đánh dấu `needs_review`. Sau khi bọc, cả hai ca XANH và trạng thái đã commit giữ nguyên.
  */
 describe('Settle hoàn tiền — lỗi ở bước phát sự kiện sau commit không đổi kết quả xác nhận chi (issue #490)', () => {
   let app: INestApplication;
@@ -55,11 +36,7 @@ describe('Settle hoàn tiền — lỗi ở bước phát sự kiện sau commit
   }
 
   /**
-   * Dựng kịch bản class_fee trọn gói: lớp + khoá có instance cohort
-   * neo vào backing cohort của lớp, học viên vào lớp qua đúng móc
-   * hậu-thanh-toán để cohort sync vật chất hoá ghi danh đang hoạt
-   * động, khoản thu class_fee đã `succeeded` và dòng hoàn
-   * `approved` cho trọn số tiền — trạng thái ngay trước khâu settle.
+   * Dựng kịch bản class_fee trọn gói: lớp + khoá có instance cohort neo vào backing cohort của lớp, học viên vào lớp qua đúng móc hậu-thanh-toán để cohort sync vật chất hoá ghi danh đang hoạt động, khoản thu class_fee đã `succeeded` và dòng hoàn `approved` cho trọn số tiền — trạng thái ngay trước khâu settle.
    */
   async function setupClassFeeScenario(refundExternalTransactionId: string | null) {
     const clazz = await classes.createClass(adminId, { name: uniqueName('cls-postcommit') });
@@ -137,9 +114,7 @@ describe('Settle hoàn tiền — lỗi ở bước phát sự kiện sau commit
     const view = await withPostCommitFailure(() =>
       payments.settleRefund(adminId, s.paymentId, s.refund.id, { externalTransactionId: 'PC-MANUAL-001' }));
 
-    // Kết quả đáp ứng nhất quán với sổ đã ghi: không ném lỗi, dòng
-    // hoàn trả về ở trạng thái settled; DB giữ đúng trạng thái đã
-    // commit (hoàn settled, khoản thu refunded, roster đã gỡ).
+    // Kết quả đáp ứng nhất quán với sổ đã ghi: không ném lỗi, dòng hoàn trả về ở trạng thái settled; DB giữ đúng trạng thái đã commit (hoàn settled, khoản thu refunded, roster đã gỡ).
     expect(view.status).toBe('settled');
     expect(await count("SELECT count(*) AS count FROM payment_refunds WHERE id = $1 AND status = 'settled'", [s.refund.id])).toBe(1);
     expect(await count("SELECT count(*) AS count FROM payments WHERE id = $1 AND status = 'refunded'", [s.paymentId])).toBe(1);
@@ -148,9 +123,7 @@ describe('Settle hoàn tiền — lỗi ở bước phát sự kiện sau commit
       [s.clazz.cohortId, s.student.id],
     )).toBe(0);
 
-    // Bước phát nhanh chết nên ghi danh chưa bị đình chỉ ngay, nhưng
-    // hàng outbox đã ghi trong transaction vẫn còn nguyên: handler
-    // mà consumer outbox gọi theo hàng đó áp được đình chỉ.
+    // Bước phát nhanh chết nên ghi danh chưa bị đình chỉ ngay, nhưng hàng outbox đã ghi trong transaction vẫn còn nguyên: handler mà consumer outbox gọi theo hàng đó áp được đình chỉ.
     expect(await s.outboxCount()).toBeGreaterThanOrEqual(1);
     expect(await s.ueStatus()).toBe(ENROL_ACTIVE);
     await enrol.onCohortMemberRemoved({ cohortId: s.clazz.cohortId, userId: s.student.id });
@@ -168,8 +141,7 @@ describe('Settle hoàn tiền — lỗi ở bước phát sự kiện sau commit
 
     await withPostCommitFailure(() => payments.settleRefundFromDebitEvent(event!));
 
-    // Sự kiện khớp trọn: matched và gắn đúng khoản thu — tuyệt đối
-    // không rơi vào needs_review chỉ vì lỗi ở bước phát sau commit.
+    // Sự kiện khớp trọn: matched và gắn đúng khoản thu — tuyệt đối không rơi vào needs_review chỉ vì lỗi ở bước phát sau commit.
     const { rows } = await pg.query<{ match_status: string; matched_payment_id: string | null }>(
       'SELECT match_status, matched_payment_id FROM payment_provider_events WHERE id = $1', [event!.id],
     );

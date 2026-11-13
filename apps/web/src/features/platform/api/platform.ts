@@ -10,12 +10,7 @@ import type {
 } from '../types/platform';
 
 /**
- * Tầng gọi API thuần của cụm trang nền tảng thuộc feature
- * platform: chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay
- * React Query. Tầng `queries/` của feature bọc các hàm này thành
- * queryOptions, đột biến và clientLoader. Tách từ module phẳng
- * `src/lib/platform-data.ts` khi tổ chức lại apps/web theo mô
- * hình features/ (issue #500).
+ * Tầng gọi API thuần của cụm trang nền tảng thuộc feature platform: chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành queryOptions, đột biến và clientLoader. Tách từ module phẳng `src/lib/platform-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
 
 // ---------------------------------------------------------------------
@@ -32,8 +27,7 @@ export function fetchMyInsights() {
 }
 
 // ---------------------------------------------------------------------
-// Privacy: người dùng tự gửi yêu cầu export/delete cho chính mình;
-// phía quản trị thấy mọi yêu cầu và duyệt/từ chối.
+// Privacy: người dùng tự gửi yêu cầu export/delete cho chính mình; phía quản trị thấy mọi yêu cầu và duyệt/từ chối.
 // ---------------------------------------------------------------------
 
 /**

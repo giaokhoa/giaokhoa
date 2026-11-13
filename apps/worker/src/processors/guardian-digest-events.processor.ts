@@ -10,9 +10,7 @@ import {
 } from '../guardian-digest-handler.service';
 
 /**
- * Kiểm tra hình dạng payload của sự kiện `guardian_digest_due` —
- * đúng bộ kiểm tra consumer phía API trước đây vẫn áp trước khi gọi
- * handler: đủ năm trường chuỗi bắt buộc và `kind` thuộc
+ * Kiểm tra hình dạng payload của sự kiện `guardian_digest_due` — đúng bộ kiểm tra consumer phía API trước đây vẫn áp trước khi gọi handler: đủ năm trường chuỗi bắt buộc và `kind` thuộc
  * {weekly, daily}; thiếu/sai thì sự kiện bị bỏ qua lặng lẽ.
  */
 function isDigestDuePayload(payload: unknown): payload is GuardianDigestDuePayload {
@@ -27,11 +25,7 @@ function isDigestDuePayload(payload: unknown): payload is GuardianDigestDuePaylo
 }
 
 /**
- * Kiểm tra hình dạng payload của sự kiện `guardian_overdue_alert` —
- * đúng bộ kiểm tra consumer phía API trước đây: bốn trường chuỗi
- * định danh bắt buộc (guardianUserId, studentUserId, digestId,
- * cmId); các trường nội dung còn lại do handler dùng theo payload
- * đã chốt của lượt quét.
+ * Kiểm tra hình dạng payload của sự kiện `guardian_overdue_alert` — đúng bộ kiểm tra consumer phía API trước đây: bốn trường chuỗi định danh bắt buộc (guardianUserId, studentUserId, digestId, cmId); các trường nội dung còn lại do handler dùng theo payload đã chốt của lượt quét.
  */
 function isOverdueAlertPayload(payload: unknown): payload is GuardianOverdueAlertPayload {
   if (typeof payload !== 'object' || payload === null) return false;
@@ -80,12 +74,7 @@ export class GuardianDigestEventsProcessor extends WorkerHost {
   }
 
   /**
-   * Xử lý một job sự kiện digest: trả `{ handled: true }` khi sự
-   * kiện thuộc hai loại digest và payload đúng hình dạng (handler
-   * đã chạy — kết quả nghiệp vụ nằm ở vết lượt); các trường hợp còn
-   * lại (payload sai hình dạng, handler ném lỗi, loại lạ lạc vào
-   * hàng đợi) đều hoàn thành lặng lẽ với `handled: false` theo ngữ
-   * nghĩa nuốt lỗi của consumer phía API trước đây.
+   * Xử lý một job sự kiện digest: trả `{ handled: true }` khi sự kiện thuộc hai loại digest và payload đúng hình dạng (handler đã chạy — kết quả nghiệp vụ nằm ở vết lượt); các trường hợp còn lại (payload sai hình dạng, handler ném lỗi, loại lạ lạc vào hàng đợi) đều hoàn thành lặng lẽ với `handled: false` theo ngữ nghĩa nuốt lỗi của consumer phía API trước đây.
    */
   async process(job: Job<OutboxEventJobData>): Promise<{ handled: boolean }> {
     return this.jobRunner.runForJob(job.data, async () => {

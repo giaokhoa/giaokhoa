@@ -12,48 +12,19 @@ import { ControlPlaneConnection } from '../../../src/modules/control-plane/contr
 import { tenantAls } from '../../../src/modules/tenants/tenant-als';
 
 /**
- * Ca tích hợp của KHUNG ĐỊNH TUYẾN KẾT NỐI THEO TRUNG TÂM (issue
- * #581): bộ phân giải đích đọc sổ đăng ký thật, trình quản lý pool
- * theo database và handle định tuyến mà nhà cung cấp kết nối của
- * API phơi cho mọi điểm inject.
+ * Ca tích hợp của KHUNG ĐỊNH TUYẾN KẾT NỐI THEO TRUNG TÂM (issue #581): bộ phân giải đích đọc sổ đăng ký thật, trình quản lý pool theo database và handle định tuyến mà nhà cung cấp kết nối của API phơi cho mọi điểm inject.
  *
- * Môi trường của ca tự cấp phát trên cùng cụm với database nghiệp
- * vụ test, toàn bộ bằng TÊN MỚI của riêng đợt này: một database
- * control plane (`giaokhoa_test_cp_581`) với role riêng, HAI database
- * kho riêng (`giaokhoa_test_centre_a_581`, `giaokhoa_test_centre_b_581`) —
- * mỗi kho có ĐÚNG MỘT role ứng dụng riêng, CONNECT của PUBLIC bị
- * thu hồi và chỉ cấp lại cho role của kho đó, baseline nghiệp vụ
- * được áp vào từng kho bằng chính role chủ kho như đường triển
- * khai thật. Hai dòng đăng ký kho riêng trong sổ trỏ bí mật qua
- * biến môi trường mà chuỗi kết nối của chúng cố ý trỏ về database
- * mặc định `postgres` — đích cuối phải do SỔ chốt (databaseName),
- * không do chuỗi bí mật. Dòng đăng ký thứ ba giữ Trang chính ở chế
- * độ kho chung, trỏ về chính database nghiệp vụ test.
+ * Môi trường của ca tự cấp phát trên cùng cụm với database nghiệp vụ test, toàn bộ bằng TÊN MỚI của riêng đợt này: một database control plane (`giaokhoa_test_cp_581`) với role riêng, HAI database kho riêng (`giaokhoa_test_centre_a_581`, `giaokhoa_test_centre_b_581`) — mỗi kho có ĐÚNG MỘT role ứng dụng riêng, CONNECT của PUBLIC bị thu hồi và chỉ cấp lại cho role của kho đó, baseline nghiệp vụ được áp vào từng kho bằng chính role chủ kho như đường triển khai thật. Hai dòng đăng ký kho riêng trong sổ trỏ bí mật qua biến môi trường mà chuỗi kết nối của chúng cố ý trỏ về database mặc định `postgres` — đích cuối phải do SỔ chốt (databaseName), không do chuỗi bí mật. Dòng đăng ký thứ ba giữ Trang chính ở chế độ kho chung, trỏ về chính database nghiệp vụ test.
  *
- * Các ca khoá đúng năm tiêu chí nghiệm thu của issue: cùng một
- * thao tác nghiệp vụ dưới ngữ cảnh hai trung tâm ghi/đọc ở hai kho
- * khác nhau (kiểm chứng trực tiếp trong từng kho); kết nối vào kho
- * của trung tâm dùng đúng role của kho đó, role của kho kia bị từ
- * chối ngay ở bước mở kết nối; pool của kho không còn traffic bị
- * đóng và tổng kết nối không vượt trần cấu hình; trung tâm ở kho
- * chung giữ nguyên hành vi hiện tại (đúng handle kho chung); đệm
- * phân giải mất hiệu lực ngay khi sổ đổi và có sự kiện phát ra.
+ * Các ca khoá đúng năm tiêu chí nghiệm thu của issue: cùng một thao tác nghiệp vụ dưới ngữ cảnh hai trung tâm ghi/đọc ở hai kho khác nhau (kiểm chứng trực tiếp trong từng kho); kết nối vào kho của trung tâm dùng đúng role của kho đó, role của kho kia bị từ chối ngay ở bước mở kết nối; pool của kho không còn traffic bị đóng và tổng kết nối không vượt trần cấu hình; trung tâm ở kho chung giữ nguyên hành vi hiện tại (đúng handle kho chung); đệm phân giải mất hiệu lực ngay khi sổ đổi và có sự kiện phát ra.
  *
- * Vòng sửa của PR (theo phán quyết điều phối trên PR) thêm hai ca
- * hồi quy cho hai khuyết tật định tuyến đã được phân xử xác nhận:
+ * Vòng sửa của PR (theo phán quyết điều phối trên PR) thêm hai ca hồi quy cho hai khuyết tật định tuyến đã được phân xử xác nhận:
  * (1) trung tâm kho riêng ĐÃ chuẩn bị mà pool bị đóng vì nhàn rỗi
- * thì truy vấn qua handle định tuyến trong ngữ cảnh còn mang slug
- * phải bị từ chối (fail-closed), không được rơi im lặng về kho
- * chung — ca dựng đúng hình: chuẩn bị, ép pool đóng, rồi vẫn giữ
- * ngữ cảnh cũ mà truy vấn/ghi; (2) sổ đổi role/bí mật của một kho
- * SAU khi pool đã tạo thì lần lấy handle kế tiếp phải kết nối
- * bằng role mới — ca cần thêm một role thứ hai của kho A
+ * thì truy vấn qua handle định tuyến trong ngữ cảnh còn mang slug phải bị từ chối (fail-closed), không được rơi im lặng về kho chung — ca dựng đúng hình: chuẩn bị, ép pool đóng, rồi vẫn giữ ngữ cảnh cũ mà truy vấn/ghi; (2) sổ đổi role/bí mật của một kho SAU khi pool đã tạo thì lần lấy handle kế tiếp phải kết nối bằng role mới — ca cần thêm một role thứ hai của kho A
  * (`giaokhoa_centre_a2_581_app`, có CONNECT vào kho A như một role của
  * kho thật được cấp phát) để làm đích đổi sổ.
  *
- * Shim `uuidv7()` chỉ áp khi server PostgreSQL dưới 18 (môi trường
- * chạy local bằng PG16): PG18 — bản ở CI và production — có sẵn
- * hàm này, shim sẽ che mất hàm gốc nên tuyệt đối không áp ở đó.
+ * Shim `uuidv7()` chỉ áp khi server PostgreSQL dưới 18 (môi trường chạy local bằng PG16): PG18 — bản ở CI và production — có sẵn hàm này, shim sẽ che mất hàm gốc nên tuyệt đối không áp ở đó.
  */
 const CP_DATABASE = 'giaokhoa_test_cp_581';
 const CP_ROLE = 'giaokhoa_cp_test_581';
@@ -171,10 +142,7 @@ describe('Khung định tuyến kết nối theo trung tâm (integration)', () =
     businessDatabase = decodeURIComponent(businessUrl.pathname.replace(/^\//, ''));
     businessRole = decodeURIComponent(businessUrl.username);
 
-    // Cấp phát control plane + hai kho riêng trên cụm test, đúng
-    // các bước script cấp phát làm ở môi trường triển khai: role
-    // riêng cho từng kho, kho thuộc role của nó, CONNECT của
-    // PUBLIC bị thu hồi và chỉ cấp lại cho đúng role đó.
+    // Cấp phát control plane + hai kho riêng trên cụm test, đúng các bước script cấp phát làm ở môi trường triển khai: role riêng cho từng kho, kho thuộc role của nó, CONNECT của PUBLIC bị thu hồi và chỉ cấp lại cho đúng role đó.
     await withClient(clusterUrl('postgres'), async (admin) => {
       for (const database of [CP_DATABASE, CENTRE_A_DATABASE, CENTRE_B_DATABASE]) {
         await admin.query(`DROP DATABASE IF EXISTS ${quoted(database)} WITH (FORCE)`);

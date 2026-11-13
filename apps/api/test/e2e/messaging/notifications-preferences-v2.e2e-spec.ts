@@ -8,27 +8,16 @@ import { adminToken, assignRole, createTestApp, createUserViaApi, http, login, r
  *
  * Tiêu chí theo hồ sơ rà soát + chính sách đã chốt trên #174:
  *  - GET /messages/preferences trả MỘT dòng cho mỗi provider, mang
- *    nhãn + mô tả vi/en từ registry ở API (không khoá thô), phân loại
- *    3 nhóm, nhãn theo vai cho loại chỉ GV nhận, cờ bắt buộc của P2 —
- *    và KHÔNG có bề mặt push hay trục loggedin/loggedoff nào.
+ *    nhãn + mô tả vi/en từ registry ở API (không khoá thô), phân loại 3 nhóm, nhãn theo vai cho loại chỉ GV nhận, cờ bắt buộc của P2 — và KHÔNG có bề mặt push hay trục loggedin/loggedoff nào.
  *  - Đổi tuỳ chọn có hiệu lực ngay ở lần phát kế tiếp (kiểm qua
- *    POST /notifications/send — điểm phát chuẩn của admin — và đọc
- *    trường channels của NotifyResult + số thông báo đã lưu).
+ *    POST /notifications/send — điểm phát chuẩn của admin — và đọc trường channels của NotifyResult + số thông báo đã lưu).
  *  - Tắt email của grade_updated vẫn giữ popup hoạt động độc lập.
  *  - Loại bắt buộc (P2): enrol_expiry_warning + admin_announcement
- *    không tắt được popup (400) nhưng email vẫn tắt được tuyệt đối,
- *    và lần phát vẫn giao popup.
+ *    không tắt được popup (400) nhưng email vẫn tắt được tuyệt đối, và lần phát vẫn giao popup.
  *  - Dữ liệu tuỳ chọn CŨ (khoá provider × kênh × trạng thái) được suy
- *    về giá trị tương đương ở hậu trường: hàng cũ giữ nguyên không
- *    bị ghi đè, khoá v2 khi đã đặt thì thắng hàng cũ.
+ *    về giá trị tương đương ở hậu trường: hàng cũ giữ nguyên không bị ghi đè, khoá v2 khi đã đặt thì thắng hàng cũ.
  *  - Phân chia theo vai + context (việc nối tiếp của issue #288):
- *    GET chỉ trả provider thuộc AUDIENCE của user — registry ở API
- *    là nguồn sự thật, audience chốt bằng truy vết điểm phát notify()
- *    thật. Giáo viên thuần không thấy loại chỉ học sinh nhận (báo
- *    điểm là ca bị bắt tại trận) hay loại của phụ huynh; người hai
- *    vai dạy + học thấy cả phía học sinh; nhân sự có liên kết giám
- *    hộ hiệu lực thấy thêm loại phụ huynh; site admin đủ 20. PUT
- *    ngoài audience bị server từ chối 403 — không chỉ giấu giao diện.
+ *    GET chỉ trả provider thuộc AUDIENCE của user — registry ở API là nguồn sự thật, audience chốt bằng truy vết điểm phát notify() thật. Giáo viên thuần không thấy loại chỉ học sinh nhận (báo điểm là ca bị bắt tại trận) hay loại của phụ huynh; người hai vai dạy + học thấy cả phía học sinh; nhân sự có liên kết giám hộ hiệu lực thấy thêm loại phụ huynh; site admin đủ 20. PUT ngoài audience bị server từ chối 403 — không chỉ giấu giao diện.
  */
 describe('Tuỳ chọn thông báo v2 (NB-2, issue #174)', () => {
   let app: INestApplication;
@@ -54,20 +43,16 @@ describe('Tuỳ chọn thông báo v2 (NB-2, issue #174)', () => {
   async function freshUser(): Promise<{ id: string; token: string }> {
     const user = await createUserViaApi(app, admin);
     const token = (await login(app, user.username, STRONG_PASSWORD)).accessToken;
-    // NB-7: bề mặt tuỳ chọn theo loại chỉ còn cho nhân sự — fixture của
-    // suite này dùng vai teacher (gán ở context hệ thống) để kiểm mô
-    // hình v2 như trước; phần chặn học sinh có spec riêng
+    // NB-7: bề mặt tuỳ chọn theo loại chỉ còn cho nhân sự — fixture của suite này dùng vai teacher (gán ở context hệ thống) để kiểm mô hình v2 như trước; phần chặn học sinh có spec riêng
     // (notifications-admin-policy).
     await assignRole(app, admin, user.id, await roleIdByShortname(app, admin, 'teacher'), await systemContextId(app, admin));
     return { id: user.id, token };
   }
 
   /**
-   * Người dùng HAI VAI dạy + học: teacher và student cùng gán ở
-   * context hệ thống → có cả context nhân sự lẫn context học sinh
+   * Người dùng HAI VAI dạy + học: teacher và student cùng gán ở context hệ thống → có cả context nhân sự lẫn context học sinh
    * (nhánh gán-vai của phép xác định context học sinh). Các ca cơ
-   * chế tuỳ chọn đụng loại phía học sinh (grade_updated…) dùng
-   * fixture này; ca nguyên mẫu giáo viên thuần dùng freshUser().
+   * chế tuỳ chọn đụng loại phía học sinh (grade_updated…) dùng fixture này; ca nguyên mẫu giáo viên thuần dùng freshUser().
    */
   async function freshDualUser(): Promise<{ id: string; token: string }> {
     const user = await createUserViaApi(app, admin);
@@ -79,10 +64,7 @@ describe('Tuỳ chọn thông báo v2 (NB-2, issue #174)', () => {
   }
 
   /**
-   * Nhân sự kiêm PHỤ HUYNH: vai teacher như freshUser() cộng một
-   * liên kết giám hộ đang hiệu lực (chèn thẳng hàng guardian_links
-   * với tenant nền tảng đã seed — cùng kỷ luật chèn dữ liệu fixture
-   * qua pg của suite này).
+   * Nhân sự kiêm PHỤ HUYNH: vai teacher như freshUser() cộng một liên kết giám hộ đang hiệu lực (chèn thẳng hàng guardian_links với tenant nền tảng đã seed — cùng kỷ luật chèn dữ liệu fixture qua pg của suite này).
    */
   async function freshGuardianStaffUser(): Promise<{ id: string; token: string }> {
     const { id, token } = await freshUser();

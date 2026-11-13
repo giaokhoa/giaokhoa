@@ -4,11 +4,7 @@ import { TEACHING_ROLE_ARCHETYPES } from './plan-limits';
 import type { EnrolDatabase, PlatformScopeRunner } from './types';
 
 /**
- * Nguồn gán vai do ghi danh cấp (cột `component` của
- * `role_assignments` — xem `ENROL_ASSIGNMENT_COMPONENT` trong
- * `role-assignment.ts`): các dòng gán mang nguồn này bị loại khỏi
- * kiểm (a) theo định nghĩa đã chốt. Hằng số được lặp lại tại đây
- * thay vì import để tránh vòng phụ thuộc module với lõi gán vai
+ * Nguồn gán vai do ghi danh cấp (cột `component` của `role_assignments` — xem `ENROL_ASSIGNMENT_COMPONENT` trong `role-assignment.ts`): các dòng gán mang nguồn này bị loại khỏi kiểm (a) theo định nghĩa đã chốt. Hằng số được lặp lại tại đây thay vì import để tránh vòng phụ thuộc module với lõi gán vai
  * (lõi gán vai tiêm lõi này).
  */
 const ENROL_ASSIGNMENT_COMPONENT_VALUE = 'enrol';

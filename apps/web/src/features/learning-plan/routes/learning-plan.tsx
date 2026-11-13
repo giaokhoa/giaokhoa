@@ -15,15 +15,11 @@ import { useLearningPlanDetail, useRequestCompetencyReview, useRequestPlanReview
 import '#config/i18n';
 
 /**
- * Kế hoạch học tập: học viên thấy các kế hoạch của mình, mức thành thạo
- * của từng competency (do thang của framework quyết định, không bao giờ suy ra từ điểm)
- * và trạng thái review, và có thể yêu cầu review một competency — hành động
- * khởi đầu quy trình của người review.
+ * Kế hoạch học tập: học viên thấy các kế hoạch của mình, mức thành thạo của từng competency (do thang của framework quyết định, không bao giờ suy ra từ điểm) và trạng thái review, và có thể yêu cầu review một competency — hành động khởi đầu quy trình của người review.
  *
  * Dữ liệu phần người học đọc qua tầng TanStack Query
  * (`lib/learning-plan-data.ts`): danh sách kế hoạch theo khoá của
- * người dùng trong phiên, chi tiết theo khoá của kế hoạch đang chọn
- * xem; gửi yêu cầu duyệt qua đột biến làm mới đúng bề mặt liên quan.
+ * người dùng trong phiên, chi tiết theo khoá của kế hoạch đang chọn xem; gửi yêu cầu duyệt qua đột biến làm mới đúng bề mặt liên quan.
  */
 export function LearningPlanPage() {
   const { t } = useTranslation('app');

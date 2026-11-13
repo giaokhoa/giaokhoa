@@ -1,16 +1,10 @@
 # @giaokhoa/web — README nghiệp vụ
 
-> File này ghi các **quyết định nghiệp vụ quan trọng và còn đang hiệu lực** của package.
-> Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub.
-> Quyết định đã bị đánh dấu "ĐÃ THAY THẾ" thì không ghi ở đây như còn hiệu lực.
+> File này ghi các **quyết định nghiệp vụ quan trọng và còn đang hiệu lực** của package. Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub. Quyết định đã bị đánh dấu "ĐÃ THAY THẾ" thì không ghi ở đây như còn hiệu lực.
 
 ## Package phụ trách nghiệp vụ gì
 
-`apps/web` là toàn bộ bề mặt người dùng nhìn thấy: trang public, app/dashboard cho giáo
-viên, học sinh, phụ huynh và admin trung tâm/nền tảng. Web **trình bày và dẫn luồng**
-theo đúng nghiệp vụ sư phạm Việt Nam (tạo khoá theo khung CT GDPT 2018, ngân hàng câu
-hỏi/đề/ma trận, làm bài, sổ điểm, tin nhắn, thông báo) — mọi gác quyền và quy tắc bất
-biến nằm ở `apps/api`; web không tự "gác" nghiệp vụ bằng cách giấu nút/mục.
+`apps/web` là toàn bộ bề mặt người dùng nhìn thấy: trang public, app/dashboard cho giáo viên, học sinh, phụ huynh và admin trung tâm/nền tảng. Web **trình bày và dẫn luồng** theo đúng nghiệp vụ sư phạm Việt Nam (tạo khoá theo khung CT GDPT 2018, ngân hàng câu hỏi/đề/ma trận, làm bài, sổ điểm, tin nhắn, thông báo) — mọi gác quyền và quy tắc bất biến nằm ở `apps/api`; web không tự "gác" nghiệp vụ bằng cách giấu nút/mục.
 
 ## Quyết định nghiệp vụ còn hiệu lực
 
@@ -29,29 +23,14 @@ biến nằm ở `apps/api`; web không tự "gác" nghiệp vụ bằng cách g
 
 ## Ranh giới — package này KHÔNG làm gì
 
-- Không chứa component shadcn/ui: toàn bộ lớp shadcn sống ở `packages/ui`; web chỉ dùng
-  qua `@giaokhoa/ui/...`. Cấm sao chép component của package vào `src/components/` để sửa
-  riêng (sẽ bị ghi đè mất ở lần đồng bộ shadcn kế tiếp). Component tự viết theo nghiệp
-  vụ nằm ở `apps/web/src/components/`.
+- Không chứa component shadcn/ui: toàn bộ lớp shadcn sống ở `packages/ui`; web chỉ dùng qua `@giaokhoa/ui/...`. Cấm sao chép component của package vào `src/components/` để sửa riêng (sẽ bị ghi đè mất ở lần đồng bộ shadcn kế tiếp). Component tự viết theo nghiệp vụ nằm ở `apps/web/src/components/`.
 - Không chứa trình soạn thảo rich-text: dùng `packages/editor`.
-- Không tự chế vỏ collapse/section riêng cho từng trang: dùng component dùng chung
-  của dự án (vỏ thống nhất: trigger full-width, chevron, hover, tiêu đề nhất quán) —
-  mỗi lát tự chế một kiểu vỏ là lỗi đã được ghi nhận (25/10/2026, trang /questions).
-- Không chứa quy tắc nghiệp vụ: điểm số, quyền, trạng thái đều do API quyết; web chỉ
-  hiển thị theo dữ liệu API trả.
+- Không tự chế vỏ collapse/section riêng cho từng trang: dùng component dùng chung của dự án (vỏ thống nhất: trigger full-width, chevron, hover, tiêu đề nhất quán) — mỗi lát tự chế một kiểu vỏ là lỗi đã được ghi nhận (25/10/2026, trang /questions).
+- Không chứa quy tắc nghiệp vụ: điểm số, quyền, trạng thái đều do API quyết; web chỉ hiển thị theo dữ liệu API trả.
 
 ## Kỹ thuật tối thiểu
 
-- React + React Router framework mode + TanStack Query. Mọi trang chỉ dùng dữ liệu
-  thật qua `src/lib/api.ts`; query key tập trung ở `src/lib/query-keys.ts`.
-- Route đã đăng nhập tải dữ liệu phía client bằng cookie phiên Better Auth
-  (client gửi kèm credentials cùng nguồn — xem `src/lib/api.ts` và
-  `lib/auth-client.ts`); phía server, `lib/server-api.ts` đọc cùng cookie
-  đó cho loader/SSR. Không còn token Bearer ở localStorage (đã chuyển sang
-  cookie từ PR #257).
-- Dev: `pnpm dev` (Vite proxy `/api`, `/socket.io`, `/mcp` và
-  OAuth metadata về backend cổng 3000).
-- Production: `@react-router/serve` chỉ phục vụ SSR + asset trên
-  cổng nội bộ 3000; service Caddy ở `compose.yaml` làm reverse proxy
-  và gắn CSP cho HTML theo `Caddyfile`. Không prerender trang dựa
-  cookie; `/` và `/login` đều SSR theo request.
+- React + React Router framework mode + TanStack Query. Mọi trang chỉ dùng dữ liệu thật qua `src/lib/api.ts`; query key tập trung ở `src/lib/query-keys.ts`.
+- Route đã đăng nhập tải dữ liệu phía client bằng cookie phiên Better Auth (client gửi kèm credentials cùng nguồn — xem `src/lib/api.ts` và `lib/auth-client.ts`); phía server, `lib/server-api.ts` đọc cùng cookie đó cho loader/SSR. Không còn token Bearer ở localStorage (đã chuyển sang cookie từ PR #257).
+- Dev: `pnpm dev` (Vite proxy `/api`, `/socket.io`, `/mcp` và OAuth metadata về backend cổng 3000).
+- Production: `@react-router/serve` chỉ phục vụ SSR + asset trên cổng nội bộ 3000; service Caddy ở `compose.yaml` làm reverse proxy và gắn CSP cho HTML theo `Caddyfile`. Không prerender trang dựa cookie; `/` và `/login` đều SSR theo request.

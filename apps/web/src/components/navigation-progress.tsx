@@ -2,11 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigation } from 'react-router';
 
 /**
- * Trạng thái chờ điều hướng toàn cục (F-14, rà soát #133): khi router
- * đang tải trang đích (`navigation.state === 'loading'` — kể từ khi
- * các trang có clientLoader, pha này là lúc dữ liệu trang đích đang
- * được nạp), hiện chỉ báo sau một khoảng trễ ngắn 150ms để điều hướng
- * nhanh không gây nhấp nháy. Tắt ngay khi điều hướng xong.
+ * Trạng thái chờ điều hướng toàn cục (F-14, rà soát #133): khi router đang tải trang đích (`navigation.state === 'loading'` — kể từ khi các trang có clientLoader, pha này là lúc dữ liệu trang đích đang được nạp), hiện chỉ báo sau một khoảng trễ ngắn 150ms để điều hướng nhanh không gây nhấp nháy. Tắt ngay khi điều hướng xong.
  */
 export function useNavigationPending(): boolean {
   const navigation = useNavigation();

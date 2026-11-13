@@ -1,13 +1,5 @@
 /**
- * Panel hàng chờ BỘ HỒ SƠ trong section đề chung (khu vực Ngân hàng
- * hệ thống): bề mặt đọc lịch sử của các bộ hồ sơ đang chờ của bank
- * đang chọn — người duyệt mở/tải bản đặc tả đã chụp ngay tại hàng
- * chờ; thao tác duyệt đi trên đóng góp đã chuyển đổi từ chính bộ hồ
- * sơ (trang truyền bản đồ nối hồ sơ → đóng góp xuống). Dữ liệu hàng
- * chờ do trang nạp và lọc; panel giữ state bản đặc tả đang mở, tự
- * nạp đặc tả qua query options của lib/questions-data và tải file
- * đặc tả xlsx qua apiFetch (thao tác tải file có sẵn của bề mặt này).
- * Làm mới sau duyệt qua các hàm refresh của trang truyền xuống.
+ * Panel hàng chờ BỘ HỒ SƠ trong section đề chung (khu vực Ngân hàng hệ thống): bề mặt đọc lịch sử của các bộ hồ sơ đang chờ của bank đang chọn — người duyệt mở/tải bản đặc tả đã chụp ngay tại hàng chờ; thao tác duyệt đi trên đóng góp đã chuyển đổi từ chính bộ hồ sơ (trang truyền bản đồ nối hồ sơ → đóng góp xuống). Dữ liệu hàng chờ do trang nạp và lọc; panel giữ state bản đặc tả đang mở, tự nạp đặc tả qua query options của lib/questions-data và tải file đặc tả xlsx qua apiFetch (thao tác tải file có sẵn của bề mặt này). Làm mới sau duyệt qua các hàm refresh của trang truyền xuống.
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -59,13 +51,7 @@ export function DossierQueuePanel({
   /**
    * Một mốc duyệt tại hàng chờ BỘ HỒ SƠ: hồ sơ là bề mặt CHỈ-ĐỌC
    * (lịch sử) — thao tác duyệt thật đi trên ĐÓNG GÓP đã chuyển đổi từ
-   * chính hồ sơ đó, nối bằng `sourceDossierId` (đợt chuyển đổi hồ sơ
-   * treo của Q4); cấp do trạng thái đóng góp quyết định ở phía
-   * server (issue #345, giai đoạn 2): `pending` → cấp 1,
-   * `pending_board` → cấp 2 BGH, cùng gọi một động từ
-   * `approve`/`reject`; từ chối bắt buộc lý do. Hồ sơ chưa
-   * có đóng góp liên kết (chưa qua đợt chuyển đổi) thì không còn thao
-   * tác ghi nào — đường ghi hồ sơ đã đóng (API trả 410).
+   * chính hồ sơ đó, nối bằng `sourceDossierId` (đợt chuyển đổi hồ sơ treo của Q4); cấp do trạng thái đóng góp quyết định ở phía server (issue #345, giai đoạn 2): `pending` → cấp 1, `pending_board` → cấp 2 BGH, cùng gọi một động từ `approve`/`reject`; từ chối bắt buộc lý do. Hồ sơ chưa có đóng góp liên kết (chưa qua đợt chuyển đổi) thì không còn thao tác ghi nào — đường ghi hồ sơ đã đóng (API trả 410).
    */
   async function reviewDossier(dossierId: string, action: 'approve' | 'reject') {
     const contribution = contributionBySourceDossierId.get(dossierId);

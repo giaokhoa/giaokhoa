@@ -8,11 +8,7 @@ import { PermissionsProvider } from '#lib/permissions';
 import { LearningPlanPage } from './learning-plan';
 
 /**
- * Spec khu quản lý competency trong trang kế hoạch học tập: tạo framework
- * phải POST đúng body của `createCompetencyFrameworkSchema` trong
- * contracts (`scale: { values, proficient }`), và hàng đợi duyệt phải gọi
- * POST /plans/:id/approve cho plan đang ở trạng thái đang duyệt (3) sau
- * khi chọn người dùng. Phần người học xem plan của mình giữ nguyên.
+ * Spec khu quản lý competency trong trang kế hoạch học tập: tạo framework phải POST đúng body của `createCompetencyFrameworkSchema` trong contracts (`scale: { values, proficient }`), và hàng đợi duyệt phải gọi POST /plans/:id/approve cho plan đang ở trạng thái đang duyệt (3) sau khi chọn người dùng. Phần người học xem plan của mình giữ nguyên.
  */
 const ADMIN_ID = '01900000-0000-7000-8000-0000000000a1';
 const LEARNER_ID = '01900000-0000-7000-8000-000000000007';

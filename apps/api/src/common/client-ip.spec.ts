@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { clientIpOf, normalizeIpAddress, TRUSTED_PROXY_HOPS } from './client-ip';
 
 /**
- * Kiểm thử đơn vị cho chuẩn hoá địa chỉ IP khách: tiền tố `::ffff:`
- * chỉ được cắt khi phần còn lại là IPv4 thật; ngoài ra mọi giá trị
- * giữ nguyên để không làm sai lệch IP đã ghi.
+ * Kiểm thử đơn vị cho chuẩn hoá địa chỉ IP khách: tiền tố `::ffff:` chỉ được cắt khi phần còn lại là IPv4 thật; ngoài ra mọi giá trị giữ nguyên để không làm sai lệch IP đã ghi.
  */
 describe('Hàm normalizeIpAddress', () => {
   it('cắt tiền tố ::ffff: khi phần còn lại là địa chỉ IPv4 hợp lệ', () => {

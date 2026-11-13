@@ -33,18 +33,9 @@ import { QUIZ_CAPABILITIES } from './quiz-shared.service';
 import type { PinRow } from './quiz.service';
 
 /**
- * Cụm ghim đề và vòng đời lần ghim của QuizService (cụm 1 của issue
- * #295): tạo/đọc/sửa/xoá lần ghim, cập nhật version tường minh +
- * chấm lại của issue #254 (giữ trọn trong cụm này, không tách riêng),
- * ghi đè theo người học, phản hồi theo ngưỡng điểm, công bố/huỷ
- * công bố kết quả, và tóm tắt pin. Nhóm phản hồi theo ngưỡng điểm
- * nằm ở cuối file gốc nhưng thuộc cụm này theo bản đồ đặc tả.
+ * Cụm ghim đề và vòng đời lần ghim của QuizService (cụm 1 của issue #295): tạo/đọc/sửa/xoá lần ghim, cập nhật version tường minh + chấm lại của issue #254 (giữ trọn trong cụm này, không tách riêng), ghi đè theo người học, phản hồi theo ngưỡng điểm, công bố/huỷ công bố kết quả, và tóm tắt pin. Nhóm phản hồi theo ngưỡng điểm nằm ở cuối file gốc nhưng thuộc cụm này theo bản đồ đặc tả.
  *
- * Cụm này gọi xuống tầng thấp dùng chung (`QuizSharedService`) và gọi
- * sang cụm lượt làm đúng một phép (`pushGrade` của `QuizAttemptsService`
- * trong chấm lại) — ngoài hai đường đó, cụm không phụ thuộc cụm nào.
- * Các method vốn `private` nhưng cụm khác gọi đã nới thành public nội
- * bộ module; bề mặt công khai ra ngoài module vẫn qua facade.
+ * Cụm này gọi xuống tầng thấp dùng chung (`QuizSharedService`) và gọi sang cụm lượt làm đúng một phép (`pushGrade` của `QuizAttemptsService` trong chấm lại) — ngoài hai đường đó, cụm không phụ thuộc cụm nào. Các method vốn `private` nhưng cụm khác gọi đã nới thành public nội bộ module; bề mặt công khai ra ngoài module vẫn qua facade.
  */
 
 export class QuizPinsService {
@@ -112,15 +103,7 @@ export class QuizPinsService {
   }
 
   /**
-   * Cổng chế độ tham chiếu version của lần ghim (issue #254): chế độ
-   * trôi `float_latest_ready` CHỈ hợp lệ cho lần ghim luyện tập — cụ
-   * thể hoá theo preset của pin: preset `regular` (thường xuyên/luyện
-   * tập) mới được trôi; preset kiểm tra chính thức (`periodic`, `mock`)
-   * hoặc pin không theo preset nào đều bị chặn. Lý do: kiểm tra chính
-   * thức đòi mọi học sinh trong cùng cửa sổ làm đúng cùng một version
-   * câu hỏi, còn luyện tập cần học sinh luôn gặp bản câu hỏi mới nhất
-   * đã duyệt. Vi phạm ném `exam.version_mode_not_allowed` — chặn ở API,
-   * không dựa vào việc ẩn tuỳ chọn ở giao diện.
+   * Cổng chế độ tham chiếu version của lần ghim (issue #254): chế độ trôi `float_latest_ready` CHỈ hợp lệ cho lần ghim luyện tập — cụ thể hoá theo preset của pin: preset `regular` (thường xuyên/luyện tập) mới được trôi; preset kiểm tra chính thức (`periodic`, `mock`) hoặc pin không theo preset nào đều bị chặn. Lý do: kiểm tra chính thức đòi mọi học sinh trong cùng cửa sổ làm đúng cùng một version câu hỏi, còn luyện tập cần học sinh luôn gặp bản câu hỏi mới nhất đã duyệt. Vi phạm ném `exam.version_mode_not_allowed` — chặn ở API, không dựa vào việc ẩn tuỳ chọn ở giao diện.
    */
   private assertVersionModeAllowed(preset: string | null | undefined, versionMode: string | null | undefined): void {
     if (versionMode === 'float_latest_ready' && preset !== 'regular') {

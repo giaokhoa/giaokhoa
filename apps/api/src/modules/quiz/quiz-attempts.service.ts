@@ -43,12 +43,7 @@ import type {
 } from './quiz.service';
 
 /**
- * Bốn cửa sổ xem lại của Moodle (mod/quiz display options): mỗi khía
- * cạnh xem lại là một bitmask trên bốn cửa sổ này. Hằng số theo mã
- * nguồn mod/quiz: DURING = 0x10000, IMMEDIATELY_AFTER = 0x01000,
- * LATER_WHILE_OPEN = 0x00100, AFTER_CLOSE = 0x00010. Cửa sổ "ngay sau
- * nộp" kéo dài 2 phút kể từ lúc lượt được chốt (khoảng ngắn theo
- * Moodle).
+ * Bốn cửa sổ xem lại của Moodle (mod/quiz display options): mỗi khía cạnh xem lại là một bitmask trên bốn cửa sổ này. Hằng số theo mã nguồn mod/quiz: DURING = 0x10000, IMMEDIATELY_AFTER = 0x01000, LATER_WHILE_OPEN = 0x00100, AFTER_CLOSE = 0x00010. Cửa sổ "ngay sau nộp" kéo dài 2 phút kể từ lúc lượt được chốt (khoảng ngắn theo Moodle).
  */
 export const REVIEW_WINDOW = {
   during: 0x10000,
@@ -61,22 +56,12 @@ export const REVIEW_WINDOW = {
 export const REVIEW_IMMEDIATELY_AFTER_MS = 2 * 60 * 1000;
 
 /**
- * Cụm lượt làm, chấm và kết quả của QuizService (cụm 4 của issue
- * #295): thiết lập hiệu lực, bắt đầu lượt, nộp bài, chấm tay, hàng
- * đợi chấm theo câu, kết quả/thống kê, và sự kiện lượt làm. Cụm này
- * gọi xuống tầng thấp dùng chung (`QuizSharedService`); hai method
- * vốn `private` nhưng cụm khác gọi (`pushGrade` cho chấm lại của cụm
- * ghim, `finalizeAttempt` cho lượt giấy của cụm sinh đề) nay để public
- * trong nội bộ module, không phải bề mặt API của module.
+ * Cụm lượt làm, chấm và kết quả của QuizService (cụm 4 của issue #295): thiết lập hiệu lực, bắt đầu lượt, nộp bài, chấm tay, hàng đợi chấm theo câu, kết quả/thống kê, và sự kiện lượt làm. Cụm này gọi xuống tầng thấp dùng chung (`QuizSharedService`); hai method vốn `private` nhưng cụm khác gọi (`pushGrade` cho chấm lại của cụm ghim, `finalizeAttempt` cho lượt giấy của cụm sinh đề) nay để public trong nội bộ module, không phải bề mặt API của module.
  *
- * Hai hằng cửa sổ xem lại (`REVIEW_WINDOW`,
- * `REVIEW_IMMEDIATELY_AFTER_MS`) chuyển về đây cùng nơi dùng thật
+ * Hai hằng cửa sổ xem lại (`REVIEW_WINDOW`, `REVIEW_IMMEDIATELY_AFTER_MS`) chuyển về đây cùng nơi dùng thật
  * (phép tính cửa sổ xem lại), facade re-export lại.
  *
- * Lưu ý duy nhất về log: hai cảnh báo ghi điểm của `pushGrade` trước
- * đây mang tên logger `QuizService`, nay mang tên
- * `QuizAttemptsService` (nơi chứa method thật) — nội dung cảnh báo
- * không đổi.
+ * Lưu ý duy nhất về log: hai cảnh báo ghi điểm của `pushGrade` trước đây mang tên logger `QuizService`, nay mang tên `QuizAttemptsService` (nơi chứa method thật) — nội dung cảnh báo không đổi.
  */
 
 export class QuizAttemptsService {
@@ -104,18 +89,7 @@ export class QuizAttemptsService {
   }
 
   /**
-   * Bộ phân giải cài đặt hiệu lực (Chặng 2, mục B.3 của hồ sơ thiết kế —
-   * đối chiếu cơ chế hợp nhất override của Moodle): hợp nhất THEO TỪNG
-   * TRƯỜNG theo thứ tự override người dùng > override nhóm > cài đặt
-   * của quiz. Nhiều override nhóm: lấy giá trị RỘNG NHẤT cho từng
-   * trường — time_open sớm nhất, time_close muộn nhất, time_limit dài
-   * nhất, attempts lớn nhất; một trường để null trong override nhóm
-   * nghĩa là nhóm đó không giới hạn ở trường đó nên thắng (không giới
-   * hạn là giá trị rộng nhất), 0 ở attempts cũng là không giới hạn.
-   * Mật khẩu KHÔNG hợp nhất từng trường: override người dùng có mật
-   * khẩu thì chỉ mật khẩu đó có hiệu lực; không thì TẬP mật khẩu của
-   * các nhóm áp dụng (nhập đúng một trong các mật khẩu là được); không
-   * nữa thì mật khẩu của quiz.
+   * Bộ phân giải cài đặt hiệu lực (Chặng 2, mục B.3 của hồ sơ thiết kế — đối chiếu cơ chế hợp nhất override của Moodle): hợp nhất THEO TỪNG TRƯỜNG theo thứ tự override người dùng > override nhóm > cài đặt của quiz. Nhiều override nhóm: lấy giá trị RỘNG NHẤT cho từng trường — time_open sớm nhất, time_close muộn nhất, time_limit dài nhất, attempts lớn nhất; một trường để null trong override nhóm nghĩa là nhóm đó không giới hạn ở trường đó nên thắng (không giới hạn là giá trị rộng nhất), 0 ở attempts cũng là không giới hạn. Mật khẩu KHÔNG hợp nhất từng trường: override người dùng có mật khẩu thì chỉ mật khẩu đó có hiệu lực; không thì TẬP mật khẩu của các nhóm áp dụng (nhập đúng một trong các mật khẩu là được); không nữa thì mật khẩu của quiz.
    */
   async resolveEffectiveSettings(quiz: PinRow, userId: string): Promise<EffectiveQuizSettings> {
     const overrides = await this.repo.listOverrides(quiz.id);
@@ -126,8 +100,7 @@ export class QuizAttemptsService {
       groupOverrides = overrides.filter((o) => o.groupId !== null && myGroupIds.has(o.groupId));
     }
     const hasGroups = groupOverrides.length > 0;
-    // Giá trị hợp nhất của nhóm cho một trường ngày giờ: undefined = không có override nhóm nào;
-    // null = có nhóm không giới hạn trường này (thắng); ngược lại lấy mốc rộng nhất.
+    // Giá trị hợp nhất của nhóm cho một trường ngày giờ: undefined = không có override nhóm nào; null = có nhóm không giới hạn trường này (thắng); ngược lại lấy mốc rộng nhất.
     const mergeDate = (pick: (o: ExamPinOverrideRow) => Date | null, widest: 'min' | 'max'): Date | null | undefined => {
       if (!hasGroups) return undefined;
       if (groupOverrides.some((o) => pick(o) === null)) return null;
@@ -182,8 +155,7 @@ export class QuizAttemptsService {
     if (effective.timeOpen && now < effective.timeOpen) return { canAttempt: false, reason: 'not_yet_open', inProgressAttemptId: null, nextAttemptAt: null, passwordRequired: effective.passwordRequired };
     if (effective.timeClose && now > effective.timeClose) return { canAttempt: false, reason: 'closed', inProgressAttemptId: null, nextAttemptAt: null, passwordRequired: effective.passwordRequired };
     if (effective.attemptsAllowed > 0 && mine.length >= effective.attemptsAllowed) return { canAttempt: false, reason: 'no_more_attempts', inProgressAttemptId: null, nextAttemptAt: null, passwordRequired: effective.passwordRequired };
-    // Khoảng chờ giữa hai lượt (delay1/delay2 của quiz cũ) đã bỏ
-    // hẳn khỏi mô hình pin — không còn cổng chờ giữa các lượt.
+    // Khoảng chờ giữa hai lượt (delay1/delay2 của quiz cũ) đã bỏ hẳn khỏi mô hình pin — không còn cổng chờ giữa các lượt.
     if (quiz.lateEntryMinutes !== null && effective.timeOpen
       && now.getTime() > effective.timeOpen.getTime() + quiz.lateEntryMinutes * 60_000) {
       return { canAttempt: false, reason: 'late_entry_closed', inProgressAttemptId: null, nextAttemptAt: null, passwordRequired: effective.passwordRequired };
@@ -194,8 +166,7 @@ export class QuizAttemptsService {
   }
 
   /**
-   * Điểm bài hiện tại của một học sinh theo grade_method của quiz (null
-   * khi chưa có lượt nào chốt điểm).
+   * Điểm bài hiện tại của một học sinh theo grade_method của quiz (null khi chưa có lượt nào chốt điểm).
    */
   async currentGradeForUser(quiz: PinRow, userId: string): Promise<number | null> {
     const finished = (await this.repo.listAttemptsForUser(quiz.id, userId)).filter((a) => a.state === 'finished' && a.sumGrades !== null);
@@ -203,15 +174,10 @@ export class QuizAttemptsService {
   }
 
   /**
-   * Điểm bài hiện tại từ tập lượt ĐÃ KẾT THÚC có sumGrades của một
-   * học sinh, chọn theo grade_method của bài (DL-03, issue #489):
-   * tổng maxMark của các usage trong tập được nạp MỘT lần theo lô
-   * thay vì `getUsage` theo từng lượt như trước, rồi tính qua
-   * `gradeFromTotals`. Đây là đường của phép tính cho MỘT học sinh
+   * Điểm bài hiện tại từ tập lượt ĐÃ KẾT THÚC có sumGrades của một học sinh, chọn theo grade_method của bài (DL-03, issue #489):
+   * tổng maxMark của các usage trong tập được nạp MỘT lần theo lô thay vì `getUsage` theo từng lượt như trước, rồi tính qua `gradeFromTotals`. Đây là đường của phép tính cho MỘT học sinh
    * (`currentGradeForUser`); trang kết quả không gọi hàm này theo
-   * từng học sinh — nó nạp tổng của toàn bộ lượt đã kết thúc của cả
-   * bài trong một lần rồi dùng thẳng `gradeFromTotals` cho từng
-   * học sinh.
+   * từng học sinh — nó nạp tổng của toàn bộ lượt đã kết thúc của cả bài trong một lần rồi dùng thẳng `gradeFromTotals` cho từng học sinh.
    */
   private async gradeFromFinishedAttempts(quiz: PinRow, finished: ExamAttemptRow[]): Promise<number | null> {
     if (!finished.length) return null;
@@ -220,11 +186,7 @@ export class QuizAttemptsService {
   }
 
   /**
-   * Tính điểm bài từ tập lượt ĐÃ KẾT THÚC của một học sinh khi map
-   * tổng maxMark theo usage đã được nạp sẵn: thuần tính trong bộ
-   * nhớ, không phát sinh truy vấn. Thứ tự `finished` quyết định
-   * first/last nên caller phải truyền đúng thứ tự liệt kê của
-   * repository (số lượt tăng dần cho một học sinh).
+   * Tính điểm bài từ tập lượt ĐÃ KẾT THÚC của một học sinh khi map tổng maxMark theo usage đã được nạp sẵn: thuần tính trong bộ nhớ, không phát sinh truy vấn. Thứ tự `finished` quyết định first/last nên caller phải truyền đúng thứ tự liệt kê của repository (số lượt tăng dần cho một học sinh).
    */
   private gradeFromTotals(quiz: PinRow, finished: ExamAttemptRow[], totals: Map<string, number>): number | null {
     const values: number[] = [];
@@ -242,15 +204,9 @@ export class QuizAttemptsService {
   }
 
   /**
-   * Hạng mục điểm của bài đã ở trạng thái ĐÃ CÔNG BỐ hay chưa, hỏi qua
-   * cổng công bố chung của module điểm
+   * Hạng mục điểm của bài đã ở trạng thái ĐÃ CÔNG BỐ hay chưa, hỏi qua cổng công bố chung của module điểm
    * (`GradesService.itemPublicationState`): hạng mục có chính sách
-   * `auto` luôn coi là đã công bố; hạng mục `manual` chỉ được coi là
-   * đã công bố khi vết công bố theo phạm vi hạng mục gần nhất là hành
-   * động công bố. Bài chưa gắn course module, hoặc chưa có hạng mục
-   * điểm (lần ghim đời cũ, trước cơ chế hạng mục), thì không có cổng
-   * công bố nào áp lên được — coi như đã công bố để giữ nguyên hành vi
-   * cũ, phần gác còn lại do mặt nạ xem lại đảm nhiệm.
+   * `auto` luôn coi là đã công bố; hạng mục `manual` chỉ được coi là đã công bố khi vết công bố theo phạm vi hạng mục gần nhất là hành động công bố. Bài chưa gắn course module, hoặc chưa có hạng mục điểm (lần ghim đời cũ, trước cơ chế hạng mục), thì không có cổng công bố nào áp lên được — coi như đã công bố để giữ nguyên hành vi cũ, phần gác còn lại do mặt nạ xem lại đảm nhiệm.
    */
   private async gradeTotalsPublished(quiz: PinRow): Promise<boolean> {
     if (!quiz.cmId) return true;
@@ -260,12 +216,7 @@ export class QuizAttemptsService {
   }
 
   /**
-   * Mặt nạ `reviewMarks` có đang mở cho CHỦ LƯỢT tại cửa sổ xem lại
-   * hiện tại của lượt này không — cùng phép tính với điểm từng câu
-   * trong `buildAttemptView`: cổng `reviewAttempt` phải mở tại cửa sổ
-   * hiện tại trước, rồi bit `reviewMarks` tại đúng cửa sổ đó mới có
-   * hiệu lực. Lượt đang làm dở thì chưa có điểm tổng nào được phép
-   * hiện.
+   * Mặt nạ `reviewMarks` có đang mở cho CHỦ LƯỢT tại cửa sổ xem lại hiện tại của lượt này không — cùng phép tính với điểm từng câu trong `buildAttemptView`: cổng `reviewAttempt` phải mở tại cửa sổ hiện tại trước, rồi bit `reviewMarks` tại đúng cửa sổ đó mới có hiệu lực. Lượt đang làm dở thì chưa có điểm tổng nào được phép hiện.
    */
   private async ownerMarksVisible(quiz: PinRow, row: ExamAttemptRow, now: Date): Promise<boolean> {
     if (row.state === 'inprogress') return false;
@@ -275,26 +226,17 @@ export class QuizAttemptsService {
   }
 
   /**
-   * Che điểm tổng (`grade` + `sumGrades`) trong tóm tắt lượt phía CHỦ
-   * LƯỢT (issue #411).
+   * Che điểm tổng (`grade` + `sumGrades`) trong tóm tắt lượt phía CHỦ LƯỢT (issue #411).
    *
    * Quy tắc nghiệp vụ (mục quy tắc về điểm trong `apps/api/AGENTS.md`):
-   * học sinh/phụ huynh chỉ thấy điểm ĐÃ CÔNG BỐ, và mọi đường đọc điểm
-   * phải qua cùng một cổng công bố. Điểm tổng vì thế chỉ hiện khi ĐỒNG
-   * THỜI thoả cả hai điều kiện độc lập:
+   * học sinh/phụ huynh chỉ thấy điểm ĐÃ CÔNG BỐ, và mọi đường đọc điểm phải qua cùng một cổng công bố. Điểm tổng vì thế chỉ hiện khi ĐỒNG THỜI thoả cả hai điều kiện độc lập:
    *
    * 1. mặt nạ `reviewMarks` đang mở tại cửa sổ xem lại hiện tại của
-   *    lượt (`marksVisible` do nơi gọi tính, dùng cùng phép tính với
-   *    điểm từng câu); và
+   *    lượt (`marksVisible` do nơi gọi tính, dùng cùng phép tính với điểm từng câu); và
    * 2. hạng mục điểm của bài đã ở trạng thái đã công bố qua cổng công
    *    bố chung của module điểm (`gradeTotalsPublished`).
    *
-   * Thiếu một trong hai điều kiện, cả `grade` lẫn `sumGrades` đều về
-   * `null` — che một mình `grade` là không đủ, vì `sumGrades` cùng
-   * thang tối đa của lượt cho phép suy ngược ra điểm. Lượt chưa có
-   * điểm nào (cả hai trường đang `null`) được trả nguyên, không tốn
-   * thêm lượt hỏi cổng công bố. Đường phía giáo viên/người có đặc
-   * quyền không đi qua hàm này và giữ nguyên số thật.
+   * Thiếu một trong hai điều kiện, cả `grade` lẫn `sumGrades` đều về `null` — che một mình `grade` là không đủ, vì `sumGrades` cùng thang tối đa của lượt cho phép suy ngược ra điểm. Lượt chưa có điểm nào (cả hai trường đang `null`) được trả nguyên, không tốn thêm lượt hỏi cổng công bố. Đường phía giáo viên/người có đặc quyền không đi qua hàm này và giữ nguyên số thật.
    */
   private async maskOwnerTotals(quiz: PinRow, summary: QuizAttemptSummary, marksVisible: boolean): Promise<QuizAttemptSummary> {
     if (summary.grade === null && summary.sumGrades === null) return summary;
@@ -303,12 +245,7 @@ export class QuizAttemptsService {
   }
 
   /**
-   * Điểm bài hiện tại (`myGrade`) cho trang thông tin quiz phía CHỦ
-   * LƯỢT: nhân sự (quản lý/chấm/báo cáo/preview) thấy số thật như hiện
-   * tại; học viên chỉ thấy số thật khi điểm tổng qua được cổng che hai
-   * điều kiện của `maskOwnerTotals`, xét trên lượt đã chốt điểm GẦN
-   * NHẤT của chính người xem — lượt gần nhất có cửa sổ xem lại khắt
-   * khe nhất nên lấy nó làm chuẩn là phía an toàn. Đường ghi sổ điểm
+   * Điểm bài hiện tại (`myGrade`) cho trang thông tin quiz phía CHỦ LƯỢT: nhân sự (quản lý/chấm/báo cáo/preview) thấy số thật như hiện tại; học viên chỉ thấy số thật khi điểm tổng qua được cổng che hai điều kiện của `maskOwnerTotals`, xét trên lượt đã chốt điểm GẦN NHẤT của chính người xem — lượt gần nhất có cửa sổ xem lại khắt khe nhất nên lấy nó làm chuẩn là phía an toàn. Đường ghi sổ điểm
    * (`pushGrade`) KHÔNG đi qua hàm này: nó dùng thẳng
    * `currentGradeForUser` để luôn ghi số thật vào sổ điểm.
    */
@@ -323,12 +260,7 @@ export class QuizAttemptsService {
   }
 
   /**
-   * Trang thông tin quiz cho người xem: cấu hình + slots, các lượt của
-   * chính người xem, điểm bài hiện tại và các cờ quyền để client hiển thị
-   * đúng thao tác. Điểm tổng trong các lượt của chính người xem và điểm
-   * bài hiện tại phía học viên đều qua cổng che hai điều kiện (mặt nạ
-   * reviewMarks + hạng mục điểm đã công bố) — xem maskOwnerTotals và
-   * myGradeForViewer (issue #411).
+   * Trang thông tin quiz cho người xem: cấu hình + slots, các lượt của chính người xem, điểm bài hiện tại và các cờ quyền để client hiển thị đúng thao tác. Điểm tổng trong các lượt của chính người xem và điểm bài hiện tại phía học viên đều qua cổng che hai điều kiện (mặt nạ reviewMarks + hạng mục điểm đã công bố) — xem maskOwnerTotals và myGradeForViewer (issue #411).
    */
   async getQuizForUser(actorId: string, pinId: string): Promise<{
     quiz: QuizView;
@@ -356,9 +288,7 @@ export class QuizAttemptsService {
       this.shared.hasCap(actorId, quiz, QUIZ_CAPABILITIES.preview),
       this.shared.hasCap(actorId, quiz, QUIZ_CAPABILITIES.attempt),
     ]);
-    // Phạm vi nhóm đích: người xem không có vai trò nhân sự (quản
-    // lý/chấm/báo cáo/preview) mà không thuộc nhóm đích thì lần ghim
-    // coi như không tồn tại (404 — không lộ sự tồn tại).
+    // Phạm vi nhóm đích: người xem không có vai trò nhân sự (quản lý/chấm/báo cáo/preview) mà không thuộc nhóm đích thì lần ghim coi như không tồn tại (404 — không lộ sự tồn tại).
     const isStaffViewer = manage || grade || viewReports || preview;
     if (!isStaffViewer && !(await this.isInTargetGroup(quiz, actorId))) {
       throw new NotFoundException({ message: `Exam pin ${pinId} not found`, code: 'exam.pin_not_found' });

@@ -1,11 +1,5 @@
 /**
- * Kiểm chứng hành vi nạp lười catalog tiếng Anh (issue #503): catalog vi
- * đóng gói sẵn là mặc định; catalog en nằm ở module riêng `i18n-en.ts` và
- * chỉ được nạp khi ngôn ngữ chuyển sang `en` — sau khi nạp, mọi khoá của
- * cả bốn namespace phải tra được đúng chuỗi tiếng Anh (không thiếu khoá
- * nào so với catalog nguồn) và chuyển về lại tiếng Việt vẫn đúng. Riêng
- * ca nạp lỗi: lần nạp đầu thất bại không được khoá cứng các lần sau —
- * lần chuyển ngôn ngữ kế tiếp phải nạp lại từ đầu và thành công.
+ * Kiểm chứng hành vi nạp lười catalog tiếng Anh (issue #503): catalog vi đóng gói sẵn là mặc định; catalog en nằm ở module riêng `i18n-en.ts` và chỉ được nạp khi ngôn ngữ chuyển sang `en` — sau khi nạp, mọi khoá của cả bốn namespace phải tra được đúng chuỗi tiếng Anh (không thiếu khoá nào so với catalog nguồn) và chuyển về lại tiếng Việt vẫn đúng. Riêng ca nạp lỗi: lần nạp đầu thất bại không được khoá cứng các lần sau — lần chuyển ngôn ngữ kế tiếp phải nạp lại từ đầu và thành công.
  */
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import i18n, {
@@ -73,9 +67,7 @@ describe('i18n — catalog tiếng Anh nạp lười', () => {
 });
 
 describe('i18n — nạp lười catalog tiếng Anh gặp lỗi rồi thử lại', () => {
-  // Trần thời gian nới riêng cho ca này: lần nạp đầu lỗi được i18next
-  // tự thử lại theo cấp số nhân (retryTimeout 350ms nhân đôi, tối đa
-  // maxRetries 5 lượt) nên riêng chặng lỗi chạy khoảng 11 giây.
+  // Trần thời gian nới riêng cho ca này: lần nạp đầu lỗi được i18next tự thử lại theo cấp số nhân (retryTimeout 350ms nhân đôi, tối đa maxRetries 5 lượt) nên riêng chặng lỗi chạy khoảng 11 giây.
   it('lần nạp đầu lỗi thì lần chuyển sang en sau đó nạp lại thành công thay vì kẹt ở promise đã reject', async () => {
     vi.resetModules();
     // Giả lập chunk catalog en tải lỗi (mạng/CDN) ở lần import đầu tiên:
@@ -89,8 +81,7 @@ describe('i18n — nạp lười catalog tiếng Anh gặp lỗi rồi thử l�
     expect(freshI18n.hasResourceBundle('en', 'app')).toBe(false);
     expect(freshI18n.hasResourceBundle('en', 'platform')).toBe(false);
 
-    // Lần yêu cầu sau chunk đã tải được: catalog phải được nạp lại từ
-    // đầu và đủ khoá, không dùng lại kết quả lỗi của lần đầu.
+    // Lần yêu cầu sau chunk đã tải được: catalog phải được nạp lại từ đầu và đủ khoá, không dùng lại kết quả lỗi của lần đầu.
     vi.doUnmock('./i18n-en');
     await freshI18n.changeLanguage('vi');
     await freshI18n.changeLanguage('en');

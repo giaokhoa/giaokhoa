@@ -11,10 +11,7 @@ import { QuizService } from './quiz.service';
 import { isMatrixContentSignatureConflict, matrixContentSignature } from './matrix-content-signature';
 
 /**
- * Dòng ghi công của một ma trận (theo đúng khuôn AttributionView
- * của câu hỏi): ma trận nguồn đã copy, bank nguồn, tác giả gốc và
- * hai bộ đếm dùng thật — số lượt được copy đi và số version đề đã
- * sinh từ ma trận này.
+ * Dòng ghi công của một ma trận (theo đúng khuôn AttributionView của câu hỏi): ma trận nguồn đã copy, bank nguồn, tác giả gốc và hai bộ đếm dùng thật — số lượt được copy đi và số version đề đã sinh từ ma trận này.
  */
 export interface MatrixAttributionView {
   matrixId: string;
@@ -29,11 +26,9 @@ export interface MatrixAttributionView {
 }
 
 /**
- * Bộ capability của lớp ngân hàng ma trận — đủ bộ matrix:*
- * use/add/edit/copy/share/moderate sau đợt đồng bộ khuôn ngân hàng
+ * Bộ capability của lớp ngân hàng ma trận — đủ bộ matrix:* use/add/edit/copy/share/moderate sau đợt đồng bộ khuôn ngân hàng
  * (issue #228, lát S3; MB-1 của issue #111 mở đầu bằng
- * copy/share/moderate và còn neo xem/sửa vào quiz:* của Chặng 3).
- * Tất cả đánh giá TẠI CONTEXT CỦA BANK (E-8).
+ * copy/share/moderate và còn neo xem/sửa vào quiz:* của Chặng 3). Tất cả đánh giá TẠI CONTEXT CỦA BANK (E-8).
  */
 export const MATRIX_BANK_CAPS = {
   view: 'matrix:use',
@@ -46,21 +41,14 @@ export const MATRIX_BANK_CAPS = {
 
 @Injectable()
 /**
- * Lớp BANK của Ngân hàng ma trận (MB-1, issue #111) — khuôn QB-1→QB-4
- * của ngân hàng câu hỏi áp cho ma trận:
+ * Lớp BANK của Ngân hàng ma trận (MB-1, issue #111) — khuôn QB-1→QB-4 của ngân hàng câu hỏi áp cho ma trận:
  *
  * - Bank là question_banks với bank_kind='matrix' (bảng đa loại của
- *   PR #83); exam_matrices.bank_id neo vào bank, quyền MỘT nguồn duy
- *   nhất là context của bank (resolver trong QuizService).
+ *   PR #83); exam_matrices.bank_id neo vào bank, quyền MỘT nguồn duy nhất là context của bank (resolver trong QuizService).
  * - Copy mẫu → ma trận làm việc: deep copy toàn bộ ô với danh tính
- *   mới, derived_from_matrix_id trỏ về mẫu, version về 1, hạ cánh
- *   `ready` (quy tắc hoàn thiện: sao chép vào bank là đường vào bank
- *   ở dạng đã hoàn thiện) — sửa bản copy fork version mới, không
- *   đụng mẫu (bất biến truy vết).
+ *   mới, derived_from_matrix_id trỏ về mẫu, version về 1, hạ cánh `ready` (quy tắc hoàn thiện: sao chép vào bank là đường vào bank ở dạng đã hoàn thiện) — sửa bản copy fork version mới, không đụng mẫu (bất biến truy vết).
  * - Đóng góp + duyệt: giáo viên đề xuất ma trận ready của mình vào
- *   bank chung; người có matrix:moderate tại bank đích duyệt (= copy
- *   sâu vào bank đích, bản vào bank tổ/trường là MẪU) hoặc từ chối kèm
- *   lý do hiện lại cho người gửi.
+ *   bank chung; người có matrix:moderate tại bank đích duyệt (= copy sâu vào bank đích, bản vào bank tổ/trường là MẪU) hoặc từ chối kèm lý do hiện lại cho người gửi.
  */
 export class MatrixBanksService {
   constructor(

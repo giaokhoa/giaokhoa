@@ -10,11 +10,8 @@ import { setSiteSettingSchema, type SetSettingDto } from './dto/site-config.dto'
 @ApiTags('site-config')
 @Controller({ path: 'site-config', version: '1' })
 /**
- * API cấu hình site và cấu hình theo plugin (chỉ quản trị có capability
- * `site:config` ở context hệ thống mới đọc/ghi được). Nhánh
- * `tenant-settings` là cấu hình của TENANT hiệu lực (TENANT-0, #168):
- * gác `tenant:manage`/`tenant:viewall` tại context tenant ngay trong
- * TenantConfigService — đổi ở đây chỉ chạm tenant của người gọi.
+ * API cấu hình site và cấu hình theo plugin (chỉ quản trị có capability `site:config` ở context hệ thống mới đọc/ghi được). Nhánh `tenant-settings` là cấu hình của TENANT hiệu lực (TENANT-0, #168):
+ * gác `tenant:manage`/`tenant:viewall` tại context tenant ngay trong TenantConfigService — đổi ở đây chỉ chạm tenant của người gọi.
  */
 export class SiteConfigController {
   constructor(

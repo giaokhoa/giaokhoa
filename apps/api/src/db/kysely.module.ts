@@ -1,29 +1,16 @@
 /**
  * `KyselyModule` đăng ký các handle Kysely cho ba kho thông qua provider NestJS và quản lý vòng đời của pool tương ứng.
  *
- * Vì sao tự dựng: Kysely không phát hành module NestJS chính thức;
- * pattern được nhà phát hành tài liệu hoá là tự tạo provider giữ
- * instance `Kysely` được dựng bằng factory của dự án. Module này
- * bám đúng khuôn `forRoot` quen thuộc của hệ:
+ * Vì sao tự dựng: Kysely không phát hành module NestJS chính thức; pattern được nhà phát hành tài liệu hoá là tự tạo provider giữ instance `Kysely` được dựng bằng factory của dự án. Module này bám đúng khuôn `forRoot` quen thuộc của hệ:
  *
  *   - `KyselyModule.forRoot({ centre: pool, controlPlane: pool, systemBank: pool })`
- *     nhận các `Pool` do tầng ứng dụng tạo sẵn (pool quyết định ngữ
- *     cảnh kết nối: `TenantAwarePool` cho kho trung tâm để RLS/GUC
- *     hoạt động, pool thường cho hai kho còn lại) và đăng ký một
- *     provider cho mỗi kho được truyền, dùng đúng factory của
- *     `@giaokhoa/db` (`createCentreKysely`, `createControlPlaneKysely`,
- *     `createSystemBankKysely`).
+ *     nhận các `Pool` do tầng ứng dụng tạo sẵn (pool quyết định ngữ cảnh kết nối: `TenantAwarePool` cho kho trung tâm để RLS/GUC hoạt động, pool thường cho hai kho còn lại) và đăng ký một provider cho mỗi kho được truyền, dùng đúng factory của `@giaokhoa/db` (`createCentreKysely`, `createControlPlaneKysely`, `createSystemBankKysely`).
  *   - Các service lấy handle bằng `@InjectKysely(...)` (xem
  *     `inject-kysely.ts` cùng thư mục).
  *   - Khi ứng dụng đóng, một provider dọn dẹp gọi `destroy()` trên
- *     mọi instance đã đăng ký — theo hành vi của `PostgresDialect`,
- *     `destroy()` đóng luôn pool đã truyền vào, nên pool truyền cho
- *     `forRoot` thuộc quyền sở hữu của module từ thời điểm đăng ký.
+ *     mọi instance đã đăng ký — theo hành vi của `PostgresDialect`, `destroy()` đóng luôn pool đã truyền vào, nên pool truyền cho `forRoot` thuộc quyền sở hữu của module từ thời điểm đăng ký.
  *
- * Trạng thái hiện hành: module và decorator có spec tích hợp kiểm
- * chứng (`kysely-foundation.int-spec.ts`) và sẵn sàng cho phía tiêu
- * thụ cần inject handle theo kho; đường khởi động của ứng dụng
- * chính nối handle kho trung tâm qua khung định tuyến
+ * Trạng thái hiện hành: module và decorator có spec tích hợp kiểm chứng (`kysely-foundation.int-spec.ts`) và sẵn sàng cho phía tiêu thụ cần inject handle theo kho; đường khởi động của ứng dụng chính nối handle kho trung tâm qua khung định tuyến
  * (`SpaceDatabaseService`) ở `AppModule`, không qua module này.
  */
 import {
@@ -48,17 +35,12 @@ const KYSELY_INSTANCES = 'KYSELY_INSTANCES';
 
 /**
  * Hình tối thiểu của một instance Kysely mà provider dọn dẹp cần:
- * chỉ thao tác `destroy()`. Khai theo cấu trúc thay vì import kiểu
- * `Kysely` vì package `kysely` là phụ thuộc của `@giaokhoa/db`, không
- * phải của `apps/api` — các handle đi vào module đều qua factory
- * của `@giaokhoa/db` nên kiểu đầy đủ vẫn được giữ ở nơi khai báo chúng.
+ * chỉ thao tác `destroy()`. Khai theo cấu trúc thay vì import kiểu `Kysely` vì package `kysely` là phụ thuộc của `@giaokhoa/db`, không phải của `apps/api` — các handle đi vào module đều qua factory của `@giaokhoa/db` nên kiểu đầy đủ vẫn được giữ ở nơi khai báo chúng.
  */
 type DestroyableKysely = { destroy(): Promise<void> };
 
 /**
- * Provider dọn dẹp vòng đời: gọi `destroy()` trên mọi instance
- * Kysely của module khi ứng dụng đóng, để pool của từng kho được
- * đóng đúng một lần cùng tiến trình.
+ * Provider dọn dẹp vòng đời: gọi `destroy()` trên mọi instance Kysely của module khi ứng dụng đóng, để pool của từng kho được đóng đúng một lần cùng tiến trình.
  */
 @Injectable()
 class KyselyShutdownService implements OnApplicationShutdown {

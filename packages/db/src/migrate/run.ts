@@ -1,33 +1,19 @@
 /**
- * CLI mỏng chạy migration cho một kho (`run.js <kho>` sau khi build
- * package — chuỗi service `migrate` của compose và script `db:*`
- * của apps/api gọi đúng điểm vào này).
+ * CLI mỏng chạy migration cho một kho (`run.js <kho>` sau khi build package — chuỗi service `migrate` của compose và script `db:*` của apps/api gọi đúng điểm vào này).
  *
  * Một lượt migrate làm đúng 3 việc, theo thứ tự:
  * 1. Phân giải thư mục migration qua điểm vào chính của package
  *    (`require.resolve('@giaokhoa/db')` — đường dẫn TUYỆT ĐỐI, diệt lớp
- *    lỗi "sai thư mục làm việc báo thành công giả": runner không
- *    bao giờ suy thư mục từ cwd).
+ *    lỗi "sai thư mục làm việc báo thành công giả": runner không bao giờ suy thư mục từ cwd).
  * 2. Áp migration qua trình tự dùng chung `applyStoreMigrations`
  *    (xem `apply.ts`): bước tiền-migration shim `uuidv7()` cho cụm
- *    dưới PostgreSQL 18 (ngoài nội dung carrier, không ghi nhật
- *    ký), rồi `migrateToLatest()` — hàm dùng chung tự kiểm kết quả
- *    `{ error, results }` mà Kysely trả (Kysely không ném lỗi từ
- *    `migrateToLatest()`) và ném lỗi khi có migration hỏng.
+ *    dưới PostgreSQL 18 (ngoài nội dung carrier, không ghi nhật ký), rồi `migrateToLatest()` — hàm dùng chung tự kiểm kết quả `{ error, results }` mà Kysely trả (Kysely không ném lỗi từ `migrateToLatest()`) và ném lỗi khi có migration hỏng.
  * 3. Hậu kiểm số đếm (`verify.ts`) trên database đích; lệch thì
  *    thoát 1 dù migrate báo thành công.
  *
- * Cờ `--verify-only`: chỉ làm việc 3 (đọc số đếm, không áp
- * migration) — đường kiểm chứng sau deploy mà runbook dùng.
+ * Cờ `--verify-only`: chỉ làm việc 3 (đọc số đếm, không áp migration) — đường kiểm chứng sau deploy mà runbook dùng.
  *
- * URL kết nối theo kho (mỗi kho một biến, khớp cấu hình bộ máy cũ
- * mà chuỗi migrate đang dùng): kho trung tâm ưu tiên
- * `MIGRATION_DATABASE_URL` rồi `DATABASE_URL`; control plane dùng
- * `CONTROL_PLANE_DATABASE_URL`; ngân hàng hệ thống dùng
- * `SYSTEM_BANK_DATABASE_URL`. Khi `DATABASE_SSL=true`, kết nối đi
- * qua TLS với `rejectUnauthorized: false` (đúng cách đường chạy của
- * API xử lý URL khi nhà cung cấp bắt TLS) thay vì gắn `sslmode`
- * vào chuỗi kết nối.
+ * URL kết nối theo kho (mỗi kho một biến, khớp cấu hình bộ máy cũ mà chuỗi migrate đang dùng): kho trung tâm ưu tiên `MIGRATION_DATABASE_URL` rồi `DATABASE_URL`; control plane dùng `CONTROL_PLANE_DATABASE_URL`; ngân hàng hệ thống dùng `SYSTEM_BANK_DATABASE_URL`. Khi `DATABASE_SSL=true`, kết nối đi qua TLS với `rejectUnauthorized: false` (đúng cách đường chạy của API xử lý URL khi nhà cung cấp bắt TLS) thay vì gắn `sslmode` vào chuỗi kết nối.
  */
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
@@ -46,17 +32,12 @@ import { verifyStore } from './verify';
 function packageRoot(): string {
   try {
     const require = createRequire(__filename);
-    // Phân giải qua điểm vào chính của package (`exports["."]` →
-    // `dist/index.js`) rồi đi lên một cấp: `exports` map của package
-    // không khai `./package.json` nên phân giải thẳng
-    // `@giaokhoa/db/package.json` bị Node từ chối
+    // Phân giải qua điểm vào chính của package (`exports["."]` → `dist/index.js`) rồi đi lên một cấp: `exports` map của package không khai `./package.json` nên phân giải thẳng `@giaokhoa/db/package.json` bị Node từ chối
     // (ERR_PACKAGE_PATH_NOT_EXPORTED — đã kiểm chứng tại thời điểm
     // thi công); điểm vào chính cho cùng kết quả tuyệt đối.
     return join(dirname(require.resolve('@giaokhoa/db')), '..');
   } catch {
-    // Dự phòng khi chạy từ source chưa qua workspace link: vị trí
-    // file này sâu đúng hai cấp dưới gốc package ở cả `src/` và
-    // `dist/` (cùng độ sâu), nên suy từ `__dirname` vẫn đúng.
+    // Dự phòng khi chạy từ source chưa qua workspace link: vị trí file này sâu đúng hai cấp dưới gốc package ở cả `src/` và `dist/` (cùng độ sâu), nên suy từ `__dirname` vẫn đúng.
     return join(__dirname, '..', '..');
   }
 }

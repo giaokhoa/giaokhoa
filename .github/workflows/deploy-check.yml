@@ -1,26 +1,11 @@
 # Workflow kiểm chứng khả năng deploy của stack tự host ngay trong CI.
 #
-# Mục đích: ruleset của nhánh main cần một status check chạy trên head
-# của PR trước khi merge để bảo đảm head đó thật sự dựng được stack
-# production tự host (compose.yaml ở gốc repo). Workflow này dựng
-# toàn bộ stack từ chính head của PR trong runner CI, chờ API khỏe,
-# kiểm tra trang gốc, rồi chờ Keycloak sẵn sàng và kiểm chứng nó
-# boot khỏe (healthcheck của service + issuer trong tài liệu
-# discovery của realm `master`). Job chạy hai kịch bản nối tiếp:
-# mật khẩu bootstrap của Keycloak được đặt, rồi gỡ biến đó và
-# chạy lại stack đòi Keycloak vẫn boot khỏe (trạng thái của môi
-# trường triển khai sau khi kết thúc bootstrap); sau cùng dọn
-# sạch. Nó KHÔNG deploy lên máy tự host
-# thật — đường deploy production vẫn là Dokploy kéo từ main.
+# Mục đích: ruleset của nhánh main cần một status check chạy trên head của PR trước khi merge để bảo đảm head đó thật sự dựng được stack production tự host (compose.yaml ở gốc repo). Workflow này dựng toàn bộ stack từ chính head của PR trong runner CI, chờ API khỏe, kiểm tra trang gốc, rồi chờ Keycloak sẵn sàng và kiểm chứng nó boot khỏe (healthcheck của service + issuer trong tài liệu discovery của realm `master`). Job chạy hai kịch bản nối tiếp:
+# mật khẩu bootstrap của Keycloak được đặt, rồi gỡ biến đó và chạy lại stack đòi Keycloak vẫn boot khỏe (trạng thái của môi trường triển khai sau khi kết thúc bootstrap); sau cùng dọn sạch. Nó KHÔNG deploy lên máy tự host thật — đường deploy production vẫn là Dokploy kéo từ main.
 #
-# Chuỗi status context của job dưới đây là "deploy-check / verify-stack"
-# (theo khuôn "<tên workflow> / <tên job>") — đây là chuỗi cần chọn
-# trong ruleset của nhánh main.
+# Chuỗi status context của job dưới đây là "deploy-check / verify-stack" (theo khuôn "<tên workflow> / <tên job>") — đây là chuỗi cần chọn trong ruleset của nhánh main.
 #
-# Mọi lệnh compose trong workflow đều gộp thêm file override
-# compose.ci.yaml (chỉ dùng trong CI) để các build dùng cache
-# layer qua GitHub Actions cache; file compose.yaml chính giữ
-# nguyên cho đường deploy thật.
+# Mọi lệnh compose trong workflow đều gộp thêm file override compose.ci.yaml (chỉ dùng trong CI) để các build dùng cache layer qua GitHub Actions cache; file compose.yaml chính giữ nguyên cho đường deploy thật.
 
 name: deploy-check
 
@@ -29,10 +14,7 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Huỷ lượt kiểm của head cũ ngay khi PR có head mới: group tách riêng
-# theo từng PR (dự phòng bằng ref cho lượt chạy tay qua workflow_dispatch)
-# và mang tên workflow này nên không huỷ lẫn với workflow CI; cổng merge
-# vẫn xét lượt completed/success của head cuối như cũ.
+# Huỷ lượt kiểm của head cũ ngay khi PR có head mới: group tách riêng theo từng PR (dự phòng bằng ref cho lượt chạy tay qua workflow_dispatch) và mang tên workflow này nên không huỷ lẫn với workflow CI; cổng merge vẫn xét lượt completed/success của head cuối như cũ.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -46,18 +28,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # Dựng builder Buildx (driver docker-container): driver mặc
-      # định của Docker trên runner không xuất được cache layer, nên
-      # cần builder này để cache_from/cache_to kiểu type=gha khai
-      # trong compose.ci.yaml hoạt động (đọc cache từ GitHub
-      # Actions cache trước khi build và ghi lại sau khi build).
+      # Dựng builder Buildx (driver docker-container): driver mặc định của Docker trên runner không xuất được cache layer, nên cần builder này để cache_from/cache_to kiểu type=gha khai trong compose.ci.yaml hoạt động (đọc cache từ GitHub Actions cache trước khi build và ghi lại sau khi build).
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      # Dùng workflow command chính thức GITHUB_ENV thay cho tạo
-      # .env.example rồi sed/grep từng bí mật. Compose đọc trực tiếp
-      # biến môi trường của runner, các giá trị tùy chọn lấy mặc định
-      # từ compose.yaml. Mỗi bí mật sinh riêng và được mask trong log.
+      # Dùng workflow command chính thức GITHUB_ENV thay cho tạo .env.example rồi sed/grep từng bí mật. Compose đọc trực tiếp biến môi trường của runner, các giá trị tùy chọn lấy mặc định từ compose.yaml. Mỗi bí mật sinh riêng và được mask trong log.
       - name: Generate CI environment variables
         run: |
           for name in POSTGRES_PASSWORD CONTROL_PLANE_POSTGRES_PASSWORD RUNTIME_POSTGRES_PASSWORD MIGRATOR_POSTGRES_PASSWORD JWT_SECRET BETTER_AUTH_SECRET KEYCLOAK_DB_PASSWORD KEYCLOAK_ADMIN_PASSWORD; do
@@ -69,9 +44,7 @@ jobs:
       - name: Validate compose configuration
         run: docker compose -f compose.yaml -f compose.ci.yaml config > /dev/null
 
-      # Compose xuất định nghĩa Bake cùng tag/cache của từng service;
-      # action Docker cấp runtime token cho cache gha mà bước shell
-      # không tự nhận được. Không tự dựng lại định nghĩa build riêng.
+      # Compose xuất định nghĩa Bake cùng tag/cache của từng service; action Docker cấp runtime token cho cache gha mà bước shell không tự nhận được. Không tự dựng lại định nghĩa build riêng.
       - name: Export the Compose build definition
         run: docker compose -f compose.yaml -f compose.ci.yaml build --print api worker web migrate > "$RUNNER_TEMP/compose-build.json"
 
@@ -82,22 +55,18 @@ jobs:
           files: ${{ runner.temp }}/compose-build.json
           load: true
 
-      # Service migrate tự chạy trước và phải thành công thì api/worker
-      # mới khởi động; chỉ dùng image vừa build, không build lại ở shell.
+      # Service migrate tự chạy trước và phải thành công thì api/worker mới khởi động; chỉ dùng image vừa build, không build lại ở shell.
       - name: Start the stack
         run: docker compose -f compose.yaml -f compose.ci.yaml up -d --no-build
 
-      # HTTP probe qua cổng công khai Caddy. Docker Compose đã chờ
-      # healthcheck của API/web qua depends_on; curl có retry chính thức
-      # thay cho vòng lặp shell chờ từng dịch vụ.
+      # HTTP probe qua cổng công khai Caddy. Docker Compose đã chờ healthcheck của API/web qua depends_on; curl có retry chính thức thay cho vòng lặp shell chờ từng dịch vụ.
       - name: Verify API through the public gateway
         run: |
           curl --fail --silent --show-error --retry 60 --retry-delay 5 --retry-all-errors --max-time 5 \
             http://127.0.0.1:8080/api/v1/health -o smoke-health.json
           jq -e '.status == "ok" and .checks.database == "up" and .checks.redis == "up"' smoke-health.json
 
-      # Cổng nghiệm thu SSR động: loader nhận JSON thực từ API nội
-      # bộ, và HTML chứa dữ liệu đã render trước khi hydrate.
+      # Cổng nghiệm thu SSR động: loader nhận JSON thực từ API nội bộ, và HTML chứa dữ liệu đã render trước khi hydrate.
       - name: Verify SSR, CSP and cache isolation
         run: |
           curl -fsS --max-time 15 http://127.0.0.1:8080/health -o smoke-ssr.html
@@ -110,33 +79,15 @@ jobs:
           grep -qi '^cache-control: private, no-cache' smoke-login.headers
           curl -fsS -o /dev/null http://127.0.0.1:8080/
 
-      # Compose chờ healthcheck native của Keycloak (chỉ chọn
-      # keycloak/kc-db, không chờ container migration one-shot).
-      # Sau đó kiểm tra issuer từ discovery qua cổng loopback.
+      # Compose chờ healthcheck native của Keycloak (chỉ chọn keycloak/kc-db, không chờ container migration one-shot). Sau đó kiểm tra issuer từ discovery qua cổng loopback.
       - name: Verify Keycloak readiness
         run: |
           docker compose -f compose.yaml -f compose.ci.yaml up --wait --wait-timeout 300 keycloak
           issuer=$(curl -sf http://127.0.0.1:8085/realms/master/.well-known/openid-configuration | jq -er '.issuer')
           test "$issuer" = "https://auth.fuckr.net/realms/master"
 
-      # Kịch bản thứ hai: chạy lại stack với KEYCLOAK_ADMIN_PASSWORD
-      # KHÔNG được đặt — đúng trạng thái của môi trường triển khai
-      # sau khi kết thúc bootstrap (đã có tài khoản quản trị lâu
-      # dài, tài khoản tạm đã xoá, biến mật khẩu đã gỡ khỏi môi
-      # trường). Kịch bản trên luôn đặt biến này nên trạng thái đó
-      # chưa từng được chạy trong CI, và production đã gãy đúng ở
-      # trạng thái đó tối 02/11/2026 (issue #724): compose từng
-      # ghim tên tài khoản bootstrap trong khi mật khẩu là biến
-      # tuỳ chọn, nên lần tạo lại container đầu tiên sau khi gỡ
-      # biến chết ở bước kiểm chứng cấu hình của Keycloak (lỗi
-      # "bootstrap-admin-username available only when bootstrap
-      # admin password is set", tiến trình thoát mã 2). Giữa hai
-      # kịch bản không dọn volume: cơ sở dữ liệu của Keycloak đã
-      # có realm master từ kịch bản trên — khớp trạng thái
-      # production khi deploy lại sau khi kết thúc bootstrap.
-      # Chỉ bỏ biến bootstrap khi khởi động và kiểm tra Keycloak:
-      # env -u cho cùng ngữ nghĩa biến hoàn toàn vắng mặt như production
-      # sau bootstrap, không sửa tệp .env hay tác động service khác.
+      # Kịch bản thứ hai: chạy lại stack với KEYCLOAK_ADMIN_PASSWORD KHÔNG được đặt — đúng trạng thái của môi trường triển khai sau khi kết thúc bootstrap (đã có tài khoản quản trị lâu dài, tài khoản tạm đã xoá, biến mật khẩu đã gỡ khỏi môi trường). Kịch bản trên luôn đặt biến này nên trạng thái đó chưa từng được chạy trong CI, và production đã gãy đúng ở trạng thái đó tối 02/11/2026 (issue #724): compose từng ghim tên tài khoản bootstrap trong khi mật khẩu là biến tuỳ chọn, nên lần tạo lại container đầu tiên sau khi gỡ biến chết ở bước kiểm chứng cấu hình của Keycloak (lỗi "bootstrap-admin-username available only when bootstrap admin password is set", tiến trình thoát mã 2). Giữa hai kịch bản không dọn volume: cơ sở dữ liệu của Keycloak đã có realm master từ kịch bản trên — khớp trạng thái production khi deploy lại sau khi kết thúc bootstrap. Chỉ bỏ biến bootstrap khi khởi động và kiểm tra Keycloak:
+      # env -u cho cùng ngữ nghĩa biến hoàn toàn vắng mặt như production sau bootstrap, không sửa tệp .env hay tác động service khác.
       - name: Restart Keycloak without bootstrap admin password
         run: env -u KEYCLOAK_ADMIN_PASSWORD docker compose -f compose.yaml -f compose.ci.yaml up -d keycloak
 

@@ -3,11 +3,7 @@ import type { Capability } from '@giaokhoa/contracts';
 /**
  * Kiểu dữ liệu của hộp thoại ma trận vai trò thuộc feature admin.
  *
- * Ma trận chỉ trình bày các ghi đè đã lưu tại ngữ cảnh đang chọn, không
- * trình bày quyền hiệu lực sau kế thừa: một năng lực vắng mặt trong bản
- * nháp nghĩa là đang ở trạng thái kế thừa (INHERIT = 0) tại ngữ cảnh
- * đó, và khi lưu, endpoint thay toàn bộ chỉ nhận các ghi đè khác kế
- * thừa — phần tử vắng mặt trong tập gửi lên trở về kế thừa.
+ * Ma trận chỉ trình bày các ghi đè đã lưu tại ngữ cảnh đang chọn, không trình bày quyền hiệu lực sau kế thừa: một năng lực vắng mặt trong bản nháp nghĩa là đang ở trạng thái kế thừa (INHERIT = 0) tại ngữ cảnh đó, và khi lưu, endpoint thay toàn bộ chỉ nhận các ghi đè khác kế thừa — phần tử vắng mặt trong tập gửi lên trở về kế thừa.
  */
 
 /** Bản nháp ma trận: tên năng lực → giá trị quyền bốn trạng thái. */
@@ -56,8 +52,7 @@ export function groupCapabilitiesByResource(capabilities: Capability[]): Capabil
 }
 
 /**
- * Động từ của một năng lực: phần sau dấu `:` (ví dụ `view` của
- * `course:view`); tên không có dấu `:` thì chính nó.
+ * Động từ của một năng lực: phần sau dấu `:` (ví dụ `view` của `course:view`); tên không có dấu `:` thì chính nó.
  */
 export function verbOfCapability(name: string): string {
   const index = name.indexOf(':');

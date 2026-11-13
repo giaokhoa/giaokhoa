@@ -21,36 +21,17 @@ const ACCESS_CACHE_TTL_MS = 60 * 60 * 1000;
 /**
  * PermissionEvaluator — nguồn sự thật duy nhất cho ngữ nghĩa capability của Moodle
  * (report §3.3). KHÔNG phải CASL, KHÔNG phải JWT claims: kết quả được tính
- * từ cây context + gán role + overrides, cache trong
- * cache chế độ application dưới một khoá nhúng dấu version của path, nên
- * việc đánh dấu một context là dirty (tăng version) sẽ làm mất hiệu lực lười cây con của nó.
+ * từ cây context + gán role + overrides, cache trong cache chế độ application dưới một khoá nhúng dấu version của path, nên việc đánh dấu một context là dirty (tăng version) sẽ làm mất hiệu lực lười cây con của nó.
  */
 @Injectable()
 /**
- * Trái tim phân quyền kiểu Moodle: quyết định user có capability tại một context hay không.
- * Quy tắc (đối chiếu lib/accesslib.php has_capability): duyệt cây context từ lá lên gốc;
- * tại mỗi context, gộp override của mọi role user được gán ở context đó và các context tổ tiên;
- * PROHIBIT ở bất kỳ đâu thắng tuyệt đối, PREVENT thắng ALLOW ở cùng/cao hơn theo thứ tự duyệt,
- * quyền chỉ được cấp khi có ít nhất một ALLOW còn hiệu lực. Site admin bỏ qua mọi kiểm tra.
+ * Trái tim phân quyền kiểu Moodle: quyết định user có capability tại một context hay không. Quy tắc (đối chiếu lib/accesslib.php has_capability): duyệt cây context từ lá lên gốc; tại mỗi context, gộp override của mọi role user được gán ở context đó và các context tổ tiên; PROHIBIT ở bất kỳ đâu thắng tuyệt đối, PREVENT thắng ALLOW ở cùng/cao hơn theo thứ tự duyệt, quyền chỉ được cấp khi có ít nhất một ALLOW còn hiệu lực. Site admin bỏ qua mọi kiểm tra.
  */
 export class PermissionEvaluator {
   /**
-   * Tên database của KHO CHUNG của tiến trình này (suy từ
-   * `DATABASE_URL` như các consumer outbox đã làm cho khoá
-   * watermark của chúng) — nửa kho chung của danh tính kho trong
-   * khoá cache của cấu hình `siteadmins` (xem
-   * `siteAdminsCacheKey`).
+   * Tên database của KHO CHUNG của tiến trình này (suy từ `DATABASE_URL` như các consumer outbox đã làm cho khoá watermark của chúng) — nửa kho chung của danh tính kho trong khoá cache của cấu hình `siteadmins` (xem `siteAdminsCacheKey`).
    *
-   * Tên cơ sở dữ liệu là phần bắt buộc phải có trong khoá: giá trị
-   * của mục cache là id người dùng — chỉ có nghĩa trong đúng một
-   * cơ sở dữ liệu — trong khi một Redis có thể được nhiều tiến
-   * trình trỏ vào các cơ sở dữ liệu khác nhau dùng chung (CI chạy
-   * nhiều DB test trên một Redis; spec seed-bootstrap spawn app
-   * con với `DATABASE_URL` khác nhưng cùng `REDIS_URL`). Khoá trần
-   * không nhúng cơ sở dữ liệu làm các tiến trình đó đọc/ghi lẫn
-   * mục của nhau: app con thấy danh sách admin của DB lạ, tưởng
-   * admin đầu tiên đã tồn tại nên bỏ qua việc tạo, và đăng nhập
-   * admin của DB con không bao giờ thành công.
+   * Tên cơ sở dữ liệu là phần bắt buộc phải có trong khoá: giá trị của mục cache là id người dùng — chỉ có nghĩa trong đúng một cơ sở dữ liệu — trong khi một Redis có thể được nhiều tiến trình trỏ vào các cơ sở dữ liệu khác nhau dùng chung (CI chạy nhiều DB test trên một Redis; spec seed-bootstrap spawn app con với `DATABASE_URL` khác nhưng cùng `REDIS_URL`). Khoá trần không nhúng cơ sở dữ liệu làm các tiến trình đó đọc/ghi lẫn mục của nhau: app con thấy danh sách admin của DB lạ, tưởng admin đầu tiên đã tồn tại nên bỏ qua việc tạo, và đăng nhập admin của DB con không bao giờ thành công.
    */
   private readonly sharedDatabaseName: string;
 
@@ -59,49 +40,28 @@ export class PermissionEvaluator {
     private readonly contexts: ContextsService,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
     @Inject(ConfigService) config: ConfigService,
-    // Khung định tuyến kho theo trung tâm — nguồn danh tính kho
-    // riêng của ngữ cảnh hiện tại cho khoá cache `siteadmins`
+    // Khung định tuyến kho theo trung tâm — nguồn danh tính kho riêng của ngữ cảnh hiện tại cho khoá cache `siteadmins`
     // (xem `siteAdminsCacheKey`). Tuỳ chọn ở tầng dựng để các
-    // spec dựng evaluator trực tiếp không phải dựng cả khung
-    // định tuyến: khi vắng mặt, evaluator suy khoá như trước —
-    // mọi ngữ cảnh đều theo danh tính kho chung của tiến trình.
+    // spec dựng evaluator trực tiếp không phải dựng cả khung định tuyến: khi vắng mặt, evaluator suy khoá như trước — mọi ngữ cảnh đều theo danh tính kho chung của tiến trình.
     @Optional() @Inject(SpaceDatabaseService) private readonly spaceDb?: SpaceDatabaseService,
   ) {
     let databaseName = 'default';
     try {
       databaseName = new URL(config.getOrThrow<string>('DATABASE_URL')).pathname.replace(/^\//, '') || 'default';
     } catch {
-      // DATABASE_URL không parse được: dùng đoạn khoá mặc định — cấu
-      // hình không hợp lệ vốn đã bị chặn ở tầng validate env khi boot.
+      // DATABASE_URL không parse được: dùng đoạn khoá mặc định — cấu hình không hợp lệ vốn đã bị chặn ở tầng validate env khi boot.
     }
     this.sharedDatabaseName = databaseName;
   }
 
   /**
    * Khoá cache của cấu hình `siteadmins` cho NGỮ CẢNH HIỆN TẠI:
-   * `access:siteadmins:<tên cơ sở dữ liệu của kho đang phục vụ
-   * ngữ cảnh>` — điểm ghi duy nhất là `setSiteAdmins` của chính
-   * evaluator nên ghi xuyên tại đó giữ hiệu lực tức thì.
+   * `access:siteadmins:<tên cơ sở dữ liệu của kho đang phục vụ ngữ cảnh>` — điểm ghi duy nhất là `setSiteAdmins` của chính evaluator nên ghi xuyên tại đó giữ hiệu lực tức thì.
    *
-   * Khoá phải mang danh tính của kho mà handle định tuyến sẽ
-   * đọc/ghi cho ngữ cảnh hiện tại, vì repository đọc cấu hình
-   * qua chính handle đó: ngữ cảnh đã phân giải tới một trung tâm
-   * kho riêng thì giá trị đọc ra là danh sách admin CỦA KHO ĐÓ.
-   * Danh tính lấy từ khung định tuyến
+   * Khoá phải mang danh tính của kho mà handle định tuyến sẽ đọc/ghi cho ngữ cảnh hiện tại, vì repository đọc cấu hình qua chính handle đó: ngữ cảnh đã phân giải tới một trung tâm kho riêng thì giá trị đọc ra là danh sách admin CỦA KHO ĐÓ. Danh tính lấy từ khung định tuyến
    * (`SpaceDatabaseService.currentContextDatabaseName` — cùng
-   * quyết định đích với chính handle định tuyến): ngữ cảnh kho
-   * riêng thì dùng tên database trong sổ đăng ký đã phân giải
-   * cho ngữ cảnh; mọi trường hợp còn lại (không slug, slug ở
-   * kho chung, slug chưa được chuẩn bị ở kho riêng) thì kho
-   * đang phục vụ ngữ cảnh là kho chung nên dùng tên database
-   * chính của tiến trình. Trước tiền điều kiện TĐ6 (issue #587)
-   * khoá chốt cứng theo `DATABASE_URL` của tiến trình — mù kho:
-   * kho nào được đọc trước thắng cả TTL dưới khoá duy nhất đó,
-   * nên quản trị của một trung tâm kho riêng không bao giờ được
-   * nhận diện trong chính trung tâm của mình (cache luôn chứa
-   * sẵn danh sách của kho chung), và chiều ngược lại danh tính
-   * admin của kho này có thể bị áp khi chấm quyền trong ngữ
-   * cảnh của kho khác.
+   * quyết định đích với chính handle định tuyến): ngữ cảnh kho riêng thì dùng tên database trong sổ đăng ký đã phân giải cho ngữ cảnh; mọi trường hợp còn lại (không slug, slug ở kho chung, slug chưa được chuẩn bị ở kho riêng) thì kho đang phục vụ ngữ cảnh là kho chung nên dùng tên database chính của tiến trình. Trước tiền điều kiện TĐ6 (issue #587) khoá chốt cứng theo `DATABASE_URL` của tiến trình — mù kho:
+   * kho nào được đọc trước thắng cả TTL dưới khoá duy nhất đó, nên quản trị của một trung tâm kho riêng không bao giờ được nhận diện trong chính trung tâm của mình (cache luôn chứa sẵn danh sách của kho chung), và chiều ngược lại danh tính admin của kho này có thể bị áp khi chấm quyền trong ngữ cảnh của kho khác.
    */
   private siteAdminsCacheKey(): string {
     return `access:siteadmins:${this.spaceDb?.currentContextDatabaseName() ?? this.sharedDatabaseName}`;

@@ -10,27 +10,18 @@ import type { EntryRow, QCategoryRow, QuestionBankRow, QuestionRow } from './que
  *   (`'bank_id as bankId'`) dùng chung cho select và returning —
  *   KHÔNG bật CamelCasePlugin (một nguồn sự thật là database thật).
  * - Ghi qua hàm ánh xạ Insert/Update loại `undefined` tường minh
- *   từng trường (thử nghiệm T-4): `undefined` = không ghi/không
- *   đổi, `null` = ghi NULL — hai nghĩa không được lẫn; điều kiện
- *   lọc động dựng bằng cách xâu chuỗi `.where` theo khuôn T-13,
- *   không truyền `undefined` vào điều kiện.
+ *   từng trường (thử nghiệm T-4): `undefined` = không ghi/không đổi, `null` = ghi NULL — hai nghĩa không được lẫn; điều kiện lọc động dựng bằng cách xâu chuỗi `.where` theo khuôn T-13, không truyền `undefined` vào điều kiện.
  * - Khoá chính `uuidv7()` do database sinh (phụ lục U của kế
- *   hoạch): insert bỏ qua `id` (trừ khi phía gọi truyền tường
- *   minh, như `buildBank` cấp id trước để dựng context) và lấy
- *   dòng qua `returning`.
+ *   hoạch): insert bỏ qua `id` (trừ khi phía gọi truyền tường minh, như `buildBank` cấp id trước để dựng context) và lấy dòng qua `returning`.
  * - Điểm mở giao dịch của repository là `transaction(fn)`; các
- *   phương thức nhận handle tuỳ chọn (`QuestionBanksDb` = handle
- *   thường hoặc handle giao dịch) để phía gọi lồng thao tác vào
- *   giao dịch của mình.
+ *   phương thức nhận handle tuỳ chọn (`QuestionBanksDb` = handle thường hoặc handle giao dịch) để phía gọi lồng thao tác vào giao dịch của mình.
  * - CTE đệ quy của `listOutcomeIdsForNode` giữ NGUYÊN VĂN thân
- *   truy vấn SQL của bản cũ trước chuyển đổi, chỉ đổi đường thực thi sang
- *   `sql` của Kysely: `QueryResult.rows` đã có kiểu tường minh
+ *   truy vấn SQL của bản cũ trước chuyển đổi, chỉ đổi đường thực thi sang `sql` của Kysely: `QueryResult.rows` đã có kiểu tường minh
  *   (MT-15) nên bỏ được lớp ép kiểu `as unknown as { rows }` của
  *   bản cũ.
  *
  * Điểm chuyển tiếp C-7 đã được hấp thụ ở đợt access (#651):
- * giao dịch `buildBank` nay mở phía Kysely và ghi thẳng qua
- * `insertBank` tại đây cùng `insertCategory` của repository câu hỏi.
+ * giao dịch `buildBank` nay mở phía Kysely và ghi thẳng qua `insertBank` tại đây cùng `insertCategory` của repository câu hỏi.
  */
 
 export type { QuestionBankRow } from './questions';
@@ -106,8 +97,7 @@ export interface NewContribution {
 }
 
 // ---------------------------------------------------------------------------
-// Danh sách cột đọc: tên cột thật kèm bí danh camelCase, dùng chung cho
-// select và returning của từng bảng (khuôn pilot — không CamelCasePlugin).
+// Danh sách cột đọc: tên cột thật kèm bí danh camelCase, dùng chung cho select và returning của từng bảng (khuôn pilot — không CamelCasePlugin).
 // ---------------------------------------------------------------------------
 
 const QUESTION_BANK_COLUMNS = [
@@ -134,9 +124,7 @@ const CONTRIBUTION_COLUMNS = [
 
 /**
  * Cột của phép nối câu hỏi ↔ entry trong `listQuestionsWithEntryInCategories`:
- * bí danh mang tiền tố `q`/`entry` để hai bảng không đè tên cột lên
- * nhau trong dòng phẳng của Kysely; phương thức tự lắp lại hình
- * dạng lồng `{ q, entry }` của hợp đồng cũ trước khi trả.
+ * bí danh mang tiền tố `q`/`entry` để hai bảng không đè tên cột lên nhau trong dòng phẳng của Kysely; phương thức tự lắp lại hình dạng lồng `{ q, entry }` của hợp đồng cũ trước khi trả.
  */
 const QUESTION_WITH_ENTRY_COLUMNS = [
   'q.id as qId', 'q.category as qCategory', 'q.qtype as qQtype',
@@ -200,10 +188,7 @@ function contributionInsertValues(v: NewContribution) {
 }
 
 /**
- * Ánh xạ patch của `question_bank_contributions`: mọi trường dòng
- * có mặt trong patch (khác `undefined`) đều được ghi như bản cũ
- * trải patch; `updated_at` luôn bị ghi đè bằng thời điểm cập nhật
- * ở cuối, đúng thứ tự trải của bản cũ.
+ * Ánh xạ patch của `question_bank_contributions`: mọi trường dòng có mặt trong patch (khác `undefined`) đều được ghi như bản cũ trải patch; `updated_at` luôn bị ghi đè bằng thời điểm cập nhật ở cuối, đúng thứ tự trải của bản cũ.
  */
 function contributionUpdateSet(patch: Partial<ContributionRow>) {
   return {
@@ -243,9 +228,7 @@ function entryUpdateSet(patch: Partial<EntryRow>) {
 
 /**
  * Kho dữ liệu lớp BANK của feat Ngân hàng câu hỏi chung (issue #70):
- * bank, category thuộc bank, đề xuất đóng góp, và các tra cứu tín
- * hiệu (use_count từ exam_slots, đội ngũ giáo viên cho bank trường,
- * tên hiển thị người dùng cho dòng ghi công).
+ * bank, category thuộc bank, đề xuất đóng góp, và các tra cứu tín hiệu (use_count từ exam_slots, đội ngũ giáo viên cho bank trường, tên hiển thị người dùng cho dòng ghi công).
  */
 export class QuestionBanksRepository {
   constructor(private readonly handle: CentreDb) {}
@@ -284,8 +267,7 @@ export class QuestionBanksRepository {
 
   /**
    * Nhiều bank theo tập id trong một truy vấn (DL-04, issue #489):
-   * bản theo lô của `getBank` cho phép suy bank của nhiều category;
-   * thứ tự trả về không cam kết, caller tự tra theo id.
+   * bản theo lô của `getBank` cho phép suy bank của nhiều category; thứ tự trả về không cam kết, caller tự tra theo id.
    */
   async getBanksByIds(ids: string[], tx?: QuestionBanksDb): Promise<QuestionBankRow[]> {
     if (!ids.length) return [];
@@ -298,8 +280,7 @@ export class QuestionBanksRepository {
   }
 
   /**
-   * Bank trường của NHIỀU tenant trong một truy vấn (DL-04, issue
-   * #489): bản theo lô của `getSchoolBank` — cùng điều kiện lọc
+   * Bank trường của NHIỀU tenant trong một truy vấn (DL-04, issue #489): bản theo lô của `getSchoolBank` — cùng điều kiện lọc
    * (scope school + tenant + loại món), caller lấy dòng đầu tiên theo
    * từng tenant như đường đọc lẻ lấy dòng đầu tiên của truy vấn.
    */
@@ -316,9 +297,7 @@ export class QuestionBanksRepository {
   }
 
   /**
-   * Bank theo (scope, scope_ref_id) cho NHIỀU đích trong một truy
-   * vấn (DL-04, issue #489): bản theo lô của `getBankByScopeRef`,
-   * dùng cho phép suy bank khoá từ context của nhiều category.
+   * Bank theo (scope, scope_ref_id) cho NHIỀU đích trong một truy vấn (DL-04, issue #489): bản theo lô của `getBankByScopeRef`, dùng cho phép suy bank khoá từ context của nhiều category.
    */
   async listBanksByScopeRefs(scope: string, scopeRefIds: string[], kind: BankKind = 'question', tx?: QuestionBanksDb): Promise<QuestionBankRow[]> {
     if (!scopeRefIds.length) return [];
@@ -465,10 +444,7 @@ export class QuestionBanksRepository {
   }
 
   /**
-   * Các version đề ĐANG CHỨA một câu hỏi (truy nguồn chiều ngược
-   * câu → đề): mỗi hàng là một exam version có slot trỏ tới câu —
-   * một đề có nhiều version chứa câu thì có nhiều hàng, để người
-   * soạn thấy đúng các bản đề bị ảnh hưởng khi sửa/rút câu.
+   * Các version đề ĐANG CHỨA một câu hỏi (truy nguồn chiều ngược câu → đề): mỗi hàng là một exam version có slot trỏ tới câu — một đề có nhiều version chứa câu thì có nhiều hàng, để người soạn thấy đúng các bản đề bị ảnh hưởng khi sửa/rút câu.
    */
   async listContainingExams(questionId: string, tx?: QuestionBanksDb): Promise<{ examId: string; examVersionId: string; version: number; name: string }[]> {
     const db = tx ?? this.handle;

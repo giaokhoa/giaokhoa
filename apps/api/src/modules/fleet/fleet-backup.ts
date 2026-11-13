@@ -1,43 +1,15 @@
 /**
- * Sao lưu logic định kỳ của đội kho (issue #586) — script CLI chạy
- * bằng `pnpm --filter @giaokhoa/api fleet:backup`, hai chế độ:
+ * Sao lưu logic định kỳ của đội kho (issue #586) — script CLI chạy bằng `pnpm --filter @giaokhoa/api fleet:backup`, hai chế độ:
  *
- * CHẾ ĐỘ CHẠY (mặc định): chụp một bản sao lưu logic cho từng kho
- * còn mang dữ kiện (trạng thái đang hoạt động hoặc tạm ngưng — kho
- * đã đóng đã hết vòng đời dữ kiện; kho đang cấp phát chưa chắc có
- * database để chụp) và cho chính database control plane. Mỗi kho
- * ghi kết quả (trạng thái + thời điểm) vào registry của mình ngay
- * sau lượt chụp, nên tỉ lệ sao lưu thành công của từng kho đọc
- * được trực tiếp từ control plane. Một kho chụp hỏng không chặn
- * các kho còn lại. Sau khi chụp, dọn các bản cũ quá hạn lưu trữ
+ * CHẾ ĐỘ CHẠY (mặc định): chụp một bản sao lưu logic cho từng kho còn mang dữ kiện (trạng thái đang hoạt động hoặc tạm ngưng — kho đã đóng đã hết vòng đời dữ kiện; kho đang cấp phát chưa chắc có database để chụp) và cho chính database control plane. Mỗi kho ghi kết quả (trạng thái + thời điểm) vào registry của mình ngay sau lượt chụp, nên tỉ lệ sao lưu thành công của từng kho đọc được trực tiếp từ control plane. Một kho chụp hỏng không chặn các kho còn lại. Sau khi chụp, dọn các bản cũ quá hạn lưu trữ
  * (`FLEET_BACKUP_RETENTION_DAYS`, mặc định 30 ngày) nhưng luôn giữ
  * bản mới nhất của mỗi kho.
  *
- * CHẾ ĐỘ KIỂM (`--check`): không chụp gì, chỉ đối chiếu — kho nào
- * chưa có bản sao lưu thành công nào trong cửa sổ
- * `FLEET_BACKUP_MAX_AGE_HOURS` (mặc định 26 giờ, nới hơn chu kỳ
- * ngày một chút để dao động lịch không báo động giả) thì bị liệt
- * kê và tiến trình thoát mã 1. Mốc đối chiếu (`lastBackupAt` trong
- * registry) chỉ tiến ở lượt THÀNH CÔNG — xem
- * `FleetRegistryWriter.recordBackupOutcome` — nên kho chỉ có các
- * lượt thất bại kéo dài vẫn bị bắt quá hạn thay vì được các lượt
- * hỏng tự gia hạn cho mình. Control plane được kiểm theo cửa sổ
- * chặt hơn (`FLEET_CP_BACKUP_MAX_AGE_HOURS`, mặc định 13 giờ) dựa
- * trên tuổi tệp sao lưu mới nhất của nó, vì registry của control
- * plane nằm trong chính nó nên "lượt gần nhất" phải đọc từ đĩa.
- * Đây là điểm móc cảnh báo của vận hành: lịch giám sát gọi chế độ
- * kiểm và chuyển mã thoát khác 0 thành cảnh báo cho đội vận hành.
+ * CHẾ ĐỘ KIỂM (`--check`): không chụp gì, chỉ đối chiếu — kho nào chưa có bản sao lưu thành công nào trong cửa sổ `FLEET_BACKUP_MAX_AGE_HOURS` (mặc định 26 giờ, nới hơn chu kỳ ngày một chút để dao động lịch không báo động giả) thì bị liệt kê và tiến trình thoát mã 1. Mốc đối chiếu (`lastBackupAt` trong registry) chỉ tiến ở lượt THÀNH CÔNG — xem `FleetRegistryWriter.recordBackupOutcome` — nên kho chỉ có các lượt thất bại kéo dài vẫn bị bắt quá hạn thay vì được các lượt hỏng tự gia hạn cho mình. Control plane được kiểm theo cửa sổ chặt hơn (`FLEET_CP_BACKUP_MAX_AGE_HOURS`, mặc định 13 giờ) dựa trên tuổi tệp sao lưu mới nhất của nó, vì registry của control plane nằm trong chính nó nên "lượt gần nhất" phải đọc từ đĩa. Đây là điểm móc cảnh báo của vận hành: lịch giám sát gọi chế độ kiểm và chuyển mã thoát khác 0 thành cảnh báo cho đội vận hành.
  *
- * Mức tự động hoá là LỰA CHỌN KỸ THUẬT của đội thi công: lịch chụp
- * do hệ triển khai/lịch của máy vận hành kích hoạt CLI này (khai
- * `FLEET_BACKUP_DIR` trỏ ra vùng lưu trữ ngoài máy cụm), không
- * phải tiến trình nền trong ứng dụng — ứng dụng nghiệp vụ không
- * mang quyền chạm tới mọi kho chỉ để phục vụ sao lưu. Các bản chụp
- * chạy qua kết nối quản trị của cụm khi được cấu hình
+ * Mức tự động hoá là LỰA CHỌN KỸ THUẬT của đội thi công: lịch chụp do hệ triển khai/lịch của máy vận hành kích hoạt CLI này (khai `FLEET_BACKUP_DIR` trỏ ra vùng lưu trữ ngoài máy cụm), không phải tiến trình nền trong ứng dụng — ứng dụng nghiệp vụ không mang quyền chạm tới mọi kho chỉ để phục vụ sao lưu. Các bản chụp chạy qua kết nối quản trị của cụm khi được cấu hình
  * (`DATABASE_ADMIN_URL`, xem `resolveDumpConnectionUrl` trong
- * `fleet-common.ts`): schema nghiệp vụ áp FORCE ROW LEVEL SECURITY
- * cả với chủ sở hữu bảng nên chỉ đường quản trị mới cho ra bản sao
- * đầy đủ.
+ * `fleet-common.ts`): schema nghiệp vụ áp FORCE ROW LEVEL SECURITY cả với chủ sở hữu bảng nên chỉ đường quản trị mới cho ra bản sao đầy đủ.
  */
 import { existsSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { basename, join } from 'node:path';
@@ -81,10 +53,7 @@ function isBackupTarget(status: string): boolean {
 }
 
 /**
- * Dọn bản sao lưu quá hạn trong thư mục của MỘT kho: tệp (và tệp
- * băm đi kèm) có thời điểm sửa cũ hơn hạn lưu trữ sẽ bị xoá, trừ
- * bản mới nhất của thư mục — kho luôn còn ít nhất một điểm khôi
- * phục dù lịch chụp có gián đoạn dài hơn hạn lưu trữ.
+ * Dọn bản sao lưu quá hạn trong thư mục của MỘT kho: tệp (và tệp băm đi kèm) có thời điểm sửa cũ hơn hạn lưu trữ sẽ bị xoá, trừ bản mới nhất của thư mục — kho luôn còn ít nhất một điểm khôi phục dù lịch chụp có gián đoạn dài hơn hạn lưu trữ.
  */
 function pruneSpaceBackupDir(dir: string, retentionDays: number, now: Date): number {
   if (!existsSync(dir)) return 0;

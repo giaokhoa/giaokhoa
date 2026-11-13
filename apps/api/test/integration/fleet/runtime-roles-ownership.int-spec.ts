@@ -3,28 +3,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildOwnershipTransferQuery } from '../../../src/modules/fleet/runtime-roles';
 
 /**
- * Ca hồi quy của việc CHUYỂN CHỦ SỞ HỮU ĐỐI TƯỢNG sang role
- * migration (issue #603, tiếp nối issue #586): câu truy vấn
- * `buildOwnershipTransferQuery` KHÔNG được liệt kê sequence gắn
- * với cột của bảng, vì PostgreSQL từ chối đổi chủ riêng cho
- * sequence dạng này ở cả hai động từ ALTER TABLE và ALTER SEQUENCE
+ * Ca hồi quy của việc CHUYỂN CHỦ SỞ HỮU ĐỐI TƯỢNG sang role migration (issue #603, tiếp nối issue #586): câu truy vấn `buildOwnershipTransferQuery` KHÔNG được liệt kê sequence gắn với cột của bảng, vì PostgreSQL từ chối đổi chủ riêng cho sequence dạng này ở cả hai động từ ALTER TABLE và ALTER SEQUENCE
  * ("cannot change owner of sequence") — chính lỗi này đã làm
  * deploy production của PR #595 lỗi ở bước migrate.
  *
- * Kiểm chứng trên database thật của riêng ca này (tên mang hậu tố
- * 603, dọn sạch ở afterAll): một bảng serial đúng dạng bảng
- * `__drizzle_migrations` của drizzle-kit (schema `drizzle`), một
- * bảng có cột identity, một sequence rời và một bảng thường — tất
- * cả thuộc role quản trị của cụm. Ca khẳng định hai điểm: danh
- * sách câu lệnh do truy vấn sinh ra loại cả hai sequence gắn cột
- * nhưng giữ sequence rời; và chạy toàn bộ danh sách theo đúng thứ
- * tự trả về thì không lỗi, chủ cuối của mọi đối tượng (bảng,
- * sequence gắn cột, sequence rời, index) đều là role migration.
+ * Kiểm chứng trên database thật của riêng ca này (tên mang hậu tố 603, dọn sạch ở afterAll): một bảng serial đúng dạng bảng `__drizzle_migrations` của drizzle-kit (schema `drizzle`), một bảng có cột identity, một sequence rời và một bảng thường — tất cả thuộc role quản trị của cụm. Ca khẳng định hai điểm: danh sách câu lệnh do truy vấn sinh ra loại cả hai sequence gắn cột nhưng giữ sequence rời; và chạy toàn bộ danh sách theo đúng thứ tự trả về thì không lỗi, chủ cuối của mọi đối tượng (bảng, sequence gắn cột, sequence rời, index) đều là role migration.
  *
- * Vai quản trị suy ra từ username của `DATABASE_URL` (môi trường
- * test của repo) để ca chạy được trên mọi cụm, không khóa cứng tên
- * `postgres`: ở CI đó là user `postgres`, ở cụm local có thể là
- * superuser khác.
+ * Vai quản trị suy ra từ username của `DATABASE_URL` (môi trường test của repo) để ca chạy được trên mọi cụm, không khóa cứng tên `postgres`: ở CI đó là user `postgres`, ở cụm local có thể là superuser khác.
  */
 const SCRATCH_DATABASE = 'giaokhoa_test_ownership_603';
 const MIGRATOR_ROLE = 'giaokhoa_migrator_test_603';
@@ -64,8 +49,7 @@ async function listTransferStatements(): Promise<string[]> {
 }
 
 beforeAll(async () => {
-  // Dọn tàn dư của lượt chạy trước (nếu có) rồi dựng database trầy
-  // với đúng bốn dạng đối tượng của ca hồi quy.
+  // Dọn tàn dư của lượt chạy trước (nếu có) rồi dựng database trầy với đúng bốn dạng đối tượng của ca hồi quy.
   await withClient(clusterUrl('postgres'), async (client) => {
     await client.query(
       `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${SCRATCH_DATABASE}' AND pid <> pg_backend_pid()`,

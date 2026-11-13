@@ -26,28 +26,11 @@ import {
 import '#config/i18n';
 
 /**
- * Quản trị chương trình GDPT 2018 (K0a + GDPT-SEED): bề mặt chính là
- * danh sách môn học — thu/mở ra chương trình theo khối, cây của một
- * khối trình bày theo mẫu Bộ (bảng Nội dung | Yêu cầu cần đạt nhóm
- * theo mạch). Tạo/sửa môn, chương trình, node và YCCĐ đều là MÀN
- * RIÊNG; Sửa/Xoá nằm ngay tại dòng (§9). Panel đồng bộ dữ liệu chuẩn
- * nằm cuối trang như tiện ích phụ: chương trình đã được seed tự động
- * khi dựng DB (restore từ dump đông cứng, định danh cố định theo dump), panel chỉ để đồng bộ lại
- * khi dataset được đính chính — nạp lại không nhân đôi và không xoá
+ * Quản trị chương trình GDPT 2018 (K0a + GDPT-SEED): bề mặt chính là danh sách môn học — thu/mở ra chương trình theo khối, cây của một khối trình bày theo mẫu Bộ (bảng Nội dung | Yêu cầu cần đạt nhóm theo mạch). Tạo/sửa môn, chương trình, node và YCCĐ đều là MÀN RIÊNG; Sửa/Xoá nằm ngay tại dòng (§9). Panel đồng bộ dữ liệu chuẩn nằm cuối trang như tiện ích phụ: chương trình đã được seed tự động khi dựng DB (restore từ dump đông cứng, định danh cố định theo dump), panel chỉ để đồng bộ lại khi dataset được đính chính — nạp lại không nhân đôi và không xoá
  * (sổ đăng ký + luật không-xoá phía API quyết định). Mọi lời gọi bị
- * API gác bằng curriculum:manage tại context hệ thống: 403 thì trang
- * hiện thông báo không có quyền thay vì sập (học sinh không vào được
- * trang này).
+ * API gác bằng curriculum:manage tại context hệ thống: 403 thì trang hiện thông báo không có quyền thay vì sập (học sinh không vào được trang này).
  *
- * Luồng dữ liệu (F-01 của rà soát #133): bốn nguồn nền — trạng thái
- * dataset chương trình, contexts (để neo danh sách môn ở context hệ
- * thống), trạng thái dataset SGK và danh sách sách — đọc qua
- * TanStack Query từ lib/curriculum; lỗi 403 ở bất kỳ nguồn nào thì
- * trang coi là không có quyền, lỗi khác hiện thông báo tải thất bại.
- * Chương trình của một môn và cây của một cuốn sách chỉ tải khi mở
- * lần đầu (truy vấn con theo từng dòng, bật theo trạng thái mở) rồi
- * giữ trong bộ nhớ đệm; đồng bộ dataset và xoá đi qua các đột biến
- * của lib/curriculum, làm mới đúng cụm khoá bị ảnh hưởng.
+ * Luồng dữ liệu (F-01 của rà soát #133): bốn nguồn nền — trạng thái dataset chương trình, contexts (để neo danh sách môn ở context hệ thống), trạng thái dataset SGK và danh sách sách — đọc qua TanStack Query từ lib/curriculum; lỗi 403 ở bất kỳ nguồn nào thì trang coi là không có quyền, lỗi khác hiện thông báo tải thất bại. Chương trình của một môn và cây của một cuốn sách chỉ tải khi mở lần đầu (truy vấn con theo từng dòng, bật theo trạng thái mở) rồi giữ trong bộ nhớ đệm; đồng bộ dataset và xoá đi qua các đột biến của lib/curriculum, làm mới đúng cụm khoá bị ảnh hưởng.
  */
 
 // --- Các dòng con lười tải ----------------------------------------------------

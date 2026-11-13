@@ -61,47 +61,27 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   /** Handle Kysely đọc sổ — dựng trên `registryPool` qua factory của adapter control plane. */
   private readonly registryDb: ControlPlaneDb | null;
   /**
-   * Các slug mà lần chuẩn bị gần nhất kết luận đang ở chế độ KHO
-   * RIÊNG — cùng vai trò với bản phía API: bảng này KHÔNG bị
-   * `onPoolClosed` xoá theo mục đã-chuẩn-bị, để `currentKysely`
-   * phân biệt "slug chưa từng chuẩn bị" (được rơi về kho chung
-   * theo hợp đồng) với "slug đã chuẩn bị ở kho riêng nhưng mục
-   * đã-chuẩn-bị đã bị thu hồi" (phải fail-closed). Mục của một
-   * slug bị xoá khi lần chuẩn bị sau kết luận slug đó ở kho chung.
+   * Các slug mà lần chuẩn bị gần nhất kết luận đang ở chế độ KHO RIÊNG — cùng vai trò với bản phía API: bảng này KHÔNG bị `onPoolClosed` xoá theo mục đã-chuẩn-bị, để `currentKysely` phân biệt "slug chưa từng chuẩn bị" (được rơi về kho chung theo hợp đồng) với "slug đã chuẩn bị ở kho riêng nhưng mục đã-chuẩn-bị đã bị thu hồi" (phải fail-closed). Mục của một slug bị xoá khi lần chuẩn bị sau kết luận slug đó ở kho chung.
    */
   private readonly dedicatedSlugs = new Set<string>();
 
   /**
-   * Handle Kysely của kho chung cho đường định tuyến; null cho tới
-   * khi được gắn — `worker.module.ts` gắn nó bằng cùng pool kho
-   * chung lúc khởi động. Instance này KHÔNG được `destroy()` riêng
+   * Handle Kysely của kho chung cho đường định tuyến; null cho tới khi được gắn — `worker.module.ts` gắn nó bằng cùng pool kho chung lúc khởi động. Instance này KHÔNG được `destroy()` riêng
    * (huỷ nó sẽ đóng luôn pool chung) — vòng đời của nó đi theo
    * vòng đời pool.
    */
   private sharedKysely: CentreDb | null = null;
   /**
-   * Các trung tâm đã chuẩn bị xong: slug → handle + kho của
-   * handle. Đây là bảng tra ĐỒNG BỘ mà `routedKysely` dùng tại
-   * thời điểm mỗi lần gọi — phân giải (đọc sổ, mở pool) là thao
-   * tác bất đồng bộ nên phải xong từ bước chuẩn bị, không thể chen
-   * vào đường đồng bộ của một lần truy vấn.
+   * Các trung tâm đã chuẩn bị xong: slug → handle + kho của handle. Đây là bảng tra ĐỒNG BỘ mà `routedKysely` dùng tại thời điểm mỗi lần gọi — phân giải (đọc sổ, mở pool) là thao tác bất đồng bộ nên phải xong từ bước chuẩn bị, không thể chen vào đường đồng bộ của một lần truy vấn.
    */
   private readonly preparedKysely = new Map<string, { db: CentreDb; databaseName: string }>();
   /**
-   * Trình quản lý pool cho các handle Kysely của kho riêng (tạo
-   * lười, trần theo kho, đóng khi nhàn rỗi, thay pool khi danh
-   * tính kết nối đổi).
+   * Trình quản lý pool cho các handle Kysely của kho riêng (tạo lười, trần theo kho, đóng khi nhàn rỗi, thay pool khi danh tính kết nối đổi).
    */
   private readonly kyselyPools: SpacePoolManager<CentreDb>;
 
   /**
-   * Handle định tuyến Kysely theo ngữ cảnh — hợp đồng
-   * chuẩn bị-trước và fail-closed như phía API: ngữ cảnh mang slug
-   * chưa từng chuẩn bị thì về kho chung; slug đã chuẩn bị ở kho
-   * riêng mà mục đã-chuẩn-bị đã bị thu hồi thì ném
-   * `SpaceRoutingError`, không rơi im lặng về kho chung. Ngữ nghĩa
-   * uỷ thác qua Proxy được chứng minh bằng spec `routed-kysely`
-   * phía worker (transaction, getter `schema`, builder lười).
+   * Handle định tuyến Kysely theo ngữ cảnh — hợp đồng chuẩn bị-trước và fail-closed như phía API: ngữ cảnh mang slug chưa từng chuẩn bị thì về kho chung; slug đã chuẩn bị ở kho riêng mà mục đã-chuẩn-bị đã bị thu hồi thì ném `SpaceRoutingError`, không rơi im lặng về kho chung. Ngữ nghĩa uỷ thác qua Proxy được chứng minh bằng spec `routed-kysely` phía worker (transaction, getter `schema`, builder lười).
    */
   readonly routedKysely: CentreDb;
 
@@ -150,15 +130,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
     });
     this.kyselyPools = new SpacePoolManager<CentreDb>({
       idleTimeoutMs,
-      // Pool của một kho bị gỡ (đóng vì nhàn rỗi, hoặc bị thay vì
-      // sổ đổi danh tính kết nối) thì các trung tâm trỏ vào kho đó
-      // cũng hết trạng thái "đã chuẩn bị": handle của pool đã chết
-      // không còn được dùng. Việc chuẩn bị lại diễn ra ở lần gọi
-      // `getKyselyForSpace`/`withSpaceKysely` kế tiếp; riêng đường
-      // ĐỒNG BỘ của `routedKysely` không chuẩn bị lại được, nên với
-      // slug đã chuẩn bị ở kho riêng nó fail-closed (xem
-      // `dedicatedSlugs` và `currentKysely`) thay vì chạm vào
-      // handle đã chết hoặc rơi về kho chung.
+      // Pool của một kho bị gỡ (đóng vì nhàn rỗi, hoặc bị thay vì sổ đổi danh tính kết nối) thì các trung tâm trỏ vào kho đó cũng hết trạng thái "đã chuẩn bị": handle của pool đã chết không còn được dùng. Việc chuẩn bị lại diễn ra ở lần gọi `getKyselyForSpace`/`withSpaceKysely` kế tiếp; riêng đường ĐỒNG BỘ của `routedKysely` không chuẩn bị lại được, nên với slug đã chuẩn bị ở kho riêng nó fail-closed (xem `dedicatedSlugs` và `currentKysely`) thay vì chạm vào handle đã chết hoặc rơi về kho chung.
       onPoolClosed: (databaseName) => {
         for (const [slug, entry] of [...this.preparedKysely]) {
           if (entry.databaseName === databaseName) this.preparedKysely.delete(slug);
@@ -170,10 +142,7 @@ export class SpaceDatabaseService implements OnModuleDestroy {
   }
 
   /**
-   * Gắn handle Kysely kho chung — `worker.module.ts` gọi đúng một
-   * lần lúc khởi động, bằng handle dựng trên pool kho chung. Mọi
-   * đích `shared` và mọi ngữ cảnh chưa chuẩn bị trung tâm riêng
-   * đều uỷ thác về handle này qua `routedKysely`.
+   * Gắn handle Kysely kho chung — `worker.module.ts` gọi đúng một lần lúc khởi động, bằng handle dựng trên pool kho chung. Mọi đích `shared` và mọi ngữ cảnh chưa chuẩn bị trung tâm riêng đều uỷ thác về handle này qua `routedKysely`.
    */
   bindSharedKysely(db: CentreDb): void {
     this.sharedKysely = db;

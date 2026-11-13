@@ -40,41 +40,22 @@ export type EnrolMethod = (typeof ENROL_METHODS)[number];
  *
  * Các bất biến (report §2#5):
  *  - Ghi danh ≠ gán role ≠ xác thực. Ghi danh cấp một role
- *    tại context khoá học qua facade Access; `isEnrolled` chỉ kiểm tra
- *    bản ghi ghi danh (trạng thái + cửa sổ thời gian).
+ *    tại context khoá học qua facade Access; `isEnrolled` chỉ kiểm tra bản ghi ghi danh (trạng thái + cửa sổ thời gian).
  *  - User bị SUSPENDED không truy cập được khoá học (cổng của CoursesService dùng
  *    isEnrolled(onlyActive)) dù gán role của họ vẫn còn.
  *  - Unenrol giữ dữ liệu đóng góp: khi user có bản ghi completion
- *    hoặc điểm trong khoá học (truy vấn dữ liệu liên quan dùng chung
- *    ở tầng dữ liệu) hoặc luôn theo luật enrol hiện hành, dòng
- *    user_enrolments được giữ dạng WITHDRAWN (trạng thái mềm) thay vì
- *    xoá cứng, và `user_unenrolled` được phát. Gán role do ghi danh
- *    này cấp sẽ bị gỡ.
+ *    hoặc điểm trong khoá học (truy vấn dữ liệu liên quan dùng chung ở tầng dữ liệu) hoặc luôn theo luật enrol hiện hành, dòng user_enrolments được giữ dạng WITHDRAWN (trạng thái mềm) thay vì xoá cứng, và `user_unenrolled` được phát. Gán role do ghi danh này cấp sẽ bị gỡ.
  *  - Ghi danh hết hạn (timeEnd trong quá khứ) không còn hiệu lực; job
  *    `enrol-expiry` của worker cũng chuyển chúng sang SUSPENDED hàng loạt.
  */
 @Injectable()
 /**
- * Nghiệp vụ ghi danh (enrolment).
- * Đối chiếu Moodle: lib/enrollib.php (enrol_get_plugin, user_enrolment) và các plugin enrol_manual/enrol_self/enrol_cohort.
- * Trạng thái ghi danh: 0 = đang hiệu lực, 1 = tạm đình chỉ, 2 = đã rút; ghi danh có thể có cửa sổ thời gian (timeStart/timeEnd).
- * Cohort sync: thành viên cohort được tự động ghi danh qua instance cohort; rời cohort thì ghi danh cohort bị rút
+ * Nghiệp vụ ghi danh (enrolment). Đối chiếu Moodle: lib/enrollib.php (enrol_get_plugin, user_enrolment) và các plugin enrol_manual/enrol_self/enrol_cohort. Trạng thái ghi danh: 0 = đang hiệu lực, 1 = tạm đình chỉ, 2 = đã rút; ghi danh có thể có cửa sổ thời gian (timeStart/timeEnd). Cohort sync: thành viên cohort được tự động ghi danh qua instance cohort; rời cohort thì ghi danh cohort bị rút
  * (chỉ rút khi user không còn dữ liệu liên quan — bài nộp/điểm — theo truy vấn dữ liệu liên quan dùng chung ở tầng dữ liệu, khớp hành vi Moodle).
  */
 export class EnrolService implements OnModuleInit {
   /**
-   * Bề mặt vật chất hoá cohort dùng chung (`@giaokhoa/enrol`): funnel ghi
-   * danh lõi, đường gỡ ghi danh lõi và hai điểm vào vật chất hoá
-   * theo sự kiện thành viên cohort sống ở tầng dữ liệu dùng chung
-   * để tiến trình khác (worker) gọi được cùng một định nghĩa.
-   * Service này dựng bề mặt bằng tay cầm Kysely đã định tuyến của
-   * API (D5 #657 — cùng handle `routedKysely` mà repository enrol
-   * dùng), bộ điều hợp outbox Kysely của API (xem dưới) và cổng ngữ
-   * cảnh platform của API, rồi dịch lỗi của bề mặt (mang mã kỹ thuật) về exception
-   * HTTP mang cùng mã và thông điệp như trước khi trích xuất.
-   * Phần thuộc về tiến trình API ở lại đây: kiểm capability của
-   * người thao tác, tin nhắn chào mừng, và các đường quản trị
-   * instance.
+   * Bề mặt vật chất hoá cohort dùng chung (`@giaokhoa/enrol`): funnel ghi danh lõi, đường gỡ ghi danh lõi và hai điểm vào vật chất hoá theo sự kiện thành viên cohort sống ở tầng dữ liệu dùng chung để tiến trình khác (worker) gọi được cùng một định nghĩa. Service này dựng bề mặt bằng tay cầm Kysely đã định tuyến của API (D5 #657 — cùng handle `routedKysely` mà repository enrol dùng), bộ điều hợp outbox Kysely của API (xem dưới) và cổng ngữ cảnh platform của API, rồi dịch lỗi của bề mặt (mang mã kỹ thuật) về exception HTTP mang cùng mã và thông điệp như trước khi trích xuất. Phần thuộc về tiến trình API ở lại đây: kiểm capability của người thao tác, tin nhắn chào mừng, và các đường quản trị instance.
    */
   private readonly materialization: CohortMaterializationSurface;
 
@@ -93,25 +74,12 @@ export class EnrolService implements OnModuleInit {
   ) {
     this.materialization = new CohortMaterializationSurface({
       db: spaceDb.routedKysely,
-      // Bộ điều hợp cổng outbox của bề mặt sang đường ghi Kysely
-      // của `OutboxService` (biến thể `enqueueKysely`, chuẩn từ
-      // PR #672): cùng ngữ nghĩa phân giải tenant qua ALS như
-      // đường cũ trước chuyển đổi, chỉ khác handle transaction. Mọi đường
-      // ghi outbox còn lại của service này cũng đi qua biến thể
-      // Kysely (vd `setSuspended` gọi thẳng `enqueueKysely` bằng
-      // transaction của bên gọi — điểm nối C-8/C đã đóng ở PR
-      // #683), không còn đường ghi bộ máy cũ nào trong service.
+      // Bộ điều hợp cổng outbox của bề mặt sang đường ghi Kysely của `OutboxService` (biến thể `enqueueKysely`, chuẩn từ PR #672): cùng ngữ nghĩa phân giải tenant qua ALS như đường cũ trước chuyển đổi, chỉ khác handle transaction. Mọi đường ghi outbox còn lại của service này cũng đi qua biến thể Kysely (vd `setSuspended` gọi thẳng `enqueueKysely` bằng transaction của bên gọi — điểm nối C-8/C đã đóng ở PR #683), không còn đường ghi bộ máy cũ nào trong service.
       outbox: {
         enqueue: (tx, input) => this.outbox.enqueueKysely(tx, input),
         enqueueStandalone: (input) => spaceDb.routedKysely.transaction().execute((trx) => this.outbox.enqueueKysely(trx, input)),
       },
-      // Cổng ngữ cảnh platform GIỮ `spaceSlug` của ngữ cảnh hiện
-      // tại (Phần A, issue #587 — A4, đúng khuôn
-      // `permission-evaluator.service.ts`): khi bề mặt vật chất hoá được gọi
-      // trong request của một trung tâm ở kho riêng, các lượt
-      // đọc/ghi xuyên tenant của nó phải chạy trên kho của trung
-      // tâm đó, không rơi về kho chung. Chỉ đổi đích dữ kiện,
-      // không đổi tầm nhìn RLS (cờ `platform: true` giữ nguyên).
+      // Cổng ngữ cảnh platform GIỮ `spaceSlug` của ngữ cảnh hiện tại (Phần A, issue #587 — A4, đúng khuôn `permission-evaluator.service.ts`): khi bề mặt vật chất hoá được gọi trong request của một trung tâm ở kho riêng, các lượt đọc/ghi xuyên tenant của nó phải chạy trên kho của trung tâm đó, không rơi về kho chung. Chỉ đổi đích dữ kiện, không đổi tầm nhìn RLS (cờ `platform: true` giữ nguyên).
       runInPlatformScope: (fn) => {
         const spaceSlug = tenantAls.getStore()?.spaceSlug;
         return tenantAls.run({ platform: true, ...(spaceSlug ? { spaceSlug } : {}) }, fn);
@@ -139,8 +107,7 @@ export class EnrolService implements OnModuleInit {
 
   // --- các instance ----------------------------------------------------------------
   /**
-   * Người xem có capability quản lý enrol tại khoá học hay không (site admin
-   * được tính là có — xem PermissionEvaluator.hasCapability).
+   * Người xem có capability quản lý enrol tại khoá học hay không (site admin được tính là có — xem PermissionEvaluator.hasCapability).
    */
   private async canManageEnrol(viewerId: string, courseId: string): Promise<boolean> {
     return this.evaluator.hasCapability(viewerId, 'enrol:manage', await this.courses.courseContextId(courseId));
@@ -148,19 +115,14 @@ export class EnrolService implements OnModuleInit {
 
   /**
    * Che khoá ghi danh của instance đối với người không có quyền quản lý enrol:
-   * khoá không bao giờ rời server cho học viên/người ngoài (response mang
-   * `enrolmentKey: null`, đúng hình dạng bản ghi). Dùng cho mọi đường đọc
-   * instance phơi qua API; đường nội bộ vẫn dùng bản ghi gốc.
+   * khoá không bao giờ rời server cho học viên/người ngoài (response mang `enrolmentKey: null`, đúng hình dạng bản ghi). Dùng cho mọi đường đọc instance phơi qua API; đường nội bộ vẫn dùng bản ghi gốc.
    */
   private hideInstanceKey(instance: EnrolRow): EnrolRow {
     return instance.enrolmentKey ? { ...instance, enrolmentKey: null } : instance;
   }
 
   /**
-   * Tạo enrol instance cho khoá học (manual/self/cohort/fee).
-   * `enrolmentKey` là khoá ghi danh của instance self; tin nhắn chào mừng mặc
-   * định bật cho self và tắt cho manual (đúng mặc định Moodle) trừ khi
-   * `sendWelcomeMessage` được chỉ định rõ.
+   * Tạo enrol instance cho khoá học (manual/self/cohort/fee). `enrolmentKey` là khoá ghi danh của instance self; tin nhắn chào mừng mặc định bật cho self và tắt cho manual (đúng mặc định Moodle) trừ khi `sendWelcomeMessage` được chỉ định rõ.
    */
   async createInstance(actorId: string, courseId: string, input: {
     method: string; name?: string; roleShortname?: string; status?: number; enrolPeriod?: number;

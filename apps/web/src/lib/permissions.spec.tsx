@@ -9,21 +9,9 @@ import { useCourseGradeData } from '#features/grades/queries/course-grade';
 import { useCoursesGradeData } from '#hooks/use-courses-grade-data';
 
 /**
- * Bảo chứng phân loại khoá dạy/học theo định nghĩa “thuộc khoá” đã chốt
- * ở #33 (việc nối tiếp #66): thuộc khoá = ghi danh đang hiệu lực ∪ gán
- * vai tại context khoá. Trước fix #66, permissions.tsx chỉ tính ghi
- * danh (enrolments/me chỉ đọc user_enrolments) nên giáo viên được gán
- * vai tại khoá mà không ghi danh — đúng thiết kế seed — rơi vào cả hai
- * danh sách đều rỗng và trang tổng quan báo chưa ghi danh khoá nào.
+ * Bảo chứng phân loại khoá dạy/học theo định nghĩa “thuộc khoá” đã chốt ở #33 (việc nối tiếp #66): thuộc khoá = ghi danh đang hiệu lực ∪ gán vai tại context khoá. Trước fix #66, permissions.tsx chỉ tính ghi danh (enrolments/me chỉ đọc user_enrolments) nên giáo viên được gán vai tại khoá mà không ghi danh — đúng thiết kế seed — rơi vào cả hai danh sách đều rỗng và trang tổng quan báo chưa ghi danh khoá nào.
  *
- * Từ F-02 (rà soát #133, issue #149) phân loại suy TRỌN từ ảnh chụp
- * capabilities, provider không còn gọi enrolments/me nữa: phía API,
- * nửa “ghi danh” của hợp nhất luôn hiện diện trong ảnh chụp dưới dạng
- * gán vai — tầng ghi danh chốt roleId cho mọi instance (mặc định vai
- * học viên), ghi danh thì cấp vai đó tại context khoá, rút ghi danh
- * thì gỡ vai, đình chỉ thì giữ vai. Fixture dưới đây mô phỏng đúng
- * hợp đồng đó: học sinh “đã ghi danh” có gán vai student trong ảnh
- * chụp hệt học sinh được gán vai trực tiếp.
+ * Từ F-02 (rà soát #133, issue #149) phân loại suy TRỌN từ ảnh chụp capabilities, provider không còn gọi enrolments/me nữa: phía API, nửa “ghi danh” của hợp nhất luôn hiện diện trong ảnh chụp dưới dạng gán vai — tầng ghi danh chốt roleId cho mọi instance (mặc định vai học viên), ghi danh thì cấp vai đó tại context khoá, rút ghi danh thì gỡ vai, đình chỉ thì giữ vai. Fixture dưới đây mô phỏng đúng hợp đồng đó: học sinh “đã ghi danh” có gán vai student trong ảnh chụp hệt học sinh được gán vai trực tiếp.
  */
 
 const TEACHER_ID = '01900000-0000-7000-8000-0000000000a2';

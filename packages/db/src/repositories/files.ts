@@ -1,36 +1,15 @@
 /**
  * Repository của cụm TỆP trên Kysely.
  *
- * Vai trò: mọi truy cập tới bảng `files` của kho trung tâm (bản
- * ghi logic của tệp theo khuôn Moodle: mỗi bản ghi là một file tại
+ * Vai trò: mọi truy cập tới bảng `files` của kho trung tâm (bản ghi logic của tệp theo khuôn Moodle: mỗi bản ghi là một file tại
  * (context, component, fileArea, itemId, filePath, fileName), nội
- * dung vật lý được deduplicate theo `contentHash` và refcount suy
- * ra từ số bản ghi cùng hash) tập trung ở đây, kèm ba hình chiếu
- * đọc tối thiểu trên các bảng của module Bài tập
+ * dung vật lý được deduplicate theo `contentHash` và refcount suy ra từ số bản ghi cùng hash) tập trung ở đây, kèm ba hình chiếu đọc tối thiểu trên các bảng của module Bài tập
  * (`assign_submission_files`, `assign_submissions`,
- * `assign_grades`) phục vụ chốt khoá bài nộp của đường xoá tệp
- * dùng chung. Luật nghiệp vụ (kiểm quyền context, URL ký, dọn nội
- * dung vật lý khi refcount về 0) nằm ở tầng service phía ứng
- * dụng; repository chỉ thực thi truy cập dữ kiện.
+ * `assign_grades`) phục vụ chốt khoá bài nộp của đường xoá tệp dùng chung. Luật nghiệp vụ (kiểm quyền context, URL ký, dọn nội dung vật lý khi refcount về 0) nằm ở tầng service phía ứng dụng; repository chỉ thực thi truy cập dữ kiện.
  *
- * Khuôn hình dạng dữ liệu ở biên repository — cùng khuôn pilot kho
- * control plane (xem mục "Sổ tay chuyển đổi repository sang Kysely"
- * trong `AGENTS.md` của package): bên trong dùng tên cột
- * snake_case của interface schema codegen; bên ngoài trả/nhận hình
- * dạng camelCase qua danh sách cột tường minh có bí danh và hàm
- * ánh xạ ghi loại `undefined` từng trường (thử nghiệm T-4); mọi
- * giá trị where là tham số bắt buộc. Phép đếm refcount giữ nguyên
- * biểu thức `count(*)::int` của đường cũ trước chuyển đổi (hàm tổng hợp của
- * `sql` template — họ FunctionModule/`sql` trong tài liệu Kysely)
- * để kiểu runtime ở biên vẫn là `number`, không trôi thành chuỗi
- * int8. Repository không import từ `apps/*`, không đọc ALS/ngữ
- * cảnh ứng dụng, không tự mở pool, không đọc biến môi trường.
+ * Khuôn hình dạng dữ liệu ở biên repository — cùng khuôn pilot kho control plane (xem mục "Sổ tay chuyển đổi repository sang Kysely" trong `AGENTS.md` của package): bên trong dùng tên cột snake_case của interface schema codegen; bên ngoài trả/nhận hình dạng camelCase qua danh sách cột tường minh có bí danh và hàm ánh xạ ghi loại `undefined` từng trường (thử nghiệm T-4); mọi giá trị where là tham số bắt buộc. Phép đếm refcount giữ nguyên biểu thức `count(*)::int` của đường cũ trước chuyển đổi (hàm tổng hợp của `sql` template — họ FunctionModule/`sql` trong tài liệu Kysely) để kiểu runtime ở biên vẫn là `number`, không trôi thành chuỗi int8. Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh ứng dụng, không tự mở pool, không đọc biến môi trường.
  *
- * Lưu ý giao dịch: không phía gọi nào của cụm này mở giao dịch
- * qua repository (kiểm kê ở thân PR của issue #647) — phương thức
- * `transaction` vẫn có mặt theo khuôn chung, và mọi phương thức
- * nhận handle tuỳ chọn làm tham số cuối như các repository đã
- * chuyển đổi khác.
+ * Lưu ý giao dịch: không phía gọi nào của cụm này mở giao dịch qua repository (kiểm kê ở thân PR của issue #647) — phương thức `transaction` vẫn có mặt theo khuôn chung, và mọi phương thức nhận handle tuỳ chọn làm tham số cuối như các repository đã chuyển đổi khác.
  */
 import { sql, type Insertable } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
@@ -77,10 +56,7 @@ export interface NewFile {
 }
 
 /**
- * Hình chiếu tối thiểu của một bài nộp mà chốt xoá tệp cần: bài
- * nộp nào, của ai, đang ở trạng thái vòng đời nào và thuộc lần
- * nộp thứ mấy — đủ để đường xoá dùng chung áp đúng khoá bài nộp
- * của module Bài tập mà không phải nạp toàn bộ bản ghi bài nộp.
+ * Hình chiếu tối thiểu của một bài nộp mà chốt xoá tệp cần: bài nộp nào, của ai, đang ở trạng thái vòng đời nào và thuộc lần nộp thứ mấy — đủ để đường xoá dùng chung áp đúng khoá bài nộp của module Bài tập mà không phải nạp toàn bộ bản ghi bài nộp.
  */
 export interface LinkedSubmissionRow {
   submissionId: string;
@@ -141,8 +117,7 @@ function fileInsertValues(values: NewFile): Insertable<CentreDB['files']> {
 }
 
 /**
- * Repository metadata tệp trên Kysely: bản ghi tệp logic và các
- * hình chiếu chốt khoá bài nộp của kho trung tâm.
+ * Repository metadata tệp trên Kysely: bản ghi tệp logic và các hình chiếu chốt khoá bài nộp của kho trung tâm.
  */
 export class FilesRepository {
   constructor(private readonly handle: CentreDb) {}
@@ -198,11 +173,7 @@ export class FilesRepository {
   }
 
   /**
-   * Các bài nộp đang gắn với một tệp qua bảng liên kết của module
-   * Bài tập (`assign_submission_files`): tệp bài nộp nào cũng có
-   * đúng một dòng liên kết tại đây. Đường xoá dùng chung dùng kết
-   * quả này để biết tệp có đang chịu khoá bài nộp hay không trước
-   * khi xoá.
+   * Các bài nộp đang gắn với một tệp qua bảng liên kết của module Bài tập (`assign_submission_files`): tệp bài nộp nào cũng có đúng một dòng liên kết tại đây. Đường xoá dùng chung dùng kết quả này để biết tệp có đang chịu khoá bài nộp hay không trước khi xoá.
    */
   async listSubmissionLinks(fileId: string, db: RepoDb = this.db()): Promise<LinkedSubmissionRow[]> {
     return db
@@ -214,10 +185,7 @@ export class FilesRepository {
   }
 
   /**
-   * Một bài nộp theo id, ở hình chiếu tối thiểu của chốt xoá tệp
-   * — dùng khi bản ghi tệp tự khai là tệp bài nộp (component/file
-   * area của module Bài tập, item id là id bài nộp) nhưng dòng
-   * liên kết vắng mặt.
+   * Một bài nộp theo id, ở hình chiếu tối thiểu của chốt xoá tệp — dùng khi bản ghi tệp tự khai là tệp bài nộp (component/file area của module Bài tập, item id là id bài nộp) nhưng dòng liên kết vắng mặt.
    */
   async getSubmission(submissionId: string, db: RepoDb = this.db()): Promise<LinkedSubmissionRow | undefined> {
     return db
@@ -229,11 +197,7 @@ export class FilesRepository {
   }
 
   /**
-   * Gói chấm hiện hành của một học viên cho một bài tập (trạng
-   * thái + lần nộp mà gói thuộc về): chốt xoá tệp so lần nộp của
-   * gói với lần nộp hiện hành của bài nộp để biết bài đã được TRẢ
-   * BÀI hay chưa, đúng ngữ nghĩa "gói chấm của lần nộp hiện hành"
-   * của module Bài tập.
+   * Gói chấm hiện hành của một học viên cho một bài tập (trạng thái + lần nộp mà gói thuộc về): chốt xoá tệp so lần nộp của gói với lần nộp hiện hành của bài nộp để biết bài đã được TRẢ BÀI hay chưa, đúng ngữ nghĩa "gói chấm của lần nộp hiện hành" của module Bài tập.
    */
   async getGradeForSubmission(
     assignmentId: string,

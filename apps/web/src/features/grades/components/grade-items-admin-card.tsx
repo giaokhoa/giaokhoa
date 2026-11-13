@@ -1,10 +1,5 @@
 /**
- * Card quản trị mục điểm trên trang Điểm theo bài (pages/grades.tsx),
- * chỉ render cho staff của khoá: sửa tên/thang điểm từng mục, đặt
- * chính sách công bố, công bố/thu hồi công bố, xoá mục, và form tạo
- * mục điểm nhập tay mới. State sửa mục, state form tạo và thông báo
- * quản trị do file trang giữ; các thao tác ghi đi qua handler của
- * trang (đột biến của features/grades/queries/course-grade) truyền xuống qua props.
+ * Card quản trị mục điểm trên trang Điểm theo bài (pages/grades.tsx), chỉ render cho staff của khoá: sửa tên/thang điểm từng mục, đặt chính sách công bố, công bố/thu hồi công bố, xoá mục, và form tạo mục điểm nhập tay mới. State sửa mục, state form tạo và thông báo quản trị do file trang giữ; các thao tác ghi đi qua handler của trang (đột biến của features/grades/queries/course-grade) truyền xuống qua props.
  */
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';

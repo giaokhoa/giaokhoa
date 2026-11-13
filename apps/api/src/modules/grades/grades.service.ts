@@ -28,15 +28,9 @@ export interface ActivityGradeView {
 }
 
 /**
- * GradesModule facade — ĐIỂM THEO TỪNG BÀI (quyết định 23:49
- * ngày 25/10/2026, issue #224). Nguồn sự thật duy nhất của điểm là điểm
- * của từng hoạt động: quiz attempt ghi qua recordActivityGrade, bài tập
- * chấm theo bài, GV nhập/sửa điểm của một bài qua setGrade/updateGrade.
- * Mọi phép tính số học nằm ở engine thuần @giaokhoa/grades (adjustedGrade).
+ * GradesModule facade — ĐIỂM THEO TỪNG BÀI (quyết định 23:49 ngày 25/10/2026, issue #224). Nguồn sự thật duy nhất của điểm là điểm của từng hoạt động: quiz attempt ghi qua recordActivityGrade, bài tập chấm theo bài, GV nhập/sửa điểm của một bài qua setGrade/updateGrade. Mọi phép tính số học nằm ở engine thuần @giaokhoa/grades (adjustedGrade).
  *
- * ĐÃ GỠ HẲN ở #224: gradebook tổng hợp theo khoá (categories/letters/
- * scales/outcomes, điểm tổng khoá, regrade, export/import CSV) và Sổ
- * điểm VN (vn-books TT 22/27). Không còn khái niệm điểm của khoá học.
+ * ĐÃ GỠ HẲN ở #224: gradebook tổng hợp theo khoá (categories/letters/ scales/outcomes, điểm tổng khoá, regrade, export/import CSV) và Sổ điểm VN (vn-books TT 22/27). Không còn khái niệm điểm của khoá học.
  *
  * Kết nối (chỉ registry/facade, không dùng repository xuyên module):
  *  - đăng ký một provider phần trăm điểm vào CoursesService để
@@ -64,10 +58,7 @@ export class GradesService implements OnModuleInit {
     this.courses.registerGradeProvider(async (userId, courseId) => this.gradePercentagesForUser(userId, courseId));
     this.completion.registerGradeEvaluator(async (cmId, userId) => this.evaluateCmGrade(cmId, userId));
     this.completion.registerCourseGradeChecker(async (courseId, userId) => this.courseGradePassed(courseId, userId));
-    // Dữ liệu điểm là một họ "dữ liệu liên quan" quyết định giữ/xoá
-    // dòng ghi danh khi gỡ ghi danh: họ đó nay được truy vấn trực
-    // tiếp ở tầng dữ liệu dùng chung (@giaokhoa/enrol) thay cho probe
-    // đăng ký lúc khởi tạo tiến trình như trước đây.
+    // Dữ liệu điểm là một họ "dữ liệu liên quan" quyết định giữ/xoá dòng ghi danh khi gỡ ghi danh: họ đó nay được truy vấn trực tiếp ở tầng dữ liệu dùng chung (@giaokhoa/enrol) thay cho probe đăng ký lúc khởi tạo tiến trình như trước đây.
   }
 
   private async requireCap(actorId: string, capability: string, courseId: string): Promise<void> {

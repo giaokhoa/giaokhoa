@@ -1,7 +1,5 @@
 /**
- * Hỗ trợ RRULE tối thiểu (report §2#13: một chuỗi là MỘT chuỗi logic duy nhất với
- * các ngoại lệ, không phải N sự kiện rời rạc). Hỗ trợ: FREQ=DAILY|WEEKLY|MONTHLY
- * với COUNT hoặc UNTIL — tập con mà UI lặp lại của Moodle phơi bày
+ * Hỗ trợ RRULE tối thiểu (report §2#13: một chuỗi là MỘT chuỗi logic duy nhất với các ngoại lệ, không phải N sự kiện rời rạc). Hỗ trợ: FREQ=DAILY|WEEKLY|MONTHLY với COUNT hoặc UNTIL — tập con mà UI lặp lại của Moodle phơi bày
  * (lặp lại mỗi ngày/tuần/tháng, N lần hoặc cho tới một ngày).
  */
 /**

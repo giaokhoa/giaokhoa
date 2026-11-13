@@ -1,19 +1,10 @@
 # @giaokhoa/grades — README nghiệp vụ
 
-> File này ghi các **quyết định nghiệp vụ quan trọng và còn đang hiệu lực** của package.
-> Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub.
+> File này ghi các **quyết định nghiệp vụ quan trọng và còn đang hiệu lực** của package. Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub.
 
 ## Package phụ trách nghiệp vụ gì
 
-`packages/grades` là **bộ máy tính điểm dùng chung** của hệ thống: bộ đánh giá công
-thức điểm (grade formula) và bộ tính điểm theo công thức (grade calculator) phục vụ
-**điểm theo từng hoạt động** — điểm của từng bài kiểm tra/bài tập — trong `apps/api`,
-hợp nhất về một package duy nhất (issue #137) để **mọi bề mặt tính điểm cùng một kết
-quả**: điểm của một bài mà GV chấm và thấy, điểm HS/PH thấy sau khi bài được công bố,
-và điểm đưa sang xuất vnEdu không bao giờ được lệch nhau vì hai bản cài đặt công thức
-khác nhau.
-Ngữ nghĩa tính toán ở đây bám Moodle (sàn tối thiểu của sản phẩm) và đã được chốt rõ
-ở những điểm Moodle không định nghĩa hết.
+`packages/grades` là **bộ máy tính điểm dùng chung** của hệ thống: bộ đánh giá công thức điểm (grade formula) và bộ tính điểm theo công thức (grade calculator) phục vụ **điểm theo từng hoạt động** — điểm của từng bài kiểm tra/bài tập — trong `apps/api`, hợp nhất về một package duy nhất (issue #137) để **mọi bề mặt tính điểm cùng một kết quả**: điểm của một bài mà GV chấm và thấy, điểm HS/PH thấy sau khi bài được công bố, và điểm đưa sang xuất vnEdu không bao giờ được lệch nhau vì hai bản cài đặt công thức khác nhau. Ngữ nghĩa tính toán ở đây bám Moodle (sàn tối thiểu của sản phẩm) và đã được chốt rõ ở những điểm Moodle không định nghĩa hết.
 
 ## Quyết định nghiệp vụ còn hiệu lực
 
@@ -27,14 +18,10 @@ Ngữ nghĩa tính toán ở đây bám Moodle (sàn tối thiểu của sản p
 
 ## Ranh giới — package này KHÔNG làm gì
 
-- Không biết khái niệm học kỳ/môn/lớp/học sinh: engine thuần trên số và công thức.
-  Mọi ánh xạ nghiệp vụ (hoạt động nào dùng công thức nào, khi nào công bố điểm của
-  bài) nằm ở `apps/api`.
-- Không truy cập DB, không có trạng thái, không làm tròn "theo cảm giác" ngoài các
-  luật đã chốt ở trên.
+- Không biết khái niệm học kỳ/môn/lớp/học sinh: engine thuần trên số và công thức. Mọi ánh xạ nghiệp vụ (hoạt động nào dùng công thức nào, khi nào công bố điểm của bài) nằm ở `apps/api`.
+- Không truy cập DB, không có trạng thái, không làm tròn "theo cảm giác" ngoài các luật đã chốt ở trên.
 - Không chứa giao diện điểm (đó là `apps/web` + bề mặt điểm theo hoạt động ở API).
 
 ## Kỹ thuật tối thiểu
 
-- Nguồn: `grade-formula.ts` (parser + đánh giá), `grade-calculator.ts` (tổng hợp),
-  `parity-corpus.ts` (ca đối chiếu); test: `*.spec.ts` cùng thư mục.
+- Nguồn: `grade-formula.ts` (parser + đánh giá), `grade-calculator.ts` (tổng hợp), `parity-corpus.ts` (ca đối chiếu); test: `*.spec.ts` cùng thư mục.

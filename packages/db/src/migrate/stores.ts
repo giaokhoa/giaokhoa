@@ -1,17 +1,7 @@
 /**
- * Định nghĩa ba kho và bước tiền-migration dùng chung cho bộ máy
- * migration của `@giaokhoa/db` (runner `run.ts`, hậu kiểm `verify.ts`,
- * harness test dựng database từ rỗng).
+ * Định nghĩa ba kho và bước tiền-migration dùng chung cho bộ máy migration của `@giaokhoa/db` (runner `run.ts`, hậu kiểm `verify.ts`, harness test dựng database từ rỗng).
  *
- * Ba kho có bộ carrier riêng (danh sách đóng băng khai tại đây;
- * file SQL nằm trong thư mục migration của kho ở
- * `packages/db/migrations/`, cùng thư mục với các migration native),
- * số đếm kỳ vọng riêng và biến môi trường kết nối riêng — bảng này
- * là nơi duy nhất ghi các giá trị đó, để runner, hậu kiểm và harness
- * không tự chế bản sao lệch nhau. Số đếm kỳ vọng đo lại tại thời điểm thi công PR-N2 từ
- * database dựng bằng đường bộ máy cũ (mốc phương án: trung tâm 202
- * bảng + 21 policy RLS + 416 index, control plane 6 bảng, ngân
- * hàng hệ thống 10 bảng).
+ * Ba kho có bộ carrier riêng (danh sách đóng băng khai tại đây; file SQL nằm trong thư mục migration của kho ở `packages/db/migrations/`, cùng thư mục với các migration native), số đếm kỳ vọng riêng và biến môi trường kết nối riêng — bảng này là nơi duy nhất ghi các giá trị đó, để runner, hậu kiểm và harness không tự chế bản sao lệch nhau. Số đếm kỳ vọng đo lại tại thời điểm thi công PR-N2 từ database dựng bằng đường bộ máy cũ (mốc phương án: trung tâm 202 bảng + 21 policy RLS + 416 index, control plane 6 bảng, ngân hàng hệ thống 10 bảng).
  */
 import { sql, type Kysely } from 'kysely';
 
@@ -27,12 +17,9 @@ export interface ExpectedStoreCounts {
   /** Số index trong schema `public` (không tính index của hai bảng nhật ký); chỉ kiểm khi có giá trị. */
   indexes?: number;
   /**
-   * Số dòng trong `kysely_migration` sau khi áp đủ — là TỔNG số
-   * migration của kho (carrier đóng băng + migration native), KHÔNG
-   * phải số carrier: hậu kiểm carrier chỉ đối sánh diện carrier
+   * Số dòng trong `kysely_migration` sau khi áp đủ — là TỔNG số migration của kho (carrier đóng băng + migration native), KHÔNG phải số carrier: hậu kiểm carrier chỉ đối sánh diện carrier
    * (`MigrationStore.carrierNames`), còn hậu kiểm đếm toàn bộ nhật ký
-   * sau một lượt migrate trọn. Thêm một migration native thì cả thư
-   * mục lẫn con số này cùng tăng trong cùng PR.
+   * sau một lượt migrate trọn. Thêm một migration native thì cả thư mục lẫn con số này cùng tăng trong cùng PR.
    */
   journalRows: number;
 }
@@ -40,21 +27,11 @@ export interface ExpectedStoreCounts {
 /** Mô tả một kho cho bộ máy migration. */
 export interface MigrationStore {
   /**
-   * Tên thư mục migration của kho trong `packages/db/migrations/` —
-   * thư mục chứa CẢ carrier đóng băng lẫn migration native của kho.
+   * Tên thư mục migration của kho trong `packages/db/migrations/` — thư mục chứa CẢ carrier đóng băng lẫn migration native của kho.
    */
   migrationsDirName: string;
   /**
-   * Tên các migration carrier đóng băng của kho, theo thứ tự áp —
-   * diện mà hậu kiểm migration đối sánh. Đây là tập ĐÃ ĐÓNG
-   * theo định nghĩa: carrier là các migration thời bộ máy cũ được giữ
-   * nguyên từng byte để áp vào database đang sống qua nhật ký
-   * Kysely, không bao giờ có carrier mới. Mọi migration viết sau chiến
-   * dịch chuyển ORM là migration native — nằm cùng thư mục, được
-   * `migrateToLatest()` áp như migration mới, và TUYỆT ĐỐI không
-   * thêm vào danh sách này (thêm vào là đòi nhật ký của database
-   * đang sống phải có sẵn tên chưa từng áp, làm runner dừng oan —
-   * sự cố deploy sau PR #687, issue #689).
+   * Tên các migration carrier đóng băng của kho, theo thứ tự áp — diện mà hậu kiểm migration đối sánh. Đây là tập ĐÃ ĐÓNG theo định nghĩa: carrier là các migration thời bộ máy cũ được giữ nguyên từng byte để áp vào database đang sống qua nhật ký Kysely, không bao giờ có carrier mới. Mọi migration viết sau chiến dịch chuyển ORM là migration native — nằm cùng thư mục, được `migrateToLatest()` áp như migration mới, và TUYỆT ĐỐI không thêm vào danh sách này (thêm vào là đòi nhật ký của database đang sống phải có sẵn tên chưa từng áp, làm runner dừng oan — sự cố deploy sau PR #687, issue #689).
    */
   carrierNames: string[];
   /** Số đếm kỳ vọng sau migrate-từ-rỗng. */
@@ -94,16 +71,10 @@ export function isMigrationStoreKey(value: string): value is MigrationStoreKey {
 }
 
 /**
- * Hàm `uuidv7()` cho cụm PostgreSQL dưới 18 — trích nguyên văn hằng
- * số `UUIDV7_SHIM` trong
- * `apps/api/src/modules/tenants/centre-provision.ts` (nguồn duy nhất
- * của chuỗi này trong repo; mọi bản sao khác phải khớp từng byte
- * với nguồn đó — kiểm chứng bằng đối chiếu chuỗi trong spec của
- * bộ máy migration).
+ * Hàm `uuidv7()` cho cụm PostgreSQL dưới 18 — trích nguyên văn hằng số `UUIDV7_SHIM` trong `apps/api/src/modules/tenants/centre-provision.ts` (nguồn duy nhất của chuỗi này trong repo; mọi bản sao khác phải khớp từng byte với nguồn đó — kiểm chứng bằng đối chiếu chuỗi trong spec của bộ máy migration).
  *
  * Shim này chỉ cài ở bước tiền-migration, NGOÀI nội dung carrier:
- * nó không sửa byte/hash của file carrier, không ghi vào
- * `kysely_migration` và không tham gia bước cấy nhật ký.
+ * nó không sửa byte/hash của file carrier, không ghi vào `kysely_migration` và không tham gia bước cấy nhật ký.
  */
 export const UUIDV7_SHIM = `CREATE OR REPLACE FUNCTION uuidv7() RETURNS uuid AS $$ DECLARE ts_ms bigint := (extract(epoch from clock_timestamp()) * 1000)::bigint; b bytea; BEGIN b := decode(lpad(to_hex(ts_ms), 12, '0'), 'hex') || gen_random_bytes(10); b := set_byte(b, 6, (get_byte(b, 6) & 15) | 112); b := set_byte(b, 8, (get_byte(b, 8) & 63) | 128); RETURN encode(b, 'hex')::uuid; END; $$ LANGUAGE plpgsql VOLATILE`;
 

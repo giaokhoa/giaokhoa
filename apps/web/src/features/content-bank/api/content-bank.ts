@@ -9,11 +9,7 @@ import type {
 
 /**
  * Tầng gọi API thuần của Kho học liệu thuộc feature content-bank:
- * chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React
- * Query. Tầng `queries/` của feature bọc các hàm này thành
- * queryOptions và đột biến. Tách từ module phẳng
- * `src/lib/content-bank.ts` khi tổ chức lại apps/web theo mô
- * hình features/ (issue #500).
+ * chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành queryOptions và đột biến. Tách từ module phẳng `src/lib/content-bank.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
 
 /**

@@ -10,18 +10,9 @@ import { QuestionsService } from '../../../src/modules/questions/questions.servi
 /**
  * Đặc trưng hoá hình dạng QuestionView của ba đường liệt kê câu hỏi
  * (issue #488, điểm DL-01): `listQuestions`,
- * `listQuestionsByCurriculumFilter` và bản có cổng đọc
- * `listQuestionsByCurriculumFilterForViewer`.
+ * `listQuestionsByCurriculumFilter` và bản có cổng đọc `listQuestionsByCurriculumFilterForViewer`.
  *
- * Ba đường này lắp view từng câu bằng một vòng lặp await tại thời điểm
- * viết đặc trưng hoá. Test này ghim HÀNH VI đang có — tập câu trả về,
- * thứ tự, và hình dạng đầy đủ của từng view (answers theo thứ tự lưu,
- * options theo dạng câu, bản ghi phía đáp án, ngữ liệu, version mới
- * nhất) — bằng cách đối chiếu từng view của đường liệt kê với
- * `getQuestion` của chính câu đó (đường đọc đơn không đổi) cộng các
- * khẳng định cụ thể theo từng dạng câu. Refactor sang loader theo lô
- * phải giữ test này xanh nguyên vẹn; đổi hình dạng/thứ tự/quyền ở bất
- * kỳ đường nào là test phải đỏ.
+ * Ba đường này lắp view từng câu bằng một vòng lặp await tại thời điểm viết đặc trưng hoá. Test này ghim HÀNH VI đang có — tập câu trả về, thứ tự, và hình dạng đầy đủ của từng view (answers theo thứ tự lưu, options theo dạng câu, bản ghi phía đáp án, ngữ liệu, version mới nhất) — bằng cách đối chiếu từng view của đường liệt kê với `getQuestion` của chính câu đó (đường đọc đơn không đổi) cộng các khẳng định cụ thể theo từng dạng câu. Refactor sang loader theo lô phải giữ test này xanh nguyên vẹn; đổi hình dạng/thứ tự/quyền ở bất kỳ đường nào là test phải đỏ.
  */
 describe('Đặc trưng hoá view của các đường liệt kê câu hỏi (issue #488)', () => {
   let app: INestApplication;

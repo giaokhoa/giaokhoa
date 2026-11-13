@@ -37,9 +37,7 @@ export class BackupProcessor extends WorkerHost {
    * Xử lý một job của queue tương ứng.
    */
   async process(job: Job<{ jobId: string }>): Promise<{ status: string; sections?: number; cms?: number }> {
-    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
-    // ngữ cảnh platform tường minh để RLS fail-closed không làm mù
-    // dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
+    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc ngữ cảnh platform tường minh để RLS fail-closed không làm mù dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
     return tenantAls.run({ platform: true }, () => this.processInContext(job));
   }
 

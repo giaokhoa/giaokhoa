@@ -8,14 +8,7 @@ import { ClassesPage } from './classes';
 import { ClassJoinPage } from './class-join';
 
 /**
- * Spec bề mặt lớp của GV (CLASS-1, issue #184): kiểm LUỒNG NGHIỆP VỤ
- * qua endpoint thật (fetch được stub ở biên mạng): nạp học sinh theo
- * định danh tạo tài khoản thì mật khẩu tạm hiện đúng một lần trong thông
- * báo; import Excel trả báo cáo từng dòng (dòng lỗi không chặn dòng
- * tốt); duyệt yêu cầu tự báo danh gọi đúng endpoint; gán vai chấm bài
- * cho đồng GV gửi đúng bộ vai; kích hoạt lại học sinh đã đình chỉ là
- * thêm lại vào roster. Đổi luật nghiệp vụ (mã lỗi/mật khẩu tạm/hàng
- * chờ) thì các ca này phải đỏ.
+ * Spec bề mặt lớp của GV (CLASS-1, issue #184): kiểm LUỒNG NGHIỆP VỤ qua endpoint thật (fetch được stub ở biên mạng): nạp học sinh theo định danh tạo tài khoản thì mật khẩu tạm hiện đúng một lần trong thông báo; import Excel trả báo cáo từng dòng (dòng lỗi không chặn dòng tốt); duyệt yêu cầu tự báo danh gọi đúng endpoint; gán vai chấm bài cho đồng GV gửi đúng bộ vai; kích hoạt lại học sinh đã đình chỉ là thêm lại vào roster. Đổi luật nghiệp vụ (mã lỗi/mật khẩu tạm/hàng chờ) thì các ca này phải đỏ.
  */
 const CLASS_ID = '01900000-0000-7000-8000-0000000000c1';
 const OWNER_ID = '01900000-0000-7000-8000-0000000000b1';

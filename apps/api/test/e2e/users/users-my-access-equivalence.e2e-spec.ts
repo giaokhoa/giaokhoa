@@ -9,21 +9,13 @@ import {
 import { EXPECTED_SNAPSHOTS } from '../../support/users-my-access-snapshot.fixture';
 
 /**
- * Tương đương phân giải của ảnh chụp quyền (`GET /users/me/capabilities`)
- * sau khi chuyển sang phân giải THEO LÔ (issue: tăng tốc endpoint này):
+ * Tương đương phân giải của ảnh chụp quyền (`GET /users/me/capabilities`) sau khi chuyển sang phân giải THEO LÔ (issue: tăng tốc endpoint này):
  *   1. Chụp đáp ứng: với bộ dữ kiện dựng cố định (cây context khoá/lớp,
- *      override PROHIBIT/PREVENT/ALLOW trên một vai tuỳ chỉnh, các gán
- *      vai mẫu), đáp ứng cho từng vai mẫu phải khớp TỪNG TRƯỜNG với mốc
- *      đã chụp từ cài đặt cũ (đường gọi `hasCapability` tuần tự) — xem
- *      `users-my-access-snapshot.fixture.ts`.
+ *      override PROHIBIT/PREVENT/ALLOW trên một vai tuỳ chỉnh, các gán vai mẫu), đáp ứng cho từng vai mẫu phải khớp TỪNG TRƯỜNG với mốc đã chụp từ cài đặt cũ (đường gọi `hasCapability` tuần tự) — xem `users-my-access-snapshot.fixture.ts`.
  *   2. Đối chiếu oracle: tại các context nhạy cảm (gồm cây tenant có
- *      cổng membership), tập capability trong ảnh chụp phải bằng đúng
- *      tập suy từ endpoint kiểm tra quyền hiện hành
- *      `GET /access/has-capability` (đường `PermissionEvaluator` gốc)
- *      cho TỪNG capability đã đăng ký.
+ *      cổng membership), tập capability trong ảnh chụp phải bằng đúng tập suy từ endpoint kiểm tra quyền hiện hành `GET /access/has-capability` (đường `PermissionEvaluator` gốc) cho TỪNG capability đã đăng ký.
  *   3. Cổng tenant: người ngoài tenant bị chặn tuyệt đối trong cây
- *      tenant; site admin ở trong cây tenant KHÔNG có lối tắt — chỉ
- *      được phân giải như người thường theo gán vai neo trong tenant.
+ *      tenant; site admin ở trong cây tenant KHÔNG có lối tắt — chỉ được phân giải như người thường theo gán vai neo trong tenant.
  */
 describe('Người dùng: tương đương phân giải batch my-access', () => {
   let app: INestApplication;

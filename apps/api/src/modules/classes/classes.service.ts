@@ -63,12 +63,7 @@ const CLASS_ROLE_DEFS = [
 ] as const;
 
 /**
- * Bộ capability vật chất hoá tại context lớp cho từng vai khi lớp được
- * tạo (khuôn qbankmember/qbanklead của ngân hàng): override chỉ tồn tại
- * ở ĐÚNG context lớp đó, và chỉ ai được gán vai tại context lớp mới
- * hưởng — quyền trên lớp không tự chảy sang lớp khác. `cohort:manage` đi
- * kèm quyền quản roster vì roster THỰC CHẤT là cohort_members của
- * backing cohort và đường ghi đi qua GroupsService.
+ * Bộ capability vật chất hoá tại context lớp cho từng vai khi lớp được tạo (khuôn qbankmember/qbanklead của ngân hàng): override chỉ tồn tại ở ĐÚNG context lớp đó, và chỉ ai được gán vai tại context lớp mới hưởng — quyền trên lớp không tự chảy sang lớp khác. `cohort:manage` đi kèm quyền quản roster vì roster THỰC CHẤT là cohort_members của backing cohort và đường ghi đi qua GroupsService.
  */
 const CLASS_ROLE_GRANTS: Record<string, string[]> = {
   [CLASS_OWNER_ROLE]: [
@@ -117,10 +112,7 @@ export function toClassDto(row: ClassRow, canSeeJoinCode: boolean): ClassView {
 }
 
 /**
- * Đích thu học phí của một lớp (CLASS-3) — gói dữ kiện PaymentsService
- * cần để tạo payment `class_fee`: tenant sở hữu lớp (căn cứ chọn tài
- * khoản nhận + cổng tenant của payment), số tiền và đơn vị tiền của gói.
- * Trả về từ `resolveClassFeePurchase` sau khi đã qua mọi cổng phía lớp.
+ * Đích thu học phí của một lớp (CLASS-3) — gói dữ kiện PaymentsService cần để tạo payment `class_fee`: tenant sở hữu lớp (căn cứ chọn tài khoản nhận + cổng tenant của payment), số tiền và đơn vị tiền của gói. Trả về từ `resolveClassFeePurchase` sau khi đã qua mọi cổng phía lớp.
  */
 export interface ClassFeeTarget {
   classId: string;
@@ -131,10 +123,7 @@ export interface ClassFeeTarget {
 }
 
 /**
- * Kết quả phân giải một mã tham gia (issue #587, hạng mục 3 —
- * thiết kế C1): dòng lớp và slug của không gian kho riêng giữ
- * lớp đó (`null` khi lớp ở kho chung). `joinByCode` cần slug để
- * chạy toàn bộ các bước ghi của nó trong đúng kho của lớp.
+ * Kết quả phân giải một mã tham gia (issue #587, hạng mục 3 — thiết kế C1): dòng lớp và slug của không gian kho riêng giữ lớp đó (`null` khi lớp ở kho chung). `joinByCode` cần slug để chạy toàn bộ các bước ghi của nó trong đúng kho của lớp.
  */
 interface JoinCodeResolution {
   row: ClassRow;
@@ -147,10 +136,7 @@ interface JoinCodeResolution {
  *
  * Bất biến của lát nền:
  *  - Lớp sở hữu đúng một backing cohort; roster của lớp ≡ cohort_members
- *    của cohort đó — KHÔNG có bảng thành viên thứ hai. Mọi thay đổi
- *    roster đi qua GroupsService.addCohortMember/removeCohortMember để
- *    dùng chung một đường phát sự kiện (in-process + outbox) cho cohort
- *    sync vật chất hoá xuống từng khoá.
+ *    của cohort đó — KHÔNG có bảng thành viên thứ hai. Mọi thay đổi roster đi qua GroupsService.addCohortMember/removeCohortMember để dùng chung một đường phát sự kiện (in-process + outbox) cho cohort sync vật chất hoá xuống từng khoá.
  *  - Context lớp (CLASS=45) là cha của context các khoá trong lớp; quyền
  *    tại lớp chảy xuống khoá qua cây path của PermissionEvaluator.
  *  - Khoá tạo trong lớp tự có group "cả lớp" + enrol instance cohort

@@ -8,24 +8,12 @@ import { createTestApp } from '../../support/identity-access-helpers';
 /**
  * Hợp đồng bảng route tĩnh của các bề mặt đã đổi tên/hợp nhất
  * (issue #345, #342, #343): mọi khẳng định trong spec này hoặc đọc
- * tài liệu OpenAPI của ứng dụng đã boot, hoặc quét tĩnh khai báo
- * `@Controller` trên cây nguồn — không khẳng định nào lái hành vi qua
- * đáp ứng HTTP, nên spec thuộc tầng integration. Hành vi của các bề
- * mặt này (alias mang header Deprecation/Sunset và sinh log cấu trúc
- * `deprecated_route_alias`, đích xuất file theo định dạng) ở lại các
- * spec e2e tương ứng: `test/e2e/platform/action-path-standard`,
- * `test/e2e/platform/grades-path-standard` và
- * `test/e2e/platform/controller-consolidation-r6a1`.
+ * tài liệu OpenAPI của ứng dụng đã boot, hoặc quét tĩnh khai báo `@Controller` trên cây nguồn — không khẳng định nào lái hành vi qua đáp ứng HTTP, nên spec thuộc tầng integration. Hành vi của các bề mặt này (alias mang header Deprecation/Sunset và sinh log cấu trúc `deprecated_route_alias`, đích xuất file theo định dạng) ở lại các spec e2e tương ứng: `test/e2e/platform/action-path-standard`, `test/e2e/platform/grades-path-standard` và `test/e2e/platform/controller-consolidation-r6a1`.
  *
- * Bất biến được ghim: thêm/bớt/đổi bất kỳ route nào thuộc các bề mặt
- * dưới đây đều làm spec đỏ, kể cả khi các flow nghiệp vụ vẫn chạy —
- * các bảng kỳ vọng viết literal là mốc đối chiếu, không sinh từ code
- * đang được kiểm.
+ * Bất biến được ghim: thêm/bớt/đổi bất kỳ route nào thuộc các bề mặt dưới đây đều làm spec đỏ, kể cả khi các flow nghiệp vụ vẫn chạy — các bảng kỳ vọng viết literal là mốc đối chiếu, không sinh từ code đang được kiểm.
  */
 /**
- * Bảng route kỳ vọng của ba họ + alias: 100 cặp (method, path) dạng
- * OpenAPI, chụp tại main ngay trước lát dọn (sau khi PR #338 merge)
- * và viết literal tại đây làm mốc đối chiếu bất biến của lát.
+ * Bảng route kỳ vọng của ba họ + alias: 100 cặp (method, path) dạng OpenAPI, chụp tại main ngay trước lát dọn (sau khi PR #338 merge) và viết literal tại đây làm mốc đối chiếu bất biến của lát.
  */
 const EXPECTED_ROUTES: string[] = [
 
@@ -141,11 +129,7 @@ const EXPECTED_OWNERS: Record<string, string> = {
 };
 
 /**
- * Dựng bảng route + bản đồ sở hữu bằng cách quét tĩnh các file
- * controller trong `apps/api/src/modules`: đọc khai báo `@Controller`
- * của từng lớp và các decorator method của nó. Comment được lột bỏ
- * trước khi quét để các decorator chỉ được nhắc trong TSDoc (ví dụ
- * `@Post(':id/cells')` trong văn bản mô tả) không bị tính là route.
+ * Dựng bảng route + bản đồ sở hữu bằng cách quét tĩnh các file controller trong `apps/api/src/modules`: đọc khai báo `@Controller` của từng lớp và các decorator method của nó. Comment được lột bỏ trước khi quét để các decorator chỉ được nhắc trong TSDoc (ví dụ `@Post(':id/cells')` trong văn bản mô tả) không bị tính là route.
  */
 function scanControllers(): { routes: string[]; owners: Map<string, Set<string>> } {
   const modulesDir = join(process.cwd(), 'src', 'modules');

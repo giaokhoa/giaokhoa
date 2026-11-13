@@ -1,17 +1,13 @@
 import { createHash } from 'node:crypto';
 
 /**
- * Validate LỚP 3 — NỘI DUNG (hồ sơ research MCP Phần 3.1) cho payload
- * qua MCP. Biên MCP chỉ nhận chuỗi thuần và lát rich text là text-only
- * nên không tồn tại đường HTML/script vào nội dung; lớp này lo phần
- * riêng của đầu vào AI:
+ * Validate LỚP 3 — NỘI DUNG (hồ sơ research MCP Phần 3.1) cho payload qua MCP. Biên MCP chỉ nhận chuỗi thuần và lát rich text là text-only nên không tồn tại đường HTML/script vào nội dung; lớp này lo phần riêng của đầu vào AI:
  *  - chặn ký tự điều khiển C0 (trừ \n, \t) và ký tự zero-width /
  *    bidi-override (chống trojan-source trong nội dung câu hỏi);
  *  - chuẩn hoá: \r\n/\r → \n, Unicode NFC (dấu tiếng Việt dạng tổ hợp
  *    không lách được chống trùng — khớp hàm chuẩn hoá QB-4 + NFC);
  *  - từ chối trường nội dung toàn khoảng trắng.
- * Giới hạn độ dài/số lượng nằm ở lớp 1 (schema contracts); nghiệp vụ
- * theo qtype nằm ở lớp 2 (QuestionsService) — lớp này không lặp lại.
+ * Giới hạn độ dài/số lượng nằm ở lớp 1 (schema contracts); nghiệp vụ theo qtype nằm ở lớp 2 (QuestionsService) — lớp này không lặp lại.
  */
 
 export interface ContentViolation {
@@ -19,8 +15,7 @@ export interface ContentViolation {
   message: string;
 }
 
-// C0 controls except \t (0009) and \n (000A); \r (000D) được chuẩn hoá
-// thành \n TRƯỚC khi quét nên không nằm trong tập cấm ở đây.
+// C0 controls except \t (0009) and \n (000A); \r (000D) được chuẩn hoá thành \n TRƯỚC khi quét nên không nằm trong tập cấm ở đây.
 function containsForbiddenControl(value: string): boolean {
   for (const char of value) {
     const code = char.charCodeAt(0);

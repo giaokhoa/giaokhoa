@@ -20,27 +20,16 @@ import { MatrixImportService } from './matrix-import.service';
 import { QuizService } from './quiz.service';
 
 /**
- * QuizModule facade: QuizService (hoạt động mod_quiz trên question
- * engine). Phụ thuộc facade của Courses (course module + context),
- * Questions (bank + engine), Grades (grade item + ghi điểm của hoạt
- * động), Users (tên hiển thị học sinh cho thống kê câu sai) và Access
+ * QuizModule facade: QuizService (hoạt động mod_quiz trên question engine). Phụ thuộc facade của Courses (course module + context), Questions (bank + engine), Grades (grade item + ghi điểm của hoạt động), Users (tên hiển thị học sinh cho thống kê câu sai) và Access
  * (PermissionEvaluator/Contexts).
  *
- * Hai vòng module là tường minh từ issue #343 (dọn controller trùng
- * path), cả hai phía đều khai `forwardRef` theo khuôn vòng module đã
- * có của repo (Users ↔ Auth ↔ BetterAuth):
+ * Hai vòng module là tường minh từ issue #343 (dọn controller trùng path), cả hai phía đều khai `forwardRef` theo khuôn vòng module đã có của repo (Users ↔ Auth ↔ BetterAuth):
  * - Quiz ↔ Questions: controller chủ của tiền tố `question-banks` ở
- *   QuestionsModule uỷ thác bề mặt ma trận của bank cho
- *   MatrixBanksService của module này, trong khi QuizService dùng
- *   facade của Questions.
+ *   QuestionsModule uỷ thác bề mặt ma trận của bank cho MatrixBanksService của module này, trong khi QuizService dùng facade của Questions.
  * - Quiz ↔ Exams: `ExamMatricesController` của module này uỷ thác
- *   handler sinh đề cho ExamsService của ExamsModule, trong khi
- *   ExamsService dùng facade của Quiz.
+ *   handler sinh đề cho ExamsService của ExamsModule, trong khi ExamsService dùng facade của Quiz.
  *
- * QuizService đã tách cấu trúc bên trong theo 4 cụm ca sử dụng của
- * issue #295 (ghim đề / ma trận / sinh đề-đặc tả / lượt làm-chấm-kết
- * quả) cộng tầng thấp dùng chung, giữ nguyên bề mặt công khai và
- * wiring của module — xem docblock của facade QuizService.
+ * QuizService đã tách cấu trúc bên trong theo 4 cụm ca sử dụng của issue #295 (ghim đề / ma trận / sinh đề-đặc tả / lượt làm-chấm-kết quả) cộng tầng thấp dùng chung, giữ nguyên bề mặt công khai và wiring của module — xem docblock của facade QuizService.
  */
 @Module({
   imports: [AccessModule, CoursesModule, forwardRef(() => QuestionsModule), GradesModule, UsersModule, GroupsModule, CurriculumModule, EventsModule, TenantsModule, EnrolModule, FilesModule, forwardRef(() => ExamsModule), SpaceRoutingModule],

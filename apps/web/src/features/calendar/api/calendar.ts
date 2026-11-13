@@ -2,11 +2,7 @@ import { apiJson } from '#lib/api';
 import type { CalendarEventView, CalendarExportTokenView, CalendarSubscriptionView } from '../types/calendar';
 
 /**
- * Tầng gọi API thuần của trang lịch thuộc feature calendar: chỉ
- * chứa các hàm gọi HTTP, không phụ thuộc React hay React Query.
- * Tầng `queries/` của feature bọc các hàm này thành hook. Tách
- * từ module phẳng `src/lib/calendar.ts` khi tổ chức lại apps/web
- * theo mô hình features/ (issue #500).
+ * Tầng gọi API thuần của trang lịch thuộc feature calendar: chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành hook. Tách từ module phẳng `src/lib/calendar.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
 
 /**

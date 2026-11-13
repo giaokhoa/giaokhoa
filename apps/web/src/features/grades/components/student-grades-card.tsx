@@ -1,9 +1,7 @@
 /**
  * Card điểm của chính người dùng trên trang Điểm theo bài
  * (pages/grades.tsx): bảng từng bài của người dùng hiện tại — điểm,
- * phản hồi và trạng thái công bố của từng bài. Chỉ bài đã công bố mới
- * hiện điểm (dữ liệu do file trang nạp qua hook của
- * `src/hooks/use-courses-grade-data.ts` rồi truyền xuống; card chỉ trình bày).
+ * phản hồi và trạng thái công bố của từng bài. Chỉ bài đã công bố mới hiện điểm (dữ liệu do file trang nạp qua hook của `src/hooks/use-courses-grade-data.ts` rồi truyền xuống; card chỉ trình bày).
  */
 import { useTranslation } from 'react-i18next';
 
@@ -31,9 +29,7 @@ export interface StudentGradesCardProps {
  */
 export function StudentGradesCard({ activities, locale }: StudentGradesCardProps) {
   const { t } = useTranslation('app');
-  // Cột của bảng điểm từng bài trên bảng dùng chung: đúng bốn cột và
-  // nội dung ô của bảng tự vẽ trước đây (điểm chỉ hiện khi đã có điểm
-  // cuối, kèm mức tối đa của mục điểm; trạng thái đọc từ công bố).
+  // Cột của bảng điểm từng bài trên bảng dùng chung: đúng bốn cột và nội dung ô của bảng tự vẽ trước đây (điểm chỉ hiện khi đã có điểm cuối, kèm mức tối đa của mục điểm; trạng thái đọc từ công bố).
   const columns: DataColumn<ActivityGradeView>[] = [
     { id: 'item', header: t('gradeItem'), cell: ({ item }) => item.itemName },
     {

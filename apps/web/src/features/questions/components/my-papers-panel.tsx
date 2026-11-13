@@ -1,14 +1,5 @@
 /**
- * Panel "Đề của tôi" của trang ngân hàng câu hỏi: danh sách đề trong
- * bank đề cá nhân của giáo viên (đổi trạng thái/xoá tại dòng, hộp ghim
- * đề vào khoá học), form đề xuất đóng góp một đề lên bank chung, form
- * nộp BỘ HỒ SƠ kèm đề xuất đóng góp và danh sách lịch sử hồ sơ của
- * chính giáo viên. Dữ liệu danh sách đề do trang nạp rồi truyền
- * xuống; các query phụ của hộp ghim (khoá học/chương/nhóm) và danh
- * sách hồ sơ của tôi là cục bộ của panel nên panel tự gọi hook. Đột
- * biến qua hook của lib/questions-data; làm mới sau đột biến qua các
- * hàm refresh của trang truyền xuống; ghim thành công điều hướng
- * thẳng tới màn đề của khoá đích.
+ * Panel "Đề của tôi" của trang ngân hàng câu hỏi: danh sách đề trong bank đề cá nhân của giáo viên (đổi trạng thái/xoá tại dòng, hộp ghim đề vào khoá học), form đề xuất đóng góp một đề lên bank chung, form nộp BỘ HỒ SƠ kèm đề xuất đóng góp và danh sách lịch sử hồ sơ của chính giáo viên. Dữ liệu danh sách đề do trang nạp rồi truyền xuống; các query phụ của hộp ghim (khoá học/chương/nhóm) và danh sách hồ sơ của tôi là cục bộ của panel nên panel tự gọi hook. Đột biến qua hook của lib/questions-data; làm mới sau đột biến qua các hàm refresh của trang truyền xuống; ghim thành công điều hướng thẳng tới màn đề của khoá đích.
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -87,8 +78,7 @@ export function MyPapersPanel({
   const [deployGroupId, setDeployGroupId] = useState('');
   const [deployVariantCount, setDeployVariantCount] = useState('1');
 
-  // Chọn chương đầu tiên khi nội dung khoá đích tải về (nhịp của
-  // loadDeployQuizzes thủ công trước đây).
+  // Chọn chương đầu tiên khi nội dung khoá đích tải về (nhịp của loadDeployQuizzes thủ công trước đây).
   const firstDeploySectionId = deployContentQuery.data?.sections[0]?.id;
   if (!deploySectionId && firstDeploySectionId) {
     setDeploySectionId(firstDeploySectionId);

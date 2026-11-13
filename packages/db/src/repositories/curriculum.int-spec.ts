@@ -5,19 +5,9 @@ import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-suppo
 import { CurriculumRepository, type LearningOutcomeRow } from './curriculum';
 
 /**
- * Spec tích hợp của CurriculumRepository phía Kysely (issue #646,
- * nhóm G6). Database kho trung tâm được dựng từ rỗng bằng cầu nối
- * migration của package trên cụm PostgreSQL thật của môi trường
- * test; mọi ca chạy qua repository production — không mô phỏng
- * handle.
+ * Spec tích hợp của CurriculumRepository phía Kysely (issue #646, nhóm G6). Database kho trung tâm được dựng từ rỗng bằng cầu nối migration của package trên cụm PostgreSQL thật của môi trường test; mọi ca chạy qua repository production — không mô phỏng handle.
  *
- * Spec này là nơi CHỐT THỬ NGHIỆM T-14 (chiếu toàn bảng trong
- * select) cho điểm đo duy nhất của repo: `searchOutcomes` của bản
- * bộ máy cũ chiếu `select({ outcome: learningOutcomes, … })` —
- * Kysely không có chiếu-gộp-cả-bảng nên bản mới liệt kê tường minh
- * MỌI cột của bảng YCCĐ dưới tiền tố `outcome…` rồi lồng lại thành
- * object `outcome` trong mã; ca T-14 dưới đây khoá hình dạng kết
- * quả bằng deep-equal với chính dòng đọc thẳng từ repository.
+ * Spec này là nơi CHỐT THỬ NGHIỆM T-14 (chiếu toàn bảng trong select) cho điểm đo duy nhất của repo: `searchOutcomes` của bản bộ máy cũ chiếu `select({ outcome: learningOutcomes, … })` — Kysely không có chiếu-gộp-cả-bảng nên bản mới liệt kê tường minh MỌI cột của bảng YCCĐ dưới tiền tố `outcome…` rồi lồng lại thành object `outcome` trong mã; ca T-14 dưới đây khoá hình dạng kết quả bằng deep-equal với chính dòng đọc thẳng từ repository.
  * (Ca T-13 — hợp điều kiện động — được khoá qua
  * `countGuardedReferences` và lọc `listOutcomes`.)
  */

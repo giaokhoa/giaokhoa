@@ -15,24 +15,11 @@ import {
 /**
  * Cơ chế phát bù một lần khi chuyển đổi consumer đồng bộ cohort
  * (điểm chặn 1 trên PR #550): các dòng outbox cohort đã bị relay
- * đóng dấu `publishedAt` khi còn chưa có trong bảng định tuyến —
- * relay không bao giờ phát lại chúng, consumer polling cũ đọc
- * theo watermark thì đã bị gỡ — phải được phát bù thành job đúng
- * một lần theo watermark cũ trước khi khoá watermark bị xoá.
+ * đóng dấu `publishedAt` khi còn chưa có trong bảng định tuyến — relay không bao giờ phát lại chúng, consumer polling cũ đọc theo watermark thì đã bị gỡ — phải được phát bù thành job đúng một lần theo watermark cũ trước khi khoá watermark bị xoá.
  *
- * Các ca đi qua đường thật của production: dòng outbox được
- * chèn đúng hình dạng phía phát vẫn ghi (kèm `publishedAt` đã
- * đóng dấu), khoá watermark cũ được đặt trên Redis thật, rồi
- * gọi `drainLegacyBacklog()` của service thật — hoặc để
- * `OnModuleInit` tự chạy khi boot module mới — và khẳng định
- * tác dụng phụ nghiệp vụ ở tầng DB (ghi danh, sự kiện phát
- * tiếp), không khẳng định qua chi tiết triển khai.
+ * Các ca đi qua đường thật của production: dòng outbox được chèn đúng hình dạng phía phát vẫn ghi (kèm `publishedAt` đã đóng dấu), khoá watermark cũ được đặt trên Redis thật, rồi gọi `drainLegacyBacklog()` của service thật — hoặc để `OnModuleInit` tự chạy khi boot module mới — và khẳng định tác dụng phụ nghiệp vụ ở tầng DB (ghi danh, sự kiện phát tiếp), không khẳng định qua chi tiết triển khai.
  *
- * Mỗi ca dùng đồ thị riêng (id ngẫu nhiên) nên các ca độc lập
- * dữ kiện nghiệp vụ. Các dòng đã đóng dấu không bị relay quét
- * lại giữa chừng (relay chỉ lấy dòng chưa có dấu) nên khẳng
- * định "không có job" là khẳng định thật, không phải do relay
- * chen ngang.
+ * Mỗi ca dùng đồ thị riêng (id ngẫu nhiên) nên các ca độc lập dữ kiện nghiệp vụ. Các dòng đã đóng dấu không bị relay quét lại giữa chừng (relay chỉ lấy dòng chưa có dấu) nên khẳng định "không có job" là khẳng định thật, không phải do relay chen ngang.
  */
 describe('Worker cohort sync catchup (phát bù tồn đọng khi chuyển đổi ở #550)', () => {
   let context: INestApplicationContext;

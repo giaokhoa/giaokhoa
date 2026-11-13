@@ -31,8 +31,7 @@ function payloadString(payload: Record<string, unknown> | null, key: string): st
 
 /**
  * Đường đọc của logstore — nền cho báo cáo "ai đã làm gì" (Moodle report_log):
- * quyền xem được kiểm tại context của khoá khi lọc theo khoá, tại context hệ
- * thống khi xem toàn site, qua PermissionEvaluator như mọi module khác.
+ * quyền xem được kiểm tại context của khoá khi lọc theo khoá, tại context hệ thống khi xem toàn site, qua PermissionEvaluator như mọi module khác.
  */
 @Injectable()
 export class EventLogService {

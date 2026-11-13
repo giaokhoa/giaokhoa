@@ -9,12 +9,9 @@ import { courseContextId } from '../../support/engagement-helpers';
 import { createGradeItem, setGrade } from '../../support/assessment-helpers';
 
 /**
- * Khoá lỗ hổng đợt rà soát gác quyền #134 — H3 (payments read), H4 (analytics
- * insights toàn cục), H6 (analytics run không uỷ quyền).
+ * Khoá lỗ hổng đợt rà soát gác quyền #134 — H3 (payments read), H4 (analytics insights toàn cục), H6 (analytics run không uỷ quyền).
  * - H3: GET /payments/:id + /:id/refunds chỉ chủ sở hữu hoặc holder
- *   payment:manageaccounts tại system đọc được; người ngoài nhận 404
- *   payment.not_found (không lộ tồn tại). GET /payments/accounts đòi
- *   payment:manageaccounts (403 khi thiếu) như các route quản trị của module.
+ *   payment:manageaccounts tại system đọc được; người ngoài nhận 404 payment.not_found (không lộ tồn tại). GET /payments/accounts đòi payment:manageaccounts (403 khi thiếu) như các route quản trị của module.
  * - H4: GET /analytics/insights lọc theo analytics:viewinsights tại context
  *   của từng dòng — đúng vị từ của /insights/me.
  * - H6: POST /analytics/models/:name/run đòi analytics:manage tại context

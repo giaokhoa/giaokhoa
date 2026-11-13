@@ -6,15 +6,11 @@ export interface FieldConfig { required?: boolean; options?: string[]; defaultva
 export const FIELD_TYPES: CustomFieldType[] = ['text', 'textarea', 'select', 'checkbox', 'date'];
 
 /**
- * Facade của CustomFields (Moodle core_customfield). Các định nghĩa là metadata —
- * các bảng nghiệp vụ không bao giờ bị thay đổi. Giá trị được kiểm chứng đối chiếu với khai báo
- * của trường mỗi khi thực thể sở hữu (hồ sơ người dùng) được lưu.
+ * Facade của CustomFields (Moodle core_customfield). Các định nghĩa là metadata — các bảng nghiệp vụ không bao giờ bị thay đổi. Giá trị được kiểm chứng đối chiếu với khai báo của trường mỗi khi thực thể sở hữu (hồ sơ người dùng) được lưu.
  */
 @Injectable()
 /**
- * Trường tuỳ biến cho user/khoá học: định nghĩa theo category, kiểu dữ liệu (text, textarea, select, checkbox, datetime, password)
- * và kiểm tra giá trị theo configData của từng field trước khi lưu.
- * Đối chiếu Moodle: customfield_* (customfield/classes/handler.php).
+ * Trường tuỳ biến cho user/khoá học: định nghĩa theo category, kiểu dữ liệu (text, textarea, select, checkbox, datetime, password) và kiểm tra giá trị theo configData của từng field trước khi lưu. Đối chiếu Moodle: customfield_* (customfield/classes/handler.php).
  */
 export class CustomFieldsService {
   constructor(private readonly repo: CustomFieldsRepository) {}

@@ -13,31 +13,16 @@ import { checksumPackage } from '../../../src/modules/system-bank/system-bank-pa
 import { SystemBankService } from '../../../src/modules/system-bank/system-bank.service';
 
 /**
- * Ca tích hợp của KHO NGÂN HÀNG HỆ THỐNG (issue #585): service phía
- * ngân hàng + repository phía trung tâm chạy trên database thật, tự
- * cấp phát trên cùng cụm với database nghiệp vụ test, toàn bộ bằng
- * TÊN MỚI của riêng đợt này: một database kho ngân hàng
+ * Ca tích hợp của KHO NGÂN HÀNG HỆ THỐNG (issue #585): service phía ngân hàng + repository phía trung tâm chạy trên database thật, tự cấp phát trên cùng cụm với database nghiệp vụ test, toàn bộ bằng TÊN MỚI của riêng đợt này: một database kho ngân hàng
  * (`giaokhoa_test_bank_585`) với role riêng và một database trung tâm
  * (`giaokhoa_test_centre_585`) với role riêng, CONNECT của PUBLIC bị thu
- * hồi và chỉ cấp lại cho role của kho đó, migration kho ngân hàng áp
- * vào kho ngân hàng và baseline nghiệp vụ (đã gồm 3 bảng vệ tinh
- * trung tâm) áp vào kho trung tâm, đều bằng chính role chủ kho như
- * đường triển khai thật. Shim `uuidv7()` chỉ áp khi server dưới PG18.
+ * hồi và chỉ cấp lại cho role của kho đó, migration kho ngân hàng áp vào kho ngân hàng và baseline nghiệp vụ (đã gồm 3 bảng vệ tinh trung tâm) áp vào kho trung tâm, đều bằng chính role chủ kho như đường triển khai thật. Shim `uuidv7()` chỉ áp khi server dưới PG18.
  *
  * Các ca khoá các tiêu chí nghiệm thu ở tầng service/repository:
  * (1) sửa câu hệ thống tạo version mới, version cũ đọc lại không
- * đổi, checksum tính lại khớp checksum lưu; (2) rút câu: khám phá
- * không còn thấy câu, sự kiện rút được ghi, danh sách trung tâm đã
- * nhập đọc được từ dòng importer; (3) gói YCCĐ: phát hành từ cây
- * chương trình rồi cài lại — nội dung cập nhật tại chỗ theo id, vết
- * cài ghi phiên bản trước; (4) cài gói khi môn chưa có ở trung tâm
- * thì fail-closed; (5) cài gói khi trung tâm đã có chương trình
+ * đổi, checksum tính lại khớp checksum lưu; (2) rút câu: khám phá không còn thấy câu, sự kiện rút được ghi, danh sách trung tâm đã nhập đọc được từ dòng importer; (3) gói YCCĐ: phát hành từ cây chương trình rồi cài lại — nội dung cập nhật tại chỗ theo id, vết cài ghi phiên bản trước; (4) cài gói khi môn chưa có ở trung tâm thì fail-closed; (5) cài gói khi trung tâm đã có chương trình
  * (môn, khối) khác id thì fail-closed; (6) đường giao thông báo
- * rút câu phía trung tâm: mỗi trung tâm liệt kê được sự kiện chưa
- * ghi nhận của đúng câu mình đã nhập mà không cần biết trước id sự
- * kiện, ghi nhận xong thì hết ở trung tâm mình và còn nguyên ở
- * trung tâm khác. Đường nhập bản chụp (cần QuestionsService thật)
- * và đường bank-off thuộc tầng e2e.
+ * rút câu phía trung tâm: mỗi trung tâm liệt kê được sự kiện chưa ghi nhận của đúng câu mình đã nhập mà không cần biết trước id sự kiện, ghi nhận xong thì hết ở trung tâm mình và còn nguyên ở trung tâm khác. Đường nhập bản chụp (cần QuestionsService thật) và đường bank-off thuộc tầng e2e.
  */
 const BANK_DATABASE = 'giaokhoa_test_bank_585';
 const BANK_ROLE = 'giaokhoa_bank_test_585';

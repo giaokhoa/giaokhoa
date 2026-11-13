@@ -1,42 +1,21 @@
 /**
  * Repository của cụm GHIM ĐỀ + LƯỢT LÀM trên Kysely.
  *
- * Vai trò: mọi truy cập tới các bảng của lần ghim đề (exam_pins),
- * ghi đè cài đặt (exam_pin_overrides), dải nhận xét (exam_pin_feedbacks),
- * lượt làm (exam_attempts), sự kiện lượt làm (exam_attempt_events),
- * vết cập nhật version của pin (exam_pin_version_updates), chấm lại
- * theo đáp án (exam_attempt_regrades + exam_attempt_regrade_items) và
- * ma trận đề (exam_matrices, exam_matrix_versions, exam_matrix_cells,
- * exam_matrix_contributions) tập trung ở đây; thêm ba đường đọc tham
- * chiếu đề đã ghim (exams, exam_versions, exam_slots — định danh/nội
- * dung đề sống ở repository exams cùng package). Repository không
- * chứa luật nghiệp vụ — cổng quyền, vòng đời lượt làm và giao dịch
- * nằm ở tầng service phía ứng dụng; repository chỉ nhận handle
+ * Vai trò: mọi truy cập tới các bảng của lần ghim đề (exam_pins), ghi đè cài đặt (exam_pin_overrides), dải nhận xét (exam_pin_feedbacks), lượt làm (exam_attempts), sự kiện lượt làm (exam_attempt_events), vết cập nhật version của pin (exam_pin_version_updates), chấm lại theo đáp án (exam_attempt_regrades + exam_attempt_regrade_items) và ma trận đề (exam_matrices, exam_matrix_versions, exam_matrix_cells, exam_matrix_contributions) tập trung ở đây; thêm ba đường đọc tham chiếu đề đã ghim (exams, exam_versions, exam_slots — định danh/nội dung đề sống ở repository exams cùng package). Repository không chứa luật nghiệp vụ — cổng quyền, vòng đời lượt làm và giao dịch nằm ở tầng service phía ứng dụng; repository chỉ nhận handle
  * (instance gốc hoặc transaction đang mở) để phía gọi ghép nhiều
  * thao tác vào một transaction khi cần.
  *
  * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong repository, truy vấn viết trên interface schema sinh
- *   bằng codegen: tên bảng/cột giữ nguyên snake_case của database,
- *   kiểu dòng nội bộ qua `Selectable`/`Insertable`/`Updateable`.
+ *   bằng codegen: tên bảng/cột giữ nguyên snake_case của database, kiểu dòng nội bộ qua `Selectable`/`Insertable`/`Updateable`.
  * - Bên ngoài, repository trả NHẬN các hình dạng dòng camelCase như
- *   phía tiêu thụ đang dùng: cột được chọn bằng danh sách tường
- *   minh có bí danh (`course_id as courseId`), giá trị ghi được ánh
- *   xạ từng trường từ camelCase sang snake_case ở các hàm
- *   `*InsertValues`/`*UpdateSet` trong file này. Phía tiêu thụ vì
- *   vậy chỉ đổi điểm import khi kho này chuyển đổi.
+ *   phía tiêu thụ đang dùng: cột được chọn bằng danh sách tường minh có bí danh (`course_id as courseId`), giá trị ghi được ánh xạ từng trường từ camelCase sang snake_case ở các hàm `*InsertValues`/`*UpdateSet` trong file này. Phía tiêu thụ vì vậy chỉ đổi điểm import khi kho này chuyển đổi.
  * - Giá trị `undefined` bị LOẠI khỏi values/set trước khi gọi
- *   builder (thử nghiệm T-4 của pilot): trường vắng mặt phải để
- *   default của database quyết định; ngược lại `undefined` lọt vào
- *   mệnh đề WHERE sẽ bị driver gắn NULL và lặng lẽ không khớp dòng
- *   nào — vì vậy mọi giá trị where trong repository đều là tham số
- *   bắt buộc, không bao giờ `undefined`.
+ *   builder (thử nghiệm T-4 của pilot): trường vắng mặt phải để default của database quyết định; ngược lại `undefined` lọt vào mệnh đề WHERE sẽ bị driver gắn NULL và lặng lẽ không khớp dòng nào — vì vậy mọi giá trị where trong repository đều là tham số bắt buộc, không bao giờ `undefined`.
  * - Mọi giá trị jsonb khi ghi đều qua `jsonbValue` (serialize tường
- *   minh + `::jsonb`): driver `pg` hiểu nhầm một MẢNG ở cấp cao
- *   nhất là mảng PostgreSQL thay vì JSON (đo tại pilot).
+ *   minh + `::jsonb`): driver `pg` hiểu nhầm một MẢNG ở cấp cao nhất là mảng PostgreSQL thay vì JSON (đo tại pilot).
  * - Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh
- *   ứng dụng, không tự mở pool, không đọc biến môi trường: handle
- *   do tầng ứng dụng dựng bằng factory của package rồi truyền vào.
+ *   ứng dụng, không tự mở pool, không đọc biến môi trường: handle do tầng ứng dụng dựng bằng factory của package rồi truyền vào.
  */
 import { sql, type Insertable, type InsertObject, type RawBuilder, type Updateable, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';
@@ -50,9 +29,7 @@ export type QuizDb = CentreDb | CentreTx;
 
 /**
  * Trần an toàn cho số lượt làm đọc theo một lần ghim (issue #489):
- * các đường đọc kết quả cần toàn bộ lượt để tính điểm/thống kê nên
- * đây không phải cỡ trang — chỉ là mốc chặn truy vấn vô hạn khi dữ
- * kiện bất thường. Mọi nơi gọi `listAttempts` đều truyền tường minh.
+ * các đường đọc kết quả cần toàn bộ lượt để tính điểm/thống kê nên đây không phải cỡ trang — chỉ là mốc chặn truy vấn vô hạn khi dữ kiện bất thường. Mọi nơi gọi `listAttempts` đều truyền tường minh.
  */
 export const QUIZ_PIN_ATTEMPTS_LIMIT = 10_000;
 

@@ -58,27 +58,15 @@ export function useActiveConversation({
   /** Id hội thoại đang mở (null khi chưa chọn). */
   const [activeId, setActiveId] = useState<string | null>(null);
   /**
-   * Bản tóm tắt hội thoại được truyền vào lúc mở — chỉ là mồi hiển
-   * thị đầu tiên cho các hội thoại chưa có mặt trong cache danh
-   * sách (ensure từ lớp/khoá/nhóm); ngay khi cache chi tiết có dữ
-   * kiện, phần chi tiết (trừ cửa sổ tin) phủ lên bản tóm tắt này.
+   * Bản tóm tắt hội thoại được truyền vào lúc mở — chỉ là mồi hiển thị đầu tiên cho các hội thoại chưa có mặt trong cache danh sách (ensure từ lớp/khoá/nhóm); ngay khi cache chi tiết có dữ kiện, phần chi tiết (trừ cửa sổ tin) phủ lên bản tóm tắt này.
    */
   const [openedSummary, setOpenedSummary] = useState<ConversationView | null>(null);
   /**
-   * Tiến độ nạp cửa sổ tin: các mốc beforeSeq của những trang tin
-   * cũ hơn/nhảy-tới đã nạp cho hội thoại đang mở. Chỉ là tiến độ —
-   * dữ kiện của từng trang nằm trong cache theo khoá trang.
+   * Tiến độ nạp cửa sổ tin: các mốc beforeSeq của những trang tin cũ hơn/nhảy-tới đã nạp cho hội thoại đang mở. Chỉ là tiến độ — dữ kiện của từng trang nằm trong cache theo khoá trang.
    */
   const [loadedPages, setLoadedPages] = useState<{ conversationId: string; seqs: number[] } | null>(null);
   /**
-   * Tin LẠC QUAN theo từng conversation (bản tạm `localStatus`
-   * đang gửi/đã lỗi): dữ kiện chỉ sinh ở client, chưa có bản phía
-   * server nên không thuộc cache. Vòng đời của bản tạm kết thúc
-   * ngay khi server xác nhận: `mergeServerMessages` dọn bản tạm
-   * khỏi state này theo clientMessageId trong cùng lượt gộp bản
-   * thật vào cache chi tiết; luật khử trùng của `mergeMessages`
-   * ở bước suy ra cửa sổ chỉ còn là lưới an toàn trong lúc xác
-   * nhận đang trên đường về.
+   * Tin LẠC QUAN theo từng conversation (bản tạm `localStatus` đang gửi/đã lỗi): dữ kiện chỉ sinh ở client, chưa có bản phía server nên không thuộc cache. Vòng đời của bản tạm kết thúc ngay khi server xác nhận: `mergeServerMessages` dọn bản tạm khỏi state này theo clientMessageId trong cùng lượt gộp bản thật vào cache chi tiết; luật khử trùng của `mergeMessages` ở bước suy ra cửa sổ chỉ còn là lưới an toàn trong lúc xác nhận đang trên đường về.
    */
   const [localMessages, setLocalMessages] = useState<Record<string, MessageView[]>>({});
   const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({});
@@ -108,12 +96,7 @@ export function useActiveConversation({
   useEffect(() => { activeRef.current = active; }, [active]);
 
   /**
-   * Cửa sổ tin đang hiển thị: gộp các trang cũ hơn vào cửa sổ chi
-   * tiết (chống trùng theo id ở `mergeMessages`), rồi gộp tin lạc
-   * quan của conversation này lên trên — bản tạm có bản thật tương
-   * ứng trong phần server tự bị loại theo clientMessageId. Tính
-   * thẳng mỗi lần render như các giá trị suy ra khác của hook (cửa
-   * sổ tối đa vài trăm tin, chi phí gộp không đáng kể).
+   * Cửa sổ tin đang hiển thị: gộp các trang cũ hơn vào cửa sổ chi tiết (chống trùng theo id ở `mergeMessages`), rồi gộp tin lạc quan của conversation này lên trên — bản tạm có bản thật tương ứng trong phần server tự bị loại theo clientMessageId. Tính thẳng mỗi lần render như các giá trị suy ra khác của hook (cửa sổ tối đa vài trăm tin, chi phí gộp không đáng kể).
    */
   let serverWindow: MessageView[] = detail?.messages ?? [];
   for (const pageQuery of pageQueries) {
@@ -149,13 +132,11 @@ export function useActiveConversation({
   async function open(conv: ConversationView) {
     setOpenedSummary(conv);
     setActiveId(conv.id);
-    // Lưu bền hội thoại đang mở để quay lại màn Tin nhắn là gặp
-    // đúng ngữ cảnh gần nhất (lát MSG-T3); deep-link thắng giá trị này.
+    // Lưu bền hội thoại đang mở để quay lại màn Tin nhắn là gặp đúng ngữ cảnh gần nhất (lát MSG-T3); deep-link thắng giá trị này.
     storeConversationId(conv.id);
     setTypingUsers({});
     setLoadedPages({ conversationId: conv.id, seqs: [] });
-    // fetchQuery mồi cache chi tiết (cửa sổ tin + mốc đọc tự suy ra
-    // từ cache) và giữ nguyên ngữ nghĩa kiểm tra tư cách thành viên:
+    // fetchQuery mồi cache chi tiết (cửa sổ tin + mốc đọc tự suy ra từ cache) và giữ nguyên ngữ nghĩa kiểm tra tư cách thành viên:
     // lỗi thì lời gọi ném ra cho phía khôi phục/deep-link bỏ qua êm.
     const fresh = await queryClient.fetchQuery(conversationDetailQueryOptions(conv.id));
     mergePeople(fresh.memberProfiles);
@@ -168,10 +149,7 @@ export function useActiveConversation({
   }
 
   /**
-   * Đảm bảo một cửa sổ tin theo mốc beforeSeq đã có trong cache và
-   * ghi mốc vào tiến độ nạp — đường chung của tải-tin-cũ và
-   * nhảy-tới-tin: cửa sổ về tay người gọi để xét tin đích có mặt
-   * hay không, phần hiển thị tự suy ra từ cache.
+   * Đảm bảo một cửa sổ tin theo mốc beforeSeq đã có trong cache và ghi mốc vào tiến độ nạp — đường chung của tải-tin-cũ và nhảy-tới-tin: cửa sổ về tay người gọi để xét tin đích có mặt hay không, phần hiển thị tự suy ra từ cache.
    */
   const ensurePageLoaded = useCallback(
     async (beforeSeq: number) => {
@@ -196,19 +174,7 @@ export function useActiveConversation({
   }
 
   /**
-   * Gộp tin phía server (tin vừa gửi được xác nhận, tin realtime,
-   * phần thiếu khi nối lại) vào cache chi tiết của đúng conversation,
-   * đồng thời DỌN bản tạm lạc quan mà các tin này xác nhận khỏi state
-   * chỉ-client theo clientMessageId. Mọi đường xác nhận của server —
-   * đáp ứng REST của lượt gửi, echo qua socket, phần thiếu lúc nối
-   * lại — đều chảy qua đây, nên vòng đời của bản tạm kết thúc tại
-   * đúng điểm xác nhận này. Chỉ khử trùng ở bước suy ra hiển thị là
-   * chưa đủ: bản thật rời khỏi cửa sổ (bị xoá cứng, hoặc cửa sổ nạp
-   * lại không còn bản thật) thì bản tạm còn nguyên trong state sẽ
-   * hiện lại với trạng thái đang gửi, kể cả nội dung đáng lẽ đã bị
-   * gỡ (vòng sửa PR #530). Bản tạm chưa được xác nhận (đang gửi,
-   * hoặc đã lỗi và chờ thử lại) không có clientMessageId nào trong
-   * đợt gộp này nên không bị đụng tới.
+   * Gộp tin phía server (tin vừa gửi được xác nhận, tin realtime, phần thiếu khi nối lại) vào cache chi tiết của đúng conversation, đồng thời DỌN bản tạm lạc quan mà các tin này xác nhận khỏi state chỉ-client theo clientMessageId. Mọi đường xác nhận của server — đáp ứng REST của lượt gửi, echo qua socket, phần thiếu lúc nối lại — đều chảy qua đây, nên vòng đời của bản tạm kết thúc tại đúng điểm xác nhận này. Chỉ khử trùng ở bước suy ra hiển thị là chưa đủ: bản thật rời khỏi cửa sổ (bị xoá cứng, hoặc cửa sổ nạp lại không còn bản thật) thì bản tạm còn nguyên trong state sẽ hiện lại với trạng thái đang gửi, kể cả nội dung đáng lẽ đã bị gỡ (vòng sửa PR #530). Bản tạm chưa được xác nhận (đang gửi, hoặc đã lỗi và chờ thử lại) không có clientMessageId nào trong đợt gộp này nên không bị đụng tới.
    */
   const mergeServerMessages = useCallback(
     (conversationId: string, incoming: MessageView[]) => {
@@ -236,9 +202,7 @@ export function useActiveConversation({
   );
 
   /**
-   * Áp một phép biến đổi lên MỌI đoạn của cửa sổ tin của một
-   * conversation: cache chi tiết, mọi cache trang đã nạp của
-   * conversation đó và tin lạc quan của nó — đường của kiểm duyệt
+   * Áp một phép biến đổi lên MỌI đoạn của cửa sổ tin của một conversation: cache chi tiết, mọi cache trang đã nạp của conversation đó và tin lạc quan của nó — đường của kiểm duyệt
    * (xoá/thu hồi/gỡ) và sự kiện tin-bị-xoá của realtime, khi tin
    * đích có thể nằm ở bất kỳ đoạn nào.
    */
@@ -287,9 +251,7 @@ export function useActiveConversation({
   );
 
   /**
-   * Áp một mốc đọc lên cache chi tiết (giữ mốc lớn nhất — biên nhận
-   * đọc đến muộn không được kéo mốc lùi): đường của `markRead` (mốc
-   * của chính mình) và của sự kiện biên nhận đọc realtime.
+   * Áp một mốc đọc lên cache chi tiết (giữ mốc lớn nhất — biên nhận đọc đến muộn không được kéo mốc lùi): đường của `markRead` (mốc của chính mình) và của sự kiện biên nhận đọc realtime.
    */
   const applyReadMarker = useCallback(
     (conversationId: string, userId: string, lastReadSeq: number) => {
@@ -308,11 +270,7 @@ export function useActiveConversation({
   );
 
   /**
-   * Vô hiệu hoá toàn bộ cửa sổ của một conversation (tiền tố khoá
-   * chi tiết phủ cả chi tiết, các trang tin và kết quả tìm): đường
-   * của sự kiện conversation.invalidate — chỉ dữ kiện nạp lại mới
-   * phân biệt được đã-thu-hồi với đã-xoá và tin xoá cứng mới biến
-   * mất khỏi khung.
+   * Vô hiệu hoá toàn bộ cửa sổ của một conversation (tiền tố khoá chi tiết phủ cả chi tiết, các trang tin và kết quả tìm): đường của sự kiện conversation.invalidate — chỉ dữ kiện nạp lại mới phân biệt được đã-thu-hồi với đã-xoá và tin xoá cứng mới biến mất khỏi khung.
    */
   const invalidateConversationWindow = useCallback(
     (conversationId: string) => {

@@ -11,27 +11,13 @@ import * as tokensRoute from './platform-tokens';
 /**
  * Spec gác F-07/F-08 (rà soát #133) cho 6 route module platform
  * (search / tokens / backup / insights / reports / privacy) bằng
- * CHÍNH các route module thật — bổ sung cho lát hoàn tất #133-A
- * theo điều kiện review: trước spec này, ca F-07 trong
- * `ssr-frame.spec.tsx` chỉ khẳng định CƠ CHẾ biên lỗi bằng route
- * tổng hợp tự chế và không spec nào gọi `meta()` của route thật,
- * nên một khoá tiêu đề gõ sai trong 6 file này vẫn qua được
- * typecheck (helper `platformKeyMeta` nhận chuỗi tự do) và chỉ lộ
- * khi rà tay.
+ * CHÍNH các route module thật — bổ sung cho lát hoàn tất #133-A theo điều kiện review: trước spec này, ca F-07 trong `ssr-frame.spec.tsx` chỉ khẳng định CƠ CHẾ biên lỗi bằng route tổng hợp tự chế và không spec nào gọi `meta()` của route thật, nên một khoá tiêu đề gõ sai trong 6 file này vẫn qua được typecheck (helper `platformKeyMeta` nhận chuỗi tự do) và chỉ lộ khi rà tay.
  *
- * Với từng route module, spec khẳng định hai điểm của nghiệm thu
- * lát #133-A:
+ * Với từng route module, spec khẳng định hai điểm của nghiệm thu lát #133-A:
  *  1. Export `ErrorBoundary` là ĐÚNG component dùng chung
- *     `RouteErrorBoundary` (so sánh đồng nhất tham chiếu, không
- *     phải một component trông giống) — lỗi của trang được chứa
- *     trong vùng nội dung theo cơ chế đã gác ở `ssr-frame.spec.tsx`.
+ *     `RouteErrorBoundary` (so sánh đồng nhất tham chiếu, không phải một component trông giống) — lỗi của trang được chứa trong vùng nội dung theo cơ chế đã gác ở `ssr-frame.spec.tsx`.
  *  2. `meta()` trả tiêu đề "<Tên trang> · Giáo khoa" dựng từ ĐÚNG khoá
- *     tiêu đề mà chính trang dùng cho heading của nó trong
- *     namespace `platform` (searchTitle / tokensTitle / backupTitle
- *     / insightsTitle / reportsTitle / privacyTitle). Khoá phải tồn
- *     tại thật trong resources: nếu khoá sai hoặc thiếu, `i18n.t`
- *     trả lại chính chuỗi khoá và ca đối chiếu khoá-suy-ra sẽ đỏ
- *     thay vì xanh giả.
+ *     tiêu đề mà chính trang dùng cho heading của nó trong namespace `platform` (searchTitle / tokensTitle / backupTitle / insightsTitle / reportsTitle / privacyTitle). Khoá phải tồn tại thật trong resources: nếu khoá sai hoặc thiếu, `i18n.t` trả lại chính chuỗi khoá và ca đối chiếu khoá-suy-ra sẽ đỏ thay vì xanh giả.
  */
 const CASES = [
   { name: 'search', route: searchRoute, key: 'searchTitle' },

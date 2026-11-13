@@ -10,9 +10,7 @@ import type { AuthenticatedUser } from './current-user.decorator';
 import { IS_PUBLIC_KEY } from './public.decorator';
 
 /**
- * Dấu hiệu trên request: danh tính đã được guard này xác lập từ phiên
- * Better Auth — JwtAuthGuard nhìn thấy dấu này thì bỏ qua, không đòi
- * Bearer token nữa (xem jwt-auth.guard.ts).
+ * Dấu hiệu trên request: danh tính đã được guard này xác lập từ phiên Better Auth — JwtAuthGuard nhìn thấy dấu này thì bỏ qua, không đòi Bearer token nữa (xem jwt-auth.guard.ts).
  */
 export const AUTHENTICATED_VIA_BETTER_AUTH = 'authenticatedViaBetterAuth';
 

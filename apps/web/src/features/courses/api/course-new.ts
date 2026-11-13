@@ -3,16 +3,9 @@ import { apiJson } from '#lib/api';
 
 /**
  * Tầng gọi API thuần của wizard tạo khoá học thuộc feature courses:
- * chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query.
- * Tầng `queries/` của feature bọc các hàm này thành queryOptions,
- * hook, đột biến và clientLoader. Tách từ module dữ liệu phẳng
- * `src/lib/course-new-data.ts` khi tổ chức lại apps/web theo mô
- * hình features/ (issue #500).
+ * chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành queryOptions, hook, đột biến và clientLoader. Tách từ module dữ liệu phẳng `src/lib/course-new-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  *
- * Các danh sách nền giữ đúng nhịp thủ công trước đây: tải hỏng thì
- * coi như danh sách rỗng (bắt lỗi ngay ở tầng này) — wizard không
- * có bề mặt lỗi riêng cho dữ liệu nền, giáo viên vẫn đi tiếp các
- * đường tạo khoá không cần danh sách đó.
+ * Các danh sách nền giữ đúng nhịp thủ công trước đây: tải hỏng thì coi như danh sách rỗng (bắt lỗi ngay ở tầng này) — wizard không có bề mặt lỗi riêng cho dữ liệu nền, giáo viên vẫn đi tiếp các đường tạo khoá không cần danh sách đó.
  */
 
 /** Tải một danh sách nền của wizard: lỗi thì trả danh sách rỗng như bản thủ công. */

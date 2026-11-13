@@ -78,24 +78,9 @@ export class MessagingMembershipSyncService {
   }
 
   /**
-   * Đồng bộ lười thành viên của một conversation gắn cấu trúc (group
-   * hoặc khoá) về đúng tập đích HIỆN TẠI: người mới thuộc cấu trúc được
-   * thêm, người đã rời bị gỡ khỏi conversation (tin nhắn cũ giữ nguyên).
-   * Trả về danh sách thành viên sau đồng bộ. Chỉ chạy phía messaging khi
-   * conversation được liệt kê/mở/gửi — không cần hook trong module chủ
-   * của cấu trúc.
+   * Đồng bộ lười thành viên của một conversation gắn cấu trúc (group hoặc khoá) về đúng tập đích HIỆN TẠI: người mới thuộc cấu trúc được thêm, người đã rời bị gỡ khỏi conversation (tin nhắn cũ giữ nguyên). Trả về danh sách thành viên sau đồng bộ. Chỉ chạy phía messaging khi conversation được liệt kê/mở/gửi — không cần hook trong module chủ của cấu trúc.
    *
-   * Ngoại lệ giữ lại (issue #592): thành viên là QUẢN TRỊ HỆ THỐNG
-   * không bao giờ bị gỡ khỏi conversation gắn LỚP/KHOÁ trong đợt
-   * đồng bộ này, dù họ không nằm trong tập đích roster/staff của
-   * cấu trúc — quản trị có phạm vi quản trị trên lớp/khoá đó nên
-   * hàng hội thoại của họ phải ở lại danh sách và mở được (kèm số
-   * chưa đọc khớp vũ trụ chuẩn), thay vì bị đồng bộ của người khác
-   * gỡ mất rồi chỉ còn huy hiệu thanh bên đếm mà không mở được.
-   * Group gắn course group không thuộc ngoại lệ này (phạm vi issue
-   * #592 chỉ nói lớp/khoá); thành viên group vẫn đồng bộ thuần theo
-   * tập đích. Không có bộ đánh giá quyền (đường gọi cũ) thì ngoại lệ
-   * không áp dụng — fail-closed về hành vi đồng bộ cũ.
+   * Ngoại lệ giữ lại (issue #592): thành viên là QUẢN TRỊ HỆ THỐNG không bao giờ bị gỡ khỏi conversation gắn LỚP/KHOÁ trong đợt đồng bộ này, dù họ không nằm trong tập đích roster/staff của cấu trúc — quản trị có phạm vi quản trị trên lớp/khoá đó nên hàng hội thoại của họ phải ở lại danh sách và mở được (kèm số chưa đọc khớp vũ trụ chuẩn), thay vì bị đồng bộ của người khác gỡ mất rồi chỉ còn huy hiệu thanh bên đếm mà không mở được. Group gắn course group không thuộc ngoại lệ này (phạm vi issue #592 chỉ nói lớp/khoá); thành viên group vẫn đồng bộ thuần theo tập đích. Không có bộ đánh giá quyền (đường gọi cũ) thì ngoại lệ không áp dụng — fail-closed về hành vi đồng bộ cũ.
    */
   async syncLinkedConversationMembers(conversation: ConversationRow, targetIds: string[]): Promise<string[]> {
     const memberIds = [...new Set(targetIds)];
@@ -103,10 +88,7 @@ export class MessagingMembershipSyncService {
     for (const id of memberIds) {
       if (!current.includes(id)) await this.repo.addMember(conversation.id, id);
     }
-    // Thành viên được giữ lại theo ngoại lệ quản trị (xem TSDoc
-    // trên): vẫn là thành viên sau đồng bộ nên phải có mặt trong
-    // danh sách trả về — nơi gọi (đường ensure) trả danh sách này
-    // làm danh sách thành viên của conversation.
+    // Thành viên được giữ lại theo ngoại lệ quản trị (xem TSDoc trên): vẫn là thành viên sau đồng bộ nên phải có mặt trong danh sách trả về — nơi gọi (đường ensure) trả danh sách này làm danh sách thành viên của conversation.
     const preserved: string[] = [];
     for (const id of current) {
       if (memberIds.includes(id)) continue;
@@ -119,10 +101,7 @@ export class MessagingMembershipSyncService {
         continue;
       }
       await this.repo.removeMember(conversation.id, id);
-      // Đẩy socket của người vừa bị gỡ ra khỏi room của conversation
-      // NGAY: membership ở DB đã mất mà socket còn nằm trong room thì
-      // vẫn nhận mọi sự kiện của conversation (F1). Tầng phân phối
-      // còn rà soát lại membership một lần nữa trước mỗi lần phát.
+      // Đẩy socket của người vừa bị gỡ ra khỏi room của conversation NGAY: membership ở DB đã mất mà socket còn nằm trong room thì vẫn nhận mọi sự kiện của conversation (F1). Tầng phân phối còn rà soát lại membership một lần nữa trước mỗi lần phát.
       await this.realtime.evictUserFromConversation(id, conversation.id);
     }
     return [...new Set([...memberIds, ...preserved])];
@@ -156,8 +135,7 @@ export class MessagingMembershipSyncService {
    * @returns Danh sách id thành viên sau đồng bộ.
    */
   async syncClassConversationMembers(conversation: ConversationRow): Promise<string[]> {
-    // Lớp đã mất (xoá/lưu trữ dứt điểm): giữ nguyên membership hiện
-    // tại thay vì gỡ sạch — đồng bộ chỉ chạy trên lớp đang hoạt động.
+    // Lớp đã mất (xoá/lưu trữ dứt điểm): giữ nguyên membership hiện tại thay vì gỡ sạch — đồng bộ chỉ chạy trên lớp đang hoạt động.
     const cls = await this.repo.getClassSummary(conversation.itemId!);
     if (!cls || cls.status !== 'active') return this.repo.listMembers(conversation.id);
     return this.syncLinkedConversationMembers(conversation, await this.repo.listClassConversationMemberIds(conversation.itemId!));

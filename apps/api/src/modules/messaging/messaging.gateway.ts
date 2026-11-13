@@ -54,11 +54,8 @@ const SYNC_MAX_CONVERSATIONS = 50;
  * (không mang slug) chạy nguyên như cũ.
  */
 // @Public ở đây KHÔNG có nghĩa là không cần đăng nhập: nó chỉ tắt
-// JwtAuthGuard toàn cục (guard HTTP đọc header Authorization qua
-// passport — không áp được cho context WebSocket và sẽ ném lỗi trên
-// mọi message handler). Xác thực của kênh này nằm ở handleConnection:
-// không qua được lớp auth mỏng là kết nối bị ngắt trước khi bất kỳ
-// handler nào chạy.
+// JwtAuthGuard toàn cục (guard HTTP đọc header Authorization qua passport — không áp được cho context WebSocket và sẽ ném lỗi trên mọi message handler). Xác thực của kênh này nằm ở handleConnection:
+// không qua được lớp auth mỏng là kết nối bị ngắt trước khi bất kỳ handler nào chạy.
 @Public()
 @WebSocketGateway({ namespace: '/messaging', cors: { origin: true } })
 export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
@@ -75,12 +72,7 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
   ) {}
 
   /**
-   * Chạy một đoạn xử lý theo kết nối trong kho của trung tâm mà
-   * danh tính của kết nối đã được phân giải: kết nối mang
-   * `spaceSlug` (gắn ở bước xác thực lúc nối) thì đoạn chạy qua
-   * `withSpaceKysely` của slug đó — chuẩn bị kho đích rồi nạp
-   * slug vào ngữ cảnh ALS để handle định tuyến của repository đọc
-   * đúng kho cho mọi truy vấn trong đoạn. Kết nối không mang slug
+   * Chạy một đoạn xử lý theo kết nối trong kho của trung tâm mà danh tính của kết nối đã được phân giải: kết nối mang `spaceSlug` (gắn ở bước xác thực lúc nối) thì đoạn chạy qua `withSpaceKysely` của slug đó — chuẩn bị kho đích rồi nạp slug vào ngữ cảnh ALS để handle định tuyến của repository đọc đúng kho cho mọi truy vấn trong đoạn. Kết nối không mang slug
    * (đường kho chung) chạy thẳng, không qua lớp bọc.
    */
   private async withConnectionSpace<T>(client: Socket, fn: () => Promise<T>): Promise<T> {
@@ -93,11 +85,7 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
   }
 
   async handleConnection(client: Socket): Promise<void> {
-    // Cờ "xác thực lúc nối đã xong": client nhận gói connect là emit được
-    // ngay, trong khi handleConnection vẫn đang chờ DB/Redis — các handler
-    // phải chờ cờ này rồi mới đọc client.data.userId, nếu không handler
-    // chạy khi userId còn trống và trả rỗng (lỗi sync {} từng làm đỏ test
-    // reconnect của realtime-flow khi máy tải nặng).
+    // Cờ "xác thực lúc nối đã xong": client nhận gói connect là emit được ngay, trong khi handleConnection vẫn đang chờ DB/Redis — các handler phải chờ cờ này rồi mới đọc client.data.userId, nếu không handler chạy khi userId còn trống và trả rỗng (lỗi sync {} từng làm đỏ test reconnect của realtime-flow khi máy tải nặng).
     let resolveAuth!: () => void;
     client.data.authSettled = new Promise<void>((resolve) => {
       resolveAuth = resolve;
@@ -112,44 +100,23 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
       client.data.username = identity.username;
       client.data.tenantId = identity.tenantId;
       client.data.spaceSlug = identity.spaceSlug;
-      // Toàn bộ phần đọc dữ kiện của lần nối (danh sách hội thoại,
-      // danh sách chặn, ảnh chụp presence) chạy trong kho của
-      // trung tâm mà danh tính đã phân giải — xem withConnectionSpace.
+      // Toàn bộ phần đọc dữ kiện của lần nối (danh sách hội thoại, danh sách chặn, ảnh chụp presence) chạy trong kho của trung tâm mà danh tính đã phân giải — xem withConnectionSpace.
       await this.withConnectionSpace(client, async () => {
         await client.join(userRoom(identity.tenantId, identity.userId));
         const conversations = await this.repo.listConversationsForUser(identity.userId);
-        // Danh sách chặn của user là MỘT dữ kiện duy nhất, không đổi
-        // theo hội thoại: tải lười một lần ở hội thoại 1–1 đầu tiên cần
-        // kiểm rồi dùng lại cho cả vòng lặp, thay vì tải lại theo từng
-        // hội thoại như trước.
+        // Danh sách chặn của user là MỘT dữ kiện duy nhất, không đổi theo hội thoại: tải lười một lần ở hội thoại 1–1 đầu tiên cần kiểm rồi dùng lại cho cả vòng lặp, thay vì tải lại theo từng hội thoại như trước.
         let blockedIds: string[] | undefined;
         const blockedIdsOnce = async (): Promise<string[]> => {
           blockedIds ??= await this.repo.listBlockedCounterpartIds(identity.userId);
           return blockedIds;
         };
         for (const conversation of conversations) {
-          // Lớp phòng thủ thứ hai (việc nối tiếp #33, siết sau PR #94
-          // vòng 1): socket mới nối KHÔNG vào room của hội thoại 1–1
-          // đang chặn — cùng luật với isBlockedDirectConversation của
-          // join/sync/typing. Socket nối từ TRƯỚC khi chặn vẫn nằm
-          // trong room cũ, nhưng mọi điểm sinh sự kiện trong lúc chặn
-          // đã bị cổng (gửi 403, xoá/đọc 404) nên không còn sự kiện
-          // nào của hội thoại đó để lộ; tầng phân phối xoá tin còn
-          // chặn nốt trường hợp outbox tới muộn (xem distributeMessageDeleted).
+          // Lớp phòng thủ thứ hai (việc nối tiếp #33, siết sau PR #94 vòng 1): socket mới nối KHÔNG vào room của hội thoại 1–1 đang chặn — cùng luật với isBlockedDirectConversation của join/sync/typing. Socket nối từ TRƯỚC khi chặn vẫn nằm trong room cũ, nhưng mọi điểm sinh sự kiện trong lúc chặn đã bị cổng (gửi 403, xoá/đọc 404) nên không còn sự kiện nào của hội thoại đó để lộ; tầng phân phối xoá tin còn chặn nốt trường hợp outbox tới muộn (xem distributeMessageDeleted).
           if (await this.isBlockedDirectConversation(conversation.id, identity.userId, blockedIdsOnce)) continue;
           await client.join(conversationRoom(conversation.tenantId, conversation.id));
         }
         await this.realtime.markConnected(identity.tenantId, identity.userId, client.id);
-        // Ảnh chụp presence lúc nối (sự kiện presence.snapshot): sự
-        // kiện presence.changed chỉ phát khi trạng thái THAY ĐỔI nên
-        // người đã trực tuyến từ trước lúc socket này nối không phát
-        // sinh sự kiện nào — không có ảnh chụp này, phía khách không
-        // bao giờ học được họ đang trực tuyến cho tới khi họ ngắt/nối
-        // lại. Ảnh chụp chỉ gửi cho CHÍNH socket vừa nối (không phát
-        // vào room) và phạm vi người được liệt kê do tầng realtime gác
-        // theo quan hệ hội thoại chung (xem listOnlineCoMemberIds).
-        // Phát SAU markConnected để presence của chính người nối đã
-        // được ghi trước khi đọc (dù chủ thể tự loại khỏi danh sách).
+        // Ảnh chụp presence lúc nối (sự kiện presence.snapshot): sự kiện presence.changed chỉ phát khi trạng thái THAY ĐỔI nên người đã trực tuyến từ trước lúc socket này nối không phát sinh sự kiện nào — không có ảnh chụp này, phía khách không bao giờ học được họ đang trực tuyến cho tới khi họ ngắt/nối lại. Ảnh chụp chỉ gửi cho CHÍNH socket vừa nối (không phát vào room) và phạm vi người được liệt kê do tầng realtime gác theo quan hệ hội thoại chung (xem listOnlineCoMemberIds). Phát SAU markConnected để presence của chính người nối đã được ghi trước khi đọc (dù chủ thể tự loại khỏi danh sách).
         const onlineCoMemberIds = await this.realtime.listOnlineCoMemberIds(identity.userId);
         client.emit(MESSAGING_SOCKET_EVENTS.presenceSnapshot, { onlineUserIds: onlineCoMemberIds });
       });

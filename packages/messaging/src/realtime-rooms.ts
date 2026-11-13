@@ -1,17 +1,9 @@
 /**
- * Định danh room realtime của messaging — NHÀ DUY NHẤT của luật đặt
- * tên room (issue #521): phía API (gateway gắn socket vào room lúc
- * bắt tay) và phía worker (consumer phân phối phát sự kiện vào room)
- * là hai tiến trình riêng, cùng import các hàm này từ package dùng
- * chung để tên room không bao giờ lệch nhau giữa nơi nối và nơi phát.
+ * Định danh room realtime của messaging — NHÀ DUY NHẤT của luật đặt tên room (issue #521): phía API (gateway gắn socket vào room lúc bắt tay) và phía worker (consumer phân phối phát sự kiện vào room) là hai tiến trình riêng, cùng import các hàm này từ package dùng chung để tên room không bao giờ lệch nhau giữa nơi nối và nơi phát.
  */
 
 /**
- * Đoạn namespace tenant trong mọi định danh realtime (TENANT-1,
- * #196): room Socket.IO và khoá Redis presence/typing đều bắt đầu
- * bằng tenant để hai tenant không bao giờ chung một kênh phát — kể
- * cả khi id conversation/user tình cờ va nhau ở tầng ứng dụng.
- * Tenant chưa rõ (dữ liệu cũ) rơi về đoạn 'platform'.
+ * Đoạn namespace tenant trong mọi định danh realtime (TENANT-1, #196): room Socket.IO và khoá Redis presence/typing đều bắt đầu bằng tenant để hai tenant không bao giờ chung một kênh phát — kể cả khi id conversation/user tình cờ va nhau ở tầng ứng dụng. Tenant chưa rõ (dữ liệu cũ) rơi về đoạn 'platform'.
  */
 export function tenantRealtimeSegment(tenantId: string | null | undefined): string {
   return tenantId ?? 'platform';

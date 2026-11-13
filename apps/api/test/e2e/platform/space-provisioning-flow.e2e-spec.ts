@@ -13,47 +13,26 @@ import { STRONG_PASSWORD, createTestApp, http } from '../../support/identity-acc
 
 /**
  * Ca đầu-cuối của CẤP PHÁT TRUNG TÂM + NHẬN DIỆN (issue #583):
- * hai trung tâm được cấp phát THẬT bằng pipeline cấp phát (sổ đăng
- * ký riêng, database + role riêng, baseline hiện hành, gói chương
- * trình, quản trị đầu tiên + lời mời), rồi ứng dụng thật chạy trên
- * chính hai kho đó qua tên miền con mang slug. Database test dùng
- * chung (`giaokhoa_test_api`) phải đã migrate từ trống trước khi chạy
- * spec này — đúng tiền điều kiện của mọi spec e2e khác (bước
- * Migrate trong CI).
+ * hai trung tâm được cấp phát THẬT bằng pipeline cấp phát (sổ đăng ký riêng, database + role riêng, baseline hiện hành, gói chương trình, quản trị đầu tiên + lời mời), rồi ứng dụng thật chạy trên chính hai kho đó qua tên miền con mang slug. Database test dùng chung (`giaokhoa_test_api`) phải đã migrate từ trống trước khi chạy spec này — đúng tiền điều kiện của mọi spec e2e khác (bước Migrate trong CI).
  *
  * Các ca khoá các tiêu chí nghiệm thu của issue ở phía HTTP:
  * (1) một lệnh cấp phát cho ra trung tâm dùng được: quản trị đầu
- *     tiên kích hoạt bằng lời mời rồi đăng nhập tại địa chỉ trung
- *     tâm, nhận diện công khai đọc được ở cả địa chỉ trung tâm lẫn
- *     địa chỉ gốc;
+ *     tiên kích hoạt bằng lời mời rồi đăng nhập tại địa chỉ trung tâm, nhận diện công khai đọc được ở cả địa chỉ trung tâm lẫn địa chỉ gốc;
  * (2) token lời mời của trung tâm này không kích hoạt được ở trung
  *     tâm khác (kho của trung tâm kia không có lời mời đó);
  * (3) mật khẩu yếu làm cháy lời mời (đốt trước, đặt mật khẩu sau),
  *     phát hành lại bằng CLI rồi kích hoạt thành công;
  * (4) quản trị trung tâm sửa được nhận diện của mình, người dùng
- *     thường của cùng trung tâm bị từ chối, nhận diện của trung tâm
- *     khác không đổi;
+ *     thường của cùng trung tâm bị từ chối, nhận diện của trung tâm khác không đổi;
  * (5) đình chỉ chặn traffic nghiệp vụ nhưng nhận diện công khai
  *     vẫn đọc được, dữ kiện còn nguyên, mở lại thì traffic trở lại;
  * (6) sau khi đã định tuyến, tắt control plane đi thì bề mặt trung
- *     tâm vẫn hiển thị đúng nhận diện đã nạp (nhận diện đọc từ kho
- *     của trung tâm, không đọc từ control plane).
+ *     tâm vẫn hiển thị đúng nhận diện đã nạp (nhận diện đọc từ kho của trung tâm, không đọc từ control plane).
  *
  * MẪU MIRROR CHO PHIÊN TRUNG TÂM (theo pattern của e2e #582):
- * luồng cấp token hiện tại tra tenant trong kho chung dưới ngữ
- * cảnh platform, nên một quản trị chỉ tồn tại trong kho riêng
- * chưa nhận được claim `centre_id` — đó là cổng #587 (thứ tự
- * phân giải danh tính), không thuộc phạm vi issue #583. Để các
- * ca đình chỉ/chặn được kiểm chứng ở tầng guard (chứ không kẹt
- * ở lỗi gắn phiên), spec này mirror dòng tenant + membership của
- * các tài khoản trung tâm vào kho chung. Mirror chỉ phục vụ việc
- * gắn phiên trong ca test; mọi quyết định phân quyền dưới test
+ * luồng cấp token hiện tại tra tenant trong kho chung dưới ngữ cảnh platform, nên một quản trị chỉ tồn tại trong kho riêng chưa nhận được claim `centre_id` — đó là cổng #587 (thứ tự phân giải danh tính), không thuộc phạm vi issue #583. Để các ca đình chỉ/chặn được kiểm chứng ở tầng guard (chứ không kẹt ở lỗi gắn phiên), spec này mirror dòng tenant + membership của các tài khoản trung tâm vào kho chung. Mirror chỉ phục vụ việc gắn phiên trong ca test; mọi quyết định phân quyền dưới test
  * (ai sửa được nhận diện, đình chỉ chặn gì) vẫn đọc từ kho riêng
- * của trung tâm. Tương tự, endpoint tạo user qua API chạy dưới
- * ngữ cảnh platform trên kho chung nên không tạo được user của
- * trung tâm kho riêng — hành vi thế giới kho chung từ trước,
- * thuộc phạm vi issue #584; ca (4) vì vậy tạo người dùng thường
- * trực tiếp trong kho trung tâm thay vì qua endpoint đó.
+ * của trung tâm. Tương tự, endpoint tạo user qua API chạy dưới ngữ cảnh platform trên kho chung nên không tạo được user của trung tâm kho riêng — hành vi thế giới kho chung từ trước, thuộc phạm vi issue #584; ca (4) vì vậy tạo người dùng thường trực tiếp trong kho trung tâm thay vì qua endpoint đó.
  */
 const RUN_SUFFIX = Math.random().toString(36).slice(2, 8);
 const CP_DATABASE = `giaokhoa_test_cp_583e_${RUN_SUFFIX}`;
@@ -150,8 +129,7 @@ describe('Cấp phát trung tâm + nhận diện (đầu-cuối)', () => {
   let centreB: Awaited<ReturnType<typeof runSpaceProvision>>;
   let adminAToken = '';
   let teacherId = '';
-  // Writer đã đóng trong ca tắt control plane (xem ca cuối) thì
-  // afterAll không đóng lại nữa: pg-pool ném lỗi khi end() lần 2.
+  // Writer đã đóng trong ca tắt control plane (xem ca cuối) thì afterAll không đóng lại nữa: pg-pool ném lỗi khi end() lần 2.
   let writerClosed = false;
 
   const auth = (token: string) => ({ Authorization: `Bearer ${token}` });

@@ -6,11 +6,7 @@ import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWO
 
 /**
  * Kiểm thử luồng Auth.
- * Oracle: lib/tests/authlib_test.php (MOODLE_503_STABLE) — test_lockout,
- * test_authenticate_user_login; xoay refresh + phát hiện tái sử dụng theo
- * báo cáo §3.7 (tự xây dựng, thực hành bảo mật OAuth tốt nhất).
- * Oracle MFA TOTP: blueprint §2#3 (MFA hook) + ngữ nghĩa factor_totp của Moodle tool_mfa
- *  — chỉ mật khẩu là chưa đủ khi một nhân tố TOTP đã được xác nhận.
+ * Oracle: lib/tests/authlib_test.php (MOODLE_503_STABLE) — test_lockout, test_authenticate_user_login; xoay refresh + phát hiện tái sử dụng theo báo cáo §3.7 (tự xây dựng, thực hành bảo mật OAuth tốt nhất). Oracle MFA TOTP: blueprint §2#3 (MFA hook) + ngữ nghĩa factor_totp của Moodle tool_mfa — chỉ mật khẩu là chưa đủ khi một nhân tố TOTP đã được xác nhận.
  */
 
 /** Mã TOTP hiện tại cho secret, sinh bằng chính thư viện otplib đã cài. */

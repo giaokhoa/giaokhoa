@@ -12,8 +12,7 @@ import { createGradeItem, setGrade } from '../../support/assessment-helpers';
 const PROHIBIT = -1000;
 
 /**
- * Luồng Platform: Search / Web Services / Content Bank / Analytics / Reports.
- * Oracle Moodle 5.3 (MOODLE_503_STABLE, đã kiểm chứng live 22/10/2026):
+ * Luồng Platform: Search / Web Services / Content Bank / Analytics / Reports. Oracle Moodle 5.3 (MOODLE_503_STABLE, đã kiểm chứng live 22/10/2026):
  * - search/tests/manager_test.php + base_test.php (area registry, quyền khi tìm)
  * - webservice/tests/externallib_test.php (token + các hàm service)
  * - contentbank/tests/contentbank_test.php (nội dung theo context, draft/public)

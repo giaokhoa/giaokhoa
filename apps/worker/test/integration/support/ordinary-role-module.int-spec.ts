@@ -8,30 +8,18 @@ import {
 } from '../../support/ordinary-worker-module';
 
 /**
- * Kiểm chứng harness boot module bằng role thường (lát 2 của issue
- * #294, `test/ordinary-worker-module.ts`).
+ * Kiểm chứng harness boot module bằng role thường (lát 2 của issue #294, `test/ordinary-worker-module.ts`).
  *
- * Harness chỉ có giá trị nếu handle kho chung mà `WorkerModule`
- * dùng qua `SpaceDatabaseService` thật sự là phiên đăng nhập của role thường
- * NOSUPERUSER/NOBYPASSRLS và thật sự chịu RLS như production. Ba ca
- * ở đây khoá đúng ba tính chất đó:
+ * Harness chỉ có giá trị nếu handle kho chung mà `WorkerModule` dùng qua `SpaceDatabaseService` thật sự là phiên đăng nhập của role thường NOSUPERUSER/NOBYPASSRLS và thật sự chịu RLS như production. Ba ca ở đây khoá đúng ba tính chất đó:
  *
  *   - module nhận đúng kết nối role thường qua handle kho chung
  *     mà harness gắn lại (không phải kết nối superuser do module tự dựng);
  *   - phiên làm việc của kết nối đó đăng nhập bằng role thường và
- *     role không có SUPERUSER/BYPASSRLS — nếu ai cấp thêm hai thuộc
- *     tính này cho role, ca này đỏ;
+ *     role không có SUPERUSER/BYPASSRLS — nếu ai cấp thêm hai thuộc tính này cho role, ca này đỏ;
  *   - chiều âm: ngoài ngữ cảnh tenant, kết nối của module KHÔNG
- *     thấy lớp thuộc một tenant mà kết nối quản trị thấy rõ — nếu
- *     harness bị vô hiệu hoá (module quay lại chạy superuser, hoặc
- *     role có BYPASSRLS), ca này đỏ vì RLS không còn che dữ liệu.
- *     Đây là ca "lỗi RLS cố ý" của tiêu chí nghiệm thu lát 2: nó đỏ
- *     đúng khi môi trường role thường bị phá, chứng minh các spec
- *     đã chuyển sang harness không còn bị superuser che khuất.
+ *     thấy lớp thuộc một tenant mà kết nối quản trị thấy rõ — nếu harness bị vô hiệu hoá (module quay lại chạy superuser, hoặc role có BYPASSRLS), ca này đỏ vì RLS không còn che dữ liệu. Đây là ca "lỗi RLS cố ý" của tiêu chí nghiệm thu lát 2: nó đỏ đúng khi môi trường role thường bị phá, chứng minh các spec đã chuyển sang harness không còn bị superuser che khuất.
  *
- * Fixture nạp bằng kết nối quản trị của harness như đường seed
- * production; spec không khẳng định hành vi nghiệp vụ nào của
- * processor — phần đó thuộc các spec đã chuyển sang harness.
+ * Fixture nạp bằng kết nối quản trị của harness như đường seed production; spec không khẳng định hành vi nghiệp vụ nào của processor — phần đó thuộc các spec đã chuyển sang harness.
  */
 describe('Harness của worker: WorkerModule chạy với vai trò DB thường (issue #294)', () => {
   let harness: OrdinaryWorkerModuleHarness;

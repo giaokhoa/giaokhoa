@@ -9,12 +9,7 @@ import type { OutboxEventJobData } from '../outbox-event-routes';
 export const COHORT_SYNC_EVENT_TYPES = ['cohort_member_added', 'cohort_member_removed'] as const;
 
 /**
- * Kiểm tra hình dạng payload của sự kiện thành viên cohort — đúng bộ
- * kiểm tra consumer polling phía API trước đây vẫn áp trước khi gọi
- * handler: đủ hai trường chuỗi định danh KHÔNG RỖNG (`cohortId`,
- * `userId`); thiếu, sai kiểu hoặc rỗng thì sự kiện bị bỏ qua lặng
- * lẽ, không ném lỗi để BullMQ thử lại một payload không bao giờ
- * xử lý được.
+ * Kiểm tra hình dạng payload của sự kiện thành viên cohort — đúng bộ kiểm tra consumer polling phía API trước đây vẫn áp trước khi gọi handler: đủ hai trường chuỗi định danh KHÔNG RỖNG (`cohortId`, `userId`); thiếu, sai kiểu hoặc rỗng thì sự kiện bị bỏ qua lặng lẽ, không ném lỗi để BullMQ thử lại một payload không bao giờ xử lý được.
  */
 function isCohortMemberPayload(payload: unknown): payload is { cohortId: string; userId: string } {
   if (typeof payload !== 'object' || payload === null) return false;

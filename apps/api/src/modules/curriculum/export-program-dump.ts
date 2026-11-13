@@ -6,24 +6,18 @@ import { ProgramImportService } from './program-import.service';
 import { tenantAls } from '../tenants/tenant-als';
 
 /**
- * CLI SẢN XUẤT DUMP ĐÔNG CỨNG dữ liệu chương trình (chỉ chạy ở trung
- * tâm khi sản xuất/cập nhật dữ liệu chuẩn — KHÔNG phải đường seed
- * của các môi trường; seed các môi trường chỉ restore artifact).
+ * CLI SẢN XUẤT DUMP ĐÔNG CỨNG dữ liệu chương trình (chỉ chạy ở trung tâm khi sản xuất/cập nhật dữ liệu chuẩn — KHÔNG phải đường seed của các môi trường; seed các môi trường chỉ restore artifact).
  *
  * Cách dùng (từ thư mục apps/api, DATABASE_URL trỏ vào DB chuẩn):
  *   node dist/modules/curriculum/export-program-dump.js [--from-datasets] [file-đích]
  * - Mặc định: xuất toàn bộ các bảng chương trình của DB chuẩn hiện
  *   tại thành artifact SQL.
  * - `--from-datasets`: nạp/patch DB chuẩn từ các dataset trong
- *   manifest trước (chạy ProgramImportService — công cụ sản xuất
- *   dump; báo cáo thay đổi của từng dataset được in ra stdout để
- *   người duyệt đối chiếu TRƯỚC khi bản dump này được commit), rồi
- *   mới xuất.
+ *   manifest trước (chạy ProgramImportService — công cụ sản xuất dump; báo cáo thay đổi của từng dataset được in ra stdout để người duyệt đối chiếu TRƯỚC khi bản dump này được commit), rồi mới xuất.
  * - File đích mặc định: artifact trong repo
  *   `src/modules/curriculum/program-data-dump/program-dump.sql`.
  *
- * Sau khi chạy: tăng PROGRAM_DUMP_VERSION trong program-dump.ts nếu
- * đây là đợt sản xuất mới, rồi commit artifact cùng thay đổi version.
+ * Sau khi chạy: tăng PROGRAM_DUMP_VERSION trong program-dump.ts nếu đây là đợt sản xuất mới, rồi commit artifact cùng thay đổi version.
  */
 /**
  * Tính đường file đích của lượt xuất dump từ danh sách đối số CLI.
@@ -53,8 +47,7 @@ async function main(): Promise<void> {
 
   const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error', 'warn'] });
   try {
-    // Đường ghi/đọc dữ liệu platform phải bọc ngữ cảnh platform
-    // tường minh (RLS fail-closed) như đường seed vẫn làm.
+    // Đường ghi/đọc dữ liệu platform phải bọc ngữ cảnh platform tường minh (RLS fail-closed) như đường seed vẫn làm.
     await tenantAls.run({ platform: true }, async () => {
       if (fromDatasets) {
         const importer = app.get(ProgramImportService, { strict: false });

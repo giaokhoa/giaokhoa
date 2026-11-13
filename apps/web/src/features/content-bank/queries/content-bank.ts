@@ -13,25 +13,10 @@ import { flattenNodes } from '../utils/content-bank';
 import { queryKeys } from './keys';
 
 /**
- * Tầng dữ liệu TanStack Query cho Kho học liệu (F-01 của rà soát
- * #133): trang kho và màn tạo/sửa trước đây gọi thẳng các hàm fetch
- * trong `useEffect` và tự giữ kết quả bằng `useState`. Nay mọi lần
- * đọc đi qua options của module này với khoá riêng của feature, các
- * thao tác ghi đi qua hook đột biến và invalidate đúng cụm khoá kho
- * học liệu; các hàm fetch gốc ở tầng `api/` giữ nguyên vai trò lời
- * gọi API bên dưới các options.
+ * Tầng dữ liệu TanStack Query cho Kho học liệu (F-01 của rà soát #133): trang kho và màn tạo/sửa trước đây gọi thẳng các hàm fetch trong `useEffect` và tự giữ kết quả bằng `useState`. Nay mọi lần đọc đi qua options của module này với khoá riêng của feature, các thao tác ghi đi qua hook đột biến và invalidate đúng cụm khoá kho học liệu; các hàm fetch gốc ở tầng `api/` giữ nguyên vai trò lời gọi API bên dưới các options.
  *
- * Cả hai bề mặt đều có máy trạng thái riêng dày (bộ lọc + không gian
- * đang mở + trạng thái bận theo từng dòng ở trang kho; toàn bộ trường
- * form ở màn tạo/sửa) nên trang đọc bằng `queryClient.fetchQuery(...)`
- * tại đúng các nhịp bản thủ công từng gọi fetch (nạp đầu, nạp lại sau
- * thao tác, nạp lười khi mở panel cắm vào khoá, đổi môn/khối) thay vì
- * đổi sang `useQuery` khai báo — cùng khuôn trang tin nhắn của đợt
- * F-01. Vì vậy hai route kho học liệu không gắn `clientLoader`:
- * prefetch ở loader không đổi được nhịp đọc do trang chủ động gọi.
- * Mọi options đặt `staleTime: 0`: mỗi nhịp đọc phải lấy số tươi từ
- * API đúng như bản thủ công (đặc biệt URL tải tệp đã ký có hạn dùng —
- * dùng lại bản cache có thể đưa URL đã hết hạn).
+ * Cả hai bề mặt đều có máy trạng thái riêng dày (bộ lọc + không gian đang mở + trạng thái bận theo từng dòng ở trang kho; toàn bộ trường form ở màn tạo/sửa) nên trang đọc bằng `queryClient.fetchQuery(...)` tại đúng các nhịp bản thủ công từng gọi fetch (nạp đầu, nạp lại sau thao tác, nạp lười khi mở panel cắm vào khoá, đổi môn/khối) thay vì đổi sang `useQuery` khai báo — cùng khuôn trang tin nhắn của đợt F-01. Vì vậy hai route kho học liệu không gắn `clientLoader`:
+ * prefetch ở loader không đổi được nhịp đọc do trang chủ động gọi. Mọi options đặt `staleTime: 0`: mỗi nhịp đọc phải lấy số tươi từ API đúng như bản thủ công (đặc biệt URL tải tệp đã ký có hạn dùng — dùng lại bản cache có thể đưa URL đã hết hạn).
  */
 
 // ---------------------------------------------------------------------
@@ -75,11 +60,7 @@ export function contentBankItemFileUrlQueryOptions(itemId: string) {
 }
 
 /**
- * Tuỳ chọn truy vấn môn học cho bộ lọc của kho học liệu: chuỗi hai
- * bước như bản thủ công — tìm context hệ thống trong GET
- * /access/contexts rồi đọc môn của context đó; mọi lỗi trên chuỗi
- * đều nuốt thành danh sách rỗng (trang chỉ mất gợi ý tên môn, không
- * sập).
+ * Tuỳ chọn truy vấn môn học cho bộ lọc của kho học liệu: chuỗi hai bước như bản thủ công — tìm context hệ thống trong GET /access/contexts rồi đọc môn của context đó; mọi lỗi trên chuỗi đều nuốt thành danh sách rỗng (trang chỉ mất gợi ý tên môn, không sập).
  */
 export function contentBankSubjectsQueryOptions() {
   return queryOptions({
@@ -94,8 +75,7 @@ export function contentBankSubjectsQueryOptions() {
 }
 
 /**
- * Tuỳ chọn truy vấn danh mục câu hỏi trong context hệ thống (màn
- * tạo/sửa học liệu loại bộ câu hỏi chọn category để tham chiếu):
+ * Tuỳ chọn truy vấn danh mục câu hỏi trong context hệ thống (màn tạo/sửa học liệu loại bộ câu hỏi chọn category để tham chiếu):
  * cùng chuỗi tìm context hệ thống như options môn học; lỗi thì rỗng.
  */
 export function contentBankQuestionCategoriesQueryOptions() {

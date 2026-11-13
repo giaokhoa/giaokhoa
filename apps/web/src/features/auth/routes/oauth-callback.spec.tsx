@@ -10,9 +10,7 @@ import { ProfilePage } from '#features/profile/routes/profile';
 
 /**
  * Trang đích sau callback OAuth của Better Auth (issue #7, GĐ2):
- * KHÔNG còn mã bàn giao trong URL — callback phía server đã đặt
- * cookie phiên, trang chỉ resolve lại phiên từ cookie qua
- * `get-session` (URL tuyệt đối của client BA) rồi sang hồ sơ.
+ * KHÔNG còn mã bàn giao trong URL — callback phía server đã đặt cookie phiên, trang chỉ resolve lại phiên từ cookie qua `get-session` (URL tuyệt đối của client BA) rồi sang hồ sơ.
  */
 
 const PROFILE = {
@@ -30,8 +28,7 @@ const PROFILE = {
   customFields: [],
 };
 
-// Thân phiên lấy từ fixture dùng chung `baSessionBody`: mốc hết hạn
-// tính tương đối theo thời điểm chạy nên không hết hạn theo lịch
+// Thân phiên lấy từ fixture dùng chung `baSessionBody`: mốc hết hạn tính tương đối theo thời điểm chạy nên không hết hạn theo lịch
 // (bản tự khai trước đây ghim ngày cứng và suýt nổ cả bộ spec).
 const SESSION_BODY = baSessionBody({
   id: PROFILE.id,
@@ -64,8 +61,7 @@ function jsonResponse(body: unknown, status = 200) {
 
 describe('Trang callback OAuth (phân giải phiên cookie, fetch mock tại biên)', () => {
   afterEach(() => {
-    // Dự án không bật auto-cleanup của Testing Library nên phải dọn
-    // DOM tường minh, tránh cây render của test trước sót sang test sau.
+    // Dự án không bật auto-cleanup của Testing Library nên phải dọn DOM tường minh, tránh cây render của test trước sót sang test sau.
     cleanup();
     vi.unstubAllGlobals();
     localStorage.clear();

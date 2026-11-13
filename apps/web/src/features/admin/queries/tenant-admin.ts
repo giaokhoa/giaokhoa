@@ -21,16 +21,9 @@ import { queryKeys } from './keys';
  * - Platform: `GET /api/v1/tenants` trả mọi tenant; trang chọn một
  *   tenant rồi đọc membership và người dùng của đúng tenant đó.
  * - Tenant: `GET /api/v1/tenants/current` chỉ trả tenant hiệu lực của
- *   phiên; trang dùng chính `id` trong đáp ứng này cho mọi lời gọi
- *   membership và người dùng, không tự suy tenant từ danh sách platform.
+ *   phiên; trang dùng chính `id` trong đáp ứng này cho mọi lời gọi membership và người dùng, không tự suy tenant từ danh sách platform.
  *
- * Mọi thao tác ghi đều đi qua API tenant hiện có. Sau khi server xác
- * nhận, tầng này làm mới gốc khoá `admin.tenants` để danh sách tenant,
- * membership và hồ sơ người dùng cùng về trạng thái mới; riêng đổi trạng
- * thái membership còn làm mới ảnh chụp quyền vì membership là một cổng
- * trong quá trình phân giải quyền của chính người bị đổi trạng thái.
- * Lời gọi API thuần nằm ở tầng `api/` của feature; khoá truy vấn
- * riêng của admin nằm ở `keys.ts` cùng tầng này.
+ * Mọi thao tác ghi đều đi qua API tenant hiện có. Sau khi server xác nhận, tầng này làm mới gốc khoá `admin.tenants` để danh sách tenant, membership và hồ sơ người dùng cùng về trạng thái mới; riêng đổi trạng thái membership còn làm mới ảnh chụp quyền vì membership là một cổng trong quá trình phân giải quyền của chính người bị đổi trạng thái. Lời gọi API thuần nằm ở tầng `api/` của feature; khoá truy vấn riêng của admin nằm ở `keys.ts` cùng tầng này.
  */
 
 /** Tuỳ chọn truy vấn danh sách tenant toàn hệ thống cho chế độ platform. */
@@ -44,13 +37,7 @@ export function tenantsQueryOptions() {
 /**
  * Tuỳ chọn truy vấn tenant hiệu lực cho chế độ chủ trung tâm.
  *
- * Đáp ứng là bản ghi tenant ĐẦY ĐỦ `Tenant` — endpoint này trả cùng
- * DTO `toTenantDto` với danh sách platform (id, slug, name, kind,
- * status, plan, createdAt, updatedAt) — nên tầng hiển thị đọc được
- * trạng thái vòng đời và gói từ đáp ứng này như ở chế độ platform.
- * Hình dạng rút gọn `MyTenant` kèm cờ `active` (nghĩa là tenant đang
- * hiệu lực trong phiên) chỉ thuộc về `GET /auth/tenants`, không phải
- * endpoint này.
+ * Đáp ứng là bản ghi tenant ĐẦY ĐỦ `Tenant` — endpoint này trả cùng DTO `toTenantDto` với danh sách platform (id, slug, name, kind, status, plan, createdAt, updatedAt) — nên tầng hiển thị đọc được trạng thái vòng đời và gói từ đáp ứng này như ở chế độ platform. Hình dạng rút gọn `MyTenant` kèm cờ `active` (nghĩa là tenant đang hiệu lực trong phiên) chỉ thuộc về `GET /auth/tenants`, không phải endpoint này.
  */
 export function currentTenantQueryOptions() {
   return queryOptions({

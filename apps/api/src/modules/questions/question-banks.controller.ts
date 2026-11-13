@@ -17,16 +17,11 @@ import {
 @ApiTags('question-banks')
 @Controller({ path: 'question-banks', version: '1' })
 /**
- * API lớp BANK của feat Ngân hàng câu hỏi chung (issue #70): bank bốn
- * scope (QB-1) và hàng chờ đóng góp/duyệt vào bank chung (QB-4).
+ * API lớp BANK của feat Ngân hàng câu hỏi chung (issue #70): bank bốn scope (QB-1) và hàng chờ đóng góp/duyệt vào bank chung (QB-4).
  *
  * Đây là controller sở hữu duy nhất của tiền tố `/question-banks`
  * (issue #343): bề mặt ma trận của bank (danh sách ma trận trong
- * bank + hàng chờ đóng góp ma trận, MB-1 của issue #111) trước đây
- * nằm ở một controller riêng của module quiz cùng khai tiền tố này,
- * đã chuyển về lớp này; các handler đó vẫn uỷ thác
- * `MatrixBanksService` của module quiz — chỉ lớp controller di
- * chuyển, tầng service không đổi.
+ * bank + hàng chờ đóng góp ma trận, MB-1 của issue #111) trước đây nằm ở một controller riêng của module quiz cùng khai tiền tố này, đã chuyển về lớp này; các handler đó vẫn uỷ thác `MatrixBanksService` của module quiz — chỉ lớp controller di chuyển, tầng service không đổi.
  */
 export class QuestionBanksController {
   constructor(
@@ -88,16 +83,11 @@ export class QuestionBanksController {
   }
 
   // --- Bề mặt ma trận của bank (MB-1, issue #111) ---------------------------
-  // Các handler dưới đây trước đây nằm ở QuestionBankMatricesController
-  // của module quiz cùng khai tiền tố `question-banks`; đã chuyển về
-  // lớp này để tiền tố có đúng một controller sở hữu (issue #343).
-  // Tầng service giữ nguyên: mọi handler vẫn uỷ thác
-  // `MatrixBanksService`.
+  // Các handler dưới đây trước đây nằm ở QuestionBankMatricesController của module quiz cùng khai tiền tố `question-banks`; đã chuyển về lớp này để tiền tố có đúng một controller sở hữu (issue #343). Tầng service giữ nguyên: mọi handler vẫn uỷ thác `MatrixBanksService`.
 
   @Get('matrix-contributions/mine')
   /**
-   * GET /question-banks/matrix-contributions/mine — mọi đề xuất đóng
-   * góp ma trận của chính người dùng (kết quả duyệt + lý do từ chối).
+   * GET /question-banks/matrix-contributions/mine — mọi đề xuất đóng góp ma trận của chính người dùng (kết quả duyệt + lý do từ chối).
    */
   async myContributions(@CurrentUser() actor: AuthenticatedUser) {
     return this.matrixBanks.listMyContributions(actor.id);
@@ -114,9 +104,7 @@ export class QuestionBanksController {
 
   @Get(':bankId/matrix-contributions')
   /**
-   * GET /question-banks/:bankId/matrix-contributions?status= — hàng
-   * chờ đóng góp của bank (người duyệt thấy tất cả, người gửi chỉ thấy
-   * của mình).
+   * GET /question-banks/:bankId/matrix-contributions?status= — hàng chờ đóng góp của bank (người duyệt thấy tất cả, người gửi chỉ thấy của mình).
    */
   async listMatrixContributions(@Param('bankId', { schema: uuidIdSchema }) bankId: string, @Query('status') status: string | undefined, @CurrentUser() actor: AuthenticatedUser) {
     return this.matrixBanks.listContributions(actor.id, bankId, status);
@@ -124,8 +112,7 @@ export class QuestionBanksController {
 
   @Post(':bankId/matrix-contributions/:contributionId/approve')
   /**
-   * POST /question-banks/:bankId/matrix-contributions/:contributionId/approve
-   * — duyệt đóng góp: copy sâu ma trận vào bank đích thành MẪU.
+   * POST /question-banks/:bankId/matrix-contributions/:contributionId/approve — duyệt đóng góp: copy sâu ma trận vào bank đích thành MẪU.
    */
   async approveMatrixContribution(
     @Param('bankId', { schema: uuidIdSchema }) bankId: string,
@@ -138,8 +125,7 @@ export class QuestionBanksController {
 
   @Post(':bankId/matrix-contributions/:contributionId/reject')
   /**
-   * POST /question-banks/:bankId/matrix-contributions/:contributionId/reject
-   * — từ chối đóng góp, lý do bắt buộc và hiện lại cho người gửi.
+   * POST /question-banks/:bankId/matrix-contributions/:contributionId/reject — từ chối đóng góp, lý do bắt buộc và hiện lại cho người gửi.
    */
   async rejectMatrixContribution(
     @Param('bankId', { schema: uuidIdSchema }) bankId: string,

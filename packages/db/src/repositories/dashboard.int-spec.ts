@@ -8,29 +8,11 @@ import { DashboardRepository, type ContextLevels } from './dashboard';
 /**
  * Spec tích hợp của repository DASHBOARD trên Kysely (issue #652).
  *
- * Database kho trung tâm được dựng từ rỗng bằng chính cầu nối
- * migration của package (carrier đóng băng) trên cụm PostgreSQL
- * thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm
- * khi cần, mặc định suy từ `DATABASE_URL` của package). Mọi ca chạy
- * qua repository production ở `dashboard.ts` — không mô phỏng
- * handle.
+ * Database kho trung tâm được dựng từ rỗng bằng chính cầu nối migration của package (carrier đóng băng) trên cụm PostgreSQL thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ `DATABASE_URL` của package). Mọi ca chạy qua repository production ở `dashboard.ts` — không mô phỏng handle.
  *
- * Đối chiếu số liệu là tiêu chí nghiệm thu trung tâm của issue: với
- * MỖI method của repository, spec chạy cùng một truy vấn trên cùng
- * một dữ kiện mẫu qua hai đường — bản thực thi cũ (sao nguyên văn
- * logic thân method của repository cũ vào các hàm `old*` dưới đây;
- * từ #663 các hàm này dựng bằng Kysely thô vì ORM cũ đã rời khỏi
- * cây) và repository hiện hành — và khẳng định kết quả khớp nhau.
- * Các method ghi được kiểm hai chiều: ghi bằng đường này, đọc lại
- * bằng đường kia.
+ * Đối chiếu số liệu là tiêu chí nghiệm thu trung tâm của issue: với MỖI method của repository, spec chạy cùng một truy vấn trên cùng một dữ kiện mẫu qua hai đường — bản thực thi cũ (sao nguyên văn logic thân method của repository cũ vào các hàm `old*` dưới đây; từ #663 các hàm này dựng bằng Kysely thô vì ORM cũ đã rời khỏi cây) và repository hiện hành — và khẳng định kết quả khớp nhau. Các method ghi được kiểm hai chiều: ghi bằng đường này, đọc lại bằng đường kia.
  *
- * Cổng registry ngữ cảnh: repository chỉ đọc khoá `COURSE` qua
- * cổng. Dữ kiện mẫu của spec tự chọn số mức cho context khoá là
- * `COURSE_LEVEL` (một giá trị riêng của spec, khác mọi giá trị
- * registry thật) và implementation cổng của spec cấp đúng giá trị
- * đó — nếu repository dùng bất kỳ hằng số mức nào khác ngoài cổng,
- * ca gán vai sẽ lệch kết quả ngay. Các khoá còn lại của cổng không
- * được repository tiêu thụ nên spec cấp 0.
+ * Cổng registry ngữ cảnh: repository chỉ đọc khoá `COURSE` qua cổng. Dữ kiện mẫu của spec tự chọn số mức cho context khoá là `COURSE_LEVEL` (một giá trị riêng của spec, khác mọi giá trị registry thật) và implementation cổng của spec cấp đúng giá trị đó — nếu repository dùng bất kỳ hằng số mức nào khác ngoài cổng, ca gán vai sẽ lệch kết quả ngay. Các khoá còn lại của cổng không được repository tiêu thụ nên spec cấp 0.
  */
 const adminUrl =
   process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??
@@ -71,12 +53,7 @@ let db: CentreDb;
 let repo: DashboardRepository;
 
 // ---------------------------------------------------------------------------
-// Bản thực thi cũ — sao nguyên văn logic thân method của repository
-// cũ (`apps/api/src/modules/dashboard/dashboard.repository.ts` tại
-// main trước lượt chuyển đổi), chỉ đổi điểm nhận handle và hằng mức
-// khoá qua cổng mẫu. Từ #663 các hàm này dựng bằng Kysely thô trên
-// cùng handle (ORM cũ đã rời khỏi cây); logic truy vấn giữ nguyên
-// từng điều kiện/nối/sắp xếp của bản sao.
+// Bản thực thi cũ — sao nguyên văn logic thân method của repository cũ (`apps/api/src/modules/dashboard/dashboard.repository.ts` tại main trước lượt chuyển đổi), chỉ đổi điểm nhận handle và hằng mức khoá qua cổng mẫu. Từ #663 các hàm này dựng bằng Kysely thô trên cùng handle (ORM cũ đã rời khỏi cây); logic truy vấn giữ nguyên từng điều kiện/nối/sắp xếp của bản sao.
 // ---------------------------------------------------------------------------
 
 type OldDb = CentreDb;
@@ -341,8 +318,7 @@ async function oldDeletePref(oldDb: OldDb, userId: string, courseId: string): Pr
 }
 
 // ---------------------------------------------------------------------------
-// Dữ kiện mẫu: một trung tâm, ba người dùng, hai khoá. Khoá A chứa đủ các
-// nguồn của dashboard; khoá B chỉ để kiểm các biên lọc (ghi danh hết hạn).
+// Dữ kiện mẫu: một trung tâm, ba người dùng, hai khoá. Khoá A chứa đủ các nguồn của dashboard; khoá B chỉ để kiểm các biên lọc (ghi danh hết hạn).
 // ---------------------------------------------------------------------------
 
 let itemModId = '';

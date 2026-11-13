@@ -23,12 +23,7 @@
  * Payload của một yêu cầu gửi mail đặt lại mật khẩu, ghi vào outbox
  * (bảng `outbox_events`, type `auth_mail_requested`).
  *
- * Payload mang nội dung NHẠY CẢM theo đúng bản chất của nó (liên kết
- * reset chứa token): token là bí mật DÙNG MỘT LẦN và sống ngắn (reset
- * 1 giờ) theo cấu hình của Better Auth — cùng mức bảo vệ với chính
- * bảng `verification` của Better Auth, nơi token reset cũng nằm
- * trong DB. Consumer đọc payload, dựng nội dung mail bằng các hàm
- * trong file này rồi mới gọi transport.
+ * Payload mang nội dung NHẠY CẢM theo đúng bản chất của nó (liên kết reset chứa token): token là bí mật DÙNG MỘT LẦN và sống ngắn (reset 1 giờ) theo cấu hình của Better Auth — cùng mức bảo vệ với chính bảng `verification` của Better Auth, nơi token reset cũng nằm trong DB. Consumer đọc payload, dựng nội dung mail bằng các hàm trong file này rồi mới gọi transport.
  */
 export interface PasswordResetMailPayload {
   kind: 'password_reset';
@@ -51,11 +46,7 @@ export interface EmailOtpMailPayload {
 export type AuthMailPayload = PasswordResetMailPayload | EmailOtpMailPayload;
 
 /**
- * Một bức mail auth đã dựng xong từ payload: người nhận, tiêu đề và
- * nội dung ở cả hai dạng text (luôn có) và HTML. Hình dạng này khớp
- * bề mặt nhận của transport Resend ở cả hai phía (API và worker) —
- * nơi gửi chỉ việc truyền thẳng kết quả dựng vào transport của phía
- * mình.
+ * Một bức mail auth đã dựng xong từ payload: người nhận, tiêu đề và nội dung ở cả hai dạng text (luôn có) và HTML. Hình dạng này khớp bề mặt nhận của transport Resend ở cả hai phía (API và worker) — nơi gửi chỉ việc truyền thẳng kết quả dựng vào transport của phía mình.
  */
 export interface RenderedAuthMail {
   /** Địa chỉ email người nhận (một người nhận cho mỗi bức mail). */

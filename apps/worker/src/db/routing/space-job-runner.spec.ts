@@ -5,15 +5,9 @@ import type { SpaceDatabaseService } from './space-database.service';
 import { SpaceJobRunner } from './space-job-runner';
 
 /**
- * Ca đơn vị của bộ chạy job theo trung tâm (issue #582): khung
- * định tuyến được thay bằng vật giả ghi lại cách phiên được mở —
- * các ca khoá đúng quyết định phiên cho từng hình job: job của
- * trung tâm ở kho riêng chạy trong phiên theo trung tâm mang cả
- * tenant của job, và phiên kho riêng chuẩn bị cả handle Kysely
+ * Ca đơn vị của bộ chạy job theo trung tâm (issue #582): khung định tuyến được thay bằng vật giả ghi lại cách phiên được mở — các ca khoá đúng quyết định phiên cho từng hình job: job của trung tâm ở kho riêng chạy trong phiên theo trung tâm mang cả tenant của job, và phiên kho riêng chuẩn bị cả handle Kysely
  * (bảng chuẩn bị tách riêng với phía bộ máy cũ); job ở kho chung
- * và job không mang slug chạy trong ngữ cảnh platform như hiện
- * tại; job mà đích phân giải lỗi thì bị lỗi thay vì chạy trên
- * platform (vòng sửa theo phán quyết điều phối PR #602).
+ * và job không mang slug chạy trong ngữ cảnh platform như hiện tại; job mà đích phân giải lỗi thì bị lỗi thay vì chạy trên platform (vòng sửa theo phán quyết điều phối PR #602).
  */
 
 const DEDICATED_TARGET: ResolvedSpaceConnection = {
@@ -51,8 +45,7 @@ function makeRunner(options?: { target?: ResolvedSpaceConnection; resolveError?:
         context?: { tenantId?: string; userId?: string },
       ) => {
         sessions.push({ slug, context });
-        // Mô phỏng đúng hợp đồng của khung thật: fn chạy trong
-        // ngữ cảnh ALS mang slug và tenant của phiên.
+        // Mô phỏng đúng hợp đồng của khung thật: fn chạy trong ngữ cảnh ALS mang slug và tenant của phiên.
         return tenantAls.run(
           { spaceSlug: slug, tenantId: context?.tenantId },
           async () => fn({}),
@@ -60,8 +53,7 @@ function makeRunner(options?: { target?: ResolvedSpaceConnection; resolveError?:
       },
     ),
     // (Bước chuẩn bị handle của kho đích chạy bên trong chính
-    // `withSpaceKysely` của khung thật, nên vật giả không cần
-    // điểm chuẩn bị riêng.)
+    // `withSpaceKysely` của khung thật, nên vật giả không cần điểm chuẩn bị riêng.)
     getKyselyForSpace: vi.fn(async () => ({})),
   };
   const runner = new SpaceJobRunner(spaceDb as unknown as SpaceDatabaseService);

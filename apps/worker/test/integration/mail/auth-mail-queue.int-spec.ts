@@ -20,41 +20,15 @@ import {
 } from '../../support/ordinary-worker-module';
 
 /**
- * Đường mail auth qua hàng đợi ở worker (issue #517) trên hạ tầng
- * thật của suite worker (DB `giaokhoa_test_worker`, Redis thật):
+ * Đường mail auth qua hàng đợi ở worker (issue #517) trên hạ tầng thật của suite worker (DB `giaokhoa_test_worker`, Redis thật):
  *
  * - Một dòng outbox `auth_mail_requested` được relay duy nhất phát
- *   thành job trên hàng đợi `auth-mail` theo bảng định tuyến: job
- *   mang `jobId` bằng id của dòng và dữ liệu là toàn bộ dòng; dòng
- *   được đóng dấu `publishedAt` và phản chiếu vào `event_log` như
- *   mọi dòng outbox khác.
+ *   thành job trên hàng đợi `auth-mail` theo bảng định tuyến: job mang `jobId` bằng id của dòng và dữ liệu là toàn bộ dòng; dòng được đóng dấu `publishedAt` và phản chiếu vào `event_log` như mọi dòng outbox khác.
  * - Processor xử lý dữ liệu job đó bằng hàng rào hai trạng thái
- *   trên Redis thật: dấu ĐÃ GỬI chỉ ghi sau khi transport nhận
- *   mail, nên xử lý lại cùng một sự kiện (cùng `outboxId`) không
- *   gửi lần hai; hai lượt xử lý ĐỒNG THỜI cùng một sự kiện cũng
- *   chỉ gửi đúng một mail (lease ĐANG XỬ LÝ chiếm nguyên tử
- *   `SET ... NX` phía Redis, lượt thua ném tín hiệu hẹn thử lại
- *   `DelayedError` chứ không kết thúc như đã xử lý); lượt giữ
- *   lease chết trước khi gửi thì lease hết hạn và lượt sau gửi
- *   được mail (khôi phục sau sập); nhả lease kiểm tra token chủ
- *   sở hữu bằng script Lua phía Redis. Hàng rào còn phải đọc lại
- *   dấu ĐÃ GỬI trong lúc đang giữ lease, trước khi gọi transport:
- *   một lượt đọc dấu là chưa có rồi bị giữ lại trước khi chiếm
- *   lease, trong lúc lượt khác gửi trọn và nhả lease, mà dựa vào
- *   kết quả kiểm tra cũ thì gửi lần hai dù không có lỗi nào xảy
- *   ra — ca xen kẽ có điều phối thứ tự ở dưới ghim cửa sổ này
- *   trên Redis thật. Tính idempotent theo `outboxId` kiểm chứng
- *   ở tầng hạ tầng thật chứ không chỉ bằng bản giả trong bộ nhớ
- *   của spec unit.
+ *   trên Redis thật: dấu ĐÃ GỬI chỉ ghi sau khi transport nhận mail, nên xử lý lại cùng một sự kiện (cùng `outboxId`) không gửi lần hai; hai lượt xử lý ĐỒNG THỜI cùng một sự kiện cũng chỉ gửi đúng một mail (lease ĐANG XỬ LÝ chiếm nguyên tử `SET ... NX` phía Redis, lượt thua ném tín hiệu hẹn thử lại `DelayedError` chứ không kết thúc như đã xử lý); lượt giữ lease chết trước khi gửi thì lease hết hạn và lượt sau gửi được mail (khôi phục sau sập); nhả lease kiểm tra token chủ sở hữu bằng script Lua phía Redis. Hàng rào còn phải đọc lại dấu ĐÃ GỬI trong lúc đang giữ lease, trước khi gọi transport:
+ *   một lượt đọc dấu là chưa có rồi bị giữ lại trước khi chiếm lease, trong lúc lượt khác gửi trọn và nhả lease, mà dựa vào kết quả kiểm tra cũ thì gửi lần hai dù không có lỗi nào xảy ra — ca xen kẽ có điều phối thứ tự ở dưới ghim cửa sổ này trên Redis thật. Tính idempotent theo `outboxId` kiểm chứng ở tầng hạ tầng thật chứ không chỉ bằng bản giả trong bộ nhớ của spec unit.
  *
- * Vì sao processor ở các ca sau ca đầu được dựng tay: module đã
- * boot có processor nền riêng đang tiêu thụ cùng hàng đợi (đúng
- * như production), nên việc "job nào tới processor nào" không xác
- * định giữa các spec chạy song song — mẫu chung của suite này (xem
- * `notification-email.int-spec.ts`) là dựng processor cần kiểm
- * chứng bằng tay với transport giả, còn ca thứ nhất chỉ khẳng định
- * các hệ quả bền của relay (dấu trên dòng, job trong hàng đợi, bản
- * phản chiếu) vốn không phụ thuộc processor nào tiêu thụ job.
+ * Vì sao processor ở các ca sau ca đầu được dựng tay: module đã boot có processor nền riêng đang tiêu thụ cùng hàng đợi (đúng như production), nên việc "job nào tới processor nào" không xác định giữa các spec chạy song song — mẫu chung của suite này (xem `notification-email.int-spec.ts`) là dựng processor cần kiểm chứng bằng tay với transport giả, còn ca thứ nhất chỉ khẳng định các hệ quả bền của relay (dấu trên dòng, job trong hàng đợi, bản phản chiếu) vốn không phụ thuộc processor nào tiêu thụ job.
  */
 
 /** Transport giả ghi lại mọi mail được yêu cầu gửi. */
@@ -68,9 +42,7 @@ class FakeMailer {
 }
 
 /**
- * Transport giả có cổng chặn: mọi lượt `send` treo lại cho tới khi
- * test mở cổng — ép hai lượt xử lý đồng thời chồng lấn tại cửa sổ
- * gửi để kiểm chứng hàng rào lease nguyên tử trên Redis thật.
+ * Transport giả có cổng chặn: mọi lượt `send` treo lại cho tới khi test mở cổng — ép hai lượt xử lý đồng thời chồng lấn tại cửa sổ gửi để kiểm chứng hàng rào lease nguyên tử trên Redis thật.
  */
 class GatedMailer {
   readonly sent: WorkerMailMessage[] = [];
@@ -93,13 +65,7 @@ class GatedMailer {
 }
 
 /**
- * Bọc bản dấu Redis thật bằng cổng chặn ở lượt chiếm lease ĐẦU
- * TIÊN: lượt gọi `claimProcessing` đầu tiên được báo hiệu qua
- * `firstClaimParked` rồi treo lại cho tới khi test mở cổng; mọi
- * thao tác còn lại đi thẳng xuống Redis thật. Dùng để ép lịch
- * xen kẽ xác định trên hạ tầng thật: lượt A đọc dấu đã gửi (chưa
- * có) rồi bị giữ ngay trước khi chiếm lease, trong lúc lượt B
- * chạy trọn chu trình gửi và nhả lease.
+ * Bọc bản dấu Redis thật bằng cổng chặn ở lượt chiếm lease ĐẦU TIÊN: lượt gọi `claimProcessing` đầu tiên được báo hiệu qua `firstClaimParked` rồi treo lại cho tới khi test mở cổng; mọi thao tác còn lại đi thẳng xuống Redis thật. Dùng để ép lịch xen kẽ xác định trên hạ tầng thật: lượt A đọc dấu đã gửi (chưa có) rồi bị giữ ngay trước khi chiếm lease, trong lúc lượt B chạy trọn chu trình gửi và nhả lease.
  */
 class FirstClaimGatedRedisMarker implements AuthMailSentMarker {
   private claimCalls = 0;
@@ -195,9 +161,7 @@ describe('Worker: mail auth qua hàng đợi (issue #517)', () => {
 
   /** Dựng một bản dấu Redis thật mới (kết nối riêng) như một tiến trình worker riêng. */
   // Bộ chạy job dùng cho các processor dựng tay trong spec:
-  // dịch vụ định tuyến không cấu hình sổ nên mọi job đều chạy ở
-  // phiên platform trên kho chung như trước (định tuyến theo
-  // trung tâm có spec riêng ở tầng worker).
+  // dịch vụ định tuyến không cấu hình sổ nên mọi job đều chạy ở phiên platform trên kho chung như trước (định tuyến theo trung tâm có spec riêng ở tầng worker).
   const jobRunner = new SpaceJobRunner({
     resolveTarget: async () => {
       throw new Error('spec không cấu hình sổ đăng ký');
@@ -231,9 +195,7 @@ describe('Worker: mail auth qua hàng đợi (issue #517)', () => {
     }).returningAll().executeTakeFirstOrThrow();
     expect(row?.id).toBeTruthy();
 
-    // Chủ động xả một lượt relay thay vì chờ nhịp nền 5 giây; nhịp
-    // nền có thể đã phát dòng này trước thì các khẳng định dưới đây
-    // vẫn đúng nguyên trạng.
+    // Chủ động xả một lượt relay thay vì chờ nhịp nền 5 giây; nhịp nền có thể đã phát dòng này trước thì các khẳng định dưới đây vẫn đúng nguyên trạng.
     const relay = context.get(OutboxRelayScheduler);
     await relay.publishPending().catch(() => undefined);
 

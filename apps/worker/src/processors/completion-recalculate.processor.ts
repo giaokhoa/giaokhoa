@@ -9,14 +9,7 @@ export interface CompletionRecalculateResult { courseId: string; users: number; 
 const ENROL_WITHDRAWN = 2;
 
 /**
- * Tính lại completion (report §2#9): khi tiêu chí của khoá học thay đổi
- * sau khi dữ liệu completion đã tồn tại, API gắn cờ reaggregation và đưa
- * job này vào queue; job tính lại course_completions của mọi user đã ghi danh
- * từ các tiêu chí HIỆN TẠI — đủ 8 loại tiêu chí của Moodle với cùng
- * ngữ nghĩa như evaluator phía API (module/date/grade/self/course/
- * duration/role/unenrol) — một cách idempotent, trong worker, không chạy inline trong
- * request. Khi user mới hoàn thành một khoá học mà các khoá học khác liệt kê là
- * điều kiện tiên quyết, các job tính lại sẽ được đưa vào queue cho các khoá phụ thuộc đó.
+ * Tính lại completion (report §2#9): khi tiêu chí của khoá học thay đổi sau khi dữ liệu completion đã tồn tại, API gắn cờ reaggregation và đưa job này vào queue; job tính lại course_completions của mọi user đã ghi danh từ các tiêu chí HIỆN TẠI — đủ 8 loại tiêu chí của Moodle với cùng ngữ nghĩa như evaluator phía API (module/date/grade/self/course/ duration/role/unenrol) — một cách idempotent, trong worker, không chạy inline trong request. Khi user mới hoàn thành một khoá học mà các khoá học khác liệt kê là điều kiện tiên quyết, các job tính lại sẽ được đưa vào queue cho các khoá phụ thuộc đó.
  */
 @Processor('completion-recalculate')
 /**
@@ -32,9 +25,7 @@ export class CompletionRecalculateProcessor extends WorkerHost {
    * Xử lý một job của queue tương ứng.
    */
   async process(job: Job<CompletionRecalculateJobData>): Promise<CompletionRecalculateResult> {
-    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc
-    // ngữ cảnh platform tường minh để RLS fail-closed không làm mù
-    // dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
+    // TENANT-1 (#196): processor nền quét/xử lý xuyên tenant — bọc ngữ cảnh platform tường minh để RLS fail-closed không làm mù dữ liệu tenant (pool gắn GUC theo ALS ở mọi checkout).
     return tenantAls.run({ platform: true }, () => this.processInContext(job));
   }
 
@@ -56,8 +47,7 @@ export class CompletionRecalculateProcessor extends WorkerHost {
       .executeTakeFirst();
     const method = settings?.method ?? 1; // 1=ALL, 2=ANY
 
-    // User ứng viên: mọi người đã ghi danh vào khoá học (bất kỳ instance nào) cộng với
-    // bất kỳ ai đã có một completion của khoá học được lưu.
+    // User ứng viên: mọi người đã ghi danh vào khoá học (bất kỳ instance nào) cộng với bất kỳ ai đã có một completion của khoá học được lưu.
     const instances = await this.spaceDb.routedKysely
       .selectFrom('enrol')
       .select(['id', 'status'])

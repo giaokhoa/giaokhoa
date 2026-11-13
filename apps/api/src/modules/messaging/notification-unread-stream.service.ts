@@ -7,9 +7,7 @@ import { MessagingRepository } from '@giaokhoa/db/repositories/messaging';
 import { tenantAls } from '../tenants/tenant-als';
 
 /**
- * Kênh Redis pub/sub mang tín hiệu "số thông báo chưa đọc của một user
- * vừa thay đổi". Payload chỉ là userId — số đếm thật luôn được đọc lại
- * từ database ở phía nhận, không tin số mang theo tín hiệu.
+ * Kênh Redis pub/sub mang tín hiệu "số thông báo chưa đọc của một user vừa thay đổi". Payload chỉ là userId — số đếm thật luôn được đọc lại từ database ở phía nhận, không tin số mang theo tín hiệu.
  */
 export const NOTIFICATION_UNREAD_CHANGED_CHANNEL = 'giaokhoa:notifications:unread-changed';
 

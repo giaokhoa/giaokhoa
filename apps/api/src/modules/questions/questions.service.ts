@@ -56,8 +56,7 @@ export interface QuestionContentInput {
   options?: QuestionOptionsInput;
   /**
    * Phía đáp án do người soạn gửi lên, ghi vào `question_answer_keys.solution`:
-   * essay gửi lời giải mẫu dạng `{answer}`; truefalse TF-A gửi đáp án từng
-   * mệnh đề dạng `{answers: [{statementId, value}]}`.
+   * essay gửi lời giải mẫu dạng `{answer}`; truefalse TF-A gửi đáp án từng mệnh đề dạng `{answers: [{statementId, value}]}`.
    */
   solution?: { answer: RichTextInput } | { answers: { statementId: string; value: boolean }[] };
 }
@@ -91,9 +90,7 @@ export const SUPPORTED_QTYPES = ['multichoice', 'truefalse', 'shortanswer', 'ess
 export type SupportedQtype = (typeof SUPPORTED_QTYPES)[number];
 
 /**
- * Hình dạng solution LƯU TRỮ ở `question_answer_keys.solution`: lời giải
- * mẫu của essay (`{answer}`) hoặc đáp án Đúng/Sai từng mệnh đề của
- * truefalse TF-A (`{answers}` bám theo statementId của thân câu).
+ * Hình dạng solution LƯU TRỮ ở `question_answer_keys.solution`: lời giải mẫu của essay (`{answer}`) hoặc đáp án Đúng/Sai từng mệnh đề của truefalse TF-A (`{answers}` bám theo statementId của thân câu).
  */
 type StoredSolution =
   | { answer: RichTextDocument }
@@ -126,32 +123,15 @@ function badAnswerData(message: string): BadRequestException {
 /**
  * Facade của QuestionsModule (core_question của Moodle): BANK + ENGINE.
  *
- * Bất biến bank: sửa một câu hỏi KHÔNG BAO GIỜ thay đổi một version — nó tạo
- * version tiếp theo (với dòng answers/options riêng) và di chuyển con trỏ
- * latest của bank entry; usage tạo sau đó phân giải version mới,
- * attempt đã bắt đầu giữ version của chúng.
+ * Bất biến bank: sửa một câu hỏi KHÔNG BAO GIỜ thay đổi một version — nó tạo version tiếp theo (với dòng answers/options riêng) và di chuyển con trỏ latest của bank entry; usage tạo sau đó phân giải version mới, attempt đã bắt đầu giữ version của chúng.
  *
- * Lưu trữ nội dung theo mô hình giaokhoa (quyết 12:04 + 12:12 ngày
- * 26/10/2026): đáp án nằm ở question_answers (cờ `isCorrect` nhị phân +
- * feedback theo đáp án — KHÔNG còn tỉ trọng), options ở bảng riêng của
- * qtype, questionText/generalFeedback là tài liệu Tiptap trên dòng
- * version, còn guidance + solution nằm ở bản ghi phía đáp án
- * `question_answer_keys` (1-1 với version, cùng giao dịch ghi). Câu hỏi
- * KHÔNG có tên — nhãn hiển thị là trích đoạn nội dung. API nhận MỘT
- * payload cấu trúc theo qtype; service bung payload ra các bảng khi lưu.
+ * Lưu trữ nội dung theo mô hình giaokhoa (quyết 12:04 + 12:12 ngày 26/10/2026): đáp án nằm ở question_answers (cờ `isCorrect` nhị phân + feedback theo đáp án — KHÔNG còn tỉ trọng), options ở bảng riêng của qtype, questionText/generalFeedback là tài liệu Tiptap trên dòng version, còn guidance + solution nằm ở bản ghi phía đáp án `question_answer_keys` (1-1 với version, cùng giao dịch ghi). Câu hỏi KHÔNG có tên — nhãn hiển thị là trích đoạn nội dung. API nhận MỘT payload cấu trúc theo qtype; service bung payload ra các bảng khi lưu.
  *
- * Bất biến engine (questionusagebyactivity_test): một usage nhóm các attempt
- * theo (component, instanceId); bắt đầu một attempt PIN version latest hiện tại;
- * mọi chuyển đổi đều ghi một step (với step_data cho response);
- * deferredfeedback chấm khi kết thúc theo answers của version ĐÃ PIN
- * và options; trạng thái usage là tổng hợp của các attempt của nó.
+ * Bất biến engine (questionusagebyactivity_test): một usage nhóm các attempt theo (component, instanceId); bắt đầu một attempt PIN version latest hiện tại; mọi chuyển đổi đều ghi một step (với step_data cho response); deferredfeedback chấm khi kết thúc theo answers của version ĐÃ PIN và options; trạng thái usage là tổng hợp của các attempt của nó.
  */
 @Injectable()
 /**
- * Ngân hàng câu hỏi và vòng đời làm bài (question engine).
- * Đối chiếu Moodle: lib/questionlib.php và question/engine.
- * Bất biến version: sửa câu hỏi tạo version mới, không sửa tại chỗ; attempt đã bắt đầu giữ nguyên
- * version đã pin nên điểm cũ không đổi; chấm điểm do question-engine domain thực hiện theo qtype và behaviour.
+ * Ngân hàng câu hỏi và vòng đời làm bài (question engine). Đối chiếu Moodle: lib/questionlib.php và question/engine. Bất biến version: sửa câu hỏi tạo version mới, không sửa tại chỗ; attempt đã bắt đầu giữ nguyên version đã pin nên điểm cũ không đổi; chấm điểm do question-engine domain thực hiện theo qtype và behaviour.
  */
 export class QuestionsService {
   constructor(
@@ -163,30 +143,17 @@ export class QuestionsService {
   ) {}
 
   private async requireCap(actorId: string, capability: string, contextId: string): Promise<void> {
-    // Context câu hỏi trong lõi này là context khoá học/hệ thống; các archetype
-    // đã seed sống ở các cấp đó và evaluator đi dọc cây.
+    // Context câu hỏi trong lõi này là context khoá học/hệ thống; các archetype đã seed sống ở các cấp đó và evaluator đi dọc cây.
     await this.evaluator.requireCapability(actorId, capability, contextId);
   }
   // --- bank: cổng đọc (issue #55) -------------------------------------------
-  // Đọc ngân hàng cũng là đọc NỘI DUNG THI (câu hỏi kèm đáp án): mọi đường
-  // đọc câu hỏi/danh mục/phiên bản/ngữ liệu phải qua cổng capability
-  // `question:useall` tại context của category chứa dữ liệu — cùng context
-  // mà các đường ghi (question:add / question:editall /
-  // question:managecategory) đã gác. Vai không có quyền nhận 404 mang mã
-  // của chính tài nguyên "không tồn tại" — không oracle phân biệt "có
-  // nhưng cấm" với "không có" (tiền lệ #44/#48). Các phương thức nội bộ
+  // Đọc ngân hàng cũng là đọc NỘI DUNG THI (câu hỏi kèm đáp án): mọi đường đọc câu hỏi/danh mục/phiên bản/ngữ liệu phải qua cổng capability `question:useall` tại context của category chứa dữ liệu — cùng context mà các đường ghi (question:add / question:editall / question:managecategory) đã gác. Vai không có quyền nhận 404 mang mã của chính tài nguyên "không tồn tại" — không oracle phân biệt "có nhưng cấm" với "không có" (tiền lệ #44/#48). Các phương thức nội bộ
   // (getQuestion, listVersions...) KHÔNG gác: quiz/engine gọi ở tầng
-  // service cho luồng làm bài của học sinh, luồng đó có cổng riêng của
-  // hoạt động; cổng ở đây chỉ áp cho các phương thức *ForViewer mà
-  // controller gọi.
+  // service cho luồng làm bài của học sinh, luồng đó có cổng riêng của hoạt động; cổng ở đây chỉ áp cho các phương thức *ForViewer mà controller gọi.
 
   /** Actor có quyền dùng ngân hàng tại context này không (không ném). */
   private async canUseBank(actorId: string, contextId: string): Promise<boolean> {
-    // Riêng tư bank personal (issue #123): context là context của một
-    // bank personal thì chỉ chủ sở hữu (và site admin như bất biến hệ
-    // thống) đọc được nội dung trong đó — capability kế thừa từ context
-    // hệ thống của GV staff/manager KHÔNG mở bank riêng của đồng nghiệp.
-    // Đây là cổng chung của mọi đường *ForViewer nên REST và MCP
+    // Riêng tư bank personal (issue #123): context là context của một bank personal thì chỉ chủ sở hữu (và site admin như bất biến hệ thống) đọc được nội dung trong đó — capability kế thừa từ context hệ thống của GV staff/manager KHÔNG mở bank riêng của đồng nghiệp. Đây là cổng chung của mọi đường *ForViewer nên REST và MCP
     // (get_question dùng getQuestionForViewer) giữ parity tuyệt đối.
     const bank = await this.repo.getBankByContextId(contextId).catch(() => undefined);
     if (bank && bank.scope === 'personal' && bank.ownerId !== actorId) {
@@ -197,21 +164,7 @@ export class QuestionsService {
   }
 
   // --- riêng tư bank personal: cổng GHI (issue #123, vòng 2) ----------------
-  // Sườn đọc đã gác bằng canUseBank/assert*Readable, nhưng các đường GHI
-  // trước đây chỉ gác capability tại context: GV archetype editingteacher
-  // kế thừa question:add/editall/managecategory từ context hệ thống xuống
-  // context bank personal của đồng nghiệp nên sửa/xoá/chen được nội dung
-  // trong bank riêng của người khác (phán quyết đánh giá PR #127
-  // 6392040333). Cổng ghi dùng chung dưới đây áp cùng quy tắc chủ sở hữu
-  // như tầng bank (isForeignPersonalBank ở QuestionBanksService): category
-  // thuộc bank personal của người khác → tài nguyên "không tồn tại" đối
-  // với actor (404 đúng mã not-found của chính tài nguyên đó, nhất quán
-  // sườn đọc); site admin giữ toàn quyền như bất biến hiện hành.
-  // Chỉ áp ở các method CÓ actorId mà controller gọi. Các đường nội bộ
-  // tầng service không qua actor (quiz/engine cho attempt của học sinh)
-  // không gọi các method này nên không đổi hành vi; MCP create_question
-  // luôn gọi với actor = chủ token vào bank của chính chủ nên qua cổng
-  // như thường.
+  // Sườn đọc đã gác bằng canUseBank/assert*Readable, nhưng các đường GHI trước đây chỉ gác capability tại context: GV archetype editingteacher kế thừa question:add/editall/managecategory từ context hệ thống xuống context bank personal của đồng nghiệp nên sửa/xoá/chen được nội dung trong bank riêng của người khác (phán quyết đánh giá PR #127 6392040333). Cổng ghi dùng chung dưới đây áp cùng quy tắc chủ sở hữu như tầng bank (isForeignPersonalBank ở QuestionBanksService): category thuộc bank personal của người khác → tài nguyên "không tồn tại" đối với actor (404 đúng mã not-found của chính tài nguyên đó, nhất quán sườn đọc); site admin giữ toàn quyền như bất biến hiện hành. Chỉ áp ở các method CÓ actorId mà controller gọi. Các đường nội bộ tầng service không qua actor (quiz/engine cho attempt của học sinh) không gọi các method này nên không đổi hành vi; MCP create_question luôn gọi với actor = chủ token vào bank của chính chủ nên qua cổng như thường.
 
   /** Bank chứa category: bankId tường minh trước, rồi bank sở hữu context của category. */
   private async bankOfCategory(category: QCategoryRow): Promise<{ scope: string; ownerId: string | null } | undefined> {

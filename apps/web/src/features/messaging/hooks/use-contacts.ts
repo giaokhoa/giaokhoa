@@ -50,8 +50,7 @@ export interface UseContactsParams {
 export function useContacts({ reload, open, patchPanelRelationship, groupTree, mergePeople }: UseContactsParams) {
   const { t } = useTranslation('app');
   const queryClient = useQueryClient();
-  // Lớp B (issue #33): danh bạ ĐÃ DUYỆT + hàng chờ kết bạn (đến/đi),
-  // thay danh bạ một chiều cũ — cả ba đều đọc từ cache.
+  // Lớp B (issue #33): danh bạ ĐÃ DUYỆT + hàng chờ kết bạn (đến/đi), thay danh bạ một chiều cũ — cả ba đều đọc từ cache.
   const contactsQuery = useQuery(messagingContactsQueryOptions());
   const requestsQuery = useQuery(messagingContactRequestsQueryOptions());
   const blockedQuery = useQuery(messagingBlockedContactsQueryOptions());
@@ -73,10 +72,7 @@ export function useContacts({ reload, open, patchPanelRelationship, groupTree, m
   /**
    * Bộ CHỌN NGƯỜI dùng chung của hai sheet Tin nhắn mới / Tạo nhóm
    * (lát MSG-T3): ngữ cảnh đang chọn + các URL trang roster đã xin
-   * của ngữ cảnh đó. Roster lớp và roster khoá dùng chung một hình
-   * dạng dòng nên một bộ trạng thái phục vụ cả hai sheet (chỉ một
-   * sheet mở tại một thời điểm); dữ kiện từng trang nằm trong
-   * cache theo khoá URL của trang.
+   * của ngữ cảnh đó. Roster lớp và roster khoá dùng chung một hình dạng dòng nên một bộ trạng thái phục vụ cả hai sheet (chỉ một sheet mở tại một thời điểm); dữ kiện từng trang nằm trong cache theo khoá URL của trang.
    */
   const [pickerContext, setPickerContext] = useState<PeoplePickerContext>({ kind: 'contacts' });
   const [pickerUrls, setPickerUrls] = useState<string[]>([]);
@@ -89,9 +85,7 @@ export function useContacts({ reload, open, patchPanelRelationship, groupTree, m
   }
   const pickerError = pickerQueries.some((q) => q.isError) ? t('rosterLoadFailed') : null;
 
-  // Hồ sơ các dòng roster đã nạp chảy vào bản đồ tên chung — gác
-  // bằng chữ ký tập userId để hiệu ứng không lặp vô hạn khi mảng
-  // suy ra đổi danh tính mỗi lần render mà nội dung không đổi.
+  // Hồ sơ các dòng roster đã nạp chảy vào bản đồ tên chung — gác bằng chữ ký tập userId để hiệu ứng không lặp vô hạn khi mảng suy ra đổi danh tính mỗi lần render mà nội dung không đổi.
   const mergedPickerSigRef = useRef('');
   useEffect(() => {
     if (!pickerMembers.length) return;
@@ -141,9 +135,7 @@ export function useContacts({ reload, open, patchPanelRelationship, groupTree, m
   );
 
   /**
-   * Gửi yêu cầu kết bạn tới một user (Lớp B: luồng yêu cầu–chấp nhận
-   * thay danh bạ một chiều) — điểm vào là dòng ROSTER thành viên khoá
-   * và hàng chờ kết bạn, không còn tìm theo tên hay form nhập UUID thô.
+   * Gửi yêu cầu kết bạn tới một user (Lớp B: luồng yêu cầu–chấp nhận thay danh bạ một chiều) — điểm vào là dòng ROSTER thành viên khoá và hàng chờ kết bạn, không còn tìm theo tên hay form nhập UUID thô.
    */
   async function sendContactRequestTo(userId: string) {
     setContactMessage(null);
@@ -161,8 +153,7 @@ export function useContacts({ reload, open, patchPanelRelationship, groupTree, m
 
   /**
    * Đường roster của một ngữ cảnh bộ chọn người (lát MSG-T3):
-   * roster LỚP (MSG-T2) và roster KHOÁ dùng chung một khuôn phân
-   * trang con trỏ phía server; ngữ cảnh liên hệ không có roster.
+   * roster LỚP (MSG-T2) và roster KHOÁ dùng chung một khuôn phân trang con trỏ phía server; ngữ cảnh liên hệ không có roster.
    */
   function pickerRosterUrl(context: PeoplePickerContext, cursor?: string): string | null {
     if (context.kind === 'contacts') return null;

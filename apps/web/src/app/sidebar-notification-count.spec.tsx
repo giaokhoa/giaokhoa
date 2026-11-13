@@ -7,17 +7,7 @@ import { queryClient } from '#lib/query-client';
 import { baSessionResponse, isGetSessionUrl } from '#test/ba-session';
 
 /**
- * Test cho số thông báo chưa đọc ở mục Thông báo trên sidebar: số
- * ban đầu lấy từ GET /notifications/unread-count — lớn hơn 0 thì
- * hiện huy hiệu số đếm cạnh nhãn mục Thông báo, bằng 0 thì không
- * hiện; sau đó stream SSE (GET /notifications/unread-count/stream)
- * ĐẨY số mới xuống thời gian thực, client KHÔNG polling nữa. Chuông
- * ở site-header từng bị gỡ (số chỉ sống ở sidebar); lát NB-3 của
- * issue #174 đưa chuông TRỞ LẠI header kèm dropdown xem nhanh, dùng
- * chung đúng khoá số chưa đọc này — và header vẫn không có bộ chọn
- * ngôn ngữ. Dựng đúng cây thật (App → Shell → AppSidebar +
- * SiteHeader) như nav-user.spec, stub fetch theo từng URL và
- * EventSource bằng bản giả lập ghi lại instance.
+ * Test cho số thông báo chưa đọc ở mục Thông báo trên sidebar: số ban đầu lấy từ GET /notifications/unread-count — lớn hơn 0 thì hiện huy hiệu số đếm cạnh nhãn mục Thông báo, bằng 0 thì không hiện; sau đó stream SSE (GET /notifications/unread-count/stream) ĐẨY số mới xuống thời gian thực, client KHÔNG polling nữa. Chuông ở site-header từng bị gỡ (số chỉ sống ở sidebar); lát NB-3 của issue #174 đưa chuông TRỞ LẠI header kèm dropdown xem nhanh, dùng chung đúng khoá số chưa đọc này — và header vẫn không có bộ chọn ngôn ngữ. Dựng đúng cây thật (App → Shell → AppSidebar + SiteHeader) như nav-user.spec, stub fetch theo từng URL và EventSource bằng bản giả lập ghi lại instance.
  */
 
 const ADMIN_ID = '01900000-0000-7000-8000-0000000000a1';
@@ -58,8 +48,7 @@ function stubFetch(unread: number, counter?: { unreadCalls: number }) {
         if (counter) counter.unreadCalls += 1;
         return jsonResponse({ unread });
       }
-      // Dropdown xem nhanh của chuông header (NB-3) đọc list nhóm —
-      // vỏ test không quan tâm nội dung, trả danh sách rỗng.
+      // Dropdown xem nhanh của chuông header (NB-3) đọc list nhóm — vỏ test không quan tâm nội dung, trả danh sách rỗng.
       if (url.startsWith('/api/v1/notifications?')) return jsonResponse({ items: [], nextCursor: null });
       if (url === '/api/v1/auth/refresh') return jsonResponse({}, 401);
       return jsonResponse({}, 404);
@@ -177,9 +166,7 @@ describe('số thông báo chưa đọc trên sidebar', () => {
     stubFetch(3);
     renderShell();
 
-    // Sidebar đã vẽ (mục Thông báo kèm số); chuông ở header của lát
-    // NB-3 là button mang nhãn "Thông báo" — phân biệt với link điều
-    // hướng cùng tên ở sidebar.
+    // Sidebar đã vẽ (mục Thông báo kèm số); chuông ở header của lát NB-3 là button mang nhãn "Thông báo" — phân biệt với link điều hướng cùng tên ở sidebar.
     await screen.findByRole('link', { name: /Thông báo/ });
     expect(await screen.findByRole('button', { name: 'Thông báo' })).toBeInTheDocument();
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
@@ -194,8 +181,7 @@ describe('số thông báo chưa đọc trên sidebar', () => {
     const item = await screen.findByRole('link', { name: /Thông báo/ });
     expect(await within(item).findByText('1')).toBeInTheDocument();
 
-    // Stream được mở đúng route và KHÔNG còn mang token qua query —
-    // xác thực đi bằng cookie phiên cùng nguồn (cutover GĐ2).
+    // Stream được mở đúng route và KHÔNG còn mang token qua query — xác thực đi bằng cookie phiên cùng nguồn (cutover GĐ2).
     expect(EventSourceFake.instances).toHaveLength(1);
     const source = EventSourceFake.instances[0]!;
     expect(source.url).toBe('/api/v1/notifications/unread-count/stream');

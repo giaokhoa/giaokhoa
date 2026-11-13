@@ -8,9 +8,7 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser } from '..
 import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWORD } from '../../support/identity-access-helpers';
 
 /**
- * Kiểm chứng nền tảng khóa chính UUIDv7.
- * Nguồn: báo cáo nghiên cứu nội bộ postgresql-18-uuidv7 §4.6 — đây là test
- * kiểm chứng nền tảng, KHÔNG phải oracle Moodle.
+ * Kiểm chứng nền tảng khóa chính UUIDv7. Nguồn: báo cáo nghiên cứu nội bộ postgresql-18-uuidv7 §4.6 — đây là test kiểm chứng nền tảng, KHÔNG phải oracle Moodle.
  */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const CONN = process.env.DATABASE_URL;

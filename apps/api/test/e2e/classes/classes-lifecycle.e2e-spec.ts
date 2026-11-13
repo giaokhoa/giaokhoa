@@ -13,23 +13,17 @@ import {
 import { createCategory, grantActiveTeacherPlan } from '../../support/course-enrolment-helpers';
 
 /**
- * CLASS-0 (issue #184) — vòng đời ghi danh cấp lớp trên nền lớp học
- * hạng nhất:
+ * CLASS-0 (issue #184) — vòng đời ghi danh cấp lớp trên nền lớp học hạng nhất:
  *  (1) tạo lớp (admin tạo hộ, owner = giáo viên) → context CLASS=45 +
  *      backing cohort; chủ lớp thấy lớp, người ngoài không;
  *  (2) tạo 2 khoá trong lớp → mỗi khoá tự có group "Cả lớp" + enrol
- *      instance cohort trỏ vào backing cohort, context khoá neo dưới
- *      context lớp;
+ *      instance cohort trỏ vào backing cohort, context khoá neo dưới context lớp;
  *  (3) thêm 2 học sinh vào roster → cả hai ACTIVE ở cả 2 khoá;
  *  (4) rời lớp → SUSPENDED ở mọi khoá; vào lại → ACTIVE lại;
  *  (5) thêm khoá mới vào lớp đang chạy → backfill ngay toàn bộ roster;
  *  (6) bền vững: chèn cohort_members + sự kiện outbox TRỰC TIẾP vào DB
  *      (bỏ qua đường in-process) → consumer vật chất hoá ghi danh —
- *      ca này đã chuyển sang tầng integration của worker cùng
- *      consumer đồng bộ cohort (issue con #528 của #519), xem
- *      `apps/worker/test/integration/enrol/cohort-sync-events-delivery.int-spec.ts`;
- *      tiến trình API không còn consumer polling cho hai loại sự kiện
- *      cohort nên ca không còn chạy được ở tầng e2e của API;
+ *      ca này đã chuyển sang tầng integration của worker cùng consumer đồng bộ cohort (issue con #528 của #519), xem `apps/worker/test/integration/enrol/cohort-sync-events-delivery.int-spec.ts`; tiến trình API không còn consumer polling cho hai loại sự kiện cohort nên ca không còn chạy được ở tầng e2e của API;
  *  (7) đình chỉ thủ công theo khoá mang vết modifierId = người thao
  *      tác (căn cứ để job đối soát tôn trọng ca "miễn môn");
  *  (8) đổi on_leave = unenrol → rời lớp thì ghi danh WITHDRAWN;

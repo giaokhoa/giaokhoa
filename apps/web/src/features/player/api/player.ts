@@ -3,11 +3,7 @@ import type { PlayerView } from '../types/player';
 
 /**
  * Tầng gọi API thuần của trang học/player thuộc feature player:
- * chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React
- * Query. Tầng `queries/` của feature bọc các hàm này thành
- * queryOptions, hook và đột biến. Tách từ module dữ liệu phẳng
- * `src/lib/player-data.ts` khi tổ chức lại apps/web theo mô hình
- * features/ (issue #500).
+ * chỉ chứa các hàm gọi HTTP, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc các hàm này thành queryOptions, hook và đột biến. Tách từ module dữ liệu phẳng `src/lib/player-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
 
 /** Tải một endpoint độc lập: lỗi thì trả null (giữ nhịp probe thủ công trước đây). */

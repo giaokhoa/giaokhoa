@@ -18,56 +18,23 @@ import { WorkerPaymentSettlementService } from '../../../worker/src/worker-payme
 import { WorkerPaymentSpaceScope } from '../../../worker/src/worker-payment-space-scope.service';
 
 /**
- * Cầu dẫn nhịp quét matching SePay ở worker cho các suite e2e
- * payments (issue con #539 của #522).
+ * Cầu dẫn nhịp quét matching SePay ở worker cho các suite e2e payments (issue con #539 của #522).
  *
- * Bối cảnh: trước #539, tiến trình API trong `createTestApp()` vừa
- * ghi sự kiện IPN vừa chạy consumer `setInterval` quét matching, nên
- * các spec chỉ cần thăm dò (poll) trạng thái rồi khớp. Từ #539,
- * consumer đã gỡ khỏi API — tiến trình API trong test không còn quét
- * nữa — nên các spec phải TỰ dẫn nhịp quét của worker, nếu không
- * mọi lần chờ `waitPaymentStatus` đều timeout.
+ * Bối cảnh: trước #539, tiến trình API trong `createTestApp()` vừa ghi sự kiện IPN vừa chạy consumer `setInterval` quét matching, nên các spec chỉ cần thăm dò (poll) trạng thái rồi khớp. Từ #539, consumer đã gỡ khỏi API — tiến trình API trong test không còn quét nữa — nên các spec phải TỰ dẫn nhịp quét của worker, nếu không mọi lần chờ `waitPaymentStatus` đều timeout.
  *
  * Cách dẫn: dựng ĐÚNG ngăn xếp production của worker bằng `new`
  * (không qua Nest, không boot WorkerModule — e2e shard chỉ build
- * `@giaokhoa/api`, không có tiến trình worker chạy kèm): handle Kysely
- * trên `TenantAwarePool` của worker (gắn GUC theo ALS như module
- * thật) cho repository + writer của `@giaokhoa/payments`, cho lượt đọc
- * polling đồng bộ cohort của chính cầu dẫn này, và cho toàn
- * bộ adapter của worker qua khung định tuyến theo không gian
+ * `@giaokhoa/api`, không có tiến trình worker chạy kèm): handle Kysely trên `TenantAwarePool` của worker (gắn GUC theo ALS như module thật) cho repository + writer của `@giaokhoa/payments`, cho lượt đọc polling đồng bộ cohort của chính cầu dẫn này, và cho toàn bộ adapter của worker qua khung định tuyến theo không gian
  * (handle Kysely được gắn vào khung
- * định tuyến như factory của module thật làm), ba adapter
- * cổng của worker, `SepayMatchingService`, rồi
- * `SepayMatchingScheduler`. Mỗi vòng thăm dò của spec gọi một nhịp
- * `sweepTick()` rồi mới đọc trạng thái — giữ nguyên hình thăm dò
- * cũ, chỉ thêm bước dẫn nhịp vào đầu mỗi vòng.
+ * định tuyến như factory của module thật làm), ba adapter cổng của worker, `SepayMatchingService`, rồi `SepayMatchingScheduler`. Mỗi vòng thăm dò của spec gọi một nhịp `sweepTick()` rồi mới đọc trạng thái — giữ nguyên hình thăm dò cũ, chỉ thêm bước dẫn nhịp vào đầu mỗi vòng.
  *
- * Vì sao import thẳng code production của worker thay vì dựng một
- * bản quét riêng cho test: import thẳng thì spec khẳng định đúng
- * đường production (cùng scheduler, cùng adapter, cùng matching);
- * một bản dựng riêng cho test sẽ chỉ chứng minh bản test chạy được,
- * không chứng minh worker chạy được. Nhịp 1 giây theo lịch
+ * Vì sao import thẳng code production của worker thay vì dựng một bản quét riêng cho test: import thẳng thì spec khẳng định đúng đường production (cùng scheduler, cùng adapter, cùng matching); một bản dựng riêng cho test sẽ chỉ chứng minh bản test chạy được, không chứng minh worker chạy được. Nhịp 1 giây theo lịch
  * (`@Interval`) không nằm trong phạm vi dẫn này — nó được ghim ở
- * tầng worker (`sepay-matching-sweep.int-spec.ts` boot module thật
- * và chờ nhịp tự chạy).
+ * tầng worker (`sepay-matching-sweep.int-spec.ts` boot module thật và chờ nhịp tự chạy).
  *
- * Nhịp đồng bộ cohort (hệ quả của #550 × #539): từ #528, consumer
- * đồng bộ cohort chạy ở worker, còn consumer polling phía API đã gỡ
- * khỏi tiến trình API — nên trong e2e không còn ai tiêu thụ các dòng
- * `cohort_member_added`/`cohort_member_removed` mà nhịp quét matching
- * vừa ghi. `driveCohortSync()` đóng đúng vai consumer cũ: quét bảng
- * outbox theo watermark riêng của file, gọi bề mặt vật chất hoá dùng
- * chung qua `CohortSyncService` của worker cho từng dòng, bỏ qua riêng
- * lẻ dòng lỗi như consumer cũ (vòng chờ của spec sẽ timeout nếu lệch
- * còn tồn tại). Watermark khởi từ 0 — bề mặt vật chất hoá đã
- * idempotent theo trạng thái hiện tại của `cohort_members` nên phát
- * lại lịch sử cũ là an toàn (đúng mẫu neo lại về 0 khi DB dựng lại
- * của consumer cũ).
+ * Nhịp đồng bộ cohort (hệ quả của #550 × #539): từ #528, consumer đồng bộ cohort chạy ở worker, còn consumer polling phía API đã gỡ khỏi tiến trình API — nên trong e2e không còn ai tiêu thụ các dòng `cohort_member_added`/`cohort_member_removed` mà nhịp quét matching vừa ghi. `driveCohortSync()` đóng đúng vai consumer cũ: quét bảng outbox theo watermark riêng của file, gọi bề mặt vật chất hoá dùng chung qua `CohortSyncService` của worker cho từng dòng, bỏ qua riêng lẻ dòng lỗi như consumer cũ (vòng chờ của spec sẽ timeout nếu lệch còn tồn tại). Watermark khởi từ 0 — bề mặt vật chất hoá đã idempotent theo trạng thái hiện tại của `cohort_members` nên phát lại lịch sử cũ là an toàn (đúng mẫu neo lại về 0 khi DB dựng lại của consumer cũ).
  *
- * Vòng đời: pool dựng lười ở lần dẫn đầu tiên của file spec và được
- * đóng ở `afterAll` của file đó qua `closeSepaySweepDriver()` — mỗi
- * file e2e chạy trong module registry riêng nên singleton này là
- * theo file, không dùng chung qua các file.
+ * Vòng đời: pool dựng lười ở lần dẫn đầu tiên của file spec và được đóng ở `afterAll` của file đó qua `closeSepaySweepDriver()` — mỗi file e2e chạy trong module registry riêng nên singleton này là theo file, không dùng chung qua các file.
  */
 let scheduler: SepayMatchingScheduler | null = null;
 let pool: TenantAwarePool | null = null;
@@ -78,11 +45,7 @@ let cohortSync: CohortSyncService | null = null;
 let cohortWatermark = '0';
 
 /**
- * Handle Kysely kho trung tâm trên pool của cầu dẫn (vòng đời của
- * nó đi theo pool chung, không `destroy()` riêng): repository và
- * writer của `@giaokhoa/payments` cùng toàn bộ adapter của worker đều
- * chạy trên handle Kysely (qua khung định tuyến gắn handle này làm
- * đích kho chung), nên mọi điểm dựng đều lấy handle từ đây.
+ * Handle Kysely kho trung tâm trên pool của cầu dẫn (vòng đời của nó đi theo pool chung, không `destroy()` riêng): repository và writer của `@giaokhoa/payments` cùng toàn bộ adapter của worker đều chạy trên handle Kysely (qua khung định tuyến gắn handle này làm đích kho chung), nên mọi điểm dựng đều lấy handle từ đây.
  */
 function getSharedKysely(): CentreDb {
   if (!sharedKysely) {
@@ -93,16 +56,9 @@ function getSharedKysely(): CentreDb {
 }
 
 /**
- * Khung định tuyến của worker cho cầu dẫn (dùng chung cho cả nhịp
- * quét matching và nhịp đồng bộ cohort): không cấu hình control
- * plane (`ConfigService` rỗng, không gọi `onModuleInit`) nên mọi
- * phân giải cho `not_configured` và kích hoạt chạy platform ở kho
- * chung — đúng hành vi của cầu dẫn trước hạng mục này. Handle
- * Kysely dùng chung được gắn vào khung định tuyến đúng như factory
- * của module worker làm lúc khởi động, trên CÙNG pool
+ * Khung định tuyến của worker cho cầu dẫn (dùng chung cho cả nhịp quét matching và nhịp đồng bộ cohort): không cấu hình control plane (`ConfigService` rỗng, không gọi `onModuleInit`) nên mọi phân giải cho `not_configured` và kích hoạt chạy platform ở kho chung — đúng hành vi của cầu dẫn trước hạng mục này. Handle Kysely dùng chung được gắn vào khung định tuyến đúng như factory của module worker làm lúc khởi động, trên CÙNG pool
  * (`getSharedKysely()` — D5 #657: cổng outbox
- * Kysely của bề mặt enrol và điểm phân giải không gian theo
- * payment cần facade `routedKysely` của khung).
+ * Kysely của bề mặt enrol và điểm phân giải không gian theo payment cần facade `routedKysely` của khung).
  */
 function getSpaceDatabase(): SpaceDatabaseService {
   if (!spaceDatabase) {
@@ -117,10 +73,7 @@ function getScheduler(): SepayMatchingScheduler {
     const repo = new PaymentsRepository(getSharedKysely());
     const writer = new OutboxWriterService(getSharedKysely());
     const plans = new PlanEntitlementsService(repo);
-    // Mọi adapter của worker chạy trên handle Kysely định tuyến
-    // của khung dùng chung ở trên: điểm phân giải không gian chỉ
-    // cần khung định tuyến, hai adapter kích hoạt và settlement
-    // nhận điểm phân giải đó cùng repository/outbox Kysely.
+    // Mọi adapter của worker chạy trên handle Kysely định tuyến của khung dùng chung ở trên: điểm phân giải không gian chỉ cần khung định tuyến, hai adapter kích hoạt và settlement nhận điểm phân giải đó cùng repository/outbox Kysely.
     const spaceDatabase = getSpaceDatabase();
     const enrolOutbox = new WorkerEnrolOutboxService(spaceDatabase);
     const spaceScope = new WorkerPaymentSpaceScope(spaceDatabase);
@@ -138,8 +91,7 @@ function getScheduler(): SepayMatchingScheduler {
 }
 
 /**
- * Dẫn một nhịp quét matching của worker (tối đa 20 sự kiện đang chờ
- * một nhịp, đúng hợp đồng nhịp production).
+ * Dẫn một nhịp quét matching của worker (tối đa 20 sự kiện đang chờ một nhịp, đúng hợp đồng nhịp production).
  */
 export async function driveSepaySweep(): Promise<void> {
   await getScheduler().sweepTick();
@@ -149,9 +101,7 @@ export async function driveSepaySweep(): Promise<void> {
 const COHORT_SYNC_TYPES = ['cohort_member_added', 'cohort_member_removed'] as const;
 
 /**
- * Dẫn một nhịp đồng bộ cohort của worker (tối đa 200 sự kiện một
- * nhịp, đúng hợp đồng nhịp của consumer cũ): tiêu thụ mọi dòng
- * cohort mới sau watermark rồi vật chất hoá qua bề mặt dùng chung.
+ * Dẫn một nhịp đồng bộ cohort của worker (tối đa 200 sự kiện một nhịp, đúng hợp đồng nhịp của consumer cũ): tiêu thụ mọi dòng cohort mới sau watermark rồi vật chất hoá qua bề mặt dùng chung.
  */
 export async function driveCohortSync(): Promise<void> {
   if (!cohortSync) cohortSync = new CohortSyncService(getSpaceDatabase());

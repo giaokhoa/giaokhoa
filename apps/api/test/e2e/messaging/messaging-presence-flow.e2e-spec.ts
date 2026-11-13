@@ -4,23 +4,12 @@ import Redis from 'ioredis';
 import { io, type Socket } from 'socket.io-client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-// QUAN TRỌNG: file này KHÔNG import tĩnh helpers/AppModule ở đầu —
-// hai knob presence phải nằm trong process.env TRƯỚC khi đồ thị
-// module (kèm ConfigModule.forRoot, nơi env được validate) được nạp,
-// nên helpers được import động trong beforeAll sau khi gán env.
+// QUAN TRỌNG: file này KHÔNG import tĩnh helpers/AppModule ở đầu — hai knob presence phải nằm trong process.env TRƯỚC khi đồ thị module (kèm ConfigModule.forRoot, nơi env được validate) được nạp, nên helpers được import động trong beforeAll sau khi gán env.
 
 /**
- * Test hồi quy F2 của review Lớp A (issue #33): presence của messaging
- * sống trong Redis với TTL (mặc định 600s). Lỗi cũ: TTL chỉ đặt lúc
- * nối, không có cơ chế gia hạn — user còn nối và còn hoạt động vẫn bị
- * coi là offline khi TTL đầu tiên hết.
+ * Test hồi quy F2 của review Lớp A (issue #33): presence của messaging sống trong Redis với TTL (mặc định 600s). Lỗi cũ: TTL chỉ đặt lúc nối, không có cơ chế gia hạn — user còn nối và còn hoạt động vẫn bị coi là offline khi TTL đầu tiên hết.
  *
- * Hai knob rút TTL xuống 3s và nhịp gia hạn xuống 300ms để test chạy
- * trong vài giây thay vì chờ 600s. Sau khi socket nối (presence đã
- * ghi), test còn rút TTL của khoá xuống 1.2s — tương đương "TTL gốc
- * đã trôi qua": có gia hạn thì khoá được nới lại trước khi hết và
- * còn tồn tại sau mốc đó; không có gia hạn (code cũ, knob bị bỏ qua
- * và không có vòng gia hạn nào) thì khoá biến mất dù socket vẫn nối.
+ * Hai knob rút TTL xuống 3s và nhịp gia hạn xuống 300ms để test chạy trong vài giây thay vì chờ 600s. Sau khi socket nối (presence đã ghi), test còn rút TTL của khoá xuống 1.2s — tương đương "TTL gốc đã trôi qua": có gia hạn thì khoá được nới lại trước khi hết và còn tồn tại sau mốc đó; không có gia hạn (code cũ, knob bị bỏ qua và không có vòng gia hạn nào) thì khoá biến mất dù socket vẫn nối.
  */
 
 const PRESENCE_KEY_PREFIX = 'giaokhoa:messaging:presence:';

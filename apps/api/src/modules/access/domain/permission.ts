@@ -11,10 +11,7 @@ export interface RoleOverridePoint {
 
 /**
  * Đánh giá quyền thuần kiểu Moodle cho MỘT role (ngữ nghĩa accesslib):
- * đi từ context lá lên tới gốc; override gần nhất mà không phải INHERIT sẽ
- * thắng — NGOẠI TRỪ một PROHIBIT ở BẤT KỲ tổ tiên nào là tuyệt đối và không thể bị
- * gỡ bỏ bởi một override gần lá hơn.
- * `pointsLeafToRoot` phải được sắp theo thứ tự lá → gốc.
+ * đi từ context lá lên tới gốc; override gần nhất mà không phải INHERIT sẽ thắng — NGOẠI TRỪ một PROHIBIT ở BẤT KỲ tổ tiên nào là tuyệt đối và không thể bị gỡ bỏ bởi một override gần lá hơn. `pointsLeafToRoot` phải được sắp theo thứ tự lá → gốc.
  */
 export function evaluateSingleRole(pointsLeafToRoot: RoleOverridePoint[]): number {
   let result = CAP_INHERIT;

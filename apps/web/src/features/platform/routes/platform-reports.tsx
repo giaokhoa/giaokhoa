@@ -19,12 +19,9 @@ import { PageHeader, PageShell } from '#components/page-shell';
 import { useCreateReport, usePlatformReports, useReportRun, useScheduleReport } from '../queries/platform';
 
 /**
- * Report builder tối thiểu (platform services): chọn dataSource/column,
- * xem kết quả, đặt lịch. Dữ liệu đọc qua tầng TanStack Query
+ * Report builder tối thiểu (platform services): chọn dataSource/column, xem kết quả, đặt lịch. Dữ liệu đọc qua tầng TanStack Query
  * (`lib/platform-data.ts`, khoá `platformReports`/`reportRun`;
- * `clientLoader` của route nạp trước danh sách báo cáo); kết quả chạy
- * chỉ tải khi người dùng bấm chạy một báo cáo, tạo báo cáo qua đột biến
- * làm mới danh sách như lần tải lại thủ công trước đây.
+ * `clientLoader` của route nạp trước danh sách báo cáo); kết quả chạy chỉ tải khi người dùng bấm chạy một báo cáo, tạo báo cáo qua đột biến làm mới danh sách như lần tải lại thủ công trước đây.
  */
 export function ReportsPage() {
   const { t: t } = useTranslation();

@@ -4,9 +4,7 @@ import { UAParser } from 'ua-parser-js';
 const MAX_RAW_USER_AGENT_LENGTH = 48;
 
 /**
- * Hàm dịch mẫu mô tả thiết bị khi phân tích được cả trình duyệt lẫn hệ
- * điều hành: nhận tên trình duyệt và tên hệ điều hành, trả về chuỗi hiển
- * thị hoàn chỉnh (mẫu câu nằm ở catalog i18n, ví dụ "{{browser}} trên
+ * Hàm dịch mẫu mô tả thiết bị khi phân tích được cả trình duyệt lẫn hệ điều hành: nhận tên trình duyệt và tên hệ điều hành, trả về chuỗi hiển thị hoàn chỉnh (mẫu câu nằm ở catalog i18n, ví dụ "{{browser}} trên
  * {{os}}"). Tách thành tham số để module này không phụ thuộc i18next —
  * nơi gọi (component) truyền bản dịch vào.
  */

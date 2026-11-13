@@ -8,10 +8,7 @@ import { QuizAttemptPage } from './quiz-attempt';
 import { QuizResultsPage } from './quiz-results';
 
 /**
- * Giả lập @giaokhoa/editor cho spec trang attempt: chỉ cần RichTextView
- * dựng nội dung rich text thành chữ đọc được — spec trang kiểm LUỒNG
- * NGHIỆP VỤ phía học sinh (hướng dẫn/lời giải hiện theo cổng), cơ chế
- * render Tiptap thật thuộc spec của chính package editor (mẫu P4).
+ * Giả lập @giaokhoa/editor cho spec trang attempt: chỉ cần RichTextView dựng nội dung rich text thành chữ đọc được — spec trang kiểm LUỒNG NGHIỆP VỤ phía học sinh (hướng dẫn/lời giải hiện theo cổng), cơ chế render Tiptap thật thuộc spec của chính package editor (mẫu P4).
  */
 vi.mock('@giaokhoa/editor', async () => {
   const React = await import('react');
@@ -33,9 +30,7 @@ vi.mock('@giaokhoa/editor', async () => {
 
 /**
  * Spec web của hoạt động Quiz (issue #30 chặng 1) theo endpoint thật:
- * giáo viên dựng đề (thêm slot cố định từ ngân hàng), học sinh làm bài
- * qua trang attempt (lưu từng câu rồi nộp để chốt điểm), giáo viên chấm
- * tay essay ở trang kết quả và điểm bài được tính lại.
+ * giáo viên dựng đề (thêm slot cố định từ ngân hàng), học sinh làm bài qua trang attempt (lưu từng câu rồi nộp để chốt điểm), giáo viên chấm tay essay ở trang kết quả và điểm bài được tính lại.
  */
 const COURSE_ID = '01900000-0000-7000-8000-0000000000c1';
 const QUIZ_ID = '01900000-0000-7000-8000-0000000000c2';

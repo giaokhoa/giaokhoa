@@ -11,13 +11,9 @@ import {
 } from '#lib/course-cards';
 
 /**
- * Panel sửa thẻ khoá tại dòng (DASH1, issue #121): chọn màu trong bảng màu
- * cố định + nhập biệt danh — chỉ áp cho chính người dùng đang đăng nhập,
- * tên gốc của khoá không đổi. Lưu qua mutation `useSaveCourseCardPref`
+ * Panel sửa thẻ khoá tại dòng (DASH1, issue #121): chọn màu trong bảng màu cố định + nhập biệt danh — chỉ áp cho chính người dùng đang đăng nhập, tên gốc của khoá không đổi. Lưu qua mutation `useSaveCourseCardPref`
  * (F-04, rà soát #133): mutation tự invalidate khoá `courseCards` trong
- * TanStack cache nên dashboard (đọc pref qua `useCourseCardPrefs`) tươi
- * lại pref mới; trang cha vẫn nhận pref qua onSaved để cập nhật ngay
- * danh sách đang hiển thị. Lỗi lưu hiện tại chỗ, nút khoá trong lúc lưu.
+ * TanStack cache nên dashboard (đọc pref qua `useCourseCardPrefs`) tươi lại pref mới; trang cha vẫn nhận pref qua onSaved để cập nhật ngay danh sách đang hiển thị. Lỗi lưu hiện tại chỗ, nút khoá trong lúc lưu.
  */
 export function CourseCardPrefEditor({
   courseId,

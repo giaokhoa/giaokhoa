@@ -11,11 +11,9 @@ import { WorkerEnrolOutboxService } from './worker-enrol-outbox.service';
 import { WorkerPaymentSpaceScope } from './worker-payment-space-scope.service';
 
 /**
- * Danh sách cột đọc của một dòng `enrol` mà adapter này nạp —
- * đúng hình dạng `EnrolRow` mà phễu ghi danh dùng chung
+ * Danh sách cột đọc của một dòng `enrol` mà adapter này nạp — đúng hình dạng `EnrolRow` mà phễu ghi danh dùng chung
  * (`CohortMaterializationSurface.enrolUserInternal`) nhận, dùng
- * chung cho lượt đọc instance đích: bí danh camelCase tường minh
- * theo khuôn danh sách cột của `@giaokhoa/db`.
+ * chung cho lượt đọc instance đích: bí danh camelCase tường minh theo khuôn danh sách cột của `@giaokhoa/db`.
  */
 const ENROL_COLUMNS = [
   'id',
@@ -103,12 +101,7 @@ export class WorkerPaidEnrolActivationService implements PaidEnrolActivationPort
     this.materialization = new CohortMaterializationSurface({
       db: this.spaceScope.routedKysely,
       outbox: enrolOutbox,
-      // Phạm vi platform của bề mặt giữ nguyên `spaceSlug` của
-      // ngữ cảnh đang chạy (cùng khuôn `CohortSyncService`): phạm
-      // vi này chỉ đổi tầm nhìn RLS sang đường platform, không
-      // đổi kho đích — dựng store mới không mang slug thì handle
-      // định tuyến rơi về kho chung trong lúc thân kích hoạt
-      // đang chạy ở kho riêng của trung tâm.
+      // Phạm vi platform của bề mặt giữ nguyên `spaceSlug` của ngữ cảnh đang chạy (cùng khuôn `CohortSyncService`): phạm vi này chỉ đổi tầm nhìn RLS sang đường platform, không đổi kho đích — dựng store mới không mang slug thì handle định tuyến rơi về kho chung trong lúc thân kích hoạt đang chạy ở kho riêng của trung tâm.
       runInPlatformScope: (fn) =>
         tenantAls.run({ platform: true, spaceSlug: tenantAls.getStore()?.spaceSlug }, fn),
     });

@@ -11,29 +11,16 @@ import {
 import type { OutboxEventJobData } from '../../../src/outbox-event-routes';
 
 /**
- * Thử lại của job phân phối realtime messaging khi lỗi bền (điều
- * kiện đạt của điểm 2, phán quyết đối chiếu trên PR #543):
+ * Thử lại của job phân phối realtime messaging khi lỗi bền (điều kiện đạt của điểm 2, phán quyết đối chiếu trên PR #543):
  *
  * - Chính sách job mặc định toàn worker (attempts 3, backoff hàm
- *   mũ từ 1 giây — bộ giá trị ở `worker.module.ts`) giết hẳn một
- *   job lỗi liên tục sau 3 lần thử; với đường messaging, dòng
- *   outbox đã được relay đóng dấu `publishedAt` ngay khi job vào
- *   hàng đợi nên không còn đường phát lại nào cứu sự kiện.
+ *   mũ từ 1 giây — bộ giá trị ở `worker.module.ts`) giết hẳn một job lỗi liên tục sau 3 lần thử; với đường messaging, dòng outbox đã được relay đóng dấu `publishedAt` ngay khi job vào hàng đợi nên không còn đường phát lại nào cứu sự kiện.
  * - Hành vi yêu cầu: lỗi phân phối (đọc dữ kiện lỗi, publish Redis
- *   lỗi — lỗi publish đã được spec unit của emitter chứng minh là
- *   ném ra khỏi `distributeEvent`) không đốt số lần thử và không
- *   giết job: job được hoãn bằng cơ chế delayed của BullMQ và thử
- *   lại cho tới khi lỗi hết; khi đó sự kiện vẫn được phân phối và
- *   dấu đã-phân-phối ghi đúng một lần.
+ *   lỗi — lỗi publish đã được spec unit của emitter chứng minh là ném ra khỏi `distributeEvent`) không đốt số lần thử và không giết job: job được hoãn bằng cơ chế delayed của BullMQ và thử lại cho tới khi lỗi hết; khi đó sự kiện vẫn được phân phối và dấu đã-phân-phối ghi đúng một lần.
  *
- * Khuôn test: hàng đợi BullMQ THẬT trên Redis thật và processor
- * THẬT, chỉ stub đúng biên `distributeEvent` của tầng phân phối
+ * Khuôn test: hàng đợi BullMQ THẬT trên Redis thật và processor THẬT, chỉ stub đúng biên `distributeEvent` của tầng phân phối
  * (biên đã được các spec khác chứng minh: luật phân phối ở
- * `@giaokhoa/messaging` và cổng phát có xác nhận publish ở emitter).
- * Hàng đợi dùng tên riêng của spec này để cách ly với hàng đợi
- * production `messaging-realtime` mà spec int của hàng đợi
- * messaging dùng song song; chính sách job mặc định được sao đúng
- * bộ giá trị thống nhất của `worker.module.ts`.
+ * `@giaokhoa/messaging` và cổng phát có xác nhận publish ở emitter). Hàng đợi dùng tên riêng của spec này để cách ly với hàng đợi production `messaging-realtime` mà spec int của hàng đợi messaging dùng song song; chính sách job mặc định được sao đúng bộ giá trị thống nhất của `worker.module.ts`.
  */
 const RETRY_TEST_QUEUE = 'messaging-realtime-retry-test';
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';

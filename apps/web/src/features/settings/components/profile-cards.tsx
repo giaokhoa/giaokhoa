@@ -26,22 +26,14 @@ import { describeUserAgent } from '../utils/user-agent';
 import { queryKeys } from '#lib/query-keys';
 
 /**
- * Ba thẻ CÀI ĐẶT tài khoản tự chứa, tách khỏi trang Hồ sơ (issue #288 —
- * quyết định 21:29 ngày 26/10/2026 theo research chuẩn site lớn: Hồ
- * sơ chỉ còn thông tin user, mọi cài đặt nằm ở khu Cài đặt riêng):
+ * Ba thẻ CÀI ĐẶT tài khoản tự chứa, tách khỏi trang Hồ sơ (issue #288 — quyết định 21:29 ngày 26/10/2026 theo research chuẩn site lớn: Hồ sơ chỉ còn thông tin user, mọi cài đặt nằm ở khu Cài đặt riêng):
  *
  * - `LinkedAccountsCard` — tài khoản liên kết OAuth, đặt ở
  *   `/settings/linked-accounts`.
  * - `TwoFactorCard` — xác thực hai lớp TOTP, đặt ở `/settings/security`.
  * - `SessionsCard` — phiên đăng nhập, đặt ở `/settings/security`.
  *
- * Flow chung: mỗi thẻ tự nạp dữ liệu bằng TanStack Query (khoá ở
- * `#lib/query-keys`), tự giữ trạng thái luồng con (setup/tắt 2FA, lỗi
- * thao tác) và tự vô hiệu hoá đúng khoá truy vấn sau mỗi đột biến —
- * trang chứa chỉ cần đặt thẻ vào khung, không truyền props. Lát #288
- * chỉ DI CHUYỂN nguyên trạng các thẻ này từ `pages/profile.tsx` sang
- * đây; nghiệp vụ bên trong (endpoint, mã lỗi được dịch, ràng buộc gỡ
- * liên kết cuối cùng, luật huỷ phiên) không đổi một dòng.
+ * Flow chung: mỗi thẻ tự nạp dữ liệu bằng TanStack Query (khoá ở `#lib/query-keys`), tự giữ trạng thái luồng con (setup/tắt 2FA, lỗi thao tác) và tự vô hiệu hoá đúng khoá truy vấn sau mỗi đột biến — trang chứa chỉ cần đặt thẻ vào khung, không truyền props. Lát #288 chỉ DI CHUYỂN nguyên trạng các thẻ này từ `pages/profile.tsx` sang đây; nghiệp vụ bên trong (endpoint, mã lỗi được dịch, ràng buộc gỡ liên kết cuối cùng, luật huỷ phiên) không đổi một dòng.
  */
 
 /** Nhãn hiển thị của issuer lấy từ catalog i18n theo khoá riêng từng nhà cung cấp. */
@@ -50,14 +42,7 @@ function issuerLabel(t: (key: string) => string, issuer: OAuthIssuer): string {
 }
 
 /**
- * Thẻ "Tài khoản liên kết" (trang Linked logins của Moodle): liệt kê
- * các liên kết đăng nhập ngoài của chính người dùng, cho gỡ từng liên
- * kết và cho liên kết thêm issuer đang bật mà chưa có liên kết (đi qua
- * endpoint link của backend rồi chuyển hướng toàn trang tới nhà cung
- * cấp). Ràng buộc nghiệp vụ phía API — tài khoản không mật khẩu không
- * được gỡ liên kết cuối cùng — trả về mã `auth.last_login_method` và
- * được dịch sang thông báo i18n riêng thay vì hiện chi tiết kỹ thuật;
- * khi `hasPassword=false` thẻ cũng hiện sẵn gợi ý đặt mật khẩu trước.
+ * Thẻ "Tài khoản liên kết" (trang Linked logins của Moodle): liệt kê các liên kết đăng nhập ngoài của chính người dùng, cho gỡ từng liên kết và cho liên kết thêm issuer đang bật mà chưa có liên kết (đi qua endpoint link của backend rồi chuyển hướng toàn trang tới nhà cung cấp). Ràng buộc nghiệp vụ phía API — tài khoản không mật khẩu không được gỡ liên kết cuối cùng — trả về mã `auth.last_login_method` và được dịch sang thông báo i18n riêng thay vì hiện chi tiết kỹ thuật; khi `hasPassword=false` thẻ cũng hiện sẵn gợi ý đặt mật khẩu trước.
  */
 export function LinkedAccountsCard() {
   const { t, i18n } = useTranslation('app');

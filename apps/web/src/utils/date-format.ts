@@ -1,18 +1,11 @@
 /**
  * Helper định dạng ngày giờ HIỂN THỊ dùng chung cho toàn bộ giao diện web.
  *
- * Trước đây mỗi trang tự gọi `toLocaleDateString` / `toLocaleString` /
- * `toLocaleTimeString` / `Intl.DateTimeFormat` ngay tại chỗ (vài trang còn
- * tự khai hàm cục bộ như `dayLabel` / `dateTimeLabel` / `formatDateTime`),
- * nên cùng một khuôn hiển thị bị lặp ở nhiều nơi. Module này là nơi duy
- * nhất gói các lời gọi đó: mỗi hàm tương ứng đúng một khuôn hiển thị đang
- * có trong hệ và cho ra chuỗi GIỐNG HỆT lời gọi gốc mà nó thay thế — đợt
- * hợp nhất chỉ đổi nơi đặt mã, không đổi một ký tự nào của chuỗi hiển thị.
+ * Trước đây mỗi trang tự gọi `toLocaleDateString` / `toLocaleString` / `toLocaleTimeString` / `Intl.DateTimeFormat` ngay tại chỗ (vài trang còn tự khai hàm cục bộ như `dayLabel` / `dateTimeLabel` / `formatDateTime`), nên cùng một khuôn hiển thị bị lặp ở nhiều nơi. Module này là nơi duy nhất gói các lời gọi đó: mỗi hàm tương ứng đúng một khuôn hiển thị đang có trong hệ và cho ra chuỗi GIỐNG HỆT lời gọi gốc mà nó thay thế — đợt hợp nhất chỉ đổi nơi đặt mã, không đổi một ký tự nào của chuỗi hiển thị.
  *
  * Ranh giới phạm vi:
  * - Chỉ phục vụ định dạng ngày giờ hiển thị. Định dạng SỐ (học phí, số
- *   tiền, điểm) vẫn dùng `toLocaleString` / `Intl.NumberFormat` tại chỗ,
- *   không đi qua module này.
+ *   tiền, điểm) vẫn dùng `toLocaleString` / `Intl.NumberFormat` tại chỗ, không đi qua module này.
  * - Các hàm nội bộ của `lib/calendar.ts` (trích thành phần múi giờ cho
  *   lưới lịch) không thuộc module này và không đổi.
  */

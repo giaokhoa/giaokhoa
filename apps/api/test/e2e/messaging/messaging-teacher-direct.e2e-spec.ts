@@ -7,14 +7,7 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser } from '..
 import { contextIdByLevelInstance } from '../../support/engagement-helpers';
 
 /**
- * Ngoại lệ nhắn riêng GV–HS (quyết định bổ sung ngày 25/10/2026 trên
- * issue #33, comment 6394872043): cặp GIÁO VIÊN của khoá (gán vai
- * archetype staff tại context khoá) ↔ HỌC SINH đang ghi danh chính
- * khoá đó nhắn riêng TRỰC TIẾP không cần kết bạn — cả mở hội thoại
- * mới lẫn gửi vào hội thoại sẵn có, cả hai chiều. Ngoài cặp này
- * cổng liên hệ cũ giữ nguyên tuyệt đối: HS↔HS cùng khoá vẫn phải
- * kết bạn; cặp đã chặn vẫn bị chặn; hết ghi danh/hết vai dạy thì
- * gửi bị chặn lại, lịch sử cũ vẫn đọc được.
+ * Ngoại lệ nhắn riêng GV–HS (quyết định bổ sung ngày 25/10/2026 trên issue #33, comment 6394872043): cặp GIÁO VIÊN của khoá (gán vai archetype staff tại context khoá) ↔ HỌC SINH đang ghi danh chính khoá đó nhắn riêng TRỰC TIẾP không cần kết bạn — cả mở hội thoại mới lẫn gửi vào hội thoại sẵn có, cả hai chiều. Ngoài cặp này cổng liên hệ cũ giữ nguyên tuyệt đối: HS↔HS cùng khoá vẫn phải kết bạn; cặp đã chặn vẫn bị chặn; hết ghi danh/hết vai dạy thì gửi bị chặn lại, lịch sử cũ vẫn đọc được.
  */
 
 interface Person { id: string; username: string; token: string }

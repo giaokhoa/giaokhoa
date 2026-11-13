@@ -1,11 +1,7 @@
 import type { Course, CourseContent, EnrolInstance } from '@giaokhoa/contracts';
 
 /**
- * Kiểu dữ liệu của trang khoá học thuộc feature courses. Tách từ
- * module dữ liệu phẳng `src/lib/course-data.ts` khi tổ chức lại
- * apps/web theo mô hình features/ (issue #500): kiểu nằm ở tầng
- * types/, lời gọi API thuần ở tầng api/, tuỳ chọn truy vấn và hook
- * ở tầng queries/.
+ * Kiểu dữ liệu của trang khoá học thuộc feature courses. Tách từ module dữ liệu phẳng `src/lib/course-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500): kiểu nằm ở tầng types/, lời gọi API thuần ở tầng api/, tuỳ chọn truy vấn và hook ở tầng queries/.
  */
 
 /** Ghi danh của chính người dùng trong khoá (GET /courses/:id/enrolments/me). */
@@ -17,9 +13,7 @@ export interface MyEnrolmentView {
 }
 
 /**
- * Thanh toán của chính người dùng (GET /payments/me — PaymentRow ở tầng
- * API). Trang chỉ cần các trường để lọc theo `itemId` (chính là enrol
- * instance id của payment phí ghi danh) và hiển thị trạng thái thật.
+ * Thanh toán của chính người dùng (GET /payments/me — PaymentRow ở tầng API). Trang chỉ cần các trường để lọc theo `itemId` (chính là enrol instance id của payment phí ghi danh) và hiển thị trạng thái thật.
  */
 export interface MyPaymentView {
   id: string;
@@ -40,9 +34,7 @@ export interface CompletionActivityView {
 
 /**
  * Shape thật của GET /courses/:id/completion/me (completion.controller):
- * `{ activities, course }` — activities là trạng thái từng cm của chính
- * người xem, course là bản ghi hoàn thành khoá (mang userId của người xem,
- * dùng làm userId khi đánh dấu thủ công lúc chưa có enrolments/me).
+ * `{ activities, course }` — activities là trạng thái từng cm của chính người xem, course là bản ghi hoàn thành khoá (mang userId của người xem, dùng làm userId khi đánh dấu thủ công lúc chưa có enrolments/me).
  */
 export interface MyCompletionView {
   activities: CompletionActivityView[];

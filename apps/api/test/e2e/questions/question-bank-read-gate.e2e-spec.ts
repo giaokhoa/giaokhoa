@@ -10,15 +10,7 @@ import { createCategory as createCourseCategory, createCourse } from '../../supp
 /**
  * Issue #55 — gác quyền ĐỌC ngân hàng câu hỏi theo capability.
  *
- * Oracle: chuẩn các cổng đã chốt ở #44/#48 — vai không có capability đọc
- * ngân hàng (`question:useall` tại context của category chứa dữ liệu)
- * nhận 404 mang mã của tài nguyên không tồn tại, và response TUYỆT ĐỐI
- * không chứa nội dung câu hỏi/đáp án (không oracle tồn tại). Giáo viên
- * có `editingteacher` tại context khoá đọc được ngân hàng của khoá đó
- * nhưng không đọc được ngân hàng ở context hệ thống — cùng quy tắc mà
- * các đường ghi (question:add/editall/managecategory) đã áp. Luồng làm
- * bài của học sinh qua question engine (hoạt động tạo usage, học sinh
- * start/submit/finish) không đổi.
+ * Oracle: chuẩn các cổng đã chốt ở #44/#48 — vai không có capability đọc ngân hàng (`question:useall` tại context của category chứa dữ liệu) nhận 404 mang mã của tài nguyên không tồn tại, và response TUYỆT ĐỐI không chứa nội dung câu hỏi/đáp án (không oracle tồn tại). Giáo viên có `editingteacher` tại context khoá đọc được ngân hàng của khoá đó nhưng không đọc được ngân hàng ở context hệ thống — cùng quy tắc mà các đường ghi (question:add/editall/managecategory) đã áp. Luồng làm bài của học sinh qua question engine (hoạt động tạo usage, học sinh start/submit/finish) không đổi.
  */
 describe('Cổng đọc ngân hàng câu hỏi (issue #55)', () => {
 

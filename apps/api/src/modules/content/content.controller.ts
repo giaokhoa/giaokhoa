@@ -127,14 +127,7 @@ export class PlayerController {
 
   @Get('progress/reports')
   /**
-   * GET /courses/:courseId/progress/reports — bản xuất của ma trận tiến độ để tải xuống.
-   * Định dạng là dữ liệu yêu cầu qua tham số truy vấn `format` (hiện
-   * chỉ hỗ trợ `csv`; vắng mặt thì mặc định `csv`), không còn nằm
-   * trong path theo chuẩn bỏ hậu tố file (issue #345); nội dung file
-   * xuất giữ nguyên như bản CSV trước đây, `?groupId=` lọc theo
-   * lớp/nhóm như cũ. Định dạng khác `csv` bị từ chối 400
-   * `content.progress_report_format_unsupported`. Path cũ
-   * `progress/report.csv` giữ qua handler alias ngay dưới.
+   * GET /courses/:courseId/progress/reports — bản xuất của ma trận tiến độ để tải xuống. Định dạng là dữ liệu yêu cầu qua tham số truy vấn `format` (hiện chỉ hỗ trợ `csv`; vắng mặt thì mặc định `csv`), không còn nằm trong path theo chuẩn bỏ hậu tố file (issue #345); nội dung file xuất giữ nguyên như bản CSV trước đây, `?groupId=` lọc theo lớp/nhóm như cũ. Định dạng khác `csv` bị từ chối 400 `content.progress_report_format_unsupported`. Path cũ `progress/report.csv` giữ qua handler alias ngay dưới.
    */
   async progressReports(@Param('courseId', { schema: uuidIdSchema }) courseId: string, @Query('groupId') groupId: string | undefined, @Query('format') format: string | undefined, @CurrentUser() viewer: AuthenticatedUser, @Res() res: Response) {
     if (format !== undefined && format !== 'csv') {

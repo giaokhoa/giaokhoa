@@ -2,21 +2,12 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { createMcpProtectedRequestHandler } from '@better-auth/mcp';
 
 /**
- * BỘ KIỂM TOKEN CỦA RS ở lát MCP-1 (issue #163): gói
- * `createMcpProtectedRequestHandler` của `@better-auth/mcp` — đường
- * kiểm chính chủ của plugin: xác thực chữ ký JWT qua JWKS của AS
+ * BỘ KIỂM TOKEN CỦA RS ở lát MCP-1 (issue #163): gói `createMcpProtectedRequestHandler` của `@better-auth/mcp` — đường kiểm chính chủ của plugin: xác thực chữ ký JWT qua JWKS của AS
  * (plugin jwt() phục vụ tại `<issuer>/jwks`), ép đúng `iss` + `aud`
  * (= resource `/mcp`) + hạn token. Cầu HS256 của MCP-0
  * (mcp-bridge-auth.ts) chỉ còn là đường lùi khi AS chưa bật.
  *
- * Plugin trả Response thành phẩm (401/403 kèm challenge
- * WWW-Authenticate) khi token không đạt; tầng mount của Giáo khoa lại cần
- * lỗi JSON-RPC đồng dạng lớp 0 của MCP-0 (-32001/-32003) — nên
- * verifier chạy handler của plugin với một callback chỉ GHI LẠI
- * claims (qua AsyncLocalStorage để các request đồng thời không lẫn
- * nhau; handler của plugin giữ cache JWKS dùng chung nên verifier
- * phải là instance duy nhất của tiến trình) rồi mount tự quyết định
- * hình lỗi + các cổng tiếp theo (scope theo tool, rate limit) như cũ.
+ * Plugin trả Response thành phẩm (401/403 kèm challenge WWW-Authenticate) khi token không đạt; tầng mount của Giáo khoa lại cần lỗi JSON-RPC đồng dạng lớp 0 của MCP-0 (-32001/-32003) — nên verifier chạy handler của plugin với một callback chỉ GHI LẠI claims (qua AsyncLocalStorage để các request đồng thời không lẫn nhau; handler của plugin giữ cache JWKS dùng chung nên verifier phải là instance duy nhất của tiến trình) rồi mount tự quyết định hình lỗi + các cổng tiếp theo (scope theo tool, rate limit) như cũ.
  */
 export interface McpOAuthIdentity {
   /** `sub` của access token = id người dùng Giáo khoa (AS phát cho chính giáo viên). */
@@ -47,8 +38,7 @@ export class McpOAuthVerifier {
       async (_request, claims) => {
         const store = this.capture.getStore();
         if (store) store.claims = claims;
-        // Response mồi: mount không dùng thân này — claims đã ghi lại
-        // trong store của đúng request đang chạy.
+        // Response mồi: mount không dùng thân này — claims đã ghi lại trong store của đúng request đang chạy.
         return new Response(null, { status: 204 });
       },
     );

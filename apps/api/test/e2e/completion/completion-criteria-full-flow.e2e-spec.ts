@@ -6,12 +6,7 @@ import { createCategory, createCourse, createEnrolInstance, enrolUser } from '..
 import { contextIdByLevelInstance, courseContextId, setCourseCompletionCriteria } from '../../support/engagement-helpers';
 
 /**
- * Tiêu chí hoàn thành khoá học — trọn bộ 8 loại của Moodle (issue #23).
- * Oracle: MOODLE_503_STABLE completion/criteria/* (completion_criteria_self,
- * completion_criteria_course, completion_criteria_duration,
- * completion_criteria_role, completion_criteria_unenrol) và biểu mẫu
- * cài đặt hoàn thành khoá học (course/completion_form.php): self = người học
- * tự đánh dấu cho mình; role = người giữ vai được nêu tên đánh dấu cho người học
+ * Tiêu chí hoàn thành khoá học — trọn bộ 8 loại của Moodle (issue #23). Oracle: MOODLE_503_STABLE completion/criteria/* (completion_criteria_self, completion_criteria_course, completion_criteria_duration, completion_criteria_role, completion_criteria_unenrol) và biểu mẫu cài đặt hoàn thành khoá học (course/completion_form.php): self = người học tự đánh dấu cho mình; role = người giữ vai được nêu tên đánh dấu cho người học
  * ("manual completion by others"); course = khoá tiên quyết đã hoàn thành;
  * duration = N ngày sau khi ghi danh; unenrol = hoàn thành khi đã huỷ ghi danh.
  */

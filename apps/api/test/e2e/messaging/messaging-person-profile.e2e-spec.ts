@@ -6,21 +6,11 @@ import {
 
 /**
  * Endpoint hồ sơ người phục vụ panel chat 1–1 (issue #592):
- * trả định danh + tên hiển thị + tên đăng nhập + email từ dữ
- * kiện người dùng thật, chỉ trong cổng hẹp: chính chủ, hoặc chung
- * hội thoại 1–1 không bị chặn với đối tác, hoặc người xem có
- * capability xem định danh. Chung nhóm tự do nhưng không chung
- * 1–1 và không có capability thì 404 — cổng cũ "chung
- * conversation nhìn thấy được" lộ email qua đồng bộ lười nên đã
- * bị thu hẹp. Các trường hồ sơ mở rộng chưa có nguồn trong hệ
+ * trả định danh + tên hiển thị + tên đăng nhập + email từ dữ kiện người dùng thật, chỉ trong cổng hẹp: chính chủ, hoặc chung hội thoại 1–1 không bị chặn với đối tác, hoặc người xem có capability xem định danh. Chung nhóm tự do nhưng không chung 1–1 và không có capability thì 404 — cổng cũ "chung conversation nhìn thấy được" lộ email qua đồng bộ lười nên đã bị thu hẹp. Các trường hồ sơ mở rộng chưa có nguồn trong hệ
  * (giới thiệu, điện thoại, website…) KHÔNG có trong response này
- * — chúng vẫn qua adapter ở web với giá trị rỗng, tuyệt đối không
- * bịa.
+ * — chúng vẫn qua adapter ở web với giá trị rỗng, tuyệt đối không bịa.
  *
- * Năm ca: chung nhóm nhưng không chung 1–1 thì 404; chung 1–1 thì
- * thấy hồ sơ thật; người lạ không chung hội thoại nào thì 404;
- * đối tác của hội thoại 1–1 đang chặn thì 404 như không tồn tại;
- * chính chủ xem hồ sơ của mình thì được.
+ * Năm ca: chung nhóm nhưng không chung 1–1 thì 404; chung 1–1 thì thấy hồ sơ thật; người lạ không chung hội thoại nào thì 404; đối tác của hội thoại 1–1 đang chặn thì 404 như không tồn tại; chính chủ xem hồ sơ của mình thì được.
  */
 interface Person { id: string; username: string; email: string; token: string }
 

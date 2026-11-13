@@ -6,13 +6,9 @@ import {
 } from '../../support/identity-access-helpers';
 
 /**
- * Kiểm thử xuyên HTTP cho luồng chương trình GDPT 2018: tạo môn, chương trình, cây nội dung và kiểm tra phân quyền.
- * Oracle: mô hình giaokhoa đã kiểm chứng tận schema
+ * Kiểm thử xuyên HTTP cho luồng chương trình GDPT 2018: tạo môn, chương trình, cây nội dung và kiểm tra phân quyền. Oracle: mô hình giaokhoa đã kiểm chứng tận schema
  * (packages/database/src/schema/curriculum.ts): subjects (slug duy nhất) →
- * curricula (duy nhất theo môn + khối 1–12) → curriculum_nodes (cây, khoá
- * ngoại ghép giữ node con trong cùng chương trình) → learning_outcomes.
- * Phần Giáo khoa bổ sung: môn neo context + capability curriculum:view|manage
- * qua PermissionEvaluator (mẫu ngân hàng câu hỏi/stimulus), node có kind
+ * curricula (duy nhất theo môn + khối 1–12) → curriculum_nodes (cây, khoá ngoại ghép giữ node con trong cùng chương trình) → learning_outcomes. Phần Giáo khoa bổ sung: môn neo context + capability curriculum:view|manage qua PermissionEvaluator (mẫu ngân hàng câu hỏi/stimulus), node có kind
  * (strand = mạch nội dung) và thời lượng/% thời lượng cho số hoá GDPT 2018.
  */
 

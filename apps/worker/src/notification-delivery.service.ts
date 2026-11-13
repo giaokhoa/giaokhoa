@@ -10,8 +10,7 @@ import { sql, type CentreDB } from '@giaokhoa/db';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
 
 /**
- * Kênh Redis pub/sub mang tín hiệu "số thông báo chưa đọc của một user
- * vừa thay đổi" — PHẢI khớp hằng số cùng tên phía API
+ * Kênh Redis pub/sub mang tín hiệu "số thông báo chưa đọc của một user vừa thay đổi" — PHẢI khớp hằng số cùng tên phía API
  * (`notification-unread-stream.service.ts`): payload chỉ là userId, số
  * đếm thật luôn được phía API đọc lại từ database.
  */
@@ -212,12 +211,7 @@ export class NotificationDeliveryService implements OnModuleDestroy {
   constructor(
     private readonly spaceDb: SpaceDatabaseService,
     @Inject(ConfigService) private readonly config: ConfigService,
-    // Hai phụ thuộc dưới đây chỉ phục vụ notify() (xếp job kênh email +
-    // nội dung generic của luật C-5). Đánh dấu tuỳ chọn để các spec
-    // dựng service thủ công chỉ cho deliverInApp (spec parity) không
-    // phải cấp hàng đợi/i18n; trong WorkerModule thật chúng luôn được
-    // tiêm (hàng đợi `notification-dispatch` đã đăng ký sẵn cho
-    // processor phát kênh ngoài, I18nService từ I18nWorkerModule).
+    // Hai phụ thuộc dưới đây chỉ phục vụ notify() (xếp job kênh email + nội dung generic của luật C-5). Đánh dấu tuỳ chọn để các spec dựng service thủ công chỉ cho deliverInApp (spec parity) không phải cấp hàng đợi/i18n; trong WorkerModule thật chúng luôn được tiêm (hàng đợi `notification-dispatch` đã đăng ký sẵn cho processor phát kênh ngoài, I18nService từ I18nWorkerModule).
     @Optional() @InjectQueue('notification-dispatch') private readonly dispatchQueue?: Queue,
     @Optional() private readonly i18n?: I18nService,
   ) {}

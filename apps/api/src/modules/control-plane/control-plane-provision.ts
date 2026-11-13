@@ -1,26 +1,14 @@
 /**
  * Helper THUẦN cho việc cấp phát database control plane (issue #580):
- * tách phần suy luận (đọc đích từ URL, dựng câu SQL) khỏi phần thực
- * thi (script `control-plane-setup.ts`) để kiểm chứng bằng unit test
- * không cần database thật.
+ * tách phần suy luận (đọc đích từ URL, dựng câu SQL) khỏi phần thực thi (script `control-plane-setup.ts`) để kiểm chứng bằng unit test không cần database thật.
  *
- * Mô hình cấp phát: control plane có database RIÊNG trên cùng cụm
- * Postgres với kho nghiệp vụ và role kết nối RIÊNG chỉ có quyền trên
- * database đó. URL `CONTROL_PLANE_DATABASE_URL` là nguồn sự thật duy
- * nhất về đích cấp phát (tên database = path, role = username, mật
- * khẩu = password) — script không nhận thêm tham số nào khác ngoài
- * URL quản trị của cụm (dựng từ `DATABASE_URL` của kho nghiệp vụ,
- * trỏ về database `postgres`).
+ * Mô hình cấp phát: control plane có database RIÊNG trên cùng cụm Postgres với kho nghiệp vụ và role kết nối RIÊNG chỉ có quyền trên database đó. URL `CONTROL_PLANE_DATABASE_URL` là nguồn sự thật duy nhất về đích cấp phát (tên database = path, role = username, mật khẩu = password) — script không nhận thêm tham số nào khác ngoài URL quản trị của cụm (dựng từ `DATABASE_URL` của kho nghiệp vụ, trỏ về database `postgres`).
  *
- * Cô lập kết nối là HAI CHIỀU ở mức mở kết nối (không chỉ ở mức
- * quyền trên bảng):
+ * Cô lập kết nối là HAI CHIỀU ở mức mở kết nối (không chỉ ở mức quyền trên bảng):
  * - Database control plane: thu hồi CONNECT của PUBLIC, chỉ cấp cho
  *   role control plane.
  * - Database nghiệp vụ: thu hồi CONNECT của PUBLIC, chỉ cấp lại cho
- *   các role nghiệp vụ hợp lệ (role kết nối của chính đường dữ kiện
- *   nghiệp vụ) — nhờ vậy role control plane cũng bị từ chối ngay ở
- *   bước mở kết nối vào kho nghiệp vụ, không mở được kết nối rồi mới
- *   chết ở quyền bảng.
+ *   các role nghiệp vụ hợp lệ (role kết nối của chính đường dữ kiện nghiệp vụ) — nhờ vậy role control plane cũng bị từ chối ngay ở bước mở kết nối vào kho nghiệp vụ, không mở được kết nối rồi mới chết ở quyền bảng.
  */
 
 /** Đích cấp phát suy ra từ URL kết nối của control plane. */
@@ -58,9 +46,7 @@ export function quoteLiteral(value: string): string {
 }
 
 /**
- * Các câu lệnh đảm bảo role đích tồn tại và mật khẩu khớp URL hiện
- * hành: chưa có thì tạo (LOGIN, không thừa hưởng quyền nào khác),
- * đã có thì đồng bộ lại mật khẩu. Chạy lặp an toàn.
+ * Các câu lệnh đảm bảo role đích tồn tại và mật khẩu khớp URL hiện hành: chưa có thì tạo (LOGIN, không thừa hưởng quyền nào khác), đã có thì đồng bộ lại mật khẩu. Chạy lặp an toàn.
  */
 export function buildEnsureRoleStatements(target: ControlPlaneTarget, roleExists: boolean): string[] {
   const role = quoteIdentifier(target.role);

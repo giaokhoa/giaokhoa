@@ -13,11 +13,9 @@ import type { CourseRow } from './courses';
  * - Khoá chính `uuidv7()` do database sinh (phụ lục U): insert bỏ
  *   qua `id` và lấy id qua `returning`.
  * - Hai truy vấn `selectDistinct` của bản cũ trước chuyển đổi dùng
- *   `SelectQueryBuilder#distinct` tương đương (đính chính C-1 của
- *   chiến dịch: `distinct` là họ API CÓ dùng, lớp A).
+ *   `SelectQueryBuilder#distinct` tương đương (đính chính C-1 của chiến dịch: `distinct` là họ API CÓ dùng, lớp A).
  * - `count(*)` ép `::int` tường minh để giữ kiểu `number` của hợp
- *   đồng cũ (T-7: `count(*)` là int8, qua pg sẽ là `string` nếu
- *   không ép).
+ *   đồng cũ (T-7: `count(*)` là int8, qua pg sẽ là `string` nếu không ép).
  *
  * Kiểu dòng công khai dùng camelCase, được ánh xạ từ tên cột snake_case của database.
  */
@@ -238,9 +236,7 @@ function joinRequestUpdateValues(v: Partial<ClassJoinRequestRow>) {
 }
 
 /**
- * Kho dữ liệu lớp học: bảng `classes` + các truy vấn vật chất hoá
- * phía lớp (instance cohort của các khoá trong lớp). Thuần dữ
- * liệu — quyết định quyền nằm ở ClassesService / PermissionEvaluator.
+ * Kho dữ liệu lớp học: bảng `classes` + các truy vấn vật chất hoá phía lớp (instance cohort của các khoá trong lớp). Thuần dữ liệu — quyết định quyền nằm ở ClassesService / PermissionEvaluator.
  */
 export class ClassesRepository {
   constructor(private readonly handle: CentreDb) {}
@@ -338,11 +334,7 @@ export class ClassesRepository {
   }
 
   /**
-   * Các khoá của lớp mà một học sinh đang ghi danh ACTIVE (status = 0 —
-   * `ENROL_ACTIVE` của module enrol; xét mọi instance của khoá, đường
-   * chính là instance cohort của lớp). Đình chỉ ở một khoá đặt dòng ghi
-   * danh thành SUSPENDED (status = 1) nên khoá đó rơi khỏi tập này —
-   * dashboard phía học sinh (CLASS-2) chỉ hiện các khoá trong tập này.
+   * Các khoá của lớp mà một học sinh đang ghi danh ACTIVE (status = 0 — `ENROL_ACTIVE` của module enrol; xét mọi instance của khoá, đường chính là instance cohort của lớp). Đình chỉ ở một khoá đặt dòng ghi danh thành SUSPENDED (status = 1) nên khoá đó rơi khỏi tập này — dashboard phía học sinh (CLASS-2) chỉ hiện các khoá trong tập này.
    */
   async listActiveEnrolledCourseIds(classId: string, userId: string): Promise<string[]> {
     const rows = await this.handle
@@ -359,9 +351,7 @@ export class ClassesRepository {
   }
 
   /**
-   * Đẩy chế độ rời lớp mới xuống `custom_text1` của mọi instance cohort
-   * của lớp (các khoá đã tạo trước khi lớp đổi `on_leave` phải theo chế
-   * độ hiện hành của lớp, không giữ ảnh chụp lúc tạo khoá).
+   * Đẩy chế độ rời lớp mới xuống `custom_text1` của mọi instance cohort của lớp (các khoá đã tạo trước khi lớp đổi `on_leave` phải theo chế độ hiện hành của lớp, không giữ ảnh chụp lúc tạo khoá).
    */
   async syncOnLeaveToInstances(cohortId: string, onLeave: string): Promise<void> {
     await this.handle
@@ -433,9 +423,7 @@ export class ClassesRepository {
   }
 
   /**
-   * Học sinh đã đình chỉ khỏi lớp: còn dòng ghi danh SUSPENDED (status
-   * = 1) trên instance cohort của lớp nhưng KHÔNG còn trong backing
-   * cohort — suy ra từ chính vật chất hoá ghi danh, không bảng phụ
+   * Học sinh đã đình chỉ khỏi lớp: còn dòng ghi danh SUSPENDED (status = 1) trên instance cohort của lớp nhưng KHÔNG còn trong backing cohort — suy ra từ chính vật chất hoá ghi danh, không bảng phụ
    * (roster chỉ có hai trạng thái thuộc/không thuộc, xem hồ sơ mục 4.3).
    */
   async listSuspendedMemberIds(cohortId: string): Promise<string[]> {

@@ -6,16 +6,7 @@ import { BankArea } from '../utils/shared';
 import '#config/i18n';
 
 /**
- * Thanh tab Cá nhân | Hệ thống dùng CHUNG cho mọi màn danh sách ngân
- * hàng (quyết định chốt lại 11:40 ngày 26/10/2026, issue #228 — thay mục
- * "Ngân hàng hệ thống" riêng ở sidebar): mỗi loại thực thể (câu hỏi /
- * đề / ma trận) có đúng hai tab, dùng chung một khung danh sách, chỉ
- * khác nguồn dữ liệu của trang đích. Tab là ĐIỀU HƯỚNG theo route —
- * mỗi khu vực giữ path riêng theo chuẩn đường dẫn (issue #221), KHÔNG
- * dùng query định danh khu vực; tab đang đứng mang `aria-current`.
- * Vỏ tab bám đúng component Tabs dùng chung của @giaokhoa/ui (nền muted,
- * tab active nền background + shadow) nhưng render bằng Link vì đây
- * là điều hướng giữa hai trang, không phải chuyển panel tại chỗ.
+ * Thanh tab Cá nhân | Hệ thống dùng CHUNG cho mọi màn danh sách ngân hàng (quyết định chốt lại 11:40 ngày 26/10/2026, issue #228 — thay mục "Ngân hàng hệ thống" riêng ở sidebar): mỗi loại thực thể (câu hỏi / đề / ma trận) có đúng hai tab, dùng chung một khung danh sách, chỉ khác nguồn dữ liệu của trang đích. Tab là ĐIỀU HƯỚNG theo route — mỗi khu vực giữ path riêng theo chuẩn đường dẫn (issue #221), KHÔNG dùng query định danh khu vực; tab đang đứng mang `aria-current`. Vỏ tab bám đúng component Tabs dùng chung của @giaokhoa/ui (nền muted, tab active nền background + shadow) nhưng render bằng Link vì đây là điều hướng giữa hai trang, không phải chuyển panel tại chỗ.
  */
 const BANK_TAB_PATHS: Record<'questions' | 'exams' | 'matrices', { personal: string; system: string }> = {
   questions: { personal: '/questions', system: '/system-bank/questions' },

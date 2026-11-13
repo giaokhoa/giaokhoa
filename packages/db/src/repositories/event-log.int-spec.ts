@@ -1,19 +1,11 @@
 /**
- * Spec tích hợp của `EventLogRepository.search` (issue #648) trên
- * database trung tâm dựng từ rỗng bằng carrier đóng băng: chốt hai
- * điểm chuyển đổi của nhóm G8 —
+ * Spec tích hợp của `EventLogRepository.search` (issue #648) trên database trung tâm dựng từ rỗng bằng carrier đóng băng: chốt hai điểm chuyển đổi của nhóm G8 —
  * - Toán tử JSON `payload ->> 'khoá'` giữ nguyên ngữ nghĩa: lọc
- *   theo các trường chuẩn hoá trong payload (courseId,
- *   relatedUserId, component) cho đúng tập dòng như kỳ vọng.
+ *   theo các trường chuẩn hoá trong payload (courseId, relatedUserId, component) cho đúng tập dòng như kỳ vọng.
  * - Khuôn điều kiện động DÙNG CHUNG (mẫu BS-1 của thử nghiệm
- *   T-13): truy vấn dòng và truy vấn đếm dùng cùng một hàm dựng
- *   điều kiện — kiểm chứng bằng tương đương thực tế: `total` luôn
- *   bằng số dòng thật khớp bộ lọc (gom đủ mọi trang), kể cả ca
- *   không có điều kiện nào.
+ *   T-13): truy vấn dòng và truy vấn đếm dùng cùng một hàm dựng điều kiện — kiểm chứng bằng tương đương thực tế: `total` luôn bằng số dòng thật khớp bộ lọc (gom đủ mọi trang), kể cả ca không có điều kiện nào.
  *
- * Cột `seq` là `bigint` sinh bởi identity: qua Kysely đọc thành
- * chuỗi (khuôn T-7), spec khoá luôn hình dạng này ở biên
- * repository — phía tiêu thụ tự chuyển số tường minh.
+ * Cột `seq` là `bigint` sinh bởi identity: qua Kysely đọc thành chuỗi (khuôn T-7), spec khoá luôn hình dạng này ở biên repository — phía tiêu thụ tự chuyển số tường minh.
  */
 import { sql } from 'kysely';
 import { Pool } from 'pg';

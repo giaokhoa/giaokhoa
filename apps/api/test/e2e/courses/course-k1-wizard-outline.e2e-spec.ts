@@ -5,12 +5,7 @@ import { createCategory, createCm, createCourse, createEnrolInstance, createSect
 import { addExamSlot, createExamDraft, createReadyQuestion, pinExam } from '../../support/exam-pin-helpers';
 
 /**
- * K1 (issue #68): wizard tạo khoá — nhân bản khoá theo bảng Re-run,
- * dùng lại nội dung từ khoá khác, Builder Outline (đổi thứ tự, nhân
- * bản tại dòng), khoá mẫu tổ/trường và gác ngày mở `open_at`.
- * Oracle nghiệp vụ: bảng sao chép Re-run trong thân issue #68 (có cấu
- * trúc/nội dung/cài đặt/chính sách điểm — KHÔNG người học/bài làm/tiến
- * độ; bản sao nháp; hạn lùi theo mốc mới).
+ * K1 (issue #68): wizard tạo khoá — nhân bản khoá theo bảng Re-run, dùng lại nội dung từ khoá khác, Builder Outline (đổi thứ tự, nhân bản tại dòng), khoá mẫu tổ/trường và gác ngày mở `open_at`. Oracle nghiệp vụ: bảng sao chép Re-run trong thân issue #68 (có cấu trúc/nội dung/cài đặt/chính sách điểm — KHÔNG người học/bài làm/tiến độ; bản sao nháp; hạn lùi theo mốc mới).
  */
 describe('K1: nhân bản khoá, outline, mẫu và ngày mở', () => {
   let app: INestApplication;

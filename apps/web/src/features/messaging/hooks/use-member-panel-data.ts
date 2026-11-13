@@ -94,11 +94,9 @@ export function useMemberPanelData({
 }: UseMemberPanelDataParams) {
   const queryClient = useQueryClient();
   /**
-   * TIẾN ĐỘ MỒI của PANEL THÀNH VIÊN (lát MSG-T4) cho conversation
-   * nhóm đang mở: những URL trang roster đã nạp vào cache cho đúng
+   * TIẾN ĐỘ MỒI của PANEL THÀNH VIÊN (lát MSG-T4) cho conversation nhóm đang mở: những URL trang roster đã nạp vào cache cho đúng
    * (conversation, ngữ cảnh) này + cờ lỗi + cờ đang mồi. Dữ kiện
-   * dòng thành viên tự suy ra từ cache theo tiến độ này nên không
-   * hiện nhầm dữ liệu của conversation trước trong lúc mồi lại.
+   * dòng thành viên tự suy ra từ cache theo tiến độ này nên không hiện nhầm dữ liệu của conversation trước trong lúc mồi lại.
    */
   const [panelPrime, setPanelPrime] = useState<{
     conversationId: string;

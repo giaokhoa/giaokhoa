@@ -1,7 +1,6 @@
 import { QuestionsPage } from '../components/questions';
 
-// Route Ngữ liệu của tôi (/questions/stimuli — chuẩn đường dẫn #221,
-// lát R1): cùng module trang ngân hàng, phục vụ đúng khu vực ngữ liệu.
+// Route Ngữ liệu của tôi (/questions/stimuli — chuẩn đường dẫn #221, lát R1): cùng module trang ngân hàng, phục vụ đúng khu vực ngữ liệu.
 export { RouteErrorBoundary as ErrorBoundary } from '#components/route-error-boundary';
 import { titleMeta } from '#lib/route-meta';
 export function meta() {

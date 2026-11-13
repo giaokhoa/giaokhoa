@@ -5,11 +5,9 @@ import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWO
 import { createCategory, createCourse, createEnrolInstance, enrolUser, getFirstSectionId } from '../../support/course-enrolment-helpers';
 
 /**
- * EB-2 hậu gộp Đề (#226; bản gốc issue #153 về recipe/materialize đã
- * bị thay thế bởi chốt bỏ recipe 26/10) — generate từ ma trận + mã đề:
+ * EB-2 hậu gộp Đề (#226; bản gốc issue #153 về recipe/materialize đã bị thay thế bởi chốt bỏ recipe 26/10) — generate từ ma trận + mã đề:
  *  - generate rút MỘT bộ câu cố định → exams(kind=snapshot, ghim
- *    matrix version) → ghim vào khoá (exam_pins); exam_id là truy
- *    vết chính, matrix_id là truy vết phụ;
+ *    matrix version) → ghim vào khoá (exam_pins); exam_id là truy vết chính, matrix_id là truy vết phụ;
  *  - cùng một đề ghim cho 2 khoá: MỌI học sinh nhận CÙNG một bộ câu
  *    (không còn rút lại theo từng học sinh);
  *  - đề sinh ra là snapshot thường: sửa trực tiếp bằng swap-cùng-ô

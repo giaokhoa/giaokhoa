@@ -3,10 +3,7 @@ import { fetchSiteSettingAudit, fetchSiteSettings, resetSiteSetting, saveSiteSet
 import { queryKeys } from './keys';
 
 /**
- * Tầng truy vấn của cụm cấu hình site thuộc feature admin: hook đọc
- * bảng cấu hình và vết thay đổi, đột biến lưu/đặt lại setting. Lời
- * gọi API thuần nằm ở tầng `api/` của feature; khoá truy vấn riêng
- * của admin nằm ở `keys.ts` cùng tầng này.
+ * Tầng truy vấn của cụm cấu hình site thuộc feature admin: hook đọc bảng cấu hình và vết thay đổi, đột biến lưu/đặt lại setting. Lời gọi API thuần nằm ở tầng `api/` của feature; khoá truy vấn riêng của admin nằm ở `keys.ts` cùng tầng này.
  */
 
 /** Bảng cấu hình site hiện hành (GET /site-config). */
@@ -18,9 +15,7 @@ export function useSiteSettings() {
 }
 
 /**
- * Vết thay đổi cấu hình gần nhất (GET /site-config/audit). Lỗi ở truy vấn
- * này không bao giờ làm hỏng trang (hạ cấp thành danh sách rỗng, đúng hành
- * vi cũ) và chỉ tải sau khi bảng cấu hình tải xong.
+ * Vết thay đổi cấu hình gần nhất (GET /site-config/audit). Lỗi ở truy vấn này không bao giờ làm hỏng trang (hạ cấp thành danh sách rỗng, đúng hành vi cũ) và chỉ tải sau khi bảng cấu hình tải xong.
  */
 export function useSiteSettingAudit(enabled: boolean) {
   return useQuery({

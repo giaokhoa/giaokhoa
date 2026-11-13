@@ -1,11 +1,7 @@
 import type { QuizAttemptSummary, QuizView } from '@giaokhoa/contracts';
 
 /**
- * Kiểu dữ liệu của trang kết quả quiz thuộc feature quizzes. Tách
- * từ module dữ liệu phẳng `src/lib/quiz-results-data.ts` khi tổ
- * chức lại apps/web theo mô hình features/ (issue #500): kiểu nằm
- * ở tầng types/, lời gọi API thuần ở tầng api/, tuỳ chọn truy vấn
- * và đột biến ở tầng queries/.
+ * Kiểu dữ liệu của trang kết quả quiz thuộc feature quizzes. Tách từ module dữ liệu phẳng `src/lib/quiz-results-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500): kiểu nằm ở tầng types/, lời gọi API thuần ở tầng api/, tuỳ chọn truy vấn và đột biến ở tầng queries/.
  */
 
 /** Một câu essay đang chờ chấm tay (hàng đợi của giáo viên). */
@@ -31,9 +27,7 @@ export interface QuestionWrongStudent {
 }
 
 /**
- * Thống kê một slot trong đề (API gộp theo vị trí câu, chỉ tính lượt
- * đã nộp): câu sai nhiều nhất được API xếp lên đầu. questionName null
- * khi slot rút câu ngẫu nhiên (mỗi lượt một câu khác nhau).
+ * Thống kê một slot trong đề (API gộp theo vị trí câu, chỉ tính lượt đã nộp): câu sai nhiều nhất được API xếp lên đầu. questionName null khi slot rút câu ngẫu nhiên (mỗi lượt một câu khác nhau).
  */
 export interface QuestionStat {
   slot: number;

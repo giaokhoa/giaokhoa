@@ -10,43 +10,15 @@ import type { CredentialBridgeService } from '../../../src/modules/auth/better-a
 import type { MailMessage } from '../../../src/modules/mail/mail.types';
 
 /**
- * Flow test của lát BA-2 (issue #7, chặng 2.5): mail auth qua Resend +
- * reset mật khẩu end-to-end + đăng nhập bằng email OTP.
+ * Flow test của lát BA-2 (issue #7, chặng 2.5): mail auth qua Resend + reset mật khẩu end-to-end + đăng nhập bằng email OTP.
  *
- * Cách kiểm chứng nội dung mail: MỌI mắt xích phía API là đồ thật —
- * endpoint Better Auth → callback → AuthMailService ghi dòng outbox
- * `auth_mail_requested` (đồng bộ trong request). Mail "người dùng
- * nhận" được dựng từ chính dòng outbox đó bằng `renderAuthMail` của
- * `@giaokhoa/contracts` — hàm dùng chung duy nhất mà processor ở phía
- * worker gọi khi gửi thật (issue #517: khâu gửi đã chuyển sang hàng
- * đợi ở worker; relay phát job, processor dựng nội dung và gọi
- * transport Resend phía worker — khâu đó được kiểm chứng ở suite
- * worker: spec unit của processor và spec tích hợp hàng đợi mail).
+ * Cách kiểm chứng nội dung mail: MỌI mắt xích phía API là đồ thật — endpoint Better Auth → callback → AuthMailService ghi dòng outbox `auth_mail_requested` (đồng bộ trong request). Mail "người dùng nhận" được dựng từ chính dòng outbox đó bằng `renderAuthMail` của `@giaokhoa/contracts` — hàm dùng chung duy nhất mà processor ở phía worker gọi khi gửi thật (issue #517: khâu gửi đã chuyển sang hàng đợi ở worker; relay phát job, processor dựng nội dung và gọi transport Resend phía worker — khâu đó được kiểm chứng ở suite worker: spec unit của processor và spec tích hợp hàng đợi mail).
  *
- * Các cổng nghiệp vụ được chứng minh: reset đủ vòng (mail chứa liên
- * kết → đặt mật khẩu mới → mật khẩu cũ chết, phiên cũ bị thu hồi,
- * token dùng một lần); email không tồn tại nhận đáp ứng trung tính và
- * không phát mail; mật khẩu yếu bị chính sách của dự án chặn TRƯỚC
- * khi token bị tiêu thụ; OTP đăng nhập đủ vòng (mã sai bị từ chối, mã
- * đúng tạo phiên dùng được ngay trên route nghiệp vụ, mã dùng một
- * lần); email lạ KHÔNG tự thành tài khoản qua OTP (disableSignUp đã
- * ghim ở plugin như toàn hệ) và nhận đáp ứng trung tính chống lộ thông
- * tin; đặt lại mật khẩu bằng OTP; tài khoản bị đình chỉ vẫn bị chặn ở
- * guard dù đăng nhập OTP thành công.
+ * Các cổng nghiệp vụ được chứng minh: reset đủ vòng (mail chứa liên kết → đặt mật khẩu mới → mật khẩu cũ chết, phiên cũ bị thu hồi, token dùng một lần); email không tồn tại nhận đáp ứng trung tính và không phát mail; mật khẩu yếu bị chính sách của dự án chặn TRƯỚC khi token bị tiêu thụ; OTP đăng nhập đủ vòng (mã sai bị từ chối, mã đúng tạo phiên dùng được ngay trên route nghiệp vụ, mã dùng một lần); email lạ KHÔNG tự thành tài khoản qua OTP (disableSignUp đã ghim ở plugin như toàn hệ) và nhận đáp ứng trung tính chống lộ thông tin; đặt lại mật khẩu bằng OTP; tài khoản bị đình chỉ vẫn bị chặn ở guard dù đăng nhập OTP thành công.
  *
- * BA-1 — chốt semantics revokeUnprovenAccountAccess (comment
- * 6405565755 trên #7, thi công cùng PR này): user do cầu nối tạo là
- * user do bên tin cậy tạo cho mailbox đã biết nên được tạo với
- * email_verified = true, và instance ghim generateId "uuid" (id
- * thường vẫn do PostgreSQL tự sinh UUIDv7 vì adapter khai
- * supportsUUIDs; chỉ id tất định của verification lock mới đổi sang
- * dạng UUID, hết lỗi 22P02). Nhờ đó đăng nhập OTP cho user bridge
- * không còn chạy đường revoke xoá credential: ca bên dưới khẳng định
- * credential mật khẩu còn nguyên và đăng nhập username/mật khẩu vẫn
- * chạy sau khi đăng nhập OTP.
+ * BA-1 — chốt semantics revokeUnprovenAccountAccess (comment 6405565755 trên #7, thi công cùng PR này): user do cầu nối tạo là user do bên tin cậy tạo cho mailbox đã biết nên được tạo với email_verified = true, và instance ghim generateId "uuid" (id thường vẫn do PostgreSQL tự sinh UUIDv7 vì adapter khai supportsUUIDs; chỉ id tất định của verification lock mới đổi sang dạng UUID, hết lỗi 22P02). Nhờ đó đăng nhập OTP cho user bridge không còn chạy đường revoke xoá credential: ca bên dưới khẳng định credential mật khẩu còn nguyên và đăng nhập username/mật khẩu vẫn chạy sau khi đăng nhập OTP.
  *
- * Biến môi trường phải tồn tại TRƯỚC khi AppModule được nạp — như
- * spec nền better-auth-flow.
+ * Biến môi trường phải tồn tại TRƯỚC khi AppModule được nạp — như spec nền better-auth-flow.
  */
 process.env.BETTER_AUTH_ENABLED = 'true';
 process.env.BETTER_AUTH_SECRET = 'e2e-better-auth-secret-0123456789abcdef';

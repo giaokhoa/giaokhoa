@@ -10,19 +10,13 @@ import type { OutboxEventJobData } from './outbox-event-routes';
 import { SpaceDatabaseService } from './db/routing/space-database.service';
 
 /**
- * Tiền tố khoá watermark của consumer polling thông báo phía API
- * trước đây: khoá đầy đủ là `${LEGACY_WATERMARK_KEY_PREFIX}<tên
- * database>:seq`, giá trị là `seq` của dòng outbox cuối cùng
- * consumer cũ đã xử lý xong. Tên khoá và ngữ nghĩa giá trị lấy
- * đúng từ consumer cũ — cơ chế phát bù đọc lại chính khoá đó,
- * không dựng khoá song song.
+ * Tiền tố khoá watermark của consumer polling thông báo phía API trước đây: khoá đầy đủ là `${LEGACY_WATERMARK_KEY_PREFIX}<tên database>:seq`, giá trị là `seq` của dòng outbox cuối cùng consumer cũ đã xử lý xong. Tên khoá và ngữ nghĩa giá trị lấy đúng từ consumer cũ — cơ chế phát bù đọc lại chính khoá đó, không dựng khoá song song.
  */
 const LEGACY_WATERMARK_KEY_PREFIX = 'giaokhoa:messaging:notifications:';
 /** Số dòng tồn đọng tối đa đọc trong một lô phát bù — cùng cỡ lô quét của consumer cũ. */
 const DRAIN_BATCH_SIZE = 100;
 /**
- * Nhịp chờ đầu tiên trước lần thử phát bù kế tiếp khi một lần
- * thử bị lỗi — cùng quy ước backoff mũ của hàng đợi trong hệ
+ * Nhịp chờ đầu tiên trước lần thử phát bù kế tiếp khi một lần thử bị lỗi — cùng quy ước backoff mũ của hàng đợi trong hệ
  * (`defaultJobOptions` ở `worker.module.ts`: backoff
  * exponential, delay 1000 ms).
  */
@@ -131,10 +125,7 @@ export class NotificationEventsCatchupService implements OnModuleInit, OnModuleD
     this.redis = new Redis({
       ...redisConnectionFromUrl(config.getOrThrow<string>('REDIS_URL')),
     });
-    // Dựng khoá đúng cách consumer polling cũ dựng: tên database
-    // là path của DATABASE_URL bỏ dấu gạch đầu; không parse được
-    // thì dùng tên mặc định — cả hai phía cùng một luật nên khoá
-    // luôn gặp nhau.
+    // Dựng khoá đúng cách consumer polling cũ dựng: tên database là path của DATABASE_URL bỏ dấu gạch đầu; không parse được thì dùng tên mặc định — cả hai phía cùng một luật nên khoá luôn gặp nhau.
     let databaseName = 'default';
     try {
       databaseName = new URL(config.getOrThrow<string>('DATABASE_URL')).pathname.replace(/^\//, '') || 'default';

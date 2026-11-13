@@ -45,18 +45,9 @@ export async function loader({ request }: { request: Request }): Promise<SsrLoad
 }
 
 /**
- * Trang huy hiệu: "huy hiệu của tôi" (từ GET /badges/mine — server tự suy
- * người dùng từ phiên đăng nhập, không còn endpoint theo userId) hiện cho
- * mọi người dùng; panel quản trị (tạo badge, đặt tiêu chí, kích hoạt qua
- * POST /badges/:id/status, xem danh sách đã cấp của một badge qua
- * GET /badges/:id/issued) chỉ render khi usePermissions().canAdminister.
- * Tiêu chí của huy hiệu đang hoạt động bị đóng băng phía server; panel
- * chỉ hiển thị kết quả từ chối đó.
+ * Trang huy hiệu: "huy hiệu của tôi" (từ GET /badges/mine — server tự suy người dùng từ phiên đăng nhập, không còn endpoint theo userId) hiện cho mọi người dùng; panel quản trị (tạo badge, đặt tiêu chí, kích hoạt qua POST /badges/:id/status, xem danh sách đã cấp của một badge qua GET /badges/:id/issued) chỉ render khi usePermissions().canAdminister. Tiêu chí của huy hiệu đang hoạt động bị đóng băng phía server; panel chỉ hiển thị kết quả từ chối đó.
  *
- * Dữ liệu qua TanStack Query (lib/badges.ts, F-01): hai danh sách là hai
- * query dùng chung cache với mọi bề mặt huy hiệu khác; các đột biến của
- * panel quản trị làm mới cả ba truy vấn (mọi huy hiệu / của tôi / đã cấp)
- * qua tiền tố khoá factory thay vì nạp lại cục bộ như trước. Từ lát SL-1
+ * Dữ liệu qua TanStack Query (lib/badges.ts, F-01): hai danh sách là hai query dùng chung cache với mọi bề mặt huy hiệu khác; các đột biến của panel quản trị làm mới cả ba truy vấn (mọi huy hiệu / của tôi / đã cấp) qua tiền tố khoá factory thay vì nạp lại cục bộ như trước. Từ lát SL-1
  * (#7), loader của route prefetch hai danh sách phía server (khi có
  * cookie phiên) và trang hydrate từ cache thay vì fetch lại khi mở.
  */

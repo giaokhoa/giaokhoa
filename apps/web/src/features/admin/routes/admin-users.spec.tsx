@@ -6,17 +6,7 @@ import { TestProviders } from '#test/providers';
 import { AdminUsersPage } from '../components/admin-users';
 
 /**
- * Spec đợt trình bày của trang danh sách người dùng (issue #561) trên
- * hợp đồng của đợt 1 (issue #560): bốn thẻ thống kê đếm thật theo
- * trạng thái, thanh công cụ một thẻ hai hàng (tìm kiếm, lọc trạng
- * thái, lọc vai trò ở ngữ cảnh hệ thống, cỡ trang 10/25/50/100), cột
- * Vai trò bày theo mô hình gán theo ngữ cảnh (vai tại hệ thống + số
- * gán ở ngữ cảnh khác + liên kết sang trang vai trò lọc theo người
- * dùng), sắp xếp phía server theo hợp đồng, chân bảng khoảng dòng và
- * hộp thoại xác nhận xoá dựng bằng component Dialog thay cho
- * `window.confirm`. Mọi lọc/sắp xếp/phân trang đều kiểm chứng qua
- * tham số thật của các lời gọi API đã ghi lại, không qua trạng thái
- * nội bộ của component.
+ * Spec đợt trình bày của trang danh sách người dùng (issue #561) trên hợp đồng của đợt 1 (issue #560): bốn thẻ thống kê đếm thật theo trạng thái, thanh công cụ một thẻ hai hàng (tìm kiếm, lọc trạng thái, lọc vai trò ở ngữ cảnh hệ thống, cỡ trang 10/25/50/100), cột Vai trò bày theo mô hình gán theo ngữ cảnh (vai tại hệ thống + số gán ở ngữ cảnh khác + liên kết sang trang vai trò lọc theo người dùng), sắp xếp phía server theo hợp đồng, chân bảng khoảng dòng và hộp thoại xác nhận xoá dựng bằng component Dialog thay cho `window.confirm`. Mọi lọc/sắp xếp/phân trang đều kiểm chứng qua tham số thật của các lời gọi API đã ghi lại, không qua trạng thái nội bộ của component.
  */
 const SYSTEM_CONTEXT_ID = '01900000-0000-7000-8000-000000000010';
 const TENANT_CONTEXT_ID = '01900000-0000-7000-8000-000000000020';
@@ -139,10 +129,7 @@ function stubFetch(calls: RecordedCall[], users: FixtureUser[], assignments = FI
         return !u.deleted;
       });
       if (search !== '') {
-        // Ngữ nghĩa tìm kiếm của bộ giả lập khớp API thật: ilike riêng
-        // từng trường, khớp khi BẤT KỲ trường nào chứa từ khoá — không
-        // ghép các trường thành một chuỗi (chuỗi ghép sẽ khớp cả truy
-        // vấn xuyên trường mà API thật không khớp).
+        // Ngữ nghĩa tìm kiếm của bộ giả lập khớp API thật: ilike riêng từng trường, khớp khi BẤT KỲ trường nào chứa từ khoá — không ghép các trường thành một chuỗi (chuỗi ghép sẽ khớp cả truy vấn xuyên trường mà API thật không khớp).
         filtered = filtered.filter((u) => {
           const fields = [u.username, u.firstName, u.lastName, `${u.firstName} ${u.lastName}`, u.email ?? ''];
           return fields.some((field) => field.toLowerCase().includes(search));

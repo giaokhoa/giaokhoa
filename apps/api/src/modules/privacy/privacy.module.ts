@@ -13,8 +13,7 @@ import { PrivacyService } from './privacy.service';
   imports: [AccessModule, FilesModule, UsersModule, SpaceRoutingModule],
   controllers: [PrivacyController],
   providers: [
-    // Repository của package @giaokhoa/db chạy trên handle Kysely đã định
-    // tuyến theo không gian (issue #648).
+    // Repository của package @giaokhoa/db chạy trên handle Kysely đã định tuyến theo không gian (issue #648).
     {
       provide: PrivacyRepository,
       useFactory: (spaceDatabase: SpaceDatabaseService) => new PrivacyRepository(spaceDatabase.routedKysely),

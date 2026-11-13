@@ -17,8 +17,7 @@ import { queryClient } from '#lib/query-client';
 type CourseModuleView = CourseContent['sections'][number]['modules'][number];
 
 /**
- * Module có cho phép đánh dấu thủ công hay không — khớp đúng điều kiện
- * phía server (completion.service markManual): tracking phải bật
+ * Module có cho phép đánh dấu thủ công hay không — khớp đúng điều kiện phía server (completion.service markManual): tracking phải bật
  * (completion ≠ 0) và module dùng hoàn thành thủ công
  * (completionManual hoặc completion = 1).
  */
@@ -29,25 +28,13 @@ function allowsManualCompletion(cm: CourseModuleView): boolean {
 /**
  * Trang khoá học: người đã ghi danh đang hoạt động thấy nội dung
  * (section + module kèm availability) như trước, kèm nút tự đánh dấu
- * hoàn thành thủ công cho các module cho phép. Người chưa ghi danh không
- * còn ăn lỗi "access denied" trơ trọi: trang tải độc lập thông tin khoá,
- * danh sách enrol instance và ghi danh của tôi, rồi hiện panel ghi danh
- * với các instance self/fee đang bật (status = 0 là đang bật theo schema
- * enrol; manual/cohort/guest bị bỏ qua vì không phải đường tự ghi danh).
- * Instance fee KHÔNG tự ghi danh trực tiếp — chỉ tạo payment qua
- * POST /payments/fee/:instanceId; ghi danh chỉ kích hoạt khi cổng thanh
- * toán xác nhận qua webhook phía server.
+ * hoàn thành thủ công cho các module cho phép. Người chưa ghi danh không còn ăn lỗi "access denied" trơ trọi: trang tải độc lập thông tin khoá, danh sách enrol instance và ghi danh của tôi, rồi hiện panel ghi danh với các instance self/fee đang bật (status = 0 là đang bật theo schema enrol; manual/cohort/guest bị bỏ qua vì không phải đường tự ghi danh). Instance fee KHÔNG tự ghi danh trực tiếp — chỉ tạo payment qua POST /payments/fee/:instanceId; ghi danh chỉ kích hoạt khi cổng thanh toán xác nhận qua webhook phía server.
  */
 export function CoursePage() {
   const { t } = useTranslation('app');
   const { id } = useParams();
   const navigate = useNavigate();
-  // Dữ liệu trang qua TanStack (F-01 đợt 1): clientLoader đã prefetch
-  // gói trang + thanh toán của tôi vào cùng khoá factory trước khi
-  // mount; các hành động ghi danh/thanh toán/đánh dấu hoàn thành đi qua
-  // mutation — thành công tự invalidate đúng query thay cho nạp lại
-  // thủ công. Gói trang vẫn tải từng endpoint độc lập (lỗi một đầu
-  // không sập cả trang) đúng nhịp thủ công trước đây.
+  // Dữ liệu trang qua TanStack (F-01 đợt 1): clientLoader đã prefetch gói trang + thanh toán của tôi vào cùng khoá factory trước khi mount; các hành động ghi danh/thanh toán/đánh dấu hoàn thành đi qua mutation — thành công tự invalidate đúng query thay cho nạp lại thủ công. Gói trang vẫn tải từng endpoint độc lập (lỗi một đầu không sập cả trang) đúng nhịp thủ công trước đây.
   const pageQuery = useCoursePage(id);
   const page = pageQuery.data;
   const course = page?.course ?? null;
@@ -74,9 +61,7 @@ export function CoursePage() {
   const [completionError, setCompletionError] = useState<string | null>(null);
 
   /**
-   * Mở chat toàn lớp của khoá: GET ensure conversation cấp khoá phía
-   * messaging (cấp phát lười phía server) rồi điều hướng sang trang Tin
-   * nhắn mở đúng conversation qua deep-link `?conversation=` sẵn có.
+   * Mở chat toàn lớp của khoá: GET ensure conversation cấp khoá phía messaging (cấp phát lười phía server) rồi điều hướng sang trang Tin nhắn mở đúng conversation qua deep-link `?conversation=` sẵn có.
    */
   async function openClassChat() {
     setChatBusy(true);

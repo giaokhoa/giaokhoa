@@ -23,8 +23,7 @@ import {
 } from '@giaokhoa/contracts';
 
 /**
- * Validation của Access (contexts/roles/assignments) dùng Zod qua Standard
- * Schema — schema nền ở `@giaokhoa/contracts` là nguồn sự thật duy nhất.
+ * Validation của Access (contexts/roles/assignments) dùng Zod qua Standard Schema — schema nền ở `@giaokhoa/contracts` là nguồn sự thật duy nhất.
  */
 export { assignRoleSchema, capabilityMatrixQuerySchema, createContextSchema, createRoleSchema, overrideCapabilitySchema, replaceRoleCapabilitiesSchema, updateRoleSchema };
 export type CreateContextDto = CreateContext;
@@ -36,12 +35,9 @@ export type ReplaceRoleCapabilitiesDto = ReplaceRoleCapabilities;
 export type CapabilityMatrixQueryDto = CapabilityMatrixQuery;
 
 /**
- * Schema phía server cho query liệt kê gán vai — EXTEND từ schema nền ở
- * contracts: query string luôn là chuỗi nên `page`/`pageSize` ép kiểu
- * bằng `z.coerce` ở tầng server và nhận giá trị mặc định khi vắng mặt
+ * Schema phía server cho query liệt kê gán vai — EXTEND từ schema nền ở contracts: query string luôn là chuỗi nên `page`/`pageSize` ép kiểu bằng `z.coerce` ở tầng server và nhận giá trị mặc định khi vắng mặt
  * (trang 1, 20 dòng mỗi trang, trần 100 dòng), còn `search` được cắt
- * khoảng trắng hai đầu và chuỗi rỗng sau khi cắt coi như không tìm kiếm.
- * Schema nền vẫn giữ kiểu số cho bề mặt dùng chung.
+ * khoảng trắng hai đầu và chuỗi rỗng sau khi cắt coi như không tìm kiếm. Schema nền vẫn giữ kiểu số cho bề mặt dùng chung.
  */
 export const listAssignmentsQueryServerSchema = listAssignmentsQuerySchema.extend({
   search: z.string().trim().transform((value) => (value === '' ? undefined : value)).optional(),
@@ -52,11 +48,8 @@ export type ListAssignmentsQueryDto = z.infer<typeof listAssignmentsQueryServerS
 export type ListAssignmentsFilter = Pick<ListAssignmentsQuery, 'userId' | 'contextId' | 'roleId' | 'search'>;
 
 /**
- * Schema phía server cho query liệt kê người dùng kèm gán vai — EXTEND từ
- * schema nền ở contracts theo đúng khuôn của query liệt kê gán vai:
- * `page`/`pageSize` ép kiểu bằng `z.coerce` và nhận mặc định (trang 1, 20
- * người mỗi trang, trần 100), `search` cắt khoảng trắng hai đầu và chuỗi
- * rỗng sau khi cắt coi như không tìm kiếm. Các trường lọc còn lại
+ * Schema phía server cho query liệt kê người dùng kèm gán vai — EXTEND từ schema nền ở contracts theo đúng khuôn của query liệt kê gán vai:
+ * `page`/`pageSize` ép kiểu bằng `z.coerce` và nhận mặc định (trang 1, 20 người mỗi trang, trần 100), `search` cắt khoảng trắng hai đầu và chuỗi rỗng sau khi cắt coi như không tìm kiếm. Các trường lọc còn lại
  * (`roleId`, `status`) giữ nguyên validation của schema nền — status
  * ngoài tập đóng bị chặn ở đây trước khi vào tầng service.
  */
@@ -69,9 +62,7 @@ export type ListUsersWithAssignmentsQueryDto = z.infer<typeof listUsersWithAssig
 export type ListUsersWithAssignmentsFilter = Pick<ListUsersWithAssignmentsQuery, 'search' | 'roleId' | 'status'>;
 
 /**
- * Schema phía server cho query kiểm tra quyền — EXTEND từ schema nền ở
- * contracts: query string luôn là chuỗi nên `userId`/`contextId` ép kiểu bằng
- * `z.coerce` ở tầng server, schema nền vẫn giữ kiểu số cho bề mặt dùng chung.
+ * Schema phía server cho query kiểm tra quyền — EXTEND từ schema nền ở contracts: query string luôn là chuỗi nên `userId`/`contextId` ép kiểu bằng `z.coerce` ở tầng server, schema nền vẫn giữ kiểu số cho bề mặt dùng chung.
  */
 export const hasCapabilityQueryServerSchema = hasCapabilityQuerySchema.extend({
   userId: uuidIdSchema,

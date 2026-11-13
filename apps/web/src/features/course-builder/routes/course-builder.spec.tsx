@@ -8,13 +8,7 @@ import { PermissionsProvider } from '#lib/permissions';
 import { CourseBuilderPage } from './course-builder';
 
 /**
- * Spec Builder Outline (K1 — issue #68): trang xây dựng khoá học
- * riêng `/courses/:id/builder` tách khỏi trang quản trị gộp. Hai
- * describe đầu di trú nguyên vẹn từ course-admin.spec (tiêu chí hoàn
- * thành + thao tác section/module cơ bản) khi khối builder được tách
- * trang; describe cuối kiểm các thao tác outline mới của K1: đổi thứ
- * tự bằng nút lên/xuống, nhân bản tại dòng, thêm nội dung bằng menu
- * chọn loại và trạng thái Mở theo lịch qua trường ngày mở riêng.
+ * Spec Builder Outline (K1 — issue #68): trang xây dựng khoá học riêng `/courses/:id/builder` tách khỏi trang quản trị gộp. Hai describe đầu di trú nguyên vẹn từ course-admin.spec (tiêu chí hoàn thành + thao tác section/module cơ bản) khi khối builder được tách trang; describe cuối kiểm các thao tác outline mới của K1: đổi thứ tự bằng nút lên/xuống, nhân bản tại dòng, thêm nội dung bằng menu chọn loại và trạng thái Mở theo lịch qua trường ngày mở riêng.
  */
 const TEACHER_ID = '01900000-0000-7000-8000-0000000000a2';
 const COURSE_ID = '01900000-0000-7000-8000-000000000010';

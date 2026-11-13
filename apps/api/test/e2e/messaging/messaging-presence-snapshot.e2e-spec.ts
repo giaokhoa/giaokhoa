@@ -8,23 +8,14 @@ import {
 } from '../../support/identity-access-helpers';
 
 /**
- * Đường đọc presence tại thời điểm nối socket (sự kiện
- * `presence.snapshot`, bổ sung trên PR #610): sự kiện
- * `presence.changed` chỉ phát khi trạng thái THAY ĐỔI, nên người đã
- * trực tuyến TRƯỚC khi người xem mở trang không phát sinh sự kiện
- * nào và người xem không bao giờ học được họ đang trực tuyến — đây
- * là kịch bản đã làm vòng nghiệm thu trình duyệt của PR #610 trượt ở
- * panel thành viên và đầu khung 1–1. Kịch bản kiểm chứng:
+ * Đường đọc presence tại thời điểm nối socket (sự kiện `presence.snapshot`, bổ sung trên PR #610): sự kiện `presence.changed` chỉ phát khi trạng thái THAY ĐỔI, nên người đã trực tuyến TRƯỚC khi người xem mở trang không phát sinh sự kiện nào và người xem không bao giờ học được họ đang trực tuyến — đây là kịch bản đã làm vòng nghiệm thu trình duyệt của PR #610 trượt ở panel thành viên và đầu khung 1–1. Kịch bản kiểm chứng:
  *
  * - B (thành viên nhóm chung) nối socket TRƯỚC và presence đã ghi
  *   trong Redis; A nối SAU thì ảnh chụp A nhận được vẫn chứa B.
  * - C (không có hội thoại chung nào với A) cũng đang trực tuyến
- *   nhưng KHÔNG xuất hiện trong ảnh chụp của A — presence không lộ
- *   ra ngoài quan hệ hội thoại chung; ảnh chụp của chính C cũng
- *   không chứa B.
+ *   nhưng KHÔNG xuất hiện trong ảnh chụp của A — presence không lộ ra ngoài quan hệ hội thoại chung; ảnh chụp của chính C cũng không chứa B.
  * - D là phía bên kia của hội thoại 1–1 mà A đã chặn: D đang trực
- *   tuyến nhưng bị loại khỏi ảnh chụp của A (cùng luật nhìn thấy với
- *   sự kiện presence.changed và các bề mặt định danh).
+ *   tuyến nhưng bị loại khỏi ảnh chụp của A (cùng luật nhìn thấy với sự kiện presence.changed và các bề mặt định danh).
  * - E là thành viên nhóm chung nhưng không nối socket (ngoại tuyến)
  *   và chính A: cả hai đều vắng mặt trong ảnh chụp.
  *
@@ -111,8 +102,7 @@ describe('Messaging — ảnh chụp presence lúc nối socket (PR #610)', () =
     d = await person('Dung', 'BlockedPeer');
     e = await person('Em', 'OfflineMember');
 
-    // Nhóm chung (type 2) của A, B, E — admin tạo hộ vì cổng lập
-    // nhóm tự do chỉ cho staff/admin (mẫu của spec ẩn-khi-chặn).
+    // Nhóm chung (type 2) của A, B, E — admin tạo hộ vì cổng lập nhóm tự do chỉ cho staff/admin (mẫu của spec ẩn-khi-chặn).
     const admin = await adminToken(app);
     const group = await http(app).post('/api/v1/messages/conversations')
       .set('Authorization', `Bearer ${admin}`).send({ type: 2, memberIds: [a.id, b.id, e.id], name: 'Nhóm ảnh chụp presence' });

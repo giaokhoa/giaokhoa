@@ -2,11 +2,7 @@ import { apiJson } from '#lib/api';
 import type { GlobalSearchDoc } from '#lib/search-target';
 
 /**
- * Tầng gọi API thuần của tìm kiếm toàn cục thuộc feature
- * platform: chỉ chứa hàm gọi HTTP, không phụ thuộc React hay
- * React Query. Tầng `queries/` của feature bọc hàm này thành
- * queryOptions. Tách từ module phẳng `src/lib/search-data.ts`
- * khi tổ chức lại apps/web theo mô hình features/ (issue #500).
+ * Tầng gọi API thuần của tìm kiếm toàn cục thuộc feature platform: chỉ chứa hàm gọi HTTP, không phụ thuộc React hay React Query. Tầng `queries/` của feature bọc hàm này thành queryOptions. Tách từ module phẳng `src/lib/search-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
 
 /**

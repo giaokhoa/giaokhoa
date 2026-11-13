@@ -25,10 +25,7 @@ import { TaskLogService } from '../task-log.service';
 import { tenantAls } from '../db/tenant-als';
 
 /**
- * Danh sách cột đọc của một dòng `enrol` mà processor này nạp —
- * đúng hình dạng `EnrolRow` của `@giaokhoa/db`, dùng chung cho lượt đọc
- * các instance cohort của lớp: bí danh camelCase tường minh theo
- * khuôn danh sách cột của `@giaokhoa/db`.
+ * Danh sách cột đọc của một dòng `enrol` mà processor này nạp — đúng hình dạng `EnrolRow` của `@giaokhoa/db`, dùng chung cho lượt đọc các instance cohort của lớp: bí danh camelCase tường minh theo khuôn danh sách cột của `@giaokhoa/db`.
  */
 const ENROL_COLUMNS = [
   'id',
@@ -54,10 +51,7 @@ const ENROL_COLUMNS = [
 ] as const;
 
 /**
- * Danh sách cột đọc của một dòng `user_enrolments` mà kế hoạch
- * đối soát cần: định danh, instance, người dùng, trạng thái và
- * vết người thao tác (phân biệt đình chỉ thủ công với đình chỉ
- * của đồng bộ hệ thống).
+ * Danh sách cột đọc của một dòng `user_enrolments` mà kế hoạch đối soát cần: định danh, instance, người dùng, trạng thái và vết người thao tác (phân biệt đình chỉ thủ công với đình chỉ của đồng bộ hệ thống).
  */
 const USER_ENROLMENT_PLAN_COLUMNS = [
   'id',
@@ -107,28 +101,12 @@ interface PlannedFix {
 }
 
 /**
- * Đối soát ghi danh cấp lớp (issue #184, CLASS-0 — vá bền vững #2 của hồ
- * sơ lớp học): nguồn sự thật là `cohort_members` của backing cohort;
- * ghi danh cấp khoá trên các instance cohort của lớp là bản vật chất
- * hoá. Job quét mọi lớp `active`, so hai phía và sửa theo hướng nguồn
- * sự thật: thiếu → ghi danh (kèm gán vai theo instance + group "cả
- * lớp" + sự kiện outbox như đường API), thừa → áp chế độ rời lớp của
- * instance (`suspend` mặc định / `unenrol` → withdrawn + gỡ vai do
- * instance cấp), ghi danh ACTIVE thiếu gán vai của instance → cấp bổ
- * sung (lấp đúng lỗ hổng gán vai nằm ngoài transaction ở enrolUserInternal).
+ * Đối soát ghi danh cấp lớp (issue #184, CLASS-0 — vá bền vững #2 của hồ sơ lớp học): nguồn sự thật là `cohort_members` của backing cohort; ghi danh cấp khoá trên các instance cohort của lớp là bản vật chất hoá. Job quét mọi lớp `active`, so hai phía và sửa theo hướng nguồn sự thật: thiếu → ghi danh (kèm gán vai theo instance + group "cả lớp" + sự kiện outbox như đường API), thừa → áp chế độ rời lớp của instance (`suspend` mặc định / `unenrol` → withdrawn + gỡ vai do instance cấp), ghi danh ACTIVE thiếu gán vai của instance → cấp bổ sung (lấp đúng lỗ hổng gán vai nằm ngoài transaction ở enrolUserInternal).
  *
  * LUẬT CỨNG — tôn trọng đình chỉ thủ công theo khoá (ca "miễn môn"):
- * một UE đang SUSPENDED mang `modifier_id` của một NGƯỜI (vết do
- * `EnrolService.setSuspended` ghi) là quyết định thủ công của giáo
- * viên tại khoá đó — job KHÔNG bao giờ tự kích hoạt lại. Chỉ UE bị
- * đình chỉ bởi đồng bộ hệ thống (modifier_id = null, vết do đường
- * cohort-removed ghi) mới được kích hoạt lại khi user quay về roster.
+ * một UE đang SUSPENDED mang `modifier_id` của một NGƯỜI (vết do `EnrolService.setSuspended` ghi) là quyết định thủ công của giáo viên tại khoá đó — job KHÔNG bao giờ tự kích hoạt lại. Chỉ UE bị đình chỉ bởi đồng bộ hệ thống (modifier_id = null, vết do đường cohort-removed ghi) mới được kích hoạt lại khi user quay về roster.
  *
- * Chống sửa sai diện rộng: kế hoạch sửa của một lớp vượt quá
- * RECONCILE_MAX_FIX_RATIO của quy mô đối chiếu (và quá
- * RECONCILE_MIN_FIX_ALLOWANCE việc) thì lớp đó bị bỏ qua lượt này và
- * ghi vào kết quả để người vận hành kiểm tra — nguồn sự thật bị thao
- * tác lỗi không được phép kéo theo sửa hàng loạt. Job idempotent:
+ * Chống sửa sai diện rộng: kế hoạch sửa của một lớp vượt quá RECONCILE_MAX_FIX_RATIO của quy mô đối chiếu (và quá RECONCILE_MIN_FIX_ALLOWANCE việc) thì lớp đó bị bỏ qua lượt này và ghi vào kết quả để người vận hành kiểm tra — nguồn sự thật bị thao tác lỗi không được phép kéo theo sửa hàng loạt. Job idempotent:
  * chạy lại trên trạng thái đã khớp là không sửa gì.
  */
 @Processor('class-enrol-reconcile')
@@ -158,8 +136,7 @@ export class ClassEnrolReconcileProcessor extends WorkerHost {
    */
   async process(_job: Job): Promise<ClassEnrolReconcileResult> {
     void _job;
-    // Ngữ cảnh platform cho lượt quét xuyên tenant — thiếu lớp bọc này
-    // là toàn bộ job mù dữ liệu vì RLS (xem @remarks ở trên).
+    // Ngữ cảnh platform cho lượt quét xuyên tenant — thiếu lớp bọc này là toàn bộ job mù dữ liệu vì RLS (xem @remarks ở trên).
     return tenantAls.run({ platform: true }, () => this.processInContext());
   }
 

@@ -4,31 +4,15 @@
  * `compose.yaml`, service `migrate`), TRƯỚC bước áp migration:
  *
  * 1. Đọc đích từ `MIGRATION_DATABASE_URL` (role migration + database
- *    nghiệp vụ) và `RUNTIME_DATABASE_URL` (role runtime + cùng
- *    database) — hai URL phải trỏ cùng một database và hai role
- *    phải khác nhau, lệch là cấu hình sai và dừng ngay.
+ *    nghiệp vụ) và `RUNTIME_DATABASE_URL` (role runtime + cùng database) — hai URL phải trỏ cùng một database và hai role phải khác nhau, lệch là cấu hình sai và dừng ngay.
  * 2. Kết nối quản trị của cụm lấy từ `DATABASE_ADMIN_URL` (dự phòng
- *    `DATABASE_URL` cho các môi trường chưa tách biến): đảm bảo hai
- *    role tồn tại ở tư thế tối thiểu, database thuộc sở hữu của
- *    role migration, và quyền kết nối vào database chỉ thuộc hai
- *    role đó (thu hồi PUBLIC).
+ *    `DATABASE_URL` cho các môi trường chưa tách biến): đảm bảo hai role tồn tại ở tư thế tối thiểu, database thuộc sở hữu của role migration, và quyền kết nối vào database chỉ thuộc hai role đó (thu hồi PUBLIC).
  * 3. Kết nối quản trị vào CHÍNH database nghiệp vụ: chuyển từng
- *    đối tượng đang thuộc sở hữu của role quản trị (di sản của
- *    thời migration chạy bằng role quản trị) sang role migration
- *    theo liệt kê từng lớp đối tượng (xem
- *    `buildOwnershipTransferQuery` trong `runtime-roles.ts` — cơ
- *    chế `REASSIGN OWNED` không dùng được với superuser gốc), rồi
- *    cấp cho role runtime bộ quyền dữ liệu tối thiểu kèm quyền mặc
- *    định cho đối tượng migration tạo về sau.
+ *    đối tượng đang thuộc sở hữu của role quản trị (di sản của thời migration chạy bằng role quản trị) sang role migration theo liệt kê từng lớp đối tượng (xem `buildOwnershipTransferQuery` trong `runtime-roles.ts` — cơ chế `REASSIGN OWNED` không dùng được với superuser gốc), rồi cấp cho role runtime bộ quyền dữ liệu tối thiểu kèm quyền mặc định cho đối tượng migration tạo về sau.
  *
- * Mọi bước đều idempotent: chạy lại ở mỗi lần stack khởi động là an
- * toàn. Chưa cấu hình `MIGRATION_DATABASE_URL` hoặc
- * `RUNTIME_DATABASE_URL` thì bỏ qua lặng lẽ (thoát 0) để các môi
- * trường chưa tách role (CI kiểm chứng, chạy local bằng một URL
- * duy nhất) không gãy — đúng khuôn của `control-plane-setup.ts`.
+ * Mọi bước đều idempotent: chạy lại ở mỗi lần stack khởi động là an toàn. Chưa cấu hình `MIGRATION_DATABASE_URL` hoặc `RUNTIME_DATABASE_URL` thì bỏ qua lặng lẽ (thoát 0) để các môi trường chưa tách role (CI kiểm chứng, chạy local bằng một URL duy nhất) không gãy — đúng khuôn của `control-plane-setup.ts`.
  *
- * Mật khẩu chỉ đi từ biến môi trường vào câu lệnh SQL qua kết nối
- * quản trị nội bộ; script không in URL hay mật khẩu ra log.
+ * Mật khẩu chỉ đi từ biến môi trường vào câu lệnh SQL qua kết nối quản trị nội bộ; script không in URL hay mật khẩu ra log.
  */
 import { Client } from 'pg';
 import { quoteIdentifier } from '../control-plane/control-plane-provision';

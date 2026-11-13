@@ -1,47 +1,21 @@
 /**
- * Bước ensure cho phần delta schema của issue #583 (chương trình
- * tenant #579) — ba bảng riêng của trung tâm trong kho nghiệp vụ
+ * Bước ensure cho phần delta schema của issue #583 (chương trình tenant #579) — ba bảng riêng của trung tâm trong kho nghiệp vụ
  * (`centre_identity`, `centre_invites`, `program_package_installs`)
- * kèm index, khoá ngoại và policy RLS, cộng chỉ mục unique từng
- * phần của sổ đăng ký trong kho control plane.
+ * kèm index, khoá ngoại và policy RLS, cộng chỉ mục unique từng phần của sổ đăng ký trong kho control plane.
  *
- * Vì sao cần bước này thay vì chỉ trông vào migration: phần delta
- * được gộp thêm vào CUỐI các file migration ĐÃ PHÁT HÀNH (baseline
- * nghiệp vụ và migration control plane đã có), mà bộ máy
- * migration chỉ áp các thư mục chưa có tên trong bảng theo dõi nên
- * sẽ bỏ qua lặng lẽ phần gộp thêm trên database đã có. Không có
- * bước ensure, sau merge api phục vụ endpoint mới trong khi các
- * bảng còn thiếu (lỗi 500) và health check vẫn xanh vì nó không
- * chạm các bảng này.
+ * Vì sao cần bước này thay vì chỉ trông vào migration: phần delta được gộp thêm vào CUỐI các file migration ĐÃ PHÁT HÀNH (baseline nghiệp vụ và migration control plane đã có), mà bộ máy migration chỉ áp các thư mục chưa có tên trong bảng theo dõi nên sẽ bỏ qua lặng lẽ phần gộp thêm trên database đã có. Không có bước ensure, sau merge api phục vụ endpoint mới trong khi các bảng còn thiếu (lỗi 500) và health check vẫn xanh vì nó không chạm các bảng này.
  *
- * Luồng: với mỗi đối tượng trong delta, kiểm tra sự tồn tại trong
- * `pg_catalog` rồi chỉ tạo đúng đối tượng còn thiếu, trong MỘT
- * transaction cho mỗi kho. Database đã áp baseline MỚI (đủ delta)
- * thì bước này là no-op thật (chỉ đọc kiểm tra, báo cáo `created`
- * rỗng). Database đã áp baseline CŨ thì sau bước này có đủ delta
- * đúng định nghĩa của baseline (cùng tên bảng/cột/ràng buộc/index/
- * policy) — baseline vẫn là nguồn sự thật duy nhất cho database
- * mới, bước này chỉ lấp khoảng trống triển khai cho database đã có.
+ * Luồng: với mỗi đối tượng trong delta, kiểm tra sự tồn tại trong `pg_catalog` rồi chỉ tạo đúng đối tượng còn thiếu, trong MỘT transaction cho mỗi kho. Database đã áp baseline MỚI (đủ delta) thì bước này là no-op thật (chỉ đọc kiểm tra, báo cáo `created` rỗng). Database đã áp baseline CŨ thì sau bước này có đủ delta đúng định nghĩa của baseline (cùng tên bảng/cột/ràng buộc/index/ policy) — baseline vẫn là nguồn sự thật duy nhất cho database mới, bước này chỉ lấp khoảng trống triển khai cho database đã có.
  *
- * Tiền điều kiện: kho nghiệp vụ và kho control plane đều đã áp
- * baseline/migration của chúng (cũ hoặc mới). Bước này KHÔNG thay
- * bộ migration: database trống vẫn phải chạy runner migration của
- * package (`@giaokhoa/db/dist/migrate/run.js`) trước (nó tạo mọi bảng
- * kể cả delta).
+ * Tiền điều kiện: kho nghiệp vụ và kho control plane đều đã áp baseline/migration của chúng (cũ hoặc mới). Bước này KHÔNG thay bộ migration: database trống vẫn phải chạy runner migration của package (`@giaokhoa/db/dist/migrate/run.js`) trước (nó tạo mọi bảng kể cả delta).
  *
- * Nối dây: chuỗi migrate của stack (`compose.yaml`, service
- * `migrate`) chạy script này SAU hai lượt migrate của runner
+ * Nối dây: chuỗi migrate của stack (`compose.yaml`, service `migrate`) chạy script này SAU hai lượt migrate của runner
  * (kho nghiệp vụ rồi kho control plane) và TRƯỚC khi api/worker
  * khởi động. Script đọc `DATABASE_URL`
  * (kho nghiệp vụ, bắt buộc) và `CONTROL_PLANE_DATABASE_URL` (kho
- * control plane — vắng thì bỏ qua phần control plane kèm dòng log,
- * theo cùng cách script cấp phát control plane bỏ qua khi chưa cấu
- * hình).
+ * control plane — vắng thì bỏ qua phần control plane kèm dòng log, theo cùng cách script cấp phát control plane bỏ qua khi chưa cấu hình).
  *
- * Phạm vi: chỉ kho nghiệp vụ CHUNG (`DATABASE_URL`) và kho control
- * plane. Kho riêng của trung tâm tạo SAU bản này nhận đủ delta ngay
- * từ bước migration của pipeline cấp phát; kho riêng tạo trước (nếu
- * có) thuộc phạm vi di trú của issue #587, không thuộc bước này.
+ * Phạm vi: chỉ kho nghiệp vụ CHUNG (`DATABASE_URL`) và kho control plane. Kho riêng của trung tâm tạo SAU bản này nhận đủ delta ngay từ bước migration của pipeline cấp phát; kho riêng tạo trước (nếu có) thuộc phạm vi di trú của issue #587, không thuộc bước này.
  */
 
 import { Client } from 'pg';

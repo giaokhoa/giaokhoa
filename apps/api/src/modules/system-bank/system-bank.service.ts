@@ -1,39 +1,20 @@
 /**
- * Service của kho ngân hàng hệ thống (issue #585): bản chính tập trung
- * của Ngân hàng câu hỏi hệ thống trên database riêng phía platform.
+ * Service của kho ngân hàng hệ thống (issue #585): bản chính tập trung của Ngân hàng câu hỏi hệ thống trên database riêng phía platform.
  *
  * Luồng nghiệp vụ chính:
  * - Phát hành (quản trị platform): tạo câu kèm phiên bản đầu tiên,
- *   hoặc tạo phiên bản mới cho câu đã có — mỗi phiên bản mang gói tự
- *   đủ + checksum SHA-256 do server tự tính trên dạng chuẩn hoá của
- *   gói; nội dung phiên bản cũ không bao giờ bị ghi đè. Liên kết YCCĐ
- *   trong gói là ẢNH CHỤP tại thời điểm phát hành (bảng liên kết của
- *   kho nghiệp vụ gắn theo câu, không theo version): sửa liên kết mà
- *   không phát hành version mới thì gói cũ không đổi — muốn làm mới
- *   gói thì phát hành version mới.
+ *   hoặc tạo phiên bản mới cho câu đã có — mỗi phiên bản mang gói tự đủ + checksum SHA-256 do server tự tính trên dạng chuẩn hoá của gói; nội dung phiên bản cũ không bao giờ bị ghi đè. Liên kết YCCĐ trong gói là ẢNH CHỤP tại thời điểm phát hành (bảng liên kết của kho nghiệp vụ gắn theo câu, không theo version): sửa liên kết mà không phát hành version mới thì gói cũ không đổi — muốn làm mới gói thì phát hành version mới.
  * - Kiểm chứng gói theo dạng câu ở mức thô (không lặp lại toàn bộ
- *   chuẩn hoá sâu của module câu hỏi — kiểm chứng Tiptap sâu xảy ra
- *   ở lúc nhập vào kho trung tâm qua `QuestionsService`):
- *   multichoice đúng 4 lựa chọn + đúng 1 đáp án đúng; truefalse TF-A
- *   không mang dòng đáp án; shortanswer ít nhất 1 đáp án và mọi dòng
- *   đều là đáp án được chấp nhận; essay không mang dòng đáp án.
+ *   chuẩn hoá sâu của module câu hỏi — kiểm chứng Tiptap sâu xảy ra ở lúc nhập vào kho trung tâm qua `QuestionsService`):
+ *   multichoice đúng 4 lựa chọn + đúng 1 đáp án đúng; truefalse TF-A không mang dòng đáp án; shortanswer ít nhất 1 đáp án và mọi dòng đều là đáp án được chấp nhận; essay không mang dòng đáp án.
  * - Rút câu (quản trị platform): đổi metadata trạng thái của câu
- *   thành `withdrawn` (tách khỏi nội dung phiên bản — các phiên bản cũ
- *   vẫn đọc lại nguyên vẹn), ghi sự kiện `question_withdrawn` vào
- *   nhật ký append-only, và trả về danh sách slug các trung tâm đã
- *   nhập câu để tầng trên phát thông báo (kênh sự kiện platform).
+ *   thành `withdrawn` (tách khỏi nội dung phiên bản — các phiên bản cũ vẫn đọc lại nguyên vẹn), ghi sự kiện `question_withdrawn` vào nhật ký append-only, và trả về danh sách slug các trung tâm đã nhập câu để tầng trên phát thông báo (kênh sự kiện platform).
  * - Đọc: câu + từng phiên bản + phiên bản mới nhất, kèm checksum để
- *   phía nhập kiểm chứng trước khi ghi bản chụp. Vì gói chứa đáp án
- *   và khoá đáp án, đường đọc nội dung gói đi qua cổng người xem
- *   `question:useall` tại context hệ thống (xem
- *   `assertPackageViewer`) — khác đường khám phá chỉ trả metadata.
+ *   phía nhập kiểm chứng trước khi ghi bản chụp. Vì gói chứa đáp án và khoá đáp án, đường đọc nội dung gói đi qua cổng người xem `question:useall` tại context hệ thống (xem `assertPackageViewer`) — khác đường khám phá chỉ trả metadata.
  *
  * Mọi thao tác đều cần kho ngân hàng đã cấu hình
  * (`SYSTEM_BANK_DATABASE_URL`); chưa cấu hình thì repository ném
- * `system_bank.not_configured` (503). Mọi thao tác ghi gác bằng
- * capability quản trị platform hiện hữu (`tenant:manage` tại context
- * hệ thống — site admin vượt qua cổng này theo lối tắt của evaluator);
- * tầng này không sinh capability mới.
+ * `system_bank.not_configured` (503). Mọi thao tác ghi gác bằng capability quản trị platform hiện hữu (`tenant:manage` tại context hệ thống — site admin vượt qua cổng này theo lối tắt của evaluator); tầng này không sinh capability mới.
  */
 import { createHash } from 'node:crypto';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
@@ -58,10 +39,7 @@ import type {
 } from './dto/system-bank.dto';
 
 /**
- * Bóc lỗi vi phạm unique của PostgreSQL (23505): qua Kysely lỗi pg
- * ném THÔ — `code` nằm trực tiếp trên lỗi, không có `cause`; helper
- * vẫn duyệt cả chuỗi `cause` (vòng đầu kiểm chính lỗi được ném) để
- * tương thích các đường lỗi còn bọc qua bộ máy cũ ở tầng khác.
+ * Bóc lỗi vi phạm unique của PostgreSQL (23505): qua Kysely lỗi pg ném THÔ — `code` nằm trực tiếp trên lỗi, không có `cause`; helper vẫn duyệt cả chuỗi `cause` (vòng đầu kiểm chính lỗi được ném) để tương thích các đường lỗi còn bọc qua bộ máy cũ ở tầng khác.
  */
 function isUniqueViolation(err: unknown): boolean {
   let e: unknown = err;
@@ -93,9 +71,7 @@ export class SystemBankService {
   }
 
   /**
-   * Gác quản trị platform: chỉ người giữ `tenant:manage` tại context
-   * hệ thống mới được phát hành/rút câu — cùng helper với bề mặt quản
-   * trị tenant và control plane hiện hữu.
+   * Gác quản trị platform: chỉ người giữ `tenant:manage` tại context hệ thống mới được phát hành/rút câu — cùng helper với bề mặt quản trị tenant và control plane hiện hữu.
    */
   private async assertPlatformManager(actorId: string): Promise<void> {
     const systemId = (await this.contexts.ensureSystemContext()).id;
@@ -103,16 +79,9 @@ export class SystemBankService {
   }
 
   /**
-   * Gác người xem cho các đường đọc NỘI DUNG GÓI (câu + từng phiên
-   * bản): gói mang đáp án và khoá đáp án nên đường đọc đi qua cổng
-   * người xem `question:useall` theo chuẩn cổng đọc câu hỏi của hệ
+   * Gác người xem cho các đường đọc NỘI DUNG GÓI (câu + từng phiên bản): gói mang đáp án và khoá đáp án nên đường đọc đi qua cổng người xem `question:useall` theo chuẩn cổng đọc câu hỏi của hệ
    * (issue #55). Ngữ cảnh gác là context HỆ THỐNG — câu hệ thống là
-   * nội dung platform, không thuộc category hay ngữ cảnh của bất kỳ
-   * trung tâm nào (cùng ngữ cảnh mà đường phát hành gác bằng
-   * `tenant:manage` ở trên). Không có quyền thì trả 404
-   * `system_bank.question_not_found` như câu không tồn tại: không lộ
-   * sự tồn tại của câu lẫn gói cho người không được xem (học sinh,
-   * phụ huynh không có `question:useall` trong registry capability).
+   * nội dung platform, không thuộc category hay ngữ cảnh của bất kỳ trung tâm nào (cùng ngữ cảnh mà đường phát hành gác bằng `tenant:manage` ở trên). Không có quyền thì trả 404 `system_bank.question_not_found` như câu không tồn tại: không lộ sự tồn tại của câu lẫn gói cho người không được xem (học sinh, phụ huynh không có `question:useall` trong registry capability).
    */
   private async assertPackageViewer(actorId: string, questionId: string): Promise<void> {
     const systemId = (await this.contexts.ensureSystemContext()).id;

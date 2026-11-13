@@ -28,11 +28,7 @@ export class UsersController {
   @Get()
   @RequireCapability('user:viewdetails')
   /**
-   * GET /users — tìm kiếm/phân trang tài khoản (user:viewdetails), kèm lọc
-   * theo trạng thái (đang hoạt động/bị đình chỉ/đã xoá) và sắp xếp theo
-   * tên/ngày tạo/lần đăng nhập gần nhất theo hợp đồng truy vấn; không truyền
-   * tham số mới thì giữ hành vi mặc định vốn có (ẩn tài khoản đã xoá, thứ tự
-   * theo id).
+   * GET /users — tìm kiếm/phân trang tài khoản (user:viewdetails), kèm lọc theo trạng thái (đang hoạt động/bị đình chỉ/đã xoá) và sắp xếp theo tên/ngày tạo/lần đăng nhập gần nhất theo hợp đồng truy vấn; không truyền tham số mới thì giữ hành vi mặc định vốn có (ẩn tài khoản đã xoá, thứ tự theo id).
    */
   async list(@Query({ schema: listUsersQueryServerSchema }) query: ListUsersQueryDto, @CurrentUser() viewer: AuthenticatedUser) {
     const result = await this.users.listUsers(query.search, query.page ?? 1, query.pageSize ?? 20, {
@@ -40,8 +36,7 @@ export class UsersController {
       sortBy: query.sortBy,
       sortDirection: query.sortDirection,
     });
-    // View của cả trang lắp MỘT lần theo lô (DL-07, issue #489) thay
-    // vì gọi getProfileView lặp cho từng user.
+    // View của cả trang lắp MỘT lần theo lô (DL-07, issue #489) thay vì gọi getProfileView lặp cho từng user.
     const views = await this.users.getProfileViews(result.users, viewer.id);
     return { users: views, total: result.total, page: result.page, pageSize: result.pageSize };
   }
@@ -55,9 +50,7 @@ export class UsersController {
   @Get('me/capabilities')
   /**
    * GET /users/me/capabilities — quyền của chính người đang đăng nhập:
-   * cờ site admin, các gán vai trò theo context và capability đã phân
-   * giải tại các context liên quan. Chỉ trả dữ liệu của người gọi (không
-   * nhận tham số user), không cần capability quản trị.
+   * cờ site admin, các gán vai trò theo context và capability đã phân giải tại các context liên quan. Chỉ trả dữ liệu của người gọi (không nhận tham số user), không cần capability quản trị.
    */
   async myCapabilities(@CurrentUser() viewer: AuthenticatedUser) {
     return this.users.getMyAccess(viewer.id, { isGuest: viewer.username === 'guest' });
@@ -74,11 +67,7 @@ export class UsersController {
 
   @Patch(':id')
   /**
-   * PATCH /users/:id — cập nhật hồ sơ. Định danh người sửa được
-   * truyền xuống service để chốt chặn trường `password` ở trường
-   * hợp tự sửa (tự đổi mật khẩu chỉ qua luồng đổi mật khẩu có tái
-   * xác thực) và để thu hồi phiên của tài khoản đích khi mật khẩu
-   * bị đặt qua đường này.
+   * PATCH /users/:id — cập nhật hồ sơ. Định danh người sửa được truyền xuống service để chốt chặn trường `password` ở trường hợp tự sửa (tự đổi mật khẩu chỉ qua luồng đổi mật khẩu có tái xác thực) và để thu hồi phiên của tài khoản đích khi mật khẩu bị đặt qua đường này.
    */
   async update(@Param('id', { schema: uuidIdSchema }) id: string, @Body({ schema: updateUserSchema }) dto: UpdateUserDto, @CurrentUser() actor: AuthenticatedUser) {
     await this.users.assertCanUpdateProfile(actor.id, id);
@@ -98,10 +87,7 @@ export class UsersController {
   @Post(':id/reactivate')
   @RequireCapability('user:update')
   /**
-   * POST /users/:id/reactivate — khôi phục tài khoản. Động từ chuẩn
-   * của cặp đối nghĩa đình chỉ là `suspend`/`reactivate` theo danh
-   * sách hành động đóng (issue #345); path cũ `:id/unsuspend` giữ qua
-   * handler alias ngay dưới.
+   * POST /users/:id/reactivate — khôi phục tài khoản. Động từ chuẩn của cặp đối nghĩa đình chỉ là `suspend`/`reactivate` theo danh sách hành động đóng (issue #345); path cũ `:id/unsuspend` giữ qua handler alias ngay dưới.
    */
   async reactivate(@Param('id', { schema: uuidIdSchema }) id: string) {
     const user = await this.users.setSuspended(id, false);
@@ -112,10 +98,7 @@ export class UsersController {
   @UseInterceptors(DeprecatedRouteAliasInterceptor)
   /**
    * POST /users/:id/unsuspend — alias cũ của POST /users/:id/reactivate:
-   * uỷ quyền nguyên vẹn cho handler canonical (cùng cổng capability
-   * `user:update`); response mang header Deprecation/Sunset và lượt
-   * gọi được ghi log alias có cấu trúc (căn cứ điều kiện gỡ alias: 0
-   * lượt gọi trong 14 ngày).
+   * uỷ quyền nguyên vẹn cho handler canonical (cùng cổng capability `user:update`); response mang header Deprecation/Sunset và lượt gọi được ghi log alias có cấu trúc (căn cứ điều kiện gỡ alias: 0 lượt gọi trong 14 ngày).
    */
   async unsuspend(@Param('id', { schema: uuidIdSchema }) id: string) {
     return this.reactivate(id);

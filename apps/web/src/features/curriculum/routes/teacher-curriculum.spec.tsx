@@ -6,11 +6,7 @@ import { TeacherCurriculumPage } from './teacher-curriculum';
 
 /**
  * Spec trang xem chương trình của GIÁO VIÊN (issue #161, lát T2):
- * bảng chương trình theo mẫu Bộ (Mạch nội dung | Nội dung | Yêu cầu
- * cần đạt) đọc qua ngữ cảnh khoá giáo viên dạy (`forCourseId` trên
- * mọi lời gọi curriculum), chế độ chỉ xem (không nút Sửa/Xoá/Thêm),
- * YCCĐ nhiều dòng giữ cấu trúc dòng (điểm T3), và 403 hiện thông báo
- * giải thích đúng trường hợp thay vì trang trắng.
+ * bảng chương trình theo mẫu Bộ (Mạch nội dung | Nội dung | Yêu cầu cần đạt) đọc qua ngữ cảnh khoá giáo viên dạy (`forCourseId` trên mọi lời gọi curriculum), chế độ chỉ xem (không nút Sửa/Xoá/Thêm), YCCĐ nhiều dòng giữ cấu trúc dòng (điểm T3), và 403 hiện thông báo giải thích đúng trường hợp thay vì trang trắng.
  */
 
 const SUBJECT = { id: 'subj-toan', contextId: 'ctx-sys', name: 'Toán', slug: 'toan', position: 1 };
@@ -87,8 +83,7 @@ interface RecordedCall {
  * - 'forbidden-with-course': có khoá nhưng API trả 403 (khoá không cấp quyền xem).
  * - 'no-course': không có khoá nào và đọc trực tiếp cũng 403.
  * - 'contexts-forbidden': danh sách context trả 403 nhưng các bước
- *   môn/chương trình/cây qua nhánh khoá vẫn qua — trang phải xem được
- *   chương trình thay vì báo cấm (điểm nghẽn D-3 của issue #233).
+ *   môn/chương trình/cây qua nhánh khoá vẫn qua — trang phải xem được chương trình thay vì báo cấm (điểm nghẽn D-3 của issue #233).
  */
 function stubFetch(calls: RecordedCall[], mode: 'ok' | 'forbidden-with-course' | 'no-course' | 'contexts-forbidden' = 'ok') {
   vi.stubGlobal(
@@ -126,8 +121,7 @@ function renderPage() {
   const router = createMemoryRouter([{ path: '/curriculum', element: <TeacherCurriculumPage /> }], {
     initialEntries: ['/curriculum'],
   });
-  // Trang đọc dữ liệu qua TanStack Query (F-01 của #133) nên render
-  // trong TestProviders như mọi spec trang đã chuyển khuôn.
+  // Trang đọc dữ liệu qua TanStack Query (F-01 của #133) nên render trong TestProviders như mọi spec trang đã chuyển khuôn.
   render(
     <TestProviders>
       <RouterProvider router={router} />

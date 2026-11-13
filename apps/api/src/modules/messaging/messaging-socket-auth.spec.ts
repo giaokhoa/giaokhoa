@@ -5,25 +5,16 @@ import { tenantAls } from '../tenants/tenant-als';
 import { MessagingSocketAuth } from './messaging-socket-auth';
 
 /**
- * GĐ5 (issue #7): gateway realtime xác thực hai đường, cookie phiên
- * Better Auth TRƯỚC, access token JWT làm đường dự phòng.
+ * GĐ5 (issue #7): gateway realtime xác thực hai đường, cookie phiên Better Auth TRƯỚC, access token JWT làm đường dự phòng.
  *
  * - Cookie hợp lệ (cờ bật, phiên dùng được, tài khoản còn active) →
- *   danh tính chốt ở cookie, tenant = tenant mặc định của user (phiên
- *   cookie không mang claim `tid` như JWT).
+ *   danh tính chốt ở cookie, tenant = tenant mặc định của user (phiên cookie không mang claim `tid` như JWT).
  * - Cookie không dùng được (cờ tắt, hỏng chữ ký, hết hạn, tài khoản
- *   bị khoá) → KHÔNG từ chối ngay mà rơi xuống đường token, đúng
- *   semantics của BetterAuthSessionGuard phía HTTP.
+ *   bị khoá) → KHÔNG từ chối ngay mà rơi xuống đường token, đúng semantics của BetterAuthSessionGuard phía HTTP.
  * - Đường token giữ nguyên luật cũ: chỉ access token đăng nhập (không
- *   scope, có sid), tài khoản còn active; token có scope/thiếu sid/
- *   sai chữ ký → null, gateway ngắt kết nối.
+ *   scope, có sid), tài khoản còn active; token có scope/thiếu sid/ sai chữ ký → null, gateway ngắt kết nối.
  *
- * Tiền điều kiện Phần B (issue #587, hạng mục 1): handshake tại địa
- * chỉ của trung tâm ở kho riêng thì MỌI lượt đọc danh tính phải chạy
- * trong kho của trung tâm đó. Các ca của khối này dùng một đầu dò
- * ghi lại từng lượt đọc có nằm trong `withSpaceKysely` hay không
- * và store ALS tại thời điểm đọc — gỡ bước phân giải không gian (đọc
- * thẳng như đường kho chung) là các khẳng định về đầu dò đỏ ngay.
+ * Tiền điều kiện Phần B (issue #587, hạng mục 1): handshake tại địa chỉ của trung tâm ở kho riêng thì MỌI lượt đọc danh tính phải chạy trong kho của trung tâm đó. Các ca của khối này dùng một đầu dò ghi lại từng lượt đọc có nằm trong `withSpaceKysely` hay không và store ALS tại thời điểm đọc — gỡ bước phân giải không gian (đọc thẳng như đường kho chung) là các khẳng định về đầu dò đỏ ngay.
  */
 describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
   const SECRET = 'test-jwt-secret-gd5';
@@ -44,9 +35,7 @@ describe('MessagingSocketAuth — dual auth cookie + token (GĐ5)', () => {
     publicApiUrl?: string | null;
     environment?: 'production' | 'development' | 'test';
   } = {}) {
-    // Đầu dò phạm vi kho: `insideSpace` bật trong lúc callback của
-    // `withSpaceKysely` chạy; mọi lượt đọc của các fake ghi lại
-    // trạng thái đầu dò tại thời điểm đọc, kèm store ALS thật.
+    // Đầu dò phạm vi kho: `insideSpace` bật trong lúc callback của `withSpaceKysely` chạy; mọi lượt đọc của các fake ghi lại trạng thái đầu dò tại thời điểm đọc, kèm store ALS thật.
     const probe = {
       insideSpace: false,
       reads: [] as { kind: string; insideSpace: boolean }[],

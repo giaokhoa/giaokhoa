@@ -5,13 +5,9 @@ import { createTestApp, http, login, uniqueName } from '../../support/identity-a
 import { createCategory, createClass, createCourse } from '../../support/course-enrolment-helpers';
 
 /**
- * Điều kiện cứng ở cửa sổ đóng gói CLASS-0 (PR #200, phán quyết độc lập
- * 6398586445 mục 4): khoá dạy thật PHẢI thuộc đúng một lớp. Spec này là
- * bản LẬT KỲ VỌNG của spec tái hiện của đội đánh giá
+ * Điều kiện cứng ở cửa sổ đóng gói CLASS-0 (PR #200, phán quyết độc lập 6398586445 mục 4): khoá dạy thật PHẢI thuộc đúng một lớp. Spec này là bản LẬT KỲ VỌNG của spec tái hiện của đội đánh giá
  * (review200-classless-course.e2e-spec.ts — ba ca từng tạo thành công
- * khoá không lớp ở head a9b4152): sau khi siết, mọi đường tạo khoá dạy
- * thật không lớp đều bị từ chối sạch 400 `course.class_required` ở tầng
- * service, và CHECK `course_class_required_check` gác ở tầng DB.
+ * khoá không lớp ở head a9b4152): sau khi siết, mọi đường tạo khoá dạy thật không lớp đều bị từ chối sạch 400 `course.class_required` ở tầng service, và CHECK `course_class_required_check` gác ở tầng DB.
  *
  * Các đường được phủ:
  *  (1) POST /courses không kèm classId;

@@ -8,22 +8,15 @@ import { adminToken, createTestApp, createUserViaApi, http, login, STRONG_PASSWO
  *
  * Tiêu chí kiểm chứng theo issue + comment Bước 0:
  *  - GET /notifications là danh sách GỘP theo (loại × nguồn × ngày)
- *    kèm count/unreadCount, phân trang con trỏ không trùng/khuyết —
- *    không còn request tải toàn bộ lịch sử (đáp ứng dạng phong bì
+ *    kèm count/unreadCount, phân trang con trỏ không trùng/khuyết — không còn request tải toàn bộ lịch sử (đáp ứng dạng phong bì
  *    { items, nextCursor } thay cho mảng phẳng cũ).
  *  - Một đợt nhiều thông báo cùng loại × nguồn × ngày (mẫu "chấm
- *    điểm cả lớp": 30 thông báo điểm của một khoá trong một ngày)
- *    chỉ thành MỘT dòng gộp, mở ra xem đủ từng mục qua
- *    GET /notifications/items.
+ *    điểm cả lớp": 30 thông báo điểm của một khoá trong một ngày) chỉ thành MỘT dòng gộp, mở ra xem đủ từng mục qua GET /notifications/items.
  *  - Lọc theo 3 nhóm (learning/people/system) và theo chưa đọc.
  *  - read-group đánh dấu đã đọc hàng loạt theo khoá gộp; xoá từng
- *    mục (của người khác → 404 không lộ tồn tại); clear-read chỉ dọn
- *    mục đã đọc.
+ *    mục (của người khác → 404 không lộ tồn tại); clear-read chỉ dọn mục đã đọc.
  *
- * Dữ liệu được gieo thẳng vào bảng notifications qua pg để kiểm soát
- * tất định thời điểm tạo (khoá ngày) — đường phát thông báo thật từ
- * sự kiện nghiệp vụ đã được spec của N1 (notifications-providers-flow)
- * kiểm chứng riêng.
+ * Dữ liệu được gieo thẳng vào bảng notifications qua pg để kiểm soát tất định thời điểm tạo (khoá ngày) — đường phát thông báo thật từ sự kiện nghiệp vụ đã được spec của N1 (notifications-providers-flow) kiểm chứng riêng.
  */
 describe('Trung tâm thông báo v2 (N2, issue #51)', () => {
   let app: INestApplication;
@@ -36,10 +29,7 @@ describe('Trung tâm thông báo v2 (N2, issue #51)', () => {
     admin = await adminToken(app);
     pg = new Client({ connectionString: process.env.DATABASE_URL });
     await pg.connect();
-    // TENANT-1 (#196): thông báo gieo thẳng phải mang tenant của người
-    // nhận (user tạo qua API thuộc tenant platform) — dòng không gắn
-    // tenant chỉ hiển thị ở ngữ cảnh platform tường minh, không thuộc
-    // phiên tenant của user.
+    // TENANT-1 (#196): thông báo gieo thẳng phải mang tenant của người nhận (user tạo qua API thuộc tenant platform) — dòng không gắn tenant chỉ hiển thị ở ngữ cảnh platform tường minh, không thuộc phiên tenant của user.
     const t = await pg.query<{ id: string }>(`select id from tenants where kind = 'platform'`);
     platformTenantId = t.rows[0]!.id;
   });

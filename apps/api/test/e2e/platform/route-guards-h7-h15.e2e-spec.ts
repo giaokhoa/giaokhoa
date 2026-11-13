@@ -11,20 +11,8 @@ import { addExamSlot, createExamDraft, createReadyQuestion, pinExam } from '../.
 import { courseContextId } from '../../support/engagement-helpers';
 
 /**
- * Vá đợt 4 của rà soát gác quyền #134 (H7–H15): các đường ĐỌC bị sót gác.
- * Mỗi cụm có ca âm (user thường/ngoài khoá bị chặn: 403, riêng cohort +
- * privacy là 404 như không tồn tại, catalogue/list là bị lọc khỏi danh
- * sách) và ca dương (chủ thể / người có capability / người trong khoá
- * chạy như cũ):
- *  H7  backup jobs: đọc đòi backup:backupcourse|restorecourse tại context khoá/system.
- *  H8  usercomp + evidence: chỉ chủ thể hoặc holder planview/usercompetencyreview.
- *  H9  danh sách quiz của khoá: qua cổng truy cập khoá (slots là cấu trúc đề).
- *  H10 cohorts: đòi cohort:view/manage tại context của cohort.
- *  H11 calendar subscriptions: chỉ của chính chủ.
- *  H12 catalogue: khoá/category ẩn chỉ hiện với holder course:viewhiddencourses.
- *  H13 badges evaluate/evaluate-user: chỉ chủ thể hoặc holder badges:awardbadge.
- *  H14 cấu trúc theo khoá (assignments, completion criteria, grades, links): cổng truy cập khoá.
- *  H15 privacy requests: chủ thể/người gửi/privacy:manage; reports metadata: reportbuilder:manage.
+ * Vá đợt 4 của rà soát gác quyền #134 (H7–H15): các đường ĐỌC bị sót gác. Mỗi cụm có ca âm (user thường/ngoài khoá bị chặn: 403, riêng cohort + privacy là 404 như không tồn tại, catalogue/list là bị lọc khỏi danh sách) và ca dương (chủ thể / người có capability / người trong khoá chạy như cũ):
+ *  H7  backup jobs: đọc đòi backup:backupcourse|restorecourse tại context khoá/system. H8  usercomp + evidence: chỉ chủ thể hoặc holder planview/usercompetencyreview. H9  danh sách quiz của khoá: qua cổng truy cập khoá (slots là cấu trúc đề). H10 cohorts: đòi cohort:view/manage tại context của cohort. H11 calendar subscriptions: chỉ của chính chủ. H12 catalogue: khoá/category ẩn chỉ hiện với holder course:viewhiddencourses. H13 badges evaluate/evaluate-user: chỉ chủ thể hoặc holder badges:awardbadge. H14 cấu trúc theo khoá (assignments, completion criteria, grades, links): cổng truy cập khoá. H15 privacy requests: chủ thể/người gửi/privacy:manage; reports metadata: reportbuilder:manage.
  */
 describe('Route guards đợt 4 (H7–H15, #134)', () => {
   let app: INestApplication;

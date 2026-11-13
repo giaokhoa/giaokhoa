@@ -7,19 +7,9 @@ import {
 import { createCategory, createCourse, createEnrolInstance, enrolUser } from '../../support/course-enrolment-helpers';
 
 /**
- * Luồng Enrol + Groups/Cohort.
- * Oracle: enrol/tests/enrollib_test.php (test_user_enrolment_created_event,
- * test_enrol_get_my_courses_only_enrolled_courses, ngữ nghĩa đình chỉ từ
- * lib/tests/enrollib trong báo cáo §2#5), group/tests/lib_test.php
+ * Luồng Enrol + Groups/Cohort. Oracle: enrol/tests/enrollib_test.php (test_user_enrolment_created_event, test_enrol_get_my_courses_only_enrolled_courses, ngữ nghĩa đình chỉ từ lib/tests/enrollib trong báo cáo §2#5), group/tests/lib_test.php
  * (test_member_added_event, test_groups_delete_groupings_groups,
- * tư cách thành viên nhóm), hành vi đồng bộ cohort từ ngữ nghĩa của plugin enrol_cohort
- * như mô tả trong báo cáo §2#6.
- * Oracle Behat (đợt business-gaps): enrol/self/tests/behat/
- * self_enrolment.feature ("Self-enrolment enabled requiring an enrolment
- * key", "...requiring a group enrolment key", "Self unenrol as a
- * self-enrolled student"), các kịch bản welcome-message của enrol/self + enrol/manual
- * , enrol/cohort/tests/behat/enrolcohorts.feature ("Editing a
- * cohort enrolment method's role should change participants' role").
+ * tư cách thành viên nhóm), hành vi đồng bộ cohort từ ngữ nghĩa của plugin enrol_cohort như mô tả trong báo cáo §2#6. Oracle Behat (đợt business-gaps): enrol/self/tests/behat/ self_enrolment.feature ("Self-enrolment enabled requiring an enrolment key", "...requiring a group enrolment key", "Self unenrol as a self-enrolled student"), các kịch bản welcome-message của enrol/self + enrol/manual , enrol/cohort/tests/behat/enrolcohorts.feature ("Editing a cohort enrolment method's role should change participants' role").
  */
 describe('Ghi danh và nhóm/cohort', () => {
   let app: INestApplication;

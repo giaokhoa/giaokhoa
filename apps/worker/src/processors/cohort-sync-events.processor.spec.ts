@@ -8,11 +8,7 @@ import { CohortSyncEventsProcessor } from './cohort-sync-events.processor';
 /**
  * Đặc tả hoá điều phối của consumer đồng bộ cohort trên hàng đợi
  * (issue con #528 của #519) — chạy processor THẬT với host bề mặt
- * giả đếm số lần gọi. Các khẳng định đều là hệ quả quan sát được
- * của điều phối: gọi đúng điểm vào vật chất hoá theo `type` của
- * job, bỏ qua lặng loại lạ và payload sai hình dạng, và để lỗi của
- * bề mặt nổi lên cho BullMQ thử lại (bề mặt an toàn khi thử lại
- * nhờ transaction + guard trạng thái).
+ * giả đếm số lần gọi. Các khẳng định đều là hệ quả quan sát được của điều phối: gọi đúng điểm vào vật chất hoá theo `type` của job, bỏ qua lặng loại lạ và payload sai hình dạng, và để lỗi của bề mặt nổi lên cho BullMQ thử lại (bề mặt an toàn khi thử lại nhờ transaction + guard trạng thái).
  */
 class FakeCohortSync {
   readonly addedCalls: Array<{ cohortId: string; userId: string }> = [];
@@ -56,9 +52,7 @@ function makeJob(partial: Partial<OutboxEventJobData> = {}) {
 /**
  * Bộ chạy job THẬT với khung định tuyến không có sổ phía sau
  * (issue #582): các job của spec này không mang slug trung tâm
- * nên bộ chạy luôn mở ngữ cảnh platform như đường xử lý trước
- * đợt này — spec khoá hành vi của processor, không khoá định
- * tuyến kho (định tuyến có spec riêng của bộ chạy và của relay).
+ * nên bộ chạy luôn mở ngữ cảnh platform như đường xử lý trước đợt này — spec khoá hành vi của processor, không khoá định tuyến kho (định tuyến có spec riêng của bộ chạy và của relay).
  */
 function makeJobRunner(): SpaceJobRunner {
   return new SpaceJobRunner({

@@ -7,20 +7,12 @@ import {
 } from '@giaokhoa/ui/components/select';
 
 /**
- * Ô chọn dùng chung của các bề mặt vai trò & quyền trong feature
- * admin, dựng trên component Select thật của `@giaokhoa/ui` (Base UI) —
- * thay toàn bộ `<select>` native trước đây: nút mở mang viền,
- * `shadow-xs`, chevron và danh sách xổ dạng popover có style đúng
- * khuôn Select của bản demo mẫu, thay vì mũi tên và danh sách xổ
- * native của hệ điều hành.
+ * Ô chọn dùng chung của các bề mặt vai trò & quyền trong feature admin, dựng trên component Select thật của `@giaokhoa/ui` (Base UI) — thay toàn bộ `<select>` native trước đây: nút mở mang viền, `shadow-xs`, chevron và danh sách xổ dạng popover có style đúng khuôn Select của bản demo mẫu, thay vì mũi tên và danh sách xổ native của hệ điều hành.
  *
- * Hai thích ứng với API của Base UI, gói gọn trong component này để
- * mọi bề mặt gọi không phải tự xử lý:
+ * Hai thích ứng với API của Base UI, gói gọn trong component này để mọi bề mặt gọi không phải tự xử lý:
  *
  * - Giá trị rỗng `''` (lựa chọn "Tất cả" của các bộ lọc, lựa chọn
- *   giữ chỗ "Chọn…" của các hộp thoại) không phải giá trị hợp lệ
- *   của Select nên được ánh xạ qua một giá trị đại diện nội bộ khi
- *   ra vào component; bề mặt gọi chỉ thấy `''` như trước.
+ *   giữ chỗ "Chọn…" của các hộp thoại) không phải giá trị hợp lệ của Select nên được ánh xạ qua một giá trị đại diện nội bộ khi ra vào component; bề mặt gọi chỉ thấy `''` như trước.
  * - Nhãn của lựa chọn đang chọn lấy từ bảng `items` (giá trị →
  *   nhãn) để nút mở hiện nhãn dạng chữ thay vì giá trị kỹ thuật.
  */

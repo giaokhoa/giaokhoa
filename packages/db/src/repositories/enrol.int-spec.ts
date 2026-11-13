@@ -8,17 +8,13 @@ import { EnrolRepository } from './enrol';
 /**
  * Spec tích hợp của repository ghi danh trên Kysely (issue #645).
  *
- * Database trung tâm dựng từ rỗng bằng chính cầu nối migration
- * của package trên cụm PostgreSQL thật của môi trường test. Mọi
- * ca chạy qua repository production ở `enrol.ts` — không mô
- * phỏng handle.
+ * Database trung tâm dựng từ rỗng bằng chính cầu nối migration của package trên cụm PostgreSQL thật của môi trường test. Mọi ca chạy qua repository production ở `enrol.ts` — không mô phỏng handle.
  *
  * Các tính chất chốt tại đây:
  * - Insert instance/ghi danh không truyền id nhận id UUIDv7 do
  *   database sinh (phụ lục U) và đọc lại nguyên vẹn.
  * - Giao dịch của repository nguyên tử cho đường tự mở giao
- *   dịch của `setSuspended`/`expireEnrolments`: cập nhật trong
- *   giao dịch rồi huỷ thì trạng thái dòng không đổi.
+ *   dịch của `setSuspended`/`expireEnrolments`: cập nhật trong giao dịch rồi huỷ thì trạng thái dòng không đổi.
  * - Patch cập nhật loại `undefined` tường minh (T-4): trường
  *   không nhắc tới giữ nguyên giá trị.
  * - `listExpiredActive` giữ đúng hợp đồng lọc tại bộ nhớ của

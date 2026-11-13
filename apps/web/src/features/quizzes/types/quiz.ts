@@ -6,12 +6,7 @@ import type {
 } from '@giaokhoa/contracts';
 
 /**
- * Kiểu dữ liệu của trang lần ghim đề và trang làm bài thuộc
- * feature quizzes. Tách từ module dữ liệu phẳng
- * `src/lib/quiz-data.ts` khi tổ chức lại apps/web theo mô hình
- * features/ (issue #500): kiểu nằm ở tầng types/, lời gọi API
- * thuần ở tầng api/, tuỳ chọn truy vấn và đột biến ở tầng
- * queries/.
+ * Kiểu dữ liệu của trang lần ghim đề và trang làm bài thuộc feature quizzes. Tách từ module dữ liệu phẳng `src/lib/quiz-data.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500): kiểu nằm ở tầng types/, lời gọi API thuần ở tầng api/, tuỳ chọn truy vấn và đột biến ở tầng queries/.
  */
 
 /** Hình dạng trả về của GET /exam-pins/:id (trang thông tin theo người xem). */
@@ -50,16 +45,10 @@ export interface ExamSourceInfo {
 }
 
 /**
- * Một câu trong lượt làm như GET /quiz-attempts/:id trả về (nội dung
- * của version đã pin).
+ * Một câu trong lượt làm như GET /quiz-attempts/:id trả về (nội dung của version đã pin).
  *
  * Hai trường phía đáp án do lát P3 cấp theo mô hình giaokhoa:
- * `guidance` là HƯỚNG DẪN (gợi ý cách làm — hiện kèm câu hỏi ngay
- * trong lúc làm theo điểm quyết D-4, không qua cổng xem lại);
- * `solution` là đáp án đúng dạng cấu trúc, API chỉ trả khi cổng
- * `reviewRightAnswer` của lần ghim cho phép tại cửa sổ xem lại —
- * ngoài cửa sổ đó trường này là `null`. Câu hỏi không còn trường
- * tên: `questionExcerpt` là trích đoạn nội dung thân câu.
+ * `guidance` là HƯỚNG DẪN (gợi ý cách làm — hiện kèm câu hỏi ngay trong lúc làm theo điểm quyết D-4, không qua cổng xem lại); `solution` là đáp án đúng dạng cấu trúc, API chỉ trả khi cổng `reviewRightAnswer` của lần ghim cho phép tại cửa sổ xem lại — ngoài cửa sổ đó trường này là `null`. Câu hỏi không còn trường tên: `questionExcerpt` là trích đoạn nội dung thân câu.
  */
 export interface AttemptQuestion {
   slot: number;

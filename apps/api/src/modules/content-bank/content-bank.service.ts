@@ -69,16 +69,7 @@ export interface SpaceView {
 }
 
 /**
- * ContentBankModule facade — Kho học liệu (CB-1, issue #69).
- * Trên khung Content Bank sẵn có (bảng/API/Files): học liệu mang metadata
- * chương trình (môn–khối–node–YCCĐ) + loại học liệu, sống trong một không
- * gian (cá nhân / tổ chuyên môn qua cohort / toàn trường) và học liệu chia
- * sẻ phải qua duyệt của tổ trưởng (`contentbank:reviewcontent` +
- * `cohort:manage` tại context của tổ; cấp trường là reviewcontent tại
- * context hệ thống) mới hiện với đồng nghiệp. Học liệu chưa duyệt KHÔNG hiện ở
- * scope tổ/trường với người ngoài (chỉ tác giả + người duyệt thấy).
- * Ngân hàng câu hỏi là kho TÁCH RIÊNG: loại `question_set` chỉ THAM CHIẾU
- * category của ngân hàng câu hỏi, không chứa bản sao câu hỏi.
+ * ContentBankModule facade — Kho học liệu (CB-1, issue #69). Trên khung Content Bank sẵn có (bảng/API/Files): học liệu mang metadata chương trình (môn–khối–node–YCCĐ) + loại học liệu, sống trong một không gian (cá nhân / tổ chuyên môn qua cohort / toàn trường) và học liệu chia sẻ phải qua duyệt của tổ trưởng (`contentbank:reviewcontent` + `cohort:manage` tại context của tổ; cấp trường là reviewcontent tại context hệ thống) mới hiện với đồng nghiệp. Học liệu chưa duyệt KHÔNG hiện ở scope tổ/trường với người ngoài (chỉ tác giả + người duyệt thấy). Ngân hàng câu hỏi là kho TÁCH RIÊNG: loại `question_set` chỉ THAM CHIẾU category của ngân hàng câu hỏi, không chứa bản sao câu hỏi.
  */
 @Injectable()
 export class ContentBankService {

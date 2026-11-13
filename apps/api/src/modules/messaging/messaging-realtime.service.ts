@@ -19,24 +19,11 @@ const TYPING_TTL_SECONDS = 4;
 /**
  * Tầng realtime PHÍA KẾT NỐI của messaging (issue #33, chặng A1/A2).
  *
- * Chỉ nơi này chạm vào Socket.IO server tại tiến trình API: gateway
- * lo xác thực + room theo kết nối, service này giữ adapter Redis,
- * presence/typing (sống trong Redis — tạm thời, KHÔNG xuống
- * Postgres; DB vẫn là nguồn sự thật duy nhất cho tin nhắn và mốc đã
- * đọc) và hai thao tác room theo lệnh nghiệp vụ (đẩy socket của
- * thành viên bị gỡ, nối lại room 1–1 sau bỏ chặn).
+ * Chỉ nơi này chạm vào Socket.IO server tại tiến trình API: gateway lo xác thực + room theo kết nối, service này giữ adapter Redis, presence/typing (sống trong Redis — tạm thời, KHÔNG xuống Postgres; DB vẫn là nguồn sự thật duy nhất cho tin nhắn và mốc đã đọc) và hai thao tác room theo lệnh nghiệp vụ (đẩy socket của thành viên bị gỡ, nối lại room 1–1 sau bỏ chặn).
  *
- * PHÂN PHỐI sự kiện nghiệp vụ (message.new, conversation.updated,
- * message.read, message.deleted, conversation.invalidate) KHÔNG
- * còn ở đây: từ issue #521, consumer phía worker tiêu thụ sự kiện
- * outbox qua hàng đợi và phân phối qua Redis emitter theo luật ở
- * package dùng chung `@giaokhoa/messaging` (nhà duy nhất của luật phân
- * phối — cổng chặn 1–1 fail-closed và rà soát membership tại thời
- * điểm phân phối nằm ở đó). Tên room cũng lấy từ package đó để nơi
- * nối (gateway) và nơi phát (worker) không bao giờ lệch nhau.
+ * PHÂN PHỐI sự kiện nghiệp vụ (message.new, conversation.updated, message.read, message.deleted, conversation.invalidate) KHÔNG còn ở đây: từ issue #521, consumer phía worker tiêu thụ sự kiện outbox qua hàng đợi và phân phối qua Redis emitter theo luật ở package dùng chung `@giaokhoa/messaging` (nhà duy nhất của luật phân phối — cổng chặn 1–1 fail-closed và rà soát membership tại thời điểm phân phối nằm ở đó). Tên room cũng lấy từ package đó để nơi nối (gateway) và nơi phát (worker) không bao giờ lệch nhau.
  *
- * Mọi lỗi Redis ở các đường phụ (presence/typing) đều bị nuốt kèm log
- * cảnh báo: realtime là đường phụ, không được làm hỏng nghiệp vụ.
+ * Mọi lỗi Redis ở các đường phụ (presence/typing) đều bị nuốt kèm log cảnh báo: realtime là đường phụ, không được làm hỏng nghiệp vụ.
  */
 @Injectable()
 export class MessagingRealtimeService implements OnModuleDestroy {
@@ -49,11 +36,7 @@ export class MessagingRealtimeService implements OnModuleDestroy {
   private readonly presenceTtlSeconds: number;
   private readonly presenceRefreshMs: number;
   /**
-   * Sổ socket ĐANG nối tại chính tiến trình này (chủ thể presence
-   * `{tenant}:{userId}` → socketId). Vòng gia hạn presence chỉ gia
-   * hạn cho user có mặt trong sổ này: tiến trình chết thì sổ biến
-   * mất theo, không ai gia hạn nữa và TTL trong Redis tự hết hạn —
-   * giữ đúng tính chất lưới an toàn của TTL.
+   * Sổ socket ĐANG nối tại chính tiến trình này (chủ thể presence `{tenant}:{userId}` → socketId). Vòng gia hạn presence chỉ gia hạn cho user có mặt trong sổ này: tiến trình chết thì sổ biến mất theo, không ai gia hạn nữa và TTL trong Redis tự hết hạn — giữ đúng tính chất lưới an toàn của TTL.
    */
   private readonly localPresence = new Map<string, Set<string>>();
   private presenceTimer: NodeJS.Timeout | null = null;
@@ -69,10 +52,7 @@ export class MessagingRealtimeService implements OnModuleDestroy {
   }
 
   /**
-   * Gateway gắn server Socket.IO vào đây khi khởi tạo: tạo Redis
-   * adapter (hai connection pub/sub riêng). Redis lỗi lúc khởi động
-   * thì giữ adapter in-memory mặc định + cảnh báo — một tiến trình
-   * vẫn phân phối nội bộ được, không chặn app boot.
+   * Gateway gắn server Socket.IO vào đây khi khởi tạo: tạo Redis adapter (hai connection pub/sub riêng). Redis lỗi lúc khởi động thì giữ adapter in-memory mặc định + cảnh báo — một tiến trình vẫn phân phối nội bộ được, không chặn app boot.
    */
   attachServer(server: Server): void {
     this.server = server;

@@ -9,45 +9,26 @@ import { AuthMailProcessor, type AuthMailSentMarker } from './auth-mail.processo
 /**
  * Kiểm chứng hành vi của consumer mail auth trên hàng đợi ở worker
  * (issue #517) qua các hệ quả quan sát được — mail nào thật sự tới
- * transport, job nào bị bỏ qua, lỗi nào được ném lại cho cơ chế thử
- * lại của hàng đợi:
+ * transport, job nào bị bỏ qua, lỗi nào được ném lại cho cơ chế thử lại của hàng đợi:
  *
  * - Job hợp lệ được dựng nội dung bằng template dùng chung và gửi
  *   đúng một lần qua transport phía worker.
  * - PHÁT LẠI cùng một sự kiện (cùng `outboxId`) không gửi mail lần
- *   hai — tính idempotent theo `outboxId` là hàng rào chống tác
- *   dụng phụ trùng ngoài cửa sổ chống trùng bằng `jobId` của
- *   BullMQ, nên ca phát lại là ca trung tâm của spec này.
+ *   hai — tính idempotent theo `outboxId` là hàng rào chống tác dụng phụ trùng ngoài cửa sổ chống trùng bằng `jobId` của BullMQ, nên ca phát lại là ca trung tâm của spec này.
  * - Hai lượt xử lý ĐỒNG THỜI cùng một sự kiện cũng chỉ gửi đúng
- *   một mail: hàng rào là lease ĐANG XỬ LÝ chiếm nguyên tử trước
- *   khi gửi; lượt thua không được kết thúc như đã xử lý (mail có
- *   thể chưa hề được gửi) mà ném tín hiệu hẹn thử lại
- *   `DelayedError` của BullMQ.
+ *   một mail: hàng rào là lease ĐANG XỬ LÝ chiếm nguyên tử trước khi gửi; lượt thua không được kết thúc như đã xử lý (mail có thể chưa hề được gửi) mà ném tín hiệu hẹn thử lại `DelayedError` của BullMQ.
  * - Lượt giữ lease CHẾT trước khi gửi (không nhả lease) thì mail
- *   không mất: lease tự hết hạn và lượt xử lý lại chiếm lại được
- *   lease để gửi — ca khôi phục sau sập này ghim đúng cửa sổ mà
- *   cơ chế một khoá (chiếm dấu trước khi gửi và giữ luôn làm dấu
- *   đã xử lý) từng để mất mail im lặng.
+ *   không mất: lease tự hết hạn và lượt xử lý lại chiếm lại được lease để gửi — ca khôi phục sau sập này ghim đúng cửa sổ mà cơ chế một khoá (chiếm dấu trước khi gửi và giữ luôn làm dấu đã xử lý) từng để mất mail im lặng.
  * - Cửa sổ kết quả kiểm tra thành cũ: một lượt đọc dấu đã gửi là
- *   chưa có rồi bị giữ lại TRƯỚC khi chiếm lease, trong lúc lượt
- *   khác gửi trọn, ghi dấu và nhả lease — lượt đầu chiếm lại
- *   lease vừa nhả mà dựa vào kết quả kiểm tra cũ thì gửi lần hai
- *   dù không hề có lỗi nào xảy ra. Hàng rào vì vậy phải đọc lại
- *   dấu ĐÃ GỬI trong lúc đang giữ lease, trước khi gọi transport;
- *   ca xen kẽ có điều phối thứ tự dưới đây ghim đúng cửa sổ này.
+ *   chưa có rồi bị giữ lại TRƯỚC khi chiếm lease, trong lúc lượt khác gửi trọn, ghi dấu và nhả lease — lượt đầu chiếm lại lease vừa nhả mà dựa vào kết quả kiểm tra cũ thì gửi lần hai dù không hề có lỗi nào xảy ra. Hàng rào vì vậy phải đọc lại dấu ĐÃ GỬI trong lúc đang giữ lease, trước khi gọi transport; ca xen kẽ có điều phối thứ tự dưới đây ghim đúng cửa sổ này.
  * - Nhả lease có kiểm tra chủ sở hữu: token sai không xoá được
  *   lease của lượt khác.
  * - Lỗi gửi tạm thời không để lại dấu đã gửi: job bị ném lỗi cho
- *   hàng đợi thử lại và lần xử lý sau gửi được, tổng cộng vẫn đúng
- *   một mail.
+ *   hàng đợi thử lại và lần xử lý sau gửi được, tổng cộng vẫn đúng một mail.
  * - Payload hỏng thì job kết thúc lặng (không gửi, không ném) để
- *   không chặn hàng đợi; môi trường chưa cấu hình Resend thì coi
- *   như đã xử lý như đường consumer cũ.
+ *   không chặn hàng đợi; môi trường chưa cấu hình Resend thì coi như đã xử lý như đường consumer cũ.
  *
- * Transport và hàng rào hai trạng thái đều là bản giả trong bộ nhớ
- * theo đúng bề mặt processor dùng; đường Redis thật của hàng rào
- * được kiểm chứng ở spec tích hợp
- * `test/integration/mail/auth-mail-queue.int-spec.ts`.
+ * Transport và hàng rào hai trạng thái đều là bản giả trong bộ nhớ theo đúng bề mặt processor dùng; đường Redis thật của hàng rào được kiểm chứng ở spec tích hợp `test/integration/mail/auth-mail-queue.int-spec.ts`.
  */
 
 /** Transport giả: ghi lại mọi mail được yêu cầu gửi; chế độ lỗi/bỏ qua điều khiển được theo ca. */
@@ -67,11 +48,7 @@ class FakeMailer {
 }
 
 /**
- * Transport giả có cổng chặn: mọi lượt `send` treo lại cho tới khi
- * test mở cổng — dùng để ép hai lượt xử lý ĐỒNG THỜI cùng một sự
- * kiện chồng lấn lên nhau tại đúng cửa sổ gửi, tái hiện đường đua
- * chống trùng (job bị nhận xử lý lại trong khi lượt trước còn đang
- * gửi).
+ * Transport giả có cổng chặn: mọi lượt `send` treo lại cho tới khi test mở cổng — dùng để ép hai lượt xử lý ĐỒNG THỜI cùng một sự kiện chồng lấn lên nhau tại đúng cửa sổ gửi, tái hiện đường đua chống trùng (job bị nhận xử lý lại trong khi lượt trước còn đang gửi).
  */
 class GatedMailer {
   readonly sent: WorkerMailMessage[] = [];

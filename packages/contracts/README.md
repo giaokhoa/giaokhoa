@@ -1,17 +1,10 @@
 # @giaokhoa/contracts — README nghiệp vụ
 
-> File này ghi các **quyết định nghiệp vụ quan trọng và còn đang hiệu lực** của package.
-> Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub.
+> File này ghi các **quyết định nghiệp vụ quan trọng và còn đang hiệu lực** của package. Nguồn sự thật về quyết định của package là chính file này, `AGENTS.md` của package và `AGENTS.md` ở thư mục gốc; quyết định liên quan tới một việc cụ thể được viết trọn vẹn trong issue đặc tả của việc đó trên GitHub.
 
 ## Package phụ trách nghiệp vụ gì
 
-`packages/contracts` là **hợp đồng dữ liệu dùng chung** giữa `apps/api`, `apps/web` và
-`apps/worker`: mọi schema Zod mô tả hình dạng request/response của các miền nghiệp vụ
-(identity, course, assessment, engagement, platform, site-config, tenants, curriculum,
-books, dashboard, guardian, mcp…) chỉ định nghĩa MỘT lần ở đây. Vì cả ba app cùng biên
-dịch trên cùng một hợp đồng, một thay đổi hình dạng nghiệp vụ ở đây là thay đổi đồng
-thời ở mọi bề mặt — đó là lý do package này mang nhiều quyết định "hình dạng nghiệp
-vụ" dù không chứa logic chạy.
+`packages/contracts` là **hợp đồng dữ liệu dùng chung** giữa `apps/api`, `apps/web` và `apps/worker`: mọi schema Zod mô tả hình dạng request/response của các miền nghiệp vụ (identity, course, assessment, engagement, platform, site-config, tenants, curriculum, books, dashboard, guardian, mcp…) chỉ định nghĩa MỘT lần ở đây. Vì cả ba app cùng biên dịch trên cùng một hợp đồng, một thay đổi hình dạng nghiệp vụ ở đây là thay đổi đồng thời ở mọi bề mặt — đó là lý do package này mang nhiều quyết định "hình dạng nghiệp vụ" dù không chứa logic chạy.
 
 ## Quyết định nghiệp vụ còn hiệu lực
 
@@ -26,14 +19,11 @@ vụ" dù không chứa logic chạy.
 
 ## Ranh giới — package này KHÔNG làm gì
 
-- Không chứa logic nghiệp vụ, không truy cập DB, không gác quyền: contracts chỉ mô tả
-  HÌNH DẠNG và ràng buộc dữ liệu. Gác quyền/luật nằm ở `apps/api`.
+- Không chứa logic nghiệp vụ, không truy cập DB, không gác quyền: contracts chỉ mô tả HÌNH DẠNG và ràng buộc dữ liệu. Gác quyền/luật nằm ở `apps/api`.
 - Không chứa component hay trình bày (đó là `packages/ui`/`packages/editor`/`apps/web`).
-- Không định nghĩa schema DB (đó là `packages/db`) — schema API và schema DB
-  là hai hợp đồng khác nhau, không suy ra nhau một-một.
+- Không định nghĩa schema DB (đó là `packages/db`) — schema API và schema DB là hai hợp đồng khác nhau, không suy ra nhau một-một.
 
 ## Kỹ thuật tối thiểu
 
 - Nguồn: `src/*.ts`, xuất qua `src/index.ts`; test hợp đồng ở `src/contracts.spec.ts`.
-- App tiêu thụ dùng bản `dist` đã build — sửa contracts xong phải build lại trước khi
-  typecheck app (dist cũ là nguồn lỗi type giả kinh điển).
+- App tiêu thụ dùng bản `dist` đã build — sửa contracts xong phải build lại trước khi typecheck app (dist cũ là nguồn lỗi type giả kinh điển).

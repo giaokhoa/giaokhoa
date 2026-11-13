@@ -3,28 +3,14 @@ import { uuidIdSchema } from './ids.js';
 import { questionViewSchema } from './assessment.js';
 
 /**
- * Hợp đồng bề mặt MCP (issue #110, lát MCP-0): input/output của các tool
- * mà client AI (Claude.ai/ChatGPT/MCP Inspector…) gọi vào Giáo khoa.
+ * Hợp đồng bề mặt MCP (issue #110, lát MCP-0): input/output của các tool mà client AI (Claude.ai/ChatGPT/MCP Inspector…) gọi vào Giáo khoa.
  *
- * Nguyên tắc (hồ sơ research MCP Phần 2.3/3.1): input tạo câu hỏi là
- * DẠNG THU HẸP có chủ đích của `createQuestionSchema` — cùng một hợp
- * đồng, chặt hơn ở biên AI: nội dung chỉ nhận CHUỖI THUẦN (không nhận
- * tài liệu Tiptap, server chuẩn hoá qua cùng đường `toRichTextDocument`
- * như REST), KHÔNG nhận dạng payload cũ `answer`, KHÔNG nhận
- * sourceKind/sourceRef (server tự ghi `source_kind='ai'`), mọi chuỗi có
- * maxLength, mọi mảng có maxItems, đáp án chỉ mang cờ `correct`
- * đúng/sai nhị phân (tỉ trọng `fraction` đã BỎ HẲN — quyết 12:04
- * ngày 26/10/2026) và câu hỏi KHÔNG có trường tên (nhãn hiển thị là
- * trích đoạn nội dung câu hỏi).
- * Sau lớp schema này, payload vẫn chạy qua ĐÚNG `createQuestionSchema`
+ * Nguyên tắc (hồ sơ research MCP Phần 2.3/3.1): input tạo câu hỏi là DẠNG THU HẸP có chủ đích của `createQuestionSchema` — cùng một hợp đồng, chặt hơn ở biên AI: nội dung chỉ nhận CHUỖI THUẦN (không nhận tài liệu Tiptap, server chuẩn hoá qua cùng đường `toRichTextDocument` như REST), KHÔNG nhận dạng payload cũ `answer`, KHÔNG nhận sourceKind/sourceRef (server tự ghi `source_kind='ai'`), mọi chuỗi có maxLength, mọi mảng có maxItems, đáp án chỉ mang cờ `correct` đúng/sai nhị phân (tỉ trọng `fraction` đã BỎ HẲN — quyết 12:04 ngày 26/10/2026) và câu hỏi KHÔNG có trường tên (nhãn hiển thị là trích đoạn nội dung câu hỏi). Sau lớp schema này, payload vẫn chạy qua ĐÚNG `createQuestionSchema`
  * + `QuestionsService` như REST — không tồn tại validator song song.
  */
 
 /**
- * Một đáp án ở biên MCP: nội dung chuỗi thuần + cờ `correct` (đáp án
- * này là đáp án ĐÚNG; vắng mặt = không đúng). Đáp án chỉ đúng/sai nhị
- * phân — KHÔNG còn `fraction` (quyết 12:04 ngày 26/10/2026). Riêng
- * shortanswer, mọi đáp án liệt kê đều là đáp án được chấp nhận.
+ * Một đáp án ở biên MCP: nội dung chuỗi thuần + cờ `correct` (đáp án này là đáp án ĐÚNG; vắng mặt = không đúng). Đáp án chỉ đúng/sai nhị phân — KHÔNG còn `fraction` (quyết 12:04 ngày 26/10/2026). Riêng shortanswer, mọi đáp án liệt kê đều là đáp án được chấp nhận.
  */
 export const mcpAnswerInputSchema = z.strictObject({
   text: z.string().min(1).max(5000),
@@ -54,9 +40,7 @@ export type McpQuestionOptionsInput = z.infer<typeof mcpQuestionOptionsInputSche
 /**
  * Tool `create_question`: đích ghi là bank CÁ NHÂN của chính chủ token
  * (ràng buộc cứng phía server — bankId của người khác coi như không tồn
- * tại), category phải thuộc bank đó. `idempotencyKey` do client sinh,
- * bắt buộc theo đặc tả 2026-07-28 (stream đứt = client phát hành lại,
- * server không được nhân đôi câu).
+ * tại), category phải thuộc bank đó. `idempotencyKey` do client sinh, bắt buộc theo đặc tả 2026-07-28 (stream đứt = client phát hành lại, server không được nhân đôi câu).
  */
 export const mcpCreateQuestionInputSchema = z.strictObject({
   bankId: uuidIdSchema,
@@ -75,9 +59,7 @@ export const mcpCreateQuestionInputSchema = z.strictObject({
 export type McpCreateQuestionInput = z.infer<typeof mcpCreateQuestionInputSchema>;
 
 /**
- * Kết quả `create_question`: `created` (câu mới ở trạng thái draft) hoặc
- * `duplicate_exact` (trùng hoàn toàn với câu đã có trong bank — KHÔNG
- * tạo bản sao, trả questionId hiện có để model tự quyết định bỏ qua).
+ * Kết quả `create_question`: `created` (câu mới ở trạng thái draft) hoặc `duplicate_exact` (trùng hoàn toàn với câu đã có trong bank — KHÔNG tạo bản sao, trả questionId hiện có để model tự quyết định bỏ qua).
  */
 export const mcpCreateQuestionOutputSchema = z.object({
   status: z.enum(['created', 'duplicate_exact']),
@@ -143,34 +125,17 @@ export type McpGetQuestionInput = z.infer<typeof mcpGetQuestionInputSchema>;
 export const mcpGetQuestionOutputSchema = questionViewSchema;
 
 /**
- * Tool `submit_contribution` (lát MCP-2 của issue #110, scope OAuth
- * `giaokhoa.banks.contribute`): đề xuất đưa các câu CỦA CHÍNH chủ token (đã
- * `ready`) vào một bank chung (tổ/trường/khoá) qua cơ chế đóng góp QB-4
- * hiện hữu — server tạo `question_bank_contributions` ở trạng thái
- * `pending`, người có `question:moderate` tại bank đích duyệt thì câu
- * mới vào bank đích. AI KHÔNG ghi thẳng được vào bank chung ở bất kỳ
- * scope nào (ranh giới ghi cứng, hồ sơ research Phần 3.2).
- * `idempotencyKey` bắt buộc như mọi write tool (đặc tả 2026-07-28):
- * phát lại cùng key + cùng payload trả kết quả cũ, không tạo đề xuất
- * trùng; cùng key khác payload là lỗi `question.idempotency_conflict`.
- * Từ issue #228 tool mở đối xứng cho đề và ma trận (cùng scope
- * `giaokhoa.banks.contribute`, không thêm scope mới): đề đi vào đường
- * đóng góp duy nhất của đề (`exam_contributions`, mode 'new'), ma
- * trận vào hàng chờ đóng góp ma trận — cả hai đều qua đúng cổng chủ
- * sở hữu + trạng thái + đích chung của từng đường như phía câu hỏi.
+ * Tool `submit_contribution` (lát MCP-2 của issue #110, scope OAuth `giaokhoa.banks.contribute`): đề xuất đưa các câu CỦA CHÍNH chủ token (đã `ready`) vào một bank chung (tổ/trường/khoá) qua cơ chế đóng góp QB-4 hiện hữu — server tạo `question_bank_contributions` ở trạng thái `pending`, người có `question:moderate` tại bank đích duyệt thì câu mới vào bank đích. AI KHÔNG ghi thẳng được vào bank chung ở bất kỳ scope nào (ranh giới ghi cứng, hồ sơ research Phần 3.2). `idempotencyKey` bắt buộc như mọi write tool (đặc tả 2026-07-28):
+ * phát lại cùng key + cùng payload trả kết quả cũ, không tạo đề xuất trùng; cùng key khác payload là lỗi `question.idempotency_conflict`. Từ issue #228 tool mở đối xứng cho đề và ma trận (cùng scope `giaokhoa.banks.contribute`, không thêm scope mới): đề đi vào đường đóng góp duy nhất của đề (`exam_contributions`, mode 'new'), ma trận vào hàng chờ đóng góp ma trận — cả hai đều qua đúng cổng chủ sở hữu + trạng thái + đích chung của từng đường như phía câu hỏi.
  */
 /**
  * Đầu vào `submit_contribution` — từ đợt đồng bộ cơ chế ngân hàng
  * (issue #228), tool mở đối xứng cho cả ba thực thể ngân hàng: ngoài
- * `questionIds` (câu hỏi), client có thể gửi `examIds` (đề — vào
- * đường đóng góp duy nhất của đề, mode 'new') và/hoặc `matrixIds`
+ * `questionIds` (câu hỏi), client có thể gửi `examIds` (đề — vào đường đóng góp duy nhất của đề, mode 'new') và/hoặc `matrixIds`
  * (ma trận — vào hàng chờ đóng góp ma trận) trong CÙNG một lượt gọi
- * tới cùng một bank đích. Ít nhất một trong ba danh sách phải có
- * phần tử; mỗi danh sách tối đa 50 phần tử như trần batch hiện hữu.
- * Ràng buộc "ít nhất một danh sách" kiểm ngay tại schema
+ * tới cùng một bank đích. Ít nhất một trong ba danh sách phải có phần tử; mỗi danh sách tối đa 50 phần tử như trần batch hiện hữu. Ràng buộc "ít nhất một danh sách" kiểm ngay tại schema
  * (superRefine) để client nhận lỗi hình dạng trước khi chạm tầng
- * nghiệp vụ. `questionIds` giữ optional thay vì bắt buộc là chủ
- * đích: payload cũ chỉ-câu-hỏi vẫn hợp lệ nguyên vẹn.
+ * nghiệp vụ. `questionIds` giữ optional thay vì bắt buộc là chủ đích: payload cũ chỉ-câu-hỏi vẫn hợp lệ nguyên vẹn.
  */
 export const mcpSubmitContributionInputSchema = z.strictObject({
   targetBankId: uuidIdSchema,
@@ -191,15 +156,9 @@ export const mcpSubmitContributionInputSchema = z.strictObject({
 export type McpSubmitContributionInput = z.infer<typeof mcpSubmitContributionInputSchema>;
 
 /**
- * Kết quả `submit_contribution` theo từng item (ngữ nghĩa từng-item
- * như batch): `pending` kèm contributionId khi đề xuất đã tạo;
- * `failed` kèm mã lỗi nghiệp vụ của đúng cổng đã chặn (chưa ready,
- * không phải của chủ token, đích là bank personal, trùng trong bank
- * đích…). Ba mảng kết quả tách theo loại thực thể: `results` (câu
- * hỏi — giữ nguyên hình dạng cũ), `examResults` và `matrixResults`
+ * Kết quả `submit_contribution` theo từng item (ngữ nghĩa từng-item như batch): `pending` kèm contributionId khi đề xuất đã tạo; `failed` kèm mã lỗi nghiệp vụ của đúng cổng đã chặn (chưa ready, không phải của chủ token, đích là bank personal, trùng trong bank đích…). Ba mảng kết quả tách theo loại thực thể: `results` (câu hỏi — giữ nguyên hình dạng cũ), `examResults` và `matrixResults`
  * (mặc định rỗng khi payload cũ được phát lại từ sổ idempotency ghi
- * trước đợt mở đối xứng, để bản ghi cũ vẫn hợp lệ với schema mới).
- * `created`/`failed` là tổng trên cả ba loại.
+ * trước đợt mở đối xứng, để bản ghi cũ vẫn hợp lệ với schema mới). `created`/`failed` là tổng trên cả ba loại.
  */
 export const mcpSubmitContributionOutputSchema = z.object({
   targetBankId: uuidIdSchema,
@@ -237,20 +196,11 @@ export type McpSubmitContributionOutput = z.infer<typeof mcpSubmitContributionOu
 
 /**
  * ── Lát MCP-1 (issue #163) ──────────────────────────────────────────
- * Các tool dưới đây dùng cùng một bộ nguyên tắc biên như MCP-0: strict
- * object, chuỗi/mảng có trần, idempotencyKey bắt buộc ở mọi tool ghi,
- * kết quả ghi theo TỪNG ITEM (một item lỗi không kéo cả lô xuống, trừ
- * tool nhóm ngữ liệu nguyên tử ghi rõ ở mô tả của nó).
+ * Các tool dưới đây dùng cùng một bộ nguyên tắc biên như MCP-0: strict object, chuỗi/mảng có trần, idempotencyKey bắt buộc ở mọi tool ghi, kết quả ghi theo TỪNG ITEM (một item lỗi không kéo cả lô xuống, trừ tool nhóm ngữ liệu nguyên tử ghi rõ ở mô tả của nó).
  */
 
 /**
- * Một câu trong lô của `create_questions_batch`: đúng hình của
- * create_question trừ bankId/categoryId/idempotencyKey (chung cả lô).
- * `clientItemId` do client đặt để đối chiếu kết quả từng câu và làm
- * khoá idempotency TỪNG CÂU (khoá lô + clientItemId). `stimulusRef`
- * trỏ tới một ngữ liệu khai trong mảng `stimuli` của cùng lô (server
- * tạo trước trong cùng thao tác); `stimulusId` trỏ ngữ liệu đã có —
- * hai trường loại trừ nhau.
+ * Một câu trong lô của `create_questions_batch`: đúng hình của create_question trừ bankId/categoryId/idempotencyKey (chung cả lô). `clientItemId` do client đặt để đối chiếu kết quả từng câu và làm khoá idempotency TỪNG CÂU (khoá lô + clientItemId). `stimulusRef` trỏ tới một ngữ liệu khai trong mảng `stimuli` của cùng lô (server tạo trước trong cùng thao tác); `stimulusId` trỏ ngữ liệu đã có — hai trường loại trừ nhau.
  */
 export const mcpBatchQuestionItemSchema = z.strictObject({
   clientItemId: z.string().min(1).max(64),
@@ -268,12 +218,7 @@ export const mcpBatchQuestionItemSchema = z.strictObject({
 export type McpBatchQuestionItem = z.infer<typeof mcpBatchQuestionItemSchema>;
 
 /**
- * Tool `create_questions_batch`: tạo NHIỀU câu draft trong bank cá
- * nhân của chủ token trong một lần gọi. Ngữ nghĩa từng-item như
- * submit_contribution: item trùng exact → `duplicate_exact` (không
- * tạo), item lỗi → `failed` kèm mã + fieldPath, các item còn lại vẫn
- * chạy. Idempotency TỪNG CÂU: phát lại cùng khoá lô + cùng payload
- * của một item thì trả kết quả cũ của item đó.
+ * Tool `create_questions_batch`: tạo NHIỀU câu draft trong bank cá nhân của chủ token trong một lần gọi. Ngữ nghĩa từng-item như submit_contribution: item trùng exact → `duplicate_exact` (không tạo), item lỗi → `failed` kèm mã + fieldPath, các item còn lại vẫn chạy. Idempotency TỪNG CÂU: phát lại cùng khoá lô + cùng payload của một item thì trả kết quả cũ của item đó.
  */
 export const mcpCreateQuestionsBatchInputSchema = z.strictObject({
   bankId: uuidIdSchema,
@@ -341,10 +286,7 @@ export const mcpStimulusQuestionItemSchema = z.strictObject({
 export type McpStimulusQuestionItem = z.infer<typeof mcpStimulusQuestionItemSchema>;
 
 /**
- * Tool `create_stimulus_with_questions`: tạo một ngữ liệu + nhóm câu
- * bám ngữ liệu đó NGUYÊN TỬ (một giao dịch ở tầng service — hoặc cả
- * nhóm tồn tại, hoặc không gì tồn tại; khác hẳn batch từng-item).
- * Mọi câu vào draft như create_question.
+ * Tool `create_stimulus_with_questions`: tạo một ngữ liệu + nhóm câu bám ngữ liệu đó NGUYÊN TỬ (một giao dịch ở tầng service — hoặc cả nhóm tồn tại, hoặc không gì tồn tại; khác hẳn batch từng-item). Mọi câu vào draft như create_question.
  */
 export const mcpCreateStimulusWithQuestionsInputSchema = z.strictObject({
   bankId: uuidIdSchema,
@@ -363,11 +305,7 @@ export const mcpCreateStimulusWithQuestionsOutputSchema = z.object({
 export type McpCreateStimulusWithQuestionsOutput = z.infer<typeof mcpCreateStimulusWithQuestionsOutputSchema>;
 
 /**
- * Tool `publish_questions` (scope `giaokhoa.questions.write`): duyệt phát
- * hành các câu DRAFT của CHÍNH chủ token trong bank cá nhân của họ lên
- * `ready` — đúng đường nghiệp vụ `setQuestionStatus` mà giao diện web
- * dùng. Từng-item: câu không phải của chủ token coi như không tồn
- * tại; câu không ở draft → failed `question.publish_not_draft`.
+ * Tool `publish_questions` (scope `giaokhoa.questions.write`): duyệt phát hành các câu DRAFT của CHÍNH chủ token trong bank cá nhân của họ lên `ready` — đúng đường nghiệp vụ `setQuestionStatus` mà giao diện web dùng. Từng-item: câu không phải của chủ token coi như không tồn tại; câu không ở draft → failed `question.publish_not_draft`.
  */
 export const mcpPublishQuestionsInputSchema = z.strictObject({
   questionIds: z.array(uuidIdSchema).min(1).max(50),
@@ -390,11 +328,7 @@ export const mcpPublishQuestionsOutputSchema = z.object({
 export type McpPublishQuestionsOutput = z.infer<typeof mcpPublishQuestionsOutputSchema>;
 
 /**
- * Tool `search_questions`: tìm câu trong MỘT bank mà chủ token xem
- * được, theo chuỗi con trong thân câu (đã chuẩn hoá NFC + thường
- * hoá hai phía như cổng chống trùng) và lọc qtype tuỳ chọn. Chỉ trả
- * SIÊU DỮ LIỆU (không đáp án, không tên — câu hỏi không có trường
- * tên, nhãn hiển thị là trích đoạn nội dung lấy qua get_question).
+ * Tool `search_questions`: tìm câu trong MỘT bank mà chủ token xem được, theo chuỗi con trong thân câu (đã chuẩn hoá NFC + thường hoá hai phía như cổng chống trùng) và lọc qtype tuỳ chọn. Chỉ trả SIÊU DỮ LIỆU (không đáp án, không tên — câu hỏi không có trường tên, nhãn hiển thị là trích đoạn nội dung lấy qua get_question).
  */
 export const mcpSearchQuestionsInputSchema = z.strictObject({
   bankId: uuidIdSchema,
@@ -421,9 +355,7 @@ export const mcpSearchQuestionsOutputSchema = z.object({
 export type McpSearchQuestionsOutput = z.infer<typeof mcpSearchQuestionsOutputSchema>;
 
 /**
- * Tool `check_duplicates`: soi trùng (exact/near) cho các câu SẮP tạo
- * trong một bank mà không ghi gì cả — cùng cơ chế băm nội dung QB-4
- * với cổng tạo, để client AI tự quyết định bỏ/sửa trước khi tạo thật.
+ * Tool `check_duplicates`: soi trùng (exact/near) cho các câu SẮP tạo trong một bank mà không ghi gì cả — cùng cơ chế băm nội dung QB-4 với cổng tạo, để client AI tự quyết định bỏ/sửa trước khi tạo thật.
  */
 export const mcpCheckDuplicatesInputSchema = z.strictObject({
   bankId: uuidIdSchema,
@@ -455,11 +387,9 @@ export const mcpCheckDuplicatesOutputSchema = z.object({
 export type McpCheckDuplicatesOutput = z.infer<typeof mcpCheckDuplicatesOutputSchema>;
 
 /**
- * Tool `search_curriculum_outcomes`: tra YCCĐ THẬT của chương trình
- * GDPT theo từ khoá (+ lọc môn/khối) trong các môn chủ token đọc được
+ * Tool `search_curriculum_outcomes`: tra YCCĐ THẬT của chương trình GDPT theo từ khoá (+ lọc môn/khối) trong các môn chủ token đọc được
  * (`curriculum:view` tại context môn) — để model bám đúng YCCĐ khi
- * soạn câu. Liên kết câu×YCCĐ chính thức vẫn ở tầng ma trận/quiz; kết
- * quả ở đây thuần tra cứu, kèm `sourceRef` làm truy vết nhẹ.
+ * soạn câu. Liên kết câu×YCCĐ chính thức vẫn ở tầng ma trận/quiz; kết quả ở đây thuần tra cứu, kèm `sourceRef` làm truy vết nhẹ.
  */
 export const mcpSearchCurriculumOutcomesInputSchema = z.strictObject({
   query: z.string().min(1).max(200),

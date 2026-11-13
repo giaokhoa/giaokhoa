@@ -11,9 +11,7 @@ import { MessagesPage } from './messages';
 
 /**
  * Kênh realtime được mock ở đúng biên lib `#lib/messaging-socket`:
- * test cũ (chặn liên lạc, hợp đồng tạo conversation) không cần socket
- * thật; test realtime bên dưới điều khiển handlers mà trang đăng ký
- * để giả lập sự kiện server đẩy xuống.
+ * test cũ (chặn liên lạc, hợp đồng tạo conversation) không cần socket thật; test realtime bên dưới điều khiển handlers mà trang đăng ký để giả lập sự kiện server đẩy xuống.
  */
 const realtime = vi.hoisted(() => ({
   handlers: null as null | Record<string, (payload: never) => void>,
@@ -36,10 +34,7 @@ vi.mock('../api/messaging-socket', () => ({
 /**
  * Lớp adapter hồ sơ người: mặc định giữ nguyên triển khai thật
  * (mọi trường mở rộng đều null — chưa có nguồn backend). Riêng
- * các ca của giai đoạn 2 vòng sửa PR #610 (hàng liên lạc thành
- * liên kết) cần trường CÓ giá trị để khẳng định, nên mock cho
- * phép ghi đè từng ca qua `profileOverride` — ca nào không đặt
- * thì hành vi y như thật.
+ * các ca của giai đoạn 2 vòng sửa PR #610 (hàng liên lạc thành liên kết) cần trường CÓ giá trị để khẳng định, nên mock cho phép ghi đè từng ca qua `profileOverride` — ca nào không đặt thì hành vi y như thật.
  */
 const profileOverride = vi.hoisted(() => ({
   value: null as null | Record<string, string | null>,
@@ -59,11 +54,7 @@ vi.mock('../api/person-profile-adapter', async (importOriginal) => {
 });
 
 /**
- * Spec chặn liên lạc theo endpoint thật của messaging: chặn qua
- * POST /messages/contacts/:userId/block, danh sách đã chặn qua
- * GET /messages/contacts/blocked, bỏ chặn qua DELETE trên cùng đường block.
- * Kèm spec hợp đồng tạo conversation: web phải gửi `memberIds` (đúng schema
- * phía API/contracts) để người được chỉ định thật sự thành thành viên.
+ * Spec chặn liên lạc theo endpoint thật của messaging: chặn qua POST /messages/contacts/:userId/block, danh sách đã chặn qua GET /messages/contacts/blocked, bỏ chặn qua DELETE trên cùng đường block. Kèm spec hợp đồng tạo conversation: web phải gửi `memberIds` (đúng schema phía API/contracts) để người được chỉ định thật sự thành thành viên.
  */
 const ME_ID = '01900000-0000-7000-8000-0000000000a1';
 const OTHER_ID = '01900000-0000-7000-8000-0000000000b2';

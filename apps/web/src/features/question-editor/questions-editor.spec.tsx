@@ -9,24 +9,13 @@ import { QuestionUsagePage } from '#features/questions/components/usage-page';
 import { QuestionEditPage, QuestionNewPage } from './routes/question-editor';
 
 /**
- * Spec editor câu hỏi 4 qtype + ngữ liệu theo hợp đồng API của mô hình
- * port giaokhoa (lát P4 #248): câu hỏi KHÔNG có tên và đáp án KHÔNG có
- * tỉ trọng — POST /questions nhận `answers` mang cờ `correct` nhị phân
+ * Spec editor câu hỏi 4 qtype + ngữ liệu theo hợp đồng API của mô hình port giaokhoa (lát P4 #248): câu hỏi KHÔNG có tên và đáp án KHÔNG có tỉ trọng — POST /questions nhận `answers` mang cờ `correct` nhị phân
  * (multichoice đúng 4 lựa chọn + đúng 1 đúng soạn trên tài liệu thống
- * nhất rồi tách khi lưu; truefalse TF-A là MỘT tài liệu thân + 4
- * mệnh đề với đáp án từng mệnh đề ở solution;
- * shortanswer mọi mẫu đều được chấp nhận), `guidance` và `solution`
+ * nhất rồi tách khi lưu; truefalse TF-A là MỘT tài liệu thân + 4 mệnh đề với đáp án từng mệnh đề ở solution; shortanswer mọi mẫu đều được chấp nhận), `guidance` và `solution`
  * (lời giải mẫu của essay) đi ở phía đáp án, PATCH tạo phiên bản mới
- * với payload đầy đủ, stimulus qua POST/PATCH/DELETE /stimuli và gắn
- * bằng `stimulusId`. Trạng thái draft/ready chốt bằng
- * POST /questions/:id/status sau khi lưu.
+ * với payload đầy đủ, stimulus qua POST/PATCH/DELETE /stimuli và gắn bằng `stimulusId`. Trạng thái draft/ready chốt bằng POST /questions/:id/status sau khi lưu.
  *
- * `@giaokhoa/editor` được thay bằng bản giả lập textarea (tài liệu ↔ văn bản
- * thuần theo paragraph; editor trắc nghiệm thống nhất giả lập bằng
- * textarea thân câu + textarea từng lựa chọn + radio đáp án đúng, vận
- * hành trên đúng hình dạng JSON tài liệu thống nhất) để spec trang
- * kiểm LUỒNG NGƯỜI DÙNG và payload — cơ chế soạn Tiptap thật thuộc
- * spec của chính package editor.
+ * `@giaokhoa/editor` được thay bằng bản giả lập textarea (tài liệu ↔ văn bản thuần theo paragraph; editor trắc nghiệm thống nhất giả lập bằng textarea thân câu + textarea từng lựa chọn + radio đáp án đúng, vận hành trên đúng hình dạng JSON tài liệu thống nhất) để spec trang kiểm LUỒNG NGƯỜI DÙNG và payload — cơ chế soạn Tiptap thật thuộc spec của chính package editor.
  */
 vi.mock('@giaokhoa/editor', async () => {
   const React = await import('react');
@@ -79,9 +68,7 @@ vi.mock('@giaokhoa/editor', async () => {
       onRequestImage?: (file?: File) => Promise<{ src: string; alt?: string | null } | null>;
     }) => {
       // Hai nút giả lập đúng hai cách editor thật gọi `onRequestImage`:
-      // bấm nút ảnh trên toolbar (không kèm tệp) và dán ảnh (kèm tệp).
-      // Editor thật tự chèn node `image` bằng định danh bề mặt chứa trả
-      // về — bản giả lập nối cùng hành vi đó vào tài liệu của trường.
+      // bấm nút ảnh trên toolbar (không kèm tệp) và dán ảnh (kèm tệp). Editor thật tự chèn node `image` bằng định danh bề mặt chứa trả về — bản giả lập nối cùng hành vi đó vào tài liệu của trường.
       const requestAndInsert = (file?: File) => {
         void (async () => {
           const pick = await onRequestImage?.(file);

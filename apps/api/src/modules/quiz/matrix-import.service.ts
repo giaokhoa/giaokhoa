@@ -114,26 +114,11 @@ type RawCellValue = { kind: 'number'; value: number } | { kind: 'text'; value: s
 
 @Injectable()
 /**
- * Service của chuỗi lát nhập ma trận: sinh workbook mẫu +
- * parse/preview file nhập (I-1, không ghi DB) và ghi nguyên tử khi
- * người nhập xác nhận (I-2 — parse lại từ file gốc tại thời điểm ghi,
- * không tin kết quả xem trước phía client).
+ * Service của chuỗi lát nhập ma trận: sinh workbook mẫu + parse/preview file nhập (I-1, không ghi DB) và ghi nguyên tử khi người nhập xác nhận (I-2 — parse lại từ file gốc tại thời điểm ghi, không tin kết quả xem trước phía client).
  *
- * Phân quyền của cả ba đầu chốt tại BANK ĐÍCH — bank ma trận cá nhân
- * của người nhập — qua cổng dùng chung
- * `QuizService.requirePersonalMatrixBankManage` (học thuyết neo bank
- * MB-0/MB-1: ma trận nằm trong bank nào thì quyền theo bank đó,
- * context của môn chỉ là phạm vi dữ liệu). Dữ liệu tham chiếu
- * môn/chương trình/cây đọc bằng đường tham chiếu nội bộ của
- * CurriculumService sau khi đã qua cổng bank. Trước đây luồng còn
- * gác thêm `quiz:managematrix` và (qua đường đọc công khai)
- * `curriculum:view` tại context của môn: môn GDPT neo tại context hệ
- * thống trong khi giáo viên chỉ được gán vai tại context khoá/trung
- * tâm, nên hai lớp cổng đó chặn nhầm mọi giáo viên ở cả ba đầu, và
- * lỗi quyền ở bước đọc môn còn bị nuốt thành "môn không tồn tại"
+ * Phân quyền của cả ba đầu chốt tại BANK ĐÍCH — bank ma trận cá nhân của người nhập — qua cổng dùng chung `QuizService.requirePersonalMatrixBankManage` (học thuyết neo bank MB-0/MB-1: ma trận nằm trong bank nào thì quyền theo bank đó, context của môn chỉ là phạm vi dữ liệu). Dữ liệu tham chiếu môn/chương trình/cây đọc bằng đường tham chiếu nội bộ của CurriculumService sau khi đã qua cổng bank. Trước đây luồng còn gác thêm `quiz:managematrix` và (qua đường đọc công khai) `curriculum:view` tại context của môn: môn GDPT neo tại context hệ thống trong khi giáo viên chỉ được gán vai tại context khoá/trung tâm, nên hai lớp cổng đó chặn nhầm mọi giáo viên ở cả ba đầu, và lỗi quyền ở bước đọc môn còn bị nuốt thành "môn không tồn tại"
  * (điểm chặn của nghiệm thu D-3 trên production, issue #233). Các
- * endpoint đọc công khai của chương trình không qua luồng này nên
- * cổng của chúng không đổi.
+ * endpoint đọc công khai của chương trình không qua luồng này nên cổng của chúng không đổi.
  */
 export class MatrixImportService {
   constructor(

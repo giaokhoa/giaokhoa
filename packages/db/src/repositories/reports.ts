@@ -1,40 +1,17 @@
 /**
  * Repository của cụm REPORT BUILDER trên Kysely.
  *
- * Vai trò: mọi truy cập tới ba bảng report_builder_report,
- * report_builder_audience và report_builder_schedule của kho
- * trung tâm tập trung ở đây, cộng truy vấn kiểm tra audience theo
- * vai trò trên hai bảng role_assignments/role (bảng của module
- * access — repository này chỉ ĐỌC chúng cho đúng một truy vấn
- * nghiệp vụ của reports, không sở hữu chúng). Repository không
- * chứa luật nghiệp vụ — gác quyền, lọc từng dòng và chạy lịch nằm
- * ở tầng service phía ứng dụng.
+ * Vai trò: mọi truy cập tới ba bảng report_builder_report, report_builder_audience và report_builder_schedule của kho trung tâm tập trung ở đây, cộng truy vấn kiểm tra audience theo vai trò trên hai bảng role_assignments/role (bảng của module access — repository này chỉ ĐỌC chúng cho đúng một truy vấn nghiệp vụ của reports, không sở hữu chúng). Repository không chứa luật nghiệp vụ — gác quyền, lọc từng dòng và chạy lịch nằm ở tầng service phía ứng dụng.
  *
- * Điểm nóng T-11 (thử nghiệm ghép mảnh động bằng `sql.join`, chốt
- * tại chính issue này): `userHasAnyRole` ghép danh sách tên vai
- * trò thành mệnh đề `IN (...)`. Khuôn đã đo trên cụm PostgreSQL
- * thật với Kysely 0.29.7 (spec đi kèm file này):
+ * Điểm nóng T-11 (thử nghiệm ghép mảnh động bằng `sql.join`, chốt tại chính issue này): `userHasAnyRole` ghép danh sách tên vai trò thành mệnh đề `IN (...)`. Khuôn đã đo trên cụm PostgreSQL thật với Kysely 0.29.7 (spec đi kèm file này):
  * - Mỗi tên vai trò là một mảnh `sql` mang đúng một tham số vô
- *   hướng; `sql.join` chèn dấu tách `, ` giữa các mảnh và giữ thứ
- *   tự tham số: tham số của mệnh đề ngoài (userId) đứng trước, rồi
- *   tới tham số của từng mảnh theo thứ tự mảng.
+ *   hướng; `sql.join` chèn dấu tách `, ` giữa các mảnh và giữ thứ tự tham số: tham số của mệnh đề ngoài (userId) đứng trước, rồi tới tham số của từng mảnh theo thứ tự mảng.
  * - Mảnh chứa biểu thức con có tham số riêng vẫn giữ đúng thứ tự
- *   tham số toàn cục (tham số của biểu thức con nằm tại vị trí của
- *   mảnh trong danh sách).
+ *   tham số toàn cục (tham số của biểu thức con nằm tại vị trí của mảnh trong danh sách).
  * - Danh sách RỖNG: `IN ()` không phải SQL hợp lệ nên khuôn KHÔNG
- *   phát truy vấn — hàm trả `false` ngay (không có vai trò nào thì
- *   không thuộc audience theo vai trò). Tầng gọi hiện hành vốn đã
- *   chặn rỗng; khuôn chốt thêm chốt chặn này trong chính hàm để
- *   mọi phía gọi sau (nhóm messaging) dùng lại an toàn.
+ *   phát truy vấn — hàm trả `false` ngay (không có vai trò nào thì không thuộc audience theo vai trò). Tầng gọi hiện hành vốn đã chặn rỗng; khuôn chốt thêm chốt chặn này trong chính hàm để mọi phía gọi sau (nhóm messaging) dùng lại an toàn.
  *
- * Khuôn hình dạng dữ liệu ở biên repository (theo khuôn pilot kho
- * control plane): bên trong dùng tên bảng/cột snake_case của
- * schema codegen; bên ngoài nhận/trả hình dạng camelCase qua danh
- * sách cột có bí danh tường minh và các hàm ánh xạ
- * `*InsertValues`/`*UpdateSet` loại `undefined` từng trường (luật
- * T-4). Cột jsonb (`columns`, `filters`, `last_result`) khi ghi đi
- * qua `jsonbValue` (serialize tường minh + `::jsonb`) vì một MẢNG
- * ở cấp cao nhất bị driver `pg` hiểu là mảng PostgreSQL.
+ * Khuôn hình dạng dữ liệu ở biên repository (theo khuôn pilot kho control plane): bên trong dùng tên bảng/cột snake_case của schema codegen; bên ngoài nhận/trả hình dạng camelCase qua danh sách cột có bí danh tường minh và các hàm ánh xạ `*InsertValues`/`*UpdateSet` loại `undefined` từng trường (luật T-4). Cột jsonb (`columns`, `filters`, `last_result`) khi ghi đi qua `jsonbValue` (serialize tường minh + `::jsonb`) vì một MẢNG ở cấp cao nhất bị driver `pg` hiểu là mảng PostgreSQL.
  */
 import { sql, type Insertable, type InsertObject, type RawBuilder, type UpdateObject } from 'kysely';
 import type { CentreDb, CentreTx, CentreDB } from '../client';

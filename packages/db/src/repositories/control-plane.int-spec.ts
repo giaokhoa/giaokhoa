@@ -19,28 +19,17 @@ import {
 /**
  * Spec tích hợp của PILOT Kysely kho control plane (issue #640).
  *
- * Database control plane được dựng từ rỗng bằng chính cầu nối
- * migration của package (carrier đóng băng) trên cụm PostgreSQL
- * thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè
- * cụm khi cần, mặc định suy từ `DATABASE_URL` của package). Mọi ca
- * chạy qua repository production ở `control-plane.ts` — không mô
- * phỏng handle.
+ * Database control plane được dựng từ rỗng bằng chính cầu nối migration của package (carrier đóng băng) trên cụm PostgreSQL thật của môi trường test (biến `GIAOKHOA_DB_TEST_ADMIN_URL` ghi đè cụm khi cần, mặc định suy từ `DATABASE_URL` của package). Mọi ca chạy qua repository production ở `control-plane.ts` — không mô phỏng handle.
  *
- * Ngoài đối chiếu hành vi của repository, spec này là nơi CHỐT bốn
- * thử nghiệm được phân bổ cho pilot (kết quả văn bản ghi trong
- * playbook ở `AGENTS.md` của package):
+ * Ngoài đối chiếu hành vi của repository, spec này là nơi CHỐT bốn thử nghiệm được phân bổ cho pilot (kết quả văn bản ghi trong playbook ở `AGENTS.md` của package):
  * - T-4: ngữ nghĩa `undefined` trong values/set/where của Kysely
  *   (đo cả SQL biên dịch lẫn kết quả chạy thật).
  * - T-7 (phần control plane): contract kiểu runtime trên cùng
- *   database — cùng một dòng đọc qua oracle độc lập (Kysely thô
- *   ngoài repository) và qua repository cho kiểu runtime từng
- *   cột đại diện (jsonb snapshot, timestamptz, uuid, text).
+ *   database — cùng một dòng đọc qua oracle độc lập (Kysely thô ngoài repository) và qua repository cho kiểu runtime từng cột đại diện (jsonb snapshot, timestamptz, uuid, text).
  * - T-10: hình dạng lỗi `pg` cho ca trùng `database_name`
  *   dedicated và ca trùng slug.
  * - U5: insert không truyền id nhận id khớp regex UUIDv7 qua
- *   `returning`; insert có id tường minh giữ nguyên id.
- * Và đo T-1 (registry ~20 instance) + kiểm chứng bộ máy migration
- * trên kho control plane ở cả hai đường (từ rỗng / đã áp đủ no-op).
+ *   `returning`; insert có id tường minh giữ nguyên id. Và đo T-1 (registry ~20 instance) + kiểm chứng bộ máy migration trên kho control plane ở cả hai đường (từ rỗng / đã áp đủ no-op).
  */
 const adminUrl =
   process.env.GIAOKHOA_DB_TEST_ADMIN_URL ??

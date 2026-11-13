@@ -5,16 +5,7 @@ import { buildTestDatabase, dropTestDatabase, withDatabase } from '../test-suppo
 import { ContentRepository } from './content';
 
 /**
- * Spec tích hợp của ContentRepository phía Kysely (issue #646,
- * nhóm G6). Database kho trung tâm dựng từ rỗng bằng cầu nối
- * migration của package trên cụm PostgreSQL thật; mọi ca chạy qua
- * repository production. Dữ kiện nền dựng theo đồ thị FK thật của
- * cụm (tenant → danh mục khoá → khoá → section → course module)
- * vì `pages.course`, `course_last_access.cm_id`,
- * `course_module_progress.cm_id` và `learning_records.cm_id` đều
- * là khoá ngoại thật. Các ca khoá: upsert onConflict của
- * last-access và module-progress (percent chỉ tăng, tính ở phía
- * mã), hai đường đọc lọc-trong-bộ-nhớ giữ nguyên từ repository cũ
+ * Spec tích hợp của ContentRepository phía Kysely (issue #646, nhóm G6). Database kho trung tâm dựng từ rỗng bằng cầu nối migration của package trên cụm PostgreSQL thật; mọi ca chạy qua repository production. Dữ kiện nền dựng theo đồ thị FK thật của cụm (tenant → danh mục khoá → khoá → section → course module) vì `pages.course`, `course_last_access.cm_id`, `course_module_progress.cm_id` và `learning_records.cm_id` đều là khoá ngoại thật. Các ca khoá: upsert onConflict của last-access và module-progress (percent chỉ tăng, tính ở phía mã), hai đường đọc lọc-trong-bộ-nhớ giữ nguyên từ repository cũ
  * (`getLastAccess` khớp khoá trong mã, `getModuleProgress` đối
  * chiếu user trong mã), và doNothing của learning record.
  */

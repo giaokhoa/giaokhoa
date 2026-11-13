@@ -5,10 +5,7 @@ import { createCategory, createCourse, createEnrolInstance } from '../../support
 import { createGroupViaApi } from '../../support/engagement-helpers';
 
 /**
- * Rà soát ngược oracle Behat (MOODLE_503_STABLE): các scenario hành trình có ý nghĩa
- * nghiệp vụ mà bộ e2e trước đây chưa phủ. Các bước gắn với giao diện PHP (bấm nút,
- * điền form) được bỏ qua theo quy ước; chỉ dịch bước nghiệp vụ + kết quả kỳ vọng
- * thành lời gọi HTTP. Nguồn đối chiếu ghi tại từng test.
+ * Rà soát ngược oracle Behat (MOODLE_503_STABLE): các scenario hành trình có ý nghĩa nghiệp vụ mà bộ e2e trước đây chưa phủ. Các bước gắn với giao diện PHP (bấm nút, điền form) được bỏ qua theo quy ước; chỉ dịch bước nghiệp vụ + kết quả kỳ vọng thành lời gọi HTTP. Nguồn đối chiếu ghi tại từng test.
  */
 describe('Hành trình kiểm toán ngược Behat', () => {
   let app: INestApplication;

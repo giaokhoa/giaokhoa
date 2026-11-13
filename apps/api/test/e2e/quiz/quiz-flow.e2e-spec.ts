@@ -7,18 +7,15 @@ import { addExamSlot, createExamDraft, pinExam } from '../../support/exam-pin-he
 import { getGradebook } from '../../support/assessment-helpers';
 
 /**
- * Hoạt động Quiz (issue #30, chặng 1) — oracle là ngữ nghĩa mod_quiz của
- * Moodle:
+ * Hoạt động Quiz (issue #30, chặng 1) — oracle là ngữ nghĩa mod_quiz của Moodle:
  *  - câu hỏi độc lập trong ngân hàng (default_mark là gợi ý); điểm thật
- *    nằm ở slot của đề (exam_slots.max_mark của exam version đã ghim)
- *    và được truyền xuống question_attempts.max_mark khi lượt làm bắt đầu;
+ *    nằm ở slot của đề (exam_slots.max_mark của exam version đã ghim) và được truyền xuống question_attempts.max_mark khi lượt làm bắt đầu;
  *  - điểm câu = fraction × maxMark; điểm lượt = tổng các câu đã chấm;
  *    điểm bài = điểm lượt quy về thang điểm của exam version
  *    (totalScore), chọn theo grade_method khi có nhiều lượt, ghi vào
  *    grade item 'mod' của cm;
  *  - hành trình soạn/ghim theo mô hình gộp Đề (#226): soạn slots trên
- *    ĐỀ trong bank → đề ready → GHIM vào khoá (exam_pins mang vai trò
- *    của quiz cũ: cấu hình tổ chức + cm + grade item).
+ *    ĐỀ trong bank → đề ready → GHIM vào khoá (exam_pins mang vai trò của quiz cũ: cấu hình tổ chức + cm + grade item).
  *  - essay không tự chấm: lượt ở trạng thái chờ chấm tay cho tới khi
  *    giáo viên cho điểm qua bước chấm của engine.
  */

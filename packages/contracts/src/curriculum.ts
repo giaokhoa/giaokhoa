@@ -3,17 +3,12 @@ import { uuidIdSchema } from './ids.js';
 
 /**
  * Hợp đồng API chương trình GDPT 2018 giữa frontend và backend:
- * subjects → curricula (duy nhất theo cặp môn + khối 1–12) →
- * curriculum_nodes (cây) → learning_outcomes (yêu cầu cần đạt).
- * Môn học neo vào một context (như question category của ngân hàng câu hỏi):
- * quyền đọc/ghi quyết qua PermissionEvaluator tại context đó, không theo
- * sở hữu cá nhân.
+ * subjects → curricula (duy nhất theo cặp môn + khối 1–12) → curriculum_nodes (cây) → learning_outcomes (yêu cầu cần đạt). Môn học neo vào một context (như question category của ngân hàng câu hỏi):
+ * quyền đọc/ghi quyết qua PermissionEvaluator tại context đó, không theo sở hữu cá nhân.
  */
 
 /**
- * Cấp của một node trong cây nội dung: mạch nội dung / chủ đề / nội dung.
- * 'lesson' là **nội dung của chương trình** GDPT 2018 (không phải
- * chương/bài SGK — SGK thuộc tầng ánh xạ riêng ngoài cây chuẩn, mục A.4).
+ * Cấp của một node trong cây nội dung: mạch nội dung / chủ đề / nội dung. 'lesson' là **nội dung của chương trình** GDPT 2018 (không phải chương/bài SGK — SGK thuộc tầng ánh xạ riêng ngoài cây chuẩn, mục A.4).
  */
 export const curriculumNodeKindSchema = z.enum(['strand', 'topic', 'lesson']);
 export type CurriculumNodeKind = z.infer<typeof curriculumNodeKindSchema>;
@@ -53,10 +48,7 @@ export const updateCurriculumSchema = z.strictObject({
 export type UpdateCurriculum = z.infer<typeof updateCurriculumSchema>;
 
 /**
- * Payload tạo node trong cây nội dung của một chương trình. Node gốc để
- * parentId trống; kind mặc định 'topic' — node cấp mạch dùng kind 'strand'.
- * durationPeriods là thời lượng dự kiến theo tiết, durationPercent là tỉ
- * trọng % thời lượng của node trong chương trình (căn cứ tỉ lệ điểm ma trận).
+ * Payload tạo node trong cây nội dung của một chương trình. Node gốc để parentId trống; kind mặc định 'topic' — node cấp mạch dùng kind 'strand'. durationPeriods là thời lượng dự kiến theo tiết, durationPercent là tỉ trọng % thời lượng của node trong chương trình (căn cứ tỉ lệ điểm ma trận).
  */
 export const createCurriculumNodeSchema = z.strictObject({
   curriculumId: uuidIdSchema,
@@ -81,9 +73,7 @@ export const updateCurriculumNodeSchema = z.strictObject({
 export type UpdateCurriculumNode = z.infer<typeof updateCurriculumNodeSchema>;
 
 /**
- * Nguồn của một YCCĐ (Chặng 2, mục A.3): 'program' = chép nguyên văn
- * Chương trình môn học của Bộ; 'derived' = tổ chuyên môn biên tập/tách
- * theo mức từ một YCCĐ gốc (ghi ở derivedFromId).
+ * Nguồn của một YCCĐ (Chặng 2, mục A.3): 'program' = chép nguyên văn Chương trình môn học của Bộ; 'derived' = tổ chuyên môn biên tập/tách theo mức từ một YCCĐ gốc (ghi ở derivedFromId).
  */
 export const outcomeSourceKindSchema = z.enum(['program', 'derived']);
 export type OutcomeSourceKind = z.infer<typeof outcomeSourceKindSchema>;
@@ -110,10 +100,8 @@ export const updateLearningOutcomeSchema = z.strictObject({
 export type UpdateLearningOutcome = z.infer<typeof updateLearningOutcomeSchema>;
 
 /**
- * Mức độ nhận thức của cặp (câu hỏi × YCCĐ) — Chặng 2, mục A.2: mức nằm
- * trên dòng nối câu–YCCĐ, không nằm trên câu hỏi/phiên bản. Khoá text:
- * khung 3 mức hiện hành cho trung học (Biết/Hiểu/Vận dụng) cộng
- * 'van_dung_cao' dự phòng cho biến thể 4 mức.
+ * Mức độ nhận thức của cặp (câu hỏi × YCCĐ) — Chặng 2, mục A.2: mức nằm trên dòng nối câu–YCCĐ, không nằm trên câu hỏi/phiên bản. Khoá text:
+ * khung 3 mức hiện hành cho trung học (Biết/Hiểu/Vận dụng) cộng 'van_dung_cao' dự phòng cho biến thể 4 mức.
  */
 export const cognitiveLevelSchema = z.enum(['biet', 'hieu', 'van_dung', 'van_dung_cao']);
 export type CognitiveLevel = z.infer<typeof cognitiveLevelSchema>;
@@ -138,10 +126,7 @@ export const updateQuestionOutcomeLinkSchema = z.strictObject({
 export type UpdateQuestionOutcomeLink = z.infer<typeof updateQuestionOutcomeLinkSchema>;
 
 /**
- * Nạp dữ liệu chương trình chuẩn (K0a): dataset là một file bản ghi đã
- * kiểm chứng nguyên văn với văn bản ban hành kèm Thông tư 32/2018 (ví dụ
- * Toán, Ngữ văn). `datasetKey` là khoá ổn định của dataset trong manifest
- * phía máy chủ — môn nào có dataset đã kiểm chứng mới nạp được môn đó.
+ * Nạp dữ liệu chương trình chuẩn (K0a): dataset là một file bản ghi đã kiểm chứng nguyên văn với văn bản ban hành kèm Thông tư 32/2018 (ví dụ Toán, Ngữ văn). `datasetKey` là khoá ổn định của dataset trong manifest phía máy chủ — môn nào có dataset đã kiểm chứng mới nạp được môn đó.
  */
 export const importProgramDatasetSchema = z.strictObject({
   datasetKey: z.string().min(1),
@@ -162,27 +147,13 @@ export const programDatasetStatusSchema = z.object({
 export type ProgramDatasetStatus = z.infer<typeof programDatasetStatusSchema>;
 
 /**
- * Loại thay đổi của một dòng YCCĐ trong một lượt nạp dataset (đợt neo
- * lại định danh theo vị trí, issue #161): `text-changed` = sửa chữ tại
- * chỗ giữ id và mọi liên kết; `added` = dòng mới của dataset;
- * `removed` = dòng rời chương trình hiện hành (được rút, không xoá);
- * `moved` = văn không đổi, chỉ xô vị trí vì chèn/bớt dòng khác;
- * `revived` = dòng đã rút được hồi sinh vì nguyên văn quay lại.
+ * Loại thay đổi của một dòng YCCĐ trong một lượt nạp dataset (đợt neo lại định danh theo vị trí, issue #161): `text-changed` = sửa chữ tại chỗ giữ id và mọi liên kết; `added` = dòng mới của dataset; `removed` = dòng rời chương trình hiện hành (được rút, không xoá); `moved` = văn không đổi, chỉ xô vị trí vì chèn/bớt dòng khác; `revived` = dòng đã rút được hồi sinh vì nguyên văn quay lại.
  */
 export const programImportChangeKindSchema = z.enum(['text-changed', 'added', 'removed', 'moved', 'revived']);
 export type ProgramImportChangeKind = z.infer<typeof programImportChangeKindSchema>;
 
 /**
- * Một mục thay đổi theo từng dòng YCCĐ trong báo cáo của một lượt nạp
- * — sản phẩm cho người duyệt đối chiếu "lần nạp này Bộ đã sửa những
- * dòng nào" (áp dụng ngay rồi báo cáo, KHÔNG duyệt hai cấp). `position`
- * là vị trí trong dataset MỚI; với `removed` là vị trí cuối cùng trước
- * khi rút. `shiftSuspected` gắn khi ca sửa chữ có thể đã ghép nhầm
- * dòng vì vừa sửa chữ vừa xô lệch; `identicalTextAmbiguous` gắn ở ca
- * rút trong nhóm dòng trùng hệt nhau (không phân định được bằng văn
- * bản — quy ước giữ dòng ở vị trí thấp). Số liên kết chỉ đếm tại thời
- * điểm nạp cho `removed` và `text-changed` — hai ca người duyệt phải
- * nhìn thấy ảnh hưởng lên câu hỏi/ánh xạ sách đang trỏ vào dòng.
+ * Một mục thay đổi theo từng dòng YCCĐ trong báo cáo của một lượt nạp — sản phẩm cho người duyệt đối chiếu "lần nạp này Bộ đã sửa những dòng nào" (áp dụng ngay rồi báo cáo, KHÔNG duyệt hai cấp). `position` là vị trí trong dataset MỚI; với `removed` là vị trí cuối cùng trước khi rút. `shiftSuspected` gắn khi ca sửa chữ có thể đã ghép nhầm dòng vì vừa sửa chữ vừa xô lệch; `identicalTextAmbiguous` gắn ở ca rút trong nhóm dòng trùng hệt nhau (không phân định được bằng văn bản — quy ước giữ dòng ở vị trí thấp). Số liên kết chỉ đếm tại thời điểm nạp cho `removed` và `text-changed` — hai ca người duyệt phải nhìn thấy ảnh hưởng lên câu hỏi/ánh xạ sách đang trỏ vào dòng.
  */
 export const programImportChangeSchema = z.object({
   recordId: z.string(),
@@ -198,15 +169,7 @@ export const programImportChangeSchema = z.object({
 export type ProgramImportChange = z.infer<typeof programImportChangeSchema>;
 
 /**
- * Kết quả một lượt nạp dataset: tạo mới / cập nhật (dataset đính
- * chính) / bỏ qua (đã khớp) + báo cáo thay đổi của lần nạp. Luật
- * không-xoá giữ nguyên: node của bản ghi đã rút khỏi dataset đếm ở
- * `orphanedNodes` và được GIỮ NGUYÊN trong DB; YCCĐ rời dataset nay
- * chuyển sang trạng thái ĐÃ RÚT lưu ở DB (`retiredOutcomes` là tổng số
- * dòng đang rút của dataset sau lần nạp) thay cho đếm orphaned cũ —
- * pool sinh đề và bản đặc tả nhờ đó phân biệt được hiện hành/đã rút.
- * `changes` bị cắt ở trần 500 mục mỗi lượt nạp một dataset (số bị cắt
- * ở `changesOmitted`); `changeCounts` luôn đầy đủ cả sáu đếm.
+ * Kết quả một lượt nạp dataset: tạo mới / cập nhật (dataset đính chính) / bỏ qua (đã khớp) + báo cáo thay đổi của lần nạp. Luật không-xoá giữ nguyên: node của bản ghi đã rút khỏi dataset đếm ở `orphanedNodes` và được GIỮ NGUYÊN trong DB; YCCĐ rời dataset nay chuyển sang trạng thái ĐÃ RÚT lưu ở DB (`retiredOutcomes` là tổng số dòng đang rút của dataset sau lần nạp) thay cho đếm orphaned cũ — pool sinh đề và bản đặc tả nhờ đó phân biệt được hiện hành/đã rút. `changes` bị cắt ở trần 500 mục mỗi lượt nạp một dataset (số bị cắt ở `changesOmitted`); `changeCounts` luôn đầy đủ cả sáu đếm.
  */
 export const programImportResultSchema = z.object({
   datasetKey: z.string(),
@@ -232,10 +195,7 @@ export const programImportResultSchema = z.object({
 export type ProgramImportResult = z.infer<typeof programImportResultSchema>;
 
 /**
- * Một YCCĐ chụp trong neo khung của section: nội dung chép nguyên văn
- * tại thời điểm nạp (hiển thị trong khoá từ bản chụp này, không đọc lại
- * cây chương trình); `outcomeId` là truy vết về YCCĐ gốc, null khi gốc
- * đã bị xoá.
+ * Một YCCĐ chụp trong neo khung của section: nội dung chép nguyên văn tại thời điểm nạp (hiển thị trong khoá từ bản chụp này, không đọc lại cây chương trình); `outcomeId` là truy vết về YCCĐ gốc, null khi gốc đã bị xoá.
  */
 export const courseSectionFrameOutcomeSchema = z.object({
   outcomeId: uuidIdSchema.nullable(),
@@ -244,9 +204,7 @@ export const courseSectionFrameOutcomeSchema = z.object({
 export type CourseSectionFrameOutcome = z.infer<typeof courseSectionFrameOutcomeSchema>;
 
 /**
- * Neo khung chương trình của một section (K0a): section là bản sao độc
- * lập, neo ghi node nguồn + tựa chụp; sửa cây chương trình sau đó không
- * đổi section đã nạp.
+ * Neo khung chương trình của một section (K0a): section là bản sao độc lập, neo ghi node nguồn + tựa chụp; sửa cây chương trình sau đó không đổi section đã nạp.
  */
 export const courseSectionFrameSchema = z.object({
   nodeId: uuidIdSchema.nullable(),
@@ -256,11 +214,7 @@ export const courseSectionFrameSchema = z.object({
 export type CourseSectionFrame = z.infer<typeof courseSectionFrameSchema>;
 
 /**
- * Payload nạp khung chương trình vào khoá: mỗi node được chọn (đơn vị
- * chủ đề/mạch — node không phải `lesson`) thành một section mang toàn bộ
- * YCCĐ trong subtree của nó, theo thứ tự cây. `insertAtSection` là số
- * thứ tự section muốn chèn vào trước (≥ 1; section 0 là section chung
- * không bị đẩy); bỏ trống = nối vào cuối outline.
+ * Payload nạp khung chương trình vào khoá: mỗi node được chọn (đơn vị chủ đề/mạch — node không phải `lesson`) thành một section mang toàn bộ YCCĐ trong subtree của nó, theo thứ tự cây. `insertAtSection` là số thứ tự section muốn chèn vào trước (≥ 1; section 0 là section chung không bị đẩy); bỏ trống = nối vào cuối outline.
  */
 export const applyCurriculumFrameSchema = z.strictObject({
   curriculumId: uuidIdSchema,

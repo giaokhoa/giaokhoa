@@ -7,8 +7,7 @@ import { ClassEditPage } from './class-edit';
 import { ClassPublicPage, loader as classPublicLoader, meta as classPublicMeta, type ClassPublicSummary } from './class-public';
 
 /**
- * Spec HỌC PHÍ THEO LỚP phía web (CLASS-3, issue #184): kiểm LUỒNG
- * NGHIỆP VỤ qua endpoint thật (fetch stub ở biên mạng):
+ * Spec HỌC PHÍ THEO LỚP phía web (CLASS-3, issue #184): kiểm LUỒNG NGHIỆP VỤ qua endpoint thật (fetch stub ở biên mạng):
  *  - người chưa ghi danh thấy gói + nút thanh toán; bấm mua gọi đúng
  *    POST /payments/class-fee/:classId và hiện mã VietQR/mã thanh toán;
  *  - poll thấy payment succeeded → báo đã vào lớp;

@@ -1,27 +1,15 @@
 /**
- * Spec tích hợp của khung Kysely phía `apps/api`: chứng minh trên
- * database trung tâm dựng từ rỗng bằng harness của `@giaokhoa/db` rằng
- * handle Kysely đi qua `TenantAwarePool` THẬT của hệ (không phải
- * bản phục vụ test trong package) vẫn giữ đúng hợp đồng GUC/RLS,
- * và wiring NestJS tự dựng (`KyselyModule` + `@InjectKysely`) cấp
- * đúng handle cho service.
+ * Spec tích hợp của khung Kysely phía `apps/api`: chứng minh trên database trung tâm dựng từ rỗng bằng harness của `@giaokhoa/db` rằng handle Kysely đi qua `TenantAwarePool` THẬT của hệ (không phải bản phục vụ test trong package) vẫn giữ đúng hợp đồng GUC/RLS, và wiring NestJS tự dựng (`KyselyModule` + `@InjectKysely`) cấp đúng handle cho service.
  *
  * Ba tính chất được kiểm chứng:
  *   (i)   Trong ngữ cảnh tenant (nạp qua `tenantAls` thật) chỉ
- *         thấy dòng của tenant đó; ngữ cảnh platform thấy mọi
- *         dòng; ngoài ngữ cảnh thì fail-closed.
+ *         thấy dòng của tenant đó; ngữ cảnh platform thấy mọi dòng; ngoài ngữ cảnh thì fail-closed.
  *   (ii)  Giao dịch qua handle `CentreTx` truyền vào repository
  *         mẫu: ném lỗi thì rollback sạch, hoàn tất thì ghi thật.
  *   (iii) `KyselyModule.forRoot(...)` inject đúng handle theo
- *         `@InjectKysely()` / `@InjectKysely('control-plane')`,
- *         handle kho trung tâm chạy được trên `TenantAwarePool`
- *         thật, và đóng module thì instance bị huỷ (pool đóng theo).
+ *         `@InjectKysely()` / `@InjectKysely('control-plane')`, handle kho trung tâm chạy được trên `TenantAwarePool` thật, và đóng module thì instance bị huỷ (pool đóng theo).
  *
- * Môi trường: kết nối quản trị lấy từ `GIAOKHOA_TEST_DATABASE_URL` (ghi
- * đè chuẩn của suite api) hoặc `DATABASE_URL` do cấu hình Vitest
- * của api đặt, thay tên database thành `postgres`. Database và
- * role test dùng tên cố định dưới đây, được xoá/dựng lại mỗi lượt
- * chạy; role là role thường (không superuser) để RLS có hiệu lực.
+ * Môi trường: kết nối quản trị lấy từ `GIAOKHOA_TEST_DATABASE_URL` (ghi đè chuẩn của suite api) hoặc `DATABASE_URL` do cấu hình Vitest của api đặt, thay tên database thành `postgres`. Database và role test dùng tên cố định dưới đây, được xoá/dựng lại mỗi lượt chạy; role là role thường (không superuser) để RLS có hiệu lực.
  */
 import { Injectable } from '@nestjs/common';
 import { Test } from '@nestjs/testing';

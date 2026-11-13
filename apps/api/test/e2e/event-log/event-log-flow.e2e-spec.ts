@@ -17,10 +17,7 @@ interface LogItem {
 interface LogPage { items: LogItem[]; total: number; page: number; pageSize: number }
 
 /**
- * Luồng Logstore (issue #22): các hành động nghiệp vụ thật qua HTTP đưa vào hàng đợi outbox
- * các sự kiện; một lượt relay (lời gọi mà bộ lập lịch của worker thực hiện mỗi 5 giây)
- * phản chiếu chúng vào event_log; API đọc sau đó phục vụ chúng kèm bộ lọc
- * và kiểm tra quyền theo phạm vi context (tương đương report_log của Moodle).
+ * Luồng Logstore (issue #22): các hành động nghiệp vụ thật qua HTTP đưa vào hàng đợi outbox các sự kiện; một lượt relay (lời gọi mà bộ lập lịch của worker thực hiện mỗi 5 giây) phản chiếu chúng vào event_log; API đọc sau đó phục vụ chúng kèm bộ lọc và kiểm tra quyền theo phạm vi context (tương đương report_log của Moodle).
  */
 describe('Nhật ký sự kiện: action outbox được nhân bản và truy vấn được bằng bộ lọc + quyền', () => {
   let app: INestApplication;

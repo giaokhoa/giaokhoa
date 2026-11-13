@@ -22,24 +22,12 @@ import { WorkerPaymentSettlementService } from '../../../src/worker-payment-sett
 import { WorkerPaymentSpaceScope } from '../../../src/worker-payment-space-scope.service';
 
 /**
- * Đặc tả tiền điều kiện Phần B của issue #587 — hạng mục 2: nhịp
- * quét matching SePay của worker phải kích hoạt ghi danh trả phí
- * tại ĐÚNG KHO của trung tâm sở hữu payment.
+ * Đặc tả tiền điều kiện Phần B của issue #587 — hạng mục 2: nhịp quét matching SePay của worker phải kích hoạt ghi danh trả phí tại ĐÚNG KHO của trung tâm sở hữu payment.
  *
- * Cách dựng: đồ thị service dựng tay đúng ngăn xếp production của
- * nhịp quét (repository + writer + service của `@giaokhoa/payments`, ba
- * cổng hiệu ứng của worker; scheduler không tham gia — spec gọi
- * thẳng `SepayMatchingService.sweep` trong bọc platform của nhịp
- * như `SepayMatchingScheduler.sweepTick` làm), khung định tuyến là
- * `SpaceDatabaseService` thật đọc sổ đăng ký ở một database
- * control plane tự cấp phát của ca. Ba trung tâm trên cùng một
- * nhịp:
+ * Cách dựng: đồ thị service dựng tay đúng ngăn xếp production của nhịp quét (repository + writer + service của `@giaokhoa/payments`, ba cổng hiệu ứng của worker; scheduler không tham gia — spec gọi thẳng `SepayMatchingService.sweep` trong bọc platform của nhịp như `SepayMatchingScheduler.sweepTick` làm), khung định tuyến là `SpaceDatabaseService` thật đọc sổ đăng ký ở một database control plane tự cấp phát của ca. Ba trung tâm trên cùng một nhịp:
  *
  * - Trung tâm KHO RIÊNG: sổ đăng ký trỏ về một database riêng tự
- *   cấp phát (baseline nghiệp vụ đầy đủ); instance thu phí / lớp
- *   thu phí CHỈ tồn tại ở kho riêng. Dòng thư mục của tenant (bảng
- *   `tenants`) nằm ở KHO CHUNG như nghĩa vụ thư mục của đợt di trú
- *   — điểm phân giải tra slug từ đó.
+ *   cấp phát (baseline nghiệp vụ đầy đủ); instance thu phí / lớp thu phí CHỈ tồn tại ở kho riêng. Dòng thư mục của tenant (bảng `tenants`) nằm ở KHO CHUNG như nghĩa vụ thư mục của đợt di trú — điểm phân giải tra slug từ đó.
  * - Trung tâm KHO CHUNG: sổ đăng ký ghi chế độ kho chung; dữ kiện
  *   ở database test của worker như hiện tại.
  * - Trung tâm LỖI: sổ đăng ký ghi kho riêng nhưng bí mật kết nối
@@ -48,29 +36,17 @@ import { WorkerPaymentSpaceScope } from '../../../src/worker-payment-space-scope
  * Các ca ghim:
  *
  * 1. `enrol_fee` của trung tâm kho riêng: payment `succeeded`,
- *    ghi danh ACTIVE và outbox `user_enrolled` nằm Ở KHO RIÊNG,
- *    kho chung không có ghi danh nào cho instance đó; quét lại
- *    không nhân đôi. (Trước hạng mục này: đối chiếu đích đọc ở kho
- *    chung không thấy instance nên payment rơi `needs_review`,
- *    hoặc kích hoạt ném `instance_not_found` — tiền đã khớp mà
- *    quyền học không mở.)
+ *    ghi danh ACTIVE và outbox `user_enrolled` nằm Ở KHO RIÊNG, kho chung không có ghi danh nào cho instance đó; quét lại không nhân đôi. (Trước hạng mục này: đối chiếu đích đọc ở kho chung không thấy instance nên payment rơi `needs_review`, hoặc kích hoạt ném `instance_not_found` — tiền đã khớp mà quyền học không mở.)
  * 2. `enrol_fee` của trung tâm kho chung: hành vi hiện tại không
  *    đổi — `succeeded`, ghi danh ở kho chung.
  * 3. `class_fee` của trung tâm kho riêng: thành viên cohort +
  *    membership + cả hai outbox nằm ở kho riêng, kho chung sạch.
  * 4. MỘT nhịp gồm payment của cả hai trung tâm: mỗi payment kích
- *    hoạt ở đúng kho của trung tâm mình — phân giải theo TỪNG
- *    payment, không theo nhịp.
+ *    hoạt ở đúng kho của trung tâm mình — phân giải theo TỪNG payment, không theo nhịp.
  * 5. Trung tâm lỗi: payment ở lại `pending`, sự kiện không
- *    `matched`, không ghi danh ở bất kỳ kho nào — dù instance thu
- *    phí của payment đó CÓ nằm ở kho chung (không rơi về kho chung
- *    để kích hoạt bừa).
+ *    `matched`, không ghi danh ở bất kỳ kho nào — dù instance thu phí của payment đó CÓ nằm ở kho chung (không rơi về kho chung để kích hoạt bừa).
  *
- * Shim `uuidv7()` chỉ áp khi server PostgreSQL dưới 18 (môi
- * trường chạy local bằng PG16): PG18 — bản ở CI và production —
- * có sẵn hàm này, shim sẽ che mất hàm gốc nên tuyệt đối không áp
- * ở đó. Khuôn cấp phát + áp migration chép theo spec khung định
- * tuyến (`test/integration/db/space-routing.int-spec.ts`).
+ * Shim `uuidv7()` chỉ áp khi server PostgreSQL dưới 18 (môi trường chạy local bằng PG16): PG18 — bản ở CI và production — có sẵn hàm này, shim sẽ che mất hàm gốc nên tuyệt đối không áp ở đó. Khuôn cấp phát + áp migration chép theo spec khung định tuyến (`test/integration/db/space-routing.int-spec.ts`).
  */
 const CP_DATABASE = 'giaokhoa_test_cp_td1';
 const CENTRE_DATABASE = 'giaokhoa_test_centre_td1';

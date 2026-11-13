@@ -6,90 +6,27 @@ import { TestProviders } from '#test/providers';
 import { AdminRolesPage } from './admin-roles';
 
 /**
- * Spec đợt 2 cho trang vai trò: lưới thẻ dựng từ dữ kiện tổng hợp của
- * đợt 1 (đúng một lần gọi danh sách), hộp thoại thêm/sửa kèm ma trận
- * bốn trạng thái lưu bằng một lần gọi thay toàn bộ, và hộp thoại xác
- * nhận xoá hiển thị đúng lý do backend chặn. Kèm cổng chặn lưu ở chế
- * độ sửa khi ma trận chưa tải xong hoặc tải lỗi (lưu sớm sẽ xoá lặng
- * ghi đè đã lưu), và ca xoá thành công dùng vai trò thường đúng luật
- * backend thay vì vai dựng sẵn.
+ * Spec đợt 2 cho trang vai trò: lưới thẻ dựng từ dữ kiện tổng hợp của đợt 1 (đúng một lần gọi danh sách), hộp thoại thêm/sửa kèm ma trận bốn trạng thái lưu bằng một lần gọi thay toàn bộ, và hộp thoại xác nhận xoá hiển thị đúng lý do backend chặn. Kèm cổng chặn lưu ở chế độ sửa khi ma trận chưa tải xong hoặc tải lỗi (lưu sớm sẽ xoá lặng ghi đè đã lưu), và ca xoá thành công dùng vai trò thường đúng luật backend thay vì vai dựng sẵn.
  *
- * Spec đợt 3 (bảng gán vai, #547) thay thế form gán rời rạc cũ bằng
- * bảng + hộp thoại gán: mọi lọc/tìm/phân trang đều gửi tham số lên
- * server, gán/gỡ đi qua hộp thoại với đúng lý do của các chốt chặn.
- * Lượt sửa theo phân xử của PR #553: kẹp trang hiện tại theo tổng mới
- * nhất sau mỗi lần dữ liệu về (không kẹt ở trang rỗng sau gỡ), và bộ
- * chọn người dùng tải thêm từng đợt 20 khi kết quả khớp vượt quá 20.
- * Hai kiểm chứng F-01 cũ vẫn giữ: ba danh sách (vai / capability /
- * context) là ba query TanStack, và đột biến gán vai làm mới các truy
- * vấn access sau POST — nay kiểm chứng qua hộp thoại gán của đợt 3.
- * Cổng "trang đã tải" của các test đợt 2 đổi từ tên vai sang nút thẻ
- * thêm vai, vì tên vai giờ xuất hiện cả ở lưới thẻ lẫn các dòng bảng
- * đợt 3 nên không còn duy nhất cho findByText.
+ * Spec đợt 3 (bảng gán vai, #547) thay thế form gán rời rạc cũ bằng bảng + hộp thoại gán: mọi lọc/tìm/phân trang đều gửi tham số lên server, gán/gỡ đi qua hộp thoại với đúng lý do của các chốt chặn. Lượt sửa theo phân xử của PR #553: kẹp trang hiện tại theo tổng mới nhất sau mỗi lần dữ liệu về (không kẹt ở trang rỗng sau gỡ), và bộ chọn người dùng tải thêm từng đợt 20 khi kết quả khớp vượt quá 20. Hai kiểm chứng F-01 cũ vẫn giữ: ba danh sách (vai / capability / context) là ba query TanStack, và đột biến gán vai làm mới các truy vấn access sau POST — nay kiểm chứng qua hộp thoại gán của đợt 3. Cổng "trang đã tải" của các test đợt 2 đổi từ tên vai sang nút thẻ thêm vai, vì tên vai giờ xuất hiện cả ở lưới thẻ lẫn các dòng bảng đợt 3 nên không còn duy nhất cho findByText.
  *
- * Lượt căn chỉnh trình bày khớp bản demo mẫu (issue #555) đổi các bề
- * mặt sau và spec này ghim trạng thái mới: thẻ thêm vai là một thẻ đầy
- * đủ (tiêu đề + mô tả + nút trong thẻ); mặt thẻ vai không còn tên ngắn
- * và dòng nguyên mẫu, ba con số Đọc/Ghi/Tổng thành dải nền xám số lớn
- * với nhãn dưới số; hộp thoại vai có đúng một nút Huỷ, thêm nút × và
- * dòng mô tả phụ theo chế độ; trang không còn khối tiêu đề phía trên
- * lưới; thanh lọc của bảng co thành một hàng; chân bảng hiện khoảng
- * dòng kèm cụm nút luôn bày.
+ * Lượt căn chỉnh trình bày khớp bản demo mẫu (issue #555) đổi các bề mặt sau và spec này ghim trạng thái mới: thẻ thêm vai là một thẻ đầy đủ (tiêu đề + mô tả + nút trong thẻ); mặt thẻ vai không còn tên ngắn và dòng nguyên mẫu, ba con số Đọc/Ghi/Tổng thành dải nền xám số lớn với nhãn dưới số; hộp thoại vai có đúng một nút Huỷ, thêm nút × và dòng mô tả phụ theo chế độ; trang không còn khối tiêu đề phía trên lưới; thanh lọc của bảng co thành một hàng; chân bảng hiện khoảng dòng kèm cụm nút luôn bày.
  *
- * Lượt dựng lại theo demo (issue #597) ghim trạng thái mới: hộp thoại
- * vai/gán/gỡ/xoá dựng trên component Dialog thật của `@giaokhoa/ui` (nút ×
- * của component mang nhãn truy cập "Close"); nhãn ngữ cảnh ở mọi bề
- * mặt là tên cấp dạng chữ qua adapter (Hệ thống / Trung tâm) — chuỗi
- * kỹ thuật "cấp · thực thể · đường dẫn" không còn xuất hiện; lưới thẻ
- * theo số đo mẫu (khe 20px, dải số nền xám nhạt số 14px nhãn 10px,
- * thẻ thêm căn giữa với nút outline); thanh lọc của bảng gán đúng hai
- * hàng; chân bảng là cụm phân trang riêng của feature (nút 36px);
- * trang có thêm bảng người dùng kèm vai trò đọc từ endpoint gộp — vì
- * trang nay có HAI bảng và hai nút "Gán vai trò", các test của bảng
- * gán giới hạn truy vấn trong đúng thẻ bảng của nó.
+ * Lượt dựng lại theo demo (issue #597) ghim trạng thái mới: hộp thoại vai/gán/gỡ/xoá dựng trên component Dialog thật của `@giaokhoa/ui` (nút × của component mang nhãn truy cập "Close"); nhãn ngữ cảnh ở mọi bề mặt là tên cấp dạng chữ qua adapter (Hệ thống / Trung tâm) — chuỗi kỹ thuật "cấp · thực thể · đường dẫn" không còn xuất hiện; lưới thẻ theo số đo mẫu (khe 20px, dải số nền xám nhạt số 14px nhãn 10px, thẻ thêm căn giữa với nút outline); thanh lọc của bảng gán đúng hai hàng; chân bảng là cụm phân trang riêng của feature (nút 36px); trang có thêm bảng người dùng kèm vai trò đọc từ endpoint gộp — vì trang nay có HAI bảng và hai nút "Gán vai trò", các test của bảng gán giới hạn truy vấn trong đúng thẻ bảng của nó.
  *
  * Vòng sửa theo phán quyết điều phối (PR #601): ba đột biến vai trò
  * (tạo/đổi tên/xoá) làm mới bảng người dùng kèm vai trò ngay trên
- * cùng trang (đổi tên làm mới thêm ma trận toàn trang — kiểm chứng
- * ở queries/admin-roles.spec.ts); hai gán cùng vai ở hai ngữ cảnh
- * cùng cấp phân biệt bằng nhãn số thứ tự trong cấp ở cột bảng, hộp
- * thoại quản lý và xác nhận gỡ; tải thêm người dùng dừng ở trần 100
- * của API kèm gợi ý thu hẹp từ khoá thay vì gửi pageSize vượt trần.
+ * cùng trang (đổi tên làm mới thêm ma trận toàn trang — kiểm chứng ở queries/admin-roles.spec.ts); hai gán cùng vai ở hai ngữ cảnh cùng cấp phân biệt bằng nhãn số thứ tự trong cấp ở cột bảng, hộp thoại quản lý và xác nhận gỡ; tải thêm người dùng dừng ở trần 100 của API kèm gợi ý thu hẹp từ khoá thay vì gửi pageSize vượt trần.
  *
- * Vòng sửa 3 theo phán quyết 6539398880 (hình dạng demo, dữ kiện
- * thật): ma trận trong hộp thoại thành bảng checkbox — mỗi ô là một
- * năng lực thật, tích = Cho phép, trống = Kế thừa; chọn nhanh bốn
- * trạng thái thay bằng chọn theo cấp (toàn cục + theo nhóm resource)
- * chỉ thao tác trên các ô sửa được; ô đang mang Ngăn chặn đã lưu
+ * Vòng sửa 3 theo phán quyết 6539398880 (hình dạng demo, dữ kiện thật): ma trận trong hộp thoại thành bảng checkbox — mỗi ô là một năng lực thật, tích = Cho phép, trống = Kế thừa; chọn nhanh bốn trạng thái thay bằng chọn theo cấp (toàn cục + theo nhóm resource) chỉ thao tác trên các ô sửa được; ô đang mang Ngăn chặn đã lưu
  * (course:view ở ngữ cảnh hệ thống trong fixture) bị khoá kèm huy
  * hiệu và giữ nguyên giá trị trong tập thay toàn bộ khi lưu.
  *
- * Vòng sửa theo phán quyết 6540064754 trên PR #601 (bổ sung bằng
- * chứng kiểm thử cho riêng đường hộp thoại): một ca ghim cả hai
- * giá trị khoá Ngăn chặn và Cấm hẳn cùng tồn tại trong một ngữ
- * cảnh — chọn toàn cục cả hai chiều không đổi được ô khoá, tập
- * thay toàn bộ khi lưu giữ nguyên cả hai giá trị, và bỏ tích ô
- * đang Cho phép thì năng lực đó rời khỏi tập ghi đè ở lần lưu sau.
+ * Vòng sửa theo phán quyết 6540064754 trên PR #601 (bổ sung bằng chứng kiểm thử cho riêng đường hộp thoại): một ca ghim cả hai giá trị khoá Ngăn chặn và Cấm hẳn cùng tồn tại trong một ngữ cảnh — chọn toàn cục cả hai chiều không đổi được ô khoá, tập thay toàn bộ khi lưu giữ nguyên cả hai giá trị, và bỏ tích ô đang Cho phép thì năng lực đó rời khỏi tập ghi đè ở lần lưu sau.
  *
- * Vòng sửa bố cục (PR #601): ma trận trong hộp thoại gom mỗi
- * resource thành đúng MỘT hàng như bảng mẫu — checkbox chọn theo
- * nhóm nằm ngay trên hàng của resource, cụm Đọc chứa checkbox
- * của các năng lực loại read và cụm Ghi chứa checkbox của các
- * năng lực loại write, mỗi checkbox kèm nhãn hành động của năng
- * lực. Mọi hành vi đã ghim ở các vòng trước (ô khoá kèm huy
- * hiệu, chọn theo cấp bỏ qua ô khoá, bảo toàn giá trị khoá khi
- * lưu) giữ nguyên phạm vi kiểm chứng.
+ * Vòng sửa bố cục (PR #601): ma trận trong hộp thoại gom mỗi resource thành đúng MỘT hàng như bảng mẫu — checkbox chọn theo nhóm nằm ngay trên hàng của resource, cụm Đọc chứa checkbox của các năng lực loại read và cụm Ghi chứa checkbox của các năng lực loại write, mỗi checkbox kèm nhãn hành động của năng lực. Mọi hành vi đã ghim ở các vòng trước (ô khoá kèm huy hiệu, chọn theo cấp bỏ qua ô khoá, bảo toàn giá trị khoá khi lưu) giữ nguyên phạm vi kiểm chứng.
  *
- * Vòng căn chỉnh khớp demo (issue #624): mọi ô chọn của hai bề
- * mặt (lọc, cỡ trang, ngữ cảnh, hộp thoại gán) chuyển từ
- * `<select>` native sang Select của `@giaokhoa/ui` — các ca tương
- * tác chọn theo nhãn nhìn thấy của lựa chọn qua helper
- * `chooseOption`; form vai báo lỗi tên tại trường (tối thiểu 2
- * ký tự, có placeholder); báo lỗi tải của trang đi theo độ hạt
- * từng query (banner toàn trang chỉ khi danh sách vai lỗi lúc
- * chưa có dữ kiện, query phụ lỗi thì báo tại chỗ); nút gỡ ở
- * bảng gán thành nút ghost biểu tượng mang nhãn truy cập "Gỡ
- * gán" như cũ; cột thời gian của bảng gán bày dạng ngày chữ.
+ * Vòng căn chỉnh khớp demo (issue #624): mọi ô chọn của hai bề mặt (lọc, cỡ trang, ngữ cảnh, hộp thoại gán) chuyển từ `<select>` native sang Select của `@giaokhoa/ui` — các ca tương tác chọn theo nhãn nhìn thấy của lựa chọn qua helper `chooseOption`; form vai báo lỗi tên tại trường (tối thiểu 2 ký tự, có placeholder); báo lỗi tải của trang đi theo độ hạt từng query (banner toàn trang chỉ khi danh sách vai lỗi lúc chưa có dữ kiện, query phụ lỗi thì báo tại chỗ); nút gỡ ở bảng gán thành nút ghost biểu tượng mang nhãn truy cập "Gỡ gán" như cũ; cột thời gian của bảng gán bày dạng ngày chữ.
  */
 const ROLE_ID = '01900000-0000-7000-8000-0000000000b1';
 const NEW_ROLE_ID = '01900000-0000-7000-8000-0000000000b2';

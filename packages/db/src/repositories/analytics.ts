@@ -1,26 +1,18 @@
 /**
  * Repository của cụm ANALYTICS trên Kysely.
  *
- * Vai trò: mọi truy cập tới ba bảng analytics_models,
- * analytics_predictions và insights của kho trung tâm tập trung ở
- * đây. Repository không chứa luật nghiệp vụ — đồng bộ model
- * provider, tính điểm và gác quyền nằm ở tầng service phía ứng
- * dụng; repository chỉ nhận handle do tầng ứng dụng truyền vào.
+ * Vai trò: mọi truy cập tới ba bảng analytics_models, analytics_predictions và insights của kho trung tâm tập trung ở đây. Repository không chứa luật nghiệp vụ — đồng bộ model provider, tính điểm và gác quyền nằm ở tầng service phía ứng dụng; repository chỉ nhận handle do tầng ứng dụng truyền vào.
  *
  * Ràng buộc về truy vấn và hình dạng dữ liệu tại biên repository:
  * - Bên trong repository, truy vấn viết trên interface schema sinh
  *   bằng codegen: tên bảng/cột giữ nguyên snake_case của database.
  * - Bên ngoài, repository nhận/trả các hình dạng dòng camelCase như
- *   phía tiêu thụ đang dùng: cột được chọn bằng danh sách tường
- *   minh có bí danh (`model_id as modelId`), giá trị ghi được ánh
- *   xạ từng trường từ camelCase sang snake_case ở các hàm
- *   `*InsertValues` trong file này.
+ *   phía tiêu thụ đang dùng: cột được chọn bằng danh sách tường minh có bí danh (`model_id as modelId`), giá trị ghi được ánh xạ từng trường từ camelCase sang snake_case ở các hàm `*InsertValues` trong file này.
  * - Giá trị `undefined` bị LOẠI khỏi values trước khi gọi builder
  *   (luật T-4 của chiến dịch); mọi giá trị where là tham số bắt
  *   buộc, không bao giờ `undefined`.
  * - Cột jsonb (`indicators`, `data`) khi ghi đi qua `jsonbValue`:
- *   serialize tường minh + ép kiểu `::jsonb`, vì một MẢNG ở cấp cao
- *   nhất bị driver `pg` hiểu là mảng PostgreSQL thay vì JSON.
+ *   serialize tường minh + ép kiểu `::jsonb`, vì một MẢNG ở cấp cao nhất bị driver `pg` hiểu là mảng PostgreSQL thay vì JSON.
  * - Repository không import từ `apps/*`, không đọc ALS/ngữ cảnh
  *   ứng dụng, không tự mở pool, không đọc biến môi trường.
  */

@@ -1,23 +1,11 @@
 /**
- * Hàm thuần về múi giờ của trang lịch thuộc feature calendar.
- * Tách từ module phẳng `src/lib/calendar.ts` khi tổ chức lại
- * apps/web theo mô hình features/ (issue #500).
+ * Hàm thuần về múi giờ của trang lịch thuộc feature calendar. Tách từ module phẳng `src/lib/calendar.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500).
  */
 
 /**
- * Múi giờ nghiệp vụ của ứng dụng (trường học Việt Nam): mọi khoảng
- * ngày "tháng hiện tại" / "N ngày tới" mà query key phụ thuộc vào đều
- * tính theo múi giờ này ở CẢ hai phía server và client.
+ * Múi giờ nghiệp vụ của ứng dụng (trường học Việt Nam): mọi khoảng ngày "tháng hiện tại" / "N ngày tới" mà query key phụ thuộc vào đều tính theo múi giờ này ở CẢ hai phía server và client.
  *
- * Lý do phải ghim một múi giờ thay vì múi giờ máy chạy (lát SL-1 của
- * #7): query key của sự kiện lịch chứa đúng chuỗi from/to, nên loader
- * phía server chỉ dehydrate trúng key khi nó tính ra ĐÚNG chuỗi mà
- * phía client sẽ tính. Tiến trình SSR chạy múi giờ UTC còn trình
- * duyệt của người dùng ở Việt Nam — tính theo giờ máy là hai phía
- * lệch nhau và dữ liệu hydrate không bao giờ khớp key. Ghim
- * Asia/Ho_Chi_Minh (không có giờ mùa, lệch UTC cố định) làm hai phía
- * tất định như nhau; người dùng ngoài Việt Nam cũng xem lịch theo
- * ngày Việt Nam, đúng bối cảnh nghiệp vụ của hệ.
+ * Lý do phải ghim một múi giờ thay vì múi giờ máy chạy (lát SL-1 của #7): query key của sự kiện lịch chứa đúng chuỗi from/to, nên loader phía server chỉ dehydrate trúng key khi nó tính ra ĐÚNG chuỗi mà phía client sẽ tính. Tiến trình SSR chạy múi giờ UTC còn trình duyệt của người dùng ở Việt Nam — tính theo giờ máy là hai phía lệch nhau và dữ liệu hydrate không bao giờ khớp key. Ghim Asia/Ho_Chi_Minh (không có giờ mùa, lệch UTC cố định) làm hai phía tất định như nhau; người dùng ngoài Việt Nam cũng xem lịch theo ngày Việt Nam, đúng bối cảnh nghiệp vụ của hệ.
  */
 export const APP_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 
@@ -65,9 +53,7 @@ function zonedOffsetMs(instant: Date): number {
 }
 
 /**
- * Mốc UTC của 00:00:00.000 một ngày lịch theo múi giờ ứng dụng: đoán
- * nửa đêm UTC của ngày đó, trừ độ lệch múi giờ đo tại mốc đoán (độ
- * lệch không đổi trong một ngày nên một lượt hiệu chỉnh là đủ).
+ * Mốc UTC của 00:00:00.000 một ngày lịch theo múi giờ ứng dụng: đoán nửa đêm UTC của ngày đó, trừ độ lệch múi giờ đo tại mốc đoán (độ lệch không đổi trong một ngày nên một lượt hiệu chỉnh là đủ).
  */
 function zonedMidnightUtcMs(year: number, month: number, day: number): number {
   const guessUtcMs = Date.UTC(year, month - 1, day);

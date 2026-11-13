@@ -1,9 +1,5 @@
 /**
- * Kiểu dữ liệu của trang lịch thuộc feature calendar. Tách từ
- * module phẳng `src/lib/calendar.ts` khi tổ chức lại apps/web
- * theo mô hình features/ (issue #500): kiểu nằm ở tầng types/,
- * hàm thuần về múi giờ nằm ở tầng utils/, lời gọi API thuần ở
- * tầng api/, hook ở tầng queries/.
+ * Kiểu dữ liệu của trang lịch thuộc feature calendar. Tách từ module phẳng `src/lib/calendar.ts` khi tổ chức lại apps/web theo mô hình features/ (issue #500): kiểu nằm ở tầng types/, hàm thuần về múi giờ nằm ở tầng utils/, lời gọi API thuần ở tầng api/, hook ở tầng queries/.
  */
 
 /** Một sự kiện lịch như trang lịch hiển thị. */

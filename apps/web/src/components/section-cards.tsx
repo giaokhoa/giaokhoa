@@ -8,18 +8,13 @@ export interface StatCard {
   value: string;
   footer?: string;
   /**
-   * Đang chờ dữ liệu: thẻ vẫn chiếm đúng ô của nó trong lưới với nhãn
-   * thật và khung xương ở phần giá trị/chú thích, để lưới không co giãn
-   * khi số liệu về (giữ hình học, tránh nhảy bố cục).
+   * Đang chờ dữ liệu: thẻ vẫn chiếm đúng ô của nó trong lưới với nhãn thật và khung xương ở phần giá trị/chú thích, để lưới không co giãn khi số liệu về (giữ hình học, tránh nhảy bố cục).
    */
   loading?: boolean;
 }
 
 /**
- * Hàng thẻ thống kê theo đúng trình bày của block dashboard-01 (nền
- * gradient, giá trị lớn dạng tabular-nums, chú thích hai lớp ở chân thẻ).
- * Khác block mẫu ở dữ liệu: thẻ nào không có số liệu thật thì trang gọi
- * không truyền vào — component không tự bịa số hay phần trăm xu hướng.
+ * Hàng thẻ thống kê theo đúng trình bày của block dashboard-01 (nền gradient, giá trị lớn dạng tabular-nums, chú thích hai lớp ở chân thẻ). Khác block mẫu ở dữ liệu: thẻ nào không có số liệu thật thì trang gọi không truyền vào — component không tự bịa số hay phần trăm xu hướng.
  */
 export function SectionCards({ cards }: { cards: StatCard[] }) {
   if (cards.length === 0) return null;

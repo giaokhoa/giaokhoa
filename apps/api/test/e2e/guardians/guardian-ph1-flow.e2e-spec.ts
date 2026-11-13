@@ -10,11 +10,7 @@ import { createGradeItem, setGrade } from '../../support/assessment-helpers';
 /**
  * PH-1 — Bề mặt phụ huynh chỉ-xem (issue #130, Đợt 6): 4 khối rút gọn
  * (research phụ huynh/HS mục 4.3) + kết quả đã công bố theo môn, trên nền
- * PH-0 (cổng công bố + liên kết giám hộ + audit) và DASH1 (hàm kết quả
- * mới đã công bố dùng chung). Nguyên tắc cứng mục 5.1: chỉ-xem, chỉ con
- * mình (đoán ID → 404 đồng nhất), chỉ dữ liệu ĐÃ CÔNG BỐ (chưa công bố
- * vắng tuyệt đối cả trong JSON thô), không xếp hạng/so sánh, không hiện
- * 0 thay cho chưa chấm.
+ * PH-0 (cổng công bố + liên kết giám hộ + audit) và DASH1 (hàm kết quả mới đã công bố dùng chung). Nguyên tắc cứng mục 5.1: chỉ-xem, chỉ con mình (đoán ID → 404 đồng nhất), chỉ dữ liệu ĐÃ CÔNG BỐ (chưa công bố vắng tuyệt đối cả trong JSON thô), không xếp hạng/so sánh, không hiện 0 thay cho chưa chấm.
  */
 describe('PH-1: bề mặt phụ huynh chỉ-xem (issue #130)', () => {
   let app: INestApplication;

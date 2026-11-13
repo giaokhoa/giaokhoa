@@ -90,15 +90,7 @@ function RichMessageText({ text }: { text: string }) {
 }
 
 /**
- * Lưới emoji của bộ chọn ở ô soạn (issue #591; tập và thứ tự
- * căn đúng theo bản demo ở issue #608 — trích nguyên mảng
- * emoji từ chunk JS của demo): dựng trên component Popover
- * của `@giaokhoa/ui` (vòng sửa PR #593 — bản trước dùng
- * DropdownMenu đã bị cả hai lớp review bác vì khác component
- * và khác ngữ nghĩa), dạng lưới 5 cột × 4 hàng. Chọn emoji
- * chèn ký tự TẠI VỊ TRÍ CON TRỎ trong ô soạn (đúng hành vi bản
- * demo; nối cuối nháp như trước là điểm lệch đã sửa ở giai
- * đoạn 2 của vòng sửa PR #610); không thêm thư viện picker.
+ * Lưới emoji của bộ chọn ở ô soạn (issue #591; tập và thứ tự căn đúng theo bản demo ở issue #608 — trích nguyên mảng emoji từ chunk JS của demo): dựng trên component Popover của `@giaokhoa/ui` (vòng sửa PR #593 — bản trước dùng DropdownMenu đã bị cả hai lớp review bác vì khác component và khác ngữ nghĩa), dạng lưới 5 cột × 4 hàng. Chọn emoji chèn ký tự TẠI VỊ TRÍ CON TRỎ trong ô soạn (đúng hành vi bản demo; nối cuối nháp như trước là điểm lệch đã sửa ở giai đoạn 2 của vòng sửa PR #610); không thêm thư viện picker.
  */
 const EMOJI_GRID_OPTIONS = [
   '😀', '😂', '😊', '😍', '🥳',
@@ -110,16 +102,12 @@ const EMOJI_GRID_OPTIONS = [
 /**
  * Bộ cảm xúc của bộ chọn reactions trên tin — CHỈ HÌNH DẠNG
  * (issue #591, xem khối render ở toolbar nổi của bong bóng):
- * reactions chưa có phán quyết chức năng nên lưới này chỉ để
- * trình bày, các mục đều vô hiệu.
+ * reactions chưa có phán quyết chức năng nên lưới này chỉ để trình bày, các mục đều vô hiệu.
  */
 const REACTION_SHAPE_EMOJIS = ['❤️', '😂', '😮', '😢', '👍'];
 
 /**
- * Cầu nối tới handle cuộn của MessageScroller: hook chỉ gọi được
- * trong cây của Provider nên một component con không-render giữ
- * handle vào ref của trang — nút trích dẫn ở bong bóng dùng ref này
- * để nhảy tới tin gốc (lát M3).
+ * Cầu nối tới handle cuộn của MessageScroller: hook chỉ gọi được trong cây của Provider nên một component con không-render giữ handle vào ref của trang — nút trích dẫn ở bong bóng dùng ref này để nhảy tới tin gốc (lát M3).
  */
 function ScrollerBridge({ bridgeRef }: { bridgeRef: RefObject<ScrollerHandle | null> }) {
   const scroller = useMessageScroller();
@@ -158,22 +146,15 @@ interface ChatPanelProps {
   onRecallMessage: (message: MessageView) => void;
   onHardDeleteMessage: (message: MessageView) => void;
   /**
-   * Đặt một cờ trạng thái cá nhân (ghim / tắt tiếng) cho hội
-   * thoại đang mở (issue #591): hành động tắt/bật thông báo và
-   * ghim/bỏ ghim ở đầu khung và panel thông tin đi qua đây —
-   * cùng một đường đổi trạng thái với menu trên hàng danh sách.
+   * Đặt một cờ trạng thái cá nhân (ghim / tắt tiếng) cho hội thoại đang mở (issue #591): hành động tắt/bật thông báo và ghim/bỏ ghim ở đầu khung và panel thông tin đi qua đây — cùng một đường đổi trạng thái với menu trên hàng danh sách.
    */
   onUpdateConversationState: (conversation: ConversationView, patch: ConversationStatePatch) => void;
   /**
-   * Bản đồ tóm tắt người dùng của trang (issue #591): panel
-   * thông tin lấy tên đăng nhập thật của đối tác qua đây để
-   * adapter hồ sơ dựng đúng trường đã có nguồn.
+   * Bản đồ tóm tắt người dùng của trang (issue #591): panel thông tin lấy tên đăng nhập thật của đối tác qua đây để adapter hồ sơ dựng đúng trường đã có nguồn.
    */
   people: Record<string, PersonSummary>;
   /**
-   * Trang đang nạp dữ kiện lần đầu (issue #591): khi chưa có
-   * hội thoại đang mở thì hiện khung đang tải đúng hình dạng
-   * thay cho trạng thái trống.
+   * Trang đang nạp dữ kiện lần đầu (issue #591): khi chưa có hội thoại đang mở thì hiện khung đang tải đúng hình dạng thay cho trạng thái trống.
    */
   loading?: boolean;
   typingNames: string[];
@@ -203,10 +184,7 @@ interface ChatPanelProps {
   onClearMessageSearch: () => void;
   onJumpToSearchResult: (result: MessageSearchResultView) => void;
   /**
-   * Gói PANEL THÀNH VIÊN (lát MSG-T4): ngữ cảnh roster + các dòng
-   * thành viên trang đã nạp cho conversation đang mở, kèm các sự
-   * kiện thao tác trên thành viên. Null khi conversation không phải
-   * hội thoại nhóm hoặc trang chưa xác định được ngữ cảnh.
+   * Gói PANEL THÀNH VIÊN (lát MSG-T4): ngữ cảnh roster + các dòng thành viên trang đã nạp cho conversation đang mở, kèm các sự kiện thao tác trên thành viên. Null khi conversation không phải hội thoại nhóm hoặc trang chưa xác định được ngữ cảnh.
    */
   memberPanel: MemberPanelBundle | null;
 }
@@ -246,29 +224,19 @@ export function ChatPanel({
   /** Bộ chọn emoji của ô soạn GHI CHÚ đang mở hay không (vòng sửa issue #623): trạng thái riêng của form ghi chú — hai form dùng cùng khuôn hàng công cụ nhưng mỗi form giữ popover của chính nó. */
   const [noteEmojiOpen, setNoteEmojiOpen] = useState(false);
   /**
-   * Tab đang chọn của hộp soạn (issue #623): hộp Tabs là Tabs
-   * điều khiển thật với hai trị `reply` / `note` như bản demo
-   * — `reply` là ô soạn tin nhắn thường, `note` là ô soạn ghi
-   * chú nội bộ cục bộ (xem `noteDrafts` ngay dưới).
+   * Tab đang chọn của hộp soạn (issue #623): hộp Tabs là Tabs điều khiển thật với hai trị `reply` / `note` như bản demo — `reply` là ô soạn tin nhắn thường, `note` là ô soạn ghi chú nội bộ cục bộ (xem `noteDrafts` ngay dưới).
    */
   const [composerTab, setComposerTab] = useState<'reply' | 'note'>('reply');
   /**
-   * Nháp GHI CHÚ NỘI BỘ theo từng conversation — dữ kiện cục
-   * bộ thuần của panel: chức năng ghi chú nội bộ chưa có phán
-   * quyết và chưa có backend, nên nháp không rời client, không
-   * qua đường gửi tin và không phát tín hiệu đang nhập; gửi ở
-   * chế độ ghi chú chỉ hiện thông báo cục bộ rồi xoá nháp,
-   * đúng hành vi phía demo.
+   * Nháp GHI CHÚ NỘI BỘ theo từng conversation — dữ kiện cục bộ thuần của panel: chức năng ghi chú nội bộ chưa có phán quyết và chưa có backend, nên nháp không rời client, không qua đường gửi tin và không phát tín hiệu đang nhập; gửi ở chế độ ghi chú chỉ hiện thông báo cục bộ rồi xoá nháp, đúng hành vi phía demo.
    */
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   /** Nháp ghi chú của conversation đang mở (rỗng khi chưa chọn hội thoại nào). */
   const noteDraft = active ? noteDrafts[active.id] ?? '' : '';
   /**
-   * Conversation vừa gửi ghi chú xong — thông báo cục bộ của
-   * nó hiện thoáng qua dưới hộp soạn như toast của phía demo
+   * Conversation vừa gửi ghi chú xong — thông báo cục bộ của nó hiện thoáng qua dưới hộp soạn như toast của phía demo
    * (vòng sửa issue #623): tự tắt sau vài giây, và bị xoá
-   * ngay khi chuyển tab soạn hoặc chuyển hội thoại, không
-   * bám lại dưới hộp như trước.
+   * ngay khi chuyển tab soạn hoặc chuyển hội thoại, không bám lại dưới hộp như trước.
    */
   const [noteNoticeFor, setNoteNoticeFor] = useState<string | null>(null);
 
@@ -288,10 +256,7 @@ export function ChatPanel({
     setNoteDrafts((prev) => ({ ...prev, [active.id]: '' }));
     setNoteNoticeFor(active.id);
   };
-  // Thông báo ghi chú tự tắt sau vài giây (hiệu ứng toast
-  // thoáng qua của phía demo — vòng sửa issue #623): hết giờ
-  // là xoá khỏi bề mặt; chuyển tab soạn / chuyển hội thoại
-  // cũng xoá ngay ở hai đường đổi ngữ cảnh tương ứng.
+  // Thông báo ghi chú tự tắt sau vài giây (hiệu ứng toast thoáng qua của phía demo — vòng sửa issue #623): hết giờ là xoá khỏi bề mặt; chuyển tab soạn / chuyển hội thoại cũng xoá ngay ở hai đường đổi ngữ cảnh tương ứng.
   useEffect(() => {
     if (!noteNoticeFor) return;
     const timer = setTimeout(() => setNoteNoticeFor(null), 4000);
@@ -300,32 +265,18 @@ export function ChatPanel({
   /** Hồ sơ rút gọn của thành viên đang xem từ menu avatar/tên (lát MSG-T4) — một sheet dùng chung cho cả panel và dòng tin. */
   const memberProfile = useMemberProfile();
   /**
-   * Lần chạm gần nhất lên một bong bóng (vòng sửa sau nghiệm
-   * thu PR #610): cơ chế trả lời của bản demo là nhấn đúp /
-   * chạm hai lần trên bong bóng (hồ sơ trích xuất E21) — chuột
-   * có sự kiện nhấn đúp sẵn của trình duyệt, nhưng cảm ứng
-   * không có sự kiện tương đương đáng tin nên khung chat tự
-   * nhận diện hai lần chạm liên tiếp trên CÙNG một bong bóng
+   * Lần chạm gần nhất lên một bong bóng (vòng sửa sau nghiệm thu PR #610): cơ chế trả lời của bản demo là nhấn đúp / chạm hai lần trên bong bóng (hồ sơ trích xuất E21) — chuột có sự kiện nhấn đúp sẵn của trình duyệt, nhưng cảm ứng không có sự kiện tương đương đáng tin nên khung chat tự nhận diện hai lần chạm liên tiếp trên CÙNG một bong bóng
    * (khoảng cách thời gian + vị trí gần nhau) từ ref này. Chỉ
    * là bộ nhớ thao tác thoáng qua, không phải dữ kiện.
    */
   const lastBubbleTapRef = useRef<{ messageId: string; at: number; x: number; y: number } | null>(null);
   /**
-   * Ô nhập của ô soạn (giai đoạn 2 của vòng sửa PR #610): các
-   * thao tác định dạng (Bold, Insert link) và bộ chọn emoji đều
-   * tác động TẠI VÙNG CHỌN/CON TRỎ hiện tại của ô nhập như bản
-   * demo — đọc selectionStart/selectionEnd từ chính phần tử và
-   * khôi phục vùng chọn sau khi nháp đổi (state React vẽ lại ô
-   * nhập theo giá trị mới nên phải đặt lại con trỏ tường minh ở
-   * khung hình kế tiếp).
+   * Ô nhập của ô soạn (giai đoạn 2 của vòng sửa PR #610): các thao tác định dạng (Bold, Insert link) và bộ chọn emoji đều tác động TẠI VÙNG CHỌN/CON TRỎ hiện tại của ô nhập như bản demo — đọc selectionStart/selectionEnd từ chính phần tử và khôi phục vùng chọn sau khi nháp đổi (state React vẽ lại ô nhập theo giá trị mới nên phải đặt lại con trỏ tường minh ở khung hình kế tiếp).
    */
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   /**
-   * Thay đoạn [start, end) của nháp hiện tại bằng `inserted` rồi
-   * khôi phục vùng chọn [selectStart, selectEnd) trong đoạn vừa
-   * chèn sau khi React vẽ lại — mẫu dùng chung của Bold, Insert
-   * link và emoji để con trỏ không nhảy về cuối nháp.
+   * Thay đoạn [start, end) của nháp hiện tại bằng `inserted` rồi khôi phục vùng chọn [selectStart, selectEnd) trong đoạn vừa chèn sau khi React vẽ lại — mẫu dùng chung của Bold, Insert link và emoji để con trỏ không nhảy về cuối nháp.
    */
   const replaceDraftRange = (start: number, end: number, inserted: string, selectStart: number, selectEnd: number) => {
     if (!active) return;
